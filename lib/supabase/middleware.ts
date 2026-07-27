@@ -48,21 +48,21 @@ export async function updateSession(request: NextRequest) {
   const isOnboardingRoute = pathname.startsWith('/onboarding');
   const isSuperAdminRoute = pathname.startsWith('/super-admin');
 
-  // Если пользователь не авторизован и пытается зайти на защищенный маршрут
-  if (!user && !isAuthRoute && pathname !== '/') {
+  // 1. Если пользователь не авторизован и заходит на защищенный маршрут
+  if (!user && !isAuthRoute) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     return NextResponse.redirect(url);
   }
 
-  // Если пользователь авторизован и заходит на /login, перенаправляем на /dashboard
+  // 2. Если пользователь авторизован и заходит на /login
   if (user && isAuthRoute) {
     const url = request.nextUrl.clone();
     url.pathname = '/dashboard';
     return NextResponse.redirect(url);
   }
 
-  // Проверяем наличие привязанной компании у пользователя
+  // 3. Проверяем наличие привязанной компании у пользователя
   if (user && !isAuthRoute && !isSuperAdminRoute) {
     const { data: profile } = await supabase
       .from('users')
@@ -85,7 +85,7 @@ export async function updateSession(request: NextRequest) {
     }
   }
 
-  // Если пытаются зайти на /super-admin, проверяем флаг is_super_admin
+  // 4. Защита маршрута /super-admin
   if (user && isSuperAdminRoute) {
     const { data: profile } = await supabase
       .from('users')
