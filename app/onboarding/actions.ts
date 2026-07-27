@@ -1,6 +1,7 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { createCompanySchema } from '@/types/company.types';
 import type { ActionResponse, Company } from '@/types/database.types';
 import { revalidatePath } from 'next/cache';
@@ -40,8 +41,11 @@ export async function createCompanyAction(
 
     const { name, inn, address, phone } = validation.data;
 
+    // Используем админ-клиент для служебных операций создания тенанта
+    const supabaseAdmin = createAdminClient();
+
     // 1. Проверяем, существует ли уже компания с таким ИНН
-    const { data: existingCompany } = await supabase
+    const { data: existingCompany } = await supabaseAdmin
       .from('companies')
       .select('id')
       .eq('inn', inn)
@@ -55,7 +59,7 @@ export async function createCompanyAction(
     }
 
     // 2. Создаем компанию
-    const { data: company, error: companyError } = await supabase
+    const { data: company, error: companyError } = await supabaseAdmin
       .from('companies')
       .insert({
         name,
@@ -79,7 +83,7 @@ export async function createCompanyAction(
     const trialExpiresAt = new Date();
     trialExpiresAt.setDate(trialExpiresAt.getDate() + 14);
 
-    const { error: subError } = await supabase.from('subscriptions').insert({
+    const { error: subError } = await supabaseAdmin.from('subscriptions').insert({
       company_id: company.id,
       plan_type: 'basic',
       status: 'trial',
@@ -94,7 +98,7 @@ export async function createCompanyAction(
     }
 
     // 4. Привязываем компанию к текущему пользователю и назначаем роль Owner
-    const { error: userUpdateError } = await supabase
+    const { error: userUpdateError } = await supabaseAdmin
       .from('users')
       .update({
         company_id: company.id,
