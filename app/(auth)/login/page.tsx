@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { FileText, ArrowRight, AlertCircle, Shield, UserPlus } from 'lucide-react';
+import { FileText, ArrowRight, AlertCircle, Shield, UserPlus, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 
 export default async function LoginPage({
@@ -16,9 +16,20 @@ export default async function LoginPage({
   const { error } = await searchParams;
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-950 px-4 py-12 relative overflow-hidden">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 px-4 py-12 relative overflow-hidden">
       {/* Dynamic Background Glow */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-blue-600/10 blur-[120px] rounded-full pointer-events-none" />
+
+      {/* Back to Home Link */}
+      <div className="w-full max-w-md mb-4 relative z-10">
+        <Link
+          href="/"
+          className="inline-flex items-center text-xs text-slate-400 hover:text-white transition-colors"
+        >
+          <ArrowLeft className="h-3.5 w-3.5 mr-1" />
+          Вернуться на главную (Лендинг)
+        </Link>
+      </div>
 
       <Card className="w-full max-w-md bg-slate-900/60 border-slate-800 backdrop-blur-xl shadow-2xl relative z-10">
         <CardHeader className="text-center space-y-2 pb-6 border-b border-slate-800/60">
