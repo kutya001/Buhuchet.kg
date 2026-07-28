@@ -1,63 +1,64 @@
 'use server';
 
-import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
-import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import type { ActionResponse } from '@/types/database.types';
+import { revalidatePath } from 'next/cache';
 
-const loginSchema = z.object({
-  email: z.string().email({ message: 'Введите корректный адрес электронной почты' }),
-  password: z.string().min(6, { message: 'Пароль должен содержать минимум 6 символов' }),
-});
+export async function signInAction(formData: FormData) {
+  const email = formData.get('email') as string;
+  const password = formData.get('password') as string;
+  const supabase = await createClient();
 
-export async function loginAction(formData: FormData): Promise<ActionResponse<{ userId: string }>> {
-  try {
-    const rawEmail = formData.get('email');
-    const rawPassword = formData.get('password');
+  const { error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  });
 
-    const validatedFields = loginSchema.safeParse({
-      email: rawEmail,
-      password: rawPassword,
-    });
-
-    if (!validatedFields.success) {
-      const errorMessage = validatedFields.error.issues.map((issue) => issue.message).join(', ');
-      return { success: false, error: errorMessage };
-    }
-
-    const { email, password } = validatedFields.data;
-    const supabase = await createClient();
-
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    if (error) {
-      return {
-        success: false,
-        error: error.message === 'Invalid login credentials' 
-          ? 'Неверный email или пароль' 
-          : error.message,
-      };
-    }
-
-    if (!data.user) {
-      return { success: false, error: 'Пользователь не найден' };
-    }
-
-    revalidatePath('/', 'layout');
-    return { success: true, data: { userId: data.user.id } };
-  } catch (err: unknown) {
-    const errorMessage = err instanceof Error ? err.message : 'Произошла непредвиденная ошибка при входе';
-    return { success: false, error: errorMessage };
+  if (error) {
+    return redirect('/login?error=Неверный email или пароль');
   }
+
+  revalidatePath('/', 'layout');
+  return redirect('/dashboard');
 }
 
-export async function signOutAction(): Promise<void> {
+export async function signUpAction(formData: FormData) {
+  const email = formData.get('email') as string;
+  const password = formData.get('password') as string;
+  const fullName = formData.get('fullName') as string;
+  const supabase = await createClient();
+
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      data: {
+        full_name: fullName,
+      },
+    },
+  });
+
+  if (error) {
+    return redirect(`/register?error=${encodeURIComponent(error.message)}`);
+  }
+
+  // Создаем запись в публичной таблице users
+  if (data.user) {
+    await supabase.from('users').upsert({
+      id: data.user.id,
+      email: data.user.email,
+      full_name: fullName || 'Новый пользователь',
+      role: 'owner',
+      is_super_admin: false,
+    });
+  }
+
+  revalidatePath('/', 'layout');
+  return redirect('/onboarding');
+}
+
+export async function signOutAction() {
   const supabase = await createClient();
   await supabase.auth.signOut();
-  revalidatePath('/', 'layout');
-  redirect('/login');
+  return redirect('/login');
 }
