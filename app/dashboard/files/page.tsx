@@ -23,10 +23,11 @@ import {
   FolderOpen,
   ArrowUpRight,
   ArrowDownLeft,
-  Filter,
+  Download,
 } from 'lucide-react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
+import { getPresignedDownloadUrlAction } from './actions';
 import type { DocumentFile, FileCategory, Document, Company } from '@/types/database.types';
 
 type ExtendedDocumentFile = DocumentFile & {
@@ -70,7 +71,7 @@ export default function FilesRegistryPage() {
       const { data: catData } = await supabase.from('file_categories').select('*').order('name');
       if (catData) setCategories(catData as FileCategory[]);
 
-      // 2. Файлы документов компании
+      // 2. Файлы документов
       const { data: filesData } = await supabase
         .from('document_files')
         .select('*, file_categories(*), documents(*, sender_company:companies!sender_company_id(*), receiver_company:companies!receiver_company_id(*))')
@@ -84,6 +85,14 @@ export default function FilesRegistryPage() {
 
     loadFilesData();
   }, []);
+
+  const handleDownloadR2File = async (fileKey?: string | null) => {
+    if (!fileKey) return;
+    const res = await getPresignedDownloadUrlAction(fileKey);
+    if (res.success && res.data?.downloadUrl) {
+      window.open(res.data.downloadUrl, '_blank');
+    }
+  };
 
   const filteredFiles = files.filter((f) => {
     const doc = f.documents;
@@ -112,10 +121,10 @@ export default function FilesRegistryPage() {
         <div>
           <h2 className="text-2xl font-bold text-white tracking-tight flex items-center">
             <FolderOpen className="h-6 w-6 mr-2 text-emerald-400" />
-            Единый Реестр Файлов и Сканов
+            Единый Реестр Файлов (Cloudflare R2)
           </h2>
           <p className="text-sm text-slate-400 mt-1">
-            Все прикрепленные сканы и первичные документы организации (Входящие и Исходящие)
+            Все сканы и файлы организации в облачном S3-хранилище
           </p>
         </div>
       </div>
@@ -182,9 +191,9 @@ export default function FilesRegistryPage() {
                   <TableHead>Имя файла / Категория</TableHead>
                   <TableHead>Описание *</TableHead>
                   <TableHead>Организация-партнер</TableHead>
+                  <TableHead>Хранилище</TableHead>
                   <TableHead>Размер</TableHead>
-                  <TableHead>Дата</TableHead>
-                  <TableHead className="text-right">Документ</TableHead>
+                  <TableHead className="text-right">Действия</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -235,25 +244,43 @@ export default function FilesRegistryPage() {
                         </div>
                       </TableCell>
 
+                      <TableCell>
+                        {f.file_path_r2 ? (
+                          <span className="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                            Cloudflare R2
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-mono text-slate-500">Локальный</span>
+                        )}
+                      </TableCell>
+
                       <TableCell className="font-mono text-xs text-slate-400">
                         {f.file_size || '1.5 MB'}
                       </TableCell>
 
-                      <TableCell className="font-mono text-xs text-slate-400">
-                        {new Date(f.created_at).toLocaleDateString('ru-RU')}
-                      </TableCell>
-
                       <TableCell className="text-right">
-                        {f.document_id ? (
-                          <Link href={`/dashboard/documents/${f.document_id}`}>
-                            <Button size="sm" variant="outline" className="border-slate-800 text-xs text-slate-300 hover:text-white">
-                              <Eye className="h-3.5 w-3.5 mr-1" />
-                              Открыть
+                        <div className="flex items-center justify-end space-x-1">
+                          {f.file_path_r2 && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleDownloadR2File(f.file_path_r2)}
+                              className="h-8 text-xs text-blue-400 hover:text-white"
+                            >
+                              <Download className="h-3.5 w-3.5 mr-1" />
+                              Скачать
                             </Button>
-                          </Link>
-                        ) : (
-                          <span className="text-slate-600 text-xs">—</span>
-                        )}
+                          )}
+
+                          {f.document_id && (
+                            <Link href={`/dashboard/documents/${f.document_id}`}>
+                              <Button size="sm" variant="outline" className="h-8 border-slate-800 text-xs text-slate-300 hover:text-white">
+                                <Eye className="h-3.5 w-3.5 mr-1" />
+                                Документ
+                              </Button>
+                            </Link>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   );

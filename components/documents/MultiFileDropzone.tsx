@@ -1,10 +1,11 @@
 'use client';
 
 import React, { useState, useRef } from 'react';
-import { Upload, FileText, X, Plus, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Upload, FileText, X, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { getPresignedUploadUrlAction } from '@/app/dashboard/files/actions';
 import type { FileCategory } from '@/types/database.types';
 
 export interface FileItemState {
@@ -13,8 +14,12 @@ export interface FileItemState {
   file_name: string;
   file_size: string;
   file_type: string;
+  file_path_r2?: string;
   description: string;
   comment: string;
+  progress?: number;
+  uploading?: boolean;
+  error?: string;
 }
 
 interface MultiFileDropzoneProps {
@@ -30,22 +35,80 @@ export function MultiFileDropzone({
   onFilesChange,
   disabled = false,
 }: MultiFileDropzoneProps) {
-  const [uploading, setUploading] = useState(false);
+  const [globalUploading, setGlobalUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const uploadFileToR2 = async (file: File, item: FileItemState) => {
+    try {
+      // 1. Запрашиваем Presigned PUT URL от нашего сервера
+      const presignedRes = await getPresignedUploadUrlAction(file.name, file.type);
+
+      if (!presignedRes.success || !presignedRes.data) {
+        throw new Error(presignedRes.error || 'Ошибка получения ссылки Cloudflare R2');
+      }
+
+      const { uploadUrl, fileKey } = presignedRes.data;
+
+      // 2. Отправляем файл по XMLHttpRequest для отслеживания процента загрузки (0% -> 100%)
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('PUT', uploadUrl, true);
+        xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable) {
+            const percent = Math.round((event.loaded / event.total) * 100);
+            onFilesChange(
+              files.map((f) => (f.tempId === item.tempId ? { ...f, progress: percent } : f))
+            );
+          }
+        };
+
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve();
+          } else {
+            reject(new Error(`Сбой загрузки в Cloudflare R2: Status ${xhr.status}`));
+          }
+        };
+
+        xhr.onerror = () => reject(new Error('Сетевой сбой при отправке файла в Cloudflare R2'));
+        xhr.send(file);
+      });
+
+      // 3. Обновляем статус готовности файла и записываем fileKey
+      onFilesChange(
+        files.map((f) =>
+          f.tempId === item.tempId
+            ? { ...f, file_path_r2: fileKey, progress: 100, uploading: false }
+            : f
+        )
+      );
+    } catch (err: any) {
+      console.error('Ошибка R2 загрузки:', err);
+      onFilesChange(
+        files.map((f) =>
+          f.tempId === item.tempId
+            ? { ...f, uploading: false, error: err.message || 'Сбой загрузки' }
+            : f
+        )
+      );
+    }
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
 
-    setUploading(true);
+    setGlobalUploading(true);
+    const selectedFiles = Array.from(e.target.files);
 
-    const newItems: FileItemState[] = Array.from(e.target.files).map((file, idx) => {
+    const defaultCategory = categories[0]?.id || '';
+
+    const newItems: FileItemState[] = selectedFiles.map((file, idx) => {
       const formattedSize =
         file.size > 1024 * 1024
           ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
           : `${Math.round(file.size / 1024)} KB`;
-
-      // Дефолтное определение категории
-      const defaultCategory = categories[0]?.id || '';
 
       return {
         tempId: `${Date.now()}-${idx}`,
@@ -55,13 +118,20 @@ export function MultiFileDropzone({
         file_type: file.type.includes('pdf') ? 'pdf' : 'image',
         description: `Скан документа ${file.name}`,
         comment: '',
+        progress: 0,
+        uploading: true,
       };
     });
 
-    setTimeout(() => {
-      onFilesChange([...files, ...newItems]);
-      setUploading(false);
-    }, 500);
+    const updatedFilesList = [...files, ...newItems];
+    onFilesChange(updatedFilesList);
+
+    // Запускаем загрузку файлов в Cloudflare R2
+    for (let i = 0; i < selectedFiles.length; i++) {
+      await uploadFileToR2(selectedFiles[i], newItems[i]);
+    }
+
+    setGlobalUploading(false);
   };
 
   const handleRemoveFile = (tempId: string) => {
@@ -83,9 +153,9 @@ export function MultiFileDropzone({
     <div className="space-y-4">
       {/* Drop Area Button */}
       <div
-        onClick={() => !disabled && !uploading && fileInputRef.current?.click()}
+        onClick={() => !disabled && !globalUploading && fileInputRef.current?.click()}
         className={`p-5 rounded-xl border-2 border-dashed transition-all text-center cursor-pointer ${
-          disabled || uploading
+          disabled || globalUploading
             ? 'opacity-50 border-slate-800 bg-slate-900/20 cursor-not-allowed'
             : 'border-slate-800 bg-slate-900/40 hover:border-blue-500/50 hover:bg-slate-900/70'
         }`}
@@ -96,14 +166,14 @@ export function MultiFileDropzone({
           multiple
           accept="image/*,.pdf"
           onChange={handleFileSelect}
-          disabled={disabled || uploading}
+          disabled={disabled || globalUploading}
           className="hidden"
         />
 
-        {uploading ? (
+        {globalUploading ? (
           <div className="flex items-center justify-center space-x-2 py-2 text-blue-400">
             <Loader2 className="h-5 w-5 animate-spin" />
-            <span className="text-sm font-medium">Загрузка и прикрепление файлов...</span>
+            <span className="text-sm font-medium">Загрузка файлов в Cloudflare R2...</span>
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center space-y-1">
@@ -111,21 +181,21 @@ export function MultiFileDropzone({
               <Upload className="h-5 w-5" />
             </div>
             <p className="text-sm font-medium text-slate-200">
-              Нажмите для мультизагрузки файлов (PDF, PNG, JPG)
+              Нажмите для мультизагрузки файлов (PDF, PNG, JPG) в Cloudflare R2
             </p>
-            <p className="text-xs text-slate-500">Вы можете прикрепить несколько сканов одновременно</p>
+            <p className="text-xs text-slate-500">Загрузка выполняется напрямую по Presigned URL</p>
           </div>
         )}
       </div>
 
-      {/* Список загруженных файлов с обязательными полями */}
+      {/* Список прикрепеленных файлов с прогрессом */}
       {files.length > 0 && (
         <div className="space-y-3">
           <Label className="text-xs font-mono uppercase text-slate-400">
-            Прикрепленные файлы ({files.length})
+            Прикрепленные сканы R2 ({files.length})
           </Label>
 
-          {files.map((file, idx) => (
+          {files.map((file) => (
             <div
               key={file.tempId}
               className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 space-y-3"
@@ -133,11 +203,17 @@ export function MultiFileDropzone({
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2.5 min-w-0">
                   <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400 flex-shrink-0">
-                    <FileText className="h-4 w-4" />
+                    {file.uploading ? (
+                      <Loader2 className="h-4 w-4 animate-spin text-blue-400" />
+                    ) : (
+                      <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                    )}
                   </div>
                   <div className="truncate">
                     <p className="text-sm font-medium text-white truncate">{file.file_name}</p>
-                    <p className="text-[11px] text-slate-500 font-mono">{file.file_size}</p>
+                    <p className="text-[11px] text-slate-500 font-mono">
+                      {file.file_size} • R2: {file.file_path_r2 ? 'Загружен' : 'Загрузка...'}
+                    </p>
                   </div>
                 </div>
 
@@ -154,9 +230,31 @@ export function MultiFileDropzone({
                 )}
               </div>
 
+              {/* Прогресс бар прямой загрузки R2 */}
+              {file.uploading && (
+                <div className="space-y-1">
+                  <div className="flex justify-between text-[10px] font-mono text-slate-400">
+                    <span>Прямая передача в R2</span>
+                    <span>{file.progress || 0}%</span>
+                  </div>
+                  <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-blue-500 transition-all duration-200"
+                      style={{ width: `${file.progress || 0}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {file.error && (
+                <div className="text-xs text-red-400 flex items-center">
+                  <AlertCircle className="h-3.5 w-3.5 mr-1" />
+                  {file.error}
+                </div>
+              )}
+
               {/* Поля файла */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
-                {/* Категория */}
                 <div className="space-y-1">
                   <Label className="text-[11px] text-slate-400">Категория файла *</Label>
                   <select
@@ -173,20 +271,18 @@ export function MultiFileDropzone({
                   </select>
                 </div>
 
-                {/* Описание (Обязательное) */}
                 <div className="space-y-1 md:col-span-2">
                   <Label className="text-[11px] text-slate-400">Описание файла * (обязательно)</Label>
                   <Input
                     value={file.description}
                     onChange={(e) => handleFileItemChange(file.tempId, 'description', e.target.value)}
-                    placeholder="Например: Оригинал накладной с печатью получателя"
+                    placeholder="Например: Оригинал накладной с печатью"
                     disabled={disabled}
                     required
                     className="h-8 text-xs bg-slate-900 border-slate-800 text-slate-100"
                   />
                 </div>
 
-                {/* Дополнительный комментарий */}
                 <div className="space-y-1 md:col-span-3">
                   <Label className="text-[11px] text-slate-500">Дополнительный комментарий</Label>
                   <Input

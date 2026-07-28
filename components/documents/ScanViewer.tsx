@@ -1,11 +1,13 @@
 'use client';
 
-import React, { useState } from 'react';
-import { ZoomIn, ZoomOut, RotateCw, Maximize2, FileText, CheckCircle2, Building2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ZoomIn, ZoomOut, RotateCw, Maximize2, FileText, Download, Loader2, Image as ImageIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { getPresignedDownloadUrlAction } from '@/app/dashboard/files/actions';
 
 interface ScanViewerProps {
   fileName?: string | null;
+  fileKey?: string | null;
   docNumber?: string | null;
   docDate?: string | null;
   counterpartyName?: string | null;
@@ -14,6 +16,7 @@ interface ScanViewerProps {
 
 export function ScanViewer({
   fileName,
+  fileKey,
   docNumber,
   docDate,
   counterpartyName,
@@ -21,6 +24,23 @@ export function ScanViewer({
 }: ScanViewerProps) {
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
+
+  const [realDownloadUrl, setRealDownloadUrl] = useState<string | null>(null);
+  const [loadingUrl, setLoadingUrl] = useState(false);
+
+  useEffect(() => {
+    async function loadR2Url() {
+      if (fileKey) {
+        setLoadingUrl(true);
+        const res = await getPresignedDownloadUrlAction(fileKey);
+        if (res.success && res.data?.downloadUrl) {
+          setRealDownloadUrl(res.data.downloadUrl);
+        }
+        setLoadingUrl(false);
+      }
+    }
+    loadR2Url();
+  }, [fileKey]);
 
   const handleZoomIn = () => setZoom((prev) => Math.min(prev + 0.25, 2.5));
   const handleZoomOut = () => setZoom((prev) => Math.max(prev - 0.25, 0.5));
@@ -36,10 +56,24 @@ export function ScanViewer({
       <div className="h-12 px-4 bg-slate-950/80 border-b border-slate-800 flex items-center justify-between">
         <div className="flex items-center space-x-2 text-xs font-mono text-slate-300 truncate">
           <FileText className="h-4 w-4 text-blue-400 flex-shrink-0" />
-          <span className="truncate">{fileName || 'Скан_накладной.pdf'}</span>
+          <span className="truncate">{fileName || 'Скан_документа.pdf'}</span>
+          {fileKey && (
+            <span className="text-[9px] uppercase font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              Cloudflare R2
+            </span>
+          )}
         </div>
 
         <div className="flex items-center space-x-1">
+          {realDownloadUrl && (
+            <a href={realDownloadUrl} target="_blank" rel="noopener noreferrer" download>
+              <Button variant="ghost" size="sm" className="h-8 text-xs text-blue-400 hover:text-white">
+                <Download className="h-3.5 w-3.5 mr-1" />
+                Скачать из R2
+              </Button>
+            </a>
+          )}
+
           <Button variant="ghost" size="sm" onClick={handleZoomOut} className="h-8 w-8 p-0 text-slate-400 hover:text-white">
             <ZoomOut className="h-4 w-4" />
           </Button>
@@ -58,72 +92,62 @@ export function ScanViewer({
 
       {/* Interactive Scan Canvas Area */}
       <div className="flex-1 p-6 overflow-auto flex items-center justify-center bg-slate-950/40 relative min-h-[400px]">
-        <div
-          className="transition-transform duration-200 shadow-2xl bg-white text-slate-900 p-8 rounded-md w-[450px] min-h-[550px] border border-slate-300 font-sans text-xs select-none"
-          style={{
-            transform: `scale(${zoom}) rotate(${rotation}deg)`,
-          }}
-        >
-          {/* Header Mock Stamp */}
-          <div className="flex justify-between items-start border-b-2 border-slate-900 pb-4 mb-4">
-            <div>
-              <h4 className="font-bold text-sm uppercase tracking-wide">Товарная Накладная</h4>
-              <p className="text-[11px] text-slate-600">№ {docNumber || '102-А'} от {docDate || new Date().toLocaleDateString('ru-RU')}</p>
+        {loadingUrl ? (
+          <div className="flex items-center space-x-2 text-slate-400">
+            <Loader2 className="h-5 w-5 animate-spin text-blue-400" />
+            <span>Генерация безопасной ссылки R2...</span>
+          </div>
+        ) : realDownloadUrl ? (
+          <div
+            className="transition-transform duration-200 shadow-2xl rounded-md max-w-full overflow-hidden"
+            style={{
+              transform: `scale(${zoom}) rotate(${rotation}deg)`,
+            }}
+          >
+            {/* Картинка или вставка файла */}
+            <img
+              src={realDownloadUrl}
+              alt={fileName || 'Скан R2'}
+              className="max-h-[600px] object-contain rounded border border-slate-800"
+              onError={(e) => {
+                // Если скан — PDF, покажем превью плашку
+                (e.target as HTMLElement).style.display = 'none';
+              }}
+            />
+          </div>
+        ) : (
+          /* Демо-макет при отсутствии реального файла */
+          <div
+            className="transition-transform duration-200 shadow-2xl bg-white text-slate-900 p-8 rounded-md w-[450px] min-h-[550px] border border-slate-300 font-sans text-xs select-none"
+            style={{
+              transform: `scale(${zoom}) rotate(${rotation}deg)`,
+            }}
+          >
+            <div className="flex justify-between items-start border-b-2 border-slate-900 pb-4 mb-4">
+              <div>
+                <h4 className="font-bold text-sm uppercase tracking-wide">Товарная Накладная</h4>
+                <p className="text-[11px] text-slate-600">№ {docNumber || '102-А'} от {docDate || new Date().toLocaleDateString('ru-RU')}</p>
+              </div>
+              <div className="border-2 border-emerald-600 text-emerald-700 text-[10px] font-bold uppercase p-1 rounded rotate-[-6deg] text-center">
+                <div>Оплачено</div>
+                <div>ГНС КР</div>
+              </div>
             </div>
-            <div className="border-2 border-emerald-600 text-emerald-700 text-[10px] font-bold uppercase p-1 rounded rotate-[-6deg] text-center">
-              <div>Оплачено</div>
-              <div>ГНС КР</div>
+
+            <div className="space-y-2 mb-6">
+              <div className="p-2 bg-slate-100 rounded border border-slate-200">
+                <span className="font-bold text-slate-700">Поставщик/Покупатель:</span>
+                <p className="text-slate-900 font-semibold">{counterpartyName || 'ОсОО «Азия Трейд»'}</p>
+                <p className="text-[10px] text-slate-600 font-mono">ИНН: 20101202310050</p>
+              </div>
+            </div>
+
+            <div className="mt-16 text-center text-slate-400 text-xs border-2 border-dashed border-slate-300 p-6 rounded">
+              <ImageIcon className="mx-auto h-8 w-8 text-slate-400 mb-2" />
+              Прикрепите сканы файла через форму для предпросмотра из Cloudflare R2
             </div>
           </div>
-
-          {/* Requisites Mock Block */}
-          <div className="space-y-2 mb-6">
-            <div className="p-2 bg-slate-100 rounded border border-slate-200">
-              <span className="font-bold text-slate-700">Поставщик/Покупатель:</span>
-              <p className="text-slate-900 font-semibold">{counterpartyName || 'ОсОО «Азия Трейд»'}</p>
-              <p className="text-[10px] text-slate-600 font-mono">ИНН: 20101202310050</p>
-            </div>
-          </div>
-
-          {/* Table Mock Rows */}
-          <table className="w-full border-collapse mb-6 text-[11px]">
-            <thead>
-              <tr className="border-b border-slate-400 text-slate-700 bg-slate-100">
-                <th className="text-left p-1">№</th>
-                <th className="text-left p-1">Наименование</th>
-                <th className="text-right p-1">Кол-во</th>
-                <th className="text-right p-1">Сумма (сом)</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr className="border-b border-slate-200">
-                <td className="p-1">1</td>
-                <td className="p-1">Вода Легенда 1.5л ПЭТ</td>
-                <td className="text-right p-1">100 шт</td>
-                <td className="text-right p-1">3 500.00</td>
-              </tr>
-              <tr className="border-b border-slate-200">
-                <td className="p-1">2</td>
-                <td className="p-1">Сок Натура 1.0л</td>
-                <td className="text-right p-1">50 шт</td>
-                <td className="text-right p-1">4 250.00</td>
-              </tr>
-            </tbody>
-          </table>
-
-          {/* Total Footer */}
-          <div className="flex justify-between items-center border-t-2 border-slate-900 pt-3">
-            <span className="font-bold text-slate-800">ВСЕГО К ОПЛАТЕ:</span>
-            <span className="font-bold text-sm text-slate-900">
-              {totalAmount ? Number(totalAmount).toLocaleString('ru-RU', { minimumFractionDigits: 2 }) : '7 750.00'} сом
-            </span>
-          </div>
-
-          <div className="mt-8 flex justify-between text-[9px] text-slate-500 pt-4 border-t border-slate-200">
-            <div>Отпустил: ______________</div>
-            <div>Принял: ______________</div>
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );

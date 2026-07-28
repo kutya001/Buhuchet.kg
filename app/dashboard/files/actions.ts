@@ -1,0 +1,110 @@
+'use server';
+
+import { createClient } from '@/lib/supabase/server';
+import { r2Client, r2BucketName } from '@/lib/r2';
+import { PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import type { ActionResponse } from '@/types/database.types';
+import { crypto } from 'next/dist/compiled/@edge-runtime/primitives';
+
+async function getUserContext() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return null;
+
+  const { data: profile } = await supabase
+    .from('users')
+    .select('company_id, is_super_admin')
+    .eq('id', user.id)
+    .single();
+
+  return {
+    userId: user.id,
+    companyId: profile?.company_id || 'system',
+    isSuperAdmin: !!profile?.is_super_admin,
+  };
+}
+
+/**
+ * Генерация Presigned PUT URL для прямой загрузки скана из браузера в Cloudflare R2
+ */
+export async function getPresignedUploadUrlAction(
+  fileName: string,
+  fileType: string
+): Promise<ActionResponse<{ uploadUrl: string; fileKey: string }>> {
+  try {
+    const ctx = await getUserContext();
+    if (!ctx) {
+      return { success: false, error: 'Пользователь не авторизован' };
+    }
+
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const uniqueId = Math.random().toString(36).substring(2, 10);
+
+    // Безопасное имя файла
+    const safeFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
+    const fileKey = `companies/${ctx.companyId}/${year}/${month}/${uniqueId}-${safeFileName}`;
+
+    // Составляем команду PUT
+    const command = new PutObjectCommand({
+      Bucket: r2BucketName,
+      Key: fileKey,
+      ContentType: fileType || 'application/octet-stream',
+    });
+
+    // Ссылка действительна 15 минут
+    const uploadUrl = await getSignedUrl(r2Client, command, { expiresIn: 900 });
+
+    return {
+      success: true,
+      data: {
+        uploadUrl,
+        fileKey,
+      },
+    };
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : 'Сбой генерации ссылки загрузки R2';
+    return { success: false, error: errorMsg };
+  }
+}
+
+/**
+ * Генерация Presigned GET URL для просмотра / скачивания скана из Cloudflare R2
+ */
+export async function getPresignedDownloadUrlAction(
+  fileKey: string
+): Promise<ActionResponse<{ downloadUrl: string }>> {
+  try {
+    const ctx = await getUserContext();
+    if (!ctx) {
+      return { success: false, error: 'Пользователь не авторизован' };
+    }
+
+    if (!fileKey) {
+      return { success: false, error: 'Ключ файла в R2 не указан' };
+    }
+
+    const command = new GetObjectCommand({
+      Bucket: r2BucketName,
+      Key: fileKey,
+    });
+
+    // Ссылка просмотра действительна 60 минут
+    const downloadUrl = await getSignedUrl(r2Client, command, { expiresIn: 3600 });
+
+    return {
+      success: true,
+      data: {
+        downloadUrl,
+      },
+    };
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : 'Сбой получения ссылки скачивания R2';
+    return { success: false, error: errorMsg };
+  }
+}

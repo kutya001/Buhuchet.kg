@@ -234,6 +234,7 @@ export default function B2BDocumentDetailPage() {
           <div className="flex-1 min-h-0">
             <ScanViewer
               fileName={currentFile?.file_name || document.mock_file_name}
+              fileKey={currentFile?.file_path_r2}
               docNumber={document.doc_number}
               docDate={document.doc_date}
               counterpartyName={document.receiver_company?.name || document.sender_company?.name}
