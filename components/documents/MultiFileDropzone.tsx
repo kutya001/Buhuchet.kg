@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef } from 'react';
-import { Upload, Camera, FileText, X, Loader2, CheckCircle2, AlertCircle, Folder } from 'lucide-react';
+import { Upload, Camera, FileText, X, Loader2, CheckCircle2, AlertCircle, Folder, FileCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -27,7 +27,6 @@ interface MultiFileDropzoneProps {
   files: FileItemState[];
   onFilesChange: (files: FileItemState[]) => void;
   disabled?: boolean;
-  onAutoSave?: (item: FileItemState) => Promise<boolean>;
 }
 
 export function MultiFileDropzone({
@@ -35,7 +34,6 @@ export function MultiFileDropzone({
   files,
   onFilesChange,
   disabled = false,
-  onAutoSave,
 }: MultiFileDropzoneProps) {
   const [globalUploading, setGlobalUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -79,22 +77,14 @@ export function MultiFileDropzone({
         xhr.send(file);
       });
 
-      // 3. Обновляем статус готовности R2
-      const updatedItem: FileItemState = {
-        ...item,
-        file_path_r2: fileKey,
-        progress: 100,
-        uploading: false,
-      };
-
+      // 3. Обновляем статус готовности R2 без автосохранения в БД
       onFilesChange(
-        files.map((f) => (f.tempId === item.tempId ? updatedItem : f))
+        files.map((f) =>
+          f.tempId === item.tempId
+            ? { ...f, file_path_r2: fileKey, progress: 100, uploading: false }
+            : f
+        )
       );
-
-      // 4. Мгновенное авто-сохранение в Supabase (если передан обработчик)
-      if (onAutoSave) {
-        await onAutoSave(updatedItem);
-      }
     } catch (err: any) {
       console.error('Ошибка R2:', err);
       onFilesChange(
@@ -130,7 +120,7 @@ export function MultiFileDropzone({
         file_name: name,
         file_size: formattedSize,
         file_type: file.type.includes('pdf') ? 'pdf' : 'image',
-        description: `Учредительный документ ${name}`,
+        description: `Скан ${name}`,
         comment: '',
         progress: 0,
         uploading: true,
@@ -175,7 +165,6 @@ export function MultiFileDropzone({
         className="hidden"
       />
 
-      {/* НАТИВНЫЙ ВЫЗОВ КАМЕРЫ СМАРТФОНА (capture="environment") */}
       <input
         ref={cameraInputRef}
         type="file"
@@ -186,14 +175,13 @@ export function MultiFileDropzone({
         className="hidden"
       />
 
-      {/* Две удобные мобильные кнопки & Drag-and-Drop зона */}
+      {/* Кнопки выбора файлов */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {/* Кнопка 1: Камера Смартфона */}
         <button
           type="button"
           onClick={() => !disabled && !globalUploading && cameraInputRef.current?.click()}
           disabled={disabled || globalUploading}
-          className="p-4 rounded-xl border-2 border-dashed border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 transition-all flex flex-col items-center justify-center text-center space-y-2 cursor-pointer active:scale-95"
+          className="p-4 rounded-xl border-2 border-dashed border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 transition-all flex flex-col items-center justify-center text-center space-y-2 cursor-pointer active:scale-95 min-h-[48px]"
         >
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-400">
             <Camera className="h-6 w-6" />
@@ -204,12 +192,11 @@ export function MultiFileDropzone({
           </div>
         </button>
 
-        {/* Кнопка 2: Выбор из файлов / Галереи / Компьютера */}
         <button
           type="button"
           onClick={() => !disabled && !globalUploading && fileInputRef.current?.click()}
           disabled={disabled || globalUploading}
-          className="p-4 rounded-xl border-2 border-dashed border-slate-800 bg-slate-900/40 hover:bg-slate-900/70 hover:border-blue-500/50 transition-all flex flex-col items-center justify-center text-center space-y-2 cursor-pointer active:scale-95"
+          className="p-4 rounded-xl border-2 border-dashed border-slate-800 bg-slate-900/40 hover:bg-slate-900/70 hover:border-blue-500/50 transition-all flex flex-col items-center justify-center text-center space-y-2 cursor-pointer active:scale-95 min-h-[48px]"
         >
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500/10 text-blue-400">
             <Folder className="h-6 w-6" />
@@ -224,15 +211,15 @@ export function MultiFileDropzone({
       {globalUploading && (
         <div className="flex items-center justify-center space-x-2 py-3 text-blue-400 bg-blue-500/10 rounded-xl border border-blue-500/20">
           <Loader2 className="h-5 w-5 animate-spin" />
-          <span className="text-sm font-medium">Прямая передача сканов в Cloudflare R2...</span>
+          <span className="text-sm font-medium">Передача файлов в Cloudflare R2...</span>
         </div>
       )}
 
-      {/* Список прикрепленных файлов с прогрессом */}
+      {/* Список прикрепленных файлов */}
       {files.length > 0 && (
         <div className="space-y-3 pt-2">
           <Label className="text-xs font-mono uppercase text-slate-400">
-            Загружаемые сканы ({files.length})
+            Сканы для сохранения ({files.length})
           </Label>
 
           {files.map((file) => (
@@ -246,13 +233,13 @@ export function MultiFileDropzone({
                     {file.uploading ? (
                       <Loader2 className="h-5 w-5 animate-spin text-blue-400" />
                     ) : (
-                      <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+                      <FileCheck className="h-5 w-5 text-emerald-400" />
                     )}
                   </div>
                   <div className="truncate">
                     <p className="text-sm font-medium text-white truncate">{file.file_name}</p>
-                    <p className="text-[11px] text-slate-500 font-mono">
-                      {file.file_size} • R2: {file.file_path_r2 ? 'Загружен' : 'Загрузка...'}
+                    <p className="text-[11px] text-slate-400 font-mono">
+                      {file.file_size} • {file.file_path_r2 ? '✅ Готов к сохранению (R2)' : 'Загрузка...'}
                     </p>
                   </div>
                 </div>
@@ -270,11 +257,10 @@ export function MultiFileDropzone({
                 )}
               </div>
 
-              {/* Прогресс бар прямой загрузки R2 */}
               {file.uploading && (
                 <div className="space-y-1">
                   <div className="flex justify-between text-[10px] font-mono text-slate-400">
-                    <span>Прямая передача R2</span>
+                    <span>Загрузка в R2</span>
                     <span>{file.progress || 0}%</span>
                   </div>
                   <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden">
@@ -293,15 +279,14 @@ export function MultiFileDropzone({
                 </div>
               )}
 
-              {/* Поля файла */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
                 <div className="space-y-1">
-                  <Label className="text-[11px] text-slate-400">Категория скана</Label>
+                  <Label className="text-[11px] text-slate-400">Категория *</Label>
                   <select
                     value={file.category_id}
                     onChange={(e) => handleFileItemChange(file.tempId, 'category_id', e.target.value)}
                     disabled={disabled}
-                    className="w-full h-9 rounded border border-slate-800 bg-slate-900 px-2 text-xs text-slate-100 focus:outline-none"
+                    className="w-full h-10 rounded-xl border border-slate-800 bg-slate-900 px-3 text-xs text-slate-100 focus:outline-none"
                   >
                     {categories.map((cat) => (
                       <option key={cat.id} value={cat.id}>
@@ -312,13 +297,14 @@ export function MultiFileDropzone({
                 </div>
 
                 <div className="space-y-1 sm:col-span-2">
-                  <Label className="text-[11px] text-slate-400">Описание (авто)</Label>
+                  <Label className="text-[11px] text-slate-400">Описание * (обязательно)</Label>
                   <Input
                     value={file.description}
                     onChange={(e) => handleFileItemChange(file.tempId, 'description', e.target.value)}
-                    placeholder="Например: Оригинал уставного документа"
+                    placeholder="Например: Устав компании с печатями"
                     disabled={disabled}
-                    className="h-9 text-xs bg-slate-900 border-slate-800 text-slate-100"
+                    required
+                    className="h-10 text-xs bg-slate-900 border-slate-800 text-slate-100 rounded-xl"
                   />
                 </div>
               </div>

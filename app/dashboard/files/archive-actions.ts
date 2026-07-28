@@ -51,7 +51,6 @@ export async function uploadLegalDocumentAction(data: any): Promise<ActionRespon
       comment,
     } = validation.data;
 
-    // Ищем дефолтную категорию "Устав компании", если не передана
     let targetCatId = category_id;
     if (!targetCatId) {
       const { data: defaultCat } = await adminSupabase
@@ -62,7 +61,6 @@ export async function uploadLegalDocumentAction(data: any): Promise<ActionRespon
       targetCatId = defaultCat?.id || '268dda23-d839-429d-bec2-aae391cffb00';
     }
 
-    // Вставка строки учредительного документа через adminSupabase для обхода возможных RLS сбоев
     const { data: insertedFile, error } = await adminSupabase
       .from('document_files')
       .insert({
@@ -171,6 +169,115 @@ export async function uploadFileToArchiveAction(data: any): Promise<ActionRespon
   }
 }
 
+// Редактирование и замена файла R2
+export async function updateDocumentFileAction(
+  fileId: string,
+  data: {
+    file_name?: string;
+    category_id?: string;
+    description?: string;
+    comment?: string;
+    file_path_r2?: string;
+    file_size?: string;
+  }
+): Promise<ActionResponse<DocumentFile>> {
+  try {
+    const supabase = await createClient();
+    const adminSupabase = await createAdminClient();
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return { success: false, error: 'Пользователь не авторизован' };
+    }
+
+    const { data: prof } = await supabase.from('users').select('company_id, is_super_admin').eq('id', user.id).single();
+
+    // Проверяем принадлежность файла
+    const { data: existingFile } = await adminSupabase.from('document_files').select('company_id').eq('id', fileId).single();
+    if (!existingFile) {
+      return { success: false, error: 'Файл не найден' };
+    }
+
+    if (existingFile.company_id !== prof?.company_id && !prof?.is_super_admin) {
+      return { success: false, error: 'Доступ запрещен: нельзя редактировать чужой файл' };
+    }
+
+    const updatePayload: Record<string, any> = {
+      updated_at: new Date().toISOString(),
+    };
+
+    if (data.file_name) updatePayload.file_name = data.file_name;
+    if (data.category_id) updatePayload.category_id = data.category_id;
+    if (data.description) updatePayload.description = data.description;
+    if (data.comment !== undefined) updatePayload.comment = data.comment;
+    if (data.file_path_r2) updatePayload.file_path_r2 = data.file_path_r2;
+    if (data.file_size) updatePayload.file_size = data.file_size;
+
+    const { data: updated, error } = await adminSupabase
+      .from('document_files')
+      .update(updatePayload)
+      .eq('id', fileId)
+      .select('*, file_categories(*)')
+      .single();
+
+    if (error || !updated) {
+      return { success: false, error: `Ошибка обновления файла: ${error?.message}` };
+    }
+
+    revalidatePath('/dashboard/files');
+    revalidatePath('/dashboard/company');
+    revalidatePath('/super-admin');
+    return { success: true, data: updated as DocumentFile };
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : 'Сбой обновления файла';
+    return { success: false, error: errorMsg };
+  }
+}
+
+// Удаление скана из базы данных
+export async function deleteDocumentFileAction(fileId: string): Promise<ActionResponse<boolean>> {
+  try {
+    const supabase = await createClient();
+    const adminSupabase = await createAdminClient();
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return { success: false, error: 'Пользователь не авторизован' };
+    }
+
+    const { data: prof } = await supabase.from('users').select('company_id, is_super_admin').eq('id', user.id).single();
+
+    const { data: existingFile } = await adminSupabase.from('document_files').select('company_id').eq('id', fileId).single();
+    if (!existingFile) {
+      return { success: false, error: 'Файл не найден' };
+    }
+
+    if (existingFile.company_id !== prof?.company_id && !prof?.is_super_admin) {
+      return { success: false, error: 'Доступ запрещен: нельзя удалять чужие файлы' };
+    }
+
+    const { error } = await adminSupabase.from('document_files').delete().eq('id', fileId);
+
+    if (error) {
+      return { success: false, error: `Ошибка удаления: ${error.message}` };
+    }
+
+    revalidatePath('/dashboard/files');
+    revalidatePath('/dashboard/company');
+    revalidatePath('/super-admin');
+    return { success: true, data: true };
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : 'Сбой при удалении файла';
+    return { success: false, error: errorMsg };
+  }
+}
+
 // Получение учредительных документов компании
 export async function getCompanyLegalDocsAction(): Promise<ActionResponse<DocumentFile[]>> {
   try {
@@ -240,6 +347,41 @@ export async function getCompanyFilesArchiveAction(): Promise<ActionResponse<Doc
     return { success: true, data: (files as DocumentFile[]) || [] };
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : 'Сбой при чтении файлов архива';
+    return { success: false, error: errorMsg };
+  }
+}
+
+// РЕЕСТР ВСЕХ ФАЙЛОВ СИСТЕМЫ (Для Панели Суперадмина)
+export async function getAllSystemFilesAction(): Promise<ActionResponse<any[]>> {
+  try {
+    const supabase = await createClient();
+    const adminSupabase = await createAdminClient();
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return { success: false, error: 'Пользователь не авторизован' };
+    }
+
+    const { data: prof } = await supabase.from('users').select('is_super_admin').eq('id', user.id).single();
+    if (!prof?.is_super_admin) {
+      return { success: false, error: 'Доступ ограничен: только для Суперадмина' };
+    }
+
+    const { data: files, error } = await adminSupabase
+      .from('document_files')
+      .select('*, file_categories(*), companies(name, inn)')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      return { success: false, error: `Ошибка загрузки системных файлов: ${error.message}` };
+    }
+
+    return { success: true, data: files || [] };
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : 'Сбой при вызове реестра файлов суперадмина';
     return { success: false, error: errorMsg };
   }
 }

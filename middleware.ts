@@ -44,11 +44,35 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Если авторизованный пользователь заходит на /login или /register -> отправляем в /dashboard
-  if (user && (pathname === '/login' || pathname === '/register')) {
-    const url = request.nextUrl.clone();
-    url.pathname = '/dashboard';
-    return NextResponse.redirect(url);
+  // Если заходит авторизованный пользователь
+  if (user) {
+    // Редирект авторизованного с страниц логина/регистрации
+    if (pathname === '/login' || pathname === '/register') {
+      const { data: dbUser } = await supabase
+        .from('users')
+        .select('is_super_admin')
+        .eq('id', user.id)
+        .single();
+
+      const url = request.nextUrl.clone();
+      url.pathname = dbUser?.is_super_admin ? '/super-admin' : '/dashboard';
+      return NextResponse.redirect(url);
+    }
+
+    // Если Суперадмин переходит на обычную главную дашборда (/dashboard) -> редиректим на /super-admin
+    if (pathname === '/dashboard') {
+      const { data: dbUser } = await supabase
+        .from('users')
+        .select('is_super_admin')
+        .eq('id', user.id)
+        .single();
+
+      if (dbUser?.is_super_admin) {
+        const url = request.nextUrl.clone();
+        url.pathname = '/super-admin';
+        return NextResponse.redirect(url);
+      }
+    }
   }
 
   return supabaseResponse;

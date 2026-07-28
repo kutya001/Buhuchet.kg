@@ -1,13 +1,13 @@
 'use server';
 
-import { createAdminClient } from '@/lib/supabase/admin';
+import { createAdminClient } from '@/lib/supabase/server';
 import type { ActionResponse, FileCategory, FeatureFlag, UserProfile, Company } from '@/types/database.types';
 import { revalidatePath } from 'next/cache';
 
 // Одобрить и Активировать компанию
 export async function approveCompanyAction(companyId: string): Promise<ActionResponse> {
   try {
-    const supabaseAdmin = createAdminClient();
+    const supabaseAdmin = await createAdminClient();
 
     const { error } = await supabaseAdmin
       .from('companies')
@@ -33,8 +33,8 @@ export async function approveCompanyAction(companyId: string): Promise<ActionRes
   }
 }
 
-// Вернуть компанию на доработку с указанием замечаний
-export async function rejectCompanyWithCommentAction(
+// Отклонить / Вернуть на доработку с комментарием
+export async function requestCompanyChangesAction(
   companyId: string,
   comment: string
 ): Promise<ActionResponse> {
@@ -43,7 +43,7 @@ export async function rejectCompanyWithCommentAction(
       return { success: false, error: 'Укажите понятную причину возврата заявки на доработку' };
     }
 
-    const supabaseAdmin = createAdminClient();
+    const supabaseAdmin = await createAdminClient();
 
     const { error } = await supabaseAdmin
       .from('companies')
@@ -55,7 +55,7 @@ export async function rejectCompanyWithCommentAction(
       .eq('id', companyId);
 
     if (error) {
-      return { success: false, error: `Ошибка отклонения компании: ${error.message}` };
+      return { success: false, error: `Ошибка отправки замечаний: ${error.message}` };
     }
 
     revalidatePath('/super-admin');
@@ -63,129 +63,80 @@ export async function rejectCompanyWithCommentAction(
     revalidatePath('/dashboard/pending');
     return { success: true };
   } catch (err: unknown) {
-    const errorMsg = err instanceof Error ? err.message : 'Сбой при отправке на доработку';
+    const errorMsg = err instanceof Error ? err.message : 'Сбой при отправке замечаний';
     return { success: false, error: errorMsg };
   }
 }
 
-// Создание категории файлов
-export async function createFileCategoryAction(
-  name: string,
-  description?: string,
-  icon?: string
-): Promise<ActionResponse<FileCategory>> {
-  try {
-    const supabaseAdmin = createAdminClient();
-
-    const { data, error } = await supabaseAdmin
-      .from('file_categories')
-      .insert({
-        name,
-        description: description || null,
-        icon: icon || 'FileText',
-        is_active: true,
-      })
-      .select()
-      .single();
-
-    if (error || !data) {
-      return { success: false, error: `Ошибка создания категории: ${error?.message}` };
-    }
-
-    revalidatePath('/super-admin');
-    return { success: true, data: data as FileCategory };
-  } catch (err: unknown) {
-    const errorMsg = err instanceof Error ? err.message : 'Сбой при создании категории';
-    return { success: false, error: errorMsg };
-  }
-}
-
-// Привязка пользователя к компании и смена роли
-export async function updateUserCompanyAndRoleAction(
-  userId: string,
-  companyId: string | null,
-  role: 'owner' | 'accountant' | 'manager',
-  isSuperAdmin?: boolean
-): Promise<ActionResponse> {
-  try {
-    const supabaseAdmin = createAdminClient();
-
-    const { error } = await supabaseAdmin
-      .from('users')
-      .update({
-        company_id: companyId || null,
-        role,
-        is_super_admin: isSuperAdmin ?? false,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', userId);
-
-    if (error) {
-      return { success: false, error: `Ошибка обновления пользователя: ${error.message}` };
-    }
-
-    revalidatePath('/super-admin');
-    return { success: true };
-  } catch (err: unknown) {
-    const errorMsg = err instanceof Error ? err.message : 'Сбой при обновлении профиля пользователя';
-    return { success: false, error: errorMsg };
-  }
-}
-
-// Переключение фичи (Feature Flag)
-export async function toggleFeatureFlagAction(
-  key: string,
-  isEnabled: boolean
-): Promise<ActionResponse> {
-  try {
-    const supabaseAdmin = createAdminClient();
-
-    const { error } = await supabaseAdmin
-      .from('feature_flags')
-      .update({
-        is_enabled: isEnabled,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('key', key);
-
-    if (error) {
-      return { success: false, error: `Ошибка переключения фичи: ${error.message}` };
-    }
-
-    revalidatePath('/super-admin');
-    revalidatePath('/dashboard', 'layout');
-    return { success: true };
-  } catch (err: unknown) {
-    const errorMsg = err instanceof Error ? err.message : 'Сбой при обновлении фичи';
-    return { success: false, error: errorMsg };
-  }
-}
-
-// Блокировка/Разблокировка компании
-export async function toggleCompanyStatusAction(
+// Заблокировать компанию
+export async function blockCompanyAction(
   companyId: string,
-  isActive: boolean
+  comment: string
 ): Promise<ActionResponse> {
   try {
-    const supabaseAdmin = createAdminClient();
+    const supabaseAdmin = await createAdminClient();
 
     const { error } = await supabaseAdmin
       .from('companies')
       .update({
-        is_active: isActive,
-        status: isActive ? 'active' : 'blocked',
+        status: 'blocked',
+        is_active: false,
+        moderation_comment: comment,
         updated_at: new Date().toISOString(),
       })
       .eq('id', companyId);
 
     if (error) {
-      return { success: false, error: `Ошибка смены статуса компании: ${error.message}` };
+      return { success: false, error: `Ошибка блокировки: ${error.message}` };
     }
 
     revalidatePath('/super-admin');
     return { success: true };
   } catch (err: unknown) {
-    const errorMsg = err instanceof Error ? err.message : 'Сбой при смене статуса компании';
+    const errorMsg = err instanceof Error ? err.message : 'Сбой при блокировке компании';
+    return { success: false, error: errorMsg };
+  }
+}
+
+// Получить компании на модерации
+export async function getPendingCompaniesAction(): Promise<ActionResponse<Company[]>> {
+  try {
+    const supabaseAdmin = await createAdminClient();
+
+    const { data, error } = await supabaseAdmin
+      .from('companies')
+      .select('*')
+      .eq('status', 'pending_approval')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      return { success: false, error: `Ошибка загрузки модерации: ${error.message}` };
+    }
+
+    return { success: true, data: (data as Company[]) || [] };
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : 'Сбой чтения модерации';
+    return { success: false, error: errorMsg };
+  }
+}
+
+// Получить все компании системы
+export async function getAllCompaniesAdminAction(): Promise<ActionResponse<Company[]>> {
+  try {
+    const supabaseAdmin = await createAdminClient();
+
+    const { data, error } = await supabaseAdmin
+      .from('companies')
+      .select('*')
+      .order('name');
+
+    if (error) {
+      return { success: false, error: `Ошибка загрузки компаний: ${error.message}` };
+    }
+
+    return { success: true, data: (data as Company[]) || [] };
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : 'Сбой чтения списка организаций';
     return { success: false, error: errorMsg };
   }
 }
