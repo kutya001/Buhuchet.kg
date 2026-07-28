@@ -5,8 +5,8 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 
 export async function signInAction(formData: FormData) {
-  const email = formData.get('email') as string;
-  const password = formData.get('password') as string;
+  const email = (formData.get('email') as string)?.trim();
+  const password = (formData.get('password') as string)?.trim();
   const supabase = await createClient();
 
   const { error } = await supabase.auth.signInWithPassword({
@@ -15,17 +15,21 @@ export async function signInAction(formData: FormData) {
   });
 
   if (error) {
-    return redirect('/login?error=Неверный email или пароль');
+    const errorMessage = error.message === 'Invalid login credentials' 
+      ? 'Неверный email или пароль' 
+      : error.message;
+
+    redirect(`/login?error=${encodeURIComponent(errorMessage)}`);
   }
 
   revalidatePath('/', 'layout');
-  return redirect('/dashboard');
+  redirect('/dashboard');
 }
 
 export async function signUpAction(formData: FormData) {
-  const email = formData.get('email') as string;
-  const password = formData.get('password') as string;
-  const fullName = formData.get('fullName') as string;
+  const email = (formData.get('email') as string)?.trim();
+  const password = (formData.get('password') as string)?.trim();
+  const fullName = (formData.get('fullName') as string)?.trim();
   const supabase = await createClient();
 
   const { data, error } = await supabase.auth.signUp({
@@ -39,7 +43,7 @@ export async function signUpAction(formData: FormData) {
   });
 
   if (error) {
-    return redirect(`/register?error=${encodeURIComponent(error.message)}`);
+    redirect(`/register?error=${encodeURIComponent(error.message)}`);
   }
 
   // Создаем запись в публичной таблице users
@@ -54,11 +58,11 @@ export async function signUpAction(formData: FormData) {
   }
 
   revalidatePath('/', 'layout');
-  return redirect('/onboarding');
+  redirect('/onboarding');
 }
 
 export async function signOutAction() {
   const supabase = await createClient();
   await supabase.auth.signOut();
-  return redirect('/login');
+  redirect('/login');
 }
