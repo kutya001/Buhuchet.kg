@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useTransition } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Table,
   TableHeader,
@@ -24,10 +25,17 @@ import {
   ArrowUpRight,
   ArrowDownLeft,
   Download,
+  Plus,
+  X,
+  CheckCircle2,
+  AlertCircle,
+  Folder,
 } from 'lucide-react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { getPresignedDownloadUrlAction } from './actions';
+import { uploadFileToArchiveAction } from './archive-actions';
+import { MultiFileDropzone, type FileItemState } from '@/components/documents/MultiFileDropzone';
 import type { DocumentFile, FileCategory, Document, Company } from '@/types/database.types';
 
 type ExtendedDocumentFile = DocumentFile & {
@@ -43,46 +51,53 @@ export default function FilesRegistryPage() {
   const [categories, setCategories] = useState<FileCategory[]>([]);
   const [currentCompanyId, setCurrentCompanyId] = useState<string>('');
   const [loading, setLoading] = useState(true);
+  const [isPending, startTransition] = useTransition();
+
+  // Модалка быстрой загрузки в архив
+  const [showArchiveModal, setShowArchiveModal] = useState(false);
+  const [archiveUploadFiles, setArchiveUploadFiles] = useState<FileItemState[]>([]);
 
   // Фильтры
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [directionFilter, setDirectionFilter] = useState<'all' | 'inbox' | 'outbox'>('all');
+  const [directionFilter, setDirectionFilter] = useState<'all' | 'inbox' | 'outbox' | 'internal'>('all');
+
+  const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const supabase = createClient();
 
-  useEffect(() => {
-    async function loadFilesData() {
-      setLoading(true);
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+  const loadFilesData = async () => {
+    setLoading(true);
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-      let myCompanyId = '';
-      if (user) {
-        const { data: prof } = await supabase.from('users').select('company_id').eq('id', user.id).single();
-        if (prof?.company_id) {
-          myCompanyId = prof.company_id;
-          setCurrentCompanyId(prof.company_id);
-        }
+    let myCompanyId = '';
+    if (user) {
+      const { data: prof } = await supabase.from('users').select('company_id').eq('id', user.id).single();
+      if (prof?.company_id) {
+        myCompanyId = prof.company_id;
+        setCurrentCompanyId(prof.company_id);
       }
-
-      // 1. Категории
-      const { data: catData } = await supabase.from('file_categories').select('*').order('name');
-      if (catData) setCategories(catData as FileCategory[]);
-
-      // 2. Файлы документов
-      const { data: filesData } = await supabase
-        .from('document_files')
-        .select('*, file_categories(*), documents(*, sender_company:companies!sender_company_id(*), receiver_company:companies!receiver_company_id(*))')
-        .order('created_at', { ascending: false });
-
-      if (filesData) {
-        setFiles(filesData as ExtendedDocumentFile[]);
-      }
-      setLoading(false);
     }
 
+    // 1. Категории
+    const { data: catData } = await supabase.from('file_categories').select('*').order('name');
+    if (catData) setCategories(catData as FileCategory[]);
+
+    // 2. Файлы документов
+    const { data: filesData } = await supabase
+      .from('document_files')
+      .select('*, file_categories(*), documents(*, sender_company:companies!sender_company_id(*), receiver_company:companies!receiver_company_id(*))')
+      .order('created_at', { ascending: false });
+
+    if (filesData) {
+      setFiles(filesData as ExtendedDocumentFile[]);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
     loadFilesData();
   }, []);
 
@@ -94,13 +109,48 @@ export default function FilesRegistryPage() {
     }
   };
 
+  const handleSaveToArchive = () => {
+    if (archiveUploadFiles.length === 0) return;
+
+    setMsg(null);
+    startTransition(async () => {
+      let count = 0;
+      for (const item of archiveUploadFiles) {
+        if (!item.file_path_r2) continue;
+
+        const res = await uploadFileToArchiveAction({
+          category_id: item.category_id,
+          file_name: item.file_name,
+          file_size: item.file_size,
+          file_type: item.file_type,
+          file_path_r2: item.file_path_r2,
+          description: item.description,
+          comment: item.comment,
+        });
+
+        if (res.success) count++;
+      }
+
+      if (count > 0) {
+        setMsg({ type: 'success', text: `Сохранено сканов в личный архив: ${count}` });
+        setArchiveUploadFiles([]);
+        setShowArchiveModal(false);
+        loadFilesData();
+      } else {
+        setMsg({ type: 'error', text: 'Ошибка сохранения файлов в архив' });
+      }
+    });
+  };
+
   const filteredFiles = files.filter((f) => {
     const doc = f.documents;
     const isInbox = doc?.receiver_company_id === currentCompanyId;
     const isOutbox = doc?.sender_company_id === currentCompanyId;
+    const isInternal = f.is_internal || f.is_legal_doc || !f.document_id;
 
     if (directionFilter === 'inbox' && !isInbox) return false;
     if (directionFilter === 'outbox' && !isOutbox) return false;
+    if (directionFilter === 'internal' && !isInternal) return false;
 
     if (selectedCategory !== 'all' && f.category_id !== selectedCategory) return false;
 
@@ -117,17 +167,38 @@ export default function FilesRegistryPage() {
 
   return (
     <div className="space-y-4 md:space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 className="text-xl md:text-2xl font-bold text-white tracking-tight flex items-center">
             <FolderOpen className="h-5 w-5 md:h-6 md:w-6 mr-2 text-emerald-400" />
             Реестр Файлов (Cloudflare R2)
           </h2>
           <p className="text-xs md:text-sm text-slate-400 mt-0.5">
-            Все сканы и прикрепеленные первичные файлы организации
+            Все сканы B2B документов и личный внутренний архив компании
           </p>
         </div>
+
+        <Button
+          onClick={() => setShowArchiveModal(true)}
+          className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs md:text-sm shadow-lg shadow-emerald-600/20"
+        >
+          <Plus className="h-4 w-4 mr-1.5" />+ Загрузить в Личный Архив
+        </Button>
       </div>
+
+      {msg && (
+        <Alert
+          variant={msg.type === 'success' ? 'success' : 'destructive'}
+          className={
+            msg.type === 'success'
+              ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-400'
+              : 'border-red-500/50 bg-red-500/10 text-red-400'
+          }
+        >
+          {msg.type === 'success' ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
+          <AlertDescription>{msg.text}</AlertDescription>
+        </Alert>
+      )}
 
       {/* Фильтры */}
       <Card className="bg-slate-900/40 border-slate-800 p-3 md:p-4">
@@ -163,9 +234,10 @@ export default function FilesRegistryPage() {
               onChange={(e) => setDirectionFilter(e.target.value as any)}
               className="w-full h-9 md:h-10 rounded-md border border-slate-800 bg-slate-950 px-3 text-xs md:text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <option value="all">Все направления</option>
+              <option value="all">Все направления и архивы</option>
               <option value="inbox">Только Входящие файлы</option>
               <option value="outbox">Только Исходящие файлы</option>
+              <option value="internal">Только Личный Архив</option>
             </select>
           </div>
         </div>
@@ -192,19 +264,24 @@ export default function FilesRegistryPage() {
                   <TableHead>Описание *</TableHead>
                   <TableHead>Организация-партнер</TableHead>
                   <TableHead>Хранилище</TableHead>
-                  <TableHead>Размер</TableHead>
                   <TableHead className="text-right">Действия</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredFiles.map((f) => {
                   const isInbox = f.documents?.receiver_company_id === currentCompanyId;
+                  const isInternal = f.is_internal || f.is_legal_doc || !f.document_id;
                   const partner = isInbox ? f.documents?.sender_company : f.documents?.receiver_company;
 
                   return (
                     <TableRow key={f.id}>
                       <TableCell>
-                        {isInbox ? (
+                        {isInternal ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                            <Folder className="h-3 w-3 mr-1" />
+                            Личный архив
+                          </span>
+                        ) : isInbox ? (
                           <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                             <ArrowDownLeft className="h-3 w-3 mr-1" />
                             Входящий
@@ -232,7 +309,7 @@ export default function FilesRegistryPage() {
                       <TableCell>
                         <div className="font-medium text-slate-200 text-xs flex items-center space-x-1">
                           <Building2 className="h-3.5 w-3.5 text-slate-500 flex-shrink-0" />
-                          <span className="truncate max-w-[160px]">{partner?.name || '—'}</span>
+                          <span className="truncate max-w-[160px]">{isInternal ? 'Внутреннее' : partner?.name || '—'}</span>
                         </div>
                       </TableCell>
 
@@ -245,8 +322,6 @@ export default function FilesRegistryPage() {
                           <span className="text-[10px] font-mono text-slate-500">Локальный</span>
                         )}
                       </TableCell>
-
-                      <TableCell className="font-mono text-xs text-slate-400">{f.file_size || '1.5 MB'}</TableCell>
 
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end space-x-1">
@@ -295,6 +370,7 @@ export default function FilesRegistryPage() {
         ) : (
           filteredFiles.map((f) => {
             const isInbox = f.documents?.receiver_company_id === currentCompanyId;
+            const isInternal = f.is_internal || f.is_legal_doc || !f.document_id;
             const partner = isInbox ? f.documents?.sender_company : f.documents?.receiver_company;
 
             return (
@@ -305,7 +381,12 @@ export default function FilesRegistryPage() {
                     <span className="text-[10px] font-mono text-slate-500">{f.file_size || '1.5 MB'}</span>
                   </div>
 
-                  {isInbox ? (
+                  {isInternal ? (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                      <Folder className="h-3 w-3 mr-1" />
+                      Личный архив
+                    </span>
+                  ) : isInbox ? (
                     <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                       <ArrowDownLeft className="h-3 w-3 mr-1" />
                       Входящий
@@ -325,7 +406,7 @@ export default function FilesRegistryPage() {
                 <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-800/60">
                   <div className="flex items-center space-x-1 text-slate-400 text-xs truncate max-w-[180px]">
                     <Building2 className="h-3.5 w-3.5 text-slate-500 flex-shrink-0" />
-                    <span className="truncate">{partner?.name || '—'}</span>
+                    <span className="truncate">{isInternal ? 'Внутренний файл' : partner?.name || '—'}</span>
                   </div>
 
                   <div className="flex items-center space-x-2">
@@ -354,6 +435,46 @@ export default function FilesRegistryPage() {
           })
         )}
       </div>
+
+      {/* МОДАЛЬНОЕ ОКНО ЗАГРУЗКИ В ЛИЧНЫЙ АРХИВ */}
+      {showArchiveModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
+          <Card className="w-full max-w-xl bg-slate-900 border-slate-800 shadow-2xl overflow-hidden p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="text-base md:text-lg font-bold text-white flex items-center">
+                <FolderOpen className="h-5 w-5 mr-2 text-emerald-400" />
+                Загрузка в Личный Архив Организации
+              </h3>
+              <Button variant="ghost" size="sm" onClick={() => setShowArchiveModal(false)} className="h-8 w-8 p-0 text-slate-400">
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
+
+            <MultiFileDropzone
+              categories={categories}
+              files={archiveUploadFiles}
+              onFilesChange={setArchiveUploadFiles}
+              disabled={isPending}
+            />
+
+            {archiveUploadFiles.length > 0 && (
+              <div className="flex justify-end space-x-3 pt-2 border-t border-slate-800">
+                <Button variant="outline" onClick={() => setShowArchiveModal(false)} className="border-slate-800 text-slate-400">
+                  Отмена
+                </Button>
+                <Button
+                  onClick={handleSaveToArchive}
+                  disabled={isPending}
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs md:text-sm"
+                >
+                  {isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <CheckCircle2 className="h-4 w-4 mr-1.5" />}
+                  Сохранить в Архив
+                </Button>
+              </div>
+            )}
+          </Card>
+        </div>
+      )}
     </div>
   );
 }

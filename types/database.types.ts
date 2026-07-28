@@ -74,7 +74,8 @@ export interface FileCategory {
 
 export interface DocumentFile {
   id: string;
-  document_id: string;
+  document_id?: string | null;
+  company_id?: string | null;
   category_id?: string | null;
   file_name: string;
   file_size?: string | null;
@@ -82,6 +83,8 @@ export interface DocumentFile {
   file_path_r2?: string | null;
   description: string;
   comment?: string | null;
+  is_internal?: boolean;
+  is_legal_doc?: boolean;
   created_at: string;
   file_categories?: FileCategory | null;
 }
