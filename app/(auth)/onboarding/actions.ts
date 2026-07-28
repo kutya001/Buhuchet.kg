@@ -1,6 +1,6 @@
 'use server';
 
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createAdminClient } from '@/lib/supabase/server';
 import type { ActionResponse, Company } from '@/types/database.types';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
@@ -18,6 +18,7 @@ const onboardingSchema = z.object({
 export async function createCompanyOnboardingAction(data: any): Promise<ActionResponse<Company>> {
   try {
     const supabase = await createClient();
+    const adminSupabase = await createAdminClient();
 
     const {
       data: { user },
@@ -35,8 +36,8 @@ export async function createCompanyOnboardingAction(data: any): Promise<ActionRe
 
     const { name, inn, industry, email, phone, legal_address, director_name } = validation.data;
 
-    // 1. Создаем компанию со статусом pending_approval
-    const { data: company, error: compError } = await supabase
+    // 1. Создаем компанию со статусом pending_approval используя adminSupabase для гарантированного считывания
+    const { data: company, error: compError } = await adminSupabase
       .from('companies')
       .insert({
         name,
@@ -58,7 +59,7 @@ export async function createCompanyOnboardingAction(data: any): Promise<ActionRe
     }
 
     // 2. Привязываем пользователя к компании и назначаем роль owner
-    const { error: userError } = await supabase
+    const { error: userError } = await adminSupabase
       .from('users')
       .update({
         company_id: company.id,
@@ -85,7 +86,7 @@ export async function resubmitCompanyForModerationAction(
   data: any
 ): Promise<ActionResponse<Company>> {
   try {
-    const supabase = await createClient();
+    const adminSupabase = await createAdminClient();
 
     const validation = onboardingSchema.safeParse(data);
     if (!validation.success) {
@@ -96,7 +97,7 @@ export async function resubmitCompanyForModerationAction(
     const { name, inn, industry, email, phone, legal_address, director_name } = validation.data;
 
     // Повторно отправляем на модерацию (pending_approval), очищая замечания
-    const { data: company, error } = await supabase
+    const { data: company, error } = await adminSupabase
       .from('companies')
       .update({
         name,
