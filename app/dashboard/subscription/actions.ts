@@ -59,7 +59,8 @@ export async function processMockPaymentAction(
     if (periodMonths === 6) discountPercent = 15;
     if (periodMonths === 12) discountPercent = 20;
 
-    const totalPriceWithoutDiscount = baseMonthlyPrice * periodMonths;
+    const months = Number(periodMonths);
+    const totalPriceWithoutDiscount = baseMonthlyPrice * months;
     const finalAmount = Math.round(totalPriceWithoutDiscount * (1 - discountPercent / 100));
 
     // 1. Фиксируем запись об имитационной оплате
@@ -91,7 +92,7 @@ export async function processMockPaymentAction(
       startDate = new Date(currentSub.expires_at);
     }
     const newExpiresAt = new Date(startDate);
-    newExpiresAt.setMonth(newExpiresAt.getMonth() + periodMonths);
+    newExpiresAt.setMonth(newExpiresAt.getMonth() + months);
 
     // 3. Обновляем статус подписки компании
     const { error: subError } = await supabase

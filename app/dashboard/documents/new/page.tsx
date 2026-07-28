@@ -9,131 +9,116 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   FileText,
-  Plus,
-  Trash2,
+  Send,
   Building2,
-  Calendar,
-  Tag,
   ArrowLeft,
   Loader2,
   AlertCircle,
-  Package,
+  FolderPlus,
 } from 'lucide-react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
-import { createDocumentAction } from '../actions';
-import { MockDropzone } from '@/components/documents/MockDropzone';
-import type { Counterparty, Nomenclature, DocumentType } from '@/types/database.types';
+import { createB2BDocumentAction } from '../actions';
+import { MultiFileDropzone, FileItemState } from '@/components/documents/MultiFileDropzone';
+import type { Company, FileCategory, DocumentType } from '@/types/database.types';
 
-interface ItemRow {
-  id: string;
-  nomenclature_id?: string;
-  title: string;
-  quantity: number;
-  price: number;
-  total: number;
-}
-
-export default function NewDocumentPage() {
+export default function NewB2BDocumentPage() {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
-  const [counterparties, setCounterparties] = useState<Counterparty[]>([]);
-  const [nomenclatures, setNomenclatures] = useState<Nomenclature[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [categories, setCategories] = useState<FileCategory[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Поля формы
   const [docType, setDocType] = useState<DocumentType>('realization');
-  const [counterpartyId, setCounterpartyId] = useState('');
+  const [receiverCompanyId, setReceiverCompanyId] = useState('');
   const [docNumber, setDocNumber] = useState('');
   const [docDate, setDocDate] = useState(new Date().toISOString().split('T')[0]);
   const [comment, setComment] = useState('');
-
-  // Мок-файл
-  const [mockFileName, setMockFileName] = useState<string | null>(null);
-  const [mockFileSize, setMockFileSize] = useState<string | null>(null);
-
-  // Табличная часть
-  const [items, setItems] = useState<ItemRow[]>([
-    { id: '1', title: '', quantity: 1, price: 0, total: 0 },
-  ]);
+  const [files, setFiles] = useState<FileItemState[]>([]);
 
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const supabase = createClient();
 
   useEffect(() => {
-    async function loadData() {
-      const { data: cData } = await supabase.from('counterparties').select('*').order('name');
-      const { data: nData } = await supabase.from('nomenclature').select('*').order('title');
+    async function loadInitialData() {
+      // Загружаем профиль для исключения своей компании из списка получателей
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
 
-      if (cData) setCounterparties(cData as Counterparty[]);
-      if (nData) setNomenclatures(nData as Nomenclature[]);
-      setLoading(false);
-    }
-    loadData();
-  }, []);
-
-  const handleAddItem = () => {
-    setItems((prev) => [
-      ...prev,
-      { id: Date.now().toString(), title: '', quantity: 1, price: 0, total: 0 },
-    ]);
-  };
-
-  const handleRemoveItem = (index: number) => {
-    setItems((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const handleItemChange = (index: number, field: keyof ItemRow, value: any) => {
-    setItems((prev) => {
-      const updated = [...prev];
-      const row = { ...updated[index], [field]: value };
-
-      if (field === 'nomenclature_id') {
-        const nom = nomenclatures.find((n) => n.id === value);
-        if (nom) {
-          row.title = nom.title;
-          row.price = Number(nom.price);
-        }
+      let myCompanyId = '';
+      if (user) {
+        const { data: prof } = await supabase.from('users').select('company_id').eq('id', user.id).single();
+        if (prof?.company_id) myCompanyId = prof.company_id;
       }
 
-      row.total = Number(row.quantity) * Number(row.price);
-      updated[index] = row;
-      return updated;
-    });
-  };
+      // 1. Загружаем компании-получатели
+      const { data: compData } = await supabase
+        .from('companies')
+        .select('*')
+        .eq('is_active', true)
+        .order('name');
 
-  const grandTotal = items.reduce((sum, item) => sum + (item.total || 0), 0);
+      if (compData) {
+        setCompanies((compData as Company[]).filter((c) => c.id !== myCompanyId));
+      }
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+      // 2. Загружаем категории файлов
+      const { data: catData } = await supabase
+        .from('file_categories')
+        .select('*')
+        .eq('is_active', true)
+        .order('name');
+
+      if (catData) {
+        setCategories(catData as FileCategory[]);
+      }
+
+      setLoading(false);
+    }
+
+    loadInitialData();
+  }, []);
+
+  const handleSubmit = (targetStatus: 'draft' | 'sent') => {
     setErrorMsg(null);
 
-    const docPayload = {
+    if (!receiverCompanyId) {
+      setErrorMsg('Выберите организацию-получателя документа');
+      return;
+    }
+
+    if (files.length === 0) {
+      setErrorMsg('Прикрепите хотя бы один файл с описанием');
+      return;
+    }
+
+    for (const f of files) {
+      if (!f.description || f.description.trim().length < 3) {
+        setErrorMsg(`Заполните описание для файла "${f.file_name}" (минимум 3 символа)`);
+        return;
+      }
+    }
+
+    const payload = {
       doc_type: docType,
-      counterparty_id: counterpartyId || null,
+      receiver_company_id: receiverCompanyId,
       doc_number: docNumber || null,
       doc_date: docDate,
       comment: comment || null,
-      status: 'draft',
-      mock_file_name: mockFileName,
-      mock_file_size: mockFileSize,
-      items: items.map((i) => ({
-        nomenclature_id: i.nomenclature_id || null,
-        title: i.title,
-        quantity: Number(i.quantity),
-        price: Number(i.price),
-        total: Number(i.total),
-      })),
+      status: targetStatus,
+      files,
     };
 
     startTransition(async () => {
-      const res = await createDocumentAction(docPayload);
+      const res = await createB2BDocumentAction(payload);
       if (res.success && res.data) {
         router.push(`/dashboard/documents/${res.data.id}`);
       } else {
-        setErrorMsg(res.error || 'Ошибка сохранения документа');
+        setErrorMsg(res.error || 'Ошибка сохранения B2B документа');
       }
     });
   };
@@ -142,13 +127,13 @@ export default function NewDocumentPage() {
     return (
       <div className="flex items-center justify-center h-64 text-slate-400">
         <Loader2 className="h-8 w-8 animate-spin mr-2" />
-        <span>Загрузка данных для формы...</span>
+        <span>Загрузка данных для B2B отправки...</span>
       </div>
     );
   }
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
+    <div className="max-w-4xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-3">
           <Link href="/dashboard/documents">
@@ -158,8 +143,8 @@ export default function NewDocumentPage() {
             </Button>
           </Link>
           <div>
-            <h2 className="text-2xl font-bold text-white tracking-tight">Создание Документа</h2>
-            <p className="text-sm text-slate-400">Формирование первичного документа и прикрепление скана</p>
+            <h2 className="text-2xl font-bold text-white tracking-tight">Создание & B2B Отправка Документа</h2>
+            <p className="text-sm text-slate-400">Адресация документов и мультизагрузка сканов партнёру</p>
           </div>
         </div>
       </div>
@@ -171,16 +156,35 @@ export default function NewDocumentPage() {
         </Alert>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Шапка документа */}
+      <div className="space-y-6">
+        {/* Шапка B2B адресации */}
         <Card className="bg-slate-900/40 border-slate-800">
           <CardHeader>
             <CardTitle className="text-lg flex items-center">
-              <FileText className="h-5 w-5 mr-2 text-blue-400" />
-              Реквизиты Шапки Документа
+              <Building2 className="h-5 w-5 mr-2 text-blue-400" />
+              Реквизиты и Адресация
             </CardTitle>
           </CardHeader>
-          <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="receiver">Организация-Получатель *</Label>
+              <select
+                id="receiver"
+                value={receiverCompanyId}
+                onChange={(e) => setReceiverCompanyId(e.target.value)}
+                required
+                className="w-full h-10 rounded-md border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">-- Выберите организацию-партнера из базы --</option>
+                {companies.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} (ИНН: {c.inn})
+                  </option>
+                ))}
+              </select>
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="doc_type">Тип Документа</Label>
               <select
@@ -191,25 +195,8 @@ export default function NewDocumentPage() {
               >
                 <option value="realization">Реализация (Продажа)</option>
                 <option value="purchase">Закуп (Поступление)</option>
-                <option value="payment">Оплата (Чек / Перевод)</option>
+                <option value="payment">Оплата (Перевод / Чек)</option>
                 <option value="advance">Авансовый отчет</option>
-              </select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="counterparty_id">Контрагент</Label>
-              <select
-                id="counterparty_id"
-                value={counterpartyId}
-                onChange={(e) => setCounterpartyId(e.target.value)}
-                className="w-full h-10 rounded-md border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">-- Выберите из Справочника --</option>
-                {counterparties.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name} (ИНН: {c.inn})
-                  </option>
-                ))}
               </select>
             </div>
 
@@ -219,7 +206,7 @@ export default function NewDocumentPage() {
                 id="doc_number"
                 value={docNumber}
                 onChange={(e) => setDocNumber(e.target.value)}
-                placeholder="102-А"
+                placeholder="№ 102-А"
                 className="bg-slate-950 border-slate-800 text-slate-100 font-mono"
               />
             </div>
@@ -237,174 +224,71 @@ export default function NewDocumentPage() {
             </div>
 
             <div className="space-y-2 md:col-span-2">
-              <Label htmlFor="comment">Примечание / Комментарий</Label>
+              <Label htmlFor="comment">Примечание к отправке</Label>
               <Input
                 id="comment"
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
-                placeholder="Например: Поставка по договору №45"
+                placeholder="Например: Пакет документов по поставке за июль"
                 className="bg-slate-950 border-slate-800 text-slate-100"
               />
             </div>
           </CardContent>
         </Card>
 
-        {/* Дропзона Скана */}
+        {/* Мультизагрузка файлов */}
         <Card className="bg-slate-900/40 border-slate-800">
           <CardHeader>
-            <CardTitle className="text-lg">Скан или фото накладной</CardTitle>
-            <CardDescription>Прикрепите фото оригинал-документа для проверки бухгалтером</CardDescription>
+            <CardTitle className="text-lg flex items-center">
+              <FolderPlus className="h-5 w-5 mr-2 text-emerald-400" />
+              Прикрепить файлы / сканы первички
+            </CardTitle>
+            <CardDescription>
+              Загрузите файлы и заполните обязательные категории и описания
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <MockDropzone
-              fileName={mockFileName}
-              fileSize={mockFileSize}
-              onFileUploaded={(name, size) => {
-                setMockFileName(name);
-                setMockFileSize(size);
-              }}
-              onFileRemoved={() => {
-                setMockFileName(null);
-                setMockFileSize(null);
-              }}
+            <MultiFileDropzone
+              categories={categories}
+              files={files}
+              onFilesChange={setFiles}
+              disabled={isPending}
             />
           </CardContent>
-        </Card>
 
-        {/* Табличная часть товаров */}
-        <Card className="bg-slate-900/40 border-slate-800">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle className="text-lg flex items-center">
-                <Package className="h-5 w-5 mr-2 text-purple-400" />
-                Товары и Услуги
-              </CardTitle>
-              <CardDescription>Табличная часть документа (позиции)</CardDescription>
-            </div>
+          <CardFooter className="pt-4 pb-6 flex justify-end space-x-3 border-t border-slate-800/60">
             <Button
               type="button"
               variant="outline"
-              size="sm"
-              onClick={handleAddItem}
+              onClick={() => handleSubmit('draft')}
+              disabled={isPending}
               className="border-slate-800 text-slate-300 hover:text-white"
             >
-              <Plus className="h-4 w-4 mr-1" />
-              Добавить позицию
+              {isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+              Сохранить черновик
             </Button>
-          </CardHeader>
 
-          <CardContent className="space-y-3">
-            {items.map((item, index) => (
-              <div
-                key={item.id}
-                className="grid grid-cols-12 gap-3 items-center p-3 rounded-lg bg-slate-950/60 border border-slate-800"
-              >
-                {/* Выбор товара из справочника */}
-                <div className="col-span-12 md:col-span-5 space-y-1">
-                  <span className="text-[10px] text-slate-500 font-mono">Товар из справочника</span>
-                  <select
-                    value={item.nomenclature_id || ''}
-                    onChange={(e) => handleItemChange(index, 'nomenclature_id', e.target.value)}
-                    className="w-full h-9 rounded-md border border-slate-800 bg-slate-900 px-2 py-1 text-xs text-slate-100 focus:outline-none"
-                  >
-                    <option value="">-- Ввести наименование вручную --</option>
-                    {nomenclatures.map((n) => (
-                      <option key={n.id} value={n.id}>
-                        {n.title} ({n.unit || 'шт'}) - {n.price} сом
-                      </option>
-                    ))}
-                  </select>
-                  <Input
-                    value={item.title}
-                    onChange={(e) => handleItemChange(index, 'title', e.target.value)}
-                    placeholder="Наименование товара/услуги"
-                    required
-                    className="h-9 text-xs bg-slate-900 border-slate-800 text-slate-100"
-                  />
-                </div>
-
-                {/* Количество */}
-                <div className="col-span-4 md:col-span-2 space-y-1">
-                  <span className="text-[10px] text-slate-500 font-mono">Кол-во</span>
-                  <Input
-                    type="number"
-                    step="0.001"
-                    min="0.001"
-                    value={item.quantity}
-                    onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
-                    required
-                    className="h-9 text-xs bg-slate-900 border-slate-800 text-slate-100 font-mono"
-                  />
-                </div>
-
-                {/* Цена */}
-                <div className="col-span-4 md:col-span-2 space-y-1">
-                  <span className="text-[10px] text-slate-500 font-mono">Цена (сом)</span>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={item.price}
-                    onChange={(e) => handleItemChange(index, 'price', e.target.value)}
-                    required
-                    className="h-9 text-xs bg-slate-900 border-slate-800 text-slate-100 font-mono"
-                  />
-                </div>
-
-                {/* Сумма */}
-                <div className="col-span-3 md:col-span-2 space-y-1">
-                  <span className="text-[10px] text-slate-500 font-mono">Сумма (сом)</span>
-                  <div className="h-9 px-2 flex items-center font-mono font-bold text-emerald-400 text-xs bg-slate-900 rounded border border-slate-800">
-                    {item.total.toFixed(2)}
-                  </div>
-                </div>
-
-                {/* Удаление */}
-                <div className="col-span-1 flex justify-end pt-4">
-                  {items.length > 1 && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleRemoveItem(index)}
-                      className="h-8 w-8 p-0 text-slate-500 hover:text-red-400"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  )}
-                </div>
-              </div>
-            ))}
-
-            {/* Итог по документу */}
-            <div className="flex justify-end pt-4 border-t border-slate-800">
-              <div className="text-right">
-                <span className="text-xs text-slate-400 uppercase font-mono">ИТОГО ПО ДОКУМЕНТУ:</span>
-                <div className="text-2xl font-bold font-mono text-emerald-400">
-                  {grandTotal.toLocaleString('ru-RU', { minimumFractionDigits: 2 })} сом
-                </div>
-              </div>
-            </div>
-          </CardContent>
-
-          <CardFooter className="pt-2 pb-6 flex justify-end">
             <Button
-              type="submit"
+              type="button"
+              onClick={() => handleSubmit('sent')}
               disabled={isPending}
               className="bg-blue-600 hover:bg-blue-500 text-white font-medium shadow-lg shadow-blue-600/20"
             >
               {isPending ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Сохранение...
+                  Отправка...
                 </>
               ) : (
-                'Сохранить документ (Черновик)'
+                <>
+                  <Send className="mr-2 h-4 w-4" />
+                  Отправить адресату
+                </>
               )}
             </Button>
           </CardFooter>
         </Card>
-      </form>
+      </div>
     </div>
   );
 }

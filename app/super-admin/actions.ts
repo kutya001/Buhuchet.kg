@@ -1,46 +1,111 @@
 'use server';
 
-import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { toggleCompanyActiveSchema, updateCompanySubscriptionSchema } from '@/types/admin.types';
-import type { ActionResponse } from '@/types/database.types';
+import type { ActionResponse, FileCategory, FeatureFlag, UserProfile } from '@/types/database.types';
 import { revalidatePath } from 'next/cache';
 
-async function verifySuperAdmin(): Promise<boolean> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+// Создание категории файлов
+export async function createFileCategoryAction(
+  name: string,
+  description?: string,
+  icon?: string
+): Promise<ActionResponse<FileCategory>> {
+  try {
+    const supabaseAdmin = createAdminClient();
 
-  if (!user) return false;
+    const { data, error } = await supabaseAdmin
+      .from('file_categories')
+      .insert({
+        name,
+        description: description || null,
+        icon: icon || 'FileText',
+        is_active: true,
+      })
+      .select()
+      .single();
 
-  const { data: profile } = await supabase
-    .from('users')
-    .select('is_super_admin')
-    .eq('id', user.id)
-    .single();
+    if (error || !data) {
+      return { success: false, error: `Ошибка создания категории: ${error?.message}` };
+    }
 
-  return !!profile?.is_super_admin;
+    revalidatePath('/super-admin');
+    return { success: true, data: data as FileCategory };
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : 'Сбой при создании категории';
+    return { success: false, error: errorMsg };
+  }
 }
 
+// Привязка пользователя к компании и смена роли
+export async function updateUserCompanyAndRoleAction(
+  userId: string,
+  companyId: string | null,
+  role: 'owner' | 'accountant' | 'manager',
+  isSuperAdmin?: boolean
+): Promise<ActionResponse> {
+  try {
+    const supabaseAdmin = createAdminClient();
+
+    const { error } = await supabaseAdmin
+      .from('users')
+      .update({
+        company_id: companyId || null,
+        role,
+        is_super_admin: isSuperAdmin ?? false,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', userId);
+
+    if (error) {
+      return { success: false, error: `Ошибка обновления пользователя: ${error.message}` };
+    }
+
+    revalidatePath('/super-admin');
+    return { success: true };
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : 'Сбой при обновлении профиля пользователя';
+    return { success: false, error: errorMsg };
+  }
+}
+
+// Переключение фичи (Feature Flag)
+export async function toggleFeatureFlagAction(
+  key: string,
+  isEnabled: boolean
+): Promise<ActionResponse> {
+  try {
+    const supabaseAdmin = createAdminClient();
+
+    const { error } = await supabaseAdmin
+      .from('feature_flags')
+      .update({
+        is_enabled: isEnabled,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('key', key);
+
+    if (error) {
+      return { success: false, error: `Ошибка переключения фичи: ${error.message}` };
+    }
+
+    revalidatePath('/super-admin');
+    revalidatePath('/dashboard', 'layout');
+    return { success: true };
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : 'Сбой при обновлении фичи';
+    return { success: false, error: errorMsg };
+  }
+}
+
+// Блокировка/Разблокировка компании
 export async function toggleCompanyStatusAction(
   companyId: string,
   isActive: boolean
 ): Promise<ActionResponse> {
   try {
-    const isSuper = await verifySuperAdmin();
-    if (!isSuper) {
-      return { success: false, error: 'Доступ запрещен. Требуются права Суперадминистратора.' };
-    }
+    const supabaseAdmin = createAdminClient();
 
-    const validation = toggleCompanyActiveSchema.safeParse({ companyId, isActive });
-    if (!validation.success) {
-      return { success: false, error: 'Некорректные параметры запроса' };
-    }
-
-    const adminSupabase = createAdminClient();
-
-    const { error } = await adminSupabase
+    const { error } = await supabaseAdmin
       .from('companies')
       .update({
         is_active: isActive,
@@ -49,93 +114,13 @@ export async function toggleCompanyStatusAction(
       .eq('id', companyId);
 
     if (error) {
-      return { success: false, error: `Ошибка изменения статуса компании: ${error.message}` };
+      return { success: false, error: `Ошибка смены статуса компании: ${error.message}` };
     }
 
     revalidatePath('/super-admin');
     return { success: true };
   } catch (err: unknown) {
-    const errorMsg = err instanceof Error ? err.message : 'Непредвиденная ошибка администратора';
-    return { success: false, error: errorMsg };
-  }
-}
-
-export async function updateCompanySubscriptionAction(
-  formData: FormData
-): Promise<ActionResponse> {
-  try {
-    const isSuper = await verifySuperAdmin();
-    if (!isSuper) {
-      return { success: false, error: 'Доступ запрещен. Требуются права Суперадминистратора.' };
-    }
-
-    const companyId = formData.get('companyId')?.toString() || '';
-    const planType = formData.get('planType')?.toString() || 'basic';
-    const daysToAdd = parseInt(formData.get('daysToAdd')?.toString() || '0', 10);
-    const storageLimitGb = parseInt(formData.get('storageLimitGb')?.toString() || '10', 10);
-
-    const validation = updateCompanySubscriptionSchema.safeParse({
-      companyId,
-      planType,
-      daysToAdd,
-      storageLimitGb,
-    });
-
-    if (!validation.success) {
-      const errStr = validation.error.issues.map((i) => i.message).join(', ');
-      return { success: false, error: errStr };
-    }
-
-    const adminSupabase = createAdminClient();
-
-    // 1. Обновляем лимит памяти в таблице companies
-    const { error: companyError } = await adminSupabase
-      .from('companies')
-      .update({
-        storage_limit_gb: storageLimitGb,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', companyId);
-
-    if (companyError) {
-      return { success: false, error: `Ошибка обновления компании: ${companyError.message}` };
-    }
-
-    // 2. Получаем текущую подписку компании
-    const { data: sub } = await adminSupabase
-      .from('subscriptions')
-      .select('expires_at')
-      .eq('company_id', companyId)
-      .single();
-
-    let newExpiresAt = new Date();
-    if (sub?.expires_at && new Date(sub.expires_at) > new Date()) {
-      newExpiresAt = new Date(sub.expires_at);
-    }
-    if (daysToAdd > 0) {
-      newExpiresAt.setDate(newExpiresAt.getDate() + daysToAdd);
-    }
-
-    // 3. Обновляем или создаем подписку
-    const { error: subError } = await adminSupabase.from('subscriptions').upsert(
-      {
-        company_id: companyId,
-        plan_type: planType,
-        status: 'active',
-        expires_at: newExpiresAt.toISOString(),
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'company_id' }
-    );
-
-    if (subError) {
-      return { success: false, error: `Ошибка обновления подписки: ${subError.message}` };
-    }
-
-    revalidatePath('/super-admin');
-    return { success: true };
-  } catch (err: unknown) {
-    const errorMsg = err instanceof Error ? err.message : 'Непредвиденная ошибка администратора';
+    const errorMsg = err instanceof Error ? err.message : 'Сбой при смене статуса компании';
     return { success: false, error: errorMsg };
   }
 }

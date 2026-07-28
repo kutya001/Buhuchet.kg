@@ -70,7 +70,7 @@ export default function Export1CPage() {
     if (docTypeFilter !== 'all' && doc.doc_type !== docTypeFilter) return false;
 
     if (statusFilter === 'approved_or_posted') {
-      return doc.status === 'approved' || doc.status === 'posted_1c';
+      return (doc.status as string) === 'approved' || (doc.status as string) === 'posted_1c';
     }
     if (statusFilter !== 'all') {
       return doc.status === statusFilter;

@@ -1,7 +1,7 @@
 import React from 'react';
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
-import { FileText, Building2, User, LogOut, LayoutDashboard, Database, Shield, CreditCard, Users, Package, FileSpreadsheet } from 'lucide-react';
+import { FileText, Building2, User, LogOut, LayoutDashboard, Database, Shield, Users, FolderOpen } from 'lucide-react';
 import Link from 'next/link';
 import { signOutAction } from '../(auth)/actions';
 import { Button } from '@/components/ui/button';
@@ -28,6 +28,8 @@ export default async function DashboardLayout({
     .eq('id', user.id)
     .single();
 
+  const company = Array.isArray(profile?.companies) ? profile?.companies[0] : profile?.companies;
+
   return (
     <div className="min-h-screen flex bg-slate-950 text-slate-100">
       {/* Sidebar */}
@@ -40,7 +42,7 @@ export default async function DashboardLayout({
             </div>
             <div>
               <span className="font-bold text-lg text-white tracking-tight">Buhuchet.kg</span>
-              <p className="text-[10px] text-slate-500 uppercase tracking-widest font-mono">MVP Core</p>
+              <p className="text-[10px] text-slate-500 uppercase tracking-widest font-mono">B2B Core</p>
             </div>
           </div>
 
@@ -59,63 +61,39 @@ export default async function DashboardLayout({
               className="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-all"
             >
               <FileText className="h-4 w-4 text-sky-400" />
-              <span>Документы</span>
+              <span>B2B Документы</span>
+            </Link>
+
+            <Link
+              href="/dashboard/files"
+              className="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-all"
+            >
+              <FolderOpen className="h-4 w-4 text-emerald-400" />
+              <span>Реестр Файлов</span>
             </Link>
 
             <Link
               href="/dashboard/counterparties"
               className="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-all"
             >
-              <Users className="h-4 w-4 text-blue-400" />
-              <span>Контрагенты</span>
-            </Link>
-
-            <Link
-              href="/dashboard/nomenclature"
-              className="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-all"
-            >
-              <Package className="h-4 w-4 text-purple-400" />
-              <span>Номенклатура</span>
-            </Link>
-
-            <Link
-              href="/dashboard/export"
-              className="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-all"
-            >
-              <FileSpreadsheet className="h-4 w-4 text-emerald-400" />
-              <span>Выгрузка в 1С (Excel)</span>
-            </Link>
-
-            <Link
-              href="/dashboard/lookups"
-              className="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-all"
-            >
-              <Database className="h-4 w-4 text-slate-400" />
-              <span>Обзор Справочников</span>
+              <Users className="h-4 w-4 text-purple-400" />
+              <span>Контрагенты (Партнеры)</span>
             </Link>
 
             <Link
               href="/dashboard/company"
               className="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-all"
             >
-              <Building2 className="h-4 w-4 text-emerald-400" />
-              <span>Организация</span>
-            </Link>
-
-            <Link
-              href="/dashboard/subscription"
-              className="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-all"
-            >
-              <CreditCard className="h-4 w-4 text-amber-400" />
-              <span>Подписки & Тарифы</span>
+              <Building2 className="h-4 w-4 text-amber-400" />
+              <span>Моя Организация</span>
             </Link>
 
             <Link
               href="/dashboard/profile"
               className="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-all"
             >
-              <User className="h-4 w-4 text-sky-400" />
-              <span>Профиль</span>
+              <User className="h-4 w-4 text-slate-400" />
+              <span>Мой Профиль</span>
             </Link>
 
             {profile?.is_super_admin && (
@@ -141,7 +119,7 @@ export default async function DashboardLayout({
                 {profile?.full_name || user.email}
               </p>
               <p className="text-xs text-slate-400 truncate">
-                {profile?.companies?.name || 'Без организации'}
+                {company?.name || 'Без организации'}
               </p>
             </div>
           </Link>
@@ -163,11 +141,11 @@ export default async function DashboardLayout({
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <header className="h-16 border-b border-slate-800/80 bg-slate-900/20 px-6 flex items-center justify-between backdrop-blur-xl">
           <div className="flex items-center space-x-3">
-            <h1 className="text-lg font-semibold text-white">Панель управления</h1>
+            <h1 className="text-lg font-semibold text-white">Панель управления B2B</h1>
           </div>
           <div className="flex items-center space-x-2 text-xs text-slate-400">
             <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span>Система активна</span>
+            <span>B2B сеть активна</span>
           </div>
         </header>
 
