@@ -38,7 +38,21 @@ VALUES
   ('d6666666-6666-6666-6666-666666666666', '00000000-0000-0000-0000-000000000000', 'oshtextile@buhuchet.kg', crypt('Company2026!', gen_salt('bf')), NOW(), '{"provider":"email","providers":["email"]}', '{"full_name":"Алиев Данияр"}', NOW(), NOW(), 'authenticated', 'authenticated')
 ON CONFLICT (id) DO NOTHING;
 
--- 5. Привязка пользователей в public.users
+-- 5. Заполнение auth.identities для работы Supabase Auth Service (GoTrue)
+INSERT INTO auth.identities (id, user_id, identity_data, provider, last_sign_in_at, created_at, updated_at, provider_id)
+SELECT 
+  id AS id,
+  id AS user_id,
+  json_build_object('sub', id::text, 'email', email)::jsonb AS identity_data,
+  'email' AS provider,
+  NOW() AS last_sign_in_at,
+  NOW() AS created_at,
+  NOW() AS updated_at,
+  id::text AS provider_id
+FROM auth.users
+ON CONFLICT (id) DO NOTHING;
+
+-- 6. Привязка пользователей в public.users
 INSERT INTO public.users (id, email, full_name, role, is_super_admin, company_id)
 VALUES 
   ('c0ca9a1d-76d5-4f34-8ff8-0d865c2036e5', 'admin@buhuchet.kg', 'Kutman', 'owner', true, NULL),
@@ -56,7 +70,7 @@ ON CONFLICT (id) DO UPDATE SET
   company_id = EXCLUDED.company_id,
   role = 'owner';
 
--- 6. Настройка подтвержденных B2B партнерств
+-- 7. Настройка подтвержденных B2B партнерств
 INSERT INTO public.company_partnerships (requester_company_id, target_company_id, status)
 VALUES
   ('8772ba39-4358-41df-bc06-2b9f62f47f57', 'da3d6acd-83fc-46b8-ab84-0949281a4493', 'approved'),
@@ -69,7 +83,7 @@ VALUES
   ('c4444444-4444-4444-4444-444444444444', 'c5555555-5555-5555-5555-555555555555', 'approved'),
   ('c6666666-6666-6666-6666-666666666666', 'ef59cac0-c937-4505-b3f1-e8f5e6543a63', 'approved');
 
--- 7. Синхронизация Counterparties для каждой компании
+-- 8. Синхронизация Counterparties для каждой компании
 INSERT INTO public.counterparties (company_id, name, inn, is_vat_payer, phone, email, comment)
 SELECT 
   cp.requester_company_id AS company_id,
@@ -96,7 +110,7 @@ FROM public.company_partnerships cp
 JOIN public.companies c ON cp.requester_company_id = c.id
 WHERE cp.status = 'approved';
 
--- 8. Категории файлов
+-- 9. Категории файлов
 INSERT INTO public.file_categories (name, description, icon, is_active)
 VALUES 
   ('Товарные накладные', 'Первичные товарно-транспортные накладные и чеки', 'FileText', true),
@@ -107,7 +121,7 @@ VALUES
   ('Справка ГНС / Соцфонд', 'Справка об отсутствии задолженности из ГНС и Соцфонда КР', 'File', true),
   ('Личный архив', 'Внутренние сканы и первичные документы организации', 'Folder', true);
 
--- 9. Флаги функционала (Feature Flags)
+-- 10. Флаги функционала (Feature Flags)
 INSERT INTO public.feature_flags (key, title, description, is_enabled)
 VALUES
   ('r2_upload_enabled', 'Облачная загрузка Cloudflare R2', 'Включение прямой передачи сканов первички в Cloudflare R2', true),
