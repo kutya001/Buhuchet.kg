@@ -58,11 +58,12 @@ export default async function DashboardLayout({
             </div>
           </div>
 
-          {/* Navigation Links */}
+          {/* Navigation Links (с prefetch={true} для мгновенного переключения роутов) */}
           <nav className="space-y-1">
             <Link
               href="/dashboard"
-              className="flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-all"
+              prefetch={true}
+              className="flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-all duration-200 ease-in-out"
             >
               <LayoutDashboard className="h-4 w-4 text-blue-400" />
               <span>Главная</span>
@@ -70,7 +71,8 @@ export default async function DashboardLayout({
 
             <Link
               href="/dashboard/documents"
-              className="flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-all"
+              prefetch={true}
+              className="flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-all duration-200 ease-in-out"
             >
               <FileText className="h-4 w-4 text-sky-400" />
               <span>B2B Документы</span>
@@ -78,7 +80,8 @@ export default async function DashboardLayout({
 
             <Link
               href="/dashboard/files"
-              className="flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-all"
+              prefetch={true}
+              className="flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-all duration-200 ease-in-out"
             >
               <FolderOpen className="h-4 w-4 text-emerald-400" />
               <span>Реестр Файлов R2</span>
@@ -86,7 +89,8 @@ export default async function DashboardLayout({
 
             <Link
               href="/dashboard/companies-catalog"
-              className="flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-all"
+              prefetch={true}
+              className="flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-all duration-200 ease-in-out"
             >
               <Globe className="h-4 w-4 text-indigo-400" />
               <span>Каталог Компаний</span>
@@ -94,7 +98,8 @@ export default async function DashboardLayout({
 
             <Link
               href="/dashboard/partnerships"
-              className="flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-all"
+              prefetch={true}
+              className="flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-all duration-200 ease-in-out"
             >
               <UserCheck className="h-4 w-4 text-purple-400" />
               <span>Заявки на Партнерство</span>
@@ -102,7 +107,8 @@ export default async function DashboardLayout({
 
             <Link
               href="/dashboard/counterparties"
-              className="flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-all"
+              prefetch={true}
+              className="flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-all duration-200 ease-in-out"
             >
               <Users className="h-4 w-4 text-amber-400" />
               <span>Мои Контрагенты</span>
@@ -110,7 +116,8 @@ export default async function DashboardLayout({
 
             <Link
               href="/dashboard/company"
-              className="flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-all"
+              prefetch={true}
+              className="flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-all duration-200 ease-in-out"
             >
               <Building2 className="h-4 w-4 text-slate-400" />
               <span>Моя Организация</span>
@@ -119,7 +126,8 @@ export default async function DashboardLayout({
             {profile?.is_super_admin && (
               <Link
                 href="/super-admin"
-                className="flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium text-amber-400 bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/20 transition-all mt-4"
+                prefetch={true}
+                className="flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium text-amber-400 bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/20 transition-all duration-200 ease-in-out mt-4"
               >
                 <Shield className="h-4 w-4" />
                 <span>Супер-Админка</span>
@@ -130,7 +138,7 @@ export default async function DashboardLayout({
 
         {/* User Footer */}
         <div className="pt-4 border-t border-slate-800/80 space-y-3">
-          <Link href="/dashboard/profile" className="flex items-center space-x-3 px-2 hover:opacity-80 transition-opacity">
+          <Link href="/dashboard/profile" prefetch={true} className="flex items-center space-x-3 px-2 hover:opacity-80 transition-opacity">
             <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-800 text-slate-300">
               <User className="h-4 w-4" />
             </div>
@@ -148,7 +156,7 @@ export default async function DashboardLayout({
             <Button
               type="submit"
               variant="outline"
-              className="w-full justify-start text-slate-400 hover:text-red-400 border-slate-800 hover:border-red-900/50 hover:bg-red-500/10"
+              className="w-full justify-start text-slate-400 hover:text-red-400 border-slate-800 hover:border-red-900/50 hover:bg-red-500/10 min-h-[44px]"
             >
               <LogOut className="mr-2 h-4 w-4" />
               Выйти из системы
@@ -175,7 +183,7 @@ export default async function DashboardLayout({
               <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
               <span>B2B сеть</span>
             </div>
-            <Link href="/dashboard/profile" className="md:hidden">
+            <Link href="/dashboard/profile" prefetch={true} className="md:hidden">
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-800 text-slate-300">
                 <User className="h-4 w-4" />
               </div>
@@ -192,10 +200,11 @@ export default async function DashboardLayout({
       {/* 3. MOBILE FLOATING ACTION BUTTON (FAB) */}
       <MobileFAB />
 
-      {/* 4. FIX BOTTOM NAVIGATION BAR FOR MOBILE SMARTPHONES */}
+      {/* 4. FIX BOTTOM NAVIGATION BAR FOR MOBILE SMARTPHONES (с prefetch={true}) */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-slate-900/95 border-t border-slate-800/80 backdrop-blur-xl z-40 flex items-center justify-around px-2">
         <Link
           href="/dashboard"
+          prefetch={true}
           className="flex flex-col items-center justify-center w-full h-full text-slate-400 hover:text-blue-400 transition-colors"
         >
           <LayoutDashboard className="h-5 w-5" />
@@ -204,6 +213,7 @@ export default async function DashboardLayout({
 
         <Link
           href="/dashboard/documents"
+          prefetch={true}
           className="flex flex-col items-center justify-center w-full h-full text-slate-400 hover:text-sky-400 transition-colors"
         >
           <FileText className="h-5 w-5" />
@@ -212,6 +222,7 @@ export default async function DashboardLayout({
 
         <Link
           href="/dashboard/files"
+          prefetch={true}
           className="flex flex-col items-center justify-center w-full h-full text-slate-400 hover:text-emerald-400 transition-colors"
         >
           <FolderOpen className="h-5 w-5" />
@@ -220,6 +231,7 @@ export default async function DashboardLayout({
 
         <Link
           href="/dashboard/companies-catalog"
+          prefetch={true}
           className="flex flex-col items-center justify-center w-full h-full text-slate-400 hover:text-indigo-400 transition-colors"
         >
           <Globe className="h-5 w-5" />
@@ -228,6 +240,7 @@ export default async function DashboardLayout({
 
         <Link
           href="/dashboard/partnerships"
+          prefetch={true}
           className="flex flex-col items-center justify-center w-full h-full text-slate-400 hover:text-purple-400 transition-colors"
         >
           <UserCheck className="h-5 w-5" />
