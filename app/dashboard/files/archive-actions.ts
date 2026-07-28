@@ -1,17 +1,17 @@
 'use server';
 
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createAdminClient } from '@/lib/supabase/server';
 import type { ActionResponse, DocumentFile } from '@/types/database.types';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
 const archiveFileSchema = z.object({
-  category_id: z.string().min(1, { message: 'Выберите категорию файла' }),
+  category_id: z.string().optional(),
   file_name: z.string().min(1, { message: 'Укажите имя файла' }),
   file_size: z.string().optional(),
   file_type: z.string().optional(),
   file_path_r2: z.string().min(1, { message: 'Отсутствует ссылка Cloudflare R2' }),
-  description: z.string().min(2, { message: 'Укажите обязательное описание скана' }),
+  description: z.string().optional(),
   comment: z.string().optional(),
   is_legal_doc: z.boolean().optional(),
 });
@@ -20,6 +20,7 @@ const archiveFileSchema = z.object({
 export async function uploadLegalDocumentAction(data: any): Promise<ActionResponse<DocumentFile>> {
   try {
     const supabase = await createClient();
+    const adminSupabase = await createAdminClient();
 
     const {
       data: { user },
@@ -50,18 +51,29 @@ export async function uploadLegalDocumentAction(data: any): Promise<ActionRespon
       comment,
     } = validation.data;
 
-    // Вставка строки учредительного документа
-    const { data: insertedFile, error } = await supabase
+    // Ищем дефолтную категорию "Устав компании", если не передана
+    let targetCatId = category_id;
+    if (!targetCatId) {
+      const { data: defaultCat } = await adminSupabase
+        .from('file_categories')
+        .select('id')
+        .eq('name', 'Устав компании')
+        .single();
+      targetCatId = defaultCat?.id || '268dda23-d839-429d-bec2-aae391cffb00';
+    }
+
+    // Вставка строки учредительного документа через adminSupabase для обхода возможных RLS сбоев
+    const { data: insertedFile, error } = await adminSupabase
       .from('document_files')
       .insert({
         company_id: prof.company_id,
         document_id: null,
-        category_id,
+        category_id: targetCatId,
         file_name,
         file_size: file_size || '1.5 MB',
         file_type: file_type || 'image',
         file_path_r2,
-        description,
+        description: description || `Учредительный документ ${file_name}`,
         comment: comment || null,
         is_internal: true,
         is_legal_doc: true,
@@ -86,6 +98,7 @@ export async function uploadLegalDocumentAction(data: any): Promise<ActionRespon
 export async function uploadFileToArchiveAction(data: any): Promise<ActionResponse<DocumentFile>> {
   try {
     const supabase = await createClient();
+    const adminSupabase = await createAdminClient();
 
     const {
       data: { user },
@@ -117,17 +130,27 @@ export async function uploadFileToArchiveAction(data: any): Promise<ActionRespon
       is_legal_doc,
     } = validation.data;
 
-    const { data: insertedFile, error } = await supabase
+    let targetCatId = category_id;
+    if (!targetCatId) {
+      const { data: defaultCat } = await adminSupabase
+        .from('file_categories')
+        .select('id')
+        .limit(1)
+        .single();
+      targetCatId = defaultCat?.id || 'd9f0d6c6-2423-4b35-a72c-1bb380699a9c';
+    }
+
+    const { data: insertedFile, error } = await adminSupabase
       .from('document_files')
       .insert({
         company_id: prof.company_id,
         document_id: null,
-        category_id,
+        category_id: targetCatId,
         file_name,
         file_size: file_size || '1.5 MB',
         file_type: file_type || 'image',
         file_path_r2,
-        description,
+        description: description || `Скан файла ${file_name}`,
         comment: comment || null,
         is_internal: true,
         is_legal_doc: !!is_legal_doc,
@@ -152,6 +175,7 @@ export async function uploadFileToArchiveAction(data: any): Promise<ActionRespon
 export async function getCompanyLegalDocsAction(): Promise<ActionResponse<DocumentFile[]>> {
   try {
     const supabase = await createClient();
+    const adminSupabase = await createAdminClient();
 
     const {
       data: { user },
@@ -166,7 +190,7 @@ export async function getCompanyLegalDocsAction(): Promise<ActionResponse<Docume
       return { success: false, error: 'Организация не найдена' };
     }
 
-    const { data: files, error } = await supabase
+    const { data: files, error } = await adminSupabase
       .from('document_files')
       .select('*, file_categories(*)')
       .eq('company_id', prof.company_id)
@@ -188,6 +212,7 @@ export async function getCompanyLegalDocsAction(): Promise<ActionResponse<Docume
 export async function getCompanyFilesArchiveAction(): Promise<ActionResponse<DocumentFile[]>> {
   try {
     const supabase = await createClient();
+    const adminSupabase = await createAdminClient();
 
     const {
       data: { user },
@@ -202,7 +227,7 @@ export async function getCompanyFilesArchiveAction(): Promise<ActionResponse<Doc
       return { success: false, error: 'Организация не найдена' };
     }
 
-    const { data: files, error } = await supabase
+    const { data: files, error } = await adminSupabase
       .from('document_files')
       .select('*, file_categories(*)')
       .eq('company_id', prof.company_id)

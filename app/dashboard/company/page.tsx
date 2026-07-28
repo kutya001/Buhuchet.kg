@@ -89,38 +89,33 @@ export default function CompanyProfilePage() {
     }
   };
 
-  const handleSaveLegalDoc = () => {
-    if (uploadFiles.length === 0) return;
+  // Мгновенное АВТО-СОХРАНЕНИЕ в Supabase сразу после завершения загрузки скана в Cloudflare R2
+  const handleAutoSaveLegalDoc = async (item: FileItemState): Promise<boolean> => {
+    if (!item.file_path_r2) return false;
 
-    setMsg(null);
-    startTransition(async () => {
-      let successCount = 0;
-      for (const item of uploadFiles) {
-        if (!item.file_path_r2) continue;
-
-        const res = await uploadLegalDocumentAction({
-          category_id: item.category_id,
-          file_name: item.file_name,
-          file_size: item.file_size,
-          file_type: item.file_type,
-          file_path_r2: item.file_path_r2,
-          description: item.description,
-          comment: item.comment,
-          is_legal_doc: true,
-        });
-
-        if (res.success) successCount++;
-      }
-
-      if (successCount > 0) {
-        setMsg({ type: 'success', text: `Успешно сохранено учредительных документов: ${successCount}` });
-        setUploadFiles([]);
-        router.refresh();
-        await loadCompanyData();
-      } else {
-        setMsg({ type: 'error', text: 'Сбой сохранения учредительных документов' });
-      }
+    const res = await uploadLegalDocumentAction({
+      category_id: item.category_id,
+      file_name: item.file_name,
+      file_size: item.file_size,
+      file_type: item.file_type,
+      file_path_r2: item.file_path_r2,
+      description: item.description || `Учредительный документ ${item.file_name}`,
+      comment: item.comment,
+      is_legal_doc: true,
     });
+
+    if (res.success) {
+      setMsg({ type: 'success', text: `Скан "${item.file_name}" успешно сохранен и прикреплен к организации!` });
+      router.refresh();
+      const updatedDocs = await getCompanyLegalDocsAction();
+      if (updatedDocs.success && updatedDocs.data) {
+        setLegalDocs(updatedDocs.data);
+      }
+      return true;
+    } else {
+      setMsg({ type: 'error', text: res.error || 'Ошибка прикрепления документа' });
+      return false;
+    }
   };
 
   if (loading) {
@@ -243,20 +238,8 @@ export default function CompanyProfilePage() {
               files={uploadFiles}
               onFilesChange={setUploadFiles}
               disabled={isPending}
+              onAutoSave={handleAutoSaveLegalDoc}
             />
-
-            {uploadFiles.length > 0 && (
-              <div className="flex justify-end pt-2">
-                <Button
-                  onClick={handleSaveLegalDoc}
-                  disabled={isPending}
-                  className="bg-purple-600 hover:bg-purple-500 text-white font-medium text-xs md:text-sm min-h-[44px]"
-                >
-                  {isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <CheckCircle2 className="h-4 w-4 mr-1.5" />}
-                  Сохранить в Учредительные Документы
-                </Button>
-              </div>
-            )}
           </Card>
 
           {/* Список загруженных уставных файлов */}

@@ -27,6 +27,7 @@ interface MultiFileDropzoneProps {
   files: FileItemState[];
   onFilesChange: (files: FileItemState[]) => void;
   disabled?: boolean;
+  onAutoSave?: (item: FileItemState) => Promise<boolean>;
 }
 
 export function MultiFileDropzone({
@@ -34,6 +35,7 @@ export function MultiFileDropzone({
   files,
   onFilesChange,
   disabled = false,
+  onAutoSave,
 }: MultiFileDropzoneProps) {
   const [globalUploading, setGlobalUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -77,14 +79,22 @@ export function MultiFileDropzone({
         xhr.send(file);
       });
 
-      // 3. Обновляем статус готовности
+      // 3. Обновляем статус готовности R2
+      const updatedItem: FileItemState = {
+        ...item,
+        file_path_r2: fileKey,
+        progress: 100,
+        uploading: false,
+      };
+
       onFilesChange(
-        files.map((f) =>
-          f.tempId === item.tempId
-            ? { ...f, file_path_r2: fileKey, progress: 100, uploading: false }
-            : f
-        )
+        files.map((f) => (f.tempId === item.tempId ? updatedItem : f))
       );
+
+      // 4. Мгновенное авто-сохранение в Supabase (если передан обработчик)
+      if (onAutoSave) {
+        await onAutoSave(updatedItem);
+      }
     } catch (err: any) {
       console.error('Ошибка R2:', err);
       onFilesChange(
@@ -103,7 +113,7 @@ export function MultiFileDropzone({
     setGlobalUploading(true);
     const selectedFiles = Array.from(e.target.files);
 
-    const defaultCategory = categories[0]?.id || '';
+    const defaultCategory = categories[0]?.id || '268dda23-d839-429d-bec2-aae391cffb00';
 
     const newItems: FileItemState[] = selectedFiles.map((file, idx) => {
       const formattedSize =
@@ -120,7 +130,7 @@ export function MultiFileDropzone({
         file_name: name,
         file_size: formattedSize,
         file_type: file.type.includes('pdf') ? 'pdf' : 'image',
-        description: `Скан накладной/документа ${name}`,
+        description: `Учредительный документ ${name}`,
         comment: '',
         progress: 0,
         uploading: true,
@@ -222,7 +232,7 @@ export function MultiFileDropzone({
       {files.length > 0 && (
         <div className="space-y-3 pt-2">
           <Label className="text-xs font-mono uppercase text-slate-400">
-            Загруженные сканы ({files.length})
+            Загружаемые сканы ({files.length})
           </Label>
 
           {files.map((file) => (
@@ -286,7 +296,7 @@ export function MultiFileDropzone({
               {/* Поля файла */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
                 <div className="space-y-1">
-                  <Label className="text-[11px] text-slate-400">Категория скана *</Label>
+                  <Label className="text-[11px] text-slate-400">Категория скана</Label>
                   <select
                     value={file.category_id}
                     onChange={(e) => handleFileItemChange(file.tempId, 'category_id', e.target.value)}
@@ -302,25 +312,13 @@ export function MultiFileDropzone({
                 </div>
 
                 <div className="space-y-1 sm:col-span-2">
-                  <Label className="text-[11px] text-slate-400">Описание * (обязательно)</Label>
+                  <Label className="text-[11px] text-slate-400">Описание (авто)</Label>
                   <Input
                     value={file.description}
                     onChange={(e) => handleFileItemChange(file.tempId, 'description', e.target.value)}
-                    placeholder="Например: Оригинал накладной с печатью"
+                    placeholder="Например: Оригинал уставного документа"
                     disabled={disabled}
-                    required
                     className="h-9 text-xs bg-slate-900 border-slate-800 text-slate-100"
-                  />
-                </div>
-
-                <div className="space-y-1 sm:col-span-3">
-                  <Label className="text-[11px] text-slate-500">Дополнительный комментарий</Label>
-                  <Input
-                    value={file.comment}
-                    onChange={(e) => handleFileItemChange(file.tempId, 'comment', e.target.value)}
-                    placeholder="Примечания по скану..."
-                    disabled={disabled}
-                    className="h-9 text-xs bg-slate-900/60 border-slate-800 text-slate-300"
                   />
                 </div>
               </div>
