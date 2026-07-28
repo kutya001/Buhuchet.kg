@@ -6,7 +6,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   FileText,
   Send,
@@ -15,18 +15,20 @@ import {
   Loader2,
   AlertCircle,
   FolderPlus,
+  UserPlus,
+  Globe,
 } from 'lucide-react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { createB2BDocumentAction } from '../actions';
 import { MultiFileDropzone, FileItemState } from '@/components/documents/MultiFileDropzone';
-import type { Company, FileCategory, DocumentType } from '@/types/database.types';
+import type { Company, FileCategory, DocumentType, CompanyPartnership } from '@/types/database.types';
 
 export default function NewB2BDocumentPage() {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
-  const [companies, setCompanies] = useState<Company[]>([]);
+  const [approvedPartners, setApprovedPartners] = useState<Company[]>([]);
   const [categories, setCategories] = useState<FileCategory[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -43,8 +45,7 @@ export default function NewB2BDocumentPage() {
   const supabase = createClient();
 
   useEffect(() => {
-    async function loadInitialData() {
-      // Загружаем профиль для исключения своей компании из списка получателей
+    async function loadApprovedPartnersData() {
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -55,18 +56,29 @@ export default function NewB2BDocumentPage() {
         if (prof?.company_id) myCompanyId = prof.company_id;
       }
 
-      // 1. Загружаем компании-получатели
-      const { data: compData } = await supabase
-        .from('companies')
-        .select('*')
-        .eq('is_active', true)
-        .order('name');
+      if (myCompanyId) {
+        // 1. Получаем только ОДОБРЕННЫЕ партнерства (status = 'approved')
+        const { data: partData } = await supabase
+          .from('company_partnerships')
+          .select('*, requester_company:companies!requester_company_id(*), target_company:companies!target_company_id(*)')
+          .eq('status', 'approved')
+          .or(`requester_company_id.eq.${myCompanyId},target_company_id.eq.${myCompanyId}`);
 
-      if (compData) {
-        setCompanies((compData as Company[]).filter((c) => c.id !== myCompanyId));
+        if (partData) {
+          const partnersList: Company[] = [];
+          (partData as (CompanyPartnership & { requester_company: Company; target_company: Company })[]).forEach((p) => {
+            if (p.requester_company_id === myCompanyId && p.target_company) {
+              partnersList.push(p.target_company);
+            } else if (p.target_company_id === myCompanyId && p.requester_company) {
+              partnersList.push(p.requester_company);
+            }
+          });
+
+          setApprovedPartners(partnersList);
+        }
       }
 
-      // 2. Загружаем категории файлов
+      // 2. Категории файлов
       const { data: catData } = await supabase
         .from('file_categories')
         .select('*')
@@ -80,14 +92,14 @@ export default function NewB2BDocumentPage() {
       setLoading(false);
     }
 
-    loadInitialData();
+    loadApprovedPartnersData();
   }, []);
 
   const handleSubmit = (targetStatus: 'draft' | 'sent') => {
     setErrorMsg(null);
 
     if (!receiverCompanyId) {
-      setErrorMsg('Выберите организацию-получателя документа');
+      setErrorMsg('Выберите подтвержденную компанию-получателя документа');
       return;
     }
 
@@ -127,7 +139,7 @@ export default function NewB2BDocumentPage() {
     return (
       <div className="flex items-center justify-center h-64 text-slate-400">
         <Loader2 className="h-8 w-8 animate-spin mr-2" />
-        <span>Загрузка данных для B2B отправки...</span>
+        <span>Загрузка списка подтвержденных партнеров...</span>
       </div>
     );
   }
@@ -144,7 +156,7 @@ export default function NewB2BDocumentPage() {
           </Link>
           <div>
             <h2 className="text-2xl font-bold text-white tracking-tight">Создание & B2B Отправка Документа</h2>
-            <p className="text-sm text-slate-400">Адресация документов и мультизагрузка сканов партнёру</p>
+            <p className="text-sm text-slate-400">Адресация документов только подтвержденным B2B партнерам</p>
           </div>
         </div>
       </div>
@@ -156,139 +168,161 @@ export default function NewB2BDocumentPage() {
         </Alert>
       )}
 
-      <div className="space-y-6">
-        {/* Шапка B2B адресации */}
-        <Card className="bg-slate-900/40 border-slate-800">
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center">
-              <Building2 className="h-5 w-5 mr-2 text-blue-400" />
-              Реквизиты и Адресация
-            </CardTitle>
-          </CardHeader>
+      {/* Проверка наличия подтвержденных партнеров */}
+      {approvedPartners.length === 0 ? (
+        <Alert className="border-amber-500/50 bg-amber-500/10 text-amber-300 p-6">
+          <Globe className="h-6 w-6 text-amber-400 mb-2" />
+          <AlertTitle className="text-lg font-bold text-white">У вашей организации пока нет подтвержденных B2B партнеров!</AlertTitle>
+          <AlertDescription className="text-sm text-amber-200/80 mt-2 space-y-4">
+            <p>
+              В соответствии с правилами безопасности платформы, отправка первичных документов разрешена 
+              <strong> только организациям с подтвержденным статусом сотрудничества</strong>.
+            </p>
+            <div>
+              <Link href="/dashboard/companies-catalog">
+                <Button className="bg-amber-600 hover:bg-amber-500 text-white font-semibold">
+                  <UserPlus className="mr-2 h-4 w-4" />
+                  Перейти в Каталог Компаний и запросить сотрудничество
+                </Button>
+              </Link>
+            </div>
+          </AlertDescription>
+        </Alert>
+      ) : (
+        <div className="space-y-6">
+          {/* Шапка B2B адресации */}
+          <Card className="bg-slate-900/40 border-slate-800">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center">
+                <Building2 className="h-5 w-5 mr-2 text-blue-400" />
+                Адресация и Реквизиты
+              </CardTitle>
+            </CardHeader>
 
-          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2 md:col-span-2">
-              <Label htmlFor="receiver">Организация-Получатель *</Label>
-              <select
-                id="receiver"
-                value={receiverCompanyId}
-                onChange={(e) => setReceiverCompanyId(e.target.value)}
-                required
-                className="w-full h-10 rounded-md border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="receiver">Подтвержденная Организация-Получатель *</Label>
+                <select
+                  id="receiver"
+                  value={receiverCompanyId}
+                  onChange={(e) => setReceiverCompanyId(e.target.value)}
+                  required
+                  className="w-full h-10 rounded-md border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">-- Выберите подтвержденного партнера из списка --</option>
+                  {approvedPartners.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} (ИНН: {c.inn}) — [{c.industry || 'Отрасль'}]
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="doc_type">Тип Документа</Label>
+                <select
+                  id="doc_type"
+                  value={docType}
+                  onChange={(e) => setDocType(e.target.value as DocumentType)}
+                  className="w-full h-10 rounded-md border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="realization">Реализация (Продажа)</option>
+                  <option value="purchase">Закуп (Поступление)</option>
+                  <option value="payment">Оплата (Перевод / Чек)</option>
+                  <option value="advance">Авансовый отчет</option>
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="doc_number">Номер Документа</Label>
+                <Input
+                  id="doc_number"
+                  value={docNumber}
+                  onChange={(e) => setDocNumber(e.target.value)}
+                  placeholder="№ 102-А"
+                  className="bg-slate-950 border-slate-800 text-slate-100 font-mono"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="doc_date">Дата Документа</Label>
+                <Input
+                  id="doc_date"
+                  type="date"
+                  value={docDate}
+                  onChange={(e) => setDocDate(e.target.value)}
+                  required
+                  className="bg-slate-950 border-slate-800 text-slate-100 font-mono"
+                />
+              </div>
+
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="comment">Примечание к отправке</Label>
+                <Input
+                  id="comment"
+                  value={comment}
+                  onChange={(e) => setComment(e.target.value)}
+                  placeholder="Например: Пакет документов за текущий квартал"
+                  className="bg-slate-950 border-slate-800 text-slate-100"
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Мультизагрузка файлов */}
+          <Card className="bg-slate-900/40 border-slate-800">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center">
+                <FolderPlus className="h-5 w-5 mr-2 text-emerald-400" />
+                Прикрепить файлы / сканы первички
+              </CardTitle>
+              <CardDescription>
+                Загрузите сканы в Cloudflare R2 и заполните обязательные категории и описания
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <MultiFileDropzone
+                categories={categories}
+                files={files}
+                onFilesChange={setFiles}
+                disabled={isPending}
+              />
+            </CardContent>
+
+            <CardFooter className="pt-4 pb-6 flex justify-end space-x-3 border-t border-slate-800/60">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => handleSubmit('draft')}
+                disabled={isPending}
+                className="border-slate-800 text-slate-300 hover:text-white"
               >
-                <option value="">-- Выберите организацию-партнера из базы --</option>
-                {companies.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name} (ИНН: {c.inn})
-                  </option>
-                ))}
-              </select>
-            </div>
+                {isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+                Сохранить черновик
+              </Button>
 
-            <div className="space-y-2">
-              <Label htmlFor="doc_type">Тип Документа</Label>
-              <select
-                id="doc_type"
-                value={docType}
-                onChange={(e) => setDocType(e.target.value as DocumentType)}
-                className="w-full h-10 rounded-md border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              <Button
+                type="button"
+                onClick={() => handleSubmit('sent')}
+                disabled={isPending}
+                className="bg-blue-600 hover:bg-blue-500 text-white font-medium shadow-lg shadow-blue-600/20"
               >
-                <option value="realization">Реализация (Продажа)</option>
-                <option value="purchase">Закуп (Поступление)</option>
-                <option value="payment">Оплата (Перевод / Чек)</option>
-                <option value="advance">Авансовый отчет</option>
-              </select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="doc_number">Номер Документа</Label>
-              <Input
-                id="doc_number"
-                value={docNumber}
-                onChange={(e) => setDocNumber(e.target.value)}
-                placeholder="№ 102-А"
-                className="bg-slate-950 border-slate-800 text-slate-100 font-mono"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="doc_date">Дата Документа</Label>
-              <Input
-                id="doc_date"
-                type="date"
-                value={docDate}
-                onChange={(e) => setDocDate(e.target.value)}
-                required
-                className="bg-slate-950 border-slate-800 text-slate-100 font-mono"
-              />
-            </div>
-
-            <div className="space-y-2 md:col-span-2">
-              <Label htmlFor="comment">Примечание к отправке</Label>
-              <Input
-                id="comment"
-                value={comment}
-                onChange={(e) => setComment(e.target.value)}
-                placeholder="Например: Пакет документов по поставке за июль"
-                className="bg-slate-950 border-slate-800 text-slate-100"
-              />
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Мультизагрузка файлов */}
-        <Card className="bg-slate-900/40 border-slate-800">
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center">
-              <FolderPlus className="h-5 w-5 mr-2 text-emerald-400" />
-              Прикрепить файлы / сканы первички
-            </CardTitle>
-            <CardDescription>
-              Загрузите файлы и заполните обязательные категории и описания
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <MultiFileDropzone
-              categories={categories}
-              files={files}
-              onFilesChange={setFiles}
-              disabled={isPending}
-            />
-          </CardContent>
-
-          <CardFooter className="pt-4 pb-6 flex justify-end space-x-3 border-t border-slate-800/60">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => handleSubmit('draft')}
-              disabled={isPending}
-              className="border-slate-800 text-slate-300 hover:text-white"
-            >
-              {isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-              Сохранить черновик
-            </Button>
-
-            <Button
-              type="button"
-              onClick={() => handleSubmit('sent')}
-              disabled={isPending}
-              className="bg-blue-600 hover:bg-blue-500 text-white font-medium shadow-lg shadow-blue-600/20"
-            >
-              {isPending ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Отправка...
-                </>
-              ) : (
-                <>
-                  <Send className="mr-2 h-4 w-4" />
-                  Отправить адресату
-                </>
-              )}
-            </Button>
-          </CardFooter>
-        </Card>
-      </div>
+                {isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Отправка...
+                  </>
+                ) : (
+                  <>
+                    <Send className="mr-2 h-4 w-4" />
+                    Отправить партнеру
+                  </>
+                )}
+              </Button>
+            </CardFooter>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }

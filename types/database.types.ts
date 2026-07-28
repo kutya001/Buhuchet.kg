@@ -6,16 +6,42 @@ export type EsfStatus = 'not_checked' | 'matched' | 'mismatch';
 export type SubscriptionPlan = 'basic' | 'standard' | 'pro';
 export type PaymentMethod = 'qr_mbank' | 'qr_optima' | 'manual_admin';
 
+export type PartnershipStatus = 'pending' | 'approved' | 'rejected';
+
+export const INDUSTRIES = [
+  'Горнодобывающая отрасль',
+  'Ритейл / Торговля',
+  'Транспорт и Логистика',
+  'IT и Телеком',
+  'Строительство',
+  'Услуги / Консалтинг',
+  'Производство',
+  'Прочее',
+] as const;
+
 export interface Company {
   id: string;
   name: string;
   inn: string;
+  industry?: string | null;
   address?: string | null;
   phone?: string | null;
   is_active: boolean;
   storage_limit_gb: number;
   created_at: string;
   updated_at: string;
+}
+
+export interface CompanyPartnership {
+  id: string;
+  requester_company_id: string;
+  target_company_id: string;
+  status: PartnershipStatus;
+  created_at: string;
+  updated_at: string;
+  
+  requester_company?: Company | null;
+  target_company?: Company | null;
 }
 
 export interface UserProfile {
@@ -65,6 +91,9 @@ export interface Counterparty {
   comment?: string | null;
   created_at: string;
   updated_at: string;
+  
+  // Присоединенная компания-партнер (официальные реквизиты)
+  target_company?: Company | null;
 }
 
 export interface Nomenclature {

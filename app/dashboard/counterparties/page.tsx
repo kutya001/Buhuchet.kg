@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useTransition } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Table,
   TableHeader,
@@ -20,18 +21,22 @@ import {
   Mail,
   Phone,
   BarChart3,
-  FileText,
   Loader2,
   X,
   Send,
   Inbox,
   FolderOpen,
+  Lock,
+  Edit2,
+  CheckCircle2,
+  AlertCircle,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
-import type { Company, Document, DocumentFile } from '@/types/database.types';
+import { updateCounterpartyCommentAction } from '../partnerships/actions';
+import type { Counterparty, Company, Document, DocumentFile } from '@/types/database.types';
 
 type PartnerReport = {
-  company: Company;
+  counterparty: Counterparty;
   inboxDocsCount: number;
   outboxDocsCount: number;
   totalFilesCount: number;
@@ -39,75 +44,96 @@ type PartnerReport = {
 };
 
 export default function CounterpartiesPage() {
-  const [partners, setPartners] = useState<Company[]>([]);
+  const [counterparties, setCounterparties] = useState<Counterparty[]>([]);
   const [currentCompanyId, setCurrentCompanyId] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [isPending, startTransition] = useTransition();
+
+  // Редактирование примечания
+  const [editingCounterpartyId, setEditingCounterpartyId] = useState<string | null>(null);
+  const [editComment, setEditComment] = useState('');
 
   // Отчет по контрагенту (Модалка)
   const [selectedPartnerReport, setSelectedPartnerReport] = useState<PartnerReport | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
+  const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const supabase = createClient();
 
-  useEffect(() => {
-    async function loadPartners() {
-      setLoading(true);
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+  const loadCounterparties = async () => {
+    setLoading(true);
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-      let myCompanyId = '';
-      if (user) {
-        const { data: prof } = await supabase.from('users').select('company_id').eq('id', user.id).single();
-        if (prof?.company_id) {
-          myCompanyId = prof.company_id;
-          setCurrentCompanyId(prof.company_id);
-        }
+    let myCompanyId = '';
+    if (user) {
+      const { data: prof } = await supabase.from('users').select('company_id').eq('id', user.id).single();
+      if (prof?.company_id) {
+        myCompanyId = prof.company_id;
+        setCurrentCompanyId(prof.company_id);
       }
-
-      // Все зарегистрированные компании системы (кроме собственной)
-      const { data: compData } = await supabase
-        .from('companies')
-        .select('*')
-        .eq('is_active', true)
-        .order('name');
-
-      if (compData) {
-        setPartners((compData as Company[]).filter((c) => c.id !== myCompanyId));
-      }
-
-      setLoading(false);
     }
 
-    loadPartners();
+    if (myCompanyId) {
+      const { data } = await supabase
+        .from('counterparties')
+        .select('*')
+        .eq('company_id', myCompanyId)
+        .order('name');
+
+      if (data) {
+        setCounterparties(data as Counterparty[]);
+      }
+    }
+
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    loadCounterparties();
   }, []);
 
-  const filteredPartners = partners.filter(
-    (p) =>
-      p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.inn.includes(searchTerm) ||
-      (p.phone && p.phone.includes(searchTerm))
+  const handleSaveComment = (counterpartyId: string) => {
+    setMsg(null);
+    startTransition(async () => {
+      const res = await updateCounterpartyCommentAction(counterpartyId, editComment);
+      if (res.success) {
+        setMsg({ type: 'success', text: 'Примечание контрагента обновлено' });
+        setEditingCounterpartyId(null);
+        loadCounterparties();
+      } else {
+        setMsg({ type: 'error', text: res.error || 'Ошибка при обновлении примечания' });
+      }
+    });
+  };
+
+  const filteredCounterparties = counterparties.filter(
+    (c) =>
+      c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      c.inn.includes(searchTerm) ||
+      (c.comment && c.comment.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   // Формирование отчета по контрагенту
-  const handleOpenReport = async (partner: Company) => {
+  const handleOpenReport = async (counterparty: Counterparty) => {
     setReportLoading(true);
 
     const { data: docs } = await supabase
       .from('documents')
       .select('*, document_files(*)')
-      .or(`and(sender_company_id.eq.${currentCompanyId},receiver_company_id.eq.${partner.id}),and(sender_company_id.eq.${partner.id},receiver_company_id.eq.${currentCompanyId})`)
+      .or(`and(sender_company_id.eq.${currentCompanyId},receiver_company_id.eq.${counterparty.company_id}),and(sender_company_id.eq.${counterparty.company_id},receiver_company_id.eq.${currentCompanyId})`)
       .order('created_at', { ascending: false });
 
     const docList = (docs as (Document & { document_files?: DocumentFile[] })[]) || [];
 
-    const inboxCount = docList.filter((d) => d.sender_company_id === partner.id).length;
-    const outboxCount = docList.filter((d) => d.receiver_company_id === partner.id).length;
+    const inboxCount = docList.filter((d) => d.sender_company_id === counterparty.company_id).length;
+    const outboxCount = docList.filter((d) => d.receiver_company_id === counterparty.company_id).length;
     const filesCount = docList.reduce((sum, d) => sum + (d.document_files?.length || 1), 0);
 
     setSelectedPartnerReport({
-      company: partner,
+      counterparty,
       inboxDocsCount: inboxCount,
       outboxDocsCount: outboxCount,
       totalFilesCount: filesCount,
@@ -123,20 +149,34 @@ export default function CounterpartiesPage() {
         <div>
           <h2 className="text-2xl font-bold text-white tracking-tight flex items-center">
             <Users className="h-6 w-6 mr-2 text-purple-400" />
-            Справочник Контрагентов & B2B Партнеров
+            Справочник Подтвержденных Контрагентов
           </h2>
           <p className="text-sm text-slate-400 mt-1">
-            Зарегистрированные организации системы для обмена документами
+            Официальные реквизиты партнеров защищены от изменений
           </p>
         </div>
       </div>
+
+      {msg && (
+        <Alert
+          variant={msg.type === 'success' ? 'success' : 'destructive'}
+          className={
+            msg.type === 'success'
+              ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-400'
+              : 'border-red-500/50 bg-red-500/10 text-red-400'
+          }
+        >
+          {msg.type === 'success' ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
+          <AlertDescription>{msg.text}</AlertDescription>
+        </Alert>
+      )}
 
       {/* Поиск */}
       <Card className="bg-slate-900/40 border-slate-800 p-4">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
           <Input
-            placeholder="Поиск организации по названию, ИНН 14 цифр, телефону..."
+            placeholder="Поиск по наименованию, ИНН 14 цифр, примечанию..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-9 bg-slate-950/60 border-slate-800 text-slate-100 text-sm"
@@ -150,61 +190,83 @@ export default function CounterpartiesPage() {
           {loading ? (
             <div className="flex items-center justify-center p-12 text-slate-400">
               <Loader2 className="h-6 w-6 animate-spin mr-2" />
-              <span>Загрузка списка партнеров...</span>
+              <span>Загрузка списка контрагентов...</span>
             </div>
-          ) : filteredPartners.length === 0 ? (
+          ) : filteredCounterparties.length === 0 ? (
             <div className="p-12 text-center text-slate-500">
-              Партнеры по вашему запросу не найдены
+              Подтвержденные контрагенты пока отсутствуют. Отправьте заявку в Каталоге Компаний.
             </div>
           ) : (
             <Table>
               <TableHeader className="bg-slate-950/60">
                 <TableRow>
-                  <TableHead>Организация</TableHead>
-                  <TableHead>ИНН КР (14 цифр)</TableHead>
-                  <TableHead>Контакты</TableHead>
-                  <TableHead>Адрес</TableHead>
+                  <TableHead>Официальное Наименование</TableHead>
+                  <TableHead>ИНН КР (Защищен)</TableHead>
+                  <TableHead>Email (Защищен)</TableHead>
+                  <TableHead>Внутреннее Примечание (Доступно к изменению)</TableHead>
                   <TableHead className="text-right">Аналитический Отчет</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredPartners.map((partner) => (
-                  <TableRow key={partner.id}>
+                {filteredCounterparties.map((c) => (
+                  <TableRow key={c.id}>
                     <TableCell>
                       <div className="font-semibold text-white text-sm flex items-center space-x-1.5">
                         <Building2 className="h-4 w-4 text-purple-400 flex-shrink-0" />
-                        <span>{partner.name}</span>
+                        <span>{c.name}</span>
+                        <Lock className="h-3 w-3 text-slate-500 ml-1" />
                       </div>
                     </TableCell>
 
                     <TableCell className="font-mono text-sm text-slate-300 font-bold">
-                      {partner.inn}
+                      {c.inn}
                     </TableCell>
 
+                    <TableCell className="font-mono text-xs text-slate-400">
+                      {c.email || `contact@${c.inn}.kg`}
+                    </TableCell>
+
+                    {/* Внутреннее примечание */}
                     <TableCell>
-                      <div className="text-xs space-y-0.5">
-                        {partner.phone && (
-                          <div className="text-slate-300 flex items-center font-mono">
-                            <Phone className="h-3 w-3 mr-1 text-slate-500" />
-                            {partner.phone}
-                          </div>
-                        )}
-                        <div className="text-slate-400 flex items-center font-mono">
-                          <Mail className="h-3 w-3 mr-1 text-slate-500" />
-                          contact@{partner.inn}.kg
+                      {editingCounterpartyId === c.id ? (
+                        <div className="flex items-center space-x-2">
+                          <Input
+                            value={editComment}
+                            onChange={(e) => setEditComment(e.target.value)}
+                            placeholder="Например: Постоянный поставщик ГСМ"
+                            className="h-8 text-xs bg-slate-950 border-slate-800 text-slate-100"
+                          />
+                          <Button
+                            size="sm"
+                            onClick={() => handleSaveComment(c.id)}
+                            disabled={isPending}
+                            className="h-8 text-xs bg-emerald-600 hover:bg-emerald-500"
+                          >
+                            Сохранить
+                          </Button>
                         </div>
-                      </div>
-                    </TableCell>
-
-                    <TableCell className="text-xs text-slate-400">
-                      {partner.address || 'Бишкек, Кыргызстан'}
+                      ) : (
+                        <div className="flex items-center space-x-2 text-xs text-slate-300">
+                          <span>{c.comment || '—'}</span>
+                          <button
+                            onClick={() => {
+                              setEditingCounterpartyId(c.id);
+                              setEditComment(c.comment || '');
+                            }}
+                            className="text-slate-500 hover:text-blue-400 p-1"
+                            title="Изменить примечание"
+                          >
+                            <Edit2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      )}
                     </TableCell>
 
                     <TableCell className="text-right">
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => handleOpenReport(partner)}
+                        onClick={() => handleOpenReport(c)}
                         className="border-slate-800 text-xs text-purple-400 hover:bg-purple-500/10 hover:border-purple-500/30"
                       >
                         <BarChart3 className="h-3.5 w-3.5 mr-1" />
@@ -219,7 +281,7 @@ export default function CounterpartiesPage() {
         </CardContent>
       </Card>
 
-      {/* Модалка Аналитического отчета по контрагенту */}
+      {/* Модалка Отчета по контрагенту */}
       {selectedPartnerReport && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
           <Card className="w-full max-w-2xl bg-slate-900 border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
@@ -227,10 +289,10 @@ export default function CounterpartiesPage() {
               <div>
                 <CardTitle className="text-lg text-white flex items-center">
                   <BarChart3 className="h-5 w-5 mr-2 text-purple-400" />
-                  Аналитика: {selectedPartnerReport.company.name}
+                  Аналитика B2B: {selectedPartnerReport.counterparty.name}
                 </CardTitle>
                 <CardDescription>
-                  ИНН: <span className="font-mono text-slate-300">{selectedPartnerReport.company.inn}</span>
+                  ИНН: <span className="font-mono text-slate-300">{selectedPartnerReport.counterparty.inn}</span>
                 </CardDescription>
               </div>
               <Button
@@ -244,7 +306,6 @@ export default function CounterpartiesPage() {
             </CardHeader>
 
             <CardContent className="p-6 space-y-6 overflow-y-auto">
-              {/* Статистические плашки */}
               <div className="grid grid-cols-3 gap-4">
                 <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 text-center">
                   <Inbox className="mx-auto h-5 w-5 text-emerald-400 mb-1" />
@@ -267,18 +328,17 @@ export default function CounterpartiesPage() {
                   <span className="text-2xl font-bold font-mono text-white">
                     {selectedPartnerReport.totalFilesCount}
                   </span>
-                  <p className="text-[11px] text-slate-400 mt-0.5">Всего B2B файлов</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">Всего файлов</p>
                 </div>
               </div>
 
-              {/* История документов с контрагентом */}
               <div className="space-y-3">
                 <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider font-mono">
-                  История B2B документов
+                  История обмена документами
                 </h4>
                 {selectedPartnerReport.documents.length === 0 ? (
                   <div className="text-center p-6 text-slate-500 text-xs bg-slate-950/40 rounded-lg">
-                    История обмена документами с данной организацией пока отсутствует
+                    История документооборота пока отсутствует
                   </div>
                 ) : (
                   <div className="space-y-2 max-h-60 overflow-y-auto pr-1">

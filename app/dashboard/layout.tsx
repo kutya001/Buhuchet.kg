@@ -1,7 +1,7 @@
 import React from 'react';
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
-import { FileText, Building2, User, LogOut, LayoutDashboard, Database, Shield, Users, FolderOpen } from 'lucide-react';
+import { FileText, Building2, User, LogOut, LayoutDashboard, Database, Shield, Users, FolderOpen, Globe, UserCheck } from 'lucide-react';
 import Link from 'next/link';
 import { signOutAction } from '../(auth)/actions';
 import { Button } from '@/components/ui/button';
@@ -42,7 +42,7 @@ export default async function DashboardLayout({
             </div>
             <div>
               <span className="font-bold text-lg text-white tracking-tight">Buhuchet.kg</span>
-              <p className="text-[10px] text-slate-500 uppercase tracking-widest font-mono">B2B Core</p>
+              <p className="text-[10px] text-slate-500 uppercase tracking-widest font-mono">B2B Network</p>
             </div>
           </div>
 
@@ -50,7 +50,7 @@ export default async function DashboardLayout({
           <nav className="space-y-1">
             <Link
               href="/dashboard"
-              className="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-all"
+              className="flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-all"
             >
               <LayoutDashboard className="h-4 w-4 text-blue-400" />
               <span>Главная</span>
@@ -58,7 +58,7 @@ export default async function DashboardLayout({
 
             <Link
               href="/dashboard/documents"
-              className="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-all"
+              className="flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-all"
             >
               <FileText className="h-4 w-4 text-sky-400" />
               <span>B2B Документы</span>
@@ -66,40 +66,48 @@ export default async function DashboardLayout({
 
             <Link
               href="/dashboard/files"
-              className="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-all"
+              className="flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-all"
             >
               <FolderOpen className="h-4 w-4 text-emerald-400" />
-              <span>Реестр Файлов</span>
+              <span>Реестр Файлов R2</span>
+            </Link>
+
+            <Link
+              href="/dashboard/companies-catalog"
+              className="flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-all"
+            >
+              <Globe className="h-4 w-4 text-indigo-400" />
+              <span>Каталог Компаний</span>
+            </Link>
+
+            <Link
+              href="/dashboard/partnerships"
+              className="flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-all"
+            >
+              <UserCheck className="h-4 w-4 text-purple-400" />
+              <span>Заявки на Партнерство</span>
             </Link>
 
             <Link
               href="/dashboard/counterparties"
-              className="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-all"
+              className="flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-all"
             >
-              <Users className="h-4 w-4 text-purple-400" />
-              <span>Контрагенты (Партнеры)</span>
+              <Users className="h-4 w-4 text-amber-400" />
+              <span>Мои Контрагенты</span>
             </Link>
 
             <Link
               href="/dashboard/company"
-              className="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-all"
+              className="flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-all"
             >
-              <Building2 className="h-4 w-4 text-amber-400" />
+              <Building2 className="h-4 w-4 text-slate-400" />
               <span>Моя Организация</span>
-            </Link>
-
-            <Link
-              href="/dashboard/profile"
-              className="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-all"
-            >
-              <User className="h-4 w-4 text-slate-400" />
-              <span>Мой Профиль</span>
             </Link>
 
             {profile?.is_super_admin && (
               <Link
                 href="/super-admin"
-                className="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium text-amber-400 bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/20 transition-all mt-4"
+                className="flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium text-amber-400 bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/20 transition-all mt-4"
               >
                 <Shield className="h-4 w-4" />
                 <span>Супер-Админка</span>
@@ -141,11 +149,11 @@ export default async function DashboardLayout({
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <header className="h-16 border-b border-slate-800/80 bg-slate-900/20 px-6 flex items-center justify-between backdrop-blur-xl">
           <div className="flex items-center space-x-3">
-            <h1 className="text-lg font-semibold text-white">Панель управления B2B</h1>
+            <h1 className="text-lg font-semibold text-white">B2B Сеть Организаций КР</h1>
           </div>
           <div className="flex items-center space-x-2 text-xs text-slate-400">
             <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span>B2B сеть активна</span>
+            <span>Сеть партнеров активна</span>
           </div>
         </header>
 
