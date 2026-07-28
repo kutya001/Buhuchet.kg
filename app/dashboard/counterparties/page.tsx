@@ -144,14 +144,14 @@ export default function CounterpartiesPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-white tracking-tight flex items-center">
-            <Users className="h-6 w-6 mr-2 text-purple-400" />
-            Справочник Подтвержденных Контрагентов
+          <h2 className="text-xl md:text-2xl font-bold text-white tracking-tight flex items-center">
+            <Users className="h-5 w-5 md:h-6 md:w-6 mr-2 text-purple-400" />
+            Подтвержденные Контрагенты
           </h2>
-          <p className="text-sm text-slate-400 mt-1">
+          <p className="text-xs md:text-sm text-slate-400 mt-0.5">
             Официальные реквизиты партнеров защищены от изменений
           </p>
         </div>
@@ -172,20 +172,20 @@ export default function CounterpartiesPage() {
       )}
 
       {/* Поиск */}
-      <Card className="bg-slate-900/40 border-slate-800 p-4">
+      <Card className="bg-slate-900/40 border-slate-800 p-3 md:p-4">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
           <Input
-            placeholder="Поиск по наименованию, ИНН 14 цифр, примечанию..."
+            placeholder="Поиск по наименованию, ИНН 14 цифр..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-9 bg-slate-950/60 border-slate-800 text-slate-100 text-sm"
+            className="pl-9 bg-slate-950/60 border-slate-800 text-slate-100 text-xs md:text-sm"
           />
         </div>
       </Card>
 
-      {/* Таблица Контрагентов */}
-      <Card className="bg-slate-900/40 border-slate-800 overflow-hidden">
+      {/* 1. ПК ТАБЛИЦА (hidden md:block) */}
+      <Card className="hidden md:block bg-slate-900/40 border-slate-800 overflow-hidden">
         <CardContent className="p-0">
           {loading ? (
             <div className="flex items-center justify-center p-12 text-slate-400">
@@ -194,7 +194,7 @@ export default function CounterpartiesPage() {
             </div>
           ) : filteredCounterparties.length === 0 ? (
             <div className="p-12 text-center text-slate-500">
-              Подтвержденные контрагенты пока отсутствуют. Отправьте заявку в Каталоге Компаний.
+              Подтвержденные контрагенты пока отсутствуют
             </div>
           ) : (
             <Table>
@@ -203,8 +203,8 @@ export default function CounterpartiesPage() {
                   <TableHead>Официальное Наименование</TableHead>
                   <TableHead>ИНН КР (Защищен)</TableHead>
                   <TableHead>Email (Защищен)</TableHead>
-                  <TableHead>Внутреннее Примечание (Доступно к изменению)</TableHead>
-                  <TableHead className="text-right">Аналитический Отчет</TableHead>
+                  <TableHead>Внутреннее Примечание</TableHead>
+                  <TableHead className="text-right">Аналитика</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -218,22 +218,16 @@ export default function CounterpartiesPage() {
                       </div>
                     </TableCell>
 
-                    <TableCell className="font-mono text-sm text-slate-300 font-bold">
-                      {c.inn}
-                    </TableCell>
+                    <TableCell className="font-mono text-sm text-slate-300 font-bold">{c.inn}</TableCell>
+                    <TableCell className="font-mono text-xs text-slate-400">{c.email || `contact@${c.inn}.kg`}</TableCell>
 
-                    <TableCell className="font-mono text-xs text-slate-400">
-                      {c.email || `contact@${c.inn}.kg`}
-                    </TableCell>
-
-                    {/* Внутреннее примечание */}
                     <TableCell>
                       {editingCounterpartyId === c.id ? (
                         <div className="flex items-center space-x-2">
                           <Input
                             value={editComment}
                             onChange={(e) => setEditComment(e.target.value)}
-                            placeholder="Например: Постоянный поставщик ГСМ"
+                            placeholder="Примечание..."
                             className="h-8 text-xs bg-slate-950 border-slate-800 text-slate-100"
                           />
                           <Button
@@ -254,7 +248,6 @@ export default function CounterpartiesPage() {
                               setEditComment(c.comment || '');
                             }}
                             className="text-slate-500 hover:text-blue-400 p-1"
-                            title="Изменить примечание"
                           >
                             <Edit2 className="h-3.5 w-3.5" />
                           </button>
@@ -267,10 +260,10 @@ export default function CounterpartiesPage() {
                         size="sm"
                         variant="outline"
                         onClick={() => handleOpenReport(c)}
-                        className="border-slate-800 text-xs text-purple-400 hover:bg-purple-500/10 hover:border-purple-500/30"
+                        className="border-slate-800 text-xs text-purple-400 hover:bg-purple-500/10"
                       >
                         <BarChart3 className="h-3.5 w-3.5 mr-1" />
-                        Отчет по контрагенту
+                        Отчет
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -281,13 +274,64 @@ export default function CounterpartiesPage() {
         </CardContent>
       </Card>
 
+      {/* 2. МОБИЛЬНЫЕ КАРТОЧКИ (block md:hidden) */}
+      <div className="block md:hidden space-y-3">
+        {loading ? (
+          <div className="flex items-center justify-center p-8 text-slate-400">
+            <Loader2 className="h-6 w-6 animate-spin mr-2" />
+            <span>Загрузка...</span>
+          </div>
+        ) : filteredCounterparties.length === 0 ? (
+          <div className="p-8 text-center text-slate-500 text-xs bg-slate-900/40 rounded-xl border border-slate-800">
+            Контрагенты не найдены
+          </div>
+        ) : (
+          filteredCounterparties.map((c) => (
+            <Card key={c.id} className="bg-slate-900/60 border-slate-800 p-4 space-y-3">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h4 className="font-bold text-white text-sm flex items-center">
+                    <Building2 className="h-4 w-4 text-purple-400 mr-1.5 flex-shrink-0" />
+                    <span>{c.name}</span>
+                  </h4>
+                  <p className="text-[11px] font-mono font-bold text-amber-400 mt-0.5">ИНН: {c.inn}</p>
+                </div>
+              </div>
+
+              <div className="text-xs text-slate-400 font-mono">
+                {c.email || `contact@${c.inn}.kg`}
+              </div>
+
+              {c.comment && (
+                <div className="p-2 rounded bg-slate-950 text-xs text-slate-300">
+                  <span className="text-slate-500 text-[10px] block">Примечание:</span>
+                  {c.comment}
+                </div>
+              )}
+
+              <div className="flex items-center justify-end pt-2 border-t border-slate-800/60">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleOpenReport(c)}
+                  className="w-full border-slate-800 text-xs text-purple-400 hover:bg-purple-500/10"
+                >
+                  <BarChart3 className="h-3.5 w-3.5 mr-1.5" />
+                  Открыть отчет по контрагенту
+                </Button>
+              </div>
+            </Card>
+          ))
+        )}
+      </div>
+
       {/* Модалка Отчета по контрагенту */}
       {selectedPartnerReport && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
           <Card className="w-full max-w-2xl bg-slate-900 border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
             <CardHeader className="border-b border-slate-800 flex flex-row items-center justify-between pb-4">
               <div>
-                <CardTitle className="text-lg text-white flex items-center">
+                <CardTitle className="text-base md:text-lg text-white flex items-center">
                   <BarChart3 className="h-5 w-5 mr-2 text-purple-400" />
                   Аналитика B2B: {selectedPartnerReport.counterparty.name}
                 </CardTitle>
@@ -305,30 +349,30 @@ export default function CounterpartiesPage() {
               </Button>
             </CardHeader>
 
-            <CardContent className="p-6 space-y-6 overflow-y-auto">
-              <div className="grid grid-cols-3 gap-4">
-                <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 text-center">
-                  <Inbox className="mx-auto h-5 w-5 text-emerald-400 mb-1" />
-                  <span className="text-2xl font-bold font-mono text-white">
+            <CardContent className="p-4 md:p-6 space-y-6 overflow-y-auto">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800 text-center">
+                  <Inbox className="mx-auto h-4 w-4 text-emerald-400 mb-1" />
+                  <span className="text-xl font-bold font-mono text-white">
                     {selectedPartnerReport.inboxDocsCount}
                   </span>
-                  <p className="text-[11px] text-slate-400 mt-0.5">Получено от него</p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">Получено</p>
                 </div>
 
-                <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 text-center">
-                  <Send className="mx-auto h-5 w-5 text-blue-400 mb-1" />
-                  <span className="text-2xl font-bold font-mono text-white">
+                <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800 text-center">
+                  <Send className="mx-auto h-4 w-4 text-blue-400 mb-1" />
+                  <span className="text-xl font-bold font-mono text-white">
                     {selectedPartnerReport.outboxDocsCount}
                   </span>
-                  <p className="text-[11px] text-slate-400 mt-0.5">Отправлено ему</p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">Отправлено</p>
                 </div>
 
-                <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 text-center">
-                  <FolderOpen className="mx-auto h-5 w-5 text-purple-400 mb-1" />
-                  <span className="text-2xl font-bold font-mono text-white">
+                <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800 text-center">
+                  <FolderOpen className="mx-auto h-4 w-4 text-purple-400 mb-1" />
+                  <span className="text-xl font-bold font-mono text-white">
                     {selectedPartnerReport.totalFilesCount}
                   </span>
-                  <p className="text-[11px] text-slate-400 mt-0.5">Всего файлов</p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">Всего файлов</p>
                 </div>
               </div>
 

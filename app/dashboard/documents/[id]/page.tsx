@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   FileText,
   Building2,
@@ -20,6 +21,8 @@ import {
   History,
   Paperclip,
   FolderOpen,
+  Eye,
+  Info,
 } from 'lucide-react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
@@ -46,6 +49,9 @@ export default function B2BDocumentDetailPage() {
   const [currentCompanyId, setCurrentCompanyId] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [isPending, startTransition] = useTransition();
+
+  // Таб переключения на мобильных смартфонах: 'scan' | 'details'
+  const [mobileTab, setMobileTab] = useState<'scan' | 'details'>('scan');
 
   const [cancelComment, setCancelComment] = useState('');
   const [showCancelModal, setShowCancelModal] = useState(false);
@@ -119,25 +125,25 @@ export default function B2BDocumentDetailPage() {
   const isReceiver = document.receiver_company_id === currentCompanyId;
 
   return (
-    <div className="h-[calc(100vh-6rem)] flex flex-col space-y-4">
+    <div className="h-[calc(100vh-6rem)] flex flex-col space-y-3 md:space-y-4">
       {/* Top Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 flex-shrink-0">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 flex-shrink-0">
         <div className="flex items-center space-x-3">
           <Link href="/dashboard/documents">
-            <Button variant="outline" size="sm" className="border-slate-800 text-slate-400 hover:text-white">
+            <Button variant="outline" size="sm" className="border-slate-800 text-slate-400 hover:text-white text-xs">
               <ArrowLeft className="h-4 w-4 mr-1" />
               В реестр
             </Button>
           </Link>
           <div>
             <div className="flex items-center space-x-2">
-              <h2 className="text-xl font-bold text-white tracking-tight">
-                {typeMeta?.label} № {document.doc_number || document.id.slice(0, 8)}
+              <h2 className="text-base md:text-xl font-bold text-white tracking-tight">
+                № {document.doc_number || document.id.slice(0, 8)}
               </h2>
               <Badge variant={statusMeta?.variant}>{statusMeta?.label}</Badge>
             </div>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Автор: {document.users?.full_name || 'Неизвестен'} • Дата: {document.doc_date}
+            <p className="text-[11px] md:text-xs text-slate-400 mt-0.5">
+              {document.doc_date} • {document.users?.full_name || 'Неизвестен'}
             </p>
           </div>
         </div>
@@ -149,7 +155,7 @@ export default function B2BDocumentDetailPage() {
               size="sm"
               onClick={() => handleStatusChange('sent', 'Отправлено получателю')}
               disabled={isPending}
-              className="bg-blue-600 hover:bg-blue-500 text-white"
+              className="bg-blue-600 hover:bg-blue-500 text-white text-xs w-full sm:w-auto"
             >
               <Send className="h-3.5 w-3.5 mr-1" />
               Отправить получателю
@@ -163,6 +169,7 @@ export default function B2BDocumentDetailPage() {
                 variant="destructive"
                 onClick={() => setShowCancelModal(true)}
                 disabled={isPending}
+                className="text-xs"
               >
                 <XCircle className="h-3.5 w-3.5 mr-1" />
                 Отклонить
@@ -171,10 +178,10 @@ export default function B2BDocumentDetailPage() {
                 size="sm"
                 onClick={() => handleStatusChange('accepted', 'Документ принят получателем')}
                 disabled={isPending}
-                className="bg-emerald-600 hover:bg-emerald-500 text-white"
+                className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs"
               >
                 <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
-                Принять документ
+                Принять
               </Button>
             </>
           )}
@@ -184,10 +191,10 @@ export default function B2BDocumentDetailPage() {
               size="sm"
               onClick={() => handleStatusChange('processed', 'Документ успешно обработан')}
               disabled={isPending}
-              className="bg-purple-600 hover:bg-purple-500 text-white"
+              className="bg-purple-600 hover:bg-purple-500 text-white text-xs"
             >
               <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
-              Отметить как Обработано
+              Обработано
             </Button>
           )}
         </div>
@@ -207,22 +214,48 @@ export default function B2BDocumentDetailPage() {
         </Alert>
       )}
 
-      {/* Split-Screen Workspace (2 колонки) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 min-h-0 overflow-hidden">
-        {/* Левая колонка: Просмотрщик скана прикрепленного файла */}
-        <div className="lg:col-span-6 flex flex-col h-full min-h-[400px]">
-          {/* Переключатель файлов если их несколько */}
+      {/* МОБИЛЬНЫЕ ВКТАДКИ СМЕНЫ ВИДА (< lg) */}
+      <div className="flex lg:hidden space-x-2 border-b border-slate-800 pb-2 flex-shrink-0">
+        <button
+          onClick={() => setMobileTab('scan')}
+          className={`flex-1 flex items-center justify-center space-x-2 py-2 rounded-lg text-xs font-medium border transition-all ${
+            mobileTab === 'scan'
+              ? 'bg-blue-600/20 text-blue-400 border-blue-500/40'
+              : 'bg-slate-900/40 text-slate-400 border-slate-800'
+          }`}
+        >
+          <Eye className="h-4 w-4" />
+          <span>Просмотр Скана R2</span>
+        </button>
+
+        <button
+          onClick={() => setMobileTab('details')}
+          className={`flex-1 flex items-center justify-center space-x-2 py-2 rounded-lg text-xs font-medium border transition-all ${
+            mobileTab === 'details'
+              ? 'bg-purple-600/20 text-purple-400 border-purple-500/40'
+              : 'bg-slate-900/40 text-slate-400 border-slate-800'
+          }`}
+        >
+          <Info className="h-4 w-4" />
+          <span>Реквизиты & История</span>
+        </button>
+      </div>
+
+      {/* Split-Screen Workspace */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-6 flex-1 min-h-0 overflow-hidden">
+        {/* Левая колонка: Просмотрщик скана R2 */}
+        <div className={`lg:col-span-6 flex flex-col h-full min-h-[350px] ${mobileTab === 'scan' ? 'flex' : 'hidden lg:flex'}`}>
           {document.document_files && document.document_files.length > 1 && (
-            <div className="flex items-center space-x-2 mb-2 overflow-x-auto pb-1">
+            <div className="flex items-center space-x-2 mb-2 overflow-x-auto pb-1 flex-shrink-0">
               <span className="text-xs text-slate-500 font-mono flex-shrink-0">Файлы:</span>
               {document.document_files.map((file, idx) => (
                 <button
                   key={file.id}
                   onClick={() => setSelectedFileIndex(idx)}
-                  className={`px-3 py-1 rounded-md text-xs font-medium border truncate max-w-[150px] transition-all ${
+                  className={`px-2.5 py-1 rounded-md text-xs font-medium border truncate max-w-[130px] transition-all ${
                     selectedFileIndex === idx
                       ? 'bg-blue-600/20 text-blue-400 border-blue-500/40'
-                      : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
+                      : 'bg-slate-900 text-slate-400 border-slate-800'
                   }`}
                 >
                   {file.file_name}
@@ -243,13 +276,13 @@ export default function B2BDocumentDetailPage() {
           </div>
         </div>
 
-        {/* Правая колонка: Реквизиты, Прикрепленные файлы с описаниями и История */}
-        <div className="lg:col-span-6 flex flex-col space-y-4 overflow-y-auto pr-1">
+        {/* Правая колонка: Реквизиты, Список сканов и История */}
+        <div className={`lg:col-span-6 flex-col space-y-4 overflow-y-auto pr-1 ${mobileTab === 'details' ? 'flex' : 'hidden lg:flex'}`}>
           {/* B2B Адресация */}
           <Card className="bg-slate-900/40 border-slate-800">
-            <CardHeader className="pb-3">
+            <CardHeader className="pb-2 pt-4">
               <CardTitle className="text-xs font-semibold text-slate-400 uppercase tracking-wider font-mono">
-                Участники B2B отправки
+                B2B Участники Отправки
               </CardTitle>
             </CardHeader>
             <CardContent className="grid grid-cols-2 gap-3 text-xs">
@@ -267,7 +300,7 @@ export default function B2BDocumentDetailPage() {
 
               {document.comment && (
                 <div className="col-span-2 p-2.5 rounded bg-slate-950/60 border border-slate-800">
-                  <span className="text-slate-500 font-mono text-[10px]">Примечание к документу:</span>
+                  <span className="text-slate-500 font-mono text-[10px]">Примечание:</span>
                   <p className="text-slate-200 mt-0.5">{document.comment}</p>
                 </div>
               )}
@@ -276,21 +309,24 @@ export default function B2BDocumentDetailPage() {
 
           {/* Список прикрепленных файлов */}
           <Card className="bg-slate-900/40 border-slate-800">
-            <CardHeader className="pb-3">
+            <CardHeader className="pb-2 pt-4">
               <CardTitle className="text-xs font-semibold text-slate-400 uppercase tracking-wider font-mono flex items-center">
                 <Paperclip className="h-3.5 w-3.5 mr-1.5 text-emerald-400" />
-                Прикрепленные сканы и файлы ({document.document_files?.length || 0})
+                Прикрепленные сканы R2 ({document.document_files?.length || 0})
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3 text-xs">
+            <CardContent className="space-y-2 text-xs">
               {document.document_files?.map((file, idx) => (
                 <div
                   key={file.id}
-                  onClick={() => setSelectedFileIndex(idx)}
+                  onClick={() => {
+                    setSelectedFileIndex(idx);
+                    setMobileTab('scan');
+                  }}
                   className={`p-3 rounded-xl border transition-all cursor-pointer ${
                     selectedFileIndex === idx
                       ? 'bg-blue-600/10 border-blue-500/40'
-                      : 'bg-slate-950/60 border-slate-800 hover:border-slate-700'
+                      : 'bg-slate-950/60 border-slate-800'
                   }`}
                 >
                   <div className="flex items-center justify-between mb-1">
@@ -299,9 +335,7 @@ export default function B2BDocumentDetailPage() {
                       {file.file_categories?.name || 'Категория'}
                     </Badge>
                   </div>
-
                   <p className="text-slate-300 font-medium text-xs mt-1">{file.description}</p>
-                  {file.comment && <p className="text-slate-500 text-[11px] mt-0.5">{file.comment}</p>}
                 </div>
               ))}
             </CardContent>
@@ -309,7 +343,7 @@ export default function B2BDocumentDetailPage() {
 
           {/* Журнал аудита */}
           <Card className="bg-slate-900/40 border-slate-800">
-            <CardHeader className="pb-2">
+            <CardHeader className="pb-2 pt-4">
               <CardTitle className="text-xs font-semibold text-slate-400 uppercase tracking-wider font-mono flex items-center">
                 <History className="h-3.5 w-3.5 mr-1.5 text-amber-400" />
                 История изменений и статусов
@@ -319,10 +353,8 @@ export default function B2BDocumentDetailPage() {
               {document.document_logs?.map((log) => (
                 <div key={log.id} className="p-2 rounded bg-slate-950/40 border border-slate-800/60 flex items-center justify-between">
                   <div>
-                    <span className="font-semibold text-slate-200">
-                      {log.users?.full_name || 'Система'}
-                    </span>
-                    <span className="text-slate-400 ml-2"> &rarr; {log.new_status}</span>
+                    <span className="font-semibold text-slate-200">{log.users?.full_name || 'Система'}</span>
+                    <span className="text-slate-400 ml-1.5"> &rarr; {log.new_status}</span>
                     {log.comment && <p className="text-[11px] text-slate-500 mt-0.5">{log.comment}</p>}
                   </div>
                   <span className="text-[10px] font-mono text-slate-500">
@@ -344,7 +376,7 @@ export default function B2BDocumentDetailPage() {
               Причина отклонения документа
             </h3>
             <div className="space-y-2">
-              <label className="text-xs text-slate-300">Укажите причину возврата отправителю:</label>
+              <Label className="text-xs text-slate-300">Укажите причину возврата отправителю:</Label>
               <Input
                 value={cancelComment}
                 onChange={(e) => setCancelComment(e.target.value)}

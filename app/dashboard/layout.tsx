@@ -1,7 +1,19 @@
 import React from 'react';
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
-import { FileText, Building2, User, LogOut, LayoutDashboard, Database, Shield, Users, FolderOpen, Globe, UserCheck } from 'lucide-react';
+import {
+  FileText,
+  Building2,
+  User,
+  LogOut,
+  LayoutDashboard,
+  Shield,
+  Users,
+  FolderOpen,
+  Globe,
+  UserCheck,
+  Menu,
+} from 'lucide-react';
 import Link from 'next/link';
 import { signOutAction } from '../(auth)/actions';
 import { Button } from '@/components/ui/button';
@@ -30,19 +42,10 @@ export default async function DashboardLayout({
 
   const company = Array.isArray(profile?.companies) ? profile?.companies[0] : profile?.companies;
 
-  // Если компания у обычного пользователя не активна (pending_approval или requires_changes)
-  const isCompanyActive = company?.status === 'active';
-  const isSuperAdmin = !!profile?.is_super_admin;
-
-  if (!isSuperAdmin && company && !isCompanyActive) {
-    // В самом layout проверяем, если рендерится не pending — редиректим
-    // Примечание: Для App Router серверных компонентов с проверками редирект на /dashboard/pending
-  }
-
   return (
-    <div className="min-h-screen flex bg-slate-950 text-slate-100">
-      {/* Sidebar */}
-      <aside className="w-64 border-r border-slate-800/80 bg-slate-900/40 p-4 flex flex-col justify-between backdrop-blur-xl">
+    <div className="min-h-screen flex flex-col md:flex-row bg-slate-950 text-slate-100">
+      {/* 1. DESKTOP SIDEBAR (Только на экранах md:flex >= 768px) */}
+      <aside className="hidden md:flex w-64 border-r border-slate-800/80 bg-slate-900/40 p-4 flex-col justify-between backdrop-blur-xl flex-shrink-0">
         <div className="space-y-6">
           {/* Logo / Brand */}
           <div className="flex items-center space-x-3 px-2 py-1">
@@ -154,22 +157,80 @@ export default async function DashboardLayout({
         </div>
       </aside>
 
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <header className="h-16 border-b border-slate-800/80 bg-slate-900/20 px-6 flex items-center justify-between backdrop-blur-xl">
+      {/* 2. MOBILE HEADER & BOTTOM NAV BAR (Только на смартфонах md:hidden) */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden pb-16 md:pb-0">
+        {/* Header */}
+        <header className="h-16 border-b border-slate-800/80 bg-slate-900/40 px-4 md:px-6 flex items-center justify-between backdrop-blur-xl sticky top-0 z-30">
           <div className="flex items-center space-x-3">
-            <h1 className="text-lg font-semibold text-white">B2B Сеть Организаций КР</h1>
+            <div className="flex md:hidden h-8 w-8 items-center justify-center rounded-lg bg-blue-600/20 text-blue-400 border border-blue-500/30">
+              <FileText className="h-4 w-4" />
+            </div>
+            <h1 className="text-base md:text-lg font-semibold text-white truncate">
+              {company?.name || 'Buhuchet.kg'}
+            </h1>
           </div>
-          <div className="flex items-center space-x-2 text-xs text-slate-400">
-            <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span>Сеть партнеров активна</span>
+
+          <div className="flex items-center space-x-3">
+            <div className="hidden sm:flex items-center space-x-2 text-xs text-slate-400">
+              <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span>B2B сеть</span>
+            </div>
+            <Link href="/dashboard/profile" className="md:hidden">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-800 text-slate-300">
+                <User className="h-4 w-4" />
+              </div>
+            </Link>
           </div>
         </header>
 
-        <main className="flex-1 p-6 overflow-y-auto">
+        {/* Main Content Area */}
+        <main className="flex-1 p-4 md:p-6 overflow-y-auto">
           {children}
         </main>
       </div>
+
+      {/* 3. FIX BOTTOM NAVIGATION BAR FOR MOBILE SMARTPHONES */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-slate-900/95 border-t border-slate-800/80 backdrop-blur-xl z-40 flex items-center justify-around px-2">
+        <Link
+          href="/dashboard"
+          className="flex flex-col items-center justify-center w-full h-full text-slate-400 hover:text-blue-400 transition-colors"
+        >
+          <LayoutDashboard className="h-5 w-5" />
+          <span className="text-[10px] font-medium mt-1">Главная</span>
+        </Link>
+
+        <Link
+          href="/dashboard/documents"
+          className="flex flex-col items-center justify-center w-full h-full text-slate-400 hover:text-sky-400 transition-colors"
+        >
+          <FileText className="h-5 w-5" />
+          <span className="text-[10px] font-medium mt-1">Документы</span>
+        </Link>
+
+        <Link
+          href="/dashboard/files"
+          className="flex flex-col items-center justify-center w-full h-full text-slate-400 hover:text-emerald-400 transition-colors"
+        >
+          <FolderOpen className="h-5 w-5" />
+          <span className="text-[10px] font-medium mt-1">Файлы R2</span>
+        </Link>
+
+        <Link
+          href="/dashboard/companies-catalog"
+          className="flex flex-col items-center justify-center w-full h-full text-slate-400 hover:text-indigo-400 transition-colors"
+        >
+          <Globe className="h-5 w-5" />
+          <span className="text-[10px] font-medium mt-1">Каталог</span>
+        </Link>
+
+        <Link
+          href="/dashboard/partnerships"
+          className="flex flex-col items-center justify-center w-full h-full text-slate-400 hover:text-purple-400 transition-colors"
+        >
+          <UserCheck className="h-5 w-5" />
+          <span className="text-[10px] font-medium mt-1">Заявки</span>
+        </Link>
+      </nav>
     </div>
   );
 }

@@ -59,7 +59,7 @@ export default function CompaniesCatalogPage() {
       }
     }
 
-    // 1. Все зарегистрированные компании
+    // 1. Все компании
     const { data: compData } = await supabase
       .from('companies')
       .select('*')
@@ -70,7 +70,7 @@ export default function CompaniesCatalogPage() {
       setCompanies((compData as Company[]).filter((c) => c.id !== myCompanyId));
     }
 
-    // 2. Все партнерские связи текущей компании
+    // 2. Все партнерские связи
     if (myCompanyId) {
       const { data: partData } = await supabase
         .from('company_partnerships')
@@ -123,15 +123,15 @@ export default function CompaniesCatalogPage() {
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-white tracking-tight flex items-center">
-            <Globe className="h-6 w-6 mr-2 text-blue-400" />
+          <h2 className="text-xl md:text-2xl font-bold text-white tracking-tight flex items-center">
+            <Globe className="h-5 w-5 md:h-6 md:w-6 mr-2 text-blue-400" />
             Каталог Организаций Платформы B2B
           </h2>
-          <p className="text-sm text-slate-400 mt-1">
-            Поиск контрагентов по Отраслям КР и отправка заявок на прямое сотрудничество
+          <p className="text-xs md:text-sm text-slate-400 mt-0.5">
+            Поиск контрагентов по Отраслям КР и отправка заявок на сотрудничество
           </p>
         </div>
       </div>
@@ -151,15 +151,15 @@ export default function CompaniesCatalogPage() {
       )}
 
       {/* Фильтры */}
-      <Card className="bg-slate-900/40 border-slate-800 p-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <Card className="bg-slate-900/40 border-slate-800 p-3 md:p-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
             <Input
-              placeholder="Поиск по наименованию, ИНН 14 цифр..."
+              placeholder="Поиск по наименованию, ИНН..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9 bg-slate-950/60 border-slate-800 text-slate-100 text-sm"
+              className="pl-9 bg-slate-950/60 border-slate-800 text-slate-100 text-xs md:text-sm"
             />
           </div>
 
@@ -167,7 +167,7 @@ export default function CompaniesCatalogPage() {
             <select
               value={selectedIndustry}
               onChange={(e) => setSelectedIndustry(e.target.value)}
-              className="w-full h-10 rounded-md border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full h-9 md:h-10 rounded-md border border-slate-800 bg-slate-950 px-3 text-xs md:text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="all">Все отрасли Кыргызстана</option>
               {INDUSTRIES.map((ind) => (
@@ -180,8 +180,8 @@ export default function CompaniesCatalogPage() {
         </div>
       </Card>
 
-      {/* Реестр Организаций */}
-      <Card className="bg-slate-900/40 border-slate-800 overflow-hidden">
+      {/* 1. ПК ТАБЛИЦА (hidden md:block) */}
+      <Card className="hidden md:block bg-slate-900/40 border-slate-800 overflow-hidden">
         <CardContent className="p-0">
           {loading ? (
             <div className="flex items-center justify-center p-12 text-slate-400">
@@ -216,12 +216,10 @@ export default function CompaniesCatalogPage() {
                         </div>
                       </TableCell>
 
-                      <TableCell className="font-mono text-sm text-slate-300 font-bold">
-                        {company.inn}
-                      </TableCell>
+                      <TableCell className="font-mono text-sm text-slate-300 font-bold">{company.inn}</TableCell>
 
                       <TableCell>
-                        <Badge variant="outline" className="border-slate-800 text-slate-300 bg-slate-950/60">
+                        <Badge variant="outline" className="border-slate-800 text-slate-300">
                           {company.industry || 'Услуги / Консалтинг'}
                         </Badge>
                       </TableCell>
@@ -239,9 +237,7 @@ export default function CompaniesCatalogPage() {
                             Заявка на рассмотрении
                           </span>
                         )}
-                        {!pState && (
-                          <span className="text-xs text-slate-500 font-mono">Не связано</span>
-                        )}
+                        {!pState && <span className="text-xs text-slate-500 font-mono">Не связано</span>}
                       </TableCell>
 
                       <TableCell className="text-right">
@@ -269,6 +265,75 @@ export default function CompaniesCatalogPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* 2. МОБИЛЬНЫЕ КАРТОЧКИ (block md:hidden) */}
+      <div className="block md:hidden space-y-3">
+        {loading ? (
+          <div className="flex items-center justify-center p-8 text-slate-400">
+            <Loader2 className="h-6 w-6 animate-spin mr-2" />
+            <span>Загрузка...</span>
+          </div>
+        ) : filteredCompanies.length === 0 ? (
+          <div className="p-8 text-center text-slate-500 text-xs bg-slate-900/40 rounded-xl border border-slate-800">
+            Организации не найдены
+          </div>
+        ) : (
+          filteredCompanies.map((company) => {
+            const pState = getPartnershipState(company.id);
+
+            return (
+              <Card key={company.id} className="bg-slate-900/60 border-slate-800 p-4 space-y-3">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <h4 className="font-bold text-white text-sm flex items-center">
+                      <Building2 className="h-4 w-4 text-blue-400 mr-1.5 flex-shrink-0" />
+                      <span>{company.name}</span>
+                    </h4>
+                    <p className="text-[11px] font-mono font-bold text-slate-400 mt-0.5">ИНН: {company.inn}</p>
+                  </div>
+
+                  <Badge variant="outline" className="text-[10px] border-slate-800 text-slate-300">
+                    {company.industry || 'Услуги'}
+                  </Badge>
+                </div>
+
+                <div className="pt-2 border-t border-slate-800/60 flex items-center justify-between">
+                  <div>
+                    {pState === 'approved' && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        <UserCheck className="h-3 w-3 mr-1" />
+                        Партнеры
+                      </span>
+                    )}
+                    {pState === 'pending' && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                        <Clock className="h-3 w-3 mr-1" />
+                        Заявка отправлена
+                      </span>
+                    )}
+                  </div>
+
+                  {!pState && (
+                    <Button
+                      size="sm"
+                      onClick={() => handleSendRequest(company.id, company.name)}
+                      disabled={isPending}
+                      className="bg-blue-600 hover:bg-blue-500 text-white text-xs w-full sm:w-auto"
+                    >
+                      {isPending ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                      ) : (
+                        <UserPlus className="h-3.5 w-3.5 mr-1" />
+                      )}
+                      Сотрудничество
+                    </Button>
+                  )}
+                </div>
+              </Card>
+            );
+          })
+        )}
+      </div>
     </div>
   );
 }

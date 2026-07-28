@@ -116,29 +116,29 @@ export default function FilesRegistryPage() {
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-white tracking-tight flex items-center">
-            <FolderOpen className="h-6 w-6 mr-2 text-emerald-400" />
-            Единый Реестр Файлов (Cloudflare R2)
+          <h2 className="text-xl md:text-2xl font-bold text-white tracking-tight flex items-center">
+            <FolderOpen className="h-5 w-5 md:h-6 md:w-6 mr-2 text-emerald-400" />
+            Реестр Файлов (Cloudflare R2)
           </h2>
-          <p className="text-sm text-slate-400 mt-1">
-            Все сканы и файлы организации в облачном S3-хранилище
+          <p className="text-xs md:text-sm text-slate-400 mt-0.5">
+            Все сканы и прикрепеленные первичные файлы организации
           </p>
         </div>
       </div>
 
       {/* Фильтры */}
-      <Card className="bg-slate-900/40 border-slate-800 p-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <Card className="bg-slate-900/40 border-slate-800 p-3 md:p-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
             <Input
-              placeholder="Поиск по файлу, описанию, партнеру..."
+              placeholder="Поиск по файлу, описанию..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9 bg-slate-950/60 border-slate-800 text-slate-100 text-sm"
+              className="pl-9 bg-slate-950/60 border-slate-800 text-slate-100 text-xs md:text-sm"
             />
           </div>
 
@@ -146,7 +146,7 @@ export default function FilesRegistryPage() {
             <select
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
-              className="w-full h-10 rounded-md border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full h-9 md:h-10 rounded-md border border-slate-800 bg-slate-950 px-3 text-xs md:text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="all">Все категории файлов</option>
               {categories.map((c) => (
@@ -161,9 +161,9 @@ export default function FilesRegistryPage() {
             <select
               value={directionFilter}
               onChange={(e) => setDirectionFilter(e.target.value as any)}
-              className="w-full h-10 rounded-md border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full h-9 md:h-10 rounded-md border border-slate-800 bg-slate-950 px-3 text-xs md:text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <option value="all">Все направления (Входящие & Исходящие)</option>
+              <option value="all">Все направления</option>
               <option value="inbox">Только Входящие файлы</option>
               <option value="outbox">Только Исходящие файлы</option>
             </select>
@@ -171,8 +171,8 @@ export default function FilesRegistryPage() {
         </div>
       </Card>
 
-      {/* Таблица Файлов */}
-      <Card className="bg-slate-900/40 border-slate-800 overflow-hidden">
+      {/* 1. ПК ТАБЛИЦА (hidden md:block) */}
+      <Card className="hidden md:block bg-slate-900/40 border-slate-800 overflow-hidden">
         <CardContent className="p-0">
           {loading ? (
             <div className="flex items-center justify-center p-12 text-slate-400">
@@ -199,9 +199,7 @@ export default function FilesRegistryPage() {
               <TableBody>
                 {filteredFiles.map((f) => {
                   const isInbox = f.documents?.receiver_company_id === currentCompanyId;
-                  const partner = isInbox
-                    ? f.documents?.sender_company
-                    : f.documents?.receiver_company;
+                  const partner = isInbox ? f.documents?.sender_company : f.documents?.receiver_company;
 
                   return (
                     <TableRow key={f.id}>
@@ -220,21 +218,15 @@ export default function FilesRegistryPage() {
                       </TableCell>
 
                       <TableCell>
-                        <div className="font-medium text-white text-sm truncate max-w-[200px]">
-                          {f.file_name}
-                        </div>
+                        <div className="font-medium text-white text-sm truncate max-w-[200px]">{f.file_name}</div>
                         <Badge variant="outline" className="text-[10px] border-slate-800 text-slate-400 mt-0.5">
                           {f.file_categories?.name || 'Без категории'}
                         </Badge>
                       </TableCell>
 
                       <TableCell>
-                        <div className="text-xs text-slate-200 font-medium max-w-[220px] truncate">
-                          {f.description}
-                        </div>
-                        {f.comment && (
-                          <p className="text-[11px] text-slate-500 truncate max-w-[220px]">{f.comment}</p>
-                        )}
+                        <div className="text-xs text-slate-200 font-medium max-w-[220px] truncate">{f.description}</div>
+                        {f.comment && <p className="text-[11px] text-slate-500 truncate max-w-[220px]">{f.comment}</p>}
                       </TableCell>
 
                       <TableCell>
@@ -254,9 +246,7 @@ export default function FilesRegistryPage() {
                         )}
                       </TableCell>
 
-                      <TableCell className="font-mono text-xs text-slate-400">
-                        {f.file_size || '1.5 MB'}
-                      </TableCell>
+                      <TableCell className="font-mono text-xs text-slate-400">{f.file_size || '1.5 MB'}</TableCell>
 
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end space-x-1">
@@ -290,6 +280,80 @@ export default function FilesRegistryPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* 2. МОБИЛЬНЫЕ КАРТОЧКИ (block md:hidden) */}
+      <div className="block md:hidden space-y-3">
+        {loading ? (
+          <div className="flex items-center justify-center p-8 text-slate-400">
+            <Loader2 className="h-6 w-6 animate-spin mr-2" />
+            <span>Загрузка...</span>
+          </div>
+        ) : filteredFiles.length === 0 ? (
+          <div className="p-8 text-center text-slate-500 text-xs bg-slate-900/40 rounded-xl border border-slate-800">
+            Файлы по фильтрам не найдены
+          </div>
+        ) : (
+          filteredFiles.map((f) => {
+            const isInbox = f.documents?.receiver_company_id === currentCompanyId;
+            const partner = isInbox ? f.documents?.sender_company : f.documents?.receiver_company;
+
+            return (
+              <Card key={f.id} className="bg-slate-900/60 border-slate-800 p-4 space-y-3">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <h4 className="font-bold text-white text-xs truncate max-w-[200px]">{f.file_name}</h4>
+                    <span className="text-[10px] font-mono text-slate-500">{f.file_size || '1.5 MB'}</span>
+                  </div>
+
+                  {isInbox ? (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                      <ArrowDownLeft className="h-3 w-3 mr-1" />
+                      Входящий
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                      <ArrowUpRight className="h-3 w-3 mr-1" />
+                      Исходящий
+                    </span>
+                  )}
+                </div>
+
+                <div className="text-xs text-slate-200 font-medium">
+                  {f.description}
+                </div>
+
+                <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-800/60">
+                  <div className="flex items-center space-x-1 text-slate-400 text-xs truncate max-w-[180px]">
+                    <Building2 className="h-3.5 w-3.5 text-slate-500 flex-shrink-0" />
+                    <span className="truncate">{partner?.name || '—'}</span>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    {f.file_path_r2 && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleDownloadR2File(f.file_path_r2)}
+                        className="h-8 p-1 text-xs text-blue-400"
+                      >
+                        <Download className="h-4 w-4" />
+                      </Button>
+                    )}
+
+                    {f.document_id && (
+                      <Link href={`/dashboard/documents/${f.document_id}`}>
+                        <Button size="sm" variant="outline" className="h-8 border-slate-800 text-xs text-slate-300">
+                          <Eye className="h-3.5 w-3.5" />
+                        </Button>
+                      </Link>
+                    )}
+                  </div>
+                </div>
+              </Card>
+            );
+          })
+        )}
+      </div>
     </div>
   );
 }
