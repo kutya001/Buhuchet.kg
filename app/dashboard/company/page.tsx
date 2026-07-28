@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -25,11 +26,12 @@ import {
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { MultiFileDropzone, type FileItemState } from '@/components/documents/MultiFileDropzone';
-import { uploadFileToArchiveAction } from '../files/archive-actions';
+import { uploadLegalDocumentAction, getCompanyLegalDocsAction } from '../files/archive-actions';
 import { getPresignedDownloadUrlAction } from '../files/actions';
 import type { Company, DocumentFile, FileCategory } from '@/types/database.types';
 
 export default function CompanyProfilePage() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<'profile' | 'legal_docs'>('profile');
   const [company, setCompany] = useState<Company | null>(null);
   const [categories, setCategories] = useState<FileCategory[]>([]);
@@ -60,15 +62,11 @@ export default function CompanyProfilePage() {
       if (comp) {
         setCompany(comp as Company);
 
-        // 1. Учредительные документы компании
-        const { data: docs } = await supabase
-          .from('document_files')
-          .select('*, file_categories(*)')
-          .eq('company_id', comp.id)
-          .eq('is_legal_doc', true)
-          .order('created_at', { ascending: false });
-
-        if (docs) setLegalDocs(docs as DocumentFile[]);
+        // 1. Чтение учредительных документов через Server Action
+        const legalRes = await getCompanyLegalDocsAction();
+        if (legalRes.success && legalRes.data) {
+          setLegalDocs(legalRes.data);
+        }
       }
     }
 
@@ -100,7 +98,7 @@ export default function CompanyProfilePage() {
       for (const item of uploadFiles) {
         if (!item.file_path_r2) continue;
 
-        const res = await uploadFileToArchiveAction({
+        const res = await uploadLegalDocumentAction({
           category_id: item.category_id,
           file_name: item.file_name,
           file_size: item.file_size,
@@ -117,7 +115,8 @@ export default function CompanyProfilePage() {
       if (successCount > 0) {
         setMsg({ type: 'success', text: `Успешно сохранено учредительных документов: ${successCount}` });
         setUploadFiles([]);
-        loadCompanyData();
+        router.refresh();
+        await loadCompanyData();
       } else {
         setMsg({ type: 'error', text: 'Сбой сохранения учредительных документов' });
       }
@@ -251,7 +250,7 @@ export default function CompanyProfilePage() {
                 <Button
                   onClick={handleSaveLegalDoc}
                   disabled={isPending}
-                  className="bg-purple-600 hover:bg-purple-500 text-white font-medium text-xs md:text-sm"
+                  className="bg-purple-600 hover:bg-purple-500 text-white font-medium text-xs md:text-sm min-h-[44px]"
                 >
                   {isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <CheckCircle2 className="h-4 w-4 mr-1.5" />}
                   Сохранить в Учредительные Документы
@@ -268,19 +267,21 @@ export default function CompanyProfilePage() {
               </div>
             ) : (
               legalDocs.map((doc) => (
-                <Card key={doc.id} className="bg-slate-900/60 border-slate-800 p-4 space-y-3">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h4 className="font-bold text-white text-xs truncate max-w-[180px]">{doc.file_name}</h4>
-                      <Badge variant="outline" className="text-[10px] border-slate-800 text-purple-400 mt-1">
-                        {doc.file_categories?.name || 'Учредительный'}
-                      </Badge>
+                <Card key={doc.id} className="bg-slate-900/60 border-slate-800 p-4 space-y-3 flex flex-col justify-between">
+                  <div className="space-y-2">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <h4 className="font-bold text-white text-xs truncate max-w-[180px]">{doc.file_name}</h4>
+                        <Badge variant="outline" className="text-[10px] border-purple-500/30 text-purple-400 mt-1">
+                          {doc.file_categories?.name || 'Учредительный'}
+                        </Badge>
+                      </div>
                     </div>
+
+                    <p className="text-xs text-slate-300 font-medium">{doc.description}</p>
                   </div>
 
-                  <p className="text-xs text-slate-300 font-medium">{doc.description}</p>
-
-                  <div className="flex items-center justify-between pt-2 border-t border-slate-800/60">
+                  <div className="flex items-center justify-between pt-2 border-t border-slate-800/60 mt-2">
                     <span className="text-[10px] font-mono text-slate-500">{doc.file_size || '1.5 MB'}</span>
 
                     {doc.file_path_r2 && (
@@ -291,7 +292,7 @@ export default function CompanyProfilePage() {
                         className="h-8 p-1 text-xs text-blue-400 hover:text-white"
                       >
                         <Download className="h-4 w-4 mr-1" />
-                        Скачать
+                        Скачать R2
                       </Button>
                     )}
                   </div>

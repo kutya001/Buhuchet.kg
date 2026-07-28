@@ -16,7 +16,73 @@ const archiveFileSchema = z.object({
   is_legal_doc: z.boolean().optional(),
 });
 
-// Загрузка файла в личный архив или учредительные документы компании
+// Загрузка уставного / учредительного документа компании
+export async function uploadLegalDocumentAction(data: any): Promise<ActionResponse<DocumentFile>> {
+  try {
+    const supabase = await createClient();
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return { success: false, error: 'Пользователь не авторизован' };
+    }
+
+    const { data: prof } = await supabase.from('users').select('company_id').eq('id', user.id).single();
+    if (!prof?.company_id) {
+      return { success: false, error: 'Пользователь не привязан к организации' };
+    }
+
+    const validation = archiveFileSchema.safeParse(data);
+    if (!validation.success) {
+      const errStr = validation.error.issues.map((i) => i.message).join(', ');
+      return { success: false, error: errStr };
+    }
+
+    const {
+      category_id,
+      file_name,
+      file_size,
+      file_type,
+      file_path_r2,
+      description,
+      comment,
+    } = validation.data;
+
+    // Вставка строки учредительного документа
+    const { data: insertedFile, error } = await supabase
+      .from('document_files')
+      .insert({
+        company_id: prof.company_id,
+        document_id: null,
+        category_id,
+        file_name,
+        file_size: file_size || '1.5 MB',
+        file_type: file_type || 'image',
+        file_path_r2,
+        description,
+        comment: comment || null,
+        is_internal: true,
+        is_legal_doc: true,
+      })
+      .select('*, file_categories(*)')
+      .single();
+
+    if (error || !insertedFile) {
+      return { success: false, error: `Ошибка сохранения учредительного документа: ${error?.message}` };
+    }
+
+    revalidatePath('/dashboard/company');
+    revalidatePath('/dashboard/files');
+    return { success: true, data: insertedFile as DocumentFile };
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : 'Сбой при сохранении уставного документа';
+    return { success: false, error: errorMsg };
+  }
+}
+
+// Загрузка файла в личный архив компании
 export async function uploadFileToArchiveAction(data: any): Promise<ActionResponse<DocumentFile>> {
   try {
     const supabase = await createClient();
@@ -63,7 +129,7 @@ export async function uploadFileToArchiveAction(data: any): Promise<ActionRespon
         file_path_r2,
         description,
         comment: comment || null,
-        is_internal: !is_legal_doc,
+        is_internal: true,
         is_legal_doc: !!is_legal_doc,
       })
       .select('*, file_categories(*)')
@@ -78,6 +144,42 @@ export async function uploadFileToArchiveAction(data: any): Promise<ActionRespon
     return { success: true, data: insertedFile as DocumentFile };
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : 'Сбой при загрузке файла в архив';
+    return { success: false, error: errorMsg };
+  }
+}
+
+// Получение учредительных документов компании
+export async function getCompanyLegalDocsAction(): Promise<ActionResponse<DocumentFile[]>> {
+  try {
+    const supabase = await createClient();
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return { success: false, error: 'Пользователь не авторизован' };
+    }
+
+    const { data: prof } = await supabase.from('users').select('company_id').eq('id', user.id).single();
+    if (!prof?.company_id) {
+      return { success: false, error: 'Организация не найдена' };
+    }
+
+    const { data: files, error } = await supabase
+      .from('document_files')
+      .select('*, file_categories(*)')
+      .eq('company_id', prof.company_id)
+      .eq('is_legal_doc', true)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      return { success: false, error: `Ошибка чтения уставных документов: ${error.message}` };
+    }
+
+    return { success: true, data: (files as DocumentFile[]) || [] };
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : 'Сбой при получении уставных сканов';
     return { success: false, error: errorMsg };
   }
 }
