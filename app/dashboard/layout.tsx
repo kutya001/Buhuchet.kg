@@ -12,11 +12,11 @@ import {
   FolderOpen,
   Globe,
   UserCheck,
-  Menu,
 } from 'lucide-react';
 import Link from 'next/link';
 import { signOutAction } from '../(auth)/actions';
 import { Button } from '@/components/ui/button';
+import { MobileFAB } from '@/components/ui/MobileFAB';
 
 export default async function DashboardLayout({
   children,
@@ -43,7 +43,7 @@ export default async function DashboardLayout({
   const company = Array.isArray(profile?.companies) ? profile?.companies[0] : profile?.companies;
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row bg-slate-950 text-slate-100">
+    <div className="min-h-screen flex flex-col md:flex-row bg-slate-950 text-slate-100 relative">
       {/* 1. DESKTOP SIDEBAR (Только на экранах md:flex >= 768px) */}
       <aside className="hidden md:flex w-64 border-r border-slate-800/80 bg-slate-900/40 p-4 flex-col justify-between backdrop-blur-xl flex-shrink-0">
         <div className="space-y-6">
@@ -158,7 +158,7 @@ export default async function DashboardLayout({
       </aside>
 
       {/* 2. MOBILE HEADER & BOTTOM NAV BAR (Только на смартфонах md:hidden) */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden pb-16 md:pb-0">
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden pb-20 md:pb-0">
         {/* Header */}
         <header className="h-16 border-b border-slate-800/80 bg-slate-900/40 px-4 md:px-6 flex items-center justify-between backdrop-blur-xl sticky top-0 z-30">
           <div className="flex items-center space-x-3">
@@ -189,7 +189,10 @@ export default async function DashboardLayout({
         </main>
       </div>
 
-      {/* 3. FIX BOTTOM NAVIGATION BAR FOR MOBILE SMARTPHONES */}
+      {/* 3. MOBILE FLOATING ACTION BUTTON (FAB) */}
+      <MobileFAB />
+
+      {/* 4. FIX BOTTOM NAVIGATION BAR FOR MOBILE SMARTPHONES */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-slate-900/95 border-t border-slate-800/80 backdrop-blur-xl z-40 flex items-center justify-around px-2">
         <Link
           href="/dashboard"

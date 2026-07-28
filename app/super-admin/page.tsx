@@ -539,10 +539,11 @@ export default function SuperAdminDashboard() {
         </>
       )}
 
-      {/* Модалка вызова причин возврата на доработку */}
+      {/* Модалка вызова причин возврата на доработку (Bottom Sheet на смартфонах) */}
       {rejectCompanyId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
-          <Card className="w-full max-w-md bg-slate-900 border-slate-800 shadow-2xl p-6 space-y-4">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-950/80 backdrop-blur-sm p-0 sm:p-4 animate-in fade-in duration-200">
+          <Card className="w-full max-w-md bg-slate-900 border-t sm:border border-slate-800 shadow-2xl p-6 space-y-4 rounded-t-3xl sm:rounded-2xl animate-in slide-in-from-bottom duration-300">
+            <div className="sm:hidden w-12 h-1 bg-slate-700 rounded-full mx-auto mb-1 opacity-80" />
             <h3 className="text-lg font-bold text-white flex items-center">
               <XCircle className="h-5 w-5 mr-2 text-red-400" />
               Причина возврата заявки на доработку
@@ -553,17 +554,18 @@ export default function SuperAdminDashboard() {
                 value={rejectComment}
                 onChange={(e) => setRejectComment(e.target.value)}
                 placeholder="Например: Ошибка в ИНН или некорректный адрес юрлица"
-                className="bg-slate-950 border-slate-800 text-slate-100"
+                className="bg-slate-950 border-slate-800 text-slate-100 min-h-[44px]"
               />
             </div>
             <div className="flex justify-end space-x-3 pt-2">
-              <Button variant="outline" onClick={() => setRejectCompanyId(null)} className="border-slate-800 text-slate-400">
+              <Button variant="outline" onClick={() => setRejectCompanyId(null)} className="border-slate-800 text-slate-400 min-h-[44px]">
                 Отмена
               </Button>
               <Button
                 variant="destructive"
                 onClick={handleRejectCompany}
                 disabled={isPending}
+                className="min-h-[44px]"
               >
                 {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Вернуть на доработку'}
               </Button>
@@ -572,17 +574,18 @@ export default function SuperAdminDashboard() {
         </div>
       )}
 
-      {/* Модалка деталей реквизитов компании */}
+      {/* Модалка деталей реквизитов компании (Bottom Sheet на смартфонах) */}
       {selectedCompDetails && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
-          <Card className="w-full max-w-lg bg-slate-900 border-slate-800 shadow-2xl p-6 space-y-4">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-950/80 backdrop-blur-sm p-0 sm:p-4 animate-in fade-in duration-200">
+          <Card className="w-full max-w-lg bg-slate-900 border-t sm:border border-slate-800 shadow-2xl p-6 space-y-4 rounded-t-3xl sm:rounded-2xl animate-in slide-in-from-bottom duration-300">
+            <div className="sm:hidden w-12 h-1 bg-slate-700 rounded-full mx-auto mb-1 opacity-80" />
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="text-lg font-bold text-white flex items-center">
                 <Building2 className="h-5 w-5 mr-2 text-blue-400" />
                 Реквизиты: {selectedCompDetails.name}
               </h3>
-              <Button variant="ghost" size="sm" onClick={() => setSelectedCompDetails(null)} className="h-8 w-8 p-0 text-slate-400">
-                <X className="h-4 w-4" />
+              <Button variant="ghost" size="sm" onClick={() => setSelectedCompDetails(null)} className="h-9 w-9 p-0 text-slate-400">
+                <X className="h-5 w-5" />
               </Button>
             </div>
 

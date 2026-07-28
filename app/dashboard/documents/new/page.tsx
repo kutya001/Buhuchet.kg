@@ -356,11 +356,14 @@ export default function NewB2BDocumentPage() {
         </form>
       </Card>
 
-      {/* МОДАЛЬНОЕ ОКНО ВЫБОРА ИЗ ИМЕЮЩИХСЯ ФАЙЛОВ */}
+      {/* МОДАЛЬНОЕ ОКНО ВЫБОРА ИЗ ИМЕЮЩИХСЯ ФАЙЛОВ (Bottom Sheet на мобильных) */}
       {showArchiveSelectModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
-          <Card className="w-full max-w-2xl bg-slate-900 border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
-            <CardHeader className="border-b border-slate-800 flex flex-row items-center justify-between pb-3">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-950/80 backdrop-blur-sm p-0 sm:p-4 animate-in fade-in duration-200">
+          <Card className="w-full max-w-2xl bg-slate-900 border-t sm:border border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-[88vh] rounded-t-3xl sm:rounded-2xl animate-in slide-in-from-bottom duration-300">
+            {/* Полоска-индикатор шторки для смартфонов */}
+            <div className="sm:hidden w-12 h-1 bg-slate-700 rounded-full mx-auto mt-3 mb-1 opacity-80" />
+
+            <CardHeader className="border-b border-slate-800 flex flex-row items-center justify-between pb-3 pt-3 sm:pt-6">
               <div>
                 <CardTitle className="text-base md:text-lg text-white flex items-center">
                   <FolderOpen className="h-5 w-5 mr-2 text-purple-400" />
@@ -374,7 +377,7 @@ export default function NewB2BDocumentPage() {
                 variant="ghost"
                 size="sm"
                 onClick={() => setShowArchiveSelectModal(false)}
-                className="h-8 w-8 p-0 text-slate-400"
+                className="h-9 w-9 p-0 text-slate-400"
               >
                 <X className="h-5 w-5" />
               </Button>
