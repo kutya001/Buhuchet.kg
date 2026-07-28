@@ -1,8 +1,72 @@
 'use server';
 
 import { createAdminClient } from '@/lib/supabase/admin';
-import type { ActionResponse, FileCategory, FeatureFlag, UserProfile } from '@/types/database.types';
+import type { ActionResponse, FileCategory, FeatureFlag, UserProfile, Company } from '@/types/database.types';
 import { revalidatePath } from 'next/cache';
+
+// Одобрить и Активировать компанию
+export async function approveCompanyAction(companyId: string): Promise<ActionResponse> {
+  try {
+    const supabaseAdmin = createAdminClient();
+
+    const { error } = await supabaseAdmin
+      .from('companies')
+      .update({
+        status: 'active',
+        is_active: true,
+        moderation_comment: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', companyId);
+
+    if (error) {
+      return { success: false, error: `Ошибка активации компании: ${error.message}` };
+    }
+
+    revalidatePath('/super-admin');
+    revalidatePath('/dashboard');
+    revalidatePath('/dashboard/pending');
+    return { success: true };
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : 'Сбой при одобрении компании';
+    return { success: false, error: errorMsg };
+  }
+}
+
+// Вернуть компанию на доработку с указанием замечаний
+export async function rejectCompanyWithCommentAction(
+  companyId: string,
+  comment: string
+): Promise<ActionResponse> {
+  try {
+    if (!comment || comment.trim().length < 3) {
+      return { success: false, error: 'Укажите понятную причину возврата заявки на доработку' };
+    }
+
+    const supabaseAdmin = createAdminClient();
+
+    const { error } = await supabaseAdmin
+      .from('companies')
+      .update({
+        status: 'requires_changes',
+        moderation_comment: comment,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', companyId);
+
+    if (error) {
+      return { success: false, error: `Ошибка отклонения компании: ${error.message}` };
+    }
+
+    revalidatePath('/super-admin');
+    revalidatePath('/dashboard');
+    revalidatePath('/dashboard/pending');
+    return { success: true };
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : 'Сбой при отправке на доработку';
+    return { success: false, error: errorMsg };
+  }
+}
 
 // Создание категории файлов
 export async function createFileCategoryAction(
@@ -109,6 +173,7 @@ export async function toggleCompanyStatusAction(
       .from('companies')
       .update({
         is_active: isActive,
+        status: isActive ? 'active' : 'blocked',
         updated_at: new Date().toISOString(),
       })
       .eq('id', companyId);

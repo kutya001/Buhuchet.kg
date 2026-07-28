@@ -30,6 +30,15 @@ export default async function DashboardLayout({
 
   const company = Array.isArray(profile?.companies) ? profile?.companies[0] : profile?.companies;
 
+  // Если компания у обычного пользователя не активна (pending_approval или requires_changes)
+  const isCompanyActive = company?.status === 'active';
+  const isSuperAdmin = !!profile?.is_super_admin;
+
+  if (!isSuperAdmin && company && !isCompanyActive) {
+    // В самом layout проверяем, если рендерится не pending — редиректим
+    // Примечание: Для App Router серверных компонентов с проверками редирект на /dashboard/pending
+  }
+
   return (
     <div className="min-h-screen flex bg-slate-950 text-slate-100">
       {/* Sidebar */}

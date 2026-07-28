@@ -30,6 +30,12 @@ import {
   FileText,
   ToggleLeft,
   ToggleRight,
+  Clock,
+  Check,
+  XCircle,
+  AlertOctagon,
+  Eye,
+  X,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import {
@@ -37,6 +43,8 @@ import {
   updateUserCompanyAndRoleAction,
   toggleFeatureFlagAction,
   toggleCompanyStatusAction,
+  approveCompanyAction,
+  rejectCompanyWithCommentAction,
 } from './actions';
 import type { Company, UserProfile, FileCategory, DocumentFile, FeatureFlag, Document } from '@/types/database.types';
 
@@ -49,15 +57,20 @@ type GlobalFile = DocumentFile & {
 };
 
 export default function SuperAdminDashboard() {
-  const [activeTab, setActiveTab] = useState<'categories' | 'companies' | 'users' | 'global_files' | 'flags'>('categories');
+  const [activeTab, setActiveTab] = useState<'moderation' | 'companies' | 'categories' | 'users' | 'global_files' | 'flags'>('moderation');
   const [loading, setLoading] = useState(true);
   const [isPending, startTransition] = useTransition();
 
-  const [categories, setCategories] = useState<FileCategory[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
+  const [categories, setCategories] = useState<FileCategory[]>([]);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [globalFiles, setGlobalFiles] = useState<GlobalFile[]>([]);
   const [featureFlags, setFeatureFlags] = useState<FeatureFlag[]>([]);
+
+  // Модалка отклонения на доработку
+  const [rejectCompanyId, setRejectCompanyId] = useState<string | null>(null);
+  const [rejectComment, setRejectComment] = useState('');
+  const [selectedCompDetails, setSelectedCompDetails] = useState<Company | null>(null);
 
   // Форма новой категории
   const [newCatName, setNewCatName] = useState('');
@@ -69,13 +82,13 @@ export default function SuperAdminDashboard() {
   const loadAllAdminData = async () => {
     setLoading(true);
 
-    // 1. Категории
-    const { data: catData } = await supabase.from('file_categories').select('*').order('name');
-    if (catData) setCategories(catData as FileCategory[]);
-
-    // 2. Компании
+    // 1. Компании
     const { data: compData } = await supabase.from('companies').select('*').order('created_at', { ascending: false });
     if (compData) setCompanies(compData as Company[]);
+
+    // 2. Категории
+    const { data: catData } = await supabase.from('file_categories').select('*').order('name');
+    if (catData) setCategories(catData as FileCategory[]);
 
     // 3. Пользователи
     const { data: usersData } = await supabase.from('users').select('*, companies(*)').order('created_at', { ascending: false });
@@ -99,6 +112,38 @@ export default function SuperAdminDashboard() {
     loadAllAdminData();
   }, []);
 
+  // Одобрение компании
+  const handleApproveCompany = (companyId: string, companyName: string) => {
+    setMsg(null);
+    startTransition(async () => {
+      const res = await approveCompanyAction(companyId);
+      if (res.success) {
+        setMsg({ type: 'success', text: `Организация "${companyName}" успешно активирована!` });
+        loadAllAdminData();
+      } else {
+        setMsg({ type: 'error', text: res.error || 'Ошибка активации' });
+      }
+    });
+  };
+
+  // Возврат компании на доработку
+  const handleRejectCompany = () => {
+    if (!rejectCompanyId || !rejectComment) return;
+
+    setMsg(null);
+    startTransition(async () => {
+      const res = await rejectCompanyWithCommentAction(rejectCompanyId, rejectComment);
+      if (res.success) {
+        setMsg({ type: 'success', text: 'Заявка возвращена компании на доработку' });
+        setRejectCompanyId(null);
+        setRejectComment('');
+        loadAllAdminData();
+      } else {
+        setMsg({ type: 'error', text: res.error || 'Ошибка отправки замечаний' });
+      }
+    });
+  };
+
   // Добавление категории
   const handleAddCategory = (e: React.FormEvent) => {
     e.preventDefault();
@@ -118,21 +163,9 @@ export default function SuperAdminDashboard() {
     });
   };
 
-  // Блокировка компании
-  const handleToggleCompany = (companyId: string, currentStatus: boolean) => {
-    startTransition(async () => {
-      await toggleCompanyStatusAction(companyId, !currentStatus);
-      loadAllAdminData();
-    });
-  };
-
-  // Переключение фичи
-  const handleToggleFlag = (key: string, currentStatus: boolean) => {
-    startTransition(async () => {
-      await toggleFeatureFlagAction(key, !currentStatus);
-      loadAllAdminData();
-    });
-  };
+  const pendingModerationCompanies = companies.filter(
+    (c) => c.status === 'pending_approval' || c.status === 'requires_changes'
+  );
 
   return (
     <div className="space-y-6">
@@ -140,10 +173,10 @@ export default function SuperAdminDashboard() {
         <div>
           <h2 className="text-2xl font-bold text-white tracking-tight flex items-center">
             <Shield className="h-6 w-6 mr-2 text-amber-400" />
-            Центр Управления Суперадмина
+            Центр Модерации Суперадмина
           </h2>
           <p className="text-sm text-slate-400 mt-1">
-            Глобальная модерация организаций, пользователей, категорий файлов и системных фичей
+            Проверка заявлений на регистрацию юрлиц и управление B2B сетью
           </p>
         </div>
       </div>
@@ -162,18 +195,18 @@ export default function SuperAdminDashboard() {
         </Alert>
       )}
 
-      {/* Вкладки Суперадмина */}
+      {/* Вкладки */}
       <div className="flex items-center space-x-2 border-b border-slate-800 pb-2 overflow-x-auto">
         <button
-          onClick={() => setActiveTab('categories')}
+          onClick={() => setActiveTab('moderation')}
           className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-            activeTab === 'categories'
+            activeTab === 'moderation'
               ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
               : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
           }`}
         >
-          <FileText className="h-4 w-4" />
-          <span>Категории Файлов</span>
+          <Clock className="h-4 w-4" />
+          <span>Заявки на Модерацию ({pendingModerationCompanies.length})</span>
         </button>
 
         <button
@@ -185,7 +218,19 @@ export default function SuperAdminDashboard() {
           }`}
         >
           <Building2 className="h-4 w-4" />
-          <span>Организации ({companies.length})</span>
+          <span>Все Организации ({companies.length})</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('categories')}
+          className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+            activeTab === 'categories'
+              ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+          }`}
+        >
+          <FileText className="h-4 w-4" />
+          <span>Категории Файлов</span>
         </button>
 
         <button
@@ -209,111 +254,118 @@ export default function SuperAdminDashboard() {
           }`}
         >
           <FolderOpen className="h-4 w-4" />
-          <span>Глобальный Реестр Файлов ({globalFiles.length})</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('flags')}
-          className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-            activeTab === 'flags'
-              ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
-          }`}
-        >
-          <Settings className="h-4 w-4" />
-          <span>Управление Фичами</span>
+          <span>Глобальные Файлы ({globalFiles.length})</span>
         </button>
       </div>
 
       {loading ? (
         <div className="flex items-center justify-center p-12 text-slate-400">
           <Loader2 className="h-6 w-6 animate-spin mr-2" />
-          <span>Загрузка админ-панели...</span>
+          <span>Загрузка данных админ-панели...</span>
         </div>
       ) : (
         <>
-          {/* Вкладка 1: Категории Файлов */}
-          {activeTab === 'categories' && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {/* Форма новой категории */}
-              <Card className="bg-slate-900/40 border-slate-800">
-                <CardHeader>
-                  <CardTitle className="text-lg">Новая Категория Файла</CardTitle>
-                  <CardDescription>Справочник доступных категорий при мультизагрузке</CardDescription>
-                </CardHeader>
-                <form onSubmit={handleAddCategory}>
-                  <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="catName">Наименование *</Label>
-                      <Input
-                        id="catName"
-                        value={newCatName}
-                        onChange={(e) => setNewCatName(e.target.value)}
-                        placeholder="Например: Договор аренды"
-                        required
-                        className="bg-slate-950 border-slate-800 text-slate-100"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="catDesc">Описание</Label>
-                      <Input
-                        id="catDesc"
-                        value={newCatDesc}
-                        onChange={(e) => setNewCatDesc(e.target.value)}
-                        placeholder="Краткое назначение категории..."
-                        className="bg-slate-950 border-slate-800 text-slate-100"
-                      />
-                    </div>
-                  </CardContent>
-
-                  <CardContent className="pt-0">
-                    <Button
-                      type="submit"
-                      disabled={isPending}
-                      className="w-full bg-amber-600 hover:bg-amber-500 text-white font-medium shadow-lg shadow-amber-600/20"
-                    >
-                      {isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
-                      Создать категорию
-                    </Button>
-                  </CardContent>
-                </form>
-              </Card>
-
-              {/* Список категорий */}
-              <Card className="md:col-span-2 bg-slate-900/40 border-slate-800">
-                <CardHeader>
-                  <CardTitle className="text-lg">Список Категорий Файлов</CardTitle>
-                </CardHeader>
-                <CardContent className="p-0">
+          {/* 1. Вкладка Модерации Заявок */}
+          {activeTab === 'moderation' && (
+            <Card className="bg-slate-900/40 border-slate-800 overflow-hidden">
+              <CardContent className="p-0">
+                {pendingModerationCompanies.length === 0 ? (
+                  <div className="p-12 text-center text-slate-500">
+                    Новые заявки на модерацию организаций отсутствуют
+                  </div>
+                ) : (
                   <Table>
                     <TableHeader className="bg-slate-950/60">
                       <TableRow>
-                        <TableHead>Категория</TableHead>
-                        <TableHead>Описание</TableHead>
+                        <TableHead>Организация / Руководитель</TableHead>
+                        <TableHead>ИНН КР (14 цифр)</TableHead>
+                        <TableHead>Отрасль</TableHead>
+                        <TableHead>Контакты</TableHead>
                         <TableHead>Статус</TableHead>
+                        <TableHead className="text-right">Решение Модератора</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {categories.map((c) => (
-                        <TableRow key={c.id}>
-                          <TableCell className="font-semibold text-white text-sm">{c.name}</TableCell>
-                          <TableCell className="text-xs text-slate-400">{c.description || '—'}</TableCell>
+                      {pendingModerationCompanies.map((comp) => (
+                        <TableRow key={comp.id}>
                           <TableCell>
-                            <Badge variant={c.is_active ? 'success' : 'secondary'}>
-                              {c.is_active ? 'Активна' : 'Скрыта'}
+                            <div className="font-bold text-white text-sm">{comp.name}</div>
+                            <div className="text-xs text-slate-400 mt-0.5">
+                              Руководитель: {comp.director_name || '—'}
+                            </div>
+                          </TableCell>
+
+                          <TableCell className="font-mono text-sm text-slate-300 font-bold">
+                            {comp.inn}
+                          </TableCell>
+
+                          <TableCell>
+                            <Badge variant="outline" className="border-slate-800 text-slate-300">
+                              {comp.industry || 'Услуги'}
                             </Badge>
+                          </TableCell>
+
+                          <TableCell className="text-xs space-y-0.5">
+                            <div className="text-slate-300 font-mono">{comp.phone || '—'}</div>
+                            <div className="text-slate-500 font-mono">{comp.email || '—'}</div>
+                          </TableCell>
+
+                          <TableCell>
+                            {comp.status === 'pending_approval' && (
+                              <Badge variant="warning">Ожидает проверки</Badge>
+                            )}
+                            {comp.status === 'requires_changes' && (
+                              <Badge variant="destructive">На доработке</Badge>
+                            )}
+                          </TableCell>
+
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end space-x-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setSelectedCompDetails(comp)}
+                                className="border-slate-800 text-xs text-slate-300"
+                              >
+                                <Eye className="h-3.5 w-3.5 mr-1" />
+                                Детали
+                              </Button>
+
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                onClick={() => {
+                                  setRejectCompanyId(comp.id);
+                                  setRejectComment('');
+                                }}
+                                disabled={isPending}
+                                className="text-xs"
+                              >
+                                <XCircle className="h-3.5 w-3.5 mr-1" />
+                                На доработку
+                              </Button>
+
+                              <Button
+                                size="sm"
+                                onClick={() => handleApproveCompany(comp.id, comp.name)}
+                                disabled={isPending}
+                                className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold"
+                              >
+                                <Check className="h-3.5 w-3.5 mr-1" />
+                                Одобрить
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
                   </Table>
-                </CardContent>
-              </Card>
-            </div>
+                )}
+              </CardContent>
+            </Card>
           )}
 
-          {/* Вкладка 2: Организации */}
+          {/* 2. Вкладка Все Организации */}
           {activeTab === 'companies' && (
             <Card className="bg-slate-900/40 border-slate-800 overflow-hidden">
               <CardContent className="p-0">
@@ -321,10 +373,10 @@ export default function SuperAdminDashboard() {
                   <TableHeader className="bg-slate-950/60">
                     <TableRow>
                       <TableHead>Организация</TableHead>
-                      <TableHead>ИНН КР (14 цифр)</TableHead>
-                      <TableHead>Телефон</TableHead>
-                      <TableHead>Статус</TableHead>
-                      <TableHead className="text-right">Действия</TableHead>
+                      <TableHead>ИНН КР</TableHead>
+                      <TableHead>Отрасль</TableHead>
+                      <TableHead>Статус Модерации</TableHead>
+                      <TableHead className="text-right">Действие</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -332,25 +384,28 @@ export default function SuperAdminDashboard() {
                       <TableRow key={comp.id}>
                         <TableCell className="font-semibold text-white">{comp.name}</TableCell>
                         <TableCell className="font-mono text-slate-300 font-bold">{comp.inn}</TableCell>
-                        <TableCell className="font-mono text-xs text-slate-400">{comp.phone || '—'}</TableCell>
+                        <TableCell className="text-xs text-slate-400">{comp.industry || '—'}</TableCell>
                         <TableCell>
-                          <Badge variant={comp.is_active ? 'success' : 'destructive'}>
-                            {comp.is_active ? 'Активна' : 'Заблокирована'}
+                          <Badge
+                            variant={
+                              comp.status === 'active'
+                                ? 'success'
+                                : comp.status === 'blocked'
+                                ? 'destructive'
+                                : 'warning'
+                            }
+                          >
+                            {comp.status}
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right">
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => handleToggleCompany(comp.id, comp.is_active)}
+                            onClick={() => toggleCompanyStatusAction(comp.id, !comp.is_active)}
                             disabled={isPending}
-                            className={
-                              comp.is_active
-                                ? 'border-slate-800 text-red-400 hover:bg-red-500/10'
-                                : 'border-slate-800 text-emerald-400 hover:bg-emerald-500/10'
-                            }
+                            className="border-slate-800 text-xs"
                           >
-                            {comp.is_active ? <Lock className="h-3.5 w-3.5 mr-1" /> : <Unlock className="h-3.5 w-3.5 mr-1" />}
                             {comp.is_active ? 'Заблокировать' : 'Разблокировать'}
                           </Button>
                         </TableCell>
@@ -362,7 +417,65 @@ export default function SuperAdminDashboard() {
             </Card>
           )}
 
-          {/* Вкладка 3: Пользователи */}
+          {/* 3. Вкладка Категории */}
+          {activeTab === 'categories' && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <Card className="bg-slate-900/40 border-slate-800">
+                <CardHeader>
+                  <CardTitle className="text-lg">Новая Категория</CardTitle>
+                </CardHeader>
+                <form onSubmit={handleAddCategory}>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="catName">Наименование *</Label>
+                      <Input
+                        id="catName"
+                        value={newCatName}
+                        onChange={(e) => setNewCatName(e.target.value)}
+                        required
+                        className="bg-slate-950 border-slate-800 text-slate-100"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="catDesc">Описание</Label>
+                      <Input
+                        id="catDesc"
+                        value={newCatDesc}
+                        onChange={(e) => setNewCatDesc(e.target.value)}
+                        className="bg-slate-950 border-slate-800 text-slate-100"
+                      />
+                    </div>
+                    <Button type="submit" disabled={isPending} className="w-full bg-amber-600 hover:bg-amber-500">
+                      Создать категорию
+                    </Button>
+                  </CardContent>
+                </form>
+              </Card>
+
+              <Card className="md:col-span-2 bg-slate-900/40 border-slate-800">
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader className="bg-slate-950/60">
+                      <TableRow>
+                        <TableHead>Категория</TableHead>
+                        <TableHead>Описание</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {categories.map((c) => (
+                        <TableRow key={c.id}>
+                          <TableCell className="font-semibold text-white">{c.name}</TableCell>
+                          <TableCell className="text-xs text-slate-400">{c.description || '—'}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* 4. Вкладка Пользователи */}
           {activeTab === 'users' && (
             <Card className="bg-slate-900/40 border-slate-800 overflow-hidden">
               <CardContent className="p-0">
@@ -372,37 +485,20 @@ export default function SuperAdminDashboard() {
                       <TableHead>ФИО / Email</TableHead>
                       <TableHead>Организация</TableHead>
                       <TableHead>Роль</TableHead>
-                      <TableHead>Суперадмин</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {users.map((u) => {
                       const userComp = Array.isArray(u.companies) ? u.companies[0] : u.companies;
-
                       return (
                         <TableRow key={u.id}>
                           <TableCell>
                             <div className="font-medium text-white">{u.full_name}</div>
-                            <div className="text-xs text-slate-500 font-mono">{u.email}</div>
+                            <div className="text-xs text-slate-500">{u.email}</div>
                           </TableCell>
-                          <TableCell className="text-xs text-slate-300">
-                            {userComp?.name ? (
-                              <span className="font-semibold text-slate-200">{userComp.name}</span>
-                            ) : (
-                              <span className="text-slate-500 font-mono">— (Без компании)</span>
-                            )}
-                          </TableCell>
+                          <TableCell className="text-xs text-slate-300">{userComp?.name || '—'}</TableCell>
                           <TableCell>
-                            <Badge variant="outline" className="border-slate-800 uppercase font-mono text-[10px]">
-                              {u.role}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            {u.is_super_admin ? (
-                              <Badge variant="warning">Суперадмин</Badge>
-                            ) : (
-                              <span className="text-slate-600 text-xs">Нет</span>
-                            )}
+                            <Badge variant="outline">{u.role}</Badge>
                           </TableCell>
                         </TableRow>
                       );
@@ -413,7 +509,7 @@ export default function SuperAdminDashboard() {
             </Card>
           )}
 
-          {/* Вкладка 4: Глобальный Реестр Файлов */}
+          {/* 5. Глобальные Файлы */}
           {activeTab === 'global_files' && (
             <Card className="bg-slate-900/40 border-slate-800 overflow-hidden">
               <CardContent className="p-0">
@@ -422,29 +518,17 @@ export default function SuperAdminDashboard() {
                     <TableRow>
                       <TableHead>Имя файла</TableHead>
                       <TableHead>Категория</TableHead>
-                      <TableHead>Описание</TableHead>
                       <TableHead>Отправитель</TableHead>
                       <TableHead>Получатель</TableHead>
-                      <TableHead>Размер</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {globalFiles.map((gf) => (
                       <TableRow key={gf.id}>
                         <TableCell className="font-medium text-white text-xs">{gf.file_name}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className="border-slate-800 text-[10px]">
-                            {gf.file_categories?.name || 'Без категории'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-xs text-slate-300 max-w-[200px] truncate">{gf.description}</TableCell>
-                        <TableCell className="text-xs font-semibold text-blue-400">
-                          {gf.documents?.sender_company?.name || '—'}
-                        </TableCell>
-                        <TableCell className="text-xs font-semibold text-purple-400">
-                          {gf.documents?.receiver_company?.name || '—'}
-                        </TableCell>
-                        <TableCell className="font-mono text-xs text-slate-400">{gf.file_size || '1.5 MB'}</TableCell>
+                        <TableCell className="text-xs text-slate-400">{gf.file_categories?.name || '—'}</TableCell>
+                        <TableCell className="text-xs text-blue-400">{gf.documents?.sender_company?.name || '—'}</TableCell>
+                        <TableCell className="text-xs text-purple-400">{gf.documents?.receiver_company?.name || '—'}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -452,46 +536,90 @@ export default function SuperAdminDashboard() {
               </CardContent>
             </Card>
           )}
-
-          {/* Вкладка 5: Feature Flags */}
-          {activeTab === 'flags' && (
-            <Card className="bg-slate-900/40 border-slate-800">
-              <CardHeader>
-                <CardTitle className="text-lg">Управление Функционалом (Feature Flags)</CardTitle>
-                <CardDescription>Гибкое включение и отключение модулей системы</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {featureFlags.map((flag) => (
-                  <div
-                    key={flag.key}
-                    className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 flex items-center justify-between"
-                  >
-                    <div>
-                      <h4 className="font-semibold text-white text-sm">{flag.title}</h4>
-                      <p className="text-xs text-slate-400 mt-0.5">{flag.description}</p>
-                      <span className="text-[10px] font-mono text-slate-600 uppercase">Key: {flag.key}</span>
-                    </div>
-
-                    <Button
-                      size="sm"
-                      variant={flag.is_enabled ? 'default' : 'outline'}
-                      onClick={() => handleToggleFlag(flag.key, flag.is_enabled)}
-                      disabled={isPending}
-                      className={
-                        flag.is_enabled
-                          ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
-                          : 'border-slate-800 text-slate-400'
-                      }
-                    >
-                      {flag.is_enabled ? <ToggleRight className="h-4 w-4 mr-1.5" /> : <ToggleLeft className="h-4 w-4 mr-1.5" />}
-                      {flag.is_enabled ? 'Модуль Включен' : 'Модуль Отключен'}
-                    </Button>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          )}
         </>
+      )}
+
+      {/* Модалка вызова причин возврата на доработку */}
+      {rejectCompanyId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
+          <Card className="w-full max-w-md bg-slate-900 border-slate-800 shadow-2xl p-6 space-y-4">
+            <h3 className="text-lg font-bold text-white flex items-center">
+              <XCircle className="h-5 w-5 mr-2 text-red-400" />
+              Причина возврата заявки на доработку
+            </h3>
+            <div className="space-y-2">
+              <Label className="text-xs text-slate-300">Укажите замечания модератора:</Label>
+              <Input
+                value={rejectComment}
+                onChange={(e) => setRejectComment(e.target.value)}
+                placeholder="Например: Ошибка в ИНН или некорректный адрес юрлица"
+                className="bg-slate-950 border-slate-800 text-slate-100"
+              />
+            </div>
+            <div className="flex justify-end space-x-3 pt-2">
+              <Button variant="outline" onClick={() => setRejectCompanyId(null)} className="border-slate-800 text-slate-400">
+                Отмена
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleRejectCompany}
+                disabled={isPending}
+              >
+                {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Вернуть на доработку'}
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Модалка деталей реквизитов компании */}
+      {selectedCompDetails && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
+          <Card className="w-full max-w-lg bg-slate-900 border-slate-800 shadow-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="text-lg font-bold text-white flex items-center">
+                <Building2 className="h-5 w-5 mr-2 text-blue-400" />
+                Реквизиты: {selectedCompDetails.name}
+              </h3>
+              <Button variant="ghost" size="sm" onClick={() => setSelectedCompDetails(null)} className="h-8 w-8 p-0 text-slate-400">
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div className="flex justify-between p-2 rounded bg-slate-950">
+                <span className="text-slate-500">ИНН КР (14 цифр):</span>
+                <span className="font-mono font-bold text-amber-400">{selectedCompDetails.inn}</span>
+              </div>
+              <div className="flex justify-between p-2 rounded bg-slate-950">
+                <span className="text-slate-500">Отрасль:</span>
+                <span className="text-slate-200">{selectedCompDetails.industry || '—'}</span>
+              </div>
+              <div className="flex justify-between p-2 rounded bg-slate-950">
+                <span className="text-slate-500">Руководитель:</span>
+                <span className="text-slate-200">{selectedCompDetails.director_name || '—'}</span>
+              </div>
+              <div className="flex justify-between p-2 rounded bg-slate-950">
+                <span className="text-slate-500">E-mail:</span>
+                <span className="text-slate-200">{selectedCompDetails.email || '—'}</span>
+              </div>
+              <div className="flex justify-between p-2 rounded bg-slate-950">
+                <span className="text-slate-500">Телефон:</span>
+                <span className="text-slate-200">{selectedCompDetails.phone || '—'}</span>
+              </div>
+              <div className="flex justify-between p-2 rounded bg-slate-950">
+                <span className="text-slate-500">Юридический адрес:</span>
+                <span className="text-slate-200">{selectedCompDetails.legal_address || selectedCompDetails.address || '—'}</span>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <Button variant="outline" onClick={() => setSelectedCompDetails(null)} className="border-slate-800 text-slate-300">
+                Закрыть
+              </Button>
+            </div>
+          </Card>
+        </div>
       )}
     </div>
   );

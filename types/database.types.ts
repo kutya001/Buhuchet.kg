@@ -7,6 +7,7 @@ export type SubscriptionPlan = 'basic' | 'standard' | 'pro';
 export type PaymentMethod = 'qr_mbank' | 'qr_optima' | 'manual_admin';
 
 export type PartnershipStatus = 'pending' | 'approved' | 'rejected';
+export type CompanyStatus = 'pending_approval' | 'requires_changes' | 'active' | 'blocked';
 
 export const INDUSTRIES = [
   'Горнодобывающая отрасль',
@@ -24,8 +25,13 @@ export interface Company {
   name: string;
   inn: string;
   industry?: string | null;
-  address?: string | null;
+  status: CompanyStatus;
+  moderation_comment?: string | null;
+  legal_address?: string | null;
+  director_name?: string | null;
+  email?: string | null;
   phone?: string | null;
+  address?: string | null;
   is_active: boolean;
   storage_limit_gb: number;
   created_at: string;
@@ -92,7 +98,6 @@ export interface Counterparty {
   created_at: string;
   updated_at: string;
   
-  // Присоединенная компания-партнер (официальные реквизиты)
   target_company?: Company | null;
 }
 
