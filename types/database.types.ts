@@ -93,6 +93,7 @@ export interface DocumentFile {
 export interface Counterparty {
   id: string;
   company_id: string;
+  target_company_id?: string | null;
   name: string;
   inn: string;
   is_vat_payer: boolean;

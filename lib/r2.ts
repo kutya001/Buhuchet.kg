@@ -1,4 +1,5 @@
-import { S3Client } from '@aws-sdk/client-s3';
+import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 const accountId = process.env.R2_ACCOUNT_ID || '';
 const accessKeyId = process.env.R2_ACCESS_KEY_ID || '';
@@ -18,3 +19,15 @@ export const r2Client = new S3Client({
     secretAccessKey,
   },
 });
+
+/**
+ * Генерация пресайн URL для скачивания файла из Cloudflare R2 (срок 1 час)
+ */
+export async function getPresignedDownloadUrl(fileKey: string, expiresInSeconds = 3600): Promise<string> {
+  const command = new GetObjectCommand({
+    Bucket: r2BucketName,
+    Key: fileKey,
+  });
+
+  return getSignedUrl(r2Client, command, { expiresIn: expiresInSeconds });
+}

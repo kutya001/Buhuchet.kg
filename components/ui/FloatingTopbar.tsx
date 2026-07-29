@@ -33,9 +33,9 @@ interface FloatingTopbarProps {
 
 const PAGE_NAMES: Record<string, string> = {
   '/dashboard': 'Главная Панель',
-  '/dashboard/documents': 'B2B Документы',
+  '/dashboard/documents': 'Документы',
   '/dashboard/documents/new': 'Новый Документ',
-  '/dashboard/files': 'Реестр Файлов R2',
+  '/dashboard/files': 'Реестр Файлов',
   '/dashboard/counterparties': 'Контрагенты',
   '/dashboard/company': 'Моя Организация',
   '/dashboard/profile': 'Профиль Пользователя',
@@ -255,7 +255,7 @@ export function FloatingTopbar({
                 className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 hover:border-sky-500/50 flex flex-col items-center justify-center text-center space-y-1.5 min-h-[72px]"
               >
                 <FileText className="h-6 w-6 text-sky-400" />
-                <span className="text-xs font-semibold text-slate-200">B2B Документы</span>
+                <span className="text-xs font-semibold text-slate-200">Документы</span>
               </Link>
 
               <Link
@@ -275,7 +275,7 @@ export function FloatingTopbar({
                 className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 hover:border-emerald-500/50 flex flex-col items-center justify-center text-center space-y-1.5 min-h-[72px]"
               >
                 <FolderOpen className="h-6 w-6 text-emerald-400" />
-                <span className="text-xs font-semibold text-slate-200">Реестр Файлов R2</span>
+                <span className="text-xs font-semibold text-slate-200">Реестр Файлов</span>
               </Link>
 
               <Link

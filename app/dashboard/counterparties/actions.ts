@@ -1,8 +1,9 @@
 'use server';
 
 import { createClient, createAdminClient } from '@/lib/supabase/server';
-import type { ActionResponse, CompanyPartnership } from '@/types/database.types';
+import type { ActionResponse, CompanyPartnership, Company, DocumentFile } from '@/types/database.types';
 import { revalidatePath } from 'next/cache';
+import { getPresignedDownloadUrl } from '@/lib/r2';
 
 async function getUserContext() {
   const supabase = await createClient();
@@ -82,7 +83,7 @@ export async function sendPartnershipRequestAction(
 }
 
 /**
- * Ответ на заявку (Принять / Отклонить) — Гарантированное добавление контрагентов
+ * Ответ на заявку (Принять / Отклонить) — Гарантированное добавление контрагентов с target_company_id
  */
 export async function respondToPartnershipRequestAction(
   partnershipId: string,
@@ -119,7 +120,7 @@ export async function respondToPartnershipRequestAction(
       return { success: false, error: `Ошибка обновления статуса: ${updateError.message}` };
     }
 
-    // 2. Если заявка одобрена (approved) — извлекаем обе компании по ID из таблицы 'companies'
+    // 2. Если заявка одобрена (approved) — гарантированно создаем связи с target_company_id для обеих компаний
     if (newStatus === 'approved') {
       const { data: compList } = await adminSupabase
         .from('companies')
@@ -130,10 +131,11 @@ export async function respondToPartnershipRequestAction(
       const targetCompany = compList?.find((c) => c.id === partnership.target_company_id);
 
       if (reqCompany && targetCompany) {
-        // Добавляем Target в контрагенты Requester
+        // Добавляем Target в контрагенты Requester (с привязкой target_company_id)
         await adminSupabase.from('counterparties').upsert(
           {
             company_id: reqCompany.id,
+            target_company_id: targetCompany.id,
             name: targetCompany.name,
             inn: targetCompany.inn,
             email: targetCompany.email || `contact@${targetCompany.inn}.kg`,
@@ -142,10 +144,11 @@ export async function respondToPartnershipRequestAction(
           { onConflict: 'company_id,inn' }
         );
 
-        // Добавляем Requester в контрагенты Target
+        // Добавляем Requester в контрагенты Target (с привязкой target_company_id)
         await adminSupabase.from('counterparties').upsert(
           {
             company_id: targetCompany.id,
+            target_company_id: reqCompany.id,
             name: reqCompany.name,
             inn: reqCompany.inn,
             email: reqCompany.email || `contact@${reqCompany.inn}.kg`,
@@ -161,6 +164,70 @@ export async function respondToPartnershipRequestAction(
     return { success: true };
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : 'Сбой при ответе на заявку на партнерство';
+    return { success: false, error: errorMsg };
+  }
+}
+
+/**
+ * Получение подробных реквизитов контрагента и его учредительных документов из R2
+ */
+export async function getCounterpartyDetailsAndFilesAction(
+  targetCompanyId: string
+): Promise<ActionResponse<{ company: Company; statutoryFiles: Array<DocumentFile & { downloadUrl?: string }> }>> {
+  try {
+    const ctx = await getUserContext();
+    if (!ctx || !ctx.companyId) {
+      return { success: false, error: 'Пользователь не авторизован' };
+    }
+
+    const adminSupabase = await createAdminClient();
+
+    // 1. Получаем детали самой компании
+    const { data: company, error: compErr } = await adminSupabase
+      .from('companies')
+      .select('*')
+      .eq('id', targetCompanyId)
+      .single();
+
+    if (compErr || !company) {
+      return { success: false, error: 'Данные организации не найдены в системе' };
+    }
+
+    // 2. Получаем загруженные файлы компании (в т.ч. учредительные/юридические документы)
+    const { data: rawFiles } = await adminSupabase
+      .from('document_files')
+      .select('*, file_categories(*)')
+      .eq('company_id', targetCompanyId)
+      .order('created_at', { ascending: false });
+
+    const statutoryFiles: Array<DocumentFile & { downloadUrl?: string }> = [];
+
+    if (rawFiles && rawFiles.length > 0) {
+      for (const file of rawFiles) {
+        let downloadUrl = '';
+        if (file.file_path_r2) {
+          try {
+            downloadUrl = await getPresignedDownloadUrl(file.file_path_r2);
+          } catch (e) {
+            console.error('R2 Presigned error:', e);
+          }
+        }
+        statutoryFiles.push({
+          ...file,
+          downloadUrl,
+        });
+      }
+    }
+
+    return {
+      success: true,
+      data: {
+        company: company as Company,
+        statutoryFiles,
+      },
+    };
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : 'Сбой получения уставных данных контрагента';
     return { success: false, error: errorMsg };
   }
 }
@@ -188,7 +255,7 @@ export async function terminatePartnershipAction(
       })
       .or(`and(requester_company_id.eq.${ctx.companyId},target_company_id.eq.${partnershipIdOrTargetCompanyId}),and(requester_company_id.eq.${partnershipIdOrTargetCompanyId},target_company_id.eq.${ctx.companyId}),id.eq.${partnershipIdOrTargetCompanyId}`);
 
-    // 2. Удаляем или отключаем запись из таблицы counterparties для текущей компании
+    // 2. Удаляем запись из таблицы counterparties
     await adminSupabase
       .from('counterparties')
       .delete()
@@ -204,7 +271,7 @@ export async function terminatePartnershipAction(
 }
 
 /**
- * Обновление внутреннего примечания контрагента (notes / comment)
+ * Обновление внутреннего примечания контрагента
  */
 export async function updateCounterpartyCommentAction(
   counterpartyId: string,
