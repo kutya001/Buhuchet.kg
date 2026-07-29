@@ -27,6 +27,33 @@ async function getUserContext() {
   };
 }
 
+// Получение списка B2B документов организации (Входящие & Исходящие) через Admin Client
+export async function getB2BDocumentsAction(): Promise<ActionResponse<any[]>> {
+  try {
+    const ctx = await getUserContext();
+    if (!ctx || !ctx.companyId) {
+      return { success: false, error: 'Пользователь не привязан к организации' };
+    }
+
+    const adminSupabase = await createAdminClient();
+
+    const { data: docs, error } = await adminSupabase
+      .from('documents')
+      .select('*, sender_company:companies!sender_company_id(*), receiver_company:companies!receiver_company_id(*), document_files(*), users(full_name)')
+      .or(`sender_company_id.eq.${ctx.companyId},receiver_company_id.eq.${ctx.companyId}`)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      return { success: false, error: `Ошибка загрузки реестра документов: ${error.message}` };
+    }
+
+    return { success: true, data: docs || [] };
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : 'Сбой чтения B2B документов';
+    return { success: false, error: errorMsg };
+  }
+}
+
 export async function createB2BDocumentAction(data: any): Promise<ActionResponse<Document>> {
   try {
     const ctx = await getUserContext();

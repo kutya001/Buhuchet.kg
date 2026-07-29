@@ -1,6 +1,6 @@
 'use server';
 
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createAdminClient } from '@/lib/supabase/server';
 import type { ActionResponse, CompanyPartnership, PartnershipStatus } from '@/types/database.types';
 import { revalidatePath } from 'next/cache';
 
@@ -96,8 +96,9 @@ export async function respondToPartnershipRequestAction(
     }
 
     const supabase = await createClient();
+    const adminSupabase = await createAdminClient();
 
-    const { data: partnership } = await supabase
+    const { data: partnership } = await adminSupabase
       .from('company_partnerships')
       .select('*, requester_company:companies!requester_company_id(*), target_company:companies!target_company_id(*)')
       .eq('id', partnershipId)
@@ -107,7 +108,7 @@ export async function respondToPartnershipRequestAction(
       return { success: false, error: 'Заявка на партнерство не найдена' };
     }
 
-    const { error: updateError } = await supabase
+    const { error: updateError } = await adminSupabase
       .from('company_partnerships')
       .update({
         status: newStatus,
@@ -119,31 +120,31 @@ export async function respondToPartnershipRequestAction(
       return { success: false, error: `Ошибка обновления статуса: ${updateError.message}` };
     }
 
-    // Если заявка одобрена (approved) — автоматически добавляем компании в контрагенты друг друга
+    // Если заявка одобрена (approved) — автоматически добавляем компании в контрагенты друг друга через Admin Client
     if (newStatus === 'approved') {
       const reqCompany = partnership.requester_company;
       const targetCompany = partnership.target_company;
 
       if (reqCompany && targetCompany) {
         // 1. Добавляем Target в контрагенты Requester
-        await supabase.from('counterparties').upsert(
+        await adminSupabase.from('counterparties').upsert(
           {
             company_id: reqCompany.id,
             name: targetCompany.name,
             inn: targetCompany.inn,
-            email: `contact@${targetCompany.inn}.kg`,
+            email: targetCompany.email || `contact@${targetCompany.inn}.kg`,
             is_vat_payer: true,
           },
           { onConflict: 'company_id,inn' }
         );
 
         // 2. Добавляем Requester в контрагенты Target
-        await supabase.from('counterparties').upsert(
+        await adminSupabase.from('counterparties').upsert(
           {
             company_id: targetCompany.id,
             name: reqCompany.name,
             inn: reqCompany.inn,
-            email: `contact@${reqCompany.inn}.kg`,
+            email: reqCompany.email || `contact@${reqCompany.inn}.kg`,
             is_vat_payer: true,
           },
           { onConflict: 'company_id,inn' }

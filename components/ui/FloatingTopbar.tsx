@@ -86,32 +86,32 @@ export function FloatingTopbar({
 
   return (
     <>
-      {/* 1. ВЕРХНИЙ ПАРЯЩИЙ МАТОВЫЙ ОСТРОВОК */}
-      <header className="sticky top-3 z-30 mx-3 sm:mx-6 mb-4 h-16 rounded-2xl bg-slate-900/70 backdrop-blur-xl border border-slate-800/80 shadow-2xl flex items-center justify-between px-4 sm:px-6 transition-all duration-300">
-        {/* Левая секция: Переключатель Сайдбара & Текущая Страница */}
-        <div className="flex items-center space-x-3">
+      {/* 1. НЕПОДВИЖНЫЙ И КОМПАКТНЫЙ ВЕРХНИЙ ПАРЯЩИЙ ОСТРОВОК */}
+      <header className="sticky top-2 z-50 mx-2 sm:mx-6 mb-3 h-12 sm:h-14 rounded-2xl bg-slate-900/85 backdrop-blur-2xl border border-slate-800/80 shadow-2xl flex items-center justify-between px-3 sm:px-5 transition-all duration-300">
+        {/* Левая секция: Кнопка Сайдбара & Текущая Страница */}
+        <div className="flex items-center space-x-2 sm:space-x-3">
           <button
             type="button"
             onClick={onToggleSidebar}
-            className="hidden md:flex h-9 w-9 items-center justify-center rounded-xl bg-slate-800/80 border border-slate-700/50 text-slate-300 hover:text-white hover:bg-slate-700/80 transition-all active:scale-95"
+            className="hidden md:flex h-8 w-8 items-center justify-center rounded-xl bg-slate-800/80 border border-slate-700/50 text-slate-300 hover:text-white hover:bg-slate-700/80 transition-all active:scale-95"
             title={isSidebarCollapsed ? 'Развернуть меню' : 'Свернуть меню'}
           >
             {isSidebarCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
           </button>
 
           <div className="flex items-center space-x-2">
-            <div className="h-2 w-2 rounded-full bg-emerald-400 animate-ping" />
-            <h1 className="text-sm sm:text-base font-bold text-white tracking-tight truncate">
+            <div className="h-2 w-2 rounded-full bg-emerald-400 animate-ping flex-shrink-0" />
+            <h1 className="text-xs sm:text-base font-bold text-white tracking-tight truncate max-w-[140px] sm:max-w-none">
               {currentPageTitle}
             </h1>
           </div>
         </div>
 
-        {/* Центральная/Правая секция: Организация, Дата/Время КР */}
-        <div className="flex items-center space-x-4">
+        {/* Центральная/Правая секция: Компактное Инфо о Компании, Часы КР и Кнопка "..." */}
+        <div className="flex items-center space-x-2 sm:space-x-3">
           {/* Инфо о Компании */}
           <div className="hidden sm:flex flex-col text-right">
-            <span className="text-xs font-bold text-slate-200 truncate max-w-[180px] lg:max-w-[240px]">
+            <span className="text-xs font-bold text-slate-200 truncate max-w-[160px] lg:max-w-[220px]">
               {companyName || 'Организация'}
             </span>
             {companyInn && (
@@ -121,19 +121,20 @@ export function FloatingTopbar({
             )}
           </div>
 
-          {/* Живые часы и дата */}
-          <div className="hidden lg:flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-slate-950/60 border border-slate-800 text-xs font-mono text-slate-300">
+          {/* Часы КР */}
+          <div className="hidden lg:flex items-center space-x-1.5 px-2.5 py-1 rounded-xl bg-slate-950/60 border border-slate-800 text-xs font-mono text-slate-300">
             <Clock className="h-3.5 w-3.5 text-blue-400" />
             <span>{timeStr}</span>
             <span className="text-slate-600">|</span>
             <span className="text-slate-400">{dateStr}</span>
           </div>
 
-          {/* В Мобильной версии: Кнопка ТРИ ТОЧКИ (...) для вызова Шторки */}
+          {/* В Мобильной версии: Кнопка ТРИ ТОЧКИ (...) для вызова Шторки Всех Страниц */}
           <button
             type="button"
             onClick={() => setIsMoreOpen(true)}
-            className="md:hidden flex h-10 w-10 items-center justify-center rounded-xl bg-slate-800/80 border border-slate-700/60 text-slate-200 hover:text-white active:scale-95 transition-all shadow-lg"
+            className="md:hidden flex h-9 w-9 items-center justify-center rounded-xl bg-slate-800/80 border border-slate-700/60 text-slate-200 hover:text-white active:scale-95 transition-all shadow-lg"
+            title="Открыть все страницы"
           >
             <MoreHorizontal className="h-5 w-5" />
           </button>

@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
+import { getB2BDocumentsAction } from './actions';
 import { DOCUMENT_TYPES, DOCUMENT_STATUSES } from '@/types/document.types';
 import type { Document, Company, DocumentFile, DocumentType, DocumentStatus } from '@/types/database.types';
 
@@ -57,22 +58,16 @@ export default function B2BDocumentsPage() {
       data: { user },
     } = await supabase.auth.getUser();
 
-    let myCompanyId = '';
     if (user) {
       const { data: prof } = await supabase.from('users').select('company_id').eq('id', user.id).single();
       if (prof?.company_id) {
-        myCompanyId = prof.company_id;
         setCurrentCompanyId(prof.company_id);
       }
     }
 
-    const { data } = await supabase
-      .from('documents')
-      .select('*, sender_company:companies!sender_company_id(*), receiver_company:companies!receiver_company_id(*), document_files(*), users(full_name)')
-      .order('created_at', { ascending: false });
-
-    if (data) {
-      setDocuments(data as FullB2BDoc[]);
+    const res = await getB2BDocumentsAction();
+    if (res.success && res.data) {
+      setDocuments(res.data as FullB2BDoc[]);
     }
     setLoading(false);
   };
@@ -110,6 +105,15 @@ export default function B2BDocumentsPage() {
     return matchesSearch && matchesStatus;
   });
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64 text-slate-400">
+        <Loader2 className="h-8 w-8 animate-spin mr-2" />
+        <span>Загрузка B2B реестра документов...</span>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4 md:space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -121,7 +125,7 @@ export default function B2BDocumentsPage() {
         </div>
 
         <Link href="/dashboard/documents/new">
-          <Button className="w-full sm:w-auto bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/20 text-xs md:text-sm">
+          <Button className="w-full sm:w-auto bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/20 text-xs md:text-sm min-h-[48px]">
             <Plus className="h-4 w-4 mr-1.5" />
             Создать B2B Отправку
           </Button>
@@ -132,38 +136,38 @@ export default function B2BDocumentsPage() {
       <div className="flex items-center space-x-1 sm:space-x-2 border-b border-slate-800 pb-2 overflow-x-auto">
         <button
           onClick={() => setActiveTab('inbox')}
-          className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-xs md:text-sm font-medium transition-all ${
+          className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs md:text-sm font-medium transition-all min-h-[44px] ${
             activeTab === 'inbox'
-              ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
+              ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30 font-bold'
               : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
           }`}
         >
           <Inbox className="h-4 w-4" />
-          <span>Входящие</span>
+          <span>Входящие ({documents.filter((d) => d.receiver_company_id === currentCompanyId && d.status !== 'draft').length})</span>
         </button>
 
         <button
           onClick={() => setActiveTab('outbox')}
-          className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-xs md:text-sm font-medium transition-all ${
+          className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs md:text-sm font-medium transition-all min-h-[44px] ${
             activeTab === 'outbox'
-              ? 'bg-purple-600/20 text-purple-400 border border-purple-500/30'
+              ? 'bg-purple-600/20 text-purple-400 border border-purple-500/30 font-bold'
               : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
           }`}
         >
           <Send className="h-4 w-4" />
-          <span>Исходящие</span>
+          <span>Исходящие ({documents.filter((d) => d.sender_company_id === currentCompanyId && d.status !== 'draft').length})</span>
         </button>
 
         <button
           onClick={() => setActiveTab('drafts')}
-          className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-xs md:text-sm font-medium transition-all ${
+          className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs md:text-sm font-medium transition-all min-h-[44px] ${
             activeTab === 'drafts'
-              ? 'bg-slate-800 text-slate-200 border border-slate-700'
+              ? 'bg-slate-800 text-slate-200 border border-slate-700 font-bold'
               : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
           }`}
         >
           <FolderOpen className="h-4 w-4" />
-          <span>Черновики</span>
+          <span>Черновики ({documents.filter((d) => d.company_id === currentCompanyId && d.status === 'draft').length})</span>
         </button>
       </div>
 
@@ -176,7 +180,7 @@ export default function B2BDocumentsPage() {
               placeholder="Поиск по номеру, организации..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9 bg-slate-950/60 border-slate-800 text-slate-100 text-xs md:text-sm"
+              className="pl-9 bg-slate-950/60 border-slate-800 text-slate-100 text-xs md:text-sm min-h-[44px]"
             />
           </div>
 
@@ -184,7 +188,7 @@ export default function B2BDocumentsPage() {
             <select
               value={selectedStatus}
               onChange={(e) => setSelectedStatus(e.target.value)}
-              className="w-full h-9 md:h-10 rounded-md border border-slate-800 bg-slate-950 px-3 text-xs md:text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full h-11 rounded-xl border border-slate-800 bg-slate-950 px-3 text-xs md:text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="all">Все статусы</option>
               <option value="sent">Отправлено</option>
@@ -199,14 +203,9 @@ export default function B2BDocumentsPage() {
       {/* 1. ПК-ВЕРСИЯ ТАБЛИЦЫ (hidden md:block) */}
       <Card className="hidden md:block bg-slate-900/40 border-slate-800 overflow-hidden">
         <CardContent className="p-0">
-          {loading ? (
-            <div className="flex items-center justify-center p-12 text-slate-400">
-              <Loader2 className="h-6 w-6 animate-spin mr-2" />
-              <span>Загрузка документов...</span>
-            </div>
-          ) : filteredDocuments.length === 0 ? (
-            <div className="p-12 text-center text-slate-500">
-              Документы не найдены
+          {filteredDocuments.length === 0 ? (
+            <div className="p-12 text-center text-slate-500 text-xs">
+              Входящие или исходящие документы не найдены
             </div>
           ) : (
             <Table>
@@ -264,7 +263,7 @@ export default function B2BDocumentsPage() {
 
                       <TableCell className="text-right">
                         <Link href={`/dashboard/documents/${doc.id}`}>
-                          <Button size="sm" variant="outline" className="border-slate-800 text-xs text-slate-300 hover:text-white">
+                          <Button size="sm" variant="outline" className="border-slate-800 text-xs text-slate-300 hover:text-white min-h-[44px]">
                             <Eye className="h-3.5 w-3.5 mr-1" />
                             Открыть
                           </Button>
@@ -281,12 +280,7 @@ export default function B2BDocumentsPage() {
 
       {/* 2. МОБИЛЬНОЕ ПРЕДСТАВЛЕНИЕ КАРТОЧЕК (block md:hidden) */}
       <div className="block md:hidden space-y-3">
-        {loading ? (
-          <div className="flex items-center justify-center p-8 text-slate-400">
-            <Loader2 className="h-6 w-6 animate-spin mr-2" />
-            <span>Загрузка...</span>
-          </div>
-        ) : filteredDocuments.length === 0 ? (
+        {filteredDocuments.length === 0 ? (
           <div className="p-8 text-center text-slate-500 text-xs bg-slate-900/40 rounded-xl border border-slate-800">
             Документы не найдены
           </div>
