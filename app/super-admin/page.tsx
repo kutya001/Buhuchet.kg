@@ -28,6 +28,8 @@ import {
   UserCheck,
   UserX,
   UserPlus,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import {
   getPendingCompaniesAction,
@@ -49,6 +51,8 @@ import { getPresignedDownloadUrlAction, getPresignedUploadUrlAction } from '../d
 import type { Company, DocumentFile, FileCategory } from '@/types/database.types';
 import { createClient } from '@/lib/supabase/client';
 
+const ITEMS_PER_PAGE = 10;
+
 export default function SuperAdminPage() {
   const [activeTab, setActiveTab] = useState<'moderation' | 'all_companies' | 'all_users' | 'all_files'>('moderation');
   const [pendingCompanies, setPendingCompanies] = useState<Company[]>([]);
@@ -60,6 +64,9 @@ export default function SuperAdminPage() {
   const [search, setSearch] = useState('');
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  // Состояние пагинации
+  const [currentPage, setCurrentPage] = useState(1);
 
   // Модальные окна модерации организаций
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
@@ -118,6 +125,11 @@ export default function SuperAdminPage() {
   useEffect(() => {
     loadData();
   }, []);
+
+  // Сброс пагинации
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, activeTab]);
 
   // --- ДЕЙСТВИЯ С КОМПАНИЯМИ ---
   const handleApprove = (comp: Company) => {
@@ -342,7 +354,7 @@ export default function SuperAdminPage() {
     });
   };
 
-  // Мгновенная клиентская фильтрация с useMemo для идеального отклика
+  // Клиентская фильтрация с useMemo
   const filteredUsers = useMemo(() => {
     const term = search.toLowerCase();
     return allUsers.filter((u) => {
@@ -362,6 +374,27 @@ export default function SuperAdminPage() {
       return matchesName || matchesDesc || matchesComp;
     });
   }, [systemFiles, search]);
+
+  // Пагинация списка Организаций
+  const totalPagesCompanies = Math.ceil(allCompanies.length / ITEMS_PER_PAGE) || 1;
+  const paginatedCompanies = allCompanies.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+
+  // Пагинация списка Пользователей
+  const totalPagesUsers = Math.ceil(filteredUsers.length / ITEMS_PER_PAGE) || 1;
+  const paginatedUsers = filteredUsers.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+
+  // Пагинация Файлов
+  const totalPagesFiles = Math.ceil(filteredFiles.length / ITEMS_PER_PAGE) || 1;
+  const paginatedFiles = filteredFiles.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
 
   if (loading) {
     return (
@@ -400,7 +433,7 @@ export default function SuperAdminPage() {
         </Alert>
       )}
 
-      {/* Вкладки Суперадмина: Нативный Мобильный Скроллбар */}
+      {/* Вкладки Суперадмина */}
       <div className="flex items-center space-x-2 border-b border-slate-800 pb-2 overflow-x-auto no-scrollbar scrollbar-none -mx-4 px-4 sm:mx-0 sm:px-0">
         <button
           onClick={() => setActiveTab('moderation')}
@@ -514,11 +547,11 @@ export default function SuperAdminPage() {
         </div>
       )}
 
-      {/* 2. Все Организации */}
+      {/* 2. Все Организации (С пагинацией) */}
       {activeTab === 'all_companies' && (
         <div className="space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {allCompanies.map((comp) => (
+            {paginatedCompanies.map((comp) => (
               <Card key={comp.id} className="bg-slate-900/60 border-slate-800 p-4 space-y-3 flex flex-col justify-between">
                 <div className="space-y-2">
                   <div className="flex justify-between items-start">
@@ -557,10 +590,40 @@ export default function SuperAdminPage() {
               </Card>
             ))}
           </div>
+
+          {totalPagesCompanies > 1 && (
+            <div className="flex items-center justify-between pt-2">
+              <p className="text-xs text-slate-400 font-mono">
+                Страница <span className="text-white font-bold">{currentPage}</span> из <span className="text-white font-bold">{totalPagesCompanies}</span>
+              </p>
+              <div className="flex items-center space-x-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="border-slate-800 text-slate-300 min-h-[40px] text-xs"
+                >
+                  <ChevronLeft className="h-4 w-4 mr-1" />
+                  Назад
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setCurrentPage((p) => Math.min(totalPagesCompanies, p + 1))}
+                  disabled={currentPage === totalPagesCompanies}
+                  className="border-slate-800 text-slate-300 min-h-[40px] text-xs"
+                >
+                  Вперед
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
-      {/* 3. Пользователи Системы */}
+      {/* 3. Пользователи Системы (С пагинацией) */}
       {activeTab === 'all_users' && (
         <div className="space-y-3">
           <div className="relative">
@@ -574,7 +637,7 @@ export default function SuperAdminPage() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {filteredUsers.map((usr) => (
+            {paginatedUsers.map((usr) => (
               <Card key={usr.id} className="bg-slate-900/60 border-slate-800 p-4 space-y-3 flex flex-col justify-between">
                 <div className="space-y-2">
                   <div className="flex justify-between items-start">
@@ -622,10 +685,40 @@ export default function SuperAdminPage() {
               </Card>
             ))}
           </div>
+
+          {totalPagesUsers > 1 && (
+            <div className="flex items-center justify-between pt-2">
+              <p className="text-xs text-slate-400 font-mono">
+                Страница <span className="text-white font-bold">{currentPage}</span> из <span className="text-white font-bold">{totalPagesUsers}</span>
+              </p>
+              <div className="flex items-center space-x-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="border-slate-800 text-slate-300 min-h-[40px] text-xs"
+                >
+                  <ChevronLeft className="h-4 w-4 mr-1" />
+                  Назад
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setCurrentPage((p) => Math.min(totalPagesUsers, p + 1))}
+                  disabled={currentPage === totalPagesUsers}
+                  className="border-slate-800 text-slate-300 min-h-[40px] text-xs"
+                >
+                  Вперед
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
-      {/* 4. Реестр всех файлов системы */}
+      {/* 4. Реестр всех файлов системы (С пагинацией) */}
       {activeTab === 'all_files' && (
         <div className="space-y-3">
           <div className="relative">
@@ -639,12 +732,12 @@ export default function SuperAdminPage() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-            {filteredFiles.length === 0 ? (
+            {paginatedFiles.length === 0 ? (
               <div className="col-span-full p-8 text-center text-slate-500 text-xs bg-slate-900/40 rounded-2xl border border-slate-800">
                 Системные файлы не найдены
               </div>
             ) : (
-              filteredFiles.map((doc) => (
+              paginatedFiles.map((doc) => (
                 <Card key={doc.id} className="bg-slate-900/60 border-slate-800 p-4 space-y-3 flex flex-col justify-between hover:border-slate-700 transition-colors">
                   <div className="space-y-2">
                     <div className="flex items-start justify-between">
@@ -697,10 +790,40 @@ export default function SuperAdminPage() {
               ))
             )}
           </div>
+
+          {totalPagesFiles > 1 && (
+            <div className="flex items-center justify-between pt-2">
+              <p className="text-xs text-slate-400 font-mono">
+                Страница <span className="text-white font-bold">{currentPage}</span> из <span className="text-white font-bold">{totalPagesFiles}</span>
+              </p>
+              <div className="flex items-center space-x-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="border-slate-800 text-slate-300 min-h-[40px] text-xs"
+                >
+                  <ChevronLeft className="h-4 w-4 mr-1" />
+                  Назад
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setCurrentPage((p) => Math.min(totalPagesFiles, p + 1))}
+                  disabled={currentPage === totalPagesFiles}
+                  className="border-slate-800 text-slate-300 min-h-[40px] text-xs"
+                >
+                  Вперед
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
-      {/* МОДАЛЬНОЕ ОКНО (BOTTOM SHEET) РЕДАКТИРОВАНИЯ КОМПАНИИ */}
+      {/* МОДАЛЬНОЕ ОКНО РЕДАКТИРОВАНИЯ КОМПАНИИ */}
       {editingCompany && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className="w-full sm:max-w-xl bg-slate-900 border-t sm:border border-slate-800 rounded-t-3xl sm:rounded-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
@@ -785,7 +908,7 @@ export default function SuperAdminPage() {
         </div>
       )}
 
-      {/* МОДАЛЬНОЕ ОКНО (BOTTOM SHEET) РЕДАКТИРОВАНИЯ ПОЛЬЗОВАТЕЛЯ */}
+      {/* МОДАЛЬНОЕ ОКНО РЕДАКТИРОВАНИЯ ПОЛЬЗОВАТЕЛЯ */}
       {editingUser && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className="w-full sm:max-w-lg bg-slate-900 border-t sm:border border-slate-800 rounded-t-3xl sm:rounded-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
@@ -880,7 +1003,7 @@ export default function SuperAdminPage() {
         </div>
       )}
 
-      {/* МОДАЛЬНОЕ ОКНО (BOTTOM SHEET) РЕДАКТИРОВАНИЯ И ЗАМЕНЫ ФАЙЛА R2 СУПЕРАДМИНОМ */}
+      {/* МОДАЛЬНОЕ ОКНО РЕДАКТИРОВАНИЯ И ЗАМЕНЫ ФАЙЛА R2 */}
       {editingFile && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className="w-full sm:max-w-lg bg-slate-900 border-t sm:border border-slate-800 rounded-t-3xl sm:rounded-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">

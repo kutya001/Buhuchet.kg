@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useTransition } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -16,9 +17,7 @@ import {
 } from '@/components/ui/table';
 import {
   Users,
-  Search,
   Building2,
-  Mail,
   BarChart3,
   Loader2,
   X,
@@ -34,7 +33,8 @@ import {
   UserPlus,
   UserX,
   Clock,
-  ShieldAlert,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import {
@@ -43,7 +43,7 @@ import {
   terminatePartnershipAction,
   updateCounterpartyCommentAction,
 } from './actions';
-import type { Counterparty, Company, Document, DocumentFile, CompanyPartnership } from '@/types/database.types';
+import type { Counterparty, Company, Document, DocumentFile } from '@/types/database.types';
 
 type PartnerReport = {
   counterparty: Counterparty;
@@ -53,7 +53,12 @@ type PartnerReport = {
   documents: Document[];
 };
 
+const ITEMS_PER_PAGE = 10;
+
 export default function CounterpartiesPage() {
+  const searchParams = useSearchParams();
+  const searchFromUrl = searchParams.get('search') || '';
+
   // Активная вкладка единого модуля: 'counterparties' | 'requests' | 'catalog'
   const [activeTab, setActiveTab] = useState<'counterparties' | 'requests' | 'catalog'>('counterparties');
 
@@ -62,8 +67,10 @@ export default function CounterpartiesPage() {
   const [catalogCompanies, setCatalogCompanies] = useState<Company[]>([]);
   const [currentCompanyId, setCurrentCompanyId] = useState<string>('');
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
   const [isPending, startTransition] = useTransition();
+
+  // Состояние пагинации
+  const [currentPage, setCurrentPage] = useState(1);
 
   // Редактирование примечания
   const [editingCounterpartyId, setEditingCounterpartyId] = useState<string | null>(null);
@@ -127,6 +134,11 @@ export default function CounterpartiesPage() {
     loadData();
   }, []);
 
+  // Сброс пагинации
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchFromUrl, activeTab]);
+
   const handleSendRequest = (targetCompanyId: string) => {
     setMsg(null);
     startTransition(async () => {
@@ -147,7 +159,7 @@ export default function CounterpartiesPage() {
       if (res.success) {
         setMsg({
           type: 'success',
-          text: status === 'approved' ? 'Партнерство подтверждено! Компания добавлена в контрагенты.' : 'Заявка отклонена.',
+          text: status === 'approved' ? 'Партнерство подтверждено! Компания успешно добавлена в список контрагентов.' : 'Заявка отклонена.',
         });
         loadData();
       } else {
@@ -186,19 +198,33 @@ export default function CounterpartiesPage() {
     });
   };
 
-  // Фильтрация
+  // Фильтрация по поиску из универсальной шапки
   const filteredCounterparties = counterparties.filter(
     (c) =>
-      c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.inn.includes(searchTerm) ||
-      (c.comment && c.comment.toLowerCase().includes(searchTerm.toLowerCase()))
+      c.name.toLowerCase().includes(searchFromUrl.toLowerCase()) ||
+      c.inn.includes(searchFromUrl) ||
+      (c.comment && c.comment.toLowerCase().includes(searchFromUrl.toLowerCase()))
   );
 
   const filteredCatalog = catalogCompanies.filter(
-    (c) => c.name.toLowerCase().includes(searchTerm.toLowerCase())
+    (c) => c.name.toLowerCase().includes(searchFromUrl.toLowerCase())
   );
 
-  // Формирование отчета по контрагенту
+  // Пагинация Моих Контрагентов
+  const totalPagesCounterparties = Math.ceil(filteredCounterparties.length / ITEMS_PER_PAGE) || 1;
+  const paginatedCounterparties = filteredCounterparties.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+
+  // Пагинация Каталога
+  const totalPagesCatalog = Math.ceil(filteredCatalog.length / ITEMS_PER_PAGE) || 1;
+  const paginatedCatalog = filteredCatalog.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+
+  // Отчет по контрагенту
   const handleOpenReport = async (counterparty: Counterparty) => {
     setReportLoading(true);
 
@@ -292,23 +318,6 @@ export default function CounterpartiesPage() {
         </button>
       </div>
 
-      {/* Поиск */}
-      <Card className="bg-slate-900/40 border-slate-800 p-3 md:p-4">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
-          <Input
-            placeholder={
-              activeTab === 'catalog'
-                ? 'Поиск компании по наименованию...'
-                : 'Поиск по наименованию или ИНН...'
-            }
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-9 bg-slate-950/60 border-slate-800 text-slate-100 text-xs md:text-sm min-h-[44px]"
-          />
-        </div>
-      </Card>
-
       {/* ------------------- ВКЛАДКА 1: МОИ КОНТРАГЕНТЫ ------------------- */}
       {activeTab === 'counterparties' && (
         <>
@@ -319,7 +328,7 @@ export default function CounterpartiesPage() {
                   <Loader2 className="h-6 w-6 animate-spin mr-2" />
                   <span>Загрузка списка контрагентов...</span>
                 </div>
-              ) : filteredCounterparties.length === 0 ? (
+              ) : paginatedCounterparties.length === 0 ? (
                 <div className="p-12 text-center text-slate-500 text-xs">
                   У вашей компании пока нет активных контрагентов. Отправьте заявку из вкладки «Каталог Компаний КР».
                 </div>
@@ -335,7 +344,7 @@ export default function CounterpartiesPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredCounterparties.map((c) => (
+                    {paginatedCounterparties.map((c) => (
                       <TableRow key={c.id}>
                         <TableCell>
                           <div className="font-semibold text-white text-sm flex items-center space-x-1.5">
@@ -415,7 +424,7 @@ export default function CounterpartiesPage() {
 
           {/* Мобильные Карточки */}
           <div className="block md:hidden space-y-3">
-            {filteredCounterparties.map((c) => (
+            {paginatedCounterparties.map((c) => (
               <Card key={c.id} className="bg-slate-900/60 border-slate-800 p-4 space-y-3">
                 <div className="flex items-start justify-between">
                   <div>
@@ -452,6 +461,37 @@ export default function CounterpartiesPage() {
               </Card>
             ))}
           </div>
+
+          {/* Пагинация Вкладки 1 */}
+          {totalPagesCounterparties > 1 && (
+            <div className="flex items-center justify-between pt-2">
+              <p className="text-xs text-slate-400 font-mono">
+                Страница <span className="text-white font-bold">{currentPage}</span> из <span className="text-white font-bold">{totalPagesCounterparties}</span>
+              </p>
+              <div className="flex items-center space-x-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="border-slate-800 text-slate-300 min-h-[40px] text-xs"
+                >
+                  <ChevronLeft className="h-4 w-4 mr-1" />
+                  Назад
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setCurrentPage((p) => Math.min(totalPagesCounterparties, p + 1))}
+                  disabled={currentPage === totalPagesCounterparties}
+                  className="border-slate-800 text-slate-300 min-h-[40px] text-xs"
+                >
+                  Вперед
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              </div>
+            </div>
+          )}
         </>
       )}
 
@@ -517,61 +557,94 @@ export default function CounterpartiesPage() {
         </div>
       )}
 
-      {/* ------------------- ВКЛАДКА 3: КАТАЛОГ КОМПАНИЙ КР (БЕЗ ИНН) ------------------- */}
+      {/* ------------------- ВКЛАДКА 3: КАТАЛОГ КОМПАНИЙ КР (БЕЗ ИНН + ПАГИНАЦИЯ) ------------------- */}
       {activeTab === 'catalog' && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredCatalog.length === 0 ? (
-            <div className="col-span-full p-12 text-center text-slate-500 text-xs bg-slate-900/40 rounded-2xl border border-slate-800">
-              Компании не найдены
-            </div>
-          ) : (
-            filteredCatalog.map((comp) => {
-              const existingPartnership = partnerships.find(
-                (p) =>
-                  (p.requester_company_id === currentCompanyId && p.target_company_id === comp.id) ||
-                  (p.target_company_id === currentCompanyId && p.requester_company_id === comp.id)
-              );
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {paginatedCatalog.length === 0 ? (
+              <div className="col-span-full p-12 text-center text-slate-500 text-xs bg-slate-900/40 rounded-2xl border border-slate-800">
+                Компании не найдены
+              </div>
+            ) : (
+              paginatedCatalog.map((comp) => {
+                const existingPartnership = partnerships.find(
+                  (p) =>
+                    (p.requester_company_id === currentCompanyId && p.target_company_id === comp.id) ||
+                    (p.target_company_id === currentCompanyId && p.requester_company_id === comp.id)
+                );
 
-              return (
-                <Card key={comp.id} className="bg-slate-900/60 border-slate-800 p-5 flex flex-col justify-between space-y-4 hover:border-indigo-500/40 transition-all shadow-xl">
-                  <div className="space-y-2">
-                    <div className="flex items-center space-x-2">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-400">
-                        <Building2 className="h-5 w-5" />
+                return (
+                  <Card key={comp.id} className="bg-slate-900/60 border-slate-800 p-5 flex flex-col justify-between space-y-4 hover:border-indigo-500/40 transition-all shadow-xl">
+                    <div className="space-y-2">
+                      <div className="flex items-center space-x-2">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-400">
+                          <Building2 className="h-5 w-5" />
+                        </div>
+                        <h4 className="font-bold text-white text-base truncate">{comp.name}</h4>
                       </div>
-                      <h4 className="font-bold text-white text-base truncate">{comp.name}</h4>
+                      <p className="text-xs text-slate-400 font-mono">Верифицированная организация КР</p>
                     </div>
-                    <p className="text-xs text-slate-400 font-mono">Верифицированная организация КР</p>
-                  </div>
 
-                  <div className="pt-2 border-t border-slate-800/80">
-                    {existingPartnership?.status === 'approved' ? (
-                      <Badge variant="outline" className="w-full justify-center border-emerald-500/30 text-emerald-400 bg-emerald-500/10 py-1.5">
-                        <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
-                        Уже в контрагентах
-                      </Badge>
-                    ) : existingPartnership?.status === 'pending' ? (
-                      <Badge variant="outline" className="w-full justify-center border-amber-500/30 text-amber-400 bg-amber-500/10 py-1.5">
-                        <Clock className="h-3.5 w-3.5 mr-1" />
-                        Заявка на рассмотрении
-                      </Badge>
-                    ) : (
-                      <Button
-                        size="sm"
-                        onClick={() => handleSendRequest(comp.id)}
-                        disabled={isPending}
-                        className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs min-h-[44px]"
-                      >
-                        <UserPlus className="h-4 w-4 mr-1.5" />
-                        Предложить сотрудничество
-                      </Button>
-                    )}
-                  </div>
-                </Card>
-              );
-            })
+                    <div className="pt-2 border-t border-slate-800/80">
+                      {existingPartnership?.status === 'approved' ? (
+                        <Badge variant="outline" className="w-full justify-center border-emerald-500/30 text-emerald-400 bg-emerald-500/10 py-1.5">
+                          <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+                          Уже в контрагентах
+                        </Badge>
+                      ) : existingPartnership?.status === 'pending' ? (
+                        <Badge variant="outline" className="w-full justify-center border-amber-500/30 text-amber-400 bg-amber-500/10 py-1.5">
+                          <Clock className="h-3.5 w-3.5 mr-1" />
+                          Заявка на рассмотрении
+                        </Badge>
+                      ) : (
+                        <Button
+                          size="sm"
+                          onClick={() => handleSendRequest(comp.id)}
+                          disabled={isPending}
+                          className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs min-h-[44px]"
+                        >
+                          <UserPlus className="h-4 w-4 mr-1.5" />
+                          Предложить сотрудничество
+                        </Button>
+                      )}
+                    </div>
+                  </Card>
+                );
+              })
+            )}
+          </div>
+
+          {/* Пагинация Каталога */}
+          {totalPagesCatalog > 1 && (
+            <div className="flex items-center justify-between pt-2">
+              <p className="text-xs text-slate-400 font-mono">
+                Страница <span className="text-white font-bold">{currentPage}</span> из <span className="text-white font-bold">{totalPagesCatalog}</span>
+              </p>
+              <div className="flex items-center space-x-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="border-slate-800 text-slate-300 min-h-[40px] text-xs"
+                >
+                  <ChevronLeft className="h-4 w-4 mr-1" />
+                  Назад
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setCurrentPage((p) => Math.min(totalPagesCatalog, p + 1))}
+                  disabled={currentPage === totalPagesCatalog}
+                  className="border-slate-800 text-slate-300 min-h-[40px] text-xs"
+                >
+                  Вперед
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              </div>
+            </div>
           )}
-        </div>
+        </>
       )}
 
       {/* Модалка Отчета по контрагенту */}

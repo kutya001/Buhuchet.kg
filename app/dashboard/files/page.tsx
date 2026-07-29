@@ -1,437 +1,219 @@
 'use client';
 
-import React, { useState, useEffect, useTransition } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Label } from '@/components/ui/label';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from '@/components/ui/table';
 import {
   FolderOpen,
-  Upload,
-  Search,
-  Download,
   FileText,
+  Building2,
+  Calendar,
+  Eye,
   Loader2,
-  CheckCircle2,
-  AlertCircle,
-  Filter,
-  Plus,
-  Edit2,
-  Trash2,
-  X,
-  RefreshCw,
+  Download,
+  UploadCloud,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
-import { createClient } from '@/lib/supabase/client';
-import { MultiFileDropzone, type FileItemState } from '@/components/documents/MultiFileDropzone';
-import {
-  uploadFileToArchiveAction,
-  getCompanyFilesArchiveAction,
-  updateDocumentFileAction,
-  deleteDocumentFileAction,
-} from './archive-actions';
-import { getPresignedDownloadUrlAction, getPresignedUploadUrlAction } from './actions';
-import type { DocumentFile, FileCategory } from '@/types/database.types';
+import { getCompanyFilesArchiveAction } from './archive-actions';
+import type { DocumentFile } from '@/types/database.types';
 
-export default function FilesArchivePage() {
+const ITEMS_PER_PAGE = 10;
+
+export default function CloudFilesRegistryPage() {
+  const searchParams = useSearchParams();
+  const searchFromUrl = searchParams.get('search') || '';
+
   const [files, setFiles] = useState<DocumentFile[]>([]);
-  const [categories, setCategories] = useState<FileCategory[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [selectedCat, setSelectedCat] = useState<string>('all');
-  const [isPending, startTransition] = useTransition();
 
-  // Состояние ручной загрузки сканов
-  const [uploadFiles, setUploadFiles] = useState<FileItemState[]>([]);
-  const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  // Состояние пагинации
+  const [currentPage, setCurrentPage] = useState(1);
 
-  // Модальное окно редактирования / замены скана
-  const [editingDoc, setEditingDoc] = useState<DocumentFile | null>(null);
-  const [editName, setEditName] = useState('');
-  const [editCatId, setEditCatId] = useState('');
-  const [editDesc, setEditDesc] = useState('');
-  const [replacingFile, setReplacingFile] = useState<File | null>(null);
-  const [replaceUploading, setReplaceUploading] = useState(false);
-
-  const supabase = createClient();
-
-  const loadData = async () => {
+  const loadFiles = async () => {
     setLoading(true);
-    const archiveRes = await getCompanyFilesArchiveAction();
-    if (archiveRes.success && archiveRes.data) {
-      setFiles(archiveRes.data);
+    const res = await getCompanyFilesArchiveAction();
+    if (res.success && res.data) {
+      setFiles(res.data);
+    } else {
+      setFiles([]);
     }
-
-    const { data: catData } = await supabase.from('file_categories').select('*').order('name');
-    if (catData) setCategories(catData as FileCategory[]);
-
     setLoading(false);
   };
 
   useEffect(() => {
-    loadData();
+    loadFiles();
   }, []);
 
-  const handleDownloadR2 = async (fileKey?: string | null) => {
-    if (!fileKey) return;
-    const res = await getPresignedDownloadUrlAction(fileKey);
-    if (res.success && res.data?.downloadUrl) {
-      window.open(res.data.downloadUrl, '_blank');
+  // Сброс пагинации при поиске
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchFromUrl]);
+
+  // Фильтрация по поиску из шапки
+  const filteredFiles = files.filter((file) => {
+    if (searchFromUrl) {
+      const query = searchFromUrl.toLowerCase();
+      return (
+        file.file_name.toLowerCase().includes(query) ||
+        file.description.toLowerCase().includes(query) ||
+        (file.file_categories?.name && file.file_categories.name.toLowerCase().includes(query))
+      );
     }
-  };
-
-  const handleSaveArchiveFiles = () => {
-    if (uploadFiles.length === 0) return;
-
-    setMsg(null);
-    startTransition(async () => {
-      let successCount = 0;
-      for (const item of uploadFiles) {
-        if (!item.file_path_r2) continue;
-
-        const res = await uploadFileToArchiveAction({
-          category_id: item.category_id,
-          file_name: item.file_name,
-          file_size: item.file_size,
-          file_type: item.file_type,
-          file_path_r2: item.file_path_r2,
-          description: item.description || `Скан файла ${item.file_name}`,
-          comment: item.comment,
-        });
-
-        if (res.success) successCount++;
-      }
-
-      if (successCount > 0) {
-        setMsg({ type: 'success', text: `Сохранено сканов в архив: ${successCount}` });
-        setUploadFiles([]);
-        await loadData();
-      } else {
-        setMsg({ type: 'error', text: 'Ошибка сохранения файлов в архив' });
-      }
-    });
-  };
-
-  const handleOpenEdit = (doc: DocumentFile) => {
-    setEditingDoc(doc);
-    setEditName(doc.file_name);
-    setEditCatId(doc.category_id || categories[0]?.id || '');
-    setEditDesc(doc.description || '');
-    setReplacingFile(null);
-  };
-
-  const handleSaveEdit = async () => {
-    if (!editingDoc) return;
-
-    setMsg(null);
-    startTransition(async () => {
-      let newKey = editingDoc.file_path_r2;
-      let newSize = editingDoc.file_size;
-      let newName = editName;
-
-      if (replacingFile) {
-        setReplaceUploading(true);
-        const presigned = await getPresignedUploadUrlAction(replacingFile.name, replacingFile.type);
-        if (!presigned.success || !presigned.data) {
-          setMsg({ type: 'error', text: 'Сбой создания ссылки для замены файла' });
-          setReplaceUploading(false);
-          return;
-        }
-
-        const xhr = new XMLHttpRequest();
-        xhr.open('PUT', presigned.data.uploadUrl, false);
-        xhr.setRequestHeader('Content-Type', replacingFile.type || 'application/octet-stream');
-        xhr.send(replacingFile);
-
-        if (xhr.status >= 200 && xhr.status < 300) {
-          newKey = presigned.data.fileKey;
-          newSize =
-            replacingFile.size > 1024 * 1024
-              ? `${(replacingFile.size / (1024 * 1024)).toFixed(1)} MB`
-              : `${Math.round(replacingFile.size / 1024)} KB`;
-          if (!editName) newName = replacingFile.name;
-        } else {
-          setMsg({ type: 'error', text: 'Ошибка отправки нового скана в R2' });
-          setReplaceUploading(false);
-          return;
-        }
-        setReplaceUploading(false);
-      }
-
-      const res = await updateDocumentFileAction(editingDoc.id, {
-        file_name: newName,
-        category_id: editCatId,
-        description: editDesc,
-        file_path_r2: newKey || undefined,
-        file_size: newSize || undefined,
-      });
-
-      if (res.success) {
-        setMsg({ type: 'success', text: 'Файл успешно обновлен!' });
-        setEditingDoc(null);
-        await loadData();
-      } else {
-        setMsg({ type: 'error', text: res.error || 'Сбой обновления файла' });
-      }
-    });
-  };
-
-  const handleDeleteFile = async (fileId: string) => {
-    if (!confirm('Вы действительно хотите удалить этот скан из архива?')) return;
-
-    startTransition(async () => {
-      const res = await deleteDocumentFileAction(fileId);
-      if (res.success) {
-        setMsg({ type: 'success', text: 'Скан удален из архива' });
-        await loadData();
-      } else {
-        setMsg({ type: 'error', text: res.error || 'Ошибка удаления скана' });
-      }
-    });
-  };
-
-  const filteredFiles = files.filter((f) => {
-    const matchesSearch =
-      f.file_name.toLowerCase().includes(search.toLowerCase()) ||
-      (f.description && f.description.toLowerCase().includes(search.toLowerCase()));
-    const matchesCat = selectedCat === 'all' || f.category_id === selectedCat;
-    return matchesSearch && matchesCat;
+    return true;
   });
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64 text-slate-400">
-        <Loader2 className="h-8 w-8 animate-spin mr-2" />
-        <span>Загрузка архива сканов R2...</span>
-      </div>
-    );
-  }
+  // Расчет пагинации
+  const totalPages = Math.ceil(filteredFiles.length / ITEMS_PER_PAGE) || 1;
+  const paginatedFiles = filteredFiles.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl md:text-2xl font-bold text-white tracking-tight flex items-center">
-            <FolderOpen className="h-6 w-6 mr-2 text-emerald-400" />
-            Реестр Файлов R2
+            <FolderOpen className="h-5 w-5 md:h-6 md:w-6 mr-2 text-emerald-400" />
+            Облачный Архив Сканов R2
           </h2>
           <p className="text-xs md:text-sm text-slate-400 mt-0.5">
-            Личный облачный архив первичных документов и уставных сканов организации
+            Все первичные накладные, акты и уставные документы организации
           </p>
         </div>
       </div>
 
-      {msg && (
-        <Alert
-          variant={msg.type === 'success' ? 'success' : 'destructive'}
-          className={
-            msg.type === 'success'
-              ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-400'
-              : 'border-red-500/50 bg-red-500/10 text-red-400'
-          }
-        >
-          {msg.type === 'success' ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
-          <AlertDescription>{msg.text}</AlertDescription>
-        </Alert>
-      )}
+      {/* ПК ТАБЛИЦА (hidden md:block) */}
+      <Card className="hidden md:block bg-slate-900/40 border-slate-800 overflow-hidden shadow-2xl">
+        <CardContent className="p-0">
+          {loading ? (
+            <div className="flex items-center justify-center p-12 text-slate-400">
+              <Loader2 className="h-6 w-6 animate-spin mr-2" />
+              <span>Загрузка архива сканов R2...</span>
+            </div>
+          ) : paginatedFiles.length === 0 ? (
+            <div className="p-12 text-center text-slate-500 text-sm">
+              Файлы в облачном архиве не найдены
+            </div>
+          ) : (
+            <Table>
+              <TableHeader className="bg-slate-950/60">
+                <TableRow>
+                  <TableHead>Наименование Файла</TableHead>
+                  <TableHead>Категория</TableHead>
+                  <TableHead>Размер & Тип</TableHead>
+                  <TableHead>Описание / Примечание</TableHead>
+                  <TableHead>Дата Загрузки</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {paginatedFiles.map((file) => (
+                  <TableRow key={file.id} className="hover:bg-slate-800/40 transition-colors">
+                    <TableCell>
+                      <div className="font-semibold text-white font-mono text-sm flex items-center space-x-2">
+                        <FileText className="h-4 w-4 text-emerald-400 flex-shrink-0" />
+                        <span className="truncate max-w-[200px]">{file.file_name}</span>
+                      </div>
+                    </TableCell>
 
-      {/* Форма Загрузки Сканов */}
-      <Card className="bg-slate-900/40 border-slate-800 p-4 md:p-6 space-y-4">
-        <h3 className="text-sm md:text-base font-bold text-white flex items-center">
-          <Upload className="h-4 w-4 mr-2 text-emerald-400" />
-          Добавить Сканы в Облачный Архив R2
-        </h3>
+                    <TableCell>
+                      <Badge variant="outline" className="border-slate-800 text-purple-400 text-xs">
+                        {file.file_categories?.name || 'Архив'}
+                      </Badge>
+                    </TableCell>
 
-        <MultiFileDropzone
-          categories={categories}
-          files={uploadFiles}
-          onFilesChange={setUploadFiles}
-          disabled={isPending}
-        />
+                    <TableCell className="font-mono text-xs text-slate-300">
+                      {file.file_size || '1.2 MB'} ({file.file_type || 'image'})
+                    </TableCell>
 
-        {uploadFiles.length > 0 && (
-          <div className="flex justify-end pt-2">
-            <Button
-              onClick={handleSaveArchiveFiles}
-              disabled={isPending || uploadFiles.some((f) => f.uploading)}
-              className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs md:text-sm min-h-[48px] px-6 shadow-lg shadow-emerald-600/20"
-            >
-              {isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
-              Сохранить ({uploadFiles.length}) в Личный Архив
-            </Button>
-          </div>
-        )}
+                    <TableCell className="text-xs text-slate-400 truncate max-w-[220px]">
+                      {file.description || '—'}
+                    </TableCell>
+
+                    <TableCell className="font-mono text-xs text-slate-400">
+                      {new Date(file.created_at).toLocaleDateString('ru-RU')}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
       </Card>
 
-      {/* Фильтры и Поиск */}
-      <div className="p-4 rounded-2xl bg-slate-900/40 border border-slate-800 flex flex-col md:flex-row gap-4">
-        <div className="relative flex-1">
-          <Search className="absolute left-3.5 top-3 h-4 w-4 text-slate-500" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Поиск файла по названию или описанию..."
-            className="pl-10 bg-slate-950 border-slate-800 text-white min-h-[44px]"
-          />
-        </div>
-
-        <select
-          value={selectedCat}
-          onChange={(e) => setSelectedCat(e.target.value)}
-          className="min-h-[44px] rounded-xl border border-slate-800 bg-slate-950 px-3 text-xs md:text-sm text-slate-200"
-        >
-          <option value="all">Все категории ({files.length})</option>
-          {categories.map((cat) => (
-            <option key={cat.id} value={cat.id}>
-              {cat.name}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Сетка Файлов */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-        {filteredFiles.length === 0 ? (
-          <div className="col-span-full p-8 text-center text-slate-500 text-xs bg-slate-900/40 rounded-xl border border-slate-800">
-            Сканы не найдены
+      {/* МОБИЛЬНЫЕ КАРТОЧКИ (block md:hidden) */}
+      <div className="block md:hidden space-y-3">
+        {loading ? (
+          <div className="flex items-center justify-center p-8 text-slate-400">
+            <Loader2 className="h-6 w-6 animate-spin mr-2" />
+            <span>Загрузка архива...</span>
+          </div>
+        ) : paginatedFiles.length === 0 ? (
+          <div className="p-8 text-center text-slate-500 text-xs bg-slate-900/40 rounded-xl border border-slate-800">
+            Файлы не найдены
           </div>
         ) : (
-          filteredFiles.map((doc) => (
-            <Card key={doc.id} className="bg-slate-900/60 border-slate-800 p-4 space-y-3 flex flex-col justify-between hover:border-slate-700 transition-colors">
-              <div className="space-y-2">
-                <div className="flex items-start justify-between">
-                  <div className="min-w-0 flex-1">
-                    <h4 className="font-bold text-white text-xs truncate">{doc.file_name}</h4>
-                    <Badge variant="outline" className="text-[10px] border-emerald-500/30 text-emerald-400 mt-1">
-                      {doc.file_categories?.name || 'Файл'}
-                    </Badge>
-                  </div>
-
-                  <div className="flex items-center space-x-1">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => handleOpenEdit(doc)}
-                      className="h-8 w-8 p-0 text-slate-400 hover:text-blue-400"
-                    >
-                      <Edit2 className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => handleDeleteFile(doc.id)}
-                      className="h-8 w-8 p-0 text-slate-400 hover:text-red-400"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
+          paginatedFiles.map((file) => (
+            <Card key={file.id} className="bg-slate-900/60 border-slate-800 p-4 space-y-2">
+              <div className="flex items-start justify-between">
+                <div className="font-bold text-white text-xs font-mono truncate max-w-[200px]">
+                  {file.file_name}
                 </div>
-
-                <p className="text-xs text-slate-300 font-medium line-clamp-2">{doc.description || 'Без описания'}</p>
+                <Badge variant="outline" className="border-slate-800 text-purple-400 text-[10px]">
+                  {file.file_categories?.name || 'Архив'}
+                </Badge>
               </div>
 
-              <div className="flex items-center justify-between pt-2 border-t border-slate-800/60 mt-2">
-                <span className="text-[10px] font-mono text-slate-500">{doc.file_size || '1.5 MB'}</span>
+              <p className="text-xs text-slate-300">{file.description}</p>
 
-                {doc.file_path_r2 && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => handleDownloadR2(doc.file_path_r2)}
-                    className="h-8 p-1 text-xs text-blue-400 hover:text-white"
-                  >
-                    <Download className="h-4 w-4 mr-1" />
-                    Скачать
-                  </Button>
-                )}
+              <div className="flex items-center justify-between pt-2 border-t border-slate-800/60 text-[11px] font-mono text-slate-500">
+                <span>{file.file_size || '1.2 MB'}</span>
+                <span>{new Date(file.created_at).toLocaleDateString('ru-RU')}</span>
               </div>
             </Card>
           ))
         )}
       </div>
 
-      {/* МОДАЛЬНОЕ ОКНО РЕДАКТИРОВАНИЯ И ЗАМЕНЫ ФАЙЛА R2 */}
-      {editingDoc && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="w-full sm:max-w-lg bg-slate-900 border-t sm:border border-slate-800 rounded-t-3xl sm:rounded-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center pb-2 border-b border-slate-800">
-              <h3 className="font-bold text-white text-base flex items-center">
-                <Edit2 className="h-4 w-4 mr-2 text-blue-400" />
-                Редактирование / Замена Файла R2
-              </h3>
-              <Button size="sm" variant="ghost" onClick={() => setEditingDoc(null)}>
-                <X className="h-5 w-5" />
-              </Button>
-            </div>
+      {/* ПАГИНАЦИЯ */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between pt-2">
+          <p className="text-xs text-slate-400 font-mono">
+            Страница <span className="text-white font-bold">{currentPage}</span> из <span className="text-white font-bold">{totalPages}</span>
+          </p>
 
-            <div className="space-y-4">
-              <div className="space-y-1">
-                <Label className="text-xs text-slate-400">Имя файла</Label>
-                <Input
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  className="bg-slate-950 border-slate-800 text-white min-h-[44px]"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <Label className="text-xs text-slate-400">Категория скана</Label>
-                <select
-                  value={editCatId}
-                  onChange={(e) => setEditCatId(e.target.value)}
-                  className="w-full min-h-[44px] rounded-xl border border-slate-800 bg-slate-950 px-3 text-sm text-slate-100"
-                >
-                  {categories.map((cat) => (
-                    <option key={cat.id} value={cat.id}>
-                      {cat.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-1">
-                <Label className="text-xs text-slate-400">Описание</Label>
-                <Input
-                  value={editDesc}
-                  onChange={(e) => setEditDesc(e.target.value)}
-                  className="bg-slate-950 border-slate-800 text-white min-h-[44px]"
-                />
-              </div>
-
-              {/* Замена файла в R2 */}
-              <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
-                <Label className="text-xs text-emerald-400 font-semibold flex items-center">
-                  <RefreshCw className="h-3.5 w-3.5 mr-1" />
-                  Заменить сам скан в Cloudflare R2 (опционально)
-                </Label>
-                <input
-                  type="file"
-                  accept="image/*,.pdf"
-                  onChange={(e) => e.target.files?.[0] && setReplacingFile(e.target.files[0])}
-                  className="text-xs text-slate-400 file:mr-2 file:py-2 file:px-3 file:rounded-xl file:border-0 file:bg-slate-800 file:text-slate-200"
-                />
-                {replacingFile && (
-                  <p className="text-[11px] text-emerald-400 font-mono">
-                    Выбран для замены: {replacingFile.name}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <div className="flex justify-end space-x-2 pt-2 border-t border-slate-800">
-              <Button variant="ghost" onClick={() => setEditingDoc(null)} className="min-h-[44px]">
-                Отмена
-              </Button>
-              <Button
-                onClick={handleSaveEdit}
-                disabled={isPending || replaceUploading}
-                className="bg-blue-600 hover:bg-blue-500 text-white min-h-[44px] px-6"
-              >
-                {isPending || replaceUploading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                Сохранить изменения
-              </Button>
-            </div>
+          <div className="flex items-center space-x-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className="border-slate-800 text-slate-300 min-h-[40px] text-xs"
+            >
+              <ChevronLeft className="h-4 w-4 mr-1" />
+              Назад
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+              className="border-slate-800 text-slate-300 min-h-[40px] text-xs"
+            >
+              Вперед
+              <ChevronRight className="h-4 w-4 ml-1" />
+            </Button>
           </div>
         </div>
       )}

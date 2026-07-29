@@ -82,7 +82,7 @@ export async function sendPartnershipRequestAction(
 }
 
 /**
- * Ответ на заявку (Принять / Отклонить)
+ * Ответ на заявку (Принять / Отклонить) — Гарантированное добавление контрагентов
  */
 export async function respondToPartnershipRequestAction(
   partnershipId: string,
@@ -98,7 +98,7 @@ export async function respondToPartnershipRequestAction(
 
     const { data: partnership } = await adminSupabase
       .from('company_partnerships')
-      .select('*, requester_company:companies!requester_company_id(*), target_company:companies!target_company_id(*)')
+      .select('id, requester_company_id, target_company_id, status')
       .eq('id', partnershipId)
       .single();
 
@@ -106,6 +106,7 @@ export async function respondToPartnershipRequestAction(
       return { success: false, error: 'Заявка на партнерство не найдена' };
     }
 
+    // 1. Обновляем статус заявки в БД
     const { error: updateError } = await adminSupabase
       .from('company_partnerships')
       .update({
@@ -118,13 +119,18 @@ export async function respondToPartnershipRequestAction(
       return { success: false, error: `Ошибка обновления статуса: ${updateError.message}` };
     }
 
-    // Если заявка одобрена (approved) — автоматически добавляем компании в контрагенты друг друга через Admin Client
+    // 2. Если заявка одобрена (approved) — извлекаем обе компании по ID из таблицы 'companies'
     if (newStatus === 'approved') {
-      const reqCompany = partnership.requester_company;
-      const targetCompany = partnership.target_company;
+      const { data: compList } = await adminSupabase
+        .from('companies')
+        .select('*')
+        .in('id', [partnership.requester_company_id, partnership.target_company_id]);
+
+      const reqCompany = compList?.find((c) => c.id === partnership.requester_company_id);
+      const targetCompany = compList?.find((c) => c.id === partnership.target_company_id);
 
       if (reqCompany && targetCompany) {
-        // 1. Добавляем Target в контрагенты Requester
+        // Добавляем Target в контрагенты Requester
         await adminSupabase.from('counterparties').upsert(
           {
             company_id: reqCompany.id,
@@ -136,7 +142,7 @@ export async function respondToPartnershipRequestAction(
           { onConflict: 'company_id,inn' }
         );
 
-        // 2. Добавляем Requester в контрагенты Target
+        // Добавляем Requester в контрагенты Target
         await adminSupabase.from('counterparties').upsert(
           {
             company_id: targetCompany.id,

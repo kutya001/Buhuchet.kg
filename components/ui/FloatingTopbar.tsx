@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
   Clock,
   Building2,
@@ -17,8 +17,10 @@ import {
   X,
   Users,
   LayoutDashboard,
+  Search,
 } from 'lucide-react';
 import { signOutAction } from '@/app/(auth)/actions';
+import { Input } from '@/components/ui/input';
 
 interface FloatingTopbarProps {
   companyName?: string;
@@ -49,11 +51,18 @@ export function FloatingTopbar({
   onToggleSidebar,
 }: FloatingTopbarProps) {
   const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
   const [timeStr, setTimeStr] = useState<string>('');
   const [dateStr, setDateStr] = useState<string>('');
   const [isMoreOpen, setIsMoreOpen] = useState(false);
 
-  // Живые часы и дата Кыргызской Республики
+  // Универсальный выпадающий поиск
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchValue, setSearchValue] = useState(searchParams.get('search') || '');
+
+  // Часы и дата КР
   useEffect(() => {
     const updateTime = () => {
       const now = new Date();
@@ -78,6 +87,22 @@ export function FloatingTopbar({
     return () => clearInterval(interval);
   }, []);
 
+  // Синхронизация поиска с URL
+  useEffect(() => {
+    setSearchValue(searchParams.get('search') || '');
+  }, [searchParams]);
+
+  const handleSearchChange = (val: string) => {
+    setSearchValue(val);
+    const params = new URLSearchParams(searchParams.toString());
+    if (val) {
+      params.set('search', val);
+    } else {
+      params.delete('search');
+    }
+    router.replace(`${pathname}?${params.toString()}`);
+  };
+
   const currentPageTitle = PAGE_NAMES[pathname] || 'Панель Управления';
 
   return (
@@ -101,17 +126,31 @@ export function FloatingTopbar({
 
           <div className="flex items-center space-x-2">
             <div className="h-2 w-2 rounded-full bg-emerald-400 animate-ping flex-shrink-0" />
-            <h1 className="text-xs sm:text-base font-bold text-white tracking-tight truncate max-w-[140px] sm:max-w-none">
+            <h1 className="text-xs sm:text-base font-bold text-white tracking-tight truncate max-w-[130px] sm:max-w-none">
               {currentPageTitle}
             </h1>
           </div>
         </div>
 
-        {/* Центральная/Правая секция: Компактное Инфо о Компании, Часы КР и Кнопка "..." */}
+        {/* Центральная/Правая секция: УНИВЕРСАЛЬНАЯ ЛУПА, Инфо о Компании, Часы КР */}
         <div className="flex items-center space-x-2 sm:space-x-3">
+          {/* УНИВЕРСАЛЬНАЯ КНОПКА ПОИСКА (ЛУПА) */}
+          <button
+            type="button"
+            onClick={() => setIsSearchOpen(!isSearchOpen)}
+            className={`flex h-8 sm:h-9 w-8 sm:w-9 items-center justify-center rounded-xl border transition-all active:scale-95 ${
+              isSearchOpen || searchValue
+                ? 'bg-blue-600/30 border-blue-500/50 text-blue-400 font-bold'
+                : 'bg-slate-800/80 border-slate-700/60 text-slate-300 hover:text-white'
+            }`}
+            title="Универсальный поиск по системе"
+          >
+            <Search className="h-4 w-4" />
+          </button>
+
           {/* Инфо о Компании */}
           <div className="hidden sm:flex flex-col text-right">
-            <span className="text-xs font-bold text-slate-200 truncate max-w-[160px] lg:max-w-[220px]">
+            <span className="text-xs font-bold text-slate-200 truncate max-w-[140px] lg:max-w-[200px]">
               {companyName || 'Организация'}
             </span>
             {companyInn && (
@@ -129,11 +168,11 @@ export function FloatingTopbar({
             <span className="text-slate-400">{dateStr}</span>
           </div>
 
-          {/* В Мобильной версии: Кнопка ТРИ ТОЧКИ (...) для вызова Шторки Всех Страниц */}
+          {/* Мобильные 3 ТОЧКИ (...) */}
           <button
             type="button"
             onClick={() => setIsMoreOpen(true)}
-            className="md:hidden flex h-9 w-9 items-center justify-center rounded-xl bg-slate-800/80 border border-slate-700/60 text-slate-200 hover:text-white active:scale-95 transition-all shadow-lg"
+            className="md:hidden flex h-8 sm:h-9 w-8 sm:w-9 items-center justify-center rounded-xl bg-slate-800/80 border border-slate-700/60 text-slate-200 hover:text-white active:scale-95 transition-all shadow-lg"
             title="Открыть все страницы"
           >
             <MoreHorizontal className="h-5 w-5" />
@@ -141,7 +180,42 @@ export function FloatingTopbar({
         </div>
       </header>
 
-      {/* 2. ВЫЕЗЖАЮЩАЯ ШТОРКА (BOTTOM SHEET) ДЛЯ МОБИЛЬНЫХ ПРИ НАЖАТИИ НА "..." В ВЕРХНЕМ ОСТРОВКЕ */}
+      {/* 2. АНИМИРОВАННО ВЫЕДВИГАЮЩАЯСЯ ВНИЗ УНИВЕРСАЛЬНАЯ ПАНЕЛЬ ПОИСКА */}
+      {isSearchOpen && (
+        <div
+          className={`fixed top-16 left-2 right-2 z-40 p-3 rounded-2xl bg-slate-900/95 backdrop-blur-2xl border border-slate-800 shadow-2xl transition-all duration-300 animate-in slide-in-from-top ${
+            isSidebarCollapsed ? 'md:left-[88px]' : 'md:left-[264px]'
+          }`}
+        >
+          <div className="relative flex items-center">
+            <Search className="absolute left-3.5 h-4 w-4 text-blue-400" />
+            <Input
+              autoFocus
+              value={searchValue}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              placeholder="Универсальный поиск по документам, файлам R2 и контрагентам КР..."
+              className="pl-10 pr-9 bg-slate-950/80 border-slate-800 text-slate-100 text-xs sm:text-sm h-11 rounded-xl focus:ring-blue-500"
+            />
+            {searchValue ? (
+              <button
+                onClick={() => handleSearchChange('')}
+                className="absolute right-3 p-1 text-slate-400 hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            ) : (
+              <button
+                onClick={() => setIsSearchOpen(false)}
+                className="absolute right-3 p-1 text-slate-500 hover:text-slate-300 text-xs font-mono"
+              >
+                ESC
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 3. ВЫЕЗЖАЮЩАЯ ШТОРКА (BOTTOM SHEET) ДЛЯ МОБИЛЬНЫХ ПРИ НАЖАТИИ НА "..." */}
       {isMoreOpen && (
         <div className="md:hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-end justify-center p-0">
           <div className="absolute inset-0" onClick={() => setIsMoreOpen(false)} />
