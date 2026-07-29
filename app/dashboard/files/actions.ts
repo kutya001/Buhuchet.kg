@@ -29,7 +29,6 @@ async function getUserContext() {
 
 /**
  * Генерация Presigned PUT URL для прямой загрузки скана из браузера в Cloudflare R2
- * С ТОЧНОЙ СТРОГОЙ НОРМАЛИЗАЦИЕЙ MIME-ТИПА ДЛЯ МОБИЛЬНЫХ УСТРОЙСТВ
  */
 export async function getPresignedUploadUrlAction(
   fileName: string,
@@ -82,6 +81,59 @@ export async function getPresignedUploadUrlAction(
     };
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : 'Сбой генерации ссылки загрузки R2';
+    return { success: false, error: errorMsg };
+  }
+}
+
+/**
+ * СЕРВЕРНЫЙ ПРОКСИ-ЗАГРУЗЧИК ФАЙЛОВ В CLOUDFLARE R2 (ФОЛЛБЭК ДЛЯ МОБИЛЬНЫХ БРАУЗЕРОВ И CORS ОГРАНИЧЕНИЙ)
+ */
+export async function uploadFileDirectlyServerAction(
+  formData: FormData
+): Promise<ActionResponse<{ fileKey: string }>> {
+  try {
+    const ctx = await getUserContext();
+    if (!ctx) {
+      return { success: false, error: 'Пользователь не авторизован' };
+    }
+
+    const file = formData.get('file') as File;
+    if (!file) {
+      return { success: false, error: 'Файл не передан в форму' };
+    }
+
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const uniqueId = Math.random().toString(36).substring(2, 10);
+    const safeFileName = (file.name || 'scan.jpg').replace(/[^a-zA-Z0-9.-]/g, '_');
+    const fileKey = `companies/${ctx.companyId}/${year}/${month}/${uniqueId}-${safeFileName}`;
+
+    let cleanContentType = (file.type || '').split(';')[0].trim().toLowerCase();
+    if (!cleanContentType || cleanContentType === 'application/octet-stream') {
+      cleanContentType = safeFileName.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg';
+    }
+
+    await r2Client.send(
+      new PutObjectCommand({
+        Bucket: r2BucketName,
+        Key: fileKey,
+        Body: buffer,
+        ContentType: cleanContentType,
+      })
+    );
+
+    return {
+      success: true,
+      data: {
+        fileKey,
+      },
+    };
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : 'Сбой серверной загрузки R2';
     return { success: false, error: errorMsg };
   }
 }

@@ -5,7 +5,7 @@ import { Upload, Camera, FileText, X, Loader2, CheckCircle2, AlertCircle, Folder
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { getPresignedUploadUrlAction } from '@/app/dashboard/files/actions';
+import { getPresignedUploadUrlAction, uploadFileDirectlyServerAction } from '@/app/dashboard/files/actions';
 import type { FileCategory } from '@/types/database.types';
 
 export interface FileItemState {
@@ -39,7 +39,7 @@ export function MultiFileDropzone({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
-  // Реф для хранения актуального списка файлов без старых замыканий (stale closure)
+  // Реф для хранения актуального списка файлов без старых замыканий
   const filesRef = useRef<FileItemState[]>(files);
   useEffect(() => {
     filesRef.current = files;
@@ -53,52 +53,79 @@ export function MultiFileDropzone({
 
   const uploadFileToR2 = async (file: File, item: FileItemState) => {
     try {
-      // Гарантируем стабильный MIME-тип для мобильных систем (iOS Camera / Android Chrome)
       const mimeType = file.type && file.type.length > 0 ? file.type : 'image/jpeg';
       const cleanFileName = file.name || `scan_${Date.now()}.jpg`;
 
-      // 1. Запрашиваем Presigned PUT URL от нашего сервера с нормализацией типа
+      // 1. Запрашиваем Presigned PUT URL от сервера
       const presignedRes = await getPresignedUploadUrlAction(cleanFileName, mimeType);
 
-      if (!presignedRes.success || !presignedRes.data) {
-        throw new Error(presignedRes.error || 'Ошибка получения ссылки Cloudflare R2');
+      let finalFileKey = '';
+
+      if (presignedRes.success && presignedRes.data) {
+        const { uploadUrl, fileKey, cleanContentType } = presignedRes.data;
+        const targetType = cleanContentType || mimeType;
+
+        // Попытка прямого XHR PUT в Cloudflare R2
+        try {
+          await new Promise<void>((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open('PUT', uploadUrl, true);
+            xhr.setRequestHeader('Content-Type', targetType);
+
+            xhr.upload.onprogress = (event) => {
+              if (event.lengthComputable) {
+                const percent = Math.round((event.loaded / event.total) * 100);
+                updateFileList((prev) =>
+                  prev.map((f) => (f.tempId === item.tempId ? { ...f, progress: percent } : f))
+                );
+              }
+            };
+
+            xhr.onload = () => {
+              if (xhr.status >= 200 && xhr.status < 300) {
+                resolve();
+              } else {
+                reject(new Error(`Status ${xhr.status}`));
+              }
+            };
+
+            xhr.onerror = () => reject(new Error('CORS / Network Error'));
+            xhr.send(file);
+          });
+
+          finalFileKey = fileKey;
+        } catch (directErr) {
+          console.warn('Прямой XHR PUT заблокирован браузером/CORS. Переключение на надежный Серверный Прокси-Загрузчик R2...', directErr);
+
+          // 2. ДВУХУРОВНЕВЫЙ ФОЛЛБЭК: Отправка файла через Server Action прямо на наш бэкенд Buhuchet.kg
+          const formData = new FormData();
+          formData.append('file', file);
+
+          const serverRes = await uploadFileDirectlyServerAction(formData);
+          if (serverRes.success && serverRes.data) {
+            finalFileKey = serverRes.data.fileKey;
+          } else {
+            throw new Error(serverRes.error || 'Ошибка серверной загрузки в Cloudflare R2');
+          }
+        }
+      } else {
+        // Если Presigned URL сразу не сгенерировался — пробуем прямой серверный прокси
+        const formData = new FormData();
+        formData.append('file', file);
+        const serverRes = await uploadFileDirectlyServerAction(formData);
+
+        if (serverRes.success && serverRes.data) {
+          finalFileKey = serverRes.data.fileKey;
+        } else {
+          throw new Error(serverRes.error || 'Ошибка загрузки в R2');
+        }
       }
 
-      const { uploadUrl, fileKey, cleanContentType } = presignedRes.data;
-      const targetType = cleanContentType || mimeType;
-
-      // 2. Отправляем файл по XMLHttpRequest со СТРОГИМ совпадением нормализованного заголовка Content-Type
-      await new Promise<void>((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open('PUT', uploadUrl, true);
-        xhr.setRequestHeader('Content-Type', targetType);
-
-        xhr.upload.onprogress = (event) => {
-          if (event.lengthComputable) {
-            const percent = Math.round((event.loaded / event.total) * 100);
-            updateFileList((prev) =>
-              prev.map((f) => (f.tempId === item.tempId ? { ...f, progress: percent } : f))
-            );
-          }
-        };
-
-        xhr.onload = () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            resolve();
-          } else {
-            reject(new Error(`Сбой загрузки в R2: Status ${xhr.status}`));
-          }
-        };
-
-        xhr.onerror = () => reject(new Error('Сетевой сбой при отправке в Cloudflare R2'));
-        xhr.send(file);
-      });
-
-      // 3. Обновляем статус готовности R2
+      // 3. Обновляем статус 100% готовности R2
       updateFileList((prev) =>
         prev.map((f) =>
           f.tempId === item.tempId
-            ? { ...f, file_path_r2: fileKey, progress: 100, uploading: false }
+            ? { ...f, file_path_r2: finalFileKey, progress: 100, uploading: false, error: undefined }
             : f
         )
       );
@@ -145,16 +172,15 @@ export function MultiFileDropzone({
       };
     });
 
-    // Сразу добавляем новые файлы к текущему списку через ref
+    // Сразу добавляем новые файлы в список
     updateFileList((prev) => [...prev, ...newItems]);
 
-    // Запускаем асинхронную загрузку каждого файла в R2
+    // Запускаем асинхронную двухуровневую загрузку каждого файла
     for (let i = 0; i < selectedFiles.length; i++) {
       await uploadFileToR2(selectedFiles[i], newItems[i]);
     }
 
     setGlobalUploading(false);
-    // Очищаем значение инпута, чтобы можно было заново выбрать тот же файл при желании
     e.target.value = '';
   };
 
