@@ -5,7 +5,6 @@ import { r2Client, r2BucketName } from '@/lib/r2';
 import { PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import type { ActionResponse } from '@/types/database.types';
-import { crypto } from 'next/dist/compiled/@edge-runtime/primitives';
 
 async function getUserContext() {
   const supabase = await createClient();
@@ -30,11 +29,12 @@ async function getUserContext() {
 
 /**
  * Генерация Presigned PUT URL для прямой загрузки скана из браузера в Cloudflare R2
+ * С ТОЧНОЙ СТРОГОЙ НОРМАЛИЗАЦИЕЙ MIME-ТИПА ДЛЯ МОБИЛЬНЫХ УСТРОЙСТВ
  */
 export async function getPresignedUploadUrlAction(
   fileName: string,
   fileType: string
-): Promise<ActionResponse<{ uploadUrl: string; fileKey: string }>> {
+): Promise<ActionResponse<{ uploadUrl: string; fileKey: string; cleanContentType: string }>> {
   try {
     const ctx = await getUserContext();
     if (!ctx) {
@@ -46,15 +46,27 @@ export async function getPresignedUploadUrlAction(
     const month = String(now.getMonth() + 1).padStart(2, '0');
     const uniqueId = Math.random().toString(36).substring(2, 10);
 
+    // Нормализация MIME-типа для мобильных устройств (iOS / Android)
+    let cleanContentType = (fileType || '').split(';')[0].trim().toLowerCase();
+    if (!cleanContentType || cleanContentType === 'application/octet-stream') {
+      if (fileName.endsWith('.pdf')) {
+        cleanContentType = 'application/pdf';
+      } else if (fileName.match(/\.(png|jpg|jpeg|webp|heic|heif)$/i)) {
+        cleanContentType = 'image/jpeg';
+      } else {
+        cleanContentType = 'image/jpeg';
+      }
+    }
+
     // Безопасное имя файла
     const safeFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
     const fileKey = `companies/${ctx.companyId}/${year}/${month}/${uniqueId}-${safeFileName}`;
 
-    // Составляем команду PUT
+    // Составляем команду PUT со строгим ContentType
     const command = new PutObjectCommand({
       Bucket: r2BucketName,
       Key: fileKey,
-      ContentType: fileType || 'application/octet-stream',
+      ContentType: cleanContentType,
     });
 
     // Ссылка действительна 15 минут
@@ -65,6 +77,7 @@ export async function getPresignedUploadUrlAction(
       data: {
         uploadUrl,
         fileKey,
+        cleanContentType,
       },
     };
   } catch (err: unknown) {

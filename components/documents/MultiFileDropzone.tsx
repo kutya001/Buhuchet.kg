@@ -57,20 +57,21 @@ export function MultiFileDropzone({
       const mimeType = file.type && file.type.length > 0 ? file.type : 'image/jpeg';
       const cleanFileName = file.name || `scan_${Date.now()}.jpg`;
 
-      // 1. Запрашиваем Presigned PUT URL от нашего сервера
+      // 1. Запрашиваем Presigned PUT URL от нашего сервера с нормализацией типа
       const presignedRes = await getPresignedUploadUrlAction(cleanFileName, mimeType);
 
       if (!presignedRes.success || !presignedRes.data) {
         throw new Error(presignedRes.error || 'Ошибка получения ссылки Cloudflare R2');
       }
 
-      const { uploadUrl, fileKey } = presignedRes.data;
+      const { uploadUrl, fileKey, cleanContentType } = presignedRes.data;
+      const targetType = cleanContentType || mimeType;
 
-      // 2. Отправляем файл по XMLHttpRequest для отслеживания процента прогресса загрузки
+      // 2. Отправляем файл по XMLHttpRequest со СТРОГИМ совпадением нормализованного заголовка Content-Type
       await new Promise<void>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.open('PUT', uploadUrl, true);
-        xhr.setRequestHeader('Content-Type', mimeType);
+        xhr.setRequestHeader('Content-Type', targetType);
 
         xhr.upload.onprogress = (event) => {
           if (event.lengthComputable) {
