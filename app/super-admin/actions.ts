@@ -1,51 +1,150 @@
 'use server';
 
-import { createAdminClient } from '@/lib/supabase/server';
-import type { ActionResponse, FileCategory, FeatureFlag, UserProfile, Company } from '@/types/database.types';
+import { createClient, createAdminClient } from '@/lib/supabase/server';
+import type { ActionResponse, Company, Document, FileCategory } from '@/types/database.types';
 import { revalidatePath } from 'next/cache';
 
-// Одобрить и Активировать компанию
+/**
+ * Проверка прав суперадмина
+ */
+async function checkSuperAdmin() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return false;
+
+  const { data: profile } = await supabase
+    .from('users')
+    .select('is_super_admin')
+    .eq('id', user.id)
+    .single();
+
+  return profile?.is_super_admin === true;
+}
+
+// -------------------------------------------------------------
+// 1. УПРАВЛЕНИЕ ОРГАНИЗАЦИЯМИ (COMPANIES)
+// -------------------------------------------------------------
+
+export async function getPendingCompaniesAction(): Promise<ActionResponse<Company[]>> {
+  try {
+    if (!(await checkSuperAdmin())) {
+      return { success: false, error: 'Доступ запрещен' };
+    }
+
+    const adminSupabase = await createAdminClient();
+    const { data, error } = await adminSupabase
+      .from('companies')
+      .select('*')
+      .eq('status', 'pending_approval')
+      .order('created_at', { ascending: false });
+
+    if (error) return { success: false, error: error.message };
+    return { success: true, data: data as Company[] };
+  } catch (err: unknown) {
+    return { success: false, error: 'Сбой загрузки заявок' };
+  }
+}
+
+export async function getAllCompaniesAdminAction(): Promise<ActionResponse<Company[]>> {
+  try {
+    if (!(await checkSuperAdmin())) {
+      return { success: false, error: 'Доступ запрещен' };
+    }
+
+    const adminSupabase = await createAdminClient();
+    const { data, error } = await adminSupabase
+      .from('companies')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) return { success: false, error: error.message };
+    return { success: true, data: data as Company[] };
+  } catch (err: unknown) {
+    return { success: false, error: 'Сбой загрузки списка всех компаний' };
+  }
+}
+
+export async function createCompanyAdminAction(data: {
+  name: string;
+  inn: string;
+  industry?: string;
+  director_name?: string;
+  email?: string;
+  phone?: string;
+  legal_address?: string;
+  status?: any;
+}): Promise<ActionResponse<Company>> {
+  try {
+    if (!(await checkSuperAdmin())) {
+      return { success: false, error: 'Доступ запрещен' };
+    }
+
+    const adminSupabase = await createAdminClient();
+    const { data: comp, error } = await adminSupabase
+      .from('companies')
+      .insert({
+        name: data.name,
+        inn: data.inn,
+        industry: data.industry || 'Услуги / Консалтинг',
+        director_name: data.director_name || null,
+        email: data.email || null,
+        phone: data.phone || null,
+        legal_address: data.legal_address || null,
+        status: data.status || 'active',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .select()
+      .single();
+
+    if (error || !comp) return { success: false, error: error?.message || 'Ошибка создания компании' };
+
+    revalidatePath('/super-admin');
+    return { success: true, data: comp as Company };
+  } catch (err: unknown) {
+    return { success: false, error: 'Сбой при создании организации' };
+  }
+}
+
 export async function approveCompanyAction(companyId: string): Promise<ActionResponse> {
   try {
-    const supabaseAdmin = await createAdminClient();
+    if (!(await checkSuperAdmin())) {
+      return { success: false, error: 'Доступ запрещен' };
+    }
 
-    const { error } = await supabaseAdmin
+    const adminSupabase = await createAdminClient();
+    const { error } = await adminSupabase
       .from('companies')
       .update({
         status: 'active',
-        is_active: true,
         moderation_comment: null,
         updated_at: new Date().toISOString(),
       })
       .eq('id', companyId);
 
-    if (error) {
-      return { success: false, error: `Ошибка активации компании: ${error.message}` };
-    }
+    if (error) return { success: false, error: error.message };
 
     revalidatePath('/super-admin');
-    revalidatePath('/dashboard');
-    revalidatePath('/dashboard/pending');
     return { success: true };
   } catch (err: unknown) {
-    const errorMsg = err instanceof Error ? err.message : 'Сбой при одобрении компании';
-    return { success: false, error: errorMsg };
+    return { success: false, error: 'Сбой одобрения компании' };
   }
 }
 
-// Отклонить / Вернуть на доработку с комментарием
 export async function requestCompanyChangesAction(
   companyId: string,
   comment: string
 ): Promise<ActionResponse> {
   try {
-    if (!comment || comment.trim().length < 3) {
-      return { success: false, error: 'Укажите понятную причину возврата заявки на доработку' };
+    if (!(await checkSuperAdmin())) {
+      return { success: false, error: 'Доступ запрещен' };
     }
 
-    const supabaseAdmin = await createAdminClient();
-
-    const { error } = await supabaseAdmin
+    const adminSupabase = await createAdminClient();
+    const { error } = await adminSupabase
       .from('companies')
       .update({
         status: 'requires_changes',
@@ -54,176 +153,96 @@ export async function requestCompanyChangesAction(
       })
       .eq('id', companyId);
 
-    if (error) {
-      return { success: false, error: `Ошибка отправки замечаний: ${error.message}` };
-    }
+    if (error) return { success: false, error: error.message };
 
     revalidatePath('/super-admin');
-    revalidatePath('/dashboard');
-    revalidatePath('/dashboard/pending');
     return { success: true };
   } catch (err: unknown) {
-    const errorMsg = err instanceof Error ? err.message : 'Сбой при отправке замечаний';
-    return { success: false, error: errorMsg };
+    return { success: false, error: 'Сбой запроса изменений' };
   }
 }
 
-// Заблокировать компанию
 export async function blockCompanyAction(
   companyId: string,
   comment: string
 ): Promise<ActionResponse> {
   try {
-    const supabaseAdmin = await createAdminClient();
+    if (!(await checkSuperAdmin())) {
+      return { success: false, error: 'Доступ запрещен' };
+    }
 
-    const { error } = await supabaseAdmin
+    const adminSupabase = await createAdminClient();
+    const { error } = await adminSupabase
       .from('companies')
       .update({
         status: 'blocked',
-        is_active: false,
         moderation_comment: comment,
         updated_at: new Date().toISOString(),
       })
       .eq('id', companyId);
 
-    if (error) {
-      return { success: false, error: `Ошибка блокировки: ${error.message}` };
-    }
+    if (error) return { success: false, error: error.message };
 
     revalidatePath('/super-admin');
     return { success: true };
   } catch (err: unknown) {
-    const errorMsg = err instanceof Error ? err.message : 'Сбой при блокировке компании';
-    return { success: false, error: errorMsg };
+    return { success: false, error: 'Сбой блокировки компании' };
   }
 }
 
-// Редактирование любых реквизитов организации суперадмином
 export async function updateCompanyAdminAction(
   companyId: string,
-  data: {
-    name?: string;
-    inn?: string;
-    industry?: string;
-    status?: 'pending_approval' | 'active' | 'requires_changes' | 'blocked';
-    legal_address?: string;
-    director_name?: string;
-    email?: string;
-    phone?: string;
-    moderation_comment?: string | null;
-  }
-): Promise<ActionResponse<Company>> {
+  updates: Partial<Company>
+): Promise<ActionResponse> {
   try {
-    const supabaseAdmin = await createAdminClient();
-
-    const updatePayload: Record<string, any> = {
-      updated_at: new Date().toISOString(),
-    };
-
-    if (data.name) updatePayload.name = data.name;
-    if (data.inn) updatePayload.inn = data.inn;
-    if (data.industry) updatePayload.industry = data.industry;
-    if (data.status) {
-      updatePayload.status = data.status;
-      updatePayload.is_active = data.status === 'active';
+    if (!(await checkSuperAdmin())) {
+      return { success: false, error: 'Доступ запрещен' };
     }
-    if (data.legal_address) {
-      updatePayload.legal_address = data.legal_address;
-      updatePayload.address = data.legal_address;
-    }
-    if (data.director_name) updatePayload.director_name = data.director_name;
-    if (data.email) updatePayload.email = data.email;
-    if (data.phone) updatePayload.phone = data.phone;
-    if (data.moderation_comment !== undefined) updatePayload.moderation_comment = data.moderation_comment;
 
-    const { data: updated, error } = await supabaseAdmin
+    const adminSupabase = await createAdminClient();
+    const { error } = await adminSupabase
       .from('companies')
-      .update(updatePayload)
-      .eq('id', companyId)
-      .select()
-      .single();
+      .update({
+        ...updates,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', companyId);
 
-    if (error || !updated) {
-      return { success: false, error: `Ошибка обновления компании: ${error?.message}` };
-    }
+    if (error) return { success: false, error: error.message };
 
     revalidatePath('/super-admin');
-    revalidatePath('/dashboard');
-    return { success: true, data: updated as Company };
+    return { success: true };
   } catch (err: unknown) {
-    const errorMsg = err instanceof Error ? err.message : 'Сбой при обновлении организации';
-    return { success: false, error: errorMsg };
+    return { success: false, error: 'Сбой при обновлении организации' };
   }
 }
 
-// Получить компании на модерации
-export async function getPendingCompaniesAction(): Promise<ActionResponse<Company[]>> {
-  try {
-    const supabaseAdmin = await createAdminClient();
+// -------------------------------------------------------------
+// 2. УПРАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯМИ (USERS)
+// -------------------------------------------------------------
 
-    const { data, error } = await supabaseAdmin
-      .from('companies')
-      .select('*')
-      .eq('status', 'pending_approval')
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      return { success: false, error: `Ошибка загрузки модерации: ${error.message}` };
-    }
-
-    return { success: true, data: (data as Company[]) || [] };
-  } catch (err: unknown) {
-    const errorMsg = err instanceof Error ? err.message : 'Сбой чтения модерации';
-    return { success: false, error: errorMsg };
-  }
-}
-
-// Получить все компании системы
-export async function getAllCompaniesAdminAction(): Promise<ActionResponse<Company[]>> {
-  try {
-    const supabaseAdmin = await createAdminClient();
-
-    const { data, error } = await supabaseAdmin
-      .from('companies')
-      .select('*')
-      .order('name');
-
-    if (error) {
-      return { success: false, error: `Ошибка загрузки компаний: ${error.message}` };
-    }
-
-    return { success: true, data: (data as Company[]) || [] };
-  } catch (err: unknown) {
-    const errorMsg = err instanceof Error ? err.message : 'Сбой чтения списка организаций';
-    return { success: false, error: errorMsg };
-  }
-}
-
-// ПОЛЬЗОВАТЕЛИ СИСТЕМЫ (Суперадминка)
 export async function getAllUsersAdminAction(): Promise<ActionResponse<any[]>> {
   try {
-    const supabaseAdmin = await createAdminClient();
-
-    const { data: users, error } = await supabaseAdmin
-      .from('users')
-      .select('*, companies(id, name, inn)')
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      return { success: false, error: `Ошибка загрузки пользователей: ${error.message}` };
+    if (!(await checkSuperAdmin())) {
+      return { success: false, error: 'Доступ запрещен' };
     }
 
-    return { success: true, data: users || [] };
+    const adminSupabase = await createAdminClient();
+    const { data, error } = await adminSupabase
+      .from('users')
+      .select('*, companies(*)')
+      .order('created_at', { ascending: false });
+
+    if (error) return { success: false, error: error.message };
+    return { success: true, data };
   } catch (err: unknown) {
-    const errorMsg = err instanceof Error ? err.message : 'Сбой чтения реестра пользователей';
-    return { success: false, error: errorMsg };
+    return { success: false, error: 'Сбой получения списка пользователей' };
   }
 }
 
-// Редактирование профиля пользователя суперадмином
 export async function updateUserAdminAction(
   userId: string,
-  data: {
+  updates: {
     full_name?: string;
     email?: string;
     role?: 'owner' | 'accountant' | 'manager';
@@ -232,52 +251,235 @@ export async function updateUserAdminAction(
   }
 ): Promise<ActionResponse> {
   try {
-    const supabaseAdmin = await createAdminClient();
+    if (!(await checkSuperAdmin())) {
+      return { success: false, error: 'Доступ запрещен' };
+    }
 
-    const updatePayload: Record<string, any> = {
-      updated_at: new Date().toISOString(),
-    };
-
-    if (data.full_name !== undefined) updatePayload.full_name = data.full_name;
-    if (data.email !== undefined) updatePayload.email = data.email;
-    if (data.role !== undefined) updatePayload.role = data.role;
-    if (data.company_id !== undefined) updatePayload.company_id = data.company_id;
-    if (data.is_super_admin !== undefined) updatePayload.is_super_admin = data.is_super_admin;
-
-    const { error } = await supabaseAdmin
+    const adminSupabase = await createAdminClient();
+    const { error } = await adminSupabase
       .from('users')
-      .update(updatePayload)
+      .update({
+        ...updates,
+        updated_at: new Date().toISOString(),
+      })
       .eq('id', userId);
 
-    if (error) {
-      return { success: false, error: `Ошибка обновления пользователя: ${error.message}` };
-    }
+    if (error) return { success: false, error: error.message };
 
     revalidatePath('/super-admin');
     return { success: true };
   } catch (err: unknown) {
-    const errorMsg = err instanceof Error ? err.message : 'Сбой обновления пользователя';
-    return { success: false, error: errorMsg };
+    return { success: false, error: 'Сбой обновления профиля пользователя' };
   }
 }
 
-// Удаление пользователя из системы
 export async function deleteUserAdminAction(userId: string): Promise<ActionResponse> {
   try {
-    const supabaseAdmin = await createAdminClient();
-
-    // Удаляем из auth.users и public.users
-    await supabaseAdmin.auth.admin.deleteUser(userId);
-    const { error } = await supabaseAdmin.from('users').delete().eq('id', userId);
-
-    if (error) {
-      return { success: false, error: `Ошибка удаления пользователя из БД: ${error.message}` };
+    if (!(await checkSuperAdmin())) {
+      return { success: false, error: 'Доступ запрещен' };
     }
+
+    const adminSupabase = await createAdminClient();
+    const { error } = await adminSupabase.from('users').delete().eq('id', userId);
+
+    if (error) return { success: false, error: error.message };
 
     revalidatePath('/super-admin');
     return { success: true };
   } catch (err: unknown) {
-    const errorMsg = err instanceof Error ? err.message : 'Сбой при удалении пользователя';
-    return { success: false, error: errorMsg };
+    return { success: false, error: 'Сбой при удалении пользователя' };
+  }
+}
+
+// -------------------------------------------------------------
+// 3. УПРАВЛЕНИЕ ВСЕМИ B2B ДОКУМЕНТАМИ (DOCUMENTS)
+// -------------------------------------------------------------
+
+export async function getAllDocumentsAdminAction(): Promise<ActionResponse<any[]>> {
+  try {
+    if (!(await checkSuperAdmin())) {
+      return { success: false, error: 'Доступ запрещен' };
+    }
+
+    const adminSupabase = await createAdminClient();
+    const { data, error } = await adminSupabase
+      .from('documents')
+      .select('*, sender_company:companies!sender_company_id(*), receiver_company:companies!receiver_company_id(*), users(*)')
+      .order('created_at', { ascending: false });
+
+    if (error) return { success: false, error: error.message };
+    return { success: true, data };
+  } catch (err: unknown) {
+    return { success: false, error: 'Сбой получения документов' };
+  }
+}
+
+export async function updateDocumentAdminAction(
+  docId: string,
+  updates: Partial<Document>
+): Promise<ActionResponse> {
+  try {
+    if (!(await checkSuperAdmin())) {
+      return { success: false, error: 'Доступ запрещен' };
+    }
+
+    const adminSupabase = await createAdminClient();
+    const { error } = await adminSupabase
+      .from('documents')
+      .update({
+        ...updates,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', docId);
+
+    if (error) return { success: false, error: error.message };
+
+    revalidatePath('/super-admin');
+    revalidatePath('/dashboard/documents');
+    return { success: true };
+  } catch (err: unknown) {
+    return { success: false, error: 'Сбой обновления документа' };
+  }
+}
+
+export async function deleteDocumentAdminAction(docId: string): Promise<ActionResponse> {
+  try {
+    if (!(await checkSuperAdmin())) {
+      return { success: false, error: 'Доступ запрещен' };
+    }
+
+    const adminSupabase = await createAdminClient();
+    const { error } = await adminSupabase.from('documents').delete().eq('id', docId);
+
+    if (error) return { success: false, error: error.message };
+
+    revalidatePath('/super-admin');
+    revalidatePath('/dashboard/documents');
+    return { success: true };
+  } catch (err: unknown) {
+    return { success: false, error: 'Сбой удаления документа' };
+  }
+}
+
+// -------------------------------------------------------------
+// 4. УПРАВЛЕНИЕ СПРАВОЧНИКАМИ (FILE CATEGORIES)
+// -------------------------------------------------------------
+
+export async function createFileCategoryAdminAction(
+  name: string,
+  code: string,
+  description?: string
+): Promise<ActionResponse<FileCategory>> {
+  try {
+    if (!(await checkSuperAdmin())) {
+      return { success: false, error: 'Доступ запрещен' };
+    }
+
+    const adminSupabase = await createAdminClient();
+    const { data: cat, error } = await adminSupabase
+      .from('file_categories')
+      .insert({
+        name,
+        code,
+        description: description || null,
+        created_at: new Date().toISOString(),
+      })
+      .select()
+      .single();
+
+    if (error || !cat) return { success: false, error: error?.message || 'Ошибка создания категории' };
+
+    revalidatePath('/super-admin');
+    return { success: true, data: cat as FileCategory };
+  } catch (err: unknown) {
+    return { success: false, error: 'Сбой создания категории' };
+  }
+}
+
+export async function updateFileCategoryAdminAction(
+  catId: string,
+  updates: Partial<FileCategory>
+): Promise<ActionResponse> {
+  try {
+    if (!(await checkSuperAdmin())) {
+      return { success: false, error: 'Доступ запрещен' };
+    }
+
+    const adminSupabase = await createAdminClient();
+    const { error } = await adminSupabase
+      .from('file_categories')
+      .update(updates)
+      .eq('id', catId);
+
+    if (error) return { success: false, error: error.message };
+
+    revalidatePath('/super-admin');
+    return { success: true };
+  } catch (err: unknown) {
+    return { success: false, error: 'Сбой обновления категории' };
+  }
+}
+
+export async function deleteFileCategoryAdminAction(catId: string): Promise<ActionResponse> {
+  try {
+    if (!(await checkSuperAdmin())) {
+      return { success: false, error: 'Доступ запрещен' };
+    }
+
+    const adminSupabase = await createAdminClient();
+    const { error } = await adminSupabase.from('file_categories').delete().eq('id', catId);
+
+    if (error) return { success: false, error: error.message };
+
+    revalidatePath('/super-admin');
+    return { success: true };
+  } catch (err: unknown) {
+    return { success: false, error: 'Сбой удаления категории' };
+  }
+}
+
+// -------------------------------------------------------------
+// 5. МОДУЛЬ БАЗЫ ДАННЫХ (READ-ONLY DATABASE INSPECTOR)
+// -------------------------------------------------------------
+
+export async function inspectTableDataAdminAction(
+  tableName: string,
+  limit: number = 50
+): Promise<ActionResponse<{ columns: string[]; rows: any[] }>> {
+  try {
+    if (!(await checkSuperAdmin())) {
+      return { success: false, error: 'Доступ запрещен' };
+    }
+
+    const allowedTables = [
+      'users',
+      'companies',
+      'documents',
+      'document_files',
+      'counterparties',
+      'company_partnerships',
+      'file_categories',
+      'nomenclature',
+      'document_logs',
+    ];
+
+    if (!allowedTables.includes(tableName)) {
+      return { success: false, error: 'Указанная таблица недоступна для инспектора' };
+    }
+
+    const adminSupabase = await createAdminClient();
+    const { data, error } = await adminSupabase
+      .from(tableName as any)
+      .select('*')
+      .limit(limit);
+
+    if (error) return { success: false, error: error.message };
+
+    const rows = data || [];
+    const columns = rows.length > 0 ? Object.keys(rows[0]) : [];
+
+    return { success: true, data: { columns, rows } };
+  } catch (err: unknown) {
+    return { success: false, error: 'Сбой инспектора БД' };
   }
 }
