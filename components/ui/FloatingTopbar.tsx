@@ -11,8 +11,6 @@ import {
   MoreHorizontal,
   FileText,
   FolderOpen,
-  Globe,
-  UserCheck,
   User,
   Shield,
   LogOut,
@@ -36,9 +34,7 @@ const PAGE_NAMES: Record<string, string> = {
   '/dashboard/documents': 'B2B Документы',
   '/dashboard/documents/new': 'Новый Документ',
   '/dashboard/files': 'Реестр Файлов R2',
-  '/dashboard/companies-catalog': 'Каталог Компаний КР',
-  '/dashboard/partnerships': 'Заявки на Партнерство',
-  '/dashboard/counterparties': 'Мои Контрагенты',
+  '/dashboard/counterparties': 'Контрагенты',
   '/dashboard/company': 'Моя Организация',
   '/dashboard/profile': 'Профиль Пользователя',
   '/super-admin': 'Панель Суперадмина',
@@ -189,6 +185,16 @@ export function FloatingTopbar({
               </Link>
 
               <Link
+                href="/dashboard/counterparties"
+                prefetch={true}
+                onClick={() => setIsMoreOpen(false)}
+                className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 hover:border-amber-500/50 flex flex-col items-center justify-center text-center space-y-1.5 min-h-[72px]"
+              >
+                <Users className="h-6 w-6 text-amber-400" />
+                <span className="text-xs font-semibold text-slate-200">Контрагенты</span>
+              </Link>
+
+              <Link
                 href="/dashboard/files"
                 prefetch={true}
                 onClick={() => setIsMoreOpen(false)}
@@ -196,36 +202,6 @@ export function FloatingTopbar({
               >
                 <FolderOpen className="h-6 w-6 text-emerald-400" />
                 <span className="text-xs font-semibold text-slate-200">Реестр Файлов R2</span>
-              </Link>
-
-              <Link
-                href="/dashboard/companies-catalog"
-                prefetch={true}
-                onClick={() => setIsMoreOpen(false)}
-                className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 hover:border-indigo-500/50 flex flex-col items-center justify-center text-center space-y-1.5 min-h-[72px]"
-              >
-                <Globe className="h-6 w-6 text-indigo-400" />
-                <span className="text-xs font-semibold text-slate-200">Каталог Компаний</span>
-              </Link>
-
-              <Link
-                href="/dashboard/partnerships"
-                prefetch={true}
-                onClick={() => setIsMoreOpen(false)}
-                className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 hover:border-purple-500/50 flex flex-col items-center justify-center text-center space-y-1.5 min-h-[72px]"
-              >
-                <UserCheck className="h-6 w-6 text-purple-400" />
-                <span className="text-xs font-semibold text-slate-200">Заявки Сети</span>
-              </Link>
-
-              <Link
-                href="/dashboard/counterparties"
-                prefetch={true}
-                onClick={() => setIsMoreOpen(false)}
-                className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 hover:border-amber-500/50 flex flex-col items-center justify-center text-center space-y-1.5 min-h-[72px]"
-              >
-                <Users className="h-6 w-6 text-amber-400" />
-                <span className="text-xs font-semibold text-slate-200">Мои Контрагенты</span>
               </Link>
 
               <Link

@@ -42,7 +42,7 @@ import {
   respondToPartnershipRequestAction,
   terminatePartnershipAction,
   updateCounterpartyCommentAction,
-} from '../partnerships/actions';
+} from './actions';
 import type { Counterparty, Company, Document, DocumentFile, CompanyPartnership } from '@/types/database.types';
 
 type PartnerReport = {
@@ -231,7 +231,7 @@ export default function CounterpartiesPage() {
         <div>
           <h2 className="text-xl md:text-2xl font-bold text-white tracking-tight flex items-center">
             <Users className="h-5 w-5 md:h-6 md:w-6 mr-2 text-amber-400" />
-            Единый Модуль «Контрагенты»
+            Контрагенты
           </h2>
           <p className="text-xs md:text-sm text-slate-400 mt-0.5">
             Управление активными партнерами, заявками сети и поиском организаций

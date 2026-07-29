@@ -190,7 +190,7 @@ export default function NewB2BDocumentPage() {
     <div className="max-w-4xl mx-auto space-y-6">
       <div className="flex items-center space-x-3">
         <Link href="/dashboard/documents">
-          <Button variant="outline" size="sm" className="border-slate-800 text-slate-400 hover:text-white">
+          <Button variant="outline" size="sm" className="border-slate-800 text-slate-400 hover:text-white min-h-[44px]">
             <ArrowLeft className="h-4 w-4 mr-1" />
             Назад в реестр
           </Button>
@@ -221,13 +221,13 @@ export default function NewB2BDocumentPage() {
             {/* Получатель */}
             <div className="space-y-2">
               <Label className="text-xs md:text-sm font-semibold text-slate-200">
-                Организация Получатель (Подтвержденный партнер КР) *
+                Организация Получатель (Подтвержденный контрагент КР) *
               </Label>
               {partners.length === 0 ? (
                 <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-400 flex items-center justify-between">
-                  <span>У вас пока нет подтвержденных партнеров для отправки.</span>
-                  <Link href="/dashboard/companies-catalog" className="underline font-bold">
-                    Каталог Компаний
+                  <span>У вас пока нет подтвержденных контрагентов для отправки.</span>
+                  <Link href="/dashboard/counterparties" className="underline font-bold">
+                    Модуль Контрагенты
                   </Link>
                 </div>
               ) : (
@@ -235,7 +235,7 @@ export default function NewB2BDocumentPage() {
                   value={receiverCompanyId}
                   onChange={(e) => setReceiverCompanyId(e.target.value)}
                   required
-                  className="w-full h-10 rounded-md border border-slate-800 bg-slate-950 px-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold"
+                  className="w-full h-11 rounded-xl border border-slate-800 bg-slate-950 px-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold"
                 >
                   {partners.map((p) => (
                     <option key={p.id} value={p.id}>
@@ -256,7 +256,7 @@ export default function NewB2BDocumentPage() {
                   id="docType"
                   value={docType}
                   onChange={(e) => setDocType(e.target.value as DocumentType)}
-                  className="w-full h-10 rounded-md border border-slate-800 bg-slate-950 px-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full h-11 rounded-xl border border-slate-800 bg-slate-950 px-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="realization">Накладная реализации</option>
                   <option value="purchase">Акт выполненных работ</option>
@@ -275,7 +275,7 @@ export default function NewB2BDocumentPage() {
                   onChange={(e) => setDocNumber(e.target.value)}
                   placeholder="Например: № ТН-4501"
                   required
-                  className="bg-slate-950 border-slate-800 text-slate-100 font-mono"
+                  className="bg-slate-950 border-slate-800 text-slate-100 font-mono min-h-[44px]"
                 />
               </div>
 
@@ -289,7 +289,7 @@ export default function NewB2BDocumentPage() {
                   value={docDate}
                   onChange={(e) => setDocDate(e.target.value)}
                   required
-                  className="bg-slate-950 border-slate-800 text-slate-100 font-mono"
+                  className="bg-slate-950 border-slate-800 text-slate-100 font-mono min-h-[44px]"
                 />
               </div>
             </div>
@@ -305,7 +305,7 @@ export default function NewB2BDocumentPage() {
                   type="button"
                   variant="outline"
                   onClick={() => setShowArchiveSelectModal(true)}
-                  className="border-slate-800 text-purple-400 hover:bg-purple-500/10 text-xs"
+                  className="border-slate-800 text-purple-400 hover:bg-purple-500/10 text-xs min-h-[44px]"
                 >
                   <FolderOpen className="h-4 w-4 mr-1.5" />
                   Выбрать из Личного Архива / Учредительных
@@ -329,7 +329,7 @@ export default function NewB2BDocumentPage() {
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
                 placeholder="Сообщение или инструкции бухгалтерской службе..."
-                className="bg-slate-950 border-slate-800 text-slate-100"
+                className="bg-slate-950 border-slate-800 text-slate-100 min-h-[44px]"
               />
             </div>
           </CardContent>
@@ -338,7 +338,7 @@ export default function NewB2BDocumentPage() {
             <Button
               type="submit"
               disabled={isPending || loading || partners.length === 0}
-              className="w-full md:w-auto bg-blue-600 hover:bg-blue-500 text-white font-medium shadow-lg shadow-blue-600/20 px-8"
+              className="w-full md:w-auto bg-blue-600 hover:bg-blue-500 text-white font-medium shadow-lg shadow-blue-600/20 px-8 min-h-[48px]"
             >
               {isPending ? (
                 <>
@@ -390,7 +390,7 @@ export default function NewB2BDocumentPage() {
                   placeholder="Поиск по наименованию скана..."
                   value={archiveSearchTerm}
                   onChange={(e) => setArchiveSearchTerm(e.target.value)}
-                  className="pl-9 bg-slate-950 border-slate-800 text-slate-100 text-xs md:text-sm"
+                  className="pl-9 bg-slate-950 border-slate-800 text-slate-100 text-xs md:text-sm min-h-[44px]"
                 />
               </div>
             </div>
@@ -426,7 +426,7 @@ export default function NewB2BDocumentPage() {
                         size="sm"
                         disabled={isSelected}
                         variant={isSelected ? 'outline' : 'default'}
-                        className={`text-xs ${
+                        className={`text-xs min-h-[40px] ${
                           isSelected ? 'border-slate-800 text-slate-500' : 'bg-purple-600 hover:bg-purple-500 text-white'
                         }`}
                       >

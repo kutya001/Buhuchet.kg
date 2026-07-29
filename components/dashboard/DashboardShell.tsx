@@ -12,8 +12,6 @@ import {
   Shield,
   Users,
   FolderOpen,
-  Globe,
-  UserCheck,
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
@@ -67,7 +65,7 @@ export function DashboardShell({
             )}
           </div>
 
-          {/* Пункты навигации */}
+          {/* Единые лаконичные пункты навигации */}
           <nav className="space-y-1">
             <Link
               href="/dashboard"
@@ -98,6 +96,20 @@ export function DashboardShell({
             </Link>
 
             <Link
+              href="/dashboard/counterparties"
+              prefetch={true}
+              className={`flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                isActive('/dashboard/counterparties')
+                  ? 'bg-amber-600/20 text-amber-400 border border-amber-500/30 font-bold'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+              }`}
+              title="Контрагенты"
+            >
+              <Users className="h-4 w-4 text-amber-400 flex-shrink-0" />
+              {!isCollapsed && <span className="truncate">Контрагенты</span>}
+            </Link>
+
+            <Link
               href="/dashboard/files"
               prefetch={true}
               className={`flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
@@ -109,48 +121,6 @@ export function DashboardShell({
             >
               <FolderOpen className="h-4 w-4 text-emerald-400 flex-shrink-0" />
               {!isCollapsed && <span className="truncate">Реестр Файлов R2</span>}
-            </Link>
-
-            <Link
-              href="/dashboard/companies-catalog"
-              prefetch={true}
-              className={`flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                isActive('/dashboard/companies-catalog')
-                  ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 font-bold'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
-              }`}
-              title="Каталог Компаний"
-            >
-              <Globe className="h-4 w-4 text-indigo-400 flex-shrink-0" />
-              {!isCollapsed && <span className="truncate">Каталог Компаний</span>}
-            </Link>
-
-            <Link
-              href="/dashboard/partnerships"
-              prefetch={true}
-              className={`flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                isActive('/dashboard/partnerships')
-                  ? 'bg-purple-600/20 text-purple-400 border border-purple-500/30 font-bold'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
-              }`}
-              title="Заявки на Партнерство"
-            >
-              <UserCheck className="h-4 w-4 text-purple-400 flex-shrink-0" />
-              {!isCollapsed && <span className="truncate">Заявки Сети</span>}
-            </Link>
-
-            <Link
-              href="/dashboard/counterparties"
-              prefetch={true}
-              className={`flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                isActive('/dashboard/counterparties')
-                  ? 'bg-amber-600/20 text-amber-400 border border-amber-500/30 font-bold'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
-              }`}
-              title="Мои Контрагенты"
-            >
-              <Users className="h-4 w-4 text-amber-400 flex-shrink-0" />
-              {!isCollapsed && <span className="truncate">Мои Контрагенты</span>}
             </Link>
 
             <Link
