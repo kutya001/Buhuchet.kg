@@ -40,6 +40,10 @@ import {
   Database,
   BookOpen,
   Plus,
+  Check,
+  Ban,
+  HelpCircle,
+  Clock,
 } from 'lucide-react';
 import {
   getPendingCompaniesAction,
@@ -76,6 +80,9 @@ export default function SuperAdminPage() {
     'companies' | 'users' | 'files' | 'documents' | 'lookups' | 'database'
   >('companies');
 
+  // Фильтр внутри модуля Организации: 'all' | 'pending' | 'problematic'
+  const [companySubTab, setCompanySubTab] = useState<'all' | 'pending' | 'problematic'>('all');
+
   const [pendingCompanies, setPendingCompanies] = useState<Company[]>([]);
   const [allCompanies, setAllCompanies] = useState<Company[]>([]);
   const [allUsers, setAllUsers] = useState<any[]>([]);
@@ -90,7 +97,7 @@ export default function SuperAdminPage() {
   // Состояние пагинации
   const [currentPage, setCurrentPage] = useState(1);
 
-  // 1. Модалки Организаций
+  // 1. Модалки МОДЕРАЦИИ И ОРГАНИЗАЦИЙ
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
   const [moderationComment, setModerationComment] = useState('');
   const [modalMode, setModalMode] = useState<'request_changes' | 'block' | null>(null);
@@ -116,27 +123,19 @@ export default function SuperAdminPage() {
   const [userCompId, setUserCompId] = useState<string>('');
   const [userIsSuperAdmin, setUserIsSuperAdmin] = useState(false);
 
-  // 3. Модалки Файлов R2
-  const [editingFile, setEditingFile] = useState<any | null>(null);
-  const [editName, setEditName] = useState('');
-  const [editCatId, setEditCatId] = useState('');
-  const [editDesc, setEditDesc] = useState('');
-  const [replacingFile, setReplacingFile] = useState<File | null>(null);
-  const [replaceUploading, setReplaceUploading] = useState(false);
-
-  // 4. Модалки Документов
+  // 3. Модалки Документов
   const [editingDoc, setEditingDoc] = useState<any | null>(null);
   const [editDocNumber, setEditDocNumber] = useState('');
   const [editDocStatus, setEditDocStatus] = useState<any>('sent');
   const [editDocComment, setEditDocComment] = useState('');
 
-  // 5. Модалки Справочников Категорий
+  // 4. Модалки Справочников Категорий
   const [showCreateCatModal, setShowCreateCatModal] = useState(false);
   const [newCatName, setNewCatName] = useState('');
   const [newCatCode, setNewCatCode] = useState('');
   const [newCatDesc, setNewCatDesc] = useState('');
 
-  // 6. МОДУЛЬ БАЗЫ ДАННЫХ (READ-ONLY)
+  // 5. МОДУЛЬ БАЗЫ ДАННЫХ (READ-ONLY)
   const [selectedDbTable, setSelectedDbTable] = useState<string>('companies');
   const [dbData, setDbData] = useState<{ columns: string[]; rows: any[] }>({ columns: [], rows: [] });
   const [dbLoading, setDbLoading] = useState(false);
@@ -189,9 +188,9 @@ export default function SuperAdminPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, activeTab]);
+  }, [search, activeTab, companySubTab]);
 
-  // ДЕЙСТВИЯ: ОРГАНИЗАЦИИ
+  // ДЕЙСТВИЯ МОДЕРАЦИИ ОРГАНИЗАЦИЙ
   const handleApprove = (comp: Company) => {
     setMsg(null);
     startTransition(async () => {
@@ -201,6 +200,40 @@ export default function SuperAdminPage() {
         await loadData();
       } else {
         setMsg({ type: 'error', text: res.error || 'Ошибка верификации' });
+      }
+    });
+  };
+
+  const handleConfirmModerationAction = () => {
+    if (!selectedCompany || !modalMode) return;
+    if (!moderationComment.trim()) {
+      alert('Укажите причину для компании!');
+      return;
+    }
+
+    setMsg(null);
+    startTransition(async () => {
+      let res;
+      if (modalMode === 'request_changes') {
+        res = await requestCompanyChangesAction(selectedCompany.id, moderationComment);
+      } else {
+        res = await blockCompanyAction(selectedCompany.id, moderationComment);
+      }
+
+      if (res.success) {
+        setMsg({
+          type: 'success',
+          text:
+            modalMode === 'request_changes'
+              ? `Отправлен запрос исправлений для "${selectedCompany.name}"`
+              : `Организация "${selectedCompany.name}" заблокирована`,
+        });
+        setSelectedCompany(null);
+        setModalMode(null);
+        setModerationComment('');
+        await loadData();
+      } else {
+        setMsg({ type: 'error', text: res.error || 'Ошибка модерации' });
       }
     });
   };
@@ -368,11 +401,23 @@ export default function SuperAdminPage() {
     }
   };
 
-  // Фильтрация
+  // Фильтрация организаций с учетом под-вкладки 'all' | 'pending' | 'problematic'
   const filteredCompanies = useMemo(() => {
     const term = search.toLowerCase();
-    return allCompanies.filter((c) => c.name.toLowerCase().includes(term) || c.inn.includes(term));
-  }, [allCompanies, search]);
+    return allCompanies.filter((c) => {
+      const matchesSearch = c.name.toLowerCase().includes(term) || c.inn.includes(term);
+      if (!matchesSearch) return false;
+
+      if (companySubTab === 'pending') {
+        return c.status === 'pending_approval';
+      }
+      if (companySubTab === 'problematic') {
+        return c.status === 'requires_changes' || c.status === 'blocked';
+      }
+
+      return true;
+    });
+  }, [allCompanies, search, companySubTab]);
 
   const filteredUsers = useMemo(() => {
     const term = search.toLowerCase();
@@ -429,10 +474,10 @@ export default function SuperAdminPage() {
         <div>
           <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-white tracking-tight flex items-center">
             <Shield className="h-5 w-5 sm:h-6 sm:w-6 mr-2 text-amber-400 flex-shrink-0" />
-            Панель Суперадмина
+            Панель Суперадминистратора
           </h2>
           <p className="text-xs sm:text-sm text-slate-400 mt-0.5">
-            Кроссплатформенный доступ над всеми 6 модулями системы
+            Глобальный контроль, модерация заявок и CRUD над всеми модулями
           </p>
         </div>
       </div>
@@ -463,6 +508,11 @@ export default function SuperAdminPage() {
         >
           <Building2 className="h-4 w-4" />
           <span>Организации ({allCompanies.length})</span>
+          {pendingCompanies.length > 0 && (
+            <span className="bg-amber-500 text-slate-950 text-[10px] font-extrabold px-1.5 py-0.5 rounded-full animate-pulse ml-1">
+              {pendingCompanies.length}
+            </span>
+          )}
         </button>
 
         <button
@@ -526,9 +576,51 @@ export default function SuperAdminPage() {
         </button>
       </div>
 
-      {/* ------------------- МОДУЛЬ 1: ОРГАНИЗАЦИИ ------------------- */}
+      {/* ------------------- МОДУЛЬ 1: ОРГАНИЗАЦИИ И МОДЕРАЦИЯ ------------------- */}
       {activeTab === 'companies' && (
         <div className="space-y-4">
+          {/* ФИЛЬТР ПОД-ВКЛАДОК МОДЕРАЦИИ */}
+          <div className="flex items-center space-x-2 bg-slate-900/60 p-1.5 rounded-xl border border-slate-800 overflow-x-auto">
+            <button
+              onClick={() => setCompanySubTab('all')}
+              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all min-h-[38px] ${
+                companySubTab === 'all'
+                  ? 'bg-blue-600 text-white font-bold shadow'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Building2 className="h-3.5 w-3.5" />
+              <span>Все ({allCompanies.length})</span>
+            </button>
+
+            <button
+              onClick={() => setCompanySubTab('pending')}
+              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all min-h-[38px] ${
+                companySubTab === 'pending'
+                  ? 'bg-amber-500 text-slate-950 font-bold shadow'
+                  : 'text-amber-400 hover:bg-amber-500/10'
+              }`}
+            >
+              <Clock className="h-3.5 w-3.5" />
+              <span>На Модерации ({pendingCompanies.length})</span>
+              {pendingCompanies.length > 0 && (
+                <span className="w-2 h-2 rounded-full bg-amber-300 animate-ping ml-1" />
+              )}
+            </button>
+
+            <button
+              onClick={() => setCompanySubTab('problematic')}
+              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all min-h-[38px] ${
+                companySubTab === 'problematic'
+                  ? 'bg-red-600 text-white font-bold shadow'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <AlertTriangle className="h-3.5 w-3.5 text-red-400" />
+              <span>Замечания / Блок</span>
+            </button>
+          </div>
+
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <Input
               value={search}
@@ -546,63 +638,122 @@ export default function SuperAdminPage() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {paginatedCompanies.map((comp) => (
-              <Card key={comp.id} className="bg-slate-900/60 border-slate-800 p-4 space-y-3 flex flex-col justify-between">
-                <div className="space-y-2">
-                  <div className="flex justify-between items-start">
-                    <div className="min-w-0 flex-1">
-                      <h4 className="font-bold text-white text-sm truncate">{comp.name}</h4>
-                      <p className="text-xs font-mono text-amber-400 mt-0.5">ИНН: {comp.inn}</p>
+            {paginatedCompanies.length === 0 ? (
+              <div className="col-span-full p-12 text-center text-slate-500 text-xs bg-slate-900/40 rounded-2xl border border-slate-800">
+                {companySubTab === 'pending'
+                  ? 'Новые заявки на модерацию отсутствуют'
+                  : 'Организации не найдены'}
+              </div>
+            ) : (
+              paginatedCompanies.map((comp) => (
+                <Card key={comp.id} className="bg-slate-900/60 border-slate-800 p-4 space-y-3 flex flex-col justify-between shadow-xl">
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-start">
+                      <div className="min-w-0 flex-1">
+                        <h4 className="font-bold text-white text-sm truncate">{comp.name}</h4>
+                        <p className="text-xs font-mono text-amber-400 mt-0.5">ИНН: {comp.inn}</p>
+                      </div>
+                      <Badge
+                        variant={
+                          comp.status === 'active'
+                            ? 'success'
+                            : comp.status === 'blocked'
+                            ? 'destructive'
+                            : 'secondary'
+                        }
+                        className="text-[10px] ml-2 flex-shrink-0"
+                      >
+                        {comp.status === 'pending_approval'
+                          ? 'Ожидает модерации'
+                          : comp.status === 'requires_changes'
+                          ? 'Требует изменений'
+                          : comp.status === 'active'
+                          ? 'Активна'
+                          : 'Заблокирована'}
+                      </Badge>
                     </div>
-                    <Badge
-                      variant={
-                        comp.status === 'active'
-                          ? 'success'
-                          : comp.status === 'blocked'
-                          ? 'destructive'
-                          : 'outline'
-                      }
-                      className="text-[10px] ml-2 flex-shrink-0"
-                    >
-                      {comp.status}
-                    </Badge>
-                  </div>
-                  <p className="text-xs text-slate-400">Директор: {comp.director_name || '—'}</p>
-                </div>
 
-                <div className="pt-2 border-t border-slate-800 flex items-center justify-between gap-2">
-                  {comp.status === 'pending_approval' && (
+                    <div className="text-xs space-y-1 text-slate-400">
+                      <p>Руководитель: <span className="text-slate-200">{comp.director_name || '—'}</span></p>
+                      <p>Отрасль: <span className="text-slate-200">{comp.industry || '—'}</span></p>
+                      {comp.moderation_comment && (
+                        <div className="p-2 rounded bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-400 mt-1">
+                          Замечание: {comp.moderation_comment}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* КНОПКИ ДЕЙСТВИЙ И МОДЕРАЦИИ */}
+                  <div className="pt-2 border-t border-slate-800 flex flex-col gap-2">
+                    {(comp.status === 'pending_approval' || comp.status === 'requires_changes' || comp.status === 'blocked') && (
+                      <div className="grid grid-cols-3 gap-1.5">
+                        <Button
+                          size="sm"
+                          onClick={() => handleApprove(comp)}
+                          disabled={isPending}
+                          className="bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] min-h-[40px] px-1 font-bold"
+                          title="Одобрить организацию"
+                        >
+                          <Check className="h-3.5 w-3.5 mr-1" />
+                          Одобрить
+                        </Button>
+
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setSelectedCompany(comp);
+                            setModalMode('request_changes');
+                            setModerationComment(comp.moderation_comment || '');
+                          }}
+                          disabled={isPending}
+                          className="border-amber-500/40 text-amber-400 hover:bg-amber-500/10 text-[11px] min-h-[40px] px-1 font-semibold"
+                          title="Отправить замечание"
+                        >
+                          <HelpCircle className="h-3.5 w-3.5 mr-1" />
+                          Замечание
+                        </Button>
+
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setSelectedCompany(comp);
+                            setModalMode('block');
+                            setModerationComment(comp.moderation_comment || '');
+                          }}
+                          disabled={isPending}
+                          className="border-red-500/40 text-red-400 hover:bg-red-500/10 text-[11px] min-h-[40px] px-1 font-semibold"
+                          title="Заблокировать компанию"
+                        >
+                          <Ban className="h-3.5 w-3.5 mr-1" />
+                          Блок
+                        </Button>
+                      </div>
+                    )}
+
                     <Button
                       size="sm"
-                      onClick={() => handleApprove(comp)}
-                      disabled={isPending}
-                      className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs min-h-[48px] font-bold"
+                      variant="outline"
+                      onClick={() => {
+                        setEditingCompany(comp);
+                        setCompName(comp.name);
+                        setCompInn(comp.inn);
+                        setCompIndustry(comp.industry || 'Услуги');
+                        setCompStatus(comp.status);
+                        setCompAddress(comp.legal_address || '');
+                        setCompDirector(comp.director_name || '');
+                      }}
+                      className="w-full border-slate-800 text-xs text-blue-400 hover:bg-blue-500/10 min-h-[44px] font-semibold"
                     >
-                      <CheckCircle2 className="h-4 w-4 mr-1" />
-                      Одобрить
+                      <Edit2 className="h-4 w-4 mr-1" />
+                      Редактировать реквизиты
                     </Button>
-                  )}
-
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      setEditingCompany(comp);
-                      setCompName(comp.name);
-                      setCompInn(comp.inn);
-                      setCompIndustry(comp.industry || 'Услуги');
-                      setCompStatus(comp.status);
-                      setCompAddress(comp.legal_address || '');
-                      setCompDirector(comp.director_name || '');
-                    }}
-                    className="flex-1 border-slate-800 text-xs text-blue-400 hover:bg-blue-500/10 min-h-[48px] font-semibold"
-                  >
-                    <Edit2 className="h-4 w-4 mr-1" />
-                    Редактировать
-                  </Button>
-                </div>
-              </Card>
-            ))}
+                  </div>
+                </Card>
+              ))
+            )}
           </div>
 
           {totalPagesCompanies > 1 && (
@@ -806,7 +957,7 @@ export default function SuperAdminPage() {
         </div>
       )}
 
-      {/* ------------------- МОДУЛЬ 4: ВСЕ B2B ДОКУМЕНТЫ (АДАПТИВНЫЙ РЕЖИМ) ------------------- */}
+      {/* ------------------- МОДУЛЬ 4: ВСЕ B2B ДОКУМЕНТЫ ------------------- */}
       {activeTab === 'documents' && (
         <div className="space-y-4">
           <Input
@@ -816,7 +967,6 @@ export default function SuperAdminPage() {
             className="bg-slate-900 border-slate-800 text-white text-xs sm:text-sm min-h-[48px]"
           />
 
-          {/* 1. Мобильные карточки на смартфонах (< md) */}
           <div className="block md:hidden space-y-3">
             {paginatedDocs.map((doc) => (
               <Card key={doc.id} className="bg-slate-900/60 border-slate-800 p-4 space-y-3">
@@ -864,7 +1014,6 @@ export default function SuperAdminPage() {
             ))}
           </div>
 
-          {/* 2. ПК Таблица на компьютерах (>= md) */}
           <Card className="hidden md:block bg-slate-900/40 border-slate-800 overflow-hidden">
             <CardContent className="p-0">
               <Table>
@@ -1070,7 +1219,70 @@ export default function SuperAdminPage() {
         </div>
       )}
 
-      {/* МОДАЛКА СОЗДАНИЯ КОМПАНИИ (MOBILE BOTTOM SHEET) */}
+      {/* МОДАЛЬНОЕ ОКНО МОДЕРАЦИИ (ЗАМЕЧАНИЕ / БЛОКИРОВКА) */}
+      {selectedCompany && modalMode && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <Card className="w-full sm:max-w-md bg-slate-900 border-t sm:border border-slate-800 rounded-t-3xl sm:rounded-2xl p-5 space-y-4">
+            <div className="w-12 h-1 bg-slate-700 rounded-full mx-auto mb-1 sm:hidden opacity-80" />
+            <h3 className="text-base sm:text-lg font-bold text-white flex items-center">
+              {modalMode === 'request_changes' ? (
+                <>
+                  <HelpCircle className="h-5 w-5 mr-2 text-amber-400" />
+                  Запрос изменений организации
+                </>
+              ) : (
+                <>
+                  <Ban className="h-5 w-5 mr-2 text-red-400" />
+                  Блокировка организации
+                </>
+              )}
+            </h3>
+
+            <div className="space-y-2">
+              <Label className="text-xs text-slate-300 font-semibold">
+                Укажите причину для компании "{selectedCompany.name}":
+              </Label>
+              <textarea
+                value={moderationComment}
+                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setModerationComment(e.target.value)}
+                placeholder={
+                  modalMode === 'request_changes'
+                    ? 'Укажите некорректные данные или документы...'
+                    : 'Причина блокировки компании...'
+                }
+                className="w-full h-24 rounded-xl border border-slate-800 bg-slate-950 p-3 text-xs text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500 resize-none"
+              />
+            </div>
+
+            <div className="flex justify-end space-x-2 pt-2 border-t border-slate-800">
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setSelectedCompany(null);
+                  setModalMode(null);
+                }}
+                className="min-h-[48px]"
+              >
+                Отмена
+              </Button>
+
+              <Button
+                onClick={handleConfirmModerationAction}
+                disabled={isPending}
+                className={
+                  modalMode === 'request_changes'
+                    ? 'bg-amber-600 hover:bg-amber-500 text-white font-bold min-h-[48px] px-6'
+                    : 'bg-red-600 hover:bg-red-500 text-white font-bold min-h-[48px] px-6'
+                }
+              >
+                {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Подтвердить'}
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* МОДАЛКА СОЗДАНИЯ КОМПАНИИ */}
       {showCreateCompanyModal && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
           <Card className="w-full sm:max-w-md bg-slate-900 border-t sm:border border-slate-800 rounded-t-3xl sm:rounded-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
@@ -1098,7 +1310,7 @@ export default function SuperAdminPage() {
         </div>
       )}
 
-      {/* МОДАЛКА РЕДАКТИРОВАНИЯ ОРГАНИЗАЦИИ (MOBILE BOTTOM SHEET) */}
+      {/* МОДАЛКА РЕДАКТИРОВАНИЯ ОРГАНИЗАЦИИ */}
       {editingCompany && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
           <Card className="w-full sm:max-w-xl bg-slate-900 border-t sm:border border-slate-800 rounded-t-3xl sm:rounded-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
@@ -1138,7 +1350,7 @@ export default function SuperAdminPage() {
         </div>
       )}
 
-      {/* МОДАЛКА РЕДАКТИРОВАНИЯ ПОЛЬЗОВАТЕЛЯ (MOBILE BOTTOM SHEET) */}
+      {/* МОДАЛКА РЕДАКТИРОВАНИЯ ПОЛЬЗОВАТЕЛЯ */}
       {editingUser && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
           <Card className="w-full sm:max-w-lg bg-slate-900 border-t sm:border border-slate-800 rounded-t-3xl sm:rounded-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
@@ -1177,7 +1389,7 @@ export default function SuperAdminPage() {
         </div>
       )}
 
-      {/* МОДАЛКА РЕДАКТИРОВАНИЯ B2B ДОКУМЕНТА (MOBILE BOTTOM SHEET) */}
+      {/* МОДАЛКА РЕДАКТИРОВАНИЯ B2B ДОКУМЕНТА */}
       {editingDoc && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
           <Card className="w-full sm:max-w-md bg-slate-900 border-t sm:border border-slate-800 rounded-t-3xl sm:rounded-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
@@ -1207,7 +1419,7 @@ export default function SuperAdminPage() {
         </div>
       )}
 
-      {/* МОДАЛКА СОЗДАНИЯ КАТЕГОРИИ (MOBILE BOTTOM SHEET) */}
+      {/* МОДАЛКА СОЗДАНИЯ КАТЕГОРИИ */}
       {showCreateCatModal && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
           <Card className="w-full sm:max-w-md bg-slate-900 border-t sm:border border-slate-800 rounded-t-3xl sm:rounded-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
