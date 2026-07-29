@@ -16,7 +16,7 @@ import {
 import Link from 'next/link';
 import { signOutAction } from '../(auth)/actions';
 import { Button } from '@/components/ui/button';
-import { MobileFAB } from '@/components/ui/MobileFAB';
+import { MobileBottomNav } from '@/components/ui/MobileBottomNav';
 
 export default async function DashboardLayout({
   children,
@@ -33,7 +33,7 @@ export default async function DashboardLayout({
     redirect('/login');
   }
 
-  // Параллельное кешированное получение профиля компании
+  // Параллельное получение профиля и компании
   const { data: profile } = await supabase
     .from('users')
     .select('*, companies(*)')
@@ -162,7 +162,7 @@ export default async function DashboardLayout({
         </div>
       </aside>
 
-      {/* 2. MOBILE HEADER & BOTTOM NAV BAR */}
+      {/* 2. MAIN CONTENT AREA */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden pb-20 md:pb-0">
         <header className="h-16 border-b border-slate-800/80 bg-slate-900/40 px-4 md:px-6 flex items-center justify-between backdrop-blur-xl sticky top-0 z-30">
           <div className="flex items-center space-x-3">
@@ -192,54 +192,12 @@ export default async function DashboardLayout({
         </main>
       </div>
 
-      <MobileFAB />
-
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-slate-900/95 border-t border-slate-800/80 backdrop-blur-xl z-40 flex items-center justify-around px-2">
-        <Link
-          href="/dashboard"
-          prefetch={true}
-          className="flex flex-col items-center justify-center w-full h-full text-slate-400 hover:text-blue-400 transition-colors"
-        >
-          <LayoutDashboard className="h-5 w-5" />
-          <span className="text-[10px] font-medium mt-1">Главная</span>
-        </Link>
-
-        <Link
-          href="/dashboard/documents"
-          prefetch={true}
-          className="flex flex-col items-center justify-center w-full h-full text-slate-400 hover:text-sky-400 transition-colors"
-        >
-          <FileText className="h-5 w-5" />
-          <span className="text-[10px] font-medium mt-1">Документы</span>
-        </Link>
-
-        <Link
-          href="/dashboard/files"
-          prefetch={true}
-          className="flex flex-col items-center justify-center w-full h-full text-slate-400 hover:text-emerald-400 transition-colors"
-        >
-          <FolderOpen className="h-5 w-5" />
-          <span className="text-[10px] font-medium mt-1">Файлы R2</span>
-        </Link>
-
-        <Link
-          href="/dashboard/companies-catalog"
-          prefetch={true}
-          className="flex flex-col items-center justify-center w-full h-full text-slate-400 hover:text-indigo-400 transition-colors"
-        >
-          <Globe className="h-5 w-5" />
-          <span className="text-[10px] font-medium mt-1">Каталог</span>
-        </Link>
-
-        <Link
-          href="/dashboard/partnerships"
-          prefetch={true}
-          className="flex flex-col items-center justify-center w-full h-full text-slate-400 hover:text-purple-400 transition-colors"
-        >
-          <UserCheck className="h-5 w-5" />
-          <span className="text-[10px] font-medium mt-1">Заявки</span>
-        </Link>
-      </nav>
+      {/* 3. ОБНОВЛЕННЫЙ НА ТРЕБОВАНИЕ МОБИЛЬНЫЙ BOTTOM NAV */}
+      <MobileBottomNav
+        isSuperAdmin={!!profile?.is_super_admin}
+        userEmail={user.email}
+        companyName={company?.name}
+      />
     </div>
   );
 }

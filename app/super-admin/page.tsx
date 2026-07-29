@@ -373,15 +373,15 @@ export default function SuperAdminPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="space-y-4 sm:space-y-6 max-w-full overflow-x-hidden">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <div>
-          <h2 className="text-xl md:text-2xl font-bold text-white tracking-tight flex items-center">
-            <Shield className="h-6 w-6 mr-2 text-amber-400" />
+          <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-white tracking-tight flex items-center">
+            <Shield className="h-5 w-5 sm:h-6 sm:w-6 mr-2 text-amber-400 flex-shrink-0" />
             Панель Суперадмина
           </h2>
-          <p className="text-xs md:text-sm text-slate-400 mt-0.5">
-            Верификация организаций Кыргызстана, управление пользователями и R2 файлами
+          <p className="text-xs sm:text-sm text-slate-400 mt-0.5">
+            Контроль организаций, пользователей и R2 сканов КР
           </p>
         </div>
       </div>
@@ -400,13 +400,13 @@ export default function SuperAdminPage() {
         </Alert>
       )}
 
-      {/* Вкладки Суперадмина */}
-      <div className="flex items-center space-x-2 border-b border-slate-800 pb-2 overflow-x-auto">
+      {/* Вкладки Суперадмина: Нативный Мобильный Скроллбар */}
+      <div className="flex items-center space-x-2 border-b border-slate-800 pb-2 overflow-x-auto no-scrollbar scrollbar-none -mx-4 px-4 sm:mx-0 sm:px-0">
         <button
           onClick={() => setActiveTab('moderation')}
-          className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs md:text-sm font-medium transition-all whitespace-nowrap min-h-[48px] ${
+          className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-medium transition-all whitespace-nowrap min-h-[48px] ${
             activeTab === 'moderation'
-              ? 'bg-amber-600/20 text-amber-400 border border-amber-500/30'
+              ? 'bg-amber-600/20 text-amber-400 border border-amber-500/30 font-bold'
               : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
           }`}
         >
@@ -416,9 +416,9 @@ export default function SuperAdminPage() {
 
         <button
           onClick={() => setActiveTab('all_companies')}
-          className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs md:text-sm font-medium transition-all whitespace-nowrap min-h-[48px] ${
+          className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-medium transition-all whitespace-nowrap min-h-[48px] ${
             activeTab === 'all_companies'
-              ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
+              ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30 font-bold'
               : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
           }`}
         >
@@ -428,21 +428,21 @@ export default function SuperAdminPage() {
 
         <button
           onClick={() => setActiveTab('all_users')}
-          className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs md:text-sm font-medium transition-all whitespace-nowrap min-h-[48px] ${
+          className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-medium transition-all whitespace-nowrap min-h-[48px] ${
             activeTab === 'all_users'
-              ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30'
+              ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 font-bold'
               : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
           }`}
         >
           <Users className="h-4 w-4" />
-          <span>Пользователи Системы ({allUsers.length})</span>
+          <span>Пользователи ({allUsers.length})</span>
         </button>
 
         <button
           onClick={() => setActiveTab('all_files')}
-          className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs md:text-sm font-medium transition-all whitespace-nowrap min-h-[48px] ${
+          className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-medium transition-all whitespace-nowrap min-h-[48px] ${
             activeTab === 'all_files'
-              ? 'bg-purple-600/20 text-purple-400 border border-purple-500/30'
+              ? 'bg-purple-600/20 text-purple-400 border border-purple-500/30 font-bold'
               : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
           }`}
         >
@@ -453,31 +453,32 @@ export default function SuperAdminPage() {
 
       {/* 1. На Модерации */}
       {activeTab === 'moderation' && (
-        <div className="space-y-4">
+        <div className="space-y-3">
           {pendingCompanies.length === 0 ? (
-            <div className="p-8 text-center text-slate-500 text-xs bg-slate-900/40 rounded-xl border border-slate-800">
+            <div className="p-8 text-center text-slate-500 text-xs bg-slate-900/40 rounded-2xl border border-slate-800">
               Нет заявок на модерацию
             </div>
           ) : (
             pendingCompanies.map((comp) => (
               <Card key={comp.id} className="bg-slate-900/60 border-slate-800 p-4 space-y-3">
-                <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
+                <div className="flex flex-col gap-3">
                   <div>
-                    <h3 className="font-bold text-white text-base">{comp.name}</h3>
-                    <p className="text-xs font-mono text-amber-400">ИНН: {comp.inn}</p>
-                    <p className="text-xs text-slate-400">Руководитель: {comp.director_name || '—'}</p>
+                    <h3 className="font-bold text-white text-base leading-tight">{comp.name}</h3>
+                    <p className="text-xs font-mono text-amber-400 mt-1">ИНН: {comp.inn}</p>
+                    <p className="text-xs text-slate-400 mt-0.5">Руководитель: {comp.director_name || '—'}</p>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-1 border-t border-slate-800/80">
                     <Button
                       size="sm"
                       onClick={() => handleApprove(comp)}
                       disabled={isPending}
-                      className="bg-emerald-600 hover:bg-emerald-500 text-white min-h-[48px] px-4 rounded-xl"
+                      className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold min-h-[48px] w-full sm:w-auto"
                     >
                       <CheckCircle2 className="h-4 w-4 mr-1.5" />
                       Подтвердить
                     </Button>
+
                     <Button
                       size="sm"
                       variant="outline"
@@ -486,11 +487,12 @@ export default function SuperAdminPage() {
                         setModalMode('request_changes');
                       }}
                       disabled={isPending}
-                      className="border-amber-500/30 text-amber-400 hover:bg-amber-500/10 min-h-[48px] px-4 rounded-xl"
+                      className="border-amber-500/30 text-amber-400 hover:bg-amber-500/10 font-semibold min-h-[48px] w-full sm:w-auto"
                     >
                       <AlertTriangle className="h-4 w-4 mr-1.5" />
                       Замечания
                     </Button>
+
                     <Button
                       size="sm"
                       variant="destructive"
@@ -499,7 +501,7 @@ export default function SuperAdminPage() {
                         setModalMode('block');
                       }}
                       disabled={isPending}
-                      className="min-h-[48px] px-4 rounded-xl"
+                      className="font-semibold min-h-[48px] w-full sm:w-auto"
                     >
                       <XCircle className="h-4 w-4 mr-1.5" />
                       Заблокировать
@@ -514,8 +516,8 @@ export default function SuperAdminPage() {
 
       {/* 2. Все Организации */}
       {activeTab === 'all_companies' && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {allCompanies.map((comp) => (
               <Card key={comp.id} className="bg-slate-900/60 border-slate-800 p-4 space-y-3 flex flex-col justify-between">
                 <div className="space-y-2">
@@ -532,7 +534,7 @@ export default function SuperAdminPage() {
                           ? 'destructive'
                           : 'outline'
                       }
-                      className="text-[10px]"
+                      className="text-[10px] ml-2 flex-shrink-0"
                     >
                       {comp.status}
                     </Badge>
@@ -541,15 +543,15 @@ export default function SuperAdminPage() {
                   <p className="text-xs text-slate-500 truncate">Адрес: {comp.legal_address || comp.address || '—'}</p>
                 </div>
 
-                <div className="pt-2 border-t border-slate-800 flex justify-end space-x-2">
+                <div className="pt-2 border-t border-slate-800 flex justify-end">
                   <Button
                     size="sm"
                     variant="outline"
                     onClick={() => handleOpenEditCompany(comp)}
-                    className="h-9 text-xs border-slate-800 text-blue-400 hover:bg-blue-500/10 min-h-[44px]"
+                    className="w-full sm:w-auto text-xs border-slate-800 text-blue-400 hover:bg-blue-500/10 min-h-[48px]"
                   >
-                    <Edit2 className="h-3.5 w-3.5 mr-1" />
-                    Редактировать
+                    <Edit2 className="h-4 w-4 mr-1.5" />
+                    Редактировать реквизиты
                   </Button>
                 </div>
               </Card>
@@ -560,18 +562,18 @@ export default function SuperAdminPage() {
 
       {/* 3. Пользователи Системы */}
       {activeTab === 'all_users' && (
-        <div className="space-y-4">
+        <div className="space-y-3">
           <div className="relative">
             <Search className="absolute left-3.5 top-3.5 h-4 w-4 text-slate-500" />
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Поиск пользователя по имени, e-mail или названию компании..."
-              className="pl-10 bg-slate-950 border-slate-800 text-white min-h-[48px] rounded-xl"
+              placeholder="Поиск по имени, e-mail или названию компании..."
+              className="pl-10 bg-slate-950 border-slate-800 text-white min-h-[48px] rounded-xl text-xs sm:text-sm"
             />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {filteredUsers.map((usr) => (
               <Card key={usr.id} className="bg-slate-900/60 border-slate-800 p-4 space-y-3 flex flex-col justify-between">
                 <div className="space-y-2">
@@ -581,7 +583,7 @@ export default function SuperAdminPage() {
                       <p className="text-xs font-mono text-slate-400 truncate">{usr.email}</p>
                     </div>
                     {usr.is_super_admin && (
-                      <Badge variant="outline" className="text-[10px] border-amber-500/30 text-amber-400 bg-amber-500/10">
+                      <Badge variant="outline" className="text-[10px] border-amber-500/30 text-amber-400 bg-amber-500/10 ml-2 flex-shrink-0">
                         Суперадмин
                       </Badge>
                     )}
@@ -597,12 +599,12 @@ export default function SuperAdminPage() {
                   </div>
                 </div>
 
-                <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
+                <div className="pt-2 border-t border-slate-800 flex items-center justify-between gap-2">
                   <Button
                     size="sm"
                     variant="outline"
                     onClick={() => handleOpenEditUser(usr)}
-                    className="h-9 text-xs border-slate-800 text-blue-400 hover:bg-blue-500/10 min-h-[44px]"
+                    className="flex-1 text-xs border-slate-800 text-blue-400 hover:bg-blue-500/10 min-h-[48px]"
                   >
                     <Edit2 className="h-3.5 w-3.5 mr-1" />
                     Редактировать
@@ -612,10 +614,9 @@ export default function SuperAdminPage() {
                     size="sm"
                     variant="ghost"
                     onClick={() => handleDeleteUser(usr.id, usr.full_name || usr.email)}
-                    className="h-9 text-xs text-red-400 hover:bg-red-500/10 min-h-[44px]"
+                    className="text-xs text-red-400 hover:bg-red-500/10 min-h-[48px]"
                   >
-                    <Trash2 className="h-3.5 w-3.5 mr-1" />
-                    Удалить
+                    <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
               </Card>
@@ -626,20 +627,20 @@ export default function SuperAdminPage() {
 
       {/* 4. Реестр всех файлов системы */}
       {activeTab === 'all_files' && (
-        <div className="space-y-4">
+        <div className="space-y-3">
           <div className="relative">
             <Search className="absolute left-3.5 top-3.5 h-4 w-4 text-slate-500" />
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Поиск файла по имени, описанию или названию компании..."
-              className="pl-10 bg-slate-950 border-slate-800 text-white min-h-[48px] rounded-xl"
+              placeholder="Поиск по имени, описанию или названию компании..."
+              className="pl-10 bg-slate-950 border-slate-800 text-white min-h-[48px] rounded-xl text-xs sm:text-sm"
             />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
             {filteredFiles.length === 0 ? (
-              <div className="col-span-full p-8 text-center text-slate-500 text-xs bg-slate-900/40 rounded-xl border border-slate-800">
+              <div className="col-span-full p-8 text-center text-slate-500 text-xs bg-slate-900/40 rounded-2xl border border-slate-800">
                 Системные файлы не найдены
               </div>
             ) : (
@@ -659,7 +660,7 @@ export default function SuperAdminPage() {
                           size="sm"
                           variant="ghost"
                           onClick={() => handleOpenEditFile(doc)}
-                          className="h-8 w-8 p-0 text-slate-400 hover:text-blue-400 min-h-[44px] min-w-[44px]"
+                          className="h-9 w-9 p-0 text-slate-400 hover:text-blue-400 min-h-[44px] min-w-[44px]"
                         >
                           <Edit2 className="h-4 w-4" />
                         </Button>
@@ -667,7 +668,7 @@ export default function SuperAdminPage() {
                           size="sm"
                           variant="ghost"
                           onClick={() => handleDeleteFile(doc.id)}
-                          className="h-8 w-8 p-0 text-slate-400 hover:text-red-400 min-h-[44px] min-w-[44px]"
+                          className="h-9 w-9 p-0 text-slate-400 hover:text-red-400 min-h-[44px] min-w-[44px]"
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -685,7 +686,7 @@ export default function SuperAdminPage() {
                         size="sm"
                         variant="ghost"
                         onClick={() => handleDownloadR2File(doc.file_path_r2)}
-                        className="h-8 p-1 text-xs text-blue-400 hover:text-white min-h-[44px]"
+                        className="h-9 p-1 text-xs text-blue-400 hover:text-white min-h-[44px]"
                       >
                         <Download className="h-4 w-4 mr-1" />
                         Скачать R2
@@ -702,8 +703,8 @@ export default function SuperAdminPage() {
       {/* МОДАЛЬНОЕ ОКНО (BOTTOM SHEET) РЕДАКТИРОВАНИЯ КОМПАНИИ */}
       {editingCompany && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="w-full sm:max-w-xl bg-slate-900 border-t sm:border border-slate-800 rounded-t-3xl sm:rounded-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-            <div className="w-12 h-1 bg-slate-700 rounded-full mx-auto mb-2 sm:hidden" />
+          <div className="w-full sm:max-w-xl bg-slate-900 border-t sm:border border-slate-800 rounded-t-3xl sm:rounded-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="w-12 h-1 bg-slate-700 rounded-full mx-auto mb-1 sm:hidden" />
 
             <div className="flex justify-between items-center pb-2 border-b border-slate-800">
               <h3 className="font-bold text-white text-base flex items-center">
@@ -715,13 +716,13 @@ export default function SuperAdminPage() {
               </Button>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label className="text-xs text-slate-400">Наименование *</Label>
                 <Input
                   value={compName}
                   onChange={(e) => setCompName(e.target.value)}
-                  className="bg-slate-950 border-slate-800 text-white min-h-[48px] rounded-xl"
+                  className="bg-slate-950 border-slate-800 text-white min-h-[48px] rounded-xl text-xs sm:text-sm"
                 />
               </div>
 
@@ -730,7 +731,7 @@ export default function SuperAdminPage() {
                 <Input
                   value={compInn}
                   onChange={(e) => setCompInn(e.target.value)}
-                  className="bg-slate-950 border-slate-800 text-white min-h-[48px] rounded-xl font-mono"
+                  className="bg-slate-950 border-slate-800 text-white min-h-[48px] rounded-xl font-mono text-xs sm:text-sm"
                 />
               </div>
 
@@ -739,7 +740,7 @@ export default function SuperAdminPage() {
                 <select
                   value={compStatus}
                   onChange={(e) => setCompStatus(e.target.value as any)}
-                  className="w-full min-h-[48px] rounded-xl border border-slate-800 bg-slate-950 px-3 text-sm text-slate-100"
+                  className="w-full min-h-[48px] rounded-xl border border-slate-800 bg-slate-950 px-3 text-xs sm:text-sm text-slate-100"
                 >
                   <option value="active">Активна (active)</option>
                   <option value="pending_approval">На модерации (pending_approval)</option>
@@ -753,7 +754,7 @@ export default function SuperAdminPage() {
                 <Input
                   value={compDirector}
                   onChange={(e) => setCompDirector(e.target.value)}
-                  className="bg-slate-950 border-slate-800 text-white min-h-[48px] rounded-xl"
+                  className="bg-slate-950 border-slate-800 text-white min-h-[48px] rounded-xl text-xs sm:text-sm"
                 />
               </div>
 
@@ -762,7 +763,7 @@ export default function SuperAdminPage() {
                 <Input
                   value={compAddress}
                   onChange={(e) => setCompAddress(e.target.value)}
-                  className="bg-slate-950 border-slate-800 text-white min-h-[48px] rounded-xl"
+                  className="bg-slate-950 border-slate-800 text-white min-h-[48px] rounded-xl text-xs sm:text-sm"
                 />
               </div>
             </div>
@@ -774,7 +775,7 @@ export default function SuperAdminPage() {
               <Button
                 onClick={handleSaveCompany}
                 disabled={isPending}
-                className="bg-blue-600 hover:bg-blue-500 text-white min-h-[48px] px-6 rounded-xl"
+                className="bg-blue-600 hover:bg-blue-500 text-white font-bold min-h-[48px] px-6 rounded-xl"
               >
                 {isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                 Сохранить
@@ -787,8 +788,8 @@ export default function SuperAdminPage() {
       {/* МОДАЛЬНОЕ ОКНО (BOTTOM SHEET) РЕДАКТИРОВАНИЯ ПОЛЬЗОВАТЕЛЯ */}
       {editingUser && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="w-full sm:max-w-lg bg-slate-900 border-t sm:border border-slate-800 rounded-t-3xl sm:rounded-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-            <div className="w-12 h-1 bg-slate-700 rounded-full mx-auto mb-2 sm:hidden" />
+          <div className="w-full sm:max-w-lg bg-slate-900 border-t sm:border border-slate-800 rounded-t-3xl sm:rounded-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="w-12 h-1 bg-slate-700 rounded-full mx-auto mb-1 sm:hidden" />
 
             <div className="flex justify-between items-center pb-2 border-b border-slate-800">
               <h3 className="font-bold text-white text-base flex items-center">
@@ -800,13 +801,13 @@ export default function SuperAdminPage() {
               </Button>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-3">
               <div className="space-y-1">
                 <Label className="text-xs text-slate-400">ФИО Пользователя</Label>
                 <Input
                   value={userName}
                   onChange={(e) => setUserName(e.target.value)}
-                  className="bg-slate-950 border-slate-800 text-white min-h-[48px] rounded-xl"
+                  className="bg-slate-950 border-slate-800 text-white min-h-[48px] rounded-xl text-xs sm:text-sm"
                 />
               </div>
 
@@ -815,7 +816,7 @@ export default function SuperAdminPage() {
                 <Input
                   value={userEmail}
                   onChange={(e) => setUserEmail(e.target.value)}
-                  className="bg-slate-950 border-slate-800 text-white min-h-[48px] rounded-xl font-mono"
+                  className="bg-slate-950 border-slate-800 text-white min-h-[48px] rounded-xl font-mono text-xs sm:text-sm"
                 />
               </div>
 
@@ -824,7 +825,7 @@ export default function SuperAdminPage() {
                 <select
                   value={userRole}
                   onChange={(e) => setUserRole(e.target.value as any)}
-                  className="w-full min-h-[48px] rounded-xl border border-slate-800 bg-slate-950 px-3 text-sm text-slate-100"
+                  className="w-full min-h-[48px] rounded-xl border border-slate-800 bg-slate-950 px-3 text-xs sm:text-sm text-slate-100"
                 >
                   <option value="owner">Владелец (owner)</option>
                   <option value="accountant">Бухгалтер (accountant)</option>
@@ -837,7 +838,7 @@ export default function SuperAdminPage() {
                 <select
                   value={userCompId}
                   onChange={(e) => setUserCompId(e.target.value)}
-                  className="w-full min-h-[48px] rounded-xl border border-slate-800 bg-slate-950 px-3 text-sm text-slate-100"
+                  className="w-full min-h-[48px] rounded-xl border border-slate-800 bg-slate-950 px-3 text-xs sm:text-sm text-slate-100"
                 >
                   <option value="">Без организации</option>
                   {allCompanies.map((c) => (
@@ -869,7 +870,7 @@ export default function SuperAdminPage() {
               <Button
                 onClick={handleSaveUser}
                 disabled={isPending}
-                className="bg-emerald-600 hover:bg-emerald-500 text-white min-h-[48px] px-6 rounded-xl"
+                className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold min-h-[48px] px-6 rounded-xl"
               >
                 {isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                 Сохранить
@@ -882,8 +883,8 @@ export default function SuperAdminPage() {
       {/* МОДАЛЬНОЕ ОКНО (BOTTOM SHEET) РЕДАКТИРОВАНИЯ И ЗАМЕНЫ ФАЙЛА R2 СУПЕРАДМИНОМ */}
       {editingFile && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="w-full sm:max-w-lg bg-slate-900 border-t sm:border border-slate-800 rounded-t-3xl sm:rounded-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-            <div className="w-12 h-1 bg-slate-700 rounded-full mx-auto mb-2 sm:hidden" />
+          <div className="w-full sm:max-w-lg bg-slate-900 border-t sm:border border-slate-800 rounded-t-3xl sm:rounded-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="w-12 h-1 bg-slate-700 rounded-full mx-auto mb-1 sm:hidden" />
 
             <div className="flex justify-between items-center pb-2 border-b border-slate-800">
               <h3 className="font-bold text-white text-base flex items-center">
@@ -895,13 +896,13 @@ export default function SuperAdminPage() {
               </Button>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-3">
               <div className="space-y-1">
                 <Label className="text-xs text-slate-400">Имя файла</Label>
                 <Input
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
-                  className="bg-slate-950 border-slate-800 text-white min-h-[48px] rounded-xl"
+                  className="bg-slate-950 border-slate-800 text-white min-h-[48px] rounded-xl text-xs sm:text-sm"
                 />
               </div>
 
@@ -910,7 +911,7 @@ export default function SuperAdminPage() {
                 <select
                   value={editCatId}
                   onChange={(e) => setEditCatId(e.target.value)}
-                  className="w-full min-h-[48px] rounded-xl border border-slate-800 bg-slate-950 px-3 text-sm text-slate-100"
+                  className="w-full min-h-[48px] rounded-xl border border-slate-800 bg-slate-950 px-3 text-xs sm:text-sm text-slate-100"
                 >
                   {categories.map((cat) => (
                     <option key={cat.id} value={cat.id}>
@@ -925,7 +926,7 @@ export default function SuperAdminPage() {
                 <Input
                   value={editDesc}
                   onChange={(e) => setEditDesc(e.target.value)}
-                  className="bg-slate-950 border-slate-800 text-white min-h-[48px] rounded-xl"
+                  className="bg-slate-950 border-slate-800 text-white min-h-[48px] rounded-xl text-xs sm:text-sm"
                 />
               </div>
 
@@ -955,7 +956,7 @@ export default function SuperAdminPage() {
               <Button
                 onClick={handleSaveEditFile}
                 disabled={isPending || replaceUploading}
-                className="bg-blue-600 hover:bg-blue-500 text-white min-h-[48px] px-6 rounded-xl"
+                className="bg-blue-600 hover:bg-blue-500 text-white font-bold min-h-[48px] px-6 rounded-xl"
               >
                 {isPending || replaceUploading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                 Сохранить изменения
@@ -968,8 +969,8 @@ export default function SuperAdminPage() {
       {/* МОДАЛЬНОЕ ОКНО ЗАМЕЧАНИЙ / БЛОКИРОВКИ */}
       {selectedCompany && (modalMode === 'request_changes' || modalMode === 'block') && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="w-full sm:max-w-md bg-slate-900 border-t sm:border border-slate-800 rounded-t-3xl sm:rounded-2xl p-6 space-y-4">
-            <div className="w-12 h-1 bg-slate-700 rounded-full mx-auto mb-2 sm:hidden" />
+          <div className="w-full sm:max-w-md bg-slate-900 border-t sm:border border-slate-800 rounded-t-3xl sm:rounded-2xl p-5 space-y-4">
+            <div className="w-12 h-1 bg-slate-700 rounded-full mx-auto mb-1 sm:hidden" />
             <h3 className="font-bold text-white text-base">
               {modalMode === 'request_changes' ? 'Замечания по модерации' : 'Причина блокировки'}
             </h3>
@@ -981,7 +982,7 @@ export default function SuperAdminPage() {
                 onChange={(e) => setModerationComment(e.target.value)}
                 placeholder="Причина отклонения или необходимость выслать новые уставные документы..."
                 rows={3}
-                className="w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-sm text-slate-100 focus:outline-none"
+                className="w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-xs sm:text-sm text-slate-100 focus:outline-none"
               />
             </div>
 
@@ -996,7 +997,7 @@ export default function SuperAdminPage() {
                     : handleBlock(selectedCompany)
                 }
                 disabled={isPending}
-                className="bg-amber-600 hover:bg-amber-500 text-white min-h-[48px] px-6 rounded-xl"
+                className="bg-amber-600 hover:bg-amber-500 text-white font-bold min-h-[48px] px-6 rounded-xl"
               >
                 {isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                 Отправить
