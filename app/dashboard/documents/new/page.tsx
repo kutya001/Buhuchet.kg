@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useTransition } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -23,16 +23,24 @@ import {
   X,
   Check,
   Folder,
+  Edit2,
 } from 'lucide-react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { MultiFileDropzone, type FileItemState } from '@/components/documents/MultiFileDropzone';
-import { createB2BDocumentAction } from '../actions';
+import {
+  createB2BDocumentAction,
+  getB2BDocumentByIdAction,
+  updateB2BDocumentFullAction,
+} from '../actions';
 import { getCompanyFilesArchiveAction } from '../../files/archive-actions';
 import type { Company, FileCategory, DocumentType, DocumentFile } from '@/types/database.types';
 
 export default function NewB2BDocumentPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const editDocId = searchParams.get('edit');
+
   const [partners, setPartners] = useState<Company[]>([]);
   const [categories, setCategories] = useState<FileCategory[]>([]);
   const [archiveFiles, setArchiveFiles] = useState<DocumentFile[]>([]);
@@ -46,10 +54,10 @@ export default function NewB2BDocumentPage() {
   const [docDate, setDocDate] = useState(new Date().toISOString().split('T')[0]);
   const [comment, setComment] = useState('');
 
-  // Список загруженных / выбранных сканов
+  // Список сканов R2
   const [filesState, setFilesState] = useState<FileItemState[]>([]);
 
-  // Состояние модалки выбора из архива
+  // Модалка архива
   const [showArchiveSelectModal, setShowArchiveSelectModal] = useState(false);
   const [archiveSearchTerm, setArchiveSearchTerm] = useState('');
 
@@ -88,7 +96,7 @@ export default function NewB2BDocumentPage() {
             }
           });
           setPartners(approvedPartners);
-          if (approvedPartners.length > 0) {
+          if (approvedPartners.length > 0 && !editDocId) {
             setReceiverCompanyId(approvedPartners[0].id);
           }
         }
@@ -104,11 +112,40 @@ export default function NewB2BDocumentPage() {
         setArchiveFiles(archiveRes.data);
       }
 
+      // 4. Если режим редактирования — загружаем существующие данные черновика
+      if (editDocId) {
+        const docRes = await getB2BDocumentByIdAction(editDocId);
+        if (docRes.success && docRes.data) {
+          const doc = docRes.data;
+          setReceiverCompanyId(doc.receiver_company_id || '');
+          setDocType(doc.doc_type || 'realization');
+          setDocNumber(doc.doc_number || '');
+          setDocDate(doc.doc_date || new Date().toISOString().split('T')[0]);
+          setComment(doc.comment || '');
+
+          if (doc.document_files && doc.document_files.length > 0) {
+            const initialFiles: FileItemState[] = doc.document_files.map((f: any, idx: number) => ({
+              tempId: `existing-${f.id}-${idx}`,
+              category_id: f.category_id || catData?.[0]?.id || '',
+              file_name: f.file_name,
+              file_size: f.file_size || '1.5 MB',
+              file_type: f.file_type || 'pdf',
+              file_path_r2: f.file_path_r2 || undefined,
+              description: f.description || `Скан ${f.file_name}`,
+              comment: f.comment || '',
+              progress: 100,
+              uploading: false,
+            }));
+            setFilesState(initialFiles);
+          }
+        }
+      }
+
       setLoading(false);
     }
 
     loadFormData();
-  }, []);
+  }, [editDocId]);
 
   const handleSelectFromArchive = (file: DocumentFile) => {
     const existingIndex = filesState.findIndex((f) => f.file_path_r2 === file.file_path_r2);
@@ -133,8 +170,7 @@ export default function NewB2BDocumentPage() {
     setShowArchiveSelectModal(false);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSave = (status: 'draft' | 'sent' = 'sent') => {
     setMsg(null);
 
     if (!receiverCompanyId) {
@@ -147,35 +183,58 @@ export default function NewB2BDocumentPage() {
       return;
     }
 
-    // Проверяем завершение загрузки в Cloudflare R2
     const unuploaded = filesState.filter((f) => f.uploading || !f.file_path_r2);
     if (unuploaded.length > 0) {
-      setMsg({ type: 'error', text: 'Пожалуйста, дождитесь завершения загрузки всех файлов в Cloudflare R2' });
+      setMsg({ type: 'error', text: 'Дождитесь завершения загрузки всех файлов в Cloudflare R2' });
       return;
     }
 
     startTransition(async () => {
-      const res = await createB2BDocumentAction({
-        receiver_company_id: receiverCompanyId,
-        doc_type: docType,
-        doc_number: docNumber,
-        doc_date: docDate,
-        comment,
-        files: filesState.map((f) => ({
-          category_id: f.category_id,
-          file_name: f.file_name,
-          file_size: f.file_size,
-          file_type: f.file_type,
-          file_path_r2: f.file_path_r2!,
-          description: f.description,
-          comment: f.comment,
-        })),
-      });
+      const payloadFiles = filesState.map((f) => ({
+        category_id: f.category_id,
+        file_name: f.file_name,
+        file_size: f.file_size,
+        file_type: f.file_type,
+        file_path_r2: f.file_path_r2!,
+        description: f.description,
+        comment: f.comment,
+      }));
 
-      if (res.success && res.data) {
-        router.push(`/dashboard/documents/${res.data.id}`);
+      let res;
+      if (editDocId) {
+        // Режим редактирования
+        res = await updateB2BDocumentFullAction(editDocId, {
+          receiver_company_id: receiverCompanyId,
+          doc_type: docType,
+          doc_number: docNumber,
+          doc_date: docDate,
+          comment,
+          status,
+          files: payloadFiles,
+        });
+
+        if (res.success) {
+          router.push(`/dashboard/documents/${editDocId}`);
+        } else {
+          setMsg({ type: 'error', text: res.error || 'Ошибка при сохранении изменений' });
+        }
       } else {
-        setMsg({ type: 'error', text: res.error || 'Ошибка отправки B2B документа' });
+        // Режим создания нового документа
+        res = await createB2BDocumentAction({
+          receiver_company_id: receiverCompanyId,
+          doc_type: docType,
+          doc_number: docNumber,
+          doc_date: docDate,
+          status,
+          comment,
+          files: payloadFiles,
+        });
+
+        if (res.success && res.data) {
+          router.push(`/dashboard/documents/${res.data.id}`);
+        } else {
+          setMsg({ type: 'error', text: res.error || 'Ошибка отправки B2B документа' });
+        }
       }
     });
   };
@@ -196,13 +255,18 @@ export default function NewB2BDocumentPage() {
           </Button>
         </Link>
         <div>
-          <h2 className="text-xl md:text-2xl font-bold text-white tracking-tight">Создание B2B Отправки</h2>
-          <p className="text-xs md:text-sm text-slate-400">Передача сканов первички зарегистрированному партнеру КР</p>
+          <h2 className="text-xl md:text-2xl font-bold text-white tracking-tight flex items-center">
+            {editDocId ? <Edit2 className="h-5 w-5 mr-2 text-blue-400" /> : <FileText className="h-5 w-5 mr-2 text-blue-400" />}
+            {editDocId ? 'Редактирование Черновика Документа' : 'Создание Документа'}
+          </h2>
+          <p className="text-xs md:text-sm text-slate-400">
+            {editDocId ? 'Полное изменение реквизитов и прикрепленных сканов первички' : 'Передача сканов первички зарегистрированному партнеру КР'}
+          </p>
         </div>
       </div>
 
       <Card className="bg-slate-900/40 border-slate-800 backdrop-blur-xl shadow-2xl">
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={(e) => { e.preventDefault(); handleSave('sent'); }}>
           <CardContent className="space-y-6 pt-6">
             {msg && (
               <Alert
@@ -294,11 +358,11 @@ export default function NewB2BDocumentPage() {
               </div>
             </div>
 
-            {/* Загрузка и прикрепление сканов R2 */}
+            {/* Управление прикрепленными сканами R2 */}
             <div className="space-y-3 pt-2 border-t border-slate-800">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <Label className="text-xs md:text-sm font-semibold text-slate-200">
-                  Прикрепленные сканы первички *
+                  Прикрепленные сканы первички (Удаление, Добавление, Замена) *
                 </Label>
 
                 <Button
@@ -308,7 +372,7 @@ export default function NewB2BDocumentPage() {
                   className="border-slate-800 text-purple-400 hover:bg-purple-500/10 text-xs min-h-[44px]"
                 >
                   <FolderOpen className="h-4 w-4 mr-1.5" />
-                  Выбрать из Личного Архива / Учредительных
+                  Добавить скан из Архива
                 </Button>
               </div>
 
@@ -334,21 +398,32 @@ export default function NewB2BDocumentPage() {
             </div>
           </CardContent>
 
-          <CardFooter className="pt-4 pb-6 border-t border-slate-800/60 flex justify-end">
+          <CardFooter className="pt-4 pb-6 border-t border-slate-800/60 flex flex-col sm:flex-row justify-end gap-3">
             <Button
-              type="submit"
+              type="button"
+              variant="outline"
+              onClick={() => handleSave('draft')}
               disabled={isPending || loading || partners.length === 0}
-              className="w-full md:w-auto bg-blue-600 hover:bg-blue-500 text-white font-medium shadow-lg shadow-blue-600/20 px-8 min-h-[48px]"
+              className="w-full sm:w-auto border-slate-800 text-slate-300 hover:text-white font-medium min-h-[48px]"
+            >
+              Сохранить черновик
+            </Button>
+
+            <Button
+              type="button"
+              onClick={() => handleSave('sent')}
+              disabled={isPending || loading || partners.length === 0}
+              className="w-full sm:w-auto bg-blue-600 hover:bg-blue-500 text-white font-bold shadow-lg shadow-blue-600/20 px-8 min-h-[48px]"
             >
               {isPending ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Отправка документа...
+                  Сохранение...
                 </>
               ) : (
                 <>
                   <Send className="mr-2 h-4 w-4" />
-                  Отправить B2B документ
+                  Отправить получателю
                 </>
               )}
             </Button>
@@ -356,11 +431,10 @@ export default function NewB2BDocumentPage() {
         </form>
       </Card>
 
-      {/* МОДАЛЬНОЕ ОКНО ВЫБОРА ИЗ ИМЕЮЩИХСЯ ФАЙЛОВ (Bottom Sheet на мобильных) */}
+      {/* МОДАЛЬНОЕ ОКНО ВЫБОРА ИЗ ИМЕЮЩИХСЯ ФАЙЛОВ */}
       {showArchiveSelectModal && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-950/80 backdrop-blur-sm p-0 sm:p-4 animate-in fade-in duration-200">
           <Card className="w-full max-w-2xl bg-slate-900 border-t sm:border border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-[88vh] rounded-t-3xl sm:rounded-2xl animate-in slide-in-from-bottom duration-300">
-            {/* Полоска-индикатор шторки для смартфонов */}
             <div className="sm:hidden w-12 h-1 bg-slate-700 rounded-full mx-auto mt-3 mb-1 opacity-80" />
 
             <CardHeader className="border-b border-slate-800 flex flex-row items-center justify-between pb-3 pt-3 sm:pt-6">
@@ -370,7 +444,7 @@ export default function NewB2BDocumentPage() {
                   Выбрать скан из Личного Архива / Устава
                 </CardTitle>
                 <CardDescription className="text-xs text-slate-400">
-                  Повторное прикрепление ранее загруженных R2-файлов без перезагрузки
+                  Повторное прикрепление ранее загруженных R2-файлов
                 </CardDescription>
               </div>
               <Button

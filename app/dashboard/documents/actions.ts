@@ -27,7 +27,7 @@ async function getUserContext() {
   };
 }
 
-// Получение списка документов организации (Входящие & Исходящие) через Admin Client
+// Получение списка документов организации
 export async function getB2BDocumentsAction(): Promise<ActionResponse<any[]>> {
   try {
     const ctx = await getUserContext();
@@ -54,7 +54,7 @@ export async function getB2BDocumentsAction(): Promise<ActionResponse<any[]>> {
   }
 }
 
-// Получение детализации одного документа по ID
+// Получение детализации документа
 export async function getB2BDocumentByIdAction(docId: string): Promise<ActionResponse<any>> {
   try {
     const ctx = await getUserContext();
@@ -85,16 +85,25 @@ export async function getB2BDocumentByIdAction(docId: string): Promise<ActionRes
   }
 }
 
-// Полное редактирование черновика документа отправителем
-export async function updateB2BDocumentDraftAction(
+// ПОЛНОЕ РЕДАКТИРОВАНИЕ ЧЕРНОВИКА (РЕКВИЗИТЫ + УПРАВЛЕНИЕ СКАНОМ R2)
+export async function updateB2BDocumentFullAction(
   documentId: string,
   data: {
-    doc_number?: string;
-    doc_date?: string;
-    doc_type?: any;
-    receiver_company_id?: string;
+    receiver_company_id: string;
+    doc_type: any;
+    doc_number: string;
+    doc_date: string;
     comment?: string;
     status?: DocumentStatus;
+    files: Array<{
+      category_id: string;
+      file_name: string;
+      file_size: string;
+      file_type: string;
+      file_path_r2: string;
+      description: string;
+      comment?: string;
+    }>;
   }
 ): Promise<ActionResponse> {
   try {
@@ -123,40 +132,64 @@ export async function updateB2BDocumentDraftAction(
       return { success: false, error: 'Редактировать можно только черновик или отозванный документ' };
     }
 
-    const updates: any = {
-      updated_at: new Date().toISOString(),
-    };
+    const targetStatus = data.status || 'draft';
 
-    if (data.doc_number !== undefined) updates.doc_number = data.doc_number;
-    if (data.doc_date) updates.doc_date = data.doc_date;
-    if (data.doc_type) updates.doc_type = data.doc_type;
-    if (data.receiver_company_id) updates.receiver_company_id = data.receiver_company_id;
-    if (data.comment !== undefined) updates.comment = data.comment;
-    if (data.status) updates.status = data.status;
-
+    // 1. Обновляем основные реквизиты документа
     const { error: updateError } = await adminSupabase
       .from('documents')
-      .update(updates)
+      .update({
+        receiver_company_id: data.receiver_company_id,
+        doc_type: data.doc_type,
+        doc_number: data.doc_number || null,
+        doc_date: data.doc_date,
+        comment: data.comment || null,
+        status: targetStatus,
+        mock_file_name: data.files[0]?.file_name || null,
+        mock_file_size: data.files[0]?.file_size || null,
+        updated_at: new Date().toISOString(),
+      })
       .eq('id', documentId);
 
     if (updateError) {
       return { success: false, error: `Ошибка обновления черновика: ${updateError.message}` };
     }
 
-    // Запись аудита
+    // 2. Обновляем список файлов (удаляем старые привязанные сканы и вставляем обновленные)
+    await adminSupabase.from('document_files').delete().eq('document_id', documentId);
+
+    if (data.files && data.files.length > 0) {
+      const filesToInsert = data.files.map((f) => ({
+        company_id: ctx.companyId,
+        document_id: documentId,
+        category_id: f.category_id,
+        file_name: f.file_name,
+        file_size: f.file_size || '1.5 MB',
+        file_type: f.file_type || 'pdf',
+        file_path_r2: f.file_path_r2 || null,
+        description: f.description || `Прикрепленный скан ${f.file_name}`,
+        comment: f.comment || null,
+        is_internal: false,
+        is_legal_doc: false,
+      }));
+
+      await adminSupabase.from('document_files').insert(filesToInsert);
+    }
+
+    // 3. Запись аудита
     await adminSupabase.from('document_logs').insert({
       document_id: documentId,
       user_id: ctx.userId,
       old_status: doc.status,
-      new_status: data.status || doc.status,
-      comment: data.status === 'sent' ? 'Черновик отредактирован и отправлен адресату' : 'Черновик отредактирован',
+      new_status: targetStatus,
+      comment: targetStatus === 'sent' ? 'Черновик отредактирован и отправлен получателю' : 'Черновик отредактирован',
     });
 
     revalidatePath(`/dashboard/documents/${documentId}`);
     revalidatePath('/dashboard/documents');
+    revalidatePath('/dashboard/files');
     return { success: true };
   } catch (err: unknown) {
-    const errorMsg = err instanceof Error ? err.message : 'Сбой редактирования черновика';
+    const errorMsg = err instanceof Error ? err.message : 'Сбой полного редактирования черновика';
     return { success: false, error: errorMsg };
   }
 }

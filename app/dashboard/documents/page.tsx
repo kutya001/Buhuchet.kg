@@ -116,17 +116,18 @@ export default function B2BDocumentsRegistryPage() {
         <div>
           <h2 className="text-xl md:text-2xl font-bold text-white tracking-tight flex items-center">
             <FileText className="h-5 w-5 md:h-6 md:w-6 mr-2 text-blue-400" />
-            Реестр B2B Документооборота
+            Реестр Документооборота
           </h2>
           <p className="text-xs md:text-sm text-slate-400 mt-0.5">
             Товарные накладные, акты выполненных работ и счета-фактуры КР
           </p>
         </div>
 
-        <Link href="/dashboard/documents/new" prefetch={true}>
-          <Button className="w-full md:w-auto bg-blue-600 hover:bg-blue-500 text-white font-medium text-xs md:text-sm shadow-lg shadow-blue-600/20 min-h-[44px]">
+        {/* На мобильных смартфонах скрыта (< md), так как есть снизу плавающая кнопка (+) */}
+        <Link href="/dashboard/documents/new" prefetch={true} className="hidden md:block">
+          <Button className="bg-blue-600 hover:bg-blue-500 text-white font-medium text-xs md:text-sm shadow-lg shadow-blue-600/20 min-h-[44px]">
             <Plus className="h-4 w-4 mr-1.5" />
-            Создать B2B документ
+            Создать документ
           </Button>
         </Link>
       </div>

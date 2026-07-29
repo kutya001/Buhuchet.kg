@@ -34,7 +34,6 @@ import {
   updateB2BDocumentStatusAction,
   deleteB2BDocumentAction,
   recallB2BDocumentAction,
-  updateB2BDocumentDraftAction,
 } from '../actions';
 import { DOCUMENT_TYPES, DOCUMENT_STATUSES } from '@/types/document.types';
 import type { Document, Company, DocumentFile, DocumentLog, DocumentStatus } from '@/types/database.types';
@@ -65,13 +64,6 @@ export default function B2BDocumentDetailPage() {
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // СОСТОЯНИЕ РЕДАКТИРОВАНИЯ ЧЕРНОВИКА
-  const [showEditDraftModal, setShowEditDraftModal] = useState(false);
-  const [draftNumber, setDraftNumber] = useState('');
-  const [draftDate, setDraftDate] = useState('');
-  const [draftType, setDraftType] = useState<any>('realization');
-  const [draftComment, setDraftComment] = useState('');
-
   const supabase = createClient();
 
   const loadDoc = async () => {
@@ -87,12 +79,7 @@ export default function B2BDocumentDetailPage() {
 
     const res = await getB2BDocumentByIdAction(docId);
     if (res.success && res.data) {
-      const docData = res.data as FullB2BDocument;
-      setDocument(docData);
-      setDraftNumber(docData.doc_number || '');
-      setDraftDate(docData.doc_date || '');
-      setDraftType(docData.doc_type || 'realization');
-      setDraftComment(docData.comment || '');
+      setDocument(res.data as FullB2BDocument);
     } else {
       setDocument(null);
     }
@@ -126,32 +113,6 @@ export default function B2BDocumentDetailPage() {
         loadDoc();
       } else {
         setMsg({ type: 'error', text: res.error || 'Ошибка отзыва документа' });
-      }
-    });
-  };
-
-  const handleSaveDraft = (shouldSend = false) => {
-    setMsg(null);
-    startTransition(async () => {
-      const res = await updateB2BDocumentDraftAction(docId, {
-        doc_number: draftNumber,
-        doc_date: draftDate,
-        doc_type: draftType,
-        comment: draftComment,
-        status: shouldSend ? 'sent' : 'draft',
-      });
-
-      if (res.success) {
-        setMsg({
-          type: 'success',
-          text: shouldSend
-            ? 'Черновик отредактирован и успешно отправлен адресату!'
-            : 'Черновик документа успешно обновлен.',
-        });
-        setShowEditDraftModal(false);
-        loadDoc();
-      } else {
-        setMsg({ type: 'error', text: res.error || 'Ошибка редактирования черновика' });
       }
     });
   };
@@ -215,18 +176,18 @@ export default function B2BDocumentDetailPage() {
 
         {/* Панель смены статусов & Отзыв документа */}
         <div className="flex items-center space-x-2 flex-wrap gap-y-2">
-          {/* КНОПКА ПОЛНОГО РЕДАКТИРОВАНИЯ ЧЕРНОВИКА */}
+          {/* КНОПКА ПОЛНОГО РЕДАКТИРОВАНИЯ ЧЕРНОВИКА И СКАНОВ */}
           {isSender && document.status === 'draft' && (
             <>
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => setShowEditDraftModal(true)}
+                onClick={() => router.push(`/dashboard/documents/new?edit=${docId}`)}
                 disabled={isPending}
-                className="border-blue-500/40 text-blue-400 hover:bg-blue-500/10 text-xs min-h-[44px]"
+                className="border-blue-500/40 text-blue-400 hover:bg-blue-500/10 text-xs min-h-[44px] font-bold"
               >
                 <Edit2 className="h-3.5 w-3.5 mr-1" />
-                Редактировать черновик
+                Редактировать черновик и сканы
               </Button>
 
               <Button
@@ -460,90 +421,6 @@ export default function B2BDocumentDetailPage() {
           </Card>
         </div>
       </div>
-
-      {/* МОДАЛКА РЕДАКТИРОВАНИЯ ЧЕРНОВИКА (MOBILE BOTTOM SHEET) */}
-      {showEditDraftModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <Card className="w-full sm:max-w-md bg-slate-900 border-t sm:border border-slate-800 rounded-t-3xl sm:rounded-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
-            <div className="w-12 h-1 bg-slate-700 rounded-full mx-auto mb-1 sm:hidden opacity-80" />
-            <h3 className="text-base sm:text-lg font-bold text-white flex items-center">
-              <Edit2 className="h-5 w-5 mr-2 text-blue-400" />
-              Редактирование Черновика
-            </h3>
-
-            <div className="space-y-3">
-              <div className="space-y-1">
-                <Label className="text-xs text-slate-300">Номер документа</Label>
-                <Input
-                  value={draftNumber}
-                  onChange={(e) => setDraftNumber(e.target.value)}
-                  placeholder="№ 102..."
-                  className="bg-slate-950 border-slate-800 text-white min-h-[48px]"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <Label className="text-xs text-slate-300">Дата документа</Label>
-                <Input
-                  type="date"
-                  value={draftDate}
-                  onChange={(e) => setDraftDate(e.target.value)}
-                  className="bg-slate-950 border-slate-800 text-white min-h-[48px]"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <Label className="text-xs text-slate-300">Тип документа</Label>
-                <select
-                  value={draftType}
-                  onChange={(e) => setDraftType(e.target.value as any)}
-                  className="w-full min-h-[48px] rounded-xl border border-slate-800 bg-slate-950 px-3 text-xs text-slate-100"
-                >
-                  <option value="realization">Накладная на реализацию</option>
-                  <option value="purchase">Акт выполненных работ</option>
-                  <option value="payment">Платежное поручение</option>
-                  <option value="advance">Авансовый отчет</option>
-                </select>
-              </div>
-
-              <div className="space-y-1">
-                <Label className="text-xs text-slate-300">Примечание получателю</Label>
-                <Input
-                  value={draftComment}
-                  onChange={(e) => setDraftComment(e.target.value)}
-                  placeholder="Исправленные реквизиты..."
-                  className="bg-slate-950 border-slate-800 text-white min-h-[48px]"
-                />
-              </div>
-            </div>
-
-            <div className="flex flex-col sm:flex-row justify-end gap-2 pt-2 border-t border-slate-800">
-              <Button
-                variant="ghost"
-                onClick={() => setShowEditDraftModal(false)}
-                className="min-h-[48px]"
-              >
-                Отмена
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => handleSaveDraft(false)}
-                disabled={isPending}
-                className="border-slate-800 text-slate-200 min-h-[48px] font-semibold"
-              >
-                Сохранить черновик
-              </Button>
-              <Button
-                onClick={() => handleSaveDraft(true)}
-                disabled={isPending}
-                className="bg-blue-600 hover:bg-blue-500 text-white font-bold min-h-[48px]"
-              >
-                Сохранить и отправить
-              </Button>
-            </div>
-          </Card>
-        </div>
-      )}
 
       {/* Модалка Отмены */}
       {showCancelModal && (
