@@ -33,7 +33,7 @@ export default async function DashboardLayout({
     redirect('/login');
   }
 
-  // Получаем профиль пользователя
+  // Параллельное кешированное получение профиля компании
   const { data: profile } = await supabase
     .from('users')
     .select('*, companies(*)')
@@ -44,10 +44,9 @@ export default async function DashboardLayout({
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-slate-950 text-slate-100 relative">
-      {/* 1. DESKTOP SIDEBAR (Только на экранах md:flex >= 768px) */}
+      {/* 1. DESKTOP SIDEBAR */}
       <aside className="hidden md:flex w-64 border-r border-slate-800/80 bg-slate-900/40 p-4 flex-col justify-between backdrop-blur-xl flex-shrink-0">
         <div className="space-y-6">
-          {/* Logo / Brand */}
           <div className="flex items-center space-x-3 px-2 py-1">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600/20 border border-blue-500/30 text-blue-400">
               <FileText className="h-5 w-5" />
@@ -58,7 +57,6 @@ export default async function DashboardLayout({
             </div>
           </div>
 
-          {/* Navigation Links (с prefetch={true} для мгновенного переключения роутов) */}
           <nav className="space-y-1">
             <Link
               href="/dashboard"
@@ -127,7 +125,7 @@ export default async function DashboardLayout({
               <Link
                 href="/super-admin"
                 prefetch={true}
-                className="flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium text-amber-400 bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/20 transition-all duration-200 ease-in-out mt-4"
+                className="flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium text-amber-400 bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/20 transition-all duration-200 ease-in-out mt-4 min-h-[44px]"
               >
                 <Shield className="h-4 w-4" />
                 <span>Супер-Админка</span>
@@ -136,7 +134,6 @@ export default async function DashboardLayout({
           </nav>
         </div>
 
-        {/* User Footer */}
         <div className="pt-4 border-t border-slate-800/80 space-y-3">
           <Link href="/dashboard/profile" prefetch={true} className="flex items-center space-x-3 px-2 hover:opacity-80 transition-opacity">
             <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-800 text-slate-300">
@@ -165,9 +162,8 @@ export default async function DashboardLayout({
         </div>
       </aside>
 
-      {/* 2. MOBILE HEADER & BOTTOM NAV BAR (Только на смартфонах md:hidden) */}
+      {/* 2. MOBILE HEADER & BOTTOM NAV BAR */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden pb-20 md:pb-0">
-        {/* Header */}
         <header className="h-16 border-b border-slate-800/80 bg-slate-900/40 px-4 md:px-6 flex items-center justify-between backdrop-blur-xl sticky top-0 z-30">
           <div className="flex items-center space-x-3">
             <div className="flex md:hidden h-8 w-8 items-center justify-center rounded-lg bg-blue-600/20 text-blue-400 border border-blue-500/30">
@@ -191,16 +187,13 @@ export default async function DashboardLayout({
           </div>
         </header>
 
-        {/* Main Content Area */}
         <main className="flex-1 p-4 md:p-6 overflow-y-auto">
           {children}
         </main>
       </div>
 
-      {/* 3. MOBILE FLOATING ACTION BUTTON (FAB) */}
       <MobileFAB />
 
-      {/* 4. FIX BOTTOM NAVIGATION BAR FOR MOBILE SMARTPHONES (с prefetch={true}) */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-slate-900/95 border-t border-slate-800/80 backdrop-blur-xl z-40 flex items-center justify-around px-2">
         <Link
           href="/dashboard"

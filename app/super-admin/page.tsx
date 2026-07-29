@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useTransition } from 'react';
+import React, { useState, useEffect, useTransition, useMemo } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -95,22 +95,22 @@ export default function SuperAdminPage() {
 
   const supabase = createClient();
 
+  // БЫСТРАЯ ПАРАЛЛЕЛЬНАЯ ЗАГРУЗКА ВСЕХ ДАННЫХ СУПЕРАДМИНКИ ЧЕРЕЗ Promise.all
   const loadData = async () => {
     setLoading(true);
-    const pendRes = await getPendingCompaniesAction();
+    const [pendRes, allRes, usersRes, filesRes, catRes] = await Promise.all([
+      getPendingCompaniesAction(),
+      getAllCompaniesAdminAction(),
+      getAllUsersAdminAction(),
+      getAllSystemFilesAction(),
+      supabase.from('file_categories').select('*').order('name'),
+    ]);
+
     if (pendRes.success && pendRes.data) setPendingCompanies(pendRes.data);
-
-    const allRes = await getAllCompaniesAdminAction();
     if (allRes.success && allRes.data) setAllCompanies(allRes.data);
-
-    const usersRes = await getAllUsersAdminAction();
     if (usersRes.success && usersRes.data) setAllUsers(usersRes.data);
-
-    const filesRes = await getAllSystemFilesAction();
     if (filesRes.success && filesRes.data) setSystemFiles(filesRes.data);
-
-    const { data: catData } = await supabase.from('file_categories').select('*').order('name');
-    if (catData) setCategories(catData as FileCategory[]);
+    if (catRes.data) setCategories(catRes.data as FileCategory[]);
 
     setLoading(false);
   };
@@ -342,21 +342,26 @@ export default function SuperAdminPage() {
     });
   };
 
-  const filteredUsers = allUsers.filter((u) => {
+  // Мгновенная клиентская фильтрация с useMemo для идеального отклика
+  const filteredUsers = useMemo(() => {
     const term = search.toLowerCase();
-    const matchesName = u.full_name?.toLowerCase().includes(term);
-    const matchesEmail = u.email?.toLowerCase().includes(term);
-    const matchesComp = u.companies?.name?.toLowerCase().includes(term);
-    return matchesName || matchesEmail || matchesComp;
-  });
+    return allUsers.filter((u) => {
+      const matchesName = u.full_name?.toLowerCase().includes(term);
+      const matchesEmail = u.email?.toLowerCase().includes(term);
+      const matchesComp = u.companies?.name?.toLowerCase().includes(term);
+      return matchesName || matchesEmail || matchesComp;
+    });
+  }, [allUsers, search]);
 
-  const filteredFiles = systemFiles.filter((f) => {
+  const filteredFiles = useMemo(() => {
     const term = search.toLowerCase();
-    const matchesName = f.file_name?.toLowerCase().includes(term);
-    const matchesDesc = f.description?.toLowerCase().includes(term);
-    const matchesComp = f.companies?.name?.toLowerCase().includes(term) || f.companies?.inn?.includes(term);
-    return matchesName || matchesDesc || matchesComp;
-  });
+    return systemFiles.filter((f) => {
+      const matchesName = f.file_name?.toLowerCase().includes(term);
+      const matchesDesc = f.description?.toLowerCase().includes(term);
+      const matchesComp = f.companies?.name?.toLowerCase().includes(term) || f.companies?.inn?.includes(term);
+      return matchesName || matchesDesc || matchesComp;
+    });
+  }, [systemFiles, search]);
 
   if (loading) {
     return (
@@ -468,7 +473,7 @@ export default function SuperAdminPage() {
                       size="sm"
                       onClick={() => handleApprove(comp)}
                       disabled={isPending}
-                      className="bg-emerald-600 hover:bg-emerald-500 text-white min-h-[48px] px-4"
+                      className="bg-emerald-600 hover:bg-emerald-500 text-white min-h-[48px] px-4 rounded-xl"
                     >
                       <CheckCircle2 className="h-4 w-4 mr-1.5" />
                       Подтвердить
@@ -481,7 +486,7 @@ export default function SuperAdminPage() {
                         setModalMode('request_changes');
                       }}
                       disabled={isPending}
-                      className="border-amber-500/30 text-amber-400 hover:bg-amber-500/10 min-h-[48px] px-4"
+                      className="border-amber-500/30 text-amber-400 hover:bg-amber-500/10 min-h-[48px] px-4 rounded-xl"
                     >
                       <AlertTriangle className="h-4 w-4 mr-1.5" />
                       Замечания
@@ -494,7 +499,7 @@ export default function SuperAdminPage() {
                         setModalMode('block');
                       }}
                       disabled={isPending}
-                      className="min-h-[48px] px-4"
+                      className="min-h-[48px] px-4 rounded-xl"
                     >
                       <XCircle className="h-4 w-4 mr-1.5" />
                       Заблокировать
@@ -698,7 +703,6 @@ export default function SuperAdminPage() {
       {editingCompany && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className="w-full sm:max-w-xl bg-slate-900 border-t sm:border border-slate-800 rounded-t-3xl sm:rounded-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-            {/* Плашка индикатор Bottom Sheet для смартфонов */}
             <div className="w-12 h-1 bg-slate-700 rounded-full mx-auto mb-2 sm:hidden" />
 
             <div className="flex justify-between items-center pb-2 border-b border-slate-800">

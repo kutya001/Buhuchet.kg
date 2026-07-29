@@ -4,6 +4,7 @@ import { createClient, createAdminClient } from '@/lib/supabase/server';
 import type { ActionResponse, DocumentFile } from '@/types/database.types';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
+import { getCachedFileCategories } from '@/lib/cache/lookups';
 
 const archiveFileSchema = z.object({
   category_id: z.string().optional(),
@@ -53,12 +54,9 @@ export async function uploadLegalDocumentAction(data: any): Promise<ActionRespon
 
     let targetCatId = category_id;
     if (!targetCatId) {
-      const { data: defaultCat } = await adminSupabase
-        .from('file_categories')
-        .select('id')
-        .eq('name', 'Устав компании')
-        .single();
-      targetCatId = defaultCat?.id || '268dda23-d839-429d-bec2-aae391cffb00';
+      const cachedCategories = await getCachedFileCategories();
+      const ustavCat = cachedCategories.find((c) => c.name === 'Устав компании');
+      targetCatId = ustavCat?.id || '268dda23-d839-429d-bec2-aae391cffb00';
     }
 
     const { data: insertedFile, error } = await adminSupabase
@@ -130,12 +128,8 @@ export async function uploadFileToArchiveAction(data: any): Promise<ActionRespon
 
     let targetCatId = category_id;
     if (!targetCatId) {
-      const { data: defaultCat } = await adminSupabase
-        .from('file_categories')
-        .select('id')
-        .limit(1)
-        .single();
-      targetCatId = defaultCat?.id || 'd9f0d6c6-2423-4b35-a72c-1bb380699a9c';
+      const cachedCategories = await getCachedFileCategories();
+      targetCatId = cachedCategories[0]?.id || 'd9f0d6c6-2423-4b35-a72c-1bb380699a9c';
     }
 
     const { data: insertedFile, error } = await adminSupabase
@@ -195,7 +189,6 @@ export async function updateDocumentFileAction(
 
     const { data: prof } = await supabase.from('users').select('company_id, is_super_admin').eq('id', user.id).single();
 
-    // Проверяем принадлежность файла
     const { data: existingFile } = await adminSupabase.from('document_files').select('company_id').eq('id', fileId).single();
     if (!existingFile) {
       return { success: false, error: 'Файл не найден' };
@@ -315,7 +308,7 @@ export async function getCompanyLegalDocsAction(): Promise<ActionResponse<Docume
   }
 }
 
-// Получение всех доступных сканов компании (из архива и уставных документов)
+// Получение всех доступных сканов компании
 export async function getCompanyFilesArchiveAction(): Promise<ActionResponse<DocumentFile[]>> {
   try {
     const supabase = await createClient();
