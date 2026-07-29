@@ -215,9 +215,9 @@ export function DashboardShell({
         </div>
       </aside>
 
-      {/* 2. MAIN CONTENT AREA WITH FLOATING TOPBAR */}
+      {/* 2. MAIN CONTENT AREA WITH ABSOLUTELY FIXED FLOATING TOPBAR */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden pb-24 md:pb-6">
-        {/* Парящий фиксированный матовый островок с часами, данными компании и заголовком */}
+        {/* Намертво зафиксированный верхний островок */}
         <FloatingTopbar
           companyName={companyName}
           companyInn={companyInn}
@@ -227,7 +227,8 @@ export function DashboardShell({
           onToggleSidebar={() => setIsCollapsed(!isCollapsed)}
         />
 
-        <main className="flex-1 px-3 sm:px-6 overflow-y-auto">
+        {/* Главный контент с отступом сверху pt-16 */}
+        <main className="flex-1 px-3 sm:px-6 pt-16 overflow-y-auto">
           {children}
         </main>
       </div>

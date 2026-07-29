@@ -86,8 +86,12 @@ export function FloatingTopbar({
 
   return (
     <>
-      {/* 1. НЕПОДВИЖНЫЙ И КОМПАКТНЫЙ ВЕРХНИЙ ПАРЯЩИЙ ОСТРОВОК */}
-      <header className="sticky top-2 z-50 mx-2 sm:mx-6 mb-3 h-12 sm:h-14 rounded-2xl bg-slate-900/85 backdrop-blur-2xl border border-slate-800/80 shadow-2xl flex items-center justify-between px-3 sm:px-5 transition-all duration-300">
+      {/* 1. НАМЕРТВО ЗАФИКСИРОВАННЫЙ ВЕРХНИЙ ПАРЯЩИЙ ОСТРОВОК (FIXED TOP-2) */}
+      <header
+        className={`fixed top-2 left-2 right-2 h-12 sm:h-14 rounded-2xl bg-slate-900/90 backdrop-blur-2xl border border-slate-800/80 shadow-2xl z-40 flex items-center justify-between px-3 sm:px-5 transition-all duration-300 ${
+          isSidebarCollapsed ? 'md:left-[88px]' : 'md:left-[264px]'
+        }`}
+      >
         {/* Левая секция: Кнопка Сайдбара & Текущая Страница */}
         <div className="flex items-center space-x-2 sm:space-x-3">
           <button

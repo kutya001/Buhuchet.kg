@@ -54,6 +54,38 @@ export async function getB2BDocumentsAction(): Promise<ActionResponse<any[]>> {
   }
 }
 
+// Получение детализации одного B2B документа по ID для отправителя и получателя
+export async function getB2BDocumentByIdAction(docId: string): Promise<ActionResponse<any>> {
+  try {
+    const ctx = await getUserContext();
+    if (!ctx || !ctx.companyId) {
+      return { success: false, error: 'Пользователь не привязан к организации' };
+    }
+
+    const adminSupabase = await createAdminClient();
+
+    const { data: doc, error } = await adminSupabase
+      .from('documents')
+      .select('*, sender_company:companies!sender_company_id(*), receiver_company:companies!receiver_company_id(*), document_files(*, file_categories(*)), document_logs(*, users(full_name)), users(full_name)')
+      .eq('id', docId)
+      .single();
+
+    if (error || !doc) {
+      return { success: false, error: 'Документ не найден или у вас нет прав на его просмотр' };
+    }
+
+    // Проверяем доступ: пользователь должен состоять в компании-отправителе ИЛИ в компании-получателе ИЛИ быть суперадмином
+    if (doc.sender_company_id !== ctx.companyId && doc.receiver_company_id !== ctx.companyId && !ctx.isSuperAdmin) {
+      return { success: false, error: 'У вашей организации нет прав на доступ к данному документу' };
+    }
+
+    return { success: true, data: doc };
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : 'Сбой загрузки детализации документа';
+    return { success: false, error: errorMsg };
+  }
+}
+
 export async function createB2BDocumentAction(data: any): Promise<ActionResponse<Document>> {
   try {
     const ctx = await getUserContext();
@@ -148,9 +180,9 @@ export async function updateB2BDocumentStatusAction(
       return { success: false, error: 'Пользователь не авторизован' };
     }
 
-    const supabase = await createClient();
+    const adminSupabase = await createAdminClient();
 
-    const { data: doc } = await supabase
+    const { data: doc } = await adminSupabase
       .from('documents')
       .select('status, sender_company_id, receiver_company_id')
       .eq('id', documentId)
@@ -162,8 +194,8 @@ export async function updateB2BDocumentStatusAction(
 
     const oldStatus = doc.status;
 
-    // Обновляем статус
-    const { error: updateError } = await supabase
+    // Обновляем статус через Admin Client
+    const { error: updateError } = await adminSupabase
       .from('documents')
       .update({
         status: newStatus,
@@ -176,7 +208,7 @@ export async function updateB2BDocumentStatusAction(
     }
 
     // Запись аудита
-    await supabase.from('document_logs').insert({
+    await adminSupabase.from('document_logs').insert({
       document_id: documentId,
       user_id: ctx.userId,
       old_status: oldStatus,
@@ -201,9 +233,9 @@ export async function deleteB2BDocumentAction(documentId: string): Promise<Actio
       return { success: false, error: 'Пользователь не авторизован' };
     }
 
-    const supabase = await createClient();
+    const adminSupabase = await createAdminClient();
 
-    const { error } = await supabase
+    const { error } = await adminSupabase
       .from('documents')
       .delete()
       .eq('id', documentId);

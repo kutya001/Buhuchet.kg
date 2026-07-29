@@ -27,7 +27,7 @@ import {
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { ScanViewer } from '@/components/documents/ScanViewer';
-import { updateB2BDocumentStatusAction, deleteB2BDocumentAction } from '../actions';
+import { getB2BDocumentByIdAction, updateB2BDocumentStatusAction, deleteB2BDocumentAction } from '../actions';
 import { DOCUMENT_TYPES, DOCUMENT_STATUSES } from '@/types/document.types';
 import type { Document, Company, DocumentFile, DocumentLog, DocumentStatus } from '@/types/database.types';
 
@@ -70,14 +70,11 @@ export default function B2BDocumentDetailPage() {
       if (prof?.company_id) setCurrentCompanyId(prof.company_id);
     }
 
-    const { data: doc } = await supabase
-      .from('documents')
-      .select('*, sender_company:companies!sender_company_id(*), receiver_company:companies!receiver_company_id(*), document_files(*, file_categories(*)), document_logs(*, users(full_name)), users(full_name)')
-      .eq('id', docId)
-      .single();
-
-    if (doc) {
-      setDocument(doc as FullB2BDocument);
+    const res = await getB2BDocumentByIdAction(docId);
+    if (res.success && res.data) {
+      setDocument(res.data as FullB2BDocument);
+    } else {
+      setDocument(null);
     }
     setLoading(false);
   };
@@ -111,9 +108,17 @@ export default function B2BDocumentDetailPage() {
 
   if (!document) {
     return (
-      <div className="text-center p-12 text-slate-500">
-        <AlertCircle className="mx-auto h-10 w-10 text-red-400 mb-2" />
-        Документ не найден
+      <div className="text-center p-12 text-slate-500 space-y-4">
+        <AlertCircle className="mx-auto h-12 w-12 text-red-400" />
+        <h3 className="text-lg font-bold text-white">Документ не найден</h3>
+        <p className="text-xs text-slate-400 max-w-sm mx-auto">
+          Возможно, данный документ был удален или у вашей организации нет доступа к просмотру.
+        </p>
+        <Link href="/dashboard/documents">
+          <Button variant="outline" className="border-slate-800 text-slate-300">
+            Вернуться в реестр документов
+          </Button>
+        </Link>
       </div>
     );
   }
@@ -130,7 +135,7 @@ export default function B2BDocumentDetailPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 flex-shrink-0">
         <div className="flex items-center space-x-3">
           <Link href="/dashboard/documents">
-            <Button variant="outline" size="sm" className="border-slate-800 text-slate-400 hover:text-white text-xs">
+            <Button variant="outline" size="sm" className="border-slate-800 text-slate-400 hover:text-white text-xs min-h-[44px]">
               <ArrowLeft className="h-4 w-4 mr-1" />
               В реестр
             </Button>
@@ -155,7 +160,7 @@ export default function B2BDocumentDetailPage() {
               size="sm"
               onClick={() => handleStatusChange('sent', 'Отправлено получателю')}
               disabled={isPending}
-              className="bg-blue-600 hover:bg-blue-500 text-white text-xs w-full sm:w-auto"
+              className="bg-blue-600 hover:bg-blue-500 text-white text-xs w-full sm:w-auto min-h-[44px]"
             >
               <Send className="h-3.5 w-3.5 mr-1" />
               Отправить получателю
@@ -169,7 +174,7 @@ export default function B2BDocumentDetailPage() {
                 variant="destructive"
                 onClick={() => setShowCancelModal(true)}
                 disabled={isPending}
-                className="text-xs"
+                className="text-xs min-h-[44px]"
               >
                 <XCircle className="h-3.5 w-3.5 mr-1" />
                 Отклонить
@@ -178,7 +183,7 @@ export default function B2BDocumentDetailPage() {
                 size="sm"
                 onClick={() => handleStatusChange('accepted', 'Документ принят получателем')}
                 disabled={isPending}
-                className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs"
+                className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs min-h-[44px]"
               >
                 <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
                 Принять
@@ -191,7 +196,7 @@ export default function B2BDocumentDetailPage() {
               size="sm"
               onClick={() => handleStatusChange('processed', 'Документ успешно обработан')}
               disabled={isPending}
-              className="bg-purple-600 hover:bg-purple-500 text-white text-xs"
+              className="bg-purple-600 hover:bg-purple-500 text-white text-xs min-h-[44px]"
             >
               <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
               Обработано
@@ -218,9 +223,9 @@ export default function B2BDocumentDetailPage() {
       <div className="flex lg:hidden space-x-2 border-b border-slate-800 pb-2 flex-shrink-0">
         <button
           onClick={() => setMobileTab('scan')}
-          className={`flex-1 flex items-center justify-center space-x-2 py-2 rounded-lg text-xs font-medium border transition-all ${
+          className={`flex-1 flex items-center justify-center space-x-2 py-2.5 rounded-xl text-xs font-medium border transition-all min-h-[44px] ${
             mobileTab === 'scan'
-              ? 'bg-blue-600/20 text-blue-400 border-blue-500/40'
+              ? 'bg-blue-600/20 text-blue-400 border-blue-500/40 font-bold'
               : 'bg-slate-900/40 text-slate-400 border-slate-800'
           }`}
         >
@@ -230,9 +235,9 @@ export default function B2BDocumentDetailPage() {
 
         <button
           onClick={() => setMobileTab('details')}
-          className={`flex-1 flex items-center justify-center space-x-2 py-2 rounded-lg text-xs font-medium border transition-all ${
+          className={`flex-1 flex items-center justify-center space-x-2 py-2.5 rounded-xl text-xs font-medium border transition-all min-h-[44px] ${
             mobileTab === 'details'
-              ? 'bg-purple-600/20 text-purple-400 border-purple-500/40'
+              ? 'bg-purple-600/20 text-purple-400 border-purple-500/40 font-bold'
               : 'bg-slate-900/40 text-slate-400 border-slate-800'
           }`}
         >
@@ -252,9 +257,9 @@ export default function B2BDocumentDetailPage() {
                 <button
                   key={file.id}
                   onClick={() => setSelectedFileIndex(idx)}
-                  className={`px-2.5 py-1 rounded-md text-xs font-medium border truncate max-w-[130px] transition-all ${
+                  className={`px-3 py-1.5 rounded-xl text-xs font-medium border truncate max-w-[140px] transition-all min-h-[40px] ${
                     selectedFileIndex === idx
-                      ? 'bg-blue-600/20 text-blue-400 border-blue-500/40'
+                      ? 'bg-blue-600/20 text-blue-400 border-blue-500/40 font-bold'
                       : 'bg-slate-900 text-slate-400 border-slate-800'
                   }`}
                 >
@@ -381,17 +386,18 @@ export default function B2BDocumentDetailPage() {
                 value={cancelComment}
                 onChange={(e) => setCancelComment(e.target.value)}
                 placeholder="Нечитаемый скан / Ошибка в реквизитах..."
-                className="bg-slate-950 border-slate-800 text-slate-100"
+                className="bg-slate-950 border-slate-800 text-slate-100 min-h-[44px]"
               />
             </div>
             <div className="flex justify-end space-x-3 pt-2">
-              <Button variant="outline" onClick={() => setShowCancelModal(false)} className="border-slate-800 text-slate-400">
+              <Button variant="outline" onClick={() => setShowCancelModal(false)} className="border-slate-800 text-slate-400 min-h-[44px]">
                 Отмена
               </Button>
               <Button
                 variant="destructive"
                 onClick={() => handleStatusChange('cancelled', cancelComment || 'Документ отклонен получателем')}
                 disabled={isPending}
+                className="min-h-[44px]"
               >
                 {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Отклонить'}
               </Button>

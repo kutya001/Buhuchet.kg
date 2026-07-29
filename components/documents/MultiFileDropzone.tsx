@@ -53,8 +53,12 @@ export function MultiFileDropzone({
 
   const uploadFileToR2 = async (file: File, item: FileItemState) => {
     try {
+      // Гарантируем стабильный MIME-тип для мобильных систем (iOS Camera / Android Chrome)
+      const mimeType = file.type && file.type.length > 0 ? file.type : 'image/jpeg';
+      const cleanFileName = file.name || `scan_${Date.now()}.jpg`;
+
       // 1. Запрашиваем Presigned PUT URL от нашего сервера
-      const presignedRes = await getPresignedUploadUrlAction(file.name, file.type);
+      const presignedRes = await getPresignedUploadUrlAction(cleanFileName, mimeType);
 
       if (!presignedRes.success || !presignedRes.data) {
         throw new Error(presignedRes.error || 'Ошибка получения ссылки Cloudflare R2');
@@ -66,7 +70,7 @@ export function MultiFileDropzone({
       await new Promise<void>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.open('PUT', uploadUrl, true);
-        xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+        xhr.setRequestHeader('Content-Type', mimeType);
 
         xhr.upload.onprogress = (event) => {
           if (event.lengthComputable) {
@@ -123,15 +127,16 @@ export function MultiFileDropzone({
           ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
           : `${Math.round(file.size / 1024)} KB`;
 
-      const isCameraPhoto = file.name.startsWith('image') || file.name.startsWith('photo');
-      const name = isCameraPhoto ? `Фото_скан_${Date.now()}.jpg` : file.name;
+      const rawName = file.name || `photo_${idx}.jpg`;
+      const isCameraPhoto = rawName.startsWith('image') || rawName.startsWith('photo') || rawName.includes('blob');
+      const name = isCameraPhoto ? `Фото_скан_${Date.now()}_${idx + 1}.jpg` : rawName;
 
       return {
         tempId: `${Date.now()}-${idx}`,
         category_id: defaultCategory,
         file_name: name,
         file_size: formattedSize,
-        file_type: file.type.includes('pdf') ? 'pdf' : 'image',
+        file_type: (file.type || '').includes('pdf') ? 'pdf' : 'image',
         description: `Скан ${name}`,
         comment: '',
         progress: 0,
