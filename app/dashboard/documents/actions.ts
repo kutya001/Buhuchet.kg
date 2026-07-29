@@ -86,6 +86,65 @@ export async function getB2BDocumentByIdAction(docId: string): Promise<ActionRes
   }
 }
 
+// Отзыв отправленного документа отправителем (возврат в статус 'draft' для редактирования ошибок)
+export async function recallB2BDocumentAction(documentId: string): Promise<ActionResponse> {
+  try {
+    const ctx = await getUserContext();
+    if (!ctx || !ctx.companyId) {
+      return { success: false, error: 'Пользователь не привязан к организации' };
+    }
+
+    const adminSupabase = await createAdminClient();
+
+    const { data: doc } = await adminSupabase
+      .from('documents')
+      .select('sender_company_id, status')
+      .eq('id', documentId)
+      .single();
+
+    if (!doc) {
+      return { success: false, error: 'Документ не найден' };
+    }
+
+    if (doc.sender_company_id !== ctx.companyId) {
+      return { success: false, error: 'Только компания-отправитель может отозвать документ' };
+    }
+
+    if (doc.status !== 'sent') {
+      return { success: false, error: 'Отозвать можно только документы в статусе "Отправлено"' };
+    }
+
+    // Возвращаем в статус черновика
+    const { error: updateError } = await adminSupabase
+      .from('documents')
+      .update({
+        status: 'draft',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', documentId);
+
+    if (updateError) {
+      return { success: false, error: `Ошибка отзыва документа: ${updateError.message}` };
+    }
+
+    // Запись аудита
+    await adminSupabase.from('document_logs').insert({
+      document_id: documentId,
+      user_id: ctx.userId,
+      old_status: 'sent',
+      new_status: 'draft',
+      comment: 'Документ отозван отправителем для исправления ошибок',
+    });
+
+    revalidatePath(`/dashboard/documents/${documentId}`);
+    revalidatePath('/dashboard/documents');
+    return { success: true };
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : 'Сбой при отзыве документа';
+    return { success: false, error: errorMsg };
+  }
+}
+
 export async function createB2BDocumentAction(data: any): Promise<ActionResponse<Document>> {
   try {
     const ctx = await getUserContext();

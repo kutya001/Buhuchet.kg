@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Users, Plus } from 'lucide-react';
+import { LayoutDashboard, FileText, Plus } from 'lucide-react';
 
 export function FloatingBottomNav() {
   const pathname = usePathname();
@@ -35,16 +35,16 @@ export function FloatingBottomNav() {
         </Link>
       </div>
 
-      {/* 3. СПРАВА: Мои контрагенты */}
+      {/* 3. СПРАВА: B2B Документы */}
       <Link
-        href="/dashboard/counterparties"
+        href="/dashboard/documents"
         prefetch={true}
         className={`flex flex-col items-center justify-center space-y-1 min-w-[56px] transition-colors ${
-          isActive('/dashboard/counterparties') ? 'text-amber-400 font-bold' : 'text-slate-400 hover:text-slate-200'
+          isActive('/dashboard/documents') ? 'text-sky-400 font-bold' : 'text-slate-400 hover:text-slate-200'
         }`}
       >
-        <Users className="h-5 w-5" />
-        <span className="text-[10px] font-medium tracking-tight">Контрагенты</span>
+        <FileText className="h-5 w-5" />
+        <span className="text-[10px] font-medium tracking-tight">B2B Документы</span>
       </Link>
     </nav>
   );

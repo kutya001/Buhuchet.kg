@@ -75,6 +75,7 @@ export async function sendPartnershipRequestAction(
 
     revalidatePath('/dashboard/companies-catalog');
     revalidatePath('/dashboard/partnerships');
+    revalidatePath('/dashboard/counterparties');
     return { success: true, data: partnership as CompanyPartnership };
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : 'Сбой при отправке заявки на партнерство';
@@ -95,7 +96,6 @@ export async function respondToPartnershipRequestAction(
       return { success: false, error: 'Пользователь не авторизован' };
     }
 
-    const supabase = await createClient();
     const adminSupabase = await createAdminClient();
 
     const { data: partnership } = await adminSupabase
@@ -159,6 +159,46 @@ export async function respondToPartnershipRequestAction(
     return { success: true };
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : 'Сбой при ответе на заявку на партнерство';
+    return { success: false, error: errorMsg };
+  }
+}
+
+/**
+ * Прекращение сотрудничества / деактивация контрагента
+ */
+export async function terminatePartnershipAction(
+  partnershipIdOrTargetCompanyId: string
+): Promise<ActionResponse> {
+  try {
+    const ctx = await getUserContext();
+    if (!ctx || !ctx.companyId) {
+      return { success: false, error: 'Пользователь не авторизован' };
+    }
+
+    const adminSupabase = await createAdminClient();
+
+    // 1. Обновляем статус партнерства в company_partnerships на 'rejected'
+    await adminSupabase
+      .from('company_partnerships')
+      .update({
+        status: 'rejected',
+        updated_at: new Date().toISOString(),
+      })
+      .or(`and(requester_company_id.eq.${ctx.companyId},target_company_id.eq.${partnershipIdOrTargetCompanyId}),and(requester_company_id.eq.${partnershipIdOrTargetCompanyId},target_company_id.eq.${ctx.companyId}),id.eq.${partnershipIdOrTargetCompanyId}`);
+
+    // 2. Удаляем или отключаем запись из таблицы counterparties для текущей компании
+    await adminSupabase
+      .from('counterparties')
+      .delete()
+      .eq('company_id', ctx.companyId)
+      .eq('id', partnershipIdOrTargetCompanyId);
+
+    revalidatePath('/dashboard/counterparties');
+    revalidatePath('/dashboard/partnerships');
+    revalidatePath('/dashboard/companies-catalog');
+    return { success: true };
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : 'Сбой при прекращении сотрудничества';
     return { success: false, error: errorMsg };
   }
 }

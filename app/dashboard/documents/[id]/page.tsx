@@ -23,11 +23,17 @@ import {
   FolderOpen,
   Eye,
   Info,
+  Undo2,
 } from 'lucide-react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { ScanViewer } from '@/components/documents/ScanViewer';
-import { getB2BDocumentByIdAction, updateB2BDocumentStatusAction, deleteB2BDocumentAction } from '../actions';
+import {
+  getB2BDocumentByIdAction,
+  updateB2BDocumentStatusAction,
+  deleteB2BDocumentAction,
+  recallB2BDocumentAction,
+} from '../actions';
 import { DOCUMENT_TYPES, DOCUMENT_STATUSES } from '@/types/document.types';
 import type { Document, Company, DocumentFile, DocumentLog, DocumentStatus } from '@/types/database.types';
 
@@ -97,6 +103,19 @@ export default function B2BDocumentDetailPage() {
     });
   };
 
+  const handleRecall = () => {
+    setMsg(null);
+    startTransition(async () => {
+      const res = await recallB2BDocumentAction(docId);
+      if (res.success) {
+        setMsg({ type: 'success', text: 'Документ успешно отозван и переведен в черновики для исправления ошибок.' });
+        loadDoc();
+      } else {
+        setMsg({ type: 'error', text: res.error || 'Ошибка отзыва документа' });
+      }
+    });
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64 text-slate-400">
@@ -127,6 +146,7 @@ export default function B2BDocumentDetailPage() {
   const typeMeta = DOCUMENT_TYPES[document.doc_type];
   const currentFile = document.document_files?.[selectedFileIndex];
 
+  const isSender = document.sender_company_id === currentCompanyId;
   const isReceiver = document.receiver_company_id === currentCompanyId;
 
   return (
@@ -153,9 +173,9 @@ export default function B2BDocumentDetailPage() {
           </div>
         </div>
 
-        {/* Панель смены статусов */}
+        {/* Панель смены статусов & Отзыв документа */}
         <div className="flex items-center space-x-2">
-          {document.status === 'draft' && (
+          {isSender && document.status === 'draft' && (
             <Button
               size="sm"
               onClick={() => handleStatusChange('sent', 'Отправлено получателю')}
@@ -164,6 +184,21 @@ export default function B2BDocumentDetailPage() {
             >
               <Send className="h-3.5 w-3.5 mr-1" />
               Отправить получателю
+            </Button>
+          )}
+
+          {/* КНОПКА ОТЗЫВА ДЛЯ ОТПРАВИТЕЛЯ */}
+          {isSender && document.status === 'sent' && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleRecall}
+              disabled={isPending}
+              className="border-amber-500/40 text-amber-400 hover:bg-amber-500/10 text-xs min-h-[44px]"
+              title="Вернуть в черновики для исправления ошибок"
+            >
+              <Undo2 className="h-3.5 w-3.5 mr-1" />
+              Отозвать документ
             </Button>
           )}
 
