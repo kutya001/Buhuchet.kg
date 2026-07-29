@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Upload, Camera, FileText, X, Loader2, CheckCircle2, AlertCircle, Folder, FileCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -39,6 +39,18 @@ export function MultiFileDropzone({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
+  // Реф для хранения актуального списка файлов без старых замыканий (stale closure)
+  const filesRef = useRef<FileItemState[]>(files);
+  useEffect(() => {
+    filesRef.current = files;
+  }, [files]);
+
+  const updateFileList = (updater: (prev: FileItemState[]) => FileItemState[]) => {
+    const nextList = updater(filesRef.current);
+    filesRef.current = nextList;
+    onFilesChange(nextList);
+  };
+
   const uploadFileToR2 = async (file: File, item: FileItemState) => {
     try {
       // 1. Запрашиваем Presigned PUT URL от нашего сервера
@@ -59,8 +71,8 @@ export function MultiFileDropzone({
         xhr.upload.onprogress = (event) => {
           if (event.lengthComputable) {
             const percent = Math.round((event.loaded / event.total) * 100);
-            onFilesChange(
-              files.map((f) => (f.tempId === item.tempId ? { ...f, progress: percent } : f))
+            updateFileList((prev) =>
+              prev.map((f) => (f.tempId === item.tempId ? { ...f, progress: percent } : f))
             );
           }
         };
@@ -77,9 +89,9 @@ export function MultiFileDropzone({
         xhr.send(file);
       });
 
-      // 3. Обновляем статус готовности R2 без автосохранения в БД
-      onFilesChange(
-        files.map((f) =>
+      // 3. Обновляем статус готовности R2
+      updateFileList((prev) =>
+        prev.map((f) =>
           f.tempId === item.tempId
             ? { ...f, file_path_r2: fileKey, progress: 100, uploading: false }
             : f
@@ -87,8 +99,8 @@ export function MultiFileDropzone({
       );
     } catch (err: any) {
       console.error('Ошибка R2:', err);
-      onFilesChange(
-        files.map((f) =>
+      updateFileList((prev) =>
+        prev.map((f) =>
           f.tempId === item.tempId
             ? { ...f, uploading: false, error: err.message || 'Сбой загрузки' }
             : f
@@ -127,28 +139,26 @@ export function MultiFileDropzone({
       };
     });
 
-    const updatedFilesList = [...files, ...newItems];
-    onFilesChange(updatedFilesList);
+    // Сразу добавляем новые файлы к текущему списку через ref
+    updateFileList((prev) => [...prev, ...newItems]);
 
+    // Запускаем асинхронную загрузку каждого файла в R2
     for (let i = 0; i < selectedFiles.length; i++) {
       await uploadFileToR2(selectedFiles[i], newItems[i]);
     }
 
     setGlobalUploading(false);
+    // Очищаем значение инпута, чтобы можно было заново выбрать тот же файл при желании
+    e.target.value = '';
   };
 
   const handleRemoveFile = (tempId: string) => {
-    onFilesChange(files.filter((f) => f.tempId !== tempId));
+    updateFileList((prev) => prev.filter((f) => f.tempId !== tempId));
   };
 
   const handleFileItemChange = (tempId: string, field: keyof FileItemState, value: string) => {
-    onFilesChange(
-      files.map((f) => {
-        if (f.tempId === tempId) {
-          return { ...f, [field]: value };
-        }
-        return f;
-      })
+    updateFileList((prev) =>
+      prev.map((f) => (f.tempId === tempId ? { ...f, [field]: value } : f))
     );
   };
 
@@ -250,7 +260,7 @@ export function MultiFileDropzone({
                     variant="ghost"
                     size="sm"
                     onClick={() => handleRemoveFile(file.tempId)}
-                    className="h-9 w-9 p-0 text-slate-500 hover:text-red-400"
+                    className="h-9 w-9 p-0 text-slate-500 hover:text-red-400 min-h-[44px]"
                   >
                     <X className="h-5 w-5" />
                   </Button>
