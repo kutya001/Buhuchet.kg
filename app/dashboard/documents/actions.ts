@@ -1,6 +1,6 @@
 'use server';
 
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { b2bDocumentSchema } from '@/types/b2b.types';
 import type { ActionResponse, Document, DocumentStatus, UserRole } from '@/types/database.types';
 import { revalidatePath } from 'next/cache';
@@ -44,6 +44,7 @@ export async function createB2BDocumentAction(data: any): Promise<ActionResponse
       validation.data;
 
     const supabase = await createClient();
+    const adminSupabase = await createAdminClient();
 
     // 1. Создаем документ
     const { data: doc, error: docError } = await supabase
@@ -68,21 +69,27 @@ export async function createB2BDocumentAction(data: any): Promise<ActionResponse
       return { success: false, error: `Ошибка создания B2B документа: ${docError?.message}` };
     }
 
-    // 2. Вставляем прикрепленные файлы (Мультизагрузка)
-    const filesToInsert = files.map((f) => ({
-      document_id: doc.id,
-      category_id: f.category_id,
-      file_name: f.file_name,
-      file_size: f.file_size || '1.5 MB',
-      file_type: f.file_type || 'pdf',
-      description: f.description,
-      comment: f.comment || null,
-    }));
+    // 2. Вставляем прикрепленные файлы с поддержкой company_id и R2 путей
+    if (files && files.length > 0) {
+      const filesToInsert = files.map((f) => ({
+        company_id: ctx.companyId,
+        document_id: doc.id,
+        category_id: f.category_id,
+        file_name: f.file_name,
+        file_size: f.file_size || '1.5 MB',
+        file_type: f.file_type || 'pdf',
+        file_path_r2: f.file_path_r2 || null,
+        description: f.description || `Прикрепленный скан ${f.file_name}`,
+        comment: f.comment || null,
+        is_internal: false,
+        is_legal_doc: false,
+      }));
 
-    const { error: filesError } = await supabase.from('document_files').insert(filesToInsert);
+      const { error: filesError } = await adminSupabase.from('document_files').insert(filesToInsert);
 
-    if (filesError) {
-      return { success: false, error: `Ошибка сохранения прикрепленных файлов: ${filesError.message}` };
+      if (filesError) {
+        return { success: false, error: `Ошибка сохранения прикрепленных файлов: ${filesError.message}` };
+      }
     }
 
     // 3. Запись в логах аудита
