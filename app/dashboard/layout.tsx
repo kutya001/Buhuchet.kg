@@ -1,22 +1,7 @@
 import React from 'react';
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
-import {
-  FileText,
-  Building2,
-  User,
-  LogOut,
-  LayoutDashboard,
-  Shield,
-  Users,
-  FolderOpen,
-  Globe,
-  UserCheck,
-} from 'lucide-react';
-import Link from 'next/link';
-import { signOutAction } from '../(auth)/actions';
-import { Button } from '@/components/ui/button';
-import { MobileBottomNav } from '@/components/ui/MobileBottomNav';
+import { DashboardShell } from '@/components/dashboard/DashboardShell';
 
 export default async function DashboardLayout({
   children,
@@ -43,161 +28,14 @@ export default async function DashboardLayout({
   const company = Array.isArray(profile?.companies) ? profile?.companies[0] : profile?.companies;
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row bg-slate-950 text-slate-100 relative">
-      {/* 1. DESKTOP SIDEBAR */}
-      <aside className="hidden md:flex w-64 border-r border-slate-800/80 bg-slate-900/40 p-4 flex-col justify-between backdrop-blur-xl flex-shrink-0">
-        <div className="space-y-6">
-          <div className="flex items-center space-x-3 px-2 py-1">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600/20 border border-blue-500/30 text-blue-400">
-              <FileText className="h-5 w-5" />
-            </div>
-            <div>
-              <span className="font-bold text-lg text-white tracking-tight">Buhuchet.kg</span>
-              <p className="text-[10px] text-slate-500 uppercase tracking-widest font-mono">B2B Network</p>
-            </div>
-          </div>
-
-          <nav className="space-y-1">
-            <Link
-              href="/dashboard"
-              prefetch={true}
-              className="flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-all duration-200 ease-in-out"
-            >
-              <LayoutDashboard className="h-4 w-4 text-blue-400" />
-              <span>Главная</span>
-            </Link>
-
-            <Link
-              href="/dashboard/documents"
-              prefetch={true}
-              className="flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-all duration-200 ease-in-out"
-            >
-              <FileText className="h-4 w-4 text-sky-400" />
-              <span>B2B Документы</span>
-            </Link>
-
-            <Link
-              href="/dashboard/files"
-              prefetch={true}
-              className="flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-all duration-200 ease-in-out"
-            >
-              <FolderOpen className="h-4 w-4 text-emerald-400" />
-              <span>Реестр Файлов R2</span>
-            </Link>
-
-            <Link
-              href="/dashboard/companies-catalog"
-              prefetch={true}
-              className="flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-all duration-200 ease-in-out"
-            >
-              <Globe className="h-4 w-4 text-indigo-400" />
-              <span>Каталог Компаний</span>
-            </Link>
-
-            <Link
-              href="/dashboard/partnerships"
-              prefetch={true}
-              className="flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-all duration-200 ease-in-out"
-            >
-              <UserCheck className="h-4 w-4 text-purple-400" />
-              <span>Заявки на Партнерство</span>
-            </Link>
-
-            <Link
-              href="/dashboard/counterparties"
-              prefetch={true}
-              className="flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-all duration-200 ease-in-out"
-            >
-              <Users className="h-4 w-4 text-amber-400" />
-              <span>Мои Контрагенты</span>
-            </Link>
-
-            <Link
-              href="/dashboard/company"
-              prefetch={true}
-              className="flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-all duration-200 ease-in-out"
-            >
-              <Building2 className="h-4 w-4 text-slate-400" />
-              <span>Моя Организация</span>
-            </Link>
-
-            {profile?.is_super_admin && (
-              <Link
-                href="/super-admin"
-                prefetch={true}
-                className="flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium text-amber-400 bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/20 transition-all duration-200 ease-in-out mt-4 min-h-[44px]"
-              >
-                <Shield className="h-4 w-4" />
-                <span>Супер-Админка</span>
-              </Link>
-            )}
-          </nav>
-        </div>
-
-        <div className="pt-4 border-t border-slate-800/80 space-y-3">
-          <Link href="/dashboard/profile" prefetch={true} className="flex items-center space-x-3 px-2 hover:opacity-80 transition-opacity">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-800 text-slate-300">
-              <User className="h-4 w-4" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-white truncate">
-                {profile?.full_name || user.email}
-              </p>
-              <p className="text-xs text-slate-400 truncate">
-                {company?.name || 'Без организации'}
-              </p>
-            </div>
-          </Link>
-
-          <form action={signOutAction}>
-            <Button
-              type="submit"
-              variant="outline"
-              className="w-full justify-start text-slate-400 hover:text-red-400 border-slate-800 hover:border-red-900/50 hover:bg-red-500/10 min-h-[44px]"
-            >
-              <LogOut className="mr-2 h-4 w-4" />
-              Выйти из системы
-            </Button>
-          </form>
-        </div>
-      </aside>
-
-      {/* 2. MAIN CONTENT AREA */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden pb-20 md:pb-0">
-        <header className="h-16 border-b border-slate-800/80 bg-slate-900/40 px-4 md:px-6 flex items-center justify-between backdrop-blur-xl sticky top-0 z-30">
-          <div className="flex items-center space-x-3">
-            <div className="flex md:hidden h-8 w-8 items-center justify-center rounded-lg bg-blue-600/20 text-blue-400 border border-blue-500/30">
-              <FileText className="h-4 w-4" />
-            </div>
-            <h1 className="text-base md:text-lg font-semibold text-white truncate">
-              {company?.name || 'Buhuchet.kg'}
-            </h1>
-          </div>
-
-          <div className="flex items-center space-x-3">
-            <div className="hidden sm:flex items-center space-x-2 text-xs text-slate-400">
-              <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>B2B сеть</span>
-            </div>
-            <Link href="/dashboard/profile" prefetch={true} className="md:hidden">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-800 text-slate-300">
-                <User className="h-4 w-4" />
-              </div>
-            </Link>
-          </div>
-        </header>
-
-        <main className="flex-1 p-4 md:p-6 overflow-y-auto">
-          {children}
-        </main>
-      </div>
-
-      {/* 3. ОБНОВЛЕННЫЙ НА ТРЕБОВАНИЕ МОБИЛЬНЫЙ BOTTOM NAV */}
-      <MobileBottomNav
-        isSuperAdmin={!!profile?.is_super_admin}
-        userEmail={user.email}
-        companyName={company?.name}
-      />
-    </div>
+    <DashboardShell
+      userEmail={user.email || ''}
+      fullName={profile?.full_name}
+      companyName={company?.name}
+      companyInn={company?.inn}
+      isSuperAdmin={!!profile?.is_super_admin}
+    >
+      {children}
+    </DashboardShell>
   );
 }
