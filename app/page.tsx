@@ -20,8 +20,34 @@ import {
 } from 'lucide-react';
 
 export default function HomePage() {
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'SoftwareApplication',
+    name: 'Buhuchet.kg',
+    operatingSystem: 'All',
+    applicationCategory: 'BusinessApplication',
+    offers: {
+      '@type': 'Offer',
+      price: '0',
+      priceCurrency: 'KGS',
+    },
+    description:
+      'Первая национальная платформа B2B электронных документов и автоматизации бухгалтерского учета ОсОО и ИП в Кыргызской Республике с выгрузкой в 1С.',
+    author: {
+      '@type': 'Organization',
+      name: 'Buhuchet.kg',
+      url: 'https://buhuchet.kg',
+    },
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 selection:bg-blue-500 selection:text-white relative overflow-x-hidden font-sans">
+      {/* 0. Микроразметка Schema.org JSON-LD */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+
       {/* Декоративные фоновые парящие свечения (Glows) */}
       <div className="absolute top-0 left-1/4 w-96 h-96 bg-blue-600/15 rounded-full blur-3xl pointer-events-none animate-pulse" />
       <div className="absolute top-1/3 right-10 w-96 h-96 bg-purple-600/15 rounded-full blur-3xl pointer-events-none" />
