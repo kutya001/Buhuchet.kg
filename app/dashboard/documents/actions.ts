@@ -27,7 +27,7 @@ async function getUserContext() {
   };
 }
 
-// Получение списка B2B документов организации (Входящие & Исходящие) через Admin Client
+// Получение списка документов организации (Входящие & Исходящие) через Admin Client
 export async function getB2BDocumentsAction(): Promise<ActionResponse<any[]>> {
   try {
     const ctx = await getUserContext();
@@ -49,12 +49,12 @@ export async function getB2BDocumentsAction(): Promise<ActionResponse<any[]>> {
 
     return { success: true, data: docs || [] };
   } catch (err: unknown) {
-    const errorMsg = err instanceof Error ? err.message : 'Сбой чтения B2B документов';
+    const errorMsg = err instanceof Error ? err.message : 'Сбой чтения документов';
     return { success: false, error: errorMsg };
   }
 }
 
-// Получение детализации одного B2B документа по ID для отправителя и получателя
+// Получение детализации одного документа по ID
 export async function getB2BDocumentByIdAction(docId: string): Promise<ActionResponse<any>> {
   try {
     const ctx = await getUserContext();
@@ -74,7 +74,6 @@ export async function getB2BDocumentByIdAction(docId: string): Promise<ActionRes
       return { success: false, error: 'Документ не найден или у вас нет прав на его просмотр' };
     }
 
-    // Проверяем доступ: пользователь должен состоять в компании-отправителе ИЛИ в компании-получателе ИЛИ быть суперадмином
     if (doc.sender_company_id !== ctx.companyId && doc.receiver_company_id !== ctx.companyId && !ctx.isSuperAdmin) {
       return { success: false, error: 'У вашей организации нет прав на доступ к данному документу' };
     }
@@ -86,7 +85,83 @@ export async function getB2BDocumentByIdAction(docId: string): Promise<ActionRes
   }
 }
 
-// Отзыв отправленного документа отправителем (возврат в статус 'draft' для редактирования ошибок)
+// Полное редактирование черновика документа отправителем
+export async function updateB2BDocumentDraftAction(
+  documentId: string,
+  data: {
+    doc_number?: string;
+    doc_date?: string;
+    doc_type?: any;
+    receiver_company_id?: string;
+    comment?: string;
+    status?: DocumentStatus;
+  }
+): Promise<ActionResponse> {
+  try {
+    const ctx = await getUserContext();
+    if (!ctx || !ctx.companyId) {
+      return { success: false, error: 'Пользователь не привязан к организации' };
+    }
+
+    const adminSupabase = await createAdminClient();
+
+    const { data: doc } = await adminSupabase
+      .from('documents')
+      .select('sender_company_id, status')
+      .eq('id', documentId)
+      .single();
+
+    if (!doc) {
+      return { success: false, error: 'Документ не найден' };
+    }
+
+    if (doc.sender_company_id !== ctx.companyId && !ctx.isSuperAdmin) {
+      return { success: false, error: 'Редактировать черновик может только организация-отправитель' };
+    }
+
+    if (doc.status !== 'draft' && doc.status !== 'sent') {
+      return { success: false, error: 'Редактировать можно только черновик или отозванный документ' };
+    }
+
+    const updates: any = {
+      updated_at: new Date().toISOString(),
+    };
+
+    if (data.doc_number !== undefined) updates.doc_number = data.doc_number;
+    if (data.doc_date) updates.doc_date = data.doc_date;
+    if (data.doc_type) updates.doc_type = data.doc_type;
+    if (data.receiver_company_id) updates.receiver_company_id = data.receiver_company_id;
+    if (data.comment !== undefined) updates.comment = data.comment;
+    if (data.status) updates.status = data.status;
+
+    const { error: updateError } = await adminSupabase
+      .from('documents')
+      .update(updates)
+      .eq('id', documentId);
+
+    if (updateError) {
+      return { success: false, error: `Ошибка обновления черновика: ${updateError.message}` };
+    }
+
+    // Запись аудита
+    await adminSupabase.from('document_logs').insert({
+      document_id: documentId,
+      user_id: ctx.userId,
+      old_status: doc.status,
+      new_status: data.status || doc.status,
+      comment: data.status === 'sent' ? 'Черновик отредактирован и отправлен адресату' : 'Черновик отредактирован',
+    });
+
+    revalidatePath(`/dashboard/documents/${documentId}`);
+    revalidatePath('/dashboard/documents');
+    return { success: true };
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : 'Сбой редактирования черновика';
+    return { success: false, error: errorMsg };
+  }
+}
+
+// Отзыв отправленного документа отправителем
 export async function recallB2BDocumentAction(documentId: string): Promise<ActionResponse> {
   try {
     const ctx = await getUserContext();
@@ -184,10 +259,10 @@ export async function createB2BDocumentAction(data: any): Promise<ActionResponse
       .single();
 
     if (docError || !doc) {
-      return { success: false, error: `Ошибка создания B2B документа: ${docError?.message}` };
+      return { success: false, error: `Ошибка создания документа: ${docError?.message}` };
     }
 
-    // 2. Вставляем прикрепленные файлы с поддержкой company_id и R2 путей
+    // 2. Вставляем прикрепленные файлы
     if (files && files.length > 0) {
       const filesToInsert = files.map((f) => ({
         company_id: ctx.companyId,
@@ -223,7 +298,7 @@ export async function createB2BDocumentAction(data: any): Promise<ActionResponse
     revalidatePath('/dashboard/files');
     return { success: true, data: doc as Document };
   } catch (err: unknown) {
-    const errorMsg = err instanceof Error ? err.message : 'Сбой при создании B2B документа';
+    const errorMsg = err instanceof Error ? err.message : 'Сбой при создании документа';
     return { success: false, error: errorMsg };
   }
 }

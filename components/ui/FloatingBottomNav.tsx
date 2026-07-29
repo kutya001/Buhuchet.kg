@@ -24,7 +24,7 @@ export function FloatingBottomNav() {
         <span className="text-[10px] font-medium tracking-tight">Главная</span>
       </Link>
 
-      {/* 2. ПО ЦЕНТРУ: Выделенная круглая кнопка ДОБАВИТЬ (+) */}
+      {/* 2. ПО ЦЕНТРУ: Выделенная круглая кнопка СОЗДАТЬ ДОКУМЕНТ (+) */}
       <div className="relative -top-5 flex justify-center items-center">
         <Link
           href="/dashboard/documents/new"
@@ -35,7 +35,7 @@ export function FloatingBottomNav() {
         </Link>
       </div>
 
-      {/* 3. СПРАВА: B2B Документы */}
+      {/* 3. СПРАВА: Документы */}
       <Link
         href="/dashboard/documents"
         prefetch={true}
@@ -44,7 +44,7 @@ export function FloatingBottomNav() {
         }`}
       >
         <FileText className="h-5 w-5" />
-        <span className="text-[10px] font-medium tracking-tight">B2B Документы</span>
+        <span className="text-[10px] font-medium tracking-tight">Документы</span>
       </Link>
     </nav>
   );

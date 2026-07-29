@@ -89,10 +89,10 @@ export function DashboardShell({
                   ? 'bg-sky-600/20 text-sky-400 border border-sky-500/30 font-bold'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
               }`}
-              title="B2B Документы"
+              title="Документы"
             >
               <FileText className="h-4 w-4 text-sky-400 flex-shrink-0" />
-              {!isCollapsed && <span className="truncate">B2B Документы</span>}
+              {!isCollapsed && <span className="truncate">Документы</span>}
             </Link>
 
             <Link
@@ -117,10 +117,10 @@ export function DashboardShell({
                   ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 font-bold'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
               }`}
-              title="Реестр Файлов R2"
+              title="Реестр Файлов"
             >
               <FolderOpen className="h-4 w-4 text-emerald-400 flex-shrink-0" />
-              {!isCollapsed && <span className="truncate">Реестр Файлов R2</span>}
+              {!isCollapsed && <span className="truncate">Реестр Файлов</span>}
             </Link>
 
             <Link
@@ -203,10 +203,10 @@ export function DashboardShell({
         </main>
       </div>
 
-      {/* Быстрая кнопка на смартфонах */}
+      {/* Быстрая кнопка на смартфонах (Только в Реестре Файлов) */}
       <MobileFAB />
 
-      {/* 3. МОБИЛЬНЫЙ НИЖНИЙ ПАРЯЩИЙ ОСТРОВОК (3 кнопки) */}
+      {/* 3. МОБИЛЬНЫЙ НИЖНИЙ ПАРЯЩИЙ ОСТРОВОК */}
       <FloatingBottomNav />
     </div>
   );

@@ -24,6 +24,7 @@ import {
   Eye,
   Info,
   Undo2,
+  Edit2,
 } from 'lucide-react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
@@ -33,6 +34,7 @@ import {
   updateB2BDocumentStatusAction,
   deleteB2BDocumentAction,
   recallB2BDocumentAction,
+  updateB2BDocumentDraftAction,
 } from '../actions';
 import { DOCUMENT_TYPES, DOCUMENT_STATUSES } from '@/types/document.types';
 import type { Document, Company, DocumentFile, DocumentLog, DocumentStatus } from '@/types/database.types';
@@ -63,6 +65,13 @@ export default function B2BDocumentDetailPage() {
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  // СОСТОЯНИЕ РЕДАКТИРОВАНИЯ ЧЕРНОВИКА
+  const [showEditDraftModal, setShowEditDraftModal] = useState(false);
+  const [draftNumber, setDraftNumber] = useState('');
+  const [draftDate, setDraftDate] = useState('');
+  const [draftType, setDraftType] = useState<any>('realization');
+  const [draftComment, setDraftComment] = useState('');
+
   const supabase = createClient();
 
   const loadDoc = async () => {
@@ -78,7 +87,12 @@ export default function B2BDocumentDetailPage() {
 
     const res = await getB2BDocumentByIdAction(docId);
     if (res.success && res.data) {
-      setDocument(res.data as FullB2BDocument);
+      const docData = res.data as FullB2BDocument;
+      setDocument(docData);
+      setDraftNumber(docData.doc_number || '');
+      setDraftDate(docData.doc_date || '');
+      setDraftType(docData.doc_type || 'realization');
+      setDraftComment(docData.comment || '');
     } else {
       setDocument(null);
     }
@@ -116,11 +130,37 @@ export default function B2BDocumentDetailPage() {
     });
   };
 
+  const handleSaveDraft = (shouldSend = false) => {
+    setMsg(null);
+    startTransition(async () => {
+      const res = await updateB2BDocumentDraftAction(docId, {
+        doc_number: draftNumber,
+        doc_date: draftDate,
+        doc_type: draftType,
+        comment: draftComment,
+        status: shouldSend ? 'sent' : 'draft',
+      });
+
+      if (res.success) {
+        setMsg({
+          type: 'success',
+          text: shouldSend
+            ? 'Черновик отредактирован и успешно отправлен адресату!'
+            : 'Черновик документа успешно обновлен.',
+        });
+        setShowEditDraftModal(false);
+        loadDoc();
+      } else {
+        setMsg({ type: 'error', text: res.error || 'Ошибка редактирования черновика' });
+      }
+    });
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64 text-slate-400">
         <Loader2 className="h-8 w-8 animate-spin mr-2" />
-        <span>Загрузка B2B документа...</span>
+        <span>Загрузка документа...</span>
       </div>
     );
   }
@@ -174,17 +214,31 @@ export default function B2BDocumentDetailPage() {
         </div>
 
         {/* Панель смены статусов & Отзыв документа */}
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-2 flex-wrap gap-y-2">
+          {/* КНОПКА ПОЛНОГО РЕДАКТИРОВАНИЯ ЧЕРНОВИКА */}
           {isSender && document.status === 'draft' && (
-            <Button
-              size="sm"
-              onClick={() => handleStatusChange('sent', 'Отправлено получателю')}
-              disabled={isPending}
-              className="bg-blue-600 hover:bg-blue-500 text-white text-xs w-full sm:w-auto min-h-[44px]"
-            >
-              <Send className="h-3.5 w-3.5 mr-1" />
-              Отправить получателю
-            </Button>
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setShowEditDraftModal(true)}
+                disabled={isPending}
+                className="border-blue-500/40 text-blue-400 hover:bg-blue-500/10 text-xs min-h-[44px]"
+              >
+                <Edit2 className="h-3.5 w-3.5 mr-1" />
+                Редактировать черновик
+              </Button>
+
+              <Button
+                size="sm"
+                onClick={() => handleStatusChange('sent', 'Отправлено получателю')}
+                disabled={isPending}
+                className="bg-blue-600 hover:bg-blue-500 text-white text-xs min-h-[44px] font-bold"
+              >
+                <Send className="h-3.5 w-3.5 mr-1" />
+                Отправить получателю
+              </Button>
+            </>
           )}
 
           {/* КНОПКА ОТЗЫВА ДЛЯ ОТПРАВИТЕЛЯ */}
@@ -218,7 +272,7 @@ export default function B2BDocumentDetailPage() {
                 size="sm"
                 onClick={() => handleStatusChange('accepted', 'Документ принят получателем')}
                 disabled={isPending}
-                className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs min-h-[44px]"
+                className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs min-h-[44px] font-bold"
               >
                 <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
                 Принять
@@ -231,7 +285,7 @@ export default function B2BDocumentDetailPage() {
               size="sm"
               onClick={() => handleStatusChange('processed', 'Документ успешно обработан')}
               disabled={isPending}
-              className="bg-purple-600 hover:bg-purple-500 text-white text-xs min-h-[44px]"
+              className="bg-purple-600 hover:bg-purple-500 text-white text-xs min-h-[44px] font-bold"
             >
               <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
               Обработано
@@ -322,7 +376,7 @@ export default function B2BDocumentDetailPage() {
           <Card className="bg-slate-900/40 border-slate-800">
             <CardHeader className="pb-2 pt-4">
               <CardTitle className="text-xs font-semibold text-slate-400 uppercase tracking-wider font-mono">
-                B2B Участники Отправки
+                Участники Отправки
               </CardTitle>
             </CardHeader>
             <CardContent className="grid grid-cols-2 gap-3 text-xs">
@@ -407,6 +461,90 @@ export default function B2BDocumentDetailPage() {
         </div>
       </div>
 
+      {/* МОДАЛКА РЕДАКТИРОВАНИЯ ЧЕРНОВИКА (MOBILE BOTTOM SHEET) */}
+      {showEditDraftModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <Card className="w-full sm:max-w-md bg-slate-900 border-t sm:border border-slate-800 rounded-t-3xl sm:rounded-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="w-12 h-1 bg-slate-700 rounded-full mx-auto mb-1 sm:hidden opacity-80" />
+            <h3 className="text-base sm:text-lg font-bold text-white flex items-center">
+              <Edit2 className="h-5 w-5 mr-2 text-blue-400" />
+              Редактирование Черновика
+            </h3>
+
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <Label className="text-xs text-slate-300">Номер документа</Label>
+                <Input
+                  value={draftNumber}
+                  onChange={(e) => setDraftNumber(e.target.value)}
+                  placeholder="№ 102..."
+                  className="bg-slate-950 border-slate-800 text-white min-h-[48px]"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs text-slate-300">Дата документа</Label>
+                <Input
+                  type="date"
+                  value={draftDate}
+                  onChange={(e) => setDraftDate(e.target.value)}
+                  className="bg-slate-950 border-slate-800 text-white min-h-[48px]"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs text-slate-300">Тип документа</Label>
+                <select
+                  value={draftType}
+                  onChange={(e) => setDraftType(e.target.value as any)}
+                  className="w-full min-h-[48px] rounded-xl border border-slate-800 bg-slate-950 px-3 text-xs text-slate-100"
+                >
+                  <option value="realization">Накладная на реализацию</option>
+                  <option value="purchase">Акт выполненных работ</option>
+                  <option value="payment">Платежное поручение</option>
+                  <option value="advance">Авансовый отчет</option>
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs text-slate-300">Примечание получателю</Label>
+                <Input
+                  value={draftComment}
+                  onChange={(e) => setDraftComment(e.target.value)}
+                  placeholder="Исправленные реквизиты..."
+                  className="bg-slate-950 border-slate-800 text-white min-h-[48px]"
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row justify-end gap-2 pt-2 border-t border-slate-800">
+              <Button
+                variant="ghost"
+                onClick={() => setShowEditDraftModal(false)}
+                className="min-h-[48px]"
+              >
+                Отмена
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => handleSaveDraft(false)}
+                disabled={isPending}
+                className="border-slate-800 text-slate-200 min-h-[48px] font-semibold"
+              >
+                Сохранить черновик
+              </Button>
+              <Button
+                onClick={() => handleSaveDraft(true)}
+                disabled={isPending}
+                className="bg-blue-600 hover:bg-blue-500 text-white font-bold min-h-[48px]"
+              >
+                Сохранить и отправить
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+
       {/* Модалка Отмены */}
       {showCancelModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
@@ -421,18 +559,18 @@ export default function B2BDocumentDetailPage() {
                 value={cancelComment}
                 onChange={(e) => setCancelComment(e.target.value)}
                 placeholder="Нечитаемый скан / Ошибка в реквизитах..."
-                className="bg-slate-950 border-slate-800 text-slate-100 min-h-[44px]"
+                className="bg-slate-950 border-slate-800 text-slate-100 min-h-[48px]"
               />
             </div>
             <div className="flex justify-end space-x-3 pt-2">
-              <Button variant="outline" onClick={() => setShowCancelModal(false)} className="border-slate-800 text-slate-400 min-h-[44px]">
+              <Button variant="outline" onClick={() => setShowCancelModal(false)} className="border-slate-800 text-slate-400 min-h-[48px]">
                 Отмена
               </Button>
               <Button
                 variant="destructive"
                 onClick={() => handleStatusChange('cancelled', cancelComment || 'Документ отклонен получателем')}
                 disabled={isPending}
-                className="min-h-[44px]"
+                className="min-h-[48px]"
               >
                 {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Отклонить'}
               </Button>

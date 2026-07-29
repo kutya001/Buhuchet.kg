@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { Plus, Camera, FileText, FolderOpen, X, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { getPresignedUploadUrlAction } from '@/app/dashboard/files/actions';
@@ -9,9 +9,15 @@ import { uploadFileToArchiveAction } from '@/app/dashboard/files/archive-actions
 
 export function MobileFAB() {
   const router = useRouter();
+  const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+
+  // Показываем плавающую кнопку FAB СТРОГО ТОЛЬКО В РЕЕСТРЕ ФАЙЛОВ!
+  if (pathname !== '/dashboard/files') {
+    return null;
+  }
 
   const handleCameraCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
@@ -63,7 +69,7 @@ export function MobileFAB() {
         className="hidden"
       />
 
-      {/* Круглая Плавающая Кнопка FAB под правый палец (Только на мобильных md:hidden) */}
+      {/* Круглая Плавающая Кнопка FAB под правый палец (Только на мобильных в Реестре Файлов) */}
       <div className="md:hidden fixed bottom-20 right-4 z-40">
         <button
           type="button"
@@ -114,7 +120,7 @@ export function MobileFAB() {
                   </div>
                 </button>
 
-                {/* 2. Создать B2B документ */}
+                {/* 2. Создать документ */}
                 <button
                   type="button"
                   onClick={() => {
@@ -127,7 +133,7 @@ export function MobileFAB() {
                     <FileText className="h-5 w-5" />
                   </div>
                   <div className="text-left">
-                    <span className="font-bold text-sm text-blue-300 block">📝 Создать B2B документ</span>
+                    <span className="font-bold text-sm text-blue-300 block">📝 Создать документ</span>
                     <span className="text-[11px] text-blue-400/70">Отправка накладной партнеру</span>
                   </div>
                 </button>
