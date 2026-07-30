@@ -57,7 +57,15 @@ export async function getB2BDocumentsAction(
       return { success: false, error: `Ошибка загрузки реестра документов: ${error.message}` };
     }
 
-    return { success: true, data: { docs: docs || [], totalCount: count || 0 } };
+    // Правило: Черновик (draft) может видеть только Отправитель
+    const filteredDocs = (docs || []).filter((doc: any) => {
+      if (doc.status === 'draft' && doc.receiver_company_id === ctx.companyId && doc.sender_company_id !== ctx.companyId && !ctx.isSuperAdmin) {
+        return false;
+      }
+      return true;
+    });
+
+    return { success: true, data: { docs: filteredDocs, totalCount: filteredDocs.length } };
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : 'Сбой чтения документов';
     return { success: false, error: errorMsg };
@@ -86,6 +94,11 @@ export async function getB2BDocumentByIdAction(docId: string): Promise<ActionRes
 
     if (doc.sender_company_id !== ctx.companyId && doc.receiver_company_id !== ctx.companyId && !ctx.isSuperAdmin) {
       return { success: false, error: 'У вашей организации нет прав на доступ к данному документу' };
+    }
+
+    // Правило: Черновик (draft) не доступен Получателю
+    if (doc.status === 'draft' && doc.sender_company_id !== ctx.companyId && !ctx.isSuperAdmin) {
+      return { success: false, error: 'Документ в статусе "Черновик" доступен только организации-отправителю' };
     }
 
     return { success: true, data: doc };
@@ -137,10 +150,10 @@ export async function updateB2BDocumentFullAction(
     }
 
     if (doc.sender_company_id !== ctx.companyId && !ctx.isSuperAdmin) {
-      return { success: false, error: 'Редактировать черновик может только организация-отправитель' };
+      return { success: false, error: 'Редактировать документ может только организация-отправитель' };
     }
 
-    if (doc.status !== 'draft' && doc.status !== 'sent') {
+    if (doc.status !== 'draft' && doc.status !== 'recalled') {
       return { success: false, error: 'Редактировать можно только черновик или отозванный документ' };
     }
 
@@ -221,7 +234,7 @@ export async function updateB2BDocumentFullAction(
   }
 }
 
-// Отзыв отправленного документа отправителем
+// Отзыв отправленного документа отправителем (перевод в recalled)
 export async function recallB2BDocumentAction(documentId: string): Promise<ActionResponse> {
   try {
     const ctx = await getUserContext();
@@ -246,14 +259,14 @@ export async function recallB2BDocumentAction(documentId: string): Promise<Actio
     }
 
     if (doc.status !== 'sent') {
-      return { success: false, error: 'Отозвать можно только документы в статусе "Отправлено"' };
+      return { success: false, error: 'Отозвать можно только документы в статусе "Отправлен"' };
     }
 
-    // Возвращаем в статус черновика
+    // Переводим в статус 'recalled'
     const { error: updateError } = await adminSupabase
       .from('documents')
       .update({
-        status: 'draft',
+        status: 'recalled',
         updated_at: new Date().toISOString(),
       })
       .eq('id', documentId);
@@ -267,8 +280,8 @@ export async function recallB2BDocumentAction(documentId: string): Promise<Actio
       document_id: documentId,
       user_id: ctx.userId,
       old_status: 'sent',
-      new_status: 'draft',
-      comment: 'Документ отозван отправителем для исправления ошибок',
+      new_status: 'recalled',
+      comment: 'Документ отозван отправителем',
     });
 
     revalidatePath(`/dashboard/documents/${documentId}`);
@@ -370,7 +383,7 @@ export async function updateB2BDocumentStatusAction(
 ): Promise<ActionResponse> {
   try {
     const ctx = await getUserContext();
-    if (!ctx) {
+    if (!ctx || !ctx.companyId) {
       return { success: false, error: 'Пользователь не авторизован' };
     }
 
@@ -387,6 +400,68 @@ export async function updateB2BDocumentStatusAction(
     }
 
     const oldStatus = doc.status;
+    const isSender = doc.sender_company_id === ctx.companyId;
+    const isReceiver = doc.receiver_company_id === ctx.companyId;
+
+    if (!isSender && !isReceiver && !ctx.isSuperAdmin) {
+      return { success: false, error: 'У вашей организации нет прав на смену статуса этого документа' };
+    }
+
+    // 🔍 ПРАВИЛА И РАЗГРАНИЧЕНИЯ ПРАВ ПО СТАТУСАМ
+
+    // 1. Черновик (draft):
+    if (oldStatus === 'draft') {
+      if (!isSender && !ctx.isSuperAdmin) {
+        return { success: false, error: 'Получатель не имеет доступа к черновикам' };
+      }
+      if (newStatus !== 'sent') {
+        return { success: false, error: 'Из статуса Черновик документ можно только Отправить' };
+      }
+    }
+
+    // 2. Отправлен (sent):
+    else if (oldStatus === 'sent') {
+      if (isSender && !isReceiver && !ctx.isSuperAdmin) {
+        if (newStatus !== 'recalled') {
+          return { success: false, error: 'Отправитель может только отозвать отправленный документ' };
+        }
+      } else if (isReceiver) {
+        if (newStatus !== 'accepted' && newStatus !== 'recalled') {
+          return { success: false, error: 'Получатель может принять документ или отправить обратно на статус Отозван' };
+        }
+      }
+    }
+
+    // 3. Отозван (recalled):
+    else if (oldStatus === 'recalled') {
+      if (isReceiver && !ctx.isSuperAdmin) {
+        return { success: false, error: 'Получатель не может изменять статус отозванного документа' };
+      }
+      if (isSender) {
+        if (newStatus !== 'draft') {
+          return { success: false, error: 'Отозванный документ отправитель может только перевести в Черновик' };
+        }
+      }
+    }
+
+    // 4. Принят (accepted):
+    else if (oldStatus === 'accepted') {
+      if (isSender && !isReceiver && !ctx.isSuperAdmin) {
+        return { success: false, error: 'Отправитель не может изменять статус принятого документа' };
+      }
+      if (isReceiver) {
+        if (newStatus !== 'processed' && newStatus !== 'recalled') {
+          return { success: false, error: 'Принятый документ получатель может перевести в "Обработан" или отправить обратно в "Отозван"' };
+        }
+      }
+    }
+
+    // 5. Обработан (processed):
+    else if (oldStatus === 'processed') {
+      if (!ctx.isSuperAdmin) {
+        return { success: false, error: 'Обработанный документ нельзя изменять' };
+      }
+    }
 
     // Обновляем статус через Admin Client
     const { error: updateError } = await adminSupabase

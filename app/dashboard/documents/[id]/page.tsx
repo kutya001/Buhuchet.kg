@@ -174,9 +174,9 @@ export default function B2BDocumentDetailPage() {
           </div>
         </div>
 
-        {/* Панель смены статусов & Отзыв документа */}
+        {/* Панель смены статусов & Разграничение прав Отправителя и Получателя */}
         <div className="flex items-center space-x-2 flex-wrap gap-y-2">
-          {/* КНОПКА ПОЛНОГО РЕДАКТИРОВАНИЯ ЧЕРНОВИКА И СКАНОВ */}
+          {/* 1. СТАТУС: Черновик (draft) */}
           {isSender && document.status === 'draft' && (
             <>
               <Button
@@ -194,7 +194,7 @@ export default function B2BDocumentDetailPage() {
                 size="sm"
                 onClick={() => handleStatusChange('sent', 'Отправлено получателю')}
                 disabled={isPending}
-                className="bg-blue-600 hover:bg-blue-500 text-white text-xs min-h-[44px] font-bold"
+                className="bg-blue-600 hover:bg-blue-500 text-white text-xs min-h-[44px] font-bold shadow-lg shadow-blue-600/20"
               >
                 <Send className="h-3.5 w-3.5 mr-1" />
                 Отправить получателю
@@ -202,15 +202,15 @@ export default function B2BDocumentDetailPage() {
             </>
           )}
 
-          {/* КНОПКА ОТЗЫВА ДЛЯ ОТПРАВИТЕЛЯ */}
+          {/* 2. СТАТУС: Отправлен (sent) */}
           {isSender && document.status === 'sent' && (
             <Button
               size="sm"
               variant="outline"
-              onClick={handleRecall}
+              onClick={() => handleStatusChange('recalled', 'Документ отозван отправителем')}
               disabled={isPending}
-              className="border-amber-500/40 text-amber-400 hover:bg-amber-500/10 text-xs min-h-[44px]"
-              title="Вернуть в черновики для исправления ошибок"
+              className="border-amber-500/40 text-amber-400 hover:bg-amber-500/10 text-xs min-h-[44px] font-bold"
+              title="Перевести в статус Отозван"
             >
               <Undo2 className="h-3.5 w-3.5 mr-1" />
               Отозвать документ
@@ -221,19 +221,20 @@ export default function B2BDocumentDetailPage() {
             <>
               <Button
                 size="sm"
-                variant="destructive"
-                onClick={() => setShowCancelModal(true)}
+                variant="outline"
+                onClick={() => handleStatusChange('recalled', 'Возвращено получателем на статус Отозван')}
                 disabled={isPending}
-                className="text-xs min-h-[44px]"
+                className="border-amber-500/40 text-amber-400 hover:bg-amber-500/10 text-xs min-h-[44px] font-bold"
               >
-                <XCircle className="h-3.5 w-3.5 mr-1" />
-                Отклонить
+                <Undo2 className="h-3.5 w-3.5 mr-1" />
+                Вернуть на отзыв
               </Button>
+
               <Button
                 size="sm"
                 onClick={() => handleStatusChange('accepted', 'Документ принят получателем')}
                 disabled={isPending}
-                className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs min-h-[44px] font-bold"
+                className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs min-h-[44px] font-bold shadow-lg shadow-emerald-600/20"
               >
                 <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
                 Принять
@@ -241,16 +242,52 @@ export default function B2BDocumentDetailPage() {
             </>
           )}
 
-          {document.status === 'accepted' && (
+          {/* 3. СТАТУС: Отозван (recalled) */}
+          {isSender && document.status === 'recalled' && (
             <Button
               size="sm"
-              onClick={() => handleStatusChange('processed', 'Документ успешно обработан')}
+              variant="outline"
+              onClick={() => handleStatusChange('draft', 'Переведен в Черновик для редактирования')}
               disabled={isPending}
-              className="bg-purple-600 hover:bg-purple-500 text-white text-xs min-h-[44px] font-bold"
+              className="border-slate-700 text-slate-300 hover:text-white text-xs min-h-[44px] font-bold"
             >
-              <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
-              Обработано
+              <Edit2 className="h-3.5 w-3.5 mr-1 text-amber-400" />
+              Перевести в Черновик (для редактирования)
             </Button>
+          )}
+
+          {/* 4. СТАТУС: Принят (accepted) */}
+          {isReceiver && document.status === 'accepted' && (
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => handleStatusChange('recalled', 'Возвращено из принятого в статус Отозван')}
+                disabled={isPending}
+                className="border-amber-500/40 text-amber-400 hover:bg-amber-500/10 text-xs min-h-[44px] font-bold"
+              >
+                <Undo2 className="h-3.5 w-3.5 mr-1" />
+                Вернуть на отзыв
+              </Button>
+
+              <Button
+                size="sm"
+                onClick={() => handleStatusChange('processed', 'Документ успешно обработан')}
+                disabled={isPending}
+                className="bg-purple-600 hover:bg-purple-500 text-white text-xs min-h-[44px] font-bold shadow-lg shadow-purple-600/20"
+              >
+                <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+                Обработать
+              </Button>
+            </>
+          )}
+
+          {/* 5. СТАТУС: Обработан (processed) */}
+          {document.status === 'processed' && (
+            <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/30 text-xs py-1.5 px-3">
+              <CheckCircle2 className="h-3.5 w-3.5 mr-1 text-purple-400 inline" />
+              Документ полностью обработан (Просмотр)
+            </Badge>
           )}
         </div>
       </div>

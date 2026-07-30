@@ -13,10 +13,11 @@ export const DOCUMENT_STATUSES: Record<
   { label: string; variant: 'default' | 'secondary' | 'warning' | 'success' | 'destructive' }
 > = {
   draft: { label: 'Черновик', variant: 'secondary' },
-  sent: { label: 'Отправлено', variant: 'warning' },
-  accepted: { label: 'Принято', variant: 'success' },
-  processed: { label: 'Обработано', variant: 'default' },
-  cancelled: { label: 'Отменено', variant: 'destructive' },
+  sent: { label: 'Отправлен', variant: 'warning' },
+  recalled: { label: 'Отозван', variant: 'destructive' },
+  accepted: { label: 'Принят', variant: 'success' },
+  processed: { label: 'Обработан', variant: 'default' },
+  cancelled: { label: 'Отменён', variant: 'destructive' },
 };
 
 export const documentItemSchema = z.object({
@@ -34,7 +35,7 @@ export const documentSchema = z.object({
   doc_number: z.string().optional().nullable(),
   doc_date: z.string().default(() => new Date().toISOString().split('T')[0]),
   doc_type: z.enum(['realization', 'purchase', 'payment', 'advance'] as [DocumentType, ...DocumentType[]]),
-  status: z.enum(['draft', 'sent', 'accepted', 'processed', 'cancelled'] as [DocumentStatus, ...DocumentStatus[]]).default('draft'),
+  status: z.enum(['draft', 'sent', 'recalled', 'accepted', 'processed', 'cancelled'] as [DocumentStatus, ...DocumentStatus[]]).default('draft'),
   comment: z.string().optional().nullable(),
 });
 

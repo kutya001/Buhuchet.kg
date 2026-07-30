@@ -1,7 +1,7 @@
 export type UserRole = 'owner' | 'accountant' | 'manager';
 
 export type DocumentType = 'realization' | 'purchase' | 'payment' | 'advance';
-export type DocumentStatus = 'draft' | 'sent' | 'accepted' | 'processed' | 'cancelled';
+export type DocumentStatus = 'draft' | 'sent' | 'recalled' | 'accepted' | 'processed' | 'cancelled';
 export type EsfStatus = 'not_checked' | 'matched' | 'mismatch';
 export type SubscriptionPlan = 'basic' | 'standard' | 'pro';
 export type PaymentMethod = 'qr_mbank' | 'qr_optima' | 'manual_admin';

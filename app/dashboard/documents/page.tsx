@@ -68,7 +68,7 @@ export default function B2BDocumentsRegistryPage() {
 
   // Фильтрация по вкладкам
   const filteredDocuments = documents.filter((doc) => {
-    if (activeTab === 'inbox' && doc.receiver_company_id !== currentCompanyId) return false;
+    if (activeTab === 'inbox' && (doc.receiver_company_id !== currentCompanyId || doc.status === 'draft')) return false;
     if (activeTab === 'outbox' && doc.sender_company_id !== currentCompanyId) return false;
     if (activeTab === 'drafts' && doc.status !== 'draft') return false;
     return true;
