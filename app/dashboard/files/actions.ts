@@ -1,6 +1,6 @@
 'use server';
 
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { r2Client, r2BucketName } from '@/lib/r2';
 import { PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
@@ -152,6 +152,33 @@ export async function getPresignedDownloadUrlAction(
 
     if (!fileKey) {
       return { success: false, error: 'Ключ файла в R2 не указан' };
+    }
+
+    // Проверка прав изоляции доступа к файлу R2 по базе данных
+    if (!ctx.isSuperAdmin && ctx.companyId) {
+      const adminSupabase = await createAdminClient();
+      const { data: fileDoc } = await adminSupabase
+        .from('document_files')
+        .select('company_id, document_id')
+        .eq('file_path_r2', fileKey)
+        .maybeSingle();
+
+      if (fileDoc && fileDoc.company_id !== ctx.companyId) {
+        // Проверяем, может компания является получателем/отправителем соответствующего документа
+        if (fileDoc.document_id) {
+          const { data: doc } = await adminSupabase
+            .from('documents')
+            .select('sender_company_id, receiver_company_id')
+            .eq('id', fileDoc.document_id)
+            .maybeSingle();
+
+          if (doc && doc.sender_company_id !== ctx.companyId && doc.receiver_company_id !== ctx.companyId) {
+            return { success: false, error: 'Доступ запрещен: файл принадлежит другой организации' };
+          }
+        } else {
+          return { success: false, error: 'Доступ запрещен: файл принадлежит другой организации' };
+        }
+      }
     }
 
     const command = new GetObjectCommand({

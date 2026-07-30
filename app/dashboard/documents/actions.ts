@@ -423,11 +423,25 @@ export async function updateB2BDocumentStatusAction(
 export async function deleteB2BDocumentAction(documentId: string): Promise<ActionResponse> {
   try {
     const ctx = await getUserContext();
-    if (!ctx) {
+    if (!ctx || !ctx.companyId) {
       return { success: false, error: 'Пользователь не авторизован' };
     }
 
     const adminSupabase = await createAdminClient();
+
+    const { data: doc } = await adminSupabase
+      .from('documents')
+      .select('sender_company_id, receiver_company_id')
+      .eq('id', documentId)
+      .single();
+
+    if (!doc) {
+      return { success: false, error: 'Документ не найден' };
+    }
+
+    if (doc.sender_company_id !== ctx.companyId && doc.receiver_company_id !== ctx.companyId && !ctx.isSuperAdmin) {
+      return { success: false, error: 'Доступ запрещен: у вашей организации нет прав на удаление этого документа' };
+    }
 
     const { error } = await adminSupabase
       .from('documents')

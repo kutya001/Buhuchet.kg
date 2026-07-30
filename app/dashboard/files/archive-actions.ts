@@ -268,7 +268,11 @@ export async function deleteDocumentFileAction(fileId: string): Promise<ActionRe
       await deleteR2Object(existingFile.file_path_r2);
     }
 
-    const { error } = await adminSupabase.from('document_files').delete().eq('id', fileId);
+    let deleteQuery = adminSupabase.from('document_files').delete().eq('id', fileId);
+    if (!prof?.is_super_admin && prof?.company_id) {
+      deleteQuery = deleteQuery.eq('company_id', prof.company_id);
+    }
+    const { error } = await deleteQuery;
 
     if (error) {
       return { success: false, error: `Ошибка удаления: ${error.message}` };
