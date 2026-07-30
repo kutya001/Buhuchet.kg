@@ -232,8 +232,8 @@ export function UnifiedDataGrid<T extends Record<string, any>>({
 
   return (
     <div className="space-y-4">
-      {/* ВЕРХНЯЯ ПАНЕЛЬ С ИНСТРУМЕНТАМИИ, ПОИСКОМ И ТУМБЛЕРАМИ */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-slate-900/60 p-4 rounded-2xl border border-slate-800 shadow-xl backdrop-blur-md">
+      {/* ВЕРХНЯЯ ПАНЕЛЬ С ИНСТРУМЕНТАМИ, ПОИСКОМ И ТУМБЛЕРАМИ (relative z-30 для отображения выпадающих меню СВЕРХУ таблицы) */}
+      <div className="relative z-30 flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-slate-900/80 p-4 rounded-2xl border border-slate-800 shadow-xl backdrop-blur-md">
         {/* Заголовок или Поиск */}
         <div className="flex flex-col sm:flex-row sm:items-center gap-3 flex-1">
           {title && (
@@ -267,7 +267,7 @@ export function UnifiedDataGrid<T extends Record<string, any>>({
           {actionButton}
 
           {/* КОНТРОЛЬ ВИДИМОСТИ СТОЛБЦОВ */}
-          <div className="relative">
+          <div className="relative z-50">
             <Button
               size="sm"
               variant="outline"
@@ -279,10 +279,10 @@ export function UnifiedDataGrid<T extends Record<string, any>>({
             </Button>
 
             {showVisibilityMenu && (
-              <div className="absolute right-0 top-12 z-50 w-56 bg-slate-900 border border-slate-800 rounded-2xl p-3 shadow-2xl space-y-2">
-                <div className="flex items-center justify-between text-xs font-bold text-slate-300 border-b border-slate-800 pb-2">
+              <div className="absolute right-0 top-12 z-50 w-60 bg-slate-900 border border-slate-700 rounded-2xl p-3 shadow-2xl space-y-2 ring-1 ring-white/10">
+                <div className="flex items-center justify-between text-xs font-bold text-slate-200 border-b border-slate-800 pb-2">
                   <span>Отображение столбцов</span>
-                  <button onClick={() => setShowVisibilityMenu(false)} className="text-slate-500 hover:text-white">
+                  <button onClick={() => setShowVisibilityMenu(false)} className="text-slate-400 hover:text-white p-1">
                     ✕
                   </button>
                 </div>
@@ -290,13 +290,13 @@ export function UnifiedDataGrid<T extends Record<string, any>>({
                   {columns.map((col) => (
                     <label
                       key={col.key}
-                      className="flex items-center space-x-2 text-xs text-slate-300 hover:bg-slate-800/60 p-1.5 rounded-lg cursor-pointer"
+                      className="flex items-center space-x-2 text-xs text-slate-300 hover:bg-slate-800/80 p-1.5 rounded-lg cursor-pointer transition-colors"
                     >
                       <input
                         type="checkbox"
                         checked={visibleColumnKeys.has(col.key)}
                         onChange={() => toggleColumnVisibility(col.key)}
-                        className="rounded bg-slate-950 border-slate-700 text-amber-500"
+                        className="rounded bg-slate-950 border-slate-700 text-amber-500 focus:ring-0"
                       />
                       <span className="truncate">{col.label}</span>
                     </label>
@@ -332,9 +332,9 @@ export function UnifiedDataGrid<T extends Record<string, any>>({
         </div>
       </div>
 
-      {/* ОТОБРАЖЕНИЕ РЕЖИМА 1: ТАБЛИЦА С DRAG&DROP И КНОПКОЙ ТРЕУГОЛЬНИКОМ ▼ */}
+      {/* ОТОБРАЖЕНИЕ РЕЖИМА 1: ТАБЛИЦА С DRAG&DROP И КНОПКОЙ ТРЕУГОЛЬНИКОМ ▼ (relative z-10) */}
       {viewMode === 'table' ? (
-        <Card className="bg-slate-900/50 border-slate-800 overflow-hidden shadow-2xl">
+        <Card className="relative z-10 bg-slate-900/50 border-slate-800 shadow-2xl">
           <CardContent className="p-0">
             {isLoading ? (
               <div className="p-12 text-center text-slate-400 text-sm">Загрузка данных...</div>
