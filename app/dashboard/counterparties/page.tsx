@@ -57,6 +57,7 @@ import {
   getCounterpartyDetailsAndFilesAction,
   syncPartnershipCounterpartiesAction,
   createManualCounterpartyAction,
+  getOrganizationsModuleDataAction,
 } from './actions';
 import { INDUSTRIES } from '@/types/database.types';
 import type { Counterparty, Company, Document, DocumentFile, PartnershipStatus } from '@/types/database.types';
@@ -132,51 +133,15 @@ export default function CounterpartiesPage() {
 
   const loadData = async () => {
     setLoading(true);
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    let myCompanyId = '';
-    if (user) {
-      const { data: prof } = await supabase.from('users').select('company_id').eq('id', user.id).single();
-      if (prof?.company_id) {
-        myCompanyId = prof.company_id;
-        setCurrentCompanyId(prof.company_id);
-      }
+    const res = await getOrganizationsModuleDataAction();
+    if (res.success && res.data) {
+      setCurrentCompanyId(res.data.currentCompanyId);
+      setCounterparties(res.data.counterparties);
+      setPartnerships(res.data.partnerships);
+      setCatalogCompanies(res.data.catalogCompanies);
+    } else {
+      setMsg({ type: 'error', text: res.error || 'Не удалось загрузить данные модуля' });
     }
-
-    if (myCompanyId) {
-      // Авто-синхронизация
-      await syncPartnershipCounterpartiesAction();
-
-      // 1. Активные контрагенты
-      const { data: cData } = await supabase
-        .from('counterparties')
-        .select('*')
-        .eq('company_id', myCompanyId)
-        .order('name');
-
-      if (cData) setCounterparties(cData as Counterparty[]);
-
-      // 2. Заявки на партнерство
-      const { data: pData } = await supabase
-        .from('company_partnerships')
-        .select('*, requester_company:companies!requester_company_id(*), target_company:companies!target_company_id(*)')
-        .or(`requester_company_id.eq.${myCompanyId},target_company_id.eq.${myCompanyId}`)
-        .order('created_at', { ascending: false });
-
-      if (pData) setPartnerships(pData);
-
-      // 3. Каталог всех компаний (исключая свою)
-      const { data: compData } = await supabase
-        .from('companies')
-        .select('*')
-        .neq('id', myCompanyId)
-        .order('name');
-
-      if (compData) setCatalogCompanies(compData as Company[]);
-    }
-
     setLoading(false);
   };
 

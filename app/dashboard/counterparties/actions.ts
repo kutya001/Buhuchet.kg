@@ -1,7 +1,7 @@
 'use server';
 
 import { createClient, createAdminClient } from '@/lib/supabase/server';
-import type { ActionResponse, CompanyPartnership, Company, DocumentFile, PartnershipStatus } from '@/types/database.types';
+import type { ActionResponse, CompanyPartnership, Company, DocumentFile, PartnershipStatus, Counterparty } from '@/types/database.types';
 import { revalidatePath } from 'next/cache';
 import { cache } from 'react';
 import { getPresignedDownloadUrl } from '@/lib/r2';
@@ -500,6 +500,68 @@ export async function syncPartnershipCounterpartiesAction(): Promise<ActionRespo
     return { success: true, data: { createdCount } };
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : 'Сбой синхронизации БД контрагентов';
+    return { success: false, error: errorMsg };
+  }
+}
+
+/**
+ * ВЫСОКОПРОИЗВОДИТЕЛЬНАЯ ЕДИНАЯ ВЫГРУЗКА ДАННЫХ МОДУЛЯ «ОРГАНИЗАЦИИ» (ПАРАЛЛЕЛЬНЫЙ PROMISE.ALL)
+ */
+export async function getOrganizationsModuleDataAction(): Promise<
+  ActionResponse<{
+    currentCompanyId: string;
+    counterparties: Counterparty[];
+    partnerships: any[];
+    catalogCompanies: Company[];
+  }>
+> {
+  try {
+    const ctx = await getUserContext();
+    if (!ctx || !ctx.companyId) {
+      return { success: false, error: 'Пользователь не авторизован или не привязан к организации' };
+    }
+
+    const adminSupabase = await createAdminClient();
+
+    // Запускаем все 3 тяжелых запроса ПАРАЛЛЕЛЬНО на сервере!
+    const [counterpartiesRes, partnershipsRes, catalogRes] = await Promise.all([
+      // 1. Активные контрагенты
+      adminSupabase
+        .from('counterparties')
+        .select('id, company_id, target_company_id, name, inn, is_vat_payer, phone, email, comment, created_at, updated_at')
+        .eq('company_id', ctx.companyId)
+        .order('name'),
+
+      // 2. Заявки на партнерство
+      adminSupabase
+        .from('company_partnerships')
+        .select('id, requester_company_id, target_company_id, status, created_at, updated_at, requester_company:companies!requester_company_id(id, name, inn, industry), target_company:companies!target_company_id(id, name, inn, industry)')
+        .or(`requester_company_id.eq.${ctx.companyId},target_company_id.eq.${ctx.companyId}`)
+        .order('created_at', { ascending: false }),
+
+      // 3. Каталог всех остальных верифицированных компаний КР (с узким набором колонок)
+      adminSupabase
+        .from('companies')
+        .select('id, name, inn, industry, director_name, status, is_active, created_at, updated_at')
+        .neq('id', ctx.companyId)
+        .order('name'),
+    ]);
+
+    if (counterpartiesRes.error) {
+      return { success: false, error: `Ошибка чтения контрагентов: ${counterpartiesRes.error.message}` };
+    }
+
+    return {
+      success: true,
+      data: {
+        currentCompanyId: ctx.companyId,
+        counterparties: (counterpartiesRes.data as Counterparty[]) || [],
+        partnerships: partnershipsRes.data || [],
+        catalogCompanies: (catalogRes.data as Company[]) || [],
+      },
+    };
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : 'Сбой быстрой загрузки данных модуля Организации';
     return { success: false, error: errorMsg };
   }
 }
