@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
@@ -37,6 +38,7 @@ import {
   ChevronRight,
   FileText,
   Download,
+  RefreshCw,
   ExternalLink,
   Shield,
 } from 'lucide-react';
@@ -47,6 +49,8 @@ import {
   terminatePartnershipAction,
   updateCounterpartyCommentAction,
   getCounterpartyDetailsAndFilesAction,
+  syncPartnershipCounterpartiesAction,
+  createManualCounterpartyAction,
 } from './actions';
 import type { Counterparty, Company, Document, DocumentFile } from '@/types/database.types';
 
@@ -94,9 +98,64 @@ export default function CounterpartiesPage() {
   const [profileModal, setProfileModal] = useState<CounterpartyProfileModal | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
 
+  // 3. Модалка ручного создания контрагента
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createName, setCreateName] = useState('');
+  const [createInn, setCreateInn] = useState('');
+  const [createEmail, setCreateEmail] = useState('');
+  const [createPhone, setCreatePhone] = useState('');
+  const [createIsVat, setCreateIsVat] = useState(true);
+  const [createComment, setCreateComment] = useState('');
+
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const supabase = createClient();
+
+  const handleSyncCounterparties = () => {
+    setMsg(null);
+    startTransition(async () => {
+      const res = await syncPartnershipCounterpartiesAction();
+      if (res.success) {
+        setMsg({ type: 'success', text: 'Синхронизация БД выполнена! Все записи контрагентов сверены.' });
+        loadData();
+      } else {
+        setMsg({ type: 'error', text: res.error || 'Ошибка синхронизации' });
+      }
+    });
+  };
+
+  const handleManualCreate = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!createName || !createInn || createInn.length !== 14) {
+      alert('Укажите наименование и ИНН КР (14 цифр)!');
+      return;
+    }
+
+    setMsg(null);
+    startTransition(async () => {
+      const res = await createManualCounterpartyAction({
+        name: createName,
+        inn: createInn,
+        email: createEmail,
+        phone: createPhone,
+        is_vat_payer: createIsVat,
+        comment: createComment,
+      });
+
+      if (res.success) {
+        setMsg({ type: 'success', text: `Контрагент "${createName}" успешно добавлен в реестр` });
+        setShowCreateModal(false);
+        setCreateName('');
+        setCreateInn('');
+        setCreateEmail('');
+        setCreatePhone('');
+        setCreateComment('');
+        loadData();
+      } else {
+        setMsg({ type: 'error', text: res.error || 'Ошибка добавления контрагента' });
+      }
+    });
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -114,6 +173,9 @@ export default function CounterpartiesPage() {
     }
 
     if (myCompanyId) {
+      // 0. Автоматическая ретроспективная проверка и синхронизация контрагентов из одобренных заявок
+      await syncPartnershipCounterpartiesAction();
+
       // 1. Активные контрагенты
       const { data: cData } = await supabase
         .from('counterparties')
@@ -368,7 +430,31 @@ export default function CounterpartiesPage() {
 
       {/* ------------------- ВКЛАДКА 1: МОИ КОНТРАГЕНТЫ ------------------- */}
       {activeTab === 'counterparties' && (
-        <>
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <h3 className="text-sm font-bold text-slate-300">Реестр Контрагентов Организации</h3>
+            <div className="flex items-center space-x-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleSyncCounterparties}
+                disabled={isPending}
+                className="border-slate-800 text-slate-300 text-xs min-h-[40px]"
+                title="Принудительная ретроспективная сверка одобренных заявок"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${isPending ? 'animate-spin' : ''}`} />
+                Синхронизировать БД
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => setShowCreateModal(true)}
+                className="bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs min-h-[40px]"
+              >
+                <UserPlus className="h-3.5 w-3.5 mr-1.5" />
+                Добавить Контрагента
+              </Button>
+            </div>
+          </div>
           <Card className="hidden md:block bg-slate-900/40 border-slate-800 overflow-hidden shadow-2xl">
             <CardContent className="p-0">
               {loading ? (
@@ -561,7 +647,7 @@ export default function CounterpartiesPage() {
               </div>
             </div>
           )}
-        </>
+        </div>
       )}
 
       {/* ------------------- ВКЛАДКА 2: ЗАЯВКИ СЕТИ ------------------- */}
@@ -915,6 +1001,108 @@ export default function CounterpartiesPage() {
           </Card>
         </div>
       )}
+
+      {/* МОДАЛЬНОЕ ОКНО РУЧНОГО ДОБАВЛЕНИЯ КОНТРАГЕНТА (MOBILE BOTTOM SHEET) */}
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <Card className="w-full sm:max-w-md bg-slate-900 border-t sm:border border-slate-800 rounded-t-3xl sm:rounded-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="w-12 h-1 bg-slate-700 rounded-full mx-auto mb-1 sm:hidden opacity-80" />
+            <h3 className="text-base sm:text-lg font-bold text-white flex items-center">
+              <UserPlus className="h-5 w-5 mr-2 text-amber-400" />
+              Добавление Контрагента
+            </h3>
+
+            <form onSubmit={handleManualCreate} className="space-y-3">
+              <div className="space-y-1">
+                <Label className="text-xs text-slate-300">Наименование организации / ИП *</Label>
+                <Input
+                  value={createName}
+                  onChange={(e) => setCreateName(e.target.value)}
+                  placeholder="ОсОО ВекторТрейд..."
+                  required
+                  className="bg-slate-950 border-slate-800 text-white min-h-[48px]"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs text-slate-300">ИНН КР (14 цифр) *</Label>
+                <Input
+                  value={createInn}
+                  onChange={(e) => setCreateInn(e.target.value.replace(/\D/g, '').slice(0, 14))}
+                  placeholder="01203202410145"
+                  maxLength={14}
+                  required
+                  className="bg-slate-950 border-slate-800 text-white font-mono min-h-[48px]"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-xs text-slate-300">E-mail</Label>
+                  <Input
+                    type="email"
+                    value={createEmail}
+                    onChange={(e) => setCreateEmail(e.target.value)}
+                    placeholder="info@vektor.kg"
+                    className="bg-slate-950 border-slate-800 text-white min-h-[48px]"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-slate-300">Телефон</Label>
+                  <Input
+                    value={createPhone}
+                    onChange={(e) => setCreatePhone(e.target.value)}
+                    placeholder="+996 550 123456"
+                    className="bg-slate-950 border-slate-800 text-white font-mono min-h-[48px]"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-3 p-3 rounded-xl bg-slate-950 border border-slate-800">
+                <input
+                  type="checkbox"
+                  id="is_vat_payer"
+                  checked={createIsVat}
+                  onChange={(e) => setCreateIsVat(e.target.checked)}
+                  className="h-5 w-5 rounded bg-slate-900 text-amber-500"
+                />
+                <Label htmlFor="is_vat_payer" className="text-xs text-amber-400 font-bold cursor-pointer">
+                  Плательщик НДС (12%)
+                </Label>
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs text-slate-300">Внутреннее примечание</Label>
+                <Input
+                  value={createComment}
+                  onChange={(e) => setCreateComment(e.target.value)}
+                  placeholder="Поставщик ГСМ, отсрочка 10 дней..."
+                  className="bg-slate-950 border-slate-800 text-white min-h-[48px]"
+                />
+              </div>
+
+              <div className="flex justify-end space-x-2 pt-2 border-t border-slate-800">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setShowCreateModal(false)}
+                  className="min-h-[48px]"
+                >
+                  Отмена
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={isPending}
+                  className="bg-amber-600 hover:bg-amber-500 text-white font-bold min-h-[48px] px-6"
+                >
+                  {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Сохранить'}
+                </Button>
+              </div>
+            </form>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }
+

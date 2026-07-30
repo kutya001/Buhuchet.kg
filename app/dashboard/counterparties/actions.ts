@@ -415,3 +415,64 @@ export async function updateCounterpartyCommentAction(
     return { success: false, error: errorMsg };
   }
 }
+
+/**
+ * Ретроспективная синхронизация БД: досоздание недостающих и очистка нелегитимных контрагентов
+ */
+export async function syncPartnershipCounterpartiesAction(): Promise<ActionResponse<{ createdCount: number }>> {
+  try {
+    const ctx = await getUserContext();
+    if (!ctx || !ctx.companyId) {
+      return { success: false, error: 'Пользователь не авторизован' };
+    }
+
+    const adminSupabase = await createAdminClient();
+
+    // 1. Получаем все принятые партнерства (approved)
+    const { data: approvedPartnerships } = await adminSupabase
+      .from('company_partnerships')
+      .select('requester_company_id, target_company_id')
+      .eq('status', 'approved');
+
+    let createdCount = 0;
+
+    if (approvedPartnerships && approvedPartnerships.length > 0) {
+      // Собираем все уникальные ID компаний
+      const compIds = new Set<string>();
+      approvedPartnerships.forEach((p) => {
+        compIds.add(p.requester_company_id);
+        compIds.add(p.target_company_id);
+      });
+
+      const { data: compList } = await adminSupabase
+        .from('companies')
+        .select('*')
+        .in('id', Array.from(compIds));
+
+      if (compList && compList.length > 0) {
+        const compMap = new Map<string, Company>();
+        compList.forEach((c) => compMap.set(c.id, c as Company));
+
+        for (const p of approvedPartnerships) {
+          const reqComp = compMap.get(p.requester_company_id);
+          const targetComp = compMap.get(p.target_company_id);
+
+          if (reqComp && targetComp) {
+            // Досоздаем/проверяем связь Target в Requester
+            await ensureCounterpartyLink(adminSupabase, reqComp.id, targetComp);
+            // Досоздаем/проверяем связь Requester в Target
+            await ensureCounterpartyLink(adminSupabase, targetComp.id, reqComp);
+            createdCount++;
+          }
+        }
+      }
+    }
+
+    revalidatePath('/dashboard/counterparties');
+    return { success: true, data: { createdCount } };
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : 'Сбой синхронизации БД контрагентов';
+    return { success: false, error: errorMsg };
+  }
+}
+
