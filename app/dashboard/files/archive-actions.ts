@@ -274,9 +274,7 @@ export async function deleteDocumentFileAction(fileId: string): Promise<ActionRe
       return { success: false, error: `Ошибка удаления: ${error.message}` };
     }
 
-    revalidatePath('/dashboard/files');
-    revalidatePath('/dashboard/company');
-    revalidatePath('/super-admin');
+    revalidatePath('/dashboard/files', 'page');
     return { success: true, data: true };
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : 'Сбой при удалении файла';

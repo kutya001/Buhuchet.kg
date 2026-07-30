@@ -7,7 +7,9 @@ import { revalidatePath } from 'next/cache';
 import { deleteR2Object } from '@/lib/r2';
 import { z } from 'zod';
 
-async function getUserContext() {
+import { cache } from 'react';
+
+const getUserContext = cache(async () => {
   const supabase = await createClient();
   const {
     data: { user },
@@ -27,10 +29,13 @@ async function getUserContext() {
     role: (profile?.role || 'manager') as UserRole,
     isSuperAdmin: !!profile?.is_super_admin,
   };
-}
+});
 
-// Получение списка документов организации
-export async function getB2BDocumentsAction(): Promise<ActionResponse<any[]>> {
+// Получение списка документов организации с поддержкой серверной пагинации
+export async function getB2BDocumentsAction(
+  page: number = 1,
+  limit: number = 50
+): Promise<ActionResponse<{ docs: any[]; totalCount: number }>> {
   try {
     const ctx = await getUserContext();
     if (!ctx || !ctx.companyId) {
@@ -38,18 +43,21 @@ export async function getB2BDocumentsAction(): Promise<ActionResponse<any[]>> {
     }
 
     const adminSupabase = await createAdminClient();
+    const from = (page - 1) * limit;
+    const to = page * limit - 1;
 
-    const { data: docs, error } = await adminSupabase
+    const { data: docs, count, error } = await adminSupabase
       .from('documents')
-      .select('*, sender_company:companies!sender_company_id(*), receiver_company:companies!receiver_company_id(*), document_files(*), users(full_name)')
+      .select('id, doc_number, doc_date, doc_type, status, total_amount, comment, mock_file_name, mock_file_size, created_at, sender_company_id, receiver_company_id, sender_company:companies!sender_company_id(name, inn), receiver_company:companies!receiver_company_id(name, inn), document_files(id, file_name, file_size), users(full_name)', { count: 'exact' })
       .or(`sender_company_id.eq.${ctx.companyId},receiver_company_id.eq.${ctx.companyId}`)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .range(from, to);
 
     if (error) {
       return { success: false, error: `Ошибка загрузки реестра документов: ${error.message}` };
     }
 
-    return { success: true, data: docs || [] };
+    return { success: true, data: { docs: docs || [], totalCount: count || 0 } };
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : 'Сбой чтения документов';
     return { success: false, error: errorMsg };

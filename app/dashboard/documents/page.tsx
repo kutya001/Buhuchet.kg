@@ -68,9 +68,9 @@ export default function B2BDocumentsRegistryPage() {
       if (prof?.company_id) setCurrentCompanyId(prof.company_id);
     }
 
-    const res = await getB2BDocumentsAction();
+    const res = await getB2BDocumentsAction(1, 100);
     if (res.success && res.data) {
-      setDocuments(res.data as FullB2BDocument[]);
+      setDocuments((res.data.docs || []) as FullB2BDocument[]);
     } else {
       setDocuments([]);
     }

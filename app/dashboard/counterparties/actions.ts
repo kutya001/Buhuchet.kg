@@ -3,9 +3,10 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import type { ActionResponse, CompanyPartnership, Company, DocumentFile, PartnershipStatus } from '@/types/database.types';
 import { revalidatePath } from 'next/cache';
+import { cache } from 'react';
 import { getPresignedDownloadUrl } from '@/lib/r2';
 
-async function getUserContext() {
+const getUserContext = cache(async () => {
   const supabase = await createClient();
   const {
     data: { user },
@@ -23,7 +24,7 @@ async function getUserContext() {
     userId: user.id,
     companyId: profile?.company_id || null,
   };
-}
+});
 
 /**
  * Отправка заявки на сотрудничество
@@ -335,23 +336,25 @@ export async function getCounterpartyDetailsAndFilesAction(
       .eq('company_id', targetCompanyId)
       .order('created_at', { ascending: false });
 
-    const statutoryFiles: Array<DocumentFile & { downloadUrl?: string }> = [];
+    let statutoryFiles: Array<DocumentFile & { downloadUrl?: string }> = [];
 
     if (rawFiles && rawFiles.length > 0) {
-      for (const file of rawFiles) {
-        let downloadUrl = '';
-        if (file.file_path_r2) {
-          try {
-            downloadUrl = await getPresignedDownloadUrl(file.file_path_r2);
-          } catch (e) {
-            console.error('R2 Presigned error:', e);
+      statutoryFiles = await Promise.all(
+        rawFiles.map(async (file) => {
+          let downloadUrl = '';
+          if (file.file_path_r2) {
+            try {
+              downloadUrl = await getPresignedDownloadUrl(file.file_path_r2);
+            } catch (e) {
+              console.error('R2 Presigned error:', e);
+            }
           }
-        }
-        statutoryFiles.push({
-          ...file,
-          downloadUrl,
-        });
-      }
+          return {
+            ...file,
+            downloadUrl,
+          };
+        })
+      );
     }
 
     return {
