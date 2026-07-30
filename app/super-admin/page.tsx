@@ -1,49 +1,36 @@
 'use client';
 
-import React, { useState, useEffect, useTransition, useMemo } from 'react';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
+import React, { useState, useEffect, useTransition } from 'react';
+import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
-  Table,
-  TableHeader,
-  TableBody,
-  TableRow,
-  TableHead,
-  TableCell,
-} from '@/components/ui/table';
-import {
   Shield,
   CheckCircle2,
   XCircle,
   AlertTriangle,
   Building2,
-  Search,
-  Eye,
   FileText,
   Loader2,
   FolderOpen,
   Download,
   Edit2,
   Trash2,
-  X,
   RefreshCw,
   AlertCircle,
   Users,
   UserCheck,
   UserPlus,
-  ChevronLeft,
-  ChevronRight,
   Database,
   BookOpen,
   Plus,
   Check,
   Ban,
-  HelpCircle,
   Clock,
+  ExternalLink,
 } from 'lucide-react';
 import {
   getPendingCompaniesAction,
@@ -60,22 +47,18 @@ import {
   updateDocumentAdminAction,
   deleteDocumentAdminAction,
   createFileCategoryAdminAction,
-  updateFileCategoryAdminAction,
   deleteFileCategoryAdminAction,
   inspectTableDataAdminAction,
 } from './actions';
 import {
   getAllSystemFilesAction,
-  updateDocumentFileAction,
   deleteDocumentFileAction,
 } from '../dashboard/files/archive-actions';
-import { getPresignedDownloadUrlAction, getPresignedUploadUrlAction } from '../dashboard/files/actions';
+import { getPresignedDownloadUrlAction } from '../dashboard/files/actions';
 import type { Company, DocumentFile, FileCategory } from '@/types/database.types';
 import { createClient } from '@/lib/supabase/client';
 import { UnifiedDataGrid, ColumnDef } from '@/components/ui/unified/UnifiedDataGrid';
 import { UnifiedFormModal } from '@/components/ui/unified/UnifiedFormModal';
-
-const ITEMS_PER_PAGE = 10;
 
 export default function SuperAdminPage() {
   const [activeTab, setActiveTab] = useState<
@@ -92,12 +75,8 @@ export default function SuperAdminPage() {
   const [allDocuments, setAllDocuments] = useState<any[]>([]);
   const [categories, setCategories] = useState<FileCategory[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [isPending, startTransition] = useTransition();
-
-  // Состояние пагинации
-  const [currentPage, setCurrentPage] = useState(1);
 
   // 1. Модалки МОДЕРАЦИИ И ОРГАНИЗАЦИЙ
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
@@ -188,147 +167,177 @@ export default function SuperAdminPage() {
     }
   }, [activeTab, selectedDbTable]);
 
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [search, activeTab, companySubTab]);
-
   // ДЕЙСТВИЯ МОДЕРАЦИИ ОРГАНИЗАЦИЙ
   const handleApprove = (comp: Company) => {
     setMsg(null);
     startTransition(async () => {
       const res = await approveCompanyAction(comp.id);
       if (res.success) {
-        setMsg({ type: 'success', text: `Организация "${comp.name}" верифицирована` });
-        await loadData();
+        setMsg({ type: 'success', text: `Организация "${comp.name}" успешно подтверждена!` });
+        loadData();
       } else {
-        setMsg({ type: 'error', text: res.error || 'Ошибка верификации' });
+        setMsg({ type: 'error', text: res.error || 'Ошибка подтверждения' });
       }
     });
   };
 
-  const handleConfirmModerationAction = () => {
-    if (!selectedCompany || !modalMode) return;
-    if (!moderationComment.trim()) {
-      alert('Укажите причину для компании!');
-      return;
-    }
-
+  const handleRequestChanges = () => {
+    if (!selectedCompany || !moderationComment) return;
     setMsg(null);
     startTransition(async () => {
-      let res;
-      if (modalMode === 'request_changes') {
-        res = await requestCompanyChangesAction(selectedCompany.id, moderationComment);
-      } else {
-        res = await blockCompanyAction(selectedCompany.id, moderationComment);
-      }
-
+      const res = await requestCompanyChangesAction(selectedCompany.id, moderationComment);
       if (res.success) {
-        setMsg({
-          type: 'success',
-          text:
-            modalMode === 'request_changes'
-              ? `Отправлен запрос исправлений для "${selectedCompany.name}"`
-              : `Организация "${selectedCompany.name}" заблокирована`,
-        });
+        setMsg({ type: 'success', text: `Запрос исправления отправлен компании "${selectedCompany.name}"` });
         setSelectedCompany(null);
-        setModalMode(null);
         setModerationComment('');
-        await loadData();
+        setModalMode(null);
+        loadData();
       } else {
-        setMsg({ type: 'error', text: res.error || 'Ошибка модерации' });
+        setMsg({ type: 'error', text: res.error || 'Ошибка отправки' });
       }
     });
   };
 
-  const handleCreateCompany = () => {
-    if (!newCompName || !newCompInn) {
-      alert('Укажите название и ИНН организации!');
+  const handleBlock = () => {
+    if (!selectedCompany || !moderationComment) return;
+    setMsg(null);
+    startTransition(async () => {
+      const res = await blockCompanyAction(selectedCompany.id, moderationComment);
+      if (res.success) {
+        setMsg({ type: 'success', text: `Организация "${selectedCompany.name}" заблокирована.` });
+        setSelectedCompany(null);
+        setModerationComment('');
+        setModalMode(null);
+        loadData();
+      } else {
+        setMsg({ type: 'error', text: res.error || 'Ошибка блокировки' });
+      }
+    });
+  };
+
+  const handleCreateCompany = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCompName || !newCompInn || newCompInn.length !== 14) {
+      alert('Заполните название и ИНН (14 цифр)!');
       return;
     }
+
     setMsg(null);
     startTransition(async () => {
       const res = await createCompanyAdminAction({
         name: newCompName,
         inn: newCompInn,
-        director_name: newCompDirector,
+        director_name: newCompDirector || undefined,
       });
 
       if (res.success) {
-        setMsg({ type: 'success', text: `Организация "${newCompName}" создана` });
+        setMsg({ type: 'success', text: `Организация "${newCompName}" верифицирована и создана` });
         setShowCreateCompanyModal(false);
         setNewCompName('');
         setNewCompInn('');
         setNewCompDirector('');
-        await loadData();
+        loadData();
       } else {
         setMsg({ type: 'error', text: res.error || 'Ошибка создания' });
       }
     });
   };
 
-  const handleSaveCompany = () => {
+  const handleOpenEditCompany = (comp: Company) => {
+    setEditingCompany(comp);
+    setCompName(comp.name);
+    setCompInn(comp.inn);
+    setCompIndustry(comp.industry || '');
+    setCompStatus(comp.status);
+    setCompAddress(comp.legal_address || '');
+    setCompDirector(comp.director_name || '');
+  };
+
+  const handleSaveCompanyEdit = (e: React.FormEvent) => {
+    e.preventDefault();
     if (!editingCompany) return;
     setMsg(null);
+
     startTransition(async () => {
       const res = await updateCompanyAdminAction(editingCompany.id, {
         name: compName,
         inn: compInn,
-        industry: compIndustry,
+        industry: compIndustry || undefined,
         status: compStatus,
-        legal_address: compAddress,
-        director_name: compDirector,
+        legal_address: compAddress || undefined,
+        director_name: compDirector || undefined,
       });
 
       if (res.success) {
-        setMsg({ type: 'success', text: `Реквизиты организации "${compName}" обновлены` });
+        setMsg({ type: 'success', text: `Данные компании "${compName}" обновлены` });
         setEditingCompany(null);
-        await loadData();
+        loadData();
       } else {
-        setMsg({ type: 'error', text: res.error || 'Ошибка при обновлении компании' });
+        setMsg({ type: 'error', text: res.error || 'Ошибка обновления' });
       }
     });
   };
 
-  // ДЕЙСТВИЯ: ПОЛЬЗОВАТЕЛИ
-  const handleSaveUser = () => {
+  // ПОЛЬЗОВАТЕЛИ
+  const handleOpenEditUser = (u: any) => {
+    setEditingUser(u);
+    setUserName(u.full_name || '');
+    setUserEmail(u.email || '');
+    setUserRole(u.role || 'owner');
+    setUserCompId(u.company_id || '');
+    setUserIsSuperAdmin(!!u.is_super_admin);
+  };
+
+  const handleSaveUserEdit = (e: React.FormEvent) => {
+    e.preventDefault();
     if (!editingUser) return;
     setMsg(null);
+
     startTransition(async () => {
       const res = await updateUserAdminAction(editingUser.id, {
         full_name: userName,
-        email: userEmail,
         role: userRole,
-        company_id: userCompId || null,
+        company_id: userCompId || undefined,
         is_super_admin: userIsSuperAdmin,
       });
 
       if (res.success) {
-        setMsg({ type: 'success', text: `Пользователь "${userName || userEmail}" обновлен` });
+        setMsg({ type: 'success', text: `Пользователь "${userName}" обновлен` });
         setEditingUser(null);
-        await loadData();
+        loadData();
       } else {
-        setMsg({ type: 'error', text: res.error || 'Ошибка при обновлении пользователя' });
+        setMsg({ type: 'error', text: res.error || 'Ошибка обновления пользователя' });
       }
     });
   };
 
-  const handleDeleteUser = async (userId: string, name: string) => {
-    if (!confirm(`Удалить пользователя "${name}" из системы?`)) return;
+  const handleDeleteUser = (userId: string, name: string) => {
+    if (!confirm(`Вы действительно хотите удалить пользователя ${name}?`)) return;
+    setMsg(null);
     startTransition(async () => {
       const res = await deleteUserAdminAction(userId);
       if (res.success) {
-        setMsg({ type: 'success', text: 'Пользователь удален из системы' });
-        await loadData();
+        setMsg({ type: 'success', text: 'Пользователь удален' });
+        loadData();
       } else {
-        setMsg({ type: 'error', text: res.error || 'Ошибка удаления пользователя' });
+        setMsg({ type: 'error', text: res.error || 'Ошибка удаления' });
       }
     });
   };
 
-  // ДЕЙСТВИЯ: B2B ДОКУМЕНТЫ
-  const handleSaveDoc = () => {
+  // ДОКУМЕНТЫ
+  const handleOpenEditDoc = (doc: any) => {
+    setEditingDoc(doc);
+    setEditDocNumber(doc.doc_number || '');
+    setEditDocStatus(doc.status || 'sent');
+    setEditDocComment(doc.comment || '');
+  };
+
+  const handleSaveDocEdit = (e: React.FormEvent) => {
+    e.preventDefault();
     if (!editingDoc) return;
     setMsg(null);
+
     startTransition(async () => {
       const res = await updateDocumentAdminAction(editingDoc.id, {
         doc_number: editDocNumber,
@@ -337,151 +346,378 @@ export default function SuperAdminPage() {
       });
 
       if (res.success) {
-        setMsg({ type: 'success', text: 'B2B Документ обновлен' });
+        setMsg({ type: 'success', text: 'Документ обновлен' });
         setEditingDoc(null);
-        await loadData();
+        loadData();
       } else {
         setMsg({ type: 'error', text: res.error || 'Ошибка обновления документа' });
       }
     });
   };
 
-  const handleDeleteDoc = async (docId: string) => {
-    if (!confirm('Удалить этот B2B документ из базы данных?')) return;
+  const handleDeleteDoc = (docId: string) => {
+    if (!confirm('Вы действительно хотите полностью удалить этот документ?')) return;
+    setMsg(null);
     startTransition(async () => {
       const res = await deleteDocumentAdminAction(docId);
       if (res.success) {
         setMsg({ type: 'success', text: 'Документ удален' });
-        await loadData();
+        loadData();
       } else {
         setMsg({ type: 'error', text: res.error || 'Ошибка удаления документа' });
       }
     });
   };
 
-  // ДЕЙСТВИЯ: СПРАВОЧНИКИ
-  const handleCreateCategory = () => {
-    if (!newCatName || !newCatCode) {
-      alert('Укажите название и код категории!');
-      return;
+  // СКАЧИВАНИЕ И УДАЛЕНИЕ СИСТЕМНЫХ ФАЙЛОВ
+  const handleDownloadFile = async (fileKey: string) => {
+    if (!fileKey) return;
+    const res = await getPresignedDownloadUrlAction(fileKey);
+    if (res.success && res.data?.downloadUrl) {
+      window.open(res.data.downloadUrl, '_blank');
+    } else {
+      alert(res.error || 'Сбой получения R2 ссылки');
     }
+  };
+
+  const handleDeleteFile = (fileId: string, name: string) => {
+    if (!confirm(`Удалить файл ${name} из системного архива R2?`)) return;
     setMsg(null);
     startTransition(async () => {
-      const res = await createFileCategoryAdminAction(newCatName, newCatCode, newCatDesc);
+      const res = await deleteDocumentFileAction(fileId);
       if (res.success) {
-        setMsg({ type: 'success', text: 'Категория создана' });
+        setMsg({ type: 'success', text: 'Файл успешно удален из R2' });
+        loadData();
+      } else {
+        setMsg({ type: 'error', text: res.error || 'Ошибка удаления файла' });
+      }
+    });
+  };
+
+  // СПРАВОЧНИКИ
+  const handleCreateCategory = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCatName || !newCatCode) return;
+    setMsg(null);
+
+    startTransition(async () => {
+      const res = await createFileCategoryAdminAction(newCatName, newCatDesc || '');
+
+      if (res.success) {
+        setMsg({ type: 'success', text: `Категория "${newCatName}" создана` });
         setShowCreateCatModal(false);
         setNewCatName('');
         setNewCatCode('');
         setNewCatDesc('');
-        await loadData();
+        loadData();
       } else {
         setMsg({ type: 'error', text: res.error || 'Ошибка создания категории' });
       }
     });
   };
 
-  const handleDeleteCategory = async (catId: string) => {
-    if (!confirm('Удалить эту категорию сканов?')) return;
+  const handleDeleteCategory = (catId: string, name: string) => {
+    if (!confirm(`Удалить категорию "${name}"?`)) return;
+    setMsg(null);
     startTransition(async () => {
       const res = await deleteFileCategoryAdminAction(catId);
       if (res.success) {
         setMsg({ type: 'success', text: 'Категория удалена' });
-        await loadData();
+        loadData();
       } else {
         setMsg({ type: 'error', text: res.error || 'Ошибка удаления' });
       }
     });
   };
 
-  // ДЕЙСТВИЯ С ФАЙЛАМИ R2
-  const handleDownloadR2File = async (fileKey?: string | null) => {
-    if (!fileKey) return;
-    const res = await getPresignedDownloadUrlAction(fileKey);
-    if (res.success && res.data?.downloadUrl) {
-      window.open(res.data.downloadUrl, '_blank');
-    }
-  };
+  // ---------------- CONFIG FOR TAB 1: COMPANIES (UnifiedDataGrid) ----------------
+  const filteredCompanies = allCompanies.filter((c) => {
+    if (companySubTab === 'pending') return c.status === 'pending_approval';
+    if (companySubTab === 'problematic') return c.status === 'requires_changes' || c.status === 'blocked';
+    return true;
+  });
 
-  // Фильтрация организаций с учетом под-вкладки 'all' | 'pending' | 'problematic'
-  const filteredCompanies = useMemo(() => {
-    const term = search.toLowerCase();
-    return allCompanies.filter((c) => {
-      const matchesSearch = c.name.toLowerCase().includes(term) || c.inn.includes(term);
-      if (!matchesSearch) return false;
+  const companiesColumns: ColumnDef<Company>[] = [
+    {
+      key: 'name',
+      label: 'Наименование Организации',
+      sortable: true,
+      getValue: (c) => c.name,
+      render: (c) => (
+        <div className="font-semibold text-white text-sm flex items-center space-x-1.5">
+          <Building2 className="h-4 w-4 text-amber-400 flex-shrink-0" />
+          <span>{c.name}</span>
+        </div>
+      ),
+    },
+    {
+      key: 'inn',
+      label: 'ИНН КР',
+      sortable: true,
+      getValue: (c) => c.inn,
+      render: (c) => <span className="font-mono text-sm font-bold text-slate-300">{c.inn}</span>,
+    },
+    {
+      key: 'status',
+      label: 'Статус Модерации',
+      sortable: true,
+      getValue: (c) => c.status,
+      render: (c) => (
+        <Badge
+          className={
+            c.status === 'active'
+              ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+              : c.status === 'pending_approval'
+              ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+              : c.status === 'blocked'
+              ? 'bg-red-500/20 text-red-400 border-red-500/30'
+              : 'bg-purple-500/20 text-purple-400 border-purple-500/30'
+          }
+        >
+          {c.status === 'active' && 'Подтверждена (Active)'}
+          {c.status === 'pending_approval' && 'На модерации'}
+          {c.status === 'requires_changes' && 'Нужны правки'}
+          {c.status === 'blocked' && 'Заблокирована'}
+        </Badge>
+      ),
+    },
+    {
+      key: 'director_name',
+      label: 'Руководитель',
+      sortable: true,
+      getValue: (c) => c.director_name,
+      render: (c) => <span className="text-xs text-slate-300">{c.director_name || '—'}</span>,
+    },
+    {
+      key: 'actions',
+      label: 'Модерация',
+      sortable: false,
+      render: (c) => (
+        <div className="flex items-center justify-end space-x-2">
+          {c.status === 'pending_approval' && (
+            <Button size="sm" onClick={() => handleApprove(c)} disabled={isPending} className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs min-h-[36px]">
+              <Check className="h-3.5 w-3.5 mr-1" />
+              Одобрить
+            </Button>
+          )}
 
-      if (companySubTab === 'pending') {
-        return c.status === 'pending_approval';
-      }
-      if (companySubTab === 'problematic') {
-        return c.status === 'requires_changes' || c.status === 'blocked';
-      }
+          <Button size="sm" variant="outline" onClick={() => handleOpenEditCompany(c)} className="border-slate-800 text-blue-400 hover:bg-blue-500/10 text-xs min-h-[36px]">
+            <Edit2 className="h-3.5 w-3.5 mr-1" />
+            Редактировать
+          </Button>
 
-      return true;
-    });
-  }, [allCompanies, search, companySubTab]);
+          {c.status !== 'blocked' && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setSelectedCompany(c);
+                setModalMode('block');
+              }}
+              className="border-red-900/40 text-red-400 hover:bg-red-500/10 text-xs min-h-[36px]"
+            >
+              <Ban className="h-3.5 w-3.5 mr-1" />
+              Блок
+            </Button>
+          )}
+        </div>
+      ),
+    },
+  ];
 
-  const filteredUsers = useMemo(() => {
-    const term = search.toLowerCase();
-    return allUsers.filter(
-      (u) =>
-        u.full_name?.toLowerCase().includes(term) ||
-        u.email?.toLowerCase().includes(term) ||
-        u.companies?.name?.toLowerCase().includes(term)
-    );
-  }, [allUsers, search]);
+  // ---------------- CONFIG FOR TAB 2: USERS (UnifiedDataGrid) ----------------
+  const usersColumns: ColumnDef<any>[] = [
+    {
+      key: 'full_name',
+      label: 'ФИО Пользователя',
+      sortable: true,
+      getValue: (u) => u.full_name || u.email,
+      render: (u) => (
+        <div className="font-semibold text-white text-sm flex items-center space-x-1.5">
+          <Users className="h-4 w-4 text-emerald-400 flex-shrink-0" />
+          <span>{u.full_name || 'Без имени'}</span>
+        </div>
+      ),
+    },
+    {
+      key: 'email',
+      label: 'Email',
+      sortable: true,
+      getValue: (u) => u.email,
+      render: (u) => <span className="font-mono text-xs text-slate-300">{u.email}</span>,
+    },
+    {
+      key: 'role',
+      label: 'Роль',
+      sortable: true,
+      getValue: (u) => u.role,
+      render: (u) => (
+        <Badge variant="outline" className="border-amber-500/30 text-amber-400 text-xs">
+          {u.role === 'owner' ? 'Владелец' : u.role === 'accountant' ? 'Бухгалтер' : 'Менеджер'}
+        </Badge>
+      ),
+    },
+    {
+      key: 'is_super_admin',
+      label: 'Суперадмин',
+      sortable: true,
+      getValue: (u) => u.is_super_admin,
+      render: (u) =>
+        u.is_super_admin ? (
+          <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30 text-xs">
+            <Shield className="h-3.5 w-3.5 mr-1" />
+            Суперадмин
+          </Badge>
+        ) : (
+          <span className="text-slate-500 text-xs">—</span>
+        ),
+    },
+    {
+      key: 'actions',
+      label: 'Действия',
+      sortable: false,
+      render: (u) => (
+        <div className="flex items-center justify-end space-x-2">
+          <Button size="sm" variant="outline" onClick={() => handleOpenEditUser(u)} className="border-slate-800 text-blue-400 hover:bg-blue-500/10 text-xs min-h-[36px]">
+            <Edit2 className="h-3.5 w-3.5 mr-1" />
+            Редактировать
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => handleDeleteUser(u.id, u.full_name || u.email)} className="border-red-900/40 text-red-400 hover:bg-red-500/10 text-xs min-h-[36px]">
+            <Trash2 className="h-3.5 w-3.5 mr-1" />
+            Удалить
+          </Button>
+        </div>
+      ),
+    },
+  ];
 
-  const filteredFiles = useMemo(() => {
-    const term = search.toLowerCase();
-    return systemFiles.filter(
-      (f) => f.file_name?.toLowerCase().includes(term) || f.description?.toLowerCase().includes(term)
-    );
-  }, [systemFiles, search]);
+  // ---------------- CONFIG FOR TAB 3: FILES (UnifiedDataGrid) ----------------
+  const filesColumns: ColumnDef<any>[] = [
+    {
+      key: 'file_name',
+      label: 'Наименование Файла',
+      sortable: true,
+      getValue: (f) => f.file_name,
+      render: (f) => (
+        <div className="font-semibold text-white text-xs sm:text-sm flex items-center space-x-2">
+          <FileText className="h-4 w-4 text-purple-400 flex-shrink-0" />
+          <span className="truncate max-w-[220px] font-mono">{f.file_name}</span>
+        </div>
+      ),
+    },
+    {
+      key: 'company',
+      label: 'Организация',
+      sortable: true,
+      getValue: (f) => f.companies?.name,
+      render: (f) => <span className="text-xs font-semibold text-slate-300">{f.companies?.name || '—'}</span>,
+    },
+    {
+      key: 'file_size',
+      label: 'Размер',
+      sortable: true,
+      getValue: (f) => f.file_size,
+      render: (f) => <span className="font-mono text-xs text-slate-400">{f.file_size || '1.5 MB'}</span>,
+    },
+    {
+      key: 'created_at',
+      label: 'Дата Загрузки',
+      sortable: true,
+      getValue: (f) => f.created_at,
+      render: (f) => <span className="font-mono text-xs text-slate-400">{new Date(f.created_at).toLocaleDateString('ru-RU')}</span>,
+    },
+    {
+      key: 'actions',
+      label: 'Действия',
+      sortable: false,
+      render: (f) => (
+        <div className="flex items-center justify-end space-x-2">
+          {f.file_path_r2 && (
+            <Button size="sm" variant="outline" onClick={() => handleDownloadFile(f.file_path_r2)} className="border-slate-800 text-purple-400 text-xs min-h-[36px]">
+              <Download className="h-3.5 w-3.5 mr-1" />
+              Скачать
+            </Button>
+          )}
+          <Button size="sm" variant="outline" onClick={() => handleDeleteFile(f.id, f.file_name)} className="border-red-900/40 text-red-400 hover:bg-red-500/10 text-xs min-h-[36px]">
+            <Trash2 className="h-3.5 w-3.5 mr-1" />
+            Удалить
+          </Button>
+        </div>
+      ),
+    },
+  ];
 
-  const filteredDocs = useMemo(() => {
-    const term = search.toLowerCase();
-    return allDocuments.filter(
-      (d) =>
-        d.doc_number?.toLowerCase().includes(term) ||
-        d.sender_company?.name.toLowerCase().includes(term) ||
-        d.receiver_company?.name.toLowerCase().includes(term)
-    );
-  }, [allDocuments, search]);
-
-  // Расчет пагинации
-  const paginatedCompanies = filteredCompanies.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
-  const totalPagesCompanies = Math.ceil(filteredCompanies.length / ITEMS_PER_PAGE) || 1;
-
-  const paginatedUsers = filteredUsers.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
-  const totalPagesUsers = Math.ceil(filteredUsers.length / ITEMS_PER_PAGE) || 1;
-
-  const paginatedFiles = filteredFiles.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
-  const totalPagesFiles = Math.ceil(filteredFiles.length / ITEMS_PER_PAGE) || 1;
-
-  const paginatedDocs = filteredDocs.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
-  const totalPagesDocs = Math.ceil(filteredDocs.length / ITEMS_PER_PAGE) || 1;
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64 text-slate-400">
-        <Loader2 className="h-8 w-8 animate-spin mr-2" />
-        <span>Загрузка панели суперадмина...</span>
-      </div>
-    );
-  }
+  // ---------------- CONFIG FOR TAB 4: DOCUMENTS (UnifiedDataGrid) ----------------
+  const documentsColumns: ColumnDef<any>[] = [
+    {
+      key: 'doc_number',
+      label: '№ Документа',
+      sortable: true,
+      getValue: (d) => d.doc_number || d.id,
+      render: (d) => <span className="font-mono font-bold text-white text-xs sm:text-sm">№ {d.doc_number || d.id.slice(0, 8)}</span>,
+    },
+    {
+      key: 'sender',
+      label: 'Отправитель',
+      sortable: true,
+      getValue: (d) => d.sender_company?.name,
+      render: (d) => <span className="text-xs text-slate-300 font-semibold">{d.sender_company?.name || '—'}</span>,
+    },
+    {
+      key: 'receiver',
+      label: 'Получатель',
+      sortable: true,
+      getValue: (d) => d.receiver_company?.name,
+      render: (d) => <span className="text-xs text-slate-300 font-semibold">{d.receiver_company?.name || '—'}</span>,
+    },
+    {
+      key: 'total_amount',
+      label: 'Сумма (сом)',
+      sortable: true,
+      getValue: (d) => d.total_amount,
+      render: (d) => <span className="font-mono font-bold text-emerald-400 text-xs sm:text-sm">{Number(d.total_amount || 0).toLocaleString('ru-RU')} c.</span>,
+    },
+    {
+      key: 'actions',
+      label: 'Действия',
+      sortable: false,
+      render: (d) => (
+        <div className="flex items-center justify-end space-x-2">
+          <Button size="sm" variant="outline" onClick={() => handleOpenEditDoc(d)} className="border-slate-800 text-blue-400 hover:bg-blue-500/10 text-xs min-h-[36px]">
+            <Edit2 className="h-3.5 w-3.5 mr-1" />
+            Редактировать
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => handleDeleteDoc(d.id)} className="border-red-900/40 text-red-400 hover:bg-red-500/10 text-xs min-h-[36px]">
+            <Trash2 className="h-3.5 w-3.5 mr-1" />
+            Удалить
+          </Button>
+        </div>
+      ),
+    },
+  ];
 
   return (
-    <div className="space-y-4 sm:space-y-6 max-w-full overflow-x-hidden w-full px-1 sm:px-0">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+    <div className="space-y-6 pb-12">
+      {/* 1. ШАПКА ПАНЕЛИ СУПЕРАДМИНА */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-white tracking-tight flex items-center">
-            <Shield className="h-5 w-5 sm:h-6 sm:w-6 mr-2 text-amber-400 flex-shrink-0" />
-            Панель Суперадминистратора
-          </h2>
-          <p className="text-xs sm:text-sm text-slate-400 mt-0.5">
-            Глобальный контроль, модерация заявок и CRUD над всеми модулями
+          <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight flex items-center">
+            <Shield className="h-6 w-6 mr-2.5 text-purple-400" />
+            Панель Суперадминистратора КР
+          </h1>
+          <p className="text-xs sm:text-sm text-slate-400 mt-1">
+            Модерация организаций, контроль B2B документов, файлы R2 и пользователи системы
           </p>
         </div>
+
+        <Button
+          size="sm"
+          onClick={() => setShowCreateCompanyModal(true)}
+          className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs min-h-[44px] shadow-lg shadow-purple-600/20"
+        >
+          <UserPlus className="h-4 w-4 mr-2" />
+          + Верифицировать Компанию
+        </Button>
       </div>
 
       {msg && (
@@ -498,30 +734,25 @@ export default function SuperAdminPage() {
         </Alert>
       )}
 
-      {/* ШЕСТЬ ОСНОВНЫХ МОДУЛЕЙ СУПЕРАДМИНА — МОБИЛЬНЫЙ ОСТРОВОК */}
-      <div className="flex items-center space-x-2 border-b border-slate-800 pb-2 overflow-x-auto no-scrollbar scrollbar-none">
+      {/* 2. НАВИГАЦИОННЫЕ ВКЛАДКИ СУПЕРАДМИНА */}
+      <div className="flex items-center space-x-2 border-b border-slate-800 pb-2 overflow-x-auto">
         <button
           onClick={() => setActiveTab('companies')}
-          className={`flex items-center space-x-2 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-medium transition-all whitespace-nowrap min-h-[48px] ${
+          className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs md:text-sm font-medium transition-all min-h-[44px] ${
             activeTab === 'companies'
-              ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30 font-bold'
+              ? 'bg-purple-600/20 text-purple-400 border border-purple-500/40 font-bold shadow-lg shadow-purple-500/10'
               : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
           }`}
         >
           <Building2 className="h-4 w-4" />
-          <span>Организации ({allCompanies.length})</span>
-          {pendingCompanies.length > 0 && (
-            <span className="bg-amber-500 text-slate-950 text-[10px] font-extrabold px-1.5 py-0.5 rounded-full animate-pulse ml-1">
-              {pendingCompanies.length}
-            </span>
-          )}
+          <span>Организации КР ({allCompanies.length})</span>
         </button>
 
         <button
           onClick={() => setActiveTab('users')}
-          className={`flex items-center space-x-2 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-medium transition-all whitespace-nowrap min-h-[48px] ${
+          className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs md:text-sm font-medium transition-all min-h-[44px] ${
             activeTab === 'users'
-              ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 font-bold'
+              ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/40 font-bold shadow-lg shadow-emerald-500/10'
               : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
           }`}
         >
@@ -531,21 +762,21 @@ export default function SuperAdminPage() {
 
         <button
           onClick={() => setActiveTab('files')}
-          className={`flex items-center space-x-2 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-medium transition-all whitespace-nowrap min-h-[48px] ${
+          className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs md:text-sm font-medium transition-all min-h-[44px] ${
             activeTab === 'files'
-              ? 'bg-purple-600/20 text-purple-400 border border-purple-500/30 font-bold'
+              ? 'bg-amber-600/20 text-amber-400 border border-amber-500/40 font-bold shadow-lg shadow-amber-500/10'
               : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
           }`}
         >
           <FolderOpen className="h-4 w-4" />
-          <span>Файлы R2 ({systemFiles.length})</span>
+          <span>Все Файлы R2 ({systemFiles.length})</span>
         </button>
 
         <button
           onClick={() => setActiveTab('documents')}
-          className={`flex items-center space-x-2 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-medium transition-all whitespace-nowrap min-h-[48px] ${
+          className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs md:text-sm font-medium transition-all min-h-[44px] ${
             activeTab === 'documents'
-              ? 'bg-sky-600/20 text-sky-400 border border-sky-500/30 font-bold'
+              ? 'bg-blue-600/20 text-blue-400 border border-blue-500/40 font-bold shadow-lg shadow-blue-500/10'
               : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
           }`}
         >
@@ -555,895 +786,183 @@ export default function SuperAdminPage() {
 
         <button
           onClick={() => setActiveTab('lookups')}
-          className={`flex items-center space-x-2 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-medium transition-all whitespace-nowrap min-h-[48px] ${
+          className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs md:text-sm font-medium transition-all min-h-[44px] ${
             activeTab === 'lookups'
-              ? 'bg-amber-600/20 text-amber-400 border border-amber-500/30 font-bold'
+              ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/40 font-bold shadow-lg shadow-indigo-500/10'
               : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
           }`}
         >
           <BookOpen className="h-4 w-4" />
-          <span>Справочники ({categories.length})</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('database')}
-          className={`flex items-center space-x-2 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-medium transition-all whitespace-nowrap min-h-[48px] ${
-            activeTab === 'database'
-              ? 'bg-red-600/20 text-red-400 border border-red-500/30 font-bold'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
-          }`}
-        >
-          <Database className="h-4 w-4" />
-          <span>Модуль БД (Read-Only)</span>
+          <span>Справочники</span>
         </button>
       </div>
 
-      {/* ------------------- МОДУЛЬ 1: ОРГАНИЗАЦИИ И МОДЕРАЦИЯ ------------------- */}
+      {/* ------------------- ВКЛАДКА 1: ОРГАНИЗАЦИИ КР (UnifiedDataGrid) ------------------- */}
       {activeTab === 'companies' && (
         <div className="space-y-4">
-          {/* ФИЛЬТР ПОД-ВКЛАДОК МОДЕРАЦИИ */}
-          <div className="flex items-center space-x-2 bg-slate-900/60 p-1.5 rounded-xl border border-slate-800 overflow-x-auto">
+          <div className="flex items-center space-x-2 bg-slate-950 p-1.5 rounded-xl border border-slate-800">
             <button
               onClick={() => setCompanySubTab('all')}
-              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all min-h-[38px] ${
-                companySubTab === 'all'
-                  ? 'bg-blue-600 text-white font-bold shadow'
-                  : 'text-slate-400 hover:text-slate-200'
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all min-h-[36px] ${
+                companySubTab === 'all' ? 'bg-slate-800 text-white font-bold' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              <Building2 className="h-3.5 w-3.5" />
-              <span>Все ({allCompanies.length})</span>
+              Все Компания ({allCompanies.length})
             </button>
-
             <button
               onClick={() => setCompanySubTab('pending')}
-              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all min-h-[38px] ${
-                companySubTab === 'pending'
-                  ? 'bg-amber-500 text-slate-950 font-bold shadow'
-                  : 'text-amber-400 hover:bg-amber-500/10'
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all min-h-[36px] ${
+                companySubTab === 'pending' ? 'bg-amber-500/20 text-amber-400 font-bold border border-amber-500/30' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              <Clock className="h-3.5 w-3.5" />
-              <span>На Модерации ({pendingCompanies.length})</span>
-              {pendingCompanies.length > 0 && (
-                <span className="w-2 h-2 rounded-full bg-amber-300 animate-ping ml-1" />
-              )}
-            </button>
-
-            <button
-              onClick={() => setCompanySubTab('problematic')}
-              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all min-h-[38px] ${
-                companySubTab === 'problematic'
-                  ? 'bg-red-600 text-white font-bold shadow'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <AlertTriangle className="h-3.5 w-3.5 text-red-400" />
-              <span>Замечания / Блок</span>
+              Требуют Модерации ({pendingCompanies.length})
             </button>
           </div>
 
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Поиск организации по названию или ИНН..."
-              className="bg-slate-900 border-slate-800 text-white text-xs sm:text-sm min-h-[48px]"
-            />
-            <Button
-              onClick={() => setShowCreateCompanyModal(true)}
-              className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold min-h-[48px] w-full sm:w-auto"
-            >
-              <Plus className="h-4 w-4 mr-1.5" />
-              Создать Компанию
-            </Button>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {paginatedCompanies.length === 0 ? (
-              <div className="col-span-full p-12 text-center text-slate-500 text-xs bg-slate-900/40 rounded-2xl border border-slate-800">
-                {companySubTab === 'pending'
-                  ? 'Новые заявки на модерацию отсутствуют'
-                  : 'Организации не найдены'}
-              </div>
-            ) : (
-              paginatedCompanies.map((comp) => (
-                <Card key={comp.id} className="bg-slate-900/60 border-slate-800 p-4 space-y-3 flex flex-col justify-between shadow-xl">
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-start">
-                      <div className="min-w-0 flex-1">
-                        <h4 className="font-bold text-white text-sm truncate">{comp.name}</h4>
-                        <p className="text-xs font-mono text-amber-400 mt-0.5">ИНН: {comp.inn}</p>
-                      </div>
-                      <Badge
-                        variant={
-                          comp.status === 'active'
-                            ? 'success'
-                            : comp.status === 'blocked'
-                            ? 'destructive'
-                            : 'secondary'
-                        }
-                        className="text-[10px] ml-2 flex-shrink-0"
-                      >
-                        {comp.status === 'pending_approval'
-                          ? 'Ожидает модерации'
-                          : comp.status === 'requires_changes'
-                          ? 'Требует изменений'
-                          : comp.status === 'active'
-                          ? 'Активна'
-                          : 'Заблокирована'}
-                      </Badge>
-                    </div>
-
-                    <div className="text-xs space-y-1 text-slate-400">
-                      <p>Руководитель: <span className="text-slate-200">{comp.director_name || '—'}</span></p>
-                      <p>Отрасль: <span className="text-slate-200">{comp.industry || '—'}</span></p>
-                      {comp.moderation_comment && (
-                        <div className="p-2 rounded bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-400 mt-1">
-                          Замечание: {comp.moderation_comment}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* КНОПКИ ДЕЙСТВИЙ И МОДЕРАЦИИ */}
-                  <div className="pt-2 border-t border-slate-800 flex flex-col gap-2">
-                    {(comp.status === 'pending_approval' || comp.status === 'requires_changes' || comp.status === 'blocked') && (
-                      <div className="grid grid-cols-3 gap-1.5">
-                        <Button
-                          size="sm"
-                          onClick={() => handleApprove(comp)}
-                          disabled={isPending}
-                          className="bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] min-h-[40px] px-1 font-bold"
-                          title="Одобрить организацию"
-                        >
-                          <Check className="h-3.5 w-3.5 mr-1" />
-                          Одобрить
-                        </Button>
-
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            setSelectedCompany(comp);
-                            setModalMode('request_changes');
-                            setModerationComment(comp.moderation_comment || '');
-                          }}
-                          disabled={isPending}
-                          className="border-amber-500/40 text-amber-400 hover:bg-amber-500/10 text-[11px] min-h-[40px] px-1 font-semibold"
-                          title="Отправить замечание"
-                        >
-                          <HelpCircle className="h-3.5 w-3.5 mr-1" />
-                          Замечание
-                        </Button>
-
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            setSelectedCompany(comp);
-                            setModalMode('block');
-                            setModerationComment(comp.moderation_comment || '');
-                          }}
-                          disabled={isPending}
-                          className="border-red-500/40 text-red-400 hover:bg-red-500/10 text-[11px] min-h-[40px] px-1 font-semibold"
-                          title="Заблокировать компанию"
-                        >
-                          <Ban className="h-3.5 w-3.5 mr-1" />
-                          Блок
-                        </Button>
-                      </div>
-                    )}
-
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        setEditingCompany(comp);
-                        setCompName(comp.name);
-                        setCompInn(comp.inn);
-                        setCompIndustry(comp.industry || 'Услуги');
-                        setCompStatus(comp.status);
-                        setCompAddress(comp.legal_address || '');
-                        setCompDirector(comp.director_name || '');
-                      }}
-                      className="w-full border-slate-800 text-xs text-blue-400 hover:bg-blue-500/10 min-h-[44px] font-semibold"
-                    >
-                      <Edit2 className="h-4 w-4 mr-1" />
-                      Редактировать реквизиты
-                    </Button>
-                  </div>
-                </Card>
-              ))
-            )}
-          </div>
-
-          {totalPagesCompanies > 1 && (
-            <div className="flex items-center justify-between pt-2">
-              <p className="text-xs text-slate-400 font-mono">
-                Стр. <span className="text-white font-bold">{currentPage}</span> из <span className="text-white font-bold">{totalPagesCompanies}</span>
-              </p>
-              <div className="flex items-center space-x-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
-                  className="border-slate-800 text-slate-300 min-h-[44px] text-xs"
-                >
-                  <ChevronLeft className="h-4 w-4 mr-1" />
-                  Назад
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setCurrentPage((p) => Math.min(totalPagesCompanies, p + 1))}
-                  disabled={currentPage === totalPagesCompanies}
-                  className="border-slate-800 text-slate-300 min-h-[44px] text-xs"
-                >
-                  Вперед
-                  <ChevronRight className="h-4 w-4 ml-1" />
-                </Button>
-              </div>
-            </div>
-          )}
+          <UnifiedDataGrid<Company>
+            columns={companiesColumns}
+            data={filteredCompanies}
+            keyExtractor={(c) => c.id}
+            searchPlaceholder="Поиск организации по названию, ИНН..."
+            emptyMessage="Организации не найдены."
+            isLoading={loading}
+            defaultPageSize={25}
+          />
         </div>
       )}
 
-      {/* ------------------- МОДУЛЬ 2: ПОЛЬЗОВАТЕЛИ ------------------- */}
+      {/* ------------------- ВКЛАДКА 2: ПОЛЬЗОВАТЕЛИ (UnifiedDataGrid) ------------------- */}
       {activeTab === 'users' && (
-        <div className="space-y-4">
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Поиск пользователя по имени или email..."
-            className="bg-slate-900 border-slate-800 text-white text-xs sm:text-sm min-h-[48px]"
-          />
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {paginatedUsers.map((usr) => (
-              <Card key={usr.id} className="bg-slate-900/60 border-slate-800 p-4 space-y-3 flex flex-col justify-between">
-                <div className="space-y-2">
-                  <div className="flex justify-between items-start">
-                    <div className="min-w-0 flex-1">
-                      <h4 className="font-bold text-white text-sm truncate">{usr.full_name || 'Без имени'}</h4>
-                      <p className="text-xs font-mono text-slate-400 truncate">{usr.email}</p>
-                    </div>
-                    {usr.is_super_admin && (
-                      <Badge variant="outline" className="text-[10px] border-amber-500/30 text-amber-400 bg-amber-500/10">
-                        Суперадмин
-                      </Badge>
-                    )}
-                  </div>
-
-                  <div className="text-xs space-y-1">
-                    <p className="text-slate-300">
-                      Компания: <span className="font-medium text-white">{usr.companies?.name || 'Без организации'}</span>
-                    </p>
-                    <p className="text-slate-400 uppercase font-mono text-[10px]">Роль: {usr.role || 'owner'}</p>
-                  </div>
-                </div>
-
-                <div className="pt-2 border-t border-slate-800 flex items-center justify-between gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      setEditingUser(usr);
-                      setUserName(usr.full_name || '');
-                      setUserEmail(usr.email || '');
-                      setUserRole(usr.role || 'owner');
-                      setUserCompId(usr.company_id || '');
-                      setUserIsSuperAdmin(!!usr.is_super_admin);
-                    }}
-                    className="flex-1 text-xs border-slate-800 text-blue-400 hover:bg-blue-500/10 min-h-[48px] font-semibold"
-                  >
-                    <Edit2 className="h-4 w-4 mr-1" />
-                    Редактировать
-                  </Button>
-
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => handleDeleteUser(usr.id, usr.full_name || usr.email)}
-                    className="text-xs text-red-400 hover:bg-red-500/10 min-h-[48px]"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </Card>
-            ))}
-          </div>
-
-          {totalPagesUsers > 1 && (
-            <div className="flex items-center justify-between pt-2">
-              <p className="text-xs text-slate-400 font-mono">
-                Стр. <span className="text-white font-bold">{currentPage}</span> из <span className="text-white font-bold">{totalPagesUsers}</span>
-              </p>
-              <div className="flex items-center space-x-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
-                  className="border-slate-800 text-slate-300 min-h-[44px] text-xs"
-                >
-                  <ChevronLeft className="h-4 w-4 mr-1" />
-                  Назад
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setCurrentPage((p) => Math.min(totalPagesUsers, p + 1))}
-                  disabled={currentPage === totalPagesUsers}
-                  className="border-slate-800 text-slate-300 min-h-[44px] text-xs"
-                >
-                  Вперед
-                  <ChevronRight className="h-4 w-4 ml-1" />
-                </Button>
-              </div>
-            </div>
-          )}
-        </div>
+        <UnifiedDataGrid<any>
+          columns={usersColumns}
+          data={allUsers}
+          keyExtractor={(u) => u.id}
+          searchPlaceholder="Поиск пользователя по имени, email..."
+          emptyMessage="Пользователи не найдены."
+          isLoading={loading}
+          defaultPageSize={25}
+        />
       )}
 
-      {/* ------------------- МОДУЛЬ 3: ФАЙЛЫ R2 ------------------- */}
+      {/* ------------------- ВКЛАДКА 3: ФАЙЛЫ R2 (UnifiedDataGrid) ------------------- */}
       {activeTab === 'files' && (
-        <div className="space-y-4">
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Поиск по наименованию файла R2..."
-            className="bg-slate-900 border-slate-800 text-white text-xs sm:text-sm min-h-[48px]"
-          />
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-            {paginatedFiles.map((file) => (
-              <Card key={file.id} className="bg-slate-900/60 border-slate-800 p-4 space-y-3 flex flex-col justify-between">
-                <div className="space-y-2">
-                  <div className="font-bold text-white text-xs truncate font-mono">{file.file_name}</div>
-                  <Badge variant="outline" className="text-[10px] border-purple-500/30 text-purple-400">
-                    {file.companies?.name || 'Архив'}
-                  </Badge>
-                  <p className="text-xs text-slate-300 line-clamp-2">{file.description || 'Без описания'}</p>
-                </div>
-
-                <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
-                  <span className="text-[10px] font-mono text-slate-500">{file.file_size || '1.2 MB'}</span>
-
-                  {file.file_path_r2 && (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => handleDownloadR2File(file.file_path_r2)}
-                      className="h-9 text-xs text-blue-400 hover:text-white font-semibold min-h-[44px]"
-                    >
-                      <Download className="h-4 w-4 mr-1" />
-                      R2
-                    </Button>
-                  )}
-                </div>
-              </Card>
-            ))}
-          </div>
-
-          {totalPagesFiles > 1 && (
-            <div className="flex items-center justify-between pt-2">
-              <p className="text-xs text-slate-400 font-mono">
-                Стр. <span className="text-white font-bold">{currentPage}</span> из <span className="text-white font-bold">{totalPagesFiles}</span>
-              </p>
-              <div className="flex items-center space-x-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
-                  className="border-slate-800 text-slate-300 min-h-[44px] text-xs"
-                >
-                  <ChevronLeft className="h-4 w-4 mr-1" />
-                  Назад
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setCurrentPage((p) => Math.min(totalPagesFiles, p + 1))}
-                  disabled={currentPage === totalPagesFiles}
-                  className="border-slate-800 text-slate-300 min-h-[44px] text-xs"
-                >
-                  Вперед
-                  <ChevronRight className="h-4 w-4 ml-1" />
-                </Button>
-              </div>
-            </div>
-          )}
-        </div>
+        <UnifiedDataGrid<any>
+          columns={filesColumns}
+          data={systemFiles}
+          keyExtractor={(f) => f.id}
+          searchPlaceholder="Поиск по наименованию файла, организации..."
+          emptyMessage="Системные файлы не найдены."
+          isLoading={loading}
+          defaultPageSize={25}
+        />
       )}
 
-      {/* ------------------- МОДУЛЬ 4: ВСЕ B2B ДОКУМЕНТЫ ------------------- */}
+      {/* ------------------- ВКЛАДКА 4: ДОКУМЕНТЫ (UnifiedDataGrid) ------------------- */}
       {activeTab === 'documents' && (
-        <div className="space-y-4">
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Поиск по номеру документа или контрагентам..."
-            className="bg-slate-900 border-slate-800 text-white text-xs sm:text-sm min-h-[48px]"
-          />
-
-          <div className="block md:hidden space-y-3">
-            {paginatedDocs.map((doc) => (
-              <Card key={doc.id} className="bg-slate-900/60 border-slate-800 p-4 space-y-3">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h4 className="font-bold text-white text-sm font-mono">№ {doc.doc_number || doc.id.slice(0, 8)}</h4>
-                    <span className="text-[11px] text-slate-400 block mt-0.5">{doc.doc_type}</span>
-                  </div>
-                  <Badge variant="outline" className="text-[10px]">
-                    {doc.status}
-                  </Badge>
-                </div>
-
-                <div className="text-xs space-y-1 pt-1 border-t border-slate-800/60">
-                  <p className="text-slate-300">Отправитель: <span className="font-medium text-white">{doc.sender_company?.name || '—'}</span></p>
-                  <p className="text-slate-300">Получатель: <span className="font-medium text-white">{doc.receiver_company?.name || '—'}</span></p>
-                </div>
-
-                <div className="pt-2 border-t border-slate-800 flex items-center justify-between gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      setEditingDoc(doc);
-                      setEditDocNumber(doc.doc_number || '');
-                      setEditDocStatus(doc.status);
-                      setEditDocComment(doc.comment || '');
-                    }}
-                    className="flex-1 border-slate-800 text-xs text-blue-400 min-h-[48px] font-semibold"
-                  >
-                    <Edit2 className="h-4 w-4 mr-1" />
-                    Изменить
-                  </Button>
-
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => handleDeleteDoc(doc.id)}
-                    className="text-xs text-red-400 hover:bg-red-500/10 min-h-[48px]"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </Card>
-            ))}
-          </div>
-
-          <Card className="hidden md:block bg-slate-900/40 border-slate-800 overflow-hidden">
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader className="bg-slate-950/60">
-                  <TableRow>
-                    <TableHead>Номер & Тип</TableHead>
-                    <TableHead>Отправитель</TableHead>
-                    <TableHead>Получатель</TableHead>
-                    <TableHead>Статус</TableHead>
-                    <TableHead className="text-right">Действия Суперадмина</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {paginatedDocs.map((doc) => (
-                    <TableRow key={doc.id}>
-                      <TableCell className="font-mono text-xs font-bold text-white">
-                        № {doc.doc_number || doc.id.slice(0, 8)}
-                      </TableCell>
-                      <TableCell className="text-xs text-slate-300">{doc.sender_company?.name || '—'}</TableCell>
-                      <TableCell className="text-xs text-slate-300">{doc.receiver_company?.name || '—'}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="text-[10px]">
-                          {doc.status}
-                        </Badge>
-                      </TableCell>
-
-                      <TableCell className="text-right space-x-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            setEditingDoc(doc);
-                            setEditDocNumber(doc.doc_number || '');
-                            setEditDocStatus(doc.status);
-                            setEditDocComment(doc.comment || '');
-                          }}
-                          className="border-slate-800 text-xs text-blue-400 min-h-[36px]"
-                        >
-                          <Edit2 className="h-3.5 w-3.5 mr-1" />
-                          Изменить
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleDeleteDoc(doc.id)}
-                          className="text-xs text-red-400 hover:bg-red-500/10 min-h-[36px]"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-
-          {totalPagesDocs > 1 && (
-            <div className="flex items-center justify-between pt-2">
-              <p className="text-xs text-slate-400 font-mono">
-                Стр. <span className="text-white font-bold">{currentPage}</span> из <span className="text-white font-bold">{totalPagesDocs}</span>
-              </p>
-              <div className="flex items-center space-x-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
-                  className="border-slate-800 text-slate-300 min-h-[44px] text-xs"
-                >
-                  <ChevronLeft className="h-4 w-4 mr-1" />
-                  Назад
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setCurrentPage((p) => Math.min(totalPagesDocs, p + 1))}
-                  disabled={currentPage === totalPagesDocs}
-                  className="border-slate-800 text-slate-300 min-h-[44px] text-xs"
-                >
-                  Вперед
-                  <ChevronRight className="h-4 w-4 ml-1" />
-                </Button>
-              </div>
-            </div>
-          )}
-        </div>
+        <UnifiedDataGrid<any>
+          columns={documentsColumns}
+          data={allDocuments}
+          keyExtractor={(d) => d.id}
+          searchPlaceholder="Поиск по № документа, отправителю..."
+          emptyMessage="Документы не найдены."
+          isLoading={loading}
+          defaultPageSize={25}
+        />
       )}
 
-      {/* ------------------- МОДУЛЬ 5: СПРАВОЧНИКИ ------------------- */}
-      {activeTab === 'lookups' && (
-        <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <h3 className="font-bold text-white text-base">Категории первички и сканов (`file_categories`)</h3>
-            <Button
-              size="sm"
-              onClick={() => setShowCreateCatModal(true)}
-              className="bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold min-h-[48px] w-full sm:w-auto"
+      {/* МОДАЛЬНЫЕ ОКНА НА UnifiedFormModal */}
+      {/* 1. СОЗДАНИЕ КОМПАНИИ СУПЕРАДМИНОМ */}
+      <UnifiedFormModal
+        isOpen={showCreateCompanyModal}
+        onClose={() => setShowCreateCompanyModal(false)}
+        title="Верификация и Создание Организации"
+        subtitle="Ручное добавление юридического лица в реестр КР"
+        mode="create"
+        onSubmit={handleCreateCompany}
+        isSubmitting={isPending}
+        submitText="Создать и верифицировать"
+      >
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <Label className="text-xs text-slate-300">Наименование компании *</Label>
+            <Input
+              value={newCompName}
+              onChange={(e) => setNewCompName(e.target.value)}
+              placeholder="ОсОО АльфаЛогистик"
+              required
+              className="bg-slate-950 border-slate-800 text-white min-h-[44px]"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <Label className="text-xs text-slate-300">ИНН КР (14 цифр) *</Label>
+            <Input
+              value={newCompInn}
+              onChange={(e) => setNewCompInn(e.target.value.replace(/\D/g, '').slice(0, 14))}
+              placeholder="01203202410145"
+              maxLength={14}
+              required
+              className="bg-slate-950 border-slate-800 text-white font-mono min-h-[44px]"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <Label className="text-xs text-slate-300">ФИО Руководителя</Label>
+            <Input
+              value={newCompDirector}
+              onChange={(e) => setNewCompDirector(e.target.value)}
+              placeholder="Иванов И.И."
+              className="bg-slate-950 border-slate-800 text-white min-h-[44px]"
+            />
+          </div>
+        </div>
+      </UnifiedFormModal>
+
+      {/* 2. РЕДАКТИРОВАНИЕ КОМПАНИИ */}
+      <UnifiedFormModal
+        isOpen={!!editingCompany}
+        onClose={() => setEditingCompany(null)}
+        title="Редактирование Организации"
+        subtitle={`ИНН: ${editingCompany?.inn || '—'}`}
+        mode="edit"
+        onSubmit={handleSaveCompanyEdit}
+        isSubmitting={isPending}
+        submitText="Сохранить"
+      >
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <Label className="text-xs text-slate-300">Наименование компании</Label>
+            <Input
+              value={compName}
+              onChange={(e) => setCompName(e.target.value)}
+              className="bg-slate-950 border-slate-800 text-white min-h-[44px]"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <Label className="text-xs text-slate-300">ИНН КР</Label>
+            <Input
+              value={compInn}
+              onChange={(e) => setCompInn(e.target.value)}
+              className="bg-slate-950 border-slate-800 text-white font-mono min-h-[44px]"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <Label className="text-xs text-slate-300">Статус модерации</Label>
+            <select
+              value={compStatus}
+              onChange={(e) => setCompStatus(e.target.value as any)}
+              className="w-full min-h-[44px] rounded-xl border border-slate-800 bg-slate-950 px-3 text-sm text-white font-bold"
             >
-              <Plus className="h-4 w-4 mr-1.5" />
-              Добавить Категорию
-            </Button>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {categories.map((cat) => (
-              <Card key={cat.id} className="bg-slate-900/60 border-slate-800 p-4 space-y-2 flex flex-col justify-between">
-                <div>
-                  <div className="flex justify-between items-start">
-                    <h4 className="font-bold text-white text-sm">{cat.name}</h4>
-                    {cat.code && (
-                      <Badge variant="outline" className="text-[10px] font-mono border-slate-700 text-amber-400">
-                        {cat.code}
-                      </Badge>
-                    )}
-                  </div>
-                  <p className="text-xs text-slate-400 mt-1">{cat.description || 'Без описания'}</p>
-                </div>
-
-                <div className="pt-2 border-t border-slate-800/80 flex justify-end">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => handleDeleteCategory(cat.id)}
-                    className="text-xs text-red-400 hover:bg-red-500/10 min-h-[44px]"
-                  >
-                    <Trash2 className="h-4 w-4 mr-1" />
-                    Удалить
-                  </Button>
-                </div>
-              </Card>
-            ))}
+              <option value="active">Active (Подтверждена)</option>
+              <option value="pending_approval">Pending Approval (На модерации)</option>
+              <option value="requires_changes">Requires Changes (Правки)</option>
+              <option value="blocked">Blocked (Заблокирована)</option>
+            </select>
           </div>
         </div>
-      )}
-
-      {/* ------------------- МОДУЛЬ 6: БАЗА ДАННЫХ (READ-ONLY INSPECTOR) ------------------- */}
-      {activeTab === 'database' && (
-        <div className="space-y-4">
-          <Card className="bg-slate-900/60 border-slate-800 p-4 space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
-                <h3 className="font-bold text-white text-base flex items-center">
-                  <Database className="h-5 w-5 mr-2 text-red-400" />
-                  Инспектор БД Supabase (Read-Only)
-                </h3>
-                <p className="text-xs text-slate-400">Прямое чтение таблиц PostgreSQL без возможности разрушения</p>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <Label className="text-xs text-slate-300 font-mono">Таблица:</Label>
-                <select
-                  value={selectedDbTable}
-                  onChange={(e) => setSelectedDbTable(e.target.value)}
-                  className="h-11 rounded-xl border border-slate-800 bg-slate-950 px-3 text-xs text-slate-100 font-mono font-bold"
-                >
-                  <option value="companies">companies (Организации)</option>
-                  <option value="users">users (Пользователи)</option>
-                  <option value="documents">documents (B2B Документы)</option>
-                  <option value="document_files">document_files (Сканы R2)</option>
-                  <option value="counterparties">counterparties (Контрагенты)</option>
-                  <option value="company_partnerships">company_partnerships (Заявки)</option>
-                  <option value="file_categories">file_categories (Категории)</option>
-                  <option value="document_logs">document_logs (Аудит)</option>
-                </select>
-              </div>
-            </div>
-
-            {dbLoading ? (
-              <div className="flex items-center justify-center p-12 text-slate-400">
-                <Loader2 className="h-6 w-6 animate-spin mr-2" />
-                <span>Чтение данных таблицы "{selectedDbTable}"...</span>
-              </div>
-            ) : dbData.rows.length === 0 ? (
-              <div className="p-12 text-center text-slate-500 text-xs">Таблица пуста</div>
-            ) : (
-              <div className="overflow-x-auto max-h-96 rounded-xl border border-slate-800">
-                <Table>
-                  <TableHeader className="bg-slate-950 font-mono text-[11px]">
-                    <TableRow>
-                      {dbData.columns.map((col) => (
-                        <TableHead key={col} className="text-slate-300 whitespace-nowrap">
-                          {col}
-                        </TableHead>
-                      ))}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody className="font-mono text-xs">
-                    {dbData.rows.map((row, idx) => (
-                      <TableRow key={idx} className="hover:bg-slate-800/40">
-                        {dbData.columns.map((col) => (
-                          <TableCell key={col} className="truncate max-w-[200px] text-slate-200">
-                            {typeof row[col] === 'object' ? JSON.stringify(row[col]) : String(row[col] ?? 'null')}
-                          </TableCell>
-                        ))}
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </Card>
-        </div>
-      )}
-
-      {/* МОДАЛЬНОЕ ОКНО МОДЕРАЦИИ (ЗАМЕЧАНИЕ / БЛОКИРОВКА) */}
-      {selectedCompany && modalMode && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <Card className="w-full sm:max-w-md bg-slate-900 border-t sm:border border-slate-800 rounded-t-3xl sm:rounded-2xl p-5 space-y-4">
-            <div className="w-12 h-1 bg-slate-700 rounded-full mx-auto mb-1 sm:hidden opacity-80" />
-            <h3 className="text-base sm:text-lg font-bold text-white flex items-center">
-              {modalMode === 'request_changes' ? (
-                <>
-                  <HelpCircle className="h-5 w-5 mr-2 text-amber-400" />
-                  Запрос изменений организации
-                </>
-              ) : (
-                <>
-                  <Ban className="h-5 w-5 mr-2 text-red-400" />
-                  Блокировка организации
-                </>
-              )}
-            </h3>
-
-            <div className="space-y-2">
-              <Label className="text-xs text-slate-300 font-semibold">
-                Укажите причину для компании "{selectedCompany.name}":
-              </Label>
-              <textarea
-                value={moderationComment}
-                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setModerationComment(e.target.value)}
-                placeholder={
-                  modalMode === 'request_changes'
-                    ? 'Укажите некорректные данные или документы...'
-                    : 'Причина блокировки компании...'
-                }
-                className="w-full h-24 rounded-xl border border-slate-800 bg-slate-950 p-3 text-xs text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500 resize-none"
-              />
-            </div>
-
-            <div className="flex justify-end space-x-2 pt-2 border-t border-slate-800">
-              <Button
-                variant="ghost"
-                onClick={() => {
-                  setSelectedCompany(null);
-                  setModalMode(null);
-                }}
-                className="min-h-[48px]"
-              >
-                Отмена
-              </Button>
-
-              <Button
-                onClick={handleConfirmModerationAction}
-                disabled={isPending}
-                className={
-                  modalMode === 'request_changes'
-                    ? 'bg-amber-600 hover:bg-amber-500 text-white font-bold min-h-[48px] px-6'
-                    : 'bg-red-600 hover:bg-red-500 text-white font-bold min-h-[48px] px-6'
-                }
-              >
-                {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Подтвердить'}
-              </Button>
-            </div>
-          </Card>
-        </div>
-      )}
-
-      {/* МОДАЛКА СОЗДАНИЯ КОМПАНИИ */}
-      {showCreateCompanyModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <Card className="w-full sm:max-w-md bg-slate-900 border-t sm:border border-slate-800 rounded-t-3xl sm:rounded-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
-            <div className="w-12 h-1 bg-slate-700 rounded-full mx-auto mb-1 sm:hidden opacity-80" />
-            <h3 className="text-base sm:text-lg font-bold text-white">Создание Организации Суперадмином</h3>
-            <div className="space-y-3">
-              <div className="space-y-1">
-                <Label className="text-xs text-slate-300">Наименование *</Label>
-                <Input value={newCompName} onChange={(e) => setNewCompName(e.target.value)} placeholder="ОсОО АлгазТрейд..." className="bg-slate-950 border-slate-800 text-white min-h-[48px]" />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs text-slate-300">ИНН (14 цифр) *</Label>
-                <Input value={newCompInn} onChange={(e) => setNewCompInn(e.target.value)} placeholder="01203202410145" className="bg-slate-950 border-slate-800 text-white font-mono min-h-[48px]" />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs text-slate-300">ФИО Директора</Label>
-                <Input value={newCompDirector} onChange={(e) => setNewCompDirector(e.target.value)} placeholder="Иванов И.И." className="bg-slate-950 border-slate-800 text-white min-h-[48px]" />
-              </div>
-            </div>
-            <div className="flex justify-end space-x-2 pt-2 border-t border-slate-800">
-              <Button variant="ghost" onClick={() => setShowCreateCompanyModal(false)} className="min-h-[48px]">Отмена</Button>
-              <Button onClick={handleCreateCompany} disabled={isPending} className="bg-blue-600 hover:bg-blue-500 text-white font-bold min-h-[48px] px-6">Создать</Button>
-            </div>
-          </Card>
-        </div>
-      )}
-
-      {/* МОДАЛКА РЕДАКТИРОВАНИЯ ОРГАНИЗАЦИИ */}
-      {editingCompany && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <Card className="w-full sm:max-w-xl bg-slate-900 border-t sm:border border-slate-800 rounded-t-3xl sm:rounded-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
-            <div className="w-12 h-1 bg-slate-700 rounded-full mx-auto mb-1 sm:hidden opacity-80" />
-            <h3 className="text-base sm:text-lg font-bold text-white flex items-center">
-              <Edit2 className="h-4 w-4 mr-2 text-blue-400" />
-              Админ-Редактирование Организации
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs text-slate-400">Наименование *</Label>
-                <Input value={compName} onChange={(e) => setCompName(e.target.value)} className="bg-slate-950 border-slate-800 text-white min-h-[48px]" />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs text-slate-400">ИНН 14 цифр *</Label>
-                <Input value={compInn} onChange={(e) => setCompInn(e.target.value)} className="bg-slate-950 border-slate-800 text-white font-mono min-h-[48px]" />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs text-slate-400">Статус</Label>
-                <select value={compStatus} onChange={(e) => setCompStatus(e.target.value as any)} className="w-full min-h-[48px] rounded-xl border border-slate-800 bg-slate-950 px-3 text-xs text-slate-100">
-                  <option value="active">Активна (active)</option>
-                  <option value="pending_approval">На модерации (pending_approval)</option>
-                  <option value="requires_changes">Замечания (requires_changes)</option>
-                  <option value="blocked">Заблокирована (blocked)</option>
-                </select>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs text-slate-400">ФИО Руководителя</Label>
-                <Input value={compDirector} onChange={(e) => setCompDirector(e.target.value)} className="bg-slate-950 border-slate-800 text-white min-h-[48px]" />
-              </div>
-            </div>
-            <div className="flex justify-end space-x-2 pt-2 border-t border-slate-800">
-              <Button variant="ghost" onClick={() => setEditingCompany(null)} className="min-h-[48px]">Отмена</Button>
-              <Button onClick={handleSaveCompany} disabled={isPending} className="bg-blue-600 hover:bg-blue-500 text-white font-bold min-h-[48px] px-6">Сохранить</Button>
-            </div>
-          </Card>
-        </div>
-      )}
-
-      {/* МОДАЛКА РЕДАКТИРОВАНИЯ ПОЛЬЗОВАТЕЛЯ */}
-      {editingUser && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <Card className="w-full sm:max-w-lg bg-slate-900 border-t sm:border border-slate-800 rounded-t-3xl sm:rounded-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
-            <div className="w-12 h-1 bg-slate-700 rounded-full mx-auto mb-1 sm:hidden opacity-80" />
-            <h3 className="text-base sm:text-lg font-bold text-white flex items-center">
-              <UserCheck className="h-4 w-4 mr-2 text-emerald-400" />
-              Редактирование Пользователя
-            </h3>
-            <div className="space-y-3">
-              <div className="space-y-1">
-                <Label className="text-xs text-slate-400">ФИО Пользователя</Label>
-                <Input value={userName} onChange={(e) => setUserName(e.target.value)} className="bg-slate-950 border-slate-800 text-white min-h-[48px]" />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs text-slate-400">E-mail</Label>
-                <Input value={userEmail} onChange={(e) => setUserEmail(e.target.value)} className="bg-slate-950 border-slate-800 text-white font-mono min-h-[48px]" />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs text-slate-400">Роль</Label>
-                <select value={userRole} onChange={(e) => setUserRole(e.target.value as any)} className="w-full min-h-[48px] rounded-xl border border-slate-800 bg-slate-950 px-3 text-xs text-slate-100">
-                  <option value="owner">Владелец (owner)</option>
-                  <option value="accountant">Бухгалтер (accountant)</option>
-                  <option value="manager">Менеджер (manager)</option>
-                </select>
-              </div>
-              <div className="flex items-center space-x-3 p-3 rounded-xl bg-slate-950 border border-slate-800">
-                <input type="checkbox" id="is_super_admin" checked={userIsSuperAdmin} onChange={(e) => setUserIsSuperAdmin(e.target.checked)} className="h-5 w-5 rounded bg-slate-900 text-amber-500" />
-                <Label htmlFor="is_super_admin" className="text-xs text-amber-400 font-bold cursor-pointer">Права Суперадмина</Label>
-              </div>
-            </div>
-            <div className="flex justify-end space-x-2 pt-2 border-t border-slate-800">
-              <Button variant="ghost" onClick={() => setEditingUser(null)} className="min-h-[48px]">Отмена</Button>
-              <Button onClick={handleSaveUser} disabled={isPending} className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold min-h-[48px] px-6">Сохранить</Button>
-            </div>
-          </Card>
-        </div>
-      )}
-
-      {/* МОДАЛКА РЕДАКТИРОВАНИЯ B2B ДОКУМЕНТА */}
-      {editingDoc && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <Card className="w-full sm:max-w-md bg-slate-900 border-t sm:border border-slate-800 rounded-t-3xl sm:rounded-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
-            <div className="w-12 h-1 bg-slate-700 rounded-full mx-auto mb-1 sm:hidden opacity-80" />
-            <h3 className="text-base sm:text-lg font-bold text-white">Редактирование B2B Документа</h3>
-            <div className="space-y-3">
-              <div className="space-y-1">
-                <Label className="text-xs text-slate-300">Номер документа</Label>
-                <Input value={editDocNumber} onChange={(e) => setEditDocNumber(e.target.value)} className="bg-slate-950 border-slate-800 text-white min-h-[48px]" />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs text-slate-300">Статус</Label>
-                <select value={editDocStatus} onChange={(e) => setEditDocStatus(e.target.value as any)} className="w-full min-h-[48px] rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-100 px-3">
-                  <option value="draft">Черновик (draft)</option>
-                  <option value="sent">На рассмотрении (sent)</option>
-                  <option value="accepted">Принято (accepted)</option>
-                  <option value="processed">Обработано (processed)</option>
-                  <option value="cancelled">Отклонено (cancelled)</option>
-                </select>
-              </div>
-            </div>
-            <div className="flex justify-end space-x-2 pt-2 border-t border-slate-800">
-              <Button variant="ghost" onClick={() => setEditingDoc(null)} className="min-h-[48px]">Отмена</Button>
-              <Button onClick={handleSaveDoc} disabled={isPending} className="bg-blue-600 hover:bg-blue-500 text-white font-bold min-h-[48px] px-6">Сохранить</Button>
-            </div>
-          </Card>
-        </div>
-      )}
-
-      {/* МОДАЛКА СОЗДАНИЯ КАТЕГОРИИ */}
-      {showCreateCatModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <Card className="w-full sm:max-w-md bg-slate-900 border-t sm:border border-slate-800 rounded-t-3xl sm:rounded-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
-            <div className="w-12 h-1 bg-slate-700 rounded-full mx-auto mb-1 sm:hidden opacity-80" />
-            <h3 className="text-base sm:text-lg font-bold text-white">Новая Категория Сканов</h3>
-            <div className="space-y-3">
-              <div className="space-y-1">
-                <Label className="text-xs text-slate-300">Наименование *</Label>
-                <Input value={newCatName} onChange={(e) => setNewCatName(e.target.value)} placeholder="Уставные Документы..." className="bg-slate-950 border-slate-800 text-white min-h-[48px]" />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs text-slate-300">Символьный Код *</Label>
-                <Input value={newCatCode} onChange={(e) => setNewCatCode(e.target.value)} placeholder="statute_docs" className="bg-slate-950 border-slate-800 text-white font-mono min-h-[48px]" />
-              </div>
-            </div>
-            <div className="flex justify-end space-x-2 pt-2 border-t border-slate-800">
-              <Button variant="ghost" onClick={() => setShowCreateCatModal(false)} className="min-h-[48px]">Отмена</Button>
-              <Button onClick={handleCreateCategory} disabled={isPending} className="bg-amber-600 hover:bg-amber-500 text-white font-bold min-h-[48px] px-6">Добавить</Button>
-            </div>
-          </Card>
-        </div>
-      )}
+      </UnifiedFormModal>
     </div>
   );
 }
