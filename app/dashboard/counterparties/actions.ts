@@ -83,6 +83,59 @@ export async function sendPartnershipRequestAction(
 }
 
 /**
+ * Вспомогательная функция гарантированного создания / обновления связи контрагента
+ */
+async function ensureCounterpartyLink(
+  adminSupabase: any,
+  companyId: string,
+  targetCompany: Company
+) {
+  // 1. Ищем существующую запись по company_id и inn ИЛИ target_company_id
+  const { data: existing } = await adminSupabase
+    .from('counterparties')
+    .select('id')
+    .eq('company_id', companyId)
+    .or(`inn.eq.${targetCompany.inn},target_company_id.eq.${targetCompany.id}`)
+    .maybeSingle();
+
+  if (existing) {
+    // 2. Если запись уже есть — обновляем target_company_id и контактные реквизиты
+    const { error: updateErr } = await adminSupabase
+      .from('counterparties')
+      .update({
+        target_company_id: targetCompany.id,
+        name: targetCompany.name,
+        email: targetCompany.email || `contact@${targetCompany.inn}.kg`,
+        phone: targetCompany.phone || null,
+        is_vat_payer: true,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', existing.id);
+
+    if (updateErr) {
+      console.error('Ошибка обновления связи контрагента:', updateErr.message);
+    }
+  } else {
+    // 3. Если записи нет — гарантированно создаем новую
+    const { error: insertErr } = await adminSupabase.from('counterparties').insert({
+      company_id: companyId,
+      target_company_id: targetCompany.id,
+      name: targetCompany.name,
+      inn: targetCompany.inn,
+      email: targetCompany.email || `contact@${targetCompany.inn}.kg`,
+      phone: targetCompany.phone || null,
+      is_vat_payer: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+
+    if (insertErr) {
+      console.error('Ошибка вставки связи контрагента:', insertErr.message);
+    }
+  }
+}
+
+/**
  * Ответ на заявку (Принять / Отклонить) — Гарантированное добавление контрагентов с target_company_id
  */
 export async function respondToPartnershipRequestAction(
@@ -120,42 +173,22 @@ export async function respondToPartnershipRequestAction(
       return { success: false, error: `Ошибка обновления статуса: ${updateError.message}` };
     }
 
-    // 2. Если заявка одобрена (approved) — гарантированно создаем связи с target_company_id для обеих компаний
+    // 2. Если заявка одобрена (approved) — гарантированно связываем контрагентов в обе стороны
     if (newStatus === 'approved') {
       const { data: compList } = await adminSupabase
         .from('companies')
         .select('*')
         .in('id', [partnership.requester_company_id, partnership.target_company_id]);
 
-      const reqCompany = compList?.find((c) => c.id === partnership.requester_company_id);
-      const targetCompany = compList?.find((c) => c.id === partnership.target_company_id);
+      const reqCompany = compList?.find((c) => c.id === partnership.requester_company_id) as Company | undefined;
+      const targetCompany = compList?.find((c) => c.id === partnership.target_company_id) as Company | undefined;
 
       if (reqCompany && targetCompany) {
-        // Добавляем Target в контрагенты Requester (с привязкой target_company_id)
-        await adminSupabase.from('counterparties').upsert(
-          {
-            company_id: reqCompany.id,
-            target_company_id: targetCompany.id,
-            name: targetCompany.name,
-            inn: targetCompany.inn,
-            email: targetCompany.email || `contact@${targetCompany.inn}.kg`,
-            is_vat_payer: true,
-          },
-          { onConflict: 'company_id,inn' }
-        );
+        // Добавляем Target в контрагенты Requester
+        await ensureCounterpartyLink(adminSupabase, reqCompany.id, targetCompany);
 
-        // Добавляем Requester в контрагенты Target (с привязкой target_company_id)
-        await adminSupabase.from('counterparties').upsert(
-          {
-            company_id: targetCompany.id,
-            target_company_id: reqCompany.id,
-            name: reqCompany.name,
-            inn: reqCompany.inn,
-            email: reqCompany.email || `contact@${reqCompany.inn}.kg`,
-            is_vat_payer: true,
-          },
-          { onConflict: 'company_id,inn' }
-        );
+        // Добавляем Requester в контрагенты Target
+        await ensureCounterpartyLink(adminSupabase, targetCompany.id, reqCompany);
       }
     }
 
@@ -164,6 +197,83 @@ export async function respondToPartnershipRequestAction(
     return { success: true };
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : 'Сбой при ответе на заявку на партнерство';
+    return { success: false, error: errorMsg };
+  }
+}
+
+/**
+ * Ручное добавление контрагента по ИНН (14 цифр КР)
+ */
+export async function createManualCounterpartyAction(data: {
+  name: string;
+  inn: string;
+  is_vat_payer?: boolean;
+  email?: string;
+  phone?: string;
+  comment?: string;
+}): Promise<ActionResponse> {
+  try {
+    const ctx = await getUserContext();
+    if (!ctx || !ctx.companyId) {
+      return { success: false, error: 'Пользователь не авторизован' };
+    }
+
+    if (!data.name || !data.inn || data.inn.length !== 14) {
+      return { success: false, error: 'Укажите корректное наименование и ИНН КР (14 цифр)' };
+    }
+
+    const adminSupabase = await createAdminClient();
+
+    // Проверяем, зарегистрирована ли эта компания в платформе по ИНН
+    const { data: targetComp } = await adminSupabase
+      .from('companies')
+      .select('id')
+      .eq('inn', data.inn)
+      .maybeSingle();
+
+    const { data: existing } = await adminSupabase
+      .from('counterparties')
+      .select('id')
+      .eq('company_id', ctx.companyId)
+      .eq('inn', data.inn)
+      .maybeSingle();
+
+    if (existing) {
+      const { error: updateErr } = await adminSupabase
+        .from('counterparties')
+        .update({
+          name: data.name,
+          target_company_id: targetComp?.id || null,
+          is_vat_payer: !!data.is_vat_payer,
+          email: data.email || null,
+          phone: data.phone || null,
+          comment: data.comment || null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existing.id);
+
+      if (updateErr) return { success: false, error: updateErr.message };
+    } else {
+      const { error: insertErr } = await adminSupabase.from('counterparties').insert({
+        company_id: ctx.companyId,
+        target_company_id: targetComp?.id || null,
+        name: data.name,
+        inn: data.inn,
+        is_vat_payer: !!data.is_vat_payer,
+        email: data.email || null,
+        phone: data.phone || null,
+        comment: data.comment || null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+
+      if (insertErr) return { success: false, error: insertErr.message };
+    }
+
+    revalidatePath('/dashboard/counterparties');
+    return { success: true };
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : 'Сбой добавления контрагента';
     return { success: false, error: errorMsg };
   }
 }
