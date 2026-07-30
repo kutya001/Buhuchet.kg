@@ -459,7 +459,6 @@ export async function inspectTableDataAdminAction(
       'counterparties',
       'company_partnerships',
       'file_categories',
-      'nomenclature',
       'document_logs',
     ];
 
