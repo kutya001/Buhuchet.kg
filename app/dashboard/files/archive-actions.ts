@@ -5,6 +5,7 @@ import type { ActionResponse, DocumentFile } from '@/types/database.types';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { getCachedFileCategories } from '@/lib/cache/lookups';
+import { deleteR2Object } from '@/lib/r2';
 
 const archiveFileSchema = z.object({
   category_id: z.string().optional(),
@@ -17,8 +18,10 @@ const archiveFileSchema = z.object({
   is_legal_doc: z.boolean().optional(),
 });
 
+export type ArchiveFileInput = z.infer<typeof archiveFileSchema>;
+
 // Загрузка уставного / учредительного документа компании
-export async function uploadLegalDocumentAction(data: any): Promise<ActionResponse<DocumentFile>> {
+export async function uploadLegalDocumentAction(data: ArchiveFileInput): Promise<ActionResponse<DocumentFile>> {
   try {
     const supabase = await createClient();
     const adminSupabase = await createAdminClient();
@@ -91,7 +94,7 @@ export async function uploadLegalDocumentAction(data: any): Promise<ActionRespon
 }
 
 // Загрузка файла в личный архив компании
-export async function uploadFileToArchiveAction(data: any): Promise<ActionResponse<DocumentFile>> {
+export async function uploadFileToArchiveAction(data: ArchiveFileInput): Promise<ActionResponse<DocumentFile>> {
   try {
     const supabase = await createClient();
     const adminSupabase = await createAdminClient();
@@ -189,13 +192,18 @@ export async function updateDocumentFileAction(
 
     const { data: prof } = await supabase.from('users').select('company_id, is_super_admin').eq('id', user.id).single();
 
-    const { data: existingFile } = await adminSupabase.from('document_files').select('company_id').eq('id', fileId).single();
+    const { data: existingFile } = await adminSupabase.from('document_files').select('company_id, file_path_r2').eq('id', fileId).single();
     if (!existingFile) {
       return { success: false, error: 'Файл не найден' };
     }
 
     if (existingFile.company_id !== prof?.company_id && !prof?.is_super_admin) {
       return { success: false, error: 'Доступ запрещен: нельзя редактировать чужой файл' };
+    }
+
+    // Если меняется файл R2 — запрашиваем удаление старого объекта из R2
+    if (data.file_path_r2 && existingFile.file_path_r2 && data.file_path_r2 !== existingFile.file_path_r2) {
+      await deleteR2Object(existingFile.file_path_r2);
     }
 
     const updatePayload: Record<string, any> = {
@@ -230,7 +238,7 @@ export async function updateDocumentFileAction(
   }
 }
 
-// Удаление скана из базы данных
+// Удаление скана из базы данных и бакета Cloudflare R2
 export async function deleteDocumentFileAction(fileId: string): Promise<ActionResponse<boolean>> {
   try {
     const supabase = await createClient();
@@ -246,13 +254,18 @@ export async function deleteDocumentFileAction(fileId: string): Promise<ActionRe
 
     const { data: prof } = await supabase.from('users').select('company_id, is_super_admin').eq('id', user.id).single();
 
-    const { data: existingFile } = await adminSupabase.from('document_files').select('company_id').eq('id', fileId).single();
+    const { data: existingFile } = await adminSupabase.from('document_files').select('company_id, file_path_r2').eq('id', fileId).single();
     if (!existingFile) {
       return { success: false, error: 'Файл не найден' };
     }
 
     if (existingFile.company_id !== prof?.company_id && !prof?.is_super_admin) {
       return { success: false, error: 'Доступ запрещен: нельзя удалять чужие файлы' };
+    }
+
+    // Физическое удаление объекта из Cloudflare R2
+    if (existingFile.file_path_r2) {
+      await deleteR2Object(existingFile.file_path_r2);
     }
 
     const { error } = await adminSupabase.from('document_files').delete().eq('id', fileId);

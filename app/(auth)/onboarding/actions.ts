@@ -15,7 +15,9 @@ const onboardingSchema = z.object({
   director_name: z.string().min(2, { message: 'Укажите ФИО руководителя' }),
 });
 
-export async function createCompanyOnboardingAction(data: any): Promise<ActionResponse<Company>> {
+export type OnboardingInput = z.infer<typeof onboardingSchema>;
+
+export async function createCompanyOnboardingAction(data: OnboardingInput): Promise<ActionResponse<Company>> {
   try {
     const supabase = await createClient();
     const adminSupabase = await createAdminClient();
@@ -83,7 +85,7 @@ export async function createCompanyOnboardingAction(data: any): Promise<ActionRe
 
 export async function resubmitCompanyForModerationAction(
   companyId: string,
-  data: any
+  data: OnboardingInput
 ): Promise<ActionResponse<Company>> {
   try {
     const adminSupabase = await createAdminClient();

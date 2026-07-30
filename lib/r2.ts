@@ -1,4 +1,4 @@
-import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 const accountId = process.env.R2_ACCOUNT_ID || '';
@@ -31,3 +31,22 @@ export async function getPresignedDownloadUrl(fileKey: string, expiresInSeconds 
 
   return getSignedUrl(r2Client, command, { expiresIn: expiresInSeconds });
 }
+
+/**
+ * Физическое удаление файла из Cloudflare R2
+ */
+export async function deleteR2Object(fileKey: string): Promise<boolean> {
+  try {
+    if (!fileKey) return false;
+    const command = new DeleteObjectCommand({
+      Bucket: r2BucketName,
+      Key: fileKey,
+    });
+    await r2Client.send(command);
+    return true;
+  } catch (err) {
+    console.error('Ошибка удаления объекта из R2:', err);
+    return false;
+  }
+}
+

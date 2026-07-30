@@ -1,7 +1,7 @@
 'use server';
 
 import { createClient, createAdminClient } from '@/lib/supabase/server';
-import type { ActionResponse, Company, Document, FileCategory } from '@/types/database.types';
+import type { ActionResponse, Company, CompanyStatus, Document, FileCategory } from '@/types/database.types';
 import { revalidatePath } from 'next/cache';
 
 /**
@@ -75,7 +75,7 @@ export async function createCompanyAdminAction(data: {
   email?: string;
   phone?: string;
   legal_address?: string;
-  status?: any;
+  status?: CompanyStatus;
 }): Promise<ActionResponse<Company>> {
   try {
     if (!(await checkSuperAdmin())) {

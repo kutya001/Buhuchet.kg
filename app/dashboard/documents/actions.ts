@@ -2,8 +2,10 @@
 
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { b2bDocumentSchema } from '@/types/b2b.types';
-import type { ActionResponse, Document, DocumentStatus, UserRole } from '@/types/database.types';
+import type { ActionResponse, Document, DocumentStatus, DocumentType, UserRole } from '@/types/database.types';
 import { revalidatePath } from 'next/cache';
+import { deleteR2Object } from '@/lib/r2';
+import { z } from 'zod';
 
 async function getUserContext() {
   const supabase = await createClient();
@@ -85,12 +87,14 @@ export async function getB2BDocumentByIdAction(docId: string): Promise<ActionRes
   }
 }
 
+export type B2BDocumentInput = z.infer<typeof b2bDocumentSchema>;
+
 // ПОЛНОЕ РЕДАКТИРОВАНИЕ ЧЕРНОВИКА (РЕКВИЗИТЫ + УПРАВЛЕНИЕ СКАНОМ R2)
 export async function updateB2BDocumentFullAction(
   documentId: string,
   data: {
     receiver_company_id: string;
-    doc_type: any;
+    doc_type: DocumentType;
     doc_number: string;
     doc_date: string;
     comment?: string;
@@ -154,7 +158,22 @@ export async function updateB2BDocumentFullAction(
       return { success: false, error: `Ошибка обновления черновика: ${updateError.message}` };
     }
 
-    // 2. Обновляем список файлов (удаляем старые привязанные сканы и вставляем обновленные)
+    // 2. Получаем текущие привязанные файлы для безопасного удаления из R2 при полной замене
+    const { data: oldFiles } = await adminSupabase
+      .from('document_files')
+      .select('file_path_r2')
+      .eq('document_id', documentId);
+
+    const newPaths = new Set(data.files.map((f) => f.file_path_r2));
+    if (oldFiles && oldFiles.length > 0) {
+      for (const oldFile of oldFiles) {
+        if (oldFile.file_path_r2 && !newPaths.has(oldFile.file_path_r2)) {
+          await deleteR2Object(oldFile.file_path_r2);
+        }
+      }
+    }
+
+    // Удаляем старые привязанные записи файлов
     await adminSupabase.from('document_files').delete().eq('document_id', documentId);
 
     if (data.files && data.files.length > 0) {
@@ -253,7 +272,7 @@ export async function recallB2BDocumentAction(documentId: string): Promise<Actio
   }
 }
 
-export async function createB2BDocumentAction(data: any): Promise<ActionResponse<Document>> {
+export async function createB2BDocumentAction(data: B2BDocumentInput): Promise<ActionResponse<Document>> {
   try {
     const ctx = await getUserContext();
     if (!ctx || !ctx.companyId) {
