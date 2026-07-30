@@ -123,7 +123,7 @@ export async function updateB2BDocumentFullAction(
     files: Array<{
       category_id: string;
       file_name: string;
-      file_size: string;
+      file_size: number;
       file_type: string;
       file_path_r2: string;
       description: string;
@@ -170,7 +170,7 @@ export async function updateB2BDocumentFullAction(
         comment: data.comment || null,
         status: targetStatus,
         mock_file_name: data.files[0]?.file_name || null,
-        mock_file_size: data.files[0]?.file_size || null,
+        mock_file_size: typeof data.files[0]?.file_size === 'number' ? data.files[0].file_size : null,
         updated_at: new Date().toISOString(),
       })
       .eq('id', documentId);
@@ -203,7 +203,7 @@ export async function updateB2BDocumentFullAction(
         document_id: documentId,
         category_id: f.category_id,
         file_name: f.file_name,
-        file_size: f.file_size || '1.5 MB',
+        file_size: typeof f.file_size === 'number' ? f.file_size : 1572864,
         file_type: f.file_type || 'pdf',
         file_path_r2: f.file_path_r2 || null,
         description: f.description || `Прикрепленный скан ${f.file_name}`,
@@ -326,7 +326,7 @@ export async function createB2BDocumentAction(data: B2BDocumentInput): Promise<A
         status: status || 'draft',
         comment: comment || null,
         mock_file_name: files[0]?.file_name || null,
-        mock_file_size: files[0]?.file_size || null,
+        mock_file_size: typeof files[0]?.file_size === 'number' ? files[0].file_size : null,
       })
       .select()
       .single();
@@ -342,7 +342,7 @@ export async function createB2BDocumentAction(data: B2BDocumentInput): Promise<A
         document_id: doc.id,
         category_id: f.category_id,
         file_name: f.file_name,
-        file_size: f.file_size || '1.5 MB',
+        file_size: typeof f.file_size === 'number' ? f.file_size : 1572864,
         file_type: f.file_type || 'pdf',
         file_path_r2: f.file_path_r2 || null,
         description: f.description || `Прикрепленный скан ${f.file_name}`,

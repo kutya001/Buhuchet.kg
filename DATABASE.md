@@ -160,8 +160,8 @@ CREATE TABLE documents (
   -- Сканы первички R2
   file_path_r2 TEXT,
   mock_file_name TEXT,
-  mock_file_size TEXT,
-  
+  mock_file_size BIGINT, -- Размер в байтах для суммирования и агрегации
+
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -181,7 +181,7 @@ CREATE TABLE document_files (
   document_id UUID REFERENCES documents(id) ON DELETE CASCADE,
   category_id UUID REFERENCES file_categories(id) ON DELETE SET NULL,
   file_name TEXT NOT NULL,
-  file_size TEXT,
+  file_size BIGINT, -- Размер файла в байтах (BIGINT) для точной агрегации
   file_type TEXT DEFAULT 'pdf',
   file_path_r2 TEXT NOT NULL,
   description TEXT,

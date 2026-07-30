@@ -79,7 +79,7 @@ export interface DocumentFile {
   company_id?: string | null;
   category_id?: string | null;
   file_name: string;
-  file_size?: string | null;
+  file_size?: number | null;
   file_type?: string | null;
   file_path_r2?: string | null;
   description: string;
@@ -131,7 +131,7 @@ export interface Document {
   total_amount: number;
   comment?: string | null;
   mock_file_name?: string | null;
-  mock_file_size?: string | null;
+  mock_file_size?: number | null;
   mock_file_status?: string | null;
   esf_status: EsfStatus;
   created_at: string;

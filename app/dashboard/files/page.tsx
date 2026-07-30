@@ -21,6 +21,7 @@ import {
   ShieldCheck,
   Image as ImageIcon,
 } from 'lucide-react';
+import { formatBytes } from '@/lib/utils';
 import { getComprehensiveFileRegistryAction } from './archive-actions';
 import { getPresignedDownloadUrlAction } from './actions';
 import type { EnrichedFileItem, FileRegistryStats } from './archive-actions';
@@ -159,7 +160,7 @@ export default function CloudFilesRegistryPage() {
       getValue: (f) => f.bytesSize,
       render: (file) => (
         <span className="font-mono text-xs text-slate-300">
-          {file.file_size || '1.2 MB'}
+          {formatBytes(file.file_size)}
         </span>
       ),
     },
@@ -209,7 +210,7 @@ export default function CloudFilesRegistryPage() {
             <FileText className="h-4 w-4 mr-1.5 text-emerald-400" />
             {file.file_name}
           </h4>
-          <p className="text-xs text-slate-400 font-mono mt-0.5">{file.file_size || '1.5 MB'}</p>
+          <p className="text-xs text-slate-400 font-mono mt-0.5">{formatBytes(file.file_size)}</p>
         </div>
 
         <Badge

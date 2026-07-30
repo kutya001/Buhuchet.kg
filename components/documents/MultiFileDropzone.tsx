@@ -7,12 +7,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { getPresignedUploadUrlAction, uploadFileDirectlyServerAction } from '@/app/dashboard/files/actions';
 import type { FileCategory } from '@/types/database.types';
+import { formatBytes } from '@/lib/utils';
 
 export interface FileItemState {
   tempId: string;
   category_id: string;
   file_name: string;
-  file_size: string;
+  file_size: number;
   file_type: string;
   file_path_r2?: string;
   description: string;
@@ -150,11 +151,6 @@ export function MultiFileDropzone({
     const defaultCategory = categories[0]?.id || '268dda23-d839-429d-bec2-aae391cffb00';
 
     const newItems: FileItemState[] = selectedFiles.map((file, idx) => {
-      const formattedSize =
-        file.size > 1024 * 1024
-          ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
-          : `${Math.round(file.size / 1024)} KB`;
-
       const rawName = file.name || `photo_${idx}.jpg`;
       const isCameraPhoto = rawName.startsWith('image') || rawName.startsWith('photo') || rawName.includes('blob');
       const name = isCameraPhoto ? `Фото_скан_${Date.now()}_${idx + 1}.jpg` : rawName;
@@ -163,7 +159,7 @@ export function MultiFileDropzone({
         tempId: `${Date.now()}-${idx}`,
         category_id: defaultCategory,
         file_name: name,
-        file_size: formattedSize,
+        file_size: file.size,
         file_type: (file.type || '').includes('pdf') ? 'pdf' : 'image',
         description: `Скан ${name}`,
         comment: '',
@@ -281,7 +277,7 @@ export function MultiFileDropzone({
                   <div className="truncate">
                     <p className="text-sm font-medium text-white truncate">{file.file_name}</p>
                     <p className="text-[11px] text-slate-400 font-mono">
-                      {file.file_size} • {file.file_path_r2 ? '✅ Готов к сохранению (R2)' : 'Загрузка...'}
+                      {formatBytes(file.file_size)} • {file.file_path_r2 ? '✅ Готов к сохранению (R2)' : 'Загрузка...'}
                     </p>
                   </div>
                 </div>

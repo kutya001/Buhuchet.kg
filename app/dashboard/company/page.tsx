@@ -28,6 +28,7 @@ import {
   X,
   RefreshCw,
 } from 'lucide-react';
+import { formatBytes } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
 import { MultiFileDropzone, type FileItemState } from '@/components/documents/MultiFileDropzone';
 import {
@@ -175,10 +176,7 @@ export default function CompanyProfilePage() {
 
         if (xhr.status >= 200 && xhr.status < 300) {
           newKey = presigned.data.fileKey;
-          newSize =
-            replacingFile.size > 1024 * 1024
-              ? `${(replacingFile.size / (1024 * 1024)).toFixed(1)} MB`
-              : `${Math.round(replacingFile.size / 1024)} KB`;
+          newSize = replacingFile.size;
           if (!editName) newName = replacingFile.name;
         } else {
           setMsg({ type: 'error', text: 'Ошибка отправки нового скана в R2' });
@@ -386,7 +384,7 @@ export default function CompanyProfilePage() {
                 key: 'file_size',
                 label: 'Размер',
                 sortable: true,
-                render: (doc) => <span className="font-mono text-xs text-slate-400">{doc.file_size || '1.5 MB'}</span>,
+                render: (doc) => <span className="font-mono text-xs text-slate-400">{formatBytes(doc.file_size)}</span>,
               },
               {
                 key: 'actions',

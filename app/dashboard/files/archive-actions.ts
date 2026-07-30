@@ -6,11 +6,12 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { getCachedFileCategories } from '@/lib/cache/lookups';
 import { deleteR2Object } from '@/lib/r2';
+import { formatBytes } from '@/lib/utils';
 
 const archiveFileSchema = z.object({
   category_id: z.string().optional(),
   file_name: z.string().min(1, { message: 'Укажите имя файла' }),
-  file_size: z.string().optional(),
+  file_size: z.union([z.number(), z.string()]).optional(),
   file_type: z.string().optional(),
   file_path_r2: z.string().min(1, { message: 'Отсутствует ссылка Cloudflare R2' }),
   description: z.string().optional(),
@@ -69,7 +70,7 @@ export async function uploadLegalDocumentAction(data: ArchiveFileInput): Promise
         document_id: null,
         category_id: targetCatId,
         file_name,
-        file_size: file_size || '1.5 MB',
+        file_size: typeof file_size === 'number' ? file_size : (file_size ? parseSizeToBytes(file_size) : 1572864),
         file_type: file_type || 'image',
         file_path_r2,
         description: description || `Учредительный документ ${file_name}`,
@@ -175,7 +176,7 @@ export async function updateDocumentFileAction(
     description?: string;
     comment?: string;
     file_path_r2?: string;
-    file_size?: string;
+    file_size?: number | string;
   }
 ): Promise<ActionResponse<DocumentFile>> {
   try {
@@ -215,7 +216,7 @@ export async function updateDocumentFileAction(
     if (data.description) updatePayload.description = data.description;
     if (data.comment !== undefined) updatePayload.comment = data.comment;
     if (data.file_path_r2) updatePayload.file_path_r2 = data.file_path_r2;
-    if (data.file_size) updatePayload.file_size = data.file_size;
+    if (data.file_size !== undefined) updatePayload.file_size = typeof data.file_size === 'number' ? data.file_size : parseSizeToBytes(data.file_size);
 
     const { data: updated, error } = await adminSupabase
       .from('document_files')
@@ -420,22 +421,15 @@ export type FileRegistryStats = {
   };
 };
 
-function parseSizeToBytes(sizeStr?: string | null): number {
-  if (!sizeStr) return 1024 * 1024; // По умолчанию 1MB если не указано
-  const clean = sizeStr.toLowerCase().trim();
+function parseSizeToBytes(sizeVal?: number | string | null): number {
+  if (typeof sizeVal === 'number') return sizeVal;
+  if (!sizeVal) return 1024 * 1024;
+  const clean = String(sizeVal).toLowerCase().trim();
   const num = parseFloat(clean.replace(/[^0-9.]/g, '')) || 1;
   if (clean.includes('gb')) return Math.round(num * 1024 * 1024 * 1024);
   if (clean.includes('kb')) return Math.round(num * 1024);
-  if (clean.includes('b')) return Math.round(num);
-  return Math.round(num * 1024 * 1024); // По умолчанию MB
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+  if (clean.includes('b') && !clean.includes('mb')) return Math.round(num);
+  return Math.round(num * 1024 * 1024);
 }
 
 /**

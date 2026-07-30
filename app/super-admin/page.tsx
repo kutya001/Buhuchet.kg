@@ -45,6 +45,7 @@ import {
   HelpCircle,
   Clock,
 } from 'lucide-react';
+import { formatBytes } from '@/lib/utils';
 import {
   getPendingCompaniesAction,
   getAllCompaniesAdminAction,
@@ -704,7 +705,7 @@ export default function SuperAdminPage() {
       label: 'Размер',
       sortable: true,
       getValue: (f) => f.file_size,
-      render: (f) => <span className="font-mono text-xs text-slate-400">{f.file_size || '1.2 MB'}</span>,
+      render: (f) => <span className="font-mono text-xs text-slate-400">{formatBytes(f.file_size)}</span>,
     },
     {
       key: 'created_at',

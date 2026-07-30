@@ -92,24 +92,39 @@ export default function B2BDocumentsRegistryPage() {
       ),
     },
     {
+      key: 'direction',
+      label: 'Вид',
+      sortable: true,
+      getValue: (d) => (d.receiver_company_id === currentCompanyId ? 'Входящий' : 'Исходящий'),
+      render: (doc) => {
+        const isInbox = doc.receiver_company_id === currentCompanyId;
+        return (
+          <Badge
+            variant="outline"
+            className={
+              isInbox
+                ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400 font-semibold text-xs py-1 px-2.5 flex items-center w-fit'
+                : 'border-blue-500/40 bg-blue-500/10 text-blue-400 font-semibold text-xs py-1 px-2.5 flex items-center w-fit'
+            }
+          >
+            {isInbox ? <Inbox className="h-3.5 w-3.5 mr-1 flex-shrink-0" /> : <Send className="h-3.5 w-3.5 mr-1 flex-shrink-0" />}
+            {isInbox ? 'Входящий' : 'Исходящий'}
+          </Badge>
+        );
+      },
+    },
+    {
       key: 'status',
       label: 'Статус',
       sortable: true,
       getValue: (d) => d.status,
       render: (doc) => {
-        const isInbox = doc.receiver_company_id === currentCompanyId;
         const statusConfig = DOCUMENT_STATUSES[doc.status] || { label: doc.status, variant: 'secondary' as const };
 
         return (
-          <div className="flex flex-col space-y-1">
-            <Badge variant={statusConfig.variant} className="font-semibold text-[10px] sm:text-xs w-fit">
-              {statusConfig.label}
-            </Badge>
-            <span className="text-[10px] text-slate-400 flex items-center">
-              {isInbox ? <Inbox className="h-3 w-3 mr-1 text-emerald-400" /> : <Send className="h-3 w-3 mr-1 text-blue-400" />}
-              {isInbox ? 'Входящий' : 'Исходящий'}
-            </span>
-          </div>
+          <Badge variant={statusConfig.variant} className="font-semibold text-xs px-2.5 py-1">
+            {statusConfig.label}
+          </Badge>
         );
       },
     },
