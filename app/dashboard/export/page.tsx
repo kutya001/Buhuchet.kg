@@ -9,11 +9,10 @@ import { Badge } from '@/components/ui/badge';
 import { FileSpreadsheet, Download, Calendar, Filter, CheckCircle2, Loader2, Building2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { exportTo1CExcel } from '@/lib/export/1c-exporter';
-import type { Document, Counterparty, DocumentItem } from '@/types/database.types';
+import type { Document, Counterparty } from '@/types/database.types';
 
 type FullDocForExport = Document & {
   counterparties?: Counterparty | null;
-  document_items?: DocumentItem[];
 };
 
 export default function Export1CPage() {
@@ -52,7 +51,7 @@ export default function Export1CPage() {
 
         const { data: docs } = await supabase
           .from('documents')
-          .select('*, counterparties(*), document_items(*)')
+          .select('*, counterparties(*)')
           .order('doc_date', { ascending: false });
 
         if (docs) {
@@ -79,10 +78,7 @@ export default function Export1CPage() {
   });
 
   // Расчет сумм и количества строк
-  const totalItemsCount = filteredDocs.reduce(
-    (sum, doc) => sum + (doc.document_items?.length || 1),
-    0
-  );
+  const totalItemsCount = filteredDocs.length;
   const totalSum = filteredDocs.reduce((sum, doc) => sum + Number(doc.total_amount), 0);
 
   const handleExportClick = () => {

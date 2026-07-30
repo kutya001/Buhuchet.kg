@@ -35,6 +35,7 @@ import {
   Check,
   Edit2,
 } from 'lucide-react';
+import { formatBytes } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
 import {
   sendPartnershipRequestAction,
@@ -311,7 +312,7 @@ export default function CounterpartiesPage() {
     let filesCount = 0;
     if (docIds.length > 0) {
       const { count } = await supabase
-        .from('document_files')
+        .from('files')
         .select('*', { count: 'exact', head: true })
         .in('document_id', docIds);
       filesCount = count || 0;
@@ -951,7 +952,7 @@ export default function CounterpartiesPage() {
                         <FileText className="h-4 w-4 text-indigo-400" />
                         <div>
                           <p className="font-semibold text-white">{file.file_name}</p>
-                          <p className="text-[11px] text-slate-400">{file.description || 'Скан'} • {file.file_size}</p>
+                          <p className="text-[11px] text-slate-400">{file.description || 'Скан'} • {formatBytes(file.size_bytes)}</p>
                         </div>
                       </div>
 

@@ -701,11 +701,11 @@ export default function SuperAdminPage() {
       ),
     },
     {
-      key: 'file_size',
+      key: 'size_bytes',
       label: 'Размер',
       sortable: true,
-      getValue: (f) => f.file_size,
-      render: (f) => <span className="font-mono text-xs text-slate-400">{formatBytes(f.file_size)}</span>,
+      getValue: (f) => f.size_bytes,
+      render: (f) => <span className="font-mono text-xs text-slate-400">{formatBytes(f.size_bytes)}</span>,
     },
     {
       key: 'created_at',
@@ -1123,7 +1123,7 @@ export default function SuperAdminPage() {
               <option value="companies">Таблица: companies</option>
               <option value="users">Таблица: users</option>
               <option value="documents">Таблица: documents</option>
-              <option value="document_files">Таблица: document_files</option>
+              <option value="files">Таблица: files</option>
               <option value="counterparties">Таблица: counterparties</option>
               <option value="company_partnerships">Таблица: company_partnerships</option>
             </select>

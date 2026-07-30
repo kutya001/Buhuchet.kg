@@ -455,7 +455,7 @@ export async function inspectTableDataAdminAction(
       'users',
       'companies',
       'documents',
-      'document_files',
+      'files',
       'counterparties',
       'company_partnerships',
       'file_categories',

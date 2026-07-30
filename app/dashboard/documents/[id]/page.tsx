@@ -41,7 +41,7 @@ import type { Document, Company, DocumentFile, DocumentLog, DocumentStatus } fro
 type FullB2BDocument = Document & {
   sender_company?: Company | null;
   receiver_company?: Company | null;
-  document_files?: DocumentFile[];
+  files?: DocumentFile[];
   document_logs?: (DocumentLog & { users?: { full_name: string } })[];
   users?: { full_name: string } | null;
 };
@@ -145,7 +145,7 @@ export default function B2BDocumentDetailPage() {
 
   const statusMeta = DOCUMENT_STATUSES[document.status as DocumentStatus];
   const typeMeta = DOCUMENT_TYPES[document.doc_type];
-  const currentFile = document.document_files?.[selectedFileIndex];
+  const currentFile = document.files?.[selectedFileIndex];
 
   const isSender = document.sender_company_id === currentCompanyId;
   const isReceiver = document.receiver_company_id === currentCompanyId;
@@ -337,10 +337,10 @@ export default function B2BDocumentDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-6 flex-1 min-h-0 overflow-hidden">
         {/* Левая колонка: Просмотрщик скана R2 */}
         <div className={`lg:col-span-6 flex flex-col h-full min-h-[350px] ${mobileTab === 'scan' ? 'flex' : 'hidden lg:flex'}`}>
-          {document.document_files && document.document_files.length > 1 && (
+          {document.files && document.files.length > 1 && (
             <div className="flex items-center space-x-2 mb-2 overflow-x-auto pb-1 flex-shrink-0">
               <span className="text-xs text-slate-500 font-mono flex-shrink-0">Файлы:</span>
-              {document.document_files.map((file, idx) => (
+              {document.files.map((file, idx) => (
                 <button
                   key={file.id}
                   onClick={() => setSelectedFileIndex(idx)}
@@ -404,11 +404,11 @@ export default function B2BDocumentDetailPage() {
             <CardHeader className="pb-2 pt-4">
               <CardTitle className="text-xs font-semibold text-slate-400 uppercase tracking-wider font-mono flex items-center">
                 <Paperclip className="h-3.5 w-3.5 mr-1.5 text-emerald-400" />
-                Прикрепленные сканы R2 ({document.document_files?.length || 0})
+                Прикрепленные сканы R2 ({document.files?.length || 0})
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 text-xs">
-              {document.document_files?.map((file, idx) => (
+              {document.files?.map((file, idx) => (
                 <div
                   key={file.id}
                   onClick={() => {

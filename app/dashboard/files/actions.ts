@@ -158,7 +158,7 @@ export async function getPresignedDownloadUrlAction(
     if (!ctx.isSuperAdmin && ctx.companyId) {
       const adminSupabase = await createAdminClient();
       const { data: fileDoc } = await adminSupabase
-        .from('document_files')
+        .from('files')
         .select('company_id, document_id')
         .eq('file_path_r2', fileKey)
         .maybeSingle();

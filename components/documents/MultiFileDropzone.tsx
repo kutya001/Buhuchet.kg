@@ -13,7 +13,7 @@ export interface FileItemState {
   tempId: string;
   category_id: string;
   file_name: string;
-  file_size: number;
+  size_bytes: number;
   file_type: string;
   file_path_r2?: string;
   description: string;
@@ -159,7 +159,7 @@ export function MultiFileDropzone({
         tempId: `${Date.now()}-${idx}`,
         category_id: defaultCategory,
         file_name: name,
-        file_size: file.size,
+        size_bytes: file.size,
         file_type: (file.type || '').includes('pdf') ? 'pdf' : 'image',
         description: `Скан ${name}`,
         comment: '',
@@ -277,7 +277,7 @@ export function MultiFileDropzone({
                   <div className="truncate">
                     <p className="text-sm font-medium text-white truncate">{file.file_name}</p>
                     <p className="text-[11px] text-slate-400 font-mono">
-                      {formatBytes(file.file_size)} • {file.file_path_r2 ? '✅ Готов к сохранению (R2)' : 'Загрузка...'}
+                      {formatBytes(file.size_bytes)} • {file.file_path_r2 ? '✅ Готов к сохранению (R2)' : 'Загрузка...'}
                     </p>
                   </div>
                 </div>

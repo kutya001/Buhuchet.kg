@@ -64,13 +64,13 @@ export async function uploadLegalDocumentAction(data: ArchiveFileInput): Promise
     }
 
     const { data: insertedFile, error } = await adminSupabase
-      .from('document_files')
+      .from('files')
       .insert({
         company_id: prof.company_id,
         document_id: null,
         category_id: targetCatId,
         file_name,
-        file_size: typeof file_size === 'number' ? file_size : (file_size ? parseSizeToBytes(file_size) : 1572864),
+        size_bytes: typeof file_size === 'number' ? file_size : (file_size ? parseSizeToBytes(file_size) : 1572864),
         file_type: file_type || 'image',
         file_path_r2,
         description: description || `Учредительный документ ${file_name}`,
@@ -137,13 +137,13 @@ export async function uploadFileToArchiveAction(data: ArchiveFileInput): Promise
     }
 
     const { data: insertedFile, error } = await adminSupabase
-      .from('document_files')
+      .from('files')
       .insert({
         company_id: prof.company_id,
         document_id: null,
         category_id: targetCatId,
         file_name,
-        file_size: file_size || '1.5 MB',
+        size_bytes: typeof file_size === 'number' ? file_size : (file_size ? parseSizeToBytes(file_size) : 1572864),
         file_type: file_type || 'image',
         file_path_r2,
         description: description || `Скан файла ${file_name}`,
@@ -193,7 +193,7 @@ export async function updateDocumentFileAction(
 
     const { data: prof } = await supabase.from('users').select('company_id, is_super_admin').eq('id', user.id).single();
 
-    const { data: existingFile } = await adminSupabase.from('document_files').select('company_id, file_path_r2').eq('id', fileId).single();
+    const { data: existingFile } = await adminSupabase.from('files').select('company_id, file_path_r2').eq('id', fileId).single();
     if (!existingFile) {
       return { success: false, error: 'Файл не найден' };
     }
@@ -216,10 +216,10 @@ export async function updateDocumentFileAction(
     if (data.description) updatePayload.description = data.description;
     if (data.comment !== undefined) updatePayload.comment = data.comment;
     if (data.file_path_r2) updatePayload.file_path_r2 = data.file_path_r2;
-    if (data.file_size !== undefined) updatePayload.file_size = typeof data.file_size === 'number' ? data.file_size : parseSizeToBytes(data.file_size);
+    if (data.file_size !== undefined) updatePayload.size_bytes = typeof data.file_size === 'number' ? data.file_size : parseSizeToBytes(data.file_size);
 
     const { data: updated, error } = await adminSupabase
-      .from('document_files')
+      .from('files')
       .update(updatePayload)
       .eq('id', fileId)
       .select('*, file_categories(*)')
@@ -255,7 +255,7 @@ export async function deleteDocumentFileAction(fileId: string): Promise<ActionRe
 
     const { data: prof } = await supabase.from('users').select('company_id, is_super_admin').eq('id', user.id).single();
 
-    const { data: existingFile } = await adminSupabase.from('document_files').select('company_id, file_path_r2').eq('id', fileId).single();
+    const { data: existingFile } = await adminSupabase.from('files').select('company_id, file_path_r2').eq('id', fileId).single();
     if (!existingFile) {
       return { success: false, error: 'Файл не найден' };
     }
@@ -269,7 +269,7 @@ export async function deleteDocumentFileAction(fileId: string): Promise<ActionRe
       await deleteR2Object(existingFile.file_path_r2);
     }
 
-    let deleteQuery = adminSupabase.from('document_files').delete().eq('id', fileId);
+    let deleteQuery = adminSupabase.from('files').delete().eq('id', fileId);
     if (!prof?.is_super_admin && prof?.company_id) {
       deleteQuery = deleteQuery.eq('company_id', prof.company_id);
     }
@@ -307,7 +307,7 @@ export async function getCompanyLegalDocsAction(): Promise<ActionResponse<Docume
     }
 
     const { data: files, error } = await adminSupabase
-      .from('document_files')
+      .from('files')
       .select('*, file_categories(*)')
       .eq('company_id', prof.company_id)
       .eq('is_legal_doc', true)
@@ -344,7 +344,7 @@ export async function getCompanyFilesArchiveAction(): Promise<ActionResponse<Doc
     }
 
     const { data: files, error } = await adminSupabase
-      .from('document_files')
+      .from('files')
       .select('*, file_categories(*)')
       .eq('company_id', prof.company_id)
       .order('created_at', { ascending: false });
@@ -380,7 +380,7 @@ export async function getAllSystemFilesAction(): Promise<ActionResponse<any[]>> 
     }
 
     const { data: files, error } = await adminSupabase
-      .from('document_files')
+      .from('files')
       .select('*, file_categories(*), companies(name, inn)')
       .order('created_at', { ascending: false });
 
@@ -489,7 +489,7 @@ export async function getComprehensiveFileRegistryAction(): Promise<
     const docIds = Array.from(docMap.keys());
     
     let query = adminSupabase
-      .from('document_files')
+      .from('files')
       .select('*, file_categories(*)')
       .order('created_at', { ascending: false });
 
@@ -517,7 +517,7 @@ export async function getComprehensiveFileRegistryAction(): Promise<
         const isMyCompanyFile = f.company_id === myCompanyId;
         if (isMyCompanyFile) myCompanyFilesCount++;
 
-        const bytes = parseSizeToBytes(f.file_size);
+        const bytes = parseSizeToBytes(f.size_bytes);
         totalSizeBytes += bytes;
 
         let sourceType: 'document' | 'company' | 'counterparty' | 'manual' = 'manual';

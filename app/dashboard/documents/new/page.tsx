@@ -123,12 +123,12 @@ export default function NewB2BDocumentPage() {
           setDocDate(doc.doc_date || new Date().toISOString().split('T')[0]);
           setComment(doc.comment || '');
 
-          if (doc.document_files && doc.document_files.length > 0) {
-            const initialFiles: FileItemState[] = doc.document_files.map((f: any, idx: number) => ({
+          if (doc.files && doc.files.length > 0) {
+            const initialFiles: FileItemState[] = doc.files.map((f: any, idx: number) => ({
               tempId: `existing-${f.id}-${idx}`,
               category_id: f.category_id || catData?.[0]?.id || '',
               file_name: f.file_name,
-              file_size: typeof f.file_size === 'number' ? f.file_size : 1572864,
+              size_bytes: typeof f.size_bytes === 'number' ? f.size_bytes : 1572864,
               file_type: f.file_type || 'pdf',
               file_path_r2: f.file_path_r2 || undefined,
               description: f.description || `Скан ${f.file_name}`,
@@ -157,7 +157,7 @@ export default function NewB2BDocumentPage() {
       tempId: `archive-${file.id}-${Date.now()}`,
       category_id: file.category_id || categories[0]?.id || '',
       file_name: file.file_name,
-      file_size: typeof file.file_size === 'number' ? file.file_size : 1572864,
+      size_bytes: typeof file.size_bytes === 'number' ? file.size_bytes : 1572864,
       file_type: file.file_type || 'image',
       file_path_r2: file.file_path_r2 || undefined,
       description: file.description || `Скан из архива: ${file.file_name}`,
@@ -193,7 +193,7 @@ export default function NewB2BDocumentPage() {
       const payloadFiles = filesState.map((f) => ({
         category_id: f.category_id,
         file_name: f.file_name,
-        file_size: f.file_size,
+        size_bytes: f.size_bytes,
         file_type: f.file_type,
         file_path_r2: f.file_path_r2!,
         description: f.description,

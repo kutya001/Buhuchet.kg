@@ -154,13 +154,13 @@ export default function CloudFilesRegistryPage() {
       ),
     },
     {
-      key: 'file_size',
+      key: 'size_bytes',
       label: 'Размер файла',
       sortable: true,
       getValue: (f) => f.bytesSize,
       render: (file) => (
         <span className="font-mono text-xs text-slate-300">
-          {formatBytes(file.file_size)}
+          {formatBytes(file.size_bytes)}
         </span>
       ),
     },
@@ -210,7 +210,7 @@ export default function CloudFilesRegistryPage() {
             <FileText className="h-4 w-4 mr-1.5 text-emerald-400" />
             {file.file_name}
           </h4>
-          <p className="text-xs text-slate-400 font-mono mt-0.5">{formatBytes(file.file_size)}</p>
+          <p className="text-xs text-slate-400 font-mono mt-0.5">{formatBytes(file.size_bytes)}</p>
         </div>
 
         <Badge

@@ -19,7 +19,7 @@ export const fileAttachmentSchema = z.object({
   id: z.string().optional(),
   category_id: z.string().min(1, { message: 'Выберите категорию файла' }),
   file_name: z.string().min(1, { message: 'Название файла обязательно' }),
-  file_size: z.number().optional(),
+  size_bytes: z.number().optional(),
   file_type: z.string().optional(),
   file_path_r2: z.string().optional().nullable(),
   description: z.string().min(3, { message: 'Описание файла обязательно (минимум 3 символа)' }),

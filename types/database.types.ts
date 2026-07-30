@@ -73,13 +73,13 @@ export interface FileCategory {
   created_at: string;
 }
 
-export interface DocumentFile {
+export interface FileRecord {
   id: string;
   document_id?: string | null;
   company_id?: string | null;
   category_id?: string | null;
   file_name: string;
-  file_size?: number | null;
+  size_bytes?: number | null;
   file_type?: string | null;
   file_path_r2?: string | null;
   description: string;
@@ -89,6 +89,8 @@ export interface DocumentFile {
   created_at: string;
   file_categories?: FileCategory | null;
 }
+
+export type DocumentFile = FileRecord;
 
 export interface Counterparty {
   id: string;

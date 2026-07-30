@@ -48,7 +48,7 @@ export async function getB2BDocumentsAction(
 
     const { data: docs, count, error } = await adminSupabase
       .from('documents')
-      .select('id, doc_number, doc_date, doc_type, status, total_amount, comment, mock_file_name, mock_file_size, created_at, sender_company_id, receiver_company_id, sender_company:companies!sender_company_id(name, inn), receiver_company:companies!receiver_company_id(name, inn), document_files(id, file_name, file_size), users(full_name)', { count: 'exact' })
+      .select('id, doc_number, doc_date, doc_type, status, total_amount, comment, mock_file_name, mock_file_size, created_at, sender_company_id, receiver_company_id, sender_company:companies!sender_company_id(name, inn), receiver_company:companies!receiver_company_id(name, inn), files(id, file_name, size_bytes), users(full_name)', { count: 'exact' })
       .or(`sender_company_id.eq.${ctx.companyId},receiver_company_id.eq.${ctx.companyId}`)
       .order('created_at', { ascending: false })
       .range(from, to);
@@ -84,7 +84,7 @@ export async function getB2BDocumentByIdAction(docId: string): Promise<ActionRes
 
     const { data: doc, error } = await adminSupabase
       .from('documents')
-      .select('*, sender_company:companies!sender_company_id(*), receiver_company:companies!receiver_company_id(*), document_files(*, file_categories(*)), document_logs(*, users(full_name)), users(full_name)')
+      .select('*, sender_company:companies!sender_company_id(*), receiver_company:companies!receiver_company_id(*), files(*, file_categories(*)), document_logs(*, users(full_name)), users(full_name)')
       .eq('id', docId)
       .single();
 
@@ -123,7 +123,7 @@ export async function updateB2BDocumentFullAction(
     files: Array<{
       category_id: string;
       file_name: string;
-      file_size: number;
+      size_bytes: number;
       file_type: string;
       file_path_r2: string;
       description: string;
@@ -170,7 +170,7 @@ export async function updateB2BDocumentFullAction(
         comment: data.comment || null,
         status: targetStatus,
         mock_file_name: data.files[0]?.file_name || null,
-        mock_file_size: typeof data.files[0]?.file_size === 'number' ? data.files[0].file_size : null,
+        mock_file_size: typeof data.files[0]?.size_bytes === 'number' ? data.files[0].size_bytes : null,
         updated_at: new Date().toISOString(),
       })
       .eq('id', documentId);
@@ -181,7 +181,7 @@ export async function updateB2BDocumentFullAction(
 
     // 2. Получаем текущие привязанные файлы для безопасного удаления из R2 при полной замене
     const { data: oldFiles } = await adminSupabase
-      .from('document_files')
+      .from('files')
       .select('file_path_r2')
       .eq('document_id', documentId);
 
@@ -195,7 +195,7 @@ export async function updateB2BDocumentFullAction(
     }
 
     // Удаляем старые привязанные записи файлов
-    await adminSupabase.from('document_files').delete().eq('document_id', documentId);
+    await adminSupabase.from('files').delete().eq('document_id', documentId);
 
     if (data.files && data.files.length > 0) {
       const filesToInsert = data.files.map((f) => ({
@@ -203,7 +203,7 @@ export async function updateB2BDocumentFullAction(
         document_id: documentId,
         category_id: f.category_id,
         file_name: f.file_name,
-        file_size: typeof f.file_size === 'number' ? f.file_size : 1572864,
+        size_bytes: typeof f.size_bytes === 'number' ? f.size_bytes : 1572864,
         file_type: f.file_type || 'pdf',
         file_path_r2: f.file_path_r2 || null,
         description: f.description || `Прикрепленный скан ${f.file_name}`,
@@ -212,7 +212,7 @@ export async function updateB2BDocumentFullAction(
         is_legal_doc: false,
       }));
 
-      await adminSupabase.from('document_files').insert(filesToInsert);
+      await adminSupabase.from('files').insert(filesToInsert);
     }
 
     // 3. Запись аудита
@@ -326,7 +326,7 @@ export async function createB2BDocumentAction(data: B2BDocumentInput): Promise<A
         status: status || 'draft',
         comment: comment || null,
         mock_file_name: files[0]?.file_name || null,
-        mock_file_size: typeof files[0]?.file_size === 'number' ? files[0].file_size : null,
+        mock_file_size: typeof files[0]?.size_bytes === 'number' ? files[0].size_bytes : null,
       })
       .select()
       .single();
@@ -342,7 +342,7 @@ export async function createB2BDocumentAction(data: B2BDocumentInput): Promise<A
         document_id: doc.id,
         category_id: f.category_id,
         file_name: f.file_name,
-        file_size: typeof f.file_size === 'number' ? f.file_size : 1572864,
+        size_bytes: typeof f.size_bytes === 'number' ? f.size_bytes : 1572864,
         file_type: f.file_type || 'pdf',
         file_path_r2: f.file_path_r2 || null,
         description: f.description || `Прикрепленный скан ${f.file_name}`,
@@ -351,7 +351,7 @@ export async function createB2BDocumentAction(data: B2BDocumentInput): Promise<A
         is_legal_doc: false,
       }));
 
-      const { error: filesError } = await adminSupabase.from('document_files').insert(filesToInsert);
+      const { error: filesError } = await adminSupabase.from('files').insert(filesToInsert);
 
       if (filesError) {
         return { success: false, error: `Ошибка сохранения прикрепленных файлов: ${filesError.message}` };

@@ -172,16 +172,16 @@ CREATE INDEX idx_documents_receiver ON documents(receiver_company_id);
 CREATE INDEX idx_documents_status ON documents(company_id, status);
 ```
 
-### 2.9 Таблица `document_files` (Связаные Сканы и Уставные Документы R2)
+### 2.9 Таблица `files` (Связаные Сканы и Уставные Документы R2)
 
 ```sql
-CREATE TABLE document_files (
+CREATE TABLE files (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   company_id UUID REFERENCES companies(id) ON DELETE CASCADE NOT NULL,
   document_id UUID REFERENCES documents(id) ON DELETE CASCADE,
   category_id UUID REFERENCES file_categories(id) ON DELETE SET NULL,
   file_name TEXT NOT NULL,
-  file_size BIGINT, -- Размер файла в байтах (BIGINT) для точной агрегации
+  size_bytes BIGINT, -- Размер файла в байтах (BIGINT) для точной агрегации
   file_type TEXT DEFAULT 'pdf',
   file_path_r2 TEXT NOT NULL,
   description TEXT,
@@ -191,8 +191,8 @@ CREATE TABLE document_files (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_doc_files_company ON document_files(company_id);
-CREATE INDEX idx_doc_files_document ON document_files(document_id);
+CREATE INDEX idx_files_company ON files(company_id);
+CREATE INDEX idx_files_document ON files(document_id);
 ```
 
 ### 2.10 Таблица `document_logs` (Журнал Аудита и Статусов)
@@ -224,7 +224,7 @@ ALTER TABLE company_partnerships ENABLE ROW LEVEL SECURITY;
 ALTER TABLE counterparties ENABLE ROW LEVEL SECURITY;
 ALTER TABLE file_categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE documents ENABLE ROW LEVEL SECURITY;
-ALTER TABLE document_files ENABLE ROW LEVEL SECURITY;
+ALTER TABLE files ENABLE ROW LEVEL SECURITY;
 ALTER TABLE document_logs ENABLE ROW LEVEL SECURITY;
 
 CREATE OR REPLACE FUNCTION get_auth_user_company_id()

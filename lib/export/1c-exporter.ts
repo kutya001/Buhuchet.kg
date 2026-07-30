@@ -1,11 +1,10 @@
 import * as XLSX from 'xlsx';
 import { DOCUMENT_TYPES, DOCUMENT_STATUSES } from '@/types/document.types';
-import type { Document, Counterparty, DocumentItem, DocumentType, DocumentStatus } from '@/types/database.types';
+import type { Document, Counterparty, DocumentType, DocumentStatus } from '@/types/database.types';
 import type { Export1CRow } from '@/types/export.types';
 
 type FullDocForExport = Document & {
   counterparties?: Counterparty | null;
-  document_items?: DocumentItem[];
 };
 
 export function exportTo1CExcel(
@@ -21,39 +20,20 @@ export function exportTo1CExcel(
     const counterpartyInn = doc.counterparties?.inn || '—';
     const vatPayerText = doc.counterparties?.is_vat_payer ? 'Плательщик НДС (12%)' : 'Без НДС';
 
-    if (doc.document_items && doc.document_items.length > 0) {
-      doc.document_items.forEach((item) => {
-        rows.push({
-          'Дата Документа': doc.doc_date,
-          'Номер Документа': doc.doc_number || '—',
-          'Тип Операции': typeLabel,
-          'ИНН Контрагента': counterpartyInn,
-          'Наименование Контрагента': counterpartyName,
-          'Товар / Услуга': item.title,
-          'Кол-во': Number(item.quantity),
-          'Ед. изм.': 'шт',
-          'Цена (сом)': Number(item.price),
-          'Сумма (сом)': Number(item.total),
-          'Учет НДС (12%)': vatPayerText,
-          'Статус Документа': statusLabel,
-        });
-      });
-    } else {
-      rows.push({
-        'Дата Документа': doc.doc_date,
-        'Номер Документа': doc.doc_number || '—',
-        'Тип Операции': typeLabel,
-        'ИНН Контрагента': counterpartyInn,
-        'Наименование Контрагента': counterpartyName,
-        'Товар / Услуга': doc.comment || 'Финансовая операция',
-        'Кол-во': 1,
-        'Ед. изм.': 'услуга',
-        'Цена (сом)': Number(doc.total_amount),
-        'Сумма (сом)': Number(doc.total_amount),
-        'Учет НДС (12%)': vatPayerText,
-        'Статус Документа': statusLabel,
-      });
-    }
+    rows.push({
+      'Дата Документа': doc.doc_date,
+      'Номер Документа': doc.doc_number || '—',
+      'Тип Операции': typeLabel,
+      'ИНН Контрагента': counterpartyInn,
+      'Наименование Контрагента': counterpartyName,
+      'Товар / Услуга': doc.comment || 'Финансовая операция',
+      'Кол-во': 1,
+      'Ед. изм.': 'услуга',
+      'Цена (сом)': Number(doc.total_amount),
+      'Сумма (сом)': Number(doc.total_amount),
+      'Учет НДС (12%)': vatPayerText,
+      'Статус Документа': statusLabel,
+    });
   });
 
   // Создаем рабочий лист Excel

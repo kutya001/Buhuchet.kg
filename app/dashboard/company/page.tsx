@@ -120,7 +120,7 @@ export default function CompanyProfilePage() {
         const res = await uploadLegalDocumentAction({
           category_id: item.category_id,
           file_name: item.file_name,
-          file_size: item.file_size,
+          file_size: item.size_bytes,
           file_type: item.file_type,
           file_path_r2: item.file_path_r2,
           description: item.description || `Учредительный документ ${item.file_name}`,
@@ -156,7 +156,7 @@ export default function CompanyProfilePage() {
     setMsg(null);
     startTransition(async () => {
       let newKey = editingDoc.file_path_r2;
-      let newSize = editingDoc.file_size;
+      let newSize = editingDoc.size_bytes;
       let newName = editName;
 
       // Если пользователь выбрал новый файл для замены
@@ -381,10 +381,10 @@ export default function CompanyProfilePage() {
                 ),
               },
               {
-                key: 'file_size',
+                key: 'size_bytes',
                 label: 'Размер',
                 sortable: true,
-                render: (doc) => <span className="font-mono text-xs text-slate-400">{formatBytes(doc.file_size)}</span>,
+                render: (doc) => <span className="font-mono text-xs text-slate-400">{formatBytes(doc.size_bytes)}</span>,
               },
               {
                 key: 'actions',

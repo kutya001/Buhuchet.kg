@@ -281,13 +281,13 @@ export async function createManualCounterpartyAction(data: {
       counterpartyId = inserted.id;
     }
 
-    // Загрузка прикрепленного файла R2 в таблицу document_files (если предоставлен)
+    // Загрузка прикрепленного файла R2 в таблицу files (если предоставлен)
     if (data.file_path_r2 && data.file_name) {
-      await adminSupabase.from('document_files').insert({
+      await adminSupabase.from('files').insert({
         company_id: ctx.companyId,
         document_id: null,
         file_name: data.file_name,
-        file_size: '1.5 MB',
+        size_bytes: 1572864,
         file_type: 'image',
         file_path_r2: data.file_path_r2,
         description: `Учредительный документ контрагента ${data.name}`,
@@ -331,7 +331,7 @@ export async function getCounterpartyDetailsAndFilesAction(
 
     // 2. Получаем загруженные файлы компании (в т.ч. учредительные/юридические документы)
     const { data: rawFiles } = await adminSupabase
-      .from('document_files')
+      .from('files')
       .select('*, file_categories(*)')
       .eq('company_id', targetCompanyId)
       .order('created_at', { ascending: false });
