@@ -50,6 +50,38 @@ export interface CompanyPartnership {
   target_company?: Company | null;
 }
 
+export interface ModulePermissions {
+  view?: boolean;
+  create?: boolean;
+  edit?: boolean;
+  delete?: boolean;
+  send?: boolean;
+  accept?: boolean;
+  recall?: boolean;
+  manage?: boolean;
+  upload?: boolean;
+}
+
+export interface RolePermissions {
+  documents?: ModulePermissions;
+  files?: ModulePermissions;
+  counterparties?: ModulePermissions;
+  employees?: ModulePermissions;
+  company?: ModulePermissions;
+  export?: ModulePermissions;
+}
+
+export interface CompanyRole {
+  id: string;
+  company_id: string;
+  name: string;
+  description?: string | null;
+  is_system?: boolean;
+  permissions: RolePermissions;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface UserProfile {
   id: string;
   company_id?: string | null;
@@ -57,10 +89,15 @@ export interface UserProfile {
   email: string;
   phone?: string | null;
   role: UserRole;
+  role_id?: string | null;
+  position?: string | null;
+  is_active?: boolean;
+  must_change_password?: boolean;
   is_super_admin: boolean;
   created_at: string;
   updated_at: string;
   companies?: Company | null;
+  company_roles?: CompanyRole | null;
 }
 
 export interface FileCategory {
@@ -125,6 +162,8 @@ export interface Document {
   author_id?: string | null;
   sender_company_id?: string | null;
   receiver_company_id?: string | null;
+  sender_user_id?: string | null;
+  receiver_user_id?: string | null;
   counterparty_id?: string | null;
   doc_number?: string | null;
   doc_date: string;
@@ -142,7 +181,9 @@ export interface Document {
   sender_company?: Company | null;
   receiver_company?: Company | null;
   counterparties?: Counterparty | null;
-  document_files?: DocumentFile[];
+  files?: FileRecord[];
+  sender_user?: { full_name: string; position?: string | null } | null;
+  receiver_user?: { full_name: string; position?: string | null } | null;
 }
 
 export interface DocumentItem {

@@ -137,6 +137,20 @@ export function DashboardShell({
               {!isCollapsed && <span className="truncate">Моя Организация</span>}
             </Link>
 
+            <Link
+              href="/dashboard/employees"
+              prefetch={true}
+              className={`flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                isActive('/dashboard/employees')
+                  ? 'bg-purple-600/20 text-purple-400 border border-purple-500/30 font-bold'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+              }`}
+              title="Сотрудники и Роли"
+            >
+              <Users className="h-4 w-4 text-purple-400 flex-shrink-0" />
+              {!isCollapsed && <span className="truncate">Сотрудники</span>}
+            </Link>
+
             {isSuperAdmin && (
               <Link
                 href="/super-admin"

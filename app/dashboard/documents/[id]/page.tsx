@@ -25,6 +25,8 @@ import {
   Info,
   Undo2,
   Edit2,
+  User,
+  UserCheck,
 } from 'lucide-react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
@@ -379,15 +381,31 @@ export default function B2BDocumentDetailPage() {
             </CardHeader>
             <CardContent className="grid grid-cols-2 gap-3 text-xs">
               <div className="p-3 rounded-lg bg-slate-950/60 border border-slate-800 space-y-1">
-                <span className="text-slate-500 font-mono text-[10px] uppercase">Отправитель</span>
+                <span className="text-slate-500 font-mono text-[10px] uppercase">Отправитель (Компания & Сотрудник)</span>
                 <div className="font-semibold text-white truncate">{document.sender_company?.name || '—'}</div>
                 <div className="text-[10px] font-mono text-slate-400">ИНН: {document.sender_company?.inn || '—'}</div>
+                <div className="text-[11px] text-sky-400 font-medium pt-1 flex items-center">
+                  <User className="h-3 w-3 mr-1" />
+                  {document.sender_user?.full_name || document.users?.full_name || 'Владелец / Сотрудник'}
+                  {document.sender_user?.position && <span className="text-slate-500 text-[10px] ml-1">({document.sender_user.position})</span>}
+                </div>
               </div>
 
               <div className="p-3 rounded-lg bg-slate-950/60 border border-slate-800 space-y-1">
-                <span className="text-slate-500 font-mono text-[10px] uppercase">Получатель</span>
+                <span className="text-slate-500 font-mono text-[10px] uppercase">Получатель (Компания & Сотрудник)</span>
                 <div className="font-semibold text-white truncate">{document.receiver_company?.name || '—'}</div>
                 <div className="text-[10px] font-mono text-slate-400">ИНН: {document.receiver_company?.inn || '—'}</div>
+                {document.receiver_user ? (
+                  <div className="text-[11px] text-emerald-400 font-medium pt-1 flex items-center">
+                    <UserCheck className="h-3 w-3 mr-1" />
+                    {document.receiver_user.full_name}
+                    {document.receiver_user.position && <span className="text-slate-500 text-[10px] ml-1">({document.receiver_user.position})</span>}
+                  </div>
+                ) : (
+                  <div className="text-[10px] text-slate-500 pt-1 italic">
+                    {document.status === 'accepted' || document.status === 'processed' ? 'Принято организацией' : 'Ожидает принятия получателем'}
+                  </div>
+                )}
               </div>
 
               {document.comment && (

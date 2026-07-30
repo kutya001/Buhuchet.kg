@@ -38,6 +38,7 @@ const PAGE_NAMES: Record<string, string> = {
   '/dashboard/files': 'Реестр Файлов',
   '/dashboard/counterparties': 'Организации',
   '/dashboard/company': 'Моя Организация',
+  '/dashboard/employees': 'Сотрудники и Роли',
   '/dashboard/profile': 'Профиль Пользователя',
   '/super-admin': 'Панель Суперадмина',
 };
@@ -286,6 +287,16 @@ export function FloatingTopbar({
               >
                 <Building2 className="h-6 w-6 text-slate-400" />
                 <span className="text-xs font-semibold text-slate-200">Моя Организация</span>
+              </Link>
+
+              <Link
+                href="/dashboard/employees"
+                prefetch={true}
+                onClick={() => setIsMoreOpen(false)}
+                className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 hover:border-purple-500/50 flex flex-col items-center justify-center text-center space-y-1.5 min-h-[72px]"
+              >
+                <Users className="h-6 w-6 text-purple-400" />
+                <span className="text-xs font-semibold text-slate-200">Сотрудники</span>
               </Link>
 
               <Link
