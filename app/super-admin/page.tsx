@@ -827,6 +827,24 @@ export default function SuperAdminPage() {
     },
   ];
 
+  // ---------------- CONFIG FOR SECTION 6: DATABASE INSPECTOR (UnifiedDataGrid) ----------------
+  const dbColumns: ColumnDef<Record<string, any>>[] = useMemo(() => {
+    return dbData.columns.map((col) => ({
+      key: col,
+      label: col,
+      sortable: true,
+      getValue: (row) => (typeof row[col] === 'object' ? JSON.stringify(row[col]) : row[col]),
+      render: (row) => (
+        <span
+          className="font-mono text-xs truncate max-w-[220px] block"
+          title={typeof row[col] === 'object' ? JSON.stringify(row[col]) : String(row[col] ?? '')}
+        >
+          {typeof row[col] === 'object' ? JSON.stringify(row[col]) : String(row[col] ?? 'null')}
+        </span>
+      ),
+    }));
+  }, [dbData.columns]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64 text-slate-400">
@@ -1111,20 +1129,12 @@ export default function SuperAdminPage() {
           </div>
 
           <UnifiedDataGrid<Record<string, any>>
-            columns={dbData.columns.map((col) => ({
-              key: col,
-              label: col,
-              sortable: true,
-              render: (row) => (
-                <span className="font-mono text-xs truncate max-w-[200px] block">
-                  {typeof row[col] === 'object' ? JSON.stringify(row[col]) : String(row[col] ?? 'null')}
-                </span>
-              ),
-            }))}
+            forceView="table"
+            columns={dbColumns}
             data={dbData.rows}
             keyExtractor={(r) => (r.id ? String(r.id) : JSON.stringify(r))}
-            searchPlaceholder="Поиск по полям таблицы..."
-            emptyMessage="Записи в выбранной таблице отсутствуют."
+            searchPlaceholder="Поиск по сырым данным таблицы PostgreSQL..."
+            emptyMessage="Записи в выбранной таблице PostgreSQL отсутствуют."
             isLoading={dbLoading}
             defaultPageSize={25}
           />

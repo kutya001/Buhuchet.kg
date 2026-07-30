@@ -52,6 +52,7 @@ export type UnifiedDataGridProps<T> = {
   emptyMessage?: string;
   isLoading?: boolean;
   defaultPageSize?: 25 | 50 | 100 | 'all';
+  forceView?: 'table' | 'cards';
 };
 
 export function UnifiedDataGrid<T extends Record<string, any>>({
@@ -66,9 +67,17 @@ export function UnifiedDataGrid<T extends Record<string, any>>({
   emptyMessage = 'Записи не найдены',
   isLoading = false,
   defaultPageSize = 25,
+  forceView,
 }: UnifiedDataGridProps<T>) {
   // 1. Порядок и конфигурация столбцов
   const [columns, setColumns] = useState<ColumnDef<T>[]>(initialColumns);
+
+  // Синхронизация при динамической смене initialColumns (например, в Инспекторе БД)
+  useEffect(() => {
+    setColumns(initialColumns);
+    setVisibleColumnKeys(new Set(initialColumns.filter((c) => !c.hiddenByDefault).map((c) => c.key)));
+  }, [initialColumns]);
+
   const [visibleColumnKeys, setVisibleColumnKeys] = useState<Set<string>>(() => {
     const keys = new Set<string>();
     initialColumns.forEach((c) => {
@@ -77,9 +86,13 @@ export function UnifiedDataGrid<T extends Record<string, any>>({
     return keys;
   });
 
-  // 2. Режим отображения: Таблица vs Карточки (На ПК по умолчанию Таблица, на Мобильных — Карточки)
-  const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
+  // 2. Режим отображения: Таблица vs Карточки (При forceView всегда берется указанный режим)
+  const [viewMode, setViewMode] = useState<'table' | 'cards'>(forceView || 'table');
   useEffect(() => {
+    if (forceView) {
+      setViewMode(forceView);
+      return;
+    }
     const checkViewport = () => {
       if (window.innerWidth < 768) {
         setViewMode('cards');
@@ -90,7 +103,7 @@ export function UnifiedDataGrid<T extends Record<string, any>>({
     checkViewport();
     window.addEventListener('resize', checkViewport);
     return () => window.removeEventListener('resize', checkViewport);
-  }, []);
+  }, [forceView]);
 
   // 3. Поиск, Сортировка и Фильтрация по столбцам
   const [searchQuery, setSearchQuery] = useState('');
@@ -306,29 +319,30 @@ export function UnifiedDataGrid<T extends Record<string, any>>({
             )}
           </div>
 
-          {/* ТУМБЛЕР ПЕРЕКЛЮЧЕНИЯ ТАБЛИЦА / КАРТОЧКИ */}
-          <div className="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800">
-            <button
-              onClick={() => setViewMode('table')}
-              className={`p-2 rounded-lg text-xs font-semibold transition-all min-h-[34px] flex items-center space-x-1 ${
-                viewMode === 'table' ? 'bg-amber-500/20 text-amber-400 font-bold border border-amber-500/30' : 'text-slate-400 hover:text-white'
-              }`}
-              title="Режим Таблицы (для ПК)"
-            >
-              <TableIcon className="h-4 w-4" />
-              <span className="hidden sm:inline">Таблица</span>
-            </button>
-            <button
-              onClick={() => setViewMode('cards')}
-              className={`p-2 rounded-lg text-xs font-semibold transition-all min-h-[34px] flex items-center space-x-1 ${
-                viewMode === 'cards' ? 'bg-amber-500/20 text-amber-400 font-bold border border-amber-500/30' : 'text-slate-400 hover:text-white'
-              }`}
-              title="Режим Карточек (для мобильных)"
-            >
-              <LayoutGrid className="h-4 w-4" />
-              <span className="hidden sm:inline">Карточки</span>
-            </button>
-          </div>
+          {!forceView && (
+            <div className="flex items-center space-x-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
+              <button
+                onClick={() => setViewMode('table')}
+                className={`p-2 rounded-lg text-xs font-semibold transition-all min-h-[34px] flex items-center space-x-1 ${
+                  viewMode === 'table' ? 'bg-amber-500/20 text-amber-400 font-bold border border-amber-500/30' : 'text-slate-400 hover:text-white'
+                }`}
+                title="Режим Таблицы (для ПК)"
+              >
+                <TableIcon className="h-4 w-4" />
+                <span className="hidden sm:inline">Таблица</span>
+              </button>
+              <button
+                onClick={() => setViewMode('cards')}
+                className={`p-2 rounded-lg text-xs font-semibold transition-all min-h-[34px] flex items-center space-x-1 ${
+                  viewMode === 'cards' ? 'bg-amber-500/20 text-amber-400 font-bold border border-amber-500/30' : 'text-slate-400 hover:text-white'
+                }`}
+                title="Режим Карточек (для мобильных)"
+              >
+                <LayoutGrid className="h-4 w-4" />
+                <span className="hidden sm:inline">Карточки</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
