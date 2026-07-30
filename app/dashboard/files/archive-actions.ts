@@ -393,3 +393,205 @@ export async function getAllSystemFilesAction(): Promise<ActionResponse<any[]>> 
     return { success: false, error: errorMsg };
   }
 }
+
+export type EnrichedFileItem = DocumentFile & {
+  sourceType: 'document' | 'company' | 'counterparty' | 'manual';
+  sourceTitle: string;
+  sourceUrl: string;
+  bytesSize: number;
+  isMyCompanyFile: boolean;
+};
+
+export type FileRegistryStats = {
+  totalCount: number;
+  totalSizeBytes: number;
+  formattedTotalSize: string;
+  myCompanyFilesCount: number;
+  bySource: {
+    document: number;
+    company: number;
+    counterparty: number;
+    manual: number;
+  };
+  byType: {
+    pdf: number;
+    image: number;
+    other: number;
+  };
+};
+
+function parseSizeToBytes(sizeStr?: string | null): number {
+  if (!sizeStr) return 1024 * 1024; // По умолчанию 1MB если не указано
+  const clean = sizeStr.toLowerCase().trim();
+  const num = parseFloat(clean.replace(/[^0-9.]/g, '')) || 1;
+  if (clean.includes('gb')) return Math.round(num * 1024 * 1024 * 1024);
+  if (clean.includes('kb')) return Math.round(num * 1024);
+  if (clean.includes('b')) return Math.round(num);
+  return Math.round(num * 1024 * 1024); // По умолчанию MB
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
+
+/**
+ * ПОЛНЫЙ РЕЕСТР ФАЙЛОВ С КЛАССИФИКАЦИЕЙ ИСТОЧНИКОВ, ССЫЛКАМИ И СТАТИСТИКОЙ ОБЪЕМА
+ */
+export async function getComprehensiveFileRegistryAction(): Promise<
+  ActionResponse<{
+    files: EnrichedFileItem[];
+    stats: FileRegistryStats;
+    myCompanyId: string;
+  }>
+> {
+  try {
+    const supabase = await createClient();
+    const adminSupabase = await createAdminClient();
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return { success: false, error: 'Пользователь не авторизован' };
+    }
+
+    const { data: prof } = await supabase.from('users').select('company_id').eq('id', user.id).single();
+    if (!prof?.company_id) {
+      return { success: false, error: 'Организация пользователя не найдена' };
+    }
+
+    const myCompanyId = prof.company_id;
+
+    // 1. Получаем все документы где компания участник (для ссылок)
+    const { data: companyDocs } = await adminSupabase
+      .from('documents')
+      .select('id, doc_number, doc_type')
+      .or(`sender_company_id.eq.${myCompanyId},receiver_company_id.eq.${myCompanyId}`);
+
+    const docMap = new Map<string, { doc_number?: string | null; doc_type: string }>();
+    if (companyDocs) {
+      companyDocs.forEach((d) => docMap.set(d.id, d));
+    }
+
+    // 2. Получаем все контрагенты (для поиска по ИНН)
+    const { data: counterparties } = await adminSupabase
+      .from('counterparties')
+      .select('id, name, inn, target_company_id')
+      .eq('company_id', myCompanyId);
+
+    const cpMap = new Map<string, string>();
+    if (counterparties) {
+      counterparties.forEach((c) => {
+        if (c.target_company_id) cpMap.set(c.target_company_id, c.inn);
+      });
+    }
+
+    // 3. Извлекаем ВСЕ привязанные к компании и ее документам файлы
+    const docIds = Array.from(docMap.keys());
+    
+    let query = adminSupabase
+      .from('document_files')
+      .select('*, file_categories(*)')
+      .order('created_at', { ascending: false });
+
+    if (docIds.length > 0) {
+      query = query.or(`company_id.eq.${myCompanyId},document_id.in.(${docIds.join(',')})`);
+    } else {
+      query = query.eq('company_id', myCompanyId);
+    }
+
+    const { data: rawFiles, error } = await query;
+
+    if (error) {
+      return { success: false, error: `Ошибка выгрузки файла архива: ${error.message}` };
+    }
+
+    const files: EnrichedFileItem[] = [];
+    let totalSizeBytes = 0;
+    let myCompanyFilesCount = 0;
+
+    const bySource = { document: 0, company: 0, counterparty: 0, manual: 0 };
+    const byType = { pdf: 0, image: 0, other: 0 };
+
+    if (rawFiles && rawFiles.length > 0) {
+      for (const f of rawFiles) {
+        const isMyCompanyFile = f.company_id === myCompanyId;
+        if (isMyCompanyFile) myCompanyFilesCount++;
+
+        const bytes = parseSizeToBytes(f.file_size);
+        totalSizeBytes += bytes;
+
+        let sourceType: 'document' | 'company' | 'counterparty' | 'manual' = 'manual';
+        let sourceTitle = 'Ручной архив';
+        let sourceUrl = '/dashboard/files';
+
+        if (f.document_id && docMap.has(f.document_id)) {
+          const d = docMap.get(f.document_id);
+          sourceType = 'document';
+          sourceTitle = `B2B Документ №${d?.doc_number || f.document_id.slice(0, 8)}`;
+          sourceUrl = `/dashboard/documents/${f.document_id}`;
+          bySource.document++;
+        } else if (f.is_legal_doc && isMyCompanyFile) {
+          sourceType = 'company';
+          sourceTitle = 'Моя Организация (Уставной скан)';
+          sourceUrl = '/dashboard/company';
+          bySource.company++;
+        } else if (f.is_legal_doc || (f.description && f.description.toLowerCase().includes('контрагент'))) {
+          sourceType = 'counterparty';
+          sourceTitle = `Скан Контрагента`;
+          const inn = cpMap.get(f.company_id || '');
+          sourceUrl = inn ? `/dashboard/counterparties?search=${inn}` : '/dashboard/counterparties';
+          bySource.counterparty++;
+        } else {
+          sourceType = 'manual';
+          sourceTitle = 'Загружен вручную';
+          sourceUrl = '/dashboard/files';
+          bySource.manual++;
+        }
+
+        // Тип формата
+        const ext = (f.file_name || '').toLowerCase();
+        if (ext.endsWith('.pdf') || f.file_type === 'pdf') {
+          byType.pdf++;
+        } else if (ext.match(/\.(png|jpg|jpeg|webp|heic)$/) || f.file_type === 'image') {
+          byType.image++;
+        } else {
+          byType.other++;
+        }
+
+        files.push({
+          ...(f as DocumentFile),
+          sourceType,
+          sourceTitle,
+          sourceUrl,
+          bytesSize: bytes,
+          isMyCompanyFile,
+        });
+      }
+    }
+
+    return {
+      success: true,
+      data: {
+        files,
+        stats: {
+          totalCount: files.length,
+          totalSizeBytes,
+          formattedTotalSize: formatBytes(totalSizeBytes),
+          myCompanyFilesCount,
+          bySource,
+          byType,
+        },
+        myCompanyId,
+      },
+    };
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : 'Сбой комплексного реестра файлов';
+    return { success: false, error: errorMsg };
+  }
+}
