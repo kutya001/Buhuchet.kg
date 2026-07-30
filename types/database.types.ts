@@ -6,7 +6,7 @@ export type EsfStatus = 'not_checked' | 'matched' | 'mismatch';
 export type SubscriptionPlan = 'basic' | 'standard' | 'pro';
 export type PaymentMethod = 'qr_mbank' | 'qr_optima' | 'manual_admin';
 
-export type PartnershipStatus = 'pending' | 'approved' | 'rejected';
+export type PartnershipStatus = 'pending' | 'sent' | 'recalled' | 'approved' | 'rejected' | 'suspended';
 export type CompanyStatus = 'pending_approval' | 'requires_changes' | 'active' | 'blocked';
 
 export const INDUSTRIES = [

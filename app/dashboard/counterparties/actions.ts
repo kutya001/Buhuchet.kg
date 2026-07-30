@@ -1,7 +1,7 @@
 'use server';
 
 import { createClient, createAdminClient } from '@/lib/supabase/server';
-import type { ActionResponse, CompanyPartnership, Company, DocumentFile } from '@/types/database.types';
+import type { ActionResponse, CompanyPartnership, Company, DocumentFile, PartnershipStatus } from '@/types/database.types';
 import { revalidatePath } from 'next/cache';
 import { getPresignedDownloadUrl } from '@/lib/r2';
 
@@ -136,11 +136,11 @@ async function ensureCounterpartyLink(
 }
 
 /**
- * Ответ на заявку (Принять / Отклонить) — Гарантированное добавление контрагентов с target_company_id
+ * Ответ на заявку (Подтверждён / Отменён / Отозван / Приостановлен)
  */
 export async function respondToPartnershipRequestAction(
   partnershipId: string,
-  newStatus: 'approved' | 'rejected'
+  newStatus: PartnershipStatus
 ): Promise<ActionResponse> {
   try {
     const ctx = await getUserContext();
@@ -202,7 +202,7 @@ export async function respondToPartnershipRequestAction(
 }
 
 /**
- * Ручное добавление контрагента по ИНН (14 цифр КР)
+ * Ручное добавление контрагента по ИНН (14 цифр КР) + Опциональная загрузка учредительного файла R2
  */
 export async function createManualCounterpartyAction(data: {
   name: string;
@@ -211,6 +211,8 @@ export async function createManualCounterpartyAction(data: {
   email?: string;
   phone?: string;
   comment?: string;
+  file_path_r2?: string;
+  file_name?: string;
 }): Promise<ActionResponse> {
   try {
     const ctx = await getUserContext();
@@ -238,7 +240,10 @@ export async function createManualCounterpartyAction(data: {
       .eq('inn', data.inn)
       .maybeSingle();
 
+    let counterpartyId = '';
+
     if (existing) {
+      counterpartyId = existing.id;
       const { error: updateErr } = await adminSupabase
         .from('counterparties')
         .update({
@@ -254,20 +259,40 @@ export async function createManualCounterpartyAction(data: {
 
       if (updateErr) return { success: false, error: updateErr.message };
     } else {
-      const { error: insertErr } = await adminSupabase.from('counterparties').insert({
-        company_id: ctx.companyId,
-        target_company_id: targetComp?.id || null,
-        name: data.name,
-        inn: data.inn,
-        is_vat_payer: !!data.is_vat_payer,
-        email: data.email || null,
-        phone: data.phone || null,
-        comment: data.comment || null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      });
+      const { data: inserted, error: insertErr } = await adminSupabase
+        .from('counterparties')
+        .insert({
+          company_id: ctx.companyId,
+          target_company_id: targetComp?.id || null,
+          name: data.name,
+          inn: data.inn,
+          is_vat_payer: !!data.is_vat_payer,
+          email: data.email || null,
+          phone: data.phone || null,
+          comment: data.comment || null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .select('id')
+        .single();
 
-      if (insertErr) return { success: false, error: insertErr.message };
+      if (insertErr || !inserted) return { success: false, error: insertErr?.message || 'Ошибка вставки' };
+      counterpartyId = inserted.id;
+    }
+
+    // Загрузка прикрепленного файла R2 в таблицу document_files (если предоставлен)
+    if (data.file_path_r2 && data.file_name) {
+      await adminSupabase.from('document_files').insert({
+        company_id: ctx.companyId,
+        document_id: null,
+        file_name: data.file_name,
+        file_size: '1.5 MB',
+        file_type: 'image',
+        file_path_r2: data.file_path_r2,
+        description: `Учредительный документ контрагента ${data.name}`,
+        is_internal: true,
+        is_legal_doc: true,
+      });
     }
 
     revalidatePath('/dashboard/counterparties');

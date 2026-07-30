@@ -36,7 +36,7 @@ const PAGE_NAMES: Record<string, string> = {
   '/dashboard/documents': 'Документы',
   '/dashboard/documents/new': 'Новый Документ',
   '/dashboard/files': 'Реестр Файлов',
-  '/dashboard/counterparties': 'Контрагенты',
+  '/dashboard/counterparties': 'Организации',
   '/dashboard/company': 'Моя Организация',
   '/dashboard/profile': 'Профиль Пользователя',
   '/super-admin': 'Панель Суперадмина',
@@ -265,7 +265,7 @@ export function FloatingTopbar({
                 className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 hover:border-amber-500/50 flex flex-col items-center justify-center text-center space-y-1.5 min-h-[72px]"
               >
                 <Users className="h-6 w-6 text-amber-400" />
-                <span className="text-xs font-semibold text-slate-200">Контрагенты</span>
+                <span className="text-xs font-semibold text-slate-200">Организации</span>
               </Link>
 
               <Link

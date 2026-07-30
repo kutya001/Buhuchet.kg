@@ -103,10 +103,10 @@ export function DashboardShell({
                   ? 'bg-amber-600/20 text-amber-400 border border-amber-500/30 font-bold'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
               }`}
-              title="Контрагенты"
+              title="Организации"
             >
               <Users className="h-4 w-4 text-amber-400 flex-shrink-0" />
-              {!isCollapsed && <span className="truncate">Контрагенты</span>}
+              {!isCollapsed && <span className="truncate">Организации</span>}
             </Link>
 
             <Link
