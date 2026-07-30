@@ -38,6 +38,8 @@ import {
 } from '../files/archive-actions';
 import { getPresignedDownloadUrlAction, getPresignedUploadUrlAction } from '../files/actions';
 import type { Company, DocumentFile, FileCategory } from '@/types/database.types';
+import { UnifiedDataGrid, ColumnDef } from '@/components/ui/unified/UnifiedDataGrid';
+import { UnifiedFormModal } from '@/components/ui/unified/UnifiedFormModal';
 
 export default function CompanyProfilePage() {
   const router = useRouter();
@@ -355,153 +357,152 @@ export default function CompanyProfilePage() {
             )}
           </Card>
 
-          {/* Список загруженных уставных файлов */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-            {legalDocs.length === 0 ? (
-              <div className="col-span-full p-8 text-center text-slate-500 text-xs bg-slate-900/40 rounded-xl border border-slate-800">
-                Учредительные документы пока не прикреплены
-              </div>
-            ) : (
-              legalDocs.map((doc) => (
-                <Card key={doc.id} className="bg-slate-900/60 border-slate-800 p-4 space-y-3 flex flex-col justify-between hover:border-slate-700 transition-colors">
-                  <div className="space-y-2">
-                    <div className="flex items-start justify-between">
-                      <div className="min-w-0 flex-1">
-                        <h4 className="font-bold text-white text-xs truncate">{doc.file_name}</h4>
-                        <Badge variant="outline" className="text-[10px] border-purple-500/30 text-purple-400 mt-1">
-                          {doc.file_categories?.name || 'Учредительный'}
-                        </Badge>
-                      </div>
-
-                      <div className="flex items-center space-x-1">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleOpenEdit(doc)}
-                          className="h-8 w-8 p-0 text-slate-400 hover:text-blue-400"
-                        >
-                          <Edit2 className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleDeleteDoc(doc.id)}
-                          className="h-8 w-8 p-0 text-slate-400 hover:text-red-400"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-
-                    <p className="text-xs text-slate-300 font-medium line-clamp-2">{doc.description}</p>
+          {/* ЕДИНООБРАЗНАЯ ТАБЛИЦА/КАРТОЧКИ УСТАВНЫХ ФАЙЛОВ UnifiedDataGrid */}
+          <UnifiedDataGrid<DocumentFile>
+            columns={[
+              {
+                key: 'file_name',
+                label: 'Наименование Файла',
+                sortable: true,
+                render: (doc) => (
+                  <div className="font-semibold text-white text-xs sm:text-sm flex items-center space-x-2">
+                    <FileText className="h-4 w-4 text-purple-400 flex-shrink-0" />
+                    <span className="truncate max-w-[200px]">{doc.file_name}</span>
                   </div>
-
-                  <div className="flex items-center justify-between pt-2 border-t border-slate-800/60 mt-2">
-                    <span className="text-[10px] font-mono text-slate-500">{doc.file_size || '1.5 MB'}</span>
-
+                ),
+              },
+              {
+                key: 'category',
+                label: 'Категория',
+                sortable: true,
+                getValue: (doc) => doc.file_categories?.name,
+                render: (doc) => (
+                  <Badge variant="outline" className="border-purple-500/30 text-purple-400 text-xs">
+                    {doc.file_categories?.name || 'Учредительный'}
+                  </Badge>
+                ),
+              },
+              {
+                key: 'file_size',
+                label: 'Размер',
+                sortable: true,
+                render: (doc) => <span className="font-mono text-xs text-slate-400">{doc.file_size || '1.5 MB'}</span>,
+              },
+              {
+                key: 'actions',
+                label: 'Действия',
+                sortable: false,
+                render: (doc) => (
+                  <div className="flex items-center justify-end space-x-2">
                     {doc.file_path_r2 && (
                       <Button
                         size="sm"
-                        variant="ghost"
-                        onClick={() => handleDownloadR2File(doc.file_path_r2)}
-                        className="h-8 p-1 text-xs text-blue-400 hover:text-white"
+                        variant="outline"
+                        onClick={() => handleDownloadR2File(doc.file_path_r2!)}
+                        className="border-slate-800 text-purple-400 text-xs min-h-[36px]"
                       >
-                        <Download className="h-4 w-4 mr-1" />
-                        Скачать R2
+                        <Download className="h-3.5 w-3.5 mr-1" />
+                        Скачать
                       </Button>
                     )}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => handleOpenEdit(doc)}
+                      className="h-8 w-8 p-0 text-slate-400 hover:text-blue-400"
+                    >
+                      <Edit2 className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => handleDeleteDoc(doc.id)}
+                      className="h-8 w-8 p-0 text-slate-400 hover:text-red-400"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
-                </Card>
-              ))
+                ),
+              },
+            ]}
+            data={legalDocs}
+            keyExtractor={(doc) => doc.id}
+            searchPlaceholder="Поиск по имени документа..."
+            emptyMessage="Учредительные документы пока не загружены."
+            isLoading={loading}
+            defaultPageSize={25}
+          />
+        </div>
+      )}
+
+      {/* МОДАЛЬНОЕ ОКНО РЕДАКТИРОВАНИЯ И ЗАМЕНЫ ФАЙЛА R2 (UnifiedFormModal) */}
+      <UnifiedFormModal
+        isOpen={!!editingDoc}
+        onClose={() => setEditingDoc(null)}
+        title="Редактирование / Замена Файла R2"
+        subtitle="Изменение категорий и замена исходного скана"
+        mode="edit"
+        onSubmit={(e) => {
+          e.preventDefault();
+          handleSaveEdit();
+        }}
+        isSubmitting={isPending || replaceUploading}
+        submitText="Сохранить изменения"
+      >
+        <div className="space-y-4">
+          <div className="space-y-1">
+            <Label className="text-xs text-slate-400">Название файла</Label>
+            <Input
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              className="bg-slate-950 border-slate-800 text-white min-h-[44px]"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <Label className="text-xs text-slate-400">Категория скана</Label>
+            <select
+              value={editCatId}
+              onChange={(e) => setEditCatId(e.target.value)}
+              className="w-full min-h-[44px] rounded-xl border border-slate-800 bg-slate-950 px-3 text-sm text-slate-100"
+            >
+              {categories.map((cat) => (
+                <option key={cat.id} value={cat.id}>
+                  {cat.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-1">
+            <Label className="text-xs text-slate-400">Описание</Label>
+            <Input
+              value={editDesc}
+              onChange={(e) => setEditDesc(e.target.value)}
+              className="bg-slate-950 border-slate-800 text-white min-h-[44px]"
+            />
+          </div>
+
+          {/* Замена файла в R2 */}
+          <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
+            <Label className="text-xs text-purple-400 font-semibold flex items-center">
+              <RefreshCw className="h-3.5 w-3.5 mr-1" />
+              Заменить сам скан в Cloudflare R2 (опционально)
+            </Label>
+            <input
+              type="file"
+              accept="image/*,.pdf"
+              onChange={(e) => e.target.files?.[0] && setReplacingFile(e.target.files[0])}
+              className="text-xs text-slate-400 file:mr-2 file:py-2 file:px-3 file:rounded-xl file:border-0 file:bg-slate-800 file:text-slate-200"
+            />
+            {replacingFile && (
+              <p className="text-[11px] text-emerald-400 font-mono">
+                Выбран для замены: {replacingFile.name}
+              </p>
             )}
           </div>
         </div>
-      )}
-
-      {/* МОДАЛЬНОЕ ОКНО РЕДАКТИРОВАНИЯ И ЗАМЕНЫ ФАЙЛА R2 */}
-      {editingDoc && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="w-full sm:max-w-lg bg-slate-900 border-t sm:border border-slate-800 rounded-t-3xl sm:rounded-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center pb-2 border-b border-slate-800">
-              <h3 className="font-bold text-white text-base flex items-center">
-                <Edit2 className="h-4 w-4 mr-2 text-blue-400" />
-                Редактирование / Замена Файла
-              </h3>
-              <Button size="sm" variant="ghost" onClick={() => setEditingDoc(null)}>
-                <X className="h-5 w-5" />
-              </Button>
-            </div>
-
-            <div className="space-y-4">
-              <div className="space-y-1">
-                <Label className="text-xs text-slate-400">Название файла</Label>
-                <Input
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  className="bg-slate-950 border-slate-800 text-white min-h-[44px]"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <Label className="text-xs text-slate-400">Категория скана</Label>
-                <select
-                  value={editCatId}
-                  onChange={(e) => setEditCatId(e.target.value)}
-                  className="w-full min-h-[44px] rounded-xl border border-slate-800 bg-slate-950 px-3 text-sm text-slate-100"
-                >
-                  {categories.map((cat) => (
-                    <option key={cat.id} value={cat.id}>
-                      {cat.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-1">
-                <Label className="text-xs text-slate-400">Описание</Label>
-                <Input
-                  value={editDesc}
-                  onChange={(e) => setEditDesc(e.target.value)}
-                  className="bg-slate-950 border-slate-800 text-white min-h-[44px]"
-                />
-              </div>
-
-              {/* Замена файла в R2 */}
-              <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
-                <Label className="text-xs text-purple-400 font-semibold flex items-center">
-                  <RefreshCw className="h-3.5 w-3.5 mr-1" />
-                  Заменить сам скан в Cloudflare R2 (опционально)
-                </Label>
-                <input
-                  type="file"
-                  accept="image/*,.pdf"
-                  onChange={(e) => e.target.files?.[0] && setReplacingFile(e.target.files[0])}
-                  className="text-xs text-slate-400 file:mr-2 file:py-2 file:px-3 file:rounded-xl file:border-0 file:bg-slate-800 file:text-slate-200"
-                />
-                {replacingFile && (
-                  <p className="text-[11px] text-emerald-400 font-mono">
-                    Выбран для замены: {replacingFile.name}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <div className="flex justify-end space-x-2 pt-2 border-t border-slate-800">
-              <Button variant="ghost" onClick={() => setEditingDoc(null)} className="min-h-[44px]">
-                Отмена
-              </Button>
-              <Button
-                onClick={handleSaveEdit}
-                disabled={isPending || replaceUploading}
-                className="bg-blue-600 hover:bg-blue-500 text-white min-h-[44px] px-6"
-              >
-                {isPending || replaceUploading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                Сохранить изменения
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      </UnifiedFormModal>
     </div>
   );
 }

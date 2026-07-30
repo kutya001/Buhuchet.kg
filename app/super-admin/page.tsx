@@ -72,6 +72,8 @@ import {
 import { getPresignedDownloadUrlAction, getPresignedUploadUrlAction } from '../dashboard/files/actions';
 import type { Company, DocumentFile, FileCategory } from '@/types/database.types';
 import { createClient } from '@/lib/supabase/client';
+import { UnifiedDataGrid, ColumnDef } from '@/components/ui/unified/UnifiedDataGrid';
+import { UnifiedFormModal } from '@/components/ui/unified/UnifiedFormModal';
 
 const ITEMS_PER_PAGE = 10;
 
