@@ -62,7 +62,7 @@ export async function getB2BDocumentsAction(
 
     const { data: docs, count, error } = await adminSupabase
       .from('documents')
-      .select('id, doc_number, doc_date, doc_type, status, total_amount, comment, mock_file_name, mock_file_size, created_at, sender_company_id, receiver_company_id, sender_user_id, receiver_user_id, sender_company:companies!sender_company_id(name, inn), receiver_company:companies!receiver_company_id(name, inn), files(id, file_name, size_bytes), sender_user:users!sender_user_id(full_name, position), receiver_user:users!receiver_user_id(full_name, position), users(full_name)', { count: 'exact' })
+      .select('id, doc_number, doc_date, doc_type, status, total_amount, comment, mock_file_name, mock_file_size, created_at, sender_company_id, receiver_company_id, sender_user_id, receiver_user_id, sender_company:companies!sender_company_id(name, inn), receiver_company:companies!receiver_company_id(name, inn), files(id, file_name, size_bytes), sender_user:users!sender_user_id(full_name, position), receiver_user:users!receiver_user_id(full_name, position), author:users!author_id(full_name)', { count: 'exact' })
       .or(`sender_company_id.eq.${ctx.companyId},receiver_company_id.eq.${ctx.companyId}`)
       .order('created_at', { ascending: false })
       .range(from, to);
@@ -105,12 +105,12 @@ export async function getB2BDocumentByIdAction(docId: string): Promise<ActionRes
 
     const { data: doc, error } = await adminSupabase
       .from('documents')
-      .select('*, sender_company:companies!sender_company_id(*), receiver_company:companies!receiver_company_id(*), sender_user:users!sender_user_id(full_name, position), receiver_user:users!receiver_user_id(full_name, position), files(*, file_categories(*)), document_logs(*, users(full_name)), users(full_name)')
+      .select('*, sender_company:companies!sender_company_id(*), receiver_company:companies!receiver_company_id(*), sender_user:users!sender_user_id(full_name, position), receiver_user:users!receiver_user_id(full_name, position), files(*, file_categories(*)), document_logs(*, user:users!user_id(full_name)), author:users!author_id(full_name)')
       .eq('id', docId)
       .single();
 
     if (error || !doc) {
-      return { success: false, error: 'Документ не найден или у вас нет прав на его просмотр' };
+      return { success: false, error: error ? `Ошибка загрузки документа: ${error.message}` : 'Документ не найден в базе данных' };
     }
 
     if (doc.sender_company_id !== ctx.companyId && doc.receiver_company_id !== ctx.companyId && !ctx.isSuperAdmin) {
@@ -341,8 +341,8 @@ export async function createB2BDocumentAction(data: B2BDocumentInput): Promise<A
     const supabase = await createClient();
     const adminSupabase = await createAdminClient();
 
-    // 1. Создаем документ
-    const { data: doc, error: docError } = await supabase
+    // 1. Создаем документ через надежный adminSupabase клиент
+    const { data: doc, error: docError } = await adminSupabase
       .from('documents')
       .insert({
         company_id: ctx.companyId,

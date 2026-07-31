@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   FileText,
   Plus,
@@ -17,6 +18,7 @@ import {
   Inbox,
   Send,
   FileCheck,
+  AlertCircle,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { getB2BDocumentsAction } from './actions';
@@ -41,8 +43,11 @@ export default function B2BDocumentsRegistryPage() {
 
   const supabase = createClient();
 
+  const [serverErrorMsg, setServerErrorMsg] = useState<string | null>(null);
+
   const loadDocuments = async () => {
     setLoading(true);
+    setServerErrorMsg(null);
 
     const res = await getB2BDocumentsAction(1, 200);
     if (res.success && res.data) {
@@ -52,6 +57,7 @@ export default function B2BDocumentsRegistryPage() {
       }
     } else {
       setDocuments([]);
+      if (res.error) setServerErrorMsg(res.error);
     }
     setLoading(false);
   };
@@ -252,6 +258,13 @@ export default function B2BDocumentsRegistryPage() {
           </Button>
         </Link>
       </div>
+
+      {serverErrorMsg && (
+        <Alert variant="destructive" className="border-amber-500/50 bg-amber-500/10 text-amber-500">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{serverErrorMsg}</AlertDescription>
+        </Alert>
+      )}
 
       {/* Вкладки Реестра */}
       <div className="flex items-center space-x-2 border-b border-slate-800 pb-2 overflow-x-auto">
