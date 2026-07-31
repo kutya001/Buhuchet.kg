@@ -298,10 +298,10 @@ export default function ProfilePage() {
             )}
           </form>
         </Card>
-
-        {/* Секция Интеграции с Telegram Ботом */}
-        <TelegramBindingCard />
       </div>
+
+      {/* Полноразмерный Островок Интеграции с Telegram */}
+      <TelegramBindingCard />
     </div>
   );
 }

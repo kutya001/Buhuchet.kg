@@ -30,6 +30,7 @@ import {
   RotateCcw,
   X,
 } from 'lucide-react';
+import { LayoutWidthToggle } from '@/components/ui/LayoutWidthToggle';
 
 export type ColumnDef<T> = {
   key: string;
@@ -117,6 +118,21 @@ export function UnifiedDataGrid<T extends Record<string, any>>({
   // 4. Пагинация (25 / 50 / 100 / 'all')
   const [pageSize, setPageSize] = useState<25 | 50 | 100 | 'all'>(defaultPageSize);
   const [currentPage, setCurrentPage] = useState(1);
+
+  // 5. Переключение ширины (По центру vs На всю ширину)
+  const [isFullWidth, setIsFullWidth] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('buhuchet_grid_fullwidth') === 'true';
+    }
+    return false;
+  });
+
+  const handleToggleFullWidth = (full: boolean) => {
+    setIsFullWidth(full);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('buhuchet_grid_fullwidth', String(full));
+    }
+  };
 
   // 5. Drag & Drop перетягивание столбцов
   const [draggedColumnKey, setDraggedColumnKey] = useState<string | null>(null);
@@ -245,7 +261,7 @@ export function UnifiedDataGrid<T extends Record<string, any>>({
   const visibleColumns = columns.filter((c) => visibleColumnKeys.has(c.key));
 
   return (
-    <div className="space-y-4">
+    <div className={`space-y-4 transition-all duration-200 ${isFullWidth ? 'w-full max-w-none' : 'max-w-7xl mx-auto'}`}>
       <div className="relative z-30 flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-card p-4 rounded-2xl border border-border shadow-xl backdrop-blur-md">
         <div className="flex flex-col sm:flex-row sm:items-center gap-3 flex-1">
           {title && (
@@ -275,6 +291,7 @@ export function UnifiedDataGrid<T extends Record<string, any>>({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <LayoutWidthToggle isFullWidth={isFullWidth} onToggle={handleToggleFullWidth} />
           {actionButton}
 
           <div className="relative z-50">

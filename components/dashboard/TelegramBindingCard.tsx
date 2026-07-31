@@ -1,10 +1,10 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
+import { Send, CheckCircle2, ShieldAlert, Unlink, ExternalLink, Loader2, Copy, Check } from 'lucide-react';
+import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Send, CheckCircle2, Loader2, AlertCircle, ExternalLink, RefreshCw, Unlink, Copy, Check } from 'lucide-react';
 import {
   generateTelegramOtpAction,
   getTelegramConnectionStatusAction,
@@ -22,12 +22,6 @@ export function TelegramBindingCard() {
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
-  const handleCopyCode = (code: string) => {
-    navigator.clipboard.writeText(code);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2500);
-  };
-
   const checkStatus = async () => {
     setLoading(true);
     const res = await getTelegramConnectionStatusAction();
@@ -41,6 +35,12 @@ export function TelegramBindingCard() {
   useEffect(() => {
     checkStatus();
   }, []);
+
+  const handleCopyCode = (code: string) => {
+    navigator.clipboard.writeText(code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2500);
+  };
 
   const handleGenerate = async () => {
     setGenerating(true);
@@ -69,124 +69,98 @@ export function TelegramBindingCard() {
 
   if (loading) {
     return (
-      <Card className="bg-card border-border p-6 flex items-center justify-center min-h-[140px]">
-        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground mr-2" />
-        <span className="text-xs text-muted-foreground">Проверка статуса Telegram...</span>
+      <Card className="p-6 border border-border/80 bg-card/60 backdrop-blur-sm flex items-center justify-center min-h-[140px]">
+        <Loader2 className="w-5 h-5 animate-spin text-muted-foreground mr-2" />
+        <span className="text-xs text-muted-foreground">Проверка статуса соединения с Telegram...</span>
       </Card>
     );
   }
 
   return (
-    <Card className="bg-card border-border/80 p-6 backdrop-blur-sm space-y-5">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-4">
-        <div className="flex items-start gap-3.5">
-          <div className="p-3 bg-sky-500/10 text-sky-400 rounded-xl shrink-0 border border-sky-500/20">
+    <Card className="p-6 border border-border/80 bg-card/60 backdrop-blur-sm shadow-sm transition-all">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+        {/* Левая часть: Иконка и Описание */}
+        <div className="flex items-start gap-4">
+          <div className="p-3.5 bg-sky-500/10 text-sky-500 rounded-2xl shrink-0 border border-sky-500/20">
             <Send className="w-6 h-6" />
           </div>
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <h3 className="font-bold text-base text-foreground">Интеграция с Telegram</h3>
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-3 flex-wrap">
+              <h3 className="font-bold text-base tracking-tight text-foreground">Интеграция с Telegram</h3>
               {isConnected ? (
-                <Badge variant="default" className="bg-emerald-500/15 text-emerald-400 border-0 font-mono text-xs">
-                  <CheckCircle2 className="h-3.5 w-3.5 mr-1 text-emerald-400" />
-                  Подключено {username ? `(@${username})` : ''}
+                <Badge
+                  variant="outline"
+                  className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 gap-1.5 py-1 px-2.5 font-mono text-xs"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                  <span>Привязано {username ? `(@${username})` : ''}</span>
                 </Badge>
               ) : (
-                <Badge variant="secondary" className="text-xs">Не привязан</Badge>
+                <Badge
+                  variant="outline"
+                  className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 gap-1.5 py-1 px-2.5 text-xs"
+                >
+                  <ShieldAlert className="w-3.5 h-3.5 text-amber-500" />
+                  <span>Не привязан</span>
+                </Badge>
               )}
             </div>
-            <p className="text-xs text-muted-foreground max-w-md">
-              Уведомления о входящих документах, смене ролей сотрудников и системных событиях ЭДО.
+            <p className="text-xs text-muted-foreground leading-relaxed max-w-xl">
+              Мгновенная доставка уведомлений о движениях первичных документов, откликах контрагентов и изменении прав доступа сотрудников.
             </p>
           </div>
+        </div>
+
+        {/* Правая часть: Действия и OTP Коды */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0">
+          {!isConnected ? (
+            !otpData ? (
+              <Button
+                onClick={handleGenerate}
+                disabled={generating}
+                className="bg-sky-600 hover:bg-sky-500 text-white gap-2 shadow-sm font-semibold text-xs min-h-[40px] px-4 rounded-xl"
+              >
+                {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                <span>{generating ? 'Генерация...' : 'Подключить Telegram'}</span>
+              </Button>
+            ) : (
+              <div className="flex items-center gap-3 bg-muted/60 p-2 rounded-xl border border-border">
+                <button
+                  type="button"
+                  onClick={() => handleCopyCode(otpData.code)}
+                  className="flex items-center space-x-2 px-3 py-1.5 bg-background font-mono font-extrabold text-lg rounded-lg border border-border text-sky-400 hover:bg-sky-500/10 transition-all"
+                  title="Нажмите, чтобы скопировать код"
+                >
+                  <span>{otpData.code}</span>
+                  {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4 text-muted-foreground" />}
+                </button>
+
+                <a href={otpData.deepLink} target="_blank" rel="noreferrer">
+                  <Button size="sm" className="bg-sky-600 hover:bg-sky-500 text-white gap-1.5 font-bold text-xs rounded-lg min-h-[36px]">
+                    <span>Открыть Бот</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </Button>
+                </a>
+              </div>
+            )
+          ) : (
+            <Button
+              variant="outline"
+              onClick={handleDisconnect}
+              disabled={disconnecting}
+              className="text-red-400 hover:bg-red-500/10 border-red-500/30 gap-2 text-xs font-semibold rounded-xl min-h-[40px]"
+            >
+              {disconnecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Unlink className="w-4 h-4" />}
+              <span>Отвязать Telegram</span>
+            </Button>
+          )}
         </div>
       </div>
 
       {error && (
-        <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-center">
-          <AlertCircle className="h-4 w-4 mr-2 flex-shrink-0" />
+        <div className="mt-4 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-center">
+          <ShieldAlert className="h-4 w-4 mr-2 flex-shrink-0" />
           <span>{error}</span>
-        </div>
-      )}
-
-      {isConnected ? (
-        <div className="flex items-center justify-between pt-1">
-          <p className="text-xs text-muted-foreground">
-            Ваш аккаунт Telegram успешно привязан. Вы будете получать уведомления в бот.
-          </p>
-          <Button
-            variant="outline"
-            disabled={disconnecting}
-            onClick={handleDisconnect}
-            className="border-red-500/30 text-red-400 hover:bg-red-500/10 text-xs min-h-[40px] rounded-xl"
-          >
-            {disconnecting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Unlink className="h-4 w-4 mr-2" />}
-            Отвязать Telegram
-          </Button>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {!otpData ? (
-            <div className="flex items-center justify-between pt-1">
-              <p className="text-xs text-muted-foreground">
-                Сгенерируйте одноразовый 4-значный код для моментальной привязки Telegram-бота.
-              </p>
-              <Button
-                disabled={generating}
-                onClick={handleGenerate}
-                className="bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs min-h-[44px] rounded-xl px-5"
-              >
-                {generating ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
-                Привязать Telegram
-              </Button>
-            </div>
-          ) : (
-            <div className="p-4 rounded-2xl bg-sky-500/10 border border-sky-500/20 space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div>
-                  <span className="text-xs text-muted-foreground">Нажмите на код, чтобы скопировать:</span>
-                  <button
-                    type="button"
-                    onClick={() => handleCopyCode(otpData.code)}
-                    className="flex items-center space-x-3 mt-1.5 p-2 px-3 rounded-xl bg-sky-500/20 border border-sky-500/40 hover:bg-sky-500/30 transition-all cursor-pointer group active:scale-95"
-                    title="Нажмите для копирования"
-                  >
-                    <span className="text-3xl font-extrabold font-mono text-sky-400 tracking-widest">
-                      {otpData.code}
-                    </span>
-                    {copied ? (
-                      <span className="flex items-center text-xs text-emerald-400 font-semibold bg-emerald-500/20 px-2 py-1 rounded-lg">
-                        <Check className="h-3.5 w-3.5 mr-1" />
-                        Скопировано!
-                      </span>
-                    ) : (
-                      <span className="flex items-center text-xs text-sky-300 opacity-80 group-hover:opacity-100 bg-sky-500/30 px-2 py-1 rounded-lg">
-                        <Copy className="h-3.5 w-3.5 mr-1" />
-                        Копировать
-                      </span>
-                    )}
-                  </button>
-                </div>
-                <a href={otpData.deepLink} target="_blank" rel="noreferrer">
-                  <Button className="bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs min-h-[44px] rounded-xl px-5">
-                    <ExternalLink className="h-4 w-4 mr-2" />
-                    Перейти в Telegram Бота
-                  </Button>
-                </a>
-              </div>
-
-              <div className="flex items-center justify-between text-[11px] text-muted-foreground border-t border-sky-500/20 pt-3">
-                <span>Код действителен 10 минут. Вы также можете отправить 4 цифры вручную в чат с ботом.</span>
-                <button
-                  onClick={checkStatus}
-                  className="text-sky-400 font-semibold hover:underline flex items-center ml-2"
-                >
-                  <RefreshCw className="h-3 w-3 mr-1" />
-                  Проверить связь
-                </button>
-              </div>
-            </div>
-          )}
         </div>
       )}
     </Card>

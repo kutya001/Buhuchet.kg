@@ -90,6 +90,7 @@ import {
 import { SuperAdminTelegramTab } from '@/components/super-admin/SuperAdminTelegramTab';
 
 import { SuperAdminSidebar, SuperAdminTab } from '@/components/super-admin/SuperAdminSidebar';
+import { FloatingTopbar } from '@/components/ui/FloatingTopbar';
 
 export default function SuperAdminPage() {
   const [activeTab, setActiveTab] = useState<SuperAdminTab>('companies');
@@ -944,8 +945,11 @@ export default function SuperAdminPage() {
       />
 
       {/* Основной Контент Панели */}
-      <main className="flex-1 p-6 md:p-8 overflow-y-auto max-w-7xl mx-auto space-y-6 w-full">
-        {/* 1. ШАПКА ПАНЕЛИ СУПЕРАДМИНИСТРАТОРА */}
+      <div className="flex-1 flex flex-col min-w-0">
+        <FloatingTopbar companyName="Buhuchet.kg Administration" isSuperAdmin={true} />
+
+        <main className="p-6 md:p-8 overflow-y-auto max-w-7xl mx-auto space-y-6 w-full flex-1">
+          {/* 1. ШАПКА ПАНЕЛИ СУПЕРАДМИНИСТРАТОРА */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/80 pb-4">
           <div>
             <h1 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight flex items-center">
@@ -1353,7 +1357,8 @@ export default function SuperAdminPage() {
           </div>
         </div>
       </UnifiedFormModal>
-      </main>
+        </main>
+      </div>
     </div>
   );
 }
