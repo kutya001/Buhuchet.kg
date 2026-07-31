@@ -82,9 +82,10 @@ export function DashboardShell({
             <Link
               href="/dashboard"
               prefetch={true}
-              className={`flex items-center space                  isActive('/dashboard')
-                    ? 'bg-blue-600/20 text-blue-500 dark:text-blue-400 border border-blue-500/30 font-bold'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+              className={`flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                isActive('/dashboard')
+                  ? 'bg-blue-600/20 text-blue-500 dark:text-blue-400 border border-blue-500/30 font-bold'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
               }`}
               title="Главная"
             >

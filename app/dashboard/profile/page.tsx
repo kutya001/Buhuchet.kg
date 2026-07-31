@@ -120,47 +120,47 @@ export default function ProfilePage() {
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-white tracking-tight">Настройки профиля</h2>
-        <p className="text-sm text-slate-400 mt-1">
+        <h2 className="text-2xl font-bold text-foreground tracking-tight">Настройки профиля</h2>
+        <p className="text-sm text-muted-foreground mt-1">
           Управление личными данными, контактным номером телефона и привязанной компанией
         </p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Информационная карточка роли и организации */}
-        <Card className="md:col-span-1 bg-slate-900/40 border-slate-800 space-y-4">
+        <Card className="md:col-span-1 bg-card border-border space-y-4 shadow-xl">
           <CardHeader className="text-center pb-4">
-            <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-blue-600/10 border border-blue-500/30 text-blue-400 mb-2">
+            <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-primary/10 border border-primary/20 text-primary mb-2">
               <User className="h-10 w-10" />
             </div>
-            <CardTitle className="text-lg font-semibold">{profile?.full_name}</CardTitle>
-            <CardDescription className="text-xs truncate">{profile?.email}</CardDescription>
+            <CardTitle className="text-lg font-semibold text-foreground">{profile?.full_name}</CardTitle>
+            <CardDescription className="text-xs truncate text-muted-foreground">{profile?.email}</CardDescription>
           </CardHeader>
 
           <CardContent className="space-y-4 text-xs">
-            <div className="flex items-center justify-between p-3 rounded-lg bg-slate-950/60 border border-slate-800">
-              <span className="text-slate-400 flex items-center">
-                <Shield className="h-3.5 w-3.5 mr-1.5 text-amber-400" />
+            <div className="flex items-center justify-between p-3 rounded-lg bg-background/80 border border-border">
+              <span className="text-muted-foreground flex items-center">
+                <Shield className="h-3.5 w-3.5 mr-1.5 text-amber-500" />
                 Роль в системе
               </span>
               <Badge variant={currentRole.variant}>{currentRole.label}</Badge>
             </div>
 
-            <div className="p-3 rounded-lg bg-slate-950/60 border border-slate-800 space-y-1.5">
-              <div className="flex items-center text-slate-400">
+            <div className="p-3 rounded-lg bg-background/80 border border-border space-y-1.5">
+              <div className="flex items-center text-muted-foreground">
                 <Building2 className="h-3.5 w-3.5 mr-1.5 text-blue-400" />
                 Организация
               </div>
-              <p className="font-medium text-white truncate">
+              <p className="font-semibold text-foreground truncate">
                 {profile?.companies?.name || 'Компания не привязана'}
               </p>
               {profile?.companies?.inn && (
-                <p className="text-[11px] text-slate-500">ИНН: {profile.companies.inn}</p>
+                <p className="text-[11px] text-muted-foreground">ИНН: {profile.companies.inn}</p>
               )}
             </div>
 
             {profile?.is_super_admin && (
-              <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 font-medium text-center">
+              <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-500 font-medium text-center">
                 Супер-Администратор системы
               </div>
             )}
@@ -168,10 +168,10 @@ export default function ProfilePage() {
         </Card>
 
         {/* Форма редактирования данных профиля */}
-        <Card className="md:col-span-2 bg-slate-900/40 border-slate-800">
+        <Card className="md:col-span-2 bg-card border-border shadow-xl">
           <CardHeader>
-            <CardTitle className="text-lg">Личные реквизиты</CardTitle>
-            <CardDescription>
+            <CardTitle className="text-lg text-foreground">Личные реквизиты</CardTitle>
+            <CardDescription className="text-muted-foreground">
               Укажите актуальный номер телефона КР для уведомлений и восстановления доступа
             </CardDescription>
           </CardHeader>
@@ -193,68 +193,68 @@ export default function ProfilePage() {
               )}
 
               <div className="space-y-2">
-                <Label htmlFor="full_name">ФИО Пользователя</Label>
+                <Label htmlFor="full_name" className="text-foreground">ФИО Пользователя</Label>
                 <Input
                   id="full_name"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   placeholder="Иванов Иван Иванович"
                   required
-                  className="bg-slate-950/60 border-slate-800 text-slate-100"
+                  className="bg-background border-border text-foreground"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="email">Основной Email (Логин)</Label>
+                <Label htmlFor="email" className="text-foreground">Основной Email (Логин)</Label>
                 <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     id="email"
                     value={profile?.email || ''}
                     disabled
-                    className="pl-9 bg-slate-950/30 border-slate-800/60 text-slate-500 cursor-not-allowed"
+                    className="pl-9 bg-muted/40 border-border text-muted-foreground cursor-not-allowed"
                   />
                 </div>
-                <p className="text-[11px] text-slate-500">
+                <p className="text-[11px] text-muted-foreground">
                   Основной email используется для входа и не может быть изменен напрямую
                 </p>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="phone">Номер телефона в Кыргызстане (+996)</Label>
+                <Label htmlFor="phone" className="text-foreground">Номер телефона в Кыргызстане (+996)</Label>
                 <div className="relative">
-                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     id="phone"
                     value={phone}
                     onChange={handlePhoneChange}
                     placeholder="+996 (700) 12-34-56"
-                    className="pl-9 bg-slate-950/60 border-slate-800 text-slate-100 font-mono"
+                    className="pl-9 bg-background border-border text-foreground font-mono"
                   />
                 </div>
-                <p className="text-[11px] text-slate-500">
+                <p className="text-[11px] text-muted-foreground">
                   Формат: +996 (код) номер. Например: +996 (555) 00-11-22
                 </p>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="secondary_email">Дополнительный Email (Необязательно)</Label>
+                <Label htmlFor="secondary_email" className="text-foreground">Дополнительный Email (Необязательно)</Label>
                 <Input
                   id="secondary_email"
                   type="email"
                   value={secondaryEmail}
                   onChange={(e) => setSecondaryEmail(e.target.value)}
                   placeholder="backup@company.kg"
-                  className="bg-slate-950/60 border-slate-800 text-slate-100"
+                  className="bg-background border-border text-foreground"
                 />
               </div>
             </CardContent>
 
-            <CardFooter className="pt-4 border-t border-slate-800/60 flex justify-end">
+            <CardFooter className="pt-4 border-t border-border flex justify-end">
               <Button
                 type="submit"
                 disabled={isPending}
-                className="bg-blue-600 hover:bg-blue-500 text-white font-medium shadow-lg shadow-blue-600/25"
+                className="bg-primary hover:bg-primary/90 text-primary-foreground font-medium shadow-md"
               >
                 {isPending ? (
                   <>
