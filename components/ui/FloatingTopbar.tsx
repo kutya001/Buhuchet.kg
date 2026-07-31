@@ -39,10 +39,12 @@ export function FloatingTopbar({
   onSearchChange,
   onLogout,
 }: FloatingTopbarProps) {
+  const [mounted, setMounted] = useState(false);
   const [timeStr, setTimeStr] = useState<string>('');
   const [dateStr, setDateStr] = useState<string>('');
 
   useEffect(() => {
+    setMounted(true);
     const updateDateTime = () => {
       const now = new Date();
       setTimeStr(
@@ -127,13 +129,13 @@ export function FloatingTopbar({
         {/* Правый блок (Desktop): Время, Дата и Тема */}
         <div className="hidden sm:flex items-center gap-4">
           <div className="flex items-center gap-3 text-xs font-mono text-muted-foreground border-r border-border/60 pr-4">
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5" suppressHydrationWarning>
               <Clock className="w-3.5 h-3.5 text-primary" />
-              <span className="font-bold text-foreground">{timeStr}</span>
+              <span className="font-bold text-foreground">{mounted ? timeStr : '--:--:--'}</span>
             </div>
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5" suppressHydrationWarning>
               <Calendar className="w-3.5 h-3.5" />
-              <span>{dateStr}</span>
+              <span>{mounted ? dateStr : '--.--.----'}</span>
             </div>
           </div>
 
@@ -150,11 +152,11 @@ export function FloatingTopbar({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56 p-2 space-y-1">
               <div className="px-2 py-1.5 text-xs font-mono text-muted-foreground flex justify-between items-center bg-muted/40 rounded-lg">
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1" suppressHydrationWarning>
                   <Clock className="w-3 h-3 text-primary" />
-                  <span>{timeStr}</span>
+                  <span>{mounted ? timeStr : '--:--'}</span>
                 </div>
-                <span>{dateStr}</span>
+                <span suppressHydrationWarning>{mounted ? dateStr : '--.--'}</span>
               </div>
               <DropdownMenuSeparator />
               <div className="px-2 py-1.5 flex justify-between items-center">

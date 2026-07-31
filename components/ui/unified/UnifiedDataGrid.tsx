@@ -120,12 +120,16 @@ export function UnifiedDataGrid<T extends Record<string, any>>({
   const [currentPage, setCurrentPage] = useState(1);
 
   // 5. Переключение ширины (По центру vs На всю ширину)
-  const [isFullWidth, setIsFullWidth] = useState<boolean>(() => {
+  const [isFullWidth, setIsFullWidth] = useState<boolean>(false);
+
+  useEffect(() => {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('buhuchet_grid_fullwidth') === 'true';
+      const saved = localStorage.getItem('buhuchet_grid_fullwidth');
+      if (saved === 'true') {
+        setIsFullWidth(true);
+      }
     }
-    return false;
-  });
+  }, []);
 
   const handleToggleFullWidth = (full: boolean) => {
     setIsFullWidth(full);
