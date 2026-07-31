@@ -22,11 +22,15 @@ import {
 import { signOutAction } from '@/app/(auth)/actions';
 import { Input } from '@/components/ui/input';
 
+import { hasPermission } from '@/lib/auth/permissions';
+import type { UserProfile } from '@/types/database.types';
+
 interface FloatingTopbarProps {
   companyName?: string;
   companyInn?: string;
   isSuperAdmin?: boolean;
   userEmail?: string;
+  userProfile?: UserProfile | null;
   isSidebarCollapsed: boolean;
   onToggleSidebar: () => void;
 }
@@ -48,6 +52,7 @@ export function FloatingTopbar({
   companyInn,
   isSuperAdmin,
   userEmail,
+  userProfile,
   isSidebarCollapsed,
   onToggleSidebar,
 }: FloatingTopbarProps) {
@@ -249,55 +254,65 @@ export function FloatingTopbar({
                 <span className="text-xs font-semibold text-slate-200">Главная</span>
               </Link>
 
-              <Link
-                href="/dashboard/documents"
-                prefetch={true}
-                onClick={() => setIsMoreOpen(false)}
-                className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 hover:border-sky-500/50 flex flex-col items-center justify-center text-center space-y-1.5 min-h-[72px]"
-              >
-                <FileText className="h-6 w-6 text-sky-400" />
-                <span className="text-xs font-semibold text-slate-200">Документы</span>
-              </Link>
+              {hasPermission(userProfile, 'documents', 'view') && (
+                <Link
+                  href="/dashboard/documents"
+                  prefetch={true}
+                  onClick={() => setIsMoreOpen(false)}
+                  className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 hover:border-sky-500/50 flex flex-col items-center justify-center text-center space-y-1.5 min-h-[72px]"
+                >
+                  <FileText className="h-6 w-6 text-sky-400" />
+                  <span className="text-xs font-semibold text-slate-200">Документы</span>
+                </Link>
+              )}
 
-              <Link
-                href="/dashboard/counterparties"
-                prefetch={true}
-                onClick={() => setIsMoreOpen(false)}
-                className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 hover:border-amber-500/50 flex flex-col items-center justify-center text-center space-y-1.5 min-h-[72px]"
-              >
-                <Users className="h-6 w-6 text-amber-400" />
-                <span className="text-xs font-semibold text-slate-200">Организации</span>
-              </Link>
+              {hasPermission(userProfile, 'counterparties', 'view') && (
+                <Link
+                  href="/dashboard/counterparties"
+                  prefetch={true}
+                  onClick={() => setIsMoreOpen(false)}
+                  className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 hover:border-amber-500/50 flex flex-col items-center justify-center text-center space-y-1.5 min-h-[72px]"
+                >
+                  <Users className="h-6 w-6 text-amber-400" />
+                  <span className="text-xs font-semibold text-slate-200">Организации</span>
+                </Link>
+              )}
 
-              <Link
-                href="/dashboard/files"
-                prefetch={true}
-                onClick={() => setIsMoreOpen(false)}
-                className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 hover:border-emerald-500/50 flex flex-col items-center justify-center text-center space-y-1.5 min-h-[72px]"
-              >
-                <FolderOpen className="h-6 w-6 text-emerald-400" />
-                <span className="text-xs font-semibold text-slate-200">Реестр Файлов</span>
-              </Link>
+              {hasPermission(userProfile, 'files', 'view') && (
+                <Link
+                  href="/dashboard/files"
+                  prefetch={true}
+                  onClick={() => setIsMoreOpen(false)}
+                  className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 hover:border-emerald-500/50 flex flex-col items-center justify-center text-center space-y-1.5 min-h-[72px]"
+                >
+                  <FolderOpen className="h-6 w-6 text-emerald-400" />
+                  <span className="text-xs font-semibold text-slate-200">Реестр Файлов</span>
+                </Link>
+              )}
 
-              <Link
-                href="/dashboard/company"
-                prefetch={true}
-                onClick={() => setIsMoreOpen(false)}
-                className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 hover:border-blue-500/50 flex flex-col items-center justify-center text-center space-y-1.5 min-h-[72px]"
-              >
-                <Building2 className="h-6 w-6 text-slate-400" />
-                <span className="text-xs font-semibold text-slate-200">Моя Организация</span>
-              </Link>
+              {hasPermission(userProfile, 'company', 'view') && (
+                <Link
+                  href="/dashboard/company"
+                  prefetch={true}
+                  onClick={() => setIsMoreOpen(false)}
+                  className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 hover:border-blue-500/50 flex flex-col items-center justify-center text-center space-y-1.5 min-h-[72px]"
+                >
+                  <Building2 className="h-6 w-6 text-slate-400" />
+                  <span className="text-xs font-semibold text-slate-200">Моя Организация</span>
+                </Link>
+              )}
 
-              <Link
-                href="/dashboard/employees"
-                prefetch={true}
-                onClick={() => setIsMoreOpen(false)}
-                className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 hover:border-purple-500/50 flex flex-col items-center justify-center text-center space-y-1.5 min-h-[72px]"
-              >
-                <Users className="h-6 w-6 text-purple-400" />
-                <span className="text-xs font-semibold text-slate-200">Сотрудники</span>
-              </Link>
+              {hasPermission(userProfile, 'employees', 'view') && (
+                <Link
+                  href="/dashboard/employees"
+                  prefetch={true}
+                  onClick={() => setIsMoreOpen(false)}
+                  className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 hover:border-purple-500/50 flex flex-col items-center justify-center text-center space-y-1.5 min-h-[72px]"
+                >
+                  <Users className="h-6 w-6 text-purple-400" />
+                  <span className="text-xs font-semibold text-slate-200">Сотрудники</span>
+                </Link>
+              )}
 
               <Link
                 href="/dashboard/profile"

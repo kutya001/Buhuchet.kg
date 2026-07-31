@@ -229,6 +229,7 @@ export function DashboardShell({
           companyInn={companyInn}
           isSuperAdmin={isSuperAdmin}
           userEmail={userEmail}
+          userProfile={userProfile}
           isSidebarCollapsed={isCollapsed}
           onToggleSidebar={() => setIsCollapsed(!isCollapsed)}
         />
@@ -243,7 +244,7 @@ export function DashboardShell({
       <MobileFAB />
 
       {/* 3. МОБИЛЬНЫЙ НИЖНИЙ ПАРЯЩИЙ ОСТРОВОК */}
-      <FloatingBottomNav />
+      <FloatingBottomNav userProfile={userProfile} />
     </div>
   );
 }

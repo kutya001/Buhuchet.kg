@@ -42,26 +42,7 @@ import {
 import type { UserProfile, CompanyRole, RolePermissions } from '@/types/database.types';
 import { UnifiedDataGrid } from '@/components/ui/unified/UnifiedDataGrid';
 
-const MODULE_DEFINITIONS = [
-  { id: 'documents', label: 'B2B Документооборот', actions: ['view', 'create', 'edit', 'delete', 'send', 'accept', 'recall'] },
-  { id: 'files', label: 'Реестр Файлов & R2 Архив', actions: ['view', 'upload', 'delete'] },
-  { id: 'counterparties', label: 'Партнеры & Контрагенты', actions: ['view', 'create', 'edit'] },
-  { id: 'employees', label: 'Управление Сотрудниками', actions: ['view', 'manage'] },
-  { id: 'company', label: 'Профиль Организации', actions: ['view', 'edit'] },
-  { id: 'export', label: 'Экспорт в 1С Бухгалтерию', actions: ['view'] },
-];
-
-const ACTION_LABELS: Record<string, string> = {
-  view: 'Просмотр',
-  create: 'Создание',
-  edit: 'Редактирование',
-  delete: 'Удаление',
-  send: 'Отправка',
-  accept: 'Принятие',
-  recall: 'Отзыв',
-  upload: 'Загрузка',
-  manage: 'Управление',
-};
+import { MODULE_CONFIG, ModuleName, ActionName } from '@/lib/auth/permissions';
 
 export default function EmployeesModulePage() {
   const [activeTab, setActiveTab] = useState<'profile' | 'employees' | 'roles'>('profile');
@@ -872,20 +853,20 @@ export default function EmployeesModulePage() {
 
             <CardContent className="space-y-4 pt-4 overflow-y-auto flex-1 text-xs">
               <div className="space-y-4">
-                {MODULE_DEFINITIONS.map((mod) => (
-                  <div key={mod.id} className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 space-y-3">
+                {Object.entries(MODULE_CONFIG).map(([modId, modConf]) => (
+                  <div key={modId} className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 space-y-3">
                     <span className="font-bold text-white text-sm font-mono flex items-center">
                       <ShieldAlert className="h-4 w-4 mr-2 text-blue-400" />
-                      {mod.label}
+                      {modConf.label}
                     </span>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                      {mod.actions.map((act) => {
-                        const isChecked = !!(rolePermissions as any)[mod.id]?.[act];
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {modConf.actions.map((act) => {
+                        const isChecked = !!(rolePermissions as any)[modId]?.[act.key];
                         return (
                           <label
-                            key={act}
-                            className={`flex items-center space-x-2 p-2 rounded-lg border cursor-pointer transition-all ${
+                            key={act.key}
+                            className={`flex items-center space-x-2.5 p-2.5 rounded-xl border cursor-pointer transition-all ${
                               isChecked
                                 ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-300 font-bold'
                                 : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'
@@ -894,10 +875,10 @@ export default function EmployeesModulePage() {
                             <input
                               type="checkbox"
                               checked={isChecked}
-                              onChange={() => togglePermission(mod.id, act)}
-                              className="rounded border-slate-700 bg-slate-950 text-emerald-500 focus:ring-0 h-4 w-4"
+                              onChange={() => togglePermission(modId, act.key)}
+                              className="rounded border-slate-700 bg-slate-950 text-emerald-500 focus:ring-0 h-4 w-4 flex-shrink-0"
                             />
-                            <span className="text-xs">{ACTION_LABELS[act] || act}</span>
+                            <span className="text-xs">{act.label}</span>
                           </label>
                         );
                       })}

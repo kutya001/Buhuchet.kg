@@ -1,7 +1,93 @@
 import type { UserProfile, RolePermissions } from '@/types/database.types';
 
 export type ModuleName = 'documents' | 'files' | 'counterparties' | 'employees' | 'company' | 'export';
-export type ActionName = 'view' | 'create' | 'edit' | 'delete' | 'send' | 'accept' | 'recall' | 'manage' | 'upload';
+export type ActionName =
+  | 'view'
+  | 'view_details'
+  | 'create'
+  | 'edit'
+  | 'delete'
+  | 'send'
+  | 'accept'
+  | 'recall'
+  | 'manage'
+  | 'upload'
+  | 'download'
+  | 'request_partnership'
+  | 'respond_partnership'
+  | 'create_manual'
+  | 'terminate'
+  | 'create_employee'
+  | 'edit_employee'
+  | 'reset_password'
+  | 'manage_roles'
+  | 'export_excel';
+
+/**
+ * Справочник русскоязычных названий модулей и кнопок в интерфейсе
+ */
+export const MODULE_CONFIG: Record<
+  ModuleName,
+  { label: string; actions: { key: ActionName; label: string }[] }
+> = {
+  documents: {
+    label: 'Документы и Первичка',
+    actions: [
+      { key: 'view', label: 'Просмотр списка B2B документов' },
+      { key: 'view_details', label: 'Просмотр деталей и содержимого скана' },
+      { key: 'create', label: 'Создание B2B Отправки (Черновик)' },
+      { key: 'send', label: 'Отправка документа контрагенту' },
+      { key: 'edit', label: 'Редактирование черновиков' },
+      { key: 'accept', label: 'Принятие и подтверждение документа' },
+      { key: 'recall', label: 'Отзыв отправленной первички' },
+      { key: 'delete', label: 'Удаление B2B документов' },
+    ],
+  },
+  files: {
+    label: 'Реестр Файлов и Cloud R2',
+    actions: [
+      { key: 'view', label: 'Просмотр общего архива сканов' },
+      { key: 'download', label: 'Скачивание оригиналов файлов' },
+      { key: 'upload', label: 'Загрузка новых сканов и первичной документации' },
+      { key: 'edit', label: 'Редактирование описаний и категорий' },
+      { key: 'delete', label: 'Удаление сканов из хранилища R2' },
+    ],
+  },
+  counterparties: {
+    label: 'Единый Реестр Контрагентов',
+    actions: [
+      { key: 'view', label: 'Просмотр списка партнеров компании' },
+      { key: 'request_partnership', label: 'Отправка заявки на сотрудничество' },
+      { key: 'respond_partnership', label: 'Принятие или отклонение заявок' },
+      { key: 'create_manual', label: 'Ручное добавление контрагентов по ИНН' },
+      { key: 'terminate', label: 'Прекращение сотрудничества' },
+    ],
+  },
+  employees: {
+    label: 'Сотрудники и Доступы',
+    actions: [
+      { key: 'view', label: 'Просмотр списка сотрудников' },
+      { key: 'create_employee', label: 'Создание новых аккаунтов сотрудников' },
+      { key: 'edit_employee', label: 'Изменение должности и статусов' },
+      { key: 'reset_password', label: 'Сброс пароля сотрудникам' },
+      { key: 'manage_roles', label: 'Управление ролями и матрицей прав' },
+    ],
+  },
+  company: {
+    label: 'Профиль Моей Организации',
+    actions: [
+      { key: 'view', label: 'Просмотр карточки организации' },
+      { key: 'edit', label: 'Редактирование реквизитов и логотипа' },
+    ],
+  },
+  export: {
+    label: 'Экспорт в 1С Бухгалтерию',
+    actions: [
+      { key: 'view', label: 'Просмотр страницы выгрузок' },
+      { key: 'export_excel', label: 'Генерация и скачивание Excel файлов' },
+    ],
+  },
+};
 
 /**
  * Единый централизованный движок проверки прав доступа (RBAC / ACL)
@@ -29,17 +115,15 @@ export function hasPermission(
     }
   }
 
-  // 4. Безопасные правила по умолчанию для обычных сотрудников без явно заданных прав:
-  // Если у сотрудника роль еще не настроена (role_id === null):
-  // По умолчанию разрешен просмотр базовых модулей ('documents.view', 'files.view', 'counterparties.view', 'company.view')
+  // 4. Безопасные правила по умолчанию для обычных сотрудников без явно заданных прав (role_id === null)
   if (!profile.role_id) {
     if (action === 'view' && module !== 'employees') {
       return true;
     }
-    if (module === 'documents' && (action === 'create' || action === 'send' || action === 'accept')) {
+    if (module === 'documents' && (action === 'create' || action === 'send' || action === 'accept' || action === 'view_details')) {
       return true;
     }
-    if (module === 'files' && action === 'upload') {
+    if (module === 'files' && (action === 'upload' || action === 'download')) {
       return true;
     }
   }

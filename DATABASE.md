@@ -38,6 +38,7 @@ CREATE TABLE companies (
 
 CREATE INDEX idx_companies_inn ON companies(inn);
 CREATE INDEX idx_companies_status ON companies(status);
+CREATE INDEX idx_companies_status_created ON companies(status, created_at DESC);
 ```
 
 ### 2.2 Таблица `users` (Профиль пользователя)

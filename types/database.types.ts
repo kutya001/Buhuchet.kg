@@ -52,6 +52,7 @@ export interface CompanyPartnership {
 
 export interface ModulePermissions {
   view?: boolean;
+  view_details?: boolean;
   create?: boolean;
   edit?: boolean;
   delete?: boolean;
@@ -60,6 +61,16 @@ export interface ModulePermissions {
   recall?: boolean;
   manage?: boolean;
   upload?: boolean;
+  download?: boolean;
+  request_partnership?: boolean;
+  respond_partnership?: boolean;
+  create_manual?: boolean;
+  terminate?: boolean;
+  create_employee?: boolean;
+  edit_employee?: boolean;
+  reset_password?: boolean;
+  manage_roles?: boolean;
+  export_excel?: boolean;
 }
 
 export interface RolePermissions {

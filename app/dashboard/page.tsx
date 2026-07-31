@@ -19,6 +19,8 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 
+import { hasPermission } from '@/lib/auth/permissions';
+
 export default async function DashboardPage() {
   const supabase = await createClient();
   const adminSupabase = await createAdminClient();
@@ -29,15 +31,20 @@ export default async function DashboardPage() {
 
   if (!user) return null;
 
-  // 1. Получаем профиль пользователя
+  // 1. Получаем профиль пользователя с ролью
   const { data: profile } = await supabase
     .from('users')
-    .select('*, companies(*)')
+    .select('*, companies(*), company_roles(*)')
     .eq('id', user.id)
     .single();
 
   const company = Array.isArray(profile?.companies) ? profile?.companies[0] : profile?.companies;
   const companyId = company?.id;
+
+  const canCreateDoc = hasPermission(profile, 'documents', 'create');
+  const canViewDocs = hasPermission(profile, 'documents', 'view');
+  const canViewCounterparties = hasPermission(profile, 'counterparties', 'view');
+  const canViewFiles = hasPermission(profile, 'files', 'view');
 
   // 2. Получаем развернутые метрики по документам организации
   let incomingCount = 0;
@@ -103,12 +110,14 @@ export default async function DashboardPage() {
           </p>
         </div>
 
-        <Link href="/dashboard/documents/new" prefetch={true}>
-          <button className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs sm:text-sm transition-all shadow-lg shadow-blue-600/20 flex items-center justify-center min-h-[48px]">
-            <Plus className="h-4 w-4 mr-1.5" />
-            Создать B2B Отправку
-          </button>
-        </Link>
+        {canCreateDoc && (
+          <Link href="/dashboard/documents/new" prefetch={true}>
+            <button className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs sm:text-sm transition-all shadow-lg shadow-blue-600/20 flex items-center justify-center min-h-[48px]">
+              <Plus className="h-4 w-4 mr-1.5" />
+              Создать B2B Отправку
+            </button>
+          </Link>
+        )}
       </div>
 
       {/* 1. ГЛАВНЫЕ ПОКАЗАТЕЛИ ДЕЯТЕЛЬНОСТИ (СТАТИСТИКА B2B) */}
@@ -236,35 +245,41 @@ export default async function DashboardPage() {
           </div>
 
           <div className="space-y-2.5">
-            <Link href="/dashboard/documents" prefetch={true} className="block">
-              <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 hover:border-blue-500/50 flex items-center justify-between transition-all">
-                <div className="flex items-center space-x-2 text-xs font-semibold text-slate-200">
-                  <FileText className="h-4 w-4 text-blue-400" />
-                  <span>Реестр B2B Документов</span>
+            {canViewDocs && (
+              <Link href="/dashboard/documents" prefetch={true} className="block">
+                <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 hover:border-blue-500/50 flex items-center justify-between transition-all">
+                  <div className="flex items-center space-x-2 text-xs font-semibold text-slate-200">
+                    <FileText className="h-4 w-4 text-blue-400" />
+                    <span>Реестр B2B Документов</span>
+                  </div>
+                  <ArrowRight className="h-4 w-4 text-slate-500" />
                 </div>
-                <ArrowRight className="h-4 w-4 text-slate-500" />
-              </div>
-            </Link>
+              </Link>
+            )}
 
-            <Link href="/dashboard/counterparties" prefetch={true} className="block">
-              <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 hover:border-amber-500/50 flex items-center justify-between transition-all">
-                <div className="flex items-center space-x-2 text-xs font-semibold text-slate-200">
-                  <Users className="h-4 w-4 text-amber-400" />
-                  <span>Единый Модуль Контрагентов</span>
+            {canViewCounterparties && (
+              <Link href="/dashboard/counterparties" prefetch={true} className="block">
+                <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 hover:border-amber-500/50 flex items-center justify-between transition-all">
+                  <div className="flex items-center space-x-2 text-xs font-semibold text-slate-200">
+                    <Users className="h-4 w-4 text-amber-400" />
+                    <span>Единый Модуль Контрагентов</span>
+                  </div>
+                  <ArrowRight className="h-4 w-4 text-slate-500" />
                 </div>
-                <ArrowRight className="h-4 w-4 text-slate-500" />
-              </div>
-            </Link>
+              </Link>
+            )}
 
-            <Link href="/dashboard/files" prefetch={true} className="block">
-              <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 hover:border-emerald-500/50 flex items-center justify-between transition-all">
-                <div className="flex items-center space-x-2 text-xs font-semibold text-slate-200">
-                  <FolderOpen className="h-4 w-4 text-emerald-400" />
-                  <span>Облачный Архив R2</span>
+            {canViewFiles && (
+              <Link href="/dashboard/files" prefetch={true} className="block">
+                <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 hover:border-emerald-500/50 flex items-center justify-between transition-all">
+                  <div className="flex items-center space-x-2 text-xs font-semibold text-slate-200">
+                    <FolderOpen className="h-4 w-4 text-emerald-400" />
+                    <span>Облачный Архив R2</span>
+                  </div>
+                  <ArrowRight className="h-4 w-4 text-slate-500" />
                 </div>
-                <ArrowRight className="h-4 w-4 text-slate-500" />
-              </div>
-            </Link>
+              </Link>
+            )}
           </div>
         </Card>
       </div>
