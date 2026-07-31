@@ -370,12 +370,21 @@ export default function CounterpartiesPage() {
       label: 'Официальное Наименование',
       sortable: true,
       getValue: (c) => c.name,
-      render: (c) => (
-        <div className="font-semibold text-white text-sm flex items-center space-x-1.5">
-          <Building2 className="h-4 w-4 text-amber-400 flex-shrink-0" />
-          <span>{c.name}</span>
-        </div>
-      ),
+      render: (c) => {
+        const isBlocked = (c as any).target_company?.status === 'blocked';
+        return (
+          <div className="font-semibold text-white text-sm flex items-center space-x-1.5 flex-wrap gap-y-1">
+            <Building2 className="h-4 w-4 text-amber-400 flex-shrink-0" />
+            <span>{c.name}</span>
+            {isBlocked && (
+              <Badge className="bg-rose-500/20 text-rose-400 border border-rose-500/40 text-[10px] animate-pulse flex items-center">
+                <AlertCircle className="h-3 w-3 mr-1" />
+                Заблокирован
+              </Badge>
+            )}
+          </div>
+        );
+      },
     },
     {
       key: 'inn',
@@ -448,41 +457,44 @@ export default function CounterpartiesPage() {
       key: 'actions',
       label: 'Действия',
       sortable: false,
-      render: (c) => (
-        <div className="flex items-center justify-end space-x-2">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => handleOpenProfileModal(c)}
-            disabled={profileLoading}
-            className="border-slate-700 text-slate-200 hover:bg-slate-800 text-xs min-h-[36px]"
-          >
-            <FolderOpen className="h-3.5 w-3.5 mr-1 text-indigo-400" />
-            Сканы R2
-          </Button>
+      render: (c) => {
+        const isBlocked = (c as any).target_company?.status === 'blocked';
+        return (
+          <div className="flex items-center justify-end space-x-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => handleOpenProfileModal(c)}
+              disabled={profileLoading}
+              className="border-slate-700 text-slate-200 hover:bg-slate-800 text-xs min-h-[36px]"
+            >
+              <FolderOpen className="h-3.5 w-3.5 mr-1 text-indigo-400" />
+              Сканы R2
+            </Button>
 
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => handleOpenPartnerReport(c)}
-            className="border-slate-800 text-amber-400 hover:bg-amber-500/10 text-xs min-h-[36px]"
-          >
-            <BarChart3 className="h-3.5 w-3.5 mr-1" />
-            Отчет
-          </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => handleOpenPartnerReport(c)}
+              className="border-slate-800 text-amber-400 hover:bg-amber-500/10 text-xs min-h-[36px]"
+            >
+              <BarChart3 className="h-3.5 w-3.5 mr-1" />
+              Отчет
+            </Button>
 
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => handleTerminatePartnership(c.id)}
-            disabled={isPending}
-            className="border-red-900/40 text-xs text-red-400 hover:bg-red-500/10 min-h-[36px]"
-          >
-            <UserX className="h-3.5 w-3.5 mr-1" />
-            Удалить
-          </Button>
-        </div>
-      ),
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => handleTerminatePartnership(c.id)}
+              disabled={isPending}
+              className={isBlocked ? 'border-rose-500 text-xs text-rose-400 hover:bg-rose-500/20 min-h-[36px] font-bold shadow-lg shadow-rose-500/10' : 'border-red-900/40 text-xs text-red-400 hover:bg-red-500/10 min-h-[36px]'}
+            >
+              <UserX className="h-3.5 w-3.5 mr-1" />
+              {isBlocked ? 'Прекратить сотрудничество' : 'Удалить'}
+            </Button>
+          </div>
+        );
+      },
     },
   ];
 

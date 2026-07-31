@@ -21,12 +21,16 @@ import { FloatingTopbar } from '@/components/ui/FloatingTopbar';
 import { FloatingBottomNav } from '@/components/ui/FloatingBottomNav';
 import { MobileFAB } from '@/components/ui/MobileFAB';
 
+import { hasPermission } from '@/lib/auth/permissions';
+import type { UserProfile } from '@/types/database.types';
+
 interface DashboardShellProps {
   userEmail: string;
   fullName?: string | null;
   companyName?: string;
   companyInn?: string;
   isSuperAdmin?: boolean;
+  userProfile?: UserProfile | null;
   children: React.ReactNode;
 }
 
@@ -36,12 +40,20 @@ export function DashboardShell({
   companyName,
   companyInn,
   isSuperAdmin,
+  userProfile,
   children,
 }: DashboardShellProps) {
   const pathname = usePathname();
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   const isActive = (path: string) => pathname === path;
+
+  // Проверка разрешений
+  const canViewDocuments = hasPermission(userProfile, 'documents', 'view');
+  const canViewCounterparties = hasPermission(userProfile, 'counterparties', 'view');
+  const canViewFiles = hasPermission(userProfile, 'files', 'view');
+  const canViewCompany = hasPermission(userProfile, 'company', 'view');
+  const canViewEmployees = hasPermission(userProfile, 'employees', 'view');
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-slate-950 text-slate-100 relative overflow-x-hidden">
@@ -81,75 +93,85 @@ export function DashboardShell({
               {!isCollapsed && <span className="truncate">Главная</span>}
             </Link>
 
-            <Link
-              href="/dashboard/documents"
-              prefetch={true}
-              className={`flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                isActive('/dashboard/documents')
-                  ? 'bg-sky-600/20 text-sky-400 border border-sky-500/30 font-bold'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
-              }`}
-              title="Документы"
-            >
-              <FileText className="h-4 w-4 text-sky-400 flex-shrink-0" />
-              {!isCollapsed && <span className="truncate">Документы</span>}
-            </Link>
+            {canViewDocuments && (
+              <Link
+                href="/dashboard/documents"
+                prefetch={true}
+                className={`flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                  isActive('/dashboard/documents')
+                    ? 'bg-sky-600/20 text-sky-400 border border-sky-500/30 font-bold'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                }`}
+                title="Документы"
+              >
+                <FileText className="h-4 w-4 text-sky-400 flex-shrink-0" />
+                {!isCollapsed && <span className="truncate">Документы</span>}
+              </Link>
+            )}
 
-            <Link
-              href="/dashboard/counterparties"
-              prefetch={true}
-              className={`flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                isActive('/dashboard/counterparties')
-                  ? 'bg-amber-600/20 text-amber-400 border border-amber-500/30 font-bold'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
-              }`}
-              title="Организации"
-            >
-              <Users className="h-4 w-4 text-amber-400 flex-shrink-0" />
-              {!isCollapsed && <span className="truncate">Организации</span>}
-            </Link>
+            {canViewCounterparties && (
+              <Link
+                href="/dashboard/counterparties"
+                prefetch={true}
+                className={`flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                  isActive('/dashboard/counterparties')
+                    ? 'bg-amber-600/20 text-amber-400 border border-amber-500/30 font-bold'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                }`}
+                title="Организации"
+              >
+                <Users className="h-4 w-4 text-amber-400 flex-shrink-0" />
+                {!isCollapsed && <span className="truncate">Организации</span>}
+              </Link>
+            )}
 
-            <Link
-              href="/dashboard/files"
-              prefetch={true}
-              className={`flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                isActive('/dashboard/files')
-                  ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 font-bold'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
-              }`}
-              title="Реестр Файлов"
-            >
-              <FolderOpen className="h-4 w-4 text-emerald-400 flex-shrink-0" />
-              {!isCollapsed && <span className="truncate">Реестр Файлов</span>}
-            </Link>
+            {canViewFiles && (
+              <Link
+                href="/dashboard/files"
+                prefetch={true}
+                className={`flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                  isActive('/dashboard/files')
+                    ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 font-bold'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                }`}
+                title="Реестр Файлов"
+              >
+                <FolderOpen className="h-4 w-4 text-emerald-400 flex-shrink-0" />
+                {!isCollapsed && <span className="truncate">Реестр Файлов</span>}
+              </Link>
+            )}
 
-            <Link
-              href="/dashboard/company"
-              prefetch={true}
-              className={`flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                isActive('/dashboard/company')
-                  ? 'bg-slate-700/30 text-white border border-slate-600/30 font-bold'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
-              }`}
-              title="Моя Организация"
-            >
-              <Building2 className="h-4 w-4 text-slate-400 flex-shrink-0" />
-              {!isCollapsed && <span className="truncate">Моя Организация</span>}
-            </Link>
+            {canViewCompany && (
+              <Link
+                href="/dashboard/company"
+                prefetch={true}
+                className={`flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                  isActive('/dashboard/company')
+                    ? 'bg-slate-700/30 text-white border border-slate-600/30 font-bold'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                }`}
+                title="Моя Организация"
+              >
+                <Building2 className="h-4 w-4 text-slate-400 flex-shrink-0" />
+                {!isCollapsed && <span className="truncate">Моя Организация</span>}
+              </Link>
+            )}
 
-            <Link
-              href="/dashboard/employees"
-              prefetch={true}
-              className={`flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                isActive('/dashboard/employees')
-                  ? 'bg-purple-600/20 text-purple-400 border border-purple-500/30 font-bold'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
-              }`}
-              title="Сотрудники и Роли"
-            >
-              <Users className="h-4 w-4 text-purple-400 flex-shrink-0" />
-              {!isCollapsed && <span className="truncate">Сотрудники</span>}
-            </Link>
+            {canViewEmployees && (
+              <Link
+                href="/dashboard/employees"
+                prefetch={true}
+                className={`flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                  isActive('/dashboard/employees')
+                    ? 'bg-purple-600/20 text-purple-400 border border-purple-500/30 font-bold'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                }`}
+                title="Сотрудники и Роли"
+              >
+                <Users className="h-4 w-4 text-purple-400 flex-shrink-0" />
+                {!isCollapsed && <span className="truncate">Сотрудники</span>}
+              </Link>
+            )}
 
             {isSuperAdmin && (
               <Link

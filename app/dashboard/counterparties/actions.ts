@@ -528,7 +528,7 @@ export async function getOrganizationsModuleDataAction(): Promise<
       // 1. Активные контрагенты
       adminSupabase
         .from('counterparties')
-        .select('id, company_id, target_company_id, name, inn, is_vat_payer, phone, email, comment, created_at, updated_at')
+        .select('id, company_id, target_company_id, name, inn, is_vat_payer, phone, email, comment, created_at, updated_at, target_company:companies!target_company_id(id, name, inn, status, moderation_comment)')
         .eq('company_id', ctx.companyId)
         .order('name'),
 
@@ -555,7 +555,7 @@ export async function getOrganizationsModuleDataAction(): Promise<
       success: true,
       data: {
         currentCompanyId: ctx.companyId,
-        counterparties: (counterpartiesRes.data as Counterparty[]) || [],
+        counterparties: (counterpartiesRes.data as unknown as Counterparty[]) || [],
         partnerships: partnershipsRes.data || [],
         catalogCompanies: (catalogRes.data as Company[]) || [],
       },

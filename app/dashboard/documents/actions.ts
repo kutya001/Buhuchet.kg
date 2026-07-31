@@ -8,6 +8,7 @@ import { deleteR2Object } from '@/lib/r2';
 import { z } from 'zod';
 
 import { cache } from 'react';
+import { hasPermission, ModuleName, ActionName } from '@/lib/auth/permissions';
 
 const getUserContext = cache(async () => {
   const supabase = await createClient();
@@ -19,15 +20,24 @@ const getUserContext = cache(async () => {
 
   const { data: profile } = await supabase
     .from('users')
-    .select('company_id, role, is_super_admin')
+    .select('*, company_roles(*), companies(*)')
     .eq('id', user.id)
     .single();
+
+  const company = Array.isArray(profile?.companies) ? profile?.companies[0] : profile?.companies;
+  const isBlocked = company?.status === 'blocked' && !profile?.is_super_admin;
 
   return {
     userId: user.id,
     companyId: profile?.company_id || null,
     role: (profile?.role || 'manager') as UserRole,
     isSuperAdmin: !!profile?.is_super_admin,
+    isCompanyBlocked: isBlocked,
+    profile,
+    checkPermission: (module: ModuleName, action: ActionName) => {
+      if (isBlocked) return false;
+      return hasPermission(profile, module, action);
+    },
   };
 });
 
@@ -40,6 +50,10 @@ export async function getB2BDocumentsAction(
     const ctx = await getUserContext();
     if (!ctx || !ctx.companyId) {
       return { success: false, error: 'Пользователь не привязан к организации' };
+    }
+
+    if (!ctx.checkPermission('documents', 'view')) {
+      return { success: false, error: 'У вашей роли нет разрешения на просмотр документов' };
     }
 
     const adminSupabase = await createAdminClient();
@@ -298,6 +312,14 @@ export async function createB2BDocumentAction(data: B2BDocumentInput): Promise<A
     const ctx = await getUserContext();
     if (!ctx || !ctx.companyId) {
       return { success: false, error: 'Пользователь не привязан к организации-отправителю' };
+    }
+
+    if (ctx.isCompanyBlocked) {
+      return { success: false, error: 'Организация заблокирована Администратором' };
+    }
+
+    if (!ctx.checkPermission('documents', 'create')) {
+      return { success: false, error: 'У вашей роли нет разрешения на создание документов' };
     }
 
     const validation = b2bDocumentSchema.safeParse(data);
