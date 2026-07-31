@@ -24,24 +24,24 @@ export default async function RegisterPage({
       <div className="w-full max-w-md mb-4 relative z-10">
         <Link
           href="/"
-          className="inline-flex items-center text-xs text-slate-400 hover:text-white transition-colors"
+          className="inline-flex items-center text-xs text-muted-foreground hover:text-foreground transition-colors"
         >
           <ArrowLeft className="h-3.5 w-3.5 mr-1" />
           Вернуться на главную (Лендинг)
         </Link>
       </div>
 
-      <Card className="w-full max-w-md bg-slate-900/60 border-slate-800 backdrop-blur-xl shadow-2xl relative z-10">
-        <CardHeader className="text-center space-y-2 pb-6 border-b border-slate-800/60">
+      <Card className="w-full max-w-md bg-card border-border backdrop-blur-xl shadow-2xl relative z-10">
+        <CardHeader className="text-center space-y-2 pb-6 border-b border-border">
           <Link href="/" className="inline-block">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-purple-600/20 text-purple-400 mx-auto border border-purple-500/30 hover:scale-105 transition-transform">
               <UserPlus className="h-6 w-6" />
             </div>
           </Link>
-          <CardTitle className="text-2xl font-bold text-white tracking-tight">
+          <CardTitle className="text-2xl font-bold text-foreground tracking-tight">
             Регистрация Организации
           </CardTitle>
-          <CardDescription className="text-slate-400 text-sm">
+          <CardDescription className="text-muted-foreground text-sm">
             Создайте аккаунт руководителя или бухгалтера B2B платформы
           </CardDescription>
         </CardHeader>
@@ -56,54 +56,53 @@ export default async function RegisterPage({
             )}
 
             <div className="space-y-2">
-              <Label htmlFor="fullName" className="text-slate-300">ФИО Руководителя / Бухгалтера *</Label>
+              <Label htmlFor="fullName" className="text-foreground">ФИО Руководителя / Бухгалтера *</Label>
               <Input
                 id="fullName"
                 name="fullName"
                 placeholder="Асанов Асан Асанович"
                 required
-                className="bg-slate-950 border-slate-800 text-slate-100 placeholder:text-slate-600"
+                className="bg-background border-border text-foreground placeholder:text-muted-foreground"
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-slate-300">Официальный Рабочий E-mail *</Label>
+              <Label htmlFor="email" className="text-foreground">Официальный Рабочий E-mail *</Label>
               <Input
                 id="email"
                 name="email"
                 type="email"
                 placeholder="director@company.kg"
                 required
-                className="bg-slate-950 border-slate-800 text-slate-100 placeholder:text-slate-600"
+                className="bg-background border-border text-foreground placeholder:text-muted-foreground"
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password" className="text-slate-300">Пароль аккаунта *</Label>
+              <Label htmlFor="password" className="text-foreground">Пароль аккаунта *</Label>
               <Input
                 id="password"
                 name="password"
                 type="password"
                 placeholder="••••••••"
                 required
-                className="bg-slate-950 border-slate-800 text-slate-100 placeholder:text-slate-600 font-mono"
+                className="bg-background border-border text-foreground placeholder:text-muted-foreground font-mono"
               />
             </div>
           </CardContent>
 
-          <CardFooter className="flex flex-col space-y-4 pt-2 pb-6 border-t border-slate-800/60 mt-4">
+          <CardFooter className="flex flex-col space-y-4 pt-2 pb-6 border-t border-border mt-4">
             <Button
               type="submit"
-              className="w-full bg-purple-600 hover:bg-purple-500 text-white font-medium shadow-lg shadow-purple-600/20"
+              className="w-full bg-purple-600 hover:bg-purple-500 text-white font-medium shadow-lg shadow-purple-600/20 min-h-[44px]"
             >
               Продолжить к онбордингу
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
 
-            <div className="text-center pt-2 border-t border-slate-800/40 w-full">
-              <span className="text-xs text-slate-400">Уже зарегистрированы? </span>
+            <div className="text-center pt-2 border-t border-border w-full">
+              <span className="text-xs text-muted-foreground">Уже есть зарегистрированная организация? </span>
               <Link href="/login" className="text-xs font-bold text-purple-400 hover:underline inline-flex items-center ml-1">
-                <LogIn className="h-3.5 w-3.5 mr-1" />
                 Войти в систему
               </Link>
             </div>

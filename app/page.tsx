@@ -103,7 +103,7 @@ export default function HomePage() {
 
           <h1 className="text-2xl sm:text-5xl md:text-6xl font-black text-foreground tracking-tight leading-[1.15] break-words">
             Электронный Документооборот и <br className="hidden sm:inline" />
-            <span className="bg-gradient-to-r from-blue-400 via-indigo-300 to-purple-400 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 bg-clip-text text-transparent">
               Облачный Архив Первички
             </span>
           </h1>
@@ -380,26 +380,26 @@ export default function HomePage() {
       </section>
 
       {/* 6. ФУТЕР ПЛАТФОРМЫ */}
-      <footer className="border-t border-slate-800/80 bg-slate-950 py-10 px-4 md:px-12 mt-12">
+      <footer className="border-t border-border bg-card py-10 px-4 md:px-12 mt-12">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6 text-center md:text-left">
           <div className="flex items-center space-x-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-600/20 border border-blue-500/30 text-blue-400">
               <FileText className="h-5 w-5" />
             </div>
             <div>
-              <span className="font-bold text-base text-white tracking-tight">Buhuchet.kg</span>
-              <p className="text-xs text-slate-400">Национальная платформа B2B документов КР</p>
+              <span className="font-bold text-base text-foreground tracking-tight">Buhuchet.kg</span>
+              <p className="text-xs text-muted-foreground">Национальная платформа B2B документов КР</p>
             </div>
           </div>
 
-          <div className="text-xs text-slate-400 space-y-1">
+          <div className="text-xs text-muted-foreground space-y-1">
             <p>© {new Date().getFullYear()} Buhuchet.kg. Все права защищены.</p>
             <p>Кыргызская Республика, г. Бишкек</p>
           </div>
 
-          <div className="flex items-center space-x-4 text-xs text-slate-400">
-            <Link href="/login" className="hover:text-white transition-colors">Войти</Link>
-            <Link href="/register" className="hover:text-white transition-colors">Регистрация</Link>
+          <div className="flex items-center space-x-4 text-xs text-muted-foreground">
+            <Link href="/login" className="hover:text-foreground transition-colors">Войти</Link>
+            <Link href="/register" className="hover:text-foreground transition-colors">Регистрация</Link>
           </div>
         </div>
       </footer>

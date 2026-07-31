@@ -449,20 +449,20 @@ export default function CompanyProfilePage() {
       >
         <div className="space-y-4">
           <div className="space-y-1">
-            <Label className="text-xs text-slate-400">Название файла</Label>
+            <Label className="text-xs text-muted-foreground">Название файла</Label>
             <Input
               value={editName}
               onChange={(e) => setEditName(e.target.value)}
-              className="bg-slate-950 border-slate-800 text-white min-h-[44px]"
+              className="bg-background border-border text-foreground min-h-[44px]"
             />
           </div>
 
           <div className="space-y-1">
-            <Label className="text-xs text-slate-400">Категория скана</Label>
+            <Label className="text-xs text-muted-foreground">Категория скана</Label>
             <select
               value={editCatId}
               onChange={(e) => setEditCatId(e.target.value)}
-              className="w-full min-h-[44px] rounded-xl border border-slate-800 bg-slate-950 px-3 text-sm text-slate-100"
+              className="w-full min-h-[44px] rounded-xl border border-border bg-background px-3 text-sm text-foreground"
             >
               {categories.map((cat) => (
                 <option key={cat.id} value={cat.id}>
@@ -473,16 +473,16 @@ export default function CompanyProfilePage() {
           </div>
 
           <div className="space-y-1">
-            <Label className="text-xs text-slate-400">Описание</Label>
+            <Label className="text-xs text-muted-foreground">Описание</Label>
             <Input
               value={editDesc}
               onChange={(e) => setEditDesc(e.target.value)}
-              className="bg-slate-950 border-slate-800 text-white min-h-[44px]"
+              className="bg-background border-border text-foreground min-h-[44px]"
             />
           </div>
 
           {/* Замена файла в R2 */}
-          <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
+          <div className="p-3 rounded-xl bg-background border border-border space-y-2">
             <Label className="text-xs text-purple-400 font-semibold flex items-center">
               <RefreshCw className="h-3.5 w-3.5 mr-1" />
               Заменить сам скан в Cloudflare R2 (опционально)
