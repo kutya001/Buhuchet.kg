@@ -145,31 +145,50 @@ export default function SuperAdminPage() {
 
   const supabase = createClient();
 
-  // Загрузка всех данных
-  const loadData = async () => {
+  // 1. Первичная быстрая загрузка ТОЛЬКО компаний
+  const loadInitialCompanies = async () => {
     setLoading(true);
-    const [pendRes, allRes, usersRes, filesRes, docsRes, catRes] = await Promise.all([
+    const [pendRes, allRes] = await Promise.all([
       getPendingCompaniesAction(),
       getAllCompaniesAdminAction(),
-      getAllUsersAdminAction(),
-      getAllSystemFilesAction(),
-      getAllDocumentsAdminAction(),
-      supabase.from('file_categories').select('*').order('name'),
     ]);
-
     if (pendRes.success && pendRes.data) setPendingCompanies(pendRes.data);
     if (allRes.success && allRes.data) setAllCompanies(allRes.data);
-    if (usersRes.success && usersRes.data) setAllUsers(usersRes.data);
-    if (filesRes.success && filesRes.data) setSystemFiles(filesRes.data);
-    if (docsRes.success && docsRes.data) setAllDocuments(docsRes.data);
-    if (catRes.data) setCategories(catRes.data as FileCategory[]);
-
     setLoading(false);
   };
 
   useEffect(() => {
-    loadData();
+    loadInitialCompanies();
   }, []);
+
+  // 2. Ленивая загрузка данных по требованию (только при открытии вкладки)
+  useEffect(() => {
+    if (activeTab === 'users' && allUsers.length === 0) {
+      setLoading(true);
+      getAllUsersAdminAction().then((res) => {
+        if (res.success && res.data) setAllUsers(res.data);
+        setLoading(false);
+      });
+    } else if (activeTab === 'files' && systemFiles.length === 0) {
+      setLoading(true);
+      getAllSystemFilesAction().then((res) => {
+        if (res.success && res.data) setSystemFiles(res.data);
+        setLoading(false);
+      });
+    } else if (activeTab === 'documents' && allDocuments.length === 0) {
+      setLoading(true);
+      getAllDocumentsAdminAction().then((res) => {
+        if (res.success && res.data) setAllDocuments(res.data);
+        setLoading(false);
+      });
+    } else if (activeTab === 'lookups' && categories.length === 0) {
+      supabase.from('file_categories').select('*').order('name').then((res) => {
+        if (res.data) setCategories(res.data as FileCategory[]);
+      });
+    } else if (activeTab === 'database') {
+      loadDbInspectorData(selectedDbTable);
+    }
+  }, [activeTab, selectedDbTable]);
 
   // Инспектор БД
   const loadDbInspectorData = async (tbl: string) => {
@@ -184,25 +203,24 @@ export default function SuperAdminPage() {
   };
 
   useEffect(() => {
-    if (activeTab === 'database') {
-      loadDbInspectorData(selectedDbTable);
-    }
-  }, [activeTab, selectedDbTable]);
-
-  useEffect(() => {
     setCurrentPage(1);
   }, [search, activeTab, companySubTab]);
 
-  // ДЕЙСТВИЯ МОДЕРАЦИИ ОРГАНИЗАЦИЙ
+  // 3. БЕСШОВНЫЕ ОПТИМИСТИЧНЫЕ ДЕЙСТВИЯ МОДЕРАЦИИ ОРГАНИЗАЦИЙ (БЕЗ ПЕРЕЗАГРУЗОК)
   const handleApprove = (comp: Company) => {
     setMsg(null);
+    // Оптимистично меняем статус локально в state
+    setPendingCompanies((prev) => prev.filter((c) => c.id !== comp.id));
+    setAllCompanies((prev) =>
+      prev.map((c) => (c.id === comp.id ? { ...c, status: 'active', moderation_comment: null } : c))
+    );
+    setMsg({ type: 'success', text: `Организация "${comp.name}" верифицирована` });
+
     startTransition(async () => {
       const res = await approveCompanyAction(comp.id);
-      if (res.success) {
-        setMsg({ type: 'success', text: `Организация "${comp.name}" верифицирована` });
-        await loadData();
-      } else {
+      if (!res.success) {
         setMsg({ type: 'error', text: res.error || 'Ошибка верификации' });
+        loadInitialCompanies();
       }
     });
   };
@@ -214,29 +232,40 @@ export default function SuperAdminPage() {
       return;
     }
 
-    setMsg(null);
+    const compId = selectedCompany.id;
+    const targetStatus = modalMode === 'request_changes' ? 'requires_changes' : 'blocked';
+    const commentText = moderationComment.trim();
+
+    // Оптимистичное локальное обновление
+    setPendingCompanies((prev) => prev.filter((c) => c.id !== compId));
+    setAllCompanies((prev) =>
+      prev.map((c) => (c.id === compId ? { ...c, status: targetStatus, moderation_comment: commentText } : c))
+    );
+
+    setMsg({
+      type: 'success',
+      text:
+        modalMode === 'request_changes'
+          ? `Отправлен запрос исправлений для "${selectedCompany.name}"`
+          : `Организация "${selectedCompany.name}" заблокирована`,
+    });
+
+    const mode = modalMode;
+    setSelectedCompany(null);
+    setModalMode(null);
+    setModerationComment('');
+
     startTransition(async () => {
       let res;
-      if (modalMode === 'request_changes') {
-        res = await requestCompanyChangesAction(selectedCompany.id, moderationComment);
+      if (mode === 'request_changes') {
+        res = await requestCompanyChangesAction(compId, commentText);
       } else {
-        res = await blockCompanyAction(selectedCompany.id, moderationComment);
+        res = await blockCompanyAction(compId, commentText);
       }
 
-      if (res.success) {
-        setMsg({
-          type: 'success',
-          text:
-            modalMode === 'request_changes'
-              ? `Отправлен запрос исправлений для "${selectedCompany.name}"`
-              : `Организация "${selectedCompany.name}" заблокирована`,
-        });
-        setSelectedCompany(null);
-        setModalMode(null);
-        setModerationComment('');
-        await loadData();
-      } else {
+      if (!res.success) {
         setMsg({ type: 'error', text: res.error || 'Ошибка модерации' });
+        loadInitialCompanies();
       }
     });
   };
@@ -260,7 +289,7 @@ export default function SuperAdminPage() {
         setNewCompName('');
         setNewCompInn('');
         setNewCompDirector('');
-        await loadData();
+        await loadInitialCompanies();
       } else {
         setMsg({ type: 'error', text: res.error || 'Ошибка создания' });
       }
@@ -270,8 +299,23 @@ export default function SuperAdminPage() {
   const handleSaveCompany = () => {
     if (!editingCompany) return;
     setMsg(null);
+    const compId = editingCompany.id;
+    const updatedComp = {
+      ...editingCompany,
+      name: compName,
+      inn: compInn,
+      industry: compIndustry,
+      status: compStatus,
+      legal_address: compAddress,
+      director_name: compDirector,
+    };
+
+    setAllCompanies((prev) => prev.map((c) => (c.id === compId ? updatedComp : c)));
+    setMsg({ type: 'success', text: `Реквизиты организации "${compName}" обновлены` });
+    setEditingCompany(null);
+
     startTransition(async () => {
-      const res = await updateCompanyAdminAction(editingCompany.id, {
+      const res = await updateCompanyAdminAction(compId, {
         name: compName,
         inn: compInn,
         industry: compIndustry,
@@ -280,12 +324,9 @@ export default function SuperAdminPage() {
         director_name: compDirector,
       });
 
-      if (res.success) {
-        setMsg({ type: 'success', text: `Реквизиты организации "${compName}" обновлены` });
-        setEditingCompany(null);
-        await loadData();
-      } else {
+      if (!res.success) {
         setMsg({ type: 'error', text: res.error || 'Ошибка при обновлении компании' });
+        loadInitialCompanies();
       }
     });
   };
@@ -294,8 +335,22 @@ export default function SuperAdminPage() {
   const handleSaveUser = () => {
     if (!editingUser) return;
     setMsg(null);
+    const userId = editingUser.id;
+    const updatedUser = {
+      ...editingUser,
+      full_name: userName,
+      email: userEmail,
+      role: userRole,
+      company_id: userCompId || null,
+      is_super_admin: userIsSuperAdmin,
+    };
+
+    setAllUsers((prev) => prev.map((u) => (u.id === userId ? updatedUser : u)));
+    setMsg({ type: 'success', text: `Пользователь "${userName || userEmail}" обновлен` });
+    setEditingUser(null);
+
     startTransition(async () => {
-      const res = await updateUserAdminAction(editingUser.id, {
+      const res = await updateUserAdminAction(userId, {
         full_name: userName,
         email: userEmail,
         role: userRole,
@@ -303,25 +358,23 @@ export default function SuperAdminPage() {
         is_super_admin: userIsSuperAdmin,
       });
 
-      if (res.success) {
-        setMsg({ type: 'success', text: `Пользователь "${userName || userEmail}" обновлен` });
-        setEditingUser(null);
-        await loadData();
-      } else {
+      if (!res.success) {
         setMsg({ type: 'error', text: res.error || 'Ошибка при обновлении пользователя' });
+        getAllUsersAdminAction().then((r) => r.data && setAllUsers(r.data));
       }
     });
   };
 
   const handleDeleteUser = async (userId: string, name: string) => {
     if (!confirm(`Удалить пользователя "${name}" из системы?`)) return;
+    setAllUsers((prev) => prev.filter((u) => u.id !== userId));
+    setMsg({ type: 'success', text: 'Пользователь удален из системы' });
+
     startTransition(async () => {
       const res = await deleteUserAdminAction(userId);
-      if (res.success) {
-        setMsg({ type: 'success', text: 'Пользователь удален из системы' });
-        await loadData();
-      } else {
+      if (!res.success) {
         setMsg({ type: 'error', text: res.error || 'Ошибка удаления пользователя' });
+        getAllUsersAdminAction().then((r) => r.data && setAllUsers(r.data));
       }
     });
   };
@@ -330,32 +383,37 @@ export default function SuperAdminPage() {
   const handleSaveDoc = () => {
     if (!editingDoc) return;
     setMsg(null);
+    const docId = editingDoc.id;
+    setAllDocuments((prev) =>
+      prev.map((d) => (d.id === docId ? { ...d, doc_number: editDocNumber, status: editDocStatus, comment: editDocComment } : d))
+    );
+    setMsg({ type: 'success', text: 'B2B Документ обновлен' });
+    setEditingDoc(null);
+
     startTransition(async () => {
-      const res = await updateDocumentAdminAction(editingDoc.id, {
+      const res = await updateDocumentAdminAction(docId, {
         doc_number: editDocNumber,
         status: editDocStatus,
         comment: editDocComment,
       });
 
-      if (res.success) {
-        setMsg({ type: 'success', text: 'B2B Документ обновлен' });
-        setEditingDoc(null);
-        await loadData();
-      } else {
+      if (!res.success) {
         setMsg({ type: 'error', text: res.error || 'Ошибка обновления документа' });
+        getAllDocumentsAdminAction().then((r) => r.data && setAllDocuments(r.data));
       }
     });
   };
 
   const handleDeleteDoc = async (docId: string) => {
     if (!confirm('Удалить этот B2B документ из базы данных?')) return;
+    setAllDocuments((prev) => prev.filter((d) => d.id !== docId));
+    setMsg({ type: 'success', text: 'Документ удален' });
+
     startTransition(async () => {
       const res = await deleteDocumentAdminAction(docId);
-      if (res.success) {
-        setMsg({ type: 'success', text: 'Документ удален' });
-        await loadData();
-      } else {
+      if (!res.success) {
         setMsg({ type: 'error', text: res.error || 'Ошибка удаления документа' });
+        getAllDocumentsAdminAction().then((r) => r.data && setAllDocuments(r.data));
       }
     });
   };
@@ -375,7 +433,7 @@ export default function SuperAdminPage() {
         setNewCatName('');
         setNewCatCode('');
         setNewCatDesc('');
-        await loadData();
+        supabase.from('file_categories').select('*').order('name').then((r) => r.data && setCategories(r.data as FileCategory[]));
       } else {
         setMsg({ type: 'error', text: res.error || 'Ошибка создания категории' });
       }
@@ -384,13 +442,14 @@ export default function SuperAdminPage() {
 
   const handleDeleteCategory = async (catId: string) => {
     if (!confirm('Удалить эту категорию сканов?')) return;
+    setCategories((prev) => prev.filter((c) => c.id !== catId));
+    setMsg({ type: 'success', text: 'Категория удалена' });
+
     startTransition(async () => {
       const res = await deleteFileCategoryAdminAction(catId);
-      if (res.success) {
-        setMsg({ type: 'success', text: 'Категория удалена' });
-        await loadData();
-      } else {
+      if (!res.success) {
         setMsg({ type: 'error', text: res.error || 'Ошибка удаления' });
+        supabase.from('file_categories').select('*').order('name').then((r) => r.data && setCategories(r.data as FileCategory[]));
       }
     });
   };
@@ -1318,7 +1377,7 @@ export default function SuperAdminPage() {
               setNewCatName('');
               setNewCatCode('');
               setNewCatDesc('');
-              await loadData();
+              supabase.from('file_categories').select('*').order('name').then((r) => r.data && setCategories(r.data as FileCategory[]));
             } else {
               setMsg({ type: 'error', text: res.error || 'Ошибка создания категории' });
             }

@@ -220,20 +220,25 @@ export default function EmployeesModulePage() {
     if (!editingEmp) return;
     setMsg(null);
 
+    const empId = editingEmp.id;
+    const updatedData = { ...editingEmp };
+
+    // Оптимистичное обновление
+    setEmployees((prev) => prev.map((e) => (e.id === empId ? updatedData : e)));
+    setMsg({ type: 'success', text: 'Данные сотрудника обновлены' });
+    setEditingEmp(null);
+
     startTransition(async () => {
-      const res = await updateEmployeeAction(editingEmp.id, {
-        full_name: editingEmp.full_name,
-        position: editingEmp.position || undefined,
-        role_id: editingEmp.role_id || undefined,
-        is_active: editingEmp.is_active,
+      const res = await updateEmployeeAction(empId, {
+        full_name: updatedData.full_name,
+        position: updatedData.position || undefined,
+        role_id: updatedData.role_id || undefined,
+        is_active: updatedData.is_active,
       });
 
-      if (res.success) {
-        setMsg({ type: 'success', text: 'Данные сотрудника обновлены' });
-        setEditingEmp(null);
-        await loadData();
-      } else {
+      if (!res.success) {
         setMsg({ type: 'error', text: res.error || 'Сбой обновления' });
+        loadData();
       }
     });
   };
@@ -304,17 +309,22 @@ export default function EmployeesModulePage() {
     if (!editingRole) return;
     setMsg(null);
 
+    const roleId = editingRole.id;
+    const perms = { ...rolePermissions };
+
+    // Оптимистичное обновление матрицы в роли
+    setRoles((prev) => prev.map((r) => (r.id === roleId ? { ...r, permissions: perms } : r)));
+    setMsg({ type: 'success', text: `Матрица доступов для роли "${editingRole.name}" сохранена!` });
+    setEditingRole(null);
+
     startTransition(async () => {
-      const res = await updateCompanyRoleAction(editingRole.id, {
-        permissions: rolePermissions,
+      const res = await updateCompanyRoleAction(roleId, {
+        permissions: perms,
       });
 
-      if (res.success) {
-        setMsg({ type: 'success', text: `Матрица доступов для роли "${editingRole.name}" сохранена!` });
-        setEditingRole(null);
-        await loadData();
-      } else {
+      if (!res.success) {
         setMsg({ type: 'error', text: res.error || 'Сбой сохранения матрицы прав' });
+        loadData();
       }
     });
   };

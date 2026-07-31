@@ -94,14 +94,22 @@ export default function B2BDocumentDetailPage() {
 
   const handleStatusChange = (newStatus: DocumentStatus, comment?: string) => {
     setMsg(null);
+    if (!document) return;
+
+    // Оптимистичное локальное обновление в UI (БЕЗ ЛОАДЕРА И ПЕРЕЗАГРУЗКИ)
+    const oldDocState = { ...document };
+    setDocument((prev) =>
+      prev ? { ...prev, status: newStatus, updated_at: new Date().toISOString() } : null
+    );
+    setMsg({ type: 'success', text: `Статус изменен на "${DOCUMENT_STATUSES[newStatus].label}"` });
+    setShowCancelModal(false);
+
     startTransition(async () => {
       const res = await updateB2BDocumentStatusAction(docId, newStatus, comment);
-      if (res.success) {
-        setMsg({ type: 'success', text: `Статус изменен на "${DOCUMENT_STATUSES[newStatus].label}"` });
-        setShowCancelModal(false);
-        loadDoc();
-      } else {
+      if (!res.success) {
         setMsg({ type: 'error', text: res.error || 'Ошибка смены статуса' });
+        // Откат при ошибке
+        setDocument(oldDocState);
       }
     });
   };

@@ -238,19 +238,25 @@ export default function CounterpartiesPage() {
 
   const handleRespondRequest = (partnershipId: string, status: PartnershipStatus) => {
     setMsg(null);
+
+    // Оптимистичное локальное обновление
+    setPartnerships((prev) =>
+      prev.map((p) => (p.id === partnershipId ? { ...p, status, updated_at: new Date().toISOString() } : p))
+    );
+
+    let statusText = 'Статус заявки обновлен.';
+    if (status === 'approved') statusText = 'Партнерство подтверждено! Контрагент добавлен в ваш список.';
+    if (status === 'rejected') statusText = 'Заявка отменена.';
+    if (status === 'recalled') statusText = 'Заявка успешно отозвана.';
+    if (status === 'suspended') statusText = 'Партнерство временно приостановлено.';
+
+    setMsg({ type: 'success', text: statusText });
+
     startTransition(async () => {
       const res = await respondToPartnershipRequestAction(partnershipId, status);
-      if (res.success) {
-        let statusText = 'Статус заявки обновлен.';
-        if (status === 'approved') statusText = 'Партнерство подтверждено! Контрагент добавлен в ваш список.';
-        if (status === 'rejected') statusText = 'Заявка отменена.';
-        if (status === 'recalled') statusText = 'Заявка успешно отозвана.';
-        if (status === 'suspended') statusText = 'Партнерство временно приостановлено.';
-
-        setMsg({ type: 'success', text: statusText });
-        loadData();
-      } else {
+      if (!res.success) {
         setMsg({ type: 'error', text: res.error || 'Ошибка обработки заявки' });
+        loadData();
       }
     });
   };
@@ -261,13 +267,15 @@ export default function CounterpartiesPage() {
     }
 
     setMsg(null);
+    // Оптимистичное удаление из локального состояния
+    setCounterparties((prev) => prev.filter((c) => c.id !== counterpartyId));
+    setMsg({ type: 'success', text: 'Сотрудничество прекращено.' });
+
     startTransition(async () => {
       const res = await terminatePartnershipAction(counterpartyId);
-      if (res.success) {
-        setMsg({ type: 'success', text: 'Сотрудничество прекращено. Статус партнерства переведен в Архив.' });
-        loadData();
-      } else {
+      if (!res.success) {
         setMsg({ type: 'error', text: res.error || 'Ошибка прекращения сотрудничества' });
+        loadData();
       }
     });
   };

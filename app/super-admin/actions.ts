@@ -126,8 +126,6 @@ export async function approveCompanyAction(companyId: string): Promise<ActionRes
       .eq('id', companyId);
 
     if (error) return { success: false, error: error.message };
-
-    revalidatePath('/super-admin');
     return { success: true };
   } catch (err: unknown) {
     return { success: false, error: 'Сбой одобрения компании' };
@@ -154,8 +152,6 @@ export async function requestCompanyChangesAction(
       .eq('id', companyId);
 
     if (error) return { success: false, error: error.message };
-
-    revalidatePath('/super-admin');
     return { success: true };
   } catch (err: unknown) {
     return { success: false, error: 'Сбой запроса изменений' };
@@ -182,8 +178,6 @@ export async function blockCompanyAction(
       .eq('id', companyId);
 
     if (error) return { success: false, error: error.message };
-
-    revalidatePath('/super-admin');
     return { success: true };
   } catch (err: unknown) {
     return { success: false, error: 'Сбой блокировки компании' };
