@@ -28,6 +28,7 @@ import {
   User,
   Settings,
   ShieldAlert,
+  Trash2,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import {
@@ -38,6 +39,7 @@ import {
   resetEmployeePasswordAction,
   createCompanyRoleAction,
   updateCompanyRoleAction,
+  deleteCompanyRoleAction,
 } from './actions';
 import type { UserProfile, CompanyRole, RolePermissions } from '@/types/database.types';
 import { UnifiedDataGrid } from '@/components/ui/unified/UnifiedDataGrid';
@@ -620,32 +622,62 @@ export default function EmployeesModulePage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {roles.map((role) => (
-              <Card key={role.id} className="bg-slate-900/60 border-slate-800 p-4 space-y-3 shadow-lg">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-bold text-white text-sm flex items-center">
-                    <Shield className="h-4 w-4 mr-2 text-emerald-400" />
-                    {role.name}
-                  </h3>
-                  {role.is_system && (
-                    <Badge variant="outline" className="border-amber-500/40 text-amber-400 text-[10px]">
-                      Системная
-                    </Badge>
-                  )}
+              <Card key={role.id} className="bg-slate-900/60 border-slate-800 p-4 space-y-3 shadow-lg flex flex-col justify-between">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-bold text-white text-sm flex items-center">
+                      <Shield className={`h-4 w-4 mr-2 ${role.is_system ? 'text-amber-400' : 'text-emerald-400'}`} />
+                      {role.name}
+                    </h3>
+                    {role.is_system && (
+                      <Badge variant="outline" className="border-amber-500/40 text-amber-400 text-[10px] bg-amber-500/10">
+                        Системная роль
+                      </Badge>
+                    )}
+                  </div>
+
+                  <p className="text-xs text-slate-400 min-h-[36px]">{role.description || 'Описание роли не указано.'}</p>
                 </div>
 
-                <p className="text-xs text-slate-400 min-h-[36px]">{role.description || 'Описание роли не указано.'}</p>
+                <div className="pt-2 border-t border-slate-800/80 space-y-2">
+                  <div className="flex items-center justify-between text-[10px] font-mono text-slate-500">
+                    <span>Модулей настроено: {Object.keys(role.permissions || {}).length}</span>
+                    {role.is_system && <span className="text-amber-400 font-bold">Нельзя удалить</span>}
+                  </div>
 
-                <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between">
-                  <span className="text-[10px] font-mono text-slate-500">Доступов настроено: {Object.keys(role.permissions || {}).length} модулей</span>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleOpenRoleMatrix(role)}
-                    className="border-slate-800 text-blue-400 hover:bg-blue-500/10 text-xs min-h-[36px]"
-                  >
-                    <Settings className="h-3.5 w-3.5 mr-1.5" />
-                    Настроить доступы
-                  </Button>
+                  <div className="flex items-center space-x-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleOpenRoleMatrix(role)}
+                      className="flex-1 border-slate-800 text-blue-400 hover:bg-blue-500/10 text-xs min-h-[36px]"
+                    >
+                      <Settings className="h-3.5 w-3.5 mr-1.5" />
+                      Настроить доступы
+                    </Button>
+
+                    {!role.is_system && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={async () => {
+                          if (confirm(`Удалить роль "${role.name}"?`)) {
+                            const res = await deleteCompanyRoleAction(role.id);
+                            if (res.success) {
+                              setRoles((prev) => prev.filter((r) => r.id !== role.id));
+                              setMsg({ type: 'success', text: `Роль "${role.name}" удалена` });
+                            } else {
+                              setMsg({ type: 'error', text: res.error || 'Ошибка удаления роли' });
+                            }
+                          }
+                        }}
+                        className="border-slate-800 text-red-400 hover:bg-red-500/10 text-xs min-h-[36px] px-2.5"
+                        title="Удалить пользовательскую роль"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </Card>
             ))}

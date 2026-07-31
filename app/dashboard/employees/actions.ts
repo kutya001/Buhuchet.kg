@@ -92,6 +92,11 @@ export async function getCompanyRolesAction(): Promise<ActionResponse<CompanyRol
 
     const adminSupabase = await createAdminClient();
 
+    // Автоматический сидинг базовых ролей при первом запросе
+    if (ctx.companyId) {
+      await adminSupabase.rpc('seed_default_company_roles', { target_comp_id: ctx.companyId });
+    }
+
     let query = adminSupabase.from('company_roles').select('*');
     if (!ctx.isSuperAdmin && ctx.companyId) {
       query = query.eq('company_id', ctx.companyId);
@@ -377,6 +382,49 @@ export async function updateCompanyRoleAction(
     return { success: true };
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : 'Сбой обновления роли';
+    return { success: false, error: errorMsg };
+  }
+}
+
+/**
+ * 8. Удаление пользовательской роли (Запрет удаления системных ролей)
+ */
+export async function deleteCompanyRoleAction(roleId: string): Promise<ActionResponse> {
+  try {
+    const ctx = await getUserContext();
+    if (!ctx || (!ctx.companyId && !ctx.isSuperAdmin)) {
+      return { success: false, error: 'Пользователь не авторизован' };
+    }
+
+    const adminSupabase = await createAdminClient();
+
+    const { data: role, error: fetchErr } = await adminSupabase
+      .from('company_roles')
+      .select('id, name, is_system')
+      .eq('id', roleId)
+      .single();
+
+    if (fetchErr || !role) {
+      return { success: false, error: 'Роль не найдена' };
+    }
+
+    if (role.is_system || role.name === 'Владелец') {
+      return { success: false, error: 'Запрещено удалять системную роль Владелец' };
+    }
+
+    const { error: delErr } = await adminSupabase
+      .from('company_roles')
+      .delete()
+      .eq('id', roleId);
+
+    if (delErr) {
+      return { success: false, error: `Ошибка удаления роли: ${delErr.message}` };
+    }
+
+    revalidatePath('/dashboard/employees');
+    return { success: true };
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : 'Сбой удаления роли';
     return { success: false, error: errorMsg };
   }
 }
