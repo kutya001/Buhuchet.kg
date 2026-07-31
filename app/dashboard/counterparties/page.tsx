@@ -22,6 +22,7 @@ import {
   Globe,
   UserPlus,
   UserX,
+  Plus,
   Clock,
   FileText,
   Download,
@@ -55,6 +56,7 @@ import imageCompression from 'browser-image-compression';
 import { UnifiedDataGrid, ColumnDef } from '@/components/ui/unified/UnifiedDataGrid';
 import { UnifiedFormModal } from '@/components/ui/unified/UnifiedFormModal';
 import { ActionRowGroup } from '@/components/ui/unified/ActionIcons';
+import { MobileFAB } from '@/components/ui/MobileFAB';
 import { hasPermission } from '@/lib/auth/permissions';
 
 type PartnerReport = {
@@ -710,6 +712,16 @@ export default function CounterpartiesPage() {
             Управление контрагентами, статусными заявками на сотрудничество и каталогом компаний КР
           </p>
         </div>
+
+        {hasPermission(currentProfile, 'counterparties', 'create') && (
+          <Button
+            onClick={() => setShowCreateModal(true)}
+            className="hidden md:inline-flex bg-primary hover:bg-primary/90 text-primary-foreground gap-2 font-bold min-h-[40px] rounded-xl shadow-lg shadow-primary/20"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Создать Контрагента</span>
+          </Button>
+        )}
       </div>
 
       {msg && (
@@ -1135,6 +1147,9 @@ export default function CounterpartiesPage() {
           </div>
         </div>
       </UnifiedFormModal>
+
+      {/* Круглая кнопка + строго для мобилок НАД нижней панелью (под правый палец) */}
+      <MobileFAB onClick={() => setShowCreateModal(true)} title="Добавить контрагента" />
     </div>
   );
 }
