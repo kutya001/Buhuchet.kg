@@ -138,18 +138,21 @@ export default function B2BDocumentDetailPage() {
 
   if (!document) {
     return (
-      <div className="text-center p-12 text-slate-500 space-y-4">
-        <AlertCircle className="mx-auto h-12 w-12 text-red-400" />
-        <h3 className="text-lg font-bold text-white">Документ не найден</h3>
-        <p className="text-xs text-slate-400 max-w-sm mx-auto">
-          Возможно, данный документ был удален или у вашей организации нет доступа к просмотру.
-        </p>
-        <Link href="/dashboard/documents">
-          <Button variant="outline" className="border-slate-800 text-slate-300">
-            Вернуться в реестр документов
-          </Button>
-        </Link>
-      </div>
+        <div className="text-center space-y-3">
+          <AlertCircle className="h-10 w-10 text-rose-500 mx-auto" />
+          <h3 className="text-lg font-bold text-foreground">Документ не найден</h3>
+          <p className="text-sm text-muted-foreground">
+            Возможно, данный документ был удален или у вашей организации нет доступа к просмотру.
+          </p>
+          <div className="pt-4">
+            <Link href="/dashboard/documents">
+              <Button variant="outline" className="border-border text-muted-foreground hover:text-foreground">
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Вернуться к списку
+              </Button>
+            </Link>
+          </div>
+        </div>
     );
   }
 
@@ -164,21 +167,22 @@ export default function B2BDocumentDetailPage() {
     <div className="h-[calc(100vh-6rem)] flex flex-col space-y-3 md:space-y-4">
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 flex-shrink-0">
-        <div className="flex items-center space-x-3">
-          <Link href="/dashboard/documents">
-            <Button variant="outline" size="sm" className="border-slate-800 text-slate-400 hover:text-white text-xs min-h-[44px]">
-              <ArrowLeft className="h-4 w-4 mr-1" />
-              В реестр
+        <div>
+          <Link href="/dashboard/documents" className="inline-block mb-3">
+            <Button variant="outline" size="sm" className="border-border text-muted-foreground hover:text-foreground text-xs min-h-[44px]">
+              <ArrowLeft className="h-3.5 w-3.5 mr-1" />
+              Все документы
             </Button>
           </Link>
-          <div>
-            <div className="flex items-center space-x-2">
-              <h2 className="text-base md:text-xl font-bold text-white tracking-tight">
-                № {document.doc_number || document.id.slice(0, 8)}
+
+          <div className="flex items-center space-x-3">
+            <div>
+              <h2 className="text-base md:text-xl font-bold text-foreground tracking-tight">
+                Документ №{document.id.slice(0, 8).toUpperCase()}
               </h2>
               <Badge variant={statusMeta?.variant}>{statusMeta?.label}</Badge>
             </div>
-            <p className="text-[11px] md:text-xs text-slate-400 mt-0.5">
+            <p className="text-[11px] md:text-xs text-muted-foreground mt-0.5">
               {document.doc_date} • {document.users?.full_name || 'Неизвестен'}
             </p>
           </div>
@@ -190,21 +194,21 @@ export default function B2BDocumentDetailPage() {
           {isSender && document.status === 'draft' && (
             <>
               <Button
-                size="sm"
                 variant="outline"
-                onClick={() => router.push(`/dashboard/documents/new?edit=${docId}`)}
+                size="sm"
+                onClick={() => setShowCancelModal(true)}
                 disabled={isPending}
-                className="border-blue-500/40 text-blue-400 hover:bg-blue-500/10 text-xs min-h-[44px] font-bold"
+                className="border-border text-muted-foreground hover:text-foreground hover:bg-muted text-xs min-h-[44px] font-bold"
               >
-                <Edit2 className="h-3.5 w-3.5 mr-1" />
-                Редактировать черновик и сканы
+                <X className="h-3.5 w-3.5 mr-1.5" />
+                Аннулировать
               </Button>
 
               <Button
                 size="sm"
                 onClick={() => handleStatusChange('sent', 'Отправлено получателю')}
                 disabled={isPending}
-                className="bg-blue-600 hover:bg-blue-500 text-white text-xs min-h-[44px] font-bold shadow-lg shadow-blue-600/20"
+                className="bg-primary hover:bg-primary/90 text-primary-foreground text-xs min-h-[44px] font-bold shadow-lg shadow-primary/20"
               >
                 <Send className="h-3.5 w-3.5 mr-1" />
                 Отправить получателю
@@ -219,7 +223,7 @@ export default function B2BDocumentDetailPage() {
               variant="outline"
               onClick={() => handleStatusChange('recalled', 'Документ отозван отправителем')}
               disabled={isPending}
-              className="border-amber-500/40 text-amber-400 hover:bg-amber-500/10 text-xs min-h-[44px] font-bold"
+              className="border-amber-500/40 text-amber-500 hover:bg-amber-500/10 text-xs min-h-[44px] font-bold"
               title="Перевести в статус Отозван"
             >
               <Undo2 className="h-3.5 w-3.5 mr-1" />
@@ -234,7 +238,7 @@ export default function B2BDocumentDetailPage() {
                 variant="outline"
                 onClick={() => handleStatusChange('recalled', 'Возвращено получателем на статус Отозван')}
                 disabled={isPending}
-                className="border-amber-500/40 text-amber-400 hover:bg-amber-500/10 text-xs min-h-[44px] font-bold"
+                className="border-amber-500/40 text-amber-500 hover:bg-amber-500/10 text-xs min-h-[44px] font-bold"
               >
                 <Undo2 className="h-3.5 w-3.5 mr-1" />
                 Вернуть на отзыв
@@ -259,10 +263,10 @@ export default function B2BDocumentDetailPage() {
               variant="outline"
               onClick={() => handleStatusChange('draft', 'Переведен в Черновик для редактирования')}
               disabled={isPending}
-              className="border-slate-700 text-slate-300 hover:text-white text-xs min-h-[44px] font-bold"
+              className="border-border text-muted-foreground hover:text-foreground text-xs min-h-[44px] font-bold"
             >
-              <Edit2 className="h-3.5 w-3.5 mr-1 text-amber-400" />
-              Перевести в Черновик (для редактирования)
+              <Edit2 className="h-3.5 w-3.5 mr-1" />
+              Перевести в Черновик
             </Button>
           )}
 
@@ -274,7 +278,7 @@ export default function B2BDocumentDetailPage() {
                 variant="outline"
                 onClick={() => handleStatusChange('recalled', 'Возвращено из принятого в статус Отозван')}
                 disabled={isPending}
-                className="border-amber-500/40 text-amber-400 hover:bg-amber-500/10 text-xs min-h-[44px] font-bold"
+                className="border-amber-500/40 text-amber-500 hover:bg-amber-500/10 text-xs min-h-[44px] font-bold"
               >
                 <Undo2 className="h-3.5 w-3.5 mr-1" />
                 Вернуть на отзыв
@@ -294,9 +298,9 @@ export default function B2BDocumentDetailPage() {
 
           {/* 5. СТАТУС: Обработан (processed) */}
           {document.status === 'processed' && (
-            <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/30 text-xs py-1.5 px-3">
-              <CheckCircle2 className="h-3.5 w-3.5 mr-1 text-purple-400 inline" />
-              Документ полностью обработан (Просмотр)
+            <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30 text-xs py-1.5 px-3">
+              <CheckCircle2 className="h-3.5 w-3.5 mr-1 inline" />
+              Документ обработан
             </Badge>
           )}
         </div>
@@ -304,7 +308,7 @@ export default function B2BDocumentDetailPage() {
 
       {msg && (
         <Alert
-          variant={msg.type === 'success' ? 'success' : 'destructive'}
+          variant={msg.type === 'success' ? 'default' : 'destructive'}
           className={
             msg.type === 'success'
               ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-400'
@@ -317,13 +321,13 @@ export default function B2BDocumentDetailPage() {
       )}
 
       {/* МОБИЛЬНЫЕ ВКТАДКИ СМЕНЫ ВИДА (< lg) */}
-      <div className="flex lg:hidden space-x-2 border-b border-slate-800 pb-2 flex-shrink-0">
+      <div className="flex lg:hidden space-x-2 border-b border-border pb-2 flex-shrink-0">
         <button
           onClick={() => setMobileTab('scan')}
           className={`flex-1 flex items-center justify-center space-x-2 py-2.5 rounded-xl text-xs font-medium border transition-all min-h-[44px] ${
             mobileTab === 'scan'
               ? 'bg-blue-600/20 text-blue-400 border-blue-500/40 font-bold'
-              : 'bg-slate-900/40 text-slate-400 border-slate-800'
+              : 'bg-background/40 text-muted-foreground border-border'
           }`}
         >
           <Eye className="h-4 w-4" />
@@ -335,7 +339,7 @@ export default function B2BDocumentDetailPage() {
           className={`flex-1 flex items-center justify-center space-x-2 py-2.5 rounded-xl text-xs font-medium border transition-all min-h-[44px] ${
             mobileTab === 'details'
               ? 'bg-purple-600/20 text-purple-400 border-purple-500/40 font-bold'
-              : 'bg-slate-900/40 text-slate-400 border-slate-800'
+              : 'bg-background/40 text-muted-foreground border-border'
           }`}
         >
           <Info className="h-4 w-4" />
@@ -349,15 +353,15 @@ export default function B2BDocumentDetailPage() {
         <div className={`lg:col-span-6 flex flex-col h-full min-h-[350px] ${mobileTab === 'scan' ? 'flex' : 'hidden lg:flex'}`}>
           {document.files && document.files.length > 1 && (
             <div className="flex items-center space-x-2 mb-2 overflow-x-auto pb-1 flex-shrink-0">
-              <span className="text-xs text-slate-500 font-mono flex-shrink-0">Файлы:</span>
+              <span className="text-xs text-muted-foreground font-mono flex-shrink-0">Файлы:</span>
               {document.files.map((file, idx) => (
                 <button
                   key={file.id}
                   onClick={() => setSelectedFileIndex(idx)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-medium border truncate max-w-[140px] transition-all min-h-[40px] ${
-                    selectedFileIndex === idx
-                      ? 'bg-blue-600/20 text-blue-400 border-blue-500/40 font-bold'
-                      : 'bg-slate-900 text-slate-400 border-slate-800'
+                  className={`px-4 py-2 rounded-xl text-xs font-medium border transition-all ${
+                    desktopTab === 'details'
+                      ? 'bg-purple-600/20 text-purple-400 border-purple-500/40 font-bold'
+                      : 'bg-background text-muted-foreground border-border hover:bg-muted'
                   }`}
                 >
                   {file.file_name}
@@ -381,54 +385,51 @@ export default function B2BDocumentDetailPage() {
         {/* Правая колонка: Реквизиты, Список сканов и История */}
         <div className={`lg:col-span-6 flex-col space-y-4 overflow-y-auto pr-1 ${mobileTab === 'details' ? 'flex' : 'hidden lg:flex'}`}>
           {/* B2B Адресация */}
-          <Card className="bg-slate-900/40 border-slate-800">
+          <Card className="bg-background/40 border-border">
             <CardHeader className="pb-2 pt-4">
-              <CardTitle className="text-xs font-semibold text-slate-400 uppercase tracking-wider font-mono">
+              <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider font-mono">
                 Участники Отправки
               </CardTitle>
             </CardHeader>
             <CardContent className="grid grid-cols-2 gap-3 text-xs">
-              <div className="p-3 rounded-lg bg-slate-950/60 border border-slate-800 space-y-1">
-                <span className="text-slate-500 font-mono text-[10px] uppercase">Отправитель (Компания & Сотрудник)</span>
-                <div className="font-semibold text-white truncate">{document.sender_company?.name || '—'}</div>
-                <div className="text-[10px] font-mono text-slate-400">ИНН: {document.sender_company?.inn || '—'}</div>
-                <div className="text-[11px] text-sky-400 font-medium pt-1 flex items-center">
-                  <User className="h-3 w-3 mr-1" />
-                  {document.sender_user?.full_name || document.users?.full_name || 'Владелец / Сотрудник'}
-                  {document.sender_user?.position && <span className="text-slate-500 text-[10px] ml-1">({document.sender_user.position})</span>}
+              <div className="p-3 rounded-lg bg-background/60 border border-border space-y-1">
+                <span className="text-muted-foreground font-mono text-[10px] uppercase">Отправитель</span>
+                <div className="font-semibold text-foreground truncate">{document.sender_company?.name || '—'}</div>
+                <div className="text-[10px] font-mono text-muted-foreground">ИНН: {document.sender_company?.inn || '—'}</div>
+                <div className="text-[11px] text-sky-500 font-medium pt-1 flex items-center">
+                  {document.author?.full_name || 'Владелец'}
                 </div>
               </div>
 
-              <div className="p-3 rounded-lg bg-slate-950/60 border border-slate-800 space-y-1">
-                <span className="text-slate-500 font-mono text-[10px] uppercase">Получатель (Компания & Сотрудник)</span>
-                <div className="font-semibold text-white truncate">{document.receiver_company?.name || '—'}</div>
-                <div className="text-[10px] font-mono text-slate-400">ИНН: {document.receiver_company?.inn || '—'}</div>
-                {document.receiver_user ? (
-                  <div className="text-[11px] text-emerald-400 font-medium pt-1 flex items-center">
+              <div className="p-3 rounded-lg bg-background/60 border border-border space-y-1">
+                <span className="text-muted-foreground font-mono text-[10px] uppercase">Получатель</span>
+                <div className="font-semibold text-foreground truncate">{document.receiver_company?.name || '—'}</div>
+                <div className="text-[10px] font-mono text-muted-foreground">ИНН: {document.receiver_company?.inn || '—'}</div>
+                {document.status === 'accepted' || document.status === 'processed' ? (
+                  <div className="text-[11px] text-emerald-500 font-medium pt-1 flex items-center">
                     <UserCheck className="h-3 w-3 mr-1" />
-                    {document.receiver_user.full_name}
-                    {document.receiver_user.position && <span className="text-slate-500 text-[10px] ml-1">({document.receiver_user.position})</span>}
+                    Принято (подписано)
                   </div>
                 ) : (
-                  <div className="text-[10px] text-slate-500 pt-1 italic">
-                    {document.status === 'accepted' || document.status === 'processed' ? 'Принято организацией' : 'Ожидает принятия получателем'}
-                  </div>
+                  <div className="text-[10px] text-muted-foreground pt-1 italic">Ожидает принятия</div>
                 )}
               </div>
 
               {document.comment && (
-                <div className="col-span-2 p-2.5 rounded bg-slate-950/60 border border-slate-800">
-                  <span className="text-slate-500 font-mono text-[10px]">Примечание:</span>
-                  <p className="text-slate-200 mt-0.5">{document.comment}</p>
+                <div className="col-span-2 p-2.5 rounded bg-background/60 border border-border">
+                  <span className="text-[10px] text-muted-foreground uppercase block mb-1">Сумма документа (без НДС):</span>
+                  <div className="font-mono font-bold text-foreground">
+                    {document.total_amount ? Number(document.total_amount).toLocaleString('ru-RU') + ' KGS' : '—'}
+                  </div>
                 </div>
               )}
             </CardContent>
           </Card>
 
-          {/* Список прикрепленных файлов */}
-          <Card className="bg-slate-900/40 border-slate-800">
+          {/* МЕТАДАТА СКАНОВ (R2) */}
+          <Card className="bg-background/40 border-border">
             <CardHeader className="pb-2 pt-4">
-              <CardTitle className="text-xs font-semibold text-slate-400 uppercase tracking-wider font-mono flex items-center">
+              <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider font-mono flex items-center">
                 <Paperclip className="h-3.5 w-3.5 mr-1.5 text-emerald-400" />
                 Прикрепленные сканы R2 ({document.files?.length || 0})
               </CardTitle>
@@ -444,66 +445,73 @@ export default function B2BDocumentDetailPage() {
                   className={`p-3 rounded-xl border transition-all cursor-pointer ${
                     selectedFileIndex === idx
                       ? 'bg-blue-600/10 border-blue-500/40'
-                      : 'bg-slate-950/60 border-slate-800'
+                      : 'bg-background/60 border-border'
                   }`}
                 >
                   <div className="flex items-center justify-between mb-1">
-                    <span className="font-medium text-white truncate">{file.file_name}</span>
-                    <Badge variant="outline" className="text-[10px] border-slate-800 text-slate-400">
+                    <span className="font-medium text-foreground truncate">{file.file_name}</span>
+                    <Badge variant="outline" className="text-[10px] border-border text-muted-foreground">
                       {file.file_categories?.name || 'Категория'}
                     </Badge>
                   </div>
-                  <p className="text-slate-300 font-medium text-xs mt-1">{file.description}</p>
+                  <p className="text-muted-foreground font-medium text-xs mt-1">{file.description}</p>
                 </div>
               ))}
             </CardContent>
           </Card>
 
           {/* Журнал аудита */}
-          <Card className="bg-slate-900/40 border-slate-800">
-            <CardHeader className="pb-2 pt-4">
-              <CardTitle className="text-xs font-semibold text-slate-400 uppercase tracking-wider font-mono flex items-center">
-                <History className="h-3.5 w-3.5 mr-1.5 text-amber-400" />
-                История изменений и статусов
+          <Card className="bg-background/40 border-border">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-bold text-foreground flex items-center">
+                <Clock className="h-4 w-4 mr-1.5 text-muted-foreground" />
+                История изменений
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2 text-xs">
-              {document.document_logs?.map((log) => (
-                <div key={log.id} className="p-2 rounded bg-slate-950/40 border border-slate-800/60 flex items-center justify-between">
-                  <div>
-                    <span className="font-semibold text-slate-200">{log.users?.full_name || 'Система'}</span>
-                    <span className="text-slate-400 ml-1.5"> &rarr; {log.new_status}</span>
-                    {log.comment && <p className="text-[11px] text-slate-500 mt-0.5">{log.comment}</p>}
+            <CardContent>
+              <div className="space-y-2 max-h-48 overflow-y-auto pr-1 text-xs">
+                {document.document_logs?.map((log) => (
+                  <div key={log.id} className="p-2 rounded bg-background/40 border border-border/60 flex flex-col space-y-1">
+                    <div className="flex justify-between items-start">
+                      <span className="font-semibold text-foreground">{log.action}</span>
+                      <span className="text-[10px] text-muted-foreground whitespace-nowrap ml-2">
+                        {new Date(log.created_at).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                    {log.details && (
+                      <span className="text-[11px] text-muted-foreground break-words">{log.details}</span>
+                    )}
                   </div>
-                  <span className="text-[10px] font-mono text-slate-500">
-                    {new Date(log.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
-                  </span>
-                </div>
-              ))}
+                ))}
+              </div>
             </CardContent>
           </Card>
         </div>
       </div>
 
-      {/* Модалка Отмены */}
+      {/* МОДАЛЬНОЕ ОКНО АННУЛИРОВАНИЯ */}
       {showCancelModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
-          <Card className="w-full max-w-md bg-slate-900 border-slate-800 shadow-2xl p-6 space-y-4">
-            <h3 className="text-lg font-bold text-white flex items-center">
-              <XCircle className="h-5 w-5 mr-2 text-red-400" />
-              Причина отклонения документа
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
+          <Card className="w-full max-w-md bg-card border-border shadow-2xl p-6 space-y-4">
+            <h3 className="text-lg font-bold text-foreground flex items-center">
+              <AlertCircle className="h-5 w-5 mr-2 text-destructive" />
+              Аннулировать документ
             </h3>
+            <p className="text-sm text-muted-foreground">
+              Укажите причину аннулирования. Это действие переведет документ в статус "Аннулирован" для обеих сторон.
+            </p>
             <div className="space-y-2">
-              <Label className="text-xs text-slate-300">Укажите причину возврата отправителю:</Label>
-              <Input
+              <Label className="text-foreground">Причина (обязательно)</Label>
+              <Textarea
                 value={cancelComment}
                 onChange={(e) => setCancelComment(e.target.value)}
                 placeholder="Нечитаемый скан / Ошибка в реквизитах..."
-                className="bg-slate-950 border-slate-800 text-slate-100 min-h-[48px]"
+                required
+                className="bg-background border-border text-foreground min-h-[48px]"
               />
             </div>
-            <div className="flex justify-end space-x-3 pt-2">
-              <Button variant="outline" onClick={() => setShowCancelModal(false)} className="border-slate-800 text-slate-400 min-h-[48px]">
+            <div className="flex space-x-3 pt-2">
+              <Button variant="outline" onClick={() => setShowCancelModal(false)} className="border-border text-muted-foreground min-h-[48px] hover:text-foreground">
                 Отмена
               </Button>
               <Button

@@ -78,7 +78,7 @@ export default function HomePage() {
 
           <Link
             href="/login"
-            className="text-xs sm:text-sm font-medium text-slate-300 hover:text-white px-2.5 sm:px-3 py-1.5 sm:py-2 transition-colors"
+            className="text-xs sm:text-sm font-medium text-muted-foreground hover:text-foreground px-2.5 sm:px-3 py-1.5 sm:py-2 transition-colors"
           >
             Войти
           </Link>
@@ -295,7 +295,7 @@ export default function HomePage() {
               <h4 className="text-sm sm:text-base font-bold text-red-400 uppercase tracking-wider flex items-center">
                 Традиционная Бумажная Документация
               </h4>
-              <ul className="space-y-3 text-xs sm:text-sm text-slate-400">
+              <ul className="space-y-3 text-xs sm:text-sm text-muted-foreground">
                 <li className="flex items-start">
                   <span className="text-red-400 mr-2 font-bold">✕</span>
                   <span>Распечатка документов и расходы на курьеров или такси</span>
@@ -316,7 +316,7 @@ export default function HomePage() {
               <h4 className="text-sm sm:text-base font-bold text-emerald-400 uppercase tracking-wider flex items-center">
                 Buhuchet.kg — Электронный Документооборот
               </h4>
-              <ul className="space-y-3 text-xs sm:text-sm text-slate-300">
+              <ul className="space-y-3 text-xs sm:text-sm text-muted-foreground">
                 <li className="flex items-start">
                   <CheckCircle2 className="h-4 w-4 text-emerald-400 mr-2 flex-shrink-0 mt-0.5" />
                   <span>Мгновенная доставка контрагентам по ИНН за 3 секунды</span>

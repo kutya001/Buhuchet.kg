@@ -82,7 +82,7 @@ export default function B2BDocumentsRegistryPage() {
       sortable: true,
       getValue: (d) => d.doc_number || d.id,
       render: (doc) => (
-        <div className="font-semibold text-white font-mono text-xs md:text-sm flex items-center space-x-2">
+        <div className="font-semibold text-foreground font-mono text-xs md:text-sm flex items-center space-x-2">
           <FileText className="h-4 w-4 text-blue-400 flex-shrink-0" />
           <div>
             <span>{doc.doc_number ? `№ ${doc.doc_number}` : 'Черновик'}</span>
@@ -180,7 +180,7 @@ export default function B2BDocumentsRegistryPage() {
       sortable: false,
       render: (doc) => (
         <Link href={`/dashboard/documents/${doc.id}`} prefetch={true}>
-          <Button size="sm" variant="outline" className="border-slate-800 text-blue-400 hover:bg-blue-500/10 text-xs min-h-[36px]">
+          <Button size="sm" variant="outline" className="border-border text-blue-400 hover:bg-blue-500/10 text-xs min-h-[36px]">
             <Eye className="h-3.5 w-3.5 mr-1" />
             Открыть
           </Button>
@@ -196,13 +196,13 @@ export default function B2BDocumentsRegistryPage() {
     const statusConfig = DOCUMENT_STATUSES[doc.status] || { label: doc.status, variant: 'secondary' as const };
 
     return (
-      <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 space-y-3 shadow-lg">
+      <div className="bg-muted/50 border border-border rounded-2xl p-4 space-y-3 shadow-lg">
         <div className="flex items-start justify-between">
           <div>
             <span className="text-[10px] text-slate-400 font-mono block">
               {DOCUMENT_TYPES[doc.doc_type]?.label || doc.doc_type}
             </span>
-            <h4 className="font-bold text-white text-sm font-mono flex items-center">
+            <h4 className="font-bold text-foreground text-sm font-mono flex items-center">
               <FileText className="h-4 w-4 mr-1.5 text-blue-400" />
               {doc.doc_number ? `№ ${doc.doc_number}` : 'Черновик'}
             </h4>
@@ -212,7 +212,7 @@ export default function B2BDocumentsRegistryPage() {
           </Badge>
         </div>
 
-        <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-800/80">
+        <div className="flex items-center justify-between text-xs pt-2 border-t border-border">
           <span className="text-slate-400 flex items-center">
             <Building2 className="h-3.5 w-3.5 mr-1 text-amber-400" />
             {partyName}
@@ -222,12 +222,12 @@ export default function B2BDocumentsRegistryPage() {
           </span>
         </div>
 
-        <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between">
+        <div className="pt-2 border-t border-border flex items-center justify-between">
           <span className="text-[11px] text-slate-400 font-mono">
             {new Date(doc.doc_date).toLocaleDateString('ru-RU')}
           </span>
           <Link href={`/dashboard/documents/${doc.id}`} prefetch={true}>
-            <Button size="sm" variant="outline" className="border-slate-800 text-blue-400 text-xs min-h-[36px]">
+            <Button size="sm" variant="outline" className="border-border text-blue-400 hover:bg-blue-500/10 hover:text-blue-500 text-xs min-h-[36px]">
               <Eye className="h-3.5 w-3.5 mr-1" />
               Открыть
             </Button>
@@ -267,13 +267,13 @@ export default function B2BDocumentsRegistryPage() {
       )}
 
       {/* Вкладки Реестра */}
-      <div className="flex items-center space-x-2 border-b border-slate-800 pb-2 overflow-x-auto">
+      <div className="flex items-center space-x-2 border-b border-border pb-2 overflow-x-auto">
         <button
           onClick={() => setActiveTab('all')}
           className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs md:text-sm font-medium transition-all min-h-[44px] ${
             activeTab === 'all'
               ? 'bg-blue-600/20 text-blue-400 border border-blue-500/40 font-bold'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+              : 'text-muted-foreground hover:text-foreground hover:bg-muted'
           }`}
         >
           <FileText className="h-4 w-4" />
@@ -285,7 +285,7 @@ export default function B2BDocumentsRegistryPage() {
           className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs md:text-sm font-medium transition-all min-h-[44px] ${
             activeTab === 'inbox'
               ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/40 font-bold'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+              : 'text-muted-foreground hover:text-foreground hover:bg-muted'
           }`}
         >
           <Inbox className="h-4 w-4" />
@@ -297,7 +297,7 @@ export default function B2BDocumentsRegistryPage() {
           className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs md:text-sm font-medium transition-all min-h-[44px] ${
             activeTab === 'outbox'
               ? 'bg-amber-600/20 text-amber-400 border border-amber-500/40 font-bold'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+              : 'text-muted-foreground hover:text-foreground hover:bg-muted'
           }`}
         >
           <Send className="h-4 w-4" />
@@ -309,7 +309,7 @@ export default function B2BDocumentsRegistryPage() {
           className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs md:text-sm font-medium transition-all min-h-[44px] ${
             activeTab === 'drafts'
               ? 'bg-purple-600/20 text-purple-400 border border-purple-500/40 font-bold'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+              : 'text-muted-foreground hover:text-foreground hover:bg-muted'
           }`}
         >
           <Clock className="h-4 w-4" />

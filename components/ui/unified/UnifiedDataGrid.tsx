@@ -373,12 +373,12 @@ export function UnifiedDataGrid<T extends Record<string, any>>({
                               {/* Перетягиваемый элемент и сортировка по клику */}
                               <div
                                 onClick={() => col.sortable !== false && handleSort(col.key)}
-                                className="flex items-center space-x-1.5 cursor-pointer hover:text-white truncate"
+                                className="flex items-center space-x-1.5 cursor-pointer hover:text-foreground truncate"
                               >
-                                <GripVertical className="h-3 w-3 text-slate-600 group-hover:text-slate-400 cursor-grab" />
+                                <GripVertical className="h-3 w-3 text-muted-foreground group-hover:text-foreground cursor-grab" />
                                 <span className="truncate">{col.label}</span>
                                 {isSorted && (
-                                  <span className="text-amber-400 font-bold text-[10px]">
+                                  <span className="text-amber-500 font-bold text-[10px]">
                                     {sortOrder === 'asc' ? '▲' : '▼'}
                                   </span>
                                 )}
@@ -391,8 +391,8 @@ export function UnifiedDataGrid<T extends Record<string, any>>({
                                     e.stopPropagation();
                                     setActiveMenuColumn(isMenuOpen ? null : col.key);
                                   }}
-                                  className={`p-1 rounded hover:bg-slate-800 transition-colors ${
-                                    hasFilter ? 'text-amber-400' : 'text-slate-500 hover:text-slate-200'
+                                  className={`p-1 rounded hover:bg-accent transition-colors ${
+                                    hasFilter ? 'text-amber-500' : 'text-muted-foreground hover:text-foreground'
                                   }`}
                                   title="Опции столбца (Сортировка, Фильтр, Скрыть)"
                                 >
@@ -401,11 +401,11 @@ export function UnifiedDataGrid<T extends Record<string, any>>({
 
                                 {/* ВЫПАДАЮЩЕЕ МЕНЮ ТРЕУГОЛЬНИКА С ОПЦИЯМИ */}
                                 {isMenuOpen && (
-                                  <div className="absolute right-0 top-7 z-50 w-52 bg-slate-950 border border-slate-800 rounded-xl p-2.5 shadow-2xl space-y-2 text-xs font-normal">
-                                    <div className="font-bold text-slate-300 border-b border-slate-800 pb-1.5 flex justify-between items-center">
-                                      <span className="truncate">{col.label}</span>
-                                      <button onClick={() => setActiveMenuColumn(null)} className="text-slate-500 hover:text-white">
-                                        ✕
+                                  <div className="absolute right-0 top-7 z-50 w-52 bg-card border border-border rounded-xl p-2.5 shadow-2xl space-y-2 text-xs font-normal">
+                                    <div className="flex items-center justify-between pb-2 border-b border-border">
+                                      <span className="font-bold text-xs text-foreground">Фильтр ({col.label})</span>
+                                      <button onClick={() => setActiveMenuColumn(null)} className="text-muted-foreground hover:text-foreground">
+                                        <X className="h-4 w-4" />
                                       </button>
                                     </div>
 
@@ -416,9 +416,9 @@ export function UnifiedDataGrid<T extends Record<string, any>>({
                                           setSortOrder('asc');
                                           setActiveMenuColumn(null);
                                         }}
-                                        className="w-full text-left px-2 py-1.5 rounded hover:bg-slate-900 text-slate-300 flex items-center space-x-2"
+                                        className="w-full text-left px-2 py-1.5 rounded hover:bg-muted text-foreground flex items-center space-x-2"
                                       >
-                                        <ChevronUp className="h-3.5 w-3.5 text-amber-400" />
+                                        <ChevronUp className="h-3.5 w-3.5 text-amber-500" />
                                         <span>Сортировка А-Я (▲)</span>
                                       </button>
 
@@ -428,18 +428,19 @@ export function UnifiedDataGrid<T extends Record<string, any>>({
                                           setSortOrder('desc');
                                           setActiveMenuColumn(null);
                                         }}
-                                        className="w-full text-left px-2 py-1.5 rounded hover:bg-slate-900 text-slate-300 flex items-center space-x-2"
+                                        className="w-full text-left px-2 py-1.5 rounded hover:bg-muted text-foreground flex items-center space-x-2"
                                       >
-                                        <ChevronDown className="h-3.5 w-3.5 text-amber-400" />
+                                        <ChevronDown className="h-3.5 w-3.5 text-amber-500" />
                                         <span>Сортировка Я-А (▼)</span>
                                       </button>
                                     </div>
 
                                     {/* Фильтр по этому столбцу */}
-                                    <div className="pt-1 border-t border-slate-800 space-y-1">
-                                      <span className="text-[10px] text-slate-400 block font-semibold">Фильтр по полю:</span>
+                                    <div className="pt-1 border-t border-border space-y-1">
+                                      <span className="text-[10px] text-muted-foreground block font-semibold">Фильтр по полю:</span>
                                       <Input
-                                        placeholder="Поиск..."
+                                        autoFocus
+                                        placeholder="Искать..."
                                         value={columnFilters[col.key] || ''}
                                         onChange={(e) =>
                                           setColumnFilters((prev) => ({
@@ -447,7 +448,7 @@ export function UnifiedDataGrid<T extends Record<string, any>>({
                                             [col.key]: e.target.value,
                                           }))
                                         }
-                                        className="h-7 text-xs bg-slate-900 border-slate-800 text-white"
+                                        className="h-7 text-xs bg-background border-border text-foreground"
                                       />
                                     </div>
 

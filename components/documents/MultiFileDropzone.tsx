@@ -275,7 +275,7 @@ export function MultiFileDropzone({
                     )}
                   </div>
                   <div className="truncate">
-                    <p className="text-sm font-medium text-white truncate">{file.file_name}</p>
+                    <p className="text-sm font-medium text-foreground truncate">{file.file_name}</p>
                     <p className="text-[11px] text-slate-400 font-mono">
                       {formatBytes(file.size_bytes)} • {file.file_path_r2 ? '✅ Готов к сохранению (R2)' : 'Загрузка...'}
                     </p>

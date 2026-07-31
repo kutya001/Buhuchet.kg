@@ -19,13 +19,13 @@ export function FloatingBottomNav({ userProfile }: FloatingBottomNavProps) {
   const canViewDocs = hasPermission(userProfile, 'documents', 'view');
 
   return (
-    <nav className="md:hidden fixed bottom-4 left-4 right-4 h-16 rounded-[28px] bg-slate-900/90 backdrop-blur-2xl border border-slate-800/80 shadow-2xl z-40 flex items-center justify-around px-6">
+    <nav className="md:hidden fixed bottom-4 left-4 right-4 h-16 rounded-[28px] bg-card/90 backdrop-blur-2xl border border-border/80 shadow-2xl z-40 flex items-center justify-around px-6 transition-colors duration-300">
       {/* 1. СЛЕВА: Главная */}
       <Link
         href="/dashboard"
         prefetch={true}
         className={`flex flex-col items-center justify-center space-y-1 min-w-[56px] transition-colors ${
-          isActive('/dashboard') ? 'text-blue-400 font-bold' : 'text-slate-400 hover:text-slate-200'
+          isActive('/dashboard') ? 'text-blue-400 font-bold' : 'text-muted-foreground hover:text-foreground'
         }`}
       >
         <LayoutDashboard className="h-5 w-5" />
@@ -38,7 +38,7 @@ export function FloatingBottomNav({ userProfile }: FloatingBottomNavProps) {
           <Link
             href="/dashboard/documents/new"
             prefetch={true}
-            className="flex items-center justify-center h-14 w-14 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-500 text-white shadow-xl shadow-blue-600/40 border-4 border-slate-950 active:scale-95 transition-transform"
+            className="flex items-center justify-center h-14 w-14 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-500 text-white shadow-xl shadow-blue-600/40 border-4 border-background active:scale-95 transition-transform"
           >
             <Plus className="h-7 w-7 stroke-[2.5]" />
           </Link>
@@ -51,7 +51,7 @@ export function FloatingBottomNav({ userProfile }: FloatingBottomNavProps) {
           href="/dashboard/documents"
           prefetch={true}
           className={`flex flex-col items-center justify-center space-y-1 min-w-[56px] transition-colors ${
-            isActive('/dashboard/documents') ? 'text-sky-400 font-bold' : 'text-slate-400 hover:text-slate-200'
+            isActive('/dashboard/documents') ? 'text-sky-400 font-bold' : 'text-muted-foreground hover:text-foreground'
           }`}
         >
           <FileText className="h-5 w-5" />

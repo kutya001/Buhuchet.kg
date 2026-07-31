@@ -381,8 +381,8 @@ export default function CounterpartiesPage() {
       render: (c) => {
         const isBlocked = (c as any).target_company?.status === 'blocked';
         return (
-          <div className="font-semibold text-white text-sm flex items-center space-x-1.5 flex-wrap gap-y-1">
-            <Building2 className="h-4 w-4 text-amber-400 flex-shrink-0" />
+          <div className="font-semibold text-foreground text-sm flex items-center space-x-1.5 flex-wrap gap-y-1">
+            <Building2 className="h-4 w-4 text-amber-500 flex-shrink-0" />
             <span>{c.name}</span>
             {isBlocked && (
               <Badge className="bg-rose-500/20 text-rose-400 border border-rose-500/40 text-[10px] animate-pulse flex items-center">
@@ -436,24 +436,24 @@ export default function CounterpartiesPage() {
               value={editComment}
               onChange={(e) => setEditComment(e.target.value)}
               placeholder="Примечание..."
-              className="h-8 text-xs bg-slate-950 border-slate-800 text-slate-100"
+              className="h-8 text-xs bg-background border-border text-foreground"
             />
-            <Button size="sm" onClick={() => handleSaveComment(c.id)} disabled={isPending} className="h-8 px-2 bg-emerald-600 hover:bg-emerald-500 text-white">
+            <Button size="sm" onClick={() => handleSaveComment(c.id)} disabled={isPending} className="h-8 px-2 bg-emerald-600 hover:bg-emerald-500 text-foreground">
               ОК
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => setEditingCounterpartyId(null)} className="h-8 px-2 text-slate-400">
+            <Button size="sm" variant="ghost" onClick={() => setEditingCounterpartyId(null)} className="h-8 px-2 text-muted-foreground">
               X
             </Button>
           </div>
         ) : (
-          <div className="flex items-center space-x-2 text-xs text-slate-300">
+          <div className="flex items-center space-x-2 text-xs text-muted-foreground">
             <span className="truncate max-w-[150px]">{c.comment || '—'}</span>
             <button
               onClick={() => {
                 setEditingCounterpartyId(c.id);
                 setEditComment(c.comment || '');
               }}
-              className="text-slate-500 hover:text-amber-400 p-1"
+              className="text-muted-foreground hover:text-amber-400 p-1"
               title="Редактировать примечание"
             >
               <Edit2 className="h-3 w-3" />
@@ -474,7 +474,7 @@ export default function CounterpartiesPage() {
               variant="outline"
               onClick={() => handleOpenProfileModal(c)}
               disabled={profileLoading}
-              className="border-slate-700 text-slate-200 hover:bg-slate-800 text-xs min-h-[36px]"
+              className="border-border text-foreground hover:bg-background text-xs min-h-[36px]"
             >
               <FolderOpen className="h-3.5 w-3.5 mr-1 text-indigo-400" />
               Сканы R2
@@ -484,7 +484,7 @@ export default function CounterpartiesPage() {
               size="sm"
               variant="outline"
               onClick={() => handleOpenPartnerReport(c)}
-              className="border-slate-800 text-amber-400 hover:bg-amber-500/10 text-xs min-h-[36px]"
+              className="border-border text-amber-400 hover:bg-amber-500/10 text-xs min-h-[36px]"
             >
               <BarChart3 className="h-3.5 w-3.5 mr-1" />
               Отчет
@@ -495,7 +495,7 @@ export default function CounterpartiesPage() {
               variant="outline"
               onClick={() => handleTerminatePartnership(c.id)}
               disabled={isPending}
-              className={isBlocked ? 'border-rose-500 text-xs text-rose-400 hover:bg-rose-500/20 min-h-[36px] font-bold shadow-lg shadow-rose-500/10' : 'border-red-900/40 text-xs text-red-400 hover:bg-red-500/10 min-h-[36px]'}
+              className={isBlocked ? 'border-rose-500 text-xs text-rose-400 hover:bg-rose-500/20 min-h-[36px] font-bold shadow-lg shadow-rose-500/10' : 'border-border text-xs text-destructive hover:bg-destructive/10 min-h-[36px]'}
             >
               <UserX className="h-3.5 w-3.5 mr-1" />
               {isBlocked ? 'Прекратить сотрудничество' : 'Удалить'}
@@ -523,11 +523,11 @@ export default function CounterpartiesPage() {
         const partnerComp = isRequester ? p.target_company : p.requester_company;
 
         return (
-          <div className="font-bold text-white text-sm flex items-center space-x-2">
-            <Building2 className="h-4 w-4 text-amber-400 flex-shrink-0" />
+          <div className="font-bold text-foreground text-sm flex items-center space-x-2">
+            <Building2 className="h-4 w-4 text-sky-400 flex-shrink-0" />
             <div>
               <span>{partnerComp?.name || 'Организация'}</span>
-              <p className="text-xs text-slate-400 font-mono">ИНН: {partnerComp?.inn || '—'}</p>
+              <p className="text-xs text-muted-foreground font-mono">ИНН: {partnerComp?.inn || '—'}</p>
             </div>
           </div>
         );
@@ -546,7 +546,7 @@ export default function CounterpartiesPage() {
               p.status === 'approved'
                 ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
                 : p.status === 'rejected'
-                ? 'bg-red-500/20 text-red-400 border-red-500/30'
+                ? 'bg-destructive/20 text-destructive border-destructive/30'
                 : p.status === 'suspended'
                 ? 'bg-purple-500/20 text-purple-400 border-purple-500/30'
                 : p.status === 'recalled'
@@ -568,7 +568,7 @@ export default function CounterpartiesPage() {
       label: 'Дата Заявки',
       sortable: true,
       getValue: (p) => p.created_at,
-      render: (p) => <span className="font-mono text-xs text-slate-400">{new Date(p.created_at).toLocaleDateString('ru-RU')}</span>,
+      render: (p) => <span className="font-mono text-xs text-muted-foreground">{new Date(p.created_at).toLocaleDateString('ru-RU')}</span>,
     },
     {
       key: 'actions',
@@ -581,7 +581,7 @@ export default function CounterpartiesPage() {
         return (
           <div className="flex items-center justify-end space-x-2">
             {p.status === 'pending' && isRequester && (
-              <Button size="sm" variant="outline" onClick={() => handleRespondRequest(p.id, 'recalled')} disabled={isPending} className="border-amber-900/50 text-amber-400 hover:bg-amber-500/10 text-xs min-h-[36px]">
+              <Button size="sm" variant="outline" onClick={() => handleRespondRequest(p.id, 'recalled')} disabled={isPending} className="border-border text-muted-foreground hover:bg-muted text-xs min-h-[36px]">
                 <RotateCcw className="h-3.5 w-3.5 mr-1" />
                 Отозвать
               </Button>
@@ -589,11 +589,11 @@ export default function CounterpartiesPage() {
 
             {p.status === 'pending' && !isRequester && (
               <>
-                <Button size="sm" variant="outline" onClick={() => handleRespondRequest(p.id, 'rejected')} disabled={isPending} className="border-red-900/50 text-red-400 hover:bg-red-500/10 text-xs min-h-[36px]">
+                <Button size="sm" variant="outline" onClick={() => handleRespondRequest(p.id, 'rejected')} disabled={isPending} className="border-destructive/50 text-destructive hover:bg-destructive/10 text-xs min-h-[36px]">
                   <X className="h-3.5 w-3.5 mr-1" />
                   Отклонить
                 </Button>
-                <Button size="sm" onClick={() => handleRespondRequest(p.id, 'approved')} disabled={isPending} className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs min-h-[36px]">
+                <Button size="sm" onClick={() => handleRespondRequest(p.id, 'approved')} disabled={isPending} className="bg-emerald-600 hover:bg-emerald-500 text-foreground font-bold text-xs min-h-[36px]">
                   <Check className="h-3.5 w-3.5 mr-1" />
                   Принять
                 </Button>
@@ -638,7 +638,7 @@ export default function CounterpartiesPage() {
       sortable: true,
       getValue: (c) => c.name,
       render: (c) => (
-        <div className="font-semibold text-white text-sm flex items-center space-x-1.5">
+        <div className="font-semibold text-foreground text-sm flex items-center space-x-1.5">
           <Building2 className="h-4 w-4 text-amber-400 flex-shrink-0" />
           <span>{c.name}</span>
         </div>
@@ -649,7 +649,7 @@ export default function CounterpartiesPage() {
       label: 'ИНН КР',
       sortable: true,
       getValue: (c) => c.inn,
-      render: (c) => <span className="font-mono text-sm text-slate-300 font-bold">{c.inn}</span>,
+      render: (c) => <span className="font-mono text-sm text-muted-foreground font-bold">{c.inn}</span>,
     },
     {
       key: 'industry',
@@ -667,7 +667,7 @@ export default function CounterpartiesPage() {
       label: 'Руководитель',
       sortable: true,
       getValue: (c) => c.director_name,
-      render: (c) => <span className="text-xs text-slate-300">{c.director_name || '—'}</span>,
+      render: (c) => <span className="text-xs text-muted-foreground">{c.director_name || '—'}</span>,
     },
     {
       key: 'actions',
@@ -700,7 +700,7 @@ export default function CounterpartiesPage() {
         }
 
         return (
-          <Button size="sm" onClick={() => handleSendRequest(c.id)} disabled={isPending} className="bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs min-h-[36px]">
+          <Button size="sm" onClick={() => handleSendRequest(c.id)} disabled={isPending} className="bg-amber-600 hover:bg-amber-500 text-foreground font-bold text-xs min-h-[36px]">
             <Send className="h-3.5 w-3.5 mr-1.5" />
             Запросить сотрудничество
           </Button>
@@ -714,11 +714,11 @@ export default function CounterpartiesPage() {
       {/* Заголовок страницы */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-white flex items-center">
+          <h1 className="text-xl sm:text-2xl font-bold text-foreground flex items-center">
             <Building2 className="h-6 w-6 mr-2.5 text-amber-400" />
             Организации и Партнерство
           </h1>
-          <p className="text-xs sm:text-sm text-slate-400 mt-1">
+          <p className="text-xs sm:text-sm text-muted-foreground mt-1">
             Управление контрагентами, статусными заявками на сотрудничество и каталогом компаний КР
           </p>
         </div>
@@ -739,13 +739,13 @@ export default function CounterpartiesPage() {
       )}
 
       {/* 3 ФУНДАМЕНТАЛЬНЫЕ ГЛАВНЫЕ ВКЛАДКИ МНОГОФУНКЦИОНАЛЬНОГО МОДУЛЯ */}
-      <div className="flex items-center space-x-2 border-b border-slate-800 pb-2 overflow-x-auto">
+      <div className="flex items-center space-x-2 border-b border-border pb-2 overflow-x-auto">
         <button
           onClick={() => setMainTab('counterparties')}
           className={`flex items-center space-x-2 px-5 py-2.5 rounded-xl text-xs md:text-sm font-medium transition-all min-h-[44px] ${
             mainTab === 'counterparties'
               ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40 font-bold shadow-lg shadow-amber-500/10'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+              : 'text-muted-foreground hover:text-foreground hover:bg-background'
           }`}
         >
           <Users className="h-4 w-4" />
@@ -757,7 +757,7 @@ export default function CounterpartiesPage() {
           className={`flex items-center space-x-2 px-5 py-2.5 rounded-xl text-xs md:text-sm font-medium transition-all min-h-[44px] ${
             mainTab === 'requests'
               ? 'bg-purple-600/20 text-purple-400 border border-purple-500/40 font-bold shadow-lg shadow-purple-500/10'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+              : 'text-muted-foreground hover:text-foreground hover:bg-background'
           }`}
         >
           <UserCheck className="h-4 w-4" />
@@ -769,7 +769,7 @@ export default function CounterpartiesPage() {
           className={`flex items-center space-x-2 px-5 py-2.5 rounded-xl text-xs md:text-sm font-medium transition-all min-h-[44px] ${
             mainTab === 'catalog'
               ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/40 font-bold shadow-lg shadow-indigo-500/10'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+              : 'text-muted-foreground hover:text-foreground hover:bg-background'
           }`}
         >
           <Globe className="h-4 w-4" />
@@ -794,7 +794,7 @@ export default function CounterpartiesPage() {
                 variant="outline"
                 onClick={handleSyncCounterparties}
                 disabled={isPending}
-                className="border-slate-800 text-slate-300 text-xs min-h-[40px]"
+                className="border-border text-muted-foreground text-xs min-h-[40px]"
               >
                 <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${isPending ? 'animate-spin' : ''}`} />
                 Синхронизировать
@@ -802,7 +802,7 @@ export default function CounterpartiesPage() {
               <Button
                 size="sm"
                 onClick={() => setShowCreateModal(true)}
-                className="bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs min-h-[40px]"
+                className="bg-amber-600 hover:bg-amber-500 text-foreground font-bold text-xs min-h-[40px]"
               >
                 <UserPlus className="h-3.5 w-3.5 mr-1.5" />
                 + Создать Контрагента
@@ -815,11 +815,11 @@ export default function CounterpartiesPage() {
       {/* ------------------- ВКЛАДКА 2: ЗАЯВКИ (5 СТАТУСОВ) ------------------- */}
       {mainTab === 'requests' && (
         <div className="space-y-4">
-          <div className="flex items-center space-x-2 bg-slate-950 p-1.5 rounded-xl border border-slate-800/80 overflow-x-auto">
+          <div className="flex items-center space-x-2 bg-background p-1.5 rounded-xl border border-border/80 overflow-x-auto">
             <button
               onClick={() => setRequestStatusFilter('all')}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all min-h-[36px] ${
-                requestStatusFilter === 'all' ? 'bg-slate-800 text-white font-bold' : 'text-slate-400 hover:text-slate-200'
+                requestStatusFilter === 'all' ? 'bg-muted text-foreground font-bold' : 'text-muted-foreground hover:text-foreground'
               }`}
             >
               Все ({partnerships.length})
@@ -828,7 +828,7 @@ export default function CounterpartiesPage() {
             <button
               onClick={() => setRequestStatusFilter('pending')}
               className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all min-h-[36px] ${
-                requestStatusFilter === 'pending' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/40 font-bold' : 'text-slate-400 hover:text-slate-200'
+                requestStatusFilter === 'pending' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/40 font-bold' : 'text-muted-foreground hover:text-foreground'
               }`}
             >
               <Clock className="h-3.5 w-3.5 text-blue-400" />
@@ -838,7 +838,7 @@ export default function CounterpartiesPage() {
             <button
               onClick={() => setRequestStatusFilter('approved')}
               className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all min-h-[36px] ${
-                requestStatusFilter === 'approved' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 font-bold' : 'text-slate-400 hover:text-slate-200'
+                requestStatusFilter === 'approved' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 font-bold' : 'text-muted-foreground hover:text-foreground'
               }`}
             >
               <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
@@ -848,7 +848,7 @@ export default function CounterpartiesPage() {
             <button
               onClick={() => setRequestStatusFilter('recalled')}
               className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all min-h-[36px] ${
-                requestStatusFilter === 'recalled' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40 font-bold' : 'text-slate-400 hover:text-slate-200'
+                requestStatusFilter === 'recalled' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40 font-bold' : 'text-muted-foreground hover:text-foreground'
               }`}
             >
               <RotateCcw className="h-3.5 w-3.5 text-amber-400" />
@@ -858,7 +858,7 @@ export default function CounterpartiesPage() {
             <button
               onClick={() => setRequestStatusFilter('rejected')}
               className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all min-h-[36px] ${
-                requestStatusFilter === 'rejected' ? 'bg-red-500/20 text-red-400 border border-red-500/40 font-bold' : 'text-slate-400 hover:text-slate-200'
+                requestStatusFilter === 'rejected' ? 'bg-red-500/20 text-red-400 border border-red-500/40 font-bold' : 'text-muted-foreground hover:text-foreground'
               }`}
             >
               <X className="h-3.5 w-3.5 text-red-400" />
@@ -868,7 +868,7 @@ export default function CounterpartiesPage() {
             <button
               onClick={() => setRequestStatusFilter('suspended')}
               className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all min-h-[36px] ${
-                requestStatusFilter === 'suspended' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/40 font-bold' : 'text-slate-400 hover:text-slate-200'
+                requestStatusFilter === 'suspended' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/40 font-bold' : 'text-muted-foreground hover:text-foreground'
               }`}
             >
               <PauseCircle className="h-3.5 w-3.5 text-purple-400" />
@@ -891,18 +891,18 @@ export default function CounterpartiesPage() {
       {/* ------------------- ВКЛАДКА 3: КАТАЛОГ ОРГАНИЗАЦИЙ ------------------- */}
       {mainTab === 'catalog' && (
         <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900/40 p-4 rounded-2xl border border-slate-800">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-background/40 p-4 rounded-2xl border border-border">
             <div>
-              <h3 className="text-base font-bold text-white">Каталог Зарегистрированных Организаций</h3>
-              <p className="text-xs text-slate-400">Поиск партнеров по категориям и отраслям бизнеса</p>
+              <h3 className="text-base font-bold text-foreground">Каталог Зарегистрированных Организаций</h3>
+              <p className="text-xs text-muted-foreground">Поиск партнеров по категориям и отраслям бизнеса</p>
             </div>
 
             <div className="flex items-center space-x-2">
-              <Filter className="h-4 w-4 text-slate-400" />
+              <Filter className="h-4 w-4 text-muted-foreground" />
               <select
                 value={selectedIndustry}
                 onChange={(e) => setSelectedIndustry(e.target.value)}
-                className="bg-slate-950 border border-slate-800 text-white text-xs rounded-xl px-3 py-2 min-h-[40px]"
+                className="bg-background border border-border text-foreground text-xs rounded-xl px-3 py-2 min-h-[40px]"
               >
                 <option value="all">Все Отрасли ({catalogCompanies.length})</option>
                 {INDUSTRIES.map((ind) => (
@@ -936,43 +936,43 @@ export default function CounterpartiesPage() {
       >
         {profileModal && (
           <div className="space-y-6">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-950/60 p-4 rounded-xl border border-slate-800 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-background/60 p-4 rounded-xl border border-border text-xs">
               <div>
-                <span className="text-slate-500 block">ФИО Руководителя:</span>
-                <span className="font-semibold text-white">{profileModal.companyDetails?.director_name || '—'}</span>
+                <span className="text-muted-foreground block">ФИО Руководителя:</span>
+                <span className="font-semibold text-foreground">{profileModal.companyDetails?.director_name || '—'}</span>
               </div>
               <div>
-                <span className="text-slate-500 block">Отрасль компании:</span>
+                <span className="text-muted-foreground block">Отрасль компании:</span>
                 <span className="font-semibold text-amber-400">{profileModal.companyDetails?.industry || 'Услуги / Торговля'}</span>
               </div>
               <div>
-                <span className="text-slate-500 block">Юридический адрес:</span>
-                <span className="font-semibold text-white">{profileModal.companyDetails?.legal_address || 'Кыргызстан'}</span>
+                <span className="text-muted-foreground block">Юридический адрес:</span>
+                <span className="font-semibold text-foreground">{profileModal.companyDetails?.legal_address || 'Кыргызстан'}</span>
               </div>
               <div>
-                <span className="text-slate-500 block">E-mail:</span>
-                <span className="font-mono text-slate-300">{profileModal.companyDetails?.email || profileModal.counterparty.email || '—'}</span>
+                <span className="text-muted-foreground block">E-mail:</span>
+                <span className="font-mono text-muted-foreground">{profileModal.companyDetails?.email || profileModal.counterparty.email || '—'}</span>
               </div>
             </div>
 
             <div className="space-y-3">
-              <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider font-mono">
+              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider font-mono">
                 Приложенные Учредительные Документы (R2)
               </h4>
 
               {profileModal.statutoryFiles.length === 0 ? (
-                <div className="p-8 text-center text-slate-500 text-xs bg-slate-950/40 rounded-xl border border-slate-800">
+                <div className="p-8 text-center text-muted-foreground text-xs bg-background/40 rounded-xl border border-border">
                   Учредительные файлы пока не загружены
                 </div>
               ) : (
                 <div className="space-y-2">
                   {profileModal.statutoryFiles.map((file) => (
-                    <div key={file.id} className="p-3 bg-slate-950/60 rounded-xl border border-slate-800 flex items-center justify-between text-xs">
+                    <div key={file.id} className="p-3 bg-background/60 rounded-xl border border-border flex items-center justify-between text-xs">
                       <div className="flex items-center space-x-3">
                         <FileText className="h-4 w-4 text-indigo-400" />
                         <div>
-                          <p className="font-semibold text-white">{file.file_name}</p>
-                          <p className="text-[11px] text-slate-400">{file.description || 'Скан'} • {formatBytes(file.size_bytes)}</p>
+                          <p className="font-semibold text-foreground">{file.file_name}</p>
+                          <p className="text-[11px] text-muted-foreground">{file.description || 'Скан'} • {formatBytes(file.size_bytes)}</p>
                         </div>
                       </div>
 
@@ -1004,69 +1004,65 @@ export default function CounterpartiesPage() {
       >
         <div className="space-y-3">
           <div className="space-y-1">
-            <Label className="text-xs text-slate-300">Наименование организации / ИП *</Label>
+            <Label className="text-xs text-muted-foreground">Наименование организации / ИП *</Label>
             <Input
               value={createName}
               onChange={(e) => setCreateName(e.target.value)}
               placeholder="ОсОО ВекторТрейд..."
               required
-              className="bg-slate-950 border-slate-800 text-white min-h-[44px]"
-            />
-          </div>
-
           <div className="space-y-1">
-            <Label className="text-xs text-slate-300">ИНН КР (14 цифр) *</Label>
+            <Label className="text-xs text-muted-foreground">ИНН КР (14 цифр) *</Label>
             <Input
               value={createInn}
               onChange={(e) => setCreateInn(e.target.value.replace(/\D/g, '').slice(0, 14))}
               placeholder="01203202410145"
               maxLength={14}
               required
-              className="bg-slate-950 border-slate-800 text-white font-mono min-h-[44px]"
+              className="bg-background border-border text-foreground font-mono min-h-[44px]"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
-              <Label className="text-xs text-slate-300">E-mail</Label>
+              <Label className="text-xs text-muted-foreground">E-mail</Label>
               <Input
                 type="email"
                 value={createEmail}
                 onChange={(e) => setCreateEmail(e.target.value)}
                 placeholder="info@vektor.kg"
-                className="bg-slate-950 border-slate-800 text-white min-h-[44px]"
+                className="bg-background border-border text-foreground min-h-[44px]"
               />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs text-slate-300">Телефон</Label>
+              <Label className="text-xs text-muted-foreground">Телефон</Label>
               <Input
                 value={createPhone}
                 onChange={(e) => setCreatePhone(e.target.value)}
                 placeholder="+996 550 123456"
-                className="bg-slate-950 border-slate-800 text-white font-mono min-h-[44px]"
+                className="bg-background border-border text-foreground font-mono min-h-[44px]"
               />
             </div>
           </div>
 
-          <div className="flex items-center space-x-3 p-3 rounded-xl bg-slate-950 border border-slate-800">
+          <div className="flex items-center space-x-3 p-3 rounded-xl bg-background border border-border">
             <input
               type="checkbox"
               id="is_vat_payer"
               checked={createIsVat}
               onChange={(e) => setCreateIsVat(e.target.checked)}
-              className="h-5 w-5 rounded bg-slate-900 text-amber-500"
+              className="h-5 w-5 rounded bg-background text-amber-500"
             />
-            <Label htmlFor="is_vat_payer" className="text-xs text-amber-400 font-bold cursor-pointer">
+            <Label htmlFor="is_vat_payer" className="text-xs text-amber-500 font-bold cursor-pointer">
               Плательщик НДС (12%)
             </Label>
           </div>
 
           <div className="space-y-1">
-            <Label className="text-xs text-slate-300">Учредительный документ / Скан (R2)</Label>
-            <div className="p-3 bg-slate-950 border border-dashed border-slate-800 rounded-xl flex items-center justify-between">
+            <Label className="text-xs text-muted-foreground">Учредительный документ / Скан (R2)</Label>
+            <div className="p-3 bg-background border border-dashed border-border rounded-xl flex items-center justify-between">
               <div className="flex items-center space-x-2 truncate">
                 <Paperclip className="h-4 w-4 text-indigo-400 flex-shrink-0" />
-                <span className="text-xs text-slate-300 truncate">
+                <span className="text-xs text-muted-foreground truncate">
                   {selectedFile ? selectedFile.name : 'Выберите файл (PDF / PNG)...'}
                 </span>
               </div>
@@ -1082,7 +1078,7 @@ export default function CounterpartiesPage() {
                 size="sm"
                 variant="outline"
                 onClick={() => document.getElementById('counterparty_file')?.click()}
-                className="text-xs border-slate-800 text-slate-300 min-h-[32px] px-3"
+                className="text-xs border-border text-muted-foreground min-h-[32px] px-3 hover:text-foreground"
               >
                 Обзор
               </Button>
@@ -1090,12 +1086,12 @@ export default function CounterpartiesPage() {
           </div>
 
           <div className="space-y-1">
-            <Label className="text-xs text-slate-300">Внутреннее примечание</Label>
+            <Label className="text-xs text-muted-foreground">Внутреннее примечание</Label>
             <Input
               value={createComment}
               onChange={(e) => setCreateComment(e.target.value)}
               placeholder="Поставщик ГСМ..."
-              className="bg-slate-950 border-slate-800 text-white min-h-[44px]"
+              className="bg-background border-border text-foreground min-h-[44px]"
             />
           </div>
         </div>

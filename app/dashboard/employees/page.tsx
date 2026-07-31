@@ -317,23 +317,23 @@ export default function EmployeesModulePage() {
       {/* Заголовок модуля */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-white flex items-center">
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-foreground flex items-center">
             <Users className="h-8 w-8 mr-3 text-blue-500" />
             Модуль «Сотрудники» и Роли
           </h1>
-          <p className="text-slate-400 text-sm mt-1">
+          <p className="text-muted-foreground text-sm mt-1">
             Управление персоналом организации, ролевой моделью доступов (RBAC) и настройками профиля.
           </p>
         </div>
 
         {/* Переключатель вкладок */}
-        <div className="flex items-center space-x-1 p-1 bg-slate-900/80 border border-slate-800 rounded-xl">
+        <div className="flex items-center space-x-1 p-1 bg-muted/80 border border-border rounded-xl">
           <button
             onClick={() => setActiveTab('profile')}
             className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-bold transition-all min-h-[40px] ${
               activeTab === 'profile'
-                ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                ? 'bg-blue-600-white shadow-lg shadow-blue-600/30'
+                : 'text-muted-foreground hover:text-foreground hover:bg-accent/60'
             }`}
           >
             <User className="h-4 w-4" />
@@ -344,8 +344,8 @@ export default function EmployeesModulePage() {
             onClick={() => setActiveTab('employees')}
             className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-bold transition-all min-h-[40px] ${
               activeTab === 'employees'
-                ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                ? 'bg-blue-600-white shadow-lg shadow-blue-600/30'
+                : 'text-muted-foreground hover:text-foreground hover:bg-accent/60'
             }`}
           >
             <Users className="h-4 w-4" />
@@ -356,8 +356,8 @@ export default function EmployeesModulePage() {
             onClick={() => setActiveTab('roles')}
             className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-bold transition-all min-h-[40px] ${
               activeTab === 'roles'
-                ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                ? 'bg-blue-600-white shadow-lg shadow-blue-600/30'
+                : 'text-muted-foreground hover:text-foreground hover:bg-accent/60'
             }`}
           >
             <Shield className="h-4 w-4" />
@@ -379,25 +379,25 @@ export default function EmployeesModulePage() {
       {activeTab === 'profile' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* ИНФОРМАЦИЯ О ПОЛЬЗОВАТЕЛЕ */}
-          <Card className="lg:col-span-6 bg-slate-900/40 border-slate-800">
-            <CardHeader className="border-b border-slate-800/80 pb-4">
-              <CardTitle className="text-base font-bold text-white flex items-center">
+          <Card className="lg:col-span-6 bg-muted/40 border-border">
+            <CardHeader className="border-b border-border/80 pb-4">
+              <CardTitle className="text-base font-bold text-foreground flex items-center">
                 <UserCheck className="h-5 w-5 mr-2 text-blue-400" />
                 Личный Профиль Учетной Записи
               </CardTitle>
-              <CardDescription className="text-xs text-slate-400">Ваша текущая роль и реквизиты сотрудника в системе.</CardDescription>
+              <CardDescription className="text-xs text-muted-foreground">Ваша текущая роль и реквизиты сотрудника в системе.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4 pt-4 text-xs">
-              <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 space-y-3">
+              <div className="p-4 rounded-xl bg-background/60 border border-border space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-slate-400 font-mono uppercase text-[10px]">ФИО сотрудника</span>
+                  <span className="text-muted-foreground font-mono uppercase text-[10px]">ФИО сотрудника</span>
                   <Badge variant="outline" className="border-blue-500/30 text-blue-400 font-mono text-[10px]">
                     {currentProfile?.position || 'Сотрудник'}
                   </Badge>
                 </div>
-                <p className="text-base font-bold text-white">{currentProfile?.full_name || 'Загрузка...'}</p>
+                <p className="text-base font-bold text-foreground">{currentProfile?.full_name || 'Загрузка...'}</p>
 
-                <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-800/60">
+                <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border/60">
                   <div>
                     <span className="text-slate-500 text-[10px]">Логин / Email:</span>
                     <p className="font-mono text-slate-200 truncate">{currentProfile?.email}</p>
@@ -409,13 +409,13 @@ export default function EmployeesModulePage() {
                 </div>
               </div>
 
-              <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 space-y-2">
-                <span className="text-slate-400 font-mono uppercase text-[10px]">Привязанная Организация</span>
-                <div className="flex items-center space-x-2 text-white font-bold text-sm">
-                  <Building2 className="h-4 w-4 text-slate-400" />
+              <div className="p-4 rounded-xl bg-background/60 border border-border space-y-2">
+                <span className="text-muted-foreground font-mono uppercase text-[10px]">Привязанная Организация</span>
+                <div className="flex items-center space-x-2 text-foreground font-bold text-sm">
+                  <Building2 className="h-4 w-4 text-muted-foreground" />
                   <span>{(currentProfile?.companies as any)?.name || 'Компания не привязана'}</span>
                 </div>
-                <p className="text-slate-400 font-mono text-[11px]">
+                <p className="text-muted-foreground font-mono text-[11px]">
                   ИНН: {(currentProfile?.companies as any)?.inn || '—'}
                 </p>
               </div>
@@ -423,13 +423,13 @@ export default function EmployeesModulePage() {
           </Card>
 
           {/* ФОРМА СМЕНЫ ПАРОЛЯ */}
-          <Card className="lg:col-span-6 bg-slate-900/40 border-slate-800">
-            <CardHeader className="border-b border-slate-800/80 pb-4">
-              <CardTitle className="text-base font-bold text-white flex items-center">
+          <Card className="lg:col-span-6 bg-muted/40 border-border">
+            <CardHeader className="border-b border-border/80 pb-4">
+              <CardTitle className="text-base font-bold text-foreground flex items-center">
                 <Lock className="h-5 w-5 mr-2 text-amber-400" />
                 Безопасность & Смена Пароля
               </CardTitle>
-              <CardDescription className="text-xs text-slate-400">
+              <CardDescription className="text-xs text-muted-foreground">
                 Вы можете самостоятельно изменить свой пароль для входа в платформу.
               </CardDescription>
             </CardHeader>
@@ -442,33 +442,33 @@ export default function EmployeesModulePage() {
                 )}
 
                 <div className="space-y-1.5">
-                  <Label className="text-xs text-slate-300">Новый пароль</Label>
+                  <Label className="text-xs text-foreground">Новый пароль</Label>
                   <Input
                     type="password"
                     placeholder="Минимум 6 символов"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     required
-                    className="bg-slate-950 border-slate-800 text-white text-xs rounded-xl min-h-[44px]"
+                    className="bg-background border-border text-foreground text-xs rounded-xl min-h-[44px]"
                   />
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label className="text-xs text-slate-300">Подтвердите новый пароль</Label>
+                  <Label className="text-xs text-foreground">Подтвердите новый пароль</Label>
                   <Input
                     type="password"
                     placeholder="Повторите новый пароль"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     required
-                    className="bg-slate-950 border-slate-800 text-white text-xs rounded-xl min-h-[44px]"
+                    className="bg-background border-border text-foreground text-xs rounded-xl min-h-[44px]"
                   />
                 </div>
 
                 <Button
                   type="submit"
                   disabled={isPending}
-                  className="w-full bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs min-h-[44px] rounded-xl shadow-lg shadow-amber-600/20"
+                  className="w-full bg-amber-600-white font-bold text-xs min-h-[44px] rounded-xl shadow-lg shadow-amber-600/20"
                 >
                   {isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Key className="h-4 w-4 mr-2" />}
                   Обновить пароль учетной записи
@@ -493,17 +493,17 @@ export default function EmployeesModulePage() {
                   value={empSearch}
                   onChange={(e) => setEmpSearch(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSearchClick()}
-                  className="pl-9 bg-slate-900 border-slate-800 text-xs rounded-xl min-h-[40px] text-white"
+                  className="pl-9 bg-muted border-border text-xs rounded-xl min-h-[40px] text-foreground"
                 />
               </div>
-              <Button size="sm" onClick={handleSearchClick} className="bg-slate-800 hover:bg-slate-700 text-xs min-h-[40px]">
+              <Button size="sm" onClick={handleSearchClick} className="bg-accent hover:bg-slate-700 text-xs min-h-[40px]">
                 Найти
               </Button>
             </div>
 
             <Button
               onClick={() => setShowAddEmpModal(true)}
-              className="bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs min-h-[44px] rounded-xl shadow-lg shadow-blue-600/20 w-full sm:w-auto"
+              className="bg-blue-600-white font-bold text-xs min-h-[44px] rounded-xl shadow-lg shadow-blue-600/20 w-full sm:w-auto"
             >
               <UserPlus className="h-4 w-4 mr-2" />
               + Добавить сотрудника
@@ -523,11 +523,11 @@ export default function EmployeesModulePage() {
                 getValue: (emp) => emp.full_name,
                 render: (emp) => (
                   <div>
-                    <p className="font-bold text-white text-xs flex items-center">
+                    <p className="font-bold text-foreground text-xs flex items-center">
                       <User className="h-3.5 w-3.5 mr-1.5 text-blue-400" />
                       {emp.full_name}
                     </p>
-                    <span className="text-[11px] text-slate-400 font-mono">{emp.position || 'Сотрудник'}</span>
+                    <span className="text-[11px] text-muted-foreground font-mono">{emp.position || 'Сотрудник'}</span>
                   </div>
                 ),
               },
@@ -537,7 +537,7 @@ export default function EmployeesModulePage() {
                 sortable: true,
                 getValue: (emp) => emp.email,
                 render: (emp) => (
-                  <span className="font-mono text-xs text-slate-300 flex items-center">
+                  <span className="font-mono text-xs text-foreground flex items-center">
                     <Mail className="h-3 w-3 mr-1 text-slate-500" />
                     {emp.email}
                   </span>
@@ -576,7 +576,7 @@ export default function EmployeesModulePage() {
                       size="sm"
                       variant="outline"
                       onClick={() => setEditingEmp(emp)}
-                      className="h-8 border-slate-800 text-slate-300 hover:text-white text-xs"
+                      className="h-8 border-border text-foreground hover:text-foreground text-xs"
                       title="Редактировать сотрудника"
                     >
                       <Edit2 className="h-3.5 w-3.5" />
@@ -606,14 +606,14 @@ export default function EmployeesModulePage() {
       {activeTab === 'roles' && (
         <div className="space-y-6">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold text-white flex items-center">
+            <h2 className="text-lg font-bold text-foreground flex items-center">
               <Shield className="h-5 w-5 mr-2 text-emerald-400" />
               Ролевая модель и матрица разрешений
             </h2>
 
             <Button
               onClick={() => setShowAddRoleModal(true)}
-              className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs min-h-[44px] rounded-xl shadow-lg shadow-emerald-600/20"
+              className="bg-emerald-600-white font-bold text-xs min-h-[44px] rounded-xl shadow-lg shadow-emerald-600/20"
             >
               <Plus className="h-4 w-4 mr-2" />
               + Создать роль
@@ -622,10 +622,10 @@ export default function EmployeesModulePage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {roles.map((role) => (
-              <Card key={role.id} className="bg-slate-900/60 border-slate-800 p-4 space-y-3 shadow-lg flex flex-col justify-between">
+              <Card key={role.id} className="bg-muted/60 border-border p-4 space-y-3 shadow-lg flex flex-col justify-between">
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <h3 className="font-bold text-white text-sm flex items-center">
+                    <h3 className="font-bold text-foreground text-sm flex items-center">
                       <Shield className={`h-4 w-4 mr-2 ${role.is_system ? 'text-amber-400' : 'text-emerald-400'}`} />
                       {role.name}
                     </h3>
@@ -636,10 +636,10 @@ export default function EmployeesModulePage() {
                     )}
                   </div>
 
-                  <p className="text-xs text-slate-400 min-h-[36px]">{role.description || 'Описание роли не указано.'}</p>
+                  <p className="text-xs text-muted-foreground min-h-[36px]">{role.description || 'Описание роли не указано.'}</p>
                 </div>
 
-                <div className="pt-2 border-t border-slate-800/80 space-y-2">
+                <div className="pt-2 border-t border-border/80 space-y-2">
                   <div className="flex items-center justify-between text-[10px] font-mono text-slate-500">
                     <span>Модулей настроено: {Object.keys(role.permissions || {}).length}</span>
                     {role.is_system && <span className="text-amber-400 font-bold">Нельзя удалить</span>}
@@ -650,7 +650,7 @@ export default function EmployeesModulePage() {
                       size="sm"
                       variant="outline"
                       onClick={() => handleOpenRoleMatrix(role)}
-                      className="flex-1 border-slate-800 text-blue-400 hover:bg-blue-500/10 text-xs min-h-[36px]"
+                      className="flex-1 border-border text-blue-400 hover:bg-blue-500/10 text-xs min-h-[36px]"
                     >
                       <Settings className="h-3.5 w-3.5 mr-1.5" />
                       Настроить доступы
@@ -671,7 +671,7 @@ export default function EmployeesModulePage() {
                             }
                           }
                         }}
-                        className="border-slate-800 text-red-400 hover:bg-red-500/10 text-xs min-h-[36px] px-2.5"
+                        className="border-border text-red-400 hover:bg-red-500/10 text-xs min-h-[36px] px-2.5"
                         title="Удалить пользовательскую роль"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
@@ -692,14 +692,14 @@ export default function EmployeesModulePage() {
       {/* МОДАЛКА: Добавление сотрудника */}
       {showAddEmpModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <Card className="w-full max-w-md bg-slate-900 border-slate-800 text-white shadow-2xl">
-            <CardHeader className="border-b border-slate-800">
+          <Card className="w-full max-w-md bg-muted border-border text-foreground shadow-2xl">
+            <CardHeader className="border-b border-border">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base font-bold flex items-center">
                   <UserPlus className="h-5 w-5 mr-2 text-blue-400" />
                   Создать аккаунт сотрудника
                 </CardTitle>
-                <button onClick={() => setShowAddEmpModal(false)} className="text-slate-400 hover:text-white">
+                <button onClick={() => setShowAddEmpModal(false)} className="text-muted-foreground hover:text-foreground">
                   <X className="h-5 w-5" />
                 </button>
               </div>
@@ -707,47 +707,47 @@ export default function EmployeesModulePage() {
             <form onSubmit={handleCreateEmployee}>
               <CardContent className="space-y-4 pt-4 text-xs">
                 <div className="space-y-1">
-                  <Label className="text-slate-300">ФИО Сотрудника *</Label>
+                  <Label className="text-foreground">ФИО Сотрудника *</Label>
                   <Input
                     placeholder="Например: Ивано Асан Рысбекович"
                     value={newEmpName}
                     onChange={(e) => setNewEmpName(e.target.value)}
                     required
-                    className="bg-slate-950 border-slate-800 text-white text-xs rounded-xl min-h-[40px]"
+                    className="bg-background border-border text-foreground text-xs rounded-xl min-h-[40px]"
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <Label className="text-slate-300">Логин / Email сотрудника *</Label>
+                  <Label className="text-foreground">Логин / Email сотрудника *</Label>
                   <Input
                     type="email"
                     placeholder="asan@company.kg"
                     value={newEmpEmail}
                     onChange={(e) => setNewEmpEmail(e.target.value)}
                     required
-                    className="bg-slate-950 border-slate-800 text-white text-xs rounded-xl min-h-[40px]"
+                    className="bg-background border-border text-foreground text-xs rounded-xl min-h-[40px]"
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <Label className="text-slate-300">Должность</Label>
+                  <Label className="text-foreground">Должность</Label>
                   <Input
                     placeholder="Например: Бухгалтер по расчетам"
                     value={newEmpPosition}
                     onChange={(e) => setNewEmpPosition(e.target.value)}
-                    className="bg-slate-950 border-slate-800 text-white text-xs rounded-xl min-h-[40px]"
+                    className="bg-background border-border text-foreground text-xs rounded-xl min-h-[40px]"
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <Label className="text-slate-300">Назначенная Роль</Label>
+                  <Label className="text-foreground">Назначенная Роль</Label>
                   <select
                     value={newEmpRoleId}
                     onChange={(e) => setNewEmpRoleId(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 text-white text-xs rounded-xl px-3 py-2 min-h-[40px]"
+                    className="w-full bg-background border border-border text-foreground text-xs rounded-xl px-3 py-2 min-h-[40px]"
                   >
                     <option value="">-- Выберите роль --</option>
-                    {roles.map((r) => (
+                    {roles.filter(r => r.id !== 'owner-system-role').map((r) => (
                       <option key={r.id} value={r.id}>
                         {r.name}
                       </option>
@@ -756,23 +756,23 @@ export default function EmployeesModulePage() {
                 </div>
 
                 <div className="space-y-1">
-                  <Label className="text-slate-300">Временный пароль для первого входа</Label>
+                  <Label className="text-foreground">Временный пароль для первого входа</Label>
                   <Input
                     type="text"
                     value={newEmpPassword}
                     onChange={(e) => setNewEmpPassword(e.target.value)}
                     required
-                    className="bg-slate-950 border-slate-800 text-amber-400 font-mono text-xs rounded-xl min-h-[40px]"
+                    className="bg-background border-border text-amber-400 font-mono text-xs rounded-xl min-h-[40px]"
                   />
                   <p className="text-[10px] text-slate-500">Сотрудник сможет сменить этот пароль в своем профиле.</p>
                 </div>
               </CardContent>
 
-              <CardFooter className="border-t border-slate-800 pt-4 flex justify-end space-x-2">
-                <Button variant="outline" type="button" onClick={() => setShowAddEmpModal(false)} className="border-slate-800 text-slate-300 text-xs">
+              <CardFooter className="border-t border-border pt-4 flex justify-end space-x-2">
+                <Button variant="outline" type="button" onClick={() => setShowAddEmpModal(false)} className="border-border text-foreground text-xs">
                   Отмена
                 </Button>
-                <Button type="submit" disabled={isPending} className="bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs">
+                <Button type="submit" disabled={isPending} className="bg-blue-600-white font-bold text-xs">
                   {isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <UserPlus className="h-4 w-4 mr-2" />}
                   Создать аккаунт
                 </Button>
@@ -785,8 +785,8 @@ export default function EmployeesModulePage() {
       {/* МОДАЛКА: Сброс пароля сотрудника */}
       {resetPwdEmp && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <Card className="w-full max-w-md bg-slate-900 border-slate-800 text-white shadow-2xl">
-            <CardHeader className="border-b border-slate-800">
+          <Card className="w-full max-w-md bg-muted border-border text-foreground shadow-2xl">
+            <CardHeader className="border-b border-border">
               <CardTitle className="text-base font-bold flex items-center">
                 <Key className="h-5 w-5 mr-2 text-amber-400" />
                 Сброс пароля сотруднику: {resetPwdEmp.full_name}
@@ -794,21 +794,21 @@ export default function EmployeesModulePage() {
             </CardHeader>
             <CardContent className="space-y-3 pt-4 text-xs">
               <div className="space-y-1">
-                <Label className="text-slate-300">Новый временный пароль *</Label>
+                <Label className="text-foreground">Новый временный пароль *</Label>
                 <Input
                   type="text"
                   placeholder="Введите новый пароль (мин. 6 символов)"
                   value={adminNewPassword}
                   onChange={(e) => setAdminNewPassword(e.target.value)}
-                  className="bg-slate-950 border-slate-800 text-white text-xs rounded-xl min-h-[40px]"
+                  className="bg-background border-border text-foreground text-xs rounded-xl min-h-[40px]"
                 />
               </div>
             </CardContent>
-            <CardFooter className="border-t border-slate-800 pt-4 flex justify-end space-x-2">
-              <Button variant="outline" onClick={() => setResetPwdEmp(null)} className="border-slate-800 text-slate-300 text-xs">
+            <CardFooter className="border-t border-border pt-4 flex justify-end space-x-2">
+              <Button variant="outline" onClick={() => setResetPwdEmp(null)} className="border-border text-foreground text-xs">
                 Отмена
               </Button>
-              <Button onClick={handleResetEmployeePassword} disabled={isPending || !adminNewPassword} className="bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs">
+              <Button onClick={handleResetEmployeePassword} disabled={isPending || !adminNewPassword} className="bg-amber-600-white font-bold text-xs">
                 {isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Check className="h-4 w-4 mr-2" />}
                 Установить пароль
               </Button>
@@ -820,8 +820,8 @@ export default function EmployeesModulePage() {
       {/* МОДАЛКА: Создание роли */}
       {showAddRoleModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <Card className="w-full max-w-md bg-slate-900 border-slate-800 text-white shadow-2xl">
-            <CardHeader className="border-b border-slate-800">
+          <Card className="w-full max-w-md bg-muted border-border text-foreground shadow-2xl">
+            <CardHeader className="border-b border-border">
               <CardTitle className="text-base font-bold flex items-center">
                 <Shield className="h-5 w-5 mr-2 text-emerald-400" />
                 Создать новую роль
@@ -830,32 +830,32 @@ export default function EmployeesModulePage() {
             <form onSubmit={handleCreateRole}>
               <CardContent className="space-y-3 pt-4 text-xs">
                 <div className="space-y-1">
-                  <Label className="text-slate-300">Название роли *</Label>
+                  <Label className="text-foreground">Название роли *</Label>
                   <Input
                     placeholder="Например: Главный бухгалтер"
                     value={newRoleName}
                     onChange={(e) => setNewRoleName(e.target.value)}
                     required
-                    className="bg-slate-950 border-slate-800 text-white text-xs rounded-xl min-h-[40px]"
+                    className="bg-background border-border text-foreground text-xs rounded-xl min-h-[40px]"
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <Label className="text-slate-300">Описание роли</Label>
+                  <Label className="text-foreground">Описание роли</Label>
                   <Input
                     placeholder="Краткое описание обязанностей роли"
                     value={newRoleDesc}
                     onChange={(e) => setNewRoleDesc(e.target.value)}
-                    className="bg-slate-950 border-slate-800 text-white text-xs rounded-xl min-h-[40px]"
+                    className="bg-background border-border text-foreground text-xs rounded-xl min-h-[40px]"
                   />
                 </div>
               </CardContent>
 
-              <CardFooter className="border-t border-slate-800 pt-4 flex justify-end space-x-2">
-                <Button variant="outline" type="button" onClick={() => setShowAddRoleModal(false)} className="border-slate-800 text-slate-300 text-xs">
+              <CardFooter className="border-t border-border pt-4 flex justify-end space-x-2">
+                <Button variant="outline" type="button" onClick={() => setShowAddRoleModal(false)} className="border-border text-foreground text-xs">
                   Отмена
                 </Button>
-                <Button type="submit" disabled={isPending} className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs">
+                <Button type="submit" disabled={isPending} className="bg-emerald-600-white font-bold text-xs">
                   Создать роль
                 </Button>
               </CardFooter>
@@ -867,17 +867,17 @@ export default function EmployeesModulePage() {
       {/* МОДАЛКА: Настройка Матрицы Доступов (ACL Matrix) */}
       {editingRole && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
-          <Card className="w-full max-w-3xl bg-slate-900 border-slate-800 text-white shadow-2xl max-h-[90vh] flex flex-col">
-            <CardHeader className="border-b border-slate-800 flex-shrink-0">
+          <Card className="w-full max-w-3xl bg-muted border-border text-foreground shadow-2xl max-h-[90vh] flex flex-col">
+            <CardHeader className="border-b border-border flex-shrink-0">
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle className="text-base font-bold flex items-center">
                     <Settings className="h-5 w-5 mr-2 text-emerald-400" />
                     Матрица Доступов Роли: {editingRole.name}
                   </CardTitle>
-                  <CardDescription className="text-xs text-slate-400">Настройте гибкие разрешения отдельно для каждого модуля платформы.</CardDescription>
+                  <CardDescription className="text-xs text-muted-foreground">Настройте гибкие разрешения отдельно для каждого модуля платформы.</CardDescription>
                 </div>
-                <button onClick={() => setEditingRole(null)} className="text-slate-400 hover:text-white">
+                <button onClick={() => setEditingRole(null)} className="text-muted-foreground hover:text-foreground">
                   <X className="h-5 w-5" />
                 </button>
               </div>
@@ -886,8 +886,8 @@ export default function EmployeesModulePage() {
             <CardContent className="space-y-4 pt-4 overflow-y-auto flex-1 text-xs">
               <div className="space-y-4">
                 {Object.entries(MODULE_CONFIG).map(([modId, modConf]) => (
-                  <div key={modId} className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 space-y-3">
-                    <span className="font-bold text-white text-sm font-mono flex items-center">
+                  <div key={modId} className="p-4 rounded-xl bg-background/80 border border-border space-y-3">
+                    <span className="font-bold text-foreground text-sm font-mono flex items-center">
                       <ShieldAlert className="h-4 w-4 mr-2 text-blue-400" />
                       {modConf.label}
                     </span>
@@ -901,14 +901,14 @@ export default function EmployeesModulePage() {
                             className={`flex items-center space-x-2.5 p-2.5 rounded-xl border cursor-pointer transition-all ${
                               isChecked
                                 ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-300 font-bold'
-                                : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'
+                                : 'bg-muted border-border text-muted-foreground hover:border-slate-700'
                             }`}
                           >
                             <input
                               type="checkbox"
                               checked={isChecked}
                               onChange={() => togglePermission(modId, act.key)}
-                              className="rounded border-slate-700 bg-slate-950 text-emerald-500 focus:ring-0 h-4 w-4 flex-shrink-0"
+                              className="rounded border-slate-700 bg-background text-emerald-500 focus:ring-0 h-4 w-4 flex-shrink-0"
                             />
                             <span className="text-xs">{act.label}</span>
                           </label>
@@ -920,11 +920,11 @@ export default function EmployeesModulePage() {
               </div>
             </CardContent>
 
-            <CardFooter className="border-t border-slate-800 pt-4 flex justify-end space-x-2 flex-shrink-0">
-              <Button variant="outline" onClick={() => setEditingRole(null)} className="border-slate-800 text-slate-300 text-xs">
+            <CardFooter className="border-t border-border pt-4 flex justify-end space-x-2 flex-shrink-0">
+              <Button variant="outline" onClick={() => setEditingRole(null)} className="border-border text-foreground text-xs">
                 Отмена
               </Button>
-              <Button onClick={handleSaveRoleMatrix} disabled={isPending} className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg shadow-emerald-600/20">
+              <Button onClick={handleSaveRoleMatrix} disabled={isPending} className="bg-emerald-600-white font-bold text-xs shadow-lg shadow-emerald-600/20">
                 {isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Check className="h-4 w-4 mr-2" />}
                 Сохранить матрицу прав
               </Button>

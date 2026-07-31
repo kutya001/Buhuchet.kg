@@ -82,14 +82,13 @@ export function DashboardShell({
             <Link
               href="/dashboard"
               prefetch={true}
-              className={`flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                isActive('/dashboard')
-                  ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30 font-bold'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+              className={`flex items-center space                  isActive('/dashboard')
+                    ? 'bg-blue-600/20 text-blue-500 dark:text-blue-400 border border-blue-500/30 font-bold'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
               }`}
               title="Главная"
             >
-              <LayoutDashboard className="h-4 w-4 text-blue-400 flex-shrink-0" />
+              <LayoutDashboard className="h-4 w-4 text-blue-500 dark:text-blue-400 flex-shrink-0" />
               {!isCollapsed && <span className="truncate">Главная</span>}
             </Link>
 
@@ -99,12 +98,12 @@ export function DashboardShell({
                 prefetch={true}
                 className={`flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
                   isActive('/dashboard/documents')
-                    ? 'bg-sky-600/20 text-sky-400 border border-sky-500/30 font-bold'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                    ? 'bg-sky-600/20 text-sky-500 dark:text-sky-400 border border-sky-500/30 font-bold'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
                 }`}
                 title="Документы"
               >
-                <FileText className="h-4 w-4 text-sky-400 flex-shrink-0" />
+                <FileText className="h-4 w-4 text-sky-500 dark:text-sky-400 flex-shrink-0" />
                 {!isCollapsed && <span className="truncate">Документы</span>}
               </Link>
             )}
@@ -115,12 +114,12 @@ export function DashboardShell({
                 prefetch={true}
                 className={`flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
                   isActive('/dashboard/counterparties')
-                    ? 'bg-amber-600/20 text-amber-400 border border-amber-500/30 font-bold'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                    ? 'bg-amber-600/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 font-bold'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
                 }`}
                 title="Организации"
               >
-                <Users className="h-4 w-4 text-amber-400 flex-shrink-0" />
+                <Users className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
                 {!isCollapsed && <span className="truncate">Организации</span>}
               </Link>
             )}
@@ -131,12 +130,12 @@ export function DashboardShell({
                 prefetch={true}
                 className={`flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
                   isActive('/dashboard/files')
-                    ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 font-bold'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                    ? 'bg-emerald-600/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 font-bold'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
                 }`}
                 title="Реестр Файлов"
               >
-                <FolderOpen className="h-4 w-4 text-emerald-400 flex-shrink-0" />
+                <FolderOpen className="h-4 w-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
                 {!isCollapsed && <span className="truncate">Реестр Файлов</span>}
               </Link>
             )}
@@ -147,12 +146,12 @@ export function DashboardShell({
                 prefetch={true}
                 className={`flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
                   isActive('/dashboard/company')
-                    ? 'bg-slate-700/30 text-white border border-slate-600/30 font-bold'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                    ? 'bg-muted text-foreground border border-border font-bold'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
                 }`}
                 title="Моя Организация"
               >
-                <Building2 className="h-4 w-4 text-slate-400 flex-shrink-0" />
+                <Building2 className="h-4 w-4 text-foreground flex-shrink-0" />
                 {!isCollapsed && <span className="truncate">Моя Организация</span>}
               </Link>
             )}
@@ -163,8 +162,8 @@ export function DashboardShell({
                 prefetch={true}
                 className={`flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
                   isActive('/dashboard/employees')
-                    ? 'bg-purple-600/20 text-purple-400 border border-purple-500/30 font-bold'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                    ? 'bg-purple-600/20 text-purple-600 dark:text-purple-400 border border-purple-500/30 font-bold'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
                 }`}
                 title="Сотрудники и Роли"
               >

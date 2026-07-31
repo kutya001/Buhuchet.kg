@@ -222,7 +222,7 @@ export default function CompanyProfilePage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64 text-slate-400">
+      <div className="flex items-center justify-center h-64 text-muted-foreground">
         <Loader2 className="h-8 w-8 animate-spin mr-2" />
         <span>Загрузка профиля компании...</span>
       </div>
@@ -258,13 +258,13 @@ export default function CompanyProfilePage() {
       )}
 
       {/* Вкладки Раздела */}
-      <div className="flex items-center space-x-2 border-b border-slate-800 pb-2">
+      <div className="flex items-center space-x-2 border-b border-border pb-2">
         <button
           onClick={() => setActiveTab('profile')}
           className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs md:text-sm font-medium transition-all ${
             activeTab === 'profile'
               ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+              : 'text-muted-foreground hover:text-slate-200 hover:bg-muted'
           }`}
         >
           <Building2 className="h-4 w-4" />
@@ -276,7 +276,7 @@ export default function CompanyProfilePage() {
           className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs md:text-sm font-medium transition-all ${
             activeTab === 'legal_docs'
               ? 'bg-purple-600/20 text-purple-400 border border-purple-500/30'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+              : 'text-muted-foreground hover:text-slate-200 hover:bg-muted'
           }`}
         >
           <FileText className="h-4 w-4" />
@@ -286,12 +286,12 @@ export default function CompanyProfilePage() {
 
       {/* 1. Вкладка Профиль & Реквизиты */}
       {activeTab === 'profile' && company && (
-        <Card className="bg-slate-900/40 border-slate-800 p-6 space-y-6">
+        <Card className="bg-muted/40 border-border p-6 space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-4">
               <div>
                 <Label className="text-xs text-slate-500">Наименование</Label>
-                <p className="text-lg font-bold text-white mt-0.5">{company.name}</p>
+                <p className="text-lg font-bold text-foreground mt-0.5">{company.name}</p>
               </div>
 
               <div>
@@ -346,7 +346,7 @@ export default function CompanyProfilePage() {
                 <Button
                   onClick={handleSaveLegalDocs}
                   disabled={isPending || uploadFiles.some((f) => f.uploading)}
-                  className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs md:text-sm min-h-[48px] px-6 shadow-lg shadow-purple-600/20"
+                  className="bg-purple-600-white font-bold text-xs md:text-sm min-h-[48px] px-6 shadow-lg shadow-purple-600/20"
                 >
                   {isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
                   Сохранить ({uploadFiles.length}) в Учредительные Документы
@@ -384,7 +384,7 @@ export default function CompanyProfilePage() {
                 key: 'size_bytes',
                 label: 'Размер',
                 sortable: true,
-                render: (doc) => <span className="font-mono text-xs text-slate-400">{formatBytes(doc.size_bytes)}</span>,
+                render: (doc) => <span className="font-mono text-xs text-muted-foreground">{formatBytes(doc.size_bytes)}</span>,
               },
               {
                 key: 'actions',
@@ -397,7 +397,7 @@ export default function CompanyProfilePage() {
                         size="sm"
                         variant="outline"
                         onClick={() => handleDownloadR2File(doc.file_path_r2!)}
-                        className="border-slate-800 text-purple-400 text-xs min-h-[36px]"
+                        className="border-border text-purple-400 text-xs min-h-[36px]"
                       >
                         <Download className="h-3.5 w-3.5 mr-1" />
                         Скачать
@@ -407,7 +407,7 @@ export default function CompanyProfilePage() {
                       size="sm"
                       variant="ghost"
                       onClick={() => handleOpenEdit(doc)}
-                      className="h-8 w-8 p-0 text-slate-400 hover:text-blue-400"
+                      className="h-8 w-8 p-0 text-muted-foreground hover:text-blue-400"
                     >
                       <Edit2 className="h-4 w-4" />
                     </Button>
@@ -415,7 +415,7 @@ export default function CompanyProfilePage() {
                       size="sm"
                       variant="ghost"
                       onClick={() => handleDeleteDoc(doc.id)}
-                      className="h-8 w-8 p-0 text-slate-400 hover:text-red-400"
+                      className="h-8 w-8 p-0 text-muted-foreground hover:text-red-400"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -491,7 +491,7 @@ export default function CompanyProfilePage() {
               type="file"
               accept="image/*,.pdf"
               onChange={(e) => e.target.files?.[0] && setReplacingFile(e.target.files[0])}
-              className="text-xs text-slate-400 file:mr-2 file:py-2 file:px-3 file:rounded-xl file:border-0 file:bg-slate-800 file:text-slate-200"
+              className="text-xs text-muted-foreground file:mr-2 file:py-2 file:px-3 file:rounded-xl file:border-0 file:bg-accent file:text-slate-200"
             />
             {replacingFile && (
               <p className="text-[11px] text-emerald-400 font-mono">

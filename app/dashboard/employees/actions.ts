@@ -108,7 +108,57 @@ export async function getCompanyRolesAction(): Promise<ActionResponse<CompanyRol
       return { success: false, error: `Ошибка загрузки ролей: ${error.message}` };
     }
 
-    return { success: true, data: (roles || []) as CompanyRole[] };
+    let fetchedRoles = (roles || []) as CompanyRole[];
+
+    // Если ролей нет (например RPC не отработал), создаем дефолтные через API
+    if (fetchedRoles.length === 0 && ctx.companyId) {
+      const defaultRoles = [
+        {
+          company_id: ctx.companyId,
+          name: 'Главный Бухгалтер',
+          description: 'Полный доступ к документам, контрагентам и финансам. Управление сотрудниками.',
+          is_system: true,
+          permissions: { documents: ['view', 'create', 'edit', 'delete'], counterparties: ['view', 'create', 'edit', 'delete'] }
+        },
+        {
+          company_id: ctx.companyId,
+          name: 'Менеджер по продажам',
+          description: 'Создание и отправка первичной документации (накладные, акты).',
+          is_system: true,
+          permissions: { documents: ['view', 'create'], counterparties: ['view'] }
+        },
+        {
+          company_id: ctx.companyId,
+          name: 'Аудитор (Чтение)',
+          description: 'Режим только для чтения. Просмотр реестров без права редактирования.',
+          is_system: true,
+          permissions: { documents: ['view'], counterparties: ['view'], files: ['view'] }
+        }
+      ];
+      
+      const { data: insertedRoles } = await adminSupabase
+        .from('company_roles')
+        .insert(defaultRoles)
+        .select('*');
+        
+      if (insertedRoles) {
+        fetchedRoles = insertedRoles as CompanyRole[];
+      }
+    }
+
+    // Добавляем системную роль Владельца
+    const ownerRole: CompanyRole = {
+      id: 'owner-system-role',
+      company_id: ctx.companyId as string,
+      name: 'Владелец (Owner)',
+      description: 'Полный доступ ко всем модулям и настройкам компании. Эту роль нельзя изменить или удалить.',
+      is_system: true,
+      permissions: { '*': ['*'] },
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    return { success: true, data: [ownerRole, ...fetchedRoles] };
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : 'Сбой загрузки ролей';
     return { success: false, error: errorMsg };

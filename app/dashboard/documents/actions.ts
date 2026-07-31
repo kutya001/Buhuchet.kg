@@ -62,7 +62,7 @@ export async function getB2BDocumentsAction(
 
     const { data: docs, count, error } = await adminSupabase
       .from('documents')
-      .select('id, doc_number, doc_date, doc_type, status, total_amount, comment, mock_file_name, mock_file_size, created_at, sender_company_id, receiver_company_id, sender_user_id, receiver_user_id, sender_company:companies!sender_company_id(name, inn), receiver_company:companies!receiver_company_id(name, inn), files(id, file_name, size_bytes), sender_user:users!sender_user_id(full_name, position), receiver_user:users!receiver_user_id(full_name, position), author:users!author_id(full_name)', { count: 'exact' })
+      .select('id, doc_number, doc_date, doc_type, status, total_amount, comment, mock_file_name, mock_file_size, created_at, sender_company_id, receiver_company_id, sender_company:companies!sender_company_id(name, inn), receiver_company:companies!receiver_company_id(name, inn), files(id, file_name, size_bytes), author:users!author_id(full_name)', { count: 'exact' })
       .or(`sender_company_id.eq.${ctx.companyId},receiver_company_id.eq.${ctx.companyId}`)
       .order('created_at', { ascending: false })
       .range(from, to);
@@ -105,7 +105,7 @@ export async function getB2BDocumentByIdAction(docId: string): Promise<ActionRes
 
     const { data: doc, error } = await adminSupabase
       .from('documents')
-      .select('*, sender_company:companies!sender_company_id(*), receiver_company:companies!receiver_company_id(*), sender_user:users!sender_user_id(full_name, position), receiver_user:users!receiver_user_id(full_name, position), files(*, file_categories(*)), document_logs(*, user:users!user_id(full_name)), author:users!author_id(full_name)')
+      .select('*, sender_company:companies!sender_company_id(*), receiver_company:companies!receiver_company_id(*), files(*, file_categories(*)), document_logs(*, user:users!user_id(full_name)), author:users!author_id(full_name, role)')
       .eq('id', docId)
       .single();
 
@@ -348,7 +348,6 @@ export async function createB2BDocumentAction(data: B2BDocumentInput): Promise<A
         company_id: ctx.companyId,
         author_id: ctx.userId,
         sender_company_id: ctx.companyId,
-        sender_user_id: ctx.userId,
         receiver_company_id,
         doc_number: doc_number || null,
         doc_date,
@@ -497,10 +496,6 @@ export async function updateB2BDocumentStatusAction(
       status: newStatus,
       updated_at: new Date().toISOString(),
     };
-
-    if (isReceiver && (newStatus === 'accepted' || newStatus === 'processed')) {
-      updatePayload.receiver_user_id = ctx.userId;
-    }
 
     // Обновляем статус через Admin Client
     const { error: updateError } = await adminSupabase

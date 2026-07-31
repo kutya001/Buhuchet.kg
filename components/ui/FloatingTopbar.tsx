@@ -171,18 +171,18 @@ export function FloatingTopbar({
           </div>
 
           {/* Часы КР */}
-          <div className="hidden lg:flex items-center space-x-1.5 px-2.5 py-1 rounded-xl bg-slate-950/60 border border-slate-800 text-xs font-mono text-slate-300">
+          <div className="hidden lg:flex items-center space-x-1.5 px-2.5 py-1 rounded-xl bg-background/60 border border-border text-xs font-mono text-muted-foreground">
             <Clock className="h-3.5 w-3.5 text-blue-400" />
             <span>{timeStr}</span>
-            <span className="text-slate-600">|</span>
-            <span className="text-slate-400">{dateStr}</span>
+            <span className="text-muted-foreground/50">|</span>
+            <span className="text-muted-foreground">{dateStr}</span>
           </div>
 
           {/* Мобильные 3 ТОЧКИ (...) */}
           <button
             type="button"
             onClick={() => setIsMoreOpen(true)}
-            className="md:hidden flex h-8 sm:h-9 w-8 sm:w-9 items-center justify-center rounded-xl bg-slate-800/80 border border-slate-700/60 text-slate-200 hover:text-white active:scale-95 transition-all shadow-lg"
+            className="md:hidden flex h-8 sm:h-9 w-8 sm:w-9 items-center justify-center rounded-xl bg-muted/80 border border-border text-muted-foreground hover:text-foreground active:scale-95 transition-all shadow-lg"
             title="Открыть все страницы"
           >
             <MoreHorizontal className="h-5 w-5" />
@@ -193,7 +193,7 @@ export function FloatingTopbar({
       {/* 2. АНИМИРОВАННО ВЫЕДВИГАЮЩАЯСЯ ВНИЗ УНИВЕРСАЛЬНАЯ ПАНЕЛЬ ПОИСКА */}
       {isSearchOpen && (
         <div
-          className={`fixed top-16 left-2 right-2 z-40 p-3 rounded-2xl bg-slate-900/95 backdrop-blur-2xl border border-slate-800 shadow-2xl transition-all duration-300 animate-in slide-in-from-top ${
+          className={`fixed top-16 left-2 right-2 z-40 p-3 rounded-2xl bg-card/95 backdrop-blur-2xl border border-border shadow-2xl transition-all duration-300 animate-in slide-in-from-top ${
             isSidebarCollapsed ? 'md:left-[88px]' : 'md:left-[264px]'
           }`}
         >
@@ -204,19 +204,19 @@ export function FloatingTopbar({
               value={searchValue}
               onChange={(e) => handleSearchChange(e.target.value)}
               placeholder="Универсальный поиск по документам, файлам R2 и контрагентам КР..."
-              className="pl-10 pr-9 bg-slate-950/80 border-slate-800 text-slate-100 text-xs sm:text-sm h-11 rounded-xl focus:ring-blue-500"
+              className="pl-10 pr-9 bg-background/80 border-border text-foreground text-xs sm:text-sm h-11 rounded-xl focus:ring-blue-500"
             />
             {searchValue ? (
               <button
                 onClick={() => handleSearchChange('')}
-                className="absolute right-3 p-1 text-slate-400 hover:text-white"
+                className="absolute right-3 p-1 text-muted-foreground hover:text-foreground"
               >
                 <X className="h-4 w-4" />
               </button>
             ) : (
               <button
                 onClick={() => setIsSearchOpen(false)}
-                className="absolute right-3 p-1 text-slate-500 hover:text-slate-300 text-xs font-mono"
+                className="absolute right-3 p-1 text-muted-foreground hover:text-foreground text-xs font-mono"
               >
                 ESC
               </button>
@@ -230,18 +230,18 @@ export function FloatingTopbar({
         <div className="md:hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-end justify-center p-0">
           <div className="absolute inset-0" onClick={() => setIsMoreOpen(false)} />
 
-          <div className="relative w-full bg-slate-900/95 border-t border-slate-800 rounded-t-3xl p-5 space-y-4 max-h-[85vh] overflow-y-auto z-10 animate-in slide-in-from-bottom duration-300 shadow-2xl backdrop-blur-2xl">
-            <div className="w-12 h-1 bg-slate-700 rounded-full mx-auto mb-1" />
+          <div className="relative w-full bg-card/95 border-t border-border rounded-t-3xl p-5 space-y-4 max-h-[85vh] overflow-y-auto z-10 animate-in slide-in-from-bottom duration-300 shadow-2xl backdrop-blur-2xl">
+            <div className="w-12 h-1 bg-border rounded-full mx-auto mb-1" />
 
-            <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+            <div className="flex items-center justify-between pb-2 border-b border-border">
               <div>
-                <h3 className="font-bold text-white text-base">Меню Навигации</h3>
-                <p className="text-xs text-slate-400 font-mono truncate">{companyName || userEmail}</p>
+                <h3 className="font-bold text-foreground text-base">Меню Навигации</h3>
+                <p className="text-xs text-muted-foreground font-mono truncate">{companyName || userEmail}</p>
               </div>
               <button
                 type="button"
                 onClick={() => setIsMoreOpen(false)}
-                className="p-2 text-slate-400 hover:text-white rounded-full bg-slate-800/60"
+                className="p-2 text-muted-foreground hover:text-foreground rounded-full bg-muted/60"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -252,10 +252,10 @@ export function FloatingTopbar({
                 href="/dashboard"
                 prefetch={true}
                 onClick={() => setIsMoreOpen(false)}
-                className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 hover:border-blue-500/50 flex flex-col items-center justify-center text-center space-y-1.5 min-h-[72px]"
+                className="p-3.5 rounded-2xl bg-background/80 border border-border hover:border-blue-500/50 flex flex-col items-center justify-center text-center space-y-1.5 min-h-[72px]"
               >
                 <LayoutDashboard className="h-6 w-6 text-blue-400" />
-                <span className="text-xs font-semibold text-slate-200">Главная</span>
+                <span className="text-xs font-semibold text-foreground">Главная</span>
               </Link>
 
               {hasPermission(userProfile, 'documents', 'view') && (
@@ -263,10 +263,10 @@ export function FloatingTopbar({
                   href="/dashboard/documents"
                   prefetch={true}
                   onClick={() => setIsMoreOpen(false)}
-                  className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 hover:border-sky-500/50 flex flex-col items-center justify-center text-center space-y-1.5 min-h-[72px]"
+                  className="p-3.5 rounded-2xl bg-background/80 border border-border hover:border-sky-500/50 flex flex-col items-center justify-center text-center space-y-1.5 min-h-[72px]"
                 >
                   <FileText className="h-6 w-6 text-sky-400" />
-                  <span className="text-xs font-semibold text-slate-200">Документы</span>
+                  <span className="text-xs font-semibold text-foreground">Документы</span>
                 </Link>
               )}
 
@@ -275,10 +275,10 @@ export function FloatingTopbar({
                   href="/dashboard/counterparties"
                   prefetch={true}
                   onClick={() => setIsMoreOpen(false)}
-                  className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 hover:border-amber-500/50 flex flex-col items-center justify-center text-center space-y-1.5 min-h-[72px]"
+                  className="p-3.5 rounded-2xl bg-background/80 border border-border hover:border-amber-500/50 flex flex-col items-center justify-center text-center space-y-1.5 min-h-[72px]"
                 >
                   <Users className="h-6 w-6 text-amber-400" />
-                  <span className="text-xs font-semibold text-slate-200">Организации</span>
+                  <span className="text-xs font-semibold text-foreground">Организации</span>
                 </Link>
               )}
 
@@ -287,10 +287,10 @@ export function FloatingTopbar({
                   href="/dashboard/files"
                   prefetch={true}
                   onClick={() => setIsMoreOpen(false)}
-                  className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 hover:border-emerald-500/50 flex flex-col items-center justify-center text-center space-y-1.5 min-h-[72px]"
+                  className="p-3.5 rounded-2xl bg-background/80 border border-border hover:border-emerald-500/50 flex flex-col items-center justify-center text-center space-y-1.5 min-h-[72px]"
                 >
                   <FolderOpen className="h-6 w-6 text-emerald-400" />
-                  <span className="text-xs font-semibold text-slate-200">Реестр Файлов</span>
+                  <span className="text-xs font-semibold text-foreground">Реестр Файлов</span>
                 </Link>
               )}
 
@@ -299,10 +299,10 @@ export function FloatingTopbar({
                   href="/dashboard/company"
                   prefetch={true}
                   onClick={() => setIsMoreOpen(false)}
-                  className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 hover:border-blue-500/50 flex flex-col items-center justify-center text-center space-y-1.5 min-h-[72px]"
+                  className="p-3.5 rounded-2xl bg-background/80 border border-border hover:border-blue-500/50 flex flex-col items-center justify-center text-center space-y-1.5 min-h-[72px]"
                 >
-                  <Building2 className="h-6 w-6 text-slate-400" />
-                  <span className="text-xs font-semibold text-slate-200">Моя Организация</span>
+                  <Building2 className="h-6 w-6 text-foreground" />
+                  <span className="text-xs font-semibold text-foreground">Моя Организация</span>
                 </Link>
               )}
 
@@ -311,10 +311,10 @@ export function FloatingTopbar({
                   href="/dashboard/employees"
                   prefetch={true}
                   onClick={() => setIsMoreOpen(false)}
-                  className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 hover:border-purple-500/50 flex flex-col items-center justify-center text-center space-y-1.5 min-h-[72px]"
+                  className="p-3.5 rounded-2xl bg-background/80 border border-border hover:border-purple-500/50 flex flex-col items-center justify-center text-center space-y-1.5 min-h-[72px]"
                 >
                   <Users className="h-6 w-6 text-purple-400" />
-                  <span className="text-xs font-semibold text-slate-200">Сотрудники</span>
+                  <span className="text-xs font-semibold text-foreground">Сотрудники</span>
                 </Link>
               )}
 
@@ -322,10 +322,10 @@ export function FloatingTopbar({
                 href="/dashboard/profile"
                 prefetch={true}
                 onClick={() => setIsMoreOpen(false)}
-                className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 hover:border-blue-500/50 flex flex-col items-center justify-center text-center space-y-1.5 min-h-[72px]"
+                className="p-3.5 rounded-2xl bg-background/80 border border-border hover:border-blue-500/50 flex flex-col items-center justify-center text-center space-y-1.5 min-h-[72px]"
               >
                 <User className="h-6 w-6 text-amber-400" />
-                <span className="text-xs font-semibold text-slate-200">Мой Профиль</span>
+                <span className="text-xs font-semibold text-foreground">Мой Профиль</span>
               </Link>
 
               {isSuperAdmin && (
@@ -341,7 +341,7 @@ export function FloatingTopbar({
               )}
             </div>
 
-            <div className="pt-2 border-t border-slate-800">
+            <div className="pt-2 border-t border-border">
               <form action={signOutAction}>
                 <button
                   type="submit"

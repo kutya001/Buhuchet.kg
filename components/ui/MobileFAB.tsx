@@ -83,16 +83,16 @@ export function MobileFAB() {
 
       {/* Нативная Нижняя Шторка (Bottom Sheet) быстрых действий */}
       {isOpen && (
-        <div className="md:hidden fixed inset-0 z-50 flex items-end justify-center bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="w-full bg-slate-900 border-t border-slate-800 rounded-t-3xl p-6 space-y-4 shadow-2xl animate-in slide-in-from-bottom duration-300">
+        <div className="md:hidden fixed inset-0 z-50 flex items-end justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full bg-card border-t border-border rounded-t-3xl p-6 space-y-4 shadow-2xl animate-in slide-in-from-bottom duration-300">
             {/* Полоска-индикатор шторки */}
-            <div className="w-12 h-1.5 bg-slate-700 rounded-full mx-auto mb-2 opacity-80" />
+            <div className="w-12 h-1.5 bg-border rounded-full mx-auto mb-2 opacity-80" />
 
-            <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-              <h3 className="text-base font-bold text-white">Быстрые Действия</h3>
+            <div className="flex items-center justify-between pb-2 border-b border-border">
+              <h3 className="text-base font-bold text-foreground">Быстрые Действия</h3>
               <button
                 onClick={() => setIsOpen(false)}
-                className="p-1 rounded-full text-slate-400 hover:text-white"
+                className="p-1 rounded-full text-muted-foreground hover:text-foreground"
               >
                 <X className="h-5 w-5" />
               </button>
