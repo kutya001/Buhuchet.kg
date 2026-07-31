@@ -91,6 +91,8 @@ import { SuperAdminTelegramTab } from '@/components/super-admin/SuperAdminTelegr
 
 import { SuperAdminSidebar, SuperAdminTab } from '@/components/super-admin/SuperAdminSidebar';
 import { FloatingTopbar } from '@/components/ui/FloatingTopbar';
+import { MobileFAB } from '@/components/ui/MobileFAB';
+import { cn } from '@/lib/utils';
 
 export default function SuperAdminPage() {
   const [activeTab, setActiveTab] = useState<SuperAdminTab>('companies');
@@ -184,23 +186,23 @@ export default function SuperAdminPage() {
         if (res.success && res.data) setAllUsers(res.data);
         setLoading(false);
       });
-    } else if (activeTab === 'files' && systemFiles.length === 0) {
+    } else if (activeTab === 'r2_files' && systemFiles.length === 0) {
       setLoading(true);
       getAllSystemFilesAction().then((res) => {
         if (res.success && res.data) setSystemFiles(res.data);
         setLoading(false);
       });
-    } else if (activeTab === 'documents' && allDocuments.length === 0) {
+    } else if (activeTab === 'edo_documents' && allDocuments.length === 0) {
       setLoading(true);
       getAllDocumentsAdminAction().then((res) => {
         if (res.success && res.data) setAllDocuments(res.data);
         setLoading(false);
       });
-    } else if (activeTab === 'lookups' && categories.length === 0) {
+    } else if (activeTab === 'dictionaries' && categories.length === 0) {
       supabase.from('file_categories').select('*').order('name').then((res) => {
         if (res.data) setCategories(res.data as FileCategory[]);
       });
-    } else if (activeTab === 'database') {
+    } else if (activeTab === 'db_inspector') {
       loadDbInspectorData(selectedDbTable);
     }
   }, [activeTab, selectedDbTable]);
@@ -946,21 +948,16 @@ export default function SuperAdminPage() {
 
       {/* Основной Контент Панели */}
       <div className="flex-1 flex flex-col min-w-0">
-        <FloatingTopbar companyName="Buhuchet.kg Administration" isSuperAdmin={true} />
+        <FloatingTopbar
+          companyName="Buhuchet.kg Administration"
+          isSuperAdmin={true}
+          onLogout={() => {
+            window.location.href = '/login';
+          }}
+        />
 
-        <main className="p-6 md:p-8 overflow-y-auto max-w-7xl mx-auto space-y-6 w-full flex-1">
-          {/* 1. ШАПКА ПАНЕЛИ СУПЕРАДМИНИСТРАТОРА */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/80 pb-4">
-          <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight flex items-center">
-              <Shield className="h-6 w-6 mr-2 text-red-500" />
-              Панель Суперадминистратора Buhuchet.kg
-            </h1>
-            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-              Полный контроль верификации компаний КР, пользователей, файлов R2 и базы данных
-            </p>
-          </div>
-        </div>
+        <main className="p-4 sm:p-6 lg:p-8 overflow-y-auto flex-1">
+          <div className="space-y-6">
 
         {msg && (
           <Alert
@@ -1051,7 +1048,7 @@ export default function SuperAdminPage() {
       )}
 
       {/* ------------------- РАЗДЕЛ 3: ВСЕ ФАЙЛЫ R2 ------------------- */}
-      {activeTab === 'files' && (
+      {activeTab === 'r2_files' && (
         <UnifiedDataGrid<any>
           columns={systemFilesColumns}
           data={systemFiles}
@@ -1064,7 +1061,7 @@ export default function SuperAdminPage() {
       )}
 
       {/* ------------------- РАЗДЕЛ 4: B2B ДОКУМЕНТЫ ------------------- */}
-      {activeTab === 'documents' && (
+      {activeTab === 'edo_documents' && (
         <UnifiedDataGrid<any>
           columns={systemDocumentsColumns}
           data={allDocuments}
@@ -1077,14 +1074,14 @@ export default function SuperAdminPage() {
       )}
 
       {/* ------------------- РАЗДЕЛ 5: СПРАВОЧНИКИ КАТЕГОРИЙ ------------------- */}
-      {activeTab === 'lookups' && (
+      {activeTab === 'dictionaries' && (
         <UnifiedDataGrid<FileCategory>
           columns={[
             {
               key: 'name',
               label: 'Наименование Категории',
               sortable: true,
-              render: (cat) => <span className="font-bold text-white text-sm">{cat.name}</span>,
+              render: (cat) => <span className="font-bold text-foreground text-sm">{cat.name}</span>,
             },
             {
               key: 'code',
@@ -1096,7 +1093,7 @@ export default function SuperAdminPage() {
               key: 'description',
               label: 'Описание',
               sortable: true,
-              render: (cat) => <span className="text-xs text-slate-400">{cat.description || '—'}</span>,
+              render: (cat) => <span className="text-xs text-muted-foreground">{cat.description || '—'}</span>,
             },
           ]}
           data={categories}
@@ -1119,7 +1116,7 @@ export default function SuperAdminPage() {
       )}
 
       {/* ------------------- РАЗДЕЛ 6: ИНСПЕКТОР БАЗЫ ДАННЫХ ------------------- */}
-      {activeTab === 'database' && (
+      {activeTab === 'db_inspector' && (
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900/40 p-4 rounded-2xl border border-slate-800">
             <div>
@@ -1357,8 +1354,17 @@ export default function SuperAdminPage() {
           </div>
         </div>
       </UnifiedFormModal>
+        </div>
         </main>
       </div>
+
+      {/* Мобильная кнопка быстрой помощи/создания */}
+      <MobileFAB
+        onClick={() => {
+          alert(`Панель Суперадминистратора: выбран раздел ${activeTab}`);
+        }}
+        title="Создать"
+      />
     </div>
   );
 }
