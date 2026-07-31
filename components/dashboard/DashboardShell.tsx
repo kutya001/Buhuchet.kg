@@ -73,7 +73,7 @@ export function DashboardShell({
             {!isCollapsed && (
               <div className="transition-opacity duration-300">
                 <span className="font-bold text-lg text-foreground tracking-tight">Buhuchet.kg</span>
-                <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-mono">B2B Network</p>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-mono">ЭДО Платформа</p>
               </div>
             )}
           </div>

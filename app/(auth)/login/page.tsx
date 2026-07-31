@@ -39,7 +39,7 @@ export default async function LoginPage({
             </div>
           </Link>
           <CardTitle className="text-2xl font-bold text-foreground tracking-tight">
-            Вход в B2B Сеть Buhuchet.kg
+            Вход в систему Buhuchet.kg
           </CardTitle>
           <CardDescription className="text-muted-foreground text-sm">
             Платформа обмена первичными документами и сканами КР

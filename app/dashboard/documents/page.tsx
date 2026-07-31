@@ -355,7 +355,7 @@ export default function B2BDocumentsRegistryPage() {
         keyExtractor={(d) => d.id}
         renderCard={renderDocumentCard}
         searchPlaceholder="Поиск по № документа, контрагенту, сумме..."
-        emptyMessage="Документы не найдены. Создайте первый B2B документ."
+        emptyMessage="Документы не найдены. Создайте первый документ."
         isLoading={loading}
         defaultPageSize={25}
       />

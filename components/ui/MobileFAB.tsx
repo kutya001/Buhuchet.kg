@@ -101,7 +101,7 @@ export function MobileFAB() {
             {uploading ? (
               <div className="flex items-center justify-center space-x-2 py-6 text-blue-400">
                 <Loader2 className="h-6 w-6 animate-spin" />
-                <span className="text-sm font-medium">Передача снимка в Cloudflare R2...</span>
+                <span className="text-sm font-medium">Передача снимка в облако...</span>
               </div>
             ) : (
               <div className="space-y-3 pt-1">

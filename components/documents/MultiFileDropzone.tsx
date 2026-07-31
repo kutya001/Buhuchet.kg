@@ -249,7 +249,7 @@ export function MultiFileDropzone({
       {globalUploading && (
         <div className="flex items-center justify-center space-x-2 py-3 text-blue-400 bg-blue-500/10 rounded-xl border border-blue-500/20">
           <Loader2 className="h-5 w-5 animate-spin" />
-          <span className="text-sm font-medium">Передача файлов в Cloudflare R2...</span>
+          <span className="text-sm font-medium">Передача файлов в защищённое облако...</span>
         </div>
       )}
 

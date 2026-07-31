@@ -42,7 +42,7 @@ export default async function RegisterPage({
             Регистрация Организации
           </CardTitle>
           <CardDescription className="text-muted-foreground text-sm">
-            Создайте аккаунт руководителя или бухгалтера B2B платформы
+            Создайте аккаунт руководителя или бухгалтера платформы документооборота
           </CardDescription>
         </CardHeader>
 

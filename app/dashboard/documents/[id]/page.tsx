@@ -387,7 +387,7 @@ export default function B2BDocumentDetailPage() {
 
         {/* Правая колонка: Реквизиты, Список сканов и История */}
         <div className={`lg:col-span-6 flex-col space-y-4 overflow-y-auto pr-1 ${mobileTab === 'details' ? 'flex' : 'hidden lg:flex'}`}>
-          {/* B2B Адресация */}
+          {/* Участники Документооборота */}
           <Card className="bg-background/40 border-border">
             <CardHeader className="pb-2 pt-4">
               <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider font-mono">

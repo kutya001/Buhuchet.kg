@@ -185,7 +185,7 @@ export default function NewB2BDocumentPage() {
 
     const unuploaded = filesState.filter((f) => f.uploading || !f.file_path_r2);
     if (unuploaded.length > 0) {
-      setMsg({ type: 'error', text: 'Дождитесь завершения загрузки всех файлов в Cloudflare R2' });
+      setMsg({ type: 'error', text: 'Дождитесь завершения загрузки всех файлов в облачный архив' });
       return;
     }
 
@@ -233,7 +233,7 @@ export default function NewB2BDocumentPage() {
         if (res.success && res.data) {
           router.push(`/dashboard/documents/${res.data.id}`);
         } else {
-          setMsg({ type: 'error', text: res.error || 'Ошибка отправки B2B документа' });
+          setMsg({ type: 'error', text: res.error || 'Ошибка отправки документа' });
         }
       }
     });

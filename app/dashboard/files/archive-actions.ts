@@ -13,7 +13,7 @@ const archiveFileSchema = z.object({
   file_name: z.string().min(1, { message: 'Укажите имя файла' }),
   file_size: z.union([z.number(), z.string()]).optional(),
   file_type: z.string().optional(),
-  file_path_r2: z.string().min(1, { message: 'Отсутствует ссылка Cloudflare R2' }),
+  file_path_r2: z.string().min(1, { message: 'Отсутствует ссылка на файл в хранилище' }),
   description: z.string().optional(),
   comment: z.string().optional(),
   is_legal_doc: z.boolean().optional(),

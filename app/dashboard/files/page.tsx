@@ -131,7 +131,7 @@ export default function CloudFilesRegistryPage() {
               : 'border-slate-700 text-slate-400'
           }
         >
-          {file.sourceType === 'document' && '📝 Документ B2B'}
+          {file.sourceType === 'document' && '📝 Электронный документ'}
           {file.sourceType === 'company' && '🏛️ Моя Организация'}
           {file.sourceType === 'counterparty' && '🤝 Контрагент'}
           {file.sourceType === 'manual' && '📂 Вручную'}

@@ -69,7 +69,7 @@ export default function HomePage() {
           <div className="min-w-0 truncate">
             <span className="font-bold text-sm sm:text-lg text-foreground tracking-tight truncate">Buhuchet.kg</span>
             <span className="hidden sm:inline-block ml-2 text-[10px] uppercase font-mono tracking-widest px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400">
-              B2B Network КР
+              ЭДО Платформа КР
             </span>
           </div>
         </div>
@@ -99,7 +99,7 @@ export default function HomePage() {
         <div className="text-center space-y-4 sm:space-y-6 max-w-4xl mx-auto">
           <div className="inline-flex items-center space-x-2 px-3 sm:px-4 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-[11px] sm:text-xs font-semibold text-amber-600 dark:text-amber-400 backdrop-blur-md shadow-sm max-w-full truncate">
             <Sparkles className="h-3.5 sm:h-4 w-3.5 sm:w-4 flex-shrink-0" />
-            <span className="truncate">Первая национальная платформа B2B документооборота КР</span>
+            <span className="truncate">Первая национальная платформа электронного документооборота КР</span>
           </div>
 
           <h1 className="text-2xl sm:text-5xl md:text-6xl font-black text-foreground tracking-tight leading-[1.15] break-words">

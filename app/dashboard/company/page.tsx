@@ -600,7 +600,7 @@ export default function CompanyProfilePage() {
           <div className="p-3 rounded-xl bg-background border border-border space-y-2">
             <Label className="text-xs text-purple-400 font-semibold flex items-center">
               <RefreshCw className="h-3.5 w-3.5 mr-1" />
-              Заменить сам скан в Cloudflare R2 (опционально)
+              Заменить сам скан в хранилище (опционально)
             </Label>
             <input
               type="file"

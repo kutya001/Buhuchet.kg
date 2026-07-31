@@ -59,7 +59,7 @@ export function ScanViewer({
           <span className="truncate">{fileName || 'Скан_документа.pdf'}</span>
           {fileKey && (
             <span className="text-[9px] uppercase font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-              Cloudflare R2
+              Облачный архив
             </span>
           )}
         </div>
