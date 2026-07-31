@@ -227,6 +227,10 @@ export async function forceSetTelegramWebhookAdminAction(targetUrl?: string): Pr
 
     const siteUrl = targetUrl
       ? targetUrl
+      : process.env.NEXT_PUBLIC_APP_URL
+      ? process.env.NEXT_PUBLIC_APP_URL
+      : process.env.VERCEL_PROJECT_PRODUCTION_URL
+      ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
       : process.env.VERCEL_URL
       ? `https://${process.env.VERCEL_URL}`
       : 'https://buhuchet.kg';

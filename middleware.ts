@@ -34,6 +34,11 @@ export async function middleware(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
 
+  // 🟢 ИСКЛЮЧЕНИЕ: Telegram Webhook должен быть публично доступен без сессии Supabase!
+  if (pathname.startsWith('/api/telegram/webhook')) {
+    return NextResponse.next();
+  }
+
   // ПУБЛИЧНЫЕ МАРШРУТЫ (Лендинг, Логин, Регистрация)
   const isPublicRoute = pathname === '/' || pathname === '/login' || pathname === '/register';
 
@@ -80,6 +85,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|api/telegram/webhook|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 };
