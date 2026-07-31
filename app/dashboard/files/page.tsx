@@ -170,7 +170,7 @@ export default function CloudFilesRegistryPage() {
       sortable: true,
       getValue: (f) => f.created_at,
       render: (file) => (
-        <span className="font-mono text-xs text-slate-400">
+        <span className="font-mono text-xs text-muted-foreground">
           {new Date(file.created_at).toLocaleDateString('ru-RU')}
         </span>
       ),
@@ -186,7 +186,7 @@ export default function CloudFilesRegistryPage() {
             variant="outline"
             onClick={() => handleDownloadR2(file.file_path_r2!, file.id)}
             disabled={downloadingId === file.id}
-            className="border-slate-800 text-slate-200 hover:bg-slate-800 text-xs min-h-[36px]"
+            className="border-border text-foreground hover:bg-muted text-xs min-h-[36px]"
           >
             {downloadingId === file.id ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
@@ -196,21 +196,21 @@ export default function CloudFilesRegistryPage() {
             R2 Ссылка
           </Button>
         ) : (
-          <span className="text-slate-500 text-xs">—</span>
+          <span className="text-muted-foreground text-xs">—</span>
         ),
     },
   ];
 
   // РЕНДЕР МОБИЛЬНОЙ КАРТОЧКИ
   const renderFileCard = (file: EnrichedFileItem) => (
-    <Card className="bg-slate-900/60 border-slate-800 p-4 space-y-3 shadow-lg">
+    <Card className="bg-card border-border p-4 space-y-3 shadow-lg">
       <div className="flex items-start justify-between">
         <div>
-          <h4 className="font-bold text-white text-sm font-mono flex items-center">
+          <h4 className="font-bold text-foreground text-sm font-mono flex items-center">
             <FileText className="h-4 w-4 mr-1.5 text-emerald-400" />
             {file.file_name}
           </h4>
-          <p className="text-xs text-slate-400 font-mono mt-0.5">{formatBytes(file.size_bytes)}</p>
+          <p className="text-xs text-muted-foreground font-mono mt-0.5">{formatBytes(file.size_bytes)}</p>
         </div>
 
         <Badge
@@ -222,7 +222,7 @@ export default function CloudFilesRegistryPage() {
               ? 'border-amber-500/40 text-amber-400 text-[10px]'
               : file.sourceType === 'counterparty'
               ? 'border-indigo-500/40 text-indigo-400 text-[10px]'
-              : 'border-slate-700 text-slate-400 text-[10px]'
+              : 'border-border text-muted-foreground text-[10px]'
           }
         >
           {file.sourceType === 'document' && '📝 Документ'}
@@ -232,7 +232,7 @@ export default function CloudFilesRegistryPage() {
         </Badge>
       </div>
 
-      <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-xs">
+      <div className="pt-2 border-t border-border flex items-center justify-between text-xs">
         <Link href={file.sourceUrl} className="inline-flex items-center space-x-1 text-emerald-400 font-semibold">
           <span className="truncate max-w-[180px]">{file.sourceTitle}</span>
           <ExternalLink className="h-3 w-3" />
@@ -244,7 +244,7 @@ export default function CloudFilesRegistryPage() {
             variant="outline"
             onClick={() => handleDownloadR2(file.file_path_r2!, file.id)}
             disabled={downloadingId === file.id}
-            className="border-slate-800 text-xs text-slate-200 min-h-[40px] px-3"
+            className="border-border text-xs text-foreground min-h-[40px] px-3 hover:bg-muted"
           >
             <Download className="h-3.5 w-3.5 mr-1 text-emerald-400" />
             R2
@@ -271,73 +271,55 @@ export default function CloudFilesRegistryPage() {
 
       {/* 2. БЛОК СТАТИСТИКИ И ПОДСЧЕТА ОБЪЕМА */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="bg-slate-900/60 border-slate-800 p-4 relative overflow-hidden shadow-lg">
+        <Card className="bg-card border-border p-4 relative overflow-hidden shadow-lg">
           <div className="flex items-center justify-between">
             <div>
-              <span className="text-xs text-slate-400 block">Всего в реестре</span>
-              <span className="text-2xl font-bold font-mono text-white mt-1 block">
-                {stats?.totalCount || 0} <span className="text-xs text-slate-400 font-normal">файлов</span>
+              <span className="text-xs text-muted-foreground block">Всего в реестре</span>
+              <span className="text-2xl font-bold font-mono text-foreground mt-1 block">
+                {stats?.totalCount || 0} <span className="text-xs text-muted-foreground font-normal">файлов</span>
               </span>
             </div>
             <div className="p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/20 text-emerald-400">
               <HardDrive className="h-6 w-6" />
             </div>
           </div>
-          <div className="mt-3 pt-2 border-t border-slate-800/80 flex items-center justify-between text-xs font-mono text-emerald-400">
+          <div className="mt-3 pt-2 border-t border-border flex items-center justify-between text-xs font-mono text-emerald-400">
             <span>Общий объем:</span>
             <span className="font-bold">{stats?.formattedTotalSize || '0 MB'} / 10 GB</span>
           </div>
         </Card>
 
-        <Card className="bg-slate-900/60 border-slate-800 p-4 relative overflow-hidden shadow-lg">
+        <Card className="bg-card border-border p-4 relative overflow-hidden shadow-lg">
           <div className="flex items-center justify-between">
             <div>
-              <span className="text-xs text-slate-400 block">Моя Организация</span>
-              <span className="text-2xl font-bold font-mono text-white mt-1 block">
-                {stats?.myCompanyFilesCount || 0} <span className="text-xs text-slate-400 font-normal">собственных</span>
-              </span>
-            </div>
-            <div className="p-3 bg-amber-500/10 rounded-xl border border-amber-500/20 text-amber-400">
-              <Building2 className="h-6 w-6" />
-            </div>
-          </div>
-          <div className="mt-3 pt-2 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
-            <span>Уставные и локальные:</span>
-            <span className="font-mono text-white">{stats?.bySource.company || 0} шт.</span>
-          </div>
-        </Card>
-
-        <Card className="bg-slate-900/60 border-slate-800 p-4 relative overflow-hidden shadow-lg">
-          <div className="flex items-center justify-between">
-            <div>
-              <span className="text-xs text-slate-400 block">Из B2B Документов</span>
-              <span className="text-2xl font-bold font-mono text-white mt-1 block">
-                {stats?.bySource.document || 0} <span className="text-xs text-slate-400 font-normal">сканов</span>
+              <span className="text-xs text-muted-foreground block">Из B2B Документов</span>
+              <span className="text-2xl font-bold font-mono text-foreground mt-1 block">
+                {stats?.bySource.document || 0} <span className="text-xs text-muted-foreground font-normal">сканов</span>
               </span>
             </div>
             <div className="p-3 bg-blue-500/10 rounded-xl border border-blue-500/20 text-blue-400">
               <FileCheck className="h-6 w-6" />
             </div>
           </div>
-          <div className="mt-3 pt-2 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
+          <div className="mt-3 pt-2 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
             <span>Накладные и акты:</span>
             <span className="font-mono text-blue-400 font-bold">100% соединены</span>
           </div>
         </Card>
 
-        <Card className="bg-slate-900/60 border-slate-800 p-4 relative overflow-hidden shadow-lg">
+        <Card className="bg-card border-border p-4 relative overflow-hidden shadow-lg">
           <div className="flex items-center justify-between">
             <div>
-              <span className="text-xs text-slate-400 block">Виды форматов</span>
-              <span className="text-base font-bold font-mono text-white mt-1 block">
-                {stats?.byType.pdf || 0} <span className="text-xs text-slate-400">PDF</span> • {stats?.byType.image || 0} <span className="text-xs text-slate-400">IMG</span>
+              <span className="text-xs text-muted-foreground block">Виды форматов</span>
+              <span className="text-base font-bold font-mono text-foreground mt-1 block">
+                {stats?.byType.pdf || 0} <span className="text-xs text-muted-foreground">PDF</span> • {stats?.byType.image || 0} <span className="text-xs text-muted-foreground">IMG</span>
               </span>
             </div>
             <div className="p-3 bg-purple-500/10 rounded-xl border border-purple-500/20 text-purple-400">
               <PieChart className="h-6 w-6" />
             </div>
           </div>
-          <div className="mt-3 pt-2 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
+          <div className="mt-3 pt-2 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
             <span>Прочее:</span>
             <span className="font-mono text-purple-400 font-bold">{stats?.byType.other || 0} шт.</span>
           </div>
@@ -345,25 +327,25 @@ export default function CloudFilesRegistryPage() {
       </div>
 
       {/* 3. ДОПОЛНИТЕЛЬНЫЕ ТУМБЛЕРЫ ФИЛЬТРАЦИИ */}
-      <div className="flex flex-wrap items-center gap-3 bg-slate-900/40 p-4 rounded-2xl border border-slate-800">
+      <div className="flex flex-wrap items-center gap-3 bg-card p-4 rounded-2xl border border-border shadow-md">
         <button
           onClick={() => setOnlyMyCompany(!onlyMyCompany)}
           className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all min-h-[40px] border ${
             onlyMyCompany
-              ? 'bg-amber-500/20 text-amber-400 border-amber-500/40 shadow-lg shadow-amber-500/10'
-              : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200'
+              ? 'bg-amber-500/20 text-amber-500 border-amber-500/40 shadow-lg shadow-amber-500/10'
+              : 'bg-background text-muted-foreground border-border hover:text-foreground hover:bg-muted'
           }`}
         >
-          <ShieldCheck className="h-4 w-4 text-amber-400" />
+          <ShieldCheck className="h-4 w-4 text-amber-500" />
           <span>Только файлы моей организации</span>
         </button>
 
         <div className="flex items-center space-x-1.5">
-          <Filter className="h-3.5 w-3.5 text-slate-400" />
+          <Filter className="h-3.5 w-3.5 text-muted-foreground" />
           <select
             value={sourceTypeFilter}
             onChange={(e) => setSourceTypeFilter(e.target.value as any)}
-            className="bg-slate-950 border border-slate-800 text-white text-xs rounded-xl px-3 py-2 min-h-[40px]"
+            className="bg-background border border-border text-foreground text-xs rounded-xl px-3 py-2 min-h-[40px] focus:outline-none focus:ring-2 focus:ring-ring"
           >
             <option value="all">Все Виды Источников</option>
             <option value="document">📝 Из B2B Документов</option>
@@ -376,7 +358,7 @@ export default function CloudFilesRegistryPage() {
         <select
           value={fileFormatFilter}
           onChange={(e) => setFileFormatFilter(e.target.value as any)}
-          className="bg-slate-950 border border-slate-800 text-white text-xs rounded-xl px-3 py-2 min-h-[40px]"
+          className="bg-background border border-border text-foreground text-xs rounded-xl px-3 py-2 min-h-[40px] focus:outline-none focus:ring-2 focus:ring-ring"
         >
           <option value="all">Все Форматы</option>
           <option value="pdf">📄 PDF Документы</option>
