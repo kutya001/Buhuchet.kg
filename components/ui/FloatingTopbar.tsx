@@ -1,17 +1,10 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Menu, Search, Clock, Moon, Sun, Coffee, MoreVertical, LogOut, X } from 'lucide-react';
+import { Menu, Search, Clock, Moon, Sun, Coffee, LogOut, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/components/theme/ThemeProvider';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-} from '@/components/ui/dropdown-menu';
 
 interface FloatingTopbarProps {
   companyName?: string;
@@ -89,7 +82,7 @@ export function FloatingTopbar({
                 <Input
                   autoFocus
                   onChange={(e) => onSearchChange?.(e.target.value)}
-                  placeholder="Поиск..."
+                  placeholder="Поиск по документам, ИНН..."
                   className="h-9 text-xs bg-muted/60 border-border rounded-xl flex-1 text-foreground"
                 />
                 <Button
@@ -128,7 +121,7 @@ export function FloatingTopbar({
               <span>{mounted ? dateStr : '--.--.----'}</span>
             </div>
 
-            {/* ЧИСТЫЕ ИКОНКИ ТЕМ (Без надписей Тёмная / Светлая / Тёплая) */}
+            {/* ЧИСТЫЕ ИКОНКИ ТЕМ */}
             <div className="inline-flex items-center p-1 rounded-xl bg-muted/40 border border-border/60 backdrop-blur-xl">
               <button
                 type="button"
@@ -181,64 +174,6 @@ export function FloatingTopbar({
                 <LogOut className="w-4 h-4" />
               </Button>
             )}
-          </div>
-        )}
-
-        {/* Правая часть (Мобилка): Меню «3 точки» */}
-        {!isSearchExpanded && (
-          <div className="flex md:hidden items-center gap-1">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl border border-border/60">
-                  <MoreVertical className="w-4 h-4 text-foreground" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56 p-2 space-y-1">
-                <div className="px-2 py-1.5 text-xs font-mono text-muted-foreground flex justify-between items-center bg-muted/40 rounded-lg" suppressHydrationWarning>
-                  <span className="font-bold text-foreground">{mounted ? timeStr : '--:--'}</span>
-                  <span>{mounted ? dateStr : '--.--'}</span>
-                </div>
-                <DropdownMenuSeparator />
-                <div className="px-2 py-1.5 space-y-1">
-                  <span className="text-[11px] font-medium text-muted-foreground">Тема оформления</span>
-                  <div className="flex gap-1 pt-1 justify-around bg-muted/40 p-1 rounded-xl">
-                    <button
-                      type="button"
-                      onClick={() => setTheme('dark')}
-                      className={`p-1.5 rounded-lg transition-all ${theme === 'dark' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}
-                      title="Тёмная"
-                    >
-                      <Moon className="w-4 h-4 text-blue-400" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setTheme('light')}
-                      className={`p-1.5 rounded-lg transition-all ${theme === 'light' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}
-                      title="Светлая"
-                    >
-                      <Sun className="w-4 h-4 text-amber-500" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setTheme('warm')}
-                      className={`p-1.5 rounded-lg transition-all ${theme === 'warm' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}
-                      title="Тёплая"
-                    >
-                      <Coffee className="w-4 h-4 text-amber-700" />
-                    </button>
-                  </div>
-                </div>
-                {onLogout && (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={onLogout} className="text-red-500 text-xs font-bold gap-2 cursor-pointer">
-                      <LogOut className="w-4 h-4" />
-                      <span>Выйти</span>
-                    </DropdownMenuItem>
-                  </>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
           </div>
         )}
       </div>
