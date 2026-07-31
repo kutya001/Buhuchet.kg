@@ -1,18 +1,15 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import {
   Send,
   RefreshCw,
   CheckCircle2,
-  AlertTriangle,
-  XCircle,
   Loader2,
   Unlink,
   Activity,
@@ -32,6 +29,7 @@ import {
   type TelegramAdminStatsData,
   type TelegramBotHealthData,
 } from '@/app/super-admin/telegram-actions';
+import { UnifiedDataGrid, ColumnDef } from '@/components/ui/unified/UnifiedDataGrid';
 
 export function SuperAdminTelegramTab() {
   const [subTab, setSubTab] = useState<'connections' | 'codes' | 'logs'>('connections');
@@ -44,7 +42,7 @@ export function SuperAdminTelegramTab() {
   const [health, setHealth] = useState<TelegramBotHealthData | null>(null);
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // Состояние ручной отправки сообщения
+  // Ручная отправка пинга
   const [testChatId, setTestChatId] = useState('');
   const [testText, setTestText] = useState('Проверочное уведомление системы Buhuchet.kg');
   const [sendingTest, setSendingTest] = useState(false);
@@ -116,6 +114,203 @@ export function SuperAdminTelegramTab() {
     }
     setSendingTest(false);
   };
+
+  // 1. КОЛОНКИ: Привязанные Аккаунты
+  const connectionColumns: ColumnDef<any>[] = useMemo(
+    () => [
+      {
+        key: 'user',
+        label: 'Пользователь',
+        sortable: true,
+        getValue: (c) => c.user_full_name,
+        render: (c) => (
+          <div>
+            <div className="font-bold text-white text-xs">{c.user_full_name}</div>
+            <div className="text-[11px] text-slate-400">{c.user_email}</div>
+          </div>
+        ),
+      },
+      {
+        key: 'company',
+        label: 'Организация / ИНН',
+        sortable: true,
+        getValue: (c) => c.company_name,
+        render: (c) => (
+          <div>
+            <div className="font-semibold text-slate-200 text-xs flex items-center">
+              <Building2 className="h-3 w-3 mr-1 text-amber-400" />
+              {c.company_name}
+            </div>
+            <div className="text-[11px] font-mono text-slate-400">ИНН: {c.company_inn}</div>
+          </div>
+        ),
+      },
+      {
+        key: 'username',
+        label: 'Telegram Username',
+        sortable: true,
+        getValue: (c) => c.telegram_username,
+        render: (c) =>
+          c.telegram_username ? (
+            <span className="text-xs text-sky-400 font-mono font-semibold">@{c.telegram_username}</span>
+          ) : (
+            <span className="text-xs text-slate-500">—</span>
+          ),
+      },
+      {
+        key: 'chat_id',
+        label: 'Chat ID',
+        sortable: true,
+        getValue: (c) => c.telegram_chat_id,
+        render: (c) => <span className="font-mono text-xs text-emerald-400 font-bold">{c.telegram_chat_id}</span>,
+      },
+      {
+        key: 'created_at',
+        label: 'Дата привязки',
+        sortable: true,
+        getValue: (c) => c.created_at,
+        render: (c) => <span className="text-xs text-slate-400">{new Date(c.created_at).toLocaleString('ru-RU')}</span>,
+      },
+      {
+        key: 'actions',
+        label: 'Действия',
+        sortable: false,
+        render: (c) => (
+          <div className="flex justify-end">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={disconnectingId === c.id}
+              onClick={() => handleDisconnect(c.id)}
+              className="border-red-500/30 text-red-400 hover:bg-red-500/10 text-xs min-h-[32px]"
+            >
+              {disconnectingId === c.id ? (
+                <Loader2 className="h-3 w-3 animate-spin mr-1" />
+              ) : (
+                <Unlink className="h-3 w-3 mr-1" />
+              )}
+              Отвязать
+            </Button>
+          </div>
+        ),
+      },
+    ],
+    [disconnectingId]
+  );
+
+  // 2. КОЛОНКИ: Реестр OTP-Кодов
+  const codeColumns: ColumnDef<any>[] = useMemo(
+    () => [
+      {
+        key: 'code',
+        label: '4-Значный Код',
+        sortable: true,
+        getValue: (cd) => cd.code,
+        render: (cd) => (
+          <span className="font-mono text-base font-extrabold text-sky-400 bg-sky-500/10 border border-sky-500/20 px-2.5 py-1 rounded-lg tracking-widest">
+            {cd.code}
+          </span>
+        ),
+      },
+      {
+        key: 'user',
+        label: 'Пользователь',
+        sortable: true,
+        getValue: (cd) => cd.user_full_name,
+        render: (cd) => <span className="text-xs font-semibold text-white">{cd.user_full_name}</span>,
+      },
+      {
+        key: 'company',
+        label: 'Компания',
+        sortable: true,
+        getValue: (cd) => cd.company_name,
+        render: (cd) => <span className="text-xs text-slate-300">{cd.company_name}</span>,
+      },
+      {
+        key: 'created_at',
+        label: 'Время создания',
+        sortable: true,
+        getValue: (cd) => cd.created_at,
+        render: (cd) => <span className="text-xs text-slate-400">{new Date(cd.created_at).toLocaleTimeString('ru-RU')}</span>,
+      },
+      {
+        key: 'expires_at',
+        label: 'Истекает в',
+        sortable: true,
+        getValue: (cd) => cd.expires_at,
+        render: (cd) => <span className="text-xs text-slate-400">{new Date(cd.expires_at).toLocaleTimeString('ru-RU')}</span>,
+      },
+      {
+        key: 'status',
+        label: 'Статус кода',
+        sortable: true,
+        getValue: (cd) => cd.status_label,
+        render: (cd) => (
+          <Badge
+            variant="outline"
+            className={`text-xs px-2.5 py-0.5 ${
+              cd.status_label.includes('✅')
+                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                : cd.status_label.includes('🟢')
+                ? 'bg-sky-500/10 text-sky-400 border-sky-500/30'
+                : 'bg-red-500/10 text-red-400 border-red-500/30'
+            }`}
+          >
+            {cd.status_label}
+          </Badge>
+        ),
+      },
+    ],
+    []
+  );
+
+  // 3. КОЛОНКИ: Логи Вебхуков
+  const logColumns: ColumnDef<any>[] = useMemo(
+    () => [
+      {
+        key: 'created_at',
+        label: 'Дата & Время',
+        sortable: true,
+        getValue: (lg) => lg.created_at,
+        render: (lg) => <span className="text-xs font-mono text-slate-400">{new Date(lg.created_at).toLocaleString('ru-RU')}</span>,
+      },
+      {
+        key: 'chat_id',
+        label: 'Chat ID',
+        sortable: true,
+        getValue: (lg) => lg.chat_id,
+        render: (lg) => <span className="text-xs font-mono font-semibold text-emerald-400">{lg.chat_id || '—'}</span>,
+      },
+      {
+        key: 'username',
+        label: 'Username',
+        sortable: true,
+        getValue: (lg) => lg.username,
+        render: (lg) => (
+          <span className="text-xs font-mono text-sky-400">{lg.username ? `@${lg.username}` : '—'}</span>
+        ),
+      },
+      {
+        key: 'message_text',
+        label: 'Текст Сообщения',
+        sortable: true,
+        getValue: (lg) => lg.message_text,
+        render: (lg) => <span className="text-xs font-mono text-slate-200">{lg.message_text}</span>,
+      },
+      {
+        key: 'status',
+        label: 'Статус',
+        sortable: true,
+        getValue: (lg) => lg.status,
+        render: (lg) => (
+          <Badge variant="outline" className="border-slate-700 text-slate-300 text-[11px]">
+            {lg.status}
+          </Badge>
+        ),
+      },
+    ],
+    []
+  );
 
   return (
     <div className="space-y-6">
@@ -295,183 +490,40 @@ export function SuperAdminTelegramTab() {
         </Button>
       </div>
 
-      {/* 3. ТАБЛИЦА: ПРИВЯЗАННЫЕ ПОЛЬЗОВАТЕЛИ */}
+      {/* 3. ОПТИМИЗИРОВАННЫЙ UNIFIED DATA GRID: ПРИВЯЗАННЫЕ ПОЛЬЗОВАТЕЛИ */}
       {subTab === 'connections' && (
-        <Card className="bg-slate-900 border-slate-800">
-          <Table>
-            <TableHeader>
-              <TableRow className="border-slate-800">
-                <TableHead className="text-slate-400 text-xs">Пользователь</TableHead>
-                <TableHead className="text-slate-400 text-xs">Организация / ИНН</TableHead>
-                <TableHead className="text-slate-400 text-xs">Telegram Username</TableHead>
-                <TableHead className="text-slate-400 text-xs">Chat ID</TableHead>
-                <TableHead className="text-slate-400 text-xs">Дата привязки</TableHead>
-                <TableHead className="text-right text-slate-400 text-xs">Действия</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {stats?.connections.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center text-slate-500 text-xs py-8">
-                    Нет активных привязок Telegram-аккаунтов.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                stats?.connections.map((c) => (
-                  <TableRow key={c.id} className="border-slate-800 hover:bg-slate-800/50">
-                    <TableCell>
-                      <div>
-                        <div className="font-bold text-white text-xs">{c.user_full_name}</div>
-                        <div className="text-[11px] text-slate-400">{c.user_email}</div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div>
-                        <div className="font-semibold text-slate-200 text-xs flex items-center">
-                          <Building2 className="h-3 w-3 mr-1 text-amber-400" />
-                          {c.company_name}
-                        </div>
-                        <div className="text-[11px] font-mono text-slate-400">ИНН: {c.company_inn}</div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {c.telegram_username ? (
-                        <span className="text-xs text-sky-400 font-mono font-semibold">@{c.telegram_username}</span>
-                      ) : (
-                        <span className="text-xs text-slate-500">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <span className="font-mono text-xs text-emerald-400 font-bold">{c.telegram_chat_id}</span>
-                    </TableCell>
-                    <TableCell className="text-xs text-slate-400">
-                      {new Date(c.created_at).toLocaleString('ru-RU')}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={disconnectingId === c.id}
-                        onClick={() => handleDisconnect(c.id)}
-                        className="border-red-500/30 text-red-400 hover:bg-red-500/10 text-xs min-h-[32px]"
-                      >
-                        {disconnectingId === c.id ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Unlink className="h-3 w-3 mr-1" />}
-                        Отвязать
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </Card>
+        <UnifiedDataGrid
+          data={stats?.connections || []}
+          columns={connectionColumns}
+          keyExtractor={(c) => c.id}
+          searchPlaceholder="Поиск привязок по ФИО, Email, ИНН или Telegram Username..."
+          emptyMessage="Нет зарегистрированных привязок пользователей"
+          isLoading={loading}
+        />
       )}
 
-      {/* 4. ТАБЛИЦА: РЕЕСТР OTP-КОДОВ */}
+      {/* 4. ОПТИМИЗИРОВАННЫЙ UNIFIED DATA GRID: РЕЕСТР OTP-КОДОВ */}
       {subTab === 'codes' && (
-        <Card className="bg-slate-900 border-slate-800">
-          <Table>
-            <TableHeader>
-              <TableRow className="border-slate-800">
-                <TableHead className="text-slate-400 text-xs">4-Значный Код</TableHead>
-                <TableHead className="text-slate-400 text-xs">Пользователь</TableHead>
-                <TableHead className="text-slate-400 text-xs">Компания</TableHead>
-                <TableHead className="text-slate-400 text-xs">Время создания</TableHead>
-                <TableHead className="text-slate-400 text-xs">Истекает в</TableHead>
-                <TableHead className="text-right text-slate-400 text-xs">Статус кода</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {stats?.codes.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center text-slate-500 text-xs py-8">
-                    История генерации кодов пуста.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                stats?.codes.map((cd) => (
-                  <TableRow key={cd.id} className="border-slate-800 hover:bg-slate-800/50">
-                    <TableCell>
-                      <span className="font-mono text-base font-extrabold text-sky-400 bg-sky-500/10 border border-sky-500/20 px-2.5 py-1 rounded-lg tracking-widest">
-                        {cd.code}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-xs font-semibold text-white">{cd.user_full_name}</TableCell>
-                    <TableCell className="text-xs text-slate-300">{cd.company_name}</TableCell>
-                    <TableCell className="text-xs text-slate-400">
-                      {new Date(cd.created_at).toLocaleTimeString('ru-RU')}
-                    </TableCell>
-                    <TableCell className="text-xs text-slate-400">
-                      {new Date(cd.expires_at).toLocaleTimeString('ru-RU')}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Badge
-                        variant="outline"
-                        className={`text-xs px-2.5 py-0.5 ${
-                          cd.status_label.includes('✅')
-                            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                            : cd.status_label.includes('🟢')
-                            ? 'bg-sky-500/10 text-sky-400 border-sky-500/30'
-                            : 'bg-red-500/10 text-red-400 border-red-500/30'
-                        }`}
-                      >
-                        {cd.status_label}
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </Card>
+        <UnifiedDataGrid
+          data={stats?.codes || []}
+          columns={codeColumns}
+          keyExtractor={(cd) => cd.id}
+          searchPlaceholder="Поиск кодов по значению, ФИО или названию компании..."
+          emptyMessage="История генерации кодов пуста"
+          isLoading={loading}
+        />
       )}
 
-      {/* 5. ТАБЛИЦА: ЛОГИ ВЕБХУКОВ И СООБЩЕНИЙ */}
+      {/* 5. ОПТИМИЗИРОВАННЫЙ UNIFIED DATA GRID: ЛОГИ ВЕБХУКОВ */}
       {subTab === 'logs' && (
-        <Card className="bg-slate-900 border-slate-800">
-          <Table>
-            <TableHeader>
-              <TableRow className="border-slate-800">
-                <TableHead className="text-slate-400 text-xs">Дата & Время</TableHead>
-                <TableHead className="text-slate-400 text-xs">Chat ID</TableHead>
-                <TableHead className="text-slate-400 text-xs">Username</TableHead>
-                <TableHead className="text-slate-400 text-xs">Текст Сообщения</TableHead>
-                <TableHead className="text-right text-slate-400 text-xs">Статус</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {stats?.logs.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center text-slate-500 text-xs py-8">
-                    Логи пока отсутствуют.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                stats?.logs.map((lg) => (
-                  <TableRow key={lg.id} className="border-slate-800 hover:bg-slate-800/50">
-                    <TableCell className="text-xs font-mono text-slate-400">
-                      {new Date(lg.created_at).toLocaleString('ru-RU')}
-                    </TableCell>
-                    <TableCell className="text-xs font-mono font-semibold text-emerald-400">
-                      {lg.chat_id || '—'}
-                    </TableCell>
-                    <TableCell className="text-xs font-mono text-sky-400">
-                      {lg.username ? `@${lg.username}` : '—'}
-                    </TableCell>
-                    <TableCell className="text-xs font-mono text-slate-200">
-                      {lg.message_text}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Badge variant="outline" className="border-slate-700 text-slate-300 text-[11px]">
-                        {lg.status}
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </Card>
+        <UnifiedDataGrid
+          data={stats?.logs || []}
+          columns={logColumns}
+          keyExtractor={(lg) => lg.id}
+          searchPlaceholder="Поиск по текстам сообщений, Chat ID или Username..."
+          emptyMessage="Системные логи сообщений пока отсутствуют"
+          isLoading={loading}
+        />
       )}
     </div>
   );

@@ -9,7 +9,7 @@ import { z } from 'zod';
 
 import { cache } from 'react';
 import { hasPermission, ModuleName, ActionName } from '@/lib/auth/permissions';
-import { sendTelegramNotification } from '@/lib/telegram/notifier';
+import { sendTelegramNotification, sendDocumentTelegramNotification } from '@/lib/telegram/notifier';
 
 const getUserContext = cache(async () => {
   const supabase = await createClient();
@@ -399,13 +399,24 @@ export async function createB2BDocumentAction(data: B2BDocumentInput): Promise<A
       comment: doc.status === 'sent' ? 'Документ отправлен адресату' : 'Документ сохранен как черновик',
     });
 
-    // 4. Отправка Telegram-уведомления организации-получателю при отправке
+    // 4. Отправка подробного Telegram-уведомления организации-получателю
     if (doc.status === 'sent' && data.receiver_company_id) {
-      sendTelegramNotification({
-        companyId: data.receiver_company_id,
-        type: 'documents',
-        message: `📄 **Новый входящий документ!**\n\n• **Тип:** ${doc.doc_type}\n• **Номер:** №${doc.doc_number}\n• **Дата:** ${doc.doc_date}\n• **Статус:** Отправлен контрагентом`,
-      }).catch(err => console.error('[Telegram Notification Error]:', err));
+      const { data: senderComp } = await adminSupabase
+        .from('companies')
+        .select('name')
+        .eq('id', ctx.companyId)
+        .single();
+
+      sendDocumentTelegramNotification({
+        receiverCompanyId: data.receiver_company_id,
+        senderCompanyName: senderComp?.name || 'Контрагент',
+        docType: doc.doc_type,
+        docNumber: doc.doc_number || doc.id.slice(0, 8),
+        docDate: doc.doc_date,
+        status: 'Отправлен',
+        documentId: doc.id,
+        files: data.files || [],
+      }).catch((err) => console.error('[Telegram Notification Error]:', err));
     }
 
     revalidatePath('/dashboard/documents');

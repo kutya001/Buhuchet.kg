@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/server';
 import { hasPermission } from '@/lib/auth/permissions';
 import type { ActionName } from '@/lib/auth/permissions';
+import { formatBytes } from '@/lib/utils';
 
 export type TelegramNotificationType = 'documents' | 'collaboration' | 'system_block';
 
@@ -86,4 +87,94 @@ export async function sendTelegramNotification({
   } catch (err) {
     console.error('[Telegram Notifier] Ошибка рассылки уведомления:', err);
   }
+}
+
+/**
+ * Форматированное уведомление о Новом Входящем Документе с информацией о контрагенте, файлах и ссылкой
+ */
+export async function sendDocumentTelegramNotification({
+  receiverCompanyId,
+  senderCompanyName,
+  docType,
+  docNumber,
+  docDate,
+  status,
+  documentId,
+  files = [],
+}: {
+  receiverCompanyId: string;
+  senderCompanyName: string;
+  docType: string;
+  docNumber: string;
+  docDate: string;
+  status: string;
+  documentId: string;
+  files?: Array<{ file_name: string; size_bytes?: number; file_type?: string; description?: string }>;
+}): Promise<void> {
+  const baseUrl =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    (process.env.VERCEL_PROJECT_PRODUCTION_URL
+      ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+      : 'https://buhuchet.kg');
+  const docLink = `${baseUrl}/dashboard/documents/${documentId}`;
+  const nowStr = new Date().toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' });
+
+  let filesText = '— Нет прикрепленных файлов';
+  if (files && files.length > 0) {
+    filesText = files
+      .map((f, idx) => {
+        const sizeFormatted = f.size_bytes ? formatBytes(f.size_bytes) : '0 Б';
+        const typeStr = f.file_type ? f.file_type.toUpperCase() : 'FILE';
+        const descStr = f.description ? ` - ${f.description}` : '';
+        return `${idx + 1}) \`${f.file_name}\` (${sizeFormatted} | ${typeStr})${descStr}`;
+      })
+      .join('\n');
+  }
+
+  const message =
+    `📩 **Поступил новый входящий документ!**\n\n` +
+    `🏢 **От контрагента:** ${senderCompanyName}\n` +
+    `📄 **Тип документа:** ${docType}\n` +
+    `🔢 **Номер:** № ${docNumber}\n` +
+    `📅 **Дата и время:** ${nowStr} (${docDate})\n` +
+    `🚦 **Статус:** ${status}\n\n` +
+    `📎 **Прикрепленные файлы:**\n${filesText}\n\n` +
+    `🔗 **Просмотреть документ на платформе:**\n${docLink}`;
+
+  await sendTelegramNotification({
+    companyId: receiverCompanyId,
+    type: 'documents',
+    message,
+  });
+}
+
+/**
+ * Уведомление о новом запросе на сотрудничество
+ */
+export async function sendCollaborationTelegramNotification({
+  targetCompanyId,
+  senderCompanyName,
+}: {
+  targetCompanyId: string;
+  senderCompanyName: string;
+}): Promise<void> {
+  const baseUrl =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    (process.env.VERCEL_PROJECT_PRODUCTION_URL
+      ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+      : 'https://buhuchet.kg');
+  const pendingLink = `${baseUrl}/dashboard/pending`;
+  const nowStr = new Date().toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' });
+
+  const message =
+    `🤝 **Новая заявка на сотрудничество!**\n\n` +
+    `🏢 **От контрагента:** ${senderCompanyName}\n` +
+    `📅 **Дата и время:** ${nowStr}\n\n` +
+    `🔗 **Перейти к списку заявок:**\n${pendingLink}`;
+
+  await sendTelegramNotification({
+    companyId: targetCompanyId,
+    type: 'collaboration',
+    message,
+  });
 }
