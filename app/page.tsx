@@ -23,7 +23,6 @@ import {
   TrendingUp,
 } from 'lucide-react';
 
-import { PricingCalculator } from '@/components/landing/PricingCalculator';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
 
 export default function HomePage() {
@@ -334,11 +333,6 @@ export default function HomePage() {
             </div>
           </div>
         </div>
-      </section>
-
-      {/* 4.5 ИНТЕРАКТИВНЫЙ КАЛЬКУЛЯТОР ТАРИФОВ КР */}
-      <section className="px-3 sm:px-6 md:px-12 py-12 max-w-7xl mx-auto">
-        <PricingCalculator />
       </section>
 
       {/* 5. БЛОК FAQ */}
