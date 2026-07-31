@@ -89,10 +89,10 @@ import {
 } from './telegram-actions';
 import { SuperAdminTelegramTab } from '@/components/super-admin/SuperAdminTelegramTab';
 
+import { SuperAdminSidebar, SuperAdminTab } from '@/components/super-admin/SuperAdminSidebar';
+
 export default function SuperAdminPage() {
-  const [activeTab, setActiveTab] = useState<
-    'companies' | 'users' | 'files' | 'documents' | 'lookups' | 'database' | 'telegram'
-  >('companies');
+  const [activeTab, setActiveTab] = useState<SuperAdminTab>('companies');
   const [telegramSubTab, setTelegramSubTab] = useState<'connections' | 'codes' | 'logs'>('connections');
   const [telegramStats, setTelegramStats] = useState<TelegramAdminStatsData | null>(null);
   const [botHealth, setBotHealth] = useState<TelegramBotHealthData | null>(null);
@@ -928,126 +928,49 @@ export default function SuperAdminPage() {
     );
   }
 
+  const handleTabChange = (tab: SuperAdminTab) => {
+    startTransition(() => {
+      setActiveTab(tab);
+    });
+  };
+
   return (
-    <div className="space-y-6 pb-12">
-      {/* 1. ШАПКА ПАНЕЛИ СУПЕРАДМИНИСТРАТОРА */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight flex items-center">
-            <Shield className="h-6 w-6 mr-2 text-red-500" />
-            Панель Суперадминистратора Buhuchet.kg
-          </h1>
-          <p className="text-xs sm:text-sm text-slate-400 mt-1">
-            Полный контроль верификации компаний КР, пользователей, файлов R2 и базы данных
-          </p>
+    <div className="flex min-h-screen bg-background text-foreground antialiased">
+      {/* Левый Вертикальный Сайдбар */}
+      <SuperAdminSidebar
+        activeTab={activeTab}
+        onTabChange={handleTabChange}
+        pendingCount={pendingCompanies.length}
+      />
+
+      {/* Основной Контент Панели */}
+      <main className="flex-1 p-6 md:p-8 overflow-y-auto max-w-7xl mx-auto space-y-6 w-full">
+        {/* 1. ШАПКА ПАНЕЛИ СУПЕРАДМИНИСТРАТОРА */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/80 pb-4">
+          <div>
+            <h1 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight flex items-center">
+              <Shield className="h-6 w-6 mr-2 text-red-500" />
+              Панель Суперадминистратора Buhuchet.kg
+            </h1>
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+              Полный контроль верификации компаний КР, пользователей, файлов R2 и базы данных
+            </p>
+          </div>
         </div>
-      </div>
 
-      {msg && (
-        <Alert
-          variant={msg.type === 'success' ? 'success' : 'destructive'}
-          className={
-            msg.type === 'success'
-              ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-400'
-              : 'border-red-500/50 bg-red-500/10 text-red-400'
-          }
-        >
-          {msg.type === 'success' ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
-          <AlertDescription>{msg.text}</AlertDescription>
-        </Alert>
-      )}
-
-      {/* 2. ГЛАВНЫЕ ВКЛАДКИ РАЗДЕЛОВ СУПЕРАДМИНКИ */}
-      <div className="flex items-center space-x-2 border-b border-slate-800 pb-2 overflow-x-auto">
-        <button
-          onClick={() => setActiveTab('companies')}
-          className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs md:text-sm font-medium transition-all min-h-[44px] ${
-            activeTab === 'companies'
-              ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40 font-bold shadow-lg shadow-amber-500/10'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
-          }`}
-        >
-          <Building2 className="h-4 w-4" />
-          <span>Организации ({allCompanies.length})</span>
-          {pendingCompanies.length > 0 && (
-            <span className="bg-amber-500 text-slate-950 text-[10px] font-extrabold px-1.5 py-0.5 rounded-full animate-pulse ml-1">
-              {pendingCompanies.length}
-            </span>
-          )}
-        </button>
-
-        <button
-          onClick={() => setActiveTab('users')}
-          className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs md:text-sm font-medium transition-all min-h-[44px] ${
-            activeTab === 'users'
-              ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/40 font-bold shadow-lg shadow-emerald-500/10'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
-          }`}
-        >
-          <Users className="h-4 w-4" />
-          <span>Пользователи ({allUsers.length})</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('files')}
-          className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs md:text-sm font-medium transition-all min-h-[44px] ${
-            activeTab === 'files'
-              ? 'bg-purple-600/20 text-purple-400 border border-purple-500/40 font-bold shadow-lg shadow-purple-500/10'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
-          }`}
-        >
-          <FolderOpen className="h-4 w-4" />
-          <span>Файлы R2 ({systemFiles.length})</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('documents')}
-          className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs md:text-sm font-medium transition-all min-h-[44px] ${
-            activeTab === 'documents'
-              ? 'bg-blue-600/20 text-blue-400 border border-blue-500/40 font-bold shadow-lg shadow-blue-600/10'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
-          }`}
-        >
-          <FileText className="h-4 w-4" />
-          <span>B2B Документы ({allDocuments.length})</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('lookups')}
-          className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs md:text-sm font-medium transition-all min-h-[44px] ${
-            activeTab === 'lookups'
-              ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/40 font-bold shadow-lg shadow-indigo-500/10'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
-          }`}
-        >
-          <BookOpen className="h-4 w-4" />
-          <span>Справочники</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('database')}
-          className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs md:text-sm font-medium transition-all min-h-[44px] ${
-            activeTab === 'database'
-              ? 'bg-red-600/20 text-red-400 border border-red-500/40 font-bold shadow-lg shadow-red-500/10'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
-          }`}
-        >
-          <Database className="h-4 w-4" />
-          <span>Инспектор БД</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('telegram')}
-          className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs md:text-sm font-medium transition-all min-h-[44px] ${
-            activeTab === 'telegram'
-              ? 'bg-sky-600/20 text-sky-400 border border-sky-500/40 font-bold shadow-lg shadow-sky-500/10'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
-          }`}
-        >
-          <Shield className="h-4 w-4 text-sky-400" />
-          <span>Telegram Бот</span>
-        </button>
-      </div>
+        {msg && (
+          <Alert
+            variant={msg.type === 'success' ? 'success' : 'destructive'}
+            className={
+              msg.type === 'success'
+                ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-400'
+                : 'border-red-500/50 bg-red-500/10 text-red-400'
+            }
+          >
+            {msg.type === 'success' ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
+            <AlertDescription>{msg.text}</AlertDescription>
+          </Alert>
+        )}
 
       {/* ------------------- РАЗДЕЛ Telegram БОТ ------------------- */}
       {activeTab === 'telegram' && <SuperAdminTelegramTab />}
@@ -1430,6 +1353,7 @@ export default function SuperAdminPage() {
           </div>
         </div>
       </UnifiedFormModal>
+      </main>
     </div>
   );
 }
