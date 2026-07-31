@@ -34,6 +34,7 @@ export interface Company {
   address?: string | null;
   is_active: boolean;
   storage_limit_gb: number;
+  closed_period_until?: string | null;
   created_at: string;
   updated_at: string;
 }

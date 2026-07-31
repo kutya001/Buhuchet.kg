@@ -32,6 +32,7 @@ CREATE TABLE companies (
   status TEXT CHECK (status IN ('pending_approval', 'requires_changes', 'active', 'blocked')) DEFAULT 'pending_approval',
   moderation_comment TEXT,
   storage_limit_gb INT4 DEFAULT 10,
+  closed_period_until DATE DEFAULT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );

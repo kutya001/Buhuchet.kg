@@ -26,6 +26,7 @@ const getUserContext = cache(async () => {
 
   const company = Array.isArray(profile?.companies) ? profile?.companies[0] : profile?.companies;
   const isBlocked = company?.status === 'blocked' && !profile?.is_super_admin;
+  const closedPeriodUntil = company?.closed_period_until || null;
 
   return {
     userId: user.id,
@@ -33,6 +34,7 @@ const getUserContext = cache(async () => {
     role: (profile?.role || 'manager') as UserRole,
     isSuperAdmin: !!profile?.is_super_admin,
     isCompanyBlocked: isBlocked,
+    closedPeriodUntil,
     profile,
     checkPermission: (module: ModuleName, action: ActionName) => {
       if (isBlocked) return false;
