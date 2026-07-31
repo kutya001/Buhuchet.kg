@@ -103,7 +103,7 @@ export default function CloudFilesRegistryPage() {
       sortable: true,
       getValue: (f) => f.file_name,
       render: (file) => (
-        <div className="font-semibold text-white text-xs sm:text-sm flex items-center space-x-2">
+        <div className="font-semibold text-foreground text-xs sm:text-sm flex items-center space-x-2">
           {file.file_name.endsWith('.pdf') ? (
             <FileText className="h-4 w-4 text-purple-400 flex-shrink-0" />
           ) : (
@@ -259,11 +259,11 @@ export default function CloudFilesRegistryPage() {
       {/* 1. ЗАГОЛОВОК СТРАНИЦЫ */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight flex items-center">
+          <h1 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight flex items-center">
             <FolderOpen className="h-6 w-6 mr-2.5 text-emerald-400" />
             Реестр Облачных Файлов R2
           </h1>
-          <p className="text-xs sm:text-sm text-slate-400 mt-1">
+          <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
             Подробный учёт всех сканов, B2B накладных и уставных документов с контролем источников
           </p>
         </div>

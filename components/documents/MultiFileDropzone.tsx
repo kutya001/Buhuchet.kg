@@ -234,14 +234,14 @@ export function MultiFileDropzone({
           type="button"
           onClick={() => !disabled && !globalUploading && fileInputRef.current?.click()}
           disabled={disabled || globalUploading}
-          className="p-4 rounded-xl border-2 border-dashed border-slate-800 bg-slate-900/40 hover:bg-slate-900/70 hover:border-blue-500/50 transition-all flex flex-col items-center justify-center text-center space-y-2 cursor-pointer active:scale-95 min-h-[48px]"
+          className="p-4 rounded-xl border-2 border-dashed border-border bg-card hover:bg-muted hover:border-blue-500/50 transition-all flex flex-col items-center justify-center text-center space-y-2 cursor-pointer active:scale-95 min-h-[48px]"
         >
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500/10 text-blue-400">
             <Folder className="h-6 w-6" />
           </div>
           <div>
-            <span className="font-bold text-sm text-slate-200">📁 Выбрать сканы / PDF</span>
-            <p className="text-[11px] text-slate-500">Из памяти смартфона или ПК</p>
+            <span className="font-bold text-sm text-foreground">📁 Выбрать сканы / PDF</span>
+            <p className="text-[11px] text-muted-foreground">Из памяти смартфона или ПК</p>
           </div>
         </button>
       </div>
@@ -256,14 +256,14 @@ export function MultiFileDropzone({
       {/* Список прикрепленных файлов */}
       {files.length > 0 && (
         <div className="space-y-3 pt-2">
-          <Label className="text-xs font-mono uppercase text-slate-400">
+          <Label className="text-xs font-mono uppercase text-muted-foreground">
             Сканы для сохранения ({files.length})
           </Label>
 
           {files.map((file) => (
             <div
               key={file.tempId}
-              className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 space-y-3 shadow-lg"
+              className="p-4 rounded-xl bg-card border border-border space-y-3 shadow-lg"
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2.5 min-w-0">

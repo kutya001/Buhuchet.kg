@@ -245,9 +245,7 @@ export function UnifiedDataGrid<T extends Record<string, any>>({
 
   return (
     <div className="space-y-4">
-      {/* ВЕРХНЯЯ ПАНЕЛЬ С ИНСТРУМЕНТАМИ, ПОИСКОМ И ТУМБЛЕРАМИ (relative z-30 для отображения выпадающих меню СВЕРХУ таблицы) */}
-      <div className="relative z-30 flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-slate-900/80 p-4 rounded-2xl border border-slate-800 shadow-xl backdrop-blur-md">
-        {/* Заголовок или Поиск */}
+      <div className="relative z-30 flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-card p-4 rounded-2xl border border-border shadow-xl backdrop-blur-md">
         <div className="flex flex-col sm:flex-row sm:items-center gap-3 flex-1">
           {title && (
             <div>
@@ -275,27 +273,25 @@ export function UnifiedDataGrid<T extends Record<string, any>>({
           </div>
         </div>
 
-        {/* Инструменты: Вид, Столбцы, Действие */}
         <div className="flex flex-wrap items-center gap-2">
           {actionButton}
 
-          {/* КОНТРОЛЬ ВИДИМОСТИ СТОЛБЦОВ */}
           <div className="relative z-50">
             <Button
               size="sm"
               variant="outline"
               onClick={() => setShowVisibilityMenu(!showVisibilityMenu)}
-              className="border-slate-800 bg-slate-950 text-slate-300 hover:text-white text-xs min-h-[40px]"
+              className="border-border bg-card text-muted-foreground hover:text-foreground text-xs min-h-[40px]"
             >
-              <SlidersHorizontal className="h-4 w-4 mr-1.5 text-amber-400" />
+              <SlidersHorizontal className="h-4 w-4 mr-1.5 text-amber-500" />
               Столбцы ({visibleColumns.length}/{columns.length})
             </Button>
 
             {showVisibilityMenu && (
-              <div className="absolute right-0 top-12 z-50 w-60 bg-slate-900 border border-slate-700 rounded-2xl p-3 shadow-2xl space-y-2 ring-1 ring-white/10">
-                <div className="flex items-center justify-between text-xs font-bold text-slate-200 border-b border-slate-800 pb-2">
+              <div className="absolute right-0 top-12 z-50 w-60 bg-card border border-border rounded-2xl p-3 shadow-2xl space-y-2 ring-1 ring-border">
+                <div className="flex items-center justify-between text-xs font-bold text-foreground border-b border-border pb-2">
                   <span>Отображение столбцов</span>
-                  <button onClick={() => setShowVisibilityMenu(false)} className="text-slate-400 hover:text-white p-1">
+                  <button onClick={() => setShowVisibilityMenu(false)} className="text-muted-foreground hover:text-foreground p-1">
                     ✕
                   </button>
                 </div>
@@ -303,13 +299,13 @@ export function UnifiedDataGrid<T extends Record<string, any>>({
                   {columns.map((col) => (
                     <label
                       key={col.key}
-                      className="flex items-center space-x-2 text-xs text-slate-300 hover:bg-slate-800/80 p-1.5 rounded-lg cursor-pointer transition-colors"
+                      className="flex items-center space-x-2 text-xs text-foreground hover:bg-muted p-1.5 rounded-lg cursor-pointer transition-colors"
                     >
                       <input
                         type="checkbox"
                         checked={visibleColumnKeys.has(col.key)}
                         onChange={() => toggleColumnVisibility(col.key)}
-                        className="rounded bg-slate-950 border-slate-700 text-amber-500 focus:ring-0"
+                        className="rounded bg-background border-border text-amber-500 focus:ring-0"
                       />
                       <span className="truncate">{col.label}</span>
                     </label>
@@ -320,11 +316,11 @@ export function UnifiedDataGrid<T extends Record<string, any>>({
           </div>
 
           {!forceView && (
-            <div className="flex items-center space-x-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
+            <div className="flex items-center space-x-1 bg-card p-1 rounded-xl border border-border">
               <button
                 onClick={() => setViewMode('table')}
                 className={`p-2 rounded-lg text-xs font-semibold transition-all min-h-[34px] flex items-center space-x-1 ${
-                  viewMode === 'table' ? 'bg-amber-500/20 text-amber-400 font-bold border border-amber-500/30' : 'text-slate-400 hover:text-white'
+                  viewMode === 'table' ? 'bg-amber-500/20 text-amber-600 font-bold border border-amber-500/30' : 'text-muted-foreground hover:text-foreground'
                 }`}
                 title="Режим Таблицы (для ПК)"
               >
@@ -334,7 +330,7 @@ export function UnifiedDataGrid<T extends Record<string, any>>({
               <button
                 onClick={() => setViewMode('cards')}
                 className={`p-2 rounded-lg text-xs font-semibold transition-all min-h-[34px] flex items-center space-x-1 ${
-                  viewMode === 'cards' ? 'bg-amber-500/20 text-amber-400 font-bold border border-amber-500/30' : 'text-slate-400 hover:text-white'
+                  viewMode === 'cards' ? 'bg-amber-500/20 text-amber-600 font-bold border border-amber-500/30' : 'text-muted-foreground hover:text-foreground'
                 }`}
                 title="Режим Карточек (для мобильных)"
               >
@@ -503,11 +499,11 @@ export function UnifiedDataGrid<T extends Record<string, any>>({
                 {renderCard ? (
                   renderCard(item)
                 ) : (
-                  <Card className="bg-slate-900/60 border-slate-800 p-4 space-y-2">
+                  <Card className="bg-card border-border p-4 space-y-2">
                     {visibleColumns.map((col) => (
                       <div key={col.key} className="flex justify-between items-center text-xs">
-                        <span className="text-slate-400 font-medium">{col.label}:</span>
-                        <span className="text-white font-semibold">{col.render ? col.render(item) : item[col.key]}</span>
+                        <span className="text-muted-foreground font-medium">{col.label}:</span>
+                        <span className="text-foreground font-semibold">{col.render ? col.render(item) : item[col.key]}</span>
                       </div>
                     ))}
                   </Card>
@@ -520,7 +516,7 @@ export function UnifiedDataGrid<T extends Record<string, any>>({
 
       {/* ЕДИНООБРАЗНАЯ ПАГИНАЦИЯ (25-50-100-ВСЕ) */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
-        <div className="flex items-center space-x-3 text-xs text-slate-400 font-mono">
+        <div className="flex items-center space-x-3 text-xs text-muted-foreground font-mono">
           <span>Размер страницы:</span>
           <select
             value={pageSize}
@@ -528,7 +524,7 @@ export function UnifiedDataGrid<T extends Record<string, any>>({
               const val = e.target.value;
               setPageSize(val === 'all' ? 'all' : (Number(val) as any));
             }}
-            className="bg-slate-950 border border-slate-800 text-amber-400 font-bold text-xs rounded-xl px-2.5 py-1.5 min-h-[36px]"
+            className="bg-card border border-border text-amber-500 font-bold text-xs rounded-xl px-2.5 py-1.5 min-h-[36px]"
           >
             <option value={25}>25 записей</option>
             <option value={50}>50 записей</option>
@@ -537,7 +533,7 @@ export function UnifiedDataGrid<T extends Record<string, any>>({
           </select>
 
           <span>
-            Показано <strong className="text-white">{pageSize === 'all' ? totalItems : Math.min(totalItems, (currentPage - 1) * pageSize + 1)}</strong> - <strong className="text-white">{pageSize === 'all' ? totalItems : Math.min(totalItems, currentPage * pageSize)}</strong> из <strong className="text-white">{totalItems}</strong>
+            Показано <strong className="text-foreground">{pageSize === 'all' ? totalItems : Math.min(totalItems, (currentPage - 1) * pageSize + 1)}</strong> - <strong className="text-foreground">{pageSize === 'all' ? totalItems : Math.min(totalItems, currentPage * pageSize)}</strong> из <strong className="text-foreground">{totalItems}</strong>
           </span>
         </div>
 
@@ -548,12 +544,12 @@ export function UnifiedDataGrid<T extends Record<string, any>>({
               variant="outline"
               onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
               disabled={currentPage === 1}
-              className="border-slate-800 text-slate-300 min-h-[36px] text-xs"
+              className="border-border text-foreground min-h-[36px] text-xs"
             >
               <ChevronLeft className="h-4 w-4 mr-1" />
               Назад
             </Button>
-            <span className="text-xs font-mono text-slate-400">
+            <span className="text-xs font-mono text-muted-foreground">
               {currentPage} / {totalPages}
             </span>
             <Button

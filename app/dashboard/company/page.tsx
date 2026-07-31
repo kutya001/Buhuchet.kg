@@ -233,11 +233,11 @@ export default function CompanyProfilePage() {
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl md:text-2xl font-bold text-white tracking-tight flex items-center">
+          <h2 className="text-xl md:text-2xl font-bold text-foreground tracking-tight flex items-center">
             <Building2 className="h-6 w-6 mr-2 text-blue-400" />
             Управление Организацией
           </h2>
-          <p className="text-xs md:text-sm text-slate-400 mt-0.5">
+          <p className="text-xs md:text-sm text-muted-foreground mt-0.5">
             Карточка организации и реквизиты учредительных документов КР
           </p>
         </div>
@@ -328,8 +328,8 @@ export default function CompanyProfilePage() {
       {/* 2. Вкладка Учредительные Документы */}
       {activeTab === 'legal_docs' && (
         <div className="space-y-6">
-          <Card className="bg-slate-900/40 border-slate-800 p-4 md:p-6 space-y-4">
-            <h3 className="text-sm md:text-base font-bold text-white flex items-center">
+          <Card className="bg-card border-border p-4 md:p-6 space-y-4">
+            <h3 className="text-sm md:text-base font-bold text-foreground flex items-center">
               <Upload className="h-4 w-4 mr-2 text-purple-400" />
               Загрузить Учредительные Сканы (Устав, Свидетельство, Паспорт)
             </h3>
@@ -363,7 +363,7 @@ export default function CompanyProfilePage() {
                 label: 'Наименование Файла',
                 sortable: true,
                 render: (doc) => (
-                  <div className="font-semibold text-white text-xs sm:text-sm flex items-center space-x-2">
+                  <div className="font-semibold text-foreground text-xs sm:text-sm flex items-center space-x-2">
                     <FileText className="h-4 w-4 text-purple-400 flex-shrink-0" />
                     <span className="truncate max-w-[200px]">{doc.file_name}</span>
                   </div>

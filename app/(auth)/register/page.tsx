@@ -16,7 +16,7 @@ export default async function RegisterPage({
   const { error } = await searchParams;
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 px-4 py-12 relative overflow-hidden">
+    <div className="w-full flex flex-col items-center justify-center bg-transparent relative">
       {/* Dynamic Background Glow */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-purple-600/10 blur-[120px] rounded-full pointer-events-none" />
 

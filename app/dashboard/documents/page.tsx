@@ -242,11 +242,11 @@ export default function B2BDocumentsRegistryPage() {
       {/* Шапка реестра */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl md:text-2xl font-bold text-white tracking-tight flex items-center">
+          <h2 className="text-xl md:text-2xl font-bold text-foreground tracking-tight flex items-center">
             <FileText className="h-5 w-5 md:h-6 md:w-6 mr-2 text-blue-400" />
             Реестр Документооборота
           </h2>
-          <p className="text-xs md:text-sm text-slate-400 mt-0.5">
+          <p className="text-xs md:text-sm text-muted-foreground mt-0.5">
             Товарные накладные, акты выполненных работ и счета-фактуры КР
           </p>
         </div>

@@ -188,17 +188,17 @@ export function DashboardShell({
         </div>
 
         {/* Профиль и Выход */}
-        <div className="pt-4 border-t border-slate-800/80 space-y-3">
+        <div className="pt-4 border-t border-border space-y-3">
           <Link href="/dashboard/profile" prefetch={true} className="flex items-center space-x-3 px-1 hover:opacity-80 transition-opacity">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-800 text-slate-300 flex-shrink-0">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-foreground flex-shrink-0">
               <User className="h-4 w-4" />
             </div>
             {!isCollapsed && (
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-white truncate">
+                <p className="text-sm font-medium text-foreground truncate">
                   {fullName || userEmail}
                 </p>
-                <p className="text-xs text-slate-400 truncate">
+                <p className="text-xs text-muted-foreground truncate">
                   {companyName || 'Без организации'}
                 </p>
               </div>
@@ -209,7 +209,7 @@ export function DashboardShell({
             <Button
               type="submit"
               variant="outline"
-              className={`w-full text-slate-400 hover:text-red-400 border-slate-800 hover:border-red-900/50 hover:bg-red-500/10 min-h-[44px] ${
+              className={`w-full text-muted-foreground hover:text-red-400 border-border hover:border-red-900/50 hover:bg-red-500/10 min-h-[44px] ${
                 isCollapsed ? 'px-0 justify-center' : 'justify-start'
               }`}
               title="Выйти из системы"

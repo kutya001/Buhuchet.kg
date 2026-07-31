@@ -96,14 +96,14 @@ export default function HomePage() {
       {/* 2. HERO SECTION */}
       <section className="px-3 sm:px-6 md:px-12 pt-6 sm:pt-10 pb-12 sm:pb-16 max-w-7xl mx-auto space-y-8 sm:space-y-12">
         <div className="text-center space-y-4 sm:space-y-6 max-w-4xl mx-auto">
-          <div className="inline-flex items-center space-x-2 px-3 sm:px-4 py-1.5 rounded-full bg-slate-900/80 border border-slate-800 text-[11px] sm:text-xs font-medium text-amber-400 backdrop-blur-md shadow-lg max-w-full truncate">
+          <div className="inline-flex items-center space-x-2 px-3 sm:px-4 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-[11px] sm:text-xs font-semibold text-amber-600 dark:text-amber-400 backdrop-blur-md shadow-sm max-w-full truncate">
             <Sparkles className="h-3.5 sm:h-4 w-3.5 sm:w-4 flex-shrink-0" />
             <span className="truncate">Первая национальная платформа B2B документооборота КР</span>
           </div>
 
           <h1 className="text-2xl sm:text-5xl md:text-6xl font-black text-foreground tracking-tight leading-[1.15] break-words">
             Электронный Документооборот и <br className="hidden sm:inline" />
-            <span className="bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 dark:from-blue-400 dark:via-indigo-300 dark:to-purple-400 bg-clip-text text-transparent">
               Облачный Архив Первички
             </span>
           </h1>
