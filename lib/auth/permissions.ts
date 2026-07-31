@@ -1,6 +1,6 @@
 import type { UserProfile, RolePermissions } from '@/types/database.types';
 
-export type ModuleName = 'documents' | 'files' | 'counterparties' | 'employees' | 'company' | 'export';
+export type ModuleName = 'documents' | 'files' | 'counterparties' | 'employees' | 'company';
 export type ActionName =
   | 'view'
   | 'view_details'
@@ -20,8 +20,7 @@ export type ActionName =
   | 'create_employee'
   | 'edit_employee'
   | 'reset_password'
-  | 'manage_roles'
-  | 'export_excel';
+  | 'manage_roles';
 
 /**
  * Справочник русскоязычных названий модулей и кнопок в интерфейсе
@@ -31,26 +30,26 @@ export const MODULE_CONFIG: Record<
   { label: string; actions: { key: ActionName; label: string }[] }
 > = {
   documents: {
-    label: 'Документы и Первичка',
+    label: 'Электронный документооборот',
     actions: [
-      { key: 'view', label: 'Просмотр списка B2B документов' },
+      { key: 'view', label: 'Просмотр списка документов' },
       { key: 'view_details', label: 'Просмотр деталей и содержимого скана' },
       { key: 'create', label: 'Создание B2B Отправки (Черновик)' },
       { key: 'send', label: 'Отправка документа контрагенту' },
       { key: 'edit', label: 'Редактирование черновиков' },
       { key: 'accept', label: 'Принятие и подтверждение документа' },
       { key: 'recall', label: 'Отзыв отправленной первички' },
-      { key: 'delete', label: 'Удаление B2B документов' },
+      { key: 'delete', label: 'Удаление документов' },
     ],
   },
   files: {
-    label: 'Реестр Файлов и Cloud R2',
+    label: 'Облачный архив',
     actions: [
-      { key: 'view', label: 'Просмотр общего архива сканов' },
+      { key: 'view', label: 'Просмотр архива файлов' },
       { key: 'download', label: 'Скачивание оригиналов файлов' },
-      { key: 'upload', label: 'Загрузка новых сканов и первичной документации' },
+      { key: 'upload', label: 'Загрузка новых сканов' },
       { key: 'edit', label: 'Редактирование описаний и категорий' },
-      { key: 'delete', label: 'Удаление сканов из хранилища R2' },
+      { key: 'delete', label: 'Удаление файлов из архива' },
     ],
   },
   counterparties: {
@@ -78,13 +77,6 @@ export const MODULE_CONFIG: Record<
     actions: [
       { key: 'view', label: 'Просмотр карточки организации' },
       { key: 'edit', label: 'Редактирование реквизитов и логотипа' },
-    ],
-  },
-  export: {
-    label: 'Экспорт в 1С Бухгалтерию',
-    actions: [
-      { key: 'view', label: 'Просмотр страницы выгрузок' },
-      { key: 'export_excel', label: 'Генерация и скачивание Excel файлов' },
     ],
   },
 };

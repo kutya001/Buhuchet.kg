@@ -70,7 +70,6 @@ export interface ModulePermissions {
   edit_employee?: boolean;
   reset_password?: boolean;
   manage_roles?: boolean;
-  export_excel?: boolean;
 }
 
 export interface RolePermissions {
@@ -79,7 +78,6 @@ export interface RolePermissions {
   counterparties?: ModulePermissions;
   employees?: ModulePermissions;
   company?: ModulePermissions;
-  export?: ModulePermissions;
 }
 
 export interface CompanyRole {
