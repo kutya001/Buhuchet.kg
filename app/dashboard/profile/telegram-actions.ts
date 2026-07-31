@@ -62,6 +62,13 @@ export async function generateTelegramOtpAction(): Promise<ActionResponse<Telegr
       return { success: false, error: `Ошибка базы данных: ${dbError.message}` };
     }
 
+    // Автоматическая гарантированная регистирация Webhook в Telegram API
+    const token = process.env.TELEGRAM_BOT_TOKEN;
+    const siteUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://buhuchet.kg';
+    if (token) {
+      fetch(`https://api.telegram.org/bot${token}/setWebhook?url=${encodeURIComponent(`${siteUrl}/api/telegram/webhook`)}`).catch(() => {});
+    }
+
     const botName = process.env.NEXT_PUBLIC_TELEGRAM_BOT_NAME || 'BuhuchetKgBot';
     const deepLink = `https://t.me/${botName}`;
 

@@ -16,11 +16,12 @@ export interface NotifyTelegramParams {
  */
 export async function sendTelegramMessage(chatId: number | string, text: string): Promise<boolean> {
   try {
-    const token = process.env.TELEGRAM_BOT_TOKEN;
-    if (!token) {
+    const rawToken = process.env.TELEGRAM_BOT_TOKEN;
+    if (!rawToken) {
       console.warn('[Telegram Notifier] TELEGRAM_BOT_TOKEN не задан в переменных окружения');
       return false;
     }
+    const token = rawToken.trim();
 
     const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: 'POST',

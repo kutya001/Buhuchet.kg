@@ -94,11 +94,11 @@ export async function GET(req: Request) {
     const host = req.headers.get('host') || 'buhuchet.kg';
     const protocol = host.includes('localhost') ? 'http' : 'https';
     const webhookUrl = `${protocol}://${host}/api/telegram/webhook`;
-    const token = process.env.TELEGRAM_BOT_TOKEN;
-
-    if (!token) {
+    const rawToken = process.env.TELEGRAM_BOT_TOKEN;
+    if (!rawToken) {
       return NextResponse.json({ success: false, error: 'TELEGRAM_BOT_TOKEN не задан в Vercel / .env' });
     }
+    const token = rawToken.trim();
 
     // Если передан флаг ?action=info, запрашиваем текущую информацию
     if (searchParams.get('action') === 'info') {
