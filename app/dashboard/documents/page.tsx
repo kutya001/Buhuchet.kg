@@ -23,8 +23,9 @@ import {
 import { createClient } from '@/lib/supabase/client';
 import { getB2BDocumentsAction } from './actions';
 import { DOCUMENT_TYPES, DOCUMENT_STATUSES } from '@/types/document.types';
-import type { Document, Company, DocumentStatus } from '@/types/database.types';
+import type { Document, Company, DocumentStatus, UserProfile } from '@/types/database.types';
 import { UnifiedDataGrid, ColumnDef } from '@/components/ui/unified/UnifiedDataGrid';
+import { hasPermission } from '@/lib/auth/permissions';
 
 type FullB2BDocument = Document & {
   sender_company?: Company | null;
@@ -45,9 +46,24 @@ export default function B2BDocumentsRegistryPage() {
 
   const [serverErrorMsg, setServerErrorMsg] = useState<string | null>(null);
 
+  const [currentProfile, setCurrentProfile] = useState<UserProfile | null>(null);
+
   const loadDocuments = async () => {
     setLoading(true);
     setServerErrorMsg(null);
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (user) {
+      const { data: prof } = await supabase
+        .from('users')
+        .select('*, companies(*), company_roles(*)')
+        .eq('id', user.id)
+        .single();
+      if (prof) setCurrentProfile(prof as UserProfile);
+    }
 
     const res = await getB2BDocumentsAction(1, 200);
     if (res.success && res.data) {
@@ -66,11 +82,26 @@ export default function B2BDocumentsRegistryPage() {
     loadDocuments();
   }, []);
 
-  // Фильтрация по вкладкам
+  // Фильтрация по вкладкам и разрешённым статусам
   const filteredDocuments = documents.filter((doc) => {
     if (activeTab === 'inbox' && (doc.receiver_company_id !== currentCompanyId || doc.status === 'draft')) return false;
     if (activeTab === 'outbox' && doc.sender_company_id !== currentCompanyId) return false;
     if (activeTab === 'drafts' && doc.status !== 'draft') return false;
+
+    // Гранулярная проверка разрешений по статусам
+    if (currentProfile && !currentProfile.is_super_admin && currentProfile.role !== 'owner' && !currentProfile.company_roles?.is_system) {
+      const canAll = hasPermission(currentProfile, 'documents', 'view_all_statuses');
+      if (!canAll) {
+        const canDraft = hasPermission(currentProfile, 'documents', 'view_draft_only');
+        const canSent = hasPermission(currentProfile, 'documents', 'view_sent_only');
+        const canAccepted = hasPermission(currentProfile, 'documents', 'view_accepted_only');
+
+        if (doc.status === 'draft' && !canDraft) return false;
+        if ((doc.status === 'sent' || doc.status === 'recalled') && !canSent) return false;
+        if ((doc.status === 'accepted' || doc.status === 'processed') && !canAccepted) return false;
+      }
+    }
+
     return true;
   });
 

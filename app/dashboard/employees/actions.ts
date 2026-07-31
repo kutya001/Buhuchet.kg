@@ -261,12 +261,17 @@ export async function updateEmployeeAction(
 
     const { data: targetUser } = await adminSupabase
       .from('users')
-      .select('company_id')
+      .select('company_id, role')
       .eq('id', employeeId)
       .single();
 
     if (!targetUser || (targetUser.company_id !== ctx.companyId && !ctx.isSuperAdmin)) {
       return { success: false, error: 'Доступ запрещен: чужой сотрудник' };
+    }
+
+    // Запрет редактирования аккаунта Владельца любыми другими сотрудниками
+    if (targetUser.role === 'owner' && ctx.role !== 'owner' && !ctx.isSuperAdmin) {
+      return { success: false, error: 'Доступ запрещен: нельзя редактировать профиль Владельца организации' };
     }
 
     const { error } = await adminSupabase
@@ -312,12 +317,17 @@ export async function resetEmployeePasswordAction(
     const adminSupabase = await createAdminClient();
     const { data: targetUser } = await adminSupabase
       .from('users')
-      .select('company_id')
+      .select('company_id, role')
       .eq('id', employeeId)
       .single();
 
     if (!targetUser || (targetUser.company_id !== ctx.companyId && !ctx.isSuperAdmin)) {
       return { success: false, error: 'Доступ запрещен' };
+    }
+
+    // Запрет сброса пароля Владельца другими сотрудниками
+    if (targetUser.role === 'owner' && ctx.role !== 'owner' && !ctx.isSuperAdmin) {
+      return { success: false, error: 'Доступ запрещен: нельзя менять пароль Владельца организации' };
     }
 
     const { error: authErr } = await adminSupabase.auth.admin.updateUserById(employeeId, {

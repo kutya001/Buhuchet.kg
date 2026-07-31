@@ -70,9 +70,35 @@ export interface ModulePermissions {
   edit_employee?: boolean;
   reset_password?: boolean;
   manage_roles?: boolean;
+
+  // Расширенные гранулярные права вкладок и статусов
+  view_all_statuses?: boolean;
+  view_draft_only?: boolean;
+  view_sent_only?: boolean;
+  view_accepted_only?: boolean;
+
+  tab_counterparties?: boolean;
+  tab_partnerships?: boolean;
+  tab_catalog?: boolean;
+
+  tab_profile?: boolean;
+  tab_legal_docs?: boolean;
+  upload_legal_doc?: boolean;
+  add_legal_doc?: boolean;
+  edit_legal_doc?: boolean;
+  delete_legal_doc?: boolean;
+
+  tab_my_profile?: boolean;
+  tab_employees?: boolean;
+  tab_roles?: boolean;
+  edit_my_profile?: boolean;
+  create_role?: boolean;
+  edit_role?: boolean;
+  delete_role?: boolean;
 }
 
 export interface RolePermissions {
+  dashboard?: ModulePermissions;
   documents?: ModulePermissions;
   files?: ModulePermissions;
   counterparties?: ModulePermissions;

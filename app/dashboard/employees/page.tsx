@@ -44,7 +44,7 @@ import {
 import type { UserProfile, CompanyRole, RolePermissions } from '@/types/database.types';
 import { UnifiedDataGrid } from '@/components/ui/unified/UnifiedDataGrid';
 
-import { MODULE_CONFIG, ModuleName, ActionName } from '@/lib/auth/permissions';
+import { MODULE_CONFIG, ModuleName, ActionName, hasPermission } from '@/lib/auth/permissions';
 
 export default function EmployeesModulePage() {
   const [activeTab, setActiveTab] = useState<'profile' | 'employees' | 'roles'>('profile');
@@ -326,43 +326,49 @@ export default function EmployeesModulePage() {
           </p>
         </div>
 
-        {/* Переключатель вкладок */}
+        {/* Переключатель вкладок по матрице доступов */}
         <div className="flex items-center space-x-1 p-1 bg-muted/80 border border-border rounded-xl">
-          <button
-            onClick={() => setActiveTab('profile')}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-bold transition-all min-h-[40px] ${
-              activeTab === 'profile'
-                ? 'bg-primary text-primary-foreground shadow-md'
-                : 'text-muted-foreground hover:text-foreground hover:bg-accent/60'
-            }`}
-          >
-            <User className="h-4 w-4" />
-            <span>Мой профиль</span>
-          </button>
+          {hasPermission(currentProfile, 'employees', 'tab_my_profile') && (
+            <button
+              onClick={() => setActiveTab('profile')}
+              className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-bold transition-all min-h-[40px] ${
+                activeTab === 'profile'
+                  ? 'bg-primary text-primary-foreground shadow-md'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-accent/60'
+              }`}
+            >
+              <User className="h-4 w-4" />
+              <span>Мой профиль</span>
+            </button>
+          )}
 
-          <button
-            onClick={() => setActiveTab('employees')}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-bold transition-all min-h-[40px] ${
-              activeTab === 'employees'
-                ? 'bg-primary text-primary-foreground shadow-md'
-                : 'text-muted-foreground hover:text-foreground hover:bg-accent/60'
-            }`}
-          >
-            <Users className="h-4 w-4" />
-            <span>Мои сотрудники ({totalEmployees})</span>
-          </button>
+          {hasPermission(currentProfile, 'employees', 'tab_employees') && (
+            <button
+              onClick={() => setActiveTab('employees')}
+              className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-bold transition-all min-h-[40px] ${
+                activeTab === 'employees'
+                  ? 'bg-primary text-primary-foreground shadow-md'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-accent/60'
+              }`}
+            >
+              <Users className="h-4 w-4" />
+              <span>Мои сотрудники ({totalEmployees})</span>
+            </button>
+          )}
 
-          <button
-            onClick={() => setActiveTab('roles')}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-bold transition-all min-h-[40px] ${
-              activeTab === 'roles'
-                ? 'bg-primary text-primary-foreground shadow-md'
-                : 'text-muted-foreground hover:text-foreground hover:bg-accent/60'
-            }`}
-          >
-            <Shield className="h-4 w-4" />
-            <span>Роли и доступы ({roles.length})</span>
-          </button>
+          {hasPermission(currentProfile, 'employees', 'tab_roles') && (
+            <button
+              onClick={() => setActiveTab('roles')}
+              className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-bold transition-all min-h-[40px] ${
+                activeTab === 'roles'
+                  ? 'bg-primary text-primary-foreground shadow-md'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-accent/60'
+              }`}
+            >
+              <Shield className="h-4 w-4" />
+              <span>Роли и доступы ({roles.length})</span>
+            </button>
+          )}
         </div>
       </div>
 

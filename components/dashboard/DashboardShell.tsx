@@ -49,6 +49,7 @@ export function DashboardShell({
   const isActive = (path: string) => pathname === path;
 
   // Проверка разрешений
+  const canViewDashboard = hasPermission(userProfile, 'dashboard', 'view');
   const canViewDocuments = hasPermission(userProfile, 'documents', 'view');
   const canViewCounterparties = hasPermission(userProfile, 'counterparties', 'view');
   const canViewFiles = hasPermission(userProfile, 'files', 'view');
@@ -79,19 +80,21 @@ export function DashboardShell({
 
           {/* Единые лаконичные пункты навигации */}
           <nav className="space-y-1">
-            <Link
-              href="/dashboard"
-              prefetch={true}
-              className={`flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                isActive('/dashboard')
-                  ? 'bg-blue-600/20 text-blue-500 dark:text-blue-400 border border-blue-500/30 font-bold'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-              }`}
-              title="Главная"
-            >
-              <LayoutDashboard className="h-4 w-4 text-blue-500 dark:text-blue-400 flex-shrink-0" />
-              {!isCollapsed && <span className="truncate">Главная</span>}
-            </Link>
+            {canViewDashboard && (
+              <Link
+                href="/dashboard"
+                prefetch={true}
+                className={`flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                  isActive('/dashboard')
+                    ? 'bg-blue-600/20 text-blue-500 dark:text-blue-400 border border-blue-500/30 font-bold'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                }`}
+                title="Главная"
+              >
+                <LayoutDashboard className="h-4 w-4 text-blue-500 dark:text-blue-400 flex-shrink-0" />
+                {!isCollapsed && <span className="truncate">Главная</span>}
+              </Link>
+            )}
 
             {canViewDocuments && (
               <Link
