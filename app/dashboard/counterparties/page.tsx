@@ -1010,6 +1010,9 @@ export default function CounterpartiesPage() {
               onChange={(e) => setCreateName(e.target.value)}
               placeholder="ОсОО ВекторТрейд..."
               required
+              className="bg-background border-border text-foreground min-h-[44px]"
+            />
+          </div>
           <div className="space-y-1">
             <Label className="text-xs text-muted-foreground">ИНН КР (14 цифр) *</Label>
             <Input
