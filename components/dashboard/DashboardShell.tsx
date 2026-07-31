@@ -59,7 +59,7 @@ export function DashboardShell({
     <div className="min-h-screen flex flex-col md:flex-row bg-background text-foreground relative overflow-x-hidden">
       {/* 1. DESKTOP COLLAPSIBLE SIDEBAR */}
       <aside
-        className={`hidden md:flex flex-col justify-between p-4 bg-card/70 border-r border-border backdrop-blur-xl transition-all duration-300 ease-in-out flex-shrink-0 ${
+        className={`hidden md:flex flex-col justify-between p-4 bg-card/80 border border-border rounded-2xl sm:rounded-3xl backdrop-blur-xl transition-all duration-300 ease-in-out flex-shrink-0 sticky top-3 sm:top-4 h-[calc(100vh-1.5rem)] sm:h-[calc(100vh-2rem)] my-3 sm:my-4 ml-3 sm:ml-4 shadow-2xl overflow-y-auto ${
           isCollapsed ? 'w-20' : 'w-64'
         }`}
       >
