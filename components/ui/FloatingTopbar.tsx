@@ -34,12 +34,10 @@ export function FloatingTopbar({
     setMounted(true);
     const updateDateTime = () => {
       const now = new Date();
-      setTimeStr(
-        now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-      );
-      setDateStr(
-        now.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })
-      );
+      const time = now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+      const date = now.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      setTimeStr(time);
+      setDateStr(date);
     };
 
     updateDateTime();
@@ -48,81 +46,69 @@ export function FloatingTopbar({
   }, []);
 
   return (
-    <header className="fixed top-3 left-3 right-3 sm:left-6 sm:right-6 z-40 rounded-2xl bg-card/80 backdrop-blur-2xl border border-border/80 shadow-xl px-3 sm:px-5 py-2 transition-all">
+    <header className="fixed top-3 left-3 right-3 sm:left-6 sm:right-6 z-40 rounded-2xl bg-card/80 backdrop-blur-2xl border border-border/80 shadow-xl px-3 py-2 transition-all">
       <div className="flex items-center justify-between gap-2">
-        {/* Левая часть: Гамбургер + Поиск */}
-        <div className="flex items-center gap-2 flex-1 min-w-0">
-          {/* Гамбургер на мобилке */}
+        {/* Левая часть: Гамбургер + Лупа/Поиск */}
+        <div className="flex items-center gap-2 min-w-0">
+          {/* Гамбургер для открытия меню */}
           {onOpenMobileMenu && (
             <Button
               variant="ghost"
               size="icon"
               onClick={onOpenMobileMenu}
-              className="md:hidden h-9 w-9 rounded-xl border border-border/60 shrink-0 bg-background/50 hover:bg-accent backdrop-blur-sm"
+              className="h-9 w-9 rounded-xl border border-border/60 shrink-0 bg-background/50 hover:bg-accent backdrop-blur-sm"
               title="Открыть меню"
             >
-              <Menu className="w-5 h-5 text-foreground" />
+              <Menu className="w-4 h-4 text-foreground" />
             </Button>
           )}
 
-          {/* ПОИСК ДЛЯ ПК */}
-          <div className="hidden sm:flex items-center flex-1 max-w-md relative">
-            <Search className="w-4 h-4 absolute left-3 text-muted-foreground" />
-            <Input
-              onChange={(e) => onSearchChange?.(e.target.value)}
-              placeholder="Поиск по документам, ИНН, контрагентам..."
-              className="pl-9 h-9 text-xs bg-muted/40 border-border/60 focus:bg-background rounded-xl w-full text-foreground"
-            />
-          </div>
-
-          {/* ВЫПАДАЮЩИЙ ПОИСК ДЛЯ МОБИЛОК (По лупе) */}
-          <div className="flex sm:hidden items-center flex-1">
-            {isSearchExpanded ? (
-              <div className="flex items-center gap-1.5 w-full animate-in fade-in duration-200">
-                <Input
-                  autoFocus
-                  onChange={(e) => onSearchChange?.(e.target.value)}
-                  placeholder="Поиск по документам, ИНН..."
-                  className="h-9 text-xs bg-muted/60 border-border rounded-xl flex-1 text-foreground"
-                />
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setIsSearchExpanded(false)}
-                  className="h-8 w-8 rounded-xl p-0"
-                >
-                  <X className="w-4 h-4" />
-                </Button>
-              </div>
-            ) : (
+          {/* Кнопка Лупы для поиска */}
+          {!isSearchExpanded ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setIsSearchExpanded(true)}
+              className="h-9 w-9 rounded-xl border border-border/60 shrink-0"
+              title="Поиск"
+            >
+              <Search className="w-4 h-4 text-foreground" />
+            </Button>
+          ) : (
+            <div className="flex items-center gap-1.5 animate-in fade-in duration-200 min-w-[180px] max-w-[260px]">
+              <Input
+                autoFocus
+                onChange={(e) => onSearchChange?.(e.target.value)}
+                placeholder="Поиск по ИНН, документам..."
+                className="h-9 text-xs bg-muted/60 border-border rounded-xl flex-1 text-foreground"
+              />
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => setIsSearchExpanded(true)}
-                className="h-9 w-9 rounded-xl border border-border/60"
-                title="Поиск"
+                onClick={() => setIsSearchExpanded(false)}
+                className="h-8 w-8 rounded-xl p-0 shrink-0"
               >
-                <Search className="w-4 h-4 text-foreground" />
+                <X className="w-4 h-4" />
               </Button>
-            )}
-          </div>
+            </div>
+          )}
         </div>
 
-        {/* Правая часть (Desktop): Время, Дата + Иконки Тем + Выход */}
+        {/* Правая часть: Дата/Время (01.08.2026 - 00:07) + Переключатель Темы (Иконки) */}
         {!isSearchExpanded && (
-          <div className="hidden md:flex items-center gap-3">
-            {/* Часы и Дата */}
-            <div className="px-2.5 py-1 text-xs font-mono text-muted-foreground flex items-center gap-2 bg-muted/40 rounded-xl border border-border/60" suppressHydrationWarning>
-              <div className="flex items-center gap-1">
-                <Clock className="w-3.5 h-3.5 text-primary" />
-                <span className="font-bold text-foreground">{mounted ? timeStr : '--:--:--'}</span>
-              </div>
-              <span>•</span>
-              <span>{mounted ? dateStr : '--.--.----'}</span>
+          <div className="flex items-center gap-2 shrink-0">
+            {/* Виджет Даты и Времени точно как на скриншоте: DD.MM.YYYY - HH:mm */}
+            <div
+              className="px-2.5 py-1 text-[11px] font-mono text-muted-foreground bg-muted/40 rounded-xl border border-border/60 flex items-center justify-center shrink-0"
+              suppressHydrationWarning
+            >
+              <span className="font-bold text-foreground">
+                {mounted ? `${dateStr} - ${timeStr}` : '--.--.---- - --:--'}
+              </span>
             </div>
 
-            {/* ЧИСТЫЕ ИКОНКИ ТЕМ */}
-            <div className="inline-flex items-center p-1 rounded-xl bg-muted/40 border border-border/60 backdrop-blur-xl">
+            {/* Островок выбора темы: Moon / Sun / Coffee */}
+            <div className="inline-flex items-center p-1 rounded-xl bg-card border border-border/80 backdrop-blur-xl shrink-0">
               <button
                 type="button"
                 onClick={() => setTheme('dark')}
@@ -162,18 +148,6 @@ export function FloatingTopbar({
                 <Coffee className="h-4 w-4 text-amber-700" />
               </button>
             </div>
-
-            {onLogout && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={onLogout}
-                className="h-9 w-9 rounded-xl border border-border/60 text-muted-foreground hover:text-red-400 hover:bg-red-500/10"
-                title="Выйти из системы"
-              >
-                <LogOut className="w-4 h-4" />
-              </Button>
-            )}
           </div>
         )}
       </div>
