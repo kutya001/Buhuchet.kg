@@ -235,6 +235,7 @@ export function DashboardShell({
           userProfile={userProfile}
           isSidebarCollapsed={isCollapsed}
           onToggleSidebar={() => setIsCollapsed(!isCollapsed)}
+          onOpenMobileMenu={() => setIsCollapsed(!isCollapsed)}
         />
 
         {/* Главный контент с отступом сверху pt-16 */}
