@@ -1364,14 +1364,6 @@ export default function SuperAdminPage() {
         </div>
         </main>
       </div>
-
-      {/* Мобильная кнопка быстрой помощи/создания */}
-      <MobileFAB
-        onClick={() => {
-          alert(`Панель Суперадминистратора: выбран раздел ${activeTab}`);
-        }}
-        title="Создать"
-      />
     </div>
   );
 }

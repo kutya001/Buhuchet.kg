@@ -399,9 +399,6 @@ export function DashboardShell({
         </div>
       )}
 
-      {/* Быстрая кнопка на смартфонах */}
-      <MobileFAB />
-
       {/* 5. МОБИЛЬНЫЙ НИЖНИЙ ПАРЯЩИЙ ОСТРОВОК */}
       <FloatingBottomNav userProfile={userProfile} />
     </div>

@@ -1147,9 +1147,6 @@ export default function CounterpartiesPage() {
           </div>
         </div>
       </UnifiedFormModal>
-
-      {/* Круглая кнопка + строго для мобилок НАД нижней панелью (под правый палец) */}
-      <MobileFAB onClick={() => setShowCreateModal(true)} title="Добавить контрагента" />
     </div>
   );
 }
