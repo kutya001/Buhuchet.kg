@@ -54,6 +54,7 @@ import type { Counterparty, Company, Document, DocumentFile, PartnershipStatus, 
 import imageCompression from 'browser-image-compression';
 import { UnifiedDataGrid, ColumnDef } from '@/components/ui/unified/UnifiedDataGrid';
 import { UnifiedFormModal } from '@/components/ui/unified/UnifiedFormModal';
+import { ActionRowGroup } from '@/components/ui/unified/ActionIcons';
 import { hasPermission } from '@/lib/auth/permissions';
 
 type PartnerReport = {
@@ -483,44 +484,13 @@ export default function CounterpartiesPage() {
       key: 'actions',
       label: 'Действия',
       sortable: false,
-      render: (c) => {
-        const isBlocked = (c as any).target_company?.status === 'blocked';
-        return (
-          <div className="flex items-center justify-end space-x-2">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => handleOpenProfileModal(c)}
-              disabled={profileLoading}
-              className="border-border text-foreground hover:bg-background text-xs min-h-[36px]"
-            >
-              <FolderOpen className="h-3.5 w-3.5 mr-1 text-indigo-400" />
-              Сканы R2
-            </Button>
-
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => handleOpenPartnerReport(c)}
-              className="border-border text-amber-400 hover:bg-amber-500/10 text-xs min-h-[36px]"
-            >
-              <BarChart3 className="h-3.5 w-3.5 mr-1" />
-              Отчет
-            </Button>
-
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => handleTerminatePartnership(c.id)}
-              disabled={isPending}
-              className={isBlocked ? 'border-rose-500 text-xs text-rose-400 hover:bg-rose-500/20 min-h-[36px] font-bold shadow-lg shadow-rose-500/10' : 'border-border text-xs text-destructive hover:bg-destructive/10 min-h-[36px]'}
-            >
-              <UserX className="h-3.5 w-3.5 mr-1" />
-              {isBlocked ? 'Прекратить сотрудничество' : 'Удалить'}
-            </Button>
-          </div>
-        );
-      },
+      render: (c) => (
+        <ActionRowGroup
+          onView={() => handleOpenProfileModal(c)}
+          onReport={() => handleOpenPartnerReport(c)}
+          onDelete={() => handleTerminatePartnership(c.id)}
+        />
+      ),
     },
   ];
 

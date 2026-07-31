@@ -7,9 +7,15 @@ import { Button } from '@/components/ui/button';
 interface MobileFABProps {
   onClick?: () => void;
   title?: string;
+  hasBottomNav?: boolean;
 }
 
-export function MobileFAB({ onClick, title = 'Создать' }: MobileFABProps) {
+export function MobileFAB({ onClick, title = 'Создать', hasBottomNav = true }: MobileFABProps) {
+  // Если на мобилке уже отображается нижняя панель навигации с кнопкой +, не дублируем второй плюс
+  if (hasBottomNav) {
+    return null;
+  }
+
   return (
     <div className="md:hidden fixed bottom-6 right-5 z-50">
       <Button
