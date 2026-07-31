@@ -286,39 +286,39 @@ export default function CompanyProfilePage() {
 
       {/* 1. Вкладка Профиль & Реквизиты */}
       {activeTab === 'profile' && company && (
-        <Card className="bg-muted/40 border-border p-6 space-y-6">
+        <Card className="bg-card border-border p-6 space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-4">
               <div>
-                <Label className="text-xs text-slate-500">Наименование</Label>
+                <Label className="text-xs text-muted-foreground">Наименование</Label>
                 <p className="text-lg font-bold text-foreground mt-0.5">{company.name}</p>
               </div>
 
               <div>
-                <Label className="text-xs text-slate-500">ИНН Кыргызской Республики</Label>
-                <p className="text-base font-mono font-bold text-amber-400 mt-0.5">{company.inn}</p>
+                <Label className="text-xs text-muted-foreground">ИНН Кыргызской Республики</Label>
+                <p className="text-base font-mono font-bold text-amber-500 mt-0.5">{company.inn}</p>
               </div>
 
               <div>
-                <Label className="text-xs text-slate-500">Отрасль Организации</Label>
-                <p className="text-sm text-slate-200 mt-0.5">{company.industry || 'Услуги / Консалтинг'}</p>
+                <Label className="text-xs text-muted-foreground">Отрасль Организации</Label>
+                <p className="text-sm font-semibold text-foreground mt-0.5">{company.industry || 'Услуги / Консалтинг'}</p>
               </div>
             </div>
 
             <div className="space-y-4">
               <div>
-                <Label className="text-xs text-slate-500">ФИО Руководителя</Label>
-                <p className="text-sm font-medium text-slate-200 mt-0.5">{company.director_name || '—'}</p>
+                <Label className="text-xs text-muted-foreground">ФИО Руководителя</Label>
+                <p className="text-sm font-semibold text-foreground mt-0.5">{company.director_name || '—'}</p>
               </div>
 
               <div>
-                <Label className="text-xs text-slate-500">Официальный E-mail</Label>
-                <p className="text-sm font-mono text-slate-200 mt-0.5">{company.email || '—'}</p>
+                <Label className="text-xs text-muted-foreground">Официальный E-mail</Label>
+                <p className="text-sm font-mono font-semibold text-foreground mt-0.5">{company.email || '—'}</p>
               </div>
 
               <div>
-                <Label className="text-xs text-slate-500">Юридический Адрес</Label>
-                <p className="text-sm text-slate-200 mt-0.5">{company.legal_address || company.address || '—'}</p>
+                <Label className="text-xs text-muted-foreground">Юридический Адрес</Label>
+                <p className="text-sm font-semibold text-foreground mt-0.5">{company.legal_address || company.address || '—'}</p>
               </div>
             </div>
           </div>

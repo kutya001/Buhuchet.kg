@@ -120,7 +120,7 @@ export default async function DashboardPage() {
 
         {canCreateDoc && (
           <Link href="/dashboard/documents/new" prefetch={true}>
-            <button className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs sm:text-sm transition-all shadow-lg shadow-blue-600/20 flex items-center justify-center min-h-[48px]">
+            <button className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs sm:text-sm transition-all shadow-md flex items-center justify-center min-h-[48px]">
               <Plus className="h-4 w-4 mr-1.5" />
               Создать B2B Отправку
             </button>

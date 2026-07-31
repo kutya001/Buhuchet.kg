@@ -51,10 +51,10 @@ export function ScanViewer({
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-900/60 border border-slate-800 rounded-xl overflow-hidden backdrop-blur-xl">
+    <div className="flex flex-col h-full bg-card border border-border rounded-xl overflow-hidden backdrop-blur-xl">
       {/* Top Toolbar */}
-      <div className="h-12 px-4 bg-slate-950/80 border-b border-slate-800 flex items-center justify-between">
-        <div className="flex items-center space-x-2 text-xs font-mono text-slate-300 truncate">
+      <div className="h-12 px-4 bg-muted/80 border-b border-border flex items-center justify-between">
+        <div className="flex items-center space-x-2 text-xs font-mono text-foreground truncate">
           <FileText className="h-4 w-4 text-blue-400 flex-shrink-0" />
           <span className="truncate">{fileName || 'Скан_документа.pdf'}</span>
           {fileKey && (
@@ -67,33 +67,33 @@ export function ScanViewer({
         <div className="flex items-center space-x-1">
           {realDownloadUrl && (
             <a href={realDownloadUrl} target="_blank" rel="noopener noreferrer" download>
-              <Button variant="ghost" size="sm" className="h-8 text-xs text-blue-400 hover:text-white">
+              <Button variant="ghost" size="sm" className="h-8 text-xs text-blue-400 hover:text-blue-500 hover:bg-muted">
                 <Download className="h-3.5 w-3.5 mr-1" />
                 Скачать из R2
               </Button>
             </a>
           )}
 
-          <Button variant="ghost" size="sm" onClick={handleZoomOut} className="h-8 w-8 p-0 text-slate-400 hover:text-white">
+          <Button variant="ghost" size="sm" onClick={handleZoomOut} className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground hover:bg-muted">
             <ZoomOut className="h-4 w-4" />
           </Button>
-          <span className="text-xs font-mono text-slate-400 px-1">{Math.round(zoom * 100)}%</span>
-          <Button variant="ghost" size="sm" onClick={handleZoomIn} className="h-8 w-8 p-0 text-slate-400 hover:text-white">
+          <span className="text-xs font-mono text-muted-foreground px-1">{Math.round(zoom * 100)}%</span>
+          <Button variant="ghost" size="sm" onClick={handleZoomIn} className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground hover:bg-muted">
             <ZoomIn className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="sm" onClick={handleRotate} className="h-8 w-8 p-0 text-slate-400 hover:text-white">
+          <Button variant="ghost" size="sm" onClick={handleRotate} className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground hover:bg-muted">
             <RotateCw className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="sm" onClick={handleReset} className="h-8 w-8 p-0 text-slate-400 hover:text-white">
+          <Button variant="ghost" size="sm" onClick={handleReset} className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground hover:bg-muted">
             <Maximize2 className="h-4 w-4" />
           </Button>
         </div>
       </div>
 
       {/* Interactive Scan Canvas Area */}
-      <div className="flex-1 p-6 overflow-auto flex items-center justify-center bg-slate-950/40 relative min-h-[400px]">
+      <div className="flex-1 p-6 overflow-auto flex items-center justify-center bg-background/50 relative min-h-[400px]">
         {loadingUrl ? (
-          <div className="flex items-center space-x-2 text-slate-400">
+          <div className="flex items-center space-x-2 text-muted-foreground">
             <Loader2 className="h-5 w-5 animate-spin text-blue-400" />
             <span>Генерация безопасной ссылки R2...</span>
           </div>

@@ -332,7 +332,7 @@ export default function EmployeesModulePage() {
             onClick={() => setActiveTab('profile')}
             className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-bold transition-all min-h-[40px] ${
               activeTab === 'profile'
-                ? 'bg-blue-600-white shadow-lg shadow-blue-600/30'
+                ? 'bg-primary text-primary-foreground shadow-md'
                 : 'text-muted-foreground hover:text-foreground hover:bg-accent/60'
             }`}
           >
@@ -344,7 +344,7 @@ export default function EmployeesModulePage() {
             onClick={() => setActiveTab('employees')}
             className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-bold transition-all min-h-[40px] ${
               activeTab === 'employees'
-                ? 'bg-blue-600-white shadow-lg shadow-blue-600/30'
+                ? 'bg-primary text-primary-foreground shadow-md'
                 : 'text-muted-foreground hover:text-foreground hover:bg-accent/60'
             }`}
           >
@@ -356,7 +356,7 @@ export default function EmployeesModulePage() {
             onClick={() => setActiveTab('roles')}
             className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-bold transition-all min-h-[40px] ${
               activeTab === 'roles'
-                ? 'bg-blue-600-white shadow-lg shadow-blue-600/30'
+                ? 'bg-primary text-primary-foreground shadow-md'
                 : 'text-muted-foreground hover:text-foreground hover:bg-accent/60'
             }`}
           >
@@ -496,14 +496,14 @@ export default function EmployeesModulePage() {
                   className="pl-9 bg-muted border-border text-xs rounded-xl min-h-[40px] text-foreground"
                 />
               </div>
-              <Button size="sm" onClick={handleSearchClick} className="bg-accent hover:bg-slate-700 text-xs min-h-[40px]">
+              <Button size="sm" onClick={handleSearchClick} className="bg-primary hover:bg-primary/90 text-primary-foreground text-xs min-h-[40px]">
                 Найти
               </Button>
             </div>
 
             <Button
               onClick={() => setShowAddEmpModal(true)}
-              className="bg-blue-600-white font-bold text-xs min-h-[44px] rounded-xl shadow-lg shadow-blue-600/20 w-full sm:w-auto"
+              className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs min-h-[44px] rounded-xl shadow-md w-full sm:w-auto"
             >
               <UserPlus className="h-4 w-4 mr-2" />
               + Добавить сотрудника
@@ -772,7 +772,7 @@ export default function EmployeesModulePage() {
                 <Button variant="outline" type="button" onClick={() => setShowAddEmpModal(false)} className="border-border text-foreground text-xs">
                   Отмена
                 </Button>
-                <Button type="submit" disabled={isPending} className="bg-blue-600-white font-bold text-xs">
+                <Button type="submit" disabled={isPending} className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs">
                   {isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <UserPlus className="h-4 w-4 mr-2" />}
                   Создать аккаунт
                 </Button>

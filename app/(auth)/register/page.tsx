@@ -34,7 +34,7 @@ export default async function RegisterPage({
       <Card className="w-full max-w-md bg-card border-border backdrop-blur-xl shadow-2xl relative z-10">
         <CardHeader className="text-center space-y-2 pb-6 border-b border-border">
           <Link href="/" className="inline-block">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-purple-600/20 text-purple-400 mx-auto border border-purple-500/30 hover:scale-105 transition-transform">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary mx-auto border border-primary/20 hover:scale-105 transition-transform">
               <UserPlus className="h-6 w-6" />
             </div>
           </Link>
@@ -94,7 +94,7 @@ export default async function RegisterPage({
           <CardFooter className="flex flex-col space-y-4 pt-2 pb-6 border-t border-border mt-4">
             <Button
               type="submit"
-              className="w-full bg-purple-600 hover:bg-purple-500 text-white font-medium shadow-lg shadow-purple-600/20 min-h-[44px]"
+              className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-medium shadow-md min-h-[44px]"
             >
               Продолжить к онбордингу
               <ArrowRight className="ml-2 h-4 w-4" />

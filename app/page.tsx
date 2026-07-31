@@ -85,7 +85,7 @@ export default function HomePage() {
 
           <Link
             href="/register"
-            className="px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold text-xs sm:text-sm transition-all shadow-lg shadow-blue-600/25 active:scale-95 whitespace-nowrap"
+            className="px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs sm:text-sm transition-all shadow-md active:scale-95 whitespace-nowrap"
           >
             <span className="hidden xs:inline">Подключить</span>
             <span className="xs:hidden">Старт</span>
@@ -115,7 +115,7 @@ export default function HomePage() {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
             <Link
               href="/register"
-              className="w-full sm:w-auto px-6 sm:px-8 py-3.5 sm:py-4 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm sm:text-base transition-all shadow-xl shadow-blue-600/30 flex items-center justify-center min-h-[48px] active:scale-95"
+              className="w-full sm:w-auto px-6 sm:px-8 py-3.5 sm:py-4 rounded-2xl bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-sm sm:text-base transition-all shadow-md flex items-center justify-center min-h-[48px] active:scale-95"
             >
               <span>Зарегистрировать Организацию</span>
               <ArrowRight className="ml-2 h-4 sm:h-5 w-4 sm:w-5" />

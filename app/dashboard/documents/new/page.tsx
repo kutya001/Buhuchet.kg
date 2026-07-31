@@ -249,33 +249,28 @@ export default function NewB2BDocumentPage() {
     <div className="max-w-4xl mx-auto space-y-6">
       <div className="flex items-center space-x-3">
         <Link href="/dashboard/documents">
-          <Button variant="outline" size="sm" className="border-slate-800 text-slate-400 hover:text-white min-h-[44px]">
+          <Button variant="outline" size="sm" className="border-border text-muted-foreground hover:text-foreground hover:bg-muted min-h-[44px]">
             <ArrowLeft className="h-4 w-4 mr-1" />
             Назад в реестр
           </Button>
         </Link>
         <div>
-          <h2 className="text-xl md:text-2xl font-bold text-white tracking-tight flex items-center">
+          <h2 className="text-xl md:text-2xl font-bold text-foreground tracking-tight flex items-center">
             {editDocId ? <Edit2 className="h-5 w-5 mr-2 text-blue-400" /> : <FileText className="h-5 w-5 mr-2 text-blue-400" />}
             {editDocId ? 'Редактирование Черновика Документа' : 'Создание Документа'}
           </h2>
-          <p className="text-xs md:text-sm text-slate-400">
+          <p className="text-xs md:text-sm text-muted-foreground">
             {editDocId ? 'Полное изменение реквизитов и прикрепленных сканов первички' : 'Передача сканов первички зарегистрированному партнеру КР'}
           </p>
         </div>
       </div>
 
-      <Card className="bg-slate-900/40 border-slate-800 backdrop-blur-xl shadow-2xl">
+      <Card className="bg-card border-border backdrop-blur-xl shadow-2xl">
         <form onSubmit={(e) => { e.preventDefault(); handleSave('sent'); }}>
           <CardContent className="space-y-6 pt-6">
             {msg && (
               <Alert
                 variant={msg.type === 'success' ? 'success' : 'destructive'}
-                className={
-                  msg.type === 'success'
-                    ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-400'
-                    : 'border-red-500/50 bg-red-500/10 text-red-400'
-                }
               >
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>{msg.text}</AlertDescription>
@@ -284,11 +279,11 @@ export default function NewB2BDocumentPage() {
 
             {/* Получатель */}
             <div className="space-y-2">
-              <Label className="text-xs md:text-sm font-semibold text-slate-200">
+              <Label className="text-xs md:text-sm font-semibold text-foreground">
                 Организация Получатель (Подтвержденный контрагент КР) *
               </Label>
               {partners.length === 0 ? (
-                <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-400 flex items-center justify-between">
+                <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-500 flex items-center justify-between">
                   <span>У вас пока нет подтвержденных контрагентов для отправки.</span>
                   <Link href="/dashboard/counterparties" className="underline font-bold">
                     Модуль Контрагенты
@@ -299,7 +294,7 @@ export default function NewB2BDocumentPage() {
                   value={receiverCompanyId}
                   onChange={(e) => setReceiverCompanyId(e.target.value)}
                   required
-                  className="w-full h-11 rounded-xl border border-slate-800 bg-slate-950 px-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold"
+                  className="w-full h-11 rounded-xl border border-border bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring font-semibold"
                 >
                   {partners.map((p) => (
                     <option key={p.id} value={p.id}>
@@ -313,14 +308,14 @@ export default function NewB2BDocumentPage() {
             {/* Реквизиты документа */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="docType" className="text-xs md:text-sm text-slate-300">
+                <Label htmlFor="docType" className="text-xs md:text-sm text-muted-foreground">
                   Тип Документа *
                 </Label>
                 <select
                   id="docType"
                   value={docType}
                   onChange={(e) => setDocType(e.target.value as DocumentType)}
-                  className="w-full h-11 rounded-xl border border-slate-800 bg-slate-950 px-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full h-11 rounded-xl border border-border bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                 >
                   <option value="realization">Накладная реализации</option>
                   <option value="purchase">Акт выполненных работ</option>
@@ -330,7 +325,7 @@ export default function NewB2BDocumentPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="docNumber" className="text-xs md:text-sm text-slate-300">
+                <Label htmlFor="docNumber" className="text-xs md:text-sm text-muted-foreground">
                   Номер документа *
                 </Label>
                 <Input
@@ -339,12 +334,12 @@ export default function NewB2BDocumentPage() {
                   onChange={(e) => setDocNumber(e.target.value)}
                   placeholder="Например: № ТН-4501"
                   required
-                  className="bg-slate-950 border-slate-800 text-slate-100 font-mono min-h-[44px]"
+                  className="bg-background border-border text-foreground font-mono min-h-[44px]"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="docDate" className="text-xs md:text-sm text-slate-300">
+                <Label htmlFor="docDate" className="text-xs md:text-sm text-muted-foreground">
                   Дата документа *
                 </Label>
                 <Input
@@ -353,15 +348,15 @@ export default function NewB2BDocumentPage() {
                   value={docDate}
                   onChange={(e) => setDocDate(e.target.value)}
                   required
-                  className="bg-slate-950 border-slate-800 text-slate-100 font-mono min-h-[44px]"
+                  className="bg-background border-border text-foreground font-mono min-h-[44px]"
                 />
               </div>
             </div>
 
             {/* Управление прикрепленными сканами R2 */}
-            <div className="space-y-3 pt-2 border-t border-slate-800">
+            <div className="space-y-3 pt-2 border-t border-border">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <Label className="text-xs md:text-sm font-semibold text-slate-200">
+                <Label className="text-xs md:text-sm font-semibold text-foreground">
                   Прикрепленные сканы первички (Удаление, Добавление, Замена) *
                 </Label>
 
@@ -369,7 +364,7 @@ export default function NewB2BDocumentPage() {
                   type="button"
                   variant="outline"
                   onClick={() => setShowArchiveSelectModal(true)}
-                  className="border-slate-800 text-purple-400 hover:bg-purple-500/10 text-xs min-h-[44px]"
+                  className="border-border text-purple-400 hover:bg-purple-500/10 text-xs min-h-[44px]"
                 >
                   <FolderOpen className="h-4 w-4 mr-1.5" />
                   Добавить скан из Архива
@@ -384,8 +379,8 @@ export default function NewB2BDocumentPage() {
               />
             </div>
 
-            <div className="space-y-2 pt-2 border-t border-slate-800">
-              <Label htmlFor="comment" className="text-xs md:text-sm text-slate-300">
+            <div className="space-y-2 pt-2 border-t border-border">
+              <Label htmlFor="comment" className="text-xs md:text-sm text-muted-foreground">
                 Примечание получателю
               </Label>
               <Input
@@ -393,32 +388,31 @@ export default function NewB2BDocumentPage() {
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
                 placeholder="Сообщение или инструкции бухгалтерской службе..."
-                className="bg-slate-950 border-slate-800 text-slate-100 min-h-[44px]"
+                className="bg-background border-border text-foreground min-h-[44px]"
               />
             </div>
           </CardContent>
 
-          <CardFooter className="pt-4 pb-6 border-t border-slate-800/60 flex flex-col sm:flex-row justify-end gap-3">
+          <CardFooter className="pt-4 pb-6 border-t border-border flex flex-col sm:flex-row justify-end gap-3">
             <Button
               type="button"
               variant="outline"
               onClick={() => handleSave('draft')}
               disabled={isPending || loading || partners.length === 0}
-              className="w-full sm:w-auto border-slate-800 text-slate-300 hover:text-white font-medium min-h-[48px]"
+              className="w-full sm:w-auto border-border text-foreground hover:bg-muted font-medium min-h-[48px]"
             >
               Сохранить черновик
             </Button>
 
             <Button
-              type="button"
-              onClick={() => handleSave('sent')}
+              type="submit"
               disabled={isPending || loading || partners.length === 0}
-              className="w-full sm:w-auto bg-blue-600 hover:bg-blue-500 text-white font-bold shadow-lg shadow-blue-600/20 px-8 min-h-[48px]"
+              className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground font-bold shadow-md px-8 min-h-[48px]"
             >
               {isPending ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Сохранение...
+                  Отправка...
                 </>
               ) : (
                 <>
@@ -433,17 +427,17 @@ export default function NewB2BDocumentPage() {
 
       {/* МОДАЛЬНОЕ ОКНО ВЫБОРА ИЗ ИМЕЮЩИХСЯ ФАЙЛОВ */}
       {showArchiveSelectModal && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-950/80 backdrop-blur-sm p-0 sm:p-4 animate-in fade-in duration-200">
-          <Card className="w-full max-w-2xl bg-slate-900 border-t sm:border border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-[88vh] rounded-t-3xl sm:rounded-2xl animate-in slide-in-from-bottom duration-300">
-            <div className="sm:hidden w-12 h-1 bg-slate-700 rounded-full mx-auto mt-3 mb-1 opacity-80" />
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-background/80 backdrop-blur-sm p-0 sm:p-4 animate-in fade-in duration-200">
+          <Card className="w-full max-w-2xl bg-card border-t sm:border border-border shadow-2xl overflow-hidden flex flex-col max-h-[88vh] rounded-t-3xl sm:rounded-2xl animate-in slide-in-from-bottom duration-300">
+            <div className="sm:hidden w-12 h-1 bg-border rounded-full mx-auto mt-3 mb-1 opacity-80" />
 
-            <CardHeader className="border-b border-slate-800 flex flex-row items-center justify-between pb-3 pt-3 sm:pt-6">
+            <CardHeader className="border-b border-border flex flex-row items-center justify-between pb-3 pt-3 sm:pt-6">
               <div>
-                <CardTitle className="text-base md:text-lg text-white flex items-center">
+                <CardTitle className="text-base md:text-lg text-foreground flex items-center">
                   <FolderOpen className="h-5 w-5 mr-2 text-purple-400" />
                   Выбрать скан из Личного Архива / Устава
                 </CardTitle>
-                <CardDescription className="text-xs text-slate-400">
+                <CardDescription className="text-xs text-muted-foreground">
                   Повторное прикрепление ранее загруженных R2-файлов
                 </CardDescription>
               </div>
@@ -451,27 +445,27 @@ export default function NewB2BDocumentPage() {
                 variant="ghost"
                 size="sm"
                 onClick={() => setShowArchiveSelectModal(false)}
-                className="h-9 w-9 p-0 text-slate-400"
+                className="h-9 w-9 p-0 text-muted-foreground hover:text-foreground"
               >
                 <X className="h-5 w-5" />
               </Button>
             </CardHeader>
 
-            <div className="p-4 border-b border-slate-800 bg-slate-950/40">
+            <div className="p-4 border-b border-border bg-muted/40">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Поиск по наименованию скана..."
                   value={archiveSearchTerm}
                   onChange={(e) => setArchiveSearchTerm(e.target.value)}
-                  className="pl-9 bg-slate-950 border-slate-800 text-slate-100 text-xs md:text-sm min-h-[44px]"
+                  className="pl-9 bg-background border-border text-foreground text-xs md:text-sm min-h-[44px]"
                 />
               </div>
             </div>
 
             <CardContent className="p-4 space-y-2 overflow-y-auto max-h-96">
               {filteredArchiveFiles.length === 0 ? (
-                <div className="text-center p-8 text-slate-500 text-xs">
+                <div className="text-center p-8 text-muted-foreground text-xs">
                   Файлы в личном архиве не найдены
                 </div>
               ) : (
@@ -484,14 +478,14 @@ export default function NewB2BDocumentPage() {
                       onClick={() => !isSelected && handleSelectFromArchive(file)}
                       className={`p-3 rounded-xl border transition-all flex items-center justify-between ${
                         isSelected
-                          ? 'bg-slate-950/40 border-slate-800 opacity-60 cursor-not-allowed'
-                          : 'bg-slate-950/60 border-slate-800 hover:border-purple-500/50 cursor-pointer'
+                          ? 'bg-muted/40 border-border opacity-60 cursor-not-allowed'
+                          : 'bg-background border-border hover:border-purple-500/50 cursor-pointer'
                       }`}
                     >
                       <div className="min-w-0 pr-3">
-                        <div className="font-bold text-white text-xs truncate">{file.file_name}</div>
-                        <p className="text-xs text-slate-300 mt-0.5">{file.description}</p>
-                        <Badge variant="outline" className="text-[10px] border-slate-800 text-purple-400 mt-1">
+                        <div className="font-bold text-foreground text-xs truncate">{file.file_name}</div>
+                        <p className="text-xs text-muted-foreground mt-0.5">{file.description}</p>
+                        <Badge variant="outline" className="text-[10px] border-border text-purple-400 mt-1">
                           {file.file_categories?.name || 'Архив'}
                         </Badge>
                       </div>

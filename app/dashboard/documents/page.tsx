@@ -252,7 +252,7 @@ export default function B2BDocumentsRegistryPage() {
         </div>
 
         <Link href="/dashboard/documents/new" prefetch={true} className="hidden md:block">
-          <Button className="bg-blue-600 hover:bg-blue-500 text-white font-medium text-xs md:text-sm shadow-lg shadow-blue-600/20 min-h-[44px]">
+          <Button className="bg-primary hover:bg-primary/90 text-primary-foreground font-medium text-xs md:text-sm shadow-md min-h-[44px]">
             <Plus className="h-4 w-4 mr-1.5" />
             Создать документ
           </Button>
