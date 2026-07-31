@@ -22,6 +22,7 @@ interface FloatingTopbarProps {
   userProfile?: any;
   isSidebarCollapsed?: boolean;
   onToggleSidebar?: () => void;
+  onOpenMobileMenu?: () => void;
   onSearchChange?: (val: string) => void;
   onLogout?: () => void;
 }
@@ -34,6 +35,7 @@ export function FloatingTopbar({
   userProfile,
   isSidebarCollapsed,
   onToggleSidebar,
+  onOpenMobileMenu,
   onSearchChange,
   onLogout,
 }: FloatingTopbarProps) {
@@ -57,10 +59,24 @@ export function FloatingTopbar({
   }, []);
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-border/80 bg-background/80 backdrop-blur-md px-4 sm:px-6 py-2.5 transition-all">
+    <header className="sticky top-0 z-40 w-full border-b border-border/80 bg-background/80 backdrop-blur-md px-3 sm:px-6 py-2.5 transition-all">
       <div className="flex items-center justify-between gap-3">
-        {/* Левый блок: Кнопка сайдбара, Компания и ИНН */}
-        <div className="flex items-center gap-3">
+        {/* Левый блок: Мобильный гамбургер, Кнопка сайдбара ПК, Компания и ИНН */}
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* Гамбургер для открытия левого выездного меню на мобилке */}
+          {onOpenMobileMenu && (
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={onOpenMobileMenu}
+              className="md:hidden h-9 w-9 rounded-xl border-border/60 shrink-0"
+              title="Открыть меню"
+            >
+              <Menu className="w-5 h-5 text-foreground" />
+            </Button>
+          )}
+
+          {/* Кнопка сайдбара на ПК */}
           {onToggleSidebar && (
             <Button
               variant="ghost"
@@ -73,10 +89,10 @@ export function FloatingTopbar({
             </Button>
           )}
 
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-muted/60 rounded-xl border border-border/60">
+          <div className="flex items-center gap-2 px-2.5 py-1.5 bg-muted/60 rounded-xl border border-border/60">
             <Building2 className="w-4 h-4 text-primary shrink-0" />
             <div className="flex flex-col min-w-0">
-              <span className="text-xs font-bold truncate max-w-[140px] sm:max-w-[240px] text-foreground leading-none">
+              <span className="text-xs font-bold truncate max-w-[130px] sm:max-w-[240px] text-foreground leading-none">
                 {companyName}
               </span>
               {companyInn && (

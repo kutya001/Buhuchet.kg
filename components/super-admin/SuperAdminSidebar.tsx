@@ -11,6 +11,7 @@ import {
   Database,
   ShieldAlert,
   LogOut,
+  X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
@@ -30,9 +31,18 @@ interface SidebarProps {
   onTabChange: (tab: SuperAdminTab) => void;
   pendingCount?: number;
   onLogout?: () => void;
+  isOpenMobile?: boolean;
+  onCloseMobile?: () => void;
 }
 
-export function SuperAdminSidebar({ activeTab, onTabChange, pendingCount = 0, onLogout }: SidebarProps) {
+export function SuperAdminSidebar({
+  activeTab,
+  onTabChange,
+  pendingCount = 0,
+  onLogout,
+  isOpenMobile = false,
+  onCloseMobile,
+}: SidebarProps) {
   const menuItems = [
     { id: 'companies' as SuperAdminTab, label: 'Организации', icon: Building2, badge: pendingCount > 0 ? pendingCount : null },
     { id: 'users' as SuperAdminTab, label: 'Пользователи', icon: Users },
@@ -43,28 +53,41 @@ export function SuperAdminSidebar({ activeTab, onTabChange, pendingCount = 0, on
     { id: 'db_inspector' as SuperAdminTab, label: 'Инспектор БД', icon: Database },
   ];
 
-  return (
-    <aside className="w-64 border-r border-border bg-card/60 backdrop-blur-md flex flex-col justify-between min-h-screen p-4 select-none shrink-0 transition-all">
+  const handleSelect = (tab: SuperAdminTab) => {
+    onTabChange(tab);
+    if (onCloseMobile) onCloseMobile();
+  };
+
+  const navContent = (
+    <div className="flex flex-col justify-between h-full p-4 select-none">
       <div className="space-y-6">
-        {/* Шапка Сайдбара: Брендинг и Статус Суперадмина */}
-        <div className="flex items-center gap-3 px-2 py-1">
-          <div className="p-2.5 bg-primary/10 text-primary rounded-xl border border-primary/20 shrink-0">
-            <ShieldAlert className="w-5 h-5 text-red-500" />
-          </div>
-          <div className="flex flex-col min-w-0">
-            <div className="flex items-center gap-1.5">
-              <span className="font-extrabold text-sm tracking-tight truncate text-foreground">Buhuchet.kg</span>
-              <Badge variant="destructive" className="text-[9px] font-mono px-1 py-0 uppercase">
-                ADMIN
-              </Badge>
+        {/* Шапка Сайдбара */}
+        <div className="flex items-center justify-between px-2 py-1">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="p-2.5 bg-primary/10 text-primary rounded-xl border border-primary/20 shrink-0">
+              <ShieldAlert className="w-5 h-5 text-red-500" />
             </div>
-            <span className="text-[11px] text-muted-foreground font-medium truncate">
-              Панель Суперадминистратора
-            </span>
+            <div className="flex flex-col min-w-0">
+              <div className="flex items-center gap-1.5">
+                <span className="font-extrabold text-sm tracking-tight truncate text-foreground">Buhuchet.kg</span>
+                <Badge variant="destructive" className="text-[9px] font-mono px-1 py-0 uppercase">
+                  ADMIN
+                </Badge>
+              </div>
+              <span className="text-[11px] text-muted-foreground font-medium truncate">
+                Панель Суперадминистратора
+              </span>
+            </div>
           </div>
+
+          {onCloseMobile && (
+            <Button variant="ghost" size="icon" className="md:hidden h-8 w-8 text-muted-foreground" onClick={onCloseMobile}>
+              <X className="w-5 h-5" />
+            </Button>
+          )}
         </div>
 
-        {/* Навигационное меню */}
+        {/* Пункты меню */}
         <nav className="space-y-1">
           <p className="px-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">
             Управление платформой
@@ -75,7 +98,7 @@ export function SuperAdminSidebar({ activeTab, onTabChange, pendingCount = 0, on
             return (
               <button
                 key={item.id}
-                onClick={() => onTabChange(item.id)}
+                onClick={() => handleSelect(item.id)}
                 className={cn(
                   'w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all duration-150 text-left',
                   isActive
@@ -98,7 +121,7 @@ export function SuperAdminSidebar({ activeTab, onTabChange, pendingCount = 0, on
         </nav>
       </div>
 
-      {/* Нижняя часть: Кнопка «Выйти из системы» */}
+      {/* Нижняя часть: Выход из системы */}
       <div className="pt-4 border-t border-border/80">
         <Button
           variant="ghost"
@@ -112,6 +135,28 @@ export function SuperAdminSidebar({ activeTab, onTabChange, pendingCount = 0, on
           <span>Выйти из системы</span>
         </Button>
       </div>
-    </aside>
+    </div>
+  );
+
+  return (
+    <>
+      {/* 1. Десктопная версия: скрыта на мобилках (hidden md:flex) */}
+      <aside className="hidden md:flex w-64 border-r border-border bg-card/60 backdrop-blur-md flex-col h-full min-h-screen shrink-0 transition-all">
+        {navContent}
+      </aside>
+
+      {/* 2. Мобильная выездная шторка (Off-canvas Drawer) */}
+      {isOpenMobile && (
+        <div className="md:hidden fixed inset-0 z-50 flex">
+          <div
+            className="fixed inset-0 bg-background/80 backdrop-blur-sm transition-opacity"
+            onClick={onCloseMobile}
+          />
+          <div className="relative w-4/5 max-w-xs bg-card border-r border-border h-full shadow-2xl z-10 flex flex-col">
+            {navContent}
+          </div>
+        </div>
+      )}
+    </>
   );
 }

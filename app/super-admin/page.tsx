@@ -96,6 +96,7 @@ import { cn } from '@/lib/utils';
 
 export default function SuperAdminPage() {
   const [activeTab, setActiveTab] = useState<SuperAdminTab>('companies');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [telegramSubTab, setTelegramSubTab] = useState<'connections' | 'codes' | 'logs'>('connections');
   const [telegramStats, setTelegramStats] = useState<TelegramAdminStatsData | null>(null);
   const [botHealth, setBotHealth] = useState<TelegramBotHealthData | null>(null);
@@ -938,19 +939,25 @@ export default function SuperAdminPage() {
   };
 
   return (
-    <div className="flex min-h-screen bg-background text-foreground antialiased">
-      {/* Левый Вертикальный Сайдбар */}
+    <div className="flex min-h-screen bg-background text-foreground antialiased w-full overflow-x-hidden">
+      {/* Левый Вертикальный Сайдбар (Десктоп + Мобильная Шторка) */}
       <SuperAdminSidebar
         activeTab={activeTab}
         onTabChange={handleTabChange}
         pendingCount={pendingCompanies.length}
+        isOpenMobile={isMobileMenuOpen}
+        onCloseMobile={() => setIsMobileMenuOpen(false)}
+        onLogout={() => {
+          window.location.href = '/login';
+        }}
       />
 
       {/* Основной Контент Панели */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 w-full overflow-hidden">
         <FloatingTopbar
           companyName="Buhuchet.kg Administration"
           isSuperAdmin={true}
+          onOpenMobileMenu={() => setIsMobileMenuOpen(true)}
           onLogout={() => {
             window.location.href = '/login';
           }}
