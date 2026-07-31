@@ -3,108 +3,74 @@
 @tailwind utilities;
 
 @layer base {
-  /* 🌙 1. ТЁМНАЯ ТЕМА (По умолчанию) */
+  /* 🌙 1. ТЁМНАЯ ТЁПЛАЯ ТЕМА (Warm Dark) */
   :root, html[data-theme="dark"] {
-    --background: 222.2 84% 4.9%; /* #020617 */
-    --foreground: 210 40% 98%; /* #F8FAFC */
+    --background: 30 7% 15.5%; /* #2B2825 */
+    --foreground: 40 18% 88.6%; /* #E8E4DC */
 
-    --card: 222.2 84% 6.5%; /* #0F172A */
-    --card-foreground: 210 40% 98%;
+    --card: 30 7% 22.4%; /* #3D3935 */
+    --card-foreground: 40 18% 88.6%;
 
-    --popover: 222.2 84% 6.5%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 30 7% 22.4%;
+    --popover-foreground: 40 18% 88.6%;
 
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    --primary: 207 30% 70%; /* #9DB5C9 - Warm Accent Blue */
+    --primary-foreground: 30 7% 15.5%;
 
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 30 8% 19.2%; /* #35312D */
+    --secondary-foreground: 40 18% 88.6%;
 
-    --muted: 217.2 32.6% 14%;
-    --muted-foreground: 215 20.2% 65.1%; /* #94A3B8 */
+    --muted: 30 8% 19.2%;
+    --muted-foreground: 30 7% 57.3%; /* #9A928A */
 
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 30 8% 19.2%;
+    --accent-foreground: 40 18% 88.6%;
 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 11 40% 71.8%; /* #D4A59A */
+    --destructive-foreground: 30 7% 15.5%;
 
-    --border: 217.2 32.6% 17.5%; /* #1E293B */
-    --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 48%;
+    --border: 30 7% 25.5%; /* #45413C */
+    --input: 30 7% 25.5%;
+    --ring: 207 30% 70%;
 
     --radius: 0.75rem;
 
-    --theme-card-raw: rgba(15, 23, 42, 0.85);
-    --theme-card-border-raw: #1e293b;
+    --theme-card-raw: rgba(61, 57, 53, 0.9);
+    --theme-card-border-raw: #45413c;
   }
 
-  /* ☀️ 2. СВЕТЛАЯ ТЕМА (Чистая минималистичная) */
-  html[data-theme="light"] {
-    --background: 210 40% 98%; /* #F8FAFC */
-    --foreground: 222.2 84% 4.9%; /* #0F172A */
+  /* ☀️ 2. СВЕТЛАЯ / ТЁПЛАЯ ТЕМА (Warm Minimal UI - Primary) */
+  html[data-theme="light"], html[data-theme="warm"] {
+    --background: 40 25% 97.5%; /* #FAF9F6 - Основной тёплый фон */
+    --foreground: 27 8% 32.7%; /* #5A534D - Тёплый коричневый текст */
 
-    --card: 0 0% 100%; /* #FFFFFF */
-    --card-foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%; /* #FFFFFF - Фон карточек */
+    --card-foreground: 27 8% 32.7%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover-foreground: 27 8% 32.7%;
 
-    --primary: 221.2 83.2% 53.3%;
-    --primary-foreground: 210 40% 98%;
+    --primary: 207 30% 70%; /* #9DB5C9 - Accent Blue */
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 40 20% 95.3%; /* #F5F3EF - Вторичный фон */
+    --secondary-foreground: 27 8% 32.7%;
 
-    --muted: 210 40% 94%;
-    --muted-foreground: 215.4 16.3% 42%; /* #64748B */
+    --muted: 40 30% 90.8%; /* #EFEAE0 - Третичный фон */
+    --muted-foreground: 32 8% 50.8%; /* #8B8278 - Вторичный текст */
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --accent: 40 20% 95.3%;
+    --accent-foreground: 27 8% 32.7%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 11 40% 71.8%; /* #D4A59A - Accent Red */
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 214.3 31.8% 88%; /* #E2E8F0 */
-    --input: 214.3 31.8% 88%;
-    --ring: 221.2 83.2% 53.3%;
+    --border: 40 18% 88.6%; /* #E8E4DC */
+    --input: 40 18% 88.6%;
+    --ring: 207 30% 70%;
 
     --theme-card-raw: #ffffff;
-    --theme-card-border-raw: #e2e8f0;
-  }
-
-  /* ☕ 3. ТЁПЛАЯ ТЕМА "Primary Theme" (Крем + Какао + Песочный) */
-  html[data-theme="warm"] {
-    --background: 37 27% 95%; /* #F6F3EE - Уютный тёплый крем */
-    --foreground: 18 13% 16%; /* #2E2623 - Тёмный шоколад / какао */
-
-    --card: 38 40% 97%; /* #FAF7F2 - Сливочно-бежевая карточка */
-    --card-foreground: 18 13% 16%;
-
-    --popover: 38 40% 97%;
-    --popover-foreground: 18 13% 16%;
-
-    --primary: 25 33% 41%; /* #8C6347 - Терракота какао */
-    --primary-foreground: 38 40% 97%;
-
-    --secondary: 35 25% 90%; /* #EFEADF - Пергаментный */
-    --secondary-foreground: 18 13% 16%;
-
-    --muted: 35 25% 88%;
-    --muted-foreground: 24 13% 41%; /* #75655B - Ореховый */
-
-    --accent: 35 25% 90%;
-    --accent-foreground: 18 13% 16%;
-
-    --destructive: 0 60% 45%;
-    --destructive-foreground: 38 40% 97%;
-
-    --border: 35 27% 82%; /* #E3D8C8 - Песочный */
-    --input: 35 27% 82%;
-    --ring: 25 33% 41%;
-
-    --theme-card-raw: #faf7f2;
-    --theme-card-border-raw: #e3d8c8;
+    --theme-card-border-raw: #e8e4dc;
   }
 }
 
@@ -116,6 +82,7 @@
   body {
     @apply bg-background text-foreground antialiased selection:bg-primary/20 selection:text-primary;
     font-feature-settings: "rlig" 1, "calt" 1;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   }
 }
 
@@ -133,21 +100,27 @@
   color: var(--foreground);
 }
 
-/* Кастомный скроллбар */
+/* Кастомный скроллбар по ТЗ */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: var(--secondary);
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.3);
-  border-radius: 9999px;
+  background: var(--border);
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.5);
+  background: var(--muted-foreground);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) var(--secondary);
 }
