@@ -468,7 +468,7 @@ export default function EmployeesModulePage() {
                 <Button
                   type="submit"
                   disabled={isPending}
-                  className="w-full bg-amber-600-white font-bold text-xs min-h-[44px] rounded-xl shadow-lg shadow-amber-600/20"
+                  className="w-full bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs min-h-[44px] rounded-xl shadow-md"
                 >
                   {isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Key className="h-4 w-4 mr-2" />}
                   Обновить пароль учетной записи
@@ -613,7 +613,7 @@ export default function EmployeesModulePage() {
 
             <Button
               onClick={() => setShowAddRoleModal(true)}
-              className="bg-emerald-600-white font-bold text-xs min-h-[44px] rounded-xl shadow-lg shadow-emerald-600/20"
+              className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs min-h-[44px] rounded-xl shadow-md"
             >
               <Plus className="h-4 w-4 mr-2" />
               + Создать роль
@@ -808,7 +808,7 @@ export default function EmployeesModulePage() {
               <Button variant="outline" onClick={() => setResetPwdEmp(null)} className="border-border text-foreground text-xs">
                 Отмена
               </Button>
-              <Button onClick={handleResetEmployeePassword} disabled={isPending || !adminNewPassword} className="bg-amber-600-white font-bold text-xs">
+              <Button onClick={handleResetEmployeePassword} disabled={isPending || !adminNewPassword} className="bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs">
                 {isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Check className="h-4 w-4 mr-2" />}
                 Установить пароль
               </Button>
@@ -855,7 +855,7 @@ export default function EmployeesModulePage() {
                 <Button variant="outline" type="button" onClick={() => setShowAddRoleModal(false)} className="border-border text-foreground text-xs">
                   Отмена
                 </Button>
-                <Button type="submit" disabled={isPending} className="bg-emerald-600-white font-bold text-xs">
+                <Button type="submit" disabled={isPending} className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs">
                   Создать роль
                 </Button>
               </CardFooter>
@@ -924,7 +924,7 @@ export default function EmployeesModulePage() {
               <Button variant="outline" onClick={() => setEditingRole(null)} className="border-border text-foreground text-xs">
                 Отмена
               </Button>
-              <Button onClick={handleSaveRoleMatrix} disabled={isPending} className="bg-emerald-600-white font-bold text-xs shadow-lg shadow-emerald-600/20">
+              <Button onClick={handleSaveRoleMatrix} disabled={isPending} className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md">
                 {isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Check className="h-4 w-4 mr-2" />}
                 Сохранить матрицу прав
               </Button>

@@ -141,11 +141,11 @@ export default function B2BDocumentsRegistryPage() {
         const partyInn = isInbox ? doc.sender_company?.inn : doc.receiver_company?.inn;
 
         return (
-          <div className="text-xs font-semibold text-slate-200 flex items-center space-x-1.5">
-            <Building2 className="h-3.5 w-3.5 text-amber-400 flex-shrink-0" />
+          <div className="text-xs font-semibold text-foreground flex items-center space-x-1.5">
+            <Building2 className="h-3.5 w-3.5 text-amber-500 flex-shrink-0" />
             <div>
               <p className="truncate max-w-[180px]">{partyName}</p>
-              {partyInn && <p className="text-[10px] text-slate-400 font-mono">ИНН: {partyInn}</p>}
+              {partyInn && <p className="text-[10px] text-muted-foreground font-mono">ИНН: {partyInn}</p>}
             </div>
           </div>
         );
