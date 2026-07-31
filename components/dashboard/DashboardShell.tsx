@@ -240,8 +240,8 @@ export function DashboardShell({
           }}
         />
 
-        {/* Главный контент с отступом сверху pt-16 */}
-        <main className="flex-1 px-3 sm:px-6 pt-16 overflow-y-auto">
+        {/* Главный контент с отступом сверху pt-16 sm:pt-20 */}
+        <main className="flex-1 px-3 sm:px-6 pt-16 sm:pt-20 overflow-y-auto">
           {children}
         </main>
       </div>
