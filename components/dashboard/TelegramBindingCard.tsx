@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Send, CheckCircle2, Loader2, AlertCircle, ExternalLink, RefreshCw, Unlink } from 'lucide-react';
+import { Send, CheckCircle2, Loader2, AlertCircle, ExternalLink, RefreshCw, Unlink, Copy, Check } from 'lucide-react';
 import {
   generateTelegramOtpAction,
   getTelegramConnectionStatusAction,
@@ -20,6 +20,13 @@ export function TelegramBindingCard() {
   const [username, setUsername] = useState<string | null>(null);
   const [otpData, setOtpData] = useState<TelegramOtpData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopyCode = (code: string) => {
+    navigator.clipboard.writeText(code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2500);
+  };
 
   const checkStatus = async () => {
     setLoading(true);
@@ -140,10 +147,28 @@ export function TelegramBindingCard() {
             <div className="p-4 rounded-2xl bg-sky-500/10 border border-sky-500/20 space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
-                  <span className="text-xs text-muted-foreground">Ваш одноразовый код подтверждения:</span>
-                  <div className="text-3xl font-extrabold font-mono text-sky-400 tracking-widest mt-1">
-                    {otpData.code}
-                  </div>
+                  <span className="text-xs text-muted-foreground">Нажмите на код, чтобы скопировать:</span>
+                  <button
+                    type="button"
+                    onClick={() => handleCopyCode(otpData.code)}
+                    className="flex items-center space-x-3 mt-1.5 p-2 px-3 rounded-xl bg-sky-500/20 border border-sky-500/40 hover:bg-sky-500/30 transition-all cursor-pointer group active:scale-95"
+                    title="Нажмите для копирования"
+                  >
+                    <span className="text-3xl font-extrabold font-mono text-sky-400 tracking-widest">
+                      {otpData.code}
+                    </span>
+                    {copied ? (
+                      <span className="flex items-center text-xs text-emerald-400 font-semibold bg-emerald-500/20 px-2 py-1 rounded-lg">
+                        <Check className="h-3.5 w-3.5 mr-1" />
+                        Скопировано!
+                      </span>
+                    ) : (
+                      <span className="flex items-center text-xs text-sky-300 opacity-80 group-hover:opacity-100 bg-sky-500/30 px-2 py-1 rounded-lg">
+                        <Copy className="h-3.5 w-3.5 mr-1" />
+                        Копировать
+                      </span>
+                    )}
+                  </button>
                 </div>
                 <a href={otpData.deepLink} target="_blank" rel="noreferrer">
                   <Button className="bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs min-h-[44px] rounded-xl px-5">

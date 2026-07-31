@@ -15,7 +15,7 @@ export async function POST(req: Request) {
     const username = update.message.from.username || null;
     const text = update.message.text.trim();
 
-    // Извлекаем код из команды /start 8492 или просто введенного текста 8492
+    // Проверяем, ввёл ли пользователь 4-значный код (например: 8737 или /start 8737)
     const codeMatch = text.match(/\/start\s+(\d{4})/) || text.match(/^(\d{4})$/);
 
     if (codeMatch) {
@@ -33,7 +33,7 @@ export async function POST(req: Request) {
       if (error || !verification) {
         await sendTelegramMessage(
           chatId,
-          '❌ **Неверный или истекший код подтверждения.**\n\nСгенерируйте новый 4-значный код в профиле системы Buhuchet.kg.'
+          '❌ **Неверный или истекший код подтверждения.**\n\nСгенерируйте новый 4-значный код в личной панели Buhuchet.kg и отправьте его сюда.'
         );
         return NextResponse.json({ ok: true });
       }
@@ -71,9 +71,10 @@ export async function POST(req: Request) {
         `✅ **Аккаунт успешно привязан!**\n\nВы подключены к уведомлениям компании **${companyName}** в платформе Buhuchet.kg.`
       );
     } else {
+      // На /start или любой иной текст просим ввести 4-значный код
       await sendTelegramMessage(
         chatId,
-        '👋 **Добро пожаловать в Buhuchet.kg Bot!**\n\nДля привязки аккаунта перейдите по ссылке из Вашего профиля Buhuchet.kg или отправьте полученный 4-значный код.'
+        '👋 **Добро пожаловать в Buhuchet.kg Bot!**\n\nПожалуйста, введите **4-значный код подтверждения** из вашего личного кабинета для завершения привязки.'
       );
     }
 

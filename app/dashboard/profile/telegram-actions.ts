@@ -63,7 +63,7 @@ export async function generateTelegramOtpAction(): Promise<ActionResponse<Telegr
     }
 
     const botName = process.env.NEXT_PUBLIC_TELEGRAM_BOT_NAME || 'BuhuchetKgBot';
-    const deepLink = `https://t.me/${botName}?start=${code}`;
+    const deepLink = `https://t.me/${botName}`;
 
     return {
       success: true,
