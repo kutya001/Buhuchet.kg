@@ -27,6 +27,8 @@ import {
   Edit2,
   User,
   UserCheck,
+  X,
+  Clock,
 } from 'lucide-react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
@@ -46,6 +48,7 @@ type FullB2BDocument = Document & {
   files?: DocumentFile[];
   document_logs?: (DocumentLog & { users?: { full_name: string } })[];
   users?: { full_name: string } | null;
+  author?: { full_name: string; role?: string } | null;
 };
 
 export default function B2BDocumentDetailPage() {
@@ -359,7 +362,7 @@ export default function B2BDocumentDetailPage() {
                   key={file.id}
                   onClick={() => setSelectedFileIndex(idx)}
                   className={`px-4 py-2 rounded-xl text-xs font-medium border transition-all ${
-                    desktopTab === 'details'
+                    selectedFileIndex === idx
                       ? 'bg-purple-600/20 text-purple-400 border-purple-500/40 font-bold'
                       : 'bg-background text-muted-foreground border-border hover:bg-muted'
                   }`}
@@ -473,13 +476,15 @@ export default function B2BDocumentDetailPage() {
                 {document.document_logs?.map((log) => (
                   <div key={log.id} className="p-2 rounded bg-background/40 border border-border/60 flex flex-col space-y-1">
                     <div className="flex justify-between items-start">
-                      <span className="font-semibold text-foreground">{log.action}</span>
+                      <span className="font-semibold text-foreground">
+                        {DOCUMENT_STATUSES[log.new_status as DocumentStatus]?.label || log.new_status}
+                      </span>
                       <span className="text-[10px] text-muted-foreground whitespace-nowrap ml-2">
                         {new Date(log.created_at).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
                       </span>
                     </div>
-                    {log.details && (
-                      <span className="text-[11px] text-muted-foreground break-words">{log.details}</span>
+                    {log.comment && (
+                      <span className="text-[11px] text-muted-foreground break-words">{log.comment}</span>
                     )}
                   </div>
                 ))}
@@ -502,12 +507,12 @@ export default function B2BDocumentDetailPage() {
             </p>
             <div className="space-y-2">
               <Label className="text-foreground">Причина (обязательно)</Label>
-              <Textarea
+              <textarea
                 value={cancelComment}
                 onChange={(e) => setCancelComment(e.target.value)}
                 placeholder="Нечитаемый скан / Ошибка в реквизитах..."
                 required
-                className="bg-background border-border text-foreground min-h-[48px]"
+                className="w-full p-3 rounded-md bg-background border border-border text-foreground min-h-[80px] text-xs focus:outline-none focus:ring-2 focus:ring-ring"
               />
             </div>
             <div className="flex space-x-3 pt-2">

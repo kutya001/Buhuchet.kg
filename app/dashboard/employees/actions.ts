@@ -153,7 +153,13 @@ export async function getCompanyRolesAction(): Promise<ActionResponse<CompanyRol
       name: 'Владелец (Owner)',
       description: 'Полный доступ ко всем модулям и настройкам компании. Эту роль нельзя изменить или удалить.',
       is_system: true,
-      permissions: { '*': ['*'] },
+      permissions: {
+        documents: ['view', 'create', 'edit', 'delete'],
+        files: ['view', 'create', 'edit', 'delete'],
+        counterparties: ['view', 'create', 'edit', 'delete'],
+        employees: ['view', 'create', 'edit', 'delete'],
+        company: ['view', 'edit'],
+      } as any,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };

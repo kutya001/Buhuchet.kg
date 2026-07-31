@@ -28,6 +28,7 @@ import {
   GripVertical,
   Search,
   RotateCcw,
+  X,
 } from 'lucide-react';
 
 export type ColumnDef<T> = {
