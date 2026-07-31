@@ -242,6 +242,19 @@ CREATE TABLE telegram_verification_codes (
 CREATE INDEX idx_telegram_connections_company ON telegram_connections(company_id);
 CREATE INDEX idx_telegram_connections_user ON telegram_connections(user_id);
 CREATE INDEX idx_telegram_codes_code ON telegram_verification_codes(code);
+
+CREATE TABLE telegram_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  chat_id BIGINT,
+  username TEXT,
+  message_text TEXT,
+  status TEXT,
+  error_message TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX idx_telegram_logs_chat ON telegram_logs(chat_id);
+CREATE INDEX idx_telegram_logs_created ON telegram_logs(created_at DESC);
 ```
 
 ---

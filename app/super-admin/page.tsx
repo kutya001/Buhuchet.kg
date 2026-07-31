@@ -78,10 +78,24 @@ import { UnifiedFormModal } from '@/components/ui/unified/UnifiedFormModal';
 
 const ITEMS_PER_PAGE = 10;
 
+import {
+  getTelegramAdminStatsAction,
+  testTelegramBotHealthAdminAction,
+  forceSetTelegramWebhookAdminAction,
+  sendAdminTestTelegramMessageAction,
+  disconnectUserTelegramAdminAction,
+  type TelegramAdminStatsData,
+  type TelegramBotHealthData,
+} from './telegram-actions';
+import { SuperAdminTelegramTab } from '@/components/super-admin/SuperAdminTelegramTab';
+
 export default function SuperAdminPage() {
   const [activeTab, setActiveTab] = useState<
-    'companies' | 'users' | 'files' | 'documents' | 'lookups' | 'database'
+    'companies' | 'users' | 'files' | 'documents' | 'lookups' | 'database' | 'telegram'
   >('companies');
+  const [telegramSubTab, setTelegramSubTab] = useState<'connections' | 'codes' | 'logs'>('connections');
+  const [telegramStats, setTelegramStats] = useState<TelegramAdminStatsData | null>(null);
+  const [botHealth, setBotHealth] = useState<TelegramBotHealthData | null>(null);
 
   // Фильтр внутри модуля Организации: 'all' | 'pending' | 'problematic'
   const [companySubTab, setCompanySubTab] = useState<'all' | 'pending' | 'problematic'>('all');
@@ -1021,7 +1035,22 @@ export default function SuperAdminPage() {
           <Database className="h-4 w-4" />
           <span>Инспектор БД</span>
         </button>
+
+        <button
+          onClick={() => setActiveTab('telegram')}
+          className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs md:text-sm font-medium transition-all min-h-[44px] ${
+            activeTab === 'telegram'
+              ? 'bg-sky-600/20 text-sky-400 border border-sky-500/40 font-bold shadow-lg shadow-sky-500/10'
+              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+          }`}
+        >
+          <Shield className="h-4 w-4 text-sky-400" />
+          <span>Telegram Бот</span>
+        </button>
       </div>
+
+      {/* ------------------- РАЗДЕЛ Telegram БОТ ------------------- */}
+      {activeTab === 'telegram' && <SuperAdminTelegramTab />}
 
       {/* ------------------- РАЗДЕЛ 1: УПРАВЛЕНИЕ ОРГАНИЗАЦИЯМИ ------------------- */}
       {activeTab === 'companies' && (

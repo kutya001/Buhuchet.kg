@@ -15,12 +15,21 @@ export async function POST(req: Request) {
     const username = update.message.from.username || null;
     const text = update.message.text.trim();
 
+    const supabase = await createAdminClient();
+
+    // Запись события в системные логи аудита
+    await supabase.from('telegram_logs').insert({
+      chat_id: chatId,
+      username,
+      message_text: text,
+      status: 'received',
+    });
+
     // Проверяем, ввёл ли пользователь 4-значный код (например: 8737 или /start 8737)
     const codeMatch = text.match(/\/start\s+(\d{4})/) || text.match(/^(\d{4})$/);
 
     if (codeMatch) {
       const code = codeMatch[1];
-      const supabase = await createAdminClient();
 
       // 1. Поиск активного неистекшего кода
       const { data: verification, error } = await supabase
