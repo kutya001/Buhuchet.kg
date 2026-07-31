@@ -116,7 +116,8 @@ export async function getTelegramConnectionStatusAction(): Promise<ActionRespons
       return { success: true, data: { isConnected: false } };
     }
 
-    const { data: conn } = await supabase
+    const adminSupabase = await createAdminClient();
+    const { data: conn } = await adminSupabase
       .from('telegram_connections')
       .select('telegram_username')
       .eq('user_id', user.id)
