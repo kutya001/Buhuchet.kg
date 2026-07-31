@@ -14,6 +14,7 @@ import {
   FolderOpen,
   ChevronLeft,
   ChevronRight,
+  X,
 } from 'lucide-react';
 import { signOutAction } from '@/app/(auth)/actions';
 import { Button } from '@/components/ui/button';
@@ -45,6 +46,7 @@ export function DashboardShell({
 }: DashboardShellProps) {
   const pathname = usePathname();
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const isActive = (path: string) => pathname === path;
 
@@ -235,7 +237,10 @@ export function DashboardShell({
           userProfile={userProfile}
           isSidebarCollapsed={isCollapsed}
           onToggleSidebar={() => setIsCollapsed(!isCollapsed)}
-          onOpenMobileMenu={() => setIsCollapsed(!isCollapsed)}
+          onOpenMobileMenu={() => setIsMobileMenuOpen(true)}
+          onLogout={() => {
+            signOutAction();
+          }}
         />
 
         {/* Главный контент с отступом сверху pt-16 */}
@@ -244,10 +249,160 @@ export function DashboardShell({
         </main>
       </div>
 
-      {/* Быстрая кнопка на смартфонах (Только в Реестре Файлов) */}
+      {/* 3. МОБИЛЬНОЕ ВЫЕЗДНОЕ МЕНЮ СНИЗУ (BOTTOM SHEET DRAWER) */}
+      {isMobileMenuOpen && (
+        <div className="md:hidden fixed inset-0 z-50 flex flex-col justify-end">
+          {/* Полупрозрачный оверлей */}
+          <div
+            className="fixed inset-0 bg-background/80 backdrop-blur-sm transition-opacity"
+            onClick={() => setIsMobileMenuOpen(false)}
+          />
+
+          {/* Выездная панель снизу */}
+          <div className="relative w-full bg-card border-t border-border rounded-t-3xl p-5 shadow-2xl z-10 space-y-4 max-h-[85vh] overflow-y-auto">
+            {/* Шапка выездного меню */}
+            <div className="flex items-center justify-between pb-3 border-b border-border">
+              <div className="flex items-center space-x-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-600/20 text-blue-400 border border-blue-500/30">
+                  <Building2 className="h-5 w-5" />
+                </div>
+                <div className="flex flex-col">
+                  <span className="font-bold text-sm text-foreground">{companyName || 'Buhuchet.kg'}</span>
+                  <span className="text-[10px] text-muted-foreground">{userEmail}</span>
+                </div>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="h-8 w-8 rounded-full p-0 text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            {/* Сетка модулей */}
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              {canViewDashboard && (
+                <Link
+                  href="/dashboard"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className={`flex items-center space-x-2.5 p-3 rounded-2xl border text-xs font-medium ${
+                    isActive('/dashboard') ? 'bg-blue-600/20 border-blue-500/40 text-blue-400 font-bold' : 'bg-muted/40 border-border text-foreground'
+                  }`}
+                >
+                  <LayoutDashboard className="h-4 w-4 text-blue-500" />
+                  <span>Главная</span>
+                </Link>
+              )}
+
+              {canViewDocuments && (
+                <Link
+                  href="/dashboard/documents"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className={`flex items-center space-x-2.5 p-3 rounded-2xl border text-xs font-medium ${
+                    isActive('/dashboard/documents') ? 'bg-sky-600/20 border-sky-500/40 text-sky-400 font-bold' : 'bg-muted/40 border-border text-foreground'
+                  }`}
+                >
+                  <FileText className="h-4 w-4 text-sky-500" />
+                  <span>Документы</span>
+                </Link>
+              )}
+
+              {canViewCounterparties && (
+                <Link
+                  href="/dashboard/counterparties"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className={`flex items-center space-x-2.5 p-3 rounded-2xl border text-xs font-medium ${
+                    isActive('/dashboard/counterparties') ? 'bg-amber-600/20 border-amber-500/40 text-amber-400 font-bold' : 'bg-muted/40 border-border text-foreground'
+                  }`}
+                >
+                  <Users className="h-4 w-4 text-amber-500" />
+                  <span>Организации</span>
+                </Link>
+              )}
+
+              {canViewFiles && (
+                <Link
+                  href="/dashboard/files"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className={`flex items-center space-x-2.5 p-3 rounded-2xl border text-xs font-medium ${
+                    isActive('/dashboard/files') ? 'bg-emerald-600/20 border-emerald-500/40 text-emerald-400 font-bold' : 'bg-muted/40 border-border text-foreground'
+                  }`}
+                >
+                  <FolderOpen className="h-4 w-4 text-emerald-500" />
+                  <span>Реестр Файлов</span>
+                </Link>
+              )}
+
+              {canViewCompany && (
+                <Link
+                  href="/dashboard/company"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className={`flex items-center space-x-2.5 p-3 rounded-2xl border text-xs font-medium ${
+                    isActive('/dashboard/company') ? 'bg-muted border-border font-bold' : 'bg-muted/40 border-border text-foreground'
+                  }`}
+                >
+                  <Building2 className="h-4 w-4 text-foreground" />
+                  <span>Моя Компания</span>
+                </Link>
+              )}
+
+              {canViewEmployees && (
+                <Link
+                  href="/dashboard/employees"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className={`flex items-center space-x-2.5 p-3 rounded-2xl border text-xs font-medium ${
+                    isActive('/dashboard/employees') ? 'bg-purple-600/20 border-purple-500/40 text-purple-400 font-bold' : 'bg-muted/40 border-border text-foreground'
+                  }`}
+                >
+                  <Users className="h-4 w-4 text-purple-400" />
+                  <span>Сотрудники</span>
+                </Link>
+              )}
+
+              <Link
+                href="/dashboard/profile"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className={`flex items-center space-x-2.5 p-3 rounded-2xl border text-xs font-medium col-span-2 ${
+                  isActive('/dashboard/profile') ? 'bg-primary/20 border-primary/40 font-bold' : 'bg-muted/40 border-border text-foreground'
+                }`}
+              >
+                <User className="h-4 w-4 text-primary" />
+                <span>Мой Профиль и Інтеграція Telegram</span>
+              </Link>
+
+              {isSuperAdmin && (
+                <Link
+                  href="/super-admin"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="flex items-center space-x-2.5 p-3 rounded-2xl border border-amber-500/40 bg-amber-500/10 text-amber-400 text-xs font-bold col-span-2"
+                >
+                  <Shield className="h-4 w-4" />
+                  <span>Панель Суперадминистратора</span>
+                </Link>
+              )}
+            </div>
+
+            {/* Кнопка Выйти из системы */}
+            <form action={signOutAction} className="pt-2">
+              <Button
+                type="submit"
+                variant="destructive"
+                className="w-full h-11 rounded-2xl text-xs font-bold gap-2 shadow-lg shadow-red-500/20"
+              >
+                <LogOut className="h-4 w-4" />
+                <span>Выйти из системы</span>
+              </Button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Быстрая кнопка на смартфонах */}
       <MobileFAB />
 
-      {/* 3. МОБИЛЬНЫЙ НИЖНИЙ ПАРЯЩИЙ ОСТРОВОК */}
+      {/* 5. МОБИЛЬНЫЙ НИЖНИЙ ПАРЯЩИЙ ОСТРОВОК */}
       <FloatingBottomNav userProfile={userProfile} />
     </div>
   );
