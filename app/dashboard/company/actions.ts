@@ -58,3 +58,54 @@ export async function updateClosedPeriodAction(
     return { success: false, error: msg };
   }
 }
+
+/**
+ * Обновление ОПФ, реквизитов и настроек приватности компании
+ */
+export async function updateCompanyPrivacyAndDetailsAction(params: {
+  legalForm?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  privacySettings?: { show_phone: boolean; show_email: boolean; show_address: boolean };
+}): Promise<ActionResponse<Company>> {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) return { success: false, error: 'Пользователь не авторизован' };
+
+    const { data: prof } = await supabase
+      .from('users')
+      .select('company_id, role, is_super_admin')
+      .eq('id', user.id)
+      .single();
+
+    if (!prof?.company_id) return { success: false, error: 'Пользователь не привязан к компании' };
+
+    const adminSupabase = await createAdminClient();
+    const updatePayload: Record<string, any> = { updated_at: new Date().toISOString() };
+
+    if (params.legalForm) updatePayload.legal_form = params.legalForm;
+    if (params.phone !== undefined) updatePayload.phone = params.phone;
+    if (params.email !== undefined) updatePayload.email = params.email;
+    if (params.address !== undefined) updatePayload.address = params.address;
+    if (params.privacySettings) updatePayload.privacy_settings = params.privacySettings;
+
+    const { data: updated, error } = await adminSupabase
+      .from('companies')
+      .update(updatePayload)
+      .eq('id', prof.company_id)
+      .select('*')
+      .single();
+
+    if (error || !updated) return { success: false, error: error?.message || 'Ошибка обновления' };
+
+    revalidatePath('/dashboard/company');
+    return { success: true, data: updated as Company };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Сбой обновления' };
+  }
+}

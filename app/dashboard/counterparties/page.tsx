@@ -34,6 +34,8 @@ import {
   PlayCircle,
   Check,
   Edit2,
+  Phone,
+  MessageCircle,
 } from 'lucide-react';
 import { formatBytes } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
@@ -956,26 +958,67 @@ export default function CounterpartiesPage() {
         subtitle={`ИНН: ${profileModal?.counterparty.inn || '—'} • Официальные данные`}
         mode="view"
       >
-        {profileModal && (
-          <div className="space-y-6">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-background/60 p-4 rounded-xl border border-border text-xs">
-              <div>
-                <span className="text-muted-foreground block">ФИО Руководителя:</span>
-                <span className="font-semibold text-foreground">{profileModal.companyDetails?.director_name || '—'}</span>
+        {profileModal && (() => {
+          const privacy = profileModal.companyDetails?.privacy_settings || { show_phone: true, show_email: true, show_address: true };
+          const rawPhone = profileModal.companyDetails?.phone || profileModal.counterparty.phone;
+          const cleanPhone = rawPhone?.replace(/[^0-9]/g, '');
+          const rawEmail = profileModal.companyDetails?.email || profileModal.counterparty.email;
+          const rawAddress = profileModal.companyDetails?.legal_address || profileModal.companyDetails?.address;
+
+          return (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-background/60 p-4 rounded-xl border border-border text-xs">
+                <div>
+                  <span className="text-muted-foreground block">ФИО Руководителя:</span>
+                  <span className="font-semibold text-foreground">{profileModal.companyDetails?.director_name || '—'}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground block">Отрасль компании:</span>
+                  <span className="font-semibold text-amber-400">{profileModal.companyDetails?.industry || 'Услуги / Торговля'}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground block">Телефон:</span>
+                  {privacy.show_phone && rawPhone ? (
+                    <span className="font-mono font-semibold text-foreground">{rawPhone}</span>
+                  ) : (
+                    <Badge variant="outline" className="text-[10px] text-muted-foreground border-border">Информация скрыта</Badge>
+                  )}
+                </div>
+                <div>
+                  <span className="text-muted-foreground block">E-mail:</span>
+                  {privacy.show_email && rawEmail ? (
+                    <span className="font-mono text-muted-foreground">{rawEmail}</span>
+                  ) : (
+                    <Badge variant="outline" className="text-[10px] text-muted-foreground border-border">Информация скрыта</Badge>
+                  )}
+                </div>
+                <div className="sm:col-span-2">
+                  <span className="text-muted-foreground block">Юридический адрес:</span>
+                  {privacy.show_address && rawAddress ? (
+                    <span className="font-semibold text-foreground">{rawAddress}</span>
+                  ) : (
+                    <Badge variant="outline" className="text-[10px] text-muted-foreground border-border">Информация скрыта</Badge>
+                  )}
+                </div>
               </div>
-              <div>
-                <span className="text-muted-foreground block">Отрасль компании:</span>
-                <span className="font-semibold text-amber-400">{profileModal.companyDetails?.industry || 'Услуги / Торговля'}</span>
-              </div>
-              <div>
-                <span className="text-muted-foreground block">Юридический адрес:</span>
-                <span className="font-semibold text-foreground">{profileModal.companyDetails?.legal_address || 'Кыргызстан'}</span>
-              </div>
-              <div>
-                <span className="text-muted-foreground block">E-mail:</span>
-                <span className="font-mono text-muted-foreground">{profileModal.companyDetails?.email || profileModal.counterparty.email || '—'}</span>
-              </div>
-            </div>
+
+              {/* Быстрые действия вызова WhatsApp / Позвонить */}
+              {privacy.show_phone && cleanPhone && (
+                <div className="grid grid-cols-2 gap-3">
+                  <a href={`https://wa.me/${cleanPhone}`} target="_blank" rel="noreferrer" className="w-full">
+                    <Button variant="outline" className="w-full border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 text-xs font-semibold gap-2 min-h-[38px]">
+                      <MessageCircle className="w-4 h-4" />
+                      <span>WhatsApp</span>
+                    </Button>
+                  </a>
+                  <a href={`tel:${rawPhone}`} className="w-full">
+                    <Button variant="outline" className="w-full border-blue-500/30 text-blue-400 hover:bg-blue-500/10 text-xs font-semibold gap-2 min-h-[38px]">
+                      <Phone className="w-4 h-4" />
+                      <span>Позвонить</span>
+                    </Button>
+                  </a>
+                </div>
+              )}
 
             <div className="space-y-3">
               <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider font-mono">
@@ -1010,7 +1053,8 @@ export default function CounterpartiesPage() {
               )}
             </div>
           </div>
-        )}
+        );
+      })()}
       </UnifiedFormModal>
 
       {/* МОДАЛЬНОЕ ОКНО РУЧНОГО СОЗДАНИЯ (UnifiedFormModal) */}

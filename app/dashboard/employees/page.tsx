@@ -29,6 +29,8 @@ import {
   Settings,
   ShieldAlert,
   Trash2,
+  Send,
+  MessageCircle,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import {
@@ -576,29 +578,79 @@ export default function EmployeesModulePage() {
                 key: 'actions',
                 label: 'Действия',
                 sortable: false,
-                render: (emp) => (
-                  <div className="flex items-center justify-end space-x-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setEditingEmp(emp)}
-                      className="h-8 border-border text-foreground hover:text-foreground text-xs"
-                      title="Редактировать сотрудника"
-                    >
-                      <Edit2 className="h-3.5 w-3.5" />
-                    </Button>
+                render: (emp) => {
+                  const cleanPhone = emp.phone?.replace(/[^0-9]/g, '');
+                  return (
+                    <div className="flex items-center justify-end space-x-1.5">
+                      {/* Telegram */}
+                      {(emp as any).telegram_connections?.telegram_username || (emp as any).telegram_username ? (
+                        <a
+                          href={`https://t.me/${(emp as any).telegram_connections?.telegram_username || (emp as any).telegram_username}`}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 w-8 p-0 text-sky-400 hover:bg-sky-500/10"
+                            title="Написать в Telegram"
+                          >
+                            <Send className="h-4 w-4" />
+                          </Button>
+                        </a>
+                      ) : null}
 
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setResetPwdEmp(emp)}
-                      className="h-8 border-amber-500/30 text-amber-400 hover:bg-amber-500/10 text-xs"
-                      title="Сбросить пароль сотруднику"
-                    >
-                      <Key className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                ),
+                      {/* WhatsApp */}
+                      {cleanPhone ? (
+                        <a href={`https://wa.me/${cleanPhone}`} target="_blank" rel="noreferrer">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 w-8 p-0 text-emerald-400 hover:bg-emerald-500/10"
+                            title="Написать в WhatsApp"
+                          >
+                            <MessageCircle className="h-4 w-4" />
+                          </Button>
+                        </a>
+                      ) : null}
+
+                      {/* Телефонный звонок */}
+                      {emp.phone ? (
+                        <a href={`tel:${emp.phone}`}>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 w-8 p-0 text-blue-400 hover:bg-blue-500/10"
+                            title="Позвонить"
+                          >
+                            <Phone className="h-4 w-4" />
+                          </Button>
+                        </a>
+                      ) : null}
+
+                      {/* Редактировать (Карандаш) */}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setEditingEmp(emp)}
+                        className="h-8 border-border text-foreground hover:text-foreground text-xs px-2"
+                        title="Редактировать сотрудника"
+                      >
+                        <Edit2 className="h-3.5 w-3.5" />
+                      </Button>
+
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setResetPwdEmp(emp)}
+                        className="h-8 border-amber-500/30 text-amber-400 hover:bg-amber-500/10 text-xs px-2"
+                        title="Сбросить пароль"
+                      >
+                        <Key className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  );
+                },
               },
             ]}
             defaultPageSize={25}

@@ -20,9 +20,18 @@ export const INDUSTRIES = [
   'Прочее',
 ] as const;
 
+export type LegalForm = 'ИП' | 'ОсОО' | 'ЗАО' | 'ОАО';
+
+export interface CompanyPrivacySettings {
+  show_phone: boolean;
+  show_email: boolean;
+  show_address: boolean;
+}
+
 export interface Company {
   id: string;
   name: string;
+  legal_form?: LegalForm;
   inn: string;
   industry?: string | null;
   status: CompanyStatus;
@@ -32,6 +41,7 @@ export interface Company {
   email?: string | null;
   phone?: string | null;
   address?: string | null;
+  privacy_settings?: CompanyPrivacySettings;
   is_active: boolean;
   storage_limit_gb: number;
   closed_period_until?: string | null;

@@ -21,6 +21,7 @@
 CREATE TABLE companies (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
+  legal_form TEXT CHECK (legal_form IN ('ИП', 'ОсОО', 'ЗАО', 'ОАО')) DEFAULT 'ОсОО',
   inn VARCHAR(14) NOT NULL UNIQUE,
   industry TEXT DEFAULT 'Услуги / Консалтинг',
   director_name TEXT,
@@ -28,6 +29,7 @@ CREATE TABLE companies (
   phone VARCHAR(20),
   legal_address TEXT,
   address TEXT,
+  privacy_settings JSONB DEFAULT '{"show_phone": true, "show_email": true, "show_address": true}'::jsonb,
   is_active BOOLEAN DEFAULT TRUE,
   status TEXT CHECK (status IN ('pending_approval', 'requires_changes', 'active', 'blocked')) DEFAULT 'pending_approval',
   moderation_comment TEXT,
@@ -39,6 +41,7 @@ CREATE TABLE companies (
 
 CREATE INDEX idx_companies_inn ON companies(inn);
 CREATE INDEX idx_companies_status ON companies(status);
+CREATE INDEX idx_companies_legal_form ON companies(legal_form);
 CREATE INDEX idx_companies_status_created ON companies(status, created_at DESC);
 ```
 

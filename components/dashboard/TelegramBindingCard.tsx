@@ -77,32 +77,29 @@ export function TelegramBindingCard() {
   }
 
   return (
-    <Card className="bg-card border-border p-6 space-y-5">
-      <div className="flex items-center justify-between border-b border-border pb-4">
-        <div className="flex items-center space-x-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-500/10 text-sky-400 border border-sky-500/20">
-            <Send className="h-5 w-5" />
+    <Card className="bg-card border-border/80 p-6 backdrop-blur-sm space-y-5">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-4">
+        <div className="flex items-start gap-3.5">
+          <div className="p-3 bg-sky-500/10 text-sky-400 rounded-xl shrink-0 border border-sky-500/20">
+            <Send className="w-6 h-6" />
           </div>
-          <div>
-            <h3 className="text-base font-bold text-foreground flex items-center">
-              Уведомления в Telegram
-            </h3>
-            <p className="text-xs text-muted-foreground">
-              Мгновенные оповещения об откликах, входящих документах и статусах
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <h3 className="font-bold text-base text-foreground">Интеграция с Telegram</h3>
+              {isConnected ? (
+                <Badge variant="default" className="bg-emerald-500/15 text-emerald-400 border-0 font-mono text-xs">
+                  <CheckCircle2 className="h-3.5 w-3.5 mr-1 text-emerald-400" />
+                  Подключено {username ? `(@${username})` : ''}
+                </Badge>
+              ) : (
+                <Badge variant="secondary" className="text-xs">Не привязан</Badge>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground max-w-md">
+              Уведомления о входящих документах, смене ролей сотрудников и системных событиях ЭДО.
             </p>
           </div>
         </div>
-
-        {isConnected ? (
-          <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 px-3 py-1 font-mono text-xs">
-            <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
-            Подключено {username ? `(@${username})` : ''}
-          </Badge>
-        ) : (
-          <Badge variant="outline" className="border-border text-muted-foreground text-xs">
-            Не привязано
-          </Badge>
-        )}
       </div>
 
       {error && (

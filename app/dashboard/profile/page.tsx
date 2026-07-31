@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { User, Phone, Mail, Building2, Shield, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import { User, Phone, Mail, Building2, Shield, CheckCircle2, AlertCircle, Loader2, Pencil, Check, X } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { updateProfileAction } from './actions';
 import type { UserProfile, Company } from '@/types/database.types';
@@ -50,6 +50,8 @@ export default function ProfilePage() {
     }
     loadProfile();
   }, []);
+
+  const [isEditing, setIsEditing] = useState(false);
 
   // Форматирование телефона КР в вид +996 (XXX) XX-XX-XX
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -168,17 +170,49 @@ export default function ProfilePage() {
           </CardContent>
         </Card>
 
-        {/* Форма редактирования данных профиля */}
+        {/* Карточка личных данных */}
         <Card className="md:col-span-2 bg-card border-border shadow-xl">
-          <CardHeader>
-            <CardTitle className="text-lg text-foreground">Личные реквизиты</CardTitle>
-            <CardDescription className="text-muted-foreground">
-              Укажите актуальный номер телефона КР для уведомлений и восстановления доступа
-            </CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between pb-4 border-b border-border">
+            <div>
+              <CardTitle className="text-lg text-foreground">Личные данные</CardTitle>
+              <CardDescription className="text-muted-foreground text-xs">
+                Управление учетной записью пользователя и контактами
+              </CardDescription>
+            </div>
+            {!isEditing ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setIsEditing(true)}
+                className="gap-2 border-border hover:bg-muted text-xs font-semibold"
+              >
+                <Pencil className="w-3.5 h-3.5" />
+                <span>Изменить</span>
+              </Button>
+            ) : (
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIsEditing(false)}
+                  className="text-xs text-muted-foreground hover:text-foreground"
+                >
+                  <X className="w-3.5 h-3.5 mr-1" />
+                  Отмена
+                </Button>
+              </div>
+            )}
           </CardHeader>
 
-          <form onSubmit={handleSubmit}>
-            <CardContent className="space-y-4">
+          <form
+            onSubmit={(e) => {
+              handleSubmit(e);
+              setIsEditing(false);
+            }}
+          >
+            <CardContent className="space-y-4 pt-4">
               {successMsg && (
                 <Alert variant="success" className="border-emerald-500/50 bg-emerald-500/10 text-emerald-400">
                   <CheckCircle2 className="h-4 w-4" />
@@ -195,14 +229,18 @@ export default function ProfilePage() {
 
               <div className="space-y-2">
                 <Label htmlFor="full_name" className="text-foreground">ФИО Пользователя</Label>
-                <Input
-                  id="full_name"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  placeholder="Иванов Иван Иванович"
-                  required
-                  className="bg-background border-border text-foreground"
-                />
+                {isEditing ? (
+                  <Input
+                    id="full_name"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    placeholder="Иванов Иван Иванович"
+                    required
+                    className="bg-background border-border text-foreground"
+                  />
+                ) : (
+                  <p className="text-sm font-semibold text-foreground py-1.5">{fullName || '—'}</p>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -216,57 +254,48 @@ export default function ProfilePage() {
                     className="pl-9 bg-muted/40 border-border text-muted-foreground cursor-not-allowed"
                   />
                 </div>
-                <p className="text-[11px] text-muted-foreground">
-                  Основной email используется для входа и не может быть изменен напрямую
-                </p>
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="phone" className="text-foreground">Номер телефона в Кыргызстане (+996)</Label>
-                <div className="relative">
-                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="phone"
-                    value={phone}
-                    onChange={handlePhoneChange}
-                    placeholder="+996 (700) 12-34-56"
-                    className="pl-9 bg-background border-border text-foreground font-mono"
-                  />
-                </div>
-                <p className="text-[11px] text-muted-foreground">
-                  Формат: +996 (код) номер. Например: +996 (555) 00-11-22
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="secondary_email" className="text-foreground">Дополнительный Email (Необязательно)</Label>
-                <Input
-                  id="secondary_email"
-                  type="email"
-                  value={secondaryEmail}
-                  onChange={(e) => setSecondaryEmail(e.target.value)}
-                  placeholder="backup@company.kg"
-                  className="bg-background border-border text-foreground"
-                />
+                {isEditing ? (
+                  <div className="relative">
+                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="phone"
+                      value={phone}
+                      onChange={handlePhoneChange}
+                      placeholder="+996 (700) 12-34-56"
+                      className="pl-9 bg-background border-border text-foreground font-mono"
+                    />
+                  </div>
+                ) : (
+                  <p className="text-sm font-mono font-semibold text-foreground py-1.5">{phone || '—'}</p>
+                )}
               </div>
             </CardContent>
 
-            <CardFooter className="pt-4 border-t border-border flex justify-end">
-              <Button
-                type="submit"
-                disabled={isPending}
-                className="bg-primary hover:bg-primary/90 text-primary-foreground font-medium shadow-md"
-              >
-                {isPending ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Сохранение...
-                  </>
-                ) : (
-                  'Сохранить изменения'
-                )}
-              </Button>
-            </CardFooter>
+            {isEditing && (
+              <CardFooter className="pt-4 border-t border-border flex justify-end">
+                <Button
+                  type="submit"
+                  disabled={isPending}
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground font-medium shadow-md"
+                >
+                  {isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Сохранение...
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-4 h-4 mr-1.5" />
+                      Сохранить изменения
+                    </>
+                  )}
+                </Button>
+              </CardFooter>
+            )}
           </form>
         </Card>
 
