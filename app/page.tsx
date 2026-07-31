@@ -23,6 +23,8 @@ import {
   TrendingUp,
 } from 'lucide-react';
 
+import { ThemeToggle } from '@/components/theme/ThemeToggle';
+
 export default function HomePage() {
   const jsonLd = {
     '@context': 'https://schema.org',
@@ -72,6 +74,8 @@ export default function HomePage() {
         </div>
 
         <div className="flex items-center space-x-1.5 sm:space-x-3 flex-shrink-0">
+          <ThemeToggle />
+
           <Link
             href="/login"
             className="text-xs sm:text-sm font-medium text-slate-300 hover:text-white px-2.5 sm:px-3 py-1.5 sm:py-2 transition-colors"

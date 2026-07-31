@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 @layer base {
-  :root {
+  :root, html[data-theme="dark"] {
     --background: 222.2 84% 4.9%;
     --foreground: 210 40% 98%;
 
@@ -33,12 +33,95 @@
     --ring: 224.3 76.3% 48%;
 
     --radius: 0.75rem;
+
+    --theme-bg-raw: #020617;
+    --theme-card-raw: #0f172a;
+    --theme-card-border-raw: #1e293b;
+    --theme-text-raw: #ffffff;
+    --theme-muted-raw: #94a3b8;
+    --theme-accent-raw: #3b82f6;
+  }
+
+  html[data-theme="light"] {
+    --background: 210 40% 98%;
+    --foreground: 222.2 84% 4.9%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+
+    --primary: 221.2 83.2% 53.3%;
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221.2 83.2% 53.3%;
+
+    --theme-bg-raw: #f8fafc;
+    --theme-card-raw: #ffffff;
+    --theme-card-border-raw: #e2e8f0;
+    --theme-text-raw: #0f172a;
+    --theme-muted-raw: #475569;
+    --theme-accent-raw: #2563eb;
+  }
+
+  /* ☕ Тёплая тема "Primary Theme" (крем + какао + терракота) */
+  html[data-theme="warm"] {
+    --background: 37 27% 95%; /* #F6F3EE */
+    --foreground: 18 13% 16%; /* #2E2623 */
+
+    --card: 38 40% 97%; /* #FAF7F2 */
+    --card-foreground: 18 13% 16%;
+
+    --popover: 38 40% 97%;
+    --popover-foreground: 18 13% 16%;
+
+    --primary: 25 33% 41%; /* #8C6347 - терракотовый какао */
+    --primary-foreground: 38 40% 97%;
+
+    --secondary: 35 25% 90%; /* #EFEADF - пергаментный */
+    --secondary-foreground: 18 13% 16%;
+
+    --muted: 35 25% 90%;
+    --muted-foreground: 24 13% 41%; /* #75655B */
+
+    --accent: 35 25% 90%;
+    --accent-foreground: 18 13% 16%;
+
+    --destructive: 0 60% 45%;
+    --destructive-foreground: 38 40% 97%;
+
+    --border: 35 27% 84%; /* #E3D8C8 */
+    --input: 35 27% 84%;
+    --ring: 25 33% 41%;
+
+    --theme-bg-raw: #f6f3ee;
+    --theme-card-raw: #faf7f2;
+    --theme-card-border-raw: #e3d8c8;
+    --theme-text-raw: #2e2623;
+    --theme-muted-raw: #75655b;
+    --theme-accent-raw: #8c6347;
   }
 }
 
 @layer base {
-  * {
+  *, *::before, *::after {
     @apply border-border;
+    transition: background-color 300ms ease, border-color 300ms ease, color 300ms ease, fill 300ms ease;
   }
   body {
     @apply bg-background text-foreground antialiased selection:bg-primary/20 selection:text-primary;
@@ -46,19 +129,34 @@
   }
 }
 
+/* Стекло в тёмной теме */
 .glass-card {
-  background: rgba(15, 23, 42, 0.65);
+  background: var(--theme-card-raw);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--theme-card-border-raw);
 }
 
 .glass-input {
-  background: rgba(30, 41, 59, 0.5);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(30, 41, 59, 0.3);
+  border: 1px solid var(--theme-card-border-raw);
 }
 
-.glass-input:focus {
-  border-color: rgba(59, 130, 246, 0.5);
-  box-shadow: 0 0 15px rgba(59, 130, 246, 0.2);
+/* Кастомный скроллбар */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.3);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.5);
 }

@@ -24,6 +24,7 @@ import { Input } from '@/components/ui/input';
 
 import { hasPermission } from '@/lib/auth/permissions';
 import type { UserProfile } from '@/types/database.types';
+import { ThemeToggle } from '@/components/theme/ThemeToggle';
 
 interface FloatingTopbarProps {
   companyName?: string;
@@ -153,6 +154,9 @@ export function FloatingTopbar({
           >
             <Search className="h-4 w-4" />
           </button>
+
+          {/* Переключатель Тем (3 Темы) */}
+          <ThemeToggle />
 
           {/* Инфо о Компании */}
           <div className="hidden sm:flex flex-col text-right">
