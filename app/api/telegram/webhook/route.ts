@@ -83,3 +83,43 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true });
   }
 }
+
+/**
+ * GET запрос для проверки статуса или быстрой привязки setWebhook из браузера
+ */
+export async function GET(req: Request) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const host = req.headers.get('host') || 'buhuchet.kg';
+    const protocol = host.includes('localhost') ? 'http' : 'https';
+    const webhookUrl = `${protocol}://${host}/api/telegram/webhook`;
+    const token = process.env.TELEGRAM_BOT_TOKEN;
+
+    if (!token) {
+      return NextResponse.json({ success: false, error: 'TELEGRAM_BOT_TOKEN не задан в Vercel / .env' });
+    }
+
+    // Если передан флаг ?action=info, запрашиваем текущую информацию
+    if (searchParams.get('action') === 'info') {
+      const res = await fetch(`https://api.telegram.org/bot${token}/getWebhookInfo`);
+      const info = await res.json();
+      return NextResponse.json({ success: true, info });
+    }
+
+    // Иначе регистрируем webhookUrl в Telegram API
+    const res = await fetch(
+      `https://api.telegram.org/bot${token}/setWebhook?url=${encodeURIComponent(webhookUrl)}`
+    );
+    const data = await res.json();
+
+    return NextResponse.json({
+      success: data.ok,
+      message: data.ok ? 'Webhook успешно зарегистрирован в Telegram!' : 'Ошибка привязки Webhook',
+      webhookUrl,
+      telegramResponse: data,
+    });
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : 'Сбой вызова setWebhook';
+    return NextResponse.json({ success: false, error: errorMsg });
+  }
+}
