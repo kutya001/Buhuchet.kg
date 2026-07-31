@@ -44,18 +44,12 @@ export default function B2BDocumentsRegistryPage() {
   const loadDocuments = async () => {
     setLoading(true);
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (user) {
-      const { data: prof } = await supabase.from('users').select('company_id').eq('id', user.id).single();
-      if (prof?.company_id) setCurrentCompanyId(prof.company_id);
-    }
-
     const res = await getB2BDocumentsAction(1, 200);
     if (res.success && res.data) {
       setDocuments((res.data.docs || []) as FullB2BDocument[]);
+      if (res.data.currentCompanyId) {
+        setCurrentCompanyId(res.data.currentCompanyId);
+      }
     } else {
       setDocuments([]);
     }

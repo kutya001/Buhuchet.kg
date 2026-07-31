@@ -45,7 +45,7 @@ const getUserContext = cache(async () => {
 export async function getB2BDocumentsAction(
   page: number = 1,
   limit: number = 50
-): Promise<ActionResponse<{ docs: any[]; totalCount: number }>> {
+): Promise<ActionResponse<{ docs: any[]; totalCount: number; currentCompanyId?: string }>> {
   try {
     const ctx = await getUserContext();
     if (!ctx || !ctx.companyId) {
@@ -79,7 +79,14 @@ export async function getB2BDocumentsAction(
       return true;
     });
 
-    return { success: true, data: { docs: filteredDocs, totalCount: filteredDocs.length } };
+    return {
+      success: true,
+      data: {
+        docs: filteredDocs,
+        totalCount: filteredDocs.length,
+        currentCompanyId: ctx.companyId,
+      },
+    };
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : 'Сбой чтения документов';
     return { success: false, error: errorMsg };
