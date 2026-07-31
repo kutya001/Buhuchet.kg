@@ -11,7 +11,6 @@ export const getCachedFileCategories = cache(async (): Promise<FileCategory[]> =
     const { data, error } = await supabaseAdmin
       .from('file_categories')
       .select('*')
-      .eq('is_active', true)
       .order('name');
 
     if (error || !data) {

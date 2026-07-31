@@ -25,7 +25,6 @@ export type ArchiveFileInput = z.infer<typeof archiveFileSchema>;
 export async function uploadLegalDocumentAction(data: ArchiveFileInput): Promise<ActionResponse<DocumentFile>> {
   try {
     const supabase = await createClient();
-    const adminSupabase = await createAdminClient();
 
     const {
       data: { user },
@@ -63,6 +62,7 @@ export async function uploadLegalDocumentAction(data: ArchiveFileInput): Promise
       targetCatId = ustavCat?.id || '268dda23-d839-429d-bec2-aae391cffb00';
     }
 
+    const adminSupabase = await createAdminClient();
     const { data: insertedFile, error } = await adminSupabase
       .from('files')
       .insert({

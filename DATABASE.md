@@ -171,6 +171,7 @@ CREATE INDEX idx_documents_company ON documents(company_id);
 CREATE INDEX idx_documents_sender ON documents(sender_company_id);
 CREATE INDEX idx_documents_receiver ON documents(receiver_company_id);
 CREATE INDEX idx_documents_status ON documents(company_id, status);
+CREATE INDEX idx_documents_company_date ON documents(company_id, doc_date DESC);
 ```
 
 ### 2.9 Таблица `files` (Связаные Сканы и Уставные Документы R2)
@@ -194,6 +195,7 @@ CREATE TABLE files (
 
 CREATE INDEX idx_files_company ON files(company_id);
 CREATE INDEX idx_files_document ON files(document_id);
+CREATE INDEX idx_files_company_category ON files(company_id, category_id);
 ```
 
 ### 2.10 Таблица `document_logs` (Журнал Аудита и Статусов)
