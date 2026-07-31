@@ -251,23 +251,23 @@ export function UnifiedDataGrid<T extends Record<string, any>>({
         <div className="flex flex-col sm:flex-row sm:items-center gap-3 flex-1">
           {title && (
             <div>
-              <h3 className="text-base font-bold text-white tracking-tight">{title}</h3>
-              {subtitle && <p className="text-xs text-slate-400 mt-0.5">{subtitle}</p>}
+              <h3 className="text-base font-bold text-foreground tracking-tight">{title}</h3>
+              {subtitle && <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>}
             </div>
           )}
 
           <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder={searchPlaceholder}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="bg-slate-950 border-slate-800 text-white text-xs pl-9 min-h-[40px] focus:border-amber-500/50"
+              className="bg-card border-border text-foreground text-xs pl-9 min-h-[40px] focus:border-amber-500/50"
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               >
                 ✕
               </button>
@@ -348,16 +348,16 @@ export function UnifiedDataGrid<T extends Record<string, any>>({
 
       {/* ОТОБРАЖЕНИЕ РЕЖИМА 1: ТАБЛИЦА С DRAG&DROP И КНОПКОЙ ТРЕУГОЛЬНИКОМ ▼ (relative z-10) */}
       {viewMode === 'table' ? (
-        <Card className="relative z-10 bg-slate-900/50 border-slate-800 shadow-2xl">
+        <Card className="relative z-10 bg-card border-border shadow-2xl">
           <CardContent className="p-0">
             {isLoading ? (
-              <div className="p-12 text-center text-slate-400 text-sm">Загрузка данных...</div>
+              <div className="p-12 text-center text-muted-foreground text-sm">Загрузка данных...</div>
             ) : paginatedData.length === 0 ? (
-              <div className="p-12 text-center text-slate-500 text-sm">{emptyMessage}</div>
+              <div className="p-12 text-center text-muted-foreground text-sm">{emptyMessage}</div>
             ) : (
               <div className="overflow-x-auto">
                 <Table>
-                  <TableHeader className="bg-slate-950/80">
+                  <TableHeader className="bg-muted/60">
                     <TableRow>
                       {visibleColumns.map((col) => {
                         const isSorted = sortKey === col.key;
@@ -371,7 +371,7 @@ export function UnifiedDataGrid<T extends Record<string, any>>({
                             onDragStart={(e) => handleDragStart(e, col.key)}
                             onDragOver={handleDragOver}
                             onDrop={(e) => handleDrop(e, col.key)}
-                            className="relative group select-none text-slate-300 font-semibold text-xs border-b border-slate-800 py-3"
+                            className="relative group select-none text-foreground font-semibold text-xs border-b border-border py-3"
                           >
                             <div className="flex items-center justify-between space-x-2">
                               {/* Перетягиваемый элемент и сортировка по клику */}

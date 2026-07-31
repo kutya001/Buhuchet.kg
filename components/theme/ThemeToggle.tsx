@@ -15,7 +15,7 @@ export function ThemeToggle({ className = '' }: { className?: string }) {
 
   return (
     <div
-      className={`inline-flex items-center p-1 rounded-2xl bg-slate-900/80 border border-slate-800 backdrop-blur-xl shadow-inner ${className}`}
+      className={`inline-flex items-center p-1 rounded-2xl bg-card border border-border backdrop-blur-xl shadow-sm ${className}`}
       title="Сменить тему оформления (Тёмная / Светлая / Тёплая)"
     >
       {themes.map((t) => {
@@ -27,8 +27,8 @@ export function ThemeToggle({ className = '' }: { className?: string }) {
             onClick={() => setTheme(t.id)}
             className={`flex items-center space-x-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all duration-300 ${
               isActive
-                ? 'bg-slate-800 text-white shadow-md border border-slate-700 font-bold scale-105'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+                ? 'bg-primary text-primary-foreground shadow-md font-bold scale-105'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
             }`}
           >
             {t.icon}

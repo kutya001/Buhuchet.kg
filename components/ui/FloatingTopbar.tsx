@@ -116,7 +116,7 @@ export function FloatingTopbar({
     <>
       {/* 1. НАМЕРТВО ЗАФИКСИРОВАННЫЙ ВЕРХНИЙ ПАРЯЩИЙ ОСТРОВОК (FIXED TOP-2) */}
       <header
-        className={`fixed top-2 left-2 right-2 h-12 sm:h-14 rounded-2xl bg-slate-900/90 backdrop-blur-2xl border border-slate-800/80 shadow-2xl z-40 flex items-center justify-between px-3 sm:px-5 transition-all duration-300 ${
+        className={`fixed top-2 left-2 right-2 h-12 sm:h-14 rounded-2xl bg-card/90 backdrop-blur-2xl border border-border shadow-2xl z-40 flex items-center justify-between px-3 sm:px-5 transition-all duration-300 ${
           isSidebarCollapsed ? 'md:left-[88px]' : 'md:left-[264px]'
         }`}
       >
@@ -125,7 +125,7 @@ export function FloatingTopbar({
           <button
             type="button"
             onClick={onToggleSidebar}
-            className="hidden md:flex h-8 w-8 items-center justify-center rounded-xl bg-slate-800/80 border border-slate-700/50 text-slate-300 hover:text-white hover:bg-slate-700/80 transition-all active:scale-95"
+            className="hidden md:flex h-8 w-8 items-center justify-center rounded-xl bg-muted border border-border text-foreground hover:bg-muted/80 transition-all active:scale-95"
             title={isSidebarCollapsed ? 'Развернуть меню' : 'Свернуть меню'}
           >
             {isSidebarCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
@@ -133,7 +133,7 @@ export function FloatingTopbar({
 
           <div className="flex items-center space-x-2">
             <div className="h-2 w-2 rounded-full bg-emerald-400 animate-ping flex-shrink-0" />
-            <h1 className="text-xs sm:text-base font-bold text-white tracking-tight truncate max-w-[130px] sm:max-w-none">
+            <h1 className="text-xs sm:text-base font-bold text-foreground tracking-tight truncate max-w-[130px] sm:max-w-none">
               {currentPageTitle}
             </h1>
           </div>
@@ -148,7 +148,7 @@ export function FloatingTopbar({
             className={`flex h-8 sm:h-9 w-8 sm:w-9 items-center justify-center rounded-xl border transition-all active:scale-95 ${
               isSearchOpen || searchValue
                 ? 'bg-blue-600/30 border-blue-500/50 text-blue-400 font-bold'
-                : 'bg-slate-800/80 border-slate-700/60 text-slate-300 hover:text-white'
+                : 'bg-muted border-border text-foreground hover:bg-muted/80'
             }`}
             title="Универсальный поиск по системе"
           >
@@ -160,7 +160,7 @@ export function FloatingTopbar({
 
           {/* Инфо о Компании */}
           <div className="hidden sm:flex flex-col text-right">
-            <span className="text-xs font-bold text-slate-200 truncate max-w-[140px] lg:max-w-[200px]">
+            <span className="text-xs font-bold text-foreground truncate max-w-[140px] lg:max-w-[200px]">
               {companyName || 'Организация'}
             </span>
             {companyInn && (

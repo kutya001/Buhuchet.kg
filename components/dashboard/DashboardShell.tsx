@@ -56,10 +56,10 @@ export function DashboardShell({
   const canViewEmployees = hasPermission(userProfile, 'employees', 'view');
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row bg-slate-950 text-slate-100 relative overflow-x-hidden">
+    <div className="min-h-screen flex flex-col md:flex-row bg-background text-foreground relative overflow-x-hidden">
       {/* 1. DESKTOP COLLAPSIBLE SIDEBAR */}
       <aside
-        className={`hidden md:flex flex-col justify-between p-4 bg-slate-900/40 border-r border-slate-800/80 backdrop-blur-xl transition-all duration-300 ease-in-out flex-shrink-0 ${
+        className={`hidden md:flex flex-col justify-between p-4 bg-card/70 border-r border-border backdrop-blur-xl transition-all duration-300 ease-in-out flex-shrink-0 ${
           isCollapsed ? 'w-20' : 'w-64'
         }`}
       >
@@ -71,8 +71,8 @@ export function DashboardShell({
             </div>
             {!isCollapsed && (
               <div className="transition-opacity duration-300">
-                <span className="font-bold text-lg text-white tracking-tight">Buhuchet.kg</span>
-                <p className="text-[10px] text-slate-500 uppercase tracking-widest font-mono">B2B Network</p>
+                <span className="font-bold text-lg text-foreground tracking-tight">Buhuchet.kg</span>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-mono">B2B Network</p>
               </div>
             )}
           </div>

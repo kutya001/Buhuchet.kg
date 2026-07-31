@@ -3,11 +3,12 @@
 @tailwind utilities;
 
 @layer base {
+  /* 🌙 1. ТЁМНАЯ ТЕМА (По умолчанию) */
   :root, html[data-theme="dark"] {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
+    --background: 222.2 84% 4.9%; /* #020617 */
+    --foreground: 210 40% 98%; /* #F8FAFC */
 
-    --card: 222.2 84% 6.5%;
+    --card: 222.2 84% 6.5%; /* #0F172A */
     --card-foreground: 210 40% 98%;
 
     --popover: 222.2 84% 6.5%;
@@ -19,8 +20,8 @@
     --secondary: 217.2 32.6% 17.5%;
     --secondary-foreground: 210 40% 98%;
 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --muted: 217.2 32.6% 14%;
+    --muted-foreground: 215 20.2% 65.1%; /* #94A3B8 */
 
     --accent: 217.2 32.6% 17.5%;
     --accent-foreground: 210 40% 98%;
@@ -28,25 +29,22 @@
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 217.2 32.6% 17.5%;
+    --border: 217.2 32.6% 17.5%; /* #1E293B */
     --input: 217.2 32.6% 17.5%;
     --ring: 224.3 76.3% 48%;
 
     --radius: 0.75rem;
 
-    --theme-bg-raw: #020617;
-    --theme-card-raw: #0f172a;
+    --theme-card-raw: rgba(15, 23, 42, 0.85);
     --theme-card-border-raw: #1e293b;
-    --theme-text-raw: #ffffff;
-    --theme-muted-raw: #94a3b8;
-    --theme-accent-raw: #3b82f6;
   }
 
+  /* ☀️ 2. СВЕТЛАЯ ТЕМА (Чистая минималистичная) */
   html[data-theme="light"] {
-    --background: 210 40% 98%;
-    --foreground: 222.2 84% 4.9%;
+    --background: 210 40% 98%; /* #F8FAFC */
+    --foreground: 222.2 84% 4.9%; /* #0F172A */
 
-    --card: 0 0% 100%;
+    --card: 0 0% 100%; /* #FFFFFF */
     --card-foreground: 222.2 84% 4.9%;
 
     --popover: 0 0% 100%;
@@ -58,8 +56,8 @@
     --secondary: 210 40% 96.1%;
     --secondary-foreground: 222.2 47.4% 11.2%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 210 40% 94%;
+    --muted-foreground: 215.4 16.3% 42%; /* #64748B */
 
     --accent: 210 40% 96.1%;
     --accent-foreground: 222.2 47.4% 11.2%;
@@ -67,37 +65,33 @@
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
+    --border: 214.3 31.8% 88%; /* #E2E8F0 */
+    --input: 214.3 31.8% 88%;
     --ring: 221.2 83.2% 53.3%;
 
-    --theme-bg-raw: #f8fafc;
     --theme-card-raw: #ffffff;
     --theme-card-border-raw: #e2e8f0;
-    --theme-text-raw: #0f172a;
-    --theme-muted-raw: #475569;
-    --theme-accent-raw: #2563eb;
   }
 
-  /* ☕ Тёплая тема "Primary Theme" (крем + какао + терракота) */
+  /* ☕ 3. ТЁПЛАЯ ТЕМА "Primary Theme" (Крем + Какао + Песочный) */
   html[data-theme="warm"] {
-    --background: 37 27% 95%; /* #F6F3EE */
-    --foreground: 18 13% 16%; /* #2E2623 */
+    --background: 37 27% 95%; /* #F6F3EE - Уютный тёплый крем */
+    --foreground: 18 13% 16%; /* #2E2623 - Тёмный шоколад / какао */
 
-    --card: 38 40% 97%; /* #FAF7F2 */
+    --card: 38 40% 97%; /* #FAF7F2 - Сливочно-бежевая карточка */
     --card-foreground: 18 13% 16%;
 
     --popover: 38 40% 97%;
     --popover-foreground: 18 13% 16%;
 
-    --primary: 25 33% 41%; /* #8C6347 - терракотовый какао */
+    --primary: 25 33% 41%; /* #8C6347 - Терракота какао */
     --primary-foreground: 38 40% 97%;
 
-    --secondary: 35 25% 90%; /* #EFEADF - пергаментный */
+    --secondary: 35 25% 90%; /* #EFEADF - Пергаментный */
     --secondary-foreground: 18 13% 16%;
 
-    --muted: 35 25% 90%;
-    --muted-foreground: 24 13% 41%; /* #75655B */
+    --muted: 35 25% 88%;
+    --muted-foreground: 24 13% 41%; /* #75655B - Ореховый */
 
     --accent: 35 25% 90%;
     --accent-foreground: 18 13% 16%;
@@ -105,16 +99,12 @@
     --destructive: 0 60% 45%;
     --destructive-foreground: 38 40% 97%;
 
-    --border: 35 27% 84%; /* #E3D8C8 */
-    --input: 35 27% 84%;
+    --border: 35 27% 82%; /* #E3D8C8 - Песочный */
+    --input: 35 27% 82%;
     --ring: 25 33% 41%;
 
-    --theme-bg-raw: #f6f3ee;
     --theme-card-raw: #faf7f2;
     --theme-card-border-raw: #e3d8c8;
-    --theme-text-raw: #2e2623;
-    --theme-muted-raw: #75655b;
-    --theme-accent-raw: #8c6347;
   }
 }
 
@@ -129,7 +119,7 @@
   }
 }
 
-/* Стекло в тёмной теме */
+/* Эффект матового стекла */
 .glass-card {
   background: var(--theme-card-raw);
   backdrop-filter: blur(16px);
@@ -138,8 +128,9 @@
 }
 
 .glass-input {
-  background: rgba(30, 41, 59, 0.3);
+  background: var(--theme-card-raw);
   border: 1px solid var(--theme-card-border-raw);
+  color: var(--foreground);
 }
 
 /* Кастомный скроллбар */
