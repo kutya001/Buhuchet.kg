@@ -11,6 +11,7 @@ import { User, Phone, Mail, Building2, Shield, CheckCircle2, AlertCircle, Loader
 import { createClient } from '@/lib/supabase/client';
 import { updateProfileAction } from './actions';
 import type { UserProfile, Company } from '@/types/database.types';
+import { TelegramBindingCard } from '@/components/dashboard/TelegramBindingCard';
 
 export default function ProfilePage() {
   const [profile, setProfile] = useState<(UserProfile & { companies?: Company | null }) | null>(null);
@@ -268,6 +269,9 @@ export default function ProfilePage() {
             </CardFooter>
           </form>
         </Card>
+
+        {/* Секция Интеграции с Telegram Ботом */}
+        <TelegramBindingCard />
       </div>
     </div>
   );

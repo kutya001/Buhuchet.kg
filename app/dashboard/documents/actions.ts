@@ -9,6 +9,7 @@ import { z } from 'zod';
 
 import { cache } from 'react';
 import { hasPermission, ModuleName, ActionName } from '@/lib/auth/permissions';
+import { sendTelegramNotification } from '@/lib/telegram/notifier';
 
 const getUserContext = cache(async () => {
   const supabase = await createClient();
@@ -397,6 +398,15 @@ export async function createB2BDocumentAction(data: B2BDocumentInput): Promise<A
       new_status: doc.status,
       comment: doc.status === 'sent' ? 'Документ отправлен адресату' : 'Документ сохранен как черновик',
     });
+
+    // 4. Отправка Telegram-уведомления организации-получателю при отправке
+    if (doc.status === 'sent' && data.receiver_company_id) {
+      sendTelegramNotification({
+        companyId: data.receiver_company_id,
+        type: 'documents',
+        message: `📄 **Новый входящий документ!**\n\n• **Тип:** ${doc.doc_type}\n• **Номер:** №${doc.doc_number}\n• **Дата:** ${doc.doc_date}\n• **Статус:** Отправлен контрагентом`,
+      }).catch(err => console.error('[Telegram Notification Error]:', err));
+    }
 
     revalidatePath('/dashboard/documents');
     revalidatePath('/dashboard/files');

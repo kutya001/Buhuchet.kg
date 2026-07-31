@@ -215,6 +215,35 @@ CREATE TABLE document_logs (
 CREATE INDEX idx_doc_logs_document ON document_logs(document_id);
 ```
 
+### 2.11 Таблицы Telegram Интеграции (`telegram_connections` & `telegram_verification_codes`)
+
+```sql
+CREATE TABLE telegram_connections (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  telegram_chat_id BIGINT NOT NULL,
+  telegram_user_id BIGINT,
+  telegram_username TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  CONSTRAINT unique_user_company_telegram UNIQUE (user_id, company_id)
+);
+
+CREATE TABLE telegram_verification_codes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  code VARCHAR(4) NOT NULL,
+  expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  CONSTRAINT unique_pending_verification UNIQUE (user_id, company_id)
+);
+
+CREATE INDEX idx_telegram_connections_company ON telegram_connections(company_id);
+CREATE INDEX idx_telegram_connections_user ON telegram_connections(user_id);
+CREATE INDEX idx_telegram_codes_code ON telegram_verification_codes(code);
+```
+
 ---
 
 ## 3. ПОЛИТИКИ БЕЗОПАСНОСТИ ROW LEVEL SECURITY (RLS)

@@ -42,7 +42,10 @@ export type ActionName =
   | 'edit_my_profile'
   | 'create_role'
   | 'edit_role'
-  | 'delete_role';
+  | 'delete_role'
+  | 'telegram_bind'
+  | 'notify_documents'
+  | 'notify_collaboration';
 
 /**
  * Справочник русскоязычных названий модулей, вкладок и прав в интерфейсе матрицы
@@ -124,6 +127,9 @@ export const MODULE_CONFIG: Record<
       { key: 'create_role', label: 'Может создавать роли' },
       { key: 'edit_role', label: 'Может изменять роли и матрицу прав' },
       { key: 'delete_role', label: 'Может удалять роли' },
+      { key: 'telegram_bind', label: 'Может привязывать Telegram к аккаунту' },
+      { key: 'notify_documents', label: 'Получает уведомления по документам' },
+      { key: 'notify_collaboration', label: 'Получает уведомления по сотрудникам' },
     ],
   },
 };

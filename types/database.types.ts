@@ -251,6 +251,25 @@ export interface FeatureFlag {
   updated_at: string;
 }
 
+export interface TelegramConnection {
+  id: string;
+  user_id: string;
+  company_id: string;
+  telegram_chat_id: number;
+  telegram_user_id?: number | null;
+  telegram_username?: string | null;
+  created_at: string;
+}
+
+export interface TelegramVerificationCode {
+  id: string;
+  user_id: string;
+  company_id: string;
+  code: string;
+  expires_at: string;
+  created_at: string;
+}
+
 export interface Subscription {
   id: string;
   company_id: string;
