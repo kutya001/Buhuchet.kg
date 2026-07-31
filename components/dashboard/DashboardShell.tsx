@@ -369,7 +369,7 @@ export function DashboardShell({
                 }`}
               >
                 <User className="h-4 w-4 text-primary" />
-                <span>Мой Профиль и Інтеграція Telegram</span>
+                <span>Мой Профиль</span>
               </Link>
 
               {isSuperAdmin && (
