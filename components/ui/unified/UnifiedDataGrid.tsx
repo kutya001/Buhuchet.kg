@@ -366,12 +366,10 @@ export function UnifiedDataGrid<T extends Record<string, any>>({
 
       {/* ОТОБРАЖЕНИЕ РЕЖИМА 1: ТАБЛИЦА С DRAG&DROP И КНОПКОЙ ТРЕУГОЛЬНИКОМ ▼ (relative z-10) */}
       {viewMode === 'table' ? (
-        <Card className="relative z-10 bg-card border-border shadow-2xl">
+        <Card className="relative z-10 bg-card border-border shadow-2xl overflow-hidden">
           <CardContent className="p-0">
             {isLoading ? (
               <div className="p-12 text-center text-muted-foreground text-sm">Загрузка данных...</div>
-            ) : paginatedData.length === 0 ? (
-              <div className="p-12 text-center text-muted-foreground text-sm">{emptyMessage}</div>
             ) : (
               <div className="overflow-x-auto">
                 <Table>
@@ -421,41 +419,38 @@ export function UnifiedDataGrid<T extends Record<string, any>>({
                                   <ChevronDown className="h-3.5 w-3.5" />
                                 </button>
 
-                                {/* ВЫПАДАЮЩЕЕ МЕНЮ ТРЕУГОЛЬНИКА С ОПЦИЯМИ */}
+                                {/* ВЫПАДАЮЩЕЕ МЕНЮ СТРОГО ДЛЯ ЭТОГО СТОЛБЦА */}
                                 {isMenuOpen && (
-                                  <div className="absolute right-0 top-7 z-50 w-52 bg-card border border-border rounded-xl p-2.5 shadow-2xl space-y-2 text-xs font-normal">
-                                    <div className="flex items-center justify-between pb-2 border-b border-border">
-                                      <span className="font-bold text-xs text-foreground">Фильтр ({col.label})</span>
-                                      <button onClick={() => setActiveMenuColumn(null)} className="text-muted-foreground hover:text-foreground">
-                                        <X className="h-4 w-4" />
-                                      </button>
+                                  <div className="absolute right-0 top-7 z-50 w-52 bg-card border border-border rounded-xl p-2 shadow-2xl space-y-2 text-xs text-foreground ring-1 ring-border">
+                                    <div className="font-bold text-[11px] text-muted-foreground px-2 py-0.5 border-b border-border">
+                                      {col.label}
                                     </div>
 
-                                    <div className="space-y-1">
-                                      <button
-                                        onClick={() => {
-                                          setSortKey(col.key);
-                                          setSortOrder('asc');
-                                          setActiveMenuColumn(null);
-                                        }}
-                                        className="w-full text-left px-2 py-1.5 rounded hover:bg-muted text-foreground flex items-center space-x-2"
-                                      >
-                                        <ChevronUp className="h-3.5 w-3.5 text-amber-500" />
-                                        <span>Сортировка А-Я (▲)</span>
-                                      </button>
-
-                                      <button
-                                        onClick={() => {
-                                          setSortKey(col.key);
-                                          setSortOrder('desc');
-                                          setActiveMenuColumn(null);
-                                        }}
-                                        className="w-full text-left px-2 py-1.5 rounded hover:bg-muted text-foreground flex items-center space-x-2"
-                                      >
-                                        <ChevronDown className="h-3.5 w-3.5 text-amber-500" />
-                                        <span>Сортировка Я-А (▼)</span>
-                                      </button>
-                                    </div>
+                                    {/* Сортировка */}
+                                    {col.sortable !== false && (
+                                      <div className="space-y-0.5">
+                                        <button
+                                          onClick={() => {
+                                            setSortKey(col.key);
+                                            setSortOrder('asc');
+                                            setActiveMenuColumn(null);
+                                          }}
+                                          className="w-full text-left px-2 py-1 rounded hover:bg-muted flex items-center space-x-2"
+                                        >
+                                          <span>▲ Сортировка по возрастанию</span>
+                                        </button>
+                                        <button
+                                          onClick={() => {
+                                            setSortKey(col.key);
+                                            setSortOrder('desc');
+                                            setActiveMenuColumn(null);
+                                          }}
+                                          className="w-full text-left px-2 py-1 rounded hover:bg-muted flex items-center space-x-2"
+                                        >
+                                          <span>▼ Сортировка по убыванию</span>
+                                        </button>
+                                      </div>
+                                    )}
 
                                     {/* Фильтр по этому столбцу */}
                                     <div className="pt-1 border-t border-border space-y-1">
@@ -479,7 +474,7 @@ export function UnifiedDataGrid<T extends Record<string, any>>({
                                         toggleColumnVisibility(col.key);
                                         setActiveMenuColumn(null);
                                       }}
-                                      className="w-full text-left px-2 py-1.5 rounded hover:bg-red-500/10 text-red-400 flex items-center space-x-2 pt-1 border-t border-slate-800"
+                                      className="w-full text-left px-2 py-1.5 rounded hover:bg-red-500/10 text-red-400 flex items-center space-x-2 pt-1 border-t border-border"
                                     >
                                       <EyeOff className="h-3.5 w-3.5" />
                                       <span>Скрыть столбец</span>
@@ -494,15 +489,23 @@ export function UnifiedDataGrid<T extends Record<string, any>>({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {paginatedData.map((item) => (
-                      <TableRow key={keyExtractor(item)} className="hover:bg-slate-800/40 transition-colors">
-                        {visibleColumns.map((col) => (
-                          <TableCell key={col.key} className="py-3 text-xs text-slate-200">
-                            {col.render ? col.render(item) : item[col.key]}
-                          </TableCell>
-                        ))}
+                    {paginatedData.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={visibleColumns.length || 1} className="py-12 text-center text-muted-foreground text-sm">
+                          {emptyMessage}
+                        </TableCell>
                       </TableRow>
-                    ))}
+                    ) : (
+                      paginatedData.map((item) => (
+                        <TableRow key={keyExtractor(item)} className="hover:bg-muted/40 transition-colors">
+                          {visibleColumns.map((col) => (
+                            <TableCell key={col.key} className="py-3 text-xs text-foreground">
+                              {col.render ? col.render(item) : item[col.key]}
+                            </TableCell>
+                          ))}
+                        </TableRow>
+                      ))
+                    )}
                   </TableBody>
                 </Table>
               </div>

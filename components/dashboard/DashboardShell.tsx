@@ -13,6 +13,8 @@ import {
   Users,
   FolderOpen,
   X,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { signOutAction } from '@/app/(auth)/actions';
 import { Button } from '@/components/ui/button';
@@ -64,17 +66,29 @@ export function DashboardShell({
         }`}
       >
         <div className="space-y-6">
-          {/* Логотип приложения */}
-          <div className="flex items-center space-x-3 px-2 py-1 overflow-hidden">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600/20 border border-blue-500/30 text-blue-400 flex-shrink-0">
-              <FileText className="h-5 w-5" />
-            </div>
-            {!isCollapsed && (
-              <div className="transition-opacity duration-300">
-                <span className="font-bold text-lg text-foreground tracking-tight">Buhuchet.kg</span>
-                <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-mono">ЭДО Платформа</p>
+          {/* Логотип приложения и Кнопка сворачивания */}
+          <div className="flex items-center justify-between px-1 py-1 overflow-hidden">
+            <div className="flex items-center space-x-3 min-w-0">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600/20 border border-blue-500/30 text-blue-400 flex-shrink-0">
+                <FileText className="h-5 w-5" />
               </div>
-            )}
+              {!isCollapsed && (
+                <div className="transition-opacity duration-300 min-w-0">
+                  <span className="font-bold text-lg text-foreground tracking-tight block truncate">Buhuchet.kg</span>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-mono truncate">ЭДО Платформа</p>
+                </div>
+              )}
+            </div>
+
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setIsCollapsed(!isCollapsed)}
+              className="h-7 w-7 text-muted-foreground hover:text-foreground p-0 hidden md:flex shrink-0 ml-1"
+              title={isCollapsed ? 'Развернуть меню' : 'Свернуть меню'}
+            >
+              {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+            </Button>
           </div>
 
           {/* Единые лаконичные пункты навигации */}
@@ -240,8 +254,8 @@ export function DashboardShell({
           }}
         />
 
-        {/* Главный контент с отступом сверху pt-16 sm:pt-20 */}
-        <main className="flex-1 px-3 sm:px-6 pt-16 sm:pt-20 overflow-y-auto">
+        {/* Главный контент с надежным отступом сверху pt-20 sm:pt-24 */}
+        <main className="flex-1 px-3 sm:px-6 pt-20 sm:pt-24 pb-28 md:pb-8 overflow-y-auto">
           {children}
         </main>
       </div>
