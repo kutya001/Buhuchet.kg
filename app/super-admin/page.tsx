@@ -978,7 +978,7 @@ export default function SuperAdminPage() {
           }}
         />
 
-        <main className="pt-24 sm:pt-28 md:pt-24 pb-28 md:pb-8 p-4 sm:p-6 lg:p-8 overflow-y-auto flex-1">
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 pt-20 sm:pt-24 md:pt-20 pb-28 md:pb-8">
           <div className="space-y-6">
 
         {msg && (
