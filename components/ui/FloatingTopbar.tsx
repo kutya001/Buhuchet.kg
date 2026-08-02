@@ -54,7 +54,7 @@ export function FloatingTopbar({
     : 'md:left-72';
 
   return (
-    <header className={`fixed top-3 left-3 right-3 ${desktopLeftClass} sm:right-6 z-40 rounded-2xl bg-card/80 backdrop-blur-2xl border border-border/80 shadow-xl px-3 py-2 transition-all duration-300`}>
+    <header className={`fixed top-2 left-3 right-3 ${desktopLeftClass} sm:right-6 z-40 rounded-2xl bg-card/90 backdrop-blur-2xl border border-border/80 shadow-xl px-3 py-1.5 transition-all duration-300`}>
       <div className="flex items-center justify-between gap-2">
         {/* Левая часть: Гамбургер + Лупа/Поиск */}
         <div className="flex items-center gap-2 min-w-0">
