@@ -20,6 +20,7 @@ interface FloatingTopbarProps {
 }
 
 export function FloatingTopbar({
+  isSidebarCollapsed,
   onLogout,
   onOpenMobileMenu,
   onSearchChange,
@@ -45,8 +46,15 @@ export function FloatingTopbar({
     return () => clearInterval(interval);
   }, []);
 
+  // Вычисление динамического позиционирования сдвига слева для десктопа
+  const desktopLeftClass = isSidebarCollapsed === undefined
+    ? 'md:left-6'
+    : isSidebarCollapsed
+    ? 'md:left-24'
+    : 'md:left-72';
+
   return (
-    <header className="fixed top-3 left-3 right-3 sm:left-6 sm:right-6 z-40 rounded-2xl bg-card/80 backdrop-blur-2xl border border-border/80 shadow-xl px-3 py-2 transition-all">
+    <header className={`fixed top-3 left-3 right-3 ${desktopLeftClass} sm:right-6 z-40 rounded-2xl bg-card/80 backdrop-blur-2xl border border-border/80 shadow-xl px-3 py-2 transition-all duration-300`}>
       <div className="flex items-center justify-between gap-2">
         {/* Левая часть: Гамбургер + Лупа/Поиск */}
         <div className="flex items-center gap-2 min-w-0">

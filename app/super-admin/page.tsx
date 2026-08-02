@@ -65,6 +65,7 @@ import {
   deleteFileCategoryAdminAction,
   inspectTableDataAdminAction,
 } from './actions';
+import { signOutAction } from '@/app/(auth)/actions';
 import {
   getAllSystemFilesAction,
   updateDocumentFileAction,
@@ -97,6 +98,7 @@ import { cn } from '@/lib/utils';
 export default function SuperAdminPage() {
   const [activeTab, setActiveTab] = useState<SuperAdminTab>('companies');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [telegramSubTab, setTelegramSubTab] = useState<'connections' | 'codes' | 'logs'>('connections');
   const [telegramStats, setTelegramStats] = useState<TelegramAdminStatsData | null>(null);
   const [botHealth, setBotHealth] = useState<TelegramBotHealthData | null>(null);
@@ -163,8 +165,8 @@ export default function SuperAdminPage() {
 
   const supabase = createClient();
 
-  // 1. Первичная быстрая загрузка ТОЛЬКО компаний
-  const loadInitialCompanies = async () => {
+  // 1. Первичная загрузка компаний и фоновая предзагрузка остальных модулей
+  const loadInitialData = async () => {
     setLoading(true);
     const [pendRes, allRes] = await Promise.all([
       getPendingCompaniesAction(),
@@ -173,31 +175,41 @@ export default function SuperAdminPage() {
     if (pendRes.success && pendRes.data) setPendingCompanies(pendRes.data);
     if (allRes.success && allRes.data) setAllCompanies(allRes.data);
     setLoading(false);
+
+    // Фоновая мгновенная предзагрузка всех остальных модулей платформы (без блокировки UI)
+    Promise.allSettled([
+      getAllUsersAdminAction().then((res) => {
+        if (res.success && res.data) setAllUsers(res.data);
+      }),
+      getAllSystemFilesAction().then((res) => {
+        if (res.success && res.data) setSystemFiles(res.data);
+      }),
+      getAllDocumentsAdminAction().then((res) => {
+        if (res.success && res.data) setAllDocuments(res.data);
+      }),
+      supabase.from('file_categories').select('*').order('name').then((res) => {
+        if (res.data) setCategories(res.data as FileCategory[]);
+      }),
+    ]);
   };
 
   useEffect(() => {
-    loadInitialCompanies();
+    loadInitialData();
   }, []);
 
-  // 2. Ленивая загрузка данных по требованию (только при открытии вкладки)
+  // 2. Бесшовное дозагружение при открытии табу, если фоновый запрос еще в пути (без сброса страницы в loading=true)
   useEffect(() => {
     if (activeTab === 'users' && allUsers.length === 0) {
-      setLoading(true);
       getAllUsersAdminAction().then((res) => {
         if (res.success && res.data) setAllUsers(res.data);
-        setLoading(false);
       });
     } else if (activeTab === 'r2_files' && systemFiles.length === 0) {
-      setLoading(true);
       getAllSystemFilesAction().then((res) => {
         if (res.success && res.data) setSystemFiles(res.data);
-        setLoading(false);
       });
     } else if (activeTab === 'edo_documents' && allDocuments.length === 0) {
-      setLoading(true);
       getAllDocumentsAdminAction().then((res) => {
         if (res.success && res.data) setAllDocuments(res.data);
-        setLoading(false);
       });
     } else if (activeTab === 'dictionaries' && categories.length === 0) {
       supabase.from('file_categories').select('*').order('name').then((res) => {
@@ -238,7 +250,7 @@ export default function SuperAdminPage() {
       const res = await approveCompanyAction(comp.id);
       if (!res.success) {
         setMsg({ type: 'error', text: res.error || 'Ошибка верификации' });
-        loadInitialCompanies();
+        loadInitialData();
       }
     });
   };
@@ -283,7 +295,7 @@ export default function SuperAdminPage() {
 
       if (!res.success) {
         setMsg({ type: 'error', text: res.error || 'Ошибка модерации' });
-        loadInitialCompanies();
+        loadInitialData();
       }
     });
   };
@@ -307,7 +319,7 @@ export default function SuperAdminPage() {
         setNewCompName('');
         setNewCompInn('');
         setNewCompDirector('');
-        await loadInitialCompanies();
+        await loadInitialData();
       } else {
         setMsg({ type: 'error', text: res.error || 'Ошибка создания' });
       }
@@ -344,7 +356,7 @@ export default function SuperAdminPage() {
 
       if (!res.success) {
         setMsg({ type: 'error', text: res.error || 'Ошибка при обновлении компании' });
-        loadInitialCompanies();
+        loadInitialData();
       }
     });
   };
@@ -947,8 +959,10 @@ export default function SuperAdminPage() {
         pendingCount={pendingCompanies.length}
         isOpenMobile={isMobileMenuOpen}
         onCloseMobile={() => setIsMobileMenuOpen(false)}
+        isCollapsed={isSidebarCollapsed}
+        onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
         onLogout={() => {
-          window.location.href = '/login';
+          signOutAction();
         }}
       />
 
@@ -957,9 +971,10 @@ export default function SuperAdminPage() {
         <FloatingTopbar
           companyName="Buhuchet.kg Administration"
           isSuperAdmin={true}
+          isSidebarCollapsed={isSidebarCollapsed}
           onOpenMobileMenu={() => setIsMobileMenuOpen(true)}
           onLogout={() => {
-            window.location.href = '/login';
+            signOutAction();
           }}
         />
 
