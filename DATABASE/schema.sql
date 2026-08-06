@@ -232,16 +232,21 @@ CREATE TABLE IF NOT EXISTS public.telegram_logs (
 CREATE INDEX IF NOT EXISTS idx_companies_inn ON public.companies(inn);
 CREATE INDEX IF NOT EXISTS idx_companies_status ON public.companies(status);
 CREATE INDEX IF NOT EXISTS idx_users_company_id ON public.users(company_id);
+CREATE INDEX IF NOT EXISTS idx_users_role_id ON public.users(role_id);
 CREATE INDEX IF NOT EXISTS idx_users_role ON public.users(role);
-CREATE INDEX IF NOT EXISTS idx_sub_payments_company ON public.subscription_payments(company_id);
+CREATE INDEX IF NOT EXISTS idx_company_roles_company_id ON public.company_roles(company_id);
 CREATE INDEX IF NOT EXISTS idx_partnerships_requester ON public.company_partnerships(requester_company_id);
 CREATE INDEX IF NOT EXISTS idx_partnerships_target ON public.company_partnerships(target_company_id);
 CREATE INDEX IF NOT EXISTS idx_counterparties_company ON public.counterparties(company_id);
+CREATE INDEX IF NOT EXISTS idx_counterparties_target_company ON public.counterparties(target_company_id);
 CREATE INDEX IF NOT EXISTS idx_documents_company ON public.documents(company_id);
+CREATE INDEX IF NOT EXISTS idx_documents_author_id ON public.documents(author_id);
+CREATE INDEX IF NOT EXISTS idx_documents_counterparty_id ON public.documents(counterparty_id);
 CREATE INDEX IF NOT EXISTS idx_documents_sender ON public.documents(sender_company_id);
 CREATE INDEX IF NOT EXISTS idx_documents_receiver ON public.documents(receiver_company_id);
 CREATE INDEX IF NOT EXISTS idx_files_company ON public.files(company_id);
 CREATE INDEX IF NOT EXISTS idx_files_document ON public.files(document_id);
+CREATE INDEX IF NOT EXISTS idx_files_category_id ON public.files(category_id);
 CREATE INDEX IF NOT EXISTS idx_doc_logs_document ON public.document_logs(document_id);
 CREATE INDEX IF NOT EXISTS idx_telegram_connections_company ON public.telegram_connections(company_id);
 
