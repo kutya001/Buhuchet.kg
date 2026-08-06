@@ -359,7 +359,7 @@ export async function getAllDocumentsAdminAction(): Promise<ActionResponse<any[]
     const adminSupabase = await createAdminClient();
     const { data: rawDocs, error } = await adminSupabase
       .from('documents')
-      .select('*, sender_company:companies!sender_company_id(name), receiver_company:companies!receiver_company_id(name), counterparties(name), users(full_name, email)')
+      .select('*, sender_company:companies!sender_company_id(name), receiver_company:companies!receiver_company_id(name), counterparties(name), users:users!author_id(full_name, email)')
       .order('created_at', { ascending: false });
 
     if (error) return { success: false, error: error.message };
