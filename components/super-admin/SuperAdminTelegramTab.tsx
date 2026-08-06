@@ -493,9 +493,22 @@ export function SuperAdminTelegramTab() {
       {/* 3. ОПТИМИЗИРОВАННЫЙ UNIFIED DATA GRID: ПРИВЯЗАННЫЕ ПОЛЬЗОВАТЕЛИ */}
       {subTab === 'connections' && (
         <UnifiedDataGrid
+          gridId="admin_telegram_connections"
           data={stats?.connections || []}
           columns={connectionColumns}
           keyExtractor={(c) => c.id}
+          getRowActions={(c) => [
+            {
+              label: '🔵 Профиль Telegram',
+              action: () => c.telegram_username && window.open(`https://t.me/${c.telegram_username}`, '_blank'),
+            },
+            {
+              label: '❌ Отвязать Telegram',
+              danger: true,
+              separatorBefore: true,
+              action: () => handleDisconnect(c.id),
+            },
+          ]}
           searchPlaceholder="Поиск привязок по ФИО, Email, ИНН или Telegram Username..."
           emptyMessage="Нет зарегистрированных привязок пользователей"
           isLoading={loading}
@@ -505,6 +518,7 @@ export function SuperAdminTelegramTab() {
       {/* 4. ОПТИМИЗИРОВАННЫЙ UNIFIED DATA GRID: РЕЕСТР OTP-КОДОВ */}
       {subTab === 'codes' && (
         <UnifiedDataGrid
+          gridId="admin_telegram_codes"
           data={stats?.codes || []}
           columns={codeColumns}
           keyExtractor={(cd) => cd.id}
@@ -517,6 +531,7 @@ export function SuperAdminTelegramTab() {
       {/* 5. ОПТИМИЗИРОВАННЫЙ UNIFIED DATA GRID: ЛОГИ ВЕБХУКОВ */}
       {subTab === 'logs' && (
         <UnifiedDataGrid
+          gridId="admin_telegram_logs"
           data={stats?.logs || []}
           columns={logColumns}
           keyExtractor={(lg) => lg.id}

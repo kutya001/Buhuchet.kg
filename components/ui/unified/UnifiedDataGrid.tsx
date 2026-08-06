@@ -55,7 +55,10 @@ export type RowAction<T> = {
   action: (item: T) => void;
   icon?: React.ReactNode;
   danger?: boolean;
+  separatorBefore?: boolean;
 };
+
+const ACTION_COLUMN_KEYS = ['actions', 'action', 'moderation', 'download', 'корректировка', 'действия', 'действие', 'модерация', 'скачивание'];
 
 export type UnifiedDataGridProps<T> = {
   gridId?: string;
@@ -92,13 +95,18 @@ export function UnifiedDataGrid<T extends Record<string, any>>({
   defaultPageSize = 25,
   forceView,
 }: UnifiedDataGridProps<T>) {
-  // 1. Конфигурация колонок и видимости
-  const [columns, setColumns] = useState<ColumnDef<T>[]>(initialColumns);
+  // 1. Исключаем служебные столбцы действий из отображения
+  const filteredInitialColumns = useMemo(() => {
+    return initialColumns.filter((col) => !ACTION_COLUMN_KEYS.includes(col.key.toLowerCase()));
+  }, [initialColumns]);
+
+  // Конфигурация колонок и видимости
+  const [columns, setColumns] = useState<ColumnDef<T>[]>(filteredInitialColumns);
 
   useEffect(() => {
-    setColumns(initialColumns);
-    setVisibleColumnKeys(new Set(initialColumns.filter((c) => !c.hiddenByDefault).map((c) => c.key)));
-  }, [initialColumns]);
+    setColumns(filteredInitialColumns);
+    setVisibleColumnKeys(new Set(filteredInitialColumns.filter((c) => !c.hiddenByDefault).map((c) => c.key)));
+  }, [filteredInitialColumns]);
 
   const [visibleColumnKeys, setVisibleColumnKeys] = useState<Set<string>>(() => {
     const keys = new Set<string>();
@@ -750,15 +758,10 @@ export function UnifiedDataGrid<T extends Record<string, any>>({
                 Действия над записью
               </div>
               {contextMenu.rowItem && getRowActions ? (
-                getRowActions(contextMenu.rowItem)
-                  .filter((act) => {
-                    const l = act.label.toLowerCase();
-                    // Скрываем действия Открыть/Просмотр, если клик по записи выполняет открытие
-                    return !l.includes('открыть') && !l.includes('просмотр');
-                  })
-                  .map((act, idx) => (
+                getRowActions(contextMenu.rowItem).map((act, idx) => (
+                  <React.Fragment key={idx}>
+                    {act.separatorBefore && <div className="my-1 border-t border-border/60" />}
                     <button
-                      key={idx}
                       onClick={() => {
                         act.action(contextMenu.rowItem!);
                         setContextMenu(null);
@@ -770,7 +773,8 @@ export function UnifiedDataGrid<T extends Record<string, any>>({
                       {act.icon && <span className="h-3.5 w-3.5 flex-shrink-0">{act.icon}</span>}
                       <span>{act.label}</span>
                     </button>
-                  ))
+                  </React.Fragment>
+                ))
               ) : (
                 <div className="text-muted-foreground px-2 py-1 text-center">Нет дополнительных действий</div>
               )}

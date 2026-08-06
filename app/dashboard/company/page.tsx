@@ -443,6 +443,7 @@ export default function CompanyProfilePage() {
 
           {/* ЕДИНООБРАЗНАЯ ТАБЛИЦА/КАРТОЧКИ УСТАВНЫХ ФАЙЛОВ UnifiedDataGrid */}
           <UnifiedDataGrid<DocumentFile>
+            gridId="company_legal_files"
             columns={[
               {
                 key: 'file_name',
@@ -472,45 +473,15 @@ export default function CompanyProfilePage() {
                 sortable: true,
                 render: (doc) => <span className="font-mono text-xs text-muted-foreground">{formatBytes(doc.size_bytes)}</span>,
               },
-              {
-                key: 'actions',
-                label: 'Действия',
-                sortable: false,
-                render: (doc) => (
-                  <div className="flex items-center justify-end space-x-2">
-                    {doc.file_path_r2 && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleDownloadR2File(doc.file_path_r2!)}
-                        className="border-border text-purple-400 text-xs min-h-[36px]"
-                      >
-                        <Download className="h-3.5 w-3.5 mr-1" />
-                        Скачать
-                      </Button>
-                    )}
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => handleOpenEdit(doc)}
-                      className="h-8 w-8 p-0 text-muted-foreground hover:text-blue-400"
-                    >
-                      <Edit2 className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => handleDeleteDoc(doc.id)}
-                      className="h-8 w-8 p-0 text-muted-foreground hover:text-red-400"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ),
-              },
             ]}
             data={legalDocs}
             keyExtractor={(doc) => doc.id}
+            onRowClick={(doc) => doc.file_path_r2 && handleDownloadR2File(doc.file_path_r2)}
+            getRowActions={(doc) => [
+              { label: 'Скачать скан (R2)', action: () => doc.file_path_r2 && handleDownloadR2File(doc.file_path_r2) },
+              { label: 'Изменить имя / категорию', action: () => handleOpenEdit(doc) },
+              { label: 'Удалить скан', action: () => handleDeleteDoc(doc.id), danger: true, separatorBefore: true },
+            ]}
             searchPlaceholder="Поиск по имени документа..."
             emptyMessage="Учредительные документы пока не загружены."
             isLoading={loading}

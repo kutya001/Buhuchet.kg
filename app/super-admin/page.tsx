@@ -1034,6 +1034,7 @@ export default function SuperAdminPage() {
           </div>
 
           <UnifiedDataGrid<Company>
+            gridId="admin_companies_registry"
             columns={companyColumns}
             data={
               companySubTab === 'pending'
@@ -1043,6 +1044,45 @@ export default function SuperAdminPage() {
                 : allCompanies
             }
             keyExtractor={(c) => c.id}
+            onRowClick={(c) => {
+              setEditingCompany(c);
+              setCompName(c.name);
+              setCompInn(c.inn);
+              setCompIndustry(c.industry || '');
+              setCompStatus(c.status);
+              setCompAddress(c.legal_address || '');
+              setCompDirector(c.director_name || '');
+            }}
+            getRowActions={(c) => [
+              {
+                label: '✏️ Права и реквизиты',
+                action: () => {
+                  setEditingCompany(c);
+                  setCompName(c.name);
+                  setCompInn(c.inn);
+                  setCompIndustry(c.industry || '');
+                  setCompStatus(c.status);
+                  setCompAddress(c.legal_address || '');
+                  setCompDirector(c.director_name || '');
+                },
+              },
+              {
+                label: '⚠️ Отправить замечание',
+                action: () => {
+                  setSelectedCompany(c);
+                  setModalMode('request_changes');
+                },
+              },
+              {
+                label: '🚫 Заблокировать / Разблокировать',
+                danger: true,
+                separatorBefore: true,
+                action: () => {
+                  setSelectedCompany(c);
+                  setModalMode('block');
+                },
+              },
+            ]}
             searchPlaceholder="Поиск организации по ИНН, названию, руководителю..."
             emptyMessage="Организации в выбранной категории отсутствуют."
             isLoading={loading}
@@ -1064,9 +1104,35 @@ export default function SuperAdminPage() {
       {/* ------------------- РАЗДЕЛ 2: УПРАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯМИ ------------------- */}
       {activeTab === 'users' && (
         <UnifiedDataGrid<any>
+          gridId="admin_users_registry"
           columns={userColumns}
           data={allUsers}
           keyExtractor={(u) => u.id}
+          onRowClick={(u) => {
+            setEditingUser(u);
+            setUserName(u.full_name || '');
+            setUserEmail(u.email || '');
+            setUserRole(u.role || 'employee');
+            setUserIsSuperAdmin(u.is_super_admin || false);
+          }}
+          getRowActions={(u) => [
+            {
+              label: '✏️ Изменить статус / роль',
+              action: () => {
+                setEditingUser(u);
+                setUserName(u.full_name || '');
+                setUserEmail(u.email || '');
+                setUserRole(u.role || 'employee');
+                setUserIsSuperAdmin(u.is_super_admin || false);
+              },
+            },
+            {
+              label: '🗑️ Удалить аккаунт',
+              danger: true,
+              separatorBefore: true,
+              action: () => handleDeleteUser(u.id, u.full_name || u.email),
+            },
+          ]}
           searchPlaceholder="Поиск пользователя по ФИО, email, ИНН компании..."
           emptyMessage="Пользователи в системе не найдены."
           isLoading={loading}
@@ -1077,9 +1143,17 @@ export default function SuperAdminPage() {
       {/* ------------------- РАЗДЕЛ 3: ВСЕ ФАЙЛЫ R2 ------------------- */}
       {activeTab === 'r2_files' && (
         <UnifiedDataGrid<any>
+          gridId="admin_r2_files"
           columns={systemFilesColumns}
           data={systemFiles}
           keyExtractor={(f) => f.id}
+          onRowClick={(f) => f.file_path_r2 && handleDownloadR2File(f.file_path_r2)}
+          getRowActions={(f) => [
+            {
+              label: '📥 R2 Ссылка / Скачать',
+              action: () => f.file_path_r2 && handleDownloadR2File(f.file_path_r2),
+            },
+          ]}
           searchPlaceholder="Поиск файла по имени, компании..."
           emptyMessage="Файлы в системе отсутствуют."
           isLoading={loading}
@@ -1090,9 +1164,33 @@ export default function SuperAdminPage() {
       {/* ------------------- РАЗДЕЛ 4: B2B ДОКУМЕНТЫ ------------------- */}
       {activeTab === 'edo_documents' && (
         <UnifiedDataGrid<any>
+          gridId="admin_edo_documents"
           columns={systemDocumentsColumns}
           data={allDocuments}
           keyExtractor={(d) => d.id}
+          onRowClick={(d) => {
+            setEditingDoc(d);
+            setEditDocNumber(d.doc_number || '');
+            setEditDocStatus(d.status);
+            setEditDocComment(d.comment || '');
+          }}
+          getRowActions={(d) => [
+            {
+              label: '✏️ Правка статуса / №',
+              action: () => {
+                setEditingDoc(d);
+                setEditDocNumber(d.doc_number || '');
+                setEditDocStatus(d.status);
+                setEditDocComment(d.comment || '');
+              },
+            },
+            {
+              label: '🗑️ Удалить документ',
+              danger: true,
+              separatorBefore: true,
+              action: () => handleDeleteDoc(d.id),
+            },
+          ]}
           searchPlaceholder="Поиск по № документа, отправителю, получателю..."
           emptyMessage="Документы не найдены."
           isLoading={loading}

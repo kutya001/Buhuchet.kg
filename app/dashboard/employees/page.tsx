@@ -27,6 +27,7 @@ import {
   Send,
   Plus,
 } from 'lucide-react';
+import { UnifiedDataGrid } from '@/components/ui/unified/UnifiedDataGrid';
 import { createClient } from '@/lib/supabase/client';
 import {
   getCompanyEmployeesAction,
@@ -406,137 +407,115 @@ export default function EmployeesModulePage() {
             </Card>
           )}
 
-          {/* Поисковая строка */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-            <div className="flex items-center space-x-2 w-full sm:w-auto">
-              <div className="relative flex-1 sm:w-64">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Поиск сотрудника..."
-                  value={empSearch}
-                  onChange={(e) => setEmpSearch(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSearchClick()}
-                  className="pl-9 bg-muted/40 border-border text-xs rounded-xl min-h-[40px] text-foreground"
-                />
-              </div>
-              <Button size="sm" onClick={handleSearchClick} className="bg-primary hover:bg-primary/90 text-primary-foreground text-xs min-h-[40px]">
-                Найти
-              </Button>
-            </div>
-          </div>
+          {/* Единая система реестра сотрудников UnifiedDataGrid */}
+          <UnifiedDataGrid<UserProfile>
+            gridId="employees_registry"
+            columns={[
+              {
+                key: 'full_name',
+                label: 'ФИО Сотрудника',
+                sortable: true,
+                render: (emp) => (
+                  <div className="flex items-center space-x-2">
+                    <div className="p-2 rounded-xl bg-blue-500/10 text-blue-400 font-bold shrink-0">
+                      <User className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-foreground text-xs">{emp.full_name}</p>
+                      <p className="text-[11px] font-mono text-muted-foreground">{emp.email}</p>
+                    </div>
+                  </div>
+                ),
+              },
+              {
+                key: 'position',
+                label: 'Должность',
+                sortable: true,
+                render: (emp) => (
+                  <Badge variant="outline" className="text-[11px] font-medium border-border/80 bg-muted/30 text-foreground">
+                    {emp.position || '—'}
+                  </Badge>
+                ),
+              },
+              {
+                key: 'role',
+                label: 'Системная Роль',
+                sortable: true,
+                render: (emp) =>
+                  emp.role === 'owner' ? (
+                    <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[10px] font-bold">
+                      Владелец (Админ)
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="border-purple-500/40 text-purple-400 text-[10px] font-bold">
+                      {emp.company_roles?.name || 'Менеджер'}
+                    </Badge>
+                  ),
+              },
+              {
+                key: 'phone',
+                label: 'Телефон',
+                sortable: true,
+                render: (emp) => <span className="text-xs font-mono text-foreground">{emp.phone || '—'}</span>,
+              },
+            ]}
+            data={employees}
+            keyExtractor={(emp) => emp.id}
+            onRowClick={(emp) => {
+              if (emp.role !== 'owner') {
+                setEditingEmp(emp);
+                setEditRoleId(emp.role_id || (roles[0]?.id || ''));
+                setEditPosition(emp.position || '');
+              }
+            }}
+            getRowActions={(emp) => {
+              const isOwnerEmp = emp.role === 'owner';
+              const cleanPhone = emp.phone ? emp.phone.replace(/\D/g, '') : '';
+              const actions: any[] = [];
 
-          {/* Таблица сотрудников */}
-          <Card className="bg-card border-border rounded-2xl overflow-hidden shadow-xl">
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs text-left">
-                <thead className="bg-muted/60 text-muted-foreground uppercase text-[10px] font-mono border-b border-border">
-                  <tr>
-                    <th className="p-3.5">ФИО Сотрудника</th>
-                    <th className="p-3.5">Должность</th>
-                    <th className="p-3.5">Системная Роль</th>
-                    <th className="p-3.5">Контакты & Связь</th>
-                    <th className="p-3.5 text-right">Действия</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/60">
-                  {employees.map((emp) => {
-                    const isOwnerEmp = emp.role === 'owner';
-                    const cleanPhone = emp.phone ? emp.phone.replace(/\D/g, '') : '';
+              if (emp.phone) {
+                actions.push(
+                  {
+                    label: '🟢 WhatsApp',
+                    action: () => window.open(`https://wa.me/${cleanPhone}`, '_blank'),
+                  },
+                  {
+                    label: '🔵 Telegram',
+                    action: () => window.open(`https://t.me/+${cleanPhone}`, '_blank'),
+                  },
+                  {
+                    label: '📞 Позвонить',
+                    action: () => (window.location.href = `tel:${emp.phone}`),
+                  }
+                );
+              }
 
-                    return (
-                      <tr key={emp.id} className="hover:bg-muted/30 transition-colors">
-                        <td className="p-3.5">
-                          <div className="flex items-center space-x-2">
-                            <div className="p-2 rounded-xl bg-blue-500/10 text-blue-400 font-bold shrink-0">
-                              <User className="w-4 h-4" />
-                            </div>
-                            <div>
-                              <p className="font-bold text-foreground text-xs">{emp.full_name}</p>
-                              <p className="text-[11px] font-mono text-muted-foreground">{emp.email}</p>
-                            </div>
-                          </div>
-                        </td>
+              if (!isOwnerEmp) {
+                actions.push(
+                  {
+                    label: '✏️ Изменить роль / должность',
+                    separatorBefore: actions.length > 0,
+                    action: () => {
+                      setEditingEmp(emp);
+                      setEditRoleId(emp.role_id || (roles[0]?.id || ''));
+                      setEditPosition(emp.position || '');
+                    },
+                  },
+                  {
+                    label: '❌ Исключить из штата',
+                    danger: true,
+                    action: () => handleRemoveEmp(emp.id, emp.full_name),
+                  }
+                );
+              }
 
-                        <td className="p-3.5">
-                          <Badge variant="outline" className="text-[11px] font-medium border-border/80 bg-muted/30 text-foreground">
-                            {emp.position || '—'}
-                          </Badge>
-                        </td>
-
-                        <td className="p-3.5">
-                          {isOwnerEmp ? (
-                            <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[10px] font-bold">
-                              Владелец (Админ)
-                            </Badge>
-                          ) : (
-                            <Badge variant="outline" className="border-purple-500/40 text-purple-400 text-[10px] font-bold">
-                              {emp.company_roles?.name || 'Менеджер'}
-                            </Badge>
-                          )}
-                        </td>
-
-                        <td className="p-3.5">
-                          <div className="flex items-center gap-1.5">
-                            {emp.phone && (
-                              <>
-                                <a
-                                  href={`https://wa.me/${cleanPhone}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  title="Написать в WhatsApp"
-                                  className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/30 transition-all"
-                                >
-                                  <MessageCircle className="w-3.5 h-3.5" />
-                                </a>
-                                <a
-                                  href={`tel:${emp.phone}`}
-                                  title="Позвонить"
-                                  className="p-1.5 rounded-lg bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 border border-blue-500/30 transition-all"
-                                >
-                                  <Phone className="w-3.5 h-3.5" />
-                                </a>
-                              </>
-                            )}
-                            <span className="text-[11px] font-mono text-muted-foreground ml-1">{emp.phone || '—'}</span>
-                          </div>
-                        </td>
-
-                        <td className="p-3.5 text-right">
-                          {!isOwnerEmp && (
-                            <div className="flex items-center justify-end gap-1.5">
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => {
-                                  setEditingEmp(emp);
-                                  setEditRoleId(emp.role_id || (roles[0]?.id || ''));
-                                  setEditPosition(emp.position || '');
-                                }}
-                                title="Редактировать роль и должность"
-                                className="h-8 w-8 p-0 rounded-lg text-muted-foreground hover:text-foreground"
-                              >
-                                <Edit2 className="w-3.5 h-3.5" />
-                              </Button>
-
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => handleRemoveEmp(emp.id, emp.full_name)}
-                                title="Исключить из штата"
-                                className="h-8 w-8 p-0 rounded-lg text-rose-400 hover:bg-rose-500/10"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </Button>
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </Card>
+              return actions;
+            }}
+            searchPlaceholder="Поиск по имени, должности, email..."
+            emptyMessage="Сотрудники не найдены."
+            isLoading={loading}
+            defaultPageSize={25}
+          />
         </div>
       )}
 
