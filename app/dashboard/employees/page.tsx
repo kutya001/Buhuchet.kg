@@ -49,18 +49,12 @@ import { UnifiedDataGrid } from '@/components/ui/unified/UnifiedDataGrid';
 import { MODULE_CONFIG, ModuleName, ActionName, hasPermission } from '@/lib/auth/permissions';
 
 export default function EmployeesModulePage() {
-  const [activeTab, setActiveTab] = useState<'profile' | 'employees' | 'roles'>('profile');
+  const [activeTab, setActiveTab] = useState<'employees' | 'roles'>('employees');
   const [loading, setLoading] = useState(true);
   const [isPending, startTransition] = useTransition();
 
   // Состояние пользователя и организации
   const [currentProfile, setCurrentProfile] = useState<UserProfile | null>(null);
-
-  // Смена своего пароля
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [pwdMsg, setPwdMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Реестр сотрудников
   const [employees, setEmployees] = useState<UserProfile[]>([]);
@@ -144,33 +138,7 @@ export default function EmployeesModulePage() {
     setLoading(false);
   };
 
-  // Смена пароля текущим пользователем
-  const handleChangeMyPassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setPwdMsg(null);
 
-    if (newPassword.length < 6) {
-      setPwdMsg({ type: 'error', text: 'Новый пароль должен содержать минимум 6 символов' });
-      return;
-    }
-
-    if (newPassword !== confirmPassword) {
-      setPwdMsg({ type: 'error', text: 'Пароли не совпадают' });
-      return;
-    }
-
-    startTransition(async () => {
-      const { error } = await supabase.auth.updateUser({ password: newPassword });
-      if (error) {
-        setPwdMsg({ type: 'error', text: `Ошибка смены пароля: ${error.message}` });
-      } else {
-        setPwdMsg({ type: 'success', text: 'Ваш пароль успешно изменен! Используйте его при следующем входе.' });
-        setCurrentPassword('');
-        setNewPassword('');
-        setConfirmPassword('');
-      }
-    });
-  };
 
   // Создание нового сотрудника
   const handleCreateEmployee = async (e: React.FormEvent) => {
@@ -330,19 +298,6 @@ export default function EmployeesModulePage() {
 
         {/* Переключатель вкладок по матрице доступов */}
         <div className="flex items-center space-x-1 p-1 bg-muted/80 border border-border rounded-xl">
-          {hasPermission(currentProfile, 'employees', 'tab_my_profile') && (
-            <button
-              onClick={() => setActiveTab('profile')}
-              className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-bold transition-all min-h-[40px] ${
-                activeTab === 'profile'
-                  ? 'bg-primary text-primary-foreground shadow-md'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-accent/60'
-              }`}
-            >
-              <User className="h-4 w-4" />
-              <span>Мой профиль</span>
-            </button>
-          )}
 
           {hasPermission(currentProfile, 'employees', 'tab_employees') && (
             <button
@@ -381,111 +336,7 @@ export default function EmployeesModulePage() {
         </Alert>
       )}
 
-      {/* ========================================================================= */}
-      {/* 1. ВКЛАДКА: МОЙ ПРОФИЛЬ */}
-      {/* ========================================================================= */}
-      {activeTab === 'profile' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* ИНФОРМАЦИЯ О ПОЛЬЗОВАТЕЛЕ */}
-          <Card className="lg:col-span-6 bg-muted/40 border-border">
-            <CardHeader className="border-b border-border/80 pb-4">
-              <CardTitle className="text-base font-bold text-foreground flex items-center">
-                <UserCheck className="h-5 w-5 mr-2 text-blue-400" />
-                Личный Профиль Учетной Записи
-              </CardTitle>
-              <CardDescription className="text-xs text-muted-foreground">Ваша текущая роль и реквизиты сотрудника в системе.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4 pt-4 text-xs">
-              <div className="p-4 rounded-xl bg-background/60 border border-border space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground font-mono uppercase text-[10px]">ФИО сотрудника</span>
-                  <Badge variant="outline" className="border-blue-500/30 text-blue-400 font-mono text-[10px]">
-                    {currentProfile?.position || 'Сотрудник'}
-                  </Badge>
-                </div>
-                <p className="text-base font-bold text-foreground">{currentProfile?.full_name || 'Загрузка...'}</p>
 
-                <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border/60">
-                  <div>
-                    <span className="text-slate-500 text-[10px]">Логин / Email:</span>
-                    <p className="font-mono text-slate-200 truncate">{currentProfile?.email}</p>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 text-[10px]">Назначенная Роль:</span>
-                    <p className="font-semibold text-emerald-400">{currentProfile?.company_roles?.name || (currentProfile?.role === 'owner' ? 'Владелец (Админ)' : 'Пользователь')}</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-4 rounded-xl bg-background/60 border border-border space-y-2">
-                <span className="text-muted-foreground font-mono uppercase text-[10px]">Привязанная Организация</span>
-                <div className="flex items-center space-x-2 text-foreground font-bold text-sm">
-                  <Building2 className="h-4 w-4 text-muted-foreground" />
-                  <span>{(currentProfile?.companies as any)?.name || 'Компания не привязана'}</span>
-                </div>
-                <p className="text-muted-foreground font-mono text-[11px]">
-                  ИНН: {(currentProfile?.companies as any)?.inn || '—'}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* ФОРМА СМЕНЫ ПАРОЛЯ */}
-          <Card className="lg:col-span-6 bg-muted/40 border-border">
-            <CardHeader className="border-b border-border/80 pb-4">
-              <CardTitle className="text-base font-bold text-foreground flex items-center">
-                <Lock className="h-5 w-5 mr-2 text-amber-400" />
-                Безопасность & Смена Пароля
-              </CardTitle>
-              <CardDescription className="text-xs text-muted-foreground">
-                Вы можете самостоятельно изменить свой пароль для входа в платформу.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="pt-4">
-              <form onSubmit={handleChangeMyPassword} className="space-y-4 text-xs">
-                {pwdMsg && (
-                  <Alert className={pwdMsg.type === 'success' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-rose-500/10 border-rose-500/30 text-rose-400'}>
-                    <AlertDescription>{pwdMsg.text}</AlertDescription>
-                  </Alert>
-                )}
-
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-foreground">Новый пароль</Label>
-                  <Input
-                    type="password"
-                    placeholder="Минимум 6 символов"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    required
-                    className="bg-background border-border text-foreground text-xs rounded-xl min-h-[44px]"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-foreground">Подтвердите новый пароль</Label>
-                  <Input
-                    type="password"
-                    placeholder="Повторите новый пароль"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    required
-                    className="bg-background border-border text-foreground text-xs rounded-xl min-h-[44px]"
-                  />
-                </div>
-
-                <Button
-                  type="submit"
-                  disabled={isPending}
-                  className="w-full bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs min-h-[44px] rounded-xl shadow-md"
-                >
-                  {isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Key className="h-4 w-4 mr-2" />}
-                  Обновить пароль учетной записи
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
-        </div>
-      )}
 
       {/* ========================================================================= */}
       {/* 2. ВКЛАДКА: МОИ СОТРУДНИКИ */}
