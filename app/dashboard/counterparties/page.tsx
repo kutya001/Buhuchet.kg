@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useTransition } from 'react';
+import React, { useState, useEffect, useTransition, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -80,7 +80,10 @@ export default function CounterpartiesPage() {
   // 3 Главные Вкладки верхнего уровня: 'counterparties' | 'requests' | 'catalog'
   const [mainTab, setMainTab] = useState<'counterparties' | 'requests' | 'catalog'>('counterparties');
 
-  // Вкладка «Заявки»: 5 статусов
+  // Направление партнерских заявок: 'incoming' (Входящие) | 'outgoing' (Исходящие)
+  const [requestDirection, setRequestDirection] = useState<'incoming' | 'outgoing'>('incoming');
+
+  // Вкладка «Заявки»: статус-фильтр
   const [requestStatusFilter, setRequestStatusFilter] = useState<'all' | PartnershipStatus>('all');
 
   // Вкладка «Каталог Организаций»: Фильтр по категориям/отраслям
@@ -497,15 +500,27 @@ export default function CounterpartiesPage() {
   ];
 
   // ---------------- CONFIG FOR TAB 2: PARTNERSHIP REQUESTS ----------------
-  const filteredPartnerships = partnerships.filter((p) => {
-    if (requestStatusFilter === 'all') return true;
-    return p.status === requestStatusFilter;
-  });
+  const incomingPartnerships = useMemo(() => {
+    return partnerships.filter((p) => p.target_company_id === currentCompanyId);
+  }, [partnerships, currentCompanyId]);
+
+  const outgoingPartnerships = useMemo(() => {
+    return partnerships.filter((p) => p.requester_company_id === currentCompanyId);
+  }, [partnerships, currentCompanyId]);
+
+  const activePartnershipsList = requestDirection === 'incoming' ? incomingPartnerships : outgoingPartnerships;
+
+  const filteredPartnerships = useMemo(() => {
+    return activePartnershipsList.filter((p) => {
+      if (requestStatusFilter === 'all') return true;
+      return p.status === requestStatusFilter;
+    });
+  }, [activePartnershipsList, requestStatusFilter]);
 
   const partnershipsColumns: ColumnDef<any>[] = [
     {
       key: 'partner',
-      label: 'Организация-Партнер',
+      label: requestDirection === 'incoming' ? 'Отправитель Заявки' : 'Адресат Заявки',
       sortable: true,
       getValue: (p) => (p.requester_company_id === currentCompanyId ? p.target_company?.name : p.requester_company?.name),
       render: (p) => {
@@ -544,9 +559,9 @@ export default function CounterpartiesPage() {
                 : 'bg-blue-500/20 text-blue-400 border-blue-500/30'
             }
           >
-            {p.status === 'approved' && 'Подтверждён'}
-            {p.status === 'pending' && (isRequester ? 'Отправлен' : 'Входящая')}
-            {p.status === 'rejected' && 'Отменён'}
+            {p.status === 'approved' && 'Партнерство Подтверждено'}
+            {p.status === 'pending' && (isRequester ? 'Отправлен (Ожидает решения)' : 'Входящая (Ожидает вашего ответа)')}
+            {p.status === 'rejected' && (isRequester ? 'Отклонен партнером' : 'Отклонен вами')}
             {p.status === 'recalled' && 'Отозван'}
             {p.status === 'suspended' && 'Приостановлен'}
           </Badge>
@@ -573,7 +588,7 @@ export default function CounterpartiesPage() {
             {p.status === 'pending' && isRequester && (
               <Button size="sm" variant="outline" onClick={() => handleRespondRequest(p.id, 'recalled')} disabled={isPending} className="border-border text-muted-foreground hover:bg-muted text-xs min-h-[36px]">
                 <RotateCcw className="h-3.5 w-3.5 mr-1" />
-                Отозвать
+                Отозвать заявку
               </Button>
             )}
 
@@ -583,9 +598,9 @@ export default function CounterpartiesPage() {
                   <X className="h-3.5 w-3.5 mr-1" />
                   Отклонить
                 </Button>
-                <Button size="sm" onClick={() => handleRespondRequest(p.id, 'approved')} disabled={isPending} className="bg-emerald-600 hover:bg-emerald-500 text-foreground font-bold text-xs min-h-[36px]">
+                <Button size="sm" onClick={() => handleRespondRequest(p.id, 'approved')} disabled={isPending} className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs min-h-[36px]">
                   <Check className="h-3.5 w-3.5 mr-1" />
-                  Принять
+                  Принять в сеть
                 </Button>
               </>
             )}
@@ -605,9 +620,9 @@ export default function CounterpartiesPage() {
             )}
 
             {(p.status === 'rejected' || p.status === 'recalled') && partnerComp?.id && (
-              <Button size="sm" variant="outline" onClick={() => handleSendRequest(partnerComp.id)} disabled={isPending} className="border-slate-800 text-amber-400 hover:bg-amber-500/10 text-xs min-h-[36px]">
+              <Button size="sm" variant="outline" onClick={() => handleSendRequest(partnerComp.id)} disabled={isPending} className="border-border text-amber-400 hover:bg-amber-500/10 text-xs min-h-[36px]">
                 <Send className="h-3.5 w-3.5 mr-1" />
-                Повторить
+                Повторить запрос
               </Button>
             )}
           </div>
@@ -617,9 +632,11 @@ export default function CounterpartiesPage() {
   ];
 
   // ---------------- CONFIG FOR TAB 3: ORGANIZATIONS CATALOG ----------------
-  const filteredCatalog = catalogCompanies.filter((c) => {
-    return selectedIndustry === 'all' || c.industry === selectedIndustry;
-  });
+  const filteredCatalog = useMemo(() => {
+    return catalogCompanies.filter((c) => {
+      return selectedIndustry === 'all' || c.industry === selectedIndustry;
+    });
+  }, [catalogCompanies, selectedIndustry]);
 
   const catalogColumns: ColumnDef<Company>[] = [
     {
@@ -628,8 +645,8 @@ export default function CounterpartiesPage() {
       sortable: true,
       getValue: (c) => c.name,
       render: (c) => (
-        <div className="font-semibold text-foreground text-sm flex items-center space-x-1.5">
-          <Building2 className="h-4 w-4 text-amber-400 flex-shrink-0" />
+        <div className="font-bold text-foreground text-sm flex items-center space-x-2">
+          <Building2 className="h-4 w-4 text-indigo-400 flex-shrink-0" />
           <span>{c.name}</span>
         </div>
       ),
@@ -639,16 +656,16 @@ export default function CounterpartiesPage() {
       label: 'ИНН КР',
       sortable: true,
       getValue: (c) => c.inn,
-      render: (c) => <span className="font-mono text-sm text-muted-foreground font-bold">{c.inn}</span>,
+      render: (c) => <span className="font-mono text-sm text-foreground font-bold">{c.inn}</span>,
     },
     {
       key: 'industry',
-      label: 'Отрасль Бизнеса',
+      label: 'Отрасль Деятельности',
       sortable: true,
       getValue: (c) => c.industry,
       render: (c) => (
-        <Badge variant="outline" className="border-indigo-500/30 text-indigo-400 text-[10px]">
-          {c.industry || 'Организация КР'}
+        <Badge variant="outline" className="text-xs border-border bg-muted/30">
+          {c.industry || 'Общий консалтинг'}
         </Badge>
       ),
     },
@@ -661,62 +678,75 @@ export default function CounterpartiesPage() {
     },
     {
       key: 'actions',
-      label: 'Действия',
+      label: 'Действие',
       sortable: false,
       render: (c) => {
-        const existingPartnership = partnerships.find(
+        const existingP = partnerships.find(
           (p) =>
             (p.requester_company_id === currentCompanyId && p.target_company_id === c.id) ||
-            (p.requester_company_id === c.id && p.target_company_id === currentCompanyId)
+            (p.target_company_id === currentCompanyId && p.requester_company_id === c.id)
         );
-        const isAlreadyPartner = counterparties.some((cp) => cp.inn === c.inn);
 
-        if (isAlreadyPartner) {
+        if (existingP?.status === 'approved') {
           return (
-            <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30 text-xs">
-              <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
-              В Контрагентах
+            <Badge className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs">
+              <Check className="h-3 w-3 mr-1" />
+              В сети партнеров
             </Badge>
           );
         }
 
-        if (existingPartnership?.status === 'pending') {
+        if (existingP?.status === 'pending') {
           return (
-            <Badge className="bg-amber-500/10 text-amber-400 border-amber-500/30 text-xs">
-              <Clock className="h-3.5 w-3.5 mr-1" />
-              Заявка отправлена
+            <Badge className="bg-blue-500/20 text-blue-400 border border-blue-500/30 text-xs">
+              <Clock className="h-3 w-3 mr-1 animate-pulse" />
+              Заявка на рассмотрении
             </Badge>
           );
         }
 
         return (
-          <Button size="sm" onClick={() => handleSendRequest(c.id)} disabled={isPending} className="bg-amber-600 hover:bg-amber-500 text-foreground font-bold text-xs min-h-[36px]">
+          <Button
+            size="sm"
+            onClick={() => handleSendRequest(c.id)}
+            disabled={isPending}
+            className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs min-h-[36px] rounded-xl"
+          >
             <Send className="h-3.5 w-3.5 mr-1.5" />
-            Запросить сотрудничество
+            Отправить заявку B2B
           </Button>
         );
       },
     },
   ];
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin mr-2" />
+        <span>Загрузка модуля Организации и Контрагенты...</span>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 pb-12">
-      {/* Заголовок страницы */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {/* Шапка модуля */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-foreground flex items-center">
-            <Building2 className="h-6 w-6 mr-2.5 text-amber-400" />
-            Организации и Партнерство
-          </h1>
-          <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-            Управление контрагентами, статусными заявками на сотрудничество и каталогом компаний КР
+          <h2 className="text-xl md:text-2xl font-bold text-foreground tracking-tight flex items-center">
+            <Building2 className="h-6 w-6 mr-2 text-amber-400" />
+            Справочник Контрагентов & Сеть Партнеров B2B
+          </h2>
+          <p className="text-xs md:text-sm text-muted-foreground mt-0.5">
+            Реестр связанных организаций Кыргызстана, входящие и исходящие заявки и публичный каталог
           </p>
         </div>
 
         {hasPermission(currentProfile, 'counterparties', 'create') && (
           <Button
             onClick={() => setShowCreateModal(true)}
-            className="hidden md:inline-flex bg-primary hover:bg-primary/90 text-primary-foreground gap-2 font-bold min-h-[40px] rounded-xl shadow-lg shadow-primary/20"
+            className="bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs rounded-xl min-h-[44px] px-5 gap-2 shadow-md"
           >
             <Plus className="w-4 h-4" />
             <span>Создать Контрагента</span>
@@ -764,7 +794,7 @@ export default function CounterpartiesPage() {
             }`}
           >
             <UserCheck className="h-4 w-4" />
-            <span>Заявки ({partnerships.length})</span>
+            <span>Заявки на партнерство ({partnerships.length})</span>
           </button>
         )}
 
@@ -800,7 +830,7 @@ export default function CounterpartiesPage() {
                 variant="outline"
                 onClick={handleSyncCounterparties}
                 disabled={isPending}
-                className="border-border text-muted-foreground text-xs min-h-[40px]"
+                className="border-border text-muted-foreground hover:text-foreground text-xs min-h-[40px]"
               >
                 <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${isPending ? 'animate-spin' : ''}`} />
                 Синхронизировать
@@ -808,7 +838,7 @@ export default function CounterpartiesPage() {
               <Button
                 size="sm"
                 onClick={() => setShowCreateModal(true)}
-                className="bg-amber-600 hover:bg-amber-500 text-foreground font-bold text-xs min-h-[40px]"
+                className="bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs min-h-[40px]"
               >
                 <UserPlus className="h-3.5 w-3.5 mr-1.5" />
                 + Создать Контрагента
@@ -818,9 +848,43 @@ export default function CounterpartiesPage() {
         />
       )}
 
-      {/* ------------------- ВКЛАДКА 2: ЗАЯВКИ (5 СТАТУСОВ) ------------------- */}
+      {/* ------------------- ВКЛАДКА 2: ЗАЯВКИ (ВХОДЯЩИЕ И ИСХОДЯЩИЕ) ------------------- */}
       {mainTab === 'requests' && (
         <div className="space-y-4">
+          {/* ПЕРЕКЛЮЧАТЕЛЬ 1 УРОВНЯ: ВХОДЯЩИЕ vs ИСХОДЯЩИЕ */}
+          <div className="flex items-center space-x-2 p-1 bg-muted/60 border border-border rounded-xl w-fit">
+            <button
+              onClick={() => {
+                setRequestDirection('incoming');
+                setRequestStatusFilter('all');
+              }}
+              className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-bold transition-all min-h-[38px] ${
+                requestDirection === 'incoming'
+                  ? 'bg-primary text-primary-foreground shadow-md'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <Download className="h-4 w-4 text-emerald-400" />
+              <span>Входящие заявки ({incomingPartnerships.length})</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setRequestDirection('outgoing');
+                setRequestStatusFilter('all');
+              }}
+              className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-bold transition-all min-h-[38px] ${
+                requestDirection === 'outgoing'
+                  ? 'bg-primary text-primary-foreground shadow-md'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <Send className="h-4 w-4 text-blue-400" />
+              <span>Исходящие заявки ({outgoingPartnerships.length})</span>
+            </button>
+          </div>
+
+          {/* ПЕРЕКЛЮЧАТЕЛЬ 2 УРОВНЯ: ФИЛЬТРЫ СТАТУСОВ */}
           <div className="flex items-center space-x-2 bg-background p-1.5 rounded-xl border border-border/80 overflow-x-auto">
             <button
               onClick={() => setRequestStatusFilter('all')}
@@ -828,58 +892,84 @@ export default function CounterpartiesPage() {
                 requestStatusFilter === 'all' ? 'bg-muted text-foreground font-bold' : 'text-muted-foreground hover:text-foreground'
               }`}
             >
-              Все ({partnerships.length})
+              Все ({activePartnershipsList.length})
             </button>
 
-            <button
-              onClick={() => setRequestStatusFilter('pending')}
-              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all min-h-[36px] ${
-                requestStatusFilter === 'pending' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/40 font-bold' : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <Clock className="h-3.5 w-3.5 text-blue-400" />
-              <span>Отправлен ({partnerships.filter((p) => p.status === 'pending').length})</span>
-            </button>
+            {requestDirection === 'incoming' ? (
+              <>
+                <button
+                  onClick={() => setRequestStatusFilter('pending')}
+                  className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all min-h-[36px] ${
+                    requestStatusFilter === 'pending' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/40 font-bold' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <Clock className="h-3.5 w-3.5 text-blue-400" />
+                  <span>Ожидают вашего ответа ({incomingPartnerships.filter((p) => p.status === 'pending').length})</span>
+                </button>
 
-            <button
-              onClick={() => setRequestStatusFilter('approved')}
-              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all min-h-[36px] ${
-                requestStatusFilter === 'approved' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 font-bold' : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
-              <span>Подтверждён ({partnerships.filter((p) => p.status === 'approved').length})</span>
-            </button>
+                <button
+                  onClick={() => setRequestStatusFilter('approved')}
+                  className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all min-h-[36px] ${
+                    requestStatusFilter === 'approved' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 font-bold' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                  <span>Принятые вами ({incomingPartnerships.filter((p) => p.status === 'approved').length})</span>
+                </button>
 
-            <button
-              onClick={() => setRequestStatusFilter('recalled')}
-              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all min-h-[36px] ${
-                requestStatusFilter === 'recalled' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40 font-bold' : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <RotateCcw className="h-3.5 w-3.5 text-amber-400" />
-              <span>Отозван ({partnerships.filter((p) => p.status === 'recalled').length})</span>
-            </button>
+                <button
+                  onClick={() => setRequestStatusFilter('rejected')}
+                  className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all min-h-[36px] ${
+                    requestStatusFilter === 'rejected' ? 'bg-red-500/20 text-red-400 border border-red-500/40 font-bold' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <X className="h-3.5 w-3.5 text-red-400" />
+                  <span>Отклоненные вами ({incomingPartnerships.filter((p) => p.status === 'rejected').length})</span>
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={() => setRequestStatusFilter('pending')}
+                  className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all min-h-[36px] ${
+                    requestStatusFilter === 'pending' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/40 font-bold' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <Clock className="h-3.5 w-3.5 text-blue-400" />
+                  <span>На рассмотрении у партнера ({outgoingPartnerships.filter((p) => p.status === 'pending').length})</span>
+                </button>
 
-            <button
-              onClick={() => setRequestStatusFilter('rejected')}
-              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all min-h-[36px] ${
-                requestStatusFilter === 'rejected' ? 'bg-red-500/20 text-red-400 border border-red-500/40 font-bold' : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <X className="h-3.5 w-3.5 text-red-400" />
-              <span>Отменён ({partnerships.filter((p) => p.status === 'rejected').length})</span>
-            </button>
+                <button
+                  onClick={() => setRequestStatusFilter('approved')}
+                  className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all min-h-[36px] ${
+                    requestStatusFilter === 'approved' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 font-bold' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                  <span>Подтверждены партнером ({outgoingPartnerships.filter((p) => p.status === 'approved').length})</span>
+                </button>
 
-            <button
-              onClick={() => setRequestStatusFilter('suspended')}
-              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all min-h-[36px] ${
-                requestStatusFilter === 'suspended' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/40 font-bold' : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <PauseCircle className="h-3.5 w-3.5 text-purple-400" />
-              <span>Приостановлен ({partnerships.filter((p) => p.status === 'suspended').length})</span>
-            </button>
+                <button
+                  onClick={() => setRequestStatusFilter('recalled')}
+                  className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all min-h-[36px] ${
+                    requestStatusFilter === 'recalled' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40 font-bold' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <RotateCcw className="h-3.5 w-3.5 text-amber-400" />
+                  <span>Отозваны вами ({outgoingPartnerships.filter((p) => p.status === 'recalled').length})</span>
+                </button>
+
+                <button
+                  onClick={() => setRequestStatusFilter('rejected')}
+                  className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all min-h-[36px] ${
+                    requestStatusFilter === 'rejected' ? 'bg-red-500/20 text-red-400 border border-red-500/40 font-bold' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <X className="h-3.5 w-3.5 text-red-400" />
+                  <span>Отклонены партнером ({outgoingPartnerships.filter((p) => p.status === 'rejected').length})</span>
+                </button>
+              </>
+            )}
           </div>
 
           <UnifiedDataGrid<any>
