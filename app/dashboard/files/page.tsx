@@ -369,9 +369,11 @@ export default function CloudFilesRegistryPage() {
 
       {/* 4. ЕДИНООБРАЗНАЯ СИСТЕМА UnifiedDataGrid С ПАГИНАЦИЕЙ (25-50-100-ВСЕ) И СТИЛЕМ */}
       <UnifiedDataGrid<EnrichedFileItem>
+        gridId="files_archive"
         columns={columns}
         data={filteredFiles}
         keyExtractor={(f) => f.id}
+        onRowClick={(f) => f.file_path_r2 && handleDownloadR2(f.file_path_r2, f.id)}
         renderCard={renderFileCard}
         searchPlaceholder="Поиск по имени файла, описанию, источнику..."
         emptyMessage="Файлы в облачном архиве по выбранным условиям не найдены."

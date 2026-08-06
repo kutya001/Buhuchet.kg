@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -35,6 +35,7 @@ type FullB2BDocument = Document & {
 
 export default function B2BDocumentsRegistryPage() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const searchFromUrl = searchParams.get('search') || '';
 
   const [documents, setDocuments] = useState<FullB2BDocument[]>([]);
@@ -205,19 +206,6 @@ export default function B2BDocumentsRegistryPage() {
         </span>
       ),
     },
-    {
-      key: 'actions',
-      label: 'Действие',
-      sortable: false,
-      render: (doc) => (
-        <Link href={`/dashboard/documents/${doc.id}`} prefetch={true}>
-          <Button size="sm" variant="outline" className="border-border text-blue-400 hover:bg-blue-500/10 text-xs min-h-[36px]">
-            <Eye className="h-3.5 w-3.5 mr-1" />
-            Открыть
-          </Button>
-        </Link>
-      ),
-    },
   ];
 
   // РЕНДЕР МОБИЛЬНОЙ КАРТОЧКИ
@@ -350,9 +338,11 @@ export default function B2BDocumentsRegistryPage() {
 
       {/* ЕДИНООБРАЗНЫЙ УНИВЕРСАЛЬНЫЙ ТАБЛИЧНО-КАРТОЧНЫЙ РЕЕСТР С Drag&Drop, СОРТИРОВКОЙ, МЕНЮ ▼ И ПАГИНАЦИЕЙ (25-50-100-Все) */}
       <UnifiedDataGrid<FullB2BDocument>
+        gridId="documents_registry"
         columns={columns}
         data={filteredDocuments}
         keyExtractor={(d) => d.id}
+        onRowClick={(doc) => router.push(`/dashboard/documents/${doc.id}`)}
         renderCard={renderDocumentCard}
         searchPlaceholder="Поиск по № документа, контрагенту, сумме..."
         emptyMessage="Документы не найдены. Создайте первый документ."

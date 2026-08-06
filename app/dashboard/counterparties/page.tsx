@@ -485,18 +485,6 @@ export default function CounterpartiesPage() {
           </div>
         ),
     },
-    {
-      key: 'actions',
-      label: 'Действия',
-      sortable: false,
-      render: (c) => (
-        <ActionRowGroup
-          onView={() => handleOpenProfileModal(c)}
-          onReport={() => handleOpenPartnerReport(c)}
-          onDelete={() => handleTerminatePartnership(c.id)}
-        />
-      ),
-    },
   ];
 
   // ---------------- CONFIG FOR TAB 2: PARTNERSHIP REQUESTS ----------------
@@ -816,9 +804,15 @@ export default function CounterpartiesPage() {
       {/* ------------------- ВКЛАДКА 1: КОНТРАГЕНТЫ ------------------- */}
       {mainTab === 'counterparties' && (
         <UnifiedDataGrid<Counterparty>
+          gridId="counterparties_registry"
           columns={counterpartiesColumns}
           data={counterparties}
           keyExtractor={(c) => c.id}
+          onRowClick={(c) => handleOpenProfileModal(c)}
+          getRowActions={(c) => [
+            { label: 'Акт сверки', action: () => handleOpenPartnerReport(c) },
+            { label: 'Прекратить партнерство', action: () => handleTerminatePartnership(c.id), danger: true },
+          ]}
           searchPlaceholder="Поиск по наименованию, ИНН, примечанию..."
           emptyMessage="Контрагенты не найдены. Создайте контрагента вручную или примите заявку в разделе «Заявки»."
           isLoading={loading}

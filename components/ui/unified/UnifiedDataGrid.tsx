@@ -62,6 +62,7 @@ export type UnifiedDataGridProps<T> = {
   columns: ColumnDef<T>[];
   data: T[];
   keyExtractor: (item: T) => string;
+  onRowClick?: (item: T) => void;
   getRowActions?: (item: T) => RowAction<T>[];
   renderCard?: (item: T) => React.ReactNode;
   title?: string;
@@ -79,6 +80,7 @@ export function UnifiedDataGrid<T extends Record<string, any>>({
   columns: initialColumns,
   data,
   keyExtractor,
+  onRowClick,
   getRowActions,
   renderCard,
   title,
@@ -607,6 +609,7 @@ export function UnifiedDataGrid<T extends Record<string, any>>({
                         return (
                           <TableRow
                             key={rowId}
+                            onClick={() => onRowClick && onRowClick(item)}
                             onContextMenu={(e) => {
                               e.preventDefault();
                               setContextMenu({
@@ -657,6 +660,7 @@ export function UnifiedDataGrid<T extends Record<string, any>>({
               return (
                 <div
                   key={rowId}
+                  onClick={() => onRowClick && onRowClick(item)}
                   onContextMenu={(e) => {
                     e.preventDefault();
                     setContextMenu({
@@ -666,7 +670,7 @@ export function UnifiedDataGrid<T extends Record<string, any>>({
                       rowItem: item,
                     });
                   }}
-                  className="relative group"
+                  className="relative group cursor-pointer"
                 >
                   {renderCard ? (
                     renderCard(item)
@@ -746,23 +750,29 @@ export function UnifiedDataGrid<T extends Record<string, any>>({
                 Действия над записью
               </div>
               {contextMenu.rowItem && getRowActions ? (
-                getRowActions(contextMenu.rowItem).map((act, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => {
-                      act.action(contextMenu.rowItem!);
-                      setContextMenu(null);
-                    }}
-                    className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center space-x-2 transition-colors ${
-                      act.danger ? 'hover:bg-red-500/10 text-red-400' : 'hover:bg-muted text-foreground'
-                    }`}
-                  >
-                    {act.icon && <span className="h-3.5 w-3.5 flex-shrink-0">{act.icon}</span>}
-                    <span>{act.label}</span>
-                  </button>
-                ))
+                getRowActions(contextMenu.rowItem)
+                  .filter((act) => {
+                    const l = act.label.toLowerCase();
+                    // Скрываем действия Открыть/Просмотр, если клик по записи выполняет открытие
+                    return !l.includes('открыть') && !l.includes('просмотр');
+                  })
+                  .map((act, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => {
+                        act.action(contextMenu.rowItem!);
+                        setContextMenu(null);
+                      }}
+                      className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center space-x-2 transition-colors ${
+                        act.danger ? 'hover:bg-red-500/10 text-red-400' : 'hover:bg-muted text-foreground'
+                      }`}
+                    >
+                      {act.icon && <span className="h-3.5 w-3.5 flex-shrink-0">{act.icon}</span>}
+                      <span>{act.label}</span>
+                    </button>
+                  ))
               ) : (
-                <div className="text-muted-foreground px-2 py-1 text-center">Нет доступных действий</div>
+                <div className="text-muted-foreground px-2 py-1 text-center">Нет дополнительных действий</div>
               )}
             </>
           )}
