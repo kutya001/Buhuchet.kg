@@ -145,7 +145,7 @@
 | `id` | `UUID` | `PRIMARY KEY`, `gen_random_uuid()` | Идентификатор партнерской связи. |
 | `requester_company_id`|`UUID` | `FOREIGN KEY (companies.id)` | Компания, инициализировавшая связывание. |
 | `target_company_id` |`UUID` | `FOREIGN KEY (companies.id)` | Принимающая организация. |
-| `status` | `TEXT` | `CHECK (IN ('pending', 'accepted', 'rejected', 'cancelled'))` | Статус рассмотрения партнерства. |
+| `status` | `TEXT` | `CHECK (IN ('pending', 'approved', 'accepted', 'rejected', 'cancelled', 'sent', 'recalled', 'suspended'))` | Статус рассмотрения и активности партнерства. |
 | `created_at` | `TIMESTAMPTZ` | `DEFAULT NOW()` | Дата подачи приглашения. |
 | `updated_at` | `TIMESTAMPTZ` | `DEFAULT NOW()` | Дата принятия/отклонения. |
 

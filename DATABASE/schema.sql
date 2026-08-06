@@ -101,7 +101,7 @@ CREATE TABLE IF NOT EXISTS public.company_partnerships (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   requester_company_id UUID REFERENCES public.companies(id) ON DELETE CASCADE NOT NULL,
   target_company_id UUID REFERENCES public.companies(id) ON DELETE CASCADE NOT NULL,
-  status TEXT CHECK (status IN ('pending', 'accepted', 'rejected', 'cancelled')) DEFAULT 'pending',
+  status TEXT CHECK (status IN ('pending', 'approved', 'accepted', 'rejected', 'cancelled', 'sent', 'recalled', 'suspended')) DEFAULT 'pending',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   UNIQUE (requester_company_id, target_company_id)
