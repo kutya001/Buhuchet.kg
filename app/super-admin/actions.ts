@@ -28,6 +28,67 @@ async function checkSuperAdmin() {
 // 1. УПРАВЛЕНИЕ ОРГАНИЗАЦИЯМИ (COMPANIES)
 // -------------------------------------------------------------
 
+/**
+ * Получение полного профиля и статистики любой компании для суперадминистратора
+ */
+export async function getSuperAdminCompanyDetailsAction(companyId: string) {
+  try {
+    if (!(await checkSuperAdmin())) {
+      return { success: false, error: 'Доступ запрещен' };
+    }
+
+    const adminSupabase = await createAdminClient();
+
+    const { data: company, error } = await adminSupabase
+      .from('companies')
+      .select('*')
+      .eq('id', companyId)
+      .single();
+
+    if (error || !company) {
+      return { success: false, error: 'Организация не найдена' };
+    }
+
+    const { data: owner } = await adminSupabase
+      .from('users')
+      .select('full_name, email, phone')
+      .eq('company_id', companyId)
+      .eq('role', 'owner')
+      .maybeSingle();
+
+    const [filesRes, docsRes, counterpartiesRes, employeesRes] = await Promise.all([
+      adminSupabase.from('files').select('id, size_bytes').eq('company_id', companyId),
+      adminSupabase.from('documents').select('id', { count: 'exact', head: true }).eq('company_id', companyId),
+      adminSupabase
+        .from('company_partnerships')
+        .select('id', { count: 'exact', head: true })
+        .or(`requester_company_id.eq.${companyId},target_company_id.eq.${companyId}`)
+        .eq('status', 'accepted'),
+      adminSupabase.from('users').select('id', { count: 'exact', head: true }).eq('company_id', companyId),
+    ]);
+
+    const filesData = filesRes.data || [];
+    const storageUsedBytes = filesData.reduce((acc, f) => acc + (Number(f.size_bytes) || 0), 0);
+
+    return {
+      success: true,
+      data: {
+        company: company as Company,
+        owner: owner || null,
+        stats: {
+          totalFiles: filesData.length,
+          totalDocuments: docsRes.count || 0,
+          totalCounterparties: counterpartiesRes.count || 0,
+          totalEmployees: employeesRes.count || 0,
+          storageUsedBytes,
+        },
+      },
+    };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Сбой получения данных' };
+  }
+}
+
 export async function getPendingCompaniesAction(): Promise<ActionResponse<Company[]>> {
   try {
     if (!(await checkSuperAdmin())) {

@@ -185,3 +185,29 @@ export function hasPermission(
 
   return false;
 }
+
+/**
+ * Проверка права на просмотр профиля компании (Владелец, Суперадмин или Разрешено)
+ */
+export function canViewCompanyProfile(
+  profile: UserProfile | null | undefined,
+  companyOwnerId?: string
+): boolean {
+  if (!profile) return false;
+  if (profile.is_super_admin) return true;
+  if (profile.role === 'owner' || (companyOwnerId && profile.id === companyOwnerId)) return true;
+  return hasPermission(profile, 'company', 'view') || hasPermission(profile, 'company', 'tab_profile');
+}
+
+/**
+ * Проверка права на редактирование профиля компании (Строго ТОЛЬКО Владелец)
+ */
+export function canEditCompanyProfile(
+  profile: UserProfile | null | undefined,
+  companyOwnerId?: string
+): boolean {
+  if (!profile) return false;
+  if (profile.role === 'owner') return true;
+  if (companyOwnerId && profile.id === companyOwnerId) return true;
+  return false;
+}

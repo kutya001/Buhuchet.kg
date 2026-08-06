@@ -46,13 +46,19 @@ import { UnifiedFormModal } from '@/components/ui/unified/UnifiedFormModal';
 import { hasPermission } from '@/lib/auth/permissions';
 import { Checkbox } from '@/components/ui/checkbox';
 
-import { updateClosedPeriodAction, updateCompanyPrivacyAndDetailsAction } from './actions';
+import { updateClosedPeriodAction, updateCompanyPrivacyAndDetailsAction, getCompanyProfileStatsAction, updateCompanyProfileAction } from './actions';
+import { CompanyStatsGrid } from '@/components/company/CompanyStatsGrid';
+import { OwnerBadge } from '@/components/company/OwnerBadge';
+import { CompanyProfileForm } from '@/components/company/CompanyProfileForm';
+import { canEditCompanyProfile } from '@/lib/auth/permissions';
+import type { CompanyProfileStats } from '@/types/company.types';
 
 export default function CompanyProfilePage() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<'profile' | 'legal_docs' | 'closed_period'>('profile');
   const [company, setCompany] = useState<Company | null>(null);
   const [currentProfile, setCurrentProfile] = useState<UserProfile | null>(null);
+  const [stats, setStats] = useState<CompanyProfileStats | null>(null);
   const [closedDateInput, setClosedDateInput] = useState<string>('');
   const [categories, setCategories] = useState<FileCategory[]>([]);
   const [legalDocs, setLegalDocs] = useState<DocumentFile[]>([]);
@@ -95,6 +101,11 @@ export default function CompanyProfilePage() {
         const legalRes = await getCompanyLegalDocsAction();
         if (legalRes.success && legalRes.data) {
           setLegalDocs(legalRes.data);
+        }
+
+        const statsRes = await getCompanyProfileStatsAction(comp.id);
+        if (statsRes.success && statsRes.data) {
+          setStats(statsRes.data);
         }
       }
     }
@@ -316,71 +327,27 @@ export default function CompanyProfilePage() {
       {/* 1. Вкладка Профиль & Реквизиты */}
       {activeTab === 'profile' && company && (
         <div className="space-y-6">
-          <Card className="bg-card border-border p-6 space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-4">
-                <div>
-                  <Label className="text-xs text-muted-foreground">Организационно-правовая форма (ОПФ)</Label>
-                  <select
-                    value={company.legal_form || 'ОсОО'}
-                    onChange={async (e) => {
-                      const newForm = e.target.value as LegalForm;
-                      const res = await updateCompanyPrivacyAndDetailsAction({ legalForm: newForm });
-                      if (res.success) {
-                        setMsg({ type: 'success', text: `ОПФ успешно изменена на ${newForm}` });
-                        await loadCompanyData();
-                      } else {
-                        setMsg({ type: 'error', text: res.error || 'Ошибка смены ОПФ' });
-                      }
-                    }}
-                    className="mt-1 w-full bg-background border border-input rounded-xl px-3 py-2 text-sm font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                  >
-                    <option value="ИП">ИП (Индивидуальный Предприниматель)</option>
-                    <option value="ОсОО">ОсОО (Общество с ограниченной ответственностью)</option>
-                    <option value="ЗАО">ЗАО (Закрытое акционерное общество)</option>
-                    <option value="ОАО">ОАО (Открытое акционерное общество)</option>
-                  </select>
-                </div>
+          {/* Баннер статуса прав Владельца */}
+          <OwnerBadge isOwner={canEditCompanyProfile(currentProfile, company.id)} />
 
-                <div>
-                  <Label className="text-xs text-muted-foreground">Наименование</Label>
-                  <p className="text-lg font-bold text-foreground mt-0.5">
-                    {company.legal_form || 'ОсОО'} «{company.name}»
-                  </p>
-                </div>
+          {/* Виджеты статистики ресурсов компании */}
+          <CompanyStatsGrid stats={stats} loading={loading} />
 
-                <div>
-                  <Label className="text-xs text-muted-foreground">ИНН Кыргызской Республики</Label>
-                  <p className="text-base font-mono font-bold text-amber-500 mt-0.5">{company.inn}</p>
-                </div>
-
-                <div>
-                  <Label className="text-xs text-muted-foreground">Отрасль Организации</Label>
-                  <p className="text-sm font-semibold text-foreground mt-0.5">{company.industry || 'Услуги / Консалтинг'}</p>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <Label className="text-xs text-muted-foreground">ФИО Руководителя</Label>
-                  <p className="text-sm font-semibold text-foreground mt-0.5">{company.director_name || '—'}</p>
-                </div>
-
-                <div>
-                  <Label className="text-xs text-muted-foreground">Официальный E-mail</Label>
-                  <p className="text-sm font-mono font-semibold text-foreground mt-0.5">{company.email || '—'}</p>
-                </div>
-
-                <div>
-                  <Label className="text-xs text-muted-foreground">Юридический Адрес</Label>
-                  <p className="text-sm font-semibold text-foreground mt-0.5">{company.legal_address || company.address || '—'}</p>
-                </div>
-              </div>
-            </div>
-          </Card>
+          {/* Форма юридических реквизитов */}
+          <CompanyProfileForm
+            company={company}
+            canEdit={canEditCompanyProfile(currentProfile, company.id)}
+            onSave={async (data) => {
+              const res = await updateCompanyProfileAction(company.id, data);
+              if (res.success) {
+                await loadCompanyData();
+              }
+              return res;
+            }}
+          />
 
           {/* Блок Настройки Настройки Публичной Приватности */}
-          <Card className="bg-card border-border p-6 space-y-4">
+          <Card className="bg-card border-border p-6 space-y-4 rounded-2xl">
             <div>
               <h3 className="text-base font-bold text-foreground">Публичные контакты и приватность</h3>
               <p className="text-xs text-muted-foreground">
@@ -391,6 +358,7 @@ export default function CompanyProfilePage() {
             <div className="space-y-3 pt-2">
               <label className="flex items-center gap-3 cursor-pointer select-none">
                 <Checkbox
+                  disabled={!canEditCompanyProfile(currentProfile, company.id)}
                   checked={company.privacy_settings?.show_phone ?? true}
                   onCheckedChange={async (checked) => {
                     const currentPrivacy = company.privacy_settings || { show_phone: true, show_email: true, show_address: true };
@@ -407,22 +375,24 @@ export default function CompanyProfilePage() {
 
               <label className="flex items-center gap-3 cursor-pointer select-none">
                 <Checkbox
+                  disabled={!canEditCompanyProfile(currentProfile, company.id)}
                   checked={company.privacy_settings?.show_email ?? true}
                   onCheckedChange={async (checked) => {
                     const currentPrivacy = company.privacy_settings || { show_phone: true, show_email: true, show_address: true };
                     const nextSettings = { ...currentPrivacy, show_email: !!checked };
                     const res = await updateCompanyPrivacyAndDetailsAction({ privacySettings: nextSettings });
                     if (res.success) {
-                      setMsg({ type: 'success', text: 'Настройки приватности Email обновлены' });
+                      setMsg({ type: 'success', text: 'Настройки приватности email обновлены' });
                       await loadCompanyData();
                     }
                   }}
                 />
-                <span className="text-sm font-medium text-foreground">Показывать официальный Email</span>
+                <span className="text-sm font-medium text-foreground">Показывать адрес электронной почты</span>
               </label>
 
               <label className="flex items-center gap-3 cursor-pointer select-none">
                 <Checkbox
+                  disabled={!canEditCompanyProfile(currentProfile, company.id)}
                   checked={company.privacy_settings?.show_address ?? true}
                   onCheckedChange={async (checked) => {
                     const currentPrivacy = company.privacy_settings || { show_phone: true, show_email: true, show_address: true };
@@ -434,7 +404,7 @@ export default function CompanyProfilePage() {
                     }
                   }}
                 />
-                <span className="text-sm font-medium text-foreground">Показывать юридический адрес</span>
+                <span className="text-sm font-medium text-foreground">Показывать фактический адрес организации</span>
               </label>
             </div>
           </Card>
