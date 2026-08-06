@@ -357,13 +357,22 @@ export async function getAllDocumentsAdminAction(): Promise<ActionResponse<any[]
     }
 
     const adminSupabase = await createAdminClient();
-    const { data, error } = await adminSupabase
+    const { data: rawDocs, error } = await adminSupabase
       .from('documents')
-      .select('*, sender_company:companies!sender_company_id(*), receiver_company:companies!receiver_company_id(*), users(*)')
+      .select('*, sender_company:companies!sender_company_id(name), receiver_company:companies!receiver_company_id(name), counterparties(name), users(full_name, email)')
       .order('created_at', { ascending: false });
 
     if (error) return { success: false, error: error.message };
-    return { success: true, data };
+
+    // Трансформируем объекты для гарантированного отображения в UnifiedDataGrid
+    const docs = (rawDocs || []).map((doc: any) => ({
+      ...doc,
+      company_name: doc.sender_company?.name || doc.receiver_company?.name || 'Организация не указана',
+      counterparty_name: doc.counterparties?.name || '—',
+      created_by_name: doc.users?.full_name || doc.users?.email || '—',
+    }));
+
+    return { success: true, data: docs };
   } catch (err: unknown) {
     return { success: false, error: 'Сбой получения документов' };
   }

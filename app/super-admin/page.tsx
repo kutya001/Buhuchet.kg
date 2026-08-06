@@ -966,8 +966,13 @@ export default function SuperAdminPage() {
         }}
       />
 
-      {/* Основной Контент Панели */}
-      <div className="flex-1 flex flex-col min-w-0 w-full overflow-hidden">
+      {/* Основной Контент Панели с учетом плавающего сайдбара */}
+      <div
+        className={cn(
+          'flex-1 flex flex-col min-w-0 w-full overflow-hidden transition-all duration-300',
+          isSidebarCollapsed ? 'md:pl-[96px]' : 'md:pl-[288px]'
+        )}
+      >
         <FloatingTopbar
           companyName="Buhuchet.kg Administration"
           isSuperAdmin={true}

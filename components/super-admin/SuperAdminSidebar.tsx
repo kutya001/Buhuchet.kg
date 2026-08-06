@@ -14,6 +14,7 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
+  LayoutDashboard,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
@@ -54,8 +55,8 @@ export function SuperAdminSidebar({
     { id: 'companies' as SuperAdminTab, label: 'Организации', icon: Building2, badge: pendingCount > 0 ? pendingCount : null },
     { id: 'users' as SuperAdminTab, label: 'Пользователи', icon: Users },
     { id: 'r2_files' as SuperAdminTab, label: 'Файлы Cloudflare R2', icon: HardDrive },
-    { id: 'edo_documents' as SuperAdminTab, label: 'Документы ЭДО', icon: FileText },
-    { id: 'telegram' as SuperAdminTab, label: 'Telegram Бот', icon: Send },
+    { id: 'edo_documents' as SuperAdminTab, label: 'Документы', icon: FileText },
+    { id: 'telegram' as SuperAdminTab, label: 'Telegram-бот', icon: Send },
     { id: 'dictionaries' as SuperAdminTab, label: 'Справочники', icon: BookOpen },
     { id: 'db_inspector' as SuperAdminTab, label: 'Инспектор БД', icon: Database },
   ];
@@ -73,19 +74,19 @@ export function SuperAdminSidebar({
           {/* Шапка Сайдбара */}
           <div className="flex items-center justify-between px-2 py-1">
             <div className="flex items-center gap-3 min-w-0">
-              <div className="p-2 bg-primary/10 text-primary rounded-xl border border-primary/20 shrink-0">
-                <ShieldAlert className="w-5 h-5 text-red-500" />
+              <div className="p-2.5 bg-red-500/10 text-red-400 rounded-xl border border-red-500/20 shrink-0 shadow-sm">
+                <ShieldAlert className="w-5 h-5 text-red-500 animate-pulse" />
               </div>
               {!collapsed && (
                 <div className="flex flex-col min-w-0">
                   <div className="flex items-center gap-1.5">
                     <span className="font-extrabold text-sm tracking-tight truncate text-foreground">Buhuchet.kg</span>
-                    <Badge variant="destructive" className="text-[9px] font-mono px-1 py-0 uppercase">
+                    <Badge variant="destructive" className="text-[9px] font-mono px-1.5 py-0.5 uppercase bg-red-600 text-white rounded-md">
                       ADMIN
                     </Badge>
                   </div>
                   <span className="text-[11px] text-muted-foreground font-medium truncate">
-                    Суперадминистратор
+                    Панель Суперадмина
                   </span>
                 </div>
               )}
@@ -97,7 +98,7 @@ export function SuperAdminSidebar({
                 variant="ghost"
                 size="icon"
                 onClick={onToggleCollapse}
-                className="hidden md:flex h-7 w-7 text-muted-foreground hover:text-foreground p-0"
+                className="hidden md:flex h-8 w-8 text-muted-foreground hover:text-foreground p-0 rounded-xl hover:bg-accent"
                 title={isCollapsed ? 'Развернуть меню' : 'Свернуть меню'}
               >
                 {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
@@ -105,17 +106,17 @@ export function SuperAdminSidebar({
             )}
 
             {onCloseMobile && forceExpanded && (
-              <Button variant="ghost" size="icon" className="md:hidden h-8 w-8 text-muted-foreground" onClick={onCloseMobile}>
+              <Button variant="ghost" size="icon" className="md:hidden h-8 w-8 text-muted-foreground rounded-xl" onClick={onCloseMobile}>
                 <X className="w-5 h-5" />
               </Button>
             )}
           </div>
 
           {/* Пункты меню */}
-          <nav className="space-y-1">
+          <nav className="space-y-1.5">
             {!collapsed && (
               <p className="px-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">
-                Управление платформой
+                Администрирование
               </p>
             )}
             {menuItems.map((item) => {
@@ -127,11 +128,11 @@ export function SuperAdminSidebar({
                   onClick={() => handleSelect(item.id)}
                   title={collapsed ? item.label : undefined}
                   className={cn(
-                    'w-full flex items-center px-3 py-2.5 rounded-xl text-xs font-semibold transition-all duration-150 text-left',
+                    'w-full flex items-center px-3 py-2.5 rounded-xl text-xs font-semibold transition-all duration-200 text-left min-h-[42px]',
                     collapsed ? 'justify-center px-0' : 'justify-between',
                     isActive
-                      ? 'bg-primary text-primary-foreground shadow-md shadow-primary/20 font-bold'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
+                      ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/25 font-bold scale-[1.01]'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-accent/60'
                   )}
                 >
                   <div className={cn('flex items-center gap-3 min-w-0', collapsed && 'justify-center')}>
@@ -139,7 +140,7 @@ export function SuperAdminSidebar({
                     {!collapsed && <span className="truncate">{item.label}</span>}
                   </div>
                   {!collapsed && item.badge && (
-                    <Badge variant="secondary" className="text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30 px-1.5 py-0">
+                    <Badge variant="secondary" className="text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded-full animate-pulse">
                       {item.badge}
                     </Badge>
                   )}
@@ -156,7 +157,7 @@ export function SuperAdminSidebar({
               type="submit"
               variant="ghost"
               className={cn(
-                'w-full flex items-center text-xs font-bold text-red-500 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-colors min-h-[40px]',
+                'w-full flex items-center text-xs font-bold text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-xl transition-colors min-h-[42px]',
                 collapsed ? 'justify-center px-0' : 'justify-start gap-3 px-3'
               )}
               title="Выйти из системы"
@@ -172,10 +173,10 @@ export function SuperAdminSidebar({
 
   return (
     <>
-      {/* 1. Десктопная версия (сворачиваемая w-64 <-> w-20) */}
+      {/* 1. Десктопный плавающий сайдбар (Glassmorphism Floating Sidebar) */}
       <aside
         className={cn(
-          'hidden md:flex border-r border-border bg-card/60 backdrop-blur-md flex-col h-full min-h-screen shrink-0 transition-all duration-300',
+          'hidden md:flex fixed top-3 left-3 bottom-3 z-40 rounded-2xl bg-card/80 backdrop-blur-2xl border border-border/80 shadow-2xl flex-col transition-all duration-300',
           isCollapsed ? 'w-20' : 'w-64'
         )}
       >
@@ -189,7 +190,7 @@ export function SuperAdminSidebar({
             className="fixed inset-0 bg-background/80 backdrop-blur-sm transition-opacity"
             onClick={onCloseMobile}
           />
-          <div className="relative w-4/5 max-w-xs bg-card border-r border-border h-full shadow-2xl z-10 flex flex-col">
+          <div className="relative w-4/5 max-w-xs bg-card/95 backdrop-blur-2xl border-r border-border h-full shadow-2xl z-10 flex flex-col">
             {navContent(true)}
           </div>
         </div>

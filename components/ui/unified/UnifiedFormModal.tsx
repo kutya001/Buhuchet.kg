@@ -83,18 +83,18 @@ export function UnifiedFormModal({
         {/* ТЕЛО ФОРМЫ */}
         <CardContent className="p-4 md:p-6 overflow-y-auto flex-1 space-y-4">
           {onSubmit ? (
-            <form onSubmit={onSubmit} className="space-y-4">
-              {children}
+            <form onSubmit={onSubmit} className="space-y-4 flex flex-col h-full">
+              <div className="flex-1 space-y-4">{children}</div>
 
               {mode !== 'view' && (
-                <div className="flex items-center justify-end space-x-2 pt-4 border-t border-border">
+                <div className="sticky bottom-0 bg-card/95 backdrop-blur-md flex items-center justify-end space-x-2 pt-4 pb-2 border-t border-border mt-auto">
                   <Button type="button" variant="ghost" onClick={onClose} className="min-h-[44px]">
                     Отмена
                   </Button>
                   <Button
                     type="submit"
                     disabled={isSubmitting}
-                    className="bg-amber-600 hover:bg-amber-500 text-white font-bold min-h-[44px] px-6"
+                    className="bg-amber-600 hover:bg-amber-500 text-white font-bold min-h-[44px] px-6 rounded-xl"
                   >
                     {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : submitText || (mode === 'create' ? 'Создать' : 'Сохранить')}
                   </Button>

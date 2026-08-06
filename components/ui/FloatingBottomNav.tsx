@@ -19,7 +19,7 @@ export function FloatingBottomNav({ userProfile }: FloatingBottomNavProps) {
   const canViewDocs = hasPermission(userProfile, 'documents', 'view');
 
   return (
-    <nav className="md:hidden fixed bottom-4 left-4 right-4 h-16 rounded-[28px] bg-card/90 backdrop-blur-2xl border border-border/80 shadow-2xl z-40 flex items-center justify-around px-6 transition-colors duration-300">
+    <nav className="md:hidden fixed bottom-3 left-3 right-3 h-16 rounded-[28px] bg-card/90 backdrop-blur-2xl border border-border/80 shadow-2xl z-40 flex items-center justify-around px-4 transition-colors duration-300 pb-[env(safe-area-inset-bottom,0px)]">
       {/* 1. СЛЕВА: Главная */}
       <Link
         href="/dashboard"
