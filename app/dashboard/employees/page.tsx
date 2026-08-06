@@ -10,42 +10,37 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Users,
   UserCheck,
-  UserPlus,
   Shield,
-  Key,
-  Lock,
-  Mail,
   Phone,
   Building2,
   CheckCircle2,
   AlertCircle,
   Loader2,
   Search,
-  Plus,
   Edit2,
-  Check,
   X,
   User,
-  Settings,
-  ShieldAlert,
   Trash2,
-  Send,
   MessageCircle,
+  Clock,
+  UserPlus,
+  Send,
+  Plus,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import {
   getCompanyEmployeesAction,
   getCompanyRolesAction,
-  createEmployeeAction,
-  updateEmployeeAction,
-  resetEmployeePasswordAction,
+  getPendingRequestsAction,
+  approveEmployeeRequestAction,
+  rejectEmployeeRequestAction,
+  updateEmployeeRoleAndPositionAction,
+  removeEmployeeAction,
   createCompanyRoleAction,
   updateCompanyRoleAction,
   deleteCompanyRoleAction,
 } from './actions';
 import type { UserProfile, CompanyRole, RolePermissions } from '@/types/database.types';
-import { UnifiedDataGrid } from '@/components/ui/unified/UnifiedDataGrid';
-
 import { MODULE_CONFIG, ModuleName, ActionName, hasPermission } from '@/lib/auth/permissions';
 
 export default function EmployeesModulePage() {
@@ -53,31 +48,28 @@ export default function EmployeesModulePage() {
   const [loading, setLoading] = useState(true);
   const [isPending, startTransition] = useTransition();
 
-  // Состояние пользователя и организации
+  // Текущий профиль пользователя
   const [currentProfile, setCurrentProfile] = useState<UserProfile | null>(null);
 
-  // Реестр сотрудников
+  // Реестры
+  const [pendingRequests, setPendingRequests] = useState<UserProfile[]>([]);
   const [employees, setEmployees] = useState<UserProfile[]>([]);
   const [totalEmployees, setTotalEmployees] = useState(0);
   const [empPage, setEmpPage] = useState(1);
   const [empLimit, setEmpLimit] = useState(25);
   const [empSearch, setEmpSearch] = useState('');
 
-  // Модальные окна сотрудников
-  const [showAddEmpModal, setShowAddEmpModal] = useState(false);
-  const [newEmpName, setNewEmpName] = useState('');
-  const [newEmpEmail, setNewEmpEmail] = useState('');
-  const [newEmpPhone, setNewEmpPhone] = useState('');
-  const [newEmpPosition, setNewEmpPosition] = useState('Менеджер');
-  const [newEmpRoleId, setNewEmpRoleId] = useState('');
-  const [newEmpPassword, setNewEmpPassword] = useState('Buhuchet2026!');
-
-  // Редактирование / Сброс пароля сотрудника
+  // Модальные окна и формы
   const [editingEmp, setEditingEmp] = useState<UserProfile | null>(null);
-  const [resetPwdEmp, setResetPwdEmp] = useState<UserProfile | null>(null);
-  const [adminNewPassword, setAdminNewPassword] = useState('');
+  const [editRoleId, setEditRoleId] = useState('');
+  const [editPosition, setEditPosition] = useState('');
 
-  // Реестр ролей
+  // Принятие заявки
+  const [approvingUser, setApprovingUser] = useState<UserProfile | null>(null);
+  const [approveRoleId, setApproveRoleId] = useState('');
+  const [approvePosition, setApprovePosition] = useState('Менеджер');
+
+  // Роли
   const [roles, setRoles] = useState<CompanyRole[]>([]);
   const [showAddRoleModal, setShowAddRoleModal] = useState(false);
   const [newRoleName, setNewRoleName] = useState('');
@@ -88,7 +80,6 @@ export default function EmployeesModulePage() {
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const supabase = createClient();
 
-  // 1. Первичная загрузка
   const loadData = async () => {
     setLoading(true);
     const {
@@ -104,15 +95,26 @@ export default function EmployeesModulePage() {
 
       if (prof) {
         setCurrentProfile(prof);
+
+        if (prof.company_id) {
+          // Загрузка поступающих заявок
+          const pendRes = await getPendingRequestsAction(prof.company_id);
+          if (pendRes.success && pendRes.data) {
+            setPendingRequests(pendRes.data);
+          }
+        }
       }
 
       // Загрузка ролей
       const rolesRes = await getCompanyRolesAction();
       if (rolesRes.success && rolesRes.data) {
         setRoles(rolesRes.data);
+        if (rolesRes.data.length > 0) {
+          setApproveRoleId(rolesRes.data[0].id);
+        }
       }
 
-      // Загрузка сотрудников
+      // Загрузка активных сотрудников
       const empRes = await getCompanyEmployeesAction(empPage, empLimit, empSearch);
       if (empRes.success && empRes.data) {
         setEmployees(empRes.data.employees);
@@ -126,89 +128,85 @@ export default function EmployeesModulePage() {
     loadData();
   }, [empPage, empLimit]);
 
-  // Фильтрация поиска сотрудников
   const handleSearchClick = async () => {
-    setLoading(true);
-    const empRes = await getCompanyEmployeesAction(1, empLimit, empSearch);
-    if (empRes.success && empRes.data) {
-      setEmployees(empRes.data.employees);
-      setTotalEmployees(empRes.data.totalCount);
-      setEmpPage(1);
-    }
-    setLoading(false);
+    setEmpPage(1);
+    await loadData();
   };
 
-
-
-  // Создание нового сотрудника
-  const handleCreateEmployee = async (e: React.FormEvent) => {
+  // Подтверждение заявки сотрудника
+  const handleApproveSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!approvingUser) return;
     setMsg(null);
 
     startTransition(async () => {
-      const res = await createEmployeeAction({
-        full_name: newEmpName,
-        email: newEmpEmail,
-        phone: newEmpPhone,
-        position: newEmpPosition,
-        role_id: newEmpRoleId || undefined,
-        password: newEmpPassword,
+      const res = await approveEmployeeRequestAction({
+        userId: approvingUser.id,
+        roleId: approveRoleId,
+        position: approvePosition,
       });
 
       if (res.success) {
-        setMsg({ type: 'success', text: `Сотрудник "${newEmpName}" успешно создан! Логин: ${newEmpEmail}` });
-        setShowAddEmpModal(false);
-        setNewEmpName('');
-        setNewEmpEmail('');
-        setNewEmpPhone('');
+        setMsg({ type: 'success', text: `Сотрудник ${approvingUser.full_name} успешно зачислен в штат!` });
+        setApprovingUser(null);
         await loadData();
       } else {
-        setMsg({ type: 'error', text: res.error || 'Ошибка при создании сотрудника' });
+        setMsg({ type: 'error', text: res.error || 'Сбой утверждения заявки' });
       }
     });
   };
 
-  // Сохранение отредактированного сотрудника
-  const handleSaveEmployeeEdit = async () => {
+  // Отклонение заявки
+  const handleReject = async (userId: string) => {
+    if (!confirm('Вы действительно хотите отклонить эту заявку?')) return;
+    setMsg(null);
+
+    startTransition(async () => {
+      const res = await rejectEmployeeRequestAction(userId);
+      if (res.success) {
+        setMsg({ type: 'success', text: 'Заявка сотрудника отклонена' });
+        await loadData();
+      } else {
+        setMsg({ type: 'error', text: res.error || 'Ошибка отклонения заявки' });
+      }
+    });
+  };
+
+  // Сохранение изменений Роли и Должности сотрудника
+  const handleSaveRoleAndPosition = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!editingEmp) return;
     setMsg(null);
 
-    const empId = editingEmp.id;
-    const updatedData = { ...editingEmp };
-
-    // Оптимистичное обновление
-    setEmployees((prev) => prev.map((e) => (e.id === empId ? updatedData : e)));
-    setMsg({ type: 'success', text: 'Данные сотрудника обновлены' });
-    setEditingEmp(null);
-
     startTransition(async () => {
-      const res = await updateEmployeeAction(empId, {
-        full_name: updatedData.full_name,
-        position: updatedData.position || undefined,
-        role_id: updatedData.role_id || undefined,
-        is_active: updatedData.is_active,
+      const res = await updateEmployeeRoleAndPositionAction({
+        userId: editingEmp.id,
+        roleId: editRoleId,
+        position: editPosition,
       });
 
-      if (!res.success) {
-        setMsg({ type: 'error', text: res.error || 'Сбой обновления' });
-        loadData();
+      if (res.success) {
+        setMsg({ type: 'success', text: `Данные сотрудника ${editingEmp.full_name} обновлены` });
+        setEditingEmp(null);
+        await loadData();
+      } else {
+        setMsg({ type: 'error', text: res.error || 'Ошибка обновления сотрудника' });
       }
     });
   };
 
-  // Сброс пароля сотрудника
-  const handleResetEmployeePassword = async () => {
-    if (!resetPwdEmp || !adminNewPassword) return;
+  // Исключение сотрудника из компании
+  const handleRemoveEmp = async (userId: string, empName: string) => {
+    if (!confirm(`Вы действительно хотите исключить сотрудника "${empName}" из компании?`)) return;
     setMsg(null);
 
     startTransition(async () => {
-      const res = await resetEmployeePasswordAction(resetPwdEmp.id, adminNewPassword);
+      const res = await removeEmployeeAction(userId);
       if (res.success) {
-        setMsg({ type: 'success', text: `Пароль сотрудника ${resetPwdEmp.full_name} успешно обновлен` });
-        setResetPwdEmp(null);
-        setAdminNewPassword('');
+        setMsg({ type: 'success', text: `Сотрудник ${empName} исключен из штата` });
+        await loadData();
       } else {
-        setMsg({ type: 'error', text: res.error || 'Ошибка сброса пароля' });
+        setMsg({ type: 'error', text: res.error || 'Ошибка исключения сотрудника' });
       }
     });
   };
@@ -265,7 +263,6 @@ export default function EmployeesModulePage() {
     const roleId = editingRole.id;
     const perms = { ...rolePermissions };
 
-    // Оптимистичное обновление матрицы в роли
     setRoles((prev) => prev.map((r) => (r.id === roleId ? { ...r, permissions: perms } : r)));
     setMsg({ type: 'success', text: `Матрица доступов для роли "${editingRole.name}" сохранена!` });
     setEditingRole(null);
@@ -276,29 +273,37 @@ export default function EmployeesModulePage() {
       });
 
       if (!res.success) {
-        setMsg({ type: 'error', text: res.error || 'Сбой сохранения матрицы прав' });
-        loadData();
+        setMsg({ type: 'error', text: res.error || 'Ошибка сохранения матрицы прав' });
+        await loadData();
       }
     });
   };
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin mr-2" />
+        <span>Загрузка списка сотрудников и ролей...</span>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-12">
-      {/* Заголовок модуля */}
+    <div className="space-y-6">
+      {/* Шапка модуля */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-foreground flex items-center">
-            <Users className="h-8 w-8 mr-3 text-blue-500" />
-            Модуль «Сотрудники» и Роли
-          </h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            Управление персоналом организации, ролевой моделью доступов (RBAC) и настройками профиля.
+          <h2 className="text-xl md:text-2xl font-bold text-foreground tracking-tight flex items-center">
+            <Users className="h-6 w-6 mr-2 text-blue-400" />
+            Управление Персоналом и Доступами
+          </h2>
+          <p className="text-xs md:text-sm text-muted-foreground mt-0.5">
+            Утверждение поступающих заявок сотрудников, назначение ролей и ролевая матрица RBAC
           </p>
         </div>
 
-        {/* Переключатель вкладок по матрице доступов */}
+        {/* Переключатель вкладок */}
         <div className="flex items-center space-x-1 p-1 bg-muted/80 border border-border rounded-xl">
-
           {hasPermission(currentProfile, 'employees', 'tab_employees') && (
             <button
               onClick={() => setActiveTab('employees')}
@@ -336,257 +341,248 @@ export default function EmployeesModulePage() {
         </Alert>
       )}
 
-
-
       {/* ========================================================================= */}
-      {/* 2. ВКЛАДКА: МОИ СОТРУДНИКИ */}
+      {/* 1. ВКЛАДКА: МОИ СОТРУДНИКИ */}
       {/* ========================================================================= */}
       {activeTab === 'employees' && (
-        <div className="space-y-4">
+        <div className="space-y-6">
+          {/* СЕКЦИЯ: ЗАЯВКИ НА ВСТУПЛЕНИЕ (Отображается при наличии pending-заявок) */}
+          {pendingRequests.length > 0 && (
+            <Card className="bg-amber-500/5 border-amber-500/30 rounded-2xl p-4 md:p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400">
+                    <Clock className="w-5 h-5 animate-pulse" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-foreground">Заявки на вступление ({pendingRequests.length})</h3>
+                    <p className="text-xs text-muted-foreground">Пользователи, выбравшие вашу компанию при регистрации</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {pendingRequests.map((req) => (
+                  <Card key={req.id} className="bg-card border-border/80 p-4 rounded-xl space-y-3 shadow-sm">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="text-sm font-bold text-foreground">{req.full_name}</p>
+                        <p className="text-xs font-mono text-muted-foreground">{req.email}</p>
+                        <p className="text-xs text-muted-foreground">{req.phone || 'Телефон не указан'}</p>
+                      </div>
+                      <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-400">
+                        Ожидает
+                      </Badge>
+                    </div>
+
+                    <div className="pt-2 flex items-center gap-2 justify-end">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleReject(req.id)}
+                        disabled={isPending}
+                        className="h-8 text-xs border-rose-500/40 text-rose-400 hover:bg-rose-500/10"
+                      >
+                        <X className="w-3.5 h-3.5 mr-1" />
+                        Отклонить
+                      </Button>
+
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          setApprovingUser(req);
+                          setApprovePosition(req.position || 'Менеджер');
+                        }}
+                        disabled={isPending}
+                        className="h-8 text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
+                        Принять в штат
+                      </Button>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            </Card>
+          )}
+
+          {/* Поисковая строка */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
             <div className="flex items-center space-x-2 w-full sm:w-auto">
               <div className="relative flex-1 sm:w-64">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
+                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Поиск сотрудника..."
                   value={empSearch}
                   onChange={(e) => setEmpSearch(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSearchClick()}
-                  className="pl-9 bg-muted border-border text-xs rounded-xl min-h-[40px] text-foreground"
+                  className="pl-9 bg-muted/40 border-border text-xs rounded-xl min-h-[40px] text-foreground"
                 />
               </div>
               <Button size="sm" onClick={handleSearchClick} className="bg-primary hover:bg-primary/90 text-primary-foreground text-xs min-h-[40px]">
                 Найти
               </Button>
             </div>
-
-            <Button
-              onClick={() => setShowAddEmpModal(true)}
-              className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs min-h-[44px] rounded-xl shadow-md w-full sm:w-auto"
-            >
-              <UserPlus className="h-4 w-4 mr-2" />
-              + Добавить сотрудника
-            </Button>
           </div>
 
           {/* Таблица сотрудников */}
-          <UnifiedDataGrid
-            data={employees}
-            isLoading={loading}
-            keyExtractor={(emp) => emp.id}
-            columns={[
-              {
-                key: 'full_name',
-                label: 'Сотрудник / Должность',
-                sortable: true,
-                getValue: (emp) => emp.full_name,
-                render: (emp) => (
-                  <div>
-                    <p className="font-bold text-foreground text-xs flex items-center">
-                      <User className="h-3.5 w-3.5 mr-1.5 text-blue-400" />
-                      {emp.full_name}
-                    </p>
-                    <span className="text-[11px] text-muted-foreground font-mono">{emp.position || 'Сотрудник'}</span>
-                  </div>
-                ),
-              },
-              {
-                key: 'email',
-                label: 'Логин / Email',
-                sortable: true,
-                getValue: (emp) => emp.email,
-                render: (emp) => (
-                  <span className="font-mono text-xs text-foreground flex items-center">
-                    <Mail className="h-3 w-3 mr-1 text-slate-500" />
-                    {emp.email}
-                  </span>
-                ),
-              },
-              {
-                key: 'role',
-                label: 'Назначенная Роль',
-                sortable: true,
-                getValue: (emp) => emp.company_roles?.name || emp.role,
-                render: (emp) => (
-                  <Badge variant="outline" className="border-emerald-500/30 text-emerald-400 font-mono text-[11px]">
-                    <Shield className="h-3 w-3 mr-1" />
-                    {emp.company_roles?.name || (emp.role === 'owner' ? 'Владелец' : 'Без роли')}
-                  </Badge>
-                ),
-              },
-              {
-                key: 'status',
-                label: 'Статус',
-                sortable: true,
-                getValue: (emp) => emp.is_active,
-                render: (emp) => (
-                  <Badge className={emp.is_active !== false ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[10px]' : 'bg-rose-500/10 text-rose-400 border border-rose-500/30 text-[10px]'}>
-                    {emp.is_active !== false ? 'Активен' : 'Заблокирован'}
-                  </Badge>
-                ),
-              },
-              {
-                key: 'actions',
-                label: 'Действия',
-                sortable: false,
-                render: (emp) => {
-                  const cleanPhone = emp.phone?.replace(/[^0-9]/g, '');
-                  return (
-                    <div className="flex items-center justify-end space-x-1.5">
-                      {/* Telegram */}
-                      {(emp as any).telegram_connections?.telegram_username || (emp as any).telegram_username ? (
-                        <a
-                          href={`https://t.me/${(emp as any).telegram_connections?.telegram_username || (emp as any).telegram_username}`}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-8 w-8 p-0 text-sky-400 hover:bg-sky-500/10"
-                            title="Написать в Telegram"
-                          >
-                            <Send className="h-4 w-4" />
-                          </Button>
-                        </a>
-                      ) : null}
+          <Card className="bg-card border-border rounded-2xl overflow-hidden shadow-xl">
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-left">
+                <thead className="bg-muted/60 text-muted-foreground uppercase text-[10px] font-mono border-b border-border">
+                  <tr>
+                    <th className="p-3.5">ФИО Сотрудника</th>
+                    <th className="p-3.5">Должность</th>
+                    <th className="p-3.5">Системная Роль</th>
+                    <th className="p-3.5">Контакты & Связь</th>
+                    <th className="p-3.5 text-right">Действия</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/60">
+                  {employees.map((emp) => {
+                    const isOwnerEmp = emp.role === 'owner';
+                    const cleanPhone = emp.phone ? emp.phone.replace(/\D/g, '') : '';
 
-                      {/* WhatsApp */}
-                      {cleanPhone ? (
-                        <a href={`https://wa.me/${cleanPhone}`} target="_blank" rel="noreferrer">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-8 w-8 p-0 text-emerald-400 hover:bg-emerald-500/10"
-                            title="Написать в WhatsApp"
-                          >
-                            <MessageCircle className="h-4 w-4" />
-                          </Button>
-                        </a>
-                      ) : null}
+                    return (
+                      <tr key={emp.id} className="hover:bg-muted/30 transition-colors">
+                        <td className="p-3.5">
+                          <div className="flex items-center space-x-2">
+                            <div className="p-2 rounded-xl bg-blue-500/10 text-blue-400 font-bold shrink-0">
+                              <User className="w-4 h-4" />
+                            </div>
+                            <div>
+                              <p className="font-bold text-foreground text-xs">{emp.full_name}</p>
+                              <p className="text-[11px] font-mono text-muted-foreground">{emp.email}</p>
+                            </div>
+                          </div>
+                        </td>
 
-                      {/* Телефонный звонок */}
-                      {emp.phone ? (
-                        <a href={`tel:${emp.phone}`}>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-8 w-8 p-0 text-blue-400 hover:bg-blue-500/10"
-                            title="Позвонить"
-                          >
-                            <Phone className="h-4 w-4" />
-                          </Button>
-                        </a>
-                      ) : null}
+                        <td className="p-3.5">
+                          <Badge variant="outline" className="text-[11px] font-medium border-border/80 bg-muted/30 text-foreground">
+                            {emp.position || '—'}
+                          </Badge>
+                        </td>
 
-                      {/* Редактировать (Карандаш) */}
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setEditingEmp(emp)}
-                        className="h-8 border-border text-foreground hover:text-foreground text-xs px-2"
-                        title="Редактировать сотрудника"
-                      >
-                        <Edit2 className="h-3.5 w-3.5" />
-                      </Button>
+                        <td className="p-3.5">
+                          {isOwnerEmp ? (
+                            <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[10px] font-bold">
+                              Владелец (Админ)
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="border-purple-500/40 text-purple-400 text-[10px] font-bold">
+                              {emp.company_roles?.name || 'Менеджер'}
+                            </Badge>
+                          )}
+                        </td>
 
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setResetPwdEmp(emp)}
-                        className="h-8 border-amber-500/30 text-amber-400 hover:bg-amber-500/10 text-xs px-2"
-                        title="Сбросить пароль"
-                      >
-                        <Key className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  );
-                },
-              },
-            ]}
-            defaultPageSize={25}
-          />
+                        <td className="p-3.5">
+                          <div className="flex items-center gap-1.5">
+                            {emp.phone && (
+                              <>
+                                <a
+                                  href={`https://wa.me/${cleanPhone}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  title="Написать в WhatsApp"
+                                  className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/30 transition-all"
+                                >
+                                  <MessageCircle className="w-3.5 h-3.5" />
+                                </a>
+                                <a
+                                  href={`tel:${emp.phone}`}
+                                  title="Позвонить"
+                                  className="p-1.5 rounded-lg bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 border border-blue-500/30 transition-all"
+                                >
+                                  <Phone className="w-3.5 h-3.5" />
+                                </a>
+                              </>
+                            )}
+                            <span className="text-[11px] font-mono text-muted-foreground ml-1">{emp.phone || '—'}</span>
+                          </div>
+                        </td>
+
+                        <td className="p-3.5 text-right">
+                          {!isOwnerEmp && (
+                            <div className="flex items-center justify-end gap-1.5">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => {
+                                  setEditingEmp(emp);
+                                  setEditRoleId(emp.role_id || (roles[0]?.id || ''));
+                                  setEditPosition(emp.position || '');
+                                }}
+                                title="Редактировать роль и должность"
+                                className="h-8 w-8 p-0 rounded-lg text-muted-foreground hover:text-foreground"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </Button>
+
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleRemoveEmp(emp.id, emp.full_name)}
+                                title="Исключить из штата"
+                                className="h-8 w-8 p-0 rounded-lg text-rose-400 hover:bg-rose-500/10"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </Card>
         </div>
       )}
 
       {/* ========================================================================= */}
-      {/* 3. ВКЛАДКА: РОЛИ И ДОСТУПЫ (RBAC MATRIX) */}
+      {/* 2. ВКЛАДКА: РОЛИ И ДОСТУПЫ */}
       {/* ========================================================================= */}
       {activeTab === 'roles' && (
         <div className="space-y-6">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold text-foreground flex items-center">
-              <Shield className="h-5 w-5 mr-2 text-emerald-400" />
-              Ролевая модель и матрица разрешений
-            </h2>
-
+            <h3 className="text-base font-bold text-foreground">Ролевая матрица организации</h3>
             <Button
               onClick={() => setShowAddRoleModal(true)}
-              className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs min-h-[44px] rounded-xl shadow-md"
+              className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded-xl h-10 px-4 gap-2"
             >
-              <Plus className="h-4 w-4 mr-2" />
-              + Создать роль
+              <Plus className="w-4 h-4" />
+              <span>Создать кастомную роль</span>
             </Button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {roles.map((role) => (
-              <Card key={role.id} className="bg-muted/60 border-border p-4 space-y-3 shadow-lg flex flex-col justify-between">
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-bold text-foreground text-sm flex items-center">
-                      <Shield className={`h-4 w-4 mr-2 ${role.is_system ? 'text-amber-400' : 'text-emerald-400'}`} />
-                      {role.name}
-                    </h3>
-                    {role.is_system && (
-                      <Badge variant="outline" className="border-amber-500/40 text-amber-400 text-[10px] bg-amber-500/10">
-                        Системная роль
-                      </Badge>
-                    )}
+              <Card key={role.id} className="bg-card border-border rounded-2xl p-5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Shield className="w-5 h-5 text-purple-400" />
+                    <h4 className="font-bold text-foreground text-sm">{role.name}</h4>
                   </div>
-
-                  <p className="text-xs text-muted-foreground min-h-[36px]">{role.description || 'Описание роли не указано.'}</p>
+                  {role.is_system && (
+                    <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-400">
+                      Системная
+                    </Badge>
+                  )}
                 </div>
 
-                <div className="pt-2 border-t border-border/80 space-y-2">
-                  <div className="flex items-center justify-between text-[10px] font-mono text-slate-500">
-                    <span>Модулей настроено: {Object.keys(role.permissions || {}).length}</span>
-                    {role.is_system && <span className="text-amber-400 font-bold">Нельзя удалить</span>}
-                  </div>
+                <p className="text-xs text-muted-foreground">{role.description || 'Описание не указано'}</p>
 
-                  <div className="flex items-center space-x-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleOpenRoleMatrix(role)}
-                      className="flex-1 border-border text-blue-400 hover:bg-blue-500/10 text-xs min-h-[36px]"
-                    >
-                      <Settings className="h-3.5 w-3.5 mr-1.5" />
-                      Настроить доступы
-                    </Button>
-
-                    {!role.is_system && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={async () => {
-                          if (confirm(`Удалить роль "${role.name}"?`)) {
-                            const res = await deleteCompanyRoleAction(role.id);
-                            if (res.success) {
-                              setRoles((prev) => prev.filter((r) => r.id !== role.id));
-                              setMsg({ type: 'success', text: `Роль "${role.name}" удалена` });
-                            } else {
-                              setMsg({ type: 'error', text: res.error || 'Ошибка удаления роли' });
-                            }
-                          }
-                        }}
-                        className="border-border text-red-400 hover:bg-red-500/10 text-xs min-h-[36px] px-2.5"
-                        title="Удалить пользовательскую роль"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    )}
-                  </div>
+                <div className="pt-2 flex justify-end">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleOpenRoleMatrix(role)}
+                    className="h-8 text-xs font-bold rounded-lg border-purple-500/40 text-purple-400 hover:bg-purple-500/10"
+                  >
+                    <Edit2 className="w-3.5 h-3.5 mr-1.5" />
+                    Настроить матрицу прав
+                  </Button>
                 </div>
               </Card>
             ))}
@@ -594,250 +590,215 @@ export default function EmployeesModulePage() {
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* МОДАЛЬНЫЕ ОКНА */}
-      {/* ========================================================================= */}
+      {/* МОДАЛЬНОЕ ОКНО ПРИНЯТИЯ ЗАЯВКИ */}
+      {approvingUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-md">
+          <Card className="max-w-md w-full bg-card border-border rounded-2xl p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-bold text-foreground">Принятие сотрудника в штат</h3>
+              <Button size="icon" variant="ghost" onClick={() => setApprovingUser(null)}>
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
 
-      {/* МОДАЛКА: Добавление сотрудника */}
-      {showAddEmpModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <Card className="w-full max-w-md bg-muted border-border text-foreground shadow-2xl">
-            <CardHeader className="border-b border-border">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base font-bold flex items-center">
-                  <UserPlus className="h-5 w-5 mr-2 text-blue-400" />
-                  Создать аккаунт сотрудника
-                </CardTitle>
-                <button onClick={() => setShowAddEmpModal(false)} className="text-muted-foreground hover:text-foreground">
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-            </CardHeader>
-            <form onSubmit={handleCreateEmployee}>
-              <CardContent className="space-y-4 pt-4 text-xs">
-                <div className="space-y-1">
-                  <Label className="text-foreground">ФИО Сотрудника *</Label>
-                  <Input
-                    placeholder="Например: Ивано Асан Рысбекович"
-                    value={newEmpName}
-                    onChange={(e) => setNewEmpName(e.target.value)}
-                    required
-                    className="bg-background border-border text-foreground text-xs rounded-xl min-h-[40px]"
-                  />
-                </div>
+            <p className="text-xs text-muted-foreground">
+              Зачисление пользователя <strong>{approvingUser.full_name}</strong> ({approvingUser.email})
+            </p>
 
-                <div className="space-y-1">
-                  <Label className="text-foreground">Логин / Email сотрудника *</Label>
-                  <Input
-                    type="email"
-                    placeholder="asan@company.kg"
-                    value={newEmpEmail}
-                    onChange={(e) => setNewEmpEmail(e.target.value)}
-                    required
-                    className="bg-background border-border text-foreground text-xs rounded-xl min-h-[40px]"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <Label className="text-foreground">Должность</Label>
-                  <Input
-                    placeholder="Например: Бухгалтер по расчетам"
-                    value={newEmpPosition}
-                    onChange={(e) => setNewEmpPosition(e.target.value)}
-                    className="bg-background border-border text-foreground text-xs rounded-xl min-h-[40px]"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <Label className="text-foreground">Назначенная Роль</Label>
-                  <select
-                    value={newEmpRoleId}
-                    onChange={(e) => setNewEmpRoleId(e.target.value)}
-                    className="w-full bg-background border border-border text-foreground text-xs rounded-xl px-3 py-2 min-h-[40px]"
-                  >
-                    <option value="">-- Выберите роль --</option>
-                    {roles.filter(r => r.id !== 'owner-system-role').map((r) => (
-                      <option key={r.id} value={r.id}>
-                        {r.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="space-y-1">
-                  <Label className="text-foreground">Временный пароль для первого входа</Label>
-                  <Input
-                    type="text"
-                    value={newEmpPassword}
-                    onChange={(e) => setNewEmpPassword(e.target.value)}
-                    required
-                    className="bg-background border-border text-amber-400 font-mono text-xs rounded-xl min-h-[40px]"
-                  />
-                  <p className="text-[10px] text-slate-500">Сотрудник сможет сменить этот пароль в своем профиле.</p>
-                </div>
-              </CardContent>
-
-              <CardFooter className="border-t border-border pt-4 flex justify-end space-x-2">
-                <Button variant="outline" type="button" onClick={() => setShowAddEmpModal(false)} className="border-border text-foreground text-xs">
-                  Отмена
-                </Button>
-                <Button type="submit" disabled={isPending} className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs">
-                  {isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <UserPlus className="h-4 w-4 mr-2" />}
-                  Создать аккаунт
-                </Button>
-              </CardFooter>
-            </form>
-          </Card>
-        </div>
-      )}
-
-      {/* МОДАЛКА: Сброс пароля сотрудника */}
-      {resetPwdEmp && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <Card className="w-full max-w-md bg-muted border-border text-foreground shadow-2xl">
-            <CardHeader className="border-b border-border">
-              <CardTitle className="text-base font-bold flex items-center">
-                <Key className="h-5 w-5 mr-2 text-amber-400" />
-                Сброс пароля сотруднику: {resetPwdEmp.full_name}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 pt-4 text-xs">
-              <div className="space-y-1">
-                <Label className="text-foreground">Новый временный пароль *</Label>
+            <form onSubmit={handleApproveSubmit} className="space-y-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Должность в компании</Label>
                 <Input
-                  type="text"
-                  placeholder="Введите новый пароль (мин. 6 символов)"
-                  value={adminNewPassword}
-                  onChange={(e) => setAdminNewPassword(e.target.value)}
-                  className="bg-background border-border text-foreground text-xs rounded-xl min-h-[40px]"
+                  value={approvePosition}
+                  onChange={(e) => setApprovePosition(e.target.value)}
+                  placeholder="Менеджер по продажам"
+                  className="h-10 text-xs bg-muted/40 rounded-xl"
                 />
               </div>
-            </CardContent>
-            <CardFooter className="border-t border-border pt-4 flex justify-end space-x-2">
-              <Button variant="outline" onClick={() => setResetPwdEmp(null)} className="border-border text-foreground text-xs">
-                Отмена
-              </Button>
-              <Button onClick={handleResetEmployeePassword} disabled={isPending || !adminNewPassword} className="bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs">
-                {isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Check className="h-4 w-4 mr-2" />}
-                Установить пароль
-              </Button>
-            </CardFooter>
-          </Card>
-        </div>
-      )}
 
-      {/* МОДАЛКА: Создание роли */}
-      {showAddRoleModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <Card className="w-full max-w-md bg-muted border-border text-foreground shadow-2xl">
-            <CardHeader className="border-b border-border">
-              <CardTitle className="text-base font-bold flex items-center">
-                <Shield className="h-5 w-5 mr-2 text-emerald-400" />
-                Создать новую роль
-              </CardTitle>
-            </CardHeader>
-            <form onSubmit={handleCreateRole}>
-              <CardContent className="space-y-3 pt-4 text-xs">
-                <div className="space-y-1">
-                  <Label className="text-foreground">Название роли *</Label>
-                  <Input
-                    placeholder="Например: Главный бухгалтер"
-                    value={newRoleName}
-                    onChange={(e) => setNewRoleName(e.target.value)}
-                    required
-                    className="bg-background border-border text-foreground text-xs rounded-xl min-h-[40px]"
-                  />
-                </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Назначаемая Роль</Label>
+                <select
+                  value={approveRoleId}
+                  onChange={(e) => setApproveRoleId(e.target.value)}
+                  className="w-full h-10 px-3 rounded-xl bg-muted/40 border border-border text-xs text-foreground focus:outline-none"
+                >
+                  {roles.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-                <div className="space-y-1">
-                  <Label className="text-foreground">Описание роли</Label>
-                  <Input
-                    placeholder="Краткое описание обязанностей роли"
-                    value={newRoleDesc}
-                    onChange={(e) => setNewRoleDesc(e.target.value)}
-                    className="bg-background border-border text-foreground text-xs rounded-xl min-h-[40px]"
-                  />
-                </div>
-              </CardContent>
-
-              <CardFooter className="border-t border-border pt-4 flex justify-end space-x-2">
-                <Button variant="outline" type="button" onClick={() => setShowAddRoleModal(false)} className="border-border text-foreground text-xs">
+              <div className="pt-2 flex justify-end gap-2">
+                <Button type="button" variant="ghost" onClick={() => setApprovingUser(null)} className="h-10 text-xs">
                   Отмена
                 </Button>
-                <Button type="submit" disabled={isPending} className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs">
-                  Создать роль
+                <Button type="submit" disabled={isPending} className="h-10 text-xs font-bold bg-emerald-600 text-white rounded-xl">
+                  Подтвердить прием
                 </Button>
-              </CardFooter>
+              </div>
             </form>
           </Card>
         </div>
       )}
 
-      {/* МОДАЛКА: Настройка Матрицы Доступов (ACL Matrix) */}
+      {/* МОДАЛЬНОЕ ОКНО РЕДАКТИРОВАНИЯ РОЛИ И ДОЛЖНОСТИ */}
+      {editingEmp && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-md">
+          <Card className="max-w-md w-full bg-card border-border rounded-2xl p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-bold text-foreground">Изменение Роли и Должности</h3>
+              <Button size="icon" variant="ghost" onClick={() => setEditingEmp(null)}>
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              Сотрудник: <strong>{editingEmp.full_name}</strong> ({editingEmp.email})
+            </p>
+
+            <form onSubmit={handleSaveRoleAndPosition} className="space-y-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Должность в компании</Label>
+                <Input
+                  value={editPosition}
+                  onChange={(e) => setEditPosition(e.target.value)}
+                  placeholder="Бухгалтер / Менеджер"
+                  className="h-10 text-xs bg-muted/40 rounded-xl"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Системная Роль</Label>
+                <select
+                  value={editRoleId}
+                  onChange={(e) => setEditRoleId(e.target.value)}
+                  className="w-full h-10 px-3 rounded-xl bg-muted/40 border border-border text-xs text-foreground focus:outline-none"
+                >
+                  {roles.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2">
+                <Button type="button" variant="ghost" onClick={() => setEditingEmp(null)} className="h-10 text-xs">
+                  Отмена
+                </Button>
+                <Button type="submit" disabled={isPending} className="h-10 text-xs font-bold rounded-xl">
+                  Сохранить изменения
+                </Button>
+              </div>
+            </form>
+          </Card>
+        </div>
+      )}
+
+      {/* МОДАЛЬНОЕ ОКНО СОЗДАНИЯ РОЛИ */}
+      {showAddRoleModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-md">
+          <Card className="max-w-md w-full bg-card border-border rounded-2xl p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-bold text-foreground">Создание новой роли</h3>
+              <Button size="icon" variant="ghost" onClick={() => setShowAddRoleModal(false)}>
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+
+            <form onSubmit={handleCreateRole} className="space-y-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Название роли</Label>
+                <Input
+                  value={newRoleName}
+                  onChange={(e) => setNewRoleName(e.target.value)}
+                  placeholder="Старший Закупщик / Фин. Контролер"
+                  className="h-10 text-xs bg-muted/40 rounded-xl"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Описание роли</Label>
+                <Input
+                  value={newRoleDesc}
+                  onChange={(e) => setNewRoleDesc(e.target.value)}
+                  placeholder="Отвечает за выгрузку актов в 1С"
+                  className="h-10 text-xs bg-muted/40 rounded-xl"
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2">
+                <Button type="button" variant="ghost" onClick={() => setShowAddRoleModal(false)} className="h-10 text-xs">
+                  Отмена
+                </Button>
+                <Button type="submit" disabled={isPending} className="h-10 text-xs font-bold bg-purple-600 text-white rounded-xl">
+                  Создать роль
+                </Button>
+              </div>
+            </form>
+          </Card>
+        </div>
+      )}
+
+      {/* РЕДАКТОР МАТРИЦЫ ПРАВ РОЛИ */}
       {editingRole && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
-          <Card className="w-full max-w-3xl bg-muted border-border text-foreground shadow-2xl max-h-[90vh] flex flex-col">
-            <CardHeader className="border-b border-border flex-shrink-0">
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="text-base font-bold flex items-center">
-                    <Settings className="h-5 w-5 mr-2 text-emerald-400" />
-                    Матрица Доступов Роли: {editingRole.name}
-                  </CardTitle>
-                  <CardDescription className="text-xs text-muted-foreground">Настройте гибкие разрешения отдельно для каждого модуля платформы.</CardDescription>
-                </div>
-                <button onClick={() => setEditingRole(null)} className="text-muted-foreground hover:text-foreground">
-                  <X className="h-5 w-5" />
-                </button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-md overflow-y-auto">
+          <Card className="max-w-3xl w-full bg-card border-border rounded-2xl p-6 space-y-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-border pb-4">
+              <div>
+                <h3 className="text-lg font-bold text-foreground">Матрица доступов роли "{editingRole.name}"</h3>
+                <p className="text-xs text-muted-foreground">Настройка видимости модулей и разрешенных экшенов</p>
               </div>
-            </CardHeader>
+              <Button size="icon" variant="ghost" onClick={() => setEditingRole(null)}>
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
 
-            <CardContent className="space-y-4 pt-4 overflow-y-auto flex-1 text-xs">
-              <div className="space-y-4">
-                {Object.entries(MODULE_CONFIG).map(([modId, modConf]) => (
-                  <div key={modId} className="p-4 rounded-xl bg-background/80 border border-border space-y-3">
-                    <span className="font-bold text-foreground text-sm font-mono flex items-center">
-                      <ShieldAlert className="h-4 w-4 mr-2 text-blue-400" />
-                      {modConf.label}
-                    </span>
+            <div className="space-y-6">
+              {Object.entries(MODULE_CONFIG).map(([modKey, mod]) => (
+                <div key={modKey} className="space-y-2 border-b border-border/60 pb-4">
+                  <h4 className="font-bold text-sm text-foreground">{mod.label}</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {mod.actions.map((act) => {
+                      const modPerms = (rolePermissions as any)[modKey] || {};
+                      const isChecked = !!modPerms[act.key];
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {modConf.actions.map((act) => {
-                        const isChecked = !!(rolePermissions as any)[modId]?.[act.key];
-                        return (
-                          <label
-                            key={act.key}
-                            className={`flex items-center space-x-2.5 p-2.5 rounded-xl border cursor-pointer transition-all ${
-                              isChecked
-                                ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-300 font-bold'
-                                : 'bg-muted border-border text-muted-foreground hover:border-slate-700'
-                            }`}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={isChecked}
-                              onChange={() => togglePermission(modId, act.key)}
-                              className="rounded border-slate-700 bg-background text-emerald-500 focus:ring-0 h-4 w-4 flex-shrink-0"
-                            />
-                            <span className="text-xs">{act.label}</span>
-                          </label>
-                        );
-                      })}
-                    </div>
+                      return (
+                        <label
+                          key={act.key}
+                          className={`flex items-center space-x-2.5 p-2 rounded-xl border text-xs cursor-pointer select-none transition-all ${
+                            isChecked
+                              ? 'bg-purple-600/10 border-purple-500/40 text-purple-300 font-bold'
+                              : 'bg-muted/20 border-border/60 text-muted-foreground'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => togglePermission(modKey, act.key)}
+                            className="rounded border-border text-purple-600 focus:ring-purple-500"
+                          />
+                          <span>{act.label}</span>
+                        </label>
+                      );
+                    })}
                   </div>
-                ))}
-              </div>
-            </CardContent>
+                </div>
+              ))}
+            </div>
 
-            <CardFooter className="border-t border-border pt-4 flex justify-end space-x-2 flex-shrink-0">
-              <Button variant="outline" onClick={() => setEditingRole(null)} className="border-border text-foreground text-xs">
+            <div className="pt-2 flex justify-end gap-2 border-t border-border">
+              <Button variant="ghost" onClick={() => setEditingRole(null)} className="h-10 text-xs">
                 Отмена
               </Button>
-              <Button onClick={handleSaveRoleMatrix} disabled={isPending} className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md">
-                {isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Check className="h-4 w-4 mr-2" />}
+              <Button onClick={handleSaveRoleMatrix} className="h-10 text-xs font-bold bg-purple-600 text-white rounded-xl">
                 Сохранить матрицу прав
               </Button>
-            </CardFooter>
+            </div>
           </Card>
         </div>
       )}

@@ -78,6 +78,27 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(url);
       }
     }
+
+    // Если пользователь — не утвержденный сотрудник (company_id есть, но role_id не назначен и он не owner/super_admin)
+    if (pathname.startsWith('/dashboard') && pathname !== '/dashboard/pending') {
+      const { data: dbUser } = await supabase
+        .from('users')
+        .select('company_id, role, role_id, is_super_admin')
+        .eq('id', user.id)
+        .single();
+
+      if (
+        dbUser &&
+        !dbUser.is_super_admin &&
+        dbUser.role !== 'owner' &&
+        dbUser.company_id &&
+        !dbUser.role_id
+      ) {
+        const url = request.nextUrl.clone();
+        url.pathname = '/dashboard/pending';
+        return NextResponse.redirect(url);
+      }
+    }
   }
 
   return supabaseResponse;

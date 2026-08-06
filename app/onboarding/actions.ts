@@ -123,3 +123,78 @@ export async function createCompanyAction(
 
   redirect('/dashboard');
 }
+
+/**
+ * Получение списка активных компаний для выпадающего списка Onboarding (только id и name)
+ */
+export async function getPublicCompaniesListAction(): Promise<ActionResponse<{ id: string; name: string }[]>> {
+  try {
+    const adminSupabase = createAdminClient();
+    const { data, error } = await adminSupabase
+      .from('companies')
+      .select('id, name')
+      .eq('is_active', true)
+      .order('name');
+
+    if (error) {
+      return { success: false, error: ` Ошибка получения списка организаций: ${error.message}` };
+    }
+
+    return { success: true, data: data || [] };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Сбой получения компаний' };
+  }
+}
+
+/**
+ * Подача заявки сотрудником на присоединение к компании (со статусом 'pending')
+ */
+export async function submitJoinCompanyRequestAction(
+  companyId: string,
+  position?: string
+): Promise<ActionResponse<{ message: string }>> {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return { success: false, error: 'Пользователь не авторизован' };
+    }
+
+    const adminSupabase = createAdminClient();
+
+    // Проверяем, нет ли уже поданной заявки
+    const { data: existingUser } = await adminSupabase
+      .from('users')
+      .select('company_id')
+      .eq('id', user.id)
+      .single();
+
+    if (existingUser?.company_id) {
+      return { success: false, error: 'Вы уже подали заявку или состояте в компании' };
+    }
+
+    // Записываем ID компании пользователю и ставим статус заявки
+    const { error: updateError } = await adminSupabase
+      .from('users')
+      .update({
+        company_id: companyId,
+        position: position || 'Сотрудник',
+        role: 'manager',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', user.id);
+
+    if (updateError) {
+      return { success: false, error: `Ошибка подачи заявки: ${updateError.message}` };
+    }
+
+    revalidatePath('/', 'layout');
+    return { success: true, data: { message: 'Заявка успешно отправлена владельцу компании' } };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Сбой подачи заявки' };
+  }
+}
+
