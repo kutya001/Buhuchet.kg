@@ -6,7 +6,7 @@ export type EsfStatus = 'not_checked' | 'matched' | 'mismatch';
 export type SubscriptionPlan = 'basic' | 'standard' | 'pro';
 export type PaymentMethod = 'qr_mbank' | 'qr_optima' | 'manual_admin';
 
-export type PartnershipStatus = 'pending' | 'sent' | 'recalled' | 'approved' | 'rejected' | 'suspended';
+export type PartnershipStatus = 'pending' | 'sent' | 'recalled' | 'approved' | 'rejected' | 'accepted' | 'cancelled' | 'suspended';
 export type CompanyStatus = 'pending_approval' | 'requires_changes' | 'active' | 'blocked';
 
 export const INDUSTRIES = [
@@ -20,7 +20,7 @@ export const INDUSTRIES = [
   'Прочее',
 ] as const;
 
-export type LegalForm = 'ИП' | 'ОсОО' | 'ЗАО' | 'ОАО';
+export type LegalForm = 'ИП' | 'ОсОО' | 'ЗАО' | 'ОАО' | 'КФХ';
 
 export interface CompanyPrivacySettings {
   show_phone: boolean;
@@ -165,7 +165,7 @@ export interface FileRecord {
   size_bytes?: number | null;
   file_type?: string | null;
   file_path_r2?: string | null;
-  description: string;
+  description?: string | null;
   comment?: string | null;
   is_internal?: boolean;
   is_legal_doc?: boolean;

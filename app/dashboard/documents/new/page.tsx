@@ -242,7 +242,7 @@ export default function NewB2BDocumentPage() {
   const filteredArchiveFiles = archiveFiles.filter(
     (f) =>
       f.file_name.toLowerCase().includes(archiveSearchTerm.toLowerCase()) ||
-      f.description.toLowerCase().includes(archiveSearchTerm.toLowerCase())
+      (f.description || '').toLowerCase().includes(archiveSearchTerm.toLowerCase())
   );
 
   return (

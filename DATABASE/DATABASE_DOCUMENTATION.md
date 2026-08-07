@@ -99,6 +99,8 @@
 | `position` | `VARCHAR(100)` | `DEFAULT 'Сотрудник'` | Должность сотрудника в штатном расписании. |
 | `role` | `TEXT` | `CHECK (IN ('owner', 'accountant', 'manager'))` | Категория аккаунта (`owner` — Владелец). |
 | `is_super_admin` | `BOOLEAN` | `DEFAULT FALSE` | Флаг глобального Суперадминистратора платформы. |
+| `is_active` | `BOOLEAN` | `DEFAULT TRUE` | Флаг активности учетной записи пользователя. |
+| `must_change_password` | `BOOLEAN` | `DEFAULT FALSE` | Флаг принудительной смены пароля при следующем входе. |
 | `created_at` | `TIMESTAMPTZ` | `DEFAULT NOW()` | Дата регистрации аккаунта. |
 | `updated_at` | `TIMESTAMPTZ` | `DEFAULT NOW()` | Дата последнего изменения профиля. |
 
@@ -181,6 +183,8 @@
 | `name` | `TEXT` | `NOT NULL` | Наименование (*Уставные документы, Акты сверки*). |
 | `code` | `TEXT` | `UNIQUE` | Символьный системный код категории. |
 | `description` | `TEXT` | `NULLABLE` | Подробное описание предназначения категории. |
+| `icon` | `TEXT` | `NULLABLE` | Иконка категории (Lucide Icon name). |
+| `is_active` | `BOOLEAN` | `DEFAULT TRUE` | Флаг активности категории. |
 | `created_at` | `TIMESTAMPTZ` | `DEFAULT NOW()` | Дата внесения категории. |
 
 ---
@@ -196,16 +200,19 @@
 | `author_id` | `UUID` | `FOREIGN KEY (users.id)` | Автор/составитель документа. |
 | `sender_company_id` |`UUID` | `FOREIGN KEY (companies.id)` | Организация-отправитель. |
 | `receiver_company_id`|`UUID` | `FOREIGN KEY (companies.id)` | Организация-получатель. |
+| `sender_user_id` | `UUID` | `FOREIGN KEY (users.id) NULLABLE` | Конкретный сотрудник-отправитель. |
+| `receiver_user_id` | `UUID` | `FOREIGN KEY (users.id) NULLABLE` | Конкретный сотрудник-получатель. |
 | `counterparty_id` |`UUID` | `FOREIGN KEY (counterparties.id)`| Ссылка на контрагента из справочника. |
 | `doc_number` | `VARCHAR(50)`| `NULLABLE` | Номер первичного документа. |
 | `doc_date` | `DATE` | `DEFAULT CURRENT_DATE` | Дата выписки документа. |
 | `doc_type` | `TEXT` | `CHECK (IN ('realization', 'purchase', 'payment', 'advance'))` | Вид хозяйственной операции. |
-| `status` | `TEXT` | `CHECK (IN ('draft', 'sent', 'accepted', 'processed', 'cancelled'))` | Статус согласования ЭДО. |
+| `status` | `TEXT` | `CHECK (IN ('draft', 'sent', 'recalled', 'accepted', 'processed', 'cancelled'))` | Статус согласования ЭДО. |
 | `total_amount` | `NUMERIC(12,2)`| `DEFAULT 0.00` | Итоговая сумма документа в сомах (KGS). |
 | `comment` | `TEXT` | `NULLABLE` | Примечание составления. |
 | `file_path_r2` | `TEXT` | `NULLABLE` | Путь к прикрепленному скану в Cloudflare R2. |
 | `mock_file_name` | `TEXT` | `NULLABLE` | Оригинальное имя загруженного файла. |
 | `mock_file_size` | `BIGINT` | `NULLABLE` | Размер прикрепленного файла в байтах. |
+| `mock_file_status` | `TEXT` | `NULLABLE` | Временный статус мок-файла. |
 | `created_at` | `TIMESTAMPTZ` | `DEFAULT NOW()` | Дата формирования документа. |
 | `updated_at` | `TIMESTAMPTZ` | `DEFAULT NOW()` | Дата последнего изменения. |
 

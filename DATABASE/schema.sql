@@ -64,6 +64,8 @@ CREATE TABLE IF NOT EXISTS public.users (
   position VARCHAR(100) DEFAULT 'Сотрудник',
   role TEXT CHECK (role IN ('owner', 'accountant', 'manager')) DEFAULT 'manager',
   is_super_admin BOOLEAN DEFAULT FALSE,
+  is_active BOOLEAN DEFAULT TRUE,
+  must_change_password BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -133,6 +135,8 @@ CREATE TABLE IF NOT EXISTS public.file_categories (
   name TEXT NOT NULL,
   code TEXT UNIQUE,
   description TEXT,
+  icon TEXT,
+  is_active BOOLEAN DEFAULT TRUE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
@@ -145,16 +149,19 @@ CREATE TABLE IF NOT EXISTS public.documents (
   author_id UUID REFERENCES public.users(id) ON DELETE SET NULL NOT NULL,
   sender_company_id UUID REFERENCES public.companies(id) ON DELETE CASCADE NOT NULL,
   receiver_company_id UUID REFERENCES public.companies(id) ON DELETE CASCADE NOT NULL,
+  sender_user_id UUID REFERENCES public.users(id) ON DELETE SET NULL,
+  receiver_user_id UUID REFERENCES public.users(id) ON DELETE SET NULL,
   counterparty_id UUID REFERENCES public.counterparties(id) ON DELETE SET NULL,
   doc_number VARCHAR(50),
   doc_date DATE DEFAULT CURRENT_DATE,
   doc_type TEXT CHECK (doc_type IN ('realization', 'purchase', 'payment', 'advance')) NOT NULL,
-  status TEXT CHECK (status IN ('draft', 'sent', 'accepted', 'processed', 'cancelled')) DEFAULT 'draft',
+  status TEXT CHECK (status IN ('draft', 'sent', 'recalled', 'accepted', 'processed', 'cancelled')) DEFAULT 'draft',
   total_amount NUMERIC(12, 2) DEFAULT 0.00,
   comment TEXT,
   file_path_r2 TEXT,
   mock_file_name TEXT,
   mock_file_size BIGINT,
+  mock_file_status TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
