@@ -128,6 +128,39 @@ export default async function DashboardPage() {
         )}
       </div>
 
+      {/* Баннер при отсутствии компании */}
+      {!companyId && !profile?.is_super_admin && (
+        <Card className="bg-gradient-to-r from-blue-950/60 via-slate-900/80 to-blue-900/40 border-blue-500/40 p-6 rounded-2xl shadow-2xl backdrop-blur-xl">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="space-y-1.5">
+              <div className="flex items-center space-x-2 text-blue-400 font-bold text-base">
+                <Building2 className="w-5 h-5 shrink-0" />
+                <span>Организация не привязана</span>
+              </div>
+              <p className="text-xs sm:text-sm text-muted-foreground max-w-2xl leading-relaxed">
+                Для доступа к функциям ЭДО, отправке первичных документов и работе с контрагентами необходимо зарегистрировать вашу компанию или отправить заявку на присоединение.
+              </p>
+            </div>
+            <Link href="/onboarding" prefetch={true} className="w-full md:w-auto shrink-0">
+              <button className="w-full md:w-auto px-5 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs sm:text-sm transition-all shadow-lg flex items-center justify-center space-x-2 min-h-[48px]">
+                <span>Пройти Онбординг</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </Link>
+          </div>
+        </Card>
+      )}
+
+      {/* Баннер модерации (pending_approval) */}
+      {company?.status === 'pending_approval' && !profile?.is_super_admin && (
+        <div className="flex items-center space-x-3 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-400">
+          <Clock className="h-5 w-5 shrink-0 animate-pulse" />
+          <p className="text-xs sm:text-sm font-medium">
+            Ваша организация <strong>«{company.name}»</strong> находится на модерации Суперадминистратором. Обмен документами будет доступен сразу после подтверждения.
+          </p>
+        </div>
+      )}
+
       {/* 1. ГЛАВНЫЕ ПОКАЗАТЕЛИ ДЕЯТЕЛЬНОСТИ (СТАТИСТИКА B2B) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="bg-card border-border backdrop-blur-xl hover:border-sky-500/40 transition-colors shadow-xl">
