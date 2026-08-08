@@ -175,8 +175,8 @@ export async function respondToPartnershipRequestAction(
       return { success: false, error: `Ошибка обновления статуса: ${updateError.message}` };
     }
 
-    // 2. Если заявка одобрена (approved) — гарантированно связываем контрагентов в обе стороны
-    if (newStatus === 'approved') {
+    // 2. Если заявка одобрена (approved / accepted) — гарантированно связываем контрагентов в обе стороны
+    if (newStatus === 'approved' || newStatus === 'accepted') {
       const { data: compList } = await adminSupabase
         .from('companies')
         .select('*')
@@ -394,14 +394,14 @@ export async function terminatePartnershipAction(
       })
       .or(`and(requester_company_id.eq.${ctx.companyId},target_company_id.eq.${partnershipIdOrTargetCompanyId}),and(requester_company_id.eq.${partnershipIdOrTargetCompanyId},target_company_id.eq.${ctx.companyId}),id.eq.${partnershipIdOrTargetCompanyId}`);
 
-    // 2. Удаляем запись из таблицы counterparties
+    // 2. Удаляем записи из таблицы counterparties
     await adminSupabase
       .from('counterparties')
       .delete()
-      .eq('company_id', ctx.companyId)
-      .eq('id', partnershipIdOrTargetCompanyId);
+      .or(`and(company_id.eq.${ctx.companyId},or(id.eq.${partnershipIdOrTargetCompanyId},target_company_id.eq.${partnershipIdOrTargetCompanyId})),and(target_company_id.eq.${ctx.companyId},company_id.eq.${partnershipIdOrTargetCompanyId})`);
 
     revalidatePath('/dashboard/counterparties');
+    revalidatePath('/dashboard/documents/new');
     return { success: true };
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : 'Сбой при прекращении сотрудничества';

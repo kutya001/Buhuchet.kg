@@ -80,25 +80,43 @@ export default function NewB2BDocumentPage() {
 
       // 1. Подтвержденные компании-партнеры
       if (myCompanyId) {
-        const { data: partData } = await supabase
-          .from('company_partnerships')
-          .select('*, requester_company:companies!requester_company_id(*), target_company:companies!target_company_id(*)')
-          .eq('status', 'approved')
-          .or(`requester_company_id.eq.${myCompanyId},target_company_id.eq.${myCompanyId}`);
+        const [partRes, counterpartyRes] = await Promise.all([
+          supabase
+            .from('company_partnerships')
+            .select('*, requester_company:companies!requester_company_id(*), target_company:companies!target_company_id(*)')
+            .or('status.eq.approved,status.eq.accepted')
+            .or(`requester_company_id.eq.${myCompanyId},target_company_id.eq.${myCompanyId}`),
+          supabase
+            .from('counterparties')
+            .select('target_company_id, target_company:companies!target_company_id(*)')
+            .eq('company_id', myCompanyId)
+            .not('target_company_id', 'is', null)
+        ]);
 
-        if (partData) {
-          const approvedPartners: Company[] = [];
-          partData.forEach((p: any) => {
+        const partnerMap = new Map<string, Company>();
+
+        if (partRes.data) {
+          partRes.data.forEach((p: any) => {
             if (p.requester_company_id === myCompanyId && p.target_company) {
-              approvedPartners.push(p.target_company);
+              partnerMap.set(p.target_company.id, p.target_company);
             } else if (p.target_company_id === myCompanyId && p.requester_company) {
-              approvedPartners.push(p.requester_company);
+              partnerMap.set(p.requester_company.id, p.requester_company);
             }
           });
-          setPartners(approvedPartners);
-          if (approvedPartners.length > 0 && !editDocId) {
-            setReceiverCompanyId(approvedPartners[0].id);
-          }
+        }
+
+        if (counterpartyRes.data) {
+          counterpartyRes.data.forEach((c: any) => {
+            if (c.target_company && !partnerMap.has(c.target_company.id)) {
+              partnerMap.set(c.target_company.id, c.target_company);
+            }
+          });
+        }
+
+        const approvedPartners = Array.from(partnerMap.values());
+        setPartners(approvedPartners);
+        if (approvedPartners.length > 0 && !editDocId) {
+          setReceiverCompanyId(approvedPartners[0].id);
         }
       }
 

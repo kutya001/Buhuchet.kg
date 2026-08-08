@@ -666,7 +666,7 @@ export default function CounterpartiesPage() {
     },
     {
       key: 'actions',
-      label: 'Действие',
+      label: 'Статус и Сотрудничество',
       sortable: false,
       render: (c) => {
         const existingP = partnerships.find(
@@ -675,21 +675,72 @@ export default function CounterpartiesPage() {
             (p.target_company_id === currentCompanyId && p.requester_company_id === c.id)
         );
 
-        if (existingP?.status === 'approved') {
+        if (existingP?.status === 'approved' || existingP?.status === 'accepted') {
           return (
-            <Badge className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs">
-              <Check className="h-3 w-3 mr-1" />
-              В сети партнеров
-            </Badge>
+            <div className="flex items-center space-x-2">
+              <Badge className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs py-1.5 px-3">
+                <Check className="h-3.5 w-3.5 mr-1" />
+                В сети партнеров
+              </Badge>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => handleTerminatePartnership(c.id)}
+                disabled={isPending}
+                className="h-8 text-xs border-rose-500/40 text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 font-medium rounded-xl px-3"
+                title="Прекратить сотрудничество с этой организацией"
+              >
+                <UserX className="h-3.5 w-3.5 mr-1" />
+                Прекратить сотрудничество
+              </Button>
+            </div>
           );
         }
 
         if (existingP?.status === 'pending') {
+          const isOutgoing = existingP.requester_company_id === currentCompanyId;
           return (
-            <Badge className="bg-blue-500/20 text-blue-400 border border-blue-500/30 text-xs">
-              <Clock className="h-3 w-3 mr-1 animate-pulse" />
-              Заявка на рассмотрении
-            </Badge>
+            <div className="flex items-center space-x-2">
+              {isOutgoing ? (
+                <>
+                  <Badge className="bg-blue-500/20 text-blue-400 border border-blue-500/30 text-xs py-1.5 px-3">
+                    <Clock className="h-3.5 w-3.5 mr-1 animate-pulse" />
+                    Заявка отправлена
+                  </Badge>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleTerminatePartnership(c.id)}
+                    disabled={isPending}
+                    className="h-8 text-xs border-slate-700 text-slate-300 hover:bg-slate-800 rounded-xl px-3"
+                    title="Отозвать заявку"
+                  >
+                    Отозвать
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button
+                    size="sm"
+                    onClick={() => handleRespondRequest(existingP.id, 'approved')}
+                    disabled={isPending}
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs h-8 rounded-xl px-3"
+                  >
+                    <Check className="h-3.5 w-3.5 mr-1" />
+                    Принять
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleRespondRequest(existingP.id, 'rejected')}
+                    disabled={isPending}
+                    className="h-8 text-xs border-rose-500/40 text-rose-400 hover:bg-rose-500/10 rounded-xl px-3"
+                  >
+                    Отклонить
+                  </Button>
+                </>
+              )}
+            </div>
           );
         }
 
@@ -698,7 +749,7 @@ export default function CounterpartiesPage() {
             size="sm"
             onClick={() => handleSendRequest(c.id)}
             disabled={isPending}
-            className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs min-h-[36px] rounded-xl"
+            className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs min-h-[36px] rounded-xl px-4 shadow-md"
           >
             <Send className="h-3.5 w-3.5 mr-1.5" />
             Отправить заявку B2B
