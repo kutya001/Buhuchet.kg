@@ -347,7 +347,7 @@ export default function B2BDocumentDetailPage() {
           }`}
         >
           <Eye className="h-4 w-4" />
-          <span>Просмотр Скана R2</span>
+          <span>Просмотр файла</span>
         </button>
 
         <button
@@ -365,7 +365,7 @@ export default function B2BDocumentDetailPage() {
 
       {/* Split-Screen Workspace */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-6 flex-1 min-h-0 overflow-hidden">
-        {/* Левая колонка: Просмотрщик скана R2 */}
+        {/* Левая колонка: Просмотрщик скана */}
         <div className={`lg:col-span-6 flex flex-col h-full min-h-[350px] ${mobileTab === 'scan' ? 'flex' : 'hidden lg:flex'}`}>
           {document.files && document.files.length > 1 && (
             <div className="flex items-center space-x-2 mb-2 overflow-x-auto pb-1 flex-shrink-0">
@@ -442,12 +442,12 @@ export default function B2BDocumentDetailPage() {
             </CardContent>
           </Card>
 
-          {/* МЕТАДАТА СКАНОВ (R2) */}
+          {/* МЕТАДАТА СКАНОВ */}
           <Card className="bg-background/40 border-border">
             <CardHeader className="pb-2 pt-4">
               <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider font-mono flex items-center">
                 <Paperclip className="h-3.5 w-3.5 mr-1.5 text-emerald-400" />
-                Прикрепленные сканы R2 ({document.files?.length || 0})
+                Прикрепленные файлы ({document.files?.length || 0})
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 text-xs">

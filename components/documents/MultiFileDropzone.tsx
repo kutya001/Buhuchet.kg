@@ -338,7 +338,7 @@ export function MultiFileDropzone({
       {globalUploading && (
         <div className="flex items-center justify-center space-x-2 py-3 text-blue-400 bg-blue-500/10 rounded-xl border border-blue-500/20">
           <Loader2 className="h-5 w-5 animate-spin" />
-          <span className="text-sm font-medium">Пакетная передача файлов в Cloudflare R2...</span>
+          <span className="text-sm font-medium">Пакетная передача файлов...</span>
         </div>
       )}
 
@@ -347,7 +347,7 @@ export function MultiFileDropzone({
         <div className="space-y-3 pt-2">
           <Label className="text-xs font-mono uppercase text-muted-foreground flex items-center justify-between">
             <span>Прикрепленные сканы ({files.length})</span>
-            <span className="text-[10px] text-emerald-400 font-semibold">Copy-on-Write (CoW) Ready</span>
+            <span className="text-[10px] text-emerald-400 font-semibold">Общий доступ защищен</span>
           </Label>
 
           {files.map((file) => (
@@ -367,7 +367,7 @@ export function MultiFileDropzone({
                   <div className="truncate">
                     <p className="text-sm font-medium text-foreground truncate">{file.file_name}</p>
                     <p className="text-[11px] text-slate-400 font-mono">
-                      {formatBytes(file.size_bytes)} • {file.file_path_r2 ? '✅ Готов в R2' : 'Загрузка...'}
+                      {formatBytes(file.size_bytes)} • {file.file_path_r2 ? '✅ Готов к сохранению' : 'Загрузка...'}
                     </p>
                   </div>
                 </div>
@@ -388,7 +388,7 @@ export function MultiFileDropzone({
               {file.uploading && (
                 <div className="space-y-1">
                   <div className="flex justify-between text-[10px] font-mono text-slate-400">
-                    <span>Загрузка в R2</span>
+                    <span>Загрузка файла</span>
                     <span>{file.progress || 0}%</span>
                   </div>
                   <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden">

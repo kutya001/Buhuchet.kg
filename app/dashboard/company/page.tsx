@@ -488,11 +488,11 @@ export default function CompanyProfilePage() {
         <ClosedPeriodsJournal canEdit={canEditCompanyProfile(currentProfile, company?.id)} />
       )}
 
-      {/* МОДАЛЬНОЕ ОКНО РЕДАКТИРОВАНИЯ И ЗАМЕНЫ ФАЙЛА R2 (UnifiedFormModal) */}
+      {/* МОДАЛЬНОЕ ОКНО РЕДАКТИРОВАНИЯ И ЗАМЕНЫ ФАЙЛА (UnifiedFormModal) */}
       <UnifiedFormModal
         isOpen={!!editingDoc}
         onClose={() => setEditingDoc(null)}
-        title="Редактирование / Замена Файла R2"
+        title="Редактирование / Замена Файла"
         subtitle="Изменение категорий и замена исходного скана"
         mode="edit"
         onSubmit={(e) => {

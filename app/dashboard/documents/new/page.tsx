@@ -470,7 +470,7 @@ export default function NewB2BDocumentPage() {
                   Выбрать скан из Личного Архива / Устава
                 </CardTitle>
                 <CardDescription className="text-xs text-muted-foreground">
-                  Повторное прикрепление ранее загруженных R2-файлов
+                  Повторное прикрепление ранее загруженных файлов
                 </CardDescription>
               </div>
               <Button

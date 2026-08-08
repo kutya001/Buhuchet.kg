@@ -69,7 +69,7 @@ export function ScanViewer({
             <a href={realDownloadUrl} target="_blank" rel="noopener noreferrer" download>
               <Button variant="ghost" size="sm" className="h-8 text-xs text-blue-400 hover:text-blue-500 hover:bg-muted">
                 <Download className="h-3.5 w-3.5 mr-1" />
-                Скачать из R2
+                Скачать файл
               </Button>
             </a>
           )}
@@ -95,7 +95,7 @@ export function ScanViewer({
         {loadingUrl ? (
           <div className="flex items-center space-x-2 text-muted-foreground">
             <Loader2 className="h-5 w-5 animate-spin text-blue-400" />
-            <span>Генерация безопасной ссылки R2...</span>
+            <span>Генерация ссылки для скачивания...</span>
           </div>
         ) : realDownloadUrl ? (
           <div
@@ -107,7 +107,7 @@ export function ScanViewer({
             {/* Картинка или вставка файла */}
             <img
               src={realDownloadUrl}
-              alt={fileName || 'Скан R2'}
+              alt={fileName || 'Просмотр скана'}
               className="max-h-[600px] object-contain rounded border border-slate-800"
               onError={(e) => {
                 // Если скан — PDF, покажем превью плашку
@@ -144,7 +144,7 @@ export function ScanViewer({
 
             <div className="mt-16 text-center text-slate-400 text-xs border-2 border-dashed border-slate-300 p-6 rounded">
               <ImageIcon className="mx-auto h-8 w-8 text-slate-400 mb-2" />
-              Прикрепите сканы файла через форму для предпросмотра из Cloudflare R2
+              Прикрепите файлы к документу для интерактивного предпросмотра
             </div>
           </div>
         )}

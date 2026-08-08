@@ -429,7 +429,7 @@ export default function CounterpartiesPage() {
   const getCounterpartyRowActions = (c: Counterparty): RowAction<Counterparty>[] => {
     return [
       {
-        label: 'Просмотреть реквизиты и уставные сканы R2',
+        label: 'Просмотреть реквизиты и уставные документы',
         icon: <FileText className="h-4 w-4 text-indigo-400" />,
         action: () => handleOpenProfileModal(c),
       },
@@ -519,7 +519,7 @@ export default function CounterpartiesPage() {
 
     const actions: RowAction<Company>[] = [
       {
-        label: 'Просмотреть данные и уставные сканы R2',
+        label: 'Просмотреть данные и уставные документы',
         icon: <FileText className="h-4 w-4 text-indigo-400" />,
         action: () => handleOpenProfileById(c.id),
       },
@@ -568,7 +568,7 @@ export default function CounterpartiesPage() {
       });
     } else {
       actions.push({
-        label: 'Запросить сотрудничество (B2B)',
+        label: 'Запросить сотрудничество',
         icon: <Send className="h-4 w-4 text-purple-400" />,
         action: () => handleSendRequest(c.id),
       });
@@ -993,7 +993,7 @@ export default function CounterpartiesPage() {
         <div>
           <h2 className="text-xl md:text-2xl font-bold text-foreground tracking-tight flex items-center">
             <Building2 className="h-6 w-6 mr-2 text-amber-400" />
-            Справочник Контрагентов & Сеть Партнеров B2B
+            Справочник Контрагентов & Сеть Партнеров
           </h2>
           <p className="text-xs md:text-sm text-muted-foreground mt-0.5">
             Реестр связанных организаций Кыргызстана, входящие и исходящие заявки и публичный каталог
@@ -1353,7 +1353,7 @@ export default function CounterpartiesPage() {
 
             <div className="space-y-3">
               <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider font-mono">
-                Приложенные Учредительные Документы (R2)
+                Приложенные Учредительные Документы
               </h4>
 
               {profileModal.statutoryFiles.length === 0 ? (
@@ -1393,7 +1393,7 @@ export default function CounterpartiesPage() {
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
         title="Создать Контрагента (с прикреплением)"
-        subtitle="Заполнение реквизитов и прикрепление скана R2"
+        subtitle="Заполнение реквизитов и прикрепление скана"
         mode="create"
         onSubmit={handleManualCreateWithFile}
         isSubmitting={uploadingFile || isPending}
@@ -1458,7 +1458,7 @@ export default function CounterpartiesPage() {
           </div>
 
           <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Учредительный документ / Скан (R2)</Label>
+            <Label className="text-xs text-muted-foreground">Учредительный документ / Скан</Label>
             <div className="p-3 bg-background border border-dashed border-border rounded-xl flex items-center justify-between">
               <div className="flex items-center space-x-2 truncate">
                 <Paperclip className="h-4 w-4 text-indigo-400 flex-shrink-0" />

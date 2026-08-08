@@ -130,7 +130,7 @@ export default async function DashboardPage() {
           <Link href="/dashboard/documents/new" prefetch={true}>
             <button className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs sm:text-sm transition-all shadow-md flex items-center justify-center min-h-[48px]">
               <Plus className="h-4 w-4 mr-1.5" />
-              Создать B2B Отправку
+              Создать документ
             </button>
           </Link>
         )}
@@ -169,7 +169,7 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      {/* 1. ГЛАВНЫЕ ПОКАЗАТЕЛИ ДЕЯТЕЛЬНОСТИ (СТАТИСТИКА B2B) */}
+      {/* 1. ГЛАВНЫЕ ПОКАЗАТЕЛИ ДЕЯТЕЛЬНОСТИ (СТАТИСТИКА ДОКУМЕНТОВ) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="bg-card border-border backdrop-blur-xl hover:border-sky-500/40 transition-colors shadow-xl">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -200,7 +200,7 @@ export default async function DashboardPage() {
         <Card className="bg-card border-border backdrop-blur-xl hover:border-emerald-500/40 transition-colors shadow-xl">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider font-mono">
-              Сканы в R2 Хранилище
+              Прикрепленные Файлы
             </CardTitle>
             <FolderOpen className="h-5 w-5 text-emerald-400" />
           </CardHeader>
@@ -299,7 +299,7 @@ export default async function DashboardPage() {
                 <div className="p-3 rounded-xl bg-muted/60 border border-border hover:border-blue-500/50 flex items-center justify-between transition-all">
                   <div className="flex items-center space-x-2 text-xs font-semibold text-foreground">
                     <FileText className="h-4 w-4 text-blue-400" />
-                    <span>Реестр B2B Документов</span>
+                    <span>Реестр документов</span>
                   </div>
                   <ArrowRight className="h-4 w-4 text-muted-foreground" />
                 </div>
@@ -311,7 +311,7 @@ export default async function DashboardPage() {
                 <div className="p-3 rounded-xl bg-muted/60 border border-border hover:border-amber-500/50 flex items-center justify-between transition-all">
                   <div className="flex items-center space-x-2 text-xs font-semibold text-foreground">
                     <Users className="h-4 w-4 text-amber-400" />
-                    <span>Единый Модуль Контрагентов</span>
+                    <span>Контрагенты</span>
                   </div>
                   <ArrowRight className="h-4 w-4 text-muted-foreground" />
                 </div>
@@ -323,7 +323,7 @@ export default async function DashboardPage() {
                 <div className="p-3 rounded-xl bg-muted/60 border border-border hover:border-emerald-500/50 flex items-center justify-between transition-all">
                   <div className="flex items-center space-x-2 text-xs font-semibold text-foreground">
                     <FolderOpen className="h-4 w-4 text-emerald-400" />
-                    <span>Облачный Архив R2</span>
+                    <span>Облачный диск</span>
                   </div>
                   <ArrowRight className="h-4 w-4 text-muted-foreground" />
                 </div>

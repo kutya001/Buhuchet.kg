@@ -111,10 +111,10 @@ export default function CloudFilesRegistryPage() {
       if (res.success && res.data?.downloadUrl) {
         window.open(res.data.downloadUrl, '_blank');
       } else {
-        alert(res.error || 'Не удалось сгенерировать ссылку для скачивания R2');
+        alert(res.error || 'Не удалось сгенерировать ссылку для скачивания файла');
       }
     } catch (e: any) {
-      alert(`Ошибка R2: ${e?.message}`);
+      alert(`Ошибка при загрузке: ${e?.message}`);
     } finally {
       setDownloadingId(null);
     }
@@ -158,21 +158,21 @@ export default function CloudFilesRegistryPage() {
     },
     {
       key: 'ownership',
-      label: 'Статус Владения (CoW)',
+      label: 'Статус доступа',
       sortable: true,
       getValue: (f) => (f.isCoWShared ? 'shared' : 'single'),
       render: (file) =>
         file.isCoWShared ? (
           <Badge
             className="bg-indigo-500/20 text-indigo-300 border-indigo-500/40 text-[11px] font-medium"
-            title={`Файл используют ${file.ownersCount} организаций (Copy-on-Write)`}
+            title={`Файл используют ${file.ownersCount} организаций`}
           >
             <ShieldCheck className="h-3 w-3 mr-1 text-indigo-400" />
-            Совместный ({file.ownersCount} тенанта)
+            Общий доступ ({file.ownersCount} организации)
           </Badge>
         ) : (
           <Badge variant="outline" className="border-slate-800 text-slate-400 text-[11px]">
-            Единоличное
+            Личный
           </Badge>
         ),
     },
@@ -194,7 +194,7 @@ export default function CloudFilesRegistryPage() {
               : 'border-slate-700 text-slate-400'
           }
         >
-          {file.sourceType === 'document' && '📝 Электронный документ'}
+          {file.sourceType === 'document' && '📝 Из документов'}
           {file.sourceType === 'company' && '🏛️ Моя Организация'}
           {file.sourceType === 'counterparty' && '🤝 Контрагент'}
           {file.sourceType === 'manual' && '📂 Вручную'}
@@ -256,7 +256,7 @@ export default function CloudFilesRegistryPage() {
             ) : (
               <Download className="h-3.5 w-3.5 mr-1 text-emerald-400" />
             )}
-            R2 Ссылка
+            Скачать файл
           </Button>
         ) : (
           <span className="text-muted-foreground text-xs">—</span>
@@ -288,7 +288,7 @@ export default function CloudFilesRegistryPage() {
               : 'border-border text-muted-foreground text-[10px]'
           }
         >
-          {file.sourceType === 'document' && '📝 Документ'}
+          {file.sourceType === 'document' && '📝 Из документов'}
           {file.sourceType === 'company' && '🏛️ Уставной'}
           {file.sourceType === 'counterparty' && '🤝 Контрагент'}
           {file.sourceType === 'manual' && '📂 Вручную'}
@@ -310,7 +310,7 @@ export default function CloudFilesRegistryPage() {
             className="border-border text-xs text-foreground min-h-[40px] px-3 hover:bg-muted"
           >
             <Download className="h-3.5 w-3.5 mr-1 text-emerald-400" />
-            R2
+            Скачать
           </Button>
         )}
       </div>
@@ -324,10 +324,10 @@ export default function CloudFilesRegistryPage() {
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight flex items-center">
             <FolderOpen className="h-6 w-6 mr-2.5 text-emerald-400" />
-            Реестр Облачных Файлов R2
+            Облачный диск
           </h1>
           <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-            Подробный учёт всех сканов, B2B накладных и уставных документов с Copy-on-Write дедупликацией
+            Подробный учёт всех сканов, накладных и уставных документов
           </p>
         </div>
 
@@ -346,7 +346,7 @@ export default function CloudFilesRegistryPage() {
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold text-foreground flex items-center">
               <FileCheck className="h-4 w-4 mr-2 text-emerald-400" />
-              Пакетная Загрузка Файлов в Облачный Архив (Drag & Drop)
+              Пакетная Загрузка Файлов на Облачный Диск (Drag & Drop)
             </h3>
             <span className="text-xs text-emerald-400 font-mono">Авто-сжатие до 200 КБ</span>
           </div>
@@ -368,7 +368,7 @@ export default function CloudFilesRegistryPage() {
                 {savingBatch ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Сохранение в архив...
+                    Сохранение на диск...
                   </>
                 ) : (
                   <>Сохранить Все Загруженные Сканы ({batchFiles.filter((f) => f.file_path_r2).length})</>
@@ -384,7 +384,7 @@ export default function CloudFilesRegistryPage() {
         <Card className="bg-card border-border p-4 relative overflow-hidden shadow-lg">
           <div className="flex items-center justify-between">
             <div>
-              <span className="text-xs text-muted-foreground block">Всего в реестре</span>
+              <span className="text-xs text-muted-foreground block">Всего на диске</span>
               <span className="text-2xl font-bold font-mono text-foreground mt-1 block">
                 {stats?.totalCount || 0} <span className="text-xs text-muted-foreground font-normal">файлов</span>
               </span>
@@ -402,7 +402,7 @@ export default function CloudFilesRegistryPage() {
         <Card className="bg-card border-border p-4 relative overflow-hidden shadow-lg">
           <div className="flex items-center justify-between">
             <div>
-              <span className="text-xs text-muted-foreground block">Из B2B Документов</span>
+              <span className="text-xs text-muted-foreground block">Из документов</span>
               <span className="text-2xl font-bold font-mono text-foreground mt-1 block">
                 {stats?.bySource.document || 0} <span className="text-xs text-muted-foreground font-normal">сканов</span>
               </span>
@@ -458,7 +458,7 @@ export default function CloudFilesRegistryPage() {
             className="bg-background border border-border text-foreground text-xs rounded-xl px-3 py-2 min-h-[40px] focus:outline-none focus:ring-2 focus:ring-ring"
           >
             <option value="all">Все Виды Источников</option>
-            <option value="document">📝 Из B2B Документов</option>
+            <option value="document">📝 Из документов</option>
             <option value="company">🏛️ Уставные Моей Организации</option>
             <option value="counterparty">🤝 Файлы Контрагентов</option>
             <option value="manual">📂 Загружен Вручную</option>
