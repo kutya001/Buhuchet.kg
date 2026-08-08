@@ -571,15 +571,12 @@ export default function SuperAdminPage() {
 
   const filteredUsers = useMemo(() => {
     const term = search.toLowerCase();
-    return allUsers.filter((u) => {
-      const comp = Array.isArray(u.companies) ? u.companies[0] : (u.companies || u.company);
-      const compName = comp?.name?.toLowerCase() || '';
-      return (
-        (u.full_name && u.full_name.toLowerCase().includes(term)) ||
-        (u.email && u.email.toLowerCase().includes(term)) ||
-        compName.includes(term)
-      );
-    });
+    return allUsers.filter(
+      (u) =>
+        u.full_name?.toLowerCase().includes(term) ||
+        u.email?.toLowerCase().includes(term) ||
+        u.companies?.name?.toLowerCase().includes(term)
+    );
   }, [allUsers, search]);
 
   const filteredFiles = useMemo(() => {
@@ -747,19 +744,13 @@ export default function SuperAdminPage() {
       key: 'company',
       label: 'Привязанная Компания',
       sortable: true,
-      getValue: (u) => {
-        const comp = Array.isArray(u.companies) ? u.companies[0] : (u.companies || u.company);
-        return comp?.name || '';
-      },
-      render: (u) => {
-        const comp = Array.isArray(u.companies) ? u.companies[0] : (u.companies || u.company);
-        return (
-          <div className="text-xs text-slate-300">
-            <span className="font-semibold">{comp?.name || '—'}</span>
-            {comp?.inn && <p className="text-[10px] text-slate-500 font-mono">ИНН: {comp.inn}</p>}
-          </div>
-        );
-      },
+      getValue: (u) => u.companies?.name,
+      render: (u) => (
+        <div className="text-xs text-slate-300">
+          <span className="font-semibold">{u.companies?.name || '—'}</span>
+          {u.companies?.inn && <p className="text-[10px] text-slate-500 font-mono">ИНН: {u.companies.inn}</p>}
+        </div>
+      ),
     },
     {
       key: 'role',

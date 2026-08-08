@@ -326,20 +326,65 @@ export async function getAllUsersAdminAction(): Promise<ActionResponse<any[]>> {
     }
 
     const adminSupabase = await createAdminClient();
-    const { data, error } = await adminSupabase
+
+    // 1. Попытка запроса с явным указанием внешнего ключа users_company_id_fkey
+    const { data: usersData, error: usersErr } = await adminSupabase
       .from('users')
-      .select('*, companies(*)')
+      .select('*, company:companies!users_company_id_fkey(*)')
       .order('created_at', { ascending: false });
 
-    if (error) {
-      console.error('[getAllUsersAdminAction Error]:', error);
-      return { success: false, error: error.message };
+    if (usersErr) {
+      console.error('[getAllUsersAdminAction join error]:', usersErr);
+
+      // 2. Гарантированный fallback-запрос безJOIN в PostgREST при сбоях
+      const { data: rawUsers, error: rawUsersErr } = await adminSupabase
+        .from('users')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (rawUsersErr) {
+        return { success: false, error: rawUsersErr.message };
+      }
+
+      const compIds = Array.from(new Set(rawUsers.map((u) => u.company_id).filter(Boolean)));
+      let companyMap: Record<string, any> = {};
+      if (compIds.length > 0) {
+        const { data: comps } = await adminSupabase
+          .from('companies')
+          .select('id, name, inn')
+          .in('id', compIds);
+        if (comps) {
+          comps.forEach((c) => {
+            companyMap[c.id] = c;
+          });
+        }
+      }
+
+      const fallbackUsers = rawUsers.map((u) => ({
+        ...u,
+        company: u.company_id ? companyMap[u.company_id] || null : null,
+        companies: u.company_id ? companyMap[u.company_id] || null : null,
+      }));
+
+      return { success: true, data: fallbackUsers };
     }
-    return { success: true, data: data || [] };
+
+    // Нормализация результатов для одинакового доступа u.companies и u.company
+    const normalized = (usersData || []).map((u: any) => {
+      const compObj = Array.isArray(u.company)
+        ? u.company[0]
+        : u.company || (Array.isArray(u.companies) ? u.companies[0] : u.companies) || null;
+      return {
+        ...u,
+        company: compObj,
+        companies: compObj,
+      };
+    });
+
+    return { success: true, data: normalized };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Сбой получения списка пользователей';
-    console.error('[getAllUsersAdminAction Exception]:', err);
-    return { success: false, error: msg };
+    console.error('[getAllUsersAdminAction exception]:', err);
+    return { success: false, error: 'Сбой получения списка пользователей' };
   }
 }
 
