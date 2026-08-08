@@ -9,7 +9,7 @@ import { z } from 'zod';
 
 import { cache } from 'react';
 import { hasPermission, ModuleName, ActionName } from '@/lib/auth/permissions';
-import { sendTelegramNotification, sendDocumentTelegramNotification } from '@/lib/telegram/notifier';
+import { sendTelegramNotification, sendDocumentTelegramNotification, sendDocumentStatusTelegramNotification } from '@/lib/telegram/notifier';
 
 const getUserContext = cache(async () => {
   const supabase = await createClient();
@@ -551,6 +551,32 @@ export async function updateB2BDocumentStatusAction(
       new_status: newStatus,
       comment: comment || `Статус изменен на "${newStatus}"`,
     });
+
+    // Telegram-уведомление противоположной стороне
+    const targetCompanyId = isSender ? doc.receiver_company_id : doc.sender_company_id;
+    if (targetCompanyId) {
+      const { data: actorComp } = await adminSupabase
+        .from('companies')
+        .select('name')
+        .eq('id', ctx.companyId)
+        .single();
+
+      const { data: fullDoc } = await adminSupabase
+        .from('documents')
+        .select('doc_type, doc_number')
+        .eq('id', documentId)
+        .single();
+
+      sendDocumentStatusTelegramNotification({
+        targetCompanyId,
+        actorCompanyName: actorComp?.name || 'Контрагент',
+        docType: fullDoc?.doc_type || 'Первичный документ',
+        docNumber: fullDoc?.doc_number || documentId.slice(0, 8),
+        newStatus,
+        comment,
+        documentId,
+      }).catch((err) => console.error('[Telegram Notification Error]:', err));
+    }
 
     revalidatePath(`/dashboard/documents/${documentId}`);
     revalidatePath('/dashboard/documents');

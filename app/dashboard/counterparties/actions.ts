@@ -5,6 +5,12 @@ import type { ActionResponse, CompanyPartnership, Company, DocumentFile, Partner
 import { revalidatePath } from 'next/cache';
 import { cache } from 'react';
 import { getPresignedDownloadUrl } from '@/lib/r2';
+import {
+  sendCollaborationTelegramNotification,
+  sendCollaborationConfirmedTelegramNotification,
+  sendCollaborationRejectedTelegramNotification,
+  sendCollaborationTerminatedTelegramNotification,
+} from '@/lib/telegram/notifier';
 
 const getUserContext = cache(async () => {
   const supabase = await createClient();
@@ -75,6 +81,18 @@ export async function sendPartnershipRequestAction(
     if (error || !partnership) {
       return { success: false, error: `Ошибка отправки заявки: ${error?.message}` };
     }
+
+    // Telegram-уведомление получателю заявки
+    const { data: senderComp } = await supabase
+      .from('companies')
+      .select('name')
+      .eq('id', ctx.companyId)
+      .single();
+
+    sendCollaborationTelegramNotification({
+      targetCompanyId,
+      senderCompanyName: senderComp?.name || 'Организация',
+    }).catch((err) => console.error('[Telegram Notification Error]:', err));
 
     revalidatePath('/dashboard/counterparties');
     return { success: true, data: partnership as CompanyPartnership };
@@ -192,6 +210,25 @@ export async function respondToPartnershipRequestAction(
         // Добавляем Requester в контрагенты Target
         await ensureCounterpartyLink(adminSupabase, targetCompany.id, reqCompany);
       }
+    }
+
+    // Telegram-уведомление автору заявки
+    const { data: currentComp } = await adminSupabase
+      .from('companies')
+      .select('name')
+      .eq('id', ctx.companyId)
+      .single();
+
+    if (newStatus === 'approved' || newStatus === 'accepted') {
+      sendCollaborationConfirmedTelegramNotification({
+        requesterCompanyId: partnership.requester_company_id,
+        partnerCompanyName: currentComp?.name || 'Партнер',
+      }).catch((err) => console.error('[Telegram Notification Error]:', err));
+    } else if (newStatus === 'rejected') {
+      sendCollaborationRejectedTelegramNotification({
+        requesterCompanyId: partnership.requester_company_id,
+        partnerCompanyName: currentComp?.name || 'Партнер',
+      }).catch((err) => console.error('[Telegram Notification Error]:', err));
     }
 
     revalidatePath('/dashboard/counterparties');
@@ -416,6 +453,18 @@ export async function terminatePartnershipAction(
       .from('counterparties')
       .delete()
       .or(`and(company_id.eq.${ctx.companyId},or(id.eq.${partnershipIdOrTargetCompanyId},target_company_id.eq.${partnershipIdOrTargetCompanyId})),and(target_company_id.eq.${ctx.companyId},company_id.eq.${partnershipIdOrTargetCompanyId})`);
+
+    // 3. Telegram-уведомление партнеру
+    const { data: initiatorComp } = await adminSupabase
+      .from('companies')
+      .select('name')
+      .eq('id', ctx.companyId)
+      .single();
+
+    sendCollaborationTerminatedTelegramNotification({
+      targetCompanyId: partnershipIdOrTargetCompanyId,
+      initiatorCompanyName: initiatorComp?.name || 'Организация',
+    }).catch((err) => console.error('[Telegram Notification Error]:', err));
 
     revalidatePath('/dashboard/counterparties');
     revalidatePath('/dashboard/documents/new');

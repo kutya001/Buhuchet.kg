@@ -178,3 +178,179 @@ export async function sendCollaborationTelegramNotification({
     message,
   });
 }
+
+/**
+ * Уведомление об одобрении запроса на сотрудничество
+ */
+export async function sendCollaborationConfirmedTelegramNotification({
+  requesterCompanyId,
+  partnerCompanyName,
+}: {
+  requesterCompanyId: string;
+  partnerCompanyName: string;
+}): Promise<void> {
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://buhuchet.kg';
+  const counterpartiesLink = `${baseUrl}/dashboard/counterparties`;
+  const nowStr = new Date().toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' });
+
+  const message =
+    `✅ **Партнерство успешно подтверждено!**\n\n` +
+    `🏢 **Организация:** ${partnerCompanyName} приняла ваше предложение о сотрудничестве.\n` +
+    `📅 **Дата и время:** ${nowStr}\n\n` +
+    `💼 Запись автоматически добавлена в справочник контрагентов. Теперь доступен электронный документооборот!\n\n` +
+    `🔗 **Перейти к контрагентам:**\n${counterpartiesLink}`;
+
+  await sendTelegramNotification({
+    companyId: requesterCompanyId,
+    type: 'collaboration',
+    message,
+  });
+}
+
+/**
+ * Уведомление об отклонении запроса на сотрудничество
+ */
+export async function sendCollaborationRejectedTelegramNotification({
+  requesterCompanyId,
+  partnerCompanyName,
+}: {
+  requesterCompanyId: string;
+  partnerCompanyName: string;
+}): Promise<void> {
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://buhuchet.kg';
+  const counterpartiesLink = `${baseUrl}/dashboard/counterparties`;
+  const nowStr = new Date().toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' });
+
+  const message =
+    `❌ **Заявка на сотрудничество отклонена**\n\n` +
+    `🏢 **Организация:** ${partnerCompanyName} отклонила предложение о сотрудничестве.\n` +
+    `📅 **Дата и время:** ${nowStr}\n\n` +
+    `🔗 **Просмотреть реестр:**\n${counterpartiesLink}`;
+
+  await sendTelegramNotification({
+    companyId: requesterCompanyId,
+    type: 'collaboration',
+    message,
+  });
+}
+
+/**
+ * Уведомление о прекращении партнерства
+ */
+export async function sendCollaborationTerminatedTelegramNotification({
+  targetCompanyId,
+  initiatorCompanyName,
+}: {
+  targetCompanyId: string;
+  initiatorCompanyName: string;
+}): Promise<void> {
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://buhuchet.kg';
+  const counterpartiesLink = `${baseUrl}/dashboard/counterparties`;
+  const nowStr = new Date().toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' });
+
+  const message =
+    `🚫 **Сотрудничество прекращено**\n\n` +
+    `🏢 **Инициатор:** ${initiatorCompanyName}\n` +
+    `📅 **Дата и время:** ${nowStr}\n\n` +
+    `Партнерская связь разорвана, запись переведена в архив.\n\n` +
+    `🔗 **Перейти в модуль:**\n${counterpartiesLink}`;
+
+  await sendTelegramNotification({
+    companyId: targetCompanyId,
+    type: 'collaboration',
+    message,
+  });
+}
+
+/**
+ * Уведомление о статусе верификации организации суперадминистратором
+ */
+export async function sendCompanyVerificationTelegramNotification({
+  companyId,
+  companyName,
+  status,
+  comment,
+}: {
+  companyId: string;
+  companyName: string;
+  status: 'active' | 'requires_changes' | 'blocked';
+  comment?: string;
+}): Promise<void> {
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://buhuchet.kg';
+  const profileLink = `${baseUrl}/dashboard/profile`;
+
+  let title = '';
+  let statusText = '';
+
+  if (status === 'active') {
+    title = '🎉 **Поздравляем! Верификация пройдена!**';
+    statusText = 'Ваша организация успешно одобрена суперадминистратором Buhuchet.kg и активирована для работы.';
+  } else if (status === 'requires_changes') {
+    title = '⚠️ **Требуется внести изменения в реквизиты**';
+    statusText = `Модерация отклонена. Замечание суперадминистратора:\n_${comment || 'Уточните ИНН или уставные сканы'}_`;
+  } else {
+    title = '🚫 **Организация заблокирована**';
+    statusText = `Доступ организации приостановлен. Причина:\n_${comment || 'Нарушение правил использования платформы'}_`;
+  }
+
+  const message =
+    `${title}\n\n` +
+    `🏢 **Организация:** ${companyName}\n` +
+    `ℹ️ **Информация:** ${statusText}\n\n` +
+    `🔗 **Перейти в профиль организации:**\n${profileLink}`;
+
+  await sendTelegramNotification({
+    companyId,
+    type: 'system_block',
+    message,
+  });
+}
+
+/**
+ * Уведомление об обработке / смене статуса документа
+ */
+export async function sendDocumentStatusTelegramNotification({
+  targetCompanyId,
+  actorCompanyName,
+  docType,
+  docNumber,
+  newStatus,
+  comment,
+  documentId,
+}: {
+  targetCompanyId: string;
+  actorCompanyName: string;
+  docType: string;
+  docNumber: string;
+  newStatus: string;
+  comment?: string;
+  documentId: string;
+}): Promise<void> {
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://buhuchet.kg';
+  const docLink = `${baseUrl}/dashboard/documents/${documentId}`;
+  const nowStr = new Date().toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' });
+
+  const statusMap: Record<string, string> = {
+    accepted: '✅ Принят к учету',
+    processed: '📂 Обработан бухгалтерской службой',
+    recalled: '↩️ Отозван контрагентом',
+    requires_changes: '⚠️ Направлен на исправление',
+  };
+
+  const statusLabel = statusMap[newStatus] || newStatus;
+
+  const message =
+    `🔄 **Изменение статуса первички!**\n\n` +
+    `🏢 **От кого:** ${actorCompanyName}\n` +
+    `📄 **Документ:** ${docType} № ${docNumber}\n` +
+    `🚦 **Новый статус:** ${statusLabel}\n` +
+    (comment ? `💬 **Примечание:** _${comment}_\n` : '') +
+    `📅 **Дата:** ${nowStr}\n\n` +
+    `🔗 **Просмотреть документ:**\n${docLink}`;
+
+  await sendTelegramNotification({
+    companyId: targetCompanyId,
+    type: 'documents',
+    message,
+  });
+}

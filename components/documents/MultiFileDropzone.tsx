@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { getPresignedUploadUrlAction, uploadFileDirectlyServerAction } from '@/app/dashboard/files/actions';
 import type { FileCategory } from '@/types/database.types';
 import { formatBytes } from '@/lib/utils';
+import imageCompression from 'browser-image-compression';
 
 export interface FileItemState {
   tempId: string;
@@ -52,17 +53,41 @@ export function MultiFileDropzone({
     onFilesChange(nextList);
   };
 
-  const uploadFileToR2 = async (file: File, item: FileItemState) => {
+  const uploadFileToR2 = async (rawFile: File, item: FileItemState) => {
     try {
-      const mimeType = file.type && file.type.length > 0 ? file.type : 'image/jpeg';
-      const cleanFileName = file.name || `scan_${Date.now()}.jpg`;
+      let fileToUpload = rawFile;
+
+      // 0. КЛИЕНТСКОЕ СЖАТИЕ ФОТО И ИЗОБРАЖЕНИЙ (GEMINI.md Rule 2.2)
+      if (rawFile.type && rawFile.type.startsWith('image/')) {
+        try {
+          const options = {
+            maxSizeMB: 0.2, // до 200 КБ
+            maxWidthOrHeight: 1000,
+            useWebWorker: true,
+          };
+          const compressed = await imageCompression(rawFile, options);
+          fileToUpload = new File([compressed], rawFile.name || `photo_${Date.now()}.jpg`, {
+            type: compressed.type || 'image/jpeg',
+          });
+
+          // Обновляем размер файла на реальный сжатый в списке
+          updateFileList((prev) =>
+            prev.map((f) => (f.tempId === item.tempId ? { ...f, size_bytes: fileToUpload.size } : f))
+          );
+        } catch (compressErr) {
+          console.warn('Клиентское сжатие не удалось, передача оригинала:', compressErr);
+        }
+      }
+
+      const mimeType = fileToUpload.type && fileToUpload.type.length > 0 ? fileToUpload.type : 'image/jpeg';
+      const cleanFileName = fileToUpload.name || `scan_${Date.now()}.jpg`;
 
       // 1. Запрашиваем Presigned PUT URL от сервера
       const presignedRes = await getPresignedUploadUrlAction(cleanFileName, mimeType);
 
       let finalFileKey = '';
 
-      if (presignedRes.success && presignedRes.data) {
+      if (presignedRes?.success && presignedRes?.data) {
         const { uploadUrl, fileKey, cleanContentType } = presignedRes.data;
         const targetType = cleanContentType || mimeType;
 
@@ -91,34 +116,57 @@ export function MultiFileDropzone({
             };
 
             xhr.onerror = () => reject(new Error('CORS / Network Error'));
-            xhr.send(file);
+            xhr.send(fileToUpload);
           });
 
           finalFileKey = fileKey;
         } catch (directErr) {
-          console.warn('Прямой XHR PUT заблокирован браузером/CORS. Переключение на надежный Серверный Прокси-Загрузчик R2...', directErr);
+          console.warn('Прямой XHR PUT заблокирован браузером/CORS. Переключение на надежный API Route /api/upload-direct...', directErr);
 
-          // 2. ДВУХУРОВНЕВЫЙ ФОЛЛБЭК: Отправка файла через Server Action прямо на наш бэкенд Buhuchet.kg
+          // 2. ДВУХУРОВНЕВЫЙ ФОЛЛБЭК: Отправка сжатого файла через API Route Handler на наш бэкенд Buhuchet.kg
           const formData = new FormData();
-          formData.append('file', file);
+          formData.append('file', fileToUpload);
 
-          const serverRes = await uploadFileDirectlyServerAction(formData);
-          if (serverRes.success && serverRes.data) {
-            finalFileKey = serverRes.data.fileKey;
+          const apiRes = await fetch('/api/upload-direct', {
+            method: 'POST',
+            body: formData,
+          });
+
+          const resData = await apiRes.json().catch(() => null);
+
+          if (apiRes.ok && resData?.success && resData?.data?.fileKey) {
+            finalFileKey = resData.data.fileKey;
           } else {
-            throw new Error(serverRes.error || 'Ошибка серверной загрузки в Cloudflare R2');
+            // Пробуем Server Action как крайний фоллбэк
+            const serverRes = await uploadFileDirectlyServerAction(formData);
+            if (serverRes?.success && serverRes?.data?.fileKey) {
+              finalFileKey = serverRes.data.fileKey;
+            } else {
+              throw new Error(resData?.error || serverRes?.error || 'Ошибка серверной загрузки в Cloudflare R2');
+            }
           }
         }
       } else {
-        // Если Presigned URL сразу не сгенерировался — пробуем прямой серверный прокси
+        // Если Presigned URL сразу не сгенерировался — пробуем прямой API Route
         const formData = new FormData();
-        formData.append('file', file);
-        const serverRes = await uploadFileDirectlyServerAction(formData);
+        formData.append('file', fileToUpload);
+        
+        const apiRes = await fetch('/api/upload-direct', {
+          method: 'POST',
+          body: formData,
+        });
 
-        if (serverRes.success && serverRes.data) {
-          finalFileKey = serverRes.data.fileKey;
+        const resData = await apiRes.json().catch(() => null);
+
+        if (apiRes.ok && resData?.success && resData?.data?.fileKey) {
+          finalFileKey = resData.data.fileKey;
         } else {
-          throw new Error(serverRes.error || 'Ошибка загрузки в R2');
+          const serverRes = await uploadFileDirectlyServerAction(formData);
+          if (serverRes?.success && serverRes?.data?.fileKey) {
+            finalFileKey = serverRes.data.fileKey;
+          } else {
+            throw new Error(resData?.error || serverRes?.error || 'Ошибка загрузки в R2');
+          }
         }
       }
 

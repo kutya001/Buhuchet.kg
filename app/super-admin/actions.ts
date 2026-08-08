@@ -3,6 +3,7 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import type { ActionResponse, Company, CompanyStatus, Document, FileCategory } from '@/types/database.types';
 import { revalidatePath } from 'next/cache';
+import { sendCompanyVerificationTelegramNotification } from '@/lib/telegram/notifier';
 
 /**
  * Проверка прав суперадмина
@@ -177,6 +178,12 @@ export async function approveCompanyAction(companyId: string): Promise<ActionRes
     }
 
     const adminSupabase = await createAdminClient();
+    const { data: comp } = await adminSupabase
+      .from('companies')
+      .select('name')
+      .eq('id', companyId)
+      .single();
+
     const { error } = await adminSupabase
       .from('companies')
       .update({
@@ -187,6 +194,13 @@ export async function approveCompanyAction(companyId: string): Promise<ActionRes
       .eq('id', companyId);
 
     if (error) return { success: false, error: error.message };
+
+    sendCompanyVerificationTelegramNotification({
+      companyId,
+      companyName: comp?.name || 'Организация',
+      status: 'active',
+    }).catch((err) => console.error('[Telegram Notification Error]:', err));
+
     return { success: true };
   } catch (err: unknown) {
     return { success: false, error: 'Сбой одобрения компании' };
@@ -203,6 +217,12 @@ export async function requestCompanyChangesAction(
     }
 
     const adminSupabase = await createAdminClient();
+    const { data: comp } = await adminSupabase
+      .from('companies')
+      .select('name')
+      .eq('id', companyId)
+      .single();
+
     const { error } = await adminSupabase
       .from('companies')
       .update({
@@ -213,6 +233,14 @@ export async function requestCompanyChangesAction(
       .eq('id', companyId);
 
     if (error) return { success: false, error: error.message };
+
+    sendCompanyVerificationTelegramNotification({
+      companyId,
+      companyName: comp?.name || 'Организация',
+      status: 'requires_changes',
+      comment,
+    }).catch((err) => console.error('[Telegram Notification Error]:', err));
+
     return { success: true };
   } catch (err: unknown) {
     return { success: false, error: 'Сбой запроса изменений' };
@@ -229,6 +257,12 @@ export async function blockCompanyAction(
     }
 
     const adminSupabase = await createAdminClient();
+    const { data: comp } = await adminSupabase
+      .from('companies')
+      .select('name')
+      .eq('id', companyId)
+      .single();
+
     const { error } = await adminSupabase
       .from('companies')
       .update({
@@ -239,6 +273,14 @@ export async function blockCompanyAction(
       .eq('id', companyId);
 
     if (error) return { success: false, error: error.message };
+
+    sendCompanyVerificationTelegramNotification({
+      companyId,
+      companyName: comp?.name || 'Организация',
+      status: 'blocked',
+      comment,
+    }).catch((err) => console.error('[Telegram Notification Error]:', err));
+
     return { success: true };
   } catch (err: unknown) {
     return { success: false, error: 'Сбой блокировки компании' };
