@@ -398,18 +398,45 @@ export default function CounterpartiesPage() {
     setProfileLoading(false);
   };
 
+  const handleOpenProfileById = async (targetCompanyId: string) => {
+    setMsg(null);
+    setProfileLoading(true);
+    const res = await getCounterpartyDetailsAndFilesAction(targetCompanyId);
+    if (res.success && res.data) {
+      setProfileModal({
+        counterparty: {
+          id: res.data.company.id,
+          company_id: currentCompanyId || '',
+          target_company_id: res.data.company.id,
+          name: res.data.company.name,
+          inn: res.data.company.inn,
+          email: res.data.company.email || '',
+          phone: res.data.company.phone || '',
+          is_vat_payer: true,
+          created_at: res.data.company.created_at || '',
+          updated_at: res.data.company.updated_at || '',
+        },
+        companyDetails: res.data.company,
+        statutoryFiles: res.data.statutoryFiles,
+      });
+    } else {
+      setMsg({ type: 'error', text: res.error || 'Не удалось получить уставные данные организации' });
+    }
+    setProfileLoading(false);
+  };
+
   // ---------------- ДВИЖОК ДЕЙСТВИЙ ДЛЯ ПОПОВЕРА И КОНТЕКСТНОГО МЕНЮ (getRowActions) ----------------
   const getCounterpartyRowActions = (c: Counterparty): RowAction<Counterparty>[] => {
     return [
       {
         label: 'Просмотреть реквизиты и уставные сканы R2',
         icon: <FileText className="h-4 w-4 text-indigo-400" />,
-        action: () => handleViewProfile(c.target_company_id || c.id),
+        action: () => handleOpenProfileModal(c),
       },
       {
         label: 'Выгрузить Акт Сверки Взаиморасчетов',
         icon: <Download className="h-4 w-4 text-emerald-400" />,
-        action: () => handleOpenPartnerReportModal(c),
+        action: () => handleOpenPartnerReport(c),
       },
       {
         label: 'Редактировать примечание',
@@ -438,7 +465,7 @@ export default function CounterpartiesPage() {
       actions.push({
         label: 'Просмотреть профиль организации',
         icon: <FileText className="h-4 w-4 text-indigo-400" />,
-        action: () => handleViewProfile(partnerComp.id),
+        action: () => handleOpenProfileById(partnerComp.id),
       });
     }
 
@@ -494,7 +521,7 @@ export default function CounterpartiesPage() {
       {
         label: 'Просмотреть данные и уставные сканы R2',
         icon: <FileText className="h-4 w-4 text-indigo-400" />,
-        action: () => handleViewProfile(c.id),
+        action: () => handleOpenProfileById(c.id),
       },
     ];
 
@@ -1239,7 +1266,7 @@ export default function CounterpartiesPage() {
             columns={catalogColumns}
             data={filteredCatalog}
             keyExtractor={(c) => c.id}
-            onRowClick={(c) => handleViewProfile(c.id)}
+            onRowClick={(c) => handleOpenProfileById(c.id)}
             getRowActions={getCatalogRowActions}
             searchPlaceholder="Поиск по названию организации, ИНН, руководителю..."
             emptyMessage="Организации в выбранной категории не найдены."
