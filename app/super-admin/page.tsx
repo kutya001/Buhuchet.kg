@@ -64,6 +64,8 @@ import {
   updateFileCategoryAdminAction,
   deleteFileCategoryAdminAction,
   inspectTableDataAdminAction,
+  updateDbRowAdminAction,
+  deleteDbRowAdminAction,
 } from './actions';
 import { signOutAction } from '@/app/(auth)/actions';
 import {
@@ -158,10 +160,13 @@ export default function SuperAdminPage() {
   const [newCatCode, setNewCatCode] = useState('');
   const [newCatDesc, setNewCatDesc] = useState('');
 
-  // 5. МОДУЛЬ БАЗЫ ДАННЫХ (READ-ONLY)
+  // 5. МОДУЛЬ БАЗЫ ДАННЫХ (FULL ACCESS)
   const [selectedDbTable, setSelectedDbTable] = useState<string>('companies');
   const [dbData, setDbData] = useState<{ columns: string[]; rows: any[] }>({ columns: [], rows: [] });
   const [dbLoading, setDbLoading] = useState(false);
+  const [editingDbRow, setEditingDbRow] = useState<Record<string, any> | null>(null);
+  const [editDbRowForm, setEditDbRowForm] = useState<Record<string, any>>({});
+  const [deletingDbRow, setDeletingDbRow] = useState<Record<string, any> | null>(null);
 
   const supabase = createClient();
 
@@ -223,13 +228,66 @@ export default function SuperAdminPage() {
   // Инспектор БД
   const loadDbInspectorData = async (tbl: string) => {
     setDbLoading(true);
-    const res = await inspectTableDataAdminAction(tbl, 50);
+    const res = await inspectTableDataAdminAction(tbl, 100);
     if (res.success && res.data) {
       setDbData(res.data);
     } else {
       setDbData({ columns: [], rows: [] });
     }
     setDbLoading(false);
+  };
+
+  const handleSaveDbRow = () => {
+    if (!editingDbRow) return;
+    const pkField = editingDbRow.id !== undefined ? 'id' : Object.keys(editingDbRow)[0];
+    const pkValue = editingDbRow[pkField];
+
+    const updates: Record<string, any> = {};
+    for (const key of Object.keys(editDbRowForm)) {
+      if (key === pkField) continue;
+      let val = editDbRowForm[key];
+      const origVal = editingDbRow[key];
+
+      if (typeof origVal === 'object' && origVal !== null && typeof val === 'string') {
+        try {
+          val = JSON.parse(val);
+        } catch {
+          // Оставляем как исходный текст, если не валидный JSON
+        }
+      }
+
+      updates[key] = val;
+    }
+
+    setMsg(null);
+    startTransition(async () => {
+      const res = await updateDbRowAdminAction(selectedDbTable, pkField, pkValue, updates);
+      if (res.success) {
+        setMsg({ type: 'success', text: `Запись [${pkField}=${pkValue}] в таблице "${selectedDbTable}" успешно обновлена` });
+        setEditingDbRow(null);
+        await loadDbInspectorData(selectedDbTable);
+      } else {
+        setMsg({ type: 'error', text: res.error || 'Ошибка при обновлении записи в БД' });
+      }
+    });
+  };
+
+  const handleDeleteDbRow = () => {
+    if (!deletingDbRow) return;
+    const pkField = deletingDbRow.id !== undefined ? 'id' : Object.keys(deletingDbRow)[0];
+    const pkValue = deletingDbRow[pkField];
+
+    setMsg(null);
+    startTransition(async () => {
+      const res = await deleteDbRowAdminAction(selectedDbTable, pkField, pkValue);
+      if (res.success) {
+        setMsg({ type: 'success', text: `Запись [${pkField}=${pkValue}] удалена из таблицы "${selectedDbTable}"` });
+        setDeletingDbRow(null);
+        await loadDbInspectorData(selectedDbTable);
+      } else {
+        setMsg({ type: 'error', text: res.error || 'Ошибка удаления записи из БД' });
+      }
+    });
   };
 
   useEffect(() => {
@@ -1255,9 +1313,9 @@ export default function SuperAdminPage() {
             <div>
               <h3 className="text-sm md:text-base font-bold text-white flex items-center">
                 <Database className="h-5 w-5 mr-2 text-red-400" />
-                Прямая Инспекция Таблиц PostgreSQL
+                Инспектор Таблиц PostgreSQL (Полный Доступ)
               </h3>
-              <p className="text-xs text-slate-400">Просмотр перпендикулярных записей и схем таблиц PostgreSQL</p>
+              <p className="text-xs text-slate-400">Просмотр, прямое редактирование и удаление записей PostgreSQL с правами SuperAdmin</p>
             </div>
 
             <select
@@ -1271,6 +1329,10 @@ export default function SuperAdminPage() {
               <option value="files">Таблица: files</option>
               <option value="counterparties">Таблица: counterparties</option>
               <option value="company_partnerships">Таблица: company_partnerships</option>
+              <option value="file_categories">Таблица: file_categories</option>
+              <option value="company_roles">Таблица: company_roles</option>
+              <option value="subscriptions">Таблица: subscriptions</option>
+              <option value="document_logs">Таблица: document_logs</option>
             </select>
           </div>
 
@@ -1279,6 +1341,21 @@ export default function SuperAdminPage() {
             columns={dbColumns}
             data={dbData.rows}
             keyExtractor={(r) => (r.id ? String(r.id) : JSON.stringify(r))}
+            getRowActions={(row) => [
+              {
+                label: '✏️ Редактировать запись',
+                action: () => {
+                  setEditingDbRow(row);
+                  setEditDbRowForm({ ...row });
+                },
+              },
+              {
+                label: '🗑️ Удалить запись из БД',
+                danger: true,
+                separatorBefore: true,
+                action: () => setDeletingDbRow(row),
+              },
+            ]}
             searchPlaceholder="Поиск по сырым данным таблицы PostgreSQL..."
             emptyMessage="Записи в выбранной таблице PostgreSQL отсутствуют."
             isLoading={dbLoading}
@@ -1484,6 +1561,82 @@ export default function SuperAdminPage() {
           <div className="space-y-1">
             <Label className="text-xs text-slate-300">Описание</Label>
             <Input value={newCatDesc} onChange={(e) => setNewCatDesc(e.target.value)} className="bg-slate-950 border-slate-800 text-white min-h-[44px]" />
+          </div>
+        </div>
+      </UnifiedFormModal>
+
+      {/* МОДАЛКА 6: Редактирование записи Инспектора БД */}
+      <UnifiedFormModal
+        isOpen={!!editingDbRow}
+        onClose={() => setEditingDbRow(null)}
+        title={`Редактирование записи: ${selectedDbTable}`}
+        subtitle={`Первичный ключ: ${editingDbRow?.id ? `id = ${editingDbRow.id}` : Object.keys(editingDbRow || {})[0]}`}
+        mode="edit"
+        onSubmit={(e) => {
+          e.preventDefault();
+          handleSaveDbRow();
+        }}
+        isSubmitting={isPending}
+        submitText="Сохранить Изменения"
+      >
+        <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+          {editingDbRow &&
+            Object.keys(editingDbRow).map((key) => {
+              const val = editDbRowForm[key];
+              const isPk = key === 'id' || key === Object.keys(editingDbRow)[0];
+              const isObj = typeof editingDbRow[key] === 'object' && editingDbRow[key] !== null;
+
+              return (
+                <div key={key} className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-mono text-slate-300">
+                      {key} {isPk && <span className="text-amber-400 font-bold ml-1">(PRIMARY KEY)</span>}
+                    </Label>
+                    {isObj && <span className="text-[10px] text-purple-400 font-mono">JSON / Object</span>}
+                  </div>
+                  {isObj ? (
+                    <textarea
+                      value={typeof val === 'object' ? JSON.stringify(val, null, 2) : String(val ?? '')}
+                      onChange={(e) => setEditDbRowForm((prev) => ({ ...prev, [key]: e.target.value }))}
+                      rows={4}
+                      className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-xs font-mono text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                  ) : (
+                    <Input
+                      value={String(val ?? '')}
+                      disabled={isPk}
+                      onChange={(e) => setEditDbRowForm((prev) => ({ ...prev, [key]: e.target.value }))}
+                      className={`bg-slate-950 border-slate-800 text-white font-mono text-xs min-h-[40px] ${
+                        isPk ? 'opacity-60 cursor-not-allowed bg-slate-900' : ''
+                      }`}
+                    />
+                  )}
+                </div>
+              );
+            })}
+        </div>
+      </UnifiedFormModal>
+
+      {/* МОДАЛКА 7: Удаление записи Инспектора БД */}
+      <UnifiedFormModal
+        isOpen={!!deletingDbRow}
+        onClose={() => setDeletingDbRow(null)}
+        title={`Удаление записи из таблицы "${selectedDbTable}"`}
+        subtitle="Внимание: Операция напрямую удаляет выбранную строку из базы данных PostgreSQL!"
+        mode="edit"
+        onSubmit={(e) => {
+          e.preventDefault();
+          handleDeleteDbRow();
+        }}
+        isSubmitting={isPending}
+        submitText="Удалить Запись Навсегда"
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-slate-300">
+            Вы действительно хотите удалить эту запись из таблицы <span className="font-mono text-amber-400 font-bold">{selectedDbTable}</span>?
+          </p>
+          <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 font-mono text-xs text-rose-400 overflow-x-auto max-h-48">
+            {deletingDbRow ? JSON.stringify(deletingDbRow, null, 2) : ''}
           </div>
         </div>
       </UnifiedFormModal>

@@ -503,30 +503,32 @@ export async function deleteFileCategoryAdminAction(catId: string): Promise<Acti
 }
 
 // -------------------------------------------------------------
-// 5. МОДУЛЬ БАЗЫ ДАННЫХ (READ-ONLY DATABASE INSPECTOR)
+// 5. МОДУЛЬ БАЗЫ ДАННЫХ (FULL ACCESS DATABASE INSPECTOR)
 // -------------------------------------------------------------
+
+const ALLOWED_INSPECTOR_TABLES = [
+  'users',
+  'companies',
+  'documents',
+  'files',
+  'counterparties',
+  'company_partnerships',
+  'file_categories',
+  'document_logs',
+  'company_roles',
+  'subscriptions',
+];
 
 export async function inspectTableDataAdminAction(
   tableName: string,
-  limit: number = 50
+  limit: number = 100
 ): Promise<ActionResponse<{ columns: string[]; rows: any[] }>> {
   try {
     if (!(await checkSuperAdmin())) {
       return { success: false, error: 'Доступ запрещен' };
     }
 
-    const allowedTables = [
-      'users',
-      'companies',
-      'documents',
-      'files',
-      'counterparties',
-      'company_partnerships',
-      'file_categories',
-      'document_logs',
-    ];
-
-    if (!allowedTables.includes(tableName)) {
+    if (!ALLOWED_INSPECTOR_TABLES.includes(tableName)) {
       return { success: false, error: 'Указанная таблица недоступна для инспектора' };
     }
 
@@ -544,5 +546,64 @@ export async function inspectTableDataAdminAction(
     return { success: true, data: { columns, rows } };
   } catch (err: unknown) {
     return { success: false, error: 'Сбой инспектора БД' };
+  }
+}
+
+export async function updateDbRowAdminAction(
+  tableName: string,
+  pkField: string,
+  pkValue: any,
+  updates: Record<string, any>
+): Promise<ActionResponse> {
+  try {
+    if (!(await checkSuperAdmin())) {
+      return { success: false, error: 'Доступ запрещен' };
+    }
+
+    if (!ALLOWED_INSPECTOR_TABLES.includes(tableName)) {
+      return { success: false, error: 'Таблица недоступна для редактирования' };
+    }
+
+    const adminSupabase = await createAdminClient();
+    const { error } = await adminSupabase
+      .from(tableName as any)
+      .update(updates)
+      .eq(pkField, pkValue);
+
+    if (error) return { success: false, error: error.message };
+
+    revalidatePath('/super-admin');
+    return { success: true };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Сбой обновления записи БД' };
+  }
+}
+
+export async function deleteDbRowAdminAction(
+  tableName: string,
+  pkField: string,
+  pkValue: any
+): Promise<ActionResponse> {
+  try {
+    if (!(await checkSuperAdmin())) {
+      return { success: false, error: 'Доступ запрещен' };
+    }
+
+    if (!ALLOWED_INSPECTOR_TABLES.includes(tableName)) {
+      return { success: false, error: 'Таблица недоступна для удаления' };
+    }
+
+    const adminSupabase = await createAdminClient();
+    const { error } = await adminSupabase
+      .from(tableName as any)
+      .delete()
+      .eq(pkField, pkValue);
+
+    if (error) return { success: false, error: error.message };
+
+    revalidatePath('/super-admin');
+    return { success: true };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Сбой удаления записи из БД' };
   }
 }
