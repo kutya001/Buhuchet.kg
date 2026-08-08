@@ -368,7 +368,7 @@ export function DashboardShell({
                   }`}
                 >
                   <Building2 className="h-4 w-4 text-foreground" />
-                  <span>Моя Компания</span>
+                  <span>Моя Организация</span>
                 </Link>
               )}
 
