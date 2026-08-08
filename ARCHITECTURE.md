@@ -20,7 +20,7 @@
    | - Middleware (Сессии, Роутинг, Редирект Onboarding)         |
    | - React Server Components (RSC) & Server Actions            |
    | - RBAC Permission Engine (lib/auth/permissions.ts)          |
-   | - Unified Floating Layout & Glassmorphism Topbar Island     |
+   | - Permanent Module Tab Navigation Engine                    |
    | - Two-Tier R2 Upload Engine (Direct PUT + Server Proxy)     |
    +-------------------------------------------------------------+
           |                      |                       |
@@ -41,17 +41,15 @@
 | **База данных & Auth** | **Supabase (PostgreSQL)** | Авторизация пользователей, хранение структуры компаний, документов и справочников, соблюдение RLS (Row Level Security). |
 | **Хранилище файлов** | **Cloudflare R2** | Приватное объектное S3-совместимое хранение сканов, фото накладных и уставных документов. |
 | **Загрузчик файлов (Two-Tier)** | **browser-image-compression + Server Proxy** | Сжатие фото до 1000px / <200КБ в браузере. Прямой PUT в R2 с автоматическим переключением на серверный экшен-прокси при CORS/сетевых сбоях. |
-| **Движок Прав (RBAC)** | **lib/auth/permissions.ts** | Единый централизованный проверщик доступов сотрудника к конкретным модулям и кнопкам на клиенте и сервере. |
-| **Компонент Реестров** | **UnifiedDataGrid.tsx** | Drag & Drop перетягивание колонок, фильтрация по отдельным столбцам, сортировка, выбор режимов и **сохранение заголовков таблицы даже при 0 результатах фильтрации**. |
-| **UI System** | **Tailwind CSS + Shadcn UI** | Дизайн-система с тёмной/светлой/тёплой темой, мобильной шторкой (Bottom Sheet Drawer), парящим островком (`FloatingTopbar` с выпадающим поиском и иконным переключателем тем) и динамическим отступом под сайдбар (`md:left-[276px]` / `md:left-[96px]`). |
+| **Движок Прав (RBAC)** | **lib/auth/permissions.ts** | Единый проверщик доступов сотрудника. Вкладки модулей рендерятся безусловно. |
+| **Компонент Реестров** | **UnifiedDataGrid.tsx** | Табличный и плиточный режимы, кастомные ячейки, поиск и контекстные действия строк `getRowActions`. |
+| **UI System** | **Tailwind CSS + Shadcn UI** | Дизайн-система с тёмной/светлой темой, стеклянными модальными окнами `UnifiedFormModal` и парящим остравком `FloatingTopbar`. |
 
 ---
 
 ## 3. МУЛЬТИАРЕНДНОСТЬ И ПОТОК ИЗОЛЯЦИИ ДАННЫХ (MULTI-TENANCY DATA FLOW)
 
 Система использует **Single Database, Shared Schema, Tenant ID Pattern** (Одна БД, общая схема, изоляция по `company_id`).
-
-### Поток идентификации компании (Tenant Resolution):
 
 ```text
 [ Запрос от пользователя ] 
@@ -60,7 +58,7 @@
 [ Next.js Middleware ] ──► Извлекает Supabase Auth JWT
            │
            ▼
-[ Server Context (getUserContext) ] ──► Запрашивает профиль `users` + `company_roles` + `companies`
+[ Server Context (getUserContext) ] ──► Использованием adminSupabase запрашивает профиль `users` + `company_roles` + `companies`
            │
            ├─► Изоляция RLS по `company_id`
            └─► Проверка прав через `hasPermission(profile, module, action)`
@@ -71,35 +69,51 @@
 ## 4. СХЕМА МОДУЛЕЙ И СТРУКТУРА РОУТОВ (APP ROUTER SITEMAP)
 
 ### 4.1 Публичные Страницы (Public Routes)
-- `/` — Главная презентационная страница (Лендинг платформы, адаптивный под мобильные экраны от 360px).
+- `/` — Главная презентационная страница (Лендинг платформы).
 - `/login` — Экран входа в систему (email + пароль).
 - `/register` — Регистрация новой организации (создание компании + аккаунт владельца).
-- `/onboarding` — Мастер первичной настройки профиля организации и повторной отправки на модерацию.
+- `/onboarding` — Мастер первичной настройки профиля организации.
 
 ### 4.2 Защищенный Интерфейс Пользователя (`/dashboard`)
 - `/dashboard` — Главная аналитическая панель с метриками движения документов.
 - `/dashboard/documents` — Реестр Электронного документооборота B2B.
-- `/dashboard/documents/new` — Мастер создания новой B2B отправки.
-- `/dashboard/documents/[id]` — Детальный просмотр документа с возможностью принятия или отзыва.
+- `/dashboard/documents/new` — Форма создания B2B отправки с автоподгрузкой принятых контрагентов.
+- `/dashboard/documents/[id]` — Детальный Split-screen просмотр документа.
 - `/dashboard/files` — Облачный архив сканов и первичной документации.
-- `/dashboard/counterparties` — Единый реестр контрагентов и управление партнерскими связями.
-- `/dashboard/employees` — Управление сотрудниками компании и настройка ролевой матрицы RBAC.
-- `/dashboard/company` — Профиль и реквизиты собственной организации.
+- `/dashboard/counterparties` — Единый справочник контрагентов, входящие/исходящие заявки и каталог компаний КР.
+- `/dashboard/employees` — Управление персоналом, зачисление кандидатов и матрица ролей RBAC.
+- `/dashboard/company` — Профиль, реквизиты, уставные сканы R2 и закрытие периода.
 - `/dashboard/profile` — Личные настройки аккаунта и самостоятельная смена пароля.
 
 ### 4.3 Изолированная Панель Суперадминистратора (`/super-admin`)
-- `/super-admin` — Панель суперадмина с модерацией заявок организаций (под-вкладки **Все / На модерации / Замечания**), просмотром всех системных пользователей, реестра файлов, документов, интеграцией с Telegram и инспектором БД.
+- `/super-admin` — Панель суперадмина: 1-кликовое одобрение организаций (`approveCompanyAction`), управление пользователями, пер первичными документами, справочниками и **Инспектор БД с полными правами на редактирование и удаление строк PostgreSQL**.
 
 ---
 
 ## 5. ПОТОКИ ДАННЫХ (DATA FLOW SPECIFICATIONS)
 
-### 5.1 Загрузка и Хранение Сканов (Cloudflare R2 Two-Tier Upload Flow)
-1. **Клиентская компрессия:** Браузер принимает изображение и сжимает его через `browser-image-compression` до `1000px` ширины и объема `< 200 КБ`.
-2. **Получение Presigned URL:** Клиент вызывает Server Action `getPresignedUploadUrlAction()`.
-3. **Прямая загрузка:** Клиент выполняет HTTP PUT напрямую в Cloudflare R2 bucket.
-4. **Резервный прокси:** При сетевой блокировке или CORS-ошибке клиент вызывает `uploadFileDirectlyServerAction()` для передачи файла через бэкенд Next.js.
-5. **Запись метаданных:** Метаданные файла и `size_bytes` записываются в таблицу `files` Supabase.
+### 5.1 Автоматическое Создание Контрагентов при Партнерстве B2B
+```text
+[ Инициатор (Компания А) ] ──► Нажимает "Отправить заявку B2B" в Каталоге
+                                       │ (статус: 'pending')
+                                       ▼
+[ Принимающий (Компания Б) ] ──► Нажимает "Принять заявку" (respondToPartnershipRequestAction)
+                                       │ (статус: 'approved' / 'accepted')
+                                       ▼
+                         [ ensureCounterpartyLink Engine ]
+                                       │
+           ┌───────────────────────────┴───────────────────────────┐
+           ▼                                                       ▼
+[ Создает запись в `counterparties` ]                    [ Создает запись в `counterparties` ]
+    company_id: A, target_company_id: B                      company_id: B, target_company_id: A
+           │                                                       │
+           └───────────────────────────┬───────────────────────────┘
+                                       ▼
+               [ Контрагенты автоматически доступны в `/documents/new` ]
+```
 
-### 5.2 Безопасный Выход из Системы (Auth Session Cleanup)
-Все кнопки «Выйти из системы» в `SuperAdminSidebar`, `FloatingTopbar` и мобильной шторке выполняют серверный `signOutAction()`, аннулируя HTTP-only куки Supabase (`sb-access-token`) перед перенаправлением на страницу входа.
+### 5.2 Прямое Управление Базой Данных в Инспекторе БД (Super-Admin Full Access)
+1. Выбор таблицы в селекторе вызываем `inspectTableDataAdminAction(tableName, limit)`.
+2. Редактирование строки вызывает `updateDbRowAdminAction(tableName, pkField, pkValue, updates)`.
+3. Удаление строки вызывает `deleteDbRowAdminAction(tableName, pkField, pkValue)`.
+4. Изменения мгновенно применяются в PostgreSQL через Service Role клиент `adminSupabase`.

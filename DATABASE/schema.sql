@@ -246,6 +246,8 @@ CREATE INDEX IF NOT EXISTS idx_partnerships_requester ON public.company_partners
 CREATE INDEX IF NOT EXISTS idx_partnerships_target ON public.company_partnerships(target_company_id);
 CREATE INDEX IF NOT EXISTS idx_counterparties_company ON public.counterparties(company_id);
 CREATE INDEX IF NOT EXISTS idx_counterparties_target_company ON public.counterparties(target_company_id);
+CREATE INDEX IF NOT EXISTS idx_counterparties_company_target ON public.counterparties(company_id, target_company_id);
+CREATE INDEX IF NOT EXISTS idx_company_partnerships_composite ON public.company_partnerships(requester_company_id, target_company_id, status);
 CREATE INDEX IF NOT EXISTS idx_documents_company ON public.documents(company_id);
 CREATE INDEX IF NOT EXISTS idx_documents_author_id ON public.documents(author_id);
 CREATE INDEX IF NOT EXISTS idx_documents_counterparty_id ON public.documents(counterparty_id);
