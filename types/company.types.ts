@@ -30,3 +30,24 @@ export interface CompanyProfileData {
   isOwner: boolean;
   canEdit: boolean;
 }
+
+export interface ClosedPeriodItem {
+  id?: string;
+  year: number;
+  month: number; // 1-12
+  monthName: string;
+  status: 'open' | 'closed';
+  closed_at?: string | null;
+  closed_by_user?: string | null;
+  opened_at?: string | null;
+  opened_by_user?: string | null;
+  comment?: string | null;
+}
+
+export interface YearClosedPeriodsSummary {
+  year: number;
+  totalMonths: number;
+  closedCount: number;
+  openCount: number;
+  periods: ClosedPeriodItem[];
+}

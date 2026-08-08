@@ -42,6 +42,12 @@ export interface Company {
   phone?: string | null;
   address?: string | null;
   privacy_settings?: CompanyPrivacySettings;
+  okpo?: string | null;
+  checking_account?: string | null;
+  bic?: string | null;
+  bank_name?: string | null;
+  corr_account?: string | null;
+  currency?: string | null;
   is_active: boolean;
   storage_limit_gb: number;
   closed_period_until?: string | null;

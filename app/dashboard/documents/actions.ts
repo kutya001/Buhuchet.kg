@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { cache } from 'react';
 import { hasPermission, ModuleName, ActionName } from '@/lib/auth/permissions';
 import { sendTelegramNotification, sendDocumentTelegramNotification, sendDocumentStatusTelegramNotification } from '@/lib/telegram/notifier';
+import { isPeriodClosed } from '@/lib/auth/period-lock';
 
 const getUserContext = cache(async () => {
   const supabase = await createClient();
@@ -354,6 +355,13 @@ export async function createB2BDocumentAction(data: B2BDocumentInput): Promise<A
     const { receiver_company_id, doc_number, doc_date, doc_type, status, comment, files } =
       validation.data;
 
+    if (doc_date && (await isPeriodClosed(ctx.companyId, doc_date))) {
+      return {
+        success: false,
+        error: `Отчетный период за ${new Date(doc_date).toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })} закрыт. Создание и проведение документов запрещено.`,
+      };
+    }
+
     const supabase = await createClient();
     const adminSupabase = await createAdminClient();
 
@@ -456,12 +464,19 @@ export async function updateB2BDocumentStatusAction(
 
     const { data: doc } = await adminSupabase
       .from('documents')
-      .select('status, sender_company_id, receiver_company_id')
+      .select('status, doc_date, sender_company_id, receiver_company_id')
       .eq('id', documentId)
       .single();
 
     if (!doc) {
       return { success: false, error: 'Документ не найден' };
+    }
+
+    if (doc.doc_date && (await isPeriodClosed(ctx.companyId, doc.doc_date))) {
+      return {
+        success: false,
+        error: 'Отчетный период закрыт для редактирования. Изменение статуса документа запрещено.',
+      };
     }
 
     const oldStatus = doc.status;
@@ -599,12 +614,19 @@ export async function deleteB2BDocumentAction(documentId: string): Promise<Actio
 
     const { data: doc } = await adminSupabase
       .from('documents')
-      .select('sender_company_id, receiver_company_id')
+      .select('sender_company_id, receiver_company_id, doc_date')
       .eq('id', documentId)
       .single();
 
     if (!doc) {
       return { success: false, error: 'Документ не найден' };
+    }
+
+    if (doc.doc_date && (await isPeriodClosed(ctx.companyId, doc.doc_date))) {
+      return {
+        success: false,
+        error: 'Отчетный период за эту дату закрыт для изменений. Удаление документа запрещено.',
+      };
     }
 
     if (doc.sender_company_id !== ctx.companyId && doc.receiver_company_id !== ctx.companyId && !ctx.isSuperAdmin) {

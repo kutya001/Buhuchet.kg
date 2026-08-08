@@ -50,6 +50,7 @@ import { updateClosedPeriodAction, updateCompanyPrivacyAndDetailsAction, getComp
 import { CompanyStatsGrid } from '@/components/company/CompanyStatsGrid';
 import { OwnerBadge } from '@/components/company/OwnerBadge';
 import { CompanyProfileForm } from '@/components/company/CompanyProfileForm';
+import { ClosedPeriodsJournal } from '@/components/company/ClosedPeriodsJournal';
 import { canEditCompanyProfile } from '@/lib/auth/permissions';
 import type { CompanyProfileStats } from '@/types/company.types';
 
@@ -256,7 +257,7 @@ export default function CompanyProfilePage() {
         <div>
           <h2 className="text-xl md:text-2xl font-bold text-foreground tracking-tight flex items-center">
             <Building2 className="h-6 w-6 mr-2 text-blue-400" />
-            Управление Организацией
+            Моя Организация
           </h2>
           <p className="text-xs md:text-sm text-muted-foreground mt-0.5">
             Карточка организации и реквизиты учредительных документов КР
@@ -488,89 +489,7 @@ export default function CompanyProfilePage() {
 
       {/* 3. Вкладка Закрытие Месяца / Периода */}
       {activeTab === 'closed_period' && (
-        <Card className="bg-card border-border p-6 space-y-6 max-w-2xl">
-          <div>
-            <h2 className="text-lg font-bold text-foreground flex items-center">
-              <Clock className="h-5 w-5 mr-2 text-amber-400" />
-              Блокировка и Закрытие Отчетного Периода
-            </h2>
-            <p className="text-xs text-muted-foreground mt-1">
-              Укажите дату, до которой все первичные документы (реализации, покупки, платежи) будут заблокированы для создания, изменения и отзыва сотрудниками.
-            </p>
-          </div>
-
-          <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs space-y-2">
-            <p className="font-semibold flex items-center">
-              <AlertCircle className="h-4 w-4 mr-1.5 flex-shrink-0" />
-              Стандарт аудита и защита от искажения учета
-            </p>
-            <p className="text-muted-foreground text-[11px]">
-              Текущая дата закрытия периода:{' '}
-              <strong className="text-foreground font-mono">
-                {company?.closed_period_until ? company.closed_period_until : 'Период открыт (без ограничений)'}
-              </strong>
-            </p>
-          </div>
-
-          <div className="space-y-4">
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold text-foreground">Заблокировать документы ДО указанной даты (включительно):</Label>
-              <Input
-                type="date"
-                value={closedDateInput}
-                onChange={(e) => setClosedDateInput(e.target.value)}
-                className="bg-background border-border text-foreground min-h-[44px] max-w-xs font-mono text-sm"
-              />
-            </div>
-
-            <div className="flex items-center space-x-3 pt-2">
-              <Button
-                disabled={isPending}
-                onClick={() => {
-                  if (!closedDateInput) {
-                    setMsg({ type: 'error', text: 'Укажите валидную дату закрытия периода' });
-                    return;
-                  }
-                  startTransition(async () => {
-                    const res = await updateClosedPeriodAction(closedDateInput);
-                    if (res.success && res.data) {
-                      setCompany(res.data);
-                      setMsg({ type: 'success', text: `Период до ${closedDateInput} успешно закрыт для редактирования!` });
-                    } else {
-                      setMsg({ type: 'error', text: res.error || 'Ошибка закрытия периода' });
-                    }
-                  });
-                }}
-                className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs min-h-[44px] rounded-xl px-5"
-              >
-                {isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Lock className="h-4 w-4 mr-2" />}
-                Заблокировать период
-              </Button>
-
-              {company?.closed_period_until && (
-                <Button
-                  variant="outline"
-                  disabled={isPending}
-                  onClick={() => {
-                    startTransition(async () => {
-                      const res = await updateClosedPeriodAction(null);
-                      if (res.success && res.data) {
-                        setCompany(res.data);
-                        setClosedDateInput('');
-                        setMsg({ type: 'success', text: 'Блокировка периода снята. Создание первички разблокировано.' });
-                      } else {
-                        setMsg({ type: 'error', text: res.error || 'Ошибка разблокировки' });
-                      }
-                    });
-                  }}
-                  className="border-border text-muted-foreground hover:text-foreground text-xs min-h-[44px] rounded-xl"
-                >
-                  Разблокировать период
-                </Button>
-              )}
-            </div>
-          </div>
-        </Card>
+        <ClosedPeriodsJournal canEdit={canEditCompanyProfile(currentProfile, company?.id)} />
       )}
 
       {/* МОДАЛЬНОЕ ОКНО РЕДАКТИРОВАНИЯ И ЗАМЕНЫ ФАЙЛА R2 (UnifiedFormModal) */}

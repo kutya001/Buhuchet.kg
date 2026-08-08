@@ -237,6 +237,23 @@ CREATE TABLE IF NOT EXISTS public.telegram_logs (
 -- =============================================================================
 
 CREATE INDEX IF NOT EXISTS idx_companies_inn ON public.companies(inn);
+-- 1.13 Таблица: company_closed_periods (Журнал Закрытых Отчетных Периодов)
+CREATE TABLE IF NOT EXISTS public.company_closed_periods (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    company_id UUID NOT NULL REFERENCES public.companies(id) ON DELETE CASCADE,
+    year INT NOT NULL CHECK (year BETWEEN 2000 AND 2100),
+    month INT NOT NULL CHECK (month BETWEEN 1 AND 12),
+    status VARCHAR(20) NOT NULL DEFAULT 'closed' CHECK (status IN ('open', 'closed')),
+    closed_at TIMESTAMPTZ DEFAULT NOW(),
+    closed_by UUID REFERENCES auth.users(id),
+    opened_at TIMESTAMPTZ,
+    opened_by UUID REFERENCES auth.users(id),
+    comment TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    CONSTRAINT unique_company_year_month UNIQUE(company_id, year, month)
+);
+
 CREATE INDEX IF NOT EXISTS idx_companies_status ON public.companies(status);
 CREATE INDEX IF NOT EXISTS idx_users_company_id ON public.users(company_id);
 CREATE INDEX IF NOT EXISTS idx_users_role_id ON public.users(role_id);
