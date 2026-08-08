@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 
 export interface ServerUserContext {
@@ -8,9 +9,10 @@ export interface ServerUserContext {
 }
 
 /**
- * Получение серверного контекста пользователя (userId, companyId, role, isSuperAdmin)
+ * Получение серверного контекста пользователя (userId, companyId, role, isSuperAdmin).
+ * Мемоизировано через React cache() для исключения дублирующих DB-запросов в рамках одного HTTP запроса.
  */
-export async function getSeverUserContext(): Promise<ServerUserContext | null> {
+export const getSeverUserContext = cache(async (): Promise<ServerUserContext | null> => {
   const supabase = await createClient();
   const {
     data: { user },
@@ -30,4 +32,4 @@ export async function getSeverUserContext(): Promise<ServerUserContext | null> {
     role: prof?.role || null,
     isSuperAdmin: !!prof?.is_super_admin,
   };
-}
+});

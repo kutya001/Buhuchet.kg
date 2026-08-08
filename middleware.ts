@@ -6,6 +6,19 @@ export async function middleware(request: NextRequest) {
     request,
   });
 
+  const pathname = request.nextUrl.pathname;
+
+  // 🟢 ИСКЛЮЧЕНИЕ 1: Публичные API эндпоинты (Telegram Webhook)
+  if (pathname.startsWith('/api/telegram/webhook')) {
+    return NextResponse.next();
+  }
+
+  // 🟢 ОПТИМИЗАЦИЯ 1: Если нет авторизационной куки Supabase (`sb-`), пропускаем анонимный визит на лендинг мгновенно
+  const hasAuthCookie = request.cookies.getAll().some((c) => c.name.startsWith('sb-'));
+  if (pathname === '/' && !hasAuthCookie) {
+    return supabaseResponse;
+  }
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -27,30 +40,20 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  // Обновляем сессию пользователя
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  const pathname = request.nextUrl.pathname;
-
-  // 🟢 ИСКЛЮЧЕНИЕ 1: Telegram Webhook должен быть публично доступен без сессии Supabase!
-  if (pathname.startsWith('/api/telegram/webhook')) {
-    return NextResponse.next();
-  }
-
-  // 🟢 ОПТИМИЗАЦИЯ 1: Для prefetch-запросов (когда Next.js предзагружает страницы на ховер/скролл)
+  // 🟢 ОПТИМИЗАЦИЯ 2: Для prefetch-запросов Next.js (ховеры/скролл)
   const isPrefetch =
     request.headers.get('purpose') === 'prefetch' ||
     request.headers.get('x-middleware-prefetch') === '1' ||
     request.headers.get('next-router-prefetch') === '1';
 
-  if (isPrefetch) {
-    const hasAuthCookie = request.cookies.getAll().some((c) => c.name.startsWith('sb-'));
-    if (hasAuthCookie) {
-      return supabaseResponse;
-    }
+  if (isPrefetch && hasAuthCookie) {
+    return supabaseResponse;
   }
+
+  // Обновляем сессию пользователя только для страниц, где требуется авторизация
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   // ПУБЛИЧНЫЕ МАРШРУТЫ (Лендинг, Логин, Регистрация)
   const isPublicRoute = pathname === '/' || pathname === '/login' || pathname === '/register';
@@ -64,7 +67,6 @@ export async function middleware(request: NextRequest) {
 
   // Если заходит авторизованный пользователь
   if (user) {
-    // 🟢 ОПТИМИЗАЦИЯ 2: Одиночная выборка профиля пользователя из БД для всех роутинговых проверок
     const { data: dbUser } = await supabase
       .from('users')
       .select('company_id, role, role_id, is_super_admin')
@@ -78,14 +80,14 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(url);
     }
 
-    // Если Суперадмин переходит на обычную главную дашборда (/dashboard) -> редиректим на /super-admin
+    // Если Суперадмин переходит на /dashboard -> редирект на /super-admin
     if (pathname === '/dashboard' && dbUser?.is_super_admin) {
       const url = request.nextUrl.clone();
       url.pathname = '/super-admin';
       return NextResponse.redirect(url);
     }
 
-    // Если пользователь — не утвержденный сотрудник (company_id есть, но role_id не назначен и он не owner/super_admin)
+    // Если пользователь — не утвержденный сотрудник
     if (pathname.startsWith('/dashboard') && pathname !== '/dashboard/pending') {
       if (
         dbUser &&
@@ -106,6 +108,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|api/telegram/webhook|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|icon.svg|robots.txt|sitemap.xml|api/telegram/webhook|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|woff2?)$).*)',
   ],
 };

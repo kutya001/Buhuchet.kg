@@ -83,16 +83,17 @@ export default function CompanyProfilePage() {
   const loadCompanyData = async () => {
     setLoading(true);
 
-    const profileRes = await getCompanyProfileDataAction();
+    const [profileRes, legalRes, catRes] = await Promise.all([
+      getCompanyProfileDataAction(),
+      getCompanyLegalDocsAction(),
+      supabase.from('file_categories').select('*').order('name'),
+    ]);
+
     if (profileRes.success && profileRes.data) {
       setCompany(profileRes.data.company);
       setCurrentProfile(profileRes.data.userProfile);
 
-      const legalRes = await getCompanyLegalDocsAction();
-      if (legalRes.success && legalRes.data) {
-        setLegalDocs(legalRes.data);
-      }
-
+      // Загружаем статистику профиля компании с помощью ID компании
       const statsRes = await getCompanyProfileStatsAction(profileRes.data.company.id);
       if (statsRes.success && statsRes.data) {
         setStats(statsRes.data);
@@ -101,8 +102,13 @@ export default function CompanyProfilePage() {
       setMsg({ type: 'error', text: profileRes.error });
     }
 
-    const { data: catData } = await supabase.from('file_categories').select('*').order('name');
-    if (catData) setCategories(catData as FileCategory[]);
+    if (legalRes.success && legalRes.data) {
+      setLegalDocs(legalRes.data);
+    }
+
+    if (catRes.data) {
+      setCategories(catRes.data as FileCategory[]);
+    }
 
     setLoading(false);
   };

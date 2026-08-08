@@ -138,3 +138,9 @@
 - Запросы к `/api/telegram/webhook` проверяются по заголовку `x-telegram-bot-api-secret-token` на соответствие переменной `TELEGRAM_WEBHOOK_SECRET`.
 - При вызове `setWebhook` в Telegram API передается параметр `secret_token`.
 
+### 6.5 Оптимизация Производительности СУБД и RLS (Migration 20260809000010)
+- Вызовы `auth.uid()` в RLS-политиках оборачены в выражение `(SELECT auth.uid())` для мемоизации идентификатора пользователя в рамках одной итерации выборки PostgreSQL.
+- Созданы составные (composite) индексы под частые фильтры: `idx_documents_company_status_date` on `documents(company_id, status, doc_date DESC)`, `idx_files_company_created` on `files(company_id, created_at DESC)`, `idx_company_partnerships_lookup` on `company_partnerships(requester_company_id, target_company_id, status)`.
+- Контекст сессии `getSeverUserContext` мемоизирован с помощью `React.cache()` для исключения дублирующих DB-запросов за один HTTP-цикл.
+
+
