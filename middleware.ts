@@ -34,9 +34,22 @@ export async function middleware(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
 
-  // 🟢 ИСКЛЮЧЕНИЕ: Telegram Webhook должен быть публично доступен без сессии Supabase!
+  // 🟢 ИСКЛЮЧЕНИЕ 1: Telegram Webhook должен быть публично доступен без сессии Supabase!
   if (pathname.startsWith('/api/telegram/webhook')) {
     return NextResponse.next();
+  }
+
+  // 🟢 ОПТИМИЗАЦИЯ 1: Для prefetch-запросов (когда Next.js предзагружает страницы на ховер/скролл)
+  const isPrefetch =
+    request.headers.get('purpose') === 'prefetch' ||
+    request.headers.get('x-middleware-prefetch') === '1' ||
+    request.headers.get('next-router-prefetch') === '1';
+
+  if (isPrefetch) {
+    const hasAuthCookie = request.cookies.getAll().some((c) => c.name.startsWith('sb-'));
+    if (hasAuthCookie) {
+      return supabaseResponse;
+    }
   }
 
   // ПУБЛИЧНЫЕ МАРШРУТЫ (Лендинг, Логин, Регистрация)
@@ -51,42 +64,29 @@ export async function middleware(request: NextRequest) {
 
   // Если заходит авторизованный пользователь
   if (user) {
+    // 🟢 ОПТИМИЗАЦИЯ 2: Одиночная выборка профиля пользователя из БД для всех роутинговых проверок
+    const { data: dbUser } = await supabase
+      .from('users')
+      .select('company_id, role, role_id, is_super_admin')
+      .eq('id', user.id)
+      .maybeSingle();
+
     // Редирект авторизованного с страниц логина/регистрации
     if (pathname === '/login' || pathname === '/register') {
-      const { data: dbUser } = await supabase
-        .from('users')
-        .select('is_super_admin')
-        .eq('id', user.id)
-        .single();
-
       const url = request.nextUrl.clone();
       url.pathname = dbUser?.is_super_admin ? '/super-admin' : '/dashboard';
       return NextResponse.redirect(url);
     }
 
     // Если Суперадмин переходит на обычную главную дашборда (/dashboard) -> редиректим на /super-admin
-    if (pathname === '/dashboard') {
-      const { data: dbUser } = await supabase
-        .from('users')
-        .select('is_super_admin')
-        .eq('id', user.id)
-        .single();
-
-      if (dbUser?.is_super_admin) {
-        const url = request.nextUrl.clone();
-        url.pathname = '/super-admin';
-        return NextResponse.redirect(url);
-      }
+    if (pathname === '/dashboard' && dbUser?.is_super_admin) {
+      const url = request.nextUrl.clone();
+      url.pathname = '/super-admin';
+      return NextResponse.redirect(url);
     }
 
     // Если пользователь — не утвержденный сотрудник (company_id есть, но role_id не назначен и он не owner/super_admin)
     if (pathname.startsWith('/dashboard') && pathname !== '/dashboard/pending') {
-      const { data: dbUser } = await supabase
-        .from('users')
-        .select('company_id, role, role_id, is_super_admin')
-        .eq('id', user.id)
-        .single();
-
       if (
         dbUser &&
         !dbUser.is_super_admin &&

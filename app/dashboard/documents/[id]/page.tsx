@@ -32,7 +32,20 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
-import { ScanViewer } from '@/components/documents/ScanViewer';
+import dynamic from 'next/dynamic';
+
+const ScanViewer = dynamic(
+  () => import('@/components/documents/ScanViewer').then((mod) => mod.ScanViewer),
+  {
+    loading: () => (
+      <div className="flex items-center justify-center h-96 bg-card border border-border rounded-xl text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin mr-2" />
+        <span>Подготовка интерактивного просмотрщика сканов...</span>
+      </div>
+    ),
+    ssr: false,
+  }
+);
 import {
   getB2BDocumentByIdAction,
   updateB2BDocumentStatusAction,

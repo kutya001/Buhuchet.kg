@@ -27,7 +27,21 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
-import { MultiFileDropzone, type FileItemState } from '@/components/documents/MultiFileDropzone';
+import dynamic from 'next/dynamic';
+import type { FileItemState } from '@/components/documents/MultiFileDropzone';
+
+const MultiFileDropzone = dynamic(
+  () => import('@/components/documents/MultiFileDropzone').then((mod) => mod.MultiFileDropzone),
+  {
+    loading: () => (
+      <div className="h-32 rounded-xl bg-muted/30 border border-dashed border-border animate-pulse flex items-center justify-center text-xs text-muted-foreground">
+        <Loader2 className="h-5 w-5 animate-spin mr-2" />
+        <span>Подготовка облачного загрузчика сканов...</span>
+      </div>
+    ),
+    ssr: false,
+  }
+);
 import {
   createB2BDocumentAction,
   getB2BDocumentByIdAction,

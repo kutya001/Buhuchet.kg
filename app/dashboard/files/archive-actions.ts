@@ -4,7 +4,7 @@ import { createClient, createAdminClient } from '@/lib/supabase/server';
 import type { ActionResponse, DocumentFile } from '@/types/database.types';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { getCachedFileCategories } from '@/lib/cache/lookups';
+import { getLookupCategories } from '@/lib/cache/lookups';
 import { deleteR2Object } from '@/lib/r2';
 import { formatBytes } from '@/lib/utils';
 
@@ -57,8 +57,8 @@ export async function uploadLegalDocumentAction(data: ArchiveFileInput): Promise
 
     let targetCatId = category_id;
     if (!targetCatId) {
-      const cachedCategories = await getCachedFileCategories();
-      const ustavCat = cachedCategories.find((c) => c.name === 'Устав компании');
+      const cachedCategories = await getLookupCategories();
+      const ustavCat = cachedCategories.find((c: any) => c.name === 'Устав компании');
       targetCatId = ustavCat?.id || '268dda23-d839-429d-bec2-aae391cffb00';
     }
 
@@ -132,7 +132,7 @@ export async function uploadFileToArchiveAction(data: ArchiveFileInput): Promise
 
     let targetCatId = category_id;
     if (!targetCatId) {
-      const cachedCategories = await getCachedFileCategories();
+      const cachedCategories = await getLookupCategories();
       targetCatId = cachedCategories[0]?.id || 'd9f0d6c6-2423-4b35-a72c-1bb380699a9c';
     }
 
