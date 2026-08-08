@@ -2,7 +2,7 @@
 
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import type { ActionResponse, UserProfile, CompanyRole } from '@/types/database.types';
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 
 async function getUserContext() {
   const supabase = await createClient();
@@ -316,6 +316,7 @@ export async function createCompanyRoleAction(params: {
     }
 
     revalidatePath('/dashboard/employees');
+    revalidateTag('company-roles');
     return { success: true, data: role as CompanyRole };
   } catch (err: unknown) {
     return { success: false, error: err instanceof Error ? err.message : 'Сбой создания роли' };
@@ -351,6 +352,7 @@ export async function updateCompanyRoleAction(
     }
 
     revalidatePath('/dashboard/employees');
+    revalidateTag('company-roles');
     return { success: true, data: updated as CompanyRole };
   } catch (err: unknown) {
     return { success: false, error: err instanceof Error ? err.message : 'Сбой обновления роли' };

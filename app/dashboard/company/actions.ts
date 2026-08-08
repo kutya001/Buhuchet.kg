@@ -3,7 +3,7 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import type { ActionResponse, Company } from '@/types/database.types';
 import type { CompanyProfileStats, ClosedPeriodItem, YearClosedPeriodsSummary } from '@/types/company.types';
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 
 /**
  * Получение агрегированной статистики профиля компании
@@ -241,6 +241,7 @@ export async function updateCompanyPrivacyAndDetailsAction(params: {
     if (error || !updated) return { success: false, error: error?.message || 'Ошибка обновления' };
 
     revalidatePath('/dashboard/company');
+    revalidateTag('companies-catalog');
     return { success: true, data: updated as Company };
   } catch (err: unknown) {
     return { success: false, error: err instanceof Error ? err.message : 'Сбой обновления' };

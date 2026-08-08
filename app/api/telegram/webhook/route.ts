@@ -4,6 +4,15 @@ import { sendTelegramMessage } from '@/lib/telegram/notifier';
 
 export async function POST(req: Request) {
   try {
+    // 0. Авторизация по секретному токену X-Telegram-Bot-Api-Secret-Token
+    const webhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
+    if (webhookSecret && webhookSecret.trim() !== '') {
+      const receivedToken = req.headers.get('x-telegram-bot-api-secret-token');
+      if (receivedToken !== webhookSecret.trim()) {
+        return NextResponse.json({ error: 'Unauthorized: invalid secret token' }, { status: 401 });
+      }
+    }
+
     const update = await req.json();
 
     if (!update.message || !update.message.text) {
@@ -110,6 +119,7 @@ export async function GET(req: Request) {
       return NextResponse.json({ success: false, error: 'TELEGRAM_BOT_TOKEN не задан в Vercel / .env' });
     }
     const token = rawToken.trim();
+    const webhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
 
     // Если передан флаг ?action=info, запрашиваем текущую информацию
     if (searchParams.get('action') === 'info') {
@@ -118,15 +128,18 @@ export async function GET(req: Request) {
       return NextResponse.json({ success: true, info });
     }
 
-    // Иначе регистрируем webhookUrl в Telegram API
-    const res = await fetch(
-      `https://api.telegram.org/bot${token}/setWebhook?url=${encodeURIComponent(webhookUrl)}`
-    );
+    // Регистрируем webhookUrl в Telegram API с заголовочным секретом
+    let setWebhookEndpoint = `https://api.telegram.org/bot${token}/setWebhook?url=${encodeURIComponent(webhookUrl)}`;
+    if (webhookSecret && webhookSecret.trim() !== '') {
+      setWebhookEndpoint += `&secret_token=${encodeURIComponent(webhookSecret.trim())}`;
+    }
+
+    const res = await fetch(setWebhookEndpoint);
     const data = await res.json();
 
     return NextResponse.json({
       success: data.ok,
-      message: data.ok ? 'Webhook успешно зарегистрирован в Telegram!' : 'Ошибка привязки Webhook',
+      message: data.ok ? 'Webhook успешно зарегистрирован в Telegram с защищенным секретом!' : 'Ошибка привязки Webhook',
       webhookUrl,
       telegramResponse: data,
     });

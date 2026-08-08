@@ -117,3 +117,24 @@
 2. Редактирование строки вызывает `updateDbRowAdminAction(tableName, pkField, pkValue, updates)`.
 3. Удаление строки вызывает `deleteDbRowAdminAction(tableName, pkField, pkValue)`.
 4. Изменения мгновенно применяются в PostgreSQL через Service Role клиент `adminSupabase`.
+
+---
+
+## 6. БЕЗОПАСНОСТЬ И АРХИТЕКТУРА СУБД (SECURITY & SSOT SPECIFICATIONS)
+
+### 6.1 Единый Источник Правды Схемы (SSOT)
+- Все физические таблицы, индексы, RLS-политики и триггеры версионируются в хронологических SQL-миграциях Supabase CLI (`supabase/migrations/*.sql`).
+- Базовый сидинг демо-данных КР находится в `supabase/seed.sql`. Генерация типов выполняется через `npm run types:generate`.
+
+### 6.2 Защищенная Валидация Server Actions (`createSafeAction`)
+- Все мутирующие серверные вызовы оборачиваются в `createSafeAction` на базе `zod`.
+- Функция автоматически проверяет сессию `getSeverUserContext()`, парсит payload по Zod-схеме и экранирует необработанные 500 исключения.
+
+### 6.3 Аппаратная Защита Закрытых Периодов (PostgreSQL Triggers & RLS)
+- Триггерная функция PostgreSQL `check_closed_period_lock()` отслеживает закрытие месяцев в `company_closed_periods` и блокирует вызовы `INSERT/UPDATE/DELETE` над таблицами `documents` и `files`.
+- Владельцы компании (`owner`) и суперадмины сохраняют исключительное право корректировки.
+
+### 6.4 Защита Telegram Webhook Секретным Токеном
+- Запросы к `/api/telegram/webhook` проверяются по заголовку `x-telegram-bot-api-secret-token` на соответствие переменной `TELEGRAM_WEBHOOK_SECRET`.
+- При вызове `setWebhook` в Telegram API передается параметр `secret_token`.
+
