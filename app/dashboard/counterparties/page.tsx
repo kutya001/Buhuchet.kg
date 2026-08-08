@@ -956,17 +956,22 @@ export default function CounterpartiesPage() {
           );
         }
 
-        // 4. Нет связи (Первичный запрос)
+        // 4. Нет связи (Не сотрудничаем)
         return (
-          <Button
-            size="sm"
-            onClick={() => handleSendRequest(c.id)}
-            disabled={isPending}
-            className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs min-h-[36px] rounded-xl px-4 shadow-md"
-          >
-            <Send className="h-3.5 w-3.5 mr-1.5" />
-            Запросить сотрудничество
-          </Button>
+          <div className="flex items-center space-x-2">
+            <Badge className="bg-slate-500/10 text-slate-400 border border-slate-500/20 text-xs py-1 px-2.5">
+              Не сотрудничаем
+            </Badge>
+            <Button
+              size="sm"
+              onClick={() => handleSendRequest(c.id)}
+              disabled={isPending}
+              className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs h-8 rounded-xl px-3 shadow-md"
+            >
+              <Send className="h-3.5 w-3.5 mr-1" />
+              Сотрудничать
+            </Button>
+          </div>
         );
       },
     },
@@ -1055,7 +1060,7 @@ export default function CounterpartiesPage() {
           }`}
         >
           <Globe className="h-4 w-4" />
-          <span>Каталог Организаций КР</span>
+          <span>Каталог организаций</span>
         </button>
       </div>
 
@@ -1240,7 +1245,7 @@ export default function CounterpartiesPage() {
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-background/40 p-4 rounded-2xl border border-border">
             <div>
-              <h3 className="text-base font-bold text-foreground">Каталог Зарегистрированных Организаций</h3>
+              <h3 className="text-base font-bold text-foreground">Каталог организаций</h3>
               <p className="text-xs text-muted-foreground">Поиск партнеров по категориям и отраслям бизнеса</p>
             </div>
 

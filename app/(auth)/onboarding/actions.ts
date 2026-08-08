@@ -132,3 +132,88 @@ export async function resubmitCompanyForModerationAction(
     return { success: false, error: errorMsg };
   }
 }
+
+/**
+ * Поиск активных компаний в КР по ИНН или названию для подачи заявки сотрудника
+ */
+export async function searchActiveCompaniesAction(
+  query: string
+): Promise<ActionResponse<Array<Partial<Company>>>> {
+  try {
+    if (!query || query.trim().length < 2) {
+      return { success: true, data: [] };
+    }
+
+    const adminSupabase = await createAdminClient();
+    const cleanQuery = query.trim();
+
+    const { data: companies, error } = await adminSupabase
+      .from('companies')
+      .select('id, name, inn, director_name, legal_address, industry')
+      .or(`name.ilike.%${cleanQuery}%,inn.ilike.%${cleanQuery}%`)
+      .limit(10);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: companies || [] };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Сбой поиска компаний' };
+  }
+}
+
+/**
+ * Подача заявки сотрудника на привязку к выбранной организации
+ */
+export async function createEmployeeJoinRequestAction(data: {
+  companyId: string;
+  position: string;
+  fullName: string;
+  phone: string;
+}): Promise<ActionResponse> {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return { success: false, error: 'Пользователь не авторизован' };
+    }
+
+    if (!data.companyId) {
+      return { success: false, error: 'Выберите целевую компанию из списка' };
+    }
+
+    if (!data.fullName || data.fullName.trim().length < 2) {
+      return { success: false, error: 'Укажите ваше полное ФИО' };
+    }
+
+    const adminSupabase = await createAdminClient();
+
+    const { error: userErr } = await adminSupabase
+      .from('users')
+      .upsert({
+        id: user.id,
+        email: user.email!,
+        full_name: data.fullName.trim(),
+        phone: data.phone ? data.phone.trim() : null,
+        company_id: data.companyId,
+        position: data.position ? data.position.trim() : 'Сотрудник',
+        role: null,
+        updated_at: new Date().toISOString(),
+      });
+
+    if (userErr) {
+      return { success: false, error: `Ошибка подачи заявки: ${userErr.message}` };
+    }
+
+    revalidatePath('/dashboard');
+    revalidatePath('/dashboard/employees');
+    revalidatePath('/dashboard/pending');
+    return { success: true };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Сбой подачи заявки сотрудника' };
+  }
+}
