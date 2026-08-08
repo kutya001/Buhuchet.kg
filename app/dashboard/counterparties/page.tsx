@@ -53,7 +53,7 @@ import {
 import { INDUSTRIES } from '@/types/database.types';
 import type { Counterparty, Company, Document, DocumentFile, PartnershipStatus, UserProfile } from '@/types/database.types';
 import imageCompression from 'browser-image-compression';
-import { UnifiedDataGrid, ColumnDef } from '@/components/ui/unified/UnifiedDataGrid';
+import { UnifiedDataGrid, ColumnDef, RowAction } from '@/components/ui/unified/UnifiedDataGrid';
 import { UnifiedFormModal } from '@/components/ui/unified/UnifiedFormModal';
 import { ActionRowGroup } from '@/components/ui/unified/ActionIcons';
 import { MobileFAB } from '@/components/ui/MobileFAB';
@@ -396,6 +396,158 @@ export default function CounterpartiesPage() {
     }
 
     setProfileLoading(false);
+  };
+
+  // ---------------- ДВИЖОК ДЕЙСТВИЙ ДЛЯ ПОПОВЕРА И КОНТЕКСТНОГО МЕНЮ (getRowActions) ----------------
+  const getCounterpartyRowActions = (c: Counterparty): RowAction<Counterparty>[] => {
+    return [
+      {
+        label: 'Просмотреть реквизиты и уставные сканы R2',
+        icon: <FileText className="h-4 w-4 text-indigo-400" />,
+        action: () => handleViewProfile(c.target_company_id || c.id),
+      },
+      {
+        label: 'Выгрузить Акт Сверки Взаиморасчетов',
+        icon: <Download className="h-4 w-4 text-emerald-400" />,
+        action: () => handleOpenPartnerReportModal(c),
+      },
+      {
+        label: 'Редактировать примечание',
+        icon: <Edit2 className="h-4 w-4 text-amber-400" />,
+        action: () => {
+          setEditingCounterpartyId(c.id);
+          setEditComment(c.comment || '');
+        },
+      },
+      {
+        label: 'Прекратить сотрудничество',
+        icon: <UserX className="h-4 w-4 text-rose-400" />,
+        danger: true,
+        separatorBefore: true,
+        action: () => setTerminateModalCompany({ id: c.target_company_id || c.id, name: c.name }),
+      },
+    ];
+  };
+
+  const getPartnershipRowActions = (p: any): RowAction<any>[] => {
+    const isRequester = p.requester_company_id === currentCompanyId;
+    const partnerComp = isRequester ? p.target_company : p.requester_company;
+    const actions: RowAction<any>[] = [];
+
+    if (partnerComp?.id) {
+      actions.push({
+        label: 'Просмотреть профиль организации',
+        icon: <FileText className="h-4 w-4 text-indigo-400" />,
+        action: () => handleViewProfile(partnerComp.id),
+      });
+    }
+
+    if (p.status === 'pending') {
+      if (isRequester) {
+        actions.push({
+          label: 'Отменить исходящую заявку',
+          icon: <RotateCcw className="h-4 w-4 text-amber-400" />,
+          action: () => handleRespondRequest(p.id, 'cancelled'),
+        });
+      } else {
+        actions.push(
+          {
+            label: 'Принять в сеть партнеров',
+            icon: <Check className="h-4 w-4 text-emerald-400" />,
+            action: () => handleRespondRequest(p.id, 'approved'),
+          },
+          {
+            label: 'Отклонить заявку',
+            icon: <X className="h-4 w-4 text-rose-400" />,
+            danger: true,
+            action: () => handleRespondRequest(p.id, 'rejected'),
+          }
+        );
+      }
+    } else if (p.status === 'approved' || p.status === 'accepted') {
+      actions.push({
+        label: 'Прекратить партнерство',
+        icon: <UserX className="h-4 w-4 text-rose-400" />,
+        danger: true,
+        separatorBefore: true,
+        action: () => setTerminateModalCompany({ id: partnerComp?.id || p.id, name: partnerComp?.name || 'Партнер' }),
+      });
+    } else if ((p.status === 'rejected' || p.status === 'recalled' || p.status === 'cancelled') && partnerComp?.id) {
+      actions.push({
+        label: 'Повторить запрос на партнерство',
+        icon: <Send className="h-4 w-4 text-purple-400" />,
+        action: () => handleSendRequest(partnerComp.id),
+      });
+    }
+
+    return actions;
+  };
+
+  const getCatalogRowActions = (c: Company): RowAction<Company>[] => {
+    const existingP = partnerships.find(
+      (p) =>
+        (p.requester_company_id === currentCompanyId && p.target_company_id === c.id) ||
+        (p.target_company_id === currentCompanyId && p.requester_company_id === c.id)
+    );
+
+    const actions: RowAction<Company>[] = [
+      {
+        label: 'Просмотреть данные и уставные сканы R2',
+        icon: <FileText className="h-4 w-4 text-indigo-400" />,
+        action: () => handleViewProfile(c.id),
+      },
+    ];
+
+    if (existingP?.status === 'approved' || existingP?.status === 'accepted') {
+      actions.push({
+        label: 'Прекратить сотрудничество',
+        icon: <UserX className="h-4 w-4 text-rose-400" />,
+        danger: true,
+        separatorBefore: true,
+        action: () => setTerminateModalCompany({ id: c.id, name: c.name }),
+      });
+    } else if (existingP?.status === 'pending') {
+      const isOutgoing = existingP.requester_company_id === currentCompanyId;
+      if (isOutgoing) {
+        actions.push({
+          label: 'Отменить исходящую заявку',
+          icon: <RotateCcw className="h-4 w-4 text-amber-400" />,
+          action: () => handleRespondRequest(existingP.id, 'cancelled'),
+        });
+      } else {
+        actions.push(
+          {
+            label: 'Принять предложение в сеть',
+            icon: <Check className="h-4 w-4 text-emerald-400" />,
+            action: () => handleRespondRequest(existingP.id, 'approved'),
+          },
+          {
+            label: 'Отклонить предложение',
+            icon: <X className="h-4 w-4 text-rose-400" />,
+            danger: true,
+            action: () => handleRespondRequest(existingP.id, 'rejected'),
+          }
+        );
+      }
+    } else if (
+      existingP?.status === 'rejected' ||
+      existingP?.status === 'terminated' ||
+      existingP?.status === 'cancelled'
+    ) {
+      actions.push({
+        label: 'Повторить запрос на партнерство',
+        icon: <Send className="h-4 w-4 text-purple-400" />,
+        action: () => handleSendRequest(c.id),
+      });
+    } else {
+      actions.push({
+        label: 'Запросить сотрудничество (B2B)',
+        icon: <Send className="h-4 w-4 text-purple-400" />,
+        action: () => handleSendRequest(c.id),
+      });
+    }
+
+    return actions;
   };
 
   // ---------------- CONFIG FOR TAB 1: COUNTERPARTIES ----------------
@@ -888,10 +1040,7 @@ export default function CounterpartiesPage() {
           data={counterparties}
           keyExtractor={(c) => c.id}
           onRowClick={(c) => handleOpenProfileModal(c)}
-          getRowActions={(c) => [
-            { label: 'Акт сверки', action: () => handleOpenPartnerReport(c) },
-            { label: 'Прекратить партнерство', action: () => handleTerminatePartnership(c.id), danger: true },
-          ]}
+          getRowActions={getCounterpartyRowActions}
           searchPlaceholder="Поиск по наименованию, ИНН, примечанию..."
           emptyMessage="Контрагенты не найдены. Создайте контрагента вручную или примите заявку в разделе «Заявки»."
           isLoading={loading}
@@ -1046,9 +1195,11 @@ export default function CounterpartiesPage() {
           </div>
 
           <UnifiedDataGrid<any>
+            gridId="partnerships_registry"
             columns={partnershipsColumns}
             data={filteredPartnerships}
             keyExtractor={(p) => p.id}
+            getRowActions={getPartnershipRowActions}
             searchPlaceholder="Поиск по организации, статусу..."
             emptyMessage="Заявки с выбранным статусом отсутствуют."
             isLoading={loading}
@@ -1084,9 +1235,12 @@ export default function CounterpartiesPage() {
           </div>
 
           <UnifiedDataGrid<Company>
+            gridId="catalog_registry"
             columns={catalogColumns}
             data={filteredCatalog}
             keyExtractor={(c) => c.id}
+            onRowClick={(c) => handleViewProfile(c.id)}
+            getRowActions={getCatalogRowActions}
             searchPlaceholder="Поиск по названию организации, ИНН, руководителю..."
             emptyMessage="Организации в выбранной категории не найдены."
             isLoading={loading}
