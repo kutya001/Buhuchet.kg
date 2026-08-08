@@ -247,6 +247,60 @@ export async function updateCompanyPrivacyAndDetailsAction(params: {
   }
 }
 
+/**
+ * Получение полной карточки компании и профиля текущего пользователя
+ */
+export async function getCompanyProfileDataAction(): Promise<
+  ActionResponse<{ company: Company; userProfile: any }>
+> {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return { success: false, error: 'Пользователь не авторизован' };
+    }
+
+    const adminSupabase = await createAdminClient();
+
+    const { data: userProfile, error: userErr } = await adminSupabase
+      .from('users')
+      .select('*, company_roles(*)')
+      .eq('id', user.id)
+      .single();
+
+    if (userErr || !userProfile) {
+      return { success: false, error: 'Профиль пользователя не найден' };
+    }
+
+    if (!userProfile.company_id) {
+      return { success: false, error: 'Пользователь не привязан к организации' };
+    }
+
+    const { data: company, error: compErr } = await adminSupabase
+      .from('companies')
+      .select('*')
+      .eq('id', userProfile.company_id)
+      .single();
+
+    if (compErr || !company) {
+      return { success: false, error: 'Данные организации не найдены' };
+    }
+
+    return {
+      success: true,
+      data: {
+        company: company as Company,
+        userProfile,
+      },
+    };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Сбой загрузки данных компании' };
+  }
+}
+
 const MONTH_NAMES_RU = [
   'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
   'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'

@@ -195,6 +195,13 @@ export async function updateB2BDocumentFullAction(
       return { success: false, error: 'Редактировать можно только черновик или отозванный документ' };
     }
 
+    if (ctx.role !== 'owner' && !ctx.isSuperAdmin && data.doc_date && (await isPeriodClosed(ctx.companyId, data.doc_date))) {
+      return {
+        success: false,
+        error: `Отчетный период за ${new Date(data.doc_date).toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })} закрыт. Изменение первички заблокировано (доступ разблокировки есть у Владельца).`,
+      };
+    }
+
     const targetStatus = data.status || 'draft';
 
     // 1. Обновляем основные реквизиты документа
@@ -284,7 +291,7 @@ export async function recallB2BDocumentAction(documentId: string): Promise<Actio
 
     const { data: doc } = await adminSupabase
       .from('documents')
-      .select('sender_company_id, status')
+      .select('sender_company_id, status, doc_date')
       .eq('id', documentId)
       .single();
 
@@ -298,6 +305,13 @@ export async function recallB2BDocumentAction(documentId: string): Promise<Actio
 
     if (doc.status !== 'sent') {
       return { success: false, error: 'Отозвать можно только документы в статусе "Отправлен"' };
+    }
+
+    if (ctx.role !== 'owner' && !ctx.isSuperAdmin && doc.doc_date && (await isPeriodClosed(ctx.companyId, doc.doc_date))) {
+      return {
+        success: false,
+        error: 'Отчетный период за эту дату закрыт. Отзыв документа заблокирован (доступ разблокировки есть у Владельца).',
+      };
     }
 
     // Переводим в статус 'recalled'
@@ -355,10 +369,10 @@ export async function createB2BDocumentAction(data: B2BDocumentInput): Promise<A
     const { receiver_company_id, doc_number, doc_date, doc_type, status, comment, files } =
       validation.data;
 
-    if (doc_date && (await isPeriodClosed(ctx.companyId, doc_date))) {
+    if (ctx.role !== 'owner' && !ctx.isSuperAdmin && doc_date && (await isPeriodClosed(ctx.companyId, doc_date))) {
       return {
         success: false,
-        error: `Отчетный период за ${new Date(doc_date).toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })} закрыт. Создание и проведение документов запрещено.`,
+        error: `Отчетный период за ${new Date(doc_date).toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })} закрыт. Создание и проведение первички заблокировано (полный доступ разблокировки есть у Владельца).`,
       };
     }
 
@@ -472,10 +486,10 @@ export async function updateB2BDocumentStatusAction(
       return { success: false, error: 'Документ не найден' };
     }
 
-    if (doc.doc_date && (await isPeriodClosed(ctx.companyId, doc.doc_date))) {
+    if (ctx.role !== 'owner' && !ctx.isSuperAdmin && doc.doc_date && (await isPeriodClosed(ctx.companyId, doc.doc_date))) {
       return {
         success: false,
-        error: 'Отчетный период закрыт для редактирования. Изменение статуса документа запрещено.',
+        error: 'Отчетный период закрыт для редактирования. Изменение статуса первички заблокировано (доступ разблокировки есть у Владельца).',
       };
     }
 
@@ -622,10 +636,10 @@ export async function deleteB2BDocumentAction(documentId: string): Promise<Actio
       return { success: false, error: 'Документ не найден' };
     }
 
-    if (doc.doc_date && (await isPeriodClosed(ctx.companyId, doc.doc_date))) {
+    if (ctx.role !== 'owner' && !ctx.isSuperAdmin && doc.doc_date && (await isPeriodClosed(ctx.companyId, doc.doc_date))) {
       return {
         success: false,
-        error: 'Отчетный период за эту дату закрыт для изменений. Удаление документа запрещено.',
+        error: 'Отчетный период за эту дату закрыт для изменений. Удаление документа заблокировано (доступ разблокировки есть у Владельца).',
       };
     }
 

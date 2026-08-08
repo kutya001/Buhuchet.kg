@@ -46,7 +46,7 @@ import { UnifiedFormModal } from '@/components/ui/unified/UnifiedFormModal';
 import { hasPermission } from '@/lib/auth/permissions';
 import { Checkbox } from '@/components/ui/checkbox';
 
-import { updateClosedPeriodAction, updateCompanyPrivacyAndDetailsAction, getCompanyProfileStatsAction, updateCompanyProfileAction } from './actions';
+import { updateClosedPeriodAction, updateCompanyPrivacyAndDetailsAction, getCompanyProfileStatsAction, updateCompanyProfileAction, getCompanyProfileDataAction } from './actions';
 import { CompanyStatsGrid } from '@/components/company/CompanyStatsGrid';
 import { OwnerBadge } from '@/components/company/OwnerBadge';
 import { CompanyProfileForm } from '@/components/company/CompanyProfileForm';
@@ -82,33 +82,23 @@ export default function CompanyProfilePage() {
 
   const loadCompanyData = async () => {
     setLoading(true);
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
 
-    if (user) {
-      const { data: prof } = await supabase
-        .from('users')
-        .select('*, companies(*), company_roles(*)')
-        .eq('id', user.id)
-        .single();
+    const profileRes = await getCompanyProfileDataAction();
+    if (profileRes.success && profileRes.data) {
+      setCompany(profileRes.data.company);
+      setCurrentProfile(profileRes.data.userProfile);
 
-      if (prof) setCurrentProfile(prof as UserProfile);
-
-      const comp = Array.isArray(prof?.companies) ? prof?.companies[0] : prof?.companies;
-      if (comp) {
-        setCompany(comp as Company);
-
-        const legalRes = await getCompanyLegalDocsAction();
-        if (legalRes.success && legalRes.data) {
-          setLegalDocs(legalRes.data);
-        }
-
-        const statsRes = await getCompanyProfileStatsAction(comp.id);
-        if (statsRes.success && statsRes.data) {
-          setStats(statsRes.data);
-        }
+      const legalRes = await getCompanyLegalDocsAction();
+      if (legalRes.success && legalRes.data) {
+        setLegalDocs(legalRes.data);
       }
+
+      const statsRes = await getCompanyProfileStatsAction(profileRes.data.company.id);
+      if (statsRes.success && statsRes.data) {
+        setStats(statsRes.data);
+      }
+    } else if (profileRes.error) {
+      setMsg({ type: 'error', text: profileRes.error });
     }
 
     const { data: catData } = await supabase.from('file_categories').select('*').order('name');
