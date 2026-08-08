@@ -200,6 +200,38 @@ CREATE TABLE files (
 CREATE INDEX idx_files_company ON files(company_id);
 CREATE INDEX idx_files_document ON files(document_id);
 CREATE INDEX idx_files_company_category ON files(company_id, category_id);
+
+### 2.9.1 Таблица `file_owners` (Связь Файла с Организациями-Владельцами для CoW)
+
+```sql
+CREATE TABLE file_owners (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  file_id UUID NOT NULL REFERENCES files(id) ON DELETE CASCADE,
+  company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  is_original_creator BOOLEAN DEFAULT false,
+  added_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(file_id, company_id)
+);
+
+CREATE INDEX idx_file_owners_company_id ON file_owners(company_id);
+CREATE INDEX idx_file_owners_file_id ON file_owners(file_id);
+
+-- Триггер автоматической каскадной очистки осиротевших файлов (orphaned files):
+CREATE OR REPLACE FUNCTION cleanup_orphaned_files()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM file_owners WHERE file_id = OLD.file_id) THEN
+    DELETE FROM files WHERE id = OLD.file_id;
+  END IF;
+  RETURN OLD;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE TRIGGER trigger_cleanup_orphaned_files
+AFTER DELETE ON file_owners
+FOR EACH ROW
+EXECUTE FUNCTION cleanup_orphaned_files();
+```
 ```
 
 ### 2.10 Таблица `document_logs` (Журнал Аудита и Статусов)

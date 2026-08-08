@@ -21,6 +21,15 @@ const archiveFileSchema = z.object({
 
 export type ArchiveFileInput = z.infer<typeof archiveFileSchema>;
 
+export async function getFileCategoriesAction(): Promise<ActionResponse<FileCategory[]>> {
+  try {
+    const categories = await getLookupCategories();
+    return { success: true, data: categories as FileCategory[] };
+  } catch (err: unknown) {
+    return { success: false, error: 'Сбой получения категорий' };
+  }
+}
+
 // Загрузка уставного / учредительного документа компании
 export async function uploadLegalDocumentAction(data: ArchiveFileInput): Promise<ActionResponse<DocumentFile>> {
   try {
@@ -84,6 +93,16 @@ export async function uploadLegalDocumentAction(data: ArchiveFileInput): Promise
     if (error || !insertedFile) {
       return { success: false, error: `Ошибка сохранения учредительного документа: ${error?.message}` };
     }
+
+    // Фиксируем первого владельца в file_owners
+    await adminSupabase.from('file_owners').upsert(
+      {
+        file_id: insertedFile.id,
+        company_id: prof.company_id,
+        is_original_creator: true,
+      },
+      { onConflict: 'file_id, company_id', ignoreDuplicates: true }
+    );
 
     revalidatePath('/dashboard/company');
     revalidatePath('/dashboard/files');
@@ -158,6 +177,16 @@ export async function uploadFileToArchiveAction(data: ArchiveFileInput): Promise
       return { success: false, error: `Ошибка сохранения файла: ${error?.message}` };
     }
 
+    // Фиксируем первого владельца в file_owners
+    await adminSupabase.from('file_owners').upsert(
+      {
+        file_id: insertedFile.id,
+        company_id: prof.company_id,
+        is_original_creator: true,
+      },
+      { onConflict: 'file_id, company_id', ignoreDuplicates: true }
+    );
+
     revalidatePath('/dashboard/files');
     revalidatePath('/dashboard/company');
     return { success: true, data: insertedFile as DocumentFile };
@@ -167,7 +196,7 @@ export async function uploadFileToArchiveAction(data: ArchiveFileInput): Promise
   }
 }
 
-// Редактирование и замена файла R2
+// Редактирование и замена файла R2 с поддержкой Copy-on-Write (CoW)
 export async function updateDocumentFileAction(
   fileId: string,
   data: {
@@ -193,16 +222,62 @@ export async function updateDocumentFileAction(
 
     const { data: prof } = await supabase.from('users').select('company_id, is_super_admin').eq('id', user.id).single();
 
-    const { data: existingFile } = await adminSupabase.from('files').select('company_id, file_path_r2').eq('id', fileId).single();
+    const { data: existingFile } = await adminSupabase.from('files').select('*').eq('id', fileId).single();
     if (!existingFile) {
       return { success: false, error: 'Файл не найден' };
     }
 
-    if (existingFile.company_id !== prof?.company_id && !prof?.is_super_admin) {
-      return { success: false, error: 'Доступ запрещен: нельзя редактировать чужой файл' };
+    const myCompanyId = prof?.company_id;
+    if (!myCompanyId && !prof?.is_super_admin) {
+      return { success: false, error: 'Доступ запрещен: пользователь не привязан к организации' };
     }
 
-    // Если меняется файл R2 — запрашиваем удаление старого объекта из R2
+    // Проверяем совладельцев в file_owners
+    const { data: owners } = await adminSupabase.from('file_owners').select('company_id').eq('file_id', fileId);
+    const ownerCount = owners?.length || 1;
+
+    // 🟢 COPY-ON-WRITE (CoW): Если владельцев > 1 и компания заменяет/редактирует документ
+    if (ownerCount > 1 && myCompanyId) {
+      const newFilePath = data.file_path_r2 || existingFile.file_path_r2;
+      const { data: newFile, error: cowErr } = await adminSupabase
+        .from('files')
+        .insert({
+          company_id: myCompanyId,
+          document_id: existingFile.document_id,
+          category_id: data.category_id || existingFile.category_id,
+          file_name: data.file_name || existingFile.file_name,
+          size_bytes: data.file_size !== undefined ? (typeof data.file_size === 'number' ? data.file_size : parseSizeToBytes(data.file_size)) : existingFile.size_bytes,
+          file_type: existingFile.file_type,
+          file_path_r2: newFilePath,
+          description: data.description || existingFile.description,
+          comment: data.comment !== undefined ? data.comment : existingFile.comment,
+          is_internal: existingFile.is_internal,
+          is_legal_doc: existingFile.is_legal_doc,
+        })
+        .select('*, file_categories(*)')
+        .single();
+
+      if (cowErr || !newFile) {
+        return { success: false, error: `Ошибка создания CoW дубликата: ${cowErr?.message}` };
+      }
+
+      // Привязываем новую запись к file_owners
+      await adminSupabase.from('file_owners').insert({
+        file_id: newFile.id,
+        company_id: myCompanyId,
+        is_original_creator: true,
+      });
+
+      // Открепляем компанию от старого файла
+      await adminSupabase.from('file_owners').delete().eq('file_id', fileId).eq('company_id', myCompanyId);
+
+      revalidatePath('/dashboard/files');
+      revalidatePath('/dashboard/company');
+      revalidatePath('/super-admin');
+      return { success: true, data: newFile as DocumentFile };
+    }
+
+    // Единоличное владение: обновляем файл напрямую
     if (data.file_path_r2 && existingFile.file_path_r2 && data.file_path_r2 !== existingFile.file_path_r2) {
       await deleteR2Object(existingFile.file_path_r2);
     }
@@ -239,7 +314,7 @@ export async function updateDocumentFileAction(
   }
 }
 
-// Удаление скана из базы данных и бакета Cloudflare R2
+// Удаление скана из базы данных с каскадным контролем file_owners
 export async function deleteDocumentFileAction(fileId: string): Promise<ActionResponse<boolean>> {
   try {
     const supabase = await createClient();
@@ -260,26 +335,25 @@ export async function deleteDocumentFileAction(fileId: string): Promise<ActionRe
       return { success: false, error: 'Файл не найден' };
     }
 
-    if (existingFile.company_id !== prof?.company_id && !prof?.is_super_admin) {
-      return { success: false, error: 'Доступ запрещен: нельзя удалять чужие файлы' };
+    // 1. Открепляем компанию от file_owners
+    if (prof?.company_id) {
+      await adminSupabase.from('file_owners').delete().eq('file_id', fileId).eq('company_id', prof.company_id);
     }
 
-    // Физическое удаление объекта из Cloudflare R2
-    if (existingFile.file_path_r2) {
-      await deleteR2Object(existingFile.file_path_r2);
-    }
+    // 2. Проверяем оставшихся владельцев
+    const { data: remainingOwners } = await adminSupabase.from('file_owners').select('id').eq('file_id', fileId);
 
-    let deleteQuery = adminSupabase.from('files').delete().eq('id', fileId);
-    if (!prof?.is_super_admin && prof?.company_id) {
-      deleteQuery = deleteQuery.eq('company_id', prof.company_id);
-    }
-    const { error } = await deleteQuery;
-
-    if (error) {
-      return { success: false, error: `Ошибка удаления: ${error.message}` };
+    // Если владельцев не осталось или это суперадмин — физически стираем из R2 и files
+    if ((!remainingOwners || remainingOwners.length === 0) || prof?.is_super_admin) {
+      if (existingFile.file_path_r2) {
+        await deleteR2Object(existingFile.file_path_r2);
+      }
+      await adminSupabase.from('files').delete().eq('id', fileId);
     }
 
     revalidatePath('/dashboard/files', 'page');
+    revalidatePath('/dashboard/company');
+    revalidatePath('/super-admin');
     return { success: true, data: true };
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : 'Сбой при удалении файла';
@@ -401,6 +475,8 @@ export type EnrichedFileItem = DocumentFile & {
   sourceUrl: string;
   bytesSize: number;
   isMyCompanyFile: boolean;
+  ownersCount: number;
+  isCoWShared: boolean;
 };
 
 export type FileRegistryStats = {
@@ -505,6 +581,17 @@ export async function getComprehensiveFileRegistryAction(): Promise<
       return { success: false, error: `Ошибка выгрузки файла архива: ${error.message}` };
     }
 
+    const fileIds = (rawFiles || []).map((f) => f.id);
+    const ownerCountsMap = new Map<string, number>();
+    if (fileIds.length > 0) {
+      const { data: allOwners } = await adminSupabase.from('file_owners').select('file_id').in('file_id', fileIds);
+      if (allOwners) {
+        allOwners.forEach((o) => {
+          ownerCountsMap.set(o.file_id, (ownerCountsMap.get(o.file_id) || 0) + 1);
+        });
+      }
+    }
+
     const files: EnrichedFileItem[] = [];
     let totalSizeBytes = 0;
     let myCompanyFilesCount = 0;
@@ -558,6 +645,8 @@ export async function getComprehensiveFileRegistryAction(): Promise<
           byType.other++;
         }
 
+        const countOwners = ownerCountsMap.get(f.id) || 1;
+
         files.push({
           ...(f as DocumentFile),
           sourceType,
@@ -565,6 +654,8 @@ export async function getComprehensiveFileRegistryAction(): Promise<
           sourceUrl,
           bytesSize: bytes,
           isMyCompanyFile,
+          ownersCount: countOwners,
+          isCoWShared: countOwners > 1,
         });
       }
     }

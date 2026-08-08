@@ -4,6 +4,7 @@ import { createClient, createAdminClient } from '@/lib/supabase/server';
 import type { ActionResponse, Company, CompanyStatus, Document, FileCategory } from '@/types/database.types';
 import { revalidatePath } from 'next/cache';
 import { sendCompanyVerificationTelegramNotification } from '@/lib/telegram/notifier';
+import { formatBytes } from '@/lib/utils';
 
 /**
  * Проверка прав суперадмина
@@ -743,5 +744,126 @@ export async function deleteDbRowAdminAction(
     return { success: true };
   } catch (err: unknown) {
     return { success: false, error: err instanceof Error ? err.message : 'Сбой удаления записи из БД' };
+  }
+}
+
+/**
+ * Мониторинг хранилища R2 и физических файлов CoW в Панели Суперадминистратора
+ */
+export async function getSuperAdminFilesMonitoringAction(): Promise<
+  ActionResponse<{
+    files: any[];
+    stats: {
+      totalPhysicalFilesCount: number;
+      totalVirtualOwnersCount: number;
+      totalPhysicalStorageBytes: number;
+      savedStorageBytes: number;
+      savedStorageFormatted: string;
+      deduplicationSavingsPercent: string;
+      topCompanies: Array<{ name: string; inn: string; filesCount: number; totalBytes: number; formattedSize: string }>;
+    };
+  }>
+> {
+  try {
+    if (!(await checkSuperAdmin())) {
+      return { success: false, error: 'Доступ запрещен' };
+    }
+
+    const adminSupabase = await createAdminClient();
+
+    // 1. Извлекаем все файлы
+    const { data: rawFiles, error: filesErr } = await adminSupabase
+      .from('files')
+      .select('*, file_categories(*), companies:company_id(name, inn)')
+      .order('created_at', { ascending: false });
+
+    if (filesErr) return { success: false, error: filesErr.message };
+
+    // 2. Извлекаем все записи file_owners с компаниями
+    const { data: allOwners, error: ownersErr } = await adminSupabase
+      .from('file_owners')
+      .select('file_id, is_original_creator, companies:company_id(id, name, inn)');
+
+    if (ownersErr) return { success: false, error: ownersErr.message };
+
+    const ownersByFileMap = new Map<string, any[]>();
+    const companyStorageMap = new Map<string, { name: string; inn: string; filesCount: number; totalBytes: number }>();
+
+    (allOwners || []).forEach((o: any) => {
+      const fId = o.file_id;
+      const comp = Array.isArray(o.companies) ? o.companies[0] : o.companies;
+      if (!ownersByFileMap.has(fId)) {
+        ownersByFileMap.set(fId, []);
+      }
+      if (comp) {
+        ownersByFileMap.get(fId)!.push({ ...comp, is_original_creator: o.is_original_creator });
+
+        const compId = comp.id || comp.inn;
+        if (!companyStorageMap.has(compId)) {
+          companyStorageMap.set(compId, { name: comp.name || 'Компания', inn: comp.inn || '—', filesCount: 0, totalBytes: 0 });
+        }
+        const compStat = companyStorageMap.get(compId)!;
+        compStat.filesCount++;
+      }
+    });
+
+    let totalPhysicalStorageBytes = 0;
+    let savedStorageBytes = 0;
+
+    const files = (rawFiles || []).map((f: any) => {
+      const fOwners = ownersByFileMap.get(f.id) || [];
+      const ownersCount = fOwners.length || 1;
+      const size = f.size_bytes || 0;
+
+      totalPhysicalStorageBytes += size;
+      if (ownersCount > 1) {
+        savedStorageBytes += size * (ownersCount - 1);
+      }
+
+      const creatorComp = Array.isArray(f.companies) ? f.companies[0] : f.companies;
+      if (creatorComp) {
+        const cKey = creatorComp.id || creatorComp.inn;
+        if (companyStorageMap.has(cKey)) {
+          companyStorageMap.get(cKey)!.totalBytes += size;
+        }
+      }
+
+      return {
+        ...f,
+        owners: fOwners,
+        ownersCount,
+        isCoWShared: ownersCount > 1,
+      };
+    });
+
+    const totalPhysicalFilesCount = files.length;
+    const totalVirtualOwnersCount = allOwners?.length || totalPhysicalFilesCount;
+    const deduplicationSavingsPercent = totalVirtualOwnersCount > 0
+      ? (((totalVirtualOwnersCount - totalPhysicalFilesCount) / totalVirtualOwnersCount) * 100).toFixed(1)
+      : '0.0';
+
+    const topCompanies = Array.from(companyStorageMap.values())
+      .sort((a, b) => b.totalBytes - a.totalBytes)
+      .slice(0, 10)
+      .map((c) => ({ ...c, formattedSize: formatBytes(c.totalBytes) }));
+
+    return {
+      success: true,
+      data: {
+        files,
+        stats: {
+          totalPhysicalFilesCount,
+          totalVirtualOwnersCount,
+          totalPhysicalStorageBytes,
+          savedStorageBytes,
+          savedStorageFormatted: formatBytes(savedStorageBytes),
+          deduplicationSavingsPercent,
+          topCompanies,
+        },
+      },
+    };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Сбой мониторинга файлов';
+    return { success: false, error: msg };
   }
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useTransition, useMemo } from 'react';
+import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -28,6 +29,7 @@ import {
   FolderOpen,
   Download,
   Edit2,
+  HardDrive,
   Trash2,
   X,
   RefreshCw,
@@ -1095,9 +1097,21 @@ export default function SuperAdminPage() {
             }
           >
             {msg.type === 'success' ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
-            <AlertDescription>{msg.text}</AlertDescription>
+            <AlertDescription className="flex items-center justify-between w-full">
+              <span>{msg.text}</span>
+            </AlertDescription>
           </Alert>
         )}
+
+        <div className="flex justify-end">
+          <Link
+            href="/super-admin/files"
+            className="inline-flex items-center space-x-2 bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/40 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-lg shadow-purple-600/10"
+          >
+            <HardDrive className="h-4 w-4 text-purple-400" />
+            <span>📊 Мониторинг Хранилища R2 & Copy-on-Write</span>
+          </Link>
+        </div>
 
       {/* ------------------- РАЗДЕЛ Telegram БОТ ------------------- */}
       {activeTab === 'telegram' && <SuperAdminTelegramTab />}

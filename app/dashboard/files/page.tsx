@@ -22,10 +22,17 @@ import {
   Image as ImageIcon,
 } from 'lucide-react';
 import { formatBytes } from '@/lib/utils';
-import { getComprehensiveFileRegistryAction } from './archive-actions';
+import {
+  getComprehensiveFileRegistryAction,
+  uploadFileToArchiveAction,
+  getFileCategoriesAction,
+  type EnrichedFileItem,
+  type FileRegistryStats,
+} from './archive-actions';
 import { getPresignedDownloadUrlAction } from './actions';
-import type { EnrichedFileItem, FileRegistryStats } from './archive-actions';
 import { UnifiedDataGrid, ColumnDef } from '@/components/ui/unified/UnifiedDataGrid';
+import { MultiFileDropzone, type FileItemState } from '@/components/documents/MultiFileDropzone';
+import type { FileCategory } from '@/types/database.types';
 
 export default function CloudFilesRegistryPage() {
   const searchParams = useSearchParams();
@@ -33,7 +40,11 @@ export default function CloudFilesRegistryPage() {
 
   const [files, setFiles] = useState<EnrichedFileItem[]>([]);
   const [stats, setStats] = useState<FileRegistryStats | null>(null);
+  const [categories, setCategories] = useState<FileCategory[]>([]);
   const [loading, setLoading] = useState(true);
+  const [batchFiles, setBatchFiles] = useState<FileItemState[]>([]);
+  const [savingBatch, setSavingBatch] = useState(false);
+  const [showBatchModal, setShowBatchModal] = useState(false);
 
   // ФИЛЬТРЫ
   const [onlyMyCompany, setOnlyMyCompany] = useState(false);
@@ -45,7 +56,11 @@ export default function CloudFilesRegistryPage() {
 
   const loadFiles = async () => {
     setLoading(true);
-    const res = await getComprehensiveFileRegistryAction();
+    const [res, catsRes] = await Promise.all([
+      getComprehensiveFileRegistryAction(),
+      getFileCategoriesAction(),
+    ]);
+
     if (res.success && res.data) {
       setFiles(res.data.files);
       setStats(res.data.stats);
@@ -53,12 +68,40 @@ export default function CloudFilesRegistryPage() {
       setFiles([]);
       setStats(null);
     }
+
+    if (catsRes?.success && catsRes?.data) {
+      setCategories(catsRes.data);
+    }
+
     setLoading(false);
   };
 
   useEffect(() => {
     loadFiles();
   }, []);
+
+  const handleSaveBatchFiles = async () => {
+    const readyFiles = batchFiles.filter((f) => f.file_path_r2 && !f.uploading && !f.error);
+    if (readyFiles.length === 0) return;
+
+    setSavingBatch(true);
+    for (const f of readyFiles) {
+      await uploadFileToArchiveAction({
+        category_id: f.category_id,
+        file_name: f.file_name,
+        file_size: f.size_bytes,
+        file_type: f.file_type,
+        file_path_r2: f.file_path_r2!,
+        description: f.description,
+        comment: f.comment,
+      });
+    }
+
+    setSavingBatch(false);
+    setBatchFiles([]);
+    setShowBatchModal(false);
+    loadFiles();
+  };
 
   const handleDownloadR2 = async (fileKey: string, fileId: string) => {
     if (!fileKey) return;
@@ -95,7 +138,7 @@ export default function CloudFilesRegistryPage() {
     return true;
   });
 
-  // ОПРЕДЕЛЕНИЕ СТОЛБЦОВ С ЕДИНООБРАЗНЫМ ФУНКЦИОНАЛОМ (D&D, МЕНЮ ▼, СОРТИРОВКА)
+  // ОПРЕДЕЛЕНИЕ СТОЛБЦОВ
   const columns: ColumnDef<EnrichedFileItem>[] = [
     {
       key: 'file_name',
@@ -112,6 +155,26 @@ export default function CloudFilesRegistryPage() {
           <span className="truncate max-w-[220px] font-mono">{file.file_name}</span>
         </div>
       ),
+    },
+    {
+      key: 'ownership',
+      label: 'Статус Владения (CoW)',
+      sortable: true,
+      getValue: (f) => (f.isCoWShared ? 'shared' : 'single'),
+      render: (file) =>
+        file.isCoWShared ? (
+          <Badge
+            className="bg-indigo-500/20 text-indigo-300 border-indigo-500/40 text-[11px] font-medium"
+            title={`Файл используют ${file.ownersCount} организаций (Copy-on-Write)`}
+          >
+            <ShieldCheck className="h-3 w-3 mr-1 text-indigo-400" />
+            Совместный ({file.ownersCount} тенанта)
+          </Badge>
+        ) : (
+          <Badge variant="outline" className="border-slate-800 text-slate-400 text-[11px]">
+            Единоличное
+          </Badge>
+        ),
     },
     {
       key: 'sourceType',
@@ -256,7 +319,7 @@ export default function CloudFilesRegistryPage() {
 
   return (
     <div className="space-y-6 pb-12">
-      {/* 1. ЗАГОЛОВОК СТРАНИЦЫ */}
+      {/* 1. ЗАГОЛОВОК СТРАНИЦЫ И КНОПКА ЗАГРУЗКИ */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight flex items-center">
@@ -264,10 +327,57 @@ export default function CloudFilesRegistryPage() {
             Реестр Облачных Файлов R2
           </h1>
           <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-            Подробный учёт всех сканов, B2B накладных и уставных документов с контролем источников
+            Подробный учёт всех сканов, B2B накладных и уставных документов с Copy-on-Write дедупликацией
           </p>
         </div>
+
+        <Button
+          onClick={() => setShowBatchModal(!showBatchModal)}
+          className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs sm:text-sm font-semibold min-h-[44px] shadow-lg shadow-emerald-600/20"
+        >
+          <FolderOpen className="h-4 w-4 mr-2" />
+          {showBatchModal ? 'Скрыть панель загрузки' : '📤 Пакетная Загрузка (Drag & Drop)'}
+        </Button>
       </div>
+
+      {/* 1.1 ИНТЕРАКТИВНЫЙ DRAG & DROP БЛОК ЗАГРУЗКИ */}
+      {showBatchModal && (
+        <Card className="bg-card border-border p-5 space-y-4 shadow-xl border-emerald-500/30">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold text-foreground flex items-center">
+              <FileCheck className="h-4 w-4 mr-2 text-emerald-400" />
+              Пакетная Загрузка Файлов в Облачный Архив (Drag & Drop)
+            </h3>
+            <span className="text-xs text-emerald-400 font-mono">Авто-сжатие до 200 КБ</span>
+          </div>
+
+          <MultiFileDropzone
+            categories={categories}
+            files={batchFiles}
+            onFilesChange={setBatchFiles}
+            disabled={savingBatch}
+          />
+
+          {batchFiles.length > 0 && (
+            <div className="flex justify-end pt-2">
+              <Button
+                onClick={handleSaveBatchFiles}
+                disabled={savingBatch || batchFiles.some((f) => f.uploading)}
+                className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs min-h-[40px] font-semibold"
+              >
+                {savingBatch ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Сохранение в архив...
+                  </>
+                ) : (
+                  <>Сохранить Все Загруженные Сканы ({batchFiles.filter((f) => f.file_path_r2).length})</>
+                )}
+              </Button>
+            </div>
+          )}
+        </Card>
+      )}
 
       {/* 2. БЛОК СТАТИСТИКИ И ПОДСЧЕТА ОБЪЕМА */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

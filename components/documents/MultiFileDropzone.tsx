@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, Camera, FileText, X, Loader2, CheckCircle2, AlertCircle, Folder, FileCheck } from 'lucide-react';
+import { Upload, Camera, FileText, X, Loader2, CheckCircle2, AlertCircle, Folder, FileCheck, Layers } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -38,10 +38,10 @@ export function MultiFileDropzone({
   disabled = false,
 }: MultiFileDropzoneProps) {
   const [globalUploading, setGlobalUploading] = useState(false);
+  const [isDragActive, setIsDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
-  // Реф для хранения актуального списка файлов без старых замыканий
   const filesRef = useRef<FileItemState[]>(files);
   useEffect(() => {
     filesRef.current = files;
@@ -57,7 +57,7 @@ export function MultiFileDropzone({
     try {
       let fileToUpload = rawFile;
 
-      // 0. КЛИЕНТСКОЕ СЖАТИЕ ФОТО И ИЗОБРАЖЕНИЙ (GEMINI.md Rule 2.2)
+      // 0. КЛИЕНТСКОЕ СЖАТИЕ ФОТО И ИЗОБРАЖЕНИЙ
       if (rawFile.type && rawFile.type.startsWith('image/')) {
         try {
           const options = {
@@ -70,12 +70,11 @@ export function MultiFileDropzone({
             type: compressed.type || 'image/jpeg',
           });
 
-          // Обновляем размер файла на реальный сжатый в списке
           updateFileList((prev) =>
             prev.map((f) => (f.tempId === item.tempId ? { ...f, size_bytes: fileToUpload.size } : f))
           );
         } catch (compressErr) {
-          console.warn('Клиентское сжатие не удалось, передача оригинала:', compressErr);
+          console.warn('Сжатие изображения не удалось, передача оригинала:', compressErr);
         }
       }
 
@@ -91,7 +90,6 @@ export function MultiFileDropzone({
         const { uploadUrl, fileKey, cleanContentType } = presignedRes.data;
         const targetType = cleanContentType || mimeType;
 
-        // Попытка прямого XHR PUT в Cloudflare R2
         try {
           await new Promise<void>((resolve, reject) => {
             const xhr = new XMLHttpRequest();
@@ -121,9 +119,8 @@ export function MultiFileDropzone({
 
           finalFileKey = fileKey;
         } catch (directErr) {
-          console.warn('Прямой XHR PUT заблокирован браузером/CORS. Переключение на надежный API Route /api/upload-direct...', directErr);
+          console.warn('Переключение на серверный фоллбэк загрузки /api/upload-direct...', directErr);
 
-          // 2. ДВУХУРОВНЕВЫЙ ФОЛЛБЭК: Отправка сжатого файла через API Route Handler на наш бэкенд Buhuchet.kg
           const formData = new FormData();
           formData.append('file', fileToUpload);
 
@@ -137,17 +134,15 @@ export function MultiFileDropzone({
           if (apiRes.ok && resData?.success && resData?.data?.fileKey) {
             finalFileKey = resData.data.fileKey;
           } else {
-            // Пробуем Server Action как крайний фоллбэк
             const serverRes = await uploadFileDirectlyServerAction(formData);
             if (serverRes?.success && serverRes?.data?.fileKey) {
               finalFileKey = serverRes.data.fileKey;
             } else {
-              throw new Error(resData?.error || serverRes?.error || 'Ошибка серверной загрузки в Cloudflare R2');
+              throw new Error(resData?.error || serverRes?.error || 'Ошибка загрузки в R2');
             }
           }
         }
       } else {
-        // Если Presigned URL сразу не сгенерировался — пробуем прямой API Route
         const formData = new FormData();
         formData.append('file', fileToUpload);
         
@@ -170,7 +165,6 @@ export function MultiFileDropzone({
         }
       }
 
-      // 3. Обновляем статус 100% готовности R2
       updateFileList((prev) =>
         prev.map((f) =>
           f.tempId === item.tempId
@@ -190,15 +184,13 @@ export function MultiFileDropzone({
     }
   };
 
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files || e.target.files.length === 0) return;
+  const processFileList = async (fileList: File[]) => {
+    if (fileList.length === 0) return;
 
     setGlobalUploading(true);
-    const selectedFiles = Array.from(e.target.files);
-
     const defaultCategory = categories[0]?.id || '268dda23-d839-429d-bec2-aae391cffb00';
 
-    const newItems: FileItemState[] = selectedFiles.map((file, idx) => {
+    const newItems: FileItemState[] = fileList.map((file, idx) => {
       const rawName = file.name || `photo_${idx}.jpg`;
       const isCameraPhoto = rawName.startsWith('image') || rawName.startsWith('photo') || rawName.includes('blob');
       const name = isCameraPhoto ? `Фото_скан_${Date.now()}_${idx + 1}.jpg` : rawName;
@@ -216,16 +208,46 @@ export function MultiFileDropzone({
       };
     });
 
-    // Сразу добавляем новые файлы в список
     updateFileList((prev) => [...prev, ...newItems]);
 
-    // Запускаем асинхронную двухуровневую загрузку каждого файла
-    for (let i = 0; i < selectedFiles.length; i++) {
-      await uploadFileToR2(selectedFiles[i], newItems[i]);
+    for (let i = 0; i < fileList.length; i++) {
+      await uploadFileToR2(fileList[i], newItems[i]);
     }
 
     setGlobalUploading(false);
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    const selectedFiles = Array.from(e.target.files);
+    await processFileList(selectedFiles);
     e.target.value = '';
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!disabled && !globalUploading) {
+      setIsDragActive(true);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragActive(false);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragActive(false);
+
+    if (disabled || globalUploading) return;
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const droppedFiles = Array.from(e.dataTransfer.files);
+      await processFileList(droppedFiles);
+    }
   };
 
   const handleRemoveFile = (tempId: string) => {
@@ -240,7 +262,6 @@ export function MultiFileDropzone({
 
   return (
     <div className="space-y-4">
-      {/* Скрытые инпуты для стандартного файла и для нативной КАМЕРЫ */}
       <input
         ref={fileInputRef}
         type="file"
@@ -261,51 +282,72 @@ export function MultiFileDropzone({
         className="hidden"
       />
 
-      {/* Кнопки выбора файлов */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <button
-          type="button"
-          onClick={() => !disabled && !globalUploading && cameraInputRef.current?.click()}
-          disabled={disabled || globalUploading}
-          className="p-4 rounded-xl border-2 border-dashed border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 transition-all flex flex-col items-center justify-center text-center space-y-2 cursor-pointer active:scale-95 min-h-[48px]"
-        >
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-400">
-            <Camera className="h-6 w-6" />
-          </div>
-          <div>
-            <span className="font-bold text-sm text-emerald-300">📸 Сделать снимки сканов</span>
-            <p className="text-[11px] text-emerald-400/70">Запуск нативной камеры смартфона</p>
-          </div>
-        </button>
+      {/* Drag & Drop Зона перетаскивания нескольких файлов */}
+      <div
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        className={`p-6 rounded-2xl border-2 border-dashed transition-all flex flex-col items-center justify-center text-center space-y-3 cursor-pointer ${
+          isDragActive
+            ? 'border-emerald-400 bg-emerald-500/20 scale-[1.01] shadow-2xl shadow-emerald-500/20 ring-2 ring-emerald-500/50'
+            : 'border-slate-800 bg-slate-950/60 hover:bg-slate-900/80 hover:border-blue-500/50'
+        }`}
+        onClick={() => !disabled && !globalUploading && fileInputRef.current?.click()}
+      >
+        <div className={`flex h-12 w-12 items-center justify-center rounded-2xl transition-transform ${
+          isDragActive ? 'bg-emerald-500/30 text-emerald-300 scale-110' : 'bg-blue-500/10 text-blue-400'
+        }`}>
+          <Upload className="h-6 w-6" />
+        </div>
+        <div>
+          <span className="font-bold text-sm text-foreground">
+            {isDragActive ? '✨ Отпустите сканы для пакета загрузки!' : 'Перетащите сканы (Drag & Drop) или выберите из файла'}
+          </span>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Поддерживаются пачки документов PDF, PNG, JPG (авто-сжатие до 200 КБ)
+          </p>
+        </div>
 
-        <button
-          type="button"
-          onClick={() => !disabled && !globalUploading && fileInputRef.current?.click()}
-          disabled={disabled || globalUploading}
-          className="p-4 rounded-xl border-2 border-dashed border-border bg-card hover:bg-muted hover:border-blue-500/50 transition-all flex flex-col items-center justify-center text-center space-y-2 cursor-pointer active:scale-95 min-h-[48px]"
-        >
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500/10 text-blue-400">
-            <Folder className="h-6 w-6" />
-          </div>
-          <div>
-            <span className="font-bold text-sm text-foreground">📁 Выбрать сканы / PDF</span>
-            <p className="text-[11px] text-muted-foreground">Из памяти смартфона или ПК</p>
-          </div>
-        </button>
+        <div className="flex space-x-2 pt-1" onClick={(e) => e.stopPropagation()}>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => !disabled && !globalUploading && cameraInputRef.current?.click()}
+            disabled={disabled || globalUploading}
+            className="border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 text-xs min-h-[36px]"
+          >
+            <Camera className="h-4 w-4 mr-1.5" />
+            Камера
+          </Button>
+
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => !disabled && !globalUploading && fileInputRef.current?.click()}
+            disabled={disabled || globalUploading}
+            className="border-slate-800 text-slate-300 hover:bg-slate-800 text-xs min-h-[36px]"
+          >
+            <Folder className="h-4 w-4 mr-1.5" />
+            Выбрать сканы
+          </Button>
+        </div>
       </div>
 
       {globalUploading && (
         <div className="flex items-center justify-center space-x-2 py-3 text-blue-400 bg-blue-500/10 rounded-xl border border-blue-500/20">
           <Loader2 className="h-5 w-5 animate-spin" />
-          <span className="text-sm font-medium">Передача файлов в защищённое облако...</span>
+          <span className="text-sm font-medium">Пакетная передача файлов в Cloudflare R2...</span>
         </div>
       )}
 
       {/* Список прикрепленных файлов */}
       {files.length > 0 && (
         <div className="space-y-3 pt-2">
-          <Label className="text-xs font-mono uppercase text-muted-foreground">
-            Сканы для сохранения ({files.length})
+          <Label className="text-xs font-mono uppercase text-muted-foreground flex items-center justify-between">
+            <span>Прикрепленные сканы ({files.length})</span>
+            <span className="text-[10px] text-emerald-400 font-semibold">Copy-on-Write (CoW) Ready</span>
           </Label>
 
           {files.map((file) => (
@@ -325,7 +367,7 @@ export function MultiFileDropzone({
                   <div className="truncate">
                     <p className="text-sm font-medium text-foreground truncate">{file.file_name}</p>
                     <p className="text-[11px] text-slate-400 font-mono">
-                      {formatBytes(file.size_bytes)} • {file.file_path_r2 ? '✅ Готов к сохранению (R2)' : 'Загрузка...'}
+                      {formatBytes(file.size_bytes)} • {file.file_path_r2 ? '✅ Готов в R2' : 'Загрузка...'}
                     </p>
                   </div>
                 </div>

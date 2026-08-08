@@ -200,6 +200,23 @@ export type ActionResponse<T = any> = {
 - **Response**: `ActionResponse<{ presignedUrl: string }>`
 - **Бизнес-логика**: Генерация временной преподписанной ссылки S3 GetObject со сроком 15 минут.
 
+#### `deleteDocumentFileAction`
+- **Auth**: Private (Tenant)
+- **Zod Schema**: `z.object({ fileId: z.string().uuid() })`
+- **Response**: `ActionResponse<boolean>`
+- **Бизнес-логика**: Удаляет связь в `file_owners`. Объект R2 и запись `files` удаляются только если `count(file_owners) == 0`.
+
+#### `updateDocumentFileAction` (Copy-on-Write)
+- **Auth**: Private (Tenant)
+- **Zod Schema**: `z.object({ fileId: z.string().uuid(), data: object })`
+- **Response**: `ActionResponse<DocumentFile>`
+- **Бизнес-логика**: Если `count(file_owners) > 1` (совместный документ), сервер создает копию физического файла/записи для редактирующей компании (CoW) и открепляет её от старого файла.
+
+#### `getSuperAdminFilesMonitoringAction`
+- **Auth**: SuperAdmin
+- **Response**: `ActionResponse<{ files: any[], stats: object }>`
+- **Бизнес-логика**: Анализ объемов Cloudflare R2, вычисление дедупликации CoW, точный просмотр совладельцев `file_owners`.
+
 ---
 
 ### 3.6 Панель Суперадминистратора (`app/super-admin/actions.ts`)
