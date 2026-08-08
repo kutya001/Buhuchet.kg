@@ -103,6 +103,9 @@ export default function CounterpartiesPage() {
   // 1. Модалка отчета
   const [selectedPartnerReport, setSelectedPartnerReport] = useState<PartnerReport | null>(null);
 
+  // 2. Модалка прекращения сотрудничества
+  const [terminateModalCompany, setTerminateModalCompany] = useState<{ id: string; name: string } | null>(null);
+
   // 2. Модалка просмотра ВСЕХ ДАННЫХ И УЧРЕДИТЕЛЬНЫХ ФАЙЛОВ контрагента
   const [profileModal, setProfileModal] = useState<CounterpartyProfileModal | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
@@ -675,17 +678,18 @@ export default function CounterpartiesPage() {
             (p.target_company_id === currentCompanyId && p.requester_company_id === c.id)
         );
 
+        // 1. Активное партнерство (Сотрудничаем)
         if (existingP?.status === 'approved' || existingP?.status === 'accepted') {
           return (
             <div className="flex items-center space-x-2">
               <Badge className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs py-1.5 px-3">
                 <Check className="h-3.5 w-3.5 mr-1" />
-                В сети партнеров
+                Партнер (Сотрудничаем)
               </Badge>
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => handleTerminatePartnership(c.id)}
+                onClick={() => setTerminateModalCompany({ id: c.id, name: c.name })}
                 disabled={isPending}
                 className="h-8 text-xs border-rose-500/40 text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 font-medium rounded-xl px-3"
                 title="Прекратить сотрудничество с этой организацией"
@@ -697,29 +701,34 @@ export default function CounterpartiesPage() {
           );
         }
 
+        // 2. Ожидание ответа (Заявка отправлена или получена)
         if (existingP?.status === 'pending') {
           const isOutgoing = existingP.requester_company_id === currentCompanyId;
           return (
             <div className="flex items-center space-x-2">
               {isOutgoing ? (
                 <>
-                  <Badge className="bg-blue-500/20 text-blue-400 border border-blue-500/30 text-xs py-1.5 px-3">
+                  <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/30 text-xs py-1.5 px-3">
                     <Clock className="h-3.5 w-3.5 mr-1 animate-pulse" />
                     Заявка отправлена
                   </Badge>
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => handleTerminatePartnership(c.id)}
+                    onClick={() => handleRespondRequest(existingP.id, 'cancelled')}
                     disabled={isPending}
                     className="h-8 text-xs border-slate-700 text-slate-300 hover:bg-slate-800 rounded-xl px-3"
-                    title="Отозвать заявку"
+                    title="Отменить исходящее предложение"
                   >
-                    Отозвать
+                    Отменить заявку
                   </Button>
                 </>
               ) : (
                 <>
+                  <Badge className="bg-blue-500/20 text-blue-400 border border-blue-500/30 text-xs py-1.5 px-3">
+                    <Clock className="h-3.5 w-3.5 mr-1 animate-pulse" />
+                    Входящая заявка
+                  </Badge>
                   <Button
                     size="sm"
                     onClick={() => handleRespondRequest(existingP.id, 'approved')}
@@ -744,6 +753,31 @@ export default function CounterpartiesPage() {
           );
         }
 
+        // 3. Прекращено / Отклонено / Отменено (Архив)
+        if (
+          existingP?.status === 'rejected' ||
+          existingP?.status === 'terminated' ||
+          existingP?.status === 'cancelled'
+        ) {
+          return (
+            <div className="flex items-center space-x-2">
+              <Badge className="bg-slate-500/20 text-slate-400 border border-slate-500/30 text-xs py-1.5 px-3">
+                В архиве / Прекращено
+              </Badge>
+              <Button
+                size="sm"
+                onClick={() => handleSendRequest(c.id)}
+                disabled={isPending}
+                className="bg-purple-600/80 hover:bg-purple-600 text-white font-bold text-xs h-8 rounded-xl px-3 shadow-md"
+              >
+                <RotateCcw className="h-3.5 w-3.5 mr-1" />
+                Повторить запрос
+              </Button>
+            </div>
+          );
+        }
+
+        // 4. Нет связи (Первичный запрос)
         return (
           <Button
             size="sm"
@@ -752,7 +786,7 @@ export default function CounterpartiesPage() {
             className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs min-h-[36px] rounded-xl px-4 shadow-md"
           >
             <Send className="h-3.5 w-3.5 mr-1.5" />
-            Отправить заявку B2B
+            Запросить сотрудничество
           </Button>
         );
       },
@@ -1276,6 +1310,42 @@ export default function CounterpartiesPage() {
           </div>
         </div>
       </UnifiedFormModal>
+
+      {/* МОДАЛЬНОЕ ОКНО ПОДТВЕРЖДЕНИЯ ПРЕКРАЩЕНИЯ СОТРУДНИЧЕСТВА */}
+      {terminateModalCompany && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in">
+          <div className="w-full max-w-md bg-card border border-border rounded-2xl p-6 shadow-2xl space-y-4">
+            <div className="flex items-center space-x-3 text-rose-400">
+              <AlertCircle className="h-6 w-6" />
+              <h3 className="text-lg font-bold text-foreground">Прекращение сотрудничества</h3>
+            </div>
+            <p className="text-xs md:text-sm text-muted-foreground leading-relaxed">
+              Вы уверены, что хотите прекратить сотрудничество с <strong className="text-foreground">ОсОО «{terminateModalCompany.name}»</strong>? 
+              Это разровет партнерскую связь и ограничит совместный доступ к первичным документам.
+            </p>
+            <div className="flex items-center justify-end space-x-3 pt-2">
+              <Button
+                variant="outline"
+                onClick={() => setTerminateModalCompany(null)}
+                className="rounded-xl text-xs min-h-[40px]"
+              >
+                Отмена
+              </Button>
+              <Button
+                onClick={() => {
+                  const targetId = terminateModalCompany.id;
+                  setTerminateModalCompany(null);
+                  handleTerminatePartnership(targetId);
+                }}
+                disabled={isPending}
+                className="bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl text-xs min-h-[40px] shadow-lg shadow-rose-600/20"
+              >
+                Да, прекратить сотрудничество
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

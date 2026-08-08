@@ -203,6 +203,23 @@ export async function respondToPartnershipRequestAction(
   }
 }
 
+/** Алиасы и точечные обертки под матрицу действий партнерства */
+export async function requestPartnershipAction(targetCompanyId: string) {
+  return sendPartnershipRequestAction(targetCompanyId);
+}
+
+export async function cancelPartnershipRequestAction(partnershipId: string): Promise<ActionResponse> {
+  return respondToPartnershipRequestAction(partnershipId, 'cancelled');
+}
+
+export async function acceptPartnershipRequestAction(partnershipId: string): Promise<ActionResponse> {
+  return respondToPartnershipRequestAction(partnershipId, 'approved');
+}
+
+export async function rejectPartnershipRequestAction(partnershipId: string): Promise<ActionResponse> {
+  return respondToPartnershipRequestAction(partnershipId, 'rejected');
+}
+
 /**
  * Ручное добавление контрагента по ИНН (14 цифр КР) + Опциональная загрузка учредительного файла R2
  */
