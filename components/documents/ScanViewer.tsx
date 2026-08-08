@@ -1,9 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { ZoomIn, ZoomOut, RotateCw, Maximize2, FileText, Download, Loader2, Image as ImageIcon } from 'lucide-react';
+import { ZoomIn, ZoomOut, RotateCw, Maximize2, FileText, Download, Loader2, Image as ImageIcon, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { getPresignedDownloadUrlAction } from '@/app/dashboard/files/actions';
+import { getFileViewUrlAction, getFileDownloadUrlAction } from '@/app/dashboard/files/actions';
 
 interface ScanViewerProps {
   fileName?: string | null;
@@ -25,22 +25,29 @@ export function ScanViewer({
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
 
-  const [realDownloadUrl, setRealDownloadUrl] = useState<string | null>(null);
+  const [realViewUrl, setRealViewUrl] = useState<string | null>(null);
+  const [downloadingUrl, setDownloadingUrl] = useState<string | null>(null);
   const [loadingUrl, setLoadingUrl] = useState(false);
 
   useEffect(() => {
-    async function loadR2Url() {
+    async function loadUrls() {
       if (fileKey) {
         setLoadingUrl(true);
-        const res = await getPresignedDownloadUrlAction(fileKey);
-        if (res.success && res.data?.downloadUrl) {
-          setRealDownloadUrl(res.data.downloadUrl);
+        const [viewRes, dlRes] = await Promise.all([
+          getFileViewUrlAction(fileKey, fileName || undefined),
+          getFileDownloadUrlAction(fileKey, fileName || undefined),
+        ]);
+        if (viewRes.success && viewRes.data?.viewUrl) {
+          setRealViewUrl(viewRes.data.viewUrl);
+        }
+        if (dlRes.success && dlRes.data?.downloadUrl) {
+          setDownloadingUrl(dlRes.data.downloadUrl);
         }
         setLoadingUrl(false);
       }
     }
-    loadR2Url();
-  }, [fileKey]);
+    loadUrls();
+  }, [fileKey, fileName]);
 
   const handleZoomIn = () => setZoom((prev) => Math.min(prev + 0.25, 2.5));
   const handleZoomOut = () => setZoom((prev) => Math.max(prev - 0.25, 0.5));
@@ -49,6 +56,8 @@ export function ScanViewer({
     setZoom(1);
     setRotation(0);
   };
+
+  const isImage = Boolean((fileName || fileKey || '').match(/\.(png|jpg|jpeg|webp|gif|svg)$/i));
 
   return (
     <div className="flex flex-col h-full bg-card border border-border rounded-xl overflow-hidden backdrop-blur-xl">
@@ -59,15 +68,15 @@ export function ScanViewer({
           <span className="truncate">{fileName || 'Скан_документа.pdf'}</span>
           {fileKey && (
             <span className="text-[9px] uppercase font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-              Облачный архив
+              Облачный диск
             </span>
           )}
         </div>
 
         <div className="flex items-center space-x-1">
-          {realDownloadUrl && (
-            <a href={realDownloadUrl} target="_blank" rel="noopener noreferrer" download>
-              <Button variant="ghost" size="sm" className="h-8 text-xs text-blue-400 hover:text-blue-500 hover:bg-muted">
+          {downloadingUrl && (
+            <a href={downloadingUrl} target="_blank" rel="noopener noreferrer" download={fileName || 'file'}>
+              <Button variant="ghost" size="sm" className="h-8 text-xs text-emerald-400 hover:text-emerald-300 hover:bg-muted font-semibold">
                 <Download className="h-3.5 w-3.5 mr-1" />
                 Скачать файл
               </Button>
@@ -91,29 +100,32 @@ export function ScanViewer({
       </div>
 
       {/* Interactive Scan Canvas Area */}
-      <div className="flex-1 p-6 overflow-auto flex items-center justify-center bg-background/50 relative min-h-[400px]">
+      <div className="flex-1 p-4 overflow-auto flex items-center justify-center bg-background/50 relative min-h-[400px]">
         {loadingUrl ? (
           <div className="flex items-center space-x-2 text-muted-foreground">
             <Loader2 className="h-5 w-5 animate-spin text-blue-400" />
-            <span>Генерация ссылки для скачивания...</span>
+            <span>Подготовка предпросмотра (UTF-8)...</span>
           </div>
-        ) : realDownloadUrl ? (
+        ) : realViewUrl ? (
           <div
-            className="transition-transform duration-200 shadow-2xl rounded-md max-w-full overflow-hidden"
+            className="transition-transform duration-200 shadow-2xl rounded-md w-full h-full max-w-full overflow-hidden flex items-center justify-center"
             style={{
               transform: `scale(${zoom}) rotate(${rotation}deg)`,
             }}
           >
-            {/* Картинка или вставка файла */}
-            <img
-              src={realDownloadUrl}
-              alt={fileName || 'Просмотр скана'}
-              className="max-h-[600px] object-contain rounded border border-slate-800"
-              onError={(e) => {
-                // Если скан — PDF, покажем превью плашку
-                (e.target as HTMLElement).style.display = 'none';
-              }}
-            />
+            {isImage ? (
+              <img
+                src={realViewUrl}
+                alt={fileName || 'Просмотр файла'}
+                className="max-h-[600px] object-contain rounded border border-slate-800"
+              />
+            ) : (
+              <iframe
+                src={realViewUrl}
+                title={fileName || 'Просмотр документа'}
+                className="w-full h-[600px] rounded border border-slate-800 bg-white"
+              />
+            )}
           </div>
         ) : (
           /* Демо-макет при отсутствии реального файла */

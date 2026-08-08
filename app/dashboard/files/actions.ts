@@ -1,7 +1,7 @@
 'use server';
 
 import { createClient, createAdminClient } from '@/lib/supabase/server';
-import { r2Client, r2BucketName } from '@/lib/r2';
+import { r2Client, r2BucketName, getPresignedDownloadUrl } from '@/lib/r2';
 import { PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import type { ActionResponse } from '@/types/database.types';
@@ -197,6 +197,46 @@ export async function getPresignedDownloadUrlAction(
     };
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : 'Сбой получения ссылки скачивания R2';
+    return { success: false, error: errorMsg };
+  }
+}
+
+/**
+ * Получение ссылки онлайн-просмотра файла (inline + UTF-8 charset)
+ */
+export async function getFileViewUrlAction(
+  fileKey: string,
+  fileName?: string
+): Promise<ActionResponse<{ viewUrl: string }>> {
+  try {
+    const ctx = await getUserContext();
+    if (!ctx) return { success: false, error: 'Пользователь не авторизован' };
+    if (!fileKey) return { success: false, error: 'Ключ файла не указан' };
+
+    const viewUrl = await getPresignedDownloadUrl(fileKey, 3600, 'view', fileName);
+    return { success: true, data: { viewUrl } };
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : 'Сбой получения ссылки просмотра';
+    return { success: false, error: errorMsg };
+  }
+}
+
+/**
+ * Получение ссылки прямого скачивания файла на ПК (attachment + UTF-8 filename)
+ */
+export async function getFileDownloadUrlAction(
+  fileKey: string,
+  fileName?: string
+): Promise<ActionResponse<{ downloadUrl: string }>> {
+  try {
+    const ctx = await getUserContext();
+    if (!ctx) return { success: false, error: 'Пользователь не авторизован' };
+    if (!fileKey) return { success: false, error: 'Ключ файла не указан' };
+
+    const downloadUrl = await getPresignedDownloadUrl(fileKey, 3600, 'download', fileName);
+    return { success: true, data: { downloadUrl } };
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : 'Сбой получения ссылки скачивания';
     return { success: false, error: errorMsg };
   }
 }

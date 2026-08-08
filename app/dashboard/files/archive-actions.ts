@@ -5,8 +5,36 @@ import type { ActionResponse, DocumentFile, FileCategory } from '@/types/databas
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { getLookupCategories } from '@/lib/cache/lookups';
-import { deleteR2Object } from '@/lib/r2';
+import { deleteR2Object, getPresignedDownloadUrl } from '@/lib/r2';
 import { formatBytes } from '@/lib/utils';
+
+export async function getFileViewUrlAction(
+  fileKey: string,
+  fileName?: string
+): Promise<ActionResponse<{ viewUrl: string }>> {
+  try {
+    if (!fileKey) return { success: false, error: 'Ключ файла не указан' };
+    const viewUrl = await getPresignedDownloadUrl(fileKey, 3600, 'view', fileName);
+    return { success: true, data: { viewUrl } };
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : 'Сбой получения ссылки просмотра';
+    return { success: false, error: errorMsg };
+  }
+}
+
+export async function getFileDownloadUrlAction(
+  fileKey: string,
+  fileName?: string
+): Promise<ActionResponse<{ downloadUrl: string }>> {
+  try {
+    if (!fileKey) return { success: false, error: 'Ключ файла не указан' };
+    const downloadUrl = await getPresignedDownloadUrl(fileKey, 3600, 'download', fileName);
+    return { success: true, data: { downloadUrl } };
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : 'Сбой получения ссылки скачивания';
+    return { success: false, error: errorMsg };
+  }
+}
 
 const archiveFileSchema = z.object({
   category_id: z.string().optional(),

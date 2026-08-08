@@ -200,6 +200,18 @@ export type ActionResponse<T = any> = {
 - **Response**: `ActionResponse<{ presignedUrl: string }>`
 - **Бизнес-логика**: Генерация временной преподписанной ссылки S3 GetObject со сроком 15 минут.
 
+#### `getFileViewUrlAction`
+- **Auth**: Private (Tenant)
+- **Input**: `fileKey: string, fileName?: string`
+- **Response**: `ActionResponse<{ viewUrl: string }>`
+- **Бизнес-логика**: Генерация пресайн URL для онлайн-просмотра в браузере с `ResponseContentDisposition: inline` и строгим кодированием `charset=utf-8` для текстов/сканов.
+
+#### `getFileDownloadUrlAction`
+- **Auth**: Private (Tenant)
+- **Input**: `fileKey: string, fileName?: string`
+- **Response**: `ActionResponse<{ downloadUrl: string }>`
+- **Бизнес-логика**: Генерация пресайн URL для прямого скачивания на компьютер с `ResponseContentDisposition: attachment; filename*=UTF-8''...`.
+
 #### `deleteDocumentFileAction`
 - **Auth**: Private (Tenant)
 - **Zod Schema**: `z.object({ fileId: z.string().uuid() })`

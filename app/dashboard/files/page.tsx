@@ -19,6 +19,7 @@ import {
   FileCheck,
   ExternalLink,
   ShieldCheck,
+  Eye,
   Image as ImageIcon,
 } from 'lucide-react';
 import { formatBytes } from '@/lib/utils';
@@ -26,11 +27,12 @@ import {
   getComprehensiveFileRegistryAction,
   uploadFileToArchiveAction,
   getFileCategoriesAction,
+  getFileViewUrlAction,
+  getFileDownloadUrlAction,
   type EnrichedFileItem,
   type FileRegistryStats,
 } from './archive-actions';
-import { getPresignedDownloadUrlAction } from './actions';
-import { UnifiedDataGrid, ColumnDef } from '@/components/ui/unified/UnifiedDataGrid';
+import { UnifiedDataGrid, ColumnDef, RowAction } from '@/components/ui/unified/UnifiedDataGrid';
 import { MultiFileDropzone, type FileItemState } from '@/components/documents/MultiFileDropzone';
 import type { FileCategory } from '@/types/database.types';
 
@@ -62,8 +64,8 @@ export default function CloudFilesRegistryPage() {
     ]);
 
     if (res.success && res.data) {
-      setFiles(res.data.files);
-      setStats(res.data.stats);
+      setFiles(res.data.files || []);
+      setStats(res.data.stats || null);
     } else {
       setFiles([]);
       setStats(null);
@@ -87,10 +89,10 @@ export default function CloudFilesRegistryPage() {
     setSavingBatch(true);
     for (const f of readyFiles) {
       await uploadFileToArchiveAction({
-        category_id: f.category_id,
+        category_id: f.category_id || undefined,
         file_name: f.file_name,
         file_size: f.size_bytes,
-        file_type: f.file_type,
+        file_type: f.file_type || 'other',
         file_path_r2: f.file_path_r2!,
         description: f.description,
         comment: f.comment,
@@ -103,18 +105,39 @@ export default function CloudFilesRegistryPage() {
     loadFiles();
   };
 
-  const handleDownloadR2 = async (fileKey: string, fileId: string) => {
+  // 1. ОНЛАЙН ПРОСМОТР ФАЙЛА (inline + UTF-8)
+  const handleViewFile = async (fileKey: string, fileName?: string) => {
+    if (!fileKey) return;
+    try {
+      const res = await getFileViewUrlAction(fileKey, fileName);
+      if (res.success && res.data?.viewUrl) {
+        window.open(res.data.viewUrl, '_blank');
+      } else {
+        alert(res.error || 'Не удалось открыть файл для просмотра');
+      }
+    } catch (e: any) {
+      alert(`Ошибка открытия: ${e?.message}`);
+    }
+  };
+
+  // 2. ПРЯМОЕ СКАЧИВАНИЕ ФАЙЛА НА ПК (attachment)
+  const handleDownloadFile = async (fileKey: string, fileId: string, fileName?: string) => {
     if (!fileKey) return;
     setDownloadingId(fileId);
     try {
-      const res = await getPresignedDownloadUrlAction(fileKey);
+      const res = await getFileDownloadUrlAction(fileKey, fileName);
       if (res.success && res.data?.downloadUrl) {
-        window.open(res.data.downloadUrl, '_blank');
+        const link = document.createElement('a');
+        link.href = res.data.downloadUrl;
+        link.download = fileName || 'file';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
       } else {
         alert(res.error || 'Не удалось сгенерировать ссылку для скачивания файла');
       }
     } catch (e: any) {
-      alert(`Ошибка при загрузке: ${e?.message}`);
+      alert(`Ошибка при скачивании: ${e?.message}`);
     } finally {
       setDownloadingId(null);
     }
@@ -240,27 +263,53 @@ export default function CloudFilesRegistryPage() {
     },
     {
       key: 'actions',
-      label: 'Скачивание',
+      label: 'Действия',
       sortable: false,
       render: (file) =>
         file.file_path_r2 ? (
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => handleDownloadR2(file.file_path_r2!, file.id)}
-            disabled={downloadingId === file.id}
-            className="border-border text-foreground hover:bg-muted text-xs min-h-[36px]"
-          >
-            {downloadingId === file.id ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
-            ) : (
-              <Download className="h-3.5 w-3.5 mr-1 text-emerald-400" />
-            )}
-            Скачать файл
-          </Button>
+          <div className="flex items-center space-x-2" onClick={(e) => e.stopPropagation()}>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => handleViewFile(file.file_path_r2!, file.file_name)}
+              className="border-border text-foreground hover:bg-muted text-xs min-h-[36px]"
+            >
+              <Eye className="h-3.5 w-3.5 mr-1 text-blue-400" />
+              Просмотр
+            </Button>
+
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => handleDownloadFile(file.file_path_r2!, file.id, file.file_name)}
+              disabled={downloadingId === file.id}
+              className="border-border text-foreground hover:bg-muted text-xs min-h-[36px]"
+            >
+              {downloadingId === file.id ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+              ) : (
+                <Download className="h-3.5 w-3.5 mr-1 text-emerald-400" />
+              )}
+              Скачать файл
+            </Button>
+          </div>
         ) : (
           <span className="text-muted-foreground text-xs">—</span>
         ),
+    },
+  ];
+
+  // КОНТЕКСТНОЕ МЕНЮ СТРОКИ
+  const getFileRowActions = (file: EnrichedFileItem): RowAction<EnrichedFileItem>[] => [
+    {
+      label: '👁️ Просмотр (UTF-8)',
+      icon: <Eye className="h-4 w-4 text-blue-400" />,
+      action: () => file.file_path_r2 && handleViewFile(file.file_path_r2, file.file_name),
+    },
+    {
+      label: '📥 Скачать файл на ПК',
+      icon: <Download className="h-4 w-4 text-emerald-400" />,
+      action: () => file.file_path_r2 && handleDownloadFile(file.file_path_r2, file.id, file.file_name),
     },
   ];
 
@@ -300,18 +349,28 @@ export default function CloudFilesRegistryPage() {
           <span className="truncate max-w-[180px]">{file.sourceTitle}</span>
           <ExternalLink className="h-3 w-3" />
         </Link>
-
         {file.file_path_r2 && (
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => handleDownloadR2(file.file_path_r2!, file.id)}
-            disabled={downloadingId === file.id}
-            className="border-border text-xs text-foreground min-h-[40px] px-3 hover:bg-muted"
-          >
-            <Download className="h-3.5 w-3.5 mr-1 text-emerald-400" />
-            Скачать
-          </Button>
+          <div className="flex items-center space-x-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => handleViewFile(file.file_path_r2!, file.file_name)}
+              className="border-border text-xs text-foreground min-h-[40px] px-3 hover:bg-muted"
+            >
+              <Eye className="h-3.5 w-3.5 mr-1 text-blue-400" />
+              Просмотр
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => handleDownloadFile(file.file_path_r2!, file.id, file.file_name)}
+              disabled={downloadingId === file.id}
+              className="border-border text-xs text-foreground min-h-[40px] px-3 hover:bg-muted"
+            >
+              <Download className="h-3.5 w-3.5 mr-1 text-emerald-400" />
+              Скачать
+            </Button>
+          </div>
         )}
       </div>
     </Card>
@@ -483,10 +542,11 @@ export default function CloudFilesRegistryPage() {
         columns={columns}
         data={filteredFiles}
         keyExtractor={(f) => f.id}
-        onRowClick={(f) => f.file_path_r2 && handleDownloadR2(f.file_path_r2, f.id)}
+        onRowClick={(f) => f.file_path_r2 && handleViewFile(f.file_path_r2, f.file_name)}
+        getRowActions={getFileRowActions}
         renderCard={renderFileCard}
         searchPlaceholder="Поиск по имени файла, описанию, источнику..."
-        emptyMessage="Файлы в облачном архиве по выбранным условиям не найдены."
+        emptyMessage="Файлы в облачном диске по выбранным условиям не найдены."
         isLoading={loading}
         defaultPageSize={25}
       />
