@@ -6,6 +6,8 @@ import { useSearchParams } from 'next/navigation';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   FolderOpen,
   FileText,
@@ -20,6 +22,10 @@ import {
   ExternalLink,
   ShieldCheck,
   Eye,
+  Pencil,
+  Trash2,
+  RefreshCw,
+  AlertTriangle,
   Image as ImageIcon,
 } from 'lucide-react';
 import { formatBytes } from '@/lib/utils';
@@ -29,10 +35,14 @@ import {
   getFileCategoriesAction,
   getFileViewUrlAction,
   getFileDownloadUrlAction,
+  updateDocumentFileAction,
+  deleteDocumentFileAction,
   type EnrichedFileItem,
   type FileRegistryStats,
 } from './archive-actions';
+import { getPresignedUploadUrlAction } from './actions';
 import { UnifiedDataGrid, ColumnDef, RowAction } from '@/components/ui/unified/UnifiedDataGrid';
+import { UnifiedFormModal } from '@/components/ui/unified/UnifiedFormModal';
 import { MultiFileDropzone, type FileItemState } from '@/components/documents/MultiFileDropzone';
 import type { FileCategory } from '@/types/database.types';
 
@@ -55,6 +65,19 @@ export default function CloudFilesRegistryPage() {
 
   // Скачивание
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+
+  // РЕДАКТИРОВАНИЕ И ЗАМЕНА
+  const [editingFile, setEditingFile] = useState<EnrichedFileItem | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editCatId, setEditCatId] = useState('');
+  const [editDesc, setEditDesc] = useState('');
+  const [editComment, setEditComment] = useState('');
+  const [replacingFile, setReplacingFile] = useState<File | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  // УДАЛЕНИЕ
+  const [deletingFile, setDeletingFile] = useState<EnrichedFileItem | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const loadFiles = async () => {
     setLoading(true);
@@ -140,6 +163,95 @@ export default function CloudFilesRegistryPage() {
       alert(`Ошибка при скачивании: ${e?.message}`);
     } finally {
       setDownloadingId(null);
+    }
+  };
+
+  // 3. ОТКРЫТИЕ МОДАЛКИ РЕДАКТИРОВАНИЯ И ЗАМЕНЫ
+  const handleOpenEditModal = (file: EnrichedFileItem) => {
+    setEditingFile(file);
+    setEditName(file.file_name || '');
+    setEditCatId(file.category_id || categories[0]?.id || '');
+    setEditDesc(file.description || '');
+    setEditComment(file.comment || '');
+    setReplacingFile(null);
+  };
+
+  // 4. СОХРАНЕНИЕ РЕДАКТИРОВАНИЯ ИЛИ ЗАМЕНЫ ФАЙЛА (с Copy-on-Write)
+  const handleSaveEdit = async () => {
+    if (!editingFile) return;
+    setSavingEdit(true);
+
+    try {
+      let newFileKey = editingFile.file_path_r2;
+      let newFileSize = editingFile.size_bytes;
+
+      if (replacingFile) {
+        // Загрузка нового скана на облачный диск
+        const presigned = await getPresignedUploadUrlAction(replacingFile.name, replacingFile.type);
+        if (!presigned.success || !presigned.data?.uploadUrl) {
+          alert(presigned.error || 'Ошибка генерации ссылки для замены файла');
+          setSavingEdit(false);
+          return;
+        }
+
+        const uploadRes = await fetch(presigned.data.uploadUrl, {
+          method: 'PUT',
+          body: replacingFile,
+          headers: {
+            'Content-Type': presigned.data.cleanContentType,
+          },
+        });
+
+        if (!uploadRes.ok) {
+          alert('Ошибка физической передачи файла на облачный диск');
+          setSavingEdit(false);
+          return;
+        }
+
+        newFileKey = presigned.data.fileKey;
+        newFileSize = replacingFile.size;
+      }
+
+      // Вызываем CoW обновление через Server Action
+      const updateRes = await updateDocumentFileAction(editingFile.id, {
+        file_name: editName,
+        category_id: editCatId,
+        description: editDesc || undefined,
+        comment: editComment || undefined,
+        file_path_r2: newFileKey || undefined,
+        file_size: newFileSize || undefined,
+      });
+
+      if (updateRes.success) {
+        setEditingFile(null);
+        setReplacingFile(null);
+        loadFiles();
+      } else {
+        alert(updateRes.error || 'Ошибка при сохранении изменений файла');
+      }
+    } catch (err: any) {
+      alert(`Ошибка редактирования: ${err?.message}`);
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  // 5. ПОДТВЕРЖДЕНИЕ И УДАЛЕНИЕ ФАЙЛА
+  const handleConfirmDelete = async () => {
+    if (!deletingFile) return;
+    setIsDeleting(true);
+    try {
+      const res = await deleteDocumentFileAction(deletingFile.id);
+      if (res.success) {
+        setDeletingFile(null);
+        loadFiles();
+      } else {
+        alert(res.error || 'Не удалось удалить файл');
+      }
+    } catch (err: any) {
+      alert(`Ошибка удаления: ${err?.message}`);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -265,37 +377,60 @@ export default function CloudFilesRegistryPage() {
       key: 'actions',
       label: 'Действия',
       sortable: false,
-      render: (file) =>
-        file.file_path_r2 ? (
-          <div className="flex items-center space-x-2" onClick={(e) => e.stopPropagation()}>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => handleViewFile(file.file_path_r2!, file.file_name)}
-              className="border-border text-foreground hover:bg-muted text-xs min-h-[36px]"
-            >
-              <Eye className="h-3.5 w-3.5 mr-1 text-blue-400" />
-              Просмотр
-            </Button>
+      render: (file) => (
+        <div className="flex items-center space-x-1.5" onClick={(e) => e.stopPropagation()}>
+          {file.file_path_r2 && (
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => handleViewFile(file.file_path_r2!, file.file_name)}
+                className="border-border text-foreground hover:bg-muted text-xs min-h-[36px] px-2.5"
+                title="Просмотреть онлайн (UTF-8)"
+              >
+                <Eye className="h-3.5 w-3.5 mr-1 text-blue-400" />
+                Просмотр
+              </Button>
 
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => handleDownloadFile(file.file_path_r2!, file.id, file.file_name)}
-              disabled={downloadingId === file.id}
-              className="border-border text-foreground hover:bg-muted text-xs min-h-[36px]"
-            >
-              {downloadingId === file.id ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
-              ) : (
-                <Download className="h-3.5 w-3.5 mr-1 text-emerald-400" />
-              )}
-              Скачать файл
-            </Button>
-          </div>
-        ) : (
-          <span className="text-muted-foreground text-xs">—</span>
-        ),
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => handleDownloadFile(file.file_path_r2!, file.id, file.file_name)}
+                disabled={downloadingId === file.id}
+                className="border-border text-foreground hover:bg-muted text-xs min-h-[36px] px-2.5"
+                title="Скачать файл на компьютер"
+              >
+                {downloadingId === file.id ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                ) : (
+                  <Download className="h-3.5 w-3.5 mr-1 text-emerald-400" />
+                )}
+                Скачать
+              </Button>
+            </>
+          )}
+
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => handleOpenEditModal(file)}
+            className="border-border text-foreground hover:bg-muted text-xs min-h-[36px] px-2"
+            title="Редактировать реквизиты или заменить файл"
+          >
+            <Pencil className="h-3.5 w-3.5 text-amber-400" />
+          </Button>
+
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setDeletingFile(file)}
+            className="border-border text-foreground hover:bg-red-500/20 hover:text-red-400 text-xs min-h-[36px] px-2"
+            title="Удалить файл"
+          >
+            <Trash2 className="h-3.5 w-3.5 text-red-400" />
+          </Button>
+        </div>
+      ),
     },
   ];
 
@@ -310,6 +445,16 @@ export default function CloudFilesRegistryPage() {
       label: '📥 Скачать файл на ПК',
       icon: <Download className="h-4 w-4 text-emerald-400" />,
       action: () => file.file_path_r2 && handleDownloadFile(file.file_path_r2, file.id, file.file_name),
+    },
+    {
+      label: '✏️ Редактировать / Заменить',
+      icon: <Pencil className="h-4 w-4 text-amber-400" />,
+      action: () => handleOpenEditModal(file),
+    },
+    {
+      label: '🗑️ Удалить файл',
+      icon: <Trash2 className="h-4 w-4 text-red-400" />,
+      action: () => setDeletingFile(file),
     },
   ];
 
@@ -344,34 +489,63 @@ export default function CloudFilesRegistryPage() {
         </Badge>
       </div>
 
-      <div className="pt-2 border-t border-border flex items-center justify-between text-xs">
-        <Link href={file.sourceUrl} className="inline-flex items-center space-x-1 text-emerald-400 font-semibold">
-          <span className="truncate max-w-[180px]">{file.sourceTitle}</span>
-          <ExternalLink className="h-3 w-3" />
-        </Link>
-        {file.file_path_r2 && (
-          <div className="flex items-center space-x-2">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => handleViewFile(file.file_path_r2!, file.file_name)}
-              className="border-border text-xs text-foreground min-h-[40px] px-3 hover:bg-muted"
-            >
-              <Eye className="h-3.5 w-3.5 mr-1 text-blue-400" />
-              Просмотр
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => handleDownloadFile(file.file_path_r2!, file.id, file.file_name)}
-              disabled={downloadingId === file.id}
-              className="border-border text-xs text-foreground min-h-[40px] px-3 hover:bg-muted"
-            >
-              <Download className="h-3.5 w-3.5 mr-1 text-emerald-400" />
-              Скачать
-            </Button>
-          </div>
-        )}
+      <div className="pt-2 border-t border-border flex flex-col space-y-2 text-xs">
+        <div className="flex items-center justify-between">
+          <Link href={file.sourceUrl} className="inline-flex items-center space-x-1 text-emerald-400 font-semibold">
+            <span className="truncate max-w-[180px]">{file.sourceTitle}</span>
+            <ExternalLink className="h-3 w-3" />
+          </Link>
+
+          {file.isCoWShared && (
+            <Badge variant="outline" className="border-indigo-500/40 text-indigo-300 text-[10px]">
+              Общий доступ ({file.ownersCount})
+            </Badge>
+          )}
+        </div>
+
+        <div className="flex items-center space-x-2 pt-1">
+          {file.file_path_r2 && (
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => handleViewFile(file.file_path_r2!, file.file_name)}
+                className="flex-1 border-border text-xs text-foreground min-h-[40px] hover:bg-muted"
+              >
+                <Eye className="h-3.5 w-3.5 mr-1 text-blue-400" />
+                Просмотр
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => handleDownloadFile(file.file_path_r2!, file.id, file.file_name)}
+                disabled={downloadingId === file.id}
+                className="flex-1 border-border text-xs text-foreground min-h-[40px] hover:bg-muted"
+              >
+                <Download className="h-3.5 w-3.5 mr-1 text-emerald-400" />
+                Скачать
+              </Button>
+            </>
+          )}
+
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => handleOpenEditModal(file)}
+            className="border-border text-xs text-foreground min-h-[40px] px-3 hover:bg-muted"
+          >
+            <Pencil className="h-3.5 w-3.5 text-amber-400" />
+          </Button>
+
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setDeletingFile(file)}
+            className="border-border text-xs text-foreground min-h-[40px] px-3 hover:bg-red-500/20 hover:text-red-400"
+          >
+            <Trash2 className="h-3.5 w-3.5 text-red-400" />
+          </Button>
+        </div>
       </div>
     </Card>
   );
@@ -536,7 +710,7 @@ export default function CloudFilesRegistryPage() {
         </select>
       </div>
 
-      {/* 4. ЕДИНООБРАЗНАЯ СИСТЕМА UnifiedDataGrid С ПАГИНАЦИЕЙ (25-50-100-ВСЕ) И СТИЛЕМ */}
+      {/* 4. ЕДИНООБРАЗНАЯ СИСТЕМА UnifiedDataGrid С ПАГИНАЦИЕЙ И СТИЛЕМ */}
       <UnifiedDataGrid<EnrichedFileItem>
         gridId="files_archive"
         columns={columns}
@@ -550,6 +724,122 @@ export default function CloudFilesRegistryPage() {
         isLoading={loading}
         defaultPageSize={25}
       />
+
+      {/* 5. МОДАЛЬНОЕ ОКНО РЕДАКТИРОВАНИЯ И ЗАМЕНЫ ФАЙЛА */}
+      <UnifiedFormModal
+        isOpen={!!editingFile}
+        onClose={() => setEditingFile(null)}
+        title="Редактирование / Замена Файла"
+        subtitle="Изменение параметров и скан-файла в хранилище"
+        mode="edit"
+        onSubmit={(e) => {
+          e.preventDefault();
+          handleSaveEdit();
+        }}
+        isSubmitting={savingEdit}
+        submitText="Сохранить изменения"
+      >
+        <div className="space-y-4">
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Наименование файла *</Label>
+            <Input
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              placeholder="Введите название файла"
+              className="bg-background border-border text-foreground min-h-[44px]"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Категория файла</Label>
+            <select
+              value={editCatId}
+              onChange={(e) => setEditCatId(e.target.value)}
+              className="w-full min-h-[44px] rounded-xl border border-border bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              {categories.map((cat) => (
+                <option key={cat.id} value={cat.id}>
+                  {cat.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Описание</Label>
+            <Input
+              value={editDesc}
+              onChange={(e) => setEditDesc(e.target.value)}
+              placeholder="Описание файла..."
+              className="bg-background border-border text-foreground min-h-[44px]"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Примечание</Label>
+            <Input
+              value={editComment}
+              onChange={(e) => setEditComment(e.target.value)}
+              placeholder="Внутренний комментарий..."
+              className="bg-background border-border text-foreground min-h-[44px]"
+            />
+          </div>
+
+          {/* Блок замена скан-файла */}
+          <div className="p-4 rounded-xl bg-background/60 border border-border space-y-2">
+            <Label className="text-xs text-purple-400 font-semibold flex items-center">
+              <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+              Заменить сам файл в хранилище (опционально)
+            </Label>
+            <input
+              type="file"
+              accept="image/*,.pdf,.txt,.csv,.doc,.docx"
+              onChange={(e) => e.target.files?.[0] && setReplacingFile(e.target.files[0])}
+              className="text-xs text-muted-foreground file:mr-2 file:py-2 file:px-3 file:rounded-xl file:border-0 file:bg-muted file:text-foreground"
+            />
+            {replacingFile && (
+              <p className="text-xs text-emerald-400 font-mono pt-1">
+                Выбран новый файл для замены: <span className="font-bold">{replacingFile.name}</span> ({formatBytes(replacingFile.size)})
+              </p>
+            )}
+            {editingFile?.isCoWShared && (
+              <p className="text-[11px] text-indigo-300 pt-1">
+                💡 Данный файл имеет общий доступ ({editingFile.ownersCount} орг.). Замена применит механизм Copy-on-Write — для вашей компании сохранится новая копия, а у остальных останется прежняя версия.
+              </p>
+            )}
+          </div>
+        </div>
+      </UnifiedFormModal>
+
+      {/* 6. МОДАЛЬНОЕ ОКНО ПОДТВЕРЖДЕНИЯ УДАЛЕНИЯ */}
+      <UnifiedFormModal
+        isOpen={!!deletingFile}
+        onClose={() => setDeletingFile(null)}
+        title="Удаление файла с диска"
+        mode="edit"
+        onSubmit={(e) => {
+          e.preventDefault();
+          handleConfirmDelete();
+        }}
+        isSubmitting={isDeleting}
+        submitText="Да, удалить файл"
+      >
+        <div className="space-y-4 pt-1">
+          <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 flex items-start space-x-3">
+            <AlertTriangle className="h-5 w-5 text-red-400 flex-shrink-0 mt-0.5" />
+            <div className="space-y-1 text-xs">
+              <p className="font-bold text-foreground">
+                Вы уверены, что хотите удалить «{deletingFile?.file_name}»?
+              </p>
+              <p className="text-muted-foreground">
+                {deletingFile?.isCoWShared
+                  ? `Файл находится в общем доступе. Удаление открепит вашу организацию, а сам файл сохранится у остальных ${deletingFile.ownersCount - 1} совладельцев.`
+                  : 'Файл находится только у вашей компании и будет полностью и навсегда удален с облачного диска.'}
+              </p>
+            </div>
+          </div>
+        </div>
+      </UnifiedFormModal>
     </div>
   );
 }
