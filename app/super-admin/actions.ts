@@ -439,6 +439,51 @@ export async function deleteUserAdminAction(userId: string): Promise<ActionRespo
   }
 }
 
+/**
+ * Административный сброс пароля пользователя с прямой синхронизацией Supabase Auth
+ */
+export async function resetUserPasswordAdminAction(
+  userId: string,
+  newPassword?: string
+): Promise<ActionResponse<{ newPassword: string }>> {
+  try {
+    if (!(await checkSuperAdmin())) {
+      return { success: false, error: 'Доступ запрещен' };
+    }
+
+    const passwordToSet =
+      newPassword && newPassword.trim().length >= 6
+        ? newPassword.trim()
+        : Math.random().toString(36).substring(2, 10) + '!' + Math.floor(Math.random() * 90 + 10);
+
+    const adminSupabase = await createAdminClient();
+
+    // 1. Смена пароля учетной записи в Supabase Auth (GoTrue) через Service Role API
+    const { error: authErr } = await adminSupabase.auth.admin.updateUserById(userId, {
+      password: passwordToSet,
+    });
+
+    if (authErr) {
+      return { success: false, error: `Ошибка сброса пароля в Auth: ${authErr.message}` };
+    }
+
+    // 2. Установка флага обязательной смены пароля при следующем входе
+    await adminSupabase
+      .from('users')
+      .update({
+        must_change_password: true,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', userId);
+
+    revalidatePath('/super-admin');
+    return { success: true, data: { newPassword: passwordToSet } };
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : 'Сбой операции сброса пароля';
+    return { success: false, error: errorMsg };
+  }
+}
+
 // -------------------------------------------------------------
 // 3. УПРАВЛЕНИЕ ВСЕМИ B2B ДОКУМЕНТАМИ (DOCUMENTS)
 // -------------------------------------------------------------

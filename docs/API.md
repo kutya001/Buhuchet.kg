@@ -222,6 +222,13 @@ export type ActionResponse<T = any> = {
 - **Бизнес-логика**: Детерминированная выборка с явным FK `users_company_id_fkey` и fallback сопоставлением организаций.
 - **Таблицы БД**: `users`, `companies`
 
+#### `resetUserPasswordAdminAction`
+- **Auth**: SuperAdmin
+- **Input**: `userId: string, newPassword?: string`
+- **Response**: `ActionResponse<{ newPassword: string }>`
+- **Бизнес-логика**: Прямой административный сброс пароля в Supabase Auth (GoTrue) через Service Role API (`admin.updateUserById`), пометка `must_change_password = true` в `public.users`.
+- **Таблицы БД**: `auth.users`, `public.users`
+
 #### `inspectTableDataAdminAction`
 - **Auth**: SuperAdmin
 - **Zod Schema**: `z.object({ tableName: z.string(), limit: z.number().default(100) })`

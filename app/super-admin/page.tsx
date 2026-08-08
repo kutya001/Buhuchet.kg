@@ -44,6 +44,8 @@ import {
   Ban,
   HelpCircle,
   Clock,
+  Key,
+  Copy,
 } from 'lucide-react';
 import { formatBytes } from '@/lib/utils';
 import {
@@ -57,6 +59,7 @@ import {
   getAllUsersAdminAction,
   updateUserAdminAction,
   deleteUserAdminAction,
+  resetUserPasswordAdminAction,
   getAllDocumentsAdminAction,
   updateDocumentAdminAction,
   deleteDocumentAdminAction,
@@ -147,6 +150,13 @@ export default function SuperAdminPage() {
   const [userRole, setUserRole] = useState<'owner' | 'accountant' | 'manager'>('owner');
   const [userCompId, setUserCompId] = useState<string>('');
   const [userIsSuperAdmin, setUserIsSuperAdmin] = useState(false);
+
+  // 2.1 Модалка Сброса Пароля Пользователя
+  const [resettingUser, setResettingUser] = useState<any | null>(null);
+  const [customPasswordInput, setCustomPasswordInput] = useState('');
+  const [generatedPasswordResult, setGeneratedPasswordResult] = useState<string | null>(null);
+  const [resetPasswordLoading, setResetPasswordLoading] = useState(false);
+  const [copiedPassword, setCopiedPassword] = useState(false);
 
   // 3. Модалки Документов
   const [editingDoc, setEditingDoc] = useState<any | null>(null);
@@ -465,6 +475,22 @@ export default function SuperAdminPage() {
         getAllUsersAdminAction().then((r) => r.data && setAllUsers(r.data));
       }
     });
+  };
+
+  const handleResetUserPassword = async () => {
+    if (!resettingUser) return;
+    setMsg(null);
+    setResetPasswordLoading(true);
+
+    const res = await resetUserPasswordAdminAction(resettingUser.id, customPasswordInput);
+    setResetPasswordLoading(false);
+
+    if (res.success && res.data) {
+      setGeneratedPasswordResult(res.data.newPassword);
+      setMsg({ type: 'success', text: `Пароль пользователя "${resettingUser.full_name || resettingUser.email}" успешно обновлен` });
+    } else {
+      setMsg({ type: 'error', text: res.error || 'Ошибка сброса пароля' });
+    }
   };
 
   // ДЕЙСТВИЯ: B2B ДОКУМЕНТЫ
@@ -799,6 +825,21 @@ export default function SuperAdminPage() {
           >
             <Edit2 className="h-3.5 w-3.5 mr-1" />
             Изменить
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setResettingUser(u);
+              setCustomPasswordInput('');
+              setGeneratedPasswordResult(null);
+              setCopiedPassword(false);
+            }}
+            className="border-amber-900/40 text-amber-400 hover:bg-amber-500/10 text-xs min-h-[34px]"
+            title="Сбросить пароль аккаунта"
+          >
+            <Key className="h-3.5 w-3.5 mr-1" />
+            Сброс пароля
           </Button>
           <Button
             size="sm"
@@ -1190,6 +1231,15 @@ export default function SuperAdminPage() {
                 setUserEmail(u.email || '');
                 setUserRole(u.role || 'employee');
                 setUserIsSuperAdmin(u.is_super_admin || false);
+              },
+            },
+            {
+              label: '🔑 Сбросить пароль аккаунта',
+              action: () => {
+                setResettingUser(u);
+                setCustomPasswordInput('');
+                setGeneratedPasswordResult(null);
+                setCopiedPassword(false);
               },
             },
             {
@@ -1638,6 +1688,95 @@ export default function SuperAdminPage() {
           <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 font-mono text-xs text-rose-400 overflow-x-auto max-h-48">
             {deletingDbRow ? JSON.stringify(deletingDbRow, null, 2) : ''}
           </div>
+        </div>
+      </UnifiedFormModal>
+
+      {/* МОДАЛКА 8: Сброс Пароля Пользователя */}
+      <UnifiedFormModal
+        isOpen={!!resettingUser}
+        onClose={() => {
+          setResettingUser(null);
+          setCustomPasswordInput('');
+          setGeneratedPasswordResult(null);
+          setCopiedPassword(false);
+        }}
+        title={`🔑 Сброс Пароля — ${resettingUser?.full_name || resettingUser?.email}`}
+        subtitle="Административный сброс пароля с прямой синхронизацией Supabase Auth"
+        mode="edit"
+        onSubmit={(e) => {
+          e.preventDefault();
+          handleResetUserPassword();
+        }}
+        isSubmitting={resetPasswordLoading}
+        submitText="🔑 Сбросить Пароль Пользователя"
+      >
+        <div className="space-y-4">
+          <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center space-x-2">
+            <Shield className="h-4 w-4 text-amber-400 flex-shrink-0" />
+            <span>Пароль будет принудительно обновлен в схеме Auth. Пользователю установится требование смены пароля при входе.</span>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs text-slate-300">Новый Пароль (Оставьте пустым для автогенерации)</Label>
+            <div className="flex space-x-2">
+              <Input
+                type="text"
+                value={customPasswordInput}
+                onChange={(e) => setCustomPasswordInput(e.target.value)}
+                placeholder="Мин. 6 символов..."
+                className="bg-slate-950 border-slate-800 text-white font-mono text-xs min-h-[44px]"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  const gen = Math.random().toString(36).substring(2, 10) + '!' + Math.floor(Math.random() * 90 + 10);
+                  setCustomPasswordInput(gen);
+                }}
+                className="border-slate-800 text-xs text-indigo-400 hover:bg-indigo-500/10 min-h-[44px] shrink-0"
+              >
+                <RefreshCw className="h-3.5 w-3.5 mr-1" />
+                Сгенерировать
+              </Button>
+            </div>
+          </div>
+
+          {generatedPasswordResult && (
+            <div className="p-4 rounded-xl bg-emerald-950/60 border border-emerald-500/40 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-emerald-400 flex items-center">
+                  <CheckCircle2 className="h-4 w-4 mr-1.5 text-emerald-400" />
+                  Новый пароль успешно установлен:
+                </span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    navigator.clipboard.writeText(generatedPasswordResult);
+                    setCopiedPassword(true);
+                    setTimeout(() => setCopiedPassword(false), 2000);
+                  }}
+                  className="border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20 text-xs min-h-[32px]"
+                >
+                  {copiedPassword ? (
+                    <>
+                      <Check className="h-3.5 w-3.5 mr-1 text-emerald-400" />
+                      Скопировано!
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="h-3.5 w-3.5 mr-1" />
+                      Скопировать
+                    </>
+                  )}
+                </Button>
+              </div>
+              <div className="p-2.5 rounded-lg bg-slate-950 border border-slate-800 font-mono text-sm font-bold text-white tracking-wider select-all text-center">
+                {generatedPasswordResult}
+              </div>
+            </div>
+          )}
         </div>
       </UnifiedFormModal>
         </div>
