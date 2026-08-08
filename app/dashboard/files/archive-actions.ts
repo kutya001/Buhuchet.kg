@@ -1,7 +1,7 @@
 'use server';
 
 import { createClient, createAdminClient } from '@/lib/supabase/server';
-import type { ActionResponse, DocumentFile } from '@/types/database.types';
+import type { ActionResponse, DocumentFile, FileCategory } from '@/types/database.types';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { getLookupCategories } from '@/lib/cache/lookups';
