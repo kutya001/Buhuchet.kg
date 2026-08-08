@@ -16,7 +16,8 @@ async function checkSuperAdmin() {
 
   if (!user) return false;
 
-  const { data: profile } = await supabase
+  const adminSupabase = await createAdminClient();
+  const { data: profile } = await adminSupabase
     .from('users')
     .select('is_super_admin')
     .eq('id', user.id)
@@ -330,10 +331,15 @@ export async function getAllUsersAdminAction(): Promise<ActionResponse<any[]>> {
       .select('*, companies(*)')
       .order('created_at', { ascending: false });
 
-    if (error) return { success: false, error: error.message };
-    return { success: true, data };
+    if (error) {
+      console.error('[getAllUsersAdminAction Error]:', error);
+      return { success: false, error: error.message };
+    }
+    return { success: true, data: data || [] };
   } catch (err: unknown) {
-    return { success: false, error: 'Сбой получения списка пользователей' };
+    const msg = err instanceof Error ? err.message : 'Сбой получения списка пользователей';
+    console.error('[getAllUsersAdminAction Exception]:', err);
+    return { success: false, error: msg };
   }
 }
 
