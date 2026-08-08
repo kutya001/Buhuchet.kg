@@ -278,35 +278,31 @@ export default function CompanyProfilePage() {
         </Alert>
       )}
 
-      {/* Вкладки Раздела по матрице доступов */}
+      {/* Вкладки Раздела */}
       <div className="flex items-center space-x-2 border-b border-border pb-2">
-        {hasPermission(currentProfile, 'company', 'tab_profile') && (
-          <button
-            onClick={() => setActiveTab('profile')}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs md:text-sm font-medium transition-all ${
-              activeTab === 'profile'
-                ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
-                : 'text-muted-foreground hover:text-slate-200 hover:bg-muted'
-            }`}
-          >
-            <Building2 className="h-4 w-4" />
-            <span>Профиль & Реквизиты</span>
-          </button>
-        )}
+        <button
+          onClick={() => setActiveTab('profile')}
+          className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs md:text-sm font-medium transition-all ${
+            activeTab === 'profile'
+              ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30 font-bold'
+              : 'text-muted-foreground hover:text-slate-200 hover:bg-muted'
+          }`}
+        >
+          <Building2 className="h-4 w-4" />
+          <span>Профиль & Реквизиты</span>
+        </button>
 
-        {hasPermission(currentProfile, 'company', 'tab_legal_docs') && (
-          <button
-            onClick={() => setActiveTab('legal_docs')}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs md:text-sm font-medium transition-all ${
-              activeTab === 'legal_docs'
-                ? 'bg-purple-600/20 text-purple-400 border border-purple-500/30'
-                : 'text-muted-foreground hover:text-slate-200 hover:bg-muted'
-            }`}
-          >
-            <FileText className="h-4 w-4" />
-            <span>Учредительные Документы ({legalDocs.length})</span>
-          </button>
-        )}
+        <button
+          onClick={() => setActiveTab('legal_docs')}
+          className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs md:text-sm font-medium transition-all ${
+            activeTab === 'legal_docs'
+              ? 'bg-purple-600/20 text-purple-400 border border-purple-500/30 font-bold'
+              : 'text-muted-foreground hover:text-slate-200 hover:bg-muted'
+          }`}
+        >
+          <FileText className="h-4 w-4" />
+          <span>Учредительные Документы ({legalDocs.length})</span>
+        </button>
 
         <button
           onClick={() => {

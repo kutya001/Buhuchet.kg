@@ -305,19 +305,17 @@ export default function EmployeesModulePage() {
 
         {/* Переключатель вкладок */}
         <div className="flex items-center space-x-1 p-1 bg-muted/80 border border-border rounded-xl">
-          {(!currentProfile || hasPermission(currentProfile, 'employees', 'tab_employees')) && (
-            <button
-              onClick={() => setActiveTab('employees')}
-              className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-bold transition-all min-h-[40px] ${
-                activeTab === 'employees'
-                  ? 'bg-primary text-primary-foreground shadow-md'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-accent/60'
-              }`}
-            >
-              <Users className="h-4 w-4" />
-              <span>Мои сотрудники ({totalEmployees})</span>
-            </button>
-          )}
+          <button
+            onClick={() => setActiveTab('employees')}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-bold transition-all min-h-[40px] ${
+              activeTab === 'employees'
+                ? 'bg-primary text-primary-foreground shadow-md'
+                : 'text-muted-foreground hover:text-foreground hover:bg-accent/60'
+            }`}
+          >
+            <Users className="h-4 w-4" />
+            <span>Мои сотрудники ({totalEmployees})</span>
+          </button>
 
           <button
             onClick={() => setActiveTab('requests')}
@@ -333,19 +331,17 @@ export default function EmployeesModulePage() {
             <span>Заявки в штат ({pendingRequests.length})</span>
           </button>
 
-          {(!currentProfile || hasPermission(currentProfile, 'employees', 'tab_roles')) && (
-            <button
-              onClick={() => setActiveTab('roles')}
-              className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-bold transition-all min-h-[40px] ${
-                activeTab === 'roles'
-                  ? 'bg-primary text-primary-foreground shadow-md'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-accent/60'
-              }`}
-            >
-              <Shield className="h-4 w-4" />
-              <span>Роли и доступы ({roles.length})</span>
-            </button>
-          )}
+          <button
+            onClick={() => setActiveTab('roles')}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-bold transition-all min-h-[40px] ${
+              activeTab === 'roles'
+                ? 'bg-primary text-primary-foreground shadow-md'
+                : 'text-muted-foreground hover:text-foreground hover:bg-accent/60'
+            }`}
+          >
+            <Shield className="h-4 w-4" />
+            <span>Роли и доступы ({roles.length})</span>
+          </button>
         </div>
       </div>
 
