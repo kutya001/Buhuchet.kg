@@ -63,12 +63,14 @@ export async function createCompanyOnboardingAction(data: OnboardingInput): Prom
     // 2. Привязываем пользователя к компании и назначаем роль owner
     const { error: userError } = await adminSupabase
       .from('users')
-      .update({
+      .upsert({
+        id: user.id,
+        email: user.email!,
+        full_name: user.user_metadata?.full_name || director_name || 'Руководитель',
         company_id: company.id,
         role: 'owner',
         updated_at: new Date().toISOString(),
-      })
-      .eq('id', user.id);
+      });
 
     if (userError) {
       return { success: false, error: `Ошибка привязки пользователя: ${userError.message}` };

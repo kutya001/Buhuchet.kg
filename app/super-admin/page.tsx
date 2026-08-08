@@ -1054,6 +1054,14 @@ export default function SuperAdminPage() {
               setCompDirector(c.director_name || '');
             }}
             getRowActions={(c) => [
+              ...(c.status !== 'active'
+                ? [
+                    {
+                      label: '✅ Одобрить и активировать компанию',
+                      action: () => handleApprove(c),
+                    },
+                  ]
+                : []),
               {
                 label: '✏️ Права и реквизиты',
                 action: () => {
@@ -1384,10 +1392,10 @@ export default function SuperAdminPage() {
           <div className="space-y-1">
             <Label className="text-xs text-slate-300">Статус Верификации</Label>
             <select value={compStatus} onChange={(e) => setCompStatus(e.target.value)} className="w-full min-h-[44px] rounded-xl border border-slate-800 bg-slate-950 px-3 text-sm text-white">
-              <option value="active">Verified / Active</option>
-              <option value="pending">Pending Verification</option>
-              <option value="needs_changes">Needs Changes</option>
-              <option value="blocked">Blocked</option>
+              <option value="active">Верифицирована (Active)</option>
+              <option value="pending_approval">На проверке (Pending Approval)</option>
+              <option value="requires_changes">Требует правок (Requires Changes)</option>
+              <option value="blocked">Заблокирована (Blocked)</option>
             </select>
           </div>
           <div className="space-y-1">

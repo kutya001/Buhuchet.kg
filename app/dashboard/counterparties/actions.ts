@@ -8,13 +8,14 @@ import { getPresignedDownloadUrl } from '@/lib/r2';
 
 const getUserContext = cache(async () => {
   const supabase = await createClient();
+  const adminSupabase = await createAdminClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   if (!user) return null;
 
-  const { data: profile } = await supabase
+  const { data: profile } = await adminSupabase
     .from('users')
     .select('company_id')
     .eq('id', user.id)

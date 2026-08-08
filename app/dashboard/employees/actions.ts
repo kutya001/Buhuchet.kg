@@ -6,13 +6,14 @@ import { revalidatePath } from 'next/cache';
 
 async function getUserContext() {
   const supabase = await createClient();
+  const adminSupabase = await createAdminClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   if (!user) return null;
 
-  const { data: profile } = await supabase
+  const { data: profile } = await adminSupabase
     .from('users')
     .select('*, company_roles(*)')
     .eq('id', user.id)

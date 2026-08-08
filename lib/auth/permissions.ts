@@ -164,10 +164,7 @@ export function hasPermission(
   if (!profile.role_id) {
     if (action === 'view') return true;
     if (
-      action === 'tab_my_profile' ||
-      action === 'tab_profile' ||
-      action === 'tab_counterparties' ||
-      action === 'tab_legal_docs' ||
+      action.startsWith('tab_') ||
       action === 'view_all_statuses'
     ) {
       return true;

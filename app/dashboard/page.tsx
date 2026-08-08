@@ -31,15 +31,23 @@ export default async function DashboardPage() {
 
   if (!user) return null;
 
-  // 1. Получаем профиль пользователя с ролью
-  const { data: profile } = await supabase
+  // 1. Получаем профиль пользователя и привязанную компанию с помощью adminSupabase
+  const { data: profile } = await adminSupabase
     .from('users')
-    .select('*, companies(*), company_roles(*)')
+    .select('*, company_roles(*)')
     .eq('id', user.id)
     .single();
 
-  const company = Array.isArray(profile?.companies) ? profile?.companies[0] : profile?.companies;
-  const companyId = company?.id;
+  let company = null;
+  if (profile?.company_id) {
+    const { data: comp } = await adminSupabase
+      .from('companies')
+      .select('*')
+      .eq('id', profile.company_id)
+      .single();
+    company = comp;
+  }
+  const companyId = company?.id || profile?.company_id;
 
   const canCreateDoc = hasPermission(profile, 'documents', 'create');
   const canViewDocs = hasPermission(profile, 'documents', 'view');

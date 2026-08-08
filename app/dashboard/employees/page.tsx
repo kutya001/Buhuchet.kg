@@ -45,7 +45,7 @@ import type { UserProfile, CompanyRole, RolePermissions } from '@/types/database
 import { MODULE_CONFIG, ModuleName, ActionName, hasPermission } from '@/lib/auth/permissions';
 
 export default function EmployeesModulePage() {
-  const [activeTab, setActiveTab] = useState<'employees' | 'roles'>('employees');
+  const [activeTab, setActiveTab] = useState<'employees' | 'requests' | 'roles'>('employees');
   const [loading, setLoading] = useState(true);
   const [isPending, startTransition] = useTransition();
 
@@ -305,7 +305,7 @@ export default function EmployeesModulePage() {
 
         {/* Переключатель вкладок */}
         <div className="flex items-center space-x-1 p-1 bg-muted/80 border border-border rounded-xl">
-          {hasPermission(currentProfile, 'employees', 'tab_employees') && (
+          {(!currentProfile || hasPermission(currentProfile, 'employees', 'tab_employees')) && (
             <button
               onClick={() => setActiveTab('employees')}
               className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-bold transition-all min-h-[40px] ${
@@ -319,7 +319,21 @@ export default function EmployeesModulePage() {
             </button>
           )}
 
-          {hasPermission(currentProfile, 'employees', 'tab_roles') && (
+          <button
+            onClick={() => setActiveTab('requests')}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-bold transition-all min-h-[40px] ${
+              activeTab === 'requests'
+                ? 'bg-amber-500 text-slate-950 font-extrabold shadow-md'
+                : pendingRequests.length > 0
+                ? 'text-amber-400 bg-amber-500/10 border border-amber-500/30'
+                : 'text-muted-foreground hover:text-foreground hover:bg-accent/60'
+            }`}
+          >
+            <Clock className="h-4 w-4" />
+            <span>Заявки в штат ({pendingRequests.length})</span>
+          </button>
+
+          {(!currentProfile || hasPermission(currentProfile, 'employees', 'tab_roles')) && (
             <button
               onClick={() => setActiveTab('roles')}
               className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-bold transition-all min-h-[40px] ${
@@ -516,6 +530,81 @@ export default function EmployeesModulePage() {
             isLoading={loading}
             defaultPageSize={25}
           />
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 2. ВКЛАДКА: ЗАЯВКИ НА ВСТУПЛЕНИЕ В ШТАТ */}
+      {/* ========================================================================= */}
+      {activeTab === 'requests' && (
+        <div className="space-y-6">
+          <Card className="bg-card border-border/80 rounded-2xl p-6 space-y-6">
+            <div className="flex items-center justify-between border-b border-border pb-4">
+              <div>
+                <h3 className="text-lg font-bold text-foreground flex items-center">
+                  <Clock className="w-5 h-5 mr-2 text-amber-400" />
+                  Заявки сотрудников на присоединение
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Пользователи, зарегистрировавшиеся в платформе и выбравшие вашу организацию
+                </p>
+              </div>
+              <Badge variant="outline" className="border-amber-500/30 text-amber-400 font-mono text-xs">
+                Всего: {pendingRequests.length}
+              </Badge>
+            </div>
+
+            {pendingRequests.length === 0 ? (
+              <div className="py-12 text-center text-muted-foreground space-y-2">
+                <CheckCircle2 className="w-10 h-10 mx-auto text-emerald-400 opacity-60" />
+                <p className="text-sm font-bold text-foreground">Новых заявок нет</p>
+                <p className="text-xs">Все кандидаты обработаны или зачислены в штат компании.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {pendingRequests.map((req) => (
+                  <Card key={req.id} className="bg-muted/30 border-border p-4 rounded-xl space-y-3 shadow-sm">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="text-sm font-bold text-foreground">{req.full_name}</p>
+                        <p className="text-xs font-mono text-muted-foreground">{req.email}</p>
+                        <p className="text-xs text-muted-foreground">{req.phone || 'Телефон не указан'}</p>
+                      </div>
+                      <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-400">
+                        Ожидает
+                      </Badge>
+                    </div>
+
+                    <div className="pt-2 flex items-center gap-2 justify-end">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleReject(req.id)}
+                        disabled={isPending}
+                        className="h-8 text-xs border-rose-500/40 text-rose-400 hover:bg-rose-500/10"
+                      >
+                        <X className="w-3.5 h-3.5 mr-1" />
+                        Отклонить
+                      </Button>
+
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          setApprovingUser(req);
+                          setApprovePosition(req.position || 'Менеджер');
+                        }}
+                        disabled={isPending}
+                        className="h-8 text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
+                        Зачислить
+                      </Button>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </Card>
         </div>
       )}
 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { DashboardShell } from '@/components/dashboard/DashboardShell';
 import { CompanyBlockedView } from '@/components/dashboard/CompanyBlockedView';
@@ -10,6 +10,7 @@ export default async function DashboardLayout({
   children: React.ReactNode;
 }) {
   const supabase = await createClient();
+  const adminSupabase = await createAdminClient();
 
   const {
     data: { user },
@@ -19,14 +20,22 @@ export default async function DashboardLayout({
     redirect('/login');
   }
 
-  // Параллельное получение профиля, компании и ролей
-  const { data: profile } = await supabase
+  // Получение профиля и привязанной компании с помощью adminSupabase
+  const { data: profile } = await adminSupabase
     .from('users')
-    .select('*, companies(*), company_roles(*)')
+    .select('*, company_roles(*)')
     .eq('id', user.id)
     .single();
 
-  const company = Array.isArray(profile?.companies) ? profile?.companies[0] : profile?.companies;
+  let company = null;
+  if (profile?.company_id) {
+    const { data: comp } = await adminSupabase
+      .from('companies')
+      .select('*')
+      .eq('id', profile.company_id)
+      .single();
+    company = comp;
+  }
 
   // 🔒 ЕСЛИ ОРГАНИЗАЦИЯ ЗАБЛОКИРОВАНА СУПЕРАДМИНИСТРАТОРОМ
   if (company?.status === 'blocked' && !profile?.is_super_admin) {

@@ -46,7 +46,7 @@ export default function OnboardingPage() {
       });
 
       if (res.success) {
-        router.push('/dashboard/pending');
+        router.push('/dashboard');
       } else {
         setErrorMsg(res.error || 'Ошибка прохождения онбординга');
       }

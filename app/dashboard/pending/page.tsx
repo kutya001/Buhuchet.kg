@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Clock, Building2, CheckCircle2, AlertCircle, RefreshCw, LogOut, ArrowLeft } from 'lucide-react';
+import { Clock, Building2, RefreshCw, LogOut, ArrowLeft } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { signOutAction } from '@/app/(auth)/actions';
 
@@ -14,6 +14,8 @@ export default function PendingApplicationPage() {
   const [loading, setLoading] = useState(true);
   const [isPending, startTransition] = useTransition();
   const [companyName, setCompanyName] = useState<string | null>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const [companyStatus, setCompanyStatus] = useState<string | null>(null);
 
   const supabase = createClient();
 
@@ -26,7 +28,7 @@ export default function PendingApplicationPage() {
     if (user) {
       const { data: prof } = await supabase
         .from('users')
-        .select('company_id, role, companies(name)')
+        .select('company_id, role, companies(name, status)')
         .eq('id', user.id)
         .single();
 
@@ -35,8 +37,13 @@ export default function PendingApplicationPage() {
         return;
       }
 
-      if (prof?.companies) {
-        setCompanyName((prof.companies as any).name);
+      if (prof) {
+        setUserRole(prof.role || null);
+        if (prof.companies) {
+          const comp = prof.companies as any;
+          setCompanyName(comp.name || null);
+          setCompanyStatus(comp.status || null);
+        }
       }
     }
     setLoading(false);
@@ -61,6 +68,8 @@ export default function PendingApplicationPage() {
     });
   };
 
+  const isCompanyModeration = userRole === 'owner' || companyStatus === 'pending_approval';
+
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <Card className="max-w-md w-full bg-card/90 border-border rounded-2xl shadow-2xl p-6 space-y-6">
@@ -68,9 +77,13 @@ export default function PendingApplicationPage() {
           <div className="mx-auto p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 w-16 h-16 flex items-center justify-center text-amber-400">
             <Clock className="w-8 h-8 animate-pulse" />
           </div>
-          <CardTitle className="text-xl font-extrabold tracking-tight">Заявка на рассмотрении</CardTitle>
+          <CardTitle className="text-xl font-extrabold tracking-tight">
+            {isCompanyModeration ? 'Организация на модерации' : 'Заявка на рассмотрении'}
+          </CardTitle>
           <CardDescription className="text-xs text-muted-foreground">
-            Ваш запрос на присоединение к организации находится у Руководителя
+            {isCompanyModeration
+              ? 'Ваша организация находится на проверке администратором платформы Buhuchet.kg'
+              : 'Ваш запрос на присоединение к организации находится у Руководителя'}
           </CardDescription>
         </CardHeader>
 
@@ -78,7 +91,15 @@ export default function PendingApplicationPage() {
           <Alert className="border-amber-500/30 bg-amber-500/10 text-amber-400 rounded-xl">
             <Building2 className="w-5 h-5 shrink-0" />
             <AlertDescription className="text-xs font-medium leading-normal ml-2">
-              Заявка отправлена в компанию <strong>«{companyName || 'Организация'}»</strong>. Ожидайте подтверждения доступа владельцем бизнеса.
+              {isCompanyModeration ? (
+                <>
+                  Заявка компании <strong>«{companyName || 'Организация'}»</strong> находится на рассмотрении. Ожидайте подтверждения модератором.
+                </>
+              ) : (
+                <>
+                  Заявка отправлена в компанию <strong>«{companyName || 'Организация'}»</strong>. Ожидайте подтверждения доступа владельцем бизнеса.
+                </>
+              )}
             </AlertDescription>
           </Alert>
 

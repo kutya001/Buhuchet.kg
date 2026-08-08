@@ -13,19 +13,29 @@ import { sendTelegramNotification, sendDocumentTelegramNotification } from '@/li
 
 const getUserContext = cache(async () => {
   const supabase = await createClient();
+  const adminSupabase = await createAdminClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   if (!user) return null;
 
-  const { data: profile } = await supabase
+  const { data: profile } = await adminSupabase
     .from('users')
-    .select('*, company_roles(*), companies(*)')
+    .select('*, company_roles(*)')
     .eq('id', user.id)
     .single();
 
-  const company = Array.isArray(profile?.companies) ? profile?.companies[0] : profile?.companies;
+  let company = null;
+  if (profile?.company_id) {
+    const { data: comp } = await adminSupabase
+      .from('companies')
+      .select('*')
+      .eq('id', profile.company_id)
+      .single();
+    company = comp;
+  }
+
   const isBlocked = company?.status === 'blocked' && !profile?.is_super_admin;
   const closedPeriodUntil = company?.closed_period_until || null;
 
@@ -36,7 +46,10 @@ const getUserContext = cache(async () => {
     isSuperAdmin: !!profile?.is_super_admin,
     isCompanyBlocked: isBlocked,
     closedPeriodUntil,
-    profile,
+    profile: {
+      ...profile,
+      companies: company,
+    },
     checkPermission: (module: ModuleName, action: ActionName) => {
       if (isBlocked) return false;
       return hasPermission(profile, module, action);
