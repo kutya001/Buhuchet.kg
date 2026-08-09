@@ -710,6 +710,30 @@ CREATE TABLE public.telegram_logs (
 
 ---
 
+### 2.18 Таблица `pending_file_deletions` — Очередь Физического Удаления Файлов R2
+
+**Описание и Назначение**: Буферная очередь необработанных ключей Cloudflare R2, подлежащих физическому списанию/удалению при срабатывании триггера `enqueue_deleted_file()`.
+
+#### Поля и столбцы таблицы `pending_file_deletions`:
+
+| Столбец | Тип данных | Ограничения / Default | Описание и Назначение | Связи / FK |
+|---|---|---|---|---|
+| `id` | `UUID` | `PRIMARY KEY`, `gen_random_uuid()` | Идентификатор записи очереди | — |
+| `storage_key` | `TEXT` | `NOT NULL` | Ключ пути к файлу на облачном диске | — |
+| `created_at` | `TIMESTAMPTZ` | `DEFAULT NOW()` | Дата добавления в очередь | — |
+
+```sql
+CREATE TABLE public.pending_file_deletions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  storage_key TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_pending_file_deletions_created ON public.pending_file_deletions(created_at);
+```
+
+---
+
 ## ⚙️ 3. Хранимые Функции и Триггеры PostgreSQL
 
 ### 3.1 Замок Закрытых Отчетных Периодов `check_closed_period_lock()`
@@ -792,6 +816,24 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 ---
 
+### 3.4 Постановка Ключа R2 в Очередь `enqueue_deleted_file()`
+Срабатывает `AFTER DELETE` на таблице `files`. При удалении записи из `public.files` берет значение `OLD.file_path_r2` и помещает в очередь `public.pending_file_deletions` для последующей обработки серверной функцией `processPendingFileDeletionsAction`.
+
+```sql
+CREATE OR REPLACE FUNCTION public.enqueue_deleted_file()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF OLD.file_path_r2 IS NOT NULL AND OLD.file_path_r2 <> '' THEN
+    INSERT INTO public.pending_file_deletions (storage_key)
+    VALUES (OLD.file_path_r2);
+  END IF;
+  RETURN OLD;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+```
+
+---
+
 ### 3.3 Инициализация Стандартных Системных Ролей `seed_default_company_roles(p_company_id)`
 Автоматически создает 3 стандартные системные роли (Владелец, Бухгалтер, Менеджер) со всеми предустановленными JSONB разрешениями при успешной регистрации новой компании.
 
@@ -822,3 +864,4 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 | `20260809000010_optimize_rls_and_composite_indexes.sql` | 09.08.2026 00:00 | Добавление составных индексов `(company_id, status)` для быстрых фильтраций |
 | `20260809000011_copy_on_write_file_owners.sql` | 09.08.2026 00:00 | Таблица `file_owners` и триггер `cleanup_orphaned_files` для Copy-on-Write |
 | `20260809120000_optimize_rls_and_closed_periods.sql` | 09.08.2026 12:00 | Мемоизация `(SELECT auth.uid())` во всех RLS-политиках и замок периодов |
+| `20260810000000_file_cleanup_queue.sql` | 10.08.2026 00:00 | Таблица `pending_file_deletions` и триггер `enqueue_deleted_file()` для асинхронного удаления сканов с облачного диска |

@@ -1,10 +1,12 @@
 'use server';
 
 import { createClient, createAdminClient } from '@/lib/supabase/server';
-import { r2Client, r2BucketName, getPresignedDownloadUrl } from '@/lib/r2';
+import { r2Client, r2BucketName, getPresignedDownloadUrl, deleteR2Object } from '@/lib/r2';
 import { PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import type { ActionResponse } from '@/types/database.types';
+import { createSafeAction } from '@/lib/auth/safe-action';
+import { z } from 'zod';
 
 async function getUserContext() {
   const supabase = await createClient();
@@ -240,3 +242,48 @@ export async function getFileDownloadUrlAction(
     return { success: false, error: errorMsg };
   }
 }
+
+const processPendingDeletionsSchema = z.object({
+  limit: z.number().optional().default(50),
+});
+
+/**
+ * Обработка очереди физического удаления осиротевших объектов с облачного диска
+ */
+export const processPendingFileDeletionsAction = createSafeAction(
+  processPendingDeletionsSchema,
+  async (data) => {
+    const adminSupabase = await createAdminClient();
+
+    const { data: pendingItems, error } = await adminSupabase
+      .from('pending_file_deletions')
+      .select('id, storage_key')
+      .order('created_at', { ascending: true })
+      .limit(data.limit || 50);
+
+    if (error) {
+      return { success: false, error: `Ошибка чтения очереди очистки диска: ${error.message}` };
+    }
+
+    if (!pendingItems || pendingItems.length === 0) {
+      return { success: true, data: { processedCount: 0 } };
+    }
+
+    let processedCount = 0;
+    for (const item of pendingItems) {
+      if (item.storage_key) {
+        // Физическое удаление из хранилища (игнорирует ошибки если файла нет в R2)
+        await deleteR2Object(item.storage_key);
+      }
+
+      // Всегда удаляем обработанную запись из очереди pending_file_deletions
+      await adminSupabase.from('pending_file_deletions').delete().eq('id', item.id);
+      processedCount++;
+    }
+
+    return {
+      success: true,
+      data: { processedCount },
+    };
+  }
+);

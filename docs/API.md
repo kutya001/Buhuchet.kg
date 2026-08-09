@@ -218,6 +218,12 @@ export type ActionResponse<T = any> = {
 - **Response**: `ActionResponse<boolean>`
 - **Бизнес-логика**: Удаляет связь в `file_owners`. Объект R2 и запись `files` удаляются только если `count(file_owners) == 0`.
 
+#### `processPendingFileDeletionsAction`
+- **Auth**: Safe Action (SuperAdmin / Service Context)
+- **Zod Schema**: `z.object({ limit: z.number().optional().default(50) })`
+- **Response**: `ActionResponse<{ processedCount: number }>`
+- **Бизнес-логика**: Асинхронно извлекает необработанные ключи хранения из `pending_file_deletions`, вызывает физическое удаление объекта через `deleteR2Object()` и удаляет запись из очереди.
+
 #### `updateDocumentFileAction` (Copy-on-Write)
 - **Auth**: Private (Tenant)
 - **Zod Schema**: `z.object({ fileId: z.string().uuid(), data: object })`
