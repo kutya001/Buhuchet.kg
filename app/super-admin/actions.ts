@@ -3,6 +3,8 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import type { ActionResponse, Company, CompanyStatus, Document, FileCategory } from '@/types/database.types';
 import { revalidatePath } from 'next/cache';
+import { z } from 'zod';
+import { createSafeAction } from '@/lib/auth/safe-action';
 import { sendCompanyVerificationTelegramNotification } from '@/lib/telegram/notifier';
 import { formatBytes } from '@/lib/utils';
 
@@ -867,3 +869,41 @@ export async function getSuperAdminFilesMonitoringAction(): Promise<
     return { success: false, error: msg };
   }
 }
+
+/**
+ * Получение системных деталей файла для суперадминистратора
+ */
+export const getSuperAdminFileDetailsAction = createSafeAction(
+  z.object({ fileId: z.string().uuid() }),
+  async ({ fileId }, ctx) => {
+    if (!ctx.isSuperAdmin) {
+      return { success: false, error: 'Доступ разрешен только Суперадминистратору' };
+    }
+
+    const adminSupabase = await createAdminClient();
+
+    const { data: file, error } = await adminSupabase
+      .from('files')
+      .select('*, file_categories(*), companies:companies!company_id(name, inn)')
+      .eq('id', fileId)
+      .single();
+
+    if (error || !file) {
+      return { success: false, error: 'Файл не найден в системе' };
+    }
+
+    const { data: owners } = await adminSupabase
+      .from('file_owners')
+      .select('*, companies:companies!company_id(name, inn)')
+      .eq('file_id', fileId);
+
+    return {
+      success: true,
+      data: {
+        ...file,
+        owners: owners || [],
+        ownersCount: owners?.length || 1,
+      },
+    };
+  }
+);

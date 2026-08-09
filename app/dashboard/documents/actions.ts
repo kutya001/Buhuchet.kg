@@ -6,6 +6,7 @@ import type { ActionResponse, Document, DocumentStatus, DocumentType, UserRole }
 import { revalidatePath } from 'next/cache';
 import { deleteR2Object } from '@/lib/r2';
 import { z } from 'zod';
+import { createSafeAction } from '@/lib/auth/safe-action';
 
 import { cache } from 'react';
 import { hasPermission, ModuleName, ActionName } from '@/lib/auth/permissions';
@@ -656,3 +657,32 @@ export async function deleteB2BDocumentAction(documentId: string): Promise<Actio
     return { success: false, error: errorMsg };
   }
 }
+
+/**
+ * Получение подробной информации о документе ЭДО для формы просмотра
+ */
+export const getB2BDocumentDetailsAction = createSafeAction(
+  z.object({ docId: z.string().uuid() }),
+  async ({ docId }, ctx) => {
+    const adminSupabase = await createAdminClient();
+
+    const { data: doc, error } = await adminSupabase
+      .from('documents')
+      .select('*, sender_company:companies!sender_company_id(*), receiver_company:companies!receiver_company_id(*), counterparties(*), files(*), document_items(*), document_logs(*, user:users!user_id(full_name)), author:users!author_id(full_name, position)')
+      .eq('id', docId)
+      .single();
+
+    if (error || !doc) {
+      return { success: false, error: 'Документ не найден в системе' };
+    }
+
+    if (doc.sender_company_id !== ctx.companyId && doc.receiver_company_id !== ctx.companyId && !ctx.isSuperAdmin) {
+      return { success: false, error: 'Доступ к данному документу запрещен' };
+    }
+
+    return {
+      success: true,
+      data: doc,
+    };
+  }
+);

@@ -21,14 +21,32 @@ import {
   Image as ImageIcon,
 } from 'lucide-react';
 import { formatBytes } from '@/lib/utils';
-import { getSuperAdminFilesMonitoringAction } from '@/app/super-admin/actions';
+import { getSuperAdminFilesMonitoringAction, getSuperAdminFileDetailsAction } from '@/app/super-admin/actions';
 import { getPresignedDownloadUrlAction } from '@/app/dashboard/files/actions';
 import { UnifiedDataGrid, ColumnDef } from '@/components/ui/unified/UnifiedDataGrid';
+import { UnifiedViewModal } from '@/components/ui/unified/UnifiedViewModal';
 
 export default function SuperAdminFilesPage() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+
+  // ПРОСМОТР ДЕТАЛЕЙ ДЛЯ СУПЕРАДМИНА (UnifiedViewModal)
+  const [viewingAdminFileDetails, setViewingAdminFileDetails] = useState<any | null>(null);
+  const [loadingAdminFileDetails, setLoadingAdminFileDetails] = useState(false);
+
+  const handleOpenAdminFileDetails = async (fileId: string) => {
+    setLoadingAdminFileDetails(true);
+    setViewingAdminFileDetails({});
+    const res = await getSuperAdminFileDetailsAction({ fileId });
+    if (res.success && res.data) {
+      setViewingAdminFileDetails(res.data);
+    } else {
+      alert(res.error || 'Не удалось загрузить системные детали файла');
+      setViewingAdminFileDetails(null);
+    }
+    setLoadingAdminFileDetails(false);
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -285,12 +303,78 @@ export default function SuperAdminFilesPage() {
           columns={columns}
           data={data?.files || []}
           keyExtractor={(f) => f.id}
+          onRowClick={(f) => handleOpenAdminFileDetails(f.id)}
           searchPlaceholder="Поиск по названию файла, R2 ключу, тенантам..."
           emptyMessage="Файлы в системе не найдены."
           isLoading={loading}
           defaultPageSize={25}
         />
       </Card>
+
+      {/* СИСТЕМНАЯ КАРТОЧКА ФАЙЛА (UnifiedViewModal ДЛЯ СУПЕРАДМИНА) */}
+      {viewingAdminFileDetails && (
+        <UnifiedViewModal
+          isOpen={!!viewingAdminFileDetails}
+          onClose={() => setViewingAdminFileDetails(null)}
+          title={viewingAdminFileDetails.file_name || 'Системный файл'}
+          subtitle={`Системный ID: ${viewingAdminFileDetails.id}`}
+          isLoading={loadingAdminFileDetails}
+          badge={
+            viewingAdminFileDetails.isCoWShared ? (
+              <Badge className="bg-indigo-500/20 text-indigo-300 border-indigo-500/40 text-[10px]">
+                Дедупликация CoW ({viewingAdminFileDetails.ownersCount} орг.)
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="border-slate-700 text-slate-400 text-[10px]">
+                Одиночный файл
+              </Badge>
+            )
+          }
+          sections={[
+            {
+              title: 'Системная информация хранилища',
+              fields: [
+                { label: 'Наименование файла', value: viewingAdminFileDetails.file_name, icon: FileText, colSpan: 2 },
+                { label: 'Размер объекта', value: formatBytes(viewingAdminFileDetails.size_bytes), icon: HardDrive },
+                { label: 'Категория', value: viewingAdminFileDetails.file_categories?.name || 'Прочее' },
+                { label: 'Ключ на облачном диске', value: viewingAdminFileDetails.file_path_r2, icon: FolderOpen, colSpan: 3 },
+              ],
+            },
+            {
+              title: 'Организации-Совладельцы (file_owners)',
+              fields: [
+                {
+                  label: 'Список компаний',
+                  value: viewingAdminFileDetails.owners?.length ? (
+                    <div className="space-y-1.5 mt-1">
+                      {viewingAdminFileDetails.owners.map((o: any, idx: number) => (
+                        <div key={idx} className="p-2 rounded-lg bg-background border border-border flex items-center justify-between text-xs">
+                          <span className="font-semibold">{o.companies?.name || 'Компания'}</span>
+                          <span className="text-[10px] text-muted-foreground font-mono">ИНН: {o.companies?.inn}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    'Владельцы не найдены'
+                  ),
+                  colSpan: 3,
+                },
+              ],
+            },
+          ]}
+          actions={[
+            {
+              label: '📥 Скачать системный файл',
+              onClick: () => {
+                const key = viewingAdminFileDetails.file_path_r2;
+                const id = viewingAdminFileDetails.id;
+                setViewingAdminFileDetails(null);
+                if (key) handleDownloadR2(key, id);
+              },
+            },
+          ]}
+        />
+      )}
     </div>
   );
 }

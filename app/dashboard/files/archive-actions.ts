@@ -4,6 +4,7 @@ import { createClient, createAdminClient } from '@/lib/supabase/server';
 import type { ActionResponse, DocumentFile, FileCategory } from '@/types/database.types';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
+import { createSafeAction } from '@/lib/auth/safe-action';
 import { getLookupCategories } from '@/lib/cache/lookups';
 import { deleteR2Object, getPresignedDownloadUrl } from '@/lib/r2';
 import { formatBytes } from '@/lib/utils';
@@ -708,3 +709,39 @@ export async function getComprehensiveFileRegistryAction(): Promise<
     return { success: false, error: errorMsg };
   }
 }
+
+/**
+ * Получение подробной информации о файле для карточки просмотра
+ */
+export const getFileDetailsAction = createSafeAction(
+  z.object({ fileId: z.string().uuid() }),
+  async ({ fileId }, ctx) => {
+    const adminSupabase = await createAdminClient();
+
+    const { data: file, error } = await adminSupabase
+      .from('files')
+      .select('*, file_categories(*), documents(*), companies:companies!company_id(name, inn)')
+      .eq('id', fileId)
+      .single();
+
+    if (error || !file) {
+      return { success: false, error: 'Файл не найден в базе данных' };
+    }
+
+    const { count } = await adminSupabase
+      .from('file_owners')
+      .select('*', { count: 'exact', head: true })
+      .eq('file_id', fileId);
+
+    const ownersCount = count || 1;
+
+    return {
+      success: true,
+      data: {
+        ...file,
+        ownersCount,
+        isCoWShared: ownersCount > 1,
+      },
+    };
+  }
+);

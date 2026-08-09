@@ -3,6 +3,8 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import type { ActionResponse, UserProfile, CompanyRole } from '@/types/database.types';
 import { revalidatePath, revalidateTag } from 'next/cache';
+import { z } from 'zod';
+import { createSafeAction } from '@/lib/auth/safe-action';
 
 async function getUserContext() {
   const supabase = await createClient();
@@ -384,3 +386,32 @@ export async function deleteCompanyRoleAction(
     return { success: false, error: err instanceof Error ? err.message : 'Сбой удаления роли' };
   }
 }
+
+/**
+ * Получение подробной информации о сотруднике для формы просмотра
+ */
+export const getEmployeeDetailsAction = createSafeAction(
+  z.object({ employeeId: z.string().uuid() }),
+  async ({ employeeId }, ctx) => {
+    const adminSupabase = await createAdminClient();
+
+    const { data: employee, error } = await adminSupabase
+      .from('users')
+      .select('*, company_roles(*), companies:companies!company_id(*), telegram_connections(*)')
+      .eq('id', employeeId)
+      .single();
+
+    if (error || !employee) {
+      return { success: false, error: 'Сотрудник не найден в системе' };
+    }
+
+    if (employee.company_id !== ctx.companyId && !ctx.isSuperAdmin) {
+      return { success: false, error: 'Доступ к карточке сотрудника запрещен' };
+    }
+
+    return {
+      success: true,
+      data: employee,
+    };
+  }
+);

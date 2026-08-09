@@ -212,6 +212,18 @@ export type ActionResponse<T = any> = {
 - **Response**: `ActionResponse<{ downloadUrl: string }>`
 - **Бизнес-логика**: Генерация пресайн URL для прямого скачивания на компьютер с `ResponseContentDisposition: attachment; filename*=UTF-8''...`.
 
+#### `getFileDetailsAction`
+- **Auth**: Private (Tenant)
+- **Zod Schema**: `z.object({ fileId: z.string().uuid() })`
+- **Response**: `ActionResponse<DocumentFile & { ownersCount: number; isCoWShared: boolean }>`
+- **Бизнес-логика**: Возвращает подробную карточку файла, категорию, привязанный источник и число совладельцев `file_owners` для `UnifiedViewModal`.
+
+#### `getB2BDocumentDetailsAction`
+- **Auth**: Private (Tenant)
+- **Zod Schema**: `z.object({ docId: z.string().uuid() })`
+- **Response**: `ActionResponse<Document & { sender_company: Company; receiver_company: Company; files: DocumentFile[] }>`
+- **Бизнес-логика**: Возвращает гидратированный документ со всеми связями для формы `UnifiedViewModal`.
+
 #### `deleteDocumentFileAction`
 - **Auth**: Private (Tenant)
 - **Zod Schema**: `z.object({ fileId: z.string().uuid() })`

@@ -4,6 +4,8 @@ import { createClient, createAdminClient } from '@/lib/supabase/server';
 import type { ActionResponse, CompanyPartnership, Company, DocumentFile, PartnershipStatus, Counterparty } from '@/types/database.types';
 import { revalidatePath } from 'next/cache';
 import { cache } from 'react';
+import { z } from 'zod';
+import { createSafeAction } from '@/lib/auth/safe-action';
 import { getPresignedDownloadUrl } from '@/lib/r2';
 import {
   sendCollaborationTelegramNotification,
@@ -632,4 +634,33 @@ export async function getOrganizationsModuleDataAction(): Promise<
     return { success: false, error: errorMsg };
   }
 }
+
+/**
+ * Получение детальной карточки контрагента
+ */
+export const getCounterpartyDetailsAction = createSafeAction(
+  z.object({ counterpartyId: z.string().uuid() }),
+  async ({ counterpartyId }, ctx) => {
+    const adminSupabase = await createAdminClient();
+
+    const { data: counterparty, error } = await adminSupabase
+      .from('counterparties')
+      .select('*, target_company:companies!target_company_id(*)')
+      .eq('id', counterpartyId)
+      .single();
+
+    if (error || !counterparty) {
+      return { success: false, error: 'Контрагент не найден в справочнике' };
+    }
+
+    if (counterparty.company_id !== ctx.companyId && !ctx.isSuperAdmin) {
+      return { success: false, error: 'Доступ к карточке контрагента запрещен' };
+    }
+
+    return {
+      success: true,
+      data: counterparty,
+    };
+  }
+);
 

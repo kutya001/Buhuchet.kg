@@ -55,6 +55,7 @@ import type { Counterparty, Company, Document, DocumentFile, PartnershipStatus, 
 import imageCompression from 'browser-image-compression';
 import { UnifiedDataGrid, ColumnDef, RowAction } from '@/components/ui/unified/UnifiedDataGrid';
 import { UnifiedFormModal } from '@/components/ui/unified/UnifiedFormModal';
+import { UnifiedViewModal } from '@/components/ui/unified/UnifiedViewModal';
 import { ActionRowGroup } from '@/components/ui/unified/ActionIcons';
 import { MobileFAB } from '@/components/ui/MobileFAB';
 import { hasPermission } from '@/lib/auth/permissions';
@@ -1281,112 +1282,95 @@ export default function CounterpartiesPage() {
         </div>
       )}
 
-      {/* ------------------- ЕДИНООБРАЗНОЕ МОДАЛЬНОЕ ОКНО ПРОСМОТРА УСТАВНЫХ СКАНОВ R2 (UnifiedFormModal) ------------------- */}
-      <UnifiedFormModal
-        isOpen={!!profileModal}
-        onClose={() => setProfileModal(null)}
-        title={profileModal?.counterparty.name || 'Организация'}
-        subtitle={`ИНН: ${profileModal?.counterparty.inn || '—'} • Официальные данные`}
-        mode="view"
-      >
-        {profileModal && (() => {
-          const privacy = profileModal.companyDetails?.privacy_settings || { show_phone: true, show_email: true, show_address: true };
-          const rawPhone = profileModal.companyDetails?.phone || profileModal.counterparty.phone;
-          const cleanPhone = rawPhone?.replace(/[^0-9]/g, '');
-          const rawEmail = profileModal.companyDetails?.email || profileModal.counterparty.email;
-          const rawAddress = profileModal.companyDetails?.legal_address || profileModal.companyDetails?.address;
-
-          return (
-            <div className="space-y-6">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-background/60 p-4 rounded-xl border border-border text-xs">
-                <div>
-                  <span className="text-muted-foreground block">ФИО Руководителя:</span>
-                  <span className="font-semibold text-foreground">{profileModal.companyDetails?.director_name || '—'}</span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground block">Отрасль компании:</span>
-                  <span className="font-semibold text-amber-400">{profileModal.companyDetails?.industry || 'Услуги / Торговля'}</span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground block">Телефон:</span>
-                  {privacy.show_phone && rawPhone ? (
-                    <span className="font-mono font-semibold text-foreground">{rawPhone}</span>
-                  ) : (
-                    <Badge variant="outline" className="text-[10px] text-muted-foreground border-border">Информация скрыта</Badge>
-                  )}
-                </div>
-                <div>
-                  <span className="text-muted-foreground block">E-mail:</span>
-                  {privacy.show_email && rawEmail ? (
-                    <span className="font-mono text-muted-foreground">{rawEmail}</span>
-                  ) : (
-                    <Badge variant="outline" className="text-[10px] text-muted-foreground border-border">Информация скрыта</Badge>
-                  )}
-                </div>
-                <div className="sm:col-span-2">
-                  <span className="text-muted-foreground block">Юридический адрес:</span>
-                  {privacy.show_address && rawAddress ? (
-                    <span className="font-semibold text-foreground">{rawAddress}</span>
-                  ) : (
-                    <Badge variant="outline" className="text-[10px] text-muted-foreground border-border">Информация скрыта</Badge>
-                  )}
-                </div>
-              </div>
-
-              {/* Быстрые действия вызова WhatsApp / Позвонить */}
-              {privacy.show_phone && cleanPhone && (
-                <div className="grid grid-cols-2 gap-3">
-                  <a href={`https://wa.me/${cleanPhone}`} target="_blank" rel="noreferrer" className="w-full">
-                    <Button variant="outline" className="w-full border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 text-xs font-semibold gap-2 min-h-[38px]">
-                      <MessageCircle className="w-4 h-4" />
-                      <span>WhatsApp</span>
-                    </Button>
-                  </a>
-                  <a href={`tel:${rawPhone}`} className="w-full">
-                    <Button variant="outline" className="w-full border-blue-500/30 text-blue-400 hover:bg-blue-500/10 text-xs font-semibold gap-2 min-h-[38px]">
-                      <Phone className="w-4 h-4" />
-                      <span>Позвонить</span>
-                    </Button>
-                  </a>
-                </div>
-              )}
-
-            <div className="space-y-3">
-              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider font-mono">
-                Приложенные Учредительные Документы
-              </h4>
-
-              {profileModal.statutoryFiles.length === 0 ? (
-                <div className="p-8 text-center text-muted-foreground text-xs bg-background/40 rounded-xl border border-border">
-                  Учредительные файлы пока не загружены
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {profileModal.statutoryFiles.map((file) => (
-                    <div key={file.id} className="p-3 bg-background/60 rounded-xl border border-border flex items-center justify-between text-xs">
-                      <div className="flex items-center space-x-3">
-                        <FileText className="h-4 w-4 text-indigo-400" />
-                        <div>
-                          <p className="font-semibold text-foreground">{file.file_name}</p>
-                          <p className="text-[11px] text-muted-foreground">{file.description || 'Скан'} • {formatBytes(file.size_bytes)}</p>
+      {/* МОДАЛЬНОЕ ОКНО ПРОСМОТРА ПРОФИЛЯ И УЧРЕДИТЕЛЬНЫХ ФАЙЛОВ (UnifiedViewModal) */}
+      {profileModal && (
+        <UnifiedViewModal
+          isOpen={!!profileModal}
+          onClose={() => setProfileModal(null)}
+          title={profileModal.counterparty.name}
+          subtitle={`ИНН КР: ${profileModal.counterparty.inn || '—'} • Профиль контрагента`}
+          badge={
+            profileModal.counterparty.is_vat_payer ? (
+              <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/40 text-[10px]">
+                Плательщик НДС (12%)
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="border-slate-700 text-slate-400 text-[10px]">
+                Без НДС
+              </Badge>
+            )
+          }
+          sections={[
+            {
+              title: 'Реквизиты организации',
+              fields: [
+                { label: 'Наименование', value: profileModal.counterparty.name, icon: Building2, colSpan: 2 },
+                { label: 'ИНН КР', value: profileModal.counterparty.inn, icon: FileText },
+                {
+                  label: 'Отрасль',
+                  value: profileModal.companyDetails?.industry || 'Услуги / Торговля',
+                },
+                { label: 'Руководитель', value: profileModal.companyDetails?.director_name || '—', colSpan: 2 },
+              ],
+            },
+            {
+              title: 'Контакты и Адрес',
+              fields: [
+                { label: 'Телефон', value: profileModal.counterparty.phone || profileModal.companyDetails?.phone || '—', icon: Phone },
+                { label: 'E-mail', value: profileModal.counterparty.email || profileModal.companyDetails?.email || '—' },
+                {
+                  label: 'Юридический адрес',
+                  value: profileModal.companyDetails?.legal_address || profileModal.companyDetails?.address || '—',
+                  colSpan: 2,
+                },
+              ],
+            },
+            {
+              title: 'Банковские реквизиты',
+              fields: [
+                { label: 'Расчетный счет', value: (profileModal.counterparty as any).bank_account || '—' },
+                { label: 'Наименование банка', value: (profileModal.counterparty as any).bank_name || '—' },
+                { label: 'БИК банка', value: (profileModal.counterparty as any).bank_bik || '—' },
+              ],
+            },
+            {
+              title: 'Учредительные файлы',
+              fields: [
+                {
+                  label: 'Прикрепленные сканы',
+                  value: profileModal.statutoryFiles.length ? (
+                    <div className="space-y-2 mt-1">
+                      {profileModal.statutoryFiles.map((file) => (
+                        <div key={file.id} className="p-2 bg-background border border-border rounded-lg flex items-center justify-between">
+                          <span className="text-xs font-semibold">{file.file_name}</span>
+                          {file.downloadUrl && (
+                            <a href={file.downloadUrl} target="_blank" rel="noopener noreferrer" download className="text-xs text-indigo-400 font-bold hover:underline">
+                              Скачать
+                            </a>
+                          )}
                         </div>
-                      </div>
-
-                      {file.downloadUrl && (
-                        <a href={file.downloadUrl} target="_blank" rel="noopener noreferrer" download className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs">
-                          <Download className="h-3.5 w-3.5" />
-                          <span>Скачать</span>
-                        </a>
-                      )}
+                      ))}
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        );
-      })()}
-      </UnifiedFormModal>
+                  ) : (
+                    'Учредительные файлы не прикреплены'
+                  ),
+                  colSpan: 2,
+                },
+              ],
+            },
+          ]}
+          actions={[
+            {
+              label: '📊 Акт сверки',
+              onClick: () => {
+                const partner = profileModal.counterparty;
+                setProfileModal(null);
+                handleOpenPartnerReport(partner);
+              },
+            },
+          ]}
+        />
+      )}
 
       {/* МОДАЛЬНОЕ ОКНО РУЧНОГО СОЗДАНИЯ (UnifiedFormModal) */}
       <UnifiedFormModal

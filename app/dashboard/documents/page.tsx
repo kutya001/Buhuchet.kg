@@ -21,10 +21,11 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
-import { getB2BDocumentsAction } from './actions';
+import { getB2BDocumentsAction, getB2BDocumentDetailsAction } from './actions';
 import { DOCUMENT_TYPES, DOCUMENT_STATUSES } from '@/types/document.types';
 import type { Document, Company, DocumentStatus, UserProfile } from '@/types/database.types';
 import { UnifiedDataGrid, ColumnDef } from '@/components/ui/unified/UnifiedDataGrid';
+import { UnifiedViewModal, ViewSection } from '@/components/ui/unified/UnifiedViewModal';
 import { hasPermission } from '@/lib/auth/permissions';
 
 type FullB2BDocument = Document & {
@@ -48,6 +49,23 @@ export default function B2BDocumentsRegistryPage() {
   const [serverErrorMsg, setServerErrorMsg] = useState<string | null>(null);
 
   const [currentProfile, setCurrentProfile] = useState<UserProfile | null>(null);
+
+  // ФОРМА ПРОСМОТРА КАРТОЧКИ (UnifiedViewModal)
+  const [viewingDocDetails, setViewingDocDetails] = useState<any | null>(null);
+  const [loadingDocDetails, setLoadingDocDetails] = useState(false);
+
+  const handleOpenDocViewModal = async (docId: string) => {
+    setLoadingDocDetails(true);
+    setViewingDocDetails({});
+    const res = await getB2BDocumentDetailsAction({ docId });
+    if (res.success && res.data) {
+      setViewingDocDetails(res.data);
+    } else {
+      alert(res.error || 'Не удалось загрузить подробности документа');
+      setViewingDocDetails(null);
+    }
+    setLoadingDocDetails(false);
+  };
 
   const loadDocuments = async () => {
     setLoading(true);
@@ -342,13 +360,100 @@ export default function B2BDocumentsRegistryPage() {
         columns={columns}
         data={filteredDocuments}
         keyExtractor={(d) => d.id}
-        onRowClick={(doc) => router.push(`/dashboard/documents/${doc.id}`)}
+        onRowClick={(doc) => handleOpenDocViewModal(doc.id)}
         renderCard={renderDocumentCard}
         searchPlaceholder="Поиск по № документа, контрагенту, сумме..."
         emptyMessage="Документы не найдены. Создайте первый документ."
         isLoading={loading}
         defaultPageSize={25}
       />
+
+      {/* УНИВЕРСАЛЬНАЯ ФОРМА ПРОСМОТРА КАРТОЧКИ ДОКУМЕНТА (UnifiedViewModal) */}
+      {viewingDocDetails && (
+        <UnifiedViewModal
+          isOpen={!!viewingDocDetails}
+          onClose={() => setViewingDocDetails(null)}
+          title={`Документ № ${viewingDocDetails.doc_number || viewingDocDetails.id?.substring(0, 8)}`}
+          subtitle={`Составлен ${viewingDocDetails.doc_date || '—'}`}
+          isLoading={loadingDocDetails}
+          badge={
+            <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/40 text-[10px]">
+              {DOCUMENT_STATUSES[viewingDocDetails.status as DocumentStatus]?.label || viewingDocDetails.status || 'Черновик'}
+            </Badge>
+          }
+          sections={[
+            {
+              title: 'Реквизиты первичного документа',
+              fields: [
+                { label: 'Номер документа', value: viewingDocDetails.doc_number || '—', icon: FileText },
+                {
+                  label: 'Вид документа',
+                  value: DOCUMENT_TYPES[viewingDocDetails.doc_type as keyof typeof DOCUMENT_TYPES]?.label || viewingDocDetails.doc_type,
+                },
+                { label: 'Дата составления', value: viewingDocDetails.doc_date || '—', icon: Calendar },
+                {
+                  label: 'Сумма сделки',
+                  value: `${Number(viewingDocDetails.total_amount || 0).toLocaleString('ru-RU', { minimumFractionDigits: 2 })} сом`,
+                },
+              ],
+            },
+            {
+              title: 'Стороны сделки',
+              fields: [
+                {
+                  label: 'Отправитель',
+                  value: viewingDocDetails.sender_company
+                    ? `${viewingDocDetails.sender_company.name} (ИНН: ${viewingDocDetails.sender_company.inn})`
+                    : '—',
+                  icon: Building2,
+                  colSpan: 2,
+                },
+                {
+                  label: 'Получатель',
+                  value: viewingDocDetails.receiver_company
+                    ? `${viewingDocDetails.receiver_company.name} (ИНН: ${viewingDocDetails.receiver_company.inn})`
+                    : viewingDocDetails.counterparties
+                    ? `${viewingDocDetails.counterparties.name} (ИНН: ${viewingDocDetails.counterparties.inn})`
+                    : '—',
+                  icon: Building2,
+                  colSpan: 2,
+                },
+              ],
+            },
+            {
+              title: 'Прикрепленные сканы и примечания',
+              fields: [
+                {
+                  label: 'Прикрепленные файлы',
+                  value: viewingDocDetails.files?.length
+                    ? `${viewingDocDetails.files.length} файл(ов) на облачном диске`
+                    : 'Файлы не прикреплены',
+                  colSpan: 2,
+                },
+                { label: 'Комментарий', value: viewingDocDetails.comment || '—', colSpan: 2 },
+              ],
+            },
+          ]}
+          actions={[
+            {
+              label: '👁️ Перейти к документу',
+              onClick: () => {
+                const id = viewingDocDetails.id;
+                setViewingDocDetails(null);
+                if (id) router.push(`/dashboard/documents/${id}`);
+              },
+            },
+            {
+              label: '✏️ Редактировать',
+              onClick: () => {
+                const id = viewingDocDetails.id;
+                setViewingDocDetails(null);
+                if (id) router.push(`/dashboard/documents/${id}`);
+              },
+            },
+          ]}
+        />
+      )}
     </div>
   );
 }

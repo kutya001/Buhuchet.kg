@@ -43,6 +43,7 @@ import {
 import { getPresignedUploadUrlAction } from './actions';
 import { UnifiedDataGrid, ColumnDef, RowAction } from '@/components/ui/unified/UnifiedDataGrid';
 import { UnifiedFormModal } from '@/components/ui/unified/UnifiedFormModal';
+import { UnifiedViewModal, ViewSection, ViewAction } from '@/components/ui/unified/UnifiedViewModal';
 import { MultiFileDropzone, type FileItemState } from '@/components/documents/MultiFileDropzone';
 import type { FileCategory } from '@/types/database.types';
 
@@ -78,6 +79,9 @@ export default function CloudFilesRegistryPage() {
   // УДАЛЕНИЕ
   const [deletingFile, setDeletingFile] = useState<EnrichedFileItem | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // ПРОСМОТР КАРТОЧКИ ФАЙЛА (UnifiedViewModal)
+  const [viewingFileDetails, setViewingFileDetails] = useState<EnrichedFileItem | null>(null);
 
   const loadFiles = async () => {
     setLoading(true);
@@ -437,6 +441,11 @@ export default function CloudFilesRegistryPage() {
   // КОНТЕКСТНОЕ МЕНЮ СТРОКИ
   const getFileRowActions = (file: EnrichedFileItem): RowAction<EnrichedFileItem>[] => [
     {
+      label: '📋 Карточка файла',
+      icon: <FileText className="h-4 w-4 text-purple-400" />,
+      action: () => setViewingFileDetails(file),
+    },
+    {
       label: '👁️ Просмотр (UTF-8)',
       icon: <Eye className="h-4 w-4 text-blue-400" />,
       action: () => file.file_path_r2 && handleViewFile(file.file_path_r2, file.file_name),
@@ -716,7 +725,7 @@ export default function CloudFilesRegistryPage() {
         columns={columns}
         data={filteredFiles}
         keyExtractor={(f) => f.id}
-        onRowClick={(f) => f.file_path_r2 && handleViewFile(f.file_path_r2, f.file_name)}
+        onRowClick={(f) => setViewingFileDetails(f)}
         getRowActions={getFileRowActions}
         renderCard={renderFileCard}
         searchPlaceholder="Поиск по имени файла, описанию, источнику..."
@@ -840,6 +849,96 @@ export default function CloudFilesRegistryPage() {
           </div>
         </div>
       </UnifiedFormModal>
+
+      {/* 7. УНИВЕРСАЛЬНАЯ ФОРМА ПРОСМОТРА КАРТОЧКИ ФАЙЛА (UnifiedViewModal) */}
+      {viewingFileDetails && (
+        <UnifiedViewModal
+          isOpen={!!viewingFileDetails}
+          onClose={() => setViewingFileDetails(null)}
+          title={viewingFileDetails.file_name}
+          subtitle={`Загружен ${new Date(viewingFileDetails.created_at).toLocaleDateString('ru-RU')}`}
+          badge={
+            viewingFileDetails.isCoWShared ? (
+              <Badge className="bg-indigo-500/20 text-indigo-300 border-indigo-500/40 text-[10px]">
+                Общий доступ ({viewingFileDetails.ownersCount} орг.)
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="border-slate-700 text-slate-400 text-[10px]">
+                Личный
+              </Badge>
+            )
+          }
+          sections={[
+            {
+              title: 'Сведения о файле',
+              fields: [
+                { label: 'Наименование файла', value: viewingFileDetails.file_name, icon: FileText, colSpan: 2 },
+                { label: 'Размер файла', value: formatBytes(viewingFileDetails.size_bytes), icon: HardDrive },
+                {
+                  label: 'Категория',
+                  value: categories.find((c) => c.id === viewingFileDetails.category_id)?.name || 'Прочее',
+                  icon: FolderOpen,
+                },
+              ],
+            },
+            {
+              title: 'Источник и Размещение',
+              fields: [
+                {
+                  label: 'Вид источника',
+                  value:
+                    viewingFileDetails.sourceType === 'document'
+                      ? '📝 Из документов'
+                      : viewingFileDetails.sourceType === 'company'
+                      ? '🏛️ Моя Организация'
+                      : viewingFileDetails.sourceType === 'counterparty'
+                      ? '🤝 Контрагент'
+                      : '📂 Вручную',
+                },
+                { label: 'Наименование источника', value: viewingFileDetails.sourceTitle, icon: ExternalLink, colSpan: 2 },
+                { label: 'Описание', value: viewingFileDetails.description || '—', colSpan: 2 },
+                { label: 'Примечание', value: viewingFileDetails.comment || '—', colSpan: 2 },
+              ],
+            },
+          ]}
+          actions={[
+            {
+              label: '👁️ Просмотр онлайн',
+              onClick: () => {
+                const key = viewingFileDetails.file_path_r2;
+                setViewingFileDetails(null);
+                if (key) handleViewFile(key, viewingFileDetails.file_name);
+              },
+            },
+            {
+              label: '📥 Скачать файл',
+              onClick: () => {
+                const key = viewingFileDetails.file_path_r2;
+                const id = viewingFileDetails.id;
+                setViewingFileDetails(null);
+                if (key) handleDownloadFile(key, id, viewingFileDetails.file_name);
+              },
+            },
+            {
+              label: '✏️ Редактировать',
+              onClick: () => {
+                const file = viewingFileDetails;
+                setViewingFileDetails(null);
+                handleOpenEditModal(file);
+              },
+            },
+            {
+              label: '🗑️ Удалить',
+              variant: 'destructive',
+              onClick: () => {
+                const file = viewingFileDetails;
+                setViewingFileDetails(null);
+                setDeletingFile(file);
+              },
+            },
+          ]}
+        />
+      )}
     </div>
   );
 }

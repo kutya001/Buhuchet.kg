@@ -28,9 +28,11 @@ import {
   Plus,
 } from 'lucide-react';
 import { UnifiedDataGrid } from '@/components/ui/unified/UnifiedDataGrid';
+import { UnifiedViewModal } from '@/components/ui/unified/UnifiedViewModal';
 import { createClient } from '@/lib/supabase/client';
 import {
   getCompanyEmployeesAction,
+  getEmployeeDetailsAction,
   getCompanyRolesAction,
   getPendingRequestsAction,
   approveEmployeeRequestAction,
@@ -64,6 +66,23 @@ export default function EmployeesModulePage() {
   const [editingEmp, setEditingEmp] = useState<UserProfile | null>(null);
   const [editRoleId, setEditRoleId] = useState('');
   const [editPosition, setEditPosition] = useState('');
+
+  // ПРОСМОТР КАРТОЧКИ СОТРУДНИКА (UnifiedViewModal)
+  const [viewingEmpDetails, setViewingEmpDetails] = useState<any | null>(null);
+  const [loadingEmpDetails, setLoadingEmpDetails] = useState(false);
+
+  const handleOpenEmpDetails = async (empId: string) => {
+    setLoadingEmpDetails(true);
+    setViewingEmpDetails({});
+    const res = await getEmployeeDetailsAction({ employeeId: empId });
+    if (res.success && res.data) {
+      setViewingEmpDetails(res.data);
+    } else {
+      alert(res.error || 'Не удалось загрузить карточку сотрудника');
+      setViewingEmpDetails(null);
+    }
+    setLoadingEmpDetails(false);
+  };
 
   // Принятие заявки
   const [approvingUser, setApprovingUser] = useState<UserProfile | null>(null);
@@ -471,13 +490,7 @@ export default function EmployeesModulePage() {
             ]}
             data={employees}
             keyExtractor={(emp) => emp.id}
-            onRowClick={(emp) => {
-              if (emp.role !== 'owner') {
-                setEditingEmp(emp);
-                setEditRoleId(emp.role_id || (roles[0]?.id || ''));
-                setEditPosition(emp.position || '');
-              }
-            }}
+            onRowClick={(emp) => handleOpenEmpDetails(emp.id)}
             getRowActions={(emp) => {
               const isOwnerEmp = emp.role === 'owner';
               const cleanPhone = emp.phone ? emp.phone.replace(/\D/g, '') : '';
@@ -865,6 +878,77 @@ export default function EmployeesModulePage() {
             </div>
           </Card>
         </div>
+      )}
+
+      {/* УНИВЕРСАЛЬНАЯ ФОРМА ПРОСМОТРА КАРТОЧКИ СОТРУДНИКА (UnifiedViewModal) */}
+      {viewingEmpDetails && (
+        <UnifiedViewModal
+          isOpen={!!viewingEmpDetails}
+          onClose={() => setViewingEmpDetails(null)}
+          title={viewingEmpDetails.full_name || 'Профиль сотрудника'}
+          subtitle={`Должность: ${viewingEmpDetails.position || '—'}`}
+          isLoading={loadingEmpDetails}
+          badge={
+            viewingEmpDetails.is_active !== false ? (
+              <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/40 text-[10px]">
+                Активный доступ
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="border-rose-500/40 text-rose-400 text-[10px]">
+                Доступ отключен
+              </Badge>
+            )
+          }
+          sections={[
+            {
+              title: 'Персональная информация',
+              fields: [
+                { label: 'ФИО сотрудника', value: viewingEmpDetails.full_name, icon: User, colSpan: 2 },
+                { label: 'Должность', value: viewingEmpDetails.position || '—' },
+                {
+                  label: 'Назначенная роль',
+                  value: viewingEmpDetails.company_roles?.name || viewingEmpDetails.role || '—',
+                  icon: Shield,
+                },
+              ],
+            },
+            {
+              title: 'Контакты и Уведомления',
+              fields: [
+                { label: 'E-mail адрес', value: viewingEmpDetails.email, icon: Send },
+                { label: 'Номер телефона', value: viewingEmpDetails.phone || '—', icon: Phone },
+                {
+                  label: 'Telegram Bot',
+                  value: viewingEmpDetails.telegram_connections?.length
+                    ? 'Привязан'
+                    : 'Не привязан',
+                  icon: MessageCircle,
+                },
+              ],
+            },
+          ]}
+          actions={[
+            {
+              label: '🔑 Изменить роль',
+              onClick: () => {
+                const emp = viewingEmpDetails;
+                setViewingEmpDetails(null);
+                setEditingEmp(emp);
+                setEditRoleId(emp.role_id || '');
+                setEditPosition(emp.position || '');
+              },
+            },
+            {
+              label: viewingEmpDetails.is_active !== false ? '🚫 Отключить доступ' : '✅ Включить доступ',
+              variant: 'destructive',
+              onClick: () => {
+                const emp = viewingEmpDetails;
+                setViewingEmpDetails(null);
+                handleRemoveEmp(emp.id, emp.full_name);
+              },
+            },
+          ]}
+        />
       )}
     </div>
   );
