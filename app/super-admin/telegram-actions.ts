@@ -169,6 +169,9 @@ export async function getTelegramAdminStatsAction(): Promise<ActionResponse<Tele
   }
 }
 
+export const getTelegramStatsAdminAction = getTelegramAdminStatsAction;
+
+
 /**
  * Проверка здоровья Telegram-бота (getMe & getWebhookInfo)
  */

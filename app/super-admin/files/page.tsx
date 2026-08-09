@@ -87,7 +87,7 @@ export default function SuperAdminFilesPage() {
   const columns: ColumnDef<any>[] = [
     {
       key: 'file_name',
-      label: 'Имя Файла R2',
+      label: 'Имя Файла',
       sortable: true,
       getValue: (f) => f.file_name,
       render: (f) => (
@@ -103,7 +103,7 @@ export default function SuperAdminFilesPage() {
     },
     {
       key: 'owners',
-      label: 'Тенанты-Владельцы (file_owners)',
+      label: 'Организации-Владельцы',
       sortable: true,
       getValue: (f) => f.ownersCount,
       render: (f) => (
@@ -133,24 +133,24 @@ export default function SuperAdminFilesPage() {
     },
     {
       key: 'ownership_status',
-      label: 'Статус CoW',
+      label: 'Режим доступа',
       sortable: true,
       getValue: (f) => (f.isCoWShared ? 'shared' : 'single'),
       render: (f) =>
         f.isCoWShared ? (
           <Badge className="bg-indigo-500/20 text-indigo-300 border-indigo-500/40 text-xs font-semibold">
             <Sparkles className="h-3 w-3 mr-1 text-indigo-400" />
-            Совместный ({f.ownersCount} тенанта)
+            Общий доступ ({f.ownersCount} орг.)
           </Badge>
         ) : (
           <Badge variant="outline" className="border-slate-800 text-slate-400 text-xs">
-            Единоличное
+            Индивидуальный
           </Badge>
         ),
     },
     {
       key: 'size_bytes',
-      label: 'Размер в R2',
+      label: 'Размер на диске',
       sortable: true,
       getValue: (f) => f.size_bytes,
       render: (f) => (
@@ -161,7 +161,7 @@ export default function SuperAdminFilesPage() {
     },
     {
       key: 'created_at',
-      label: 'Создан',
+      label: 'Дата загрузки',
       sortable: true,
       getValue: (f) => f.created_at,
       render: (f) => (
@@ -183,7 +183,7 @@ export default function SuperAdminFilesPage() {
           className="border-slate-800 text-xs text-blue-400 hover:bg-blue-500/10 min-h-[34px]"
         >
           <Download className="h-3.5 w-3.5 mr-1" />
-          R2 Скачать
+          Скачать
         </Button>
       ),
     },

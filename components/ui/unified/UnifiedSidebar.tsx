@@ -17,6 +17,9 @@ import {
   LayoutDashboard,
   HardDrive,
   UserCheck,
+  Database,
+  Send,
+  ArrowLeft,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -40,7 +43,7 @@ export interface UnifiedSidebarProps {
   className?: string;
 }
 
-const NAV_ITEMS: SidebarNavItem[] = [
+const USER_NAV_ITEMS: SidebarNavItem[] = [
   {
     title: 'Главная Панель',
     href: '/dashboard',
@@ -81,9 +84,47 @@ const NAV_ITEMS: SidebarNavItem[] = [
   },
   {
     title: 'Суперадминка',
-    href: '/super-admin',
+    href: '/super-admin/companies',
     icon: Shield,
     superAdminOnly: true,
+  },
+];
+
+const SUPER_ADMIN_NAV_ITEMS: SidebarNavItem[] = [
+  {
+    title: 'Организации',
+    href: '/super-admin/companies',
+    icon: Building2,
+  },
+  {
+    title: 'Пользователи',
+    href: '/super-admin/users',
+    icon: Users,
+  },
+  {
+    title: 'Служебный реестр файлов',
+    href: '/super-admin/files',
+    icon: HardDrive,
+  },
+  {
+    title: 'Telegram-боты',
+    href: '/super-admin/telegram',
+    icon: Send,
+  },
+  {
+    title: 'Инспектор БД',
+    href: '/super-admin/inspector',
+    icon: Database,
+  },
+  {
+    title: 'Подписки',
+    href: '/super-admin/subscriptions',
+    icon: CreditCard,
+  },
+  {
+    title: '← Рабочий кабинет',
+    href: '/dashboard',
+    icon: ArrowLeft,
   },
 ];
 
@@ -98,11 +139,15 @@ export function UnifiedSidebar({
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
 
-  const filteredNavItems = NAV_ITEMS.filter((item) => {
-    if (item.superAdminOnly && !isSuperAdmin) return false;
-    if (item.roles && !item.roles.includes(userRole) && !isSuperAdmin) return false;
-    return true;
-  });
+  const isSuperAdminRoute = pathname.startsWith('/super-admin');
+
+  const filteredNavItems = isSuperAdminRoute
+    ? SUPER_ADMIN_NAV_ITEMS
+    : USER_NAV_ITEMS.filter((item) => {
+        if (item.superAdminOnly && !isSuperAdmin) return false;
+        if (item.roles && !item.roles.includes(userRole) && !isSuperAdmin) return false;
+        return true;
+      });
 
   const sidebarContent = (
     <div className="flex flex-col h-full bg-card border-r border-border shadow-2xl justify-between transition-all duration-300">

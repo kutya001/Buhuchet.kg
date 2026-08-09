@@ -998,3 +998,79 @@ export const getSuperAdminUserDetailsAction = createSafeAction(
   }
 );
 
+/**
+ * Модульный SafeAction: Получение всех организаций для админки
+ */
+export const getCompaniesAdminAction = createSafeAction(
+  z.object({}),
+  async (_, ctx) => {
+    if (!ctx.isSuperAdmin) {
+      return { success: false, error: 'Доступ разрешен только Суперадминистратору' };
+    }
+
+    const adminSupabase = await createAdminClient();
+    const { data, error } = await adminSupabase
+      .from('companies')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) return { success: false, error: error.message };
+    return { success: true, data: data as Company[] };
+  }
+);
+
+/**
+ * Модульный SafeAction: Получение всех пользователей для админки
+ */
+export const getUsersAdminAction = createSafeAction(
+  z.object({}),
+  async (_, ctx) => {
+    if (!ctx.isSuperAdmin) {
+      return { success: false, error: 'Доступ разрешен только Суперадминистратору' };
+    }
+
+    const adminSupabase = await createAdminClient();
+    const { data, error } = await adminSupabase
+      .from('users')
+      .select('*, companies:companies!company_id(name, inn)')
+      .order('created_at', { ascending: false });
+
+    if (error) return { success: false, error: error.message };
+    return { success: true, data: data || [] };
+  }
+);
+
+/**
+ * Модульный SafeAction: Статистика инспектора БД
+ */
+export const getInspectorStatsAdminAction = createSafeAction(
+  z.object({}),
+  async (_, ctx) => {
+    if (!ctx.isSuperAdmin) {
+      return { success: false, error: 'Доступ разрешен только Суперадминистратору' };
+    }
+
+    const adminSupabase = await createAdminClient();
+    const [compRes, usersRes, docsRes, filesRes] = await Promise.all([
+      adminSupabase.from('companies').select('id', { count: 'exact', head: true }),
+      adminSupabase.from('users').select('id', { count: 'exact', head: true }),
+      adminSupabase.from('documents').select('id', { count: 'exact', head: true }),
+      adminSupabase.from('files').select('id, size_bytes'),
+    ]);
+
+    const totalFilesSize = (filesRes.data || []).reduce((acc, f) => acc + (Number(f.size_bytes) || 0), 0);
+
+    return {
+      success: true,
+      data: {
+        totalCompanies: compRes.count || 0,
+        totalUsers: usersRes.count || 0,
+        totalDocuments: docsRes.count || 0,
+        totalFiles: filesRes.data?.length || 0,
+        totalFilesSize,
+      },
+    };
+  }
+);
+
+

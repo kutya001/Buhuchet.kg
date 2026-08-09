@@ -684,7 +684,13 @@ export const getB2BDocumentDetailsAction = createSafeAction(
       return { success: false, error: 'Запрошенный документ не найден в системе' };
     }
 
-    if (doc.sender_company_id !== ctx.companyId && doc.receiver_company_id !== ctx.companyId && !ctx.isSuperAdmin) {
+    if (
+      doc.sender_company_id !== ctx.companyId &&
+      doc.receiver_company_id !== ctx.companyId &&
+      doc.counterparty_id !== ctx.companyId &&
+      doc.company_id !== ctx.companyId &&
+      !ctx.isSuperAdmin
+    ) {
       return { success: false, error: 'У вас нет прав для просмотра данного документа' };
     }
 
