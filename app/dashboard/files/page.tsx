@@ -44,6 +44,7 @@ import { getPresignedUploadUrlAction } from './actions';
 import { UnifiedDataGrid, ColumnDef, RowAction } from '@/components/ui/unified/UnifiedDataGrid';
 import { UnifiedFormModal } from '@/components/ui/unified/UnifiedFormModal';
 import { UnifiedViewModal, ViewSection, ViewAction } from '@/components/ui/unified/UnifiedViewModal';
+import { UnifiedWorkspaceLayout } from '@/components/ui/unified/UnifiedWorkspaceLayout';
 import { MultiFileDropzone, type FileItemState } from '@/components/documents/MultiFileDropzone';
 import type { FileCategory } from '@/types/database.types';
 
@@ -560,19 +561,11 @@ export default function CloudFilesRegistryPage() {
   );
 
   return (
-    <div className="space-y-6 pb-12">
-      {/* 1. ЗАГОЛОВОК СТРАНИЦЫ И КНОПКА ЗАГРУЗКИ */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight flex items-center">
-            <FolderOpen className="h-6 w-6 mr-2.5 text-emerald-400" />
-            Облачный диск
-          </h1>
-          <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-            Подробный учёт всех сканов, накладных и уставных документов
-          </p>
-        </div>
-
+    <UnifiedWorkspaceLayout
+      title="Облачный диск"
+      description="Подробный учёт всех сканов, накладных и уставных документов"
+      icon={FolderOpen}
+      actionButtonsSlot={
         <Button
           onClick={() => setShowBatchModal(!showBatchModal)}
           className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs sm:text-sm font-semibold min-h-[44px] shadow-lg shadow-emerald-600/20"
@@ -580,7 +573,8 @@ export default function CloudFilesRegistryPage() {
           <FolderOpen className="h-4 w-4 mr-2" />
           {showBatchModal ? 'Скрыть панель загрузки' : '📤 Пакетная Загрузка (Drag & Drop)'}
         </Button>
-      </div>
+      }
+    >
 
       {/* 1.1 ИНТЕРАКТИВНЫЙ DRAG & DROP БЛОК ЗАГРУЗКИ */}
       {showBatchModal && (
@@ -939,6 +933,6 @@ export default function CloudFilesRegistryPage() {
           ]}
         />
       )}
-    </div>
+    </UnifiedWorkspaceLayout>
   );
 }

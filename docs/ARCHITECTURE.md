@@ -43,7 +43,8 @@
 | **Загрузчик файлов (Two-Tier)** | **browser-image-compression + Server Proxy** | Сжатие фото до 1000px / <200КБ в браузере. Прямой PUT в R2 с автоматическим переключением на серверный экшен-прокси при CORS/сетевых сбоях. |
 | **Движок Прав (RBAC)** | **lib/auth/permissions.ts** | Единый проверщик доступов сотрудника. Вкладки модулей рендерятся безусловно. |
 | **Компонент Реестров** | **UnifiedDataGrid.tsx** | Табличный и плиточный режимы, кастомные ячейки, поиск и контекстные действия строк `getRowActions`. |
-| **UI System** | **Tailwind CSS + Shadcn UI** | Дизайн-система с тёмной/светлой темой, модальными окнами редактирования `UnifiedFormModal`, универсальными карточками просмотра `UnifiedViewModal` и парящим остравком `FloatingTopbar`. |
+| **Унифицированный UI Пакет** | **components/ui/unified/** | Единая кроссплатформенная дизайн-система: `UnifiedWorkspaceLayout` (каркас экранов), `UnifiedViewModal` (карточка просмотра / Bottom Sheet), `UnifiedSidebar` (левое ролевое меню), `UnifiedHeader` (шапка), `UnifiedBottomNav` (мобильная PWA навигация ≥48px). |
+| **UI System** | **Tailwind CSS + Shadcn UI** | Дизайн-система с тёмной/светлой темой, модальными окнами редактирования `UnifiedFormModal` и универсальной адаптивной версткой. |
 
 ---
 

@@ -25,6 +25,7 @@ import { getSuperAdminFilesMonitoringAction, getSuperAdminFileDetailsAction } fr
 import { getPresignedDownloadUrlAction } from '@/app/dashboard/files/actions';
 import { UnifiedDataGrid, ColumnDef } from '@/components/ui/unified/UnifiedDataGrid';
 import { UnifiedViewModal } from '@/components/ui/unified/UnifiedViewModal';
+import { UnifiedWorkspaceLayout } from '@/components/ui/unified/UnifiedWorkspaceLayout';
 
 export default function SuperAdminFilesPage() {
   const [data, setData] = useState<any>(null);
@@ -184,36 +185,21 @@ export default function SuperAdminFilesPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 p-4 sm:p-6 lg:p-8 space-y-6">
-      {/* Навигация */}
-      <div className="flex items-center justify-between border-b border-slate-800/80 pb-4">
-        <div className="flex items-center space-x-3">
-          <Link
-            href="/super-admin"
-            className="p-2 rounded-xl bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-300 transition-colors"
-          >
-            <ChevronLeft className="h-5 w-5" />
-          </Link>
-          <div>
-            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white flex items-center">
-              <HardDrive className="h-6 w-6 mr-2.5 text-purple-400" />
-              Мониторинг Хранилища R2 и Copy-on-Write (CoW)
-            </h1>
-            <p className="text-xs sm:text-sm text-slate-400 mt-0.5">
-              Инспекция физических файлов R2, виртуальных связей тенантов и метрик дедупликации
-            </p>
-          </div>
-        </div>
-
+    <UnifiedWorkspaceLayout
+      title="Мониторинг областного диска и общего доступа"
+      description="Инспекция файлов, связей компаний и показателей экономии дискового пространства"
+      icon={HardDrive}
+      actionButtonsSlot={
         <Button
           onClick={loadData}
           disabled={loading}
           variant="outline"
           className="border-slate-800 text-xs text-slate-300 hover:bg-slate-900 min-h-[40px]"
         >
-          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Обновить Метрики'}
+          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Обновить показатели'}
         </Button>
-      </div>
+      }
+    >
 
       {/* КАРТОЧКИ МЕТРИК ДЕДУПЛИКАЦИИ */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -375,6 +361,6 @@ export default function SuperAdminFilesPage() {
           ]}
         />
       )}
-    </div>
+    </UnifiedWorkspaceLayout>
   );
 }

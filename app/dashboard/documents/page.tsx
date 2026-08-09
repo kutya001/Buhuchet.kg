@@ -26,6 +26,7 @@ import { DOCUMENT_TYPES, DOCUMENT_STATUSES } from '@/types/document.types';
 import type { Document, Company, DocumentStatus, UserProfile } from '@/types/database.types';
 import { UnifiedDataGrid, ColumnDef } from '@/components/ui/unified/UnifiedDataGrid';
 import { UnifiedViewModal, ViewSection } from '@/components/ui/unified/UnifiedViewModal';
+import { UnifiedWorkspaceLayout } from '@/components/ui/unified/UnifiedWorkspaceLayout';
 import { hasPermission } from '@/lib/auth/permissions';
 
 type FullB2BDocument = Document & {
@@ -275,84 +276,33 @@ export default function B2BDocumentsRegistryPage() {
   };
 
   return (
-    <div className="space-y-4 md:space-y-6">
-      {/* Шапка реестра */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl md:text-2xl font-bold text-foreground tracking-tight flex items-center">
-            <FileText className="h-5 w-5 md:h-6 md:w-6 mr-2 text-blue-400" />
-            Реестр Документооборота
-          </h2>
-          <p className="text-xs md:text-sm text-muted-foreground mt-0.5">
-            Товарные накладные, акты выполненных работ и счета-фактуры КР
-          </p>
-        </div>
-
-        <Link href="/dashboard/documents/new" prefetch={true} className="hidden md:block">
+    <UnifiedWorkspaceLayout
+      title="Реестр документооборота"
+      description="Товарные накладные, акты выполненных работ и счета-фактуры КР"
+      icon={FileText}
+      tabs={[
+        { key: 'all', label: 'Все документы', count: documents.length, icon: FileText },
+        { key: 'inbox', label: 'Входящие', count: documents.filter((d) => d.receiver_company_id === currentCompanyId).length, icon: Inbox },
+        { key: 'outbox', label: 'Исходящие', count: documents.filter((d) => d.sender_company_id === currentCompanyId).length, icon: Send },
+        { key: 'drafts', label: 'Черновики', count: documents.filter((d) => d.status === 'draft').length, icon: Clock },
+      ]}
+      activeTab={activeTab}
+      onTabChange={(tabKey) => setActiveTab(tabKey)}
+      actionButtonsSlot={
+        <Link href="/dashboard/documents/new" prefetch={true}>
           <Button className="bg-primary hover:bg-primary/90 text-primary-foreground font-medium text-xs md:text-sm shadow-md min-h-[44px]">
             <Plus className="h-4 w-4 mr-1.5" />
             Создать документ
           </Button>
         </Link>
-      </div>
-
+      }
+    >
       {serverErrorMsg && (
-        <Alert variant="destructive" className="border-amber-500/50 bg-amber-500/10 text-amber-500">
+        <Alert variant="destructive" className="border-amber-500/50 bg-amber-500/10 text-amber-500 mb-4">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>{serverErrorMsg}</AlertDescription>
         </Alert>
       )}
-
-      {/* Вкладки Реестра */}
-      <div className="flex items-center space-x-2 border-b border-border pb-2 overflow-x-auto">
-        <button
-          onClick={() => setActiveTab('all')}
-          className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs md:text-sm font-medium transition-all min-h-[44px] ${
-            activeTab === 'all'
-              ? 'bg-blue-600/20 text-blue-400 border border-blue-500/40 font-bold'
-              : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-          }`}
-        >
-          <FileText className="h-4 w-4" />
-          <span>Все Документы ({documents.length})</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('inbox')}
-          className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs md:text-sm font-medium transition-all min-h-[44px] ${
-            activeTab === 'inbox'
-              ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/40 font-bold'
-              : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-          }`}
-        >
-          <Inbox className="h-4 w-4" />
-          <span>Входящие ({documents.filter((d) => d.receiver_company_id === currentCompanyId).length})</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('outbox')}
-          className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs md:text-sm font-medium transition-all min-h-[44px] ${
-            activeTab === 'outbox'
-              ? 'bg-amber-600/20 text-amber-400 border border-amber-500/40 font-bold'
-              : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-          }`}
-        >
-          <Send className="h-4 w-4" />
-          <span>Исходящие ({documents.filter((d) => d.sender_company_id === currentCompanyId).length})</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('drafts')}
-          className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs md:text-sm font-medium transition-all min-h-[44px] ${
-            activeTab === 'drafts'
-              ? 'bg-purple-600/20 text-purple-400 border border-purple-500/40 font-bold'
-              : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-          }`}
-        >
-          <Clock className="h-4 w-4" />
-          <span>Черновики ({documents.filter((d) => d.status === 'draft').length})</span>
-        </button>
-      </div>
 
       {/* ЕДИНООБРАЗНЫЙ УНИВЕРСАЛЬНЫЙ ТАБЛИЧНО-КАРТОЧНЫЙ РЕЕСТР С Drag&Drop, СОРТИРОВКОЙ, МЕНЮ ▼ И ПАГИНАЦИЕЙ (25-50-100-Все) */}
       <UnifiedDataGrid<FullB2BDocument>
@@ -454,6 +404,6 @@ export default function B2BDocumentsRegistryPage() {
           ]}
         />
       )}
-    </div>
+    </UnifiedWorkspaceLayout>
   );
 }

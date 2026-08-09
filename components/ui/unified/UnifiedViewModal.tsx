@@ -168,7 +168,7 @@ export function UnifiedViewModal({
                 variant={act.variant || 'outline'}
                 onClick={act.onClick}
                 disabled={act.disabled || act.loading}
-                className={act.className || 'border-border text-foreground hover:bg-muted text-xs min-h-[38px] px-3 font-semibold'}
+                className={act.className || 'border-border text-foreground hover:bg-muted text-xs sm:text-sm min-h-[44px] px-3.5 font-semibold rounded-xl'}
               >
                 {act.loading ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />

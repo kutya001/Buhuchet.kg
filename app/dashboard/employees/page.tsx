@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { UnifiedDataGrid } from '@/components/ui/unified/UnifiedDataGrid';
 import { UnifiedViewModal } from '@/components/ui/unified/UnifiedViewModal';
+import { UnifiedWorkspaceLayout } from '@/components/ui/unified/UnifiedWorkspaceLayout';
 import { createClient } from '@/lib/supabase/client';
 import {
   getCompanyEmployeesAction,
@@ -309,60 +310,18 @@ export default function EmployeesModulePage() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Шапка модуля */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl md:text-2xl font-bold text-foreground tracking-tight flex items-center">
-            <Users className="h-6 w-6 mr-2 text-blue-400" />
-            Управление Персоналом и Доступами
-          </h2>
-          <p className="text-xs md:text-sm text-muted-foreground mt-0.5">
-            Утверждение поступающих заявок сотрудников, назначение ролей и ролевая матрица RBAC
-          </p>
-        </div>
-
-        {/* Переключатель вкладок */}
-        <div className="flex items-center space-x-1 p-1 bg-muted/80 border border-border rounded-xl">
-          <button
-            onClick={() => setActiveTab('employees')}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-bold transition-all min-h-[40px] ${
-              activeTab === 'employees'
-                ? 'bg-primary text-primary-foreground shadow-md'
-                : 'text-muted-foreground hover:text-foreground hover:bg-accent/60'
-            }`}
-          >
-            <Users className="h-4 w-4" />
-            <span>Мои сотрудники ({totalEmployees})</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('requests')}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-bold transition-all min-h-[40px] ${
-              activeTab === 'requests'
-                ? 'bg-amber-500 text-slate-950 font-extrabold shadow-md'
-                : pendingRequests.length > 0
-                ? 'text-amber-400 bg-amber-500/10 border border-amber-500/30'
-                : 'text-muted-foreground hover:text-foreground hover:bg-accent/60'
-            }`}
-          >
-            <Clock className="h-4 w-4" />
-            <span>Заявки в штат ({pendingRequests.length})</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('roles')}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-bold transition-all min-h-[40px] ${
-              activeTab === 'roles'
-                ? 'bg-primary text-primary-foreground shadow-md'
-                : 'text-muted-foreground hover:text-foreground hover:bg-accent/60'
-            }`}
-          >
-            <Shield className="h-4 w-4" />
-            <span>Роли и доступы ({roles.length})</span>
-          </button>
-        </div>
-      </div>
+    <UnifiedWorkspaceLayout
+      title="Управление персоналом и доступами"
+      description="Утверждение поступающих заявок сотрудников, назначение ролей и ролевая матрица"
+      icon={Users}
+      tabs={[
+        { key: 'employees', label: 'Мои сотрудники', count: totalEmployees, icon: Users },
+        { key: 'requests', label: 'Заявки в штат', count: pendingRequests.length, icon: Clock },
+        { key: 'roles', label: 'Роли и доступы', count: roles.length, icon: Shield },
+      ]}
+      activeTab={activeTab}
+      onTabChange={(tabKey) => setActiveTab(tabKey)}
+    >
 
       {msg && (
         <Alert className={msg.type === 'success' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-rose-500/10 border-rose-500/30 text-rose-400'}>
@@ -950,6 +909,6 @@ export default function EmployeesModulePage() {
           ]}
         />
       )}
-    </div>
+    </UnifiedWorkspaceLayout>
   );
 }

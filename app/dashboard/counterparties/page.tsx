@@ -56,6 +56,7 @@ import imageCompression from 'browser-image-compression';
 import { UnifiedDataGrid, ColumnDef, RowAction } from '@/components/ui/unified/UnifiedDataGrid';
 import { UnifiedFormModal } from '@/components/ui/unified/UnifiedFormModal';
 import { UnifiedViewModal } from '@/components/ui/unified/UnifiedViewModal';
+import { UnifiedWorkspaceLayout } from '@/components/ui/unified/UnifiedWorkspaceLayout';
 import { ActionRowGroup } from '@/components/ui/unified/ActionIcons';
 import { MobileFAB } from '@/components/ui/MobileFAB';
 import { hasPermission } from '@/lib/auth/permissions';
@@ -988,20 +989,19 @@ export default function CounterpartiesPage() {
   }
 
   return (
-    <div className="space-y-6 pb-12">
-      {/* Шапка модуля */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl md:text-2xl font-bold text-foreground tracking-tight flex items-center">
-            <Building2 className="h-6 w-6 mr-2 text-amber-400" />
-            Справочник Контрагентов & Сеть Партнеров
-          </h2>
-          <p className="text-xs md:text-sm text-muted-foreground mt-0.5">
-            Реестр связанных организаций Кыргызстана, входящие и исходящие заявки и публичный каталог
-          </p>
-        </div>
-
-        {hasPermission(currentProfile, 'counterparties', 'create') && (
+    <UnifiedWorkspaceLayout
+      title="Справочник контрагентов & сеть партнеров"
+      description="Реестр связанных организаций Кыргызстана, входящие и исходящие заявки и публичный каталог"
+      icon={Building2}
+      tabs={[
+        { key: 'counterparties', label: 'Мои контрагенты', count: counterparties.length, icon: Building2 },
+        { key: 'requests', label: 'Партнерские заявки', count: partnerships.length, icon: UserPlus },
+        { key: 'catalog', label: 'Публичный каталог компаний КР', count: catalogCompanies.length, icon: Globe },
+      ]}
+      activeTab={mainTab}
+      onTabChange={(tabKey) => setMainTab(tabKey)}
+      actionButtonsSlot={
+        hasPermission(currentProfile, 'counterparties', 'create') && (
           <Button
             onClick={() => setShowCreateModal(true)}
             className="bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs rounded-xl min-h-[44px] px-5 gap-2 shadow-md"
@@ -1009,8 +1009,9 @@ export default function CounterpartiesPage() {
             <Plus className="w-4 h-4" />
             <span>Создать Контрагента</span>
           </Button>
-        )}
-      </div>
+        )
+      }
+    >
 
       {msg && (
         <Alert
@@ -1516,6 +1517,6 @@ export default function CounterpartiesPage() {
           </div>
         </div>
       )}
-    </div>
+    </UnifiedWorkspaceLayout>
   );
 }
