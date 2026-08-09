@@ -115,7 +115,7 @@ export async function getB2BDocumentByIdAction(docId: string): Promise<ActionRes
 
     const { data: doc, error } = await adminSupabase
       .from('documents')
-      .select('*, sender_company:companies!sender_company_id(*), receiver_company:companies!receiver_company_id(*), counterparties(*), document_items(*), document_logs(*, user:users!user_id(full_name)), author:users!author_id(full_name, position)')
+      .select('*, sender_company:companies!sender_company_id(id, name, inn), receiver_company:companies!receiver_company_id(id, name, inn), counterparties:counterparties!counterparty_id(id, name, inn), author:users!author_id(id, full_name, email, position)')
       .eq('id', docId)
       .maybeSingle();
 
@@ -138,17 +138,18 @@ export async function getB2BDocumentByIdAction(docId: string): Promise<ActionRes
       return { success: false, error: 'Документ в статусе "Черновик" доступен только организации-отправителю' };
     }
 
-    // Безопасное получение прикрепленных сканов из Облачного диска
-    const { data: attachedFiles } = await adminSupabase
-      .from('files')
-      .select('*, file_categories(*)')
-      .eq('document_id', docId);
+    // Параллельная загрузка связанных сканов и истории изменений
+    const [{ data: attachedFiles }, { data: logs }] = await Promise.all([
+      adminSupabase.from('files').select('*, file_categories(*)').eq('document_id', docId),
+      adminSupabase.from('document_logs').select('*, user:users!user_id(full_name)').eq('document_id', docId),
+    ]);
 
     return {
       success: true,
       data: {
         ...doc,
         files: attachedFiles || [],
+        document_logs: logs || [],
       },
     };
   } catch (err: unknown) {
@@ -694,7 +695,7 @@ export const getB2BDocumentDetailsAction = createSafeAction(
 
     const { data: doc, error } = await adminSupabase
       .from('documents')
-      .select('*, sender_company:companies!sender_company_id(*), receiver_company:companies!receiver_company_id(*), counterparties(*), document_items(*), document_logs(*, user:users!user_id(full_name)), author:users!author_id(full_name, position)')
+      .select('*, sender_company:companies!sender_company_id(id, name, inn), receiver_company:companies!receiver_company_id(id, name, inn), counterparties:counterparties!counterparty_id(id, name, inn), author:users!author_id(id, full_name, email, position)')
       .eq('id', targetId)
       .maybeSingle();
 
@@ -712,17 +713,18 @@ export const getB2BDocumentDetailsAction = createSafeAction(
       return { success: false, error: 'У вас нет прав для просмотра данного документа' };
     }
 
-    // Безопасное получение прикрепленных сканов из Облачного диска
-    const { data: attachedFiles } = await adminSupabase
-      .from('files')
-      .select('*')
-      .eq('document_id', targetId);
+    // Параллельная загрузка связанных сканов и истории изменений
+    const [{ data: attachedFiles }, { data: logs }] = await Promise.all([
+      adminSupabase.from('files').select('*, file_categories(*)').eq('document_id', targetId),
+      adminSupabase.from('document_logs').select('*, user:users!user_id(full_name)').eq('document_id', targetId),
+    ]);
 
     return {
       success: true,
       data: {
         ...doc,
         files: attachedFiles || [],
+        document_logs: logs || [],
       },
     };
   }
