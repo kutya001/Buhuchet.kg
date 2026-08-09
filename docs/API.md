@@ -231,10 +231,10 @@ export type ActionResponse<T = any> = {
 - **Бизнес-логика**: Детализация профиля пользователя, его роли, привязанных компаний и ID чата Telegram для `UnifiedViewModal`.
 
 #### `getB2BDocumentDetailsAction` / `getDocumentDetailsAction`
-- **Auth**: Private (Tenant)
+- **Auth**: Private (Tenant / SuperAdmin)
 - **Zod Schema**: `z.object({ id: z.string().uuid().optional(), docId: z.string().uuid().optional() })`
-- **Response**: `ActionResponse<Document & { sender_company: Company; receiver_company: Company; files: DocumentFile[] }>`
-- **Бизнес-логика**: Возвращает гидратированный документ со всеми связями для формы `UnifiedViewModal`. Защищен проверкой прав компании.
+- **Response**: `ActionResponse<Document & { sender_company: Company; receiver_company: Company; counterparties: Counterparty; files: DocumentFile[]; document_items: DocumentItem[]; document_logs: DocumentLog[] }>`
+- **Бизнес-логика**: Выполняет безопасный серверный гибридный запрос документа, его реквизитов и прикрепленных файлов Облачного диска без прямых клиентских JOIN-запросов, предотвращая ошибки соединения. Доступ регулируется правами организации-отправителя, получателя или контрагента.
 
 #### `deleteDocumentFileAction`
 - **Auth**: Private (Tenant)

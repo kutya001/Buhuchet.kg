@@ -115,15 +115,21 @@ export async function getB2BDocumentByIdAction(docId: string): Promise<ActionRes
 
     const { data: doc, error } = await adminSupabase
       .from('documents')
-      .select('*, sender_company:companies!sender_company_id(*), receiver_company:companies!receiver_company_id(*), files(*, file_categories(*)), document_logs(*, user:users!user_id(full_name)), author:users!author_id(full_name, role)')
+      .select('*, sender_company:companies!sender_company_id(*), receiver_company:companies!receiver_company_id(*), counterparties(*), document_items(*), document_logs(*, user:users!user_id(full_name)), author:users!author_id(full_name, position)')
       .eq('id', docId)
-      .single();
+      .maybeSingle();
 
     if (error || !doc) {
-      return { success: false, error: error ? `Ошибка загрузки документа: ${error.message}` : 'Документ не найден в базе данных' };
+      return { success: false, error: 'Запрошенный документ не найден в системе' };
     }
 
-    if (doc.sender_company_id !== ctx.companyId && doc.receiver_company_id !== ctx.companyId && !ctx.isSuperAdmin) {
+    if (
+      doc.sender_company_id !== ctx.companyId &&
+      doc.receiver_company_id !== ctx.companyId &&
+      doc.counterparty_id !== ctx.companyId &&
+      doc.company_id !== ctx.companyId &&
+      !ctx.isSuperAdmin
+    ) {
       return { success: false, error: 'У вашей организации нет прав на доступ к данному документу' };
     }
 
@@ -132,7 +138,19 @@ export async function getB2BDocumentByIdAction(docId: string): Promise<ActionRes
       return { success: false, error: 'Документ в статусе "Черновик" доступен только организации-отправителю' };
     }
 
-    return { success: true, data: doc };
+    // Безопасное получение прикрепленных сканов из Облачного диска
+    const { data: attachedFiles } = await adminSupabase
+      .from('files')
+      .select('*, file_categories(*)')
+      .eq('document_id', docId);
+
+    return {
+      success: true,
+      data: {
+        ...doc,
+        files: attachedFiles || [],
+      },
+    };
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : 'Сбой загрузки детализации документа';
     return { success: false, error: errorMsg };
@@ -676,7 +694,7 @@ export const getB2BDocumentDetailsAction = createSafeAction(
 
     const { data: doc, error } = await adminSupabase
       .from('documents')
-      .select('*, sender_company:companies!sender_company_id(*), receiver_company:companies!receiver_company_id(*), counterparties(*), files(*), document_items(*), document_logs(*, user:users!user_id(full_name)), author:users!author_id(full_name, position)')
+      .select('*, sender_company:companies!sender_company_id(*), receiver_company:companies!receiver_company_id(*), counterparties(*), document_items(*), document_logs(*, user:users!user_id(full_name)), author:users!author_id(full_name, position)')
       .eq('id', targetId)
       .maybeSingle();
 
@@ -694,9 +712,18 @@ export const getB2BDocumentDetailsAction = createSafeAction(
       return { success: false, error: 'У вас нет прав для просмотра данного документа' };
     }
 
+    // Безопасное получение прикрепленных сканов из Облачного диска
+    const { data: attachedFiles } = await adminSupabase
+      .from('files')
+      .select('*')
+      .eq('document_id', targetId);
+
     return {
       success: true,
-      data: doc,
+      data: {
+        ...doc,
+        files: attachedFiles || [],
+      },
     };
   }
 );
