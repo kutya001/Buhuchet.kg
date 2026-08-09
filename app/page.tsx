@@ -166,13 +166,13 @@ export default function HomePage() {
       <div className="absolute bottom-10 left-1/3 w-[300px] sm:w-[600px] h-[300px] sm:h-[600px] bg-teal-600/10 rounded-full blur-[150px] pointer-events-none" />
 
       {/* 1. ФИКСИРОВАННЫЙ НАВБАР - ПАРЯЩИЙ ОСТРОВОК */}
-      <header className="sticky top-3 sm:top-4 z-50 mx-2 sm:mx-6 md:mx-12 my-2 h-14 sm:h-16 rounded-2xl sm:rounded-3xl bg-card/85 backdrop-blur-xl border border-border shadow-2xl flex items-center justify-between px-3 sm:px-6 transition-all">
-        <Link href="/" className="flex items-center space-x-2 sm:space-x-3 min-w-0">
+      <header className="sticky top-2 sm:top-4 z-50 mx-1.5 sm:mx-6 md:mx-12 my-1 h-14 sm:h-16 rounded-2xl sm:rounded-3xl bg-card/85 backdrop-blur-xl border border-border shadow-2xl flex items-center justify-between px-2 sm:px-6 transition-all">
+        <Link href="/" className="flex items-center space-x-1.5 sm:space-x-3 shrink-0">
           <div className="flex h-8 sm:h-10 w-8 sm:w-10 items-center justify-center rounded-xl sm:rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-500 text-white shadow-lg shadow-blue-500/20 shrink-0">
             <FileText className="h-4 sm:h-5 w-4 sm:w-5" />
           </div>
           <div className="min-w-0 truncate">
-            <span className="font-bold text-base sm:text-xl text-foreground tracking-tight truncate">
+            <span className="font-bold text-sm sm:text-xl text-foreground tracking-tight truncate">
               Buhuchet.kg
             </span>
             <span className="hidden sm:inline-block ml-2 text-[10px] uppercase font-mono tracking-wider px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 font-semibold">
@@ -206,21 +206,21 @@ export default function HomePage() {
           </a>
         </nav>
 
-        <div className="flex items-center space-x-1.5 sm:space-x-3 shrink-0">
+        <div className="flex items-center space-x-1 sm:space-x-3 shrink-0">
           <ThemeToggle />
 
           <Link
             href="/login"
-            className="text-xs sm:text-sm font-medium text-muted-foreground hover:text-foreground px-2.5 sm:px-3 py-1.5 sm:py-2 transition-colors"
+            className="text-xs sm:text-sm font-medium text-muted-foreground hover:text-foreground px-1.5 sm:px-3 py-1.5 sm:py-2 transition-colors"
           >
             Войти
           </Link>
 
           <Link
             href="/register"
-            className="px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs sm:text-sm transition-all shadow-lg shadow-blue-600/20 active:scale-95 whitespace-nowrap"
+            className="px-2.5 sm:px-5 py-1.5 sm:py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs sm:text-sm transition-all shadow-lg shadow-blue-600/20 active:scale-95 whitespace-nowrap"
           >
-            <span>Подключить компанию</span>
+            <span>Регистрация</span>
           </Link>
         </div>
       </header>

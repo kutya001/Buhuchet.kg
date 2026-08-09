@@ -25,7 +25,7 @@ export function ThemeToggle({ className = '' }: { className?: string }) {
             key={t.id}
             type="button"
             onClick={() => setTheme(t.id)}
-            className={`flex items-center space-x-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all duration-300 ${
+            className={`flex items-center space-x-1 sm:space-x-1.5 px-1.5 sm:px-2.5 py-1 sm:py-1.5 rounded-xl text-xs font-semibold transition-all duration-300 ${
               isActive
                 ? 'bg-primary text-primary-foreground shadow-md font-bold scale-105'
                 : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
