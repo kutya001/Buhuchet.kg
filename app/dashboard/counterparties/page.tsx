@@ -54,6 +54,7 @@ import { INDUSTRIES } from '@/types/database.types';
 import type { Counterparty, Company, Document, DocumentFile, PartnershipStatus, UserProfile } from '@/types/database.types';
 import imageCompression from 'browser-image-compression';
 import { UnifiedDataGrid, ColumnDef, RowAction } from '@/components/ui/unified/UnifiedDataGrid';
+import { toast } from 'sonner';
 import { UnifiedFormModal } from '@/components/ui/unified/UnifiedFormModal';
 import { UnifiedViewModal } from '@/components/ui/unified/UnifiedViewModal';
 import { UnifiedWorkspaceLayout } from '@/components/ui/unified/UnifiedWorkspaceLayout';
@@ -178,7 +179,7 @@ export default function CounterpartiesPage() {
   const handleManualCreateWithFile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!createName || !createInn || createInn.length !== 14) {
-      alert('Укажите наименование и ИНН КР (14 цифр)!');
+      toast.error('Укажите наименование и ИНН КР (14 цифр)!');
       return;
     }
 

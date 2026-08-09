@@ -87,6 +87,7 @@ import { UnifiedDataGrid, ColumnDef } from '@/components/ui/unified/UnifiedDataG
 import { UnifiedFormModal } from '@/components/ui/unified/UnifiedFormModal';
 import { UnifiedViewModal, ViewSection } from '@/components/ui/unified/UnifiedViewModal';
 import { UnifiedWorkspaceLayout } from '@/components/ui/unified/UnifiedWorkspaceLayout';
+import { toast } from 'sonner';
 
 const ITEMS_PER_PAGE = 10;
 
@@ -366,7 +367,7 @@ export default function SuperAdminPage() {
   const handleConfirmModerationAction = () => {
     if (!selectedCompany || !modalMode) return;
     if (!moderationComment.trim()) {
-      alert('Укажите причину для компании!');
+      toast.error('Укажите причину для компании!');
       return;
     }
 
@@ -410,7 +411,7 @@ export default function SuperAdminPage() {
 
   const handleCreateCompany = () => {
     if (!newCompName || !newCompInn) {
-      alert('Укажите название и ИНН организации!');
+      toast.error('Укажите название и ИНН организации!');
       return;
     }
     setMsg(null);
@@ -575,7 +576,7 @@ export default function SuperAdminPage() {
   // ДЕЙСТВИЯ: СПРАВОЧНИКИ
   const handleCreateCategory = () => {
     if (!newCatName || !newCatCode) {
-      alert('Укажите название и код категории!');
+      toast.error('Укажите название и код категории!');
       return;
     }
     setMsg(null);

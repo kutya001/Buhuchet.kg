@@ -26,6 +26,7 @@ import { getPresignedDownloadUrlAction } from '@/app/dashboard/files/actions';
 import { UnifiedDataGrid, ColumnDef } from '@/components/ui/unified/UnifiedDataGrid';
 import { UnifiedViewModal } from '@/components/ui/unified/UnifiedViewModal';
 import { UnifiedWorkspaceLayout } from '@/components/ui/unified/UnifiedWorkspaceLayout';
+import { toast } from 'sonner';
 
 export default function SuperAdminFilesPage() {
   const [data, setData] = useState<any>(null);
@@ -36,14 +37,18 @@ export default function SuperAdminFilesPage() {
   const [viewingAdminFileDetails, setViewingAdminFileDetails] = useState<any | null>(null);
   const [loadingAdminFileDetails, setLoadingAdminFileDetails] = useState(false);
 
-  const handleOpenAdminFileDetails = async (fileId: string) => {
+  const handleOpenAdminFileDetails = async (fileId?: string) => {
+    if (!fileId || typeof fileId !== 'string' || fileId.trim() === '') {
+      toast.error('Ошибка: выбран некорректный объект');
+      return;
+    }
     setLoadingAdminFileDetails(true);
     setViewingAdminFileDetails({});
     const res = await getSuperAdminFileDetailsAction({ fileId });
     if (res.success && res.data) {
       setViewingAdminFileDetails(res.data);
     } else {
-      alert(res.error || 'Не удалось загрузить системные детали файла');
+      toast.error(res.error || 'Не удалось загрузить служебную карточку файла');
       setViewingAdminFileDetails(null);
     }
     setLoadingAdminFileDetails(false);
@@ -70,10 +75,10 @@ export default function SuperAdminFilesPage() {
       if (res.success && res.data?.downloadUrl) {
         window.open(res.data.downloadUrl, '_blank');
       } else {
-        alert(res.error || 'Ошибка вызова преподписанной ссылки R2');
+        toast.error(res.error || 'Ошибка генерации ссылки на скачивание файла');
       }
     } catch (e: any) {
-      alert(`Ошибка R2: ${e?.message}`);
+      toast.error(`Ошибка диска: ${e?.message}`);
     } finally {
       setDownloadingId(null);
     }

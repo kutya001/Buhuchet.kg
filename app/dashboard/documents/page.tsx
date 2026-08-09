@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { getB2BDocumentsAction, getB2BDocumentDetailsAction } from './actions';
+import { toast } from 'sonner';
 import { DOCUMENT_TYPES, DOCUMENT_STATUSES } from '@/types/document.types';
 import type { Document, Company, DocumentStatus, UserProfile } from '@/types/database.types';
 import { UnifiedDataGrid, ColumnDef } from '@/components/ui/unified/UnifiedDataGrid';
@@ -55,15 +56,21 @@ export default function B2BDocumentsRegistryPage() {
   const [viewingDocDetails, setViewingDocDetails] = useState<any | null>(null);
   const [loadingDocDetails, setLoadingDocDetails] = useState(false);
 
-  const handleOpenDocViewModal = async (docId: string) => {
+  const handleOpenDocViewModal = async (docId?: string) => {
+    if (!docId || typeof docId !== 'string' || docId.trim() === '') {
+      toast.error('Ошибка: выбран некорректный документ');
+      return;
+    }
+
     setLoadingDocDetails(true);
-    setViewingDocDetails({});
+    setViewingDocDetails({ id: docId, doc_number: 'Загрузка...' });
+
     const res = await getB2BDocumentDetailsAction({ docId });
     if (res.success && res.data) {
       setViewingDocDetails(res.data);
     } else {
-      alert(res.error || 'Не удалось загрузить подробности документа');
       setViewingDocDetails(null);
+      toast.error(res.error || 'Не удалось загрузить подробности документа');
     }
     setLoadingDocDetails(false);
   };
@@ -310,7 +317,13 @@ export default function B2BDocumentsRegistryPage() {
         columns={columns}
         data={filteredDocuments}
         keyExtractor={(d) => d.id}
-        onRowClick={(doc) => handleOpenDocViewModal(doc.id)}
+        onRowClick={(doc) => {
+          if (doc && doc.id) {
+            handleOpenDocViewModal(doc.id);
+          } else {
+            toast.error('Запрошенный документ не найден');
+          }
+        }}
         renderCard={renderDocumentCard}
         searchPlaceholder="Поиск по № документа, контрагенту, сумме..."
         emptyMessage="Документы не найдены. Создайте первый документ."

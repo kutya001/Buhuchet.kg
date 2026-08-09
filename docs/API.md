@@ -230,11 +230,11 @@ export type ActionResponse<T = any> = {
 - **Response**: `ActionResponse<User & { companies: Company }>`
 - **Бизнес-логика**: Детализация профиля пользователя, его роли, привязанных компаний и ID чата Telegram для `UnifiedViewModal`.
 
-#### `getB2BDocumentDetailsAction`
+#### `getB2BDocumentDetailsAction` / `getDocumentDetailsAction`
 - **Auth**: Private (Tenant)
-- **Zod Schema**: `z.object({ docId: z.string().uuid() })`
+- **Zod Schema**: `z.object({ id: z.string().uuid().optional(), docId: z.string().uuid().optional() })`
 - **Response**: `ActionResponse<Document & { sender_company: Company; receiver_company: Company; files: DocumentFile[] }>`
-- **Бизнес-логика**: Возвращает гидратированный документ со всеми связями для формы `UnifiedViewModal`.
+- **Бизнес-логика**: Возвращает гидратированный документ со всеми связями для формы `UnifiedViewModal`. Защищен проверкой прав компании.
 
 #### `deleteDocumentFileAction`
 - **Auth**: Private (Tenant)

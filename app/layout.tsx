@@ -68,6 +68,7 @@ export const viewport: Viewport = {
 };
 
 import { ThemeProvider } from '@/components/theme/ThemeProvider';
+import { Toaster } from 'sonner';
 
 export default function RootLayout({
   children,
@@ -77,7 +78,10 @@ export default function RootLayout({
   return (
     <html lang="ru" className="scroll-smooth" data-theme="dark">
       <body className="min-h-screen font-sans antialiased">
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          {children}
+          <Toaster position="top-right" richColors theme="dark" />
+        </ThemeProvider>
       </body>
     </html>
   );

@@ -662,22 +662,30 @@ export async function deleteB2BDocumentAction(documentId: string): Promise<Actio
  * Получение подробной информации о документе ЭДО для формы просмотра
  */
 export const getB2BDocumentDetailsAction = createSafeAction(
-  z.object({ docId: z.string().uuid() }),
-  async ({ docId }, ctx) => {
+  z.object({
+    id: z.string().uuid().optional(),
+    docId: z.string().uuid().optional(),
+  }),
+  async ({ id, docId }, ctx) => {
+    const targetId = docId || id;
+    if (!targetId) {
+      return { success: false, error: 'Идентификатор документа не указан' };
+    }
+
     const adminSupabase = await createAdminClient();
 
     const { data: doc, error } = await adminSupabase
       .from('documents')
       .select('*, sender_company:companies!sender_company_id(*), receiver_company:companies!receiver_company_id(*), counterparties(*), files(*), document_items(*), document_logs(*, user:users!user_id(full_name)), author:users!author_id(full_name, position)')
-      .eq('id', docId)
-      .single();
+      .eq('id', targetId)
+      .maybeSingle();
 
     if (error || !doc) {
-      return { success: false, error: 'Документ не найден в системе' };
+      return { success: false, error: 'Запрошенный документ не найден в системе' };
     }
 
     if (doc.sender_company_id !== ctx.companyId && doc.receiver_company_id !== ctx.companyId && !ctx.isSuperAdmin) {
-      return { success: false, error: 'Доступ к данному документу запрещен' };
+      return { success: false, error: 'У вас нет прав для просмотра данного документа' };
     }
 
     return {
@@ -686,3 +694,6 @@ export const getB2BDocumentDetailsAction = createSafeAction(
     };
   }
 );
+
+export const getDocumentDetailsAction = getB2BDocumentDetailsAction;
+

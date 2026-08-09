@@ -31,6 +31,7 @@ import { UnifiedDataGrid } from '@/components/ui/unified/UnifiedDataGrid';
 import { UnifiedViewModal } from '@/components/ui/unified/UnifiedViewModal';
 import { UnifiedWorkspaceLayout } from '@/components/ui/unified/UnifiedWorkspaceLayout';
 import { createClient } from '@/lib/supabase/client';
+import { toast } from 'sonner';
 import {
   getCompanyEmployeesAction,
   getEmployeeDetailsAction,
@@ -72,15 +73,19 @@ export default function EmployeesModulePage() {
   const [viewingEmpDetails, setViewingEmpDetails] = useState<any | null>(null);
   const [loadingEmpDetails, setLoadingEmpDetails] = useState(false);
 
-  const handleOpenEmpDetails = async (empId: string) => {
+  const handleOpenEmpDetails = async (empId?: string) => {
+    if (!empId || typeof empId !== 'string' || empId.trim() === '') {
+      toast.error('Ошибка: выбран некорректный сотрудник');
+      return;
+    }
     setLoadingEmpDetails(true);
     setViewingEmpDetails({});
     const res = await getEmployeeDetailsAction({ employeeId: empId });
     if (res.success && res.data) {
       setViewingEmpDetails(res.data);
     } else {
-      alert(res.error || 'Не удалось загрузить карточку сотрудника');
       setViewingEmpDetails(null);
+      toast.error(res.error || 'Не удалось загрузить карточку сотрудника');
     }
     setLoadingEmpDetails(false);
   };

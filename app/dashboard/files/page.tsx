@@ -45,6 +45,7 @@ import { UnifiedDataGrid, ColumnDef, RowAction } from '@/components/ui/unified/U
 import { UnifiedFormModal } from '@/components/ui/unified/UnifiedFormModal';
 import { UnifiedViewModal, ViewSection, ViewAction } from '@/components/ui/unified/UnifiedViewModal';
 import { UnifiedWorkspaceLayout } from '@/components/ui/unified/UnifiedWorkspaceLayout';
+import { toast } from 'sonner';
 import { MultiFileDropzone, type FileItemState } from '@/components/documents/MultiFileDropzone';
 import type { FileCategory } from '@/types/database.types';
 
@@ -141,10 +142,10 @@ export default function CloudFilesRegistryPage() {
       if (res.success && res.data?.viewUrl) {
         window.open(res.data.viewUrl, '_blank');
       } else {
-        alert(res.error || 'Не удалось открыть файл для просмотра');
+        toast.error(res.error || 'Не удалось открыть файл для просмотра');
       }
     } catch (e: any) {
-      alert(`Ошибка открытия: ${e?.message}`);
+      toast.error(`Ошибка открытия: ${e?.message}`);
     }
   };
 
@@ -162,10 +163,10 @@ export default function CloudFilesRegistryPage() {
         link.click();
         document.body.removeChild(link);
       } else {
-        alert(res.error || 'Не удалось сгенерировать ссылку для скачивания файла');
+        toast.error(res.error || 'Не удалось сгенерировать ссылку для скачивания файла');
       }
     } catch (e: any) {
-      alert(`Ошибка при скачивании: ${e?.message}`);
+      toast.error(`Ошибка при скачивании: ${e?.message}`);
     } finally {
       setDownloadingId(null);
     }
@@ -194,7 +195,7 @@ export default function CloudFilesRegistryPage() {
         // Загрузка нового скана на облачный диск
         const presigned = await getPresignedUploadUrlAction(replacingFile.name, replacingFile.type);
         if (!presigned.success || !presigned.data?.uploadUrl) {
-          alert(presigned.error || 'Ошибка генерации ссылки для замены файла');
+          toast.error(presigned.error || 'Ошибка генерации ссылки для замены файла');
           setSavingEdit(false);
           return;
         }
@@ -208,7 +209,7 @@ export default function CloudFilesRegistryPage() {
         });
 
         if (!uploadRes.ok) {
-          alert('Ошибка физической передачи файла на облачный диск');
+          toast.error('Ошибка физической передачи файла на облачный диск');
           setSavingEdit(false);
           return;
         }
@@ -230,12 +231,13 @@ export default function CloudFilesRegistryPage() {
       if (updateRes.success) {
         setEditingFile(null);
         setReplacingFile(null);
+        toast.success('Параметры файла успешно сохранены');
         loadFiles();
       } else {
-        alert(updateRes.error || 'Ошибка при сохранении изменений файла');
+        toast.error(updateRes.error || 'Ошибка при сохранении изменений файла');
       }
     } catch (err: any) {
-      alert(`Ошибка редактирования: ${err?.message}`);
+      toast.error(`Ошибка редактирования: ${err?.message}`);
     } finally {
       setSavingEdit(false);
     }
@@ -249,12 +251,13 @@ export default function CloudFilesRegistryPage() {
       const res = await deleteDocumentFileAction(deletingFile.id);
       if (res.success) {
         setDeletingFile(null);
+        toast.success('Файл успешно удален из архива');
         loadFiles();
       } else {
-        alert(res.error || 'Не удалось удалить файл');
+        toast.error(res.error || 'Не удалось удалить файл');
       }
     } catch (err: any) {
-      alert(`Ошибка удаления: ${err?.message}`);
+      toast.error(`Ошибка удаления: ${err?.message}`);
     } finally {
       setIsDeleting(false);
     }
