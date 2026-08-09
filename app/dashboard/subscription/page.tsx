@@ -203,7 +203,7 @@ export default function SubscriptionPage() {
             </div>
 
             <div className="space-y-1">
-              <span className="text-xs text-slate-500 uppercase tracking-wider font-mono">Облачный диск R2</span>
+              <span className="text-xs text-slate-500 uppercase tracking-wider font-mono">Облачный диск</span>
               <div className="flex items-center space-x-2">
                 <HardDrive className="h-5 w-5 text-purple-400" />
                 <span className="text-2xl font-bold text-white">{company?.storage_limit_gb || 10} ГБ</span>

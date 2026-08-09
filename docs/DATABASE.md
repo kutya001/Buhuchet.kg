@@ -310,4 +310,36 @@ ALTER TABLE document_logs ENABLE ROW LEVEL SECURITY;
 
 CREATE OR REPLACE FUNCTION get_auth_user_company_id()
 RETURNS UUID AS $$SELECT company_id FROM users WHERE id = auth.uid();$$ LANGUAGE sql STABLE SECURITY DEFINER;
+
+---
+
+## 4. МИГРАЦИЯ МЕМОИЗАЦИИ RLS И ТРИГГЕРОВ ЗАКРЫТЫХ ПЕРИОДОВ (`20260809120000_optimize_rls_and_closed_periods.sql`)
+
+### 4.1 Мемоизация (SELECT auth.uid()) в RLS-Политиках
+Для исключения повторной эвалюации `auth.uid()` на каждую строку таблицы PostgreSQL, выражения в `documents`, `files`, `file_owners` и `company_partnerships` обернуты в подзапросы `(SELECT auth.uid())`:
+
+```sql
+CREATE POLICY "Доступ к документам своей компании" ON public.documents
+FOR ALL USING (
+    company_id IN (SELECT company_id FROM public.users WHERE id = (SELECT auth.uid()))
+    OR sender_company_id IN (SELECT company_id FROM public.users WHERE id = (SELECT auth.uid()))
+    OR receiver_company_id IN (SELECT company_id FROM public.users WHERE id = (SELECT auth.uid()))
+);
+
+CREATE POLICY "Доступ к файлам своей компании" ON public.files
+FOR ALL USING (
+  EXISTS (
+    SELECT 1 FROM public.file_owners fo
+    WHERE fo.file_id = files.id 
+      AND fo.company_id IN (
+        SELECT company_id FROM public.users WHERE id = (SELECT auth.uid())
+      )
+  )
+  OR company_id IN (SELECT company_id FROM public.users WHERE id = (SELECT auth.uid()))
+);
+```
+
+### 4.2 Аппаратная замок-проверка `check_closed_period_lock()`
+Блокирует любые операции `INSERT`, `UPDATE`, `DELETE` на таблицах `documents` и `files` для пользователей без ролей `owner` или `is_super_admin`, если дата документа входит в закрытый помесячный период (`company_closed_periods`) или до порога `companies.closed_period_until`.
+
 ```

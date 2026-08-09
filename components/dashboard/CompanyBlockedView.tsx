@@ -31,7 +31,7 @@ export function CompanyBlockedView({
             Организация заблокирована
           </CardTitle>
           <CardDescription className="text-xs text-muted-foreground mt-1">
-            Доступ к функциям B2B платформы для вашей компании временно приостановлен Суперадминистратором.
+            Доступ к функциям платформы для вашей компании временно приостановлен Суперадминистратором.
           </CardDescription>
         </CardHeader>
 

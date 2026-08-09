@@ -84,7 +84,7 @@ export function ActionRowGroup({
       {onDownloadR2 && (
         <ActionIconButton
           icon={FolderDown}
-          label="Скачать скан R2"
+          label="Скачать скан"
           onClick={typeof onDownloadR2 === 'function' ? onDownloadR2 : undefined}
           href={typeof onDownloadR2 === 'string' ? onDownloadR2 : undefined}
           colorClass="text-emerald-500 hover:bg-emerald-500/10"

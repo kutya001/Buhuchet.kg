@@ -23,19 +23,11 @@ const getUserContext = cache(async () => {
 
   const { data: profile } = await adminSupabase
     .from('users')
-    .select('*, company_roles(*)')
+    .select('*, company_roles(*), companies:companies!company_id(*)')
     .eq('id', user.id)
     .single();
 
-  let company = null;
-  if (profile?.company_id) {
-    const { data: comp } = await adminSupabase
-      .from('companies')
-      .select('*')
-      .eq('id', profile.company_id)
-      .single();
-    company = comp;
-  }
+  const company = (profile as any)?.companies || null;
 
   const isBlocked = company?.status === 'blocked' && !profile?.is_super_admin;
   const closedPeriodUntil = company?.closed_period_until || null;

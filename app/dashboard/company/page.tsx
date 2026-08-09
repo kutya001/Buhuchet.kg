@@ -197,7 +197,7 @@ export default function CompanyProfilePage() {
           newSize = replacingFile.size;
           if (!editName) newName = replacingFile.name;
         } else {
-          setMsg({ type: 'error', text: 'Ошибка отправки нового скана в R2' });
+          setMsg({ type: 'error', text: 'Ошибка отправки нового скана' });
           setReplaceUploading(false);
           return;
         }

@@ -31,7 +31,7 @@ export function CompanyStatsGrid({ stats, loading }: CompanyStatsGridProps) {
       color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
     },
     {
-      label: 'B2B Документов',
+      label: 'Документов',
       value: stats.totalDocuments,
       sub: 'За все время',
       icon: FileText,
