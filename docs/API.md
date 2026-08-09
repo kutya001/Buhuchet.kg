@@ -218,6 +218,18 @@ export type ActionResponse<T = any> = {
 - **Response**: `ActionResponse<DocumentFile & { ownersCount: number; isCoWShared: boolean }>`
 - **Бизнес-логика**: Возвращает подробную карточку файла, категорию, привязанный источник и число совладельцев `file_owners` для `UnifiedViewModal`.
 
+#### `getSuperAdminCompanyDetailsSafeAction`
+- **Auth**: Private (SuperAdmin Only)
+- **Zod Schema**: `z.object({ companyId: z.string().uuid() })`
+- **Response**: `ActionResponse<{ company: Company; owner: User; employees: User[]; stats: CompanyStats }>`
+- **Бизнес-логика**: Полный аудит организации, её ресурсов, объема хранилища и списка сотрудников для формы `UnifiedViewModal`.
+
+#### `getSuperAdminUserDetailsAction`
+- **Auth**: Private (SuperAdmin Only)
+- **Zod Schema**: `z.object({ userId: z.string().uuid() })`
+- **Response**: `ActionResponse<User & { companies: Company }>`
+- **Бизнес-логика**: Детализация профиля пользователя, его роли, привязанных компаний и ID чата Telegram для `UnifiedViewModal`.
+
 #### `getB2BDocumentDetailsAction`
 - **Auth**: Private (Tenant)
 - **Zod Schema**: `z.object({ docId: z.string().uuid() })`

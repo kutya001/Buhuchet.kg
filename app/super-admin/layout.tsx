@@ -1,6 +1,7 @@
 import React from 'react';
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
+import { SuperAdminShell } from './super-admin-shell';
 
 export default async function SuperAdminLayout({
   children,
@@ -20,7 +21,7 @@ export default async function SuperAdminLayout({
   // Проверяем флаг is_super_admin в таблице users
   const { data: profile } = await supabase
     .from('users')
-    .select('is_super_admin')
+    .select('full_name, is_super_admin')
     .eq('id', user.id)
     .single();
 
@@ -29,8 +30,8 @@ export default async function SuperAdminLayout({
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground antialiased w-full overflow-x-hidden">
+    <SuperAdminShell userName={profile.full_name || 'Суперадминистратор'}>
       {children}
-    </div>
+    </SuperAdminShell>
   );
 }

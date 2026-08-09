@@ -71,6 +71,8 @@ import {
   inspectTableDataAdminAction,
   updateDbRowAdminAction,
   deleteDbRowAdminAction,
+  getSuperAdminCompanyDetailsSafeAction,
+  getSuperAdminUserDetailsAction,
 } from './actions';
 import { signOutAction } from '@/app/(auth)/actions';
 import {
@@ -83,6 +85,8 @@ import type { Company, DocumentFile, FileCategory } from '@/types/database.types
 import { createClient } from '@/lib/supabase/client';
 import { UnifiedDataGrid, ColumnDef } from '@/components/ui/unified/UnifiedDataGrid';
 import { UnifiedFormModal } from '@/components/ui/unified/UnifiedFormModal';
+import { UnifiedViewModal, ViewSection } from '@/components/ui/unified/UnifiedViewModal';
+import { UnifiedWorkspaceLayout } from '@/components/ui/unified/UnifiedWorkspaceLayout';
 
 const ITEMS_PER_PAGE = 10;
 
@@ -159,6 +163,40 @@ export default function SuperAdminPage() {
   const [generatedPasswordResult, setGeneratedPasswordResult] = useState<string | null>(null);
   const [resetPasswordLoading, setResetPasswordLoading] = useState(false);
   const [copiedPassword, setCopiedPassword] = useState(false);
+
+  // 1.1 Модалка просмотра карточки организации (UnifiedViewModal)
+  const [viewingCompanyDetails, setViewingCompanyDetails] = useState<any | null>(null);
+  const [loadingCompanyDetails, setLoadingCompanyDetails] = useState(false);
+
+  const handleOpenCompanyDetails = async (companyId: string) => {
+    setLoadingCompanyDetails(true);
+    setViewingCompanyDetails({});
+    const res = await getSuperAdminCompanyDetailsSafeAction({ companyId });
+    if (res.success && res.data) {
+      setViewingCompanyDetails(res.data);
+    } else {
+      setViewingCompanyDetails(null);
+      setMsg({ type: 'error', text: res.error || 'Ошибка загрузки карточки организации' });
+    }
+    setLoadingCompanyDetails(false);
+  };
+
+  // 2.2 Модалка просмотра карточки пользователя (UnifiedViewModal)
+  const [viewingUserDetails, setViewingUserDetails] = useState<any | null>(null);
+  const [loadingUserDetails, setLoadingUserDetails] = useState(false);
+
+  const handleOpenUserDetails = async (userId: string) => {
+    setLoadingUserDetails(true);
+    setViewingUserDetails({});
+    const res = await getSuperAdminUserDetailsAction({ userId });
+    if (res.success && res.data) {
+      setViewingUserDetails(res.data);
+    } else {
+      setViewingUserDetails(null);
+      setMsg({ type: 'error', text: res.error || 'Ошибка загрузки карточки пользователя' });
+    }
+    setLoadingUserDetails(false);
+  };
 
   // 3. Модалки Документов
   const [editingDoc, setEditingDoc] = useState<any | null>(null);
@@ -1052,40 +1090,19 @@ export default function SuperAdminPage() {
   };
 
   return (
-    <div className="flex min-h-screen bg-background text-foreground antialiased w-full overflow-x-hidden">
-      {/* Левый Вертикальный Сайдбар (Десктоп + Мобильная Шторка) */}
-      <SuperAdminSidebar
-        activeTab={activeTab}
-        onTabChange={handleTabChange}
-        pendingCount={pendingCompanies.length}
-        isOpenMobile={isMobileMenuOpen}
-        onCloseMobile={() => setIsMobileMenuOpen(false)}
-        isCollapsed={isSidebarCollapsed}
-        onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-        onLogout={() => {
-          signOutAction();
-        }}
-      />
-
-      {/* Основной Контент Панели с учетом плавающего сайдбара */}
-      <div
-        className={cn(
-          'flex-1 flex flex-col min-w-0 w-full overflow-hidden transition-all duration-300',
-          isSidebarCollapsed ? 'md:pl-[96px]' : 'md:pl-[288px]'
-        )}
-      >
-        <FloatingTopbar
-          companyName="Buhuchet.kg Administration"
-          isSuperAdmin={true}
-          isSidebarCollapsed={isSidebarCollapsed}
-          onOpenMobileMenu={() => setIsMobileMenuOpen(true)}
-          onLogout={() => {
-            signOutAction();
-          }}
-        />
-
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 pt-20 sm:pt-24 pb-28 md:pb-8">
-          <div className="space-y-6 pt-4 sm:pt-6">
+    <UnifiedWorkspaceLayout
+      title="Панель суперадминистрирования"
+      description="Централизованное управление организациями, пользователями, доступами и Telegram-ботом"
+      icon={Shield}
+      tabs={[
+        { key: 'companies', label: 'Организации', count: pendingCompanies.length, icon: Building2 },
+        { key: 'users', label: 'Пользователи', count: allUsers.length, icon: Users },
+        { key: 'telegram', label: 'Telegram Бот', icon: UserCheck },
+        { key: 'db_inspector', label: 'Инспектор БД', icon: Database },
+      ]}
+      activeTab={activeTab}
+      onTabChange={(tabKey) => handleTabChange(tabKey)}
+    >
 
         {msg && (
           <Alert
@@ -1157,15 +1174,7 @@ export default function SuperAdminPage() {
                 : allCompanies
             }
             keyExtractor={(c) => c.id}
-            onRowClick={(c) => {
-              setEditingCompany(c);
-              setCompName(c.name);
-              setCompInn(c.inn);
-              setCompIndustry(c.industry || '');
-              setCompStatus(c.status);
-              setCompAddress(c.legal_address || '');
-              setCompDirector(c.director_name || '');
-            }}
+            onRowClick={(c) => handleOpenCompanyDetails(c.id)}
             getRowActions={(c) => [
               ...(c.status !== 'active'
                 ? [
@@ -1229,13 +1238,7 @@ export default function SuperAdminPage() {
           columns={userColumns}
           data={filteredUsers}
           keyExtractor={(u) => u.id}
-          onRowClick={(u) => {
-            setEditingUser(u);
-            setUserName(u.full_name || '');
-            setUserEmail(u.email || '');
-            setUserRole(u.role || 'employee');
-            setUserIsSuperAdmin(u.is_super_admin || false);
-          }}
+          onRowClick={(u) => handleOpenUserDetails(u.id)}
           getRowActions={(u) => [
             {
               label: '✏️ Изменить статус / роль',
@@ -1793,9 +1796,202 @@ export default function SuperAdminPage() {
           )}
         </div>
       </UnifiedFormModal>
-        </div>
-        </main>
-      </div>
-    </div>
+
+      {/* 4. МОДАЛКА ПРОСМОТРА КАРТОЧКИ ОРГАНИЗАЦИИ (UnifiedViewModal) */}
+      {viewingCompanyDetails && (
+        <UnifiedViewModal
+          isOpen={!!viewingCompanyDetails}
+          onClose={() => setViewingCompanyDetails(null)}
+          isLoading={loadingCompanyDetails}
+          title={viewingCompanyDetails.company?.name || 'Карточка организации'}
+          subtitle={`ИНН КР: ${viewingCompanyDetails.company?.inn || '—'}`}
+          badge={
+            <Badge
+              className={
+                viewingCompanyDetails.company?.status === 'active'
+                  ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                  : viewingCompanyDetails.company?.status === 'pending_approval'
+                  ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+                  : 'bg-red-500/20 text-red-400 border-red-500/30'
+              }
+            >
+              {viewingCompanyDetails.company?.status === 'active'
+                ? 'Активна'
+                : viewingCompanyDetails.company?.status === 'pending_approval'
+                ? 'На проверке'
+                : 'Заблокирована'}
+            </Badge>
+          }
+          sections={[
+            {
+              title: 'Реквизиты организации',
+              fields: [
+                { label: 'Наименование', value: viewingCompanyDetails.company?.name, icon: Building2 },
+                { label: 'ИНН КР', value: viewingCompanyDetails.company?.inn },
+                { label: 'Отрасль', value: viewingCompanyDetails.company?.industry || 'Услуги' },
+                { label: 'Руководитель', value: viewingCompanyDetails.company?.director_name || 'Не указан' },
+                { label: 'Email', value: viewingCompanyDetails.company?.email || '—' },
+                { label: 'Телефон', value: viewingCompanyDetails.company?.phone || '—' },
+                { label: 'Юридический адрес', value: viewingCompanyDetails.company?.legal_address || '—', colSpan: 2 },
+              ],
+            },
+            {
+              title: 'Ресурсы и Статистика',
+              fields: [
+                { label: 'Пользователи', value: viewingCompanyDetails.stats?.totalEmployees || 0 },
+                { label: 'Документы', value: viewingCompanyDetails.stats?.totalDocuments || 0 },
+                { label: 'Контрагенты', value: viewingCompanyDetails.stats?.totalCounterparties || 0 },
+                { label: 'Файлы на диске', value: viewingCompanyDetails.stats?.totalFiles || 0 },
+                { label: 'Занятый объем', value: formatBytes(viewingCompanyDetails.stats?.storageUsedBytes || 0), colSpan: 2 },
+              ],
+            },
+            ...(viewingCompanyDetails.owner
+              ? [
+                  {
+                    title: 'Владелец аккаунта',
+                    fields: [
+                      { label: 'ФИО Владельца', value: viewingCompanyDetails.owner.full_name, icon: Users },
+                      { label: 'Email', value: viewingCompanyDetails.owner.email },
+                      { label: 'Телефон', value: viewingCompanyDetails.owner.phone || '—' },
+                    ],
+                  },
+                ]
+              : []),
+          ]}
+          actions={[
+            ...(viewingCompanyDetails.company?.status !== 'active'
+              ? [
+                  {
+                    label: '✅ Одобрить организацию',
+                    onClick: () => {
+                      const comp = viewingCompanyDetails.company;
+                      setViewingCompanyDetails(null);
+                      handleApprove(comp);
+                    },
+                  },
+                ]
+              : []),
+            {
+              label: '✏️ Редактировать',
+              onClick: () => {
+                const comp = viewingCompanyDetails.company;
+                setViewingCompanyDetails(null);
+                if (comp) {
+                  setEditingCompany(comp);
+                  setCompName(comp.name);
+                  setCompInn(comp.inn);
+                  setCompIndustry(comp.industry || '');
+                  setCompStatus(comp.status);
+                  setCompAddress(comp.legal_address || '');
+                  setCompDirector(comp.director_name || '');
+                }
+              },
+            },
+            {
+              label: '🚫 Заблокировать',
+              variant: 'destructive',
+              onClick: () => {
+                const comp = viewingCompanyDetails.company;
+                setViewingCompanyDetails(null);
+                if (comp) {
+                  setSelectedCompany(comp);
+                  setModalMode('block');
+                }
+              },
+            },
+          ]}
+        />
+      )}
+
+      {/* 5. МОДАЛКА ПРОСМОТРА КАРТОЧКИ ПОЛЬЗОВАТЕЛЯ (UnifiedViewModal) */}
+      {viewingUserDetails && (
+        <UnifiedViewModal
+          isOpen={!!viewingUserDetails}
+          onClose={() => setViewingUserDetails(null)}
+          isLoading={loadingUserDetails}
+          title={viewingUserDetails.full_name || 'Профиль пользователя'}
+          subtitle={`Email: ${viewingUserDetails.email || '—'}`}
+          badge={
+            <Badge
+              className={
+                viewingUserDetails.is_super_admin
+                  ? 'bg-purple-500/20 text-purple-300 border-purple-500/30'
+                  : viewingUserDetails.role === 'owner'
+                  ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+                  : 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+              }
+            >
+              {viewingUserDetails.is_super_admin
+                ? 'Суперадмин'
+                : viewingUserDetails.role === 'owner'
+                ? 'Владелец'
+                : 'Сотрудник'}
+            </Badge>
+          }
+          sections={[
+            {
+              title: 'Профиль пользователя',
+              fields: [
+                { label: 'ФИО', value: viewingUserDetails.full_name, icon: Users },
+                { label: 'Email', value: viewingUserDetails.email },
+                { label: 'Телефон', value: viewingUserDetails.phone || '—' },
+                { label: 'Роль в системе', value: viewingUserDetails.role || 'employee' },
+                { label: 'Статус доступа', value: viewingUserDetails.is_active !== false ? '✅ Активен' : '🚫 Заблокирован' },
+                { label: 'Суперадминистратор', value: viewingUserDetails.is_super_admin ? 'Да' : 'Нет' },
+              ],
+            },
+            ...(viewingUserDetails.companies
+              ? [
+                  {
+                    title: 'Привязанная организация',
+                    fields: [
+                      { label: 'Наименование', value: viewingUserDetails.companies.name, icon: Building2 },
+                      { label: 'ИНН КР', value: viewingUserDetails.companies.inn },
+                      { label: 'Статус', value: viewingUserDetails.companies.status },
+                    ],
+                  },
+                ]
+              : []),
+            {
+              title: 'Уведомления Telegram',
+              fields: [
+                { label: 'ID чата Telegram', value: viewingUserDetails.telegram_chat_id || 'Не привязан' },
+              ],
+            },
+          ]}
+          actions={[
+            {
+              label: '✏️ Изменить роль',
+              onClick: () => {
+                const u = viewingUserDetails;
+                setViewingUserDetails(null);
+                setEditingUser(u);
+                setUserName(u.full_name || '');
+                setUserEmail(u.email || '');
+                setUserRole(u.role || 'employee');
+                setUserIsSuperAdmin(u.is_super_admin || false);
+              },
+            },
+            {
+              label: '🔑 Сбросить пароль',
+              onClick: () => {
+                const u = viewingUserDetails;
+                setViewingUserDetails(null);
+                setResettingUser(u);
+              },
+            },
+            {
+              label: '🗑️ Удалить пользователя',
+              variant: 'destructive',
+              onClick: () => {
+                const u = viewingUserDetails;
+                setViewingUserDetails(null);
+                handleDeleteUser(u.id, u.full_name || u.email);
+              },
+            },
+          ]}
+        />
+      )}
+    </UnifiedWorkspaceLayout>
   );
 }
