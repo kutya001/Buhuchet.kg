@@ -1,4 +1,4 @@
-import { S3Client, GetObjectCommand, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, GetObjectCommand, PutObjectCommand, DeleteObjectCommand, DeleteObjectsCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 const accountId = process.env.R2_ACCOUNT_ID || '';
@@ -113,3 +113,43 @@ export async function deleteR2Object(fileKey: string): Promise<boolean> {
     return false;
   }
 }
+
+/**
+ * Пакетное удаление до 1000 файлов из Cloudflare R2 за один запрос
+ */
+export async function deleteR2ObjectsBatch(fileKeys: string[]): Promise<{ deletedCount: number; errors: string[] }> {
+  try {
+    const validKeys = fileKeys.filter(Boolean);
+    if (validKeys.length === 0) return { deletedCount: 0, errors: [] };
+
+    // S3 DeleteObjectsCommand принимает до 1000 объектов за запрос
+    const chunkSize = 1000;
+    let totalDeleted = 0;
+    const errors: string[] = [];
+
+    for (let i = 0; i < validKeys.length; i += chunkSize) {
+      const chunk = validKeys.slice(i, i + chunkSize);
+      const command = new DeleteObjectsCommand({
+        Bucket: r2BucketName,
+        Delete: {
+          Objects: chunk.map((k) => ({ Key: k })),
+          Quiet: true,
+        },
+      });
+
+      const res = await r2Client.send(command);
+      if (res.Errors && res.Errors.length > 0) {
+        res.Errors.forEach((e) => errors.push(`${e.Key}: ${e.Message}`));
+        totalDeleted += chunk.length - res.Errors.length;
+      } else {
+        totalDeleted += chunk.length;
+      }
+    }
+
+    return { deletedCount: totalDeleted, errors };
+  } catch (err) {
+    console.error('Ошибка пакетного удаления объектов из R2:', err);
+    return { deletedCount: 0, errors: [err instanceof Error ? err.message : 'Сбой пакетного удаления'] };
+  }
+}
+

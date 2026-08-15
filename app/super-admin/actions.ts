@@ -1,32 +1,25 @@
 'use server';
 
 import { createClient, createAdminClient } from '@/lib/supabase/server';
+import { requireSuperAdminSession } from '@/lib/auth/server-context';
+import { deleteR2ObjectsBatch } from '@/lib/r2';
 import type { ActionResponse, Company, CompanyStatus, Document, FileCategory } from '@/types/database.types';
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, unstable_cache } from 'next/cache';
 import { z } from 'zod';
 import { createSafeAction } from '@/lib/auth/safe-action';
 import { sendCompanyVerificationTelegramNotification } from '@/lib/telegram/notifier';
 import { formatBytes } from '@/lib/utils';
 
 /**
- * Проверка прав суперадмина
+ * Проверка прав суперадмина через централизованный серверный контекст
  */
 async function checkSuperAdmin() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) return false;
-
-  const adminSupabase = await createAdminClient();
-  const { data: profile } = await adminSupabase
-    .from('users')
-    .select('is_super_admin')
-    .eq('id', user.id)
-    .single();
-
-  return profile?.is_super_admin === true;
+  try {
+    await requireSuperAdminSession();
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // -------------------------------------------------------------
@@ -177,27 +170,23 @@ export async function createCompanyAdminAction(data: {
 
 export async function approveCompanyAction(companyId: string): Promise<ActionResponse> {
   try {
-    if (!(await checkSuperAdmin())) {
-      return { success: false, error: 'Доступ запрещен' };
-    }
-
+    const adminSession = await requireSuperAdminSession();
     const adminSupabase = await createAdminClient();
+
     const { data: comp } = await adminSupabase
       .from('companies')
       .select('name')
       .eq('id', companyId)
       .single();
 
-    const { error } = await adminSupabase
-      .from('companies')
-      .update({
-        status: 'active',
-        moderation_comment: null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', companyId);
+    const { error: rpcErr } = await adminSupabase.rpc('admin_approve_company_atomic', {
+      p_company_id: companyId,
+      p_admin_id: adminSession.userId,
+    });
 
-    if (error) return { success: false, error: error.message };
+    if (rpcErr) {
+      return { success: false, error: `Сбой активации компании: ${rpcErr.message}` };
+    }
 
     sendCompanyVerificationTelegramNotification({
       companyId,
@@ -205,9 +194,11 @@ export async function approveCompanyAction(companyId: string): Promise<ActionRes
       status: 'active',
     }).catch((err) => console.error('[Telegram Notification Error]:', err));
 
+    revalidatePath('/super-admin');
+    revalidatePath('/super-admin/companies');
     return { success: true };
   } catch (err: unknown) {
-    return { success: false, error: 'Сбой одобрения компании' };
+    return { success: false, error: err instanceof Error ? err.message : 'Сбой одобрения компании' };
   }
 }
 
@@ -1080,5 +1071,234 @@ export const getInspectorStatsAdminAction = createSafeAction(
     };
   }
 );
+
+/**
+ * Получение сводной аналитики платформы суперадмина с кэшированием (TTL 60s)
+ */
+export async function getPlatformSummaryStatsAction(): Promise<ActionResponse<any>> {
+  try {
+    await requireSuperAdminSession();
+    const adminSupabase = await createAdminClient();
+
+    const { data, error } = await adminSupabase.rpc('get_platform_summary_stats');
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Сбой получения статистики платформы' };
+  }
+}
+
+/**
+ * Обработка очереди физической очистки файлов R2
+ */
+export async function processStorageCleanupQueueAction(batchSize = 200): Promise<ActionResponse<{ processed: number; errors: string[] }>> {
+  try {
+    const adminSession = await requireSuperAdminSession();
+    const adminSupabase = await createAdminClient();
+
+    const { data: queueItems, error } = await adminSupabase
+      .from('pending_file_deletions')
+      .select('id, storage_key, attempts')
+      .eq('status', 'pending')
+      .order('created_at', { ascending: true })
+      .limit(batchSize);
+
+    if (error || !queueItems || queueItems.length === 0) {
+      return { success: true, data: { processed: 0, errors: [] } };
+    }
+
+    const keys = queueItems.map((item) => item.storage_key).filter(Boolean);
+    const { deletedCount, errors } = await deleteR2ObjectsBatch(keys);
+
+    const ids = queueItems.map((item) => item.id);
+    await adminSupabase
+      .from('pending_file_deletions')
+      .update({
+        status: errors.length > 0 ? 'failed' : 'processed',
+        processed_at: new Date().toISOString(),
+        attempts: (queueItems[0].attempts || 0) + 1,
+        error: errors.length > 0 ? errors.join('; ') : null,
+      })
+      .in('id', ids);
+
+    // Запись аудита
+    await adminSupabase.from('admin_audit_logs').insert({
+      admin_id: adminSession.userId,
+      action: 'storage_cleanup_processed',
+      target_type: 'files',
+      details: { processed: deletedCount, totalInBatch: queueItems.length, errors },
+    });
+
+    revalidatePath('/super-admin/files');
+    return { success: true, data: { processed: deletedCount, errors } };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Сбой очистки хранилища R2' };
+  }
+}
+
+/**
+ * Серверная пагинация организаций для суперадмина
+ */
+export async function getPaginatedCompaniesAdminAction(params: {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  status?: string;
+}): Promise<ActionResponse<{ companies: Company[]; total: number; page: number; pageSize: number }>> {
+  try {
+    await requireSuperAdminSession();
+    const adminSupabase = await createAdminClient();
+
+    const page = Math.max(1, params.page || 1);
+    const pageSize = Math.min(100, Math.max(1, params.pageSize || 25));
+    const offset = (page - 1) * pageSize;
+
+    let query = adminSupabase
+      .from('companies')
+      .select('*', { count: 'exact' });
+
+    if (params.status && params.status !== 'all') {
+      query = query.eq('status', params.status);
+    }
+
+    if (params.search && params.search.trim()) {
+      const s = params.search.trim();
+      query = query.or(`name.ilike.%${s}%,inn.ilike.%${s}%,director_name.ilike.%${s}%,email.ilike.%${s}%`);
+    }
+
+    const { data, count, error } = await query
+      .order('created_at', { ascending: false })
+      .range(offset, offset + pageSize - 1);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return {
+      success: true,
+      data: {
+        companies: (data || []) as Company[],
+        total: count || 0,
+        page,
+        pageSize,
+      },
+    };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Сбой выборки организаций' };
+  }
+}
+
+/**
+ * Серверная пагинация пользователей для суперадмина
+ */
+export async function getPaginatedUsersAdminAction(params: {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  role?: string;
+  companyId?: string;
+}): Promise<ActionResponse<{ users: any[]; total: number; page: number; pageSize: number }>> {
+  try {
+    await requireSuperAdminSession();
+    const adminSupabase = await createAdminClient();
+
+    const page = Math.max(1, params.page || 1);
+    const pageSize = Math.min(100, Math.max(1, params.pageSize || 25));
+    const offset = (page - 1) * pageSize;
+
+    let query = adminSupabase
+      .from('users')
+      .select('*, company:companies(id, name, inn)', { count: 'exact' });
+
+    if (params.role && params.role !== 'all') {
+      query = query.eq('role', params.role);
+    }
+
+    if (params.companyId) {
+      query = query.eq('company_id', params.companyId);
+    }
+
+    if (params.search && params.search.trim()) {
+      const s = params.search.trim();
+      query = query.or(`full_name.ilike.%${s}%,email.ilike.%${s}%,phone.ilike.%${s}%`);
+    }
+
+    const { data, count, error } = await query
+      .order('created_at', { ascending: false })
+      .range(offset, offset + pageSize - 1);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return {
+      success: true,
+      data: {
+        users: data || [],
+        total: count || 0,
+        page,
+        pageSize,
+      },
+    };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Сбой выборки пользователей' };
+  }
+}
+
+/**
+ * Серверная пагинация файлов для суперадмина
+ */
+export async function getPaginatedFilesAdminAction(params: {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  companyId?: string;
+}): Promise<ActionResponse<{ files: any[]; total: number; page: number; pageSize: number }>> {
+  try {
+    await requireSuperAdminSession();
+    const adminSupabase = await createAdminClient();
+
+    const page = Math.max(1, params.page || 1);
+    const pageSize = Math.min(100, Math.max(1, params.pageSize || 25));
+    const offset = (page - 1) * pageSize;
+
+    let query = adminSupabase
+      .from('files')
+      .select('*, company:companies(id, name, inn), file_categories(name)', { count: 'exact' });
+
+    if (params.companyId) {
+      query = query.eq('company_id', params.companyId);
+    }
+
+    if (params.search && params.search.trim()) {
+      const s = params.search.trim();
+      query = query.or(`file_name.ilike.%${s}%,description.ilike.%${s}%`);
+    }
+
+    const { data, count, error } = await query
+      .order('created_at', { ascending: false })
+      .range(offset, offset + pageSize - 1);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return {
+      success: true,
+      data: {
+        files: data || [],
+        total: count || 0,
+        page,
+        pageSize,
+      },
+    };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Сбой выборки файлов' };
+  }
+}
+
 
 

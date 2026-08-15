@@ -21,7 +21,11 @@ import {
   Image as ImageIcon,
 } from 'lucide-react';
 import { formatBytes } from '@/lib/utils';
-import { getSuperAdminFilesMonitoringAction, getSuperAdminFileDetailsAction } from '@/app/super-admin/actions';
+import {
+  getSuperAdminFilesMonitoringAction,
+  getSuperAdminFileDetailsAction,
+  processStorageCleanupQueueAction,
+} from '@/app/super-admin/actions';
 import { getPresignedDownloadUrlAction } from '@/app/dashboard/files/actions';
 import { UnifiedDataGrid, ColumnDef } from '@/components/ui/unified/UnifiedDataGrid';
 import { UnifiedViewModal } from '@/components/ui/unified/UnifiedViewModal';
@@ -31,6 +35,7 @@ import { toast } from 'sonner';
 export default function SuperAdminFilesPage() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [cleaningQueue, setCleaningQueue] = useState(false);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   // ПРОСМОТР ДЕТАЛЕЙ ДЛЯ СУПЕРАДМИНА (UnifiedViewModal)
@@ -52,6 +57,23 @@ export default function SuperAdminFilesPage() {
       setViewingAdminFileDetails(null);
     }
     setLoadingAdminFileDetails(false);
+  };
+
+  const handleCleanStorageQueue = async () => {
+    setCleaningQueue(true);
+    try {
+      const res = await processStorageCleanupQueueAction(200);
+      if (res.success) {
+        toast.success(`Очередь R2 очищена: удалено ${res.data?.processed || 0} физических объектов`);
+        loadData();
+      } else {
+        toast.error(res.error || 'Ошибка очистки очереди R2');
+      }
+    } catch (e: any) {
+      toast.error(e.message || 'Сбой выполнения очистки');
+    } finally {
+      setCleaningQueue(false);
+    }
   };
 
   const loadData = async () => {
@@ -284,9 +306,27 @@ export default function SuperAdminFilesPage() {
             <ShieldCheck className="h-5 w-5 mr-2 text-emerald-400" />
             Реестр Физических Файлов R2 (Owner Inspector)
           </h3>
-          <Badge variant="outline" className="border-slate-800 text-slate-400 font-mono text-xs">
-            Всего: {data?.files?.length || 0} файлов
-          </Badge>
+          <div className="flex items-center space-x-3">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={cleaningQueue}
+              onClick={handleCleanStorageQueue}
+              className="border-amber-500/30 text-amber-300 hover:bg-amber-500/10 text-xs h-8"
+            >
+              {cleaningQueue ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                  Очистка...
+                </>
+              ) : (
+                'Очистить очередь R2'
+              )}
+            </Button>
+            <Badge variant="outline" className="border-slate-800 text-slate-400 font-mono text-xs">
+              Всего: {data?.files?.length || 0} файлов
+            </Badge>
+          </div>
         </div>
 
         <UnifiedDataGrid<any>

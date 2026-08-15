@@ -101,3 +101,35 @@ export const getUserPermissions = cache(async () => {
   return { isFullAccess: false, permissions: roleData?.permissions || {} };
 });
 
+/**
+ * Строгая проверка прав суперадминистратора для Server Actions
+ */
+export const requireSuperAdminSession = cache(async (): Promise<{ userId: string; email: string; isSuperAdmin: true }> => {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error('401 Unauthorized: Пользователь не авторизован');
+  }
+
+  const adminSupabase = await createAdminClient();
+  const { data: profile } = await adminSupabase
+    .from('users')
+    .select('id, email, is_super_admin')
+    .eq('id', user.id)
+    .maybeSingle();
+
+  if (!profile?.is_super_admin) {
+    throw new Error('403 Forbidden: Доступ разрешен только Суперадминистратору платформы');
+  }
+
+  return {
+    userId: user.id,
+    email: user.email || profile.email,
+    isSuperAdmin: true,
+  };
+});
+
+

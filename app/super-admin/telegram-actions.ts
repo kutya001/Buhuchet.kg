@@ -1,6 +1,7 @@
 'use server';
 
 import { createClient, createAdminClient } from '@/lib/supabase/server';
+import { requireSuperAdminSession } from '@/lib/auth/server-context';
 import type { ActionResponse } from '@/types/database.types';
 import { sendTelegramMessage } from '@/lib/telegram/notifier';
 import { revalidatePath } from 'next/cache';
@@ -60,25 +61,10 @@ export interface TelegramBotHealthData {
 }
 
 /**
- * Проверка Суперадмина
+ * Проверка Суперадмина через централизованный серверный контекст
  */
 async function checkSuperAdmin() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) throw new Error('Неавторизован');
-
-  const { data: prof } = await supabase
-    .from('users')
-    .select('is_super_admin')
-    .eq('id', user.id)
-    .single();
-
-  if (!prof?.is_super_admin) {
-    throw new Error('Доступ разрешен только Суперадминистратору');
-  }
+  await requireSuperAdminSession();
 }
 
 /**
@@ -296,3 +282,93 @@ export async function disconnectUserTelegramAdminAction(connectionId: string): P
     return { success: false, error: errorMsg };
   }
 }
+
+/**
+ * Пакетная рассылка сообщений через Telegram с контролем rate-limit (до 20 msg/sec)
+ */
+export async function broadcastTelegramMessageAdminAction(params: {
+  message: string;
+  targetRole?: string;
+  companyId?: string;
+}): Promise<ActionResponse<{ totalTargeted: number; sentCount: number; failCount: number }>> {
+  try {
+    const adminSession = await requireSuperAdminSession();
+    const adminSupabase = await createAdminClient();
+
+    let query = adminSupabase
+      .from('telegram_connections')
+      .select('id, telegram_chat_id, user_id, user:users(role, full_name)');
+
+    if (params.companyId) {
+      query = query.eq('company_id', params.companyId);
+    }
+
+    const { data: connections, error } = await query;
+    if (error || !connections || connections.length === 0) {
+      return { success: false, error: 'Нет активных Telegram-привязок для рассылки' };
+    }
+
+    // Фильтрация по роли, если указана
+    const targetConns = connections.filter((c: any) => {
+      if (!params.targetRole || params.targetRole === 'all') return true;
+      const u = Array.isArray(c.user) ? c.user[0] : c.user;
+      return u?.role === params.targetRole;
+    });
+
+    if (targetConns.length === 0) {
+      return { success: false, error: 'Нет получателей, соответствующих выбранным критериям' };
+    }
+
+    let sentCount = 0;
+    let failCount = 0;
+    const batchSize = 20;
+
+    for (let i = 0; i < targetConns.length; i += batchSize) {
+      const chunk = targetConns.slice(i, i + batchSize);
+      await Promise.all(
+        chunk.map(async (c: any) => {
+          try {
+            const ok = await sendTelegramMessage(c.telegram_chat_id, params.message);
+            if (ok) {
+              sentCount++;
+            } else {
+              failCount++;
+            }
+          } catch (e) {
+            failCount++;
+          }
+        })
+      );
+
+      // Пауза 1 сек между чанками для гарантированного соблюдения лимита Telegram API
+      if (i + batchSize < targetConns.length) {
+        await new Promise((r) => setTimeout(r, 1000));
+      }
+    }
+
+    // Аудит рассылки
+    await adminSupabase.from('admin_audit_logs').insert({
+      admin_id: adminSession.userId,
+      action: 'telegram_broadcast_sent',
+      target_type: 'telegram',
+      details: {
+        totalTargeted: targetConns.length,
+        sentCount,
+        failCount,
+        messagePreview: params.message.slice(0, 100),
+      },
+    });
+
+    return {
+      success: true,
+      data: {
+        totalTargeted: targetConns.length,
+        sentCount,
+        failCount,
+      },
+    };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Сбой массовой рассылки' };
+  }
+}
+
