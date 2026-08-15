@@ -69,7 +69,7 @@ Buhuchet.kg — это облачная fullstack B2B-платформа и Tele
 1. Проверить компиляцию типов TypeScript: `npx tsc --noEmit`.
 2. Проверить производственную сборку Next.js: `npm run build`.
 3. Обновить `docs/ARCHITECTURE.md`, `docs/DATABASE.md` и `docs/API.md` при добавлении или изменении модулей, таблиц или серверных контрактов.
-4. Сохранить план разработки и walkthrough отчет в `.ai_artifacts/plans/` по формату `implementation_plan_yyyy-mm-dd-HH-MM` и `.ai_artifacts/walkthroughs/`по формату `walkthrough_yyyy-mm-dd-HH-MM`.
+4. Сохранить план разработки и walkthrough отчет в `.ai_artifacts/plans/` по формату `implementation_plan_yyyy-mm-dd-HH-MM` и `.ai_artifacts/walkthroughs/`по формату `walkthrough_yyyy-mm-dd-HH-MM`, дата и время на момент выполнения задачи.
 
 ---
 
