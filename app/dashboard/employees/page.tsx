@@ -49,6 +49,7 @@ import {
 } from './actions';
 import type { UserProfile, CompanyRole, RolePermissions } from '@/types/database.types';
 import { MODULE_CONFIG, ModuleName, ActionName, hasPermission } from '@/lib/auth/permissions';
+import { PermissionMatrixEditor } from '@/components/company/PermissionMatrixEditor';
 
 export default function EmployeesModulePage() {
   const [activeTab, setActiveTab] = useState<'employees' | 'requests' | 'roles'>('employees');
@@ -103,7 +104,6 @@ export default function EmployeesModulePage() {
   const [newRoleName, setNewRoleName] = useState('');
   const [newRoleDesc, setNewRoleDesc] = useState('');
   const [editingRole, setEditingRole] = useState<CompanyRole | null>(null);
-  const [rolePermissions, setRolePermissions] = useState<RolePermissions>({});
 
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const supabase = createClient();
@@ -263,46 +263,6 @@ export default function EmployeesModulePage() {
   // Открытие редактора матрицы доступов роли
   const handleOpenRoleMatrix = (role: CompanyRole) => {
     setEditingRole(role);
-    setRolePermissions(role.permissions || {});
-  };
-
-  // Переключение разрешения в матрице
-  const togglePermission = (moduleId: string, action: string) => {
-    setRolePermissions((prev) => {
-      const modPerms = (prev as any)[moduleId] || {};
-      const currentVal = !!modPerms[action];
-      return {
-        ...prev,
-        [moduleId]: {
-          ...modPerms,
-          [action]: !currentVal,
-        },
-      };
-    });
-  };
-
-  // Сохранение матрицы прав роли
-  const handleSaveRoleMatrix = async () => {
-    if (!editingRole) return;
-    setMsg(null);
-
-    const roleId = editingRole.id;
-    const perms = { ...rolePermissions };
-
-    setRoles((prev) => prev.map((r) => (r.id === roleId ? { ...r, permissions: perms } : r)));
-    setMsg({ type: 'success', text: `Матрица доступов для роли "${editingRole.name}" сохранена!` });
-    setEditingRole(null);
-
-    startTransition(async () => {
-      const res = await updateCompanyRoleAction(roleId, {
-        permissions: perms,
-      });
-
-      if (!res.success) {
-        setMsg({ type: 'error', text: res.error || 'Ошибка сохранения матрицы прав' });
-        await loadData();
-      }
-    });
   };
 
   if (loading) {
@@ -821,64 +781,33 @@ export default function EmployeesModulePage() {
         </div>
       )}
 
-      {/* РЕДАКТОР МАТРИЦЫ ПРАВ РОЛИ */}
-      {editingRole && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-md overflow-y-auto">
-          <Card className="max-w-3xl w-full bg-card border-border rounded-2xl p-6 space-y-6 shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-border pb-4">
-              <div>
-                <h3 className="text-lg font-bold text-foreground">Матрица доступов роли "{editingRole.name}"</h3>
-                <p className="text-xs text-muted-foreground">Настройка видимости модулей и разрешенных экшенов</p>
-              </div>
-              <Button size="icon" variant="ghost" onClick={() => setEditingRole(null)}>
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
+      {/* РЕДАКТОР МАТРИЦЫ ПРАВ РОЛИ (PermissionMatrixEditor) */}
+      <PermissionMatrixEditor
+        role={editingRole}
+        isOpen={!!editingRole}
+        onClose={() => setEditingRole(null)}
+        isSaving={isPending}
+        onSave={async (newPermissions) => {
+          if (!editingRole) return;
+          const roleId = editingRole.id;
+          const roleName = editingRole.name;
 
-            <div className="space-y-6">
-              {Object.entries(MODULE_CONFIG).map(([modKey, mod]) => (
-                <div key={modKey} className="space-y-2 border-b border-border/60 pb-4">
-                  <h4 className="font-bold text-sm text-foreground">{mod.label}</h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {mod.actions.map((act) => {
-                      const modPerms = (rolePermissions as any)[modKey] || {};
-                      const isChecked = !!modPerms[act.key];
+          setRoles((prev) => prev.map((r) => (r.id === roleId ? { ...r, permissions: newPermissions } : r)));
+          setMsg({ type: 'success', text: `Матрица доступов для роли "${roleName}" успешно обновлена!` });
+          setEditingRole(null);
 
-                      return (
-                        <label
-                          key={act.key}
-                          className={`flex items-center space-x-2.5 p-2 rounded-xl border text-xs cursor-pointer select-none transition-all ${
-                            isChecked
-                              ? 'bg-purple-600/10 border-purple-500/40 text-purple-300 font-bold'
-                              : 'bg-muted/20 border-border/60 text-muted-foreground'
-                          }`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isChecked}
-                            onChange={() => togglePermission(modKey, act.key)}
-                            className="rounded border-border text-purple-600 focus:ring-purple-500"
-                          />
-                          <span>{act.label}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
+          startTransition(async () => {
+            const res = await updateCompanyRoleAction(roleId, {
+              permissions: newPermissions,
+            });
 
-            <div className="pt-2 flex justify-end gap-2 border-t border-border">
-              <Button variant="ghost" onClick={() => setEditingRole(null)} className="h-10 text-xs">
-                Отмена
-              </Button>
-              <Button onClick={handleSaveRoleMatrix} className="h-10 text-xs font-bold bg-purple-600 text-white rounded-xl">
-                Сохранить матрицу прав
-              </Button>
-            </div>
-          </Card>
-        </div>
-      )}
+            if (!res.success) {
+              setMsg({ type: 'error', text: res.error || 'Ошибка сохранения матрицы прав' });
+              await loadData();
+            }
+          });
+        }}
+      />
 
       {/* УНИВЕРСАЛЬНАЯ ФОРМА ПРОСМОТРА КАРТОЧКИ СОТРУДНИКА (UnifiedViewModal) */}
       {viewingEmpDetails && (
