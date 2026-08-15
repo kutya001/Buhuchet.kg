@@ -31,17 +31,47 @@ export interface CompanyProfileData {
   canEdit: boolean;
 }
 
+export interface ClosedPeriod {
+  id?: string;
+  company_id: string;
+  year: number;
+  month: number; // 1-12
+  monthName?: string;
+  lock_documents: boolean;
+  lock_files: boolean;
+  reason?: string | null;
+  comment?: string | null;
+  closed_by?: string | null;
+  closed_by_user?: string | null;
+  created_at?: string;
+  updated_at?: string;
+  status?: 'open' | 'partial' | 'closed';
+}
+
+export interface SaveClosedPeriodInput {
+  companyId?: string;
+  periodId?: string;
+  year: number;
+  month: number;
+  lockDocuments: boolean;
+  lockFiles: boolean;
+  reason?: string;
+}
+
 export interface ClosedPeriodItem {
   id?: string;
   year: number;
   month: number; // 1-12
   monthName: string;
-  status: 'open' | 'closed';
+  lock_documents?: boolean;
+  lock_files?: boolean;
+  status: 'open' | 'partial' | 'closed';
   closed_at?: string | null;
   closed_by_user?: string | null;
   opened_at?: string | null;
   opened_by_user?: string | null;
   comment?: string | null;
+  reason?: string | null;
 }
 
 export interface YearClosedPeriodsSummary {

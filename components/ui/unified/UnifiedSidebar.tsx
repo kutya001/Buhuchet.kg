@@ -50,7 +50,7 @@ const USER_NAV_ITEMS: SidebarNavItem[] = [
     icon: LayoutDashboard,
   },
   {
-    title: 'Реестр документов',
+    title: 'Документооборот',
     href: '/dashboard/documents',
     icon: FileText,
   },

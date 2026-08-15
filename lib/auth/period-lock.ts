@@ -4,9 +4,14 @@ import { createAdminClient } from '@/lib/supabase/server';
  * Проверка блокировки отчетного периода на стороне сервера (Server-side Period Lock Guard)
  * @param companyId UUID компании
  * @param date Дата документа или дата совершения операции (Date / string "YYYY-MM-DD")
+ * @param module Модуль для проверки ('documents' | 'files')
  * @returns boolean true - период ЗАКРЫТ (операция запрещена), false - период открыт
  */
-export async function isPeriodClosed(companyId: string, date: Date | string): Promise<boolean> {
+export async function isPeriodClosed(
+  companyId: string,
+  date: Date | string,
+  module: 'documents' | 'files' = 'documents'
+): Promise<boolean> {
   try {
     if (!companyId || !date) return false;
 
@@ -21,14 +26,19 @@ export async function isPeriodClosed(companyId: string, date: Date | string): Pr
     // 1. Проверяем точечную запись в Журнале Закрытых Периодов (company_closed_periods)
     const { data: periodRecord } = await adminSupabase
       .from('company_closed_periods')
-      .select('status')
+      .select('status, lock_documents, lock_files')
       .eq('company_id', companyId)
       .eq('year', year)
       .eq('month', month)
       .maybeSingle();
 
-    if (periodRecord && periodRecord.status === 'closed') {
-      return true;
+    if (periodRecord) {
+      if (module === 'documents' && (periodRecord.lock_documents || periodRecord.status === 'closed')) {
+        return true;
+      }
+      if (module === 'files' && (periodRecord.lock_files || periodRecord.status === 'closed')) {
+        return true;
+      }
     }
 
     // 2. Проверяем также глобальную отсечку closed_period_until из карточки компании
@@ -49,7 +59,6 @@ export async function isPeriodClosed(companyId: string, date: Date | string): Pr
     return false;
   } catch (err) {
     console.error('[Period Lock Guard Error]:', err);
-    // При сбое сервера в целях финансовой безопасности возвращаем false (или разрешаем), но логируем
     return false;
   }
 }

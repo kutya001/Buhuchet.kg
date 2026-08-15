@@ -284,7 +284,7 @@ export default function B2BDocumentsRegistryPage() {
 
   return (
     <UnifiedWorkspaceLayout
-      title="Реестр документооборота"
+      title="Документооборот"
       description="Товарные накладные, акты выполненных работ и счета-фактуры КР"
       icon={FileText}
       tabs={[

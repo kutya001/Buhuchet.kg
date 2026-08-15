@@ -10,7 +10,7 @@ export function UnifiedBottomNav() {
 
   const navItems = [
     { label: 'Главная', href: '/dashboard', icon: LayoutDashboard },
-    { label: 'Документы', href: '/dashboard/documents', icon: FileText },
+    { label: 'Документооборот', href: '/dashboard/documents', icon: FileText },
     { label: 'Диск', href: '/dashboard/files', icon: HardDrive },
     { label: 'Партнеры', href: '/dashboard/counterparties', icon: Building2 },
     { label: 'Профиль', href: '/dashboard/profile', icon: User },

@@ -50,7 +50,7 @@ function hasPermission(profile, moduleName, actionName) {
 }
 
 // Проверка блокировки отчетного периода
-async function isPeriodClosed(companyId, docDate) {
+async function isPeriodClosed(companyId, docDate, module = 'documents') {
   if (!docDate || !companyId) return false;
   const d = new Date(docDate);
   if (isNaN(d.getTime())) return false;
@@ -60,13 +60,16 @@ async function isPeriodClosed(companyId, docDate) {
 
   const { data } = await supabase
     .from('company_closed_periods')
-    .select('id, status')
+    .select('id, status, lock_documents, lock_files')
     .eq('company_id', companyId)
     .eq('year', year)
     .eq('month', month)
     .maybeSingle();
 
-  return data?.status === 'closed';
+  if (!data) return false;
+  if (module === 'documents') return !!(data.lock_documents || data.status === 'closed');
+  if (module === 'files') return !!(data.lock_files || data.status === 'closed');
+  return data.status === 'closed';
 }
 
 async function runRbacTests() {
@@ -254,6 +257,8 @@ async function runRbacTests() {
           company_id: testCompId,
           year: 2026,
           month: 5,
+          lock_documents: true,
+          lock_files: true,
           status: 'closed',
           closed_by: userChiefId,
           updated_at: new Date().toISOString(),

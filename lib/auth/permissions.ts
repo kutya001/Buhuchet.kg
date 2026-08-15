@@ -90,7 +90,7 @@ export interface PermissionGroupMeta {
 export const SYSTEM_PERMISSION_CATALOG: PermissionGroupMeta[] = [
   {
     id: 'documents',
-    title: 'Документы и Первичка',
+    title: 'Документооборот',
     iconName: 'FileText',
     description: 'Электронный документооборот: создание, согласование, подписание и экспорт первичных бухгалтерских документов.',
     permissions: [
@@ -98,7 +98,7 @@ export const SYSTEM_PERMISSION_CATALOG: PermissionGroupMeta[] = [
         key: 'documents.view',
         module: 'documents',
         action: 'view',
-        label: 'Просмотр реестра документов',
+        label: 'Просмотр документооборота',
         uiTarget: 'Страница /dashboard/documents',
         shortDesc: 'Доступ к списку первички и просмотру деталей',
         detailedDesc: 'Позволяет просматривать общий реестр первичных документов (накладные, акты, счета-фактуры), фильтровать по статусам и открывать карточки документов.',

@@ -519,18 +519,26 @@ CREATE INDEX idx_document_logs_doc ON public.document_logs(document_id);
 |---|---|---|---|---|
 | `id` | `UUID` | `PRIMARY KEY`, `gen_random_uuid()` | Идентификатор записи закрытия | — |
 | `company_id` | `UUID` | `NOT NULL` | Организация | `companies.id` |
-| `year` | `INTEGER` | `NOT NULL` | Отчетный год (напр. 2026) | — |
-| `month` | `INTEGER` | `NOT NULL` | Отчетный месяц (1-12) | — |
-| `status` | `VARCHAR(20)` | `DEFAULT 'closed'` | Статус периода (`closed`, `open`) | — |
+| `year` | `INTEGER` | `NOT NULL`, `BETWEEN 2000 AND 2100` | Отчетный год (напр. 2026) | — |
+| `month` | `INTEGER` | `NOT NULL`, `BETWEEN 1 AND 12` | Отчетный месяц (1-12) | — |
+| `lock_documents` | `BOOLEAN` | `NOT NULL DEFAULT TRUE` | Блокировка первички по `doc_date` | — |
+| `lock_files` | `BOOLEAN` | `NOT NULL DEFAULT TRUE` | Блокировка файлов по `created_at` | — |
+| `status` | `VARCHAR(20)` | `DEFAULT 'closed'` | Статус периода (`closed`, `partial`, `open`) | — |
+| `reason` | `TEXT` | `NULL` | Причина / комментарий закрытия | — |
+| `closed_by` | `UUID` | `NULL` | Пользователь, установивший замок | `auth.users(id)` |
 | `closed_at` | `TIMESTAMPTZ` | `DEFAULT NOW()` | Дата фиксации закрытия | — |
 
 ```sql
 CREATE TABLE public.company_closed_periods (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   company_id UUID NOT NULL REFERENCES public.companies(id) ON DELETE CASCADE,
-  year INTEGER NOT NULL,
-  month INTEGER NOT NULL,
+  year INTEGER NOT NULL CHECK (year BETWEEN 2000 AND 2100),
+  month INTEGER NOT NULL CHECK (month BETWEEN 1 AND 12),
+  lock_documents BOOLEAN NOT NULL DEFAULT TRUE,
+  lock_files BOOLEAN NOT NULL DEFAULT TRUE,
   status VARCHAR(20) DEFAULT 'closed',
+  reason TEXT,
+  closed_by UUID REFERENCES auth.users(id),
   closed_at TIMESTAMPTZ DEFAULT NOW(),
   CONSTRAINT unique_company_period UNIQUE(company_id, year, month)
 );
@@ -962,3 +970,4 @@ $$;
 | `20260815120000_fix_join_requests_and_profile_rls.sql` | 15.08.2026 12:00 | Расширение RLS `companies` (поиск) и `users` (просмотр соискателей владельцами компаний) |
 | `20260816000000_performance_core_fix.sql` | 16.08.2026 00:00 | Оптимизация RLS политик без correlated subqueries, составные B-Tree индексы, STABLE процедуры |
 | `20260817000000_rbac_hardening_and_closed_periods.sql` | 17.08.2026 00:00 | Харденинг RBAC, защита роли Owner триггером, права на закрытые периоды и экспорт |
+| `20260818000000_refactor_closed_periods_schema.sql` | 18.08.2026 00:00 | Рефакторинг закрытых периодов: `lock_documents`, `lock_files`, триггер по модулям |

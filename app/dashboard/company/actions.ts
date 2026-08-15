@@ -2,7 +2,7 @@
 
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import type { ActionResponse, Company } from '@/types/database.types';
-import type { CompanyProfileStats, ClosedPeriodItem, YearClosedPeriodsSummary } from '@/types/company.types';
+import type { CompanyProfileStats, ClosedPeriod, ClosedPeriodItem, YearClosedPeriodsSummary } from '@/types/company.types';
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { validateKyrgyzINN } from '@/lib/validators/inn';
 import { hasPermission, requirePermission } from '@/lib/auth/permissions';
@@ -364,8 +364,16 @@ export async function getCompanyClosedPeriodsAction(
 
     for (let m = 1; m <= 12; m++) {
       const rec = recordMap.get(m);
-      const isClosed = rec ? rec.status === 'closed' : false;
-      if (isClosed) closedCount++;
+      const isDocLocked = rec ? (rec.lock_documents ?? (rec.status === 'closed')) : false;
+      const isFileLocked = rec ? (rec.lock_files ?? (rec.status === 'closed')) : false;
+      
+      let computedStatus: 'open' | 'partial' | 'closed' = 'open';
+      if (isDocLocked && isFileLocked) {
+        computedStatus = 'closed';
+        closedCount++;
+      } else if (isDocLocked || isFileLocked) {
+        computedStatus = 'partial';
+      }
 
       const closedByUser = rec?.closed_by_user
         ? rec.closed_by_user.full_name || rec.closed_by_user.email
@@ -379,12 +387,15 @@ export async function getCompanyClosedPeriodsAction(
         year: selectedYear,
         month: m,
         monthName: MONTH_NAMES_RU[m - 1],
-        status: isClosed ? 'closed' : 'open',
+        status: computedStatus,
+        lock_documents: isDocLocked,
+        lock_files: isFileLocked,
         closed_at: rec?.closed_at || null,
         closed_by_user: closedByUser,
         opened_at: rec?.opened_at || null,
         opened_by_user: openedByUser,
-        comment: rec?.comment || null,
+        comment: rec?.comment || rec?.reason || null,
+        reason: rec?.reason || rec?.comment || null,
       });
     }
 
@@ -404,13 +415,83 @@ export async function getCompanyClosedPeriodsAction(
 }
 
 /**
- * Переключение статуса закрытия периода (Открыть / Закрыть период)
+ * Получение всех записей закрытых периодов для UnifiedDataGrid
  */
-export async function toggleCompanyClosedPeriodAction(params: {
+export async function getAllClosedPeriodsAction(): Promise<ActionResponse<ClosedPeriod[]>> {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return { success: false, error: 'Пользователь не авторизован' };
+    }
+
+    const adminSupabase = await createAdminClient();
+    const { data: userProfile } = await adminSupabase
+      .from('users')
+      .select('*, company_roles(*)')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (!userProfile?.company_id) {
+      return { success: false, error: 'Пользователь не привязан к организации' };
+    }
+
+    if (!hasPermission(userProfile, 'company', 'periods_view') && !hasPermission(userProfile, 'company', 'tab_periods')) {
+      return { success: false, error: '403 Forbidden: Нет доступа к журналу закрытых периодов' };
+    }
+
+    const { data: dbRecords, error: fetchErr } = await adminSupabase
+      .from('company_closed_periods')
+      .select('*, closed_by_user:users!closed_by(full_name, email)')
+      .eq('company_id', userProfile.company_id)
+      .order('year', { ascending: false })
+      .order('month', { ascending: false });
+
+    if (fetchErr) {
+      return { success: false, error: `Ошибка загрузки периодов: ${fetchErr.message}` };
+    }
+
+    const result: ClosedPeriod[] = (dbRecords || []).map((r) => {
+      const isDoc = r.lock_documents ?? (r.status === 'closed');
+      const isFile = r.lock_files ?? (r.status === 'closed');
+      const status: 'open' | 'partial' | 'closed' = isDoc && isFile ? 'closed' : isDoc || isFile ? 'partial' : 'open';
+
+      return {
+        id: r.id,
+        company_id: r.company_id,
+        year: r.year,
+        month: r.month,
+        monthName: MONTH_NAMES_RU[r.month - 1],
+        lock_documents: isDoc,
+        lock_files: isFile,
+        status,
+        reason: r.reason || r.comment,
+        comment: r.comment || r.reason,
+        closed_by: r.closed_by,
+        closed_by_user: r.closed_by_user ? r.closed_by_user.full_name || r.closed_by_user.email : null,
+        created_at: r.created_at,
+        updated_at: r.updated_at,
+      };
+    });
+
+    return { success: true, data: result };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Сбой получения журнала закрытых периодов' };
+  }
+}
+
+/**
+ * Сохранение / Создание закрытого периода с гранулярными флагами
+ */
+export async function saveClosedPeriodAction(params: {
   year: number;
   month: number;
-  targetStatus: 'open' | 'closed';
-  comment?: string;
+  lockDocuments: boolean;
+  lockFiles: boolean;
+  reason?: string;
 }): Promise<ActionResponse> {
   try {
     const supabase = await createClient();
@@ -433,7 +514,6 @@ export async function toggleCompanyClosedPeriodAction(params: {
       return { success: false, error: 'Пользователь не привязан к организации' };
     }
 
-    // Строгая проверка прав RBAC: закрывать/открывать период могут Владелец и Главный Бухгалтер
     if (!hasPermission(userProfile, 'company', 'periods_manage')) {
       return {
         success: false,
@@ -441,39 +521,195 @@ export async function toggleCompanyClosedPeriodAction(params: {
       };
     }
 
-    if (params.targetStatus === 'open' && (!params.comment || params.comment.trim().length < 3)) {
-      return { success: false, error: 'Укажите обязательную причину разблокировки (открытия) периода' };
-    }
+    const isAllLocked = params.lockDocuments && params.lockFiles;
+    const isAnyLocked = params.lockDocuments || params.lockFiles;
+    const status = isAllLocked ? 'closed' : isAnyLocked ? 'partial' : 'open';
 
     const payload: Record<string, any> = {
       company_id: userProfile.company_id,
       year: params.year,
       month: params.month,
-      status: params.targetStatus,
+      lock_documents: params.lockDocuments,
+      lock_files: params.lockFiles,
+      status,
+      reason: params.reason ? params.reason.trim() : null,
+      comment: params.reason ? params.reason.trim() : null,
+      closed_by: user.id,
+      closed_at: isAnyLocked ? new Date().toISOString() : null,
       updated_at: new Date().toISOString(),
     };
-
-    if (params.targetStatus === 'closed') {
-      payload.closed_at = new Date().toISOString();
-      payload.closed_by = user.id;
-    } else {
-      payload.opened_at = new Date().toISOString();
-      payload.opened_by = user.id;
-      payload.comment = params.comment ? params.comment.trim() : null;
-    }
 
     const { error } = await adminSupabase
       .from('company_closed_periods')
       .upsert(payload, { onConflict: 'company_id,year,month' });
 
     if (error) {
-      return { success: false, error: `Ошибка изменения статуса периода: ${error.message}` };
+      return { success: false, error: `Ошибка сохранения периода: ${error.message}` };
     }
 
     revalidatePath('/dashboard/company');
     revalidatePath('/dashboard/documents');
+    revalidatePath('/dashboard/files');
     return { success: true };
   } catch (err: unknown) {
-    return { success: false, error: err instanceof Error ? err.message : 'Сбой переключения периода' };
+    return { success: false, error: err instanceof Error ? err.message : 'Сбой сохранения периода' };
   }
+}
+
+/**
+ * Полное открытие периода (снятие всех блокировок)
+ */
+export async function reopenFullPeriodAction(params: {
+  year: number;
+  month: number;
+  reason?: string;
+}): Promise<ActionResponse> {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return { success: false, error: 'Пользователь не авторизован' };
+    }
+
+    const adminSupabase = await createAdminClient();
+    const { data: userProfile } = await adminSupabase
+      .from('users')
+      .select('*, company_roles(*)')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (!userProfile?.company_id && !userProfile?.is_super_admin) {
+      return { success: false, error: 'Пользователь не привязан к организации' };
+    }
+
+    if (!hasPermission(userProfile, 'company', 'periods_manage')) {
+      return {
+        success: false,
+        error: '403 Forbidden: Управление закрытием периодов доступно только Руководителю или Главному Бухгалтеру',
+      };
+    }
+
+    const { error } = await adminSupabase
+      .from('company_closed_periods')
+      .delete()
+      .eq('company_id', userProfile.company_id)
+      .eq('year', params.year)
+      .eq('month', params.month);
+
+    if (error) {
+      return { success: false, error: `Ошибка открытия периода: ${error.message}` };
+    }
+
+    revalidatePath('/dashboard/company');
+    revalidatePath('/dashboard/documents');
+    revalidatePath('/dashboard/files');
+    return { success: true };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Сбой открытия периода' };
+  }
+}
+
+/**
+ * Точечное переключение блокировки конкретного модуля (Документооборот / Файлы)
+ */
+export async function toggleModuleLockAction(params: {
+  year: number;
+  month: number;
+  moduleKey: 'documents' | 'files';
+  isLocked: boolean;
+}): Promise<ActionResponse> {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return { success: false, error: 'Пользователь не авторизован' };
+    }
+
+    const adminSupabase = await createAdminClient();
+    const { data: userProfile } = await adminSupabase
+      .from('users')
+      .select('*, company_roles(*)')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (!userProfile?.company_id && !userProfile?.is_super_admin) {
+      return { success: false, error: 'Пользователь не привязан к организации' };
+    }
+
+    if (!hasPermission(userProfile, 'company', 'periods_manage')) {
+      return {
+        success: false,
+        error: '403 Forbidden: Управление закрытием периодов доступно только Руководителю или Главному Бухгалтеру',
+      };
+    }
+
+    // Получаем текущую запись периода
+    const { data: existing } = await adminSupabase
+      .from('company_closed_periods')
+      .select('*')
+      .eq('company_id', userProfile.company_id)
+      .eq('year', params.year)
+      .eq('month', params.month)
+      .maybeSingle();
+
+    const currentDocLock = existing ? (existing.lock_documents ?? (existing.status === 'closed')) : false;
+    const currentFileLock = existing ? (existing.lock_files ?? (existing.status === 'closed')) : false;
+
+    const newDocLock = params.moduleKey === 'documents' ? params.isLocked : currentDocLock;
+    const newFileLock = params.moduleKey === 'files' ? params.isLocked : currentFileLock;
+
+    const status = newDocLock && newFileLock ? 'closed' : newDocLock || newFileLock ? 'partial' : 'open';
+
+    const { error } = await adminSupabase
+      .from('company_closed_periods')
+      .upsert(
+        {
+          company_id: userProfile.company_id,
+          year: params.year,
+          month: params.month,
+          lock_documents: newDocLock,
+          lock_files: newFileLock,
+          status,
+          closed_by: user.id,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'company_id,year,month' }
+      );
+
+    if (error) {
+      return { success: false, error: `Ошибка переключения блокировки: ${error.message}` };
+    }
+
+    revalidatePath('/dashboard/company');
+    revalidatePath('/dashboard/documents');
+    revalidatePath('/dashboard/files');
+    return { success: true };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Сбой переключения модуля' };
+  }
+}
+
+/**
+ * Переключение статуса закрытия периода (Совместимость со старыми вызовами)
+ */
+export async function toggleCompanyClosedPeriodAction(params: {
+  year: number;
+  month: number;
+  targetStatus: 'open' | 'closed';
+  comment?: string;
+}): Promise<ActionResponse> {
+  const isClose = params.targetStatus === 'closed';
+  return saveClosedPeriodAction({
+    year: params.year,
+    month: params.month,
+    lockDocuments: isClose,
+    lockFiles: isClose,
+    reason: params.comment,
+  });
 }

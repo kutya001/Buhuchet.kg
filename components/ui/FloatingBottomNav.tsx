@@ -74,7 +74,7 @@ export function FloatingBottomNav({ userProfile }: FloatingBottomNavProps) {
         </div>
       )}
 
-      {/* 3. СПРАВА: Документы (Только если есть право view) */}
+      {/* 3. СПРАВА: Документооборот (Только если есть право view) */}
       {canViewDocs && (
         <Link
           href="/dashboard/documents"
@@ -84,7 +84,7 @@ export function FloatingBottomNav({ userProfile }: FloatingBottomNavProps) {
           }`}
         >
           <FileText className="h-5 w-5" />
-          <span className="text-[10px] font-medium tracking-tight">Документы</span>
+          <span className="text-[10px] font-medium tracking-tight">Документооборот</span>
         </Link>
       )}
     </nav>
