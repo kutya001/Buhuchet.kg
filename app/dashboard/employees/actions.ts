@@ -93,12 +93,17 @@ export async function getPendingRequestsAction(
 ): Promise<ActionResponse<any[]>> {
   try {
     const ctx = await getUserContext();
-    if (!ctx || !ctx.companyId) {
-      return { success: false, error: 'Пользователь не привязан к организации' };
+    const targetCompId = companyId || ctx?.companyId;
+
+    if (!targetCompId) {
+      return { success: false, error: 'Идентификатор организации не определен' };
+    }
+
+    if (!ctx || (ctx.companyId && ctx.companyId !== targetCompId && !ctx.isSuperAdmin)) {
+      return { success: false, error: 'Доступ к заявкам организации запрещен' };
     }
 
     const adminSupabase = await createAdminClient();
-    const targetCompId = companyId || ctx.companyId;
 
     // 1. Загружаем активные заявки из таблицы company_join_requests
     const { data: joinReqs, error: joinErr } = await adminSupabase

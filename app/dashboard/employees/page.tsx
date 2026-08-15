@@ -26,6 +26,7 @@ import {
   UserPlus,
   Send,
   Plus,
+  RefreshCw,
 } from 'lucide-react';
 import { UnifiedDataGrid } from '@/components/ui/unified/UnifiedDataGrid';
 import { UnifiedViewModal } from '@/components/ui/unified/UnifiedViewModal';
@@ -57,7 +58,7 @@ export default function EmployeesModulePage() {
   const [currentProfile, setCurrentProfile] = useState<UserProfile | null>(null);
 
   // Реестры
-  const [pendingRequests, setPendingRequests] = useState<UserProfile[]>([]);
+  const [pendingRequests, setPendingRequests] = useState<any[]>([]);
   const [employees, setEmployees] = useState<UserProfile[]>([]);
   const [totalEmployees, setTotalEmployees] = useState(0);
   const [empPage, setEmpPage] = useState(1);
@@ -91,7 +92,7 @@ export default function EmployeesModulePage() {
   };
 
   // Принятие заявки
-  const [approvingUser, setApprovingUser] = useState<UserProfile | null>(null);
+  const [approvingUser, setApprovingUser] = useState<any | null>(null);
   const [approveRoleId, setApproveRoleId] = useState('');
   const [approvePosition, setApprovePosition] = useState('Менеджер');
 
@@ -152,7 +153,7 @@ export default function EmployeesModulePage() {
 
   useEffect(() => {
     loadData();
-  }, [empPage, empLimit]);
+  }, [empPage, empLimit, activeTab]);
 
   const handleSearchClick = async () => {
     setEmpPage(1);
@@ -361,12 +362,22 @@ export default function EmployeesModulePage() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {pendingRequests.map((req) => (
-                  <Card key={req.id} className="bg-card border-border/80 p-4 rounded-xl space-y-3 shadow-sm">
+                  <Card key={req.requestId || req.id} className="bg-card border-border/80 p-4 rounded-xl space-y-3 shadow-sm">
                     <div className="flex items-start justify-between">
                       <div>
                         <p className="text-sm font-bold text-foreground">{req.full_name}</p>
                         <p className="text-xs font-mono text-muted-foreground">{req.email}</p>
                         <p className="text-xs text-muted-foreground">{req.phone || 'Телефон не указан'}</p>
+                        <div className="mt-1.5 flex items-center gap-2 flex-wrap text-[11px]">
+                          <span className="bg-sky-500/10 text-sky-400 border border-sky-500/20 px-2 py-0.5 rounded-md font-medium">
+                            💼 {req.position || req.position_note || 'Сотрудник'}
+                          </span>
+                          {req.created_at && (
+                            <span className="text-muted-foreground">
+                              {new Date(req.created_at).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' })}
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-400">
                         Ожидает
@@ -526,9 +537,21 @@ export default function EmployeesModulePage() {
                   Пользователи, зарегистрировавшиеся в платформе и выбравшие вашу организацию
                 </p>
               </div>
-              <Badge variant="outline" className="border-amber-500/30 text-amber-400 font-mono text-xs">
-                Всего: {pendingRequests.length}
-              </Badge>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={loadData}
+                  disabled={loading}
+                  className="h-8 text-xs border-border gap-1.5"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+                  <span>Обновить</span>
+                </Button>
+                <Badge variant="outline" className="border-amber-500/30 text-amber-400 font-mono text-xs">
+                  Всего: {pendingRequests.length}
+                </Badge>
+              </div>
             </div>
 
             {pendingRequests.length === 0 ? (
@@ -540,12 +563,22 @@ export default function EmployeesModulePage() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {pendingRequests.map((req) => (
-                  <Card key={req.id} className="bg-muted/30 border-border p-4 rounded-xl space-y-3 shadow-sm">
+                  <Card key={req.requestId || req.id} className="bg-muted/30 border-border p-4 rounded-xl space-y-3 shadow-sm">
                     <div className="flex items-start justify-between">
                       <div>
                         <p className="text-sm font-bold text-foreground">{req.full_name}</p>
                         <p className="text-xs font-mono text-muted-foreground">{req.email}</p>
                         <p className="text-xs text-muted-foreground">{req.phone || 'Телефон не указан'}</p>
+                        <div className="mt-1.5 flex items-center gap-2 flex-wrap text-[11px]">
+                          <span className="bg-sky-500/10 text-sky-400 border border-sky-500/20 px-2 py-0.5 rounded-md font-medium">
+                            💼 {req.position || req.position_note || 'Сотрудник'}
+                          </span>
+                          {req.created_at && (
+                            <span className="text-muted-foreground">
+                              {new Date(req.created_at).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' })}
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-400">
                         Ожидает
