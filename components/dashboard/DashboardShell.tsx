@@ -189,15 +189,20 @@ export function DashboardShell({
               </Link>
             )}
 
+            {/* Если нет активной компании: показываем ссылку на подачу заявки */}
             {!companyName && !isSuperAdmin && (
               <Link
-                href="/onboarding"
+                href="/dashboard/pending"
                 prefetch={true}
-                className="flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-bold text-blue-400 bg-blue-500/10 border border-blue-500/30 hover:bg-blue-500/20 transition-all mt-3 min-h-[44px]"
-                title="Привязать Организацию"
+                className={`flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-bold transition-all mt-3 min-h-[44px] ${
+                  isActive('/dashboard/pending')
+                    ? 'bg-sky-600/20 text-sky-400 border border-sky-500/30'
+                    : 'text-sky-400 bg-sky-500/10 border border-sky-500/30 hover:bg-sky-500/20'
+                }`}
+                title="Заявка в компанию"
               >
                 <Building2 className="h-4 w-4 flex-shrink-0" />
-                {!isCollapsed && <span className="truncate">Привязать компанию</span>}
+                {!isCollapsed && <span className="truncate">Заявка в компанию</span>}
               </Link>
             )}
 

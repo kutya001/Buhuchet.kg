@@ -17,6 +17,35 @@ export function FloatingBottomNav({ userProfile }: FloatingBottomNavProps) {
   const isActive = (path: string) => pathname === path;
   const canCreateDoc = hasPermission(userProfile, 'documents', 'create');
   const canViewDocs = hasPermission(userProfile, 'documents', 'view');
+  const hasActiveCompany = !!userProfile?.company_id && (userProfile.role === 'owner' || !!userProfile.role_id);
+
+  if (!hasActiveCompany && !userProfile?.is_super_admin) {
+    return (
+      <nav className="md:hidden fixed bottom-3 left-3 right-3 h-16 rounded-[28px] bg-card/90 backdrop-blur-2xl border border-border/80 shadow-2xl z-40 flex items-center justify-around px-4 transition-colors duration-300 pb-[env(safe-area-inset-bottom,0px)]">
+        <Link
+          href="/dashboard/pending"
+          prefetch={true}
+          className={`flex flex-col items-center justify-center space-y-1 min-w-[56px] transition-colors ${
+            isActive('/dashboard/pending') ? 'text-sky-400 font-bold' : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <LayoutDashboard className="h-5 w-5" />
+          <span className="text-[10px] font-medium tracking-tight">Заявка</span>
+        </Link>
+
+        <Link
+          href="/dashboard/profile"
+          prefetch={true}
+          className={`flex flex-col items-center justify-center space-y-1 min-w-[56px] transition-colors ${
+            isActive('/dashboard/profile') ? 'text-primary font-bold' : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <FileText className="h-5 w-5" />
+          <span className="text-[10px] font-medium tracking-tight">Профиль</span>
+        </Link>
+      </nav>
+    );
+  }
 
   return (
     <nav className="md:hidden fixed bottom-3 left-3 right-3 h-16 rounded-[28px] bg-card/90 backdrop-blur-2xl border border-border/80 shadow-2xl z-40 flex items-center justify-around px-4 transition-colors duration-300 pb-[env(safe-area-inset-bottom,0px)]">

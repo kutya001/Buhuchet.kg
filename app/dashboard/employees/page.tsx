@@ -168,6 +168,7 @@ export default function EmployeesModulePage() {
     startTransition(async () => {
       const res = await approveEmployeeRequestAction({
         userId: approvingUser.id,
+        requestId: (approvingUser as any).requestId,
         roleId: approveRoleId,
         position: approvePosition,
       });
@@ -183,12 +184,15 @@ export default function EmployeesModulePage() {
   };
 
   // Отклонение заявки
-  const handleReject = async (userId: string) => {
+  const handleReject = async (reqItem: any) => {
     if (!confirm('Вы действительно хотите отклонить эту заявку?')) return;
     setMsg(null);
 
     startTransition(async () => {
-      const res = await rejectEmployeeRequestAction(userId);
+      const res = await rejectEmployeeRequestAction({
+        userId: reqItem.id,
+        requestId: reqItem.requestId,
+      });
       if (res.success) {
         setMsg({ type: 'success', text: 'Заявка сотрудника отклонена' });
         await loadData();
@@ -373,7 +377,7 @@ export default function EmployeesModulePage() {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => handleReject(req.id)}
+                        onClick={() => handleReject(req)}
                         disabled={isPending}
                         className="h-8 text-xs border-rose-500/40 text-rose-400 hover:bg-rose-500/10"
                       >

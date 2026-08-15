@@ -87,17 +87,39 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(url);
     }
 
-    // Если пользователь — не утвержденный сотрудник
-    if (pathname.startsWith('/dashboard') && pathname !== '/dashboard/pending') {
-      if (
-        dbUser &&
-        !dbUser.is_super_admin &&
-        dbUser.role !== 'owner' &&
-        dbUser.company_id &&
-        !dbUser.role_id
-      ) {
+    const isSuperAdmin = !!dbUser?.is_super_admin;
+    const isOwner = dbUser?.role === 'owner';
+    const hasCompany = !!dbUser?.company_id;
+    const hasApprovedRole = !!dbUser?.role_id;
+    const hasActiveCompany = isSuperAdmin || (hasCompany && (isOwner || hasApprovedRole));
+
+    // Проверка доступа к /onboarding:
+    // Только пользователи без компании, которые зарегистрировались как владельцы или создают организацию
+    if (pathname.startsWith('/onboarding')) {
+      if (hasCompany || (!isOwner && !isSuperAdmin && user.user_metadata?.account_type === 'employee')) {
+        const url = request.nextUrl.clone();
+        url.pathname = hasActiveCompany ? '/dashboard' : '/dashboard/pending';
+        return NextResponse.redirect(url);
+      }
+    }
+
+    // Если пользователь авторизован, но не имеет активной компании:
+    // Разрешаем ТОЛЬКО /dashboard/pending и /dashboard/profile
+    if (pathname.startsWith('/dashboard')) {
+      const isAllowedGuestRoute =
+        pathname === '/dashboard/pending' ||
+        pathname.startsWith('/dashboard/profile');
+
+      if (!hasActiveCompany && !isAllowedGuestRoute) {
         const url = request.nextUrl.clone();
         url.pathname = '/dashboard/pending';
+        return NextResponse.redirect(url);
+      }
+
+      // Если у пользователя уже есть активная компания, но он зашел на /dashboard/pending
+      if (hasActiveCompany && pathname === '/dashboard/pending') {
+        const url = request.nextUrl.clone();
+        url.pathname = '/dashboard';
         return NextResponse.redirect(url);
       }
     }

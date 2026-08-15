@@ -5,6 +5,7 @@ import type { ActionResponse, UserProfile, CompanyRole } from '@/types/database.
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { z } from 'zod';
 import { createSafeAction } from '@/lib/auth/safe-action';
+import { sendTelegramMessage } from '@/lib/telegram/notifier';
 
 async function getUserContext() {
   const supabase = await createClient();
@@ -83,23 +84,51 @@ export async function getCompanyEmployeesAction(
   }
 }
 
+
 /**
- * 2. Получение поступивших заявок сотрудников со статусом pending
+ * 2. Получение списка ожидающих заявок на вступление (из company_join_requests и users)
  */
 export async function getPendingRequestsAction(
-  companyId: string
-): Promise<ActionResponse<UserProfile[]>> {
+  companyId?: string
+): Promise<ActionResponse<any[]>> {
   try {
     const ctx = await getUserContext();
-    if (!ctx || (ctx.companyId !== companyId && !ctx.isSuperAdmin)) {
-      return { success: false, error: 'Доступ запрещен' };
+    if (!ctx || !ctx.companyId) {
+      return { success: false, error: 'Пользователь не привязан к организации' };
     }
 
     const adminSupabase = await createAdminClient();
+    const targetCompId = companyId || ctx.companyId;
+
+    // 1. Загружаем заявки из таблицы company_join_requests
+    const { data: joinReqs, error: joinErr } = await adminSupabase
+      .from('company_join_requests')
+      .select('id, company_id, user_id, position_note, status, created_at, users:users!user_id(id, full_name, email, phone)')
+      .eq('company_id', targetCompId)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false });
+
+    if (!joinErr && joinReqs && joinReqs.length > 0) {
+      const formatted = joinReqs.map((r: any) => {
+        const u = Array.isArray(r.users) ? r.users[0] : r.users;
+        return {
+          id: u?.id || r.user_id,
+          requestId: r.id,
+          full_name: u?.full_name || 'Кандидат',
+          email: u?.email || '—',
+          phone: u?.phone || '—',
+          position: r.position_note || 'Сотрудник',
+          created_at: r.created_at,
+        };
+      });
+      return { success: true, data: formatted };
+    }
+
+    // 2. Fallback: Загрузка пользователей со статусом ожидания в таблице users
     const { data, error } = await adminSupabase
       .from('users')
-      .select('*, company_roles(*)')
-      .eq('company_id', companyId)
+      .select('id, full_name, email, phone, position, created_at, company_roles(*)')
+      .eq('company_id', targetCompId)
       .is('role_id', null)
       .neq('role', 'owner')
       .order('created_at', { ascending: false });
@@ -108,17 +137,18 @@ export async function getPendingRequestsAction(
       return { success: false, error: `Ошибка получения заявок: ${error.message}` };
     }
 
-    return { success: true, data: (data || []) as UserProfile[] };
+    return { success: true, data: data || [] };
   } catch (err: unknown) {
     return { success: false, error: err instanceof Error ? err.message : 'Сбой получения заявок' };
   }
 }
 
 /**
- * 3. Принятие заявки сотрудника в штат
+ * 3. Принятие заявки сотрудника в штат с назначением роли RBAC
  */
 export async function approveEmployeeRequestAction(params: {
   userId: string;
+  requestId?: string;
   roleId: string;
   position: string;
 }): Promise<ActionResponse<{ message: string }>> {
@@ -129,9 +159,12 @@ export async function approveEmployeeRequestAction(params: {
     }
 
     const adminSupabase = await createAdminClient();
-    const { error } = await adminSupabase
+
+    // 1. Обновляем пользователя в users
+    const { error: userError } = await adminSupabase
       .from('users')
       .update({
+        company_id: ctx.companyId,
         role_id: params.roleId,
         position: params.position || 'Сотрудник',
         role: 'manager',
@@ -139,11 +172,71 @@ export async function approveEmployeeRequestAction(params: {
       })
       .eq('id', params.userId);
 
-    if (error) {
-      return { success: false, error: `Ошибка принятия сотрудника: ${error.message}` };
+    if (userError) {
+      return { success: false, error: `Ошибка принятия сотрудника: ${userError.message}` };
+    }
+
+    // 2. Если есть requestId, обновляем статус в company_join_requests
+    if (params.requestId) {
+      await adminSupabase
+        .from('company_join_requests')
+        .update({
+          status: 'approved',
+          reviewed_by: ctx.userId,
+          reviewed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', params.requestId);
+    } else {
+      // Иначе закрываем любые открытые заявки этого пользователя в эту компанию
+      await adminSupabase
+        .from('company_join_requests')
+        .update({
+          status: 'approved',
+          reviewed_by: ctx.userId,
+          reviewed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('user_id', params.userId)
+        .eq('company_id', ctx.companyId)
+        .eq('status', 'pending');
+    }
+
+    // 3. Отправляем Telegram-уведомление сотруднику (если у него привязан бот)
+    const { data: userConn } = await adminSupabase
+      .from('telegram_connections')
+      .select('telegram_chat_id')
+      .eq('user_id', params.userId)
+      .maybeSingle();
+
+    if (userConn?.telegram_chat_id) {
+      const { data: comp } = await adminSupabase
+        .from('companies')
+        .select('name')
+        .eq('id', ctx.companyId)
+        .single();
+
+      const { data: roleData } = await adminSupabase
+        .from('company_roles')
+        .select('name')
+        .eq('id', params.roleId)
+        .single();
+
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://buhuchet.kg';
+      const msg =
+        `🎉 **Ваша заявка на вступление одобрена!**\n\n` +
+        `🏢 **Организация:** ${comp?.name || 'Компания'}\n` +
+        `💼 **Должность:** ${params.position || 'Сотрудник'}\n` +
+        `🛡️ **Назначенная роль:** ${roleData?.name || 'Менеджер'}\n\n` +
+        `Ваша рабочая область разблокирована. Вы можете приступать к работе!\n\n` +
+        `🔗 **Войти в систему:**\n${baseUrl}/dashboard`;
+
+      await sendTelegramMessage(userConn.telegram_chat_id, msg);
     }
 
     revalidatePath('/dashboard/employees');
+    revalidatePath('/dashboard/pending');
+    revalidatePath('/dashboard');
     return { success: true, data: { message: 'Сотрудник успешно зачислен в штат компании' } };
   } catch (err: unknown) {
     return { success: false, error: err instanceof Error ? err.message : 'Сбой утверждения заявки' };
@@ -153,9 +246,11 @@ export async function approveEmployeeRequestAction(params: {
 /**
  * 4. Отклонение заявки сотрудника
  */
-export async function rejectEmployeeRequestAction(
-  userId: string
-): Promise<ActionResponse<{ message: string }>> {
+export async function rejectEmployeeRequestAction(params: {
+  userId: string;
+  requestId?: string;
+  reason?: string;
+}): Promise<ActionResponse<{ message: string }>> {
   try {
     const ctx = await getUserContext();
     if (!ctx || (ctx.role !== 'owner' && !ctx.isSuperAdmin)) {
@@ -163,7 +258,9 @@ export async function rejectEmployeeRequestAction(
     }
 
     const adminSupabase = await createAdminClient();
-    const { error } = await adminSupabase
+
+    // 1. Очищаем привязку в users, если она была установлена
+    await adminSupabase
       .from('users')
       .update({
         company_id: null,
@@ -171,13 +268,62 @@ export async function rejectEmployeeRequestAction(
         role_id: null,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', userId);
+      .eq('id', params.userId)
+      .eq('company_id', ctx.companyId)
+      .is('role_id', null);
 
-    if (error) {
-      return { success: false, error: `Ошибка отклонения заявки: ${error.message}` };
+    // 2. Обновляем статус в company_join_requests
+    if (params.requestId) {
+      await adminSupabase
+        .from('company_join_requests')
+        .update({
+          status: 'rejected',
+          reviewed_by: ctx.userId,
+          reviewed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', params.requestId);
+    } else {
+      await adminSupabase
+        .from('company_join_requests')
+        .update({
+          status: 'rejected',
+          reviewed_by: ctx.userId,
+          reviewed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('user_id', params.userId)
+        .eq('company_id', ctx.companyId)
+        .eq('status', 'pending');
+    }
+
+    // 3. Отправляем Telegram-уведомление сотруднику (если есть привязка)
+    const { data: userConn } = await adminSupabase
+      .from('telegram_connections')
+      .select('telegram_chat_id')
+      .eq('user_id', params.userId)
+      .maybeSingle();
+
+    if (userConn?.telegram_chat_id) {
+      const { data: comp } = await adminSupabase
+        .from('companies')
+        .select('name')
+        .eq('id', ctx.companyId)
+        .single();
+
+      const reasonStr = params.reason ? `\n💬 **Причина:** _${params.reason}_\n` : '';
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://buhuchet.kg';
+      const msg =
+        `❌ **Заявка на вступление отклонена**\n\n` +
+        `🏢 **Организация:** ${comp?.name || 'Компания'}${reasonStr}\n` +
+        `Вы можете найти другую организацию в панели поиска:\n\n` +
+        `🔗 **Подать новую заявку:**\n${baseUrl}/dashboard/pending`;
+
+      await sendTelegramMessage(userConn.telegram_chat_id, msg);
     }
 
     revalidatePath('/dashboard/employees');
+    revalidatePath('/dashboard/pending');
     return { success: true, data: { message: 'Заявка сотрудника отклонена' } };
   } catch (err: unknown) {
     return { success: false, error: err instanceof Error ? err.message : 'Сбой отклонения заявки' };

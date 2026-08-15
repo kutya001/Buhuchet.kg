@@ -152,6 +152,23 @@ export interface UserProfile {
   company_roles?: CompanyRole | null;
 }
 
+export type JoinRequestStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
+
+export interface CompanyJoinRequest {
+  id: string;
+  company_id: string;
+  user_id: string;
+  position_note?: string | null;
+  status: JoinRequestStatus;
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
+  created_at: string;
+  updated_at: string;
+  companies?: Company | null;
+  users?: UserProfile | null;
+  reviewer?: UserProfile | null;
+}
+
 export interface FileCategory {
   id: string;
   name: string;

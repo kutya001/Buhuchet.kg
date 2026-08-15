@@ -30,6 +30,7 @@ export async function signUpAction(formData: FormData) {
   const email = (formData.get('email') as string)?.trim();
   const password = (formData.get('password') as string)?.trim();
   const fullName = (formData.get('fullName') as string)?.trim();
+  const accountType = (formData.get('accountType') as string)?.trim() === 'employee' ? 'employee' : 'owner';
   const supabase = await createClient();
 
   const { data, error } = await supabase.auth.signUp({
@@ -38,6 +39,7 @@ export async function signUpAction(formData: FormData) {
     options: {
       data: {
         full_name: fullName,
+        account_type: accountType,
       },
     },
   });
@@ -48,17 +50,26 @@ export async function signUpAction(formData: FormData) {
 
   // Создаем запись в публичной таблице users
   if (data.user) {
+    const isOwner = accountType === 'owner';
+
     await supabase.from('users').upsert({
       id: data.user.id,
       email: data.user.email,
-      full_name: fullName || 'Новый пользователь',
-      role: 'owner',
+      full_name: fullName || (isOwner ? 'Руководитель' : 'Сотрудник'),
+      role: isOwner ? 'owner' : 'manager',
+      role_id: null,
+      company_id: null,
       is_super_admin: false,
     });
   }
 
   revalidatePath('/', 'layout');
-  redirect('/onboarding');
+
+  if (accountType === 'employee') {
+    redirect('/dashboard/pending');
+  } else {
+    redirect('/onboarding');
+  }
 }
 
 export async function signOutAction() {

@@ -128,6 +128,19 @@ const SUPER_ADMIN_NAV_ITEMS: SidebarNavItem[] = [
   },
 ];
 
+const GUEST_NAV_ITEMS: SidebarNavItem[] = [
+  {
+    title: 'Заявка в компанию',
+    href: '/dashboard/pending',
+    icon: Building2,
+  },
+  {
+    title: 'Мой профиль',
+    href: '/dashboard/profile',
+    icon: Settings,
+  },
+];
+
 export function UnifiedSidebar({
   userRole = 'manager',
   isSuperAdmin = false,
@@ -140,9 +153,12 @@ export function UnifiedSidebar({
   const [collapsed, setCollapsed] = useState(false);
 
   const isSuperAdminRoute = pathname.startsWith('/super-admin');
+  const isGuestMode = !isSuperAdmin && (!companyName || companyName === 'Организация' || companyName === 'Без организации');
 
   const filteredNavItems = isSuperAdminRoute
     ? SUPER_ADMIN_NAV_ITEMS
+    : isGuestMode
+    ? GUEST_NAV_ITEMS
     : USER_NAV_ITEMS.filter((item) => {
         if (item.superAdminOnly && !isSuperAdmin) return false;
         if (item.roles && !item.roles.includes(userRole) && !isSuperAdmin) return false;
