@@ -48,6 +48,7 @@ const INSPECTOR_TABLES = [
   { id: 'telegram_connections', label: 'Таблица: telegram_connections (Связи TG)' },
   { id: 'telegram_logs', label: 'Таблица: telegram_logs (Логи TG)' },
   { id: 'telegram_verification_codes', label: 'Таблица: telegram_verification_codes (Коды TG)' },
+  { id: 'company_join_requests', label: 'Таблица: company_join_requests (Заявки на вступление)' },
 ];
 
 export default function SuperAdminInspectorPage() {

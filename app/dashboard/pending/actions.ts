@@ -82,6 +82,30 @@ export async function submitJoinRequestAction(params: {
       return { success: false, error: 'Вы уже отправили заявку в эту компанию. Ожидайте рассмотрения.' };
     }
 
+    // Гарантируем наличие записи в public.users перед созданием заявки (защита FK)
+    let { data: userProfile } = await adminSupabase
+      .from('users')
+      .select('full_name, email, phone')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (!userProfile) {
+      await adminSupabase.from('users').upsert({
+        id: user.id,
+        email: user.email!,
+        full_name: user.user_metadata?.full_name || 'Сотрудник',
+        role: 'manager',
+        role_id: null,
+        company_id: null,
+        is_super_admin: false,
+      });
+      userProfile = {
+        full_name: user.user_metadata?.full_name || 'Сотрудник',
+        email: user.email!,
+        phone: null,
+      };
+    }
+
     // Создаем запись в company_join_requests
     const { data: newRequest, error: reqError } = await adminSupabase
       .from('company_join_requests')
@@ -98,48 +122,45 @@ export async function submitJoinRequestAction(params: {
       return { success: false, error: `Ошибка создания заявки: ${reqError?.message}` };
     }
 
-    // Получаем профиль пользователя и название компании для Telegram-оповещения
-    const { data: userProfile } = await adminSupabase
-      .from('users')
-      .select('full_name, email, phone')
-      .eq('id', user.id)
-      .single();
+    // Безопасная отправка Telegram-уведомления руководству компании
+    try {
+      const { data: targetCompany } = await adminSupabase
+        .from('companies')
+        .select('name')
+        .eq('id', params.companyId)
+        .single();
 
-    const { data: targetCompany } = await adminSupabase
-      .from('companies')
-      .select('name')
-      .eq('id', params.companyId)
-      .single();
+      const { data: companyConnections } = await adminSupabase
+        .from('telegram_connections')
+        .select('telegram_chat_id, user:users(role, is_super_admin)')
+        .eq('company_id', params.companyId);
 
-    // Отправляем Telegram-уведомление руководству компании
-    const { data: companyConnections } = await adminSupabase
-      .from('telegram_connections')
-      .select('telegram_chat_id, user:users!user_id(role, is_super_admin)')
-      .eq('company_id', params.companyId);
+      if (companyConnections && companyConnections.length > 0) {
+        const nowStr = new Date().toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' });
+        const candidateName = userProfile?.full_name || user.email || 'Новый кандидат';
+        const posStr = params.positionNote ? params.positionNote.trim() : 'Сотрудник';
+        const phoneStr = userProfile?.phone ? `\n📞 **Телефон:** ${userProfile.phone}` : '';
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://buhuchet.kg';
+        const manageLink = `${baseUrl}/dashboard/employees`;
 
-    if (companyConnections && companyConnections.length > 0) {
-      const nowStr = new Date().toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' });
-      const candidateName = userProfile?.full_name || user.email || 'Новый кандидат';
-      const posStr = params.positionNote ? params.positionNote.trim() : 'Сотрудник';
-      const phoneStr = userProfile?.phone ? `\n📞 **Телефон:** ${userProfile.phone}` : '';
-      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://buhuchet.kg';
-      const manageLink = `${baseUrl}/dashboard/employees`;
+        const text =
+          `👥 **Новая входящая заявка на вступление в штат!**\n\n` +
+          `🏢 **Организация:** ${targetCompany?.name || 'Ваша компания'}\n` +
+          `👤 **Кандидат:** ${candidateName}\n` +
+          `📧 **Email:** ${userProfile?.email || user.email}\n` +
+          `💼 **Желаемая должность:** ${posStr}${phoneStr}\n` +
+          `📅 **Дата заявки:** ${nowStr}\n\n` +
+          `🔗 **Рассмотреть и принять кандидата:**\n${manageLink}`;
 
-      const text =
-        `👥 **Новая входящая заявка на вступление в штат!**\n\n` +
-        `🏢 **Организация:** ${targetCompany?.name || 'Ваша компания'}\n` +
-        `👤 **Кандидат:** ${candidateName}\n` +
-        `📧 **Email:** ${userProfile?.email || user.email}\n` +
-        `💼 **Желаемая должность:** ${posStr}${phoneStr}\n` +
-        `📅 **Дата заявки:** ${nowStr}\n\n` +
-        `🔗 **Рассмотреть и принять кандидата:**\n${manageLink}`;
-
-      for (const conn of companyConnections) {
-        const u = Array.isArray(conn.user) ? conn.user[0] : conn.user;
-        if (u?.role === 'owner' || u?.is_super_admin) {
-          await sendTelegramMessage(conn.telegram_chat_id, text);
+        for (const conn of companyConnections) {
+          const u = Array.isArray(conn.user) ? conn.user[0] : conn.user;
+          if (u?.role === 'owner' || u?.is_super_admin) {
+            await sendTelegramMessage(conn.telegram_chat_id, text);
+          }
         }
       }
+    } catch (tgErr) {
+      console.warn('[Telegram Notification] Не удалось отправить уведомление о заявке:', tgErr);
     }
 
     revalidatePath('/dashboard/pending');

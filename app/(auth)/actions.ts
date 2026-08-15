@@ -1,6 +1,6 @@
 'use server';
 
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 
@@ -48,11 +48,12 @@ export async function signUpAction(formData: FormData) {
     redirect(`/register?error=${encodeURIComponent(error.message)}`);
   }
 
-  // Создаем запись в публичной таблице users
+  // Создаем запись в публичной таблице users с правами service_role (createAdminClient)
   if (data.user) {
     const isOwner = accountType === 'owner';
+    const adminSupabase = await createAdminClient();
 
-    await supabase.from('users').upsert({
+    await adminSupabase.from('users').upsert({
       id: data.user.id,
       email: data.user.email,
       full_name: fullName || (isOwner ? 'Руководитель' : 'Сотрудник'),

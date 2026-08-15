@@ -665,6 +665,7 @@ const ALLOWED_INSPECTOR_TABLES = [
   'telegram_connections',
   'telegram_logs',
   'telegram_verification_codes',
+  'company_join_requests',
 ];
 
 export async function inspectTableDataAdminAction(
