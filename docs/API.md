@@ -393,10 +393,19 @@ export type ActionResponse<T = any> = {
 - **Response**: `ActionResponse<{ rows: any[], columns: string[] }>`
 - **Таблицы БД**: Прямое чтение любой разрешенной таблицы PostgreSQL через `adminSupabase`.
 
-#### `updateDbRowAdminAction` / `deleteDbRowAdminAction`
+#### `updateFileSuperAdminAction`
 - **Auth**: SuperAdmin (`requireSuperAdminSession`)
-- **Response**: `ActionResponse<{ message: string }>`
-- **Бизнес-логика**: Прямая мутация / удаление строк PostgreSQL в Инспекторе БД с фиксацией в `admin_audit_logs`.
+- **Zod Schema**: `z.object({ fileId: z.string().uuid(), fileName: z.string(), categoryId: z.string().uuid().nullable().optional(), description: z.string().optional(), comment: z.string().optional() })`
+- **Response**: `ActionResponse<DocumentFile>`
+- **Бизнес-логика**: Обновление наименования, категории и примечаний файла с фиксацией в `admin_audit_logs`.
+- **Таблицы БД**: `files`, `admin_audit_logs`
+
+#### `deleteFileSuperAdminAction`
+- **Auth**: SuperAdmin (`requireSuperAdminSession`)
+- **Zod Schema**: `z.object({ fileId: z.string().uuid() })`
+- **Response**: `ActionResponse`
+- **Бизнес-логика**: Удаление связей из `file_owners`, удаление записи из `files`, постановка объекта в очередь `pending_file_deletions` и запись в `admin_audit_logs`.
+- **Таблицы БД**: `files`, `file_owners`, `pending_file_deletions`, `admin_audit_logs`
 
 ---
 

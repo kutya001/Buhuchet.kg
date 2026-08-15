@@ -19,6 +19,7 @@ import {
   Send,
   FileCheck,
   AlertCircle,
+  Filter,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { getB2BDocumentsAction, getB2BDocumentDetailsAction } from './actions';
@@ -44,12 +45,12 @@ export default function B2BDocumentsRegistryPage() {
   const [documents, setDocuments] = useState<FullB2BDocument[]>([]);
   const [currentCompanyId, setCurrentCompanyId] = useState<string>('');
   const [activeTab, setActiveTab] = useState<'all' | 'inbox' | 'outbox' | 'drafts'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'draft' | 'sent' | 'accepted' | 'processed' | 'recalled'>('all');
   const [loading, setLoading] = useState(true);
 
   const supabase = createClient();
 
   const [serverErrorMsg, setServerErrorMsg] = useState<string | null>(null);
-
   const [currentProfile, setCurrentProfile] = useState<UserProfile | null>(null);
 
   // ФОРМА ПРОСМОТРА КАРТОЧКИ (UnifiedViewModal)
@@ -109,13 +110,23 @@ export default function B2BDocumentsRegistryPage() {
     loadDocuments();
   }, []);
 
-  // Фильтрация по вкладкам и разрешённым статусам
+  // Фильтрация по вкладкам, статусам и разрешениям
   const filteredDocuments = documents.filter((doc) => {
+    // 1. Фильтр направления (вкладки)
     if (activeTab === 'inbox' && (doc.receiver_company_id !== currentCompanyId || doc.status === 'draft')) return false;
     if (activeTab === 'outbox' && doc.sender_company_id !== currentCompanyId) return false;
     if (activeTab === 'drafts' && doc.status !== 'draft') return false;
 
-    // Гранулярная проверка разрешений по статусам
+    // 2. Фильтр по статусу (кнопки-подвкладки)
+    if (statusFilter !== 'all') {
+      if (statusFilter === 'recalled') {
+        if (doc.status !== 'recalled' && doc.status !== 'cancelled') return false;
+      } else if (doc.status !== statusFilter) {
+        return false;
+      }
+    }
+
+    // 3. Гранулярная проверка разрешений по статусам
     if (currentProfile && !currentProfile.is_super_admin && currentProfile.role !== 'owner' && !currentProfile.company_roles?.is_system) {
       const canAll = hasPermission(currentProfile, 'documents', 'view_all_statuses');
       if (!canAll) {
@@ -132,7 +143,15 @@ export default function B2BDocumentsRegistryPage() {
     return true;
   });
 
-  // ОПРЕДЕЛЕНИЕ СТОЛБЦОВ ТАБЛИЦЫ С УНИФИЦИРОВАННЫМИ ВОЗМОЖНОСТЯМИ (D&D, Меню ▼, Сортировка)
+  // Документы для подсчета в текущей вкладке направления
+  const tabScopedDocs = documents.filter((doc) => {
+    if (activeTab === 'inbox' && (doc.receiver_company_id !== currentCompanyId || doc.status === 'draft')) return false;
+    if (activeTab === 'outbox' && doc.sender_company_id !== currentCompanyId) return false;
+    if (activeTab === 'drafts' && doc.status !== 'draft') return false;
+    return true;
+  });
+
+  // ОПРЕДЕЛЕНИЕ СТОЛБЦОВ ТАБЛИЦЫ
   const columns: ColumnDef<FullB2BDocument>[] = [
     {
       key: 'doc_number',
@@ -144,7 +163,7 @@ export default function B2BDocumentsRegistryPage() {
           <FileText className="h-4 w-4 text-blue-400 flex-shrink-0" />
           <div>
             <span>{doc.doc_number ? `№ ${doc.doc_number}` : 'Черновик'}</span>
-            <p className="text-[11px] text-slate-400 font-normal">{DOCUMENT_TYPES[doc.doc_type]?.label || doc.doc_type}</p>
+            <p className="text-[11px] text-muted-foreground font-normal">{DOCUMENT_TYPES[doc.doc_type]?.label || doc.doc_type}</p>
           </div>
         </div>
       ),
@@ -202,7 +221,7 @@ export default function B2BDocumentsRegistryPage() {
           <div className="text-xs font-semibold text-foreground flex items-center space-x-1.5">
             <Building2 className="h-3.5 w-3.5 text-amber-500 flex-shrink-0" />
             <div>
-              <p className="truncate max-w-[180px]">{partyName}</p>
+              <p className="truncate max-w-[220px]">{partyName}</p>
               {partyInn && <p className="text-[10px] text-muted-foreground font-mono">ИНН: {partyInn}</p>}
             </div>
           </div>
@@ -210,24 +229,13 @@ export default function B2BDocumentsRegistryPage() {
       },
     },
     {
-      key: 'total_amount',
-      label: 'Сумма (сом)',
-      sortable: true,
-      getValue: (d) => d.total_amount,
-      render: (doc) => (
-        <span className="font-mono font-bold text-emerald-400 text-xs sm:text-sm">
-          {Number(doc.total_amount || 0).toLocaleString('ru-RU')} c.
-        </span>
-      ),
-    },
-    {
       key: 'doc_date',
       label: 'Дата Документа',
       sortable: true,
       getValue: (d) => d.doc_date,
       render: (doc) => (
-        <span className="font-mono text-xs text-slate-400 flex items-center">
-          <Calendar className="h-3 w-3 mr-1 text-slate-500" />
+        <span className="font-mono text-xs text-muted-foreground flex items-center">
+          <Calendar className="h-3 w-3 mr-1 text-muted-foreground" />
           {new Date(doc.doc_date).toLocaleDateString('ru-RU')}
         </span>
       ),
@@ -244,7 +252,7 @@ export default function B2BDocumentsRegistryPage() {
       <div className="bg-muted/50 border border-border rounded-2xl p-4 space-y-3 shadow-lg">
         <div className="flex items-start justify-between">
           <div>
-            <span className="text-[10px] text-slate-400 font-mono block">
+            <span className="text-[10px] text-muted-foreground font-mono block">
               {DOCUMENT_TYPES[doc.doc_type]?.label || doc.doc_type}
             </span>
             <h4 className="font-bold text-foreground text-sm font-mono flex items-center">
@@ -258,17 +266,24 @@ export default function B2BDocumentsRegistryPage() {
         </div>
 
         <div className="flex items-center justify-between text-xs pt-2 border-t border-border">
-          <span className="text-slate-400 flex items-center">
+          <span className="text-muted-foreground flex items-center">
             <Building2 className="h-3.5 w-3.5 mr-1 text-amber-400" />
             {partyName}
           </span>
-          <span className="font-mono font-bold text-emerald-400">
-            {Number(doc.total_amount || 0).toLocaleString('ru-RU')} c.
-          </span>
+          <Badge
+            variant="outline"
+            className={
+              isInbox
+                ? 'border-emerald-500/40 text-emerald-400 text-[10px]'
+                : 'border-blue-500/40 text-blue-400 text-[10px]'
+            }
+          >
+            {isInbox ? 'Входящий' : 'Исходящий'}
+          </Badge>
         </div>
 
         <div className="pt-2 border-t border-border flex items-center justify-between">
-          <span className="text-[11px] text-slate-400 font-mono">
+          <span className="text-[11px] text-muted-foreground font-mono">
             {new Date(doc.doc_date).toLocaleDateString('ru-RU')}
           </span>
           <Link href={`/dashboard/documents/${doc.id}`} prefetch={true}>
@@ -282,6 +297,16 @@ export default function B2BDocumentsRegistryPage() {
     );
   };
 
+  // КНОПКИ-ПОДВКЛАДКИ ПО СТАТУСАМ
+  const statusButtons = [
+    { key: 'all', label: 'Все статусы', count: tabScopedDocs.length },
+    { key: 'draft', label: 'Черновики', count: tabScopedDocs.filter((d) => d.status === 'draft').length },
+    { key: 'sent', label: 'Отправленные', count: tabScopedDocs.filter((d) => d.status === 'sent').length },
+    { key: 'accepted', label: 'Согласованные', count: tabScopedDocs.filter((d) => d.status === 'accepted').length },
+    { key: 'processed', label: 'В обработке', count: tabScopedDocs.filter((d) => d.status === 'processed').length },
+    { key: 'recalled', label: 'Отозванные / Отклоненные', count: tabScopedDocs.filter((d) => d.status === 'recalled' || d.status === 'cancelled').length },
+  ];
+
   return (
     <UnifiedWorkspaceLayout
       title="Документооборот"
@@ -289,12 +314,38 @@ export default function B2BDocumentsRegistryPage() {
       icon={FileText}
       tabs={[
         { key: 'all', label: 'Все документы', count: documents.length, icon: FileText },
-        { key: 'inbox', label: 'Входящие', count: documents.filter((d) => d.receiver_company_id === currentCompanyId).length, icon: Inbox },
+        { key: 'inbox', label: 'Входящие', count: documents.filter((d) => d.receiver_company_id === currentCompanyId && d.status !== 'draft').length, icon: Inbox },
         { key: 'outbox', label: 'Исходящие', count: documents.filter((d) => d.sender_company_id === currentCompanyId).length, icon: Send },
         { key: 'drafts', label: 'Черновики', count: documents.filter((d) => d.status === 'draft').length, icon: Clock },
       ]}
       activeTab={activeTab}
-      onTabChange={(tabKey) => setActiveTab(tabKey)}
+      onTabChange={(tabKey) => {
+        setActiveTab(tabKey);
+        setStatusFilter('all');
+      }}
+      filtersSlot={
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-1 scrollbar-none">
+          {statusButtons.map((btn) => {
+            const isActive = statusFilter === btn.key;
+            return (
+              <button
+                key={btn.key}
+                onClick={() => setStatusFilter(btn.key as any)}
+                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all whitespace-nowrap min-h-[34px] ${
+                  isActive
+                    ? 'bg-primary/20 text-primary border border-primary/40 shadow-sm font-bold'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/50 border border-transparent'
+                }`}
+              >
+                <span>{btn.label}</span>
+                <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-mono bg-muted text-muted-foreground">
+                  {btn.count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      }
       actionButtonsSlot={
         <Link href="/dashboard/documents/new" prefetch={true}>
           <Button className="bg-primary hover:bg-primary/90 text-primary-foreground font-medium text-xs md:text-sm shadow-md min-h-[44px]">
@@ -311,7 +362,7 @@ export default function B2BDocumentsRegistryPage() {
         </Alert>
       )}
 
-      {/* ЕДИНООБРАЗНЫЙ УНИВЕРСАЛЬНЫЙ ТАБЛИЧНО-КАРТОЧНЫЙ РЕЕСТР С Drag&Drop, СОРТИРОВКОЙ, МЕНЮ ▼ И ПАГИНАЦИЕЙ (25-50-100-Все) */}
+      {/* ЕДИНООБРАЗНЫЙ УНИВЕРСАЛЬНЫЙ ТАБЛИЧНО-КАРТОЧНЫЙ РЕЕСТР */}
       <UnifiedDataGrid<FullB2BDocument>
         gridId="documents_registry"
         columns={columns}
@@ -325,8 +376,8 @@ export default function B2BDocumentsRegistryPage() {
           }
         }}
         renderCard={renderDocumentCard}
-        searchPlaceholder="Поиск по № документа, контрагенту, сумме..."
-        emptyMessage="Документы не найдены. Создайте первый документ."
+        searchPlaceholder="Поиск по № документа, контрагенту, комментариям..."
+        emptyMessage="Документы не найдены. Измените фильтры или создайте первый документ."
         isLoading={loading}
         defaultPageSize={25}
       />
@@ -354,10 +405,7 @@ export default function B2BDocumentsRegistryPage() {
                   value: DOCUMENT_TYPES[viewingDocDetails.doc_type as keyof typeof DOCUMENT_TYPES]?.label || viewingDocDetails.doc_type,
                 },
                 { label: 'Дата составления', value: viewingDocDetails.doc_date || '—', icon: Calendar },
-                {
-                  label: 'Сумма сделки',
-                  value: `${Number(viewingDocDetails.total_amount || 0).toLocaleString('ru-RU', { minimumFractionDigits: 2 })} сом`,
-                },
+                { label: 'Статус проведения', value: DOCUMENT_STATUSES[viewingDocDetails.status as DocumentStatus]?.label || viewingDocDetails.status || 'Черновик' },
               ],
             },
             {

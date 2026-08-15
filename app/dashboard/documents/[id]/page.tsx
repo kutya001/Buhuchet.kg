@@ -433,9 +433,9 @@ export default function B2BDocumentDetailPage() {
 
               {document.comment && (
                 <div className="col-span-2 p-2.5 rounded bg-background/60 border border-border">
-                  <span className="text-[10px] text-muted-foreground uppercase block mb-1">Сумма документа (без НДС):</span>
-                  <div className="font-mono font-bold text-foreground">
-                    {document.total_amount ? Number(document.total_amount).toLocaleString('ru-RU') + ' KGS' : '—'}
+                  <span className="text-[10px] text-muted-foreground uppercase block mb-1">Примечание / Комментарий:</span>
+                  <div className="text-xs text-foreground font-medium">
+                    {document.comment}
                   </div>
                 </div>
               )}

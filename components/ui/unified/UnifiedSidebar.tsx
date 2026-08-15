@@ -92,6 +92,11 @@ const USER_NAV_ITEMS: SidebarNavItem[] = [
 
 const SUPER_ADMIN_NAV_ITEMS: SidebarNavItem[] = [
   {
+    title: 'Главная',
+    href: '/super-admin',
+    icon: LayoutDashboard,
+  },
+  {
     title: 'Организации',
     href: '/super-admin/companies',
     icon: Building2,
@@ -107,6 +112,11 @@ const SUPER_ADMIN_NAV_ITEMS: SidebarNavItem[] = [
     icon: HardDrive,
   },
   {
+    title: 'Подписки',
+    href: '/super-admin/subscriptions',
+    icon: CreditCard,
+  },
+  {
     title: 'Telegram-боты',
     href: '/super-admin/telegram',
     icon: Send,
@@ -115,11 +125,6 @@ const SUPER_ADMIN_NAV_ITEMS: SidebarNavItem[] = [
     title: 'Инспектор БД',
     href: '/super-admin/inspector',
     icon: Database,
-  },
-  {
-    title: 'Подписки',
-    href: '/super-admin/subscriptions',
-    icon: CreditCard,
   },
   {
     title: '← Рабочий кабинет',

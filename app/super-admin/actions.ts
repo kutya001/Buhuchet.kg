@@ -908,6 +908,110 @@ export const getSuperAdminFileDetailsAction = createSafeAction(
 );
 
 /**
+ * Редактирование параметров файла суперадминистратором
+ */
+export const updateFileSuperAdminAction = createSafeAction(
+  z.object({
+    fileId: z.string().uuid(),
+    fileName: z.string().min(1, 'Укажите название файла'),
+    categoryId: z.string().uuid().nullable().optional(),
+    description: z.string().optional(),
+    comment: z.string().optional(),
+  }),
+  async ({ fileId, fileName, categoryId, description, comment }, ctx) => {
+    if (!ctx.isSuperAdmin) {
+      return { success: false, error: 'Доступ разрешен только Суперадминистратору' };
+    }
+
+    const adminSupabase = await createAdminClient();
+
+    const { data: updated, error } = await adminSupabase
+      .from('files')
+      .update({
+        file_name: fileName,
+        category_id: categoryId || null,
+        description: description || null,
+        comment: comment || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', fileId)
+      .select()
+      .single();
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    // Аудит
+    await adminSupabase.from('admin_audit_logs').insert({
+      admin_id: ctx.userId,
+      action: 'file_updated',
+      target_type: 'file',
+      target_id: fileId,
+      details: { fileName, categoryId },
+    });
+
+    revalidatePath('/super-admin/files');
+    return { success: true, data: updated };
+  }
+);
+
+/**
+ * Полное удаление файла суперадминистратором (БД + очередь очистки R2)
+ */
+export const deleteFileSuperAdminAction = createSafeAction(
+  z.object({ fileId: z.string().uuid() }),
+  async ({ fileId }, ctx) => {
+    if (!ctx.isSuperAdmin) {
+      return { success: false, error: 'Доступ разрешен только Суперадминистратору' };
+    }
+
+    const adminSupabase = await createAdminClient();
+
+    // 1. Получаем путь к файлу
+    const { data: file, error: fetchErr } = await adminSupabase
+      .from('files')
+      .select('id, file_name, file_path_r2')
+      .eq('id', fileId)
+      .maybeSingle();
+
+    if (fetchErr || !file) {
+      return { success: false, error: 'Файл не найден' };
+    }
+
+    // 2. Удаляем связи в file_owners
+    await adminSupabase.from('file_owners').delete().eq('file_id', fileId);
+
+    // 3. Удаляем запись из files
+    const { error: delErr } = await adminSupabase.from('files').delete().eq('id', fileId);
+    if (delErr) {
+      return { success: false, error: delErr.message };
+    }
+
+    // 4. Добавляем в очередь удаления физического объекта из R2
+    if (file.file_path_r2) {
+      await adminSupabase.from('pending_file_deletions').insert({
+        storage_key: file.file_path_r2,
+        status: 'pending',
+        attempts: 0,
+      });
+    }
+
+    // 5. Аудит
+    await adminSupabase.from('admin_audit_logs').insert({
+      admin_id: ctx.userId,
+      action: 'file_deleted',
+      target_type: 'file',
+      target_id: fileId,
+      details: { file_name: file.file_name, storage_key: file.file_path_r2 },
+    });
+
+    revalidatePath('/super-admin/files');
+    return { success: true };
+  }
+);
+
+/**
  * Безопасное получение развернутых деталей компании для суперадминистратора
  */
 export const getSuperAdminCompanyDetailsSafeAction = createSafeAction(

@@ -343,7 +343,6 @@ CREATE TABLE public.file_categories (
 | `doc_date` | `DATE` | `NOT NULL` | Дата составления документа | — |
 | `doc_type` | `VARCHAR(30)` | `NOT NULL` | Тип (`realization`, `purchase`, `payment`, `advance`) | — |
 | `status` | `VARCHAR(20)` | `DEFAULT 'draft'` | Статус (`draft`, `sent`, `accepted`, `processed`, `cancelled`, `recalled`) | — |
-| `total_amount` | `NUMERIC(15,2)` | `DEFAULT 0.00` | Итоговая сумма документа в сомах (KGS) | — |
 | `comment` | `TEXT` | `NULL` | Комментарий или примечание | — |
 | `mock_file_name` | `TEXT` | `NULL` | Имя прикрепленного скана по умолчанию | — |
 | `mock_file_size` | `BIGINT` | `NULL` | Размер прикрепленного файла в байтах | — |
@@ -363,7 +362,6 @@ CREATE TABLE public.documents (
   doc_date DATE NOT NULL,
   doc_type VARCHAR(30) NOT NULL,
   status VARCHAR(20) DEFAULT 'draft',
-  total_amount NUMERIC(15,2) DEFAULT 0.00,
   comment TEXT,
   mock_file_name TEXT,
   mock_file_size BIGINT,
@@ -1086,3 +1084,4 @@ $$;
 | `20260818110000_fix_closed_periods_status_check.sql` | 18.08.2026 11:00 | Расширение CHECK-ограничения статусов с поддержкой статуса `partial` (частично закрыт) |
 | `20260818200000_superadmin_hardening_and_atomicity.sql` | 18.08.2026 20:00 | Таблица `admin_audit_logs`, атомарная процедура `admin_approve_company_atomic`, `get_platform_summary_stats` |
 | `20260819000000_superadmin_hardening.sql` | 19.08.2026 00:00 | Триггер `trg_prevent_system_role_deletion` для защиты системных ролей (is_system = true) |
+| `20260819100000_remove_total_amount_from_documents.sql` | 19.08.2026 10:00 | Удаление столбца `total_amount` из таблицы `documents` и обновление `create_document_atomic` |

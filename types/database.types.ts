@@ -247,7 +247,7 @@ export interface Document {
   doc_date: string;
   doc_type: DocumentType;
   status: DocumentStatus;
-  total_amount: number;
+  total_amount?: number;
   comment?: string | null;
   mock_file_name?: string | null;
   mock_file_size?: number | null;

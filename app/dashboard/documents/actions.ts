@@ -80,7 +80,7 @@ export async function getB2BDocumentsAction(
 
     let query = adminSupabase
       .from('documents')
-      .select('id, doc_number, doc_date, doc_type, status, total_amount, comment, mock_file_name, mock_file_size, created_at, sender_company_id, receiver_company_id, sender_company:companies!sender_company_id(name, inn), receiver_company:companies!receiver_company_id(name, inn), files(id, file_name, size_bytes), author:users!author_id(full_name)', { count: 'exact' });
+      .select('id, doc_number, doc_date, doc_type, status, comment, mock_file_name, mock_file_size, created_at, sender_company_id, receiver_company_id, sender_company:companies!sender_company_id(name, inn), receiver_company:companies!receiver_company_id(name, inn), files(id, file_name, size_bytes), author:users!author_id(full_name)', { count: 'exact' });
 
     // Фильтрация по направлению (вкладкам)
     if (filters?.tab === 'inbox') {
