@@ -10,7 +10,8 @@
     "lint:sql": "node scripts/lint-migrations.js",
     "types:generate": "supabase gen types typescript --local > types/database.types.ts",
     "benchmark": "node scripts/benchmarks/run-all.mjs",
-    "benchmark:db": "node scripts/benchmarks/db-benchmark.mjs"
+    "benchmark:db": "node scripts/benchmarks/db-benchmark.mjs",
+    "test:rbac": "node scripts/tests/rbac-test.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1096.0",
