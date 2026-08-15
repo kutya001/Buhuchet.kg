@@ -1,6 +1,13 @@
 import type { UserProfile, RolePermissions } from '@/types/database.types';
 
-export type ModuleName = 'dashboard' | 'documents' | 'files' | 'counterparties' | 'employees' | 'company';
+export type ModuleName =
+  | 'dashboard'
+  | 'documents'
+  | 'files'
+  | 'counterparties'
+  | 'employees'
+  | 'company'
+  | 'subscription';
 
 export type ActionName =
   | 'view'
@@ -14,6 +21,7 @@ export type ActionName =
   | 'manage'
   | 'upload'
   | 'download'
+  | 'export'
   | 'request_partnership'
   | 'respond_partnership'
   | 'create_manual'
@@ -32,6 +40,9 @@ export type ActionName =
   | 'tab_catalog'
   | 'tab_profile'
   | 'tab_legal_docs'
+  | 'tab_periods'
+  | 'periods_view'
+  | 'periods_manage'
   | 'upload_legal_doc'
   | 'add_legal_doc'
   | 'edit_legal_doc'
@@ -45,7 +56,8 @@ export type ActionName =
   | 'delete_role'
   | 'telegram_bind'
   | 'notify_documents'
-  | 'notify_collaboration';
+  | 'notify_collaboration'
+  | 'manage_subscription';
 
 /**
  * Справочник русскоязычных названий модулей, вкладок и прав в интерфейсе матрицы
@@ -71,6 +83,7 @@ export const MODULE_CONFIG: Record<
       { key: 'accept', label: 'Принятие и подтверждение документа' },
       { key: 'recall', label: 'Отзыв отправленной первички' },
       { key: 'delete', label: 'Удаление документов' },
+      { key: 'export', label: 'Экспорт реестра в 1С / Excel' },
       { key: 'view_all_statuses', label: 'Видит документы ВСЕХ статусов' },
       { key: 'view_draft_only', label: 'Видит только Черновики' },
       { key: 'view_sent_only', label: 'Видит только Отправленные/Входящие' },
@@ -107,6 +120,9 @@ export const MODULE_CONFIG: Record<
       { key: 'view', label: 'Доступ к модулю (Отображение в меню)' },
       { key: 'tab_profile', label: 'Видит вкладку «Профиль & Реквизиты»' },
       { key: 'tab_legal_docs', label: 'Видит вкладку «Учредительные Документы»' },
+      { key: 'tab_periods', label: 'Видит вкладку «Закрытие периода»' },
+      { key: 'periods_view', label: 'Просмотр журнала закрытых периодов' },
+      { key: 'periods_manage', label: 'Управление закрытием / открытием периодов' },
       { key: 'upload_legal_doc', label: 'Загрузка уставных файлов' },
       { key: 'add_legal_doc', label: 'Добавление файлов в устав' },
       { key: 'edit_legal_doc', label: 'Изменение уставных документов' },
@@ -130,6 +146,13 @@ export const MODULE_CONFIG: Record<
       { key: 'telegram_bind', label: 'Может привязывать Telegram к аккаунту' },
       { key: 'notify_documents', label: 'Получает уведомления по документам' },
       { key: 'notify_collaboration', label: 'Получает уведомления по сотрудникам' },
+    ],
+  },
+  subscription: {
+    label: 'Тариф и Подписка',
+    actions: [
+      { key: 'view', label: 'Просмотр текущего тарифного плана' },
+      { key: 'manage_subscription', label: 'Управление тарифом и оплата (Владелец)' },
     ],
   },
 };
@@ -167,11 +190,15 @@ export function hasPermission(
       action.startsWith('tab_') ||
       action === 'view_all_statuses'
     ) {
+      // Закрытие периодов и управление подпиской по умолчанию недоступны без явного назначения
+      if (action === 'tab_periods' || action === 'periods_manage' || action === 'manage_subscription') {
+        return false;
+      }
       return true;
     }
     if (
       module === 'documents' &&
-      (action === 'create' || action === 'send' || action === 'accept' || action === 'view_details')
+      (action === 'create' || action === 'send' || action === 'accept' || action === 'view_details' || action === 'export')
     ) {
       return true;
     }
@@ -181,6 +208,22 @@ export function hasPermission(
   }
 
   return false;
+}
+
+/**
+ * Валидация прав доступа с выбросом ошибки 403 Forbidden
+ */
+export function requirePermission(
+  profile: UserProfile | null | undefined,
+  module: ModuleName,
+  action: ActionName,
+  customErrorMessage?: string
+): void {
+  if (!hasPermission(profile, module, action)) {
+    throw new Error(
+      customErrorMessage || `403 Forbidden: Недостаточно прав для выполнения действия [${module}.${action}]`
+    );
+  }
 }
 
 /**
@@ -197,14 +240,15 @@ export function canViewCompanyProfile(
 }
 
 /**
- * Проверка права на редактирование профиля компании (Строго ТОЛЬКО Владелец)
+ * Проверка права на редактирование профиля компании (Строго ТОЛЬКО Владелец или Суперадмин)
  */
 export function canEditCompanyProfile(
   profile: UserProfile | null | undefined,
   companyOwnerId?: string
 ): boolean {
   if (!profile) return false;
+  if (profile.is_super_admin) return true;
   if (profile.role === 'owner') return true;
   if (companyOwnerId && profile.id === companyOwnerId) return true;
-  return false;
+  return hasPermission(profile, 'company', 'edit');
 }

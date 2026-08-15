@@ -89,6 +89,7 @@ export interface ModulePermissions {
   manage_roles?: boolean;
 
   // Расширенные гранулярные права вкладок и статусов
+  export?: boolean;
   view_all_statuses?: boolean;
   view_draft_only?: boolean;
   view_sent_only?: boolean;
@@ -100,6 +101,9 @@ export interface ModulePermissions {
 
   tab_profile?: boolean;
   tab_legal_docs?: boolean;
+  tab_periods?: boolean;
+  periods_view?: boolean;
+  periods_manage?: boolean;
   upload_legal_doc?: boolean;
   add_legal_doc?: boolean;
   edit_legal_doc?: boolean;
@@ -112,6 +116,10 @@ export interface ModulePermissions {
   create_role?: boolean;
   edit_role?: boolean;
   delete_role?: boolean;
+  telegram_bind?: boolean;
+  notify_documents?: boolean;
+  notify_collaboration?: boolean;
+  manage_subscription?: boolean;
 }
 
 export interface RolePermissions {
@@ -121,6 +129,7 @@ export interface RolePermissions {
   counterparties?: ModulePermissions;
   employees?: ModulePermissions;
   company?: ModulePermissions;
+  subscription?: ModulePermissions;
 }
 
 export interface CompanyRole {

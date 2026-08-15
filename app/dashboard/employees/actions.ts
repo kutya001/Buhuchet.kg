@@ -218,6 +218,17 @@ export async function approveEmployeeRequestAction(params: {
 
     const adminSupabase = await createAdminClient();
 
+    // 0. Защита от назначения системной роли Владельца
+    const { data: targetRole } = await adminSupabase
+      .from('company_roles')
+      .select('id, name, is_system')
+      .eq('id', params.roleId)
+      .maybeSingle();
+
+    if (targetRole?.is_system || targetRole?.name?.toLowerCase() === 'владелец') {
+      return { success: false, error: '403 Forbidden: Запрещено назначать системную роль Владельца' };
+    }
+
     // 1. Обновляем пользователя в users
     const { error: userError } = await adminSupabase
       .from('users')
@@ -414,7 +425,35 @@ export async function updateEmployeeRoleAndPositionAction(params: {
       return { success: false, error: 'Изменять роли может только Владелец компании' };
     }
 
+    // Запрет редактирования собственной роли
+    if (params.userId === ctx.userId && !ctx.isSuperAdmin) {
+      return { success: false, error: '403 Forbidden: Запрещено изменять собственную роль' };
+    }
+
     const adminSupabase = await createAdminClient();
+
+    // Проверка: запрет назначения системной роли Владельца
+    const { data: targetRole } = await adminSupabase
+      .from('company_roles')
+      .select('id, name, is_system')
+      .eq('id', params.roleId)
+      .maybeSingle();
+
+    if (targetRole?.is_system || targetRole?.name?.toLowerCase() === 'владелец') {
+      return { success: false, error: '403 Forbidden: Запрещено назначать системную роль Владельца' };
+    }
+
+    // Проверка: целевой пользователь не должен быть Владельцем компании
+    const { data: targetUser } = await adminSupabase
+      .from('users')
+      .select('id, role')
+      .eq('id', params.userId)
+      .maybeSingle();
+
+    if (targetUser?.role === 'owner' && !ctx.isSuperAdmin) {
+      return { success: false, error: '403 Forbidden: Нельзя изменять роль создателя и собственника компании' };
+    }
+
     const { error } = await adminSupabase
       .from('users')
       .update({
@@ -447,7 +486,29 @@ export async function removeEmployeeAction(
       return { success: false, error: 'Исключать сотрудников может только Владелец компании' };
     }
 
+    if (userId === ctx.userId && !ctx.isSuperAdmin) {
+      return { success: false, error: '403 Forbidden: Запрещено исключать самого себя из компании' };
+    }
+
     const adminSupabase = await createAdminClient();
+
+    // Проверка: нельзя исключить собственника
+    const { data: comp } = await adminSupabase
+      .from('companies')
+      .select('owner_id')
+      .eq('id', ctx.companyId)
+      .maybeSingle();
+
+    const { data: targetUser } = await adminSupabase
+      .from('users')
+      .select('id, role')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (comp?.owner_id === userId || targetUser?.role === 'owner') {
+      return { success: false, error: '403 Forbidden: Запрещено исключать законного собственника компании' };
+    }
+
     const { error } = await adminSupabase
       .from('users')
       .update({

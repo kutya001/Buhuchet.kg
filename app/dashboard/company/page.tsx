@@ -301,20 +301,24 @@ export default function CompanyProfilePage() {
           <span>Учредительные Документы ({legalDocs.length})</span>
         </button>
 
-        <button
-          onClick={() => {
-            setActiveTab('closed_period');
-            if (company?.closed_period_until) setClosedDateInput(company.closed_period_until);
-          }}
-          className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs md:text-sm font-medium transition-all ${
-            activeTab === 'closed_period'
-              ? 'bg-amber-600/20 text-amber-400 border border-amber-500/30'
-              : 'text-muted-foreground hover:text-slate-200 hover:bg-muted'
-          }`}
-        >
-          <Clock className="h-4 w-4 text-amber-400" />
-          <span>Закрытие Месяца / Периода</span>
-        </button>
+        {(hasPermission(currentProfile, 'company', 'periods_view') ||
+          hasPermission(currentProfile, 'company', 'tab_periods') ||
+          canEditCompanyProfile(currentProfile, company?.id)) && (
+          <button
+            onClick={() => {
+              setActiveTab('closed_period');
+              if (company?.closed_period_until) setClosedDateInput(company.closed_period_until);
+            }}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs md:text-sm font-medium transition-all ${
+              activeTab === 'closed_period'
+                ? 'bg-amber-600/20 text-amber-400 border border-amber-500/30'
+                : 'text-muted-foreground hover:text-slate-200 hover:bg-muted'
+            }`}
+          >
+            <Clock className="h-4 w-4 text-amber-400" />
+            <span>Закрытие Месяца / Периода</span>
+          </button>
+        )}
       </div>
 
       {/* 1. Вкладка Профиль & Реквизиты */}
@@ -485,7 +489,12 @@ export default function CompanyProfilePage() {
 
       {/* 3. Вкладка Закрытие Месяца / Периода */}
       {activeTab === 'closed_period' && (
-        <ClosedPeriodsJournal canEdit={canEditCompanyProfile(currentProfile, company?.id)} />
+        <ClosedPeriodsJournal
+          canEdit={
+            hasPermission(currentProfile, 'company', 'periods_manage') ||
+            canEditCompanyProfile(currentProfile, company?.id)
+          }
+        />
       )}
 
       {/* МОДАЛЬНОЕ ОКНО РЕДАКТИРОВАНИЯ И ЗАМЕНЫ ФАЙЛА (UnifiedFormModal) */}

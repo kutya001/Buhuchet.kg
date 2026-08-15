@@ -5,6 +5,7 @@ import type { ActionResponse, Company } from '@/types/database.types';
 import type { CompanyProfileStats, ClosedPeriodItem, YearClosedPeriodsSummary } from '@/types/company.types';
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { validateKyrgyzINN } from '@/lib/validators/inn';
+import { hasPermission, requirePermission } from '@/lib/auth/permissions';
 
 /**
  * Получение агрегированной статистики профиля компании
@@ -330,23 +331,27 @@ export async function getCompanyClosedPeriodsAction(
       return { success: false, error: 'Пользователь не авторизован' };
     }
 
-    const { data: prof } = await supabase
+    const adminSupabase = await createAdminClient();
+    const { data: userProfile } = await adminSupabase
       .from('users')
-      .select('company_id')
+      .select('*, company_roles(*)')
       .eq('id', user.id)
-      .single();
+      .maybeSingle();
 
-    if (!prof?.company_id) {
+    if (!userProfile?.company_id) {
       return { success: false, error: 'Пользователь не привязан к организации' };
     }
 
-    const adminSupabase = await createAdminClient();
+    // Проверка прав на просмотр закрытых периодов
+    if (!hasPermission(userProfile, 'company', 'periods_view') && !hasPermission(userProfile, 'company', 'tab_periods')) {
+      return { success: false, error: '403 Forbidden: Нет доступа к журналу закрытых периодов' };
+    }
 
     // Запрашиваем записи закрытия за выбранный год
     const { data: dbRecords } = await adminSupabase
       .from('company_closed_periods')
       .select('*, closed_by_user:users!closed_by(full_name, email), opened_by_user:users!opened_by(full_name, email)')
-      .eq('company_id', prof.company_id)
+      .eq('company_id', userProfile.company_id)
       .eq('year', selectedYear);
 
     const recordMap = new Map<number, any>();
@@ -417,28 +422,31 @@ export async function toggleCompanyClosedPeriodAction(params: {
       return { success: false, error: 'Пользователь не авторизован' };
     }
 
-    const { data: prof } = await supabase
+    const adminSupabase = await createAdminClient();
+    const { data: userProfile } = await adminSupabase
       .from('users')
-      .select('company_id, role, is_super_admin')
+      .select('*, company_roles(*)')
       .eq('id', user.id)
-      .single();
+      .maybeSingle();
 
-    if (!prof?.company_id && !prof?.is_super_admin) {
+    if (!userProfile?.company_id && !userProfile?.is_super_admin) {
       return { success: false, error: 'Пользователь не привязан к организации' };
     }
 
-    if (prof.role !== 'owner' && !prof.is_super_admin) {
-      return { success: false, error: 'Управление закрытием периодов доступно только Руководителю организации' };
+    // Строгая проверка прав RBAC: закрывать/открывать период могут Владелец и Главный Бухгалтер
+    if (!hasPermission(userProfile, 'company', 'periods_manage')) {
+      return {
+        success: false,
+        error: '403 Forbidden: Управление закрытием периодов доступно только Руководителю или Главному Бухгалтеру',
+      };
     }
 
     if (params.targetStatus === 'open' && (!params.comment || params.comment.trim().length < 3)) {
       return { success: false, error: 'Укажите обязательную причину разблокировки (открытия) периода' };
     }
 
-    const adminSupabase = await createAdminClient();
-
     const payload: Record<string, any> = {
-      company_id: prof.company_id,
+      company_id: userProfile.company_id,
       year: params.year,
       month: params.month,
       status: params.targetStatus,

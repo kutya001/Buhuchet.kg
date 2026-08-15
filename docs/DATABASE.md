@@ -960,3 +960,5 @@ $$;
 | `20260815000002_arch01_atomic_document_creation.sql` | 15.08.2026 00:00 | Атомарное создание документов и привязка совладельцев |
 | `20260815000003_employee_registration_and_join_requests.sql` | 15.08.2026 00:00 | Создание таблицы `company_join_requests`, RPC `search_companies_for_join`, RLS политик |
 | `20260815120000_fix_join_requests_and_profile_rls.sql` | 15.08.2026 12:00 | Расширение RLS `companies` (поиск) и `users` (просмотр соискателей владельцами компаний) |
+| `20260816000000_performance_core_fix.sql` | 16.08.2026 00:00 | Оптимизация RLS политик без correlated subqueries, составные B-Tree индексы, STABLE процедуры |
+| `20260817000000_rbac_hardening_and_closed_periods.sql` | 17.08.2026 00:00 | Харденинг RBAC, защита роли Owner триггером, права на закрытые периоды и экспорт |

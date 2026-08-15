@@ -15,6 +15,7 @@ import {
   sendCollaborationRejectedTelegramNotification,
   sendCollaborationTerminatedTelegramNotification,
 } from '@/lib/telegram/notifier';
+import { hasPermission, requirePermission, type ActionName } from '@/lib/auth/permissions';
 
 const getUserContext = cache(async () => {
   const supabase = await createClient();
@@ -27,13 +28,15 @@ const getUserContext = cache(async () => {
 
   const { data: profile } = await adminSupabase
     .from('users')
-    .select('company_id')
+    .select('*, company_roles(*)')
     .eq('id', user.id)
-    .single();
+    .maybeSingle();
 
   return {
     userId: user.id,
     companyId: profile?.company_id || null,
+    profile,
+    checkPermission: (action: ActionName) => hasPermission(profile, 'counterparties', action),
   };
 });
 
@@ -47,6 +50,10 @@ export async function sendPartnershipRequestAction(
     const ctx = await getUserContext();
     if (!ctx || !ctx.companyId) {
       return { success: false, error: 'Пользователь не привязан к организации' };
+    }
+
+    if (!ctx.checkPermission('request_partnership')) {
+      return { success: false, error: '403 Forbidden: У вашей роли нет прав на отправку заявок на партнерство' };
     }
 
     if (ctx.companyId === targetCompanyId) {
@@ -170,6 +177,10 @@ export async function respondToPartnershipRequestAction(
     const ctx = await getUserContext();
     if (!ctx || !ctx.companyId) {
       return { success: false, error: 'Пользователь не авторизован' };
+    }
+
+    if (!ctx.checkPermission('respond_partnership')) {
+      return { success: false, error: '403 Forbidden: У вашей роли нет прав на рассмотрение заявок на партнерство' };
     }
 
     const adminSupabase = await createAdminClient();
@@ -447,6 +458,10 @@ export async function terminatePartnershipAction(
     const ctx = await getUserContext();
     if (!ctx || !ctx.companyId) {
       return { success: false, error: 'Пользователь не авторизован' };
+    }
+
+    if (!ctx.checkPermission('terminate')) {
+      return { success: false, error: '403 Forbidden: У вашей роли нет прав на прекращение сотрудничества' };
     }
 
     const adminSupabase = await createAdminClient();

@@ -648,6 +648,10 @@ export async function deleteB2BDocumentAction(documentId: string): Promise<Actio
       return { success: false, error: 'Пользователь не авторизован' };
     }
 
+    if (!ctx.checkPermission('documents', 'delete')) {
+      return { success: false, error: '403 Forbidden: У вашей роли нет прав на удаление документов' };
+    }
+
     const adminSupabase = await createAdminClient();
 
     const { data: doc } = await adminSupabase

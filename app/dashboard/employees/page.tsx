@@ -696,11 +696,13 @@ export default function EmployeesModulePage() {
                   onChange={(e) => setApproveRoleId(e.target.value)}
                   className="w-full h-10 px-3 rounded-xl bg-muted/40 border border-border text-xs text-foreground focus:outline-none"
                 >
-                  {roles.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.name}
-                    </option>
-                  ))}
+                  {roles
+                    .filter((r) => !r.is_system && r.name.toLowerCase() !== 'владелец')
+                    .map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.name}
+                      </option>
+                    ))}
                 </select>
               </div>
 
@@ -750,11 +752,13 @@ export default function EmployeesModulePage() {
                   onChange={(e) => setEditRoleId(e.target.value)}
                   className="w-full h-10 px-3 rounded-xl bg-muted/40 border border-border text-xs text-foreground focus:outline-none"
                 >
-                  {roles.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.name}
-                    </option>
-                  ))}
+                  {roles
+                    .filter((r) => !r.is_system && r.name.toLowerCase() !== 'владелец')
+                    .map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.name}
+                      </option>
+                    ))}
                 </select>
               </div>
 
