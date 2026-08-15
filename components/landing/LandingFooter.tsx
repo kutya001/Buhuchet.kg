@@ -116,7 +116,7 @@ export function LandingFooter() {
           <p>© 2026 BuhUchet.kg. Все права защищены.</p>
           <div className="flex items-center space-x-6">
             <span>Электронный документооборот КР</span>
-            <span>Cloudflare R2 Storage</span>
+            <span>Безопасный облачный диск</span>
           </div>
         </div>
       </div>

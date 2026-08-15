@@ -79,7 +79,7 @@ export function LandingHero({ isAuthenticated = false }: LandingHeroProps) {
             <div className="grid grid-cols-3 gap-3 pt-6 border-t border-border/60 max-w-lg mx-auto lg:mx-0">
               <div className="flex items-center space-x-2 text-xs font-medium text-muted-foreground">
                 <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                <span>14 дней триал</span>
+                <span>7 дней пробного периода</span>
               </div>
               <div className="flex items-center space-x-2 text-xs font-medium text-muted-foreground">
                 <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
@@ -87,7 +87,7 @@ export function LandingHero({ isAuthenticated = false }: LandingHeroProps) {
               </div>
               <div className="flex items-center space-x-2 text-xs font-medium text-muted-foreground">
                 <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                <span>Облачный диск R2</span>
+                <span>Облачный диск</span>
               </div>
             </div>
           </div>

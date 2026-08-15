@@ -322,6 +322,21 @@ export interface Subscription {
   updated_at: string;
 }
 
+export interface LandingPricingPlan {
+  id: string;
+  name: string;
+  price: string;
+  period: string;
+  description?: string | null;
+  is_popular: boolean;
+  badge_text?: string | null;
+  sort_order: number;
+  features: string[];
+  button_text: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export type ActionResponse<T = any> = {
   success: boolean;
   data?: T;

@@ -36,13 +36,18 @@ export const metadata: Metadata = {
 };
 
 export default async function HomePage() {
-  // 1. Проверка сессии на этапе серверного рендеринга (RSC)
+  // 1. Проверка сессии на этапе серверного рендеринга (RSC) и загрузка тарифов
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const [{ data: { user } }, plansRes] = await Promise.all([
+    supabase.auth.getUser(),
+    supabase
+      .from('landing_pricing_plans')
+      .select('*')
+      .order('sort_order', { ascending: true }),
+  ]);
 
   const isAuthenticated = !!user;
+  const pricingPlans = plansRes.data || [];
 
   return (
     <div className="min-h-screen bg-background text-foreground scroll-smooth flex flex-col antialiased selection:bg-blue-500/20 selection:text-blue-500">
@@ -63,7 +68,7 @@ export default async function HomePage() {
         <LandingAudience isAuthenticated={isAuthenticated} />
 
         {/* 6. ТАРИФНАЯ СЕТКА */}
-        <LandingPricing isAuthenticated={isAuthenticated} />
+        <LandingPricing isAuthenticated={isAuthenticated} plans={pricingPlans} />
 
         {/* 7. ОТЗЫВЫ КЛИЕНТОВ */}
         <LandingTestimonials />

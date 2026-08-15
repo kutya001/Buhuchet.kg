@@ -407,6 +407,19 @@ export type ActionResponse<T = any> = {
 - **Бизнес-логика**: Удаление связей из `file_owners`, удаление записи из `files`, постановка объекта в очередь `pending_file_deletions` и запись в `admin_audit_logs`.
 - **Таблицы БД**: `files`, `file_owners`, `pending_file_deletions`, `admin_audit_logs`
 
+#### `getLandingPricingPlansAction`
+- **Auth**: Public / SuperAdmin
+- **Response**: `ActionResponse<LandingPricingPlan[]>`
+- **Бизнес-логика**: Выборка всех публичных тарифов с сортировкой `sort_order ASC`.
+- **Таблицы БД**: `landing_pricing_plans`
+
+#### `updateLandingPricingPlanAction`
+- **Auth**: SuperAdmin (`createSafeAction` + `isSuperAdmin`)
+- **Zod Schema**: `z.object({ id: z.string(), name: z.string(), price: z.string(), period: z.string(), description: z.string().optional(), is_popular: z.boolean(), badge_text: z.string().optional(), features: z.array(z.string()), button_text: z.string() })`
+- **Response**: `ActionResponse<LandingPricingPlan>`
+- **Бизнес-логика**: Обновление цен, фич и бейджей тарифа лендинга с фиксацией в `admin_audit_logs` и инвалидацией кэша страниц.
+- **Таблицы БД**: `landing_pricing_plans`, `admin_audit_logs`
+
 ---
 
 ### 3.7 Модуль «Гостевой Режим и Заявки на Вступление» (`app/dashboard/pending/actions.ts`)

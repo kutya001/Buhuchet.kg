@@ -26,7 +26,7 @@ export function LandingCta({ isAuthenticated = false }: LandingCtaProps) {
         </h2>
 
         <p className="text-base sm:text-lg text-muted-foreground max-w-2xl mx-auto">
-          Присоединяйтесь к единой экосистеме документооборота Кыргызстана. Начните бесплатный 14-дневный пробный период прямо сейчас.
+          Присоединяйтесь к единой экосистеме документооборота Кыргызстана. Начните бесплатный 7-дневный пробный период прямо сейчас.
         </p>
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2">

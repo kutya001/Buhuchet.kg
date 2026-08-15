@@ -4,30 +4,73 @@ import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { CreditCard, CheckCircle2, ShieldCheck, Zap, RefreshCw, Loader2, Building2, AlertTriangle } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  CreditCard,
+  CheckCircle2,
+  ShieldCheck,
+  Zap,
+  RefreshCw,
+  Loader2,
+  Building2,
+  AlertTriangle,
+  Pencil,
+  Sparkles,
+  SlidersHorizontal,
+} from 'lucide-react';
 import { UnifiedWorkspaceLayout } from '@/components/ui/unified/UnifiedWorkspaceLayout';
 import { UnifiedDataGrid, ColumnDef } from '@/components/ui/unified/UnifiedDataGrid';
-import { getAllSubscriptionsAdminAction, checkExpiredSubscriptionsAdminAction } from '@/app/super-admin/actions';
+import { UnifiedFormModal } from '@/components/ui/unified/UnifiedFormModal';
+import {
+  getAllSubscriptionsAdminAction,
+  checkExpiredSubscriptionsAdminAction,
+  getLandingPricingPlansAction,
+  updateLandingPricingPlanAction,
+} from '@/app/super-admin/actions';
 import { toast } from 'sonner';
+import type { LandingPricingPlan } from '@/types/database.types';
 
 export default function SuperAdminSubscriptionsPage() {
   const [subscriptions, setSubscriptions] = useState<any[]>([]);
+  const [landingPlans, setLandingPlans] = useState<LandingPricingPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [checkingExpired, setCheckingExpired] = useState(false);
 
-  const loadSubscriptions = async () => {
+  // РЕДАКТИРОВАНИЕ ТАРИФА ЛЕНДИНГА
+  const [editingPlan, setEditingPlan] = useState<LandingPricingPlan | null>(null);
+  const [planName, setPlanName] = useState('');
+  const [planPrice, setPlanPrice] = useState('');
+  const [planPeriod, setPlanPeriod] = useState('сом/мес');
+  const [planDescription, setPlanDescription] = useState('');
+  const [planIsPopular, setPlanIsPopular] = useState(false);
+  const [planBadgeText, setPlanBadgeText] = useState('');
+  const [planFeaturesText, setPlanFeaturesText] = useState('');
+  const [planButtonText, setPlanButtonText] = useState('');
+  const [savingPlan, setSavingPlan] = useState(false);
+
+  const loadData = async () => {
     setLoading(true);
-    const res = await getAllSubscriptionsAdminAction();
-    if (res.success && res.data) {
-      setSubscriptions(res.data);
+    const [subRes, plansRes] = await Promise.all([
+      getAllSubscriptionsAdminAction(),
+      getLandingPricingPlansAction(),
+    ]);
+
+    if (subRes.success && subRes.data) {
+      setSubscriptions(subRes.data);
     } else {
-      toast.error(res.error || 'Не удалось загрузить реестр подписок');
+      toast.error(subRes.error || 'Не удалось загрузить реестр подписок');
+    }
+
+    if (plansRes.success && plansRes.data) {
+      setLandingPlans(plansRes.data);
     }
     setLoading(false);
   };
 
   useEffect(() => {
-    loadSubscriptions();
+    loadData();
   }, []);
 
   const handleCheckExpired = async () => {
@@ -36,7 +79,7 @@ export default function SuperAdminSubscriptionsPage() {
       const res = await checkExpiredSubscriptionsAdminAction();
       if (res.success) {
         toast.success(`Проверка завершена: обновлено ${res.data?.updatedCount || 0} просроченных подписок`);
-        loadSubscriptions();
+        loadData();
       } else {
         toast.error(res.error || 'Ошибка проверки просроченных тарифов');
       }
@@ -44,6 +87,64 @@ export default function SuperAdminSubscriptionsPage() {
       toast.error(e.message || 'Сбой выполнения проверки');
     } finally {
       setCheckingExpired(false);
+    }
+  };
+
+  // ОТКРЫТИЕ МОДАЛКИ РЕДАКТИРОВАНИЯ ТАРИФА
+  const handleStartEditPlan = (plan: LandingPricingPlan) => {
+    setEditingPlan(plan);
+    setPlanName(plan.name || '');
+    setPlanPrice(plan.price || '');
+    setPlanPeriod(plan.period || 'сом/мес');
+    setPlanDescription(plan.description || '');
+    setPlanIsPopular(Boolean(plan.is_popular));
+    setPlanBadgeText(plan.badge_text || '');
+    setPlanFeaturesText((plan.features || []).join('\n'));
+    setPlanButtonText(plan.button_text || 'Выбрать тариф');
+  };
+
+  // СОХРАНЕНИЕ ТАРИФА
+  const handleSavePlan = async () => {
+    if (!editingPlan) return;
+    if (!planName.trim()) {
+      toast.error('Укажите название тарифа');
+      return;
+    }
+    if (!planPrice.trim()) {
+      toast.error('Укажите стоимость');
+      return;
+    }
+
+    const featuresArray = planFeaturesText
+      .split('\n')
+      .map((f) => f.trim())
+      .filter((f) => f.length > 0);
+
+    setSavingPlan(true);
+    try {
+      const res = await updateLandingPricingPlanAction({
+        id: editingPlan.id,
+        name: planName.trim(),
+        price: planPrice.trim(),
+        period: planPeriod.trim() || 'сом/мес',
+        description: planDescription.trim() || undefined,
+        is_popular: planIsPopular,
+        badge_text: planBadgeText.trim() || undefined,
+        features: featuresArray,
+        button_text: planButtonText.trim() || 'Выбрать тариф',
+      });
+
+      if (res.success) {
+        toast.success(`Тариф «${planName}» успешно обновлен на лендинге`);
+        setEditingPlan(null);
+        loadData();
+      } else {
+        toast.error(res.error || 'Ошибка обновления тарифа');
+      }
+    } catch (e: any) {
+      toast.error(e.message || 'Сбой обновления');
+    } finally {
+      setSavingPlan(false);
     }
   };
 
@@ -135,54 +236,125 @@ export default function SuperAdminSubscriptionsPage() {
 
   return (
     <UnifiedWorkspaceLayout
-      title="Управление подписками и лимитами"
-      description="Контроль тарифных планов организаций, срока действия и фоновая проверка задолженностей"
+      title="Управление тарифами и подписками"
+      description="Настройка публичных тарифов лендинга и мониторинг подписок организаций"
       icon={CreditCard}
+      actionButtonsSlot={
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={checkingExpired}
+            onClick={handleCheckExpired}
+            className="border-purple-500/30 text-purple-300 hover:bg-purple-500/10 text-xs min-h-[40px]"
+          >
+            {checkingExpired ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                Проверка...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                Проверить просроченные
+              </>
+            )}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={loading}
+            onClick={loadData}
+            className="border-border text-xs min-h-[40px]"
+          >
+            {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Обновить'}
+          </Button>
+        </div>
+      }
     >
-      <div className="space-y-6">
-        {/* Карточки планов */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <Card className="bg-card border-border p-6 space-y-4 shadow-xl">
-            <div className="flex items-center justify-between">
-              <h3 className="font-bold text-foreground text-base">Базовый тариф</h3>
-              <Badge variant="outline" className="border-border text-muted-foreground text-xs">Стандарт</Badge>
+      <div className="space-y-8">
+        {/* СЕКЦИЯ 1: НАСТРОЙКА ПУБЛИЧНЫХ ТАРИФОВ ЛЕНДИНГА */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-base font-bold text-foreground flex items-center">
+                <SlidersHorizontal className="h-5 w-5 mr-2 text-blue-400" />
+                Публичные тарифы лендинга («Прозрачные тарифы без скрытых платежей»)
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                Редактируйте стоимость, описания, преимущества и бейджи тарифов в режиме реального времени
+              </p>
             </div>
-            <p className="text-2xl font-bold font-mono text-amber-400">0 сом <span className="text-xs text-muted-foreground font-normal">/ мес</span></p>
-            <ul className="space-y-2 text-xs text-muted-foreground">
-              <li className="flex items-center"><CheckCircle2 className="h-3.5 w-3.5 mr-2 text-emerald-400" /> До 50 документов в месяц</li>
-              <li className="flex items-center"><CheckCircle2 className="h-3.5 w-3.5 mr-2 text-emerald-400" /> 1 ГБ на облачном диске</li>
-              <li className="flex items-center"><CheckCircle2 className="h-3.5 w-3.5 mr-2 text-emerald-400" /> До 3 сотрудников</li>
-            </ul>
-          </Card>
+            <Badge variant="outline" className="border-blue-500/30 text-blue-400 bg-blue-500/10 text-xs font-mono">
+              Live на главной
+            </Badge>
+          </div>
 
-          <Card className="bg-card border-amber-500/30 p-6 space-y-4 relative overflow-hidden shadow-xl">
-            <div className="flex items-center justify-between">
-              <h3 className="font-bold text-foreground text-base">Бизнес тариф</h3>
-              <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/40 text-xs">Популярный</Badge>
-            </div>
-            <p className="text-2xl font-bold font-mono text-amber-400">1 500 сом <span className="text-xs text-muted-foreground font-normal">/ мес</span></p>
-            <ul className="space-y-2 text-xs text-muted-foreground">
-              <li className="flex items-center"><CheckCircle2 className="h-3.5 w-3.5 mr-2 text-emerald-400" /> Неограниченно документов</li>
-              <li className="flex items-center"><CheckCircle2 className="h-3.5 w-3.5 mr-2 text-emerald-400" /> 15 ГБ на облачном диске</li>
-              <li className="flex items-center"><CheckCircle2 className="h-3.5 w-3.5 mr-2 text-emerald-400" /> До 15 сотрудников</li>
-            </ul>
-          </Card>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {landingPlans.map((plan) => (
+              <Card
+                key={plan.id}
+                className={`bg-card p-6 flex flex-col justify-between shadow-xl relative transition-all ${
+                  plan.is_popular
+                    ? 'border-2 border-blue-500 shadow-blue-500/10'
+                    : 'border border-border'
+                }`}
+              >
+                {plan.is_popular && (
+                  <div className="absolute -top-3 left-6">
+                    <Badge className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-[11px] font-bold px-3 py-0.5 shadow-md">
+                      <Sparkles className="h-3 w-3 mr-1" />
+                      {plan.badge_text || 'Популярный'}
+                    </Badge>
+                  </div>
+                )}
 
-          <Card className="bg-card border-purple-500/30 p-6 space-y-4 shadow-xl">
-            <div className="flex items-center justify-between">
-              <h3 className="font-bold text-foreground text-base">Корпоративный</h3>
-              <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/40 text-xs">VIP</Badge>
-            </div>
-            <p className="text-2xl font-bold font-mono text-purple-400">Индивидуальный</p>
-            <ul className="space-y-2 text-xs text-muted-foreground">
-              <li className="flex items-center"><CheckCircle2 className="h-3.5 w-3.5 mr-2 text-emerald-400" /> Безлимитный облачный диск</li>
-              <li className="flex items-center"><CheckCircle2 className="h-3.5 w-3.5 mr-2 text-emerald-400" /> Выделенный сервер 1С</li>
-              <li className="flex items-center"><CheckCircle2 className="h-3.5 w-3.5 mr-2 text-emerald-400" /> Персональный консультант</li>
-            </ul>
-          </Card>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between pt-1">
+                    <h4 className="font-extrabold text-foreground text-lg">{plan.name}</h4>
+                    <span className="text-xs font-mono text-muted-foreground">ID: {plan.id}</span>
+                  </div>
+
+                  <div>
+                    <p className="text-3xl font-extrabold font-mono text-foreground">
+                      {plan.price}{' '}
+                      <span className="text-xs text-muted-foreground font-normal">{plan.period}</span>
+                    </p>
+                    {plan.description && (
+                      <p className="text-xs text-muted-foreground mt-1">{plan.description}</p>
+                    )}
+                  </div>
+
+                  <ul className="space-y-2 text-xs text-foreground/90 pt-3 border-t border-border">
+                    {(plan.features || []).map((feat, fIdx) => (
+                      <li key={fIdx} className="flex items-start">
+                        <CheckCircle2 className="h-3.5 w-3.5 mr-2 text-emerald-400 flex-shrink-0 mt-0.5" />
+                        <span>{feat}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div className="pt-6 mt-4 border-t border-border flex items-center justify-between">
+                  <span className="text-[11px] font-mono text-muted-foreground">
+                    Кнопка: «{plan.button_text}»
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleStartEditPlan(plan)}
+                    className="border-blue-500/30 text-blue-400 hover:bg-blue-500/10 text-xs h-8"
+                  >
+                    <Pencil className="h-3.5 w-3.5 mr-1.5" />
+                    Настроить
+                  </Button>
+                </div>
+              </Card>
+            ))}
+          </div>
         </div>
 
-        {/* Таблица Реестра Подписок Организаций */}
+        {/* СЕКЦИЯ 2: РЕЕСТР ПОДПИСОК ОРГАНИЗАЦИЙ */}
         <Card className="bg-card border-border p-5 space-y-4 shadow-xl">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
@@ -190,32 +362,11 @@ export default function SuperAdminSubscriptionsPage() {
                 <ShieldCheck className="h-5 w-5 mr-2 text-purple-400" />
                 Реестр Подписок Организаций
               </h3>
-              <p className="text-xs text-muted-foreground">Мониторинг активных тарифов и контроль окончания периодов</p>
+              <p className="text-xs text-muted-foreground">Мониторинг активных тарифов и контроль окончания периодов компаний</p>
             </div>
-            <div className="flex items-center space-x-3">
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={checkingExpired}
-                onClick={handleCheckExpired}
-                className="border-purple-500/30 text-purple-300 hover:bg-purple-500/10 text-xs h-8"
-              >
-                {checkingExpired ? (
-                  <>
-                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                    Проверка...
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
-                    Проверить просроченные
-                  </>
-                )}
-              </Button>
-              <Badge variant="outline" className="border-border text-muted-foreground font-mono text-xs">
-                Всего: {subscriptions.length}
-              </Badge>
-            </div>
+            <Badge variant="outline" className="border-border text-muted-foreground font-mono text-xs">
+              Всего: {subscriptions.length} компаний
+            </Badge>
           </div>
 
           <UnifiedDataGrid<any>
@@ -230,6 +381,122 @@ export default function SuperAdminSubscriptionsPage() {
           />
         </Card>
       </div>
+
+      {/* МОДАЛЬНОЕ ОКНО РЕДАКТИРОВАНИЯ ТАРИФА ЛЕНДИНГА */}
+      {editingPlan && (
+        <UnifiedFormModal
+          isOpen={!!editingPlan}
+          onClose={() => setEditingPlan(null)}
+          title={`Настройка тарифа «${editingPlan.name}»`}
+          subtitle="Изменение параметров отображения плана в секции «Прозрачные тарифы» на главной странице"
+          mode="edit"
+          submitText={savingPlan ? 'Сохранение...' : 'Сохранить тариф'}
+          isSubmitting={savingPlan}
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleSavePlan();
+          }}
+        >
+          <div className="space-y-4 max-h-[65vh] overflow-y-auto pr-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold">Название тарифа *</Label>
+                <Input
+                  value={planName}
+                  onChange={(e) => setPlanName(e.target.value)}
+                  placeholder="Старт / Бизнес / Премиум"
+                  className="bg-card border-border text-sm"
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold">Стоимость (KGS) *</Label>
+                <Input
+                  value={planPrice}
+                  onChange={(e) => setPlanPrice(e.target.value)}
+                  placeholder="990 / 2 490"
+                  className="bg-card border-border font-mono text-sm"
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold">Период оплаты</Label>
+                <Input
+                  value={planPeriod}
+                  onChange={(e) => setPlanPeriod(e.target.value)}
+                  placeholder="сом/мес"
+                  className="bg-card border-border text-sm"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold">Текст на кнопке</Label>
+                <Input
+                  value={planButtonText}
+                  onChange={(e) => setPlanButtonText(e.target.value)}
+                  placeholder="Начать 7 дней бесплатно"
+                  className="bg-card border-border text-sm"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold">Краткое описание</Label>
+              <Input
+                value={planDescription}
+                onChange={(e) => setPlanDescription(e.target.value)}
+                placeholder="Для кого предназначен данный план"
+                className="bg-card border-border text-sm"
+              />
+            </div>
+
+            <div className="p-3.5 bg-muted/40 border border-border rounded-xl space-y-3">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="is_popular"
+                  checked={planIsPopular}
+                  onCheckedChange={(checked) => setPlanIsPopular(Boolean(checked))}
+                />
+                <Label htmlFor="is_popular" className="text-xs font-bold cursor-pointer">
+                  Выделить как популярный тариф (Популярный план)
+                </Label>
+              </div>
+
+              {planIsPopular && (
+                <div className="space-y-1.5 pt-1">
+                  <Label className="text-xs text-muted-foreground">Текст бейджа популярности</Label>
+                  <Input
+                    value={planBadgeText}
+                    onChange={(e) => setPlanBadgeText(e.target.value)}
+                    placeholder="Самый популярный / Хит продаж"
+                    className="bg-card border-border text-xs"
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-semibold">Преимущества (каждое с новой строки)</Label>
+                <span className="text-[11px] text-muted-foreground font-mono">
+                  {planFeaturesText.split('\n').filter((f) => f.trim().length > 0).length} пунктов
+                </span>
+              </div>
+              <textarea
+                value={planFeaturesText}
+                onChange={(e) => setPlanFeaturesText(e.target.value)}
+                rows={5}
+                placeholder="До 500 первичных документов в месяц&#10;Неограниченное число сотрудников&#10;Telegram-оповещения"
+                className="w-full bg-card border border-border rounded-xl p-3 text-xs text-foreground font-sans focus:outline-none focus:ring-2 focus:ring-primary leading-relaxed"
+              />
+            </div>
+          </div>
+        </UnifiedFormModal>
+      )}
     </UnifiedWorkspaceLayout>
   );
 }

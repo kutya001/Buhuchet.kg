@@ -3,7 +3,7 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { requireSuperAdminSession } from '@/lib/auth/server-context';
 import { deleteR2ObjectsBatch } from '@/lib/r2';
-import type { ActionResponse, Company, CompanyStatus, Document, FileCategory } from '@/types/database.types';
+import type { ActionResponse, Company, CompanyStatus, Document, FileCategory, LandingPricingPlan } from '@/types/database.types';
 import { revalidatePath, unstable_cache } from 'next/cache';
 import { z } from 'zod';
 import { createSafeAction } from '@/lib/auth/safe-action';
@@ -1441,6 +1441,82 @@ export async function checkExpiredSubscriptionsAdminAction(): Promise<ActionResp
     return { success: false, error: err instanceof Error ? err.message : 'Сбой проверки подписок' };
   }
 }
+
+/**
+ * Получение настраиваемых тарифов лендинга
+ */
+export async function getLandingPricingPlansAction(): Promise<ActionResponse<LandingPricingPlan[]>> {
+  try {
+    const adminSupabase = await createAdminClient();
+    const { data, error } = await adminSupabase
+      .from('landing_pricing_plans')
+      .select('*')
+      .order('sort_order', { ascending: true });
+
+    if (error) return { success: false, error: error.message };
+    return { success: true, data: (data || []) as LandingPricingPlan[] };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Сбой выборки тарифов' };
+  }
+}
+
+/**
+ * Редактирование тарифа лендинга суперадминистратором
+ */
+export const updateLandingPricingPlanAction = createSafeAction(
+  z.object({
+    id: z.string().min(1),
+    name: z.string().min(1, 'Укажите название тарифа'),
+    price: z.string().min(1, 'Укажите стоимость'),
+    period: z.string().default('сом/мес'),
+    description: z.string().optional().nullable(),
+    is_popular: z.boolean().default(false),
+    badge_text: z.string().optional().nullable(),
+    features: z.array(z.string()).default([]),
+    button_text: z.string().default('Выбрать тариф'),
+  }),
+  async ({ id, name, price, period, description, is_popular, badge_text, features, button_text }, ctx) => {
+    if (!ctx.isSuperAdmin) {
+      return { success: false, error: 'Доступ разрешен только Суперадминистратору' };
+    }
+
+    const adminSupabase = await createAdminClient();
+
+    const { data: updated, error } = await adminSupabase
+      .from('landing_pricing_plans')
+      .update({
+        name,
+        price,
+        period,
+        description: description || null,
+        is_popular,
+        badge_text: badge_text || null,
+        features,
+        button_text,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    // Аудит
+    await adminSupabase.from('admin_audit_logs').insert({
+      admin_id: ctx.userId,
+      action: 'pricing_plan_updated',
+      target_type: 'subscription_plan',
+      target_id: id,
+      details: { name, price, is_popular },
+    });
+
+    revalidatePath('/');
+    revalidatePath('/super-admin/subscriptions');
+    return { success: true, data: updated as LandingPricingPlan };
+  }
+);
 
 
 
