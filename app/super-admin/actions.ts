@@ -648,16 +648,23 @@ export async function deleteFileCategoryAdminAction(catId: string): Promise<Acti
 // -------------------------------------------------------------
 
 const ALLOWED_INSPECTOR_TABLES = [
-  'users',
   'companies',
+  'users',
   'documents',
   'files',
+  'file_owners',
+  'file_categories',
   'counterparties',
   'company_partnerships',
-  'file_categories',
-  'document_logs',
   'company_roles',
+  'company_closed_periods',
   'subscriptions',
+  'document_logs',
+  'audit_logs',
+  'pending_file_deletions',
+  'telegram_connections',
+  'telegram_logs',
+  'telegram_verification_codes',
 ];
 
 export async function inspectTableDataAdminAction(
