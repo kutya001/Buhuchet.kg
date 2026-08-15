@@ -5,9 +5,19 @@ import type { ActionResponse, Company } from '@/types/database.types';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
+import { validateKyrgyzINN } from '@/lib/validators/inn';
+
 const onboardingSchema = z.object({
   name: z.string().min(2, { message: 'Укажите официальное наименование организации' }),
-  inn: z.string().length(14, { message: 'ИНН Кыргызстана должен состоять строго из 14 цифр' }),
+  inn: z.string().superRefine((val, ctx) => {
+    const res = validateKyrgyzINN(val);
+    if (!res.isValid) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: res.error || 'Некорректный ИНН Кыргызской Республики',
+      });
+    }
+  }),
   industry: z.string().min(1, { message: 'Выберите отрасль компании' }),
   email: z.string().email({ message: 'Укажите корректный контактный E-mail' }),
   phone: z.string().min(6, { message: 'Укажите контактный телефон' }),

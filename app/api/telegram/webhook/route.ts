@@ -1,18 +1,34 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/server';
 import { sendTelegramMessage } from '@/lib/telegram/notifier';
+import crypto from 'crypto';
+
+/**
+ * Валидация подлинности входящего вебхука через X-Telegram-Bot-Api-Secret-Token
+ */
+function verifyTelegramSecret(req: Request): boolean {
+  const configuredSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
+  // Если секрет настроен в окружении, проверка обязательна
+  if (configuredSecret && configuredSecret.trim() !== '') {
+    const receivedToken = req.headers.get('x-telegram-bot-api-secret-token') || '';
+    const secretBuffer = Buffer.from(configuredSecret.trim());
+    const receivedBuffer = Buffer.from(receivedToken);
+
+    if (secretBuffer.length !== receivedBuffer.length) {
+      return false;
+    }
+    return crypto.timingSafeEqual(secretBuffer, receivedBuffer);
+  }
+  return true;
+}
 
 export async function POST(req: Request) {
-  try {
-    // 0. Авторизация по секретному токену X-Telegram-Bot-Api-Secret-Token
-    const webhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
-    if (webhookSecret && webhookSecret.trim() !== '') {
-      const receivedToken = req.headers.get('x-telegram-bot-api-secret-token');
-      if (receivedToken !== webhookSecret.trim()) {
-        return NextResponse.json({ error: 'Unauthorized: invalid secret token' }, { status: 401 });
-      }
-    }
+  // 1. Немедленная верификация криптографического токена до парсинга JSON
+  if (!verifyTelegramSecret(req)) {
+    return new Response(null, { status: 403, statusText: 'Forbidden' });
+  }
 
+  try {
     const update = await req.json();
 
     if (!update.message || !update.message.text) {

@@ -29,6 +29,8 @@ async function getUserContext() {
   };
 }
 
+import { validateFileMetadata, MAX_FILE_SIZE_BYTES } from '@/lib/files/validation';
+
 /**
  * Генерация Presigned PUT URL для прямой загрузки скана из браузера в Cloudflare R2
  */
@@ -42,22 +44,15 @@ export async function getPresignedUploadUrlAction(
       return { success: false, error: 'Пользователь не авторизован' };
     }
 
+    const validation = validateFileMetadata(fileName, fileType);
+    if (!validation.valid) {
+      return { success: false, error: validation.error || 'Недопустимый тип файла' };
+    }
+
     const now = new Date();
     const year = now.getFullYear();
     const month = String(now.getMonth() + 1).padStart(2, '0');
     const uniqueId = Math.random().toString(36).substring(2, 10);
-
-    // Нормализация MIME-типа для мобильных устройств (iOS / Android)
-    let cleanContentType = (fileType || '').split(';')[0].trim().toLowerCase();
-    if (!cleanContentType || cleanContentType === 'application/octet-stream') {
-      if (fileName.endsWith('.pdf')) {
-        cleanContentType = 'application/pdf';
-      } else if (fileName.match(/\.(png|jpg|jpeg|webp|heic|heif)$/i)) {
-        cleanContentType = 'image/jpeg';
-      } else {
-        cleanContentType = 'image/jpeg';
-      }
-    }
 
     // Безопасное имя файла
     const safeFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
@@ -67,7 +62,7 @@ export async function getPresignedUploadUrlAction(
     const command = new PutObjectCommand({
       Bucket: r2BucketName,
       Key: fileKey,
-      ContentType: cleanContentType,
+      ContentType: validation.cleanContentType,
     });
 
     // Ссылка действительна 15 минут
@@ -78,7 +73,7 @@ export async function getPresignedUploadUrlAction(
       data: {
         uploadUrl,
         fileKey,
-        cleanContentType,
+        cleanContentType: validation.cleanContentType,
       },
     };
   } catch (err: unknown) {
@@ -104,6 +99,15 @@ export async function uploadFileDirectlyServerAction(
       return { success: false, error: 'Файл не передан в форму' };
     }
 
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      return { success: false, error: 'Размер файла превышает лимит 25 МБ' };
+    }
+
+    const validation = validateFileMetadata(file.name || 'scan.jpg', file.type);
+    if (!validation.valid) {
+      return { success: false, error: validation.error || 'Недопустимый формат файла' };
+    }
+
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
@@ -114,17 +118,12 @@ export async function uploadFileDirectlyServerAction(
     const safeFileName = (file.name || 'scan.jpg').replace(/[^a-zA-Z0-9.-]/g, '_');
     const fileKey = `companies/${ctx.companyId}/${year}/${month}/${uniqueId}-${safeFileName}`;
 
-    let cleanContentType = (file.type || '').split(';')[0].trim().toLowerCase();
-    if (!cleanContentType || cleanContentType === 'application/octet-stream') {
-      cleanContentType = safeFileName.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg';
-    }
-
     await r2Client.send(
       new PutObjectCommand({
         Bucket: r2BucketName,
         Key: fileKey,
         Body: buffer,
-        ContentType: cleanContentType,
+        ContentType: validation.cleanContentType,
       })
     );
 

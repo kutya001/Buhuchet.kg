@@ -7,6 +7,8 @@ import { cache } from 'react';
 import { z } from 'zod';
 import { createSafeAction } from '@/lib/auth/safe-action';
 import { getPresignedDownloadUrl } from '@/lib/r2';
+import { verifyR2FileMagicBytes } from '@/lib/files/validation';
+import { validateKyrgyzINN } from '@/lib/validators/inn';
 import {
   sendCollaborationTelegramNotification,
   sendCollaborationConfirmedTelegramNotification,
@@ -278,8 +280,13 @@ export async function createManualCounterpartyAction(data: {
       return { success: false, error: 'Пользователь не авторизован' };
     }
 
-    if (!data.name || !data.inn || data.inn.length !== 14) {
-      return { success: false, error: 'Укажите корректное наименование и ИНН КР (14 цифр)' };
+    if (!data.name || !data.inn) {
+      return { success: false, error: 'Укажите наименование и ИНН организации' };
+    }
+
+    const innValidation = validateKyrgyzINN(data.inn);
+    if (!innValidation.isValid) {
+      return { success: false, error: innValidation.error || 'Некорректный ИНН Кыргызской Республики' };
     }
 
     const adminSupabase = await createAdminClient();
@@ -340,17 +347,20 @@ export async function createManualCounterpartyAction(data: {
 
     // Загрузка прикрепленного файла R2 в таблицу files (если предоставлен)
     if (data.file_path_r2 && data.file_name) {
-      await adminSupabase.from('files').insert({
-        company_id: ctx.companyId,
-        document_id: null,
-        file_name: data.file_name,
-        size_bytes: 1572864,
-        file_type: 'image',
-        file_path_r2: data.file_path_r2,
-        description: `Учредительный документ контрагента ${data.name}`,
-        is_internal: true,
-        is_legal_doc: true,
-      });
+      const magicCheck = await verifyR2FileMagicBytes(data.file_path_r2);
+      if (magicCheck.valid) {
+        await adminSupabase.from('files').insert({
+          company_id: ctx.companyId,
+          document_id: null,
+          file_name: data.file_name,
+          size_bytes: 1572864,
+          file_type: 'image',
+          file_path_r2: data.file_path_r2,
+          description: `Учредительный документ контрагента ${data.name}`,
+          is_internal: true,
+          is_legal_doc: true,
+        });
+      }
     }
 
     revalidatePath('/dashboard/counterparties');

@@ -12,6 +12,7 @@ import { cache } from 'react';
 import { hasPermission, ModuleName, ActionName } from '@/lib/auth/permissions';
 import { sendTelegramNotification, sendDocumentTelegramNotification, sendDocumentStatusTelegramNotification } from '@/lib/telegram/notifier';
 import { isPeriodClosed } from '@/lib/auth/period-lock';
+import { verifyR2FileMagicBytes } from '@/lib/files/validation';
 
 const getUserContext = cache(async () => {
   const supabase = await createClient();
@@ -51,10 +52,16 @@ const getUserContext = cache(async () => {
   };
 });
 
-// Получение списка документов организации с поддержкой серверной пагинации
+// Получение списка документов организации с поддержкой серверной пагинации и фильтрации (PERF-02)
 export async function getB2BDocumentsAction(
   page: number = 1,
-  limit: number = 50
+  limit: number = 50,
+  filters?: {
+    search?: string;
+    tab?: 'all' | 'inbox' | 'outbox' | 'drafts';
+    status?: string;
+    docType?: string;
+  }
 ): Promise<ActionResponse<{ docs: any[]; totalCount: number; currentCompanyId?: string }>> {
   try {
     const ctx = await getUserContext();
@@ -67,13 +74,39 @@ export async function getB2BDocumentsAction(
     }
 
     const adminSupabase = await createAdminClient();
-    const from = (page - 1) * limit;
-    const to = page * limit - 1;
+    const safeLimit = Math.min(Math.max(limit, 1), 100);
+    const from = (Math.max(page, 1) - 1) * safeLimit;
+    const to = from + safeLimit - 1;
 
-    const { data: docs, count, error } = await adminSupabase
+    let query = adminSupabase
       .from('documents')
-      .select('id, doc_number, doc_date, doc_type, status, total_amount, comment, mock_file_name, mock_file_size, created_at, sender_company_id, receiver_company_id, sender_company:companies!sender_company_id(name, inn), receiver_company:companies!receiver_company_id(name, inn), files(id, file_name, size_bytes), author:users!author_id(full_name)', { count: 'exact' })
-      .or(`sender_company_id.eq.${ctx.companyId},receiver_company_id.eq.${ctx.companyId}`)
+      .select('id, doc_number, doc_date, doc_type, status, total_amount, comment, mock_file_name, mock_file_size, created_at, sender_company_id, receiver_company_id, sender_company:companies!sender_company_id(name, inn), receiver_company:companies!receiver_company_id(name, inn), files(id, file_name, size_bytes), author:users!author_id(full_name)', { count: 'exact' });
+
+    // Фильтрация по направлению (вкладкам)
+    if (filters?.tab === 'inbox') {
+      query = query.eq('receiver_company_id', ctx.companyId).neq('status', 'draft');
+    } else if (filters?.tab === 'outbox') {
+      query = query.eq('sender_company_id', ctx.companyId);
+    } else if (filters?.tab === 'drafts') {
+      query = query.eq('sender_company_id', ctx.companyId).eq('status', 'draft');
+    } else {
+      query = query.or(`sender_company_id.eq.${ctx.companyId},receiver_company_id.eq.${ctx.companyId}`);
+    }
+
+    if (filters?.status && filters.status !== 'all') {
+      query = query.eq('status', filters.status);
+    }
+
+    if (filters?.docType && filters.docType !== 'all') {
+      query = query.eq('doc_type', filters.docType);
+    }
+
+    if (filters?.search && filters.search.trim() !== '') {
+      const s = filters.search.trim();
+      query = query.or(`doc_number.ilike.%${s}%,comment.ilike.%${s}%,mock_file_name.ilike.%${s}%`);
+    }
+
+    const { data: docs, count, error } = await query
       .order('created_at', { ascending: false })
       .range(from, to);
 
@@ -93,7 +126,7 @@ export async function getB2BDocumentsAction(
       success: true,
       data: {
         docs: filteredDocs,
-        totalCount: filteredDocs.length,
+        totalCount: count ?? filteredDocs.length,
         currentCompanyId: ctx.companyId,
       },
     };
@@ -391,60 +424,39 @@ export async function createB2BDocumentAction(data: B2BDocumentInput): Promise<A
     const supabase = await createClient();
     const adminSupabase = await createAdminClient();
 
-    // 1. Создаем документ через надежный adminSupabase клиент
-    const { data: doc, error: docError } = await adminSupabase
-      .from('documents')
-      .insert({
-        company_id: ctx.companyId,
-        author_id: ctx.userId,
-        sender_company_id: ctx.companyId,
-        receiver_company_id,
-        doc_number: doc_number || null,
-        doc_date,
-        doc_type,
-        status: status || 'draft',
-        comment: comment || null,
-        mock_file_name: files[0]?.file_name || null,
-        mock_file_size: typeof files[0]?.size_bytes === 'number' ? files[0].size_bytes : null,
-      })
-      .select()
-      .single();
-
-    if (docError || !doc) {
-      return { success: false, error: `Ошибка создания документа: ${docError?.message}` };
-    }
-
-    // 2. Вставляем прикрепленные файлы
+    // 1. Проверяем целостность и сигнатуры всех прикрепляемых файлов R2
     if (files && files.length > 0) {
-      const filesToInsert = files.map((f) => ({
-        company_id: ctx.companyId,
-        document_id: doc.id,
-        category_id: f.category_id,
-        file_name: f.file_name,
-        size_bytes: typeof f.size_bytes === 'number' ? f.size_bytes : 1572864,
-        file_type: f.file_type || 'pdf',
-        file_path_r2: f.file_path_r2 || null,
-        description: f.description || `Прикрепленный скан ${f.file_name}`,
-        comment: f.comment || null,
-        is_internal: false,
-        is_legal_doc: false,
-      }));
-
-      const { error: filesError } = await adminSupabase.from('files').insert(filesToInsert);
-
-      if (filesError) {
-        return { success: false, error: `Ошибка сохранения прикрепленных файлов: ${filesError.message}` };
+      for (const f of files) {
+        if (f.file_path_r2) {
+          const magicCheck = await verifyR2FileMagicBytes(f.file_path_r2);
+          if (!magicCheck.valid) {
+            return { success: false, error: `Файл ${f.file_name}: ${magicCheck.error || 'недопустимый формат'}` };
+          }
+        }
       }
     }
 
-    // 3. Запись в логах аудита
-    await supabase.from('document_logs').insert({
-      document_id: doc.id,
-      user_id: ctx.userId,
-      old_status: null,
-      new_status: doc.status,
-      comment: doc.status === 'sent' ? 'Документ отправлен адресату' : 'Документ сохранен как черновик',
+    // 2. Атомарное создание документа, файлов и логов в единой транзакции базы данных (ARCH-01)
+    const { data: docRaw, error: rpcError } = await adminSupabase.rpc('create_document_atomic', {
+      p_company_id: ctx.companyId,
+      p_author_id: ctx.userId,
+      p_sender_company_id: ctx.companyId,
+      p_receiver_company_id: receiver_company_id,
+      p_doc_number: doc_number || null,
+      p_doc_date: doc_date,
+      p_doc_type: doc_type,
+      p_status: status || 'draft',
+      p_comment: comment || null,
+      p_mock_file_name: files[0]?.file_name || null,
+      p_mock_file_size: typeof files[0]?.size_bytes === 'number' ? files[0].size_bytes : null,
+      p_files: files || [],
     });
+
+    if (rpcError || !docRaw) {
+      return { success: false, error: `Ошибка создания документа: ${rpcError?.message || 'Сбой транзакции'}` };
+    }
+
+    const doc = docRaw as Document;
 
     // 4. Отправка подробного Telegram-уведомления организации-получателю
     if (doc.status === 'sent' && data.receiver_company_id) {

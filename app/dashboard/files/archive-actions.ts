@@ -8,6 +8,7 @@ import { createSafeAction } from '@/lib/auth/safe-action';
 import { getLookupCategories } from '@/lib/cache/lookups';
 import { deleteR2Object, getPresignedDownloadUrl } from '@/lib/r2';
 import { formatBytes } from '@/lib/utils';
+import { verifyR2FileMagicBytes } from '@/lib/files/validation';
 
 export async function getFileViewUrlAction(
   fileKey: string,
@@ -100,6 +101,13 @@ export async function uploadLegalDocumentAction(data: ArchiveFileInput): Promise
       targetCatId = ustavCat?.id || '268dda23-d839-429d-bec2-aae391cffb00';
     }
 
+    if (file_path_r2) {
+      const magicCheck = await verifyR2FileMagicBytes(file_path_r2);
+      if (!magicCheck.valid) {
+        return { success: false, error: magicCheck.error || 'Недопустимый формат файла' };
+      }
+    }
+
     const adminSupabase = await createAdminClient();
     const { data: insertedFile, error } = await adminSupabase
       .from('files')
@@ -182,6 +190,13 @@ export async function uploadFileToArchiveAction(data: ArchiveFileInput): Promise
     if (!targetCatId) {
       const cachedCategories = await getLookupCategories();
       targetCatId = cachedCategories[0]?.id || 'd9f0d6c6-2423-4b35-a72c-1bb380699a9c';
+    }
+
+    if (file_path_r2) {
+      const magicCheck = await verifyR2FileMagicBytes(file_path_r2);
+      if (!magicCheck.valid) {
+        return { success: false, error: magicCheck.error || 'Недопустимый формат файла' };
+      }
     }
 
     const { data: insertedFile, error } = await adminSupabase
@@ -538,13 +553,20 @@ function parseSizeToBytes(sizeVal?: number | string | null): number {
 }
 
 /**
- * ПОЛНЫЙ РЕЕСТР ФАЙЛОВ С КЛАССИФИКАЦИЕЙ ИСТОЧНИКОВ, ССЫЛКАМИ И СТАТИСТИКОЙ ОБЪЕМА
+ * ПОЛНЫЙ РЕЕСТР ФАЙЛОВ С КЛАССИФИКАЦИЕЙ ИСТОЧНИКОВ, ССЫЛКАМИ И СТАТИСТИКОЙ ОБЪЕМА (С СЕРВЕРНОЙ ОПТИМИЗАЦИЕЙ PERF-02)
  */
-export async function getComprehensiveFileRegistryAction(): Promise<
+export async function getComprehensiveFileRegistryAction(params?: {
+  page?: number;
+  limit?: number;
+  search?: string;
+  sourceType?: string;
+  fileFormat?: string;
+}): Promise<
   ActionResponse<{
     files: EnrichedFileItem[];
     stats: FileRegistryStats;
     myCompanyId: string;
+    totalCount?: number;
   }>
 > {
   try {
@@ -590,12 +612,12 @@ export async function getComprehensiveFileRegistryAction(): Promise<
       });
     }
 
-    // 3. Извлекаем ВСЕ привязанные к компании и ее документам файлы
+    // 3. Извлекаем файлы с поддержкой серверных фильтров и пагинации
     const docIds = Array.from(docMap.keys());
     
     let query = adminSupabase
       .from('files')
-      .select('*, file_categories(*)')
+      .select('*, file_categories(*)', { count: 'exact' })
       .order('created_at', { ascending: false });
 
     if (docIds.length > 0) {
@@ -604,7 +626,20 @@ export async function getComprehensiveFileRegistryAction(): Promise<
       query = query.eq('company_id', myCompanyId);
     }
 
-    const { data: rawFiles, error } = await query;
+    if (params?.search && params.search.trim() !== '') {
+      const s = params.search.trim();
+      query = query.or(`file_name.ilike.%${s}%,description.ilike.%${s}%,comment.ilike.%${s}%`);
+    }
+
+    if (params?.page && params?.limit) {
+      const page = Math.max(params.page, 1);
+      const limit = Math.min(Math.max(params.limit, 1), 200);
+      const from = (page - 1) * limit;
+      const to = from + limit - 1;
+      query = query.range(from, to);
+    }
+
+    const { data: rawFiles, count, error } = await query;
 
     if (error) {
       return { success: false, error: `Ошибка выгрузки файла архива: ${error.message}` };

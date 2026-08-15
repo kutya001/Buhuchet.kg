@@ -318,7 +318,11 @@ export async function createCompanyRoleAction(params: {
     }
 
     revalidatePath('/dashboard/employees');
-    revalidateTag('company-roles');
+    if (ctx.companyId) {
+      revalidateTag(`company:${ctx.companyId}:roles`);
+    } else {
+      revalidateTag('company-roles');
+    }
     return { success: true, data: role as CompanyRole };
   } catch (err: unknown) {
     return { success: false, error: err instanceof Error ? err.message : 'Сбой создания роли' };
@@ -354,7 +358,11 @@ export async function updateCompanyRoleAction(
     }
 
     revalidatePath('/dashboard/employees');
-    revalidateTag('company-roles');
+    if (ctx.companyId) {
+      revalidateTag(`company:${ctx.companyId}:roles`);
+    } else {
+      revalidateTag('company-roles');
+    }
     return { success: true, data: updated as CompanyRole };
   } catch (err: unknown) {
     return { success: false, error: err instanceof Error ? err.message : 'Сбой обновления роли' };
@@ -381,6 +389,11 @@ export async function deleteCompanyRoleAction(
     }
 
     revalidatePath('/dashboard/employees');
+    if (ctx.companyId) {
+      revalidateTag(`company:${ctx.companyId}:roles`);
+    } else {
+      revalidateTag('company-roles');
+    }
     return { success: true, data: { message: 'Роль успешно удалена' } };
   } catch (err: unknown) {
     return { success: false, error: err instanceof Error ? err.message : 'Сбой удаления роли' };

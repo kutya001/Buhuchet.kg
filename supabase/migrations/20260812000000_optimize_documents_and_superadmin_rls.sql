@@ -8,6 +8,7 @@ CREATE OR REPLACE FUNCTION public.is_super_admin()
 RETURNS boolean
 LANGUAGE sql
 SECURITY DEFINER
+SET search_path = public, pg_temp
 STABLE
 AS $$
   SELECT COALESCE(

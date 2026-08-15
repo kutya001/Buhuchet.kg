@@ -4,6 +4,7 @@ import { createClient, createAdminClient } from '@/lib/supabase/server';
 import type { ActionResponse, Company } from '@/types/database.types';
 import type { CompanyProfileStats, ClosedPeriodItem, YearClosedPeriodsSummary } from '@/types/company.types';
 import { revalidatePath, revalidateTag } from 'next/cache';
+import { validateKyrgyzINN } from '@/lib/validators/inn';
 
 /**
  * Получение агрегированной статистики профиля компании
@@ -109,7 +110,13 @@ export async function updateCompanyProfileAction(
 
     if (data.name !== undefined) updatePayload.name = data.name;
     if (data.legal_form !== undefined) updatePayload.legal_form = data.legal_form;
-    if (data.inn !== undefined) updatePayload.inn = data.inn;
+    if (data.inn !== undefined) {
+      const innValidation = validateKyrgyzINN(data.inn);
+      if (!innValidation.isValid) {
+        return { success: false, error: innValidation.error || 'Некорректный ИНН Кыргызской Республики' };
+      }
+      updatePayload.inn = data.inn;
+    }
     if (data.okpo !== undefined) updatePayload.okpo = data.okpo;
     if (data.industry !== undefined) updatePayload.industry = data.industry;
     if (data.director_name !== undefined) updatePayload.director_name = data.director_name;

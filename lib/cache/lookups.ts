@@ -3,8 +3,8 @@ import { createAdminClient } from '@/lib/supabase/server';
 import type { FileCategory, CompanyRole, Company } from '@/types/database.types';
 
 /**
- * Кэшированное получение глобального справочника категорий сканов первички (R2).
- * Срок действия кэша: 1 час (3600 сек). Тег инвалидации: 'file-categories'.
+ * 1. Глобальный справочник категорий сканов (R2).
+ * Срок: 1 час (3600 сек). Тег: 'global:file-categories'.
  */
 export const getLookupCategories = unstable_cache(
   async (): Promise<FileCategory[]> => {
@@ -17,32 +17,33 @@ export const getLookupCategories = unstable_cache(
     return (data || []) as FileCategory[];
   },
   ['lookup-file-categories'],
-  { revalidate: 3600, tags: ['file-categories'] }
+  { revalidate: 3600, tags: ['global:file-categories'] }
 );
 
 /**
- * Кэшированное получение кастомных ролей компании RBAC.
- * Срок действия кэша: 5 минут (300 сек). Тег инвалидации: 'company-roles'.
+ * 2. Роли компании RBAC с изоляцией кэша по тегу `company:${companyId}:roles`.
+ * Срок: 10 минут (600 сек).
  */
-export const getLookupCompanyRoles = unstable_cache(
-  async (companyId: string): Promise<CompanyRole[]> => {
-    if (!companyId) return [];
-    const adminSupabase = await createAdminClient();
-    const { data } = await adminSupabase
-      .from('company_roles')
-      .select('*')
-      .eq('company_id', companyId)
-      .order('created_at', { ascending: true });
+export const getLookupCompanyRoles = (companyId: string) =>
+  unstable_cache(
+    async (): Promise<CompanyRole[]> => {
+      if (!companyId) return [];
+      const adminSupabase = await createAdminClient();
+      const { data } = await adminSupabase
+        .from('company_roles')
+        .select('*')
+        .eq('company_id', companyId)
+        .order('created_at', { ascending: true });
 
-    return (data || []) as CompanyRole[];
-  },
-  ['lookup-company-roles'],
-  { revalidate: 300, tags: ['company-roles'] }
-);
+      return (data || []) as CompanyRole[];
+    },
+    [`lookup-company-roles-${companyId}`],
+    { revalidate: 600, tags: [`company:${companyId}:roles`, 'company-roles'] }
+  )();
 
 /**
- * Кэшированное получение публичного каталога верифицированных организаций КР.
- * Срок действия кэша: 10 минут (600 сек). Тег инвалидации: 'companies-catalog'.
+ * 3. Публичный каталог верифицированных компаний.
+ * Срок: 10 минут (600 сек). Тег: 'global:companies-catalog'.
  */
 export const getLookupCompaniesCatalog = unstable_cache(
   async (): Promise<Company[]> => {
@@ -56,5 +57,5 @@ export const getLookupCompaniesCatalog = unstable_cache(
     return (data || []) as Company[];
   },
   ['lookup-companies-catalog'],
-  { revalidate: 600, tags: ['companies-catalog'] }
+  { revalidate: 600, tags: ['global:companies-catalog', 'companies-catalog'] }
 );
