@@ -155,18 +155,71 @@ export type ActionResponse<T = any> = {
 
 ### 3.4 Модуль «Сотрудники и Роли RBAC» (`app/dashboard/employees/actions.ts`)
 
+#### `getMyEmployeeProfileInfoAction`
+- **Auth**: Private (Tenant / Authenticated)
+- **Response**: `ActionResponse<UserProfile>`
+- **Бизнес-логика**: Безопасный серверный запрос полного профиля текущего пользователя с привязанными объектами `companies` и `company_roles` через `adminSupabase`.
+
 #### `getCompanyEmployeesAction`
 - **Auth**: Private (Tenant)
 - **RBAC**: `employees:view`
-- **Response**: `ActionResponse<UserProfile[]>`
+- **Input**: `page: number = 1, limit: number = 25, searchQuery?: string`
+- **Response**: `ActionResponse<{ employees: UserProfile[]; totalCount: number }>`
 - **Таблицы БД**: `users`, `company_roles`
 
-#### `approveEmployeeJoinRequestAction`
+#### `getPendingRequestsAction`
+- **Auth**: Private (Tenant)
+- **RBAC**: `employees:view` (Владельцы и суперадминистраторы)
+- **Input**: `companyId?: string`
+- **Response**: `ActionResponse<any[]>`
+- **Бизнес-логика**: Возвращает список ожидающих заявок соискателей (`company_join_requests` со статусом `pending`), сопоставляя ФИО, контакты и желаемую должность из `public.users`.
+- **Таблицы БД**: `company_join_requests`, `users`
+
+#### `approveEmployeeRequestAction`
+- **Auth**: Private (Tenant)
+- **RBAC**: `employees:edit_employee` (Строго Руководитель / Owner)
+- **Zod Schema**: `z.object({ userId: z.string().uuid(), requestId: z.string().uuid().optional(), roleId: z.string().uuid(), position: z.string() })`
+- **Response**: `ActionResponse<{ message: string }>`
+- **Бизнес-логика**: 
+  1. Прикрепляет пользователя к организации (`users.company_id = ctx.companyId`, `role_id = params.roleId`, `position = params.position`, `role = 'manager'`).
+  2. Переводит заявку в статус `status = 'approved'` с фиксацией `reviewed_by` и `reviewed_at`.
+  3. Отправляет Telegram-уведомление кандидату о зачислении в штат.
+- **Таблицы БД**: `users`, `company_join_requests`, `telegram_connections`
+
+#### `rejectEmployeeRequestAction`
+- **Auth**: Private (Tenant)
+- **RBAC**: `employees:edit_employee` (Строго Руководитель / Owner)
+- **Zod Schema**: `z.object({ userId: z.string().uuid(), requestId: z.string().uuid().optional(), reason: z.string().optional() })`
+- **Response**: `ActionResponse<{ message: string }>`
+- **Бизнес-логика**: Переводит заявку соискателя в статус `rejected`, сбрасывает временные привязки и отправляет Telegram-уведомление об отказе.
+- **Таблицы БД**: `company_join_requests`, `users`, `telegram_connections`
+
+#### `getEmployeeDetailsAction`
+- **Auth**: Private (Tenant)
+- **Zod Schema**: `z.object({ employeeId: z.string().uuid() })`
+- **Response**: `ActionResponse<UserProfile & { telegram_connections: any[] }>`
+- **Бизнес-логика**: Загрузка полной карточки сотрудника для `UnifiedViewModal`.
+- **Таблицы БД**: `users`, `company_roles`, `telegram_connections`
+
+#### `updateEmployeeRoleAndPositionAction`
 - **Auth**: Private (Tenant)
 - **RBAC**: `employees:edit_employee` (Строго Owner)
-- **Zod Schema**: `z.object({ candidateUserId: z.string().uuid(), roleId: z.string().uuid().optional(), position: z.string().optional() })`
-- **Response**: `ActionResponse<UserProfile>`
+- **Zod Schema**: `z.object({ userId: z.string().uuid(), roleId: z.string().uuid(), position: z.string() })`
+- **Response**: `ActionResponse<{ message: string }>`
 - **Таблицы БД**: `users`
+
+#### `removeEmployeeAction`
+- **Auth**: Private (Tenant)
+- **RBAC**: `employees:edit_employee` (Строго Owner)
+- **Input**: `userId: string`
+- **Response**: `ActionResponse<{ message: string }>`
+- **Бизнес-логика**: Исключает сотрудника из организации (`company_id = NULL`, `role_id = NULL`).
+- **Таблицы БД**: `users`
+
+#### `getCompanyRolesAction`
+- **Auth**: Private (Tenant)
+- **Response**: `ActionResponse<CompanyRole[]>`
+- **Таблицы БД**: `company_roles`
 
 #### `createCompanyRoleAction`
 - **Auth**: Private (Tenant)
@@ -174,6 +227,20 @@ export type ActionResponse<T = any> = {
 - **Zod Schema**: `z.object({ name: z.string().min(2), description: z.string().optional(), permissions: z.record(z.any()).optional() })`
 - **Response**: `ActionResponse<CompanyRole>`
 - **Таблицы БД**: `company_roles`
+
+#### `updateCompanyRoleAction`
+- **Auth**: Private (Tenant)
+- **RBAC**: `employees:manage_roles`
+- **Zod Schema**: `z.object({ roleId: z.string().uuid(), name: z.string().min(2), description: z.string().optional(), permissions: z.record(z.any()) })`
+- **Response**: `ActionResponse<CompanyRole>`
+- **Таблицы БД**: `company_roles`
+
+#### `deleteCompanyRoleAction`
+- **Auth**: Private (Tenant)
+- **RBAC**: `employees:manage_roles`
+- **Input**: `roleId: string`
+- **Response**: `ActionResponse<{ message: string }>`
+- **Таблицы БД**: `company_roles`, `users`
 
 ---
 
@@ -298,3 +365,39 @@ export type ActionResponse<T = any> = {
 - **Auth**: SuperAdmin
 - **Response**: `ActionResponse<{ message: string }>`
 - **Бизнес-логика**: Прямая мутация / удаление любых строк PostgreSQL в Инспекторе БД.
+
+---
+
+### 3.7 Модуль «Гостевой Режим и Заявки на Вступление» (`app/dashboard/pending/actions.ts`)
+
+#### `searchCompanyAction`
+- **Auth**: Authenticated (Любой авторизованный пользователь / Гость)
+- **Input**: `query: string`
+- **Response**: `ActionResponse<Array<Partial<Company>>>`
+- **Бизнес-логика**: Полнотекстовый поиск активных организаций Кыргызстана по ИНН или наименованию через RPC `search_companies_for_join` с безопасным fallback-запросом.
+- **Таблицы БД**: `companies`
+
+#### `submitJoinRequestAction`
+- **Auth**: Authenticated (Соискатель без привязки к компании)
+- **Zod / Input**: `{ companyId: string, positionNote?: string }`
+- **Response**: `ActionResponse<{ requestId: string }>`
+- **Бизнес-логика**:
+  1. Проверяет отсутствие дублирующих открытых заявок (`status = 'pending'`).
+  2. Гарантирует наличие профиля в `public.users` (защита целостности FK).
+  3. Создает запись в `company_join_requests` со статусом `pending`.
+  4. Отправляет мгновенное Telegram-уведомление руководству и владельцу выбранной компании.
+- **Таблицы БД**: `company_join_requests`, `users`, `companies`, `telegram_connections`
+
+#### `cancelJoinRequestAction`
+- **Auth**: Authenticated (Автор заявки)
+- **Input**: `requestId: string`
+- **Response**: `ActionResponse<{ message: string }>`
+- **Бизнес-логика**: Отзывает ранее поданную заявку соискателя (`status = 'cancelled'`).
+- **Таблицы БД**: `company_join_requests`
+
+#### `getMyJoinRequestsAction`
+- **Auth**: Authenticated (Текущий пользователь)
+- **Response**: `ActionResponse<Array<CompanyJoinRequest & { company_name?: string; company_inn?: string }>>`
+- **Бизнес-логика**: Возвращает историю всех заявок текущего пользователя с подтягиванием реквизитов организаций.
+- **Таблицы БД**: `company_join_requests`, `companies`
+

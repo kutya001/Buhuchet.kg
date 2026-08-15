@@ -16,7 +16,7 @@
 
 ## 🗄️ 2. Подробный Реестр Таблиц, Полей и Связей
 
-Ниже описана каждая из **17 таблиц** базы данных с указанием её назначения, связей и подробного описания всех столбцов.
+Ниже описана каждая из **19 таблиц** базы данных с указанием её назначения, связей и подробного описания всех столбцов.
 
 ---
 
@@ -734,6 +734,55 @@ CREATE INDEX idx_pending_file_deletions_created ON public.pending_file_deletions
 
 ---
 
+### 2.19 Таблица `company_join_requests` — Заявки Сотрудников на Вступление в Организацию
+
+**Описание и Назначение**: Хранит входящие заявки пользователей, выбравших конкретную компанию КР при регистрации или из личного кабинета гостя (`/dashboard/pending`). Обеспечивает разделение потока регистрации на владельцев и сотрудников с последующим утверждением роли и должности владельцем организации.
+
+**Внешние связи**:
+- `company_id` ➔ `companies.id` (ON DELETE CASCADE)
+- `user_id` ➔ `users.id` (ON DELETE CASCADE)
+- `reviewed_by` ➔ `users.id` (ON DELETE SET NULL)
+
+#### Поля и столбцы таблицы `company_join_requests`:
+
+| Столбец | Тип данных | Ограничения / Default | Описание и Назначение | Связи / FK |
+|---|---|---|---|---|
+| `id` | `UUID` | `PRIMARY KEY`, `gen_random_uuid()` | Уникальный идентификатор заявки | — |
+| `company_id` | `UUID` | `NOT NULL` | Организация, в которую подана заявка | `companies.id` |
+| `user_id` | `UUID` | `NOT NULL` | Пользователь/соискатель, подавший заявку | `users.id` |
+| `position_note` | `TEXT` | `NULL` | Желаемая должность или сопроводительное примечание кандидата | — |
+| `status` | `VARCHAR(30)` | `DEFAULT 'pending'`, `CHECK IN ('pending', 'approved', 'rejected', 'cancelled')` | Статус заявки | — |
+| `reviewed_by` | `UUID` | `NULL` | Идентификатор владельца/админа, рассмотревшего заявку | `users.id` |
+| `reviewed_at` | `TIMESTAMPTZ` | `NULL` | Дата и время рассмотрения заявки | — |
+| `created_at` | `TIMESTAMPTZ` | `DEFAULT NOW()` | Время подачи заявки | — |
+| `updated_at` | `TIMESTAMPTZ` | `DEFAULT NOW()` | Время последнего обновления статуса | — |
+
+```sql
+CREATE TABLE public.company_join_requests (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id UUID NOT NULL REFERENCES public.companies(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  position_note TEXT,
+  status VARCHAR(30) NOT NULL DEFAULT 'pending' 
+    CHECK (status IN ('pending', 'approved', 'rejected', 'cancelled')),
+  reviewed_by UUID REFERENCES public.users(id) ON DELETE SET NULL,
+  reviewed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Частичный уникальный индекс: только 1 активная заявка на компанию от пользователя
+CREATE UNIQUE INDEX idx_join_requests_active_unique 
+  ON public.company_join_requests(user_id, company_id) 
+  WHERE status = 'pending';
+
+CREATE INDEX idx_company_join_requests_company ON public.company_join_requests(company_id);
+CREATE INDEX idx_company_join_requests_user ON public.company_join_requests(user_id);
+CREATE INDEX idx_company_join_requests_status ON public.company_join_requests(status);
+```
+
+---
+
 ## ⚙️ 3. Хранимые Функции и Триггеры PostgreSQL
 
 ### 3.1 Замок Закрытых Отчетных Периодов `check_closed_period_lock()`
@@ -839,9 +888,48 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 ---
 
+### 3.5 Безопасный Поиск Организаций Соискателями `search_companies_for_join(search_query)`
+Выполняет безопасный полнотекстовый поиск активных организаций по ИНН (префиксное совпадение) или наименованию (ILIKE) для соискателей в процессе онбординга гостя без раскрытия конфиденциальных полей.
+
+```sql
+CREATE OR REPLACE FUNCTION public.search_companies_for_join(search_query TEXT)
+RETURNS TABLE (
+  id UUID,
+  name TEXT,
+  inn VARCHAR,
+  legal_address TEXT,
+  director_name TEXT,
+  status VARCHAR
+)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+  SELECT 
+    c.id,
+    c.name,
+    c.inn,
+    c.legal_address,
+    c.director_name,
+    c.status
+  FROM public.companies c
+  WHERE 
+    c.status = 'active'
+    AND (
+      c.name ILIKE '%' || trim(search_query) || '%'
+      OR c.inn ILIKE trim(search_query) || '%'
+    )
+  ORDER BY c.name ASC
+  LIMIT 20;
+$$;
+```
+
+---
+
 ## 📜 4. Полный Реестр Миграционных Скриптов (`supabase/migrations/`)
 
-Все изменения схемы базы данных строго версионируются в папке `supabase/migrations/`. Ниже приведен полный список всех 19 примененных миграционных файлов:
+Все изменения схемы базы данных строго версионируются в папке `supabase/migrations/`. Ниже приведен полный список всех **27 примененных миграционных файлов**:
 
 | Файл миграции | Дата / Время | Назначение и Ключевые Операции |
 |---|---|---|
@@ -864,4 +952,11 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 | `20260809000010_optimize_rls_and_composite_indexes.sql` | 09.08.2026 00:00 | Добавление составных индексов `(company_id, status)` для быстрых фильтраций |
 | `20260809000011_copy_on_write_file_owners.sql` | 09.08.2026 00:00 | Таблица `file_owners` и триггер `cleanup_orphaned_files` для Copy-on-Write |
 | `20260809120000_optimize_rls_and_closed_periods.sql` | 09.08.2026 12:00 | Мемоизация `(SELECT auth.uid())` во всех RLS-политиках и замок периодов |
-| `20260810000000_file_cleanup_queue.sql` | 10.08.2026 00:00 | Таблица `pending_file_deletions` и триггер `enqueue_deleted_file()` для асинхронного удаления сканов с облачного диска |
+| `20260810000000_file_cleanup_queue.sql` | 10.08.2026 00:00 | Таблица `pending_file_deletions` и триггер `enqueue_deleted_file()` для асинхронного удаления сканов |
+| `20260811000000_view_form_indexes.sql` | 11.08.2026 00:00 | Индексы ускорения выборок для форм просмотра и фильтрации первички |
+| `20260812000000_optimize_documents_and_superadmin_rls.sql` | 12.08.2026 00:00 | Оптимизация прав суперадминистратора и документов в RLS |
+| `20260815000000_sec01_security_definer_search_path.sql` | 15.08.2026 00:00 | Харденинг всех хранимых процедур SECURITY DEFINER с явным `search_path = public, pg_temp` |
+| `20260815000001_data02_immutable_audit_log.sql` | 15.08.2026 00:00 | Неизменяемый журнал аудита `document_logs` и защита от модификаций |
+| `20260815000002_arch01_atomic_document_creation.sql` | 15.08.2026 00:00 | Атомарное создание документов и привязка совладельцев |
+| `20260815000003_employee_registration_and_join_requests.sql` | 15.08.2026 00:00 | Создание таблицы `company_join_requests`, RPC `search_companies_for_join`, RLS политик |
+| `20260815120000_fix_join_requests_and_profile_rls.sql` | 15.08.2026 12:00 | Расширение RLS `companies` (поиск) и `users` (просмотр соискателей владельцами компаний) |
