@@ -748,3 +748,43 @@ export const getB2BDocumentDetailsAction = createSafeAction(
 
 export const getDocumentDetailsAction = getB2BDocumentDetailsAction;
 
+/**
+ * Легковесная предварительная проверка закрытия периода перед загрузкой файлов в R2
+ */
+export async function checkDocumentPeriodLockAction(
+  docDate: string
+): Promise<ActionResponse<{ isLocked: boolean; message?: string }>> {
+  try {
+    const ctx = await getUserContext();
+    if (!ctx || !ctx.companyId) {
+      return { success: false, error: 'Пользователь не привязан к организации' };
+    }
+
+    // Владельцы и суперадмины могут проводить документы в закрытых периодах
+    if (ctx.role === 'owner' || ctx.isSuperAdmin) {
+      return { success: true, data: { isLocked: false } };
+    }
+
+    const locked = await isPeriodClosed(ctx.companyId, docDate, 'documents');
+    if (locked) {
+      const dateObj = new Date(docDate);
+      const monthName = !isNaN(dateObj.getTime())
+        ? dateObj.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })
+        : docDate;
+
+      return {
+        success: true,
+        data: {
+          isLocked: true,
+          message: `Период за ${monthName} закрыт для документооборота. Сохранение и загрузка файлов заблокированы.`,
+        },
+      };
+    }
+
+    return { success: true, data: { isLocked: false } };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Сбой проверки периода' };
+  }
+}
+
+

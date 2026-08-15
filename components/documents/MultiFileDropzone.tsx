@@ -6,9 +6,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { getPresignedUploadUrlAction, uploadFileDirectlyServerAction } from '@/app/dashboard/files/actions';
+import { checkDocumentPeriodLockAction } from '@/app/dashboard/documents/actions';
 import type { FileCategory } from '@/types/database.types';
 import { formatBytes } from '@/lib/utils';
 import imageCompression from 'browser-image-compression';
+import { toast } from 'sonner';
 
 export interface FileItemState {
   tempId: string;
@@ -28,6 +30,7 @@ interface MultiFileDropzoneProps {
   categories: FileCategory[];
   files: FileItemState[];
   onFilesChange: (files: FileItemState[]) => void;
+  documentDate?: string;
   disabled?: boolean;
 }
 
@@ -35,6 +38,7 @@ export function MultiFileDropzone({
   categories,
   files,
   onFilesChange,
+  documentDate,
   disabled = false,
 }: MultiFileDropzoneProps) {
   const [globalUploading, setGlobalUploading] = useState(false);
@@ -55,6 +59,19 @@ export function MultiFileDropzone({
 
   const uploadFileToR2 = async (rawFile: File, item: FileItemState) => {
     try {
+      // ПРЕДВАРИТЕЛЬНАЯ ПРОВЕРКА ЗАКРЫТИЯ ПЕРИОДА ДО ОБРАЩЕНИЯ К R2
+      if (documentDate) {
+        const lockCheck = await checkDocumentPeriodLockAction(documentDate);
+        if (lockCheck?.success && lockCheck?.data?.isLocked) {
+          const lockMsg = lockCheck.data.message || 'Период закрыт для документооборота';
+          toast.error(lockMsg);
+          updateFileList((prev) =>
+            prev.map((f) => (f.tempId === item.tempId ? { ...f, uploading: false, error: lockMsg } : f))
+          );
+          return;
+        }
+      }
+
       let fileToUpload = rawFile;
 
       // 0. КЛИЕНТСКОЕ СЖАТИЕ ФОТО И ИЗОБРАЖЕНИЙ

@@ -46,6 +46,7 @@ import {
   createB2BDocumentAction,
   getB2BDocumentByIdAction,
   updateB2BDocumentFullAction,
+  checkDocumentPeriodLockAction,
 } from '../actions';
 import { getCompanyFilesArchiveAction } from '../../files/archive-actions';
 import type { Company, FileCategory, DocumentType, DocumentFile } from '@/types/database.types';
@@ -202,8 +203,16 @@ export default function NewB2BDocumentPage() {
     setShowArchiveSelectModal(false);
   };
 
-  const handleSave = (status: 'draft' | 'sent' = 'sent') => {
+  const handleSave = async (status: 'draft' | 'sent' = 'sent') => {
     setMsg(null);
+
+    if (docDate) {
+      const lockCheck = await checkDocumentPeriodLockAction(docDate);
+      if (lockCheck?.success && lockCheck?.data?.isLocked) {
+        setMsg({ type: 'error', text: lockCheck.data.message || 'Период закрыт для документооборота' });
+        return;
+      }
+    }
 
     if (!receiverCompanyId) {
       setMsg({ type: 'error', text: 'Выберите зарегистрированного контрагента получателя' });
@@ -407,6 +416,7 @@ export default function NewB2BDocumentPage() {
                 categories={categories}
                 files={filesState}
                 onFilesChange={setFilesState}
+                documentDate={docDate}
                 disabled={isPending}
               />
             </div>

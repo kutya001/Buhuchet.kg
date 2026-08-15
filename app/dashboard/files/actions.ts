@@ -65,8 +65,11 @@ export async function getPresignedUploadUrlAction(
       ContentType: validation.cleanContentType,
     });
 
-    // Ссылка действительна 15 минут
-    const uploadUrl = await getSignedUrl(r2Client, command, { expiresIn: 900 });
+    // Ссылка действительна 15 минут с явным подписанием content-type
+    const uploadUrl = await getSignedUrl(r2Client, command, {
+      expiresIn: 900,
+      unhoistableHeaders: new Set(['content-type']),
+    });
 
     return {
       success: true,

@@ -594,6 +594,7 @@ export default function CloudFilesRegistryPage() {
             categories={categories}
             files={batchFiles}
             onFilesChange={setBatchFiles}
+            documentDate={new Date().toISOString().split('T')[0]}
             disabled={savingBatch}
           />
 

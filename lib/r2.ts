@@ -1,4 +1,4 @@
-import { S3Client, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, GetObjectCommand, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 const accountId = process.env.R2_ACCOUNT_ID || '';
@@ -17,6 +17,9 @@ export const r2Client = new S3Client({
     accessKeyId,
     secretAccessKey,
   },
+  // Отключаем принудительное добавление параметров контрольных сумм в Presigned URL для совместимости с браузерами
+  requestChecksumCalculation: 'WHEN_REQUIRED',
+  responseChecksumValidation: 'WHEN_REQUIRED',
 });
 
 function getContentTypeAndDisposition(fileKey: string, fileName?: string, mode: 'view' | 'download' = 'view') {
@@ -44,6 +47,32 @@ function getContentTypeAndDisposition(fileKey: string, fileName?: string, mode: 
   }
 
   return { contentType, contentDisposition };
+}
+
+/**
+ * Создание Presigned URL для прямой загрузки файла (PUT) в Cloudflare R2
+ */
+export async function createPresignedUploadUrl({
+  key,
+  contentType,
+  expiresInSeconds = 900,
+}: {
+  key: string;
+  contentType: string;
+  expiresInSeconds?: number;
+}): Promise<{ uploadUrl: string; key: string }> {
+  const command = new PutObjectCommand({
+    Bucket: r2BucketName,
+    Key: key,
+    ContentType: contentType,
+  });
+
+  const uploadUrl = await getSignedUrl(r2Client, command, {
+    expiresIn: expiresInSeconds,
+    unhoistableHeaders: new Set(['content-type']),
+  });
+
+  return { uploadUrl, key };
 }
 
 /**
