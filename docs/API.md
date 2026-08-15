@@ -482,3 +482,49 @@ export type ActionResponse<T = any> = {
 - **Бизнес-логика**: Возвращает историю всех заявок текущего пользователя с подтягиванием реквизитов организаций.
 - **Таблицы БД**: `company_join_requests`, `companies`
 
+---
+
+### 3.8 Модуль «Подписки, Тарифные Планы и Квоты» (`app/uchet/subscription/actions.ts` и `app/admin/actions.ts`)
+
+#### `getCompanySubscriptionDetailsAction`
+- **Auth**: Authenticated (`company_id` required)
+- **Response**: `ActionResponse<{ limits: CompanyEffectiveLimits; activeSubscription: Subscription; availablePlans: LandingPricingPlan[]; renewalRequests: SubscriptionRenewalRequest[] }>`
+- **Бизнес-логика**: Вычисляет эффективные лимиты организации (контрагенты, сотрудники, Облачный диск в байтах, доступ к Telegram), проверяет истечение срока (`isExpired`, `daysRemaining`), возвращает активный тариф, каталог тарифов и историю поданных заявок.
+- **Таблицы БД**: `companies`, `subscriptions`, `pricing_plans`, `landing_pricing_plans`, `subscription_renewal_requests`, `counterparties`, `company_roles`, `files`
+
+#### `createRenewalRequestAction`
+- **Auth**: Authenticated (`company_id` required)
+- **Zod Schema**: `z.object({ targetPlanId: z.string(), billingPeriodMonths: z.enum([1, 3, 6, 12]), comment: z.string().max(1000).optional() })`
+- **Response**: `ActionResponse<SubscriptionRenewalRequest>`
+- **Бизнес-логика**: Создает клиентскую заявку на продление подписки со статусом `pending`. Заявка немедленно доступна суперадминистратору в панели управления.
+- **Таблицы БД**: `subscription_renewal_requests`, `users`, `companies`
+
+#### `getAdminRenewalRequestsAction`
+- **Auth**: SuperAdmin (`createSafeAction` + `isSuperAdmin`)
+- **Zod Schema**: `z.object({ page: z.number().default(1), pageSize: z.number().default(20), status: z.enum(['all', 'pending', 'approved', 'rejected']).default('all'), search: z.string().optional() })`
+- **Response**: `ActionResponse<{ requests: SubscriptionRenewalRequest[]; totalCount: number; page: number; pageSize: number }>`
+- **Бизнес-логика**: Пагинация, поиск и фильтрация всех поступивших заявок на продление подписки.
+- **Таблицы БД**: `subscription_renewal_requests`, `companies`, `users`, `pricing_plans`, `landing_pricing_plans`
+
+#### `approveRenewalRequestAction`
+- **Auth**: SuperAdmin (`createSafeAction` + `isSuperAdmin`)
+- **Zod Schema**: `z.object({ requestId: z.string().uuid(), adminNotes: z.string().optional() })`
+- **Response**: `ActionResponse<{ message: string }>`
+- **Бизнес-логика**: Вызывает атомарную процедуру `admin_approve_renewal_request_atomic`, обновляет дату окончания подписки организации (`expires_at`), устанавливает статус `approved`, фиксирует `processed_at`, `processed_by_user_id` и логирует в `admin_audit_logs`.
+- **Таблицы БД**: `subscription_renewal_requests`, `subscriptions`, `admin_audit_logs`
+
+#### `rejectRenewalRequestAction`
+- **Auth**: SuperAdmin (`createSafeAction` + `isSuperAdmin`)
+- **Zod Schema**: `z.object({ requestId: z.string().uuid(), adminNotes: z.string().min(3) })`
+- **Response**: `ActionResponse<{ message: string }>`
+- **Бизнес-логика**: Отклоняет заявку организации с обязательным указанием причины в `admin_notes` и фиксацией в аудите.
+- **Таблицы БД**: `subscription_renewal_requests`, `admin_audit_logs`
+
+#### `updateCompanyCustomLimitsAction`
+- **Auth**: SuperAdmin (`createSafeAction` + `isSuperAdmin`)
+- **Zod Schema**: `z.object({ companyId: z.string().uuid(), customMaxCounterparties: z.number().nullable().optional(), customMaxEmployees: z.number().nullable().optional(), customStorageLimitGb: z.number().nullable().optional(), customTelegramEnabled: z.boolean().nullable().optional() })`
+- **Response**: `ActionResponse<{ message: string }>`
+- **Бизнес-логика**: Установка индивидуальных квот для выбранной организации сверх стандартного тарифа.
+- **Таблицы БД**: `companies`, `admin_audit_logs`
+
+

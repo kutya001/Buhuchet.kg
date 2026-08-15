@@ -16,6 +16,7 @@ import {
   sendCollaborationTerminatedTelegramNotification,
 } from '@/lib/telegram/notifier';
 import { hasPermission, requirePermission, type ActionName } from '@/lib/auth/permissions';
+import { assertCanAddCounterparty } from '@/lib/auth/subscription-lock';
 
 const getUserContext = cache(async () => {
   const supabase = await createClient();
@@ -59,6 +60,9 @@ export async function sendPartnershipRequestAction(
     if (ctx.companyId === targetCompanyId) {
       return { success: false, error: 'Нельзя отправить заявку своей собственной компании' };
     }
+
+    // Проверка квоты контрагентов по тарифу
+    await assertCanAddCounterparty(ctx.companyId);
 
     const supabase = await createClient();
 
@@ -315,6 +319,11 @@ export async function createManualCounterpartyAction(data: {
       .eq('company_id', ctx.companyId)
       .eq('inn', data.inn)
       .maybeSingle();
+
+    if (!existing) {
+      // Проверяем лимит контрагентов по подписке
+      await assertCanAddCounterparty(ctx.companyId);
+    }
 
     let counterpartyId = '';
 

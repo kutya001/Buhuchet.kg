@@ -41,6 +41,7 @@ export interface UnifiedSidebarProps {
   isOpenMobile?: boolean;
   onCloseMobile?: () => void;
   className?: string;
+  isSubscriptionExpired?: boolean;
 }
 
 const USER_NAV_ITEMS: SidebarNavItem[] = [
@@ -153,6 +154,7 @@ export function UnifiedSidebar({
   isOpenMobile = false,
   onCloseMobile,
   className = '',
+  isSubscriptionExpired = false,
 }: UnifiedSidebarProps) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
@@ -169,6 +171,12 @@ export function UnifiedSidebar({
         if (item.roles && !item.roles.includes(userRole) && !isSuperAdmin) return false;
         return true;
       });
+
+  const isItemLocked = (href: string) => {
+    if (isSuperAdminRoute || !isSubscriptionExpired) return false;
+    // Разрешены только разделы продления и профиля
+    return href !== '/uchet/subscription' && href !== '/uchet/company' && href !== '/uchet/profile';
+  };
 
   const sidebarContent = (
     <div className="flex flex-col h-full bg-card border-r border-border shadow-2xl justify-between transition-all duration-300">
@@ -202,6 +210,25 @@ export function UnifiedSidebar({
           {filteredNavItems.map((item) => {
             const isActive = pathname === item.href || (item.href !== '/uchet' && pathname.startsWith(item.href));
             const Icon = item.icon;
+            const locked = isItemLocked(item.href);
+
+            if (locked) {
+              return (
+                <div
+                  key={item.href}
+                  className="flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs md:text-sm font-medium text-muted-foreground/40 cursor-not-allowed opacity-60 min-h-[44px]"
+                  title={collapsed ? `${item.title} (Заблокировано)` : undefined}
+                >
+                  <Icon className="h-5 w-5 flex-shrink-0 text-muted-foreground/40" />
+                  {!collapsed && <span className="truncate">{item.title}</span>}
+                  {!collapsed && (
+                    <Badge variant="outline" className="ml-auto text-[10px] border-rose-500/30 text-rose-400 bg-rose-500/10">
+                      Истек
+                    </Badge>
+                  )}
+                </div>
+              );
+            }
 
             return (
               <Link

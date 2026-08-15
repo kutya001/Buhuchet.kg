@@ -6,6 +6,7 @@ import { revalidatePath, revalidateTag } from 'next/cache';
 import { z } from 'zod';
 import { createSafeAction } from '@/lib/auth/safe-action';
 import { sendTelegramMessage } from '@/lib/telegram/notifier';
+import { assertCanAddEmployee } from '@/lib/auth/subscription-lock';
 
 async function getUserContext() {
   const supabase = await createClient();
@@ -215,6 +216,13 @@ export async function approveEmployeeRequestAction(params: {
     if (!ctx || (ctx.role !== 'owner' && !ctx.isSuperAdmin)) {
       return { success: false, error: 'Принимать сотрудников может только Владелец компании' };
     }
+
+    if (!ctx.companyId) {
+      return { success: false, error: 'Пользователь не привязан к организации' };
+    }
+
+    // Проверка лимита сотрудников по тарифу
+    await assertCanAddEmployee(ctx.companyId);
 
     const adminSupabase = await createAdminClient();
 

@@ -15,14 +15,21 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
+  CreditCard,
+  AlertTriangle,
+  ArrowRight,
+  Lock,
 } from 'lucide-react';
 import { signOutAction } from '@/app/(auth)/actions';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { FloatingTopbar } from '@/components/ui/FloatingTopbar';
 import { FloatingBottomNav } from '@/components/ui/FloatingBottomNav';
+import { SubscriptionExpiredView } from '@/components/dashboard/SubscriptionExpiredView';
 
 import { hasPermission } from '@/lib/auth/permissions';
 import type { UserProfile } from '@/types/database.types';
+import type { CompanyEffectiveLimits } from '@/lib/auth/subscription-lock';
 
 interface DashboardShellProps {
   userEmail: string;
@@ -31,6 +38,7 @@ interface DashboardShellProps {
   companyInn?: string;
   isSuperAdmin?: boolean;
   userProfile?: UserProfile | null;
+  subscriptionLimits?: CompanyEffectiveLimits | null;
   children: React.ReactNode;
 }
 
@@ -41,6 +49,7 @@ export function DashboardShell({
   companyInn,
   isSuperAdmin,
   userProfile,
+  subscriptionLimits,
   children,
 }: DashboardShellProps) {
   const pathname = usePathname();
@@ -48,6 +57,20 @@ export function DashboardShell({
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const isActive = (path: string) => pathname === path;
+
+  // Проверка активности подписки
+  const isExpired = !isSuperAdmin && Boolean(subscriptionLimits?.isExpired);
+  const isExpiringSoon = !isSuperAdmin && !isExpired && Boolean(subscriptionLimits?.isExpiringSoon);
+
+  // Маршруты, которые блокируются при истечении подписки
+  const isOperationalRoute =
+    pathname === '/uchet' ||
+    pathname.startsWith('/uchet/documents') ||
+    pathname.startsWith('/uchet/counterparties') ||
+    pathname.startsWith('/uchet/files') ||
+    pathname.startsWith('/uchet/employees');
+
+  const isLocked = isExpired && isOperationalRoute;
 
   // Проверка разрешений
   const canViewDashboard = hasPermission(userProfile, 'dashboard', 'view');
@@ -94,67 +117,127 @@ export function DashboardShell({
           {/* Единые лаконичные пункты навигации */}
           <nav className="space-y-1">
             {canViewDashboard && (
-              <Link
-                href="/uchet"
-                prefetch={true}
-                className={`flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                  isActive('/uchet')
-                    ? 'bg-blue-600/20 text-blue-500 dark:text-blue-400 border border-blue-500/30 font-bold'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-                }`}
-                title="Главная"
-              >
-                <LayoutDashboard className="h-4 w-4 text-blue-500 dark:text-blue-400 flex-shrink-0" />
-                {!isCollapsed && <span className="truncate">Главная</span>}
-              </Link>
+              isExpired ? (
+                <div
+                  className="flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium text-muted-foreground/40 cursor-not-allowed opacity-60"
+                  title="Главная (Заблокировано)"
+                >
+                  <LayoutDashboard className="h-4 w-4 text-muted-foreground/40 flex-shrink-0" />
+                  {!isCollapsed && <span className="truncate">Главная</span>}
+                  {!isCollapsed && (
+                    <Badge variant="outline" className="ml-auto text-[10px] border-rose-500/30 text-rose-400 bg-rose-500/10">
+                      Истек
+                    </Badge>
+                  )}
+                </div>
+              ) : (
+                <Link
+                  href="/uchet"
+                  prefetch={true}
+                  className={`flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                    isActive('/uchet')
+                      ? 'bg-blue-600/20 text-blue-500 dark:text-blue-400 border border-blue-500/30 font-bold'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                  }`}
+                  title="Главная"
+                >
+                  <LayoutDashboard className="h-4 w-4 text-blue-500 dark:text-blue-400 flex-shrink-0" />
+                  {!isCollapsed && <span className="truncate">Главная</span>}
+                </Link>
+              )
             )}
 
             {canViewDocuments && (
-              <Link
-                href="/uchet/documents"
-                prefetch={true}
-                className={`flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                  isActive('/uchet/documents')
-                    ? 'bg-sky-600/20 text-sky-500 dark:text-sky-400 border border-sky-500/30 font-bold'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-                }`}
-                title="Документы"
-              >
-                <FileText className="h-4 w-4 text-sky-500 dark:text-sky-400 flex-shrink-0" />
-                {!isCollapsed && <span className="truncate">Документы</span>}
-              </Link>
+              isExpired ? (
+                <div
+                  className="flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium text-muted-foreground/40 cursor-not-allowed opacity-60"
+                  title="Документы (Заблокировано)"
+                >
+                  <FileText className="h-4 w-4 text-muted-foreground/40 flex-shrink-0" />
+                  {!isCollapsed && <span className="truncate">Документы</span>}
+                  {!isCollapsed && (
+                    <Badge variant="outline" className="ml-auto text-[10px] border-rose-500/30 text-rose-400 bg-rose-500/10">
+                      Истек
+                    </Badge>
+                  )}
+                </div>
+              ) : (
+                <Link
+                  href="/uchet/documents"
+                  prefetch={true}
+                  className={`flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                    isActive('/uchet/documents')
+                      ? 'bg-sky-600/20 text-sky-500 dark:text-sky-400 border border-sky-500/30 font-bold'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                  }`}
+                  title="Документы"
+                >
+                  <FileText className="h-4 w-4 text-sky-500 dark:text-sky-400 flex-shrink-0" />
+                  {!isCollapsed && <span className="truncate">Документы</span>}
+                </Link>
+              )
             )}
 
             {canViewCounterparties && (
-              <Link
-                href="/uchet/counterparties"
-                prefetch={true}
-                className={`flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                  isActive('/uchet/counterparties')
-                    ? 'bg-amber-600/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 font-bold'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-                }`}
-                title="Организации"
-              >
-                <Users className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
-                {!isCollapsed && <span className="truncate">Организации</span>}
-              </Link>
+              isExpired ? (
+                <div
+                  className="flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium text-muted-foreground/40 cursor-not-allowed opacity-60"
+                  title="Организации (Заблокировано)"
+                >
+                  <Users className="h-4 w-4 text-muted-foreground/40 flex-shrink-0" />
+                  {!isCollapsed && <span className="truncate">Организации</span>}
+                  {!isCollapsed && (
+                    <Badge variant="outline" className="ml-auto text-[10px] border-rose-500/30 text-rose-400 bg-rose-500/10">
+                      Истек
+                    </Badge>
+                  )}
+                </div>
+              ) : (
+                <Link
+                  href="/uchet/counterparties"
+                  prefetch={true}
+                  className={`flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                    isActive('/uchet/counterparties')
+                      ? 'bg-amber-600/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 font-bold'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                  }`}
+                  title="Организации"
+                >
+                  <Users className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+                  {!isCollapsed && <span className="truncate">Организации</span>}
+                </Link>
+              )
             )}
 
             {canViewFiles && (
-              <Link
-                href="/uchet/files"
-                prefetch={true}
-                className={`flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                  isActive('/uchet/files')
-                    ? 'bg-emerald-600/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 font-bold'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-                }`}
-                title="Реестр Файлов"
-              >
-                <FolderOpen className="h-4 w-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
-                {!isCollapsed && <span className="truncate">Реестр Файлов</span>}
-              </Link>
+              isExpired ? (
+                <div
+                  className="flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium text-muted-foreground/40 cursor-not-allowed opacity-60"
+                  title="Реестр Файлов (Заблокировано)"
+                >
+                  <FolderOpen className="h-4 w-4 text-muted-foreground/40 flex-shrink-0" />
+                  {!isCollapsed && <span className="truncate">Реестр Файлов</span>}
+                  {!isCollapsed && (
+                    <Badge variant="outline" className="ml-auto text-[10px] border-rose-500/30 text-rose-400 bg-rose-500/10">
+                      Истек
+                    </Badge>
+                  )}
+                </div>
+              ) : (
+                <Link
+                  href="/uchet/files"
+                  prefetch={true}
+                  className={`flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                    isActive('/uchet/files')
+                      ? 'bg-emerald-600/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 font-bold'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                  }`}
+                  title="Реестр Файлов"
+                >
+                  <FolderOpen className="h-4 w-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
+                  {!isCollapsed && <span className="truncate">Реестр Файлов</span>}
+                </Link>
+              )
             )}
 
             {canViewCompany && (
@@ -174,20 +257,57 @@ export function DashboardShell({
             )}
 
             {canViewEmployees && (
-              <Link
-                href="/uchet/employees"
-                prefetch={true}
-                className={`flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                  isActive('/uchet/employees')
-                    ? 'bg-purple-600/20 text-purple-600 dark:text-purple-400 border border-purple-500/30 font-bold'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-                }`}
-                title="Сотрудники и Роли"
-              >
-                <Users className="h-4 w-4 text-purple-400 flex-shrink-0" />
-                {!isCollapsed && <span className="truncate">Сотрудники</span>}
-              </Link>
+              isExpired ? (
+                <div
+                  className="flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium text-muted-foreground/40 cursor-not-allowed opacity-60"
+                  title="Сотрудники (Заблокировано)"
+                >
+                  <Users className="h-4 w-4 text-muted-foreground/40 flex-shrink-0" />
+                  {!isCollapsed && <span className="truncate">Сотрудники</span>}
+                  {!isCollapsed && (
+                    <Badge variant="outline" className="ml-auto text-[10px] border-rose-500/30 text-rose-400 bg-rose-500/10">
+                      Истек
+                    </Badge>
+                  )}
+                </div>
+              ) : (
+                <Link
+                  href="/uchet/employees"
+                  prefetch={true}
+                  className={`flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                    isActive('/uchet/employees')
+                      ? 'bg-purple-600/20 text-purple-600 dark:text-purple-400 border border-purple-500/30 font-bold'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                  }`}
+                  title="Сотрудники и Роли"
+                >
+                  <Users className="h-4 w-4 text-purple-400 flex-shrink-0" />
+                  {!isCollapsed && <span className="truncate">Сотрудники</span>}
+                </Link>
+              )
             )}
+
+            {/* ПОДПИСКА И БАЛАНС */}
+            <Link
+              href="/uchet/subscription"
+              prefetch={true}
+              className={`flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                isActive('/uchet/subscription')
+                  ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30 font-bold'
+                  : isExpired
+                  ? 'bg-rose-500/15 border border-rose-500/40 text-rose-400 font-bold animate-pulse'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+              }`}
+              title="Подписка и баланс"
+            >
+              <CreditCard className={`h-4 w-4 flex-shrink-0 ${isExpired ? 'text-rose-400' : 'text-blue-400'}`} />
+              {!isCollapsed && <span className="truncate">Подписка</span>}
+              {!isCollapsed && isExpired && (
+                <Badge className="ml-auto text-[10px] bg-rose-500 text-white font-bold">
+                  Продлить
+                </Badge>
+              )}
+            </Link>
 
             {/* Если нет активной компании: показываем ссылку на подачу заявки */}
             {!companyName && !isSuperAdmin && (
@@ -273,11 +393,38 @@ export function DashboardShell({
 
         {/* Главный контент с гарантированным пространством pt-24 sm:pt-28 */}
         <main className="flex-1 px-3 sm:px-6 pt-24 sm:pt-28 md:pt-24 pb-28 md:pb-8 overflow-y-auto">
-          {children}
+          {/* ПРЕДУПРЕЖДАЮЩИЙ БАННЕР О СКОРОМ ОКОНЧАНИИ ПОДПИСКИ */}
+          {isExpiringSoon && (
+            <div className="mb-4 bg-gradient-to-r from-rose-600 via-rose-500 to-amber-600 text-white p-3 rounded-2xl flex flex-wrap items-center justify-between gap-2 shadow-lg text-xs">
+              <div className="flex items-center space-x-2 font-medium">
+                <AlertTriangle className="h-4 w-4 animate-pulse text-amber-200 flex-shrink-0" />
+                <span>
+                  Срок действия подписки истекает {subscriptionLimits?.daysRemaining === 0 ? 'сегодня' : `через ${subscriptionLimits?.daysRemaining} дн.`}. Подайте заявку на продление, чтобы сохранить доступ к модулям.
+                </span>
+              </div>
+              <Link
+                href="/uchet/subscription"
+                className="px-3 py-1 bg-white/20 hover:bg-white/30 rounded-xl font-bold flex items-center shrink-0 ml-auto"
+              >
+                <span>Продлить тариф</span>
+                <ArrowRight className="ml-1 h-3 w-3" />
+              </Link>
+            </div>
+          )}
+
+          {/* ПОЛНОЭКРАННАЯ БЛОКИРОВКА ПРИ ИСТЕЧЕНИИ СРОКА */}
+          {isLocked ? (
+            <SubscriptionExpiredView
+              companyName={companyName}
+              expiresAt={subscriptionLimits?.expiresAt}
+            />
+          ) : (
+            children
+          )}
         </main>
       </div>
 
-      {/* 3. МОБИЛЬНОЕ ВЫЕЗДНОЕ МЕНЮ СНИЗУ (BOTTOM SHEET DRAWER) - БЕЗ ВРЕМЕНИ И ТЕМ */}
+      {/* 3. МОБИЛЬНОЕ ВЫЕЗДНОЕ МЕНЮ СНИЗУ (BOTTOM SHEET DRAWER) */}
       {isMobileMenuOpen && (
         <div className="md:hidden fixed inset-0 z-50 flex flex-col justify-end">
           {/* Полупрозрачный оверлей */}
@@ -288,7 +435,7 @@ export function DashboardShell({
 
           {/* Выездная панель снизу */}
           <div className="relative w-full bg-card border-t border-border rounded-t-3xl p-5 shadow-2xl z-10 space-y-4 max-h-[85vh] overflow-y-auto">
-            {/* Шапка выездного меню: Профиль организации */}
+            {/* Шапка выездного меню */}
             <div className="flex items-center justify-between pb-3 border-b border-border">
               <div className="flex items-center space-x-3">
                 <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-600/20 text-blue-400 border border-blue-500/30">
@@ -312,7 +459,7 @@ export function DashboardShell({
 
             {/* Сетка всех модулей */}
             <div className="grid grid-cols-2 gap-2 pt-1">
-              {canViewDashboard && (
+              {canViewDashboard && !isExpired && (
                 <Link
                   href="/uchet"
                   onClick={() => setIsMobileMenuOpen(false)}
@@ -325,7 +472,7 @@ export function DashboardShell({
                 </Link>
               )}
 
-              {canViewDocuments && (
+              {canViewDocuments && !isExpired && (
                 <Link
                   href="/uchet/documents"
                   onClick={() => setIsMobileMenuOpen(false)}
@@ -338,7 +485,7 @@ export function DashboardShell({
                 </Link>
               )}
 
-              {canViewCounterparties && (
+              {canViewCounterparties && !isExpired && (
                 <Link
                   href="/uchet/counterparties"
                   onClick={() => setIsMobileMenuOpen(false)}
@@ -351,7 +498,7 @@ export function DashboardShell({
                 </Link>
               )}
 
-              {canViewFiles && (
+              {canViewFiles && !isExpired && (
                 <Link
                   href="/uchet/files"
                   onClick={() => setIsMobileMenuOpen(false)}
@@ -377,7 +524,7 @@ export function DashboardShell({
                 </Link>
               )}
 
-              {canViewEmployees && (
+              {canViewEmployees && !isExpired && (
                 <Link
                   href="/uchet/employees"
                   onClick={() => setIsMobileMenuOpen(false)}
@@ -391,9 +538,20 @@ export function DashboardShell({
               )}
 
               <Link
+                href="/uchet/subscription"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className={`flex items-center space-x-2.5 p-3 rounded-2xl border text-xs font-medium ${
+                  isExpired ? 'bg-rose-500/20 border-rose-500/40 text-rose-400 font-bold' : 'bg-muted/40 border-border text-foreground'
+                }`}
+              >
+                <CreditCard className="h-4 w-4 text-blue-400" />
+                <span>Подписка и баланс</span>
+              </Link>
+
+              <Link
                 href="/uchet/profile"
                 onClick={() => setIsMobileMenuOpen(false)}
-                className={`flex items-center space-x-2.5 p-3 rounded-2xl border text-xs font-medium col-span-2 ${
+                className={`flex items-center space-x-2.5 p-3 rounded-2xl border text-xs font-medium ${
                   isActive('/uchet/profile') ? 'bg-primary/20 border-primary/40 font-bold' : 'bg-muted/40 border-border text-foreground'
                 }`}
               >

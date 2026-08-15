@@ -649,6 +649,102 @@ CREATE TABLE public.subscription_payments (
 
 ---
 
+### 2.14.1 Таблица `pricing_plans` — Тарифные Планы и Технические Квоты
+
+**Описание и Назначение**: Хранение параметров тарифных планов платформы (`start`, `business`, `premium`), включая стоимость, лимиты контрагентов, сотрудников, Облачного диска и доступ к Telegram-боту.
+
+#### Поля и столбцы таблицы `pricing_plans`:
+
+| Столбец | Тип данных | Ограничения / Default | Описание и Назначение | Связи / FK |
+|---|---|---|---|---|
+| `id` | `VARCHAR(50)` | `PRIMARY KEY` | Идентификатор тарифа (`start`, `business`, `premium`) | — |
+| `name` | `VARCHAR(100)` | `NOT NULL` | Название плана («Старт», «Бизнес», «Премиум») | — |
+| `price` | `VARCHAR(50)` | `NOT NULL` | Стоимость («990», «2 490») | — |
+| `period` | `VARCHAR(50)` | `DEFAULT 'сом/мес'` | Период тарификации | — |
+| `description` | `TEXT` | `NULL` | Описание целевой аудитории | — |
+| `max_counterparties` | `INTEGER` | `NOT NULL DEFAULT 10` | Лимит активных организаций-партнеров | — |
+| `max_employees` | `INTEGER` | `NOT NULL DEFAULT 3` | Лимит пользователей/сотрудников компании | — |
+| `storage_limit_bytes`| `BIGINT` | `NOT NULL DEFAULT 1073741824` | Лимит Облачного диска в байтах (1 ГБ / 10 ГБ / 100 ГБ) | — |
+| `is_telegram_enabled`| `BOOLEAN` | `NOT NULL DEFAULT FALSE`| Флаг включения Telegram-оповещений и бота | — |
+| `is_popular` | `BOOLEAN` | `DEFAULT FALSE` | Метка популярного выбора | — |
+| `badge_text` | `VARCHAR(100)` | `NULL` | Текст бейджа («Популярный», «Выгодно») | — |
+| `features` | `TEXT[]` | `DEFAULT '{}'` | Список маркетинговых преимуществ | — |
+| `button_text` | `VARCHAR(100)` | `DEFAULT 'Выбрать тариф'` | Текст кнопки заказа | — |
+| `created_at` | `TIMESTAMPTZ` | `DEFAULT NOW()` | Дата создания | — |
+| `updated_at` | `TIMESTAMPTZ` | `DEFAULT NOW()` | Дата обновления | — |
+
+```sql
+CREATE TABLE public.pricing_plans (
+  id VARCHAR(50) PRIMARY KEY,
+  name VARCHAR(100) NOT NULL,
+  price VARCHAR(50) NOT NULL,
+  period VARCHAR(50) DEFAULT 'сом/мес',
+  description TEXT,
+  max_counterparties INTEGER NOT NULL DEFAULT 10,
+  max_employees INTEGER NOT NULL DEFAULT 3,
+  storage_limit_bytes BIGINT NOT NULL DEFAULT 1073741824,
+  is_telegram_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+  is_popular BOOLEAN DEFAULT FALSE,
+  badge_text VARCHAR(100),
+  features TEXT[] DEFAULT '{}'::text[],
+  button_text VARCHAR(100) DEFAULT 'Выбрать тариф',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+---
+
+### 2.14.2 Таблица `subscription_renewal_requests` — Заявки на Продление Тарифов
+
+**Описание и Назначение**: Реестр клиентских запросов на продление или изменение тарифного плана со статусами модерации суперадминистратором.
+
+**Внешние связи**:
+- `company_id` ➔ `companies.id` (ON DELETE CASCADE)
+- `requested_by_user_id` ➔ `users.id` (ON DELETE SET NULL)
+- `processed_by_user_id` ➔ `users.id` (ON DELETE SET NULL)
+
+#### Поля и столбцы таблицы `subscription_renewal_requests`:
+
+| Столбец | Тип данных | Ограничения / Default | Описание и Назначение | Связи / FK |
+|---|---|---|---|---|
+| `id` | `UUID` | `PRIMARY KEY`, `gen_random_uuid()` | Идентификатор заявки | — |
+| `company_id` | `UUID` | `NOT NULL` | Организация-заявитель | `companies.id` |
+| `requested_by_user_id` | `UUID` | `NOT NULL` | Инициатор (пользователь) | `users.id` |
+| `target_plan_id` | `VARCHAR(50)` | `NOT NULL` | Запрашиваемый тарифный план | — |
+| `billing_period_months`| `INTEGER` | `NOT NULL DEFAULT 1` | Срок продления (1, 3, 6, 12 месяцев) | — |
+| `status` | `VARCHAR(20)` | `DEFAULT 'pending'` | Статус (`pending`, `approved`, `rejected`, `cancelled`) | — |
+| `comment` | `TEXT` | `NULL` | Комментарий клиента (номер ПП, пожелания) | — |
+| `admin_notes` | `TEXT` | `NULL` | Примечание/причина решения суперадминистратора | — |
+| `processed_by_user_id` | `UUID` | `NULL` | Суперадминистратор, обработавший заявку | `users.id` |
+| `processed_at` | `TIMESTAMPTZ` | `NULL` | Дата и время модерации | — |
+| `created_at` | `TIMESTAMPTZ` | `DEFAULT NOW()` | Дата подачи | — |
+| `updated_at` | `TIMESTAMPTZ` | `DEFAULT NOW()` | Дата изменения | — |
+
+```sql
+CREATE TABLE public.subscription_renewal_requests (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id UUID NOT NULL REFERENCES public.companies(id) ON DELETE CASCADE,
+  requested_by_user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE SET NULL,
+  target_plan_id VARCHAR(50) NOT NULL,
+  billing_period_months INTEGER NOT NULL DEFAULT 1,
+  status VARCHAR(20) NOT NULL DEFAULT 'pending',
+  comment TEXT,
+  admin_notes TEXT,
+  processed_by_user_id UUID REFERENCES public.users(id) ON DELETE SET NULL,
+  processed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT check_renewal_billing_period CHECK (billing_period_months IN (1, 3, 6, 12)),
+  CONSTRAINT check_renewal_status CHECK (status IN ('pending', 'approved', 'rejected', 'cancelled'))
+);
+
+CREATE INDEX idx_renewal_requests_company_status ON public.subscription_renewal_requests(company_id, status);
+CREATE INDEX idx_renewal_requests_status_created ON public.subscription_renewal_requests(status, created_at DESC);
+```
+
+---
+
 ### 2.15 Таблица `telegram_connections` — Привязанные Telegram Аккаунты
 
 **Описание и Назначение**: Связь пользователей платформы с их Telegram Chat ID для отправки быстрых уведомлений.

@@ -51,6 +51,10 @@ export interface Company {
   is_active: boolean;
   storage_limit_gb: number;
   closed_period_until?: string | null;
+  custom_max_counterparties?: number | null;
+  custom_max_employees?: number | null;
+  custom_storage_limit_bytes?: number | null;
+  custom_telegram_enabled?: boolean | null;
   created_at: string;
   updated_at: string;
 }
@@ -327,6 +331,10 @@ export interface LandingPricingPlan {
   price: string;
   period: string;
   description?: string | null;
+  max_counterparties?: number;
+  max_employees?: number;
+  storage_limit_bytes?: number;
+  is_telegram_enabled?: boolean;
   is_popular: boolean;
   badge_text?: string | null;
   sort_order: number;
@@ -335,6 +343,27 @@ export interface LandingPricingPlan {
   is_active?: boolean;
   created_at?: string;
   updated_at?: string;
+}
+
+export type PricingPlan = LandingPricingPlan;
+
+export interface SubscriptionRenewalRequest {
+  id: string;
+  company_id: string;
+  requested_by_user_id: string;
+  target_plan_id: string;
+  billing_period_months: 1 | 3 | 6 | 12;
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled';
+  comment?: string | null;
+  admin_notes?: string | null;
+  processed_by_user_id?: string | null;
+  processed_at?: string | null;
+  created_at: string;
+  updated_at: string;
+  company?: Company | null;
+  requested_by_user?: UserProfile | null;
+  processed_by_user?: UserProfile | null;
+  target_plan?: LandingPricingPlan | null;
 }
 
 export interface TelegramNotificationLog {

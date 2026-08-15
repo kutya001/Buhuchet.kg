@@ -3,6 +3,7 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import type { ActionResponse } from '@/types/database.types';
 import { hasPermission } from '@/lib/auth/permissions';
+import { assertCanUseTelegram } from '@/lib/auth/subscription-lock';
 import { revalidatePath } from 'next/cache';
 
 export interface TelegramOtpData {
@@ -34,6 +35,9 @@ export async function generateTelegramOtpAction(): Promise<ActionResponse<Telegr
     if (!profile || !profile.company_id) {
       return { success: false, error: 'Пользователь не привязан к компании' };
     }
+
+    // Проверка привилегии Telegram в тарифе
+    await assertCanUseTelegram(profile.company_id);
 
     // Проверка права на привязку Telegram
     const canBind = hasPermission(profile, 'employees', 'telegram_bind');

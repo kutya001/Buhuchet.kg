@@ -1494,7 +1494,7 @@ export async function getLandingPricingPlansAction(): Promise<ActionResponse<Lan
 }
 
 /**
- * Редактирование тарифа лендинга суперадминистратором
+ * Редактирование тарифа лендинга и лимитов суперадминистратором
  */
 export const updateLandingPricingPlanAction = createSafeAction(
   z.object({
@@ -1503,31 +1503,59 @@ export const updateLandingPricingPlanAction = createSafeAction(
     price: z.string().min(1, 'Укажите стоимость'),
     period: z.string().default('сом/мес'),
     description: z.string().optional().nullable(),
+    max_counterparties: z.number().int().min(1).default(10),
+    max_employees: z.number().int().min(1).default(3),
+    storage_limit_gb: z.number().min(0.1).default(1),
+    is_telegram_enabled: z.boolean().default(false),
     is_popular: z.boolean().default(false),
     badge_text: z.string().optional().nullable(),
     features: z.array(z.string()).default([]),
     button_text: z.string().default('Выбрать тариф'),
   }),
-  async ({ id, name, price, period, description, is_popular, badge_text, features, button_text }, ctx) => {
+  async (
+    {
+      id,
+      name,
+      price,
+      period,
+      description,
+      max_counterparties,
+      max_employees,
+      storage_limit_gb,
+      is_telegram_enabled,
+      is_popular,
+      badge_text,
+      features,
+      button_text,
+    },
+    ctx
+  ) => {
     if (!ctx.isSuperAdmin) {
       return { success: false, error: 'Доступ разрешен только Суперадминистратору' };
     }
 
     const adminSupabase = await createAdminClient();
+    const storage_limit_bytes = Math.round((storage_limit_gb || 1) * 1024 * 1024 * 1024);
+
+    const updatePayload = {
+      name,
+      price,
+      period,
+      description: description || null,
+      max_counterparties,
+      max_employees,
+      storage_limit_bytes,
+      is_telegram_enabled,
+      is_popular,
+      badge_text: badge_text || null,
+      features,
+      button_text,
+      updated_at: new Date().toISOString(),
+    };
 
     const { data: updated, error } = await adminSupabase
       .from('landing_pricing_plans')
-      .update({
-        name,
-        price,
-        period,
-        description: description || null,
-        is_popular,
-        badge_text: badge_text || null,
-        features,
-        button_text,
-        updated_at: new Date().toISOString(),
-      })
+      .update(updatePayload)
       .eq('id', id)
       .select()
       .single();
@@ -1536,18 +1564,230 @@ export const updateLandingPricingPlanAction = createSafeAction(
       return { success: false, error: error.message };
     }
 
+    // Синхронизируем pricing_plans
+    const { error: syncError } = await adminSupabase
+      .from('pricing_plans')
+      .upsert({ id, ...updatePayload });
+
+    if (syncError) {
+      console.error('[Pricing plans sync error]:', syncError.message);
+    }
+
     // Аудит
     await adminSupabase.from('admin_audit_logs').insert({
       admin_id: ctx.userId,
       action: 'pricing_plan_updated',
       target_type: 'subscription_plan',
       target_id: id,
-      details: { name, price, is_popular },
+      details: { name, price, max_counterparties, max_employees, storage_limit_gb, is_telegram_enabled },
     });
 
     revalidatePath('/');
     revalidatePath('/admin/subscriptions');
+    revalidatePath('/uchet/subscription');
     return { success: true, data: updated as LandingPricingPlan };
+  }
+);
+
+export const updatePricingPlanAction = updateLandingPricingPlanAction;
+
+/**
+ * Получение списка заявок на продление подписок для суперадминистратора
+ */
+export async function getAdminRenewalRequestsAction(params?: {
+  status?: string;
+  page?: number;
+  pageSize?: number;
+}): Promise<ActionResponse<{ requests: any[]; total: number; page: number; pageSize: number }>> {
+  try {
+    await requireSuperAdminSession();
+    const adminSupabase = await createAdminClient();
+
+    const page = Math.max(1, params?.page || 1);
+    const pageSize = Math.min(100, Math.max(1, params?.pageSize || 25));
+    const offset = (page - 1) * pageSize;
+
+    let query = adminSupabase
+      .from('subscription_renewal_requests')
+      .select(
+        '*, company:companies(id, name, inn, phone, email), requested_by_user:users!requested_by_user_id(id, full_name, email, phone), target_plan:landing_pricing_plans!target_plan_id(*), processed_by_user:users!processed_by_user_id(full_name)',
+        { count: 'exact' }
+      );
+
+    if (params?.status && params.status !== 'all') {
+      query = query.eq('status', params.status);
+    }
+
+    const { data, count, error } = await query
+      .order('created_at', { ascending: false })
+      .range(offset, offset + pageSize - 1);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return {
+      success: true,
+      data: {
+        requests: data || [],
+        total: count || 0,
+        page,
+        pageSize,
+      },
+    };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Сбой выборки заявок на продление' };
+  }
+}
+
+/**
+ * Одобрение заявки на продление подписки суперадминистратором
+ */
+export const approveRenewalRequestAction = createSafeAction(
+  z.object({
+    requestId: z.string().uuid('Некорректный ID заявки'),
+    adminNotes: z.string().max(1000).optional(),
+  }),
+  async ({ requestId, adminNotes }, ctx) => {
+    if (!ctx.isSuperAdmin) {
+      return { success: false, error: 'Доступ разрешен только суперадминистратору' };
+    }
+
+    const adminSupabase = await createAdminClient();
+
+    const { data, error } = await adminSupabase.rpc('admin_approve_renewal_request_atomic', {
+      p_request_id: requestId,
+      p_admin_id: ctx.userId,
+      p_admin_notes: adminNotes?.trim() || null,
+    });
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    revalidatePath('/admin/subscriptions');
+    revalidatePath('/uchet/subscription');
+    revalidatePath('/uchet');
+
+    return { success: true, data };
+  }
+);
+
+/**
+ * Отклонение заявки на продление подписки суперадминистратором
+ */
+export const rejectRenewalRequestAction = createSafeAction(
+  z.object({
+    requestId: z.string().uuid('Некорректный ID заявки'),
+    adminNotes: z.string().min(1, 'Укажите причину отклонения заявки').max(1000),
+  }),
+  async ({ requestId, adminNotes }, ctx) => {
+    if (!ctx.isSuperAdmin) {
+      return { success: false, error: 'Доступ разрешен только суперадминистратору' };
+    }
+
+    const adminSupabase = await createAdminClient();
+
+    const { data: updated, error } = await adminSupabase
+      .from('subscription_renewal_requests')
+      .update({
+        status: 'rejected',
+        admin_notes: adminNotes.trim(),
+        processed_by_user_id: ctx.userId,
+        processed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', requestId)
+      .eq('status', 'pending')
+      .select()
+      .single();
+
+    if (error || !updated) {
+      return { success: false, error: error?.message || 'Заявка не найдена или уже обработана' };
+    }
+
+    // Аудит
+    await adminSupabase.from('admin_audit_logs').insert({
+      admin_id: ctx.userId,
+      action: 'subscription_renewal_rejected',
+      target_type: 'subscription_renewal_request',
+      target_id: requestId,
+      details: { admin_notes: adminNotes.trim() },
+    });
+
+    revalidatePath('/admin/subscriptions');
+    revalidatePath('/uchet/subscription');
+
+    return { success: true, data: updated };
+  }
+);
+
+/**
+ * Ручная настройка индивидуальных лимитов для организации
+ */
+export const updateCompanyCustomLimitsAction = createSafeAction(
+  z.object({
+    companyId: z.string().uuid(),
+    custom_max_counterparties: z.number().int().min(1).nullable().optional(),
+    custom_max_employees: z.number().int().min(1).nullable().optional(),
+    custom_storage_limit_gb: z.number().min(0.1).nullable().optional(),
+    custom_telegram_enabled: z.boolean().nullable().optional(),
+  }),
+  async (
+    {
+      companyId,
+      custom_max_counterparties,
+      custom_max_employees,
+      custom_storage_limit_gb,
+      custom_telegram_enabled,
+    },
+    ctx
+  ) => {
+    if (!ctx.isSuperAdmin) {
+      return { success: false, error: 'Доступ разрешен только суперадминистратору' };
+    }
+
+    const adminSupabase = await createAdminClient();
+    const custom_storage_limit_bytes =
+      typeof custom_storage_limit_gb === 'number'
+        ? Math.round(custom_storage_limit_gb * 1024 * 1024 * 1024)
+        : custom_storage_limit_gb;
+
+    const { data: updated, error } = await adminSupabase
+      .from('companies')
+      .update({
+        custom_max_counterparties,
+        custom_max_employees,
+        custom_storage_limit_bytes,
+        custom_telegram_enabled,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', companyId)
+      .select()
+      .single();
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    await adminSupabase.from('admin_audit_logs').insert({
+      admin_id: ctx.userId,
+      action: 'company_custom_limits_updated',
+      target_type: 'company',
+      target_id: companyId,
+      details: {
+        custom_max_counterparties,
+        custom_max_employees,
+        custom_storage_limit_bytes,
+        custom_telegram_enabled,
+      },
+    });
+
+    revalidatePath('/admin/companies');
+    revalidatePath('/admin/subscriptions');
+    revalidatePath('/uchet/subscription');
+
+    return { success: true, data: updated };
   }
 );
 

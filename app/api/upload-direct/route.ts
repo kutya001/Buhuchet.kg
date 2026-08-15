@@ -37,6 +37,12 @@ export async function POST(req: NextRequest) {
       targetCompanyId = 'anonymous';
     }
 
+    // Если загрузка идет от конкретной организации — проверяем квоту Облачного диска
+    if (targetCompanyId && targetCompanyId !== 'anonymous' && targetCompanyId !== 'system') {
+      const { assertCanUploadFile } = await import('@/lib/auth/subscription-lock');
+      await assertCanUploadFile(targetCompanyId, file.size);
+    }
+
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 

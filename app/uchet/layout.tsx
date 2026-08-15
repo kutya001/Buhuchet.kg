@@ -3,6 +3,7 @@ import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { DashboardShell } from '@/components/dashboard/DashboardShell';
 import { CompanyBlockedView } from '@/components/dashboard/CompanyBlockedView';
+import { getCompanyEffectiveLimits } from '@/lib/auth/subscription-lock';
 
 export default async function DashboardLayout({
   children,
@@ -28,13 +29,15 @@ export default async function DashboardLayout({
     .single();
 
   let company = null;
+  let subscriptionLimits = null;
+
   if (profile?.company_id) {
-    const { data: comp } = await adminSupabase
-      .from('companies')
-      .select('*')
-      .eq('id', profile.company_id)
-      .single();
-    company = comp;
+    const [compRes, limits] = await Promise.all([
+      adminSupabase.from('companies').select('*').eq('id', profile.company_id).single(),
+      getCompanyEffectiveLimits(profile.company_id),
+    ]);
+    company = compRes.data;
+    subscriptionLimits = limits;
   }
 
   // 🔒 ЕСЛИ ОРГАНИЗАЦИЯ ЗАБЛОКИРОВАНА СУПЕРАДМИНИСТРАТОРОМ
@@ -56,8 +59,10 @@ export default async function DashboardLayout({
       companyInn={company?.inn}
       isSuperAdmin={!!profile?.is_super_admin}
       userProfile={profile}
+      subscriptionLimits={subscriptionLimits}
     >
       {children}
     </DashboardShell>
   );
 }
+
