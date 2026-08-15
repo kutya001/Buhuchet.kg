@@ -225,8 +225,13 @@ export async function forceSetTelegramWebhookAdminAction(targetUrl?: string): Pr
       : 'https://buhuchet.kg';
 
     const webhookUrl = `${siteUrl}/api/telegram/webhook`;
+    const secretToken = process.env.TELEGRAM_WEBHOOK_SECRET;
+    let setWebhookApiUrl = `https://api.telegram.org/bot${token}/setWebhook?url=${encodeURIComponent(webhookUrl)}`;
+    if (secretToken && secretToken.trim()) {
+      setWebhookApiUrl += `&secret_token=${encodeURIComponent(secretToken.trim())}`;
+    }
 
-    const res = await fetch(`https://api.telegram.org/bot${token}/setWebhook?url=${encodeURIComponent(webhookUrl)}`);
+    const res = await fetch(setWebhookApiUrl);
     const data = await res.json();
 
     if (!data.ok) {

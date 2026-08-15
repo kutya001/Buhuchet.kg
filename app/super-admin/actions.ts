@@ -1300,5 +1300,44 @@ export async function getPaginatedFilesAdminAction(params: {
   }
 }
 
+/**
+ * Получение всех подписок организаций для суперадминистратора
+ */
+export async function getAllSubscriptionsAdminAction(): Promise<ActionResponse<any[]>> {
+  try {
+    await requireSuperAdminSession();
+    const adminSupabase = await createAdminClient();
+
+    const { data, error } = await adminSupabase
+      .from('subscriptions')
+      .select('*, company:companies(id, name, inn)')
+      .order('created_at', { ascending: false });
+
+    if (error) return { success: false, error: error.message };
+    return { success: true, data: data || [] };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Сбой выборки подписок' };
+  }
+}
+
+/**
+ * Ручной запуск проверки просроченных тарифов
+ */
+export async function checkExpiredSubscriptionsAdminAction(): Promise<ActionResponse<{ updatedCount: number }>> {
+  try {
+    await requireSuperAdminSession();
+    const adminSupabase = await createAdminClient();
+
+    const { data, error } = await adminSupabase.rpc('cron_check_expired_subscriptions');
+    if (error) return { success: false, error: error.message };
+
+    revalidatePath('/super-admin/subscriptions');
+    return { success: true, data: { updatedCount: data || 0 } };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Сбой проверки подписок' };
+  }
+}
+
+
 
 

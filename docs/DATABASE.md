@@ -974,3 +974,4 @@ $$;
 | `20260818100000_fix_closed_periods_users_fk.sql` | 18.08.2026 10:00 | Исправление внешних ключей `closed_by` / `opened_by` на `public.users` для PostgREST |
 | `20260818110000_fix_closed_periods_status_check.sql` | 18.08.2026 11:00 | Расширение CHECK-ограничения статусов с поддержкой статуса `partial` (частично закрыт) |
 | `20260818200000_superadmin_hardening_and_atomicity.sql` | 18.08.2026 20:00 | Таблица `admin_audit_logs`, атомарная процедура `admin_approve_company_atomic`, `get_platform_summary_stats` |
+| `20260819000000_superadmin_hardening.sql` | 19.08.2026 00:00 | Триггер `trg_prevent_system_role_deletion` для защиты системных ролей (is_system = true) |

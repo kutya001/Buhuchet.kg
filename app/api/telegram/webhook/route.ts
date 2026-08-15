@@ -25,7 +25,7 @@ function verifyTelegramSecret(req: Request): boolean {
 export async function POST(req: Request) {
   // 1. Немедленная верификация криптографического токена до парсинга JSON
   if (!verifyTelegramSecret(req)) {
-    return new Response(null, { status: 403, statusText: 'Forbidden' });
+    return new Response('Unauthorized', { status: 401, statusText: 'Unauthorized' });
   }
 
   try {
