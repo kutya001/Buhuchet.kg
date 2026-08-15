@@ -27,7 +27,7 @@ export const getSeverUserContext = cache(async (): Promise<ServerUserContext | n
     .from('users')
     .select('company_id, role, role_id, is_super_admin')
     .eq('id', user.id)
-    .single();
+    .maybeSingle();
 
   const companyId = prof?.company_id || null;
   const role = prof?.role || null;
@@ -65,5 +65,39 @@ export const getSeverUserContext = cache(async (): Promise<ServerUserContext | n
     hasActiveCompany,
     membershipStatus,
   };
+});
+
+/**
+ * Получение текущего пользователя auth
+ */
+export const getCurrentUser = cache(async () => {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  return user;
+});
+
+/**
+ * Получение прав текущего пользователя
+ */
+export const getUserPermissions = cache(async () => {
+  const ctx = await getSeverUserContext();
+  if (!ctx || !ctx.userId) return null;
+
+  if (ctx.isSuperAdmin || ctx.role === 'owner') {
+    return { isFullAccess: true };
+  }
+
+  if (!ctx.roleId) return { isFullAccess: false, permissions: {} };
+
+  const adminSupabase = await createAdminClient();
+  const { data: roleData } = await adminSupabase
+    .from('company_roles')
+    .select('permissions')
+    .eq('id', ctx.roleId)
+    .maybeSingle();
+
+  return { isFullAccess: false, permissions: roleData?.permissions || {} };
 });
 

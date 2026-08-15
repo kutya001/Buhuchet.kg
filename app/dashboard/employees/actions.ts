@@ -260,37 +260,43 @@ export async function approveEmployeeRequestAction(params: {
         .eq('status', 'pending');
     }
 
-    // 3. Отправляем Telegram-уведомление сотруднику (если у него привязан бот)
-    const { data: userConn } = await adminSupabase
-      .from('telegram_connections')
-      .select('telegram_chat_id')
-      .eq('user_id', params.userId)
-      .maybeSingle();
+    // 3. Отправляем Telegram-уведомление кандидату (неблокирующий фоновый режим)
+    Promise.resolve().then(async () => {
+      try {
+        const { data: userConn } = await adminSupabase
+          .from('telegram_connections')
+          .select('telegram_chat_id')
+          .eq('user_id', params.userId)
+          .maybeSingle();
 
-    if (userConn?.telegram_chat_id) {
-      const { data: comp } = await adminSupabase
-        .from('companies')
-        .select('name')
-        .eq('id', ctx.companyId)
-        .single();
+        if (userConn?.telegram_chat_id) {
+          const { data: comp } = await adminSupabase
+            .from('companies')
+            .select('name')
+            .eq('id', ctx.companyId)
+            .single();
 
-      const { data: roleData } = await adminSupabase
-        .from('company_roles')
-        .select('name')
-        .eq('id', params.roleId)
-        .single();
+          const { data: roleData } = await adminSupabase
+            .from('company_roles')
+            .select('name')
+            .eq('id', params.roleId)
+            .single();
 
-      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://buhuchet.kg';
-      const msg =
-        `🎉 **Ваша заявка на вступление одобрена!**\n\n` +
-        `🏢 **Организация:** ${comp?.name || 'Компания'}\n` +
-        `💼 **Должность:** ${params.position || 'Сотрудник'}\n` +
-        `🛡️ **Назначенная роль:** ${roleData?.name || 'Менеджер'}\n\n` +
-        `Ваша рабочая область разблокирована. Вы можете приступать к работе!\n\n` +
-        `🔗 **Войти в систему:**\n${baseUrl}/dashboard`;
+          const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://buhuchet.kg';
+          const msg =
+            `🎉 **Ваша заявка на вступление одобрена!**\n\n` +
+            `🏢 **Организация:** ${comp?.name || 'Компания'}\n` +
+            `💼 **Должность:** ${params.position || 'Сотрудник'}\n` +
+            `🛡️ **Назначенная роль:** ${roleData?.name || 'Менеджер'}\n\n` +
+            `Ваша рабочая область разблокирована. Вы можете приступать к работе!\n\n` +
+            `🔗 **Войти в систему:**\n${baseUrl}/dashboard`;
 
-      await sendTelegramMessage(userConn.telegram_chat_id, msg);
-    }
+          await sendTelegramMessage(userConn.telegram_chat_id, msg);
+        }
+      } catch (tgErr) {
+        console.error('[Telegram Notification Background Error]:', tgErr);
+      }
+    });
 
     revalidatePath('/dashboard/employees');
     revalidatePath('/dashboard/pending');
@@ -355,30 +361,36 @@ export async function rejectEmployeeRequestAction(params: {
         .eq('status', 'pending');
     }
 
-    // 3. Отправляем Telegram-уведомление сотруднику (если есть привязка)
-    const { data: userConn } = await adminSupabase
-      .from('telegram_connections')
-      .select('telegram_chat_id')
-      .eq('user_id', params.userId)
-      .maybeSingle();
+    // 3. Отправляем Telegram-уведомление сотруднику (неблокирующий фоновый режим)
+    Promise.resolve().then(async () => {
+      try {
+        const { data: userConn } = await adminSupabase
+          .from('telegram_connections')
+          .select('telegram_chat_id')
+          .eq('user_id', params.userId)
+          .maybeSingle();
 
-    if (userConn?.telegram_chat_id) {
-      const { data: comp } = await adminSupabase
-        .from('companies')
-        .select('name')
-        .eq('id', ctx.companyId)
-        .single();
+        if (userConn?.telegram_chat_id) {
+          const { data: comp } = await adminSupabase
+            .from('companies')
+            .select('name')
+            .eq('id', ctx.companyId)
+            .single();
 
-      const reasonStr = params.reason ? `\n💬 **Причина:** _${params.reason}_\n` : '';
-      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://buhuchet.kg';
-      const msg =
-        `❌ **Заявка на вступление отклонена**\n\n` +
-        `🏢 **Организация:** ${comp?.name || 'Компания'}${reasonStr}\n` +
-        `Вы можете найти другую организацию в панели поиска:\n\n` +
-        `🔗 **Подать новую заявку:**\n${baseUrl}/dashboard/pending`;
+          const reasonStr = params.reason ? `\n💬 **Причина:** _${params.reason}_\n` : '';
+          const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://buhuchet.kg';
+          const msg =
+            `❌ **Заявка на вступление отклонена**\n\n` +
+            `🏢 **Организация:** ${comp?.name || 'Компания'}${reasonStr}\n` +
+            `Вы можете найти другую организацию в панели поиска:\n\n` +
+            `🔗 **Подать новую заявку:**\n${baseUrl}/dashboard/pending`;
 
-      await sendTelegramMessage(userConn.telegram_chat_id, msg);
-    }
+          await sendTelegramMessage(userConn.telegram_chat_id, msg);
+        }
+      } catch (tgErr) {
+        console.error('[Telegram Reject Background Error]:', tgErr);
+      }
+    });
 
     revalidatePath('/dashboard/employees');
     revalidatePath('/dashboard/pending');

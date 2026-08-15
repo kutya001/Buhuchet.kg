@@ -13,9 +13,22 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // 🟢 ОПТИМИЗАЦИЯ 1: Если нет авторизационной куки Supabase (`sb-`), пропускаем анонимный визит на лендинг мгновенно
+  // 🟢 ОПТИМИЗАЦИЯ 1: Если нет авторизационной куки Supabase (`sb-`), пропускаем анонимный визит на публичные страницы мгновенно
   const hasAuthCookie = request.cookies.getAll().some((c) => c.name.startsWith('sb-'));
-  if (pathname === '/' && !hasAuthCookie) {
+  const isPublicRoute = pathname === '/' || pathname === '/login' || pathname === '/register';
+
+  if (isPublicRoute && !hasAuthCookie) {
+    return supabaseResponse;
+  }
+
+  // 🟢 ОПТИМИЗАЦИЯ 2: Для всех prefetch-запросов Next.js (ховеры меню, скролл, роутинг) пропускаем сетевые вызовы БД
+  const isPrefetch =
+    request.headers.get('purpose') === 'prefetch' ||
+    request.headers.get('x-middleware-prefetch') === '1' ||
+    request.headers.get('next-router-prefetch') === '1' ||
+    request.headers.get('x-next-prefetch') === '1';
+
+  if (isPrefetch) {
     return supabaseResponse;
   }
 
@@ -40,23 +53,10 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  // 🟢 ОПТИМИЗАЦИЯ 2: Для prefetch-запросов Next.js (ховеры/скролл)
-  const isPrefetch =
-    request.headers.get('purpose') === 'prefetch' ||
-    request.headers.get('x-middleware-prefetch') === '1' ||
-    request.headers.get('next-router-prefetch') === '1';
-
-  if (isPrefetch && hasAuthCookie) {
-    return supabaseResponse;
-  }
-
   // Обновляем сессию пользователя только для страниц, где требуется авторизация
   const {
     data: { user },
   } = await supabase.auth.getUser();
-
-  // ПУБЛИЧНЫЕ МАРШРУТЫ (Лендинг, Логин, Регистрация)
-  const isPublicRoute = pathname === '/' || pathname === '/login' || pathname === '/register';
 
   // Если неавторизованный пользователь пытается зайти в защищенную зону (/dashboard или /super-admin)
   if (!user && !isPublicRoute) {
