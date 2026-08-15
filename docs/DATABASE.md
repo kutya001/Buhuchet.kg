@@ -971,3 +971,5 @@ $$;
 | `20260816000000_performance_core_fix.sql` | 16.08.2026 00:00 | Оптимизация RLS политик без correlated subqueries, составные B-Tree индексы, STABLE процедуры |
 | `20260817000000_rbac_hardening_and_closed_periods.sql` | 17.08.2026 00:00 | Харденинг RBAC, защита роли Owner триггером, права на закрытые периоды и экспорт |
 | `20260818000000_refactor_closed_periods_schema.sql` | 18.08.2026 00:00 | Рефакторинг закрытых периодов: `lock_documents`, `lock_files`, триггер по модулям |
+| `20260818100000_fix_closed_periods_users_fk.sql` | 18.08.2026 10:00 | Исправление внешних ключей `closed_by` / `opened_by` на `public.users` для PostgREST |
+| `20260818110000_fix_closed_periods_status_check.sql` | 18.08.2026 11:00 | Расширение CHECK-ограничения статусов с поддержкой статуса `partial` (частично закрыт) |
