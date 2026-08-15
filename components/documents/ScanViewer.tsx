@@ -11,7 +11,6 @@ interface ScanViewerProps {
   docNumber?: string | null;
   docDate?: string | null;
   counterpartyName?: string | null;
-  totalAmount?: number | null;
 }
 
 export function ScanViewer({
@@ -20,7 +19,6 @@ export function ScanViewer({
   docNumber,
   docDate,
   counterpartyName,
-  totalAmount,
 }: ScanViewerProps) {
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);

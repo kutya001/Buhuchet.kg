@@ -31,22 +31,14 @@ export default async function DashboardPage() {
 
   if (!user) return null;
 
-  // 1. Получаем профиль пользователя и привязанную компанию с помощью adminSupabase
+  // 1. Получаем профиль пользователя вместе с компанией и ролями за 1 запрос
   const { data: profile } = await adminSupabase
     .from('users')
-    .select('*, company_roles(*)')
+    .select('*, company_roles(*), company:companies!company_id(*)')
     .eq('id', user.id)
     .single();
 
-  let company = null;
-  if (profile?.company_id) {
-    const { data: comp } = await adminSupabase
-      .from('companies')
-      .select('*')
-      .eq('id', profile.company_id)
-      .single();
-    company = comp;
-  }
+  const company = (profile as any)?.company || null;
   const companyId = company?.id || profile?.company_id;
 
   const canCreateDoc = hasPermission(profile, 'documents', 'create');
@@ -54,7 +46,7 @@ export default async function DashboardPage() {
   const canViewCounterparties = hasPermission(profile, 'counterparties', 'view');
   const canViewFiles = hasPermission(profile, 'files', 'view');
 
-  // 2. Получаем развернутые метрики по документам организации
+  // 2. Параллельная выборка всех метрик организации через Promise.all() (устранение Waterfall)
   let incomingCount = 0;
   let outgoingCount = 0;
   let sentCount = 0;
@@ -63,13 +55,26 @@ export default async function DashboardPage() {
   let draftsCount = 0;
   let cancelledCount = 0;
   let totalDocs = 0;
+  let counterpartiesCount = 0;
+  let filesCount = 0;
 
   if (companyId) {
-    const { data: allDocs } = await adminSupabase
-      .from('documents')
-      .select('id, sender_company_id, receiver_company_id, status, company_id')
-      .or(`sender_company_id.eq.${companyId},receiver_company_id.eq.${companyId}`);
+    const [docsRes, counterpartiesRes, filesRes] = await Promise.all([
+      adminSupabase
+        .from('documents')
+        .select('id, sender_company_id, receiver_company_id, status, company_id')
+        .or(`sender_company_id.eq.${companyId},receiver_company_id.eq.${companyId}`),
+      adminSupabase
+        .from('counterparties')
+        .select('id', { count: 'exact', head: true })
+        .eq('company_id', companyId),
+      adminSupabase
+        .from('files')
+        .select('id', { count: 'exact', head: true })
+        .eq('company_id', companyId),
+    ]);
 
+    const allDocs = docsRes.data;
     if (allDocs) {
       totalDocs = allDocs.length;
       allDocs.forEach((d) => {
@@ -86,26 +91,9 @@ export default async function DashboardPage() {
         if (d.status === 'cancelled') cancelledCount++;
       });
     }
-  }
 
-  // 3. Получаем количество контрагентов
-  let counterpartiesCount = 0;
-  if (companyId) {
-    const { count } = await adminSupabase
-      .from('counterparties')
-      .select('id', { count: 'exact', head: true })
-      .eq('company_id', companyId);
-    counterpartiesCount = count || 0;
-  }
-
-  // 4. Получаем количество файлов в хранилище
-  let filesCount = 0;
-  if (companyId) {
-    const { count } = await adminSupabase
-      .from('files')
-      .select('id', { count: 'exact', head: true })
-      .eq('company_id', companyId);
-    filesCount = count || 0;
+    counterpartiesCount = counterpartiesRes.count || 0;
+    filesCount = filesRes.count || 0;
   }
 
   // Расчет процента успешных документов

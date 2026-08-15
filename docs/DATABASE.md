@@ -1086,3 +1086,5 @@ $$;
 | `20260818200000_superadmin_hardening_and_atomicity.sql` | 18.08.2026 20:00 | Таблица `admin_audit_logs`, атомарная процедура `admin_approve_company_atomic`, `get_platform_summary_stats` |
 | `20260819000000_superadmin_hardening.sql` | 19.08.2026 00:00 | Триггер `trg_prevent_system_role_deletion` для защиты системных ролей (is_system = true) |
 | `20260819100000_remove_total_amount_from_documents.sql` | 19.08.2026 10:00 | Удаление столбца `total_amount` из таблицы `documents` и обновление `create_document_atomic` |
+| `20260819200000_landing_pricing_plans.sql` | 19.08.2026 20:00 | Создание таблицы `landing_pricing_plans` для настраиваемых тарифов лендинга |
+| `20260820000000_fix_pricing_plans_public_rls.sql` | 20.08.2026 00:00 | Настройка публичного RLS (`is_active = true`) для тарифов и гарантия изоляции периодов |

@@ -83,8 +83,9 @@ export default function CompanyProfilePage() {
   const loadCompanyData = async () => {
     setLoading(true);
 
-    const [profileRes, legalRes, catRes] = await Promise.all([
+    const [profileRes, statsRes, legalRes, catRes] = await Promise.all([
       getCompanyProfileDataAction(),
+      getCompanyProfileStatsAction(),
       getCompanyLegalDocsAction(),
       supabase.from('file_categories').select('*').order('name'),
     ]);
@@ -92,14 +93,12 @@ export default function CompanyProfilePage() {
     if (profileRes.success && profileRes.data) {
       setCompany(profileRes.data.company);
       setCurrentProfile(profileRes.data.userProfile);
-
-      // Загружаем статистику профиля компании с помощью ID компании
-      const statsRes = await getCompanyProfileStatsAction(profileRes.data.company.id);
-      if (statsRes.success && statsRes.data) {
-        setStats(statsRes.data);
-      }
     } else if (profileRes.error) {
       setMsg({ type: 'error', text: profileRes.error });
+    }
+
+    if (statsRes.success && statsRes.data) {
+      setStats(statsRes.data);
     }
 
     if (legalRes.success && legalRes.data) {
@@ -475,7 +474,7 @@ export default function CompanyProfilePage() {
             keyExtractor={(doc) => doc.id}
             onRowClick={(doc) => doc.file_path_r2 && handleDownloadR2File(doc.file_path_r2)}
             getRowActions={(doc) => [
-              { label: 'Скачать скан (R2)', action: () => doc.file_path_r2 && handleDownloadR2File(doc.file_path_r2) },
+              { label: 'Скачать скан', action: () => doc.file_path_r2 && handleDownloadR2File(doc.file_path_r2) },
               { label: 'Изменить имя / категорию', action: () => handleOpenEdit(doc) },
               { label: 'Удалить скан', action: () => handleDeleteDoc(doc.id), danger: true, separatorBefore: true },
             ]}

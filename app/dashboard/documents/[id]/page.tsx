@@ -393,7 +393,6 @@ export default function B2BDocumentDetailPage() {
               docNumber={document.doc_number}
               docDate={document.doc_date}
               counterpartyName={document.receiver_company?.name || document.sender_company?.name}
-              totalAmount={document.total_amount}
             />
           </div>
         </div>

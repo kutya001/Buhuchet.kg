@@ -3,7 +3,7 @@ export type UserRole = 'owner' | 'accountant' | 'manager';
 export type DocumentType = 'realization' | 'purchase' | 'payment' | 'advance';
 export type DocumentStatus = 'draft' | 'sent' | 'recalled' | 'accepted' | 'processed' | 'cancelled';
 export type EsfStatus = 'not_checked' | 'matched' | 'mismatch';
-export type SubscriptionPlan = 'basic' | 'standard' | 'pro';
+export type SubscriptionPlan = 'basic' | 'standard' | 'pro' | 'start' | 'business' | 'premium';
 export type PaymentMethod = 'qr_mbank' | 'qr_optima' | 'manual_admin';
 
 export type PartnershipStatus = 'pending' | 'sent' | 'recalled' | 'approved' | 'rejected' | 'accepted' | 'cancelled' | 'suspended';
@@ -247,7 +247,6 @@ export interface Document {
   doc_date: string;
   doc_type: DocumentType;
   status: DocumentStatus;
-  total_amount?: number;
   comment?: string | null;
   mock_file_name?: string | null;
   mock_file_size?: number | null;
@@ -333,6 +332,7 @@ export interface LandingPricingPlan {
   sort_order: number;
   features: string[];
   button_text: string;
+  is_active?: boolean;
   created_at?: string;
   updated_at?: string;
 }

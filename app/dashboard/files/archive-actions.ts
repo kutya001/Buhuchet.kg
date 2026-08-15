@@ -678,7 +678,7 @@ export async function getComprehensiveFileRegistryAction(params?: {
         if (f.document_id && docMap.has(f.document_id)) {
           const d = docMap.get(f.document_id);
           sourceType = 'document';
-          sourceTitle = `B2B Документ №${d?.doc_number || f.document_id.slice(0, 8)}`;
+          sourceTitle = `Документ №${d?.doc_number || f.document_id.slice(0, 8)}`;
           sourceUrl = `/dashboard/documents/${f.document_id}`;
           bySource.document++;
         } else if (f.is_legal_doc && isMyCompanyFile) {
