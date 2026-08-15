@@ -556,7 +556,7 @@ export default function EmployeesModulePage() {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => handleReject(req.id)}
+                        onClick={() => handleReject(req)}
                         disabled={isPending}
                         className="h-8 text-xs border-rose-500/40 text-rose-400 hover:bg-rose-500/10"
                       >

@@ -100,32 +100,46 @@ export async function getPendingRequestsAction(
     const adminSupabase = await createAdminClient();
     const targetCompId = companyId || ctx.companyId;
 
-    // 1. Загружаем заявки из таблицы company_join_requests
+    // 1. Загружаем активные заявки из таблицы company_join_requests
     const { data: joinReqs, error: joinErr } = await adminSupabase
       .from('company_join_requests')
-      .select('id, company_id, user_id, position_note, status, created_at, users:users!user_id(id, full_name, email, phone)')
+      .select('id, company_id, user_id, position_note, status, created_at')
       .eq('company_id', targetCompId)
       .eq('status', 'pending')
       .order('created_at', { ascending: false });
 
-    if (!joinErr && joinReqs && joinReqs.length > 0) {
-      const formatted = joinReqs.map((r: any) => {
-        const u = Array.isArray(r.users) ? r.users[0] : r.users;
-        return {
-          id: u?.id || r.user_id,
+    if (joinErr) {
+      console.error('[getPendingRequestsAction] Ошибка чтения company_join_requests:', joinErr);
+    }
+
+    const requestsList: any[] = [];
+
+    if (joinReqs && joinReqs.length > 0) {
+      const userIds = Array.from(new Set(joinReqs.map((r) => r.user_id)));
+      const { data: usersList } = await adminSupabase
+        .from('users')
+        .select('id, full_name, email, phone')
+        .in('id', userIds);
+
+      const usersMap = new Map(usersList?.map((u) => [u.id, u]) || []);
+
+      for (const r of joinReqs) {
+        const u = usersMap.get(r.user_id);
+        requestsList.push({
+          id: r.user_id,
           requestId: r.id,
           full_name: u?.full_name || 'Кандидат',
           email: u?.email || '—',
           phone: u?.phone || '—',
           position: r.position_note || 'Сотрудник',
           created_at: r.created_at,
-        };
-      });
-      return { success: true, data: formatted };
+        });
+      }
     }
 
-    // 2. Fallback: Загрузка пользователей со статусом ожидания в таблице users
-    const { data, error } = await adminSupabase
+    // 2. Дополнительно подтягиваем кандидатов из users (legacy fallback)
+    const existingUserIds = new Set(requestsList.map((r) => r.id));
+    const { data: legacyUsers } = await adminSupabase
       .from('users')
       .select('id, full_name, email, phone, position, created_at, company_roles(*)')
       .eq('company_id', targetCompId)
@@ -133,11 +147,23 @@ export async function getPendingRequestsAction(
       .neq('role', 'owner')
       .order('created_at', { ascending: false });
 
-    if (error) {
-      return { success: false, error: `Ошибка получения заявок: ${error.message}` };
+    if (legacyUsers && legacyUsers.length > 0) {
+      for (const u of legacyUsers) {
+        if (!existingUserIds.has(u.id)) {
+          requestsList.push({
+            id: u.id,
+            requestId: undefined,
+            full_name: u.full_name,
+            email: u.email,
+            phone: u.phone || '—',
+            position: u.position || 'Сотрудник',
+            created_at: u.created_at,
+          });
+        }
+      }
     }
 
-    return { success: true, data: data || [] };
+    return { success: true, data: requestsList };
   } catch (err: unknown) {
     return { success: false, error: err instanceof Error ? err.message : 'Сбой получения заявок' };
   }
