@@ -971,7 +971,7 @@ export const deleteFileSuperAdminAction = createSafeAction(
     // 1. Получаем путь к файлу
     const { data: file, error: fetchErr } = await adminSupabase
       .from('files')
-      .select('id, file_name, file_path_r2')
+      .select('id, file_name, file_path_r2, company_id, size_bytes')
       .eq('id', fileId)
       .maybeSingle();
 
@@ -986,6 +986,14 @@ export const deleteFileSuperAdminAction = createSafeAction(
     const { error: delErr } = await adminSupabase.from('files').delete().eq('id', fileId);
     if (delErr) {
       return { success: false, error: delErr.message };
+    }
+
+    // Атомарно освобождаем память на Облачном диске
+    if (file.company_id && file.size_bytes) {
+      await adminSupabase.rpc('increment_company_storage', {
+        p_company_id: file.company_id,
+        p_bytes: -Number(file.size_bytes),
+      });
     }
 
     // 4. Добавляем в очередь удаления физического объекта из R2

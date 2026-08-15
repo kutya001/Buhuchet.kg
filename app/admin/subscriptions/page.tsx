@@ -294,8 +294,14 @@ export default function SuperAdminSubscriptionsPage() {
       sortable: true,
       getValue: (r) => r.created_at,
       render: (r) => (
-        <span className="font-mono text-xs text-muted-foreground">
-          {new Date(r.created_at).toLocaleDateString('ru-RU')}
+        <span className="font-mono text-xs text-foreground">
+          {new Date(r.created_at).toLocaleString('ru-RU', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+          })}
         </span>
       ),
     },
@@ -436,7 +442,13 @@ export default function SuperAdminSubscriptionsPage() {
         const isExpired = d < new Date();
         return (
           <span className={`font-mono text-xs ${isExpired ? 'text-rose-400 font-bold' : 'text-foreground'}`}>
-            {d.toLocaleDateString('ru-RU')}
+            {d.toLocaleString('ru-RU', {
+              day: '2-digit',
+              month: '2-digit',
+              year: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+            })}
           </span>
         );
       },
@@ -448,7 +460,13 @@ export default function SuperAdminSubscriptionsPage() {
       getValue: (s) => s.created_at,
       render: (s) => (
         <span className="font-mono text-xs text-muted-foreground">
-          {new Date(s.created_at).toLocaleDateString('ru-RU')}
+          {new Date(s.created_at).toLocaleString('ru-RU', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+          })}
         </span>
       ),
     },

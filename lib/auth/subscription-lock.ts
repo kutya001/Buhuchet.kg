@@ -40,8 +40,17 @@ export interface CompanyEffectiveLimits {
 export async function getCompanyEffectiveLimits(companyId: string): Promise<CompanyEffectiveLimits> {
   const adminSupabase = await createAdminClient();
 
-  // Параллельная выборка профиля компании, подписки, файлов, сотрудников и контрагентов
-  const [companyRes, subRes, filesRes, employeesRes, counterpartiesRes, plansRes] = await Promise.all([
+  // Параллельная выборка профиля компании, подписки, файлов, сотрудников, партнерств и планов
+  const [
+    companyRes,
+    subRes,
+    filesRes,
+    employeesRes,
+    partnershipsReqRes,
+    partnershipsTargetRes,
+    manualCounterpartiesRes,
+    plansRes,
+  ] = await Promise.all([
     adminSupabase
       .from('companies')
       .select('*')
@@ -62,8 +71,18 @@ export async function getCompanyEffectiveLimits(companyId: string): Promise<Comp
       .eq('company_id', companyId)
       .eq('is_active', true),
     adminSupabase
+      .from('company_partnerships')
+      .select('target_company_id')
+      .eq('requester_company_id', companyId)
+      .in('status', ['pending', 'accepted', 'approved']),
+    adminSupabase
+      .from('company_partnerships')
+      .select('requester_company_id')
+      .eq('target_company_id', companyId)
+      .in('status', ['pending', 'accepted', 'approved']),
+    adminSupabase
       .from('counterparties')
-      .select('id', { count: 'exact', head: true })
+      .select('id, inn')
       .eq('company_id', companyId),
     adminSupabase
       .from('landing_pricing_plans')
@@ -84,13 +103,33 @@ export async function getCompanyEffectiveLimits(companyId: string): Promise<Comp
     is_telegram_enabled: false,
   };
 
-  // Фактическое использование
-  const filesList = filesRes.data || [];
-  const storageUsedBytes = filesList.reduce((acc, f) => acc + (Number(f.size_bytes) || 0), 0);
-  const employeesCount = employeesRes.count || 0;
-  const counterpartiesCount = counterpartiesRes.count || 0;
+  // 1. Двусторонний подсчет уникальных контрагентов
+  const uniquePartners = new Set<string>();
+  (partnershipsReqRes.data || []).forEach((p) => {
+    if (p.target_company_id && p.target_company_id !== companyId) {
+      uniquePartners.add(p.target_company_id);
+    }
+  });
+  (partnershipsTargetRes.data || []).forEach((p) => {
+    if (p.requester_company_id && p.requester_company_id !== companyId) {
+      uniquePartners.add(p.requester_company_id);
+    }
+  });
+  (manualCounterpartiesRes.data || []).forEach((m) => {
+    if (m.inn) uniquePartners.add(`inn_${m.inn}`);
+    else if (m.id) uniquePartners.add(`cp_${m.id}`);
+  });
+  const counterpartiesCount = uniquePartners.size;
 
-  // Эффективные лимиты с учетом ручных оверрайдов суперадмина
+  // 2. Фактическое использование памяти и сотрудников
+  const filesList = filesRes.data || [];
+  const filesSumBytes = filesList.reduce((acc, f) => acc + (Number(f.size_bytes) || 0), 0);
+  const storageUsedBytes = company.storage_used_bytes != null
+    ? Math.max(0, Number(company.storage_used_bytes))
+    : filesSumBytes;
+  const employeesCount = employeesRes.count || 0;
+
+  // 3. Эффективные лимиты с учетом ручных оверрайдов суперадмина
   const maxCounterparties = company.custom_max_counterparties ?? plan.max_counterparties ?? 10;
   const maxEmployees = company.custom_max_employees ?? plan.max_employees ?? 3;
   const storageLimitBytes = company.custom_storage_limit_bytes ?? plan.storage_limit_bytes ?? ((company.storage_limit_gb || 1) * 1024 * 1024 * 1024);
@@ -102,7 +141,7 @@ export async function getCompanyEffectiveLimits(companyId: string): Promise<Comp
     company.custom_telegram_enabled !== null
   );
 
-  // Определение срока действия
+  // 4. Определение срока действия
   const now = new Date();
   const expiresAt = subscription?.expires_at || null;
   let isExpired = false;
@@ -212,8 +251,9 @@ export async function assertCanUploadFile(companyId: string, fileSizeBytes: numb
   if (limits.isExpired) {
     throw new Error('Срок действия подписки истек. Продлите тариф для загрузки новых файлов.');
   }
-  if (limits.storageUsedBytes + fileSizeBytes > limits.storageLimitBytes) {
-    const freeMb = Math.max(0, Math.round(((limits.storageLimitBytes - limits.storageUsedBytes) / (1024 * 1024)) * 10) / 10);
+  const usedBytes = Math.max(0, limits.storageUsedBytes || 0);
+  if (usedBytes + fileSizeBytes > limits.storageLimitBytes) {
+    const freeMb = Math.max(0, Math.round(((limits.storageLimitBytes - usedBytes) / (1024 * 1024)) * 10) / 10);
     const requiredMb = Math.round((fileSizeBytes / (1024 * 1024)) * 10) / 10;
     throw new Error(
       `Недостаточно свободного места на Облачном диске. Требуется: ${requiredMb} МБ, свободно: ${freeMb} МБ. Перейдите на расширенный тариф в разделе «Подписка».`

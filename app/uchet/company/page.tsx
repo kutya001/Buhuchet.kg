@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useTransition } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -29,6 +29,7 @@ import {
   RefreshCw,
   Lock,
   Clock,
+  CreditCard,
 } from 'lucide-react';
 import { formatBytes } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
@@ -51,12 +52,14 @@ import { CompanyStatsGrid } from '@/components/company/CompanyStatsGrid';
 import { OwnerBadge } from '@/components/company/OwnerBadge';
 import { CompanyProfileForm } from '@/components/company/CompanyProfileForm';
 import { ClosedPeriodsJournal } from '@/components/company/ClosedPeriodsJournal';
+import { SubscriptionManagementView } from '@/components/subscription/SubscriptionManagementView';
 import { canEditCompanyProfile } from '@/lib/auth/permissions';
 import type { CompanyProfileStats } from '@/types/company.types';
 
 export default function CompanyProfilePage() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<'profile' | 'legal_docs' | 'closed_period'>('profile');
+  const searchParams = useSearchParams();
+  const [activeTab, setActiveTab] = useState<'profile' | 'legal_docs' | 'closed_period' | 'subscription'>('profile');
   const [company, setCompany] = useState<Company | null>(null);
   const [currentProfile, setCurrentProfile] = useState<UserProfile | null>(null);
   const [stats, setStats] = useState<CompanyProfileStats | null>(null);
@@ -114,7 +117,11 @@ export default function CompanyProfilePage() {
 
   useEffect(() => {
     loadCompanyData();
-  }, []);
+    const tabParam = searchParams.get('tab');
+    if (tabParam === 'subscription' || tabParam === 'legal_docs' || tabParam === 'closed_period' || tabParam === 'profile') {
+      setActiveTab(tabParam as any);
+    }
+  }, [searchParams]);
 
   const handleDownloadR2File = async (fileKey?: string | null) => {
     if (!fileKey) return;
@@ -318,6 +325,18 @@ export default function CompanyProfilePage() {
             <span>Закрытие Месяца / Периода</span>
           </button>
         )}
+
+        <button
+          onClick={() => setActiveTab('subscription')}
+          className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs md:text-sm font-medium transition-all ${
+            activeTab === 'subscription'
+              ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30 font-bold'
+              : 'text-muted-foreground hover:text-slate-200 hover:bg-muted'
+          }`}
+        >
+          <CreditCard className="h-4 w-4 text-blue-400" />
+          <span>Подписка и Тарифы</span>
+        </button>
       </div>
 
       {/* 1. Вкладка Профиль & Реквизиты */}
@@ -494,6 +513,11 @@ export default function CompanyProfilePage() {
             canEditCompanyProfile(currentProfile, company?.id)
           }
         />
+      )}
+
+      {/* 4. Вкладка Подписка и Тарифные Квоты */}
+      {activeTab === 'subscription' && (
+        <SubscriptionManagementView />
       )}
 
       {/* МОДАЛЬНОЕ ОКНО РЕДАКТИРОВАНИЯ И ЗАМЕНЫ ФАЙЛА (UnifiedFormModal) */}

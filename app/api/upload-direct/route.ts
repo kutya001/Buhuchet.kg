@@ -67,6 +67,14 @@ export async function POST(req: NextRequest) {
       })
     );
 
+    // Атомарно увеличиваем счетчик занятого места на Облачном диске
+    if (targetCompanyId && targetCompanyId !== 'anonymous' && targetCompanyId !== 'system') {
+      await adminSupabase.rpc('increment_company_storage', {
+        p_company_id: targetCompanyId,
+        p_bytes: file.size,
+      });
+    }
+
     return NextResponse.json({
       success: true,
       data: {

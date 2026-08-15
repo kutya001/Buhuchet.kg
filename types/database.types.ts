@@ -50,6 +50,7 @@ export interface Company {
   currency?: string | null;
   is_active: boolean;
   storage_limit_gb: number;
+  storage_used_bytes?: number | null;
   closed_period_until?: string | null;
   custom_max_counterparties?: number | null;
   custom_max_employees?: number | null;

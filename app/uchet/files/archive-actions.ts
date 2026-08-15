@@ -374,7 +374,11 @@ export async function deleteDocumentFileAction(fileId: string): Promise<ActionRe
 
     const { data: prof } = await supabase.from('users').select('company_id, is_super_admin').eq('id', user.id).single();
 
-    const { data: existingFile } = await adminSupabase.from('files').select('company_id, file_path_r2').eq('id', fileId).single();
+    const { data: existingFile } = await adminSupabase
+      .from('files')
+      .select('company_id, file_path_r2, size_bytes')
+      .eq('id', fileId)
+      .single();
     if (!existingFile) {
       return { success: false, error: 'Файл не найден' };
     }
@@ -393,6 +397,14 @@ export async function deleteDocumentFileAction(fileId: string): Promise<ActionRe
         await deleteR2Object(existingFile.file_path_r2);
       }
       await adminSupabase.from('files').delete().eq('id', fileId);
+
+      // Атомарно освобождаем память на Облачном диске
+      if (existingFile.company_id && existingFile.size_bytes) {
+        await adminSupabase.rpc('increment_company_storage', {
+          p_company_id: existingFile.company_id,
+          p_bytes: -Number(existingFile.size_bytes),
+        });
+      }
     }
 
     revalidatePath('/uchet/files', 'page');

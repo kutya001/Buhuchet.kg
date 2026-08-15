@@ -66,7 +66,7 @@ export function SubscriptionExpiredView({
             asChild
             className="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium shadow-lg shadow-blue-600/25 min-h-[42px]"
           >
-            <Link href="/uchet/subscription">
+            <Link href="/uchet/company?tab=subscription">
               <CreditCard className="mr-2 h-4 w-4" />
               Перейти к продлению подписки
               <ArrowRight className="ml-2 h-4 w-4" />
