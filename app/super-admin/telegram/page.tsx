@@ -21,6 +21,10 @@ import {
   ExternalLink,
   ShieldCheck,
   AlertCircle,
+  Eye,
+  Calendar,
+  Layers,
+  Radio,
 } from 'lucide-react';
 import {
   getTelegramAdminStatsAction,
@@ -28,15 +32,18 @@ import {
   forceSetTelegramWebhookAdminAction,
   sendAdminTestTelegramMessageAction,
   disconnectUserTelegramAdminAction,
+  getTelegramLogsAction,
   type TelegramAdminStatsData,
   type TelegramBotHealthData,
 } from '@/app/super-admin/telegram-actions';
 import { UnifiedDataGrid, ColumnDef } from '@/components/ui/unified/UnifiedDataGrid';
 import { UnifiedWorkspaceLayout } from '@/components/ui/unified/UnifiedWorkspaceLayout';
+import { UnifiedViewModal } from '@/components/ui/unified/UnifiedViewModal';
 import { toast } from 'sonner';
+import type { TelegramNotificationLog } from '@/types/database.types';
 
 export default function SuperAdminTelegramPage() {
-  const [subTab, setSubTab] = useState<'connections' | 'codes' | 'logs'>('connections');
+  const [subTab, setSubTab] = useState<'notification_logs' | 'connections' | 'codes'>('notification_logs');
   const [loading, setLoading] = useState(true);
   const [healthLoading, setHealthLoading] = useState(false);
   const [settingWebhook, setSettingWebhook] = useState(false);
@@ -44,6 +51,11 @@ export default function SuperAdminTelegramPage() {
 
   const [stats, setStats] = useState<TelegramAdminStatsData | null>(null);
   const [health, setHealth] = useState<TelegramBotHealthData | null>(null);
+
+  // Реестр логов уведомлений
+  const [notificationLogs, setNotificationLogs] = useState<TelegramNotificationLog[]>([]);
+  const [loadingLogs, setLoadingLogs] = useState(false);
+  const [selectedLogForModal, setSelectedLogForModal] = useState<TelegramNotificationLog | null>(null);
 
   // Ручная отправка пинга
   const [testChatId, setTestChatId] = useState('');
@@ -61,6 +73,15 @@ export default function SuperAdminTelegramPage() {
     setLoading(false);
   };
 
+  const loadNotificationLogs = async () => {
+    setLoadingLogs(true);
+    const res = await getTelegramLogsAction({ page: 1, pageSize: 100 });
+    if (res.success && res.data) {
+      setNotificationLogs((res.data.logs || []) as TelegramNotificationLog[]);
+    }
+    setLoadingLogs(false);
+  };
+
   const loadHealth = async () => {
     setHealthLoading(true);
     const res = await testTelegramBotHealthAdminAction();
@@ -75,6 +96,7 @@ export default function SuperAdminTelegramPage() {
   useEffect(() => {
     loadStats();
     loadHealth();
+    loadNotificationLogs();
   }, []);
 
   const handleForceWebhook = async () => {
@@ -111,13 +133,110 @@ export default function SuperAdminTelegramPage() {
     if (res.success) {
       toast.success(`Тестовое сообщение успешно отправлено в Chat ID: ${testChatId}`);
       await loadStats();
+      await loadNotificationLogs();
     } else {
       toast.error(res.error || 'Сбой отправки тестового сообщения');
     }
     setSendingTest(false);
   };
 
-  // 1. КОЛОНКИ: Привязанные Аккаунты
+  // 1. КОЛОНКИ: Журнал отправленных сообщений Telegram
+  const notificationLogColumns: ColumnDef<TelegramNotificationLog>[] = useMemo(
+    () => [
+      {
+        key: 'status',
+        label: 'Статус',
+        sortable: true,
+        getValue: (l) => l.status,
+        render: (l) => {
+          if (l.status === 'sent') {
+            return (
+              <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-xs flex items-center gap-1 w-fit">
+                <CheckCircle2 className="h-3 w-3" />
+                Отправлено
+              </Badge>
+            );
+          }
+          if (l.status === 'failed') {
+            return (
+              <Badge className="bg-red-500/20 text-red-400 border-red-500/30 text-xs flex items-center gap-1 w-fit">
+                <AlertCircle className="h-3 w-3" />
+                Ошибка
+              </Badge>
+            );
+          }
+          return (
+            <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30 text-xs flex items-center gap-1 w-fit">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              В процессе
+            </Badge>
+          );
+        },
+      },
+      {
+        key: 'event_type',
+        label: 'Тип события',
+        sortable: true,
+        getValue: (l) => l.event_type,
+        render: (l) => {
+          const typeColors: Record<string, string> = {
+            DOC_CREATED: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+            STATUS_CHANGED: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
+            COLLABORATION_REQUEST: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
+            COLLABORATION_CONFIRMED: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+            COLLABORATION_REJECTED: 'bg-rose-500/20 text-rose-400 border-rose-500/30',
+            COLLABORATION_TERMINATED: 'bg-red-500/20 text-red-400 border-red-500/30',
+            COMPANY_VERIFICATION: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30',
+            SYSTEM_BROADCAST: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
+          };
+          const cls = typeColors[l.event_type] || 'bg-slate-500/20 text-slate-300 border-slate-500/30';
+          return <Badge className={`${cls} text-[11px] font-mono`}>{l.event_type}</Badge>;
+        },
+      },
+      {
+        key: 'recipient',
+        label: 'Получатель / Chat ID',
+        sortable: true,
+        getValue: (l) => l.recipient_user?.full_name || l.recipient_chat_id,
+        render: (l) => (
+          <div>
+            <div className="font-semibold text-foreground text-xs">
+              {l.recipient_user?.full_name || 'Пользователь Telegram'}
+            </div>
+            <div className="text-[11px] font-mono text-muted-foreground">Chat ID: {l.recipient_chat_id}</div>
+          </div>
+        ),
+      },
+      {
+        key: 'message_preview',
+        label: 'Текст сообщения',
+        sortable: false,
+        getValue: (l) => l.message_text,
+        render: (l) => (
+          <div
+            className="text-xs text-muted-foreground truncate max-w-sm cursor-pointer hover:text-foreground font-mono"
+            title="Нажмите для полного просмотра"
+          >
+            {l.message_text.replace(/\*\*/g, '').slice(0, 80)}...
+          </div>
+        ),
+      },
+      {
+        key: 'sent_at',
+        label: 'Время отправки',
+        sortable: true,
+        getValue: (l) => l.created_at || l.sent_at,
+        render: (l) => (
+          <span className="text-xs text-muted-foreground font-mono">
+            {new Date(l.created_at || l.sent_at).toLocaleString('ru-RU')}
+          </span>
+        ),
+      },
+    ],
+    []
+  );
+
+  // 2. КОЛОНКИ: Привязанные Аккаунты
   const connectionColumns: ColumnDef<any>[] = useMemo(
     () => [
       {
@@ -208,7 +327,7 @@ export default function SuperAdminTelegramPage() {
     [disconnectingId]
   );
 
-  // 2. КОЛОНКИ: Реестр OTP-Кодов
+  // 3. КОЛОНКИ: Реестр OTP-Кодов
   const codeColumns: ColumnDef<any>[] = useMemo(
     () => [
       {
@@ -278,73 +397,10 @@ export default function SuperAdminTelegramPage() {
     []
   );
 
-  // 3. КОЛОНКИ: Логи Вебхуков
-  const logColumns: ColumnDef<any>[] = useMemo(
-    () => [
-      {
-        key: 'status',
-        label: 'Статус',
-        sortable: true,
-        getValue: (lg) => lg.status,
-        render: (lg) => (
-          <Badge
-            className={
-              lg.status === 'received'
-                ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-xs'
-                : lg.status === 'error'
-                ? 'bg-red-500/20 text-red-400 border-red-500/30 text-xs'
-                : 'bg-amber-500/20 text-amber-400 border-amber-500/30 text-xs'
-            }
-          >
-            {lg.status || 'unknown'}
-          </Badge>
-        ),
-      },
-      {
-        key: 'chat_id',
-        label: 'Chat ID',
-        sortable: true,
-        getValue: (lg) => lg.chat_id,
-        render: (lg) => <span className="font-mono text-xs text-foreground font-bold">{lg.chat_id || '—'}</span>,
-      },
-      {
-        key: 'username',
-        label: 'Username',
-        sortable: true,
-        getValue: (lg) => lg.username,
-        render: (lg) =>
-          lg.username ? (
-            <span className="text-xs text-sky-400 font-mono">@{lg.username}</span>
-          ) : (
-            <span className="text-xs text-muted-foreground">—</span>
-          ),
-      },
-      {
-        key: 'message_text',
-        label: 'Текст входящего сообщения',
-        sortable: false,
-        getValue: (lg) => lg.message_text,
-        render: (lg) => (
-          <div className="font-mono text-xs text-foreground max-w-md truncate" title={lg.message_text || ''}>
-            {lg.message_text || '—'}
-          </div>
-        ),
-      },
-      {
-        key: 'created_at',
-        label: 'Время события',
-        sortable: true,
-        getValue: (lg) => lg.created_at,
-        render: (lg) => <span className="text-xs text-muted-foreground">{new Date(lg.created_at).toLocaleString('ru-RU')}</span>,
-      },
-    ],
-    []
-  );
-
   return (
     <UnifiedWorkspaceLayout
       title="Мониторинг Telegram-ботов и уведомителя"
-      description="Управление интеграциями мессенджеров, вебхуками, реестрами привязок и рассылкой уведомлений"
+      description="Управление интеграциями мессенджеров, вебхуками, реестрами привязок и историей отправленных сообщений"
       icon={Send}
       actionButtonsSlot={
         <div className="flex items-center space-x-2">
@@ -362,230 +418,292 @@ export default function SuperAdminTelegramPage() {
             onClick={() => {
               loadStats();
               loadHealth();
+              loadNotificationLogs();
             }}
-            disabled={loading || healthLoading}
+            disabled={loading || healthLoading || loadingLogs}
             variant="outline"
             className="border-border text-xs min-h-[40px]"
           >
-            <RefreshCw className={`h-4 w-4 mr-1.5 ${loading || healthLoading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`h-4 w-4 mr-1.5 ${loading || healthLoading || loadingLogs ? 'animate-spin' : ''}`} />
             Проверить статус
           </Button>
         </div>
       }
     >
-      {/* 1. СТАТИСТИЧЕСКИЕ КАРТОЧКИ И ЗДОРОВЬЕ БОТА */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="bg-card border-border p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <span className="text-xs text-muted-foreground block">Статус Bot API</span>
-              <div className="flex items-center space-x-2 mt-1">
-                <Badge className="bg-sky-500/20 text-sky-400 border-sky-500/30 text-xs font-mono">
-                  @{health?.botInfo?.username || 'bot'}
-                </Badge>
+      <div className="w-full space-y-6">
+        {/* 1. СТАТИСТИЧЕСКИЕ КАРТОЧКИ И ЗДОРОВЬЕ БОТА */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Card className="bg-card border-border p-4 shadow-xl">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-xs text-muted-foreground block">Статус Bot API</span>
+                <div className="flex items-center space-x-2 mt-1">
+                  <Badge className="bg-sky-500/20 text-sky-400 border-sky-500/30 text-xs font-mono">
+                    @{health?.botInfo?.username || 'bot'}
+                  </Badge>
+                </div>
+              </div>
+              <div className="p-3 bg-sky-500/10 rounded-xl text-sky-400">
+                <CheckCircle2 className="h-6 w-6" />
               </div>
             </div>
-            <div className="p-3 bg-sky-500/10 rounded-xl text-sky-400">
-              <CheckCircle2 className="h-6 w-6" />
+            <div className="mt-3 pt-2 border-t border-border text-xs text-muted-foreground">
+              {health?.botInfo?.first_name || 'Buhuchet Bot'}
             </div>
-          </div>
-          <div className="mt-3 pt-2 border-t border-border text-xs text-muted-foreground">
-            {health?.botInfo?.first_name || 'Buhuchet Bot'}
-          </div>
-        </Card>
+          </Card>
 
-        <Card className="bg-card border-border p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <span className="text-xs text-muted-foreground block">Статус Webhook</span>
-              <span className="text-sm font-bold text-emerald-400 mt-1 block truncate max-w-[170px]" title={health?.webhookInfo?.url || ''}>
-                {health?.webhookInfo?.url ? 'Активен 200 OK' : 'Не установлен'}
-              </span>
+          <Card className="bg-card border-border p-4 shadow-xl">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-xs text-muted-foreground block">Статус Webhook</span>
+                <span className="text-sm font-bold text-emerald-400 mt-1 block truncate max-w-[170px]" title={health?.webhookInfo?.url || ''}>
+                  {health?.webhookInfo?.url ? 'Активен 200 OK' : 'Не установлен'}
+                </span>
+              </div>
+              <div className="p-3 bg-emerald-500/10 rounded-xl text-emerald-400">
+                <CheckCircle2 className="h-6 w-6" />
+              </div>
             </div>
-            <div className="p-3 bg-emerald-500/10 rounded-xl text-emerald-400">
-              <CheckCircle2 className="h-6 w-6" />
+            <div className="mt-3 pt-2 border-t border-border text-xs text-muted-foreground truncate font-mono">
+              {health?.webhookInfo?.url ? health.webhookInfo.url : '⚠️ URL не настроен'}
             </div>
-          </div>
-          <div className="mt-3 pt-2 border-t border-border text-xs text-muted-foreground truncate font-mono">
-            {health?.webhookInfo?.url ? health.webhookInfo.url : '⚠️ URL не настроен'}
-          </div>
-        </Card>
+          </Card>
 
-        <Card className="bg-card border-border p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <span className="text-xs text-muted-foreground block">Привязано пользователей</span>
-              <span className="text-2xl font-bold font-mono text-amber-400 mt-1 block">
-                {stats?.connections.length || 0}
-              </span>
+          <Card className="bg-card border-border p-4 shadow-xl">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-xs text-muted-foreground block">Привязано пользователей</span>
+                <span className="text-2xl font-bold font-mono text-amber-400 mt-1 block">
+                  {stats?.connections.length || 0}
+                </span>
+              </div>
+              <div className="p-3 bg-amber-500/10 rounded-xl text-amber-400">
+                <MessageSquare className="h-6 w-6" />
+              </div>
             </div>
-            <div className="p-3 bg-amber-500/10 rounded-xl text-amber-400">
-              <MessageSquare className="h-6 w-6" />
+            <div className="mt-3 pt-2 border-t border-border text-xs text-muted-foreground">
+              Специалисты с активной связью
             </div>
-          </div>
-          <div className="mt-3 pt-2 border-t border-border text-xs text-muted-foreground">
-            Специалисты с активной связью
-          </div>
-        </Card>
+          </Card>
 
-        <Card className="bg-card border-border p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <span className="text-xs text-muted-foreground block">Очередь Telegram</span>
-              <span className="text-2xl font-bold font-mono text-indigo-400 mt-1 block">
-                {health?.webhookInfo?.pending_update_count ?? 0}
-              </span>
+          <Card className="bg-card border-border p-4 shadow-xl">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-xs text-muted-foreground block">Отправлено оповещений</span>
+                <span className="text-2xl font-bold font-mono text-indigo-400 mt-1 block">
+                  {notificationLogs.length || stats?.logs.length || 0}
+                </span>
+              </div>
+              <div className="p-3 bg-indigo-500/10 rounded-xl text-indigo-400">
+                <BellRing className="h-6 w-6" />
+              </div>
             </div>
-            <div className="p-3 bg-indigo-500/10 rounded-xl text-indigo-400">
-              <BellRing className="h-6 w-6" />
+            <div className="mt-3 pt-2 border-t border-border text-xs text-muted-foreground">
+              Всего зафиксировано в реестре
             </div>
-          </div>
-          <div className="mt-3 pt-2 border-t border-border text-xs text-muted-foreground">
-            Недоставленных событий
-          </div>
-        </Card>
-      </div>
-
-      {/* ТЕСТОВАЯ ОТПРАВКА PING */}
-      <Card className="bg-card border-border p-5 mt-4 space-y-3">
-        <h4 className="text-xs md:text-sm font-bold text-foreground flex items-center">
-          <Send className="h-4 w-4 mr-2 text-amber-400" />
-          Ручная отправка тестового уведомления
-        </h4>
-        <form onSubmit={handleSendTest} className="flex flex-col sm:flex-row items-end gap-3">
-          <div className="w-full sm:w-1/3 space-y-1">
-            <Label className="text-xs text-muted-foreground">Telegram Chat ID получателя</Label>
-            <Input
-              value={testChatId}
-              onChange={(e) => setTestChatId(e.target.value)}
-              placeholder="Например: 123456789"
-              className="bg-background border-border text-foreground text-xs font-mono min-h-[40px]"
-            />
-          </div>
-          <div className="w-full sm:w-1/2 space-y-1">
-            <Label className="text-xs text-muted-foreground">Текст проверочного сообщения</Label>
-            <Input
-              value={testText}
-              onChange={(e) => setTestText(e.target.value)}
-              className="bg-background border-border text-foreground text-xs min-h-[40px]"
-            />
-          </div>
-          <Button
-            type="submit"
-            disabled={sendingTest || !testChatId}
-            className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs min-h-[40px] px-5 rounded-xl shadow-md"
-          >
-            {sendingTest ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Send className="h-4 w-4 mr-1.5" />}
-            Отправить Тест
-          </Button>
-        </form>
-      </Card>
-
-      {/* 2. ПОДВКЛАДКИ РЕЕСТРОВ */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3 mt-6">
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={() => setSubTab('connections')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-              subTab === 'connections'
-                ? 'bg-sky-500/20 text-sky-400 border border-sky-500/40 shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            <User className="h-3.5 w-3.5 inline mr-1.5" />
-            Привязанные Пользователи ({stats?.connections.length || 0})
-          </button>
-
-          <button
-            onClick={() => setSubTab('codes')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-              subTab === 'codes'
-                ? 'bg-purple-500/20 text-purple-400 border border-purple-500/40 shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            <Key className="h-3.5 w-3.5 inline mr-1.5" />
-            Реестр OTP-Кодов ({stats?.codes.length || 0})
-          </button>
-
-          <button
-            onClick={() => setSubTab('logs')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-              subTab === 'logs'
-                ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40 shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            <ListFilter className="h-3.5 w-3.5 inline mr-1.5" />
-            Логи Вебхуков ({stats?.logs.length || 0})
-          </button>
+          </Card>
         </div>
 
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={loadStats}
-          disabled={loading}
-          className="text-xs text-muted-foreground hover:text-foreground"
-        >
-          <RefreshCw className={`h-3.5 w-3.5 mr-1 ${loading ? 'animate-spin' : ''}`} />
-          Обновить реестр
-        </Button>
+        {/* ТЕСТОВАЯ ОТПРАВКА PING */}
+        <Card className="bg-card border-border p-5 space-y-3 shadow-xl">
+          <h4 className="text-xs md:text-sm font-bold text-foreground flex items-center">
+            <Send className="h-4 w-4 mr-2 text-amber-400" />
+            Ручная отправка проверочного уведомления
+          </h4>
+          <form onSubmit={handleSendTest} className="flex flex-col sm:flex-row items-end gap-3">
+            <div className="w-full sm:w-1/3 space-y-1">
+              <Label className="text-xs text-muted-foreground">Telegram Chat ID получателя</Label>
+              <Input
+                value={testChatId}
+                onChange={(e) => setTestChatId(e.target.value)}
+                placeholder="Например: 123456789"
+                className="bg-background border-border text-foreground text-xs font-mono min-h-[40px]"
+              />
+            </div>
+            <div className="w-full sm:w-1/2 space-y-1">
+              <Label className="text-xs text-muted-foreground">Текст проверочного сообщения</Label>
+              <Input
+                value={testText}
+                onChange={(e) => setTestText(e.target.value)}
+                className="bg-background border-border text-foreground text-xs min-h-[40px]"
+              />
+            </div>
+            <Button
+              type="submit"
+              disabled={sendingTest || !testChatId}
+              className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs min-h-[40px] px-5 rounded-xl shadow-md"
+            >
+              {sendingTest ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Send className="h-4 w-4 mr-1.5" />}
+              Отправить Тест
+            </Button>
+          </form>
+        </Card>
+
+        {/* 2. ПОДВКЛАДКИ РЕЕСТРОВ */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => setSubTab('notification_logs')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                subTab === 'notification_logs'
+                  ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40 shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <ListFilter className="h-3.5 w-3.5 inline mr-1.5" />
+              Журнал Telegram-Оповещений ({notificationLogs.length || 0})
+            </button>
+
+            <button
+              onClick={() => setSubTab('connections')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                subTab === 'connections'
+                  ? 'bg-sky-500/20 text-sky-400 border border-sky-500/40 shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <User className="h-3.5 w-3.5 inline mr-1.5" />
+              Привязанные Пользователи ({stats?.connections.length || 0})
+            </button>
+
+            <button
+              onClick={() => setSubTab('codes')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                subTab === 'codes'
+                  ? 'bg-purple-500/20 text-purple-400 border border-purple-500/40 shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <Key className="h-3.5 w-3.5 inline mr-1.5" />
+              Реестр OTP-Кодов ({stats?.codes.length || 0})
+            </button>
+          </div>
+
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              loadStats();
+              loadNotificationLogs();
+            }}
+            disabled={loading || loadingLogs}
+            className="text-xs text-muted-foreground hover:text-foreground"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 mr-1 ${loading || loadingLogs ? 'animate-spin' : ''}`} />
+            Обновить реестр
+          </Button>
+        </div>
+
+        {/* 3. UNIFIED DATA GRID: ЖУРНАЛ ОПОВЕЩЕНИЙ */}
+        {subTab === 'notification_logs' && (
+          <UnifiedDataGrid<TelegramNotificationLog>
+            gridId="admin_telegram_notifications_history"
+            data={notificationLogs}
+            columns={notificationLogColumns}
+            keyExtractor={(l) => l.id}
+            onRowClick={(l) => setSelectedLogForModal(l)}
+            getRowActions={(l) => [
+              {
+                label: '👁️ Просмотр сообщения',
+                action: () => setSelectedLogForModal(l),
+              },
+            ]}
+            searchPlaceholder="Поиск по тексту сообщения, Chat ID или типу события..."
+            emptyMessage="История отправленных оповещений Telegram пока пуста"
+            isLoading={loadingLogs}
+            defaultPageSize={25}
+          />
+        )}
+
+        {/* 4. UNIFIED DATA GRID: ПРИВЯЗАННЫЕ ПОЛЬЗОВАТЕЛИ */}
+        {subTab === 'connections' && (
+          <UnifiedDataGrid
+            gridId="admin_telegram_connections"
+            data={stats?.connections || []}
+            columns={connectionColumns}
+            keyExtractor={(c) => c.id}
+            getRowActions={(c) => [
+              {
+                label: '🔵 Профиль Telegram',
+                action: () => c.telegram_username && window.open(`https://t.me/${c.telegram_username}`, '_blank'),
+              },
+              {
+                label: '❌ Отвязать Telegram',
+                danger: true,
+                separatorBefore: true,
+                action: () => handleDisconnect(c.id),
+              },
+            ]}
+            searchPlaceholder="Поиск привязок по ФИО, Email, ИНН или Telegram Username..."
+            emptyMessage="Нет зарегистрированных привязок пользователей"
+            isLoading={loading}
+            defaultPageSize={25}
+          />
+        )}
+
+        {/* 5. UNIFIED DATA GRID: РЕЕСТР OTP-КОДОВ */}
+        {subTab === 'codes' && (
+          <UnifiedDataGrid
+            gridId="admin_telegram_codes"
+            data={stats?.codes || []}
+            columns={codeColumns}
+            keyExtractor={(cd) => cd.id}
+            searchPlaceholder="Поиск кодов по значению, ФИО или названию компании..."
+            emptyMessage="История генерации кодов пуста"
+            isLoading={loading}
+            defaultPageSize={25}
+          />
+        )}
+
+        {/* МОДАЛЬНОЕ ОКНО ПРЕДПРОСМОТРА ПОЛНОГО ТЕКСТА СООБЩЕНИЯ */}
+        {selectedLogForModal && (
+          <UnifiedViewModal
+            isOpen={!!selectedLogForModal}
+            onClose={() => setSelectedLogForModal(null)}
+            title="Детали Telegram-оповещения"
+            subtitle={`ID записи: ${selectedLogForModal.id}`}
+            badge={
+              <Badge
+                className={
+                  selectedLogForModal.status === 'sent'
+                    ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                    : 'bg-red-500/20 text-red-400 border-red-500/30'
+                }
+              >
+                {selectedLogForModal.status === 'sent' ? '✅ Доставлено' : '❌ Ошибка'}
+              </Badge>
+            }
+            sections={[
+              {
+                title: 'Параметры отправки',
+                fields: [
+                  { label: 'Тип события', value: selectedLogForModal.event_type },
+                  { label: 'Chat ID', value: selectedLogForModal.recipient_chat_id },
+                  {
+                    label: 'Получатель',
+                    value: selectedLogForModal.recipient_user?.full_name || 'Не привязан к профилю',
+                  },
+                  {
+                    label: 'Дата и время',
+                    value: new Date(selectedLogForModal.created_at || selectedLogForModal.sent_at).toLocaleString('ru-RU'),
+                  },
+                  ...(selectedLogForModal.error_message
+                    ? [{ label: 'Ошибка доставки', value: selectedLogForModal.error_message, colSpan: 2 as 2 }]
+                    : []),
+                ],
+              },
+            ]}
+            previewSlot={
+              <div className="space-y-2">
+                <Label className="text-xs font-bold text-muted-foreground uppercase">Полный текст сообщения</Label>
+                <div className="bg-background/80 p-4 rounded-xl border border-border font-mono text-xs whitespace-pre-wrap leading-relaxed text-foreground select-all">
+                  {selectedLogForModal.message_text}
+                </div>
+              </div>
+            }
+          />
+        )}
       </div>
-
-      {/* 3. UNIFIED DATA GRID: ПРИВЯЗАННЫЕ ПОЛЬЗОВАТЕЛИ С НАСТРОЙКОЙ ВИДИМОСТИ КОЛОНОК */}
-      {subTab === 'connections' && (
-        <UnifiedDataGrid
-          gridId="admin_telegram_connections"
-          data={stats?.connections || []}
-          columns={connectionColumns}
-          keyExtractor={(c) => c.id}
-          getRowActions={(c) => [
-            {
-              label: '🔵 Профиль Telegram',
-              action: () => c.telegram_username && window.open(`https://t.me/${c.telegram_username}`, '_blank'),
-            },
-            {
-              label: '❌ Отвязать Telegram',
-              danger: true,
-              separatorBefore: true,
-              action: () => handleDisconnect(c.id),
-            },
-          ]}
-          searchPlaceholder="Поиск привязок по ФИО, Email, ИНН или Telegram Username..."
-          emptyMessage="Нет зарегистрированных привязок пользователей"
-          isLoading={loading}
-          defaultPageSize={25}
-        />
-      )}
-
-      {/* 4. UNIFIED DATA GRID: РЕЕСТР OTP-КОДОВ */}
-      {subTab === 'codes' && (
-        <UnifiedDataGrid
-          gridId="admin_telegram_codes"
-          data={stats?.codes || []}
-          columns={codeColumns}
-          keyExtractor={(cd) => cd.id}
-          searchPlaceholder="Поиск кодов по значению, ФИО или названию компании..."
-          emptyMessage="История генерации кодов пуста"
-          isLoading={loading}
-          defaultPageSize={25}
-        />
-      )}
-
-      {/* 5. UNIFIED DATA GRID: ЛОГИ ВЕБХУКОВ */}
-      {subTab === 'logs' && (
-        <UnifiedDataGrid
-          gridId="admin_telegram_logs"
-          data={stats?.logs || []}
-          columns={logColumns}
-          keyExtractor={(lg) => lg.id}
-          searchPlaceholder="Поиск по текстам сообщений, Chat ID или Username..."
-          emptyMessage="Системные логи сообщений пока отсутствуют"
-          isLoading={loading}
-          defaultPageSize={25}
-        />
-      )}
     </UnifiedWorkspaceLayout>
   );
 }

@@ -52,7 +52,7 @@ export function UnifiedHeader({
           </Badge>
         )}
 
-        <Link href="/dashboard/profile">
+        <Link href={isSuperAdmin ? '/super-admin/profile' : '/dashboard/profile'}>
           <Button
             variant="outline"
             size="sm"

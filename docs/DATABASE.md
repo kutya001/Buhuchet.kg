@@ -1088,3 +1088,4 @@ $$;
 | `20260819100000_remove_total_amount_from_documents.sql` | 19.08.2026 10:00 | Удаление столбца `total_amount` из таблицы `documents` и обновление `create_document_atomic` |
 | `20260819200000_landing_pricing_plans.sql` | 19.08.2026 20:00 | Создание таблицы `landing_pricing_plans` для настраиваемых тарифов лендинга |
 | `20260820000000_fix_pricing_plans_public_rls.sql` | 20.08.2026 00:00 | Настройка публичного RLS (`is_active = true`) для тарифов и гарантия изоляции периодов |
+| `20260821000000_superadmin_telegram_logs_and_indexes.sql` | 21.08.2026 00:00 | Таблица `telegram_notification_logs`, составные индексы и RLS для суперадмина |

@@ -3,6 +3,8 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { requireSuperAdminSession } from '@/lib/auth/server-context';
 import type { ActionResponse } from '@/types/database.types';
+import { z } from 'zod';
+import { createSafeAction } from '@/lib/auth/safe-action';
 import { sendTelegramMessage } from '@/lib/telegram/notifier';
 import { revalidatePath } from 'next/cache';
 
@@ -134,10 +136,10 @@ export async function getTelegramAdminStatsAction(): Promise<ActionResponse<Tele
       };
     });
 
-    // 3. Последние 100 логов сообщений
+    // 3. Последние 100 логов сообщений из таблицы уведомлений
     const { data: logsRaw } = await adminSupabase
-      .from('telegram_logs')
-      .select('*')
+      .from('telegram_notification_logs')
+      .select('*, recipient_user:users!recipient_user_id(id, full_name, email)')
       .order('created_at', { ascending: false })
       .limit(100);
 
@@ -146,7 +148,7 @@ export async function getTelegramAdminStatsAction(): Promise<ActionResponse<Tele
       data: {
         connections,
         codes,
-        logs: logsRaw || [],
+        logs: (logsRaw || []) as any[],
       },
     };
   } catch (err: unknown) {
@@ -156,6 +158,63 @@ export async function getTelegramAdminStatsAction(): Promise<ActionResponse<Tele
 }
 
 export const getTelegramStatsAdminAction = getTelegramAdminStatsAction;
+
+/**
+ * Получение пагинированного реестра логов сообщений Telegram
+ */
+export const getTelegramLogsAction = createSafeAction(
+  z.object({
+    page: z.number().int().positive().default(1),
+    pageSize: z.number().int().positive().max(100).default(20),
+    eventType: z.string().optional(),
+    status: z.string().optional(),
+    search: z.string().optional(),
+  }),
+  async ({ page, pageSize, eventType, status, search }, ctx) => {
+    if (!ctx.isSuperAdmin) {
+      return { success: false, error: 'Доступ разрешен только суперадминистратору' };
+    }
+
+    const adminSupabase = await createAdminClient();
+    const curPage = Math.max(1, page || 1);
+    const curPageSize = Math.min(100, Math.max(1, pageSize || 20));
+    const from = (curPage - 1) * curPageSize;
+    const to = from + curPageSize - 1;
+
+    let query = adminSupabase
+      .from('telegram_notification_logs')
+      .select('*, recipient_user:users!recipient_user_id(id, full_name, email)', { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .range(from, to);
+
+    if (eventType && eventType !== 'all') {
+      query = query.eq('event_type', eventType);
+    }
+
+    if (status && status !== 'all') {
+      query = query.eq('status', status);
+    }
+
+    if (search && search.trim()) {
+      query = query.or(`message_text.ilike.%${search.trim()}%,recipient_chat_id.ilike.%${search.trim()}%`);
+    }
+
+    const { data, count, error } = await query;
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return {
+      success: true,
+      data: {
+        logs: (data || []) as any[],
+        totalCount: count || 0,
+        page: curPage,
+        pageSize: curPageSize,
+      },
+    };
+  }
+);
 
 
 /**

@@ -420,6 +420,33 @@ export type ActionResponse<T = any> = {
 - **Бизнес-логика**: Обновление цен, фич и бейджей тарифа лендинга с фиксацией в `admin_audit_logs` и инвалидацией кэша страниц.
 - **Таблицы БД**: `landing_pricing_plans`, `admin_audit_logs`
 
+#### `getTelegramLogsAction`
+- **Auth**: SuperAdmin (`createSafeAction` + `isSuperAdmin`)
+- **Zod Schema**: `z.object({ page: z.number().default(1), pageSize: z.number().default(20), eventType: z.string().optional(), status: z.string().optional(), search: z.string().optional() })`
+- **Response**: `ActionResponse<{ logs: TelegramNotificationLog[]; totalCount: number; page: number; pageSize: number }>`
+- **Бизнес-логика**: Серверная пагинация и фильтрация истории отправленных Telegram-оповещений.
+- **Таблицы БД**: `telegram_notification_logs`, `users`
+
+#### `updateSuperAdminProfileAction`
+- **Auth**: SuperAdmin (`createSafeAction` + `isSuperAdmin`)
+- **Zod Schema**: `z.object({ full_name: z.string().min(2), phone: z.string().optional().nullable() })`
+- **Response**: `ActionResponse<UserProfile>`
+- **Бизнес-логика**: Обновление ФИО и телефона суперадминистратора с записью в `admin_audit_logs`.
+- **Таблицы БД**: `users`, `admin_audit_logs`
+
+#### `getSuperAdminProfileDataAction`
+- **Auth**: SuperAdmin (`requireSuperAdminSession`)
+- **Response**: `ActionResponse<{ user: UserProfile; telegramConnection: any }>`
+- **Бизнес-логика**: Загрузка учетных данных суперадминистратора и статуса привязки к Telegram.
+- **Таблицы БД**: `users`, `telegram_connections`
+
+#### `getPaginatedSubscriptionsAdminAction`
+- **Auth**: SuperAdmin (`requireSuperAdminSession`)
+- **Input**: `{ page?: number, pageSize?: number, search?: string, status?: string }`
+- **Response**: `ActionResponse<{ subscriptions: any[]; total: number; page: number; pageSize: number }>`
+- **Бизнес-логика**: Серверная пагинация списка активных и истекших подписок организаций.
+- **Таблицы БД**: `subscriptions`, `companies`
+
 ---
 
 ### 3.7 Модуль «Гостевой Режим и Заявки на Вступление» (`app/dashboard/pending/actions.ts`)

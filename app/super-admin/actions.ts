@@ -1177,19 +1177,52 @@ export const getInspectorStatsAdminAction = createSafeAction(
 );
 
 /**
- * Получение сводной аналитики платформы суперадмина с кэшированием (TTL 60s)
+ * Получение сводной аналитики платформы суперадмина (RPC + параллельный Promise.allSettled)
  */
 export async function getPlatformSummaryStatsAction(): Promise<ActionResponse<any>> {
   try {
     await requireSuperAdminSession();
     const adminSupabase = await createAdminClient();
 
-    const { data, error } = await adminSupabase.rpc('get_platform_summary_stats');
-    if (error) {
-      return { success: false, error: error.message };
+    // 1. Попытка вызова RPC
+    const rpcRes = await adminSupabase.rpc('get_platform_summary_stats');
+    if (!rpcRes.error && rpcRes.data) {
+      return { success: true, data: rpcRes.data };
     }
 
-    return { success: true, data };
+    // 2. Резервная параллельная агрегация через Promise.allSettled
+    const [companiesRes, pendingCompaniesRes, usersRes, filesRes, subsRes, docsRes] = await Promise.allSettled([
+      adminSupabase.from('companies').select('id, status', { count: 'exact' }),
+      adminSupabase.from('companies').select('id', { count: 'exact', head: true }).eq('status', 'pending_approval'),
+      adminSupabase.from('users').select('id', { count: 'exact', head: true }),
+      adminSupabase.from('files').select('size_bytes'),
+      adminSupabase.from('subscriptions').select('id', { count: 'exact', head: true }).eq('status', 'active'),
+      adminSupabase.from('documents').select('id', { count: 'exact', head: true }),
+    ]);
+
+    const totalCompanies = companiesRes.status === 'fulfilled' ? companiesRes.value.count || 0 : 0;
+    const pendingCompanies = pendingCompaniesRes.status === 'fulfilled' ? pendingCompaniesRes.value.count || 0 : 0;
+    const activeCompanies = Math.max(0, totalCompanies - pendingCompanies);
+    const totalUsers = usersRes.status === 'fulfilled' ? usersRes.value.count || 0 : 0;
+    const totalDocs = docsRes.status === 'fulfilled' ? docsRes.value.count || 0 : 0;
+    const activeSubs = subsRes.status === 'fulfilled' ? subsRes.value.count || 0 : 0;
+
+    let storageUsed = 0;
+    let totalFiles = 0;
+    if (filesRes.status === 'fulfilled' && filesRes.value.data) {
+      totalFiles = filesRes.value.data.length;
+      storageUsed = filesRes.value.data.reduce((acc, f) => acc + (Number(f.size_bytes) || 0), 0);
+    }
+
+    const fallbackStats = {
+      companies: { total: totalCompanies, active: activeCompanies, pending: pendingCompanies },
+      users: { total: totalUsers },
+      storage: { total_bytes: storageUsed, total_files: totalFiles },
+      subscriptions: { active: activeSubs },
+      documents: { total: totalDocs },
+    };
+
+    return { success: true, data: fallbackStats };
   } catch (err: unknown) {
     return { success: false, error: err instanceof Error ? err.message : 'Сбой получения статистики платформы' };
   }
@@ -1517,6 +1550,133 @@ export const updateLandingPricingPlanAction = createSafeAction(
     return { success: true, data: updated as LandingPricingPlan };
   }
 );
+
+/**
+ * Получение данных профиля суперадминистратора
+ */
+export async function getSuperAdminProfileDataAction(): Promise<ActionResponse<any>> {
+  try {
+    const session = await requireSuperAdminSession();
+    const adminSupabase = await createAdminClient();
+
+    const [userRes, telegramRes] = await Promise.all([
+      adminSupabase.from('users').select('*, company_roles(*)').eq('id', session.userId).single(),
+      adminSupabase.from('telegram_connections').select('*').eq('user_id', session.userId).maybeSingle(),
+    ]);
+
+    if (userRes.error || !userRes.data) {
+      return { success: false, error: 'Пользователь не найден' };
+    }
+
+    return {
+      success: true,
+      data: {
+        user: userRes.data,
+        telegramConnection: telegramRes.data || null,
+      },
+    };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Сбой получения профиля суперадминистратора' };
+  }
+}
+
+/**
+ * Обновление личного профиля суперадминистратора
+ */
+export const updateSuperAdminProfileAction = createSafeAction(
+  z.object({
+    full_name: z.string().min(2, 'ФИО должно содержать не менее 2 символов'),
+    phone: z.string().optional().nullable(),
+  }),
+  async ({ full_name, phone }, ctx) => {
+    if (!ctx.isSuperAdmin) {
+      return { success: false, error: 'Доступ разрешен только суперадминистратору' };
+    }
+
+    const adminSupabase = await createAdminClient();
+
+    const { data: updated, error } = await adminSupabase
+      .from('users')
+      .update({
+        full_name,
+        phone: phone || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', ctx.userId)
+      .select('*, company_roles(*)')
+      .single();
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    // Аудит обновления профиля
+    await adminSupabase.from('admin_audit_logs').insert({
+      admin_id: ctx.userId,
+      action: 'superadmin_profile_updated',
+      target_type: 'user',
+      target_id: ctx.userId,
+      details: { full_name, phone },
+    });
+
+    revalidatePath('/super-admin/profile');
+    revalidatePath('/super-admin');
+    return { success: true, data: updated };
+  }
+);
+
+/**
+ * Серверная пагинация подписок организаций для суперадминистратора
+ */
+export async function getPaginatedSubscriptionsAdminAction(params: {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  status?: string;
+}): Promise<ActionResponse<{ subscriptions: any[]; total: number; page: number; pageSize: number }>> {
+  try {
+    await requireSuperAdminSession();
+    const adminSupabase = await createAdminClient();
+
+    const page = Math.max(1, params.page || 1);
+    const pageSize = Math.min(100, Math.max(1, params.pageSize || 25));
+    const offset = (page - 1) * pageSize;
+
+    let query = adminSupabase
+      .from('subscriptions')
+      .select('*, company:companies(id, name, inn)', { count: 'exact' });
+
+    if (params.status && params.status !== 'all') {
+      query = query.eq('status', params.status);
+    }
+
+    if (params.search && params.search.trim()) {
+      const s = params.search.trim();
+      query = query.or(`company.name.ilike.%${s}%,company.inn.ilike.%${s}%`);
+    }
+
+    const { data, count, error } = await query
+      .order('created_at', { ascending: false })
+      .range(offset, offset + pageSize - 1);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return {
+      success: true,
+      data: {
+        subscriptions: data || [],
+        total: count || 0,
+        page,
+        pageSize,
+      },
+    };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Сбой выборки подписок' };
+  }
+}
+
 
 
 

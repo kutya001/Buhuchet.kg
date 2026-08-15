@@ -12,13 +12,15 @@ import {
   CheckCircle2,
   Loader2,
   Unlink,
-  Activity,
   User,
   Building2,
   Key,
   ListFilter,
   ShieldCheck,
   AlertCircle,
+  ExternalLink,
+  MessageSquare,
+  BellRing,
 } from 'lucide-react';
 import {
   getTelegramAdminStatsAction,
@@ -26,13 +28,17 @@ import {
   forceSetTelegramWebhookAdminAction,
   sendAdminTestTelegramMessageAction,
   disconnectUserTelegramAdminAction,
+  getTelegramLogsAction,
   type TelegramAdminStatsData,
   type TelegramBotHealthData,
 } from '@/app/super-admin/telegram-actions';
 import { UnifiedDataGrid, ColumnDef } from '@/components/ui/unified/UnifiedDataGrid';
+import { UnifiedViewModal } from '@/components/ui/unified/UnifiedViewModal';
+import { toast } from 'sonner';
+import type { TelegramNotificationLog } from '@/types/database.types';
 
 export function SuperAdminTelegramTab() {
-  const [subTab, setSubTab] = useState<'connections' | 'codes' | 'logs'>('connections');
+  const [subTab, setSubTab] = useState<'notification_logs' | 'connections' | 'codes'>('notification_logs');
   const [loading, setLoading] = useState(true);
   const [healthLoading, setHealthLoading] = useState(false);
   const [settingWebhook, setSettingWebhook] = useState(false);
@@ -40,7 +46,9 @@ export function SuperAdminTelegramTab() {
 
   const [stats, setStats] = useState<TelegramAdminStatsData | null>(null);
   const [health, setHealth] = useState<TelegramBotHealthData | null>(null);
-  const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [notificationLogs, setNotificationLogs] = useState<TelegramNotificationLog[]>([]);
+  const [loadingLogs, setLoadingLogs] = useState(false);
+  const [selectedLogForModal, setSelectedLogForModal] = useState<TelegramNotificationLog | null>(null);
 
   // Ручная отправка пинга
   const [testChatId, setTestChatId] = useState('');
@@ -53,7 +61,7 @@ export function SuperAdminTelegramTab() {
     if (res.success && res.data) {
       setStats(res.data);
     } else {
-      setMsg({ type: 'error', text: res.error || 'Ошибка загрузки статистики' });
+      toast.error(res.error || 'Ошибка загрузки статистики');
     }
     setLoading(false);
   };
@@ -64,25 +72,34 @@ export function SuperAdminTelegramTab() {
     if (res.success && res.data) {
       setHealth(res.data);
     } else {
-      setMsg({ type: 'error', text: res.error || 'Сбой проверки Webhook и Bot API' });
+      toast.error(res.error || 'Сбой проверки Webhook и Bot API');
     }
     setHealthLoading(false);
+  };
+
+  const loadNotificationLogs = async () => {
+    setLoadingLogs(true);
+    const res = await getTelegramLogsAction({ page: 1, pageSize: 100 });
+    if (res.success && res.data) {
+      setNotificationLogs((res.data.logs || []) as TelegramNotificationLog[]);
+    }
+    setLoadingLogs(false);
   };
 
   useEffect(() => {
     loadStats();
     loadHealth();
+    loadNotificationLogs();
   }, []);
 
   const handleForceWebhook = async () => {
     setSettingWebhook(true);
-    setMsg(null);
     const res = await forceSetTelegramWebhookAdminAction();
     if (res.success && res.data) {
-      setMsg({ type: 'success', text: `Webhook успешно зафиксирован: ${res.data.webhookUrl}` });
+      toast.success(`Webhook успешно зафиксирован: ${res.data.webhookUrl}`);
       await loadHealth();
     } else {
-      setMsg({ type: 'error', text: res.error || 'Не удалось зарегистрировать Webhook' });
+      toast.error(res.error || 'Не удалось зарегистрировать Webhook');
     }
     setSettingWebhook(false);
   };
@@ -92,10 +109,10 @@ export function SuperAdminTelegramTab() {
     setDisconnectingId(id);
     const res = await disconnectUserTelegramAdminAction(id);
     if (res.success) {
-      setMsg({ type: 'success', text: 'Связь с Telegram успешно удалена' });
+      toast.success('Связь с Telegram успешно удалена');
       await loadStats();
     } else {
-      setMsg({ type: 'error', text: res.error || 'Ошибка отвязки' });
+      toast.error(res.error || 'Ошибка отвязки');
     }
     setDisconnectingId(null);
   };
@@ -104,18 +121,114 @@ export function SuperAdminTelegramTab() {
     e.preventDefault();
     if (!testChatId) return;
     setSendingTest(true);
-    setMsg(null);
     const res = await sendAdminTestTelegramMessageAction(Number(testChatId), testText);
     if (res.success) {
-      setMsg({ type: 'success', text: `Тестовое сообщение успешно выслано в Chat ID: ${testChatId}` });
+      toast.success(`Тестовое сообщение отправлено в Chat ID: ${testChatId}`);
       await loadStats();
+      await loadNotificationLogs();
     } else {
-      setMsg({ type: 'error', text: res.error || 'Сбой отправки сообщения' });
+      toast.error(res.error || 'Сбой отправки тестового сообщения');
     }
     setSendingTest(false);
   };
 
-  // 1. КОЛОНКИ: Привязанные Аккаунты
+  // 1. КОЛОНКИ: Журнал отправленных сообщений Telegram
+  const notificationLogColumns: ColumnDef<TelegramNotificationLog>[] = useMemo(
+    () => [
+      {
+        key: 'status',
+        label: 'Статус',
+        sortable: true,
+        getValue: (l) => l.status,
+        render: (l) => {
+          if (l.status === 'sent') {
+            return (
+              <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-xs flex items-center gap-1 w-fit">
+                <CheckCircle2 className="h-3 w-3" />
+                Отправлено
+              </Badge>
+            );
+          }
+          if (l.status === 'failed') {
+            return (
+              <Badge className="bg-red-500/20 text-red-400 border-red-500/30 text-xs flex items-center gap-1 w-fit">
+                <AlertCircle className="h-3 w-3" />
+                Ошибка
+              </Badge>
+            );
+          }
+          return (
+            <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30 text-xs flex items-center gap-1 w-fit">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              В процессе
+            </Badge>
+          );
+        },
+      },
+      {
+        key: 'event_type',
+        label: 'Тип события',
+        sortable: true,
+        getValue: (l) => l.event_type,
+        render: (l) => {
+          const typeColors: Record<string, string> = {
+            DOC_CREATED: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+            STATUS_CHANGED: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
+            COLLABORATION_REQUEST: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
+            COLLABORATION_CONFIRMED: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+            COLLABORATION_REJECTED: 'bg-rose-500/20 text-rose-400 border-rose-500/30',
+            COLLABORATION_TERMINATED: 'bg-red-500/20 text-red-400 border-red-500/30',
+            COMPANY_VERIFICATION: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30',
+            SYSTEM_BROADCAST: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
+          };
+          const cls = typeColors[l.event_type] || 'bg-slate-500/20 text-slate-300 border-slate-500/30';
+          return <Badge className={`${cls} text-[11px] font-mono`}>{l.event_type}</Badge>;
+        },
+      },
+      {
+        key: 'recipient',
+        label: 'Получатель / Chat ID',
+        sortable: true,
+        getValue: (l) => l.recipient_user?.full_name || l.recipient_chat_id,
+        render: (l) => (
+          <div>
+            <div className="font-semibold text-foreground text-xs">
+              {l.recipient_user?.full_name || 'Пользователь Telegram'}
+            </div>
+            <div className="text-[11px] font-mono text-muted-foreground">Chat ID: {l.recipient_chat_id}</div>
+          </div>
+        ),
+      },
+      {
+        key: 'message_preview',
+        label: 'Текст сообщения',
+        sortable: false,
+        getValue: (l) => l.message_text,
+        render: (l) => (
+          <div
+            className="text-xs text-muted-foreground truncate max-w-sm cursor-pointer hover:text-foreground font-mono"
+            title="Нажмите для полного просмотра"
+          >
+            {l.message_text.replace(/\*\*/g, '').slice(0, 80)}...
+          </div>
+        ),
+      },
+      {
+        key: 'sent_at',
+        label: 'Время отправки',
+        sortable: true,
+        getValue: (l) => l.created_at || l.sent_at,
+        render: (l) => (
+          <span className="text-xs text-muted-foreground font-mono">
+            {new Date(l.created_at || l.sent_at).toLocaleString('ru-RU')}
+          </span>
+        ),
+      },
+    ],
+    []
+  );
+
+  // 2. КОЛОНКИ: Привязанные Аккаунты
   const connectionColumns: ColumnDef<any>[] = useMemo(
     () => [
       {
@@ -125,8 +238,8 @@ export function SuperAdminTelegramTab() {
         getValue: (c) => c.user_full_name,
         render: (c) => (
           <div>
-            <div className="font-bold text-white text-xs">{c.user_full_name}</div>
-            <div className="text-[11px] text-slate-400">{c.user_email}</div>
+            <div className="font-bold text-foreground text-xs">{c.user_full_name}</div>
+            <div className="text-[11px] text-muted-foreground">{c.user_email}</div>
           </div>
         ),
       },
@@ -137,11 +250,11 @@ export function SuperAdminTelegramTab() {
         getValue: (c) => c.company_name,
         render: (c) => (
           <div>
-            <div className="font-semibold text-slate-200 text-xs flex items-center">
+            <div className="font-semibold text-foreground text-xs flex items-center">
               <Building2 className="h-3 w-3 mr-1 text-amber-400" />
               {c.company_name}
             </div>
-            <div className="text-[11px] font-mono text-slate-400">ИНН: {c.company_inn}</div>
+            <div className="text-[11px] font-mono text-muted-foreground">ИНН: {c.company_inn}</div>
           </div>
         ),
       },
@@ -152,9 +265,17 @@ export function SuperAdminTelegramTab() {
         getValue: (c) => c.telegram_username,
         render: (c) =>
           c.telegram_username ? (
-            <span className="text-xs text-sky-400 font-mono font-semibold">@{c.telegram_username}</span>
+            <a
+              href={`https://t.me/${c.telegram_username}`}
+              target="_blank"
+              rel="noreferrer"
+              className="text-xs text-sky-400 font-mono font-semibold hover:underline inline-flex items-center"
+            >
+              @{c.telegram_username}
+              <ExternalLink className="h-2.5 w-2.5 ml-1" />
+            </a>
           ) : (
-            <span className="text-xs text-slate-500">—</span>
+            <span className="text-xs text-muted-foreground">—</span>
           ),
       },
       {
@@ -169,7 +290,7 @@ export function SuperAdminTelegramTab() {
         label: 'Дата привязки',
         sortable: true,
         getValue: (c) => c.created_at,
-        render: (c) => <span className="text-xs text-slate-400">{new Date(c.created_at).toLocaleString('ru-RU')}</span>,
+        render: (c) => <span className="text-xs text-muted-foreground">{new Date(c.created_at).toLocaleString('ru-RU')}</span>,
       },
       {
         key: 'actions',
@@ -198,7 +319,7 @@ export function SuperAdminTelegramTab() {
     [disconnectingId]
   );
 
-  // 2. КОЛОНКИ: Реестр OTP-Кодов
+  // 3. КОЛОНКИ: Реестр OTP-Кодов
   const codeColumns: ColumnDef<any>[] = useMemo(
     () => [
       {
@@ -207,7 +328,7 @@ export function SuperAdminTelegramTab() {
         sortable: true,
         getValue: (cd) => cd.code,
         render: (cd) => (
-          <span className="font-mono text-base font-extrabold text-sky-400 bg-sky-500/10 border border-sky-500/20 px-2.5 py-1 rounded-lg tracking-widest">
+          <span className="font-mono text-sm font-extrabold text-sky-400 bg-sky-500/10 border border-sky-500/20 px-2.5 py-1 rounded-lg tracking-widest">
             {cd.code}
           </span>
         ),
@@ -217,236 +338,188 @@ export function SuperAdminTelegramTab() {
         label: 'Пользователь',
         sortable: true,
         getValue: (cd) => cd.user_full_name,
-        render: (cd) => <span className="text-xs font-semibold text-white">{cd.user_full_name}</span>,
+        render: (cd) => <span className="text-xs font-semibold text-foreground">{cd.user_full_name || '—'}</span>,
       },
       {
         key: 'company',
-        label: 'Компания',
+        label: 'Организация',
         sortable: true,
         getValue: (cd) => cd.company_name,
-        render: (cd) => <span className="text-xs text-slate-300">{cd.company_name}</span>,
-      },
-      {
-        key: 'created_at',
-        label: 'Время создания',
-        sortable: true,
-        getValue: (cd) => cd.created_at,
-        render: (cd) => <span className="text-xs text-slate-400">{new Date(cd.created_at).toLocaleTimeString('ru-RU')}</span>,
-      },
-      {
-        key: 'expires_at',
-        label: 'Истекает в',
-        sortable: true,
-        getValue: (cd) => cd.expires_at,
-        render: (cd) => <span className="text-xs text-slate-400">{new Date(cd.expires_at).toLocaleTimeString('ru-RU')}</span>,
-      },
-      {
-        key: 'status',
-        label: 'Статус кода',
-        sortable: true,
-        getValue: (cd) => cd.status_label,
         render: (cd) => (
-          <Badge
-            variant="outline"
-            className={`text-xs px-2.5 py-0.5 ${
-              cd.status_label.includes('✅')
-                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                : cd.status_label.includes('🟢')
-                ? 'bg-sky-500/10 text-sky-400 border-sky-500/30'
-                : 'bg-red-500/10 text-red-400 border-red-500/30'
-            }`}
-          >
-            {cd.status_label}
-          </Badge>
+          <div className="text-xs text-foreground flex items-center">
+            <Building2 className="h-3 w-3 mr-1 text-amber-400" />
+            {cd.company_name || '—'}
+          </div>
         ),
-      },
-    ],
-    []
-  );
-
-  // 3. КОЛОНКИ: Логи Вебхуков
-  const logColumns: ColumnDef<any>[] = useMemo(
-    () => [
-      {
-        key: 'created_at',
-        label: 'Дата & Время',
-        sortable: true,
-        getValue: (lg) => lg.created_at,
-        render: (lg) => <span className="text-xs font-mono text-slate-400">{new Date(lg.created_at).toLocaleString('ru-RU')}</span>,
-      },
-      {
-        key: 'chat_id',
-        label: 'Chat ID',
-        sortable: true,
-        getValue: (lg) => lg.chat_id,
-        render: (lg) => <span className="text-xs font-mono font-semibold text-emerald-400">{lg.chat_id || '—'}</span>,
-      },
-      {
-        key: 'username',
-        label: 'Username',
-        sortable: true,
-        getValue: (lg) => lg.username,
-        render: (lg) => (
-          <span className="text-xs font-mono text-sky-400">{lg.username ? `@${lg.username}` : '—'}</span>
-        ),
-      },
-      {
-        key: 'message_text',
-        label: 'Текст Сообщения',
-        sortable: true,
-        getValue: (lg) => lg.message_text,
-        render: (lg) => <span className="text-xs font-mono text-slate-200">{lg.message_text}</span>,
       },
       {
         key: 'status',
         label: 'Статус',
         sortable: true,
-        getValue: (lg) => lg.status,
-        render: (lg) => (
-          <Badge variant="outline" className="border-slate-700 text-slate-300 text-[11px]">
-            {lg.status}
+        getValue: (cd) => cd.status_label,
+        render: (cd) => (
+          <Badge
+            className={
+              cd.status_label === '✅ Подключен'
+                ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-xs'
+                : cd.status_label === '🔴 Истёк по времени'
+                ? 'bg-red-500/20 text-red-400 border-red-500/30 text-xs'
+                : 'bg-amber-500/20 text-amber-400 border-amber-500/30 text-xs'
+            }
+          >
+            {cd.status_label}
           </Badge>
         ),
+      },
+      {
+        key: 'expires_at',
+        label: 'Истекает',
+        sortable: true,
+        getValue: (cd) => cd.expires_at,
+        render: (cd) => <span className="text-xs text-muted-foreground font-mono">{new Date(cd.expires_at).toLocaleString('ru-RU')}</span>,
+      },
+      {
+        key: 'created_at',
+        label: 'Создан',
+        sortable: true,
+        getValue: (cd) => cd.created_at,
+        render: (cd) => <span className="text-xs text-muted-foreground">{new Date(cd.created_at).toLocaleString('ru-RU')}</span>,
       },
     ],
     []
   );
 
   return (
-    <div className="space-y-6">
-      {msg && (
-        <div
-          className={`p-4 rounded-xl text-xs font-semibold flex items-center justify-between border ${
-            msg.type === 'success'
-              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-              : 'bg-red-500/10 border-red-500/30 text-red-400'
-          }`}
-        >
-          <div className="flex items-center space-x-2">
-            {msg.type === 'success' ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
-            <span>{msg.text}</span>
-          </div>
-          <button onClick={() => setMsg(null)} className="hover:opacity-75">
-            ✕
-          </button>
-        </div>
-      )}
-
-      {/* 1. КАРТОЧКА ДИАГНОСТИКИ ЗДОРОВЬЯ БОТА И WEBHOOK */}
-      <Card className="bg-slate-900 border-slate-800 p-6 space-y-6">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-800 pb-5">
-          <div className="flex items-center space-x-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-500/10 text-sky-400 border border-sky-500/20">
-              <Activity className="h-6 w-6" />
-            </div>
+    <div className="w-full space-y-6">
+      {/* 1. СТАТИСТИЧЕСКИЕ КАРТОЧКИ */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card className="bg-card border-border p-4 shadow-xl">
+          <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-bold text-white flex items-center">
-                Центр Диагностики & Webhook Telegram API
-              </h2>
-              <p className="text-xs text-slate-400">
-                Мониторинг соединения с Telegram Bot API и проверка доставки событий
-              </p>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="outline"
-              disabled={healthLoading}
-              onClick={loadHealth}
-              className="border-slate-700 bg-slate-800 hover:bg-slate-700 text-white text-xs rounded-xl min-h-[40px]"
-            >
-              {healthLoading ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <RefreshCw className="h-4 w-4 mr-1.5" />}
-              Проверить Bot API
-            </Button>
-
-            <Button
-              disabled={settingWebhook}
-              onClick={handleForceWebhook}
-              className="bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs rounded-xl min-h-[40px] px-4"
-            >
-              {settingWebhook ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <ShieldCheck className="h-4 w-4 mr-1.5" />}
-              Принудительно зафиксировать Webhook
-            </Button>
-          </div>
-        </div>
-
-        {/* ДИАГНОСТИЧЕСКАЯ ПАНЕЛЬ С ИНДИКАТОРАМИ */}
-        {health ? (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
-              <span className="text-[11px] text-slate-400 uppercase tracking-wider font-bold">Статус Имени Бот-Аккаунта</span>
-              <div className="flex items-center space-x-2">
-                <Badge className="bg-sky-500/20 text-sky-400 border-sky-500/30 text-xs px-2.5 py-1 font-mono">
-                  @{health.botInfo?.username || '—'}
+              <span className="text-xs text-muted-foreground block">Статус Bot API</span>
+              <div className="flex items-center space-x-2 mt-1">
+                <Badge className="bg-sky-500/20 text-sky-400 border-sky-500/30 text-xs font-mono">
+                  @{health?.botInfo?.username || 'bot'}
                 </Badge>
-                <span className="text-xs text-slate-300 font-semibold">{health.botInfo?.first_name}</span>
               </div>
             </div>
-
-            <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
-              <span className="text-[11px] text-slate-400 uppercase tracking-wider font-bold">Привязанный Webhook URL</span>
-              <div className="text-xs font-mono text-emerald-400 truncate" title={health.webhookInfo?.url || 'Не установлен'}>
-                {health.webhookInfo?.url ? health.webhookInfo.url : '⚠️ URL не зарегистрирован'}
-              </div>
-            </div>
-
-            <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
-              <span className="text-[11px] text-slate-400 uppercase tracking-wider font-bold">Очередь сообщений в Telegram</span>
-              <div className="flex items-center space-x-2">
-                <span className="text-lg font-mono font-extrabold text-white">
-                  {health.webhookInfo?.pending_update_count ?? 0}
-                </span>
-                <span className="text-[11px] text-slate-400">недоставленных событий</span>
-              </div>
+            <div className="p-3 bg-sky-500/10 rounded-xl text-sky-400">
+              <CheckCircle2 className="h-6 w-6" />
             </div>
           </div>
-        ) : (
-          <div className="text-xs text-slate-400 flex items-center justify-center p-4">
-            <Loader2 className="h-4 w-4 animate-spin mr-2" />
-            Загрузка системных данных бота...
+          <div className="mt-3 pt-2 border-t border-border text-xs text-muted-foreground">
+            {health?.botInfo?.first_name || 'Buhuchet Bot'}
           </div>
-        )}
+        </Card>
 
-        {/* ТЕСТОВАЯ ОТПРАВКА PING */}
-        <form onSubmit={handleSendTest} className="pt-4 border-t border-slate-800 flex flex-col sm:flex-row items-end gap-3">
+        <Card className="bg-card border-border p-4 shadow-xl">
+          <div className="flex items-center justify-between">
+            <div>
+              <span className="text-xs text-muted-foreground block">Статус Webhook</span>
+              <span className="text-sm font-bold text-emerald-400 mt-1 block truncate max-w-[170px]" title={health?.webhookInfo?.url || ''}>
+                {health?.webhookInfo?.url ? 'Активен 200 OK' : 'Не установлен'}
+              </span>
+            </div>
+            <div className="p-3 bg-emerald-500/10 rounded-xl text-emerald-400">
+              <CheckCircle2 className="h-6 w-6" />
+            </div>
+          </div>
+          <div className="mt-3 pt-2 border-t border-border text-xs text-muted-foreground truncate font-mono">
+            {health?.webhookInfo?.url ? health.webhookInfo.url : '⚠️ URL не настроен'}
+          </div>
+        </Card>
+
+        <Card className="bg-card border-border p-4 shadow-xl">
+          <div className="flex items-center justify-between">
+            <div>
+              <span className="text-xs text-muted-foreground block">Привязано пользователей</span>
+              <span className="text-2xl font-bold font-mono text-amber-400 mt-1 block">
+                {stats?.connections.length || 0}
+              </span>
+            </div>
+            <div className="p-3 bg-amber-500/10 rounded-xl text-amber-400">
+              <MessageSquare className="h-6 w-6" />
+            </div>
+          </div>
+          <div className="mt-3 pt-2 border-t border-border text-xs text-muted-foreground">
+            Специалисты с активной связью
+          </div>
+        </Card>
+
+        <Card className="bg-card border-border p-4 shadow-xl">
+          <div className="flex items-center justify-between">
+            <div>
+              <span className="text-xs text-muted-foreground block">Отправлено оповещений</span>
+              <span className="text-2xl font-bold font-mono text-indigo-400 mt-1 block">
+                {notificationLogs.length || stats?.logs.length || 0}
+              </span>
+            </div>
+            <div className="p-3 bg-indigo-500/10 rounded-xl text-indigo-400">
+              <BellRing className="h-6 w-6" />
+            </div>
+          </div>
+          <div className="mt-3 pt-2 border-t border-border text-xs text-muted-foreground">
+            Всего зафиксировано в реестре
+          </div>
+        </Card>
+      </div>
+
+      {/* ТЕСТОВАЯ ОТПРАВКА PING */}
+      <Card className="bg-card border-border p-5 space-y-3 shadow-xl">
+        <h4 className="text-xs md:text-sm font-bold text-foreground flex items-center">
+          <Send className="h-4 w-4 mr-2 text-amber-400" />
+          Ручная отправка проверочного уведомления
+        </h4>
+        <form onSubmit={handleSendTest} className="flex flex-col sm:flex-row items-end gap-3">
           <div className="w-full sm:w-1/3 space-y-1">
-            <Label className="text-xs text-slate-300">Telegram Chat ID получателя</Label>
+            <Label className="text-xs text-muted-foreground">Telegram Chat ID получателя</Label>
             <Input
               value={testChatId}
               onChange={(e) => setTestChatId(e.target.value)}
               placeholder="Например: 123456789"
-              className="bg-slate-950 border-slate-800 text-white text-xs font-mono"
+              className="bg-background border-border text-foreground text-xs font-mono min-h-[40px]"
             />
           </div>
           <div className="w-full sm:w-1/2 space-y-1">
-            <Label className="text-xs text-slate-300">Текст проверочного пинга</Label>
+            <Label className="text-xs text-muted-foreground">Текст проверочного сообщения</Label>
             <Input
               value={testText}
               onChange={(e) => setTestText(e.target.value)}
-              className="bg-slate-950 border-slate-800 text-white text-xs"
+              className="bg-background border-border text-foreground text-xs min-h-[40px]"
             />
           </div>
           <Button
             type="submit"
             disabled={sendingTest || !testChatId}
-            className="bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs min-h-[40px] px-4 rounded-xl"
+            className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs min-h-[40px] px-5 rounded-xl shadow-md"
           >
             {sendingTest ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Send className="h-4 w-4 mr-1.5" />}
-            Тестовый Пинг
+            Отправить Тест
           </Button>
         </form>
       </Card>
 
       {/* 2. ПОДВКЛАДКИ РЕЕСТРОВ */}
-      <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-        <div className="flex items-center space-x-2">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => setSubTab('notification_logs')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              subTab === 'notification_logs'
+                ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40 shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <ListFilter className="h-3.5 w-3.5 inline mr-1.5" />
+            Журнал Telegram-Оповещений ({notificationLogs.length || 0})
+          </button>
+
           <button
             onClick={() => setSubTab('connections')}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
               subTab === 'connections'
-                ? 'bg-sky-500/20 text-sky-400 border border-sky-500/40 shadow-md'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'bg-sky-500/20 text-sky-400 border border-sky-500/40 shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             <User className="h-3.5 w-3.5 inline mr-1.5" />
@@ -457,43 +530,68 @@ export function SuperAdminTelegramTab() {
             onClick={() => setSubTab('codes')}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
               subTab === 'codes'
-                ? 'bg-purple-500/20 text-purple-400 border border-purple-500/40 shadow-md'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'bg-purple-500/20 text-purple-400 border border-purple-500/40 shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             <Key className="h-3.5 w-3.5 inline mr-1.5" />
             Реестр OTP-Кодов ({stats?.codes.length || 0})
           </button>
-
-          <button
-            onClick={() => setSubTab('logs')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-              subTab === 'logs'
-                ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40 shadow-md'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <ListFilter className="h-3.5 w-3.5 inline mr-1.5" />
-            Логи Вебхуков ({stats?.logs.length || 0})
-          </button>
         </div>
 
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={loadStats}
-          disabled={loading}
-          className="text-xs text-slate-400 hover:text-white"
-        >
-          <RefreshCw className={`h-3.5 w-3.5 mr-1 ${loading ? 'animate-spin' : ''}`} />
-          Обновить
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={handleForceWebhook}
+            disabled={settingWebhook}
+            variant="outline"
+            size="sm"
+            className="border-sky-500/40 text-sky-400 hover:bg-sky-500/10 text-xs min-h-[36px]"
+          >
+            <ShieldCheck className={`h-3.5 w-3.5 mr-1 ${settingWebhook ? 'animate-spin' : ''}`} />
+            Фиксировать Webhook
+          </Button>
+
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              loadStats();
+              loadNotificationLogs();
+            }}
+            disabled={loading || loadingLogs}
+            className="text-xs text-muted-foreground hover:text-foreground min-h-[36px]"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 mr-1 ${loading || loadingLogs ? 'animate-spin' : ''}`} />
+            Обновить
+          </Button>
+        </div>
       </div>
 
-      {/* 3. ОПТИМИЗИРОВАННЫЙ UNIFIED DATA GRID: ПРИВЯЗАННЫЕ ПОЛЬЗОВАТЕЛИ */}
+      {/* 3. UNIFIED DATA GRID: ЖУРНАЛ ОПОВЕЩЕНИЙ */}
+      {subTab === 'notification_logs' && (
+        <UnifiedDataGrid<TelegramNotificationLog>
+          gridId="admin_telegram_notifications_tab"
+          data={notificationLogs}
+          columns={notificationLogColumns}
+          keyExtractor={(l) => l.id}
+          onRowClick={(l) => setSelectedLogForModal(l)}
+          getRowActions={(l) => [
+            {
+              label: '👁️ Просмотр сообщения',
+              action: () => setSelectedLogForModal(l),
+            },
+          ]}
+          searchPlaceholder="Поиск по тексту сообщения, Chat ID или типу события..."
+          emptyMessage="История отправленных оповещений Telegram пока пуста"
+          isLoading={loadingLogs}
+          defaultPageSize={25}
+        />
+      )}
+
+      {/* 4. UNIFIED DATA GRID: ПРИВЯЗАННЫЕ ПОЛЬЗОВАТЕЛИ */}
       {subTab === 'connections' && (
         <UnifiedDataGrid
-          gridId="admin_telegram_connections"
+          gridId="admin_telegram_connections_tab"
           data={stats?.connections || []}
           columns={connectionColumns}
           keyExtractor={(c) => c.id}
@@ -512,32 +610,70 @@ export function SuperAdminTelegramTab() {
           searchPlaceholder="Поиск привязок по ФИО, Email, ИНН или Telegram Username..."
           emptyMessage="Нет зарегистрированных привязок пользователей"
           isLoading={loading}
+          defaultPageSize={25}
         />
       )}
 
-      {/* 4. ОПТИМИЗИРОВАННЫЙ UNIFIED DATA GRID: РЕЕСТР OTP-КОДОВ */}
+      {/* 5. UNIFIED DATA GRID: РЕЕСТР OTP-КОДОВ */}
       {subTab === 'codes' && (
         <UnifiedDataGrid
-          gridId="admin_telegram_codes"
+          gridId="admin_telegram_codes_tab"
           data={stats?.codes || []}
           columns={codeColumns}
           keyExtractor={(cd) => cd.id}
           searchPlaceholder="Поиск кодов по значению, ФИО или названию компании..."
           emptyMessage="История генерации кодов пуста"
           isLoading={loading}
+          defaultPageSize={25}
         />
       )}
 
-      {/* 5. ОПТИМИЗИРОВАННЫЙ UNIFIED DATA GRID: ЛОГИ ВЕБХУКОВ */}
-      {subTab === 'logs' && (
-        <UnifiedDataGrid
-          gridId="admin_telegram_logs"
-          data={stats?.logs || []}
-          columns={logColumns}
-          keyExtractor={(lg) => lg.id}
-          searchPlaceholder="Поиск по текстам сообщений, Chat ID или Username..."
-          emptyMessage="Системные логи сообщений пока отсутствуют"
-          isLoading={loading}
+      {/* МОДАЛЬНОЕ ОКНО ПРЕДПРОСМОТРА ПОЛНОГО ТЕКСТА СООБЩЕНИЯ */}
+      {selectedLogForModal && (
+        <UnifiedViewModal
+          isOpen={!!selectedLogForModal}
+          onClose={() => setSelectedLogForModal(null)}
+          title="Детали Telegram-оповещения"
+          subtitle={`ID записи: ${selectedLogForModal.id}`}
+          badge={
+            <Badge
+              className={
+                selectedLogForModal.status === 'sent'
+                  ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                  : 'bg-red-500/20 text-red-400 border-red-500/30'
+              }
+            >
+              {selectedLogForModal.status === 'sent' ? '✅ Доставлено' : '❌ Ошибка'}
+            </Badge>
+          }
+          sections={[
+            {
+              title: 'Параметры отправки',
+              fields: [
+                { label: 'Тип события', value: selectedLogForModal.event_type },
+                { label: 'Chat ID', value: selectedLogForModal.recipient_chat_id },
+                {
+                  label: 'Получатель',
+                  value: selectedLogForModal.recipient_user?.full_name || 'Не привязан к профилю',
+                },
+                {
+                  label: 'Дата и время',
+                  value: new Date(selectedLogForModal.created_at || selectedLogForModal.sent_at).toLocaleString('ru-RU'),
+                },
+                ...(selectedLogForModal.error_message
+                  ? [{ label: 'Ошибка доставки', value: selectedLogForModal.error_message, colSpan: 2 as 2 }]
+                  : []),
+              ],
+            },
+          ]}
+          previewSlot={
+            <div className="space-y-2">
+              <Label className="text-xs font-bold text-muted-foreground uppercase">Полный текст сообщения</Label>
+              <div className="bg-background/80 p-4 rounded-xl border border-border font-mono text-xs whitespace-pre-wrap leading-relaxed text-foreground select-all">
+                {selectedLogForModal.message_text}
+              </div>
+            </div>
+          }
         />
       )}
     </div>

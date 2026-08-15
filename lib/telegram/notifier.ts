@@ -10,16 +10,65 @@ export interface NotifyTelegramParams {
   type: TelegramNotificationType;
   message: string;
   targetUserId?: string;
+  eventType?: string;
+  metadata?: Record<string, any>;
 }
 
 /**
- * Отправка сообщения конкретному Telegram Chat ID
+ * Асинхронное логирование уведомления в telegram_notification_logs
  */
-export async function sendTelegramMessage(chatId: number | string, text: string): Promise<boolean> {
+export async function logTelegramNotification(params: {
+  recipientUserId?: string | null;
+  recipientChatId: string | number;
+  eventType: string;
+  messageText: string;
+  status: 'sent' | 'failed' | 'pending';
+  errorMessage?: string | null;
+  metadata?: Record<string, any>;
+}): Promise<void> {
+  try {
+    const adminSupabase = await createAdminClient();
+    await adminSupabase.from('telegram_notification_logs').insert({
+      recipient_user_id: params.recipientUserId || null,
+      recipient_chat_id: String(params.recipientChatId),
+      event_type: params.eventType,
+      message_text: params.messageText,
+      status: params.status,
+      error_message: params.errorMessage || null,
+      metadata: params.metadata || {},
+      sent_at: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.error('[Telegram Logger] Ошибка логирования оповещения:', err);
+  }
+}
+
+/**
+ * Отправка сообщения конкретному Telegram Chat ID с автоматическим логированием
+ */
+export async function sendTelegramMessage(
+  chatId: number | string,
+  text: string,
+  options?: {
+    eventType?: string;
+    recipientUserId?: string | null;
+    metadata?: Record<string, any>;
+  }
+): Promise<boolean> {
+  const eventType = options?.eventType || 'SYSTEM_BROADCAST';
   try {
     const rawToken = process.env.TELEGRAM_BOT_TOKEN;
     if (!rawToken) {
       console.warn('[Telegram Notifier] TELEGRAM_BOT_TOKEN не задан в переменных окружения');
+      await logTelegramNotification({
+        recipientUserId: options?.recipientUserId,
+        recipientChatId: chatId,
+        eventType,
+        messageText: text,
+        status: 'failed',
+        errorMessage: 'TELEGRAM_BOT_TOKEN не задан в окружении',
+        metadata: options?.metadata,
+      });
       return false;
     }
     const token = rawToken.trim();
@@ -34,9 +83,38 @@ export async function sendTelegramMessage(chatId: number | string, text: string)
       }),
     });
 
-    return res.ok;
-  } catch (err) {
+    const isOk = res.ok;
+    let errorMsg: string | null = null;
+    if (!isOk) {
+      const errBody = await res.text();
+      errorMsg = `HTTP ${res.status}: ${errBody}`;
+    }
+
+    await logTelegramNotification({
+      recipientUserId: options?.recipientUserId,
+      recipientChatId: chatId,
+      eventType,
+      messageText: text,
+      status: isOk ? 'sent' : 'failed',
+      errorMessage: errorMsg,
+      metadata: options?.metadata,
+    });
+
+    return isOk;
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : 'Сетевой сбой отправки в Telegram API';
     console.error('[Telegram Notifier] Ошибка запроса к Telegram API:', err);
+
+    await logTelegramNotification({
+      recipientUserId: options?.recipientUserId,
+      recipientChatId: chatId,
+      eventType,
+      messageText: text,
+      status: 'failed',
+      errorMessage: errorMsg,
+      metadata: options?.metadata,
+    });
+
     return false;
   }
 }
@@ -49,6 +127,8 @@ export async function sendTelegramNotification({
   type,
   message,
   targetUserId,
+  eventType,
+  metadata,
 }: NotifyTelegramParams): Promise<void> {
   try {
     const supabase = await createAdminClient();
@@ -71,18 +151,26 @@ export async function sendTelegramNotification({
     if (type === 'documents') requiredAction = 'notify_documents';
     if (type === 'collaboration') requiredAction = 'notify_collaboration';
 
+    const finalEventType = eventType || (type === 'documents' ? 'DOCUMENTS_NOTIFY' : 'COLLABORATION_NOTIFY');
+
     for (const conn of connections) {
       const userProfile = Array.isArray(conn.user) ? conn.user[0] : conn.user;
       if (!userProfile) continue;
 
-      // Если событие системное (блокировка), отправляем всем без исключения.
-      // Иначе проверяем наличие соответствующего права у сотрудника.
       if (type !== 'system_block' && requiredAction) {
         const canReceive = hasPermission(userProfile, 'employees', requiredAction);
         if (!canReceive) continue;
       }
 
-      await sendTelegramMessage(conn.telegram_chat_id, message);
+      await sendTelegramMessage(conn.telegram_chat_id, message, {
+        eventType: finalEventType,
+        recipientUserId: conn.user_id,
+        metadata: {
+          companyId,
+          role: userProfile.role,
+          ...metadata,
+        },
+      });
     }
   } catch (err) {
     console.error('[Telegram Notifier] Ошибка рассылки уведомления:', err);
@@ -144,7 +232,9 @@ export async function sendDocumentTelegramNotification({
   await sendTelegramNotification({
     companyId: receiverCompanyId,
     type: 'documents',
+    eventType: 'DOC_CREATED',
     message,
+    metadata: { documentId, docNumber, docType, senderCompanyName },
   });
 }
 
@@ -175,7 +265,9 @@ export async function sendCollaborationTelegramNotification({
   await sendTelegramNotification({
     companyId: targetCompanyId,
     type: 'collaboration',
+    eventType: 'COLLABORATION_REQUEST',
     message,
+    metadata: { senderCompanyName },
   });
 }
 
@@ -203,7 +295,9 @@ export async function sendCollaborationConfirmedTelegramNotification({
   await sendTelegramNotification({
     companyId: requesterCompanyId,
     type: 'collaboration',
+    eventType: 'COLLABORATION_CONFIRMED',
     message,
+    metadata: { partnerCompanyName },
   });
 }
 
@@ -230,7 +324,9 @@ export async function sendCollaborationRejectedTelegramNotification({
   await sendTelegramNotification({
     companyId: requesterCompanyId,
     type: 'collaboration',
+    eventType: 'COLLABORATION_REJECTED',
     message,
+    metadata: { partnerCompanyName },
   });
 }
 
@@ -258,7 +354,9 @@ export async function sendCollaborationTerminatedTelegramNotification({
   await sendTelegramNotification({
     companyId: targetCompanyId,
     type: 'collaboration',
+    eventType: 'COLLABORATION_TERMINATED',
     message,
+    metadata: { initiatorCompanyName },
   });
 }
 
@@ -302,7 +400,9 @@ export async function sendCompanyVerificationTelegramNotification({
   await sendTelegramNotification({
     companyId,
     type: 'system_block',
+    eventType: 'COMPANY_VERIFICATION',
     message,
+    metadata: { companyName, status, comment },
   });
 }
 
@@ -351,6 +451,8 @@ export async function sendDocumentStatusTelegramNotification({
   await sendTelegramNotification({
     companyId: targetCompanyId,
     type: 'documents',
+    eventType: 'STATUS_CHANGED',
     message,
+    metadata: { documentId, docNumber, docType, newStatus, comment },
   });
 }

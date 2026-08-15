@@ -337,6 +337,24 @@ export interface LandingPricingPlan {
   updated_at?: string;
 }
 
+export interface TelegramNotificationLog {
+  id: string;
+  recipient_user_id?: string | null;
+  recipient_chat_id: string;
+  event_type: string;
+  message_text: string;
+  status: 'sent' | 'failed' | 'pending';
+  error_message?: string | null;
+  metadata?: Record<string, any>;
+  sent_at: string;
+  created_at: string;
+  recipient_user?: {
+    id: string;
+    full_name: string;
+    email: string;
+  } | null;
+}
+
 export type ActionResponse<T = any> = {
   success: boolean;
   data?: T;

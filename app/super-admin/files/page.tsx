@@ -357,7 +357,7 @@ export default function SuperAdminFilesPage() {
             variant="outline"
             disabled={cleaningQueue}
             onClick={handleCleanStorageQueue}
-            className="border-amber-500/30 text-amber-300 hover:bg-amber-500/10 text-xs min-h-[40px]"
+            className="border-amber-500/30 text-amber-400 hover:bg-amber-500/10 text-xs min-h-[40px]"
           >
             {cleaningQueue ? (
               <>
@@ -365,14 +365,14 @@ export default function SuperAdminFilesPage() {
                 Очистка очереди...
               </>
             ) : (
-              'Очистить очередь R2'
+              'Очистить очередь файлов'
             )}
           </Button>
           <Button
             onClick={loadData}
             disabled={loading}
             variant="outline"
-            className="border-slate-800 text-xs text-slate-300 hover:bg-slate-900 min-h-[40px]"
+            className="border-border text-xs text-foreground hover:bg-accent min-h-[40px]"
           >
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Обновить'}
           </Button>
@@ -381,11 +381,11 @@ export default function SuperAdminFilesPage() {
     >
       {/* КАРТОЧКИ МЕТРИК ДЕДУПЛИКАЦИИ */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="bg-slate-900/90 border-slate-800 p-4 relative overflow-hidden shadow-xl">
+        <Card className="bg-card border-border p-4 relative overflow-hidden shadow-xl">
           <div className="flex items-center justify-between">
             <div>
-              <span className="text-xs text-slate-400 block">Физические файлы R2</span>
-              <span className="text-2xl font-bold font-mono text-white mt-1 block">
+              <span className="text-xs text-muted-foreground block">Файлы на облачном диске</span>
+              <span className="text-2xl font-bold font-mono text-foreground mt-1 block">
                 {data?.stats?.totalPhysicalFilesCount || 0}
               </span>
             </div>
@@ -393,15 +393,15 @@ export default function SuperAdminFilesPage() {
               <HardDrive className="h-6 w-6" />
             </div>
           </div>
-          <div className="mt-3 pt-2 border-t border-slate-800 text-xs font-mono text-purple-400">
+          <div className="mt-3 pt-2 border-t border-border text-xs font-mono text-purple-400">
             Объем: {formatBytes(data?.stats?.totalPhysicalStorageBytes || 0)}
           </div>
         </Card>
 
-        <Card className="bg-slate-900/90 border-slate-800 p-4 relative overflow-hidden shadow-xl">
+        <Card className="bg-card border-border p-4 relative overflow-hidden shadow-xl">
           <div className="flex items-center justify-between">
             <div>
-              <span className="text-xs text-slate-400 block">Виртуальные связи (owners)</span>
+              <span className="text-xs text-muted-foreground block">Совместный доступ к файлам</span>
               <span className="text-2xl font-bold font-mono text-indigo-400 mt-1 block">
                 {data?.stats?.totalVirtualOwnersCount || 0}
               </span>
@@ -410,15 +410,15 @@ export default function SuperAdminFilesPage() {
               <Layers className="h-6 w-6" />
             </div>
           </div>
-          <div className="mt-3 pt-2 border-t border-slate-800 text-xs font-mono text-indigo-400">
+          <div className="mt-3 pt-2 border-t border-border text-xs font-mono text-indigo-400">
             Виртуальные тенанты
           </div>
         </Card>
 
-        <Card className="bg-slate-900/90 border-slate-800 p-4 relative overflow-hidden shadow-xl border-emerald-500/30">
+        <Card className="bg-card border-border p-4 relative overflow-hidden shadow-xl border-emerald-500/30">
           <div className="flex items-center justify-between">
             <div>
-              <span className="text-xs text-slate-400 block">Сэкономлено благодаря CoW</span>
+              <span className="text-xs text-muted-foreground block">Сэкономлено оптимизацией</span>
               <span className="text-2xl font-bold font-mono text-emerald-400 mt-1 block">
                 {data?.stats?.savedStorageFormatted || '0 B'}
               </span>
@@ -427,16 +427,16 @@ export default function SuperAdminFilesPage() {
               <Sparkles className="h-6 w-6" />
             </div>
           </div>
-          <div className="mt-3 pt-2 border-t border-slate-800 text-xs font-mono text-emerald-400">
+          <div className="mt-3 pt-2 border-t border-border text-xs font-mono text-emerald-400">
             Экономия: {data?.stats?.deduplicationSavingsPercent || '0'}% места
           </div>
         </Card>
 
-        <Card className="bg-slate-900/90 border-slate-800 p-4 relative overflow-hidden shadow-xl">
+        <Card className="bg-card border-border p-4 relative overflow-hidden shadow-xl">
           <div className="flex items-center justify-between">
             <div>
-              <span className="text-xs text-slate-400 block">Топ-Тенант Хранилища</span>
-              <span className="text-sm font-bold font-mono text-amber-300 mt-1 block truncate max-w-[140px]">
+              <span className="text-xs text-muted-foreground block">Топ-Организация Хранилища</span>
+              <span className="text-sm font-bold font-mono text-amber-400 mt-1 block truncate max-w-[140px]">
                 {data?.stats?.topCompanies[0]?.name || '—'}
               </span>
             </div>
@@ -444,20 +444,20 @@ export default function SuperAdminFilesPage() {
               <Building2 className="h-6 w-6" />
             </div>
           </div>
-          <div className="mt-3 pt-2 border-t border-slate-800 text-xs font-mono text-amber-400">
+          <div className="mt-3 pt-2 border-t border-border text-xs font-mono text-amber-400">
             {data?.stats?.topCompanies[0]?.formattedSize || '0 B'}
           </div>
         </Card>
       </div>
 
       {/* ТАБЛИЦА РЕЕСТРА ИНСПЕКЦИИ ФАЙЛОВ */}
-      <Card className="bg-slate-900/90 border-slate-800 p-5 space-y-4 shadow-2xl">
+      <Card className="bg-card border-border p-5 space-y-4 shadow-xl">
         <div className="flex items-center justify-between">
-          <h3 className="text-base font-bold text-white flex items-center">
+          <h3 className="text-base font-bold text-foreground flex items-center">
             <ShieldCheck className="h-5 w-5 mr-2 text-emerald-400" />
-            Реестр Физических Файлов R2
+            Служебный реестр файлов
           </h3>
-          <Badge variant="outline" className="border-slate-800 text-slate-400 font-mono text-xs">
+          <Badge variant="outline" className="border-border text-muted-foreground font-mono text-xs">
             Всего: {data?.files?.length || 0} файлов
           </Badge>
         </div>
@@ -469,7 +469,7 @@ export default function SuperAdminFilesPage() {
           data={data?.files || []}
           keyExtractor={(f) => f.id}
           onRowClick={(f) => handleOpenAdminFileDetails(f.id)}
-          searchPlaceholder="Поиск по названию файла, ключу R2, тенантам..."
+          searchPlaceholder="Поиск по названию файла, ключу диска, организациям..."
           emptyMessage="Файлы в системе не найдены."
           isLoading={loading}
           defaultPageSize={25}

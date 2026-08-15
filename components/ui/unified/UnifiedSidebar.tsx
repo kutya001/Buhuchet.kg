@@ -127,9 +127,9 @@ const SUPER_ADMIN_NAV_ITEMS: SidebarNavItem[] = [
     icon: Database,
   },
   {
-    title: '← Рабочий кабинет',
-    href: '/dashboard',
-    icon: ArrowLeft,
+    title: 'Профиль',
+    href: '/super-admin/profile',
+    icon: Settings,
   },
 ];
 
