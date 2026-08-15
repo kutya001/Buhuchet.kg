@@ -20,7 +20,7 @@ async function getUserContext() {
     .from('users')
     .select('*, company_roles(*)')
     .eq('id', user.id)
-    .single();
+    .maybeSingle();
 
   return {
     userId: user.id,
@@ -30,6 +30,33 @@ async function getUserContext() {
     role: profile?.role,
     profile,
   };
+}
+
+/**
+ * Получение профиля текущего пользователя для модуля сотрудников
+ */
+export async function getMyEmployeeProfileInfoAction(): Promise<ActionResponse<UserProfile>> {
+  try {
+    const ctx = await getUserContext();
+    if (!ctx || !ctx.userId) {
+      return { success: false, error: 'Пользователь не авторизован' };
+    }
+
+    const adminSupabase = await createAdminClient();
+    const { data: prof, error } = await adminSupabase
+      .from('users')
+      .select('*, companies(*), company_roles(*)')
+      .eq('id', ctx.userId)
+      .single();
+
+    if (error || !prof) {
+      return { success: false, error: error?.message || 'Профиль не найден' };
+    }
+
+    return { success: true, data: prof as UserProfile };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Сбой получения профиля' };
+  }
 }
 
 /**

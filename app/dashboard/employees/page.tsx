@@ -34,6 +34,7 @@ import { UnifiedWorkspaceLayout } from '@/components/ui/unified/UnifiedWorkspace
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import {
+  getMyEmployeeProfileInfoAction,
   getCompanyEmployeesAction,
   getEmployeeDetailsAction,
   getCompanyRolesAction,
@@ -109,46 +110,40 @@ export default function EmployeesModulePage() {
 
   const loadData = async () => {
     setLoading(true);
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    try {
+      const [profRes, pendRes, rolesRes, empRes] = await Promise.all([
+        getMyEmployeeProfileInfoAction(),
+        getPendingRequestsAction(),
+        getCompanyRolesAction(),
+        getCompanyEmployeesAction(empPage, empLimit, empSearch),
+      ]);
 
-    if (user) {
-      const { data: prof } = await supabase
-        .from('users')
-        .select('*, companies(*), company_roles(*)')
-        .eq('id', user.id)
-        .single();
-
-      if (prof) {
-        setCurrentProfile(prof);
-
-        if (prof.company_id) {
-          // Загрузка поступающих заявок
-          const pendRes = await getPendingRequestsAction(prof.company_id);
-          if (pendRes.success && pendRes.data) {
-            setPendingRequests(pendRes.data);
-          }
-        }
+      if (profRes.success && profRes.data) {
+        setCurrentProfile(profRes.data);
       }
 
-      // Загрузка ролей
-      const rolesRes = await getCompanyRolesAction();
+      if (pendRes.success && pendRes.data) {
+        setPendingRequests(pendRes.data);
+      } else if (!pendRes.success) {
+        console.error('[loadData] Ошибка загрузки заявок:', pendRes.error);
+      }
+
       if (rolesRes.success && rolesRes.data) {
         setRoles(rolesRes.data);
-        if (rolesRes.data.length > 0) {
+        if (rolesRes.data.length > 0 && !approveRoleId) {
           setApproveRoleId(rolesRes.data[0].id);
         }
       }
 
-      // Загрузка активных сотрудников
-      const empRes = await getCompanyEmployeesAction(empPage, empLimit, empSearch);
       if (empRes.success && empRes.data) {
         setEmployees(empRes.data.employees);
         setTotalEmployees(empRes.data.totalCount);
       }
+    } catch (err) {
+      console.error('[loadData] Ошибка при параллельной загрузке модуля сотрудников:', err);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   useEffect(() => {
