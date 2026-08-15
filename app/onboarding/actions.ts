@@ -121,7 +121,7 @@ export async function createCompanyAction(
     return { success: false, error: errorMsg };
   }
 
-  redirect('/dashboard');
+  redirect('/uchet');
 }
 
 /**

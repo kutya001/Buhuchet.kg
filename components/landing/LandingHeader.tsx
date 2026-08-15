@@ -77,7 +77,7 @@ export function LandingHeader({ isAuthenticated = false }: LandingHeaderProps) {
         {/* КНОПКИ ДЕЙСТВИЙ */}
         <div className="hidden md:flex items-center space-x-4">
           {isAuthenticated ? (
-            <Link href="/dashboard">
+            <Link href="/uchet">
               <Button className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold rounded-full px-6 shadow-lg shadow-blue-500/25 transition-all">
                 <span>В панель управления</span>
                 <ArrowRight className="w-4 h-4 ml-2" />
@@ -152,7 +152,7 @@ export function LandingHeader({ isAuthenticated = false }: LandingHeaderProps) {
           </a>
           <div className="pt-3 border-t border-border flex flex-col gap-2">
             {isAuthenticated ? (
-              <Link href="/dashboard" onClick={() => setIsMobileMenuOpen(false)}>
+              <Link href="/uchet" onClick={() => setIsMobileMenuOpen(false)}>
                 <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-xl">
                   В панель управления
                 </Button>

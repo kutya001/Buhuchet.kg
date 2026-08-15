@@ -40,7 +40,7 @@ export default function OnboardingPage() {
   const [directorName, setDirectorName] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Проверка роли пользователя: если сотрудник без компании, перенаправляем на /dashboard/pending
+  // Проверка роли пользователя: если сотрудник без компании, перенаправляем на /uchet/pending
   useEffect(() => {
     const verifyUser = async () => {
       const supabase = createClient();
@@ -60,12 +60,12 @@ export default function OnboardingPage() {
         .single();
 
       if (prof?.company_id && (prof.role === 'owner' || prof.role_id)) {
-        router.push('/dashboard');
+        router.push('/uchet');
         return;
       }
 
       if (user.user_metadata?.account_type === 'employee' || prof?.role === 'manager') {
-        router.push('/dashboard/pending');
+        router.push('/uchet/pending');
         return;
       }
 
@@ -104,7 +104,7 @@ export default function OnboardingPage() {
       });
 
       if (res.success) {
-        router.push('/dashboard');
+        router.push('/uchet');
       } else {
         setErrorMsg(res.error || 'Ошибка создания организации');
       }

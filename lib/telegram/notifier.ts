@@ -204,7 +204,7 @@ export async function sendDocumentTelegramNotification({
     (process.env.VERCEL_PROJECT_PRODUCTION_URL
       ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
       : 'https://buhuchet.kg');
-  const docLink = `${baseUrl}/dashboard/documents/${documentId}`;
+  const docLink = `${baseUrl}/uchet/documents/${documentId}`;
   const nowStr = new Date().toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' });
 
   let filesText = '— Нет прикрепленных файлов';
@@ -253,7 +253,7 @@ export async function sendCollaborationTelegramNotification({
     (process.env.VERCEL_PROJECT_PRODUCTION_URL
       ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
       : 'https://buhuchet.kg');
-  const pendingLink = `${baseUrl}/dashboard/pending`;
+  const pendingLink = `${baseUrl}/uchet/pending`;
   const nowStr = new Date().toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' });
 
   const message =
@@ -282,7 +282,7 @@ export async function sendCollaborationConfirmedTelegramNotification({
   partnerCompanyName: string;
 }): Promise<void> {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://buhuchet.kg';
-  const counterpartiesLink = `${baseUrl}/dashboard/counterparties`;
+  const counterpartiesLink = `${baseUrl}/uchet/counterparties`;
   const nowStr = new Date().toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' });
 
   const message =
@@ -312,7 +312,7 @@ export async function sendCollaborationRejectedTelegramNotification({
   partnerCompanyName: string;
 }): Promise<void> {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://buhuchet.kg';
-  const counterpartiesLink = `${baseUrl}/dashboard/counterparties`;
+  const counterpartiesLink = `${baseUrl}/uchet/counterparties`;
   const nowStr = new Date().toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' });
 
   const message =
@@ -341,7 +341,7 @@ export async function sendCollaborationTerminatedTelegramNotification({
   initiatorCompanyName: string;
 }): Promise<void> {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://buhuchet.kg';
-  const counterpartiesLink = `${baseUrl}/dashboard/counterparties`;
+  const counterpartiesLink = `${baseUrl}/uchet/counterparties`;
   const nowStr = new Date().toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' });
 
   const message =
@@ -375,7 +375,7 @@ export async function sendCompanyVerificationTelegramNotification({
   comment?: string;
 }): Promise<void> {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://buhuchet.kg';
-  const profileLink = `${baseUrl}/dashboard/profile`;
+  const profileLink = `${baseUrl}/uchet/profile`;
 
   let title = '';
   let statusText = '';
@@ -427,7 +427,7 @@ export async function sendDocumentStatusTelegramNotification({
   documentId: string;
 }): Promise<void> {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://buhuchet.kg';
-  const docLink = `${baseUrl}/dashboard/documents/${documentId}`;
+  const docLink = `${baseUrl}/uchet/documents/${documentId}`;
   const nowStr = new Date().toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' });
 
   const statusMap: Record<string, string> = {

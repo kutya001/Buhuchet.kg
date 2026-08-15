@@ -46,45 +46,45 @@ export interface UnifiedSidebarProps {
 const USER_NAV_ITEMS: SidebarNavItem[] = [
   {
     title: 'Главная Панель',
-    href: '/dashboard',
+    href: '/uchet',
     icon: LayoutDashboard,
   },
   {
     title: 'Документооборот',
-    href: '/dashboard/documents',
+    href: '/uchet/documents',
     icon: FileText,
   },
   {
     title: 'Облачный диск',
-    href: '/dashboard/files',
+    href: '/uchet/files',
     icon: HardDrive,
   },
   {
     title: 'Контрагенты',
-    href: '/dashboard/counterparties',
+    href: '/uchet/counterparties',
     icon: Building2,
   },
   {
     title: 'Сотрудники',
-    href: '/dashboard/employees',
+    href: '/uchet/employees',
     icon: Users,
     roles: ['owner', 'accountant'],
   },
   {
     title: 'Профиль организации',
-    href: '/dashboard/company',
+    href: '/uchet/company',
     icon: Settings,
     roles: ['owner'],
   },
   {
     title: 'Подписка и баланс',
-    href: '/dashboard/subscription',
+    href: '/uchet/subscription',
     icon: CreditCard,
     roles: ['owner'],
   },
   {
-    title: 'Суперадминка',
-    href: '/super-admin/companies',
+    title: 'Панель администратора',
+    href: '/admin',
     icon: Shield,
     superAdminOnly: true,
   },
@@ -93,42 +93,42 @@ const USER_NAV_ITEMS: SidebarNavItem[] = [
 const SUPER_ADMIN_NAV_ITEMS: SidebarNavItem[] = [
   {
     title: 'Главная',
-    href: '/super-admin',
+    href: '/admin',
     icon: LayoutDashboard,
   },
   {
     title: 'Организации',
-    href: '/super-admin/companies',
+    href: '/admin/companies',
     icon: Building2,
   },
   {
     title: 'Пользователи',
-    href: '/super-admin/users',
+    href: '/admin/users',
     icon: Users,
   },
   {
     title: 'Служебный реестр файлов',
-    href: '/super-admin/files',
+    href: '/admin/files',
     icon: HardDrive,
   },
   {
     title: 'Подписки',
-    href: '/super-admin/subscriptions',
+    href: '/admin/subscriptions',
     icon: CreditCard,
   },
   {
     title: 'Telegram-боты',
-    href: '/super-admin/telegram',
+    href: '/admin/telegram',
     icon: Send,
   },
   {
     title: 'Инспектор БД',
-    href: '/super-admin/inspector',
+    href: '/admin/inspector',
     icon: Database,
   },
   {
     title: 'Профиль',
-    href: '/super-admin/profile',
+    href: '/admin/profile',
     icon: Settings,
   },
 ];
@@ -136,12 +136,12 @@ const SUPER_ADMIN_NAV_ITEMS: SidebarNavItem[] = [
 const GUEST_NAV_ITEMS: SidebarNavItem[] = [
   {
     title: 'Заявка в компанию',
-    href: '/dashboard/pending',
+    href: '/uchet/pending',
     icon: Building2,
   },
   {
     title: 'Мой профиль',
-    href: '/dashboard/profile',
+    href: '/uchet/profile',
     icon: Settings,
   },
 ];
@@ -157,7 +157,7 @@ export function UnifiedSidebar({
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
 
-  const isSuperAdminRoute = pathname.startsWith('/super-admin');
+  const isSuperAdminRoute = pathname.startsWith('/admin');
   const isGuestMode = !isSuperAdmin && (!companyName || companyName === 'Организация' || companyName === 'Без организации');
 
   const filteredNavItems = isSuperAdminRoute
@@ -200,7 +200,7 @@ export function UnifiedSidebar({
         {/* 2. НАВИГАЦИОННОЕ МЕНЮ МОДУЛЕЙ */}
         <nav className="p-2 space-y-1 mt-2">
           {filteredNavItems.map((item) => {
-            const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
+            const isActive = pathname === item.href || (item.href !== '/uchet' && pathname.startsWith(item.href));
             const Icon = item.icon;
 
             return (

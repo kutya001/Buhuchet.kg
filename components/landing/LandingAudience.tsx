@@ -58,7 +58,7 @@ export function LandingAudience({ isAuthenticated = false }: LandingAudienceProp
             </div>
 
             <div className="pt-8 mt-6 border-t border-border/80">
-              <Link href={isAuthenticated ? '/dashboard' : '/register'}>
+              <Link href={isAuthenticated ? '/uchet' : '/register'}>
                 <Button className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl px-8 min-h-[48px] shadow-lg shadow-blue-600/20">
                   <span>{isAuthenticated ? 'Перейти в кабинет' : 'Попробовать для компании'}</span>
                   <ArrowRight className="w-4 h-4 ml-2" />
@@ -102,7 +102,7 @@ export function LandingAudience({ isAuthenticated = false }: LandingAudienceProp
             </div>
 
             <div className="pt-8 mt-6 border-t border-border/80">
-              <Link href={isAuthenticated ? '/dashboard' : '/register'}>
+              <Link href={isAuthenticated ? '/uchet' : '/register'}>
                 <Button className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-2xl px-8 min-h-[48px] shadow-lg shadow-indigo-600/20">
                   <span>{isAuthenticated ? 'Перейти в кабинет' : 'Присоединиться как эксперт'}</span>
                   <ArrowRight className="w-4 h-4 ml-2" />

@@ -9,17 +9,17 @@ export function UnifiedBottomNav() {
   const pathname = usePathname();
 
   const navItems = [
-    { label: 'Главная', href: '/dashboard', icon: LayoutDashboard },
-    { label: 'Документооборот', href: '/dashboard/documents', icon: FileText },
-    { label: 'Диск', href: '/dashboard/files', icon: HardDrive },
-    { label: 'Партнеры', href: '/dashboard/counterparties', icon: Building2 },
-    { label: 'Профиль', href: '/dashboard/profile', icon: User },
+    { label: 'Главная', href: '/uchet', icon: LayoutDashboard },
+    { label: 'Документооборот', href: '/uchet/documents', icon: FileText },
+    { label: 'Диск', href: '/uchet/files', icon: HardDrive },
+    { label: 'Партнеры', href: '/uchet/counterparties', icon: Building2 },
+    { label: 'Профиль', href: '/uchet/profile', icon: User },
   ];
 
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-card/95 backdrop-blur-lg border-t border-border px-2 py-1 flex items-center justify-around shadow-2xl min-h-[60px]">
       {navItems.map((item) => {
-        const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
+        const isActive = pathname === item.href || (item.href !== '/uchet' && pathname.startsWith(item.href));
         const Icon = item.icon;
 
         return (

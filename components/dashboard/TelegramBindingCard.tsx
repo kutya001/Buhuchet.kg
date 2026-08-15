@@ -10,7 +10,7 @@ import {
   getTelegramConnectionStatusAction,
   disconnectTelegramAction,
   type TelegramOtpData,
-} from '@/app/dashboard/profile/telegram-actions';
+} from '@/app/uchet/profile/telegram-actions';
 
 export function TelegramBindingCard() {
   const [loading, setLoading] = useState(true);

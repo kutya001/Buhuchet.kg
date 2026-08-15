@@ -41,7 +41,8 @@
 | **19** | [`pending_file_deletions`](#218-таблица-pending_file_deletions--очередь-физического-удаления-файлов-r2) | Очередь Очистки R2 | Буферная очередь отложенного физического удаления неиспользуемых файлов из Cloudflare R2 (batch до 1000). | `file_id ➔ files(id) ON DELETE SET NULL` |
 | **20** | [`admin_audit_logs`](#220-таблица-admin_audit_logs--журнал-аудита-суперадминистратора) | Аудит Суперадминистратора | Протоколирование действий суперадминистратора платформы (активация компаний, Telegram-рассылки, пакетная очистка R2). | `admin_id ➔ users(id)` |
 | **21** | [`nomenclature`](#221-таблица-nomenclature--справочник-номенклатуры-товаров-и-услуг) | Справочник Номенклатуры | Каталог товаров, работ и услуг организации с ценами, единицами измерения (шт, кг, услуга) и ставками НДС. | `company_id ➔ companies(id)` |
-| **22** | [`landing_pricing_plans`](#222-таблица-landing_pricing_plans--публичные-тарифы-лендинга) | Тарифы Лендинга | Настраиваемые тарифные планы на главной странице (Старт, Бизнес, Премиум), цены, бейджи, фичи и статус популярности. | — |
+| **22** | [`landing_pricing_plans`](#322-таблица-landing_pricing_plans--публичные-тарифы-лендинга) | Тарифы Лендинга | Настраиваемые тарифные планы на главной странице (Старт, Бизнес, Премиум), цены, бейджи, фичи и статус популярности. | — |
+| **23** | [`telegram_notification_logs`](#323-таблица-telegram_notification_logs--реестр-отправленных-telegram-уведомлений) | Реестр Telegram-оповещений | Детализированный журнал отправленных платформой сообщений в Telegram (получатель, chat_id, тип события, статус, текст). | `recipient_user_id ➔ users(id) ON DELETE SET NULL` |
 
 ---
 
@@ -1045,9 +1046,59 @@ $$;
 
 ---
 
+### 3.23 Таблица `telegram_notification_logs` — Реестр отправленных Telegram-уведомлений
+
+**Описание и Назначение**: Хранит аудит всех отправленных платформой уведомлений в Telegram пользователям и контрагентам (создание первички, партнерские запросы, заявки в штат, системные рассылки).
+
+**Внешние связи**:
+- `recipient_user_id` ➔ `public.users(id) ON DELETE SET NULL`
+
+**DDL и Индексы**:
+```sql
+CREATE TABLE IF NOT EXISTS public.telegram_notification_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  recipient_user_id UUID REFERENCES public.users(id) ON DELETE SET NULL,
+  recipient_chat_id BIGINT NOT NULL,
+  event_type VARCHAR(100) NOT NULL,
+  message_text TEXT NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'sent' CHECK (status IN ('sent', 'failed', 'pending')),
+  error_message TEXT,
+  metadata JSONB DEFAULT '{}'::jsonb,
+  sent_at TIMESTAMPTZ DEFAULT now(),
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Индексы
+CREATE INDEX IF NOT EXISTS idx_telegram_logs_event_created 
+  ON public.telegram_notification_logs(event_type, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_telegram_logs_recipient 
+  ON public.telegram_notification_logs(recipient_user_id);
+
+CREATE INDEX IF NOT EXISTS idx_telegram_logs_chat_created 
+  ON public.telegram_notification_logs(recipient_chat_id, created_at DESC);
+
+-- RLS
+ALTER TABLE public.telegram_notification_logs ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Superadmin full access to telegram_notification_logs"
+  ON public.telegram_notification_logs
+  FOR ALL
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.users
+      WHERE users.id = (SELECT auth.uid())
+        AND users.is_super_admin = true
+    )
+  );
+```
+
+---
+
 ## 📜 4. Полный Реестр Миграционных Скриптов (`supabase/migrations/`)
 
-Все изменения схемы базы данных строго версионируются в папке `supabase/migrations/`. Ниже приведен полный список всех **27 примененных миграционных файлов**:
+Все изменения схемы базы данных строго версионируются в папке `supabase/migrations/`. Ниже приведен полный список всех **38 примененных миграционных файлов**:
 
 | Файл миграции | Дата / Время | Назначение и Ключевые Операции |
 |---|---|---|
@@ -1088,4 +1139,4 @@ $$;
 | `20260819100000_remove_total_amount_from_documents.sql` | 19.08.2026 10:00 | Удаление столбца `total_amount` из таблицы `documents` и обновление `create_document_atomic` |
 | `20260819200000_landing_pricing_plans.sql` | 19.08.2026 20:00 | Создание таблицы `landing_pricing_plans` для настраиваемых тарифов лендинга |
 | `20260820000000_fix_pricing_plans_public_rls.sql` | 20.08.2026 00:00 | Настройка публичного RLS (`is_active = true`) для тарифов и гарантия изоляции периодов |
-| `20260821000000_superadmin_telegram_logs_and_indexes.sql` | 21.08.2026 00:00 | Таблица `telegram_notification_logs`, составные индексы и RLS для суперадмина |
+| `20260821000000_superadmin_telegram_logs_and_routing.sql` | 21.08.2026 00:00 | Таблица `telegram_notification_logs`, составные индексы, RLS для суперадмина и трехконтурная маршрутизация |

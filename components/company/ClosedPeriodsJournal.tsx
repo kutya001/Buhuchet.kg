@@ -23,7 +23,7 @@ import {
   saveClosedPeriodAction,
   reopenFullPeriodAction,
   toggleModuleLockAction,
-} from '@/app/dashboard/company/actions';
+} from '@/app/uchet/company/actions';
 import type { ClosedPeriod } from '@/types/company.types';
 import { UnifiedDataGrid, type ColumnDef, type RowAction } from '@/components/ui/unified/UnifiedDataGrid';
 import { ClosedPeriodModal } from './ClosedPeriodModal';

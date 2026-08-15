@@ -29,7 +29,7 @@ export function AccessDeniedCard({ moduleName = 'данному модулю', a
             Обратитесь к Администратору вашей организации для изменения ролевой матрицы разрешений во вкладке «Роли и доступы».
           </p>
 
-          <Link href="/dashboard" className="inline-block w-full">
+          <Link href="/uchet" className="inline-block w-full">
             <Button className="w-full bg-muted hover:bg-muted-foreground/20 text-foreground font-bold text-xs min-h-[40px] rounded-xl">
               <ArrowLeft className="h-4 w-4 mr-2" />
               Вернуться на Главную

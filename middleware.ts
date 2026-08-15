@@ -8,9 +8,22 @@ export async function middleware(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
 
-  // 🟢 ИСКЛЮЧЕНИЕ 1: Публичные API эндпоинты (Telegram Webhook)
-  if (pathname.startsWith('/api/telegram/webhook')) {
+  // 🟢 ИСКЛЮЧЕНИЕ 1: Публичные API эндпоинты (Telegram Webhook, Upload Direct)
+  if (pathname.startsWith('/api/telegram/webhook') || pathname.startsWith('/api/upload-direct')) {
     return NextResponse.next();
+  }
+
+  // 🟢 АВТОМАТИЧЕСКИЕ 308-РЕДИРЕКТЫ СО СТАРЫХ МАРШРУТОВ
+  if (pathname === '/super-admin' || pathname.startsWith('/super-admin/')) {
+    const url = request.nextUrl.clone();
+    url.pathname = pathname.replace(/^\/super-admin/, '/admin');
+    return NextResponse.redirect(url, 308);
+  }
+
+  if (pathname === '/dashboard' || pathname.startsWith('/dashboard/')) {
+    const url = request.nextUrl.clone();
+    url.pathname = pathname.replace(/^\/dashboard/, '/uchet');
+    return NextResponse.redirect(url, 308);
   }
 
   // 🟢 ОПТИМИЗАЦИЯ 1: Если нет авторизационной куки Supabase (`sb-`), пропускаем анонимный визит на публичные страницы мгновенно
@@ -58,7 +71,7 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Если неавторизованный пользователь пытается зайти в защищенную зону (/dashboard или /super-admin)
+  // Если неавторизованный пользователь пытается зайти в защищенную зону (/uchet или /admin)
   if (!user && !isPublicRoute) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
@@ -73,54 +86,57 @@ export async function middleware(request: NextRequest) {
       .eq('id', user.id)
       .maybeSingle();
 
-    // Редирект авторизованного с страниц логина/регистрации
-    if (pathname === '/login' || pathname === '/register') {
-      const url = request.nextUrl.clone();
-      url.pathname = dbUser?.is_super_admin ? '/super-admin' : '/dashboard';
-      return NextResponse.redirect(url);
-    }
-
-    // Если Суперадмин переходит на /dashboard -> редирект на /super-admin
-    if (pathname === '/dashboard' && dbUser?.is_super_admin) {
-      const url = request.nextUrl.clone();
-      url.pathname = '/super-admin';
-      return NextResponse.redirect(url);
-    }
-
     const isSuperAdmin = !!dbUser?.is_super_admin;
     const isOwner = dbUser?.role === 'owner';
     const hasCompany = !!dbUser?.company_id;
     const hasApprovedRole = !!dbUser?.role_id;
     const hasActiveCompany = isSuperAdmin || (hasCompany && (isOwner || hasApprovedRole));
 
-    // Проверка доступа к /onboarding:
-    // Только пользователи без компании, которые зарегистрировались как владельцы или создают организацию
-    if (pathname.startsWith('/onboarding')) {
-      if (hasCompany || (!isOwner && !isSuperAdmin && user.user_metadata?.account_type === 'employee')) {
+    // Редирект авторизованного с страниц логина/регистрации
+    if (pathname === '/login' || pathname === '/register') {
+      const url = request.nextUrl.clone();
+      url.pathname = isSuperAdmin ? '/admin' : (hasActiveCompany ? '/uchet' : '/uchet/pending');
+      return NextResponse.redirect(url);
+    }
+
+    // 🔒 Защита контура /admin/*: Доступ только для суперадминистратора
+    if (pathname.startsWith('/admin')) {
+      if (!isSuperAdmin) {
         const url = request.nextUrl.clone();
-        url.pathname = hasActiveCompany ? '/dashboard' : '/dashboard/pending';
+        url.pathname = hasActiveCompany ? '/uchet' : '/uchet/pending';
         return NextResponse.redirect(url);
       }
     }
 
-    // Если пользователь авторизован, но не имеет активной компании:
-    // Разрешаем ТОЛЬКО /dashboard/pending и /dashboard/profile
-    if (pathname.startsWith('/dashboard')) {
-      const isAllowedGuestRoute =
-        pathname === '/dashboard/pending' ||
-        pathname.startsWith('/dashboard/profile');
-
-      if (!hasActiveCompany && !isAllowedGuestRoute) {
+    // Проверка доступа к /onboarding:
+    if (pathname.startsWith('/onboarding')) {
+      if (hasCompany || (!isOwner && !isSuperAdmin && user.user_metadata?.account_type === 'employee')) {
         const url = request.nextUrl.clone();
-        url.pathname = '/dashboard/pending';
+        url.pathname = isSuperAdmin ? '/admin' : (hasActiveCompany ? '/uchet' : '/uchet/pending');
         return NextResponse.redirect(url);
       }
+    }
 
-      // Если у пользователя уже есть активная компания, но он зашел на /dashboard/pending
-      if (hasActiveCompany && pathname === '/dashboard/pending') {
-        const url = request.nextUrl.clone();
-        url.pathname = '/dashboard';
-        return NextResponse.redirect(url);
+    // 🔒 Защита контура /uchet/*:
+    if (pathname.startsWith('/uchet')) {
+      // Суперадминистратор имеет доступ ко всем контурам, но для обычных пользователей:
+      if (!isSuperAdmin) {
+        const isAllowedGuestRoute =
+          pathname === '/uchet/pending' ||
+          pathname.startsWith('/uchet/profile');
+
+        if (!hasActiveCompany && !isAllowedGuestRoute) {
+          const url = request.nextUrl.clone();
+          url.pathname = '/uchet/pending';
+          return NextResponse.redirect(url);
+        }
+
+        // Если у пользователя уже есть активная компания, но он зашел на /uchet/pending
+        if (hasActiveCompany && pathname === '/uchet/pending') {
+          const url = request.nextUrl.clone();
+          url.pathname = '/uchet';
+          return NextResponse.redirect(url);
+        }
       }
     }
   }
@@ -130,6 +146,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|icon.svg|robots.txt|sitemap.xml|api/telegram/webhook|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|woff2?)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|icon.svg|robots.txt|sitemap.xml|api/telegram/webhook|api/upload-direct|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|woff2?)$).*)',
   ],
 };

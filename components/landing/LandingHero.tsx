@@ -50,7 +50,7 @@ export function LandingHero({ isAuthenticated = false }: LandingHeroProps) {
 
             <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-3.5 pt-2">
               {isAuthenticated ? (
-                <Link href="/dashboard" className="w-full sm:w-auto">
+                <Link href="/uchet" className="w-full sm:w-auto">
                   <Button className="w-full sm:w-auto min-h-[50px] px-8 text-base font-bold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-2xl shadow-xl shadow-blue-600/25 hover:scale-[1.02] transition-all">
                     <span>Перейти в кабинет</span>
                     <ArrowRight className="w-5 h-5 ml-2" />
@@ -105,7 +105,7 @@ export function LandingHero({ isAuthenticated = false }: LandingHeroProps) {
                     <span className="w-3 h-3 rounded-full bg-emerald-500" />
                   </div>
                   <Badge variant="outline" className="border-blue-500/30 text-blue-400 bg-blue-500/10 text-[11px] font-mono">
-                    buhuchet.kg/dashboard
+                    buhuchet.kg/uchet
                   </Badge>
                 </div>
 

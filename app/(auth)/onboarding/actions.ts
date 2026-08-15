@@ -86,8 +86,8 @@ export async function createCompanyOnboardingAction(data: OnboardingInput): Prom
       return { success: false, error: `Ошибка привязки пользователя: ${userError.message}` };
     }
 
-    revalidatePath('/dashboard');
-    revalidatePath('/dashboard/pending');
+    revalidatePath('/uchet');
+    revalidatePath('/uchet/pending');
     return { success: true, data: company as Company };
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : 'Сбой при онбординге организации';
@@ -134,8 +134,8 @@ export async function resubmitCompanyForModerationAction(
       return { success: false, error: `Ошибка обновления реквизитов: ${error?.message}` };
     }
 
-    revalidatePath('/dashboard');
-    revalidatePath('/dashboard/pending');
+    revalidatePath('/uchet');
+    revalidatePath('/uchet/pending');
     return { success: true, data: company as Company };
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : 'Сбой при повторной отправке на модерацию';
@@ -219,9 +219,9 @@ export async function createEmployeeJoinRequestAction(data: {
       return { success: false, error: `Ошибка подачи заявки: ${userErr.message}` };
     }
 
-    revalidatePath('/dashboard');
-    revalidatePath('/dashboard/employees');
-    revalidatePath('/dashboard/pending');
+    revalidatePath('/uchet');
+    revalidatePath('/uchet/employees');
+    revalidatePath('/uchet/pending');
     return { success: true };
   } catch (err: unknown) {
     return { success: false, error: err instanceof Error ? err.message : 'Сбой подачи заявки сотрудника' };

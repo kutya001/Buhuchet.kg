@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { ZoomIn, ZoomOut, RotateCw, Maximize2, FileText, Download, Loader2, Image as ImageIcon, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { getFileViewUrlAction, getFileDownloadUrlAction } from '@/app/dashboard/files/actions';
+import { getFileViewUrlAction, getFileDownloadUrlAction } from '@/app/uchet/files/actions';
 
 interface ScanViewerProps {
   fileName?: string | null;

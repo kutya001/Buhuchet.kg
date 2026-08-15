@@ -31,7 +31,7 @@ import {
   getTelegramLogsAction,
   type TelegramAdminStatsData,
   type TelegramBotHealthData,
-} from '@/app/super-admin/telegram-actions';
+} from '@/app/admin/telegram-actions';
 import { UnifiedDataGrid, ColumnDef } from '@/components/ui/unified/UnifiedDataGrid';
 import { UnifiedViewModal } from '@/components/ui/unified/UnifiedViewModal';
 import { toast } from 'sonner';
@@ -136,8 +136,53 @@ export function SuperAdminTelegramTab() {
   const notificationLogColumns: ColumnDef<TelegramNotificationLog>[] = useMemo(
     () => [
       {
+        key: 'sent_at',
+        label: 'Дата и время',
+        sortable: true,
+        getValue: (l) => l.created_at || l.sent_at,
+        render: (l) => (
+          <span className="text-xs text-muted-foreground font-mono whitespace-nowrap">
+            {new Date(l.created_at || l.sent_at).toLocaleString('ru-RU')}
+          </span>
+        ),
+      },
+      {
+        key: 'recipient',
+        label: 'Получатель',
+        sortable: true,
+        getValue: (l) => l.recipient_user?.full_name || l.recipient_chat_id,
+        render: (l) => (
+          <div>
+            <div className="font-semibold text-foreground text-xs">
+              {l.recipient_user?.full_name || 'Пользователь Telegram'}
+            </div>
+            <div className="text-[11px] font-mono text-muted-foreground">Chat ID: {l.recipient_chat_id}</div>
+          </div>
+        ),
+      },
+      {
+        key: 'event_type',
+        label: 'Событие',
+        sortable: true,
+        getValue: (l) => l.event_type,
+        render: (l) => {
+          const typeColors: Record<string, string> = {
+            DOC_CREATED: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+            STATUS_CHANGED: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
+            COLLABORATION_REQUEST: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
+            COLLABORATION_CONFIRMED: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+            COLLABORATION_REJECTED: 'bg-rose-500/20 text-rose-400 border-rose-500/30',
+            COLLABORATION_TERMINATED: 'bg-red-500/20 text-red-400 border-red-500/30',
+            COMPANY_VERIFICATION: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30',
+            SYSTEM_BROADCAST: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
+          };
+          const cls = typeColors[l.event_type] || 'bg-slate-500/20 text-slate-300 border-slate-500/30';
+          return <Badge className={`${cls} text-[11px] font-mono`}>{l.event_type}</Badge>;
+        },
+      },
+      {
         key: 'status',
-        label: 'Статус',
+        label: 'Статус доставки',
         sortable: true,
         getValue: (l) => l.status,
         render: (l) => {
@@ -166,40 +211,6 @@ export function SuperAdminTelegramTab() {
         },
       },
       {
-        key: 'event_type',
-        label: 'Тип события',
-        sortable: true,
-        getValue: (l) => l.event_type,
-        render: (l) => {
-          const typeColors: Record<string, string> = {
-            DOC_CREATED: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-            STATUS_CHANGED: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
-            COLLABORATION_REQUEST: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
-            COLLABORATION_CONFIRMED: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
-            COLLABORATION_REJECTED: 'bg-rose-500/20 text-rose-400 border-rose-500/30',
-            COLLABORATION_TERMINATED: 'bg-red-500/20 text-red-400 border-red-500/30',
-            COMPANY_VERIFICATION: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30',
-            SYSTEM_BROADCAST: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
-          };
-          const cls = typeColors[l.event_type] || 'bg-slate-500/20 text-slate-300 border-slate-500/30';
-          return <Badge className={`${cls} text-[11px] font-mono`}>{l.event_type}</Badge>;
-        },
-      },
-      {
-        key: 'recipient',
-        label: 'Получатель / Chat ID',
-        sortable: true,
-        getValue: (l) => l.recipient_user?.full_name || l.recipient_chat_id,
-        render: (l) => (
-          <div>
-            <div className="font-semibold text-foreground text-xs">
-              {l.recipient_user?.full_name || 'Пользователь Telegram'}
-            </div>
-            <div className="text-[11px] font-mono text-muted-foreground">Chat ID: {l.recipient_chat_id}</div>
-          </div>
-        ),
-      },
-      {
         key: 'message_preview',
         label: 'Текст сообщения',
         sortable: false,
@@ -214,14 +225,21 @@ export function SuperAdminTelegramTab() {
         ),
       },
       {
-        key: 'sent_at',
-        label: 'Время отправки',
-        sortable: true,
-        getValue: (l) => l.created_at || l.sent_at,
+        key: 'actions',
+        label: 'Действия',
+        sortable: false,
         render: (l) => (
-          <span className="text-xs text-muted-foreground font-mono">
-            {new Date(l.created_at || l.sent_at).toLocaleString('ru-RU')}
-          </span>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={(e) => {
+              e.stopPropagation();
+              setSelectedLogForModal(l);
+            }}
+            className="border-border text-xs min-h-[32px] px-2.5 flex items-center gap-1 hover:bg-muted"
+          >
+            Просмотр
+          </Button>
         ),
       },
     ],

@@ -31,7 +31,7 @@ export function LandingCta({ isAuthenticated = false }: LandingCtaProps) {
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2">
           {isAuthenticated ? (
-            <Link href="/dashboard" className="w-full sm:w-auto">
+            <Link href="/uchet" className="w-full sm:w-auto">
               <Button className="w-full sm:w-auto min-h-[52px] px-10 text-base font-bold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-2xl shadow-xl shadow-blue-600/30 hover:scale-105 transition-all">
                 <span>В панель управления</span>
                 <ArrowRight className="w-5 h-5 ml-2" />

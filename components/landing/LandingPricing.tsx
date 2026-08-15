@@ -131,7 +131,7 @@ export function LandingPricing({ isAuthenticated = false, plans }: LandingPricin
               </div>
 
               <div className="pt-8 mt-6 border-t border-border">
-                <Link href={isAuthenticated ? '/dashboard/subscription' : '/register'}>
+                <Link href={isAuthenticated ? '/uchet/subscription' : '/register'}>
                   <Button
                     variant={plan.is_popular ? 'default' : 'outline'}
                     className={`w-full min-h-[48px] rounded-2xl font-bold text-sm ${

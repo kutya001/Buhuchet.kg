@@ -95,10 +95,10 @@ export function DashboardShell({
           <nav className="space-y-1">
             {canViewDashboard && (
               <Link
-                href="/dashboard"
+                href="/uchet"
                 prefetch={true}
                 className={`flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                  isActive('/dashboard')
+                  isActive('/uchet')
                     ? 'bg-blue-600/20 text-blue-500 dark:text-blue-400 border border-blue-500/30 font-bold'
                     : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
                 }`}
@@ -111,10 +111,10 @@ export function DashboardShell({
 
             {canViewDocuments && (
               <Link
-                href="/dashboard/documents"
+                href="/uchet/documents"
                 prefetch={true}
                 className={`flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                  isActive('/dashboard/documents')
+                  isActive('/uchet/documents')
                     ? 'bg-sky-600/20 text-sky-500 dark:text-sky-400 border border-sky-500/30 font-bold'
                     : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
                 }`}
@@ -127,10 +127,10 @@ export function DashboardShell({
 
             {canViewCounterparties && (
               <Link
-                href="/dashboard/counterparties"
+                href="/uchet/counterparties"
                 prefetch={true}
                 className={`flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                  isActive('/dashboard/counterparties')
+                  isActive('/uchet/counterparties')
                     ? 'bg-amber-600/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 font-bold'
                     : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
                 }`}
@@ -143,10 +143,10 @@ export function DashboardShell({
 
             {canViewFiles && (
               <Link
-                href="/dashboard/files"
+                href="/uchet/files"
                 prefetch={true}
                 className={`flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                  isActive('/dashboard/files')
+                  isActive('/uchet/files')
                     ? 'bg-emerald-600/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 font-bold'
                     : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
                 }`}
@@ -159,10 +159,10 @@ export function DashboardShell({
 
             {canViewCompany && (
               <Link
-                href="/dashboard/company"
+                href="/uchet/company"
                 prefetch={true}
                 className={`flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                  isActive('/dashboard/company')
+                  isActive('/uchet/company')
                     ? 'bg-muted text-foreground border border-border font-bold'
                     : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
                 }`}
@@ -175,10 +175,10 @@ export function DashboardShell({
 
             {canViewEmployees && (
               <Link
-                href="/dashboard/employees"
+                href="/uchet/employees"
                 prefetch={true}
                 className={`flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                  isActive('/dashboard/employees')
+                  isActive('/uchet/employees')
                     ? 'bg-purple-600/20 text-purple-600 dark:text-purple-400 border border-purple-500/30 font-bold'
                     : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
                 }`}
@@ -192,10 +192,10 @@ export function DashboardShell({
             {/* Если нет активной компании: показываем ссылку на подачу заявки */}
             {!companyName && !isSuperAdmin && (
               <Link
-                href="/dashboard/pending"
+                href="/uchet/pending"
                 prefetch={true}
                 className={`flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-bold transition-all mt-3 min-h-[44px] ${
-                  isActive('/dashboard/pending')
+                  isActive('/uchet/pending')
                     ? 'bg-sky-600/20 text-sky-400 border border-sky-500/30'
                     : 'text-sky-400 bg-sky-500/10 border border-sky-500/30 hover:bg-sky-500/20'
                 }`}
@@ -208,7 +208,7 @@ export function DashboardShell({
 
             {isSuperAdmin && (
               <Link
-                href="/super-admin"
+                href="/admin"
                 prefetch={true}
                 className="flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium text-amber-400 bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/20 transition-all mt-4 min-h-[44px]"
                 title="Панель Суперадмина"
@@ -222,7 +222,7 @@ export function DashboardShell({
 
         {/* Профиль и Выход */}
         <div className="pt-4 border-t border-border space-y-3">
-          <Link href="/dashboard/profile" prefetch={true} className="flex items-center space-x-3 px-1 hover:opacity-80 transition-opacity">
+          <Link href="/uchet/profile" prefetch={true} className="flex items-center space-x-3 px-1 hover:opacity-80 transition-opacity">
             <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-foreground flex-shrink-0">
               <User className="h-4 w-4" />
             </div>
@@ -314,10 +314,10 @@ export function DashboardShell({
             <div className="grid grid-cols-2 gap-2 pt-1">
               {canViewDashboard && (
                 <Link
-                  href="/dashboard"
+                  href="/uchet"
                   onClick={() => setIsMobileMenuOpen(false)}
                   className={`flex items-center space-x-2.5 p-3 rounded-2xl border text-xs font-medium ${
-                    isActive('/dashboard') ? 'bg-blue-600/20 border-blue-500/40 text-blue-400 font-bold' : 'bg-muted/40 border-border text-foreground'
+                    isActive('/uchet') ? 'bg-blue-600/20 border-blue-500/40 text-blue-400 font-bold' : 'bg-muted/40 border-border text-foreground'
                   }`}
                 >
                   <LayoutDashboard className="h-4 w-4 text-blue-500" />
@@ -327,10 +327,10 @@ export function DashboardShell({
 
               {canViewDocuments && (
                 <Link
-                  href="/dashboard/documents"
+                  href="/uchet/documents"
                   onClick={() => setIsMobileMenuOpen(false)}
                   className={`flex items-center space-x-2.5 p-3 rounded-2xl border text-xs font-medium ${
-                    isActive('/dashboard/documents') ? 'bg-sky-600/20 border-sky-500/40 text-sky-400 font-bold' : 'bg-muted/40 border-border text-foreground'
+                    isActive('/uchet/documents') ? 'bg-sky-600/20 border-sky-500/40 text-sky-400 font-bold' : 'bg-muted/40 border-border text-foreground'
                   }`}
                 >
                   <FileText className="h-4 w-4 text-sky-500" />
@@ -340,10 +340,10 @@ export function DashboardShell({
 
               {canViewCounterparties && (
                 <Link
-                  href="/dashboard/counterparties"
+                  href="/uchet/counterparties"
                   onClick={() => setIsMobileMenuOpen(false)}
                   className={`flex items-center space-x-2.5 p-3 rounded-2xl border text-xs font-medium ${
-                    isActive('/dashboard/counterparties') ? 'bg-amber-600/20 border-amber-500/40 text-amber-400 font-bold' : 'bg-muted/40 border-border text-foreground'
+                    isActive('/uchet/counterparties') ? 'bg-amber-600/20 border-amber-500/40 text-amber-400 font-bold' : 'bg-muted/40 border-border text-foreground'
                   }`}
                 >
                   <Users className="h-4 w-4 text-amber-500" />
@@ -353,10 +353,10 @@ export function DashboardShell({
 
               {canViewFiles && (
                 <Link
-                  href="/dashboard/files"
+                  href="/uchet/files"
                   onClick={() => setIsMobileMenuOpen(false)}
                   className={`flex items-center space-x-2.5 p-3 rounded-2xl border text-xs font-medium ${
-                    isActive('/dashboard/files') ? 'bg-emerald-600/20 border-emerald-500/40 text-emerald-400 font-bold' : 'bg-muted/40 border-border text-foreground'
+                    isActive('/uchet/files') ? 'bg-emerald-600/20 border-emerald-500/40 text-emerald-400 font-bold' : 'bg-muted/40 border-border text-foreground'
                   }`}
                 >
                   <FolderOpen className="h-4 w-4 text-emerald-500" />
@@ -366,10 +366,10 @@ export function DashboardShell({
 
               {canViewCompany && (
                 <Link
-                  href="/dashboard/company"
+                  href="/uchet/company"
                   onClick={() => setIsMobileMenuOpen(false)}
                   className={`flex items-center space-x-2.5 p-3 rounded-2xl border text-xs font-medium ${
-                    isActive('/dashboard/company') ? 'bg-muted border-border font-bold' : 'bg-muted/40 border-border text-foreground'
+                    isActive('/uchet/company') ? 'bg-muted border-border font-bold' : 'bg-muted/40 border-border text-foreground'
                   }`}
                 >
                   <Building2 className="h-4 w-4 text-foreground" />
@@ -379,10 +379,10 @@ export function DashboardShell({
 
               {canViewEmployees && (
                 <Link
-                  href="/dashboard/employees"
+                  href="/uchet/employees"
                   onClick={() => setIsMobileMenuOpen(false)}
                   className={`flex items-center space-x-2.5 p-3 rounded-2xl border text-xs font-medium ${
-                    isActive('/dashboard/employees') ? 'bg-purple-600/20 border-purple-500/40 text-purple-400 font-bold' : 'bg-muted/40 border-border text-foreground'
+                    isActive('/uchet/employees') ? 'bg-purple-600/20 border-purple-500/40 text-purple-400 font-bold' : 'bg-muted/40 border-border text-foreground'
                   }`}
                 >
                   <Users className="h-4 w-4 text-purple-400" />
@@ -391,10 +391,10 @@ export function DashboardShell({
               )}
 
               <Link
-                href="/dashboard/profile"
+                href="/uchet/profile"
                 onClick={() => setIsMobileMenuOpen(false)}
                 className={`flex items-center space-x-2.5 p-3 rounded-2xl border text-xs font-medium col-span-2 ${
-                  isActive('/dashboard/profile') ? 'bg-primary/20 border-primary/40 font-bold' : 'bg-muted/40 border-border text-foreground'
+                  isActive('/uchet/profile') ? 'bg-primary/20 border-primary/40 font-bold' : 'bg-muted/40 border-border text-foreground'
                 }`}
               >
                 <User className="h-4 w-4 text-primary" />
@@ -403,7 +403,7 @@ export function DashboardShell({
 
               {isSuperAdmin && (
                 <Link
-                  href="/super-admin"
+                  href="/admin"
                   onClick={() => setIsMobileMenuOpen(false)}
                   className="flex items-center space-x-2.5 p-3 rounded-2xl border border-amber-500/40 bg-amber-500/10 text-amber-400 text-xs font-bold col-span-2"
                 >

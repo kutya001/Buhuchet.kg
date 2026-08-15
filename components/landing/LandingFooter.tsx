@@ -75,8 +75,8 @@ export function LandingFooter() {
                 </Link>
               </li>
               <li>
-                <Link href="/dashboard" className="hover:text-foreground transition-colors">
-                  Рабочий дашборд
+                <Link href="/uchet" className="hover:text-foreground transition-colors">
+                  Рабочий кабинет (Учёт)
                 </Link>
               </li>
               <li>

@@ -53,7 +53,7 @@ export type ActionResponse<T = any> = {
 
 ---
 
-### 3.1 Модуль «Моя Организация» (`app/dashboard/company/actions.ts`)
+### 3.1 Модуль «Моя Организация» (`app/uchet/company/actions.ts`)
 
 #### `getCompanyProfileStatsAction`
 - **Auth**: Private (Tenant)
@@ -86,7 +86,7 @@ export type ActionResponse<T = any> = {
 
 ---
 
-### 3.2 Модуль «Электронный Документооборот (ЭДО)» (`app/dashboard/documents/actions.ts`)
+### 3.2 Модуль «Электронный Документооборот (ЭДО)» (`app/uchet/documents/actions.ts`)
 
 #### `getDocumentsAction`
 - **Auth**: Private (Tenant)
@@ -121,7 +121,7 @@ export type ActionResponse<T = any> = {
 
 ---
 
-### 3.3 Модуль «Контрагенты и Каталог» (`app/dashboard/counterparties/actions.ts`)
+### 3.3 Модуль «Контрагенты и Каталог» (`app/uchet/counterparties/actions.ts`)
 
 #### `getCounterpartiesAction`
 - **Auth**: Private (Tenant)
@@ -153,7 +153,7 @@ export type ActionResponse<T = any> = {
 
 ---
 
-### 3.4 Модуль «Сотрудники и Роли RBAC» (`app/dashboard/employees/actions.ts`)
+### 3.4 Модуль «Сотрудники и Роли RBAC» (`app/uchet/employees/actions.ts`)
 
 #### `getMyEmployeeProfileInfoAction`
 - **Auth**: Private (Tenant / Authenticated)
@@ -244,7 +244,7 @@ export type ActionResponse<T = any> = {
 
 ---
 
-### 3.5 Модуль «Облачный Архив R2 и Файлы» (`app/dashboard/files/actions.ts` & `archive-actions.ts`)
+### 3.5 Модуль «Облачный Архив и Файлы» (`app/uchet/files/actions.ts` & `archive-actions.ts`)
 
 #### `getCompanyFilesAction`
 - **Auth**: Private (Tenant)
@@ -328,7 +328,7 @@ export type ActionResponse<T = any> = {
 
 ---
 
-### 3.6 Панель Суперадминистратора (`app/super-admin/actions.ts`)
+### 3.6 Панель Суперадминистратора (`app/admin/actions.ts` & `app/admin/telegram-actions.ts`)
 
 #### `getSuperAdminCompaniesAction`
 - **Auth**: SuperAdmin (`is_super_admin = true`)
@@ -449,7 +449,7 @@ export type ActionResponse<T = any> = {
 
 ---
 
-### 3.7 Модуль «Гостевой Режим и Заявки на Вступление» (`app/dashboard/pending/actions.ts`)
+### 3.7 Модуль «Гостевой Режим и Заявки на Вступление» (`app/uchet/pending/actions.ts`)
 
 #### `searchCompanyAction`
 - **Auth**: Authenticated (Любой авторизованный пользователь / Гость)

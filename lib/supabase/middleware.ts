@@ -46,7 +46,7 @@ export async function updateSession(request: NextRequest) {
   // Публичные маршруты
   const isAuthRoute = pathname.startsWith('/login') || pathname.startsWith('/register');
   const isOnboardingRoute = pathname.startsWith('/onboarding');
-  const isSuperAdminRoute = pathname.startsWith('/super-admin');
+  const isSuperAdminRoute = pathname.startsWith('/admin');
 
   // 1. Если пользователь не авторизован и заходит на защищенный маршрут
   if (!user && !isAuthRoute) {
@@ -58,7 +58,7 @@ export async function updateSession(request: NextRequest) {
   // 2. Если пользователь авторизован и заходит на /login
   if (user && isAuthRoute) {
     const url = request.nextUrl.clone();
-    url.pathname = '/dashboard';
+    url.pathname = '/uchet';
     return NextResponse.redirect(url);
   }
 
@@ -80,7 +80,7 @@ export async function updateSession(request: NextRequest) {
     // Если компания есть, но пользователь снова пытается зайти на /onboarding
     if (profile?.company_id && isOnboardingRoute) {
       const url = request.nextUrl.clone();
-      url.pathname = '/dashboard';
+      url.pathname = '/uchet';
       return NextResponse.redirect(url);
     }
   }
@@ -95,7 +95,7 @@ export async function updateSession(request: NextRequest) {
 
     if (!profile || !profile.is_super_admin) {
       const url = request.nextUrl.clone();
-      url.pathname = '/dashboard';
+      url.pathname = '/uchet';
       return NextResponse.redirect(url);
     }
   }

@@ -5,8 +5,8 @@ import { Upload, Camera, FileText, X, Loader2, CheckCircle2, AlertCircle, Folder
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { getPresignedUploadUrlAction, uploadFileDirectlyServerAction } from '@/app/dashboard/files/actions';
-import { checkDocumentPeriodLockAction } from '@/app/dashboard/documents/actions';
+import { getPresignedUploadUrlAction, uploadFileDirectlyServerAction } from '@/app/uchet/files/actions';
+import { checkDocumentPeriodLockAction } from '@/app/uchet/documents/actions';
 import type { FileCategory } from '@/types/database.types';
 import { formatBytes } from '@/lib/utils';
 import imageCompression from 'browser-image-compression';

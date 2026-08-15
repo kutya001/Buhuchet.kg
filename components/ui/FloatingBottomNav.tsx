@@ -23,10 +23,10 @@ export function FloatingBottomNav({ userProfile }: FloatingBottomNavProps) {
     return (
       <nav className="md:hidden fixed bottom-3 left-3 right-3 h-16 rounded-[28px] bg-card/90 backdrop-blur-2xl border border-border/80 shadow-2xl z-40 flex items-center justify-around px-4 transition-colors duration-300 pb-[env(safe-area-inset-bottom,0px)]">
         <Link
-          href="/dashboard/pending"
+          href="/uchet/pending"
           prefetch={true}
           className={`flex flex-col items-center justify-center space-y-1 min-w-[56px] transition-colors ${
-            isActive('/dashboard/pending') ? 'text-sky-400 font-bold' : 'text-muted-foreground hover:text-foreground'
+            isActive('/uchet/pending') ? 'text-sky-400 font-bold' : 'text-muted-foreground hover:text-foreground'
           }`}
         >
           <LayoutDashboard className="h-5 w-5" />
@@ -34,10 +34,10 @@ export function FloatingBottomNav({ userProfile }: FloatingBottomNavProps) {
         </Link>
 
         <Link
-          href="/dashboard/profile"
+          href="/uchet/profile"
           prefetch={true}
           className={`flex flex-col items-center justify-center space-y-1 min-w-[56px] transition-colors ${
-            isActive('/dashboard/profile') ? 'text-primary font-bold' : 'text-muted-foreground hover:text-foreground'
+            isActive('/uchet/profile') ? 'text-primary font-bold' : 'text-muted-foreground hover:text-foreground'
           }`}
         >
           <FileText className="h-5 w-5" />
@@ -51,10 +51,10 @@ export function FloatingBottomNav({ userProfile }: FloatingBottomNavProps) {
     <nav className="md:hidden fixed bottom-3 left-3 right-3 h-16 rounded-[28px] bg-card/90 backdrop-blur-2xl border border-border/80 shadow-2xl z-40 flex items-center justify-around px-4 transition-colors duration-300 pb-[env(safe-area-inset-bottom,0px)]">
       {/* 1. СЛЕВА: Главная */}
       <Link
-        href="/dashboard"
+        href="/uchet"
         prefetch={true}
         className={`flex flex-col items-center justify-center space-y-1 min-w-[56px] transition-colors ${
-          isActive('/dashboard') ? 'text-blue-400 font-bold' : 'text-muted-foreground hover:text-foreground'
+          isActive('/uchet') ? 'text-blue-400 font-bold' : 'text-muted-foreground hover:text-foreground'
         }`}
       >
         <LayoutDashboard className="h-5 w-5" />
@@ -65,7 +65,7 @@ export function FloatingBottomNav({ userProfile }: FloatingBottomNavProps) {
       {canCreateDoc && (
         <div className="relative -top-5 flex justify-center items-center">
           <Link
-            href="/dashboard/documents/new"
+            href="/uchet/documents/new"
             prefetch={true}
             className="flex items-center justify-center h-14 w-14 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-500 text-white shadow-xl shadow-blue-600/40 border-4 border-background active:scale-95 transition-transform"
           >
@@ -77,10 +77,10 @@ export function FloatingBottomNav({ userProfile }: FloatingBottomNavProps) {
       {/* 3. СПРАВА: Документооборот (Только если есть право view) */}
       {canViewDocs && (
         <Link
-          href="/dashboard/documents"
+          href="/uchet/documents"
           prefetch={true}
           className={`flex flex-col items-center justify-center space-y-1 min-w-[56px] transition-colors ${
-            isActive('/dashboard/documents') ? 'text-sky-400 font-bold' : 'text-muted-foreground hover:text-foreground'
+            isActive('/uchet/documents') ? 'text-sky-400 font-bold' : 'text-muted-foreground hover:text-foreground'
           }`}
         >
           <FileText className="h-5 w-5" />

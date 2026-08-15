@@ -22,8 +22,28 @@ export async function signInAction(formData: FormData) {
     redirect(`/login?error=${encodeURIComponent(errorMessage)}`);
   }
 
+  // Проверяем статус суперадмина для корректного контура
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  let targetPath = '/uchet';
+  if (user) {
+    const { data: dbUser } = await supabase
+      .from('users')
+      .select('is_super_admin, company_id')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (dbUser?.is_super_admin) {
+      targetPath = '/admin';
+    } else if (!dbUser?.company_id) {
+      targetPath = '/uchet/pending';
+    }
+  }
+
   revalidatePath('/', 'layout');
-  redirect('/dashboard');
+  redirect(targetPath);
 }
 
 export async function signUpAction(formData: FormData) {
@@ -67,7 +87,7 @@ export async function signUpAction(formData: FormData) {
   revalidatePath('/', 'layout');
 
   if (accountType === 'employee') {
-    redirect('/dashboard/pending');
+    redirect('/uchet/pending');
   } else {
     redirect('/onboarding');
   }
