@@ -92,10 +92,11 @@ async function runRbacTests() {
     console.log('\n📦 [1/3] Создание изолированного тестового окружения...');
 
     // 1. Создаем тестовую компанию (без owner_id на первом шаге из-за FK)
+    const testInn = `99${Date.now().toString().slice(-12)}`;
     const { error: compErr } = await supabase.from('companies').insert({
       id: testCompId,
       name: '__test_rbac_company__',
-      inn: '99999999999999',
+      inn: testInn,
       status: 'active',
       is_active: true,
       owner_id: null,

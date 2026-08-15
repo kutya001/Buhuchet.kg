@@ -10,6 +10,11 @@ SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
 BEGIN
+    -- Если удаляется вся компания целиком (каскад), разрешаем очистку
+    IF NOT EXISTS (SELECT 1 FROM public.companies WHERE id = OLD.company_id) THEN
+        RETURN OLD;
+    END IF;
+
     IF OLD.is_system = true THEN
         RAISE EXCEPTION '403 Forbidden: Запрещено удалять системные роли организации (Владелец и др.)';
     END IF;

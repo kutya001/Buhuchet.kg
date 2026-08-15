@@ -14,13 +14,43 @@
 
 ---
 
-## 🗄️ 2. Подробный Реестр Таблиц, Полей и Связей
+## 🗄️ 2. Сводная Карта Таблиц Базы Данных (Database Schema Overview)
 
-Ниже описана каждая из **19 таблиц** базы данных с указанием её назначения, связей и подробного описания всех столбцов.
+Ниже представлена сводная матрица всех **21 таблиц** базы данных PostgreSQL / Supabase с их бизнес-ролью, назначением в платформе и внешними связями:
+
+| № | Таблица | Краткое описание | Назначение и Бизнес-роль в системе | Ключевые внешние связи (Foreign Keys) |
+|:---:|---|---|---|---|
+| **1** | [`companies`](#21-таблица-companies--организации-юридические-лица-кр) | Организации (Тенанты) | Хранит профили компаний и ИП Кыргызстана (ИНН 14 знаков, реквизиты, банковские счета, статус модерации, лимиты хранилища). Главный тенант платформы. | `owner_id ➔ users(id)` |
+| **2** | [`users`](#22-таблица-users--пользователи-и-профили-сотрудников) | Пользователи и Профили | Учетные записи сотрудников, привязка к компании, глобальный флаг `is_super_admin`, контакты, должность и привязка к Telegram. | `company_id ➔ companies(id)`, `role_id ➔ company_roles(id)` |
+| **3** | [`company_roles`](#23-таблица-company_roles--роли-и-права-доступа-rbac) | Роли и Права (RBAC) | Системные и пользовательские роли с гранулярной JSONB-матрицей разрешений. Системные роли защищены триггером от удаления. | `company_id ➔ companies(id)` |
+| **4** | [`company_join_requests`](#219-таблица-company_join_requests--заявки-сотрудников-на-вступление-в-организацию) | Заявки на вступление | Заявки соискателей/сотрудников на присоединение к существующей компании со статусами `pending`, `approved`, `rejected`, `cancelled`. | `user_id ➔ users(id)`, `company_id ➔ companies(id)`, `reviewed_by ➔ users(id)` |
+| **5** | [`company_partnerships`](#24-таблица-company_partnerships--партнерства-и-связи-организаций) | B2B Связи Партнеров | Партнерские соглашения между организациями внутри платформы для сквозного обмена электронными документами. | `requester_company_id ➔ companies(id)`, `target_company_id ➔ companies(id)` |
+| **6** | [`counterparties`](#25-таблица-counterparties--контрагенты) | Внешние Контрагенты | Справочник внешних контрагентов компаний (поставщики, покупатели, их ИНН, банковские счета и контакты). | `company_id ➔ companies(id)` |
+| **7** | [`file_categories`](#26-таблица-file_categories--категории-файлов) | Категории и Папки | Иерархический рубрикатор файлов компании (Бухгалтерия, Кадры, Договоры, Уставные документы). | `company_id ➔ companies(id)` |
+| **8** | [`documents`](#27-таблица-documents--реестр-документов-первичка-эдо) | Реестр Первички (ЭДО) | Накладные, акты, счета-фактуры, счета на оплату. Хранит дату, суммы, статус оплаты, признак закрытия периода. | `company_id ➔ companies(id)`, `sender_company_id ➔ companies(id)`, `receiver_company_id ➔ companies(id)`, `counterparty_id ➔ counterparties(id)`, `author_id ➔ users(id)` |
+| **9** | [`files`](#28-таблица-files--прикрепленные-файлы-и-сканы) | Физические Файлы R2 | Метаданные физических объектов в Cloudflare R2: SHA256-хеш (дедупликация), размер, MIME-тип, путь к S3-ключу. | `company_id ➔ companies(id)`, `category_id ➔ file_categories(id)` |
+| **10** | [`file_owners`](#29-таблица-file_owners--совладельцы-файлов-copy-on-write) | Совладельцы Файлов (CoW) | Обеспечивает Copy-on-Write дедупликацию: связывает один физический файл с несколькими организациями. | `file_id ➔ files(id) ON DELETE CASCADE`, `company_id ➔ companies(id)`, `document_id ➔ documents(id)` |
+| **11** | [`document_items`](#210-таблица-document_items--товарные-позиции-документа) | Товарные Позиции | Детализация строк накладных и счетов: номенклатура, количество, цена, сумма без НДС, НДС (12%), итого. | `document_id ➔ documents(id) ON DELETE CASCADE` |
+| **12** | [`document_logs`](#211-таблица-document_logs--журнал-аудита-и-статусов-документов) | Аудит Документооборота | Неизменяемый журнал истории каждого документа (создание, отправка, согласование, прикрепление файлов). | `document_id ➔ documents(id) ON DELETE CASCADE`, `user_id ➔ users(id)` |
+| **13** | [`company_closed_periods`](#212-таблица-company_closed_periods--закрытые-отчетные-периоды) | Закрытые Периоды | Реестр закрытых бухгалтерских периодов (год, месяц) с раздельными флагами `lock_documents`, `lock_files` и статусом (`open`, `closed`, `partial`). | `company_id ➔ companies(id)`, `closed_by ➔ users(id)`, `opened_by ➔ users(id)` |
+| **14** | [`subscriptions`](#213-таблица-subscriptions--подписки-и-тарифные-планы) | Подписки и Тарифы | Учет тарифного плана тенанта (`standard`, `business`, `corporate`), срока действия (`expires_at`) и статуса (`active`, `past_due`). | `company_id ➔ companies(id)` |
+| **15** | [`subscription_payments`](#214-таблица-subscription_payments--история-платежей-за-сервис) | История Платежей | Транзакции оплаты подписок через платежные шлюзы Кыргызстана (ЭЛСОМ, MBANK, О!Деньги, Банк). | `subscription_id ➔ subscriptions(id)`, `company_id ➔ companies(id)` |
+| **16** | [`telegram_connections`](#215-таблица-telegram_connections--привязанные-telegram-аккаунты) | Привязки Telegram | Активные связки аккаунтов пользователей и организаций с Telegram чатами (`telegram_chat_id`). | `user_id ➔ users(id)`, `company_id ➔ companies(id)` |
+| **17** | [`telegram_verification_codes`](#216-таблица-telegram_verification_codes--коды-подтверждения-telegram) | Коды Авторизации Telegram | Временные 4-значные одноразовые коды верификации для связывания Telegram аккаунта с профилем платформы. | `user_id ➔ users(id)`, `company_id ➔ companies(id)` |
+| **18** | [`telegram_logs`](#217-таблица-telegram_logs--журнал-telegram-уведомлений) | Журнал Telegram Бота | История входящих и исходящих сообщений, вебхуков и системных уведомлений через Telegram Bot API. | — |
+| **19** | [`pending_file_deletions`](#218-таблица-pending_file_deletions--очередь-физического-удаления-файлов-r2) | Очередь Очистки R2 | Буферная очередь отложенного физического удаления неиспользуемых файлов из Cloudflare R2 (batch до 1000). | `file_id ➔ files(id) ON DELETE SET NULL` |
+| **20** | [`admin_audit_logs`](#220-таблица-admin_audit_logs--журнал-аудита-суперадминистратора) | Аудит Суперадминистратора | Протоколирование действий суперадминистратора платформы (активация компаний, Telegram-рассылки, пакетная очистка R2). | `admin_id ➔ users(id)` |
+| **21** | [`nomenclature`](#221-таблица-nomenclature--справочник-номенклатуры-товаров-и-услуг) | Справочник Номенклатуры | Каталог товаров, работ и услуг организации с ценами, единицами измерения (шт, кг, услуга) и ставками НДС. | `company_id ➔ companies(id)` |
 
 ---
 
-### 2.1 Таблица `companies` — Организации (Юридические лица КР)
+## 🔍 3. Подробная Спецификация Таблиц, Полей и Связей
+
+Ниже детально описана структура каждой таблицы с типами данных, ограничениями и SQL-схемами.
+
+---
+
+### 3.1 Таблица `companies` — Организации (Юридические лица КР)
 
 **Описание и Назначение**: Хранит профили всех зарегистрированных на платформе организаций и ИП Кыргызской Республики. Является главным тенантом (арендатором) платформы.
 
@@ -791,9 +821,90 @@ CREATE INDEX idx_company_join_requests_status ON public.company_join_requests(st
 
 ---
 
-## ⚙️ 3. Хранимые Функции и Триггеры PostgreSQL
+### 3.20 Таблица `admin_audit_logs` — Журнал Аудита Суперадминистратора
 
-### 3.1 Замок Закрытых Отчетных Периодов `check_closed_period_lock()`
+**Описание и Назначение**: Неизменяемый журнал протоколирования привилегированных действий суперадминистратора платформы (активация компаний, Telegram-рассылки, пакетная очистка Cloudflare R2, ручная модификация записей в инспекторе).
+
+**Внешние связи**:
+- `admin_id` ➔ `users.id` (ON DELETE CASCADE)
+
+#### Поля и столбцы таблицы `admin_audit_logs`:
+
+| Столбец | Тип данных | Ограничения / Default | Описание и Назначение | Связи / FK |
+|---|---|---|---|---|
+| `id` | `UUID` | `PRIMARY KEY`, `gen_random_uuid()` | Уникальный идентификатор записи аудита | — |
+| `admin_id` | `UUID` | `NOT NULL` | Идентификатор суперадминистратора | `users.id` |
+| `action` | `TEXT` | `NOT NULL` | Системный тип действия (`company_approved`, `storage_cleanup_processed`, `telegram_broadcast_sent` и т.д.) | — |
+| `target_type` | `TEXT` | `NOT NULL` | Тип целевого объекта (`company`, `user`, `files`, `telegram`, `table_row`) | — |
+| `target_id` | `UUID` | `NULL` | Идентификатор целевой сущности | — |
+| `details` | `JSONB` | `DEFAULT '{}'::jsonb` | Контекстные метаданные события (параметры, количество, результат) | — |
+| `ip_address` | `TEXT` | `NULL` | IP-адрес клиента при выполнении действия | — |
+| `created_at` | `TIMESTAMPTZ` | `NOT NULL DEFAULT NOW()` | Время фиксации действия | — |
+
+```sql
+CREATE TABLE public.admin_audit_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    admin_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+    action TEXT NOT NULL,
+    target_type TEXT NOT NULL,
+    target_id UUID,
+    details JSONB DEFAULT '{}'::jsonb,
+    ip_address TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_admin_audit_logs_admin ON public.admin_audit_logs(admin_id, created_at DESC);
+CREATE INDEX idx_admin_audit_logs_action ON public.admin_audit_logs(action, target_type);
+```
+
+---
+
+### 3.21 Таблица `nomenclature` — Справочник Номенклатуры Товаров и Услуг
+
+**Описание и Назначение**: Каталог товарно-материальных ценностей, готовой продукции, работ и услуг организации для автоподстановки в первичные документы (накладные, акты, счета-фактуры).
+
+**Внешние связи**:
+- `company_id` ➔ `companies.id` (ON DELETE CASCADE)
+
+#### Поля и столбцы таблицы `nomenclature`:
+
+| Столбец | Тип данных | Ограничения / Default | Описание и Назначение | Связи / FK |
+|---|---|---|---|---|
+| `id` | `UUID` | `PRIMARY KEY`, `gen_random_uuid()` | Идентификатор номенклатурной позиции | — |
+| `company_id` | `UUID` | `NOT NULL` | Организация-владелец справочника | `companies.id` |
+| `name` | `TEXT` | `NOT NULL` | Наименование товара, работы или услуги | — |
+| `sku` | `VARCHAR(100)` | `NULL` | Артикул / Номенклатурный номер (SKU) | — |
+| `unit` | `VARCHAR(20)` | `DEFAULT 'шт'` | Единица измерения (`шт`, `кг`, `л`, `м`, `услуга`, `комплект`) | — |
+| `price` | `NUMERIC(15,2)` | `DEFAULT 0.00` | Базовая цена продажи без учета скидок | — |
+| `vat_rate` | `NUMERIC(5,2)` | `DEFAULT 12.00` | Ставка НДС (12% в КР или 0% для льготников) | — |
+| `description` | `TEXT` | `NULL` | Дополнительное описание характеристик | — |
+| `is_active` | `BOOLEAN` | `DEFAULT TRUE` | Флаг доступности позиции при заполнении документов | — |
+| `created_at` | `TIMESTAMPTZ` | `DEFAULT NOW()` | Время создания позиции | — |
+| `updated_at` | `TIMESTAMPTZ` | `DEFAULT NOW()` | Время последнего обновления | — |
+
+```sql
+CREATE TABLE public.nomenclature (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    company_id UUID NOT NULL REFERENCES public.companies(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    sku VARCHAR(100),
+    unit VARCHAR(20) DEFAULT 'шт',
+    price NUMERIC(15,2) DEFAULT 0.00,
+    vat_rate NUMERIC(5,2) DEFAULT 12.00,
+    description TEXT,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_nomenclature_company ON public.nomenclature(company_id, name);
+```
+
+---
+
+## ⚙️ 4. Хранимые Функции и Триггеры PostgreSQL
+
+### 4.1 Замок Закрытых Отчетных Периодов `check_closed_period_lock()`
 Срабатывает перед `INSERT`, `UPDATE`, `DELETE` на таблицах `documents` и `files`. Проверяет права текущего пользователя через мемоизированный `(SELECT auth.uid())`. Пользователи с ролями `owner` и `is_super_admin` пропускаются. Для остальных проверяется наличие записи в `company_closed_periods` или превышение порога `companies.closed_period_until`.
 
 ```sql

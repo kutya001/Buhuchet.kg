@@ -349,22 +349,54 @@ export type ActionResponse<T = any> = {
 - **Таблицы БД**: `users`, `companies`
 
 #### `resetUserPasswordAdminAction`
-- **Auth**: SuperAdmin
+- **Auth**: SuperAdmin (`requireSuperAdminSession`)
 - **Input**: `userId: string, newPassword?: string`
 - **Response**: `ActionResponse<{ newPassword: string }>`
 - **Бизнес-логика**: Прямой административный сброс пароля в Supabase Auth (GoTrue) через Service Role API (`admin.updateUserById`), пометка `must_change_password = true` в `public.users`.
 - **Таблицы БД**: `auth.users`, `public.users`
 
+#### `getPlatformSummaryStatsAction`
+- **Auth**: SuperAdmin (`requireSuperAdminSession`)
+- **Response**: `ActionResponse<{ companies: object, users: object, documents: object, files: object, subscriptions: object }>`
+- **Бизнес-логика**: Возвращает сводную аналитику платформы за один проход через SQL-функцию `get_platform_summary_stats()`.
+- **Таблицы БД**: `companies`, `users`, `documents`, `files`, `subscriptions`
+
+#### `processStorageCleanupQueueAction`
+- **Auth**: SuperAdmin (`requireSuperAdminSession`)
+- **Input**: `batchSize?: number` (default: 200)
+- **Response**: `ActionResponse<{ processed: number, errors: string[] }>`
+- **Бизнес-логика**: Выбирает необработанные записи из `pending_file_deletions`, отправляет пакетный запрос `DeleteObjectsCommand` в Cloudflare R2 (до 1000 объектов) и фиксирует результат в `admin_audit_logs`.
+- **Таблицы БД**: `pending_file_deletions`, `admin_audit_logs`
+
+#### `getPaginatedCompaniesAdminAction` / `getPaginatedUsersAdminAction` / `getPaginatedFilesAdminAction`
+- **Auth**: SuperAdmin (`requireSuperAdminSession`)
+- **Input**: `{ page?: number, pageSize?: number, search?: string, status?: string }`
+- **Response**: `ActionResponse<{ items: any[], total: number, page: number, pageSize: number }>`
+- **Бизнес-логика**: Серверная пагинация с использованием `.range()` и точным счетчиком `{ count: 'exact' }`.
+
+#### `getAllSubscriptionsAdminAction` / `checkExpiredSubscriptionsAdminAction`
+- **Auth**: SuperAdmin (`requireSuperAdminSession`)
+- **Response**: `ActionResponse<{ updatedCount: number }>`
+- **Бизнес-логика**: Вызов хранимой процедуры `cron_check_expired_subscriptions()` для перевода просроченных тарифов в статус `past_due`.
+- **Таблицы БД**: `subscriptions`
+
+#### `broadcastTelegramMessageAdminAction`
+- **Auth**: SuperAdmin (`requireSuperAdminSession`)
+- **Input**: `{ message: string, targetRole?: string, companyId?: string }`
+- **Response**: `ActionResponse<{ totalTargeted: number, sentCount: number, failCount: number }>`
+- **Бизнес-логика**: Чанкование по 20 сообщений с паузой 1 сек для соблюдения лимитов Telegram API. Фиксация в `admin_audit_logs`.
+- **Таблицы БД**: `telegram_connections`, `admin_audit_logs`
+
 #### `inspectTableDataAdminAction`
-- **Auth**: SuperAdmin
+- **Auth**: SuperAdmin (`requireSuperAdminSession`)
 - **Zod Schema**: `z.object({ tableName: z.string(), limit: z.number().default(100) })`
 - **Response**: `ActionResponse<{ rows: any[], columns: string[] }>`
-- **Таблицы БД**: Прямое чтение любой таблицы PostgreSQL через `adminSupabase`.
+- **Таблицы БД**: Прямое чтение любой разрешенной таблицы PostgreSQL через `adminSupabase`.
 
 #### `updateDbRowAdminAction` / `deleteDbRowAdminAction`
-- **Auth**: SuperAdmin
+- **Auth**: SuperAdmin (`requireSuperAdminSession`)
 - **Response**: `ActionResponse<{ message: string }>`
-- **Бизнес-логика**: Прямая мутация / удаление любых строк PostgreSQL в Инспекторе БД.
+- **Бизнес-логика**: Прямая мутация / удаление строк PostgreSQL в Инспекторе БД с фиксацией в `admin_audit_logs`.
 
 ---
 
