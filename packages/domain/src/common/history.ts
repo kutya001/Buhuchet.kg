@@ -32,8 +32,30 @@ export interface HistoryChange {
   to?: HistoryValue;
 }
 
-/** Поля, значения которых в историю не пишутся никогда (хеш пароля и т. п.). */
+/**
+ * Поля, значения которых в историю не пишутся никогда, — только факт изменения. Кроме списка
+ * секретным считается любое поле с окончанием Hash, Token или Secret (хеш сеанса, код
+ * привязки Telegram, хеш кода страницы контрагента): так новое секретное поле не утечёт случайно.
+ */
 export const HISTORY_SECRET_FIELDS: readonly string[] = ['passwordHash'];
+const SECRET_FIELD_SUFFIX = /(Hash|Token|Secret)$/;
+
+/** Секретное ли поле: по общему правилу или по списку вызова. */
+export function isSecretField(field: string, extra: readonly string[] = []): boolean {
+  return (
+    HISTORY_SECRET_FIELDS.includes(field) ||
+    SECRET_FIELD_SUFFIX.test(field) ||
+    extra.includes(field)
+  );
+}
+
+/** Убрать значения секретных полей из готового списка изменений. */
+export function redactChanges(
+  changes: readonly HistoryChange[],
+  secretFields: readonly string[] = [],
+): HistoryChange[] {
+  return changes.map((c) => (isSecretField(c.field, secretFields) ? { field: c.field } : c));
+}
 
 /** Значение поля для истории: дата — строкой ISO, отсутствие — null, вложенное — как в JSON. */
 export function toHistoryValue(value: unknown): HistoryValue {
@@ -78,7 +100,8 @@ export function sameHistoryValue(a: HistoryValue, b: HistoryValue): boolean {
 export function diffChanges(
   before: Readonly<Record<string, unknown>>,
   patch: Readonly<Record<string, unknown>>,
-  secretFields: readonly string[] = HISTORY_SECRET_FIELDS,
+  /** Секретные поля сверх общего правила (`isSecretField`). */
+  secretFields: readonly string[] = [],
 ): HistoryChange[] {
   const changes: HistoryChange[] = [];
   for (const [field, next] of Object.entries(patch)) {
@@ -86,7 +109,7 @@ export function diffChanges(
     const from = toHistoryValue(before[field]);
     const to = toHistoryValue(next);
     if (sameHistoryValue(from, to)) continue;
-    changes.push(secretFields.includes(field) ? { field } : { field, from, to });
+    changes.push(isSecretField(field, secretFields) ? { field } : { field, from, to });
   }
   return changes;
 }

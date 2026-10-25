@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { withOrgContext, type OrgContext } from './context';
 import { readHistory, updateWithHistory, writeHistory } from './history';
 import { createOrganization, type CreatedOrganization } from './organizations';
-import { auditLog, employees, users } from './schema';
+import { auditLog, employees, orgSettings, roles, users } from './schema';
 import { seedPermissions, seedRoleTemplates } from './seed';
 import { readSpecJson } from './spec-data';
 import { createTestDatabase, databaseAvailable, type TestDatabase } from './testing';
@@ -22,8 +22,12 @@ describe.skipIf(!databaseAvailable())('история изменений и ве
   let t: TestDatabase;
   let a: CreatedOrganization;
   let b: CreatedOrganization;
+  let platformAdminId: string;
+  /** Второй сотрудник организации А — главный бухгалтер. */
+  let chiefUserId: string;
   /** Владелец организации А правит от своего имени. */
   const ctxA = (): OrgContext => ({ orgId: a.orgId, userId: a.ownerUserId });
+  const ctxChief = (): OrgContext => ({ orgId: a.orgId, userId: chiefUserId });
 
   const employee = async (id: string) =>
     (await t.admin.db.select().from(employees).where(eq(employees.id, id)))[0]!;
@@ -36,11 +40,29 @@ describe.skipIf(!databaseAvailable())('история изменений и ве
     await seedPermissions(t.admin.db, refDB.permissions, { update: false });
     await seedRoleTemplates(t.admin.db, refDB.roleTemplates, { update: false });
     const passwordHash = await hashPassword('Bh-4821-temp');
+    const [admin] = await t.admin.db
+      .insert(users)
+      .values({ login: 'platform-admin', passwordHash, isPlatformAdmin: true })
+      .returning({ id: users.id });
+    platformAdminId = admin!.id;
     a = await createOrganization(t.app.db, {
       name: 'Организация А',
       inn: '01811201810456',
       slug: 'org-a',
       owner: { fullName: 'Токтомаматов Бекзат', login: 'owner-a', passwordHash },
+      createdBy: platformAdminId,
+    });
+    const [chief] = await t.admin.db
+      .insert(users)
+      .values({ orgId: a.orgId, login: 'chief-a', passwordHash })
+      .returning({ id: users.id });
+    chiefUserId = chief!.id;
+    await t.admin.db.insert(employees).values({
+      orgId: a.orgId,
+      userId: chiefUserId,
+      fullName: 'Тилекова Алина',
+      shortName: 'Тилекова А.',
+      roleId: a.roles.find((r) => r.templateCode === 'chief')!.id,
     });
     b = await createOrganization(t.app.db, {
       name: 'Организация Б',
@@ -54,9 +76,25 @@ describe.skipIf(!databaseAvailable())('история изменений и ве
     await t?.drop();
   });
 
-  it('новая организация: создание организации и владельца уже в истории', async () => {
-    const [created] = await historyOf(a.ownerEmployeeId);
-    expect(created).toMatchObject({ action: 'create', orgId: a.orgId, actorUserId: null });
+  it('новая организация: всё созданное уже в истории, автор — администратор платформы', async () => {
+    const rows = await withOrgContext(t.app.db, ctxA(), (tx) =>
+      tx.select().from(auditLog).where(eq(auditLog.action, 'create')),
+    );
+    expect(rows.map((r) => r.entity)).toEqual([
+      'organization',
+      'role',
+      'role',
+      'role',
+      'user',
+      'employee',
+      'org_settings',
+    ]);
+    expect(rows.every((r) => r.actorUserId === platformAdminId && r.orgId === a.orgId)).toBe(true);
+    // Без администратора (служебная команда без автора) — «Система».
+    const [ownB] = await withOrgContext(t.app.db, { orgId: b.orgId }, (tx) =>
+      readHistory(tx, 'employee', b.ownerEmployeeId),
+    );
+    expect(ownB).toMatchObject({ action: 'create', actorUserId: null });
   });
 
   it('правка сотрудника пишет в историю: кто, когда, что было и что стало', async () => {
@@ -102,7 +140,7 @@ describe.skipIf(!databaseAvailable())('история изменений и ве
         patch: { fullName: 'Токтомаматов Бекзат Айбекович' },
       }),
     );
-    const second = withOrgContext(t.app.db, ctxA(), (tx) =>
+    const second = withOrgContext(t.app.db, ctxChief(), (tx) =>
       updateWithHistory(tx, {
         table: employees,
         entity: 'employee',
@@ -121,7 +159,15 @@ describe.skipIf(!databaseAvailable())('история изменений и ве
     expect(after.fullName).toBe('Токтомаматов Бекзат Айбекович');
     expect(after.phone).toBe(opened.phone);
     expect(after.version).toBe(opened.version + 1);
-    expect(await historyOf(a.ownerEmployeeId)).toHaveLength(historyBefore + 1);
+    expect(after.updatedBy).toBe(a.ownerUserId);
+    const history = await historyOf(a.ownerEmployeeId);
+    expect(history).toHaveLength(historyBefore + 1);
+    expect(history.at(-1)).toMatchObject({
+      actorUserId: a.ownerUserId,
+      changes: [
+        { field: 'fullName', from: 'Токтомаматов Бекзат', to: 'Токтомаматов Бекзат Айбекович' },
+      ],
+    });
   });
 
   it('одновременная правка: вторая ждёт, пока первая сохранится, и получает предупреждение', async () => {
@@ -144,7 +190,7 @@ describe.skipIf(!databaseAvailable())('история изменений и ве
       return row;
     });
     await isLocked;
-    const second = withOrgContext(t.app.db, ctxA(), (tx) =>
+    const second = withOrgContext(t.app.db, ctxChief(), (tx) =>
       updateWithHistory(tx, {
         table: employees,
         entity: 'employee',
@@ -254,7 +300,7 @@ describe.skipIf(!databaseAvailable())('история изменений и ве
       ),
     );
     const rows = await withOrgContext(t.app.db, ctxA(), (tx) =>
-      tx.select().from(auditLog).where(eq(auditLog.entity, 'role')),
+      tx.select().from(auditLog).where(eq(auditLog.action, 'delete')),
     );
     expect(rows.map((r) => [r.entityId, r.reason, r.contractorId, r.actorUserId])).toEqual([
       ['r-1', 'Роль больше не нужна', contractorId, null],
@@ -283,6 +329,139 @@ describe.skipIf(!databaseAvailable())('история изменений и ве
         writeHistory(tx, { entity: 'employee', entityId: 'x', action: 'update' }),
       ),
     ).rejects.toThrow();
+  });
+
+  it('автора, время и организацию записи истории подменить нельзя', async () => {
+    const entry = { entity: 'employee', entityId: 'x', action: 'update' } as const;
+    for (const forged of [
+      { actorUserId: chiefUserId },
+      { actorUserId: null },
+      { at: new Date('2020-01-01T00:00:00Z') },
+    ]) {
+      await expect(
+        withOrgContext(t.app.db, ctxA(), (tx) =>
+          tx.insert(auditLog).values({ ...entry, ...forged }),
+        ),
+      ).rejects.toThrow(rlsViolation);
+    }
+    // Пользователь другой организации в контексте — тоже нет: автор только из своей организации.
+    await expect(
+      withOrgContext(t.app.db, { orgId: a.orgId, userId: b.ownerUserId }, (tx) =>
+        writeHistory(tx, entry),
+      ),
+    ).rejects.toThrow(rlsViolation);
+    // Администратор платформы может быть автором в любой организации.
+    await withOrgContext(t.app.db, { orgId: b.orgId, userId: platformAdminId }, (tx) =>
+      writeHistory(tx, entry),
+    );
+  });
+
+  it('правка только из полей таблицы: служебные и лишние поля — ошибка, ничего не меняется', async () => {
+    const opened = await employee(a.ownerEmployeeId);
+    for (const extra of [
+      { createdBy: chiefUserId },
+      { id: randomUUID() },
+      { version: 999 },
+      { notAColumn: 1 },
+    ]) {
+      const body: Record<string, unknown> = { fullName: 'Взлом', ...extra };
+      await expect(
+        withOrgContext(t.app.db, ctxA(), (tx) =>
+          updateWithHistory(tx, {
+            table: employees,
+            entity: 'employee',
+            id: a.ownerEmployeeId,
+            version: opened.version,
+            patch: body,
+          }),
+        ),
+      ).rejects.toThrow(/нельзя менять правкой/);
+    }
+    expect(await employee(a.ownerEmployeeId)).toEqual(opened);
+  });
+
+  it('неверный номер записи и запись вне области доступа — «не найдена»', async () => {
+    const opened = await employee(a.ownerEmployeeId);
+    const attempt = (id: string, where?: ReturnType<typeof eq>) =>
+      withOrgContext(t.app.db, ctxA(), (tx) =>
+        updateWithHistory(tx, {
+          table: employees,
+          entity: 'employee',
+          id,
+          version: opened.version,
+          patch: { phone: null },
+          where,
+        }),
+      );
+    await expect(attempt('не-номер')).rejects.toBeInstanceOf(RecordNotFoundError);
+    await expect(attempt(a.ownerEmployeeId, eq(employees.active, false))).rejects.toBeInstanceOf(
+      RecordNotFoundError,
+    );
+    expect((await employee(a.ownerEmployeeId)).version).toBe(opened.version);
+  });
+
+  it('учётная политика: запись с ключом org_id', async () => {
+    const [before] = await t.admin.db
+      .select()
+      .from(orgSettings)
+      .where(eq(orgSettings.orgId, a.orgId));
+    const updated = await withOrgContext(t.app.db, ctxA(), (tx) =>
+      updateWithHistory(tx, {
+        table: orgSettings,
+        entity: 'org_settings',
+        id: a.orgId,
+        key: orgSettings.orgId,
+        version: before!.version,
+        patch: { remindDays: [7, 3, 1] },
+      }),
+    );
+    expect(updated).toMatchObject({ version: before!.version + 1, updatedBy: a.ownerUserId });
+    const [last] = (
+      await withOrgContext(t.app.db, ctxA(), (tx) => readHistory(tx, 'org_settings', a.orgId))
+    ).slice(-1);
+    expect(last?.changes).toEqual([{ field: 'remindDays', from: [7, 3], to: [7, 3, 1] }]);
+  });
+
+  it('изменения дочерних записей (права роли) поднимают версию и попадают в историю', async () => {
+    const chiefRole = a.roles.find((r) => r.templateCode === 'chief')!;
+    const [before] = await t.admin.db.select().from(roles).where(eq(roles.id, chiefRole.id));
+    const updated = await withOrgContext(t.app.db, ctxA(), (tx) =>
+      updateWithHistory(tx, {
+        table: roles,
+        entity: 'role',
+        id: chiefRole.id,
+        version: before!.version,
+        patch: {},
+        changes: [{ field: 'permissions', from: ['cpView'], to: ['cpView', 'assign'] }],
+      }),
+    );
+    expect(updated.version).toBe(before!.version + 1);
+    const [last] = (
+      await withOrgContext(t.app.db, ctxA(), (tx) => readHistory(tx, 'role', chiefRole.id))
+    ).slice(-1);
+    expect(last).toMatchObject({
+      action: 'update',
+      changes: [{ field: 'permissions', from: ['cpView'], to: ['cpView', 'assign'] }],
+    });
+  });
+
+  it('секретные значения не попадают в историю, даже в готовом списке изменений', async () => {
+    await withOrgContext(t.app.db, ctxA(), (tx) =>
+      writeHistory(tx, {
+        entity: 'user',
+        entityId: a.ownerUserId,
+        action: 'update',
+        changes: [
+          { field: 'telegramLinkToken', from: null, to: 'abc123' },
+          { field: 'pin', from: '1111', to: '2222' },
+        ],
+        secretFields: ['pin'],
+      }),
+    );
+    const [last] = (
+      await withOrgContext(t.app.db, ctxA(), (tx) => readHistory(tx, 'user', a.ownerUserId))
+    ).slice(-1);
+    expect(last?.changes).toEqual([{ field: 'telegramLinkToken' }, { field: 'pin' }]);
   });
 
   it('записи истории не меняются и не удаляются', async () => {

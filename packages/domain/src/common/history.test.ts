@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { RecordChangedError, RecordNotFoundError } from './errors';
-import { diffChanges, sameHistoryValue, toHistoryValue } from './history';
+import {
+  diffChanges,
+  isSecretField,
+  redactChanges,
+  sameHistoryValue,
+  toHistoryValue,
+} from './history';
 
 describe('toHistoryValue — значение поля как в JSON', () => {
   it('простые значения как есть, отсутствие — null', () => {
@@ -105,5 +111,32 @@ describe('ошибки записи', () => {
     const e = new RecordNotFoundError('employee', 'e1');
     expect(e.code).toBe('not_found');
     expect(e.name).toBe('RecordNotFoundError');
+  });
+});
+
+describe('секретные поля', () => {
+  it('по списку и по окончанию имени: Hash, Token, Secret', () => {
+    for (const f of ['passwordHash', 'sessionTokenHash', 'linkToken', 'webhookSecret']) {
+      expect(isSecretField(f)).toBe(true);
+    }
+    for (const f of ['fullName', 'gkedCode', 'phone', 'hashtag', 'mustChangePassword']) {
+      expect(isSecretField(f)).toBe(false);
+    }
+    expect(isSecretField('accessCode', ['accessCode'])).toBe(true);
+  });
+
+  it('из готового списка изменений значения секретных полей убираются', () => {
+    expect(
+      redactChanges([
+        { field: 'telegramLinkToken', from: null, to: 'abc123' },
+        { field: 'phone', from: null, to: '+996 555 123 456' },
+      ]),
+    ).toEqual([
+      { field: 'telegramLinkToken' },
+      { field: 'phone', from: null, to: '+996 555 123 456' },
+    ]);
+    expect(redactChanges([{ field: 'pin', from: '1', to: '2' }], ['pin'])).toEqual([
+      { field: 'pin' },
+    ]);
   });
 });

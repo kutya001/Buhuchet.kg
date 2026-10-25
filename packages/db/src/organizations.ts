@@ -207,10 +207,14 @@ async function insertOrganization(
     createdBy,
     updatedBy: createdBy,
   });
+  // Кто создал организацию и что появилось вместе с ней; учётная политика — запись с ключом org_id.
   await writeHistory(
     tx,
     { entity: 'organization', entityId: orgId, action: 'create' },
+    ...created.map((r) => ({ entity: 'role' as const, entityId: r.id, action: 'create' as const })),
+    { entity: 'user', entityId: user!.id, action: 'create' },
     { entity: 'employee', entityId: employee!.id, action: 'create' },
+    { entity: 'org_settings', entityId: orgId, action: 'create' },
   );
 
   return { orgId, ownerUserId: user!.id, ownerEmployeeId: employee!.id, roles: created };
