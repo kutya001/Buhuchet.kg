@@ -24,6 +24,13 @@ const SECRET_KEYS = [
   'CRON_SECRET',
   'TELEGRAM_BOT_TOKEN',
   'TELEGRAM_WEBHOOK_SECRET',
+  // Поля тела ошибки S3, которые SDK копирует в объект ошибки (подпись запроса).
+  'AWSAccessKeyId',
+  'StringToSign',
+  'StringToSignBytes',
+  'CanonicalRequest',
+  'CanonicalRequestBytes',
+  'SignatureProvided',
 ];
 const SECRET_HEADERS = ['set-cookie', 'x-telegram-bot-api-secret-token'];
 
