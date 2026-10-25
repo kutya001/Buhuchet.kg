@@ -1,10 +1,12 @@
 import { randomUUID } from 'node:crypto';
+import { S3ServiceException } from '@aws-sdk/client-s3';
 import { describe, expect, it } from 'vitest';
 import { hasStorageEnv, integrationTestsRequired, loadStorageConfig } from './config';
 import {
   attachmentDisposition,
   createMemoryStorage,
   createS3Storage,
+  explainStorageError,
   orgFileKey,
   type Storage,
 } from './storage';
@@ -32,6 +34,43 @@ describe('attachmentDisposition', () => {
       "filename*=UTF-8''%D0%90%D0%BA%D1%82%20%28O%27Neil%29.pdf",
     );
     expect(attachmentDisposition()).toBe('attachment');
+  });
+});
+
+function s3Error(name: string, httpStatusCode: number, message = ''): S3ServiceException {
+  return new S3ServiceException({ name, $fault: 'client', $metadata: { httpStatusCode }, message });
+}
+
+describe('explainStorageError', () => {
+  it('по коду S3 подсказывает, какую настройку проверить', () => {
+    const text = explainStorageError(
+      s3Error('SignatureDoesNotMatch', 403, 'The request signature\n does not match'),
+      'buhuchet',
+    );
+    expect(text).toContain('Корзина «buhuchet» не готова: HTTP 403');
+    expect(text).toContain('SignatureDoesNotMatch: The request signature does not match');
+    expect(text).toContain('S3_SECRET_ACCESS_KEY');
+    expect(text).toContain('S3_REGION');
+    expect(explainStorageError(s3Error('InvalidAccessKeyId', 403), 'b')).toContain(
+      'S3_ACCESS_KEY_ID',
+    );
+    expect(explainStorageError(s3Error('AccessDenied', 403), 'b')).toContain('service_role');
+  });
+
+  it('без кода (ответ на HEAD) — по коду ответа', () => {
+    expect(explainStorageError(s3Error('Unknown', 403, 'UnknownError'), 'b')).toMatch(
+      /HTTP 403, Unknown: UnknownError\.\nЧто проверить: доступ запрещён — проверьте ключи и регион/,
+    );
+    expect(explainStorageError(s3Error('UnknownError', 404), 'b')).toContain('/storage/v1/s3');
+    expect(explainStorageError(s3Error('InternalError', 500), 'b')).toContain(
+      'проверьте S3_ENDPOINT, S3_REGION',
+    );
+  });
+
+  it('сеть недоступна — проверить адрес', () => {
+    const text = explainStorageError(new Error('getaddrinfo ENOTFOUND s3.example'), 'b');
+    expect(text).toContain('хранилище недоступно (getaddrinfo ENOTFOUND s3.example)');
+    expect(text).toContain('S3_ENDPOINT');
   });
 });
 
@@ -120,5 +159,17 @@ describe.skipIf(!s3Available)('S3: подписанная ссылка реал�
     await storage.ensureBucket();
     await storage.ping();
     await storage.ensureBucket();
+  });
+
+  it('ensureBucket с чужим секретом сообщает код ошибки S3, а не UnknownError', async () => {
+    const config = loadStorageConfig();
+    const storage = createS3Storage({ ...config, S3_SECRET_ACCESS_KEY: 'wrong-secret-000000' });
+    const error = await storage.ensureBucket().then(
+      () => null,
+      (e: unknown) => e,
+    );
+    expect(error).toBeInstanceOf(S3ServiceException);
+    expect((error as S3ServiceException).name).toBe('SignatureDoesNotMatch');
+    expect(explainStorageError(error, config.S3_BUCKET)).toContain('S3_SECRET_ACCESS_KEY');
   });
 });

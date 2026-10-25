@@ -100,6 +100,19 @@ describe('частичные конфигурации', () => {
     expect(() => loadStorageConfig({})).toThrow(ConfigError);
   });
 
+  it('ключи и регион S3 без пробелов и перевода строки по краям (вставка копированием)', () => {
+    const cfg = loadStorageConfig({
+      ...base,
+      S3_REGION: ' eu-west-1\n',
+      S3_ACCESS_KEY_ID: 'key\n',
+      S3_SECRET_ACCESS_KEY: '  secret \r\n',
+    });
+    expect(cfg.S3_REGION).toBe('eu-west-1');
+    expect(cfg.S3_ACCESS_KEY_ID).toBe('key');
+    expect(cfg.S3_SECRET_ACCESS_KEY).toBe('secret');
+    expect(() => loadStorageConfig({ ...base, S3_SECRET_ACCESS_KEY: ' \n' })).toThrow(ConfigError);
+  });
+
   it('признаки наличия окружения', () => {
     expect(hasStorageEnv(base)).toBe(true);
     expect(hasStorageEnv({})).toBe(false);

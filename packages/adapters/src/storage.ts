@@ -4,6 +4,7 @@ import {
   GetObjectCommand,
   HeadBucketCommand,
   HeadObjectCommand,
+  ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
   S3ServiceException,
@@ -77,8 +78,52 @@ function isNotFound(error: unknown): boolean {
     error instanceof S3ServiceException &&
     (error.$metadata.httpStatusCode === 404 ||
       error.name === 'NoSuchKey' ||
+      error.name === 'NoSuchBucket' ||
       error.name === 'NotFound')
   );
+}
+
+/** Что проверить в настройках по коду ошибки S3. */
+const STORAGE_ERROR_HINTS: Record<string, string> = {
+  InvalidAccessKeyId:
+    'такого ключа доступа нет — проверьте S3_ACCESS_KEY_ID (Supabase: Storage → S3 Configuration → Access keys)',
+  SignatureDoesNotMatch:
+    'подпись не сошлась — S3_SECRET_ACCESS_KEY не от этого ключа доступа или S3_REGION не совпадает с регионом проекта',
+  InvalidSignature:
+    'подпись не сошлась — S3_SECRET_ACCESS_KEY не от этого ключа доступа или S3_REGION не совпадает с регионом проекта',
+  AuthorizationHeaderMalformed: 'S3_REGION не совпадает с регионом хранилища',
+  AccessDenied:
+    'доступ запрещён — это не ключи S3 хранилища (anon и service_role не подходят) или у ключа нет прав на корзину',
+  NoSuchBucket: 'корзины нет — проверьте S3_BUCKET',
+};
+
+const STORAGE_SETTINGS = 'S3_ENDPOINT, S3_REGION, S3_ACCESS_KEY_ID и S3_SECRET_ACCESS_KEY';
+
+/**
+ * Понятное объяснение ошибки хранилища для журнала запуска (storage:init в CI).
+ * Значения ключей не выводятся — только код ответа, код ошибки S3 и подсказка.
+ */
+export function explainStorageError(error: unknown, bucket: string): string {
+  const head = `Корзина «${bucket}» не готова`;
+  if (!(error instanceof S3ServiceException)) {
+    const reason = error instanceof Error ? error.message : String(error);
+    return `${head}: хранилище недоступно (${reason}). Проверьте адрес S3_ENDPOINT.`;
+  }
+  const status = error.$metadata.httpStatusCode;
+  const message = (error.message || '')
+    .replace(/\s+/g, ' ')
+    .slice(0, 300)
+    .replace(/[\s.]+$/, '')
+    .trim();
+  const known = STORAGE_ERROR_HINTS[error.name];
+  let hint = known ?? `проверьте ${STORAGE_SETTINGS}`;
+  if (!known && status === 404) {
+    hint = 'по адресу S3_ENDPOINT нет S3 — у Supabase адрес оканчивается на /storage/v1/s3';
+  } else if (!known && status === 403) {
+    hint = `доступ запрещён — проверьте ключи и регион: ${STORAGE_SETTINGS}`;
+  }
+  const code = message && message !== error.name ? `${error.name}: ${message}` : error.name;
+  return `${head}: HTTP ${status ?? '—'}, ${code}.\nЧто проверить: ${hint}.`;
 }
 
 export function createS3Storage(config: StorageConfig): Storage {
@@ -136,11 +181,25 @@ export function createS3Storage(config: StorageConfig): Storage {
       try {
         await client.send(new HeadBucketCommand({ Bucket }));
       } catch (error) {
-        if (!isNotFound(error)) throw error;
+        if (!isNotFound(error)) throw await withErrorCode(error);
         await client.send(new CreateBucketCommand({ Bucket }));
       }
     },
   };
+
+  /**
+   * Ответ на HEAD приходит без тела, и код ошибки теряется (UnknownError, только HTTP 403).
+   * Тот же запрос через GET возвращает код S3 (InvalidAccessKeyId, SignatureDoesNotMatch…).
+   */
+  async function withErrorCode(error: unknown): Promise<unknown> {
+    if (!(error instanceof S3ServiceException)) return error;
+    try {
+      await client.send(new ListObjectsV2Command({ Bucket, MaxKeys: 1 }));
+      return error;
+    } catch (detailed) {
+      return detailed;
+    }
+  }
 }
 
 export interface MemoryStorage extends Storage {
