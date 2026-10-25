@@ -5,12 +5,12 @@
 ## Схема
 - Ветка `main` — тестовый стенд `test.buhuchet.kg`: сюда автослиянием приходят все PR. Ветка `production` — рабочий сайт `buhuchet.kg`: обновляется только по команде заказчика «выпускай».
 - Из одного репозитория два проекта Vercel: `buhuchet-kg` — стенд (Production Branch = `main`, домен `test.buhuchet.kg`, тестовая база) и позже `buhuchet` (Production Branch = `production`, домен `buhuchet.kg`, рабочая база). Два проекта, потому что Vercel Cron вызывает только production-выпуск проекта, а `/api/cron/tick` нужен и на стенде.
-- Supabase: бесплатный проект `buhuchet-test` (стенд) сейчас; рабочий Pro-проект — ближе к запуску, сразу во Frankfurt (eu-central-1).
+- Supabase: бесплатный проект `buhuchet-test` (стенд) сейчас, рабочий Pro-проект — ближе к запуску; оба во Frankfurt (Central EU, eu-central-1), как в ТЗ.
 
 ## Supabase: создание проекта
 - **Enable Data API — выключить**, **Automatically expose new tables — выключить** (supabase-js и REST Supabase не используются, браузер к базе не обращается); **Enable automatic RLS — не включать** (RLS включают наши миграции: этот триггер есть только в Supabase, его нет локально и на VPS); **Connect GitHub — не подключать** (миграции применяет наш CI).
 - Если Data API уже включён: Project Settings → Data API → выключить (или убрать `public` из открытых схем). Даже без этого строки не видны: у ролей `anon` и `authenticated` нет политик RLS (docs/decisions.md, п. 11).
-- Регион проекта = регион функций Vercel (`regions` в `apps/web/vercel.json`, сейчас `fra1`): если бесплатный проект оказался не во Франкфурте, `regions` меняется под него.
+- Region при создании — **Central EU (Frankfurt)**, и у стенда, и у рабочего проекта: функции Vercel стоят рядом с базой (`regions` в `apps/web/vercel.json` = `fra1`), а `vercel.json` один на оба проекта Vercel. Проект, созданный в другом регионе, пересоздаётся.
 - Storage → создать закрытую корзину `buhuchet` (Public — выключено); Storage → S3 Connection → создать ключи S3 (Access key ID и Secret).
 
 ## Vercel: проект стенда `buhuchet-kg`
@@ -18,7 +18,7 @@
 - Install Command и Build Command — по умолчанию (pnpm ставит весь монорепозиторий, `next build` сам транспилирует внутренние пакеты). Output Directory — по умолчанию.
 - Node.js 22 Vercel берёт из `engines` в `apps/web/package.json` (настройка Node.js Version в проекте при этом не действует; без `engines` Vercel взял бы версию из настроек, 24.x, и `pnpm install` остановился бы на `engines` корневого `package.json`). Settings → Git → Production Branch — `main`.
 - К репозиторию подключены только проекты из схемы выше: проект, который собирает репозиторий из корня (без Root Directory), падает на каждом PR с «No Next.js version detected» — его отключают (Settings → Git → Disconnect).
-- Регион функций и расписание задаются в `apps/web/vercel.json` (`fra1`, `/api/cron/tick` раз в минуту). Расписание раз в минуту работает только на Vercel Pro: на Hobby выкладка с таким `vercel.json` отклоняется.
+- Регион функций и расписание задаются в `apps/web/vercel.json` (`fra1`, `/api/cron/tick` раз в минуту). Проверено 25.10.2026: на тарифе Hobby выкладка с таким `vercel.json` проходит и Vercel Cron вызывает `/api/cron/tick` раз в минуту. Ограничение другое: по правилам Vercel тариф Hobby — только для личного некоммерческого использования, поэтому по плану проекты переходят на Pro.
 - Settings → Domains → `test.buhuchet.kg`; Vercel покажет запись CNAME — её добавить в кабинете cctld.kg (серверы имён не меняем).
 
 ## Переменные окружения
