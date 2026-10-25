@@ -1,6 +1,7 @@
 # packages/api — API на Hono
 
 - Не зависит от Next.js: в веб-приложении монтируется одним catch-all роутом `apps/web/app/api/[[...route]]/route.ts`, на VPS может работать отдельно (`src/standalone.ts`, @hono/node-server).
+- Входы пакета: `@buhuchet/api/web` — обработчик для сайта (приложение API целиком), `@buhuchet/api/runtime` — зависимости из окружения, `@buhuchet/api/jobs` — `runDueJobs` для worker. Worker собирается в один файл и не должен импортировать приложение API (`createApp`, `src/web.ts`): в нём нативный модуль argon2, который в такой файл не собирается.
 - Каждый метод — `createRoute` из `@hono/zod-openapi` со схемами Zod из `@buhuchet/shared` для входа и выхода; описание OpenAPI строится само: `/api/openapi.json`.
 - Маршруты раскладываются по модулям ТЗ: `src/modules/<модуль>/…`; модуль экспортирует функцию, которая регистрирует свои маршруты (пример — `src/modules/system`).
 - Зависимости (база, хранилище, часы, журнал, Telegram, настройки) приходят через `ApiDeps` (`src/deps.ts`); в тестах — поддельные (`src/testing.ts`). `process.env` здесь не читается — только `loadConfig` в `src/runtime.ts`.

@@ -13,11 +13,13 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts'],
-      // runtime.ts и standalone.ts только собирают зависимости из окружения: их проверяют сквозные тесты в Docker.
+      // runtime.ts, web.ts и standalone.ts только собирают зависимости из окружения: их проверяют сквозные
+      // тесты в Docker.
       exclude: [
         'src/**/*.test.ts',
         'src/index.ts',
         'src/runtime.ts',
+        'src/web.ts',
         'src/standalone.ts',
         'src/testing.ts',
       ],

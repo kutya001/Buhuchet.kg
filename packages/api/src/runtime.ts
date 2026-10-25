@@ -7,7 +7,6 @@ import {
   type AppConfig,
 } from '@buhuchet/adapters';
 import { createDb } from '@buhuchet/db';
-import { createApp, type ApiApp } from './app';
 import type { ApiDeps } from './deps';
 import { jobs } from './jobs/registry';
 
@@ -52,18 +51,4 @@ export function createRuntime(
  */
 export function assertWebConfig(): void {
   loadConfig();
-}
-
-let web: { runtime: Runtime; app: ApiApp } | undefined;
-
-/**
- * Обработчик для Next.js catch-all роута: `export const GET = handleApiRequest` и т. д.
- * Зависимости создаются при первом запросе, а не при сборке, поэтому `next build` не требует настроек.
- */
-export function handleApiRequest(request: Request): Promise<Response> | Response {
-  if (!web) {
-    const runtime = createRuntime('web');
-    web = { runtime, app: createApp(runtime.deps) };
-  }
-  return web.app.fetch(request);
 }
