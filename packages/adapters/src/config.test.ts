@@ -85,9 +85,11 @@ describe('loadConfig', () => {
     expect(cfg.TELEGRAM_BOT_TOKEN).toBe('1:abc');
   });
 
-  it('S3_FORCE_PATH_STYLE понимает false и 0', () => {
+  it('S3_FORCE_PATH_STYLE понимает false и 0, регистр и пробелы не важны', () => {
     expect(loadConfig({ ...base, S3_FORCE_PATH_STYLE: 'false' }).S3_FORCE_PATH_STYLE).toBe(false);
     expect(loadConfig({ ...base, S3_FORCE_PATH_STYLE: '0' }).S3_FORCE_PATH_STYLE).toBe(false);
+    expect(loadConfig({ ...base, S3_FORCE_PATH_STYLE: ' True\n' }).S3_FORCE_PATH_STYLE).toBe(true);
+    expect(() => loadConfig({ ...base, S3_FORCE_PATH_STYLE: 'да' })).toThrow(ConfigError);
   });
 });
 

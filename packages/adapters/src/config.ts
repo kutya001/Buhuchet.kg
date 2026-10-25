@@ -5,7 +5,13 @@ import { z } from 'zod';
  * Список переменных с пояснениями — в `.env.example`.
  */
 
-const bool = z.enum(['true', 'false', '1', '0']).transform((v) => v === 'true' || v === '1');
+// «True», «TRUE » из панели настроек тоже понимаются: регистр и пробелы по краям не важны.
+const bool = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .pipe(z.enum(['true', 'false', '1', '0']))
+  .transform((v) => v === 'true' || v === '1');
 
 export const AppEnvironment = z.enum(['local', 'test', 'staging', 'production']);
 export type AppEnvironment = z.infer<typeof AppEnvironment>;
