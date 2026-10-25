@@ -35,6 +35,11 @@
 - Задача по расписанию берёт список организаций `orgIds(db)` (функция `app.org_ids()`) и работает с каждой в своей `withOrgContext`.
 - Ссылки между записями организации — на пару `(id, org_id)` (составной внешний ключ), чтобы запись нельзя было связать с чужой организацией.
 
+## Вход и сеансы
+- Вход, проверка cookie и выход идут до того, как известна организация, поэтому `users` и `sessions` в это время читаются только функциями `app.auth_*` (миграция 0009, SECURITY DEFINER, `search_path` задан, выполняет только `buhuchet_app`) через обёртки `src/auth.ts`: `findLogin`, `reserveLoginAttempt` (попытка занимается до проверки пароля), `startSession`, `sessionByToken`, `endSession`, `changeOwnPassword`. Обходить RLS чтением таблиц нельзя; новая такая функция — тоже узкая, с `REVOKE … FROM PUBLIC`.
+- В таблице сеансов — только SHA-256 токена; токен знает лишь cookie.
+- Права и роль сотрудника для общего слоя API — `loadEmployeeAccess(tx, employeeId)` в `withOrgContext`; администратор платформы без организации — `withUserContext`.
+
 ## Тесты
-- Тесты базы создают временную базу на сервере из `DATABASE_ADMIN_URL` (`createTestDatabase` из `src/testing.ts`), применяют миграции и удаляют базу в конце.
+- Тесты базы создают временную базу на сервере из `DATABASE_ADMIN_URL` (`createTestDatabase` из `src/testing.ts`), применяют миграции и удаляют базу в конце. Права и шаблоны ролей для `createOrganization` — `seedAccessReference(db)`.
 - Без `DATABASE_URL` и `DATABASE_ADMIN_URL` тесты базы пропускаются; в CI (`REQUIRE_INTEGRATION_TESTS=1`) — падают.

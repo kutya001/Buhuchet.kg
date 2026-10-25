@@ -3,4 +3,5 @@
 export * from './client';
 export * from './context';
 export * from './history';
+export * from './auth';
 export * as schema from './schema';

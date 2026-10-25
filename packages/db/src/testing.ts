@@ -4,8 +4,10 @@ import {
   integrationTestsRequired,
   loadDatabaseConfig,
 } from '@buhuchet/adapters/config';
-import { createDb, type DbHandle } from './client';
+import { createDb, type Db, type DbHandle } from './client';
 import { ensureAppLoginRole, runMigrations } from './migrate';
+import { seedPermissions, seedRoleTemplates } from './seed/access';
+import { readSpecJson } from './spec-data';
 
 /**
  * Есть ли PostgreSQL для тестов. В CI (REQUIRE_INTEGRATION_TESTS=1) отсутствие базы — ошибка,
@@ -77,4 +79,11 @@ export async function createTestDatabase(): Promise<TestDatabase> {
       await m.close();
     },
   };
+}
+
+/** Права и шаблоны ролей из spec/data/refDB.json: без них организацию не создать. */
+export async function seedAccessReference(db: Db): Promise<void> {
+  const refDB = await readSpecJson<Record<string, unknown>>('data/refDB.json');
+  await seedPermissions(db, refDB.permissions, { update: false });
+  await seedRoleTemplates(db, refDB.roleTemplates, { update: false });
 }

@@ -3,6 +3,8 @@ import {
   boolean,
   check,
   customType,
+  index,
+  integer,
   pgTable,
   text,
   timestamp,
@@ -37,12 +39,18 @@ export const users = pgTable(
     isPlatformAdmin: boolean('is_platform_admin').notNull().default(false),
     /** Заблокирован администратором платформы: не входит, сеансы закрыты. */
     blocked: boolean('blocked').notNull().default(false),
+    /** Неверные пароли подряд; на пятом вход закрывается на 15 минут, счётчик начинается заново. */
+    failedLogins: integer('failed_logins').notNull().default(0),
+    /** До какого момента вход закрыт после неверных паролей. */
+    lockedUntil: timestamp('locked_until', { withTimezone: true }),
     lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
     ...timestamps(),
     version: recordVersion(),
   },
   (t) => [
     unique('users_id_org_unique').on(t.id, t.orgId),
+    // Поиск логина при входе (app.auth_find_login) — без citext, по lower(login::text).
+    index('users_login_lower_idx').on(sql`lower(${t.login}::text)`),
     check(
       'users_org_or_platform_admin',
       sql`(${t.isPlatformAdmin} and ${t.orgId} is null) or (not ${t.isPlatformAdmin} and ${t.orgId} is not null)`,

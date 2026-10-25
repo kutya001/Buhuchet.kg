@@ -14,6 +14,8 @@ describe('логин', () => {
     expect(isValidLogin('эркин')).toBe(false);
     expect(isValidLogin('erkin s')).toBe(false);
     expect(isValidLogin('Erkin')).toBe(false);
+    expect(isValidLogin('a'.repeat(64))).toBe(true);
+    expect(isValidLogin('a'.repeat(65))).toBe(false);
   });
 });
 

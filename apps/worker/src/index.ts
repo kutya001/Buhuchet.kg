@@ -1,5 +1,5 @@
 import { startMinuteRunner } from '@buhuchet/adapters/scheduler';
-import { runDueJobs } from '@buhuchet/api';
+import { runDueJobs } from '@buhuchet/api/jobs';
 import { createRuntime } from '@buhuchet/api/runtime';
 
 const runtime = createRuntime('worker');

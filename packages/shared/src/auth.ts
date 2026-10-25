@@ -1,0 +1,61 @@
+import {
+  LOGIN_MAX_LENGTH,
+  PASSWORD_MAX_LENGTH,
+  PASSWORD_MIN_LENGTH,
+  PERMISSION_IDS,
+  SCOPE_GROUPS,
+  SCOPES,
+  type PermissionId,
+  type ScopeGroupId,
+} from '@buhuchet/domain';
+import { z } from 'zod';
+import { Uuid } from './common';
+
+/** Вход по логину и паролю (без почты). Логин сравнивается без учёта регистра. */
+export const LoginRequest = z.object({
+  login: z.string().trim().min(1).max(LOGIN_MAX_LENGTH),
+  password: z.string().min(1).max(PASSWORD_MAX_LENGTH),
+});
+export type LoginRequest = z.infer<typeof LoginRequest>;
+
+/** Смена своего пароля: текущий и новый (не короче 8 символов). Повтор нового сверяет форма. */
+export const ChangePasswordRequest = z.object({
+  currentPassword: z.string().min(1).max(PASSWORD_MAX_LENGTH),
+  newPassword: z.string().min(PASSWORD_MIN_LENGTH).max(PASSWORD_MAX_LENGTH),
+});
+export type ChangePasswordRequest = z.infer<typeof ChangePasswordRequest>;
+
+export const PermissionIdSchema = z.enum(PERMISSION_IDS as [PermissionId, ...PermissionId[]]);
+export const ScopeGroupIdSchema = z.enum(SCOPE_GROUPS as [ScopeGroupId, ...ScopeGroupId[]]);
+
+/**
+ * Кто вошёл (ответ входа и GET /api/auth/me). У администратора платформы нет сотрудника, организации
+ * и прав в организации. permissions — действующие права, scopes — область каждой группы.
+ */
+export const MeResponse = z.object({
+  user: z.object({
+    id: Uuid,
+    login: z.string(),
+    isPlatformAdmin: z.boolean(),
+    /** Вошёл с временным паролем: пока не сменит, остальные методы отвечают 403. */
+    mustChangePassword: z.boolean(),
+  }),
+  employee: z
+    .object({
+      id: Uuid,
+      fullName: z.string(),
+      shortName: z.string(),
+      roleId: Uuid,
+      roleName: z.string(),
+      isOwner: z.boolean(),
+    })
+    .nullable(),
+  organization: z.object({ id: Uuid, name: z.string(), slug: z.string() }).nullable(),
+  permissions: z.array(PermissionIdSchema),
+  scopes: z.partialRecord(ScopeGroupIdSchema, z.enum(SCOPES)),
+});
+export type MeResponse = z.infer<typeof MeResponse>;
+
+/** Ответ без данных: выход, смена пароля. */
+export const OkResponse = z.object({ ok: z.literal(true) });
+export type OkResponse = z.infer<typeof OkResponse>;

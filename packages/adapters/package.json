@@ -11,7 +11,8 @@
     "./scheduler": "./src/scheduler.ts",
     "./telegram": "./src/telegram.ts",
     "./logger": "./src/logger.ts",
-    "./password": "./src/password.ts"
+    "./password": "./src/password.ts",
+    "./tokens": "./src/tokens.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",

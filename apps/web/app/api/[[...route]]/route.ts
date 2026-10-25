@@ -1,4 +1,4 @@
-import { handleApiRequest } from '@buhuchet/api/runtime';
+import { handleApiRequest } from '@buhuchet/api/web';
 
 // Весь API — пакет @buhuchet/api (Hono). Next.js только передаёт ему запросы.
 export const runtime = 'nodejs';

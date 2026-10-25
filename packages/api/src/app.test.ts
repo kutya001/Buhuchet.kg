@@ -8,6 +8,31 @@ import { createTestDeps } from './testing';
 
 const okDb = { execute: async () => [] } as unknown as Db;
 
+/**
+ * База-подделка, где любой запрос находит сеанс администратора платформы: так общий обработчик
+ * ошибок проверяется за слоем входа без PostgreSQL. Вход и права — в auth.test.ts против базы.
+ */
+const signedInDb = {
+  execute: async () => [
+    {
+      session_id: '0b2d4e6f-0000-4000-8003-000000000001',
+      user_id: '0b2d4e6f-0000-4000-8002-000000000001',
+      org_id: null,
+      login: 'platform-admin',
+      is_platform_admin: true,
+      must_change_password: false,
+      user_blocked: false,
+      employee_id: null,
+      employee_active: null,
+      org_status: null,
+      org_name: null,
+      touched: false,
+    },
+  ],
+} as unknown as Db;
+const signedIn = { cookie: `bh_session=${'A'.repeat(43)}`, origin: 'http://localhost' };
+const signedInApp = () => createApp(createTestDeps({ db: signedInDb }));
+
 describe('GET /api/health', () => {
   it('200 и «ok», когда база и хранилище доступны', async () => {
     const app = createApp(createTestDeps({ db: okDb }));
@@ -52,30 +77,46 @@ describe('служебное', () => {
     const doc = (await res.json()) as { openapi: string; paths: Record<string, unknown> };
     expect(doc.openapi).toBe('3.1.0');
     expect(Object.keys(doc.paths)).toEqual(
-      expect.arrayContaining(['/api/health', '/api/cron/tick']),
+      expect.arrayContaining([
+        '/api/health',
+        '/api/cron/tick',
+        '/api/auth/login',
+        '/api/auth/logout',
+        '/api/auth/me',
+        '/api/auth/password',
+      ]),
     );
   });
 
-  it('неизвестный метод — 404 в общем формате ошибки', async () => {
+  it('без входа любой метод, кроме открытых, — 401 в общем формате ошибки', async () => {
     const res = await createApp(createTestDeps()).request('/api/nope');
+    expect(res.status).toBe(401);
+    expect(res.headers.get('cache-control')).toBe('no-store');
+    expect(await res.json()).toEqual({
+      error: { code: 'unauthorized', message: 'Войдите в систему' },
+    });
+  });
+
+  it('неизвестный метод — 404 в общем формате ошибки', async () => {
+    const res = await signedInApp().request('/api/nope', { headers: signedIn });
     expect(res.status).toBe(404);
     expect(res.headers.get('cache-control')).toBe('no-store');
     expect(await res.json()).toEqual({ error: { code: 'not_found', message: 'Метод не найден' } });
   });
 
   it('непредвиденная ошибка — 500 без подробностей наружу', async () => {
-    const app = createApp(createTestDeps());
+    const app = signedInApp();
     app.get('/boom', () => {
       throw new Error('секретная подробность');
     });
-    const res = await app.request('/api/boom');
+    const res = await app.request('/api/boom', { headers: signedIn });
     expect(res.status).toBe(500);
     expect(JSON.stringify(await res.json())).not.toContain('секретная');
   });
 
   it('неверные данные запроса — 400 validation_failed с подробностями', async () => {
     const { createRoute, z } = await import('@hono/zod-openapi');
-    const app = createApp(createTestDeps());
+    const app = signedInApp();
     app.openapi(
       createRoute({
         method: 'get',
@@ -90,8 +131,10 @@ describe('служебное', () => {
       }),
       (c) => c.json({ n: c.req.valid('query').n }, 200),
     );
-    expect(await (await app.request('/api/echo?n=5')).json()).toEqual({ n: 5 });
-    const bad = await app.request('/api/echo?n=пять');
+    expect(await (await app.request('/api/echo?n=5', { headers: signedIn })).json()).toEqual({
+      n: 5,
+    });
+    const bad = await app.request('/api/echo?n=пять', { headers: signedIn });
     expect(bad.status).toBe(400);
     const body = ApiError.parse(await bad.json());
     expect(body.error.code).toBe('validation_failed');
@@ -100,21 +143,21 @@ describe('служебное', () => {
 
   it('HTTPException отдаёт свой статус', async () => {
     const { HTTPException } = await import('hono/http-exception');
-    const app = createApp(createTestDeps());
+    const app = signedInApp();
     app.get('/teapot', () => {
       throw new HTTPException(418, { message: 'чайник' });
     });
-    const res = await app.request('/api/teapot');
+    const res = await app.request('/api/teapot', { headers: signedIn });
     expect(res.status).toBe(418);
     expect(ApiError.parse(await res.json()).error.code).toBe('http_error');
   });
 
   it('устаревшая версия записи — 409 record_changed «Запись изменена другим пользователем»', async () => {
-    const app = createApp(createTestDeps());
+    const app = signedInApp();
     app.put('/stale', () => {
       throw new RecordChangedError('employee', 'e3', 4);
     });
-    const res = await app.request('/api/stale', { method: 'PUT' });
+    const res = await app.request('/api/stale', { method: 'PUT', headers: signedIn });
     expect(res.status).toBe(409);
     const body = ApiError.parse(await res.json());
     expect(body).toEqual({
@@ -128,11 +171,11 @@ describe('служебное', () => {
   });
 
   it('нет записи — 404 not_found без подробностей', async () => {
-    const app = createApp(createTestDeps());
+    const app = signedInApp();
     app.put('/missing', () => {
       throw new RecordNotFoundError('employee', 'e3');
     });
-    const res = await app.request('/api/missing', { method: 'PUT' });
+    const res = await app.request('/api/missing', { method: 'PUT', headers: signedIn });
     expect(res.status).toBe(404);
     expect(await res.json()).toEqual({
       error: { code: 'not_found', message: 'Запись не найдена' },

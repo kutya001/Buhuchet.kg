@@ -2,6 +2,7 @@ import { createRoute, type RouteHandler } from '@hono/zod-openapi';
 import { isAuthorizedCronCall } from '@buhuchet/adapters/scheduler';
 import { ApiError, CronTickResponse } from '@buhuchet/shared';
 import type { ApiDeps } from '../../deps';
+import type { AppEnv } from '../../env';
 import { apiError } from '../../errors';
 import { runDueJobs } from '../../jobs/runner';
 
@@ -34,7 +35,7 @@ export const cronTickPostRoute = createRoute({
 
 export function cronTickHandler(
   deps: ApiDeps,
-): RouteHandler<typeof cronTickGetRoute> & RouteHandler<typeof cronTickPostRoute> {
+): RouteHandler<typeof cronTickGetRoute, AppEnv> & RouteHandler<typeof cronTickPostRoute, AppEnv> {
   return async (c) => {
     if (!isAuthorizedCronCall(c.req.header('authorization'), deps.config.CRON_SECRET)) {
       return c.json(apiError('cron_unauthorized', 'Неверный секрет планировщика'), 401);

@@ -1,4 +1,4 @@
-import { randomInt } from 'node:crypto';
+import { randomBytes, randomInt } from 'node:crypto';
 import { hash, verify, type Algorithm, type Options } from '@node-rs/argon2';
 
 /**
@@ -24,6 +24,18 @@ export async function verifyPassword(passwordHash: string, password: string): Pr
   } catch {
     return false;
   }
+}
+
+let dummyHash: Promise<string> | null = null;
+
+/**
+ * Проверка пароля, когда логина нет: та же работа argon2 по заранее посчитанному хешу, ответ —
+ * всегда «не подходит». Так по времени ответа не понять, есть ли такой логин.
+ */
+export async function verifyAgainstDummy(password: string): Promise<false> {
+  dummyHash ??= hashPassword(randomBytes(16).toString('hex'));
+  await verifyPassword(await dummyHash, password);
+  return false;
 }
 
 /** Без похожих символов (0/O, 1/l/I), чтобы временный пароль легко продиктовать. */
