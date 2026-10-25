@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { mergeGuardFiles, protectedChanges } from './protected-paths.mjs';
+import { mergeGuardFiles, needsStagingMigration, protectedChanges } from './protected-paths.mjs';
 
 test('проверки, автослияние и хуки останавливают автослияние', () => {
   assert.deepEqual(
@@ -48,4 +48,10 @@ test('spec/ только с SOURCE.json (синхронизация)', () => {
 
 test('остальные файлы не проверяются', () => {
   assert.deepEqual(protectedChanges('M\tpackages/api/src/app.ts\nD\tdocs/old.md'), []);
+});
+
+test('миграции стенда — только когда PR меняет базу или данные spec/', () => {
+  assert.equal(needsStagingMigration(['packages/db/migrations/0003_users.sql']), true);
+  assert.equal(needsStagingMigration(['spec/data/refDB.json', 'spec/SOURCE.json']), true);
+  assert.equal(needsStagingMigration(['packages/api/src/app.ts', 'spec/ТЗ Buhuchet.kg.md']), false);
 });

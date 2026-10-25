@@ -1,0 +1,83 @@
+name: Migrate test
+
+# Миграции, наполнение справочников и демо-организации и корзина файлов тестового стенда test.buhuchet.kg.
+# Запускается: после автослияния PR в main, который меняет базу или данные spec/ (automerge.mjs вызывает
+# workflow_dispatch — слияние токеном GITHUB_TOKEN не запускает push), при слиянии человеком
+# (push в main) и вручную (Actions → Migrate test → Run workflow, ветка main).
+# Секреты — Settings → Secrets and variables → Actions, с приставкой TEST_ (docs/deploy.md);
+# пока их нет, запуск пропускается. Секреты передаются только в шаги, которым нужны, — не в установку
+# зависимостей.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/db/**'
+      - 'spec/data/**'
+
+concurrency:
+  group: migrate-test
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  migrate:
+    name: migrate-test
+    # Только код из main: ручной запуск с другой ветки ничего не делает.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      APP_ENV: staging
+      S3_BUCKET: buhuchet
+      S3_FORCE_PATH_STYLE: 'true'
+    steps:
+      - name: Секреты стенда заданы
+        id: ready
+        env:
+          SET: >-
+            ${{ secrets.TEST_DATABASE_ADMIN_URL != '' && secrets.TEST_DATABASE_URL != '' &&
+            secrets.TEST_S3_ENDPOINT != '' && secrets.TEST_S3_REGION != '' &&
+            secrets.TEST_S3_ACCESS_KEY_ID != '' && secrets.TEST_S3_SECRET_ACCESS_KEY != '' }}
+        run: |
+          if [ "$SET" = "true" ]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::Секреты TEST_* заданы не все (docs/deploy.md) — миграции стенда пропущены."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.ready.outputs.ok == 'true'
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        if: steps.ready.outputs.ok == 'true'
+      - uses: actions/setup-node@v4
+        if: steps.ready.outputs.ok == 'true'
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - if: steps.ready.outputs.ok == 'true'
+        run: pnpm install --frozen-lockfile
+      - name: Миграции и роль приложения
+        if: steps.ready.outputs.ok == 'true'
+        run: pnpm db:migrate
+        env:
+          DATABASE_ADMIN_URL: ${{ secrets.TEST_DATABASE_ADMIN_URL }}
+          DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
+      - name: Справочники, ГКЭД и демо-организация (изменившиеся разделы обновляются)
+        if: steps.ready.outputs.ok == 'true'
+        run: pnpm db:seed --update
+        env:
+          DATABASE_ADMIN_URL: ${{ secrets.TEST_DATABASE_ADMIN_URL }}
+          DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
+      - name: Корзина файлов
+        if: steps.ready.outputs.ok == 'true'
+        run: pnpm storage:init
+        env:
+          S3_ENDPOINT: ${{ secrets.TEST_S3_ENDPOINT }}
+          S3_REGION: ${{ secrets.TEST_S3_REGION }}
+          S3_ACCESS_KEY_ID: ${{ secrets.TEST_S3_ACCESS_KEY_ID }}
+          S3_SECRET_ACCESS_KEY: ${{ secrets.TEST_S3_SECRET_ACCESS_KEY }}

@@ -12,6 +12,8 @@ permissions:
   contents: write
   pull-requests: write
   checks: read
+  # Запуск migrate-test.yml после слияния PR, который меняет базу.
+  actions: write
 
 concurrency:
   group: automerge-${{ github.event.workflow_run.head_branch }}
