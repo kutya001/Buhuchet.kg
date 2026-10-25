@@ -38,6 +38,9 @@ function withDatabase(url: string, name: string): string {
   return u.toString();
 }
 
+/** Номер рекомендательной блокировки на время миграций тестовой базы. */
+const MIGRATION_LOCK = 704_118;
+
 /** Временная база с применёнными миграциями. Обязательно вызвать drop() в afterAll. */
 export async function createTestDatabase(): Promise<TestDatabase> {
   const config = loadDatabaseConfig();
@@ -45,12 +48,19 @@ export async function createTestDatabase(): Promise<TestDatabase> {
   const name = `test_${randomBytes(6).toString('hex')}`;
   const maintenance = createDb(serverAdminUrl, { max: 1, applicationName: 'buhuchet-test' });
   await maintenance.sql.unsafe(`create database "${name}"`);
-  await maintenance.close();
 
   const adminUrl = withDatabase(serverAdminUrl, name);
   const appUrl = withDatabase(config.DATABASE_URL, name);
-  await runMigrations(adminUrl);
-  await ensureAppLoginRole(adminUrl, appUrl);
+  // Миграции создают роли, общие для всего сервера (buhuchet_app, роль входа): параллельные файлы
+  // тестов делают это по очереди, иначе одновременный CREATE ROLE падает на уникальности имени.
+  await maintenance.sql`select pg_advisory_lock(${MIGRATION_LOCK})`;
+  try {
+    await runMigrations(adminUrl);
+    await ensureAppLoginRole(adminUrl, appUrl);
+  } finally {
+    await maintenance.sql`select pg_advisory_unlock(${MIGRATION_LOCK})`;
+    await maintenance.close();
+  }
 
   const admin = createDb(adminUrl, { max: 2, applicationName: 'buhuchet-test-admin' });
   const app = createDb(appUrl, { max: 2, applicationName: 'buhuchet-test-app' });

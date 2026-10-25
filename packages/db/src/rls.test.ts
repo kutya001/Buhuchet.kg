@@ -97,6 +97,28 @@ describe.skipIf(!databaseAvailable())('RLS: организации не видя
     expect(foreign).toEqual([]);
   });
 
+  it('у каждой таблицы со столбцом org_id политика сравнивает его с организацией из контекста', async () => {
+    const loose = await t.admin.sql<{ tablename: string }[]>`
+      select c.table_name as tablename from information_schema.columns c
+      where c.table_schema = 'public' and c.column_name = 'org_id'
+        and not exists (
+          select 1 from pg_policies p
+          where p.schemaname = 'public' and p.tablename = c.table_name
+            and p.qual like '%org_id = app.current_org_id()%'
+            and p.with_check like '%org_id = app.current_org_id()%'
+        )`;
+    expect(loose).toEqual([]);
+  });
+
+  it('функции SECURITY DEFINER: свой search_path и не исполняются кем угодно', async () => {
+    const unsafe = await t.admin.sql<{ proname: string }[]>`
+      select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+      where n.nspname in ('app', 'public') and p.prosecdef
+        and (not exists (select 1 from unnest(coalesce(p.proconfig, '{}')) c where c like 'search_path=%')
+             or has_function_privilege('public', p.oid, 'execute'))`;
+    expect(unsafe).toEqual([]);
+  });
+
   it('справочники платформы приложение только читает', async () => {
     await t.admin.db.insert(gkedItems).values({
       code: 'A',

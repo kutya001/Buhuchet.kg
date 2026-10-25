@@ -1,36 +1,52 @@
 import type { Db } from '../client';
 import { readSpecJson, specCommit } from '../spec-data';
-import { seedDemoOrganization } from './demo';
+import { seedPermissions, seedRoleTemplates } from './access';
+import { seedDemoOrganization, type DemoSeedReport } from './demo';
 import { seedGked, seedPlatformReference, type SeedReport } from './platform';
 
 export { checksumOf } from './checksum';
-export { DEMO_ORG_ID, seedDemoOrganization } from './demo';
+export { seedPermissions, seedRoleTemplates } from './access';
+export {
+  DEMO_ORG_ID,
+  demoId,
+  seedDemoOrganization,
+  type DemoSeedOptions,
+  type DemoSeedReport,
+} from './demo';
 export { seedGked, seedPlatformReference, type SeedOptions, type SeedReport } from './platform';
 
 export interface SeedAllResult {
   platformReference: SeedReport;
   gked: SeedReport;
-  demo: { orgId: string; created: boolean } | null;
+  permissions: SeedReport;
+  roleTemplates: SeedReport;
+  demo: DemoSeedReport | null;
 }
 
 /** Всё начальное наполнение из spec/data. Подключение — владельцем схемы (обходит RLS). */
 export async function seedAll(
   db: Db,
-  options: { update: boolean; demo: boolean },
+  options: { update: boolean; demo: boolean; demoPassword?: string | null },
 ): Promise<SeedAllResult> {
   const commit = await specCommit();
   return db.transaction(async (tx) => {
     const t = tx as unknown as Db;
+    const refDB = await readSpecJson<Record<string, unknown>>('data/refDB.json');
     const platformReference = await seedPlatformReference(
       t,
-      await readSpecJson<Record<string, unknown>>('data/refDB.json'),
+      refDB,
       `refDB.json@${commit}`,
       options,
     );
     const gked = await seedGked(t, await readSpecJson('data/gkedDB.json'), options);
+    const permissions = await seedPermissions(t, refDB.permissions, options);
+    const roleTemplates = await seedRoleTemplates(t, refDB.roleTemplates, options);
     const demo = options.demo
-      ? await seedDemoOrganization(t, await readSpecJson('data/demoDB.json'))
+      ? await seedDemoOrganization(t, await readSpecJson('data/demoDB.json'), {
+          update: options.update,
+          password: options.demoPassword ?? null,
+        })
       : null;
-    return { platformReference, gked, demo };
+    return { platformReference, gked, permissions, roleTemplates, demo };
   });
 }

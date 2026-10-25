@@ -37,6 +37,10 @@ Vercel → проект → Settings → Environment Variables, окружени
 - **General → Pull Requests**: включить «Allow auto-merge» и «Automatically delete head branches».
 - **Branches → Branch protection rule (или Ruleset) для `main`** (если тариф позволяет для закрытого репозитория): Require a pull request, Require status checks `check`, `docker-e2e`, `pr-policy`, запрет force-push. Без защиты автослияние всё равно работает через `.github/workflows/automerge.yml`, а прямой push в main запрещает хук Claude Code.
 
+## Первая организация и администратор платформы
+- До Админки организацию с владельцем создаёт `pnpm db:create-org --name … --inn … --owner-fio … --owner-login …` (ролью приложения, `DATABASE_URL`), администратора платформы — `pnpm db:create-admin --login …` (владельцем схемы, `DATABASE_ADMIN_URL`). Временный пароль печатается один раз, при первом входе его нужно сменить. Как запускать их для стенда и рабочего сайта так, чтобы пароль не попал в журнал GitHub Actions, решим к задаче входа (#5).
+- Демо-сотрудники (erkin, meerim, alisher…) на стенде входят паролем из `DEMO_PASSWORD` при `pnpm db:seed --update` (на стенде — своя строка от 12 символов, на рабочем сайте не задаётся); пока он не задан (секрет `TEST_DEMO_PASSWORD` в `migrate-test.yml` — правка `.github/`, отдельным PR заказчика), войти в демо-организацию нельзя.
+
 ## Как выходит версия
 - Слияние PR в `main` → Vercel сам выкладывает `main` на `test.buhuchet.kg` (стенд с демо-организацией), миграции стенда применяет `migrate-test.yml`: `pnpm db:migrate`, `pnpm db:seed --update`, `pnpm storage:init` с `APP_ENV=staging`.
   - Слияние, сделанное `automerge.yml` токеном `GITHUB_TOKEN`, не запускает workflow на `push` в main (так устроен GitHub), но запуск `workflow_dispatch` разрешён: после слияния PR, который меняет `packages/db/` или `spec/data/`, `automerge.mjs` запускает `migrate-test.yml` сам. Слияние человеком запускает его через `push`; вручную — Actions → Migrate test → Run workflow.

@@ -7,6 +7,8 @@ const SECRET_KEYS = [
   'password',
   'newPassword',
   'passwordHash',
+  'password_hash',
+  'temporaryPassword',
   'token',
   'accessToken',
   'refreshToken',
@@ -24,6 +26,7 @@ const SECRET_KEYS = [
   'CRON_SECRET',
   'TELEGRAM_BOT_TOKEN',
   'TELEGRAM_WEBHOOK_SECRET',
+  'DEMO_PASSWORD',
   // Поля тела ошибки S3, которые SDK копирует в объект ошибки (подпись запроса).
   'AWSAccessKeyId',
   'StringToSign',

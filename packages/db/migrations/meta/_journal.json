@@ -22,6 +22,20 @@
       "when": 1792943980831,
       "tag": "0002_rls_all_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792965382985,
+      "tag": "0003_users_staff_roles",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792965396403,
+      "tag": "0004_org_ids_function",
+      "breakpoints": true
     }
   ]
 }
