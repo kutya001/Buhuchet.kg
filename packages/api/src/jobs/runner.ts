@@ -24,8 +24,14 @@ export async function runDueJobs(ctx: JobContext, jobs: readonly Job[]): Promise
       continue;
     }
     let error: string | null = null;
+    const started = Date.now();
     try {
       await job.run(ctx, slot);
+      // Чтобы по журналу стенда и рабочего сайта было видно, что задачи действительно идут.
+      ctx.logger.info(
+        { job: job.name, slot: slot.toISOString(), ms: Date.now() - started },
+        'задача по расписанию выполнена',
+      );
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
       ctx.logger.error(

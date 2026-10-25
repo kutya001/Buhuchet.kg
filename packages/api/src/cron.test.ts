@@ -1,4 +1,5 @@
-import { fixedClock } from '@buhuchet/adapters';
+import { Writable } from 'node:stream';
+import { createLogger, fixedClock } from '@buhuchet/adapters';
 import { schema } from '@buhuchet/db';
 import { createTestDatabase, databaseAvailable, type TestDatabase } from '@buhuchet/db/testing';
 import { ApiError, CronTickResponse } from '@buhuchet/shared';
@@ -87,10 +88,25 @@ describe.skipIf(!databaseAvailable())('/api/cron/tick с базой', () => {
     };
     const okRun = vi.fn(async () => {});
     const ok: Job = { name: 'test.ok', cron: '* * * * *', run: okRun };
+    const lines: string[] = [];
+    const destination = new Writable({
+      write(chunk, _enc, cb) {
+        lines.push(String(chunk));
+        cb();
+      },
+    });
+    const logger = createLogger({
+      level: 'info',
+      environment: 'test',
+      version: 'test',
+      service: 'web',
+      destination,
+    });
     const deps = createTestDeps({
       db: t.app.db,
       clock: fixedClock('2026-10-18T05:00:00Z'),
       jobs: [failing, weird, ok],
+      logger,
     });
     const body = CronTickResponse.parse(
       await (await createApp(deps).request('/api/cron/tick', { headers: auth })).json(),
@@ -103,6 +119,10 @@ describe.skipIf(!databaseAvailable())('/api/cron/tick с базой', () => {
     const rows = await t.admin.db.select().from(schema.schedulerRuns);
     expect(rows.find((r) => r.job === 'test.failing')?.error).toBe('сломалось');
     expect(rows.find((r) => r.job === 'test.weird')?.error).toBe('не Error');
+    const done = lines
+      .map((l) => JSON.parse(l) as { msg: string; job?: string })
+      .filter((e) => e.msg === 'задача по расписанию выполнена');
+    expect(done.map((e) => e.job)).toEqual(['test.ok']);
   });
 
   it('очистка удаляет записи старше 30 дней', async () => {
