@@ -1,8 +1,17 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { sql } from 'drizzle-orm';
 import { withOrgContext } from './context';
-import { gkedItems, organizations, platformReference } from './schema';
-import { checksumOf, DEMO_ORG_ID, seedAll, seedPlatformReference } from './seed';
+import { verifyPassword } from '@buhuchet/adapters/password';
+import { eq } from 'drizzle-orm';
+import { employees, gkedItems, organizations, platformReference, roles, users } from './schema';
+import {
+  checksumOf,
+  DEMO_ORG_ID,
+  demoId,
+  seedAll,
+  seedPermissions,
+  seedPlatformReference,
+} from './seed';
 import { readSpecJson } from './spec-data';
 import { createTestDatabase, databaseAvailable, type TestDatabase } from './testing';
 
@@ -32,7 +41,9 @@ describe.skipIf(!databaseAvailable())('начальное наполнение �
     const result = await seedAll(t.admin.db, { update: false, demo: true });
     expect(result.platformReference.inserted).toBe(Object.keys(refDB).length);
     expect(result.gked.inserted).toBe(gked.items.length);
-    expect(result.demo).toEqual({ orgId: DEMO_ORG_ID, created: true });
+    expect(result.demo).toEqual({ orgId: DEMO_ORG_ID, created: true, employees: 7 });
+    expect(result.permissions.inserted).toBe(39);
+    expect(result.roleTemplates.inserted).toBe(2);
 
     const [reportTypes] = await t.admin.db
       .select()
@@ -49,7 +60,9 @@ describe.skipIf(!databaseAvailable())('начальное наполнение �
     expect(result.platformReference.inserted).toBe(0);
     expect(result.platformReference.updated).toBe(0);
     expect(result.gked).toMatchObject({ inserted: 0, updated: 0 });
-    expect(result.demo?.created).toBe(false);
+    expect(result.permissions).toEqual({ inserted: 0, updated: 0, unchanged: 39 });
+    expect(result.roleTemplates).toEqual({ inserted: 0, updated: 0, unchanged: 2 });
+    expect(result.demo).toMatchObject({ created: false, employees: 0 });
   });
 
   it('изменённый раздел обновляется только с --update и повышает версию', async () => {
@@ -73,5 +86,47 @@ describe.skipIf(!databaseAvailable())('начальное наполнение �
       tx.select().from(organizations),
     );
     expect(own[0]?.slug).toBe('buhgalter-plyus');
+  });
+
+  it('демо-сотрудники: роли из demoDB.json, вход паролем DEMO_PASSWORD только после --update с паролем', async () => {
+    const staff = await withOrgContext(t.app.db, { orgId: DEMO_ORG_ID }, (tx) =>
+      tx
+        .select({
+          login: users.login,
+          role: roles.name,
+          isOwner: roles.isOwner,
+          active: employees.active,
+        })
+        .from(employees)
+        .innerJoin(users, eq(users.id, employees.userId))
+        .innerJoin(roles, eq(roles.id, employees.roleId))
+        .orderBy(users.login),
+    );
+    expect(staff).toHaveLength(7);
+    expect(staff.find((e) => e.login === 'erkin')).toMatchObject({ isOwner: true });
+    expect(staff.find((e) => e.login === 'meerim')?.role).toBe('Главный бухгалтер');
+    expect(staff.find((e) => e.login === 'bakyt')).toMatchObject({
+      role: 'Бухгалтер',
+      active: false,
+    });
+
+    const hashOf = async () =>
+      (
+        await t.admin.db
+          .select()
+          .from(users)
+          .where(eq(users.id, demoId('user', 'e3')))
+      )[0]!.passwordHash;
+    expect(await verifyPassword(await hashOf(), 'demo')).toBe(false);
+    await seedAll(t.admin.db, { update: true, demo: true, demoPassword: 'demo' });
+    expect(await verifyPassword(await hashOf(), 'demo')).toBe(true);
+  });
+
+  it('каталог прав из refDB.json должен совпадать с системным', async () => {
+    const refDB = await readSpecJson<{ permissions: { id: string }[] }>('data/refDB.json');
+    const extra = [...refDB.permissions, { id: 'newRight', group: 'cps', name: 'Новое', desc: '' }];
+    await expect(seedPermissions(t.admin.db, extra, { update: true })).rejects.toThrow(
+      /расходится/,
+    );
   });
 });

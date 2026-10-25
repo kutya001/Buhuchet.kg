@@ -64,6 +64,8 @@ services:
     environment:
       <<: *app-env
       DATABASE_ADMIN_URL: postgres://postgres:postgres@postgres:5432/buhuchet
+      # Пароль демо-сотрудников (из .env); пусто — войти в демо-организацию нельзя.
+      DEMO_PASSWORD: ${DEMO_PASSWORD:-}
     command: ['sh', '-c', 'pnpm db:migrate && pnpm db:seed --update && pnpm storage:init']
     depends_on:
       postgres:

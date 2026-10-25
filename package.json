@@ -24,6 +24,8 @@
     "db:generate": "pnpm --filter @buhuchet/db generate",
     "db:migrate": "pnpm --filter @buhuchet/db migrate",
     "db:seed": "pnpm --filter @buhuchet/db seed",
+    "db:create-org": "pnpm --filter @buhuchet/db create-org",
+    "db:create-admin": "pnpm --filter @buhuchet/db create-admin",
     "services:up": "docker compose up -d --wait postgres minio",
     "services:down": "docker compose down",
     "spec:sync": "node scripts/spec-sync.mjs",

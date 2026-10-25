@@ -20,6 +20,7 @@ B2B SaaS для бухгалтерских аутсорсинговых орга
 - `pnpm check` — типы, линтер, переносимость, карта приёмки, все тесты. **Готово только когда он зелёный.**
 - `pnpm test`, `pnpm test:coverage` (порог 80 % для domain и api), `pnpm test:e2e` (против запущенного сайта, `E2E_BASE_URL`).
 - `pnpm db:generate` (миграция из схемы), `pnpm db:migrate`, `pnpm db:seed [--update]`.
+- `pnpm db:create-org --name … --inn … --owner-fio … --owner-login …` и `pnpm db:create-admin --login …` — организация с владельцем и администратор платформы с временным паролем (до Админки).
 - `pnpm check:portability`, `pnpm check:acceptance`, `pnpm format`.
 - Как на VPS: `docker compose --profile app up -d --build --wait`.
 

@@ -10,7 +10,8 @@ export const organizations = pgTable(
     /** Адрес страницы организации: buhuchet.kg/<slug>/inn/<ИНН>. */
     slug: text('slug').notNull().unique(),
     name: text('name').notNull(),
-    inn: text('inn'),
+    /** 14 цифр; второй организации с таким ИНН быть не может. */
+    inn: text('inn').unique(),
     isDemo: boolean('is_demo').notNull().default(false),
     ...timestamps(),
     version: recordVersion(),

@@ -24,6 +24,8 @@ const DatabaseEnv = z.object({
   /** Подключение владельца схемы: только миграции и начальное наполнение. */
   DATABASE_ADMIN_URL: z.string().min(1).optional(),
   DATABASE_POOL_MAX: z.coerce.number().int().positive().default(5),
+  /** Пароль демо-сотрудников для `pnpm db:seed`; без него войти в демо-организацию нельзя. */
+  DEMO_PASSWORD: z.string().min(1).optional(),
 });
 
 // Ключи, регион и корзину вставляют копированием: лишний пробел или перевод строки в конце ломает подпись S3.
