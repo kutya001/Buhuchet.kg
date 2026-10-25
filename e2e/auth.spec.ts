@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 // Вход и сеансы через настоящий сайт (Next.js → API): cookie, общий слой и проверка Origin.
 // Демо-организация наполняется с DEMO_PASSWORD (в CI — из .env.example). Неверные пароли здесь не
 // вводятся: пять неверных подряд закрыли бы вход демо-сотруднику на 15 минут — это проверяют тесты
-// API против базы (packages/api/src/auth.test.ts).
+// API против базы (packages/api/src/modules/auth/auth.test.ts).
 const DEMO_PASSWORD = process.env.DEMO_PASSWORD ?? 'demo';
 
 test.describe('Этап 1: вход и сеансы (API)', () => {

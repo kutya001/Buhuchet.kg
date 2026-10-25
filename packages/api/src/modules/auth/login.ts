@@ -1,7 +1,7 @@
 import { createRoute, type RouteHandler } from '@hono/zod-openapi';
 import { verifyAgainstDummy, verifyPassword } from '@buhuchet/adapters/password';
 import { hashSessionToken, newSessionToken } from '@buhuchet/adapters/tokens';
-import { endSession, findLogin, recordLoginFailure, startSession } from '@buhuchet/db';
+import { endSession, findLogin, reserveLoginAttempt, startSession } from '@buhuchet/db';
 import {
   LOGIN_LOCK_MINUTES,
   LOGIN_MAX_FAILURES,
@@ -42,8 +42,10 @@ export const loginRoute = createRoute({
 /**
  * Порядок проверок — как в прототипе (core/login.js): нет логина → «Нет такого логина»; учётная
  * запись или организация заблокирована → сообщение о блокировке; неверный пароль → «Неверный
- * пароль…», на пятом подряд вход закрывается на 15 минут (docs/deviations.md, п. 4).
+ * пароль…», на пятом подряд вход закрывается на 15 минут. Верный пароль сбрасывает счётчик.
  */
+// ОТКЛОНЕНИЕ: docs/deviations.md#4 — разные сообщения для неизвестного логина и неверного пароля,
+// о блокировке — до проверки пароля (как в прототипе), пока заказчик не выбрал вариант.
 export function loginHandler(deps: ApiDeps): RouteHandler<typeof loginRoute, AppEnv> {
   return async (c) => {
     const { login, password } = c.req.valid('json');
@@ -56,13 +58,13 @@ export function loginHandler(deps: ApiDeps): RouteHandler<typeof loginRoute, App
       return c.json(lockedError(c, account.lockedUntil), 429);
     }
     const denial = loginDenial(account);
-    if (denial) return c.json(denialError(denial, account.orgName), 403);
+    if (denial) return c.json(denialError(denial, account), 403);
 
+    // Попытка занимается до проверки пароля: одновременные запросы не проверят больше пяти паролей.
+    const attempt = await reserveLoginAttempt(deps.db, account.userId);
+    if (!attempt.allowed) return c.json(lockedError(c, attempt.lockedUntil), 429);
     if (!(await verifyPassword(account.passwordHash, password))) {
-      const failure = await recordLoginFailure(deps.db, account.userId);
-      if (failure.locked) {
-        return c.json(lockedError(c, failure.lockedUntil), 429);
-      }
+      if (attempt.locked) return c.json(lockedError(c, attempt.lockedUntil), 429);
       return c.json(
         apiError(
           'wrong_password',

@@ -44,7 +44,7 @@ export function sessionGuard(deps: ApiDeps) {
     if (denial) {
       await endSession(deps.db, tokenHash);
       clearSessionCookie(c, deps);
-      return c.json(denialError(denial, session.orgName), 403);
+      return c.json(denialError(denial, session), 403);
     }
     if (session.touched) writeSessionCookie(c, deps, token);
     c.set('session', { ...session, tokenHash });

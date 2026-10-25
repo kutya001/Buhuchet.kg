@@ -7,7 +7,7 @@ import {
   endSession,
   findLogin,
   loadEmployeeAccess,
-  recordLoginFailure,
+  reserveLoginAttempt,
   sessionByToken,
   startSession,
   withUserContext,
@@ -88,21 +88,27 @@ describe.skipIf(!databaseAvailable())('вход и сеансы в базе', ()
     });
   });
 
-  it('пятый неверный пароль подряд закрывает вход на 15 минут, счётчик начинается заново', async () => {
+  it('попытка входа занимается до проверки пароля; пятая подряд закрывает вход на 15 минут', async () => {
     for (let i = 1; i <= 4; i++) {
-      expect(await recordLoginFailure(t.app.db, b.ownerUserId)).toEqual({
-        failedLogins: i,
-        lockedUntil: null,
+      expect(await reserveLoginAttempt(t.app.db, b.ownerUserId)).toEqual({
+        allowed: true,
         locked: false,
+        lockedUntil: null,
       });
     }
     const before = Date.now();
-    const fifth = await recordLoginFailure(t.app.db, b.ownerUserId);
-    expect(fifth).toMatchObject({ failedLogins: 0, locked: true });
+    const fifth = await reserveLoginAttempt(t.app.db, b.ownerUserId);
+    expect(fifth).toMatchObject({ allowed: true, locked: true });
     const minutes = (fifth.lockedUntil!.getTime() - before) / 60_000;
     expect(minutes).toBeGreaterThan(14.9);
     expect(minutes).toBeLessThan(15.1);
     expect(await findLogin(t.app.db, 'owner-b')).toMatchObject({ locked: true });
+    // Пока вход закрыт, попытка не занимается и срок не продлевается.
+    expect(await reserveLoginAttempt(t.app.db, b.ownerUserId)).toEqual({
+      allowed: false,
+      locked: true,
+      lockedUntil: fifth.lockedUntil,
+    });
 
     // Верный пароль после окончания блокировки: счётчик и блокировка сброшены, есть сеанс.
     await t.admin.db
@@ -115,6 +121,18 @@ describe.skipIf(!databaseAvailable())('вход и сеансы в базе', ()
     expect(after.failedLogins).toBe(0);
     expect(after.lockedUntil).toBeNull();
     expect(after.lastLoginAt).not.toBeNull();
+  });
+
+  it('одновременные попытки: занять можно ровно пять, остальные отклоняются', async () => {
+    const attempts = await Promise.all(
+      Array.from({ length: 20 }, () => reserveLoginAttempt(t.app.db, b.ownerUserId)),
+    );
+    expect(attempts.filter((x) => x.allowed)).toHaveLength(5);
+    expect(attempts.filter((x) => x.allowed && !x.locked)).toHaveLength(4);
+    await t.admin.db
+      .update(users)
+      .set({ lockedUntil: null, failedLogins: 0 })
+      .where(eq(users.id, b.ownerUserId));
   });
 
   it('сеанс находится по хешу токена; продлевается не чаще раза в час', async () => {
@@ -170,6 +188,7 @@ describe.skipIf(!databaseAvailable())('вход и сеансы в базе', ()
     await startSession(t.app.db, { userId: a.ownerUserId, tokenHash: other });
     const bSession = newHash();
     await startSession(t.app.db, { userId: b.ownerUserId, tokenHash: bSession });
+    await t.admin.db.update(users).set({ failedLogins: 2 }).where(eq(users.id, a.ownerUserId));
     const version = (await user(a.ownerUserId)).version;
 
     const rotated = newHash();
@@ -185,6 +204,7 @@ describe.skipIf(!databaseAvailable())('вход и сеансы в базе', ()
     const after = await user(a.ownerUserId);
     expect(after.passwordHash).toBe('hash-a2');
     expect(after.version).toBe(version + 1);
+    expect(after.failedLogins).toBe(0);
     // Сеансы другого пользователя не тронуты.
     expect(await sessionByToken(t.app.db, bSession)).not.toBeNull();
   });
@@ -241,6 +261,39 @@ describe.skipIf(!databaseAvailable())('вход и сеансы в базе', ()
     expect(await t.app.db.select().from(sessions)).toEqual([]);
   });
 
+  it('чужая организация не меняется и не создаётся: сеансы Б из контекста А', async () => {
+    const bToken = newHash();
+    await startSession(t.app.db, { userId: b.ownerUserId, tokenHash: bToken });
+    const ctxA = { orgId: a.orgId, userId: a.ownerUserId };
+    const changed = await withOrgContext(t.app.db, ctxA, (tx) =>
+      tx
+        .update(sessions)
+        .set({ expiresAt: new Date(Date.now() + 365 * 86_400_000) })
+        .where(eq(sessions.orgId, b.orgId))
+        .returning({ id: sessions.id }),
+    );
+    expect(changed).toEqual([]);
+    const deleted = await withOrgContext(t.app.db, ctxA, (tx) =>
+      tx.delete(sessions).where(eq(sessions.orgId, b.orgId)).returning({ id: sessions.id }),
+    );
+    expect(deleted).toEqual([]);
+    expect(await sessionByToken(t.app.db, bToken)).not.toBeNull();
+    await expect(
+      withOrgContext(t.app.db, ctxA, (tx) =>
+        tx.insert(sessions).values({
+          userId: b.ownerUserId,
+          orgId: b.orgId,
+          tokenHash: newHash(),
+          expiresAt: new Date(Date.now() + 86_400_000),
+        }),
+      ),
+    ).rejects.toThrow(
+      expect.objectContaining({
+        cause: expect.objectContaining({ message: expect.stringMatching(/row-level security/) }),
+      }),
+    );
+  });
+
   it('права сотрудника: роль, права и области; сотрудник чужой организации не находится', async () => {
     const chiefRole = a.roles.find((r) => r.templateCode === 'chief')!;
     const [chiefUser] = await t.admin.db
@@ -287,16 +340,16 @@ describe.skipIf(!databaseAvailable())('вход и сеансы в базе', ()
     ).toEqual({ id: a.orgId, name: 'Организация А', slug: 'org-a' });
   });
 
-  it('организацию нельзя заблокировать без причины', async () => {
+  it('состояние организации — только «активна» или «заблокирована»; причина необязательна', async () => {
     await expect(
       t.admin.db
         .update(organizations)
-        .set({ status: 'blocked' })
+        .set({ status: 'paused' })
         .where(eq(organizations.id, b.orgId)),
     ).rejects.toThrow(checkViolation);
     await t.admin.db
       .update(organizations)
-      .set({ status: 'blocked', blockedReason: 'Неоплата' })
+      .set({ status: 'blocked' })
       .where(eq(organizations.id, b.orgId));
     expect(await findLogin(t.app.db, 'owner-b')).toMatchObject({ orgStatus: 'blocked' });
   });

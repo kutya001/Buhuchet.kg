@@ -19,6 +19,6 @@ ALTER TABLE "sessions" ADD CONSTRAINT "sessions_org_id_organizations_id_fk" FORE
 ALTER TABLE "sessions" ADD CONSTRAINT "sessions_user_org_fk" FOREIGN KEY ("user_id","org_id") REFERENCES "public"."users"("id","org_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "sessions_user_idx" ON "sessions" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "sessions_expires_idx" ON "sessions" USING btree ("expires_at");--> statement-breakpoint
+CREATE INDEX "users_login_lower_idx" ON "users" USING btree (lower("login"::text));--> statement-breakpoint
 ALTER TABLE "organizations" ADD CONSTRAINT "organizations_status_check" CHECK ("organizations"."status" in ('active', 'blocked'));--> statement-breakpoint
-ALTER TABLE "organizations" ADD CONSTRAINT "organizations_blocked_reason_check" CHECK ("organizations"."status" <> 'blocked' or "organizations"."blocked_reason" is not null);--> statement-breakpoint
 CREATE POLICY "sessions_isolation" ON "sessions" AS PERMISSIVE FOR ALL TO "buhuchet_app" USING ("sessions"."org_id" = app.current_org_id()) WITH CHECK ("sessions"."org_id" = app.current_org_id());

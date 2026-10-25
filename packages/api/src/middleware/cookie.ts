@@ -5,12 +5,15 @@ import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import type { ApiDeps } from '../deps';
 
 /**
- * Cookie сеанса (ТЗ «Вход и сеансы — свои»): HttpOnly, Secure, SameSite=Lax. На стенде и рабочем
- * сайте — с приставкой `__Host-` (только https, только наш адрес, без поддоменов). Локально и в
- * сквозных тестах сайт работает по http, там cookie без Secure.
+ * Cookie сеанса (ТЗ «Вход и сеансы — свои»): HttpOnly, Secure, SameSite=Lax. На стенде, рабочем
+ * сайте и любом сайте по https — с приставкой `__Host-` (только https, только наш адрес, без
+ * поддоменов). Локально и в сквозных тестах сайт работает по http, там cookie без Secure.
  */
 function cookieOptions(deps: ApiDeps) {
-  const secure = deps.config.APP_ENV === 'staging' || deps.config.APP_ENV === 'production';
+  const secure =
+    deps.config.APP_ENV === 'staging' ||
+    deps.config.APP_ENV === 'production' ||
+    deps.config.APP_BASE_URL.startsWith('https:');
   return { name: secure ? '__Host-bh_session' : 'bh_session', secure };
 }
 

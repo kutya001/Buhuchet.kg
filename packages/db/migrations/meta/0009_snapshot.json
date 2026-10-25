@@ -1,6 +1,6 @@
 {
-  "id": "ce014536-51de-4d58-aeed-73a69b53f386",
-  "prevId": "def3a295-f9b7-4866-9c2a-034dc6c01550",
+  "id": "82a318aa-01b3-493a-b9ce-8d5dacbe0324",
+  "prevId": "51ddea19-37c2-4819-af4c-2baddf227596",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -110,10 +110,6 @@
         "organizations_status_check": {
           "name": "organizations_status_check",
           "value": "\"organizations\".\"status\" in ('active', 'blocked')"
-        },
-        "organizations_blocked_reason_check": {
-          "name": "organizations_blocked_reason_check",
-          "value": "\"organizations\".\"status\" <> 'blocked' or \"organizations\".\"blocked_reason\" is not null"
         }
       },
       "isRLSEnabled": true
@@ -444,7 +440,23 @@
           "default": 1
         }
       },
-      "indexes": {},
+      "indexes": {
+        "users_login_lower_idx": {
+          "name": "users_login_lower_idx",
+          "columns": [
+            {
+              "expression": "lower(\"login\"::text)",
+              "isExpression": true,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
       "foreignKeys": {
         "users_org_id_organizations_id_fk": {
           "name": "users_org_id_organizations_id_fk",

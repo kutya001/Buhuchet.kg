@@ -15,9 +15,10 @@ export const organizations = pgTable(
     inn: text('inn').unique(),
     isDemo: boolean('is_demo').notNull().default(false),
     /**
-     * active или blocked: заблокированную организацию (например, за неоплату) администратор платформы
-     * блокирует с причиной; сотрудники не входят, данные сохраняются (ТЗ «Админка» → «Блокировка
-     * организации»).
+     * active или blocked: заблокированную организацию (например, за неоплату) сотрудники не входят,
+     * данные сохраняются и возвращаются при разблокировке (ТЗ «Админка» → «Блокировка организации»).
+     * Причина — пометка администратора платформы, необязательная (в прототипе подставляется
+     * «Заблокирована администратором»).
      */
     status: text('status').notNull().default('active'),
     blockedReason: text('blocked_reason'),
@@ -26,10 +27,6 @@ export const organizations = pgTable(
   },
   (t) => [
     check('organizations_status_check', sql`${t.status} in ('active', 'blocked')`),
-    check(
-      'organizations_blocked_reason_check',
-      sql`${t.status} <> 'blocked' or ${t.blockedReason} is not null`,
-    ),
     orgIsolation('organizations_isolation', t.id),
   ],
 ).enableRLS();

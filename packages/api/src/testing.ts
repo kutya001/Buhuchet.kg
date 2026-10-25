@@ -19,7 +19,12 @@ export function unavailableDb(): Db {
 /** Зависимости API для тестов: память вместо S3, часы 18.10.2026 09:00 по Бишкеку, бот-подделка. */
 export function createTestDeps(overrides: Partial<ApiDeps> = {}): ApiDeps {
   return {
-    config: { APP_ENV: 'test', APP_VERSION: '0.0.0-test', CRON_SECRET: 'test-cron-secret-0000' },
+    config: {
+      APP_ENV: 'test',
+      APP_VERSION: '0.0.0-test',
+      APP_BASE_URL: 'http://localhost:3000',
+      CRON_SECRET: 'test-cron-secret-0000',
+    },
     db: unavailableDb(),
     storage: createMemoryStorage(),
     clock: fixedClock('2026-10-18T03:00:00Z'),

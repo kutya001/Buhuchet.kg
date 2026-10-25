@@ -2,6 +2,7 @@ import type { OrgContext } from '@buhuchet/db';
 import { hasPermission, type PermissionId } from '@buhuchet/domain';
 import type { Context } from 'hono';
 import { createMiddleware } from 'hono/factory';
+import { HTTPException } from 'hono/http-exception';
 import type { AppEnv } from '../env';
 import { apiError } from '../errors';
 
@@ -29,9 +30,14 @@ export const requireEmployee = createMiddleware<AppEnv>(async (c, next) => {
   return next();
 });
 
-/** Контекст для `withOrgContext`: организация и пользователь — только из сеанса, не из запроса. */
+/**
+ * Контекст для `withOrgContext`: организация и пользователь — только из сеанса, не из запроса. Без
+ * организации в сеансе (администратор платформы в методе, где забыли `requirePermission`) — 403.
+ */
 export function orgContextOf(c: Context<AppEnv>): OrgContext {
   const session = c.get('session');
-  if (!session?.orgId) throw new Error('orgContextOf: метод без организации в сеансе');
+  if (!session?.orgId) {
+    throw new HTTPException(403, { res: Response.json(forbidden(), { status: 403 }) });
+  }
   return { orgId: session.orgId, userId: session.userId };
 }

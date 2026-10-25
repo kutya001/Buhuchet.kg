@@ -1,4 +1,5 @@
 import { hashPassword } from '@buhuchet/adapters/password';
+import { createRoute, z } from '@hono/zod-openapi';
 import { schema, withOrgContext } from '@buhuchet/db';
 import { createOrganization, type CreatedOrganization } from '@buhuchet/db/organizations';
 import {
@@ -22,15 +23,39 @@ const PASSWORD = 'Верный-пароль-1';
 
 type App = ReturnType<typeof createApp>;
 
-/** Приложение с двумя проверочными методами: с правом «Просматривать сотрудников» и для любого сотрудника. */
+/**
+ * Приложение с двумя проверочными методами: «Сотрудники» с правом «Просматривать сотрудников» —
+ * так, как метод подключает право (`createRoute({ middleware })`), и метод для любого сотрудника.
+ */
 function appWithProbes(deps: ApiDeps): App {
   const app = createApp(deps);
-  app.get('/probe/staff', requirePermission('staffView'), async (c) =>
-    c.json(
-      await withOrgContext(deps.db, orgContextOf(c), (tx) =>
-        tx.select({ id: employees.id, orgId: employees.orgId }).from(employees),
+  app.openapi(
+    createRoute({
+      method: 'get',
+      path: '/probe/staff',
+      middleware: [requirePermission('staffView')] as const,
+      responses: {
+        200: {
+          description: 'Сотрудники своей организации',
+          content: {
+            'application/json': {
+              schema: z.array(z.object({ id: z.string(), orgId: z.string() })),
+            },
+          },
+        },
+      },
+    }),
+    async (c) =>
+      c.json(
+        await withOrgContext(deps.db, orgContextOf(c), (tx) =>
+          tx.select({ id: employees.id, orgId: employees.orgId }).from(employees),
+        ),
+        200,
       ),
-    ),
+  );
+  // Метод, где забыли проверку права: без организации в сеансе orgContextOf сам отвечает 403.
+  app.get('/probe/unguarded', async (c) =>
+    c.json(await withOrgContext(deps.db, orgContextOf(c), async () => ({ ok: true }))),
   );
   app.get('/probe/scope', requireEmployee, (c) =>
     c.json({ cps: scopeOf(c.get('access')!.subject, 'cps') }),
@@ -118,6 +143,8 @@ describe.skipIf(!databaseAvailable())('вход, сеансы и проверк�
       ['blocked-a', 'acc'],
       ['banned-a', 'acc'],
       ['wrong-a', 'acc'],
+      ['pwlock-a', 'acc'],
+      ['race-a', 'acc'],
     ] as const) {
       await addEmployee(a, login, template);
     }
@@ -184,8 +211,10 @@ describe.skipIf(!databaseAvailable())('вход, сеансы и проверк�
     const body = ApiError.parse(await fifth.json());
     expect(body.error).toMatchObject({
       code: 'login_locked',
-      message: 'Слишком много неверных паролей. Вход закрыт на 15 минут.',
     });
+    expect(body.error.message).toMatch(
+      /^Слишком много неверных паролей\. Вход закрыт на 15 минут, попробуйте снова после \d{2}:\d{2}\.$/,
+    );
     const retryAfter = Number(fifth.headers.get('retry-after'));
     expect(retryAfter).toBeGreaterThan(14 * 60);
     expect(retryAfter).toBeLessThanOrEqual(15 * 60);
@@ -201,6 +230,19 @@ describe.skipIf(!databaseAvailable())('вход, сеансы и проверк�
       .set({ lockedUntil: new Date(Date.now() - 1000) })
       .where(eq(users.login, 'lock-a'));
     expect((await login(app, 'lock-a')).status).toBe(200);
+  });
+
+  it('одновременные неверные пароли: проверяются только пять, остальным — «вход закрыт»', async () => {
+    const results = await Promise.all(
+      Array.from({ length: 20 }, (_, i) => login(app, 'race-a', `неверный-${i}`)),
+    );
+    const statuses = results.map((r) => r.status);
+    expect(statuses.filter((s) => s === 401)).toHaveLength(4);
+    expect(statuses.filter((s) => s === 429)).toHaveLength(16);
+    // Верный пароль после пятой занятой попытки — тоже «вход закрыт», блокировка не снимается.
+    expect(await errorCode(await login(app, 'race-a'))).toBe('login_locked');
+    const [race] = await t.admin.db.select().from(users).where(eq(users.login, 'race-a'));
+    expect(race!.lockedUntil!.getTime()).toBeGreaterThan(Date.now());
   });
 
   it('без входа — 401; испорченная или чужая cookie — 401, cookie стирается', async () => {
@@ -321,6 +363,21 @@ describe.skipIf(!databaseAvailable())('вход, сеансы и проверк�
     expect((await get(app, '/api/auth/me', cookie)).status).toBe(200);
   });
 
+  it('пятый неверный текущий пароль подряд закрывает вход на 15 минут — 429', async () => {
+    const cookie = await signIn(app, 'pwlock-a', PASSWORD);
+    const attempt = () =>
+      app.request(
+        '/api/auth/password',
+        json({ currentPassword: 'не-тот', newPassword: 'Новый-пароль-2' }, { cookie }),
+      );
+    for (let i = 1; i <= 4; i++) expect((await attempt()).status).toBe(400);
+    const fifth = await attempt();
+    expect(fifth.status).toBe(429);
+    expect(await errorCode(fifth)).toBe('login_locked');
+    expect(await errorCode(await attempt())).toBe('login_locked');
+    expect(await errorCode(await login(app, 'pwlock-a'))).toBe('login_locked');
+  });
+
   it('временный пароль: до смены доступны только «кто я» и смена пароля', async () => {
     const res = await login(app, 'owner-a');
     expect(res.status).toBe(200);
@@ -377,13 +434,13 @@ describe.skipIf(!databaseAvailable())('вход, сеансы и проверк�
     expect(await errorCode(again)).toBe('employee_blocked');
   });
 
-  it('учётная запись, заблокированная администратором платформы, не входит', async () => {
+  it('учётная запись, заблокированная администратором платформы, не входит (текст — как в прототипе)', async () => {
     await t.admin.db.update(users).set({ blocked: true }).where(eq(users.login, 'banned-a'));
     const res = await login(app, 'banned-a');
     expect(res.status).toBe(403);
     expect(ApiError.parse(await res.json()).error).toMatchObject({
       code: 'user_blocked',
-      message: 'Учётная запись заблокирована. Обратитесь к администратору платформы.',
+      message: 'Учётная запись заблокирована. Обратитесь к владельцу организации.',
     });
   });
 
@@ -391,7 +448,7 @@ describe.skipIf(!databaseAvailable())('вход, сеансы и проверк�
     const cookie = await signIn(app, 'owner-c', PASSWORD);
     await t.admin.db
       .update(organizations)
-      .set({ status: 'blocked', blockedReason: 'Неоплата' })
+      .set({ status: 'blocked', blockedReason: 'Заблокирована администратором' })
       .where(eq(organizations.id, c.orgId));
     const expected = {
       code: 'org_blocked',
@@ -403,6 +460,19 @@ describe.skipIf(!databaseAvailable())('вход, сеансы и проверк�
     const res = await login(app, 'owner-c');
     expect(res.status).toBe(403);
     expect(ApiError.parse(await res.json()).error).toMatchObject(expected);
+    // Как в прототипе: о блокировке сообщается до проверки пароля (docs/deviations.md, п. 4).
+    const wrong = await login(app, 'owner-c', 'не-тот-пароль');
+    expect(wrong.status).toBe(403);
+    expect(await errorCode(wrong)).toBe('org_blocked');
+
+    // После разблокировки сотрудники снова входят и видят свои данные.
+    await t.admin.db
+      .update(organizations)
+      .set({ status: 'active', blockedReason: null })
+      .where(eq(organizations.id, c.orgId));
+    const back = await signIn(app, 'owner-c', PASSWORD);
+    const seen = (await (await get(app, '/api/probe/staff', back)).json()) as { orgId: string }[];
+    expect(seen).toEqual([{ id: c.ownerEmployeeId, orgId: c.orgId }]);
   });
 
   it('администратор платформы входит без организации и без прав в организациях', async () => {
@@ -419,6 +489,9 @@ describe.skipIf(!databaseAvailable())('вход, сеансы и проверк�
     expect((await get(app, '/api/auth/me', cookie)).status).toBe(200);
     expect(await errorCode(await get(app, '/api/probe/staff', cookie))).toBe('forbidden');
     expect(await errorCode(await get(app, '/api/probe/scope', cookie))).toBe('forbidden');
+    const unguarded = await get(app, '/api/probe/unguarded', cookie);
+    expect(unguarded.status).toBe(403);
+    expect(await errorCode(unguarded)).toBe('forbidden');
 
     const changed = await app.request(
       '/api/auth/password',
@@ -443,18 +516,54 @@ describe.skipIf(!databaseAvailable())('вход, сеансы и проверк�
     });
     expect(noOrigin.status).toBe(403);
     // За прокси (Vercel) адрес сайта — в x-forwarded-host.
-    const proxied = await app.request(
-      '/api/auth/login',
-      json(
-        { login: 'acc-a', password: PASSWORD },
-        { origin: 'https://test.buhuchet.kg', 'x-forwarded-host': 'test.buhuchet.kg' },
-      ),
+    // Заголовкам прокси не верим: подставленный X-Forwarded-Host не делает чужой Origin своим.
+    const spoofed = await app.request(
+      '/api/auth/logout',
+      json({}, { origin: 'https://evil.example', 'x-forwarded-host': 'evil.example' }),
     );
-    expect(proxied.status).toBe(200);
+    expect(spoofed.status).toBe(403);
+    // Проверяются все изменяющие методы, не только POST.
+    const patch = await app.request('/api/auth/me', { method: 'PATCH' });
+    expect(await errorCode(patch)).toBe('origin_mismatch');
+    // Адрес сайта из APP_BASE_URL — свой, даже если запрос пришёл на внутренний адрес.
+    const site = appWithProbes(
+      createTestDeps({
+        db: t.app.db,
+        config: { ...deps.config, APP_BASE_URL: 'https://test.buhuchet.kg' },
+      }),
+    );
+    const fromSite = await site.request(
+      '/api/auth/login',
+      json({ login: 'acc-a', password: PASSWORD }, { origin: 'https://test.buhuchet.kg' }),
+    );
+    expect(fromSite.status).toBe(200);
     // Планировщик вызывает со своим секретом, без Origin.
     expect(await errorCode(await app.request('/api/cron/tick', { method: 'POST' }))).toBe(
       'cron_unauthorized',
     );
+  });
+
+  it('сайт по https — cookie с приставкой __Host- и Secure, даже если забыли APP_ENV', async () => {
+    const https = appWithProbes(
+      createTestDeps({
+        db: t.app.db,
+        config: { ...deps.config, APP_ENV: 'local', APP_BASE_URL: 'https://buhuchet.example' },
+      }),
+    );
+    const res = await https.request(
+      '/api/auth/login',
+      json({ login: 'acc-a', password: PASSWORD }, { origin: 'https://buhuchet.example' }),
+    );
+    expect(res.headers.get('set-cookie')).toMatch(/^__Host-bh_session=.*Secure/);
+  });
+
+  it('слишком большой запрос — 413 до проверки пароля', async () => {
+    const res = await app.request(
+      '/api/auth/login',
+      json({ login: 'acc-a', password: 'x'.repeat(2 * 1024 * 1024) }),
+    );
+    expect(res.status).toBe(413);
+    expect(await errorCode(res)).toBe('payload_too_large');
   });
 
   it('на стенде и рабочем сайте cookie — с приставкой __Host- и Secure', async () => {

@@ -3,6 +3,7 @@ import {
   boolean,
   check,
   customType,
+  index,
   integer,
   pgTable,
   text,
@@ -48,6 +49,8 @@ export const users = pgTable(
   },
   (t) => [
     unique('users_id_org_unique').on(t.id, t.orgId),
+    // Поиск логина при входе (app.auth_find_login) — без citext, по lower(login::text).
+    index('users_login_lower_idx').on(sql`lower(${t.login}::text)`),
     check(
       'users_org_or_platform_admin',
       sql`(${t.isPlatformAdmin} and ${t.orgId} is null) or (not ${t.isPlatformAdmin} and ${t.orgId} is not null)`,

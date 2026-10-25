@@ -76,22 +76,32 @@ export async function findLogin(db: Db | Tx, login: string): Promise<LoginRecord
   };
 }
 
-/** Неверный пароль: счётчик +1; на пятом подряд вход закрывается на 15 минут (locked). */
-export async function recordLoginFailure(
-  db: Db,
-  userId: string,
-): Promise<{ failedLogins: number; lockedUntil: Date | null; locked: boolean }> {
+/** Итог `reserveLoginAttempt`. */
+export interface LoginAttempt {
+  /** false — вход закрыт после неверных паролей: пароль не проверять. */
+  allowed: boolean;
+  /** Если пароль неверный, вход закрыт (это была пятая попытка подряд или вход уже закрыт). */
+  locked: boolean;
+  lockedUntil: Date | null;
+}
+
+/**
+ * Занять попытку входа до проверки пароля (счётчик +1, на пятой подряд вход закрывается на 15 минут).
+ * Так одновременные запросы не проверят больше пяти паролей; верный пароль сбрасывает счётчик
+ * (`startSession`, `changeOwnPassword`).
+ */
+export async function reserveLoginAttempt(db: Db, userId: string): Promise<LoginAttempt> {
   const [row] = await db.execute<{
-    failed_logins: number;
-    locked_until: Date | string | null;
+    allowed: boolean;
     locked: boolean;
+    locked_until: Date | string | null;
   }>(
-    sql`select * from app.auth_login_failed(${userId}, ${LOGIN_MAX_FAILURES}, ${LOGIN_LOCK_MINUTES})`,
+    sql`select * from app.auth_login_attempt(${userId}, ${LOGIN_MAX_FAILURES}, ${LOGIN_LOCK_MINUTES})`,
   );
   return {
-    failedLogins: row?.failed_logins ?? 0,
+    allowed: row?.allowed ?? false,
+    locked: row?.locked ?? true,
     lockedUntil: asDate(row?.locked_until ?? null),
-    locked: row?.locked ?? false,
   };
 }
 
@@ -167,7 +177,7 @@ export async function endSession(db: Db, tokenHash: string): Promise<void> {
 
 /**
  * Смена своего пароля в транзакции с app.user_id: остальные сеансы удаляются, у текущего —
- * новый токен.
+ * новый токен; счётчик неверных паролей сбрасывается.
  */
 export async function changeOwnPassword(
   tx: Tx,

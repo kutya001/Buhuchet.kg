@@ -2,25 +2,45 @@ import { LOGIN_LOCK_MINUTES, type LoginDenial } from '@buhuchet/domain';
 import type { Context } from 'hono';
 import { apiError } from './errors';
 
-/** Почему вход закрыт при верном пароле. Тексты — как в прототипе (core/login.js). */
-export function denialError(denial: LoginDenial, orgName: string | null) {
+const EMPLOYEE_BLOCKED = 'Учётная запись заблокирована. Обратитесь к владельцу организации.';
+
+/**
+ * Почему войти нельзя, даже с верным паролем (проверяется до пароля, как в прототипе). Тексты — из
+ * прототипа core/login.js: там и администратор платформы, блокируя учётную запись сотрудника,
+ * выключает сотрудника, поэтому сотрудник видит одно сообщение — «Обратитесь к владельцу организации».
+ */
+export function denialError(
+  denial: LoginDenial,
+  account: { orgName: string | null; isPlatformAdmin: boolean },
+) {
   switch (denial) {
     case 'org_blocked':
       return apiError(
         denial,
-        `Организация ${orgName ? `${orgName} ` : ''}заблокирована. Обратитесь к администратору платформы.`,
+        `Организация ${account.orgName ? `${account.orgName} ` : ''}заблокирована. Обратитесь к администратору платформы.`,
       );
     case 'employee_blocked':
-      return apiError(denial, 'Учётная запись заблокирована. Обратитесь к владельцу организации.');
+      return apiError(denial, EMPLOYEE_BLOCKED);
     case 'user_blocked':
       return apiError(
         denial,
-        'Учётная запись заблокирована. Обратитесь к администратору платформы.',
+        account.isPlatformAdmin
+          ? 'Учётная запись заблокирована. Обратитесь к администратору платформы.'
+          : EMPLOYEE_BLOCKED,
       );
   }
 }
 
-/** Вход закрыт после неверных паролей: до какого момента — в details.lockedUntil и в Retry-After. */
+/** «14:35» по Бишкеку: все сроки и время на платформе — по часовому поясу организации. */
+function bishkekTime(at: Date): string {
+  return at.toLocaleTimeString('ru-RU', {
+    timeZone: 'Asia/Bishkek',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+/** Вход закрыт после неверных паролей: до какого момента — в тексте, details.lockedUntil и Retry-After. */
 export function lockedError(c: Context, until: Date | null) {
   if (until) {
     const seconds = Math.max(1, Math.ceil((until.getTime() - Date.now()) / 1000));
@@ -28,7 +48,9 @@ export function lockedError(c: Context, until: Date | null) {
   }
   return apiError(
     'login_locked',
-    `Слишком много неверных паролей. Вход закрыт на ${LOGIN_LOCK_MINUTES} минут.`,
+    `Слишком много неверных паролей. Вход закрыт на ${LOGIN_LOCK_MINUTES} минут${
+      until ? `, попробуйте снова после ${bishkekTime(until)}` : ''
+    }.`,
     { lockedUntil: until?.toISOString() ?? null },
   );
 }
