@@ -12,6 +12,7 @@ import {
 import { asc, eq, sql } from 'drizzle-orm';
 import type { Db, Tx } from './client';
 import { withOrgContext } from './context';
+import { writeHistory } from './history';
 import {
   employees,
   organizations,
@@ -206,6 +207,11 @@ async function insertOrganization(
     createdBy,
     updatedBy: createdBy,
   });
+  await writeHistory(
+    tx,
+    { entity: 'organization', entityId: orgId, action: 'create' },
+    { entity: 'employee', entityId: employee!.id, action: 'create' },
+  );
 
   return { orgId, ownerUserId: user!.id, ownerEmployeeId: employee!.id, roles: created };
 }

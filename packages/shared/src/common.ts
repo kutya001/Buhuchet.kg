@@ -24,3 +24,17 @@ export const ApiError = z.object({
   }),
 });
 export type ApiError = z.infer<typeof ApiError>;
+
+/** Код ошибки из ответа API; null — ответ не в общем формате ошибки. */
+export function apiErrorCode(body: unknown): string | null {
+  const parsed = ApiError.safeParse(body);
+  return parsed.success ? parsed.data.error.code : null;
+}
+
+/**
+ * Ответ 409 «Запись изменена другим пользователем»: пока пользователь правил, запись сохранил
+ * кто-то другой. Интерфейс показывает предупреждение и перечитывает запись, правка не сохраняется.
+ */
+export function isRecordChanged(body: unknown): boolean {
+  return apiErrorCode(body) === 'record_changed';
+}
