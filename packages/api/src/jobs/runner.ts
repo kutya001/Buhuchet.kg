@@ -1,3 +1,4 @@
+import { safeErrorMessage } from '@buhuchet/adapters/logger';
 import { dueJobs } from '@buhuchet/adapters/scheduler';
 import { schema } from '@buhuchet/db';
 import type { CronTickResponse } from '@buhuchet/shared';
@@ -33,7 +34,8 @@ export async function runDueJobs(ctx: JobContext, jobs: readonly Job[]): Promise
         'задача по расписанию выполнена',
       );
     } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
+      // Журнал задач виден из любой организации: без значений параметров запроса к базе.
+      error = safeErrorMessage(e);
       ctx.logger.error(
         { job: job.name, slot: slot.toISOString(), err: e },
         'задача по расписанию упала',

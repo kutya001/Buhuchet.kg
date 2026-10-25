@@ -7,14 +7,18 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
   },
   "peerDependencies": {
     "react": "^19.2.0"
   },
   "devDependencies": {
     "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "react": "^19.3.1",
-    "typescript": "catalog:"
+    "react-dom": "^19.3.1",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   }
 }

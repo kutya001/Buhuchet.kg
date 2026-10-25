@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { IsoDate, Tyiyn } from './common';
+import { apiErrorCode, IsoDate, isRecordChanged, Tyiyn } from './common';
 import { HealthResponse } from './system';
 
 describe('общие схемы', () => {
@@ -23,5 +23,20 @@ describe('общие схемы', () => {
       checks: { database: 'ok', storage: 'ok' },
     });
     expect(ok.success).toBe(true);
+  });
+});
+
+describe('ошибки API', () => {
+  it('код ошибки из ответа в общем формате', () => {
+    const conflict = {
+      error: { code: 'record_changed', message: 'Запись изменена другим пользователем' },
+    };
+    expect(apiErrorCode(conflict)).toBe('record_changed');
+    expect(isRecordChanged(conflict)).toBe(true);
+    expect(isRecordChanged({ error: { code: 'not_found', message: 'Запись не найдена' } })).toBe(
+      false,
+    );
+    expect(apiErrorCode({ id: 1 })).toBeNull();
+    expect(isRecordChanged(null)).toBe(false);
   });
 });

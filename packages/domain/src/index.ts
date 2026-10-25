@@ -6,3 +6,5 @@ export * from './org/slug';
 export * from './org/inn';
 export * from './auth/login';
 export * from './staff/names';
+export * from './common/history';
+export * from './common/errors';

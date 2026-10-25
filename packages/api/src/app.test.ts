@@ -1,7 +1,9 @@
-import { ApiError, HealthResponse } from '@buhuchet/shared';
+import { RecordChangedError, RecordNotFoundError } from '@buhuchet/domain';
+import { ApiError, HealthResponse, isRecordChanged } from '@buhuchet/shared';
 import type { Db } from '@buhuchet/db';
 import { describe, expect, it } from 'vitest';
 import { createApp } from './app';
+import { versionedSaveResponses } from './errors';
 import { createTestDeps } from './testing';
 
 const okDb = { execute: async () => [] } as unknown as Db;
@@ -105,5 +107,58 @@ describe('служебное', () => {
     const res = await app.request('/api/teapot');
     expect(res.status).toBe(418);
     expect(ApiError.parse(await res.json()).error.code).toBe('http_error');
+  });
+
+  it('устаревшая версия записи — 409 record_changed «Запись изменена другим пользователем»', async () => {
+    const app = createApp(createTestDeps());
+    app.put('/stale', () => {
+      throw new RecordChangedError('employee', 'e3', 4);
+    });
+    const res = await app.request('/api/stale', { method: 'PUT' });
+    expect(res.status).toBe(409);
+    const body = ApiError.parse(await res.json());
+    expect(body).toEqual({
+      error: {
+        code: 'record_changed',
+        message: 'Запись изменена другим пользователем',
+        details: { version: 4 },
+      },
+    });
+    expect(isRecordChanged(body)).toBe(true);
+  });
+
+  it('нет записи — 404 not_found без подробностей', async () => {
+    const app = createApp(createTestDeps());
+    app.put('/missing', () => {
+      throw new RecordNotFoundError('employee', 'e3');
+    });
+    const res = await app.request('/api/missing', { method: 'PUT' });
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({
+      error: { code: 'not_found', message: 'Запись не найдена' },
+    });
+  });
+
+  it('метод с версией записи описывает в OpenAPI ответы 404 и 409', async () => {
+    const { createRoute, z } = await import('@hono/zod-openapi');
+    const app = createApp(createTestDeps());
+    app.openapi(
+      createRoute({
+        method: 'put',
+        path: '/versioned',
+        responses: {
+          200: {
+            description: 'ok',
+            content: { 'application/json': { schema: z.object({ version: z.number() }) } },
+          },
+          ...versionedSaveResponses,
+        },
+      }),
+      (c) => c.json({ version: 2 }, 200),
+    );
+    const doc = (await (await app.request('/api/openapi.json')).json()) as {
+      paths: Record<string, { put: { responses: Record<string, unknown> } }>;
+    };
+    expect(Object.keys(doc.paths['/api/versioned']!.put.responses)).toEqual(['200', '404', '409']);
   });
 });

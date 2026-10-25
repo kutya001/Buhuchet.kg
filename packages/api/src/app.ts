@@ -2,7 +2,7 @@ import { HTTPException } from 'hono/http-exception';
 import { requestId } from 'hono/request-id';
 import { secureHeaders } from 'hono/secure-headers';
 import type { ApiDeps } from './deps';
-import { apiError } from './errors';
+import { apiError, recordErrorResponse } from './errors';
 import { createModuleApp } from './module';
 import { systemModule } from './modules/system';
 
@@ -43,6 +43,8 @@ export function createApp(deps: ApiDeps) {
     if (err instanceof HTTPException) {
       return c.json(apiError('http_error', err.message), err.status);
     }
+    const record = recordErrorResponse(err);
+    if (record) return c.json(record.body, record.status);
     deps.logger.error({ err, requestId: c.get('requestId'), path: c.req.path }, 'ошибка API');
     return c.json(apiError('internal_error', 'Внутренняя ошибка'), 500);
   });
