@@ -25,7 +25,7 @@
 Vercel → проект → Settings → Environment Variables, окружение Production (для `buhuchet-kg` это стенд). Полный список с пояснениями — `.env.example`.
 - `APP_ENV` = `staging` (у рабочего сайта — `production`); `APP_BASE_URL` = `https://test.buhuchet.kg`.
 - `DATABASE_URL` — роль приложения через пул Supabase в режиме транзакций (Connect → Transaction pooler, порт 6543), пользователь `buhuchet_web.<ref проекта>`, свой новый пароль (не пароль `postgres`). Роль с этим паролем создаёт `pnpm db:migrate`.
-- `S3_ENDPOINT` = `https://<ref проекта>.storage.supabase.co/storage/v1/s3`, `S3_REGION` = регион проекта (например, `eu-central-1`), `S3_BUCKET` = `buhuchet`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_FORCE_PATH_STYLE` = `true`.
+- `S3_ENDPOINT` = `https://<ref проекта>.storage.supabase.co/storage/v1/s3`, `S3_REGION` = регион проекта (у стенда — `eu-west-1`), `S3_BUCKET` = `buhuchet`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_FORCE_PATH_STYLE` = `true`.
 - `CRON_SECRET` — случайная строка от 32 символов (Vercel Cron передаёт её сам; примерная из `.env.example` на стенде и рабочем сайте не принимается).
 - Позже: `TELEGRAM_BOT_TOKEN` и `TELEGRAM_WEBHOOK_SECRET` (только вместе), `SENTRY_DSN`. На стенде можно `FIXED_NOW` для демо-даты.
 - `DATABASE_ADMIN_URL` в Vercel **не задаётся**: пароль владельца базы есть только у миграций в GitHub Actions.
@@ -42,3 +42,4 @@ Vercel → проект → Settings → Environment Variables, окружени
   - Слияние, сделанное `automerge.yml` токеном `GITHUB_TOKEN`, не запускает workflow на `push` в main (так устроен GitHub), но запуск `workflow_dispatch` разрешён: после слияния PR, который меняет `packages/db/` или `spec/data/`, `automerge.mjs` запускает `migrate-test.yml` сам. Слияние человеком запускает его через `push`; вручную — Actions → Migrate test → Run workflow.
   - Vercel выкладывает код одновременно с миграциями, поэтому миграции пишутся совместимыми со старым кодом (сначала добавить, потом убрать).
 - Рабочий сайт — только по команде заказчика «выпускай»: метка версии, повтор проверок, миграции рабочей базы, перенос `production` на эту метку.
+  - До первого выпуска, когда создаётся проект Vercel `buhuchet` с базой во Frankfurt: убрать `regions` из `apps/web/vercel.json`, задать Function Region в настройках каждого проекта (`buhuchet-kg` — `dub1`, `buhuchet` — `fra1`) и поменять `apps/web/src/vercel-config.test.ts`. Иначе функции рабочего сайта окажутся в Дублине, вдали от базы.
