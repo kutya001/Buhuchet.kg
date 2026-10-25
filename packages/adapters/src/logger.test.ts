@@ -49,6 +49,7 @@ describe('createLogger', () => {
       res: { headers: { 'set-cookie': 'sid=1' } },
       config: { DATABASE_URL: 'postgres://u:p@h/db' },
       err: { code: '23505' },
+      s3: { err: { name: 'SignatureDoesNotMatch', StringToSign: 'AWS4…', AWSAccessKeyId: 'AK' } },
     });
     const entry = JSON.parse(lines[0]!);
     expect(entry.ctx.session.accessToken).toBe('[скрыто]');
@@ -56,5 +57,10 @@ describe('createLogger', () => {
     expect(entry.res.headers['set-cookie']).toBe('[скрыто]');
     expect(entry.config.DATABASE_URL).toBe('[скрыто]');
     expect(entry.err.code).toBe('23505');
+    expect(entry.s3.err).toEqual({
+      name: 'SignatureDoesNotMatch',
+      StringToSign: '[скрыто]',
+      AWSAccessKeyId: '[скрыто]',
+    });
   });
 });

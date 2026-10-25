@@ -83,6 +83,15 @@ function isNotFound(error: unknown): boolean {
   );
 }
 
+/** Текст с сервера — одной строкой и не длиннее 300 знаков, без точки в конце. */
+function oneLine(text: string): string {
+  return text
+    .replace(/\s+/g, ' ')
+    .slice(0, 300)
+    .replace(/[\s.]+$/, '')
+    .trim();
+}
+
 /** Что проверить в настройках по коду ошибки S3. */
 const STORAGE_ERROR_HINTS: Record<string, string> = {
   InvalidAccessKeyId:
@@ -106,15 +115,11 @@ const STORAGE_SETTINGS = 'S3_ENDPOINT, S3_REGION, S3_ACCESS_KEY_ID и S3_SECRET_
 export function explainStorageError(error: unknown, bucket: string): string {
   const head = `Корзина «${bucket}» не готова`;
   if (!(error instanceof S3ServiceException)) {
-    const reason = error instanceof Error ? error.message : String(error);
+    const reason = oneLine(error instanceof Error ? error.message : String(error));
     return `${head}: хранилище недоступно (${reason}). Проверьте адрес S3_ENDPOINT.`;
   }
   const status = error.$metadata.httpStatusCode;
-  const message = (error.message || '')
-    .replace(/\s+/g, ' ')
-    .slice(0, 300)
-    .replace(/[\s.]+$/, '')
-    .trim();
+  const message = oneLine(error.message || '');
   const known = STORAGE_ERROR_HINTS[error.name];
   let hint = known ?? `проверьте ${STORAGE_SETTINGS}`;
   if (!known && status === 404) {
@@ -122,7 +127,8 @@ export function explainStorageError(error: unknown, bucket: string): string {
   } else if (!known && status === 403) {
     hint = `доступ запрещён — проверьте ключи и регион: ${STORAGE_SETTINGS}`;
   }
-  const code = message && message !== error.name ? `${error.name}: ${message}` : error.name;
+  const name = oneLine(error.name);
+  const code = message && message !== name ? `${name}: ${message}` : name;
   return `${head}: HTTP ${status ?? '—'}, ${code}.\nЧто проверить: ${hint}.`;
 }
 

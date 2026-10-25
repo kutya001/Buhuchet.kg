@@ -20,11 +20,11 @@ const DatabaseEnv = z.object({
   DATABASE_POOL_MAX: z.coerce.number().int().positive().default(5),
 });
 
-// Ключи и регион вставляют копированием: лишний пробел или перевод строки в конце ломает подпись S3.
+// Ключи, регион и корзину вставляют копированием: лишний пробел или перевод строки в конце ломает подпись S3.
 const StorageEnv = z.object({
   S3_ENDPOINT: z.url(),
   S3_REGION: z.string().trim().min(1).default('us-east-1'),
-  S3_BUCKET: z.string().min(3),
+  S3_BUCKET: z.string().trim().min(3),
   S3_ACCESS_KEY_ID: z.string().trim().min(1),
   S3_SECRET_ACCESS_KEY: z.string().trim().min(1),
   S3_FORCE_PATH_STYLE: bool.default(true),
