@@ -1,5 +1,6 @@
 'use client';
 
+import { formatDateRu } from '@buhuchet/domain';
 import type { HealthResponse } from '@buhuchet/shared';
 import { Card, StatusDot } from '@buhuchet/ui';
 import { useEffect, useState } from 'react';
@@ -56,7 +57,7 @@ export default function HealthPage() {
               <dt>Среда</dt>
               <dd>{state.health.environment}</dd>
               <dt>Сегодня (Бишкек)</dt>
-              <dd>{state.health.todayBishkek.split('-').reverse().join('.')}</dd>
+              <dd>{formatDateRu(state.health.todayBishkek)}</dd>
             </dl>
           </div>
         )}

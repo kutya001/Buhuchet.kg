@@ -1,4 +1,5 @@
 import { boolean, pgTable, primaryKey, text, timestamp } from 'drizzle-orm/pg-core';
+import { platformService } from './rls';
 
 /**
  * Запуски задач по расписанию: одна строка на задачу и слот. Первичный ключ не даёт выполнить
@@ -14,5 +15,5 @@ export const schedulerRuns = pgTable(
     ok: boolean('ok'),
     error: text('error'),
   },
-  (t) => [primaryKey({ columns: [t.job, t.slot] })],
-);
+  (t) => [primaryKey({ columns: [t.job, t.slot] }), platformService('scheduler_runs_service')],
+).enableRLS();

@@ -28,6 +28,10 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          # В PR проверяется коммит слияния с main: его первый родитель — main, с ним сравниваем правки.
+          fetch-depth: 2
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -46,6 +50,9 @@ jobs:
         run: pnpm check:portability
       - name: Карта приёмки и тесты служебных скриптов
         run: pnpm check:acceptance && pnpm test:scripts
+      - name: Применённые миграции и spec/ не тронуты
+        if: github.event_name == 'pull_request'
+        run: node scripts/check-protected.mjs HEAD^1
       - name: Миграции и наполнение на чистой базе
         run: pnpm db:migrate && pnpm db:seed && pnpm db:seed --update && pnpm storage:init
       - name: Миграции не отстали от схемы
@@ -56,8 +63,12 @@ jobs:
             git status --porcelain packages/db/migrations
             exit 1
           fi
-      - name: Тесты и покрытие (domain и api — не ниже 80 %)
-        run: pnpm test:coverage && pnpm --filter @buhuchet/web --filter @buhuchet/shared test
+      - name: Тесты и покрытие (domain, api и adapters — не ниже 80 %)
+        # Пакеты с порогом покрытия — test:coverage; все остальные (db с RLS и наполнением, web, shared
+        # и любые новые) — обычным test, чтобы новый пакет не выпал из проверки.
+        run: |
+          pnpm test:coverage
+          pnpm exec turbo run test --filter='!@buhuchet/domain' --filter='!@buhuchet/api' --filter='!@buhuchet/adapters'
 
   docker-e2e:
     name: docker-e2e
@@ -65,6 +76,8 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:

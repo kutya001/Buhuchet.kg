@@ -41,9 +41,9 @@ export function formatSom(tyiyn: Tyiyn, fraction: 'always' | 'auto' = 'always'):
   return (negative ? MINUS : '') + grouped + tail;
 }
 
-/** «1 250,50 сом» / «1 250 сом». */
+/** «1 250,50 сом» / «1 250 сом»; перед «сом» неразрывный пробел, как в som() прототипа. */
 export function formatSomWithUnit(tyiyn: Tyiyn): string {
-  return `${formatSom(tyiyn, 'auto')} сом`;
+  return `${formatSom(tyiyn, 'auto')}${NBSP}сом`;
 }
 
 /**

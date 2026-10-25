@@ -5,18 +5,17 @@ name: buhuchet-prod
 x-app-env: &app-env
   APP_ENV: production
   APP_VERSION: ${APP_VERSION}
-  APP_BASE_URL: https://${DOMAIN}
+  APP_BASE_URL: https://${DOMAIN:?задайте DOMAIN}
   LOG_LEVEL: ${LOG_LEVEL:-info}
-  DATABASE_URL: postgres://${DB_APP_USER}:${DB_APP_PASSWORD}@postgres:5432/buhuchet
-  DATABASE_ADMIN_URL: postgres://postgres:${DB_ADMIN_PASSWORD}@postgres:5432/buhuchet
+  DATABASE_URL: postgres://${DB_APP_USER:?задайте DB_APP_USER}:${DB_APP_PASSWORD:?задайте DB_APP_PASSWORD}@postgres:5432/buhuchet
   DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-10}
   S3_ENDPOINT: ${S3_ENDPOINT:-http://minio:9000}
   S3_REGION: ${S3_REGION:-us-east-1}
   S3_BUCKET: ${S3_BUCKET:-buhuchet}
-  S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID}
-  S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY}
+  S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:?задайте S3_ACCESS_KEY_ID}
+  S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?задайте S3_SECRET_ACCESS_KEY}
   S3_FORCE_PATH_STYLE: 'true'
-  CRON_SECRET: ${CRON_SECRET}
+  CRON_SECRET: ${CRON_SECRET:?задайте CRON_SECRET}
   TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
   TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:-}
   SENTRY_DSN: ${SENTRY_DSN:-}
@@ -26,7 +25,7 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_PASSWORD: ${DB_ADMIN_PASSWORD}
+      POSTGRES_PASSWORD: ${DB_ADMIN_PASSWORD:?задайте DB_ADMIN_PASSWORD}
       POSTGRES_DB: buhuchet
     volumes:
       - pgdata:/var/lib/postgresql/data
@@ -49,9 +48,12 @@ services:
       interval: 5s
       retries: 30
 
+  # Пароль владельца базы — только здесь: web и worker работают ролью приложения без обхода RLS.
   migrate:
     build: { context: ., target: tools }
-    environment: *app-env
+    environment:
+      <<: *app-env
+      DATABASE_ADMIN_URL: postgres://postgres:${DB_ADMIN_PASSWORD:?задайте DB_ADMIN_PASSWORD}@postgres:5432/buhuchet
     command: ['sh', '-c', 'pnpm db:migrate && pnpm db:seed && pnpm storage:init']
     depends_on:
       postgres: { condition: service_healthy }
@@ -79,7 +81,7 @@ services:
     image: caddy:2-alpine
     restart: unless-stopped
     environment:
-      DOMAIN: ${DOMAIN}
+      DOMAIN: ${DOMAIN:?задайте DOMAIN}
     ports:
       - '80:80'
       - '443:443'

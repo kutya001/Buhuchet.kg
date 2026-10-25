@@ -1,3 +1,4 @@
+import { createHash, createHmac, pbkdf2Sync, randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import { createDb } from './client';
@@ -23,14 +24,47 @@ export function roleFromUrl(url: string): string {
 }
 
 /**
+ * Пароль роли в виде SCRAM-SHA-256 (как его хранит PostgreSQL): открытый пароль не попадает
+ * ни в текст SQL, ни в журнал базы, ни в pg_stat_statements.
+ */
+export function scramSha256Verifier(password: string, salt = randomBytes(16)): string {
+  const iterations = 4096;
+  const salted = pbkdf2Sync(password.normalize('NFKC'), salt, iterations, 32, 'sha256');
+  const clientKey = createHmac('sha256', salted).update('Client Key').digest();
+  const storedKey = createHash('sha256').update(clientKey).digest('base64');
+  const serverKey = createHmac('sha256', salted).update('Server Key').digest('base64');
+  return `SCRAM-SHA-256$${iterations}:${salt.toString('base64')}$${storedKey}:${serverKey}`;
+}
+
+/**
+ * Роли общие для всего сервера PostgreSQL: если две базы (например, параллельные тесты) меняют одну
+ * роль одновременно, PostgreSQL отвечает «tuple concurrently updated» — тогда просто повторяем.
+ */
+async function retryConcurrent<T>(action: () => PromiseLike<T>, attempts = 5): Promise<T> {
+  for (let i = 1; ; i++) {
+    try {
+      return await action();
+    } catch (error) {
+      const concurrent = error instanceof Error && /concurrently updated/.test(error.message);
+      if (!concurrent || i >= attempts) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 50 * i));
+    }
+  }
+}
+
+/**
  * Роль входа приложения (пользователь из DATABASE_URL): создаётся, если её нет, получает пароль из
- * строки подключения и членство в `buhuchet_app`. Она не владелец таблиц и не обходит RLS.
+ * строки подключения и членство в `buhuchet_app`. Она не владелец таблиц, не обходит RLS и не
+ * получает прав владельца через членство в других ролях.
  */
 export async function ensureAppLoginRole(adminUrl: string, appUrl: string): Promise<string> {
   const role = roleFromUrl(appUrl);
   const password = decodeURIComponent(new URL(appUrl).password);
-  if (!/^[a-z_][a-z0-9_]{0,62}$/.test(role)) {
-    throw new Error(`Имя роли приложения «${role}» должно состоять из a-z, 0-9 и _`);
+  if (!/^buhuchet_[a-z0-9_]{1,54}$/.test(role)) {
+    throw new Error(
+      `Имя роли приложения «${role}» должно начинаться с buhuchet_ и состоять из a-z, 0-9 и _: ` +
+        'так миграции не тронут чужие роли (на Supabase — anon, authenticated и т. п.)',
+    );
   }
   if (role === roleFromUrl(adminUrl)) {
     throw new Error(
@@ -41,20 +75,28 @@ export async function ensureAppLoginRole(adminUrl: string, appUrl: string): Prom
 
   const { sql, close } = createDb(adminUrl, { max: 1, applicationName: 'buhuchet-migrate' });
   try {
-    const literal = `'${password.replace(/'/g, "''")}'`;
-    const [existing] = await sql<{ rolsuper: boolean; rolbypassrls: boolean }[]>`
-      select rolsuper, rolbypassrls from pg_roles where rolname = ${role}`;
+    const verifier = `'${scramSha256Verifier(password)}'`;
+    const [existing] = await sql<{ rolsuper: boolean; rolbypassrls: boolean; owner: boolean }[]>`
+      select rolsuper, rolbypassrls,
+        exists (
+          select 1 from pg_tables
+          where schemaname in ('public', 'app') and pg_has_role(r.oid, tableowner, 'USAGE')
+        ) or pg_has_role(r.oid, current_user, 'USAGE') as owner
+      from pg_roles r where rolname = ${role}`;
     if (!existing) {
-      await sql.unsafe(`create role "${role}" login password ${literal}`);
+      await sql.unsafe(`create role "${role}" login password ${verifier}`);
     } else {
-      if (existing.rolsuper || existing.rolbypassrls) {
+      if (existing.rolsuper || existing.rolbypassrls || existing.owner) {
         throw new Error(
-          `Роль «${role}» — суперпользователь или обходит RLS; приложению такая роль запрещена`,
+          `Роль «${role}» — суперпользователь, обходит RLS или имеет права владельца таблиц; ` +
+            'приложению такая роль запрещена',
         );
       }
-      await sql.unsafe(`alter role "${role}" with login password ${literal}`);
+      await retryConcurrent(() =>
+        sql.unsafe(`alter role "${role}" with login password ${verifier}`),
+      );
     }
-    await sql.unsafe(`grant "${APP_GROUP_ROLE}" to "${role}"`);
+    await retryConcurrent(() => sql.unsafe(`grant "${APP_GROUP_ROLE}" to "${role}"`));
     return role;
   } finally {
     await close();

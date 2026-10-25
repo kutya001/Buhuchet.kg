@@ -57,6 +57,7 @@ describe('служебное', () => {
   it('неизвестный метод — 404 в общем формате ошибки', async () => {
     const res = await createApp(createTestDeps()).request('/api/nope');
     expect(res.status).toBe(404);
+    expect(res.headers.get('cache-control')).toBe('no-store');
     expect(await res.json()).toEqual({ error: { code: 'not_found', message: 'Метод не найден' } });
   });
 

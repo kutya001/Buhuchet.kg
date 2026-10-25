@@ -3,7 +3,7 @@
 import { execSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { readInput, ROOT } from './lib.mjs';
+import { mainRef, readInput, ROOT } from './lib.mjs';
 
 const input = readInput();
 if (input.stop_hook_active) process.exit(0);
@@ -17,7 +17,7 @@ const sh = (cmd) => {
   }
 };
 
-const base = sh('git rev-parse --verify -q origin/main') ? 'origin/main' : 'HEAD';
+const base = mainRef() ?? 'HEAD';
 const changed = sh(`git diff --name-only ${base}`) + sh('git ls-files --others --exclude-standard');
 const code = changed
   .split('\n')

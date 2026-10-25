@@ -9,7 +9,6 @@ x-app-env: &app-env
   APP_BASE_URL: http://localhost:3000
   LOG_LEVEL: ${LOG_LEVEL:-info}
   DATABASE_URL: postgres://buhuchet_web:buhuchet_web@postgres:5432/buhuchet
-  DATABASE_ADMIN_URL: postgres://postgres:postgres@postgres:5432/buhuchet
   S3_ENDPOINT: http://minio:9000
   S3_REGION: us-east-1
   S3_BUCKET: buhuchet
@@ -27,7 +26,7 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: buhuchet
     ports:
-      - '5432:5432'
+      - '127.0.0.1:5432:5432'
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -45,8 +44,8 @@ services:
       MINIO_ROOT_USER: buhuchet
       MINIO_ROOT_PASSWORD: buhuchet-secret
     ports:
-      - '9000:9000'
-      - '9001:9001'
+      - '127.0.0.1:9000:9000'
+      - '127.0.0.1:9001:9001'
     volumes:
       - miniodata:/data
     healthcheck:
@@ -61,7 +60,10 @@ services:
     build:
       context: .
       target: tools
-    environment: *app-env
+    # Владелец базы — только у миграций; web и worker работают ролью приложения, как на VPS.
+    environment:
+      <<: *app-env
+      DATABASE_ADMIN_URL: postgres://postgres:postgres@postgres:5432/buhuchet
     command: ['sh', '-c', 'pnpm db:migrate && pnpm db:seed --update && pnpm storage:init']
     depends_on:
       postgres:
@@ -76,7 +78,7 @@ services:
       target: web
     environment: *app-env
     ports:
-      - '3000:3000'
+      - '127.0.0.1:3000:3000'
     depends_on:
       migrate:
         condition: service_completed_successfully

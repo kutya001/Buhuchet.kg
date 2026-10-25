@@ -26,6 +26,13 @@ describe('attachmentDisposition', () => {
     expect(value).toMatch(/^attachment; filename="[\x20-\x7e]+"/);
     expect(value).not.toContain('"2026"');
   });
+
+  it('кодирует апостроф и скобки, без имени — просто вложение', () => {
+    expect(attachmentDisposition("Акт (O'Neil).pdf")).toContain(
+      "filename*=UTF-8''%D0%90%D0%BA%D1%82%20%28O%27Neil%29.pdf",
+    );
+    expect(attachmentDisposition()).toBe('attachment');
+  });
 });
 
 function contract(name: string, make: () => Promise<Storage>, opts: { skip?: boolean } = {}) {
@@ -54,7 +61,7 @@ function contract(name: string, make: () => Promise<Storage>, opts: { skip?: boo
       await expect(storage.signedDownloadUrl(key, { expiresInSeconds: 0 })).rejects.toThrow(
         RangeError,
       );
-      await expect(storage.signedDownloadUrl(key, { expiresInSeconds: 7200 })).rejects.toThrow(
+      await expect(storage.signedDownloadUrl(key, { expiresInSeconds: 901 })).rejects.toThrow(
         RangeError,
       );
       await storage.ping();
@@ -94,6 +101,15 @@ describe.skipIf(!s3Available)('S3: подписанная ссылка реал�
     expect(res.status).toBe(200);
     expect(await res.text()).toBe('содержимое');
     expect(res.headers.get('content-disposition')).toContain(encodeURIComponent('Квитанция.txt'));
+    await storage.delete(key);
+  });
+
+  it('без имени файл всё равно скачивается вложением, а не открывается', async () => {
+    const storage = createS3Storage(loadStorageConfig());
+    const key = orgFileKey('test', 'signed', randomUUID());
+    await storage.put(key, '<script>alert(1)</script>', { contentType: 'text/html' });
+    const res = await fetch(await storage.signedDownloadUrl(key, { expiresInSeconds: 60 }));
+    expect(res.headers.get('content-disposition')).toBe('attachment');
     await storage.delete(key);
   });
 

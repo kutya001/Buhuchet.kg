@@ -15,6 +15,13 @@
       "when": 1792941417932,
       "tag": "0001_foundation_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792943980831,
+      "tag": "0002_rls_all_tables",
+      "breakpoints": true
     }
   ]
 }

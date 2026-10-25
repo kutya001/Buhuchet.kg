@@ -1,6 +1,6 @@
 // Перед правкой файла: запрет менять spec/, применённые миграции, .env*, сборки и lock-файл.
 import { execFileSync } from 'node:child_process';
-import { block, readInput, relative, ROOT } from './lib.mjs';
+import { block, mainRef, readInput, relative, ROOT } from './lib.mjs';
 
 const input = readInput();
 const file = input.tool_input?.file_path ?? input.tool_input?.notebook_path;
@@ -26,9 +26,11 @@ if (rel === 'pnpm-lock.yaml') {
 }
 if (rel.startsWith('packages/db/migrations/')) {
   // Миграция уже в main — значит, применена на стенде или рабочем сайте: только новая миграция поверх.
+  const main = mainRef();
   const applied = (() => {
+    if (!main) return false;
     try {
-      execFileSync('git', ['cat-file', '-e', `origin/main:${rel}`], { cwd: ROOT, stdio: 'ignore' });
+      execFileSync('git', ['cat-file', '-e', `${main}:${rel}`], { cwd: ROOT, stdio: 'ignore' });
       return true;
     } catch {
       return false;

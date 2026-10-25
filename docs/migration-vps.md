@@ -9,7 +9,9 @@
 ## Шаги
 1. За неделю: уменьшить время жизни записей DNS в кабинете cctld.kg, если можно.
 2. Подготовить VPS: Docker, файрвол (открыты только 80, 443 и SSH по ключу), пользователь без root.
-3. Склонировать репозиторий, создать `.env` с переменными из `docker-compose.prod.yml` (`DOMAIN`, `APP_VERSION`, `DB_ADMIN_PASSWORD`, `DB_APP_USER`, `DB_APP_PASSWORD`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `CRON_SECRET`, `TELEGRAM_*`, `SENTRY_DSN`).
+3. Склонировать репозиторий, создать `.env` с переменными из `docker-compose.prod.yml` (`DOMAIN`, `APP_VERSION`, `DB_ADMIN_PASSWORD`, `DB_APP_USER` (имя вида `buhuchet_web`), `DB_APP_PASSWORD`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `CRON_SECRET`, `TELEGRAM_*`, `SENTRY_DSN`).
+   - Без обязательных переменных `docker compose` не запустится и назовёт, чего не хватает. Пароль владельца базы получает только сервис `migrate`.
+   - Приложение пока ходит в MinIO ключами владельца MinIO; при репетиции переезда завести отдельного пользователя MinIO с доступом только к корзине `buhuchet` (`mc admin user add` + политика) и указать его ключи в `S3_*`.
 4. `docker compose -f docker-compose.prod.yml up -d --build` и проверить `curl -fsS http://127.0.0.1:3000/api/health` внутри сервера.
 5. Файлы заранее: `rclone sync supabase:<корзина> minio:buhuchet` (оба — как S3-хранилища в настройках rclone).
 6. Окно переезда (ночь, 30–60 минут):

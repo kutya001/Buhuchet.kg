@@ -46,6 +46,14 @@ export function createRuntime(
   return { config, deps, close: () => database.close() };
 }
 
+/**
+ * Проверка настроек при запуске сайта (`apps/web/instrumentation.ts`): без нужных настроек сайт не стартует,
+ * как и worker. Падает с ConfigError и списком того, чего не хватает.
+ */
+export function assertWebConfig(): void {
+  loadConfig();
+}
+
 let web: { runtime: Runtime; app: ApiApp } | undefined;
 
 /**

@@ -18,7 +18,7 @@ describe('formatSom — как fmtM прототипа', () => {
   it('auto убирает «,00» у целых сомов', () => {
     expect(formatSom(125000, 'auto')).toBe(`1${NBSP}250`);
     expect(formatSom(125050, 'auto')).toBe(`1${NBSP}250,50`);
-    expect(formatSomWithUnit(100000)).toBe(`1${NBSP}000 сом`);
+    expect(formatSomWithUnit(100000)).toBe(`1${NBSP}000${NBSP}сом`);
   });
 
   it('не принимает дробные тыйыны', () => {

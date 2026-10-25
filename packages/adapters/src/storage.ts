@@ -22,6 +22,10 @@ export interface Storage {
   get(key: string): Promise<Uint8Array | null>;
   delete(key: string): Promise<void>;
   exists(key: string): Promise<boolean>;
+  /**
+   * Временная ссылка на скачивание (только после проверки права). Файл всегда отдаётся вложением,
+   * а не открывается в браузере: загруженный HTML или SVG не выполнится на домене хранилища.
+   */
   signedDownloadUrl(
     key: string,
     options: { expiresInSeconds: number; fileName?: string },
@@ -48,12 +52,19 @@ export function orgFileKey(orgId: string, section: string, fileId: string): stri
 }
 
 /** Content-Disposition для скачивания с русским именем файла (RFC 6266 / RFC 5987). */
-export function attachmentDisposition(fileName: string): string {
+export function attachmentDisposition(fileName?: string): string {
+  if (!fileName) return 'attachment';
   const ascii = fileName.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
-  return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(fileName)}`;
+  // encodeURIComponent не кодирует ' ( ) *, а в filename* RFC 5987 они недопустимы.
+  const encoded = encodeURIComponent(fileName).replace(
+    /['()*]/g,
+    (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
+  return `attachment; filename="${ascii}"; filename*=UTF-8''${encoded}`;
 }
 
-const MAX_SIGNED_URL_SECONDS = 60 * 60;
+/** Ссылки короткие: 15 минут хватает, чтобы скачать файл. */
+const MAX_SIGNED_URL_SECONDS = 15 * 60;
 
 function checkExpiry(seconds: number): void {
   if (!Number.isInteger(seconds) || seconds < 1 || seconds > MAX_SIGNED_URL_SECONDS) {
@@ -114,7 +125,7 @@ export function createS3Storage(config: StorageConfig): Storage {
       const command = new GetObjectCommand({
         Bucket,
         Key: key,
-        ...(fileName ? { ResponseContentDisposition: attachmentDisposition(fileName) } : {}),
+        ResponseContentDisposition: attachmentDisposition(fileName),
       });
       return getSignedUrl(client, command, { expiresIn: expiresInSeconds });
     },

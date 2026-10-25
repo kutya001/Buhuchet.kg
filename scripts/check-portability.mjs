@@ -108,7 +108,8 @@ export function checkPortability(root) {
       );
     }
     if (r !== 'packages/adapters/src/config.ts' && !isToolConfig) {
-      each(/\bprocess\.env\b/, text, (_m, line) =>
+      // process.env.NEXT_RUNTIME — не настройка, а признак среды Next.js (instrumentation.ts).
+      each(/\bprocess\.env\b(?!\.NEXT_RUNTIME\b)/, text, (_m, line) =>
         add(
           file,
           line,
