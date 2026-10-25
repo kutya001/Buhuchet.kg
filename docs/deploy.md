@@ -18,7 +18,7 @@
 - Install Command и Build Command — по умолчанию (pnpm ставит весь монорепозиторий, `next build` сам транспилирует внутренние пакеты). Output Directory — по умолчанию.
 - Node.js 22 Vercel берёт из `engines` в `apps/web/package.json` (настройка Node.js Version в проекте при этом не действует; без `engines` Vercel взял бы версию из настроек, 24.x, и `pnpm install` остановился бы на `engines` корневого `package.json`). Settings → Git → Production Branch — `main`.
 - К репозиторию подключены только проекты из схемы выше: проект, который собирает репозиторий из корня (без Root Directory), падает на каждом PR с «No Next.js version detected» — его отключают (Settings → Git → Disconnect).
-- Регион функций и расписание задаются в `apps/web/vercel.json` (`fra1`, `/api/cron/tick` раз в минуту). Проверено 25.10.2026: на тарифе Hobby выкладка с таким `vercel.json` проходит и Vercel Cron вызывает `/api/cron/tick` раз в минуту. Ограничение другое: по правилам Vercel тариф Hobby — только для личного некоммерческого использования, поэтому по плану проекты переходят на Pro.
+- Регион функций и расписание задаются в `apps/web/vercel.json` (`fra1`, `/api/cron/tick` раз в минуту). Расписание раз в минуту требует тарифа Vercel Pro — команда проектов на Pro; проверено 25.10.2026 по журналам Vercel: `/api/cron/tick` вызывается раз в минуту.
 - Settings → Domains → `test.buhuchet.kg`; Vercel покажет запись CNAME — её добавить в кабинете cctld.kg (серверы имён не меняем).
 
 ## Переменные окружения
