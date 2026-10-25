@@ -14,7 +14,7 @@
 
 | Пакет | Что внутри | Зависит от |
 | --- | --- | --- |
-| `apps/web` | Next.js App Router, интерфейс, `vercel.json` (fra1, cron) | api, shared, ui |
+| `apps/web` | Next.js App Router, интерфейс, `vercel.json` (dub1, cron) | api, shared, ui |
 | `apps/worker` | цикл раз в минуту для VPS, один файл после сборки | api, adapters |
 | `packages/api` | Hono + @hono/zod-openapi, модули, задачи по расписанию, `/api/openapi.json` | adapters, db, domain, shared |
 | `packages/domain` | бизнес-правила без базы и сети: деньги в тыйынах, даты по Бишкеку, дальше — сроки, отчёты, ГКЭД, тарифы | — |

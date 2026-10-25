@@ -5,12 +5,12 @@
 ## Схема
 - Ветка `main` — тестовый стенд `test.buhuchet.kg`: сюда автослиянием приходят все PR. Ветка `production` — рабочий сайт `buhuchet.kg`: обновляется только по команде заказчика «выпускай».
 - Из одного репозитория два проекта Vercel: `buhuchet-kg` — стенд (Production Branch = `main`, домен `test.buhuchet.kg`, тестовая база) и позже `buhuchet` (Production Branch = `production`, домен `buhuchet.kg`, рабочая база). Два проекта, потому что Vercel Cron вызывает только production-выпуск проекта, а `/api/cron/tick` нужен и на стенде.
-- Supabase: бесплатный проект `buhuchet-test` (стенд) сейчас, рабочий Pro-проект — ближе к запуску; оба во Frankfurt (Central EU, eu-central-1), как в ТЗ.
+- Supabase: бесплатный проект `buhuchet-test` (стенд, eu-west-1 — Ирландия) сейчас, рабочий Pro-проект — ближе к запуску, во Frankfurt (eu-central-1), как в ТЗ (docs/deviations.md, п. 1).
 
 ## Supabase: создание проекта
 - **Enable Data API — выключить**, **Automatically expose new tables — выключить** (supabase-js и REST Supabase не используются, браузер к базе не обращается); **Enable automatic RLS — не включать** (RLS включают наши миграции: этот триггер есть только в Supabase, его нет локально и на VPS); **Connect GitHub — не подключать** (миграции применяет наш CI).
 - Если Data API уже включён: Project Settings → Data API → выключить (или убрать `public` из открытых схем). Даже без этого строки не видны: у ролей `anon` и `authenticated` нет политик RLS (docs/decisions.md, п. 11).
-- Region при создании — **Central EU (Frankfurt)**, и у стенда, и у рабочего проекта: функции Vercel стоят рядом с базой (`regions` в `apps/web/vercel.json` = `fra1`), а `vercel.json` один на оба проекта Vercel. Проект, созданный в другом регионе, пересоздаётся.
+- Регион: у бесплатного проекта выбирается только часть света (**Europe**), город назначает Supabase — он виден в Project Settings → General. Функции Vercel ставятся в тот же регион (`regions` в `apps/web/vercel.json`, сейчас `dub1` под eu-west-1). Рабочий Pro-проект создаётся сразу с регионом **Frankfurt** (регион проекта потом не меняется); `vercel.json` один на оба проекта Vercel, поэтому тогда `regions` уходит из него в настройки каждого проекта (Settings → Functions → Function Region), а тест `apps/web/src/vercel-config.test.ts` меняется.
 - Storage → создать закрытую корзину `buhuchet` (Public — выключено); Storage → S3 Connection → создать ключи S3 (Access key ID и Secret).
 
 ## Vercel: проект стенда `buhuchet-kg`
@@ -18,14 +18,14 @@
 - Install Command и Build Command — по умолчанию (pnpm ставит весь монорепозиторий, `next build` сам транспилирует внутренние пакеты). Output Directory — по умолчанию.
 - Node.js 22 Vercel берёт из `engines` в `apps/web/package.json` (настройка Node.js Version в проекте при этом не действует; без `engines` Vercel взял бы версию из настроек, 24.x, и `pnpm install` остановился бы на `engines` корневого `package.json`). Settings → Git → Production Branch — `main`.
 - К репозиторию подключены только проекты из схемы выше: проект, который собирает репозиторий из корня (без Root Directory), падает на каждом PR с «No Next.js version detected» — его отключают (Settings → Git → Disconnect).
-- Регион функций и расписание задаются в `apps/web/vercel.json` (`fra1`, `/api/cron/tick` раз в минуту). Расписание раз в минуту требует тарифа Vercel Pro — команда проектов на Pro; проверено 25.10.2026 по журналам Vercel: `/api/cron/tick` вызывается раз в минуту.
+- Регион функций и расписание задаются в `apps/web/vercel.json` (`dub1`, `/api/cron/tick` раз в минуту). Расписание раз в минуту требует тарифа Vercel Pro — команда проектов на Pro; проверено 25.10.2026 по журналам Vercel: `/api/cron/tick` вызывается раз в минуту.
 - Settings → Domains → `test.buhuchet.kg`; Vercel покажет запись CNAME — её добавить в кабинете cctld.kg (серверы имён не меняем).
 
 ## Переменные окружения
 Vercel → проект → Settings → Environment Variables, окружение Production (для `buhuchet-kg` это стенд). Полный список с пояснениями — `.env.example`.
 - `APP_ENV` = `staging` (у рабочего сайта — `production`); `APP_BASE_URL` = `https://test.buhuchet.kg`.
 - `DATABASE_URL` — роль приложения через пул Supabase в режиме транзакций (Connect → Transaction pooler, порт 6543), пользователь `buhuchet_web.<ref проекта>`, свой новый пароль (не пароль `postgres`). Роль с этим паролем создаёт `pnpm db:migrate`.
-- `S3_ENDPOINT` = `https://<ref проекта>.storage.supabase.co/storage/v1/s3`, `S3_REGION` = регион проекта (например, `eu-central-1`), `S3_BUCKET` = `buhuchet`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_FORCE_PATH_STYLE` = `true`.
+- `S3_ENDPOINT` = `https://<ref проекта>.storage.supabase.co/storage/v1/s3`, `S3_REGION` = регион проекта (у стенда — `eu-west-1`), `S3_BUCKET` = `buhuchet`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_FORCE_PATH_STYLE` = `true`.
 - `CRON_SECRET` — случайная строка от 32 символов (Vercel Cron передаёт её сам; примерная из `.env.example` на стенде и рабочем сайте не принимается).
 - Позже: `TELEGRAM_BOT_TOKEN` и `TELEGRAM_WEBHOOK_SECRET` (только вместе), `SENTRY_DSN`. На стенде можно `FIXED_NOW` для демо-даты.
 - `DATABASE_ADMIN_URL` в Vercel **не задаётся**: пароль владельца базы есть только у миграций в GitHub Actions.
@@ -42,3 +42,4 @@ Vercel → проект → Settings → Environment Variables, окружени
   - Слияние, сделанное `automerge.yml` токеном `GITHUB_TOKEN`, не запускает workflow на `push` в main (так устроен GitHub), но запуск `workflow_dispatch` разрешён: после слияния PR, который меняет `packages/db/` или `spec/data/`, `automerge.mjs` запускает `migrate-test.yml` сам. Слияние человеком запускает его через `push`; вручную — Actions → Migrate test → Run workflow.
   - Vercel выкладывает код одновременно с миграциями, поэтому миграции пишутся совместимыми со старым кодом (сначала добавить, потом убрать).
 - Рабочий сайт — только по команде заказчика «выпускай»: метка версии, повтор проверок, миграции рабочей базы, перенос `production` на эту метку.
+  - До первого выпуска, когда создаётся проект Vercel `buhuchet` с базой во Frankfurt: убрать `regions` из `apps/web/vercel.json`, задать Function Region в настройках каждого проекта (`buhuchet-kg` — `dub1`, `buhuchet` — `fra1`) и поменять `apps/web/src/vercel-config.test.ts`. Иначе функции рабочего сайта окажутся в Дублине, вдали от базы.

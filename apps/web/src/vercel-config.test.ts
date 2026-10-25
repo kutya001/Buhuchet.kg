@@ -9,7 +9,7 @@ describe('vercel.json', () => {
     expect(config.crons).toEqual(PLATFORM_CRON_ENTRIES);
   });
 
-  it('функции во Франкфурте, рядом с базой', () => {
-    expect(config.regions).toEqual(['fra1']);
+  it('функции в регионе базы стенда (Supabase eu-west-1 — Дублин)', () => {
+    expect(config.regions).toEqual(['dub1']);
   });
 });
