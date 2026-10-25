@@ -13,6 +13,11 @@ export function mergeGuardFiles(files) {
   return files.filter((f) => MERGE_GUARDS.some((re) => re.test(f)));
 }
 
+/** Меняет ли PR базу или данные справочников: тогда после слияния нужны миграции стенда (migrate-test.yml). */
+export function needsStagingMigration(files) {
+  return files.some((f) => f.startsWith('packages/db/') || f.startsWith('spec/data/'));
+}
+
 /**
  * Ошибки в изменениях PR относительно main (строки `git diff --name-status --no-renames`):
  * миграция из main уже применена — её нельзя менять или удалять, только добавить новую;

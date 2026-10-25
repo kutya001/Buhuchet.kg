@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Автослияние PR (вызывается из .github/workflows/automerge.yml после каждой завершённой проверки).
 import { execFileSync } from 'node:child_process';
-import { mergeGuardFiles } from './protected-paths.mjs';
+import { mergeGuardFiles, needsStagingMigration } from './protected-paths.mjs';
 
 const REQUIRED_CHECKS = ['check', 'docker-e2e', 'pr-policy'];
 const BEHIND_MARKER = '<!-- automerge:behind -->';
@@ -95,3 +95,16 @@ gh(
   HEAD_SHA,
 );
 console.log(`PR #${pr.number} слит (squash).`);
+
+// Слияние токеном GITHUB_TOKEN не запускает workflow на push, а workflow_dispatch — запускает.
+// Стенд — это main: слияние в другую ветку (например, production) стенд не трогает.
+if (pr.base.ref === 'main' && needsStagingMigration(files)) {
+  try {
+    gh('workflow', 'run', 'migrate-test.yml', '--repo', REPO, '--ref', 'main');
+    console.log('Запущены миграции стенда (migrate-test.yml).');
+  } catch {
+    console.log(
+      '::warning::PR слит, но миграции стенда не запустились: Actions → Migrate test → Run workflow (main).',
+    );
+  }
+}
