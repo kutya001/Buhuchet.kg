@@ -49,14 +49,29 @@ describe('loadConfig', () => {
   it('на стенде и рабочем сайте секрет планировщика не примерный и не короткий', () => {
     const strong = 'f'.repeat(40);
     for (const APP_ENV of ['staging', 'production']) {
+      const site = { ...base, APP_ENV, APP_BASE_URL: 'https://test.buhuchet.kg' };
       expect(() =>
-        loadConfig({ ...base, APP_ENV, CRON_SECRET: 'local-cron-secret-change-me-0000000000' }),
+        loadConfig({ ...site, CRON_SECRET: 'local-cron-secret-change-me-0000000000' }),
       ).toThrow(/CRON_SECRET/);
-      expect(() => loadConfig({ ...base, APP_ENV, CRON_SECRET: 'short-secret-0000' })).toThrow(
+      expect(() => loadConfig({ ...site, CRON_SECRET: 'short-secret-0000' })).toThrow(
         /CRON_SECRET/,
       );
-      expect(loadConfig({ ...base, APP_ENV, CRON_SECRET: strong }).CRON_SECRET).toBe(strong);
+      expect(loadConfig({ ...site, CRON_SECRET: strong }).CRON_SECRET).toBe(strong);
     }
+  });
+
+  it('на стенде и рабочем сайте адрес сайта обязателен и только https', () => {
+    const site = { ...base, CRON_SECRET: 'f'.repeat(40) };
+    for (const APP_ENV of ['staging', 'production']) {
+      expect(() => loadConfig({ ...site, APP_ENV })).toThrow(/APP_BASE_URL/);
+      expect(() => loadConfig({ ...site, APP_ENV, APP_BASE_URL: 'http://buhuchet.kg' })).toThrow(
+        /APP_BASE_URL/,
+      );
+      expect(
+        loadConfig({ ...site, APP_ENV, APP_BASE_URL: 'https://buhuchet.kg' }).APP_BASE_URL,
+      ).toBe('https://buhuchet.kg');
+    }
+    expect(loadConfig(base).APP_BASE_URL).toBe('http://localhost:3000');
   });
 
   it('запрещает фиксированное время на рабочем сайте', () => {
@@ -67,6 +82,7 @@ describe('loadConfig', () => {
       loadConfig({
         ...base,
         APP_ENV: 'staging',
+        APP_BASE_URL: 'https://test.buhuchet.kg',
         CRON_SECRET: 's'.repeat(32),
         FIXED_NOW: '2026-10-18T06:00:00Z',
       }).FIXED_NOW,

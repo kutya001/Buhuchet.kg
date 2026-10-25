@@ -105,6 +105,17 @@ const AppEnv = z
           'на стенде и рабочем сайте — своя случайная строка от 32 символов, не из .env.example',
       });
     }
+    if (
+      (env.APP_ENV === 'staging' || env.APP_ENV === 'production') &&
+      !env.APP_BASE_URL.startsWith('https://')
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['APP_BASE_URL'],
+        message:
+          'на стенде и рабочем сайте — адрес сайта по https (по нему сверяется Origin и ставится cookie входа)',
+      });
+    }
     if (Boolean(env.TELEGRAM_BOT_TOKEN) !== Boolean(env.TELEGRAM_WEBHOOK_SECRET)) {
       ctx.addIssue({
         code: 'custom',
