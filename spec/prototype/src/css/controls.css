@@ -1,0 +1,143 @@
+/* Кнопки, поля, метки, вкладки, плитки */
+/* ── Buttons ── */
+.btn{display:inline-flex;align-items:center;gap:7px;padding:6px 13px;min-height:33px;border:0;border-radius:var(--r-m);background:var(--btn);color:var(--text);box-shadow:var(--sh-btn);cursor:pointer;font-weight:550;font-size:13px;white-space:nowrap;transition:background .15s,box-shadow .15s;text-decoration:none;line-height:1.2}
+.btn:hover{background:var(--btn-hover);box-shadow:var(--sh-btn-h)}
+.btn:active{box-shadow:var(--sh-btn-a)}
+.btn.cta{background:var(--accent);color:var(--on-accent);box-shadow:var(--sh-cta)}
+.btn.cta:hover{background:var(--accent-hover)}
+.btn.cta:active{box-shadow:var(--sh-btn-a)}
+/* Подпись внутри кнопки берёт цвет и размер кнопки: класс .lbl у полей формы приглушённый, на кнопке он сливался с фоном */
+.btn .lbl,.btn .bl,.tab .lbl,.fab .lbl{color:inherit;font-size:inherit;font-weight:inherit;letter-spacing:inherit}
+.btn.danger{background:var(--red);color:var(--on-accent);box-shadow:var(--sh-cta)}
+.btn.ok{background:var(--green);color:var(--on-accent);box-shadow:var(--sh-cta)}
+.btn.ghost{background:transparent;box-shadow:none;color:var(--muted)}
+.btn.ghost:hover{background:var(--row-hover);color:var(--text)}
+.btn.sm{min-height:29px;padding:4px 10px;font-size:12.5px}
+.btn[disabled],.btn.dis{opacity:.5;cursor:not-allowed;box-shadow:none}
+.icon-btn{width:33px;height:33px;display:inline-grid;place-items:center;border:0;border-radius:var(--r-m);background:transparent;color:var(--muted);cursor:pointer;flex:none}
+.icon-btn:hover{background:var(--row-hover);color:var(--text)}
+.icon-btn.sm{width:27px;height:27px}
+.icon-btn.raised{background:var(--btn);box-shadow:var(--sh-btn)}
+.linkbtn{border:0;background:none;padding:0;color:var(--link);cursor:pointer;font-weight:550;text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1px}
+.seg{display:inline-flex;padding:3px;border-radius:var(--r-m);background:var(--pane-alt);border:1px solid var(--border);gap:2px}
+.seg button{border:0;background:none;padding:4px 10px;border-radius:6px;font-size:12.5px;font-weight:550;color:var(--muted);cursor:pointer;display:inline-flex;gap:6px;align-items:center;min-height:26px}
+.seg button.on{background:var(--raised);color:var(--text);box-shadow:var(--sh-btn)}
+
+/* ── Inputs ── */
+.inp{width:100%;min-height:35px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--r-m);background:var(--field);color:var(--text);font-size:13.5px;outline:none;box-shadow:inset 0 1px 2px rgba(0,0,0,.04);transition:border-color .15s,box-shadow .15s}
+.inp:focus{border-color:var(--border-strong);box-shadow:0 0 0 3px var(--sel)}
+textarea.inp{min-height:90px;resize:vertical;line-height:1.5}
+select.inp{cursor:pointer}
+.inp[readonly]{background:var(--pane-alt)}
+.phone{display:flex;gap:6px}
+.phone select{width:118px;flex:none}
+.sw{position:relative;width:36px;height:20px;flex:none;appearance:none;-webkit-appearance:none;border-radius:999px;background:var(--border-strong);cursor:pointer;transition:background .2s;box-shadow:inset 0 1px 3px rgba(0,0,0,.22);margin:0;vertical-align:middle}
+.sw::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:var(--knob);box-shadow:0 1px 2px rgba(0,0,0,.3);transition:transform .2s}
+.sw:checked{background:var(--green)}
+.sw:checked::after{transform:translateX(16px)}
+.sw:disabled{opacity:.5;cursor:not-allowed}
+input[type=checkbox]:not(.sw){accent-color:var(--accent);width:16px;height:16px;margin:0;cursor:pointer;vertical-align:middle}
+.form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px 14px}
+.fld{display:flex;flex-direction:column;gap:5px;min-width:0}
+.fld.full{grid-column:1/-1}
+.fld>label,.lbl{font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.01em}
+.req::after{content:' *';color:var(--red)}
+.hint{font-size:11.5px;color:var(--faint);line-height:1.4}
+.err{font-size:12px;color:var(--red);display:flex;gap:5px;align-items:flex-start}
+.fld.bad .inp{border-color:var(--red)}
+.chipsel{display:flex;flex-wrap:wrap;gap:6px}
+.chipsel button{border:1px solid var(--border);background:var(--raised);border-radius:999px;padding:4px 11px;font-size:12.5px;font-weight:550;color:var(--muted);cursor:pointer;display:inline-flex;gap:6px;align-items:center}
+.chipsel button.on{background:var(--accent);border-color:transparent;color:var(--on-accent);box-shadow:var(--sh-cta)}
+.chipsel button:disabled{opacity:.45;cursor:not-allowed;text-decoration:line-through}
+.check-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)}
+.check-row:last-child{border-bottom:0}
+.check-row .grow{flex:1;min-width:0}
+@media (max-width:600px){.form{grid-template-columns:minmax(0,1fr)}}
+
+/* ── Pills & tags ── */
+.pill{display:inline-flex;align-items:center;gap:5px;padding:1px 9px 1px 7px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap;line-height:20px;background:var(--sel);color:var(--muted);vertical-align:middle}
+.pill .ic{width:12px;height:12px;stroke-width:2.3}
+.pill.red{background:var(--red-bg);color:var(--red)}
+.pill.orange{background:var(--orange-bg);color:var(--orange)}
+.pill.yellow{background:var(--yellow-bg);color:var(--yellow)}
+.pill.green{background:var(--green-bg);color:var(--green)}
+.pill.blue{background:var(--blue-bg);color:var(--blue)}
+.pill.actp{gap:3px}.pill.actp .ic{width:13px;height:13px}.pill.act-sub{background:var(--blue-bg);color:var(--blue)}.pill.act-pay{background:var(--green-bg);color:var(--green)}.pill.act-both{background:linear-gradient(90deg,var(--blue-bg),var(--green-bg));color:var(--blue)}
+.actq{margin:2px 0 10px}.actq button .n{opacity:.7;margin-left:4px}
+.pill.purple{background:var(--purple-bg);color:var(--purple)}
+.pill.faint{background:transparent;color:var(--faint);box-shadow:inset 0 0 0 1px var(--border)}
+.pill.sm{font-size:11px;line-height:17px;padding:0 7px 0 6px}
+.tag{display:inline-block;font-size:10.5px;font-weight:650;letter-spacing:.03em;padding:0 6px;border-radius:4px;background:var(--sel);color:var(--muted);line-height:17px;vertical-align:1px;white-space:nowrap}
+.tag.blue{background:var(--blue-bg);color:var(--blue)}
+.tag.yellow{background:var(--yellow-bg);color:var(--yellow)}
+.tag.red{background:var(--red-bg);color:var(--red)}
+.strike{text-decoration:line-through}
+
+/* ── Module header & tabs ── */
+.tabrow{display:flex;align-items:center;gap:10px;min-width:0}
+.tabrow .tr-l{flex:1 1 0;min-width:0}
+.tabrow .tabs{flex:0 1 auto;min-width:0}
+.tabrow .tr-r{flex:1 0 0;display:flex;justify-content:flex-end;align-items:center;gap:8px;min-width:max-content}
+.tabrow .tr-r:empty{min-width:0}
+.add-btn.slim .lbl{display:none}
+.tabs.tight{gap:4px}.tabs.tight .tab{padding:7px 9px;gap:5px}
+.tabs.tight2 .tab .ic{display:none}
+.mtitle{position:relative;display:flex;align-items:center;gap:4px}
+.mtitle h1{margin:0;font-size:23px;font-weight:720;letter-spacing:-.02em;text-wrap:balance}
+.mtitle .tip{position:absolute;left:0;top:calc(100% + 6px);z-index:20;width:min(420px,80vw);background:var(--raised);border:1px solid var(--border-strong);border-radius:var(--r-m);box-shadow:var(--shadow-l);padding:10px 12px;font-size:13px;color:var(--muted);display:none;animation:slideUp .25s forwards;line-height:1.5}
+.mtitle:hover .tip,.mtitle.tip-open .tip{display:block}
+.mhead .grow{flex:1}
+.tabs{display:flex;gap:6px;overflow-x:auto;padding:4px 2px 6px;scrollbar-width:none;margin:-2px 0 2px}
+.tabs::-webkit-scrollbar{display:none}
+.tabs>:first-child{margin-left:auto}.tabs>:last-child{margin-right:auto}
+.tab{flex:none;display:inline-flex;align-items:center;gap:7px;padding:7px 14px;border-radius:999px;border:1px solid var(--border);color:var(--muted);background:var(--pane-alt);font-weight:550;font-size:13px;cursor:pointer;text-decoration:none;transition:background .2s,color .2s,transform .2s}
+.tab:hover{background:var(--raised);color:var(--text);transform:translateY(-1px)}
+.tab.on{background:var(--raised);color:var(--text);border-color:transparent;box-shadow:var(--sh-btn);animation:pop .32s ease-out}
+.tab .ic{width:15px;height:15px}
+.tabs.compact .tab .lbl{display:none}
+.tabs.compact .tab{padding:7px 11px}
+.tabs.sm .tab{padding:5px 11px;font-size:12.5px}
+
+/* ── Plates (summary tiles) ── */
+.plates{display:grid;grid-template-columns:repeat(auto-fit,minmax(158px,1fr));gap:10px}
+.plate{all:unset;box-sizing:border-box;cursor:pointer;background:var(--raised);border:1px solid var(--border);border-radius:var(--r-l);padding:12px 14px 13px;display:flex;flex-direction:column;gap:7px;transition:transform .15s,box-shadow .15s;min-width:0}
+.plate:hover{box-shadow:var(--shadow-s);transform:translateY(-1px)}
+.plate:focus-visible{outline:2px solid var(--b-blue);outline-offset:2px}
+.plate.on{box-shadow:var(--sh-btn-a);transform:none}
+.pl-top{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted);font-weight:600}
+.pl-dot{width:24px;height:24px;border-radius:7px;display:grid;place-items:center;background:var(--sel);color:var(--muted);flex:none}
+.pl-dot .ic{width:14px;height:14px;stroke-width:2}
+.pl-dot.red{background:var(--red-bg);color:var(--red)} .pl-dot.yellow{background:var(--yellow-bg);color:var(--yellow)} .pl-dot.green{background:var(--green-bg);color:var(--green)} .pl-dot.blue{background:var(--blue-bg);color:var(--blue)} .pl-dot.orange{background:var(--orange-bg);color:var(--orange)} .pl-dot.purple{background:var(--purple-bg);color:var(--purple)}
+.pl-val{font-size:25px;font-weight:720;letter-spacing:-.025em;font-variant-numeric:tabular-nums;line-height:1.05}
+.pl-val small{font-size:13px;font-weight:550;color:var(--faint);letter-spacing:0;margin-left:3px}
+.pl-sub{font-size:12px;color:var(--faint)}
+
+/* ГКЭД: выбор вида деятельности, отметка «Подходит по ГКЭД» */
+.chipsel button.gkfit:not(.on){border-color:color-mix(in srgb,var(--green) 55%,var(--border));color:var(--text)}
+.gk-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--green);margin-left:2px}
+.chipsel button.on .gk-dot{background:var(--on-accent)}
+.btn.gk-main{justify-content:flex-start;white-space:normal;text-align:left;width:100%;min-height:35px}
+.btn.gk-main span{min-width:0;overflow-wrap:anywhere}
+.btn.gk-empty{color:var(--muted)}
+.gk-x{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.gk-chip{max-width:100%}
+.gk-q{width:100%;position:relative}
+.gk-q>span{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--faint);display:flex}
+.gk-q input{width:100%;height:36px;border-radius:999px;border:1px solid var(--border);background:var(--field);padding:0 12px 0 34px;outline:none;font-size:13.5px}
+.gk-q input:focus{border-color:var(--border-strong);box-shadow:0 0 0 3px var(--sel)}
+.gk-list{display:flex;flex-direction:column;gap:2px;max-height:min(460px,calc(100dvh - 300px));overflow:auto;margin-top:6px}
+.gk-i{display:flex;gap:10px;align-items:flex-start;text-align:left;border:0;background:none;padding:7px 9px;border-radius:var(--r-m);cursor:pointer;color:var(--text);font:inherit;font-size:13px;line-height:1.35}
+.gk-i:hover:not(:disabled){background:var(--row-hover)}
+.gk-i.on{background:var(--sel)}
+.gk-i:disabled{opacity:.45;cursor:not-allowed}
+.gk-i .mono{flex:none;min-width:62px}
+.gk-i small{display:block;color:var(--faint);font-size:11.5px}
+.gk-tree .gk-row{display:flex;align-items:center;gap:6px;padding:4px 6px;border-radius:var(--r-s);font-size:13px}
+.gk-tree .gk-row:hover{background:var(--row-hover)}
+.gk-tree .gk-row.off{opacity:.55}
+.gk-tree button.tg{border:0;background:none;width:22px;height:22px;display:grid;place-items:center;color:var(--faint);cursor:pointer;flex:none;border-radius:4px}
+.gk-tree button.tg.op .ic{transform:rotate(90deg)}
+.gk-tree .kids{margin-left:18px;border-left:1px solid var(--border);padding-left:6px}
+/* Отдельная кнопка рядом с «+ Добавить» (например, «Из свидетельства и выписки») и метка «Бета» */
+.add-x{margin-right:8px}.add-x .beta-p{margin-left:2px}.add-x.slim .lbl{display:none}
+.pill.beta-p{font-weight:700;letter-spacing:.02em;vertical-align:middle}

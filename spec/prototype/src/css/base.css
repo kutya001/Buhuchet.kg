@@ -1,0 +1,125 @@
+/* Цвета, темы, шрифты, анимации */
+:root{
+  /* Layout: dimmed warm frame (top bar + module rail) around one lifted paper pane.
+     Palette, shadows and type follow Primary for Obsidian, Classic Original. */
+  color-scheme: light;
+  --frame:hsl(34 34% 90%);
+  --frame-hover:hsl(36 35% 86%);
+  --pane:hsl(35 36% 96%);
+  --pane-alt:hsl(35 37% 92%);
+  --raised:hsl(36 38% 98%);
+  --field:hsl(36 38% 98.5%);
+  --btn:hsl(35 37% 93%);
+  --btn-hover:hsl(36 38% 96%);
+  --border:hsl(37 38% 83%);
+  --border-strong:hsl(34 37% 70%);
+  --text:hsl(31 45% 24%);
+  --muted:hsl(35 28% 40%);
+  --faint:hsl(34 26% 55%);
+  --accent:hsl(30 26% 42%);
+  --accent-hover:hsl(28 30% 47%);
+  --on-accent:hsl(36 38% 98%);
+  --link:hsl(40 98% 32%);
+  --hover:hsla(36 38% 98% / .55);
+  --row-hover:hsla(34 37% 70% / .13);
+  --nav-active:hsla(36 38% 98% / .8);
+  --sel:hsla(34 37% 70% / .22);
+  --red:hsl(4 56% 45%);      --red-bg:hsla(4 72% 55% / .12);
+  --orange:hsl(18 69% 42%);  --orange-bg:hsla(21 81% 59% / .16);
+  --yellow:hsl(40 98% 30%);  --yellow-bg:hsla(43 83% 57% / .24);
+  --green:hsl(153 65% 27%);  --green-bg:hsla(148 48% 47% / .15);
+  --blue:hsl(200 64% 34%);   --blue-bg:hsla(202 66% 48% / .13);
+  --purple:hsl(275 37% 42%); --purple-bg:hsla(277 35% 59% / .15);
+  --b-red:hsl(4 56% 48%); --b-yellow:hsl(43 83% 57%); --b-blue:hsl(200 64% 37%);
+  --knob:hsl(36 38% 98%);
+  --cover:hsla(33 30% 35% / .22);
+  --toast-bg:hsl(31 45% 22%); --toast-fg:hsl(35 36% 96%);
+  --shadow-s:0 1px 2px rgba(0,0,0,.028),0 3.4px 6.7px rgba(0,0,0,.042),0 15px 30px rgba(0,0,0,.07);
+  --shadow-l:0 1.8px 7.3px rgba(0,0,0,.091),0 6.3px 24.7px rgba(0,0,0,.132),0 30px 90px rgba(0,0,0,.22);
+  --sh-btn:inset 0 1px 0 0 rgba(255,255,255,.2),inset 0 0 0 1px rgba(0,0,0,.1),inset 0 -2px 0 2px rgba(0,0,0,.09),inset 0 -2px 4px 0 rgba(0,0,0,.1),0 4px 4px -5.6px rgba(0,0,0,.4),0 2px 4px -2.7px rgba(0,0,0,.1),0 2px 4px -1px rgba(0,0,0,.05);
+  --sh-btn-h:inset 0 1px 0 0 rgba(255,255,255,.4),inset 0 0 0 1px rgba(0,0,0,.15),inset 0 -2px 0 2px rgba(0,0,0,.09),inset 0 -2px 4px 0 rgba(0,0,0,.1),0 4px 4px -5.6px rgba(0,0,0,.4),0 2px 4px -2.7px rgba(0,0,0,.15),0 2px 6px -1px rgba(0,0,0,.1);
+  --sh-btn-a:inset 0 0 0 1px rgba(0,0,0,.15),inset 0 0 0 3px rgba(0,0,0,.09),inset 0 2px 8px 0 rgba(0,0,0,.2),0 0 0 1px rgba(255,255,255,.6);
+  --sh-cta:inset 0 1px 0 0 rgba(255,255,255,.09),inset 0 0 0 1px rgba(0,0,0,.15),inset 0 -2px 0 2px rgba(0,0,0,.15),inset 0 -2px 4px 0 rgba(0,0,0,.2),0 4px 4px -5.6px rgba(0,0,0,.52),0 2px 4px -2.7px rgba(0,0,0,.22),0 2px 4px -1px rgba(0,0,0,.19);
+  --font-ui:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;
+  --font-mono:'Cascadia Code','JetBrains Mono',ui-monospace,Menlo,Consolas,monospace;
+  --r-s:5px; --r-m:8px; --r-l:12px; --r-xl:16px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  color-scheme: dark;
+  --frame:hsl(29 16% 12%); --frame-hover:hsl(30 17% 15%);
+  --pane:hsl(30 19% 15%); --pane-alt:hsl(30 17% 13%); --raised:hsl(33 20% 17%); --field:hsl(30 17% 11%);
+  --btn:hsl(29 16% 13%); --btn-hover:hsl(30 18% 15%);
+  --border:hsl(28 22% 20%); --border-strong:hsl(31 27% 27%);
+  --text:hsl(34 39% 76%); --muted:hsl(35 27% 58%); --faint:hsl(34 22% 46%);
+  --accent:hsl(28 28% 30%); --accent-hover:hsl(26 31% 35%); --on-accent:hsl(32 48% 87%);
+  --link:hsl(43 69% 63%);
+  --hover:hsla(0 0% 0% / .22); --row-hover:hsla(31 27% 40% / .14); --nav-active:hsla(33 20% 20% / .95); --sel:hsla(34 24% 40% / .25);
+  --red:hsl(4 88% 66%); --red-bg:hsla(4 88% 61% / .15);
+  --orange:hsl(26 85% 62%); --orange-bg:hsla(24 84% 50% / .17);
+  --yellow:hsl(43 69% 63%); --yellow-bg:hsla(42 79% 51% / .17);
+  --green:hsl(152 51% 56%); --green-bg:hsla(154 57% 42% / .17);
+  --blue:hsl(194 59% 62%); --blue-bg:hsla(194 59% 56% / .15);
+  --purple:hsl(242 52% 74%); --purple-bg:hsla(241 45% 57% / .18);
+  --b-red:hsl(4 88% 61%); --b-yellow:hsl(42 79% 51%); --b-blue:hsl(197 48% 49%);
+  --knob:hsl(32 48% 85%);
+  --cover:hsla(30 20% 4% / .45);
+  --toast-bg:hsl(32 48% 85%); --toast-fg:hsl(30 19% 13%);
+  --shadow-s:0 1px 2px rgba(0,0,0,.228),0 3.4px 6.7px rgba(0,0,0,.242),0 15px 30px rgba(0,0,0,.27);
+  --shadow-l:0 1.8px 7.3px rgba(0,0,0,.271),0 6.3px 24.7px rgba(0,0,0,.312),0 30px 90px rgba(0,0,0,.4);
+  --sh-btn:inset 0 1px 0 0 rgba(255,255,255,.02),inset 0 0 0 1px rgba(0,0,0,.25),inset 0 -2px 0 2px rgba(0,0,0,.2),inset 0 -2px 4px 0 rgba(0,0,0,.25),0 4px 4px -5.6px rgba(0,0,0,.55),0 2px 4px -2.7px rgba(0,0,0,.25),0 2px 4px -1px rgba(0,0,0,.2);
+  --sh-btn-h:inset 0 1px 0 0 rgba(255,255,255,.06),inset 0 0 0 1px rgba(0,0,0,.3),inset 0 -2px 0 2px rgba(0,0,0,.2),inset 0 -2px 4px 0 rgba(0,0,0,.25),0 4px 4px -5.6px rgba(0,0,0,.55),0 2px 4px -2.7px rgba(0,0,0,.3),0 2px 6px -1px rgba(0,0,0,.25);
+  --sh-btn-a:inset 0 0 0 1px rgba(0,0,0,.45),inset 0 0 0 3px rgba(0,0,0,.15),inset 0 2px 8px 0 rgba(0,0,0,.57),0 0 0 1px rgba(255,255,255,.02);
+  --sh-cta:inset 0 1px 0 0 rgba(255,255,255,.1),inset 0 0 0 1px rgba(0,0,0,.3),inset 0 -2px 0 2px rgba(0,0,0,.2),inset 0 -2px 4px 0 rgba(0,0,0,.25),0 4px 4px -5.6px rgba(0,0,0,.55),0 2px 4px -2.7px rgba(0,0,0,.3),0 2px 4px -1px rgba(0,0,0,.25);
+}}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --frame:hsl(29 16% 12%); --frame-hover:hsl(30 17% 15%);
+  --pane:hsl(30 19% 15%); --pane-alt:hsl(30 17% 13%); --raised:hsl(33 20% 17%); --field:hsl(30 17% 11%);
+  --btn:hsl(29 16% 13%); --btn-hover:hsl(30 18% 15%);
+  --border:hsl(28 22% 20%); --border-strong:hsl(31 27% 27%);
+  --text:hsl(34 39% 76%); --muted:hsl(35 27% 58%); --faint:hsl(34 22% 46%);
+  --accent:hsl(28 28% 30%); --accent-hover:hsl(26 31% 35%); --on-accent:hsl(32 48% 87%);
+  --link:hsl(43 69% 63%);
+  --hover:hsla(0 0% 0% / .22); --row-hover:hsla(31 27% 40% / .14); --nav-active:hsla(33 20% 20% / .95); --sel:hsla(34 24% 40% / .25);
+  --red:hsl(4 88% 66%); --red-bg:hsla(4 88% 61% / .15);
+  --orange:hsl(26 85% 62%); --orange-bg:hsla(24 84% 50% / .17);
+  --yellow:hsl(43 69% 63%); --yellow-bg:hsla(42 79% 51% / .17);
+  --green:hsl(152 51% 56%); --green-bg:hsla(154 57% 42% / .17);
+  --blue:hsl(194 59% 62%); --blue-bg:hsla(194 59% 56% / .15);
+  --purple:hsl(242 52% 74%); --purple-bg:hsla(241 45% 57% / .18);
+  --b-red:hsl(4 88% 61%); --b-yellow:hsl(42 79% 51%); --b-blue:hsl(197 48% 49%);
+  --knob:hsl(32 48% 85%);
+  --cover:hsla(30 20% 4% / .45);
+  --toast-bg:hsl(32 48% 85%); --toast-fg:hsl(30 19% 13%);
+  --shadow-s:0 1px 2px rgba(0,0,0,.228),0 3.4px 6.7px rgba(0,0,0,.242),0 15px 30px rgba(0,0,0,.27);
+  --shadow-l:0 1.8px 7.3px rgba(0,0,0,.271),0 6.3px 24.7px rgba(0,0,0,.312),0 30px 90px rgba(0,0,0,.4);
+  --sh-btn:inset 0 1px 0 0 rgba(255,255,255,.02),inset 0 0 0 1px rgba(0,0,0,.25),inset 0 -2px 0 2px rgba(0,0,0,.2),inset 0 -2px 4px 0 rgba(0,0,0,.25),0 4px 4px -5.6px rgba(0,0,0,.55),0 2px 4px -2.7px rgba(0,0,0,.25),0 2px 4px -1px rgba(0,0,0,.2);
+  --sh-btn-h:inset 0 1px 0 0 rgba(255,255,255,.06),inset 0 0 0 1px rgba(0,0,0,.3),inset 0 -2px 0 2px rgba(0,0,0,.2),inset 0 -2px 4px 0 rgba(0,0,0,.25),0 4px 4px -5.6px rgba(0,0,0,.55),0 2px 4px -2.7px rgba(0,0,0,.3),0 2px 6px -1px rgba(0,0,0,.25);
+  --sh-btn-a:inset 0 0 0 1px rgba(0,0,0,.45),inset 0 0 0 3px rgba(0,0,0,.15),inset 0 2px 8px 0 rgba(0,0,0,.57),0 0 0 1px rgba(255,255,255,.02);
+  --sh-cta:inset 0 1px 0 0 rgba(255,255,255,.1),inset 0 0 0 1px rgba(0,0,0,.3),inset 0 -2px 0 2px rgba(0,0,0,.2),inset 0 -2px 4px 0 rgba(0,0,0,.25),0 4px 4px -5.6px rgba(0,0,0,.55),0 2px 4px -2.7px rgba(0,0,0,.3),0 2px 4px -1px rgba(0,0,0,.25);
+}
+
+/* ── Primary keyframes ── */
+@keyframes slideUp{0%{transform:translateY(0);opacity:0}10%{transform:translateY(8%);opacity:.2}20%{transform:translateY(5%);opacity:.4}50%{transform:translateY(-2%);opacity:.85}100%{transform:translateY(0);opacity:1}}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+@keyframes pop{0%{transform:scale(.94)}60%{transform:scale(1.03)}100%{transform:scale(1)}}
+@keyframes shimmer{0%{background-position:-400px 0}100%{background-position:400px 0}}
+@media (prefers-reduced-motion: reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--frame);color:var(--text);font:450 14px/1.45 var(--font-ui);
+  font-feature-settings:"calt" 1,"ss03" 1,"cv01" 1,"cv05" 1,"cv06" 1,"cv11" 1;-webkit-font-smoothing:antialiased;overflow:hidden}
+button,input,select,textarea{font:inherit;color:inherit}
+a{color:var(--link)}
+.ic{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;flex:none;vertical-align:-3px}
+.ic.sm{width:13px;height:13px;stroke-width:2}
+.ic.lg{width:28px;height:28px;stroke-width:1.5}
+.mono{font-family:var(--font-mono);font-size:.92em;font-feature-settings:"calt" 1,"zero" 1}
+.strong{font-weight:600}
+.faint{color:var(--faint)} .muted{color:var(--muted)} .red{color:var(--red)} .green{color:var(--green)} .yellow{color:var(--yellow)}
+.tnum{font-variant-numeric:tabular-nums}
+:focus-visible{outline:2px solid var(--b-blue);outline-offset:2px}
+[hidden]{display:none!important}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+

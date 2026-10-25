@@ -1,0 +1,111 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Прототип Buhuchet.kg v57</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300..800&family=JetBrains+Mono:wght@400;600&display=swap">
+<script>try{var __t=localStorage.getItem('bu.theme');if(__t==='light'||__t==='dark')document.documentElement.setAttribute('data-theme',__t)}catch(e){}</script>
+<!-- Стили: src/css. Сборка (build.py) объединяет их в один <style> -->
+<link rel="stylesheet" href="src/css/base.css">
+<link rel="stylesheet" href="src/css/shell.css">
+<link rel="stylesheet" href="src/css/controls.css">
+<link rel="stylesheet" href="src/css/grid.css">
+<link rel="stylesheet" href="src/css/popups.css">
+<link rel="stylesheet" href="src/css/kb.css">
+<link rel="stylesheet" href="src/css/cards.css">
+<link rel="stylesheet" href="src/css/pages.css">
+<link rel="stylesheet" href="src/css/mobile.css">
+
+<div class="app" id="app">
+  <header class="topbar" id="topbar">
+    <button class="icon-btn tb-other" id="burger" aria-label="Меню" title="Меню"></button>
+    <button class="tb-title tb-other" id="tb-title" type="button"><b id="tb-mod"></b><span id="tb-tab"></span></button><button class="icon-btn sm tb-info tb-other" id="tb-info" type="button" aria-label="Описание модуля"></button>
+    <div class="tb-search">
+      <div class="search" role="search">
+        <span id="search-ic"></span>
+        <input id="q" type="search" placeholder="Поиск по текущей вкладке" autocomplete="off" aria-label="Поиск по текущей вкладке">
+        <span class="scope" id="q-scope"></span>
+      </div>
+      <button class="icon-btn tb-mobile" id="q-open" aria-label="Поиск"></button>
+    </div>
+    <div class="clock tb-other" id="clock" aria-live="off"></div>
+    <button class="icon-btn tb-other" id="help" aria-label="Помощь" title="Помощь: обучение и подсказки"></button>
+    <button class="icon-btn tb-other" id="theme" aria-label="Переключить тему" title="Светлая / тёмная тема"></button>
+  </header>
+  <aside class="side" id="side" aria-label="Модули"></aside>
+  <main class="pane" id="pane"><div class="page" id="page"></div></main>
+  <nav class="bnav" id="bnav" aria-label="Модули"></nav>
+</div>
+<button class="fab" id="fab" aria-label="Добавить" hidden></button>
+<div class="sheet-cover" id="sheet-cover" hidden></div>
+<div class="sheet" id="sheet" role="dialog" aria-label="Меню"></div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+<!-- Скрипты: src/js. Порядок важен: файл может при загрузке вызывать только то, что объявлено выше.
+     core/registry.js ссылается на функции всех модулей, поэтому подключается после них. Сборка (build.py) объединяет их в один <script> -->
+<script src="src/js/core/icons.js"></script>
+<script src="src/js/core/utils.js"></script>
+<script src="src/js/core/xlsx.js"></script>
+<script src="src/js/core/data.js"></script>
+<script src="src/js/core/reference.js"></script>
+<script src="src/js/core/gked.js"></script>
+<script src="src/js/core/tax-lines.js"></script>
+<script src="src/js/core/socfund.js"></script>
+<script src="src/js/core/regdocs.js"></script>
+<script src="src/js/core/org.js"></script>
+<script src="src/js/core/requisites.js"></script>
+<script src="src/js/core/derive.js"></script>
+<script src="src/js/ui/popups.js"></script>
+<script src="src/js/ui/mobile-pack.js"></script>
+<script src="src/js/ui/grid.js"></script>
+<script src="src/js/core/session.js"></script>
+<script src="src/js/ui/shell.js"></script>
+<script src="src/js/ui/swipes.js"></script>
+<script src="src/js/ui/events.js"></script>
+<script src="src/js/ui/empty.js"></script>
+<script src="src/js/modules/kb-lessons.js"></script>
+<script src="src/js/modules/kb.js"></script>
+<script src="src/js/admin/kb-content.js"></script>
+<script src="src/js/modules/kb-news.js"></script>
+<script src="src/js/admin/news.js"></script>
+<script src="src/js/ui/tour.js"></script>
+<script src="src/js/modules/onboard.js"></script>
+<script src="src/js/core/login.js"></script>
+<script src="src/js/modules/profile.js"></script>
+<script src="src/js/modules/home.js"></script>
+<script src="src/js/modules/reports.js"></script>
+<script src="src/js/ui/status-scale.js"></script>
+<script src="src/js/modules/report-card.js"></script>
+<script src="src/js/modules/gked-ui.js"></script>
+<script src="src/js/modules/contractors.js"></script>
+<script src="src/js/modules/contractor-card.js"></script>
+<script src="src/js/modules/cp-page.js"></script>
+<script src="src/js/modules/report-pick.js"></script>
+<script src="src/js/modules/tax-pick.js"></script>
+<script src="src/js/modules/socfund-ui.js"></script>
+<script src="src/js/modules/contractor-form.js"></script>
+<script src="src/js/modules/contractor-import.js"></script>
+<script src="src/js/modules/contractor-regdocs.js"></script>
+<script src="src/js/modules/tasks.js"></script>
+<script src="src/js/modules/services.js"></script>
+<script src="src/js/modules/finance.js"></script>
+<script src="src/js/modules/fin-op.js"></script>
+<script src="src/js/modules/projects.js"></script>
+<script src="src/js/modules/files.js"></script>
+<script src="src/js/modules/analytics.js"></script>
+<script src="src/js/modules/staff.js"></script>
+<script src="src/js/modules/dicts.js"></script>
+<script src="src/js/modules/dict-guide.js"></script>
+<script src="src/js/modules/org.js"></script>
+<script src="src/js/admin/accounts-orgs.js"></script>
+<script src="src/js/admin/platform-dicts.js"></script>
+<script src="src/js/admin/platform-dicts-forms.js"></script>
+<script src="src/js/admin/platform-dicts-io.js"></script>
+<script src="src/js/admin/platform-dicts-edit.js"></script>
+<script src="src/js/admin/gked-admin.js"></script>
+<script src="src/js/admin/l10n.js"></script>
+<script src="src/js/admin/telegram.js"></script>
+<script src="src/js/modules/kpi.js"></script>
+<script src="src/js/modules/kpi-excel.js"></script>
+<script src="src/js/core/registry.js"></script>
+<script src="src/js/start.js"></script>
+
+</body></html>
