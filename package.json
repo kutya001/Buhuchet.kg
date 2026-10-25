@@ -1,0 +1,45 @@
+{
+  "name": "buhuchet",
+  "private": true,
+  "description": "Buhuchet.kg — рабочий продукт",
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": ">=22.18 <23"
+  },
+  "type": "module",
+  "scripts": {
+    "dev": "turbo run dev --filter=@buhuchet/web",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "lint": "eslint . --max-warnings=0",
+    "test": "turbo run test",
+    "test:coverage": "turbo run test:coverage",
+    "test:e2e": "playwright test -c e2e/playwright.config.ts",
+    "check": "pnpm typecheck && pnpm lint && pnpm check:portability && pnpm check:acceptance && pnpm test",
+    "check:portability": "node scripts/check-portability.mjs",
+    "check:acceptance": "node scripts/check-acceptance-map.mjs",
+    "test:scripts": "node --test \"scripts/*.test.mjs\"",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "db:generate": "pnpm --filter @buhuchet/db generate",
+    "db:migrate": "pnpm --filter @buhuchet/db migrate",
+    "db:seed": "pnpm --filter @buhuchet/db seed",
+    "services:up": "docker compose up -d --wait postgres minio",
+    "services:down": "docker compose down",
+    "spec:sync": "node scripts/spec-sync.mjs",
+    "storage:init": "pnpm --filter @buhuchet/adapters storage:init",
+    "setup:local": "pnpm services:up && pnpm db:migrate && pnpm db:seed --update && pnpm storage:init"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "1.63.0",
+    "@types/node": "^22.19.0",
+    "eslint": "^10.13.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.13.0",
+    "prettier": "^3.9.10",
+    "turbo": "^2.11.10",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.72.0"
+  }
+}

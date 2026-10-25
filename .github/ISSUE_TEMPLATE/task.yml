@@ -1,0 +1,46 @@
+name: Задача модуля
+description: Один кусок модуля = одна задача = одна сессия Claude Code = один PR
+title: '<Модуль>: <кусок>'
+labels: [task]
+body:
+  - type: input
+    id: module
+    attributes:
+      label: Модуль и кусок
+      placeholder: 'Контрагенты: список и фильтры'
+    validations:
+      required: true
+  - type: input
+    id: tz
+    attributes:
+      label: Раздел ТЗ
+      placeholder: 'spec/ТЗ Buhuchet.kg.md → «Контрагенты» → «Список»'
+    validations:
+      required: true
+  - type: input
+    id: prototype
+    attributes:
+      label: Файл прототипа
+      placeholder: 'spec/prototype/src/js/modules/contractors.js'
+  - type: textarea
+    id: scope
+    attributes:
+      label: Что входит
+    validations:
+      required: true
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: Что не входит
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Пункты приёмки
+      description: Из раздела ТЗ «Как проверить, что всё работает»; каждый станет сквозным тестом
+    validations:
+      required: true
+  - type: input
+    id: depends
+    attributes:
+      label: Зависит от задач
+      placeholder: '#3, #5'

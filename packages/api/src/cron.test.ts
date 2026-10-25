@@ -1,0 +1,118 @@
+import { fixedClock } from '@buhuchet/adapters';
+import { schema } from '@buhuchet/db';
+import { createTestDatabase, databaseAvailable, type TestDatabase } from '@buhuchet/db/testing';
+import { ApiError, CronTickResponse } from '@buhuchet/shared';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { createApp } from './app';
+import type { Job } from './deps';
+import { cleanupSchedulerRuns, jobs } from './jobs/registry';
+import { createTestDeps } from './testing';
+
+const SECRET = 'test-cron-secret-0000';
+const auth = { authorization: `Bearer ${SECRET}` };
+
+describe('/api/cron/tick без базы', () => {
+  it('без секрета — 401', async () => {
+    const app = createApp(createTestDeps());
+    for (const method of ['GET', 'POST']) {
+      const res = await app.request('/api/cron/tick', { method });
+      expect(res.status).toBe(401);
+      expect(ApiError.parse(await res.json()).error.code).toBe('cron_unauthorized');
+    }
+    const wrong = await app.request('/api/cron/tick', {
+      headers: { authorization: 'Bearer wrong' },
+    });
+    expect(wrong.status).toBe(401);
+  });
+
+  it('с секретом и без задач — пустой ответ', async () => {
+    const res = await createApp(createTestDeps()).request('/api/cron/tick', { headers: auth });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ran: [], skipped: [] });
+  });
+
+  it('в реестре есть очистка журнала запусков', () => {
+    expect(jobs.map((j) => j.name)).toContain('system.cleanup-scheduler-runs');
+  });
+});
+
+describe.skipIf(!databaseAvailable())('/api/cron/tick с базой', () => {
+  let t: TestDatabase;
+
+  beforeAll(async () => {
+    t = await createTestDatabase();
+  });
+
+  afterAll(async () => {
+    await t?.drop();
+  });
+
+  it('выполняет слот один раз, даже если вызвать дважды или одновременно', async () => {
+    const run = vi.fn(async () => {});
+    const job: Job = { name: 'test.daily', cron: '0 9 * * *', lookbackMinutes: 120, run };
+    const clock = fixedClock('2026-10-18T03:20:00Z'); // 09:20 по Бишкеку
+    const app = createApp(createTestDeps({ db: t.app.db, clock, jobs: [job] }));
+
+    const [a, b] = await Promise.all([
+      app.request('/api/cron/tick', { headers: auth }),
+      app.request('/api/cron/tick', { method: 'POST', headers: auth }),
+    ]);
+    const bodies = [CronTickResponse.parse(await a.json()), CronTickResponse.parse(await b.json())];
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(bodies.flatMap((x) => x.ran)).toEqual([
+      { job: 'test.daily', slot: '2026-10-18T03:00:00.000Z', ok: true },
+    ]);
+    expect(bodies.flatMap((x) => x.skipped)).toEqual(['test.daily']);
+
+    clock.set('2026-10-19T03:00:30Z');
+    const next = CronTickResponse.parse(
+      await (await app.request('/api/cron/tick', { headers: auth })).json(),
+    );
+    expect(next.ran).toHaveLength(1);
+    expect(run).toHaveBeenCalledTimes(2);
+  });
+
+  it('упавшая задача записывается с ошибкой и не мешает остальным', async () => {
+    const failing: Job = {
+      name: 'test.failing',
+      cron: '* * * * *',
+      run: async () => {
+        throw new Error('сломалось');
+      },
+    };
+    const weird: Job = {
+      name: 'test.weird',
+      cron: '* * * * *',
+      run: () => Promise.reject('не Error'),
+    };
+    const okRun = vi.fn(async () => {});
+    const ok: Job = { name: 'test.ok', cron: '* * * * *', run: okRun };
+    const deps = createTestDeps({
+      db: t.app.db,
+      clock: fixedClock('2026-10-18T05:00:00Z'),
+      jobs: [failing, weird, ok],
+    });
+    const body = CronTickResponse.parse(
+      await (await createApp(deps).request('/api/cron/tick', { headers: auth })).json(),
+    );
+    expect(body.ran).toEqual([
+      { job: 'test.failing', slot: '2026-10-18T05:00:00.000Z', ok: false },
+      { job: 'test.weird', slot: '2026-10-18T05:00:00.000Z', ok: false },
+      { job: 'test.ok', slot: '2026-10-18T05:00:00.000Z', ok: true },
+    ]);
+    const rows = await t.admin.db.select().from(schema.schedulerRuns);
+    expect(rows.find((r) => r.job === 'test.failing')?.error).toBe('сломалось');
+    expect(rows.find((r) => r.job === 'test.weird')?.error).toBe('не Error');
+  });
+
+  it('очистка удаляет записи старше 30 дней', async () => {
+    await t.admin.db.insert(schema.schedulerRuns).values([
+      { job: 'old', slot: new Date('2026-09-01T00:00:00Z') },
+      { job: 'fresh', slot: new Date('2026-10-10T00:00:00Z') },
+    ]);
+    await cleanupSchedulerRuns.run(createTestDeps({ db: t.app.db }), new Date());
+    const left = (await t.admin.db.select().from(schema.schedulerRuns)).map((r) => r.job);
+    expect(left).not.toContain('old');
+    expect(left).toContain('fresh');
+  });
+});

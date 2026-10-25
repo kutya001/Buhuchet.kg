@@ -1,0 +1,33 @@
+name: Automerge
+
+# Человека-разработчика нет: PR сливается сам (squash), когда зелёные все обязательные проверки
+# (check, docker-e2e, pr-policy), PR не черновик, без метки hold и ветка не отстала от main.
+# Скрипт берётся из main, а не из ветки PR.
+on:
+  workflow_run:
+    workflows: [CI, PR policy]
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+  checks: read
+
+concurrency:
+  group: automerge-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: false
+
+jobs:
+  merge:
+    if: github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts
+      - run: node scripts/automerge.mjs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
