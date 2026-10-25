@@ -363,6 +363,8 @@ describe.skipIf(!databaseAvailable())('история изменений и ве
       { id: randomUUID() },
       { version: 999 },
       { notAColumn: 1 },
+      { constructor: 1 },
+      { toString: 1 },
     ]) {
       const body: Record<string, unknown> = { fullName: 'Взлом', ...extra };
       await expect(

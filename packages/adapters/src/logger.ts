@@ -42,25 +42,48 @@ export const REDACT_PATHS = [
   ...SECRET_HEADERS.flatMap((h) => [`headers["${h}"]`, `*.headers["${h}"]`]),
 ];
 
+type QueryError = Error & {
+  query: unknown;
+  params: unknown;
+  cause?: { code?: string; message?: string; constraint_name?: string };
+};
+
+/** Ошибка запроса к базе в цепочке причин (сама ошибка или обёрнутая в другую). */
+function findQueryError(err: unknown): QueryError | null {
+  for (let e: unknown = err, depth = 0; e instanceof Error && depth < 10; depth++) {
+    if ('query' in e && 'params' in e) return e as QueryError;
+    e = e.cause;
+  }
+  return null;
+}
+
 /**
  * Ошибка запроса к базе (DrizzleQueryError) несёт значения параметров — хеш пароля, телефоны — и в
- * `params`, и в тексте сообщения, и в стеке. В журнал из неё идут только текст запроса без значений
- * и код ошибки PostgreSQL; остальные ошибки — как обычно.
+ * `params`, и в тексте сообщения, и в стеке. Если она есть в цепочке причин, в журнал идут только
+ * текст запроса без значений и код ошибки PostgreSQL; остальные ошибки — как обычно. Ошибки пишутся
+ * в журнал только под ключом `err` — так их видит этот обработчик.
  */
 export function serializeError(err: unknown): unknown {
-  if (err instanceof Error && 'query' in err && 'params' in err) {
-    const cause = err.cause as
-      { code?: string; message?: string; constraint_name?: string } | undefined;
+  const q = findQueryError(err);
+  if (q) {
     return {
-      type: err.name,
-      message: 'Ошибка запроса к базе',
-      query: typeof err.query === 'string' ? err.query : undefined,
-      code: cause?.code,
-      constraint: cause?.constraint_name,
-      cause: cause?.message,
+      type: (err as Error).name,
+      message:
+        err === q ? 'Ошибка запроса к базе' : `${(err as Error).message}: ошибка запроса к базе`,
+      query: typeof q.query === 'string' ? q.query : undefined,
+      code: q.cause?.code,
+      constraint: q.cause?.constraint_name,
+      cause: q.cause?.message,
     };
   }
   return pino.stdSerializers.err(err as Error);
+}
+
+/** Текст ошибки для сохранения в базе (журнал задач): без значений параметров запроса. */
+export function safeErrorMessage(err: unknown): string {
+  const q = findQueryError(err);
+  if (q) return `Ошибка запроса к базе${q.cause?.code ? ` (${q.cause.code})` : ''}`;
+  return err instanceof Error ? err.message : String(err);
 }
 
 /**

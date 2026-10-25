@@ -74,7 +74,7 @@ export interface VersionedUpdate<T extends VersionedTable> {
   entity: HistoryEntity;
   /** Значение ключа записи. */
   id: string;
-  /** Ключевой столбец, если он не `id` (у учётной политики — `org_id`). */
+  /** Ключевой столбец, если он не `id` (у учётной политики — `org_id`); только уникальный. */
   key?: PgColumn;
   /** Версия, которую видел пользователь, когда открыл запись. */
   version: number;
@@ -136,13 +136,19 @@ export async function updateWithHistory<T extends VersionedTable>(
     updatedAt: sql`now()`,
   };
   if ('updatedBy' in table) set.updatedBy = sql`app.current_user_id()`;
-  const [updated] = (await tx
+  const rows = (await tx
     .update(table)
     .set(set as PgUpdateSetSource<T>)
     .where(and(match, eq(table.version, version)))
     .returning()) as T['$inferSelect'][];
-  // Запись заблокирована и версия проверена выше, так что сюда попасть нельзя; на всякий случай.
-  if (!updated) throw new RecordChangedError(entity, id, version + 1);
+  // Запись заблокирована и версия проверена выше, так что строк не может быть ноль; больше одной —
+  // значит, `key` не уникален: ошибка, транзакция откатится.
+  if (rows.length !== 1) {
+    throw new Error(
+      `updateWithHistory(${entity}): изменено строк — ${rows.length}, ожидалась одна`,
+    );
+  }
+  const updated = rows[0]!;
 
   await writeHistory(tx, {
     entity,
@@ -167,7 +173,7 @@ function checkedPatch(
 ): Record<string, unknown> {
   const columns = getTableColumns(table);
   for (const field of Object.keys(patch)) {
-    if (!(field in columns) || (SERVICE_FIELDS as readonly string[]).includes(field)) {
+    if (!Object.hasOwn(columns, field) || (SERVICE_FIELDS as readonly string[]).includes(field)) {
       throw new Error(`updateWithHistory(${entity}): поле «${field}» нельзя менять правкой`);
     }
   }

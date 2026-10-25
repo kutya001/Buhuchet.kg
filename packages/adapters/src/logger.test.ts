@@ -1,6 +1,6 @@
 import { Writable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
-import { createLogger } from './logger';
+import { createLogger, safeErrorMessage } from './logger';
 
 describe('createLogger', () => {
   it('пишет JSON со службой и вычищает секреты', () => {
@@ -102,7 +102,19 @@ describe('createLogger', () => {
       cause: 'duplicate key value violates unique constraint',
     });
 
+    log.error({ err: new Error('сохранение сотрудника', { cause: err }) }, 'ошибка');
+    expect(lines[1]).not.toContain('argon2id');
+    expect(JSON.parse(lines[1]!).err).toMatchObject({
+      type: 'Error',
+      message: 'сохранение сотрудника: ошибка запроса к базе',
+      code: '23505',
+    });
+
     log.error({ err: new Error('обычная ошибка') }, 'ошибка');
-    expect(JSON.parse(lines[1]!).err).toMatchObject({ type: 'Error', message: 'обычная ошибка' });
+    expect(JSON.parse(lines[2]!).err).toMatchObject({ type: 'Error', message: 'обычная ошибка' });
+
+    expect(safeErrorMessage(err)).toBe('Ошибка запроса к базе (23505)');
+    expect(safeErrorMessage(new Error('сломалось'))).toBe('сломалось');
+    expect(safeErrorMessage('не Error')).toBe('не Error');
   });
 });
