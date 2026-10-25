@@ -128,15 +128,13 @@ describe.skipIf(!databaseAvailable())('RLS: сотрудники, роли и у
       .returning({ id: users.id });
     await expect(
       withOrgContext(t.app.db, { orgId: ORG_A }, (tx) =>
-        tx
-          .insert(employees)
-          .values({
-            orgId: ORG_A,
-            userId: looseB!.id,
-            fullName: 'Н',
-            shortName: 'Н',
-            roleId: ROLE_A,
-          }),
+        tx.insert(employees).values({
+          orgId: ORG_A,
+          userId: looseB!.id,
+          fullName: 'Н',
+          shortName: 'Н',
+          roleId: ROLE_A,
+        }),
       ),
     ).rejects.toThrow(fkViolation);
     await expect(
@@ -146,6 +144,33 @@ describe.skipIf(!databaseAvailable())('RLS: сотрудники, роли и у
           .values({ orgId: ORG_A, roleId: ROLE_B, permissionId: 'repView' }),
       ),
     ).rejects.toThrow(fkViolation);
+    await expect(
+      withOrgContext(t.app.db, { orgId: ORG_A }, (tx) =>
+        tx
+          .insert(roleScopes)
+          .values({ orgId: ORG_A, roleId: ROLE_B, permGroup: 'fin', scope: 'all' }),
+      ),
+    ).rejects.toThrow(fkViolation);
+    await expect(
+      withOrgContext(t.app.db, { orgId: ORG_A }, (tx) =>
+        tx.update(orgSettings).set({ defaultRoleId: ROLE_B }).where(eq(orgSettings.orgId, ORG_A)),
+      ),
+    ).rejects.toThrow(fkViolation);
+  });
+
+  it('учётную запись нельзя перенести в другую организацию или сделать администратором платформы', async () => {
+    await expect(
+      withOrgContext(t.app.db, { orgId: ORG_A }, (tx) =>
+        tx.update(users).set({ orgId: ORG_B }).where(eq(users.id, USER_A)),
+      ),
+    ).rejects.toThrow(rlsViolation);
+    await expect(
+      withOrgContext(t.app.db, { orgId: ORG_A }, (tx) =>
+        tx.update(users).set({ orgId: null, isPlatformAdmin: true }).where(eq(users.id, USER_A)),
+      ),
+    ).rejects.toThrow(rlsViolation);
+    const [a] = await t.admin.db.select().from(users).where(eq(users.id, USER_A));
+    expect(a).toMatchObject({ orgId: ORG_A, isPlatformAdmin: false });
   });
 
   it('логин уникален на платформе без учёта регистра; у организации одна роль владельца', async () => {

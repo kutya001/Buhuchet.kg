@@ -1,4 +1,5 @@
 import {
+  OWNER_ONLY_PERMISSIONS,
   PERMISSION_GROUPS,
   PERMISSION_IDS,
   viewPermissionOf,
@@ -20,12 +21,15 @@ export interface AccessSubject {
 }
 
 /**
- * Есть ли право. Владелец имеет все права. Право группы действует, только если в роли есть и
- * «Просматривать …» этой группы (прототип core/session.js, can).
+ * Есть ли право. Владелец имеет все права; права «только у владельца» у других не действуют, даже
+ * если оказались в роли. Право группы действует, только если в роли есть и «Просматривать …» этой
+ * группы (прототип core/session.js, can).
  */
 export function hasPermission(subject: AccessSubject, permission: PermissionId): boolean {
   if (subject.isOwner) return true;
-  if (!subject.permissions.has(permission)) return false;
+  if (!subject.permissions.has(permission) || OWNER_ONLY_PERMISSIONS.includes(permission)) {
+    return false;
+  }
   const view = viewPermissionOf(permission);
   return view === null || view === permission || subject.permissions.has(view);
 }

@@ -3,7 +3,7 @@
 -- поэтому функция работает от владельца схемы (SECURITY DEFINER) и отдаёт только номера организаций.
 CREATE OR REPLACE FUNCTION app.org_ids() RETURNS SETOF uuid
   LANGUAGE sql STABLE SECURITY DEFINER
-  SET search_path = pg_catalog, public
+  SET search_path = pg_catalog, pg_temp
   AS $$ SELECT id FROM public.organizations ORDER BY id $$;
 --> statement-breakpoint
 REVOKE ALL ON FUNCTION app.org_ids() FROM PUBLIC;

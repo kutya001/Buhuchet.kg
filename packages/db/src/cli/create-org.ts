@@ -56,7 +56,10 @@ try {
     );
     process.exitCode = 1;
   } else {
-    throw error;
+    // Текст ошибки Drizzle содержит параметры запроса (в том числе хеш пароля) — печатаем только код.
+    const cause = (error as { cause?: { code?: string } }).cause;
+    console.error(`Не удалось создать организацию (код ошибки базы: ${cause?.code ?? 'нет'}).`);
+    process.exitCode = 1;
   }
 } finally {
   await handle.close();

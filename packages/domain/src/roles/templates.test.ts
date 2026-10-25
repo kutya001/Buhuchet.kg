@@ -111,8 +111,23 @@ describe('rolesForNewOrganization', () => {
 
   it('бухгалтер — права шаблона и «Свои» во всех группах', () => {
     const acc = roles[2]!;
-    expect(acc.permissions).toHaveLength(14);
-    expect(acc.permissions).toContain('changeStatus');
+    // ТЗ: просмотр всех модулей, кроме «Сотрудников», и восемь прав действий.
+    expect(acc.permissions).toEqual([
+      'cpView',
+      'createCp',
+      'repView',
+      'changeStatus',
+      'changeSum',
+      'finView',
+      'money',
+      'projView',
+      'kpiView',
+      'kpiEdit',
+      'kpiImport',
+      'filesView',
+      'filesUpload',
+      'export',
+    ]);
     expect(Object.values(acc.scopes)).toEqual(SCOPE_GROUPS.map(() => 'own'));
   });
 });

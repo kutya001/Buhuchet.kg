@@ -102,7 +102,24 @@ describe.skipIf(!databaseAvailable())('создание организации �
       'rollback',
     ]);
     expect(new Set(Object.values(scopesOf(chief.id)))).toEqual(new Set(['all']));
-    expect(permsOf(acc.id).size).toBe(14);
+    expect([...permsOf(acc.id)].sort()).toEqual(
+      [
+        'cpView',
+        'createCp',
+        'repView',
+        'changeStatus',
+        'changeSum',
+        'finView',
+        'money',
+        'projView',
+        'kpiView',
+        'kpiEdit',
+        'kpiImport',
+        'filesView',
+        'filesUpload',
+        'export',
+      ].sort(),
+    );
     expect(Object.keys(scopesOf(acc.id))).toHaveLength(6);
     expect(new Set(Object.values(scopesOf(acc.id)))).toEqual(new Set(['own']));
 

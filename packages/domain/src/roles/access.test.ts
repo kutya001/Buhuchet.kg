@@ -61,6 +61,10 @@ describe('hasPermission — как can() прототипа', () => {
     expect(effectivePermissions(acc)).toHaveLength(ACCOUNTANT.length);
   });
 
+  it('«Настройки и учётная политика» — только у владельца, даже если право оказалось в роли', () => {
+    expect(hasPermission(subject({ permissions: ['org'] }), 'org')).toBe(false);
+  });
+
   it('без «Просматривать …» остальные права группы не действуют', () => {
     const noView = subject({ permissions: ['projects', 'money', 'tasksCreate'] });
     expect(hasPermission(noView, 'projects')).toBe(false);

@@ -16,7 +16,7 @@ const bool = z
 export const AppEnvironment = z.enum(['local', 'test', 'staging', 'production']);
 export type AppEnvironment = z.infer<typeof AppEnvironment>;
 
-const DatabaseEnv = z.object({
+const DatabaseFields = z.object({
   /** Обязательна: без неё стенд или рабочий сайт мог бы получить поведение «local» (демо, FIXED_NOW). */
   APP_ENV: AppEnvironment,
   /** Подключение приложения: роль без права обходить RLS. */
@@ -27,6 +27,35 @@ const DatabaseEnv = z.object({
   /** Пароль демо-сотрудников для `pnpm db:seed`; без него войти в демо-организацию нельзя. */
   DEMO_PASSWORD: z.string().min(1).optional(),
 });
+
+/**
+ * Логины демо-сотрудников открыты (demoDB.json), поэтому на стенде пароль демо — своя строка от
+ * 12 символов, не из .env.example; на рабочем сайте демо-организации нет и пароль не задаётся.
+ */
+function checkDemoPassword(
+  env: { APP_ENV: AppEnvironment; DEMO_PASSWORD?: string | undefined },
+  ctx: z.RefinementCtx,
+): void {
+  if (!env.DEMO_PASSWORD) return;
+  if (env.APP_ENV === 'production') {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['DEMO_PASSWORD'],
+      message: 'на рабочем сайте демо-организации нет — не задаётся',
+    });
+  } else if (
+    env.APP_ENV === 'staging' &&
+    (env.DEMO_PASSWORD.length < 12 || env.DEMO_PASSWORD === 'demo')
+  ) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['DEMO_PASSWORD'],
+      message: 'на стенде — своя строка от 12 символов, не из .env.example',
+    });
+  }
+}
+
+const DatabaseEnv = DatabaseFields.superRefine(checkDemoPassword);
 
 // Ключи, регион и корзину вставляют копированием: лишний пробел или перевод строки в конце ломает подпись S3.
 const StorageEnv = z.object({
@@ -55,7 +84,7 @@ const AppEnv = z
     /** Зафиксировать «сейчас» (демо-стенд, сквозные тесты). На рабочем сайте запрещено. */
     FIXED_NOW: z.iso.datetime().optional(),
   })
-  .extend(DatabaseEnv.shape)
+  .extend(DatabaseFields.shape)
   .extend(StorageEnv.shape)
   .superRefine((env, ctx) => {
     if (env.APP_ENV === 'production' && env.FIXED_NOW) {
@@ -83,6 +112,7 @@ const AppEnv = z
         message: 'TELEGRAM_BOT_TOKEN и TELEGRAM_WEBHOOK_SECRET задаются вместе',
       });
     }
+    checkDemoPassword(env, ctx);
   });
 
 export type AppConfig = z.infer<typeof AppEnv>;

@@ -8,7 +8,7 @@ if (existsSync(rootEnv)) process.loadEnvFile(rootEnv);
 export default defineConfig({
   test: {
     include: ['src/**/*.test.ts'],
-    // Каждый файл тестов создаёт свою временную базу; параллельно — безопасно.
+    // Каждый файл тестов создаёт свою временную базу; общие роли сервера миграции создают по очереди.
     testTimeout: 60_000,
     hookTimeout: 120_000,
   },

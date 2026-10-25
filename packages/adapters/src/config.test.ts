@@ -93,6 +93,34 @@ describe('loadConfig', () => {
   });
 });
 
+describe('пароль демо-сотрудников', () => {
+  const db = { APP_ENV: 'local', DATABASE_URL: base.DATABASE_URL };
+
+  it('локально может быть простым', () => {
+    expect(loadDatabaseConfig({ ...db, DEMO_PASSWORD: 'demo' }).DEMO_PASSWORD).toBe('demo');
+  });
+
+  it('на стенде — от 12 символов и не из .env.example', () => {
+    for (const DEMO_PASSWORD of ['demo', 'short-one']) {
+      expect(() => loadDatabaseConfig({ ...db, APP_ENV: 'staging', DEMO_PASSWORD })).toThrow(
+        /DEMO_PASSWORD/,
+      );
+    }
+    expect(
+      loadDatabaseConfig({ ...db, APP_ENV: 'staging', DEMO_PASSWORD: 'stend-demo-2026-x' })
+        .DEMO_PASSWORD,
+    ).toBe('stend-demo-2026-x');
+  });
+
+  it('на рабочем сайте не задаётся — ни для наполнения, ни для приложения', () => {
+    const prod = { APP_ENV: 'production', DEMO_PASSWORD: 'stend-demo-2026-x' };
+    expect(() => loadDatabaseConfig({ ...db, ...prod })).toThrow(/DEMO_PASSWORD/);
+    expect(() => loadConfig({ ...base, ...prod, CRON_SECRET: 'x'.repeat(40) })).toThrow(
+      /DEMO_PASSWORD/,
+    );
+  });
+});
+
 describe('частичные конфигурации', () => {
   it('база и хранилище читаются по отдельности', () => {
     expect(
