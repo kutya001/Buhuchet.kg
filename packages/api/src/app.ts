@@ -3,7 +3,10 @@ import { requestId } from 'hono/request-id';
 import { secureHeaders } from 'hono/secure-headers';
 import type { ApiDeps } from './deps';
 import { apiError, recordErrorResponse } from './errors';
+import { originCheck } from './middleware/origin';
+import { sessionGuard } from './middleware/session';
 import { createModuleApp } from './module';
+import { authModule } from './modules/auth';
 import { systemModule } from './modules/system';
 
 /** Приложение API. Монтируется по пути /api (Next.js catch-all или отдельный сервер). */
@@ -30,8 +33,13 @@ export function createApp(deps: ApiDeps) {
     );
   });
 
+  // Общий слой для всех методов: сначала Origin изменяющих запросов, потом сеанс, организация и
+  // права сотрудника; право конкретного метода — requirePermission в его createRoute.
+  app.use('*', originCheck());
+  app.use('*', sessionGuard(deps));
+
   // Модули подключаются цепочкой: так их маршруты попадают в тип ApiApp для клиента интерфейса.
-  const routes = app.route('/', systemModule(deps));
+  const routes = app.route('/', systemModule(deps)).route('/', authModule(deps));
 
   app.doc31('/openapi.json', {
     openapi: '3.1.0',

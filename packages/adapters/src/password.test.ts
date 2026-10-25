@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { generateTemporaryPassword, hashPassword, verifyPassword } from './password';
+import {
+  generateTemporaryPassword,
+  hashPassword,
+  verifyAgainstDummy,
+  verifyPassword,
+} from './password';
 
 describe('пароли', () => {
   it('хеш argon2id с солью: тот же пароль даёт разные хеши, оба проверяются', async () => {
@@ -14,6 +19,11 @@ describe('пароли', () => {
 
   it('испорченный хеш — пароль не подходит, без исключения', async () => {
     expect(await verifyPassword('не хеш', 'x')).toBe(false);
+  });
+
+  it('проверка без логина всегда «не подходит»', async () => {
+    expect(await verifyAgainstDummy('любой')).toBe(false);
+    expect(await verifyAgainstDummy('любой')).toBe(false);
   });
 
   it('временный пароль: 12 символов без похожих букв и цифр, каждый раз новый', () => {

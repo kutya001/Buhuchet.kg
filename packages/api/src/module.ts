@@ -1,4 +1,5 @@
 import { OpenAPIHono } from '@hono/zod-openapi';
+import type { AppEnv } from './env';
 import { apiError } from './errors';
 
 /**
@@ -6,7 +7,7 @@ import { apiError } from './errors';
  * попали в `ApiApp` и типизированный клиент интерфейса видел каждый метод.
  */
 export function createModuleApp() {
-  return new OpenAPIHono({
+  return new OpenAPIHono<AppEnv>({
     defaultHook: (result, c) => {
       if (!result.success) {
         return c.json(

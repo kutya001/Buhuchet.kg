@@ -2,6 +2,7 @@ import { createRoute, type RouteHandler } from '@hono/zod-openapi';
 import { HealthResponse } from '@buhuchet/shared';
 import { sql } from 'drizzle-orm';
 import type { ApiDeps } from '../../deps';
+import type { AppEnv } from '../../env';
 
 export const healthRoute = createRoute({
   method: 'get',
@@ -29,7 +30,7 @@ async function check(fn: () => Promise<unknown>): Promise<'ok' | 'error'> {
   }
 }
 
-export function healthHandler(deps: ApiDeps): RouteHandler<typeof healthRoute> {
+export function healthHandler(deps: ApiDeps): RouteHandler<typeof healthRoute, AppEnv> {
   return async (c) => {
     const [database, storage] = await Promise.all([
       check(() => deps.db.execute(sql`select 1`)),
