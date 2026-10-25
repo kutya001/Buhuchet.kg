@@ -1,0 +1,65 @@
+/* Телефон (до 767 px) */
+/* ── Mobile ── */
+.bnav,.fab,.sheet,.tb-mobile{display:none}
+.tb-title{display:flex;flex:0 1 auto;max-width:360px;margin-left:0;min-width:0;flex-direction:column;align-items:flex-start;justify-content:center;gap:1px;background:none;border:0;padding:2px 4px;color:var(--text);text-align:left;font:inherit;cursor:pointer}
+.tb-title b,.tb-title span{display:block;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tb-title b{font-size:15px;font-weight:700;letter-spacing:-.01em}
+.tb-title span{font-size:11.5px;color:var(--muted);font-weight:550}
+.tb-info{display:inline-grid;margin-left:-6px}
+.tb-title.full b,.tb-title.full span{white-space:normal}
+@media (max-width:767px){
+  .app,.app.nav-hidden{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto}
+  .side{display:none!important}
+  .app,.app.nav-hidden{padding:8px 8px calc(8px + env(safe-area-inset-bottom,0px));gap:8px}
+  .topbar,.app.nav-hidden .topbar{grid-column:1}
+  .pane,.app.nav-hidden .pane{grid-column:1;margin:0;border-radius:var(--r-xl)}
+  .page{padding:16px 16px 92px;gap:12px}
+  .mtitle h1{font-size:20px}
+  .tabrow .tr-l,.tabrow .add-btn{display:none}
+  .tabrow .tr-r{flex:0 0 auto;min-width:0}
+  .tabrow .tabs{flex:1 1 auto}
+  .topbar{gap:4px;padding:6px 8px}
+  .tb-search{justify-content:flex-end;flex:0 0 auto}
+  .tb-title{flex:1;max-width:none;margin-left:0}
+  .mhead .mtitle h1{font-size:18px}
+  .search{display:none}
+  .tb-mobile{display:inline-grid}
+  .topbar.searching .search{display:block;width:100%}
+  .search.gk-q{display:block;width:100%}
+  .topbar.searching .tb-other{display:none}
+  .clock .d{display:none}
+  .bnav{display:flex;grid-row:3;overflow-x:auto;gap:2px;padding:6px;background:var(--pane);border:1px solid var(--border);border-radius:var(--r-xl);box-shadow:var(--shadow-s);scrollbar-width:none}
+  .bnav::-webkit-scrollbar{display:none}
+  .bn{flex:1 0 auto;min-width:66px;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 6px 5px;border-radius:var(--r-m);color:var(--muted);font-size:10.5px;font-weight:600;text-decoration:none;position:relative}
+  .bn .ic{width:20px;height:20px}
+  .gtools .icon-btn.sm{width:36px;height:36px}
+  .gtools .icon-btn.sm .ic{width:17px;height:17px}
+  .bn.on{color:var(--text);background:var(--pane-alt);box-shadow:var(--sh-btn)}
+  .bn .badge{position:absolute;top:2px;right:8px;font-size:9.5px;line-height:15px;min-width:16px;padding:0 4px}
+  .fab{display:grid;position:fixed;right:16px;bottom:calc(78px + env(safe-area-inset-bottom,0px));width:54px;height:54px;border-radius:50%;place-items:center;background:var(--accent);color:var(--on-accent);border:0;box-shadow:var(--sh-cta),var(--shadow-l);z-index:20;cursor:pointer}
+  .fab .ic{width:24px;height:24px;stroke-width:2.2}
+  .app.kb .bnav,.app.kb .fab,body.kb .fab,body.kb .bnav{display:none}
+  .sheet{display:flex;flex-direction:column;gap:6px;position:fixed;left:0;right:0;bottom:0;z-index:60;max-height:85dvh;overflow:auto;background:var(--pane);border-radius:var(--r-xl) var(--r-xl) 0 0;border:1px solid var(--border-strong);border-bottom:0;box-shadow:var(--shadow-l);padding:4px 16px calc(16px + env(safe-area-inset-bottom,0px));transform:translateY(110%);transition:transform .28s cubic-bezier(.2,.8,.2,1)}
+  .sheet.open{transform:none}
+  .sheet .grabber{display:block;margin:6px auto 6px}
+  .sheet-cover{position:fixed;inset:0;z-index:55;background:var(--cover)}
+  .gscroll{max-height:none}
+  .plates{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .pl-val{font-size:21px}
+  .kv{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width:420px){.kv{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:767px){
+  .md-sw{display:inline-flex}.md-bl{display:none}
+  .md-split{grid-template-columns:1fr}.md-split[data-v=text] .md-prev,.md-split[data-v=prev] .md-src{display:none}
+}
+/* Компоновка форм на телефоне: короткие поля по два в строку (src/js/ui/mobile-pack.js) */
+@media (max-width:600px){
+  .form.m-pack,.kv.m-pack{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .form.m-pack>*,.kv.m-pack>*{grid-column:1/-1}
+  .form.m-pack>.m-half,.kv.m-pack>.m-half{grid-column:auto}
+  .form.m-pack>div:empty,.form.m-pack>.m-full>.m-sp{display:none}
+  .form.m-pack>.m-half>label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+}
+/* Уведомления на телефоне закрываются свайпом влево или вправо, крестик не показывается */
+@media (max-width:767px){.toast-x{display:none}.toasts{bottom:calc(var(--bnav-h,84px) + env(safe-area-inset-bottom,0px))}}

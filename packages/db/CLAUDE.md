@@ -1,0 +1,28 @@
+# packages/db — схема, миграции, RLS, наполнение
+
+## Миграции
+- Схема таблиц — в `src/schema/*.ts` (Drizzle). После правки схемы: `pnpm db:generate` → в `migrations/` появляется SQL-файл; его читаем глазами и коммитим вместе со схемой.
+- То, что Drizzle не генерирует (функции, роли, права, триггеры, особые индексы), — отдельной миграцией: `pnpm --filter @buhuchet/db exec drizzle-kit generate --custom --name=<что_делает>`, SQL пишем руками.
+- Применённые миграции (уже в main) не правятся никогда — только новая миграция поверх. Хук запрещает их менять.
+- `drizzle-kit push` запрещён. Миграции применяет `pnpm db:migrate`: локально и в CI — к своему PostgreSQL, на стенде и рабочем сайте — GitHub Actions при выпуске.
+- Миграции делает одна сессия за раз (номера не должны конфликтовать).
+- Расширения — только pg_trgm, pgcrypto, citext. Функции Supabase (`auth.uid()`, `auth.jwt()`, схема `storage`), pg_cron, Realtime — нельзя (`pnpm check:portability`).
+
+## Организации и RLS
+- Каждая таблица с данными организации: столбец `org_id uuid not null references organizations(id)`, `.enableRLS()` и политика `orgIsolation(t.orgId)` из `src/schema/rls.ts`.
+- API в начале транзакции задаёт `app.org_id` и `app.user_id` (`withOrgContext`); политики сравнивают с `app.current_org_id()`.
+- Приложение подключается ролью из `DATABASE_URL` — член `buhuchet_app` без права обходить RLS; владелец таблиц (`DATABASE_ADMIN_URL`) — только миграции и наполнение.
+- В той же правке, что и таблица, — тест «чужая организация не видна» (пример — `src/rls.test.ts`).
+
+## Данные
+- Деньги — `bigint` тыйынов (`money()` из `src/schema/columns.ts`), даты сроков — `date` (строка `YYYY-MM-DD`), моменты — `timestamptz`.
+- У изменяемых записей — `version integer` (защита от одновременной правки) и `created_at`/`updated_at`.
+- История изменений пишется в той же транзакции, что и изменение (таблица аудита появится в этапе 1).
+
+## Наполнение
+- `pnpm db:seed` — справочники платформы из `spec/data/refDB.json`, ГКЭД из `spec/data/gkedDB.json`, демо-организация из `spec/data/demoDB.json` (не на рабочем сайте). По умолчанию только добавляет недостающее; `--update` обновляет изменившиеся разделы (локально и на стенде после `pnpm spec:sync`).
+- Модуль, у которого появляются таблицы, добавляет свой наполнитель демо-данных в `src/seed/demo.ts`.
+
+## Тесты
+- Тесты базы создают временную базу на сервере из `DATABASE_ADMIN_URL` (`createTestDatabase` из `src/testing.ts`), применяют миграции и удаляют базу в конце.
+- Без `DATABASE_URL` и `DATABASE_ADMIN_URL` тесты базы пропускаются; в CI (`REQUIRE_INTEGRATION_TESTS=1`) — падают.

@@ -1,0 +1,1136 @@
+{
+ "meta": {
+  "file": "TemDB.json",
+  "version": 1,
+  "exported": "2026-10-18 09:00",
+  "description": "Рабочие данные прототипа: пустой шаблон (организация сразу после регистрации). Та же структура, что у demoDB.json, плюс раздел ref с правками справочников"
+ },
+ "organization": {
+  "id": "o1",
+  "name": "ОсОО «Бухгалтер Плюс»",
+  "inn": "01203201910123",
+  "address": "",
+  "phone": {
+   "cc": "KG",
+   "digits": "996312901234"
+  },
+  "head": "",
+  "accounts": [],
+  "features": {
+   "tasks": true,
+   "calendar": true,
+   "telegram": true,
+   "files": true,
+   "taxpay": false,
+   "accounts": false,
+   "fee": false,
+   "finops": false,
+   "projects": false,
+   "indicators": false,
+   "cppage": false
+  },
+  "remind": [
+   7,
+   3
+  ],
+  "tz": "Asia/Bishkek (UTC+6)",
+  "overdueRepeat": true,
+  "digest": "09:00",
+  "waitDays": 3,
+  "defaultRole": "acc",
+  "created": "2026-10-18",
+  "types": {
+   "nds": {
+    "on": false,
+    "days": [
+     14,
+     3
+    ],
+    "needFile": false,
+    "needReceipt": false,
+    "_cb": "e1",
+    "_ca": "2025-02-14 11:20",
+    "_ub": "e1",
+    "_ua": "2026-03-10 10:05"
+   },
+   "nspm": {
+    "on": false,
+    "days": [
+     7,
+     3
+    ],
+    "needFile": false,
+    "needReceipt": false,
+    "_cb": "e1",
+    "_ca": "2025-02-14 11:20",
+    "_ub": "e1",
+    "_ua": "2025-02-14 11:20"
+   },
+   "nspq": {
+    "on": false,
+    "days": [
+     7,
+     3
+    ],
+    "needFile": false,
+    "needReceipt": false,
+    "_cb": "e1",
+    "_ca": "2025-02-14 11:20",
+    "_ub": "e1",
+    "_ua": "2025-02-14 11:20"
+   },
+   "npa": {
+    "on": false,
+    "days": [
+     7,
+     3
+    ],
+    "needFile": false,
+    "needReceipt": false,
+    "_cb": "e1",
+    "_ca": "2025-02-14 11:20",
+    "_ub": "e1",
+    "_ua": "2025-02-14 11:20"
+   },
+   "enq": {
+    "on": false,
+    "days": [
+     7,
+     3
+    ],
+    "needFile": false,
+    "needReceipt": false,
+    "_cb": "e1",
+    "_ca": "2025-02-14 11:20",
+    "_ub": "e1",
+    "_ua": "2025-02-14 11:20"
+   },
+   "enm": {
+    "on": false,
+    "days": [
+     7,
+     3
+    ],
+    "needFile": false,
+    "needReceipt": false,
+    "_cb": "e1",
+    "_ca": "2025-02-14 11:20",
+    "_ub": "e1",
+    "_ua": "2025-02-14 11:20"
+   },
+   "etr": {
+    "on": false,
+    "days": [
+     7,
+     3
+    ],
+    "needFile": false,
+    "needReceipt": false,
+    "_cb": "e1",
+    "_ca": "2025-02-14 11:20",
+    "_ub": "e1",
+    "_ua": "2025-02-14 11:20"
+   },
+   "pat": {
+    "on": false,
+    "days": [
+     7,
+     3
+    ],
+    "needFile": false,
+    "needReceipt": false,
+    "_cb": "e1",
+    "_ca": "2025-02-14 11:20",
+    "_ub": "e1",
+    "_ua": "2025-02-14 11:20"
+   },
+   "patw": {
+    "on": false,
+    "days": [
+     7,
+     3
+    ],
+    "needFile": false,
+    "needReceipt": false,
+    "_cb": "e1",
+    "_ca": "2025-02-14 11:20",
+    "_ub": "e1",
+    "_ua": "2025-02-14 11:20"
+   },
+   "pvtd": {
+    "on": false,
+    "days": [
+     7,
+     3
+    ],
+    "needFile": false,
+    "needReceipt": false,
+    "_cb": "e1",
+    "_ca": "2025-02-14 11:20",
+    "_ub": "e1",
+    "_ua": "2025-02-14 11:20"
+   },
+   "min": {
+    "on": false,
+    "days": [
+     7,
+     3
+    ],
+    "needFile": false,
+    "needReceipt": false,
+    "_cb": "e1",
+    "_ca": "2025-02-14 11:20",
+    "_ub": "e1",
+    "_ua": "2025-02-14 11:20"
+   },
+   "soc": {
+    "on": false,
+    "days": [
+     7,
+     3
+    ],
+    "needFile": true,
+    "needReceipt": false,
+    "_cb": "e1",
+    "_ca": "2025-02-14 11:20",
+    "_ub": "e1",
+    "_ua": "2025-02-14 11:20"
+   },
+   "pni": {
+    "on": false,
+    "days": [
+     7,
+     3
+    ],
+    "needFile": false,
+    "needReceipt": false,
+    "_cb": "e1",
+    "_ca": "2025-02-14 11:20",
+    "_ub": "e1",
+    "_ua": "2025-02-14 11:20"
+   },
+   "imn": {
+    "on": false,
+    "days": [
+     7,
+     3
+    ],
+    "needFile": false,
+    "needReceipt": false,
+    "_cb": "e1",
+    "_ca": "2025-02-14 11:20",
+    "_ub": "e1",
+    "_ua": "2025-02-14 11:20"
+   },
+   "endo": {
+    "on": false,
+    "days": [
+     7,
+     3
+    ],
+    "needFile": false,
+    "needReceipt": false,
+    "_cb": "e1",
+    "_ca": "2025-02-14 11:20",
+    "_ub": "e1",
+    "_ua": "2025-02-14 11:20"
+   },
+   "endi": {
+    "on": false,
+    "days": [
+     7,
+     3
+    ],
+    "needFile": false,
+    "needReceipt": false,
+    "_cb": "e1",
+    "_ca": "2025-02-14 11:20",
+    "_ub": "e1",
+    "_ua": "2025-02-14 11:20"
+   },
+   "t1q": {
+    "on": false,
+    "days": [
+     7,
+     3
+    ],
+    "needFile": false,
+    "needReceipt": false,
+    "_cb": "e1",
+    "_ca": "2025-02-14 11:20",
+    "_ub": "e1",
+    "_ua": "2025-02-14 11:20"
+   },
+   "inv": {
+    "on": false,
+    "days": [
+     7,
+     3
+    ],
+    "needFile": false,
+    "needReceipt": false,
+    "_cb": "e1",
+    "_ca": "2025-02-14 11:20",
+    "_ub": "e1",
+    "_ua": "2025-02-14 11:20"
+   },
+   "tbo": {
+    "on": false,
+    "days": [
+     7,
+     3
+    ],
+    "needFile": false,
+    "needReceipt": false,
+    "_cb": "e1",
+    "_ca": "2025-02-14 11:20",
+    "_ub": "e1",
+    "_ua": "2025-02-14 11:20"
+   },
+   "opu": {
+    "on": false,
+    "days": [
+     7,
+     3
+    ],
+    "needFile": false,
+    "needReceipt": false,
+    "_cb": "e1",
+    "_ca": "2025-02-14 11:20",
+    "_ub": "e1",
+    "_ua": "2025-02-14 11:20"
+   },
+   "odds": {
+    "on": false,
+    "days": [
+     7,
+     3
+    ],
+    "needFile": false,
+    "needReceipt": false,
+    "_cb": "e1",
+    "_ca": "2025-02-14 11:20",
+    "_ub": "e1",
+    "_ua": "2025-02-14 11:20"
+   },
+   "bal": {
+    "on": false,
+    "days": [
+     7,
+     3
+    ],
+    "needFile": false,
+    "needReceipt": false,
+    "_cb": "e1",
+    "_ca": "2025-02-14 11:20",
+    "_ub": "e1",
+    "_ua": "2025-02-14 11:20"
+   },
+   "cap": {
+    "on": false,
+    "days": [
+     7,
+     3
+    ],
+    "needFile": false,
+    "needReceipt": false,
+    "_cb": "e1",
+    "_ca": "2025-02-14 11:20",
+    "_ub": "e1",
+    "_ua": "2025-02-14 11:20"
+   },
+   "pkid": {
+    "on": false,
+    "days": [
+     7,
+     3
+    ],
+    "needFile": false,
+    "needReceipt": false,
+    "_cb": "admin",
+    "_ca": "2026-10-18 17:30",
+    "_ub": "admin",
+    "_ua": "2026-10-18 17:30"
+   }
+  },
+  "taskConfirm": true,
+  "onboard": {
+   "state": "new"
+  },
+  "repConfirm": true,
+  "payFirst": true
+ },
+ "roles": [
+  {
+   "id": "owner",
+   "name": "Владелец организации",
+   "perms": [
+    "cpView",
+    "createCp",
+    "cpImport",
+    "cpPause",
+    "cpArchive",
+    "fee",
+    "tariff",
+    "archiveRest",
+    "repView",
+    "assign",
+    "repDue",
+    "changeStatus",
+    "changeSum",
+    "repConfirm",
+    "finView",
+    "money",
+    "bonus",
+    "projView",
+    "projects",
+    "kpiView",
+    "kpiEdit",
+    "kpiImport",
+    "indSetup",
+    "indCheck",
+    "tasksCreate",
+    "tasksAll",
+    "tasksConfirm",
+    "filesView",
+    "filesUpload",
+    "filesDelete",
+    "staffView",
+    "staff",
+    "dicts",
+    "kbLevels",
+    "org",
+    "viewAll",
+    "export",
+    "rollback"
+   ],
+   "locked": true,
+   "_cb": "e1",
+   "_ca": "2025-02-14 11:20",
+   "_ub": "e1",
+   "_ua": "2025-02-14 11:20",
+   "scope": {
+    "cps": "all",
+    "reports": "all",
+    "fin": "all",
+    "projects": "all",
+    "kpi": "all",
+    "files": "all"
+   }
+  },
+  {
+   "id": "chief",
+   "name": "Главный бухгалтер",
+   "perms": [
+    "cpView",
+    "createCp",
+    "cpImport",
+    "cpPause",
+    "fee",
+    "tariff",
+    "repView",
+    "assign",
+    "repDue",
+    "changeStatus",
+    "changeSum",
+    "repConfirm",
+    "finView",
+    "money",
+    "bonus",
+    "projView",
+    "projects",
+    "kpiView",
+    "kpiEdit",
+    "kpiImport",
+    "indSetup",
+    "indCheck",
+    "tasksCreate",
+    "tasksAll",
+    "tasksConfirm",
+    "filesView",
+    "filesUpload",
+    "filesDelete",
+    "staffView",
+    "dicts",
+    "kbLevels",
+    "viewAll",
+    "export"
+   ],
+   "_cb": "e1",
+   "_ca": "2025-02-14 11:20",
+   "_ub": "e1",
+   "_ua": "2025-02-14 11:20",
+   "scope": {
+    "cps": "all",
+    "reports": "all",
+    "fin": "all",
+    "projects": "all",
+    "kpi": "all",
+    "files": "all"
+   }
+  },
+  {
+   "id": "acc",
+   "name": "Бухгалтер",
+   "perms": [
+    "cpView",
+    "repView",
+    "finView",
+    "projView",
+    "kpiView",
+    "filesView",
+    "createCp",
+    "changeStatus",
+    "changeSum",
+    "money",
+    "kpiEdit",
+    "kpiImport",
+    "filesUpload",
+    "export"
+   ],
+   "_cb": "e1",
+   "_ca": "2025-02-14 11:20",
+   "_ub": "e1",
+   "_ua": "2025-02-14 11:20",
+   "scope": {
+    "cps": "own",
+    "reports": "own",
+    "fin": "own",
+    "projects": "own",
+    "kpi": "own",
+    "files": "own"
+   }
+  }
+ ],
+ "employees": [
+  {
+   "id": "e1",
+   "fio": "Садыков Эркин Маратович",
+   "short": "Эркин С.",
+   "login": "erkin",
+   "phone": {
+    "cc": "KG",
+    "digits": "996555100200"
+   },
+   "role": "owner",
+   "tg": null,
+   "active": true,
+   "lastIn": "сейчас",
+   "wallets": [],
+   "_cb": "admin",
+   "_ca": "2025-02-14 08:42",
+   "_ub": "admin",
+   "_ua": "2025-02-14 08:42"
+  }
+ ],
+ "contractors": [],
+ "reports": [],
+ "moneyOps": [],
+ "history": [],
+ "tasks": [],
+ "feePayments": [],
+ "services": [],
+ "projects": [],
+ "files": [],
+ "indicators": [
+  {
+   "id": "k1",
+   "unit": "сом",
+   "type": "som",
+   "desc": "Выручка за месяц без НДС по данным учёта (оборот из декларации или книги продаж).",
+   "main": "sum",
+   "scope": "all",
+   "cps": [],
+   "req": true,
+   "dueDay": 10,
+   "archived": false,
+   "order": 1,
+   "_cb": "system",
+   "_ca": "2026-10-18 11:00",
+   "name": "Выручка",
+   "off": {},
+   "from": {},
+   "autoNew": true,
+   "seen": []
+  },
+  {
+   "id": "k2",
+   "unit": "чел.",
+   "type": "int",
+   "desc": "Численность на последний день месяца по штатному расписанию или отчёту в Соцфонд.",
+   "main": "avg",
+   "scope": "all",
+   "cps": [],
+   "req": true,
+   "dueDay": 10,
+   "archived": false,
+   "order": 2,
+   "_cb": "system",
+   "_ca": "2026-10-18 11:00",
+   "name": "Количество сотрудников",
+   "off": {},
+   "from": {},
+   "autoNew": true,
+   "seen": []
+  }
+ ],
+ "indicatorValues": [],
+ "indicatorMonths": [],
+ "indicatorHistory": [],
+ "indicatorImports": [],
+ "kbProgress": {
+  "u": {}
+ },
+ "newsRead": {},
+ "platformOrgs": [
+  {
+   "id": "o1",
+   "name": "ОсОО «Бухгалтер Плюс»",
+   "inn": "01203201910123",
+   "owner": "erkin",
+   "created": "2025-02-14",
+   "active": true,
+   "_cb": "admin",
+   "_ca": "2025-02-14 12:42",
+   "_ub": "admin",
+   "_ua": "2025-02-14 12:42",
+   "self": true
+  },
+  {
+   "id": "o2",
+   "name": "ОсОО «Финконсалт Ош»",
+   "inn": "01811201810456",
+   "owner": "b.toktomamatov",
+   "created": "2025-04-02",
+   "active": true,
+   "_cb": "admin",
+   "_ca": "2025-04-02 09:51",
+   "_ub": "admin",
+   "_ua": "2025-04-02 09:51",
+   "contractors": 64,
+   "employees": 5
+  },
+  {
+   "id": "o3",
+   "name": "ОсОО «Аудит Профи»",
+   "inn": "02204201510789",
+   "owner": "aprofi",
+   "created": "2025-06-19",
+   "active": true,
+   "_cb": "admin",
+   "_ca": "2025-06-19 09:09",
+   "_ub": "admin",
+   "_ua": "2025-06-19 09:09",
+   "contractors": 118,
+   "employees": 9
+  },
+  {
+   "id": "o4",
+   "name": "ИП Касымова Н. Б. «Налог-Консалт»",
+   "inn": "21503198500321",
+   "owner": "kasymova",
+   "created": "2025-09-11",
+   "active": true,
+   "_cb": "admin",
+   "_ca": "2025-09-11 14:45",
+   "_ub": "admin",
+   "_ua": "2025-09-11 14:45",
+   "contractors": 23,
+   "employees": 1
+  },
+  {
+   "id": "o5",
+   "name": "ОсОО «Учёт и Право»",
+   "inn": "01107202110654",
+   "owner": "uchet.pravo",
+   "created": "2026-01-20",
+   "active": true,
+   "_cb": "admin",
+   "_ca": "2026-01-20 09:48",
+   "_ub": "admin",
+   "_ua": "2026-01-20 09:48",
+   "contractors": 41,
+   "employees": 4
+  },
+  {
+   "id": "o6",
+   "name": "ОсОО «Изи Бух»",
+   "inn": "01509202310987",
+   "owner": "easybuh",
+   "created": "2026-03-03",
+   "active": false,
+   "note": "Заблокирована: не оплачена платформа",
+   "_cb": "admin",
+   "_ca": "2026-03-03 16:58",
+   "_ub": "admin",
+   "_ua": "2026-09-01 09:00",
+   "contractors": 12,
+   "employees": 2
+  }
+ ],
+ "platformUsers": [
+  {
+   "login": "b.toktomamatov",
+   "fio": "Токтомаматов Бекзат",
+   "org": "o2",
+   "role": "Владелец организации",
+   "lastIn": "сегодня",
+   "active": true,
+   "_cb": "admin",
+   "_ca": "2025-04-02 10:19",
+   "_ub": "admin",
+   "_ua": "2025-04-02 10:19"
+  },
+  {
+   "login": "n.alieva",
+   "fio": "Алиева Нургуль",
+   "org": "o2",
+   "role": "Бухгалтер",
+   "lastIn": "2026-10-17 10:11",
+   "active": true,
+   "_cb": "b.toktomamatov",
+   "_ca": "2025-05-05 17:15",
+   "_ub": "b.toktomamatov",
+   "_ua": "2025-05-05 17:15"
+  },
+  {
+   "login": "aprofi",
+   "fio": "Асанова Динара",
+   "org": "o3",
+   "role": "Владелец организации",
+   "lastIn": "2026-10-16 11:12",
+   "active": true,
+   "_cb": "admin",
+   "_ca": "2025-06-19 16:37",
+   "_ub": "admin",
+   "_ua": "2025-06-19 16:37"
+  },
+  {
+   "login": "m.sultanov",
+   "fio": "Султанов Марат",
+   "org": "o3",
+   "role": "Главный бухгалтер",
+   "lastIn": "сегодня",
+   "active": true,
+   "_cb": "aprofi",
+   "_ca": "2025-07-22 17:22",
+   "_ub": "aprofi",
+   "_ua": "2025-07-22 17:22"
+  },
+  {
+   "login": "a.zhakypova",
+   "fio": "Жакыпова Айпери",
+   "org": "o3",
+   "role": "Бухгалтер",
+   "lastIn": "2026-10-14 13:14",
+   "active": true,
+   "_cb": "aprofi",
+   "_ca": "2025-06-23 13:12",
+   "_ub": "aprofi",
+   "_ua": "2025-06-23 13:12"
+  },
+  {
+   "login": "kasymova",
+   "fio": "Касымова Назира",
+   "org": "o4",
+   "role": "Владелец организации",
+   "lastIn": "2026-10-13 14:15",
+   "active": true,
+   "_cb": "admin",
+   "_ca": "2025-09-11 09:28",
+   "_ub": "admin",
+   "_ua": "2025-09-11 09:28"
+  },
+  {
+   "login": "uchet.pravo",
+   "fio": "Иманалиев Талант",
+   "org": "o5",
+   "role": "Владелец организации",
+   "lastIn": "сегодня",
+   "active": true,
+   "_cb": "admin",
+   "_ca": "2026-01-20 10:04",
+   "_ub": "admin",
+   "_ua": "2026-01-20 10:04"
+  },
+  {
+   "login": "g.osmonova",
+   "fio": "Осмонова Гульзат",
+   "org": "o5",
+   "role": "Бухгалтер",
+   "lastIn": "2026-10-11 16:17",
+   "active": true,
+   "_cb": "uchet.pravo",
+   "_ca": "2026-01-31 14:27",
+   "_ub": "uchet.pravo",
+   "_ua": "2026-01-31 14:27"
+  },
+  {
+   "login": "easybuh",
+   "fio": "Мамытов Ильяс",
+   "org": "o6",
+   "role": "Владелец организации",
+   "lastIn": "2026-10-10 17:18",
+   "active": false,
+   "_cb": "admin",
+   "_ca": "2026-03-03 15:51",
+   "_ub": "admin",
+   "_ua": "2026-03-03 15:51"
+  }
+ ],
+ "dictRequests": [
+  {
+   "at": "2026-10-15",
+   "org": "ОсОО «Финконсалт Ош»",
+   "what": "Форма 1-ИП (Нацстатком)",
+   "dict": "Виды отчётов",
+   "status": "Новый",
+   "_cb": "b.toktomamatov",
+   "_ca": "2026-10-15 14:22",
+   "_ub": "b.toktomamatov",
+   "_ua": "2026-10-15 14:22"
+  }
+ ],
+ "telegramLog": [
+  {
+   "id": 1,
+   "at": "2026-10-18 09:00",
+   "to": "Жылдыз О. @jyldyz_o",
+   "org": "ОсОО «Бухгалтер Плюс»",
+   "kind": "Новая задача",
+   "st": "Отправлено",
+   "tries": 1,
+   "err": ""
+  },
+  {
+   "id": 2,
+   "at": "2026-10-18 10:07",
+   "to": "Эркин С. @erkin_s",
+   "org": "ОсОО «Бухгалтер Плюс»",
+   "kind": "Напоминание за 7 дней",
+   "st": "Ожидает",
+   "tries": 0,
+   "err": ""
+  },
+  {
+   "id": 3,
+   "at": "2026-10-18 11:14",
+   "to": "Эркин С. @erkin_s",
+   "org": "ОсОО «Бухгалтер Плюс»",
+   "kind": "Код восстановления",
+   "st": "Ожидает",
+   "tries": 0,
+   "err": ""
+  },
+  {
+   "id": 4,
+   "at": "2026-10-18 12:21",
+   "to": "Эркин С. @erkin_s",
+   "org": "ИП Касымова Н. Б. «Налог-Консалт»",
+   "kind": "Новая задача",
+   "st": "Ошибка",
+   "tries": 5,
+   "err": "429 Too Many Requests: retry after 14"
+  },
+  {
+   "id": 5,
+   "at": "2026-10-18 13:28",
+   "to": "Бакыт И. @bakyt_i",
+   "org": "ОсОО «Бухгалтер Плюс»",
+   "kind": "Напоминание за 3 дня",
+   "st": "Отправлено",
+   "tries": 1,
+   "err": ""
+  },
+  {
+   "id": 6,
+   "at": "2026-10-17 14:35",
+   "to": "Алишер Т. @alisher_t",
+   "org": "ОсОО «Бухгалтер Плюс»",
+   "kind": "Напоминание за 3 дня",
+   "st": "Отправлено",
+   "tries": 1,
+   "err": ""
+  },
+  {
+   "id": 7,
+   "at": "2026-10-17 15:42",
+   "to": "Бакыт И. @bakyt_i",
+   "org": "ОсОО «Бухгалтер Плюс»",
+   "kind": "В день срока",
+   "st": "Отправлено",
+   "tries": 1,
+   "err": ""
+  },
+  {
+   "id": 8,
+   "at": "2026-10-17 16:49",
+   "to": "Алишер Т. @alisher_t",
+   "org": "ИП Касымова Н. Б. «Налог-Консалт»",
+   "kind": "В день срока",
+   "st": "Отправлено",
+   "tries": 1,
+   "err": ""
+  },
+  {
+   "id": 9,
+   "at": "2026-10-17 17:56",
+   "to": "Бакыт И. @bakyt_i",
+   "org": "ОсОО «Бухгалтер Плюс»",
+   "kind": "Новая задача",
+   "st": "Отправлено",
+   "tries": 1,
+   "err": ""
+  },
+  {
+   "id": 10,
+   "at": "2026-10-17 09:03",
+   "to": "Айгерим С. @aigerim_s",
+   "org": "ОсОО «Бухгалтер Плюс»",
+   "kind": "Сводка на неделю",
+   "st": "Отправлено",
+   "tries": 1,
+   "err": ""
+  },
+  {
+   "id": 11,
+   "at": "2026-10-16 10:10",
+   "to": "Айгерим С. @aigerim_s",
+   "org": "ОсОО «Бухгалтер Плюс»",
+   "kind": "Новая задача",
+   "st": "Отправлено",
+   "tries": 1,
+   "err": ""
+  },
+  {
+   "id": 12,
+   "at": "2026-10-16 11:17",
+   "to": "Мээрим К. @meerim_k",
+   "org": "ОсОО «Финконсалт Ош»",
+   "kind": "Код восстановления",
+   "st": "Отправлено",
+   "tries": 1,
+   "err": ""
+  },
+  {
+   "id": 13,
+   "at": "2026-10-16 12:24",
+   "to": "Айгерим С. @aigerim_s",
+   "org": "ОсОО «Бухгалтер Плюс»",
+   "kind": "Просрочка",
+   "st": "Отправлено",
+   "tries": 1,
+   "err": ""
+  },
+  {
+   "id": 14,
+   "at": "2026-10-16 13:31",
+   "to": "Жылдыз О. @jyldyz_o",
+   "org": "ОсОО «Бухгалтер Плюс»",
+   "kind": "Сводка на неделю",
+   "st": "Отправлено",
+   "tries": 1,
+   "err": ""
+  },
+  {
+   "id": 15,
+   "at": "2026-10-16 14:38",
+   "to": "Эркин С. @erkin_s",
+   "org": "ОсОО «Бухгалтер Плюс»",
+   "kind": "Напоминание за 3 дня",
+   "st": "Отправлено",
+   "tries": 1,
+   "err": ""
+  },
+  {
+   "id": 16,
+   "at": "2026-10-15 15:45",
+   "to": "Алишер Т. @alisher_t",
+   "org": "ОсОО «Аудит Профи»",
+   "kind": "Сводка на неделю",
+   "st": "Отправлено",
+   "tries": 1,
+   "err": ""
+  },
+  {
+   "id": 17,
+   "at": "2026-10-15 16:52",
+   "to": "Айгерим С. @aigerim_s",
+   "org": "ОсОО «Бухгалтер Плюс»",
+   "kind": "В день срока",
+   "st": "Отправлено",
+   "tries": 1,
+   "err": ""
+  },
+  {
+   "id": 18,
+   "at": "2026-10-15 17:59",
+   "to": "Мээрим К. @meerim_k",
+   "org": "ОсОО «Бухгалтер Плюс»",
+   "kind": "Код восстановления",
+   "st": "Ошибка",
+   "tries": 5,
+   "err": "403 Forbidden: bot was blocked by the user"
+  },
+  {
+   "id": 19,
+   "at": "2026-10-15 09:06",
+   "to": "Эркин С. @erkin_s",
+   "org": "ОсОО «Бухгалтер Плюс»",
+   "kind": "Напоминание за 7 дней",
+   "st": "Отправлено",
+   "tries": 1,
+   "err": ""
+  },
+  {
+   "id": 20,
+   "at": "2026-10-15 10:13",
+   "to": "Айгерим С. @aigerim_s",
+   "org": "ОсОО «Учёт и Право»",
+   "kind": "Код восстановления",
+   "st": "Отправлено",
+   "tries": 1,
+   "err": ""
+  },
+  {
+   "id": 21,
+   "at": "2026-10-14 11:20",
+   "to": "Мээрим К. @meerim_k",
+   "org": "ОсОО «Бухгалтер Плюс»",
+   "kind": "Сводка на неделю",
+   "st": "Отправлено",
+   "tries": 1,
+   "err": ""
+  },
+  {
+   "id": 22,
+   "at": "2026-10-14 12:27",
+   "to": "Эркин С. @erkin_s",
+   "org": "ОсОО «Бухгалтер Плюс»",
+   "kind": "Просрочка",
+   "st": "Отправлено",
+   "tries": 1,
+   "err": ""
+  },
+  {
+   "id": 23,
+   "at": "2026-10-14 13:34",
+   "to": "Эркин С. @erkin_s",
+   "org": "ОсОО «Бухгалтер Плюс»",
+   "kind": "Сводка на неделю",
+   "st": "Отправлено",
+   "tries": 1,
+   "err": ""
+  },
+  {
+   "id": 24,
+   "at": "2026-10-14 14:41",
+   "to": "Эркин С. @erkin_s",
+   "org": "ОсОО «Учёт и Право»",
+   "kind": "Просрочка",
+   "st": "Отправлено",
+   "tries": 1,
+   "err": ""
+  },
+  {
+   "id": 25,
+   "at": "2026-10-14 15:48",
+   "to": "Эркин С. @erkin_s",
+   "org": "ОсОО «Бухгалтер Плюс»",
+   "kind": "Напоминание за 3 дня",
+   "st": "Отправлено",
+   "tries": 1,
+   "err": ""
+  },
+  {
+   "id": 26,
+   "at": "2026-10-13 16:55",
+   "to": "Алишер Т. @alisher_t",
+   "org": "ОсОО «Бухгалтер Плюс»",
+   "kind": "Сводка на неделю",
+   "st": "Отправлено",
+   "tries": 1,
+   "err": ""
+  },
+  {
+   "id": 27,
+   "at": "2026-10-13 17:02",
+   "to": "Бакыт И. @bakyt_i",
+   "org": "ОсОО «Бухгалтер Плюс»",
+   "kind": "Напоминание за 3 дня",
+   "st": "Отправлено",
+   "tries": 1,
+   "err": ""
+  },
+  {
+   "id": 28,
+   "at": "2026-10-13 09:09",
+   "to": "Айгерим С. @aigerim_s",
+   "org": "ОсОО «Финконсалт Ош»",
+   "kind": "Новая задача",
+   "st": "Отправлено",
+   "tries": 1,
+   "err": ""
+  },
+  {
+   "id": 29,
+   "at": "2026-10-13 10:16",
+   "to": "Жылдыз О. @jyldyz_o",
+   "org": "ОсОО «Бухгалтер Плюс»",
+   "kind": "Напоминание за 3 дня",
+   "st": "Отправлено",
+   "tries": 1,
+   "err": ""
+  },
+  {
+   "id": 30,
+   "at": "2026-10-13 11:23",
+   "to": "Эркин С. @erkin_s",
+   "org": "ОсОО «Бухгалтер Плюс»",
+   "kind": "Напоминание за 7 дней",
+   "st": "Отправлено",
+   "tries": 1,
+   "err": ""
+  },
+  {
+   "id": 31,
+   "at": "2026-10-12 12:30",
+   "to": "Айгерим С. @aigerim_s",
+   "org": "ОсОО «Бухгалтер Плюс»",
+   "kind": "Напоминание за 3 дня",
+   "st": "Отправлено",
+   "tries": 1,
+   "err": ""
+  },
+  {
+   "id": 32,
+   "at": "2026-10-12 13:37",
+   "to": "Жылдыз О. @jyldyz_o",
+   "org": "ОсОО «Учёт и Право»",
+   "kind": "В день срока",
+   "st": "Отправлено",
+   "tries": 1,
+   "err": ""
+  },
+  {
+   "id": 33,
+   "at": "2026-10-12 14:44",
+   "to": "Бакыт И. @bakyt_i",
+   "org": "ОсОО «Бухгалтер Плюс»",
+   "kind": "Сводка на неделю",
+   "st": "Отправлено",
+   "tries": 1,
+   "err": ""
+  },
+  {
+   "id": 34,
+   "at": "2026-10-12 15:51",
+   "to": "Эркин С. @erkin_s",
+   "org": "ОсОО «Бухгалтер Плюс»",
+   "kind": "Напоминание за 7 дней",
+   "st": "Отправлено",
+   "tries": 1,
+   "err": ""
+  }
+ ]
+}

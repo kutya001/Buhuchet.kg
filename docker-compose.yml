@@ -1,0 +1,101 @@
+# Buhuchet.kg в Docker: это и есть будущий VPS.
+#   Только сервисы для разработки и тестов:   docker compose up -d --wait postgres minio   (pnpm services:up)
+#   Всё приложение, как на VPS (проверка переносимости):   docker compose --profile app up -d --build --wait
+name: buhuchet
+
+x-app-env: &app-env
+  APP_ENV: ${APP_ENV:-local}
+  APP_VERSION: ${APP_VERSION:-0.0.0-docker}
+  APP_BASE_URL: http://localhost:3000
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  DATABASE_URL: postgres://buhuchet_web:buhuchet_web@postgres:5432/buhuchet
+  DATABASE_ADMIN_URL: postgres://postgres:postgres@postgres:5432/buhuchet
+  S3_ENDPOINT: http://minio:9000
+  S3_REGION: us-east-1
+  S3_BUCKET: buhuchet
+  S3_ACCESS_KEY_ID: buhuchet
+  S3_SECRET_ACCESS_KEY: buhuchet-secret
+  S3_FORCE_PATH_STYLE: 'true'
+  CRON_SECRET: ${CRON_SECRET:-local-cron-secret-change-me}
+  FIXED_NOW: ${FIXED_NOW:-}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: buhuchet
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d buhuchet']
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  # Официальные образы MinIO больше не публикуются; pgsty/minio — сборка того же MinIO сообществом (см. docs/decisions.md).
+  # Приложению всё равно, что за хранилище: оно говорит только по протоколу S3.
+  minio:
+    image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
+    command: ['server', '/data', '--console-address', ':9001']
+    environment:
+      MINIO_ROOT_USER: buhuchet
+      MINIO_ROOT_PASSWORD: buhuchet-secret
+    ports:
+      - '9000:9000'
+      - '9001:9001'
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ['CMD', 'curl', '-fsS', 'http://localhost:9000/minio/health/live']
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  # Миграции, начальное наполнение и корзина файлов — один раз перед запуском приложения.
+  migrate:
+    profiles: ['app']
+    build:
+      context: .
+      target: tools
+    environment: *app-env
+    command: ['sh', '-c', 'pnpm db:migrate && pnpm db:seed --update && pnpm storage:init']
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+
+  web:
+    profiles: ['app']
+    build:
+      context: .
+      target: web
+    environment: *app-env
+    ports:
+      - '3000:3000'
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:3000/api/health']
+      interval: 3s
+      timeout: 5s
+      retries: 40
+
+  worker:
+    profiles: ['app']
+    build:
+      context: .
+      target: worker
+    environment: *app-env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  pgdata:
+  miniodata:

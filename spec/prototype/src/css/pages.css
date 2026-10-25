@@ -1,0 +1,218 @@
+/* Главная, календарь, матрица, вход */
+/* ── Home ── */
+.hello{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;color:var(--muted);font-size:13.5px}
+.hello b{color:var(--text)}
+.list{display:flex;flex-direction:column}
+.li{display:flex;align-items:center;gap:10px;padding:9px 2px;border-bottom:1px solid var(--border);min-width:0;cursor:pointer}
+.li:last-child{border-bottom:0}
+.li:hover{background:var(--row-hover)}
+.li .grow{flex:1;min-width:0}
+.li .t1{font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.li .t2{font-size:12px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.datebox{width:42px;flex:none;text-align:center;border-radius:8px;background:var(--pane-alt);border:1px solid var(--border);padding:3px 0;line-height:1.1}
+.datebox b{display:block;font-size:15px;font-variant-numeric:tabular-nums}
+.datebox span{font-size:10px;color:var(--faint);text-transform:uppercase;letter-spacing:.05em}
+.datebox.red{background:var(--red-bg);border-color:transparent;color:var(--red)}
+.prog{display:grid;grid-template-columns:minmax(0,150px) minmax(0,1fr) 64px;gap:10px;align-items:center;font-size:13px;padding:6px 0}
+.prog .n{text-align:right;color:var(--muted);font-variant-numeric:tabular-nums;font-size:12.5px}
+
+/* ── Calendar & matrix ── */
+.calhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.calhead h3{margin:0;font-size:17px;font-weight:700;text-transform:capitalize;min-width:150px;text-align:center}
+.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+.cal .dow{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--faint);padding:0 6px;font-weight:700}
+.cday{all:unset;box-sizing:border-box;cursor:pointer;min-height:92px;background:var(--raised);border:1px solid var(--border);border-radius:var(--r-m);padding:6px 8px;display:flex;flex-direction:column;gap:3px;min-width:0;transition:box-shadow .15s}
+.cday:hover{box-shadow:var(--shadow-s)}
+.cday:focus-visible{outline:2px solid var(--b-blue)}
+.cday.off{background:var(--pane-alt)}
+.cday.other{opacity:.4}
+.cday.today{box-shadow:inset 0 0 0 2px var(--accent)}
+.cday.sel{box-shadow:var(--sh-btn-a)}
+.cday .dn{font-weight:700;font-size:13px;display:flex;justify-content:space-between;gap:4px;font-variant-numeric:tabular-nums}
+.cday .hol{font-size:10.5px;color:var(--red);line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cday .cnts{display:flex;flex-direction:column;gap:2px;margin-top:auto;align-items:flex-start}
+@media (max-width:767px){.cday{min-height:58px;padding:4px 5px}.cday .hol{display:none}.cday .pill{font-size:10px;padding:0 5px;line-height:15px}.cday .pill .ic{display:none}.cal{gap:3px}}
+.mx{overflow:auto;border:1px solid var(--border);border-radius:var(--r-l);background:var(--raised);max-height:max(360px,calc(100dvh - 300px))}
+.mx table{border-collapse:separate;border-spacing:0;font-size:13px}
+.mx th,.mx td{border-bottom:1px solid var(--border);padding:6px 8px;text-align:center;white-space:nowrap}
+.mx thead th{position:sticky;top:0;background:var(--pane-alt);z-index:2;font-size:11.5px;font-weight:650;color:var(--muted);min-width:76px}
+.mx tbody th,.mx thead th:first-child{position:sticky;left:0;background:var(--raised);text-align:left;z-index:1;font-weight:600;max-width:240px;overflow:hidden;text-overflow:ellipsis;border-right:1px solid var(--border)}
+.mx thead th:first-child{z-index:3;background:var(--pane-alt)}
+.mx tbody tr:hover td,.mx tbody tr:hover th{background:var(--row-hover)}
+.mx td.na{background:repeating-linear-gradient(135deg,transparent 0 5px,var(--sel) 5px 6px)}
+.mx tfoot td,.mx tfoot th{position:sticky;bottom:0;background:var(--pane-alt);font-weight:700;font-size:12px}
+.mx tfoot th{left:0;z-index:3}
+
+/* ── Login ── */
+.login{position:fixed;inset:0;z-index:100;background:var(--frame);display:grid;place-items:center;padding:24px 16px;overflow:auto}
+.login .card{width:min(400px,100%);background:var(--pane);border:1px solid var(--border);border-radius:var(--r-xl);box-shadow:var(--shadow-l);padding:28px 26px;display:flex;flex-direction:column;gap:14px;animation:slideUp .35s forwards}
+.login h2{margin:0;font-size:20px;font-weight:720;letter-spacing:-.015em}
+
+/* Тариф Соцфонда: признаки Да / Нет, выбор тарифа, ставки (ТЗ «Тариф страховых взносов в Соцфонд (СПиНО)») */
+.sf-box{gap:8px}
+.sf-flags{display:flex;flex-direction:column;border:1px solid var(--border);border-radius:var(--r-m);padding:2px 10px;background:var(--pane-alt)}
+.sf-flag{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)}
+.sf-flag:last-child{border-bottom:0}
+.sf-flag .hint{display:block;margin-top:1px}
+.sf-flag .seg{flex-shrink:0}
+.sf-d summary{display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:var(--muted);list-style:none}
+.sf-d summary::-webkit-details-marker{display:none}
+.sf-d[open] summary{margin-bottom:6px}
+.kv>.sf-kv{grid-column:span 2}
+.sf-n{flex-wrap:wrap}.sf-n>.grow{flex:1 1 220px;min-width:0}.sf-n>.btn{margin-left:auto}
+@media (max-width:420px){.kv>.sf-kv{grid-column:auto}}
+/* Страница контрагента по ссылке: блок в карточке и сама страница поверх программы */
+.cp-page .pg-link{color:var(--link);overflow-wrap:anywhere}
+.cp-page .pg-code{font-size:16px;letter-spacing:.06em}
+.cp-page .kv>.pg-secs-row{grid-column:1/-1}
+.pg-secs{display:flex;flex-wrap:wrap;gap:4px 14px}.pg-secs .row{gap:6px;font-size:13px}
+.pg-pol{margin:-4px 0 6px 52px;display:flex;flex-direction:column;gap:2px}.pg-pol .check-row{padding:4px 0}
+.pub{position:fixed;inset:0;z-index:85;background:var(--frame);display:flex;flex-direction:column;overflow:hidden}
+.pub[hidden]{display:none}
+body.pub-on{overflow:hidden}
+.pub-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 16px;background:var(--pane-alt);border-bottom:1px solid var(--border);font-size:12.5px}
+.pub-proto{display:flex;align-items:center;gap:6px;color:var(--muted)}
+.pub-url{flex:1;min-width:0;display:flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;background:var(--field);border:1px solid var(--border);overflow:hidden;white-space:nowrap}
+.pub-url .mono{overflow:hidden;text-overflow:ellipsis}
+.pub-page{flex:1;overflow:auto;padding:24px 16px 32px;display:flex;flex-direction:column;align-items:center;gap:18px}
+.pub-gate{width:min(420px,100%);margin-top:8vh;background:var(--raised);border:1px solid var(--border);border-radius:var(--r-xl);padding:26px 24px;display:flex;flex-direction:column;gap:12px;box-shadow:var(--shadow-l)}
+.pub-gate h1{margin:0;font-size:20px}.pub-gate p{margin:0}
+.pub-brand{display:flex;align-items:center;gap:8px;color:var(--accent);font-size:15px}
+.pub-code{font-size:22px;letter-spacing:.3em;text-align:center}
+.pub-body{width:min(1120px,100%);display:flex;flex-direction:column;gap:14px}
+.pub-h{display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:space-between}
+.pub-org{display:flex;align-items:center;gap:10px}.pub-org>span{display:flex;flex-direction:column}
+.pub-logo{width:40px;height:40px;border-radius:10px;object-fit:contain;display:grid;place-items:center;background:var(--accent);color:var(--on-accent);font-weight:700;flex:none}
+img.pub-logo{background:none;border:1px solid var(--border)}
+.pub-title h1{margin:0 0 4px;font-size:24px;line-height:1.25}
+/* Строка состояния: цвет дополнен значком и текстом, замечания — ссылки на свои разделы */
+.pub-state{display:flex;align-items:flex-start;gap:10px;padding:11px 14px;border-radius:var(--r-l);font-size:14px;line-height:1.5}
+.pub-state>.ic{flex:none;margin-top:2px}
+.pub-state.ok{background:var(--green-bg);color:var(--green);font-weight:600}
+.pub-state.warn{background:var(--orange-bg);color:var(--orange)}
+.pub-state.bad{background:var(--red-bg);color:var(--red)}
+.pub-state .linkbtn{color:inherit;text-decoration:underline;text-underline-offset:2px;font-weight:600}
+.pub-state .tipi{margin-left:auto;color:inherit}
+/* ПК: две колонки — слева «Главное», «Отчёты», «Показатели», справа оплата, бухгалтер, деньги, обслуживание, контакты */
+.pub-grid{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:14px;align-items:start}
+.pub-col{display:flex;flex-direction:column;gap:14px;min-width:0}
+.pub-s{scroll-margin-top:12px}
+.pub-s h3.pub-sh{font-size:15px;text-transform:none;letter-spacing:0;color:var(--text);flex-wrap:wrap}
+.pub-sh .ic{color:var(--accent)}
+.pub-tg{display:flex;align-items:center;gap:8px;flex:1;min-width:0;background:none;border:0;padding:0;font:inherit;color:inherit;text-align:left;cursor:default}
+.pub-tg>.ic:last-child:not(:first-child){display:none;color:var(--faint);transition:transform .2s}
+.pub-body .grow{flex:1}
+.pub-tt{white-space:nowrap;flex:none}
+.pub-sum{display:none;font-weight:500;color:var(--muted);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.pub-ex .inp{width:auto;min-height:30px;padding:3px 8px;font-size:13px}
+.pub-sb{display:flex;flex-direction:column;gap:10px;min-width:0}
+.pub-what{margin:-2px 0 0;color:var(--muted);font-size:13px;line-height:1.45}
+.pub-s h4{margin:6px 0 0;font-size:13px}
+.pub-flash{animation:pub-flash 1.4s}
+@keyframes pub-flash{0%{box-shadow:0 0 0 3px var(--b-blue)}100%{box-shadow:0 0 0 3px transparent}}
+/* «Главное» — плитки-итоги с крупными цифрами */
+.pub-tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.pub-tile{display:flex;flex-direction:column;gap:6px;text-align:left;padding:12px 14px;border:1px solid var(--border);border-radius:var(--r-l);background:var(--pane-alt);font:inherit;color:inherit;cursor:pointer;min-width:0}
+.pub-tile:hover{border-color:var(--border-strong);box-shadow:var(--shadow-s)}
+.pub-tile.wide{grid-column:1/-1}
+.pub-tl{font-size:12.5px;color:var(--muted);font-weight:600}
+.pub-tv{font-size:24px;font-weight:700;line-height:1.15}
+.pub-tv small{font-size:14px;font-weight:600;color:var(--muted)}
+.pub-tile.bad .pub-tv{color:var(--red)}
+.pub-ts{font-size:12.5px;color:var(--muted);display:flex;flex-direction:column;gap:6px;line-height:1.35}
+.pub-ts .bar{margin:2px 0 0}
+.pub-t3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.pub-t3>span{display:flex;flex-direction:column;gap:2px;min-width:0}
+.pub-t3 small{font-size:12px;color:var(--muted);font-weight:600}
+.pub-t3 b{font-size:20px}
+/* «Как оплатить» */
+.pub-pays{display:flex;flex-direction:column;gap:10px}
+.pub-pay{border:1px solid var(--border);border-radius:var(--r-l);padding:12px 14px;display:flex;flex-direction:column;gap:8px;background:var(--pane-alt)}
+.pub-pt{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.pub-pt .ic{color:var(--accent)}.pub-pt .hint{margin-left:auto}
+.pub-pbn{font-weight:600}
+.pub-pn{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.pub-pn .mono{font-size:22px;font-weight:700;letter-spacing:.02em;overflow-wrap:anywhere}
+.pub-pb,.pub-pk{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:13px}
+.pub-pay .pub-what{margin:0}
+/* Плитки видов отчётов, месяцев и показателей; строки периодов */
+.pub-tools{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.plates.pub-pl{grid-template-columns:repeat(3,minmax(0,1fr))}
+.pub-list{display:flex;flex-direction:column;gap:8px;min-width:0}
+.pub-row{display:flex;flex-direction:column;gap:4px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-m);background:var(--raised);min-width:0}
+.pub-row.late{border-color:var(--b-red)}
+.pub-r1{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:13.5px}
+.pub-r2{display:flex;align-items:center;gap:4px 12px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+.pub-r2 b{color:var(--text)}
+.pub-files{display:flex;flex-wrap:wrap;gap:4px 10px}
+.tipi.pub-tp{width:auto;height:auto;margin:0;padding:0;border:0;background:none;display:inline-flex;align-items:center;gap:3px;cursor:help;font:inherit;color:var(--faint)}
+.pub-rt,.pub-grp,.pub-k{border:1px solid var(--border);border-radius:var(--r-l);background:var(--raised);overflow:hidden;min-width:0}
+.pub-rt.late{border-color:var(--b-red)}
+.pub-gh{display:flex;flex-direction:column;align-items:stretch;gap:5px;width:100%;padding:11px 14px;background:none;border:0;font:inherit;color:inherit;text-align:left;cursor:pointer}
+.pub-gh:hover{background:var(--row-hover)}
+.pub-rt1{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.pub-rt1>.ic:last-child{color:var(--faint);transition:transform .2s}
+.open>.pub-gh .pub-rt1>.ic:last-child{transform:rotate(180deg)}
+.pub-rt2{font-size:13px;color:var(--muted);line-height:1.45}
+.pub-rt3{display:flex;align-items:center;gap:4px 12px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+.pub-rt3 b{color:var(--text)}
+.pub-gb{display:none;padding:0 12px 12px}
+.open>.pub-gb{display:flex}
+.pub-gb .pub-row{background:var(--pane-alt)}
+.pub-ks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-items:start}
+.pub-kv{font-size:22px;font-weight:700;line-height:1.2}
+.pub-sp{width:100%;height:34px;display:block;margin-top:4px}
+.pub-sp rect{fill:var(--border-strong)}.pub-sp rect.c{fill:var(--accent)}.pub-sp rect.e{fill:var(--border)}
+.pub-people{display:flex;flex-direction:column;gap:10px}
+.pub-person{display:flex;flex-direction:column;gap:2px}.pub-person a{color:var(--link)}
+.pub-file{display:inline-flex;align-items:center;gap:4px;color:var(--link);font-size:12.5px}
+.pub-more{display:none}
+.pub-nav{display:none}
+.pub-foot{color:var(--faint);font-size:12px;text-align:center}
+/* Окна и подсказки поверх страницы контрагента */
+body.pub-on .cover{z-index:88}body.pub-on .pop{z-index:89}
+/* Телефон: разделы друг под другом, кроме «Главного» и «Как оплатить» свёрнуты с итогом в заголовке, снизу — панель разделов */
+@media (max-width:767px){.pub-proto span{display:none}.pub-bar{padding:8px 12px}.pub-title h1{font-size:20px}.pub-gate{margin-top:4vh;padding:22px 18px}.pg-pol{margin-left:0}
+  .pub-page{padding:14px 12px calc(84px + env(safe-area-inset-bottom,0px));gap:14px}.pub-body{gap:10px}
+  .pub-grid{display:flex;flex-direction:column;align-items:stretch;gap:10px}.pub-col{display:contents}
+  .pub-s[data-sec=main]{order:1}.pub-s[data-sec=pay]{order:2}.pub-s[data-sec=acc]{order:3}.pub-s[data-sec=reports]{order:4}.pub-s[data-sec=money]{order:5}.pub-s[data-sec=fee]{order:6}.pub-s[data-sec=kpi]{order:7}.pub-s[data-sec=contacts]{order:8}
+  .pub-s{padding:12px 14px}.pub-fd .pub-tg{cursor:pointer;min-height:28px}.pub-tg>.ic:last-child:not(:first-child){display:inline-block}
+  .pub-fd:not(.fold) .pub-tg>.ic:last-child{transform:rotate(180deg)}
+  .pub-s.fold .pub-sb,.pub-s.fold .pub-ex{display:none}
+  .pub-fd .pub-tg{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;column-gap:8px;row-gap:1px}.pub-fd .pub-tg>.ic:first-child{grid-area:1/1}.pub-fd .pub-tt{grid-area:1/2}.pub-fd .pub-tg .grow{display:none}.pub-fd .pub-tg>.ic:last-child{grid-area:1/3/3/4}
+  .pub-s.fold .pub-sum{display:block;grid-area:2/2;white-space:normal}
+  .pub-tv{font-size:20px}.pub-t3 b{font-size:16px}.pub-pn .mono{font-size:20px}.pub-kv{font-size:20px}
+  .pub-tile{padding:10px 12px}.pub-ks{grid-template-columns:minmax(0,1fr)}
+  .plates.pub-pl{gap:8px}.plates.pub-pl .plate{padding:9px 10px;gap:4px}.plates.pub-pl .pl-top{font-size:11px;gap:4px;flex-wrap:wrap;min-width:0}.plates.pub-pl .pl-dot{width:20px;height:20px}.plates.pub-pl .pl-val{font-size:18px}
+  .pub-list:not(.all)>:nth-child(n+6):not(.pub-more){display:none}
+  .pub-more{display:inline-flex;align-items:center;gap:4px;align-self:flex-start}
+  .pub-nav{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:86;background:var(--raised);border-top:1px solid var(--border);padding:2px 4px calc(2px + env(safe-area-inset-bottom,0px))}
+  .pub-nav button{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:2px;background:none;border:0;font:inherit;font-size:11px;font-weight:600;color:var(--muted);padding:6px 2px;min-height:52px;cursor:pointer}
+  .pub-nav button .ic{width:20px;height:20px}
+  body.pub-on .toasts{bottom:calc(66px + env(safe-area-inset-bottom,0px))}}
+/* Ставки в назначении: строки ЕНС, добавляемые строки налога с продаж; строки суммы по ставкам в «Сдан» и «Указать сумму» */
+.rt-tbl td:nth-child(2){min-width:260px}
+.en-ed{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.en-row{display:flex;gap:6px;align-items:center;width:100%;min-width:0}
+.en-row select{min-height:30px;padding:3px 8px;flex:1;min-width:0;max-width:420px}
+.en-row select[data-env]{flex:0 1 auto;max-width:220px}
+.en-warn{display:flex;gap:6px;align-items:flex-start;color:var(--orange);font-size:12px}
+.en-add{display:flex;flex-direction:column;gap:4px;margin-top:6px}
+.en-add label{display:flex;flex-wrap:nowrap;gap:6px;align-items:flex-start;font-size:12.5px;line-height:1.35;max-width:420px}
+.en-add input{margin-top:2px;flex:none}
+.ln-tbl .inp{max-width:150px;margin-left:auto;text-align:right;min-height:30px;padding:3px 8px}
+.ln-tbl .ln-n{min-width:180px}.ln-tbl .ln-n .hint{margin-top:2px}
+.kv>.ln-kv{grid-column:1/-1}
+.ln-row{display:flex;justify-content:space-between;gap:12px;padding:3px 0;border-bottom:1px solid var(--border)}.ln-row:last-child{border-bottom:0}
+@media (max-width:767px){
+  .rt-tbl thead{display:none}.rt-tbl,.rt-tbl tbody{display:block}
+  .rt-tbl tr{display:grid;grid-template-columns:minmax(0,1fr);gap:6px;padding:10px 0;border-bottom:1px solid var(--border)}.rt-tbl tr:last-child{border-bottom:0}
+  .rt-tbl td{display:block;padding:0;border:0;min-width:0}.rt-tbl td:nth-child(2){min-width:0}.rt-tbl td.num{text-align:left}.rt-tbl td.num .inp{margin-left:0!important;max-width:160px!important}
+  .rt-tbl td[data-l]::before{content:attr(data-l);display:block;font-size:11.5px;color:var(--faint);font-weight:600;margin-bottom:3px}
+  .en-row select,.en-row select[data-env]{max-width:none}
+  .ln-tbl thead{display:none}.ln-tbl,.ln-tbl tbody,.ln-tbl tr,.ln-tbl td{display:block;width:100%}
+  .ln-tbl tr{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:4px 8px;padding:8px 0;border-bottom:1px solid var(--border)}
+  .ln-tbl td{padding:0;border:0}.ln-tbl td.ln-n{grid-column:1/-1;min-width:0}
+  .ln-tbl td[data-l]::before{content:attr(data-l);display:block;font-size:11.5px;color:var(--faint);font-weight:600;text-align:left;margin-bottom:2px}
+  .ln-tbl .inp{max-width:none}
+  .ln-row{flex-direction:column;gap:0}
+}

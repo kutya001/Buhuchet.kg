@@ -1,0 +1,93 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    # Каждую ночь (03:00 по Бишкеку) — main целиком, даже если правок не было.
+    - cron: '0 21 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  REQUIRE_INTEGRATION_TESTS: '1'
+  TURBO_TELEMETRY_DISABLED: '1'
+  NEXT_TELEMETRY_DISABLED: '1'
+
+jobs:
+  check:
+    name: check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Окружение как локально (.env из .env.example)
+        run: cp .env.example .env
+      - name: PostgreSQL и MinIO из docker-compose.yml
+        run: docker compose up -d --wait postgres minio
+      - name: Типы
+        run: pnpm typecheck
+      - name: Линтер и форматирование
+        run: pnpm lint && pnpm format:check
+      - name: Переносимость (без привязки к Vercel и Supabase)
+        run: pnpm check:portability
+      - name: Карта приёмки и тесты служебных скриптов
+        run: pnpm check:acceptance && pnpm test:scripts
+      - name: Миграции и наполнение на чистой базе
+        run: pnpm db:migrate && pnpm db:seed && pnpm db:seed --update && pnpm storage:init
+      - name: Миграции не отстали от схемы
+        run: |
+          pnpm db:generate
+          if [ -n "$(git status --porcelain packages/db/migrations)" ]; then
+            echo "::error::Схема Drizzle изменена без миграции: запустите pnpm db:generate и закоммитьте SQL."
+            git status --porcelain packages/db/migrations
+            exit 1
+          fi
+      - name: Тесты и покрытие (domain и api — не ниже 80 %)
+        run: pnpm test:coverage && pnpm --filter @buhuchet/web --filter @buhuchet/shared test
+
+  docker-e2e:
+    name: docker-e2e
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: cp .env.example .env
+      - name: Всё приложение в Docker, как на VPS
+        run: docker compose --profile app up -d --build --wait
+      - name: Задачи по расписанию с секретом
+        run: |
+          curl -fsS -X POST -H "Authorization: Bearer $(grep ^CRON_SECRET= .env | cut -d= -f2)" http://localhost:3000/api/cron/tick
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - name: Сквозные тесты на ПК и телефоне
+        run: pnpm test:e2e
+        env:
+          E2E_BASE_URL: http://localhost:3000
+      - name: Журналы контейнеров
+        if: failure()
+        run: docker compose --profile app logs --no-color --tail=200
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7

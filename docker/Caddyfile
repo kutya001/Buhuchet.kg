@@ -1,0 +1,5 @@
+# Обратный прокси на VPS: HTTPS-сертификат Caddy получает сам.
+{$DOMAIN}, www.{$DOMAIN} {
+	encode zstd gzip
+	reverse_proxy web:3000
+}
