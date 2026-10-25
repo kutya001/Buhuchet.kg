@@ -1,21 +1,26 @@
 import { sql } from 'drizzle-orm';
 import { boolean, index, integer, jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+import { platformReadOnly } from './rls';
 
 /**
  * Справочники платформы — разделы refDB.json прототипа как есть (reportTypes, holidays, taxes, …).
  * Это начальное наполнение этапа 0: модуль «Справочники платформы» разложит нужные разделы по своим
  * таблицам и добавит историю загрузок. Данные общие для всех организаций, поэтому без org_id.
  */
-export const platformReference = pgTable('platform_reference', {
-  key: text('key').primaryKey(),
-  payload: jsonb('payload').notNull(),
-  /** sha256 канонического JSON раздела: по нему видно, изменился ли раздел. */
-  checksum: text('checksum').notNull(),
-  version: integer('version').notNull().default(1),
-  /** Откуда раздел: `refDB.json@<коммит прототипа>`. */
-  source: text('source').notNull(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-});
+export const platformReference = pgTable(
+  'platform_reference',
+  {
+    key: text('key').primaryKey(),
+    payload: jsonb('payload').notNull(),
+    /** sha256 канонического JSON раздела: по нему видно, изменился ли раздел. */
+    checksum: text('checksum').notNull(),
+    version: integer('version').notNull().default(1),
+    /** Откуда раздел: `refDB.json@<коммит прототипа>`. */
+    source: text('source').notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  () => [platformReadOnly('platform_reference_read')],
+).enableRLS();
 
 export const GKED_LEVELS = [
   'section',
@@ -42,5 +47,6 @@ export const gkedItems = pgTable(
   (t) => [
     index('gked_items_parent_idx').on(t.parentCode),
     index('gked_items_name_trgm_idx').using('gin', sql`${t.name} gin_trgm_ops`),
+    platformReadOnly('gked_items_read'),
   ],
-);
+).enableRLS();

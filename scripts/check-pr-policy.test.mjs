@@ -19,6 +19,19 @@ test('нет вывода агента или заглушка из шаблон
   assert.equal(problems.length, 2);
 });
 
+test('вывод без вердикта («в работе») — ошибка', () => {
+  const problems = checkPrPolicy(body('в работе', 'в работе'));
+  assert.equal(problems.length, 2);
+  assert.match(problems[0], /нет вердикта/);
+});
+
+test('замечания без критичного — проходит', () => {
+  assert.deepEqual(
+    checkPrPolicy(body('соответствует, мелочи в отчёте', 'есть замечания, только желательные')),
+    [],
+  );
+});
+
 test('критичное или несоответствие — ошибка', () => {
   const problems = checkPrPolicy(
     body(

@@ -1,14 +1,21 @@
 #!/usr/bin/env node
 // Автослияние PR (вызывается из .github/workflows/automerge.yml после каждой завершённой проверки).
 import { execFileSync } from 'node:child_process';
+import { mergeGuardFiles } from './protected-paths.mjs';
 
 const REQUIRED_CHECKS = ['check', 'docker-e2e', 'pr-policy'];
 const BEHIND_MARKER = '<!-- automerge:behind -->';
+const GUARD_MARKER = '<!-- automerge:guards -->';
 const { REPO, HEAD_SHA } = process.env;
 
 const gh = (...args) =>
   execFileSync('gh', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] });
 const api = (path) => JSON.parse(gh('api', '-H', 'Accept: application/vnd.github+json', path));
+const comment = (number, marker, text) => {
+  const comments = api(`repos/${REPO}/issues/${number}/comments?per_page=100`);
+  if (comments.some((c) => c.body.includes(marker))) return;
+  gh('pr', 'comment', String(number), '--repo', REPO, '--body', `${marker}\n${text}`);
+};
 
 const pr = api(`repos/${REPO}/commits/${HEAD_SHA}/pulls`).find(
   (p) => p.state === 'open' && p.head.sha === HEAD_SHA && p.head.repo?.full_name === REPO,
@@ -26,11 +33,34 @@ if (pr.labels.some((l) => l.name === 'hold')) {
   process.exit(0);
 }
 
+// PR, который меняет проверки, автослияние или хуки, сливает только заказчик.
+const files = gh(
+  'api',
+  '--paginate',
+  `repos/${REPO}/pulls/${pr.number}/files?per_page=100`,
+  '--jq',
+  '.[].filename',
+)
+  .split('\n')
+  .filter(Boolean);
+const guards = mergeGuardFiles(files);
+if (guards.length) {
+  comment(
+    pr.number,
+    GUARD_MARKER,
+    `PR меняет проверки, автослияние или хуки (${guards.join(', ')}), поэтому сам не сливается: ` +
+      'сливает заказчик после просмотра.',
+  );
+  console.log(`PR #${pr.number} меняет ${guards.join(', ')} — автослияние остановлено.`);
+  process.exit(0);
+}
+
 // Последний запуск каждой обязательной проверки должен быть успешным.
 const runs = api(`repos/${REPO}/commits/${HEAD_SHA}/check-runs?per_page=100`).check_runs;
 for (const name of REQUIRED_CHECKS) {
   const latest = runs
-    .filter((r) => r.name === name)
+    // Только проверки GitHub Actions: чужое приложение не может «зажечь» зелёный check с тем же именем.
+    .filter((r) => r.name === name && r.app?.slug === 'github-actions')
     .sort((a, b) => new Date(b.started_at) - new Date(a.started_at))[0];
   if (!latest || latest.status !== 'completed' || latest.conclusion !== 'success') {
     console.log(
@@ -43,19 +73,12 @@ for (const name of REQUIRED_CHECKS) {
 // Ветка должна содержать свежий main: иначе зелёные проверки не про то, что окажется в main.
 const compare = api(`repos/${REPO}/compare/${pr.base.ref}...${HEAD_SHA}`);
 if (compare.behind_by > 0) {
-  const comments = api(`repos/${REPO}/issues/${pr.number}/comments?per_page=100`);
-  if (!comments.some((c) => c.body.includes(BEHIND_MARKER))) {
-    gh(
-      'pr',
-      'comment',
-      String(pr.number),
-      '--repo',
-      REPO,
-      '--body',
-      `${BEHIND_MARKER}\nВсе проверки зелёные, но ветка отстала от main на ${compare.behind_by} коммит(а). ` +
-        'Обновите ветку (rebase или merge с main) и запушьте — после новых зелёных проверок PR сольётся сам.',
-    );
-  }
+  comment(
+    pr.number,
+    BEHIND_MARKER,
+    `Все проверки зелёные, но ветка отстала от main на ${compare.behind_by} коммит(а). ` +
+      'Обновите ветку (rebase или merge с main) и запушьте — после новых зелёных проверок PR сольётся сам.',
+  );
   console.log(`PR #${pr.number} отстал от main на ${compare.behind_by} — ждём обновления ветки.`);
   process.exit(0);
 }

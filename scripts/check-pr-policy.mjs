@@ -1,6 +1,23 @@
 #!/usr/bin/env node
 // Проверка PR: в описании есть «Отчёт ревьюеров» с выводами spec-reviewer и security-reviewer,
 // и ни один не нашёл критичного. Без этого PR не сливается (человека-разработчика нет).
+// Вердикты — как в инструкциях агентов (.claude/agents): spec-reviewer — «соответствует» /
+// «не соответствует», security-reviewer — «замечаний нет» / «есть замечания» (+ «критично: …»).
+
+const VERDICTS = {
+  'spec-reviewer': {
+    ok: (t) => /(^|[^а-яё])соответствует/i.test(t),
+    stop: (t) => /не\s+соответствует/i.test(t),
+  },
+  'security-reviewer': {
+    ok: (t) => /замечаний\s+нет|есть\s+замечания/i.test(t),
+    // «критично: …» останавливает, кроме «критично: нет» и «критичных нет».
+    stop: (t) =>
+      [...t.matchAll(/критичн[а-яё]*[\s:—-]*([а-яё]*)/gi)].some(
+        (m) => m[1].toLowerCase() !== 'нет',
+      ),
+  },
+};
 
 export function checkPrPolicy(body) {
   const problems = [];
@@ -15,14 +32,17 @@ export function checkPrPolicy(body) {
   const rest = lines.slice(start + 1);
   const end = rest.findIndex((l) => /^##\s/.test(l));
   const section = (end === -1 ? rest : rest.slice(0, end)).join('\n');
-  for (const agent of ['spec-reviewer', 'security-reviewer']) {
+  for (const [agent, verdict] of Object.entries(VERDICTS)) {
     const line = new RegExp(`^\\s*[-*]\\s*\\**${agent}\\**\\s*:\\s*(.+)$`, 'mi').exec(section);
-    if (!line || /^<.*>$/.test(line[1].trim())) {
+    const found = line?.[1].trim() ?? '';
+    if (!found || /^<.*>$/.test(found)) {
       problems.push(`Нет вывода агента ${agent}: строка «- ${agent}: <вердикт и главное>».`);
-    } else if (/не соответствует|критично(?!\s*:?\s*нет)/i.test(line[1])) {
+    } else if (verdict.stop(found)) {
       problems.push(
-        `${agent} нашёл то, что нельзя сливать: «${line[1].trim()}». Исправьте и запустите агента снова.`,
+        `${agent} нашёл то, что нельзя сливать: «${found}». Исправьте и запустите агента снова.`,
       );
+    } else if (!verdict.ok(found)) {
+      problems.push(`У ${agent} нет вердикта из инструкции агента: «${found}».`);
     }
   }
   return problems;

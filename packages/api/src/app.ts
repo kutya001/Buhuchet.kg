@@ -16,6 +16,8 @@ export function createApp(deps: ApiDeps) {
     const started = performance.now();
     await next();
     c.header('x-robots-tag', 'noindex');
+    // Ответы API по умолчанию не кэшируются (данные организаций); метод может задать своё.
+    if (!c.res.headers.has('cache-control')) c.header('cache-control', 'no-store');
     deps.logger.info(
       {
         requestId: c.get('requestId'),

@@ -4,14 +4,18 @@ import { block, readInput } from './lib.mjs';
 
 const command = readInput().tool_input?.command ?? '';
 const c = command.replace(/\s+/g, ' ');
+// git push, в том числе git -C <папка> push и git -c <настройка> push.
+const GIT_PUSH = String.raw`\bgit(\s+-[Cc]\s+\S+)*\s+push\b`;
 
 const rules = [
   [
-    /\bgit\s+push\b[^;&|]*(\s--force\b|\s-f\b|\s--force-with-lease\b|\s\+\S)/,
+    new RegExp(
+      `${GIT_PUSH}[^;&|]*(\\s--force\\b|\\s-[a-zA-Z]*f[a-zA-Z]*\\b|\\s--force-with-lease\\b|\\s--mirror\\b|\\s\\+\\S)`,
+    ),
     'git push --force запрещён: история веток не переписывается.',
   ],
   [
-    /\bgit\s+push\b[^;&|]*\s(\S+:)?(refs\/heads\/)?main\b(?![\w/-])/,
+    new RegExp(`${GIT_PUSH}[^;&|]*(\\s(\\S+:)?(refs\\/heads\\/)?main\\b(?![\\w/-])|\\s--all\\b)`),
     'В main напрямую не пушим: только PR со всеми зелёными проверками.',
   ],
   [
@@ -27,8 +31,12 @@ const rules = [
     'DROP DATABASE запрещён (кроме временных баз тестов test_*).',
   ],
   [
-    /\b(drop\s+schema|truncate\s+(table\s+)?\w)/i,
-    'DROP SCHEMA и TRUNCATE запрещены: данные удаляются только миграцией.',
+    /\b(drop\s+(schema|table)|truncate\s+(table\s+)?\w)/i,
+    'DROP SCHEMA, DROP TABLE и TRUNCATE запрещены: схема и данные меняются только миграцией.',
+  ],
+  [
+    /\bdelete\s+from\s+[\w."]+\s*(;|'|"|\\|$)/i,
+    'DELETE без WHERE запрещён: данные удаляются только миграцией.',
   ],
   [
     /\brm\s+(-\w*\s+)*\S*(spec|packages\/db\/migrations)(\/|\s|$)/,

@@ -24,6 +24,13 @@ test.describe('Этап 0: приложение работает на любой
     expect(await robots.text()).toContain('Disallow: /');
   });
 
+  test('страницы нельзя встроить в чужой сайт', async ({ request }) => {
+    const res = await request.get('/health');
+    expect(res.headers()['x-frame-options']).toBe('DENY');
+    expect(res.headers()['content-security-policy']).toContain("frame-ancestors 'none'");
+    expect(res.headers()['x-content-type-options']).toBe('nosniff');
+  });
+
   test('запуск задач по расписанию требует секрет планировщика', async ({ request }) => {
     const res = await request.post('/api/cron/tick');
     expect(res.status()).toBe(401);

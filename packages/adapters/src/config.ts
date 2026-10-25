@@ -11,7 +11,8 @@ export const AppEnvironment = z.enum(['local', 'test', 'staging', 'production'])
 export type AppEnvironment = z.infer<typeof AppEnvironment>;
 
 const DatabaseEnv = z.object({
-  APP_ENV: AppEnvironment.default('local'),
+  /** Обязательна: без неё стенд или рабочий сайт мог бы получить поведение «local» (демо, FIXED_NOW). */
+  APP_ENV: AppEnvironment,
   /** Подключение приложения: роль без права обходить RLS. */
   DATABASE_URL: z.string().min(1),
   /** Подключение владельца схемы: только миграции и начальное наполнение. */
@@ -53,6 +54,17 @@ const AppEnv = z
         code: 'custom',
         path: ['FIXED_NOW'],
         message: 'на рабочем сайте время не фиксируется',
+      });
+    }
+    if (
+      (env.APP_ENV === 'staging' || env.APP_ENV === 'production') &&
+      (env.CRON_SECRET.length < 32 || /change-me/i.test(env.CRON_SECRET))
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['CRON_SECRET'],
+        message:
+          'на стенде и рабочем сайте — своя случайная строка от 32 символов, не из .env.example',
       });
     }
     if (Boolean(env.TELEGRAM_BOT_TOKEN) !== Boolean(env.TELEGRAM_WEBHOOK_SECRET)) {

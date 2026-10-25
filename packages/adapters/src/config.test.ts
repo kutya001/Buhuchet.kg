@@ -10,6 +10,7 @@ import {
 } from './config';
 
 const base = {
+  APP_ENV: 'local',
   DATABASE_URL: 'postgres://app:app@localhost:5432/buhuchet',
   S3_ENDPOINT: 'http://localhost:9000',
   S3_BUCKET: 'buhuchet',
@@ -40,12 +41,35 @@ describe('loadConfig', () => {
     }
   });
 
+  it('APP_ENV обязательна', () => {
+    const { APP_ENV: _omit, ...withoutEnv } = base;
+    expect(() => loadConfig(withoutEnv)).toThrow(/APP_ENV/);
+  });
+
+  it('на стенде и рабочем сайте секрет планировщика не примерный и не короткий', () => {
+    const strong = 'f'.repeat(40);
+    for (const APP_ENV of ['staging', 'production']) {
+      expect(() =>
+        loadConfig({ ...base, APP_ENV, CRON_SECRET: 'local-cron-secret-change-me-0000000000' }),
+      ).toThrow(/CRON_SECRET/);
+      expect(() => loadConfig({ ...base, APP_ENV, CRON_SECRET: 'short-secret-0000' })).toThrow(
+        /CRON_SECRET/,
+      );
+      expect(loadConfig({ ...base, APP_ENV, CRON_SECRET: strong }).CRON_SECRET).toBe(strong);
+    }
+  });
+
   it('запрещает фиксированное время на рабочем сайте', () => {
     expect(() =>
       loadConfig({ ...base, APP_ENV: 'production', FIXED_NOW: '2026-10-18T06:00:00Z' }),
     ).toThrow(/FIXED_NOW/);
     expect(
-      loadConfig({ ...base, APP_ENV: 'staging', FIXED_NOW: '2026-10-18T06:00:00Z' }).FIXED_NOW,
+      loadConfig({
+        ...base,
+        APP_ENV: 'staging',
+        CRON_SECRET: 's'.repeat(32),
+        FIXED_NOW: '2026-10-18T06:00:00Z',
+      }).FIXED_NOW,
     ).toBe('2026-10-18T06:00:00Z');
   });
 
@@ -69,7 +93,9 @@ describe('loadConfig', () => {
 
 describe('частичные конфигурации', () => {
   it('база и хранилище читаются по отдельности', () => {
-    expect(loadDatabaseConfig({ DATABASE_URL: 'postgres://x' }).DATABASE_POOL_MAX).toBe(5);
+    expect(
+      loadDatabaseConfig({ APP_ENV: 'test', DATABASE_URL: 'postgres://x' }).DATABASE_POOL_MAX,
+    ).toBe(5);
     expect(loadStorageConfig(base).S3_REGION).toBe('us-east-1');
     expect(() => loadStorageConfig({})).toThrow(ConfigError);
   });

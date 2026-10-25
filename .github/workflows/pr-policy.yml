@@ -18,11 +18,13 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.base.sha }}
           sparse-checkout: scripts
+          persist-credentials: false
           path: base
       # Только для самого первого PR, пока в main ещё нет скрипта.
       - uses: actions/checkout@v4
         with:
           sparse-checkout: scripts
+          persist-credentials: false
           path: head
       - name: Отчёт агентов-ревьюеров в описании PR
         run: |

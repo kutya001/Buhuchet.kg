@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@buhuchet/api": "workspace:*",
+    "@buhuchet/domain": "workspace:*",
     "@buhuchet/shared": "workspace:*",
     "@buhuchet/ui": "workspace:*",
     "hono": "catalog:",

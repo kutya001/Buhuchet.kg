@@ -26,6 +26,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           sparse-checkout: scripts
+          persist-credentials: false
       - run: node scripts/automerge.mjs
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

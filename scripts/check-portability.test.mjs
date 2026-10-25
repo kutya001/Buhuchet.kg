@@ -31,6 +31,7 @@ test('чистый репозиторий проходит', () => {
     'packages/db/migrations/0000.sql':
       'CREATE EXTENSION IF NOT EXISTS pg_trgm; -- auth.uid() в комментарии можно',
     'apps/web/next.config.ts': 'process.env.X;',
+    'apps/web/instrumentation.ts': "if (process.env.NEXT_RUNTIME === 'nodejs') {}",
     'apps/web/vercel.json': JSON.stringify({ regions: ['fra1'], crons: [] }),
   });
   assert.deepEqual(rules(root), []);

@@ -89,6 +89,9 @@ importers:
       '@buhuchet/api':
         specifier: workspace:*
         version: link:../../packages/api
+      '@buhuchet/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       '@buhuchet/shared':
         specifier: workspace:*
         version: link:../../packages/shared
