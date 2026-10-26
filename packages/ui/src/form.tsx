@@ -109,7 +109,7 @@ export function Field(props: FieldProps) {
  */
 export const FORM_GRID_CLASS = [
   'grid grid-cols-2 gap-x-3.5 gap-y-[13px] max-[600px]:grid-cols-1',
-  'max-[600px]:data-packed:grid-cols-2 [&>[data-pack]]:col-span-2 [&>[data-pack=half]]:col-span-1',
+  'max-[600px]:data-packed:grid-cols-2 [&>[data-pack=full]]:col-span-2 [&>[data-pack=half]]:col-span-1',
   '[&>[data-pack=hidden]]:hidden [&>[data-pack=half]>label]:truncate',
 ].join(' ');
 
@@ -136,7 +136,7 @@ export function FormGrid({
 export const KV_CLASS = [
   'grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-x-[18px] gap-y-3',
   'max-md:grid-cols-2 max-[420px]:grid-cols-1 max-[600px]:data-packed:grid-cols-2',
-  '[&>[data-pack]]:col-span-2 [&>[data-pack=half]]:col-span-1',
+  '[&>[data-pack=full]]:col-span-2 [&>[data-pack=half]]:col-span-1',
 ].join(' ');
 
 export interface KeyValueItem {

@@ -28,9 +28,14 @@ async function signInByForm(page: Page, login: string, password: string) {
 }
 
 /** Новый сотрудник уже сменил временный пароль на OWN_PASSWORD; `api` вошёл им. */
-async function hiredAndSignedIn(api: APIRequestContext, origin: string, prefix: string) {
+async function hiredAndSignedIn(
+  api: APIRequestContext,
+  origin: string,
+  prefix: string,
+  phone: string | null = null,
+) {
   const login = uniqueLogin(prefix);
-  const { temporaryPassword } = await hire(api, origin, login);
+  const { temporaryPassword } = await hire(api, origin, login, phone);
   await signIn(api, origin, login, temporaryPassword);
   const changed = await api.post('/api/auth/password', {
     headers: { origin },
@@ -70,6 +75,13 @@ test.describe('Этап 1: экраны входа и «Мой профиль»'
         await expect(password).toHaveAttribute('aria-invalid', 'true');
       }
       await expect(page).toHaveURL(/\/login$/);
+    });
+
+    await test.step('логина нет на платформе — то же сообщение под тем же полем', async () => {
+      await signInByForm(page, uniqueLogin('e2e-nobody'), 'неверный');
+      await expect(page.getByText(`Неверный логин или пароль. ${LOCK_WARNING}`)).toBeVisible();
+      await expect(password).toHaveAttribute('aria-invalid', 'true');
+      await expect(page.getByLabel('Логин')).not.toHaveAttribute('aria-invalid', 'true');
     });
 
     await test.step('пятый неверный пароль закрывает вход на 15 минут — даже верным паролем', async () => {
@@ -207,7 +219,7 @@ test.describe('Этап 1: экраны входа и «Мой профиль»'
     isMobile,
   }) => {
     const origin = new URL(baseURL!).origin;
-    const login = await hiredAndSignedIn(page.request, origin, 'e2e-profile');
+    const login = await hiredAndSignedIn(page.request, origin, 'e2e-profile', '+996555100200');
     await page.goto('/app/home/today');
     const profile = page.getByRole('dialog', { name: 'Мой профиль' });
     const openProfile = async () => {
@@ -225,8 +237,27 @@ test.describe('Этап 1: экраны входа и «Мой профиль»'
     await test.step('основное: ФИО, логин, телефон, роль', async () => {
       await expect(profile).toContainText('Входов Сквозной Тестович');
       await expect(profile).toContainText(login);
+      await expect(profile).toContainText('+996 555 100 200');
       await expect(profile).toContainText('Бухгалтер');
     });
+
+    if (isMobile) {
+      await test.step('до 600 px два коротких значения подряд — в строку, длинные — во всю ширину', async () => {
+        const item = (label: string) => profile.locator('dl > div', { hasText: label });
+        // Логин e2e длинный — во всю ширину; телефон и роль короткие — по два в строку.
+        await expect(item('Логин')).toHaveAttribute('data-pack', 'full');
+        await expect(item('Телефон')).toHaveAttribute('data-pack', 'half');
+        await expect(item('Роль')).toHaveAttribute('data-pack', 'half');
+        const phone = (await item('Телефон').boundingBox())!;
+        const role = (await item('Роль').boundingBox())!;
+        expect(Math.abs(phone.y - role.y)).toBeLessThanOrEqual(1);
+        expect(role.x).toBeGreaterThan(phone.x + phone.width);
+        // Поля пароля длинные — во всю ширину; пустая ячейка между ними скрыта.
+        const current = profile.locator('[data-pack]', { has: page.getByLabel('Текущий пароль') });
+        await expect(current).toHaveAttribute('data-pack', 'full');
+        await expect(profile.locator('[data-pack=hidden]')).toHaveCount(1);
+      });
+    }
 
     await test.step('Telegram: привязка по ссылке и «Отвязать»', async () => {
       await expect(profile.getByText('Telegram не привязан')).toBeVisible();

@@ -29,6 +29,33 @@ describe('ошибка ответа API на экране', () => {
     expect(errorText({ code: 'inn_dup', message: 'ИНН занят' })).toBe('Такой ИНН уже есть');
     expect(errorText({ code: 'slug_taken', message: 'Адрес занят' })).toBe('Адрес занят');
   });
+
+  it('подстановки из details и вариант текста; не хватает значения — текст сервера', () => {
+    const text = makeErrorText({
+      'err.login_locked': 'Вход закрыт на {minutes} минут, до {time}.',
+      'err.user_blocked': 'Обратитесь к владельцу',
+      'err.user_blocked.platform_admin': 'Обратитесь к администратору',
+    });
+    expect(
+      text({
+        code: 'login_locked',
+        message: 'сервер',
+        details: { lockedUntil: '2026-10-26T08:35:00.000Z', minutes: 15, time: '14:35' },
+      }),
+    ).toBe('Вход закрыт на 15 минут, до 14:35.');
+    expect(text({ code: 'login_locked', message: 'сервер', details: { minutes: 15 } })).toBe(
+      'сервер',
+    );
+    expect(
+      text({ code: 'user_blocked', message: 'с', details: { variant: 'platform_admin' } }),
+    ).toBe('Обратитесь к администратору');
+    expect(text({ code: 'user_blocked', message: 'с', details: { variant: 'другой' } })).toBe(
+      'Обратитесь к владельцу',
+    );
+    expect(text({ code: 'user_blocked', message: 'с', details: ['не объект'] })).toBe(
+      'Обратитесь к владельцу',
+    );
+  });
 });
 
 describe('ошибка поля формы', () => {

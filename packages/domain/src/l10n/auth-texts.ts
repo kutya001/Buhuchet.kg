@@ -6,7 +6,8 @@ import type { UiTextDefault } from './texts';
  * предложение привязать Telegram после неё — по ТЗ («при следующем входе система требует сменить его»,
  * «привязка предлагается при первом входе»), в прототипе этих шагов нет. Ключ `auth.forgot` — из
  * раздела `localization` refDB.json, с тем же текстом. `{min}` — наименьшая длина пароля, `{code}` —
- * число цифр кода, `{count}` и `{minutes}` — числа из правил входа (@buhuchet/domain).
+ * число цифр кода, `{count}` и `{minutes}` — числа из правил входа (@buhuchet/domain). Тексты ошибок
+ * `err.*` совпадают с текстами ответов сервера (packages/api/src/auth-errors.ts, modules/auth).
  */
 export const AUTH_TEXTS = {
   // Страница входа
@@ -16,8 +17,8 @@ export const AUTH_TEXTS = {
   'auth.password': { ru: 'Пароль', section: 'Вход' },
   'auth.sign_in': { ru: 'Войти', section: 'Вход' },
   'auth.forgot': { ru: 'Забыли пароль?', section: 'Вход' },
-  'auth.lock_warning': {
-    ru: 'После {count} неверных попыток вход блокируется на {minutes} минут.',
+  'auth.wrong_credentials': {
+    ru: 'Неверный логин или пароль. После {count} неверных попыток вход блокируется на {minutes} минут.',
     section: 'Вход',
   },
 
@@ -30,6 +31,10 @@ export const AUTH_TEXTS = {
   'auth.get_code': { ru: 'Получить код', section: 'Вход' },
   'auth.back': { ru: 'Вернуться ко входу', section: 'Вход' },
   'auth.code_title': { ru: 'Введите код', section: 'Вход' },
+  'auth.reset_requested': {
+    ru: 'Если к логину привязан Telegram, бот пришлёт код. Если код не пришёл, пароль сбросит владелец организации, а владельцу — администратор платформы.',
+    section: 'Вход',
+  },
   'auth.code': { ru: 'Код из Telegram', section: 'Вход' },
   'auth.new_password': { ru: 'Новый пароль', section: 'Вход' },
   'auth.password_hint': { ru: 'Не короче {min} символов', section: 'Вход' },
@@ -64,7 +69,48 @@ export const AUTH_TEXTS = {
   'auth.err.mismatch': { ru: 'Пароли не совпадают', section: 'Вход' },
   'auth.err.code': { ru: 'Введите код из Telegram: {code} цифр', section: 'Вход' },
   'form.too_long': { ru: 'Слишком длинное значение', section: 'Формы' },
-  // Ошибки ответа без своего текста: обрыв связи и непонятный ответ сервера (`err.<код>`, useErrorText).
+  // Ошибки ответа API по коду (`err.<код>`, useErrorText; `err.<код>.<вариант>` — по details.variant).
+  // Подстановки — из details ответа; чего-то нет — экран показывает текст сервера.
+  'err.invalid_credentials': { ru: 'Неверный логин или пароль', section: 'Ошибки' },
+  'err.login_locked': {
+    ru: 'Слишком много неверных паролей. Вход закрыт на {minutes} минут, попробуйте снова после {time}.',
+    section: 'Ошибки',
+  },
+  'err.employee_blocked': {
+    ru: 'Учётная запись заблокирована. Обратитесь к владельцу организации.',
+    section: 'Ошибки',
+  },
+  'err.user_blocked': {
+    ru: 'Учётная запись заблокирована. Обратитесь к владельцу организации.',
+    section: 'Ошибки',
+  },
+  'err.user_blocked.platform_admin': {
+    ru: 'Учётная запись заблокирована. Обратитесь к администратору платформы.',
+    section: 'Ошибки',
+  },
+  'err.org_blocked': {
+    ru: 'Организация {org} заблокирована. Обратитесь к администратору платформы.',
+    section: 'Ошибки',
+  },
+  'err.password_change_required': {
+    ru: 'Смените временный пароль, чтобы продолжить',
+    section: 'Ошибки',
+  },
+  'err.current_password_invalid': { ru: 'Текущий пароль неверный', section: 'Ошибки' },
+  'err.reset_code_invalid': { ru: 'Код неверный или истёк', section: 'Ошибки' },
+  'err.telegram_unavailable': {
+    ru: 'Telegram-бот пока не подключён к платформе',
+    section: 'Ошибки',
+  },
+  'err.telegram_unavailable.reset': {
+    ru: 'Telegram-бот пока не подключён к платформе. Пароль сбросит владелец организации, а владельцу — администратор платформы.',
+    section: 'Ошибки',
+  },
+  'err.unauthorized': { ru: 'Войдите в систему', section: 'Ошибки' },
+  'err.origin_mismatch': { ru: 'Запрос с другого сайта отклонён', section: 'Ошибки' },
+  'err.validation_failed': { ru: 'Неверные данные запроса', section: 'Ошибки' },
+  'err.internal_error': { ru: 'Внутренняя ошибка', section: 'Ошибки' },
+  // Обрыв связи и непонятный ответ сервера.
   'err.network': {
     ru: 'Нет связи с сервером. Проверьте интернет и попробуйте ещё раз.',
     section: 'Ошибки',

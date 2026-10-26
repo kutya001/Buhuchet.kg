@@ -3,7 +3,8 @@ import { createServer, type ServerResponse } from 'node:http';
 // Подделка Telegram Bot API для сквозных тестов. Сайт шлёт сюда сообщения бота (TELEGRAM_API_BASE в
 // .env.example), тесты читают их: код «Забыли пароль?», подтверждение привязки. Запускает Playwright
 // (webServer в playwright.config.ts). Слушает все адреса: сайт в Docker обращается к этому компьютеру
-// как host.docker.internal. Хранит сообщения только в памяти, пока идут тесты.
+// как host.docker.internal (через мост Docker, не 127.0.0.1). Хранит сообщения только в памяти, пока
+// идут тесты; коды в них — от локальной базы с демо-данными.
 //   POST /bot<токен>/sendMessage, /bot<токен>/setWebhook — как Bot API;
 //   GET /messages?chat=<id> — что бот отправил в этот чат; GET /health.
 
@@ -43,7 +44,12 @@ createServer((req, res) => {
     body += chunk;
   });
   req.on('end', () => {
-    const data = JSON.parse(body || '{}') as { chat_id?: number | string; text?: string };
+    let data: { chat_id?: number | string; text?: string };
+    try {
+      data = JSON.parse(body || '{}') as typeof data;
+    } catch {
+      return reply(res, 400, { ok: false, error_code: 400, description: 'Bad Request' });
+    }
     if (method === 'sendMessage') {
       sent.push({ chatId: String(data.chat_id), text: String(data.text ?? '') });
       return reply(res, 200, { ok: true, result: { message_id: nextId++ } });

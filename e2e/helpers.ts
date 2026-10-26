@@ -21,7 +21,12 @@ export async function signIn(
 }
 
 /** Владелец демо-организации (erkin) создаёт сотрудника с ролью «Бухгалтер» и временным паролем. */
-export async function hire(api: APIRequestContext, origin: string, login: string) {
+export async function hire(
+  api: APIRequestContext,
+  origin: string,
+  login: string,
+  phone: string | null = null,
+) {
   await signIn(api, origin, 'erkin', DEMO_PASSWORD);
   const roles = (await (await api.get('/api/roles')).json()) as {
     items: { id: string; name: string }[];
@@ -31,6 +36,7 @@ export async function hire(api: APIRequestContext, origin: string, login: string
     data: {
       fullName: 'Входов Сквозной Тестович',
       login,
+      phone,
       roleId: roles.items.find((r) => r.name === 'Бухгалтер')!.id,
     },
   });

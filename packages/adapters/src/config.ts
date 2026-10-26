@@ -67,6 +67,9 @@ const StorageEnv = z.object({
   S3_FORCE_PATH_STYLE: bool.default(true),
 });
 
+/** Имя бота-подделки из .env.example (локально и в CI). */
+const EXAMPLE_BOT_USERNAME = 'buhuchet_local_bot';
+
 const AppEnv = z
   .object({
     APP_VERSION: z.string().min(1).default('0.0.0-dev'),
@@ -144,6 +147,14 @@ const AppEnv = z
           code: 'custom',
           path: ['TELEGRAM_API_BASE'],
           message: 'на стенде и рабочем сайте бот говорит только с api.telegram.org — не задаётся',
+        });
+      }
+      // Имя бота из примера может занять кто угодно: ссылка привязки с токеном ушла бы чужому боту.
+      if (env.TELEGRAM_BOT_USERNAME === EXAMPLE_BOT_USERNAME) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['TELEGRAM_BOT_USERNAME'],
+          message: 'на стенде и рабочем сайте — имя своего бота, не из .env.example',
         });
       }
       if (env.TELEGRAM_BOT_TOKEN && /change-me/i.test(env.TELEGRAM_BOT_TOKEN)) {

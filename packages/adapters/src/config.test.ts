@@ -161,6 +161,7 @@ describe('loadConfig', () => {
       CRON_SECRET: 's'.repeat(32),
     };
     const secret = 'w'.repeat(32);
+    const own = { TELEGRAM_BOT_USERNAME: 'buhuchet_test_bot' };
     expect(() =>
       loadConfig({
         ...stand,
@@ -175,17 +176,22 @@ describe('loadConfig', () => {
       loadConfig({ ...stand, ...bot, TELEGRAM_WEBHOOK_SECRET: 'short-secret-0000' }),
     ).toThrow(/TELEGRAM_WEBHOOK_SECRET/);
     expect(
-      loadConfig({ ...stand, ...bot, TELEGRAM_WEBHOOK_SECRET: secret }).TELEGRAM_WEBHOOK_SECRET,
+      loadConfig({ ...stand, ...bot, ...own, TELEGRAM_WEBHOOK_SECRET: secret })
+        .TELEGRAM_WEBHOOK_SECRET,
     ).toBe(secret);
-    // Поддельный токен из .env.example на стенде тоже не подходит.
+    // Поддельные токен и имя бота из .env.example на стенде тоже не подходят.
     expect(() =>
       loadConfig({
         ...stand,
         ...bot,
+        ...own,
         TELEGRAM_WEBHOOK_SECRET: secret,
         TELEGRAM_BOT_TOKEN: '100000001:local-fake-bot-token-change-me-0000',
       }),
     ).toThrow(/TELEGRAM_BOT_TOKEN/);
+    expect(() => loadConfig({ ...stand, ...bot, TELEGRAM_WEBHOOK_SECRET: secret })).toThrow(
+      /TELEGRAM_BOT_USERNAME/,
+    );
   });
 
   it('S3_FORCE_PATH_STYLE понимает false и 0, регистр и пробелы не важны', () => {

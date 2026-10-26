@@ -252,7 +252,11 @@ describe.skipIf(!databaseAvailable())('вход, сеансы и проверк�
     const retryAfter = Number(fifth.headers.get('retry-after'));
     expect(retryAfter).toBeGreaterThan(14 * 60);
     expect(retryAfter).toBeLessThanOrEqual(15 * 60);
-    expect((body.error.details as { lockedUntil: string }).lockedUntil).toMatch(/^\d{4}-/);
+    // Для текста словаря err.login_locked — минуты и время по Бишкеку, как в тексте сервера.
+    const details = body.error.details as { lockedUntil: string; minutes: number; time: string };
+    expect(details.lockedUntil).toMatch(/^\d{4}-/);
+    expect(details.minutes).toBe(15);
+    expect(body.error.message).toContain(`после ${details.time}.`);
 
     const correct = await login(app, 'lock-a');
     expect(correct.status).toBe(429);
@@ -519,6 +523,7 @@ describe.skipIf(!databaseAvailable())('вход, сеансы и проверк�
     const expected = {
       code: 'org_blocked',
       message: 'Организация Организация В заблокирована. Обратитесь к администратору платформы.',
+      details: { org: 'Организация В' },
     };
     const open = await get(app, '/api/auth/me', cookie);
     expect(open.status).toBe(403);

@@ -12,7 +12,8 @@ export type TelegramInfo = z.infer<typeof TelegramInfo>;
  * действует 15 минут; бот проверит её, привяжет чат и пришлёт подтверждение.
  */
 export const TelegramLinkResponse = z.object({
-  url: z.url(),
+  // Только https://t.me/…: экран вставляет ссылку в href.
+  url: z.url({ protocol: /^https$/, hostname: /^t\.me$/ }),
   expiresAt: z.iso.datetime(),
 });
 export type TelegramLinkResponse = z.infer<typeof TelegramLinkResponse>;

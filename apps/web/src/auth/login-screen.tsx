@@ -13,7 +13,6 @@ import {
   MeResponse,
   PasswordResetCodeForm,
   PasswordResetLoginForm,
-  PasswordResetRequestedResponse,
 } from '@buhuchet/shared';
 import {
   Brand,
@@ -38,13 +37,16 @@ import { TelegramLinkRow, useTelegramLink } from './telegram-link';
 type Step =
   | { id: 'login'; login: string }
   | { id: 'forgot'; login: string }
-  | { id: 'code'; login: string; message: string }
+  | { id: 'code'; login: string }
   | { id: 'change'; me: MeResponse; current: string | null }
   | { id: 'telegram' };
 
 const STEP_TITLE = 'm-0 text-[20px] font-[720] tracking-[-.015em]';
 const WIDE_CTA = `${buttonClass('cta')} justify-center`;
 const LINK_LEFT = `${linkButtonClass()} self-start`;
+
+/** Почему войти нельзя даже с верным паролем — сообщение под логином (docs/deviations.md, п. 4). */
+const DENIALS = new Set(['org_blocked', 'user_blocked', 'employee_blocked']);
 
 /**
  * Страница входа (прототип core/login.js showLogin): логин и пароль, «Забыли пароль?» с кодом из
@@ -93,17 +95,13 @@ function LoginCard({ me }: { me: MeResponse | null }) {
         <ForgotStep
           initialLogin={step.login}
           onBack={(login) => setStep({ id: 'login', login })}
-          onRequested={(login, message) => setStep({ id: 'code', login, message })}
+          onRequested={(login) => setStep({ id: 'code', login })}
         />
       );
       break;
     case 'code':
       body = (
-        <CodeStep
-          login={step.login}
-          message={step.message}
-          onDone={() => setStep({ id: 'login', login: step.login })}
-        />
+        <CodeStep login={step.login} onDone={() => setStep({ id: 'login', login: step.login })} />
       );
       break;
     case 'change':
@@ -160,10 +158,10 @@ function LoginStep({
     // (docs/deviations.md, п. 4); о блокировке сотрудника или организации — под логином.
     const message =
       res.error.code === 'invalid_credentials'
-        ? `${errorText(res.error)}. ${t('auth.lock_warning', { count: LOGIN_MAX_FAILURES, minutes: LOGIN_LOCK_MINUTES })}`
+        ? t('auth.wrong_credentials', { count: LOGIN_MAX_FAILURES, minutes: LOGIN_LOCK_MINUTES })
         : errorText(res.error);
     setError(
-      res.status === 403 ? 'login' : 'password',
+      DENIALS.has(res.error.code) ? 'login' : 'password',
       { type: 'server', message },
       { shouldFocus: true },
     );
@@ -213,7 +211,7 @@ function ForgotStep({
 }: {
   initialLogin: string;
   onBack: (login: string) => void;
-  onRequested: (login: string, message: string) => void;
+  onRequested: (login: string) => void;
 }) {
   const t = useT();
   const errorText = useErrorText();
@@ -230,7 +228,7 @@ function ForgotStep({
 
   const submit = handleSubmit(async ({ login }) => {
     const res = await callApi(() => api.api.auth['password-reset'].$post({ json: { login } }));
-    if (res.ok) return onRequested(login, PasswordResetRequestedResponse.parse(res.data).message);
+    if (res.ok) return onRequested(login);
     setError('login', { type: 'server', message: errorText(res.error) }, { shouldFocus: true });
   });
 
@@ -262,15 +260,7 @@ function ForgotStep({
   );
 }
 
-function CodeStep({
-  login,
-  message,
-  onDone,
-}: {
-  login: string;
-  message: string;
-  onDone: () => void;
-}) {
+function CodeStep({ login, onDone }: { login: string; onDone: () => void }) {
   const t = useT();
   const errorText = useErrorText();
   const toast = useToast();
@@ -306,7 +296,7 @@ function CodeStep({
     <form onSubmit={submit} noValidate className="flex flex-col gap-3.5">
       <h1 className={STEP_TITLE}>{t('auth.code_title')}</h1>
       {/* Один ответ для любого логина: пришлёт ли бот код, не сообщается (docs/deviations.md, п. 4). */}
-      <Note icon="tg">{message}</Note>
+      <Note icon="tg">{t('auth.reset_requested')}</Note>
       <Field id="fg-code" label={t('auth.code')} error={fieldError(t, errors.code)}>
         {(control) => (
           <input
@@ -419,7 +409,6 @@ function ChangeStep({
       <button type="submit" className={WIDE_CTA} disabled={isSubmitting}>
         {t('auth.change')}
       </button>
-      <div className="text-[11.5px] leading-[1.4] text-faint">{t('auth.reset_note')}</div>
       <button type="button" className={LINK_LEFT} onClick={leave} disabled={leaving}>
         {t('shell.logout')}
       </button>
