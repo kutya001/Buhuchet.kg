@@ -13,6 +13,8 @@ import type { IconName } from '@buhuchet/ui';
 /** Что можно вошедшему: права, функции учётной политики, режим Админки. */
 export interface ShellAccess {
   admin: boolean;
+  /** «Сдача отчётов требует подтверждения» включена в учётной политике. */
+  reportConfirm: boolean;
   can: (permission: PermissionId) => boolean;
   feature: (feature: Feature) => boolean;
 }
@@ -21,9 +23,15 @@ export function shellAccess(me: MeResponse): ShellAccess {
   const permissions = new Set<string>(me.permissions);
   return {
     admin: me.user.isPlatformAdmin,
+    reportConfirm: me.reportConfirm,
     can: (p) => permissions.has(p),
     feature: (f) => me.features[f] === true,
   };
+}
+
+/** Можно ли работать на страницах за входом: вошёл, сменил временный пароль, есть модули. */
+export function canEnter(me: MeResponse | null): me is MeResponse {
+  return !!me && !me.user.mustChangePassword && me.modules.length > 0;
 }
 
 type When = (access: ShellAccess) => boolean;
@@ -108,8 +116,13 @@ export const MODULES: Record<MenuModuleId, ModuleDef> = {
     tabs: [
       { id: 'week', icon: 'calendar', label: 'tab.reports.week' },
       { id: 'overdue', icon: 'alert', label: 'tab.reports.overdue' },
-      // Только при включённом подтверждении сдачи (настройка организации) — уточнит экран отчётов.
-      { id: 'waiting', icon: 'hourglass', label: 'tab.reports.waiting' },
+      // Только при включённой «Сдача отчётов требует подтверждения» (repConfOn прототипа).
+      {
+        id: 'waiting',
+        icon: 'hourglass',
+        label: 'tab.reports.waiting',
+        when: (a) => a.reportConfirm,
+      },
       { id: 'all', icon: 'list', label: 'tab.reports.all' },
       { id: 'matrix', icon: 'matrix', label: 'tab.reports.matrix' },
       {

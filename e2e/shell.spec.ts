@@ -163,4 +163,115 @@ test.describe('Этап 1: оболочка рабочей страницы', ()
     await expect(html).toHaveAttribute('data-theme', 'light');
     expect(luminance(await frame())).toBeGreaterThan(0.6);
   });
+
+  test('верхняя и левая панели: «ⓘ», «?», поиск по вкладке, время по Бишкеку, скрытие панели и раскрытые ветки', async ({
+    page,
+    baseURL,
+    isMobile,
+  }) => {
+    await signIn(page.request, new URL(baseURL!).origin, 'erkin', DEMO_PASSWORD);
+    // Часы показывают время Бишкека и на устройстве в другом поясе.
+    await page.clock.setFixedTime(new Date('2026-10-26T18:30:00Z'));
+    await page.goto('/app/reports/week');
+
+    const clock = page.locator('header [title$=", Бишкек"]');
+    await expect(clock).toHaveAttribute('title', '27.10.2026 00:30, Бишкек');
+    // Уже 768 px — только ЧЧ:ММ.
+    await expect
+      .poll(() => clock.innerText())
+      .toMatch(isMobile ? /^00:30$/ : /^27\.10\.2026\s*00:30$/);
+
+    // «ⓘ»: на ПК — при наведении, на телефоне — по нажатию.
+    const info = page.getByRole('button', { name: 'Описание модуля' });
+    const infoBox = page.getByRole('dialog', { name: 'Описание модуля' });
+    if (isMobile) await info.click();
+    else await info.hover();
+    await expect(infoBox).toContainText('Отчёты создаются автоматически по назначениям');
+    if (isMobile) await page.keyboard.press('Escape');
+    else await page.mouse.move(640, 600);
+    await expect(infoBox).toBeHidden();
+
+    // «?»: описание модуля и «Открыть Базу знаний».
+    await page.getByRole('button', { name: 'Помощь' }).click();
+    const help = page.getByRole('dialog', { name: 'Помощь' });
+    await expect(help).toContainText('Отчёты создаются автоматически по назначениям');
+    await help.getByRole('link', { name: 'Открыть Базу знаний' }).click();
+    await expect(page).toHaveURL(/\/app\/kb\/level$/);
+
+    if (isMobile) return; // Поиск, «Меню» и дерево модулей на телефоне — задача #11.
+
+    // Поиск по текущей вкладке очищается при смене вкладки.
+    await page.goto('/app/reports/week');
+    const search = page.getByRole('searchbox', { name: 'Поиск по текущей вкладке' });
+    await search.fill('НДС');
+    await page.getByRole('tab', { name: 'Просрочено' }).click();
+    await expect(page).toHaveURL(/\/app\/reports\/overdue$/);
+    await expect(search).toHaveValue('');
+
+    // «Меню» скрывает левую панель, раскрытая ветка дерева — запоминаются.
+    const side = page.getByRole('complementary', { name: 'Модули' });
+    await page.getByRole('button', { name: 'Раскрыть вкладки: Отчеты для сдачи' }).click();
+    await expect(side.getByRole('link', { name: 'Кто что сдаёт' })).toBeVisible();
+    await page.getByRole('button', { name: 'Меню' }).click();
+    await expect(side).toBeHidden();
+    await page.reload();
+    await expect(side).toBeHidden();
+    await page.getByRole('button', { name: 'Меню' }).click();
+    await expect(side.getByRole('link', { name: 'Кто что сдаёт' })).toBeVisible();
+  });
+
+  test('без входа, с временным паролем и после выхода страницы за входом ведут на страницу входа', async ({
+    page,
+    playwright,
+    baseURL,
+    isMobile,
+  }) => {
+    const origin = new URL(baseURL!).origin;
+    await page.goto('/app/reports/week');
+    await expect(page).toHaveURL(/\/login$/);
+
+    const owner = await playwright.request.newContext({ baseURL });
+    await signIn(owner, origin, 'erkin', DEMO_PASSWORD);
+    const roles = (await (await owner.get('/api/roles')).json()) as {
+      items: { id: string; name: string }[];
+    };
+    const login = unique('e2e-shell');
+    const hired = await owner.post('/api/staff', {
+      headers: { origin },
+      data: {
+        fullName: 'Оболочкин Сквозной Тестович',
+        login,
+        roleId: roles.items.find((r) => r.name === 'Бухгалтер')!.id,
+      },
+    });
+    expect(hired.status(), await hired.text()).toBe(201);
+    const { temporaryPassword } = (await hired.json()) as { temporaryPassword: string };
+    await owner.dispose();
+
+    // Временный пароль не сменён — в программу не пускает.
+    await signIn(page.request, origin, login, temporaryPassword);
+    await page.goto('/app');
+    await expect(page).toHaveURL(/\/login$/);
+
+    const changed = await page.request.post('/api/auth/password', {
+      headers: { origin },
+      data: { currentPassword: temporaryPassword, newPassword: 'Свой-пароль-e2e-1' },
+    });
+    expect(changed.status()).toBe(200);
+    await page.goto('/app');
+    await expect(page).toHaveURL(/\/app\/home\/today$/);
+
+    // «Выйти из аккаунта» — внизу левой панели на ПК; на телефоне панель придёт в #11.
+    if (isMobile) {
+      await page.waitForLoadState('networkidle');
+      expect((await page.request.post('/api/auth/logout', { headers: { origin } })).status()).toBe(
+        200,
+      );
+    } else {
+      await page.getByRole('button', { name: 'Выйти из аккаунта' }).click();
+      await expect(page).toHaveURL(/\/login$/);
+    }
+    await page.goto('/app/home/today');
+    await expect(page).toHaveURL(/\/login$/);
+  });
 });

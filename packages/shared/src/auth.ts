@@ -64,6 +64,8 @@ export const MeResponse = z.object({
   permissions: z.array(PermissionIdSchema),
   scopes: z.partialRecord(ScopeGroupIdSchema, z.enum(SCOPES)),
   features: z.partialRecord(FeatureSchema, z.boolean()),
+  /** «Сдача отчётов требует подтверждения» (учётная политика): есть ли вкладка «Ожидают подтверждения». */
+  reportConfirm: z.boolean(),
   modules: z.array(MenuModuleIdSchema),
 });
 export type MeResponse = z.infer<typeof MeResponse>;

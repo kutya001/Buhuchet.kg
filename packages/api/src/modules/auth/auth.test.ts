@@ -1,4 +1,5 @@
 import { hashPassword } from '@buhuchet/adapters/password';
+import { hashSessionToken } from '@buhuchet/adapters/tokens';
 import { createRoute, z } from '@hono/zod-openapi';
 import { schema, withOrgContext } from '@buhuchet/db';
 import { createOrganization, type CreatedOrganization } from '@buhuchet/db/organizations';
@@ -8,7 +9,7 @@ import {
   seedAccessReference,
   type TestDatabase,
 } from '@buhuchet/db/testing';
-import { scopeOf } from '@buhuchet/domain';
+import { MENU_MODULES, scopeOf } from '@buhuchet/domain';
 import { ApiError, MeResponse } from '@buhuchet/shared';
 import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -171,11 +172,16 @@ describe.skipIf(!databaseAvailable())('вход, сеансы и проверк�
     expect(me).toMatchObject({
       user: { login: 'acc-a', isPlatformAdmin: false, mustChangePassword: false },
       employee: { shortName: 'acc-a', roleName: 'Бухгалтер', isOwner: false },
-      organization: { id: a.orgId, name: 'Организация А', slug: 'org-a' },
+      organization: { id: a.orgId, name: 'Организация А', slug: 'org-a', inn: '01811201810456' },
       scopes: { cps: 'own', reports: 'own' },
+      // Подтверждение сдачи у новой организации включено (учётная политика по умолчанию).
+      reportConfirm: true,
     });
     expect(me.permissions).toContain('cpView');
     expect(me.permissions).not.toContain('staffView');
+    // Меню сотрудника — только модули Бизнеса, модулей Админки в нём нет.
+    expect(me.modules).toContain('home');
+    expect(me.modules.filter((m) => !MENU_MODULES.some((b) => b.id === m))).toEqual([]);
 
     const again = await get(app, '/api/auth/me', cookieOf(res));
     expect(again.status).toBe(200);
@@ -529,6 +535,7 @@ describe.skipIf(!databaseAvailable())('вход, сеансы и проверк�
       organization: null,
       permissions: [],
       scopes: {},
+      reportConfirm: false,
       // Меню Админки — все её модули по порядку (прототип core/registry.js, ADM).
       modules: ['accounts', 'orgs', 'pdicts', 'l10n', 'kb', 'kbadm', 'tg'],
     });
@@ -642,6 +649,24 @@ describe.skipIf(!databaseAvailable())('вход, сеансы и проверк�
     const touched = await get(app, '/api/auth/me', cookie);
     expect(touched.status).toBe(200);
     expect(cookieOf(touched)).toBe(cookie);
+  });
+
+  it('показ страницы сервером сеанс не продлевает: продление остаётся запросам самой страницы', async () => {
+    const cookie = await signIn(app, 'acc-a', PASSWORD);
+    const thisSession = eq(sessions.tokenHash, hashSessionToken(cookie.split('=')[1]!));
+    const stale = new Date(Date.now() - 2 * 3600_000);
+    await t.admin.db.update(sessions).set({ lastSeenAt: stale }).where(thisSession);
+    const lastSeen = async () =>
+      (await t.admin.db.select().from(sessions).where(thisSession))[0]!.lastSeenAt.getTime();
+
+    const page = await app.request('/api/auth/me', { headers: { cookie } }, { pageRender: true });
+    expect(page.status).toBe(200);
+    expect(page.headers.get('set-cookie')).toBeNull();
+    expect(await lastSeen()).toBe(stale.getTime());
+
+    const own = await get(app, '/api/auth/me', cookie);
+    expect(cookieOf(own)).toBe(cookie);
+    expect(await lastSeen()).toBeGreaterThan(stale.getTime());
   });
 
   it('неизвестный метод после входа — 404', async () => {

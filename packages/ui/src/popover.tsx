@@ -1,6 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from 'react';
 
 const PLACEMENTS = {
   'bottom-start': 'top-full left-0 mt-1.5',
@@ -22,14 +30,23 @@ export interface PopoverProps {
   padded?: boolean;
   /** Открыто с первой отрисовки (для проверок разметки). */
   defaultOpen?: boolean;
+  /**
+   * На ПК с мышью открывается и при наведении: через 300 мс, закрывается, когда указатель ушёл с кнопки
+   * и окошка (как «ⓘ» прототипа, ui/popups.js). На телефоне — только нажатием.
+   */
+  hover?: boolean;
   /** Классы обёртки (например, кнопка «+» на телефоне закреплена в углу экрана вместе с меню). */
   className?: string;
 }
 
+const HOVER_QUERY = '(hover: hover) and (min-width: 768px)';
+const HOVER_OPEN_MS = 300;
+const HOVER_CLOSE_MS = 220;
+
 /**
  * Всплывающее окошко у кнопки (прототип ui/popups.js, openPop; стиль `.pop`): описание модуля «ⓘ»,
  * «?» и меню «+ Добавить». Закрывается повторным нажатием, клавишей Esc и нажатием вне окошка; при
- * открытии фокус переходит в окошко, при закрытии по Esc — обратно на кнопку.
+ * открытии нажатием фокус переходит в окошко, при закрытии по Esc — обратно на кнопку.
  */
 export function Popover({
   trigger,
@@ -39,24 +56,47 @@ export function Popover({
   placement = 'bottom-start',
   padded = false,
   defaultOpen = false,
+  hover = false,
   className = 'relative inline-flex',
 }: PopoverProps) {
-  const [open, setOpen] = useState(defaultOpen);
+  // Как открыто: нажатием (фокус переходит в окошко) или наведением (уход указателя закрывает).
+  const [openBy, setOpenBy] = useState<'click' | 'hover' | null>(defaultOpen ? 'click' : null);
+  const open = openBy !== null;
   const id = useId();
   const box = useRef<HTMLSpanElement>(null);
   const panel = useRef<HTMLDivElement>(null);
-  const close = useCallback(() => setOpen(false), []);
-  const toggle = useCallback(() => setOpen((v) => !v), []);
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const close = useCallback(() => setOpenBy(null), []);
+  const toggle = useCallback(() => setOpenBy((v) => (v ? null : 'click')), []);
+
+  const pointerEnter = (e: ReactPointerEvent<HTMLSpanElement>) => {
+    if (e.pointerType !== 'mouse' || !window.matchMedia(HOVER_QUERY).matches) return;
+    clearTimeout(timer.current);
+    if (open) return;
+    timer.current = setTimeout(() => setOpenBy((v) => v ?? 'hover'), HOVER_OPEN_MS);
+  };
+  const pointerLeave = () => {
+    clearTimeout(timer.current);
+    if (openBy === 'hover') {
+      timer.current = setTimeout(
+        () => setOpenBy((v) => (v === 'hover' ? null : v)),
+        HOVER_CLOSE_MS,
+      );
+    }
+  };
+  useEffect(() => () => clearTimeout(timer.current), []);
 
   useEffect(() => {
-    if (!open) return;
-    panel.current?.querySelector<HTMLElement>('a[href],button:not([disabled])')?.focus();
+    if (!openBy) return;
+    if (openBy === 'click') {
+      panel.current?.querySelector<HTMLElement>('a[href],button:not([disabled])')?.focus();
+    }
     const outside = (e: PointerEvent) => {
-      if (box.current && !box.current.contains(e.target as Node)) setOpen(false);
+      if (box.current && !box.current.contains(e.target as Node)) setOpenBy(null);
     };
     const escape = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
-      setOpen(false);
+      setOpenBy(null);
       box.current?.querySelector<HTMLElement>('[aria-controls]')?.focus();
     };
     document.addEventListener('pointerdown', outside);
@@ -65,10 +105,15 @@ export function Popover({
       document.removeEventListener('pointerdown', outside);
       document.removeEventListener('keydown', escape);
     };
-  }, [open]);
+  }, [openBy]);
 
   return (
-    <span ref={box} className={className}>
+    <span
+      ref={box}
+      className={className}
+      onPointerEnter={hover ? pointerEnter : undefined}
+      onPointerLeave={hover ? pointerLeave : undefined}
+    >
       {trigger({ open, toggle, id })}
       {open && (
         <div

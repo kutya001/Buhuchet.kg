@@ -11,6 +11,15 @@ export interface MenuItem {
   badge?: string;
 }
 
+/** Метка «Бета» у способа добавления (прототип `.beta-p`). */
+export function BetaBadge({ label }: { label: string }) {
+  return (
+    <span className="inline-flex items-center rounded-full bg-warn-bg px-[7px] align-middle text-[11px] leading-[17px] font-bold tracking-[0.02em] text-warn">
+      {label}
+    </span>
+  );
+}
+
 /**
  * Пункты меню действий (прототип ui/popups.js, menu; стиль `.mi`): значок, название, пояснение.
  * Используется внутри `Popover` с role="menu".
@@ -36,9 +45,7 @@ export function MenuItems({
         {item.badge && (
           <>
             {' '}
-            <span className="inline-flex items-center rounded-full bg-warn-bg px-[7px] align-middle text-[11px] leading-[17px] font-bold tracking-[0.02em] text-warn">
-              {item.badge}
-            </span>
+            <BetaBadge label={item.badge} />
           </>
         )}
         {item.sub && <span className="block text-[11.5px] text-faint">{item.sub}</span>}

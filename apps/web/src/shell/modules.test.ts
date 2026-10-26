@@ -27,6 +27,7 @@ function me({
   permissions = PERMISSION_IDS as readonly PermissionId[],
   features = ALL_FEATURES as Partial<Record<Feature, boolean>>,
   admin = false,
+  reportConfirm = true,
 } = {}): MeResponse {
   return {
     user: {
@@ -41,6 +42,7 @@ function me({
     permissions: [...permissions],
     scopes: {},
     features,
+    reportConfirm,
     modules,
   };
 }
@@ -94,6 +96,17 @@ describe('вкладки и «+ Добавить» по правам и учёт
       ids(visibleTabs('fin', shellAccess(me({ permissions: noProjects, features: noFee })))),
     ).not.toContain('proj');
     expect(ids(visibleTabs('fin', shellAccess(me({ permissions: noProjects }))))).toContain('proj');
+  });
+
+  it('«Ожидают подтверждения» — только при включённой «Сдача отчётов требует подтверждения»', () => {
+    expect(ids(visibleTabs('reports', shellAccess(me())))).toContain('waiting');
+    expect(ids(visibleTabs('reports', shellAccess(me({ reportConfirm: false }))))).toEqual([
+      'week',
+      'overdue',
+      'all',
+      'matrix',
+      'calendar',
+    ]);
   });
 
   it('«Календарь» отчётов — только при включённом календаре сроков', () => {

@@ -253,11 +253,12 @@ describe('TabRow — вкладки и «+ Добавить»', () => {
       />,
     );
     expect(html).not.toContain('aria-haspopup');
-    expect(html).toContain('title="Назначить отчёты массово"');
+    // Подсказка — «Добавить», как у кнопки прототипа.
+    expect(html).toMatch(/title="Добавить" class="[^"]*bg-accent/);
   });
 
   it('отдельный способ — своей кнопкой на ПК рядом с «+ Добавить», на телефоне — в меню «+»', () => {
-    const actions = [{ ...ACTIONS[0]!, separate: true }, ACTIONS[1]!];
+    const actions = [{ ...ACTIONS[0]!, separate: true, badge: 'Бета' }, ACTIONS[1]!];
     const html = renderToStaticMarkup(
       <TabRow
         tabs={TABS}
@@ -271,9 +272,11 @@ describe('TabRow — вкладки и «+ Добавить»', () => {
     expect(html).toMatch(
       /<button type="button" title="Назначить отчёты массово" class="[^"]*max-md:hidden/,
     );
+    // Если ряд не помещается, у отдельной кнопки остаётся значок (подпись прячется), метка «Бета» — на месте.
+    expect(html).toContain('group-data-[slim=true]/row:hidden">Назначить отчёты массово</span>');
+    expect(html).toMatch(/Назначить отчёты массово<\/span><span[^>]*>Бета<\/span><\/button>/);
     // На ПК в «+ Добавить» остался один способ, у «+» на телефоне — оба (меню).
     expect(html.match(/aria-haspopup="menu"/g)).toHaveLength(1);
-    expect(html).toContain('title="Разовый отчёт"');
   });
 });
 

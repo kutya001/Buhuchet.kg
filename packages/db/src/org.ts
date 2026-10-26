@@ -148,13 +148,19 @@ export async function getOrgPolicy(tx: Tx, orgId: string): Promise<OrgPolicyReco
   };
 }
 
-/** Включённые функции организации — для меню модулей в «кто я». */
-export async function orgFeatures(tx: Tx, orgId: string): Promise<Record<Feature, boolean>> {
+/**
+ * Учётная политика для меню в «кто я»: включённые функции (модули) и «Сдача отчётов требует
+ * подтверждения» (вкладка «Ожидают подтверждения»). Чужая организация не видна (RLS) — всё выключено.
+ */
+export async function orgMenuSettings(
+  tx: Tx,
+  orgId: string,
+): Promise<{ features: Record<Feature, boolean>; reportConfirm: boolean }> {
   const [r] = await tx
-    .select({ features: orgSettings.features })
+    .select({ features: orgSettings.features, reportConfirm: orgSettings.reportConfirm })
     .from(orgSettings)
     .where(eq(orgSettings.orgId, orgId));
-  return featureSet(r?.features ?? {});
+  return { features: featureSet(r?.features ?? {}), reportConfirm: r?.reportConfirm ?? false };
 }
 
 export interface HistoryItem {

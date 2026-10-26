@@ -30,8 +30,8 @@ export function Icon({
       aria-hidden="true"
       focusable="false"
       className={`flex-none fill-none stroke-current [stroke-linecap:round] [stroke-linejoin:round] ${SIZES[size]} ${className}`}
-      // Содержимое — постоянная строка из ICONS, не данные пользователя.
-      dangerouslySetInnerHTML={{ __html: ICONS[name] }}
+      // Содержимое — постоянная строка из ICONS, не данные пользователя; чужое имя — пустой значок.
+      dangerouslySetInnerHTML={{ __html: Object.hasOwn(ICONS, name) ? ICONS[name] : '' }}
     />
   );
 }

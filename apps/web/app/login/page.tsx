@@ -1,7 +1,8 @@
 import { BrandMark } from '@buhuchet/ui';
 import { redirect } from 'next/navigation';
 import { getT } from '../../src/l10n/server';
-import { canEnter, loadMe } from '../../src/shell/server';
+import { canEnter } from '../../src/shell/modules';
+import { loadMe } from '../../src/shell/server';
 
 /** Страница входа. Пока экрана входа нет (задача #13) — пояснение; вошедшего ведёт в программу. */
 export default async function LoginPage() {

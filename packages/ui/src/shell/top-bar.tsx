@@ -11,7 +11,7 @@ export interface TopBarProps {
   tab: string | null;
   /** «Меню»: показать или скрыть левую панель. */
   menu: { label: string; onClick: () => void };
-  /** «ⓘ» у названия: описание модуля. */
+  /** «ⓘ» у названия: описание модуля — при наведении (ПК) или по нажатию. */
   info: { label: string; content: ReactNode };
   /** Общий поиск по текущей вкладке. */
   search: {
@@ -67,6 +67,7 @@ export function TopBar({ title, tab, menu, info, search, clock, help, theme }: T
       <Popover
         label={info.label}
         padded
+        hover
         trigger={({ open, toggle, id }) => (
           <button
             type="button"

@@ -1,7 +1,7 @@
 'use client';
 
 import type { MenuModuleId } from '@buhuchet/domain';
-import type { MeResponse } from '@buhuchet/shared';
+import { MeResponse } from '@buhuchet/shared';
 import {
   AppFrame,
   buttonClass,
@@ -16,8 +16,8 @@ import {
   type ShellModule,
 } from '@buhuchet/ui';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { api } from '../api-client';
 import { useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
@@ -26,6 +26,7 @@ import { Clock } from './clock';
 import {
   addActions,
   APP_PATH,
+  canEnter,
   MODULES,
   moduleHref,
   parseAppPath,
@@ -85,18 +86,57 @@ function shellModule(id: MenuModuleId, access: ShellAccess, t: Translate): Shell
  * `children`. Модули не рисуют свои заголовки, кнопки добавления и поля поиска — всё это даёт оболочка.
  */
 export function Shell({
-  me,
+  me: initialMe,
   initialNavHidden,
   initialOpen,
+  serverNow,
   children,
 }: {
   me: MeResponse;
   initialNavHidden: boolean;
   initialOpen: readonly string[];
+  /** Момент показа страницы на сервере (мс) — часы первого показа. */
+  serverNow: number;
   children: ReactNode;
 }) {
   const t = useT();
-  const { moduleId, tabId } = parseAppPath(usePathname());
+  const router = useRouter();
+  const pathname = usePathname();
+  const { moduleId, tabId } = parseAppPath(pathname);
+
+  // Права и учётную политику меняет владелец, часто на другом устройстве: при каждом переходе меню
+  // сверяется с сервером (прототип перерисовывает меню на каждом переходе). Этот же запрос продлевает
+  // сеанс. Сеанс закрыт или вход больше не годится — на страницу входа.
+  const [me, setMe] = useState(initialMe);
+  const [shownMe, setShownMe] = useState(initialMe);
+  if (shownMe !== initialMe) {
+    setShownMe(initialMe);
+    setMe(initialMe);
+  }
+  useEffect(() => {
+    let cancelled = false;
+    api.api.auth.me
+      .$get()
+      .then(async (res) => {
+        if (res.status === 401 || res.status === 403) return 'out';
+        if (res.status !== 200) return null;
+        const fresh = MeResponse.parse(await res.json());
+        return canEnter(fresh) ? fresh : 'out';
+      })
+      .then((fresh) => {
+        if (cancelled || !fresh) return;
+        if (fresh === 'out') return window.location.assign('/login');
+        setMe(fresh);
+        // Открытый модуль пропал из меню — на первый модуль меню.
+        if (moduleId && !fresh.modules.some((m) => m === moduleId)) router.replace(APP_PATH);
+      })
+      // Нет сети — меню остаётся прежним, данные всё равно проверяет API.
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [pathname, moduleId, router]);
+
   const access = useMemo(() => shellAccess(me), [me]);
   const modules = useMemo(
     () => me.modules.map((id) => shellModule(id, access, t)),
@@ -232,7 +272,7 @@ export function Shell({
               placeholder: t('shell.search'),
               scope: currentTab?.label ?? title,
             }}
-            clock={<Clock />}
+            clock={<Clock initial={serverNow} />}
             help={{
               label: t('shell.help'),
               title: t('shell.help_title'),

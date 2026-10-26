@@ -3,7 +3,7 @@
 import { useLayoutEffect, useRef } from 'react';
 import { buttonClass } from '../button';
 import { Icon } from '../icon';
-import { MenuItems, type MenuItem } from '../menu';
+import { BetaBadge, MenuItems, type MenuItem } from '../menu';
 import { Popover } from '../popover';
 import { CountBadge } from './badge';
 import type { ShellLink, ShellTab } from './types';
@@ -14,15 +14,19 @@ const PHONE = '(max-width: 767px)';
 
 /**
  * Подгонка ряда вкладок под ширину (прототип ui/shell.js, fitTabs; ТЗ «Вкладки модуля»): на ПК, если
- * ряд не помещается, сначала уменьшаются отступы, затем скрываются значки, и только потом ряд
- * прокручивается; на телефоне остаются только значки. Активная вкладка сдвигается в видимую часть.
+ * ряд не помещается, сначала у отдельных кнопок добавления остаются только значки, затем уменьшаются
+ * отступы вкладок, затем скрываются их значки, и только потом ряд прокручивается; на телефоне остаются
+ * только значки. Активная вкладка сдвигается в видимую часть.
  */
 function fitTabs(row: HTMLElement) {
+  const root = row.parentElement;
   const over = () => row.scrollWidth > row.clientWidth + 2;
   row.dataset.fit = 'full';
+  if (root) root.dataset.slim = 'false';
   if (window.matchMedia(PHONE).matches) {
     if (over()) row.dataset.fit = 'icons';
   } else {
+    if (over() && root) root.dataset.slim = 'true';
     if (over()) row.dataset.fit = 'tight';
     if (over()) row.dataset.fit = 'labels';
   }
@@ -80,7 +84,7 @@ export function TabRow({
   const inMenu = addActions.filter((a) => !a.separate);
 
   return (
-    <div className="flex min-w-0 items-center gap-2.5">
+    <div data-slim="false" className="group/row flex min-w-0 items-center gap-2.5">
       <span className="min-w-0 flex-[1_1_0] max-md:hidden" />
       {tabs.length > 0 && (
         <div
@@ -121,7 +125,8 @@ export function TabRow({
             className={`${buttonClass()} max-md:hidden`}
           >
             <Icon name={a.icon} />
-            <span>{a.label}</span>
+            <span className="group-data-[slim=true]/row:hidden">{a.label}</span>
+            {a.badge && <BetaBadge label={a.badge} />}
           </button>
         ))}
         {inMenu.length > 0 && (
@@ -172,7 +177,7 @@ function AddControl({
           type="button"
           onClick={() => onAdd(actions[0]!.id)}
           aria-label={fab ? label : undefined}
-          title={actions[0]!.label}
+          title={label}
           className={look}
         >
           {content}

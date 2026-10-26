@@ -41,7 +41,11 @@ export function sessionGuard(deps: ApiDeps) {
 
     const token = readSessionToken(c, deps);
     const tokenHash = token ? hashSessionToken(token) : null;
-    const session = tokenHash ? await sessionByToken(deps.db, tokenHash) : null;
+    // При показе страницы сервером сеанс не продлевается: новая cookie из такого ответа до браузера не
+    // дойдёт, а продление забрало бы часовой слот у запросов самой страницы — тогда срок в базе
+    // сдвигался бы, а cookie в браузере нет.
+    const touch = c.env?.pageRender !== true;
+    const session = tokenHash ? await sessionByToken(deps.db, tokenHash, { touch }) : null;
     if (!token || !tokenHash || !session) {
       clearSessionCookie(c, deps);
       return c.json(apiError('unauthorized', 'Войдите в систему'), 401);
