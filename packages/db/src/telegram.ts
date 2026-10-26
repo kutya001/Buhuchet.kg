@@ -6,6 +6,7 @@ import {
   TELEGRAM_LINK_TTL_MINUTES,
 } from '@buhuchet/domain';
 import { and, eq, sql } from 'drizzle-orm';
+import { clearLoginAttempts } from './auth';
 import type { Db, Tx } from './client';
 import { employees, platformReference, roles, sessions, users } from './schema';
 
@@ -315,7 +316,7 @@ export async function setTemporaryPassword(
   input: { userId: string; passwordHash: string },
 ): Promise<{ mustChangePasswordBefore: boolean } | null> {
   const [before] = await tx
-    .select({ mustChangePassword: users.mustChangePassword })
+    .select({ login: users.login, mustChangePassword: users.mustChangePassword })
     .from(users)
     .where(and(eq(users.id, input.userId), eq(users.isPlatformAdmin, false)))
     .for('update');
@@ -325,14 +326,13 @@ export async function setTemporaryPassword(
     .set({
       passwordHash: input.passwordHash,
       mustChangePassword: true,
-      failedLogins: 0,
-      lockedUntil: null,
       version: sql`${users.version} + 1`,
       updatedAt: sql`now()`,
     })
     .where(eq(users.id, input.userId));
   await tx.delete(sessions).where(eq(sessions.userId, input.userId));
   await revokePasswordResetCodes(tx, input.userId);
+  await clearLoginAttempts(tx, before.login);
   return { mustChangePasswordBefore: before.mustChangePassword };
 }
 

@@ -1,4 +1,4 @@
-import { schema } from '@buhuchet/db';
+import { cleanupLoginAttempts, schema } from '@buhuchet/db';
 import { lt } from 'drizzle-orm';
 import type { Job } from '../deps';
 
@@ -18,7 +18,20 @@ export const cleanupSchedulerRuns: Job = {
 };
 
 /**
+ * Счёт неверных паролей по логину забывается через час: такие строки удаляются каждые 10 минут, чтобы
+ * таблица не росла от выдуманных логинов.
+ */
+export const cleanupLoginAttemptsJob: Job = {
+  name: 'auth.cleanup-login-attempts',
+  cron: '*/10 * * * *',
+  lookbackMinutes: 10,
+  async run(ctx) {
+    await cleanupLoginAttempts(ctx.db);
+  },
+};
+
+/**
  * Все задачи по расписанию. Модули добавляют сюда свои: создание отчётов, напоминания 7 и 3 дня
  * и в день срока, сводка по понедельникам, отправка очереди Telegram.
  */
-export const jobs: readonly Job[] = [cleanupSchedulerRuns];
+export const jobs: readonly Job[] = [cleanupSchedulerRuns, cleanupLoginAttemptsJob];

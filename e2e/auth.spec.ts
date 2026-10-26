@@ -43,7 +43,7 @@ test.describe('Этап 1: вход и сеансы (API)', () => {
     expect(replay.status()).toBe(401);
   });
 
-  test('без входа методы отвечают 401, неизвестный логин — «Нет такого логина»', async ({
+  test('без входа методы отвечают 401, неизвестный логин — «Неверный логин или пароль»', async ({
     request,
     baseURL,
   }) => {
@@ -51,13 +51,14 @@ test.describe('Этап 1: вход и сеансы (API)', () => {
     expect(me.status()).toBe(401);
     expect(await me.json()).toMatchObject({ error: { code: 'unauthorized' } });
 
+    // Свой логин на каждый запуск: неверные попытки считаются и для логина, которого нет.
     const unknown = await request.post('/api/auth/login', {
       headers: { origin: new URL(baseURL!).origin },
-      data: { login: 'no-such-user', password: 'whatever' },
+      data: { login: `no-such-user-${Date.now()}`, password: 'whatever' },
     });
     expect(unknown.status()).toBe(401);
-    expect(await unknown.json()).toMatchObject({
-      error: { code: 'unknown_login', message: 'Нет такого логина' },
+    expect(await unknown.json()).toEqual({
+      error: { code: 'invalid_credentials', message: 'Неверный логин или пароль' },
     });
   });
 

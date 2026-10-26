@@ -1,4 +1,4 @@
-import { randomBytes, randomInt } from 'node:crypto';
+import { randomInt } from 'node:crypto';
 import { hash, verify, type Algorithm, type Options } from '@node-rs/argon2';
 
 /**
@@ -17,24 +17,42 @@ export function hashPassword(password: string): Promise<string> {
   return hash(password, OPTIONS);
 }
 
-/** Неверный или испорченный хеш — просто «пароль не подходит». */
+/**
+ * Подставной хеш: argon2id с параметрами OPTIONS от случайной строки, которую никто не знает (она не
+ * сохранялась). Посчитан заранее, чтобы и первый запрос после запуска сервера проверялся так же долго,
+ * как настоящий пароль. Параметры сверяет тест: при смене OPTIONS хеш нужно посчитать заново.
+ */
+export const DUMMY_HASH =
+  '$argon2id$v=19$m=19456,t=2,p=1$H/xWfpSqx0Ms5GpUMBha4A$7uLTcw3OdIY4jn61kHIFshXyxbrHoicw+UKOQL9Smi4';
+
+async function verifyDummy(password: string): Promise<void> {
+  try {
+    await verify(DUMMY_HASH, password);
+  } catch {
+    // Подставной хеш не может не подойти по формату; ответ всё равно «не подходит».
+  }
+}
+
+/**
+ * Неверный или испорченный хеш — просто «пароль не подходит». Испорченный хеш (у демо-сотрудника без
+ * DEMO_PASSWORD — «!») проверяется так же долго, как настоящий: по времени ответа не видно, какие
+ * логины есть (docs/deviations.md, п. 4).
+ */
 export async function verifyPassword(passwordHash: string, password: string): Promise<boolean> {
   try {
     return await verify(passwordHash, password);
   } catch {
+    await verifyDummy(password);
     return false;
   }
 }
 
-let dummyHash: Promise<string> | null = null;
-
 /**
- * Проверка пароля, когда логина нет: та же работа argon2 по заранее посчитанному хешу, ответ —
- * всегда «не подходит». Так по времени ответа не понять, есть ли такой логин.
+ * Проверка пароля, когда логина нет: та же работа argon2 по подставному хешу, ответ — всегда «не
+ * подходит». Так по времени ответа не понять, есть ли такой логин.
  */
 export async function verifyAgainstDummy(password: string): Promise<false> {
-  dummyHash ??= hashPassword(randomBytes(16).toString('hex'));
-  await verifyPassword(await dummyHash, password);
+  await verifyDummy(password);
   return false;
 }
 
