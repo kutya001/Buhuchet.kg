@@ -338,9 +338,16 @@ test.describe('Этап 1: сотрудники и роли (экраны)', () 
     } else {
       // На ПК все группы раскрыты; шире 1100 px — в две колонки.
       await expect(form.locator('[data-permission-group][data-open]')).toHaveCount(12);
-      const [a, b] = await Promise.all([groups.nth(0).boundingBox(), groups.nth(1).boundingBox()]);
-      expect(Math.abs(a!.y - b!.y)).toBeLessThanOrEqual(1);
-      expect(b!.x).toBeGreaterThan(a!.x + a!.width);
+      // Обе рамки — в одном кадре: окно появляется с масштабом (bu-pop), и две отдельные
+      // boundingBox() на медленной машине попадают в разные кадры анимации.
+      await expect
+        .poll(() =>
+          groups.evaluateAll((els) => {
+            const [a, b] = els.slice(0, 2).map((el) => el.getBoundingClientRect());
+            return { sameRow: Math.abs(a!.top - b!.top) <= 1, side: b!.left > a!.right };
+          }),
+        )
+        .toEqual({ sameRow: true, side: true });
       await expect(form.locator('[data-permission]')).toHaveCount(39);
     }
     // Под каждым правом — что оно разрешает (справочник «Права ролей»).
