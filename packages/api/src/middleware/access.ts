@@ -30,6 +30,12 @@ export const requireEmployee = createMiddleware<AppEnv>(async (c, next) => {
   return next();
 });
 
+/** Метод Админки: только администратор платформы (ТЗ «Админка»). */
+export const requirePlatformAdmin = createMiddleware<AppEnv>(async (c, next) => {
+  if (!c.get('session')?.isPlatformAdmin) return c.json(forbidden(), 403);
+  return next();
+});
+
 /**
  * Контекст для `withOrgContext`: организация и пользователь — только из сеанса, не из запроса. Без
  * организации в сеансе (администратор платформы в методе, где забыли `requirePermission`) — 403.

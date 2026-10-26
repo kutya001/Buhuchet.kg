@@ -2,10 +2,12 @@ import { createRoute, type RouteHandler } from '@hono/zod-openapi';
 import {
   currentOrganization,
   loadEmployeeAccess,
+  telegramChat,
   withOrgContext,
   type EmployeeAccess,
+  type TelegramChat,
 } from '@buhuchet/db';
-import { effectivePermissions, SCOPE_GROUPS, scopeOf } from '@buhuchet/domain';
+import { effectivePermissions, SCOPE_GROUPS, scopeOf, telegramName } from '@buhuchet/domain';
 import { ApiError, MeResponse } from '@buhuchet/shared';
 import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
@@ -22,6 +24,7 @@ function meBody(
   user: MeUser,
   access: EmployeeAccess | null,
   organization: { id: string; name: string; slug: string } | null,
+  telegram: TelegramChat | null,
 ): MeResponse {
   return {
     user: {
@@ -39,6 +42,10 @@ function meBody(
       isOwner: access.subject.isOwner,
     },
     organization,
+    telegram: telegram && {
+      name: telegramName(telegram),
+      linkedAt: telegram.linkedAt.toISOString(),
+    },
     permissions: access ? effectivePermissions(access.subject) : [],
     scopes: access
       ? Object.fromEntries(SCOPE_GROUPS.map((g) => [g, scopeOf(access.subject, g)]))
@@ -48,14 +55,15 @@ function meBody(
 
 /**
  * «Кто я» для ответа входа и GET /api/auth/me: сотрудник, роль, права и организация — в контексте
- * организации пользователя (RLS). Уже загруженные права (`access`) повторно не читаются.
+ * организации пользователя (RLS); привязан ли Telegram. Уже загруженные права (`access`) повторно не читаются.
  */
 export async function loadMe(
   deps: ApiDeps,
   user: MeUser & { employeeId: string | null },
   loaded?: EmployeeAccess | null,
 ): Promise<MeResponse> {
-  if (!user.orgId) return meBody(user, null, null);
+  const telegram = await telegramChat(deps.db, user.userId);
+  if (!user.orgId) return meBody(user, null, null, telegram);
   const orgId = user.orgId;
   const { access, organization } = await withOrgContext(
     deps.db,
@@ -65,7 +73,7 @@ export async function loadMe(
       organization: await currentOrganization(tx, orgId),
     }),
   );
-  return meBody(user, access, organization);
+  return meBody(user, access, organization, telegram);
 }
 
 export const meRoute = createRoute({

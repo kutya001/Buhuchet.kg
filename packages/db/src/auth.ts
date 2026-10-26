@@ -177,7 +177,7 @@ export async function endSession(db: Db, tokenHash: string): Promise<void> {
 
 /**
  * Смена своего пароля в транзакции с app.user_id: остальные сеансы удаляются, у текущего —
- * новый токен; счётчик неверных паролей сбрасывается.
+ * новый токен; счётчик неверных паролей сбрасывается, ожидающий код «Забыли пароль?» отменяется.
  */
 export async function changeOwnPassword(
   tx: Tx,
@@ -186,6 +186,8 @@ export async function changeOwnPassword(
   await tx.execute(
     sql`select app.auth_change_own_password(${input.sessionId}, ${input.passwordHash}, ${input.newTokenHash})`,
   );
+  // Код «Забыли пароль?», отправленный до смены, пароль уже не задаст (миграция 0011).
+  await tx.execute(sql`select app.auth_reset_revoke(app.current_user_id())`);
 }
 
 /** Транзакция от имени пользователя без организации (администратор платформы). */

@@ -5,7 +5,9 @@ import { apiError } from '../errors';
 
 /** Методы, которые ничего не меняют; остальные проверяются. */
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+// Планировщик и вебхук Telegram приходят не из браузера, без Origin; у них свой секрет в заголовке.
 const ORIGIN_EXEMPT_PREFIXES = ['/api/cron/'];
+const ORIGIN_EXEMPT_PATHS = new Set(['/api/telegram/webhook']);
 
 function hostOf(url: string): string | null {
   try {
@@ -20,13 +22,14 @@ function hostOf(url: string): string | null {
  * заголовок Origin — наш адрес: `APP_BASE_URL` или адрес, на который пришёл запрос (Host; на Vercel —
  * домен сайта или превью). Браузер ставит Origin и Host сам, страница чужого сайта подменить их не
  * может; заголовкам прокси вроде X-Forwarded-Host не верим. Без Origin изменяющий запрос не
- * принимается.
+ * принимается (кроме вызовов планировщика и вебхука Telegram — они проверяют свой секрет).
  */
 export function originCheck(deps: ApiDeps) {
   const base = hostOf(deps.config.APP_BASE_URL);
   return createMiddleware<AppEnv>(async (c, next) => {
     if (
       SAFE_METHODS.has(c.req.method) ||
+      ORIGIN_EXEMPT_PATHS.has(c.req.path) ||
       ORIGIN_EXEMPT_PREFIXES.some((p) => c.req.path.startsWith(p))
     ) {
       return next();

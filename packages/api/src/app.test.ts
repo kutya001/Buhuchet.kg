@@ -84,6 +84,12 @@ describe('служебное', () => {
         '/api/auth/logout',
         '/api/auth/me',
         '/api/auth/password',
+        '/api/auth/password-reset',
+        '/api/auth/password-reset/confirm',
+        '/api/telegram/link',
+        '/api/telegram/webhook',
+        '/api/staff/{id}/password-reset',
+        '/api/admin/users/{id}/password-reset',
       ]),
     );
   });

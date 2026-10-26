@@ -32,7 +32,7 @@ export function denialError(
 }
 
 /** «14:35» по Бишкеку: все сроки и время на платформе — по часовому поясу организации. */
-function bishkekTime(at: Date): string {
+export function bishkekTime(at: Date): string {
   return at.toLocaleTimeString('ru-RU', {
     timeZone: 'Asia/Bishkek',
     hour: '2-digit',

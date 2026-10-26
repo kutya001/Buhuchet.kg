@@ -7,3 +7,4 @@ export * from './staff';
 export * from './org-settings';
 export * from './history';
 export * from './auth';
+export * from './telegram';

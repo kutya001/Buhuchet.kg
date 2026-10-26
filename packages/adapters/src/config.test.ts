@@ -93,12 +93,32 @@ describe('loadConfig', () => {
     expect(() => loadConfig({ ...base, TELEGRAM_BOT_TOKEN: '1:abc' })).toThrow(
       /TELEGRAM_WEBHOOK_SECRET/,
     );
+    expect(() =>
+      loadConfig({
+        ...base,
+        TELEGRAM_BOT_TOKEN: '1:abc',
+        TELEGRAM_WEBHOOK_SECRET: 'webhook-secret-0000',
+      }),
+    ).toThrow(/TELEGRAM_BOT_USERNAME/);
+    expect(() => loadConfig({ ...base, TELEGRAM_BOT_USERNAME: 'buhuchet_bot' })).toThrow(
+      /TELEGRAM_BOT_TOKEN/,
+    );
     const cfg = loadConfig({
       ...base,
       TELEGRAM_BOT_TOKEN: '1:abc',
       TELEGRAM_WEBHOOK_SECRET: 'webhook-secret-0000',
+      TELEGRAM_BOT_USERNAME: ' @buhuchet_bot\n',
     });
     expect(cfg.TELEGRAM_BOT_TOKEN).toBe('1:abc');
+    expect(cfg.TELEGRAM_BOT_USERNAME).toBe('buhuchet_bot');
+    expect(() =>
+      loadConfig({
+        ...base,
+        TELEGRAM_BOT_TOKEN: '1:abc',
+        TELEGRAM_WEBHOOK_SECRET: 'webhook-secret-0000',
+        TELEGRAM_BOT_USERNAME: 't.me/buhuchet_bot',
+      }),
+    ).toThrow(/имя бота/);
   });
 
   it('S3_FORCE_PATH_STYLE понимает false и 0, регистр и пробелы не важны', () => {
