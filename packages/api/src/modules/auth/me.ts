@@ -9,6 +9,7 @@ import {
   type TelegramChat,
 } from '@buhuchet/db';
 import {
+  ADMIN_MENU_MODULES,
   effectivePermissions,
   menuModules,
   SCOPE_GROUPS,
@@ -31,7 +32,7 @@ interface MeUser {
 function meBody(
   user: MeUser,
   access: EmployeeAccess | null,
-  organization: { id: string; name: string; slug: string } | null,
+  organization: MeResponse['organization'],
   telegram: TelegramChat | null,
   features: Record<Feature, boolean> | null,
 ): MeResponse {
@@ -60,14 +61,18 @@ function meBody(
       ? Object.fromEntries(SCOPE_GROUPS.map((g) => [g, scopeOf(access.subject, g)]))
       : {},
     features: features ?? {},
-    modules: access && features ? menuModules(access.subject, features) : [],
+    modules: user.isPlatformAdmin
+      ? [...ADMIN_MENU_MODULES]
+      : access && features
+        ? menuModules(access.subject, features)
+        : [],
   };
 }
 
 /**
  * «Кто я» для ответа входа и GET /api/auth/me: сотрудник, роль, права, организация, функции учётной
  * политики и модули меню — в контексте организации пользователя (RLS); привязан ли Telegram. Уже
- * загруженные права (`access`) повторно не читаются.
+ * загруженные права (`access`) повторно не читаются. Администратору платформы — модули Админки.
  */
 export async function loadMe(
   deps: ApiDeps,

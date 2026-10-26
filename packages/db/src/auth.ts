@@ -272,7 +272,12 @@ export async function loadEmployeeAccess(
 /** Организация из контекста: для «кто я». */
 export async function currentOrganization(tx: Tx, orgId: string) {
   const [org] = await tx
-    .select({ id: organizations.id, name: organizations.name, slug: organizations.slug })
+    .select({
+      id: organizations.id,
+      name: organizations.name,
+      slug: organizations.slug,
+      inn: organizations.inn,
+    })
     .from(organizations)
     .where(eq(organizations.id, orgId));
   return org ?? null;

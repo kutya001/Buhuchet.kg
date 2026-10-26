@@ -529,6 +529,8 @@ describe.skipIf(!databaseAvailable())('вход, сеансы и проверк�
       organization: null,
       permissions: [],
       scopes: {},
+      // Меню Админки — все её модули по порядку (прототип core/registry.js, ADM).
+      modules: ['accounts', 'orgs', 'pdicts', 'l10n', 'kb', 'kbadm', 'tg'],
     });
     const cookie = cookieOf(res);
     expect((await get(app, '/api/auth/me', cookie)).status).toBe(200);

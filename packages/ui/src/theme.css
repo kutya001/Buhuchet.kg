@@ -1,0 +1,356 @@
+/*
+ * Тема оформления — как в прототипе (spec/prototype/src/css/base.css): тёплая рамка (верхняя и левая
+ * панели) вокруг «бумажной» рабочей области; светлая и тёмная тема. Тема выбирается атрибутом
+ * data-theme на <html> (light | dark); без атрибута — по настройке устройства. Цвета задаются здесь
+ * один раз: компоненты берут их классами Tailwind (bg-pane, text-muted, border-line, shadow-pane …).
+ */
+
+:root {
+  color-scheme: light;
+  --bu-frame: hsl(34 34% 90%);
+  --bu-frame-hover: hsl(36 35% 86%);
+  --bu-pane: hsl(35 36% 96%);
+  --bu-pane-alt: hsl(35 37% 92%);
+  --bu-raised: hsl(36 38% 98%);
+  --bu-field: hsl(36 38% 98.5%);
+  --bu-btn: hsl(35 37% 93%);
+  --bu-btn-hover: hsl(36 38% 96%);
+  --bu-border: hsl(37 38% 83%);
+  --bu-border-strong: hsl(34 37% 70%);
+  --bu-text: hsl(31 45% 24%);
+  --bu-muted: hsl(35 28% 40%);
+  --bu-faint: hsl(34 26% 55%);
+  --bu-accent: hsl(30 26% 42%);
+  --bu-accent-hover: hsl(28 30% 47%);
+  --bu-on-accent: hsl(36 38% 98%);
+  --bu-link: hsl(40 98% 32%);
+  --bu-hover: hsla(36 38% 98% / 0.55);
+  --bu-row-hover: hsla(34 37% 70% / 0.13);
+  --bu-nav-active: hsla(36 38% 98% / 0.8);
+  --bu-sel: hsla(34 37% 70% / 0.22);
+  --bu-red: hsl(4 56% 45%);
+  --bu-red-bg: hsla(4 72% 55% / 0.12);
+  --bu-yellow: hsl(40 98% 30%);
+  --bu-yellow-bg: hsla(43 83% 57% / 0.24);
+  --bu-orange: hsl(18 69% 42%);
+  --bu-orange-bg: hsla(21 81% 59% / 0.16);
+  --bu-green: hsl(153 65% 27%);
+  --bu-green-bg: hsla(148 48% 47% / 0.15);
+  --bu-blue: hsl(200 64% 34%);
+  --bu-blue-bg: hsla(202 66% 48% / 0.13);
+  --bu-purple: hsl(275 37% 42%);
+  --bu-purple-bg: hsla(277 35% 59% / 0.15);
+  --bu-b-red: hsl(4 56% 48%);
+  --bu-b-yellow: hsl(43 83% 57%);
+  --bu-b-blue: hsl(200 64% 37%);
+  --bu-cover: hsla(33 30% 35% / 0.22);
+  --bu-shadow-s:
+    0 1px 2px rgba(0, 0, 0, 0.028), 0 3.4px 6.7px rgba(0, 0, 0, 0.042),
+    0 15px 30px rgba(0, 0, 0, 0.07);
+  --bu-shadow-l:
+    0 1.8px 7.3px rgba(0, 0, 0, 0.091), 0 6.3px 24.7px rgba(0, 0, 0, 0.132),
+    0 30px 90px rgba(0, 0, 0, 0.22);
+  --bu-sh-btn:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.2), inset 0 0 0 1px rgba(0, 0, 0, 0.1),
+    inset 0 -2px 0 2px rgba(0, 0, 0, 0.09), inset 0 -2px 4px 0 rgba(0, 0, 0, 0.1),
+    0 4px 4px -5.6px rgba(0, 0, 0, 0.4), 0 2px 4px -2.7px rgba(0, 0, 0, 0.1),
+    0 2px 4px -1px rgba(0, 0, 0, 0.05);
+  --bu-sh-btn-h:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.4), inset 0 0 0 1px rgba(0, 0, 0, 0.15),
+    inset 0 -2px 0 2px rgba(0, 0, 0, 0.09), inset 0 -2px 4px 0 rgba(0, 0, 0, 0.1),
+    0 4px 4px -5.6px rgba(0, 0, 0, 0.4), 0 2px 4px -2.7px rgba(0, 0, 0, 0.15),
+    0 2px 6px -1px rgba(0, 0, 0, 0.1);
+  --bu-sh-btn-a:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.15), inset 0 0 0 3px rgba(0, 0, 0, 0.09),
+    inset 0 2px 8px 0 rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.6);
+  --bu-sh-cta:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.09), inset 0 0 0 1px rgba(0, 0, 0, 0.15),
+    inset 0 -2px 0 2px rgba(0, 0, 0, 0.15), inset 0 -2px 4px 0 rgba(0, 0, 0, 0.2),
+    0 4px 4px -5.6px rgba(0, 0, 0, 0.52), 0 2px 4px -2.7px rgba(0, 0, 0, 0.22),
+    0 2px 4px -1px rgba(0, 0, 0, 0.19);
+}
+
+/*
+ * Тёмная тема: выбрана явно (data-theme="dark") или выбора нет и тёмная включена на устройстве. Два блока
+ * с одинаковыми значениями, как в прототипе; одинаковость проверяет тест theme.test.ts.
+ */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bu-frame: hsl(29 16% 12%);
+  --bu-frame-hover: hsl(30 17% 15%);
+  --bu-pane: hsl(30 19% 15%);
+  --bu-pane-alt: hsl(30 17% 13%);
+  --bu-raised: hsl(33 20% 17%);
+  --bu-field: hsl(30 17% 11%);
+  --bu-btn: hsl(29 16% 13%);
+  --bu-btn-hover: hsl(30 18% 15%);
+  --bu-border: hsl(28 22% 20%);
+  --bu-border-strong: hsl(31 27% 27%);
+  --bu-text: hsl(34 39% 76%);
+  --bu-muted: hsl(35 27% 58%);
+  --bu-faint: hsl(34 22% 46%);
+  --bu-accent: hsl(28 28% 30%);
+  --bu-accent-hover: hsl(26 31% 35%);
+  --bu-on-accent: hsl(32 48% 87%);
+  --bu-link: hsl(43 69% 63%);
+  --bu-hover: hsla(0 0% 0% / 0.22);
+  --bu-row-hover: hsla(31 27% 40% / 0.14);
+  --bu-nav-active: hsla(33 20% 20% / 0.95);
+  --bu-sel: hsla(34 24% 40% / 0.25);
+  --bu-red: hsl(4 88% 66%);
+  --bu-red-bg: hsla(4 88% 61% / 0.15);
+  --bu-yellow: hsl(43 69% 63%);
+  --bu-yellow-bg: hsla(42 79% 51% / 0.17);
+  --bu-orange: hsl(26 85% 62%);
+  --bu-orange-bg: hsla(24 84% 50% / 0.17);
+  --bu-green: hsl(152 51% 56%);
+  --bu-green-bg: hsla(154 57% 42% / 0.17);
+  --bu-blue: hsl(194 59% 62%);
+  --bu-blue-bg: hsla(194 59% 56% / 0.15);
+  --bu-purple: hsl(242 52% 74%);
+  --bu-purple-bg: hsla(241 45% 57% / 0.18);
+  --bu-b-red: hsl(4 88% 61%);
+  --bu-b-yellow: hsl(42 79% 51%);
+  --bu-b-blue: hsl(197 48% 49%);
+  --bu-cover: hsla(30 20% 4% / 0.45);
+  --bu-shadow-s:
+    0 1px 2px rgba(0, 0, 0, 0.228), 0 3.4px 6.7px rgba(0, 0, 0, 0.242),
+    0 15px 30px rgba(0, 0, 0, 0.27);
+  --bu-shadow-l:
+    0 1.8px 7.3px rgba(0, 0, 0, 0.271), 0 6.3px 24.7px rgba(0, 0, 0, 0.312),
+    0 30px 90px rgba(0, 0, 0, 0.4);
+  --bu-sh-btn:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.02), inset 0 0 0 1px rgba(0, 0, 0, 0.25),
+    inset 0 -2px 0 2px rgba(0, 0, 0, 0.2), inset 0 -2px 4px 0 rgba(0, 0, 0, 0.25),
+    0 4px 4px -5.6px rgba(0, 0, 0, 0.55), 0 2px 4px -2.7px rgba(0, 0, 0, 0.25),
+    0 2px 4px -1px rgba(0, 0, 0, 0.2);
+  --bu-sh-btn-h:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.06), inset 0 0 0 1px rgba(0, 0, 0, 0.3),
+    inset 0 -2px 0 2px rgba(0, 0, 0, 0.2), inset 0 -2px 4px 0 rgba(0, 0, 0, 0.25),
+    0 4px 4px -5.6px rgba(0, 0, 0, 0.55), 0 2px 4px -2.7px rgba(0, 0, 0, 0.3),
+    0 2px 6px -1px rgba(0, 0, 0, 0.25);
+  --bu-sh-btn-a:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.45), inset 0 0 0 3px rgba(0, 0, 0, 0.15),
+    inset 0 2px 8px 0 rgba(0, 0, 0, 0.57), 0 0 0 1px rgba(255, 255, 255, 0.02);
+  --bu-sh-cta:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.1), inset 0 0 0 1px rgba(0, 0, 0, 0.3),
+    inset 0 -2px 0 2px rgba(0, 0, 0, 0.2), inset 0 -2px 4px 0 rgba(0, 0, 0, 0.25),
+    0 4px 4px -5.6px rgba(0, 0, 0, 0.55), 0 2px 4px -2.7px rgba(0, 0, 0, 0.3),
+    0 2px 4px -1px rgba(0, 0, 0, 0.25);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --bu-frame: hsl(29 16% 12%);
+    --bu-frame-hover: hsl(30 17% 15%);
+    --bu-pane: hsl(30 19% 15%);
+    --bu-pane-alt: hsl(30 17% 13%);
+    --bu-raised: hsl(33 20% 17%);
+    --bu-field: hsl(30 17% 11%);
+    --bu-btn: hsl(29 16% 13%);
+    --bu-btn-hover: hsl(30 18% 15%);
+    --bu-border: hsl(28 22% 20%);
+    --bu-border-strong: hsl(31 27% 27%);
+    --bu-text: hsl(34 39% 76%);
+    --bu-muted: hsl(35 27% 58%);
+    --bu-faint: hsl(34 22% 46%);
+    --bu-accent: hsl(28 28% 30%);
+    --bu-accent-hover: hsl(26 31% 35%);
+    --bu-on-accent: hsl(32 48% 87%);
+    --bu-link: hsl(43 69% 63%);
+    --bu-hover: hsla(0 0% 0% / 0.22);
+    --bu-row-hover: hsla(31 27% 40% / 0.14);
+    --bu-nav-active: hsla(33 20% 20% / 0.95);
+    --bu-sel: hsla(34 24% 40% / 0.25);
+    --bu-red: hsl(4 88% 66%);
+    --bu-red-bg: hsla(4 88% 61% / 0.15);
+    --bu-yellow: hsl(43 69% 63%);
+    --bu-yellow-bg: hsla(42 79% 51% / 0.17);
+    --bu-orange: hsl(26 85% 62%);
+    --bu-orange-bg: hsla(24 84% 50% / 0.17);
+    --bu-green: hsl(152 51% 56%);
+    --bu-green-bg: hsla(154 57% 42% / 0.17);
+    --bu-blue: hsl(194 59% 62%);
+    --bu-blue-bg: hsla(194 59% 56% / 0.15);
+    --bu-purple: hsl(242 52% 74%);
+    --bu-purple-bg: hsla(241 45% 57% / 0.18);
+    --bu-b-red: hsl(4 88% 61%);
+    --bu-b-yellow: hsl(42 79% 51%);
+    --bu-b-blue: hsl(197 48% 49%);
+    --bu-cover: hsla(30 20% 4% / 0.45);
+    --bu-shadow-s:
+      0 1px 2px rgba(0, 0, 0, 0.228), 0 3.4px 6.7px rgba(0, 0, 0, 0.242),
+      0 15px 30px rgba(0, 0, 0, 0.27);
+    --bu-shadow-l:
+      0 1.8px 7.3px rgba(0, 0, 0, 0.271), 0 6.3px 24.7px rgba(0, 0, 0, 0.312),
+      0 30px 90px rgba(0, 0, 0, 0.4);
+    --bu-sh-btn:
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.02), inset 0 0 0 1px rgba(0, 0, 0, 0.25),
+      inset 0 -2px 0 2px rgba(0, 0, 0, 0.2), inset 0 -2px 4px 0 rgba(0, 0, 0, 0.25),
+      0 4px 4px -5.6px rgba(0, 0, 0, 0.55), 0 2px 4px -2.7px rgba(0, 0, 0, 0.25),
+      0 2px 4px -1px rgba(0, 0, 0, 0.2);
+    --bu-sh-btn-h:
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.06), inset 0 0 0 1px rgba(0, 0, 0, 0.3),
+      inset 0 -2px 0 2px rgba(0, 0, 0, 0.2), inset 0 -2px 4px 0 rgba(0, 0, 0, 0.25),
+      0 4px 4px -5.6px rgba(0, 0, 0, 0.55), 0 2px 4px -2.7px rgba(0, 0, 0, 0.3),
+      0 2px 6px -1px rgba(0, 0, 0, 0.25);
+    --bu-sh-btn-a:
+      inset 0 0 0 1px rgba(0, 0, 0, 0.45), inset 0 0 0 3px rgba(0, 0, 0, 0.15),
+      inset 0 2px 8px 0 rgba(0, 0, 0, 0.57), 0 0 0 1px rgba(255, 255, 255, 0.02);
+    --bu-sh-cta:
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.1), inset 0 0 0 1px rgba(0, 0, 0, 0.3),
+      inset 0 -2px 0 2px rgba(0, 0, 0, 0.2), inset 0 -2px 4px 0 rgba(0, 0, 0, 0.25),
+      0 4px 4px -5.6px rgba(0, 0, 0, 0.55), 0 2px 4px -2.7px rgba(0, 0, 0, 0.3),
+      0 2px 4px -1px rgba(0, 0, 0, 0.25);
+  }
+}
+
+/* Цвета, тени и шрифт темы — классами Tailwind: bg-frame, bg-pane, text-muted, border-line, shadow-pane … */
+@theme inline {
+  --color-frame: var(--bu-frame);
+  --color-frame-hover: var(--bu-frame-hover);
+  --color-pane: var(--bu-pane);
+  --color-pane-alt: var(--bu-pane-alt);
+  --color-raised: var(--bu-raised);
+  --color-field: var(--bu-field);
+  --color-btn: var(--bu-btn);
+  --color-btn-hover: var(--bu-btn-hover);
+  --color-line: var(--bu-border);
+  --color-line-strong: var(--bu-border-strong);
+  --color-ink: var(--bu-text);
+  --color-muted: var(--bu-muted);
+  --color-faint: var(--bu-faint);
+  --color-accent: var(--bu-accent);
+  --color-accent-hover: var(--bu-accent-hover);
+  --color-on-accent: var(--bu-on-accent);
+  --color-link: var(--bu-link);
+  --color-hover: var(--bu-hover);
+  --color-row-hover: var(--bu-row-hover);
+  --color-nav-active: var(--bu-nav-active);
+  --color-sel: var(--bu-sel);
+  --color-danger: var(--bu-red);
+  --color-danger-bg: var(--bu-red-bg);
+  --color-warn: var(--bu-yellow);
+  --color-warn-bg: var(--bu-yellow-bg);
+  --color-caution: var(--bu-orange);
+  --color-caution-bg: var(--bu-orange-bg);
+  --color-ok: var(--bu-green);
+  --color-ok-bg: var(--bu-green-bg);
+  --color-info: var(--bu-blue);
+  --color-info-bg: var(--bu-blue-bg);
+  --color-violet: var(--bu-purple);
+  --color-violet-bg: var(--bu-purple-bg);
+  --color-brand-red: var(--bu-b-red);
+  --color-brand-yellow: var(--bu-b-yellow);
+  --color-brand-blue: var(--bu-b-blue);
+  --color-cover: var(--bu-cover);
+  --shadow-pane: var(--bu-shadow-s);
+  --shadow-pop: var(--bu-shadow-l);
+  --shadow-btn: var(--bu-sh-btn);
+  --shadow-btn-hover: var(--bu-sh-btn-h);
+  --shadow-btn-active: var(--bu-sh-btn-a);
+  --shadow-cta: var(--bu-sh-cta);
+  --font-sans:
+    'Inter Variable', 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+  --animate-pop: bu-pop 0.32s ease-out;
+  --animate-slide-up: bu-slide-up 0.25s forwards;
+}
+
+@keyframes bu-pop {
+  0% {
+    transform: scale(0.94);
+  }
+  60% {
+    transform: scale(1.03);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes bu-slide-up {
+  0% {
+    transform: translateY(0);
+    opacity: 0;
+  }
+  10% {
+    transform: translateY(8%);
+    opacity: 0.2;
+  }
+  20% {
+    transform: translateY(5%);
+    opacity: 0.4;
+  }
+  50% {
+    transform: translateY(-2%);
+    opacity: 0.85;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@layer base {
+  html,
+  body {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--bu-frame);
+    color: var(--bu-text);
+    font: 450 14px/1.45 var(--font-sans);
+    font-feature-settings:
+      'calt' 1,
+      'ss03' 1,
+      'cv01' 1,
+      'cv05' 1,
+      'cv06' 1,
+      'cv11' 1;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  a {
+    color: var(--bu-link);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--bu-b-blue);
+    outline-offset: 2px;
+  }
+
+  /* «Уменьшить движение» в системе — без анимаций (ТЗ «Принципы оформления»). */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation: none !important;
+      transition: none !important;
+    }
+  }
+}
+
+/*
+ * Значок темы: в светлой — «луна» (переключит на тёмную), в тёмной — «солнце». Выбирается стилями, а не
+ * скриптом, поэтому и без сохранённого выбора (тема устройства) значок верный с первой отрисовки.
+ */
+.bu-dark-only {
+  display: none;
+}
+:root[data-theme='dark'] .bu-dark-only {
+  display: inline-grid;
+}
+:root[data-theme='dark'] .bu-light-only {
+  display: none;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .bu-dark-only {
+    display: inline-grid;
+  }
+  :root:not([data-theme='light']) .bu-light-only {
+    display: none;
+  }
+}

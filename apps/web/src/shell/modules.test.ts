@@ -1,0 +1,211 @@
+import {
+  FEATURES,
+  MENU_MODULE_IDS,
+  PERMISSION_IDS,
+  UI_TEXTS,
+  type Feature,
+  type MenuModuleId,
+  type PermissionId,
+} from '@buhuchet/domain';
+import type { MeResponse } from '@buhuchet/shared';
+import { describe, expect, it } from 'vitest';
+import {
+  addActions,
+  MODULES,
+  moduleHref,
+  parseAppPath,
+  resolveAppRoute,
+  shellAccess,
+  visibleTabs,
+} from './modules';
+import { parseNavHidden, parseTheme, parseTree, prefCookie, serializeTree } from './prefs';
+
+const ALL_FEATURES = Object.fromEntries(FEATURES.map((f) => [f, true])) as Record<Feature, boolean>;
+
+function me({
+  modules = ['home', 'cps', 'reports', 'fin', 'staff'] as MenuModuleId[],
+  permissions = PERMISSION_IDS as readonly PermissionId[],
+  features = ALL_FEATURES as Partial<Record<Feature, boolean>>,
+  admin = false,
+} = {}): MeResponse {
+  return {
+    user: {
+      id: '00000000-0000-4000-8000-000000000001',
+      login: 'erkin',
+      isPlatformAdmin: admin,
+      mustChangePassword: false,
+    },
+    employee: null,
+    organization: null,
+    telegram: null,
+    permissions: [...permissions],
+    scopes: {},
+    features,
+    modules,
+  };
+}
+
+const ids = (list: readonly { id: string }[]) => list.map((x) => x.id);
+
+describe('реестр модулей оболочки', () => {
+  it('описан каждый модуль меню, все тексты — из словаря', () => {
+    expect(Object.keys(MODULES).sort()).toEqual([...MENU_MODULE_IDS].sort());
+    const keys = Object.values(MODULES).flatMap((m) => [
+      m.title,
+      m.short,
+      m.desc,
+      ...(m.tabs ?? []).map((t) => t.label),
+      ...(m.add ?? []).flatMap((a) => (a.sub ? [a.label, a.sub] : [a.label])),
+    ]);
+    expect(keys.filter((k) => !(k in UI_TEXTS))).toEqual([]);
+  });
+
+  it('у вкладок и способов добавления модуля нет повторов', () => {
+    for (const m of Object.values(MODULES)) {
+      expect(new Set(ids(m.tabs ?? [])).size).toBe((m.tabs ?? []).length);
+      expect(new Set(ids(m.add ?? [])).size).toBe((m.add ?? []).length);
+    }
+  });
+});
+
+describe('вкладки и «+ Добавить» по правам и учётной политике', () => {
+  it('владелец со всеми функциями видит все вкладки «Финансовых операций»', () => {
+    expect(ids(visibleTabs('fin', shellAccess(me())))).toEqual([
+      'all',
+      'tax',
+      'fee',
+      'proj',
+      'wo',
+      'journal',
+    ]);
+  });
+
+  it('без учёта оплаты налогов нет вкладок оплаты, без платы за обслуживание — «Плата» и «Должники»', () => {
+    const access = shellAccess(me({ features: { ...ALL_FEATURES, taxpay: false, fee: false } }));
+    expect(ids(visibleTabs('fin', access))).toEqual(['all', 'proj']);
+    expect(ids(visibleTabs('cps', access))).toEqual(['all', 'mine']);
+    expect(ids(addActions('fin', access))).toEqual(['service']);
+  });
+
+  it('вкладка «Проекты» в финансах — при плате за обслуживание или праве вести проекты', () => {
+    const noProjects = PERMISSION_IDS.filter((p) => p !== 'projects');
+    const noFee = { ...ALL_FEATURES, fee: false };
+    expect(
+      ids(visibleTabs('fin', shellAccess(me({ permissions: noProjects, features: noFee })))),
+    ).not.toContain('proj');
+    expect(ids(visibleTabs('fin', shellAccess(me({ permissions: noProjects }))))).toContain('proj');
+  });
+
+  it('«Календарь» отчётов — только при включённом календаре сроков', () => {
+    const off = shellAccess(me({ features: { ...ALL_FEATURES, calendar: false } }));
+    expect(ids(visibleTabs('reports', off))).not.toContain('calendar');
+    expect(ids(visibleTabs('reports', shellAccess(me())))).toContain('calendar');
+  });
+
+  it('бухгалтер без прав на сотрудников видит только список, без «+ Добавить»', () => {
+    const access = shellAccess(
+      me({ permissions: ['cpView', 'repView', 'staffView'] as PermissionId[] }),
+    );
+    expect(ids(visibleTabs('staff', access))).toEqual(['list']);
+    expect(addActions('staff', access)).toEqual([]);
+  });
+
+  it('загрузка показателей из Excel — отдельной кнопкой; «Запросить вид отчёта» — без права', () => {
+    const kpi = addActions('kpi', shellAccess(me()));
+    expect(kpi.find((a) => a.id === 'excel')?.separate).toBe(true);
+    expect(ids(addActions('dicts', shellAccess(me({ permissions: [] }))))).toEqual(['request']);
+  });
+});
+
+describe('адрес страницы за входом', () => {
+  it('модуль и вкладка из адреса /app/модуль/вкладка', () => {
+    expect(parseAppPath('/app/reports/week')).toEqual({ moduleId: 'reports', tabId: 'week' });
+    expect(parseAppPath('/app/files')).toEqual({ moduleId: 'files', tabId: null });
+    expect(parseAppPath('/app')).toEqual({ moduleId: null, tabId: null });
+    expect(parseAppPath('/bukhgalter-plus/inn/01203201910123')).toEqual({
+      moduleId: null,
+      tabId: null,
+    });
+  });
+
+  it('адрес модуля — сразу на первой видимой вкладке; без вкладок — сам модуль', () => {
+    const access = shellAccess(me());
+    expect(moduleHref('reports', access)).toBe('/app/reports/week');
+    expect(moduleHref('files', access)).toBe('/app/files');
+  });
+
+  it('открытый модуль и видимая вкладка — показываются', () => {
+    expect(resolveAppRoute(me(), 'reports', ['overdue'])).toEqual({
+      moduleId: 'reports',
+      tabId: 'overdue',
+    });
+    expect(resolveAppRoute(me({ modules: ['files'] }), 'files', undefined)).toEqual({
+      moduleId: 'files',
+      tabId: null,
+    });
+  });
+
+  it('модуля нет в меню (нет права «Просматривать …») — на первый модуль меню', () => {
+    expect(resolveAppRoute(me(), 'projects', ['active'])).toEqual({
+      redirect: '/app/home/today',
+    });
+    expect(resolveAppRoute(me(), 'nope', undefined)).toEqual({ redirect: '/app/home/today' });
+    expect(resolveAppRoute(me({ modules: [] }), 'home', undefined)).toEqual({
+      redirect: '/login',
+    });
+  });
+
+  it('вкладки нет, она не видна или адрес длиннее — на первую видимую вкладку', () => {
+    const noCalendar = me({ features: { ...ALL_FEATURES, calendar: false } });
+    expect(resolveAppRoute(noCalendar, 'reports', ['calendar'])).toEqual({
+      redirect: '/app/reports/week',
+    });
+    expect(resolveAppRoute(me(), 'reports', undefined)).toEqual({
+      redirect: '/app/reports/week',
+    });
+    expect(resolveAppRoute(me(), 'reports', ['week', 'x'])).toEqual({
+      redirect: '/app/reports/week',
+    });
+    expect(resolveAppRoute(me({ modules: ['files'] }), 'files', ['x'])).toEqual({
+      redirect: '/app/files',
+    });
+  });
+
+  it('администратор платформы попадает в модули Админки', () => {
+    const admin = me({ admin: true, modules: ['accounts', 'orgs', 'pdicts'], permissions: [] });
+    expect(resolveAppRoute(admin, 'home', undefined)).toEqual({ redirect: '/app/accounts' });
+    expect(resolveAppRoute(admin, 'pdicts', ['gked'])).toEqual({
+      moduleId: 'pdicts',
+      tabId: 'gked',
+    });
+  });
+});
+
+describe('выбор на устройстве: тема, левая панель, раскрытые ветки', () => {
+  it('тема — только light или dark, иначе тема устройства', () => {
+    expect(parseTheme('dark')).toBe('dark');
+    expect(parseTheme('light')).toBe('light');
+    expect(parseTheme('blue')).toBeNull();
+    expect(parseTheme(undefined)).toBeNull();
+  });
+
+  it('левая панель скрыта только по явному выбору', () => {
+    expect(parseNavHidden('hidden')).toBe(true);
+    expect(parseNavHidden('shown')).toBe(false);
+    expect(parseNavHidden(undefined)).toBe(false);
+  });
+
+  it('раскрытые ветки: только известные модули и без повторов', () => {
+    const known = ['home', 'reports', 'cps'];
+    expect(parseTree('reports.cps.reports.<script>', known)).toEqual(['reports', 'cps']);
+    expect(parseTree(undefined, known)).toEqual([]);
+    expect(parseTree(serializeTree(new Set(['cps', 'home'])), known)).toEqual(['cps', 'home']);
+  });
+
+  it('cookie выбора — на год, для всего сайта, по https — с Secure', () => {
+    expect(prefCookie('bh_theme', 'dark', false)).toBe(
+      'bh_theme=dark; Path=/; Max-Age=31536000; SameSite=Lax',
+    );
+    expect(prefCookie('bh_tree', 'a.b', true)).toMatch(/^bh_tree=a\.b; .*; Secure$/);
+  });
+});

@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { buttonClass } from './button';
 
 export interface RecordChangedNoticeProps {
   /** «Запись изменена другим пользователем» — из словаря. */
@@ -16,8 +17,7 @@ export interface RecordChangedNoticeProps {
  * пользователь правил запись, её сохранил кто-то другой. Правка не сохранена; пользователь
  * перечитывает запись и при необходимости правит снова. Вид — как в прототипе: `.note.warn` со значком
  * `alert`, текст `.grow` и кнопка `.btn.sm` (spec/prototype/src/css/cards.css, controls.css). Цвета —
- * токены темы прототипа (`--orange`, `--btn` …) с их значениями по умолчанию, пока оболочка (#10) их
- * не задала.
+ * из темы (theme.css).
  */
 export function RecordChangedNotice({
   message,
@@ -28,7 +28,7 @@ export function RecordChangedNotice({
   return (
     <div
       role="alert"
-      className="flex items-start gap-[9px] rounded-lg border border-transparent bg-[color:var(--orange-bg,hsla(21,81%,59%,0.16))] px-3 py-[9px] text-[12.5px] leading-[1.45] text-[color:var(--orange,hsl(18,69%,42%))] dark:bg-[color:var(--orange-bg,hsla(24,84%,50%,0.17))] dark:text-[color:var(--orange,hsl(26,85%,62%))]"
+      className="flex items-start gap-[9px] rounded-lg border border-transparent bg-caution-bg px-3 py-[9px] text-[12.5px] leading-[1.45] text-caution"
     >
       <svg
         viewBox="0 0 24 24"
@@ -44,7 +44,7 @@ export function RecordChangedNotice({
         onClick={onReload}
         disabled={reloading}
         aria-busy={reloading}
-        className="inline-flex min-h-[29px] cursor-pointer items-center rounded-lg bg-[color:var(--btn,hsl(35,37%,93%))] px-[10px] py-1 text-[12.5px] font-[550] whitespace-nowrap text-[color:var(--text,hsl(31,45%,24%))] shadow-[var(--sh-btn,inset_0_0_0_1px_rgba(0,0,0,.1),0_2px_4px_-2.7px_rgba(0,0,0,.1))] hover:bg-[color:var(--btn-hover,hsl(36,38%,96%))] disabled:cursor-default disabled:opacity-60 dark:bg-[color:var(--btn,hsl(29,16%,13%))] dark:text-[color:var(--text,hsl(34,39%,76%))] dark:hover:bg-[color:var(--btn-hover,hsl(30,18%,15%))]"
+        className={buttonClass('default', 'sm')}
       >
         {reloadLabel}
       </button>

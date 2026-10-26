@@ -55,7 +55,7 @@ export default function HealthPage() {
                 </li>
               ))}
             </ul>
-            <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm text-slate-600 dark:text-slate-400">
+            <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm text-muted">
               <dt>{t('health.version')}</dt>
               <dd>{state.health.version}</dd>
               <dt>{t('health.environment')}</dt>

@@ -25,7 +25,31 @@ export const MENU_MODULES = [
   permission: PermissionId | null;
 }[];
 
-export type MenuModuleId = (typeof MENU_MODULES)[number]['id'];
+export type BusinessModuleId = (typeof MENU_MODULES)[number]['id'];
+
+/**
+ * Модули Админки по порядку (прототип core/registry.js, ADM). Администратору платформы видны все:
+ * прав в организации у него нет.
+ */
+export const ADMIN_MENU_MODULES = [
+  'accounts',
+  'orgs',
+  'pdicts',
+  'l10n',
+  'kb',
+  'kbadm',
+  'tg',
+] as const;
+
+export type AdminModuleId = (typeof ADMIN_MENU_MODULES)[number];
+
+/** Модуль меню — организации или Админки («База знаний» есть в обоих). */
+export type MenuModuleId = BusinessModuleId | AdminModuleId;
+
+/** Все модули меню без повторов: организации, затем Админки. */
+export const MENU_MODULE_IDS: readonly MenuModuleId[] = [
+  ...new Set<MenuModuleId>([...MENU_MODULES.map((m) => m.id), ...ADMIN_MENU_MODULES]),
+];
 
 /**
  * Модули, которые сотрудник видит в меню (прототип core/registry.js, mods): включена функция модуля и
@@ -38,7 +62,7 @@ export type MenuModuleId = (typeof MENU_MODULES)[number]['id'];
 export function menuModules(
   subject: AccessSubject,
   features: Readonly<Partial<Record<Feature, boolean>>>,
-): MenuModuleId[] {
+): BusinessModuleId[] {
   const on = (f: Feature) => features[f] === true;
   const can = (p: PermissionId) => hasPermission(subject, p);
   const finUseful = (on('taxpay') && can('money')) || (on('fee') && can('fee')) || can('projects');
