@@ -3,6 +3,8 @@ import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   changeOwnPassword,
+  cleanupLoginAttempts,
+  clearLoginAttempts,
   currentOrganization,
   endSession,
   findLogin,
@@ -14,7 +16,7 @@ import {
 } from './auth';
 import { withOrgContext } from './context';
 import { createOrganization, type CreatedOrganization } from './organizations';
-import { employees, organizations, sessions, users } from './schema';
+import { employees, loginAttempts, organizations, sessions, users } from './schema';
 import {
   createTestDatabase,
   databaseAvailable,
@@ -26,6 +28,9 @@ const newHash = () => createHash('sha256').update(randomBytes(32)).digest('hex')
 const checkViolation = expect.objectContaining({
   cause: expect.objectContaining({ code: '23514' }),
 });
+const permissionDenied = expect.objectContaining({
+  cause: expect.objectContaining({ code: '42501' }),
+});
 
 describe.skipIf(!databaseAvailable())('вход и сеансы в базе', () => {
   let t: TestDatabase;
@@ -35,6 +40,8 @@ describe.skipIf(!databaseAvailable())('вход и сеансы в базе', ()
 
   const user = async (id: string) =>
     (await t.admin.db.select().from(users).where(eq(users.id, id)))[0]!;
+  const attempts = async (login: string) =>
+    (await t.admin.db.select().from(loginAttempts).where(eq(loginAttempts.login, login)))[0];
 
   beforeAll(async () => {
     t = await createTestDatabase();
@@ -72,8 +79,6 @@ describe.skipIf(!databaseAvailable())('вход и сеансы в базе', ()
       isPlatformAdmin: false,
       userBlocked: false,
       mustChangePassword: true,
-      lockedUntil: null,
-      locked: false,
       employeeId: a.ownerEmployeeId,
       employeeActive: true,
       orgStatus: 'active',
@@ -90,49 +95,89 @@ describe.skipIf(!databaseAvailable())('вход и сеансы в базе', ()
 
   it('попытка входа занимается до проверки пароля; пятая подряд закрывает вход на 15 минут', async () => {
     for (let i = 1; i <= 4; i++) {
-      expect(await reserveLoginAttempt(t.app.db, b.ownerUserId)).toEqual({
+      expect(await reserveLoginAttempt(t.app.db, 'owner-b')).toEqual({
         allowed: true,
         locked: false,
         lockedUntil: null,
       });
     }
     const before = Date.now();
-    const fifth = await reserveLoginAttempt(t.app.db, b.ownerUserId);
+    const fifth = await reserveLoginAttempt(t.app.db, 'owner-b');
     expect(fifth).toMatchObject({ allowed: true, locked: true });
     const minutes = (fifth.lockedUntil!.getTime() - before) / 60_000;
     expect(minutes).toBeGreaterThan(14.9);
     expect(minutes).toBeLessThan(15.1);
-    expect(await findLogin(t.app.db, 'owner-b')).toMatchObject({ locked: true });
-    // Пока вход закрыт, попытка не занимается и срок не продлевается.
-    expect(await reserveLoginAttempt(t.app.db, b.ownerUserId)).toEqual({
+    // Пока вход закрыт, попытка не занимается и срок не продлевается — и при другом регистре логина.
+    expect(await reserveLoginAttempt(t.app.db, ' OWNER-B ')).toEqual({
       allowed: false,
       locked: true,
       lockedUntil: fifth.lockedUntil,
     });
 
-    // Верный пароль после окончания блокировки: счётчик и блокировка сброшены, есть сеанс.
+    // Прошло 15 минут: верный пароль снимает счёт, сеанс создаётся.
     await t.admin.db
-      .update(users)
-      .set({ lockedUntil: new Date(Date.now() - 1000), failedLogins: 3 })
-      .where(eq(users.id, b.ownerUserId));
-    expect(await findLogin(t.app.db, 'owner-b')).toMatchObject({ locked: false });
+      .update(loginAttempts)
+      .set({ lockedUntil: new Date(Date.now() - 1000), failures: 3 })
+      .where(eq(loginAttempts.login, 'owner-b'));
+    expect(await reserveLoginAttempt(t.app.db, 'owner-b')).toMatchObject({
+      allowed: true,
+      locked: false,
+    });
+    await clearLoginAttempts(t.app.db, 'Owner-B');
+    expect(await attempts('owner-b')).toBeUndefined();
     await startSession(t.app.db, { userId: b.ownerUserId, tokenHash: newHash() });
-    const after = await user(b.ownerUserId);
-    expect(after.failedLogins).toBe(0);
-    expect(after.lockedUntil).toBeNull();
-    expect(after.lastLoginAt).not.toBeNull();
+    expect((await user(b.ownerUserId)).lastLoginAt).not.toBeNull();
+  });
+
+  it('логин, которого нет, считается так же: пятая попытка закрывает вход', async () => {
+    for (let i = 1; i <= 4; i++) {
+      expect(await reserveLoginAttempt(t.app.db, 'nobody-here')).toMatchObject({
+        allowed: true,
+        locked: false,
+      });
+    }
+    expect(await reserveLoginAttempt(t.app.db, 'nobody-here')).toMatchObject({
+      allowed: true,
+      locked: true,
+    });
+    expect(await reserveLoginAttempt(t.app.db, 'nobody-here')).toMatchObject({ allowed: false });
+  });
+
+  it('через сутки после последней попытки счёт забывается; очистка удаляет такие строки', async () => {
+    await t.admin.db.insert(loginAttempts).values([
+      { login: 'old-tries', failures: 4, lastAttemptAt: new Date(Date.now() - 25 * 3_600_000) },
+      { login: 'new-tries', failures: 4, lastAttemptAt: new Date(Date.now() - 23 * 3_600_000) },
+    ]);
+    // Четыре неверных больше суток назад — эта попытка снова первая.
+    expect(await reserveLoginAttempt(t.app.db, 'old-tries')).toMatchObject({ locked: false });
+    expect(await attempts('old-tries')).toMatchObject({ failures: 1 });
+    // Четыре неверных меньше суток назад — эта пятая.
+    expect(await reserveLoginAttempt(t.app.db, 'new-tries')).toMatchObject({ locked: true });
+
+    await t.admin.db
+      .update(loginAttempts)
+      .set({ lastAttemptAt: new Date(Date.now() - 25 * 3_600_000) })
+      .where(eq(loginAttempts.login, 'old-tries'));
+    expect(await cleanupLoginAttempts(t.app.db)).toBeGreaterThanOrEqual(1);
+    expect(await attempts('old-tries')).toBeUndefined();
+    // Вход ещё закрыт — строка остаётся.
+    expect(await attempts('new-tries')).toMatchObject({ failures: 0 });
+  });
+
+  it('счёт неверных паролей роль приложения не читает и не меняет напрямую', async () => {
+    await expect(t.app.db.select().from(loginAttempts)).rejects.toThrow(permissionDenied);
+    await expect(
+      t.app.db.insert(loginAttempts).values({ login: 'forged', failures: 0 }),
+    ).rejects.toThrow(permissionDenied);
+    await expect(t.app.db.delete(loginAttempts)).rejects.toThrow(permissionDenied);
   });
 
   it('одновременные попытки: занять можно ровно пять, остальные отклоняются', async () => {
-    const attempts = await Promise.all(
-      Array.from({ length: 20 }, () => reserveLoginAttempt(t.app.db, b.ownerUserId)),
+    const results = await Promise.all(
+      Array.from({ length: 20 }, () => reserveLoginAttempt(t.app.db, 'race-login')),
     );
-    expect(attempts.filter((x) => x.allowed)).toHaveLength(5);
-    expect(attempts.filter((x) => x.allowed && !x.locked)).toHaveLength(4);
-    await t.admin.db
-      .update(users)
-      .set({ lockedUntil: null, failedLogins: 0 })
-      .where(eq(users.id, b.ownerUserId));
+    expect(results.filter((x) => x.allowed)).toHaveLength(5);
+    expect(results.filter((x) => x.allowed && !x.locked)).toHaveLength(4);
   });
 
   it('сеанс находится по хешу токена; продлевается не чаще раза в час', async () => {
@@ -188,7 +233,7 @@ describe.skipIf(!databaseAvailable())('вход и сеансы в базе', ()
     await startSession(t.app.db, { userId: a.ownerUserId, tokenHash: other });
     const bSession = newHash();
     await startSession(t.app.db, { userId: b.ownerUserId, tokenHash: bSession });
-    await t.admin.db.update(users).set({ failedLogins: 2 }).where(eq(users.id, a.ownerUserId));
+    await t.admin.db.insert(loginAttempts).values({ login: 'owner-a', failures: 2 });
     const version = (await user(a.ownerUserId)).version;
 
     const rotated = newHash();
@@ -204,7 +249,7 @@ describe.skipIf(!databaseAvailable())('вход и сеансы в базе', ()
     const after = await user(a.ownerUserId);
     expect(after.passwordHash).toBe('hash-a2');
     expect(after.version).toBe(version + 1);
-    expect(after.failedLogins).toBe(0);
+    expect(await attempts('owner-a')).toBeUndefined();
     // Сеансы другого пользователя не тронуты.
     expect(await sessionByToken(t.app.db, bSession)).not.toBeNull();
   });

@@ -1,5 +1,6 @@
 import {
   isPermissionId,
+  LOGIN_FAILURE_MEMORY_HOURS,
   LOGIN_LOCK_MINUTES,
   LOGIN_MAX_FAILURES,
   SCOPE_GROUPS,
@@ -15,8 +16,9 @@ import type { Db, Tx } from './client';
 import { employees, organizations, rolePermissions, roleScopes, roles } from './schema';
 
 /**
- * Вход и сеансы до выбора организации — через функции app.auth_* (миграция 0009): роль приложения
- * сама не видит пользователей и сеансы чужих организаций, а при входе организация ещё не известна.
+ * Вход и сеансы до выбора организации — через функции app.auth_* (миграции 0009 и 0013): роль
+ * приложения сама не видит пользователей и сеансы чужих организаций, а при входе организация ещё не
+ * известна.
  */
 
 /** Учётная запись по логину (для проверки пароля при входе). */
@@ -28,9 +30,6 @@ export interface LoginRecord {
   isPlatformAdmin: boolean;
   userBlocked: boolean;
   mustChangePassword: boolean;
-  /** Вход закрыт после неверных паролей до этого момента. */
-  lockedUntil: Date | null;
-  locked: boolean;
   employeeId: string | null;
   employeeActive: boolean | null;
   orgStatus: 'active' | 'blocked' | null;
@@ -45,8 +44,6 @@ interface LoginRow extends Record<string, unknown> {
   is_platform_admin: boolean;
   user_blocked: boolean;
   must_change_password: boolean;
-  locked_until: Date | string | null;
-  locked: boolean;
   employee_id: string | null;
   employee_active: boolean | null;
   org_status: 'active' | 'blocked' | null;
@@ -67,8 +64,6 @@ export async function findLogin(db: Db | Tx, login: string): Promise<LoginRecord
     isPlatformAdmin: row.is_platform_admin,
     userBlocked: row.user_blocked,
     mustChangePassword: row.must_change_password,
-    lockedUntil: asDate(row.locked_until),
-    locked: row.locked,
     employeeId: row.employee_id,
     employeeActive: row.employee_active,
     orgStatus: row.org_status,
@@ -86,17 +81,19 @@ export interface LoginAttempt {
 }
 
 /**
- * Занять попытку входа до проверки пароля (счётчик +1, на пятой подряд вход закрывается на 15 минут).
- * Так одновременные запросы не проверят больше пяти паролей; верный пароль сбрасывает счётчик
- * (`startSession`, `changeOwnPassword`).
+ * Занять попытку входа по набранному логину до проверки пароля (счёт +1, на пятой подряд вход
+ * закрывается на 15 минут; через сутки счёт забывается). Счёт ведётся и для логина, которого нет:
+ * «вход закрыт» одинаков для любого логина (docs/deviations.md, п. 4, решение Б). Так одновременные
+ * запросы не проверят больше пяти паролей. Верный пароль снимает счёт (`clearLoginAttempts`), смена
+ * и сброс пароля — тоже (`changeOwnPassword`, `completePasswordReset`, `setTemporaryPassword`).
  */
-export async function reserveLoginAttempt(db: Db, userId: string): Promise<LoginAttempt> {
+export async function reserveLoginAttempt(db: Db, login: string): Promise<LoginAttempt> {
   const [row] = await db.execute<{
     allowed: boolean;
     locked: boolean;
     locked_until: Date | string | null;
   }>(
-    sql`select * from app.auth_login_attempt(${userId}, ${LOGIN_MAX_FAILURES}, ${LOGIN_LOCK_MINUTES})`,
+    sql`select * from app.auth_login_attempt(${login}, ${LOGIN_MAX_FAILURES}, ${LOGIN_LOCK_MINUTES}, ${LOGIN_FAILURE_MEMORY_HOURS})`,
   );
   return {
     allowed: row?.allowed ?? false,
@@ -105,7 +102,20 @@ export async function reserveLoginAttempt(db: Db, userId: string): Promise<Login
   };
 }
 
-/** Верный пароль: счётчик сбрасывается, создаётся сеанс (в базе — только хеш токена). */
+/** Снять счёт неверных паролей и блокировку входа по логину (верный пароль, новый пароль). */
+export async function clearLoginAttempts(db: Db | Tx, login: string): Promise<void> {
+  await db.execute(sql`select app.auth_login_clear(${login})`);
+}
+
+/** Удалить строки, чей счёт уже забыт (задача по расписанию); возвращает, сколько удалено. */
+export async function cleanupLoginAttempts(db: Db): Promise<number> {
+  const [row] = await db.execute<{ removed: number }>(
+    sql`select app.auth_login_cleanup(${LOGIN_FAILURE_MEMORY_HOURS}) as removed`,
+  );
+  return row?.removed ?? 0;
+}
+
+/** Верный пароль: создаётся сеанс (в базе — только хеш токена). */
 export async function startSession(
   db: Db,
   input: { userId: string; tokenHash: string },

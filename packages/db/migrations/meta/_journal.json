@@ -85,6 +85,20 @@
       "when": 1792972646999,
       "tag": "0011_telegram_functions",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1792976282545,
+      "tag": "0012_login_attempts",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1792976294092,
+      "tag": "0013_login_attempts_functions",
+      "breakpoints": true
     }
   ]
 }

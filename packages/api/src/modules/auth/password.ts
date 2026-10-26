@@ -59,8 +59,7 @@ export function changePasswordHandler(
     if (!account || account.userId !== session.userId) {
       return c.json(apiError('unauthorized', 'Войдите в систему'), 401);
     }
-    if (account.locked) return c.json(lockedError(c, account.lockedUntil), 429);
-    const attempt = await reserveLoginAttempt(deps.db, account.userId);
+    const attempt = await reserveLoginAttempt(deps.db, account.login);
     if (!attempt.allowed) return c.json(lockedError(c, attempt.lockedUntil), 429);
     if (!(await verifyPassword(account.passwordHash, currentPassword))) {
       if (attempt.locked) return c.json(lockedError(c, attempt.lockedUntil), 429);
@@ -74,7 +73,7 @@ export function changePasswordHandler(
         sessionId: session.sessionId,
         passwordHash,
         newTokenHash: hashSessionToken(token),
-      }); // заодно сбрасывает счётчик неверных паролей
+      }); // заодно снимает счёт неверных паролей и блокировку входа
     if (session.orgId) {
       await withOrgContext(
         deps.db,

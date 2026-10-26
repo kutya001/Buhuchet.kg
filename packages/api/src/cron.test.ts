@@ -6,7 +6,7 @@ import { ApiError, CronTickResponse } from '@buhuchet/shared';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createApp } from './app';
 import type { Job } from './deps';
-import { cleanupSchedulerRuns, jobs } from './jobs/registry';
+import { cleanupLoginAttemptsJob, cleanupSchedulerRuns, jobs } from './jobs/registry';
 import { createTestDeps } from './testing';
 
 const SECRET = 'test-cron-secret-0000';
@@ -32,8 +32,10 @@ describe('/api/cron/tick без базы', () => {
     expect(await res.json()).toEqual({ ran: [], skipped: [] });
   });
 
-  it('в реестре есть очистка журнала запусков', () => {
-    expect(jobs.map((j) => j.name)).toContain('system.cleanup-scheduler-runs');
+  it('в реестре есть очистка журнала запусков и счёта неверных паролей', () => {
+    expect(jobs.map((j) => j.name)).toEqual(
+      expect.arrayContaining(['system.cleanup-scheduler-runs', 'auth.cleanup-login-attempts']),
+    );
   });
 });
 
@@ -134,5 +136,22 @@ describe.skipIf(!databaseAvailable())('/api/cron/tick с базой', () => {
     const left = (await t.admin.db.select().from(schema.schedulerRuns)).map((r) => r.job);
     expect(left).not.toContain('old');
     expect(left).toContain('fresh');
+  });
+
+  it('очистка счёта неверных паролей: удаляются забытые строки, закрытый вход остаётся', async () => {
+    const hoursAgo = (h: number) => new Date(Date.now() - h * 3_600_000);
+    await t.admin.db.insert(schema.loginAttempts).values([
+      { login: 'forgotten', failures: 3, lastAttemptAt: hoursAgo(25) },
+      { login: 'recent', failures: 2, lastAttemptAt: hoursAgo(23) },
+      {
+        login: 'still-locked',
+        failures: 0,
+        lockedUntil: new Date(Date.now() + 600_000),
+        lastAttemptAt: hoursAgo(25),
+      },
+    ]);
+    await cleanupLoginAttemptsJob.run(createTestDeps({ db: t.app.db }), new Date());
+    const left = (await t.admin.db.select().from(schema.loginAttempts)).map((r) => r.login);
+    expect(left.sort()).toEqual(['recent', 'still-locked']);
   });
 });

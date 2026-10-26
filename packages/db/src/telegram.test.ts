@@ -7,6 +7,7 @@ import { createOrganization, type CreatedOrganization } from './organizations';
 import type { Tx } from './client';
 import {
   employees,
+  loginAttempts,
   passwordResetCodes,
   platformReference,
   sessions,
@@ -333,9 +334,8 @@ describe.skipIf(!databaseAvailable())('Telegram и «Забыли пароль?�
     const token = newHash();
     await startSession(t.app.db, { userId: a.ownerUserId, tokenHash: token });
     await t.admin.db
-      .update(users)
-      .set({ failedLogins: 0, lockedUntil: new Date(Date.now() + 600_000) })
-      .where(eq(users.id, a.ownerUserId));
+      .insert(loginAttempts)
+      .values({ login: 'owner-a', failures: 0, lockedUntil: new Date(Date.now() + 600_000) });
     const attempt = (await reservePasswordResetAttempt(t.app.db, a.ownerUserId))!;
     expect(attempt.codeHash).toBe('good');
 
@@ -351,12 +351,10 @@ describe.skipIf(!databaseAvailable())('Telegram и «Забыли пароль?�
       ),
     ).toBe(true);
     const [u] = await t.admin.db.select().from(users).where(eq(users.id, a.ownerUserId));
-    expect(u).toMatchObject({
-      passwordHash: 'new-hash',
-      mustChangePassword: false,
-      failedLogins: 0,
-      lockedUntil: null,
-    });
+    expect(u).toMatchObject({ passwordHash: 'new-hash', mustChangePassword: false });
+    expect(
+      await t.admin.db.select().from(loginAttempts).where(eq(loginAttempts.login, 'owner-a')),
+    ).toEqual([]);
     expect(await sessionByToken(t.app.db, token)).toBeNull();
     expect(
       await withOrgContext(t.app.db, ctxA(), (tx) =>
@@ -396,9 +394,12 @@ describe.skipIf(!databaseAvailable())('Telegram и «Забыли пароль?�
     ).toMatchObject({ status: 'locked' });
   });
 
-  it('временный пароль от владельца: сменить при входе, сеансы завершены; чужого не сбросить', async () => {
+  it('временный пароль от владельца: сменить при входе, сеансы завершены, вход открыт; чужого не сбросить', async () => {
     const token = newHash();
     await startSession(t.app.db, { userId: accA, tokenHash: token });
+    await t.admin.db
+      .insert(loginAttempts)
+      .values({ login: 'acc-a', failures: 0, lockedUntil: new Date(Date.now() + 600_000) });
     expect(
       await withOrgContext(t.app.db, ctxA(), (tx) => employeeAccount(tx, accAEmployee)),
     ).toMatchObject({ userId: accA, login: 'acc-a', isOwner: false, fullName: 'Асанов Алишер' });
@@ -413,6 +414,9 @@ describe.skipIf(!databaseAvailable())('Telegram и «Забыли пароль?�
     const [u] = await t.admin.db.select().from(users).where(eq(users.id, accA));
     expect(u).toMatchObject({ passwordHash: 'temp', mustChangePassword: true });
     expect(await sessionByToken(t.app.db, token)).toBeNull();
+    expect(
+      await t.admin.db.select().from(loginAttempts).where(eq(loginAttempts.login, 'acc-a')),
+    ).toEqual([]);
 
     expect(
       await withOrgContext(t.app.db, ctxA(), (tx) =>

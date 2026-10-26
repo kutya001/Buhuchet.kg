@@ -17,7 +17,7 @@ import type { ApiDeps } from '../../deps';
 import { orgContextOf, requireEmployee, requirePermission } from '../../middleware/access';
 import { cookieOf, createTestDeps, signIn, TEST_ORIGIN as ORIGIN } from '../../testing';
 
-const { auditLog, employees, organizations, sessions, users } = schema;
+const { auditLog, employees, loginAttempts, organizations, sessions, users } = schema;
 
 const PASSWORD = 'Верный-пароль-1';
 
@@ -145,6 +145,8 @@ describe.skipIf(!databaseAvailable())('вход, сеансы и проверк�
       ['wrong-a', 'acc'],
       ['pwlock-a', 'acc'],
       ['race-a', 'acc'],
+      ['twin-a', 'acc'],
+      ['clear-a', 'acc'],
     ] as const) {
       await addEmployee(a, login, template);
     }
@@ -184,27 +186,38 @@ describe.skipIf(!databaseAvailable())('вход, сеансы и проверк�
     expect(stored.some((s) => s.tokenHash === token)).toBe(false);
   });
 
-  it('нет такого логина — «Нет такого логина»; неверный пароль — предупреждение о блокировке', async () => {
+  it('неизвестный логин и неверный пароль — один ответ «Неверный логин или пароль»', async () => {
     const unknown = await login(app, 'nobody');
-    expect(unknown.status).toBe(401);
-    expect(ApiError.parse(await unknown.json()).error).toMatchObject({
-      code: 'unknown_login',
-      message: 'Нет такого логина',
-    });
     const wrong = await login(app, 'wrong-a', 'не-тот-пароль');
+    expect(unknown.status).toBe(401);
     expect(wrong.status).toBe(401);
-    expect(ApiError.parse(await wrong.json()).error).toMatchObject({
-      code: 'wrong_password',
-      message: 'Неверный пароль. После 5 неверных попыток вход блокируется на 15 минут.',
-    });
+    const expected = {
+      error: { code: 'invalid_credentials', message: 'Неверный логин или пароль' },
+    };
+    expect(await unknown.json()).toEqual(expected);
+    expect(await wrong.json()).toEqual(expected);
     expect(wrong.headers.get('set-cookie')).toBeNull();
+    expect(unknown.headers.get('set-cookie')).toBeNull();
+  });
+
+  it('верный пароль снимает счёт неверных: после него снова пять попыток', async () => {
+    for (let i = 1; i <= 4; i++) {
+      expect((await login(app, 'clear-a', `неверный-${i}`)).status).toBe(401);
+    }
+    expect((await login(app, 'clear-a')).status).toBe(200);
+    for (let i = 1; i <= 4; i++) {
+      expect(await errorCode(await login(app, 'clear-a', `неверный-${i}`))).toBe(
+        'invalid_credentials',
+      );
+    }
+    expect((await login(app, 'clear-a')).status).toBe(200);
   });
 
   it('5 неверных паролей подряд — вход закрыт на 15 минут, даже с верным паролем', async () => {
     for (let i = 1; i <= 4; i++) {
       const res = await login(app, 'lock-a', `неверный-${i}`);
       expect(res.status).toBe(401);
-      expect(await errorCode(res)).toBe('wrong_password');
+      expect(await errorCode(res)).toBe('invalid_credentials');
     }
     const fifth = await login(app, 'lock-a', 'неверный-5');
     expect(fifth.status).toBe(429);
@@ -226,10 +239,29 @@ describe.skipIf(!databaseAvailable())('вход, сеансы и проверк�
 
     // Прошло 15 минут — верный пароль снова пускает.
     await t.admin.db
-      .update(users)
+      .update(loginAttempts)
       .set({ lockedUntil: new Date(Date.now() - 1000) })
-      .where(eq(users.login, 'lock-a'));
+      .where(eq(loginAttempts.login, 'lock-a'));
     expect((await login(app, 'lock-a')).status).toBe(200);
+  });
+
+  it('логин, которого нет, закрывается так же: те же ответы, «вход закрыт» на пятой попытке', async () => {
+    const answers = async (name: string) => {
+      const out: { status: number; code: string; retry: boolean }[] = [];
+      for (let i = 1; i <= 6; i++) {
+        const res = await login(app, name, `неверный-${i}`);
+        out.push({
+          status: res.status,
+          code: await errorCode(res),
+          retry: res.headers.get('retry-after') !== null,
+        });
+      }
+      return out;
+    };
+    const ghost = await answers('ghost-login');
+    expect(ghost).toEqual(await answers('twin-a'));
+    expect(ghost.map((a) => a.status)).toEqual([401, 401, 401, 401, 429, 429]);
+    expect(ghost[4]).toEqual({ status: 429, code: 'login_locked', retry: true });
   });
 
   it('одновременные неверные пароли: проверяются только пять, остальным — «вход закрыт»', async () => {
@@ -241,7 +273,10 @@ describe.skipIf(!databaseAvailable())('вход, сеансы и проверк�
     expect(statuses.filter((s) => s === 429)).toHaveLength(16);
     // Верный пароль после пятой занятой попытки — тоже «вход закрыт», блокировка не снимается.
     expect(await errorCode(await login(app, 'race-a'))).toBe('login_locked');
-    const [race] = await t.admin.db.select().from(users).where(eq(users.login, 'race-a'));
+    const [race] = await t.admin.db
+      .select()
+      .from(loginAttempts)
+      .where(eq(loginAttempts.login, 'race-a'));
     expect(race!.lockedUntil!.getTime()).toBeGreaterThan(Date.now());
   });
 
@@ -326,7 +361,7 @@ describe.skipIf(!databaseAvailable())('вход, сеансы и проверк�
     expect((await get(app, '/api/auth/me', c2)).status).toBe(401);
     expect((await get(app, '/api/auth/me', rotated)).status).toBe(200);
 
-    expect(await errorCode(await login(app, 'chief-a'))).toBe('wrong_password');
+    expect(await errorCode(await login(app, 'chief-a'))).toBe('invalid_credentials');
     expect((await login(app, 'chief-a', 'Новый-пароль-2')).status).toBe(200);
 
     // В истории — что пароль сменён, без значений.
@@ -351,8 +386,11 @@ describe.skipIf(!databaseAvailable())('вход, сеансы и проверк�
       code: 'current_password_invalid',
       message: 'Текущий пароль неверный',
     });
-    const [acc] = await t.admin.db.select().from(users).where(eq(users.login, 'acc-a'));
-    expect(acc!.failedLogins).toBe(1);
+    const [acc] = await t.admin.db
+      .select()
+      .from(loginAttempts)
+      .where(eq(loginAttempts.login, 'acc-a'));
+    expect(acc!.failures).toBe(1);
 
     const short = await app.request(
       '/api/auth/password',
@@ -432,6 +470,10 @@ describe.skipIf(!databaseAvailable())('вход, сеансы и проверк�
     const again = await login(app, 'blocked-a');
     expect(again.status).toBe(403);
     expect(await errorCode(again)).toBe('employee_blocked');
+    // С неверным паролем о блокировке не сообщается (docs/deviations.md, п. 4, решение Б).
+    expect(await errorCode(await login(app, 'blocked-a', 'не-тот-пароль'))).toBe(
+      'invalid_credentials',
+    );
   });
 
   it('учётная запись, заблокированная администратором платформы, не входит (текст — как в прототипе)', async () => {
@@ -442,6 +484,9 @@ describe.skipIf(!databaseAvailable())('вход, сеансы и проверк�
       code: 'user_blocked',
       message: 'Учётная запись заблокирована. Обратитесь к владельцу организации.',
     });
+    expect(await errorCode(await login(app, 'banned-a', 'не-тот-пароль'))).toBe(
+      'invalid_credentials',
+    );
   });
 
   it('сотрудники заблокированной организации видят сообщение о блокировке', async () => {
@@ -460,10 +505,10 @@ describe.skipIf(!databaseAvailable())('вход, сеансы и проверк�
     const res = await login(app, 'owner-c');
     expect(res.status).toBe(403);
     expect(ApiError.parse(await res.json()).error).toMatchObject(expected);
-    // Как в прототипе: о блокировке сообщается до проверки пароля (docs/deviations.md, п. 4).
+    // О блокировке сообщается только после верного пароля (docs/deviations.md, п. 4, решение Б).
     const wrong = await login(app, 'owner-c', 'не-тот-пароль');
-    expect(wrong.status).toBe(403);
-    expect(await errorCode(wrong)).toBe('org_blocked');
+    expect(wrong.status).toBe(401);
+    expect(await errorCode(wrong)).toBe('invalid_credentials');
 
     // После разблокировки сотрудники снова входят и видят свои данные.
     await t.admin.db

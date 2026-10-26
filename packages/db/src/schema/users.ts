@@ -4,7 +4,6 @@ import {
   check,
   customType,
   index,
-  integer,
   pgTable,
   text,
   timestamp,
@@ -39,10 +38,6 @@ export const users = pgTable(
     isPlatformAdmin: boolean('is_platform_admin').notNull().default(false),
     /** Заблокирован администратором платформы: не входит, сеансы закрыты. */
     blocked: boolean('blocked').notNull().default(false),
-    /** Неверные пароли подряд; на пятом вход закрывается на 15 минут, счётчик начинается заново. */
-    failedLogins: integer('failed_logins').notNull().default(0),
-    /** До какого момента вход закрыт после неверных паролей. */
-    lockedUntil: timestamp('locked_until', { withTimezone: true }),
     lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
     ...timestamps(),
     version: recordVersion(),
