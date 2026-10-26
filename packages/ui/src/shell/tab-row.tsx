@@ -91,8 +91,10 @@ export function TabRow({
           ref={row}
           role="tablist"
           aria-label={label}
+          data-tabrow
           data-fit="full"
-          className="group/tabs -mt-0.5 mb-0.5 flex min-w-0 flex-[0_1_auto] gap-1.5 overflow-x-auto px-0.5 pt-1 pb-1.5 [scrollbar-width:none] data-[fit=tight]:gap-1 data-[fit=labels]:gap-1 max-md:flex-[1_1_auto] [&::-webkit-scrollbar]:hidden [&>:first-child]:ml-auto [&>:last-child]:mr-auto"
+          data-swiping="false"
+          className="group/tabs relative -mt-0.5 mb-0.5 flex min-w-0 flex-[0_1_auto] gap-1.5 overflow-x-auto px-0.5 pt-1 pb-1.5 [scrollbar-width:none] data-[fit=tight]:gap-1 data-[fit=labels]:gap-1 max-md:flex-[1_1_auto] [&::-webkit-scrollbar]:hidden [&>:first-child]:ml-auto [&>:last-child]:mr-auto"
         >
           {tabs.map((t) => {
             const on = t.id === activeTab;
@@ -103,7 +105,7 @@ export function TabRow({
                 role="tab"
                 aria-selected={on}
                 title={t.label}
-                className={`inline-flex flex-none cursor-pointer items-center gap-[7px] rounded-full border px-3.5 py-[7px] text-[13px] font-[550] no-underline transition-[background-color,color,transform] duration-200 group-data-[fit=icons]/tabs:px-[11px] group-data-[fit=labels]/tabs:gap-[5px] group-data-[fit=labels]/tabs:px-[9px] group-data-[fit=tight]/tabs:gap-[5px] group-data-[fit=tight]/tabs:px-[9px] ${on ? 'animate-pop border-transparent bg-raised text-ink shadow-btn' : 'border-line bg-pane-alt text-muted hover:-translate-y-px hover:bg-raised hover:text-ink'}`}
+                className={`inline-flex flex-none cursor-pointer items-center gap-[7px] rounded-full border px-3.5 py-[7px] text-[13px] font-[550] no-underline transition-[background-color,color,transform] duration-200 group-data-[fit=icons]/tabs:px-[11px] group-data-[fit=labels]/tabs:gap-[5px] group-data-[fit=labels]/tabs:px-[9px] group-data-[fit=tight]/tabs:gap-[5px] group-data-[fit=tight]/tabs:px-[9px] ${on ? 'animate-pop border-transparent bg-raised text-ink shadow-btn group-data-[swiping=true]/tabs:animate-none group-data-[swiping=true]/tabs:border-line group-data-[swiping=true]/tabs:bg-pane-alt group-data-[swiping=true]/tabs:text-muted group-data-[swiping=true]/tabs:shadow-none' : 'border-line bg-pane-alt text-muted hover:-translate-y-px hover:bg-raised hover:text-ink'}`}
               >
                 <span className="inline-grid group-data-[fit=labels]/tabs:hidden">
                   <Icon name={t.icon} size="tab" />
@@ -136,7 +138,10 @@ export function TabRow({
         )}
       </div>
       {addActions.length > 0 && (
-        <AddControl actions={addActions} label={addLabel} onAdd={onAdd} fab />
+        // Свайп вкладок не начинается на кнопке «+».
+        <span data-no-swipe className="contents">
+          <AddControl actions={addActions} label={addLabel} onAdd={onAdd} fab />
+        </span>
       )}
     </div>
   );
@@ -156,7 +161,7 @@ function AddControl({
 }) {
   const many = actions.length > 1;
   const wrapper = fab
-    ? 'fixed right-4 bottom-[calc(78px+env(safe-area-inset-bottom,0px))] z-20 inline-flex md:hidden'
+    ? 'fixed right-4 bottom-[calc(78px+env(safe-area-inset-bottom,0px))] z-20 inline-flex group-data-[kb=true]/app:hidden md:hidden'
     : 'relative inline-flex';
   const look = fab
     ? 'grid h-[54px] w-[54px] cursor-pointer place-items-center rounded-full border-0 bg-accent text-on-accent shadow-[var(--bu-sh-cta),var(--bu-shadow-l)]'

@@ -4,7 +4,7 @@ import type { MenuModuleId } from '@buhuchet/domain';
 import { Icon } from '@buhuchet/ui';
 import { useT } from '../l10n/provider';
 import { MODULES } from './modules';
-import { useShell } from './shell';
+import { useShell } from './context';
 
 /**
  * Модуль, у которого ещё нет экрана: оболочка (меню, вкладки, «+ Добавить») уже работает, а вместо

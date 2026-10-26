@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { iconButtonClass } from '../button';
 import { Icon } from '../icon';
 import { Popover } from '../popover';
@@ -20,6 +20,8 @@ export interface TopBarProps {
     placeholder: string;
     /** Где ищем — название вкладки (или модуля) справа в поле. */
     scope: string;
+    /** «Поиск» — значок, который на телефоне раскрывает поле на всю ширину. */
+    openLabel: string;
   };
   /** Дата и время по Бишкеку. */
   clock: ReactNode;
@@ -33,19 +35,32 @@ export interface TopBarProps {
  * Верхняя панель (прототип index.html `#topbar`, ui/shell.js initTop и renderPage; css/shell.css,
  * mobile.css `.tb-title`): «Меню», название модуля и под ним вкладки с «ⓘ», общий поиск, дата и время,
  * «?» и переключатель темы. Стоит над рабочей областью и не прокручивается. Длинное название
- * обрезается многоточием, полное — в подсказке и по нажатию.
+ * обрезается многоточием, полное — в подсказке и по нажатию. На телефоне поиск свёрнут в значок и
+ * раскрывается на всю ширину вместо остальных кнопок; пустое поле при уходе фокуса сворачивается.
  */
 export function TopBar({ title, tab, menu, info, search, clock, help, theme }: TopBarProps) {
   const [full, setFull] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const input = useRef<HTMLInputElement>(null);
   const wrap = full ? 'whitespace-normal' : 'truncate';
+  // Остальное на телефоне прячется, пока раскрыт поиск (прототип `.tb-other`).
+  const other = searching ? 'max-md:hidden' : '';
+
+  useEffect(() => {
+    if (searching) input.current?.focus();
+  }, [searching]);
+
   return (
-    <header className="col-start-2 row-start-1 flex min-w-0 items-center gap-2.5 rounded-2xl border border-line bg-pane py-[7px] pr-3 pl-2.5 shadow-pane group-data-[nav=hidden]/app:col-start-1 max-md:col-start-1 max-md:gap-1 max-md:px-2 max-md:py-1.5">
+    <header
+      data-searching={searching}
+      className="col-start-2 row-start-1 flex min-w-0 items-center gap-2.5 rounded-2xl border border-line bg-pane py-[7px] pr-3 pl-2.5 shadow-pane group-data-[nav=hidden]/app:col-start-1 max-md:col-start-1 max-md:gap-1 max-md:px-2 max-md:py-1.5"
+    >
       <button
         type="button"
         onClick={menu.onClick}
         aria-label={menu.label}
         title={menu.label}
-        className={iconButtonClass()}
+        className={`${iconButtonClass()} ${other}`}
       >
         <Icon name="menu" />
       </button>
@@ -53,7 +68,7 @@ export function TopBar({ title, tab, menu, info, search, clock, help, theme }: T
         type="button"
         onClick={() => setFull((v) => !v)}
         title={tab ? `${title} · ${tab}` : title}
-        className="flex max-w-[360px] min-w-0 flex-[0_1_auto] cursor-pointer flex-col items-start justify-center gap-px border-0 bg-transparent px-1 py-0.5 text-left text-ink max-md:max-w-none max-md:flex-1"
+        className={`flex max-w-[360px] min-w-0 flex-[0_1_auto] cursor-pointer flex-col items-start justify-center gap-px border-0 bg-transparent px-1 py-0.5 text-left text-ink max-md:max-w-none max-md:flex-1 ${other}`}
       >
         <b className={`block max-w-full text-[15px] font-bold tracking-[-0.01em] ${wrap}`}>
           {title}
@@ -68,6 +83,7 @@ export function TopBar({ title, tab, menu, info, search, clock, help, theme }: T
         label={info.label}
         padded
         hover
+        className={`relative inline-flex ${other}`}
         trigger={({ open, toggle, id }) => (
           <button
             type="button"
@@ -83,16 +99,25 @@ export function TopBar({ title, tab, menu, info, search, clock, help, theme }: T
       >
         {() => info.content}
       </Popover>
-      <div className="flex min-w-0 flex-1 justify-center max-md:hidden">
-        <div role="search" className="relative w-[min(560px,100%)]">
+      <div
+        className={`flex min-w-0 flex-1 justify-center max-md:gap-1 ${searching ? '' : 'max-md:flex-none max-md:justify-end'}`}
+      >
+        <div
+          role="search"
+          className={`relative w-[min(560px,100%)] ${searching ? 'max-md:w-full' : 'max-md:hidden'}`}
+        >
           <Icon
             name="search"
             className="pointer-events-none absolute top-1/2 left-[11px] -translate-y-1/2 text-faint"
           />
           <input
+            ref={input}
             type="search"
             value={search.value}
             onChange={(e) => search.onChange(e.target.value)}
+            onBlur={() => {
+              if (!search.value) setSearching(false);
+            }}
             placeholder={search.placeholder}
             aria-label={search.placeholder}
             autoComplete="off"
@@ -102,14 +127,28 @@ export function TopBar({ title, tab, menu, info, search, clock, help, theme }: T
             {search.scope}
           </span>
         </div>
+        {/* Значок остаётся и при раскрытом поле (прототип `#q-open`): нажатие возвращает фокус в поле. */}
+        <button
+          type="button"
+          onClick={() => {
+            setSearching(true);
+            input.current?.focus();
+          }}
+          aria-label={search.openLabel}
+          title={search.openLabel}
+          className={`${iconButtonClass()} md:hidden`}
+        >
+          <Icon name="search" />
+        </button>
       </div>
-      <div className="text-[13px] font-[550] whitespace-nowrap text-muted tabular-nums">
+      <div className={`text-[13px] font-[550] whitespace-nowrap text-muted tabular-nums ${other}`}>
         {clock}
       </div>
       <Popover
         label={help.label}
         padded
         placement="bottom-end"
+        className={`relative inline-flex ${other}`}
         trigger={({ open, toggle, id }) => (
           <button
             type="button"
@@ -131,7 +170,7 @@ export function TopBar({ title, tab, menu, info, search, clock, help, theme }: T
         onClick={theme.onToggle}
         aria-label={theme.label}
         title={theme.title}
-        className={iconButtonClass()}
+        className={`${iconButtonClass()} ${other}`}
       >
         <span className="bu-light-only inline-grid">
           <Icon name="moon" />

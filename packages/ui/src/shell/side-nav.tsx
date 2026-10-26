@@ -19,9 +19,16 @@ export function BrandMark() {
   );
 }
 
-export function Brand({ mode }: { mode: string }) {
+export function Brand({
+  mode,
+  className = 'px-2 pt-2 pb-4',
+}: {
+  mode: string;
+  /** Отступы: в левой панели и в панели «Меню» телефона они разные. */
+  className?: string;
+}) {
   return (
-    <div className="flex items-center gap-[11px] px-2 pt-2 pb-4">
+    <div className={`flex items-center gap-[11px] ${className}`}>
       <BrandMark />
       <div>
         <div className="text-base leading-[1.1] font-[750] tracking-[-0.015em]">Buhuchet.kg</div>
@@ -145,18 +152,22 @@ export function SideOrg({
   sub,
   href,
   title,
+  onClick,
   Link = DefaultLink,
 }: {
   name: string;
   sub: string;
   href: string;
   title: string;
+  /** Например, закрыть панель «Меню» телефона перед переходом. */
+  onClick?: () => void;
   Link?: ShellLink;
 }) {
   return (
     <Link
       href={href}
       title={title}
+      onClick={onClick}
       className="flex items-center gap-2.5 rounded-lg p-2 text-ink no-underline hover:bg-hover"
     >
       <span className="grid h-[30px] w-[30px] flex-none place-items-center rounded-[9px] bg-btn text-muted shadow-btn">

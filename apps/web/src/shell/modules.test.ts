@@ -1,6 +1,7 @@
 import {
   FEATURES,
   MENU_MODULE_IDS,
+  MENU_MODULES,
   PERMISSION_IDS,
   UI_TEXTS,
   type Feature,
@@ -14,6 +15,7 @@ import {
   MODULES,
   moduleHref,
   parseAppPath,
+  phoneModules,
   resolveAppRoute,
   shellAccess,
   visibleTabs,
@@ -191,6 +193,28 @@ describe('адрес страницы за входом', () => {
       moduleId: 'pdicts',
       tabId: 'gked',
     });
+  });
+});
+
+describe('меню на телефоне (ТЗ «Мобильная навигация»)', () => {
+  it('внизу ровно 4 основных модуля, остальные — в «Других модулях» в порядке меню', () => {
+    const all = MENU_MODULES.map((m) => m.id);
+    const { bottom, other } = phoneModules(all, false);
+    expect(bottom).toEqual(['home', 'cps', 'reports', 'tasks']);
+    expect(other).toEqual(all.filter((m) => !bottom.includes(m)));
+    expect(other).not.toContain('home');
+  });
+
+  it('основной модуль без права не показывается и не переезжает в «Другие модули»', () => {
+    const { bottom, other } = phoneModules(['home', 'reports', 'fin', 'staff'], false);
+    expect(bottom).toEqual(['home', 'reports']);
+    expect(other).toEqual(['fin', 'staff']);
+  });
+
+  it('у администратора платформы внизу — свои четыре модуля Админки', () => {
+    const { bottom, other } = phoneModules(['accounts', 'orgs', 'pdicts', 'kb', 'tg'], true);
+    expect(bottom).toEqual(['accounts', 'orgs', 'pdicts', 'tg']);
+    expect(other).toEqual(['kb']);
   });
 });
 

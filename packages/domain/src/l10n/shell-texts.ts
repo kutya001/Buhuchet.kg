@@ -1,9 +1,9 @@
 import type { UiTextDefault } from './texts';
 
 /**
- * Тексты оболочки (рабочая страница, задача #10): названия модулей, их краткие названия и описания,
- * вкладки и способы добавления — как в прототипе (core/registry.js, BIZ и ADM; вкладки и «+ Добавить»
- * — функции `*Tabs` и `*Add` модулей). Ключи `nav.home`, `nav.counterparties`, `nav.reports`,
+ * Тексты оболочки (рабочая страница, задачи #10 и #11): названия модулей, их краткие названия и
+ * описания, вкладки и способы добавления — как в прототипе (core/registry.js, BIZ и ADM; вкладки и
+ * «+ Добавить» — функции `*Tabs` и `*Add` модулей). Ключи `nav.home`, `nav.counterparties`, `nav.reports`,
  * `nav.tasks`, `nav.staff`, `kb.title`, `kb.open`, `btn.add` — из раздела `localization` refDB.json,
  * с тем же текстом.
  */
@@ -235,6 +235,8 @@ export const SHELL_TEXTS = {
   'shell.org_profile': { ru: 'Профиль организации', section: 'Оболочка' },
   'shell.org_inn': { ru: 'ИНН {inn}', section: 'Оболочка' },
   'shell.logout': { ru: 'Выйти из аккаунта', section: 'Оболочка' },
+  'shell.other_modules': { ru: 'Другие модули', section: 'Оболочка' },
+  'shell.search_open': { ru: 'Поиск', section: 'Оболочка' },
   'kb.open': { ru: 'Открыть Базу знаний', section: 'База знаний' },
   'shell.stub_title': { ru: '{module}: экран в разработке', section: 'Оболочка' },
   'shell.stub_text': {
