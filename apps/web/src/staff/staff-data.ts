@@ -1,6 +1,6 @@
 'use client';
 
-import { Employee, OrgPolicy, PhoneCodes, RoleList, StaffTabCounts } from '@buhuchet/shared';
+import { Employee, PhoneCodes, RoleList, StaffTabCounts } from '@buhuchet/shared';
 import type { ShellCount } from '@buhuchet/ui';
 import { queryOptions, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
@@ -37,12 +37,6 @@ export const allRolesQuery = queryOptions({
       (v) => RoleList.parse(v).items,
       'roles',
     ),
-});
-
-/** Учётная политика: роль новых сотрудников (прототип `ORG.defaultRole`) и включённые модули. */
-export const policyQuery = queryOptions({
-  queryKey: ['org', 'policy'],
-  queryFn: async () => json(await api.api.org.policy.$get(), (v) => OrgPolicy.parse(v), 'policy'),
 });
 
 /** Счётчик вкладки; ноль показывается серым, как у вкладок модуля в прототипе; null — вкладки нет. */

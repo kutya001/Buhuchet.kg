@@ -172,6 +172,13 @@ describe('поля и блоки форм (прототип controls.css, cards.
     expect(inputClass({ multiline: true })).toContain('min-h-[90px]');
   });
 
+  it('фон панели — только по атрибуту readonly (не у списка и выбора файла); кнопка выбора файла в рамке', () => {
+    expect(inputClass().split(' ')).toContain('[&[readonly]]:bg-pane-alt');
+    expect(inputClass()).not.toContain('read-only:');
+    expect(inputClass().split(' ')).not.toContain('file:border-line-strong');
+    expect(inputClass({ file: true }).split(' ')).toContain('file:border-line-strong');
+  });
+
   it('форма: две колонки, на телефоне до компоновки — одна; компоновка раскладывает по атрибутам', () => {
     const html = renderToStaticMarkup(
       <FormGrid>

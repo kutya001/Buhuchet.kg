@@ -9,6 +9,9 @@ export const ORG_HEAD_MAX_LENGTH = 200;
 /** Логотип — картинка до 2 МБ (прототип modules/org.js: `lf.size > 2*1048576`). */
 export const LOGO_MAX_BYTES = 2 * 1048576;
 
+/** Ссылка на логотип живёт 15 минут, как все ссылки на файлы; потом экран запрашивает новую. */
+export const LOGO_LINK_SECONDS = 15 * 60;
+
 /** Тексты под полями «Основное» (прототип modules/org.js, og-save). */
 export const ORG_PROFILE_MESSAGES = {
   name_required: 'Введите название',

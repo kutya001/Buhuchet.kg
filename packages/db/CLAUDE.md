@@ -37,7 +37,7 @@
 - Задача по расписанию берёт список организаций `orgIds(db)` (функция `app.org_ids()`) и работает с каждой в своей `withOrgContext`.
 - Ссылки между записями организации — на пару `(id, org_id)` (составной внешний ключ), чтобы запись нельзя было связать с чужой организацией.
 - Сотрудники — `src/staff.ts` (`listEmployeesPage` — страница списка, `getEmployee` — запись с `phoneText` по маске «Кодов телефонов», `createEmployee`, `lockEmployee`, `roleAccess` — роль для решения о сотруднике, строка блокируется FOR SHARE, `roleScopeMap`, `endUserSessions`, `phoneCodes`), роли — `src/roles.ts` (`listRoles`, `getRole`, `createRole`, `replaceRolePermissions`, `setRoleScopes`, `roleInUse`, `deleteRole`, `permissionCatalog`); всё — в `withOrgContext`, хеш пароля не читается. Новая запись получает организацию и автора из контекста (`app.current_org_id()`, `app.current_user_id()`).
-- «Моя организация» — `src/org.ts` (`getOrgProfile`, `getOrgPolicy`, `orgFeatures`, `orgPolicyHistory`). У `organizations` роль приложения меняет только поля профиля и служебные поля правки (права на столбцы, миграция 0015); новое изменяемое поле организации — в `GRANT UPDATE (…)` новой миграцией.
+- «Моя организация» — `src/org.ts` (`getOrgProfile`, `getOrgPolicy`, `orgFeatures`, `orgPolicyHistory`, `orgRoleOptions` — роли для «Роли по умолчанию»). У `organizations` роль приложения меняет только поля профиля и служебные поля правки (права на столбцы, миграция 0015); новое изменяемое поле организации — в `GRANT UPDATE (…)` новой миграцией.
 - Нарушенное ограничение — `uniqueViolation(err)` и `foreignKeyViolation(err)` из `src/errors.ts` (имя ограничения): так метод отвечает «логин занят», «такая роль уже есть», а не 500.
 
 ## Списки

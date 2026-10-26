@@ -19,10 +19,11 @@ import { useState, type ReactNode } from 'react';
 import { api, callApi } from '../api-client';
 import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
 import { useErrorText, useT } from '../l10n/provider';
+import { policyQuery } from '../org/org-data';
 import { useShell } from '../shell/context';
 import { EmployeeCard } from './employee-card';
 import { ChangeRoleDialog, NewEmployeeDialog } from './employee-forms';
-import { allRolesQuery, phoneCodesQuery, policyQuery, useStaffRefresh } from './staff-data';
+import { allRolesQuery, phoneCodesQuery, useStaffRefresh } from './staff-data';
 import { staffMenu } from './staff-menu';
 
 interface NewEmployeeData {

@@ -12,6 +12,7 @@ import {
 } from '@buhuchet/domain';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ActionMenu, type ActionEntry, type MenuPlace } from '../action-menu';
+import { Chip } from '../chip';
 import { iconButtonClass, linkButtonClass, TOUCH_AREA } from '../button';
 import { EmptyState, NothingFound } from '../empty-state';
 import { FloatingPanel } from '../floating';
@@ -497,26 +498,9 @@ export function GridChips({
   labels: GridLabels;
 }) {
   const chip = (key: string, name: string, text: string, clear: string, onClear?: () => void) => (
-    <span
-      key={key}
-      data-chip={key}
-      className="inline-flex max-w-full items-center gap-1 rounded-full bg-info-bg py-0.5 pr-1 pl-2.5 text-[12.5px] font-[550] text-info"
-    >
-      <span className="truncate">
-        <b className="font-[650]">{name}</b> {text}
-      </span>
-      {onClear && (
-        <button
-          type="button"
-          onClick={onClear}
-          aria-label={clear}
-          title={clear}
-          className={`${TOUCH_AREA} grid h-5 w-5 flex-none cursor-pointer place-items-center rounded-full border-0 bg-transparent text-inherit hover:bg-info-bg`}
-        >
-          <Icon name="x" size="sm" />
-        </button>
-      )}
-    </span>
+    <Chip key={key} id={key} clear={clear} onClear={onClear}>
+      <b className="font-[650]">{name}</b> {text}
+    </Chip>
   );
   return (
     <div className="flex flex-wrap items-center gap-1.5" data-grid-chips>

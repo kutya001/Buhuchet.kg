@@ -1,8 +1,6 @@
+import { LOGO_LINK_SECONDS } from '@buhuchet/domain';
 import type { OrgLogoLink } from '@buhuchet/shared';
 import type { ApiDeps } from '../../deps';
-
-/** Ссылка на логотип живёт 15 минут, как все ссылки на файлы; потом экран запрашивает новую. */
-export const LOGO_LINK_SECONDS = 15 * 60;
 
 /**
  * Ключ лежит в папке логотипов этой организации. Ключ ставит только сервер, но ссылка выдаётся и файл

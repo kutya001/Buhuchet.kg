@@ -10,22 +10,29 @@ import { useFormPack } from './use-form-pack';
  * cards.css `.box`, `.kv`, `.note`; ui/popups.js `fld`, `setErr`). Тексты — пропсами из словаря.
  */
 
+/** Кнопка внутри поля выбора файла (`::file-selector-button`). */
+const FILE_BUTTON_CLASS =
+  'file:mr-1.5 file:cursor-pointer file:rounded-[4px] file:border file:border-line-strong file:bg-pane file:px-1.5 file:text-ink';
+
 /** Моноширинный текст (`.mono`): логин, код, номер счёта. */
 export const MONO_CLASS = 'font-mono text-[.92em] [font-feature-settings:"calt"_1,"zero"_1]';
 
 /**
  * Поле ввода (`.inp`): рамка, при фокусе — тёмная рамка и кольцо, с ошибкой (`aria-invalid`) —
  * красная рамка, только для чтения — фон панели. Подходит для input, select и textarea. `full: false` —
- * без ширины на всю строку (ширину задаёт свой класс).
+ * без ширины на всю строку (ширину задаёт свой класс). Фон панели — только у поля с атрибутом `readonly`
+ * (`.inp[readonly]`): псевдокласс `:read-only` браузер ставит и списку, и выбору файла. `file` — выбор
+ * файла с кнопкой в рамке, как в прототипе.
  */
 export function inputClass(
-  options: { mono?: boolean; multiline?: boolean; full?: boolean } = {},
+  options: { mono?: boolean; multiline?: boolean; full?: boolean; file?: boolean } = {},
 ): string {
   return [
     options.full === false ? '' : 'w-full',
     'min-h-[35px] rounded-lg border border-line bg-field px-2.5 py-[7px] text-[13.5px] text-ink outline-none',
     'shadow-[inset_0_1px_2px_rgba(0,0,0,.04)] transition-[border-color,box-shadow] duration-150',
-    'focus:border-line-strong focus:shadow-[0_0_0_3px_var(--bu-sel)] read-only:bg-pane-alt',
+    'focus:border-line-strong focus:shadow-[0_0_0_3px_var(--bu-sel)] [&[readonly]]:bg-pane-alt',
+    options.file ? FILE_BUTTON_CLASS : '',
     'aria-[invalid=true]:border-danger',
     options.multiline ? 'min-h-[90px] resize-y leading-normal' : '',
     options.mono ? MONO_CLASS : '',

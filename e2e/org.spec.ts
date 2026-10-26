@@ -1,20 +1,11 @@
-import { expect, test, type APIRequestContext } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
+import { DEMO_PASSWORD, signIn } from './helpers';
 
-// «Моя организация» через настоящий сайт (Next.js → API) на демо-организации. Экранов ещё нет (#19) —
-// проверяются методы API. Правки общей демо-организации (адрес страницы, функции) — только в проекте
-// «desktop» и по очереди: иначе проекты ПК и телефона меняли бы одну запись одновременно; методы API
-// для ПК и телефона одни и те же. Всё изменённое возвращается как было.
-const DEMO_PASSWORD = process.env.DEMO_PASSWORD ?? 'demo';
+// «Моя организация» через настоящий сайт (Next.js → API) на демо-организации: методы API и экраны,
+// которые общую запись не меняют. Сохранение адреса страницы, функций и настроек — в
+// org.shared.spec.ts: те тесты идут после всех остальных и по одному.
 
-test.describe.configure({ mode: 'serial' });
-
-async function signIn(api: APIRequestContext, origin: string, login: string) {
-  const res = await api.post('/api/auth/login', {
-    headers: { origin },
-    data: { login, password: DEMO_PASSWORD },
-  });
-  expect(res.status(), await res.text()).toBe(200);
-}
+const ORG_NAME = 'ОсОО «Бухгалтер Плюс»';
 
 async function version(api: APIRequestContext, path: '/api/org' | '/api/org/policy') {
   const res = await api.get(path);
@@ -22,18 +13,31 @@ async function version(api: APIRequestContext, path: '/api/org' | '/api/org/poli
   return ((await res.json()) as { version: number }).version;
 }
 
-test.describe('Этап 1: Моя организация (API)', () => {
+/** Окно профиля организации: на ПК — из левой панели, на телефоне — из панели «Меню». */
+async function openOrgProfile(page: Page, isMobile: boolean) {
+  if (isMobile) {
+    await page.getByRole('button', { name: 'Меню' }).click();
+    await page.getByRole('dialog', { name: 'Меню' }).locator('[data-side-org]').click();
+  } else {
+    await page.getByRole('complementary', { name: 'Модули' }).locator('[data-side-org]').click();
+  }
+  const dialog = page.getByRole('dialog', { name: ORG_NAME });
+  await expect(dialog).toBeVisible();
+  return dialog;
+}
+
+test.describe('Этап 1: Моя организация', () => {
   test('бухгалтер видит профиль организации, но изменить не может (403)', async ({
     playwright,
     baseURL,
   }) => {
     const origin = new URL(baseURL!).origin;
     const accountant = await playwright.request.newContext({ baseURL });
-    await signIn(accountant, origin, 'alisher');
+    await signIn(accountant, origin, 'alisher', DEMO_PASSWORD);
     const profile = await accountant.get('/api/org');
     expect(profile.status()).toBe(200);
     const body = (await profile.json()) as { name: string; slug: string; version: number };
-    expect(body).toMatchObject({ name: 'ОсОО «Бухгалтер Плюс»', slug: 'buhgalter-plyus' });
+    expect(body).toMatchObject({ name: ORG_NAME, slug: 'buhgalter-plyus' });
 
     const patch = await accountant.patch('/api/org', {
       headers: { origin },
@@ -46,16 +50,27 @@ test.describe('Этап 1: Моя организация (API)', () => {
       data: { version: await version(accountant, '/api/org/policy'), features: { tasks: false } },
     });
     expect(policy.status()).toBe(403);
+    const roles = await accountant.get('/api/org/role-options');
+    expect(roles.status()).toBe(403);
+    const logo = await accountant.put(`/api/org/logo?version=${body.version}`, {
+      headers: { origin, 'content-type': 'image/png' },
+      data: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    });
+    expect(logo.status()).toBe(403);
+    const removed = await accountant.delete(`/api/org/logo?version=${body.version}`, {
+      headers: { origin },
+    });
+    expect(removed.status()).toBe(403);
     await accountant.dispose();
   });
 
-  test('владелец вводит зарезервированный адрес страницы — отказ с понятной причиной; свободный сохраняется', async ({
+  test('зарезервированный и неверный адрес страницы сервер отклоняет с понятной причиной', async ({
     playwright,
     baseURL,
-  }, testInfo) => {
+  }) => {
     const origin = new URL(baseURL!).origin;
     const owner = await playwright.request.newContext({ baseURL });
-    await signIn(owner, origin, 'erkin');
+    await signIn(owner, origin, 'erkin', DEMO_PASSWORD);
     const save = async (slug: string) =>
       owner.patch('/api/org', {
         headers: { origin },
@@ -76,58 +91,152 @@ test.describe('Этап 1: Моя организация (API)', () => {
         message: '3–30 символов: строчные латинские буквы, цифры и дефис',
       },
     });
-
-    test.skip(testInfo.project.name !== 'desktop', 'правка общей записи — один раз, в проекте ПК');
-    const free = `e2e-${Date.now().toString(36)}`;
-    try {
-      const res = await save(free);
-      expect(res.status()).toBe(200);
-      expect(await res.json()).toMatchObject({ slug: free });
-      const me = await owner.get('/api/auth/me');
-      expect(await me.json()).toMatchObject({ organization: { slug: free } });
-    } finally {
-      expect((await save('buhgalter-plyus')).status()).toBe(200);
-    }
     await owner.dispose();
   });
 
-  test('выключенный в учётной политике модуль пропадает из списка модулей меню', async ({
-    playwright,
+  test('бухгалтер видит «Мою организацию» только для просмотра: замок, без полей и кнопок сохранения', async ({
+    page,
     baseURL,
-  }, testInfo) => {
-    test.skip(testInfo.project.name !== 'desktop', 'правка общей записи — один раз, в проекте ПК');
-    const origin = new URL(baseURL!).origin;
-    const owner = await playwright.request.newContext({ baseURL });
-    const accountant = await playwright.request.newContext({ baseURL });
-    await signIn(owner, origin, 'erkin');
-    await signIn(accountant, origin, 'alisher');
-    const modules = async () =>
-      ((await (await accountant.get('/api/auth/me')).json()) as { modules: string[] }).modules;
-    const setProjects = async (on: boolean) => {
-      const res = await owner.patch('/api/org/policy', {
-        headers: { origin },
-        data: { version: await version(owner, '/api/org/policy'), features: { projects: on } },
-      });
-      expect(res.status(), await res.text()).toBe(200);
-    };
+  }) => {
+    await signIn(page.request, new URL(baseURL!).origin, 'alisher', DEMO_PASSWORD);
+    const main = page.locator('main');
 
-    expect(await modules()).toContain('projects');
-    try {
-      await setProjects(false);
-      const after = await modules();
-      expect(after).not.toContain('projects');
-      expect(after).toEqual(expect.arrayContaining(['home', 'cps', 'reports', 'org']));
-      const history = await accountant.get('/api/org/policy/history');
-      expect(
-        ((await history.json()) as { items: { changes: { field: string }[] }[] }).items[0],
-      ).toMatchObject({
-        changes: [expect.objectContaining({ field: 'features' })],
-      });
-    } finally {
-      await setProjects(true);
-    }
-    expect(await modules()).toContain('projects');
-    await owner.dispose();
-    await accountant.dispose();
+    await page.goto('/app/org/main');
+    await expect(
+      main.getByText('Редактировать может только владелец организации.', { exact: false }),
+    ).toBeVisible();
+    await expect(main.getByText(ORG_NAME)).toBeVisible();
+    await expect(main.getByText('01203201910123')).toBeVisible();
+    await expect(main.getByRole('textbox')).toHaveCount(0);
+    await expect(main.getByRole('button', { name: 'Сохранить' })).toHaveCount(0);
+
+    await page.goto('/app/org/policy');
+    await expect(main.getByText('Менять учётную политику может только владелец.')).toBeVisible();
+    const switches = main.getByRole('switch');
+    await expect(switches.first()).toBeVisible();
+    expect(await switches.count()).toBeGreaterThan(10);
+    for (const s of await switches.all()) await expect(s).toBeDisabled();
+    const sections = main.locator('[data-page-section] input');
+    await expect(sections.first()).toBeVisible();
+    for (const c of await sections.all()) await expect(c).toBeDisabled();
+    // Дни напоминаний — без поля «+ день» и крестиков (прототип: только для чтения).
+    await expect(main.locator('[data-chip]').first()).toBeVisible();
+    await expect(main.getByRole('textbox', { name: 'Добавить день напоминания' })).toHaveCount(0);
+    await expect(main.getByRole('button', { name: 'Убрать' })).toHaveCount(0);
+
+    await page.goto('/app/org/settings');
+    await expect(main.getByLabel('Часовой пояс')).toBeDisabled();
+    await expect(main.getByLabel('Роль по умолчанию для новых сотрудников')).toHaveValue(/.+/);
+    await expect(main.getByRole('button', { name: 'Сохранить настройки' })).toHaveCount(0);
+  });
+
+  test('владелец: «admin» в «Адресе страницы организации» подсвечен под полем и не сохраняется; логотип больше 2 МБ и не картинка — отказ', async ({
+    page,
+    baseURL,
+  }) => {
+    await signIn(page.request, new URL(baseURL!).origin, 'erkin', DEMO_PASSWORD);
+    const before = await version(page.request, '/api/org');
+    await page.goto('/app/org/main');
+    const main = page.locator('main');
+    const slug = main.getByLabel('Адрес страницы организации');
+    await expect(slug).toHaveValue('buhgalter-plyus');
+
+    // Причина видна сразу при вводе, сохранить нельзя: окна «Сменить адрес…» нет, запись та же.
+    await slug.fill('admin');
+    await expect(main.getByText('Этот адрес занят, выберите другой')).toBeVisible();
+    await expect(slug).toHaveAttribute('aria-invalid', 'true');
+    await main.getByRole('button', { name: 'Сохранить' }).click();
+    await expect(slug).toBeFocused();
+    await expect(
+      page.getByRole('dialog', { name: 'Сменить адрес страницы организации?' }),
+    ).toHaveCount(0);
+    await slug.fill('Не адрес');
+    await expect(
+      main.getByText('3–30 символов: строчные латинские буквы, цифры и дефис').last(),
+    ).toBeVisible();
+    await slug.fill('buhgalter-plyus');
+    await expect(slug).not.toHaveAttribute('aria-invalid');
+
+    const logo = main.getByLabel('Логотип');
+    await logo.setInputFiles({
+      name: 'big.png',
+      mimeType: 'image/png',
+      buffer: Buffer.alloc(2 * 1024 * 1024 + 1),
+    });
+    await expect(main.getByText('Файл больше 2 МБ')).toBeVisible();
+    await logo.setInputFiles({ name: 'logo.gif', mimeType: 'image/gif', buffer: Buffer.alloc(10) });
+    await expect(main.getByText('Логотип — картинка PNG или JPG')).toBeVisible();
+    await main.getByRole('button', { name: 'Сохранить' }).click();
+    await expect(logo).toBeFocused();
+    expect(await version(page.request, '/api/org')).toBe(before);
+  });
+
+  test('функцию, которая нужна другой включённой, выключить нельзя — уведомление объясняет почему', async ({
+    page,
+    baseURL,
+  }) => {
+    await signIn(page.request, new URL(baseURL!).origin, 'erkin', DEMO_PASSWORD);
+    const before = await version(page.request, '/api/org/policy');
+    await page.goto('/app/org/policy');
+    const main = page.locator('main');
+    // В демо включены и «Учёт оплаты налогов», и «Виртуальные счета и бонусы», которым он нужен.
+    await expect(main.locator('[data-feat-row="accounts"]').getByRole('switch')).toBeChecked();
+    const taxpay = main.locator('[data-feat-row="taxpay"]').getByRole('switch');
+    await expect(taxpay).toBeChecked();
+    await taxpay.click();
+    await expect(
+      page.getByRole('status').filter({
+        hasText:
+          'Сначала отключите «Виртуальные счета и бонусы» — она работает только вместе с этой функцией',
+      }),
+    ).toBeVisible();
+    await expect(taxpay).toBeChecked();
+    expect(await version(page.request, '/api/org/policy')).toBe(before);
+  });
+
+  test('«Настройки»: пустое время сводки не сохраняется — ошибка под полем', async ({
+    page,
+    baseURL,
+  }) => {
+    await signIn(page.request, new URL(baseURL!).origin, 'erkin', DEMO_PASSWORD);
+    const before = await version(page.request, '/api/org/policy');
+    await page.goto('/app/org/settings');
+    const main = page.locator('main');
+    const digest = main.getByLabel('Еженедельная сводка, понедельник');
+    await expect(digest).toHaveValue(/^\d\d:\d\d$/);
+    await digest.fill('');
+    await main.getByRole('button', { name: 'Сохранить настройки' }).click();
+    await expect(main.getByText('Укажите время сводки')).toBeVisible();
+    await expect(digest).toHaveAttribute('aria-invalid', 'true');
+    expect(await version(page.request, '/api/org/policy')).toBe(before);
+  });
+
+  test('профиль организации открывается из левой панели (на телефоне — из «Меню»); «Редактировать» ведёт на «Основное»', async ({
+    page,
+    baseURL,
+    isMobile,
+  }) => {
+    const origin = new URL(baseURL!).origin;
+    await signIn(page.request, origin, 'erkin', DEMO_PASSWORD);
+    await page.goto('/app/reports/week');
+    const dialog = await openOrgProfile(page, isMobile);
+    await expect(dialog).toContainText('Профиль организации · только просмотр');
+    await expect(dialog).toContainText('01203201910123');
+    await expect(dialog).toContainText('buhgalter-plyus');
+    await expect(dialog).toContainText('На платформе с');
+    await dialog.getByRole('button', { name: 'Редактировать' }).click();
+    await expect(page).toHaveURL(/\/app\/org\/main$/);
+    await expect(dialog).toBeHidden();
+    await expect(page.locator('main').getByLabel('Название')).toHaveValue(ORG_NAME);
+
+    // Без права «Настройки и учётная политика» — только «Закрыть».
+    await page.goto('about:blank');
+    await signIn(page.request, origin, 'alisher', DEMO_PASSWORD);
+    await page.goto('/app/reports/week');
+    const view = await openOrgProfile(page, isMobile);
+    await expect(view.getByRole('button', { name: 'Редактировать' })).toHaveCount(0);
+    await view.getByRole('button', { name: 'Закрыть', exact: true }).last().click();
+    await expect(view).toBeHidden();
+    await expect(page).toHaveURL(/\/app\/reports\/week$/);
   });
 });

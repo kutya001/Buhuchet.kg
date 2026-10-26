@@ -1,5 +1,10 @@
 import { defineConfig, devices } from '@playwright/test';
 
+const DESKTOP = { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 800 } };
+const MOBILE = { ...devices['Pixel 7'], viewport: { width: 390, height: 844 } };
+/** Тесты, которые меняют общую запись демо-организации. */
+const SHARED = /\.shared\.spec\.ts$/;
+
 // Сквозные тесты идут против уже запущенного приложения: в CI — docker-compose (как на VPS),
 // локально — `pnpm dev` или `docker compose --profile app up`. Адрес — E2E_BASE_URL.
 export default defineConfig({
@@ -25,12 +30,19 @@ export default defineConfig({
     reuseExistingServer: true,
     stdout: 'ignore',
   },
-  // Каждый пункт приёмки проверяется на ПК (1280 px) и телефоне (390 px).
+  // Каждый пункт приёмки проверяется на ПК (1280 px) и телефоне (390 px). Тесты, которые меняют общую
+  // запись демо-организации (учётная политика, адрес страницы, настройки), — в файлах *.shared.spec.ts:
+  // они идут после всех остальных и по одному (сначала ПК, потом телефон), чтобы выключенный на время
+  // модуль не попал в чужую проверку меню или прав.
   projects: [
+    { name: 'desktop', use: DESKTOP, testIgnore: SHARED },
+    { name: 'mobile', use: MOBILE, testIgnore: SHARED },
     {
-      name: 'desktop',
-      use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 800 } },
+      name: 'desktop-shared',
+      use: DESKTOP,
+      testMatch: SHARED,
+      dependencies: ['desktop', 'mobile'],
     },
-    { name: 'mobile', use: { ...devices['Pixel 7'], viewport: { width: 390, height: 844 } } },
+    { name: 'mobile-shared', use: MOBILE, testMatch: SHARED, dependencies: ['desktop-shared'] },
   ],
 });

@@ -9,6 +9,7 @@ import {
   OrgPolicy,
   OrgPolicyHistory,
   OrgProfile,
+  OrgRoleOptions,
 } from '@buhuchet/shared';
 import { and, desc, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -324,6 +325,7 @@ describe.skipIf(!databaseAvailable())('Моя организация: API', () =
         digestTime: '09:00',
         overdueRepeat: true,
         defaultRoleId: f.templateRole(f.a, 'acc'),
+        defaultRoleName: 'Бухгалтер',
         version: 1,
       });
       for (const cookie of [acc, hr, admin]) {
@@ -436,6 +438,44 @@ describe.skipIf(!databaseAvailable())('Моя организация: API', () =
       expect(
         await apiErr(await call('PATCH', '/api/org/policy', owner, { version: 1 })),
       ).toMatchObject({ code: 'record_changed' });
+    });
+
+    it('роли для «Роли по умолчанию» — тому, кто меняет настройки: без владельца, только своей организации', async () => {
+      const res = await call('GET', '/api/org/role-options', owner);
+      expect(res.status).toBe(200);
+      const { items } = OrgRoleOptions.parse(await res.json());
+      // По названию, как выбор роли в других формах.
+      expect(items.map((r) => r.id)).toEqual([
+        f.templateRole(f.a, 'acc'),
+        f.templateRole(f.a, 'chief'),
+        f.roleIds.hr,
+        f.roleIds.senior,
+      ]);
+      expect(items.map((r) => r.name)).toEqual([
+        'Бухгалтер',
+        'Главный бухгалтер',
+        'Кадры',
+        'Старший',
+      ]);
+      const other = OrgRoleOptions.parse(
+        await (await call('GET', '/api/org/role-options', ownerB)).json(),
+      );
+      expect(other.items.map((r) => r.id)).toEqual([
+        f.templateRole(f.b, 'acc'),
+        f.templateRole(f.b, 'chief'),
+      ]);
+      // Без права «Настройки и учётная политика» списка нет, даже с правом «Сотрудники и роли».
+      for (const cookie of [acc, hr, admin]) {
+        expect((await call('GET', '/api/org/role-options', cookie)).status).toBe(403);
+      }
+      expect((await call('GET', '/api/org/role-options')).status).toBe(401);
+      // Название выбранной роли видят все — для «Настроек» только для просмотра.
+      expect((await patchPolicy({ defaultRoleId: f.roleIds.hr })).status).toBe(200);
+      expect(await policy(acc)).toMatchObject({
+        defaultRoleId: f.roleIds.hr,
+        defaultRoleName: 'Кадры',
+      });
+      expect((await policy(ownerB)).defaultRoleName).toBe('Бухгалтер');
     });
 
     it('история учётной политики: сначала новые, кто и было → стало; видна всем, чужая — нет', async () => {
