@@ -159,7 +159,7 @@ export function roleChangeProblem(
   for (const group of SCOPE_GROUPS) {
     const setAll = after.scopes[group] === 'all' && before.scopes[group] !== 'all';
     const becomesAll = seesAll(will, group) && !seesAll(was, group);
-    if ((setAll || becomesAll) && scopeOf(editor.subject, group) !== 'all') {
+    if ((setAll || becomesAll) && !seesAll(editor.subject, group)) {
       return { lock: 'beyond_own_scope', group };
     }
   }
@@ -183,7 +183,7 @@ export function roleWithinRights(subject: AccessSubject, role: RoleRights): bool
   if (role.isOwner) return false;
   const holder = holderOf(role);
   if (effectivePermissions(holder).some((p) => !hasPermission(subject, p))) return false;
-  return SCOPE_GROUPS.every((g) => !seesAll(holder, g) || scopeOf(subject, g) === 'all');
+  return SCOPE_GROUPS.every((g) => !seesAll(holder, g) || seesAll(subject, g));
 }
 
 /**
@@ -204,6 +204,19 @@ export function copiedRolePermissions(
       !OWNER_ONLY_PERMISSIONS.includes(p) &&
       (editor.isOwner || (!OWNER_GRANTED_PERMISSIONS.includes(p) && hasPermission(editor, p))),
   );
+}
+
+/**
+ * Можно ли удалить роль по её правам (удаления в прототипе нет — docs/deviations.md, п. 16): роль
+ * владельца не удаляется; роль с правами, которые выдаёт только владелец, удаляет только он — как и
+ * меняет (ОТКЛОНЕНИЕ: docs/deviations.md#15). Сотрудники с ролью и учётная политика проверяются в базе.
+ */
+export function roleDeleteRefusal(
+  editor: Pick<RoleEditor, 'isOwner'>,
+  role: { isOwner: boolean; permissions: Iterable<PermissionId> },
+): 'owner_role' | 'owner_granted_role' | null {
+  if (role.isOwner) return 'owner_role';
+  return !editor.isOwner && hasOwnerGrantedPermission(role) ? 'owner_granted_role' : null;
 }
 
 /** Есть ли среди прав роли те, что выдаёт и снимает только владелец. */

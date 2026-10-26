@@ -8,6 +8,7 @@ import {
   ROLE_LOCK_MESSAGES,
   roleChangeProblem,
   rolePermissionCount,
+  roleDeleteRefusal,
   rolePermissionLock,
   roleWithinRights,
   type RoleLock,
@@ -174,6 +175,15 @@ describe('roleChangeProblem — сохранение роли на сервер�
       group: 'reports',
     });
     expect(change(owner, accRole, set(), set(), { reports: 'all' })).toBeNull();
+    // «Все» в своей роли без просмотра группы ничего не открывает — и выдать его нельзя.
+    const blind = {
+      ...hr,
+      subject: { ...hrSubject, scopes: { cps: 'all' as const, fin: 'all' as const } },
+    };
+    expect(change(blind, accRole, set('finView'), set('finView'), { fin: 'all' })).toEqual({
+      lock: 'beyond_own_scope',
+      group: 'fin',
+    });
   });
 
   it('возврат просмотра группы оживляет её права и область — они тоже не шире своих', () => {
@@ -297,6 +307,17 @@ describe('copiedRolePermissions — «Скопировать права из»',
         permissions: ['export', 'org', 'cpView', 'export'],
       }),
     ).toEqual(['cpView', 'export']);
+  });
+});
+
+describe('roleDeleteRefusal — удаление роли', () => {
+  it('роль владельца не удаляется; роль с правами «выдаёт только владелец» удаляет владелец', () => {
+    expect(roleDeleteRefusal(owner, { isOwner: true, permissions: [] })).toBe('owner_role');
+    expect(roleDeleteRefusal(hr, { isOwner: false, permissions: ['cpView', 'rollback'] })).toBe(
+      'owner_granted_role',
+    );
+    expect(roleDeleteRefusal(owner, { isOwner: false, permissions: ['rollback'] })).toBeNull();
+    expect(roleDeleteRefusal(hr, { isOwner: false, permissions: ['viewAll'] })).toBeNull();
   });
 });
 

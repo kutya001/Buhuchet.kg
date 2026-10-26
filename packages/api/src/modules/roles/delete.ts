@@ -7,11 +7,7 @@ import {
   rolePermissionIds,
   withOrgContext,
 } from '@buhuchet/db';
-import {
-  hasOwnerGrantedPermission,
-  RecordChangedError,
-  RecordNotFoundError,
-} from '@buhuchet/domain';
+import { RecordChangedError, RecordNotFoundError, roleDeleteRefusal } from '@buhuchet/domain';
 import { DeleteRoleQuery, OkResponse, Uuid } from '@buhuchet/shared';
 import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
@@ -19,6 +15,11 @@ import { apiError, apiFail, versionedSaveResponses } from '../../errors';
 import { orgContextOf, requirePermission } from '../../middleware/access';
 import { staffActor } from '../staff/employees';
 import { error } from './roles';
+
+const DELETE_REFUSALS = {
+  owner_role: 'Роль владельца не удаляется',
+  owner_granted_role: 'Роль с правами, которые выдаёт только владелец, удаляет владелец',
+} as const;
 
 const ROLE_IN_USE = apiError('role_in_use', 'Роль назначена сотрудникам: сначала смените им роль');
 
@@ -60,15 +61,9 @@ export function deleteRoleHandler(deps: ApiDeps): RouteHandler<typeof deleteRole
         const role = await lockRole(tx, id);
         if (!role) throw new RecordNotFoundError('role', id);
         if (role.version !== version) throw new RecordChangedError('role', id, role.version);
-        if (role.isOwner) apiFail(403, 'owner_role', 'Роль владельца не удаляется');
-        const permissions = await rolePermissionIds(tx, id);
-        if (!actor.isOwner && hasOwnerGrantedPermission({ isOwner: false, permissions })) {
-          apiFail(
-            403,
-            'owner_granted_role',
-            'Роль с правами, которые выдаёт только владелец, удаляет владелец',
-          );
-        }
+        const permissions = role.isOwner ? [] : await rolePermissionIds(tx, id);
+        const refusal = roleDeleteRefusal(actor, { isOwner: role.isOwner, permissions });
+        if (refusal) apiFail(403, refusal, DELETE_REFUSALS[refusal]);
         const inUse = await roleInUse(tx, id);
         if (inUse === 'employees') apiFail(400, ROLE_IN_USE.error.code, ROLE_IN_USE.error.message);
         if (inUse === 'default') {
