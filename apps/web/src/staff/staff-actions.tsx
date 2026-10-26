@@ -33,10 +33,28 @@ export function useStaffActions(onChanged: () => void): {
   const { access, employeeId } = useShell();
   const [askBlock, setAskBlock] = useState<Employee | null>(null);
   const [reset, setReset] = useState<{ employee: Employee; password: string } | null>(null);
+  // Сотрудники, по которым запрос ещё идёт: повторное действие над ними не шлёт второй запрос
+  // (иначе окно могло бы показать уже недействительный временный пароль).
+  const [pending, setPending] = useState<ReadonlySet<string>>(() => new Set());
+  const once = async <T,>(e: Employee, send: () => Promise<T>): Promise<T | null> => {
+    if (pending.has(e.id)) return null;
+    setPending((p) => new Set(p).add(e.id));
+    try {
+      return await send();
+    } finally {
+      setPending((p) => {
+        const next = new Set(p);
+        next.delete(e.id);
+        return next;
+      });
+    }
+  };
+
   const resetPassword = async (e: Employee) => {
-    const res = await callApi(() =>
-      api.api.staff[':id']['password-reset'].$post({ param: { id: e.id } }),
+    const res = await once(e, () =>
+      callApi(() => api.api.staff[':id']['password-reset'].$post({ param: { id: e.id } })),
     );
+    if (!res) return;
     if (!res.ok) return toast(errorText(res.error), { bad: true });
     const body = TemporaryPasswordResponse.safeParse(res.data);
     if (!body.success) return toast(t('err.unknown'), { bad: true });
@@ -44,12 +62,15 @@ export function useStaffActions(onChanged: () => void): {
   };
 
   const setActive = async (e: Employee, active: boolean) => {
-    const res = await callApi(() =>
-      api.api.staff[':id'][active ? 'unblock' : 'block'].$post({
-        param: { id: e.id },
-        json: { version: e.version },
-      }),
+    const res = await once(e, () =>
+      callApi(() =>
+        api.api.staff[':id'][active ? 'unblock' : 'block'].$post({
+          param: { id: e.id },
+          json: { version: e.version },
+        }),
+      ),
     );
+    if (!res) return;
     onChanged();
     if (!res.ok) return toast(errorText(res.error), { bad: true });
     toast(t(active ? 'staff.unblock.done' : 'staff.block.done'), {
