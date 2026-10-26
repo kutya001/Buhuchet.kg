@@ -55,7 +55,7 @@ export type StaffRefusal =
   | 'owner_role'
   /** Права, которые выдаёт и снимает только владелец: такую роль назначает и снимает владелец. */
   | 'owner_granted'
-  /** Роль шире прав того, кто действует: её назначает, снимает и сбрасывает пароль владелец. */
+  /** Роль шире прав того, кто действует: её назначает и снимает, носителей ведёт владелец. */
   | 'beyond_own';
 
 /**
@@ -64,8 +64,8 @@ export type StaffRefusal =
  * владелец; себя не блокируют. Сотрудника, в роли которого есть права, которые выдаёт только
  * владелец, блокирует и разблокирует, меняет ему роль и сбрасывает пароль только владелец — иначе эти
  * права снимал бы или получал (через временный пароль) тот, кому их не выдавали. По той же причине не
- * владелец назначает, снимает и сбрасывает пароль только для ролей не шире своей (`roleWithinRights`).
- * `newRole` — роль, которую назначают (changeRole).
+ * владелец назначает, снимает, сбрасывает пароль, блокирует и разблокирует только для ролей не шире
+ * своей (`roleWithinRights`). `newRole` — роль, которую назначают (changeRole).
  */
 export function staffActionRefusal(
   actor: StaffActor,
@@ -82,10 +82,10 @@ export function staffActionRefusal(
     case 'edit':
       return null;
     case 'block':
-      if (self) return 'own_account';
-      return ownerGranted ? 'owner_granted' : null;
     case 'unblock':
-      return ownerGranted ? 'owner_granted' : null;
+      if (action === 'block' && self) return 'own_account';
+      if (ownerGranted) return 'owner_granted';
+      return roleWithinRights(actor, target.role) ? null : 'beyond_own';
     case 'resetPassword':
       if (ownerGranted) return 'owner_granted';
       return roleWithinRights(actor, target.role) ? null : 'beyond_own';

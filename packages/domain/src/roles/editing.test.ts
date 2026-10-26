@@ -12,7 +12,7 @@ import {
   roleWithinRights,
   type RoleLock,
 } from './editing';
-import { PERMISSION_IDS, type PermissionId } from './permissions';
+import { PERMISSION_IDS, type PermissionId, type Scope, type ScopeGroupId } from './permissions';
 
 const LOCK_BY_MESSAGE = new Map(
   Object.entries(ROLE_LOCK_MESSAGES).map(([lock, message]) => [message, lock as RoleLock]),
@@ -88,94 +88,116 @@ describe('rolePermissionLock — как roleLock прототипа', () => {
 });
 
 describe('roleChangeProblem — сохранение роли на сервере', () => {
+  type Scopes = Partial<Record<ScopeGroupId, Scope>>;
+  /** Сохранение роли: права до и после, область после (по умолчанию — как до, везде «Свои»). */
+  const change = (
+    editor: typeof owner,
+    role: { id: string; isOwner: boolean },
+    before: Set<PermissionId>,
+    after: Set<PermissionId>,
+    scopes: Scopes = {},
+    scopesBefore: Scopes = {},
+  ) =>
+    roleChangeProblem(
+      editor,
+      role,
+      { permissions: before, scopes: scopesBefore },
+      { permissions: after, scopes: { ...scopesBefore, ...scopes } },
+    );
+
   it('роль владельца не меняется никем; свою роль не владелец не меняет', () => {
-    expect(roleChangeProblem(owner, { id: 'owner', isOwner: true }, set(), set())).toEqual({
+    expect(change(owner, { id: 'owner', isOwner: true }, set(), set())).toEqual({
       lock: 'owner_role',
     });
-    expect(roleChangeProblem(hr, { id: 'hr', isOwner: false }, set(), set())).toEqual({
+    expect(change(hr, { id: 'hr', isOwner: false }, set(), set())).toEqual({
       lock: 'own_role',
     });
-    expect(
-      roleChangeProblem(owner, { id: 'owner-role-of-other', isOwner: false }, set(), set()),
-    ).toBeNull();
+    expect(change(owner, { id: 'owner-role-of-other', isOwner: false }, set(), set())).toBeNull();
   });
 
   it('добавить право группы можно только вместе с просмотром', () => {
-    expect(roleChangeProblem(owner, accRole, set(), set('createCp'))).toEqual({
+    expect(change(owner, accRole, set(), set('createCp'))).toEqual({
       lock: 'view_required',
       permission: 'createCp',
     });
-    expect(roleChangeProblem(owner, accRole, set(), set('cpView', 'createCp'))).toBeNull();
+    expect(change(owner, accRole, set(), set('cpView', 'createCp'))).toBeNull();
     // Права групп без просмотра («Задачи», «Справочники», «Общие права») — без условия.
-    expect(
-      roleChangeProblem(owner, accRole, set(), set('tasksCreate', 'dicts', 'export')),
-    ).toBeNull();
+    expect(change(owner, accRole, set(), set('tasksCreate', 'dicts', 'export'))).toBeNull();
   });
 
   it('право только владельца не выдаётся никому, даже владельцем', () => {
-    expect(roleChangeProblem(owner, accRole, set(), set('org'))).toEqual({
+    expect(change(owner, accRole, set(), set('org'))).toEqual({
       lock: 'owner_only',
       permission: 'org',
     });
   });
 
   it('права, которые выдаёт только владелец: не владелец не добавляет', () => {
-    expect(roleChangeProblem(hr, accRole, set(), set('rollback'))).toEqual({
+    expect(change(hr, accRole, set(), set('rollback'))).toEqual({
       lock: 'owner_granted',
       permission: 'rollback',
     });
-    expect(
-      roleChangeProblem(owner, accRole, set(), set('staffView', 'staff', 'rollback')),
-    ).toBeNull();
+    expect(change(owner, accRole, set(), set('staffView', 'staff', 'rollback'))).toBeNull();
   });
 
   it('роль с правами, которые выдаёт только владелец, меняет только владелец — целиком', () => {
     const problem = { lock: 'owner_granted_role' };
     // Снять само право, погасить его снятием просмотра, расширить такую роль — нельзя.
-    expect(roleChangeProblem(hr, accRole, set('staffView', 'staff'), set('staffView'))).toEqual(
-      problem,
-    );
-    expect(roleChangeProblem(hr, accRole, set('staffView', 'staff'), set('staff'))).toEqual(
-      problem,
-    );
-    expect(roleChangeProblem(hr, accRole, set('rollback'), set('rollback', 'export'))).toEqual(
-      problem,
-    );
+    expect(change(hr, accRole, set('staffView', 'staff'), set('staffView'))).toEqual(problem);
+    expect(change(hr, accRole, set('staffView', 'staff'), set('staff'))).toEqual(problem);
+    expect(change(hr, accRole, set('rollback'), set('rollback', 'export'))).toEqual(problem);
     expect(
-      roleChangeProblem(hr, accRole, set('cpView', 'archiveRest'), set('cpView', 'archiveRest'), {
+      change(hr, accRole, set('cpView', 'archiveRest'), set('cpView', 'archiveRest'), {
         cps: 'all',
       }),
     ).toEqual(problem);
-    expect(
-      roleChangeProblem(owner, accRole, set('staffView', 'staff'), set('staffView')),
-    ).toBeNull();
+    expect(change(owner, accRole, set('staffView', 'staff'), set('staffView'))).toBeNull();
   });
 
   it('не владелец добавляет только права, которые действуют у него самого', () => {
-    expect(roleChangeProblem(hr, accRole, set(), set('cpView', 'createCp', 'export'))).toBeNull();
-    expect(roleChangeProblem(hr, accRole, set(), set('finView', 'money'))).toEqual({
+    expect(change(hr, accRole, set(), set('cpView', 'createCp', 'export'))).toBeNull();
+    expect(change(hr, accRole, set(), set('finView', 'money'))).toEqual({
       lock: 'beyond_own',
       permission: 'finView',
     });
-    expect(roleChangeProblem(hr, accRole, set('export'), set('export', 'viewAll'))).toEqual({
+    expect(change(hr, accRole, set('export'), set('export', 'viewAll'))).toEqual({
       lock: 'beyond_own',
       permission: 'viewAll',
     });
-    expect(roleChangeProblem(owner, accRole, set(), set('finView', 'money', 'viewAll'))).toBeNull();
+    expect(change(owner, accRole, set(), set('finView', 'money', 'viewAll'))).toBeNull();
   });
 
   it('область «Все контрагенты» не владелец даёт только там, где она есть у него', () => {
-    expect(roleChangeProblem(hr, accRole, set(), set(), { cps: 'all', reports: 'own' })).toBeNull();
-    expect(roleChangeProblem(hr, accRole, set(), set(), { reports: 'all' })).toEqual({
+    expect(change(hr, accRole, set(), set(), { cps: 'all', reports: 'own' })).toBeNull();
+    expect(change(hr, accRole, set(), set(), { reports: 'all' })).toEqual({
       lock: 'beyond_own_scope',
       group: 'reports',
     });
-    expect(roleChangeProblem(owner, accRole, set(), set(), { reports: 'all' })).toBeNull();
+    expect(change(owner, accRole, set(), set(), { reports: 'all' })).toBeNull();
+  });
+
+  it('возврат просмотра группы оживляет её права и область — они тоже не шире своих', () => {
+    // В роли остались «Менять срок отчёта» и «Все» без просмотра отчётов; у кадровика их нет.
+    expect(change(hr, accRole, set('repDue'), set('repDue', 'repView'))).toEqual({
+      lock: 'beyond_own',
+      permission: 'repDue',
+    });
+    expect(change(hr, accRole, set(), set('repView'), {}, { reports: 'all' })).toEqual({
+      lock: 'beyond_own_scope',
+      group: 'reports',
+    });
+    // В контрагентах у кадровика «Все» — оживить можно.
+    expect(
+      change(hr, accRole, set('createCp'), set('createCp', 'cpView'), {}, { cps: 'all' }),
+    ).toBeNull();
+    expect(
+      change(owner, accRole, set('repDue'), set('repDue', 'repView'), {}, { reports: 'all' }),
+    ).toBeNull();
   });
 
   it('снять право можно, права группы без просмотра остаются и не действуют', () => {
-    expect(roleChangeProblem(hr, accRole, set('cpView', 'createCp'), set('createCp'))).toBeNull();
-    expect(roleChangeProblem(hr, accRole, set('finView', 'money'), set())).toBeNull();
+    expect(change(hr, accRole, set('cpView', 'createCp'), set('createCp'))).toBeNull();
+    expect(change(hr, accRole, set('finView', 'money'), set())).toBeNull();
   });
 
   it('у каждой причины есть текст', () => {

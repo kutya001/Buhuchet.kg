@@ -71,7 +71,7 @@ describe('действия над сотрудником', () => {
   it('себя не блокируют; разблокировать и править можно', () => {
     expect(staffActionRefusal(hr, target('e2'), 'block')).toBe('own_account');
     expect(staffActionRefusal(hr, target('e3'), 'block')).toBeNull();
-    expect(staffActionRefusal(hr, target('e3', finRole), 'block')).toBeNull();
+    expect(staffActionRefusal(hr, target('e3', role(['cpView', 'export'])), 'block')).toBeNull();
     expect(staffActionRefusal(hr, target('e3'), 'unblock')).toBeNull();
     expect(staffActionRefusal(hr, target('e2'), 'edit')).toBeNull();
   });
@@ -81,6 +81,12 @@ describe('действия над сотрудником', () => {
     expect(staffActionRefusal(hr, target('e3', staffRole), 'unblock')).toBe('owner_granted');
     expect(staffActionRefusal(owner, target('e3', staffRole), 'block')).toBeNull();
     expect(staffActionRefusal(owner, target('e3', staffRole), 'unblock')).toBeNull();
+  });
+
+  it('сотрудника с ролью шире своей блокирует и разблокирует только владелец', () => {
+    expect(staffActionRefusal(hr, target('e3', finRole), 'block')).toBe('beyond_own');
+    expect(staffActionRefusal(hr, target('e3', finRole), 'unblock')).toBe('beyond_own');
+    expect(staffActionRefusal(owner, target('e3', finRole), 'unblock')).toBeNull();
   });
 
   it('смена роли: свою — только владелец; роль владельца не назначается', () => {

@@ -377,6 +377,26 @@ describe.skipIf(!databaseAvailable())('Роли: API', () => {
         permissions: ['cpView', 'createCp', 'export'],
         audit: { updatedBy: 'hr-a' },
       });
+      // Владелец оставил в роли «Все» по отчётам без просмотра: вернуть просмотр — значит дать «Все».
+      const dormant = await newRole('Оживление');
+      const scoped = Role.parse(
+        await (
+          await call('PATCH', `/api/roles/${dormant.id}`, owner, {
+            version: dormant.version,
+            scopes: { reports: 'all' },
+          })
+        ).json(),
+      );
+      const revive = await call('PATCH', `/api/roles/${dormant.id}`, hr, {
+        version: scoped.version,
+        permissions: ['repView'],
+      });
+      expect(revive.status).toBe(403);
+      expect(await apiErr(revive)).toMatchObject({
+        code: 'beyond_own_scope',
+        details: { group: 'reports' },
+      });
+
       const wide = await call('PATCH', `/api/roles/${r.id}`, owner, {
         version: saved.version,
         permissions: [...saved.permissions, 'viewAll'],

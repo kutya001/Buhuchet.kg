@@ -88,6 +88,9 @@ export function refuse(refusal: StaffRefusal, action: StaffAction | 'create'): n
   if (refusal === 'beyond_own' && action === 'resetPassword') {
     apiFail(403, refusal, 'Пароль сотрудника с правами шире ваших сбрасывает владелец');
   }
+  if (refusal === 'beyond_own' && (action === 'block' || action === 'unblock')) {
+    apiFail(403, refusal, 'Сотрудника с правами шире ваших блокирует и разблокирует владелец');
+  }
   apiFail(403, refusal, REFUSAL_MESSAGES[refusal]);
 }
 

@@ -487,6 +487,17 @@ describe.skipIf(!databaseAvailable())('Сотрудники: API', () => {
       }
       expect((await card(owner, senior.id)).active).toBe(true);
 
+      // «Главный бухгалтер» шире «Кадров» — его тоже блокирует только владелец.
+      const chiefCard = await card(owner, f.people['chief-a']!.employeeId);
+      const chiefBlock = await call('POST', `/api/staff/${chiefCard.id}/block`, hr, {
+        version: chiefCard.version,
+      });
+      expect(chiefBlock.status).toBe(403);
+      expect(ApiError.parse(await chiefBlock.json()).error).toEqual({
+        code: 'beyond_own',
+        message: 'Сотрудника с правами шире ваших блокирует и разблокирует владелец',
+      });
+
       const acc = await card(owner, f.people['acc-a']!.employeeId);
       const stale = await call('POST', `/api/staff/${acc.id}/block`, owner, {
         version: acc.version + 5,

@@ -94,6 +94,27 @@ export interface RoleChangeProblem {
   group?: ScopeGroupId;
 }
 
+/** Права и область роли до или после правки. */
+export interface RoleDraft {
+  permissions: ReadonlySet<PermissionId>;
+  scopes: Readonly<Partial<Record<ScopeGroupId, Scope>>>;
+}
+
+/** Носитель роли: что роль даёт сотруднику (`hasPermission`, `scopeOf`). */
+function holderOf(role: { permissions: Iterable<PermissionId>; scopes: RoleDraft['scopes'] }) {
+  return {
+    employeeId: '',
+    isOwner: false,
+    permissions: new Set(role.permissions),
+    scopes: role.scopes,
+  } satisfies AccessSubject;
+}
+
+/** Действует ли у носителя роли область «Все контрагенты» в группе: нужен ещё просмотр группы. */
+function seesAll(holder: AccessSubject, group: ScopeGroupId): boolean {
+  return scopeOf(holder, group) === 'all' && hasPermission(holder, scopeGroupView(group));
+}
+
 /**
  * Проверка сохранения роли на сервере — то же правило, что у галочек формы. Роль владельца и свою
  * роль (не владельцу) не меняют вовсе: ни права, ни область, ни название — иначе сотрудник расширил
@@ -103,33 +124,42 @@ export interface RoleChangeProblem {
  *
  * Сверх прототипа сотруднику не владельцу (ОТКЛОНЕНИЕ: docs/deviations.md#15): роль с правами,
  * которые выдаёт только владелец, меняет только владелец — иначе такие права гасили бы снятием
- * просмотра группы, а двое их носителей расширяли бы роли друг другу; добавить можно только право,
- * которое действует у него самого, а область «Все контрагенты» — только в группе, где она у него
- * есть: через роль коллеги и созданного сотрудника он получил бы права шире своих. `scopes` — группы,
- * у которых область меняется.
+ * просмотра группы, а двое их носителей расширяли бы роли друг другу. И он не выдаёт больше, чем есть
+ * у него самого: каждое право, которое после правки начинает действовать у носителей роли (и то, что
+ * оживает, когда в роль возвращают просмотр группы), должно действовать у него; область «Все
+ * контрагенты» он ставит и делает действующей только в группе, где она есть у него. Иначе через роль
+ * коллеги и созданного сотрудника он получил бы права шире своих.
  */
 export function roleChangeProblem(
   editor: RoleSaveEditor,
   role: EditedRole,
-  before: ReadonlySet<PermissionId>,
-  after: ReadonlySet<PermissionId>,
-  scopes: Readonly<Partial<Record<ScopeGroupId, Scope>>> = {},
+  before: RoleDraft,
+  after: RoleDraft,
 ): RoleChangeProblem | null {
   if (role.isOwner) return { lock: 'owner_role' };
   if (!editor.isOwner) {
     if (editor.roleId === role.id) return { lock: 'own_role' };
-    if (hasOwnerGrantedPermission({ isOwner: false, permissions: before })) {
+    if (hasOwnerGrantedPermission({ isOwner: false, permissions: before.permissions })) {
       return { lock: 'owner_granted_role' };
     }
   }
   for (const permission of PERMISSION_IDS) {
-    if (!after.has(permission) || before.has(permission)) continue;
-    const lock = rolePermissionLock(editor, role, permission, after);
+    if (!after.permissions.has(permission) || before.permissions.has(permission)) continue;
+    const lock = rolePermissionLock(editor, role, permission, after.permissions);
     if (lock) return { lock, permission };
-    if (!hasPermission(editor.subject, permission)) return { lock: 'beyond_own', permission };
+  }
+  if (editor.isOwner) return null;
+  const was = holderOf(before);
+  const will = holderOf(after);
+  for (const permission of effectivePermissions(will)) {
+    if (!hasPermission(was, permission) && !hasPermission(editor.subject, permission)) {
+      return { lock: 'beyond_own', permission };
+    }
   }
   for (const group of SCOPE_GROUPS) {
-    if (scopes[group] === 'all' && scopeOf(editor.subject, group) !== 'all') {
+    const setAll = after.scopes[group] === 'all' && before.scopes[group] !== 'all';
+    const becomesAll = seesAll(will, group) && !seesAll(was, group);
+    if ((setAll || becomesAll) && scopeOf(editor.subject, group) !== 'all') {
       return { lock: 'beyond_own_scope', group };
     }
   }
@@ -151,19 +181,9 @@ export interface RoleRights {
 export function roleWithinRights(subject: AccessSubject, role: RoleRights): boolean {
   if (subject.isOwner) return true;
   if (role.isOwner) return false;
-  const holder: AccessSubject = {
-    employeeId: '',
-    isOwner: false,
-    permissions: new Set(role.permissions),
-    scopes: role.scopes,
-  };
+  const holder = holderOf(role);
   if (effectivePermissions(holder).some((p) => !hasPermission(subject, p))) return false;
-  return SCOPE_GROUPS.every(
-    (g) =>
-      scopeOf(subject, g) === 'all' ||
-      scopeOf(holder, g) === 'own' ||
-      !hasPermission(holder, scopeGroupView(g)),
-  );
+  return SCOPE_GROUPS.every((g) => !seesAll(holder, g) || scopeOf(subject, g) === 'all');
 }
 
 /**

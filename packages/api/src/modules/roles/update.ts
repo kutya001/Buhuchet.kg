@@ -96,7 +96,12 @@ export function updateRoleHandler(deps: ApiDeps): RouteHandler<typeof updateRole
           return (await getRole(tx, id))!;
         }
 
-        const problem = roleChangeProblem(actor, current, new Set(before), new Set(after), scopes);
+        const problem = roleChangeProblem(
+          actor,
+          current,
+          { permissions: new Set(before), scopes: scopesBefore },
+          { permissions: new Set(after), scopes: { ...scopesBefore, ...scopes } },
+        );
         if (problem) {
           const { lock, ...details } = problem;
           apiFail(
