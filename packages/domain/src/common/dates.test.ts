@@ -5,6 +5,7 @@ import {
   bishkekTime,
   diffDays,
   formatDateRu,
+  formatMomentRu,
   isIsoDate,
   weekdayMondayFirst,
 } from './dates';
@@ -30,6 +31,11 @@ describe('арифметика дат', () => {
 
   it('formatDateRu', () => {
     expect(formatDateRu('2026-03-15')).toBe('15.03.2026');
+  });
+
+  it('formatMomentRu — дата и время по Бишкеку', () => {
+    expect(formatMomentRu(new Date('2026-03-15T04:05:00Z'))).toBe('15.03.2026 10:05');
+    expect(formatMomentRu(new Date('2026-12-31T18:30:00Z'))).toBe('01.01.2027 00:30');
   });
 
   it('weekdayMondayFirst', () => {

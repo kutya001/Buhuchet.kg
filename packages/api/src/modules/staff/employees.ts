@@ -1,5 +1,5 @@
 import { createRoute, z, type RouteHandler } from '@hono/zod-openapi';
-import { getEmployee, listEmployees, withOrgContext, type EmployeeRecord } from '@buhuchet/db';
+import { getEmployee, listEmployeesPage, withOrgContext, type EmployeeRecord } from '@buhuchet/db';
 import {
   RecordNotFoundError,
   telegramName,
@@ -8,11 +8,11 @@ import {
   type StaffActor,
   type StaffRefusal,
 } from '@buhuchet/domain';
-import { ApiError, Employee, EmployeeList, Uuid } from '@buhuchet/shared';
+import { ApiError, Employee, EmployeeList, ListQueryParams, Uuid } from '@buhuchet/shared';
 import type { Context } from 'hono';
 import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
-import { apiFail } from '../../errors';
+import { apiFail, listQueryOf, listQueryResponses } from '../../errors';
 import { orgContextOf, requirePermission } from '../../middleware/access';
 
 export const error = { 'application/json': { schema: ApiError } };
@@ -25,6 +25,7 @@ export function employeeBody(e: EmployeeRecord): Employee {
     shortName: e.shortName,
     login: e.login,
     phone: e.phone,
+    phoneText: e.phoneText,
     role: e.role,
     active: e.active,
     telegram: e.telegram && {
@@ -98,25 +99,43 @@ export const listEmployeesRoute = createRoute({
   method: 'get',
   path: '/staff',
   tags: ['staff'],
-  summary: 'Сотрудники организации',
+  summary: 'Сотрудники организации: страница списка',
   middleware: [requirePermission('staffView')] as const,
+  request: { query: ListQueryParams },
   responses: {
     200: {
-      description: 'Все сотрудники, и заблокированные',
+      description:
+        'Страница списка сотрудников (и заблокированных): сортировка, страница и фильтры — на сервере',
       content: { 'application/json': { schema: EmployeeList } },
     },
+    ...listQueryResponses,
     401: { description: 'Нет входа', content: error },
     403: { description: 'Нет права «Просматривать сотрудников»', content: error },
   },
 });
 
-/** Список сотрудников (прототип modules/staff.js, renderStaff, вкладка «Сотрудники»). */
+/**
+ * Список сотрудников (прототип modules/staff.js, renderStaff, вкладка «Сотрудники»): в ответе только
+ * текущая страница, всего записей по фильтру и итоги.
+ */
 export function listEmployeesHandler(
   deps: ApiDeps,
 ): RouteHandler<typeof listEmployeesRoute, AppEnv> {
   return async (c) => {
-    const items = await withOrgContext(deps.db, orgContextOf(c), listEmployees);
-    return c.json({ items: items.map(employeeBody) }, 200);
+    const query = listQueryOf(c.req.valid('query'));
+    const page = await withOrgContext(deps.db, orgContextOf(c), (tx) =>
+      listEmployeesPage(tx, query),
+    );
+    return c.json(
+      {
+        items: page.rows.map(employeeBody),
+        total: page.total,
+        page: page.page,
+        size: query.size,
+        totals: page.totals,
+      },
+      200,
+    );
   };
 }
 

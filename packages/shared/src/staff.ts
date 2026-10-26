@@ -6,6 +6,7 @@ import {
 } from '@buhuchet/domain';
 import { z } from 'zod';
 import { RecordAudit, RecordVersion, Uuid } from './common';
+import { listPageSchema } from './list';
 import { TelegramInfo } from './telegram';
 
 /** Телефон в виде «+996555100200»: код страны и цифры; маску страны проверяет сервер. */
@@ -22,6 +23,8 @@ export const Employee = z.object({
   shortName: z.string(),
   login: z.string(),
   phone: z.string().nullable(),
+  /** Телефон для показа по маске справочника «Коды телефонов»: «+996 555 100 200». */
+  phoneText: z.string().nullable(),
   role: z.object({ id: Uuid, name: z.string(), isOwner: z.boolean() }),
   /** Нет — заблокирован: не входит, сеансы закрыты. */
   active: z.boolean(),
@@ -34,7 +37,11 @@ export const Employee = z.object({
 });
 export type Employee = z.infer<typeof Employee>;
 
-export const EmployeeList = z.object({ items: z.array(Employee) });
+/**
+ * Страница списка сотрудников (ТЗ «Сотрудники», список на общем компоненте): сортировка, страницы и
+ * фильтры — на сервере.
+ */
+export const EmployeeList = listPageSchema(Employee);
 export type EmployeeList = z.infer<typeof EmployeeList>;
 
 /**

@@ -37,6 +37,7 @@ import { api } from '../api-client';
 import { useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { ProfileWindow } from '../profile/profile-window';
+import { QueryProvider } from '../query';
 import { ModuleScreen } from '../screens/module-screen';
 import { PHONE_QUERY, saveMaxPrefs, saveNavHidden, saveTree, toggleTheme } from './browser';
 import { Clock } from './clock';
@@ -118,11 +119,13 @@ export function Shell({ initialMax, ...props }: ShellProps) {
     [t],
   );
   return (
-    <WindowProvider labels={windowLabels} initialMax={initialMax} onMaxChange={saveMaxPrefs}>
-      <ToastProvider labels={toastLabels}>
-        <ShellPage {...props} />
-      </ToastProvider>
-    </WindowProvider>
+    <QueryProvider>
+      <WindowProvider labels={windowLabels} initialMax={initialMax} onMaxChange={saveMaxPrefs}>
+        <ToastProvider labels={toastLabels}>
+          <ShellPage {...props} />
+        </ToastProvider>
+      </WindowProvider>
+    </QueryProvider>
   );
 }
 

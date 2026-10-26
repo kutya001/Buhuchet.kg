@@ -1,5 +1,6 @@
 export { OverlayHistory, useBackClose, type HistoryHost, type OverlayHandle } from './back-close';
 export { buttonClass, iconButtonClass, linkButtonClass, type ButtonVariant } from './button';
+export { Avatar } from './avatar';
 export { Card, StatusDot } from './card';
 export { CardTabs, type CardTab } from './card-tabs';
 export { EmptyState, NothingFound, type EmptyAction } from './empty-state';
@@ -60,3 +61,17 @@ export {
   type KeyValueItem,
 } from './form';
 export { PACK_QUERY } from './form-pack';
+export {
+  ActionList,
+  ActionMenu,
+  menuPosition,
+  type ActionEntry,
+  type ActionItem,
+  type ActionSeparator,
+  type MenuPlace,
+} from './action-menu';
+export { DataGrid, GridFooter, GridSkeleton, type DataGridProps } from './grid/data-grid';
+export * from './grid/grid-state';
+export { ColumnsPanel, GridToolbar } from './grid/grid-toolbar';
+export { LONG_PRESS_MS, useRowEvents, type RowEvents } from './grid/row-events';
+export type { GridColumn, GridLabels, GridPage, GridRowTone } from './grid/types';

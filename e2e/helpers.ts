@@ -20,12 +20,13 @@ export async function signIn(
   return res;
 }
 
-/** Владелец демо-организации (erkin) создаёт сотрудника с ролью «Бухгалтер» и временным паролем. */
+/** Владелец демо-организации (erkin) создаёт сотрудника с ролью (по умолчанию «Бухгалтер») и временным паролем. */
 export async function hire(
   api: APIRequestContext,
   origin: string,
   login: string,
   phone: string | null = null,
+  roleName = 'Бухгалтер',
 ) {
   await signIn(api, origin, 'erkin', DEMO_PASSWORD);
   const roles = (await (await api.get('/api/roles')).json()) as {
@@ -37,7 +38,7 @@ export async function hire(
       fullName: 'Входов Сквозной Тестович',
       login,
       phone,
-      roleId: roles.items.find((r) => r.name === 'Бухгалтер')!.id,
+      roleId: roles.items.find((r) => r.name === roleName)!.id,
     },
   });
   expect(res.status(), await res.text()).toBe(201);

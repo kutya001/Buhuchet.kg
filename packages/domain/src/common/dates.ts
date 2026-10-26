@@ -50,6 +50,11 @@ export function formatDateRu(date: IsoDate): string {
   return `${date.slice(8, 10)}.${date.slice(5, 7)}.${date.slice(0, 4)}`;
 }
 
+/** Момент по Бишкеку: «15.03.2026 10:05» (прототип fmtDT; столбцы «Создано», «Последний вход»). */
+export function formatMomentRu(at: Date): string {
+  return `${formatDateRu(bishkekDate(at))} ${bishkekTime(at)}`;
+}
+
 /** День недели: 0 — понедельник … 6 — воскресенье. */
 export function weekdayMondayFirst(date: IsoDate): number {
   return (toUtcDate(date).getUTCDay() + 6) % 7;

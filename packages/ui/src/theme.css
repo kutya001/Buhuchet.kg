@@ -272,6 +272,17 @@
   --animate-pop: bu-pop 0.25s ease-out;
   --animate-slide-up: bu-slide-up 0.25s forwards;
   --animate-fade: bu-fade 0.2s;
+  /* Заготовка строк списка при загрузке (`.skel` прототипа, keyframes shimmer). */
+  --animate-shimmer: bu-shimmer 1.1s infinite linear;
+}
+
+@keyframes bu-shimmer {
+  0% {
+    background-position: -400px 0;
+  }
+  100% {
+    background-position: 400px 0;
+  }
 }
 
 @keyframes bu-pop {

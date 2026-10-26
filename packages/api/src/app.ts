@@ -16,6 +16,7 @@ import { rolesModule } from './modules/roles';
 import { staffModule } from './modules/staff';
 import { systemModule } from './modules/system';
 import { telegramModule } from './modules/telegram';
+import { viewsModule } from './modules/views';
 
 /**
  * Предел тела запроса API: формы и списки — килобайты; файлы идут в хранилище по подписанной ссылке,
@@ -71,6 +72,7 @@ export function createApp(deps: ApiDeps) {
     .route('/', staffModule(deps))
     .route('/', rolesModule(deps))
     .route('/', orgModule(deps))
+    .route('/', viewsModule(deps))
     .route('/', adminModule(deps));
 
   app.doc31('/openapi.json', {

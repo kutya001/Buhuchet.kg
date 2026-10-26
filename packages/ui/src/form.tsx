@@ -232,9 +232,10 @@ const PILL_TONES = {
   plain: 'bg-sel text-muted',
   ok: 'bg-ok-bg text-ok',
   bad: 'bg-danger-bg text-danger',
+  caution: 'bg-caution-bg text-caution',
 } as const;
 
-/** Метка (`.pill`): «Привязан», «Основной». */
+/** Метка (`.pill`): «Привязан», «Основной»; `caution` — оранжевая (`.pill.orange`, «не привязан»). */
 export function Pill({
   tone = 'plain',
   icon,

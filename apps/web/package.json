@@ -20,6 +20,7 @@
     "@buhuchet/ui": "workspace:*",
     "@fontsource-variable/inter": "^5.2.8",
     "@hookform/resolvers": "5.9.1",
+    "@tanstack/react-query": "^5.105.0",
     "hono": "catalog:",
     "next": "^16.4.3",
     "react": "^19.3.1",

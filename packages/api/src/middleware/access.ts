@@ -1,9 +1,10 @@
-import type { OrgContext } from '@buhuchet/db';
+import { withOrgContext, withUserContext, type OrgContext, type Tx } from '@buhuchet/db';
 import { hasPermission, type PermissionId } from '@buhuchet/domain';
 import type { Context } from 'hono';
 import { createMiddleware } from 'hono/factory';
 import { HTTPException } from 'hono/http-exception';
-import type { AppEnv } from '../env';
+import type { ApiDeps } from '../deps';
+import type { AppEnv, AuthSession } from '../env';
 import { apiError } from '../errors';
 
 const forbidden = () => apiError('forbidden', 'Нет права на это действие');
@@ -46,4 +47,20 @@ export function orgContextOf(c: Context<AppEnv>): OrgContext {
     throw new HTTPException(403, { res: Response.json(forbidden(), { status: 403 }) });
   }
   return { orgId: session.orgId, userId: session.userId };
+}
+
+/**
+ * Транзакция от имени вошедшего: в его организации (RLS) или, у администратора платформы, без неё
+ * (`withUserContext`). Для своих данных пользователя: привязка Telegram, настройки вида.
+ */
+export function asSessionUser<T>(
+  deps: ApiDeps,
+  session: AuthSession,
+  fn: (tx: Tx, inOrg: boolean) => Promise<T>,
+): Promise<T> {
+  return session.orgId
+    ? withOrgContext(deps.db, { orgId: session.orgId, userId: session.userId }, (tx) =>
+        fn(tx, true),
+      )
+    : withUserContext(deps.db, session.userId, (tx) => fn(tx, false));
 }
