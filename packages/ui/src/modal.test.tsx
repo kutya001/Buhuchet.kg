@@ -8,7 +8,7 @@ import {
   type WindowFrameProps,
   type WindowLabels,
 } from './modal';
-import { canMaximize, WindowStack } from './window-stack';
+import { canMaximize, closesAtOnce, WindowStack } from './window-stack';
 
 const LABELS: WindowLabels = {
   maximize: 'На весь экран',
@@ -115,10 +115,33 @@ describe('окно: шапка, «На весь экран», закрытие (
     const max = dialogClass('mid', true);
     expect(max).toContain('max-md:h-dvh');
     expect(max).toContain('max-md:rounded-none');
+    // С учётом выреза экрана сверху и полоски «домой» снизу.
     expect(max).toContain('max-md:pt-[env(safe-area-inset-top,0px)]');
+    expect(max).toContain('max-md:pb-[env(safe-area-inset-bottom,0px)]');
     // На ПК развёрнутое окно сохраняет скругление и тень.
     expect(max).toContain('rounded-2xl');
     expect(max).toContain('shadow-pop');
+  });
+
+  it('окно выезжает снизу при открытии; открытое сразу развёрнутым появляется без выезда', () => {
+    expect(dialogClass('mid', false)).toContain('animate-slide-up');
+    expect(dialogClass('mid', true, false)).not.toContain('animate-slide-up');
+    expect(
+      renderToStaticMarkup(<WindowFrame {...frame({ max: true, slide: false })} />),
+    ).not.toContain('animate-slide-up');
+  });
+
+  it('фон — отдельный слой под окном: пока окно тянут вниз, светлеет только фон, окно непрозрачно', () => {
+    const onCoverDown = vi.fn();
+    const tree = WindowFrame(frame({ onCoverDown }));
+    const [cover] = find<{ onPointerDown: () => void; className: string; children?: ReactNode }>(
+      tree,
+      (el) => typeof (el.props as { onPointerDown?: unknown }).onPointerDown === 'function',
+    );
+    expect(cover!.props.className).toContain('bg-cover');
+    expect(cover!.props.children).toBeUndefined();
+    cover!.props.onPointerDown();
+    expect(onCoverDown).toHaveBeenCalledOnce();
   });
 
   it('ручка и шапка — места, за которые окно тянут вниз', () => {
@@ -215,14 +238,26 @@ describe('стопка открытых окон', () => {
     expect(stack.size).toBe(0);
   });
 
-  it('выход спрашивает «Выйти без сохранения?», только если открыто окно-форма', () => {
+  it('протяжка вниз и «Назад» закрывают сразу, кроме формы с несохранёнными изменениями — она спрашивает', () => {
+    expect(closesAtOnce({ kind: 'card' })).toBe(true);
+    expect(closesAtOnce({ kind: 'form' })).toBe(true);
+    expect(closesAtOnce({ kind: 'form', dirty: false })).toBe(true);
+    expect(closesAtOnce({ kind: 'form', dirty: true })).toBe(false);
+    // У карточки просмотра нечего терять.
+    expect(closesAtOnce({ kind: 'card', dirty: true })).toBe(true);
+  });
+
+  it('выход спрашивает «Выйти без сохранения?», только если в открытой форме есть несохранённые изменения', () => {
     const stack = new WindowStack();
     const removeCard = stack.add({ kind: 'card' });
-    expect(stack.hasForm()).toBe(false);
-    const removeForm = stack.add({ kind: 'form' });
-    expect(stack.hasForm()).toBe(true);
+    const form = { kind: 'form' as const, dirty: false };
+    const removeForm = stack.add(form);
+    // Нетронутая форма — выход без вопроса (ТЗ; прототип спрашивал при любой открытой форме).
+    expect(stack.hasUnsaved()).toBe(false);
+    form.dirty = true;
+    expect(stack.hasUnsaved()).toBe(true);
     removeForm();
+    expect(stack.hasUnsaved()).toBe(false);
     removeCard();
-    expect(stack.hasForm()).toBe(false);
   });
 });

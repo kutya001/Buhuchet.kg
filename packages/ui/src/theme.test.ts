@@ -35,7 +35,7 @@ function vars(block: string, prefix: string): Map<string, string> {
   return out;
 }
 
-/** Цвета, которых нет в прототипе: опасная кнопка (docs/deviations.md, п. 26). */
+/** Цвета, которых нет в прототипе: опасная кнопка и красный счётчик (docs/deviations.md, п. 26). */
 const PRODUCT_ONLY = ['danger-btn'];
 
 const light = vars(blockAfter(theme, ':root {'), 'bu-');
@@ -90,7 +90,7 @@ describe('тема оформления', () => {
     expect(contrast(dark.get('on-accent')!, dark.get('accent')!)).toBeGreaterThanOrEqual(4.5);
   });
 
-  it('надпись на опасной кнопке («Удалить», «Закрыть без сохранения») читается: не ниже 4,5 : 1', () => {
+  it('надпись на опасной кнопке («Удалить», «Закрыть без сохранения») и число на красном счётчике читаются: не ниже 4,5 : 1', () => {
     expect(contrast(light.get('on-accent')!, light.get('danger-btn')!)).toBeGreaterThanOrEqual(4.5);
     expect(contrast(dark.get('on-accent')!, dark.get('danger-btn')!)).toBeGreaterThanOrEqual(4.5);
   });

@@ -123,7 +123,21 @@ test.describe('Этап 1: оболочка на телефоне', () => {
       };
       const head = await openHelp();
       const threshold = Math.min(head.height / 4, 160);
-      await swipe.drag(head, { x: head.x, y: head.y + threshold / 2 });
+      // Пока окно тянут, светлеет только фон за ним, само окно остаётся непрозрачным.
+      await swipe.drag(head, { x: head.x, y: head.y + threshold / 2 }, async () => {
+        const seen = await help.evaluate((el) => {
+          // Видимая прозрачность — с учётом всех родителей.
+          let windowOpacity = 1;
+          for (let n: Element | null = el; n; n = n.parentElement) {
+            windowOpacity *= Number(getComputedStyle(n).opacity);
+          }
+          const covers = document.querySelectorAll('.bg-cover');
+          const cover = covers[covers.length - 1]!;
+          return { windowOpacity, coverOpacity: Number(getComputedStyle(cover).opacity) };
+        });
+        expect(seen.windowOpacity).toBe(1);
+        expect(seen.coverOpacity).toBeLessThan(1);
+      });
       await page.waitForTimeout(400);
       await expect(help).toBeVisible();
       expect((await help.boundingBox())!.y).toBeCloseTo(head.top, 0);

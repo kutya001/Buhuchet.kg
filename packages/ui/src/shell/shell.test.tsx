@@ -77,6 +77,8 @@ describe('SideNav — панель модулей на ПК', () => {
     expect(html).not.toMatch(/href="\/app\/home\/today" aria-current/);
     expect(html).toContain('title="Просрочено"');
     expect(html).toContain('>74</span>');
+    // Красный счётчик — цвета опасной кнопки: число читается и в тёмной теме (theme.test.ts).
+    expect(html).toMatch(/title="Просрочено" class="[^"]*bg-danger-btn text-on-accent/);
     expect(html).toContain('<span>низ</span></div></aside>');
   });
 

@@ -14,6 +14,8 @@ export interface MaxPrefs {
 /** Окно в стопке открытых окон. */
 export interface OpenWindow {
   kind: WindowKind;
+  /** В форме есть несохранённые изменения. */
+  dirty?: boolean;
 }
 
 /** Можно ли окно развернуть на весь экран (у коротких подтверждений кнопки нет). */
@@ -22,9 +24,18 @@ export function canMaximize(kind: WindowKind): kind is keyof MaxPrefs {
 }
 
 /**
+ * Закрывается ли окно сразу: форма с несохранёнными изменениями на протяжку вниз и «Назад» сначала
+ * спрашивает «Закрыть без сохранения?» (ТЗ «Управление свайпами»).
+ */
+export function closesAtOnce(window: OpenWindow): boolean {
+  return !(window.kind === 'form' && window.dirty);
+}
+
+/**
  * Открытые окна по порядку открытия (прототип `MODALS`): Esc закрывает и Tab обходит только верхнее
- * окно; выход из аккаунта при открытой форме спрашивает «Выйти без сохранения?» (core/login.js
- * logoutDlg).
+ * окно; выход из аккаунта при несохранённых изменениях в открытой форме спрашивает «Выйти без
+ * сохранения?» (ТЗ «Панель модулей»; прототип core/login.js logoutDlg спрашивает при любой открытой
+ * форме — docs/deviations.md, п. 27).
  */
 export class WindowStack {
   private readonly items: OpenWindow[] = [];
@@ -42,9 +53,10 @@ export class WindowStack {
     return this.items[this.items.length - 1] === window;
   }
 
-  /** Открыто ли окно-форма (в нём могут быть несохранённые изменения). */
-  hasForm(): boolean {
-    return this.items.some((w) => w.kind === 'form');
+  /** Есть ли открытая форма с несохранёнными изменениями. */
+  hasUnsaved(): boolean {
+    // ОТКЛОНЕНИЕ: docs/deviations.md#27
+    return this.items.some((w) => !closesAtOnce(w));
   }
 
   get size(): number {

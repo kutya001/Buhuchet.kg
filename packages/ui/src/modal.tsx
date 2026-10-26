@@ -27,6 +27,7 @@ import { PHONE_QUERY, useMediaQuery, useMounted } from './use-media';
 import { useSwipeDown } from './use-swipe-down';
 import {
   canMaximize,
+  closesAtOnce,
   WindowStack,
   type MaxPrefs,
   type OpenWindow,
@@ -97,10 +98,13 @@ export function WindowProvider({
   return <WindowsContext.Provider value={value}>{children}</WindowsContext.Provider>;
 }
 
-/** Открытые окна страницы: есть ли среди них форма (выход спрашивает «Выйти без сохранения?»). */
-export function useWindows(): { hasOpenForm: () => boolean } {
+/**
+ * Открытые окна страницы: есть ли форма с несохранёнными изменениями (выход спрашивает «Выйти без
+ * сохранения?»).
+ */
+export function useWindows(): { hasUnsavedForm: () => boolean } {
   const { stack } = useWindowsValue();
-  return useMemo(() => ({ hasOpenForm: () => stack.hasForm() }), [stack]);
+  return useMemo(() => ({ hasUnsavedForm: () => stack.hasUnsaved() }), [stack]);
 }
 
 interface CurrentWindow {
@@ -219,11 +223,14 @@ export function Modal({
   const canMax = canMaximize(kind);
   const [shown, setShown] = useState(false);
   const [max, setMax] = useState(false);
+  const [openedMax, setOpenedMax] = useState(false);
   const [asking, setAsking] = useState(false);
   // Окно открылось — развёрнуто, если так выбрали в прошлый раз (для карточек и форм отдельно).
   if (shown !== open) {
+    const startMax = open && canMaximize(kind) && windows.max[kind];
     setShown(open);
-    setMax(open && canMaximize(kind) && windows.max[kind]);
+    setMax(startMax);
+    setOpenedMax(startMax);
     setAsking(false);
   }
 
@@ -234,10 +241,15 @@ export function Modal({
   const flip = useRef<DOMRect | null>(null);
   const live = open && mounted;
 
-  const unsaved = kind === 'form' && dirty;
+  /** Окно в стопке открытых окон: вид и несохранённые изменения (для «Выйти без сохранения?»). */
+  const self = useRef<OpenWindow>({ kind, dirty });
+  useEffect(() => {
+    self.current.kind = kind;
+    self.current.dirty = dirty;
+  }, [kind, dirty]);
   /** Можно ли закрыть сразу; форма с несохранёнными изменениями сначала спрашивает. */
   const mayClose = () => {
-    if (!unsaved) return true;
+    if (closesAtOnce({ kind, dirty })) return true;
     setAsking(true);
     return false;
   };
@@ -260,9 +272,9 @@ export function Modal({
     onSelect: (id) => tabs?.onSelect(id),
   });
 
-  const keydown = useEffectEvent((e: KeyboardEvent, self: OpenWindow) => {
+  const keydown = useEffectEvent((e: KeyboardEvent, entry: OpenWindow) => {
     const el = dialog.current;
-    if (!el || e.defaultPrevented || !windows.stack.isTop(self)) return;
+    if (!el || e.defaultPrevented || !windows.stack.isTop(entry)) return;
     if (e.key === 'Escape') {
       // Сначала закрывается всплывающее окошко внутри окна (оно само слушает Esc).
       if (document.querySelector('[data-popover]')) return;
@@ -274,8 +286,8 @@ export function Modal({
   });
   useEffect(() => {
     if (!live) return;
-    const self: OpenWindow = { kind };
-    const remove = windows.stack.add(self);
+    const entry = self.current;
+    const remove = windows.stack.add(entry);
     const opener = document.activeElement as HTMLElement | null;
     const el = dialog.current;
     // На телефоне клавиатура сама не выезжает: фокус — в окно, а не в поле.
@@ -283,14 +295,14 @@ export function Modal({
       ? null
       : el?.querySelector<HTMLElement>(`[data-window-body] ${FIRST_FIELD}`);
     (field ?? el)?.focus({ preventScroll: true });
-    const onKey = (e: KeyboardEvent) => keydown(e, self);
+    const onKey = (e: KeyboardEvent) => keydown(e, entry);
     document.addEventListener('keydown', onKey);
     return () => {
       document.removeEventListener('keydown', onKey);
       remove();
       if (opener?.isConnected) opener.focus({ preventScroll: true });
     };
-  }, [live, kind, windows.stack]);
+  }, [live, windows.stack]);
 
   // Развернули или свернули на ПК — окно плавно меняет размер от прежнего (около 220 мс).
   useLayoutEffect(() => {
@@ -356,6 +368,7 @@ export function Modal({
         narrow={kind === 'form' && size !== 'wide'}
         canMax={canMax}
         max={max}
+        slide={!openedMax}
         phone={phone}
         labels={windows.labels}
         tabs={tabs}
@@ -387,15 +400,19 @@ const DIALOG_SIZE: Record<ModalSize, string> = {
   wide: 'w-[min(1100px,100%)] h-[min(860px,calc(100dvh-48px))]',
 };
 
-/** Классы окна: размер на ПК, шторка на телефоне, развёрнутое — во всё окно (прототип `.modal`). */
-export function dialogClass(size: ModalSize, max: boolean): string {
+/**
+ * Классы окна: размер на ПК, шторка на телефоне, развёрнутое — во всё окно (прототип `.modal`).
+ * `slide` — окно выезжает снизу при открытии; открытое сразу развёрнутым появляется без выезда
+ * (прототип `.modal.max{animation:none}`).
+ */
+export function dialogClass(size: ModalSize, max: boolean, slide = true): string {
   const desktop = max
     ? 'w-full h-[calc(100dvh-24px)] max-h-none'
     : `${DIALOG_SIZE[size]} max-h-[calc(100dvh-48px)]`;
   const phone = max
-    ? 'max-md:h-dvh max-md:max-h-dvh max-md:rounded-none max-md:border-0 max-md:pt-[env(safe-area-inset-top,0px)]'
+    ? 'max-md:h-dvh max-md:max-h-dvh max-md:rounded-none max-md:border-0 max-md:pt-[env(safe-area-inset-top,0px)] max-md:pb-[env(safe-area-inset-bottom,0px)]'
     : `max-md:w-full max-md:max-h-[92dvh] ${size === 'wide' ? 'max-md:h-[92dvh]' : 'max-md:h-auto'} max-md:rounded-b-none max-md:border-b-0 max-md:pb-[env(safe-area-inset-bottom,0px)]`;
-  return `flex min-w-0 animate-slide-up touch-pan-y flex-col rounded-2xl border border-line-strong bg-pane text-ink shadow-pop outline-none ${desktop} ${phone}`;
+  return `relative flex min-w-0 touch-pan-y flex-col rounded-2xl border border-line-strong bg-pane text-ink shadow-pop outline-none ${slide ? 'animate-slide-up' : ''} ${desktop} ${phone}`;
 }
 
 const EDGE_MAX = {
@@ -425,6 +442,8 @@ export interface WindowFrameProps {
   narrow: boolean;
   canMax: boolean;
   max: boolean;
+  /** Выезд снизу при открытии (нет у окна, открытого сразу развёрнутым). */
+  slide?: boolean;
   phone: boolean;
   labels: WindowLabels;
   tabs?: ModalProps['tabs'];
@@ -450,6 +469,7 @@ export function WindowFrame({
   narrow,
   canMax,
   max,
+  slide = true,
   phone,
   labels,
   tabs,
@@ -469,11 +489,16 @@ export function WindowFrame({
   };
   return (
     <div
-      ref={coverRef}
-      onPointerDown={onCoverDown}
       data-max={max}
-      className={`fixed inset-0 z-50 grid animate-fade place-items-center bg-cover backdrop-blur-[3px] max-md:items-end max-md:justify-items-stretch max-md:p-0 ${max ? 'p-3' : 'px-4 py-6'}`}
+      className={`fixed inset-0 z-50 grid place-items-center max-md:items-end max-md:justify-items-stretch max-md:p-0 ${max ? 'p-3' : 'px-4 py-6'}`}
     >
+      {/* Фон отдельно от окна: пока окно тянут вниз, светлеет только фон, окно остаётся непрозрачным. */}
+      <div
+        ref={coverRef}
+        onPointerDown={onCoverDown}
+        aria-hidden="true"
+        className="absolute inset-0 animate-fade bg-cover backdrop-blur-[3px]"
+      />
       <div
         ref={dialogRef}
         role="dialog"
@@ -484,7 +509,7 @@ export function WindowFrame({
         data-window
         data-overlay
         data-max={max}
-        className={dialogClass(size, max)}
+        className={dialogClass(size, max, slide)}
       >
         <div
           data-swipe-handle

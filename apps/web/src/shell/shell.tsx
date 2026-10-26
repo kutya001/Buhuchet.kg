@@ -280,9 +280,10 @@ function ShellPage({
       else window.location.assign('/login');
     }
   };
-  /** Открыта форма — сначала «Выйти без сохранения?» (прототип core/login.js logoutDlg). */
+  /** В открытой форме несохранённые изменения — сначала «Выйти без сохранения?» (ТЗ «Панель модулей»). */
   const requestLogout = (replace = false) => {
-    if (windows.hasOpenForm()) setAskLogout({ replace });
+    // ОТКЛОНЕНИЕ: docs/deviations.md#27
+    if (windows.hasUnsavedForm()) setAskLogout({ replace });
     else void logout(replace);
   };
 

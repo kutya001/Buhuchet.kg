@@ -9,7 +9,8 @@ export interface Point {
 
 /**
  * Палец по экрану. `drag` — настоящие касания через протокол отладки Chromium: ведём по 12 px за кадр
- * и перед отпусканием останавливаемся (рывка нет). `flick` — быстрый рывок с частотой экрана
+ * и перед отпусканием останавливаемся (рывка нет); `holding` выполняется, пока палец ещё на экране.
+ * `flick` — быстрый рывок с частотой экрана
  * 120 Гц: без экрана Chromium доставляет касания протокола раз в ~50 мс, и рывок вышел бы медленным,
  * поэтому события касания создаются на странице с нужными промежутками.
  */
@@ -18,7 +19,7 @@ export async function finger(page: Page) {
   const send = (type: 'touchStart' | 'touchMove' | 'touchEnd', p?: Point) =>
     cdp.send('Input.dispatchTouchEvent', { type, touchPoints: p ? [p] : [] });
   return {
-    async drag(from: Point, to: Point) {
+    async drag(from: Point, to: Point, holding?: () => Promise<void>) {
       const steps = Math.max(4, Math.ceil(Math.hypot(to.x - from.x, to.y - from.y) / 12));
       await send('touchStart', from);
       for (let i = 1; i <= steps; i++) {
@@ -29,6 +30,7 @@ export async function finger(page: Page) {
         await page.waitForTimeout(16);
       }
       await page.waitForTimeout(150);
+      await holding?.();
       await send('touchEnd');
     },
     flick: (from: Point, to: Point) =>

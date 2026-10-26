@@ -2,7 +2,8 @@ import type { ShellCount } from './types';
 
 const TONES = {
   none: 'bg-sel text-muted',
-  red: 'bg-danger text-on-accent',
+  // Красный — цвет опасной кнопки: в тёмной теме темнее, чем в прототипе, контраст не ниже 4,5 : 1.
+  red: 'bg-danger-btn text-on-accent',
   yellow:
     'bg-warn-bg text-warn shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--bu-yellow)_35%,transparent)]',
 } as const;
