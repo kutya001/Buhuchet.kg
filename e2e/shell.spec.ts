@@ -102,6 +102,8 @@ test.describe('Этап 1: оболочка рабочей страницы', ()
     await page.goto('/app');
     await expect(moduleLinks(page, 'projects').first()).toBeAttached();
 
+    // Уходим со страницы владельца: её проверка входа после сброса cookie увела бы на /login.
+    await page.goto('about:blank');
     await page.context().clearCookies();
     await signIn(page.request, origin, login, temporaryPassword);
     const changed = await page.request.post('/api/auth/password', {
@@ -137,7 +139,8 @@ test.describe('Этап 1: оболочка рабочей страницы', ()
       /^Из свидетельства и выписки Бета/,
     ]);
 
-    // Выбор способа передаётся экрану модуля (пока — заглушка сообщает, что он появится с экраном).
+    // Выбор способа передаётся экрану модуля (пока — заглушка сообщает уведомлением внизу экрана,
+    // что он появится с экраном).
     await menu.getByRole('menuitem', { name: 'Контрагент', exact: true }).click();
     await expect(menu).toBeHidden();
     await expect(page.getByRole('status')).toHaveText(
@@ -192,9 +195,9 @@ test.describe('Этап 1: оболочка рабочей страницы', ()
     else await page.mouse.move(640, 600);
     await expect(infoBox).toBeHidden();
 
-    // «?»: описание модуля и «Открыть Базу знаний».
+    // «?»: окно «Базы знаний» о модуле — описание и «Открыть Базу знаний».
     await page.getByRole('button', { name: 'Помощь' }).click();
-    const help = page.getByRole('dialog', { name: 'Помощь' });
+    const help = page.getByRole('dialog', { name: 'Отчеты для сдачи' });
     await expect(help).toContainText('Отчёты создаются автоматически по назначениям');
     await help.getByRole('link', { name: 'Открыть Базу знаний' }).click();
     await expect(page).toHaveURL(/\/app\/kb\/level$/);

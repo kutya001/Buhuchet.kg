@@ -7,6 +7,8 @@ import {
   pagerOffset,
   SWIPE_RESIST,
   swipeAxis,
+  throwFires,
+  throwOpacity,
 } from './gestures';
 
 describe('жесты: общие правила (ТЗ «Управление свайпами»)', () => {
@@ -77,5 +79,24 @@ describe('жесты: общие правила (ТЗ «Управление с�
     expect(finishMs(300, -10)).toBe(120);
     expect(finishMs(300, 0.5)).toBe(320);
     expect(finishMs(300, 0)).toBe(260);
+  });
+
+  it('уведомление смахивается вбок на треть ширины или рывком, иначе возвращается', () => {
+    // Уведомление шириной 300 px: порог — 100 px в любую сторону.
+    expect(throwFires({ dx: 110, vx: 0, width: 300 })).toBe(true);
+    expect(throwFires({ dx: -110, vx: 0, width: 300 })).toBe(true);
+    expect(throwFires({ dx: 90, vx: 0, width: 300 })).toBe(false);
+    // Дотянули и повели обратно — остаётся.
+    expect(throwFires({ dx: 110, vx: -0.4, width: 300 })).toBe(false);
+    // Рывок — только в ту сторону, куда тянут.
+    expect(throwFires({ dx: 30, vx: 0.9, width: 300 })).toBe(true);
+    expect(throwFires({ dx: 30, vx: -0.9, width: 300 })).toBe(false);
+    expect(throwFires({ dx: 5, vx: 3, width: 300 })).toBe(false);
+  });
+
+  it('пока уведомление тянут, оно бледнеет, но не исчезает', () => {
+    expect(throwOpacity(0, 300)).toBe(1);
+    expect(throwOpacity(-180, 300)).toBeCloseTo(0.5);
+    expect(throwOpacity(1000, 300)).toBe(0.2);
   });
 });

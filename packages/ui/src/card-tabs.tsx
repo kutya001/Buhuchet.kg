@@ -44,7 +44,7 @@ const BADGE = 'min-w-[18px] px-[5px] text-[10.5px] leading-4';
  * счётчиками. На телефоне вместо ряда — одна кнопка во всю ширину: значок и название текущей вкладки,
  * счётчик, справа «N из M» и стрелка; нажатие открывает список всех вкладок, текущая выделена (ряд
  * на телефоне не прокручивается, поэтому список не обрезается). Свайп по содержимому окна листает
- * вкладки — вместе с окнами (#12).
+ * вкладки (`Modal` с `tabs`).
  */
 export function CardTabs({
   tabs,
@@ -52,6 +52,7 @@ export function CardTabs({
   onSelect,
   label,
   position,
+  inWindow = false,
 }: {
   tabs: readonly CardTab[];
   active: string;
@@ -60,6 +61,11 @@ export function CardTabs({
   label: string;
   /** «N из M» текущей вкладки на телефоне (текст из словаря). */
   position: (n: number, total: number) => string;
+  /**
+   * Ряд в содержимом окна: закрепляется у самого верха, поверх отступа содержимого (прототип
+   * css/cards.css `.mb>.ctabs`).
+   */
+  inWindow?: boolean;
 }) {
   const row = useRef<HTMLDivElement>(null);
 
@@ -85,7 +91,7 @@ export function CardTabs({
       role="tablist"
       aria-label={label}
       data-fit="full"
-      className="group/ctabs sticky top-0 z-[4] -mx-1 flex gap-1.5 overflow-x-auto bg-pane px-1 py-2 shadow-[0_1px_0_var(--bu-border)] [scrollbar-width:none] data-[fit=labels]:gap-1 data-[fit=tight]:gap-1 max-md:overflow-visible [&::-webkit-scrollbar]:hidden [&>:first-child]:ml-auto [&>:last-child]:mr-auto"
+      className={`group/ctabs sticky z-[4] -mx-1 flex ${inWindow ? '-top-1.5 -mt-1.5 max-md:-top-1 max-md:-mt-1' : 'top-0'} gap-1.5 overflow-x-auto bg-pane px-1 py-2 shadow-[0_1px_0_var(--bu-border)] [scrollbar-width:none] data-[fit=labels]:gap-1 data-[fit=tight]:gap-1 max-md:overflow-visible [&::-webkit-scrollbar]:hidden [&>:first-child]:ml-auto [&>:last-child]:mr-auto`}
     >
       {tabs.map((t, i) => {
         const count = t.count?.value ? <CountBadge count={t.count} className={BADGE} /> : null;

@@ -50,7 +50,9 @@ describe('кнопка «Назад» закрывает открытое окн
     const h = fakeHost();
     const overlays = new OverlayHistory(h.host);
     let closed = 0;
-    const handle = overlays.open(() => closed++);
+    const handle = overlays.open(() => {
+      closed++;
+    });
     expect(h.entries).toHaveLength(2);
     h.back();
     h.flush();
@@ -67,7 +69,11 @@ describe('кнопка «Назад» закрывает открытое окн
     const h = fakeHost();
     const overlays = new OverlayHistory(h.host);
     let closed = 0;
-    overlays.open(() => closed++).release();
+    overlays
+      .open(() => {
+        closed++;
+      })
+      .release();
     h.flush();
     expect(h.index).toBe(0);
     expect(closed).toBe(0);
@@ -86,8 +92,12 @@ describe('кнопка «Назад» закрывает открытое окн
     const h = fakeHost();
     const overlays = new OverlayHistory(h.host);
     const closed: string[] = [];
-    overlays.open(() => closed.push('панель'));
-    overlays.open(() => closed.push('окно'));
+    overlays.open(() => {
+      closed.push('панель');
+    });
+    overlays.open(() => {
+      closed.push('окно');
+    });
     expect(h.entries).toHaveLength(2);
     h.back();
     h.flush();
@@ -104,7 +114,9 @@ describe('кнопка «Назад» закрывает открытое окн
     const overlays = new OverlayHistory(h.host);
     overlays.open(() => {}).release();
     let closed = 0;
-    overlays.open(() => closed++);
+    overlays.open(() => {
+      closed++;
+    });
     h.flush();
     expect(h.index).toBe(1);
     h.back();
@@ -122,5 +134,40 @@ describe('кнопка «Назад» закрывает открытое окн
     h.forward();
     h.flush();
     expect(h.index).toBe(0);
+  });
+
+  it('форма с несохранёнными изменениями на «Назад» остаётся открытой и спрашивает; ответ закрывает вопрос, затем форму', () => {
+    const h = fakeHost();
+    const overlays = new OverlayHistory(h.host);
+    const closed: string[] = [];
+    let asked = false;
+    const form = overlays.open(() => {
+      // Форма не закрывается, а открывает вопрос «Закрыть без сохранения?» — окно поверх неё.
+      asked = true;
+      return false;
+    });
+    h.back();
+    h.flush();
+    expect(asked).toBe(true);
+    expect(overlays.size).toBe(1);
+    // Заглушка снова на месте: следующее «Назад» не уйдёт со страницы.
+    expect(h.index).toBe(1);
+    const question = overlays.open(() => {
+      closed.push('вопрос');
+    });
+    expect(h.entries).toHaveLength(2);
+    // «Назад» на вопросе — как «Отмена»: закрывается только вопрос.
+    h.back();
+    h.flush();
+    expect(closed).toEqual(['вопрос']);
+    expect(overlays.size).toBe(1);
+    expect(h.index).toBe(1);
+    // «Закрыть» в вопросе: закрывается и форма, заглушка снимается.
+    overlays.open(() => {}).release();
+    form.release();
+    h.flush();
+    expect(overlays.size).toBe(0);
+    expect(h.index).toBe(0);
+    void question;
   });
 });

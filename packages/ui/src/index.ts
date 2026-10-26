@@ -1,10 +1,21 @@
 export { OverlayHistory, useBackClose, type HistoryHost, type OverlayHandle } from './back-close';
-export { buttonClass, iconButtonClass, type ButtonVariant } from './button';
+export { buttonClass, iconButtonClass, linkButtonClass, type ButtonVariant } from './button';
 export { Card, StatusDot } from './card';
 export { CardTabs, type CardTab } from './card-tabs';
+export { EmptyState, NothingFound, type EmptyAction } from './empty-state';
 export { Icon } from './icon';
 export { ICONS, type IconName } from './icons';
 export { MenuItems, type MenuItem } from './menu';
+export {
+  ConfirmDialog,
+  Modal,
+  useWindow,
+  useWindows,
+  WindowProvider,
+  type ModalProps,
+  type ModalSize,
+  type WindowLabels,
+} from './modal';
 export { Popover, type PopoverProps } from './popover';
 export { RecordChangedNotice, type RecordChangedNoticeProps } from './record-changed';
 export { BottomSheet, type BottomSheetProps } from './sheet';
@@ -23,5 +34,14 @@ export {
 export { TabPager, type TabPagerProps } from './shell/tab-pager';
 export { TabRow, type AddAction, type TabRowProps } from './shell/tab-row';
 export { TopBar, type TopBarProps } from './shell/top-bar';
+export {
+  ToastProvider,
+  useToast,
+  type ShowToast,
+  type ToastLabels,
+  type ToastOptions,
+} from './toast';
 export { useSwipeDown, type SwipeDownOptions } from './use-swipe-down';
+export { PHONE_QUERY, useMediaQuery } from './use-media';
+export { canMaximize, type MaxPrefs, type WindowKind } from './window-stack';
 export type { ShellCount, ShellLink, ShellLinkProps, ShellModule, ShellTab } from './shell/types';

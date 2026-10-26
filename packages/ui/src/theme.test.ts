@@ -35,6 +35,9 @@ function vars(block: string, prefix: string): Map<string, string> {
   return out;
 }
 
+/** Цвета, которых нет в прототипе: опасная кнопка (docs/deviations.md, п. 26). */
+const PRODUCT_ONLY = ['danger-btn'];
+
 const light = vars(blockAfter(theme, ':root {'), 'bu-');
 const dark = vars(blockAfter(theme, ":root[data-theme='dark'] {"), 'bu-');
 const darkAuto = vars(blockAfter(theme, ":root:not([data-theme='light']) {"), 'bu-');
@@ -73,9 +76,11 @@ describe('тема оформления', () => {
 
   it('цвета и тени — как в прототипе (css/base.css), в обеих темах', () => {
     for (const [name, value] of light) {
+      if (PRODUCT_ONLY.includes(name)) continue;
       expect([name, norm(protoLight.get(name))]).toEqual([name, norm(value)]);
     }
     for (const [name, value] of dark) {
+      if (PRODUCT_ONLY.includes(name)) continue;
       expect([name, norm(protoDark.get(name))]).toEqual([name, norm(value)]);
     }
   });
@@ -83,5 +88,15 @@ describe('тема оформления', () => {
   it('текст «Добавить» на основной кнопке читается: контраст не ниже 4,5 : 1 в обеих темах', () => {
     expect(contrast(light.get('on-accent')!, light.get('accent')!)).toBeGreaterThanOrEqual(4.5);
     expect(contrast(dark.get('on-accent')!, dark.get('accent')!)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('надпись на опасной кнопке («Удалить», «Закрыть без сохранения») читается: не ниже 4,5 : 1', () => {
+    expect(contrast(light.get('on-accent')!, light.get('danger-btn')!)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(dark.get('on-accent')!, dark.get('danger-btn')!)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('текст уведомления внизу экрана читается: контраст не ниже 4,5 : 1 в обеих темах', () => {
+    expect(contrast(light.get('toast-fg')!, light.get('toast-bg')!)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(dark.get('toast-fg')!, dark.get('toast-bg')!)).toBeGreaterThanOrEqual(4.5);
   });
 });

@@ -21,7 +21,8 @@ export interface OverlayHandle {
 }
 
 interface Entry {
-  close: () => void;
+  /** false — окно не закрылось (форма спросила «Закрыть без сохранения?») и остаётся открытым. */
+  close: () => void | boolean;
   done: boolean;
 }
 
@@ -41,7 +42,7 @@ export class OverlayHistory {
 
   constructor(private readonly host: HistoryHost) {}
 
-  open(close: () => void): OverlayHandle {
+  open(close: () => void | boolean): OverlayHandle {
     this.listen();
     const entry: Entry = { close, done: false };
     this.stack.push(entry);
@@ -103,7 +104,11 @@ export class OverlayHistory {
     const top = this.stack.pop();
     if (!top) return;
     top.done = true;
-    top.close();
+    // Окно не закрылось: оно остаётся в стопке со своей заглушкой, следующее «Назад» снова к нему.
+    if (top.close() === false) {
+      top.done = false;
+      this.stack.push(top);
+    }
     if (this.stack.length > 0) this.pushStub();
   }
 }
@@ -111,11 +116,15 @@ export class OverlayHistory {
 let shared: OverlayHistory | null = null;
 
 /**
- * Закрывать окно кнопкой «Назад», пока оно открыто. Возвращает функцию для закрытия переходом:
- * вызвать перед переходом с `replace` (выбор модуля в панели «Меню»), чтобы заглушку заменил сам
- * переход.
+ * Закрывать окно кнопкой «Назад», пока оно открыто; `close` может вернуть false — окно осталось
+ * открытым (форма с несохранёнными изменениями спрашивает «Закрыть без сохранения?»). Возвращает
+ * функцию для закрытия переходом: вызвать перед переходом с `replace` (выбор модуля в панели «Меню»),
+ * чтобы заглушку заменил сам переход.
  */
-export function useBackClose(open: boolean, close: () => void): (navigating?: boolean) => void {
+export function useBackClose(
+  open: boolean,
+  close: () => void | boolean,
+): (navigating?: boolean) => void {
   const onBack = useEffectEvent(() => close());
   const handle = useRef<OverlayHandle | null>(null);
 

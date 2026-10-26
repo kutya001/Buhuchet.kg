@@ -44,6 +44,10 @@
   --bu-b-yellow: hsl(43 83% 57%);
   --bu-b-blue: hsl(200 64% 37%);
   --bu-cover: hsla(33 30% 35% / 0.22);
+  --bu-toast-bg: hsl(31 45% 22%);
+  --bu-toast-fg: hsl(35 36% 96%);
+  /* Опасная кнопка — светлый текст на красном, не ниже 4,5 : 1 (ОТКЛОНЕНИЕ: docs/deviations.md#26). */
+  --bu-danger-btn: hsl(4 56% 45%);
   --bu-shadow-s:
     0 1px 2px rgba(0, 0, 0, 0.028), 0 3.4px 6.7px rgba(0, 0, 0, 0.042),
     0 15px 30px rgba(0, 0, 0, 0.07);
@@ -113,6 +117,9 @@
   --bu-b-yellow: hsl(42 79% 51%);
   --bu-b-blue: hsl(197 48% 49%);
   --bu-cover: hsla(30 20% 4% / 0.45);
+  --bu-toast-bg: hsl(32 48% 85%);
+  --bu-toast-fg: hsl(30 19% 13%);
+  --bu-danger-btn: hsl(4 70% 40%);
   --bu-shadow-s:
     0 1px 2px rgba(0, 0, 0, 0.228), 0 3.4px 6.7px rgba(0, 0, 0, 0.242),
     0 15px 30px rgba(0, 0, 0, 0.27);
@@ -179,6 +186,9 @@
     --bu-b-yellow: hsl(42 79% 51%);
     --bu-b-blue: hsl(197 48% 49%);
     --bu-cover: hsla(30 20% 4% / 0.45);
+    --bu-toast-bg: hsl(32 48% 85%);
+    --bu-toast-fg: hsl(30 19% 13%);
+    --bu-danger-btn: hsl(4 70% 40%);
     --bu-shadow-s:
       0 1px 2px rgba(0, 0, 0, 0.228), 0 3.4px 6.7px rgba(0, 0, 0, 0.242),
       0 15px 30px rgba(0, 0, 0, 0.27);
@@ -245,6 +255,9 @@
   --color-brand-yellow: var(--bu-b-yellow);
   --color-brand-blue: var(--bu-b-blue);
   --color-cover: var(--bu-cover);
+  --color-toast-bg: var(--bu-toast-bg);
+  --color-toast-fg: var(--bu-toast-fg);
+  --color-danger-btn: var(--bu-danger-btn);
   --shadow-pane: var(--bu-shadow-s);
   --shadow-pop: var(--bu-shadow-l);
   --shadow-btn: var(--bu-sh-btn);
@@ -256,6 +269,7 @@
   /* ТЗ «Принципы оформления»: анимации 150–250 мс; в прототипе «pop» — 0,32 с (docs/deviations.md, п. 23). */
   --animate-pop: bu-pop 0.25s ease-out;
   --animate-slide-up: bu-slide-up 0.25s forwards;
+  --animate-fade: bu-fade 0.2s;
 }
 
 @keyframes bu-pop {
@@ -267,6 +281,15 @@
   }
   100% {
     transform: scale(1);
+  }
+}
+
+@keyframes bu-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
   }
 }
 
