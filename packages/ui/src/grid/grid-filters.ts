@@ -21,6 +21,23 @@ export function activeFilterKeys(
 }
 
 /**
+ * Столбцы фильтров-галочек, у отмеченных значений которых нет подписи для чипа: фильтр поставлен не
+ * из меню столбца (например, плашкой статистики) — подписи подгружаются методом значений столбца.
+ */
+export function unlabeledEnumFilters(
+  filters: Readonly<Record<string, ListFilterValue>>,
+  keys: readonly string[],
+  known: Readonly<Record<string, Readonly<Record<string, string | null>>>>,
+): string[] {
+  return activeFilterKeys(filters, keys).filter((key) => {
+    const filter = filters[key]!;
+    if (filter.type !== 'enum') return false;
+    const names = known[key] ?? {};
+    return filter.vals.some((v) => v !== '' && !(v in names));
+  });
+}
+
+/**
  * Граница «От» / «До» из поля: у денег — сомы, введённые человеком («1 250,50»), в тыйынах; у счётчика —
  * целое. Пусто — null; не число — 'bad'.
  */

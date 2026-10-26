@@ -34,7 +34,11 @@ type Expr = SQL | AnyColumn;
 /** Столбец списка на сервере: тип (от него зависят фильтр и сортировка) и выражение значения. */
 export interface ListColumn {
   type: ListColumnType;
-  /** Значение для фильтра: справочник сравнивается как текст (код значения), дата — по Бишкеку. */
+  /**
+   * Значение для фильтра: справочник сравнивается как текст (код значения), дата — по Бишкеку. По нему
+   * же группируют `group by`, поэтому в `value` и `sort` — без параметров запроса (тексты словаря —
+   * только в `display`).
+   */
   value: Expr;
   /**
    * Сортировка, если не по значению: роль — по названию, статус — «Активен» выше «Заблокирован».
@@ -220,11 +224,20 @@ function filterCondition(key: string, column: ListColumn, filter: ListFilterValu
 }
 
 /**
- * Значение столбцов «Создал» и «Изменил» для фильтра и сортировки — как на экране (`auditActorName`):
- * краткое ФИО сотрудника; автор без записи сотрудника — «Администратор платформы»; без автора — пусто.
+ * Постоянный текст прямо в запросе, а не параметром: Drizzle даёт параметру новый номер в каждом месте
+ * запроса, и PostgreSQL не считает `select` и `group by` с ним одним выражением.
+ */
+function textLiteral(value: string): SQL {
+  return sql.raw(`'${value.replace(/'/g, "''")}'`);
+}
+
+/**
+ * Значение столбцов «Создал» и «Изменил» для фильтра, сортировки и группировки — как на экране
+ * (`auditActorName`): краткое ФИО сотрудника; автор без записи сотрудника — «Администратор
+ * платформы»; без автора — пусто.
  */
 export function auditActorValue(userId: Expr, shortName: Expr): SQL {
-  return sql`case when ${userId} is null then null else coalesce(${shortName}, ${PLATFORM_ADMIN_NAME}::text) end`;
+  return sql`case when ${userId} is null then null else coalesce(${shortName}, ${textLiteral(PLATFORM_ADMIN_NAME)}::text) end`;
 }
 
 /** Условие по фильтрам столбцов и поиску (всё сразу — «И»). */
@@ -428,8 +441,11 @@ export async function selectListPage<T extends ListWindowRow>(options: {
   /** Естественный порядок списка: без сортировки и для равных значений. */
   natural: Expr[];
   defaultSort?: ListSort | null;
-  /** Область «Свои контрагенты» и другие условия модуля. */
-  scope?: SQL;
+  /**
+   * Область «Свои контрагенты» и другие условия модуля — всегда явно (`undefined` — весь список
+   * организации), чтобы модуль с областью не забыл её.
+   */
+  scope: SQL | undefined;
   select: (q: {
     window: ListWindowFields;
     where: SQL | undefined;
@@ -515,7 +531,8 @@ export interface ListValue {
 export async function selectListValues(options: {
   columns: ListColumns;
   key: string;
-  scope?: SQL;
+  /** Та же область, что у страницы списка: числа записей — только по ней. */
+  scope: SQL | undefined;
   from: ListFrom;
 }): Promise<{ items: ListValue[]; more: boolean }> {
   const column = columnOf(options.columns, options.key, 'column');
@@ -548,7 +565,8 @@ export async function selectListExport(options: {
   keys: readonly string[];
   natural: Expr[];
   defaultSort?: ListSort | null;
-  scope?: SQL;
+  /** Та же область, что у страницы списка: в файл — только её записи. */
+  scope: SQL | undefined;
   from: ListFrom;
 }): Promise<{
   columns: { key: string; label: string; type: ListColumnType }[];

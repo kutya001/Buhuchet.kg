@@ -228,6 +228,8 @@ export async function listEmployeesPage(
     query,
     columns: employeeListColumns(t),
     natural: EMPLOYEE_NATURAL,
+    // У сотрудников нет области «Свои»: список — вся организация (её отсекает RLS).
+    scope: undefined,
     select: ({ window, where, orderBy, limit, offset }) =>
       selectEmployeePage(tx, window)
         .where(where)
@@ -242,7 +244,12 @@ export async function listEmployeesPage(
 
 /** Значения столбца списка сотрудников для фильтра-галочек (роль — названия ролей, статус — подписи). */
 export function listEmployeeValues(tx: Tx, key: string, t: ListTexts) {
-  return selectListValues({ columns: employeeListColumns(t), key, from: employeeListFrom(tx) });
+  return selectListValues({
+    columns: employeeListColumns(t),
+    key,
+    scope: undefined,
+    from: employeeListFrom(tx),
+  });
 }
 
 /**
@@ -260,6 +267,7 @@ export async function exportEmployees(
     columns: employeeListColumns(t),
     keys,
     natural: EMPLOYEE_NATURAL,
+    scope: undefined,
     from: employeeListFrom(tx),
   });
   const phone = keys.indexOf('phone');

@@ -1,3 +1,4 @@
+import type { ListFilterValue } from '@buhuchet/domain';
 import { describe, expect, it } from 'vitest';
 import {
   activeFilterKeys,
@@ -5,6 +6,7 @@ import {
   enumFilter,
   formatFilterNumber,
   parseFilterNumber,
+  unlabeledEnumFilters,
 } from './grid-filters';
 import type { GridLabels } from './types';
 
@@ -69,5 +71,18 @@ describe('фильтры у столбцов', () => {
     expect(chipText('datetime', { type: 'date', from: '2026-03-01' }, LABELS, name)).toBe(
       'с 01.03.2026',
     );
+  });
+
+  it('подписи для чипа подгружаются у галочек, поставленных не из меню столбца', () => {
+    const filters: Record<string, ListFilterValue> = {
+      active: { type: 'enum', vals: ['blocked'] },
+      role: { type: 'enum', vals: ['r1', ''] },
+      fullName: { type: 'text', q: 'ив' },
+      gone: { type: 'enum', vals: ['x'] },
+    };
+    const keys = ['active', 'role', 'fullName'];
+    expect(unlabeledEnumFilters(filters, keys, {})).toEqual(['active', 'role']);
+    // «(Пусто)» подписи не требует; известные подписи повторно не грузятся.
+    expect(unlabeledEnumFilters(filters, keys, { role: { r1: 'Бухгалтер' } })).toEqual(['active']);
   });
 });

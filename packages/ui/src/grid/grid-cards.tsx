@@ -166,7 +166,7 @@ export function GridCards<Row>({
                     <span key={c.key}>
                       {c.label}
                       {how === 'sum' ? '' : ` (${labels.agg[how].toLowerCase()})`}:{' '}
-                      <b className="text-ink tabular-nums">
+                      <b className="tabular-nums">
                         {aggText(c.type, how, node.group.aggs[c.key] ?? null)}
                       </b>
                     </span>

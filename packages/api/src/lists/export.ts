@@ -8,7 +8,7 @@ import { buildXlsx, XLSX_TYPE, type XlsxCell } from './xlsx';
  * в файле и все ли вошли — в заголовках `x-export-rows` и `x-export-more`: экран говорит об этом
  * уведомлением.
  */
-export function xlsxResponse(
+export async function xlsxResponse(
   c: Context,
   options: {
     title: string;
@@ -18,9 +18,9 @@ export function xlsxResponse(
     more: boolean;
     t: (key: string) => string;
   },
-): Response {
+): Promise<Response> {
   const { title, columns, rows, more, t } = options;
-  const file = buildXlsx(
+  const file = await buildXlsx(
     title,
     columns.map((col) => ({
       title: t(col.label),

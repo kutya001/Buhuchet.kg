@@ -289,11 +289,11 @@ function EnumValues({
               onChange={(e) => toggle([i.value], e.target.checked)}
             />
             {i.label === null ? (
-              <i className="text-muted">{labels.empty}</i>
+              <i className="text-faint">{labels.empty}</i>
             ) : (
               <span className="min-w-0 truncate">{i.label}</span>
             )}
-            <span className="ml-auto text-[11px] text-muted tabular-nums">{i.count}</span>
+            <span className="ml-auto text-[11px] text-faint tabular-nums">{i.count}</span>
           </label>
         ))}
       </div>

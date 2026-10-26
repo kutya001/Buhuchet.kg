@@ -1,4 +1,8 @@
-import { crc32, deflateRawSync } from 'node:zlib';
+import { promisify } from 'node:util';
+import { crc32, deflateRaw } from 'node:zlib';
+
+/** Сжатие в пуле потоков Node.js: большой файл не останавливает ответы на другие запросы. */
+const deflate = promisify(deflateRaw);
 
 /**
  * Файл Excel (.xlsx) для выгрузки списка (ТЗ «Экспорт в Excel всех отфильтрованных записей; файл
@@ -152,13 +156,14 @@ const DOS_TIME = 0;
 const DOS_DATE = ((2026 - 1980) << 9) | (1 << 5) | 1;
 
 /** Архив ZIP (сжатие deflate) из файлов с ASCII-именами. */
-export function zip(files: readonly { name: string; data: Buffer }[]): Buffer {
+export async function zip(files: readonly { name: string; data: Buffer }[]): Promise<Buffer> {
   const locals: Buffer[] = [];
   const centrals: Buffer[] = [];
   let offset = 0;
-  for (const file of files) {
+  const packedAll = await Promise.all(files.map((file) => deflate(file.data)));
+  for (const [i, file] of files.entries()) {
     const name = Buffer.from(file.name, 'ascii');
-    const packed = deflateRawSync(file.data);
+    const packed = packedAll[i]!;
     const crc = crc32(file.data);
     const local = Buffer.alloc(30);
     local.writeUInt32LE(0x04034b50, 0);
@@ -213,7 +218,7 @@ export function buildXlsx(
   name: string,
   columns: readonly XlsxColumn[],
   rows: readonly XlsxCell[][],
-): Buffer {
+): Promise<Buffer> {
   const file = (path: string, xml: string) => ({ name: path, data: Buffer.from(xml, 'utf8') });
   return zip([
     file('[Content_Types].xml', CONTENT_TYPES),

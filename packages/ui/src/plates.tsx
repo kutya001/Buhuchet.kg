@@ -61,12 +61,12 @@ export function Plate({
       <span className="text-[25px] leading-[1.05] font-[720] tracking-[-0.025em] tabular-nums max-md:text-[21px]">
         {value}
         {unit && (
-          <small className="ml-[3px] text-[13px] font-[550] tracking-normal text-muted">
+          <small className="ml-[3px] text-[13px] font-[550] tracking-normal text-faint">
             {unit}
           </small>
         )}
       </span>
-      {sub && <span className="text-[12px] text-muted">{sub}</span>}
+      {sub && <span className="text-[12px] text-faint">{sub}</span>}
     </>
   );
   const box =

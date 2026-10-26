@@ -5,7 +5,7 @@ import {
   type ListFilterValue,
   type ListQuery,
 } from '@buhuchet/domain';
-import { asc, sql, type SQL } from 'drizzle-orm';
+import { asc, eq, sql, type SQL } from 'drizzle-orm';
 import { bigint, date, integer, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -112,6 +112,7 @@ describe.skipIf(!databaseAvailable())('страница списка на сер
       query: { sort: undefined, page: 1, size: 25, filters: {}, ...query },
       columns: COLUMNS,
       natural: [items.createdAt, items.id],
+      scope: undefined,
       select: ({ window, where, orderBy, limit, offset }) =>
         t.app.db
           .select({ id: items.id, name: items.name, ...window })
@@ -152,6 +153,7 @@ describe.skipIf(!databaseAvailable())('страница списка на сер
       query: { sort: null, page: 2, size: 25, filters: {} },
       columns: COLUMNS,
       natural: [items.id],
+      scope: undefined,
       select: ({ window, where, orderBy, offset }) =>
         t.app.db
           .select({ id: items.id, ...window })
@@ -352,7 +354,9 @@ describe.skipIf(!databaseAvailable())('страница списка на сер
   });
 
   it('значения для фильтра-галочек: подпись и число записей по всему списку, пустые внизу', async () => {
-    expect(await selectListValues({ columns: COLUMNS, key: 'kind', from })).toEqual({
+    const values = (key: string, scope?: SQL) =>
+      selectListValues({ columns: COLUMNS, key, scope, from });
+    expect(await values('kind')).toEqual({
       items: [
         { value: 'a', label: 'a', count: 3 },
         { value: 'b', label: 'b', count: 2 },
@@ -360,9 +364,11 @@ describe.skipIf(!databaseAvailable())('страница списка на сер
       ],
       more: false,
     });
-    await expect(selectListValues({ columns: COLUMNS, key: 'nope', from })).rejects.toBeInstanceOf(
-      ListQueryError,
-    );
+    // Область модуля («Свои контрагенты») сужает и значения, и их числа.
+    expect((await values('kind', eq(items.kind, 'b'))).items).toEqual([
+      { value: 'b', label: 'b', count: 2 },
+    ]);
+    await expect(values('nope')).rejects.toBeInstanceOf(ListQueryError);
   });
 
   it('выгрузка: все записи под фильтром, видимые столбцы по порядку, деньги — числом', async () => {
@@ -371,6 +377,7 @@ describe.skipIf(!databaseAvailable())('страница списка на сер
       columns: COLUMNS,
       keys: ['name', 'amount', 'due'],
       natural: [items.createdAt, items.id],
+      scope: undefined,
       from,
     });
     expect(exported).toEqual({
@@ -386,6 +393,16 @@ describe.skipIf(!databaseAvailable())('страница списка на сер
       ],
       more: false,
     });
+    // В файл — только записи области модуля.
+    const scoped = await selectListExport({
+      query: { sort: null, page: 1, size: 25, filters: {} },
+      columns: COLUMNS,
+      keys: ['kind'],
+      natural: [items.id],
+      scope: eq(items.kind, 'b'),
+      from,
+    });
+    expect(scoped.rows).toEqual([['b'], ['b']]);
   });
 
   it('итог по любому фильтру: «компания А, 09.2026» — 10 500 сом (механизм итогов пункта приёмки)', async () => {
@@ -401,6 +418,7 @@ describe.skipIf(!databaseAvailable())('страница списка на сер
       },
       columns: REPORT_COLUMNS,
       natural: [reports.createdAt, reports.id],
+      scope: undefined,
       select: ({ window, where, orderBy, limit, offset }) =>
         t.app.db
           .select({ id: reports.id, ...window })

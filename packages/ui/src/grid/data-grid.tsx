@@ -10,7 +10,7 @@ import {
   type ListPageSize,
   type ListSort,
 } from '@buhuchet/domain';
-import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ActionMenu, type ActionEntry, type MenuPlace } from '../action-menu';
 import { iconButtonClass, linkButtonClass } from '../button';
 import { EmptyState, NothingFound } from '../empty-state';
@@ -20,7 +20,7 @@ import { useToast } from '../toast';
 import { PHONE_QUERY, useMediaQuery } from '../use-media';
 import { auditColumns } from './audit';
 import { FilterPanel, type ValueLabels } from './grid-filter';
-import { activeFilterKeys, chipText } from './grid-filters';
+import { activeFilterKeys, chipText, unlabeledEnumFilters } from './grid-filters';
 import { effectiveGroup, groupAggs, groupPaths, groupTree, withGroup } from './grid-groups';
 import { effectiveSort, effectiveView, pageSizeOf, toggleSort, visibleKeys } from './grid-state';
 import { GridCards } from './grid-cards';
@@ -165,6 +165,24 @@ export function DataGrid<Row>({
   const closeFilter = useCallback(() => setFilterAt(null), []);
   const [valueLabels, setValueLabels] = useState<Readonly<Record<string, ValueLabels>>>({});
   const filterKeys = activeFilterKeys(filters, keys);
+  // Фильтр-галочки, поставленный не из меню столбца (плашкой статистики): подписи значений для чипа
+  // подгружаются тем же методом значений столбца — один раз на столбец.
+  const unlabeled = unlabeledEnumFilters(filters, keys, valueLabels).join('|');
+  const asked = useRef(new Set<string>());
+  useEffect(() => {
+    if (!loadValues || !unlabeled) return;
+    for (const key of unlabeled.split('|')) {
+      if (asked.current.has(key)) continue;
+      asked.current.add(key);
+      loadValues(key).then(
+        (res) => {
+          const names = Object.fromEntries(res.items.map((i) => [i.value, i.label]));
+          setValueLabels((prev) => ({ ...prev, [key]: { ...names, ...prev[key] } }));
+        },
+        () => {},
+      );
+    }
+  }, [unlabeled, loadValues]);
   const searching = search.trim() !== '';
   const view = effectiveView(settings, phone, fixedView);
   const sort = effectiveSort(settings, defaultSort, keys);

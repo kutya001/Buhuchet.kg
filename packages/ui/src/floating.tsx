@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { menuPosition } from './action-menu';
+import { PHONE_QUERY } from './use-media';
 import { useSwipeDown } from './use-swipe-down';
 
 /**
@@ -10,7 +11,8 @@ import { useSwipeDown } from './use-swipe-down';
  * `Popover`, но рисуется в `document.body` — не обрезается прокруткой таблицы (фильтр у заголовка
  * столбца). Место — `menuPosition`: под элементом, а если не помещается — над ним. Закрывается Esc
  * (фокус возвращается на элемент), нажатием вне окошка и элемента, кнопкой «Назад» и на телефоне
- * протяжкой вниз; при открытии фокус — на первом поле или кнопке.
+ * протяжкой вниз. При открытии фокус — на первом поле ввода (на телефоне — на первой кнопке, чтобы не
+ * выскакивала клавиатура, как `!isMobile()` в openPop).
  */
 export function FloatingPanel({
   anchor,
@@ -41,9 +43,12 @@ export function FloatingPanel({
   }, [anchor]);
 
   useEffect(() => {
-    box.current
-      ?.querySelector<HTMLElement>('input:not([disabled]),select,button:not([disabled])')
-      ?.focus();
+    const field = window.matchMedia(PHONE_QUERY).matches
+      ? null
+      : box.current?.querySelector<HTMLElement>(
+          'input:not([type=checkbox]):not([disabled]),select:not([disabled])',
+        );
+    (field ?? box.current?.querySelector<HTMLElement>('button:not([disabled])'))?.focus();
     const outside = (e: PointerEvent) => {
       const target = e.target as Node;
       if (box.current?.contains(target) || anchor.contains(target)) return;

@@ -154,6 +154,18 @@ describe.skipIf(!databaseAvailable())(
           found.items.map((e) => e.fullName),
           key,
         ).toEqual(['Номер 1']);
+        // Группы и значения фильтра — по тому же тексту, что на экране.
+        const grouped = await list({ group: [key] });
+        expect(grouped.groups?.find((g) => g.label === 'Администратор платформы')?.count, key).toBe(
+          1,
+        );
+        const res = await apiRequest(f.app, 'GET', `/api/staff/values?col=${key}`, owner);
+        expect(res.status, key).toBe(200);
+        expect(ListValues.parse(await res.json()).items, key).toContainEqual({
+          value: 'Администратор платформы',
+          label: 'Администратор платформы',
+          count: 1,
+        });
       }
     });
 
@@ -309,6 +321,15 @@ describe.skipIf(!databaseAvailable())(
       const ownerB = await signIn(f.app, 'owner-b', TEST_PASSWORD);
       const b = await list({ size: 'all' }, ownerB);
       expect(b.items.map((e) => e.login).sort()).toEqual(['acc-b', 'owner-b']);
+      // И в файле «В Excel» у Б — только свои.
+      const file = await apiRequest(f.app, 'GET', '/api/staff/export?cols=login', ownerB);
+      expect(file.status).toBe(200);
+      expect(file.headers.get('x-export-rows')).toBe('2');
+      const sheet = unzipTexts(new Uint8Array(await file.arrayBuffer()))[
+        'xl/worksheets/sheet1.xml'
+      ]!;
+      const logins = [...sheet.matchAll(/<t xml:space="preserve">([^<]*)<\/t>/g)].map((m) => m[1]);
+      expect(logins.slice(1).sort()).toEqual(['acc-b', 'owner-b']);
     });
 
     it('неверные сортировка, страница и фильтры — 400', async () => {
