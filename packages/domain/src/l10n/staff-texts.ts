@@ -26,6 +26,7 @@ export const STAFF_TEXTS = {
   'staff.action.block': { ru: 'Заблокировать', section: 'Сотрудники' },
   'staff.action.unblock': { ru: 'Разблокировать', section: 'Сотрудники' },
   'staff.action.block_self': { ru: 'Нельзя заблокировать себя', section: 'Сотрудники' },
+  'staff.action.reset_self': { ru: 'Свой пароль меняют в «Мой профиль»', section: 'Сотрудники' },
   'staff.block.title': { ru: 'Заблокировать {name}?', section: 'Сотрудники' },
   'staff.block.text': {
     ru: 'Сотрудник не сможет войти. Его история сохранится.',
@@ -39,4 +40,35 @@ export const STAFF_TEXTS = {
     ru: 'Передайте его сотруднику лично. При первом входе нужно будет задать свой пароль. Все прежние сеансы завершены.',
     section: 'Сотрудники',
   },
+  // Отказы сервера в действиях над сотрудником (`refuse` в packages/api: код и details.variant).
+  'err.own_account': { ru: 'Нельзя заблокировать себя', section: 'Ошибки' },
+  'err.owner_employee': {
+    ru: 'Роль, блокировку и пароль владельца организации ведёт администратор платформы',
+    section: 'Ошибки',
+  },
+  'err.owner_employee.edit': {
+    ru: 'ФИО и телефон владельца меняет сам владелец',
+    section: 'Ошибки',
+  },
+  'err.owner_password_reset': {
+    ru: 'Пароль владельца сбрасывает администратор платформы',
+    section: 'Ошибки',
+  },
+  'err.owner_granted.reset_password': {
+    ru: 'Пароль сотрудника с правами, которые выдаёт только владелец, сбрасывает владелец',
+    section: 'Ошибки',
+  },
+  'err.owner_granted.block': {
+    ru: 'Сотрудника с правами, которые выдаёт только владелец, блокирует и разблокирует владелец',
+    section: 'Ошибки',
+  },
+  'err.beyond_own.reset_password': {
+    ru: 'Пароль сотрудника с правами шире ваших сбрасывает владелец',
+    section: 'Ошибки',
+  },
+  'err.beyond_own.block': {
+    ru: 'Сотрудника с правами шире ваших блокирует и разблокирует владелец',
+    section: 'Ошибки',
+  },
+  'err.record_changed': { ru: 'Запись изменена другим пользователем', section: 'Ошибки' },
 } as const satisfies Record<string, UiTextDefault>;

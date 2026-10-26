@@ -483,6 +483,7 @@ describe.skipIf(!databaseAvailable())('Сотрудники: API', () => {
           code: 'owner_granted',
           message:
             'Сотрудника с правами, которые выдаёт только владелец, блокирует и разблокирует владелец',
+          details: { variant: 'block' },
         });
       }
       expect((await card(owner, senior.id)).active).toBe(true);
@@ -496,6 +497,7 @@ describe.skipIf(!databaseAvailable())('Сотрудники: API', () => {
       expect(ApiError.parse(await chiefBlock.json()).error).toEqual({
         code: 'beyond_own',
         message: 'Сотрудника с правами шире ваших блокирует и разблокирует владелец',
+        details: { variant: 'block' },
       });
 
       const acc = await card(owner, f.people['acc-a']!.employeeId);
@@ -536,6 +538,7 @@ describe.skipIf(!databaseAvailable())('Сотрудники: API', () => {
       expect(ApiError.parse(await byHr.json()).error).toEqual({
         code: 'beyond_own',
         message: 'Пароль сотрудника с правами шире ваших сбрасывает владелец',
+        details: { variant: 'reset_password' },
       });
       expect((await loginAs('chief-a')).status).toBe(200);
       const missing = await call(

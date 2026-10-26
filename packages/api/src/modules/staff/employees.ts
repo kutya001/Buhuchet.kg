@@ -81,11 +81,13 @@ const REFUSAL_MESSAGES: Record<StaffRefusal, string> = {
 
 /**
  * Отказ 403 в действии над сотрудником (`staffActionRefusal`, `newEmployeeRoleRefusal`); внутри
- * транзакции откатывает её.
+ * транзакции откатывает её. Отказ в правке, сбросе пароля, блокировке и разблокировке передаёт
+ * `details.variant` (`edit`, `reset_password`, `block`): экран берёт текст из словаря
+ * (`err.<код>.<вариант>`), а не из ответа.
  */
 export function refuse(refusal: StaffRefusal, action: StaffAction | 'create'): never {
   if (refusal === 'owner_employee' && action === 'edit') {
-    apiFail(403, refusal, 'ФИО и телефон владельца меняет сам владелец');
+    apiFail(403, refusal, 'ФИО и телефон владельца меняет сам владелец', { variant: 'edit' });
   }
   if (refusal === 'owner_employee' && action === 'resetPassword') {
     apiFail(403, 'owner_password_reset', 'Пароль владельца сбрасывает администратор платформы');
@@ -95,6 +97,7 @@ export function refuse(refusal: StaffRefusal, action: StaffAction | 'create'): n
       403,
       refusal,
       'Пароль сотрудника с правами, которые выдаёт только владелец, сбрасывает владелец',
+      { variant: 'reset_password' },
     );
   }
   if (refusal === 'owner_granted' && (action === 'block' || action === 'unblock')) {
@@ -102,13 +105,18 @@ export function refuse(refusal: StaffRefusal, action: StaffAction | 'create'): n
       403,
       refusal,
       'Сотрудника с правами, которые выдаёт только владелец, блокирует и разблокирует владелец',
+      { variant: 'block' },
     );
   }
   if (refusal === 'beyond_own' && action === 'resetPassword') {
-    apiFail(403, refusal, 'Пароль сотрудника с правами шире ваших сбрасывает владелец');
+    apiFail(403, refusal, 'Пароль сотрудника с правами шире ваших сбрасывает владелец', {
+      variant: 'reset_password',
+    });
   }
   if (refusal === 'beyond_own' && (action === 'block' || action === 'unblock')) {
-    apiFail(403, refusal, 'Сотрудника с правами шире ваших блокирует и разблокирует владелец');
+    apiFail(403, refusal, 'Сотрудника с правами шире ваших блокирует и разблокирует владелец', {
+      variant: 'block',
+    });
   }
   apiFail(403, refusal, REFUSAL_MESSAGES[refusal]);
 }

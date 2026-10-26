@@ -348,6 +348,19 @@ test.describe('Списки: UnifiedDataGrid', () => {
     await expect(card(first!.id)).toContainText('Активен');
     await expect(card(second!.id)).toContainText('Заблокирован');
 
+    // Группировка по статусу — заголовки групп над плитками (на ПК — строки групп в таблице).
+    await grid.locator('[data-grid-group-button]').click();
+    const panel = page.getByRole('dialog', { name: 'Группировка' });
+    await panel.getByLabel('Уровень 1').selectOption({ label: 'Статус' });
+    await panel.getByRole('button', { name: 'Применить' }).click();
+    await expect(grid.locator('[data-group-level="0"]')).toHaveCount(2);
+    await expect(grid).toHaveAttribute('data-view', isMobile ? 'cards' : 'table');
+    await grid
+      .locator('[data-chip="group"]')
+      .getByRole('button', { name: 'Убрать группировку' })
+      .click();
+    await expect(grid.locator('[data-group-level="0"]')).toHaveCount(0);
+
     // Фильтр у столбца «Статус» (на телефоне — в виде «Таблица», как в прототипе); плашка фильтра
     // видна и в плитках, там же фильтр снимается.
     if (isMobile) await page.getByRole('button', { name: 'Вид списка: Таблица' }).click();
@@ -377,6 +390,14 @@ test.describe('Списки: UnifiedDataGrid', () => {
         [box.x + box.width / 2, box.y - 8] as const,
       );
       expect(hit).toBe(true);
+    }
+    if (isMobile) {
+      // Меню на телефоне закрывается протяжкой вниз, как окна и панели.
+      await more.click();
+      const box = await settledBox(menu);
+      const from = { x: box.x + box.width / 2, y: box.y + 20 };
+      await (await finger(page)).drag(from, { x: from.x, y: from.y + 160 });
+      await expect(menu).toHaveCount(0);
     }
     await more.click();
     await expect(menu.getByRole('menuitem')).toHaveText(['Сбросить пароль', 'Заблокировать']);

@@ -10,7 +10,7 @@ import {
 } from '@buhuchet/domain';
 import { useId, useState, type DragEvent } from 'react';
 import { ActionList } from '../action-menu';
-import { buttonClass, iconButtonClass } from '../button';
+import { buttonClass, iconButtonClass, TOUCH_AREA } from '../button';
 import { inputClass } from '../form';
 import { Icon } from '../icon';
 import { Popover } from '../popover';
@@ -26,9 +26,11 @@ import {
 } from './grid-state';
 import type { GridBulkAction, GridColumn, GridLabels } from './types';
 
-/** Кнопка панели на телефоне — значок 36 px с подложкой (`.gtools .icon-btn.sm.raised`). */
-const PHONE_TOOL =
-  'inline-grid h-9 w-9 flex-none cursor-pointer place-items-center rounded-lg border-0 bg-btn text-muted shadow-btn hover:text-ink [&_svg]:h-[17px] [&_svg]:w-[17px]';
+/**
+ * Кнопка панели на телефоне — значок 36 px с подложкой (`.gtools .icon-btn.sm.raised`), область
+ * касания — 44 px (`TOUCH_AREA`).
+ */
+const PHONE_TOOL = `${TOUCH_AREA} inline-grid h-9 w-9 flex-none cursor-pointer place-items-center rounded-lg border-0 bg-btn text-muted shadow-btn hover:text-ink [&_svg]:h-[17px] [&_svg]:w-[17px]`;
 
 /** Кнопка «Настройки вида» на ПК (`.icon-btn.sm.raised`). */
 const RAISED_ICON = `${iconButtonClass('sm')} bg-btn! shadow-btn`;
@@ -141,7 +143,7 @@ export function GridToolbar<Row>({
             aria-label={phone ? groupLabel : undefined}
             className={
               phone
-                ? `${PHONE_TOOL} relative ${group.length ? 'text-ink' : ''}`
+                ? `${PHONE_TOOL} ${group.length ? 'text-ink' : ''}`
                 : buttonClass('default', 'sm')
             }
           >

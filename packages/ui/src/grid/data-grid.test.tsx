@@ -501,8 +501,9 @@ describe('UnifiedDataGrid: карточки', () => {
       const owner = html.slice(html.indexOf('data-id="p1"'), html.indexOf('data-id="p2"'));
       expect(owner).not.toContain('data-row-menu');
     }
-    // На телефоне область касания «⋯» больше самой кнопки (ТЗ: не меньше 44 px).
-    expect(grid({ data, actions })).toContain('max-md:before:-inset-[9px]');
+    // На телефоне область касания «⋯» больше самой кнопки (ТЗ: не меньше 44 px; `TOUCH_AREA`).
+    const menu = grid({ data, actions }).match(/<button[^>]*data-row-menu[^>]*>/)![0];
+    expect(menu).toContain('max-md:before:h-[max(100%,44px)] max-md:before:w-[max(100%,44px)]');
   });
 
   it('закреплённый вид — без переключателя «Таблица / Карточки»', () => {

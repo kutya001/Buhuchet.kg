@@ -29,6 +29,15 @@ export function buttonClass(
   return `${BUTTON_BASE} ${BUTTON_VARIANTS[variant]} ${BUTTON_SIZES[size]}`;
 }
 
+/**
+ * На телефоне область касания маленькой кнопки — не меньше 44 × 44 px, а вид прежний, как в прототипе
+ * (ТЗ «Принципы оформления» → «Плотность»): невидимый слой поверх кнопки и вокруг неё. Кнопка
+ * становится `relative` — не для кнопок с `absolute` или `fixed`.
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#35
+export const TOUCH_AREA =
+  "relative max-md:before:absolute max-md:before:top-1/2 max-md:before:left-1/2 max-md:before:h-[max(100%,44px)] max-md:before:w-[max(100%,44px)] max-md:before:-translate-1/2 max-md:before:content-['']";
+
 /** Кнопка-значок без подписи (`.icon-btn`): подпись — в aria-label и подсказке. */
 export function iconButtonClass(size: 'md' | 'sm' = 'md'): string {
   const box = size === 'sm' ? 'h-[27px] w-[27px]' : 'h-[33px] w-[33px]';

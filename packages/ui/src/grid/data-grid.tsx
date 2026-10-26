@@ -12,7 +12,7 @@ import {
 } from '@buhuchet/domain';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ActionMenu, type ActionEntry, type MenuPlace } from '../action-menu';
-import { iconButtonClass, linkButtonClass } from '../button';
+import { iconButtonClass, linkButtonClass, TOUCH_AREA } from '../button';
 import { EmptyState, NothingFound } from '../empty-state';
 import { FloatingPanel } from '../floating';
 import { Icon } from '../icon';
@@ -508,7 +508,7 @@ export function GridChips({
           onClick={onClear}
           aria-label={clear}
           title={clear}
-          className="grid h-5 w-5 flex-none cursor-pointer place-items-center rounded-full border-0 bg-transparent text-inherit hover:bg-info-bg"
+          className={`${TOUCH_AREA} grid h-5 w-5 flex-none cursor-pointer place-items-center rounded-full border-0 bg-transparent text-inherit hover:bg-info-bg`}
         >
           <Icon name="x" size="sm" />
         </button>
@@ -586,7 +586,7 @@ export function GridFooter({
         onClick={() => onPageChange(page - 1)}
         aria-label={labels.prev}
         title={labels.prev}
-        className={`${iconButtonClass('sm')} disabled:cursor-not-allowed disabled:opacity-40`}
+        className={`${iconButtonClass('sm')} ${TOUCH_AREA} disabled:cursor-not-allowed disabled:opacity-40`}
       >
         <Icon name="left" />
       </button>
@@ -599,7 +599,7 @@ export function GridFooter({
         onClick={() => onPageChange(page + 1)}
         aria-label={labels.next}
         title={labels.next}
-        className={`${iconButtonClass('sm')} disabled:cursor-not-allowed disabled:opacity-40`}
+        className={`${iconButtonClass('sm')} ${TOUCH_AREA} disabled:cursor-not-allowed disabled:opacity-40`}
       >
         <Icon name="right" />
       </button>
