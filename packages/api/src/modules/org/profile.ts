@@ -20,18 +20,14 @@ import type { AppEnv } from '../../env';
 import { apiError, versionedSaveResponses } from '../../errors';
 import { orgContextOf, requireEmployee, requirePermission } from '../../middleware/access';
 import { checkPhone } from '../staff/create';
+import { logoLink } from './logo-link';
 
 const { organizations } = schema;
 
 export const error = { 'application/json': { schema: ApiError } };
 
-/** Последняя часть ключа логотипа — номер загрузки: по нему браузер не берёт старую картинку из кэша. */
-export function logoVersion(logoKey: string): string {
-  return logoKey.slice(logoKey.lastIndexOf('/') + 1);
-}
-
-/** «Основное» для ответа API: ключ хранилища наружу не уходит, только адрес картинки. */
-export function orgProfileBody(p: OrgProfileRecord): OrgProfile {
+/** «Основное» для ответа API: ключ хранилища наружу не уходит, только временная ссылка на картинку. */
+export async function orgProfileBody(deps: ApiDeps, p: OrgProfileRecord): Promise<OrgProfile> {
   return {
     id: p.id,
     name: p.name,
@@ -40,7 +36,7 @@ export function orgProfileBody(p: OrgProfileRecord): OrgProfile {
     phone: p.phone,
     head: p.head,
     slug: p.slug,
-    logoUrl: p.logoKey ? `/api/org/logo?v=${logoVersion(p.logoKey)}` : null,
+    logo: await logoLink(deps, p.id, p.logoKey),
     audit: {
       createdAt: p.audit.createdAt.toISOString(),
       createdBy: p.audit.createdBy,
@@ -75,7 +71,7 @@ export function getOrgProfileHandler(
     const ctx = orgContextOf(c);
     const profile = await withOrgContext(deps.db, ctx, (tx) => getOrgProfile(tx, ctx.orgId));
     if (!profile) throw new RecordNotFoundError('organization', ctx.orgId);
-    return c.json(orgProfileBody(profile), 200);
+    return c.json(await orgProfileBody(deps, profile), 200);
   };
 }
 
@@ -148,7 +144,7 @@ export function updateOrgProfileHandler(
         });
         return (await getOrgProfile(tx, ctx.orgId))!;
       });
-      return c.json(orgProfileBody(profile), 200);
+      return c.json(await orgProfileBody(deps, profile), 200);
     } catch (err) {
       const constraint = uniqueViolation(err);
       if (constraint === 'organizations_slug_unique') {

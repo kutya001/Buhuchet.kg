@@ -27,7 +27,7 @@ export interface OrgProfileRecord {
   phone: string | null;
   head: string | null;
   slug: string;
-  /** Ключ логотипа в хранилище; наружу не отдаётся — только признак и адрес GET /api/org/logo. */
+  /** Ключ логотипа в хранилище; наружу не отдаётся — только временная подписанная ссылка на картинку. */
   logoKey: string | null;
   audit: AuditRecord;
   version: number;

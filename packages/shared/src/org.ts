@@ -26,6 +26,16 @@ export const MenuModuleIdSchema = z.enum(
 export const PageSectionSchema = z.enum(PAGE_SECTIONS);
 
 /**
+ * Временная подписанная ссылка на картинку логотипа в хранилище. Живёт 15 минут (до `expiresAt`),
+ * потом экран запрашивает новую: GET /api/org/logo.
+ */
+export const OrgLogoLink = z.object({
+  url: z.string(),
+  expiresAt: z.iso.datetime(),
+});
+export type OrgLogoLink = z.infer<typeof OrgLogoLink>;
+
+/**
  * «Моя организация» → «Основное» (прототип modules/org.js, renderOrg → main). Видят все сотрудники,
  * меняет владелец (право «Настройки и учётная политика»).
  */
@@ -39,8 +49,8 @@ export const OrgProfile = z.object({
   head: z.string().nullable(),
   /** «Адрес страницы организации»: buhuchet.kg/<slug>/inn/<ИНН>. */
   slug: z.string(),
-  /** Адрес картинки логотипа (GET /api/org/logo, меняется с каждой загрузкой); null — логотипа нет. */
-  logoUrl: z.string().nullable(),
+  /** Ссылка на картинку логотипа на 15 минут; null — логотипа нет. */
+  logo: OrgLogoLink.nullable(),
   audit: RecordAudit,
   version: RecordVersion,
 });

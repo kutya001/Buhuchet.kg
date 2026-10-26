@@ -22,7 +22,7 @@ export const organizations = pgTable(
     phone: text('phone'),
     /** Руководитель. */
     head: text('head'),
-    /** Ключ логотипа в хранилище: org/<org_id>/logo/<id>; картинку отдаёт GET /api/org/logo. */
+    /** Ключ логотипа в хранилище: org/<org_id>/logo/<id>; картинка — по подписанной ссылке. */
     logoKey: text('logo_key'),
     isDemo: boolean('is_demo').notNull().default(false),
     /**
