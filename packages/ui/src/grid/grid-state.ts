@@ -60,6 +60,24 @@ export function visibleKeys(
 }
 
 /**
+ * Столбцы, которые видны на этом экране (прототип `vis()`): выбранные в «Столбцах», а на телефоне — без
+ * столбцов только для ПК (`desktopOnly`); если не осталось ни одного — первый по порядку.
+ */
+export function screenVisibleKeys(
+  columns: readonly { key: string; desktopOnly?: boolean }[],
+  settings: GridViewSettings,
+  defaultVisible: readonly string[],
+  phone: boolean,
+): string[] {
+  const keys = columns.map((c) => c.key);
+  const visible = visibleKeys(keys, settings, defaultVisible);
+  if (!phone) return visible;
+  const desktop = new Set(columns.filter((c) => c.desktopOnly).map((c) => c.key));
+  const shown = visible.filter((k) => !desktop.has(k));
+  return shown.length ? shown : orderedKeys(keys, settings.order).slice(0, 1);
+}
+
+/**
  * Показать или скрыть столбец в меню «Столбцы»; последний видимый скрыть нельзя. Сохраняется выбор
  * по всем столбцам списка — столбец, добавленный позже, получит видимость по умолчанию.
  */

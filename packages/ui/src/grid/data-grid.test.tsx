@@ -247,7 +247,10 @@ describe('UnifiedDataGrid: таблица (ТЗ «Списки записей»,
   });
 
   it('действия записи — столбец «⋯»; без открытия строка не выглядит нажимаемой', () => {
-    const withActions = grid({ actions: () => [], onOpen: () => {} });
+    const withActions = grid({
+      actions: () => [{ id: 'reset', label: 'Сбросить пароль', run: () => {} }],
+      onOpen: () => {},
+    });
     expect(withActions).toContain('aria-label="Действия"');
     expect(withActions).toContain('data-row-menu');
     expect(withActions).toContain('cursor-pointer');
@@ -366,7 +369,6 @@ describe('выбор строк галочками и массовые дейс�
       columns: COLUMNS.slice(0, 3),
       rows: people(2),
       rowKey: (p) => p.id,
-      hasActions: false,
       clickable: false,
       events: rowEvents({ timer: undefined, start: null, pressed: false }, {}),
       selection: sel,
@@ -455,6 +457,52 @@ describe('UnifiedDataGrid: карточки', () => {
     expect(html).not.toContain('<dt class="text-faint">ФИО</dt>');
     expect(html).toContain('Создал: Кутман О., 12.03.2026 10:15');
     expect(html).toContain('data-view="cards"');
+  });
+
+  it('суммы, которые читаются вместе, — одной строкой «К уплате · Получено · Оплачено» (прототип cline)', () => {
+    const money = (
+      key: string,
+      label: string,
+      value: (p: Person) => string,
+    ): GridColumn<Person> => ({
+      key,
+      label,
+      type: 'money',
+      text: value,
+      tileLine: {},
+    });
+    const html = grid({
+      columns: [
+        COLUMNS[0]!,
+        money('due', 'К уплате', () => '5 000'),
+        COLUMNS[2]!,
+        money('got', 'Получено', () => ''),
+        money('paid', 'Оплачено', () => '3 000'),
+        ...COLUMNS.slice(3),
+      ],
+      settings: { view: 'cards', shown: ['name', 'due', 'role', 'got', 'paid'] },
+      titleKey: 'name',
+      data: { items: people(1), total: 1, page: 1, totals: {} },
+    });
+    const line = html.match(/<dd data-tile-line[^>]*>(.*?)<\/dd>/)![1]!.replace(/<[^>]+>/g, '');
+    // Пустая сумма не показывается; строка стоит на месте первой суммы — выше роли.
+    expect(line).toBe('К уплате 5 000·Оплачено 3 000');
+    expect(html.indexOf('data-tile-line')).toBeLessThan(html.indexOf('>Роль</dt>'));
+    expect(html).not.toContain('<dt class="text-faint">К уплате</dt>');
+  });
+
+  it('«⋯» только у записей с действиями — в карточках и в таблице', () => {
+    const actions = (p: Person) =>
+      p.id === 'p1' ? [] : [{ id: 'reset', label: 'Сбросить пароль', run: () => {} }];
+    const data = { items: people(3), total: 3, page: 1, totals: {} };
+    for (const view of ['cards', 'table'] as const) {
+      const html = grid({ settings: { view }, data, actions });
+      expect(html.match(/data-row-menu/g)).toHaveLength(2);
+      const owner = html.slice(html.indexOf('data-id="p1"'), html.indexOf('data-id="p2"'));
+      expect(owner).not.toContain('data-row-menu');
+    }
+    // На телефоне область касания «⋯» больше самой кнопки (ТЗ: не меньше 44 px).
+    expect(grid({ data, actions })).toContain('max-md:before:-inset-[9px]');
   });
 
   it('закреплённый вид — без переключателя «Таблица / Карточки»', () => {

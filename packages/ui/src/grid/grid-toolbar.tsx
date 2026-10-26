@@ -21,6 +21,7 @@ import {
   orderedKeys,
   setColumnVisible,
   setView as withView,
+  screenVisibleKeys,
   visibleKeys,
 } from './grid-state';
 import type { GridBulkAction, GridColumn, GridLabels } from './types';
@@ -84,7 +85,7 @@ export function GridToolbar<Row>({
   labels,
 }: ToolbarProps<Row>) {
   const keys = columns.map((c) => c.key);
-  const visible = visibleKeys(keys, settings, defaultVisible);
+  const visible = screenVisibleKeys(columns, settings, defaultVisible, phone);
   const shown = visible.length;
   const columnsLabel = `${labels.columns} (${shown}/${keys.length})`;
   const groupLabel = group.length ? labels.groupN(group.length) : labels.group;

@@ -14,7 +14,9 @@ import {
   effectiveSort,
   groupAggs,
   pageSizeOf,
-  visibleKeys,
+  PHONE_QUERY,
+  screenVisibleKeys,
+  useMediaQuery,
   type GridPage,
 } from '@buhuchet/ui';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
@@ -49,8 +51,11 @@ export function useListPage<Row>({
   fetchPage,
 }: {
   gridKey: GridKey;
-  /** Столбцы модуля (ключ и тип): сортировка по столбцу, которого больше нет, — по умолчанию. */
-  columns: readonly { key: string; type: ListColumnType }[];
+  /**
+   * Столбцы модуля (ключ, тип, «только для ПК»): сортировка по столбцу, которого больше нет, — по
+   * умолчанию; поиск — по столбцам, видимым на этом экране.
+   */
+  columns: readonly { key: string; type: ListColumnType; desktopOnly?: boolean }[];
   /** У списка есть служебные столбцы «Создал… Изменено» (проп `audit` у `DataGrid`) — их ключи добавятся сами. */
   audit?: boolean;
   defaultVisible: readonly string[];
@@ -65,9 +70,10 @@ export function useListPage<Row>({
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState<Filters>({});
   const q = useDebounced(search.trim(), SEARCH_DELAY_MS);
+  const phone = useMediaQuery(PHONE_QUERY);
   const all = audit ? [...columns, ...AUDIT_COLUMNS] : columns;
   const keys = all.map((c) => c.key);
-  const visible = visibleKeys(keys, settings, defaultVisible);
+  const visible = screenVisibleKeys(all, settings, defaultVisible, phone);
   const group = effectiveGroup(keys, settings);
 
   // Поиск, фильтры или группировка сменились — список с первой страницы (прототип `s.page = 0`).

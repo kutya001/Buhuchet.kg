@@ -98,6 +98,33 @@ export function GroupToggle<Row>({
 }
 
 /**
+ * Кнопка «⋯» записи (`.icon-btn.sm` прототипа): на вид 27 px, а на телефоне её область касания —
+ * 45 px (ТЗ «Плотность»: кнопки на телефоне не меньше 44 px).
+ */
+export function RowMenuButton<Row>({
+  row,
+  events,
+  label,
+}: {
+  row: Row;
+  events: RowEvents<Row>;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      data-row-menu
+      aria-label={label}
+      aria-haspopup="menu"
+      onClick={(e) => events.menuAt(row, { anchor: e.currentTarget })}
+      className={`${iconButtonClass('sm')} relative max-md:before:absolute max-md:before:-inset-[9px] max-md:before:content-['']`}
+    >
+      <Icon name="more" />
+    </button>
+  );
+}
+
+/**
  * Таблица списка (прототип ui/grid.js, tableHtml; стили `.gscroll`, `table.gt`): заголовок закреплён,
  * сортировка нажатием на заголовок, ширина — перетаскиванием границы (не уже 70 px), порядок —
  * перетаскиванием заголовка; слева — галочки выбора строк, справа — «⋯», действия записи; внизу
@@ -261,16 +288,9 @@ export function GridTable<Row>({
         })}
         {hasActions && (
           <td className={`${cell} px-1! text-center ${last ? 'border-b-0' : ''}`}>
-            <button
-              type="button"
-              data-row-menu
-              aria-label={labels.actions}
-              aria-haspopup="menu"
-              onClick={(e) => events.menuAt(row, { anchor: e.currentTarget })}
-              className={iconButtonClass('sm')}
-            >
-              <Icon name="more" />
-            </button>
+            {events.hasMenu(row) && (
+              <RowMenuButton row={row} events={events} label={labels.actions} />
+            )}
           </td>
         )}
       </tr>

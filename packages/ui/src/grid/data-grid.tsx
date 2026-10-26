@@ -22,7 +22,13 @@ import { auditColumns } from './audit';
 import { FilterPanel, type ValueLabels } from './grid-filter';
 import { activeFilterKeys, chipText, unlabeledEnumFilters } from './grid-filters';
 import { effectiveGroup, groupAggs, groupPaths, groupTree, withGroup } from './grid-groups';
-import { effectiveSort, effectiveView, pageSizeOf, toggleSort, visibleKeys } from './grid-state';
+import {
+  effectiveSort,
+  effectiveView,
+  pageSizeOf,
+  screenVisibleKeys,
+  toggleSort,
+} from './grid-state';
 import { GridCards } from './grid-cards';
 import { GridTable, type GridTableGroups } from './grid-table';
 import { GridToolbar } from './grid-toolbar';
@@ -146,10 +152,11 @@ export function DataGrid<Row>({
   const events = useRowEvents<Row>({
     onOpen,
     onMenu: actions ? (row, place) => setMenu({ row, place }) : undefined,
+    hasMenu: actions ? (row) => actions(row).length > 0 : undefined,
   });
 
   const keys = columns.map((c) => c.key);
-  const shown = visibleKeys(keys, settings, defaultVisible);
+  const shown = screenVisibleKeys(columns, settings, defaultVisible, phone);
   const visible = shown.map((k) => columns.find((c) => c.key === k)!);
   const group = effectiveGroup(keys, settings);
   const groupKey = group.join('|');
@@ -309,7 +316,6 @@ export function DataGrid<Row>({
         rows={data.items}
         rowKey={rowKey}
         rowTone={rowTone}
-        hasActions={!!actions}
         clickable={!!onOpen}
         events={events}
         selection={selection}

@@ -10,6 +10,7 @@ import {
   moveColumn,
   orderedKeys,
   pageSizeOf,
+  screenVisibleKeys,
   setColumnVisible,
   setColumnWidth,
   toggleSort,
@@ -64,6 +65,20 @@ describe('столбцы: видимость по умолчанию и выбо
   it('неизвестный столбец не меняет настройки', () => {
     const s = {};
     expect(setColumnVisible(KEYS, s, DEFAULT_VISIBLE, 'nope', true)).toBe(s);
+  });
+
+  it('на телефоне столбцы «только для ПК» не показываются (прототип deskOnly), на ПК — показываются', () => {
+    const cols = KEYS.map((key) => ({ key, desktopOnly: key === 'phone' || key === 'role' }));
+    expect(screenVisibleKeys(cols, {}, DEFAULT_VISIBLE, false)).toEqual([
+      'fullName',
+      'phone',
+      'role',
+      'active',
+    ]);
+    expect(screenVisibleKeys(cols, {}, DEFAULT_VISIBLE, true)).toEqual(['fullName', 'active']);
+    // Видны только столбцы для ПК — на телефоне остаётся первый столбец по порядку.
+    const only = { shown: ['phone', 'role'], hidden: ['fullName', 'login', 'active', 'createdAt'] };
+    expect(screenVisibleKeys(cols, only, DEFAULT_VISIBLE, true)).toEqual(['fullName']);
   });
 });
 

@@ -1,10 +1,11 @@
 import { expect, test, type APIRequestContext, type Page, type Response } from '@playwright/test';
-import { DEMO_PASSWORD, hire, signIn, uniqueLogin } from './helpers';
+import { DEMO_PASSWORD, finger, hire, settledBox, signIn, uniqueLogin } from './helpers';
 
-// Общий список записей (UnifiedDataGrid, задачи #14 и #15) на списке сотрудников через настоящий
-// сайт: страницы с сервера, настройки вида пользователя, группировка, фильтры у столбцов и поиск. У
-// каждого теста свой новый сотрудник с ролью «Главный бухгалтер» (видит модуль «Сотрудники»): его вид
-// списка не пересекается с другими тестами.
+// Общий список записей (UnifiedDataGrid, задачи #14–#16) на списке сотрудников через настоящий
+// сайт: страницы с сервера, настройки вида пользователя, группировка, фильтры у столбцов, поиск и
+// действия над записью без правого клика. У каждого теста свой новый сотрудник с ролью «Главный
+// бухгалтер» (видит модуль «Сотрудники») или своей ролью с правом «Сотрудники и роли»: его вид списка
+// не пересекается с другими тестами.
 
 const isStaffList = (r: Response) =>
   r.request().method() === 'GET' && new URL(r.url()).pathname === '/api/staff';
@@ -30,14 +31,18 @@ async function hirePair(api: APIRequestContext, origin: string, word: string) {
     items: { id: string; name: string }[];
   };
   const roleId = roles.items.find((r) => r.name === 'Бухгалтер')!.id;
-  const made: { id: string; version: number }[] = [];
+  const made: { id: string; version: number; login: string }[] = [];
   for (const n of ['Первый', 'Второй']) {
+    const login = uniqueLogin('e2e-pair');
     const res = await api.post('/api/staff', {
       headers: { origin },
-      data: { fullName: `Сочетаев ${word} ${n}`, login: uniqueLogin('e2e-pair'), roleId },
+      data: { fullName: `Сочетаев ${word} ${n}`, login, roleId },
     });
     expect(res.status(), await res.text()).toBe(201);
-    made.push(((await res.json()) as { employee: { id: string; version: number } }).employee);
+    made.push({
+      ...((await res.json()) as { employee: { id: string; version: number } }).employee,
+      login,
+    });
   }
   const blocked = await api.post(`/api/staff/${made[1]!.id}/block`, {
     headers: { origin },
@@ -45,6 +50,7 @@ async function hirePair(api: APIRequestContext, origin: string, word: string) {
   });
   expect(blocked.status(), await blocked.text()).toBe(200);
   await api.post('/api/auth/logout', { headers: { origin } });
+  return made;
 }
 
 /** В демо-организации не меньше `min` сотрудников: недостающих владелец создаёт через API. */
@@ -78,6 +84,44 @@ async function ensureStaff(api: APIRequestContext, origin: string, min: number) 
 async function signInAsNewChief(page: Page, origin: string) {
   const login = uniqueLogin('e2e-grid');
   const { temporaryPassword } = await hire(page.request, origin, login, null, 'Главный бухгалтер');
+  await signIn(page.request, origin, login, temporaryPassword);
+  const changed = await page.request.post('/api/auth/password', {
+    headers: { origin },
+    data: { currentPassword: temporaryPassword, newPassword: 'Свой-пароль-e2e-1' },
+  });
+  expect(changed.status(), await changed.text()).toBe(200);
+}
+
+/**
+ * Владелец создаёт роль «как у главного бухгалтера и ещё «Сотрудники и роли»» и сотрудника с ней;
+ * сотрудник входит в браузере и меняет временный пароль. Действия над сотрудниками не трогают
+ * владельца демо-организации, которым входят другие тесты.
+ */
+async function signInAsStaffManager(page: Page, origin: string, setup: APIRequestContext) {
+  await signIn(setup, origin, 'erkin', DEMO_PASSWORD);
+  const roles = (await (await setup.get('/api/roles')).json()) as {
+    items: { id: string; name: string }[];
+  };
+  const chief = roles.items.find((r) => r.name === 'Главный бухгалтер')!.id;
+  const made = await setup.post('/api/roles', {
+    headers: { origin },
+    data: { name: `Сквозная роль ${uniqueLogin('staff')}`, copyFromRoleId: chief },
+  });
+  expect(made.status(), await made.text()).toBe(201);
+  const role = (await made.json()) as { id: string; version: number; permissions: string[] };
+  const saved = await setup.patch(`/api/roles/${role.id}`, {
+    headers: { origin },
+    data: { version: role.version, permissions: [...role.permissions, 'staff'] },
+  });
+  expect(saved.status(), await saved.text()).toBe(200);
+  const login = uniqueLogin('e2e-staff');
+  const hired = await setup.post('/api/staff', {
+    headers: { origin },
+    data: { fullName: 'Кадров Сквозной Тестович', login, roleId: role.id },
+  });
+  expect(hired.status(), await hired.text()).toBe(201);
+  const { temporaryPassword } = (await hired.json()) as { temporaryPassword: string };
+  await setup.post('/api/auth/logout', { headers: { origin } });
   await signIn(page.request, origin, login, temporaryPassword);
   const changed = await page.request.post('/api/auth/password', {
     headers: { origin },
@@ -277,5 +321,103 @@ test.describe('Списки: UnifiedDataGrid', () => {
     await grid.locator('[data-grid-reset]').click();
     await expect(grid.locator('[data-chip="search"]')).toHaveCount(0);
     await expect(grid.locator('[data-chip="group"]')).toBeVisible();
+  });
+  test('(проверка задачи #16) на телефоне доступны поиск, фильтры и действия над записью без правого клика: «⋯» и долгое нажатие', async ({
+    page,
+    playwright,
+    baseURL,
+    isMobile,
+  }) => {
+    const origin = new URL(baseURL!).origin;
+    const word = `Действ${Array.from({ length: 6 }, () => 'абвгдежзиклмнопрстуф'[Math.floor(Math.random() * 20)]).join('')}`;
+    const setup = await playwright.request.newContext({ baseURL });
+    const [first, second] = await hirePair(setup, origin, word);
+    await signInAsStaffManager(page, origin, setup);
+    await page.goto('/app/staff/list');
+    const grid = page.locator('[data-grid]');
+    await expect(grid.locator('[data-id]').first()).toBeVisible();
+    // На телефоне список — плитками, на ПК — таблицей (прототип: вид по умолчанию по ширине).
+    await expect(grid).toHaveAttribute('data-view', isMobile ? 'cards' : 'table');
+
+    // Поиск: на телефоне — кнопкой «Поиск» в верхней панели.
+    if (isMobile) await page.getByRole('button', { name: 'Поиск', exact: true }).click();
+    const searched = page.waitForResponse(listWith('q', word));
+    await page.getByRole('searchbox').fill(word);
+    expect(((await (await searched).json()) as StaffPage).total).toBe(2);
+    const card = (id: string) => grid.locator(`[data-id="${id}"]`);
+    await expect(card(first!.id)).toContainText('Активен');
+    await expect(card(second!.id)).toContainText('Заблокирован');
+
+    // Фильтр у столбца «Статус» (на телефоне — в виде «Таблица», как в прототипе); плашка фильтра
+    // видна и в плитках, там же фильтр снимается.
+    if (isMobile) await page.getByRole('button', { name: 'Вид списка: Таблица' }).click();
+    await grid.getByRole('button', { name: 'Фильтр: Статус' }).click();
+    const filter = page.getByRole('dialog', { name: 'Статус' });
+    await filter.getByRole('checkbox', { name: 'Активен' }).uncheck();
+    await filter.getByRole('button', { name: 'Применить' }).click();
+    await expect(grid.locator('[data-id]')).toHaveCount(1);
+    await expect(card(second!.id)).toBeVisible();
+    if (isMobile) await page.getByRole('button', { name: 'Вид списка: Карточки' }).click();
+    const chip = grid.locator('[data-chip="active"]');
+    await expect(chip).toContainText('Статус: Заблокирован');
+    await chip.getByRole('button', { name: 'Убрать фильтр' }).click();
+    await expect(grid.locator('[data-id]')).toHaveCount(2);
+
+    const menu = page.getByRole('menu', { name: 'Действия' });
+    const toast = page.getByRole('status');
+
+    // «⋯» на плитке или в строке: «Заблокировать» — после подтверждения.
+    const more = card(first!.id).locator('[data-row-menu]');
+    if (isMobile) {
+      // Касание «⋯» на телефоне — не меньше 44 px: нажатие рядом с кнопкой попадает в неё.
+      const box = await settledBox(more);
+      expect(box.width).toBeLessThan(44);
+      const hit = await page.evaluate(
+        ([x, y]) => document.elementFromPoint(x, y)?.closest('[data-row-menu]') !== null,
+        [box.x + box.width / 2, box.y - 8] as const,
+      );
+      expect(hit).toBe(true);
+    }
+    await more.click();
+    await expect(menu.getByRole('menuitem')).toHaveText(['Сбросить пароль', 'Заблокировать']);
+    await menu.getByRole('menuitem', { name: 'Заблокировать' }).click();
+    const ask = page.getByRole('dialog', { name: /^Заблокировать / });
+    await expect(ask).toContainText('Сотрудник не сможет войти. Его история сохранится.');
+    await ask.getByRole('button', { name: 'Заблокировать' }).click();
+    await expect(toast).toHaveText('Сотрудник заблокирован');
+    await expect(card(first!.id)).toContainText('Заблокирован');
+
+    // Меню без «⋯»: на телефоне — долгим нажатием на плитку, на ПК — правым кликом.
+    const target = card(second!.id);
+    if (isMobile) {
+      const box = await settledBox(target.locator('dl'));
+      await (await finger(page)).hold({ x: box.x + box.width / 2, y: box.y + box.height / 2 });
+    } else {
+      await target.click({ button: 'right' });
+    }
+    await menu.getByRole('menuitem', { name: 'Разблокировать' }).click();
+    await expect(toast.filter({ hasText: 'Сотрудник разблокирован' })).toBeVisible();
+    await expect(target).toContainText('Активен');
+    // После долгого нажатия карточка записи не открылась: окон нет.
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+
+    // «Сбросить пароль»: временный пароль показывается один раз, с ним сотрудник входит.
+    await target.locator('[data-row-menu]').click();
+    await menu.getByRole('menuitem', { name: 'Сбросить пароль' }).click();
+    const reset = page.getByRole('dialog', { name: 'Пароль сброшен' });
+    await expect(reset).toContainText(`Сочетаев ${word} Второй`);
+    await expect(reset).toContainText('Передайте его сотруднику лично.');
+    const password = (await reset.locator('[data-temporary-password]').textContent())!;
+    await reset.getByRole('button', { name: 'Готово' }).click();
+    await expect(reset).toHaveCount(0);
+    const login = await setup.post('/api/auth/login', {
+      headers: { origin },
+      data: { login: second!.login, password },
+    });
+    expect(login.status(), await login.text()).toBe(200);
+    expect(((await login.json()) as { user: { mustChangePassword: boolean } }).user).toMatchObject({
+      mustChangePassword: true,
+    });
+    await setup.dispose();
   });
 });
