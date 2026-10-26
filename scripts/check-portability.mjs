@@ -98,7 +98,9 @@ export function checkPortability(root) {
     const inAdapters = r.startsWith('packages/adapters/');
     const isTest = /\.test\.(c|m)?(t|j)sx?$/.test(r);
     const isToolConfig = /(^|\/)[\w.-]+\.config\.(c|m)?(t|j)s$/.test(r);
-    const isCli = /\/src\/cli\//.test(r);
+    // Служебные команды и инструменты разработчика (эталоны прототипа в packages/<пакет>/scripts/):
+    // в сайт и worker не попадают, пишут на диск разработчика.
+    const isCli = /\/src\/cli\//.test(r) || /^packages\/[\w-]+\/scripts\//.test(r);
 
     if (!inAdapters) {
       each(

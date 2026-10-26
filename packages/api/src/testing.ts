@@ -4,7 +4,13 @@ import {
   createMemoryStorage,
   fixedClock,
 } from '@buhuchet/adapters';
-import type { Db } from '@buhuchet/db';
+import { hashPassword } from '@buhuchet/adapters/password';
+import { schema, type Db } from '@buhuchet/db';
+import { createOrganization, type CreatedOrganization } from '@buhuchet/db/organizations';
+import { createTestDatabase, seedAccessReference, seedPhoneCodes } from '@buhuchet/db/testing';
+import { SCOPE_GROUPS } from '@buhuchet/domain';
+import { eq } from 'drizzle-orm';
+import { createApp } from './app';
 import type { ApiDeps } from './deps';
 
 /** База-заглушка для тестов без PostgreSQL: любой запрос падает с понятной ошибкой. */
@@ -126,4 +132,116 @@ export async function linkTelegram(
   const token = new URL(url).searchParams.get('start')!;
   const bot = await sendToBot(app, telegramUpdate(`/start ${token}`, chatId, { username }));
   if (bot.status !== 200) throw new Error(`вебхук: ${bot.status} ${await bot.text()}`);
+}
+
+/** Запрос к API от вошедшего пользователя: Origin нашего сайта, тело — JSON. */
+export function apiRequest(
+  app: RequestApp,
+  method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
+  path: string,
+  cookie?: string,
+  body?: unknown,
+) {
+  return app.request(path, {
+    method,
+    headers: {
+      origin: TEST_ORIGIN,
+      ...(cookie ? { cookie } : {}),
+      ...(body === undefined ? {} : { 'content-type': 'application/json' }),
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+}
+
+/** Пароль всех учётных записей `createStaffFixture`. */
+export const TEST_PASSWORD = 'Верный-пароль-1';
+
+/**
+ * База для тестов модулей «Сотрудники» и «Роли»: организации А и Б с владельцами owner-a и owner-b
+ * (временный пароль уже сменён), администратор платформы platform-admin; в А — chief-a и acc-a по
+ * шаблонам ролей, роли «Кадры» (права «Бухгалтера», staffView и staff — их выдал владелец; область
+ * «Свои») с hr-a и «Старший» (cpView и rollback) с senior-a; в Б — acc-b. «Главный бухгалтер» шире
+ * «Кадров» (финансы без своих прав, «Видеть все…»), «Бухгалтер» — нет. Справочник «Коды телефонов»
+ * загружен.
+ */
+export async function createStaffFixture() {
+  const t = await createTestDatabase();
+  await seedAccessReference(t.admin.db);
+  await seedPhoneCodes(t.admin.db);
+  const passwordHash = await hashPassword(TEST_PASSWORD);
+  await t.admin.db
+    .insert(schema.users)
+    .values({ login: 'platform-admin', passwordHash, isPlatformAdmin: true });
+  const org = (name: string, inn: string, slug: string, owner: string) =>
+    createOrganization(t.app.db, {
+      name,
+      inn,
+      slug,
+      owner: { fullName: `Владелец ${owner}`, login: owner, passwordHash },
+    });
+  const a = await org('Организация А', '01811201810456', 'org-a', 'owner-a');
+  const b = await org('Организация Б', '02811201810457', 'org-b', 'owner-b');
+  await t.admin.db.update(schema.users).set({ mustChangePassword: false });
+
+  const templateRole = (o: CreatedOrganization, code: string) =>
+    o.roles.find((r) => r.templateCode === code)!.id;
+  const accPermissions = (
+    await t.admin.db
+      .select({ id: schema.rolePermissions.permissionId })
+      .from(schema.rolePermissions)
+      .where(eq(schema.rolePermissions.roleId, templateRole(a, 'acc')))
+  ).map((r) => r.id);
+
+  const roleIds: Record<'hr' | 'senior', string> = { hr: '', senior: '' };
+  const custom: ['hr' | 'senior', string, string[]][] = [
+    ['hr', 'Кадры', [...accPermissions, 'staffView', 'staff']],
+    ['senior', 'Старший', ['cpView', 'rollback']],
+  ];
+  for (const [key, name, permissions] of custom) {
+    const [role] = await t.admin.db
+      .insert(schema.roles)
+      .values({ orgId: a.orgId, name })
+      .returning({ id: schema.roles.id });
+    roleIds[key] = role!.id;
+    await t.admin.db
+      .insert(schema.rolePermissions)
+      .values(
+        permissions.map((permissionId) => ({ orgId: a.orgId, roleId: role!.id, permissionId })),
+      );
+    await t.admin.db.insert(schema.roleScopes).values(
+      SCOPE_GROUPS.map((g) => ({
+        orgId: a.orgId,
+        roleId: role!.id,
+        permGroup: g,
+        scope: 'own' as const,
+      })),
+    );
+  }
+
+  const people: Record<string, { userId: string; employeeId: string }> = {};
+  for (const [o, login, roleId] of [
+    [a, 'chief-a', templateRole(a, 'chief')],
+    [a, 'acc-a', templateRole(a, 'acc')],
+    [a, 'hr-a', roleIds.hr],
+    [a, 'senior-a', roleIds.senior],
+    [b, 'acc-b', templateRole(b, 'acc')],
+  ] as const) {
+    const [user] = await t.admin.db
+      .insert(schema.users)
+      .values({ orgId: o.orgId, login, passwordHash })
+      .returning({ id: schema.users.id });
+    const [employee] = await t.admin.db
+      .insert(schema.employees)
+      .values({
+        orgId: o.orgId,
+        userId: user!.id,
+        fullName: `Сотрудник ${login}`,
+        shortName: login,
+        roleId,
+      })
+      .returning({ id: schema.employees.id });
+    people[login] = { userId: user!.id, employeeId: employee!.id };
+  }
+  const deps = createTestDeps({ db: t.app.db });
+  return { t, deps, app: createApp(deps), a, b, roleIds, templateRole, people };
 }

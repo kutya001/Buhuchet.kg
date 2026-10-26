@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { changeOwnPassword, sessionByToken, startSession, withUserContext } from './auth';
 import { withOrgContext } from './context';
 import { createOrganization, type CreatedOrganization } from './organizations';
+import { getEmployee } from './staff';
 import type { Tx } from './client';
 import {
   employees,
@@ -19,7 +20,6 @@ import {
   adminFindUser,
   completePasswordReset,
   createTelegramLinkToken,
-  employeeAccount,
   messageTemplates,
   passwordResetStatus,
   peekTelegramLink,
@@ -401,10 +401,15 @@ describe.skipIf(!databaseAvailable())('Telegram и «Забыли пароль?�
       .insert(loginAttempts)
       .values({ login: 'acc-a', failures: 0, lockedUntil: new Date(Date.now() + 600_000) });
     expect(
-      await withOrgContext(t.app.db, ctxA(), (tx) => employeeAccount(tx, accAEmployee)),
-    ).toMatchObject({ userId: accA, login: 'acc-a', isOwner: false, fullName: 'Асанов Алишер' });
+      await withOrgContext(t.app.db, ctxA(), (tx) => getEmployee(tx, accAEmployee)),
+    ).toMatchObject({
+      userId: accA,
+      login: 'acc-a',
+      role: { isOwner: false },
+      fullName: 'Асанов Алишер',
+    });
     expect(
-      await withOrgContext(t.app.db, { orgId: b.orgId }, (tx) => employeeAccount(tx, accAEmployee)),
+      await withOrgContext(t.app.db, { orgId: b.orgId }, (tx) => getEmployee(tx, accAEmployee)),
     ).toBeNull();
     expect(
       await withOrgContext(t.app.db, ctxA(), (tx) =>

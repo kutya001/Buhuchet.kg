@@ -1,3 +1,4 @@
+import { HTTPException } from 'hono/http-exception';
 import { RecordChangedError, RecordNotFoundError } from '@buhuchet/domain';
 import { ApiError } from '@buhuchet/shared';
 
@@ -35,3 +36,18 @@ export const versionedSaveResponses = {
     content: { 'application/json': { schema: ApiError } },
   },
 } as const;
+
+/**
+ * Отказ метода в общем формате ошибки. Брошенный внутри `withOrgContext`, откатывает транзакцию;
+ * отвечает общий обработчик (`app.onError`). Код ответа должен быть в описании маршрута.
+ */
+export function apiFail(
+  status: 400 | 403 | 404 | 409,
+  code: string,
+  message: string,
+  details?: unknown,
+): never {
+  throw new HTTPException(status, {
+    res: Response.json(apiError(code, message, details), { status }),
+  });
+}

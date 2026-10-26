@@ -38,3 +38,15 @@ export function apiErrorCode(body: unknown): string | null {
 export function isRecordChanged(body: unknown): boolean {
   return apiErrorCode(body) === 'record_changed';
 }
+
+/**
+ * «Создал» и «Изменил» в карточке записи (прототип core/session.js, auditKv): кто и когда. Кто —
+ * короткое имя сотрудника или «Администратор платформы»; null — система.
+ */
+export const RecordAudit = z.object({
+  createdAt: z.iso.datetime(),
+  createdBy: z.string().nullable(),
+  updatedAt: z.iso.datetime(),
+  updatedBy: z.string().nullable(),
+});
+export type RecordAudit = z.infer<typeof RecordAudit>;

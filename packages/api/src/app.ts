@@ -9,6 +9,7 @@ import { sessionGuard } from './middleware/session';
 import { createModuleApp } from './module';
 import { adminModule } from './modules/admin';
 import { authModule } from './modules/auth';
+import { rolesModule } from './modules/roles';
 import { staffModule } from './modules/staff';
 import { systemModule } from './modules/system';
 import { telegramModule } from './modules/telegram';
@@ -61,6 +62,7 @@ export function createApp(deps: ApiDeps) {
     .route('/', authModule(deps))
     .route('/', telegramModule(deps))
     .route('/', staffModule(deps))
+    .route('/', rolesModule(deps))
     .route('/', adminModule(deps));
 
   app.doc31('/openapi.json', {

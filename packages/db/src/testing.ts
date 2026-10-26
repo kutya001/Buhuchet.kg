@@ -6,6 +6,7 @@ import {
 } from '@buhuchet/adapters/config';
 import { createDb, type Db, type DbHandle } from './client';
 import { ensureAppLoginRole, runMigrations } from './migrate';
+import { platformReference } from './schema';
 import { seedPermissions, seedRoleTemplates } from './seed/access';
 import { readSpecJson } from './spec-data';
 
@@ -86,4 +87,13 @@ export async function seedAccessReference(db: Db): Promise<void> {
   const refDB = await readSpecJson<Record<string, unknown>>('data/refDB.json');
   await seedPermissions(db, refDB.permissions, { update: false });
   await seedRoleTemplates(db, refDB.roleTemplates, { update: false });
+}
+
+/** Справочник «Коды телефонов» из refDB.json — для проверки телефона сотрудника. */
+export async function seedPhoneCodes(db: Db): Promise<void> {
+  const refDB = await readSpecJson<Record<string, unknown>>('data/refDB.json');
+  await db
+    .insert(platformReference)
+    .values({ key: 'phoneCodes', payload: refDB.phoneCodes, checksum: 'test', source: 'test' })
+    .onConflictDoNothing();
 }

@@ -33,6 +33,8 @@ test('чистый репозиторий проходит', () => {
     'apps/web/next.config.ts': 'process.env.X;',
     'apps/web/instrumentation.ts': "if (process.env.NEXT_RUNTIME === 'nodejs') {}",
     'apps/web/vercel.json': JSON.stringify({ regions: ['fra1'], crons: [] }),
+    // Эталон прототипа пишет фикстуру на диск разработчика — это не код приложения.
+    'packages/domain/scripts/oracle-x.mjs': "writeFileSync('fixture.json', '{}');",
   });
   assert.deepEqual(rules(root), []);
 });

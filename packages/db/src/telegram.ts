@@ -8,7 +8,7 @@ import {
 import { and, eq, sql } from 'drizzle-orm';
 import { clearLoginAttempts } from './auth';
 import type { Db, Tx } from './client';
-import { employees, platformReference, roles, sessions, users } from './schema';
+import { platformReference, sessions, users } from './schema';
 
 /**
  * Telegram и «Забыли пароль?» — через функции app.telegram_* и app.auth_reset_* (миграция 0011):
@@ -287,23 +287,6 @@ export async function adminFindUser(
         isPlatformAdmin: row.is_platform_admin,
       }
     : null;
-}
-
-/** Сотрудник организации из контекста и его учётная запись (для сброса пароля владельцем). */
-export async function employeeAccount(tx: Tx, employeeId: string) {
-  const [row] = await tx
-    .select({
-      employeeId: employees.id,
-      userId: employees.userId,
-      fullName: employees.fullName,
-      login: users.login,
-      isOwner: roles.isOwner,
-    })
-    .from(employees)
-    .innerJoin(users, eq(users.id, employees.userId))
-    .innerJoin(roles, eq(roles.id, employees.roleId))
-    .where(eq(employees.id, employeeId));
-  return row ?? null;
 }
 
 /**
