@@ -3,6 +3,7 @@ import {
   currentOrganization,
   loadEmployeeAccess,
   orgMenuSettings,
+  phoneCodes,
   telegramChat,
   withOrgContext,
   type EmployeeAccess,
@@ -11,6 +12,7 @@ import {
 import {
   ADMIN_MENU_MODULES,
   effectivePermissions,
+  formatPhone,
   menuModules,
   SCOPE_GROUPS,
   scopeOf,
@@ -35,6 +37,7 @@ function meBody(
   organization: MeResponse['organization'],
   telegram: TelegramChat | null,
   settings: { features: Record<Feature, boolean>; reportConfirm: boolean } | null,
+  phone: string | null = null,
 ): MeResponse {
   const features = settings?.features ?? null;
   return {
@@ -48,6 +51,7 @@ function meBody(
       id: access.subject.employeeId,
       fullName: access.fullName,
       shortName: access.shortName,
+      phone,
       roleId: access.roleId,
       roleName: access.roleName,
       isOwner: access.subject.isOwner,
@@ -72,8 +76,8 @@ function meBody(
 }
 
 /**
- * «Кто я» для ответа входа и GET /api/auth/me: сотрудник, роль, права, организация, функции учётной
- * политики, «Сдача отчётов требует подтверждения» и модули меню — в контексте организации пользователя (RLS); привязан ли Telegram. Уже
+ * «Кто я» для ответа входа и GET /api/auth/me: сотрудник (с телефоном для «Мой профиль»), роль, права,
+ * организация, функции учётной политики, «Сдача отчётов требует подтверждения» и модули меню — в контексте организации пользователя (RLS); привязан ли Telegram. Уже
  * загруженные права (`access`) повторно не читаются. Администратору платформы — модули Админки.
  */
 export async function loadMe(
@@ -84,16 +88,22 @@ export async function loadMe(
   const telegram = await telegramChat(deps.db, user.userId);
   if (!user.orgId) return meBody(user, null, null, telegram, null);
   const orgId = user.orgId;
-  const { access, organization, settings } = await withOrgContext(
+  const { access, organization, settings, phone } = await withOrgContext(
     deps.db,
     { orgId, userId: user.userId },
-    async (tx) => ({
-      access: loaded ?? (user.employeeId ? await loadEmployeeAccess(tx, user.employeeId) : null),
-      organization: await currentOrganization(tx, orgId),
-      settings: await orgMenuSettings(tx, orgId),
-    }),
+    async (tx) => {
+      const access =
+        loaded ?? (user.employeeId ? await loadEmployeeAccess(tx, user.employeeId) : null);
+      return {
+        access,
+        organization: await currentOrganization(tx, orgId),
+        settings: await orgMenuSettings(tx, orgId),
+        // Телефон в «Мой профиль» — по маске страны из справочника «Коды телефонов».
+        phone: access?.phone ? formatPhone(access.phone, await phoneCodes(tx)) : null,
+      };
+    },
   );
-  return meBody(user, access, organization, telegram, settings);
+  return meBody(user, access, organization, telegram, settings, phone);
 }
 
 export const meRoute = createRoute({

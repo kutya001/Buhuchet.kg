@@ -14,7 +14,7 @@ export interface MaxPrefs {
 /** Окно в стопке открытых окон. */
 export interface OpenWindow {
   kind: WindowKind;
-  /** В форме есть несохранённые изменения. */
+  /** В форме (или в форме внутри карточки, как «Смена пароля» в «Мой профиль») есть несохранённые изменения. */
   dirty?: boolean;
 }
 
@@ -25,10 +25,11 @@ export function canMaximize(kind: WindowKind): kind is keyof MaxPrefs {
 
 /**
  * Закрывается ли окно сразу: форма с несохранёнными изменениями на протяжку вниз и «Назад» сначала
- * спрашивает «Закрыть без сохранения?» (ТЗ «Управление свайпами»).
+ * спрашивает «Закрыть без сохранения?» (ТЗ «Управление свайпами»). Так же — карточка, внутри которой
+ * форма с несохранёнными изменениями; короткому подтверждению терять нечего.
  */
 export function closesAtOnce(window: OpenWindow): boolean {
-  return !(window.kind === 'form' && window.dirty);
+  return !(window.kind !== 'message' && window.dirty);
 }
 
 /**

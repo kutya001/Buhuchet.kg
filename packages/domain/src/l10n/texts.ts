@@ -1,3 +1,4 @@
+import { AUTH_TEXTS } from './auth-texts';
 import { SHELL_TEXTS } from './shell-texts';
 
 /**
@@ -15,14 +16,10 @@ export interface UiTextDefault {
   section: string;
 }
 
-/** Тексты служебных страниц: главная до входа, «здоровье». */
+/** Тексты служебных страниц: описание сайта, «здоровье». */
 const SYSTEM_TEXTS = {
   'app.description': {
     ru: 'Учёт сдачи налоговых отчётов для бухгалтерских организаций',
-    section: 'Система',
-  },
-  'home.in_progress': {
-    ru: 'Идёт разработка. Вход в программу появится в этапе 1.',
     section: 'Система',
   },
   'health.title': { ru: 'Проверка работы системы', section: 'Система' },
@@ -45,12 +42,14 @@ const SYSTEM_TEXTS = {
  * refDB.json (там — тексты, которые завёл прототип). Экраны берут текст не отсюда, а из словаря
  * (`useT` в apps/web): текст, поправленный в словаре, заменяет этот без изменения кода. Ключ,
  * который есть и в refDB.json, пишется с тем же текстом (это проверяет тест наполнения). Тексты
- * разложены по файлам экранов: служебные — здесь, оболочки — `shell-texts.ts`.
+ * разложены по файлам экранов: служебные — здесь, оболочки — `shell-texts.ts`, входа и «Мой профиль» —
+ * `auth-texts.ts`.
  */
-export const UI_TEXTS = { ...SYSTEM_TEXTS, ...SHELL_TEXTS } as const satisfies Record<
-  string,
-  UiTextDefault
->;
+export const UI_TEXTS = {
+  ...SYSTEM_TEXTS,
+  ...SHELL_TEXTS,
+  ...AUTH_TEXTS,
+} as const satisfies Record<string, UiTextDefault>;
 
 /** Ключ текста интерфейса: только из `UI_TEXTS`, поэтому опечатка в ключе — ошибка типов. */
 export type UiTextKey = keyof typeof UI_TEXTS;

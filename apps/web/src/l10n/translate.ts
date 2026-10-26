@@ -1,4 +1,10 @@
-import { formatText, type UiTextKey, type UiTextParams } from '@buhuchet/domain';
+import {
+  formatText,
+  PASSWORD_MIN_LENGTH,
+  RESET_CODE_LENGTH,
+  type UiTextKey,
+  type UiTextParams,
+} from '@buhuchet/domain';
 
 /** Текст по ключу из словаря с подстановками `{имя}`. */
 export type Translate = (key: UiTextKey, params?: UiTextParams) => string;
@@ -22,4 +28,15 @@ export function makeErrorText(
   texts: Readonly<Record<string, string>>,
 ): (error: ApiErrorLike) => string {
   return (error) => texts[`err.${error.code}`] ?? error.message;
+}
+
+/** Числа правил в текстах ошибок форм: `{min}` — длина пароля, `{code}` — цифр в коде из Telegram. */
+const RULE_NUMBERS = { min: PASSWORD_MIN_LENGTH, code: RESET_CODE_LENGTH };
+
+/**
+ * Текст ошибки поля формы: сообщение схемы формы (`@buhuchet/shared`) — ключ словаря; нет ошибки —
+ * undefined.
+ */
+export function fieldErrorText(t: Translate, message: string | undefined): string | undefined {
+  return message ? t(message as UiTextKey, RULE_NUMBERS) : undefined;
 }

@@ -31,6 +31,27 @@ export function phoneProblem(phone: string, codes: readonly PhoneCode[]): string
   return `Номер — ${need(known[0]!)} цифр после кода страны`;
 }
 
+/**
+ * Телефон для показа: «+996555100200» → «+996 555 100 200» по маске страны из справочника (прототип
+ * core/reference.js, fmtPhone). Номер, который не подходит ни к одной маске, показывается как есть.
+ */
+export function formatPhone(phone: string, codes: readonly PhoneCode[]): string {
+  const digits = /^\+(\d+)$/.exec(phone)?.[1];
+  if (!digits) return phone;
+  const need = (c: PhoneCode) => c.mask.split('X').length - 1;
+  const code = codes
+    .filter((c) => digits.startsWith(c.code) && digits.length === c.code.length + need(c))
+    .sort((a, b) => b.code.length - a.code.length)[0];
+  if (!code) return phone;
+  let rest = digits.slice(code.code.length);
+  const local = code.mask.replace(/X/g, () => {
+    const d = rest[0]!;
+    rest = rest.slice(1);
+    return d;
+  });
+  return `+${code.code} ${local}`;
+}
+
 /** Действие над сотрудником в модуле «Сотрудники». */
 export type StaffAction = 'edit' | 'changeRole' | 'block' | 'unblock' | 'resetPassword';
 

@@ -141,6 +141,53 @@ describe('loadConfig', () => {
     ).toThrow(/секрет вебхука/);
   });
 
+  it('подделка Telegram (TELEGRAM_API_BASE) — только локально и в тестах; секрет вебхука на стенде — свой', () => {
+    const bot = {
+      TELEGRAM_BOT_TOKEN: TOKEN,
+      TELEGRAM_WEBHOOK_SECRET: 'local-webhook-secret-change-me',
+      TELEGRAM_BOT_USERNAME: 'buhuchet_local_bot',
+    };
+    expect(
+      loadConfig({ ...base, ...bot, TELEGRAM_API_BASE: 'http://localhost:8091' }).TELEGRAM_API_BASE,
+    ).toBe('http://localhost:8091');
+    expect(loadConfig({ ...base, ...bot }).TELEGRAM_API_BASE).toBeUndefined();
+    expect(() => loadConfig({ ...base, ...bot, TELEGRAM_API_BASE: 'не адрес' })).toThrow(
+      /TELEGRAM_API_BASE/,
+    );
+    const stand = {
+      ...base,
+      APP_ENV: 'staging',
+      APP_BASE_URL: 'https://test.buhuchet.kg',
+      CRON_SECRET: 's'.repeat(32),
+    };
+    const secret = 'w'.repeat(32);
+    expect(() =>
+      loadConfig({
+        ...stand,
+        ...bot,
+        TELEGRAM_WEBHOOK_SECRET: secret,
+        TELEGRAM_API_BASE: 'http://localhost:8091',
+      }),
+    ).toThrow(/TELEGRAM_API_BASE/);
+    // Секрет из .env.example и короткий секрет на стенде не подходят.
+    expect(() => loadConfig({ ...stand, ...bot })).toThrow(/TELEGRAM_WEBHOOK_SECRET/);
+    expect(() =>
+      loadConfig({ ...stand, ...bot, TELEGRAM_WEBHOOK_SECRET: 'short-secret-0000' }),
+    ).toThrow(/TELEGRAM_WEBHOOK_SECRET/);
+    expect(
+      loadConfig({ ...stand, ...bot, TELEGRAM_WEBHOOK_SECRET: secret }).TELEGRAM_WEBHOOK_SECRET,
+    ).toBe(secret);
+    // Поддельный токен из .env.example на стенде тоже не подходит.
+    expect(() =>
+      loadConfig({
+        ...stand,
+        ...bot,
+        TELEGRAM_WEBHOOK_SECRET: secret,
+        TELEGRAM_BOT_TOKEN: '100000001:local-fake-bot-token-change-me-0000',
+      }),
+    ).toThrow(/TELEGRAM_BOT_TOKEN/);
+  });
+
   it('S3_FORCE_PATH_STYLE понимает false и 0, регистр и пробелы не важны', () => {
     expect(loadConfig({ ...base, S3_FORCE_PATH_STYLE: 'false' }).S3_FORCE_PATH_STYLE).toBe(false);
     expect(loadConfig({ ...base, S3_FORCE_PATH_STYLE: '0' }).S3_FORCE_PATH_STYLE).toBe(false);

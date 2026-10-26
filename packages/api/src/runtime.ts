@@ -38,7 +38,10 @@ export function createRuntime(
     clock: clockFromConfig(config),
     logger,
     telegram: config.TELEGRAM_BOT_TOKEN
-      ? createTelegramBotApi({ token: config.TELEGRAM_BOT_TOKEN })
+      ? createTelegramBotApi({
+          token: config.TELEGRAM_BOT_TOKEN,
+          ...(config.TELEGRAM_API_BASE ? { apiBase: config.TELEGRAM_API_BASE } : {}),
+        })
       : null,
     jobs: jobsFor(config),
   };

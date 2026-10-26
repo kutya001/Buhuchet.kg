@@ -3,12 +3,13 @@ import type { PermissionId } from '../roles/permissions';
 import {
   isFullName,
   newEmployeeRoleRefusal,
+  formatPhone,
   phoneProblem,
   staffActionRefusal,
   type StaffActor,
   type StaffTarget,
 } from './rules';
-import { auditActorName, PLATFORM_ADMIN_NAME } from './names';
+import { auditActorName, initials, PLATFORM_ADMIN_NAME } from './names';
 
 /** Часть справочника «Коды телефонов» (refDB.json → phoneCodes). */
 const CODES = [
@@ -34,6 +35,14 @@ describe('ФИО и телефон нового сотрудника', () => {
     expect(phoneProblem('+1555100200', CODES)).toBe('Неизвестный код страны');
     expect(phoneProblem('996555100200', CODES)).toBe('Номер — «+», код страны и цифры');
     expect(phoneProblem('+996 555 100 200', CODES)).toBe('Номер — «+», код страны и цифры');
+  });
+
+  it('телефон для показа — по маске страны; неподходящий номер — как есть (прототип fmtPhone)', () => {
+    expect(formatPhone('+996555100200', CODES)).toBe('+996 555 100 200');
+    expect(formatPhone('+77011234567', CODES)).toBe('+7 701 123 45 67');
+    expect(formatPhone('+998901234567', CODES)).toBe('+998 90 123 45 67');
+    expect(formatPhone('+99655510020', CODES)).toBe('+99655510020');
+    expect(formatPhone('8 555 100 200', CODES)).toBe('8 555 100 200');
   });
 });
 
@@ -137,6 +146,15 @@ describe('действия над сотрудником', () => {
     expect(newEmployeeRoleRefusal(owner, staffRole)).toBeNull();
     expect(newEmployeeRoleRefusal(owner, finRole)).toBeNull();
     expect(newEmployeeRoleRefusal(hr, accRole)).toBeNull();
+  });
+});
+
+describe('инициалы для «Мой профиль»', () => {
+  it('первые буквы фамилии и имени (прототип core/org.js initials)', () => {
+    expect(initials('Сыдыков Эркин Маратович')).toBe('СЭ');
+    expect(initials('  алиев   нурлан ')).toBe('АН');
+    expect(initials('Администратор')).toBe('А');
+    expect(initials('')).toBe('');
   });
 });
 

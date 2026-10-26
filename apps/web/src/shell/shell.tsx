@@ -1,6 +1,6 @@
 'use client';
 
-import type { MenuModuleId } from '@buhuchet/domain';
+import { initials, type MenuModuleId } from '@buhuchet/domain';
 import { MeResponse } from '@buhuchet/shared';
 import {
   AppFrame,
@@ -36,6 +36,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { api } from '../api-client';
 import { useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
+import { ProfileWindow } from '../profile/profile-window';
 import { ModuleScreen } from '../screens/module-screen';
 import { PHONE_QUERY, saveMaxPrefs, saveNavHidden, saveTree, toggleTheme } from './browser';
 import { Clock } from './clock';
@@ -215,6 +216,7 @@ function ShellPage({
   const [addRequest, setAddRequest] = useState<AddRequest | null>(null);
   const [leaving, setLeaving] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   /** Выход ждёт ответа «Выйти без сохранения?»; `replace` — выход из панели «Меню». */
   const [askLogout, setAskLogout] = useState<{ replace: boolean } | null>(null);
 
@@ -296,6 +298,7 @@ function ShellPage({
     [search, addRequest, setAddRequest],
   );
   const mode = t(access.admin ? 'shell.mode.admin' : 'shell.mode.business');
+  const fullName = me.employee?.fullName ?? t('profile.platform_admin');
   const orgHref = `${APP_PATH}/org`;
 
   return (
@@ -331,6 +334,11 @@ function ShellPage({
                   />
                 )}
                 <SideFootRow>
+                  <SideFootButton
+                    icon="user"
+                    label={t('profile.title')}
+                    onClick={() => setProfileOpen(true)}
+                  />
                   <SideFootButton
                     icon="logout"
                     label={t('shell.logout')}
@@ -417,6 +425,16 @@ function ShellPage({
                       />
                     )}
                     <SheetAction
+                      icon="user"
+                      avatar={initials(fullName)}
+                      label={t('profile.title')}
+                      sub={fullName}
+                      onClick={() => {
+                        setSheetOpen(false);
+                        setProfileOpen(true);
+                      }}
+                    />
+                    <SheetAction
                       icon="logout"
                       label={t('shell.logout')}
                       onClick={() => {
@@ -478,6 +496,7 @@ function ShellPage({
         <p className="m-0 leading-[1.6]">{desc}</p>
         <p className="m-0 text-muted">{t('kb.no_article')}</p>
       </Modal>
+      <ProfileWindow open={profileOpen} onClose={() => setProfileOpen(false)} me={me} />
       <ConfirmDialog
         open={askLogout !== null}
         onClose={() => setAskLogout(null)}

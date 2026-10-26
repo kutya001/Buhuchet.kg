@@ -238,13 +238,15 @@ describe('стопка открытых окон', () => {
     expect(stack.size).toBe(0);
   });
 
-  it('протяжка вниз и «Назад» закрывают сразу, кроме формы с несохранёнными изменениями — она спрашивает', () => {
+  it('протяжка вниз и «Назад» закрывают сразу, кроме формы (или карточки с формой) с несохранёнными изменениями — она спрашивает', () => {
     expect(closesAtOnce({ kind: 'card' })).toBe(true);
     expect(closesAtOnce({ kind: 'form' })).toBe(true);
     expect(closesAtOnce({ kind: 'form', dirty: false })).toBe(true);
     expect(closesAtOnce({ kind: 'form', dirty: true })).toBe(false);
-    // У карточки просмотра нечего терять.
-    expect(closesAtOnce({ kind: 'card', dirty: true })).toBe(true);
+    // Карточке просмотра терять нечего, пока в ней нет формы с изменениями («Смена пароля» в «Мой профиль»).
+    expect(closesAtOnce({ kind: 'card', dirty: false })).toBe(true);
+    expect(closesAtOnce({ kind: 'card', dirty: true })).toBe(false);
+    expect(closesAtOnce({ kind: 'message', dirty: true })).toBe(true);
   });
 
   it('выход спрашивает «Выйти без сохранения?», только если в открытой форме есть несохранённые изменения', () => {

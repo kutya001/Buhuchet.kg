@@ -18,17 +18,22 @@ function savePref(name: string, value: string) {
 }
 
 /** Тема сейчас: выбранная или (без выбора) тема устройства. */
-function currentTheme(): Theme {
+export function currentTheme(): Theme {
   const chosen = document.documentElement.dataset.theme;
   if (chosen === 'light' || chosen === 'dark') return chosen;
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
+/** Выбрать тему и запомнить выбор на этом устройстве («Мой профиль» → «Личные настройки»). */
+export function setTheme(theme: Theme): void {
+  document.documentElement.dataset.theme = theme;
+  savePref(THEME_COOKIE, theme);
+}
+
 /** Переключить тему на противоположную и запомнить выбор на этом устройстве. */
 export function toggleTheme(): Theme {
   const next: Theme = currentTheme() === 'dark' ? 'light' : 'dark';
-  document.documentElement.dataset.theme = next;
-  savePref(THEME_COOKIE, next);
+  setTheme(next);
   return next;
 }
 

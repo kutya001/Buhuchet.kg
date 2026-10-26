@@ -7,6 +7,7 @@ import {
   createTestDatabase,
   databaseAvailable,
   seedAccessReference,
+  seedPhoneCodes,
   type TestDatabase,
 } from '@buhuchet/db/testing';
 import { MENU_MODULES, scopeOf } from '@buhuchet/domain';
@@ -114,6 +115,7 @@ describe.skipIf(!databaseAvailable())('вход, сеансы и проверк�
   beforeAll(async () => {
     t = await createTestDatabase();
     await seedAccessReference(t.admin.db);
+    await seedPhoneCodes(t.admin.db);
     const passwordHash = await hashPassword(PASSWORD);
     await t.admin.db
       .insert(users)
@@ -171,7 +173,7 @@ describe.skipIf(!databaseAvailable())('вход, сеансы и проверк�
     const me = MeResponse.parse(await res.json());
     expect(me).toMatchObject({
       user: { login: 'acc-a', isPlatformAdmin: false, mustChangePassword: false },
-      employee: { shortName: 'acc-a', roleName: 'Бухгалтер', isOwner: false },
+      employee: { shortName: 'acc-a', phone: null, roleName: 'Бухгалтер', isOwner: false },
       organization: { id: a.orgId, name: 'Организация А', slug: 'org-a', inn: '01811201810456' },
       scopes: { cps: 'own', reports: 'own' },
       // Подтверждение сдачи у новой организации включено (учётная политика по умолчанию).
@@ -190,6 +192,19 @@ describe.skipIf(!databaseAvailable())('вход, сеансы и проверк�
     const token = cookieOf(res).split('=')[1]!;
     const stored = await t.admin.db.select({ tokenHash: sessions.tokenHash }).from(sessions);
     expect(stored.some((s) => s.tokenHash === token)).toBe(false);
+  });
+
+  it('«кто я» показывает телефон сотрудника по маске страны («Мой профиль»)', async () => {
+    await t.admin.db
+      .update(employees)
+      .set({ phone: '+996555100200' })
+      .where(eq(employees.shortName, 'chief-a'));
+    const res = await login(app, 'chief-a');
+    expect(res.status).toBe(200);
+    expect(MeResponse.parse(await res.json()).employee).toMatchObject({
+      fullName: 'Сотрудник chief-a',
+      phone: '+996 555 100 200',
+    });
   });
 
   it('неизвестный логин и неверный пароль — один ответ «Неверный логин или пароль»', async () => {

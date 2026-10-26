@@ -45,3 +45,18 @@ export { useSwipeDown, type SwipeDownOptions } from './use-swipe-down';
 export { PHONE_QUERY, useMediaQuery } from './use-media';
 export { canMaximize, type MaxPrefs, type WindowKind } from './window-stack';
 export type { ShellCount, ShellLink, ShellLinkProps, ShellModule, ShellTab } from './shell/types';
+export {
+  Box,
+  Field,
+  fieldControl,
+  FormGrid,
+  inputClass,
+  KeyValues,
+  MONO_CLASS,
+  Note,
+  Pill,
+  type FieldControl,
+  type FieldProps,
+  type KeyValueItem,
+} from './form';
+export { PACK_QUERY } from './form-pack';
