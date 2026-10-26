@@ -2,7 +2,7 @@
 
 import type { GridViewSettings, GroupAgg, ListSort } from '@buhuchet/domain';
 import { useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
-import { iconButtonClass } from '../button';
+import { iconButtonClass, TOUCH_AREA } from '../button';
 import { Icon } from '../icon';
 import { aggText, groupLabelSpan, type GroupNode } from './grid-groups';
 import { clampWidth, columnWidth, dropColumn, setColumnWidth } from './grid-state';
@@ -93,6 +93,33 @@ export function GroupToggle<Row>({
       <span className="rounded-full border border-line bg-btn px-[7px] text-[11px] font-semibold text-muted tabular-nums">
         {node.group.count}
       </span>
+    </button>
+  );
+}
+
+/**
+ * Кнопка «⋯» записи (`.icon-btn.sm` прототипа): на вид 27 px, а на телефоне её область касания —
+ * 44 px (`TOUCH_AREA`).
+ */
+export function RowMenuButton<Row>({
+  row,
+  events,
+  label,
+}: {
+  row: Row;
+  events: RowEvents<Row>;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      data-row-menu
+      aria-label={label}
+      aria-haspopup="menu"
+      onClick={(e) => events.menuAt(row, { anchor: e.currentTarget })}
+      className={`${iconButtonClass('sm')} ${TOUCH_AREA}`}
+    >
+      <Icon name="more" />
     </button>
   );
 }
@@ -261,16 +288,9 @@ export function GridTable<Row>({
         })}
         {hasActions && (
           <td className={`${cell} px-1! text-center ${last ? 'border-b-0' : ''}`}>
-            <button
-              type="button"
-              data-row-menu
-              aria-label={labels.actions}
-              aria-haspopup="menu"
-              onClick={(e) => events.menuAt(row, { anchor: e.currentTarget })}
-              className={iconButtonClass('sm')}
-            >
-              <Icon name="more" />
-            </button>
+            {events.hasMenu(row) && (
+              <RowMenuButton row={row} events={events} label={labels.actions} />
+            )}
           </td>
         )}
       </tr>
@@ -372,7 +392,7 @@ export function GridTable<Row>({
                         aria-expanded={filter.open === c.key}
                         aria-pressed={filter.filtered(c.key)}
                         onClick={(e) => filter.onOpen(c.key, e.currentTarget)}
-                        className={`inline-grid h-6 w-6 flex-none cursor-pointer place-items-center rounded-[5px] border-0 group-hover/th:opacity-100 focus-visible:opacity-100 ${filter.filtered(c.key) ? 'bg-info-bg text-info opacity-100' : 'bg-transparent text-faint opacity-55 hover:bg-row-hover hover:text-ink'}`}
+                        className={`${TOUCH_AREA} inline-grid h-6 w-6 flex-none cursor-pointer place-items-center rounded-[5px] border-0 group-hover/th:opacity-100 focus-visible:opacity-100 ${filter.filtered(c.key) ? 'bg-info-bg text-info opacity-100' : 'bg-transparent text-faint opacity-55 hover:bg-row-hover hover:text-ink'}`}
                       >
                         <Icon name="filter" size="sm" />
                       </button>

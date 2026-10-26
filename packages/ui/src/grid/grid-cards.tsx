@@ -1,10 +1,8 @@
 'use client';
 
-import type { ReactNode } from 'react';
-import { iconButtonClass } from '../button';
-import { Icon } from '../icon';
+import { Fragment, type ReactNode } from 'react';
 import { aggText, type GroupNode } from './grid-groups';
-import { GroupToggle, SELECT_BOX, type GridTableGroups } from './grid-table';
+import { GroupToggle, RowMenuButton, SELECT_BOX, type GridTableGroups } from './grid-table';
 import type { RowEvents } from './row-events';
 import type { GridColumn, GridLabels, GridRowSelection, GridRowTone } from './types';
 
@@ -21,8 +19,9 @@ const TONE_CARD: Record<GridRowTone, string> = {
  * столбец, ниже пары «подпись — значение» видимых столбцов, внизу строка «Создал… · Изменил…» из
  * служебных столбцов; у списка с массовыми действиями — галочка в заголовке карточки. Сгруппированный
  * список — заголовки групп с числом записей и итогами (`.gc-grp`), под раскрытой группой — её
- * вложенные группы или карточки. Плитки телефона (одна строка сумм, действия без правого клика) —
- * задача #16.
+ * вложенные группы или карточки. Суммы, которые читаются вместе (`tileLine`), — одной строкой
+ * «К уплате 5 000 · Получено 5 000 · Оплачено 3 000». Действия записи — кнопкой «⋯» в заголовке
+ * карточки и долгим нажатием, без правого клика; у записи без действий кнопки нет.
  */
 export function GridCards<Row>({
   columns,
@@ -30,7 +29,6 @@ export function GridCards<Row>({
   rows,
   rowKey,
   rowTone,
-  hasActions,
   clickable,
   events,
   selection,
@@ -45,7 +43,6 @@ export function GridCards<Row>({
   rows: readonly Row[];
   rowKey: (row: Row) => string;
   rowTone?: (row: Row) => GridRowTone | undefined;
-  hasActions: boolean;
   clickable: boolean;
   events: RowEvents<Row>;
   selection?: GridRowSelection<Row>;
@@ -63,6 +60,32 @@ export function GridCards<Row>({
       .filter(Boolean)
       .join(', ');
   const withTotals = columns.filter((c) => c.total && totals[c.key] !== undefined);
+  // Столбцы общей строки плитки стоят одной строкой на месте первого из них (`clineHtml` прототипа).
+  const lineColumns = rest.filter((c) => c.tileLine);
+  const firstLine = lineColumns[0];
+  const tileLine = (row: Row): ReactNode => {
+    const parts = lineColumns.filter((c) => c.text(row) !== '');
+    if (!parts.length) return null;
+    return (
+      <dd
+        key="tile-line"
+        data-tile-line
+        className="col-span-full m-0 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-left text-muted"
+      >
+        {parts.map((c, i) => (
+          <Fragment key={c.key}>
+            {i > 0 && <i className="text-faint not-italic">·</i>}
+            <span>
+              {c.tileLine!.label ?? c.label}{' '}
+              <b className="font-[650] text-ink tabular-nums">
+                {c.tileLine!.cell ? c.tileLine!.cell(row) : c.text(row)}
+              </b>
+            </span>
+          </Fragment>
+        ))}
+      </dd>
+    );
+  };
 
   const card = (row: Row): ReactNode => {
     const id = rowKey(row);
@@ -91,22 +114,14 @@ export function GridCards<Row>({
           <div className="min-w-0 flex-1 leading-[1.35] font-semibold">
             {title.cell ? title.cell(row) : title.text(row)}
           </div>
-          {hasActions && (
-            <button
-              type="button"
-              data-row-menu
-              aria-label={labels.actions}
-              aria-haspopup="menu"
-              onClick={(e) => events.menuAt(row, { anchor: e.currentTarget })}
-              className={iconButtonClass('sm')}
-            >
-              <Icon name="more" />
-            </button>
+          {events.hasMenu(row) && (
+            <RowMenuButton row={row} events={events} label={labels.actions} />
           )}
         </div>
         {rest.length > 0 && (
           <dl className="m-0 grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-[5px] text-[12.5px]">
             {rest.map((c) => {
+              if (c.tileLine) return c === firstLine ? tileLine(row) : null;
               const text = c.text(row);
               return (
                 <div key={c.key} className="contents">

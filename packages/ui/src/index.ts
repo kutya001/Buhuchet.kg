@@ -1,5 +1,11 @@
 export { OverlayHistory, useBackClose, type HistoryHost, type OverlayHandle } from './back-close';
-export { buttonClass, iconButtonClass, linkButtonClass, type ButtonVariant } from './button';
+export {
+  buttonClass,
+  iconButtonClass,
+  linkButtonClass,
+  TOUCH_AREA,
+  type ButtonVariant,
+} from './button';
 export { Avatar } from './avatar';
 export { Card, StatusDot } from './card';
 export { CardTabs, type CardTab } from './card-tabs';

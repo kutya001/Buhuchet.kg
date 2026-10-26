@@ -172,5 +172,29 @@ describe('нажатия по строке списка', () => {
     const { onMenu, events } = setup();
     events.menuAt(ROW, { anchor: row });
     expect(onMenu).toHaveBeenCalledWith(ROW, { anchor: row });
+    expect(events.hasMenu(ROW)).toBe(true);
+    expect(setup(false).events.hasMenu(ROW)).toBe(false);
+  });
+
+  it('у записи без действий (владелец) меню нет: ни правым кликом, ни клавишами, ни пальцем', () => {
+    const onMenu = vi.fn();
+    const OWNER = { id: 'owner' };
+    const events = rowEvents<typeof ROW>(press(), {
+      onMenu,
+      hasMenu: (r) => r.id !== 'owner',
+    });
+    expect(events.hasMenu(OWNER)).toBe(false);
+    expect(events.hasMenu(ROW)).toBe(true);
+    const h = events.handlers(OWNER);
+    const e = mouse();
+    h.onContextMenu(e);
+    expect(e.preventDefault).not.toHaveBeenCalled();
+    h.onKeyDown(key('ContextMenu'));
+    h.onPointerDown(pointer(50, 60));
+    vi.advanceTimersByTime(LONG_PRESS_MS);
+    events.menuAt(OWNER, { anchor: row });
+    expect(onMenu).not.toHaveBeenCalled();
+    events.handlers(ROW).onContextMenu(mouse());
+    expect(onMenu).toHaveBeenCalledOnce();
   });
 });

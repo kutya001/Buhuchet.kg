@@ -12,7 +12,7 @@ import {
 } from '@buhuchet/domain';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ActionMenu, type ActionEntry, type MenuPlace } from '../action-menu';
-import { iconButtonClass, linkButtonClass } from '../button';
+import { iconButtonClass, linkButtonClass, TOUCH_AREA } from '../button';
 import { EmptyState, NothingFound } from '../empty-state';
 import { FloatingPanel } from '../floating';
 import { Icon } from '../icon';
@@ -22,7 +22,13 @@ import { auditColumns } from './audit';
 import { FilterPanel, type ValueLabels } from './grid-filter';
 import { activeFilterKeys, chipText, unlabeledEnumFilters } from './grid-filters';
 import { effectiveGroup, groupAggs, groupPaths, groupTree, withGroup } from './grid-groups';
-import { effectiveSort, effectiveView, pageSizeOf, toggleSort, visibleKeys } from './grid-state';
+import {
+  effectiveSort,
+  effectiveView,
+  pageSizeOf,
+  screenVisibleKeys,
+  toggleSort,
+} from './grid-state';
 import { GridCards } from './grid-cards';
 import { GridTable, type GridTableGroups } from './grid-table';
 import { GridToolbar } from './grid-toolbar';
@@ -146,10 +152,11 @@ export function DataGrid<Row>({
   const events = useRowEvents<Row>({
     onOpen,
     onMenu: actions ? (row, place) => setMenu({ row, place }) : undefined,
+    hasMenu: actions ? (row) => actions(row).length > 0 : undefined,
   });
 
   const keys = columns.map((c) => c.key);
-  const shown = visibleKeys(keys, settings, defaultVisible);
+  const shown = screenVisibleKeys(columns, settings, defaultVisible, phone);
   const visible = shown.map((k) => columns.find((c) => c.key === k)!);
   const group = effectiveGroup(keys, settings);
   const groupKey = group.join('|');
@@ -309,7 +316,6 @@ export function DataGrid<Row>({
         rows={data.items}
         rowKey={rowKey}
         rowTone={rowTone}
-        hasActions={!!actions}
         clickable={!!onOpen}
         events={events}
         selection={selection}
@@ -502,7 +508,7 @@ export function GridChips({
           onClick={onClear}
           aria-label={clear}
           title={clear}
-          className="grid h-5 w-5 flex-none cursor-pointer place-items-center rounded-full border-0 bg-transparent text-inherit hover:bg-info-bg"
+          className={`${TOUCH_AREA} grid h-5 w-5 flex-none cursor-pointer place-items-center rounded-full border-0 bg-transparent text-inherit hover:bg-info-bg`}
         >
           <Icon name="x" size="sm" />
         </button>
@@ -580,7 +586,7 @@ export function GridFooter({
         onClick={() => onPageChange(page - 1)}
         aria-label={labels.prev}
         title={labels.prev}
-        className={`${iconButtonClass('sm')} disabled:cursor-not-allowed disabled:opacity-40`}
+        className={`${iconButtonClass('sm')} ${TOUCH_AREA} disabled:cursor-not-allowed disabled:opacity-40`}
       >
         <Icon name="left" />
       </button>
@@ -593,7 +599,7 @@ export function GridFooter({
         onClick={() => onPageChange(page + 1)}
         aria-label={labels.next}
         title={labels.next}
-        className={`${iconButtonClass('sm')} disabled:cursor-not-allowed disabled:opacity-40`}
+        className={`${iconButtonClass('sm')} ${TOUCH_AREA} disabled:cursor-not-allowed disabled:opacity-40`}
       >
         <Icon name="right" />
       </button>

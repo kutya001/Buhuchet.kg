@@ -10,6 +10,7 @@ import {
 import { createPortal } from 'react-dom';
 import { Icon } from './icon';
 import type { IconName } from './icons';
+import { useSwipeDown } from './use-swipe-down';
 
 /** Пункт меню действий (прототип ui/popups.js, `menu`: `label`, `icon`, `danger`, `disabled`, `reason`, `on`). */
 export interface ActionItem {
@@ -134,8 +135,8 @@ export function menuPosition(
  * Меню действий записи поверх страницы (прототип ui/popups.js, `menu` + `openPop`; стиль `.pop`):
  * открывается правым кликом или долгим нажатием на строке, кнопкой «⋯» и клавишами ContextMenu или
  * Shift+F10. Рисуется в `document.body`, поэтому не обрезается прокруткой таблицы. Закрывается выбором
- * пункта, Esc (фокус возвращается на элемент), нажатием вне меню и кнопкой «Назад» (переход идёт своим
- * чередом, как у `Popover`).
+ * пункта, Esc (фокус возвращается на элемент), нажатием вне меню, кнопкой «Назад» (переход идёт своим
+ * чередом, как у `Popover`) и на телефоне протяжкой вниз (ТЗ «Управление свайпами»).
  */
 export function ActionMenu({
   items,
@@ -151,6 +152,7 @@ export function ActionMenu({
 }) {
   const box = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+  useSwipeDown(box, { enabled: true, onClose });
 
   useLayoutEffect(() => {
     const el = box.current;

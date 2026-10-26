@@ -21,6 +21,7 @@ import { useGridLabels } from '../lists/grid-labels';
 import { useListPage, type FetchListPage } from '../lists/use-list-page';
 import { useViewSettings } from '../lists/view-settings';
 import { useShell } from '../shell/context';
+import { useStaffActions } from './staff-actions';
 
 /** Сортировка по умолчанию во всех списках — от новых к старым по «Создано» (прототип defSort). */
 const DEFAULT_SORT: ListSort = { key: 'createdAt', dir: 'desc' };
@@ -139,8 +140,9 @@ const fetchStaffValues = async (col: string) => {
 /**
  * «Сотрудники» → список (ТЗ «Сотрудники», прототип modules/staff.js, renderStaff): общий список
  * записей с поиском, фильтрами у столбцов, группировкой и «В Excel» (по праву «Выгружать в Excel»);
- * заблокированные — приглушённо. Карточка сотрудника, его действия и окно «Новый сотрудник» —
- * задача #18; до неё выбор «+ Добавить» подтверждается уведомлением, как в заглушке модуля.
+ * заблокированные — приглушённо. Действия над сотрудником — «⋯», долгим нажатием и правым кликом
+ * (`useStaffActions`). Карточка сотрудника и окно «Новый сотрудник» — задача #18; до неё выбор
+ * «+ Добавить» подтверждается уведомлением, как в заглушке модуля.
  */
 export function StaffList() {
   const t = useT();
@@ -165,6 +167,7 @@ export function StaffList() {
     [params, visible],
   );
   const exporter = useListExport(sendExport);
+  const staff = useStaffActions(list.retry);
 
   const request = addRequest?.moduleId === 'staff' ? addRequest : null;
   useEffect(() => {
@@ -174,31 +177,35 @@ export function StaffList() {
   }, [request, toast, t, clearAddRequest]);
 
   return (
-    <DataGrid
-      columns={columns}
-      audit={STAFF_AUDIT}
-      defaultVisible={DEFAULT_VISIBLE}
-      defaultSort={DEFAULT_SORT}
-      settings={view.settings}
-      onSettingsChange={view.save}
-      onResetView={() => void view.reset()}
-      data={view.ready ? list.data : undefined}
-      onPageChange={list.setPage}
-      error={list.error}
-      onRetry={list.retry}
-      filters={list.filters}
-      onFiltersChange={list.setFilters}
-      loadValues={fetchStaffValues}
-      search={search}
-      onClearSearch={clearSearch}
-      onExport={access.can('export') ? () => void exporter.run() : undefined}
-      exporting={exporter.exporting}
-      empty={<EmptyState icon="users" title={t('grid.empty')} />}
-      rowKey={(e) => e.id}
-      titleKey="fullName"
-      rowTone={(e) => (e.active ? undefined : 'muted')}
-      label={t('nav.staff')}
-      labels={labels}
-    />
+    <>
+      <DataGrid
+        columns={columns}
+        audit={STAFF_AUDIT}
+        defaultVisible={DEFAULT_VISIBLE}
+        defaultSort={DEFAULT_SORT}
+        settings={view.settings}
+        onSettingsChange={view.save}
+        onResetView={() => void view.reset()}
+        data={view.ready ? list.data : undefined}
+        onPageChange={list.setPage}
+        error={list.error}
+        onRetry={list.retry}
+        filters={list.filters}
+        onFiltersChange={list.setFilters}
+        loadValues={fetchStaffValues}
+        search={search}
+        onClearSearch={clearSearch}
+        onExport={access.can('export') ? () => void exporter.run() : undefined}
+        exporting={exporter.exporting}
+        empty={<EmptyState icon="users" title={t('grid.empty')} />}
+        rowKey={(e) => e.id}
+        titleKey="fullName"
+        rowTone={(e) => (e.active ? undefined : 'muted')}
+        label={t('nav.staff')}
+        labels={labels}
+        actions={staff.actions}
+      />
+      {staff.dialogs}
+    </>
   );
 }
