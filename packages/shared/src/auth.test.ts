@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ChangePasswordForm,
   ChangePasswordRequest,
+  LoginForm,
   LoginRequest,
   MeResponse,
+  PasswordResetCodeForm,
   PasswordResetConfirmRequest,
+  PasswordResetLoginForm,
   PasswordResetRequest,
 } from './auth';
 import { TelegramLinkResponse } from './telegram';
@@ -36,7 +40,15 @@ describe('схемы входа', () => {
         isPlatformAdmin: false,
         mustChangePassword: false,
       },
-      employee: null,
+      employee: {
+        id: '0b2d4e6f-0000-4000-8000-00000000000b',
+        fullName: 'Сыдыков Эркин',
+        shortName: 'Эркин С.',
+        phone: '+996 555 100 200',
+        roleId: '0b2d4e6f-0000-4000-8000-00000000000c',
+        roleName: 'Владелец',
+        isOwner: true,
+      },
       organization: null,
       telegram: { name: '@erkin_s', linkedAt: '2026-10-18T03:00:00.000Z' },
       permissions: ['cpView'],
@@ -71,5 +83,73 @@ describe('схемы входа', () => {
       }).success,
     ).toBe(true);
     expect(TelegramLinkResponse.safeParse({ url: 'abc', expiresAt: 'завтра' }).success).toBe(false);
+    // Экран вставляет ссылку в href: только https://t.me без логина и порта.
+    for (const url of [
+      'javascript:alert(1)',
+      'http://t.me/buhuchet_bot?start=abc',
+      'https://t.me.evil.example/buhuchet_bot',
+      'https://evil.example@t.me/buhuchet_bot',
+      'https://t.me:8443/buhuchet_bot',
+    ]) {
+      expect(
+        TelegramLinkResponse.safeParse({ url, expiresAt: '2026-10-18T03:15:00.000Z' }).success,
+        url,
+      ).toBe(false);
+    }
+  });
+});
+
+describe('формы входа и смены пароля (сообщения — ключи словаря)', () => {
+  /** Ключи сообщений по полям: что покажет форма. */
+  const errors = (result: {
+    success: boolean;
+    error?: { issues: { path: PropertyKey[]; message: string }[] };
+  }) => Object.fromEntries((result.error?.issues ?? []).map((i) => [i.path.join('.'), i.message]));
+
+  it('вход: пустые логин и пароль — «Введите логин», «Введите пароль»; логин обрезается', () => {
+    expect(errors(LoginForm.safeParse({ login: '  ', password: '' }))).toEqual({
+      login: 'auth.err.login',
+      password: 'auth.err.password',
+    });
+    expect(LoginForm.parse({ login: ' erkin ', password: 'x' })).toEqual({
+      login: 'erkin',
+      password: 'x',
+    });
+    expect(errors(LoginForm.safeParse({ login: 'a'.repeat(65), password: 'x' }))).toEqual({
+      login: 'form.too_long',
+    });
+    expect(errors(PasswordResetLoginForm.safeParse({ login: '' }))).toEqual({
+      login: 'auth.err.login',
+    });
+  });
+
+  it('код из Telegram — 6 цифр; новый пароль — не короче 8 символов; повтор должен совпасть', () => {
+    const base = { code: '482913', newPassword: 'Новый-пароль', repeat: 'Новый-пароль' };
+    expect(PasswordResetCodeForm.safeParse(base).success).toBe(true);
+    expect(errors(PasswordResetCodeForm.safeParse({ ...base, code: '48291' }))).toEqual({
+      code: 'auth.err.code',
+    });
+    expect(
+      errors(
+        PasswordResetCodeForm.safeParse({ ...base, newPassword: '1234567', repeat: '1234567' }),
+      ),
+    ).toEqual({ newPassword: 'auth.err.short' });
+    expect(errors(PasswordResetCodeForm.safeParse({ ...base, repeat: 'Другой-пароль' }))).toEqual({
+      repeat: 'auth.err.mismatch',
+    });
+  });
+
+  it('смена пароля: текущий обязателен, новый и повтор — как в «Забыли пароль?»', () => {
+    const base = { currentPassword: 'old', newPassword: 'Новый-пароль', repeat: 'Новый-пароль' };
+    expect(ChangePasswordForm.safeParse(base).success).toBe(true);
+    expect(errors(ChangePasswordForm.safeParse({ ...base, currentPassword: '' }))).toEqual({
+      currentPassword: 'auth.err.current',
+    });
+    expect(errors(ChangePasswordForm.safeParse({ ...base, repeat: '' }))).toEqual({
+      repeat: 'auth.err.mismatch',
+    });
+    // Форма отправляет методу смены пароля только его поля.
+    const { currentPassword, newPassword } = ChangePasswordForm.parse(base);
+    expect(ChangePasswordRequest.safeParse({ currentPassword, newPassword }).success).toBe(true);
   });
 });

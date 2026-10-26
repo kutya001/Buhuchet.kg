@@ -438,6 +438,21 @@ describe('телефон: нижняя панель и панель «Меню»
     expect(onClick).toHaveBeenCalledOnce();
   });
 
+  it('«Мой профиль» в панели «Меню»: инициалы в кружке вместо значка, ФИО под названием', () => {
+    const html = renderToStaticMarkup(
+      <SheetAction
+        icon="user"
+        avatar="СЭ"
+        label="Мой профиль"
+        sub="Сыдыков Эркин"
+        onClick={() => {}}
+      />,
+    );
+    expect(html).toMatch(/<span aria-hidden="true" class="[^"]*rounded-full[^"]*">СЭ<\/span>/);
+    expect(html).not.toContain('<svg');
+    expect(html).toContain('>Сыдыков Эркин</span>');
+  });
+
   it('выдвижная панель: закрытая — за краем экрана и невидима, открытая — окно с ручкой', () => {
     const closed = renderToStaticMarkup(
       <BottomSheet open={false} onClose={() => {}} label="Меню">

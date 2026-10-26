@@ -67,6 +67,9 @@ const StorageEnv = z.object({
   S3_FORCE_PATH_STYLE: bool.default(true),
 });
 
+/** Имя бота-подделки из .env.example (локально и в CI). */
+const EXAMPLE_BOT_USERNAME = 'buhuchet_local_bot';
+
 const AppEnv = z
   .object({
     APP_VERSION: z.string().min(1).default('0.0.0-dev'),
@@ -97,6 +100,11 @@ const AppEnv = z
       .transform((v) => v.replace(/^@/, ''))
       .pipe(z.string().regex(/^[A-Za-z][A-Za-z0-9_]{3,31}$/, 'имя бота: латиница, цифры и _'))
       .optional(),
+    /**
+     * Адрес Bot API вместо https://api.telegram.org — только локально и в тестах: сквозные тесты
+     * подменяют Telegram своим сервером-подделкой (e2e/fake-telegram.ts).
+     */
+    TELEGRAM_API_BASE: z.url().optional(),
     SENTRY_DSN: z.string().min(1).optional(),
     /** Зафиксировать «сейчас» (демо-стенд, сквозные тесты). На рабочем сайте запрещено. */
     FIXED_NOW: z.iso.datetime().optional(),
@@ -132,6 +140,41 @@ const AppEnv = z
         message:
           'на стенде и рабочем сайте — адрес сайта по https (по нему сверяется Origin и ставится cookie входа)',
       });
+    }
+    if (env.APP_ENV === 'staging' || env.APP_ENV === 'production') {
+      if (env.TELEGRAM_API_BASE) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['TELEGRAM_API_BASE'],
+          message: 'на стенде и рабочем сайте бот говорит только с api.telegram.org — не задаётся',
+        });
+      }
+      // Имя бота из примера может занять кто угодно: ссылка привязки с токеном ушла бы чужому боту
+      // (регистр в именах Telegram не важен).
+      if (env.TELEGRAM_BOT_USERNAME?.toLowerCase() === EXAMPLE_BOT_USERNAME) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['TELEGRAM_BOT_USERNAME'],
+          message: 'на стенде и рабочем сайте — имя своего бота, не из .env.example',
+        });
+      }
+      if (env.TELEGRAM_BOT_TOKEN && /change-me/i.test(env.TELEGRAM_BOT_TOKEN)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['TELEGRAM_BOT_TOKEN'],
+          message: 'на стенде и рабочем сайте — токен своего бота от BotFather, не из .env.example',
+        });
+      }
+      // Секрет из .env.example открыт всем: с ним кто угодно прислал бы сайту поддельное сообщение бота.
+      const secret = env.TELEGRAM_WEBHOOK_SECRET;
+      if (secret && (secret.length < 32 || /change-me/i.test(secret))) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['TELEGRAM_WEBHOOK_SECRET'],
+          message:
+            'на стенде и рабочем сайте — своя случайная строка от 32 символов, не из .env.example',
+        });
+      }
     }
     for (const key of ['TELEGRAM_WEBHOOK_SECRET', 'TELEGRAM_BOT_USERNAME'] as const) {
       if (Boolean(env.TELEGRAM_BOT_TOKEN) !== Boolean(env[key])) {

@@ -126,12 +126,15 @@ export function PhoneMenu({
  */
 export function SheetAction({
   icon,
+  avatar,
   label,
   sub,
   onClick,
   disabled = false,
 }: {
   icon: IconName;
+  /** Инициалы в кружке вместо значка (`.av.round` прототипа): «Мой профиль». */
+  avatar?: string;
   label: string;
   sub?: string;
   onClick: () => void;
@@ -144,9 +147,18 @@ export function SheetAction({
       disabled={disabled}
       className="flex cursor-pointer items-center gap-2.5 rounded-lg border-0 bg-transparent p-2 text-left text-ink hover:bg-hover focus-visible:outline-2 focus-visible:outline-brand-blue disabled:cursor-not-allowed disabled:opacity-50"
     >
-      <span className="grid h-[30px] w-[30px] flex-none place-items-center rounded-[9px] bg-btn text-muted shadow-btn">
-        <Icon name={icon} size="sm" />
-      </span>
+      {avatar ? (
+        <span
+          aria-hidden="true"
+          className="grid h-[30px] w-[30px] flex-none place-items-center rounded-full bg-btn text-[12px] font-bold tracking-[.02em] text-muted shadow-btn"
+        >
+          {avatar}
+        </span>
+      ) : (
+        <span className="grid h-[30px] w-[30px] flex-none place-items-center rounded-[9px] bg-btn text-muted shadow-btn">
+          <Icon name={icon} size="sm" />
+        </span>
+      )}
       <span className="min-w-0">
         <span className="block truncate text-[13px] leading-[1.2] font-[650]">{label}</span>
         {sub && <span className="block text-[11.5px] text-faint">{sub}</span>}

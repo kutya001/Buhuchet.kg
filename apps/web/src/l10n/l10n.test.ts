@@ -2,7 +2,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ESLint } from 'eslint';
 import { describe, expect, it } from 'vitest';
-import { makeErrorText, makeTranslate } from './translate';
+import { fieldErrorText, makeErrorText, makeTranslate } from './translate';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 
@@ -29,9 +29,50 @@ describe('ошибка ответа API на экране', () => {
     expect(errorText({ code: 'inn_dup', message: 'ИНН занят' })).toBe('Такой ИНН уже есть');
     expect(errorText({ code: 'slug_taken', message: 'Адрес занят' })).toBe('Адрес занят');
   });
+
+  it('подстановки из details и вариант текста; не хватает значения — текст сервера', () => {
+    const text = makeErrorText({
+      'err.login_locked': 'Вход закрыт на {minutes} минут, до {time}.',
+      'err.user_blocked': 'Обратитесь к владельцу',
+      'err.user_blocked.platform_admin': 'Обратитесь к администратору',
+    });
+    expect(
+      text({
+        code: 'login_locked',
+        message: 'сервер',
+        details: { lockedUntil: '2026-10-26T08:35:00.000Z', minutes: 15, time: '14:35' },
+      }),
+    ).toBe('Вход закрыт на 15 минут, до 14:35.');
+    expect(text({ code: 'login_locked', message: 'сервер', details: { minutes: 15 } })).toBe(
+      'сервер',
+    );
+    expect(
+      text({ code: 'user_blocked', message: 'с', details: { variant: 'platform_admin' } }),
+    ).toBe('Обратитесь к администратору');
+    expect(text({ code: 'user_blocked', message: 'с', details: { variant: 'другой' } })).toBe(
+      'Обратитесь к владельцу',
+    );
+    expect(text({ code: 'user_blocked', message: 'с', details: ['не объект'] })).toBe(
+      'Обратитесь к владельцу',
+    );
+  });
 });
 
-describe('линтер: в коде сайта нет русских строк вне словаря', () => {
+describe('ошибка поля формы', () => {
+  const t = makeTranslate({
+    'auth.err.short': 'Пароль короче {min} символов',
+    'auth.err.code': 'Введите код из Telegram: {code} цифр',
+  });
+
+  it('сообщение схемы — ключ словаря; числа правил подставляются; нет ошибки — пусто', () => {
+    expect(fieldErrorText(t, 'auth.err.short')).toBe('Пароль короче 8 символов');
+    expect(fieldErrorText(t, 'auth.err.code')).toBe('Введите код из Telegram: 6 цифр');
+    expect(fieldErrorText(t, undefined)).toBeUndefined();
+  });
+});
+
+// Первый запуск ESLint с проверкой типов занимает несколько секунд, под нагрузкой — больше пяти.
+describe('линтер: в коде сайта нет русских строк вне словаря', { timeout: 30_000 }, () => {
   const eslint = new ESLint({ cwd: root });
   const problems = async (code: string, file: string) => {
     const [result] = await eslint.lintText(code, { filePath: path.join(root, file) });

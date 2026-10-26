@@ -9,6 +9,8 @@ const EMPLOYEE_BLOCKED = 'Учётная запись заблокирована
  * (docs/deviations.md, п. 4, решение Б), в открытом сеансе — при следующем запросе. Тексты — из
  * прототипа core/login.js: там и администратор платформы, блокируя учётную запись сотрудника,
  * выключает сотрудника, поэтому сотрудник видит одно сообщение — «Обратитесь к владельцу организации».
+ * Экран берёт текст из словаря (`err.<код>`): в `details` — название организации (`org`) и вариант
+ * текста для администратора платформы (`variant`).
  */
 export function denialError(
   denial: LoginDenial,
@@ -19,16 +21,16 @@ export function denialError(
       return apiError(
         denial,
         `Организация ${account.orgName ? `${account.orgName} ` : ''}заблокирована. Обратитесь к администратору платформы.`,
+        account.orgName ? { org: account.orgName } : undefined,
       );
     case 'employee_blocked':
       return apiError(denial, EMPLOYEE_BLOCKED);
     case 'user_blocked':
-      return apiError(
-        denial,
-        account.isPlatformAdmin
-          ? 'Учётная запись заблокирована. Обратитесь к администратору платформы.'
-          : EMPLOYEE_BLOCKED,
-      );
+      return account.isPlatformAdmin
+        ? apiError(denial, 'Учётная запись заблокирована. Обратитесь к администратору платформы.', {
+            variant: 'platform_admin',
+          })
+        : apiError(denial, EMPLOYEE_BLOCKED);
   }
 }
 
@@ -41,7 +43,10 @@ export function bishkekTime(at: Date): string {
   });
 }
 
-/** Вход закрыт после неверных паролей: до какого момента — в тексте, details.lockedUntil и Retry-After. */
+/**
+ * Вход закрыт после неверных паролей: до какого момента — в тексте, `details.lockedUntil` и Retry-After;
+ * для текста словаря (`err.login_locked`) — `details.minutes` и `details.time` («14:35» по Бишкеку).
+ */
 export function lockedError(c: Context, until: Date | null) {
   if (until) {
     const seconds = Math.max(1, Math.ceil((until.getTime() - Date.now()) / 1000));
@@ -52,6 +57,10 @@ export function lockedError(c: Context, until: Date | null) {
     `Слишком много неверных паролей. Вход закрыт на ${LOGIN_LOCK_MINUTES} минут${
       until ? `, попробуйте снова после ${bishkekTime(until)}` : ''
     }.`,
-    { lockedUntil: until?.toISOString() ?? null },
+    {
+      lockedUntil: until?.toISOString() ?? null,
+      minutes: LOGIN_LOCK_MINUTES,
+      ...(until ? { time: bishkekTime(until) } : {}),
+    },
   );
 }

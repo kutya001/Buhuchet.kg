@@ -18,6 +18,13 @@ export default defineConfig({
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
+  // Подделка Telegram Bot API (fake-telegram.ts): бот сайта из .env.example шлёт сообщения ей.
+  webServer: {
+    command: 'node fake-telegram.ts',
+    url: 'http://127.0.0.1:8091/health',
+    reuseExistingServer: true,
+    stdout: 'ignore',
+  },
   // Каждый пункт приёмки проверяется на ПК (1280 px) и телефоне (390 px).
   projects: [
     {

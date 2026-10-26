@@ -228,6 +228,8 @@ export interface EmployeeAccess {
   subject: AccessSubject;
   fullName: string;
   shortName: string;
+  /** Телефон «+996555100200»; null — не указан. */
+  phone: string | null;
   roleId: string;
   roleName: string;
 }
@@ -242,6 +244,7 @@ export async function loadEmployeeAccess(
       id: employees.id,
       fullName: employees.fullName,
       shortName: employees.shortName,
+      phone: employees.phone,
       roleId: roles.id,
       roleName: roles.name,
       isOwner: roles.isOwner,
@@ -273,6 +276,7 @@ export async function loadEmployeeAccess(
     },
     fullName: row.fullName,
     shortName: row.shortName,
+    phone: row.phone,
     roleId: row.roleId,
     roleName: row.roleName,
   };

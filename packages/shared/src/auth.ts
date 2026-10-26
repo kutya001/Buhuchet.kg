@@ -8,6 +8,7 @@ import {
   SCOPES,
   type PermissionId,
   type ScopeGroupId,
+  type UiTextKey,
 } from '@buhuchet/domain';
 import { z } from 'zod';
 import { Uuid } from './common';
@@ -50,6 +51,8 @@ export const MeResponse = z.object({
       id: Uuid,
       fullName: z.string(),
       shortName: z.string(),
+      /** Телефон для показа в «Мой профиль»: «+996 555 100 200»; null — не указан. */
+      phone: z.string().nullable(),
       roleId: Uuid,
       roleName: z.string(),
       isOwner: z.boolean(),
@@ -105,3 +108,65 @@ export type TemporaryPasswordResponse = z.infer<typeof TemporaryPasswordResponse
 /** Ответ без данных: выход, смена пароля. */
 export const OkResponse = z.object({ ok: z.literal(true) });
 export type OkResponse = z.infer<typeof OkResponse>;
+
+/*
+ * Формы входа, «Забыли пароль?» и смены пароля (React Hook Form): те же пределы, что у методов выше,
+ * и повтор нового пароля. Сообщение ошибки — ключ словаря: экран показывает текст из «Локализации»
+ * с подстановками `{min}` (PASSWORD_MIN_LENGTH) и `{code}` (RESET_CODE_LENGTH).
+ */
+const message = (key: UiTextKey) => ({ message: key });
+
+const loginField = z
+  .string()
+  .trim()
+  .min(1, message('auth.err.login'))
+  .max(LOGIN_MAX_LENGTH, message('form.too_long'));
+
+const newPasswordFields = {
+  newPassword: z
+    .string()
+    .min(PASSWORD_MIN_LENGTH, message('auth.err.short'))
+    .max(PASSWORD_MAX_LENGTH, message('form.too_long')),
+  repeat: z.string(),
+};
+
+const samePasswords = (v: { newPassword: string; repeat: string }) => v.newPassword === v.repeat;
+const mismatch = { path: ['repeat'], ...message('auth.err.mismatch') };
+
+/** Страница входа: логин и пароль. */
+export const LoginForm = z.object({
+  login: loginField,
+  password: z
+    .string()
+    .min(1, message('auth.err.password'))
+    .max(PASSWORD_MAX_LENGTH, message('form.too_long')),
+});
+export type LoginForm = z.infer<typeof LoginForm>;
+
+/** «Забыли пароль?», шаг 1: логин. */
+export const PasswordResetLoginForm = z.object({ login: loginField });
+export type PasswordResetLoginForm = z.infer<typeof PasswordResetLoginForm>;
+
+/** «Забыли пароль?», шаг 2: код из Telegram, новый пароль и его повтор. */
+export const PasswordResetCodeForm = z
+  .object({
+    code: z
+      .string()
+      .trim()
+      .regex(new RegExp(`^\\d{${RESET_CODE_LENGTH}}$`), message('auth.err.code')),
+    ...newPasswordFields,
+  })
+  .refine(samePasswords, mismatch);
+export type PasswordResetCodeForm = z.infer<typeof PasswordResetCodeForm>;
+
+/** Смена пароля: в «Мой профиль» и обязательная смена временного пароля. */
+export const ChangePasswordForm = z
+  .object({
+    currentPassword: z
+      .string()
+      .min(1, message('auth.err.current'))
+      .max(PASSWORD_MAX_LENGTH, message('form.too_long')),
+    ...newPasswordFields,
+  })
+  .refine(samePasswords, mismatch);
+export type ChangePasswordForm = z.infer<typeof ChangePasswordForm>;

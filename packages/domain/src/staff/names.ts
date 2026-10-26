@@ -8,6 +8,16 @@ export function shortName(fullName: string): string {
   return name ? `${name} ${surname[0]}.` : surname;
 }
 
+/** Инициалы для кружка «Мой профиль» в панели «Меню» телефона: «Сыдыков Эркин» → «СЭ» (прототип core/org.js). */
+export function initials(fullName: string): string {
+  return fullName
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((word) => word.charAt(0).toUpperCase())
+    .join('');
+}
+
 /** Как показывать в «Создал» и «Изменил» запись администратора платформы (прототип core/session.js, whoName). */
 export const PLATFORM_ADMIN_NAME = 'Администратор платформы';
 

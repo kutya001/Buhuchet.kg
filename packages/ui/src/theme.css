@@ -266,6 +266,8 @@
   --shadow-cta: var(--bu-sh-cta);
   --font-sans:
     'Inter Variable', 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+  /* Моноширинный (`.mono` прототипа): логины, коды, номера счетов. */
+  --font-mono: 'Cascadia Code', 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;
   /* ТЗ «Принципы оформления»: анимации 150–250 мс; в прототипе «pop» — 0,32 с (docs/deviations.md, п. 23). */
   --animate-pop: bu-pop 0.25s ease-out;
   --animate-slide-up: bu-slide-up 0.25s forwards;
