@@ -22,7 +22,7 @@ function renderSide(){
   h+=demoBox()+`</div>`;
   $('#side').innerHTML=h;
 }
-const PROTO_VER='v57 · 25.10.2026';
+const PROTO_VER='v58 · 25.10.2026';
 function demoBox(){return `<div class="demo"><div class="row" style="gap:6px"><b>Прототип ${PROTO_VER}</b></div><label>Данные:</label>${sel('demo-data-x',[['demo','Демо-данные'],['empty','Пустая организация']],DATA_MODE,'data-demo-data aria-label="Данные макета"')}<label for="demo-user">Войти как:</label>${sel('demo-user',[...EMP.filter(e=>e.active).map(e=>[e.id,`${e.short} — ${ROLES.find(r=>r.id===e.role).name}`]),['admin','Администратор платформы']],S.me)}<button type="button" class="linkbtn" data-demo-fail style="align-self:flex-start">Показать ошибку загрузки списка</button><label>Данные прототипа:</label><div class="demo-db"><button type="button" class="linkbtn" data-db="export">Экспорт TemDB.json</button><button type="button" class="linkbtn" data-db="load">Загрузить TemDB.json</button><button type="button" class="linkbtn" data-db="clear">Очистить рабочие данные</button><button type="button" class="linkbtn" data-db="ref">Экспорт refDB.json</button><button type="button" class="linkbtn" data-db="gked">Экспорт gkedDB.json</button></div><span>${DATA_MODE==='empty'?'Организация как сразу после регистрации.':'Демо-данные из demoDB.json.'} Все изменения сохраняются в этом браузере (TemDB). Файлы данных: ${DBSRC.demo.from}.</span></div>`}
 function renderBnav(){
   const ids=BNAV[isAdmin()?'admin':'business'];const l=mods().filter(m=>ids.includes(m.id)&&!m.hidden);const cn=isAdmin()?{}:counts();
