@@ -34,8 +34,8 @@ export function closesAtOnce(window: OpenWindow): boolean {
 /**
  * Открытые окна по порядку открытия (прототип `MODALS`): Esc закрывает и Tab обходит только верхнее
  * окно; выход из аккаунта при несохранённых изменениях в открытой форме спрашивает «Выйти без
- * сохранения?» (ТЗ «Панель модулей»; прототип core/login.js logoutDlg спрашивает при любой открытой
- * форме — docs/deviations.md, п. 27).
+ * сохранения?» (ТЗ «Панель модулей», решение заказчика 26.10.2026; прототип core/login.js logoutDlg
+ * спрашивает при любой открытой форме — docs/deviations.md, п. 27).
  */
 export class WindowStack {
   private readonly items: OpenWindow[] = [];
@@ -55,7 +55,6 @@ export class WindowStack {
 
   /** Есть ли открытая форма с несохранёнными изменениями. */
   hasUnsaved(): boolean {
-    // ОТКЛОНЕНИЕ: docs/deviations.md#27
     return this.items.some((w) => !closesAtOnce(w));
   }
 

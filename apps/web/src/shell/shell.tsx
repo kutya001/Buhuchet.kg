@@ -280,9 +280,11 @@ function ShellPage({
       else window.location.assign('/login');
     }
   };
-  /** В открытой форме несохранённые изменения — сначала «Выйти без сохранения?» (ТЗ «Панель модулей»). */
+  /**
+   * В открытой форме несохранённые изменения — сначала «Выйти без сохранения?» (ТЗ «Панель модулей»,
+   * решение заказчика 26.10.2026 — docs/deviations.md, п. 27).
+   */
   const requestLogout = (replace = false) => {
-    // ОТКЛОНЕНИЕ: docs/deviations.md#27
     if (windows.hasUnsavedForm()) setAskLogout({ replace });
     else void logout(replace);
   };
