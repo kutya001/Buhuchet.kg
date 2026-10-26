@@ -52,6 +52,15 @@ test.describe('Этап 1: Моя организация', () => {
     expect(policy.status()).toBe(403);
     const roles = await accountant.get('/api/org/role-options');
     expect(roles.status()).toBe(403);
+    const logo = await accountant.put(`/api/org/logo?version=${body.version}`, {
+      headers: { origin, 'content-type': 'image/png' },
+      data: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    });
+    expect(logo.status()).toBe(403);
+    const removed = await accountant.delete(`/api/org/logo?version=${body.version}`, {
+      headers: { origin },
+    });
+    expect(removed.status()).toBe(403);
     await accountant.dispose();
   });
 
@@ -107,6 +116,9 @@ test.describe('Этап 1: Моя организация', () => {
     await expect(switches.first()).toBeVisible();
     expect(await switches.count()).toBeGreaterThan(10);
     for (const s of await switches.all()) await expect(s).toBeDisabled();
+    const sections = main.locator('[data-page-section] input');
+    await expect(sections.first()).toBeVisible();
+    for (const c of await sections.all()) await expect(c).toBeDisabled();
     // Дни напоминаний — без поля «+ день» и крестиков (прототип: только для чтения).
     await expect(main.locator('[data-chip]').first()).toBeVisible();
     await expect(main.getByRole('textbox', { name: 'Добавить день напоминания' })).toHaveCount(0);
@@ -157,6 +169,46 @@ test.describe('Этап 1: Моя организация', () => {
     await main.getByRole('button', { name: 'Сохранить' }).click();
     await expect(logo).toBeFocused();
     expect(await version(page.request, '/api/org')).toBe(before);
+  });
+
+  test('функцию, которая нужна другой включённой, выключить нельзя — уведомление объясняет почему', async ({
+    page,
+    baseURL,
+  }) => {
+    await signIn(page.request, new URL(baseURL!).origin, 'erkin', DEMO_PASSWORD);
+    const before = await version(page.request, '/api/org/policy');
+    await page.goto('/app/org/policy');
+    const main = page.locator('main');
+    // В демо включены и «Учёт оплаты налогов», и «Виртуальные счета и бонусы», которым он нужен.
+    await expect(main.locator('[data-feat-row="accounts"]').getByRole('switch')).toBeChecked();
+    const taxpay = main.locator('[data-feat-row="taxpay"]').getByRole('switch');
+    await expect(taxpay).toBeChecked();
+    await taxpay.click();
+    await expect(
+      page.getByRole('status').filter({
+        hasText:
+          'Сначала отключите «Виртуальные счета и бонусы» — она работает только вместе с этой функцией',
+      }),
+    ).toBeVisible();
+    await expect(taxpay).toBeChecked();
+    expect(await version(page.request, '/api/org/policy')).toBe(before);
+  });
+
+  test('«Настройки»: пустое время сводки не сохраняется — ошибка под полем', async ({
+    page,
+    baseURL,
+  }) => {
+    await signIn(page.request, new URL(baseURL!).origin, 'erkin', DEMO_PASSWORD);
+    const before = await version(page.request, '/api/org/policy');
+    await page.goto('/app/org/settings');
+    const main = page.locator('main');
+    const digest = main.getByLabel('Еженедельная сводка, понедельник');
+    await expect(digest).toHaveValue(/^\d\d:\d\d$/);
+    await digest.fill('');
+    await main.getByRole('button', { name: 'Сохранить настройки' }).click();
+    await expect(main.getByText('Укажите время сводки')).toBeVisible();
+    await expect(digest).toHaveAttribute('aria-invalid', 'true');
+    expect(await version(page.request, '/api/org/policy')).toBe(before);
   });
 
   test('профиль организации открывается из левой панели (на телефоне — из «Меню»); «Редактировать» ведёт на «Основное»', async ({

@@ -62,6 +62,7 @@ function SettingsForm({
   const [roleId, setRoleId] = useState(policy.defaultRoleId ?? '');
   const [overdueRepeat, setOverdueRepeat] = useState(policy.overdueRepeat);
   const [digestTime, setDigestTime] = useState(policy.digestTime);
+  const [digestError, setDigestError] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
   const [changed, setChanged] = useState(false);
   const telegram = policy.features.telegram;
@@ -72,9 +73,13 @@ function SettingsForm({
     if (timezone !== policy.timezone) patch.timezone = timezone as OrgTimezone;
     if (roleId && roleId !== policy.defaultRoleId) patch.defaultRoleId = roleId;
     if (telegram && overdueRepeat !== policy.overdueRepeat) patch.overdueRepeat = overdueRepeat;
-    if (telegram && digestTime !== policy.digestTime && isDigestTime(digestTime)) {
-      patch.digestTime = digestTime;
+    if (telegram && !isDigestTime(digestTime)) {
+      // Пустое время сводки не сохраняется молча: ошибка под полем.
+      setDigestError(t('org.settings.digest_required'));
+      document.getElementById(`${id}-digest`)?.focus();
+      return;
     }
+    if (telegram && digestTime !== policy.digestTime) patch.digestTime = digestTime;
     if (Object.keys(patch).length === 0) return toast(t('org.settings.saved'), { icon: 'check' });
     setBusy(true);
     const res = await callApi(() =>
@@ -155,14 +160,17 @@ function SettingsForm({
               <Hint>{t('org.settings.overdue_repeat_hint')}</Hint>
             </CheckRow>
             <FormGrid>
-              <Field id={`${id}-digest`} label={t('org.settings.digest')}>
+              <Field id={`${id}-digest`} label={t('org.settings.digest')} error={digestError}>
                 {(c) => (
                   <input
                     {...c}
                     type="time"
                     value={digestTime}
                     disabled={off}
-                    onChange={(e) => setDigestTime(e.target.value)}
+                    onChange={(e) => {
+                      setDigestTime(e.target.value);
+                      setDigestError(undefined);
+                    }}
                     className={inputClass()}
                   />
                 )}

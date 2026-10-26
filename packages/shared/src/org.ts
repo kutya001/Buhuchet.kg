@@ -146,7 +146,7 @@ export type OrgPolicy = z.infer<typeof OrgPolicy>;
 
 /**
  * Роли для поля «Роль по умолчанию для новых сотрудников» на вкладке «Настройки» (прототип
- * modules/org.js, st-role): все роли организации, кроме роли владельца, в порядке создания.
+ * modules/org.js, st-role): все роли организации, кроме роли владельца, по названию.
  */
 export const OrgRoleOptions = z.object({
   items: z.array(z.object({ id: Uuid, name: z.string() })),

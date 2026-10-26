@@ -6,6 +6,7 @@ import {
   formatDateRu,
   formatPhone,
   joinPhone,
+  LOGO_LINK_SECONDS,
   LOGO_MAX_BYTES,
   splitPhone,
 } from '@buhuchet/domain';
@@ -130,9 +131,14 @@ export function OrgMainView({
   );
 }
 
+/** Через сколько после получения ссылка на логотип могла истечь: срок без минуты на дорогу ответа. */
+const LOGO_STALE_MS = (LOGO_LINK_SECONDS - 60) * 1000;
+
 /**
  * Логотип 40 × 40 по временной ссылке; ссылка живёт 15 минут — если картинка не открылась, потому что
- * срок вышел, «Основное» перечитывается с новой ссылкой.
+ * срок вышел, «Основное» перечитывается с новой ссылкой. Срок считается по часам браузера от получения
+ * ответа: часы компьютера могут расходиться с сервером, а только что полученная ссылка, которая тоже не
+ * открылась (хранилище недоступно), не перезапрашивается по кругу.
  */
 function OrgLogo({ link, alt }: { link: NonNullable<OrgProfile['logo']>; alt: string }) {
   const client = useQueryClient();
@@ -143,7 +149,8 @@ function OrgLogo({ link, alt }: { link: NonNullable<OrgProfile['logo']>; alt: st
       data-org-logo=""
       className="h-10 w-10 flex-none rounded-lg border border-line object-contain"
       onError={() => {
-        if (Date.parse(link.expiresAt) <= Date.now()) {
+        const at = client.getQueryState(orgProfileQuery.queryKey)?.dataUpdatedAt ?? 0;
+        if (Date.now() - at >= LOGO_STALE_MS) {
           void client.invalidateQueries({ queryKey: orgProfileQuery.queryKey });
         }
       }}
@@ -333,7 +340,10 @@ function OrgMainEdit({
     }
   };
 
-  const shownLogo = logo?.url ?? saved.logo?.url;
+  // Ссылка на сохранённый логотип — из свежих данных, если запись та же: новая ссылка взамен истёкшей
+  // приходит перечитыванием «Основного», а не сохранением.
+  const savedLogo = profile.version === saved.version ? profile.logo : saved.logo;
+  const shownLogo = logo?.url ?? savedLogo?.url;
   return (
     <div className="flex flex-col gap-3.5">
       <Box title={t('org.main.title')}>
@@ -439,7 +449,7 @@ function OrgMainEdit({
                         className="h-10 w-10 flex-none rounded-lg border border-line object-contain"
                       />
                     ) : (
-                      <OrgLogo link={saved.logo!} alt={t('org.field.logo')} />
+                      <OrgLogo link={savedLogo!} alt={t('org.field.logo')} />
                     )
                   ) : null}
                   <input

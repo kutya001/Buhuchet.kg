@@ -218,10 +218,10 @@ export const ORG_TEXTS = {
   'org.history.on': { ru: 'включено', section: S },
   'org.history.off': { ru: 'выключено', section: S },
   'org.history.wait_days': {
-    ru: 'Напоминание о неподтверждённой сдаче: через {n} дн.',
+    ru: 'Напоминание о неподтверждённой сдаче: через {from} → {n} дн.',
     section: S,
   },
-  'org.history.remind_days': { ru: 'Дни напоминаний: за {days} дн.', section: S },
+  'org.history.remind_days': { ru: 'Дни напоминаний: за {from} → {days} дн.', section: S },
   'org.history.page_on': {
     ru: 'Страница контрагента: раздел «{name}» показывается',
     section: S,
@@ -243,6 +243,7 @@ export const ORG_TEXTS = {
     section: S,
   },
   'org.settings.digest': { ru: 'Еженедельная сводка, понедельник', section: S },
+  'org.settings.digest_required': { ru: 'Укажите время сводки', section: S },
   'org.settings.digest_hint': {
     ru: 'Все напоминания одному человеку за день собираются в одно сообщение.',
     section: S,

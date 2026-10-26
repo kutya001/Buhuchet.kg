@@ -38,10 +38,21 @@ function changeLines(change: HistoryChange, t: Translate): string[] {
       return [t('org.history.report_confirm', { state: state(change.to) })];
     case 'payBeforeSubmit':
       return [t('org.history.pay_first', { state: state(change.to) })];
+    // Было → стало (ТЗ «История изменений учётной политики»; прототип пишет только новое значение).
     case 'confirmWaitDays':
-      return [t('org.history.wait_days', { n: Number(change.to) })];
+      return [
+        t('org.history.wait_days', {
+          from: change.from === undefined ? '—' : Number(change.from),
+          n: Number(change.to),
+        }),
+      ];
     case 'remindDays':
-      return [t('org.history.remind_days', { days: list(change.to).join(', ') || '—' })];
+      return [
+        t('org.history.remind_days', {
+          from: list(change.from).join(', ') || '—',
+          days: list(change.to).join(', ') || '—',
+        }),
+      ];
     case 'pageSections': {
       const from = new Set(list(change.from));
       const to = new Set(list(change.to));

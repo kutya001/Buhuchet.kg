@@ -13,7 +13,16 @@ type Policy = {
   features: Record<string, boolean>;
   remindDays: number[];
   overdueRepeat: boolean;
+  timezone: string;
+  defaultRoleId: string | null;
+  defaultRoleName: string | null;
 };
+
+/** Картинка PNG 1 × 1. */
+const PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+  'base64',
+);
 
 async function policy(api: APIRequestContext) {
   const res = await api.get('/api/org/policy');
@@ -184,6 +193,96 @@ test.describe('Этап 1: Моя организация — правки вла
         remindDays: before.remindDays,
         overdueRepeat: before.overdueRepeat,
       });
+    }
+  });
+
+  test('«Запись изменена другим пользователем»: сохранение поверх чужой правки не проходит, «Перечитать» показывает новые значения; часовой пояс и роль по умолчанию сохраняются', async ({
+    page,
+    baseURL,
+  }) => {
+    const origin = new URL(baseURL!).origin;
+    await signIn(page.request, origin, 'erkin', DEMO_PASSWORD);
+    const before = await policy(page.request);
+    try {
+      await page.goto('/app/org/settings');
+      const main = page.locator('main');
+      const repeat = main.getByRole('switch', { name: /Повторять при просрочке/ });
+      const timezone = main.getByLabel('Часовой пояс');
+      const role = main.getByLabel('Роль по умолчанию для новых сотрудников');
+      const save = main.getByRole('button', { name: 'Сохранить настройки' });
+      await expect(repeat).toBeChecked({ checked: before.overdueRepeat });
+
+      // Пока форма открыта, настройки меняет другой пользователь.
+      await patchPolicy(page.request, origin, { overdueRepeat: !before.overdueRepeat });
+      await timezone.selectOption('Asia/Almaty');
+      await save.click();
+      await expect(main.getByText('Запись изменена другим пользователем')).toBeVisible();
+      await expect(save).toBeDisabled();
+      expect((await policy(page.request)).timezone).toBe(before.timezone);
+      await main.getByRole('button', { name: 'Перечитать' }).click();
+      await expect(main.getByText('Запись изменена другим пользователем')).toHaveCount(0);
+      await expect(repeat).toBeChecked({ checked: !before.overdueRepeat });
+      await expect(timezone).toHaveValue(before.timezone);
+
+      await timezone.selectOption('Asia/Almaty');
+      await role.selectOption({ label: 'Главный бухгалтер' });
+      await save.click();
+      await expect(
+        page.getByRole('status').filter({ hasText: 'Настройки сохранены' }),
+      ).toBeVisible();
+      expect(await policy(page.request)).toMatchObject({
+        timezone: 'Asia/Almaty',
+        defaultRoleName: 'Главный бухгалтер',
+      });
+    } finally {
+      await patchPolicy(page.request, origin, {
+        overdueRepeat: before.overdueRepeat,
+        timezone: before.timezone,
+        ...(before.defaultRoleId ? { defaultRoleId: before.defaultRoleId } : {}),
+      });
+    }
+  });
+
+  test('логотип PNG до 2 МБ: предпросмотр до сохранения, после «Сохранить» — у организации', async ({
+    page,
+    baseURL,
+  }) => {
+    const origin = new URL(baseURL!).origin;
+    await signIn(page.request, origin, 'erkin', DEMO_PASSWORD);
+    const removeLogo = async () => {
+      const current = (await (await page.request.get('/api/org')).json()) as {
+        version: number;
+        logo: unknown;
+      };
+      if (!current.logo) return;
+      const res = await page.request.delete(`/api/org/logo?version=${current.version}`, {
+        headers: { origin },
+      });
+      expect(res.status(), await res.text()).toBe(200);
+    };
+    await removeLogo();
+    try {
+      await page.goto('/app/org/main');
+      const main = page.locator('main');
+      await expect(main.locator('[data-org-logo]')).toHaveCount(0);
+      await main.getByLabel('Логотип').setInputFiles({
+        name: 'logo.png',
+        mimeType: 'image/png',
+        buffer: PNG,
+      });
+      // Предпросмотр — выбранный файл, ещё не сохранённый.
+      await expect(main.locator('[data-org-logo]')).toHaveAttribute('src', /^blob:/);
+      await main.getByRole('button', { name: 'Сохранить' }).click();
+      await expect(page.getByRole('status').filter({ hasText: 'Сохранено' })).toBeVisible();
+      // Картинку отдаёт хранилище по временной ссылке (в docker-e2e браузер до него не дотягивается,
+      // поэтому проверяется ссылка, а не то, что картинка открылась).
+      await expect(main.locator('[data-org-logo]')).not.toHaveAttribute('src', /^blob:/);
+      const profile = (await (await page.request.get('/api/org')).json()) as {
+        logo: { url: string } | null;
+      };
+      expect(profile.logo?.url).toBeTruthy();
+    } finally {
+      await removeLogo();
     }
   });
 });
