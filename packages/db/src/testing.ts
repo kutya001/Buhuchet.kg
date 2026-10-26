@@ -8,6 +8,7 @@ import { createDb, type Db, type DbHandle } from './client';
 import { ensureAppLoginRole, runMigrations } from './migrate';
 import { platformReference } from './schema';
 import { seedPermissions, seedRoleTemplates } from './seed/access';
+import { seedPlatformDicts } from './seed/platform-dicts';
 import { readSpecJson } from './spec-data';
 
 /**
@@ -96,4 +97,10 @@ export async function seedPhoneCodes(db: Db): Promise<void> {
     .insert(platformReference)
     .values({ key: 'phoneCodes', payload: refDB.phoneCodes, checksum: 'test', source: 'test' })
     .onConflictDoNothing();
+}
+
+/** Справочники платформы для контрагентов и отчётов из refDB.json (виды отчётов, режимы, УГНС, календарь…). */
+export async function seedPlatformDictionaries(db: Db): Promise<void> {
+  const refDB = await readSpecJson<Record<string, unknown>>('data/refDB.json');
+  await seedPlatformDicts(db, refDB, { update: false });
 }

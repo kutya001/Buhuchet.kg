@@ -3,14 +3,24 @@ import { sql } from 'drizzle-orm';
 import { withOrgContext } from './context';
 import { verifyPassword } from '@buhuchet/adapters/password';
 import { eq } from 'drizzle-orm';
-import { employees, gkedItems, organizations, platformReference, roles, users } from './schema';
+import {
+  employees,
+  gkedItems,
+  organizations,
+  platformReference,
+  reportTypes,
+  roles,
+  users,
+} from './schema';
 import {
   checksumOf,
   DEMO_ORG_ID,
   demoId,
+  referenceSections,
   seedAll,
   seedPermissions,
   seedPlatformReference,
+  TABLE_SECTIONS,
 } from './seed';
 import { readSpecJson } from './spec-data';
 import { createTestDatabase, databaseAvailable, type TestDatabase } from './testing';
@@ -39,18 +49,28 @@ describe.skipIf(!databaseAvailable())('начальное наполнение �
     const refDB = await readSpecJson<Record<string, unknown>>('data/refDB.json');
     const gked = await readSpecJson<{ items: unknown[] }>('data/gkedDB.json');
     const result = await seedAll(t.admin.db, { update: false, demo: true });
-    expect(result.platformReference.inserted).toBe(Object.keys(refDB).length);
+    expect(result.platformReference.inserted).toBe(Object.keys(referenceSections(refDB)).length);
+    expect(result.platformDicts.reportTypes.inserted).toBe((refDB.reportTypes as unknown[]).length);
     expect(result.gked.inserted).toBe(gked.items.length);
     expect(result.demo).toEqual({ orgId: DEMO_ORG_ID, created: true, employees: 7 });
     expect(result.permissions.inserted).toBe(39);
     expect(result.roleTemplates.inserted).toBe(2);
     expect(result.uiTexts.inserted).toBeGreaterThan(0);
 
-    const [reportTypes] = await t.admin.db
+    // Разделы со своими таблицами в platform_reference не копируются, у `dictionaries` остаются мелкие.
+    const keys = (await t.admin.db.select().from(platformReference)).map((r) => r.key);
+    for (const key of TABLE_SECTIONS) expect(keys).not.toContain(key);
+    const [dictionaries] = await t.admin.db
       .select()
       .from(platformReference)
-      .where(sql`${platformReference.key} = 'reportTypes'`);
-    expect(Array.isArray(reportTypes?.payload)).toBe(true);
+      .where(sql`${platformReference.key} = 'dictionaries'`);
+    expect(Object.keys(dictionaries!.payload as object).sort()).toEqual([
+      'banks',
+      'cats',
+      'forms',
+      'reasons',
+    ]);
+    expect(await t.admin.db.$count(reportTypes)).toBe((refDB.reportTypes as unknown[]).length);
     expect(
       await t.admin.db.$count(gkedItems, sql`${gkedItems.level} = 'subclass'`),
     ).toBeGreaterThan(0);
@@ -58,8 +78,9 @@ describe.skipIf(!databaseAvailable())('начальное наполнение �
 
   it('повторный запуск ничего не дублирует и не меняет', async () => {
     const result = await seedAll(t.admin.db, { update: true, demo: true });
-    expect(result.platformReference.inserted).toBe(0);
-    expect(result.platformReference.updated).toBe(0);
+    expect(result.platformReference).toMatchObject({ inserted: 0, updated: 0, removed: 0 });
+    for (const report of Object.values(result.platformDicts))
+      expect(report).toMatchObject({ inserted: 0, updated: 0 });
     expect(result.gked).toMatchObject({ inserted: 0, updated: 0 });
     expect(result.permissions).toEqual({ inserted: 0, updated: 0, unchanged: 39 });
     expect(result.roleTemplates).toEqual({ inserted: 0, updated: 0, unchanged: 2 });
@@ -68,17 +89,30 @@ describe.skipIf(!databaseAvailable())('начальное наполнение �
   });
 
   it('изменённый раздел обновляется только с --update и повышает версию', async () => {
-    const changed = { holidays: { '2026': ['2026-01-01'] } };
+    const changed = { taxRates: { nds: ['12 %'] } };
     const quiet = await seedPlatformReference(t.admin.db, changed, 'test', { update: false });
-    expect(quiet).toEqual({ inserted: 0, updated: 0, unchanged: 1 });
+    expect(quiet).toEqual({ inserted: 0, updated: 0, unchanged: 1, removed: 0 });
     const loud = await seedPlatformReference(t.admin.db, changed, 'test', { update: true });
     expect(loud.updated).toBe(1);
     const [row] = await t.admin.db
       .select()
       .from(platformReference)
-      .where(sql`${platformReference.key} = 'holidays'`);
+      .where(sql`${platformReference.key} = 'taxRates'`);
     expect(row?.version).toBe(2);
     expect(row?.source).toBe('test');
+  });
+
+  it('с --update удаляются копии разделов, переехавших в свои таблицы (наполнение этапа 0)', async () => {
+    await t.admin.db
+      .insert(platformReference)
+      .values({ key: 'reportTypes', payload: [], checksum: 'x', source: 'этап 0' });
+    const quiet = await seedPlatformReference(t.admin.db, {}, 'test', { update: false });
+    expect(quiet.removed).toBe(0);
+    const loud = await seedPlatformReference(t.admin.db, {}, 'test', { update: true });
+    expect(loud.removed).toBe(1);
+    expect(
+      await t.admin.db.$count(platformReference, sql`${platformReference.key} = 'reportTypes'`),
+    ).toBe(0);
   });
 
   it('справочники платформы читаются ролью приложения, демо-организация — только в своём контексте', async () => {

@@ -1,0 +1,121 @@
+import { addDays, isIsoDate, weekdayMondayFirst, type IsoDate } from '../common/dates';
+
+/**
+ * Производственный календарь КР (ТЗ «Справочники платформы» → «Производственный календарь»; прототип
+ * core/reference.js: holidayName, isWorking, shiftWork; admin/platform-dicts-edit.js: holidayRows).
+ * Запись календаря — день с названием:
+ * - `holiday` — праздник; ключ `MM-DD` — каждый год (государственный праздник по закону), `YYYY-MM-DD` —
+ *   только в этом году (плавающие Орозо айт и Курман айт);
+ * - `transfer` — нерабочий день по переносу Кабинета министров (только в этом году);
+ * - `workday` — перенесённая рабочая суббота (только в этом году).
+ */
+export const CALENDAR_DAY_KINDS = ['holiday', 'transfer', 'workday'] as const;
+export type CalendarDayKind = (typeof CALENDAR_DAY_KINDS)[number];
+
+export interface CalendarEntry {
+  /** `MM-DD` — каждый год, `YYYY-MM-DD` — только этот день. */
+  day: string;
+  kind: CalendarDayKind;
+  name: string;
+}
+
+/** День календаря конкретного года (вкладка «Календарь» и метод API). */
+export interface CalendarDay {
+  date: IsoDate;
+  kind: CalendarDayKind;
+  name: string;
+  /** Праздник повторяется каждый год (ключ `MM-DD`). */
+  everyYear: boolean;
+}
+
+const MONTH_DAY = /^(\d{2})-(\d{2})$/;
+
+/** Ключ записи календаря: `MM-DD` (существующий день, 29 февраля можно) или дата `YYYY-MM-DD`. */
+export function isCalendarDay(day: string): boolean {
+  const m = MONTH_DAY.exec(day);
+  return m ? isIsoDate(`2024-${day}`) : isIsoDate(day);
+}
+
+/** Запись повторяется каждый год. */
+export const isEveryYear = (day: string): boolean => MONTH_DAY.test(day);
+
+/**
+ * Что не так с записью календаря (для наполнения и будущей загрузки из Excel): ключ, вид и название.
+ * Каждый год повторяется только праздник; у рабочей субботы — суббота.
+ */
+export function calendarEntryProblem(entry: CalendarEntry): string | null {
+  if (!isCalendarDay(entry.day)) return `«${entry.day}» — не дата`;
+  if (!CALENDAR_DAY_KINDS.includes(entry.kind)) return `«${entry.kind}» — неизвестный вид дня`;
+  if (isEveryYear(entry.day) && entry.kind !== 'holiday')
+    return `${entry.day}: каждый год повторяется только праздник`;
+  if (entry.kind === 'workday' && weekdayMondayFirst(entry.day) !== 5)
+    return `${entry.day}: рабочая суббота — не суббота`;
+  if (entry.kind !== 'workday' && !entry.name.trim()) return `${entry.day}: нет названия`;
+  return null;
+}
+
+/**
+ * Вид дня по записи прототипа: рабочая суббота — из списка `workingSaturdays`, перенос — название
+ * начинается с «Перенос» (прототип holidayRows), остальное — праздник.
+ */
+export function calendarKindOf(name: string, workingSaturday: boolean): CalendarDayKind {
+  if (workingSaturday) return 'workday';
+  return /^Перенос/.test(name) ? 'transfer' : 'holiday';
+}
+
+export interface ProductionCalendar {
+  /** Нерабочие дни: ключ `MM-DD` или `YYYY-MM-DD` → название. */
+  readonly offDays: ReadonlyMap<string, string>;
+  readonly workingSaturdays: ReadonlySet<IsoDate>;
+}
+
+export function productionCalendar(entries: readonly CalendarEntry[]): ProductionCalendar {
+  const offDays = new Map<string, string>();
+  const workingSaturdays = new Set<IsoDate>();
+  for (const e of entries) {
+    if (e.kind === 'workday') workingSaturdays.add(e.day);
+    else offDays.set(e.day, e.name);
+  }
+  return { offDays, workingSaturdays };
+}
+
+/** Название праздника или переноса; дата года важнее праздника «каждый год». Рабочий день — ''. */
+export function holidayName(calendar: ProductionCalendar, date: IsoDate): string {
+  return calendar.offDays.get(date) ?? calendar.offDays.get(date.slice(5)) ?? '';
+}
+
+/**
+ * Рабочий ли день: рабочая суббота — рабочий; суббота и воскресенье — нет; праздник и перенос — нет.
+ */
+export function isWorkingDay(calendar: ProductionCalendar, date: IsoDate): boolean {
+  if (calendar.workingSaturdays.has(date)) return true;
+  if (weekdayMondayFirst(date) >= 5) return false;
+  return !holidayName(calendar, date);
+}
+
+/** Сколько дней подряд срок может сдвигаться: как в прототипе (shiftWork), нерабочих дней больше не бывает. */
+const MAX_SHIFT_DAYS = 20;
+
+/**
+ * Срок на нерабочем дне сдвигается на следующий день и так далее, пока не попадёт на рабочий день по
+ * календарю; правило «суббота → понедельник» не используется, рабочая суббота — рабочий день (ТЗ).
+ */
+export function nextWorkingDay(calendar: ProductionCalendar, date: IsoDate): IsoDate {
+  let day = date;
+  for (let n = 0; n < MAX_SHIFT_DAYS && !isWorkingDay(calendar, day); n++) day = addDays(day, 1);
+  return day;
+}
+
+/** Дни календаря года по дате: праздники «каждый год» на этот год и записи этого года. */
+export function calendarYear(entries: readonly CalendarEntry[], year: number): CalendarDay[] {
+  const y = String(year).padStart(4, '0');
+  return entries
+    .flatMap((e): CalendarDay[] => {
+      const everyYear = isEveryYear(e.day);
+      const date = everyYear ? `${y}-${e.day}` : e.day;
+      // 29 февраля «каждый год» в невисокосном году не наступает.
+      if (!date.startsWith(`${y}-`) || !isIsoDate(date)) return [];
+      return [{ date, kind: e.kind, name: e.name, everyYear }];
+    })
+    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.kind < b.kind ? -1 : 1));
+}

@@ -1,8 +1,9 @@
-import { sql } from 'drizzle-orm';
+import { inArray, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Db } from '../client';
 import { GKED_LEVELS, gkedItems, platformReference } from '../schema';
 import { checksumOf } from './checksum';
+import { TABLE_DICTIONARIES, TABLE_SECTIONS } from './platform-dicts';
 
 export interface SeedOptions {
   /** true — обновить изменившиеся записи; false — только добавить недостающие. */
@@ -13,9 +14,37 @@ export interface SeedReport {
   inserted: number;
   updated: number;
   unchanged: number;
+  /** Удалённые строки (копии разделов, переехавших в свои таблицы). */
+  removed?: number;
 }
 
-/** Разделы refDB.json → platform_reference (раздел = строка). */
+/**
+ * Мелкие разделы refDB.json, которые остаются в platform_reference: без разделов со своими таблицами
+ * (`TABLE_SECTIONS`), у `dictionaries` — без справочников со своими таблицами (`TABLE_DICTIONARIES`).
+ */
+export function referenceSections(refDB: Record<string, unknown>): Record<string, unknown> {
+  const tableSections = new Set<string>(TABLE_SECTIONS);
+  const tableDictionaries = new Set<string>(TABLE_DICTIONARIES);
+  return Object.fromEntries(
+    Object.entries(refDB)
+      .filter(([key]) => !tableSections.has(key))
+      .map(([key, payload]) =>
+        key === 'dictionaries' && payload && typeof payload === 'object'
+          ? [
+              key,
+              Object.fromEntries(
+                Object.entries(payload).filter(([k]) => !tableDictionaries.has(k)),
+              ),
+            ]
+          : [key, payload],
+      ),
+  );
+}
+
+/**
+ * Мелкие разделы refDB.json → platform_reference (раздел = строка). С `update` удаляются и копии
+ * разделов, которые теперь лежат в своих таблицах.
+ */
 export async function seedPlatformReference(
   db: Db,
   refDB: Record<string, unknown>,
@@ -29,8 +58,15 @@ export async function seedPlatformReference(
         .from(platformReference)
     ).map((r) => [r.key, r.checksum]),
   );
-  const report: SeedReport = { inserted: 0, updated: 0, unchanged: 0 };
-  for (const [key, payload] of Object.entries(refDB)) {
+  const report: SeedReport = { inserted: 0, updated: 0, unchanged: 0, removed: 0 };
+  if (options.update) {
+    const stale = await db
+      .delete(platformReference)
+      .where(inArray(platformReference.key, [...TABLE_SECTIONS]))
+      .returning({ key: platformReference.key });
+    report.removed = stale.length;
+  }
+  for (const [key, payload] of Object.entries(referenceSections(refDB))) {
     const checksum = checksumOf(payload);
     const current = existing.get(key);
     if (current === undefined) {

@@ -1,11 +1,36 @@
 import type { ApiDeps } from '../../deps';
 import { createModuleApp } from '../../module';
+import {
+  authoritiesHandler,
+  authoritiesRoute,
+  productionCalendarHandler,
+  productionCalendarRoute,
+  reportBasesHandler,
+  reportBasesRoute,
+  reportTypesHandler,
+  reportTypesRoute,
+  taxBenefitsHandler,
+  taxBenefitsRoute,
+  taxOfficesHandler,
+  taxOfficesRoute,
+  taxRegimesHandler,
+  taxRegimesRoute,
+} from './dicts';
 import { phoneCodesHandler, phoneCodesRoute } from './phone-codes';
 
 /**
- * Справочники платформы для экранов организаций (только чтение): коды телефонов. Правка справочников —
+ * Справочники платформы для экранов организаций (только чтение): коды телефонов, виды отчётов, режимы,
+ * льготы и статусы, основания, УГНС, органы, производственный календарь. Правка справочников —
  * Админка → «Справочники платформы» (поток Д).
  */
 export function platformDictsModule(deps: ApiDeps) {
-  return createModuleApp().openapi(phoneCodesRoute, phoneCodesHandler(deps));
+  return createModuleApp()
+    .openapi(phoneCodesRoute, phoneCodesHandler(deps))
+    .openapi(reportTypesRoute, reportTypesHandler(deps))
+    .openapi(taxRegimesRoute, taxRegimesHandler(deps))
+    .openapi(taxBenefitsRoute, taxBenefitsHandler(deps))
+    .openapi(reportBasesRoute, reportBasesHandler(deps))
+    .openapi(taxOfficesRoute, taxOfficesHandler(deps))
+    .openapi(authoritiesRoute, authoritiesHandler(deps))
+    .openapi(productionCalendarRoute, productionCalendarHandler(deps));
 }
