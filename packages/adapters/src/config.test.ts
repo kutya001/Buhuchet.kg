@@ -119,6 +119,15 @@ describe('loadConfig', () => {
         TELEGRAM_BOT_USERNAME: 't.me/buhuchet_bot',
       }),
     ).toThrow(/имя бота/);
+    // Секрет вебхука — только символы, которые принимает Telegram.
+    expect(() =>
+      loadConfig({
+        ...base,
+        TELEGRAM_BOT_TOKEN: '1:abc',
+        TELEGRAM_WEBHOOK_SECRET: 'секрет с пробелами и знаками!',
+        TELEGRAM_BOT_USERNAME: 'buhuchet_bot',
+      }),
+    ).toThrow(/секрет вебхука/);
   });
 
   it('S3_FORCE_PATH_STYLE понимает false и 0, регистр и пробелы не важны', () => {

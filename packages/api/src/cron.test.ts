@@ -1,12 +1,18 @@
 import { Writable } from 'node:stream';
-import { createLogger, fixedClock } from '@buhuchet/adapters';
+import { createFakeTelegram, createLogger, fixedClock } from '@buhuchet/adapters';
 import { schema } from '@buhuchet/db';
 import { createTestDatabase, databaseAvailable, type TestDatabase } from '@buhuchet/db/testing';
 import { ApiError, CronTickResponse } from '@buhuchet/shared';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createApp } from './app';
 import type { Job } from './deps';
-import { cleanupLoginAttemptsJob, cleanupSchedulerRuns, jobs } from './jobs/registry';
+import {
+  cleanupLoginAttemptsJob,
+  cleanupSchedulerRuns,
+  jobs,
+  jobsFor,
+  telegramWebhookJob,
+} from './jobs/registry';
 import { createTestDeps } from './testing';
 
 const SECRET = 'test-cron-secret-0000';
@@ -36,6 +42,31 @@ describe('/api/cron/tick без базы', () => {
     expect(jobs.map((j) => j.name)).toEqual(
       expect.arrayContaining(['system.cleanup-scheduler-runs', 'auth.cleanup-login-attempts']),
     );
+  });
+
+  it('вебхук бота сайт сообщает сам — только если бот задан и адрес сайта по https', async () => {
+    const bot = {
+      TELEGRAM_BOT_TOKEN: '1:abc',
+      TELEGRAM_WEBHOOK_SECRET: 'webhook-secret-0000',
+    };
+    const names = (list: readonly Job[]) => list.map((j) => j.name);
+    expect(names(jobsFor({ APP_BASE_URL: 'https://test.buhuchet.kg' }))).toEqual(names(jobs));
+    expect(names(jobsFor({ APP_BASE_URL: 'http://localhost:3000', ...bot }))).toEqual(names(jobs));
+    const withBot = jobsFor({ APP_BASE_URL: 'https://test.buhuchet.kg/', ...bot });
+    expect(names(withBot)).toEqual([...names(jobs), 'telegram.register-webhook']);
+
+    const telegram = createFakeTelegram();
+    await withBot.at(-1)!.run(createTestDeps({ telegram }), new Date());
+    expect(telegram.webhook).toEqual({
+      url: 'https://test.buhuchet.kg/api/telegram/webhook',
+      secretToken: 'webhook-secret-0000',
+    });
+    // Без бота задача ничего не делает.
+    const job = telegramWebhookJob({
+      url: 'https://x.example/api/telegram/webhook',
+      secretToken: 's',
+    });
+    await expect(job.run(createTestDeps({ telegram: null }), new Date())).resolves.toBeUndefined();
   });
 });
 

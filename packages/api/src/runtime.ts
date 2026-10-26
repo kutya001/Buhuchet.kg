@@ -8,7 +8,7 @@ import {
 } from '@buhuchet/adapters';
 import { createDb } from '@buhuchet/db';
 import type { ApiDeps } from './deps';
-import { jobs } from './jobs/registry';
+import { jobsFor } from './jobs/registry';
 
 export interface Runtime {
   config: AppConfig;
@@ -40,7 +40,7 @@ export function createRuntime(
     telegram: config.TELEGRAM_BOT_TOKEN
       ? createTelegramBotApi({ token: config.TELEGRAM_BOT_TOKEN })
       : null,
-    jobs,
+    jobs: jobsFor(config),
   };
   return { config, deps, close: () => database.close() };
 }
