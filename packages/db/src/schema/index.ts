@@ -10,3 +10,4 @@ export * from './auth';
 export * from './telegram';
 export * from './l10n';
 export * from './views';
+export * from './status';

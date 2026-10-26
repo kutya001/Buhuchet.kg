@@ -4,6 +4,7 @@ export * from './client';
 export * from './context';
 export * from './errors';
 export * from './history';
+export * from './status';
 export * from './auth';
 export * from './telegram';
 export * from './staff';

@@ -229,7 +229,7 @@ export function Note({
 }
 
 const PILL_TONES = {
-  plain: 'bg-sel text-muted',
+  plain: 'bg-label-bg text-label',
   ok: 'bg-ok-bg text-ok',
   bad: 'bg-danger-bg text-danger-label',
   caution: 'bg-caution-bg text-caution-label',
@@ -239,6 +239,11 @@ const PILL_SIZES = {
   md: 'py-px pr-[9px] pl-[7px] text-[12px] leading-5',
   sm: 'py-0 pr-[7px] pl-[6px] text-[11px] leading-[17px]',
 } as const;
+
+/** Форма и размер метки (`.pill`, `.pill.sm`) — общие у `Pill` и метки статуса. */
+export function pillClass(size: keyof typeof PILL_SIZES = 'md'): string {
+  return `inline-flex items-center gap-[5px] rounded-full align-middle font-semibold whitespace-nowrap ${PILL_SIZES[size]}`;
+}
 
 /**
  * Метка (`.pill`): «Привязан», «Основной»; `caution` — оранжевая (`.pill.orange`, «не привязан»);
@@ -256,10 +261,7 @@ export function Pill({
   children: ReactNode;
 }) {
   return (
-    <span
-      data-pill
-      className={`inline-flex items-center gap-[5px] rounded-full align-middle font-semibold whitespace-nowrap ${PILL_SIZES[size]} ${PILL_TONES[tone]}`}
-    >
+    <span data-pill className={`${pillClass(size)} ${PILL_TONES[tone]}`}>
       {icon ? <Icon name={icon} size="sm" /> : null}
       {children}
     </span>

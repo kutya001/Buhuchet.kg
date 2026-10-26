@@ -141,6 +141,20 @@
       "when": 1793006993273,
       "tag": "0019_list_natural_collation",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1793024505654,
+      "tag": "0020_status_history",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1793024513345,
+      "tag": "0021_status_history_append_only",
+      "breakpoints": true
     }
   ]
 }

@@ -23,6 +23,7 @@
   - создание, удаление и прочие действия — `writeHistory(tx, { entity, entityId, action, changes?, reason? })`; сама запись при этом не меняется;
   - организация, автор и время ставит база из контекста `withOrgContext`, подменить их политика не даёт; без пользователя — «Система»; значения секретных полей (`isSecretField`: хеш пароля, `*Hash`, `*Token`, `*Secret`, плюс `secretFields`) не пишутся;
   - записи истории роль приложения не меняет и не удаляет (нет прав UPDATE и DELETE); новые виды записей и действия — в `HISTORY_ENTITIES` и `HISTORY_ACTIONS` из `@buhuchet/domain`.
+- «История статусов» — своя таблица `status_history` (`src/status.ts`, docs/decisions.md, п. 33): смена статуса — `writeStatusChange(tx, { scale, entityId, from, to, reason?, rollback? })` в той же транзакции, что меняет статус записи; чтение — `readStatusHistory(tx, scale, entityId)` (сначала старые, автор — краткое ФИО или «Система»). Организация, автор и время — из контекста, записи только добавляются; коды статусов каждой шкалы проверяет ограничение `status_history_status_check` (из `STATUS_SCALE_DEFS` домена) — новый код статуса требует миграции.
 
 ## Наполнение
 - `pnpm db:seed` — справочники платформы из `spec/data/refDB.json`, ГКЭД из `spec/data/gkedDB.json`, демо-организация из `spec/data/demoDB.json` (не на рабочем сайте). По умолчанию только добавляет недостающее; `--update` обновляет изменившиеся разделы (локально и на стенде после `pnpm spec:sync`).

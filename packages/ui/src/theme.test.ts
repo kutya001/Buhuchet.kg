@@ -39,7 +39,16 @@ function vars(block: string, prefix: string): Map<string, string> {
  * Цвета, которых нет в прототипе (docs/deviations.md, п. 26): опасная кнопка и красный счётчик, текст
  * цветных меток и заметок.
  */
-const PRODUCT_ONLY = ['danger-btn', 'red-label', 'orange-label', 'yellow-label'];
+const PRODUCT_ONLY = [
+  'danger-btn',
+  'red-label',
+  'orange-label',
+  'yellow-label',
+  'label',
+  'label-bg',
+  'faint-pill-bg',
+  ...['green', 'blue', 'yellow', 'orange', 'purple', 'gray', 'faint'].map((c) => `${c}-btn`),
+];
 
 const light = vars(blockAfter(theme, ':root {'), 'bu-');
 const dark = vars(blockAfter(theme, ":root[data-theme='dark'] {"), 'bu-');
@@ -124,6 +133,18 @@ describe('тема оформления', () => {
     expect(contrast(dark.get('on-accent')!, dark.get('danger-btn')!)).toBeGreaterThanOrEqual(4.5);
   });
 
+  it('надпись на цветной кнопке («Выполнено», «Подтвердить») и номер текущего шага шкалы статусов: не ниже 4,5 : 1', () => {
+    for (const color of ['green', 'blue', 'yellow', 'orange', 'purple', 'gray', 'faint']) {
+      for (const [name, theme] of [
+        ['светлая', light],
+        ['тёмная', dark],
+      ] as const) {
+        const ratio = contrast(theme.get('on-accent')!, theme.get(`${color}-btn`)!);
+        expect([name, color, ratio >= 4.5]).toEqual([name, color, true]);
+      }
+    }
+  });
+
   it('цветные метки и заметки читаются на карточке и под наведением строки: не ниже 4,5 : 1', () => {
     // Метка: текст `--X-label` на подложке `--X-bg`, подложка — поверх карточки списка (`--raised`) или
     // строки под указателем (`--row-hover` поверх `--raised`). Красная — «Заблокирован», зелёная —
@@ -133,6 +154,8 @@ describe('тема оформления', () => {
       ['green', 'green-bg'],
       ['orange-label', 'orange-bg'],
       ['yellow-label', 'yellow-bg'],
+      ['label', 'label-bg'],
+      ['label', 'faint-pill-bg'],
     ] as const;
     for (const [name, theme] of [
       ['светлая', light],
@@ -146,6 +169,36 @@ describe('тема оформления', () => {
           const back = rgbLuminance(over(theme.get(bg)!, base));
           const ratio = (Math.max(fg, back) + 0.05) / (Math.min(fg, back) + 0.05);
           expect([name, text, surface, ratio >= 4.5]).toEqual([name, text, surface, true]);
+        }
+      }
+    }
+  });
+
+  it('метки статусов в карточке записи и «Истории статусов» читаются: не ниже 4,5 : 1', () => {
+    // Все цвета справочника «Статусы» на карточке и на рабочей области (без наведения: строки
+    // истории не подсвечиваются): серые и бледные — `--label`, текущий серый шаг — на `--btn`.
+    const pairs = [
+      ['blue', 'blue-bg'],
+      ['purple', 'purple-bg'],
+      ['green', 'green-bg'],
+      ['yellow-label', 'yellow-bg'],
+      ['orange-label', 'orange-bg'],
+      ['red-label', 'red-bg'],
+      ['label', 'label-bg'],
+      ['label', 'faint-pill-bg'],
+      ['label', 'btn'],
+    ] as const;
+    for (const [name, theme] of [
+      ['светлая', light],
+      ['тёмная', dark],
+    ] as const) {
+      for (const surface of ['raised', 'pane'] as const) {
+        const base = rgba(theme.get(surface)!).rgb;
+        for (const [text, bg] of pairs) {
+          const fg = rgbLuminance(rgba(theme.get(text)!).rgb);
+          const back = rgbLuminance(over(theme.get(bg)!, base));
+          const ratio = (Math.max(fg, back) + 0.05) / (Math.min(fg, back) + 0.05);
+          expect([name, text, bg, surface, ratio >= 4.5]).toEqual([name, text, bg, surface, true]);
         }
       }
     }

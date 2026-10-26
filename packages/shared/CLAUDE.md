@@ -5,3 +5,4 @@
 - Раскладка по модулям ТЗ: `src/<модуль>.ts`; общие кирпичи (даты, деньги, идентификаторы) — в `src/common.ts`.
 - Тексты ошибок для людей не пишем в схеме: интерфейс берёт их из словаря по коду ошибки.
 - Списки — `src/list.ts`: параметры запроса `ListQueryParams` (`sort=<столбец>.asc|desc|none`, `page`, `size=25|50|100|all`, `filters` — JSON, `q` + `qcols` — поиск по видимым столбцам, `group=a,b`, `agg` — JSON итогов групп), `parseListQuery` и обратно `listQueryParams`, страница ответа `listPageSchema` (с `groups` и `rowGroups`), значения столбца `ListValuesQuery` / `ListValues`, выгрузка `ListExportParams` (+ `cols`), настройки вида `ViewSettings` (с группировкой, итогами и «Статистикой»).
+- Статусы — `src/status.ts`: шкала `StatusScaleKey`, код `StatusCode`, запись истории в ответе API `StatusHistoryEntry`, тело отката `StatusRollback` (причина обязательна, до 500 символов). Методы смены статуса и отката — у модулей.
