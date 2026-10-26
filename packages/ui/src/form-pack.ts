@@ -113,6 +113,7 @@ export interface KvInfo {
  * Карточка просмотра: значения идут по порядку, два подряд коротких (каждая строка помещается в
  * половину) встают в одну строку, длинное — на всю ширину.
  */
+// ОТКЛОНЕНИЕ: docs/deviations.md#29 — как kvShort прототипа: телефон меряется по ширине значения.
 export function packKvItems(items: readonly KvInfo[], column: number): PackPlace[] {
   const short = (item: KvInfo) => !item.block && item.lineWidths.every((w) => w <= column);
   const places: PackPlace[] = items.map(() => 'full');

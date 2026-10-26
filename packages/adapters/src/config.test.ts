@@ -192,6 +192,14 @@ describe('loadConfig', () => {
     expect(() => loadConfig({ ...stand, ...bot, TELEGRAM_WEBHOOK_SECRET: secret })).toThrow(
       /TELEGRAM_BOT_USERNAME/,
     );
+    expect(() =>
+      loadConfig({
+        ...stand,
+        ...bot,
+        TELEGRAM_WEBHOOK_SECRET: secret,
+        TELEGRAM_BOT_USERNAME: 'Buhuchet_Local_Bot',
+      }),
+    ).toThrow(/TELEGRAM_BOT_USERNAME/);
   });
 
   it('S3_FORCE_PATH_STYLE понимает false и 0, регистр и пробелы не важны', () => {

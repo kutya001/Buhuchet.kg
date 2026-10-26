@@ -83,6 +83,19 @@ describe('схемы входа', () => {
       }).success,
     ).toBe(true);
     expect(TelegramLinkResponse.safeParse({ url: 'abc', expiresAt: 'завтра' }).success).toBe(false);
+    // Экран вставляет ссылку в href: только https://t.me без логина и порта.
+    for (const url of [
+      'javascript:alert(1)',
+      'http://t.me/buhuchet_bot?start=abc',
+      'https://t.me.evil.example/buhuchet_bot',
+      'https://evil.example@t.me/buhuchet_bot',
+      'https://t.me:8443/buhuchet_bot',
+    ]) {
+      expect(
+        TelegramLinkResponse.safeParse({ url, expiresAt: '2026-10-18T03:15:00.000Z' }).success,
+        url,
+      ).toBe(false);
+    }
   });
 });
 

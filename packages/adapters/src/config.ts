@@ -149,8 +149,9 @@ const AppEnv = z
           message: 'на стенде и рабочем сайте бот говорит только с api.telegram.org — не задаётся',
         });
       }
-      // Имя бота из примера может занять кто угодно: ссылка привязки с токеном ушла бы чужому боту.
-      if (env.TELEGRAM_BOT_USERNAME === EXAMPLE_BOT_USERNAME) {
+      // Имя бота из примера может занять кто угодно: ссылка привязки с токеном ушла бы чужому боту
+      // (регистр в именах Telegram не важен).
+      if (env.TELEGRAM_BOT_USERNAME?.toLowerCase() === EXAMPLE_BOT_USERNAME) {
         ctx.addIssue({
           code: 'custom',
           path: ['TELEGRAM_BOT_USERNAME'],
