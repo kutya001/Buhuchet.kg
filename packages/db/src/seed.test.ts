@@ -85,7 +85,29 @@ describe.skipIf(!databaseAvailable())('начальное наполнение �
     const own = await withOrgContext(t.app.db, { orgId: DEMO_ORG_ID }, (tx) =>
       tx.select().from(organizations),
     );
-    expect(own[0]?.slug).toBe('buhgalter-plyus');
+    expect(own[0]).toMatchObject({
+      slug: 'buhgalter-plyus',
+      address: 'г. Бишкек, ул. Киевская, 95, офис 12',
+      phone: '+996312901234',
+      head: 'Садыков Эркин Маратович',
+      createdAt: new Date('2025-02-13T18:00:00Z'),
+    });
+  });
+
+  it('--update досоздаёт пустые поля профиля демо-организации и не трогает изменённые', async () => {
+    await t.admin.db
+      .update(organizations)
+      .set({ address: null, head: 'Новый руководитель' })
+      .where(eq(organizations.id, DEMO_ORG_ID));
+    await seedAll(t.admin.db, { update: true, demo: true });
+    const [org] = await t.admin.db
+      .select()
+      .from(organizations)
+      .where(eq(organizations.id, DEMO_ORG_ID));
+    expect(org).toMatchObject({
+      address: 'г. Бишкек, ул. Киевская, 95, офис 12',
+      head: 'Новый руководитель',
+    });
   });
 
   it('демо-сотрудники: роли из demoDB.json, вход паролем DEMO_PASSWORD только после --update с паролем', async () => {

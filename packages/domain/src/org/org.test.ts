@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { isValidOrgInn } from './inn';
 import { defaultOrgPolicy } from './policy';
-import { slugFree, slugOf } from './slug';
+import { LOGO_MAX_BYTES, logoImageType, logoProblem } from './profile';
+import { RESERVED_SLUGS, slugFree, slugOf, slugProblem } from './slug';
 
 describe('defaultOrgPolicy — как TemDB.json прототипа', () => {
   it('включены задачи, календарь, Telegram и файлы, остальное выключено', () => {
@@ -24,6 +25,7 @@ describe('defaultOrgPolicy — как TemDB.json прототипа', () => {
       taskConfirm: true,
       reportConfirm: true,
       payBeforeSubmit: true,
+      pageSections: ['pay', 'reports', 'money', 'fee', 'kpi', 'contacts'],
     });
   });
 
@@ -56,6 +58,52 @@ describe('slugOf и slugFree — как в прототипе', () => {
     expect(slugFree('ab', [])).toBe('ab-org');
     expect(slugFree('', ['org'])).toBe('org-2');
     expect(slugFree('a'.repeat(30), ['a'.repeat(30)])).toBe(`${'a'.repeat(28)}-2`);
+  });
+
+  it('занятые слова программы не предлагаются', () => {
+    expect(slugFree('demo', [])).toBe('demo-2');
+    expect(slugFree('admin', ['admin-2'])).toBe('admin-3');
+  });
+});
+
+describe('slugProblem — адрес страницы организации (прототип v58, slugErr)', () => {
+  it('формат: 3–30 символов, строчные латинские буквы, цифры и дефис', () => {
+    expect(slugProblem('ahti')).toBeNull();
+    expect(slugProblem('buhgalter-plyus-2')).toBeNull();
+    expect(slugProblem('ab')).toBe('slug_invalid');
+    expect(slugProblem('Ahti')).toBe('slug_invalid');
+    expect(slugProblem('ахти')).toBe('slug_invalid');
+    expect(slugProblem('a'.repeat(31))).toBe('slug_invalid');
+  });
+
+  it('занятые слова — «Этот адрес занят, выберите другой»', () => {
+    expect(slugProblem('admin')).toBe('slug_reserved');
+    expect(slugProblem('buhuchet')).toBe('slug_reserved');
+    expect(RESERVED_SLUGS).toHaveLength(25);
+    for (const word of RESERVED_SLUGS) expect(slugProblem(word), word).toBe('slug_reserved');
+  });
+});
+
+describe('логотип', () => {
+  const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00]);
+  const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00]);
+  const svg = new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg"><script/></svg>');
+
+  it('тип — по первым байтам: PNG или JPG', () => {
+    expect(logoImageType(png)).toBe('image/png');
+    expect(logoImageType(jpeg)).toBe('image/jpeg');
+    expect(logoImageType(svg)).toBeNull();
+    expect(logoImageType(new Uint8Array([0x89, 0x50]))).toBeNull();
+  });
+
+  it('не больше 2 МБ', () => {
+    const big = new Uint8Array(LOGO_MAX_BYTES + 1);
+    big.set(png);
+    expect(logoProblem(big)).toBe('logo_too_large');
+    const max = new Uint8Array(LOGO_MAX_BYTES);
+    max.set(png);
+    expect(logoProblem(max)).toBeNull();
+    expect(logoProblem(svg)).toBe('logo_type');
   });
 });
 

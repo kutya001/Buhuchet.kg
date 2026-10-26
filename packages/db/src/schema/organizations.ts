@@ -1,9 +1,13 @@
 import { sql } from 'drizzle-orm';
-import { boolean, check, pgTable, text, uuid } from 'drizzle-orm/pg-core';
+import { boolean, check, pgTable, text, uuid, type AnyPgColumn } from 'drizzle-orm/pg-core';
 import { recordVersion, timestamps } from './columns';
 import { orgIsolation } from './rls';
+import { users } from './users';
 
-/** Организации (тенанты). Поля профиля добавляются модулем «Моя организация» (этап 1). */
+/**
+ * Организации (тенанты) и их «Основное» в модуле «Моя организация». Роль приложения меняет только поля
+ * профиля (права на столбцы, миграция 0015); статус и блокировку ведёт администратор платформы.
+ */
 export const organizations = pgTable(
   'organizations',
   {
@@ -13,6 +17,13 @@ export const organizations = pgTable(
     name: text('name').notNull(),
     /** 14 цифр; второй организации с таким ИНН быть не может. */
     inn: text('inn').unique(),
+    address: text('address'),
+    /** «+», код страны и цифры, как телефон сотрудника. */
+    phone: text('phone'),
+    /** Руководитель. */
+    head: text('head'),
+    /** Ключ логотипа в хранилище: org/<org_id>/logo/<id>; картинку отдаёт GET /api/org/logo. */
+    logoKey: text('logo_key'),
     isDemo: boolean('is_demo').notNull().default(false),
     /**
      * active или blocked: заблокированную организацию (например, за неоплату) сотрудники не входят,
@@ -22,6 +33,9 @@ export const organizations = pgTable(
      */
     status: text('status').notNull().default('active'),
     blockedReason: text('blocked_reason'),
+    // Ссылки по кругу (users ссылается на organizations) — тип столбца задан явно.
+    createdBy: uuid('created_by').references((): AnyPgColumn => users.id),
+    updatedBy: uuid('updated_by').references((): AnyPgColumn => users.id),
     ...timestamps(),
     version: recordVersion(),
   },

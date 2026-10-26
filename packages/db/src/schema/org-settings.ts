@@ -39,6 +39,11 @@ export const orgSettings = pgTable(
     taskConfirm: boolean('task_confirm').notNull().default(true),
     reportConfirm: boolean('report_confirm').notNull().default(true),
     payBeforeSubmit: boolean('pay_before_submit').notNull().default(true),
+    /** Разделы страницы контрагента по ссылке (`PAGE_SECTIONS` из @buhuchet/domain), по порядку. */
+    pageSections: text('page_sections')
+      .array()
+      .notNull()
+      .default(sql`'{pay,reports,money,fee,kpi,contacts}'`),
     createdBy: uuid('created_by').references(() => users.id),
     updatedBy: uuid('updated_by').references(() => users.id),
     ...timestamps(),

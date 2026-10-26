@@ -9,6 +9,8 @@ import { sessionGuard } from './middleware/session';
 import { createModuleApp } from './module';
 import { adminModule } from './modules/admin';
 import { authModule } from './modules/auth';
+import { orgModule } from './modules/org';
+import { LOGO_PATH } from './modules/org/logo';
 import { rolesModule } from './modules/roles';
 import { staffModule } from './modules/staff';
 import { systemModule } from './modules/system';
@@ -16,9 +18,12 @@ import { telegramModule } from './modules/telegram';
 
 /**
  * Предел тела запроса API: формы и списки — килобайты; файлы идут в хранилище по подписанной ссылке,
- * мимо API. Метод, которому нужно больше, задаёт свой предел.
+ * мимо API. Исключение — пути из `OWN_BODY_LIMIT_PATHS`: их метод задаёт свой предел сам.
  */
 const API_BODY_LIMIT = 1024 * 1024;
+
+/** Логотип организации (до 2 МБ) идёт через API: сервер проверяет, что это картинка, до сохранения. */
+const OWN_BODY_LIMIT_PATHS: ReadonlySet<string> = new Set([LOGO_PATH]);
 
 /** Приложение API. Монтируется по пути /api (Next.js catch-all или отдельный сервер). */
 export function createApp(deps: ApiDeps) {
@@ -46,12 +51,12 @@ export function createApp(deps: ApiDeps) {
 
   // Общий слой для всех методов: сначала Origin изменяющих запросов, потом сеанс, организация и
   // права сотрудника; право конкретного метода — requirePermission в его createRoute.
-  app.use(
-    '*',
-    bodyLimit({
-      maxSize: API_BODY_LIMIT,
-      onError: (c) => c.json(apiError('payload_too_large', 'Слишком большой запрос'), 413),
-    }),
+  const apiBodyLimit = bodyLimit({
+    maxSize: API_BODY_LIMIT,
+    onError: (c) => c.json(apiError('payload_too_large', 'Слишком большой запрос'), 413),
+  });
+  app.use('*', (c, next) =>
+    OWN_BODY_LIMIT_PATHS.has(c.req.path) ? next() : apiBodyLimit(c, next),
   );
   app.use('*', originCheck(deps));
   app.use('*', sessionGuard(deps));
@@ -63,6 +68,7 @@ export function createApp(deps: ApiDeps) {
     .route('/', telegramModule(deps))
     .route('/', staffModule(deps))
     .route('/', rolesModule(deps))
+    .route('/', orgModule(deps))
     .route('/', adminModule(deps));
 
   app.doc31('/openapi.json', {

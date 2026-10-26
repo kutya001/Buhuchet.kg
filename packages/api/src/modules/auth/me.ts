@@ -2,12 +2,20 @@ import { createRoute, type RouteHandler } from '@hono/zod-openapi';
 import {
   currentOrganization,
   loadEmployeeAccess,
+  orgFeatures,
   telegramChat,
   withOrgContext,
   type EmployeeAccess,
   type TelegramChat,
 } from '@buhuchet/db';
-import { effectivePermissions, SCOPE_GROUPS, scopeOf, telegramName } from '@buhuchet/domain';
+import {
+  effectivePermissions,
+  menuModules,
+  SCOPE_GROUPS,
+  scopeOf,
+  telegramName,
+  type Feature,
+} from '@buhuchet/domain';
 import { ApiError, MeResponse } from '@buhuchet/shared';
 import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
@@ -25,6 +33,7 @@ function meBody(
   access: EmployeeAccess | null,
   organization: { id: string; name: string; slug: string } | null,
   telegram: TelegramChat | null,
+  features: Record<Feature, boolean> | null,
 ): MeResponse {
   return {
     user: {
@@ -50,12 +59,15 @@ function meBody(
     scopes: access
       ? Object.fromEntries(SCOPE_GROUPS.map((g) => [g, scopeOf(access.subject, g)]))
       : {},
+    features: features ?? {},
+    modules: access && features ? menuModules(access.subject, features) : [],
   };
 }
 
 /**
- * «Кто я» для ответа входа и GET /api/auth/me: сотрудник, роль, права и организация — в контексте
- * организации пользователя (RLS); привязан ли Telegram. Уже загруженные права (`access`) повторно не читаются.
+ * «Кто я» для ответа входа и GET /api/auth/me: сотрудник, роль, права, организация, функции учётной
+ * политики и модули меню — в контексте организации пользователя (RLS); привязан ли Telegram. Уже
+ * загруженные права (`access`) повторно не читаются.
  */
 export async function loadMe(
   deps: ApiDeps,
@@ -63,17 +75,18 @@ export async function loadMe(
   loaded?: EmployeeAccess | null,
 ): Promise<MeResponse> {
   const telegram = await telegramChat(deps.db, user.userId);
-  if (!user.orgId) return meBody(user, null, null, telegram);
+  if (!user.orgId) return meBody(user, null, null, telegram, null);
   const orgId = user.orgId;
-  const { access, organization } = await withOrgContext(
+  const { access, organization, features } = await withOrgContext(
     deps.db,
     { orgId, userId: user.userId },
     async (tx) => ({
       access: loaded ?? (user.employeeId ? await loadEmployeeAccess(tx, user.employeeId) : null),
       organization: await currentOrganization(tx, orgId),
+      features: await orgFeatures(tx, orgId),
     }),
   );
-  return meBody(user, access, organization, telegram);
+  return meBody(user, access, organization, telegram, features);
 }
 
 export const meRoute = createRoute({
