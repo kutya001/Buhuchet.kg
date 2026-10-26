@@ -1,7 +1,12 @@
 import { isValidElement, type ReactElement, type ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-import { StatusHistory, StatusHistoryDetails, type StatusHistoryRow } from './status-history';
+import {
+  safeHref,
+  StatusHistory,
+  StatusHistoryDetails,
+  type StatusHistoryRow,
+} from './status-history';
 import {
   StatusMini,
   StatusMiniNone,
@@ -96,6 +101,26 @@ describe('шкала статусов (прототип scaleFull)', () => {
     const without = StatusScale({ ...props, back: null });
     expect(buttons(without).filter((b) => b.props.onClick)).toEqual([]);
     expect(renderToStaticMarkup(without)).not.toContain('откатить');
+  });
+
+  it('следующий шаг поверх пройденного (из архива снова «Обслуживается») — как следующий, а не серый', () => {
+    const tree = StatusScale({
+      title: 'Обслуживание',
+      steps: [
+        { code: 'active', label: 'Обслуживается' },
+        { code: 'paused', label: 'Приостановлен' },
+        { code: 'archived', label: 'В архиве' },
+      ],
+      index: 2,
+      tone: 'faint',
+      next: ['active'],
+      labels,
+    });
+    const first = buttons(tree)[0]!;
+    expect(first.props.title).toBe('Перевести в «Обслуживается»');
+    expect(first.props.className).toContain('text-ink');
+    expect(first.props.className).not.toContain('text-muted');
+    expect(renderToStaticMarkup(tree)).toContain('border-accent text-accent bg-pane-alt');
   });
 
   it('откат только на предыдущий шаг: будущий шаг откатом не становится', () => {
@@ -306,6 +331,29 @@ describe('«История статусов» (прототип statusHistHtml)'
     // На телефоне — записи одна под другой (сетка вместо таблицы), шапки нет.
     expect(html).toContain('max-md:grid');
     expect(html).toMatch(/<thead class="max-md:hidden">/);
+  });
+
+  it('ссылка на файл — только путь сайта или https:, иначе одно имя', () => {
+    expect(safeHref('/api/files/1')).toBe(true);
+    expect(safeHref('https://s3.example/f.pdf?sig=1')).toBe(true);
+    for (const bad of [
+      'javascript:alert(1)',
+      'data:text/html,x',
+      '//evil.example',
+      '/\\evil',
+      'http://x',
+    ])
+      expect(safeHref(bad), bad).toBe(false);
+    const html = (href: string) =>
+      renderToStaticMarkup(
+        <StatusHistory
+          rows={[{ ...rows[1]!, file: { name: 'выписка.pdf', href } }]}
+          totals={[]}
+          labels={historyLabels}
+        />,
+      );
+    expect(html('/api/files/1')).toContain('href="/api/files/1"');
+    expect(html('data:text/html,x')).not.toContain('href=');
   });
 
   it('пустая история — ничего; свёрнутая — строка со значком и стрелкой', () => {

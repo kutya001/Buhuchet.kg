@@ -1,4 +1,6 @@
 import {
+  bishkekDate,
+  diffDays,
   durationText,
   formatMomentRu,
   isNoScale,
@@ -86,6 +88,8 @@ export interface ScaleInput {
   confirm?: boolean;
   /** Отметка на последнем шаге отчёта: `waiting` или `confirmed`. */
   mark?: string | null;
+  /** Текст отметки вместо названия: «Ждёт подтверждения · 3 дн.», «Подтвердил Тилекова А.» (`confirmMarkLabel`). */
+  markLabel?: string | null;
   /** Следующие шаги, которые модуль разрешает поставить (`scaleNext` с правом). */
   next?: readonly string[];
   /** Следующие шаги, закрытые условием: код → почему. */
@@ -137,7 +141,11 @@ export function scaleView(t: Translate, input: ScaleInput): ScaleView {
       side: pos.side
         ? { label: name, tone: pos.side.tone, at: moment(lastSet(history, status)) }
         : null,
-      mark: mark && { ...mark, icon: input.mark === 'confirmed' ? 'check' : 'hourglass' },
+      mark: mark && {
+        ...mark,
+        label: input.markLabel ?? mark.label,
+        icon: input.mark === 'confirmed' ? 'check' : 'hourglass',
+      },
       next: input.next ?? [],
       blocked: input.blocked ?? {},
       back: input.back ?? null,
@@ -158,7 +166,7 @@ export type MiniView =
  */
 export function miniView(
   t: Translate,
-  input: Pick<ScaleInput, 'scale' | 'status' | 'history' | 'confirm' | 'mark'>,
+  input: Pick<ScaleInput, 'scale' | 'status' | 'history' | 'confirm' | 'mark' | 'markLabel'>,
 ): MiniView {
   const { scale, status, history } = input;
   const name = statusName(t, scale, status);
@@ -177,7 +185,7 @@ export function miniView(
       tone: statusLook(scale, status).tone,
       label: name,
       side: !!pos.side,
-      title: mark ? `${step} · ${mark.label}` : step,
+      title: mark ? `${step} · ${input.markLabel ?? mark.label}` : step,
       at: last ? formatMomentRu(last.at) : null,
       atTitle: last
         ? t('status.set_at_by', {
@@ -188,6 +196,26 @@ export function miniView(
       mark,
     },
   };
+}
+
+/**
+ * Текст отметки подтверждения сдачи (прототип `repConfTxt`): «Ждёт подтверждения · N дн.» — дней с
+ * последней сдачи по Бишкеку; «Подтвердил <кто>» — по последнему подтверждению (система — название).
+ */
+export function confirmMarkLabel(
+  t: Translate,
+  history: readonly StatusEvent[],
+  mark: string,
+  now: Date,
+): string {
+  const name = statusName(t, 'report', mark);
+  if (mark === 'waiting') {
+    const since = lastSet(history, 'submitted') ?? now;
+    const n = Math.max(0, diffDays(bishkekDate(now), bishkekDate(since)));
+    return t('status.mark_waiting_days', { name, n });
+  }
+  const by = [...history].reverse().find((e) => e.to === mark)?.actor;
+  return by ? t('status.mark_confirmed_by', { who: by }) : name;
 }
 
 /**

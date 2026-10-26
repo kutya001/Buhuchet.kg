@@ -82,7 +82,15 @@ export const STATUS_TEXTS = {
   'status.rollback_ok': { ru: 'Откатить', section: 'Статусы' },
   'status.rollback_reason_required': { ru: 'Укажите причину', section: 'Статусы' },
   'status.rollback_done': { ru: 'Откат выполнен', section: 'Статусы' },
-  'status.no_rollback_right': { ru: 'Нет права «Откат статусов»', section: 'Статусы' },
+  'status.need_rollback_right': { ru: 'Нужно право «Откат статусов»', section: 'Статусы' },
+  'status.mark_waiting_days': { ru: '{name} · {n} дн.', section: 'Статусы' },
+  'status.mark_confirmed_by': { ru: 'Подтвердил {who}', section: 'Статусы' },
+  'status.unconfirm': { ru: 'Снять подтверждение', section: 'Статусы' },
+  'status.unconfirm_title': { ru: 'Снять подтверждение сдачи', section: 'Статусы' },
+  'status.unconfirm_effect': {
+    ru: 'Подтверждение будет снято: отчёт снова будет ждать подтверждения старшего бухгалтера, регулярная задача снова станет открытой. Приложенные файлы не удаляются.',
+    section: 'Статусы',
+  },
   'status.rollback_effect.report': {
     ru: 'Регулярная задача по отчёту снова станет открытой. Приложенные файлы не удаляются.',
     section: 'Статусы',

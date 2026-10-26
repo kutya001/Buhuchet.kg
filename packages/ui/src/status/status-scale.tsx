@@ -113,7 +113,8 @@ export function StatusScale({
           const go = next.includes(step.code) && !why;
           const rollback = !go && back === step.code && (passed || (isCurrent && !!side));
           const at = isCurrent && side ? side.at : j <= index ? step.at : null;
-          const text = passed ? 'text-muted' : isCurrent || go ? 'text-ink' : 'text-faint';
+          // Следующий шаг поверх пройденного (обслуживание «В архиве» → «Обслуживается»): как `.go`.
+          const text = go || isCurrent ? 'text-ink' : passed ? 'text-muted' : 'text-faint';
           const border = go
             ? 'border-dashed border-line-strong'
             : rollback
@@ -127,12 +128,12 @@ export function StatusScale({
               ? `cursor-pointer hover:bg-caution-bg ${FOCUS}`
               : 'cursor-default';
           const look = `${text} ${border} ${isCurrent ? `font-[650] ${current.stepBg}` : 'bg-transparent'} ${action}`;
-          const number = passed
-            ? 'border-line-strong bg-pane-alt text-muted'
-            : isCurrent
-              ? `${current.number} text-on-accent`
-              : go
-                ? 'border-accent bg-pane text-accent'
+          const number = isCurrent
+            ? `${current.number} text-on-accent`
+            : go
+              ? `border-accent text-accent ${passed ? 'bg-pane-alt' : 'bg-pane'}`
+              : passed
+                ? 'border-line-strong bg-pane-alt text-muted'
                 : 'border-line-strong bg-pane';
           return (
             <li

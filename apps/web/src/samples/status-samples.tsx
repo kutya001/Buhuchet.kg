@@ -9,6 +9,7 @@ import {
   Modal,
   RollbackDialog,
   StatusHistory,
+  StatusHistoryDetails,
   StatusMini,
   StatusMiniNone,
   StatusNone,
@@ -23,6 +24,7 @@ import { useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { UiProviders } from '../shell/ui-providers';
 import {
+  confirmMarkLabel,
   historyLabels,
   historyView,
   miniView,
@@ -132,7 +134,7 @@ function SamplesPage({
               >
                 <span className="text-[13px] font-semibold">{t(s.title)}</span>
                 {s.scales.map((x) => (
-                  <Mini key={x.scale} t={t} scale={x} />
+                  <Mini key={x.scale} t={t} scale={x} now={now} />
                 ))}
               </button>
             </li>
@@ -163,6 +165,9 @@ function SamplesPage({
                       history: s.history,
                       confirm: !!s.confirm,
                       mark: s.mark ?? null,
+                      markLabel: s.mark
+                        ? confirmMarkLabel(t, s.history, s.mark, new Date(now))
+                        : null,
                       next: sampleNext(s),
                       back: to,
                       ...blockedStep(t, sample, s),
@@ -174,23 +179,7 @@ function SamplesPage({
                 );
               })}
             </StatusScales>
-            <section className="flex min-w-0 flex-col">
-              <h3 className="mt-0 mb-2 text-[13px] font-semibold text-muted">
-                {t('status.history')}
-              </h3>
-              {sample.scales.map((s) => {
-                const view = historyView(t, s.scale, s.history, new Date(now));
-                return (
-                  <StatusHistory
-                    key={s.scale}
-                    rows={view.rows}
-                    totals={view.totals}
-                    title={sample.scales.length > 1 ? t(scaleTextKey(s.scale)) : undefined}
-                    labels={historyLabels(t)}
-                  />
-                );
-              })}
-            </section>
+            <HistoryBlock t={t} sample={sample} now={now} />
           </div>
         </Modal>
       ) : null}
@@ -213,9 +202,17 @@ function SamplesPage({
         <RollbackDialog
           open={back.open}
           onClose={() => setBack({ ...back, open: false })}
-          title={rollbackTitle(t, backScale.scale, rollbackFrom(backScale, back.to), back.to)}
+          title={
+            isUnconfirm(backScale, back.to)
+              ? t('status.unconfirm_title')
+              : rollbackTitle(t, backScale.scale, rollbackFrom(backScale, back.to), back.to)
+          }
           sub={t(sample.title)}
-          consequences={t(`status.rollback_effect.${backScale.scale}` satisfies UiTextKey)}
+          consequences={t(
+            isUnconfirm(backScale, back.to)
+              ? 'status.unconfirm_effect'
+              : (`status.rollback_effect.${backScale.scale}` satisfies UiTextKey),
+          )}
           labels={rollbackLabels(t)}
           onConfirm={(reason) => {
             change(back.index, (s, at) => rollbackSample(s, back.to, reason, at, actor));
@@ -243,13 +240,44 @@ function blockedStep(t: Translate, sample: Sample, s: SampleScale) {
   };
 }
 
-function Mini({ t, scale }: { t: Translate; scale: SampleScale }) {
+/** Снять подтверждение сдачи — свой заголовок, пункт и последствия (прототип `rollbackDlg`). */
+const isUnconfirm = (s: SampleScale, to: string) => s.scale === 'report' && to === 'waiting';
+
+/**
+ * «История статусов» карточки: по шкале на запись; у контрагента (обслуживание) — свёрнутая строкой,
+ * как в его карточке (прототип `.sh-d`).
+ */
+function HistoryBlock({ t, sample, now }: { t: Translate; sample: Sample; now: number }) {
+  const blocks = sample.scales.map((s) => {
+    const view = historyView(t, s.scale, s.history, new Date(now));
+    return (
+      <StatusHistory
+        key={s.scale}
+        rows={view.rows}
+        totals={view.totals}
+        title={sample.scales.length > 1 ? t(scaleTextKey(s.scale)) : undefined}
+        labels={historyLabels(t)}
+      />
+    );
+  });
+  if (sample.id === 'service')
+    return <StatusHistoryDetails title={t('status.history')}>{blocks}</StatusHistoryDetails>;
+  return (
+    <section className="flex min-w-0 flex-col">
+      <h3 className="mt-0 mb-2 text-[13px] font-semibold text-muted">{t('status.history')}</h3>
+      {blocks}
+    </section>
+  );
+}
+
+function Mini({ t, scale, now }: { t: Translate; scale: SampleScale; now: number }) {
   const view = miniView(t, {
     scale: scale.scale,
     status: scale.status,
     history: scale.history,
     confirm: !!scale.confirm,
     mark: scale.mark ?? null,
+    markLabel: scale.mark ? confirmMarkLabel(t, scale.history, scale.mark, new Date(now)) : null,
   });
   if (view.kind === 'none') return <StatusMiniNone label={view.label} title={view.title} />;
   if (view.kind === 'pill') return <StatusPill {...view.pill} size="sm" />;
@@ -282,7 +310,10 @@ function ScaleBlock({
   return <StatusScale {...view.props} onStep={onStep} onBack={onBack} />;
 }
 
-/** Кнопки отката в карточке (как пункт «Откатить статус» в меню записи): только с правом. */
+/**
+ * Кнопки отката в карточке (как пункт «Откатить в «…»» меню записи): без права «Откат статусов» видны,
+ * но недоступны, с подсказкой, какое право нужно (ТЗ «Откат статуса»).
+ */
 function rollbackButtons(
   t: Translate,
   sample: Sample,
@@ -290,18 +321,22 @@ function rollbackButtons(
   onBack: (target: StepTarget) => void,
 ) {
   const buttons = sample.scales.flatMap((s, index) => {
-    const to = sampleBack(s, right);
+    const to = sampleBack(s, true);
     if (!to) return [];
     return [
       <button
         key={index}
         type="button"
-        className={buttonClass('default')}
+        className={`${buttonClass('default')} aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:shadow-none`}
         data-rollback-to={to}
-        onClick={() => onBack({ index, to, open: true })}
+        {...(right
+          ? { onClick: () => onBack({ index, to, open: true }) }
+          : { 'aria-disabled': true, title: t('status.need_rollback_right') })}
       >
         <Icon name="history" size="sm" />
-        {t('status.rollback_to', { name: statusName(t, s.scale, to) })}
+        {isUnconfirm(s, to)
+          ? t('status.unconfirm')
+          : t('status.rollback_to', { name: statusName(t, s.scale, to) })}
       </button>,
     ];
   });

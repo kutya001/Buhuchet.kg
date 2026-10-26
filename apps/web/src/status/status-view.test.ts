@@ -3,6 +3,7 @@ import { ICONS } from '@buhuchet/ui';
 import { describe, expect, it } from 'vitest';
 import { makeTranslate } from '../l10n/translate';
 import {
+  confirmMarkLabel,
   historyView,
   miniView,
   rollbackTitle,
@@ -143,6 +144,44 @@ describe('полная шкала (scaleFull)', () => {
       title: 'Сдача',
       pill: { label: 'Ждёт подтверждения', tone: 'yellow', icon: 'hourglass' },
     });
+  });
+});
+
+describe('отметка подтверждения сдачи (repConfTxt)', () => {
+  it('«Ждёт подтверждения · N дн.» с последней сдачи; «Подтвердил …» по последнему подтверждению', () => {
+    expect(confirmMarkLabel(t, report, 'waiting', at('2026-10-12T08:00'))).toBe(
+      'Ждёт подтверждения · 3 дн.',
+    );
+    expect(confirmMarkLabel(t, [], 'waiting', at('2026-10-12T08:00'))).toBe(
+      'Ждёт подтверждения · 0 дн.',
+    );
+    const confirmed = [...report, ev('2026-10-10T09:00', 'submitted', 'confirmed')];
+    expect(confirmMarkLabel(t, confirmed, 'confirmed', at('2026-10-12T08:00'))).toBe(
+      'Подтвердил Тилекова А.',
+    );
+    const bySystem = [...report, ev('2026-10-10T09:00', 'submitted', 'confirmed', { actor: null })];
+    expect(confirmMarkLabel(t, bySystem, 'confirmed', at('2026-10-12T08:00'))).toBe('Подтверждено');
+  });
+
+  it('текст отметки — на шаге «Сдан» и в подсказке компактной шкалы', () => {
+    const view = scaleView(t, {
+      scale: 'report',
+      status: 'submitted',
+      history: report,
+      mark: 'waiting',
+      markLabel: 'Ждёт подтверждения · 3 дн.',
+    });
+    if (view.kind !== 'scale') throw new Error(view.kind);
+    expect(view.props.mark?.label).toBe('Ждёт подтверждения · 3 дн.');
+    const mini = miniView(t, {
+      scale: 'report',
+      status: 'submitted',
+      history: report,
+      mark: 'waiting',
+      markLabel: 'Ждёт подтверждения · 3 дн.',
+    });
+    if (mini.kind !== 'mini') throw new Error(mini.kind);
+    expect(mini.props.title).toBe('Этап 3 из 3: Сдан · Ждёт подтверждения · 3 дн.');
   });
 });
 

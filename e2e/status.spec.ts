@@ -141,22 +141,25 @@ test.describe('Этап 1: шкала статусов и «История ст�
     await expect(steps).toHaveCount(3);
     for (const i of [0, 1, 2]) await expect(steps.nth(i)).toHaveAttribute('aria-disabled', 'true');
     await expect(card.getByText('откатить')).toHaveCount(0);
-    await expect(card.locator('[data-rollback-to]')).toHaveCount(0);
+    // Пункт отката виден, но недоступен, с подсказкой, какое право нужно.
+    const unconfirmButton = card.getByRole('button', { name: 'Снять подтверждение' });
+    await expect(unconfirmButton).toHaveAttribute('aria-disabled', 'true');
+    await expect(unconfirmButton).toHaveAttribute('title', 'Нужно право «Откат статусов»');
     await steps.nth(1).click({ force: true });
-    await expect(page.getByRole('dialog', { name: /^Откатить/ })).toHaveCount(0);
+    await unconfirmButton.click({ force: true });
+    await expect(page.getByRole('dialog', { name: /^(Откатить|Снять)/ })).toHaveCount(0);
 
-    // С правом — снять подтверждение сдачи: «Подтверждено» → «Ждёт подтверждения».
+    // С правом — снять подтверждение сдачи: отметка «Подтвердил …» сменяется «Ждёт подтверждения».
     await page.keyboard.press('Escape');
     await page.getByLabel('Право «Откат статусов»').check();
     card = await openCard(page, 'report_confirmed', 'Отчёт: сдача подтверждена');
-    await expect(card.locator('ol[data-status-scale]')).toContainText('Подтверждено');
-    await card.locator('[data-rollback-to="waiting"]').click();
-    const unconfirm = page.getByRole('dialog', {
-      name: 'Откатить: «Подтверждено» → «Ждёт подтверждения»',
-    });
+    await expect(card.locator('ol[data-status-scale]')).toContainText('Подтвердил Эркин С.');
+    await card.getByRole('button', { name: 'Снять подтверждение' }).click();
+    const unconfirm = page.getByRole('dialog', { name: 'Снять подтверждение сдачи' });
+    await expect(unconfirm).toContainText('отчёт снова будет ждать подтверждения');
     await unconfirm.getByLabel('Причина отката').fill('Подтвердили не тот отчёт');
     await unconfirm.getByRole('button', { name: 'Откатить' }).click();
-    await expect(card.locator('ol[data-status-scale]')).toContainText('Ждёт подтверждения');
+    await expect(card.locator('ol[data-status-scale]')).toContainText('Ждёт подтверждения · ');
     await expect(card.locator('[data-status-history] tbody > tr').first()).toContainText(
       'Подтвердили не тот отчёт',
     );

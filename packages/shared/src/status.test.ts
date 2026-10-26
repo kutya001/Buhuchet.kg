@@ -16,6 +16,8 @@ describe('схемы статусов', () => {
     const empty = StatusRollback.safeParse({ to: 'in_progress', reason: '   ' });
     expect(empty.success).toBe(false);
     expect(empty.error?.issues[0]?.message).toBe('status.rollback_reason_required');
+    const invisible = StatusRollback.safeParse({ to: 'todo', reason: '\u200b\u2060' });
+    expect(invisible.error?.issues[0]?.message).toBe('status.rollback_reason_required');
     expect(
       StatusRollback.safeParse({ to: 'todo', reason: 'я'.repeat(ROLLBACK_REASON_MAX) }).success,
     ).toBe(true);

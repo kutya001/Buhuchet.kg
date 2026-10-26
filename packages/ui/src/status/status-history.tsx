@@ -25,6 +25,7 @@ export interface StatusHistoryRow {
   note?: string | null | undefined;
   /** Откат — отдельная пометка «Откат» перед причиной. */
   rollback?: boolean | undefined;
+  /** Файл; ссылка — только относительная или `https:` (иначе имя без ссылки). */
   file?: { name: string; href?: string | undefined } | null | undefined;
   /** Сколько в статусе: «3 дня», «меньше часа». */
   duration: string;
@@ -68,53 +69,56 @@ export function StatusHistory({
   return (
     <div data-status-history="" className="min-w-0 [&+&]:mt-3.5">
       {title ? <div className="mb-1.5 text-[12.5px] font-[650]">{title}</div> : null}
-      <table className="w-full table-fixed border-collapse text-[13px] tabular-nums max-md:block">
-        <thead className="max-md:hidden">
-          <tr>
-            <th className={`${TH} w-32`}>{labels.when}</th>
-            <th className={`${TH} w-[220px]`}>{labels.status}</th>
-            <th className={`${TH} w-[110px]`}>{labels.who}</th>
-            <th className={TH}>{labels.note}</th>
-            <th className={`${TH} w-[120px] text-right`}>{labels.inStatus}</th>
-          </tr>
-        </thead>
-        <tbody className="max-md:block max-md:w-full">
-          {[...rows].reverse().map((row) => {
-            const empty = !row.note && !row.file && !row.rollback;
-            return (
-              <tr
-                key={row.key}
-                className="max-md:grid max-md:grid-cols-[minmax(0,1fr)_auto] max-md:gap-x-2.5 max-md:gap-y-1 max-md:border-b max-md:border-line max-md:py-[9px] max-md:first:pt-0.5 max-md:last:border-b-0"
-              >
-                <td className={`${TD} max-md:order-1 max-md:text-[12px] max-md:text-muted`}>
-                  {row.at}
-                </td>
-                <td className={`${TD} max-md:order-3 max-md:col-span-full max-md:text-[13px]`}>
-                  {row.from ? <span className="text-faint">{row.from} → </span> : null}
-                  <StatusPill {...row.to} size="sm" />
-                </td>
-                <td
-                  className={`${TD} max-md:order-4 max-md:col-span-full max-md:text-[12px] max-md:text-muted`}
+      {/* Узкая карточка на ПК — таблица прокручивается вбок, как `.tbl-wrap`; на телефоне — список. */}
+      <div className="overflow-x-auto max-md:overflow-visible">
+        <table className="w-full table-fixed border-collapse text-[13px] tabular-nums max-md:block">
+          <thead className="max-md:hidden">
+            <tr>
+              <th className={`${TH} w-32`}>{labels.when}</th>
+              <th className={`${TH} w-[220px]`}>{labels.status}</th>
+              <th className={`${TH} w-[110px]`}>{labels.who}</th>
+              <th className={TH}>{labels.note}</th>
+              <th className={`${TH} w-[120px] text-right`}>{labels.inStatus}</th>
+            </tr>
+          </thead>
+          <tbody className="max-md:block max-md:w-full">
+            {[...rows].reverse().map((row) => {
+              const empty = !row.note && !row.file && !row.rollback;
+              return (
+                <tr
+                  key={row.key}
+                  className="max-md:grid max-md:grid-cols-[minmax(0,1fr)_auto] max-md:gap-x-2.5 max-md:gap-y-1 max-md:border-b max-md:border-line max-md:py-[9px] max-md:first:pt-0.5 max-md:last:border-b-0"
                 >
-                  <span className="max-md:hidden">{row.actor}</span>
-                  <span className="md:hidden">{labels.whoLine(row.actor)}</span>
-                </td>
-                <td
-                  className={`${TD} max-md:order-5 max-md:col-span-full max-md:text-[13px] ${empty ? 'max-md:hidden' : ''}`}
-                >
-                  <Note row={row} rollback={labels.rollback} />
-                </td>
-                <td
-                  className={`${TD} text-right max-md:order-2 max-md:text-[12px] max-md:text-muted`}
-                >
-                  {row.duration}
-                  {row.now ? <span className="text-faint"> · {labels.now}</span> : null}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+                  <td className={`${TD} max-md:order-1 max-md:text-[12px] max-md:text-muted`}>
+                    {row.at}
+                  </td>
+                  <td className={`${TD} max-md:order-3 max-md:col-span-full max-md:text-[13px]`}>
+                    {row.from ? <span className="text-faint">{row.from} → </span> : null}
+                    <StatusPill {...row.to} size="sm" />
+                  </td>
+                  <td
+                    className={`${TD} max-md:order-4 max-md:col-span-full max-md:text-[12px] max-md:text-muted`}
+                  >
+                    <span className="max-md:hidden">{row.actor}</span>
+                    <span className="md:hidden">{labels.whoLine(row.actor)}</span>
+                  </td>
+                  <td
+                    className={`${TD} max-md:order-5 max-md:col-span-full max-md:text-[13px] ${empty ? 'max-md:hidden' : ''}`}
+                  >
+                    <Note row={row} rollback={labels.rollback} />
+                  </td>
+                  <td
+                    className={`${TD} text-right max-md:order-2 max-md:text-[12px] max-md:text-muted`}
+                  >
+                    {row.duration}
+                    {row.now ? <span className="text-faint"> · {labels.now}</span> : null}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
       <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-muted max-md:gap-x-3">
         {totals.map((total) => (
           <span key={total.label}>
@@ -124,6 +128,13 @@ export function StatusHistory({
       </div>
     </div>
   );
+}
+
+/** Ссылка на файл — путь сайта или `https:`; `data:`, `javascript:` и адреса без схемы не открываются. */
+export function safeHref(href: string | undefined): boolean {
+  if (!href) return false;
+  if (href.startsWith('/')) return !href.startsWith('//') && !href.startsWith('/\\');
+  return /^https:\/\//i.test(href);
 }
 
 /** Комментарий, пометка «Откат» и файл; пусто — «—». */
@@ -144,7 +155,7 @@ function Note({ row, rollback }: { row: StatusHistoryRow; rollback: string }) {
       </>
     );
     parts.push(
-      row.file.href ? (
+      safeHref(row.file.href) ? (
         <a
           key="file"
           href={row.file.href}
