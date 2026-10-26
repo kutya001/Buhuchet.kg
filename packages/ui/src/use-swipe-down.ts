@@ -142,10 +142,10 @@ export function useSwipeDown(
         c.style.transition = `opacity ${SWIPE_BACK_MS}ms`;
         c.style.opacity = '';
       }
-      // Вернулось на место — дальше открытие и закрытие анимируют свои классы.
+      // Вернулось на место — дальше открытие и закрытие анимируют свои классы. Анимация появления
+      // остаётся снятой: иначе окно появилось бы заново.
       afterTransition(el, SWIPE_BACK_MS, () => {
         el.style.transition = '';
-        el.style.animation = '';
         if (c) c.style.transition = '';
       });
     };

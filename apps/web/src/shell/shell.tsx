@@ -7,6 +7,9 @@ import {
   BottomNav,
   BottomSheet,
   buttonClass,
+  ConfirmDialog,
+  Icon,
+  Modal,
   PhoneMenu,
   SheetAction,
   SideFootButton,
@@ -15,11 +18,17 @@ import {
   SideOrg,
   TabPager,
   TabRow,
+  ToastProvider,
   TopBar,
+  useWindow,
+  useWindows,
+  WindowProvider,
   type AddAction,
+  type MaxPrefs,
   type PhoneModule,
   type ShellLink,
   type ShellModule,
+  type WindowLabels,
 } from '@buhuchet/ui';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -28,7 +37,7 @@ import { api } from '../api-client';
 import { useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { ModuleScreen } from '../screens/module-screen';
-import { PHONE_QUERY, saveNavHidden, saveTree, toggleTheme } from './browser';
+import { PHONE_QUERY, saveMaxPrefs, saveNavHidden, saveTree, toggleTheme } from './browser';
 import { Clock } from './clock';
 import { ShellContext, type AddRequest } from './context';
 import {
@@ -67,28 +76,82 @@ function shellModule(id: MenuModuleId, access: ShellAccess, t: Translate): Shell
   };
 }
 
+interface ShellProps {
+  me: MeResponse;
+  initialNavHidden: boolean;
+  initialOpen: readonly string[];
+  /** Развёрнутые на весь экран карточки и формы (выбор на этом устройстве). */
+  initialMax: MaxPrefs;
+  /** Момент показа страницы на сервере (мс) — часы первого показа. */
+  serverNow: number;
+  children: ReactNode;
+}
+
 /**
  * Рабочая страница за входом (ТЗ «Рабочая страница (work_page)» и «Мобильная навигация», прототип
  * ui/shell.js): левая панель модулей по правам и учётной политике, верхняя панель, ряд вкладок и
  * «+ Добавить»; на телефоне — нижняя панель из четырёх основных модулей, панель «Меню» с «Другими
  * модулями» и листание вкладок свайпом. Экран модуля — `children`. Модули не рисуют свои заголовки,
- * кнопки добавления и поля поиска — всё это даёт оболочка.
+ * кнопки добавления и поля поиска — всё это даёт оболочка. Окна (`Modal`) и уведомления (`useToast`)
+ * экраны берут из `@buhuchet/ui`: тексты и выбор «На весь экран» им даёт оболочка.
  */
-export function Shell({
+export function Shell({ initialMax, ...props }: ShellProps) {
+  const t = useT();
+  const windowLabels = useMemo<WindowLabels>(
+    () => ({
+      maximize: t('window.maximize'),
+      restore: t('window.restore'),
+      maximizeHint: t('window.maximize_hint'),
+      close: t('window.close'),
+      cancel: t('btn.cancel'),
+      confirm: t('btn.confirm'),
+      discardTitle: t('window.discard_title'),
+      discardText: t('window.discard_text'),
+      discardOk: t('window.discard_ok'),
+      tabPosition: (n, total) => t('window.tab_position', { n, total }),
+    }),
+    [t],
+  );
+  const toastLabels = useMemo(
+    () => ({ close: t('toast.close'), closeTitle: t('toast.close_title') }),
+    [t],
+  );
+  return (
+    <WindowProvider labels={windowLabels} initialMax={initialMax} onMaxChange={saveMaxPrefs}>
+      <ToastProvider labels={toastLabels}>
+        <ShellPage {...props} />
+      </ToastProvider>
+    </WindowProvider>
+  );
+}
+
+/** Нижняя строка окна помощи: «Открыть Базу знаний» (окно закрывается, переход заменяет его в истории) и «Закрыть». */
+function HelpFooter({ kbHref }: { kbHref: string }) {
+  const t = useT();
+  const { close, leave } = useWindow();
+  return (
+    <>
+      <Link href={kbHref} replace onClick={leave} className={buttonClass('ghost')}>
+        <Icon name="grad" size="sm" />
+        {t('kb.open')}
+      </Link>
+      <div className="flex-1" />
+      <button type="button" onClick={close} className={buttonClass('cta')}>
+        {t('btn.close')}
+      </button>
+    </>
+  );
+}
+
+function ShellPage({
   me: initialMe,
   initialNavHidden,
   initialOpen,
   serverNow,
   children,
-}: {
-  me: MeResponse;
-  initialNavHidden: boolean;
-  initialOpen: readonly string[];
-  /** Момент показа страницы на сервере (мс) — часы первого показа. */
-  serverNow: number;
-  children: ReactNode;
-}) {
+}: Omit<ShellProps, 'initialMax'>) {
   const t = useT();
+  const windows = useWindows();
   const router = useRouter();
   const pathname = usePathname();
   const { moduleId, tabId } = parseAppPath(pathname);
@@ -151,6 +214,9 @@ export function Shell({
   const [search, setSearch] = useState('');
   const [addRequest, setAddRequest] = useState<AddRequest | null>(null);
   const [leaving, setLeaving] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  /** Выход ждёт ответа «Выйти без сохранения?»; `replace` — выход из панели «Меню». */
+  const [askLogout, setAskLogout] = useState<{ replace: boolean } | null>(null);
 
   // Смена модуля или вкладки очищает поиск и забытый запрос «Добавить» (ТЗ «Общий поиск»).
   const route = `${moduleId}/${tabId}`;
@@ -205,7 +271,7 @@ export function Shell({
   };
 
   /** Выйти; из панели «Меню» — заменяя её запись в истории, чтобы «Назад» не вернул к панели. */
-  const logout = async (replace = false) => {
+  const logout = async (replace: boolean) => {
     setLeaving(true);
     try {
       await api.api.auth.logout.$post();
@@ -213,6 +279,14 @@ export function Shell({
       if (replace) window.location.replace('/login');
       else window.location.assign('/login');
     }
+  };
+  /**
+   * В открытой форме несохранённые изменения — сначала «Выйти без сохранения?» (ТЗ «Панель модулей»,
+   * решение заказчика 26.10.2026 — docs/deviations.md, п. 27).
+   */
+  const requestLogout = (replace = false) => {
+    if (windows.hasUnsavedForm()) setAskLogout({ replace });
+    else void logout(replace);
   };
 
   const title = current?.title ?? '';
@@ -260,7 +334,7 @@ export function Shell({
                   <SideFootButton
                     icon="logout"
                     label={t('shell.logout')}
-                    onClick={() => logout()}
+                    onClick={() => requestLogout()}
                     disabled={leaving}
                   />
                 </SideFootRow>
@@ -295,22 +369,7 @@ export function Shell({
             help={{
               label: t('shell.help'),
               title: t('shell.help_title'),
-              // Статей «Базы знаний» о модулях ещё нет: описание модуля и «Открыть Базу знаний».
-              content: (close) => (
-                <>
-                  <h4 className="m-0 text-xs font-[650] tracking-[0.07em] text-faint uppercase">
-                    {title}
-                  </h4>
-                  <div className="max-w-[300px] text-[13px] leading-normal">{desc}</div>
-                  <Link
-                    href={moduleHref('kb', access)}
-                    onClick={close}
-                    className={`${buttonClass('default', 'sm')} self-start`}
-                  >
-                    {t('kb.open')}
-                  </Link>
-                </>
-              ),
+              onClick: () => setHelpOpen(true),
             }}
             theme={{
               label: t('shell.theme'),
@@ -362,7 +421,7 @@ export function Shell({
                       label={t('shell.logout')}
                       onClick={() => {
                         leave();
-                        void logout(true);
+                        requestLogout(true);
                       }}
                       disabled={leaving}
                     />
@@ -407,6 +466,27 @@ export function Shell({
           children
         )}
       </AppFrame>
+      {/* «?»: статей «Базы знаний» о модулях ещё нет — описание модуля (прототип kb.js kbHelp). */}
+      <Modal
+        open={helpOpen}
+        onClose={() => setHelpOpen(false)}
+        size="mid"
+        title={title}
+        sub={t('kb.title')}
+        footer={<HelpFooter kbHref={moduleHref('kb', access)} />}
+      >
+        <p className="m-0 leading-[1.6]">{desc}</p>
+        <p className="m-0 text-muted">{t('kb.no_article')}</p>
+      </Modal>
+      <ConfirmDialog
+        open={askLogout !== null}
+        onClose={() => setAskLogout(null)}
+        title={t('shell.logout_discard_title')}
+        text={t('shell.logout_discard_text')}
+        ok={t('shell.logout_discard_ok')}
+        danger
+        onConfirm={() => void logout(askLogout?.replace ?? false)}
+      />
     </ShellContext.Provider>
   );
 }

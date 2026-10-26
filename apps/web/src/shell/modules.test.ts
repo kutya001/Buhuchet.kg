@@ -20,7 +20,15 @@ import {
   shellAccess,
   visibleTabs,
 } from './modules';
-import { parseNavHidden, parseTheme, parseTree, prefCookie, serializeTree } from './prefs';
+import {
+  parseMaxPrefs,
+  parseNavHidden,
+  parseTheme,
+  parseTree,
+  prefCookie,
+  serializeMaxPrefs,
+  serializeTree,
+} from './prefs';
 
 const ALL_FEATURES = Object.fromEntries(FEATURES.map((f) => [f, true])) as Record<Feature, boolean>;
 
@@ -218,7 +226,7 @@ describe('меню на телефоне (ТЗ «Мобильная навига
   });
 });
 
-describe('выбор на устройстве: тема, левая панель, раскрытые ветки', () => {
+describe('выбор на устройстве: тема, левая панель, раскрытые ветки, «На весь экран»', () => {
   it('тема — только light или dark, иначе тема устройства', () => {
     expect(parseTheme('dark')).toBe('dark');
     expect(parseTheme('light')).toBe('light');
@@ -237,6 +245,18 @@ describe('выбор на устройстве: тема, левая панел�
     expect(parseTree('reports.cps.reports.<script>', known)).toEqual(['reports', 'cps']);
     expect(parseTree(undefined, known)).toEqual([]);
     expect(parseTree(serializeTree(new Set(['cps', 'home'])), known)).toEqual(['cps', 'home']);
+  });
+
+  it('«На весь экран» запоминается отдельно для карточек и для форм', () => {
+    expect(parseMaxPrefs(undefined)).toEqual({ card: false, form: false });
+    expect(parseMaxPrefs('card')).toEqual({ card: true, form: false });
+    expect(parseMaxPrefs('form.card.x')).toEqual({ card: true, form: true });
+    expect(serializeMaxPrefs({ card: true, form: false })).toBe('card');
+    expect(serializeMaxPrefs({ card: false, form: false })).toBe('');
+    expect(parseMaxPrefs(serializeMaxPrefs({ card: false, form: true }))).toEqual({
+      card: false,
+      form: true,
+    });
   });
 
   it('cookie выбора — на год, для всего сайта, по https — с Secure', () => {

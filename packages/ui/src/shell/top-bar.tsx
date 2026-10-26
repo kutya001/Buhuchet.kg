@@ -25,8 +25,8 @@ export interface TopBarProps {
   };
   /** Дата и время по Бишкеку. */
   clock: ReactNode;
-  /** «?» — помощь по модулю; `content` получает `close`. */
-  help: { label: string; title: string; content: (close: () => void) => ReactNode };
+  /** «?» — помощь по модулю: открывает окно со статьёй «Базы знаний». */
+  help: { label: string; title: string; onClick: () => void };
   /** Переключатель темы. */
   theme: { label: string; title: string; onToggle: () => void };
 }
@@ -34,7 +34,7 @@ export interface TopBarProps {
 /**
  * Верхняя панель (прототип index.html `#topbar`, ui/shell.js initTop и renderPage; css/shell.css,
  * mobile.css `.tb-title`): «Меню», название модуля и под ним вкладки с «ⓘ», общий поиск, дата и время,
- * «?» и переключатель темы. Стоит над рабочей областью и не прокручивается. Длинное название
+ * «?» (окно помощи, kb.js kbHelp) и переключатель темы. Стоит над рабочей областью и не прокручивается. Длинное название
  * обрезается многоточием, полное — в подсказке и по нажатию. На телефоне поиск свёрнут в значок и
  * раскрывается на всю ширину вместо остальных кнопок; пустое поле при уходе фокуса сворачивается.
  */
@@ -144,27 +144,16 @@ export function TopBar({ title, tab, menu, info, search, clock, help, theme }: T
       <div className={`text-[13px] font-[550] whitespace-nowrap text-muted tabular-nums ${other}`}>
         {clock}
       </div>
-      <Popover
-        label={help.label}
-        padded
-        placement="bottom-end"
-        className={`relative inline-flex ${other}`}
-        trigger={({ open, toggle, id }) => (
-          <button
-            type="button"
-            onClick={toggle}
-            aria-label={help.label}
-            title={help.title}
-            aria-expanded={open}
-            aria-controls={id}
-            className={iconButtonClass()}
-          >
-            <Icon name="help" />
-          </button>
-        )}
+      <button
+        type="button"
+        onClick={help.onClick}
+        aria-label={help.label}
+        title={help.title}
+        aria-haspopup="dialog"
+        className={`${iconButtonClass()} ${other}`}
       >
-        {help.content}
-      </Popover>
+        <Icon name="help" />
+      </button>
       <button
         type="button"
         onClick={theme.onToggle}

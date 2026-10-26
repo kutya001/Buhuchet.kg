@@ -77,6 +77,8 @@ describe('SideNav — панель модулей на ПК', () => {
     expect(html).not.toMatch(/href="\/app\/home\/today" aria-current/);
     expect(html).toContain('title="Просрочено"');
     expect(html).toContain('>74</span>');
+    // Красный счётчик — цвета опасной кнопки: число читается и в тёмной теме (theme.test.ts).
+    expect(html).toMatch(/title="Просрочено" class="[^"]*bg-danger-btn text-on-accent/);
     expect(html).toContain('<span>низ</span></div></aside>');
   });
 
@@ -159,7 +161,7 @@ const TOP: TopBarProps = {
     openLabel: 'Поиск',
   },
   clock: <time>10:33</time>,
-  help: { label: 'Помощь', title: 'Помощь по модулю', content: () => <p>Помощь</p> },
+  help: { label: 'Помощь', title: 'Помощь по модулю', onClick: () => {} },
   theme: { label: 'Тема', title: 'Сменить тему', onToggle: () => {} },
 };
 
@@ -315,7 +317,7 @@ describe('Popover и меню действий', () => {
     );
     expect(open).toContain('aria-expanded="true"');
     expect(open).toMatch(
-      /role="menu" aria-label="Добавить" data-overlay="true" class="[^"]*right-0/,
+      /role="menu" aria-label="Добавить" data-overlay="true" data-popover="true" class="[^"]*right-0/,
     );
     expect(open).toContain('<p>текст</p>');
   });

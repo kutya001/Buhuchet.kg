@@ -49,7 +49,7 @@ const HOVER_CLOSE_MS = 220;
  * «?» и меню «+ Добавить». Закрывается повторным нажатием, клавишей Esc, нажатием вне окошка, кнопкой
  * «Назад» (переход при этом не отменяется) и на телефоне протяжкой вниз; при открытии нажатием фокус
  * переходит в окошко, при закрытии по Esc — обратно на кнопку. Пока окошко открыто, свайп по вкладкам
- * не начинается (`data-overlay`).
+ * не начинается (`data-overlay`), а Esc внутри окна закрывает сначала окошко (`data-popover`).
  */
 export function Popover({
   trigger,
@@ -131,6 +131,7 @@ export function Popover({
           role={role}
           aria-label={label}
           data-overlay
+          data-popover
           className={`absolute z-[70] max-h-[min(460px,calc(100dvh-24px))] touch-pan-y w-max max-w-[min(360px,calc(100vw-24px))] min-w-[210px] animate-slide-up overflow-auto rounded-xl border border-line-strong bg-raised text-ink shadow-pop ${PLACEMENTS[placement]} ${padded ? 'flex flex-col gap-2.5 p-3' : 'p-1.5'}`}
         >
           {children(close)}

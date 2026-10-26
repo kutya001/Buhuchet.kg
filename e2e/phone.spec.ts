@@ -1,7 +1,8 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
+import { finger, settledBox } from './helpers';
 
-// Оболочка на телефоне (задача #11): нижняя панель, панель «Меню» с «Другими модулями», протяжка
-// вниз, листание вкладок свайпом, «Назад» телефона. Касания — настоящие события касания через
+// Оболочка на телефоне (задачи #11 и #12): нижняя панель, панель «Меню» с «Другими модулями», протяжка
+// вниз панели и окна, листание вкладок свайпом, «Назад» телефона. Касания — настоящие события касания через
 // протокол отладки Chromium, с паузами между движениями пальца: так правила жестов видят и
 // расстояние, и скорость.
 const DEMO_PASSWORD = process.env.DEMO_PASSWORD ?? 'demo';
@@ -13,68 +14,6 @@ async function signIn(api: APIRequestContext, origin: string) {
     data: { login: 'erkin', password: DEMO_PASSWORD },
   });
   expect(res.status(), await res.text()).toBe(200);
-}
-
-interface Point {
-  x: number;
-  y: number;
-}
-
-/**
- * Палец по экрану. `drag` — настоящие касания через протокол отладки Chromium: ведём по 12 px за кадр
- * и перед отпусканием останавливаемся (рывка нет). `flick` — быстрый рывок с частотой экрана
- * 120 Гц: без экрана Chromium доставляет касания протокола раз в ~50 мс, и рывок вышел бы медленным,
- * поэтому события касания создаются на странице с нужными промежутками.
- */
-async function finger(page: Page) {
-  const cdp = await page.context().newCDPSession(page);
-  const send = (type: 'touchStart' | 'touchMove' | 'touchEnd', p?: Point) =>
-    cdp.send('Input.dispatchTouchEvent', { type, touchPoints: p ? [p] : [] });
-  return {
-    async drag(from: Point, to: Point) {
-      const steps = Math.max(4, Math.ceil(Math.hypot(to.x - from.x, to.y - from.y) / 12));
-      await send('touchStart', from);
-      for (let i = 1; i <= steps; i++) {
-        await send('touchMove', {
-          x: from.x + ((to.x - from.x) * i) / steps,
-          y: from.y + ((to.y - from.y) * i) / steps,
-        });
-        await page.waitForTimeout(16);
-      }
-      await page.waitForTimeout(150);
-      await send('touchEnd');
-    },
-    flick: (from: Point, to: Point) =>
-      page.evaluate(
-        async ([a, b]) => {
-          const target = document.elementFromPoint(a.x, a.y)!;
-          let last = new Touch({ identifier: 1, target, clientX: a.x, clientY: a.y });
-          const fire = (type: string, touches: Touch[]) =>
-            target.dispatchEvent(
-              new TouchEvent(type, {
-                bubbles: true,
-                cancelable: true,
-                touches,
-                targetTouches: touches,
-                changedTouches: [last],
-              }),
-            );
-          fire('touchstart', [last]);
-          for (let i = 1; i <= 6; i++) {
-            await new Promise((r) => setTimeout(r, 8));
-            last = new Touch({
-              identifier: 1,
-              target,
-              clientX: a.x + ((b.x - a.x) * i) / 6,
-              clientY: a.y + ((b.y - a.y) * i) / 6,
-            });
-            fire('touchmove', [last]);
-          }
-          fire('touchend', []);
-        },
-        [from, to] as const,
-      ),
-  };
 }
 
 const bottomNav = (page: Page) => page.getByRole('navigation', { name: 'Модули' });
@@ -170,6 +109,44 @@ test.describe('Этап 1: оболочка на телефоне', () => {
       const handle = await openMenu();
       await swipe.flick(handle, { x: handle.x, y: handle.y + 80 });
       await expect(menu).toBeHidden();
+    });
+
+    await test.step('окно («?»): короткая протяжка за шапку — возвращается, дальше четверти высоты — закрывается, рывок вниз — закрывается', async () => {
+      const help = page.getByRole('dialog', { name: 'Отчеты для сдачи' });
+      const openHelp = async () => {
+        await page.getByRole('button', { name: 'Помощь' }).click();
+        const box = await settledBox(help);
+        // Шторка снизу во всю ширину.
+        expect(box.width).toBeCloseTo(390, 0);
+        expect(box.y + box.height).toBeCloseTo(844, 0);
+        return { x: box.x + box.width / 2, y: box.y + 30, top: box.y, height: box.height };
+      };
+      const head = await openHelp();
+      const threshold = Math.min(head.height / 4, 160);
+      // Пока окно тянут, светлеет только фон за ним, само окно остаётся непрозрачным.
+      await swipe.drag(head, { x: head.x, y: head.y + threshold / 2 }, async () => {
+        const seen = await help.evaluate((el) => {
+          // Видимая прозрачность — с учётом всех родителей.
+          let windowOpacity = 1;
+          for (let n: Element | null = el; n; n = n.parentElement) {
+            windowOpacity *= Number(getComputedStyle(n).opacity);
+          }
+          const covers = document.querySelectorAll('.bg-cover');
+          const cover = covers[covers.length - 1]!;
+          return { windowOpacity, coverOpacity: Number(getComputedStyle(cover).opacity) };
+        });
+        expect(seen.windowOpacity).toBe(1);
+        expect(seen.coverOpacity).toBeLessThan(1);
+      });
+      await page.waitForTimeout(400);
+      await expect(help).toBeVisible();
+      expect((await help.boundingBox())!.y).toBeCloseTo(head.top, 0);
+      await swipe.drag(head, { x: head.x, y: head.y + threshold + 30 });
+      await expect(help).toBeHidden();
+      await expect(page).toHaveURL(/\/app\/reports\/week$/);
+      const again = await openHelp();
+      await swipe.flick(again, { x: again.x, y: again.y + 80 });
+      await expect(help).toBeHidden();
     });
 
     const pane = (await page.locator('main').boundingBox())!;

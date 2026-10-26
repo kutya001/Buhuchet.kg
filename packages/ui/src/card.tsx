@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-/** Карточка-заготовка. Полная карточка с «На весь экран» появится в этапе 1 по прототипу. */
+/** Площадка с заголовком (страница «здоровья»). Карточка записи с «На весь экран» — `Modal` с `tabs`. */
 export function Card({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="rounded-xl border border-line bg-pane p-4 shadow-pane">

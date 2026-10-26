@@ -1,8 +1,11 @@
+import type { MaxPrefs } from '@buhuchet/ui';
 import {
+  MAX_COOKIE,
   NAV_COOKIE,
   prefCookie,
   THEME_COOKIE,
   TREE_COOKIE,
+  serializeMaxPrefs,
   serializeTree,
   type Theme,
 } from './prefs';
@@ -35,4 +38,8 @@ export function saveNavHidden(hidden: boolean) {
 
 export function saveTree(ids: Iterable<string>) {
   savePref(TREE_COOKIE, serializeTree(ids));
+}
+
+export function saveMaxPrefs(prefs: MaxPrefs) {
+  savePref(MAX_COOKIE, serializeMaxPrefs(prefs));
 }

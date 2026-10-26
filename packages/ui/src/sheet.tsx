@@ -29,7 +29,8 @@ export function BottomSheet({ open, onClose, label, children }: BottomSheetProps
   useSwipeDown(sheet, { enabled: open, onClose, cover });
 
   const escape = useEffectEvent((e: KeyboardEvent) => {
-    if (e.key === 'Escape') onClose();
+    // Окно или всплывающее окошко поверх панели Esc закрывает первым.
+    if (e.key === 'Escape' && !document.querySelector('[data-window],[data-popover]')) onClose();
   });
   useEffect(() => {
     if (!open) return;

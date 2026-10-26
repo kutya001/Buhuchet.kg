@@ -90,6 +90,23 @@ export function pagerFires({
   return (along > width / 3 && speed > -0.1) || (speed > SWIPE_FLICK && along > SWIPE_SLOP);
 }
 
+/**
+ * Смахнуть уведомление вбок: протянули дальше трети его ширины или рывком в ту же сторону (те же
+ * пороги, что у вкладок; прототип ui/swipes.js swipeAway).
+ */
+export function throwFires({ dx, vx, width }: { dx: number; vx: number; width: number }): boolean {
+  const dir = Math.sign(dx);
+  return (
+    (Math.abs(dx) > width / 3 && vx * dir > -0.1) ||
+    (Math.abs(vx) > SWIPE_FLICK && Math.sign(vx) === dir && Math.abs(dx) > SWIPE_SLOP)
+  );
+}
+
+/** Уведомление бледнеет, пока его тянут вбок, но не исчезает совсем (не прозрачнее 0,2). */
+export function throwOpacity(dx: number, width: number): number {
+  return Math.max(0.2, 1 - Math.abs(dx) / (width * 1.2));
+}
+
 /** Закрыть протяжкой вниз: дальше четверти высоты (не больше 160 px) или рывком вниз. */
 export function dismissFires({ dy, vy, height }: { dy: number; vy: number; height: number }) {
   const threshold = Math.min(height / 4, DISMISS_MAX);

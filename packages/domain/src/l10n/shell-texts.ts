@@ -1,11 +1,12 @@
 import type { UiTextDefault } from './texts';
 
 /**
- * Тексты оболочки (рабочая страница, задачи #10 и #11): названия модулей, их краткие названия и
+ * Тексты оболочки (рабочая страница, задачи #10–#12): названия модулей, их краткие названия и
  * описания, вкладки и способы добавления — как в прототипе (core/registry.js, BIZ и ADM; вкладки и
- * «+ Добавить» — функции `*Tabs` и `*Add` модулей). Ключи `nav.home`, `nav.counterparties`, `nav.reports`,
- * `nav.tasks`, `nav.staff`, `kb.title`, `kb.open`, `btn.add` — из раздела `localization` refDB.json,
- * с тем же текстом.
+ * «+ Добавить» — функции `*Tabs` и `*Add` модулей); окна, подтверждения и уведомления — ui/popups.js,
+ * окно помощи — modules/kb.js kbHelp, выход — core/login.js logoutDlg. Ключи `nav.home`,
+ * `nav.counterparties`, `nav.reports`, `nav.tasks`, `nav.staff`, `kb.title`, `kb.open`, `btn.add`,
+ * `btn.cancel` — из раздела `localization` refDB.json, с тем же текстом.
  */
 export const SHELL_TEXTS = {
   // Названия модулей
@@ -244,4 +245,32 @@ export const SHELL_TEXTS = {
     section: 'Оболочка',
   },
   'shell.stub_add': { ru: '«{action}» появится вместе с экраном модуля.', section: 'Оболочка' },
+  'shell.logout_discard_title': { ru: 'Выйти без сохранения?', section: 'Оболочка' },
+  'shell.logout_discard_text': {
+    ru: 'В открытом окне есть несохранённые изменения. Если выйти сейчас, они пропадут.',
+    section: 'Оболочка',
+  },
+  'shell.logout_discard_ok': { ru: 'Выйти', section: 'Оболочка' },
+  'kb.no_article': {
+    ru: 'Отдельной статьи об этом модуле пока нет. Все статьи и уроки — в «Базе знаний».',
+    section: 'База знаний',
+  },
+
+  // Окна, подтверждения и уведомления
+  'btn.cancel': { ru: 'Отмена', section: 'Кнопки' },
+  'btn.confirm': { ru: 'Подтвердить', section: 'Кнопки' },
+  'btn.close': { ru: 'Закрыть', section: 'Кнопки' },
+  'window.maximize': { ru: 'На весь экран', section: 'Окна' },
+  'window.restore': { ru: 'Свернуть окно', section: 'Окна' },
+  'window.maximize_hint': { ru: '(двойной клик по заголовку)', section: 'Окна' },
+  'window.close': { ru: 'Закрыть', section: 'Окна' },
+  'window.discard_title': { ru: 'Закрыть без сохранения?', section: 'Окна' },
+  'window.discard_text': {
+    ru: 'В форме есть несохранённые изменения. Если закрыть сейчас, они пропадут.',
+    section: 'Окна',
+  },
+  'window.discard_ok': { ru: 'Закрыть', section: 'Окна' },
+  'window.tab_position': { ru: '{n} из {total}', section: 'Окна' },
+  'toast.close': { ru: 'Закрыть уведомление', section: 'Уведомления' },
+  'toast.close_title': { ru: 'Закрыть', section: 'Уведомления' },
 } as const satisfies Record<string, UiTextDefault>;
