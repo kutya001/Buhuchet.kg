@@ -2,7 +2,9 @@
 // сотрудниках demoDB.json. Запуск: node packages/domain/scripts/oracle-roles.mjs — пишет
 // packages/domain/src/roles/__fixtures__/role-locks.json (скилл prototype-oracle).
 import { readFileSync, writeFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
+import { format, resolveConfig } from 'prettier';
 
 const root = new URL('../../../', import.meta.url);
 const read = (path) => readFileSync(new URL(path, root), 'utf8');
@@ -61,5 +63,8 @@ for (const editor of editors) {
   }
 }
 const out = new URL('packages/domain/src/roles/__fixtures__/role-locks.json', root);
-writeFileSync(out, JSON.stringify({ editors, roles, cases }) + '\n');
+// В том виде, что ждёт `pnpm format:check`.
+const filepath = fileURLToPath(out);
+const json = JSON.stringify({ editors, roles, cases });
+writeFileSync(out, await format(json, { ...(await resolveConfig(filepath)), filepath }));
 console.log(`role-locks.json: ${cases.length} ответов прототипа`);
