@@ -11,3 +11,4 @@ export * from './telegram';
 export * from './l10n';
 export * from './views';
 export * from './status';
+export * from './platform-dicts';

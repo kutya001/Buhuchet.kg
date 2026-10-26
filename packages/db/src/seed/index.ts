@@ -4,6 +4,7 @@ import { seedPermissions, seedRoleTemplates } from './access';
 import { seedDemoOrganization, type DemoSeedReport } from './demo';
 import { seedUiTexts } from './l10n';
 import { seedGked, seedPlatformReference, type SeedReport } from './platform';
+import { seedPlatformDicts, type PlatformDictsReport } from './platform-dicts';
 
 export { checksumOf } from './checksum';
 export { seedPermissions, seedRoleTemplates } from './access';
@@ -15,10 +16,24 @@ export {
   type DemoSeedReport,
 } from './demo';
 export { seedUiTexts, uiTextSeedRows, type UiTextSeedRow } from './l10n';
-export { seedGked, seedPlatformReference, type SeedOptions, type SeedReport } from './platform';
+export {
+  referenceSections,
+  seedGked,
+  seedPlatformReference,
+  type SeedOptions,
+  type SeedReport,
+} from './platform';
+export {
+  platformDictRows,
+  seedPlatformDicts,
+  TABLE_DICTIONARIES,
+  TABLE_SECTIONS,
+  type PlatformDictsReport,
+} from './platform-dicts';
 
 export interface SeedAllResult {
   platformReference: SeedReport;
+  platformDicts: PlatformDictsReport;
   gked: SeedReport;
   permissions: SeedReport;
   roleTemplates: SeedReport;
@@ -41,6 +56,7 @@ export async function seedAll(
       `refDB.json@${commit}`,
       options,
     );
+    const platformDicts = await seedPlatformDicts(t, refDB, options);
     const gked = await seedGked(t, await readSpecJson('data/gkedDB.json'), options);
     const permissions = await seedPermissions(t, refDB.permissions, options);
     const roleTemplates = await seedRoleTemplates(t, refDB.roleTemplates, options);
@@ -51,6 +67,6 @@ export async function seedAll(
           password: options.demoPassword ?? null,
         })
       : null;
-    return { platformReference, gked, permissions, roleTemplates, uiTexts, demo };
+    return { platformReference, platformDicts, gked, permissions, roleTemplates, uiTexts, demo };
   });
 }

@@ -8,3 +8,4 @@ export * from './roles';
 export * from './org';
 export * from './l10n';
 export * from './status';
+export * from './platform-dicts';

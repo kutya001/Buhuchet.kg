@@ -17,3 +17,5 @@ export * from './auth/session';
 export * from './auth/reset';
 export * from './telegram/messages';
 export * from './l10n/texts';
+export * from './platform-dicts/catalog';
+export * from './platform-dicts/calendar';

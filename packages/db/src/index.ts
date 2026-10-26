@@ -13,4 +13,5 @@ export * from './org';
 export * from './l10n';
 export * from './list';
 export * from './views';
+export * from './platform-dicts';
 export * as schema from './schema';
