@@ -87,8 +87,11 @@ export interface DataGridProps<Row> {
    */
   filters?: Filters;
   onFiltersChange?: (filters: Record<string, ListFilterValue>) => void;
-  /** Значения столбца для фильтра-галочек (справочник, статус) с числом записей — с сервера. */
-  loadValues?: (key: string) => Promise<GridValues>;
+  /**
+   * Значения столбца для фильтра-галочек (справочник, статус) с числом записей — с сервера; `q` —
+   * «Найти значение» по всем значениям столбца.
+   */
+  loadValues?: (key: string, q?: string) => Promise<GridValues>;
   /** Текст общего поиска: чип «Поиск: «…»» и «Ничего не найдено»; `onClearSearch` очищает поиск. */
   search?: string;
   onClearSearch?: () => void;

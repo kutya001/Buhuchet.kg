@@ -80,7 +80,11 @@ export const GRID_TEXTS = {
     section: 'Списки',
   },
   'grid.filter_more': {
-    ru: 'Показаны первые {n} значений, остальные найдутся поиском по списку.',
+    ru: 'Показаны первые {n} значений из {total} — сузьте список поиском',
+    section: 'Списки',
+  },
+  'grid.filter_too_many': {
+    ru: 'Слишком много отдельных отметок. Найдите значения поиском и нажмите «Выбрать все».',
     section: 'Списки',
   },
   'grid.clear': { ru: 'Очистить', section: 'Списки' },
@@ -122,6 +126,10 @@ export const GRID_TEXTS = {
   'grid.chip_since': { ru: 'с {v}', section: 'Списки' },
   'grid.chip_until': { ru: 'по {v}', section: 'Списки' },
   'grid.chip_more': { ru: '+{n}', section: 'Списки' },
+  'grid.chip_all': { ru: 'все', section: 'Списки' },
+  'grid.chip_match': { ru: 'содержит «{q}»', section: 'Списки' },
+  'grid.chip_except': { ru: 'кроме {v}', section: 'Списки' },
+  'grid.chip_except_match': { ru: 'кроме содержащих «{q}»', section: 'Списки' },
   'grid.ungroup': { ru: 'Убрать группировку', section: 'Списки' },
   'grid.clear_search': { ru: 'Очистить поиск', section: 'Списки' },
   'grid.remove_filter': { ru: 'Убрать фильтр', section: 'Списки' },

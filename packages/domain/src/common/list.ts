@@ -88,15 +88,189 @@ export function filterTypeOf(type: ListColumnType): ListFilterType {
 }
 
 /**
- * Значение фильтра столбца (ТЗ «Поиск и фильтры»): текст — подстрока; справочник — отмеченные
- * значения, '' — «(Пусто)»; число — «От» и «До» включительно; дата — `YYYY-MM-DD`, «По дату» —
- * включая весь день.
+ * Шаг выбора в фильтре-галочках: отметить (`on`) или снять отдельные значения `vals` либо все
+ * значения, подпись которых содержит `match` (ТЗ «Поиск и фильтры»: «Выбрать все» отмечает все
+ * значения, подходящие под «Найти значение», в том числе не показанные; '' — все значения).
+ */
+export type EnumStep = { on: boolean; vals: string[] } | { on: boolean; match: string };
+
+/**
+ * Выбор в фильтре-галочках: отмеченные значения `vals` ('' — «(Пусто)»), а после них по порядку
+ * шаги `steps` (`enumChecked`). Без шагов — просто отмеченные значения, как в прототипе.
+ */
+export interface EnumSelection {
+  vals: string[];
+  steps?: EnumStep[];
+}
+
+/**
+ * Значение фильтра столбца (ТЗ «Поиск и фильтры»): текст — подстрока; справочник — выбор галочками
+ * (`EnumSelection`); число — «От» и «До» включительно; дата — `YYYY-MM-DD`, «По дату» — включая весь
+ * день.
  */
 export type ListFilterValue =
   | { type: 'text'; q: string }
-  | { type: 'enum'; vals: string[] }
+  | ({ type: 'enum' } & EnumSelection)
   | { type: 'num'; from?: number | null; to?: number | null }
   | { type: 'date'; from?: string | null; to?: string | null };
+
+/**
+ * Отдельных значений во всех шагах фильтра-галочек — не больше стольких, шагов — не больше стольких:
+ * фильтр уходит в адресе запроса. Много значений выбираются шагом «Выбрать все» по поиску.
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#36 — в прототипе предела нет; вопрос заказчику задан.
+export const ENUM_FILTER_VALS_MAX = 200;
+export const ENUM_FILTER_STEPS_MAX = 20;
+
+/** Сколько отдельных значений в выборе: отмеченные и значения всех шагов. */
+export function enumSelectionSize(selection: EnumSelection): number {
+  return (selection.steps ?? []).reduce(
+    (n, s) => n + ('vals' in s ? s.vals.length : 0),
+    selection.vals.length,
+  );
+}
+
+/**
+ * Подходит ли значение под «Найти значение» в фильтре-галочках (прототип filterPop: подпись содержит
+ * текст без учёта регистра и «ё»): '' — подходит любое; у пустого значения подписи нет — «(Пусто)»
+ * поиском не находится, как в прототипе. Эталон для поиска значений на сервере.
+ */
+export function matchesValue(label: string | null, match: string): boolean {
+  const needle = searchText(match.trim());
+  if (!needle) return true;
+  return label !== null && searchText(label).includes(needle);
+}
+
+function stepCovers(step: EnumStep, value: string, label: string | null): boolean {
+  return 'match' in step ? matchesValue(label, step.match) : step.vals.includes(value);
+}
+
+/**
+ * Отмечено ли значение (код `value`, подпись как на экране `label`): решает последний шаг, который
+ * его касается; если ни один — отмечено ли оно в `vals`. Эталон для условия фильтра на сервере.
+ */
+export function enumChecked(
+  selection: EnumSelection,
+  value: string,
+  label: string | null,
+): boolean {
+  const steps = selection.steps ?? [];
+  for (let i = steps.length - 1; i >= 0; i--) {
+    if (stepCovers(steps[i]!, value, label)) return steps[i]!.on;
+  }
+  return selection.vals.includes(value);
+}
+
+/** Выбрано всё — фильтра нет. */
+export function enumAll(): EnumSelection {
+  return { vals: [], steps: [{ on: true, match: '' }] };
+}
+
+export function isEnumAll(selection: EnumSelection): boolean {
+  const [first, ...rest] = selection.steps ?? [];
+  return !!first && !rest.length && first.on && 'match' in first && !searchText(first.match.trim());
+}
+
+/** Подпись значения, если она уже приходила с сервера; undefined — не известна. */
+export type EnumLabelOf = (value: string) => string | null | undefined;
+
+/**
+ * Отмечены ли наверняка все значения, подпись которых содержит `match` ('' — все значения): галочка
+ * «Выбрать все», когда пришли не все подходящие (прототип: `m.every(k => on.has(k))`). Да — если
+ * есть шаг «отметить всё, что содержит …», покрывающий этот поиск, и после него ни один шаг не мог
+ * снять подходящее значение. В сомнении — «не все»: тогда «Выбрать все» отметит, а не снимет.
+ */
+export function enumMatchChecked(
+  selection: EnumSelection,
+  match: string,
+  labelOf: EnumLabelOf,
+): boolean {
+  const needle = searchText(match.trim());
+  const steps = selection.steps ?? [];
+  for (let i = steps.length - 1; i >= 0; i--) {
+    const s = steps[i]!;
+    if (s.on) {
+      if ('match' in s && needle.includes(searchText(s.match.trim()))) return true;
+    } else if (
+      'match' in s ||
+      s.vals.some((v) => {
+        const label = labelOf(v);
+        return label === undefined || matchesValue(label, needle);
+      })
+    ) {
+      return false;
+    }
+  }
+  return false;
+}
+
+/** Отмечено ли значение, если это можно сказать по известным подписям; undefined — нельзя. */
+function knownChecked(
+  selection: EnumSelection,
+  value: string,
+  labelOf: EnumLabelOf,
+): boolean | undefined {
+  const label = labelOf(value);
+  if (label === undefined && (selection.steps ?? []).some((s) => 'match' in s)) return undefined;
+  return enumChecked(selection, value, label ?? null);
+}
+
+/**
+ * Следующий шаг выбора (прототип filterPop: галочка значения, «Выбрать все» по «Найти значение»):
+ * новый шаг перекрывает прежние у тех значений, которых касается, поэтому перекрытые значения и
+ * более узкие поиски из прежних шагов убираются; шаг, который ничего не меняет (отметить уже
+ * отмеченное, снять снятое), не добавляется; без поиска выбор остаётся просто набором значений.
+ */
+export function addEnumStep(
+  selection: EnumSelection,
+  step: EnumStep,
+  labelOf: EnumLabelOf,
+): EnumSelection {
+  if ('vals' in step && !step.vals.length) return selection;
+  const needle = 'match' in step ? searchText(step.match.trim()) : '';
+  if ('match' in step && !needle) return step.on ? enumAll() : { vals: [] };
+  const covered = (value: string) => {
+    if ('vals' in step) return step.vals.includes(value);
+    const label = labelOf(value);
+    return label !== undefined && matchesValue(label, needle);
+  };
+  let vals = selection.vals.filter((v) => !covered(v));
+  const steps: EnumStep[] = [];
+  for (const s of selection.steps ?? []) {
+    if ('vals' in s) {
+      const rest = s.vals.filter((v) => !covered(v));
+      if (rest.length) steps.push({ on: s.on, vals: rest });
+    } else if (!needle || !searchText(s.match.trim()).includes(needle)) {
+      steps.push(s);
+    }
+  }
+  const before: EnumSelection = { vals, steps };
+  const unchanged =
+    'match' in step
+      ? step.on && enumMatchChecked(before, step.match, labelOf)
+      : step.vals.every((v) => knownChecked(before, v, labelOf) === step.on);
+  const last = steps.at(-1);
+  if (unchanged) {
+    // Шаг ничего не меняет — выбор остаётся прежним (без перекрытых им записей).
+  } else if ('vals' in step && last && 'vals' in last && last.on === step.on) {
+    steps[steps.length - 1] = { on: step.on, vals: [...last.vals, ...step.vals] };
+  } else {
+    steps.push('vals' in step ? { on: step.on, vals: [...step.vals] } : step);
+  }
+  // Снятие, когда ещё ничего не отмечено, ничего не меняет; до «все значения» отмеченные не нужны.
+  while (!vals.length && steps[0] && !steps[0].on) steps.shift();
+  const first = steps[0];
+  if (first && first.on && 'match' in first && !searchText(first.match.trim())) vals = [];
+  if (steps.some((s) => 'match' in s)) return { vals, steps };
+  const set = new Set(vals);
+  for (const s of steps as { on: boolean; vals: string[] }[]) {
+    for (const v of s.vals) {
+      if (s.on) set.add(v);
+      else set.delete(v);
+    }
+  }
+  return { vals: [...set] };
+}
 
 /**
  * Поиск из верхней панели (ТЗ «Общий поиск», «Поиск и фильтры»): текст и столбцы, которые видны на

@@ -1,7 +1,14 @@
 import {
+  ENUM_FILTER_STEPS_MAX,
+  ENUM_FILTER_VALS_MAX,
+  enumAll,
+  enumChecked,
+  enumSelectionSize,
   formatDateRu,
   formatSom,
+  isEnumAll,
   parseSom,
+  type EnumSelection,
   type ListColumnType,
   type ListFilterValue,
 } from '@buhuchet/domain';
@@ -33,8 +40,16 @@ export function unlabeledEnumFilters(
     const filter = filters[key]!;
     if (filter.type !== 'enum') return false;
     const names = known[key] ?? {};
-    return filter.vals.some((v) => v !== '' && !(v in names));
+    return enumValuesOf(filter).some((v) => v !== '' && !(v in names));
   });
+}
+
+/** Все отдельные значения выбора галочками: отмеченные и из шагов. */
+function enumValuesOf(selection: EnumSelection): string[] {
+  return [
+    ...selection.vals,
+    ...(selection.steps ?? []).flatMap((s) => ('vals' in s ? s.vals : [])),
+  ];
 }
 
 /**
@@ -56,22 +71,59 @@ export function formatFilterNumber(type: ListColumnType, value: number): string 
   return type === 'money' ? formatSom(value, 'auto') : String(value);
 }
 
-/**
- * Фильтр-галочки: отмечены все значения — фильтра нет (прототип: `v.length < all.length`), иначе —
- * отмеченные.
- */
-export function enumFilter(
-  all: readonly string[],
-  checked: ReadonlySet<string>,
-): ListFilterValue | null {
-  const vals = all.filter((v) => checked.has(v));
-  return vals.length === all.length ? null : { type: 'enum', vals };
+/** Выбор галочками по фильтру столбца; фильтра нет — отмечено всё. */
+export function enumSelectionOf(filter: ListFilterValue | undefined): EnumSelection {
+  if (filter?.type !== 'enum') return enumAll();
+  return filter.steps?.length ? { vals: filter.vals, steps: filter.steps } : { vals: filter.vals };
 }
 
 /**
- * Текст чипа фильтра (прототип `chipText`): текст — «запрос», галочки — первые два значения и «+N»,
- * число — «от 100 до 200», дата — «с 01.03.2026 по 31.03.2026». Подпись значения галочки — из
- * загруженных значений столбца (`valueLabel`), пустое — «(Пусто)».
+ * Фильтр-галочки из выбора: отмечено всё — фильтра нет (прототип: `v.length < all.length`). Если
+ * пришли все значения столбца (`all`), уходят отмеченные значения по порядку списка, как в прототипе;
+ * не помещаются в адрес запроса (`enumFilterFits`) — выбор шагами или «все, кроме» снятых. Пришли не
+ * все — выбор шагами «Выбрать все» по «Найти значение».
+ */
+export function enumFilterOf(
+  selection: EnumSelection,
+  all: readonly { value: string; label: string | null }[] | null,
+): ListFilterValue | null {
+  const stepped: ListFilterValue | null = isEnumAll(selection)
+    ? null
+    : selection.steps?.length
+      ? { type: 'enum', vals: selection.vals, steps: selection.steps }
+      : { type: 'enum', vals: selection.vals };
+  if (!all) return stepped;
+  const on = all.filter((i) => enumChecked(selection, i.value, i.label)).map((i) => i.value);
+  if (on.length === all.length) return null;
+  const listed: ListFilterValue = { type: 'enum', vals: on };
+  if (enumFilterFits(listed)) return listed;
+  if (enumFilterFits(stepped)) return stepped;
+  const checked = new Set(on);
+  const off = all.filter((i) => !checked.has(i.value)).map((i) => i.value);
+  return {
+    type: 'enum',
+    vals: [],
+    steps: [
+      { on: true, match: '' },
+      { on: false, vals: off },
+    ],
+  };
+}
+
+/** Фильтр уходит в адресе запроса: отдельных значений и шагов — не больше, чем примет сервер. */
+export function enumFilterFits(filter: ListFilterValue | null): boolean {
+  if (filter?.type !== 'enum') return true;
+  return (
+    enumSelectionSize(filter) <= ENUM_FILTER_VALS_MAX &&
+    (filter.steps?.length ?? 0) <= ENUM_FILTER_STEPS_MAX
+  );
+}
+
+/**
+ * Текст чипа фильтра (прототип `chipText`): текст — «запрос», галочки — первые два значения и «+N»
+ * (шаги «Выбрать все» по поиску — «все, кроме Стажёр», «содержит «ИП»»), число — «от 100 до 200»,
+ * дата — «с 01.03.2026 по 31.03.2026». Подпись значения галочки — из загруженных значений столбца
+ * (`valueLabel`), пустое — «(Пусто)».
  */
 export function chipText(
   type: ListColumnType,
@@ -83,9 +135,19 @@ export function chipText(
     case 'text':
       return `«${filter.q}»`;
     case 'enum': {
-      const names = filter.vals.map((v) => (v === '' ? labels.empty : valueLabel(v)));
-      if (names.length <= 2) return names.join(', ');
-      return `${names.slice(0, 2).join(', ')} ${labels.chipMore(names.length - 2)}`;
+      const listed = (vals: readonly string[]) => {
+        const names = vals.map((v) => (v === '' ? labels.empty : valueLabel(v)));
+        if (names.length <= 2) return names.join(', ');
+        return `${names.slice(0, 2).join(', ')} ${labels.chipMore(names.length - 2)}`;
+      };
+      // ОТКЛОНЕНИЕ: docs/deviations.md#36 — выбор по поиску словами, в прототипе только перечень.
+      const parts = (filter.steps ?? []).map((s) => {
+        if ('vals' in s) return s.on ? listed(s.vals) : labels.chipExcept(listed(s.vals));
+        const q = s.match.trim();
+        if (!q) return s.on ? labels.chipAll : '';
+        return s.on ? labels.chipMatch(q) : labels.chipExceptMatch(q);
+      });
+      return [filter.vals.length ? listed(filter.vals) : '', ...parts].filter(Boolean).join(', ');
     }
     case 'num':
       return [

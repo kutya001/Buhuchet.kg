@@ -58,6 +58,8 @@ export interface GridPage<Row> {
  */
 export interface GridValues {
   items: readonly { value: string; label: string | null; count: number }[];
+  /** Сколько всего значений (под «Найти значение» — подходящих); `more` — пришли не все. */
+  total: number;
   more: boolean;
 }
 
@@ -177,7 +179,10 @@ export interface GridLabels {
   empty: string;
   filterLoading: string;
   filterLoadError: string;
-  filterMore: (n: number) => string;
+  /** «Показаны первые 500 значений из 1 240 — сузьте список поиском». */
+  filterMore: (n: number, total: number) => string;
+  /** Отдельных отметок больше, чем уходит в фильтр. */
+  filterTooMany: string;
   clear: string;
   apply: string;
   groupByColumn: string;
@@ -209,6 +214,11 @@ export interface GridLabels {
   chipSince: (v: string) => string;
   chipUntil: (v: string) => string;
   chipMore: (n: number) => string;
+  /** Галочки по «Выбрать все» с поиском: «все», «содержит «ИП»», «кроме Стажёр», «кроме содержащих «ИП»». */
+  chipAll: string;
+  chipMatch: (q: string) => string;
+  chipExcept: (v: string) => string;
+  chipExceptMatch: (q: string) => string;
   ungroup: string;
   clearSearch: string;
   removeFilter: string;

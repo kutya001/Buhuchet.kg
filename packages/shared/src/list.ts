@@ -1,5 +1,8 @@
 import {
   DEFAULT_PAGE_SIZE,
+  ENUM_FILTER_STEPS_MAX,
+  ENUM_FILTER_VALS_MAX,
+  enumSelectionSize,
   GROUP_AGGS,
   isListPageSize,
   MAX_GROUP_LEVELS,
@@ -33,23 +36,47 @@ export const ListSortSchema = z.object({ key: ColumnKey, dir: z.enum(['asc', 'de
 
 const FILTER_TEXT_MAX = 200;
 
+/**
+ * Текст фильтра или поиска: не длиннее 200 знаков и без нулевого символа — PostgreSQL его в тексте
+ * не принимает, и запрос упал бы ошибкой сервера вместо «неверный фильтр».
+ */
+const FilterText = z
+  .string()
+  .max(FILTER_TEXT_MAX)
+  .refine((s) => !s.includes('\u0000'));
+
 /** Граница фильтра «От» / «До»: целое (деньги — в тыйынах), дробное база не сравнит с целым столбцом. */
 const FilterNumber = Tyiyn;
 
 /** Дата фильтра: года 0000 в базе нет — такой запрос дал бы ошибку сервера, а не «неверный фильтр». */
 const FilterDate = IsoDate.refine((d) => d >= '0001-01-01');
 
+const EnumVals = z.array(FilterText).max(ENUM_FILTER_VALS_MAX);
+
+/**
+ * Шаг выбора галочками (`EnumStep` из `@buhuchet/domain`): отметить или снять значения `vals` либо
+ * все значения, подпись которых содержит `match` ('' — все).
+ */
+const EnumStepSchema = z.union([
+  z.strictObject({ on: z.boolean(), vals: EnumVals }),
+  z.strictObject({ on: z.boolean(), match: FilterText }),
+]);
+
 /**
  * Фильтр столбца по его типу (ТЗ «Поиск и фильтры»): текст — по подстроке; справочник и статус —
- * отмеченные значения, пустая строка — «(Пусто)»; число — «От» и «До» включительно (деньги —
- * в тыйынах); дата — «С даты» и «По дату», последний день входит целиком.
+ * отмеченные значения (пустая строка — «(Пусто)») и шаги «Выбрать все» по «Найти значение»
+ * (`enumChecked`); число — «От» и «До» включительно (деньги — в тыйынах); дата — «С даты» и
+ * «По дату», последний день входит целиком.
  */
 export const ListFilter = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('text'), q: z.string().trim().min(1).max(FILTER_TEXT_MAX) }),
-  z.object({
-    type: z.literal('enum'),
-    vals: z.array(z.string().max(FILTER_TEXT_MAX)).max(200),
-  }),
+  z.object({ type: z.literal('text'), q: FilterText.trim().min(1) }),
+  z
+    .object({
+      type: z.literal('enum'),
+      vals: EnumVals,
+      steps: z.array(EnumStepSchema).max(ENUM_FILTER_STEPS_MAX).optional(),
+    })
+    .refine((f) => enumSelectionSize(f) <= ENUM_FILTER_VALS_MAX),
   z
     .object({
       type: z.literal('num'),
@@ -82,9 +109,6 @@ const keyList = (max: number) =>
     .regex(new RegExp(`^${KEY}(?:,${KEY}){0,${max - 1}}$`))
     .optional();
 
-/** Поиск — не длиннее фильтра столбца. */
-const SEARCH_MAX = FILTER_TEXT_MAX;
-
 /** Итоги в строках групп: столбец → сумма, среднее, минимум, максимум или количество. */
 export const ListAggs = z
   .record(ColumnKey, z.enum(GROUP_AGGS))
@@ -105,7 +129,8 @@ export const ListQueryParams = z.object({
   page: z.coerce.number().int().min(1).max(1_000_000).optional(),
   size: z.enum(['25', '50', '100', 'all']).optional(),
   filters: z.string().max(8000).optional(),
-  q: z.string().max(SEARCH_MAX).optional(),
+  // Поиск — не длиннее фильтра столбца.
+  q: FilterText.optional(),
   qcols: keyList(COLUMN_LIST_MAX),
   group: keyList(MAX_GROUP_LEVELS),
   agg: z.string().max(4000).optional(),
@@ -210,9 +235,14 @@ export function listPageSchema<T extends z.ZodType>(item: T) {
 /**
  * Значения столбца для фильтра-галочек (прототип filterPop: значения с числом записей, «(Пусто)»):
  * значение (код), подпись как на экране (null — пусто) и сколько записей с ним во всём списке.
- * `more` — значений больше, чем пришло.
+ * `q` — «Найти значение»: только значения, подпись которых его содержит (`matchesValue`), — поиск по
+ * всем значениям, а не по пришедшим (ТЗ «Поиск и фильтры»). `total` — сколько всего подходящих
+ * значений, `more` — их больше, чем пришло.
  */
-export const ListValuesQuery = z.object({ col: ColumnKey });
+export const ListValuesQuery = z.object({
+  col: ColumnKey,
+  q: FilterText.optional(),
+});
 export const ListValues = z.object({
   items: z.array(
     z.object({
@@ -221,6 +251,7 @@ export const ListValues = z.object({
       count: z.number().int().nonnegative(),
     }),
   ),
+  total: z.number().int().nonnegative(),
   more: z.boolean(),
 });
 export type ListValues = z.infer<typeof ListValues>;

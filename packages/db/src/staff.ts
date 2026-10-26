@@ -242,13 +242,17 @@ export async function listEmployeesPage(
   return { ...page, rows: page.rows.map((r) => toEmployee(r, codes)) };
 }
 
-/** Значения столбца списка сотрудников для фильтра-галочек (роль — названия ролей, статус — подписи). */
-export function listEmployeeValues(tx: Tx, key: string, t: ListTexts) {
+/**
+ * Значения столбца списка сотрудников для фильтра-галочек (роль — названия ролей, статус — подписи);
+ * `q` — «Найти значение» по всем значениям столбца.
+ */
+export function listEmployeeValues(tx: Tx, key: string, t: ListTexts, q?: string) {
   return selectListValues({
     columns: employeeListColumns(t),
     key,
     scope: undefined,
     from: employeeListFrom(tx),
+    q,
   });
 }
 

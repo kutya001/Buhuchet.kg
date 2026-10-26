@@ -112,6 +112,11 @@ describe.skipIf(!databaseAvailable())('Сотрудники: API', () => {
       expect((await call('GET', '/api/staff')).status).toBe(401);
       const admin = await signIn(f.app, 'platform-admin', TEST_PASSWORD);
       expect((await call('GET', '/api/staff', admin)).status).toBe(403);
+      // Значения для фильтра и их поиск — по тому же праву.
+      const values = '/api/staff/values?col=role&q=%D0%B1%D1%83%D1%85';
+      expect((await call('GET', values, chief)).status).toBe(200);
+      expect((await call('GET', values, acc)).status).toBe(403);
+      expect((await call('GET', values)).status).toBe(401);
     });
 
     it('карточка: своя организация — 200; чужая — 404; не номер — 400', async () => {

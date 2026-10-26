@@ -1,7 +1,10 @@
 import {
+  enumChecked,
   formatSom,
   formatSomWithUnit,
   matchesSearch,
+  matchesValue,
+  type EnumSelection,
   type ListFilterValue,
   type ListQuery,
 } from '@buhuchet/domain';
@@ -10,6 +13,7 @@ import { bigint, date, integer, pgTable, text, timestamp } from 'drizzle-orm/pg-
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   displayOf,
+  LIST_VALUES_LIMIT,
   ListQueryError,
   normalizeText,
   selectListExport,
@@ -40,6 +44,18 @@ const COLUMNS: ListColumns = {
   due: { type: 'date', label: 'test.due', value: items.due },
   at: { type: 'datetime', label: 'test.at', value: items.at },
   createdAt: { type: 'datetime', label: 'test.created_at', value: items.createdAt },
+};
+
+/** Название как справочник: «Найти значение» и шаги «Выбрать все» по подписи значения. */
+const NAME_ENUM: ListColumns = {
+  name: { type: 'enum', label: 'test.name', value: items.name },
+};
+
+/** Столбец с 620 значениями — больше, чем приходит в фильтр-галочки (`LIST_VALUES_LIMIT`). */
+const MANY = 620;
+const many = pgTable('list_test_many', { id: integer('id').primaryKey(), name: text('name') });
+const MANY_COLUMNS: ListColumns = {
+  name: { type: 'enum', label: 'test.name', value: many.name },
 };
 
 /** Отчёты для пункта приёмки «компания А, 09.2026 — 10 500 сом»: только для этого теста. */
@@ -83,6 +99,9 @@ describe.skipIf(!databaseAvailable())('страница списка на сер
       id integer primary key, company text not null, kind text not null, period date not null,
       sum bigint not null, created_at timestamptz not null)`;
     await t.admin.sql`grant select on list_test_reports to buhuchet_app`;
+    await t.admin.sql.unsafe(`create table list_test_many as
+      select i as id, 'Значение ' || i as name from generate_series(1, ${MANY}) i`);
+    await t.admin.sql`grant select on list_test_many to buhuchet_app`;
     await t.admin.db.insert(reports).values(
       [
         { id: 1, company: 'Компания А', kind: 'Соцфонд', period: '2026-09-01', sum: 250_000 },
@@ -107,6 +126,7 @@ describe.skipIf(!databaseAvailable())('страница списка на сер
   });
 
   const from: ListFrom = (fields) => t.app.db.select(fields).from(items).$dynamic();
+  const manyFrom: ListFrom = (fields) => t.app.db.select(fields).from(many).$dynamic();
   const page = (query: Partial<ListQuery>) =>
     selectListPage({
       query: { sort: undefined, page: 1, size: 25, filters: {}, ...query },
@@ -362,6 +382,7 @@ describe.skipIf(!databaseAvailable())('страница списка на сер
         { value: 'b', label: 'b', count: 2 },
         { value: '', label: null, count: 2 },
       ],
+      total: 3,
       more: false,
     });
     // Область модуля («Свои контрагенты») сужает и значения, и их числа.
@@ -369,6 +390,87 @@ describe.skipIf(!databaseAvailable())('страница списка на сер
       { value: 'b', label: 'b', count: 2 },
     ]);
     await expect(values('nope')).rejects.toBeInstanceOf(ListQueryError);
+  });
+
+  it('«Найти значение» ищет по всем значениям: подстрока подписи без учёта регистра и «ё», как matchesValue', async () => {
+    const found = async (q: string) =>
+      selectListValues({ columns: NAME_ENUM, key: 'name', scope: undefined, from, q });
+    expect(await found('ДОК')).toEqual({
+      items: [
+        { value: 'Док 1', label: 'Док 1', count: 1 },
+        { value: 'док 2', label: 'док 2', count: 1 },
+        { value: 'Док 10', label: 'Док 10', count: 1 },
+      ],
+      total: 3,
+      more: false,
+    });
+    for (const q of ['ел', 'ёл', '%', '_', 'пусто', '  ']) {
+      const labels = ROWS.map((r) => r.name || null).filter((l) => matchesValue(l, q));
+      const res = await found(q);
+      expect(res.items.map((i) => i.label).sort(), q).toEqual([...new Set(labels)].sort());
+    }
+  });
+
+  it('значений больше 500 — пришли первые 500, всего — сколько подходит; поиск находит и не пришедшие', async () => {
+    const values = (q?: string) =>
+      selectListValues({ columns: MANY_COLUMNS, key: 'name', scope: undefined, from: manyFrom, q });
+    const all = await values();
+    expect(all.items).toHaveLength(LIST_VALUES_LIMIT);
+    expect(all).toMatchObject({ total: MANY, more: true });
+    expect(all.items.map((i) => i.label)).not.toContain('Значение 610');
+    const found = await values('значение 61');
+    expect(found).toMatchObject({ total: 11, more: false });
+    expect(found.items.map((i) => i.label)).toContain('Значение 610');
+  });
+
+  it('галочки с шагами «Выбрать все» по поиску — те же записи, что эталон enumChecked', async () => {
+    const selections: EnumSelection[] = [
+      { vals: ['Док 1'] },
+      { vals: [], steps: [{ on: true, match: 'док' }] },
+      {
+        vals: [],
+        steps: [
+          { on: true, match: 'Е' },
+          { on: false, vals: ['Ель_синяя'] },
+        ],
+      },
+      {
+        vals: [''],
+        steps: [
+          { on: true, match: '' },
+          { on: false, match: 'ДОК 1' },
+        ],
+      },
+      {
+        vals: ['Ёлка 50%'],
+        steps: [
+          { on: false, match: '%' },
+          { on: true, vals: ['док 2', ''] },
+        ],
+      },
+      { vals: [], steps: [{ on: true, match: '_' }] },
+    ];
+    for (const selection of selections) {
+      const res = await selectListPage({
+        query: { sort: null, page: 1, size: 25, filters: { name: { type: 'enum', ...selection } } },
+        columns: NAME_ENUM,
+        natural: [items.id],
+        scope: undefined,
+        select: ({ window, where, orderBy, limit, offset }) =>
+          t.app.db
+            .select({ id: items.id, ...window })
+            .from(items)
+            .where(where)
+            .orderBy(...orderBy)
+            .limit(limit)
+            .offset(offset),
+      });
+      const expected = ROWS.filter((r) => enumChecked(selection, r.name ?? '', r.name || null));
+      expect(
+        res.rows.map((r) => r.id),
+        JSON.stringify(selection),
+      ).toEqual(expected.map((r) => r.id));
+    }
   });
 
   it('выгрузка: все записи под фильтром, видимые столбцы по порядку, деньги — числом', async () => {
