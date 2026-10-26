@@ -52,7 +52,7 @@ export const loginAttempts = pgTable(
     failures: integer('failures').notNull().default(0),
     /** До какого момента вход закрыт. */
     lockedUntil: timestamp('locked_until', { withTimezone: true }),
-    /** Последняя попытка: через сутки после неё счёт забывается, строку удаляет задача очистки. */
+    /** Последняя попытка: через час после неё счёт забывается, строку удаляет задача очистки. */
     lastAttemptAt: timestamp('last_attempt_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index('login_attempts_last_attempt_idx').on(t.lastAttemptAt)],

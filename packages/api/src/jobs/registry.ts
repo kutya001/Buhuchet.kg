@@ -17,11 +17,14 @@ export const cleanupSchedulerRuns: Job = {
   },
 };
 
-/** Счёт неверных паролей по логину забывается через сутки: такие строки удаляются раз в сутки. */
+/**
+ * Счёт неверных паролей по логину забывается через час: такие строки удаляются каждые 10 минут, чтобы
+ * таблица не росла от выдуманных логинов.
+ */
 export const cleanupLoginAttemptsJob: Job = {
   name: 'auth.cleanup-login-attempts',
-  cron: '40 3 * * *',
-  lookbackMinutes: 24 * 60,
+  cron: '*/10 * * * *',
+  lookbackMinutes: 10,
   async run(ctx) {
     await cleanupLoginAttempts(ctx.db);
   },

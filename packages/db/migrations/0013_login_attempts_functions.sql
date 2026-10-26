@@ -35,12 +35,14 @@ CREATE FUNCTION app.auth_find_login(p_login text)
 DROP FUNCTION app.auth_login_attempt(uuid, integer, integer);
 --> statement-breakpoint
 -- Попытка входа по набранному логину занимается до проверки пароля: счёт +1, на p_max-й подряд вход
--- закрывается на p_lock_minutes, и счёт начинается с нуля. Через p_memory_hours после последней
+-- закрывается на p_lock_minutes, и счёт начинается с нуля. Через p_memory_minutes после последней
 -- попытки счёт забывается. Пока вход закрыт, попытка не занимается (allowed = false) и пароль не
--- проверяется. Строка логина блокируется до конца функции, поэтому одновременные запросы проверят не
--- больше p_max паролей. locked = true: после этой попытки вход закрыт, если пароль окажется неверным.
+-- проверяется. Строка логина создаётся и блокируется одним оператором до конца функции, поэтому
+-- одновременные запросы проверят не больше p_max паролей, а одновременное удаление строки не даст
+-- попытке пройти без счёта. locked = true: после этой попытки вход закрыт, если пароль окажется
+-- неверным.
 CREATE FUNCTION app.auth_login_attempt(
-    p_login text, p_max integer, p_lock_minutes integer, p_memory_hours integer)
+    p_login text, p_max integer, p_lock_minutes integer, p_memory_minutes integer)
   RETURNS TABLE (allowed boolean, locked boolean, locked_until timestamptz)
   LANGUAGE plpgsql VOLATILE SECURITY DEFINER
   SET search_path = pg_catalog, pg_temp
@@ -51,16 +53,14 @@ CREATE FUNCTION app.auth_login_attempt(
     v_until timestamptz;
     v_last timestamptz;
   BEGIN
-    INSERT INTO public.login_attempts (login) VALUES (v_login) ON CONFLICT DO NOTHING;
-    SELECT a.failures, a.locked_until, a.last_attempt_at INTO v_failures, v_until, v_last
-      FROM public.login_attempts a
-      WHERE a.login = v_login
-      FOR UPDATE;
+    INSERT INTO public.login_attempts AS a (login) VALUES (v_login)
+      ON CONFLICT (login) DO UPDATE SET login = EXCLUDED.login
+      RETURNING a.failures, a.locked_until, a.last_attempt_at INTO v_failures, v_until, v_last;
     IF v_until > now() THEN
       RETURN QUERY SELECT false, true, v_until;
       RETURN;
     END IF;
-    IF v_last <= now() - make_interval(hours => p_memory_hours) THEN
+    IF v_last <= now() - make_interval(mins => p_memory_minutes) THEN
       v_failures := 0;
     END IF;
     v_failures := v_failures + 1;
@@ -83,14 +83,14 @@ CREATE FUNCTION app.auth_login_clear(p_login text)
 --> statement-breakpoint
 -- Очистка по расписанию: строки, чей счёт уже забыт и вход не закрыт. Удаление такой строки ничего
 -- не меняет для входа: попытка по ней и так начала бы счёт с нуля.
-CREATE FUNCTION app.auth_login_cleanup(p_memory_hours integer)
+CREATE FUNCTION app.auth_login_cleanup(p_memory_minutes integer)
   RETURNS integer
   LANGUAGE sql VOLATILE SECURITY DEFINER
   SET search_path = pg_catalog, pg_temp
   AS $$
     WITH gone AS (
       DELETE FROM public.login_attempts
-      WHERE last_attempt_at <= now() - make_interval(hours => p_memory_hours)
+      WHERE last_attempt_at <= now() - make_interval(mins => p_memory_minutes)
         AND (locked_until IS NULL OR locked_until <= now())
       RETURNING 1
     )

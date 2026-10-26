@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  DUMMY_HASH,
   generateTemporaryPassword,
   hashPassword,
   verifyAgainstDummy,
@@ -24,6 +25,11 @@ describe('пароли', () => {
   it('проверка без логина всегда «не подходит»', async () => {
     expect(await verifyAgainstDummy('любой')).toBe(false);
     expect(await verifyAgainstDummy('любой')).toBe(false);
+  });
+
+  it('подставной хеш — с теми же параметрами argon2, что и настоящие', async () => {
+    const params = (h: string) => h.split('$').slice(1, 4).join('$');
+    expect(params(DUMMY_HASH)).toBe(params(await hashPassword('x')));
   });
 
   it('временный пароль: 12 символов без похожих букв и цифр, каждый раз новый', () => {

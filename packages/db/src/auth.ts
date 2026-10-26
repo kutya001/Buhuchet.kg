@@ -1,6 +1,6 @@
 import {
   isPermissionId,
-  LOGIN_FAILURE_MEMORY_HOURS,
+  LOGIN_FAILURE_MEMORY_MINUTES,
   LOGIN_LOCK_MINUTES,
   LOGIN_MAX_FAILURES,
   SCOPE_GROUPS,
@@ -82,7 +82,7 @@ export interface LoginAttempt {
 
 /**
  * Занять попытку входа по набранному логину до проверки пароля (счёт +1, на пятой подряд вход
- * закрывается на 15 минут; через сутки счёт забывается). Счёт ведётся и для логина, которого нет:
+ * закрывается на 15 минут; через час счёт забывается). Счёт ведётся и для логина, которого нет:
  * «вход закрыт» одинаков для любого логина (docs/deviations.md, п. 4, решение Б). Так одновременные
  * запросы не проверят больше пяти паролей. Верный пароль снимает счёт (`clearLoginAttempts`), смена
  * и сброс пароля — тоже (`changeOwnPassword`, `completePasswordReset`, `setTemporaryPassword`).
@@ -93,7 +93,7 @@ export async function reserveLoginAttempt(db: Db, login: string): Promise<LoginA
     locked: boolean;
     locked_until: Date | string | null;
   }>(
-    sql`select * from app.auth_login_attempt(${login}, ${LOGIN_MAX_FAILURES}, ${LOGIN_LOCK_MINUTES}, ${LOGIN_FAILURE_MEMORY_HOURS})`,
+    sql`select * from app.auth_login_attempt(${login}, ${LOGIN_MAX_FAILURES}, ${LOGIN_LOCK_MINUTES}, ${LOGIN_FAILURE_MEMORY_MINUTES})`,
   );
   return {
     allowed: row?.allowed ?? false,
@@ -110,7 +110,7 @@ export async function clearLoginAttempts(db: Db | Tx, login: string): Promise<vo
 /** Удалить строки, чей счёт уже забыт (задача по расписанию); возвращает, сколько удалено. */
 export async function cleanupLoginAttempts(db: Db): Promise<number> {
   const [row] = await db.execute<{ removed: number }>(
-    sql`select app.auth_login_cleanup(${LOGIN_FAILURE_MEMORY_HOURS}) as removed`,
+    sql`select app.auth_login_cleanup(${LOGIN_FAILURE_MEMORY_MINUTES}) as removed`,
   );
   return row?.removed ?? 0;
 }

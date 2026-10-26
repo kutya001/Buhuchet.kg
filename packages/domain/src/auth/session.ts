@@ -8,9 +8,9 @@ export const LOGIN_MAX_FAILURES = 5;
 export const LOGIN_LOCK_MINUTES = 15;
 /**
  * Неверные пароли считаются по набранному логину, есть он или нет (docs/deviations.md, п. 4, решение
- * Б); через сутки после последней попытки счёт забывается.
+ * Б); через час после последней попытки счёт забывается.
  */
-export const LOGIN_FAILURE_MEMORY_HOURS = 24;
+export const LOGIN_FAILURE_MEMORY_MINUTES = 60;
 
 /** Сеанс живёт 30 дней с последнего обращения; срок продлевается не чаще раза в час. */
 export const SESSION_TTL_DAYS = 30;

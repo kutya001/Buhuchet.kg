@@ -143,20 +143,21 @@ describe.skipIf(!databaseAvailable())('вход и сеансы в базе', ()
     expect(await reserveLoginAttempt(t.app.db, 'nobody-here')).toMatchObject({ allowed: false });
   });
 
-  it('через сутки после последней попытки счёт забывается; очистка удаляет такие строки', async () => {
+  it('через час после последней попытки счёт забывается; очистка удаляет такие строки', async () => {
+    const minutesAgo = (m: number) => new Date(Date.now() - m * 60_000);
     await t.admin.db.insert(loginAttempts).values([
-      { login: 'old-tries', failures: 4, lastAttemptAt: new Date(Date.now() - 25 * 3_600_000) },
-      { login: 'new-tries', failures: 4, lastAttemptAt: new Date(Date.now() - 23 * 3_600_000) },
+      { login: 'old-tries', failures: 4, lastAttemptAt: minutesAgo(61) },
+      { login: 'new-tries', failures: 4, lastAttemptAt: minutesAgo(59) },
     ]);
-    // Четыре неверных больше суток назад — эта попытка снова первая.
+    // Четыре неверных больше часа назад — эта попытка снова первая.
     expect(await reserveLoginAttempt(t.app.db, 'old-tries')).toMatchObject({ locked: false });
     expect(await attempts('old-tries')).toMatchObject({ failures: 1 });
-    // Четыре неверных меньше суток назад — эта пятая.
+    // Четыре неверных меньше часа назад — эта пятая.
     expect(await reserveLoginAttempt(t.app.db, 'new-tries')).toMatchObject({ locked: true });
 
     await t.admin.db
       .update(loginAttempts)
-      .set({ lastAttemptAt: new Date(Date.now() - 25 * 3_600_000) })
+      .set({ lastAttemptAt: minutesAgo(61) })
       .where(eq(loginAttempts.login, 'old-tries'));
     expect(await cleanupLoginAttempts(t.app.db)).toBeGreaterThanOrEqual(1);
     expect(await attempts('old-tries')).toBeUndefined();
