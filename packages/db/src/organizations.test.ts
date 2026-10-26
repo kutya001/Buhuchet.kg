@@ -180,6 +180,7 @@ describe.skipIf(!databaseAvailable())('создание организации �
       [{ name: '  ' }, 'name'],
       [{ inn: '123' }, 'inn'],
       [{ slug: 'Не латиница' }, 'slug'],
+      [{ slug: 'admin' }, 'slug'],
       [{ owner: { fullName: '', login: 'ok-login', passwordHash: 'x' } }, 'ownerFullName'],
       [{ owner: { fullName: 'Ф', login: 'эр', passwordHash: 'x' } }, 'ownerLogin'],
     ];

@@ -11,6 +11,7 @@ import {
 } from '@buhuchet/domain';
 import { z } from 'zod';
 import { Uuid } from './common';
+import { FeatureSchema, MenuModuleIdSchema } from './org';
 import { TelegramInfo } from './telegram';
 
 /** Вход по логину и паролю (без почты). Логин сравнивается без учёта регистра. */
@@ -32,7 +33,8 @@ export const ScopeGroupIdSchema = z.enum(SCOPE_GROUPS as [ScopeGroupId, ...Scope
 
 /**
  * Кто вошёл (ответ входа и GET /api/auth/me). У администратора платформы нет сотрудника, организации
- * и прав в организации. permissions — действующие права, scopes — область каждой группы.
+ * и прав в организации. permissions — действующие права, scopes — область каждой группы, features —
+ * функции учётной политики, modules — модули меню сотрудника по функциям и правам.
  */
 export const MeResponse = z.object({
   user: z.object({
@@ -57,6 +59,8 @@ export const MeResponse = z.object({
   telegram: TelegramInfo.nullable(),
   permissions: z.array(PermissionIdSchema),
   scopes: z.partialRecord(ScopeGroupIdSchema, z.enum(SCOPES)),
+  features: z.partialRecord(FeatureSchema, z.boolean()),
+  modules: z.array(MenuModuleIdSchema),
 });
 export type MeResponse = z.infer<typeof MeResponse>;
 

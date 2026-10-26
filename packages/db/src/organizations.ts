@@ -3,11 +3,13 @@ import {
   defaultOrgPolicy,
   isValidLogin,
   isValidOrgInn,
-  isValidSlug,
   normalizeLogin,
+  ORG_PROFILE_MESSAGES,
   rolesForNewOrganization,
   SCOPE_GROUPS,
   shortName,
+  SLUG_MESSAGES,
+  slugProblem,
 } from '@buhuchet/domain';
 import { asc, eq, sql } from 'drizzle-orm';
 import type { Db, Tx } from './client';
@@ -61,8 +63,8 @@ export class OrganizationInputError extends Error {
 }
 
 const UNIQUE_FIELDS: Record<string, [OrganizationInputError['field'], string]> = {
-  organizations_inn_unique: ['inn', 'Организация с таким ИНН уже есть'],
-  organizations_slug_unique: ['slug', 'Такой адрес страницы уже занят другой организацией'],
+  organizations_inn_unique: ['inn', ORG_PROFILE_MESSAGES.inn_taken],
+  organizations_slug_unique: ['slug', SLUG_MESSAGES.slug_taken],
   users_login_unique: ['ownerLogin', 'Логин уже занят'],
 };
 
@@ -78,14 +80,13 @@ export async function createOrganization(
   const name = input.name.trim();
   const fullName = input.owner.fullName.trim();
   const login = normalizeLogin(input.owner.login);
-  if (!name) throw new OrganizationInputError('name', 'Введите название');
-  if (!isValidOrgInn(input.inn)) throw new OrganizationInputError('inn', 'ИНН — 14 цифр');
-  if (!isValidSlug(input.slug)) {
-    throw new OrganizationInputError(
-      'slug',
-      'Адрес страницы: 3–30 символов, строчные латинские буквы, цифры и дефис',
-    );
+  if (!name) throw new OrganizationInputError('name', ORG_PROFILE_MESSAGES.name_required);
+  if (!isValidOrgInn(input.inn)) {
+    throw new OrganizationInputError('inn', ORG_PROFILE_MESSAGES.inn_invalid);
   }
+  // Адрес — как в «Моя организация»: формат и занятые слова программы (прототип v58, slugErr).
+  const slug = slugProblem(input.slug);
+  if (slug) throw new OrganizationInputError('slug', `Адрес страницы: ${SLUG_MESSAGES[slug]}`);
   if (!fullName) throw new OrganizationInputError('ownerFullName', 'Введите ФИО владельца');
   if (!isValidLogin(login)) {
     throw new OrganizationInputError(
@@ -126,7 +127,7 @@ async function insertOrganization(
 
   await tx
     .insert(organizations)
-    .values({ id: orgId, slug: input.slug, name: input.name, inn: input.inn });
+    .values({ id: orgId, slug: input.slug, name: input.name, inn: input.inn, createdBy });
 
   const created: CreatedOrganization['roles'] = [];
   for (const role of rolesForNewOrganization(templates)) {
@@ -196,6 +197,7 @@ async function insertOrganization(
     taskConfirm: policy.taskConfirm,
     reportConfirm: policy.reportConfirm,
     payBeforeSubmit: policy.payBeforeSubmit,
+    pageSections: policy.pageSections,
     createdBy,
     updatedBy: createdBy,
   });

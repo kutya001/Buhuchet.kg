@@ -28,7 +28,7 @@ describe('схемы входа', () => {
     expect(ok('x'.repeat(129))).toBe(false);
   });
 
-  it('«кто я»: права — только из каталога 39 прав', () => {
+  it('«кто я»: права — только из каталога 39 прав, модули — только из меню', () => {
     const me = {
       user: {
         id: '0b2d4e6f-0000-4000-8000-00000000000a',
@@ -41,9 +41,12 @@ describe('схемы входа', () => {
       telegram: { name: '@erkin_s', linkedAt: '2026-10-18T03:00:00.000Z' },
       permissions: ['cpView'],
       scopes: { cps: 'own' },
+      features: { tasks: true, projects: false },
+      modules: ['home', 'cps', 'tasks'],
     };
     expect(MeResponse.parse(me)).toEqual(me);
     expect(MeResponse.safeParse({ ...me, permissions: ['rootAccess'] }).success).toBe(false);
+    expect(MeResponse.safeParse({ ...me, modules: ['admin'] }).success).toBe(false);
   });
 
   it('«Забыли пароль?»: логин, код из 6 цифр и новый пароль не короче 8 символов', () => {

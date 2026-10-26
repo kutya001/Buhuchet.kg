@@ -56,11 +56,46 @@ export function slugOf(name: string): string {
     .replace(/-+$/, '');
 }
 
-/** Первый свободный адрес: name, name-2, name-3… (прототип core/utils.js, slugFree). */
+/**
+ * Занятые слова — адреса самой программы: ссылки контрагентов buhuchet.kg/<адрес>/inn/<ИНН> не должны
+ * пересекаться с ними (прототип modules/org.js, SLUG_BUSY, v58).
+ */
+export const RESERVED_SLUGS: readonly string[] = [
+  'api',
+  'admin',
+  'login',
+  'logout',
+  'auth',
+  'signup',
+  'register',
+  'reset',
+  'password',
+  'test',
+  'www',
+  'inn',
+  'app',
+  'help',
+  'support',
+  'docs',
+  'static',
+  'assets',
+  'files',
+  'mail',
+  'status',
+  'staging',
+  'dev',
+  'demo',
+  'buhuchet',
+];
+
+/**
+ * Первый свободный адрес: name, name-2, name-3… (прототип core/utils.js, slugFree). Занятые слова
+ * программы тоже пропускаются, чтобы предложенный адрес можно было сохранить.
+ */
 export function slugFree(base: string, taken: readonly string[]): string {
   const b = base.length >= 3 ? base : (base ? `${base}-org` : 'org').slice(0, SLUG_MAX);
   let slug = b;
-  for (let i = 2; taken.includes(slug); i++) {
+  for (let i = 2; taken.includes(slug) || RESERVED_SLUGS.includes(slug); i++) {
     const tail = `-${i}`;
     slug = b.slice(0, SLUG_MAX - tail.length).replace(/-+$/, '') + tail;
   }
@@ -70,4 +105,20 @@ export function slugFree(base: string, taken: readonly string[]): string {
 /** Адрес страницы организации: 3–30 символов, строчные латинские буквы, цифры и дефис. */
 export function isValidSlug(slug: string): boolean {
   return /^[a-z0-9-]{3,30}$/.test(slug);
+}
+
+/** Что не так с адресом страницы организации; занят ли он другой организацией, проверяет база. */
+export type SlugProblem = 'slug_invalid' | 'slug_reserved';
+
+/** Тексты под полем «Адрес страницы организации» (прототип modules/org.js, slugErr). */
+export const SLUG_MESSAGES: Record<SlugProblem | 'slug_taken', string> = {
+  slug_invalid: '3–30 символов: строчные латинские буквы, цифры и дефис',
+  slug_reserved: 'Этот адрес занят, выберите другой',
+  slug_taken: 'Такой адрес уже занят другой организацией',
+};
+
+/** Проверка адреса страницы в том же порядке, что в прототипе: формат, затем занятые слова. */
+export function slugProblem(slug: string): SlugProblem | null {
+  if (!isValidSlug(slug)) return 'slug_invalid';
+  return RESERVED_SLUGS.includes(slug) ? 'slug_reserved' : null;
 }

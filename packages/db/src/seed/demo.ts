@@ -7,7 +7,7 @@ import {
   normalizeScopes,
   SCOPE_GROUPS,
 } from '@buhuchet/domain';
-import { inArray } from 'drizzle-orm';
+import { eq, inArray, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Db } from '../client';
 import {
@@ -41,6 +41,9 @@ const DemoFile = z.object({
   organization: z.object({
     name: z.string(),
     inn: z.string().optional(),
+    address: z.string().optional(),
+    phone: Phone,
+    head: z.string().optional(),
     slug: z.string(),
     features: z.record(z.string(), z.boolean()).default({}),
     remind: z.array(z.number().int()).optional(),
@@ -100,11 +103,35 @@ export async function seedDemoOrganization(
   const demo = DemoFile.parse(file);
   const org = demo.organization;
   const orgId = DEMO_ORG_ID;
+  const profile = {
+    address: org.address ?? null,
+    phone: org.phone ? `+${org.phone.digits}` : null,
+    head: org.head ?? null,
+  };
   const created = await db
     .insert(organizations)
-    .values({ id: orgId, slug: org.slug, name: org.name, inn: org.inn ?? null, isDemo: true })
+    .values({
+      id: orgId,
+      slug: org.slug,
+      name: org.name,
+      inn: org.inn ?? null,
+      ...profile,
+      isDemo: true,
+    })
     .onConflictDoNothing()
     .returning({ id: organizations.id });
+  if (options.update) {
+    // Демо-организация, созданная до «Моя организация» (#8): досоздать пустые поля профиля, не трогая
+    // то, что уже изменили на стенде.
+    await db
+      .update(organizations)
+      .set({
+        address: sql`coalesce(${organizations.address}, ${profile.address})`,
+        phone: sql`coalesce(${organizations.phone}, ${profile.phone})`,
+        head: sql`coalesce(${organizations.head}, ${profile.head})`,
+      })
+      .where(eq(organizations.id, orgId));
+  }
 
   await db
     .insert(roles)
@@ -190,6 +217,7 @@ export async function seedDemoOrganization(
       taskConfirm: org.taskConfirm ?? defaults.taskConfirm,
       reportConfirm: org.repConfirm ?? defaults.reportConfirm,
       payBeforeSubmit: org.payFirst ?? defaults.payBeforeSubmit,
+      pageSections: defaults.pageSections,
     })
     .onConflictDoNothing();
 
