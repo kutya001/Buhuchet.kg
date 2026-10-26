@@ -13,6 +13,12 @@ export const RESET_CODE_MAX_PER_HOUR = 3;
  * ограничения 6 цифр перебираются за 10 минут (docs/decisions.md, п. 21).
  */
 export const RESET_CODE_MAX_ATTEMPTS = 5;
+/**
+ * Неверных вводов кода за сутки, после которых «Забыли пароль?» для логина закрывается до конца
+ * суток (пароль может сбросить владелец). Иначе код подбирали бы по 15 вариантов в час без конца
+ * (docs/decisions.md, п. 21; сверх ТЗ — docs/deviations.md, п. 9).
+ */
+export const RESET_CODE_MAX_DAILY_FAILURES = 10;
 
 /** Ссылка привязки Telegram одноразовая и действует 15 минут (прототип modules/profile.js). */
 export const TELEGRAM_LINK_TTL_MINUTES = 15;

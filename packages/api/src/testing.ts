@@ -36,6 +36,7 @@ export function createTestDeps(overrides: Partial<ApiDeps> = {}): ApiDeps {
     logger: createLogger({ level: 'silent', environment: 'test', version: 'test', service: 'web' }),
     telegram: createFakeTelegram(),
     jobs: [],
+    resetResponseFloorMs: 0,
     ...overrides,
   };
 }

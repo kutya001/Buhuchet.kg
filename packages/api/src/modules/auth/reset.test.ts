@@ -12,7 +12,7 @@ import { TELEGRAM_TEMPLATE_DEFAULTS, TEMP_PASSWORD_PATTERN } from '@buhuchet/dom
 import {
   ApiError,
   MeResponse,
-  PasswordResetSentResponse,
+  PasswordResetRequestedResponse,
   TemporaryPasswordResponse,
 } from '@buhuchet/shared';
 import { and, eq } from 'drizzle-orm';
@@ -20,6 +20,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from '../../app';
 import type { ApiDeps } from '../../deps';
 import { createTestDeps, linkTelegram, signIn, TEST_ORIGIN as ORIGIN } from '../../testing';
+import { RESET_REQUESTED_MESSAGE } from './reset';
 
 const { auditLog, employees, organizations, passwordResetCodes, users } = schema;
 
@@ -43,6 +44,8 @@ async function error(res: Response) {
 
 const passedChangeNotice = (login: string) =>
   TELEGRAM_TEMPLATE_DEFAULTS.tgPassChanged.replace('{логин}', login);
+const passwordResetNotice = (login: string, by: string) =>
+  TELEGRAM_TEMPLATE_DEFAULTS.tgPassReset.replace('{логин}', login).replace('{кто}', by);
 
 describe.skipIf(!databaseAvailable())('«Забыли пароль?» и сброс временным паролем', () => {
   let t: TestDatabase;
@@ -131,49 +134,56 @@ describe.skipIf(!databaseAvailable())('«Забыли пароль?» и сбр�
     await t?.drop();
   });
 
-  it('нет такого логина; без Telegram — кто сбросит пароль (прототип core/login.js)', async () => {
-    const unknown = await requestCode('nobody');
-    expect(unknown.status).toBe(404);
-    expect(await error(unknown)).toMatchObject({
-      code: 'unknown_login',
-      message: 'Нет такого логина',
+  /** Ответ шага 1 — один для любого логина (docs/deviations.md, п. 4, решение Б). */
+  const expectRequested = async (res: Response) => {
+    expect(res.status).toBe(200);
+    expect(PasswordResetRequestedResponse.parse(await res.json())).toEqual({
+      message: RESET_REQUESTED_MESSAGE,
     });
+  };
 
-    const employee = await requestCode('lost-a');
-    expect(employee.status).toBe(409);
-    expect(await error(employee)).toEqual({
-      code: 'telegram_not_linked',
-      message: 'Telegram не привязан. Пароль сбросит владелец организации.',
-    });
-    for (const login of ['owner-b', 'platform-admin']) {
-      expect(await error(await requestCode(login))).toEqual({
-        code: 'telegram_not_linked',
-        message: 'Telegram не привязан. Пароль сбросит администратор платформы.',
-      });
+  it('для любого логина один ответ: кто сбросит пароль без Telegram; код — только в привязанный', async () => {
+    expect(RESET_REQUESTED_MESSAGE).toContain('пароль сбросит владелец организации');
+    for (const login of ['nobody', 'lost-a', 'owner-b', 'platform-admin']) {
+      await expectRequested(await requestCode(login));
     }
     expect(tg.sent).toEqual([]);
+  });
+
+  it('по времени ответа не видно, есть ли логин: оба шага не быстрее заданного порога', async () => {
+    const slow = createApp(
+      createTestDeps({ db: t.app.db, telegram: tg, resetResponseFloorMs: 300 }),
+    );
+    for (const [path, body] of [
+      ['/api/auth/password-reset', { login: 'nobody' }],
+      [
+        '/api/auth/password-reset/confirm',
+        { login: 'nobody', code: '123456', newPassword: NEW_PASSWORD },
+      ],
+    ] as const) {
+      const started = Date.now();
+      await slow.request(path, json(body));
+      expect(Date.now() - started).toBeGreaterThanOrEqual(290);
+    }
   });
 
   it('код приходит в Telegram сразу, новый пароль закрывает прежние сеансы, бот сообщает о смене', async () => {
     const oldCookie = await signIn(app, 'owner-a', PASSWORD);
     const before = Date.now();
-    const res = await requestCode('Owner-A ');
-    expect(res.status).toBe(200);
-    const body = PasswordResetSentResponse.parse(await res.json());
-    expect(body.telegram).toBe('@erkin_s');
-    const minutes = (Date.parse(body.expiresAt) - before) / 60_000;
-    expect(minutes).toBeGreaterThan(9.9);
-    expect(minutes).toBeLessThan(10.1);
+    await expectRequested(await requestCode('Owner-A '));
     expect(tg.sent).toHaveLength(1);
     expect(tg.sent[0]).toMatchObject({ chatId: 5002 });
     const code = sentCode();
     expect(tg.sent[0]!.text).toBe(TELEGRAM_TEMPLATE_DEFAULTS.tgCode.replace('{код}', code));
-    // Код в базе — только хешем.
+    // Код в базе — только хешем; действует 10 минут.
     const rows = await t.admin.db
       .select()
       .from(passwordResetCodes)
       .where(eq(passwordResetCodes.userId, a.ownerUserId));
     expect(rows.every((r) => !r.codeHash.includes(code))).toBe(true);
+    const minutes = (rows.at(-1)!.expiresAt.getTime() - before) / 60_000;
+    expect(minutes).toBeGreaterThan(9.9);
+    expect(minutes).toBeLessThan(10.1);
 
     const wrong = code === '000000' ? '111111' : '000000';
     const bad = await confirm('owner-a', wrong);
@@ -204,22 +214,22 @@ describe.skipIf(!databaseAvailable())('«Забыли пароль?» и сбр�
     await setPassword(a.ownerUserId);
   });
 
-  it('четвёртый запрос кода за час отклоняется; действует только последний код', async () => {
+  it('четвёртый запрос кода за час отклоняется: код не приходит; действует только последний', async () => {
     await forgetCodes(people['acc-a']!.userId);
     const codes: string[] = [];
     for (let i = 0; i < 3; i++) {
-      expect((await requestCode('acc-a')).status).toBe(200);
+      await expectRequested(await requestCode('acc-a'));
       codes.push(sentCode());
     }
-    const fourth = await requestCode('acc-a');
-    expect(fourth.status).toBe(429);
-    expect(fourth.headers.get('retry-after')).toMatch(/^\d+$/);
-    const err = await error(fourth);
-    expect(err.code).toBe('reset_limited');
-    expect(err.message).toMatch(
-      /^Код уже запрашивали 3 раза за час\. Запросите новый после \d\d:\d\d\.$/,
-    );
+    // Ответ тот же, что всегда (решение Б по п. 4), но четвёртого кода нет.
+    await expectRequested(await requestCode('acc-a'));
     expect(tg.sent).toHaveLength(3);
+    expect(
+      await t.admin.db
+        .select()
+        .from(passwordResetCodes)
+        .where(eq(passwordResetCodes.userId, people['acc-a']!.userId)),
+    ).toHaveLength(3);
     // Один Telegram у двух организаций — в сообщении указана организация.
     await linkTelegram(app, await signIn(app, 'acc-b', PASSWORD), 5001);
     await forgetCodes(people['acc-a']!.userId);
@@ -264,25 +274,38 @@ describe.skipIf(!databaseAvailable())('«Забыли пароль?» и сбр�
     await setPassword(people['acc-a']!.userId);
   });
 
-  it('Telegram не принял сообщение — 502; бот не подключён — 503; заблокированному — 403', async () => {
-    await forgetCodes(people['acc-a']!.userId);
+  it('Telegram не принял сообщение — тот же ответ; бот не подключён — 503; заблокированному — без кода', async () => {
+    const userId = people['acc-a']!.userId;
+    const codeCount = async () =>
+      (
+        await t.admin.db
+          .select()
+          .from(passwordResetCodes)
+          .where(eq(passwordResetCodes.userId, userId))
+      ).length;
+    await forgetCodes(userId);
+    const before = await codeCount();
     tg.failNext({ ok: false, errorCode: 403, description: 'blocked', permanent: true });
-    const failed = await requestCode('acc-a');
-    expect(failed.status).toBe(502);
-    expect((await error(failed)).code).toBe('telegram_send_failed');
+    await expectRequested(await requestCode('acc-a'));
+    expect(tg.sent).toEqual([]);
+    expect(await codeCount()).toBe(before + 1);
 
     const noBot = createApp(createTestDeps({ db: t.app.db, telegram: null }));
-    const res = await noBot.request('/api/auth/password-reset', json({ login: 'acc-a' }));
-    expect(res.status).toBe(503);
+    for (const login of ['acc-a', 'nobody']) {
+      const res = await noBot.request('/api/auth/password-reset', json({ login }));
+      expect(res.status).toBe(503);
+      expect((await error(res)).code).toBe('telegram_unavailable');
+    }
 
     await t.admin.db
       .update(employees)
       .set({ active: false })
       .where(eq(employees.id, people['acc-a']!.employeeId));
-    const blocked = await requestCode('acc-a');
-    expect(blocked.status).toBe(403);
-    expect((await error(blocked)).code).toBe('employee_blocked');
-    expect((await confirm('acc-a', '123456')).status).toBe(403);
+    await forgetCodes(userId);
+    await expectRequested(await requestCode('acc-a'));
+    expect(await error(await confirm('acc-a', '123456'))).toMatchObject({
+      code: 'reset_code_invalid',
+    });
     await t.admin.db
       .update(employees)
       .set({ active: true })
@@ -291,11 +314,14 @@ describe.skipIf(!databaseAvailable())('«Забыли пароль?» и сбр�
       .update(organizations)
       .set({ status: 'blocked' })
       .where(eq(organizations.id, a.orgId));
-    expect((await error(await requestCode('acc-a'))).code).toBe('org_blocked');
+    await expectRequested(await requestCode('acc-a'));
     await t.admin.db
       .update(organizations)
       .set({ status: 'active' })
       .where(eq(organizations.id, a.orgId));
+    // Заблокированному код не записан и не отправлен.
+    expect(tg.sent).toEqual([]);
+    expect(await codeCount()).toBe(before + 1);
   });
 
   it('неверные данные запроса — 400 без запроса к Telegram', async () => {
@@ -312,7 +338,10 @@ describe.skipIf(!databaseAvailable())('«Забыли пароль?» и сбр�
     expect(tg.sent).toEqual([]);
   });
 
-  it('смена своего пароля в профиле — бот тоже сообщает', async () => {
+  it('смена своего пароля в профиле — бот тоже сообщает, ожидающий код отменяется', async () => {
+    await forgetCodes(people['acc-a']!.userId);
+    await requestCode('acc-a');
+    const code = sentCode();
     const cookie = await signIn(app, 'acc-a', PASSWORD);
     const res = await app.request(
       '/api/auth/password',
@@ -320,7 +349,27 @@ describe.skipIf(!databaseAvailable())('«Забыли пароль?» и сбр�
     );
     expect(res.status).toBe(200);
     expect(tg.sent.at(-1)!.text).toBe(`Организация А\n${passedChangeNotice('acc-a')}`);
+    expect((await confirm('acc-a', code, 'Третий-пароль-3')).status).toBe(400);
+    expect(await loginStatus('acc-a', NEW_PASSWORD)).toBe(200);
     await setPassword(people['acc-a']!.userId);
+  });
+
+  it('10 неверных кодов за сутки — восстановление через Telegram закрыто до конца суток', async () => {
+    const userId = people['acc-a']!.userId;
+    await forgetCodes(userId);
+    await t.admin.db
+      .update(passwordResetCodes)
+      .set({ createdAt: new Date(Date.now() - 25 * 3_600_000) })
+      .where(eq(passwordResetCodes.userId, userId));
+    for (let round = 0; round < 2; round++) {
+      await requestCode('acc-a');
+      const wrong = sentCode() === '000000' ? '111111' : '000000';
+      for (let i = 0; i < 5; i++) expect((await confirm('acc-a', wrong)).status).toBe(400);
+    }
+    const sent = tg.sent.length;
+    await expectRequested(await requestCode('acc-a'));
+    expect(tg.sent).toHaveLength(sent);
+    await t.admin.db.delete(passwordResetCodes).where(eq(passwordResetCodes.userId, userId));
   });
 
   describe('сброс временным паролем', () => {
@@ -352,17 +401,27 @@ describe.skipIf(!databaseAvailable())('«Забыли пароль?» и сбр�
         .where(and(eq(auditLog.entity, 'user'), eq(auditLog.entityId, people['lost-a']!.userId)));
       expect(history.at(-1)).toMatchObject({
         actorUserId: a.ownerUserId,
-        changes: [{ field: 'passwordHash' }, { field: 'mustChangePassword', to: true }],
+        changes: [
+          { field: 'passwordHash' },
+          { field: 'mustChangePassword', from: false, to: true },
+        ],
       });
       expect(JSON.stringify(history)).not.toContain(body.temporaryPassword);
       await setPassword(people['lost-a']!.userId);
     });
 
-    it('у сотрудника привязан Telegram — бот сообщает о сбросе', async () => {
+    it('у сотрудника привязан Telegram — бот сообщает, кто сбросил; ожидающий код отменяется', async () => {
+      await forgetCodes(people['acc-a']!.userId);
+      await requestCode('acc-a');
+      const code = sentCode();
       const owner = await signIn(app, 'owner-a', PASSWORD);
       const res = await resetEmployee(owner, people['acc-a']!.employeeId);
       expect(TemporaryPasswordResponse.parse(await res.json()).telegramNotified).toBe(true);
-      expect(tg.sent.at(-1)).toMatchObject({ chatId: 5001 });
+      expect(tg.sent.at(-1)).toMatchObject({
+        chatId: 5001,
+        text: `Организация А\n${passwordResetNotice('acc-a', 'Владелец owner-a')}`,
+      });
+      expect((await confirm('acc-a', code)).status).toBe(400);
       await setPassword(people['acc-a']!.userId);
     });
 
@@ -401,7 +460,10 @@ describe.skipIf(!databaseAvailable())('«Забыли пароль?» и сбр�
       // Владелец с Telegram — бот сообщает, с организацией, если Telegram общий.
       const notified = await resetByAdmin(admin, a.ownerUserId);
       expect(TemporaryPasswordResponse.parse(await notified.json()).telegramNotified).toBe(true);
-      expect(tg.sent.at(-1)).toMatchObject({ chatId: 5002, text: passedChangeNotice('owner-a') });
+      expect(tg.sent.at(-1)).toMatchObject({
+        chatId: 5002,
+        text: passwordResetNotice('owner-a', 'администратор платформы'),
+      });
       await setPassword(a.ownerUserId);
     });
 

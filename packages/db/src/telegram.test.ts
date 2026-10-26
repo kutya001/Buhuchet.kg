@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { sessionByToken, startSession, withUserContext } from './auth';
+import { changeOwnPassword, sessionByToken, startSession, withUserContext } from './auth';
 import { withOrgContext } from './context';
 import { createOrganization, type CreatedOrganization } from './organizations';
 import type { Tx } from './client';
@@ -19,8 +19,8 @@ import {
   completePasswordReset,
   createTelegramLinkToken,
   employeeAccount,
-  isOrgOwner,
   messageTemplates,
+  passwordResetStatus,
   peekTelegramLink,
   requestPasswordReset,
   reservePasswordResetAttempt,
@@ -37,8 +37,8 @@ import {
 } from './testing';
 
 const newHash = () => createHash('sha256').update(randomBytes(32)).digest('hex');
-const rlsViolation = expect.objectContaining({
-  cause: expect.objectContaining({ message: expect.stringMatching(/row-level security/) }),
+const permissionDenied = expect.objectContaining({
+  cause: expect.objectContaining({ message: expect.stringMatching(/permission denied/) }),
 });
 
 describe.skipIf(!databaseAvailable())('Telegram и «Забыли пароль?» в базе', () => {
@@ -177,7 +177,7 @@ describe.skipIf(!databaseAvailable())('Telegram и «Забыли пароль?�
     ).toBeNull();
 
     expect(await linkAs(ctxA(), 5003, 'erkin_new')).toEqual({
-      previous: { chatId: 5001, username: 'erkin_s', firstName: 'Эркин' },
+      previous: { chatId: 5001, username: 'erkin_s', firstName: 'Эркин', shared: false },
       shared: false,
     });
     expect(await telegramChat(t.app.db, a.ownerUserId)).toMatchObject({ chatId: 5003 });
@@ -196,16 +196,20 @@ describe.skipIf(!databaseAvailable())('Telegram и «Забыли пароль?�
   });
 
   it('отвязать можно только свой Telegram', async () => {
+    // Этот чат остаётся привязан к владельцу А — в сообщении об отвязке нужна организация.
     expect(
       await withOrgContext(t.app.db, { orgId: b.orgId, userId: b.ownerUserId }, unlinkTelegram),
-    ).toEqual({ username: null, firstName: 'Имя' });
+    ).toEqual({ chatId: 5003, username: null, firstName: 'Имя', shared: true });
     expect(await telegramChat(t.app.db, b.ownerUserId)).toBeNull();
     expect(await telegramChat(t.app.db, a.ownerUserId)).toMatchObject({ shared: false });
     expect(
       await withOrgContext(t.app.db, { orgId: b.orgId, userId: b.ownerUserId }, unlinkTelegram),
     ).toBeNull();
-    expect(await withUserContext(t.app.db, adminId, unlinkTelegram)).toMatchObject({
+    expect(await withUserContext(t.app.db, adminId, unlinkTelegram)).toEqual({
+      chatId: 7001,
       username: 'admin',
+      firstName: 'Имя',
+      shared: false,
     });
   });
 
@@ -227,44 +231,44 @@ describe.skipIf(!databaseAvailable())('Telegram и «Забыли пароль?�
     }
   });
 
-  it('чужая организация не меняется и не создаётся: привязки и коды Б из контекста А', async () => {
-    const changed = await withOrgContext(t.app.db, ctxA(), (tx) =>
-      tx
-        .update(telegramLinks)
-        .set({ chatId: 1 })
-        .where(eq(telegramLinks.userId, b.ownerUserId))
-        .returning({ id: telegramLinks.userId }),
-    );
-    expect(changed).toEqual([]);
-    const deleted = await withOrgContext(t.app.db, ctxA(), (tx) =>
-      tx
-        .delete(passwordResetCodes)
-        .where(eq(passwordResetCodes.userId, b.ownerUserId))
-        .returning({ id: passwordResetCodes.id }),
-    );
-    expect(deleted).toEqual([]);
-    expect(await telegramChat(t.app.db, b.ownerUserId)).toMatchObject({ chatId: 6001 });
-    await expect(
-      withOrgContext(t.app.db, ctxA(), (tx) =>
+  it('чужая организация не меняется и не создаётся: напрямую эти таблицы роль приложения не меняет', async () => {
+    // Только функции app.telegram_* и app.auth_reset_*: ошибка в коде не перепривяжет чужой Telegram,
+    // не обнулит попытки ввода кода и не подставит свой хеш — ни в чужой организации, ни в своей.
+    const attempts = [
+      (tx: Tx) =>
+        tx.update(telegramLinks).set({ chatId: 1 }).where(eq(telegramLinks.userId, b.ownerUserId)),
+      (tx: Tx) =>
+        tx
+          .update(passwordResetCodes)
+          .set({ attempts: 0 })
+          .where(eq(passwordResetCodes.userId, a.ownerUserId)),
+      (tx: Tx) => tx.delete(passwordResetCodes).where(eq(passwordResetCodes.userId, b.ownerUserId)),
+      (tx: Tx) => tx.delete(telegramLinkTokens).where(eq(telegramLinkTokens.userId, a.ownerUserId)),
+      (tx: Tx) =>
         tx.insert(telegramLinks).values({ userId: b.ownerUserId, orgId: b.orgId, chatId: 2 }),
-      ),
-    ).rejects.toThrow(rlsViolation);
-    await expect(
-      withOrgContext(t.app.db, ctxA(), (tx) =>
+      (tx: Tx) =>
         tx.insert(passwordResetCodes).values({
-          userId: b.ownerUserId,
-          orgId: b.orgId,
+          userId: a.ownerUserId,
+          orgId: a.orgId,
           codeHash: 'x',
           expiresAt: new Date(Date.now() + 60_000),
         }),
-      ),
-    ).rejects.toThrow(rlsViolation);
+    ];
+    for (const attempt of attempts) {
+      await expect(withOrgContext(t.app.db, ctxA(), attempt)).rejects.toThrow(permissionDenied);
+    }
+    expect(await telegramChat(t.app.db, b.ownerUserId)).toMatchObject({ chatId: 6001 });
   });
 
   it('код «Забыли пароль?»: без Telegram не записывается, 10 минут, не больше 3 в час', async () => {
+    expect(await passwordResetStatus(t.app.db, accA)).toEqual({ status: 'no_telegram' });
     expect(await requestPasswordReset(t.app.db, { userId: accA, codeHash: 'c0' })).toEqual({
       status: 'no_telegram',
     });
+    expect(await passwordResetStatus(t.app.db, '00000000-0000-4000-8000-000000000000')).toEqual({
+      status: 'no_user',
+    });
+    expect(await passwordResetStatus(t.app.db, a.ownerUserId)).toEqual({ status: 'ok' });
     expect(
       await requestPasswordReset(t.app.db, {
         userId: '00000000-0000-4000-8000-000000000000',
@@ -292,6 +296,7 @@ describe.skipIf(!databaseAvailable())('Telegram и «Забыли пароль?�
     const retry = (fourth as { retryAt: Date }).retryAt.getTime() - before;
     expect(retry / 60_000).toBeGreaterThan(59.9);
     expect(retry / 60_000).toBeLessThan(60.1);
+    expect(await passwordResetStatus(t.app.db, a.ownerUserId)).toEqual(fourth);
 
     // Действует только последний код (c3).
     expect(await reservePasswordResetAttempt(t.app.db, a.ownerUserId)).toMatchObject({
@@ -361,6 +366,36 @@ describe.skipIf(!databaseAvailable())('Telegram и «Забыли пароль?�
     expect(await reservePasswordResetAttempt(t.app.db, a.ownerUserId)).toBeNull();
   });
 
+  it('за сутки не больше 10 неверных кодов: потом код не присылается и не принимается', async () => {
+    // Прежние коды — старше суток.
+    await t.admin.db
+      .update(passwordResetCodes)
+      .set({ createdAt: new Date(Date.now() - 25 * 3_600_000) })
+      .where(eq(passwordResetCodes.userId, a.ownerUserId));
+    expect(await passwordResetStatus(t.app.db, a.ownerUserId)).toEqual({ status: 'ok' });
+    const wrong = async (codeHash: string, times: number) => {
+      expect(
+        await requestPasswordReset(t.app.db, { userId: a.ownerUserId, codeHash }),
+      ).toMatchObject({ status: 'sent' });
+      for (let i = 0; i < times; i++) {
+        expect(await reservePasswordResetAttempt(t.app.db, a.ownerUserId)).not.toBeNull();
+      }
+    };
+    await wrong('d1', 5);
+    await wrong('d2', 4);
+    // Третий код: у него самого попыток много, но за сутки это уже десятый неверный ввод.
+    await wrong('d3', 1);
+    expect(await reservePasswordResetAttempt(t.app.db, a.ownerUserId)).toBeNull();
+    const locked = await passwordResetStatus(t.app.db, a.ownerUserId);
+    expect(locked.status).toBe('locked');
+    const hours = ((locked as { retryAt: Date }).retryAt.getTime() - Date.now()) / 3_600_000;
+    expect(hours).toBeGreaterThan(23.9);
+    expect(hours).toBeLessThan(24.1);
+    expect(
+      await requestPasswordReset(t.app.db, { userId: a.ownerUserId, codeHash: 'd4' }),
+    ).toMatchObject({ status: 'locked' });
+  });
+
   it('временный пароль от владельца: сменить при входе, сеансы завершены; чужого не сбросить', async () => {
     const token = newHash();
     await startSession(t.app.db, { userId: accA, tokenHash: token });
@@ -374,7 +409,7 @@ describe.skipIf(!databaseAvailable())('Telegram и «Забыли пароль?�
       await withOrgContext(t.app.db, ctxA(), (tx) =>
         setTemporaryPassword(tx, { userId: accA, passwordHash: 'temp' }),
       ),
-    ).toBe(true);
+    ).toEqual({ mustChangePasswordBefore: false });
     const [u] = await t.admin.db.select().from(users).where(eq(users.id, accA));
     expect(u).toMatchObject({ passwordHash: 'temp', mustChangePassword: true });
     expect(await sessionByToken(t.app.db, token)).toBeNull();
@@ -383,12 +418,58 @@ describe.skipIf(!databaseAvailable())('Telegram и «Забыли пароль?�
       await withOrgContext(t.app.db, ctxA(), (tx) =>
         setTemporaryPassword(tx, { userId: b.ownerUserId, passwordHash: 'evil' }),
       ),
-    ).toBe(false);
+    ).toBeNull();
     const [ub] = await t.admin.db.select().from(users).where(eq(users.id, b.ownerUserId));
     expect(ub!.passwordHash).toBe('hash-b');
     expect(
       await t.app.db.select().from(sessions).where(eq(sessions.userId, b.ownerUserId)),
     ).toEqual([]);
+  });
+
+  it('ожидающий код отменяется: смена и сброс пароля, отвязка и замена Telegram', async () => {
+    const pendingAfter = async (userId: string, action: () => Promise<unknown>) => {
+      await t.admin.db.delete(passwordResetCodes).where(eq(passwordResetCodes.userId, userId));
+      expect(await requestPasswordReset(t.app.db, { userId, codeHash: 'pending' })).toMatchObject({
+        status: 'sent',
+      });
+      await action();
+      return (await reservePasswordResetAttempt(t.app.db, userId)) !== null;
+    };
+    const sessionId = await startSession(t.app.db, {
+      userId: a.ownerUserId,
+      tokenHash: newHash(),
+    });
+    expect(
+      await pendingAfter(a.ownerUserId, () =>
+        withOrgContext(t.app.db, ctxA(), (tx) =>
+          changeOwnPassword(tx, { sessionId, passwordHash: 'own', newTokenHash: newHash() }),
+        ),
+      ),
+    ).toBe(false);
+
+    await linkAs({ orgId: a.orgId, userId: accA }, 5010);
+    expect(
+      await pendingAfter(accA, () =>
+        withOrgContext(t.app.db, ctxA(), (tx) =>
+          setTemporaryPassword(tx, { userId: accA, passwordHash: 'temp-2' }),
+        ),
+      ),
+    ).toBe(false);
+
+    expect(
+      await pendingAfter(accA, () =>
+        withOrgContext(t.app.db, { orgId: a.orgId, userId: accA }, unlinkTelegram),
+      ),
+    ).toBe(false);
+
+    // Замена Telegram на другой чат отменяет код, повторная привязка того же чата — нет.
+    await linkAs({ orgId: a.orgId, userId: accA }, 5011);
+    expect(await pendingAfter(accA, () => linkAs({ orgId: a.orgId, userId: accA }, 5012))).toBe(
+      false,
+    );
+    expect(await pendingAfter(accA, () => linkAs({ orgId: a.orgId, userId: accA }, 5012))).toBe(
+      true,
+    );
   });
 
   it('администратор платформы находит учётную запись; остальные — нет', async () => {
@@ -403,12 +484,6 @@ describe.skipIf(!databaseAvailable())('Telegram и «Забыли пароль?�
       await withUserContext(t.app.db, adminId, (tx) => adminFindUser(tx, b.ownerUserId)),
     ).toBeNull();
     await t.admin.db.update(users).set({ blocked: false }).where(eq(users.id, adminId));
-  });
-
-  it('кто владелец организации — для подсказки «пароль сбросит …»', async () => {
-    expect(await isOrgOwner(t.app.db, a.ownerUserId)).toBe(true);
-    expect(await isOrgOwner(t.app.db, accA)).toBe(false);
-    expect(await isOrgOwner(t.app.db, adminId)).toBe(false);
   });
 
   it('шаблоны сообщений — из справочников платформы', async () => {

@@ -30,4 +30,6 @@ export interface ApiDeps extends JobContext {
     | 'TELEGRAM_BOT_USERNAME'
   >;
   jobs: readonly Job[];
+  /** Не быстрее скольких миллисекунд отвечает «Забыли пароль?» (по умолчанию 1,5 с; в тестах — 0). */
+  resetResponseFloorMs?: number;
 }

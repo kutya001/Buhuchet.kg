@@ -66,12 +66,12 @@ export const PasswordResetRequest = z.object({
 });
 export type PasswordResetRequest = z.infer<typeof PasswordResetRequest>;
 
-/** Код отправлен: куда (как в прототипе «Код отправлен в Telegram @…») и до какого момента действует. */
-export const PasswordResetSentResponse = z.object({
-  telegram: z.string(),
-  expiresAt: z.iso.datetime(),
-});
-export type PasswordResetSentResponse = z.infer<typeof PasswordResetSentResponse>;
+/**
+ * «Забыли пароль?», шаг 1: один ответ для любого логина — пришлёт ли бот код, не сообщается
+ * (docs/deviations.md, п. 4, решение Б).
+ */
+export const PasswordResetRequestedResponse = z.object({ message: z.string() });
+export type PasswordResetRequestedResponse = z.infer<typeof PasswordResetRequestedResponse>;
 
 /** «Забыли пароль?», шаг 2: код из Telegram и новый пароль. Повтор нового пароля сверяет форма. */
 export const PasswordResetConfirmRequest = z.object({

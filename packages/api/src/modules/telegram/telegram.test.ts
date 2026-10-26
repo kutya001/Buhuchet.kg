@@ -199,6 +199,20 @@ describe.skipIf(!databaseAvailable())('Telegram: привязка по ссыл�
     expect((await me(app, cookie)).telegram).toMatchObject({ name: 'Алишер' });
   });
 
+  it('другой Telegram вместо прежнего — бот пишет об этом в прежний чат', async () => {
+    const cookie = await signIn(app, 'acc-a', PASSWORD);
+    await linkTelegram(app, cookie, 7003, 'new_tg');
+    expect(tg.sent.map((m) => m.chatId)).toEqual([7001, 7003]);
+    expect(tg.sent[0]!.text).toBe(
+      TELEGRAM_TEMPLATE_DEFAULTS.tgRelinked
+        .replace('{логин}', 'acc-a')
+        .replace('{telegram}', '@new_tg'),
+    );
+    // Тот же чат ещё раз — сообщения о замене нет.
+    await linkTelegram(app, cookie, 7003, 'new_tg');
+    expect(tg.sent.map((m) => m.chatId)).toEqual([7001, 7003, 7003]);
+  });
+
   it('просто /start, другой текст — подсказка; группы и боты — без ответа', async () => {
     await sendToBot(app, telegramUpdate('/start', 9001));
     expect(lastText()).toBe(TELEGRAM_TEMPLATE_DEFAULTS.tgStart);
@@ -248,7 +262,16 @@ describe.skipIf(!databaseAvailable())('Telegram: привязка по ссыл�
     expect(noOrigin.status).toBe(403);
     expect((await post(app, '/api/telegram/link', cookie, 'DELETE')).status).toBe(200);
     expect((await me(app, cookie)).telegram).toBeNull();
+    // Бот сообщает об отвязке в отвязанный чат; он остался у owner-a — с организацией.
+    expect(tg.sent).toEqual([
+      {
+        chatId: 5001,
+        text: `Организация Б\n${TELEGRAM_TEMPLATE_DEFAULTS.tgUnlinked.replace('{логин}', 'owner-b')}`,
+        options: {},
+      },
+    ]);
     expect((await post(app, '/api/telegram/link', cookie, 'DELETE')).status).toBe(200);
+    expect(tg.sent).toHaveLength(1);
     const history = await t.admin.db
       .select()
       .from(auditLog)
@@ -267,6 +290,10 @@ describe.skipIf(!databaseAvailable())('Telegram: привязка по ссыл�
     expect((await me(app, cookie)).telegram).toMatchObject({ name: '@admin_tg' });
     expect((await post(app, '/api/telegram/link', cookie, 'DELETE')).status).toBe(200);
     expect((await me(app, cookie)).telegram).toBeNull();
+    expect(tg.sent.at(-1)).toMatchObject({
+      chatId: 8001,
+      text: TELEGRAM_TEMPLATE_DEFAULTS.tgUnlinked.replace('{логин}', 'platform-admin'),
+    });
   });
 
   it('ошибка Telegram не роняет вебхук', async () => {

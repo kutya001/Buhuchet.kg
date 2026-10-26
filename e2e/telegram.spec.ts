@@ -6,29 +6,30 @@ import { expect, test } from '@playwright/test';
 const DEMO_PASSWORD = process.env.DEMO_PASSWORD ?? 'demo';
 
 test.describe('Этап 1: Telegram и «Забыли пароль?» (API)', () => {
-  test('без привязанного Telegram «Забыли пароль?» объясняет, кто сбросит пароль', async ({
+  test('«Забыли пароль?» отвечает одинаково для любого логина (п. 4 расхождений, решение Б)', async ({
     request,
     baseURL,
   }) => {
     const origin = new URL(baseURL!).origin;
-    const ask = (login: string) =>
-      request.post('/api/auth/password-reset', { headers: { origin }, data: { login } });
-
-    const employee = await ask('nurlan');
-    expect(employee.status()).toBe(409);
-    expect(await employee.json()).toMatchObject({
-      error: {
-        code: 'telegram_not_linked',
-        message: 'Telegram не привязан. Пароль сбросит владелец организации.',
-      },
-    });
-    const owner = await ask('erkin');
-    expect(await owner.json()).toMatchObject({
-      error: { message: 'Telegram не привязан. Пароль сбросит администратор платформы.' },
-    });
-    const unknown = await ask('no-such-user');
-    expect(unknown.status()).toBe(404);
-    expect(await unknown.json()).toMatchObject({ error: { message: 'Нет такого логина' } });
+    // Без бота кода не будет ни у кого — об этом и ответ, логин не важен.
+    for (const login of ['nurlan', 'erkin', 'no-such-user']) {
+      const res = await request.post('/api/auth/password-reset', {
+        headers: { origin },
+        data: { login },
+      });
+      expect(res.status()).toBe(503);
+      expect(await res.json()).toMatchObject({ error: { code: 'telegram_unavailable' } });
+    }
+    for (const login of ['nurlan', 'no-such-user']) {
+      const res = await request.post('/api/auth/password-reset/confirm', {
+        headers: { origin },
+        data: { login, code: '123456', newPassword: 'Новый-пароль-2' },
+      });
+      expect(res.status()).toBe(400);
+      expect(await res.json()).toMatchObject({
+        error: { code: 'reset_code_invalid', message: 'Код неверный или истёк' },
+      });
+    }
   });
 
   test('без бота ссылка привязки недоступна, а вебхук не принимается', async ({

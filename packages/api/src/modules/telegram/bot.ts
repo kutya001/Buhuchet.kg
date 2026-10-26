@@ -49,17 +49,21 @@ export async function sendNow(
 
 /**
  * Бот сообщает о каждой смене пароля, чтобы пользователь заметил чужую попытку (ТЗ «Восстановление
- * пароля через Telegram»). false — Telegram не привязан или сообщение не ушло.
+ * пароля через Telegram»); resetBy — кто выдал временный пароль. false — Telegram не привязан или
+ * сообщение не ушло.
  */
 export async function notifyPasswordChanged(
   deps: ApiDeps,
   user: { userId: string; login: string; orgName: string | null },
+  resetBy?: string,
 ): Promise<boolean> {
   if (!deps.telegram) return false;
   const chat = await telegramChat(deps.db, user.userId);
   if (!chat) return false;
   const text = withOrganization(
-    await botText(deps, 'tgPassChanged', { логин: user.login }),
+    resetBy === undefined
+      ? await botText(deps, 'tgPassChanged', { логин: user.login })
+      : await botText(deps, 'tgPassReset', { логин: user.login, кто: resetBy }),
     user.orgName,
     chat.shared,
   );

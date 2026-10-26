@@ -54,23 +54,25 @@ export function adminResetPasswordHandler(
     const temporaryPassword = newTemporaryPassword();
     const passwordHash = await hashPassword(temporaryPassword);
     const org = await withOrgContext(deps.db, { orgId, userId: admin.userId }, async (tx) => {
-      if (!(await setTemporaryPassword(tx, { userId: target.userId, passwordHash }))) {
-        throw new RecordNotFoundError('user', id);
-      }
+      const reset = await setTemporaryPassword(tx, { userId: target.userId, passwordHash });
+      if (!reset) throw new RecordNotFoundError('user', id);
       await writeHistory(tx, {
         entity: 'user',
         entityId: target.userId,
         action: 'update',
-        changes: [{ field: 'passwordHash' }, { field: 'mustChangePassword', to: true }],
+        changes: [
+          { field: 'passwordHash' },
+          { field: 'mustChangePassword', from: reset.mustChangePasswordBefore, to: true },
+        ],
         reason: 'Пароль сброшен администратором платформы: выдан временный пароль',
       });
       return currentOrganization(tx, orgId);
     });
-    const telegramNotified = await notifyPasswordChanged(deps, {
-      userId: target.userId,
-      login: target.login,
-      orgName: org?.name ?? null,
-    });
+    const telegramNotified = await notifyPasswordChanged(
+      deps,
+      { userId: target.userId, login: target.login, orgName: org?.name ?? null },
+      'администратор платформы',
+    );
     return c.json({ temporaryPassword, telegramNotified }, 200);
   };
 }

@@ -48,15 +48,20 @@ export function resetEmployeePasswordHandler(
       const employee = await employeeAccount(tx, id);
       if (!employee) throw new RecordNotFoundError('employee', id);
       if (employee.isOwner) return null;
-      await setTemporaryPassword(tx, { userId: employee.userId, passwordHash });
+      const reset = await setTemporaryPassword(tx, { userId: employee.userId, passwordHash });
+      if (!reset) throw new RecordNotFoundError('employee', id);
       await writeHistory(tx, {
         entity: 'user',
         entityId: employee.userId,
         action: 'update',
-        changes: [{ field: 'passwordHash' }, { field: 'mustChangePassword', to: true }],
+        changes: [
+          { field: 'passwordHash' },
+          { field: 'mustChangePassword', from: reset.mustChangePasswordBefore, to: true },
+        ],
         reason: 'Пароль сброшен: выдан временный пароль',
       });
-      return employee;
+      const actor = session.employeeId ? await employeeAccount(tx, session.employeeId) : null;
+      return { ...employee, resetBy: actor?.fullName ?? session.login };
     });
     if (!target) {
       return c.json(
@@ -64,11 +69,11 @@ export function resetEmployeePasswordHandler(
         403,
       );
     }
-    const telegramNotified = await notifyPasswordChanged(deps, {
-      userId: target.userId,
-      login: target.login,
-      orgName: session.orgName,
-    });
+    const telegramNotified = await notifyPasswordChanged(
+      deps,
+      { userId: target.userId, login: target.login, orgName: session.orgName },
+      target.resetBy,
+    );
     return c.json({ temporaryPassword, telegramNotified }, 200);
   };
 }

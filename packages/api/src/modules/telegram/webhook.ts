@@ -72,7 +72,9 @@ export function webhookGuard(deps: ApiDeps) {
 /**
  * Вебхук бота (ТЗ «Телеграм бот для любых уведомлений»): ссылка t.me/бот?start=токен приходит как
  * «/start токен». Бот проверяет токен (одноразовый, 15 минут), привязывает чат к профилю и присылает
- * подтверждение. На всё остальное отвечает 200, чтобы Telegram не повторял доставку.
+ * подтверждение. Если вместо прежнего привязан другой чат, бот пишет об этом в прежний: привязка —
+ * способ восстановить пароль, и чужая замена не должна пройти незаметно. На всё остальное отвечает
+ * 200, чтобы Telegram не повторял доставку.
  */
 export function webhookHandler(deps: ApiDeps): RouteHandler<typeof webhookRoute, AppEnv> {
   return async (c) => {
@@ -129,6 +131,18 @@ export function webhookHandler(deps: ApiDeps): RouteHandler<typeof webhookRoute,
       : // История администратора платформы — в Админке (#18); у его записи нет организации.
         await withUserContext(deps.db, target.userId, (tx) => useTelegramLink(tx, link));
     if (!result) return reply(await botText(deps, 'tgLinkInvalid'));
+    if (result.previous && result.previous.chatId !== chat.id) {
+      const notice = await botText(deps, 'tgRelinked', {
+        логин: target.login,
+        telegram: telegramName(link),
+      });
+      await sendNow(
+        deps,
+        result.previous.chatId,
+        withOrganization(notice, target.orgName, result.previous.shared),
+        'telegram_relinked',
+      );
+    }
     return reply(
       withOrganization(
         await botText(deps, 'tgLinked', { логин: target.login }),

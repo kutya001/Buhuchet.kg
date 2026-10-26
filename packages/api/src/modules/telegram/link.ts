@@ -8,11 +8,12 @@ import {
   writeHistory,
   type Tx,
 } from '@buhuchet/db';
-import { telegramName } from '@buhuchet/domain';
+import { telegramName, withOrganization } from '@buhuchet/domain';
 import { ApiError, OkResponse, TelegramLinkResponse } from '@buhuchet/shared';
 import type { ApiDeps } from '../../deps';
 import type { AppEnv, AuthSession } from '../../env';
 import { apiError } from '../../errors';
+import { botText, sendNow } from './bot';
 
 const error = { 'application/json': { schema: ApiError } };
 
@@ -82,22 +83,35 @@ export const unlinkRoute = createRoute({
   },
 });
 
-/** «Отвязать» в «Мой профиль»: напоминания и «Забыли пароль?» перестают работать; пишется в историю. */
+/**
+ * «Отвязать» в «Мой профиль»: напоминания и «Забыли пароль?» перестают работать, ожидающий код
+ * отменяется; пишется в историю, бот сообщает об отвязке в отвязанный чат.
+ */
 export function unlinkHandler(deps: ApiDeps): RouteHandler<typeof unlinkRoute, AppEnv> {
   return async (c) => {
     const session = c.get('session')!;
-    await asSessionUser(deps, session, async (tx, inOrg) => {
-      const removed = await unlinkTelegram(tx);
+    const removed = await asSessionUser(deps, session, async (tx, inOrg) => {
+      const chat = await unlinkTelegram(tx);
       // История администратора платформы — в Админке (#18); у его записи нет организации.
-      if (removed && inOrg) {
+      if (chat && inOrg) {
         await writeHistory(tx, {
           entity: 'user',
           entityId: session.userId,
           action: 'update',
-          changes: [{ field: 'telegram', from: telegramName(removed), to: null }],
+          changes: [{ field: 'telegram', from: telegramName(chat), to: null }],
         });
       }
+      return chat;
     });
+    if (removed) {
+      const notice = await botText(deps, 'tgUnlinked', { логин: session.login });
+      await sendNow(
+        deps,
+        removed.chatId,
+        withOrganization(notice, session.orgName, removed.shared),
+        'telegram_unlinked',
+      );
+    }
     return c.json({ ok: true as const }, 200);
   };
 }
