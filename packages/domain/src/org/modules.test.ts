@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AccessSubject } from '../roles/access';
 import { FEATURES, type Feature, type PermissionId } from '../roles/permissions';
-import { menuModules } from './modules';
+import { ADMIN_MENU_MODULES, MENU_MODULE_IDS, MENU_MODULES, menuModules } from './modules';
 
 const all = Object.fromEntries(FEATURES.map((f) => [f, true])) as Record<Feature, boolean>;
 const without = (...off: Feature[]) => ({
@@ -74,5 +74,24 @@ describe('модули в меню — как mods() прототипа', () => 
       menuModules(role('finView', 'projView', 'projects'), without('taxpay', 'fee')),
     ).toContain('fin');
     expect(menuModules(owner, without('finops'))).not.toContain('fin');
+  });
+});
+
+describe('модули Админки и общий список модулей', () => {
+  it('модули Админки — по порядку прототипа (ADM)', () => {
+    expect(ADMIN_MENU_MODULES).toEqual(['accounts', 'orgs', 'pdicts', 'l10n', 'kb', 'kbadm', 'tg']);
+  });
+
+  it('общий список без повторов: «База знаний» есть и у организации, и в Админке', () => {
+    expect(MENU_MODULE_IDS.filter((id) => id === 'kb')).toHaveLength(1);
+    expect(MENU_MODULE_IDS).toEqual([
+      ...MENU_MODULES.map((m) => m.id),
+      'accounts',
+      'orgs',
+      'pdicts',
+      'l10n',
+      'kbadm',
+      'tg',
+    ]);
   });
 });

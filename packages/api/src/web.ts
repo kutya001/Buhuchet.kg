@@ -10,9 +10,21 @@ let web: { runtime: Runtime; app: ApiApp } | undefined;
  * (вход по паролю — нативный модуль argon2).
  */
 export function handleApiRequest(request: Request): Promise<Response> | Response {
+  return webApp().fetch(request);
+}
+
+/**
+ * Запрос серверной части страницы к API в том же процессе (без сети): сеанс только читается и не
+ * продлевается — cookie из такого ответа до браузера не дойдёт, её продлевают запросы самой страницы.
+ */
+export function handlePageRequest(request: Request): Promise<Response> | Response {
+  return webApp().fetch(request, { pageRender: true });
+}
+
+function webApp(): ApiApp {
   if (!web) {
     const runtime = createRuntime('web');
     web = { runtime, app: createApp(runtime.deps) };
   }
-  return web.app.fetch(request);
+  return web.app;
 }

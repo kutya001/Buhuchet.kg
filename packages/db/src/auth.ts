@@ -158,10 +158,19 @@ interface SessionRow extends Record<string, unknown> {
   touched: boolean;
 }
 
-/** Сеанс по хешу токена из cookie; истёкший или удалённый — null. */
-export async function sessionByToken(db: Db, tokenHash: string): Promise<SessionRecord | null> {
+/**
+ * Сеанс по хешу токена из cookie; истёкший или удалённый — null. Обычно сеанс заодно продлевается (не
+ * чаще раза в час, тогда `touched`). `touch: false` — только прочитать: порог продления берётся равным
+ * сроку жизни сеанса, а за это время действующий сеанс не бывает «несвежим».
+ */
+export async function sessionByToken(
+  db: Db,
+  tokenHash: string,
+  { touch = true }: { touch?: boolean } = {},
+): Promise<SessionRecord | null> {
+  const touchMinutes = touch ? SESSION_TOUCH_MINUTES : SESSION_TTL_DAYS * 24 * 60;
   const [row] = await db.execute<SessionRow>(
-    sql`select * from app.auth_session(${tokenHash}, ${SESSION_TTL_DAYS}, ${SESSION_TOUCH_MINUTES})`,
+    sql`select * from app.auth_session(${tokenHash}, ${SESSION_TTL_DAYS}, ${touchMinutes})`,
   );
   if (!row) return null;
   return {
@@ -272,7 +281,12 @@ export async function loadEmployeeAccess(
 /** Организация из контекста: для «кто я». */
 export async function currentOrganization(tx: Tx, orgId: string) {
   const [org] = await tx
-    .select({ id: organizations.id, name: organizations.name, slug: organizations.slug })
+    .select({
+      id: organizations.id,
+      name: organizations.name,
+      slug: organizations.slug,
+      inn: organizations.inn,
+    })
     .from(organizations)
     .where(eq(organizations.id, orgId));
   return org ?? null;

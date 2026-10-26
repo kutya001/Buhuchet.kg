@@ -1,6 +1,6 @@
 import {
   FEATURES,
-  MENU_MODULES,
+  MENU_MODULE_IDS,
   ORG_ADDRESS_MAX_LENGTH,
   ORG_HEAD_MAX_LENGTH,
   ORG_NAME_MAX_LENGTH,
@@ -17,10 +17,8 @@ import { Phone } from './staff';
 /** Функция учётной политики (tasks, calendar, fee, …). */
 export const FeatureSchema = z.enum(FEATURES);
 
-/** Модуль меню организации (home, cps, reports, …). */
-export const MenuModuleIdSchema = z.enum(
-  MENU_MODULES.map((m) => m.id) as [MenuModuleId, ...MenuModuleId[]],
-);
+/** Модуль меню организации (home, cps, reports, …) или Админки (accounts, orgs, …). */
+export const MenuModuleIdSchema = z.enum(MENU_MODULE_IDS as [MenuModuleId, ...MenuModuleId[]]);
 
 /** Раздел страницы контрагента по ссылке. */
 export const PageSectionSchema = z.enum(PAGE_SECTIONS);

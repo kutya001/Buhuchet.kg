@@ -383,7 +383,7 @@ describe.skipIf(!databaseAvailable())('вход и сеансы в базе', ()
     ).toBeNull();
     expect(
       await withOrgContext(t.app.db, { orgId: a.orgId }, (tx) => currentOrganization(tx, a.orgId)),
-    ).toEqual({ id: a.orgId, name: 'Организация А', slug: 'org-a' });
+    ).toEqual({ id: a.orgId, name: 'Организация А', slug: 'org-a', inn: '01811201810456' });
   });
 
   it('состояние организации — только «активна» или «заблокирована»; причина необязательна', async () => {

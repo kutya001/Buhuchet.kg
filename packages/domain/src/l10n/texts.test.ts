@@ -14,7 +14,7 @@ describe('словарь текстов интерфейса', () => {
     for (const [key, value] of Object.entries(UI_TEXTS)) {
       expect(value.ru.trim(), key).not.toBe('');
       expect(value.section.trim(), key).not.toBe('');
-      expect(key).toMatch(/^[a-z]+(\.[a-z_]+)+$/);
+      expect(key).toMatch(/^[a-z]+(\.[a-z0-9_]+)+$/);
     }
   });
 

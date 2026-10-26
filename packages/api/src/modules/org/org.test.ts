@@ -351,6 +351,15 @@ describe.skipIf(!databaseAvailable())('Моя организация: API', () =
       expect((await me(ownerB)).modules).toContain('tasks');
     });
 
+    it('«Сдача отчётов требует подтверждения» видна в «кто я»: от неё зависит вкладка «Ожидают подтверждения»', async () => {
+      expect((await me(acc)).reportConfirm).toBe(true);
+      expect((await patchPolicy({ reportConfirm: false })).status).toBe(200);
+      expect((await me(acc)).reportConfirm).toBe(false);
+      expect((await me(ownerB)).reportConfirm).toBe(true);
+      expect((await patchPolicy({ reportConfirm: true })).status).toBe(200);
+      expect((await me(acc)).reportConfirm).toBe(true);
+    });
+
     it('функция, нужная другой, не выключается; без нужной — не включается', async () => {
       const alone = await patchPolicy({ features: { accounts: true } });
       expect(alone.status).toBe(400);

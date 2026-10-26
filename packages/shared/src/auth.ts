@@ -34,7 +34,8 @@ export const ScopeGroupIdSchema = z.enum(SCOPE_GROUPS as [ScopeGroupId, ...Scope
 /**
  * Кто вошёл (ответ входа и GET /api/auth/me). У администратора платформы нет сотрудника, организации
  * и прав в организации. permissions — действующие права, scopes — область каждой группы, features —
- * функции учётной политики, modules — модули меню сотрудника по функциям и правам.
+ * функции учётной политики, modules — модули меню: сотрудника — по функциям и правам, администратора
+ * платформы — модули Админки.
  */
 export const MeResponse = z.object({
   user: z.object({
@@ -54,12 +55,17 @@ export const MeResponse = z.object({
       isOwner: z.boolean(),
     })
     .nullable(),
-  organization: z.object({ id: Uuid, name: z.string(), slug: z.string() }).nullable(),
+  /** Организация пользователя; ИНН — под названием в левой панели (у созданных без ИНН — null). */
+  organization: z
+    .object({ id: Uuid, name: z.string(), slug: z.string(), inn: z.string().nullable() })
+    .nullable(),
   /** Привязанный Telegram; null — не привязан (напоминания не приходят, «Забыли пароль?» не работает). */
   telegram: TelegramInfo.nullable(),
   permissions: z.array(PermissionIdSchema),
   scopes: z.partialRecord(ScopeGroupIdSchema, z.enum(SCOPES)),
   features: z.partialRecord(FeatureSchema, z.boolean()),
+  /** «Сдача отчётов требует подтверждения» (учётная политика): есть ли вкладка «Ожидают подтверждения». */
+  reportConfirm: z.boolean(),
   modules: z.array(MenuModuleIdSchema),
 });
 export type MeResponse = z.infer<typeof MeResponse>;

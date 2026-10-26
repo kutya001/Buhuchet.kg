@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { withOrgContext } from './context';
 import { updateWithHistory } from './history';
-import { getOrgPolicy, getOrgProfile, orgFeatures, orgPolicyHistory } from './org';
+import { getOrgPolicy, getOrgProfile, orgMenuSettings, orgPolicyHistory } from './org';
 import { createOrganization, type CreatedOrganization } from './organizations';
 import { organizations, orgSettings } from './schema';
 import {
@@ -68,7 +68,10 @@ describe.skipIf(!databaseAvailable())(
           }),
         ),
       ).rejects.toThrow(RecordNotFoundError);
-      expect(await inA((tx) => orgFeatures(tx, b.orgId))).toMatchObject({ tasks: false });
+      expect(await inA((tx) => orgMenuSettings(tx, b.orgId))).toMatchObject({
+        features: { tasks: false },
+        reportConfirm: false,
+      });
     });
 
     it('учётная политика новой организации — по умолчанию, время сводки «09:00»', async () => {
@@ -81,9 +84,9 @@ describe.skipIf(!databaseAvailable())(
         defaultRoleId: a.roles.find((r) => r.templateCode === 'acc')!.id,
         version: 1,
       });
-      expect(await inA((tx) => orgFeatures(tx, a.orgId))).toMatchObject({
-        tasks: true,
-        projects: false,
+      expect(await inA((tx) => orgMenuSettings(tx, a.orgId))).toMatchObject({
+        features: { tasks: true, projects: false },
+        reportConfirm: true,
       });
     });
 

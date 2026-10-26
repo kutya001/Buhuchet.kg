@@ -42,6 +42,7 @@ describe('схемы входа', () => {
       permissions: ['cpView'],
       scopes: { cps: 'own' },
       features: { tasks: true, projects: false },
+      reportConfirm: true,
       modules: ['home', 'cps', 'tasks'],
     };
     expect(MeResponse.parse(me)).toEqual(me);

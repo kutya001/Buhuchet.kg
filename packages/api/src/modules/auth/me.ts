@@ -2,13 +2,14 @@ import { createRoute, type RouteHandler } from '@hono/zod-openapi';
 import {
   currentOrganization,
   loadEmployeeAccess,
-  orgFeatures,
+  orgMenuSettings,
   telegramChat,
   withOrgContext,
   type EmployeeAccess,
   type TelegramChat,
 } from '@buhuchet/db';
 import {
+  ADMIN_MENU_MODULES,
   effectivePermissions,
   menuModules,
   SCOPE_GROUPS,
@@ -31,10 +32,11 @@ interface MeUser {
 function meBody(
   user: MeUser,
   access: EmployeeAccess | null,
-  organization: { id: string; name: string; slug: string } | null,
+  organization: MeResponse['organization'],
   telegram: TelegramChat | null,
-  features: Record<Feature, boolean> | null,
+  settings: { features: Record<Feature, boolean>; reportConfirm: boolean } | null,
 ): MeResponse {
+  const features = settings?.features ?? null;
   return {
     user: {
       id: user.userId,
@@ -60,14 +62,19 @@ function meBody(
       ? Object.fromEntries(SCOPE_GROUPS.map((g) => [g, scopeOf(access.subject, g)]))
       : {},
     features: features ?? {},
-    modules: access && features ? menuModules(access.subject, features) : [],
+    reportConfirm: settings?.reportConfirm ?? false,
+    modules: user.isPlatformAdmin
+      ? [...ADMIN_MENU_MODULES]
+      : access && features
+        ? menuModules(access.subject, features)
+        : [],
   };
 }
 
 /**
  * «Кто я» для ответа входа и GET /api/auth/me: сотрудник, роль, права, организация, функции учётной
- * политики и модули меню — в контексте организации пользователя (RLS); привязан ли Telegram. Уже
- * загруженные права (`access`) повторно не читаются.
+ * политики, «Сдача отчётов требует подтверждения» и модули меню — в контексте организации пользователя (RLS); привязан ли Telegram. Уже
+ * загруженные права (`access`) повторно не читаются. Администратору платформы — модули Админки.
  */
 export async function loadMe(
   deps: ApiDeps,
@@ -77,16 +84,16 @@ export async function loadMe(
   const telegram = await telegramChat(deps.db, user.userId);
   if (!user.orgId) return meBody(user, null, null, telegram, null);
   const orgId = user.orgId;
-  const { access, organization, features } = await withOrgContext(
+  const { access, organization, settings } = await withOrgContext(
     deps.db,
     { orgId, userId: user.userId },
     async (tx) => ({
       access: loaded ?? (user.employeeId ? await loadEmployeeAccess(tx, user.employeeId) : null),
       organization: await currentOrganization(tx, orgId),
-      features: await orgFeatures(tx, orgId),
+      settings: await orgMenuSettings(tx, orgId),
     }),
   );
-  return meBody(user, access, organization, telegram, features);
+  return meBody(user, access, organization, telegram, settings);
 }
 
 export const meRoute = createRoute({
