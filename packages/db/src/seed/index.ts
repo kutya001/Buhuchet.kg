@@ -2,6 +2,7 @@ import type { Db } from '../client';
 import { readSpecJson, specCommit } from '../spec-data';
 import { seedPermissions, seedRoleTemplates } from './access';
 import { seedDemoOrganization, type DemoSeedReport } from './demo';
+import { seedUiTexts } from './l10n';
 import { seedGked, seedPlatformReference, type SeedReport } from './platform';
 
 export { checksumOf } from './checksum';
@@ -13,6 +14,7 @@ export {
   type DemoSeedOptions,
   type DemoSeedReport,
 } from './demo';
+export { seedUiTexts, uiTextSeedRows, type UiTextSeedRow } from './l10n';
 export { seedGked, seedPlatformReference, type SeedOptions, type SeedReport } from './platform';
 
 export interface SeedAllResult {
@@ -20,6 +22,7 @@ export interface SeedAllResult {
   gked: SeedReport;
   permissions: SeedReport;
   roleTemplates: SeedReport;
+  uiTexts: SeedReport;
   demo: DemoSeedReport | null;
 }
 
@@ -41,12 +44,13 @@ export async function seedAll(
     const gked = await seedGked(t, await readSpecJson('data/gkedDB.json'), options);
     const permissions = await seedPermissions(t, refDB.permissions, options);
     const roleTemplates = await seedRoleTemplates(t, refDB.roleTemplates, options);
+    const uiTexts = await seedUiTexts(t, refDB.localization, options);
     const demo = options.demo
       ? await seedDemoOrganization(t, await readSpecJson('data/demoDB.json'), {
           update: options.update,
           password: options.demoPassword ?? null,
         })
       : null;
-    return { platformReference, gked, permissions, roleTemplates, demo };
+    return { platformReference, gked, permissions, roleTemplates, uiTexts, demo };
   });
 }

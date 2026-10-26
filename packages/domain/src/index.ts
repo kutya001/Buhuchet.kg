@@ -14,3 +14,4 @@ export * from './common/errors';
 export * from './auth/session';
 export * from './auth/reset';
 export * from './telegram/messages';
+export * from './l10n/texts';

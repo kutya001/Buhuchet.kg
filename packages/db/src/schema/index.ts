@@ -8,3 +8,4 @@ export * from './org-settings';
 export * from './history';
 export * from './auth';
 export * from './telegram';
+export * from './l10n';

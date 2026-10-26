@@ -43,6 +43,7 @@ export function createTestDeps(overrides: Partial<ApiDeps> = {}): ApiDeps {
     telegram: createFakeTelegram(),
     jobs: [],
     resetResponseFloorMs: 0,
+    l10nRecheckMs: 0,
     ...overrides,
   };
 }

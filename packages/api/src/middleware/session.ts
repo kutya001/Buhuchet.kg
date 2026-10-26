@@ -13,6 +13,8 @@ const PUBLIC_PATHS = new Set([
   '/api/health',
   '/api/cron/tick',
   '/api/openapi.json',
+  // Словарь текстов нужен уже на странице входа.
+  '/api/l10n',
   '/api/auth/login',
   '/api/auth/logout',
   '/api/auth/password-reset',
