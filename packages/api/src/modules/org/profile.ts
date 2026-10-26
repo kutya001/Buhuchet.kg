@@ -26,7 +26,7 @@ const { organizations } = schema;
 
 export const error = { 'application/json': { schema: ApiError } };
 
-/** «Основное» для ответа API: ключ хранилища наружу не уходит, только временная ссылка на картинку. */
+/** «Основное» для ответа API: ключ хранилища отдельным полем не отдаётся, только внутри временной ссылки. */
 export async function orgProfileBody(deps: ApiDeps, p: OrgProfileRecord): Promise<OrgProfile> {
   return {
     id: p.id,

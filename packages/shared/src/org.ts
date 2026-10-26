@@ -26,8 +26,9 @@ export const MenuModuleIdSchema = z.enum(
 export const PageSectionSchema = z.enum(PAGE_SECTIONS);
 
 /**
- * Временная подписанная ссылка на картинку логотипа в хранилище. Живёт 15 минут (до `expiresAt`),
- * потом экран запрашивает новую: GET /api/org/logo.
+ * Временная подписанная ссылка на картинку логотипа в хранилище. Живёт 15 минут (до `expiresAt`,
+ * по настоящему времени — сравнивать с часами браузера, а не с датой демо-стенда), потом экран
+ * запрашивает новую: GET /api/org/logo.
  */
 export const OrgLogoLink = z.object({
   url: z.string(),
