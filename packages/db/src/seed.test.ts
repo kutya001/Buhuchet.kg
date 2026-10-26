@@ -44,6 +44,7 @@ describe.skipIf(!databaseAvailable())('начальное наполнение �
     expect(result.demo).toEqual({ orgId: DEMO_ORG_ID, created: true, employees: 7 });
     expect(result.permissions.inserted).toBe(39);
     expect(result.roleTemplates.inserted).toBe(2);
+    expect(result.uiTexts.inserted).toBeGreaterThan(0);
 
     const [reportTypes] = await t.admin.db
       .select()
@@ -62,6 +63,7 @@ describe.skipIf(!databaseAvailable())('начальное наполнение �
     expect(result.gked).toMatchObject({ inserted: 0, updated: 0 });
     expect(result.permissions).toEqual({ inserted: 0, updated: 0, unchanged: 39 });
     expect(result.roleTemplates).toEqual({ inserted: 0, updated: 0, unchanged: 2 });
+    expect(result.uiTexts).toMatchObject({ inserted: 0, updated: 0 });
     expect(result.demo).toMatchObject({ created: false, employees: 0 });
   });
 

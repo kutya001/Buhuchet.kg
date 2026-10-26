@@ -9,6 +9,7 @@ import { sessionGuard } from './middleware/session';
 import { createModuleApp } from './module';
 import { adminModule } from './modules/admin';
 import { authModule } from './modules/auth';
+import { l10nModule } from './modules/l10n';
 import { orgModule } from './modules/org';
 import { LOGO_PATH } from './modules/org/logo';
 import { rolesModule } from './modules/roles';
@@ -64,6 +65,7 @@ export function createApp(deps: ApiDeps) {
   // Модули подключаются цепочкой: так их маршруты попадают в тип ApiApp для клиента интерфейса.
   const routes = app
     .route('/', systemModule(deps))
+    .route('/', l10nModule(deps))
     .route('/', authModule(deps))
     .route('/', telegramModule(deps))
     .route('/', staffModule(deps))
