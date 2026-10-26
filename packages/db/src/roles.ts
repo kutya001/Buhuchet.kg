@@ -14,7 +14,7 @@ import { alias } from 'drizzle-orm/pg-core';
 import type { Db, Tx } from './client';
 import { writeHistory } from './history';
 import { employees, orgSettings, permissions, rolePermissions, roleScopes, roles } from './schema';
-import { rolePermissionIds, type AuditRecord } from './staff';
+import { rolePermissionIds, roleScopeMap, type AuditRecord } from './staff';
 
 /**
  * Вкладка «Роли» модуля «Сотрудники»: роли организации из контекста `withOrgContext` (RLS), их права
@@ -88,15 +88,6 @@ function toSummary(r: RoleRow): RoleSummary {
 export async function listRoles(tx: Tx): Promise<RoleSummary[]> {
   const rows = await selectRoles(tx).orderBy(asc(roles.name), asc(roles.id));
   return rows.map(toSummary);
-}
-
-/** Область групп роли, как сохранена; недостающие группы — «Свои». */
-export async function roleScopeMap(tx: Tx, roleId: string): Promise<Record<ScopeGroupId, Scope>> {
-  const rows = await tx
-    .select({ group: roleScopes.permGroup, scope: roleScopes.scope })
-    .from(roleScopes)
-    .where(eq(roleScopes.roleId, roleId));
-  return normalizeScopes(Object.fromEntries(rows.map((r) => [r.group, r.scope])));
 }
 
 /** Карточка роли; null — нет такой роли в организации. */

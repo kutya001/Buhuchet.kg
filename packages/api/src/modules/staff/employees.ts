@@ -3,7 +3,9 @@ import { getEmployee, listEmployees, withOrgContext, type EmployeeRecord } from 
 import {
   RecordNotFoundError,
   telegramName,
+  type RoleSaveEditor,
   type StaffAction,
+  type StaffActor,
   type StaffRefusal,
 } from '@buhuchet/domain';
 import { ApiError, Employee, EmployeeList, Uuid } from '@buhuchet/shared';
@@ -40,14 +42,13 @@ export function employeeBody(e: EmployeeRecord): Employee {
   };
 }
 
-/** Кто действует в методах модуля: сотрудник из общего слоя (право метода уже проверено). */
-export function staffActor(c: Context<AppEnv>) {
-  const access = c.get('access')!;
-  return {
-    employeeId: access.subject.employeeId,
-    isOwner: access.subject.isOwner,
-    roleId: access.roleId,
-  };
+/**
+ * Кто действует в методах модуля: сотрудник из общего слоя (право метода уже проверено) — его права
+ * и область для правил сотрудников и своя роль для правил ролей.
+ */
+export function staffActor(c: Context<AppEnv>): StaffActor & RoleSaveEditor {
+  const { subject, roleId } = c.get('access')!;
+  return { ...subject, roleId, subject };
 }
 
 const REFUSAL_MESSAGES: Record<StaffRefusal, string> = {
@@ -56,6 +57,7 @@ const REFUSAL_MESSAGES: Record<StaffRefusal, string> = {
   own_account: 'Нельзя заблокировать себя',
   owner_role: 'Роль владельца организации не назначается',
   owner_granted: 'Роль с правами, которые выдаёт только владелец, назначает и снимает владелец',
+  beyond_own: 'Роль с правами шире ваших назначает и снимает владелец',
 };
 
 /**
@@ -75,6 +77,16 @@ export function refuse(refusal: StaffRefusal, action: StaffAction | 'create'): n
       refusal,
       'Пароль сотрудника с правами, которые выдаёт только владелец, сбрасывает владелец',
     );
+  }
+  if (refusal === 'owner_granted' && (action === 'block' || action === 'unblock')) {
+    apiFail(
+      403,
+      refusal,
+      'Сотрудника с правами, которые выдаёт только владелец, блокирует и разблокирует владелец',
+    );
+  }
+  if (refusal === 'beyond_own' && action === 'resetPassword') {
+    apiFail(403, refusal, 'Пароль сотрудника с правами шире ваших сбрасывает владелец');
   }
   apiFail(403, refusal, REFUSAL_MESSAGES[refusal]);
 }

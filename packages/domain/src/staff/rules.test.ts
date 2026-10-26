@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import type { PermissionId } from '../roles/permissions';
 import {
   isFullName,
   newEmployeeRoleRefusal,
   phoneProblem,
   staffActionRefusal,
+  type StaffActor,
   type StaffTarget,
 } from './rules';
 import { auditActorName, PLATFORM_ADMIN_NAME } from './names';
@@ -36,15 +38,26 @@ describe('ФИО и телефон нового сотрудника', () => {
 });
 
 describe('действия над сотрудником', () => {
-  const owner = { employeeId: 'e1', isOwner: true };
-  const chief = { employeeId: 'e2', isOwner: false };
-  const target = (employeeId: string, role: Partial<StaffTarget['role']> = {}): StaffTarget => ({
+  const owner: StaffActor = { employeeId: 'e1', isOwner: true, permissions: new Set(), scopes: {} };
+  /** Кадровик: «Сотрудники и роли», контрагенты — «Все», финансов нет. */
+  const hr: StaffActor = {
+    employeeId: 'e2',
+    isOwner: false,
+    permissions: new Set(['cpView', 'createCp', 'staffView', 'staff', 'export']),
+    scopes: { cps: 'all' },
+  };
+  const role = (
+    permissions: PermissionId[],
+    scopes: StaffTarget['role']['scopes'] = {},
+  ): StaffTarget['role'] => ({ isOwner: false, permissions, scopes });
+  const accRole = role(['cpView']);
+  const staffRole = role(['staffView', 'staff']);
+  const finRole = role(['finView', 'money']);
+  const ownerRole = { isOwner: true, permissions: [], scopes: {} };
+  const target = (employeeId: string, r: StaffTarget['role'] = accRole): StaffTarget => ({
     employeeId,
-    role: { isOwner: false, permissions: ['cpView'], ...role },
+    role: r,
   });
-  const accRole = { isOwner: false, permissions: ['cpView' as const] };
-  const staffRole = { isOwner: false, permissions: ['staffView' as const, 'staff' as const] };
-  const ownerRole = { isOwner: true, permissions: [] };
 
   it('у владельца организации действий нет, кроме правки своих ФИО и телефона', () => {
     const o = target('e1', ownerRole);
@@ -52,46 +65,72 @@ describe('действия над сотрудником', () => {
       expect(staffActionRefusal(owner, o, action, accRole)).toBe('owner_employee');
     }
     expect(staffActionRefusal(owner, o, 'edit')).toBeNull();
-    expect(staffActionRefusal(chief, o, 'edit')).toBe('owner_employee');
+    expect(staffActionRefusal(hr, o, 'edit')).toBe('owner_employee');
   });
 
   it('себя не блокируют; разблокировать и править можно', () => {
-    expect(staffActionRefusal(chief, target('e2'), 'block')).toBe('own_account');
-    expect(staffActionRefusal(chief, target('e3'), 'block')).toBeNull();
-    expect(staffActionRefusal(chief, target('e3', staffRole), 'block')).toBeNull();
-    expect(staffActionRefusal(chief, target('e3'), 'unblock')).toBeNull();
-    expect(staffActionRefusal(chief, target('e2'), 'edit')).toBeNull();
+    expect(staffActionRefusal(hr, target('e2'), 'block')).toBe('own_account');
+    expect(staffActionRefusal(hr, target('e3'), 'block')).toBeNull();
+    expect(staffActionRefusal(hr, target('e3', finRole), 'block')).toBeNull();
+    expect(staffActionRefusal(hr, target('e3'), 'unblock')).toBeNull();
+    expect(staffActionRefusal(hr, target('e2'), 'edit')).toBeNull();
+  });
+
+  it('сотрудника с правами «выдаёт только владелец» блокирует и разблокирует только владелец', () => {
+    expect(staffActionRefusal(hr, target('e3', staffRole), 'block')).toBe('owner_granted');
+    expect(staffActionRefusal(hr, target('e3', staffRole), 'unblock')).toBe('owner_granted');
+    expect(staffActionRefusal(owner, target('e3', staffRole), 'block')).toBeNull();
+    expect(staffActionRefusal(owner, target('e3', staffRole), 'unblock')).toBeNull();
   });
 
   it('смена роли: свою — только владелец; роль владельца не назначается', () => {
-    expect(staffActionRefusal(chief, target('e2'), 'changeRole', accRole)).toBe('own_role');
-    expect(staffActionRefusal(chief, target('e3'), 'changeRole', accRole)).toBeNull();
+    expect(staffActionRefusal(hr, target('e2'), 'changeRole', accRole)).toBe('own_role');
+    expect(staffActionRefusal(hr, target('e3'), 'changeRole', accRole)).toBeNull();
     expect(staffActionRefusal(owner, target('e3'), 'changeRole', ownerRole)).toBe('owner_role');
     expect(() => staffActionRefusal(owner, target('e3'), 'changeRole')).toThrow();
   });
 
   it('роль с правами «выдаёт только владелец» назначает и снимает только владелец', () => {
-    expect(staffActionRefusal(chief, target('e3'), 'changeRole', staffRole)).toBe('owner_granted');
-    expect(staffActionRefusal(chief, target('e3', staffRole), 'changeRole', accRole)).toBe(
+    expect(staffActionRefusal(hr, target('e3'), 'changeRole', staffRole)).toBe('owner_granted');
+    expect(staffActionRefusal(hr, target('e3', staffRole), 'changeRole', accRole)).toBe(
       'owner_granted',
     );
     expect(staffActionRefusal(owner, target('e3'), 'changeRole', staffRole)).toBeNull();
     expect(staffActionRefusal(owner, target('e3', staffRole), 'changeRole', accRole)).toBeNull();
   });
 
-  it('пароль сотрудника с такими правами сбрасывает только владелец', () => {
-    expect(staffActionRefusal(chief, target('e3', staffRole), 'resetPassword')).toBe(
-      'owner_granted',
-    );
+  it('роль шире своей не владелец не назначает и не снимает', () => {
+    expect(staffActionRefusal(hr, target('e3'), 'changeRole', finRole)).toBe('beyond_own');
+    expect(staffActionRefusal(hr, target('e3', finRole), 'changeRole', accRole)).toBe('beyond_own');
+    expect(
+      staffActionRefusal(hr, target('e3'), 'changeRole', role(['repView'], { reports: 'all' })),
+    ).toBe('beyond_own');
+    expect(
+      staffActionRefusal(
+        hr,
+        target('e3'),
+        'changeRole',
+        role(['cpView', 'createCp'], { cps: 'all' }),
+      ),
+    ).toBeNull();
+    expect(staffActionRefusal(owner, target('e3'), 'changeRole', finRole)).toBeNull();
+  });
+
+  it('пароль сбрасывает не владелец только сотруднику с ролью не шире своей и без прав владельца', () => {
+    expect(staffActionRefusal(hr, target('e3', staffRole), 'resetPassword')).toBe('owner_granted');
+    expect(staffActionRefusal(hr, target('e3', finRole), 'resetPassword')).toBe('beyond_own');
     expect(staffActionRefusal(owner, target('e3', staffRole), 'resetPassword')).toBeNull();
-    expect(staffActionRefusal(chief, target('e3'), 'resetPassword')).toBeNull();
+    expect(staffActionRefusal(owner, target('e3', finRole), 'resetPassword')).toBeNull();
+    expect(staffActionRefusal(hr, target('e3'), 'resetPassword')).toBeNull();
   });
 
   it('роль нового сотрудника', () => {
     expect(newEmployeeRoleRefusal(owner, ownerRole)).toBe('owner_role');
-    expect(newEmployeeRoleRefusal(chief, staffRole)).toBe('owner_granted');
+    expect(newEmployeeRoleRefusal(hr, staffRole)).toBe('owner_granted');
+    expect(newEmployeeRoleRefusal(hr, finRole)).toBe('beyond_own');
     expect(newEmployeeRoleRefusal(owner, staffRole)).toBeNull();
-    expect(newEmployeeRoleRefusal(chief, accRole)).toBeNull();
+    expect(newEmployeeRoleRefusal(owner, finRole)).toBeNull();
+    expect(newEmployeeRoleRefusal(hr, accRole)).toBeNull();
   });
 });
 

@@ -70,7 +70,7 @@ describe.skipIf(!databaseAvailable())('Роли: API', () => {
         employees: 1,
         permissionCount: 39,
       });
-      expect(byName['Кадры']).toMatchObject({ isOwner: false, employees: 1, permissionCount: 2 });
+      expect(byName['Кадры']).toMatchObject({ isOwner: false, employees: 1, permissionCount: 16 });
       expect(byName['Бухгалтер']!.employees).toBe(1);
       // Роли другой организации не видны.
       expect(items).toHaveLength(5);
@@ -140,13 +140,17 @@ describe.skipIf(!databaseAvailable())('Роли: API', () => {
       expect(empty.permissions).toEqual([]);
     });
 
-    it('не владелец не копирует права, которые выдаёт только владелец', async () => {
+    it('не владелец не копирует права, которые выдаёт только владелец, и права, которых у него нет', async () => {
+      const hrRole = await role(f.roleIds.hr);
       const fromOwner = await newRole('Почти всё', f.a.roles.find((r) => r.isOwner)!.id, hr);
-      expect(fromOwner.permissions).not.toEqual(expect.arrayContaining(['staff']));
-      for (const p of ['staff', 'rollback', 'archiveRest', 'org'] as const) {
+      for (const p of ['staff', 'rollback', 'archiveRest', 'org', 'viewAll', 'bonus'] as const) {
         expect(fromOwner.permissions).not.toContain(p);
       }
-      expect(fromOwner.permissions).toHaveLength(35);
+      // Свои права «Кадров» без «Сотрудники и роли».
+      expect(fromOwner.permissions).toEqual(hrRole.permissions.filter((p) => p !== 'staff'));
+      const fromChief = await newRole('Почти главбух', f.templateRole(f.a, 'chief'), hr);
+      expect(fromChief.permissions).not.toContain('viewAll');
+      expect(fromChief.permissions.every((p) => hrRole.permissions.includes(p))).toBe(true);
       const byOwner = await newRole('Всё кроме настроек', f.a.roles.find((r) => r.isOwner)!.id);
       expect(byOwner.permissions).toHaveLength(38);
     });
@@ -287,7 +291,7 @@ describe.skipIf(!databaseAvailable())('Роли: API', () => {
       for (const body of [
         { scopes: { cps: 'all' } },
         { name: 'Отдел кадров' },
-        { permissions: [...hrRole.permissions, 'export'] },
+        { permissions: [...hrRole.permissions, 'tasksCreate'] },
       ]) {
         const own = await call('PATCH', `/api/roles/${hrRole.id}`, hr, {
           version: hrRole.version,
@@ -307,7 +311,7 @@ describe.skipIf(!databaseAvailable())('Роли: API', () => {
       expect(same.status).toBe(200);
     });
 
-    it('не владелец не выдаёт и не снимает права «выдаёт только владелец», остальные — меняет', async () => {
+    it('не владелец не выдаёт права «выдаёт только владелец» и не меняет роль с ними', async () => {
       const accRole = await role(f.templateRole(f.a, 'acc'));
       const grant = await call('PATCH', `/api/roles/${accRole.id}`, hr, {
         version: accRole.version,
@@ -318,23 +322,67 @@ describe.skipIf(!databaseAvailable())('Роли: API', () => {
         code: 'owner_granted',
         details: { permission: 'rollback' },
       });
+      // Роль с «Откатом статусов»: не снять его, не погасить снятием просмотра, не расширить.
       const senior = await role(f.roleIds.senior);
-      const revoke = await call('PATCH', `/api/roles/${senior.id}`, hr, {
-        version: senior.version,
-        permissions: ['cpView'],
-      });
-      expect(revoke.status).toBe(403);
-      const other = await call('PATCH', `/api/roles/${senior.id}`, hr, {
+      for (const body of [
+        { permissions: ['cpView'] },
+        { permissions: ['rollback'] },
+        { permissions: ['cpView', 'createCp', 'rollback'] },
+        { scopes: { cps: 'all' } },
+        { name: 'Старший (с откатом)' },
+      ]) {
+        const res = await call('PATCH', `/api/roles/${senior.id}`, hr, {
+          version: senior.version,
+          ...body,
+        });
+        expect(res.status).toBe(403);
+        expect(await apiErr(res)).toEqual({
+          code: 'owner_granted_role',
+          message: 'Роль с правами, которые выдаёт только владелец, меняет владелец',
+        });
+      }
+      expect(await role(senior.id)).toMatchObject({ version: senior.version });
+      const byOwner = await call('PATCH', `/api/roles/${senior.id}`, owner, {
         version: senior.version,
         permissions: ['cpView', 'createCp', 'rollback'],
-        name: 'Старший (с откатом)',
       });
-      expect(other.status).toBe(200);
-      expect(Role.parse(await other.json())).toMatchObject({
-        name: 'Старший (с откатом)',
-        permissions: ['cpView', 'createCp', 'rollback'],
+      expect(byOwner.status).toBe(200);
+    });
+
+    it('не владелец не выдаёт права и область «Все» шире своих, остальное меняет', async () => {
+      const r = await newRole('Расширение', undefined, hr);
+      const cases = [
+        [{ permissions: ['viewAll'] }, { code: 'beyond_own', details: { permission: 'viewAll' } }],
+        [
+          { permissions: ['repView', 'repDue'] },
+          { code: 'beyond_own', details: { permission: 'repDue' } },
+        ],
+        [{ scopes: { cps: 'all' } }, { code: 'beyond_own_scope', details: { group: 'cps' } }],
+      ] as const;
+      for (const [body, expected] of cases) {
+        const res = await call('PATCH', `/api/roles/${r.id}`, hr, { version: r.version, ...body });
+        expect(res.status).toBe(403);
+        expect(await apiErr(res)).toMatchObject(expected);
+      }
+      const ok = await call('PATCH', `/api/roles/${r.id}`, hr, {
+        version: r.version,
+        permissions: ['cpView', 'createCp', 'export'],
+        scopes: { cps: 'own' },
+        name: 'Расширение (своё)',
+      });
+      expect(ok.status).toBe(200);
+      const saved = Role.parse(await ok.json());
+      expect(saved).toMatchObject({
+        name: 'Расширение (своё)',
+        permissions: ['cpView', 'createCp', 'export'],
         audit: { updatedBy: 'hr-a' },
       });
+      const wide = await call('PATCH', `/api/roles/${r.id}`, owner, {
+        version: saved.version,
+        permissions: [...saved.permissions, 'viewAll'],
+        scopes: { cps: 'all' },
+      });
+      expect(wide.status).toBe(200);
     });
 
     it('устаревшая версия — 409, правка не затирает чужую; занятое название — 400', async () => {
@@ -406,6 +454,27 @@ describe.skipIf(!databaseAvailable())('Роли: API', () => {
       expect((await apiErr(own)).code).toBe('owner_role');
       expect((await call('DELETE', `/api/roles/${ownerRole.id}`, owner)).status).toBe(400);
       expect((await call('DELETE', `/api/roles/${ownerRole.id}?version=1`, acc)).status).toBe(403);
+    });
+
+    it('роль с правами «выдаёт только владелец» удаляет только владелец', async () => {
+      const r = await newRole('С откатом');
+      const saved = Role.parse(
+        await (
+          await call('PATCH', `/api/roles/${r.id}`, owner, {
+            version: r.version,
+            permissions: ['rollback'],
+          })
+        ).json(),
+      );
+      const byHr = await call('DELETE', `/api/roles/${r.id}?version=${saved.version}`, hr);
+      expect(byHr.status).toBe(403);
+      expect(await apiErr(byHr)).toEqual({
+        code: 'owner_granted_role',
+        message: 'Роль с правами, которые выдаёт только владелец, удаляет владелец',
+      });
+      expect(
+        (await call('DELETE', `/api/roles/${r.id}?version=${saved.version}`, owner)).status,
+      ).toBe(200);
     });
 
     it('роль новых сотрудников без сотрудников — 400 «role_is_default»', async () => {

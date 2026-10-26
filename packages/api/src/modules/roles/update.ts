@@ -15,7 +15,7 @@ import {
   PERMISSION_IDS,
   RecordChangedError,
   RecordNotFoundError,
-  ROLE_LOCK_MESSAGES,
+  ROLE_CHANGE_MESSAGES,
   roleChangeProblem,
   type HistoryChange,
   type Scope,
@@ -51,7 +51,8 @@ export const updateRoleRoute = createRoute({
     401: { description: 'Нет входа', content: error },
     403: {
       description:
-        'Нет права; роль владельца или своя роль; право только владельца или выдаёт только владелец',
+        'Нет права; роль владельца, своя роль или роль с правами, которые выдаёт только владелец; ' +
+        'право только владельца или выдаёт только владелец; право или область шире ваших',
       content: error,
     },
     ...versionedSaveResponses,
@@ -61,7 +62,9 @@ export const updateRoleRoute = createRoute({
 /**
  * Форма роли (прототип modules/staff.js, roleForm): название, галочки прав и область «Свои / Все
  * контрагенты» по группам. Сервер проверяет те же правила, что и галочки формы (`roleChangeProblem`):
- * права только владельца, права, которые выдаёт только владелец, своя роль, «Сначала дайте просмотр».
+ * права только владельца, права, которые выдаёт только владелец, своя роль, «Сначала дайте просмотр»;
+ * сверх прототипа не владелец не трогает роль с правами, которые выдаёт только владелец, и не выдаёт
+ * права и область «Все» шире своих (docs/deviations.md, п. 15).
  * Изменения прав и области поднимают версию роли и пишутся в её историю. Новые права действуют со
  * следующего запроса сотрудников с этой ролью.
  */
@@ -93,13 +96,14 @@ export function updateRoleHandler(deps: ApiDeps): RouteHandler<typeof updateRole
           return (await getRole(tx, id))!;
         }
 
-        const problem = roleChangeProblem(actor, current, new Set(before), new Set(after));
+        const problem = roleChangeProblem(actor, current, new Set(before), new Set(after), scopes);
         if (problem) {
+          const { lock, ...details } = problem;
           apiFail(
-            problem.lock === 'view_required' ? 400 : 403,
-            problem.lock,
-            ROLE_LOCK_MESSAGES[problem.lock],
-            problem.permission ? { permission: problem.permission } : undefined,
+            lock === 'view_required' ? 400 : 403,
+            lock,
+            ROLE_CHANGE_MESSAGES[lock],
+            Object.keys(details).length > 0 ? details : undefined,
           );
         }
 

@@ -235,6 +235,18 @@ describe.skipIf(!databaseAvailable())('Сотрудники: API', () => {
       expect(hrRole.status).toBe(403);
       expect(await errorCode(hrRole)).toBe('owner_granted');
 
+      // «Главный бухгалтер» шире «Кадров»: его временный пароль дал бы кадровику чужие права.
+      const wider = await call('POST', '/api/staff', hr, {
+        fullName: 'Тестов Главбух',
+        login: 'chief2-a',
+        roleId: f.templateRole(f.a, 'chief'),
+      });
+      expect(wider.status).toBe(403);
+      expect(ApiError.parse(await wider.json()).error).toEqual({
+        code: 'beyond_own',
+        message: 'Роль с правами шире ваших назначает и снимает владелец',
+      });
+
       const ok = await call('POST', '/api/staff', hr, {
         fullName: 'Тестов Бухгалтер',
         login: 'hired-by-hr-a',
@@ -334,6 +346,21 @@ describe.skipIf(!databaseAvailable())('Сотрудники: API', () => {
       });
       expect(grant.status).toBe(403);
       expect(await errorCode(grant)).toBe('owner_granted');
+
+      // Роль шире своей не назначает и не снимает.
+      const promote = await call('PATCH', `/api/staff/${acc.id}`, hr, {
+        version: acc.version,
+        roleId: f.templateRole(f.a, 'chief'),
+      });
+      expect(promote.status).toBe(403);
+      expect(await errorCode(promote)).toBe('beyond_own');
+      const chiefCard = await card(owner, f.people['chief-a']!.employeeId);
+      const demoteChief = await call('PATCH', `/api/staff/${chiefCard.id}`, hr, {
+        version: chiefCard.version,
+        roleId: f.templateRole(f.a, 'acc'),
+      });
+      expect(demoteChief.status).toBe(403);
+      expect(await errorCode(demoteChief)).toBe('beyond_own');
 
       const ownerCard = await card(owner, f.a.ownerEmployeeId);
       const ownerEdit = await call('PATCH', `/api/staff/${ownerCard.id}`, hr, {
@@ -445,6 +472,21 @@ describe.skipIf(!databaseAvailable())('Сотрудники: API', () => {
       expect(ownerBlock.status).toBe(403);
       expect(await errorCode(ownerBlock)).toBe('owner_employee');
 
+      // У senior-a «Откат статусов» — его блокирует и разблокирует только владелец.
+      const senior = await card(owner, f.people['senior-a']!.employeeId);
+      for (const action of ['block', 'unblock']) {
+        const res = await call('POST', `/api/staff/${senior.id}/${action}`, hr, {
+          version: senior.version,
+        });
+        expect(res.status).toBe(403);
+        expect(ApiError.parse(await res.json()).error).toEqual({
+          code: 'owner_granted',
+          message:
+            'Сотрудника с правами, которые выдаёт только владелец, блокирует и разблокирует владелец',
+        });
+      }
+      expect((await card(owner, senior.id)).active).toBe(true);
+
       const acc = await card(owner, f.people['acc-a']!.employeeId);
       const stale = await call('POST', `/api/staff/${acc.id}/block`, owner, {
         version: acc.version + 5,
@@ -474,6 +516,24 @@ describe.skipIf(!databaseAvailable())('Сотрудники: API', () => {
 
       const bySenior = await call('POST', `/api/staff/${senior}/password-reset`, owner, {});
       expect(bySenior.status).toBe(200);
+    });
+
+    it('пароль сотрудника с правами шире своих не владелец не сбрасывает', async () => {
+      const chiefId = f.people['chief-a']!.employeeId;
+      const byHr = await call('POST', `/api/staff/${chiefId}/password-reset`, hr, {});
+      expect(byHr.status).toBe(403);
+      expect(ApiError.parse(await byHr.json()).error).toEqual({
+        code: 'beyond_own',
+        message: 'Пароль сотрудника с правами шире ваших сбрасывает владелец',
+      });
+      expect((await loginAs('chief-a')).status).toBe(200);
+      const missing = await call(
+        'POST',
+        '/api/staff/00000000-0000-4000-8000-000000000000/password-reset',
+        owner,
+        {},
+      );
+      expect(missing.status).toBe(404);
     });
   });
 });

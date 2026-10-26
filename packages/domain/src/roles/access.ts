@@ -52,6 +52,11 @@ const SCOPE_GROUP_VIEW = Object.fromEntries(
   PERMISSION_GROUPS.filter((g) => g.scope).map((g) => [g.id, g.view]),
 ) as Record<ScopeGroupId, PermissionId>;
 
+/** Право просмотра группы с областью: без него область группы ничего не открывает. */
+export function scopeGroupView(group: ScopeGroupId): PermissionId {
+  return SCOPE_GROUP_VIEW[group];
+}
+
 /**
  * Видит ли субъект данные контрагента в группе прав: нужно право просмотра группы, а при области
  * «Свои контрагенты» — чтобы субъект был ответственным за контрагента.

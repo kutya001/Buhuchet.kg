@@ -3,6 +3,7 @@ import { hashPassword } from '@buhuchet/adapters/password';
 import { newTemporaryPassword } from '@buhuchet/adapters/tokens';
 import {
   getEmployee,
+  lockEmployee,
   roleAccess,
   setTemporaryPassword,
   withOrgContext,
@@ -33,7 +34,7 @@ export const resetEmployeePasswordRoute = createRoute({
     401: { description: 'Нет входа', content: error },
     403: {
       description:
-        'Нет права «Сотрудники и роли»; это владелец; у сотрудника права, которые выдаёт только владелец',
+        'Нет права «Сотрудники и роли»; это владелец; у сотрудника права, которые выдаёт только владелец, или шире ваших',
       content: error,
     },
     404: { description: 'Сотрудника нет', content: error },
@@ -45,8 +46,9 @@ export const resetEmployeePasswordRoute = createRoute({
  * показывается один раз и передаётся сотруднику лично; при первом входе нужно задать свой, все
  * прежние сеансы завершены. Так пароль восстанавливают, если Telegram не привязан (ТЗ «Восстановление
  * пароля через Telegram»). Пароль владельца сбрасывает только администратор платформы, а пароль
- * сотрудника с правами, которые выдаёт только владелец, — только владелец (ОТКЛОНЕНИЕ:
- * docs/deviations.md#15).
+ * сотрудника с правами, которые выдаёт только владелец, или с правами шире, чем у того, кто
+ * сбрасывает, — только владелец (ОТКЛОНЕНИЕ: docs/deviations.md#15). Сотрудник и его роль
+ * заблокированы до конца транзакции: роль не сменится между проверкой и сбросом.
  */
 export function resetEmployeePasswordHandler(
   deps: ApiDeps,
@@ -57,8 +59,8 @@ export function resetEmployeePasswordHandler(
     const temporaryPassword = newTemporaryPassword();
     const passwordHash = await hashPassword(temporaryPassword);
     const target = await withOrgContext(deps.db, orgContextOf(c), async (tx) => {
-      const employee = await getEmployee(tx, id);
-      if (!employee) throw new RecordNotFoundError('employee', id);
+      if (!(await lockEmployee(tx, id))) throw new RecordNotFoundError('employee', id);
+      const employee = (await getEmployee(tx, id))!;
       const role = (await roleAccess(tx, employee.role.id))!;
       const refusal = staffActionRefusal(staffActor(c), { employeeId: id, role }, 'resetPassword');
       if (refusal) refuse(refusal, 'resetPassword');

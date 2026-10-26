@@ -9,6 +9,7 @@ import { schema, type Db } from '@buhuchet/db';
 import { createOrganization, type CreatedOrganization } from '@buhuchet/db/organizations';
 import { createTestDatabase, seedAccessReference, seedPhoneCodes } from '@buhuchet/db/testing';
 import { SCOPE_GROUPS } from '@buhuchet/domain';
+import { eq } from 'drizzle-orm';
 import { createApp } from './app';
 import type { ApiDeps } from './deps';
 
@@ -158,8 +159,10 @@ export const TEST_PASSWORD = 'Верный-пароль-1';
 /**
  * База для тестов модулей «Сотрудники» и «Роли»: организации А и Б с владельцами owner-a и owner-b
  * (временный пароль уже сменён), администратор платформы platform-admin; в А — chief-a и acc-a по
- * шаблонам ролей, роли «Кадры» (staffView и staff — их выдал владелец) с hr-a и «Старший» (cpView и
- * rollback) с senior-a; в Б — acc-b. Справочник «Коды телефонов» загружен.
+ * шаблонам ролей, роли «Кадры» (права «Бухгалтера», staffView и staff — их выдал владелец; область
+ * «Свои») с hr-a и «Старший» (cpView и rollback) с senior-a; в Б — acc-b. «Главный бухгалтер» шире
+ * «Кадров» (финансы без своих прав, «Видеть все…»), «Бухгалтер» — нет. Справочник «Коды телефонов»
+ * загружен.
  */
 export async function createStaffFixture() {
   const t = await createTestDatabase();
@@ -180,11 +183,21 @@ export async function createStaffFixture() {
   const b = await org('Организация Б', '02811201810457', 'org-b', 'owner-b');
   await t.admin.db.update(schema.users).set({ mustChangePassword: false });
 
+  const templateRole = (o: CreatedOrganization, code: string) =>
+    o.roles.find((r) => r.templateCode === code)!.id;
+  const accPermissions = (
+    await t.admin.db
+      .select({ id: schema.rolePermissions.permissionId })
+      .from(schema.rolePermissions)
+      .where(eq(schema.rolePermissions.roleId, templateRole(a, 'acc')))
+  ).map((r) => r.id);
+
   const roleIds: Record<'hr' | 'senior', string> = { hr: '', senior: '' };
-  for (const [key, name, permissions] of [
-    ['hr', 'Кадры', ['staffView', 'staff']],
+  const custom: ['hr' | 'senior', string, string[]][] = [
+    ['hr', 'Кадры', [...accPermissions, 'staffView', 'staff']],
     ['senior', 'Старший', ['cpView', 'rollback']],
-  ] as const) {
+  ];
+  for (const [key, name, permissions] of custom) {
     const [role] = await t.admin.db
       .insert(schema.roles)
       .values({ orgId: a.orgId, name })
@@ -195,19 +208,15 @@ export async function createStaffFixture() {
       .values(
         permissions.map((permissionId) => ({ orgId: a.orgId, roleId: role!.id, permissionId })),
       );
-    await t.admin.db
-      .insert(schema.roleScopes)
-      .values(
-        SCOPE_GROUPS.map((g) => ({
-          orgId: a.orgId,
-          roleId: role!.id,
-          permGroup: g,
-          scope: 'own' as const,
-        })),
-      );
+    await t.admin.db.insert(schema.roleScopes).values(
+      SCOPE_GROUPS.map((g) => ({
+        orgId: a.orgId,
+        roleId: role!.id,
+        permGroup: g,
+        scope: 'own' as const,
+      })),
+    );
   }
-  const templateRole = (o: CreatedOrganization, code: string) =>
-    o.roles.find((r) => r.templateCode === code)!.id;
 
   const people: Record<string, { userId: string; employeeId: string }> = {};
   for (const [o, login, roleId] of [

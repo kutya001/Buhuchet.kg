@@ -30,8 +30,9 @@ export const createRoleRoute = createRoute({
 
 /**
  * «Новая роль» (прототип modules/staff.js, roleAddDlg): название и «Скопировать права из» — права
- * роли-образца без тех, что выдаёт только владелец (если создаёт не владелец), область — «Свои»
- * везде. Дальше права отмечают в форме роли.
+ * роли-образца, а если создаёт не владелец — без тех, что выдаёт только владелец, и без тех, которых
+ * нет у него самого (`copiedRolePermissions`); область — «Свои» везде. Дальше права отмечают в форме
+ * роли.
  */
 export function createRoleHandler(deps: ApiDeps): RouteHandler<typeof createRoleRoute, AppEnv> {
   return async (c) => {

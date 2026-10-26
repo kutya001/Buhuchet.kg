@@ -1,11 +1,23 @@
 import { createRoute, z, type RouteHandler } from '@hono/zod-openapi';
-import { deleteRole, foreignKeyViolation, lockRole, roleInUse, withOrgContext } from '@buhuchet/db';
-import { RecordChangedError, RecordNotFoundError } from '@buhuchet/domain';
+import {
+  deleteRole,
+  foreignKeyViolation,
+  lockRole,
+  roleInUse,
+  rolePermissionIds,
+  withOrgContext,
+} from '@buhuchet/db';
+import {
+  hasOwnerGrantedPermission,
+  RecordChangedError,
+  RecordNotFoundError,
+} from '@buhuchet/domain';
 import { DeleteRoleQuery, OkResponse, Uuid } from '@buhuchet/shared';
 import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
 import { apiError, apiFail, versionedSaveResponses } from '../../errors';
 import { orgContextOf, requirePermission } from '../../middleware/access';
+import { staffActor } from '../staff/employees';
 import { error } from './roles';
 
 const ROLE_IN_USE = apiError('role_in_use', 'Роль назначена сотрудникам: сначала смените им роль');
@@ -24,7 +36,10 @@ export const deleteRoleRoute = createRoute({
       content: error,
     },
     401: { description: 'Нет входа', content: error },
-    403: { description: 'Нет права или это роль владельца', content: error },
+    403: {
+      description: 'Нет права; роль владельца или роль с правами, которые выдаёт только владелец',
+      content: error,
+    },
     ...versionedSaveResponses,
   },
 });
@@ -32,18 +47,28 @@ export const deleteRoleRoute = createRoute({
 /**
  * Удаление неиспользуемой роли (задача #7; в прототипе кнопки нет — docs/deviations.md, п. 16): не
  * роль владельца, нет сотрудников с ней, даже заблокированных, и её не получают новые сотрудники по
- * учётной политике. Права и область удаляются вместе с ролью, удаление — в истории.
+ * учётной политике. Роль с правами, которые выдаёт только владелец, удаляет только владелец — как и
+ * меняет (docs/deviations.md, п. 15). Права и область удаляются вместе с ролью, удаление — в истории.
  */
 export function deleteRoleHandler(deps: ApiDeps): RouteHandler<typeof deleteRoleRoute, AppEnv> {
   return async (c) => {
     const { id } = c.req.valid('param');
     const { version } = c.req.valid('query');
+    const actor = staffActor(c);
     try {
       await withOrgContext(deps.db, orgContextOf(c), async (tx) => {
         const role = await lockRole(tx, id);
         if (!role) throw new RecordNotFoundError('role', id);
         if (role.version !== version) throw new RecordChangedError('role', id, role.version);
         if (role.isOwner) apiFail(403, 'owner_role', 'Роль владельца не удаляется');
+        const permissions = await rolePermissionIds(tx, id);
+        if (!actor.isOwner && hasOwnerGrantedPermission({ isOwner: false, permissions })) {
+          apiFail(
+            403,
+            'owner_granted_role',
+            'Роль с правами, которые выдаёт только владелец, удаляет владелец',
+          );
+        }
         const inUse = await roleInUse(tx, id);
         if (inUse === 'employees') apiFail(400, ROLE_IN_USE.error.code, ROLE_IN_USE.error.message);
         if (inUse === 'default') {

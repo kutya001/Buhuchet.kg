@@ -65,9 +65,10 @@ export const updateEmployeeRoute = createRoute({
 });
 
 /**
- * Правка сотрудника: ФИО и телефон, «Сменить роль» (прототип modules/staff.js, empActions). Свою роль
- * и роль с правами, которые выдаёт только владелец, меняет владелец (`staffActionRefusal`). Новая роль
- * действует со следующего запроса сотрудника: права загружаются при каждом запросе.
+ * Правка сотрудника: ФИО и телефон, «Сменить роль» (прототип modules/staff.js, empActions). Свою роль,
+ * роль с правами, которые выдаёт только владелец, и роль шире своей меняет владелец
+ * (`staffActionRefusal`). Новая роль действует со следующего запроса сотрудника: права загружаются
+ * при каждом запросе.
  */
 export function updateEmployeeHandler(
   deps: ApiDeps,
@@ -159,7 +160,11 @@ const activeRoute = (action: 'block' | 'unblock') =>
         content: { 'application/json': { schema: Employee } },
       },
       401: { description: 'Нет входа', content: error },
-      403: { description: 'Нет права, это владелец или вы сами', content: error },
+      403: {
+        description:
+          'Нет права, это владелец, вы сами или у сотрудника права, которые выдаёт только владелец',
+        content: error,
+      },
       ...versionedSaveResponses,
     },
   });

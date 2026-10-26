@@ -78,10 +78,7 @@ export function createEmployeeHandler(
     const fullName = checkFullName(body.fullName);
     const login = normalizeLogin(body.login);
     if (!isValidLogin(login)) {
-      return c.json(
-        apiError('invalid_login', 'Логин: латиница, цифры, точка, дефис; от 3 символов'),
-        400,
-      );
+      return c.json(apiError('invalid_login', 'Латиница, цифры, точка, дефис; от 3 символов'), 400);
     }
     const temporaryPassword = body.temporaryPassword ?? newTemporaryPassword();
     const passwordHash = await hashPassword(temporaryPassword);

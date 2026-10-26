@@ -1,8 +1,12 @@
 import {
   auditActorName,
   isPermissionId,
+  normalizeScopes,
   PERMISSION_IDS,
+  SCOPE_GROUPS,
   type PermissionId,
+  type Scope,
+  type ScopeGroupId,
 } from '@buhuchet/domain';
 import { asc, eq, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
@@ -12,6 +16,7 @@ import {
   employees,
   platformReference,
   rolePermissions,
+  roleScopes,
   roles,
   sessions,
   telegramLinks,
@@ -130,22 +135,46 @@ export async function lockEmployee(tx: Tx, id: string): Promise<boolean> {
   return rows.length > 0;
 }
 
-/** Роль организации и её права (у роли владельца права не перечисляются). */
+/** Роль организации, её права и область (у роли владельца права не перечисляются, область — «Все»). */
 export interface RoleAccess {
   id: string;
   name: string;
   isOwner: boolean;
   permissions: PermissionId[];
+  scopes: Record<ScopeGroupId, Scope>;
 }
 
-/** Роль с правами; null — нет такой роли в организации. */
+/**
+ * Роль с правами и областью для решения о сотруднике; null — нет такой роли в организации. Строка
+ * роли блокируется на чтение до конца транзакции (FOR SHARE): правка роли (`lockRole`, FOR UPDATE)
+ * дождётся решения, а решение — уже сохранённой правки, и права читаются отдельным запросом после
+ * блокировки, то есть свежие.
+ */
 export async function roleAccess(tx: Tx, roleId: string): Promise<RoleAccess | null> {
   const [role] = await tx
     .select({ id: roles.id, name: roles.name, isOwner: roles.isOwner })
     .from(roles)
-    .where(eq(roles.id, roleId));
+    .where(eq(roles.id, roleId))
+    .for('share');
   if (!role) return null;
-  return { ...role, permissions: await rolePermissionIds(tx, roleId) };
+  if (role.isOwner) {
+    const all = normalizeScopes(Object.fromEntries(SCOPE_GROUPS.map((g) => [g, 'all'])));
+    return { ...role, permissions: [], scopes: all };
+  }
+  return {
+    ...role,
+    permissions: await rolePermissionIds(tx, roleId),
+    scopes: await roleScopeMap(tx, roleId),
+  };
+}
+
+/** Область групп роли, как сохранена; недостающие группы — «Свои». */
+export async function roleScopeMap(tx: Tx, roleId: string): Promise<Record<ScopeGroupId, Scope>> {
+  const rows = await tx
+    .select({ group: roleScopes.permGroup, scope: roleScopes.scope })
+    .from(roleScopes)
+    .where(eq(roleScopes.roleId, roleId));
+  return normalizeScopes(Object.fromEntries(rows.map((r) => [r.group, r.scope])));
 }
 
 /** Права роли в порядке каталога. */
