@@ -15,13 +15,14 @@ import {
   ORG_PROFILE_MESSAGES,
   RecordNotFoundError,
 } from '@buhuchet/domain';
-import { OrgProfile, OrgVersionQuery } from '@buhuchet/shared';
+import { OrgLogoLink, OrgProfile, OrgVersionQuery } from '@buhuchet/shared';
 import { bodyLimit } from 'hono/body-limit';
 import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
 import { apiError, versionedSaveResponses } from '../../errors';
 import { orgContextOf, requireEmployee, requirePermission } from '../../middleware/access';
-import { error, logoVersion, orgProfileBody } from './profile';
+import { logoLink, ownLogoKey } from './logo-link';
+import { error, orgProfileBody } from './profile';
 
 const { organizations } = schema;
 
@@ -29,14 +30,6 @@ const { organizations } = schema;
 export const LOGO_PATH = '/api/org/logo';
 
 const tooLarge = () => apiError('logo_too_large', ORG_PROFILE_MESSAGES.logo_too_large);
-
-/**
- * Ключ лежит в папке логотипов этой организации. Ключ ставит только сервер, но файл читается и
- * удаляется лишь после этой проверки: ошибочный ключ не откроет и не сотрёт файл чужой организации.
- */
-function ownLogoKey(key: string | null | undefined, orgId: string): key is string {
-  return !!key && key.startsWith(`org/${orgId}/logo/`);
-}
 
 /** Ключ хранилища в историю не пишется — только факт «Загружен логотип» или «Убран». */
 const LOGO_HISTORY_SECRET = ['logoKey'];
@@ -56,11 +49,13 @@ export const getLogoRoute = createRoute({
   method: 'get',
   path: '/org/logo',
   tags: ['org'],
-  summary: 'Картинка логотипа организации',
+  summary: 'Новая ссылка на логотип организации на 15 минут',
   middleware: [requireEmployee] as const,
-  request: { query: z.object({ v: z.string().max(64).optional() }) },
   responses: {
-    200: { description: 'Логотип (PNG или JPG)', content: image },
+    200: {
+      description: 'Подписанная ссылка на картинку в хранилище',
+      content: { 'application/json': { schema: OrgLogoLink } },
+    },
     401: { description: 'Нет входа', content: error },
     403: { description: 'Не сотрудник организации', content: error },
     404: { description: 'Логотипа нет', content: error },
@@ -68,26 +63,17 @@ export const getLogoRoute = createRoute({
 });
 
 /**
- * Логотип видят все сотрудники организации: картинка идёт через API после проверки сеанса, с адреса
- * сайта, поэтому её можно показать в <img> без подписанной ссылки на хранилище. Тип — по первым
- * байтам (сохраняются только PNG и JPG); страница с картинкой ничего не выполняет (CSP sandbox).
- * Адрес с номером загрузки (`?v=`) кэшируется браузером надолго, без номера — перепроверяется.
+ * Логотип видят все сотрудники организации: после проверки сеанса выдаётся временная подписанная
+ * ссылка на картинку в хранилище (ТЗ; решение заказчика по п. 20 расхождений). Ссылка из «Основного»
+ * живёт 15 минут — когда срок выходит, экран берёт здесь новую.
  */
 export function getLogoHandler(deps: ApiDeps): RouteHandler<typeof getLogoRoute, AppEnv> {
   return async (c) => {
     const ctx = orgContextOf(c);
     const profile = await withOrgContext(deps.db, ctx, (tx) => getOrgProfile(tx, ctx.orgId));
-    const key = profile?.logoKey;
-    const bytes = ownLogoKey(key, ctx.orgId) ? await deps.storage.get(key) : null;
-    const type = bytes && logoImageType(bytes);
-    if (!key || !bytes || !type) return c.json(apiError('not_found', 'Логотипа нет'), 404);
-    const current = c.req.valid('query').v === logoVersion(key);
-    return c.body(bytes as Uint8Array<ArrayBuffer>, 200, {
-      'content-type': type,
-      'content-disposition': 'inline',
-      'content-security-policy': "default-src 'none'; sandbox",
-      'cache-control': current ? 'private, max-age=31536000, immutable' : 'private, no-cache',
-    });
+    const link = profile && (await logoLink(deps, ctx.orgId, profile.logoKey));
+    if (!link) return c.json(apiError('not_found', 'Логотипа нет'), 404);
+    return c.json(link, 200);
   };
 }
 
@@ -160,7 +146,7 @@ export function uploadLogoHandler(deps: ApiDeps): RouteHandler<typeof uploadLogo
     }
     if (ownLogoKey(previous, ctx.orgId)) await dropFile(deps, previous);
     const profile = await withOrgContext(deps.db, ctx, (tx) => getOrgProfile(tx, ctx.orgId));
-    return c.json(orgProfileBody(profile!), 200);
+    return c.json(await orgProfileBody(deps, profile!), 200);
   };
 }
 
@@ -201,6 +187,6 @@ export function deleteLogoHandler(deps: ApiDeps): RouteHandler<typeof deleteLogo
       return { previous: before.logoKey, profile: (await getOrgProfile(tx, ctx.orgId))! };
     });
     if (ownLogoKey(previous, ctx.orgId)) await dropFile(deps, previous);
-    return c.json(orgProfileBody(profile), 200);
+    return c.json(await orgProfileBody(deps, profile), 200);
   };
 }

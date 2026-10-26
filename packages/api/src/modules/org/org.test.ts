@@ -2,7 +2,14 @@ import type { MemoryStorage } from '@buhuchet/adapters';
 import { schema } from '@buhuchet/db';
 import { databaseAvailable } from '@buhuchet/db/testing';
 import { LOGO_MAX_BYTES } from '@buhuchet/domain';
-import { ApiError, MeResponse, OrgPolicy, OrgPolicyHistory, OrgProfile } from '@buhuchet/shared';
+import {
+  ApiError,
+  MeResponse,
+  OrgLogoLink,
+  OrgPolicy,
+  OrgPolicyHistory,
+  OrgProfile,
+} from '@buhuchet/shared';
 import { and, desc, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { apiRequest, createStaffFixture, signIn, TEST_ORIGIN, TEST_PASSWORD } from '../../testing';
@@ -86,7 +93,7 @@ describe.skipIf(!databaseAvailable())('Моя организация: API', () =
         name: 'Организация А',
         inn: '01811201810456',
         slug: 'org-a',
-        logoUrl: null,
+        logo: null,
         version: 1,
       });
       expect(await profile(acc)).toEqual(own);
@@ -192,33 +199,37 @@ describe.skipIf(!databaseAvailable())('Моя организация: API', () =
   });
 
   describe('логотип', () => {
-    it('владелец загружает PNG до 2 МБ, все сотрудники видят картинку', async () => {
+    it('владелец загружает PNG до 2 МБ, все сотрудники получают ссылку на 15 минут', async () => {
       const res = await putLogo(PNG, (await profile()).version);
       expect(res.status, await res.clone().text()).toBe(200);
-      const { logoUrl } = OrgProfile.parse(await res.json());
-      expect(logoUrl).toMatch(/^\/api\/org\/logo\?v=[0-9a-f-]{36}$/);
-      expect([...files().keys()]).toEqual([expect.stringMatching(`^org/${f.a.orgId}/logo/`)]);
+      const { logo } = OrgProfile.parse(await res.json());
+      const [key] = [...files().keys()];
+      expect(key).toMatch(new RegExp(`^org/${f.a.orgId}/logo/[0-9a-f-]{36}$`));
+      expect(files().get(key!)).toEqual({ body: PNG, contentType: 'image/png' });
+      // Подписанная ссылка на файл в хранилище (в памяти — memory://<ключ>?expires=<секунды>).
+      expect(logo?.url).toBe(`memory://${key}?expires=900`);
+      const left = Date.parse(logo!.expiresAt) - Date.now();
+      expect(left).toBeGreaterThan(14 * 60_000);
+      expect(left).toBeLessThanOrEqual(15 * 60_000);
 
       for (const cookie of [owner, acc]) {
-        const img = await f.app.request(logoUrl!, { headers: { cookie } });
-        expect(img.status).toBe(200);
-        expect(img.headers.get('content-type')).toBe('image/png');
-        expect(img.headers.get('cache-control')).toBe('private, max-age=31536000, immutable');
-        expect(img.headers.get('content-security-policy')).toContain('sandbox');
-        expect(new Uint8Array(await img.arrayBuffer())).toEqual(PNG);
+        expect((await profile(cookie)).logo?.url).toBe(logo?.url);
+        const fresh = await call('GET', '/api/org/logo', cookie);
+        expect(fresh.status).toBe(200);
+        expect(OrgLogoLink.parse(await fresh.json()).url).toBe(logo?.url);
       }
-      const plain = await f.app.request('/api/org/logo', { headers: { cookie: acc } });
-      expect(plain.headers.get('cache-control')).toBe('private, no-cache');
-      expect((await f.app.request(logoUrl!)).status).toBe(401);
+      expect((await call('GET', '/api/org/logo')).status).toBe(401);
+      expect((await call('GET', '/api/org/logo', admin)).status).toBe(403);
 
-      // У организации Б логотипа нет — чужой не отдаётся; со своим каждая получает только свою картинку.
-      expect((await f.app.request(logoUrl!, { headers: { cookie: ownerB } })).status).toBe(404);
+      // У организации Б логотипа нет — чужой не отдаётся; со своим каждая получает ссылку на свой файл.
+      expect((await call('GET', '/api/org/logo', ownerB)).status).toBe(404);
+      expect((await profile(ownerB)).logo).toBeNull();
       const versionB = (await profile(ownerB)).version;
       expect((await putLogo(JPEG, versionB, ownerB, 'image/jpeg')).status).toBe(200);
-      const own = await f.app.request('/api/org/logo', { headers: { cookie: ownerB } });
-      expect(new Uint8Array(await own.arrayBuffer())).toEqual(JPEG);
-      const mine = await f.app.request('/api/org/logo', { headers: { cookie: acc } });
-      expect(new Uint8Array(await mine.arrayBuffer())).toEqual(PNG);
+      const own = OrgLogoLink.parse(await (await call('GET', '/api/org/logo', ownerB)).json());
+      expect(own.url).toMatch(new RegExp(`^memory://org/${f.b.orgId}/logo/`));
+      const mine = OrgLogoLink.parse(await (await call('GET', '/api/org/logo', acc)).json());
+      expect(mine.url).toBe(logo?.url);
       const versionB2 = (await profile(ownerB)).version;
       expect((await call('DELETE', `/api/org/logo?version=${versionB2}`, ownerB)).status).toBe(200);
 
@@ -271,9 +282,11 @@ describe.skipIf(!databaseAvailable())('Моя организация: API', () =
       expect(replaced.status).toBe(200);
       expect(files().has(oldKey)).toBe(false);
       expect(files().size).toBe(1);
-      const { logoUrl } = OrgProfile.parse(await replaced.json());
-      const img = await f.app.request(logoUrl!, { headers: { cookie: acc } });
-      expect(img.headers.get('content-type')).toBe('image/jpeg');
+      const newKey = [...files().keys()][0]!;
+      expect(files().get(newKey)?.contentType).toBe('image/jpeg');
+      expect(OrgProfile.parse(await replaced.json()).logo?.url).toBe(
+        `memory://${newKey}?expires=900`,
+      );
 
       expect(
         (await call('DELETE', `/api/org/logo?version=${(await profile()).version}`, acc)).status,
@@ -284,9 +297,17 @@ describe.skipIf(!databaseAvailable())('Моя организация: API', () =
         owner,
       );
       expect(removed.status).toBe(200);
-      expect(OrgProfile.parse(await removed.json()).logoUrl).toBeNull();
+      expect(OrgProfile.parse(await removed.json()).logo).toBeNull();
       expect(files().size).toBe(0);
-      expect((await f.app.request('/api/org/logo', { headers: { cookie: acc } })).status).toBe(404);
+      expect((await call('GET', '/api/org/logo', acc)).status).toBe(404);
+
+      // Ключ не из папки своей организации ссылки не получает: ключ ставит только сервер, это страховка.
+      const setKey = (logoKey: string | null) =>
+        f.t.admin.db.update(organizations).set({ logoKey }).where(eq(organizations.id, f.a.orgId));
+      await setKey(`org/${f.b.orgId}/logo/${crypto.randomUUID()}`);
+      expect((await call('GET', '/api/org/logo', acc)).status).toBe(404);
+      expect((await profile(acc)).logo).toBeNull();
+      await setKey(null);
     });
   });
 
