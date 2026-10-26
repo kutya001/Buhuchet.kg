@@ -1,6 +1,6 @@
 import { createRoute, z, type RouteHandler } from '@hono/zod-openapi';
 import { listViewSettings, resetViewSettings, saveViewSettings } from '@buhuchet/db';
-import { isGridKey } from '@buhuchet/domain';
+import { isViewKey } from '@buhuchet/domain';
 import {
   ApiError,
   GridKeyParam,
@@ -16,9 +16,12 @@ import { asSessionUser } from '../../middleware/access';
 const error = { 'application/json': { schema: ApiError } };
 const params = z.object({ gridKey: GridKeyParam });
 
-/** Список из `GRID_KEYS`: настройки других ключей сервер не хранит (их нельзя накопить без меры). */
+/**
+ * Список из `GRID_KEYS` или «Статистика» модуля меню (`isViewKey`): настройки других ключей сервер не
+ * хранит (их нельзя накопить без меры).
+ */
 function knownGrid(gridKey: string): string {
-  if (!isGridKey(gridKey)) apiFail(404, 'not_found', 'Список не найден');
+  if (!isViewKey(gridKey)) apiFail(404, 'not_found', 'Список не найден');
   return gridKey;
 }
 
@@ -49,7 +52,7 @@ export function listViewSettingsHandler(
     const items: Record<string, ViewSettings> = {};
     for (const [key, value] of Object.entries(stored)) {
       const parsed = ViewSettings.safeParse(value);
-      if (isGridKey(key) && parsed.success) items[key] = parsed.data;
+      if (isViewKey(key) && parsed.success) items[key] = parsed.data;
     }
     return c.json({ items }, 200);
   };

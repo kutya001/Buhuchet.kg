@@ -251,6 +251,9 @@ export const SHELL_TEXTS = {
     section: 'Оболочка',
   },
   'shell.logout_discard_ok': { ru: 'Выйти', section: 'Оболочка' },
+  'shell.stats': { ru: 'Статистика', section: 'Оболочка' },
+  'shell.stats_show': { ru: 'Показать статистику', section: 'Оболочка' },
+  'shell.stats_hide': { ru: 'Скрыть статистику', section: 'Оболочка' },
   'kb.no_article': {
     ru: 'Отдельной статьи об этом модуле пока нет. Все статьи и уроки — в «Базе знаний».',
     section: 'База знаний',

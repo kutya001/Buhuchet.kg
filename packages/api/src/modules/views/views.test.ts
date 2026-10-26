@@ -69,6 +69,15 @@ describe.skipIf(!databaseAvailable())('Настройки вида списко�
     expect((await mine(owner))['staff.list']).not.toEqual({ size: 100 });
   });
 
+  it('«Статистика» модуля запоминается у пользователя по модулю; чужого модуля нет', async () => {
+    const saved = await call('PUT', '/api/view-settings/stats.reports', owner, { stats: false });
+    expect(saved.status).toBe(200);
+    expect((await mine(owner))['stats.reports']).toEqual({ stats: false });
+    expect((await mine(chief))['stats.reports']).toBeUndefined();
+    expect((await call('PUT', '/api/view-settings/stats.nope', owner, {})).status).toBe(404);
+    await call('DELETE', '/api/view-settings/stats.reports', owner);
+  });
+
   it('неизвестный список — 404; неверные настройки — 400; без входа — 401', async () => {
     const unknown = await call('PUT', '/api/view-settings/reports.week', owner, {});
     expect(unknown.status).toBe(404);
@@ -81,6 +90,8 @@ describe.skipIf(!databaseAvailable())('Настройки вида списко�
       { size: 7 },
       { sort: { key: 'fullName', dir: 'up' } },
       { view: 'tiles' },
+      { group: ['a', 'b', 'c'] },
+      { stats: 'yes' },
     ]) {
       const res = await call('PUT', '/api/view-settings/staff.list', owner, bad);
       expect(res.status, JSON.stringify(bad)).toBe(400);

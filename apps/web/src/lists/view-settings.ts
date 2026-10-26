@@ -1,6 +1,6 @@
 'use client';
 
-import type { GridKey, GridViewSettings } from '@buhuchet/domain';
+import type { GridViewSettings, ViewKey } from '@buhuchet/domain';
 import { ViewSettingsMap } from '@buhuchet/shared';
 import { useToast } from '@buhuchet/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -31,7 +31,7 @@ async function fetchViewSettings(): Promise<SettingsMap> {
  * несохранённая правка уходит и при закрытии страницы. Не удалось загрузить настройки — список
  * показывается по умолчанию.
  */
-export function useViewSettings(gridKey: GridKey) {
+export function useViewSettings(gridKey: ViewKey) {
   const client = useQueryClient();
   const toast = useToast();
   const t = useT();

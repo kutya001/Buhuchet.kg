@@ -17,6 +17,8 @@ export {
   type ModalSize,
   type WindowLabels,
 } from './modal';
+export { FloatingPanel } from './floating';
+export { Plate, Plates, type PlateColor, type PlateProps } from './plates';
 export { Popover, type PopoverProps } from './popover';
 export { RecordChangedNotice, type RecordChangedNoticeProps } from './record-changed';
 export { BottomSheet, type BottomSheetProps } from './sheet';
@@ -33,7 +35,7 @@ export {
   type SideNavLabels,
 } from './shell/side-nav';
 export { TabPager, type TabPagerProps } from './shell/tab-pager';
-export { TabRow, type AddAction, type TabRowProps } from './shell/tab-row';
+export { TabRow, type AddAction, type StatsToggle, type TabRowProps } from './shell/tab-row';
 export { TopBar, type TopBarProps } from './shell/top-bar';
 export {
   ToastProvider,
@@ -70,10 +72,25 @@ export {
   type ActionSeparator,
   type MenuPlace,
 } from './action-menu';
-export { AUDIT_KEYS, auditColumns } from './grid/audit';
-export { DataGrid, GridFooter, GridSkeleton, type DataGridProps } from './grid/data-grid';
+export { AUDIT_COLUMNS, AUDIT_KEYS, auditColumns } from './grid/audit';
+export {
+  DataGrid,
+  GridChips,
+  GridFooter,
+  GridSkeleton,
+  type DataGridProps,
+} from './grid/data-grid';
+export { FilterPanel, type ValueLabels } from './grid/grid-filter';
+export * from './grid/grid-filters';
+export * from './grid/grid-groups';
 export * from './grid/grid-state';
-export { ColumnsPanel, GridBulkBar, GridToolbar, type GridSelectionBar } from './grid/grid-toolbar';
+export {
+  ColumnsPanel,
+  GridBulkBar,
+  GridToolbar,
+  GroupPanel,
+  type GridSelectionBar,
+} from './grid/grid-toolbar';
 export {
   LONG_PRESS_MS,
   LONG_PRESS_SLOP_PX,
@@ -89,4 +106,5 @@ export type {
   GridPage,
   GridRowSelection,
   GridRowTone,
+  GridValues,
 } from './grid/types';

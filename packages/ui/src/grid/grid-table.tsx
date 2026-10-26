@@ -1,9 +1,10 @@
 'use client';
 
-import type { GridViewSettings, ListSort } from '@buhuchet/domain';
-import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import type { GridViewSettings, GroupAgg, ListSort } from '@buhuchet/domain';
+import { useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { iconButtonClass } from '../button';
 import { Icon } from '../icon';
+import { aggText, groupLabelSpan, type GroupNode } from './grid-groups';
 import { clampWidth, columnWidth, dropColumn, setColumnWidth } from './grid-state';
 import type { GridColumn, GridLabels, GridRowSelection, GridRowTone } from './types';
 import type { RowEvents } from './row-events';
@@ -43,8 +44,57 @@ interface TableProps<Row> {
   events: RowEvents<Row>;
   /** Выбор строк галочками (есть массовые действия). */
   selection?: GridRowSelection<Row>;
+  /** Фильтр у заголовков: открыть меню столбца у кнопки; `filtered` — у столбца есть фильтр. */
+  filter?: GridHeaderFilter;
+  /** Сгруппированный список: группы со строками, свёрнутые группы и итоги числовых столбцов. */
+  groups?: GridTableGroups<Row>;
   label: string;
   labels: GridLabels;
+}
+
+export interface GridHeaderFilter {
+  filtered: (key: string) => boolean;
+  /** Меню какого столбца открыто (у кнопки — aria-expanded). */
+  open: string | null;
+  onOpen: (key: string, anchor: HTMLElement) => void;
+}
+
+export interface GridTableGroups<Row> {
+  tree: readonly GroupNode<Row>[];
+  closed: ReadonlySet<string>;
+  onToggle: (path: string) => void;
+  aggs: Readonly<Record<string, GroupAgg>>;
+}
+
+/** Кнопка группы (`.g-tg` прототипа): стрелка, название жирным и число записей. */
+export function GroupToggle<Row>({
+  node,
+  open,
+  onToggle,
+  indent,
+  labels,
+}: {
+  node: GroupNode<Row>;
+  open: boolean;
+  onToggle: (path: string) => void;
+  indent: boolean;
+  labels: GridLabels;
+}) {
+  return (
+    <button
+      type="button"
+      aria-expanded={open}
+      onClick={() => onToggle(node.path)}
+      style={indent ? { paddingLeft: node.level * 22 } : undefined}
+      className="inline-flex max-w-full cursor-pointer items-center gap-[7px] border-0 bg-transparent p-0 text-left font-[inherit] text-inherit"
+    >
+      <Icon name={open ? 'down' : 'right'} size="sm" />
+      <b className="truncate">{node.group.label ?? labels.empty}</b>
+      <span className="rounded-full border border-line bg-btn px-[7px] text-[11px] font-semibold text-muted tabular-nums">
+        {node.group.count}
+      </span>
+    </button>
+  );
 }
 
 /**
@@ -71,6 +121,8 @@ export function GridTable<Row>({
   clickable,
   events,
   selection,
+  filter,
+  groups,
   label,
   labels,
 }: TableProps<Row>) {
@@ -114,6 +166,116 @@ export function GridTable<Row>({
   };
 
   const cell = `overflow-hidden border-b border-line px-2.5 text-ellipsis whitespace-nowrap ${compact ? 'h-[31px] py-[3px] text-[12.5px]' : 'h-[41px] py-2 text-[13px]'}`;
+
+  // Строки тела по порядку: без группировки — строки страницы; с группировкой — строка группы, под
+  // ней (если она раскрыта) её вложенные группы или строки (прототип tableHtml, `walk`).
+  const lines: ({ kind: 'group'; node: GroupNode<Row> } | { kind: 'row'; row: Row })[] = [];
+  const walk = (nodes: readonly GroupNode<Row>[]) => {
+    for (const node of nodes) {
+      lines.push({ kind: 'group', node });
+      if (groups!.closed.has(node.path)) continue;
+      if (node.sub) walk(node.sub);
+      else for (const row of node.rows) lines.push({ kind: 'row', row });
+    }
+  };
+  if (groups) walk(groups.tree);
+  else for (const row of rows) lines.push({ kind: 'row', row });
+
+  const span = groupLabelSpan(columns);
+  const groupRow = (node: GroupNode<Row>, last: boolean): ReactNode => {
+    const { closed, onToggle, aggs } = groups!;
+    const bg =
+      node.level === 0
+        ? 'bg-pane-alt'
+        : 'bg-[color-mix(in_srgb,var(--bu-pane-alt)_45%,transparent)]';
+    const td = `${cell} ${bg} border-line-strong font-semibold ${last ? 'border-b-0' : ''}`;
+    return (
+      <tr
+        key={`g${node.path}`}
+        data-group={node.path}
+        data-group-level={node.level}
+        className="[&:hover>td]:bg-row-hover"
+      >
+        {selection && <td className={td} />}
+        <td colSpan={span} className={`${td} overflow-visible`}>
+          <GroupToggle
+            node={node}
+            open={!closed.has(node.path)}
+            onToggle={onToggle}
+            indent
+            labels={labels}
+          />
+        </td>
+        {columns.slice(span).map((c) => {
+          const how = aggs[c.key];
+          if (!how) return <td key={c.key} className={td} />;
+          return (
+            <td
+              key={c.key}
+              title={`${labels.agg[how]}: ${c.label}`}
+              className={`${td} text-right text-ink tabular-nums`}
+            >
+              {aggText(c.type, how, node.group.aggs[c.key] ?? null)}
+            </td>
+          );
+        })}
+        {hasActions && <td className={td} />}
+      </tr>
+    );
+  };
+
+  const dataRow = (row: Row, last: boolean): ReactNode => {
+    const id = rowKey(row);
+    const tone = rowTone?.(row);
+    const picked = selection?.has(row) ?? false;
+    return (
+      <tr
+        key={id}
+        data-id={id}
+        tabIndex={0}
+        {...events.handlers(row)}
+        className={`group/row focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-blue [&:hover>td]:bg-row-hover ${clickable ? 'cursor-pointer' : ''} ${tone ? TONE_ROW[tone] : ''} ${picked ? '[&>td]:bg-sel' : ''}`}
+      >
+        {selection && (
+          <td className={`${cell} px-0! text-center ${last ? 'border-b-0' : ''}`}>
+            <input
+              type="checkbox"
+              aria-label={labels.selectRow}
+              checked={picked}
+              onChange={(e) => selection.toggle(row, e.target.checked)}
+              className={SELECT_BOX}
+            />
+          </td>
+        )}
+        {columns.map((c) => {
+          const text = c.text(row);
+          return (
+            <td
+              key={c.key}
+              title={text}
+              className={`${cell} ${last ? 'border-b-0' : ''} ${isNumeric(c) ? 'text-right' : ''} ${c.className ?? ''}`}
+            >
+              {c.cell ? c.cell(row) : text}
+            </td>
+          );
+        })}
+        {hasActions && (
+          <td className={`${cell} px-1! text-center ${last ? 'border-b-0' : ''}`}>
+            <button
+              type="button"
+              data-row-menu
+              aria-label={labels.actions}
+              aria-haspopup="menu"
+              onClick={(e) => events.menuAt(row, { anchor: e.currentTarget })}
+              className={iconButtonClass('sm')}
+            >
+              <Icon name="more" />
+            </button>
+          </td>
+        )}
+      </tr>
+    );
+  };
 
   return (
     <div
@@ -182,7 +344,7 @@ export function GridTable<Row>({
                     setDrag(null);
                     setOver(null);
                   }}
-                  className={`sticky top-0 z-[2] border-b border-line bg-pane-alt p-0 text-left text-[12px] font-[650] tracking-[0.01em] text-muted select-none ${over === c.key && drag !== c.key ? 'shadow-[inset_2px_0_0_var(--bu-b-blue)]' : ''}`}
+                  className={`group/th sticky top-0 z-[2] border-b border-line bg-pane-alt p-0 text-left text-[12px] font-[650] tracking-[0.01em] text-muted select-none ${over === c.key && drag !== c.key ? 'shadow-[inset_2px_0_0_var(--bu-b-blue)]' : ''}`}
                 >
                   <div
                     className={`flex min-h-9 items-center gap-0.5 pr-1 pl-2.5 ${isNumeric(c) ? 'justify-end' : ''}`}
@@ -199,6 +361,21 @@ export function GridTable<Row>({
                       </button>
                     ) : (
                       <span className="truncate py-1.5">{c.label}</span>
+                    )}
+                    {filter && c.filterable !== false && (
+                      <button
+                        type="button"
+                        data-filter-button={c.key}
+                        aria-label={labels.filterOf(c.label)}
+                        title={labels.filter}
+                        aria-haspopup="dialog"
+                        aria-expanded={filter.open === c.key}
+                        aria-pressed={filter.filtered(c.key)}
+                        onClick={(e) => filter.onOpen(c.key, e.currentTarget)}
+                        className={`inline-grid h-6 w-6 flex-none cursor-pointer place-items-center rounded-[5px] border-0 group-hover/th:opacity-100 focus-visible:opacity-100 ${filter.filtered(c.key) ? 'bg-info-bg text-info opacity-100' : 'bg-transparent text-faint opacity-55 hover:bg-row-hover hover:text-ink'}`}
+                      >
+                        <Icon name="filter" size="sm" />
+                      </button>
                     )}
                   </div>
                   <span
@@ -220,59 +397,11 @@ export function GridTable<Row>({
           </tr>
         </thead>
         <tbody>
-          {rows.map((row, i) => {
-            const id = rowKey(row);
-            const tone = rowTone?.(row);
-            const last = i === rows.length - 1;
-            const picked = selection?.has(row) ?? false;
-            return (
-              <tr
-                key={id}
-                data-id={id}
-                tabIndex={0}
-                {...events.handlers(row)}
-                className={`group/row focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-blue [&:hover>td]:bg-row-hover ${clickable ? 'cursor-pointer' : ''} ${tone ? TONE_ROW[tone] : ''} ${picked ? '[&>td]:bg-sel' : ''}`}
-              >
-                {selection && (
-                  <td className={`${cell} px-0! text-center ${last ? 'border-b-0' : ''}`}>
-                    <input
-                      type="checkbox"
-                      aria-label={labels.selectRow}
-                      checked={picked}
-                      onChange={(e) => selection.toggle(row, e.target.checked)}
-                      className={SELECT_BOX}
-                    />
-                  </td>
-                )}
-                {columns.map((c) => {
-                  const text = c.text(row);
-                  return (
-                    <td
-                      key={c.key}
-                      title={text}
-                      className={`${cell} ${last ? 'border-b-0' : ''} ${isNumeric(c) ? 'text-right' : ''} ${c.className ?? ''}`}
-                    >
-                      {c.cell ? c.cell(row) : text}
-                    </td>
-                  );
-                })}
-                {hasActions && (
-                  <td className={`${cell} px-1! text-center ${last ? 'border-b-0' : ''}`}>
-                    <button
-                      type="button"
-                      data-row-menu
-                      aria-label={labels.actions}
-                      aria-haspopup="menu"
-                      onClick={(e) => events.menuAt(row, { anchor: e.currentTarget })}
-                      className={iconButtonClass('sm')}
-                    >
-                      <Icon name="more" />
-                    </button>
-                  </td>
-                )}
-              </tr>
-            );
-          })}
+          {lines.map((line, i) =>
+            line.kind === 'group'
+              ? groupRow(line.node, i === lines.length - 1)
+              : dataRow(line.row, i === lines.length - 1),
+          )}
         </tbody>
         {hasTotals && (
           <tfoot>

@@ -1,7 +1,7 @@
 'use client';
 
 import { useLayoutEffect, useRef } from 'react';
-import { buttonClass } from '../button';
+import { buttonClass, iconButtonClass } from '../button';
 import { Icon } from '../icon';
 import { BetaBadge, MenuItems, type MenuItem } from '../menu';
 import { Popover } from '../popover';
@@ -51,14 +51,29 @@ export interface TabRowProps {
   addActions: readonly AddAction[];
   addLabel: string;
   onAdd: (actionId: string) => void;
+  /** Кнопка «Статистика»: только у экрана с плашками-итогами. */
+  stats?: StatsToggle;
   Link?: ShellLink;
+}
+
+/**
+ * Кнопка «Статистика» (прототип ui/shell.js, `#stat-btn`; ТЗ «Статистика модуля»): скрывает и
+ * показывает плашки-итоги модуля; подсказка — «Показать статистику» или «Скрыть статистику».
+ */
+export interface StatsToggle {
+  shown: boolean;
+  onToggle: () => void;
+  label: string;
+  show: string;
+  hide: string;
 }
 
 /**
  * Ряд вкладок и кнопка «+ Добавить» (прототип ui/shell.js, renderPage; css/controls.css `.tabrow`,
  * `.tab`, `.add-btn`): вкладки-«острова» со значком и счётчиком по центру, кнопка справа на том же
  * уровне. Один способ добавления — кнопка сразу его запускает, несколько — открывает меню выбора. На
- * телефоне вместо кнопки — круглая «+» справа внизу со всеми способами.
+ * телефоне вместо кнопки — круглая «+» справа внизу со всеми способами. У экрана с плашками-итогами
+ * перед ними — значок «Статистика» (на ПК и на телефоне).
  */
 export function TabRow({
   tabs,
@@ -67,6 +82,7 @@ export function TabRow({
   addActions,
   addLabel,
   onAdd,
+  stats,
   Link = DefaultLink,
 }: TabRowProps) {
   const row = useRef<HTMLDivElement>(null);
@@ -118,6 +134,20 @@ export function TabRow({
         </div>
       )}
       <div className="flex min-w-max flex-[1_0_0] items-center justify-end gap-2 empty:min-w-0 max-md:flex-[0_0_auto] max-md:min-w-0">
+        {stats && (
+          <button
+            type="button"
+            data-no-swipe
+            data-stats-toggle
+            onClick={stats.onToggle}
+            aria-label={stats.label}
+            aria-pressed={stats.shown}
+            title={stats.shown ? stats.hide : stats.show}
+            className={`${iconButtonClass()} ${stats.shown ? 'bg-btn! text-ink! shadow-btn' : ''}`}
+          >
+            <Icon name="chart" />
+          </button>
+        )}
         {separate.map((a) => (
           <button
             key={a.id}

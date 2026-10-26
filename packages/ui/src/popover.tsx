@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
@@ -43,6 +44,15 @@ export interface PopoverProps {
 const HOVER_QUERY = '(hover: hover) and (min-width: 768px)';
 const HOVER_OPEN_MS = 300;
 const HOVER_CLOSE_MS = 220;
+/** Отступ окошка от края экрана (openPop прототипа: `x = max(8, min(x, W - w - 8))`). */
+const EDGE = 8;
+
+/** Сдвиг по горизонтали, чтобы окошко `left…right` не выходило за край экрана шириной `width`. */
+export function edgeShift(left: number, right: number, width: number): number {
+  if (left < EDGE) return EDGE - left;
+  if (right > width - EDGE) return Math.max(EDGE - left, width - EDGE - right);
+  return 0;
+}
 
 /**
  * Всплывающее окошко у кнопки (прототип ui/popups.js, openPop; стиль `.pop`): описание модуля «ⓘ»,
@@ -90,6 +100,16 @@ export function Popover({
   };
   useEffect(() => () => clearTimeout(timer.current), []);
   useSwipeDown(panel, { enabled: open, onClose: close });
+
+  // Окошко у кнопки посреди ряда (например, «Столбцы» на телефоне) не уходит за край экрана.
+  useLayoutEffect(() => {
+    const el = panel.current;
+    if (!open || !el) return;
+    el.style.translate = '';
+    const rect = el.getBoundingClientRect();
+    const shift = edgeShift(rect.left, rect.right, document.documentElement.clientWidth);
+    if (shift) el.style.translate = `${shift}px 0`;
+  }, [open]);
 
   useEffect(() => {
     if (!openBy) return;

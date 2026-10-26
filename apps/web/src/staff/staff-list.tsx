@@ -1,7 +1,7 @@
 'use client';
 
 import { formatMomentRu, initials, type ListSort } from '@buhuchet/domain';
-import { EmployeeList, type Employee } from '@buhuchet/shared';
+import { EmployeeList, ListValues, type Employee } from '@buhuchet/shared';
 import {
   Avatar,
   DataGrid,
@@ -12,10 +12,11 @@ import {
   type GridAudit,
   type GridColumn,
 } from '@buhuchet/ui';
-import { useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { api } from '../api-client';
 import { useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
+import { useListExport } from '../lists/export';
 import { useGridLabels } from '../lists/grid-labels';
 import { useListPage, type FetchListPage } from '../lists/use-list-page';
 import { useViewSettings } from '../lists/view-settings';
@@ -33,7 +34,7 @@ const DEFAULT_VISIBLE = ['fullName', 'role', 'phone', 'active'];
 
 const moment = (iso: string | null) => (iso ? formatMomentRu(new Date(iso)) : '');
 
-// ОТКЛОНЕНИЕ: docs/deviations.md#31 — «Роль» перед «Телефоном», как в ТЗ (в прототипе наоборот).
+// «Роль» перед «Телефоном» — как в ТЗ (docs/deviations.md, п. 31, решение А; прототип поправят).
 /**
  * Столбцы списка сотрудников — как в прототипе (modules/staff.js, renderStaff), ключи — как на сервере.
  * Служебные «Создал», «Изменил», «Создано», «Изменено» добавляет сам список (`STAFF_AUDIT`).
@@ -128,9 +129,17 @@ const fetchStaff: FetchListPage<Employee> = async (params) => {
   return EmployeeList.parse(await res.json());
 };
 
+/** Значения столбца для фильтра-галочек: роли по названию, статус, «Telegram привязан». */
+const fetchStaffValues = async (col: string) => {
+  const res = await api.api.staff.values.$get({ query: { col } });
+  if (!res.ok) throw new Error(`staff values: ${res.status}`);
+  return ListValues.parse(await res.json());
+};
+
 /**
  * «Сотрудники» → список (ТЗ «Сотрудники», прототип modules/staff.js, renderStaff): общий список
- * записей; заблокированные — приглушённо. Карточка сотрудника, его действия и окно «Новый сотрудник» —
+ * записей с поиском, фильтрами у столбцов, группировкой и «В Excel» (по праву «Выгружать в Excel»);
+ * заблокированные — приглушённо. Карточка сотрудника, его действия и окно «Новый сотрудник» —
  * задача #18; до неё выбор «+ Добавить» подтверждается уведомлением, как в заглушке модуля.
  */
 export function StaffList() {
@@ -138,18 +147,25 @@ export function StaffList() {
   const toast = useToast();
   const labels = useGridLabels('staff.count');
   const columns = useMemo(() => staffColumns(t), [t]);
-  const keys = useMemo(() => columns.map((c) => c.key), [columns]);
   const view = useViewSettings('staff.list');
+  const { search, clearSearch, access, addRequest, clearAddRequest } = useShell();
   const list = useListPage({
     gridKey: 'staff.list',
-    keys,
+    columns,
+    defaultVisible: DEFAULT_VISIBLE,
     settings: view.settings,
     defaultSort: DEFAULT_SORT,
+    search,
     enabled: view.ready,
     fetchPage: fetchStaff,
   });
+  const { params, visible } = list;
+  const sendExport = useCallback(
+    () => api.api.staff.export.$get({ query: { ...params, cols: visible.join(',') } }),
+    [params, visible],
+  );
+  const exporter = useListExport(sendExport);
 
-  const { addRequest, clearAddRequest } = useShell();
   const request = addRequest?.moduleId === 'staff' ? addRequest : null;
   useEffect(() => {
     if (!request) return;
@@ -170,6 +186,13 @@ export function StaffList() {
       onPageChange={list.setPage}
       error={list.error}
       onRetry={list.retry}
+      filters={list.filters}
+      onFiltersChange={list.setFilters}
+      loadValues={fetchStaffValues}
+      search={search}
+      onClearSearch={clearSearch}
+      onExport={access.can('export') ? () => void exporter.run() : undefined}
+      exporting={exporter.exporting}
       empty={<EmptyState icon="users" title={t('grid.empty')} />}
       rowKey={(e) => e.id}
       titleKey="fullName"

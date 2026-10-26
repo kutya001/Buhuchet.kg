@@ -1,7 +1,17 @@
+import type { ListColumnType } from '@buhuchet/domain';
 import type { GridAudit, GridColumn, GridLabels } from './types';
 
 /** Ключи служебных столбцов — те же у столбцов списка на сервере. */
 export const AUDIT_KEYS = ['createdBy', 'updatedBy', 'createdAt', 'updatedAt'] as const;
+
+/** Ключи и типы служебных столбцов — для запроса страницы (поиск по видимым, итоги групп). */
+export const AUDIT_COLUMNS: readonly { key: (typeof AUDIT_KEYS)[number]; type: ListColumnType }[] =
+  [
+    { key: 'createdBy', type: 'enum' },
+    { key: 'updatedBy', type: 'enum' },
+    { key: 'createdAt', type: 'datetime' },
+    { key: 'updatedAt', type: 'datetime' },
+  ];
 
 /**
  * Служебные столбцы списка (прототип ui/grid.js, `auditCols`; ТЗ «Списки записей» → «Столбцы»):

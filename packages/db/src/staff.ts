@@ -16,9 +16,14 @@ import type { Db, Tx } from './client';
 import { writeHistory } from './history';
 import {
   auditActorValue,
+  selectListExport,
   selectListPage,
+  selectListValues,
+  type ExportCell,
   type ListColumns,
+  type ListFrom,
   type ListPageResult,
+  type ListTexts,
   type ListWindowFields,
 } from './list';
 import {
@@ -101,7 +106,7 @@ function selectEmployees(tx: Tx) {
     .leftJoin(updater, eq(updater.userId, employees.updatedBy));
 }
 
-/** То же для страницы списка — с числом записей и итогами по фильтру (`selectListPage`). */
+/** То же для страницы списка — с числом записей, итогами и группами (`selectListPage`). */
 function selectEmployeePage(tx: Tx, window: ListWindowFields) {
   return tx
     .select({ ...employeeFields, ...window })
@@ -111,6 +116,20 @@ function selectEmployeePage(tx: Tx, window: ListWindowFields) {
     .leftJoin(telegramLinks, eq(telegramLinks.userId, employees.userId))
     .leftJoin(creator, eq(creator.userId, employees.createdBy))
     .leftJoin(updater, eq(updater.userId, employees.updatedBy));
+}
+
+/** Те же таблицы с любыми полями — для групп, значений фильтра и выгрузки (`ListFrom`). */
+function employeeListFrom(tx: Tx): ListFrom {
+  return (fields) =>
+    tx
+      .select(fields)
+      .from(employees)
+      .innerJoin(users, eq(users.id, employees.userId))
+      .innerJoin(roles, eq(roles.id, employees.roleId))
+      .leftJoin(telegramLinks, eq(telegramLinks.userId, employees.userId))
+      .leftJoin(creator, eq(creator.userId, employees.createdBy))
+      .leftJoin(updater, eq(updater.userId, employees.updatedBy))
+      .$dynamic();
 }
 
 type EmployeeRow = Awaited<ReturnType<typeof selectEmployees>>[number];
@@ -144,63 +163,122 @@ function toEmployee(r: EmployeeRow, codes: PhoneCodes): EmployeeRecord {
 
 /**
  * Столбцы списка сотрудников на сервере (ТЗ «Сотрудники» → список; прототип modules/staff.js,
- * renderStaff): ключи — как у столбцов экрана. Роль фильтруется по номеру роли, а сортируется по
- * названию; статус и Telegram — коды `active`/`blocked`, `linked`/`none`, а сортируются как подписи
- * на экране («Активен» выше «Заблокирован», «Не привязан» выше «Привязан»). «Создал» и «Изменил» —
- * как на экране; «Изменил» у записи без правок — тот, кто создал. Контрагенты, отчёты, счёт и
- * уровень знаний добавят их модули.
+ * renderStaff): ключи — как у столбцов экрана. Роль фильтруется по номеру роли, а сортируется и
+ * ищется по названию; статус и Telegram — коды `active`/`blocked`, `linked`/`none`, а сортируются и
+ * ищутся как подписи на экране («Активен» выше «Заблокирован», «Не привязан» выше «Привязан»;
+ * подписи — из словаря `t`). «Создал» и «Изменил» — как на экране; «Изменил» у записи без правок —
+ * тот, кто создал. Контрагенты, отчёты, счёт и уровень знаний добавят их модули.
  */
 const CREATED_BY = auditActorValue(employees.createdBy, creator.shortName);
 
-export const EMPLOYEE_LIST_COLUMNS: ListColumns = {
-  fullName: { type: 'text', value: employees.fullName },
-  login: { type: 'text', value: users.login },
-  phone: { type: 'text', value: employees.phone, compact: true },
-  role: { type: 'enum', value: roles.id, sort: { value: roles.name, text: true } },
-  telegram: {
-    type: 'enum',
-    value: sql`case when ${telegramLinks.linkedAt} is null then 'none' else 'linked' end`,
-    sort: {
-      value: sql`case when ${telegramLinks.linkedAt} is null then 0 else 1 end`,
-      text: false,
+export function employeeListColumns(t: ListTexts): ListColumns {
+  return {
+    fullName: { type: 'text', label: 'staff.col.full_name', value: employees.fullName },
+    login: { type: 'text', label: 'staff.col.login', value: users.login },
+    phone: { type: 'text', label: 'staff.col.phone', value: employees.phone, compact: true },
+    role: {
+      type: 'enum',
+      label: 'staff.col.role',
+      value: roles.id,
+      display: roles.name,
+      sort: { value: roles.name, text: true },
     },
-  },
-  lastLoginAt: { type: 'datetime', value: users.lastLoginAt },
-  active: {
-    type: 'enum',
-    value: sql`case when ${employees.active} then 'active' else 'blocked' end`,
-    sort: { value: sql`case when ${employees.active} then 0 else 1 end`, text: false },
-  },
-  createdAt: { type: 'datetime', value: employees.createdAt },
-  updatedAt: { type: 'datetime', value: employees.updatedAt },
-  createdBy: { type: 'enum', value: CREATED_BY },
-  updatedBy: {
-    type: 'enum',
-    value: sql`coalesce(${auditActorValue(employees.updatedBy, updater.shortName)}, ${CREATED_BY})`,
-  },
-};
+    telegram: {
+      type: 'enum',
+      label: 'staff.col.telegram',
+      value: sql`case when ${telegramLinks.linkedAt} is null then 'none' else 'linked' end`,
+      display: sql`case when ${telegramLinks.linkedAt} is null then ${t('staff.telegram.none')} else ${t('staff.telegram.linked')} end`,
+      sort: {
+        value: sql`case when ${telegramLinks.linkedAt} is null then 0 else 1 end`,
+        text: false,
+      },
+    },
+    lastLoginAt: { type: 'datetime', label: 'staff.col.last_login', value: users.lastLoginAt },
+    active: {
+      type: 'enum',
+      label: 'staff.col.active',
+      value: sql`case when ${employees.active} then 'active' else 'blocked' end`,
+      display: sql`case when ${employees.active} then ${t('staff.active')} else ${t('staff.blocked')} end`,
+      sort: { value: sql`case when ${employees.active} then 0 else 1 end`, text: false },
+    },
+    createdAt: { type: 'datetime', label: 'grid.col.created_at', value: employees.createdAt },
+    updatedAt: { type: 'datetime', label: 'grid.col.updated_at', value: employees.updatedAt },
+    createdBy: { type: 'enum', label: 'grid.col.created_by', value: CREATED_BY },
+    updatedBy: {
+      type: 'enum',
+      label: 'grid.col.updated_by',
+      value: sql`coalesce(${auditActorValue(employees.updatedBy, updater.shortName)}, ${CREATED_BY})`,
+    },
+  };
+}
+
+const EMPLOYEE_NATURAL = [employees.createdAt, employees.id];
 
 /**
- * Страница списка сотрудников: сортировка, страница и фильтры — на сервере, в ответе только текущая
- * страница; по умолчанию — от новых к старым по «Создано». Неизвестный столбец — `ListQueryError`.
+ * Страница списка сотрудников: сортировка, страница, фильтры, поиск и группы — на сервере, в ответе
+ * только текущая страница; по умолчанию — от новых к старым по «Создано». Неизвестный столбец —
+ * `ListQueryError`. `t` — тексты словаря для поиска по подписям статуса и Telegram.
  */
 export async function listEmployeesPage(
   tx: Tx,
   query: ListQuery,
+  t: ListTexts,
 ): Promise<ListPageResult<EmployeeRecord>> {
   const page = await selectListPage({
     query,
-    columns: EMPLOYEE_LIST_COLUMNS,
-    natural: [employees.createdAt, employees.id],
+    columns: employeeListColumns(t),
+    natural: EMPLOYEE_NATURAL,
+    // У сотрудников нет области «Свои»: список — вся организация (её отсекает RLS).
+    scope: undefined,
     select: ({ window, where, orderBy, limit, offset }) =>
       selectEmployeePage(tx, window)
         .where(where)
         .orderBy(...orderBy)
         .limit(limit)
         .offset(offset),
+    from: employeeListFrom(tx),
   });
   const codes = await phoneCodes(tx);
   return { ...page, rows: page.rows.map((r) => toEmployee(r, codes)) };
+}
+
+/** Значения столбца списка сотрудников для фильтра-галочек (роль — названия ролей, статус — подписи). */
+export function listEmployeeValues(tx: Tx, key: string, t: ListTexts) {
+  return selectListValues({
+    columns: employeeListColumns(t),
+    key,
+    scope: undefined,
+    from: employeeListFrom(tx),
+  });
+}
+
+/**
+ * Сотрудники для выгрузки в Excel: все под поиском и фильтрами, столбцы `keys` по порядку экрана;
+ * телефон — по маске справочника, как на экране.
+ */
+export async function exportEmployees(
+  tx: Tx,
+  query: ListQuery,
+  keys: readonly string[],
+  t: ListTexts,
+) {
+  const result = await selectListExport({
+    query,
+    columns: employeeListColumns(t),
+    keys,
+    natural: EMPLOYEE_NATURAL,
+    scope: undefined,
+    from: employeeListFrom(tx),
+  });
+  const phone = keys.indexOf('phone');
+  if (phone < 0) return result;
+  const codes = await phoneCodes(tx);
+  const rows = result.rows.map((row): ExportCell[] =>
+    row.map((cell, i) =>
+      i === phone && typeof cell === 'string' ? formatPhone(cell, codes) : cell,
+    ),
+  );
+  return { ...result, rows };
 }
 
 /** Карточка сотрудника; null — нет такого в организации. */

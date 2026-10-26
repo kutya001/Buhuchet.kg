@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   GridKeyParam,
+  ListExportParams,
   ListFilter,
   ListFilters,
   ListQueryParams,
+  ListValues,
   listPageSchema,
   listQueryParams,
   parseListQuery,
@@ -75,6 +77,70 @@ describe('запрос страницы списка', () => {
     expect(parse({ filters: '{"bad key":{"type":"text","q":"a"}}' })).toEqual({ ok: false });
     expect(parse({ filters: '[1]' })).toEqual({ ok: false });
   });
+
+  it('поиск по видимым столбцам, группировка и итоги групп', () => {
+    const raw = {
+      q: '  Алиев ',
+      qcols: 'fullName,role,role',
+      group: 'role,active',
+      agg: '{"amount":"avg"}',
+    };
+    expect(parse(raw)).toEqual({
+      ok: true,
+      query: {
+        sort: undefined,
+        page: 1,
+        size: 25,
+        filters: {},
+        search: { q: 'Алиев', keys: ['fullName', 'role'] },
+        group: ['role', 'active'],
+        agg: { amount: 'avg' },
+      },
+    });
+    // Пустой поиск — без поиска; без столбцов — по всем.
+    const blank = parse({ q: '   ' });
+    expect(blank.ok && 'search' in blank.query).toBe(false);
+    expect(parse({ q: 'x' })).toMatchObject({ query: { search: { q: 'x', keys: [] } } });
+    const query = {
+      sort: null,
+      page: 1,
+      size: 'all' as const,
+      filters: {},
+      search: { q: 'Алиев', keys: ['fullName'] },
+      group: ['role'],
+      agg: { amount: 'sum' as const },
+    };
+    const params = listQueryParams(query);
+    expect(params).toEqual({
+      page: '1',
+      size: 'all',
+      sort: 'none',
+      q: 'Алиев',
+      qcols: 'fullName',
+      group: 'role',
+      agg: '{"amount":"sum"}',
+    });
+    expect(parse(params)).toEqual({ ok: true, query });
+  });
+
+  it('больше двух уровней группировки, чужой итог и длинный поиск не проходят', () => {
+    for (const raw of [
+      { group: 'a,b,c' },
+      { group: 'a,' },
+      { qcols: 'a b' },
+      { q: 'x'.repeat(201) },
+    ]) {
+      expect(ListQueryParams.safeParse(raw).success, JSON.stringify(raw).slice(0, 40)).toBe(false);
+    }
+    expect(parse({ agg: '{"amount":"median"}' })).toEqual({ ok: false });
+    expect(parse({ agg: '{' })).toEqual({ ok: false });
+  });
+
+  it('выгрузка — с видимыми столбцами по порядку', () => {
+    expect(ListExportParams.safeParse({ cols: 'fullName,role' }).success).toBe(true);
+    expect(ListExportParams.safeParse({}).success).toBe(false);
+    expect(ListExportParams.safeParse({ cols: 'fullName;drop' }).success).toBe(false);
+  });
 });
 
 describe('фильтры столбцов (ТЗ «Поиск и фильтры»)', () => {
@@ -130,6 +196,44 @@ describe('ответ со страницей', () => {
       false,
     );
   });
+
+  it('сгруппированный список: группы двух уровней и ключи групп у записей', () => {
+    const page = listPageSchema(z.object({ id: z.string() }));
+    const leaf = { key: 'blocked', label: 'Заблокирован', count: 1, aggs: { sum: null } };
+    expect(
+      page.safeParse({
+        items: [{ id: 'a' }],
+        total: 1,
+        page: 1,
+        size: 'all',
+        totals: {},
+        groups: [{ key: 'r1', label: null, count: 1, aggs: {}, sub: [leaf] }],
+        rowGroups: [['r1', 'blocked']],
+      }).success,
+    ).toBe(true);
+    expect(
+      page.safeParse({
+        items: [],
+        total: 0,
+        page: 1,
+        size: 'all',
+        totals: {},
+        rowGroups: [['a', 'b', 'c']],
+      }).success,
+    ).toBe(false);
+  });
+
+  it('значения столбца для фильтра-галочек', () => {
+    expect(
+      ListValues.safeParse({
+        items: [
+          { value: 'active', label: 'Активен', count: 5 },
+          { value: '', label: null, count: 1 },
+        ],
+        more: false,
+      }).success,
+    ).toBe(true);
+  });
 });
 
 describe('настройки вида', () => {
@@ -144,8 +248,16 @@ describe('настройки вида', () => {
       widths: { fullName: 300 },
       sort: { key: 'fullName', dir: 'asc' },
       size: 100,
+      group: ['role', 'active'],
+      agg: { amount: 'avg', count: 'none' },
     };
     expect(ViewSettings.parse(settings)).toEqual(settings);
+    expect(ViewSettings.parse({ stats: false, phoneStats: true })).toEqual({
+      stats: false,
+      phoneStats: true,
+    });
+    expect(ViewSettings.safeParse({ group: ['a', 'b', 'c'] }).success).toBe(false);
+    expect(ViewSettings.safeParse({ agg: { amount: 'median' } }).success).toBe(false);
     expect(ViewSettings.parse({ sort: null })).toEqual({ sort: null });
   });
 

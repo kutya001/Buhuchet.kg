@@ -1,11 +1,20 @@
 'use client';
 
-import type { GridViewSettings } from '@buhuchet/domain';
-import { useState, type DragEvent } from 'react';
+import {
+  GROUP_AGGS,
+  groupAggOf,
+  groupLevels,
+  isNumericColumn,
+  type GridViewSettings,
+  type GroupAggChoice,
+} from '@buhuchet/domain';
+import { useId, useState, type DragEvent } from 'react';
 import { ActionList } from '../action-menu';
 import { buttonClass, iconButtonClass } from '../button';
+import { inputClass } from '../form';
 import { Icon } from '../icon';
 import { Popover } from '../popover';
+import { withGroup } from './grid-groups';
 import {
   isHidden,
   moveColumn,
@@ -35,6 +44,13 @@ interface ToolbarProps<Row> {
   total: number | null;
   /** Отмеченные строки и массовые действия: при выборе вместо числа записей — «Выбрано: N». */
   selection?: GridSelectionBar<Row>;
+  /** Столбцы группировки (до двух). */
+  group: readonly string[];
+  /** «Группировка» сменила уровни — свёрнутые группы снова раскрыты. */
+  onGroupChange: () => void;
+  /** «В Excel»: есть — кнопка на панели; `exporting` — файл собирается. */
+  onExport?: () => void;
+  exporting?: boolean;
   labels: GridLabels;
 }
 
@@ -61,11 +77,17 @@ export function GridToolbar<Row>({
   phone,
   total,
   selection,
+  group,
+  onGroupChange,
+  onExport,
+  exporting = false,
   labels,
 }: ToolbarProps<Row>) {
   const keys = columns.map((c) => c.key);
-  const shown = visibleKeys(keys, settings, defaultVisible).length;
+  const visible = visibleKeys(keys, settings, defaultVisible);
+  const shown = visible.length;
   const columnsLabel = `${labels.columns} (${shown}/${keys.length})`;
+  const groupLabel = group.length ? labels.groupN(group.length) : labels.group;
   const setView = (next: 'table' | 'cards') => onSettingsChange(withView(settings, phone, next));
 
   return (
@@ -102,6 +124,54 @@ export function GridToolbar<Row>({
             ))}
           </div>
         ))}
+      <Popover
+        label={labels.group}
+        placement="bottom-end"
+        padded
+        trigger={({ open, toggle, id }) => (
+          <button
+            type="button"
+            onClick={toggle}
+            aria-expanded={open}
+            aria-controls={id}
+            aria-haspopup="dialog"
+            data-grid-group-button
+            title={phone ? groupLabel : labels.groupButtonHint}
+            aria-label={phone ? groupLabel : undefined}
+            className={
+              phone
+                ? `${PHONE_TOOL} relative ${group.length ? 'text-ink' : ''}`
+                : buttonClass('default', 'sm')
+            }
+          >
+            <Icon name="layers" size="sm" />
+            {phone && group.length > 0 && (
+              <span
+                aria-hidden="true"
+                className="absolute -top-1 -right-1 h-[15px] min-w-[15px] rounded-lg bg-accent px-[3px] text-center text-[9.5px] leading-[15px] font-bold text-on-accent"
+              >
+                {group.length}
+              </span>
+            )}
+            {!phone && groupLabel}
+          </button>
+        )}
+      >
+        {(close) => (
+          <GroupPanel
+            columns={columns}
+            keys={keys}
+            visible={visible}
+            settings={settings}
+            onApply={(next) => {
+              onSettingsChange(next);
+              onGroupChange();
+              close();
+            }}
+            labels={labels}
+          />
+        )}
+      </Popover>
       <Popover
         label={labels.columns}
         placement="bottom-end"
@@ -196,7 +266,170 @@ export function GridToolbar<Row>({
           />
         )}
       </Popover>
+      {onExport &&
+        (phone ? (
+          <button
+            type="button"
+            onClick={onExport}
+            disabled={exporting}
+            aria-busy={exporting}
+            title={labels.excel}
+            aria-label={labels.excel}
+            data-grid-export
+            className={`${PHONE_TOOL} disabled:cursor-wait disabled:opacity-60`}
+          >
+            <Icon name="download" size="sm" />
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={onExport}
+            disabled={exporting}
+            aria-busy={exporting}
+            title={labels.excelHint}
+            data-grid-export
+            className={buttonClass('default', 'sm')}
+          >
+            <Icon name="download" size="sm" />
+            {labels.excel}
+          </button>
+        ))}
     </div>
+  );
+}
+
+/**
+ * Окно «Группировка» (прототип ui/grid.js, groupPop; ТЗ «Группировка»): «Уровень 1» и «Уровень 2
+ * (внутри первого)» — любой столбец списка; итоги в строке группы у видимых числовых столбцов — «Не
+ * считать», «Сумма» (по умолчанию), «Среднее», «Минимум», «Максимум», «Количество». «Убрать» снимает
+ * группировку, «Применить» сохраняет её в настройках вида.
+ */
+export function GroupPanel<Row>({
+  columns,
+  keys,
+  visible,
+  settings,
+  onApply,
+  labels,
+}: {
+  columns: readonly GridColumn<Row>[];
+  keys: readonly string[];
+  visible: readonly string[];
+  settings: GridViewSettings;
+  onApply: (settings: GridViewSettings) => void;
+  labels: GridLabels;
+}) {
+  const id = useId();
+  const saved = (settings.group ?? []).filter((k) => keys.includes(k));
+  const [first, setFirst] = useState(saved[0] ?? '');
+  const [second, setSecond] = useState(saved[1] ?? '');
+  const numeric = orderedKeys(keys, settings.order)
+    .map((k) => columns.find((c) => c.key === k)!)
+    .filter((c) => visible.includes(c.key) && isNumericColumn(c.type));
+  const [aggs, setAggs] = useState<Record<string, GroupAggChoice>>(() =>
+    Object.fromEntries(
+      numeric.map((c) => [c.key, groupAggOf(c.type, settings.agg?.[c.key]) ?? 'none']),
+    ),
+  );
+  const ordered = orderedKeys(keys, settings.order).map((k) => columns.find((c) => c.key === k)!);
+  const options = [
+    <option key="" value="">
+      {labels.groupNone}
+    </option>,
+    ...ordered.map((c) => (
+      <option key={c.key} value={c.key}>
+        {c.label}
+      </option>
+    )),
+  ];
+  const field = 'flex flex-col gap-1';
+  const caption = 'text-[12.5px] font-[550] text-muted';
+
+  return (
+    <>
+      <h4 className="m-0 text-[12px] font-[650] tracking-[0.07em] text-faint uppercase">
+        {labels.group}
+      </h4>
+      <div className={field}>
+        <label htmlFor={`${id}-1`} className={caption}>
+          {labels.groupLevel1}
+        </label>
+        <select
+          id={`${id}-1`}
+          className={inputClass()}
+          value={first}
+          onChange={(e) => {
+            setFirst(e.target.value);
+            if (!e.target.value) setSecond('');
+          }}
+        >
+          {options}
+        </select>
+      </div>
+      <div className={field}>
+        <label htmlFor={`${id}-2`} className={caption}>
+          {labels.groupLevel2}
+        </label>
+        <select
+          id={`${id}-2`}
+          className={inputClass()}
+          value={first ? second : ''}
+          disabled={!first}
+          onChange={(e) => setSecond(e.target.value)}
+        >
+          {options}
+        </select>
+      </div>
+      {numeric.length > 0 && (
+        <>
+          <div className={`${caption} mt-1`}>{labels.groupAggs}</div>
+          {numeric.map((c) => (
+            <div key={c.key} className="flex items-center gap-2">
+              <label htmlFor={`${id}-a-${c.key}`} className="flex-1 text-[13px]">
+                {c.label}
+              </label>
+              <select
+                id={`${id}-a-${c.key}`}
+                className={`${inputClass()} w-[140px]!`}
+                value={aggs[c.key] ?? 'none'}
+                onChange={(e) =>
+                  setAggs((prev) => ({ ...prev, [c.key]: e.target.value as GroupAggChoice }))
+                }
+              >
+                <option value="none">{labels.aggNone}</option>
+                {GROUP_AGGS.map((how) => (
+                  <option key={how} value={how}>
+                    {labels.agg[how]}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ))}
+        </>
+      )}
+      <div className="text-[11.5px] leading-[1.4] text-faint">{labels.groupHint}</div>
+      <div className="flex justify-end gap-1.5">
+        <button
+          type="button"
+          onClick={() => onApply(withGroup(settings, []))}
+          className={buttonClass('ghost', 'sm')}
+        >
+          {labels.groupRemove}
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            onApply({
+              ...withGroup(settings, groupLevels(first, first ? second : '')),
+              agg: { ...settings.agg, ...aggs },
+            })
+          }
+          className={buttonClass('cta', 'sm')}
+        >
+          {labels.apply}
+        </button>
+      </div>
+    </>
   );
 }
 
