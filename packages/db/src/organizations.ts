@@ -86,7 +86,7 @@ export async function createOrganization(
   }
   // Адрес — как в «Моя организация»: формат и занятые слова программы (прототип v58, slugErr).
   const slug = slugProblem(input.slug);
-  if (slug) throw new OrganizationInputError('slug', `Адрес страницы: ${SLUG_MESSAGES[slug]}`);
+  if (slug) throw new OrganizationInputError('slug', SLUG_MESSAGES[slug]);
   if (!fullName) throw new OrganizationInputError('ownerFullName', 'Введите ФИО владельца');
   if (!isValidLogin(login)) {
     throw new OrganizationInputError(

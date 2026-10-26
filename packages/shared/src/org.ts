@@ -122,8 +122,12 @@ const HistoryChangeSchema = z.object({
   to: z.unknown().optional(),
 });
 
-/** «История изменений учётной политики»: что изменено, было → стало, кто, когда; сначала новые. */
+/**
+ * «История изменений учётной политики»: что изменено, было → стало, кто, когда; сначала новые.
+ * Изменения вкладки «Настройки» сюда не входят (как в прототипе). total — сколько записей всего.
+ */
 export const OrgPolicyHistory = z.object({
+  total: z.number().int(),
   items: z.array(
     z.object({
       at: z.iso.datetime(),

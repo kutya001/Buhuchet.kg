@@ -8,7 +8,7 @@ import {
   type OrgPolicy,
   type PageSection,
 } from '@buhuchet/domain';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { Tx } from './client';
 import { auditLog, employees, organizations, orgSettings } from './schema';
@@ -87,6 +87,22 @@ export async function getOrgProfile(tx: Tx, orgId: string): Promise<OrgProfileRe
   };
 }
 
+/**
+ * Ключ логотипа из заблокированной до конца транзакции строки организации: прежний файл, который
+ * удалят после замены, — тот, что был в базе в момент правки. null — логотипа нет или организация чужая.
+ */
+export async function lockOrgLogoKey(
+  tx: Tx,
+  orgId: string,
+): Promise<{ logoKey: string | null } | null> {
+  const [row] = await tx
+    .select({ logoKey: organizations.logoKey })
+    .from(organizations)
+    .where(eq(organizations.id, orgId))
+    .for('update');
+  return row ?? null;
+}
+
 /** Набор функций: каждая из `FEATURES`, чего нет в записи — выключено. */
 export function featureSet(stored: Readonly<Record<string, boolean>>): Record<Feature, boolean> {
   return Object.fromEntries(FEATURES.map((f) => [f, stored[f] === true])) as Record<
@@ -153,10 +169,46 @@ export interface HistoryItem {
 const actor = alias(employees, 'actor');
 
 /**
- * «История изменений учётной политики» (ТЗ: что изменено, было → стало, кто, когда): записи истории
- * учётной политики и настроек организации, сначала новые.
+ * Поля учётной политики (вкладка «Учётная политика»); изменения вкладки «Настройки» (часовой пояс,
+ * сводка, повтор при просрочке, роль по умолчанию) в её историю не входят — как в прототипе, где они
+ * пишутся отдельно (modules/org.js: log('org', 'settings')).
  */
-export async function orgPolicyHistory(tx: Tx, orgId: string, limit = 100): Promise<HistoryItem[]> {
+export const ORG_POLICY_FIELDS = [
+  'features',
+  'taskConfirm',
+  'reportConfirm',
+  'confirmWaitDays',
+  'payBeforeSubmit',
+  'remindDays',
+  'pageSections',
+] as const;
+
+/**
+ * «История изменений учётной политики» (ТЗ: что изменено, было → стало, кто, когда): создание и
+ * правки учётной политики организации, сначала новые; в правке — только поля учётной политики.
+ * total — сколько всего таких записей (заголовок «История … · N»), items — последние `limit`.
+ */
+export async function orgPolicyHistory(
+  tx: Tx,
+  orgId: string,
+  limit = 100,
+): Promise<{ total: number; items: HistoryItem[] }> {
+  const fields = sql.join(
+    ORG_POLICY_FIELDS.map((f) => sql`${f}`),
+    sql`, `,
+  );
+  const match = and(
+    eq(auditLog.entity, 'org_settings'),
+    eq(auditLog.entityId, orgId),
+    or(
+      eq(auditLog.action, 'create'),
+      sql`exists (select 1 from jsonb_array_elements(${auditLog.changes}) as c where c->>'field' in (${fields}))`,
+    ),
+  );
+  const [count] = await tx
+    .select({ total: sql<number>`count(*)::int` })
+    .from(auditLog)
+    .where(match);
   const rows = await tx
     .select({
       at: auditLog.at,
@@ -168,14 +220,18 @@ export async function orgPolicyHistory(tx: Tx, orgId: string, limit = 100): Prom
     })
     .from(auditLog)
     .leftJoin(actor, eq(actor.userId, auditLog.actorUserId))
-    .where(and(eq(auditLog.entity, 'org_settings'), eq(auditLog.entityId, orgId)))
+    .where(match)
     .orderBy(desc(auditLog.at), desc(auditLog.id))
     .limit(limit);
-  return rows.map((r) => ({
-    at: r.at,
-    actor: auditActorName(r.actorUserId, r.actorName),
-    action: r.action as HistoryAction,
-    changes: r.changes,
-    reason: r.reason,
-  }));
+  const policyField = (field: string) => (ORG_POLICY_FIELDS as readonly string[]).includes(field);
+  return {
+    total: Number(count?.total ?? 0),
+    items: rows.map((r) => ({
+      at: r.at,
+      actor: auditActorName(r.actorUserId, r.actorName),
+      action: r.action as HistoryAction,
+      changes: r.changes.filter((c) => policyField(c.field)),
+      reason: r.reason,
+    })),
+  };
 }

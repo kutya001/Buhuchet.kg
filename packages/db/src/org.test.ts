@@ -1,3 +1,4 @@
+import { RecordNotFoundError } from '@buhuchet/domain';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { withOrgContext } from './context';
@@ -55,7 +56,18 @@ describe.skipIf(!databaseAvailable())(
     it('профиль и учётная политика чужой организации не видны', async () => {
       expect(await inA((tx) => getOrgProfile(tx, b.orgId))).toBeNull();
       expect(await inA((tx) => getOrgPolicy(tx, b.orgId))).toBeNull();
-      expect(await inA((tx) => orgPolicyHistory(tx, b.orgId))).toEqual([]);
+      expect(await inA((tx) => orgPolicyHistory(tx, b.orgId))).toEqual({ total: 0, items: [] });
+      await expect(
+        inA((tx) =>
+          updateWithHistory(tx, {
+            table: organizations,
+            entity: 'organization',
+            id: b.orgId,
+            version: 1,
+            patch: { name: 'Взлом' },
+          }),
+        ),
+      ).rejects.toThrow(RecordNotFoundError);
       expect(await inA((tx) => orgFeatures(tx, b.orgId))).toMatchObject({ tasks: false });
     });
 
@@ -105,25 +117,35 @@ describe.skipIf(!databaseAvailable())(
       expect(row).toMatchObject({ status: 'active', blockedReason: null, isDemo: false });
     });
 
-    it('история учётной политики — сначала новые, с автором', async () => {
-      await inA((tx) =>
-        updateWithHistory(tx, {
-          table: orgSettings,
-          entity: 'org_settings',
-          key: orgSettings.orgId,
-          id: a.orgId,
-          version: 1,
-          patch: { remindDays: [14, 7, 3] },
-        }),
-      );
-      const history = await inA((tx) => orgPolicyHistory(tx, a.orgId));
-      expect(history[0]).toMatchObject({
+    it('история учётной политики — сначала новые, с автором, без изменений «Настроек»', async () => {
+      const save = (version: number, patch: Record<string, unknown>) =>
+        inA((tx) =>
+          updateWithHistory(tx, {
+            table: orgSettings,
+            entity: 'org_settings',
+            key: orgSettings.orgId,
+            id: a.orgId,
+            version,
+            patch,
+          }),
+        );
+      await save(1, { remindDays: [14, 7, 3] });
+      await save(2, { timezone: 'Asia/Almaty', digestTime: '18:00' });
+      await save(3, { taskConfirm: false, overdueRepeat: false });
+      const { total, items } = await inA((tx) => orgPolicyHistory(tx, a.orgId));
+      expect(total).toBe(3);
+      expect(items.map((h) => h.changes.map((c) => c.field))).toEqual([
+        ['taskConfirm'],
+        ['remindDays'],
+        [],
+      ]);
+      expect(items[1]).toMatchObject({
         actor: 'Тестовый В.',
         action: 'update',
         changes: [{ field: 'remindDays', from: [7, 3], to: [14, 7, 3] }],
       });
       // Создание организации записано от имени системы (организацию создаёт администратор или команда).
-      expect(history.at(-1)).toMatchObject({ action: 'create', actor: null });
+      expect(items.at(-1)).toMatchObject({ action: 'create', actor: null });
     });
   },
 );

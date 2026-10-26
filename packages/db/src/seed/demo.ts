@@ -44,6 +44,8 @@ const DemoFile = z.object({
     address: z.string().optional(),
     phone: Phone,
     head: z.string().optional(),
+    /** «На платформе с» — дата подключения организации. */
+    created: z.iso.date().optional(),
     slug: z.string(),
     features: z.record(z.string(), z.boolean()).default({}),
     remind: z.array(z.number().int()).optional(),
@@ -117,6 +119,8 @@ export async function seedDemoOrganization(
       inn: org.inn ?? null,
       ...profile,
       isDemo: true,
+      // Полночь по Бишкеку: «На платформе с» показывает дату из demoDB.json, а не день наполнения.
+      ...(org.created ? { createdAt: new Date(`${org.created}T00:00:00+06:00`) } : {}),
     })
     .onConflictDoNothing()
     .returning({ id: organizations.id });

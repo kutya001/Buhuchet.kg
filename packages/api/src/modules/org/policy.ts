@@ -202,14 +202,17 @@ export const orgPolicyHistoryRoute = createRoute({
   },
 });
 
-/** История учётной политики и настроек — как блок прототипа (последние 100 записей). */
+/** История учётной политики — как блок прототипа: последние 100 записей и общее число. */
 export function orgPolicyHistoryHandler(
   deps: ApiDeps,
 ): RouteHandler<typeof orgPolicyHistoryRoute, AppEnv> {
   return async (c) => {
     const ctx = orgContextOf(c);
-    const items = await withOrgContext(deps.db, ctx, (tx) => orgPolicyHistory(tx, ctx.orgId));
+    const { total, items } = await withOrgContext(deps.db, ctx, (tx) =>
+      orgPolicyHistory(tx, ctx.orgId),
+    );
     const body: OrgPolicyHistory = {
+      total,
       items: items.map((h) => ({
         at: h.at.toISOString(),
         actor: h.actor,

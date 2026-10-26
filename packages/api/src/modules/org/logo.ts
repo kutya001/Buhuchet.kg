@@ -1,7 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import { createRoute, z, type RouteHandler } from '@hono/zod-openapi';
 import { orgFileKey } from '@buhuchet/adapters';
-import { getOrgProfile, schema, updateWithHistory, withOrgContext } from '@buhuchet/db';
+import {
+  getOrgProfile,
+  lockOrgLogoKey,
+  schema,
+  updateWithHistory,
+  withOrgContext,
+} from '@buhuchet/db';
 import {
   LOGO_MAX_BYTES,
   logoImageType,
@@ -23,6 +29,17 @@ const { organizations } = schema;
 export const LOGO_PATH = '/api/org/logo';
 
 const tooLarge = () => apiError('logo_too_large', ORG_PROFILE_MESSAGES.logo_too_large);
+
+/**
+ * Ключ лежит в папке логотипов этой организации. Ключ ставит только сервер, но файл читается и
+ * удаляется лишь после этой проверки: ошибочный ключ не откроет и не сотрёт файл чужой организации.
+ */
+function ownLogoKey(key: string | null | undefined, orgId: string): key is string {
+  return !!key && key.startsWith(`org/${orgId}/logo/`);
+}
+
+/** Ключ хранилища в историю не пишется — только факт «Загружен логотип» или «Убран». */
+const LOGO_HISTORY_SECRET = ['logoKey'];
 
 /** Предел тела загрузки логотипа — сам файл до 2 МБ (прототип: «Файл больше 2 МБ»). */
 const logoBodyLimit = bodyLimit({
@@ -61,7 +78,7 @@ export function getLogoHandler(deps: ApiDeps): RouteHandler<typeof getLogoRoute,
     const ctx = orgContextOf(c);
     const profile = await withOrgContext(deps.db, ctx, (tx) => getOrgProfile(tx, ctx.orgId));
     const key = profile?.logoKey;
-    const bytes = key ? await deps.storage.get(key) : null;
+    const bytes = ownLogoKey(key, ctx.orgId) ? await deps.storage.get(key) : null;
     const type = bytes && logoImageType(bytes);
     if (!key || !bytes || !type) return c.json(apiError('not_found', 'Логотипа нет'), 404);
     const current = c.req.valid('query').v === logoVersion(key);
@@ -109,7 +126,8 @@ async function dropFile(deps: ApiDeps, key: string): Promise<void> {
 /**
  * Логотип (прототип modules/org.js, og-save: «Загружен логотип»). Файл кладётся в хранилище под новым
  * ключом org/<org_id>/logo/<id>, затем ключ записывается в организацию с историей и версией; прежний
- * файл удаляется после сохранения. Если сохранить не удалось (версия устарела), новый файл удаляется.
+ * файл (ключ из заблокированной строки) удаляется после сохранения. Если сохранить не удалось (версия
+ * устарела), новый файл удаляется.
  */
 export function uploadLogoHandler(deps: ApiDeps): RouteHandler<typeof uploadLogoRoute, AppEnv> {
   return async (c) => {
@@ -124,7 +142,7 @@ export function uploadLogoHandler(deps: ApiDeps): RouteHandler<typeof uploadLogo
     let previous: string | null;
     try {
       previous = await withOrgContext(deps.db, ctx, async (tx) => {
-        const before = await getOrgProfile(tx, ctx.orgId);
+        const before = await lockOrgLogoKey(tx, ctx.orgId);
         if (!before) throw new RecordNotFoundError('organization', ctx.orgId);
         await updateWithHistory(tx, {
           table: organizations,
@@ -132,6 +150,7 @@ export function uploadLogoHandler(deps: ApiDeps): RouteHandler<typeof uploadLogo
           id: ctx.orgId,
           version,
           patch: { logoKey: key },
+          secretFields: LOGO_HISTORY_SECRET,
         });
         return before.logoKey;
       });
@@ -139,7 +158,7 @@ export function uploadLogoHandler(deps: ApiDeps): RouteHandler<typeof uploadLogo
       await dropFile(deps, key);
       throw err;
     }
-    if (previous) await dropFile(deps, previous);
+    if (ownLogoKey(previous, ctx.orgId)) await dropFile(deps, previous);
     const profile = await withOrgContext(deps.db, ctx, (tx) => getOrgProfile(tx, ctx.orgId));
     return c.json(orgProfileBody(profile!), 200);
   };
@@ -169,7 +188,7 @@ export function deleteLogoHandler(deps: ApiDeps): RouteHandler<typeof deleteLogo
     const { version } = c.req.valid('query');
     const ctx = orgContextOf(c);
     const { previous, profile } = await withOrgContext(deps.db, ctx, async (tx) => {
-      const before = await getOrgProfile(tx, ctx.orgId);
+      const before = await lockOrgLogoKey(tx, ctx.orgId);
       if (!before) throw new RecordNotFoundError('organization', ctx.orgId);
       await updateWithHistory(tx, {
         table: organizations,
@@ -177,10 +196,11 @@ export function deleteLogoHandler(deps: ApiDeps): RouteHandler<typeof deleteLogo
         id: ctx.orgId,
         version,
         patch: { logoKey: null },
+        secretFields: LOGO_HISTORY_SECRET,
       });
       return { previous: before.logoKey, profile: (await getOrgProfile(tx, ctx.orgId))! };
     });
-    if (previous) await dropFile(deps, previous);
+    if (ownLogoKey(previous, ctx.orgId)) await dropFile(deps, previous);
     return c.json(orgProfileBody(profile), 200);
   };
 }

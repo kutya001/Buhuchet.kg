@@ -3,7 +3,7 @@ import { schema } from '@buhuchet/db';
 import { databaseAvailable } from '@buhuchet/db/testing';
 import { LOGO_MAX_BYTES } from '@buhuchet/domain';
 import { ApiError, MeResponse, OrgPolicy, OrgPolicyHistory, OrgProfile } from '@buhuchet/shared';
-import { and, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { apiRequest, createStaffFixture, signIn, TEST_ORIGIN, TEST_PASSWORD } from '../../testing';
 
@@ -209,9 +209,27 @@ describe.skipIf(!databaseAvailable())('Моя организация: API', () =
       }
       const plain = await f.app.request('/api/org/logo', { headers: { cookie: acc } });
       expect(plain.headers.get('cache-control')).toBe('private, no-cache');
-      // У организации Б логотипа нет — чужой не отдаётся.
-      expect((await f.app.request(logoUrl!, { headers: { cookie: ownerB } })).status).toBe(404);
       expect((await f.app.request(logoUrl!)).status).toBe(401);
+
+      // У организации Б логотипа нет — чужой не отдаётся; со своим каждая получает только свою картинку.
+      expect((await f.app.request(logoUrl!, { headers: { cookie: ownerB } })).status).toBe(404);
+      const versionB = (await profile(ownerB)).version;
+      expect((await putLogo(JPEG, versionB, ownerB, 'image/jpeg')).status).toBe(200);
+      const own = await f.app.request('/api/org/logo', { headers: { cookie: ownerB } });
+      expect(new Uint8Array(await own.arrayBuffer())).toEqual(JPEG);
+      const mine = await f.app.request('/api/org/logo', { headers: { cookie: acc } });
+      expect(new Uint8Array(await mine.arrayBuffer())).toEqual(PNG);
+      const versionB2 = (await profile(ownerB)).version;
+      expect((await call('DELETE', `/api/org/logo?version=${versionB2}`, ownerB)).status).toBe(200);
+
+      // В историю — только факт загрузки, без ключа хранилища.
+      const [entry] = await f.t.admin.db
+        .select()
+        .from(auditLog)
+        .where(and(eq(auditLog.entity, 'organization'), eq(auditLog.entityId, f.a.orgId)))
+        .orderBy(desc(auditLog.id))
+        .limit(1);
+      expect(entry?.changes).toEqual([{ field: 'logoKey' }]);
     });
 
     it('не картинка, больше 2 МБ, без права, устаревшая версия — отказ, лишних файлов нет', async () => {
@@ -233,6 +251,15 @@ describe.skipIf(!databaseAvailable())('Моя организация: API', () =
       });
 
       expect((await putLogo(PNG, version, acc)).status).toBe(403);
+      // Свой предел тела у логотипа — после проверки входа и права: большое тело без них — 401 и 403.
+      const over = new Uint8Array(1024 * 1024 + 10);
+      expect((await putLogo(over, version, acc)).status).toBe(403);
+      const anonymous = await f.app.request(`/api/org/logo?version=${version}`, {
+        method: 'PUT',
+        headers: { origin: TEST_ORIGIN, 'content-type': 'image/png' },
+        body: over,
+      });
+      expect(anonymous.status).toBe(401);
       const stale = await putLogo(JPEG, version - 1, owner, 'image/jpeg');
       expect(stale.status).toBe(409);
       expect(files().size).toBe(1);
@@ -384,7 +411,8 @@ describe.skipIf(!databaseAvailable())('Моя организация: API', () =
     it('история учётной политики: сначала новые, кто и было → стало; видна всем, чужая — нет', async () => {
       const res = await call('GET', '/api/org/policy/history', acc);
       expect(res.status).toBe(200);
-      const { items } = OrgPolicyHistory.parse(await res.json());
+      const { total, items } = OrgPolicyHistory.parse(await res.json());
+      expect(total).toBe(items.length);
       expect(items[0]).toMatchObject({
         actor: 'owner-a В.',
         action: 'update',
@@ -392,6 +420,17 @@ describe.skipIf(!databaseAvailable())('Моя организация: API', () =
       });
       expect(items.at(-1)).toMatchObject({ action: 'create', actor: null });
       expect(items.some((h) => h.changes.some((c) => c.field === 'features'))).toBe(true);
+
+      // Изменения вкладки «Настройки» — не в истории учётной политики (как в прототипе).
+      const fields = items.flatMap((h) => h.changes.map((c) => c.field));
+      for (const field of ['timezone', 'digestTime', 'overdueRepeat', 'defaultRoleId']) {
+        expect(fields).not.toContain(field);
+      }
+      expect(await patchPolicy({ timezone: 'Europe/Moscow' }).then((r) => r.status)).toBe(200);
+      const after = OrgPolicyHistory.parse(
+        await (await call('GET', '/api/org/policy/history', acc)).json(),
+      );
+      expect(after.total).toBe(total);
 
       const other = await call('GET', '/api/org/policy/history', ownerB);
       expect(OrgPolicyHistory.parse(await other.json()).items).toEqual([

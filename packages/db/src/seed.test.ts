@@ -90,6 +90,7 @@ describe.skipIf(!databaseAvailable())('начальное наполнение �
       address: 'г. Бишкек, ул. Киевская, 95, офис 12',
       phone: '+996312901234',
       head: 'Садыков Эркин Маратович',
+      createdAt: new Date('2025-02-13T18:00:00Z'),
     });
   });
 
