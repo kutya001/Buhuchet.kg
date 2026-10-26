@@ -34,6 +34,8 @@
 - Новая организация — только через `createOrganization` (`src/organizations.ts`): роли из шаблонов, владелец, учётная политика в одной транзакции. Служебные команды: `pnpm db:create-org`, `pnpm db:create-admin`.
 - Задача по расписанию берёт список организаций `orgIds(db)` (функция `app.org_ids()`) и работает с каждой в своей `withOrgContext`.
 - Ссылки между записями организации — на пару `(id, org_id)` (составной внешний ключ), чтобы запись нельзя было связать с чужой организацией.
+- Сотрудники — `src/staff.ts` (`listEmployees`, `getEmployee`, `createEmployee`, `lockEmployee`, `roleAccess`, `endUserSessions`, `phoneCodes`), роли — `src/roles.ts` (`listRoles`, `getRole`, `createRole`, `replaceRolePermissions`, `setRoleScopes`, `roleInUse`, `deleteRole`, `permissionCatalog`); всё — в `withOrgContext`, хеш пароля не читается. Новая запись получает организацию и автора из контекста (`app.current_org_id()`, `app.current_user_id()`).
+- Нарушенное ограничение — `uniqueViolation(err)` и `foreignKeyViolation(err)` из `src/errors.ts` (имя ограничения): так метод отвечает «логин занят», «такая роль уже есть», а не 500.
 
 ## Вход и сеансы
 - Вход, проверка cookie и выход идут до того, как известна организация, поэтому `users` и `sessions` в это время читаются только функциями `app.auth_*` (миграции 0009 и 0013, SECURITY DEFINER, `search_path` задан, выполняет только `buhuchet_app`) через обёртки `src/auth.ts`: `findLogin`, `reserveLoginAttempt` (попытка по набранному логину занимается до проверки пароля), `clearLoginAttempts`, `startSession`, `sessionByToken`, `endSession`, `changeOwnPassword`.

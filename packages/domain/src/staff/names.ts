@@ -7,3 +7,18 @@ export function shortName(fullName: string): string {
   if (!surname) return '';
   return name ? `${name} ${surname[0]}.` : surname;
 }
+
+/** Как показывать в «Создал» и «Изменил» запись администратора платформы (прототип core/session.js, whoName). */
+export const PLATFORM_ADMIN_NAME = 'Администратор платформы';
+
+/**
+ * Кто создал или изменил запись: короткое имя сотрудника организации; пользователь без сотрудника в
+ * организации — администратор платформы; null — система.
+ */
+export function auditActorName(
+  userId: string | null,
+  employeeShortName: string | null,
+): string | null {
+  if (!userId) return null;
+  return employeeShortName ?? PLATFORM_ADMIN_NAME;
+}

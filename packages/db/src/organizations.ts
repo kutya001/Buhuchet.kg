@@ -12,6 +12,7 @@ import {
 import { asc, eq, sql } from 'drizzle-orm';
 import type { Db, Tx } from './client';
 import { withOrgContext } from './context';
+import { uniqueViolation } from './errors';
 import { writeHistory } from './history';
 import {
   employees,
@@ -64,15 +65,6 @@ const UNIQUE_FIELDS: Record<string, [OrganizationInputError['field'], string]> =
   organizations_slug_unique: ['slug', 'Такой адрес страницы уже занят другой организацией'],
   users_login_unique: ['ownerLogin', 'Логин уже занят'],
 };
-
-/** Имя нарушенного ограничения уникальности (код 23505), если ошибка — она. */
-function uniqueViolation(error: unknown): string | null {
-  for (let e: unknown = error; e && typeof e === 'object'; e = (e as { cause?: unknown }).cause) {
-    const pg = e as { code?: string; constraint_name?: string };
-    if (pg.code === '23505') return pg.constraint_name ?? null;
-  }
-  return null;
-}
 
 /**
  * Организация и её владелец (ТЗ «Админка» → «Модуль организаций»): копии шаблонов ролей платформы,
