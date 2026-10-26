@@ -1,8 +1,12 @@
 import {
   FULL_NAME_MAX_LENGTH,
+  isFullName,
+  isValidLogin,
   LOGIN_MAX_LENGTH,
+  normalizeLogin,
   PASSWORD_MAX_LENGTH,
   PASSWORD_MIN_LENGTH,
+  type UiTextKey,
 } from '@buhuchet/domain';
 import { z } from 'zod';
 import { RecordAudit, RecordVersion, Uuid } from './common';
@@ -11,6 +15,24 @@ import { TelegramInfo } from './telegram';
 
 /** Телефон в виде «+996555100200»: код страны и цифры; маску страны проверяет сервер. */
 export const Phone = z.string().trim().max(20);
+
+/**
+ * Справочник платформы «Коды телефонов» для поля ввода телефона (прототип ui/popups.js, phoneInput):
+ * страна, флаг, код и маска номера («XXX XXX XXX»); выключенный код не предлагается для нового номера.
+ */
+export const PhoneCodes = z.object({
+  items: z.array(
+    z.object({
+      cc: z.string(),
+      flag: z.string(),
+      name: z.string(),
+      code: z.string(),
+      mask: z.string(),
+      active: z.boolean(),
+    }),
+  ),
+});
+export type PhoneCodes = z.infer<typeof PhoneCodes>;
 
 /**
  * Сотрудник в списке и в карточке (прототип modules/staff.js, renderStaff и empCard). Число
@@ -74,3 +96,31 @@ export type UpdateEmployeeRequest = z.infer<typeof UpdateEmployeeRequest>;
 /** Заблокировать или разблокировать: версия, которую видел пользователь. */
 export const EmployeeVersionRequest = z.object({ version: RecordVersion });
 export type EmployeeVersionRequest = z.infer<typeof EmployeeVersionRequest>;
+
+const message = (key: UiTextKey) => ({ message: key });
+
+/**
+ * Форма «Новый сотрудник» (прототип modules/staff.js, empAddDlg; React Hook Form): ФИО — фамилия и
+ * имя, логин — латиница, цифры, точка, дефис, от 3 символов (в нижнем регистре), временный пароль —
+ * не короче `PASSWORD_MIN_LENGTH` (docs/deviations.md, п. 17), роль. Телефон проверяет поле ввода по
+ * маске страны. Сообщения — ключи словаря.
+ */
+export const NewEmployeeForm = z.object({
+  fullName: z
+    .string()
+    .trim()
+    .max(FULL_NAME_MAX_LENGTH, message('form.too_long'))
+    .refine(isFullName, message('staff.err.full_name')),
+  login: z
+    .string()
+    .max(LOGIN_MAX_LENGTH, message('form.too_long'))
+    .transform(normalizeLogin)
+    .refine(isValidLogin, message('staff.err.login')),
+  temporaryPassword: z
+    .string()
+    .min(PASSWORD_MIN_LENGTH, message('staff.err.password'))
+    .max(PASSWORD_MAX_LENGTH, message('form.too_long')),
+  roleId: z.string().min(1, message('staff.err.role')),
+});
+export type NewEmployeeFormInput = z.input<typeof NewEmployeeForm>;
+export type NewEmployeeForm = z.output<typeof NewEmployeeForm>;

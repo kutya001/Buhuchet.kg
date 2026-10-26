@@ -22,6 +22,8 @@ export interface ShellState {
   access: ShellAccess;
   /** Вошедший сотрудник; у администратора платформы — null. */
   employeeId: string | null;
+  /** Роль вошедшего (для формы роли: права своей роли меняет владелец); у администратора — null. */
+  role: { id: string; isOwner: boolean } | null;
 }
 
 const NO_ACCESS: ShellAccess = {
@@ -38,6 +40,7 @@ export const ShellContext = createContext<ShellState>({
   clearAddRequest: () => {},
   access: NO_ACCESS,
   employeeId: null,
+  role: null,
 });
 
 /** Состояние рабочей страницы для экранов модулей: поиск, права и выбранный способ добавления. */

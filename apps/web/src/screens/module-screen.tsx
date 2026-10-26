@@ -1,8 +1,10 @@
 'use client';
 
 import type { MenuModuleId } from '@buhuchet/domain';
+import { RolesList } from '../roles/roles-list';
 import { ModuleStub } from '../shell/module-stub';
 import { StaffList } from '../staff/staff-list';
+import { StaffStub } from '../staff/staff-stub';
 
 /**
  * Экран модуля на вкладке. Экраны — клиентские компоненты (данные — из API через TanStack Query),
@@ -18,7 +20,12 @@ export function ModuleScreen({
   moduleId: MenuModuleId;
   tabId: string | null;
 }) {
-  if (moduleId === 'staff' && (tabId ?? 'list') === 'list') return <StaffList />;
+  if (moduleId === 'staff') {
+    const tab = tabId ?? 'list';
+    if (tab === 'list') return <StaffList />;
+    if (tab === 'roles') return <RolesList />;
+    return <StaffStub />;
+  }
   return <ModuleStub moduleId={moduleId} />;
 }
 

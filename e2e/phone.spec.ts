@@ -226,6 +226,51 @@ test.describe('Этап 1: оболочка на телефоне', () => {
     });
   });
 
+  test('на телефоне вкладки окна (карточка сотрудника) листаются протяжкой по содержимому на треть ширины или рывком, недотянутая протяжка возвращается', async ({
+    page,
+    baseURL,
+    isMobile,
+  }) => {
+    test.skip(!isMobile, 'Жесты — только на касание; на ПК вкладки переключаются нажатием.');
+    await signIn(page.request, new URL(baseURL!).origin);
+    const swipe = await finger(page);
+    const me = (await (await page.request.get('/api/auth/me')).json()) as {
+      employee: { fullName: string };
+    };
+    const name = me.employee.fullName;
+    await page.goto('/app/staff/list');
+    await page.getByRole('button', { name: 'Поиск', exact: true }).click();
+    await page.getByRole('searchbox').first().fill(name);
+    await page
+      .locator('[data-grid] [data-id]')
+      .filter({ hasText: name })
+      .first()
+      .getByText(name, { exact: true })
+      .click();
+    const card = page.getByRole('dialog', { name });
+    const current = card.getByRole('tab', { selected: true });
+    await expect(current).toContainText('Основное');
+    // Точки на содержимом карточки: высота шторки зависит от вкладки, поэтому замер — перед жестом.
+    const at = async (part: number) => {
+      const box = await settledBox(card);
+      return { x: box.x + box.width * part, y: box.y + box.height * 0.6, width: box.width };
+    };
+    let from = await at(0.85);
+    await swipe.drag(from, { x: from.x - 60, y: from.y });
+    await page.waitForTimeout(400);
+    await expect(current).toContainText('Основное');
+    from = await at(0.85);
+    await swipe.drag(from, { x: from.x - from.width / 3 - 40, y: from.y });
+    await expect(current).toContainText('Контрагенты');
+    await expect(card).toContainText('Нет закреплённых контрагентов');
+    from = await at(0.15);
+    await swipe.flick(from, { x: from.x + 80, y: from.y });
+    await expect(current).toContainText('Основное');
+    await page.keyboard.press('Escape');
+    await expect(card).toBeHidden();
+    await expect(page).toHaveURL(/\/app\/staff\/list$/);
+  });
+
   test('телефон: поиск раскрывается значком, при открытой клавиатуре нет нижней панели и «+»', async ({
     page,
     baseURL,

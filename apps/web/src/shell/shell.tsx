@@ -312,8 +312,9 @@ function ShellPage({
       clearAddRequest: () => setAddRequest(null),
       access,
       employeeId: me.employee?.id ?? null,
+      role: me.employee ? { id: me.employee.roleId, isOwner: me.employee.isOwner } : null,
     }),
-    [search, addRequest, setAddRequest, access, me.employee?.id],
+    [search, addRequest, setAddRequest, access, me.employee],
   );
   const mode = t(access.admin ? 'shell.mode.admin' : 'shell.mode.business');
   const fullName = me.employee?.fullName ?? t('profile.platform_admin');

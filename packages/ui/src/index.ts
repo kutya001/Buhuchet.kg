@@ -65,11 +65,15 @@ export {
   Note,
   Pill,
   pillClass,
+  Tag,
   type FieldControl,
   type FieldProps,
   type KeyValueItem,
 } from './form';
 export { PACK_QUERY } from './form-pack';
+export { MiniTable, type MiniColumn, type MiniRow } from './mini-table';
+export { PhoneInput, type PhoneInputCode, type PhoneInputValue } from './phone-input';
+export { Segments, type SegmentOption } from './segments';
 export {
   StatusMini,
   StatusMiniNone,

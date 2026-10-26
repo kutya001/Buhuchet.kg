@@ -52,7 +52,14 @@ export class OverlayHistory {
         if (entry.done) return;
         entry.done = true;
         this.stack.splice(this.stack.indexOf(entry), 1);
-        if (this.stack.length > 0 || navigating || !this.onStub()) return;
+        if (this.stack.length > 0 || navigating) return;
+        // Своё «Назад» уже в пути (окно сменили другим, и оно сразу закрылось): второе увело бы со
+        // страницы — достаточно не класть заглушку снова.
+        if (this.skip) {
+          this.reopen = false;
+          return;
+        }
+        if (!this.onStub()) return;
         this.skip = true;
         this.host.history.back();
       },

@@ -1,7 +1,9 @@
 import { createRoute, z, type RouteHandler } from '@hono/zod-openapi';
 import {
+  exportRoles,
   getRole,
-  listRoles,
+  listRolesPage,
+  listRoleValues,
   permissionCatalog,
   withOrgContext,
   type RoleRecord,
@@ -10,6 +12,10 @@ import {
 import { permissionGroup, RecordNotFoundError } from '@buhuchet/domain';
 import {
   ApiError,
+  ListExportParams,
+  ListQueryParams,
+  ListValues,
+  ListValuesQuery,
   PermissionCatalog,
   Role,
   RoleList,
@@ -18,7 +24,10 @@ import {
 } from '@buhuchet/shared';
 import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
+import { listQueryOf, listQueryResponses } from '../../errors';
+import { xlsxContent, xlsxResponse } from '../../lists/export';
 import { orgContextOf, requirePermission } from '../../middleware/access';
+import { serverTexts } from '../l10n/texts';
 
 export const error = { 'application/json': { schema: ApiError } };
 
@@ -49,10 +58,16 @@ export const listRolesRoute = createRoute({
   method: 'get',
   path: '/roles',
   tags: ['roles'],
-  summary: 'Роли организации: число сотрудников и прав',
+  summary: 'Роли организации: страница списка',
   middleware: [requirePermission('staff')] as const,
+  request: { query: ListQueryParams },
   responses: {
-    200: { description: 'Роли', content: { 'application/json': { schema: RoleList } } },
+    200: {
+      description:
+        'Страница списка ролей с числом сотрудников и прав: сортировка, страница, фильтры, поиск и группы — на сервере',
+      content: { 'application/json': { schema: RoleList } },
+    },
+    ...listQueryResponses,
     401: { description: 'Нет входа', content: error },
     403: { description: 'Нет права «Сотрудники и роли»', content: error },
   },
@@ -60,12 +75,92 @@ export const listRolesRoute = createRoute({
 
 /**
  * Вкладка «Роли» (прототип modules/staff.js, renderStaff): роль, число сотрудников, число прав,
- * изменено. Вкладку видит только тот, у кого есть право «Сотрудники и роли».
+ * изменено — на общем списке; по умолчанию по названию. Вкладку видит только тот, у кого есть право
+ * «Сотрудники и роли». Все роли для выбора в формах — `size=all`.
  */
 export function listRolesHandler(deps: ApiDeps): RouteHandler<typeof listRolesRoute, AppEnv> {
   return async (c) => {
-    const items = await withOrgContext(deps.db, orgContextOf(c), listRoles);
-    return c.json({ items: items.map(roleSummaryBody) }, 200);
+    const query = listQueryOf(c.req.valid('query'));
+    const page = await withOrgContext(deps.db, orgContextOf(c), (tx) => listRolesPage(tx, query));
+    return c.json(
+      {
+        items: page.rows.map(roleSummaryBody),
+        total: page.total,
+        page: page.page,
+        size: page.size,
+        totals: page.totals,
+        ...(page.groups ? { groups: page.groups, rowGroups: page.rowGroups } : {}),
+      },
+      200,
+    );
+  };
+}
+
+export const roleValuesRoute = createRoute({
+  method: 'get',
+  path: '/roles/values',
+  tags: ['roles'],
+  summary: 'Значения столбца списка ролей для фильтра',
+  middleware: [requirePermission('staff')] as const,
+  request: { query: ListValuesQuery },
+  responses: {
+    200: {
+      description: 'Значения столбца с подписью и числом записей во всём списке',
+      content: { 'application/json': { schema: ListValues } },
+    },
+    ...listQueryResponses,
+    401: { description: 'Нет входа', content: error },
+    403: { description: 'Нет права «Сотрудники и роли»', content: error },
+  },
+});
+
+/** Значения для фильтра-галочек столбца («Изменил», числа); `q` — «Найти значение» по всем значениям. */
+export function roleValuesHandler(deps: ApiDeps): RouteHandler<typeof roleValuesRoute, AppEnv> {
+  return async (c) => {
+    const { col, q } = c.req.valid('query');
+    const values = await withOrgContext(deps.db, orgContextOf(c), (tx) =>
+      listRoleValues(tx, col, q),
+    );
+    return c.json(values, 200);
+  };
+}
+
+export const exportRolesRoute = createRoute({
+  method: 'get',
+  path: '/roles/export',
+  tags: ['roles'],
+  summary: 'Роли в Excel',
+  middleware: [requirePermission('staff'), requirePermission('export')] as const,
+  request: { query: ListExportParams },
+  responses: {
+    200: {
+      description: 'Файл Excel со всеми записями под поиском и фильтрами',
+      content: xlsxContent,
+    },
+    ...listQueryResponses,
+    401: { description: 'Нет входа', content: error },
+    403: { description: 'Нет права «Сотрудники и роли» или «Выгружать в Excel»', content: error },
+  },
+});
+
+/** Выгрузка списка ролей в Excel: все записи под поиском и фильтрами, видимые столбцы по порядку экрана. */
+export function exportRolesHandler(deps: ApiDeps): RouteHandler<typeof exportRolesRoute, AppEnv> {
+  return async (c) => {
+    const params = c.req.valid('query');
+    const query = listQueryOf(params);
+    const keys = [...new Set(params.cols.split(','))];
+    const t = await serverTexts(deps);
+    const result = await withOrgContext(deps.db, orgContextOf(c), (tx) =>
+      exportRoles(tx, query, keys),
+    );
+    return xlsxResponse(c, {
+      title: t('tab.staff.roles'),
+      today: deps.clock.now(),
+      columns: result.columns,
+      rows: result.rows,
+      more: result.more,
+      t,
+    });
   };
 }
 

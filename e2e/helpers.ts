@@ -29,7 +29,7 @@ export async function hire(
   roleName = 'Бухгалтер',
 ) {
   await signIn(api, origin, 'erkin', DEMO_PASSWORD);
-  const roles = (await (await api.get('/api/roles')).json()) as {
+  const roles = (await (await api.get('/api/roles?size=all')).json()) as {
     items: { id: string; name: string }[];
   };
   const res = await api.post('/api/staff', {

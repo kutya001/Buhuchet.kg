@@ -94,8 +94,11 @@ describe('служебное', () => {
         '/api/staff/{id}/unblock',
         '/api/staff/{id}/password-reset',
         '/api/roles',
+        '/api/roles/values',
+        '/api/roles/export',
         '/api/roles/{id}',
         '/api/permissions',
+        '/api/phone-codes',
         '/api/admin/users/{id}/password-reset',
       ]),
     );

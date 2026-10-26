@@ -4,15 +4,17 @@ import { formatMomentRu, initials, type ListSort } from '@buhuchet/domain';
 import { EmployeeList, ListValues, type Employee } from '@buhuchet/shared';
 import {
   Avatar,
+  buttonClass,
   DataGrid,
   EmptyState,
+  Icon,
   MONO_CLASS,
+  Note,
   Pill,
-  useToast,
   type GridAudit,
   type GridColumn,
 } from '@buhuchet/ui';
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { api } from '../api-client';
 import { useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
@@ -20,8 +22,10 @@ import { useListExport } from '../lists/export';
 import { useGridLabels } from '../lists/grid-labels';
 import { useListPage, type FetchListPage } from '../lists/use-list-page';
 import { useViewSettings } from '../lists/view-settings';
+import { useNewRole } from '../roles/new-role';
 import { useShell } from '../shell/context';
 import { useStaffActions } from './staff-actions';
+import { useStaffAddRequest } from './staff-add';
 
 /** Сортировка по умолчанию во всех списках — от новых к старым по «Создано» (прототип defSort). */
 const DEFAULT_SORT: ListSort = { key: 'createdAt', dir: 'desc' };
@@ -143,17 +147,16 @@ const fetchStaffValues = async (col: string, q?: string) => {
 /**
  * «Сотрудники» → список (ТЗ «Сотрудники», прототип modules/staff.js, renderStaff): общий список
  * записей с поиском, фильтрами у столбцов, группировкой и «В Excel» (по праву «Выгружать в Excel»);
- * заблокированные — приглушённо. Действия над сотрудником — «⋯», долгим нажатием и правым кликом
- * (`useStaffActions`). Карточка сотрудника и окно «Новый сотрудник» — задача #18; до неё выбор
- * «+ Добавить» подтверждается уведомлением, как в заглушке модуля.
+ * заблокированные — приглушённо. Строка открывает карточку сотрудника; действия — «⋯», долгим
+ * нажатием и правым кликом (`useStaffActions`). Пока в организации один сотрудник — подсказка
+ * «Добавить сотрудника». «+ Добавить» — «Сотрудник» и «Роль».
  */
 export function StaffList() {
   const t = useT();
-  const toast = useToast();
   const labels = useGridLabels('staff.count');
   const columns = useMemo(() => staffColumns(t), [t]);
   const view = useViewSettings('staff.list');
-  const { search, clearSearch, access, addRequest, clearAddRequest } = useShell();
+  const { search, clearSearch, access } = useShell();
   const list = useListPage({
     gridKey: 'staff.list',
     columns,
@@ -170,17 +173,30 @@ export function StaffList() {
     [params, visible],
   );
   const exporter = useListExport(sendExport);
-  const staff = useStaffActions(list.retry);
-
-  const request = addRequest?.moduleId === 'staff' ? addRequest : null;
-  useEffect(() => {
-    if (!request) return;
-    toast(t('shell.stub_add', { action: request.label }), { icon: 'info' });
-    clearAddRequest();
-  }, [request, toast, t, clearAddRequest]);
+  const staff = useStaffActions();
+  const newRole = useNewRole();
+  useStaffAddRequest({ employee: staff.newEmployee, role: newRole.open });
+  // Подсказка — пока в организации только владелец (прототип `EMP.length===1`): без поиска и фильтров
+  // в списке одна запись.
+  const alone =
+    access.can('staff') &&
+    !search &&
+    Object.keys(list.filters).length === 0 &&
+    list.data?.total === 1;
 
   return (
-    <>
+    <div className="flex flex-col gap-3.5">
+      {alone ? (
+        <Note icon="users">
+          <span className="flex flex-wrap items-center gap-2.5">
+            <span className="min-w-0 flex-1">{t('staff.first.text')}</span>
+            <button type="button" className={buttonClass('cta', 'sm')} onClick={staff.newEmployee}>
+              <Icon name="plus" size="sm" />
+              {t('staff.first.add')}
+            </button>
+          </span>
+        </Note>
+      ) : null}
       <DataGrid
         columns={columns}
         audit={STAFF_AUDIT}
@@ -207,8 +223,10 @@ export function StaffList() {
         label={t('nav.staff')}
         labels={labels}
         actions={staff.actions}
+        onOpen={staff.openCard}
       />
       {staff.dialogs}
-    </>
+      {newRole.dialog}
+    </div>
   );
 }

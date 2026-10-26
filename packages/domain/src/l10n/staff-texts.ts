@@ -2,8 +2,10 @@ import type { UiTextDefault } from './texts';
 
 /**
  * Тексты модуля «Сотрудники» (задача #14 — список; прототип modules/staff.js, renderStaff): подписи
- * столбцов и значения; действия в списке (задача #16; прототип empActions, blockDlg). Окна
- * сотрудника и роли добавит задача #18.
+ * столбцов и значения; действия в списке (задача #16; прототип empActions, blockDlg); карточка
+ * сотрудника, «Новый сотрудник», «Сменить роль», вкладка «Роли», карточка и форма роли (задача #18;
+ * прототип empCard, empAddDlg, roleAddDlg, roleCard, roleForm, permGroupsHtml; core/org.js
+ * PERM_GROUPS и roleLock).
  */
 export const STAFF_TEXTS = {
   'staff.count.one': { ru: '{n} сотрудник', section: 'Сотрудники' },
@@ -40,6 +42,130 @@ export const STAFF_TEXTS = {
     ru: 'Передайте его сотруднику лично. При первом входе нужно будет задать свой пароль. Все прежние сеансы завершены.',
     section: 'Сотрудники',
   },
+  'staff.first.text': {
+    ru: 'Пока в организации только вы. Добавьте бухгалтеров: каждому — свой логин, роль и закреплённые контрагенты.',
+    section: 'Сотрудники',
+  },
+  'staff.first.add': { ru: 'Добавить сотрудника', section: 'Сотрудники' },
+  'staff.action.open': { ru: 'Открыть карточку', section: 'Сотрудники' },
+  'staff.action.change_role': { ru: 'Сменить роль', section: 'Сотрудники' },
+  'staff.action.more': { ru: 'Действия', section: 'Сотрудники' },
+  'staff.card.tabs': { ru: 'Разделы карточки сотрудника', section: 'Сотрудники' },
+  'staff.card.tab.main': { ru: 'Основное', section: 'Сотрудники' },
+  'staff.card.tab.cps': { ru: 'Контрагенты', section: 'Сотрудники' },
+  'staff.card.blocked': { ru: '{role} · заблокирован', section: 'Сотрудники' },
+  'staff.card.never': { ru: 'ещё не входил', section: 'Сотрудники' },
+  'staff.card.load_error': { ru: 'Не удалось загрузить карточку', section: 'Сотрудники' },
+  'staff.card.call': { ru: 'Позвонить', section: 'Сотрудники' },
+  'staff.card.whatsapp': { ru: 'Написать в WhatsApp', section: 'Сотрудники' },
+  'staff.card.cps_count': { ru: 'Закреплено контрагентов: {n}', section: 'Сотрудники' },
+  'staff.card.cps.name': { ru: 'Контрагент', section: 'Сотрудники' },
+  'staff.card.cps.regime': { ru: 'Режим', section: 'Сотрудники' },
+  'staff.card.cps.open': { ru: 'Несданных', section: 'Сотрудники' },
+  'staff.card.cps.overdue': { ru: 'Просрочено', section: 'Сотрудники' },
+  'staff.card.cps.empty': { ru: 'Нет закреплённых контрагентов', section: 'Сотрудники' },
+  'staff.role.title': { ru: 'Роль сотрудника', section: 'Сотрудники' },
+  'staff.role.done': { ru: 'Роль изменена', section: 'Сотрудники' },
+  'staff.new.title': { ru: 'Новый сотрудник', section: 'Сотрудники' },
+  'staff.new.sub': { ru: 'Вход по логину и паролю, без почты', section: 'Сотрудники' },
+  'staff.new.login_hint': { ru: 'Уникален на всей платформе', section: 'Сотрудники' },
+  'staff.new.password': { ru: 'Временный пароль', section: 'Сотрудники' },
+  'staff.new.tg_note': {
+    ru: 'При первом входе сотруднику предложат привязать Telegram — без него не будет напоминаний и самостоятельного восстановления пароля.',
+    section: 'Сотрудники',
+  },
+  'staff.new.done': { ru: 'Сотрудник создан', section: 'Сотрудники' },
+  'staff.phone.code': { ru: 'Код страны', section: 'Сотрудники' },
+  'form.reload': { ru: 'Перечитать', section: 'Формы' },
+  // Ошибки полей форм сотрудника (сообщения схем `@buhuchet/shared`).
+  'staff.err.full_name': { ru: 'Введите фамилию и имя', section: 'Ошибки' },
+  'staff.err.login': { ru: 'Латиница, цифры, точка, дефис; от 3 символов', section: 'Ошибки' },
+  'staff.err.password': { ru: 'Не короче {min} символов', section: 'Ошибки' },
+  'staff.err.phone': { ru: 'Номер — {n} цифр', section: 'Ошибки' },
+  'staff.err.role': { ru: 'Выберите роль', section: 'Ошибки' },
+
+  // Вкладка «Роли», карточка и форма роли.
+  'roles.note': {
+    ru: 'Права выдаются через роли: сотрудник → роль → права. Права разбиты по модулям, под каждым — что оно разрешает. Кнопки и вкладки без права не показываются, а сервер всё равно проверяет право при каждом действии. «Настройки и учётная политика» есть только у владельца; «Откат статусов», «Распоряжаться остатком при архивировании» и «Сотрудники и роли» выдаёт только владелец; права своей роли сотрудник не меняет.',
+    section: 'Роли',
+  },
+  'roles.count.one': { ru: '{n} роль', section: 'Роли' },
+  'roles.count.few': { ru: '{n} роли', section: 'Роли' },
+  'roles.count.many': { ru: '{n} ролей', section: 'Роли' },
+  'roles.col.name': { ru: 'Роль', section: 'Роли' },
+  'roles.col.employees': { ru: 'Сотрудников', section: 'Роли' },
+  'roles.col.permissions': { ru: 'Прав', section: 'Роли' },
+  'roles.all_rights': { ru: 'все права', section: 'Роли' },
+  'roles.of_total': { ru: 'из {total}', section: 'Роли' },
+  'roles.action.open': { ru: 'Открыть', section: 'Роли' },
+  'roles.action.edit': { ru: 'Изменить', section: 'Роли' },
+  'roles.card.sub': { ru: '{n} чел. · прав {k} из {total}', section: 'Роли' },
+  'roles.load_error': { ru: 'Не удалось загрузить роль', section: 'Роли' },
+  'roles.card.owner_note': {
+    ru: 'У владельца организации все права, они не меняются.',
+    section: 'Роли',
+  },
+  'roles.search': { ru: 'Поиск по названию и описанию права', section: 'Роли' },
+  'roles.search_label': { ru: 'Поиск права', section: 'Роли' },
+  'roles.nothing': { ru: 'Ничего не найдено', section: 'Роли' },
+  'roles.selected': { ru: 'Выбрано {n} из {total}', section: 'Роли' },
+  'roles.select_all': { ru: 'Выбрать все', section: 'Роли' },
+  'roles.clear_all': { ru: 'Снять все', section: 'Роли' },
+  'roles.scope': { ru: 'Область:', section: 'Роли' },
+  'roles.scope_label': { ru: 'Область', section: 'Роли' },
+  'roles.scope.own': { ru: 'Свои контрагенты', section: 'Роли' },
+  'roles.scope.all': { ru: 'Все контрагенты', section: 'Роли' },
+  'roles.scope.fixed': {
+    ru: 'Задано правом «Видеть все отчёты и всех контрагентов»',
+    section: 'Роли',
+  },
+  'roles.granted': { ru: 'Есть', section: 'Роли' },
+  'roles.not_granted': { ru: 'Нет', section: 'Роли' },
+  'roles.module_off': {
+    ru: 'Модуль выключен в учётной политике: права сохранятся и начнут действовать после включения',
+    section: 'Роли',
+  },
+  // Группы прав — в порядке меню модулей (прототип core/org.js, PERM_GROUPS).
+  'roles.group.cps': { ru: 'Контрагенты', section: 'Роли' },
+  'roles.group.reports': { ru: 'Отчеты для сдачи', section: 'Роли' },
+  'roles.group.fin': { ru: 'Финансовые операции по контрагентам', section: 'Роли' },
+  'roles.group.projects': { ru: 'Проекты контрагентов', section: 'Роли' },
+  'roles.group.kpi': { ru: 'Показатели контрагентов', section: 'Роли' },
+  'roles.group.tasks': { ru: 'Задачи', section: 'Роли' },
+  'roles.group.files': { ru: 'Файловый менеджер', section: 'Роли' },
+  'roles.group.staff': { ru: 'Сотрудники', section: 'Роли' },
+  'roles.group.dicts': { ru: 'Справочники', section: 'Роли' },
+  'roles.group.kb': { ru: 'База знаний', section: 'Роли' },
+  'roles.group.org': { ru: 'Моя организация', section: 'Роли' },
+  'roles.group.common': { ru: 'Общие права', section: 'Роли' },
+  // Почему галочка права неактивна (`RoleLock`, прототип roleLock) и почему роль не сохранить.
+  'roles.lock.owner_role': { ru: 'Права владельца не меняются', section: 'Роли' },
+  'roles.lock.view_required': { ru: 'Сначала дайте просмотр', section: 'Роли' },
+  'roles.lock.owner_only': {
+    ru: 'Это право есть только у владельца организации',
+    section: 'Роли',
+  },
+  'roles.lock.own_role': { ru: 'Права своей роли меняет владелец', section: 'Роли' },
+  'roles.lock.owner_granted': { ru: 'Это право выдаёт только владелец', section: 'Роли' },
+  'roles.err.owner_granted_role': {
+    ru: 'Роль с правами, которые выдаёт только владелец, меняет владелец',
+    section: 'Роли',
+  },
+  'roles.err.beyond_own': { ru: 'Можно выдать только те права, что есть у вас', section: 'Роли' },
+  'roles.err.beyond_own_scope': {
+    ru: 'Область «Все контрагенты» можно дать только там, где она есть у вас',
+    section: 'Роли',
+  },
+  'roles.err.name': { ru: 'Введите название', section: 'Ошибки' },
+  'roles.form.title': { ru: 'Права роли', section: 'Роли' },
+  'roles.form.name': { ru: 'Название роли', section: 'Роли' },
+  'roles.form.count': { ru: 'Выбрано прав: {n} из {total}', section: 'Роли' },
+  'roles.form.done': { ru: 'Права роли сохранены', section: 'Роли' },
+  'roles.new.title': { ru: 'Новая роль', section: 'Роли' },
+  'roles.new.name': { ru: 'Название', section: 'Роли' },
+  'roles.new.copy': { ru: 'Скопировать права из', section: 'Роли' },
+  'roles.new.done': { ru: 'Роль создана: отметьте её права', section: 'Роли' },
+
   // Отказы сервера в действиях над сотрудником (`refuse` в packages/api: код и details.variant).
   'err.own_account': { ru: 'Нельзя заблокировать себя', section: 'Ошибки' },
   'err.owner_employee': {
@@ -70,5 +196,23 @@ export const STAFF_TEXTS = {
     ru: 'Сотрудника с правами шире ваших блокирует и разблокирует владелец',
     section: 'Ошибки',
   },
+  'err.own_role': { ru: 'Свою роль меняет владелец', section: 'Ошибки' },
+  'err.owner_role': { ru: 'Роль владельца организации не назначается', section: 'Ошибки' },
+  'err.owner_granted': {
+    ru: 'Роль с правами, которые выдаёт только владелец, назначает и снимает владелец',
+    section: 'Ошибки',
+  },
+  'err.beyond_own': {
+    ru: 'Роль с правами шире ваших назначает и снимает владелец',
+    section: 'Ошибки',
+  },
+  'err.invalid_full_name': { ru: 'Введите фамилию и имя', section: 'Ошибки' },
+  'err.invalid_login': {
+    ru: 'Латиница, цифры, точка, дефис; от 3 символов',
+    section: 'Ошибки',
+  },
+  'err.login_taken': { ru: 'Такой логин уже занят на платформе', section: 'Ошибки' },
+  'err.role_not_found': { ru: 'Нет такой роли', section: 'Ошибки' },
+  'err.role_name_taken': { ru: 'Такая роль уже есть', section: 'Ошибки' },
   'err.record_changed': { ru: 'Запись изменена другим пользователем', section: 'Ошибки' },
 } as const satisfies Record<string, UiTextDefault>;

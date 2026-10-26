@@ -125,6 +125,36 @@ describe('кнопка «Назад» закрывает открытое окн
     expect(h.index).toBe(0);
   });
 
+  it('новое окно открылось и сразу закрылось, пока снималась прежняя заглушка, — со страницы не уходим', () => {
+    const h = fakeHost();
+    const overlays = new OverlayHistory(h.host);
+    overlays.open(() => {}).release();
+    // Так бывает при смене карточки формой: в режиме разработки React открывает окно дважды.
+    overlays.open(() => {}).release();
+    let closed = 0;
+    overlays.open(() => {
+      closed++;
+    });
+    h.flush();
+    expect(h.index).toBe(1);
+    expect(h.entries).toHaveLength(2);
+    h.back();
+    h.flush();
+    expect(closed).toBe(1);
+    expect(h.index).toBe(0);
+  });
+
+  it('окно закрылось, пока снималась прежняя заглушка, и больше окон нет — заглушки нет', () => {
+    const h = fakeHost();
+    const overlays = new OverlayHistory(h.host);
+    overlays.open(() => {}).release();
+    overlays.open(() => {}).release();
+    h.flush();
+    expect(h.index).toBe(0);
+    expect(h.entries).toHaveLength(2);
+    expect(overlays.size).toBe(0);
+  });
+
   it('«Вперёд» на лишнюю заглушку, когда окон уже нет, — проходится назад', () => {
     const h = fakeHost();
     const overlays = new OverlayHistory(h.host);
