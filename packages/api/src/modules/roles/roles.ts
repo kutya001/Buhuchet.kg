@@ -37,6 +37,7 @@ export function roleSummaryBody(r: RoleSummary): RoleListItem {
     id: r.id,
     name: r.name,
     isOwner: r.isOwner,
+    templateCode: r.templateCode,
     employees: r.employees,
     permissionCount: r.permissionCount,
     audit: {

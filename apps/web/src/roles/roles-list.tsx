@@ -1,7 +1,7 @@
 'use client';
 
 import { formatMomentRu, PERMISSION_IDS, type ListSort } from '@buhuchet/domain';
-import { ListValues, RoleList, type Role, type RoleListItem } from '@buhuchet/shared';
+import { ListValues, RoleList, Uuid, type Role, type RoleListItem } from '@buhuchet/shared';
 import {
   DataGrid,
   EmptyState,
@@ -181,6 +181,8 @@ export function RolesList() {
   useEffect(() => {
     if (!editId) return;
     window.history.replaceState(window.history.state, '', tabHref('staff', 'roles'));
+    // Только номер роли: иначе значение из адреса ушло бы в путь запроса как есть.
+    if (!Uuid.safeParse(editId).success) return;
     loadForm(client, editId).then(
       (data) => {
         if (!data.role.isOwner) setForm(openSlot(data));

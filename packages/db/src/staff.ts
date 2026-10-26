@@ -10,7 +10,7 @@ import {
   type Scope,
   type ScopeGroupId,
 } from '@buhuchet/domain';
-import { eq, sql } from 'drizzle-orm';
+import { count, eq, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { Db, Tx } from './client';
 import { writeHistory } from './history';
@@ -240,6 +240,19 @@ export async function listEmployeesPage(
   });
   const codes = await phoneCodes(tx);
   return { ...page, rows: page.rows.map((r) => toEmployee(r, codes)) };
+}
+
+/**
+ * Счётчики вкладок модуля «Сотрудники» (прототип staffTabs): активных сотрудников и ролей
+ * организации (её отсекает RLS).
+ */
+export async function staffTabCounts(tx: Tx): Promise<{ active: number; roles: number }> {
+  const [active] = await tx
+    .select({ n: count() })
+    .from(employees)
+    .where(eq(employees.active, true));
+  const [all] = await tx.select({ n: count() }).from(roles);
+  return { active: Number(active?.n ?? 0), roles: Number(all?.n ?? 0) };
 }
 
 /**

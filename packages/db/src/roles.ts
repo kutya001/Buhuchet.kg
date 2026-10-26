@@ -36,6 +36,8 @@ export interface RoleSummary {
   id: string;
   name: string;
   isOwner: boolean;
+  /** Код шаблона платформы, из которого роль создана; null — роль создала организация. */
+  templateCode: string | null;
   /** Активных сотрудников с ролью (прототип: столбец «Сотрудников»). */
   employees: number;
   permissionCount: number;
@@ -62,6 +64,7 @@ const roleFields = {
   id: roles.id,
   name: roles.name,
   isOwner: roles.isOwner,
+  templateCode: roles.templateCode,
   employees: ROLE_EMPLOYEES,
   permissionCount: ROLE_PERMISSIONS,
   createdAt: roles.createdAt,
@@ -108,6 +111,7 @@ function toSummary(r: RoleRow): RoleSummary {
     id: r.id,
     name: r.name,
     isOwner: r.isOwner,
+    templateCode: r.templateCode,
     employees: Number(r.employees),
     permissionCount: r.isOwner
       ? rolePermissionCount({ isOwner: true, permissions: [] })

@@ -54,6 +54,7 @@ import {
   visibleTabs,
   type ShellAccess,
 } from './modules';
+import { useTabCounts } from './tab-counts';
 import { UiProviders } from './ui-providers';
 
 export { useShell, type AddRequest } from './context';
@@ -132,10 +133,12 @@ function HelpFooter({ kbHref }: { kbHref: string }) {
 function ModuleTabRow({
   moduleId,
   plates,
-  ...props
+  tabs: plain,
+  ...rest
 }: TabRowProps & { moduleId: MenuModuleId; plates: boolean }) {
-  if (!plates) return <TabRow {...props} />;
-  return <TabRowWithStats moduleId={moduleId} {...props} />;
+  const tabs = useTabCounts(moduleId, plain);
+  if (!plates) return <TabRow tabs={tabs} {...rest} />;
+  return <TabRowWithStats moduleId={moduleId} tabs={tabs} {...rest} />;
 }
 
 function TabRowWithStats({ moduleId, ...props }: TabRowProps & { moduleId: MenuModuleId }) {

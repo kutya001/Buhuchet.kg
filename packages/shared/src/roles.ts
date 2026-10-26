@@ -37,6 +37,8 @@ export const RoleListItem = z.object({
   name: z.string(),
   /** Роль владельца: все права, не меняется и не удаляется. */
   isOwner: z.boolean(),
+  /** Код шаблона платформы («chief», «acc»), из которого роль создана; null — роль создала организация. */
+  templateCode: z.string().nullable(),
   /** Активных сотрудников с этой ролью. */
   employees: z.number().int().nonnegative(),
   /** Число прав; у роли владельца — все. */

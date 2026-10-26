@@ -177,6 +177,18 @@ test.describe('Этап 1: сотрудники и роли (экраны)', () 
     await expect(card).toContainText('не привязан');
     await expect(card).toContainText('ещё не входил');
     await expect(card).toContainText('Активен');
+    if (isMobile) {
+      // Пары «подпись — значение» на телефоне: два коротких значения подряд — в строку, длинное и
+      // оставшееся без пары — во всю ширину.
+      const item = (label: string) =>
+        card.locator('dl > div', {
+          has: page.locator('dt', { hasText: new RegExp(`^${label}$`) }),
+        });
+      await expect(item('Логин')).toHaveAttribute('data-pack', 'full');
+      await expect(item('Telegram')).toHaveAttribute('data-pack', 'half');
+      await expect(item('Последний вход')).toHaveAttribute('data-pack', 'half');
+      await expect(item('Статус')).toHaveAttribute('data-pack', 'full');
+    }
     await expect(card.getByRole('link', { name: '+996 555 100 200' })).toHaveAttribute(
       'href',
       'tel:+996555100200',
@@ -241,6 +253,10 @@ test.describe('Этап 1: сотрудники и роли (экраны)', () 
     await expect(
       page.getByText('Права выдаются через роли: сотрудник → роль → права.'),
     ).toBeVisible();
+    // Счётчики вкладок, как в прототипе: активных сотрудников и ролей.
+    const tabs = page.locator('[data-tabrow]');
+    await expect(tabs.locator('a[href="/app/staff/list"]')).toHaveText(/^Сотрудники\s*[1-9]\d*$/);
+    await expect(tabs.locator('a[href="/app/staff/roles"]')).toHaveText(/^Роли\s*[1-9]\d*$/);
 
     await test.step('роль владельца — «все права», «Изменить» недоступно, в карточке права не меняются', async () => {
       await search(page, isMobile, 'Владелец организации');

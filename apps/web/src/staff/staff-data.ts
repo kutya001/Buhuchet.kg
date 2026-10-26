@@ -1,6 +1,7 @@
 'use client';
 
-import { Employee, OrgPolicy, PhoneCodes, RoleList } from '@buhuchet/shared';
+import { Employee, OrgPolicy, PhoneCodes, RoleList, StaffTabCounts } from '@buhuchet/shared';
+import type { ShellCount } from '@buhuchet/ui';
 import { queryOptions, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 import { api } from '../api-client';
@@ -8,7 +9,7 @@ import { api } from '../api-client';
 /**
  * Данные окон модуля «Сотрудники» через TanStack Query: карточка сотрудника, все роли для выбора,
  * роль новых сотрудников из учётной политики, коды телефонов. Окно с полями открывается, когда
- * данные уже есть (`ensureQueryData`): фокус сразу встаёт в первое поле. После правки —
+ * данные уже есть (`fetchQuery`): фокус сразу встаёт в первое поле. После правки —
  * `useStaffRefresh`.
  */
 
@@ -42,6 +43,25 @@ export const allRolesQuery = queryOptions({
 export const policyQuery = queryOptions({
   queryKey: ['org', 'policy'],
   queryFn: async () => json(await api.api.org.policy.$get(), (v) => OrgPolicy.parse(v), 'policy'),
+});
+
+/** Счётчик вкладки: ноль не показывается, как в прототипе. */
+const tabCount = (value: number | null): ShellCount | undefined => (value ? { value } : undefined);
+
+/**
+ * Счётчики вкладок модуля (прототип staffTabs): у «Сотрудников» — активных сотрудников, у «Ролей» —
+ * ролей (с правом «Сотрудники и роли»).
+ */
+export const staffTabCountsQuery = queryOptions({
+  queryKey: ['staff', 'tab-counts'],
+  queryFn: async (): Promise<Partial<Record<string, ShellCount>>> => {
+    const counts = await json(
+      await api.api.staff['tab-counts'].$get(),
+      (v) => StaffTabCounts.parse(v),
+      'staff tab counts',
+    );
+    return { list: tabCount(counts.list), roles: tabCount(counts.roles) };
+  },
 });
 
 /** Карточка сотрудника. */

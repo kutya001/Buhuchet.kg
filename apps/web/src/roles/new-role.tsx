@@ -9,7 +9,10 @@ import { api, callApi } from '../api-client';
 import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
 import { useErrorText, useT } from '../l10n/provider';
 import { tabHref } from '../shell/modules';
-import { allRolesQuery, policyQuery, useStaffRefresh } from '../staff/staff-data';
+import { allRolesQuery, useStaffRefresh } from '../staff/staff-data';
+
+/** «Скопировать права из» по умолчанию — роль из шаблона «Бухгалтер» (прототип roleAddDlg: `'acc'`). */
+const COPY_FROM_TEMPLATE = 'acc';
 
 /** Окно, из которого создали роль: закрыть или закрыть перед переходом с заменой записи истории. */
 type WindowControl = ReturnType<typeof useWindow>;
@@ -20,7 +23,7 @@ export const roleEditHref = (id: string) =>
 
 /**
  * «Новая роль» (прототип modules/staff.js, roleAddDlg): «Название» и «Скопировать права из» — по
- * умолчанию роль новых сотрудников из учётной политики. Права копирует сервер: не владелец не получит
+ * умолчанию «Бухгалтер» (роль из шаблона платформы `acc`, как в прототипе). Права копирует сервер: не владелец не получит
  * права, которые выдаёт только владелец, и те, которых нет у него самого. После «Создать» — вкладка
  * «Роли», уведомление «Роль создана: отметьте её права» и форма прав новой роли.
  */
@@ -164,12 +167,9 @@ export function useNewRole(onCreated?: (role: Role) => void): {
 
   const open = async () => {
     try {
-      const [roles, policy] = await Promise.all([
-        client.fetchQuery(allRolesQuery),
-        client.fetchQuery(policyQuery),
-      ]);
+      const roles = await client.fetchQuery(allRolesQuery);
       const copyFrom =
-        roles.find((r) => r.id === policy.defaultRoleId)?.id ??
+        roles.find((r) => r.templateCode === COPY_FROM_TEMPLATE)?.id ??
         roles.find((r) => !r.isOwner)?.id ??
         roles[0]?.id ??
         '';

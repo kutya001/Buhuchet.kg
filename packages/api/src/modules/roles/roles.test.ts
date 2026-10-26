@@ -104,6 +104,25 @@ describe.skipIf(!databaseAvailable())('Роли: API', () => {
       expect((await call('GET', '/api/roles?sort=secret.asc', owner)).status).toBe(400);
     });
 
+    it('чужая организация не видна: в списке ролей и значениях фильтра — только роли своей организации', async () => {
+      const list = async (who: string) => {
+        const res = await call('GET', '/api/roles?size=all', who);
+        expect(res.status).toBe(200);
+        return RoleList.parse(await res.json());
+      };
+      const a = await list(owner);
+      const b = await list(ownerB);
+      expect(b.total).toBe(3);
+      const idsA = new Set(a.items.map((r) => r.id));
+      expect(b.items.some((r) => idsA.has(r.id))).toBe(false);
+      expect(b.items.map((r) => r.name)).not.toContain('Кадры');
+      const values = ListValues.parse(
+        await (await call('GET', '/api/roles/values?col=name', ownerB)).json(),
+      );
+      expect(values.items.reduce((n, v) => n + v.count, 0)).toBe(3);
+      expect(values.items.map((v) => v.value)).not.toContain('Кадры');
+    });
+
     it('значения для фильтра и «В Excel» — роли своей организации; выгрузка — с правом «Выгружать в Excel»', async () => {
       const res = await call('GET', '/api/roles/values?col=permissionCount', owner);
       expect(res.status).toBe(200);

@@ -67,6 +67,16 @@ export const EmployeeList = listPageSchema(Employee);
 export type EmployeeList = z.infer<typeof EmployeeList>;
 
 /**
+ * Счётчики вкладок модуля «Сотрудники» (прототип staffTabs): `list` — активных сотрудников, `roles` —
+ * ролей организации (null — нет права «Сотрудники и роли», вкладки «Роли» нет).
+ */
+export const StaffTabCounts = z.object({
+  list: z.number().int().nonnegative(),
+  roles: z.number().int().nonnegative().nullable(),
+});
+export type StaffTabCounts = z.infer<typeof StaffTabCounts>;
+
+/**
  * Новый сотрудник (прототип modules/staff.js, empAddDlg): вход по логину и паролю, без почты.
  * Временный пароль задаёт владелец или, если поле пустое, сервер; при входе его нужно сменить.
  */
