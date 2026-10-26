@@ -9,18 +9,19 @@ import { uiTexts } from './schema';
  */
 
 /**
- * Отметка словаря языка: сколько текстов и когда правился последний. Меняется с каждой правкой,
- * поэтому по ней API узнаёт, что словарь пора перечитать, не читая его целиком.
+ * Отметка словаря языка: число текстов и хеш всех пар «ключ — текст». Меняется с любой правкой —
+ * через Админку, наполнение или прямо в таблице, — поэтому по ней API узнаёт, что словарь пора
+ * перечитать, не перенося его по сети целиком.
  */
 export async function uiTextsStamp(db: Db | Tx, lang: UiLanguage): Promise<string> {
   const [row] = await db
     .select({
       count: sql<number>`count(*)::int`,
-      last: sql<string | null>`max(${uiTexts.updatedAt})::text`,
+      hash: sql<string>`md5(coalesce(string_agg(${uiTexts.key} || chr(31) || ${uiTexts.text}, chr(30) order by ${uiTexts.key}), ''))`,
     })
     .from(uiTexts)
     .where(eq(uiTexts.lang, lang));
-  return `${row?.count ?? 0}|${row?.last ?? ''}`;
+  return `${row?.count ?? 0}|${row?.hash ?? ''}`;
 }
 
 /** Тексты языка: ключ → текст. */

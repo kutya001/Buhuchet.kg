@@ -25,9 +25,15 @@ test.describe('Этап 1: словарь текстов интерфейса', 
     request,
   }) => {
     const { texts } = (await (await request.get('/api/l10n')).json()) as Dictionary;
-    // Разметка до выполнения скриптов уже содержит тексты словаря.
-    const html = await (await request.get('/health')).text();
-    expect(html).toContain(texts['health.title']);
+    // Страница собирается на каждый запрос, и её разметка до выполнения скриптов уже содержит
+    // тексты словаря: заголовок — готовым элементом h1, а не только в данных для браузера.
+    const res = await request.get('/health');
+    expect(res.headers()['cache-control']).toContain('no-store');
+    const html = await res.text();
+    const title = texts['health.title']!;
+    expect(html).toMatch(
+      new RegExp(`<h1[^>]*>${title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}</h1>`),
+    );
     expect(html).toContain(`content="${texts['app.description']}"`);
 
     await page.goto('/health');

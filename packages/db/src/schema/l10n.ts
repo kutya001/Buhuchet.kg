@@ -16,6 +16,8 @@ export const uiTexts = pgTable(
     text: text('text').notNull(),
     /** Раздел в списке «Локализации» (Меню, Кнопки, Списки, …). */
     section: text('section').notNull(),
+    /** Кто завёл текст в Админке; null — текст из наполнения. */
+    createdBy: uuid('created_by').references(() => users.id),
     /** Кто поправил текст в Админке; null — текст из наполнения, его обновляет `db:seed --update`. */
     updatedBy: uuid('updated_by').references(() => users.id),
     ...timestamps(),

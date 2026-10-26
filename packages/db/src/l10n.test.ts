@@ -7,9 +7,9 @@ import { seedUiTexts, uiTextSeedRows } from './seed';
 import { readSpecJson } from './spec-data';
 import { createTestDatabase, databaseAvailable, type TestDatabase } from './testing';
 
-/** Ошибка именно RLS, а не любая (у drizzle она в cause). */
-const rlsViolation = expect.objectContaining({
-  cause: expect.objectContaining({ message: expect.stringMatching(/row-level security/) }),
+/** Нет права на действие с таблицей (у drizzle ошибка базы — в cause). */
+const permissionDenied = expect.objectContaining({
+  cause: expect.objectContaining({ code: '42501' }),
 });
 
 type LocalizationEntry = { key: string; ru: string; sec: string };
@@ -108,7 +108,7 @@ describe.skipIf(!databaseAvailable())('словарь текстов в базе
   it('прямая правка, новый и удалённый текст меняют отметку словаря', async () => {
     const before = await uiTextsStamp(t.app.db, 'ru');
     expect(before).toMatch(new RegExp(`^${total}\\|`));
-    // Правка без updated_at, как запросом в редакторе SQL: время правки ставит сама база.
+    // Правка без updated_at и version, как запросом в редакторе SQL.
     await t.admin.db.update(uiTexts).set({ text: 'Главная!' }).where(eq(uiTexts.key, 'nav.home'));
     const edited = await uiTextsStamp(t.app.db, 'ru');
     expect(edited).not.toBe(before);
@@ -125,19 +125,19 @@ describe.skipIf(!databaseAvailable())('словарь текстов в базе
       .where(eq(uiTexts.key, 'nav.home'));
   });
 
-  it('роль приложения словарь читает, но не меняет (RLS — только чтение)', async () => {
+  it('роль приложения словарь читает, но не меняет: прав на запись у неё нет', async () => {
     expect(await t.app.db.$count(uiTexts)).toBe(total);
     await expect(
       t.app.db.insert(uiTexts).values({ key: 'x.new', text: 'Новый', section: 'Тест' }),
-    ).rejects.toThrow(rlsViolation);
-    const updated = await t.app.db
-      .update(uiTexts)
-      .set({ text: 'Взлом' })
-      .where(eq(uiTexts.key, 'nav.home'))
-      .returning();
-    expect(updated).toEqual([]);
-    const deleted = await t.app.db.delete(uiTexts).returning();
-    expect(deleted).toEqual([]);
-    expect(await t.admin.db.$count(uiTexts, sql`${uiTexts.text} = 'Взлом'`)).toBe(0);
+    ).rejects.toThrow(permissionDenied);
+    await expect(
+      t.app.db.update(uiTexts).set({ text: 'Взлом' }).where(eq(uiTexts.key, 'nav.home')),
+    ).rejects.toThrow(permissionDenied);
+    await expect(t.app.db.delete(uiTexts)).rejects.toThrow(permissionDenied);
+    // Без прав на запись нельзя и заблокировать таблицу (иначе встали бы все страницы сайта).
+    await expect(
+      t.app.db.transaction((tx) => tx.execute(sql`lock table ui_texts in access exclusive mode`)),
+    ).rejects.toThrow(permissionDenied);
+    expect(await t.admin.db.$count(uiTexts)).toBe(total);
   });
 });

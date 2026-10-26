@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
-import { makeTranslate, type Translate } from './translate';
+import { makeErrorText, makeTranslate, type ApiErrorLike, type Translate } from './translate';
 
 const TextsContext = createContext<Readonly<Record<string, string>>>({});
 
@@ -23,4 +23,10 @@ export function L10nProvider({
 export function useT(): Translate {
   const texts = useContext(TextsContext);
   return useMemo(() => makeTranslate(texts), [texts]);
+}
+
+/** `const errorText = useErrorText(); errorText(error)` — ошибка ответа API словами из словаря. */
+export function useErrorText(): (error: ApiErrorLike) => string {
+  const texts = useContext(TextsContext);
+  return useMemo(() => makeErrorText(texts), [texts]);
 }

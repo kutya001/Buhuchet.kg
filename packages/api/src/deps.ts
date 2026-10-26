@@ -32,4 +32,6 @@ export interface ApiDeps extends JobContext {
   jobs: readonly Job[];
   /** Не быстрее скольких миллисекунд отвечает «Забыли пароль?» (по умолчанию 1,5 с; в тестах — 0). */
   resetResponseFloorMs?: number;
+  /** Не чаще скольких миллисекунд словарь сверяется с базой (по умолчанию 1 с; в тестах — 0). */
+  l10nRecheckMs?: number;
 }

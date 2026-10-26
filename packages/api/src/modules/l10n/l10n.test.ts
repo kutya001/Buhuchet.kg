@@ -110,4 +110,12 @@ describe.skipIf(!databaseAvailable())('словарь текстов интер�
     expect(removed.version).not.toBe(added.version);
     expect(removed.texts['health.title']).toBe(UI_TEXTS['health.title'].ru);
   });
+
+  it('с базой словарь сверяется не чаще заданного: в промежутке отдаётся из памяти', async () => {
+    const slow = createApp(createTestDeps({ db: t.app.db, l10nRecheckMs: 60_000 }));
+    const before = await dictionary(await slow.request('/api/l10n'));
+    await t.admin.db.update(uiTexts).set({ text: 'Главная 2' }).where(eq(uiTexts.key, 'nav.home'));
+    expect(await dictionary(await slow.request('/api/l10n'))).toEqual(before);
+    expect((await dictionary(await app.request('/api/l10n'))).texts['nav.home']).toBe('Главная 2');
+  });
 });

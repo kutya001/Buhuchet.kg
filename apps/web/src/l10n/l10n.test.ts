@@ -2,7 +2,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ESLint } from 'eslint';
 import { describe, expect, it } from 'vitest';
-import { makeTranslate } from './translate';
+import { makeErrorText, makeTranslate } from './translate';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 
@@ -19,6 +19,15 @@ describe('t: текст из словаря', () => {
 
   it('ключа нет в словаре — показывает ключ, а не пустоту', () => {
     expect(t('health.state')).toBe('health.state');
+  });
+});
+
+describe('ошибка ответа API на экране', () => {
+  const errorText = makeErrorText({ 'err.inn_dup': 'Такой ИНН уже есть' });
+
+  it('текст словаря по коду, а если ключа нет — текст сервера', () => {
+    expect(errorText({ code: 'inn_dup', message: 'ИНН занят' })).toBe('Такой ИНН уже есть');
+    expect(errorText({ code: 'slug_taken', message: 'Адрес занят' })).toBe('Адрес занят');
   });
 });
 

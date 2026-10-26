@@ -23,6 +23,9 @@ export const dictionaryRoute = createRoute({
 
 const DEFAULTS = defaultUiTexts();
 
+/** Словарь сверяется с базой не чаще раза в секунду: поток запросов не занимает соединения базы. */
+const RECHECK_MS = 1000;
+
 /** Тексты по умолчанию входят в версию: новая выкладка с новыми ключами — новая версия словаря. */
 const DEFAULTS_HASH = createHash('sha256').update(JSON.stringify(DEFAULTS)).digest('hex');
 
@@ -45,25 +48,31 @@ function notModified(header: string | undefined, etag: string): boolean {
 /**
  * Словарь текстов интерфейса (ТЗ: все тексты — в словаре, не в коде). Тексты из базы (`ui_texts`)
  * ложатся поверх текстов по умолчанию (`UI_TEXTS`): ключ, который выложен с новым кодом, но ещё не
- * попал в базу наполнением, всё равно показывается. Словарь держится в памяти и перечитывается,
- * только когда меняется отметка базы (число текстов и время последней правки), — поправленный
- * текст виден со следующего запроса. Браузер перепроверяет словарь по ETag и получает 304, пока
+ * попал в базу наполнением, всё равно показывается. Словарь держится в памяти; не чаще раза в
+ * секунду он сверяется с отметкой базы (число текстов и хеш) и перечитывается, только когда она
+ * изменилась, — поправленный текст виден со следующего обновления страницы. Браузер перепроверяет словарь по ETag и получает 304, пока
  * версия та же. База недоступна — отдаются тексты по умолчанию без кэширования, чтобы страница
  * (в том числе «здоровье») всё равно показалась.
  */
 export function dictionaryHandler(deps: ApiDeps): RouteHandler<typeof dictionaryRoute, AppEnv> {
-  const cache = new Map<UiLanguage, { stamp: string; body: UiDictionary }>();
+  const recheckMs = deps.l10nRecheckMs ?? RECHECK_MS;
+  const cache = new Map<UiLanguage, { stamp: string; checkedAt: number; body: UiDictionary }>();
 
   async function load(lang: UiLanguage): Promise<UiDictionary> {
-    const stamp = await uiTextsStamp(deps.db, lang);
     const cached = cache.get(lang);
-    if (cached?.stamp === stamp) return cached.body;
+    const now = Date.now();
+    if (cached && now - cached.checkedAt < recheckMs) return cached.body;
+    const stamp = await uiTextsStamp(deps.db, lang);
+    if (cached?.stamp === stamp) {
+      cached.checkedAt = now;
+      return cached.body;
+    }
     const body: UiDictionary = {
       lang,
       version: versionOf(lang, stamp),
       texts: { ...DEFAULTS, ...(await loadUiTexts(deps.db, lang)) },
     };
-    cache.set(lang, { stamp, body });
+    cache.set(lang, { stamp, checkedAt: now, body });
     return body;
   }
 

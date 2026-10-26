@@ -1,6 +1,6 @@
 {
-  "id": "857041b9-204d-4682-a3fc-776a172124c4",
-  "prevId": "5b9e3c15-488f-4dee-8cff-7de77611c652",
+  "id": "91ff2792-7a60-49ce-881c-eee922db8ca3",
+  "prevId": "14098f91-e763-4968-84cc-7f0190f3c106",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -2268,6 +2268,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "updated_by": {
           "name": "updated_by",
           "type": "uuid",
@@ -2298,6 +2304,19 @@
       },
       "indexes": {},
       "foreignKeys": {
+        "ui_texts_created_by_users_id_fk": {
+          "name": "ui_texts_created_by_users_id_fk",
+          "tableFrom": "ui_texts",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
         "ui_texts_updated_by_users_id_fk": {
           "name": "ui_texts_updated_by_users_id_fk",
           "tableFrom": "ui_texts",

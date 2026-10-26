@@ -1,3 +1,4 @@
+import 'server-only';
 import type { ApiApp } from '@buhuchet/api';
 import { handleApiRequest } from '@buhuchet/api/web';
 import { UiDictionary } from '@buhuchet/shared';
