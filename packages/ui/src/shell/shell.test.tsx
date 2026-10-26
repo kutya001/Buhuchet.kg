@@ -119,18 +119,20 @@ describe('SideNav — панель модулей на ПК', () => {
 });
 
 describe('низ левой панели', () => {
-  it('организация с ИНН ведёт в профиль организации', () => {
-    const html = renderToStaticMarkup(
-      <SideOrg
-        name="ОсОО «Бухгалтер Плюс»"
-        sub="ИНН 01203201910123"
-        href="/app/org"
-        title="Профиль организации"
-      />,
-    );
-    expect(html).toContain('href="/app/org"');
-    expect(html).toContain('title="Профиль организации"');
+  it('организация с ИНН открывает окно профиля организации', () => {
+    const onClick = vi.fn();
+    const props = {
+      name: 'ОсОО «Бухгалтер Плюс»',
+      sub: 'ИНН 01203201910123',
+      title: 'Профиль организации',
+      onClick,
+    };
+    const html = renderToStaticMarkup(<SideOrg {...props} />);
+    expect(html).toContain('<button type="button" title="Профиль организации"');
     expect(html).toContain('ИНН 01203201910123');
+    const [button] = find<{ onClick: () => void }>(SideOrg(props), 'button');
+    button!.props.onClick();
+    expect(onClick).toHaveBeenCalledOnce();
   });
 
   it('«Выйти из аккаунта»: нажатие и неактивное состояние', () => {

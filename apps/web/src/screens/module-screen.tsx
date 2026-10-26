@@ -1,6 +1,9 @@
 'use client';
 
 import type { MenuModuleId } from '@buhuchet/domain';
+import { OrgMain } from '../org/org-main';
+import { OrgPolicyTab } from '../org/org-policy';
+import { OrgSettingsTab } from '../org/org-settings';
 import { RolesList } from '../roles/roles-list';
 import { ModuleStub } from '../shell/module-stub';
 import { StaffList } from '../staff/staff-list';
@@ -25,6 +28,12 @@ export function ModuleScreen({
     if (tab === 'list') return <StaffList />;
     if (tab === 'roles') return <RolesList />;
     return <StaffStub />;
+  }
+  if (moduleId === 'org') {
+    const tab = tabId ?? 'main';
+    if (tab === 'policy') return <OrgPolicyTab />;
+    if (tab === 'settings') return <OrgSettingsTab />;
+    return <OrgMain />;
   }
   return <ModuleStub moduleId={moduleId} />;
 }

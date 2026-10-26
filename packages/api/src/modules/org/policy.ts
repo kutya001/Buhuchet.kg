@@ -3,6 +3,7 @@ import {
   getOrgPolicy,
   getRole,
   orgPolicyHistory,
+  orgRoleOptions,
   schema,
   updateWithHistory,
   withOrgContext,
@@ -21,7 +22,12 @@ import {
   toHistoryValue,
   type Feature,
 } from '@buhuchet/domain';
-import { OrgPolicy, OrgPolicyHistory, UpdateOrgPolicyRequest } from '@buhuchet/shared';
+import {
+  OrgPolicy,
+  OrgPolicyHistory,
+  OrgRoleOptions,
+  UpdateOrgPolicyRequest,
+} from '@buhuchet/shared';
 import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
 import { apiError, apiFail, versionedSaveResponses } from '../../errors';
@@ -44,6 +50,7 @@ function orgPolicyBody(p: OrgPolicyRecord): OrgPolicy {
     overdueRepeat: p.overdueRepeat,
     digestTime: p.digestTime,
     defaultRoleId: p.defaultRoleId,
+    defaultRoleName: p.defaultRoleName,
     audit: {
       createdAt: p.audit.createdAt.toISOString(),
       createdBy: p.audit.createdBy,
@@ -77,6 +84,37 @@ export function getOrgPolicyHandler(deps: ApiDeps): RouteHandler<typeof getOrgPo
     const policy = await withOrgContext(deps.db, ctx, (tx) => getOrgPolicy(tx, ctx.orgId));
     if (!policy) throw new RecordNotFoundError('org_settings', ctx.orgId);
     return c.json(orgPolicyBody(policy), 200);
+  };
+}
+
+export const orgRoleOptionsRoute = createRoute({
+  method: 'get',
+  path: '/org/role-options',
+  tags: ['org'],
+  summary: 'Роли для поля «Роль по умолчанию для новых сотрудников»',
+  middleware: [requirePermission('org')] as const,
+  responses: {
+    200: {
+      description: 'Роли организации без роли владельца',
+      content: { 'application/json': { schema: OrgRoleOptions } },
+    },
+    401: { description: 'Нет входа', content: error },
+    403: { description: 'Нет права «Настройки и учётная политика»', content: error },
+  },
+});
+
+/**
+ * Варианты «Роли по умолчанию» (прототип modules/org.js, st-role) — тому, кто меняет настройки; без
+ * права «Сотрудники и роли» список ролей ему иначе не получить. Остальные видят только выбранную роль
+ * (`defaultRoleName` в учётной политике).
+ */
+export function orgRoleOptionsHandler(
+  deps: ApiDeps,
+): RouteHandler<typeof orgRoleOptionsRoute, AppEnv> {
+  return async (c) => {
+    const ctx = orgContextOf(c);
+    const items = await withOrgContext(deps.db, ctx, (tx) => orgRoleOptions(tx));
+    return c.json({ items }, 200);
   };
 }
 

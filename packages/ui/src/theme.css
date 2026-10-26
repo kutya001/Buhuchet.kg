@@ -24,6 +24,7 @@
   --bu-accent-hover: hsl(28 30% 47%);
   --bu-on-accent: hsl(36 38% 98%);
   --bu-link: hsl(40 98% 32%);
+  --bu-knob: hsl(36 38% 98%);
   --bu-hover: hsla(36 38% 98% / 0.55);
   --bu-row-hover: hsla(34 37% 70% / 0.13);
   --bu-nav-active: hsla(36 38% 98% / 0.8);
@@ -115,6 +116,7 @@
   --bu-accent-hover: hsl(26 31% 35%);
   --bu-on-accent: hsl(32 48% 87%);
   --bu-link: hsl(43 69% 63%);
+  --bu-knob: hsl(32 48% 85%);
   --bu-hover: hsla(0 0% 0% / 0.22);
   --bu-row-hover: hsla(31 27% 40% / 0.14);
   --bu-nav-active: hsla(33 20% 20% / 0.95);
@@ -197,6 +199,7 @@
     --bu-accent-hover: hsl(26 31% 35%);
     --bu-on-accent: hsl(32 48% 87%);
     --bu-link: hsl(43 69% 63%);
+    --bu-knob: hsl(32 48% 85%);
     --bu-hover: hsla(0 0% 0% / 0.22);
     --bu-row-hover: hsla(31 27% 40% / 0.14);
     --bu-nav-active: hsla(33 20% 20% / 0.95);
@@ -279,6 +282,7 @@
   --color-accent-hover: var(--bu-accent-hover);
   --color-on-accent: var(--bu-on-accent);
   --color-link: var(--bu-link);
+  --color-knob: var(--bu-knob);
   --color-hover: var(--bu-hover);
   --color-row-hover: var(--bu-row-hover);
   --color-nav-active: var(--bu-nav-active);

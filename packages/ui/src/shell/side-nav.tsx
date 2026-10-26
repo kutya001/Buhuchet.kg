@@ -145,30 +145,26 @@ export function SideNav({
 
 /**
  * Организация внизу левой панели (прототип `.orgbtn`): значок, название и строка под ним; нажатие
- * открывает профиль организации.
+ * открывает окно профиля организации (прототип `orgProfileDlg`).
  */
 export function SideOrg({
   name,
   sub,
-  href,
   title,
   onClick,
-  Link = DefaultLink,
 }: {
   name: string;
   sub: string;
-  href: string;
   title: string;
-  /** Например, закрыть панель «Меню» телефона перед переходом. */
-  onClick?: () => void;
-  Link?: ShellLink;
+  onClick: () => void;
 }) {
   return (
-    <Link
-      href={href}
+    <button
+      type="button"
       title={title}
       onClick={onClick}
-      className="flex items-center gap-2.5 rounded-lg p-2 text-ink no-underline hover:bg-hover"
+      data-side-org=""
+      className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg border-0 bg-transparent p-2 text-left text-ink hover:bg-hover"
     >
       <span className="grid h-[30px] w-[30px] flex-none place-items-center rounded-[9px] bg-btn text-muted shadow-btn">
         <Icon name="landmark" size="sm" />
@@ -177,7 +173,7 @@ export function SideOrg({
         <span className="block truncate text-[13px] leading-[1.2] font-[650]">{name}</span>
         <span className="block text-[11.5px] text-faint">{sub}</span>
       </span>
-    </Link>
+    </button>
   );
 }
 

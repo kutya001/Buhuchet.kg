@@ -11,7 +11,7 @@ import {
 import { and, desc, eq, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { Tx } from './client';
-import { auditLog, employees, organizations, orgSettings } from './schema';
+import { auditLog, employees, organizations, orgSettings, roles } from './schema';
 import type { AuditRecord } from './staff';
 
 /**
@@ -36,6 +36,7 @@ export interface OrgProfileRecord {
 export interface OrgPolicyRecord extends OrgPolicy {
   /** Роль по умолчанию для новых сотрудников; null — не выбрана. */
   defaultRoleId: string | null;
+  defaultRoleName: string | null;
   audit: AuditRecord;
   version: number;
 }
@@ -116,10 +117,12 @@ export async function getOrgPolicy(tx: Tx, orgId: string): Promise<OrgPolicyReco
   const [r] = await tx
     .select({
       settings: orgSettings,
+      defaultRoleName: roles.name,
       createdByName: creator.shortName,
       updatedByName: updater.shortName,
     })
     .from(orgSettings)
+    .leftJoin(roles, eq(roles.id, orgSettings.defaultRoleId))
     .leftJoin(creator, eq(creator.userId, orgSettings.createdBy))
     .leftJoin(updater, eq(updater.userId, orgSettings.updatedBy))
     .where(eq(orgSettings.orgId, orgId));
@@ -138,6 +141,7 @@ export async function getOrgPolicy(tx: Tx, orgId: string): Promise<OrgPolicyReco
     payBeforeSubmit: s.payBeforeSubmit,
     pageSections: PAGE_SECTIONS.filter((p) => s.pageSections.includes(p)) as PageSection[],
     defaultRoleId: s.defaultRoleId,
+    defaultRoleName: r.defaultRoleName,
     audit: {
       createdAt: s.createdAt,
       createdBy: auditActorName(s.createdBy, r.createdByName),
@@ -146,6 +150,19 @@ export async function getOrgPolicy(tx: Tx, orgId: string): Promise<OrgPolicyReco
     },
     version: s.version,
   };
+}
+
+/**
+ * Роли для поля «Роль по умолчанию для новых сотрудников» (прототип modules/org.js, st-role: роли без
+ * владельца): все роли организации из контекста, кроме роли владельца, по названию — как выбор роли в
+ * форме сотрудника (шаблонные роли создаются одним запросом, порядка создания у них нет).
+ */
+export function orgRoleOptions(tx: Tx): Promise<{ id: string; name: string }[]> {
+  return tx
+    .select({ id: roles.id, name: roles.name })
+    .from(roles)
+    .where(eq(roles.isOwner, false))
+    .orderBy(roles.name, roles.id);
 }
 
 /**

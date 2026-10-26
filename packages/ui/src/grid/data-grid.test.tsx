@@ -3,6 +3,7 @@ import { isValidElement, type ReactElement, type ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { ActionList, menuPosition } from '../action-menu';
+import { Chip } from '../chip';
 import { DataGrid, GridChips, GridFooter, pickRows, type DataGridProps } from './data-grid';
 import { FilterPanel } from './grid-filter';
 import { GridCards } from './grid-cards';
@@ -203,6 +204,8 @@ function find(tree: ReactNode, tag: string): Clickable[] {
   const walk = (n: ReactNode) => {
     if (Array.isArray(n)) return n.forEach(walk);
     if (!isValidElement<{ children?: ReactNode }>(n)) return;
+    // Плашка без хуков — раскрыть, чтобы найти её крестик.
+    if (n.type === Chip) return walk(Chip(n.props as Parameters<typeof Chip>[0]));
     if (n.type === tag) found.push(n as Clickable);
     walk(n.props.children);
   };

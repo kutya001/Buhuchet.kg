@@ -1,5 +1,6 @@
 import {
   FEATURES,
+  isValidOrgInn,
   MENU_MODULE_IDS,
   ORG_ADDRESS_MAX_LENGTH,
   ORG_HEAD_MAX_LENGTH,
@@ -7,8 +8,10 @@ import {
   ORG_TIMEZONE_IDS,
   PAGE_SECTIONS,
   REMIND_DAY_MAX,
+  slugProblem,
   type MenuModuleId,
   type OrgTimezone,
+  type UiTextKey,
 } from '@buhuchet/domain';
 import { z } from 'zod';
 import { RecordAudit, RecordVersion, Uuid } from './common';
@@ -71,6 +74,41 @@ export const UpdateOrgProfileRequest = z.object({
 });
 export type UpdateOrgProfileRequest = z.infer<typeof UpdateOrgProfileRequest>;
 
+const message = (key: UiTextKey) => ({ message: key });
+
+/**
+ * Форма «Основное» на экране (прототип modules/org.js, og-save): «Введите название», «ИНН — 14 цифр».
+ * Адрес страницы проверяется отдельно (`OrgSlugField`): поле видно, только когда включена «Страница
+ * контрагента по ссылке». Телефон проверяет поле ввода по маске страны. Сообщения — ключи словаря.
+ */
+export const OrgMainForm = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1, message('err.name_required'))
+    .max(ORG_NAME_MAX_LENGTH, message('form.too_long')),
+  inn: z.string().trim().refine(isValidOrgInn, message('err.inn_invalid')),
+  address: z.string().trim().max(ORG_ADDRESS_MAX_LENGTH, message('form.too_long')),
+  head: z.string().trim().max(ORG_HEAD_MAX_LENGTH, message('form.too_long')),
+  slug: z.string(),
+});
+export type OrgMainFormInput = z.input<typeof OrgMainForm>;
+export type OrgMainForm = z.output<typeof OrgMainForm>;
+
+/**
+ * «Адрес страницы организации» в форме: как на сервере — пробелы по краям убираются, буквы строчные;
+ * формат и занятые слова программы — тексты прототипа (slugErr). Занят ли адрес другой
+ * организацией, отвечает сервер.
+ */
+export const OrgSlugField = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .superRefine((value, ctx) => {
+    const problem = slugProblem(value);
+    if (problem) ctx.addIssue({ code: 'custom', message: `err.${problem}` satisfies UiTextKey });
+  });
+
 /** Версия «Основного», которую видел пользователь, — для загрузки и удаления логотипа. */
 export const OrgVersionQuery = z.object({ version: z.coerce.number().int().nonnegative() });
 
@@ -99,10 +137,21 @@ export const OrgPolicy = z.object({
   digestTime: z.string(),
   /** Роль по умолчанию для новых сотрудников; null — не выбрана. */
   defaultRoleId: Uuid.nullable(),
+  /** Её название — для «Настроек» только для просмотра (список ролей видит тот, кто меняет). */
+  defaultRoleName: z.string().nullable(),
   audit: RecordAudit,
   version: RecordVersion,
 });
 export type OrgPolicy = z.infer<typeof OrgPolicy>;
+
+/**
+ * Роли для поля «Роль по умолчанию для новых сотрудников» на вкладке «Настройки» (прототип
+ * modules/org.js, st-role): все роли организации, кроме роли владельца, в порядке создания.
+ */
+export const OrgRoleOptions = z.object({
+  items: z.array(z.object({ id: Uuid, name: z.string() })),
+});
+export type OrgRoleOptions = z.infer<typeof OrgRoleOptions>;
 
 /** Сохранить учётную политику или настройки: только переданные поля; функции — только переданные. */
 export const UpdateOrgPolicyRequest = z.object({

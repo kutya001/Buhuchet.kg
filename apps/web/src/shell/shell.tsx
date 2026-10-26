@@ -34,6 +34,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { api } from '../api-client';
 import { useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
+import { OrgProfileWindow } from '../org/org-profile-window';
 import { ProfileWindow } from '../profile/profile-window';
 import { QueryProvider } from '../query';
 import { useModuleStats } from '../lists/stats';
@@ -230,6 +231,7 @@ function ShellPage({
   const [leaving, setLeaving] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [orgOpen, setOrgOpen] = useState(false);
   /** Выход ждёт ответа «Выйти без сохранения?»; `replace` — выход из панели «Меню». */
   const [askLogout, setAskLogout] = useState<{ replace: boolean } | null>(null);
 
@@ -320,7 +322,6 @@ function ShellPage({
   );
   const mode = t(access.admin ? 'shell.mode.admin' : 'shell.mode.business');
   const fullName = me.employee?.fullName ?? t('profile.platform_admin');
-  const orgHref = `${APP_PATH}/org`;
 
   return (
     <ShellContext.Provider value={state}>
@@ -350,8 +351,7 @@ function ShellPage({
                       me.organization.inn ? t('shell.org_inn', { inn: me.organization.inn }) : ''
                     }
                     title={t('shell.org_profile')}
-                    href={orgHref}
-                    Link={NextLink}
+                    onClick={() => setOrgOpen(true)}
                   />
                 )}
                 <SideFootRow>
@@ -440,9 +440,10 @@ function ShellPage({
                         name={me.organization.name}
                         sub={t('shell.org_profile')}
                         title={t('shell.org_profile')}
-                        href={orgHref}
-                        onClick={leave}
-                        Link={ReplaceLink}
+                        onClick={() => {
+                          setSheetOpen(false);
+                          setOrgOpen(true);
+                        }}
                       />
                     )}
                     <SheetAction
@@ -520,6 +521,14 @@ function ShellPage({
         <p className="m-0 text-muted">{t('kb.no_article')}</p>
       </Modal>
       <ProfileWindow open={profileOpen} onClose={() => setProfileOpen(false)} me={me} />
+      {me.organization && (
+        <OrgProfileWindow
+          open={orgOpen}
+          onClose={() => setOrgOpen(false)}
+          name={me.organization.name}
+          canEdit={access.can('org')}
+        />
+      )}
       <ConfirmDialog
         open={askLogout !== null}
         onClose={() => setAskLogout(null)}

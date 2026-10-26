@@ -1,5 +1,6 @@
 import { AUTH_TEXTS } from './auth-texts';
 import { GRID_TEXTS } from './grid-texts';
+import { ORG_TEXTS } from './org-texts';
 import { SHELL_TEXTS } from './shell-texts';
 import { STAFF_TEXTS } from './staff-texts';
 import { STATUS_TEXTS } from './status-texts';
@@ -47,7 +48,7 @@ const SYSTEM_TEXTS = {
  * который есть и в refDB.json, пишется с тем же текстом (это проверяет тест наполнения). Тексты
  * разложены по файлам экранов: служебные — здесь, оболочки — `shell-texts.ts`, входа и «Мой профиль» —
  * `auth-texts.ts`, списков — `grid-texts.ts`, сотрудников — `staff-texts.ts`, шкалы и истории статусов —
- * `status-texts.ts`.
+ * `status-texts.ts`, «Моей организации» — `org-texts.ts`.
  */
 export const UI_TEXTS = {
   ...SYSTEM_TEXTS,
@@ -56,6 +57,7 @@ export const UI_TEXTS = {
   ...GRID_TEXTS,
   ...STAFF_TEXTS,
   ...STATUS_TEXTS,
+  ...ORG_TEXTS,
 } as const satisfies Record<string, UiTextDefault>;
 
 /** Ключ текста интерфейса: только из `UI_TEXTS`, поэтому опечатка в ключе — ошибка типов. */
