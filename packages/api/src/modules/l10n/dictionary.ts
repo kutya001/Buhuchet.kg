@@ -1,10 +1,9 @@
-import { createHash } from 'node:crypto';
 import { createRoute, type RouteHandler } from '@hono/zod-openapi';
-import { loadUiTexts, uiTextsStamp } from '@buhuchet/db';
-import { DEFAULT_UI_LANGUAGE, defaultUiTexts, type UiLanguage } from '@buhuchet/domain';
+import { DEFAULT_UI_LANGUAGE } from '@buhuchet/domain';
 import { UiDictionary, UiDictionaryQuery } from '@buhuchet/shared';
 import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
+import { DEFAULT_TEXTS, uiDictionary } from './texts';
 
 export const dictionaryRoute = createRoute({
   method: 'get',
@@ -20,21 +19,6 @@ export const dictionaryRoute = createRoute({
     304: { description: 'Словарь не изменился с версии из If-None-Match' },
   },
 });
-
-const DEFAULTS = defaultUiTexts();
-
-/** Словарь сверяется с базой не чаще раза в секунду: поток запросов не занимает соединения базы. */
-const RECHECK_MS = 1000;
-
-/** Тексты по умолчанию входят в версию: новая выкладка с новыми ключами — новая версия словаря. */
-const DEFAULTS_HASH = createHash('sha256').update(JSON.stringify(DEFAULTS)).digest('hex');
-
-function versionOf(lang: UiLanguage, stamp: string): string {
-  return createHash('sha256')
-    .update(`${lang}|${stamp}|${DEFAULTS_HASH}`)
-    .digest('base64url')
-    .slice(0, 16);
-}
 
 /** Совпадает ли версия из If-None-Match (одна, список или `*`) с текущей. */
 function notModified(header: string | undefined, etag: string): boolean {
@@ -55,26 +39,7 @@ function notModified(header: string | undefined, etag: string): boolean {
  * (в том числе «здоровье») всё равно показалась.
  */
 export function dictionaryHandler(deps: ApiDeps): RouteHandler<typeof dictionaryRoute, AppEnv> {
-  const recheckMs = deps.l10nRecheckMs ?? RECHECK_MS;
-  const cache = new Map<UiLanguage, { stamp: string; checkedAt: number; body: UiDictionary }>();
-
-  async function load(lang: UiLanguage): Promise<UiDictionary> {
-    const cached = cache.get(lang);
-    const now = Date.now();
-    if (cached && now - cached.checkedAt < recheckMs) return cached.body;
-    const stamp = await uiTextsStamp(deps.db, lang);
-    if (cached?.stamp === stamp) {
-      cached.checkedAt = now;
-      return cached.body;
-    }
-    const body: UiDictionary = {
-      lang,
-      version: versionOf(lang, stamp),
-      texts: { ...DEFAULTS, ...(await loadUiTexts(deps.db, lang)) },
-    };
-    cache.set(lang, { stamp, checkedAt: now, body });
-    return body;
-  }
+  const load = uiDictionary(deps);
 
   return async (c) => {
     const lang = c.req.valid('query').lang ?? DEFAULT_UI_LANGUAGE;
@@ -84,7 +49,7 @@ export function dictionaryHandler(deps: ApiDeps): RouteHandler<typeof dictionary
     } catch (err) {
       deps.logger.error({ err }, 'словарь: база недоступна, отданы тексты по умолчанию');
       c.header('cache-control', 'no-store');
-      return c.json({ lang, version: 'default', texts: DEFAULTS } satisfies UiDictionary, 200);
+      return c.json({ lang, version: 'default', texts: DEFAULT_TEXTS } satisfies UiDictionary, 200);
     }
     const etag = `"${body.version}"`;
     c.header('etag', etag);

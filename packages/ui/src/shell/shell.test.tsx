@@ -226,6 +226,43 @@ describe('TabRow — вкладки и «+ Добавить»', () => {
     expect(html).toMatch(/href="\/app\/reports\/week" role="tab" aria-selected="false"/);
   });
 
+  it('«Статистика»: только у экрана с плашками; подсказка — что сделает нажатие', () => {
+    const toggle = vi.fn();
+    const row = (shown: boolean) =>
+      renderToStaticMarkup(
+        <TabRow
+          tabs={TABS}
+          activeTab="week"
+          label="Отчеты"
+          addActions={[]}
+          addLabel="Добавить"
+          onAdd={() => {}}
+          stats={{
+            shown,
+            onToggle: toggle,
+            label: 'Статистика',
+            show: 'Показать статистику',
+            hide: 'Скрыть статистику',
+          }}
+        />,
+      );
+    expect(row(true)).toMatch(
+      /data-stats-toggle="true" aria-label="Статистика" aria-pressed="true" title="Скрыть статистику"/,
+    );
+    expect(row(false)).toMatch(/aria-pressed="false" title="Показать статистику"/);
+    const without = renderToStaticMarkup(
+      <TabRow
+        tabs={TABS}
+        activeTab="week"
+        label="Отчеты"
+        addActions={[]}
+        addLabel="Добавить"
+        onAdd={() => {}}
+      />,
+    );
+    expect(without).not.toContain('data-stats-toggle');
+  });
+
   it('нет способов добавления — нет и кнопки «Добавить»', () => {
     const html = renderToStaticMarkup(
       <TabRow

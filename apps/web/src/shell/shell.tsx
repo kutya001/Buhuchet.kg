@@ -28,6 +28,7 @@ import {
   type PhoneModule,
   type ShellLink,
   type ShellModule,
+  type TabRowProps,
   type WindowLabels,
 } from '@buhuchet/ui';
 import Link from 'next/link';
@@ -38,7 +39,8 @@ import { useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { ProfileWindow } from '../profile/profile-window';
 import { QueryProvider } from '../query';
-import { ModuleScreen } from '../screens/module-screen';
+import { useModuleStats } from '../lists/stats';
+import { ModuleScreen, screenHasPlates } from '../screens/module-screen';
 import { PHONE_QUERY, saveMaxPrefs, saveNavHidden, saveTree, toggleTheme } from './browser';
 import { Clock } from './clock';
 import { ShellContext, type AddRequest } from './context';
@@ -144,6 +146,36 @@ function HelpFooter({ kbHref }: { kbHref: string }) {
         {t('btn.close')}
       </button>
     </>
+  );
+}
+
+/**
+ * Ряд вкладок модуля; у экрана с плашками-итогами — с кнопкой «Статистика» (выбор хранится в
+ * настройках вида пользователя для модуля, отдельно на ПК и на телефоне).
+ */
+function ModuleTabRow({
+  moduleId,
+  plates,
+  ...props
+}: TabRowProps & { moduleId: MenuModuleId; plates: boolean }) {
+  if (!plates) return <TabRow {...props} />;
+  return <TabRowWithStats moduleId={moduleId} {...props} />;
+}
+
+function TabRowWithStats({ moduleId, ...props }: TabRowProps & { moduleId: MenuModuleId }) {
+  const t = useT();
+  const stats = useModuleStats(moduleId);
+  return (
+    <TabRow
+      {...props}
+      stats={{
+        shown: stats.shown,
+        onToggle: stats.toggle,
+        label: t('shell.stats'),
+        show: t('shell.stats_show'),
+        hide: t('shell.stats_hide'),
+      }}
+    />
   );
 }
 
@@ -297,8 +329,14 @@ function ShellPage({
   const title = current?.title ?? '';
   const desc = current ? t(MODULES[current.id as MenuModuleId].desc) : '';
   const state = useMemo(
-    () => ({ search, addRequest, clearAddRequest: () => setAddRequest(null) }),
-    [search, addRequest, setAddRequest],
+    () => ({
+      search,
+      clearSearch: () => setSearch(''),
+      addRequest,
+      clearAddRequest: () => setAddRequest(null),
+      access,
+    }),
+    [search, addRequest, setAddRequest, access],
   );
   const mode = t(access.admin ? 'shell.mode.admin' : 'shell.mode.business');
   const fullName = me.employee?.fullName ?? t('profile.platform_admin');
@@ -454,7 +492,9 @@ function ShellPage({
         }
       >
         {current && (
-          <TabRow
+          <ModuleTabRow
+            moduleId={current.id as MenuModuleId}
+            plates={screenHasPlates(current.id as MenuModuleId, tabId)}
             tabs={current.tabs}
             activeTab={tabId}
             label={title}

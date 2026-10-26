@@ -3,10 +3,11 @@ import { isValidElement, type ReactElement, type ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { ActionList, menuPosition } from '../action-menu';
-import { DataGrid, GridFooter, pickRows, type DataGridProps } from './data-grid';
+import { DataGrid, GridChips, GridFooter, pickRows, type DataGridProps } from './data-grid';
+import { FilterPanel } from './grid-filter';
 import { GridCards } from './grid-cards';
 import { GridTable } from './grid-table';
-import { ColumnsPanel, GridBulkBar, GridToolbar } from './grid-toolbar';
+import { ColumnsPanel, GridBulkBar, GridToolbar, GroupPanel } from './grid-toolbar';
 import { rowEvents } from './row-events';
 import type { GridColumn, GridLabels, GridRowSelection } from './types';
 
@@ -94,6 +95,56 @@ const LABELS: GridLabels = {
   updatedBy: 'Изменил',
   createdAt: 'Создано',
   updatedAt: 'Изменено',
+  notFound: 'Ничего не найдено',
+  notFoundText: 'Под поиск и фильтры не подходит ни одна запись.',
+  resetFilters: 'Сбросить фильтры',
+  filter: 'Фильтр',
+  filterOf: (label) => `Фильтр: ${label}`,
+  filterContains: 'Содержит…',
+  filterFrom: 'От',
+  filterTo: 'До',
+  filterBounds: 'Границы включительно',
+  filterSince: 'С даты',
+  filterUntil: 'По дату',
+  filterBadNumber: 'Введите число, например 1 250,50',
+  filterFind: 'Найти значение',
+  filterAll: 'Выбрать все',
+  empty: '(Пусто)',
+  filterLoading: 'Загружаю значения…',
+  filterLoadError: 'Не удалось загрузить значения.',
+  filterMore: (n) => `Показаны первые ${n} значений`,
+  clear: 'Очистить',
+  apply: 'Применить',
+  groupByColumn: 'Группировать по этому столбцу',
+  ungroupColumn: 'Убрать группировку по этому столбцу',
+  groupReplaced: 'Не больше двух уровней — второй уровень заменён',
+  group: 'Группировка',
+  groupN: (n) => `Группировка (${n})`,
+  groupButtonHint: 'Группировать список по столбцам (до двух уровней)',
+  groupLevel1: 'Уровень 1',
+  groupLevel2: 'Уровень 2 (внутри первого)',
+  groupNone: '— нет —',
+  groupAggs: 'Итоги в строке группы',
+  groupHint: 'Не больше двух уровней.',
+  groupRemove: 'Убрать',
+  aggNone: 'Не считать',
+  agg: { sum: 'Сумма', avg: 'Среднее', min: 'Минимум', max: 'Максимум', count: 'Количество' },
+  groupsShown: (g, n) => `Групп: ${g} · записей: ${n}`,
+  expandAll: 'Развернуть все',
+  collapseAll: 'Свернуть все',
+  chipGroup: 'Группировка:',
+  chipSearch: 'Поиск:',
+  chipFrom: (v) => `от ${v}`,
+  chipTo: (v) => `до ${v}`,
+  chipSince: (v) => `с ${v}`,
+  chipUntil: (v) => `по ${v}`,
+  chipMore: (n) => `+${n}`,
+  ungroup: 'Убрать группировку',
+  clearSearch: 'Очистить поиск',
+  removeFilter: 'Убрать фильтр',
+  resetAll: 'Сбросить всё',
+  excel: 'В Excel',
+  excelHint: 'Скачать файл Excel со всеми отфильтрованными записями',
 };
 
 const people = (n: number): Person[] =>
@@ -424,6 +475,8 @@ describe('панель над списком', () => {
       view: 'table',
       phone: false,
       total: 250,
+      group: [],
+      onGroupChange: () => {},
       labels: LABELS,
       ...over,
     });
@@ -606,5 +659,236 @@ describe('меню действий записи (прототип ui/popups.js,
         viewport,
       ),
     ).toEqual({ x: 20, y: 554 });
+  });
+});
+
+describe('поиск, фильтры и группировка (задача #15)', () => {
+  const grouped = {
+    items: [people(1)[0]!, { ...people(2)[1]!, balance: 125050 }],
+    total: 2,
+    page: 1,
+    totals: {},
+    groups: [
+      {
+        key: 'Бухгалтер',
+        label: 'Бухгалтер',
+        count: 2,
+        aggs: { balance: 125150 },
+        sub: [
+          { key: 'true', label: 'Активен', count: 1, aggs: { balance: 100 } },
+          { key: 'false', label: 'Заблокирован', count: 1, aggs: { balance: 125050 } },
+        ],
+      },
+    ],
+    rowGroups: [
+      ['Бухгалтер', 'true'],
+      ['Бухгалтер', 'false'],
+    ],
+  };
+  const withBalance = { shown: ['name', 'role', 'active', 'balance'] };
+
+  it('группы двух уровней: строки групп с числом записей и итогами, внизу «Групп · записей»', () => {
+    const html = grid({ settings: { ...withBalance, group: ['role', 'active'] }, data: grouped });
+    expect(html).toContain('data-group="›Бухгалтер" data-group-level="0"');
+    expect(html).toContain('data-group="›Бухгалтер›true" data-group-level="1"');
+    expect(html).toContain('data-group="›Бухгалтер›false" data-group-level="1"');
+    // Название группы — на столбцы до первого числового, итог — под «Балансом».
+    expect(html).toMatch(/<td colSpan="3"[^>]*><button type="button" aria-expanded="true"/);
+    expect(html).toContain('title="Сумма: Баланс"');
+    expect(html).toContain('1 251,50');
+    expect(html).toContain('1 250,50');
+    // Вложенная группа — с отступом.
+    expect(html).toContain('padding-left:22px');
+    expect(html.match(/data-id="/g)).toHaveLength(2);
+    expect(html).toContain('Групп: 1 · записей: 2');
+    expect(html).toContain('Развернуть все');
+    expect(html).toContain('Свернуть все');
+    expect(html).not.toContain('data-grid-page');
+    expect(html).toContain('<b class="font-[650]">Группировка:</b> Роль → Статус');
+    expect(html).toContain('Группировка (2)');
+  });
+
+  it('«Не считать» у числового столбца — в строке группы пусто', () => {
+    const html = grid({
+      settings: { ...withBalance, group: ['role'], agg: { balance: 'none' } },
+      data: { ...grouped, groups: [{ ...grouped.groups[0]!, sub: undefined }] },
+    });
+    expect(html).not.toContain('title="Сумма: Баланс"');
+    expect(html).not.toContain('1 251,50');
+  });
+
+  it('карточки: группы — заголовками с числом записей и итогами', () => {
+    const html = grid({
+      settings: {
+        ...withBalance,
+        view: 'cards',
+        group: ['role', 'active'],
+        agg: { balance: 'max' },
+      },
+      data: grouped,
+    });
+    expect(html).toContain('data-grid-groups');
+    expect(html).toMatch(/<div data-group="›Бухгалтер" data-group-level="0"/);
+    expect(html).toContain('Баланс (максимум):');
+    expect(html.match(/data-grid-cards/g)).toHaveLength(2);
+  });
+
+  it('фильтры: кнопка у заголовка, у столбца с фильтром — нажата; чипы и «Сбросить всё»', () => {
+    const html = grid({
+      settings: withBalance,
+      filters: {
+        name: { type: 'text', q: 'ива' },
+        balance: { type: 'num', from: 10000 },
+        gone: { type: 'text', q: 'x' },
+      },
+      onFiltersChange: () => {},
+      search: 'Сотр',
+    });
+    expect(html).toMatch(
+      /data-filter-button="name" aria-label="Фильтр: ФИО" title="Фильтр"[^>]*aria-pressed="true"/,
+    );
+    expect(html).toMatch(/data-filter-button="role"[^>]*aria-pressed="false"/);
+    expect(html).toContain('<b class="font-[650]">ФИО:</b> «ива»');
+    expect(html).toContain('<b class="font-[650]">Баланс:</b> от 100');
+    expect(html).toContain('<b class="font-[650]">Поиск:</b> «Сотр»');
+    expect(html).not.toContain('data-chip="gone"');
+    expect(html).toContain('Сбросить всё');
+  });
+
+  it('без `onFiltersChange` кнопок фильтра нет; без поиска, фильтров и групп нет и чипов', () => {
+    const html = grid();
+    expect(html).not.toContain('data-filter-button');
+    expect(html).not.toContain('data-grid-chips');
+  });
+
+  it('пусто под поиском или фильтром — «Ничего не найдено», без них — пустое состояние экрана', () => {
+    const none = { items: [], total: 0, page: 1, totals: {} };
+    const found = grid({ data: none, search: 'нет такого' });
+    expect(found).toContain('Ничего не найдено');
+    expect(found).toContain('Под поиск и фильтры не подходит ни одна запись.');
+    expect(found).toContain('Сбросить фильтры');
+    expect(found).not.toContain('пусто');
+    const filtered = grid({
+      data: none,
+      filters: { name: { type: 'text', q: 'я' } },
+      onFiltersChange: () => {},
+    });
+    expect(filtered).toContain('Ничего не найдено');
+    expect(grid({ data: none })).toContain('<p>пусто</p>');
+  });
+
+  it('чипы: крестик убирает свой фильтр, группировку или поиск; «Сбросить всё» — фильтры и поиск', () => {
+    const remove = vi.fn();
+    const ungroup = vi.fn();
+    const clear = vi.fn();
+    const reset = vi.fn();
+    const buttons = find(
+      GridChips({
+        group: ['Роль'],
+        onUngroup: ungroup,
+        search: 'ив',
+        onClearSearch: clear,
+        filters: [{ key: 'active', label: 'Статус', text: 'Активен' }],
+        onRemove: remove,
+        onResetAll: reset,
+        labels: LABELS,
+      }),
+      'button',
+    );
+    expect(buttons.map((b) => b.props['aria-label'] ?? 'reset')).toEqual([
+      'Убрать группировку',
+      'Очистить поиск',
+      'Убрать фильтр',
+      'reset',
+    ]);
+    buttons.forEach((b) => b.props.onClick!());
+    expect(ungroup).toHaveBeenCalledOnce();
+    expect(clear).toHaveBeenCalledOnce();
+    expect(remove).toHaveBeenCalledWith('active');
+    expect(reset).toHaveBeenCalledOnce();
+  });
+
+  it('меню столбца по типу: текст — «Содержит…», число — «От» и «До», дата — «С даты» и «По дату»', () => {
+    const panel = (key: string, filter?: Parameters<typeof FilterPanel<Person>>[0]['filter']) =>
+      renderToStaticMarkup(
+        <FilterPanel
+          column={COLUMNS.find((c) => c.key === key)!}
+          filter={filter}
+          grouped={key === 'role'}
+          onApply={() => {}}
+          onToggleGroup={() => {}}
+          labels={LABELS}
+        />,
+      );
+    const text = panel('name', { type: 'text', q: 'ив' });
+    expect(text).toContain('placeholder="Содержит…"');
+    expect(text).toContain('value="ив"');
+    expect(text).toContain('Группировать по этому столбцу');
+    expect(text).toContain('Очистить');
+    expect(text).toContain('Применить');
+    const num = panel('balance', { type: 'num', from: 125050 });
+    expect(num).toContain('placeholder="От"');
+    expect(num).toContain('placeholder="До"');
+    expect(num).toContain('value="1 250,50"');
+    expect(num).toContain('Границы включительно');
+    const date = panel('at', { type: 'date', to: '2026-03-31' });
+    expect(date).toContain('С даты');
+    expect(date).toContain('type="date"');
+    expect(date).toContain('value="2026-03-31"');
+    // Справочник: значения грузятся с сервера; столбец уже в группировке — «Убрать группировку…».
+    const enumPanel = panel('role');
+    expect(enumPanel).toContain('Убрать группировку по этому столбцу');
+  });
+
+  it('окно «Группировка»: два уровня из всех столбцов, итоги у видимых числовых столбцов', () => {
+    const html = renderToStaticMarkup(
+      <GroupPanel
+        columns={COLUMNS}
+        keys={COLUMNS.map((c) => c.key)}
+        visible={['name', 'role', 'balance']}
+        settings={{ group: ['role'], agg: { balance: 'avg' } }}
+        onApply={() => {}}
+        labels={LABELS}
+      />,
+    );
+    expect(html).toContain('Уровень 1');
+    expect(html).toContain('Уровень 2 (внутри первого)');
+    expect(html).toContain('<option value="">— нет —</option>');
+    expect(html).toContain('<option value="role" selected="">Роль</option>');
+    expect(html).toContain('Итоги в строке группы');
+    expect(html).toContain('<option value="avg" selected="">Среднее</option>');
+    expect(html).toContain('<option value="none">Не считать</option>');
+    expect(html).toContain('Убрать');
+  });
+
+  it('панель: «Группировка (N)» и «В Excel» — только когда выгрузка разрешена; на телефоне — значки', () => {
+    const toolbar = (over: Partial<Parameters<typeof GridToolbar<Person>>[0]>) =>
+      renderToStaticMarkup(
+        <GridToolbar
+          columns={COLUMNS}
+          defaultVisible={DEFAULT_VISIBLE}
+          settings={{}}
+          onSettingsChange={() => {}}
+          onResetView={() => {}}
+          view="table"
+          phone={false}
+          total={3}
+          group={[]}
+          onGroupChange={() => {}}
+          labels={LABELS}
+          {...over}
+        />,
+      );
+    const desk = toolbar({ onExport: () => {} });
+    expect(desk).toContain('title="Группировать список по столбцам (до двух уровней)"');
+    expect(desk).toContain('>Группировка<');
+    expect(desk).toMatch(
+      /title="Скачать файл Excel со всеми отфильтрованными записями"[^>]*>.*В Excel/,
+    );
+    expect(toolbar({})).not.toContain('data-grid-export');
+    const phone = toolbar({ phone: true, group: ['role', 'active'], onExport: () => {} });
+    expect(phone).toContain('aria-label="Группировка (2)"');
+    expect(phone).toMatch(/aria-hidden="true"[^>]*>2<\/span>/);
+    expect(phone).toContain('aria-label="В Excel"');
   });
 });

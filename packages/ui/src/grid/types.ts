@@ -1,4 +1,4 @@
-import type { ListColumnType } from '@buhuchet/domain';
+import type { GroupAgg, ListColumnType, ListGroup } from '@buhuchet/domain';
 import type { ReactNode } from 'react';
 import type { IconName } from '../icons';
 
@@ -25,6 +25,8 @@ export interface GridColumn<Row> {
   audit?: 'created' | 'updated';
   /** Сортировка по заголовку; по умолчанию есть. */
   sortable?: boolean;
+  /** Фильтр у заголовка (кнопка «Фильтр» и меню столбца); по умолчанию есть (`nofilter` прототипа). */
+  filterable?: boolean;
   /** Итог столбца по фильтру из `totals` ответа сервера — строкой для показа. */
   total?: (value: number) => string;
 }
@@ -35,6 +37,19 @@ export interface GridPage<Row> {
   total: number;
   page: number;
   totals: Readonly<Record<string, number>>;
+  /** Сгруппированный список: группы по всем отфильтрованным записям (итоги считает сервер). */
+  groups?: readonly ListGroup[];
+  /** Ключи групп каждой строки страницы — по порядку `items`. */
+  rowGroups?: readonly (readonly string[])[];
+}
+
+/**
+ * Значения столбца для фильтра-галочек (`ListValues` в `@buhuchet/shared`): код, подпись как на
+ * экране (null — «(Пусто)») и число записей; `more` — значений больше, чем пришло.
+ */
+export interface GridValues {
+  items: readonly { value: string; label: string | null; count: number }[];
+  more: boolean;
 }
 
 /**
@@ -133,4 +148,63 @@ export interface GridLabels {
   /** Строка карточки: «Создал: Алишер Т., 12.03.2026 10:15». */
   createdLine: (text: string) => string;
   updatedLine: (text: string) => string;
+  /** «Ничего не найдено»: заголовок, пояснение и «Сбросить фильтры». */
+  notFound: string;
+  notFoundText: string;
+  resetFilters: string;
+  /** Кнопка фильтра у заголовка: подсказка «Фильтр», для диктора — «Фильтр: ФИО». */
+  filter: string;
+  filterOf: (label: string) => string;
+  filterContains: string;
+  filterFrom: string;
+  filterTo: string;
+  filterBounds: string;
+  filterSince: string;
+  filterUntil: string;
+  filterBadNumber: string;
+  filterFind: string;
+  filterAll: string;
+  /** Пустое значение в фильтре, группе и чипе: «(Пусто)». */
+  empty: string;
+  filterLoading: string;
+  filterLoadError: string;
+  filterMore: (n: number) => string;
+  clear: string;
+  apply: string;
+  groupByColumn: string;
+  ungroupColumn: string;
+  /** Уведомление: «Не больше двух уровней — второй уровень заменён». */
+  groupReplaced: string;
+  /** Кнопка «Группировка» и «Группировка (2)». */
+  group: string;
+  groupN: (n: number) => string;
+  groupButtonHint: string;
+  groupLevel1: string;
+  groupLevel2: string;
+  groupNone: string;
+  groupAggs: string;
+  groupHint: string;
+  groupRemove: string;
+  /** Итоги в строке группы: «Не считать», «Сумма», «Среднее», «Минимум», «Максимум», «Количество». */
+  aggNone: string;
+  agg: Readonly<Record<GroupAgg, string>>;
+  /** Низ сгруппированного списка: «Групп: 4 · записей: 52». */
+  groupsShown: (groups: number, total: number) => string;
+  expandAll: string;
+  collapseAll: string;
+  /** Чипы над списком: «Группировка:», «Поиск:», «от 100», «до 200», «с 01.03.2026», «по …», «+3». */
+  chipGroup: string;
+  chipSearch: string;
+  chipFrom: (v: string) => string;
+  chipTo: (v: string) => string;
+  chipSince: (v: string) => string;
+  chipUntil: (v: string) => string;
+  chipMore: (n: number) => string;
+  ungroup: string;
+  clearSearch: string;
+  removeFilter: string;
+  resetAll: string;
+  /** «В Excel» и подсказка к ней. */
+  excel: string;
+  excelHint: string;
 }

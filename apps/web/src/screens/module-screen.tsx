@@ -21,3 +21,14 @@ export function ModuleScreen({
   if (moduleId === 'staff' && (tabId ?? 'list') === 'list') return <StaffList />;
   return <ModuleStub moduleId={moduleId} />;
 }
+
+/**
+ * Вкладки модулей, у экрана которых есть статистика — плашки-итоги над списком (ТЗ «Статистика
+ * модуля»): только у них в ряду вкладок кнопка «Статистика». Экран с плашками добавляет сюда свою
+ * вкладку («модуль/вкладка») и показывает плашки по `useModuleStats`.
+ */
+const SCREENS_WITH_PLATES: ReadonlySet<string> = new Set<string>();
+
+export function screenHasPlates(moduleId: MenuModuleId, tabId: string | null): boolean {
+  return SCREENS_WITH_PLATES.has(`${moduleId}/${tabId ?? ''}`);
+}

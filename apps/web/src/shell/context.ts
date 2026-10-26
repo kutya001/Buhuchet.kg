@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useContext } from 'react';
+import type { ShellAccess } from './modules';
 
 /** Запрос «+ Добавить»: какой способ выбран в каком модуле; `n` отличает повторный выбор того же. */
 export interface AddRequest {
@@ -13,17 +14,30 @@ export interface AddRequest {
 export interface ShellState {
   /** Общий поиск по текущей вкладке; при смене модуля или вкладки очищается. */
   search: string;
+  /** Очистить поиск (чип «Поиск» и «Сбросить всё» в списке). */
+  clearSearch: () => void;
   addRequest: AddRequest | null;
   clearAddRequest: () => void;
+  /** Что можно вошедшему: права (например, «Выгружать в Excel») и функции учётной политики. */
+  access: ShellAccess;
 }
+
+const NO_ACCESS: ShellAccess = {
+  admin: false,
+  reportConfirm: false,
+  can: () => false,
+  feature: () => false,
+};
 
 export const ShellContext = createContext<ShellState>({
   search: '',
+  clearSearch: () => {},
   addRequest: null,
   clearAddRequest: () => {},
+  access: NO_ACCESS,
 });
 
-/** Состояние рабочей страницы для экранов модулей: поиск и выбранный способ добавления. */
+/** Состояние рабочей страницы для экранов модулей: поиск, права и выбранный способ добавления. */
 export function useShell(): ShellState {
   return useContext(ShellContext);
 }

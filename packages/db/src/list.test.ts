@@ -1,8 +1,23 @@
-import type { ListFilterValue, ListQuery } from '@buhuchet/domain';
-import { asc, sql } from 'drizzle-orm';
+import {
+  formatSom,
+  formatSomWithUnit,
+  matchesSearch,
+  type ListFilterValue,
+  type ListQuery,
+} from '@buhuchet/domain';
+import { asc, sql, type SQL } from 'drizzle-orm';
 import { bigint, date, integer, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { ListQueryError, normalizeText, selectListPage, type ListColumns } from './list';
+import {
+  displayOf,
+  ListQueryError,
+  normalizeText,
+  selectListExport,
+  selectListPage,
+  selectListValues,
+  type ListColumns,
+  type ListFrom,
+} from './list';
 import { createTestDatabase, databaseAvailable, type TestDatabase } from './testing';
 
 /** Таблица только для этого теста: создаётся во временной базе, в схеме приложения её нет. */
@@ -18,13 +33,31 @@ const items = pgTable('list_test_items', {
 });
 
 const COLUMNS: ListColumns = {
-  name: { type: 'text', value: items.name },
-  phone: { type: 'text', value: items.phone, compact: true },
-  kind: { type: 'enum', value: items.kind },
-  amount: { type: 'money', value: items.amount, total: true },
-  due: { type: 'date', value: items.due },
-  at: { type: 'datetime', value: items.at },
-  createdAt: { type: 'datetime', value: items.createdAt },
+  name: { type: 'text', label: 'test.name', value: items.name },
+  phone: { type: 'text', label: 'test.phone', value: items.phone, compact: true },
+  kind: { type: 'enum', label: 'test.kind', value: items.kind },
+  amount: { type: 'money', label: 'test.amount', value: items.amount, total: true },
+  due: { type: 'date', label: 'test.due', value: items.due },
+  at: { type: 'datetime', label: 'test.at', value: items.at },
+  createdAt: { type: 'datetime', label: 'test.created_at', value: items.createdAt },
+};
+
+/** Отчёты для пункта приёмки «компания А, 09.2026 — 10 500 сом»: только для этого теста. */
+const reports = pgTable('list_test_reports', {
+  id: integer('id').primaryKey(),
+  company: text('company').notNull(),
+  kind: text('kind').notNull(),
+  period: date('period', { mode: 'string' }).notNull(),
+  sum: bigint('sum', { mode: 'number' }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+});
+
+const REPORT_COLUMNS: ListColumns = {
+  company: { type: 'enum', label: 'test.company', value: reports.company },
+  kind: { type: 'enum', label: 'test.kind', value: reports.kind },
+  period: { type: 'date', label: 'test.period', value: reports.period },
+  sum: { type: 'money', label: 'test.sum', value: reports.sum, total: true },
+  createdAt: { type: 'datetime', label: 'test.created_at', value: reports.createdAt },
 };
 
 const ROWS = [
@@ -46,6 +79,19 @@ describe.skipIf(!databaseAvailable())('страница списка на сер
       id integer primary key, name text, phone text, kind text, amount bigint, due date,
       at timestamptz, created_at timestamptz not null)`;
     await t.admin.sql`grant select on list_test_items to buhuchet_app`;
+    await t.admin.sql`create table list_test_reports (
+      id integer primary key, company text not null, kind text not null, period date not null,
+      sum bigint not null, created_at timestamptz not null)`;
+    await t.admin.sql`grant select on list_test_reports to buhuchet_app`;
+    await t.admin.db.insert(reports).values(
+      [
+        { id: 1, company: 'Компания А', kind: 'Соцфонд', period: '2026-09-01', sum: 250_000 },
+        { id: 2, company: 'Компания А', kind: 'ГНС', period: '2026-09-01', sum: 300_000 },
+        { id: 3, company: 'Компания А', kind: 'НДС', period: '2026-09-01', sum: 500_000 },
+        { id: 4, company: 'Компания А', kind: 'НДС', period: '2026-08-01', sum: 100_000 },
+        { id: 5, company: 'Компания Б', kind: 'ГНС', period: '2026-09-01', sum: 700_000 },
+      ].map((r) => ({ ...r, createdAt: new Date(Date.UTC(2026, 9, 1, 0, r.id)) })),
+    );
     await t.admin.db.insert(items).values(
       ROWS.map((r, i) => ({
         ...r,
@@ -60,6 +106,7 @@ describe.skipIf(!databaseAvailable())('страница списка на сер
     await t?.drop();
   });
 
+  const from: ListFrom = (fields) => t.app.db.select(fields).from(items).$dynamic();
   const page = (query: Partial<ListQuery>) =>
     selectListPage({
       query: { sort: undefined, page: 1, size: 25, filters: {}, ...query },
@@ -73,7 +120,9 @@ describe.skipIf(!databaseAvailable())('страница списка на сер
           .orderBy(...orderBy)
           .limit(limit)
           .offset(offset),
+      from,
     });
+  const found = (q: string, keys: string[] = []) => ids({ search: { q, keys } });
   const ids = async (query: Partial<ListQuery>) => (await page(query)).rows.map((r) => r.id);
   const filtered = (key: string, filter: ListFilterValue) => ids({ filters: { [key]: filter } });
 
@@ -188,6 +237,182 @@ describe.skipIf(!databaseAvailable())('страница списка на сер
     await expect(filtered('__proto__', { type: 'text', q: 'a' })).rejects.toBeInstanceOf(
       ListQueryError,
     );
+  });
+
+  it('поиск — по тексту видимых столбцов, как на экране: сумма, дата, момент по Бишкеку', async () => {
+    expect(await found('док', ['name'])).toEqual([3, 2, 1]);
+    expect(await found('ЁЛ', ['name'])).toEqual([7, 4]);
+    // Ищется только в видимых столбцах.
+    expect(await found('док', ['phone'])).toEqual([]);
+    // Сумма — «25,00» (2 500 тыйынов), дата — «01.10.2026», момент — «26.10.2026 01:00» в Бишкеке.
+    expect(await found('25,00', ['amount'])).toEqual([2]);
+    expect(await found('01.10.2026', ['due'])).toEqual([1]);
+    expect(await found('26.10.2026', ['at'])).toEqual([1]);
+    // Без столбцов — по всем.
+    expect(await found('+996700')).toEqual([2]);
+    expect(await found('   ')).toEqual([7, 6, 5, 4, 3, 2, 1]);
+  });
+
+  it('поиск: в телефоне пробелы, дефисы и скобки не мешают; совпадает с эталоном matchesSearch', async () => {
+    expect(await found('555 100-200', ['phone'])).toEqual([1]);
+    expect(await found('(555) 999', ['phone'])).toEqual([5]);
+    for (const q of [
+      'док',
+      'Док 1',
+      'ё',
+      '%',
+      '_',
+      '55',
+      '5-5',
+      '555 1',
+      '996 700',
+      'ель с',
+      '50%',
+    ]) {
+      const expected = ROWS.filter((r) => [r.name, r.phone].some((v) => matchesSearch(v ?? '', q)))
+        .map((r) => r.id)
+        .sort((a, b) => b - a);
+      expect(await found(q, ['name', 'phone']), q).toEqual(expected);
+    }
+  });
+
+  it('поиск и фильтр сочетаются («И»); неизвестный столбец поиска — ошибка запроса', async () => {
+    expect(
+      await ids({
+        filters: { kind: { type: 'enum', vals: ['a'] } },
+        search: { q: 'док', keys: ['name'] },
+      }),
+    ).toEqual([1]);
+    await expect(found('a', ['nope'])).rejects.toMatchObject({ part: 'search', key: 'nope' });
+  });
+
+  it('деньги на экране — как formatSom: «1 250,50», «−300,00»', async () => {
+    for (const v of [0, 5, 100, 125_050, 100_000_000, -30_000, 123_456_789_012]) {
+      const column = { type: 'money' as const, label: '', value: sql`${v}::bigint` };
+      const [row] = await t.app.db
+        .select({ text: displayOf(column) as SQL<string> })
+        .from(sql`(select 1) x`);
+      expect(row?.text, String(v)).toBe(formatSom(v));
+    }
+  });
+
+  it('группировка: группы по порядку, пустая внизу, число записей и итоги; записи по группам', async () => {
+    const grouped = await page({ group: ['kind'], agg: { amount: 'sum' } });
+    expect(grouped.size).toBe('all');
+    expect(grouped.groups).toEqual([
+      { key: 'a', label: 'a', count: 3, aggs: { amount: 1700 } },
+      { key: 'b', label: 'b', count: 2, aggs: { amount: 7500 } },
+      { key: '', label: null, count: 2, aggs: { amount: 300 } },
+    ]);
+    expect(grouped.rows.map((r) => r.id)).toEqual([7, 5, 1, 6, 2, 4, 3]);
+    expect(grouped.rowGroups).toEqual([['a'], ['a'], ['a'], ['b'], ['b'], [''], ['']]);
+    // Сортировка по столбцу группы по убыванию — группы тоже; пустая всё равно внизу.
+    const desc = await page({ group: ['kind'], sort: { key: 'kind', dir: 'desc' } });
+    expect(desc.groups?.map((g) => g.key)).toEqual(['b', 'a', '']);
+  });
+
+  it('два уровня: группы внутри групп; момент группируется по дню в Бишкеке', async () => {
+    const grouped = await page({
+      group: ['kind', 'at'],
+      agg: { amount: 'avg' },
+      filters: { kind: { type: 'enum', vals: ['a', 'b'] } },
+    });
+    expect(grouped.groups).toEqual([
+      {
+        key: 'a',
+        label: 'a',
+        count: 3,
+        aggs: { amount: 1700 / 3 },
+        sub: [
+          { key: '2026-10-25', label: '25.10.2026', count: 2, aggs: { amount: 350 } },
+          { key: '2026-10-26', label: '26.10.2026', count: 1, aggs: { amount: 1000 } },
+        ],
+      },
+      {
+        key: 'b',
+        label: 'b',
+        count: 2,
+        aggs: { amount: 3750 },
+        sub: [{ key: '2026-10-25', label: '25.10.2026', count: 2, aggs: { amount: 3750 } }],
+      },
+    ]);
+    expect(grouped.rowGroups?.[0]).toEqual(['a', '2026-10-25']);
+    const counts = await page({ group: ['kind'], agg: { amount: 'count' } });
+    expect(counts.groups?.map((g) => g.aggs.amount)).toEqual([3, 2, 1]);
+    const extremes = await page({ group: ['kind'], agg: { amount: 'max' } });
+    expect(extremes.groups?.map((g) => g.aggs.amount)).toEqual([1000, 5000, 300]);
+  });
+
+  it('группа по неизвестному столбцу или итог у не-числа — ошибка запроса', async () => {
+    await expect(page({ group: ['nope'] })).rejects.toMatchObject({ part: 'group' });
+    await expect(page({ group: ['kind'], agg: { name: 'sum' } })).rejects.toMatchObject({
+      part: 'agg',
+      key: 'name',
+    });
+  });
+
+  it('значения для фильтра-галочек: подпись и число записей по всему списку, пустые внизу', async () => {
+    expect(await selectListValues({ columns: COLUMNS, key: 'kind', from })).toEqual({
+      items: [
+        { value: 'a', label: 'a', count: 3 },
+        { value: 'b', label: 'b', count: 2 },
+        { value: '', label: null, count: 2 },
+      ],
+      more: false,
+    });
+    await expect(selectListValues({ columns: COLUMNS, key: 'nope', from })).rejects.toBeInstanceOf(
+      ListQueryError,
+    );
+  });
+
+  it('выгрузка: все записи под фильтром, видимые столбцы по порядку, деньги — числом', async () => {
+    const exported = await selectListExport({
+      query: { sort: null, page: 1, size: 25, filters: { kind: { type: 'enum', vals: ['a'] } } },
+      columns: COLUMNS,
+      keys: ['name', 'amount', 'due'],
+      natural: [items.createdAt, items.id],
+      from,
+    });
+    expect(exported).toEqual({
+      columns: [
+        { key: 'name', label: 'test.name', type: 'text' },
+        { key: 'amount', label: 'test.amount', type: 'money' },
+        { key: 'due', label: 'test.due', type: 'date' },
+      ],
+      rows: [
+        ['Док 10', 1000, '01.10.2026'],
+        [null, 0, '01.11.2026'],
+        ['Ель_синяя', 700, null],
+      ],
+      more: false,
+    });
+  });
+
+  it('итог по любому фильтру: «компания А, 09.2026» — 10 500 сом (механизм итогов пункта приёмки)', async () => {
+    const result = await selectListPage({
+      query: {
+        sort: undefined,
+        page: 1,
+        size: 25,
+        filters: {
+          company: { type: 'enum', vals: ['Компания А'] },
+          period: { type: 'date', from: '2026-09-01', to: '2026-09-30' },
+        },
+      },
+      columns: REPORT_COLUMNS,
+      natural: [reports.createdAt, reports.id],
+      select: ({ window, where, orderBy, limit, offset }) =>
+        t.app.db
+          .select({ id: reports.id, ...window })
+          .from(reports)
+          .where(where)
+          .orderBy(...orderBy)
+          .limit(limit)
+          .offset(offset),
+    });
+    expect(result.total).toBe(3);
+    expect(result.totals).toEqual({ sum: 1_050_000 });
+    expect(formatSomWithUnit(result.totals.sum!)).toBe('10\u00a0500\u00a0сом');
   });
 
   it('сравнение текста — русское с числами по значению (миграция 0019)', async () => {

@@ -1,17 +1,50 @@
 import { expect, test, type APIRequestContext, type Page, type Response } from '@playwright/test';
 import { DEMO_PASSWORD, hire, signIn, uniqueLogin } from './helpers';
 
-// Общий список записей (UnifiedDataGrid, задача #14) на списке сотрудников через настоящий сайт:
-// страницы с сервера и настройки вида пользователя. У каждого теста свой новый сотрудник с ролью
-// «Главный бухгалтер» (видит модуль «Сотрудники»): его вид списка не пересекается с другими тестами.
+// Общий список записей (UnifiedDataGrid, задачи #14 и #15) на списке сотрудников через настоящий
+// сайт: страницы с сервера, настройки вида пользователя, группировка, фильтры у столбцов и поиск. У
+// каждого теста свой новый сотрудник с ролью «Главный бухгалтер» (видит модуль «Сотрудники»): его вид
+// списка не пересекается с другими тестами.
 
 const isStaffList = (r: Response) =>
   r.request().method() === 'GET' && new URL(r.url()).pathname === '/api/staff';
 
 interface StaffPage {
-  items: { id: string }[];
+  items: { id: string; fullName: string }[];
   total: number;
   page: number;
+  groups?: { key: string; label: string | null; count: number; sub?: { count: number }[] }[];
+}
+
+/** Ответ списка, у которого параметр `name` равен `value`. */
+const listWith = (name: string, value: string) => (r: Response) =>
+  isStaffList(r) && new URL(r.url()).searchParams.get(name) === value;
+
+/**
+ * Владелец создаёт двух бухгалтеров с общим редким словом в ФИО и блокирует второго: поиск по слову
+ * находит обоих, фильтр «Статус: Активен» оставляет первого.
+ */
+async function hirePair(api: APIRequestContext, origin: string, word: string) {
+  await signIn(api, origin, 'erkin', DEMO_PASSWORD);
+  const roles = (await (await api.get('/api/roles')).json()) as {
+    items: { id: string; name: string }[];
+  };
+  const roleId = roles.items.find((r) => r.name === 'Бухгалтер')!.id;
+  const made: { id: string; version: number }[] = [];
+  for (const n of ['Первый', 'Второй']) {
+    const res = await api.post('/api/staff', {
+      headers: { origin },
+      data: { fullName: `Сочетаев ${word} ${n}`, login: uniqueLogin('e2e-pair'), roleId },
+    });
+    expect(res.status(), await res.text()).toBe(201);
+    made.push(((await res.json()) as { employee: { id: string; version: number } }).employee);
+  }
+  const blocked = await api.post(`/api/staff/${made[1]!.id}/block`, {
+    headers: { origin },
+    data: { version: made[1]!.version },
+  });
+  expect(blocked.status(), await blocked.text()).toBe(200);
+  await api.post('/api/auth/logout', { headers: { origin } });
 }
 
 /** В демо-организации не меньше `min` сотрудников: недостающих владелец создаёт через API. */
@@ -154,5 +187,95 @@ test.describe('Списки: UnifiedDataGrid', () => {
       'ascending',
     );
     await expect(page.locator('[data-grid]')).toHaveAttribute('data-view', 'table');
+  });
+
+  test('группировка по двум полям показывает вложенные группы с числом записей; фильтр-плашка и поиск сочетаются', async ({
+    page,
+    playwright,
+    baseURL,
+    isMobile,
+  }) => {
+    const origin = new URL(baseURL!).origin;
+    // Слово из букв без цифр: поиск ищет его в ФИО, а не в логине.
+    const word = `Сквозь${Array.from({ length: 6 }, () => 'абвгдежзиклмнопрстуф'[Math.floor(Math.random() * 20)]).join('')}`;
+    const setup = await playwright.request.newContext({ baseURL });
+    await hirePair(setup, origin, word);
+    await setup.dispose();
+    await signInAsNewChief(page, origin);
+    await page.goto('/app/staff/list');
+    const grid = page.locator('[data-grid]');
+    await expect(grid.locator('[data-id]').first()).toBeVisible();
+    // Фильтры — у заголовков таблицы: на телефоне переключаемся с карточек на таблицу.
+    if (isMobile) await page.getByRole('button', { name: 'Вид списка: Таблица' }).click();
+
+    // «Группировка»: роль, внутри — статус.
+    await grid.locator('[data-grid-group-button]').click();
+    const panel = page.getByRole('dialog', { name: 'Группировка' });
+    await panel.getByLabel('Уровень 1').selectOption({ label: 'Роль' });
+    await panel.getByLabel('Уровень 2 (внутри первого)').selectOption({ label: 'Статус' });
+    const grouped = page.waitForResponse(listWith('group', 'role,active'));
+    await panel.getByRole('button', { name: 'Применить' }).click();
+    const all = (await (await grouped).json()) as StaffPage;
+    expect(all.groups!.length).toBeGreaterThan(0);
+    expect(all.groups!.reduce((n, g) => n + g.count, 0)).toBe(all.total);
+    const accountants = all.groups!.find((g) => g.label === 'Бухгалтер')!;
+    expect(accountants.sub!.reduce((n, g) => n + g.count, 0)).toBe(accountants.count);
+
+    await expect(grid.locator('[data-chip="group"]')).toContainText('Группировка: Роль → Статус');
+    await expect(grid.locator('[data-group-level="0"]')).toHaveCount(all.groups!.length);
+    const path = `›${accountants.key}`;
+    const top = grid.locator(`[data-group="${path}"]`);
+    await expect(top).toContainText('Бухгалтер');
+    await expect(top).toContainText(String(accountants.count));
+    await expect(grid.locator(`[data-group^="${path}›"]`)).toHaveCount(accountants.sub!.length);
+    await expect(grid.locator('[data-grid-footer]').first()).toContainText(
+      `Групп: ${all.groups!.length} · записей: ${all.total}`,
+    );
+
+    // Фильтр у столбца «Статус»: только «Активен».
+    await grid.getByRole('button', { name: 'Фильтр: Статус' }).click();
+    const filter = page.getByRole('dialog', { name: 'Статус' });
+    await filter.getByRole('checkbox', { name: 'Заблокирован' }).uncheck();
+    const filtered = page.waitForResponse(
+      (r) =>
+        isStaffList(r) && (new URL(r.url()).searchParams.get('filters') ?? '').includes('active'),
+    );
+    await filter.getByRole('button', { name: 'Применить' }).click();
+    expect((await filtered).status()).toBe(200);
+    await expect(grid.locator('[data-chip="active"]')).toContainText('Статус: Активен');
+
+    // Поиск по редкому слову вместе с фильтром: остаётся один активный бухгалтер.
+    if (isMobile) await page.getByRole('button', { name: 'Поиск', exact: true }).click();
+    const searched = page.waitForResponse(listWith('q', word));
+    await page.getByRole('searchbox').fill(word);
+    const found = (await (await searched).json()) as StaffPage;
+    expect(found.total).toBe(1);
+    expect(found.items[0]!.fullName).toBe(`Сочетаев ${word} Первый`);
+    expect(found.groups).toEqual([
+      expect.objectContaining({
+        label: 'Бухгалтер',
+        count: 1,
+        sub: [expect.objectContaining({ label: 'Активен', count: 1 })],
+      }),
+    ]);
+    await expect(grid.locator('[data-chip="search"]')).toContainText(`Поиск: «${word}»`);
+    await expect(grid.locator('[data-id]')).toHaveCount(1);
+    await expect(grid.locator('[data-id]')).toContainText(`Сочетаев ${word} Первый`);
+
+    // Без фильтра тот же поиск находит обоих — фильтр и поиск действительно сочетаются.
+    const both = page.waitForResponse(
+      (r) => listWith('q', word)(r) && !new URL(r.url()).searchParams.has('filters'),
+    );
+    await grid
+      .locator('[data-chip="active"]')
+      .getByRole('button', { name: 'Убрать фильтр' })
+      .click();
+    expect(((await (await both).json()) as StaffPage).total).toBe(2);
+    await expect(grid.locator('[data-id]')).toHaveCount(2);
+
+    // «Сбросить всё» убирает поиск и фильтры, группировка остаётся.
+    await grid.locator('[data-grid-reset]').click();
+    await expect(grid.locator('[data-chip="search"]')).toHaveCount(0);
+    await expect(grid.locator('[data-chip="group"]')).toBeVisible();
   });
 });
