@@ -134,7 +134,7 @@ export function webhookHandler(deps: ApiDeps): RouteHandler<typeof webhookRoute,
     if (result.previous && result.previous.chatId !== chat.id) {
       const notice = await botText(deps, 'tgRelinked', {
         логин: target.login,
-        telegram: telegramName(link),
+        телеграм: telegramName(link),
       });
       await sendNow(
         deps,

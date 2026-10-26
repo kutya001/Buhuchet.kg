@@ -21,6 +21,18 @@ describe('createTelegramBotApi', () => {
     });
   });
 
+  it('не ждёт Telegram дольше заданного: запрос прерывается', async () => {
+    const hanging = vi.fn(
+      (_url: string, init: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init.signal?.addEventListener('abort', () => reject(init.signal!.reason));
+        }),
+    );
+    const bot = createTelegramBotApi({ token: 't', fetch: hanging });
+    await expect(bot.sendMessage(1, 'код', { timeoutMs: 20 })).rejects.toThrow();
+    expect(hanging.mock.calls[0]![1].signal).toBeInstanceOf(AbortSignal);
+  });
+
   it('429 — повторить позже, 403 — повтор бессмыслен', async () => {
     const limited = createTelegramBotApi({
       token: 't',

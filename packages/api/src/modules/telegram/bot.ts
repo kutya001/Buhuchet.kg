@@ -1,3 +1,4 @@
+import type { TelegramSendOptions } from '@buhuchet/adapters';
 import { messageTemplates, telegramChat } from '@buhuchet/db';
 import {
   fillTemplate,
@@ -30,10 +31,11 @@ export async function sendNow(
   chatId: number,
   text: string,
   purpose: string,
+  options: TelegramSendOptions = {},
 ): Promise<boolean> {
   if (!deps.telegram) return false;
   try {
-    const res = await deps.telegram.sendMessage(chatId, text);
+    const res = await deps.telegram.sendMessage(chatId, text, options);
     if (!res.ok) {
       deps.logger.warn(
         { purpose, errorCode: res.errorCode, description: res.description },

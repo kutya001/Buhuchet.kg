@@ -21,7 +21,11 @@ export interface TelegramSendOptions {
   /** Разметка HTML (по умолчанию — обычный текст). */
   html?: boolean;
   disableLinkPreview?: boolean;
+  /** Сколько ждать ответа Telegram, мс (по умолчанию 10 с); дольше — ошибка, запрос прерывается. */
+  timeoutMs?: number;
 }
+
+const DEFAULT_TIMEOUT_MS = 10_000;
 
 export interface Telegram {
   sendMessage(
@@ -50,23 +54,32 @@ export function createTelegramBotApi(options: {
   const doFetch: FetchLike = options.fetch ?? ((input, init) => fetch(input, init));
   const base = `${options.apiBase ?? 'https://api.telegram.org'}/bot${options.token}`;
 
-  async function call<T>(method: string, body: unknown): Promise<BotApiResponse<T>> {
+  async function call<T>(
+    method: string,
+    body: unknown,
+    timeoutMs = DEFAULT_TIMEOUT_MS,
+  ): Promise<BotApiResponse<T>> {
     const res = await doFetch(`${base}/${method}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     return (await res.json()) as BotApiResponse<T>;
   }
 
   return {
     async sendMessage(chatId, text, opts = {}) {
-      const data = await call<{ message_id: number }>('sendMessage', {
-        chat_id: chatId,
-        text,
-        ...(opts.html ? { parse_mode: 'HTML' } : {}),
-        link_preview_options: { is_disabled: opts.disableLinkPreview ?? true },
-      });
+      const data = await call<{ message_id: number }>(
+        'sendMessage',
+        {
+          chat_id: chatId,
+          text,
+          ...(opts.html ? { parse_mode: 'HTML' } : {}),
+          link_preview_options: { is_disabled: opts.disableLinkPreview ?? true },
+        },
+        opts.timeoutMs,
+      );
       if (data.ok && data.result) return { ok: true, messageId: data.result.message_id };
       const errorCode = data.error_code ?? 0;
       return {

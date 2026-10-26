@@ -354,7 +354,7 @@ describe.skipIf(!databaseAvailable())('«Забыли пароль?» и сбр�
     await setPassword(people['acc-a']!.userId);
   });
 
-  it('10 неверных кодов за сутки — восстановление через Telegram закрыто до конца суток', async () => {
+  it('10 неверных кодов за 24 часа — восстановление через Telegram закрыто на 24 часа', async () => {
     const userId = people['acc-a']!.userId;
     await forgetCodes(userId);
     await t.admin.db

@@ -206,7 +206,7 @@ describe.skipIf(!databaseAvailable())('Telegram: привязка по ссыл�
     expect(tg.sent[0]!.text).toBe(
       TELEGRAM_TEMPLATE_DEFAULTS.tgRelinked
         .replace('{логин}', 'acc-a')
-        .replace('{telegram}', '@new_tg'),
+        .replace('{телеграм}', '@new_tg'),
     );
     // Тот же чат ещё раз — сообщения о замене нет.
     await linkTelegram(app, cookie, 7003, 'new_tg');

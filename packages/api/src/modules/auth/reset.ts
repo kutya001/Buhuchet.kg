@@ -77,7 +77,8 @@ export const resetRequestRoute = createRoute({
  * Шаг 1 «Забыли пароль?» (ТЗ «Восстановление пароля через Telegram», прототип core/login.js): логин →
  * одноразовый код из 6 цифр в привязанный Telegram, сразу, мимо очереди; действует 10 минут, не
  * больше 3 кодов в час на логин, прежний код перестаёт действовать. После 10 неверных кодов за сутки
- * восстановление через Telegram закрыто до конца суток. В базе — хеш кода; лимиты проверяются до
+ * восстановление через Telegram закрыто на 24 часа после последнего кода. В базе — хеш кода; лимиты
+ * проверяются до
  * того, как его считать, чтобы запросы сверх лимита не нагружали сервер.
  */
 // ОТКЛОНЕНИЕ: docs/deviations.md#4 — решение Б: в прототипе «Нет такого логина», «Telegram не
@@ -86,7 +87,10 @@ export function resetRequestHandler(deps: ApiDeps): RouteHandler<typeof resetReq
   return async (c) => {
     if (!deps.telegram) {
       return c.json(
-        apiError('telegram_unavailable', 'Telegram-бот пока не подключён к платформе'),
+        apiError(
+          'telegram_unavailable',
+          'Telegram-бот пока не подключён к платформе. Пароль сбросит владелец организации, а владельцу — администратор платформы.',
+        ),
         503,
       );
     }
@@ -114,7 +118,8 @@ async function sendResetCode(deps: ApiDeps, account: LoginRecord): Promise<void>
     account.orgName,
     request.chat.shared,
   );
-  await sendNow(deps, request.chat.chatId, text, 'reset_code');
+  // Дольше секунды не ждём: иначе медленный Telegram выдал бы по времени ответа, что логин есть.
+  await sendNow(deps, request.chat.chatId, text, 'reset_code', { timeoutMs: 1000 });
 }
 
 export const resetConfirmRoute = createRoute({
