@@ -67,7 +67,8 @@ export function Popover({
   const panel = useRef<HTMLDivElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const close = useCallback(() => setOpenBy(null), []);
-  const toggle = useCallback(() => setOpenBy((v) => (v ? null : 'click')), []);
+  // Открытое наведением нажатие оставляет открытым (как в прототипе), открытое нажатием — закрывает.
+  const toggle = useCallback(() => setOpenBy((v) => (v === 'click' ? null : 'click')), []);
 
   const pointerEnter = (e: ReactPointerEvent<HTMLSpanElement>) => {
     if (e.pointerType !== 'mouse' || !window.matchMedia(HOVER_QUERY).matches) return;
