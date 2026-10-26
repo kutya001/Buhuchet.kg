@@ -3,7 +3,6 @@
 import { formatMomentRu, initials, type ListSort } from '@buhuchet/domain';
 import { EmployeeList, type Employee } from '@buhuchet/shared';
 import {
-  AUDIT_KEYS,
   Avatar,
   DataGrid,
   EmptyState,
@@ -139,7 +138,7 @@ export function StaffList() {
   const toast = useToast();
   const labels = useGridLabels('staff.count');
   const columns = useMemo(() => staffColumns(t), [t]);
-  const keys = useMemo(() => [...columns.map((c) => c.key), ...AUDIT_KEYS], [columns]);
+  const keys = useMemo(() => columns.map((c) => c.key), [columns]);
   const view = useViewSettings('staff.list');
   const list = useListPage({
     gridKey: 'staff.list',
