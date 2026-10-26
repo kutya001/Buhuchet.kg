@@ -184,6 +184,32 @@ export function searchCondition(
   return or(...parts);
 }
 
+/** Значение среди отмеченных ('' — «(Пусто)»). */
+function valuesCondition(column: ListColumn, values: readonly string[]): SQL {
+  const vals = values.filter((v) => v !== '');
+  const parts: SQL[] = [];
+  if (vals.length) {
+    parts.push(
+      sql`${column.value}::text in (${sql.join(
+        vals.map((v) => sql`${v}`),
+        sql`, `,
+      )})`,
+    );
+  }
+  if (values.includes('')) parts.push(sql`coalesce(${column.value}::text, '') = ''`);
+  return parts.length ? sql`(${sql.join(parts, sql` or `)})` : sql`false`;
+}
+
+/**
+ * Подпись значения, как на экране, содержит текст «Найти значение» без учёта регистра и «ё»; '' —
+ * подходит любое значение. Эталон — `matchesValue`.
+ */
+function valueMatch(column: ListColumn, match: string): SQL {
+  const needle = searchText(match.trim());
+  if (!needle) return sql`true`;
+  return sql`${searchable(displayOf(column))} like ${likePattern(needle)} escape '\\'`;
+}
+
 function filterCondition(key: string, column: ListColumn, filter: ListFilterValue): SQL {
   if (filterTypeOf(column.type) !== filter.type) throw new ListQueryError('filter', key);
   switch (filter.type) {
@@ -193,19 +219,16 @@ function filterCondition(key: string, column: ListColumn, filter: ListFilterValu
       return sql`${textOf(column.value, column.compact === true)} like ${likePattern(needle)} escape '\\'`;
     }
     case 'enum': {
-      const empty = filter.vals.includes('');
-      const vals = filter.vals.filter((v) => v !== '');
-      const parts: SQL[] = [];
-      if (vals.length) {
-        parts.push(
-          sql`${column.value}::text in (${sql.join(
-            vals.map((v) => sql`${v}`),
-            sql`, `,
-          )})`,
+      // Решает последний шаг, который касается значения (эталон — `enumChecked`).
+      const steps = filter.steps ?? [];
+      if (!steps.length) return valuesCondition(column, filter.vals);
+      const cases = steps
+        .toReversed()
+        .map(
+          (s) =>
+            sql`when ${'match' in s ? valueMatch(column, s.match) : valuesCondition(column, s.vals)} then ${sql.raw(s.on ? 'true' : 'false')}`,
         );
-      }
-      if (empty) parts.push(sql`coalesce(${column.value}::text, '') = ''`);
-      return parts.length ? sql`(${sql.join(parts, sql` or `)})` : sql`false`;
+      return sql`(case ${sql.join(cases, sql` `)} else ${valuesCondition(column, filter.vals)} end)`;
     }
     case 'num': {
       const parts: SQL[] = [sql`${column.value} is not null`];
@@ -526,7 +549,9 @@ export interface ListValue {
 /**
  * Значения столбца для фильтра-галочек (прототип filterPop: значения со числом записей по всему
  * списку, «(Пусто)» внизу): код значения, подпись как на экране и число записей в области
- * пользователя. Порядок — как у сортировки столбца.
+ * пользователя. Порядок — как у сортировки столбца. `q` — «Найти значение»: только значения, подпись
+ * которых его содержит, среди всех значений столбца (ТЗ «Поиск и фильтры»); `total` — сколько всего
+ * подходящих значений.
  */
 export async function selectListValues(options: {
   columns: ListColumns;
@@ -534,22 +559,24 @@ export async function selectListValues(options: {
   /** Та же область, что у страницы списка: числа записей — только по ней. */
   scope: SQL | undefined;
   from: ListFrom;
-}): Promise<{ items: ListValue[]; more: boolean }> {
+  q?: string;
+}): Promise<{ items: ListValue[]; total: number; more: boolean }> {
   const column = columnOf(options.columns, options.key, 'column');
   const value = sql`coalesce(${column.value}::text, '')`;
   const label = sql`min(${displayOf(column)})`;
   const rows = await options
-    .from({ value, label, count: sql`count(*)::int` })
-    .where(options.scope)
+    .from({ value, label, count: sql`count(*)::int`, total: sql`count(*) over ()` })
+    .where(and(options.scope, valueMatch(column, options.q ?? '')))
     .groupBy(value, groupSortOf(column))
     .orderBy(...groupOrderOf(column, options.key, null))
-    .limit(LIST_VALUES_LIMIT + 1);
-  const items = rows.slice(0, LIST_VALUES_LIMIT).map((r) => ({
+    .limit(LIST_VALUES_LIMIT);
+  const items = rows.map((r) => ({
     value: String(r.value ?? ''),
     label: (r.label as string | null) ?? null,
     count: Number(r.count),
   }));
-  return { items, more: rows.length > LIST_VALUES_LIMIT };
+  const total = rows.length ? Number(rows[0]!.total) : 0;
+  return { items, total, more: total > items.length };
 }
 
 export type ExportCell = string | number | null;

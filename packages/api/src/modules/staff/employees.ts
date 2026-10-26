@@ -186,15 +186,18 @@ export const employeeValuesRoute = createRoute({
   },
 });
 
-/** Значения для фильтра-галочек столбца (прототип filterPop): роли, статусы, «Создал»… */
+/**
+ * Значения для фильтра-галочек столбца (прототип filterPop): роли, статусы, «Создал»…; `q` —
+ * «Найти значение» по всем значениям.
+ */
 export function employeeValuesHandler(
   deps: ApiDeps,
 ): RouteHandler<typeof employeeValuesRoute, AppEnv> {
   return async (c) => {
-    const { col } = c.req.valid('query');
+    const { col, q } = c.req.valid('query');
     const t = await serverTexts(deps);
     const values = await withOrgContext(deps.db, orgContextOf(c), (tx) =>
-      listEmployeeValues(tx, col, t),
+      listEmployeeValues(tx, col, t, q),
     );
     return c.json(values, 200);
   };

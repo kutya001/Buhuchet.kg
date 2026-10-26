@@ -177,6 +177,14 @@ describe.skipIf(!databaseAvailable())(
       const blocked = await list({ filters: { active: { type: 'enum', vals: ['blocked'] } } });
       expect(blocked.total).toBe(EXTRA / 3);
       expect(blocked.items.every((e) => !e.active)).toBe(true);
+      // «Выбрать все», затем снять всё, что находит «Найти значение» по «заблок», — подпись из словаря.
+      const steps = [
+        { on: true, match: '' },
+        { on: false, match: 'заблок' },
+      ];
+      const active = await list({ filters: { active: { type: 'enum', vals: [], steps } } });
+      expect(active.total).toBe(TOTAL_A - EXTRA / 3);
+      expect(active.items.every((e) => e.active)).toBe(true);
       const phone = await list({ filters: { phone: { type: 'text', q: '555 10 0004' } } });
       expect(phone.items.map((e) => e.fullName)).toEqual(['Номер 4']);
       // Для показа — по маске справочника «Коды телефонов».
@@ -236,14 +244,26 @@ describe.skipIf(!databaseAvailable())(
     });
 
     it('значения для фильтра-галочек: подписи из словаря и названия ролей; чужих ролей нет', async () => {
-      const values = async (col: string, cookie = owner) => {
-        const res = await apiRequest(f.app, 'GET', `/api/staff/values?col=${col}`, cookie);
+      const values = async (col: string, cookie = owner, q?: string) => {
+        const query = new URLSearchParams({ col, ...(q ? { q } : {}) });
+        const res = await apiRequest(f.app, 'GET', `/api/staff/values?${query}`, cookie);
         expect(res.status).toBe(200);
         return ListValues.parse(await res.json());
       };
-      expect((await values('active')).items).toEqual([
-        { value: 'active', label: 'Активен', count: TOTAL_A - EXTRA / 3 },
+      expect(await values('active')).toEqual({
+        items: [
+          { value: 'active', label: 'Активен', count: TOTAL_A - EXTRA / 3 },
+          { value: 'blocked', label: 'Заблокирован', count: EXTRA / 3 },
+        ],
+        total: 2,
+        more: false,
+      });
+      // «Найти значение» — по подписи из словаря, без учёта регистра.
+      expect((await values('active', owner, 'ЗАБЛОК')).items).toEqual([
         { value: 'blocked', label: 'Заблокирован', count: EXTRA / 3 },
+      ]);
+      expect((await values('role', owner, 'главный')).items.map((v) => v.label)).toEqual([
+        'Главный бухгалтер',
       ]);
       const roles = (await values('role')).items.map((v) => v.label);
       expect(roles).toContain('Главный бухгалтер');
@@ -251,6 +271,12 @@ describe.skipIf(!databaseAvailable())(
       const rolesB = (await values('role', ownerB)).items;
       expect(rolesB.reduce((n, v) => n + v.count, 0)).toBe(2);
       expect(rolesB.map((v) => v.value)).not.toContain(f.templateRole(f.a, 'acc'));
+      // Поиск значений и «всего» — тоже только по своей организации.
+      const foundB = await values('role', ownerB, 'бух');
+      expect(foundB.items.map((v) => v.value)).not.toContain(f.templateRole(f.a, 'acc'));
+      expect(foundB.items.length).toBeGreaterThan(0);
+      expect(foundB.total).toBe(foundB.items.length);
+      expect(foundB.items.reduce((n, v) => n + v.count, 0)).toBeLessThanOrEqual(2);
       const bad = await apiRequest(f.app, 'GET', '/api/staff/values?col=passwordHash', owner);
       expect(bad.status).toBe(400);
     });

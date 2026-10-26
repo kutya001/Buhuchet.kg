@@ -1,6 +1,6 @@
 'use client';
 
-import { pluralForm } from '@buhuchet/domain';
+import { formatCount, pluralForm } from '@buhuchet/domain';
 import type { GridLabels } from '@buhuchet/ui';
 import { useMemo } from 'react';
 import { useT } from '../l10n/provider';
@@ -71,7 +71,9 @@ export function gridLabels(t: Translate, count: CountKey): GridLabels {
     empty: t('grid.filter_empty'),
     filterLoading: t('grid.filter_loading'),
     filterLoadError: t('grid.filter_load_error'),
-    filterMore: (n) => t('grid.filter_more', { n }),
+    filterMore: (n, total) =>
+      t('grid.filter_more', { n: formatCount(n), total: formatCount(total) }),
+    filterTooMany: t('grid.filter_too_many'),
     clear: t('grid.clear'),
     apply: t('grid.apply'),
     groupByColumn: t('grid.group_by_column'),
@@ -104,6 +106,10 @@ export function gridLabels(t: Translate, count: CountKey): GridLabels {
     chipSince: (v) => t('grid.chip_since', { v }),
     chipUntil: (v) => t('grid.chip_until', { v }),
     chipMore: (n) => t('grid.chip_more', { n }),
+    chipAll: t('grid.chip_all'),
+    chipMatch: (q) => t('grid.chip_match', { q }),
+    chipExcept: (v) => t('grid.chip_except', { v }),
+    chipExceptMatch: (q) => t('grid.chip_except_match', { q }),
     ungroup: t('grid.ungroup'),
     clearSearch: t('grid.clear_search'),
     removeFilter: t('grid.remove_filter'),

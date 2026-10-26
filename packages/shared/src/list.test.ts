@@ -6,6 +6,7 @@ import {
   ListFilters,
   ListQueryParams,
   ListValues,
+  ListValuesQuery,
   listPageSchema,
   listQueryParams,
   parseListQuery,
@@ -156,6 +157,34 @@ describe('фильтры столбцов (ТЗ «Поиск и фильтры»
     }
   });
 
+  it('галочки — отмеченные значения и шаги «Выбрать все» по поиску; не больше 200 значений во всех шагах', () => {
+    const steps = [
+      { on: true, match: '' },
+      { on: false, vals: ['r1'] },
+      { on: false, match: 'ИП' },
+    ];
+    expect(ListFilter.safeParse({ type: 'enum', vals: [], steps }).success).toBe(true);
+    const many = (n: number) => Array.from({ length: n }, (_, i) => `v${i}`);
+    for (const f of [
+      { type: 'enum', vals: many(201) },
+      { type: 'enum', vals: many(150), steps: [{ on: false, vals: many(51) }] },
+      {
+        type: 'enum',
+        vals: [],
+        steps: Array.from({ length: 21 }, () => ({ on: true, match: 'а' })),
+      },
+      { type: 'enum', vals: [], steps: [{ on: true }] },
+      { type: 'enum', vals: [], steps: [{ on: true, match: 'а', vals: ['x'] }] },
+      { type: 'enum', vals: [], steps: [{ on: true, match: 'а'.repeat(201) }] },
+      // Нулевой символ PostgreSQL в тексте не принимает: это неверный фильтр, а не ошибка сервера.
+      { type: 'enum', vals: [], steps: [{ on: true, match: 'а\u0000' }] },
+      { type: 'enum', vals: ['\u0000'] },
+      { type: 'text', q: 'а\u0000б' },
+    ]) {
+      expect(ListFilter.safeParse(f).success, JSON.stringify(f).slice(0, 60)).toBe(false);
+    }
+  });
+
   it('пустой диапазон, дробное число, год 0000 и чужой формат даты не принимаются', () => {
     for (const f of [
       { type: 'num' },
@@ -230,9 +259,14 @@ describe('ответ со страницей', () => {
           { value: 'active', label: 'Активен', count: 5 },
           { value: '', label: null, count: 1 },
         ],
+        total: 2,
         more: false,
       }).success,
     ).toBe(true);
+    expect(ListValuesQuery.safeParse({ col: 'role', q: 'бух' }).success).toBe(true);
+    expect(ListValuesQuery.safeParse({ col: 'role', q: 'а'.repeat(201) }).success).toBe(false);
+    expect(ListValuesQuery.safeParse({ col: 'role', q: 'а\u0000' }).success).toBe(false);
+    expect(ListQueryParams.safeParse({ q: 'а\u0000' }).success).toBe(false);
   });
 });
 

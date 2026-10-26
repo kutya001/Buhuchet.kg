@@ -322,6 +322,70 @@ test.describe('Списки: UnifiedDataGrid', () => {
     await expect(grid.locator('[data-chip="search"]')).toHaveCount(0);
     await expect(grid.locator('[data-chip="group"]')).toBeVisible();
   });
+  test('фильтр-галочки: значений больше, чем показано, — «Найти значение» ищет по всем, «Выбрать все» отмечает и не показанные', async ({
+    page,
+    baseURL,
+    isMobile,
+  }) => {
+    const origin = new URL(baseURL!).origin;
+    await signInAsNewChief(page, origin);
+    // Столько ролей в демо-организации нет: сервер отдаёт настоящие значения, а здесь из них
+    // остаётся первое — как будто пришли первые 500 из 1 240.
+    await page.route(/\/api\/staff\/values\?/, async (route) => {
+      const real = await route.fetch();
+      const body = (await real.json()) as { items: unknown[]; total: number };
+      const total = new URL(route.request().url()).searchParams.has('q') ? body.total : 1240;
+      await route.fulfill({
+        response: real,
+        json: { items: body.items.slice(0, 1), total, more: true },
+      });
+    });
+    await page.goto('/app/staff/list');
+    const grid = page.locator('[data-grid]');
+    await expect(grid.locator('[data-id]').first()).toBeVisible();
+    if (isMobile) await page.getByRole('button', { name: 'Вид списка: Таблица' }).click();
+
+    await grid.getByRole('button', { name: 'Фильтр: Роль' }).click();
+    const filter = page.getByRole('dialog', { name: 'Роль' });
+    await expect(filter.locator('[data-filter-more]')).toHaveText(
+      /^Показаны первые 1 значений из 1\s240 — сузьте список поиском$/,
+    );
+    // Снять всё, найти «бух» на сервере и отметить все подходящие: показан только «Бухгалтер».
+    await filter.getByRole('checkbox', { name: 'Выбрать все' }).uncheck();
+    const searched = page.waitForResponse(
+      (r) =>
+        new URL(r.url()).pathname === '/api/staff/values' &&
+        new URL(r.url()).searchParams.get('q') === 'бух',
+    );
+    await filter.getByRole('textbox', { name: 'Найти значение' }).fill('бух');
+    await searched;
+    const values = filter.locator('[data-filter-values] label');
+    await expect(values).toHaveCount(2);
+    await expect(values.nth(1)).toContainText('Бухгалтер');
+    await expect(filter.getByRole('checkbox', { name: /Бухгалтер/ })).not.toBeChecked();
+    await expect(filter.locator('[data-filter-more]')).toContainText(
+      'Показаны первые 1 значений из 2',
+    );
+    await filter.getByRole('checkbox', { name: 'Выбрать все' }).check();
+    await expect(filter.getByRole('checkbox', { name: /Бухгалтер/ })).toBeChecked();
+    const filtered = page.waitForResponse(
+      (r) => isStaffList(r) && new URL(r.url()).searchParams.has('filters'),
+    );
+    await filter.getByRole('button', { name: 'Применить' }).click();
+    const res = await filtered;
+    expect(JSON.parse(new URL(res.url()).searchParams.get('filters')!)).toEqual({
+      role: { type: 'enum', vals: [], steps: [{ on: true, match: 'бух' }] },
+    });
+    // В список попал и «Главный бухгалтер», которого в галочках не было, а других ролей нет.
+    const grouped = await page.request.get(
+      `/api/staff?${new URLSearchParams({ filters: new URL(res.url()).searchParams.get('filters')!, group: 'role' })}`,
+    );
+    const labels = ((await grouped.json()) as StaffPage).groups!.map((g) => g.label ?? '');
+    expect(labels).toContain('Главный бухгалтер');
+    expect(labels.every((name) => name.toLowerCase().includes('бух'))).toBe(true);
+    await expect(grid.locator('[data-chip="role"]')).toContainText('Роль: содержит «бух»');
+  });
+
   test('(проверка задачи #16) на телефоне доступны поиск, фильтры и действия над записью без правого клика: «⋯» и долгое нажатие', async ({
     page,
     playwright,

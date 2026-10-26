@@ -1,18 +1,40 @@
 'use client';
 
-import { filterTypeOf, searchText, type ListFilterValue } from '@buhuchet/domain';
+import {
+  addEnumStep,
+  enumChecked,
+  enumMatchChecked,
+  filterTypeOf,
+  matchesValue,
+  type EnumLabelOf,
+  type EnumSelection,
+  type EnumStep,
+  type ListFilterValue,
+} from '@buhuchet/domain';
 import { useEffect, useId, useState, type KeyboardEvent } from 'react';
 import { buttonClass, linkButtonClass } from '../button';
 import { inputClass } from '../form';
 import { Icon } from '../icon';
-import { enumFilter, formatFilterNumber, parseFilterNumber } from './grid-filters';
+import {
+  enumFilterFits,
+  enumFilterOf,
+  enumSelectionOf,
+  formatFilterNumber,
+  parseFilterNumber,
+} from './grid-filters';
 import type { GridColumn, GridLabels, GridValues } from './types';
 
 /** Значений больше стольких — над списком галочек поле «Найти значение» (прототип: `keys.length > 8`). */
 const FIND_FROM = 8;
 
+/** Пауза после ввода в «Найти значение», прежде чем искать значения на сервере, — мс. */
+const FIND_DELAY = 250;
+
 /** Подписи значений, загруженных для галочек: по ним чип показывает «Бухгалтер», а не код роли. */
 export type ValueLabels = Readonly<Record<string, string | null>>;
+
+const labelsOf = (values: GridValues): ValueLabels =>
+  Object.fromEntries(values.items.map((i) => [i.value, i.label]));
 
 const HINT = 'text-[11.5px] leading-[1.4] text-faint';
 
@@ -20,8 +42,10 @@ const HINT = 'text-[11.5px] leading-[1.4] text-faint';
  * Меню столбца (прототип ui/grid.js, filterPop; ТЗ «Фильтр у каждого столбца по его типу»): текст —
  * «Содержит…»; число — «От» и «До» включительно; дата — «С даты» и «По дату»; справочник и статус —
  * галочки значений с числом записей по всему списку, «Выбрать все», «(Пусто)» и «Найти значение»,
- * если значений больше восьми. Внизу — «Группировать по этому столбцу» (или «Убрать группировку…»),
- * «Очистить» и «Применить»; Enter — «Применить».
+ * если значений больше восьми. Значений больше 500 — приходят первые 500, а «Найти значение» ищет на
+ * сервере по всем; «Выбрать все» отмечает все подходящие, в том числе не показанные (шаг выбора
+ * `addEnumStep`). Внизу — «Группировать по этому столбцу» (или «Убрать группировку…»), «Очистить» и
+ * «Применить»; Enter — «Применить».
  */
 export function FilterPanel<Row>({
   column,
@@ -36,8 +60,8 @@ export function FilterPanel<Row>({
   filter: ListFilterValue | undefined;
   /** Список уже сгруппирован по этому столбцу. */
   grouped: boolean;
-  /** Значения столбца для галочек с сервера. */
-  loadValues?: (key: string) => Promise<GridValues>;
+  /** Значения столбца для галочек с сервера; `q` — «Найти значение» по всем значениям. */
+  loadValues?: (key: string, q?: string) => Promise<GridValues>;
   /** Новый фильтр (null — убрать) и подписи значений галочек для чипа. */
   onApply: (filter: ListFilterValue | null, valueLabels?: ValueLabels) => void;
   onToggleGroup: () => void;
@@ -50,8 +74,12 @@ export function FilterPanel<Row>({
   const [to, setTo] = useState(() => initialBound(column, filter, 'to'));
   const [bad, setBad] = useState(false);
   const [values, setValues] = useState<GridValues | 'loading' | 'error'>('loading');
-  const [checked, setChecked] = useState<Set<string> | null>(null);
+  const [selection, setSelection] = useState<EnumSelection>(() => enumSelectionOf(filter));
+  // Подписи всех значений, которые приходили с сервера: для шагов выбора и чипа.
+  const [names, setNames] = useState<ValueLabels>({});
   const [find, setFind] = useState('');
+  const [found, setFound] = useState<{ q: string; values: GridValues | 'error' } | null>(null);
+  const [tooMany, setTooMany] = useState(false);
 
   useEffect(() => {
     if (type !== 'enum' || !loadValues) return;
@@ -60,8 +88,7 @@ export function FilterPanel<Row>({
       (v) => {
         if (!live) return;
         setValues(v);
-        const all = v.items.map((i) => i.value);
-        setChecked(new Set(filter?.type === 'enum' ? filter.vals : all));
+        setNames((prev) => ({ ...prev, ...labelsOf(v) }));
       },
       () => live && setValues('error'),
     );
@@ -71,6 +98,34 @@ export function FilterPanel<Row>({
     // Значения грузятся один раз при открытии меню.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Пришли не все значения — «Найти значение» ищет на сервере по всем (ТЗ «Поиск и фильтры»).
+  const partial = typeof values === 'object' && values.more;
+  const needle = find.trim();
+  useEffect(() => {
+    if (!partial || !needle || !loadValues) return;
+    let live = true;
+    const timer = setTimeout(() => {
+      loadValues(column.key, needle).then(
+        (v) => {
+          if (!live) return;
+          setFound({ q: needle, values: v });
+          setNames((prev) => ({ ...prev, ...labelsOf(v) }));
+        },
+        () => live && setFound({ q: needle, values: 'error' }),
+      );
+    }, FIND_DELAY);
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+  }, [partial, needle, loadValues, column.key]);
+
+  const labelOf: EnumLabelOf = (v) => (Object.hasOwn(names, v) ? names[v] : undefined);
+  const step = (next: EnumStep) => {
+    setTooMany(false);
+    setSelection((prev) => addEnumStep(prev, next, labelOf));
+  };
 
   const apply = () => {
     if (type === 'text') {
@@ -92,10 +147,13 @@ export function FilterPanel<Row>({
       onApply(from || to ? { type: 'date', from: from || null, to: to || null } : null);
       return;
     }
-    if (typeof values !== 'object' || !checked) return;
-    const all = values.items.map((i) => i.value);
-    const names = Object.fromEntries(values.items.map((i) => [i.value, i.label]));
-    onApply(enumFilter(all, checked), names);
+    if (typeof values !== 'object') return;
+    const next = enumFilterOf(selection, values.more ? null : values.items);
+    if (!enumFilterFits(next)) {
+      setTooMany(true);
+      return;
+    }
+    onApply(next, names);
   };
 
   const enter = (e: KeyboardEvent) => {
@@ -175,10 +233,13 @@ export function FilterPanel<Row>({
       {type === 'enum' && (
         <EnumValues
           values={loadValues ? values : 'error'}
-          checked={checked}
-          onChecked={setChecked}
+          found={found}
+          selection={selection}
+          labelOf={labelOf}
+          onStep={step}
           find={find}
           onFind={setFind}
+          tooMany={tooMany}
           labels={labels}
         />
       )}
@@ -215,78 +276,135 @@ function initialBound<Row>(
   return '';
 }
 
-/** Галочки значений (`.fl-list` прототипа): «Выбрать все» отмечает видимые после поиска значения. */
+/**
+ * Галочки значений (`.fl-list` прототипа). Пришли все значения — «Найти значение» ищет среди них;
+ * пришли не все — ищет сервер (`found`). Пока ответ на новый поиск не пришёл, виден прежний список
+ * (окно не прыгает), но отмечать в нём нельзя.
+ */
 function EnumValues({
   values,
-  checked,
-  onChecked,
+  found,
+  selection,
+  labelOf,
+  onStep,
   find,
   onFind,
+  tooMany,
   labels,
 }: {
   values: GridValues | 'loading' | 'error';
-  checked: Set<string> | null;
-  onChecked: (checked: Set<string>) => void;
+  found: { q: string; values: GridValues | 'error' } | null;
+  selection: EnumSelection;
+  labelOf: EnumLabelOf;
+  onStep: (step: EnumStep) => void;
   find: string;
   onFind: (find: string) => void;
+  tooMany: boolean;
   labels: GridLabels;
 }) {
   if (values === 'loading') return <div className={HINT}>{labels.filterLoading}</div>;
-  if (values === 'error' || !checked) {
+  if (values === 'error') {
     return <div className="text-[12.5px] text-danger-label">{labels.filterLoadError}</div>;
   }
-  const needle = searchText(find.trim());
-  const shown = values.items.filter(
-    (i) => !needle || searchText(i.label ?? labels.empty).includes(needle),
-  );
-  const allOn = shown.length > 0 && shown.every((i) => checked.has(i.value));
-  const toggle = (vals: readonly string[], on: boolean) => {
-    const next = new Set(checked);
-    for (const v of vals) {
-      if (on) next.add(v);
-      else next.delete(v);
-    }
-    onChecked(next);
-  };
-  const row =
-    'flex cursor-pointer items-center gap-2 rounded-[5px] px-[7px] py-[5px] text-[13px] hover:bg-row-hover';
-  const box = 'm-0 h-4 w-4 flex-none cursor-pointer accent-accent';
+  const needle = find.trim();
+  let shown: GridValues | 'error' = values;
+  let busy = false;
+  if (!values.more) {
+    shown = { ...values, items: values.items.filter((i) => matchesValue(i.label, needle)) };
+  } else if (needle && found?.q === needle) {
+    shown = found.values;
+  } else if (needle) {
+    busy = true;
+    if (found && found.values !== 'error') shown = found.values;
+  }
   return (
     <>
-      {values.items.length > FIND_FROM && (
+      {(values.items.length > FIND_FROM || values.more) && (
         <input
           className={inputClass()}
           value={find}
           onChange={(e) => onFind(e.target.value)}
           placeholder={labels.filterFind}
           aria-label={labels.filterFind}
+          maxLength={200}
         />
       )}
+      {shown === 'error' ? (
+        <div className="text-[12.5px] text-danger-label">{labels.filterLoadError}</div>
+      ) : (
+        <EnumList
+          shown={shown}
+          needle={needle}
+          busy={busy}
+          selection={selection}
+          labelOf={labelOf}
+          onStep={onStep}
+          labels={labels}
+        />
+      )}
+      {tooMany && <div className="text-[12.5px] text-danger-label">{labels.filterTooMany}</div>}
+    </>
+  );
+}
+
+const ROW =
+  'flex cursor-pointer items-center gap-2 rounded-[5px] px-[7px] py-[5px] text-[13px] hover:bg-row-hover';
+const BOX = 'm-0 h-4 w-4 flex-none cursor-pointer accent-accent';
+
+/**
+ * Список галочек с «Выбрать все» и подсказкой, если показаны не все подходящие значения. «Выбрать
+ * все» — шаг по «Найти значение» (без поиска — все значения), поэтому отмечает и не показанные;
+ * отмечена, если отмечены все подходящие (`enumMatchChecked`), а не только показанные.
+ */
+function EnumList({
+  shown,
+  needle,
+  busy,
+  selection,
+  labelOf,
+  onStep,
+  labels,
+}: {
+  shown: GridValues;
+  needle: string;
+  /** Идёт поиск на сервере: список прежний, отмечать нельзя. */
+  busy: boolean;
+  selection: EnumSelection;
+  labelOf: EnumLabelOf;
+  onStep: (step: EnumStep) => void;
+  labels: GridLabels;
+}) {
+  const isOn = (i: GridValues['items'][number]) => enumChecked(selection, i.value, i.label);
+  const allOn =
+    !busy &&
+    shown.items.length > 0 &&
+    shown.items.every(isOn) &&
+    (!shown.more || enumMatchChecked(selection, needle, labelOf));
+  return (
+    <>
       <div
-        className="flex max-h-[230px] flex-col overflow-auto rounded-lg border border-line p-1"
+        className={`flex max-h-[230px] flex-col overflow-auto rounded-lg border border-line p-1 ${busy ? 'opacity-60' : ''}`}
+        aria-busy={busy}
         data-filter-values
       >
-        <label className={row}>
+        <label className={ROW}>
           <input
             type="checkbox"
-            className={box}
+            className={BOX}
             checked={allOn}
-            onChange={(e) =>
-              toggle(
-                shown.map((i) => i.value),
-                e.target.checked,
-              )
-            }
+            disabled={busy}
+            onChange={(e) => onStep({ on: e.target.checked, match: needle })}
           />
           <b>{labels.filterAll}</b>
         </label>
-        {shown.map((i) => (
-          <label key={i.value} className={row}>
+        {shown.items.map((i) => (
+          <label key={i.value} className={ROW}>
             <input
               type="checkbox"
-              className={box}
-              checked={checked.has(i.value)}
-              onChange={(e) => toggle([i.value], e.target.checked)}
+              className={BOX}
+              checked={isOn(i)}
+              disabled={busy}
+              onChange={(e) => onStep({ on: e.target.checked, vals: [i.value] })}
             />
             {i.label === null ? (
               <i className="text-faint">{labels.empty}</i>
@@ -297,7 +415,15 @@ function EnumValues({
           </label>
         ))}
       </div>
-      {values.more && <div className={HINT}>{labels.filterMore(values.items.length)}</div>}
+      {busy ? (
+        <div className={HINT}>{labels.filterLoading}</div>
+      ) : (
+        shown.more && (
+          <div className={HINT} data-filter-more>
+            {labels.filterMore(shown.items.length, shown.total)}
+          </div>
+        )
+      )}
     </>
   );
 }

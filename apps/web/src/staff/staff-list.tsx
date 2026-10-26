@@ -130,9 +130,12 @@ const fetchStaff: FetchListPage<Employee> = async (params) => {
   return EmployeeList.parse(await res.json());
 };
 
-/** Значения столбца для фильтра-галочек: роли по названию, статус, «Telegram привязан». */
-const fetchStaffValues = async (col: string) => {
-  const res = await api.api.staff.values.$get({ query: { col } });
+/**
+ * Значения столбца для фильтра-галочек: роли по названию, статус, «Telegram привязан»; `q` — «Найти
+ * значение» по всем значениям.
+ */
+const fetchStaffValues = async (col: string, q?: string) => {
+  const res = await api.api.staff.values.$get({ query: q ? { col, q } : { col } });
   if (!res.ok) throw new Error(`staff values: ${res.status}`);
   return ListValues.parse(await res.json());
 };

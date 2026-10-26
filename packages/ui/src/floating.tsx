@@ -9,10 +9,10 @@ import { useSwipeDown } from './use-swipe-down';
 /**
  * Всплывающее окошко у элемента поверх страницы (прототип ui/popups.js, openPop с `cls:'pad'`): как
  * `Popover`, но рисуется в `document.body` — не обрезается прокруткой таблицы (фильтр у заголовка
- * столбца). Место — `menuPosition`: под элементом, а если не помещается — над ним. Закрывается Esc
- * (фокус возвращается на элемент), нажатием вне окошка и элемента, кнопкой «Назад» и на телефоне
- * протяжкой вниз. При открытии фокус — на первом поле ввода (на телефоне — на первой кнопке, чтобы не
- * выскакивала клавиатура, как `!isMobile()` в openPop).
+ * столбца). Место — `menuPosition`: под элементом, а если не помещается — над ним; вырос за край
+ * экрана — место считается заново. Закрывается Esc (фокус возвращается на элемент), нажатием вне
+ * окошка и элемента, кнопкой «Назад» и на телефоне протяжкой вниз. При открытии фокус — на первом поле
+ * ввода (на телефоне — на первой кнопке, чтобы не выскакивала клавиатура, как `!isMobile()` в openPop).
  */
 export function FloatingPanel({
   anchor,
@@ -33,13 +33,21 @@ export function FloatingPanel({
   useLayoutEffect(() => {
     const el = box.current;
     if (!el) return;
-    setPos(
-      menuPosition(
-        { anchor },
-        { w: el.offsetWidth, h: el.offsetHeight },
-        { w: window.innerWidth, h: window.innerHeight },
-      ),
-    );
+    const place = () => {
+      const size = { w: el.offsetWidth, h: el.offsetHeight };
+      const viewport = { w: window.innerWidth, h: window.innerHeight };
+      // Содержимое поменяло размер (значения фильтра пришли с сервера) — окошко переставляется, только
+      // если вышло за край экрана: поле «Найти значение» не уезжает во время ввода.
+      setPos((prev) =>
+        prev && prev.x + size.w <= viewport.w && prev.y + size.h <= viewport.h
+          ? prev
+          : menuPosition({ anchor }, size, viewport),
+      );
+    };
+    place();
+    const resized = new ResizeObserver(place);
+    resized.observe(el);
+    return () => resized.disconnect();
   }, [anchor]);
 
   useEffect(() => {
