@@ -4,25 +4,33 @@ import type { MenuModuleId } from '@buhuchet/domain';
 import { MeResponse } from '@buhuchet/shared';
 import {
   AppFrame,
+  BottomNav,
+  BottomSheet,
   buttonClass,
+  PhoneMenu,
+  SheetAction,
   SideFootButton,
   SideFootRow,
   SideNav,
   SideOrg,
+  TabPager,
   TabRow,
   TopBar,
   type AddAction,
+  type PhoneModule,
   type ShellLink,
   type ShellModule,
 } from '@buhuchet/ui';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { api } from '../api-client';
 import { useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
+import { ModuleScreen } from '../screens/module-screen';
 import { PHONE_QUERY, saveNavHidden, saveTree, toggleTheme } from './browser';
 import { Clock } from './clock';
+import { ShellContext, type AddRequest } from './context';
 import {
   addActions,
   APP_PATH,
@@ -30,39 +38,18 @@ import {
   MODULES,
   moduleHref,
   parseAppPath,
+  phoneModules,
   shellAccess,
   tabHref,
   visibleTabs,
   type ShellAccess,
 } from './modules';
 
-/** Запрос «+ Добавить»: какой способ выбран в каком модуле; `n` отличает повторный выбор того же. */
-export interface AddRequest {
-  moduleId: string;
-  actionId: string;
-  label: string;
-  n: number;
-}
-
-interface ShellState {
-  /** Общий поиск по текущей вкладке; при смене модуля или вкладки очищается. */
-  search: string;
-  addRequest: AddRequest | null;
-  clearAddRequest: () => void;
-}
-
-const ShellContext = createContext<ShellState>({
-  search: '',
-  addRequest: null,
-  clearAddRequest: () => {},
-});
-
-/** Состояние рабочей страницы для экранов модулей: поиск и выбранный способ добавления. */
-export function useShell(): ShellState {
-  return useContext(ShellContext);
-}
+export { useShell, type AddRequest } from './context';
 
 const NextLink: ShellLink = (props) => <Link {...props} />;
+/** Переход из панели «Меню» заменяет её запись в истории: «Назад» вернёт на прежнюю страницу. */
+const ReplaceLink: ShellLink = (props) => <Link {...props} replace />;
 
 function shellModule(id: MenuModuleId, access: ShellAccess, t: Translate): ShellModule {
   const def = MODULES[id];
@@ -81,9 +68,11 @@ function shellModule(id: MenuModuleId, access: ShellAccess, t: Translate): Shell
 }
 
 /**
- * Рабочая страница за входом (ТЗ «Рабочая страница (work_page)», прототип ui/shell.js): левая панель
- * модулей по правам и учётной политике, верхняя панель, ряд вкладок и «+ Добавить»; экран модуля —
- * `children`. Модули не рисуют свои заголовки, кнопки добавления и поля поиска — всё это даёт оболочка.
+ * Рабочая страница за входом (ТЗ «Рабочая страница (work_page)» и «Мобильная навигация», прототип
+ * ui/shell.js): левая панель модулей по правам и учётной политике, верхняя панель, ряд вкладок и
+ * «+ Добавить»; на телефоне — нижняя панель из четырёх основных модулей, панель «Меню» с «Другими
+ * модулями» и листание вкладок свайпом. Экран модуля — `children`. Модули не рисуют свои заголовки,
+ * кнопки добавления и поля поиска — всё это даёт оболочка.
  */
 export function Shell({
   me: initialMe,
@@ -144,9 +133,21 @@ export function Shell({
   );
   const current = modules.find((m) => m.id === moduleId) ?? null;
   const currentTab = current?.tabs.find((tab) => tab.id === tabId) ?? null;
+  const phone = useMemo(() => {
+    const split = phoneModules(me.modules, access.admin);
+    const pick = (id: MenuModuleId, title: string): PhoneModule => {
+      const m = modules.find((x) => x.id === id)!;
+      return { id, title, icon: m.icon, href: m.href };
+    };
+    return {
+      bottom: split.bottom.map((id) => pick(id, t(MODULES[id].short))),
+      other: split.other.map((id) => pick(id, t(MODULES[id].title))),
+    };
+  }, [me.modules, access.admin, modules, t]);
 
   const [navHidden, setNavHidden] = useState(initialNavHidden);
   const [openIds, setOpenIds] = useState<ReadonlySet<string>>(() => new Set(initialOpen));
+  const [sheetOpen, setSheetOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [addRequest, setAddRequest] = useState<AddRequest | null>(null);
   const [leaving, setLeaving] = useState(false);
@@ -160,6 +161,16 @@ export function Shell({
     setAddRequest(null);
   }
 
+  // Окно стало шире телефона — панели «Меню» там нет.
+  useEffect(() => {
+    const query = window.matchMedia(PHONE_QUERY);
+    const change = () => {
+      if (!query.matches) setSheetOpen(false);
+    };
+    query.addEventListener('change', change);
+    return () => query.removeEventListener('change', change);
+  }, []);
+
   const actions: AddAction[] = current
     ? addActions(current.id as MenuModuleId, access).map((a) => ({
         id: a.id,
@@ -172,8 +183,11 @@ export function Shell({
     : [];
 
   const toggleNav = () => {
-    // На телефоне «Меню» выдвигает панель модулей снизу — задача #11.
-    if (window.matchMedia(PHONE_QUERY).matches) return;
+    // На телефоне «Меню» выдвигает снизу панель с остальными модулями.
+    if (window.matchMedia(PHONE_QUERY).matches) {
+      setSheetOpen(true);
+      return;
+    }
     setNavHidden((hidden) => {
       saveNavHidden(!hidden);
       return !hidden;
@@ -190,12 +204,14 @@ export function Shell({
     });
   };
 
-  const logout = async () => {
+  /** Выйти; из панели «Меню» — заменяя её запись в истории, чтобы «Назад» не вернул к панели. */
+  const logout = async (replace = false) => {
     setLeaving(true);
     try {
       await api.api.auth.logout.$post();
     } finally {
-      window.location.assign('/login');
+      if (replace) window.location.replace('/login');
+      else window.location.assign('/login');
     }
   };
 
@@ -205,6 +221,8 @@ export function Shell({
     () => ({ search, addRequest, clearAddRequest: () => setAddRequest(null) }),
     [search, addRequest, setAddRequest],
   );
+  const mode = t(access.admin ? 'shell.mode.admin' : 'shell.mode.business');
+  const orgHref = `${APP_PATH}/org`;
 
   return (
     <ShellContext.Provider value={state}>
@@ -213,7 +231,7 @@ export function Shell({
         paneLabel={title}
         side={
           <SideNav
-            mode={t(access.admin ? 'shell.mode.admin' : 'shell.mode.business')}
+            mode={mode}
             modules={modules}
             activeModule={moduleId}
             activeTab={tabId}
@@ -234,7 +252,7 @@ export function Shell({
                       me.organization.inn ? t('shell.org_inn', { inn: me.organization.inn }) : ''
                     }
                     title={t('shell.org_profile')}
-                    href={`${APP_PATH}/org`}
+                    href={orgHref}
                     Link={NextLink}
                   />
                 )}
@@ -242,7 +260,7 @@ export function Shell({
                   <SideFootButton
                     icon="logout"
                     label={t('shell.logout')}
-                    onClick={logout}
+                    onClick={() => logout()}
                     disabled={leaving}
                   />
                 </SideFootRow>
@@ -271,6 +289,7 @@ export function Shell({
               onChange: setSearch,
               placeholder: t('shell.search'),
               scope: currentTab?.label ?? title,
+              openLabel: t('shell.search_open'),
             }}
             clock={<Clock initial={serverNow} />}
             help={{
@@ -300,6 +319,59 @@ export function Shell({
             }}
           />
         }
+        bottomNav={
+          <BottomNav
+            modules={phone.bottom}
+            active={moduleId}
+            label={t('shell.modules')}
+            Link={NextLink}
+          />
+        }
+        sheet={
+          <BottomSheet open={sheetOpen} onClose={() => setSheetOpen(false)} label={t('shell.menu')}>
+            {(leave) => (
+              <PhoneMenu
+                mode={mode}
+                modules={phone.other}
+                active={moduleId}
+                label={t('shell.other_modules')}
+                // Выбор модуля закрывает панель; уже открытый модуль — просто закрывает.
+                onSelect={(e, m) => {
+                  if (m.href === pathname) {
+                    e.preventDefault();
+                    setSheetOpen(false);
+                  } else {
+                    leave();
+                  }
+                }}
+                Link={ReplaceLink}
+                footer={
+                  <>
+                    {me.organization && (
+                      <SideOrg
+                        name={me.organization.name}
+                        sub={t('shell.org_profile')}
+                        title={t('shell.org_profile')}
+                        href={orgHref}
+                        onClick={leave}
+                        Link={ReplaceLink}
+                      />
+                    )}
+                    <SheetAction
+                      icon="logout"
+                      label={t('shell.logout')}
+                      onClick={() => {
+                        leave();
+                        void logout(true);
+                      }}
+                      disabled={leaving}
+                    />
+                  </>
+                }
+              />
+            )}
+          </BottomSheet>
+        }
       >
         {current && (
           <TabRow
@@ -319,7 +391,21 @@ export function Shell({
             Link={NextLink}
           />
         )}
-        {children}
+        {current ? (
+          <TabPager
+            tabs={current.tabs.map((tab) => tab.id)}
+            activeTab={tabId}
+            scope={current.id}
+            renderTab={(tab) => <ModuleScreen moduleId={current.id as MenuModuleId} tabId={tab} />}
+            onSwipe={(tab) =>
+              router.replace(tabHref(current.id as MenuModuleId, tab), { scroll: false })
+            }
+          >
+            {children}
+          </TabPager>
+        ) : (
+          children
+        )}
       </AppFrame>
     </ShellContext.Provider>
   );

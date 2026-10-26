@@ -27,17 +27,21 @@ export function BetaBadge({ label }: { label: string }) {
 export function MenuItems({
   items,
   onSelect,
+  active,
 }: {
   items: readonly MenuItem[];
   onSelect: (id: string) => void;
+  /** Выделенный пункт (прототип `.mi.on`), например текущая вкладка карточки. */
+  active?: string;
 }) {
   return items.map((item) => (
     <button
       key={item.id}
       type="button"
       role="menuitem"
+      aria-current={item.id === active ? 'true' : undefined}
       onClick={() => onSelect(item.id)}
-      className="flex w-full cursor-pointer items-start gap-2.5 rounded-[5px] border-0 bg-transparent px-2.5 py-[7px] text-left text-[13px] leading-[1.35] text-ink hover:bg-row-hover"
+      className={`flex w-full cursor-pointer items-start gap-2.5 rounded-[5px] border-0 px-2.5 py-[7px] text-left text-[13px] leading-[1.35] text-ink ${item.id === active ? 'bg-sel font-semibold' : 'bg-transparent hover:bg-row-hover'}`}
     >
       <Icon name={item.icon} className="mt-px text-muted" />
       <span>

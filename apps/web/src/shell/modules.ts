@@ -374,6 +374,30 @@ export const MODULES: Record<MenuModuleId, ModuleDef> = {
   },
 };
 
+/**
+ * Четыре основных модуля нижней панели телефона (прототип core/session.js BNAV; ТЗ «Мобильная
+ * навигация»): у организации и у администратора платформы свои.
+ */
+export const BOTTOM_NAV = {
+  business: ['home', 'cps', 'reports', 'tasks'],
+  admin: ['accounts', 'orgs', 'pdicts', 'tg'],
+} as const satisfies Record<'business' | 'admin', readonly MenuModuleId[]>;
+
+/**
+ * Модули меню на телефоне: внизу — основные, на которые есть право (основной модуль без права просто
+ * не показывается), в «Других модулях» — все остальные, в порядке меню.
+ */
+export function phoneModules(
+  modules: readonly MenuModuleId[],
+  admin: boolean,
+): { bottom: MenuModuleId[]; other: MenuModuleId[] } {
+  const main: readonly MenuModuleId[] = BOTTOM_NAV[admin ? 'admin' : 'business'];
+  return {
+    bottom: modules.filter((m) => main.includes(m)),
+    other: modules.filter((m) => !main.includes(m)),
+  };
+}
+
 /** Адрес страниц за входом: /app/<модуль>/<вкладка> (адреса `app` нет среди адресов организаций). */
 export const APP_PATH = '/app';
 

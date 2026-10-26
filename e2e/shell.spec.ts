@@ -1,8 +1,9 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 
 // Оболочка рабочей страницы через настоящий сайт: меню по правам из /api/auth/me, «+ Добавить», тема.
-// Экранов модулей ещё нет — вместо них заглушки. На телефоне левой панели нет (нижняя панель — #11),
-// поэтому меню проверяется по ссылкам в разметке страницы. Логины и роли свои на каждый запуск.
+// Экранов модулей ещё нет — вместо них заглушки. Меню по правам проверяется по ссылкам левой панели
+// в разметке страницы (на телефоне она скрыта; нижняя панель и «Другие модули» — e2e/phone.spec.ts).
+// Логины и роли свои на каждый запуск.
 const DEMO_PASSWORD = process.env.DEMO_PASSWORD ?? 'demo';
 
 const unique = (prefix: string) =>
@@ -198,15 +199,16 @@ test.describe('Этап 1: оболочка рабочей страницы', ()
     await help.getByRole('link', { name: 'Открыть Базу знаний' }).click();
     await expect(page).toHaveURL(/\/app\/kb\/level$/);
 
-    if (isMobile) return; // Поиск, «Меню» и дерево модулей на телефоне — задача #11.
-
-    // Поиск по текущей вкладке очищается при смене вкладки.
+    // Поиск по текущей вкладке очищается при смене вкладки; на телефоне поле раскрывает значок.
     await page.goto('/app/reports/week');
+    if (isMobile) await page.getByRole('button', { name: 'Поиск', exact: true }).click();
     const search = page.getByRole('searchbox', { name: 'Поиск по текущей вкладке' });
     await search.fill('НДС');
     await page.getByRole('tab', { name: 'Просрочено' }).click();
     await expect(page).toHaveURL(/\/app\/reports\/overdue$/);
     await expect(search).toHaveValue('');
+
+    if (isMobile) return; // Левой панели и дерева модулей на телефоне нет.
 
     // «Меню» скрывает левую панель, раскрытая ветка дерева — запоминаются.
     const side = page.getByRole('complementary', { name: 'Модули' });
@@ -261,16 +263,10 @@ test.describe('Этап 1: оболочка рабочей страницы', ()
     await page.goto('/app');
     await expect(page).toHaveURL(/\/app\/home\/today$/);
 
-    // «Выйти из аккаунта» — внизу левой панели на ПК; на телефоне панель придёт в #11.
-    if (isMobile) {
-      await page.waitForLoadState('networkidle');
-      expect((await page.request.post('/api/auth/logout', { headers: { origin } })).status()).toBe(
-        200,
-      );
-    } else {
-      await page.getByRole('button', { name: 'Выйти из аккаунта' }).click();
-      await expect(page).toHaveURL(/\/login$/);
-    }
+    // «Выйти из аккаунта» — внизу левой панели на ПК, на телефоне — в панели «Меню».
+    if (isMobile) await page.getByRole('button', { name: 'Меню' }).click();
+    await page.getByRole('button', { name: 'Выйти из аккаунта' }).click();
+    await expect(page).toHaveURL(/\/login$/);
     await page.goto('/app/home/today');
     await expect(page).toHaveURL(/\/login$/);
   });

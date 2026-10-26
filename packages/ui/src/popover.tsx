@@ -9,6 +9,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from 'react';
+import { useSwipeDown } from './use-swipe-down';
 
 const PLACEMENTS = {
   'bottom-start': 'top-full left-0 mt-1.5',
@@ -45,8 +46,10 @@ const HOVER_CLOSE_MS = 220;
 
 /**
  * Всплывающее окошко у кнопки (прототип ui/popups.js, openPop; стиль `.pop`): описание модуля «ⓘ»,
- * «?» и меню «+ Добавить». Закрывается повторным нажатием, клавишей Esc и нажатием вне окошка; при
- * открытии нажатием фокус переходит в окошко, при закрытии по Esc — обратно на кнопку.
+ * «?» и меню «+ Добавить». Закрывается повторным нажатием, клавишей Esc, нажатием вне окошка, кнопкой
+ * «Назад» (переход при этом не отменяется) и на телефоне протяжкой вниз; при открытии нажатием фокус
+ * переходит в окошко, при закрытии по Esc — обратно на кнопку. Пока окошко открыто, свайп по вкладкам
+ * не начинается (`data-overlay`).
  */
 export function Popover({
   trigger,
@@ -86,6 +89,7 @@ export function Popover({
     }
   };
   useEffect(() => () => clearTimeout(timer.current), []);
+  useSwipeDown(panel, { enabled: open, onClose: close });
 
   useEffect(() => {
     if (!openBy) return;
@@ -100,11 +104,15 @@ export function Popover({
       setOpenBy(null);
       box.current?.querySelector<HTMLElement>('[aria-controls]')?.focus();
     };
+    // «Назад» и «Вперёд» закрывают окошко, а переход идёт своим чередом (closePop прототипа).
+    const back = () => setOpenBy(null);
     document.addEventListener('pointerdown', outside);
     document.addEventListener('keydown', escape);
+    window.addEventListener('popstate', back);
     return () => {
       document.removeEventListener('pointerdown', outside);
       document.removeEventListener('keydown', escape);
+      window.removeEventListener('popstate', back);
     };
   }, [openBy]);
 
@@ -122,7 +130,8 @@ export function Popover({
           id={id}
           role={role}
           aria-label={label}
-          className={`absolute z-[70] max-h-[min(460px,calc(100dvh-24px))] w-max max-w-[min(360px,calc(100vw-24px))] min-w-[210px] animate-slide-up overflow-auto rounded-xl border border-line-strong bg-raised text-ink shadow-pop ${PLACEMENTS[placement]} ${padded ? 'flex flex-col gap-2.5 p-3' : 'p-1.5'}`}
+          data-overlay
+          className={`absolute z-[70] max-h-[min(460px,calc(100dvh-24px))] touch-pan-y w-max max-w-[min(360px,calc(100vw-24px))] min-w-[210px] animate-slide-up overflow-auto rounded-xl border border-line-strong bg-raised text-ink shadow-pop ${PLACEMENTS[placement]} ${padded ? 'flex flex-col gap-2.5 p-3' : 'p-1.5'}`}
         >
           {children(close)}
         </div>
