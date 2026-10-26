@@ -4,10 +4,12 @@ import {
   getEmployee,
   listEmployeeValues,
   listEmployeesPage,
+  staffTabCounts,
   withOrgContext,
   type EmployeeRecord,
 } from '@buhuchet/db';
 import {
+  hasPermission,
   RecordNotFoundError,
   telegramName,
   type RoleSaveEditor,
@@ -23,6 +25,7 @@ import {
   ListQueryParams,
   ListValues,
   ListValuesQuery,
+  StaffTabCounts,
   Uuid,
 } from '@buhuchet/shared';
 import type { Context } from 'hono';
@@ -165,6 +168,36 @@ export function listEmployeesHandler(
       },
       200,
     );
+  };
+}
+
+export const staffTabCountsRoute = createRoute({
+  method: 'get',
+  path: '/staff/tab-counts',
+  tags: ['staff'],
+  summary: 'Счётчики вкладок модуля «Сотрудники»',
+  middleware: [requirePermission('staffView')] as const,
+  responses: {
+    200: {
+      description: 'Активных сотрудников и ролей (ролей — только с правом «Сотрудники и роли»)',
+      content: { 'application/json': { schema: StaffTabCounts } },
+    },
+    401: { description: 'Нет входа', content: error },
+    403: { description: 'Нет права «Просматривать сотрудников»', content: error },
+  },
+});
+
+/**
+ * Числа на вкладках модуля (прототип staffTabs): у «Сотрудников» — активных сотрудников, у «Ролей» —
+ * ролей. Без права «Сотрудники и роли» вкладки «Роли» нет, и её число не отдаётся.
+ */
+export function staffTabCountsHandler(
+  deps: ApiDeps,
+): RouteHandler<typeof staffTabCountsRoute, AppEnv> {
+  return async (c) => {
+    const counts = await withOrgContext(deps.db, orgContextOf(c), (tx) => staffTabCounts(tx));
+    const roles = hasPermission(c.get('access')!.subject, 'staff') ? counts.roles : null;
+    return c.json({ list: counts.active, roles }, 200);
   };
 }
 

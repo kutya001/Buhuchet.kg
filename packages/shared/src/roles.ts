@@ -2,6 +2,7 @@ import { PERMISSION_GROUPS, SCOPES, type PermissionGroupId } from '@buhuchet/dom
 import { z } from 'zod';
 import { PermissionIdSchema, ScopeGroupIdSchema } from './auth';
 import { RecordAudit, RecordVersion, Uuid } from './common';
+import { listPageSchema } from './list';
 
 /** Название роли: уникально в организации. */
 export const ROLE_NAME_MAX_LENGTH = 100;
@@ -36,6 +37,8 @@ export const RoleListItem = z.object({
   name: z.string(),
   /** Роль владельца: все права, не меняется и не удаляется. */
   isOwner: z.boolean(),
+  /** Код шаблона платформы («chief», «acc»), из которого роль создана; null — роль создала организация. */
+  templateCode: z.string().nullable(),
   /** Активных сотрудников с этой ролью. */
   employees: z.number().int().nonnegative(),
   /** Число прав; у роли владельца — все. */
@@ -45,7 +48,11 @@ export const RoleListItem = z.object({
 });
 export type RoleListItem = z.infer<typeof RoleListItem>;
 
-export const RoleList = z.object({ items: z.array(RoleListItem) });
+/**
+ * Страница списка ролей (вкладка «Роли» на общем списке): сортировка, страницы и фильтры — на
+ * сервере. Все роли сразу (для выбора роли в формах) — `size=all&sort=name.asc`.
+ */
+export const RoleList = listPageSchema(RoleListItem);
 export type RoleList = z.infer<typeof RoleList>;
 
 /**

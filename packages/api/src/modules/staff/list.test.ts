@@ -5,6 +5,7 @@ import {
   EmployeeList,
   listQueryParams,
   ListValues,
+  StaffTabCounts,
   type ListQuery,
 } from '@buhuchet/shared';
 import { eq } from 'drizzle-orm';
@@ -64,6 +65,30 @@ describe.skipIf(!databaseAvailable())(
 
     afterAll(async () => {
       await f?.t.drop();
+    });
+
+    it('счётчики вкладок: активных сотрудников и ролей своей организации; без права «Сотрудники и роли» — без ролей', async () => {
+      const counts = async (cookie: string) => {
+        const res = await apiRequest(f.app, 'GET', '/api/staff/tab-counts', cookie);
+        expect(res.status, await res.clone().text()).toBe(200);
+        return StaffTabCounts.parse(await res.json());
+      };
+      // Организация А: 5 сотрудников фикстуры и 20 из 30 добавленных (каждый третий заблокирован), 5 ролей.
+      expect(await counts(owner)).toEqual({ list: 25, roles: 5 });
+      // Организация Б: владелец и бухгалтер, 3 роли — чужие не считаются.
+      expect(await counts(await signIn(f.app, 'owner-b', TEST_PASSWORD))).toEqual({
+        list: 2,
+        roles: 3,
+      });
+      // Главный бухгалтер видит сотрудников, но вкладки «Роли» у него нет.
+      expect(await counts(await signIn(f.app, 'chief-a', TEST_PASSWORD))).toEqual({
+        list: 25,
+        roles: null,
+      });
+      // Без «Просматривать сотрудников» — 403, без входа — 401.
+      const acc = await signIn(f.app, 'acc-a', TEST_PASSWORD);
+      expect((await apiRequest(f.app, 'GET', '/api/staff/tab-counts', acc)).status).toBe(403);
+      expect((await apiRequest(f.app, 'GET', '/api/staff/tab-counts')).status).toBe(401);
     });
 
     it('в ответе только текущая страница; всего записей и номер страницы', async () => {

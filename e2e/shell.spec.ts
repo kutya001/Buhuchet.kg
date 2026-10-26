@@ -69,7 +69,7 @@ test.describe('Этап 1: оболочка рабочей страницы', ()
     await signIn(owner, origin, 'erkin', DEMO_PASSWORD);
 
     // Роль — копия «Бухгалтера» (у него «Проекты» видны) без права «Просматривать проекты».
-    const roles = (await (await owner.get('/api/roles')).json()) as {
+    const roles = (await (await owner.get('/api/roles?size=all')).json()) as {
       items: { id: string; name: string }[];
     };
     const accountant = roles.items.find((r) => r.name === 'Бухгалтер')!;
@@ -237,7 +237,7 @@ test.describe('Этап 1: оболочка рабочей страницы', ()
 
     const owner = await playwright.request.newContext({ baseURL });
     await signIn(owner, origin, 'erkin', DEMO_PASSWORD);
-    const roles = (await (await owner.get('/api/roles')).json()) as {
+    const roles = (await (await owner.get('/api/roles?size=all')).json()) as {
       items: { id: string; name: string }[];
     };
     const login = unique('e2e-shell');

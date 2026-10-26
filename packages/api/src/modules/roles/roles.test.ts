@@ -1,10 +1,17 @@
 import { schema } from '@buhuchet/db';
 import { databaseAvailable } from '@buhuchet/db/testing';
 import { PERMISSIONS, PERMISSION_IDS, SCOPE_GROUPS } from '@buhuchet/domain';
-import { ApiError, MeResponse, PermissionCatalog, Role, RoleList } from '@buhuchet/shared';
+import {
+  ApiError,
+  ListValues,
+  MeResponse,
+  PermissionCatalog,
+  Role,
+  RoleList,
+} from '@buhuchet/shared';
 import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { apiRequest, createStaffFixture, signIn, TEST_PASSWORD } from '../../testing';
+import { apiRequest, createStaffFixture, signIn, TEST_PASSWORD, unzipTexts } from '../../testing';
 
 const { auditLog } = schema;
 
@@ -76,9 +83,80 @@ describe.skipIf(!databaseAvailable())('Роли: API', () => {
       expect(items).toHaveLength(5);
     });
 
+    it('список ролей — общий список: по умолчанию по названию, страница, сортировка и фильтр на сервере', async () => {
+      const page = async (query: string) => {
+        const res = await call('GET', `/api/roles?${query}`, owner);
+        expect(res.status, await res.clone().text()).toBe(200);
+        return RoleList.parse(await res.json());
+      };
+      const all = await page('');
+      expect(all.total).toBe(5);
+      const names = all.items.map((r) => r.name);
+      expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b, 'ru')));
+      expect((await page('size=25&page=1&sort=permissionCount.desc')).items[0]!.isOwner).toBe(true);
+      const filtered = (filters: unknown) =>
+        page(`filters=${encodeURIComponent(JSON.stringify(filters))}`);
+      expect((await filtered({ employees: { type: 'num', from: 1, to: 1 } })).total).toBe(5);
+      expect((await filtered({ employees: { type: 'num', from: 2 } })).total).toBe(0);
+      expect((await page('q=кадр&qcols=name')).items.map((r) => r.name)).toEqual(['Кадры']);
+      const grouped = await page('group=employees');
+      expect(grouped.groups!.reduce((n, g) => n + g.count, 0)).toBe(5);
+      expect((await call('GET', '/api/roles?sort=secret.asc', owner)).status).toBe(400);
+    });
+
+    it('чужая организация не видна: в списке ролей и значениях фильтра — только роли своей организации', async () => {
+      const list = async (who: string) => {
+        const res = await call('GET', '/api/roles?size=all', who);
+        expect(res.status).toBe(200);
+        return RoleList.parse(await res.json());
+      };
+      const a = await list(owner);
+      const b = await list(ownerB);
+      expect(b.total).toBe(3);
+      const idsA = new Set(a.items.map((r) => r.id));
+      expect(b.items.some((r) => idsA.has(r.id))).toBe(false);
+      expect(b.items.map((r) => r.name)).not.toContain('Кадры');
+      const values = ListValues.parse(
+        await (await call('GET', '/api/roles/values?col=name', ownerB)).json(),
+      );
+      expect(values.items.reduce((n, v) => n + v.count, 0)).toBe(3);
+      expect(values.items.map((v) => v.value)).not.toContain('Кадры');
+    });
+
+    it('значения для фильтра и «В Excel» — роли своей организации; выгрузка — с правом «Выгружать в Excel»', async () => {
+      const res = await call('GET', '/api/roles/values?col=permissionCount', owner);
+      expect(res.status).toBe(200);
+      const values = ListValues.parse(await res.json());
+      expect(values.items.reduce((n, v) => n + v.count, 0)).toBe(5);
+      expect(values.items.map((v) => v.value)).toContain('39');
+      expect((await call('GET', '/api/roles/values?col=passwordHash', owner)).status).toBe(400);
+
+      const params = new URLSearchParams({ cols: 'name,employees,permissionCount' });
+      const file = await call('GET', `/api/roles/export?${params}`, owner);
+      expect(file.status).toBe(200);
+      expect(file.headers.get('content-disposition')).toContain(
+        `filename*=UTF-8''${encodeURIComponent('Роли')}`,
+      );
+      expect(file.headers.get('x-export-rows')).toBe('5');
+      const sheet = unzipTexts(new Uint8Array(await file.arrayBuffer()))[
+        'xl/worksheets/sheet1.xml'
+      ]!;
+      const texts = [...sheet.matchAll(/<t xml:space="preserve">([^<]*)<\/t>/g)].map((m) => m[1]);
+      expect(texts.slice(0, 3)).toEqual(['Роль', 'Сотрудников', 'Прав']);
+      expect(texts).toContain('Кадры');
+      const fileB = await call('GET', `/api/roles/export?${params}`, ownerB);
+      expect(fileB.headers.get('x-export-rows')).toBe('3');
+    });
+
     it('без права «Сотрудники и роли» роли и справочник прав не отдаются', async () => {
       const chief = await signIn(f.app, 'chief-a', TEST_PASSWORD);
-      for (const path of ['/api/roles', `/api/roles/${f.roleIds.hr}`, '/api/permissions']) {
+      for (const path of [
+        '/api/roles',
+        '/api/roles/values?col=name',
+        '/api/roles/export?cols=name',
+        `/api/roles/${f.roleIds.hr}`,
+        '/api/permissions',
+      ]) {
         expect((await call('GET', path, chief)).status).toBe(403);
       }
       expect((await call('GET', '/api/roles')).status).toBe(401);

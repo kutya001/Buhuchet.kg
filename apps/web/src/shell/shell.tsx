@@ -54,6 +54,7 @@ import {
   visibleTabs,
   type ShellAccess,
 } from './modules';
+import { useTabCounts, withTabCounts } from './tab-counts';
 import { UiProviders } from './ui-providers';
 
 export { useShell, type AddRequest } from './context';
@@ -202,9 +203,10 @@ function ShellPage({
   }, [pathname, moduleId, router]);
 
   const access = useMemo(() => shellAccess(me), [me]);
+  const counts = useTabCounts(me.modules);
   const modules = useMemo(
-    () => me.modules.map((id) => shellModule(id, access, t)),
-    [me.modules, access, t],
+    () => me.modules.map((id) => withTabCounts(shellModule(id, access, t), counts[id])),
+    [me.modules, access, t, counts],
   );
   const current = modules.find((m) => m.id === moduleId) ?? null;
   const currentTab = current?.tabs.find((tab) => tab.id === tabId) ?? null;
@@ -312,8 +314,9 @@ function ShellPage({
       clearAddRequest: () => setAddRequest(null),
       access,
       employeeId: me.employee?.id ?? null,
+      role: me.employee ? { id: me.employee.roleId, isOwner: me.employee.isOwner } : null,
     }),
-    [search, addRequest, setAddRequest, access, me.employee?.id],
+    [search, addRequest, setAddRequest, access, me.employee],
   );
   const mode = t(access.admin ? 'shell.mode.admin' : 'shell.mode.business');
   const fullName = me.employee?.fullName ?? t('profile.platform_admin');

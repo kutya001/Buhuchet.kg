@@ -13,7 +13,14 @@ import {
   roleWithinRights,
   type RoleLock,
 } from './editing';
-import { PERMISSION_IDS, type PermissionId, type Scope, type ScopeGroupId } from './permissions';
+import { UI_TEXTS } from '../l10n/texts';
+import {
+  PERMISSION_GROUPS,
+  PERMISSION_IDS,
+  type PermissionId,
+  type Scope,
+  type ScopeGroupId,
+} from './permissions';
 
 const LOCK_BY_MESSAGE = new Map(
   Object.entries(ROLE_LOCK_MESSAGES).map(([lock, message]) => [message, lock as RoleLock]),
@@ -337,5 +344,20 @@ describe('счётчики роли', () => {
     expect(
       rolePermissionCount({ isOwner: false, permissions: ['cpView', 'export', 'cpView'] }),
     ).toBe(2);
+  });
+});
+
+describe('тексты формы роли в словаре', () => {
+  const texts: Record<string, { ru: string }> = UI_TEXTS;
+
+  it('причины под галочкой и отказы сохранения — те же тексты, что отдаёт сервер', () => {
+    for (const [lock, message] of Object.entries(ROLE_CHANGE_MESSAGES)) {
+      const key = lock in ROLE_LOCK_MESSAGES ? `roles.lock.${lock}` : `roles.err.${lock}`;
+      expect(texts[key]?.ru, key).toBe(message);
+    }
+  });
+
+  it('у каждой группы прав есть название', () => {
+    for (const g of PERMISSION_GROUPS) expect(texts[`roles.group.${g.id}`], g.id).toBeDefined();
   });
 });

@@ -10,7 +10,7 @@ import {
   type Scope,
   type ScopeGroupId,
 } from '@buhuchet/domain';
-import { eq, sql } from 'drizzle-orm';
+import { count, eq, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { Db, Tx } from './client';
 import { writeHistory } from './history';
@@ -243,6 +243,19 @@ export async function listEmployeesPage(
 }
 
 /**
+ * Счётчики вкладок модуля «Сотрудники» (прототип staffTabs): активных сотрудников и ролей
+ * организации (её отсекает RLS).
+ */
+export async function staffTabCounts(tx: Tx): Promise<{ active: number; roles: number }> {
+  const [active] = await tx
+    .select({ n: count() })
+    .from(employees)
+    .where(eq(employees.active, true));
+  const [all] = await tx.select({ n: count() }).from(roles);
+  return { active: Number(active?.n ?? 0), roles: Number(all?.n ?? 0) };
+}
+
+/**
  * Значения столбца списка сотрудников для фильтра-галочек (роль — названия ролей, статус — подписи);
  * `q` — «Найти значение» по всем значениям столбца.
  */
@@ -420,18 +433,41 @@ export async function endUserSessions(tx: Tx, userId: string): Promise<void> {
   await tx.delete(sessions).where(eq(sessions.userId, userId));
 }
 
-/** Справочник платформы «Коды телефонов» (refDB → phoneCodes): код страны и маска номера. */
-export async function phoneCodes(db: Db | Tx): Promise<{ code: string; mask: string }[]> {
+/** Строка справочника «Коды телефонов» для поля ввода телефона. */
+export interface PhoneCodeRecord {
+  /** Страна: KG, KZ… */
+  cc: string;
+  flag: string;
+  name: string;
+  code: string;
+  mask: string;
+  /** Выключенный код в поле ввода не предлагается, но номер с ним по-прежнему читается. */
+  active: boolean;
+}
+
+/**
+ * Справочник платформы «Коды телефонов» (refDB → phoneCodes) по порядку справочника; строки без
+ * страны, кода из цифр или маски пропускаются.
+ */
+export async function phoneCodeList(db: Db | Tx): Promise<PhoneCodeRecord[]> {
   const [row] = await db
     .select({ payload: platformReference.payload })
     .from(platformReference)
     .where(eq(platformReference.key, 'phoneCodes'));
   const payload = row?.payload;
   if (!Array.isArray(payload)) return [];
+  const text = (v: unknown) => (typeof v === 'string' ? v : '');
   return payload.flatMap((p: unknown) => {
-    const c = p as { code?: unknown; mask?: unknown };
-    return typeof c.code === 'string' && typeof c.mask === 'string' && /^\d+$/.test(c.code)
-      ? [{ code: c.code, mask: c.mask }]
-      : [];
+    const c = p as Record<string, unknown>;
+    const code = text(c.code);
+    const mask = text(c.mask);
+    const cc = text(c.cc);
+    if (!cc || !/^\d+$/.test(code) || !mask.includes('X')) return [];
+    return [{ cc, flag: text(c.flag), name: text(c.name), code, mask, active: c.active !== false }];
   });
+}
+
+/** Справочник платформы «Коды телефонов» (refDB → phoneCodes): код страны и маска номера. */
+export async function phoneCodes(db: Db | Tx): Promise<{ code: string; mask: string }[]> {
+  return (await phoneCodeList(db)).map(({ code, mask }) => ({ code, mask }));
 }

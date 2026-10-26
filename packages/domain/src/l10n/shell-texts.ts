@@ -263,6 +263,8 @@ export const SHELL_TEXTS = {
   'btn.cancel': { ru: 'Отмена', section: 'Кнопки' },
   'btn.confirm': { ru: 'Подтвердить', section: 'Кнопки' },
   'btn.close': { ru: 'Закрыть', section: 'Кнопки' },
+  'btn.save': { ru: 'Сохранить', section: 'Кнопки' },
+  'btn.create': { ru: 'Создать', section: 'Кнопки' },
   'window.maximize': { ru: 'На весь экран', section: 'Окна' },
   'window.restore': { ru: 'Свернуть окно', section: 'Окна' },
   'window.maximize_hint': { ru: '(двойной клик по заголовку)', section: 'Окна' },

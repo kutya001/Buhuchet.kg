@@ -112,6 +112,81 @@ test.describe('Этап 1: окна и уведомления', () => {
     });
   });
 
+  test('карточка сотрудника по «На весь экран»: на ПК таблица на вкладке шире, на телефоне развёрнутая карточка листается свайпом по вкладкам и закрывается свайпом вниз', async ({
+    page,
+    baseURL,
+    isMobile,
+  }) => {
+    await signIn(page.request, new URL(baseURL!).origin);
+    const me = (await (await page.request.get('/api/auth/me')).json()) as {
+      employee: { fullName: string };
+    };
+    const name = me.employee.fullName;
+    await page.goto('/app/staff/list');
+    if (isMobile) await page.getByRole('button', { name: 'Поиск', exact: true }).click();
+    await page.getByRole('searchbox').first().fill(name);
+    await page
+      .locator('[data-grid] [data-id]')
+      .filter({ hasText: name })
+      .first()
+      .getByText(name, { exact: true })
+      .click();
+    const card = page.getByRole('dialog', { name });
+    const current = card.getByRole('tab', { selected: true });
+    await expect(current).toContainText('Основное');
+    const view = page.viewportSize()!;
+
+    if (!isMobile) {
+      // Таблица закреплённых контрагентов растягивается на всю ширину развёрнутой карточки.
+      await card.getByRole('tab', { name: 'Контрагенты' }).click();
+      const table = card.getByRole('table', { name: 'Контрагенты' });
+      await expect(table).toBeVisible();
+      const before = (await settledBox(card)).width;
+      const narrow = (await table.boundingBox())!.width;
+      await card.getByRole('button', { name: 'На весь экран' }).click();
+      expectBox(await settledBox(card), {
+        x: 12,
+        y: 12,
+        width: view.width - 24,
+        height: view.height - 24,
+      });
+      const wide = (await table.boundingBox())!.width;
+      expect(wide - narrow).toBeGreaterThanOrEqual(view.width - 24 - before - 2);
+      await card.getByRole('button', { name: 'Свернуть окно' }).click();
+      await expect.poll(async () => (await table.boundingBox())!.width).toBeCloseTo(narrow, 0);
+      return;
+    }
+
+    await card.getByRole('button', { name: 'На весь экран' }).click();
+    const box = await settledBox(card);
+    expectBox(box, { x: 0, y: 0, width: view.width, height: view.height });
+    const swipe = await finger(page);
+    const y = box.y + box.height * 0.6;
+    const left = { x: box.x + box.width * 0.85, y };
+    const right = { x: box.x + box.width * 0.15, y };
+
+    await test.step('протяжка влево дальше трети ширины — вкладка «Контрагенты»', async () => {
+      await swipe.drag(left, { x: left.x - box.width / 3 - 40, y });
+      await expect(current).toContainText('Контрагенты');
+      await expect(card).toContainText('Нет закреплённых контрагентов');
+      // Развёрнутой карточка и осталась.
+      expectBox(await settledBox(card), { x: 0, y: 0, width: view.width, height: view.height });
+    });
+
+    await test.step('рывок вправо — снова «Основное»', async () => {
+      await swipe.flick(right, { x: right.x + 80, y });
+      await expect(current).toContainText('Основное');
+      await expect(card).toContainText('Последний вход');
+    });
+
+    await test.step('протяжка вниз за шапку — карточка закрывается, страница та же', async () => {
+      const head = { x: box.x + box.width / 2, y: box.y + 30 };
+      await swipe.drag(head, { x: head.x, y: head.y + Math.min(box.height / 4, 160) + 30 });
+      await expect(card).toBeHidden();
+      await expect(page).toHaveURL(/\/app\/staff\/list$/);
+    });
+  });
+
   test('окно закрывается крестиком, Esc, касанием фона и «Назад» на той же странице; фокус не уходит под окно', async ({
     page,
     baseURL,

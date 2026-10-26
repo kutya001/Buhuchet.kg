@@ -5,6 +5,7 @@ import {
   PERMISSION_IDS,
   rolePermissionCount,
   SCOPE_GROUPS,
+  type ListQuery,
   type PermissionId,
   type Scope,
   type ScopeGroupId,
@@ -13,6 +14,16 @@ import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { Db, Tx } from './client';
 import { writeHistory } from './history';
+import {
+  auditActorValue,
+  selectListExport,
+  selectListPage,
+  selectListValues,
+  type ListColumns,
+  type ListFrom,
+  type ListPageResult,
+  type ListWindowFields,
+} from './list';
 import { employees, orgSettings, permissions, rolePermissions, roleScopes, roles } from './schema';
 import { rolePermissionIds, roleScopeMap, type AuditRecord } from './staff';
 
@@ -25,6 +36,8 @@ export interface RoleSummary {
   id: string;
   name: string;
   isOwner: boolean;
+  /** Код шаблона платформы, из которого роль создана; null — роль создала организация. */
+  templateCode: string | null;
   /** Активных сотрудников с ролью (прототип: столбец «Сотрудников»). */
   employees: number;
   permissionCount: number;
@@ -42,25 +55,53 @@ export interface RoleRecord extends RoleSummary {
 const creator = alias(employees, 'creator');
 const updater = alias(employees, 'updater');
 
+/** Активных сотрудников с ролью (прототип: столбец «Сотрудников»). */
+const ROLE_EMPLOYEES = sql<number>`(select count(*)::int from ${employees} where ${employees.roleId} = ${roles.id} and ${employees.active})`;
+/** Прав в роли; у роли владельца — все (`rolePermissionCount`; число — без параметра запроса). */
+const ROLE_PERMISSIONS = sql<number>`case when ${roles.isOwner} then ${sql.raw(String(PERMISSION_IDS.length))} else (select count(*)::int from ${rolePermissions} where ${rolePermissions.roleId} = ${roles.id}) end`;
+
+const roleFields = {
+  id: roles.id,
+  name: roles.name,
+  isOwner: roles.isOwner,
+  templateCode: roles.templateCode,
+  employees: ROLE_EMPLOYEES,
+  permissionCount: ROLE_PERMISSIONS,
+  createdAt: roles.createdAt,
+  createdBy: roles.createdBy,
+  createdByName: creator.shortName,
+  updatedAt: roles.updatedAt,
+  updatedBy: roles.updatedBy,
+  updatedByName: updater.shortName,
+  version: roles.version,
+};
+
 function selectRoles(tx: Tx) {
   return tx
-    .select({
-      id: roles.id,
-      name: roles.name,
-      isOwner: roles.isOwner,
-      employees: sql<number>`(select count(*)::int from ${employees} where ${employees.roleId} = ${roles.id} and ${employees.active})`,
-      permissionCount: sql<number>`(select count(*)::int from ${rolePermissions} where ${rolePermissions.roleId} = ${roles.id})`,
-      createdAt: roles.createdAt,
-      createdBy: roles.createdBy,
-      createdByName: creator.shortName,
-      updatedAt: roles.updatedAt,
-      updatedBy: roles.updatedBy,
-      updatedByName: updater.shortName,
-      version: roles.version,
-    })
+    .select(roleFields)
     .from(roles)
     .leftJoin(creator, eq(creator.userId, roles.createdBy))
     .leftJoin(updater, eq(updater.userId, roles.updatedBy));
+}
+
+/** То же для страницы списка — с числом записей, итогами и группами (`selectListPage`). */
+function selectRolePage(tx: Tx, window: ListWindowFields) {
+  return tx
+    .select({ ...roleFields, ...window })
+    .from(roles)
+    .leftJoin(creator, eq(creator.userId, roles.createdBy))
+    .leftJoin(updater, eq(updater.userId, roles.updatedBy));
+}
+
+/** Те же таблицы с любыми полями — для групп, значений фильтра и выгрузки (`ListFrom`). */
+function roleListFrom(tx: Tx): ListFrom {
+  return (fields) =>
+    tx
+      .select(fields)
+      .from(roles)
+      .leftJoin(creator, eq(creator.userId, roles.createdBy))
+      .leftJoin(updater, eq(updater.userId, roles.updatedBy))
+      .$dynamic();
 }
 
 type RoleRow = Awaited<ReturnType<typeof selectRoles>>[number];
@@ -70,6 +111,7 @@ function toSummary(r: RoleRow): RoleSummary {
     id: r.id,
     name: r.name,
     isOwner: r.isOwner,
+    templateCode: r.templateCode,
     employees: Number(r.employees),
     permissionCount: r.isOwner
       ? rolePermissionCount({ isOwner: true, permissions: [] })
@@ -84,10 +126,77 @@ function toSummary(r: RoleRow): RoleSummary {
   };
 }
 
-/** Роли организации по названию (прототип: список ролей отсортирован по названию). */
-export async function listRoles(tx: Tx): Promise<RoleSummary[]> {
-  const rows = await selectRoles(tx).orderBy(asc(roles.name), asc(roles.id));
-  return rows.map(toSummary);
+const ROLE_CREATED_BY = auditActorValue(roles.createdBy, creator.shortName);
+
+/**
+ * Столбцы списка ролей на сервере (прототип modules/staff.js, renderStaff, вкладка «Роли»: роль,
+ * сотрудников, прав, изменено, изменил): ключи — как у столбцов экрана. «Изменил» у роли без правок —
+ * тот, кто создал; у ролей из шаблонов при создании организации автора нет — пусто.
+ */
+export const ROLE_LIST_COLUMNS: ListColumns = {
+  name: { type: 'text', label: 'roles.col.name', value: roles.name },
+  employees: { type: 'int', label: 'roles.col.employees', value: ROLE_EMPLOYEES },
+  permissionCount: { type: 'int', label: 'roles.col.permissions', value: ROLE_PERMISSIONS },
+  updatedAt: { type: 'datetime', label: 'grid.col.updated_at', value: roles.updatedAt },
+  updatedBy: {
+    type: 'enum',
+    label: 'grid.col.updated_by',
+    value: sql`coalesce(${auditActorValue(roles.updatedBy, updater.shortName)}, ${ROLE_CREATED_BY})`,
+  },
+};
+
+const ROLE_NATURAL = [roles.createdAt, roles.id];
+/** Роли по умолчанию — по названию (прототип: `sort: {key: 'name', dir: 1}`). */
+export const ROLE_DEFAULT_SORT = { key: 'name', dir: 'asc' } as const;
+
+/**
+ * Страница списка ролей: сортировка, страница, фильтры, поиск и группы — на сервере, как у всех
+ * списков (ТЗ «Списки записей»). Неизвестный столбец — `ListQueryError`.
+ */
+export async function listRolesPage(
+  tx: Tx,
+  query: ListQuery,
+): Promise<ListPageResult<RoleSummary>> {
+  const page = await selectListPage({
+    query,
+    columns: ROLE_LIST_COLUMNS,
+    natural: ROLE_NATURAL,
+    defaultSort: ROLE_DEFAULT_SORT,
+    // У ролей нет области «Свои»: список — вся организация (её отсекает RLS).
+    scope: undefined,
+    select: ({ window, where, orderBy, limit, offset }) =>
+      selectRolePage(tx, window)
+        .where(where)
+        .orderBy(...orderBy)
+        .limit(limit)
+        .offset(offset),
+    from: roleListFrom(tx),
+  });
+  return { ...page, rows: page.rows.map(toSummary) };
+}
+
+/** Значения столбца списка ролей для фильтра-галочек; `q` — «Найти значение» по всем значениям. */
+export function listRoleValues(tx: Tx, key: string, q?: string) {
+  return selectListValues({
+    columns: ROLE_LIST_COLUMNS,
+    key,
+    scope: undefined,
+    from: roleListFrom(tx),
+    q,
+  });
+}
+
+/** Роли для выгрузки в Excel: все под поиском и фильтрами, столбцы `keys` по порядку экрана. */
+export function exportRoles(tx: Tx, query: ListQuery, keys: readonly string[]) {
+  return selectListExport({
+    query,
+    columns: ROLE_LIST_COLUMNS,
+    keys,
+    natural: ROLE_NATURAL,
+    defaultSort: ROLE_DEFAULT_SORT,
+    scope: undefined,
+    from: roleListFrom(tx),
+  });
 }
 
 /** Карточка роли; null — нет такой роли в организации. */

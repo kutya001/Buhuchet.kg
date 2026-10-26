@@ -27,7 +27,7 @@ const listWith = (name: string, value: string) => (r: Response) =>
  */
 async function hirePair(api: APIRequestContext, origin: string, word: string) {
   await signIn(api, origin, 'erkin', DEMO_PASSWORD);
-  const roles = (await (await api.get('/api/roles')).json()) as {
+  const roles = (await (await api.get('/api/roles?size=all')).json()) as {
     items: { id: string; name: string }[];
   };
   const roleId = roles.items.find((r) => r.name === 'Бухгалтер')!.id;
@@ -57,7 +57,7 @@ async function hirePair(api: APIRequestContext, origin: string, word: string) {
 async function ensureStaff(api: APIRequestContext, origin: string, min: number) {
   await signIn(api, origin, 'erkin', DEMO_PASSWORD);
   const { total } = (await (await api.get('/api/staff?size=25')).json()) as StaffPage;
-  const roles = (await (await api.get('/api/roles')).json()) as {
+  const roles = (await (await api.get('/api/roles?size=all')).json()) as {
     items: { id: string; name: string }[];
   };
   const roleId = roles.items.find((r) => r.name === 'Бухгалтер')!.id;
@@ -99,7 +99,7 @@ async function signInAsNewChief(page: Page, origin: string) {
  */
 async function signInAsStaffManager(page: Page, origin: string, setup: APIRequestContext) {
   await signIn(setup, origin, 'erkin', DEMO_PASSWORD);
-  const roles = (await (await setup.get('/api/roles')).json()) as {
+  const roles = (await (await setup.get('/api/roles?size=all')).json()) as {
     items: { id: string; name: string }[];
   };
   const chief = roles.items.find((r) => r.name === 'Главный бухгалтер')!.id;
@@ -464,7 +464,12 @@ test.describe('Списки: UnifiedDataGrid', () => {
       await expect(menu).toHaveCount(0);
     }
     await more.click();
-    await expect(menu.getByRole('menuitem')).toHaveText(['Сбросить пароль', 'Заблокировать']);
+    await expect(menu.getByRole('menuitem')).toHaveText([
+      'Открыть карточку',
+      'Сменить роль',
+      'Сбросить пароль',
+      'Заблокировать',
+    ]);
     await menu.getByRole('menuitem', { name: 'Заблокировать' }).click();
     const ask = page.getByRole('dialog', { name: /^Заблокировать / });
     await expect(ask).toContainText('Сотрудник не сможет войти. Его история сохранится.');

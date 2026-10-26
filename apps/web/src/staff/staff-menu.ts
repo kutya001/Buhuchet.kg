@@ -4,36 +4,52 @@ import type { Translate } from '../l10n/translate';
 
 /** Что делают пункты меню сотрудника: открывают окно или отправляют запрос. */
 export interface StaffMenuRun {
+  open: (e: Employee) => void;
+  changeRole: (e: Employee) => void;
   resetPassword: (e: Employee) => void;
   block: (e: Employee) => void;
   unblock: (e: Employee) => void;
 }
 
 /**
- * Пункты меню сотрудника в списке (прототип modules/staff.js, empActions). Без права «Сотрудники и
- * роли» меню нет совсем (undefined — у списка нет столбца «⋯»); у владельца организации пунктов нет
- * («⋯» на его строке не показывается). Остальным: «Сбросить пароль», черта и «Заблокировать» (красным)
- * или у заблокированного — «Разблокировать». На своей строке «Сбросить пароль» и «Заблокировать»
- * недоступны с причиной: себя не блокируют, а свой пароль меняют в «Мой профиль». Остальные запреты
- * проверяет сервер (docs/deviations.md, п. 15).
+ * Пункты меню сотрудника (прототип modules/staff.js, empActions): «Открыть карточку» — всем, кто видит
+ * список. С правом «Сотрудники и роли» и не у владельца организации — ещё «Сменить роль», «Сбросить
+ * пароль», черта и «Заблокировать» (красным) или у заблокированного — «Разблокировать». На своей
+ * строке «Сменить роль», «Сбросить пароль» и «Заблокировать» недоступны с причиной: свою роль меняет
+ * владелец, себя не блокируют, а свой пароль меняют в «Мой профиль». Остальные запреты проверяет
+ * сервер (docs/deviations.md, п. 15). «Передать контрагентов» добавит модуль «Контрагенты» (поток А).
+ * `card` — меню кнопки «Действия» в карточке: без «Открыть карточку».
  */
 export function staffMenu({
   canManage,
   employeeId,
   t,
   run,
+  card = false,
 }: {
   canManage: boolean;
   /** Вошедший сотрудник. */
   employeeId: string | null;
   t: Translate;
   run: StaffMenuRun;
-}): ((e: Employee) => ActionEntry[]) | undefined {
-  if (!canManage) return undefined;
+  card?: boolean;
+}): (e: Employee) => ActionEntry[] {
   return (e) => {
-    if (e.role.isOwner) return [];
+    const open: ActionEntry[] = card
+      ? []
+      : [{ id: 'open', label: t('staff.action.open'), icon: 'user', run: () => run.open(e) }];
+    if (!canManage || e.role.isOwner) return open;
     const self = e.id === employeeId;
     return [
+      ...open,
+      {
+        id: 'change-role',
+        label: t('staff.action.change_role'),
+        icon: 'shield',
+        disabled: self,
+        reason: self ? t('err.own_role') : undefined,
+        run: () => run.changeRole(e),
+      },
       {
         id: 'reset-password',
         label: t('staff.action.reset_password'),

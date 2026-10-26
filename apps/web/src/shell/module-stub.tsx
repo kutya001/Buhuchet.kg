@@ -11,13 +11,20 @@ import { useShell } from './context';
  * Модуль, у которого ещё нет экрана: оболочка (меню, вкладки, «+ Добавить») уже работает, а вместо
  * экрана — пояснение (вид пустого состояния прототипа `.state`). Выбранный способ добавления
  * подтверждается уведомлением внизу экрана: само действие появится вместе с экраном модуля.
+ * `handleAdd: false` — «+ Добавить» модуля уже работает (вкладка без экрана в модуле с экранами).
  */
-export function ModuleStub({ moduleId }: { moduleId: MenuModuleId }) {
+export function ModuleStub({
+  moduleId,
+  handleAdd = true,
+}: {
+  moduleId: MenuModuleId;
+  handleAdd?: boolean;
+}) {
   const t = useT();
   const toast = useToast();
   const { addRequest, clearAddRequest } = useShell();
   const def = MODULES[moduleId];
-  const request = addRequest?.moduleId === moduleId ? addRequest : null;
+  const request = handleAdd && addRequest?.moduleId === moduleId ? addRequest : null;
 
   useEffect(() => {
     if (!request) return;

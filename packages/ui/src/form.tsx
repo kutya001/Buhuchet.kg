@@ -15,11 +15,15 @@ export const MONO_CLASS = 'font-mono text-[.92em] [font-feature-settings:"calt"_
 
 /**
  * Поле ввода (`.inp`): рамка, при фокусе — тёмная рамка и кольцо, с ошибкой (`aria-invalid`) —
- * красная рамка, только для чтения — фон панели. Подходит для input, select и textarea.
+ * красная рамка, только для чтения — фон панели. Подходит для input, select и textarea. `full: false` —
+ * без ширины на всю строку (ширину задаёт свой класс).
  */
-export function inputClass(options: { mono?: boolean; multiline?: boolean } = {}): string {
+export function inputClass(
+  options: { mono?: boolean; multiline?: boolean; full?: boolean } = {},
+): string {
   return [
-    'w-full min-h-[35px] rounded-lg border border-line bg-field px-2.5 py-[7px] text-[13.5px] text-ink outline-none',
+    options.full === false ? '' : 'w-full',
+    'min-h-[35px] rounded-lg border border-line bg-field px-2.5 py-[7px] text-[13.5px] text-ink outline-none',
     'shadow-[inset_0_1px_2px_rgba(0,0,0,.04)] transition-[border-color,box-shadow] duration-150',
     'focus:border-line-strong focus:shadow-[0_0_0_3px_var(--bu-sel)] read-only:bg-pane-alt',
     'aria-[invalid=true]:border-danger',
@@ -167,22 +171,24 @@ export function KeyValues({ items }: { items: readonly KeyValueItem[] }) {
   );
 }
 
-/** Блок карточки (`.box`): заголовок прописными буквами, справа от него — кнопки. */
+/** Блок карточки (`.box`): заголовок прописными буквами, справа от него — кнопки; без заголовка — только рамка. */
 export function Box({
   title,
   actions,
   children,
 }: {
-  title: string;
+  title?: string;
   actions?: ReactNode;
   children: ReactNode;
 }) {
   return (
     <section className="flex min-w-0 flex-col gap-2.5 rounded-xl border border-line bg-raised px-4 py-3.5">
-      <h3 className="m-0 flex items-center gap-2 text-[11.5px] font-bold tracking-[.08em] text-faint uppercase">
-        <span className="grow">{title}</span>
-        {actions}
-      </h3>
+      {title ? (
+        <h3 className="m-0 flex items-center gap-2 text-[11.5px] font-bold tracking-[.08em] text-faint uppercase">
+          <span className="grow">{title}</span>
+          {actions}
+        </h3>
+      ) : null}
       {children}
     </section>
   );
@@ -262,6 +268,28 @@ export function Pill({
 }) {
   return (
     <span data-pill className={`${pillClass(size)} ${PILL_TONES[tone]}`}>
+      {icon ? <Icon name={icon} size="sm" /> : null}
+      {children}
+    </span>
+  );
+}
+
+/** Ярлык (`.tag`): «все права», «Свои контрагенты» в карточке роли; `title` — подсказка. */
+export function Tag({
+  icon,
+  title,
+  children,
+}: {
+  icon?: IconName;
+  title?: string;
+  children: ReactNode;
+}) {
+  return (
+    <span
+      data-tag=""
+      title={title}
+      className="inline-flex flex-none items-center gap-1 rounded px-1.5 align-[1px] text-[10.5px] leading-[17px] font-[650] tracking-[.03em] whitespace-nowrap bg-sel text-label"
+    >
       {icon ? <Icon name={icon} size="sm" /> : null}
       {children}
     </span>

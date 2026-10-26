@@ -26,9 +26,8 @@ export function phoneProblem(phone: string, codes: readonly PhoneCode[]): string
   const digits = match[1]!;
   const known = codes.filter((c) => digits.startsWith(c.code));
   if (known.length === 0) return 'Неизвестный код страны';
-  const need = (c: PhoneCode) => c.mask.split('X').length - 1;
-  if (known.some((c) => digits.length === c.code.length + need(c))) return null;
-  return `Номер — ${need(known[0]!)} цифр после кода страны`;
+  if (known.some((c) => digits.length === c.code.length + maskDigits(c.mask))) return null;
+  return `Номер — ${maskDigits(known[0]!.mask)} цифр после кода страны`;
 }
 
 /**
@@ -38,18 +37,79 @@ export function phoneProblem(phone: string, codes: readonly PhoneCode[]): string
 export function formatPhone(phone: string, codes: readonly PhoneCode[]): string {
   const digits = /^\+(\d+)$/.exec(phone)?.[1];
   if (!digits) return phone;
-  const need = (c: PhoneCode) => c.mask.split('X').length - 1;
   const code = codes
-    .filter((c) => digits.startsWith(c.code) && digits.length === c.code.length + need(c))
+    .filter(
+      (c) => digits.startsWith(c.code) && digits.length === c.code.length + maskDigits(c.mask),
+    )
     .sort((a, b) => b.code.length - a.code.length)[0];
   if (!code) return phone;
-  let rest = digits.slice(code.code.length);
-  const local = code.mask.replace(/X/g, () => {
-    const d = rest[0]!;
-    rest = rest.slice(1);
-    return d;
-  });
-  return `+${code.code} ${local}`;
+  return `+${code.code} ${applyPhoneMask(code.mask, digits.slice(code.code.length))}`;
+}
+
+/** Сколько цифр номера после кода страны по маске: «XXX XXX XXX» → 9. */
+export function maskDigits(mask: string): number {
+  return mask.split('X').length - 1;
+}
+
+/**
+ * Цифры номера по маске страны, как их видно в поле ввода (прототип core/reference.js, applyMask):
+ * «5551002» и «XXX XXX XXX» → «555 100 2»; лишние цифры отбрасываются.
+ */
+export function applyPhoneMask(mask: string, digits: string): string {
+  let out = '';
+  let i = 0;
+  for (const ch of mask) {
+    if (i >= digits.length) break;
+    if (ch === 'X') out += digits[i++];
+    else out += ch;
+  }
+  return out;
+}
+
+/** Код страны для поля ввода телефона: страна, код и маска; выключенный — не для нового номера. */
+export interface PhoneCodeOption extends PhoneCode {
+  cc: string;
+  active: boolean;
+}
+
+/**
+ * Поле ввода из сохранённого номера (прототип ui/popups.js, phoneInput): страна — по коду номера
+ * (сначала самый длинный подходящий код с нужным числом цифр, при равных — первый по справочнику),
+ * цифры — после кода. Пусто или номер не подходит ни к одному коду — первая включённая страна
+ * справочника и пустой номер.
+ */
+export function splitPhone(
+  phone: string | null,
+  codes: readonly PhoneCodeOption[],
+): { cc: string; local: string } {
+  const first = codes.find((c) => c.active) ?? codes[0];
+  const empty = { cc: first?.cc ?? '', local: '' };
+  const digits = phone ? /^\+(\d+)$/.exec(phone)?.[1] : undefined;
+  if (!digits) return empty;
+  const fit = codes
+    .filter(
+      (c) => digits.startsWith(c.code) && digits.length === c.code.length + maskDigits(c.mask),
+    )
+    .sort((a, b) => b.code.length - a.code.length)[0];
+  return fit ? { cc: fit.cc, local: digits.slice(fit.code.length) } : empty;
+}
+
+/**
+ * Номер из поля ввода телефона: «+», код страны и цифры («+996555100200»). Без цифр — null (номер не
+ * указан); `missing` — сколько цифр не хватает до маски страны (0 — номер полный).
+ */
+export function joinPhone(
+  cc: string,
+  local: string,
+  codes: readonly PhoneCodeOption[],
+): { phone: string | null; need: number; missing: number } {
+  const code = codes.find((c) => c.cc === cc);
+  const digits = local.replace(/\D/g, '');
+  if (!code) return { phone: null, need: 0, missing: 0 };
+  const need = maskDigits(code.mask);
+  const value = digits.slice(0, need);
+  if (!value) return { phone: null, need, missing: 0 };
+  return { phone: `+${code.code}${value}`, need, missing: need - value.length };
 }
 
 /** Действие над сотрудником в модуле «Сотрудники». */

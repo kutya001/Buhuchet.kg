@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import type { PermissionId } from '../roles/permissions';
 import {
+  applyPhoneMask,
   isFullName,
+  joinPhone,
+  maskDigits,
   newEmployeeRoleRefusal,
   formatPhone,
   phoneProblem,
+  splitPhone,
   staffActionRefusal,
   type StaffActor,
   type StaffTarget,
@@ -43,6 +47,45 @@ describe('ФИО и телефон нового сотрудника', () => {
     expect(formatPhone('+998901234567', CODES)).toBe('+998 90 123 45 67');
     expect(formatPhone('+99655510020', CODES)).toBe('+99655510020');
     expect(formatPhone('8 555 100 200', CODES)).toBe('8 555 100 200');
+  });
+
+  /** Коды для поля ввода: у Казахстана и России один код «7», Таджикистан выключен. */
+  const OPTIONS = [
+    { cc: 'KG', code: '996', mask: 'XXX XXX XXX', active: true },
+    { cc: 'KZ', code: '7', mask: 'XXX XXX XX XX', active: true },
+    { cc: 'RU', code: '7', mask: 'XXX XXX XX XX', active: true },
+    { cc: 'TJ', code: '992', mask: 'XX XXX XXXX', active: false },
+  ];
+
+  it('поле ввода телефона: маска по мере ввода, лишние цифры отбрасываются (прототип applyMask)', () => {
+    expect(maskDigits('XXX XXX XXX')).toBe(9);
+    expect(maskDigits('XX XXX XX XX')).toBe(9);
+    expect(applyPhoneMask('XXX XXX XXX', '')).toBe('');
+    expect(applyPhoneMask('XXX XXX XXX', '5551')).toBe('555 1');
+    expect(applyPhoneMask('XXX XXX XXX', '555100200999')).toBe('555 100 200');
+    expect(applyPhoneMask('XXX XXX XX XX', '7011234567')).toBe('701 123 45 67');
+  });
+
+  it('поле ввода из номера: страна по коду, цифры после кода; пусто — первая включённая страна', () => {
+    expect(splitPhone('+996555100200', OPTIONS)).toEqual({ cc: 'KG', local: '555100200' });
+    expect(splitPhone('+77011234567', OPTIONS)).toEqual({ cc: 'KZ', local: '7011234567' });
+    expect(splitPhone('+992901234567', OPTIONS)).toEqual({ cc: 'TJ', local: '901234567' });
+    expect(splitPhone(null, OPTIONS)).toEqual({ cc: 'KG', local: '' });
+    expect(splitPhone('+1555', OPTIONS)).toEqual({ cc: 'KG', local: '' });
+    expect(splitPhone('+996555', OPTIONS)).toEqual({ cc: 'KG', local: '' });
+    expect(splitPhone(null, [])).toEqual({ cc: '', local: '' });
+  });
+
+  it('номер из поля ввода: «+», код и цифры; без цифр — не указан; сколько цифр не хватает', () => {
+    expect(joinPhone('KG', '555 100 200', OPTIONS)).toEqual({
+      phone: '+996555100200',
+      need: 9,
+      missing: 0,
+    });
+    expect(joinPhone('RU', '701', OPTIONS)).toEqual({ phone: '+7701', need: 10, missing: 7 });
+    expect(joinPhone('KG', '', OPTIONS)).toEqual({ phone: null, need: 9, missing: 0 });
+    expect(joinPhone('KG', '5551002009', OPTIONS).phone).toBe('+996555100200');
+    expect(joinPhone('XX', '555', OPTIONS)).toEqual({ phone: null, need: 0, missing: 0 });
   });
 });
 
