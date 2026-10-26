@@ -3,6 +3,7 @@ import {
   PASSWORD_MAX_LENGTH,
   PASSWORD_MIN_LENGTH,
   PERMISSION_IDS,
+  RESET_CODE_LENGTH,
   SCOPE_GROUPS,
   SCOPES,
   type PermissionId,
@@ -10,6 +11,7 @@ import {
 } from '@buhuchet/domain';
 import { z } from 'zod';
 import { Uuid } from './common';
+import { TelegramInfo } from './telegram';
 
 /** Вход по логину и паролю (без почты). Логин сравнивается без учёта регистра. */
 export const LoginRequest = z.object({
@@ -51,10 +53,44 @@ export const MeResponse = z.object({
     })
     .nullable(),
   organization: z.object({ id: Uuid, name: z.string(), slug: z.string() }).nullable(),
+  /** Привязанный Telegram; null — не привязан (напоминания не приходят, «Забыли пароль?» не работает). */
+  telegram: TelegramInfo.nullable(),
   permissions: z.array(PermissionIdSchema),
   scopes: z.partialRecord(ScopeGroupIdSchema, z.enum(SCOPES)),
 });
 export type MeResponse = z.infer<typeof MeResponse>;
+
+/** «Забыли пароль?», шаг 1: логин — бот пришлёт код в привязанный Telegram. */
+export const PasswordResetRequest = z.object({
+  login: z.string().trim().min(1).max(LOGIN_MAX_LENGTH),
+});
+export type PasswordResetRequest = z.infer<typeof PasswordResetRequest>;
+
+/** Код отправлен: куда (как в прототипе «Код отправлен в Telegram @…») и до какого момента действует. */
+export const PasswordResetSentResponse = z.object({
+  telegram: z.string(),
+  expiresAt: z.iso.datetime(),
+});
+export type PasswordResetSentResponse = z.infer<typeof PasswordResetSentResponse>;
+
+/** «Забыли пароль?», шаг 2: код из Telegram и новый пароль. Повтор нового пароля сверяет форма. */
+export const PasswordResetConfirmRequest = z.object({
+  login: z.string().trim().min(1).max(LOGIN_MAX_LENGTH),
+  code: z
+    .string()
+    .trim()
+    .regex(new RegExp(`^\\d{${RESET_CODE_LENGTH}}$`)),
+  newPassword: z.string().min(PASSWORD_MIN_LENGTH).max(PASSWORD_MAX_LENGTH),
+});
+export type PasswordResetConfirmRequest = z.infer<typeof PasswordResetConfirmRequest>;
+
+/** Пароль сброшен владельцем или администратором: временный пароль показывается один раз. */
+export const TemporaryPasswordResponse = z.object({
+  temporaryPassword: z.string(),
+  /** Бот сообщил о смене пароля в привязанный Telegram. */
+  telegramNotified: z.boolean(),
+});
+export type TemporaryPasswordResponse = z.infer<typeof TemporaryPasswordResponse>;
 
 /** Ответ без данных: выход, смена пароля. */
 export const OkResponse = z.object({ ok: z.literal(true) });

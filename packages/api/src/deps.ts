@@ -20,6 +20,14 @@ export type Job = JobDefinition<JobContext>;
 
 /** Всё, что нужно API. Собирается в runtime.ts из окружения, в тестах — из подделок. */
 export interface ApiDeps extends JobContext {
-  config: Pick<AppConfig, 'APP_ENV' | 'APP_VERSION' | 'APP_BASE_URL' | 'CRON_SECRET'>;
+  config: Pick<
+    AppConfig,
+    | 'APP_ENV'
+    | 'APP_VERSION'
+    | 'APP_BASE_URL'
+    | 'CRON_SECRET'
+    | 'TELEGRAM_WEBHOOK_SECRET'
+    | 'TELEGRAM_BOT_USERNAME'
+  >;
   jobs: readonly Job[];
 }

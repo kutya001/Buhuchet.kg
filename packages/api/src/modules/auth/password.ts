@@ -17,6 +17,7 @@ import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
 import { apiError } from '../../errors';
 import { writeSessionCookie } from '../../middleware/cookie';
+import { notifyPasswordChanged } from '../telegram/bot';
 
 const error = { 'application/json': { schema: ApiError } };
 
@@ -46,7 +47,7 @@ export const changePasswordRoute = createRoute({
  * Смена пароля (прототип modules/profile.js: «Пароль изменён. Другие сеансы завершены.») — и
  * обязательная смена временного пароля. Неверный текущий пароль считается как неверный пароль при
  * входе: так украденный сеанс не позволит подобрать пароль. Новая cookie выдаётся и этому сеансу:
- * старая больше не действует нигде.
+ * старая больше не действует нигде. Бот сообщает о смене пароля в привязанный Telegram.
  */
 export function changePasswordHandler(
   deps: ApiDeps,
@@ -98,6 +99,7 @@ export function changePasswordHandler(
       await withUserContext(deps.db, session.userId, change);
     }
     writeSessionCookie(c, deps, token);
+    await notifyPasswordChanged(deps, session);
     return c.json({ ok: true as const }, 200);
   };
 }

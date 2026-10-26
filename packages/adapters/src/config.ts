@@ -78,8 +78,15 @@ const AppEnv = z
       .default('info'),
     /** Секрет, с которым планировщик (Vercel Cron, worker, cron) вызывает /api/cron/*. */
     CRON_SECRET: z.string().min(16),
-    TELEGRAM_BOT_TOKEN: z.string().min(1).optional(),
-    TELEGRAM_WEBHOOK_SECRET: z.string().min(16).optional(),
+    TELEGRAM_BOT_TOKEN: z.string().trim().min(1).optional(),
+    TELEGRAM_WEBHOOK_SECRET: z.string().trim().min(16).optional(),
+    /** Имя бота без «@» (buhuchet_bot): из него строится ссылка привязки t.me/<имя>?start=<токен>. */
+    TELEGRAM_BOT_USERNAME: z
+      .string()
+      .trim()
+      .transform((v) => v.replace(/^@/, ''))
+      .pipe(z.string().regex(/^[A-Za-z][A-Za-z0-9_]{3,31}$/, 'имя бота: латиница, цифры и _'))
+      .optional(),
     SENTRY_DSN: z.string().min(1).optional(),
     /** Зафиксировать «сейчас» (демо-стенд, сквозные тесты). На рабочем сайте запрещено. */
     FIXED_NOW: z.iso.datetime().optional(),
@@ -116,12 +123,15 @@ const AppEnv = z
           'на стенде и рабочем сайте — адрес сайта по https (по нему сверяется Origin и ставится cookie входа)',
       });
     }
-    if (Boolean(env.TELEGRAM_BOT_TOKEN) !== Boolean(env.TELEGRAM_WEBHOOK_SECRET)) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['TELEGRAM_WEBHOOK_SECRET'],
-        message: 'TELEGRAM_BOT_TOKEN и TELEGRAM_WEBHOOK_SECRET задаются вместе',
-      });
+    for (const key of ['TELEGRAM_WEBHOOK_SECRET', 'TELEGRAM_BOT_USERNAME'] as const) {
+      if (Boolean(env.TELEGRAM_BOT_TOKEN) !== Boolean(env[key])) {
+        ctx.addIssue({
+          code: 'custom',
+          path: [key],
+          message:
+            'TELEGRAM_BOT_TOKEN, TELEGRAM_WEBHOOK_SECRET и TELEGRAM_BOT_USERNAME задаются вместе',
+        });
+      }
     }
     checkDemoPassword(env, ctx);
   });

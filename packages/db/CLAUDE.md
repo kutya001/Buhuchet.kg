@@ -38,6 +38,7 @@
 ## Вход и сеансы
 - Вход, проверка cookie и выход идут до того, как известна организация, поэтому `users` и `sessions` в это время читаются только функциями `app.auth_*` (миграция 0009, SECURITY DEFINER, `search_path` задан, выполняет только `buhuchet_app`) через обёртки `src/auth.ts`: `findLogin`, `reserveLoginAttempt` (попытка занимается до проверки пароля), `startSession`, `sessionByToken`, `endSession`, `changeOwnPassword`. Обходить RLS чтением таблиц нельзя; новая такая функция — тоже узкая, с `REVOKE … FROM PUBLIC`.
 - В таблице сеансов — только SHA-256 токена; токен знает лишь cookie.
+- Telegram и «Забыли пароль?» (миграция 0011): привязка `telegram_links`, ссылки `telegram_link_tokens` (SHA-256 токена), коды `password_reset_codes` (хеш argon2id) — у всех `org_id` (пусто у администратора платформы) и RLS. Без входа и без организации они читаются и меняются функциями `app.telegram_*`, `app.auth_reset_*`, `app.auth_is_owner`, `app.admin_find_user` через обёртки `src/telegram.ts`; привязать, отвязать и задать пароль по коду можно только пользователю из `app.user_id` (API вызывает это в его `withOrgContext` и пишет историю в той же транзакции). Временный пароль владельцем — `setTemporaryPassword` в контексте организации (RLS).
 - Права и роль сотрудника для общего слоя API — `loadEmployeeAccess(tx, employeeId)` в `withOrgContext`; администратор платформы без организации — `withUserContext`.
 
 ## Тесты

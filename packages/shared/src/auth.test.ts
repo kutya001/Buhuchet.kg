@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { ChangePasswordRequest, LoginRequest, MeResponse } from './auth';
+import {
+  ChangePasswordRequest,
+  LoginRequest,
+  MeResponse,
+  PasswordResetConfirmRequest,
+  PasswordResetRequest,
+} from './auth';
+import { TelegramLinkResponse } from './telegram';
 
 describe('схемы входа', () => {
   it('логин обрезается по краям; пустой логин или пароль не принимаются', () => {
@@ -31,10 +38,34 @@ describe('схемы входа', () => {
       },
       employee: null,
       organization: null,
+      telegram: { name: '@erkin_s', linkedAt: '2026-10-18T03:00:00.000Z' },
       permissions: ['cpView'],
       scopes: { cps: 'own' },
     };
     expect(MeResponse.parse(me)).toEqual(me);
     expect(MeResponse.safeParse({ ...me, permissions: ['rootAccess'] }).success).toBe(false);
+  });
+
+  it('«Забыли пароль?»: логин, код из 6 цифр и новый пароль не короче 8 символов', () => {
+    expect(PasswordResetRequest.parse({ login: ' Erkin ' })).toEqual({ login: 'Erkin' });
+    expect(PasswordResetRequest.safeParse({ login: '' }).success).toBe(false);
+    const ok = (code: string, newPassword = 'Новый-пароль') =>
+      PasswordResetConfirmRequest.safeParse({ login: 'erkin', code, newPassword }).success;
+    expect(ok('482913')).toBe(true);
+    expect(ok(' 482913 ')).toBe(true);
+    expect(ok('48291')).toBe(false);
+    expect(ok('4829134')).toBe(false);
+    expect(ok('48291a')).toBe(false);
+    expect(ok('482913', '1234567')).toBe(false);
+  });
+
+  it('ссылка привязки Telegram — адрес и срок', () => {
+    expect(
+      TelegramLinkResponse.safeParse({
+        url: 'https://t.me/buhuchet_bot?start=abc',
+        expiresAt: '2026-10-18T03:15:00.000Z',
+      }).success,
+    ).toBe(true);
+    expect(TelegramLinkResponse.safeParse({ url: 'abc', expiresAt: 'завтра' }).success).toBe(false);
   });
 });

@@ -16,6 +16,9 @@ export function unavailableDb(): Db {
   });
 }
 
+/** Секрет вебхука бота в тестах (заголовок X-Telegram-Bot-Api-Secret-Token). */
+export const TEST_WEBHOOK_SECRET = 'test-webhook-secret-0000';
+
 /** Зависимости API для тестов: память вместо S3, часы 18.10.2026 09:00 по Бишкеку, бот-подделка. */
 export function createTestDeps(overrides: Partial<ApiDeps> = {}): ApiDeps {
   return {
@@ -24,6 +27,8 @@ export function createTestDeps(overrides: Partial<ApiDeps> = {}): ApiDeps {
       APP_VERSION: '0.0.0-test',
       APP_BASE_URL: 'http://localhost:3000',
       CRON_SECRET: 'test-cron-secret-0000',
+      TELEGRAM_WEBHOOK_SECRET: TEST_WEBHOOK_SECRET,
+      TELEGRAM_BOT_USERNAME: 'buhuchet_test_bot',
     },
     db: unavailableDb(),
     storage: createMemoryStorage(),
@@ -59,4 +64,65 @@ export async function signIn(
   });
   if (res.status !== 200) throw new Error(`вход ${login}: ${res.status} ${await res.text()}`);
   return cookieOf(res);
+}
+
+type RequestApp = { request: (path: string, init: RequestInit) => Response | Promise<Response> };
+
+let nextUpdateId = 1;
+
+/** Обновление Telegram с текстом в личном чате — как его присылает вебхук. */
+export function telegramUpdate(
+  text: string,
+  chatId: number,
+  options: { username?: string; firstName?: string; chatType?: string; isBot?: boolean } = {},
+) {
+  return {
+    update_id: nextUpdateId++,
+    message: {
+      message_id: nextUpdateId,
+      date: 1_792_972_800,
+      text,
+      chat: { id: chatId, type: options.chatType ?? 'private' },
+      from: {
+        id: chatId,
+        is_bot: options.isBot ?? false,
+        first_name: options.firstName ?? 'Тест',
+        ...(options.username ? { username: options.username } : {}),
+      },
+    },
+  };
+}
+
+/** Прислать обновление в вебхук бота (без Origin, как Telegram), с секретом вебхука. */
+export function sendToBot(
+  app: RequestApp,
+  update: unknown,
+  secret: string | null = TEST_WEBHOOK_SECRET,
+) {
+  return app.request('/api/telegram/webhook', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      ...(secret === null ? {} : { 'x-telegram-bot-api-secret-token': secret }),
+    },
+    body: JSON.stringify(update),
+  });
+}
+
+/** Привязать Telegram вошедшему пользователю: ссылка из профиля → «/start токен» в бот. */
+export async function linkTelegram(
+  app: RequestApp,
+  cookie: string,
+  chatId: number,
+  username?: string,
+): Promise<void> {
+  const res = await app.request('/api/telegram/link', {
+    method: 'POST',
+    headers: { origin: TEST_ORIGIN, cookie },
+  });
+  if (res.status !== 200) throw new Error(`ссылка Telegram: ${res.status} ${await res.text()}`);
+  const { url } = (await res.json()) as { url: string };
+  const token = new URL(url).searchParams.get('start')!;
+  const bot = await sendToBot(app, telegramUpdate(`/start ${token}`, chatId, { username }));
+  if (bot.status !== 200) throw new Error(`вебхук: ${bot.status} ${await bot.text()}`);
 }

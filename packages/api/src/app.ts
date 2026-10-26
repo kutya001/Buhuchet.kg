@@ -7,8 +7,11 @@ import { apiError, recordErrorResponse } from './errors';
 import { originCheck } from './middleware/origin';
 import { sessionGuard } from './middleware/session';
 import { createModuleApp } from './module';
+import { adminModule } from './modules/admin';
 import { authModule } from './modules/auth';
+import { staffModule } from './modules/staff';
 import { systemModule } from './modules/system';
+import { telegramModule } from './modules/telegram';
 
 /**
  * Предел тела запроса API: формы и списки — килобайты; файлы идут в хранилище по подписанной ссылке,
@@ -53,7 +56,12 @@ export function createApp(deps: ApiDeps) {
   app.use('*', sessionGuard(deps));
 
   // Модули подключаются цепочкой: так их маршруты попадают в тип ApiApp для клиента интерфейса.
-  const routes = app.route('/', systemModule(deps)).route('/', authModule(deps));
+  const routes = app
+    .route('/', systemModule(deps))
+    .route('/', authModule(deps))
+    .route('/', telegramModule(deps))
+    .route('/', staffModule(deps))
+    .route('/', adminModule(deps));
 
   app.doc31('/openapi.json', {
     openapi: '3.1.0',

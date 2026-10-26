@@ -71,6 +71,20 @@
       "when": 1792971120628,
       "tag": "0009_auth_functions",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1792972624767,
+      "tag": "0010_telegram_links",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1792972646999,
+      "tag": "0011_telegram_functions",
+      "breakpoints": true
     }
   ]
 }
