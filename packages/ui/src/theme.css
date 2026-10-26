@@ -30,6 +30,11 @@
   --bu-sel: hsla(34 37% 70% / 0.22);
   --bu-red: hsl(4 56% 45%);
   --bu-red-bg: hsla(4 72% 55% / 0.12);
+  /* Текст цветных меток и заметок — не ниже 4,5 : 1 на карточке и под наведением строки
+     (docs/deviations.md, п. 26); в прототипе — те же `--red`, `--orange`, `--yellow`. */
+  --bu-red-label: hsl(4 56% 43%);
+  --bu-orange-label: hsl(18 69% 37%);
+  --bu-yellow-label: hsl(40 98% 23%);
   --bu-yellow: hsl(40 98% 30%);
   --bu-yellow-bg: hsla(43 83% 57% / 0.24);
   --bu-orange: hsl(18 69% 42%);
@@ -103,6 +108,9 @@
   --bu-sel: hsla(34 24% 40% / 0.25);
   --bu-red: hsl(4 88% 66%);
   --bu-red-bg: hsla(4 88% 61% / 0.15);
+  --bu-red-label: hsl(4 88% 76%);
+  --bu-orange-label: hsl(26 85% 70%);
+  --bu-yellow-label: hsl(43 69% 63%);
   --bu-yellow: hsl(43 69% 63%);
   --bu-yellow-bg: hsla(42 79% 51% / 0.17);
   --bu-orange: hsl(26 85% 62%);
@@ -172,6 +180,9 @@
     --bu-sel: hsla(34 24% 40% / 0.25);
     --bu-red: hsl(4 88% 66%);
     --bu-red-bg: hsla(4 88% 61% / 0.15);
+    --bu-red-label: hsl(4 88% 76%);
+    --bu-orange-label: hsl(26 85% 70%);
+    --bu-yellow-label: hsl(43 69% 63%);
     --bu-yellow: hsl(43 69% 63%);
     --bu-yellow-bg: hsla(42 79% 51% / 0.17);
     --bu-orange: hsl(26 85% 62%);
@@ -241,10 +252,13 @@
   --color-sel: var(--bu-sel);
   --color-danger: var(--bu-red);
   --color-danger-bg: var(--bu-red-bg);
+  --color-danger-label: var(--bu-red-label);
   --color-warn: var(--bu-yellow);
   --color-warn-bg: var(--bu-yellow-bg);
+  --color-warn-label: var(--bu-yellow-label);
   --color-caution: var(--bu-orange);
   --color-caution-bg: var(--bu-orange-bg);
+  --color-caution-label: var(--bu-orange-label);
   --color-ok: var(--bu-green);
   --color-ok-bg: var(--bu-green-bg);
   --color-info: var(--bu-blue);

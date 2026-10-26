@@ -162,12 +162,22 @@ export function pageSizeOf(settings: GridViewSettings): ListPageSize {
 
 /**
  * Вид списка: закреплённый модулем, выбранный пользователем или по умолчанию — «Таблица» на ПК,
- * «Карточки» на телефоне (ТЗ «Вид»).
+ * «Карточки» на телефоне (ТЗ «Вид»). Выбор запоминается отдельно для ПК и телефона: таблица,
+ * выбранная на ПК, не открывается на телефоне вместо карточек.
  */
 export function effectiveView(
   settings: GridViewSettings,
   phone: boolean,
   fixed?: 'table' | 'cards',
 ): 'table' | 'cards' {
-  return fixed ?? settings.view ?? (phone ? 'cards' : 'table');
+  return fixed ?? (phone ? settings.phoneView : settings.view) ?? (phone ? 'cards' : 'table');
+}
+
+/** Выбор «Таблица / Карточки» на этом устройстве (ПК или телефон). */
+export function setView(
+  settings: GridViewSettings,
+  phone: boolean,
+  view: 'table' | 'cards',
+): GridViewSettings {
+  return phone ? { ...settings, phoneView: view } : { ...settings, view };
 }

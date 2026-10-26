@@ -1,6 +1,7 @@
 import { schema } from '@buhuchet/db';
 import { databaseAvailable } from '@buhuchet/db/testing';
 import { ApiError, EmployeeList, listQueryParams, type ListQuery } from '@buhuchet/shared';
+import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { apiRequest, createStaffFixture, signIn, TEST_PASSWORD } from '../../testing';
 
@@ -109,6 +110,45 @@ describe.skipIf(!databaseAvailable())(
       const byStatus = await list({ sort: { key: 'active', dir: 'asc' }, size: 'all' });
       const firstBlocked = byStatus.items.findIndex((e) => !e.active);
       expect(byStatus.items.slice(firstBlocked).every((e) => !e.active)).toBe(true);
+    });
+
+    it('Telegram и «Создал» / «Изменил» сортируются и фильтруются как на экране', async () => {
+      const [admin] = await f.t.admin.db
+        .select({ id: schema.users.id })
+        .from(schema.users)
+        .where(eq(schema.users.login, 'platform-admin'));
+      const [first] = await f.t.admin.db
+        .select({ id: schema.employees.id, userId: schema.employees.userId })
+        .from(schema.employees)
+        .where(eq(schema.employees.fullName, 'Номер 1'));
+      // «Номер 1» создал администратор платформы (записи сотрудника у него нет), правок не было.
+      await f.t.admin.db
+        .update(schema.employees)
+        .set({ createdBy: admin!.id, updatedBy: null })
+        .where(eq(schema.employees.id, first!.id));
+      await f.t.admin.db
+        .insert(schema.telegramLinks)
+        .values({ userId: first!.userId, orgId: f.a.orgId, chatId: 777001 });
+
+      const byTelegram = await list({ sort: { key: 'telegram', dir: 'asc' }, size: 'all' });
+      expect(byTelegram.items.at(-1)!.fullName).toBe('Номер 1');
+      const linked = byTelegram.items.filter((e) => e.telegram).map((e) => e.fullName);
+      expect(byTelegram.items.slice(-linked.length).every((e) => e.telegram)).toBe(true);
+
+      const byCreator = await list({ sort: { key: 'createdBy', dir: 'asc' } });
+      expect(byCreator.items[0]).toMatchObject({
+        fullName: 'Номер 1',
+        audit: { createdBy: 'Администратор платформы', updatedBy: null },
+      });
+      for (const key of ['createdBy', 'updatedBy']) {
+        const found = await list({
+          filters: { [key]: { type: 'enum', vals: ['Администратор платформы'] } },
+        });
+        expect(
+          found.items.map((e) => e.fullName),
+          key,
+        ).toEqual(['Номер 1']);
+      }
     });
 
     it('фильтры: роль по номеру, статус, телефон без пробелов, дата создания', async () => {

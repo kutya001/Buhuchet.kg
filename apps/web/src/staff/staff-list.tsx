@@ -3,12 +3,14 @@
 import { formatMomentRu, initials, type ListSort } from '@buhuchet/domain';
 import { EmployeeList, type Employee } from '@buhuchet/shared';
 import {
+  AUDIT_KEYS,
   Avatar,
   DataGrid,
   EmptyState,
   MONO_CLASS,
   Pill,
   useToast,
+  type GridAudit,
   type GridColumn,
 } from '@buhuchet/ui';
 import { useEffect, useMemo } from 'react';
@@ -24,15 +26,19 @@ import { useShell } from '../shell/context';
 const DEFAULT_SORT: ListSort = { key: 'createdAt', dir: 'desc' };
 
 /**
- * Видимые по умолчанию (ТЗ «Сотрудники», прототип SHOW.staff: ФИО, роль, телефон, контрагентов,
+ * Видимые по умолчанию (ТЗ «Столбцы, видимые по умолчанию»: ФИО, роль, телефон, контрагентов,
  * просрочено, статус, уровень знаний). Контрагентов, несданные, просрочено, баланс счёта и уровень
  * знаний добавят их модули.
  */
-const DEFAULT_VISIBLE = ['fullName', 'phone', 'role', 'active'];
+const DEFAULT_VISIBLE = ['fullName', 'role', 'phone', 'active'];
 
 const moment = (iso: string | null) => (iso ? formatMomentRu(new Date(iso)) : '');
 
-/** Столбцы списка сотрудников — как в прототипе (modules/staff.js, renderStaff), ключи — как на сервере. */
+// ОТКЛОНЕНИЕ: docs/deviations.md#31 — «Роль» перед «Телефоном», как в ТЗ (в прототипе наоборот).
+/**
+ * Столбцы списка сотрудников — как в прототипе (modules/staff.js, renderStaff), ключи — как на сервере.
+ * Служебные «Создал», «Изменил», «Создано», «Изменено» добавляет сам список (`STAFF_AUDIT`).
+ */
 export function staffColumns(t: Translate): GridColumn<Employee>[] {
   return [
     {
@@ -56,6 +62,7 @@ export function staffColumns(t: Translate): GridColumn<Employee>[] {
       text: (e) => e.login,
       className: MONO_CLASS,
     },
+    { key: 'role', label: t('staff.col.role'), type: 'enum', width: 170, text: (e) => e.role.name },
     {
       key: 'phone',
       label: t('staff.col.phone'),
@@ -64,7 +71,6 @@ export function staffColumns(t: Translate): GridColumn<Employee>[] {
       text: (e) => e.phoneText ?? '',
       className: MONO_CLASS,
     },
-    { key: 'role', label: t('staff.col.role'), type: 'enum', width: 170, text: (e) => e.role.name },
     {
       key: 'telegram',
       label: t('staff.col.telegram'),
@@ -73,11 +79,11 @@ export function staffColumns(t: Translate): GridColumn<Employee>[] {
       text: (e) => t(e.telegram ? 'staff.telegram.linked' : 'staff.telegram.none'),
       cell: (e) =>
         e.telegram ? (
-          <Pill tone="ok" icon="tg">
+          <Pill tone="ok" icon="tg" size="sm">
             {t('staff.telegram.linked_pill')}
           </Pill>
         ) : (
-          <Pill tone="caution" icon="alert">
+          <Pill tone="caution" icon="alert" size="sm">
             {t('staff.telegram.none_pill')}
           </Pill>
         ),
@@ -106,40 +112,16 @@ export function staffColumns(t: Translate): GridColumn<Employee>[] {
           </Pill>
         ),
     },
-    {
-      key: 'createdBy',
-      label: t('grid.col.created_by'),
-      type: 'enum',
-      width: 136,
-      audit: 'created',
-      text: (e) => e.audit.createdBy ?? '',
-    },
-    {
-      key: 'updatedBy',
-      label: t('grid.col.updated_by'),
-      type: 'enum',
-      width: 136,
-      audit: 'updated',
-      text: (e) => e.audit.updatedBy ?? e.audit.createdBy ?? '',
-    },
-    {
-      key: 'createdAt',
-      label: t('grid.col.created_at'),
-      type: 'datetime',
-      width: 146,
-      audit: 'created',
-      text: (e) => moment(e.audit.createdAt),
-    },
-    {
-      key: 'updatedAt',
-      label: t('grid.col.updated_at'),
-      type: 'datetime',
-      width: 146,
-      audit: 'updated',
-      text: (e) => moment(e.audit.updatedAt),
-    },
   ];
 }
+
+/** Значения служебных столбцов; «Изменил» у записи без правок — тот, кто создал (прототип `_ub || _cb`). */
+const STAFF_AUDIT: GridAudit<Employee> = {
+  createdBy: (e) => e.audit.createdBy ?? '',
+  updatedBy: (e) => e.audit.updatedBy ?? e.audit.createdBy ?? '',
+  createdAt: (e) => moment(e.audit.createdAt),
+  updatedAt: (e) => moment(e.audit.updatedAt),
+};
 
 const fetchStaff: FetchListPage<Employee> = async (params) => {
   const res = await api.api.staff.$get({ query: params });
@@ -157,7 +139,7 @@ export function StaffList() {
   const toast = useToast();
   const labels = useGridLabels('staff.count');
   const columns = useMemo(() => staffColumns(t), [t]);
-  const keys = useMemo(() => columns.map((c) => c.key), [columns]);
+  const keys = useMemo(() => [...columns.map((c) => c.key), ...AUDIT_KEYS], [columns]);
   const view = useViewSettings('staff.list');
   const list = useListPage({
     gridKey: 'staff.list',
@@ -179,6 +161,7 @@ export function StaffList() {
   return (
     <DataGrid
       columns={columns}
+      audit={STAFF_AUDIT}
       defaultVisible={DEFAULT_VISIBLE}
       defaultSort={DEFAULT_SORT}
       settings={view.settings}

@@ -3,7 +3,7 @@ import type { UiTextDefault } from './texts';
 /**
  * Тексты общего списка записей (задача #14, прототип ui/grid.js): панель над списком, меню «Столбцы»
  * и «Настройки вида», заголовки, страницы, загрузка и ошибка, служебные столбцы «Создал», «Создано»,
- * «Изменил», «Изменено». Ключи `grid.columns`, `grid.reset_view`, `grid.not_found`,
+ * «Изменил», «Изменено», выбор строк и панель «Выбрано: N». Ключи `grid.columns`, `grid.reset_view`, `grid.not_found`,
  * `grid.reset_filters`, `grid.shown` — из раздела `localization` refDB.json, с тем же текстом.
  * Число записей — три формы (`.one`, `.few`, `.many`: 1 запись, 2 записи, 5 записей).
  */
@@ -64,4 +64,9 @@ export const GRID_TEXTS = {
   'grid.col.created_at': { ru: 'Создано', section: 'Списки' },
   'grid.col.updated_by': { ru: 'Изменил', section: 'Списки' },
   'grid.col.updated_at': { ru: 'Изменено', section: 'Списки' },
+  'grid.selected': { ru: 'Выбрано: {n}', section: 'Списки' },
+  'grid.clear_selection': { ru: 'Снять выбор', section: 'Списки' },
+  'grid.select_all': { ru: 'Выбрать все на странице', section: 'Списки' },
+  'grid.select_row': { ru: 'Выбрать строку', section: 'Списки' },
+  'grid.select_card': { ru: 'Выбрать', section: 'Списки' },
 } as const satisfies Record<string, UiTextDefault>;

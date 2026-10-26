@@ -2,8 +2,9 @@
 
 import { iconButtonClass } from '../button';
 import { Icon } from '../icon';
+import { SELECT_BOX } from './grid-table';
 import type { RowEvents } from './row-events';
-import type { GridColumn, GridLabels, GridRowTone } from './types';
+import type { GridColumn, GridLabels, GridRowSelection, GridRowTone } from './types';
 
 /** Как `.gcard.<класс>` прототипа: приглушения у карточек нет (`.gt tr.muted` — только таблица). */
 const TONE_CARD: Record<GridRowTone, string> = {
@@ -16,7 +17,7 @@ const TONE_CARD: Record<GridRowTone, string> = {
 /**
  * Карточки списка (прототип ui/grid.js, cardsHtml; стили `.gcards`, `.gcard`): заголовок — главный
  * столбец, ниже пары «подпись — значение» видимых столбцов, внизу строка «Создал… · Изменил…» из
- * служебных столбцов. Плитки телефона (одна строка сумм, действия без правого клика) — задача #16.
+ * служебных столбцов; у списка с массовыми действиями — галочка в заголовке карточки. Плитки телефона (одна строка сумм, действия без правого клика) — задача #16.
  */
 export function GridCards<Row>({
   columns,
@@ -27,6 +28,7 @@ export function GridCards<Row>({
   hasActions,
   clickable,
   events,
+  selection,
   totals,
   total,
   labels,
@@ -39,6 +41,7 @@ export function GridCards<Row>({
   hasActions: boolean;
   clickable: boolean;
   events: RowEvents<Row>;
+  selection?: GridRowSelection<Row>;
   totals: Readonly<Record<string, number>>;
   total: number;
   labels: GridLabels;
@@ -62,15 +65,25 @@ export function GridCards<Row>({
           const tone = rowTone?.(row);
           const created = auditLine(row, 'created');
           const updated = auditLine(row, 'updated');
+          const picked = selection?.has(row) ?? false;
           return (
             <div
               key={id}
               data-id={id}
               tabIndex={0}
               {...events.handlers(row)}
-              className={`flex min-w-0 flex-col gap-[9px] rounded-xl border border-line bg-raised pt-[11px] pr-3 pb-3 pl-3.5 transition-shadow duration-150 hover:shadow-pane focus-visible:outline-2 focus-visible:outline-brand-blue ${clickable ? 'cursor-pointer' : ''} ${tone ? TONE_CARD[tone] : ''}`}
+              className={`flex min-w-0 flex-col gap-[9px] rounded-xl border border-line bg-raised pt-[11px] pr-3 pb-3 pl-3.5 transition-shadow duration-150 hover:shadow-pane focus-visible:outline-2 focus-visible:outline-brand-blue ${clickable ? 'cursor-pointer' : ''} ${tone ? TONE_CARD[tone] : ''} ${picked ? 'shadow-btn-active' : ''}`}
             >
               <div className="flex items-start gap-[9px]">
+                {selection && (
+                  <input
+                    type="checkbox"
+                    aria-label={labels.selectCard}
+                    checked={picked}
+                    onChange={(e) => selection.toggle(row, e.target.checked)}
+                    className={`${SELECT_BOX} mt-[3px]`}
+                  />
+                )}
                 <div className="min-w-0 flex-1 leading-[1.35] font-semibold">
                   {title.cell ? title.cell(row) : title.text(row)}
                 </div>

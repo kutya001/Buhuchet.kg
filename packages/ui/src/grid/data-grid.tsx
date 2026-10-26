@@ -8,21 +8,33 @@ import {
   type ListPageSize,
   type ListSort,
 } from '@buhuchet/domain';
-import { useCallback, useState, type ReactNode } from 'react';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { ActionMenu, type ActionEntry, type MenuPlace } from '../action-menu';
 import { iconButtonClass } from '../button';
 import { EmptyState } from '../empty-state';
 import { Icon } from '../icon';
 import { PHONE_QUERY, useMediaQuery } from '../use-media';
+import { auditColumns } from './audit';
 import { effectiveSort, effectiveView, pageSizeOf, toggleSort, visibleKeys } from './grid-state';
 import { GridCards } from './grid-cards';
 import { GridTable } from './grid-table';
 import { GridToolbar } from './grid-toolbar';
 import { useRowEvents } from './row-events';
-import type { GridColumn, GridLabels, GridPage, GridRowTone } from './types';
+import type {
+  GridAudit,
+  GridBulkAction,
+  GridColumn,
+  GridLabels,
+  GridPage,
+  GridRowSelection,
+  GridRowTone,
+} from './types';
 
 export interface DataGridProps<Row> {
+  /** Столбцы модуля; служебные «Создал», «Изменил», «Создано», «Изменено» список добавит сам. */
   columns: readonly GridColumn<Row>[];
+  /** Значения служебных столбцов строкой; без них служебных столбцов нет. */
+  audit?: GridAudit<Row>;
   /** Столбцы, видимые по умолчанию (ТЗ «Столбцы, видимые по умолчанию»); остальные — в «Столбцы». */
   defaultVisible: readonly string[];
   /** Сортировка по умолчанию — «Создано», от новых к старым. */
@@ -48,6 +60,8 @@ export interface DataGridProps<Row> {
   actions?: (row: Row) => readonly ActionEntry[];
   /** Открыть запись (карточку) нажатием на строку или Enter. */
   onOpen?: (row: Row) => void;
+  /** Массовые действия: есть — у строк галочки, при выборе — панель «Выбрано: N». */
+  bulk?: readonly GridBulkAction<Row>[];
   /** Вид закреплён модулем: переключателя «Таблица / Карточки» нет. */
   fixedView?: 'table' | 'cards';
   /** Название списка для экранного диктора, например «Сотрудники». */
@@ -58,12 +72,14 @@ export interface DataGridProps<Row> {
 /**
  * Единый компонент списка — UnifiedDataGrid (ТЗ «Списки», прототип ui/grid.js `grid()`): панель с
  * числом записей, видом и «Столбцами», таблица или карточки, страницы внизу, меню действий записи,
- * заготовка при загрузке, ошибка с «Повторить» и пустое состояние. Сортировка, страницы и фильтры
+ * выбор строк галочками с массовыми действиями, служебные столбцы «Создал… Изменено», заготовка при
+ * загрузке, ошибка с «Повторить» и пустое состояние. Сортировка, страницы и фильтры
  * считает сервер: в браузер приходит только текущая страница разрешённых записей. Настройки вида —
  * пропсом, экран сохраняет их на сервере для пользователя.
  */
 export function DataGrid<Row>({
-  columns,
+  columns: moduleColumns,
+  audit,
   defaultVisible,
   defaultSort,
   settings,
@@ -80,11 +96,18 @@ export function DataGrid<Row>({
   rowTone,
   actions,
   onOpen,
+  bulk,
   fixedView,
   label,
   labels,
 }: DataGridProps<Row>) {
   const phone = useMediaQuery(PHONE_QUERY);
+  const columns = useMemo(
+    () => (audit ? [...moduleColumns, ...auditColumns(audit, labels)] : moduleColumns),
+    [moduleColumns, audit, labels],
+  );
+  // Отмеченные строки — по ключу записи; выбор переживает переход по страницам до «Снять выбор».
+  const [picked, setPicked] = useState<ReadonlyMap<string, Row>>(() => new Map());
   const [menu, setMenu] = useState<{ row: Row; place: MenuPlace } | null>(null);
   const closeMenu = useCallback(() => setMenu(null), []);
   const events = useRowEvents<Row>({
@@ -99,6 +122,16 @@ export function DataGrid<Row>({
   const sort = effectiveSort(settings, defaultSort, keys);
   const size = pageSizeOf(settings);
   const total = data?.total ?? null;
+  const pageRows = data?.items ?? [];
+  const selection: GridRowSelection<Row> | undefined = bulk?.length
+    ? {
+        has: (row) => picked.has(rowKey(row)),
+        toggle: (row, on) => setPicked((prev) => pickRows(prev, [row], on, rowKey)),
+        allOnPage: pageRows.length > 0 && pageRows.every((r) => picked.has(rowKey(r))),
+        togglePage: (on) => setPicked((prev) => pickRows(prev, pageRows, on, rowKey)),
+      }
+    : undefined;
+  const clearPicked = () => setPicked(new Map());
 
   let body: ReactNode;
   if (error) {
@@ -143,6 +176,7 @@ export function DataGrid<Row>({
         hasActions={!!actions}
         clickable={!!onOpen}
         events={events}
+        selection={selection}
         label={label}
         labels={labels}
       />
@@ -158,6 +192,7 @@ export function DataGrid<Row>({
         hasActions={!!actions}
         clickable={!!onOpen}
         events={events}
+        selection={selection}
         totals={data.totals}
         total={data.total}
         labels={labels}
@@ -182,6 +217,16 @@ export function DataGrid<Row>({
         fixedView={fixedView}
         phone={phone}
         total={error ? null : total}
+        selection={
+          bulk?.length
+            ? {
+                count: picked.size,
+                actions: bulk,
+                onRun: (action) => action.run([...picked.values()], clearPicked),
+                onClear: clearPicked,
+              }
+            : undefined
+        }
         labels={labels}
       />
       {body}
@@ -208,6 +253,21 @@ export function DataGrid<Row>({
       )}
     </div>
   );
+}
+
+/** Отметить или снять строки (галочка строки или «Выбрать все на странице»). */
+export function pickRows<Row>(
+  prev: ReadonlyMap<string, Row>,
+  rows: readonly Row[],
+  on: boolean,
+  rowKey: (row: Row) => string,
+): ReadonlyMap<string, Row> {
+  const next = new Map(prev);
+  for (const row of rows) {
+    if (on) next.set(rowKey(row), row);
+    else next.delete(rowKey(row));
+  }
+  return next;
 }
 
 /**

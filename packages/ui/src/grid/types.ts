@@ -1,5 +1,6 @@
 import type { ListColumnType } from '@buhuchet/domain';
 import type { ReactNode } from 'react';
+import type { IconName } from '../icons';
 
 /**
  * Столбец списка (прототип ui/grid.js, `cfg.cols`): ключ — тот же, что у столбца на сервере (сортировка
@@ -34,6 +35,39 @@ export interface GridPage<Row> {
   total: number;
   page: number;
   totals: Readonly<Record<string, number>>;
+}
+
+/**
+ * Служебные столбцы «Создал», «Изменил», «Создано», «Изменено» (прототип `auditCols`): их добавляет
+ * сам список, экран даёт только значения строкой. На сервере у списка — столбцы `createdBy`,
+ * `updatedBy`, `createdAt`, `updatedAt`; «Изменил» без правок — тот, кто создал.
+ */
+export interface GridAudit<Row> {
+  createdBy: (row: Row) => string;
+  updatedBy: (row: Row) => string;
+  createdAt: (row: Row) => string;
+  updatedAt: (row: Row) => string;
+}
+
+/**
+ * Массовое действие над отмеченными строками (прототип `cfg.bulk`, ТЗ «Действия над записью»):
+ * кнопка на панели «Выбрано: N». `done()` снимает выбор, когда действие выполнено.
+ */
+export interface GridBulkAction<Row> {
+  id: string;
+  label: string;
+  icon?: IconName;
+  danger?: boolean;
+  run: (rows: readonly Row[], done: () => void) => void;
+}
+
+/** Отмеченные строки списка с массовыми действиями (галочки в таблице и карточках). */
+export interface GridRowSelection<Row> {
+  has: (row: Row) => boolean;
+  toggle: (row: Row, on: boolean) => void;
+  /** Все строки страницы отмечены — галочка в заголовке стоит. */
+  allOnPage: boolean;
+  togglePage: (on: boolean) => void;
 }
 
 /** Подсветка строки (прототип `rowClass`): заблокированный — приглушённо, просроченный — красным. */
@@ -84,6 +118,18 @@ export interface GridLabels {
   retry: string;
   /** Строка итогов: «Итого по фильтру · 12». */
   totalByFilter: (count: number) => string;
+  /** Панель массовых действий: «Выбрано: 3». */
+  selected: (count: number) => string;
+  clearSelection: string;
+  selectAll: string;
+  selectRow: string;
+  /** Галочка карточки: «Выбрать». */
+  selectCard: string;
+  /** Подписи служебных столбцов. */
+  createdBy: string;
+  updatedBy: string;
+  createdAt: string;
+  updatedAt: string;
   /** Строка карточки: «Создал: Алишер Т., 12.03.2026 10:15». */
   createdLine: (text: string) => string;
   updatedLine: (text: string) => string;

@@ -6,8 +6,15 @@ import { ActionList } from '../action-menu';
 import { buttonClass, iconButtonClass } from '../button';
 import { Icon } from '../icon';
 import { Popover } from '../popover';
-import { isHidden, moveColumn, orderedKeys, setColumnVisible, visibleKeys } from './grid-state';
-import type { GridColumn, GridLabels } from './types';
+import {
+  isHidden,
+  moveColumn,
+  orderedKeys,
+  setColumnVisible,
+  setView as withView,
+  visibleKeys,
+} from './grid-state';
+import type { GridBulkAction, GridColumn, GridLabels } from './types';
 
 /** Кнопка панели на телефоне — значок 36 px с подложкой (`.gtools .icon-btn.sm.raised`). */
 const PHONE_TOOL =
@@ -26,7 +33,16 @@ interface ToolbarProps<Row> {
   fixedView?: 'table' | 'cards';
   phone: boolean;
   total: number | null;
+  /** Отмеченные строки и массовые действия: при выборе вместо числа записей — «Выбрано: N». */
+  selection?: GridSelectionBar<Row>;
   labels: GridLabels;
+}
+
+export interface GridSelectionBar<Row> {
+  count: number;
+  actions: readonly GridBulkAction<Row>[];
+  onRun: (action: GridBulkAction<Row>) => void;
+  onClear: () => void;
 }
 
 /**
@@ -44,18 +60,23 @@ export function GridToolbar<Row>({
   fixedView,
   phone,
   total,
+  selection,
   labels,
 }: ToolbarProps<Row>) {
   const keys = columns.map((c) => c.key);
   const shown = visibleKeys(keys, settings, defaultVisible).length;
   const columnsLabel = `${labels.columns} (${shown}/${keys.length})`;
-  const setView = (next: 'table' | 'cards') => onSettingsChange({ ...settings, view: next });
+  const setView = (next: 'table' | 'cards') => onSettingsChange(withView(settings, phone, next));
 
   return (
     <div className="flex min-h-[33px] flex-wrap items-center gap-2">
-      <div className="flex flex-wrap items-center gap-2 text-[13px] text-muted">
-        {total !== null && <span data-grid-count>{labels.count(total)}</span>}
-      </div>
+      {selection && selection.count > 0 ? (
+        <GridBulkBar selection={selection} labels={labels} />
+      ) : (
+        <div className="flex flex-wrap items-center gap-2 text-[13px] text-muted">
+          {total !== null && <span data-grid-count>{labels.count(total)}</span>}
+        </div>
+      )}
       <div className="flex-1" />
       {!fixedView &&
         (phone ? (
@@ -175,6 +196,49 @@ export function GridToolbar<Row>({
           />
         )}
       </Popover>
+    </div>
+  );
+}
+
+/**
+ * Панель массовых действий (прототип `.bulkbar`; ТЗ «Действия над записью» → «Выбор нескольких строк
+ * галочками и массовые действия»): «Выбрано: N», кнопки действий и «Снять выбор».
+ */
+export function GridBulkBar<Row>({
+  selection,
+  labels,
+}: {
+  selection: GridSelectionBar<Row>;
+  labels: GridLabels;
+}) {
+  return (
+    <div
+      role="toolbar"
+      aria-label={labels.selected(selection.count)}
+      data-grid-bulk
+      className="flex animate-slide-up flex-wrap items-center gap-1.5 rounded-full border border-line-strong bg-raised py-[3px] pr-1 pl-3 text-[13px] shadow-pane"
+    >
+      <b>{labels.selected(selection.count)}</b>
+      {selection.actions.map((a) => (
+        <button
+          key={a.id}
+          type="button"
+          onClick={() => selection.onRun(a)}
+          className={buttonClass(a.danger ? 'danger' : 'default', 'sm')}
+        >
+          <Icon name={a.icon ?? 'check'} size="sm" />
+          {a.label}
+        </button>
+      ))}
+      <button
+        type="button"
+        onClick={selection.onClear}
+        aria-label={labels.clearSelection}
+        title={labels.clearSelection}
+        className={iconButtonClass('sm')}
+      >
+        <Icon name="x" size="sm" />
+      </button>
     </div>
   );
 }

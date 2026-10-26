@@ -5,17 +5,23 @@ import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { iconButtonClass } from '../button';
 import { Icon } from '../icon';
 import { clampWidth, columnWidth, dropColumn, setColumnWidth } from './grid-state';
-import type { GridColumn, GridLabels, GridRowTone } from './types';
+import type { GridColumn, GridLabels, GridRowSelection, GridRowTone } from './types';
 import type { RowEvents } from './row-events';
 
 /** Ширина столбца «⋯» (`.actc` прототипа). */
 const ACTIONS_WIDTH = 44;
+/** Ширина столбца с галочками (`.selc` прототипа). */
+const SELECT_WIDTH = 38;
+/** Галочка выбора строки. */
+export const SELECT_BOX = 'm-0 h-4 w-4 flex-none cursor-pointer accent-accent align-middle';
 
 export const isNumeric = <Row,>(c: GridColumn<Row>) =>
   c.numeric ?? (c.type === 'int' || c.type === 'money');
 
 const TONE_ROW: Record<GridRowTone, string> = {
-  muted: '[&>td]:text-faint',
+  // Прототип `.gt tr.muted` — цветом `--faint` (2,9 : 1); основной текст не бледнее `--muted`
+  // (docs/deviations.md, п. 22).
+  muted: '[&>td]:text-muted',
   overdue: '[&>td]:bg-danger-bg [&>td:first-child]:shadow-[inset_3px_0_0_var(--bu-red)]',
   warn: '[&>td:first-child]:shadow-[inset_3px_0_0_var(--bu-orange)]',
 };
@@ -35,6 +41,8 @@ interface TableProps<Row> {
   hasActions: boolean;
   clickable: boolean;
   events: RowEvents<Row>;
+  /** Выбор строк галочками (есть массовые действия). */
+  selection?: GridRowSelection<Row>;
   label: string;
   labels: GridLabels;
 }
@@ -42,7 +50,8 @@ interface TableProps<Row> {
 /**
  * Таблица списка (прототип ui/grid.js, tableHtml; стили `.gscroll`, `table.gt`): заголовок закреплён,
  * сортировка нажатием на заголовок, ширина — перетаскиванием границы (не уже 70 px), порядок —
- * перетаскиванием заголовка; столбец «⋯» — действия записи; внизу закреплённая строка итогов.
+ * перетаскиванием заголовка; слева — галочки выбора строк, справа — «⋯», действия записи; внизу
+ * закреплённая строка итогов.
  * Широкая таблица прокручивается внутри себя; в развёрнутом окне — выше, на телефоне — без
  * ограничения высоты.
  */
@@ -61,6 +70,7 @@ export function GridTable<Row>({
   hasActions,
   clickable,
   events,
+  selection,
   label,
   labels,
 }: TableProps<Row>) {
@@ -71,7 +81,9 @@ export function GridTable<Row>({
   const widthOf = (c: GridColumn<Row>) =>
     live?.key === c.key ? live.width : columnWidth(c, settings);
   const tableWidth =
-    columns.reduce((sum, c) => sum + widthOf(c), 0) + (hasActions ? ACTIONS_WIDTH : 0);
+    columns.reduce((sum, c) => sum + widthOf(c), 0) +
+    (selection ? SELECT_WIDTH : 0) +
+    (hasActions ? ACTIONS_WIDTH : 0);
   const compact = settings.density === 'compact';
   const hasTotals = columns.some((c) => c.total);
 
@@ -111,9 +123,10 @@ export function GridTable<Row>({
       <table
         aria-label={label}
         style={{ width: tableWidth }}
-        className="min-w-full table-fixed border-separate border-spacing-0 tabular-nums"
+        className={`min-w-full table-fixed border-separate border-spacing-0 tabular-nums ${compact ? '[&_[data-pill]]:leading-[17px]' : ''}`}
       >
         <colgroup>
+          {selection && <col style={{ width: SELECT_WIDTH }} />}
           {columns.map((c) => (
             <col key={c.key} style={{ width: widthOf(c) }} />
           ))}
@@ -121,6 +134,20 @@ export function GridTable<Row>({
         </colgroup>
         <thead>
           <tr>
+            {selection && (
+              <th
+                scope="col"
+                className="sticky top-0 z-[2] border-b border-line bg-pane-alt p-0 text-center"
+              >
+                <input
+                  type="checkbox"
+                  aria-label={labels.selectAll}
+                  checked={selection.allOnPage}
+                  onChange={(e) => selection.togglePage(e.target.checked)}
+                  className={SELECT_BOX}
+                />
+              </th>
+            )}
             {columns.map((c) => {
               const dir = sort?.key === c.key ? sort.dir : null;
               const sortable = c.sortable !== false;
@@ -197,14 +224,26 @@ export function GridTable<Row>({
             const id = rowKey(row);
             const tone = rowTone?.(row);
             const last = i === rows.length - 1;
+            const picked = selection?.has(row) ?? false;
             return (
               <tr
                 key={id}
                 data-id={id}
                 tabIndex={0}
                 {...events.handlers(row)}
-                className={`group/row focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-blue [&:hover>td]:bg-row-hover ${clickable ? 'cursor-pointer' : ''} ${tone ? TONE_ROW[tone] : ''}`}
+                className={`group/row focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-blue [&:hover>td]:bg-row-hover ${clickable ? 'cursor-pointer' : ''} ${tone ? TONE_ROW[tone] : ''} ${picked ? '[&>td]:bg-sel' : ''}`}
               >
+                {selection && (
+                  <td className={`${cell} px-0! text-center ${last ? 'border-b-0' : ''}`}>
+                    <input
+                      type="checkbox"
+                      aria-label={labels.selectRow}
+                      checked={picked}
+                      onChange={(e) => selection.toggle(row, e.target.checked)}
+                      className={SELECT_BOX}
+                    />
+                  </td>
+                )}
                 {columns.map((c) => {
                   const text = c.text(row);
                   return (
@@ -238,6 +277,9 @@ export function GridTable<Row>({
         {hasTotals && (
           <tfoot>
             <tr>
+              {selection && (
+                <td className="sticky bottom-0 z-[1] border-t border-line-strong bg-pane-alt" />
+              )}
               {columns.map((c, i) => {
                 const value = totals[c.key];
                 const foot =

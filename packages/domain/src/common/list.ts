@@ -14,6 +14,7 @@ export const DEFAULT_PAGE_SIZE: ListPageSize = 25;
  * страницами по 5 000, а не грузит в браузер десятки тысяч строк (ТЗ: «большие реестры загружаются
  * с сервера постранично»).
  */
+// ОТКЛОНЕНИЕ: docs/deviations.md#30 — в прототипе «Все записи» без предела.
 export const ALL_ROWS_LIMIT = 5000;
 
 export function isListPageSize(value: unknown): value is ListPageSize {
@@ -110,13 +111,14 @@ export const DEFAULT_LIST_SORT: ListSort = { key: 'createdAt', dir: 'desc' };
 
 /**
  * Настройки вида списка у пользователя (ТЗ «Настройки вида»; прототип gsave): вид «Таблица /
- * Карточки», плотность, ширина, показанные и скрытые столбцы (столбца нет ни там, ни там — он
+ * Карточки» — отдельно на ПК (`view`) и на телефоне (`phoneView`), плотность, ширина, показанные и скрытые столбцы (столбца нет ни там, ни там — он
  * появился позже, у него видимость по умолчанию), порядок, ширины в px, сортировка (null —
  * пользователь выключил сортировку, нет поля — по умолчанию) и записей на странице. Схема для API —
  * `ViewSettings` в `@buhuchet/shared`.
  */
 export interface GridViewSettings {
   view?: 'table' | 'cards';
+  phoneView?: 'table' | 'cards';
   density?: 'normal' | 'compact';
   width?: 'full' | 'center';
   shown?: string[];

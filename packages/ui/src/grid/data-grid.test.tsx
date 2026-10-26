@@ -3,9 +3,12 @@ import { isValidElement, type ReactElement, type ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { ActionList, menuPosition } from '../action-menu';
-import { DataGrid, GridFooter, type DataGridProps } from './data-grid';
-import { ColumnsPanel, GridToolbar } from './grid-toolbar';
-import type { GridColumn, GridLabels } from './types';
+import { DataGrid, GridFooter, pickRows, type DataGridProps } from './data-grid';
+import { GridCards } from './grid-cards';
+import { GridTable } from './grid-table';
+import { ColumnsPanel, GridBulkBar, GridToolbar } from './grid-toolbar';
+import { rowEvents } from './row-events';
+import type { GridColumn, GridLabels, GridRowSelection } from './types';
 
 interface Person {
   id: string;
@@ -82,6 +85,15 @@ const LABELS: GridLabels = {
   totalByFilter: (n) => `Итого по фильтру · ${n}`,
   createdLine: (t) => `Создал: ${t}`,
   updatedLine: (t) => `Изменил: ${t}`,
+  selected: (n) => `Выбрано: ${n}`,
+  clearSelection: 'Снять выбор',
+  selectAll: 'Выбрать все на странице',
+  selectRow: 'Выбрать строку',
+  selectCard: 'Выбрать',
+  createdBy: 'Создал',
+  updatedBy: 'Изменил',
+  createdAt: 'Создано',
+  updatedAt: 'Изменено',
 };
 
 const people = (n: number): Person[] =>
@@ -203,10 +215,156 @@ describe('UnifiedDataGrid: таблица (ТЗ «Списки записей»,
     expect(html).toContain('300 сом');
   });
 
-  it('приглушённая строка (заблокированный сотрудник)', () => {
+  it('приглушённая строка (заблокированный сотрудник) — не бледнее второстепенного текста', () => {
     const html = grid({ rowTone: (p) => (p.active ? undefined : 'muted') });
-    expect(html).toMatch(/data-id="p2"[^>]*\[&amp;&gt;td\]:text-faint/);
-    expect(html).not.toMatch(/data-id="p1"[^>]*\[&amp;&gt;td\]:text-faint/);
+    expect(html).toMatch(/data-id="p2"[^>]*\[&amp;&gt;td\]:text-muted/);
+    expect(html).not.toMatch(/data-id="p1"[^>]*\[&amp;&gt;td\]:text-muted/);
+    expect(html).not.toContain('[&amp;&gt;td]:text-faint');
+  });
+
+  it('служебные столбцы «Создал», «Изменил», «Создано», «Изменено» список добавляет сам', () => {
+    const own = COLUMNS.filter((c) => !c.audit);
+    const html = grid({
+      columns: own,
+      audit: {
+        createdBy: (p) => p.by,
+        updatedBy: () => '',
+        createdAt: (p) => p.at,
+        updatedAt: () => '',
+      },
+      settings: { shown: ['name', 'createdBy', 'createdAt'] },
+    });
+    expect(headers(html)).toEqual(['name', 'role', 'active', 'createdBy', 'createdAt']);
+    expect(html).toContain('Столбцы (5/9)');
+    expect(html).toContain('title="Кутман О."');
+    const cards = grid({
+      columns: own,
+      audit: {
+        createdBy: (p) => p.by,
+        updatedBy: () => '',
+        createdAt: (p) => p.at,
+        updatedAt: () => '',
+      },
+      settings: { view: 'cards', shown: ['createdBy', 'createdAt'] },
+    });
+    expect(cards).toContain('Создал: Кутман О., 12.03.2026 10:15');
+  });
+});
+
+describe('выбор строк галочками и массовые действия (ТЗ «Действия над записью», прототип cfg.bulk)', () => {
+  const bulk = [{ id: 'confirm', label: 'Подтвердить', run: vi.fn() }];
+  const selection = (ids: string[], over: Partial<GridRowSelection<Person>> = {}) => ({
+    has: (p: Person) => ids.includes(p.id),
+    toggle: vi.fn(),
+    allOnPage: false,
+    togglePage: vi.fn(),
+    ...over,
+  });
+  const table = (sel: GridRowSelection<Person>, rows = people(3)) =>
+    renderToStaticMarkup(
+      <GridTable
+        columns={COLUMNS.slice(0, 2)}
+        allKeys={COLUMNS.map((c) => c.key)}
+        rows={rows}
+        rowKey={(p) => p.id}
+        settings={{}}
+        onSettingsChange={() => {}}
+        sort={null}
+        onSort={() => {}}
+        totals={{}}
+        total={rows.length}
+        hasActions={false}
+        clickable={false}
+        events={rowEvents({ timer: undefined, start: null, pressed: false }, {})}
+        selection={sel}
+        label="Сотрудники"
+        labels={LABELS}
+      />,
+    );
+
+  it('без массовых действий галочек нет', () => {
+    expect(grid()).not.toContain('Выбрать строку');
+  });
+
+  it('с действиями — столбец галочек и «Выбрать все на странице»; пока ничего не выбрано — число записей', () => {
+    const html = grid({ bulk });
+    expect(html.match(/aria-label="Выбрать строку"/g)).toHaveLength(25);
+    expect(html).toContain('aria-label="Выбрать все на странице"');
+    expect(html).toContain('<col style="width:38px"/>');
+    expect(html).toContain('250 сотрудников');
+    expect(html).not.toContain('data-grid-bulk');
+  });
+
+  it('отмеченная строка подсвечена; все отмечены — галочка в заголовке', () => {
+    const html = table(selection(['p2']));
+    expect(html).toMatch(/data-id="p2"[^>]*\[&amp;&gt;td\]:bg-sel/);
+    expect(html).not.toMatch(/data-id="p1"[^>]*\[&amp;&gt;td\]:bg-sel/);
+    const boxes = html.match(/<input type="checkbox"[^>]*>/g)!;
+    expect(boxes.filter((b) => b.includes('checked=""'))).toHaveLength(1);
+    const all = table(selection(['p1', 'p2', 'p3'], { allOnPage: true }));
+    expect(all).toMatch(
+      /<input type="checkbox" aria-label="Выбрать все на странице"[^>]*checked=""/,
+    );
+  });
+
+  it('галочка строки и «Выбрать все на странице» передают выбор', () => {
+    const sel = selection([]);
+    const html = table(sel);
+    expect(html).toContain('aria-label="Выбрать строку"');
+    const tree = GridCards<Person>({
+      columns: COLUMNS.slice(0, 3),
+      rows: people(2),
+      rowKey: (p) => p.id,
+      hasActions: false,
+      clickable: false,
+      events: rowEvents({ timer: undefined, start: null, pressed: false }, {}),
+      selection: sel,
+      totals: {},
+      total: 2,
+      labels: LABELS,
+    });
+    const [box] = find(tree, 'input');
+    expect(box!.props['aria-label']).toBe('Выбрать');
+    box!.props.onChange!({ target: { value: '', checked: true } });
+    expect(sel.toggle).toHaveBeenCalledWith(people(2)[0], true);
+  });
+
+  it('выбор по ключу записи: отметить, снять, страница целиком', () => {
+    const key = (p: Person) => p.id;
+    const [a, b, c] = people(3);
+    let picked = pickRows(new Map(), [a!], true, key);
+    picked = pickRows(picked, [b!, c!], true, key);
+    expect([...picked.keys()]).toEqual(['p1', 'p2', 'p3']);
+    picked = pickRows(picked, [b!], false, key);
+    expect([...picked.values()]).toEqual([a, c]);
+    expect(pickRows(picked, [a!, b!, c!], false, key).size).toBe(0);
+  });
+
+  it('панель «Выбрано: N»: действие получает отмеченные строки, «Снять выбор»', () => {
+    const run = vi.fn();
+    const clear = vi.fn();
+    const action = {
+      id: 'block',
+      label: 'Заблокировать',
+      icon: 'lock' as const,
+      danger: true,
+      run,
+    };
+    const bar = { count: 2, actions: [bulk[0]!, action], onRun: vi.fn(), onClear: clear };
+    const html = renderToStaticMarkup(<GridBulkBar selection={bar} labels={LABELS} />);
+    expect(html).toContain('<b>Выбрано: 2</b>');
+    expect(html).toContain('role="toolbar"');
+    expect(html).toMatch(/<button[^>]*bg-danger-btn[^>]*>.*Заблокировать/);
+    const buttons = find(GridBulkBar({ selection: bar, labels: LABELS }), 'button');
+    expect(buttons.map((x) => x.props['aria-label'])).toEqual([
+      undefined,
+      undefined,
+      'Снять выбор',
+    ]);
+    buttons[1]!.props.onClick!();
+    expect(bar.onRun).toHaveBeenCalledWith(action);
+    buttons[2]!.props.onClick!();
+    expect(clear).toHaveBeenCalledOnce();
   });
 });
 
@@ -278,6 +436,16 @@ describe('панель над списком', () => {
     expect(change).toHaveBeenCalledWith({ view: 'cards' });
   });
 
+  it('выбраны строки — вместо числа записей панель «Выбрано: N»', () => {
+    const html = renderToStaticMarkup(
+      toolbar({
+        selection: { count: 3, actions: [], onRun: () => {}, onClear: () => {} },
+      }),
+    );
+    expect(html).toContain('Выбрано: 3');
+    expect(html).not.toContain('250 сотрудников');
+  });
+
   it('телефон: одна кнопка-значок вида с подписью для диктора', () => {
     const change = vi.fn();
     const html = renderToStaticMarkup(
@@ -287,6 +455,16 @@ describe('панель над списком', () => {
     expect(html).toContain('aria-label="Столбцы (3/7)"');
     expect(html).toContain('aria-label="Настройки вида"');
     expect(html).not.toContain('<span>Таблица</span>');
+    // Выбор на телефоне запоминается отдельно от ПК: переключатель вида — первый элемент с `onChange`.
+    const tree = toolbar({ phone: true, view: 'cards', onSettingsChange: change });
+    const toggle = (tree.props as { children: ReactNode[] }).children
+      .flat()
+      .find(
+        (n): n is ReactElement<{ onChange: (v: 'table' | 'cards') => void }> =>
+          isValidElement<{ onChange?: unknown }>(n) && typeof n.props.onChange === 'function',
+      );
+    toggle!.props.onChange('table');
+    expect(change).toHaveBeenCalledWith({ phoneView: 'table' });
   });
 });
 

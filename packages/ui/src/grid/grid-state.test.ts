@@ -5,6 +5,7 @@ import {
   dropColumn,
   effectiveSort,
   effectiveView,
+  setView,
   isHidden,
   moveColumn,
   orderedKeys,
@@ -159,7 +160,16 @@ describe('вид и страница', () => {
   it('«Таблица» на ПК, «Карточки» на телефоне; выбор пользователя; закреплённый вид', () => {
     expect(effectiveView({}, false)).toBe('table');
     expect(effectiveView({}, true)).toBe('cards');
-    expect(effectiveView({ view: 'table' }, true)).toBe('table');
+    // Выбор на ПК телефону не мешает, и наоборот.
+    expect(effectiveView({ view: 'table' }, true)).toBe('cards');
+    expect(effectiveView({ phoneView: 'table' }, true)).toBe('table');
+    expect(effectiveView({ phoneView: 'table' }, false)).toBe('table');
+    expect(effectiveView({ view: 'cards', phoneView: 'table' }, false)).toBe('cards');
+    expect(setView({ density: 'compact' }, true, 'table')).toEqual({
+      density: 'compact',
+      phoneView: 'table',
+    });
+    expect(setView({}, false, 'cards')).toEqual({ view: 'cards' });
     expect(effectiveView({ view: 'cards' }, false, 'table')).toBe('table');
   });
 

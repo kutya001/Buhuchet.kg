@@ -112,13 +112,14 @@ test.describe('Списки: UnifiedDataGrid', () => {
     await expect(page.locator('[data-grid] [data-id]').first()).toBeVisible();
     // На телефоне по умолчанию — карточки: переключаемся на таблицу (выбор тоже запоминается).
     if (isMobile) await page.getByRole('button', { name: 'Вид списка: Таблица' }).click();
-    await expect.poll(() => headers(page)).toEqual(['fullName', 'phone', 'role', 'active']);
+    await expect.poll(() => headers(page)).toEqual(['fullName', 'role', 'phone', 'active']);
 
     // «Столбцы»: скрыть «Телефон», «Роль» — наверх.
     await page.getByRole('button', { name: /^Столбцы/ }).click();
     const panel = page.getByRole('dialog', { name: 'Столбцы' });
     await panel.getByRole('checkbox', { name: 'Телефон' }).uncheck();
-    for (let i = 0; i < 3; i++) await panel.getByRole('button', { name: 'Выше: Роль' }).click();
+    // «Роль» — третья в общем порядке столбцов (после ФИО и скрытого «Логина»).
+    for (let i = 0; i < 2; i++) await panel.getByRole('button', { name: 'Выше: Роль' }).click();
     await page.keyboard.press('Escape');
     await expect(panel).toBeHidden();
     await expect.poll(() => headers(page)).toEqual(['role', 'fullName', 'active']);

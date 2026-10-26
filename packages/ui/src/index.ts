@@ -70,8 +70,23 @@ export {
   type ActionSeparator,
   type MenuPlace,
 } from './action-menu';
+export { AUDIT_KEYS, auditColumns } from './grid/audit';
 export { DataGrid, GridFooter, GridSkeleton, type DataGridProps } from './grid/data-grid';
 export * from './grid/grid-state';
-export { ColumnsPanel, GridToolbar } from './grid/grid-toolbar';
-export { LONG_PRESS_MS, useRowEvents, type RowEvents } from './grid/row-events';
-export type { GridColumn, GridLabels, GridPage, GridRowTone } from './grid/types';
+export { ColumnsPanel, GridBulkBar, GridToolbar, type GridSelectionBar } from './grid/grid-toolbar';
+export {
+  LONG_PRESS_MS,
+  LONG_PRESS_SLOP_PX,
+  rowEvents,
+  useRowEvents,
+  type RowEvents,
+} from './grid/row-events';
+export type {
+  GridAudit,
+  GridBulkAction,
+  GridColumn,
+  GridLabels,
+  GridPage,
+  GridRowSelection,
+  GridRowTone,
+} from './grid/types';

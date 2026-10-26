@@ -3,6 +3,7 @@ import {
   DEFAULT_LIST_SORT,
   filterTypeOf,
   pageLimit,
+  PLATFORM_ADMIN_NAME,
   type ListColumnType,
   type ListFilterValue,
   type ListQuery,
@@ -110,6 +111,14 @@ function filterCondition(key: string, column: ListColumn, filter: ListFilterValu
       return sql`(${sql.join(parts, sql` and `)})`;
     }
   }
+}
+
+/**
+ * Значение столбцов «Создал» и «Изменил» для фильтра и сортировки — как на экране (`auditActorName`):
+ * краткое ФИО сотрудника; автор без записи сотрудника — «Администратор платформы»; без автора — пусто.
+ */
+export function auditActorValue(userId: Expr, shortName: Expr): SQL {
+  return sql`case when ${userId} is null then null else coalesce(${shortName}, ${PLATFORM_ADMIN_NAME}::text) end`;
 }
 
 /** Условие по фильтрам столбцов (все сразу — «И»). */

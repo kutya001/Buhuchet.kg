@@ -2,7 +2,7 @@
 
 import {
   useEffect,
-  useRef,
+  useState,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
@@ -31,36 +31,40 @@ export interface RowEvents<Row> {
   menuAt: (row: Row, place: MenuPlace) => void;
 }
 
+/** Состояние нажатия пальцем: таймер долгого нажатия, точка касания, «меню уже открыто». */
+export interface PressState {
+  timer: ReturnType<typeof setTimeout> | undefined;
+  start: { x: number; y: number } | null;
+  pressed: boolean;
+}
+
+interface RowEventOptions<Row> {
+  onOpen?: (row: Row) => void;
+  /** Нет меню — правый клик остаётся браузерным. */
+  onMenu?: (row: Row, place: MenuPlace) => void;
+}
+
 /**
  * Как открывается запись и её меню (прототип ui/grid.js, bind; ТЗ «Действия над записью»): нажатие
  * на строку или Enter — карточка записи; правый клик, долгое нажатие пальцем (550 мс), клавиши
  * ContextMenu и Shift+F10 — меню действий. После долгого нажатия отпускание пальца запись не
- * открывает.
+ * открывает. Нажатие на кнопку, ссылку или галочку внутри строки запись не открывает.
  */
-export function useRowEvents<Row>({
-  onOpen,
-  onMenu,
-}: {
-  onOpen?: (row: Row) => void;
-  /** Нет меню — правый клик остаётся браузерным. */
-  onMenu?: (row: Row, place: MenuPlace) => void;
-}): RowEvents<Row> {
-  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const start = useRef<{ x: number; y: number } | null>(null);
-  const pressed = useRef(false);
-  useEffect(() => () => clearTimeout(timer.current), []);
-
+export function rowEvents<Row>(
+  press: PressState,
+  { onOpen, onMenu }: RowEventOptions<Row>,
+): RowEvents<Row> {
   const cancel = () => {
-    clearTimeout(timer.current);
-    start.current = null;
+    clearTimeout(press.timer);
+    press.start = null;
   };
 
   return {
     menuAt: (row, place) => onMenu?.(row, place),
     handlers: (row) => ({
       onClick: (e) => {
-        if (pressed.current) {
-          pressed.current = false;
+        if (press.pressed) {
+          press.pressed = false;
           return;
         }
         if ((e.target as HTMLElement).closest(INTERACTIVE)) return;
@@ -84,15 +88,15 @@ export function useRowEvents<Row>({
         }
       },
       onPointerDown: (e) => {
-        pressed.current = false;
+        press.pressed = false;
         if (e.pointerType !== 'touch' || !onMenu) return;
         const x = e.clientX;
         const y = e.clientY;
-        start.current = { x, y };
-        clearTimeout(timer.current);
-        timer.current = setTimeout(() => {
-          pressed.current = true;
-          start.current = null;
+        press.start = { x, y };
+        clearTimeout(press.timer);
+        press.timer = setTimeout(() => {
+          press.pressed = true;
+          press.start = null;
           onMenu(row, { x, y });
           try {
             navigator.vibrate?.(15);
@@ -101,13 +105,21 @@ export function useRowEvents<Row>({
           }
         }, LONG_PRESS_MS);
       },
-      onPointerUp: () => clearTimeout(timer.current),
+      onPointerUp: () => clearTimeout(press.timer),
       onPointerCancel: cancel,
       onPointerMove: (e) => {
-        const s = start.current;
+        const s = press.start;
         if (e.pointerType !== 'touch' || !s) return;
         if (Math.hypot(e.clientX - s.x, e.clientY - s.y) > LONG_PRESS_SLOP_PX) cancel();
       },
     }),
   };
+}
+
+/** Обработчики строк списка (`rowEvents`) с таймером долгого нажатия, который живёт вместе с экраном. */
+export function useRowEvents<Row>(options: RowEventOptions<Row>): RowEvents<Row> {
+  // Состояние нажатия меняют только обработчики событий: экран из-за него не перерисовывается.
+  const [press] = useState<PressState>(() => ({ timer: undefined, start: null, pressed: false }));
+  useEffect(() => () => clearTimeout(press.timer), [press]);
+  return rowEvents(press, options);
 }

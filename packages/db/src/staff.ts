@@ -15,6 +15,7 @@ import { alias } from 'drizzle-orm/pg-core';
 import type { Db, Tx } from './client';
 import { writeHistory } from './history';
 import {
+  auditActorValue,
   selectListPage,
   type ListColumns,
   type ListPageResult,
@@ -144,9 +145,13 @@ function toEmployee(r: EmployeeRow, codes: PhoneCodes): EmployeeRecord {
 /**
  * Столбцы списка сотрудников на сервере (ТЗ «Сотрудники» → список; прототип modules/staff.js,
  * renderStaff): ключи — как у столбцов экрана. Роль фильтруется по номеру роли, а сортируется по
- * названию; статус и Telegram — коды `active`/`blocked`, `linked`/`none`. Контрагенты, отчёты, счёт и
+ * названию; статус и Telegram — коды `active`/`blocked`, `linked`/`none`, а сортируются как подписи
+ * на экране («Активен» выше «Заблокирован», «Не привязан» выше «Привязан»). «Создал» и «Изменил» —
+ * как на экране; «Изменил» у записи без правок — тот, кто создал. Контрагенты, отчёты, счёт и
  * уровень знаний добавят их модули.
  */
+const CREATED_BY = auditActorValue(employees.createdBy, creator.shortName);
+
 export const EMPLOYEE_LIST_COLUMNS: ListColumns = {
   fullName: { type: 'text', value: employees.fullName },
   login: { type: 'text', value: users.login },
@@ -155,6 +160,10 @@ export const EMPLOYEE_LIST_COLUMNS: ListColumns = {
   telegram: {
     type: 'enum',
     value: sql`case when ${telegramLinks.linkedAt} is null then 'none' else 'linked' end`,
+    sort: {
+      value: sql`case when ${telegramLinks.linkedAt} is null then 0 else 1 end`,
+      text: false,
+    },
   },
   lastLoginAt: { type: 'datetime', value: users.lastLoginAt },
   active: {
@@ -164,8 +173,11 @@ export const EMPLOYEE_LIST_COLUMNS: ListColumns = {
   },
   createdAt: { type: 'datetime', value: employees.createdAt },
   updatedAt: { type: 'datetime', value: employees.updatedAt },
-  createdBy: { type: 'enum', value: creator.shortName },
-  updatedBy: { type: 'enum', value: updater.shortName },
+  createdBy: { type: 'enum', value: CREATED_BY },
+  updatedBy: {
+    type: 'enum',
+    value: sql`coalesce(${auditActorValue(employees.updatedBy, updater.shortName)}, ${CREATED_BY})`,
+  },
 };
 
 /**
