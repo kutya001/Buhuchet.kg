@@ -422,6 +422,7 @@ export const productionCalendar = pgTable(
     kind: text('kind', { enum: CALENDAR_DAY_KINDS }).notNull(),
     name: text('name').notNull().default(''),
     ...auditColumns(),
+    version: recordVersion(),
   },
   (t) => [
     check(

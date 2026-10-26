@@ -10,7 +10,16 @@ import {
   REPORT_PERIODS,
   type CalendarEntry,
 } from '@buhuchet/domain';
-import { getTableColumns, getTableName, inArray, isNotNull, sql } from 'drizzle-orm';
+import {
+  and,
+  getTableColumns,
+  getTableName,
+  inArray,
+  isNotNull,
+  isNull,
+  notInArray,
+  sql,
+} from 'drizzle-orm';
 import type { PgColumn, PgTable } from 'drizzle-orm/pg-core';
 import { z } from 'zod';
 import type { Db } from '../client';
@@ -275,6 +284,9 @@ const ReportTypeSchema = z
 const Dictionary = <T extends z.ZodType>(item: T) =>
   z.object({ title: z.string(), items: z.array(item) }).strict();
 
+/** Раздел `platform_reference`, на коды которого ссылаются справочники (ставки ЕН, формы, налоги). */
+const CodedSection = z.array(z.object({ code: z.string() }));
+
 const RefSections = z.object({
   dictionaries: z.object({
     organs: Dictionary(OrganSchema),
@@ -282,8 +294,11 @@ const RefSections = z.object({
     bases: Dictionary(BaseSchema),
     ugns: Dictionary(UgnsSchema),
     benefits: Dictionary(BenefitSchema),
+    forms: z.object({ items: CodedSection }),
   }),
   reportTypes: z.array(ReportTypeSchema),
+  enRates: CodedSection,
+  taxes: CodedSection,
   holidays: z.record(z.string(), z.string().min(1)),
   workingSaturdays: z.array(z.iso.date()),
 });
@@ -352,6 +367,10 @@ export function platformDictRows(refDB: unknown) {
   const officeIds = new Map(d.ugns.items.map((u) => [u.id, u.id]));
   const typeCodes = new Map(ref.reportTypes.map((t) => [t.id, t.id]));
   const benefitCodes = new Map(d.benefits.items.map((b) => [b.code, b.code]));
+  const codesIn = (items: { code: string }[]) => new Map(items.map((x) => [x.code, x.code]));
+  const enRateCodes = codesIn(ref.enRates);
+  const formCodes = codesIn(d.forms.items);
+  const taxCodes = codesIn(ref.taxes);
 
   const authorityRows = d.organs.items.map((o, i) => ({
     code: o.code,
@@ -436,7 +455,9 @@ export function platformDictRows(refDB: unknown) {
     payer: t.who,
     rates: t.rates,
     rateAdditions: t.rateAdd,
-    notForEnRates: t.enRatesNot,
+    notForEnRates: t.enRatesNot.map((c) =>
+      lookup(enRateCodes, c, `reportTypes.${t.id}.enRatesNot`),
+    ),
     bizSizes: t.bizSize,
     pickGroup: t.group,
     preselect: t.preselect,
@@ -482,6 +503,8 @@ export function platformDictRows(refDB: unknown) {
     const { ugns: _offices, ...suggest } = b.suggest ?? {};
     if (suggest.basis) lookup(baseCodes, suggest.basis, `benefits.${b.code}.suggest.basis`);
     for (const c of suggest.notWith ?? []) lookup(benefitCodes, c, `benefits.${b.code}.notWith`);
+    for (const c of suggest.warnForms ?? []) lookup(formCodes, c, `benefits.${b.code}.warnForms`);
+    if (b.tax) lookup(taxCodes, b.tax, `benefits.${b.code}.tax`);
     return {
       code: b.code,
       name: b.name,
@@ -712,6 +735,25 @@ export async function seedPlatformDicts(
     rows.productionCalendar,
     update,
   );
+  if (update) {
+    // Календарь сопоставляется по дате: перенесённая в refDB.json дата (например, предварительная дата
+    // айта) не должна остаться праздником. Удаляются только дни из наполнения — не заведённые и не
+    // поправленные в Админке.
+    const removed = await db
+      .delete(productionCalendar)
+      .where(
+        and(
+          isNull(productionCalendar.createdBy),
+          isNull(productionCalendar.updatedBy),
+          notInArray(
+            productionCalendar.day,
+            rows.productionCalendar.map((r) => r.day),
+          ),
+        ),
+      )
+      .returning({ day: productionCalendar.day });
+    calendar.report.removed = removed.length;
+  }
   return {
     authorities: authority.report,
     taxRegimes: regime.report,

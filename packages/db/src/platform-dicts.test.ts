@@ -1,4 +1,4 @@
-import { eq, sql } from 'drizzle-orm';
+import { eq, getTableName, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   listAuthorities,
@@ -88,6 +88,23 @@ describe('справочники платформы из refDB.json: прове�
     const status = office.dictionaries.benefits.items.find((b) => b.code === 'ЛЬГ-30')!;
     (status.suggest as { ugns: string[] }).ugns = ['ugns-none'];
     expect(() => platformDictRows(office)).toThrow(/ЛЬГ-30\.suggest\.ugns/);
+  });
+
+  it('коды ставок ЕН, форм собственности и налогов из мелких разделов тоже проверяются', () => {
+    const rate = clone(ref);
+    rate.reportTypes.find((x) => (x.enRatesNot as string[] | undefined)?.length)!.enRatesNot = [
+      'ЕНС-99',
+    ];
+    expect(() => platformDictRows(rate)).toThrow(/enRatesNot — «ЕНС-99»/);
+    const form = clone(ref);
+    const warned = form.dictionaries.benefits.items.find(
+      (b) => (b.suggest as { warnForms?: string[] } | undefined)?.warnForms,
+    )!;
+    (warned.suggest as { warnForms: string[] }).warnForms = ['ФС-99'];
+    expect(() => platformDictRows(form)).toThrow(/warnForms — «ФС-99»/);
+    const tax = clone(ref);
+    tax.dictionaries.benefits.items.find((b) => b.tax)!.tax = 'ПЛТ-99';
+    expect(() => platformDictRows(tax)).toThrow(/\.tax — «ПЛТ-99»/);
   });
 
   it('повторный код и неизвестное поле тоже останавливают: данные не теряются молча', () => {
@@ -192,6 +209,18 @@ describe.skipIf(!databaseAvailable())('справочники платформы
     const organs = new Map(ref.dictionaries.organs.items.map((o) => [o.code, o.name]));
     const regimes = new Map(ref.dictionaries.regimes.items.map((r) => [r.code, r.name]));
     const all = new Map((await listReportTypes(t.app.db, { all: true })).map((x) => [x.code, x]));
+    // Сверку с ГНС (дата и кто сверял) видит только Админка: в списке для организаций её нет.
+    const checked = new Map(
+      (
+        await t.admin.db
+          .select({
+            code: reportTypes.code,
+            at: reportTypes.gnsCheckedAt,
+            by: reportTypes.gnsCheckedBy,
+          })
+          .from(reportTypes)
+      ).map((x) => [x.code, x]),
+    );
     for (const src of ref.reportTypes) {
       const r = all.get(src.id as string)!;
       // Обратно в вид прототипа: те же поля, кроме служебных отметок, производных от «Что нужно
@@ -242,7 +271,10 @@ describe.skipIf(!databaseAvailable())('справочники платформы
         ...(r.respondents && { respondents: r.respondents }),
         verify: r.verify,
         ...(src.verifyNote !== undefined && { verifyNote: r.verifyNote }),
-        ...(src.gnsAt !== undefined && { gnsAt: r.gnsCheckedAt ?? '', gnsBy: r.gnsCheckedBy }),
+        ...(src.gnsAt !== undefined && {
+          gnsAt: checked.get(r.code)!.at ?? '',
+          gnsBy: checked.get(r.code)!.by,
+        }),
         ...(r.gked && { gked: r.gked }),
         active: r.active,
       };
@@ -293,6 +325,11 @@ describe.skipIf(!databaseAvailable())('справочники платформы
     );
     const bases = await listReportBases(t.app.db, { all: true });
     expect(bases.find((b) => b.code === 'employees')?.reportTypes).toContain('soc');
+    // Отключённый вид отчёта не предлагается и через основание: в списке для новых записей его нет.
+    const sample = bases.find((b) => b.code === 'statSample')!.reportTypes;
+    expect(sample).toEqual(expect.arrayContaining(['t1q', 'pre', 'inv']));
+    const shown = (await listReportBases(t.app.db)).find((b) => b.code === 'statSample')!;
+    expect(shown.reportTypes).toEqual(sample.filter((c) => !['t1q', 'pre', 'inv'].includes(c)));
 
     const calendar = await productionCalendarEntries(t.app.db);
     expect(calendar).toContainEqual({ day: '01-01', kind: 'holiday', name: 'Новый год' });
@@ -336,7 +373,12 @@ describe.skipIf(!databaseAvailable())('справочники платформы
     expect(regimes.regimes).toEqual(['РЕЖ-01', 'РЕЖ-03']);
 
     // Запись, которой больше нет в refDB.json, не удаляется — значение справочника только отключают.
-    await seedPlatformDicts(t.admin.db, ref, { update: true });
+    // Календарь сопоставляется по дате: дня, которого нет в refDB.json, после --update нет.
+    const back = await seedPlatformDicts(t.admin.db, ref, { update: true });
+    expect(back.productionCalendar.removed).toBe(1);
+    expect(
+      await t.app.db.$count(productionCalendar, eq(productionCalendar.day, '2027-01-02')),
+    ).toBe(0);
     expect(await t.app.db.$count(reportTypes, eq(reportTypes.code, 'nds2'))).toBe(1);
     const [restored] = await t.app.db.select().from(reportTypes).where(eq(reportTypes.code, 'nds'));
     expect(restored).toMatchObject({ name: 'НДС', version: 3 });
@@ -359,6 +401,9 @@ describe.skipIf(!databaseAvailable())('справочники платформы
       .update(productionCalendar)
       .set({ name: 'Новый год (правка)', updatedBy: admin!.id })
       .where(eq(productionCalendar.day, '01-01'));
+    await t.admin.db
+      .insert(productionCalendar)
+      .values({ day: '2027-12-31', kind: 'holiday', name: 'Из Админки', createdBy: admin!.id });
 
     const report = await seedPlatformDicts(t.admin.db, ref, { update: true });
     expect(report.reportTypes.updated).toBe(0);
@@ -367,6 +412,9 @@ describe.skipIf(!databaseAvailable())('справочники платформы
     expect(nds).toMatchObject({ name: 'НДС (правка Админки)', regimes: ['РЕЖ-01', 'РЕЖ-03'] });
     const calendar = await productionCalendarEntries(t.app.db);
     expect(calendar).toContainEqual({ day: '01-01', kind: 'holiday', name: 'Новый год (правка)' });
+    // День, заведённый в Админке, наполнение не удаляет, хотя его нет в refDB.json.
+    expect(report.productionCalendar.removed).toBe(0);
+    expect(calendar).toContainEqual({ day: '2027-12-31', kind: 'holiday', name: 'Из Админки' });
 
     // Значение снова «из наполнения» — --update приводит его к refDB.json.
     await t.admin.db
@@ -389,6 +437,32 @@ describe.skipIf(!databaseAvailable())('справочники платформы
 
   it('приложение только читает справочники; используемое значение удалить нельзя', async () => {
     const app = t.app.db;
+    // Права роли приложения на каждую таблицу справочников: только чтение (TRUNCATE RLS не держит).
+    const tables = [
+      authorities,
+      taxRegimes,
+      reportBases,
+      taxOffices,
+      reportTypes,
+      reportTypeRegimes,
+      reportTypeBases,
+      taxBenefits,
+      taxBenefitReportTypes,
+      taxBenefitOffices,
+      taxBenefitDueRules,
+      productionCalendar,
+    ].map((table) => getTableName(table));
+    const rights = await app.execute<{ name: string; read: boolean; write: boolean }>(sql`
+      select t.name,
+        has_table_privilege(current_user, t.name, 'SELECT') as read,
+        has_table_privilege(current_user, t.name, 'INSERT, UPDATE, DELETE, TRUNCATE') as write
+      from unnest(array[${sql.join(
+        tables.map((name) => sql`${name}`),
+        sql`, `,
+      )}]::text[]) as t(name)`);
+    expect(rights.map((r) => [r.name, r.read, r.write])).toEqual(
+      tables.map((name) => [name, true, false]),
+    );
     expect((await app.select().from(reportTypes)).length).toBeGreaterThan(100);
     await expect(app.update(reportTypes).set({ name: 'Взлом' })).rejects.toThrow(permissionDenied);
     await expect(app.delete(productionCalendar)).rejects.toThrow(permissionDenied);

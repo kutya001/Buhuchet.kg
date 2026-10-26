@@ -22,6 +22,7 @@ CREATE TABLE "production_calendar" (
 	"created_by" uuid,
 	"updated_by" uuid,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL,
 	CONSTRAINT "production_calendar_day_check" CHECK ("production_calendar"."day" ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' or ("production_calendar"."day" ~ '^[0-9]{2}-[0-9]{2}$' and "production_calendar"."kind" = 'holiday')),
 	CONSTRAINT "production_calendar_kind_check" CHECK ("production_calendar"."kind" in ('holiday', 'transfer', 'workday'))
 );

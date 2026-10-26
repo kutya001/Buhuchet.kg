@@ -53,6 +53,12 @@ const activeOnly = (column: AnyPgColumn, options: DictListOptions): SQL | undefi
 const codesOf = (query: SQL): SQL<string[]> => sql<string[]>`array(${query})`;
 
 /**
+ * Связанный вид отчёта (`t`) в списке для новых записей — только действующий: отключённый вид не
+ * предлагается ни сам, ни через основание, ни через льготу, которая его добавляет.
+ */
+const typeShown = (options: DictListOptions): SQL => (options.all ? sql`true` : sql`t.active`);
+
+/**
  * Столбец внешней строки в подзапросе — с именем таблицы: в выборке из одной таблицы drizzle пишет
  * столбцы без него, и «code» в подзапросе нашёл бы столбец таблицы подзапроса.
  */
@@ -155,7 +161,8 @@ export async function listReportBases(
       reportTypes: codesOf(
         sql`select l.report_type_code from ${reportTypeBases} l
           join ${reportTypes} t on t.code = l.report_type_code
-          where l.base_code = ${outer(reportBases.code)} order by t.sort_order, t.code`,
+          where l.base_code = ${outer(reportBases.code)} and ${typeShown(options)}
+          order by t.sort_order, t.code`,
       ),
       active: reportBases.active,
     })
@@ -243,8 +250,6 @@ export interface ReportTypeRecord {
   source: string;
   verify: boolean;
   verifyNote: string;
-  gnsCheckedAt: string | null;
-  gnsCheckedBy: string;
   gked: GkedRule | null;
   active: boolean;
 }
@@ -253,7 +258,7 @@ const regimesOf = (relation: 'applies' | 'excludes') =>
   codesOf(
     sql`select l.regime_code from ${reportTypeRegimes} l
       join ${taxRegimes} r on r.code = l.regime_code
-      where l.report_type_code = ${outer(reportTypes.code)} and l.relation = ${sql.raw(`'${relation}'`)}
+      where l.report_type_code = ${outer(reportTypes.code)} and l.relation = ${relation}
       order by r.sort_order, r.code`,
   );
 
@@ -311,8 +316,6 @@ export async function listReportTypes(
       source: reportTypes.source,
       verify: reportTypes.verify,
       verifyNote: reportTypes.verifyNote,
-      gnsCheckedAt: reportTypes.gnsCheckedAt,
-      gnsCheckedBy: reportTypes.gnsCheckedBy,
       gked: reportTypes.gked,
       active: reportTypes.active,
     })
@@ -360,11 +363,11 @@ export interface TaxBenefitRecord {
   active: boolean;
 }
 
-const typesOf = (effect: BenefitEffect) =>
+const typesOf = (effect: BenefitEffect, shown: SQL) =>
   codesOf(
     sql`select l.report_type_code from ${taxBenefitReportTypes} l
       join ${reportTypes} t on t.code = l.report_type_code
-      where l.benefit_code = ${outer(taxBenefits.code)} and l.effect = ${sql.raw(`'${effect}'`)}
+      where l.benefit_code = ${outer(taxBenefits.code)} and l.effect = ${effect} and ${shown}
       order by t.sort_order, t.code`,
   );
 
@@ -392,8 +395,8 @@ export async function listTaxBenefits(
       gkedMainOnly: taxBenefits.gkedMainOnly,
       taxCode: taxBenefits.taxCode,
       suggest: taxBenefits.suggest,
-      adds: typesOf('adds'),
-      removes: typesOf('removes'),
+      adds: typesOf('adds', typeShown(options)),
+      removes: typesOf('removes', sql`true`),
       taxOffices: codesOf(
         sql`select l.tax_office_code from ${taxBenefitOffices} l
           join ${taxOffices} o on o.code = l.tax_office_code

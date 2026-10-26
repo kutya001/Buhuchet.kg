@@ -80,7 +80,7 @@ export const ReportBase = z.object({
   name: z.string(),
   description: z.string(),
   note: z.string(),
-  /** Виды отчётов с этим основанием. */
+  /** Виды отчётов с этим основанием (без `all=true` — только действующие). */
   reportTypes: Codes,
   active: z.boolean(),
 });
@@ -159,8 +159,6 @@ export const ReportType = z.object({
   source: z.string(),
   verify: z.boolean(),
   verifyNote: z.string(),
-  gnsCheckedAt: IsoDate.nullable(),
-  gnsCheckedBy: z.string(),
   gked: GkedRule.nullable(),
   active: z.boolean(),
 });
@@ -194,6 +192,7 @@ export const TaxBenefit = z.object({
       note: z.string().optional(),
     })
     .nullable(),
+  /** Добавляет виды отчётов (без `all=true` — только действующие). */
   adds: Codes,
   removes: Codes,
   /** «Ставится по УГНС». */

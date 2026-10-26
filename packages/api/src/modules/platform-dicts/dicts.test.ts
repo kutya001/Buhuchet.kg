@@ -1,11 +1,19 @@
+import { schema } from '@buhuchet/db';
 import { databaseAvailable, seedPlatformDictionaries } from '@buhuchet/db/testing';
+import { eq } from 'drizzle-orm';
 import {
   Authorities,
+  Authority,
   ProductionCalendarYear,
+  ReportBase,
   ReportBases,
+  ReportType,
   ReportTypes,
+  TaxBenefit,
   TaxBenefits,
+  TaxOffice,
   TaxOffices,
+  TaxRegime,
   TaxRegimes,
 } from '@buhuchet/shared';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -15,12 +23,18 @@ type Fixture = Awaited<ReturnType<typeof createStaffFixture>>;
 
 // Число записей и отключённых значений — как в spec/data/refDB.json (проверка наполнения — в пакете db).
 const DICTS = [
-  ['/api/report-types', ReportTypes, 145, ['pvt', 'ims', 'imu', 'trn', 'zem', 't1q', 'pre', 'inv']],
-  ['/api/tax-regimes', TaxRegimes, 12, 1],
-  ['/api/tax-benefits', TaxBenefits, 31, 0],
-  ['/api/report-bases', ReportBases, 14, 1],
-  ['/api/tax-offices', TaxOffices, 65, 7],
-  ['/api/authorities', Authorities, 15, 0],
+  [
+    '/api/report-types',
+    ReportTypes,
+    ReportType,
+    145,
+    ['pvt', 'ims', 'imu', 'trn', 'zem', 't1q', 'pre', 'inv'],
+  ],
+  ['/api/tax-regimes', TaxRegimes, TaxRegime, 12, 1],
+  ['/api/tax-benefits', TaxBenefits, TaxBenefit, 31, 0],
+  ['/api/report-bases', ReportBases, ReportBase, 14, 1],
+  ['/api/tax-offices', TaxOffices, TaxOffice, 65, 7],
+  ['/api/authorities', Authorities, Authority, 15, 0],
 ] as const;
 
 describe.skipIf(!databaseAvailable())('Справочники платформы для контрагентов и отчётов', () => {
@@ -38,8 +52,14 @@ describe.skipIf(!databaseAvailable())('Справочники платформы
   });
 
   it('по умолчанию — только действующие значения; all=true — все, по порядку справочника', async () => {
-    for (const [path, schema, total, disabled] of DICTS) {
-      const active = schema.parse(await (await apiRequest(f.app, 'GET', path, cookie)).json());
+    for (const [path, schema, item, total, disabled] of DICTS) {
+      const body = (await (await apiRequest(f.app, 'GET', path, cookie)).json()) as {
+        items: Record<string, unknown>[];
+      };
+      // Ровно поля схемы: служебные (кто правил, версия, порядок) и поля Админки наружу не уходят.
+      for (const i of body.items)
+        expect(Object.keys(i).sort(), path).toEqual(Object.keys(item.shape).sort());
+      const active = schema.parse(body);
       const all = schema.parse(
         await (await apiRequest(f.app, 'GET', `${path}?all=true`, cookie)).json(),
       );
@@ -54,6 +74,40 @@ describe.skipIf(!databaseAvailable())('Справочники платформы
         await (await apiRequest(f.app, 'GET', `${path}?all=false`, cookie)).json(),
       );
       expect(explicit.items).toHaveLength(active.items.length);
+    }
+  });
+
+  it('отключённые орган и льгота пропадают из списков для новых записей, в полном списке остаются', async () => {
+    // В refDB.json отключённых органов и льгот нет — отключаем, как это сделает Админка.
+    const db = f.t.admin.db;
+    await db
+      .update(schema.authorities)
+      .set({ active: false })
+      .where(eq(schema.authorities.code, 'ОРГ-02'));
+    await db
+      .update(schema.taxBenefits)
+      .set({ active: false })
+      .where(eq(schema.taxBenefits.code, 'ЛЬГ-01'));
+    try {
+      const codes = async (path: string) =>
+        (
+          (await (await apiRequest(f.app, 'GET', path, cookie)).json()) as {
+            items: { code: string }[];
+          }
+        ).items.map((i) => i.code);
+      expect(await codes('/api/authorities')).not.toContain('ОРГ-02');
+      expect(await codes('/api/authorities?all=true')).toContain('ОРГ-02');
+      expect(await codes('/api/tax-benefits')).not.toContain('ЛЬГ-01');
+      expect(await codes('/api/tax-benefits?all=true')).toContain('ЛЬГ-01');
+    } finally {
+      await db
+        .update(schema.authorities)
+        .set({ active: true })
+        .where(eq(schema.authorities.code, 'ОРГ-02'));
+      await db
+        .update(schema.taxBenefits)
+        .set({ active: true })
+        .where(eq(schema.taxBenefits.code, 'ЛЬГ-01'));
     }
   });
 
