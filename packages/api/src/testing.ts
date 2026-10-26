@@ -138,7 +138,7 @@ export async function linkTelegram(
 /** Запрос к API от вошедшего пользователя: Origin нашего сайта, тело — JSON. */
 export function apiRequest(
   app: RequestApp,
-  method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
   path: string,
   cookie?: string,
   body?: unknown,

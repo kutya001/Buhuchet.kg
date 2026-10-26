@@ -1,16 +1,26 @@
 import { HTTPException } from 'hono/http-exception';
+import { ListQueryError } from '@buhuchet/db';
 import { RecordChangedError, RecordNotFoundError } from '@buhuchet/domain';
-import { ApiError } from '@buhuchet/shared';
+import { ApiError, parseListQuery, type ListQuery, type ListQueryParams } from '@buhuchet/shared';
 
 export function apiError(code: string, message: string, details?: unknown): ApiError {
   return { error: { code, message, ...(details === undefined ? {} : { details }) } };
 }
 
 /**
- * Ошибки записи, общие для всех модулей: метод просто бросает их (`updateWithHistory` из
- * @buhuchet/db), а общий обработчик отвечает одинаково везде. Остальные ошибки — null.
+ * Ошибки записи и запроса списка, общие для всех модулей: метод просто бросает их
+ * (`updateWithHistory`, `selectListPage` из @buhuchet/db), а общий обработчик отвечает одинаково
+ * везде. Остальные ошибки — null.
  */
-export function recordErrorResponse(err: unknown): { status: 404 | 409; body: ApiError } | null {
+export function recordErrorResponse(
+  err: unknown,
+): { status: 400 | 404 | 409; body: ApiError } | null {
+  if (err instanceof ListQueryError) {
+    return {
+      status: 400,
+      body: apiError('validation_failed', 'Неверные данные запроса', { [err.part]: err.key }),
+    };
+  }
   if (err instanceof RecordChangedError) {
     return {
       status: 409,
@@ -50,4 +60,22 @@ export function apiFail(
   throw new HTTPException(status, {
     res: Response.json(apiError(code, message, details), { status }),
   });
+}
+
+/** Ответ 400 метода списка — для описания OpenAPI (`createRoute`). */
+export const listQueryResponses = {
+  400: {
+    description: 'Неверная сортировка, страница или фильтр списка',
+    content: { 'application/json': { schema: ApiError } },
+  },
+} as const;
+
+/**
+ * Запрос страницы списка из параметров (`ListQueryParams`); фильтры не в формате — 400. Столбцы
+ * сортировки и фильтров проверяет `selectListPage` (неизвестный — тоже 400).
+ */
+export function listQueryOf(params: ListQueryParams): ListQuery {
+  const parsed = parseListQuery(params);
+  if (!parsed.ok) apiFail(400, 'validation_failed', 'Неверные фильтры списка');
+  return parsed.query;
 }

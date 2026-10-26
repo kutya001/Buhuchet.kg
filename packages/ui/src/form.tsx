@@ -190,8 +190,8 @@ export function Box({
 
 const NOTE_TONES = {
   info: 'border-line bg-pane-alt text-muted',
-  warn: 'border-transparent bg-caution-bg text-caution',
-  bad: 'border-transparent bg-danger-bg text-danger',
+  warn: 'border-transparent bg-caution-bg text-caution-label',
+  bad: 'border-transparent bg-danger-bg text-danger-label',
   ok: 'border-transparent bg-ok-bg text-ok',
 } as const;
 
@@ -231,22 +231,34 @@ export function Note({
 const PILL_TONES = {
   plain: 'bg-sel text-muted',
   ok: 'bg-ok-bg text-ok',
-  bad: 'bg-danger-bg text-danger',
+  bad: 'bg-danger-bg text-danger-label',
+  caution: 'bg-caution-bg text-caution-label',
 } as const;
 
-/** Метка (`.pill`): «Привязан», «Основной». */
+const PILL_SIZES = {
+  md: 'py-px pr-[9px] pl-[7px] text-[12px] leading-5',
+  sm: 'py-0 pr-[7px] pl-[6px] text-[11px] leading-[17px]',
+} as const;
+
+/**
+ * Метка (`.pill`): «Привязан», «Основной»; `caution` — оранжевая (`.pill.orange`, «не привязан»);
+ * `sm` — маленькая (`.pill.sm`). В компактном списке метка ниже (`data-pill`).
+ */
 export function Pill({
   tone = 'plain',
+  size = 'md',
   icon,
   children,
 }: {
   tone?: keyof typeof PILL_TONES;
+  size?: keyof typeof PILL_SIZES;
   icon?: IconName;
   children: ReactNode;
 }) {
   return (
     <span
-      className={`inline-flex items-center gap-[5px] rounded-full py-px pr-[9px] pl-[7px] align-middle text-[12px] leading-5 font-semibold whitespace-nowrap ${PILL_TONES[tone]}`}
+      data-pill
+      className={`inline-flex items-center gap-[5px] rounded-full align-middle font-semibold whitespace-nowrap ${PILL_SIZES[size]} ${PILL_TONES[tone]}`}
     >
       {icon ? <Icon name={icon} size="sm" /> : null}
       {children}

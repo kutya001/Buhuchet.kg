@@ -127,6 +127,20 @@
       "when": 1792986976693,
       "tag": "0017_ui_texts_read_only",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1793006992125,
+      "tag": "0018_view_settings",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1793006993273,
+      "tag": "0019_list_natural_collation",
+      "breakpoints": true
     }
   ]
 }

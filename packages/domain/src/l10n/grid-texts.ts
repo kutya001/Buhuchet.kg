@@ -1,0 +1,72 @@
+import type { UiTextDefault } from './texts';
+
+/**
+ * Тексты общего списка записей (задача #14, прототип ui/grid.js): панель над списком, меню «Столбцы»
+ * и «Настройки вида», заголовки, страницы, загрузка и ошибка, служебные столбцы «Создал», «Создано»,
+ * «Изменил», «Изменено», выбор строк и панель «Выбрано: N». Ключи `grid.columns`, `grid.reset_view`, `grid.not_found`,
+ * `grid.reset_filters`, `grid.shown` — из раздела `localization` refDB.json, с тем же текстом.
+ * Число записей — три формы (`.one`, `.few`, `.many`: 1 запись, 2 записи, 5 записей).
+ */
+export const GRID_TEXTS = {
+  'grid.count.one': { ru: '{n} запись', section: 'Списки' },
+  'grid.count.few': { ru: '{n} записи', section: 'Списки' },
+  'grid.count.many': { ru: '{n} записей', section: 'Списки' },
+  'grid.view': { ru: 'Вид списка', section: 'Списки' },
+  'grid.table': { ru: 'Таблица', section: 'Списки' },
+  'grid.cards': { ru: 'Карточки', section: 'Списки' },
+  'grid.view_to': { ru: 'Вид списка: {name}', section: 'Списки' },
+  'grid.columns': { ru: 'Столбцы', section: 'Списки' },
+  'grid.columns_hint': {
+    ru: 'Галочка — показать столбец. Порядок — перетащите строку или стрелками. Последний столбец скрыть нельзя.',
+    section: 'Списки',
+  },
+  'grid.system': { ru: 'системный', section: 'Списки' },
+  'grid.move_up': { ru: 'Выше', section: 'Списки' },
+  'grid.move_down': { ru: 'Ниже', section: 'Списки' },
+  'grid.drag_hint': { ru: 'Перетащите, чтобы поменять порядок', section: 'Списки' },
+  'grid.view_options': { ru: 'Настройки вида', section: 'Списки' },
+  'grid.view_options_hint': { ru: 'Плотность и ширина', section: 'Списки' },
+  'grid.density_normal': { ru: 'Обычно', section: 'Списки' },
+  'grid.density_compact': { ru: 'Компактно', section: 'Списки' },
+  'grid.width_full': { ru: 'На весь экран', section: 'Списки' },
+  'grid.width_center': { ru: 'По центру', section: 'Списки' },
+  'grid.reset_view': { ru: 'Сбросить вид', section: 'Списки' },
+  'grid.reset_view_sub': {
+    ru: 'Столбцы, порядок, ширины, сортировка, группировка, плотность',
+    section: 'Списки',
+  },
+  'grid.view_reset': { ru: 'Вид списка сброшен', section: 'Списки' },
+  'grid.view_save_failed': {
+    ru: 'Не удалось сохранить вид списка. Проверьте подключение к интернету.',
+    section: 'Списки',
+  },
+  'grid.sort_by': { ru: 'Сортировать: {label}', section: 'Списки' },
+  'grid.column_width': { ru: 'Ширина столбца', section: 'Списки' },
+  'grid.actions': { ru: 'Действия', section: 'Списки' },
+  'grid.shown': { ru: 'Показано {from} – {to} из {total}', section: 'Списки' },
+  'grid.per_page': { ru: 'На странице', section: 'Списки' },
+  'grid.all_rows': { ru: 'Все записи', section: 'Списки' },
+  'grid.prev': { ru: 'Назад', section: 'Списки' },
+  'grid.next': { ru: 'Вперёд', section: 'Списки' },
+  'grid.load_error': { ru: 'Не удалось загрузить список', section: 'Списки' },
+  'grid.load_error_text': {
+    ru: 'Проверьте подключение к интернету и попробуйте ещё раз.',
+    section: 'Списки',
+  },
+  'grid.retry': { ru: 'Повторить', section: 'Списки' },
+  'grid.empty': { ru: 'Здесь пока пусто', section: 'Списки' },
+  'grid.not_found': { ru: 'Ничего не найдено', section: 'Списки' },
+  'grid.reset_filters': { ru: 'Сбросить фильтры', section: 'Списки' },
+  'grid.total_by_filter': { ru: 'Итого по фильтру · {n}', section: 'Списки' },
+  'grid.created_line': { ru: 'Создал: {text}', section: 'Списки' },
+  'grid.updated_line': { ru: 'Изменил: {text}', section: 'Списки' },
+  'grid.col.created_by': { ru: 'Создал', section: 'Списки' },
+  'grid.col.created_at': { ru: 'Создано', section: 'Списки' },
+  'grid.col.updated_by': { ru: 'Изменил', section: 'Списки' },
+  'grid.col.updated_at': { ru: 'Изменено', section: 'Списки' },
+  'grid.selected': { ru: 'Выбрано: {n}', section: 'Списки' },
+  'grid.clear_selection': { ru: 'Снять выбор', section: 'Списки' },
+  'grid.select_all': { ru: 'Выбрать все на странице', section: 'Списки' },
+  'grid.select_row': { ru: 'Выбрать строку', section: 'Списки' },
+  'grid.select_card': { ru: 'Выбрать', section: 'Списки' },
+} as const satisfies Record<string, UiTextDefault>;

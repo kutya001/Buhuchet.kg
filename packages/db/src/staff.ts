@@ -1,17 +1,26 @@
 import {
   auditActorName,
+  formatPhone,
   isPermissionId,
   normalizeScopes,
   PERMISSION_IDS,
   SCOPE_GROUPS,
+  type ListQuery,
   type PermissionId,
   type Scope,
   type ScopeGroupId,
 } from '@buhuchet/domain';
-import { asc, eq, sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { Db, Tx } from './client';
 import { writeHistory } from './history';
+import {
+  auditActorValue,
+  selectListPage,
+  type ListColumns,
+  type ListPageResult,
+  type ListWindowFields,
+} from './list';
 import {
   employees,
   platformReference,
@@ -43,6 +52,8 @@ export interface EmployeeRecord {
   shortName: string;
   login: string;
   phone: string | null;
+  /** Телефон для показа по маске справочника «Коды телефонов»: «+996 555 100 200». */
+  phoneText: string | null;
   role: { id: string; name: string; isOwner: boolean };
   active: boolean;
   telegram: { username: string | null; firstName: string | null; linkedAt: Date } | null;
@@ -54,31 +65,46 @@ export interface EmployeeRecord {
 const creator = alias(employees, 'creator');
 const updater = alias(employees, 'updater');
 
+const employeeFields = {
+  id: employees.id,
+  userId: employees.userId,
+  fullName: employees.fullName,
+  shortName: employees.shortName,
+  login: users.login,
+  phone: employees.phone,
+  roleId: roles.id,
+  roleName: roles.name,
+  roleIsOwner: roles.isOwner,
+  active: employees.active,
+  tgUsername: telegramLinks.username,
+  tgFirstName: telegramLinks.firstName,
+  tgLinkedAt: telegramLinks.linkedAt,
+  lastLoginAt: users.lastLoginAt,
+  createdAt: employees.createdAt,
+  createdBy: employees.createdBy,
+  createdByName: creator.shortName,
+  updatedAt: employees.updatedAt,
+  updatedBy: employees.updatedBy,
+  updatedByName: updater.shortName,
+  version: employees.version,
+};
+
+/** Сотрудники с учётной записью, ролью, Telegram и именами «Создал» и «Изменил». */
 function selectEmployees(tx: Tx) {
   return tx
-    .select({
-      id: employees.id,
-      userId: employees.userId,
-      fullName: employees.fullName,
-      shortName: employees.shortName,
-      login: users.login,
-      phone: employees.phone,
-      roleId: roles.id,
-      roleName: roles.name,
-      roleIsOwner: roles.isOwner,
-      active: employees.active,
-      tgUsername: telegramLinks.username,
-      tgFirstName: telegramLinks.firstName,
-      tgLinkedAt: telegramLinks.linkedAt,
-      lastLoginAt: users.lastLoginAt,
-      createdAt: employees.createdAt,
-      createdBy: employees.createdBy,
-      createdByName: creator.shortName,
-      updatedAt: employees.updatedAt,
-      updatedBy: employees.updatedBy,
-      updatedByName: updater.shortName,
-      version: employees.version,
-    })
+    .select(employeeFields)
+    .from(employees)
+    .innerJoin(users, eq(users.id, employees.userId))
+    .innerJoin(roles, eq(roles.id, employees.roleId))
+    .leftJoin(telegramLinks, eq(telegramLinks.userId, employees.userId))
+    .leftJoin(creator, eq(creator.userId, employees.createdBy))
+    .leftJoin(updater, eq(updater.userId, employees.updatedBy));
+}
+
+/** То же для страницы списка — с числом записей и итогами по фильтру (`selectListPage`). */
+function selectEmployeePage(tx: Tx, window: ListWindowFields) {
+  return tx
+    .select({ ...employeeFields, ...window })
     .from(employees)
     .innerJoin(users, eq(users.id, employees.userId))
     .innerJoin(roles, eq(roles.id, employees.roleId))
@@ -89,7 +115,9 @@ function selectEmployees(tx: Tx) {
 
 type EmployeeRow = Awaited<ReturnType<typeof selectEmployees>>[number];
 
-function toEmployee(r: EmployeeRow): EmployeeRecord {
+type PhoneCodes = Awaited<ReturnType<typeof phoneCodes>>;
+
+function toEmployee(r: EmployeeRow, codes: PhoneCodes): EmployeeRecord {
   return {
     id: r.id,
     userId: r.userId,
@@ -97,6 +125,7 @@ function toEmployee(r: EmployeeRow): EmployeeRecord {
     shortName: r.shortName,
     login: r.login,
     phone: r.phone,
+    phoneText: r.phone && formatPhone(r.phone, codes),
     role: { id: r.roleId, name: r.roleName, isOwner: r.roleIsOwner },
     active: r.active,
     telegram: r.tgLinkedAt
@@ -113,16 +142,71 @@ function toEmployee(r: EmployeeRow): EmployeeRecord {
   };
 }
 
-/** Сотрудники организации по ФИО (прототип: список отсортирован по ФИО). */
-export async function listEmployees(tx: Tx): Promise<EmployeeRecord[]> {
-  const rows = await selectEmployees(tx).orderBy(asc(employees.fullName), asc(employees.id));
-  return rows.map(toEmployee);
+/**
+ * Столбцы списка сотрудников на сервере (ТЗ «Сотрудники» → список; прототип modules/staff.js,
+ * renderStaff): ключи — как у столбцов экрана. Роль фильтруется по номеру роли, а сортируется по
+ * названию; статус и Telegram — коды `active`/`blocked`, `linked`/`none`, а сортируются как подписи
+ * на экране («Активен» выше «Заблокирован», «Не привязан» выше «Привязан»). «Создал» и «Изменил» —
+ * как на экране; «Изменил» у записи без правок — тот, кто создал. Контрагенты, отчёты, счёт и
+ * уровень знаний добавят их модули.
+ */
+const CREATED_BY = auditActorValue(employees.createdBy, creator.shortName);
+
+export const EMPLOYEE_LIST_COLUMNS: ListColumns = {
+  fullName: { type: 'text', value: employees.fullName },
+  login: { type: 'text', value: users.login },
+  phone: { type: 'text', value: employees.phone, compact: true },
+  role: { type: 'enum', value: roles.id, sort: { value: roles.name, text: true } },
+  telegram: {
+    type: 'enum',
+    value: sql`case when ${telegramLinks.linkedAt} is null then 'none' else 'linked' end`,
+    sort: {
+      value: sql`case when ${telegramLinks.linkedAt} is null then 0 else 1 end`,
+      text: false,
+    },
+  },
+  lastLoginAt: { type: 'datetime', value: users.lastLoginAt },
+  active: {
+    type: 'enum',
+    value: sql`case when ${employees.active} then 'active' else 'blocked' end`,
+    sort: { value: sql`case when ${employees.active} then 0 else 1 end`, text: false },
+  },
+  createdAt: { type: 'datetime', value: employees.createdAt },
+  updatedAt: { type: 'datetime', value: employees.updatedAt },
+  createdBy: { type: 'enum', value: CREATED_BY },
+  updatedBy: {
+    type: 'enum',
+    value: sql`coalesce(${auditActorValue(employees.updatedBy, updater.shortName)}, ${CREATED_BY})`,
+  },
+};
+
+/**
+ * Страница списка сотрудников: сортировка, страница и фильтры — на сервере, в ответе только текущая
+ * страница; по умолчанию — от новых к старым по «Создано». Неизвестный столбец — `ListQueryError`.
+ */
+export async function listEmployeesPage(
+  tx: Tx,
+  query: ListQuery,
+): Promise<ListPageResult<EmployeeRecord>> {
+  const page = await selectListPage({
+    query,
+    columns: EMPLOYEE_LIST_COLUMNS,
+    natural: [employees.createdAt, employees.id],
+    select: ({ window, where, orderBy, limit, offset }) =>
+      selectEmployeePage(tx, window)
+        .where(where)
+        .orderBy(...orderBy)
+        .limit(limit)
+        .offset(offset),
+  });
+  const codes = await phoneCodes(tx);
+  return { ...page, rows: page.rows.map((r) => toEmployee(r, codes)) };
 }
 
 /** Карточка сотрудника; null — нет такого в организации. */
 export async function getEmployee(tx: Tx, id: string): Promise<EmployeeRecord | null> {
   const [row] = await selectEmployees(tx).where(eq(employees.id, id));
-  return row ? toEmployee(row) : null;
+  return row ? toEmployee(row, await phoneCodes(tx)) : null;
 }
 
 /** Заблокировать запись сотрудника до конца транзакции, перед проверкой правил и правкой. */

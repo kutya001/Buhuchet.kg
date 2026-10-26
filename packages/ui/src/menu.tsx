@@ -14,7 +14,7 @@ export interface MenuItem {
 /** Метка «Бета» у способа добавления (прототип `.beta-p`). */
 export function BetaBadge({ label }: { label: string }) {
   return (
-    <span className="inline-flex items-center rounded-full bg-warn-bg px-[7px] align-middle text-[11px] leading-[17px] font-bold tracking-[0.02em] text-warn">
+    <span className="inline-flex items-center rounded-full bg-warn-bg px-[7px] align-middle text-[11px] leading-[17px] font-bold tracking-[0.02em] text-warn-label">
       {label}
     </span>
   );

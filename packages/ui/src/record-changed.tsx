@@ -28,7 +28,7 @@ export function RecordChangedNotice({
   return (
     <div
       role="alert"
-      className="flex items-start gap-[9px] rounded-lg border border-transparent bg-caution-bg px-3 py-[9px] text-[12.5px] leading-[1.45] text-caution"
+      className="flex items-start gap-[9px] rounded-lg border border-transparent bg-caution-bg px-3 py-[9px] text-[12.5px] leading-[1.45] text-caution-label"
     >
       <svg
         viewBox="0 0 24 24"

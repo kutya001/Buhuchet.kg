@@ -5,7 +5,7 @@ const TONES = {
   // Красный — цвет опасной кнопки: в тёмной теме темнее, чем в прототипе, контраст не ниже 4,5 : 1.
   red: 'bg-danger-btn text-on-accent',
   yellow:
-    'bg-warn-bg text-warn shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--bu-yellow)_35%,transparent)]',
+    'bg-warn-bg text-warn-label shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--bu-yellow)_35%,transparent)]',
 } as const;
 
 /** Счётчик-«таблетка» (прототип `.badge`): число записей у модуля или вкладки. */

@@ -35,8 +35,11 @@ function vars(block: string, prefix: string): Map<string, string> {
   return out;
 }
 
-/** Цвета, которых нет в прототипе: опасная кнопка и красный счётчик (docs/deviations.md, п. 26). */
-const PRODUCT_ONLY = ['danger-btn'];
+/**
+ * Цвета, которых нет в прототипе (docs/deviations.md, п. 26): опасная кнопка и красный счётчик, текст
+ * цветных меток и заметок.
+ */
+const PRODUCT_ONLY = ['danger-btn', 'red-label', 'orange-label', 'yellow-label'];
 
 const light = vars(blockAfter(theme, ':root {'), 'bu-');
 const dark = vars(blockAfter(theme, ":root[data-theme='dark'] {"), 'bu-');
@@ -57,6 +60,32 @@ function luminance(hsl: string): number {
   };
   const lin = (c: number) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
   return 0.2126 * lin(f(0)) + 0.7152 * lin(f(8)) + 0.0722 * lin(f(4));
+}
+
+/** Цвет `hsl()` / `hsla()` в RGB 0…1 и его прозрачность. */
+function rgba(color: string): { rgb: [number, number, number]; alpha: number } {
+  const [h, s, l, alpha = 1] = color
+    .replace(/hsla?\(|\)|%/g, '')
+    .split(/[\s,/]+/)
+    .filter(Boolean)
+    .map(Number) as [number, number, number, number?];
+  const a = (s / 100) * Math.min(l / 100, 1 - l / 100);
+  const f = (n: number) => {
+    const k = (n + h / 30) % 12;
+    return l / 100 - a * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+  };
+  return { rgb: [f(0), f(8), f(4)], alpha };
+}
+
+/** Полупрозрачный цвет поверх сплошного — сплошной `hsl()`-независимый RGB. */
+function over(top: string, base: [number, number, number]): [number, number, number] {
+  const { rgb, alpha } = rgba(top);
+  return rgb.map((c, i) => c * alpha + base[i]! * (1 - alpha)) as [number, number, number];
+}
+
+function rgbLuminance(rgb: [number, number, number]): number {
+  const lin = (c: number) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+  return 0.2126 * lin(rgb[0]) + 0.7152 * lin(rgb[1]) + 0.0722 * lin(rgb[2]);
 }
 
 function contrast(a: string, b: string): number {
@@ -93,6 +122,33 @@ describe('тема оформления', () => {
   it('надпись на опасной кнопке («Удалить», «Закрыть без сохранения») и число на красном счётчике читаются: не ниже 4,5 : 1', () => {
     expect(contrast(light.get('on-accent')!, light.get('danger-btn')!)).toBeGreaterThanOrEqual(4.5);
     expect(contrast(dark.get('on-accent')!, dark.get('danger-btn')!)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('цветные метки и заметки читаются на карточке и под наведением строки: не ниже 4,5 : 1', () => {
+    // Метка: текст `--X-label` на подложке `--X-bg`, подложка — поверх карточки списка (`--raised`) или
+    // строки под указателем (`--row-hover` поверх `--raised`). Красная — «Заблокирован», зелёная —
+    // «Активен», оранжевая — «не привязан», жёлтая — счётчик «Справочники» и метка «скоро».
+    const pairs = [
+      ['red-label', 'red-bg'],
+      ['green', 'green-bg'],
+      ['orange-label', 'orange-bg'],
+      ['yellow-label', 'yellow-bg'],
+    ] as const;
+    for (const [name, theme] of [
+      ['светлая', light],
+      ['тёмная', dark],
+    ] as const) {
+      const raised = rgba(theme.get('raised')!).rgb;
+      const surfaces = { raised, hover: over(theme.get('row-hover')!, raised) };
+      for (const [text, bg] of pairs) {
+        for (const [surface, base] of Object.entries(surfaces)) {
+          const fg = rgbLuminance(rgba(theme.get(text)!).rgb);
+          const back = rgbLuminance(over(theme.get(bg)!, base));
+          const ratio = (Math.max(fg, back) + 0.05) / (Math.min(fg, back) + 0.05);
+          expect([name, text, surface, ratio >= 4.5]).toEqual([name, text, surface, true]);
+        }
+      }
+    }
   });
 
   it('текст уведомления внизу экрана читается: контраст не ниже 4,5 : 1 в обеих темах', () => {

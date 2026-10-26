@@ -1,34 +1,15 @@
 import { createRoute, type RouteHandler } from '@hono/zod-openapi';
 import { hashSessionToken, newLinkToken } from '@buhuchet/adapters/tokens';
-import {
-  createTelegramLinkToken,
-  unlinkTelegram,
-  withOrgContext,
-  withUserContext,
-  writeHistory,
-  type Tx,
-} from '@buhuchet/db';
+import { createTelegramLinkToken, unlinkTelegram, writeHistory } from '@buhuchet/db';
 import { telegramName, withOrganization } from '@buhuchet/domain';
 import { ApiError, OkResponse, TelegramLinkResponse } from '@buhuchet/shared';
 import type { ApiDeps } from '../../deps';
-import type { AppEnv, AuthSession } from '../../env';
+import type { AppEnv } from '../../env';
 import { apiError } from '../../errors';
+import { asSessionUser } from '../../middleware/access';
 import { botText, sendNow } from './bot';
 
 const error = { 'application/json': { schema: ApiError } };
-
-/** Транзакция от имени вошедшего: в его организации (RLS) или, у администратора платформы, без неё. */
-export function asSessionUser<T>(
-  deps: ApiDeps,
-  session: AuthSession,
-  fn: (tx: Tx, inOrg: boolean) => Promise<T>,
-): Promise<T> {
-  return session.orgId
-    ? withOrgContext(deps.db, { orgId: session.orgId, userId: session.userId }, (tx) =>
-        fn(tx, true),
-      )
-    : withUserContext(deps.db, session.userId, (tx) => fn(tx, false));
-}
 
 export const createLinkRoute = createRoute({
   method: 'post',
