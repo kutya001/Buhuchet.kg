@@ -46,7 +46,7 @@ describe('/api/cron/tick без базы', () => {
 
   it('вебхук бота сайт сообщает сам — только если бот задан и адрес сайта по https', async () => {
     const bot = {
-      TELEGRAM_BOT_TOKEN: '1:abc',
+      TELEGRAM_BOT_TOKEN: '123456789:test-token-not-real-0000000000000',
       TELEGRAM_WEBHOOK_SECRET: 'webhook-secret-0000',
     };
     const names = (list: readonly Job[]) => list.map((j) => j.name);

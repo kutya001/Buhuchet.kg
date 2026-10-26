@@ -78,7 +78,12 @@ const AppEnv = z
       .default('info'),
     /** Секрет, с которым планировщик (Vercel Cron, worker, cron) вызывает /api/cron/*. */
     CRON_SECRET: z.string().min(16),
-    TELEGRAM_BOT_TOKEN: z.string().trim().min(1).optional(),
+    /** Токен от BotFather: «цифры:строка» (проверка формата — как в прототипе admin/telegram.js). */
+    TELEGRAM_BOT_TOKEN: z
+      .string()
+      .trim()
+      .regex(/^\d{6,12}:[\w-]{30,}$/, 'токен бота: «123456789:…» из BotFather')
+      .optional(),
     /** Секрет вебхука: Telegram принимает только латиницу, цифры, _ и - (до 256 символов). */
     TELEGRAM_WEBHOOK_SECRET: z
       .string()

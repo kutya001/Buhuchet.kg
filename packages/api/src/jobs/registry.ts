@@ -43,6 +43,7 @@ export const jobs: readonly Job[] = [cleanupSchedulerRuns, cleanupLoginAttemptsJ
  * меняет), поэтому после того как переменные бота заданы или секрет сменён, ручного шага с токеном нет.
  * У бота один вебхук: у стенда и рабочего сайта боты разные, иначе они перебивали бы друг друга.
  */
+// ОТКЛОНЕНИЕ: docs/deviations.md#14 — токен бота и секрет берутся из окружения, а не из Админки.
 export function telegramWebhookJob(webhook: { url: string; secretToken: string }): Job {
   return {
     name: 'telegram.register-webhook',

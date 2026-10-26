@@ -18,6 +18,8 @@ const base = {
   S3_SECRET_ACCESS_KEY: 'secret',
   CRON_SECRET: 'local-cron-secret-0000',
 };
+/** Токен в формате BotFather; не настоящий. */
+const TOKEN = '123456789:test-token-not-real-0000000000000';
 
 describe('loadConfig', () => {
   it('заполняет значения по умолчанию', () => {
@@ -90,13 +92,13 @@ describe('loadConfig', () => {
   });
 
   it('токен бота и секрет вебхука задаются вместе', () => {
-    expect(() => loadConfig({ ...base, TELEGRAM_BOT_TOKEN: '1:abc' })).toThrow(
+    expect(() => loadConfig({ ...base, TELEGRAM_BOT_TOKEN: TOKEN })).toThrow(
       /TELEGRAM_WEBHOOK_SECRET/,
     );
     expect(() =>
       loadConfig({
         ...base,
-        TELEGRAM_BOT_TOKEN: '1:abc',
+        TELEGRAM_BOT_TOKEN: TOKEN,
         TELEGRAM_WEBHOOK_SECRET: 'webhook-secret-0000',
       }),
     ).toThrow(/TELEGRAM_BOT_USERNAME/);
@@ -105,25 +107,34 @@ describe('loadConfig', () => {
     );
     const cfg = loadConfig({
       ...base,
-      TELEGRAM_BOT_TOKEN: '1:abc',
+      TELEGRAM_BOT_TOKEN: TOKEN,
       TELEGRAM_WEBHOOK_SECRET: 'webhook-secret-0000',
       TELEGRAM_BOT_USERNAME: ' @buhuchet_bot\n',
     });
-    expect(cfg.TELEGRAM_BOT_TOKEN).toBe('1:abc');
+    expect(cfg.TELEGRAM_BOT_TOKEN).toBe(TOKEN);
     expect(cfg.TELEGRAM_BOT_USERNAME).toBe('buhuchet_bot');
+    expect(() =>
+      loadConfig({
+        ...base,
+        TELEGRAM_BOT_TOKEN: TOKEN,
+        TELEGRAM_WEBHOOK_SECRET: 'webhook-secret-0000',
+        TELEGRAM_BOT_USERNAME: 't.me/buhuchet_bot',
+      }),
+    ).toThrow(/имя бота/);
+    // Токен — в формате BotFather.
     expect(() =>
       loadConfig({
         ...base,
         TELEGRAM_BOT_TOKEN: '1:abc',
         TELEGRAM_WEBHOOK_SECRET: 'webhook-secret-0000',
-        TELEGRAM_BOT_USERNAME: 't.me/buhuchet_bot',
+        TELEGRAM_BOT_USERNAME: 'buhuchet_bot',
       }),
-    ).toThrow(/имя бота/);
+    ).toThrow(/токен бота/);
     // Секрет вебхука — только символы, которые принимает Telegram.
     expect(() =>
       loadConfig({
         ...base,
-        TELEGRAM_BOT_TOKEN: '1:abc',
+        TELEGRAM_BOT_TOKEN: TOKEN,
         TELEGRAM_WEBHOOK_SECRET: 'секрет с пробелами и знаками!',
         TELEGRAM_BOT_USERNAME: 'buhuchet_bot',
       }),
