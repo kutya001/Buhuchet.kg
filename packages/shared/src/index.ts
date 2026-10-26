@@ -7,3 +7,4 @@ export * from './staff';
 export * from './roles';
 export * from './org';
 export * from './l10n';
+export * from './status';

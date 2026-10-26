@@ -2,6 +2,7 @@ import { AUTH_TEXTS } from './auth-texts';
 import { GRID_TEXTS } from './grid-texts';
 import { SHELL_TEXTS } from './shell-texts';
 import { STAFF_TEXTS } from './staff-texts';
+import { STATUS_TEXTS } from './status-texts';
 
 /**
  * Языки интерфейса (ТЗ, Админка → «Локализация»). Сейчас язык один — русский; добавление языка
@@ -45,7 +46,8 @@ const SYSTEM_TEXTS = {
  * (`useT` в apps/web): текст, поправленный в словаре, заменяет этот без изменения кода. Ключ,
  * который есть и в refDB.json, пишется с тем же текстом (это проверяет тест наполнения). Тексты
  * разложены по файлам экранов: служебные — здесь, оболочки — `shell-texts.ts`, входа и «Мой профиль» —
- * `auth-texts.ts`, списков — `grid-texts.ts`, сотрудников — `staff-texts.ts`.
+ * `auth-texts.ts`, списков — `grid-texts.ts`, сотрудников — `staff-texts.ts`, шкалы и истории статусов —
+ * `status-texts.ts`.
  */
 export const UI_TEXTS = {
   ...SYSTEM_TEXTS,
@@ -53,6 +55,7 @@ export const UI_TEXTS = {
   ...AUTH_TEXTS,
   ...GRID_TEXTS,
   ...STAFF_TEXTS,
+  ...STATUS_TEXTS,
 } as const satisfies Record<string, UiTextDefault>;
 
 /** Ключ текста интерфейса: только из `UI_TEXTS`, поэтому опечатка в ключе — ошибка типов. */

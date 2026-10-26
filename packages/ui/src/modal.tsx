@@ -116,6 +116,11 @@ interface CurrentWindow {
 
 const CurrentWindowContext = createContext<CurrentWindow>({ close: () => {}, leave: () => {} });
 
+/** Тексты окон из `WindowProvider` («Отмена», «Подтвердить», …) — для своих окон пакета. */
+export function useWindowLabels(): WindowLabels {
+  return useWindowsValue().labels;
+}
+
 /** Окно, внутри которого нарисован компонент: закрыть его или закрыть перед переходом. */
 export function useWindow(): CurrentWindow {
   return useContext(CurrentWindowContext);

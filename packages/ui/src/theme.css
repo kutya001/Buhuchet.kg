@@ -35,6 +35,10 @@
   --bu-red-label: hsl(4 56% 43%);
   --bu-orange-label: hsl(18 69% 37%);
   --bu-yellow-label: hsl(40 98% 23%);
+  /* Серые метки и текст статуса на подложке — не ниже 4,5 : 1 (прототип версии 59 — `--label`). */
+  --bu-label: hsl(35 28% 33%);
+  --bu-label-bg: hsla(34 37% 70% / 0.16);
+  --bu-faint-pill-bg: hsla(0 0% 100% / 0);
   --bu-yellow: hsl(40 98% 30%);
   --bu-yellow-bg: hsla(43 83% 57% / 0.24);
   --bu-orange: hsl(18 69% 42%);
@@ -53,6 +57,15 @@
   --bu-toast-fg: hsl(35 36% 96%);
   /* Опасная кнопка — светлый текст на красном, не ниже 4,5 : 1 (решение заказчика, docs/deviations.md, п. 26). */
   --bu-danger-btn: hsl(4 56% 45%);
+  /* Залитые цветом кнопки («Выполнено», «Подтвердить») и кружки шкалы статусов со светлым текстом —
+     не ниже 4,5 : 1 в обеих темах (docs/deviations.md, п. 26; прототип версии 59 — `--<цвет>-btn`). */
+  --bu-green-btn: hsl(153 65% 26%);
+  --bu-blue-btn: hsl(200 64% 32%);
+  --bu-yellow-btn: hsl(40 98% 23%);
+  --bu-orange-btn: hsl(18 69% 36%);
+  --bu-purple-btn: hsl(275 37% 42%);
+  --bu-gray-btn: hsl(35 28% 40%);
+  --bu-faint-btn: hsl(34 26% 40%);
   --bu-shadow-s:
     0 1px 2px rgba(0, 0, 0, 0.028), 0 3.4px 6.7px rgba(0, 0, 0, 0.042),
     0 15px 30px rgba(0, 0, 0, 0.07);
@@ -111,6 +124,9 @@
   --bu-red-label: hsl(4 88% 76%);
   --bu-orange-label: hsl(26 85% 70%);
   --bu-yellow-label: hsl(43 69% 63%);
+  --bu-label: hsl(35 27% 58%);
+  --bu-label-bg: hsla(30 20% 8% / 0.4);
+  --bu-faint-pill-bg: hsla(30 20% 8% / 0.3);
   --bu-yellow: hsl(43 69% 63%);
   --bu-yellow-bg: hsla(42 79% 51% / 0.17);
   --bu-orange: hsl(26 85% 62%);
@@ -128,6 +144,13 @@
   --bu-toast-bg: hsl(32 48% 85%);
   --bu-toast-fg: hsl(30 19% 13%);
   --bu-danger-btn: hsl(4 70% 40%);
+  --bu-green-btn: hsl(152 51% 27%);
+  --bu-blue-btn: hsl(194 59% 30%);
+  --bu-yellow-btn: hsl(43 69% 27%);
+  --bu-orange-btn: hsl(26 85% 31%);
+  --bu-purple-btn: hsl(242 52% 53%);
+  --bu-gray-btn: hsl(35 27% 34%);
+  --bu-faint-btn: hsl(34 22% 35%);
   --bu-shadow-s:
     0 1px 2px rgba(0, 0, 0, 0.228), 0 3.4px 6.7px rgba(0, 0, 0, 0.242),
     0 15px 30px rgba(0, 0, 0, 0.27);
@@ -183,6 +206,9 @@
     --bu-red-label: hsl(4 88% 76%);
     --bu-orange-label: hsl(26 85% 70%);
     --bu-yellow-label: hsl(43 69% 63%);
+    --bu-label: hsl(35 27% 58%);
+    --bu-label-bg: hsla(30 20% 8% / 0.4);
+    --bu-faint-pill-bg: hsla(30 20% 8% / 0.3);
     --bu-yellow: hsl(43 69% 63%);
     --bu-yellow-bg: hsla(42 79% 51% / 0.17);
     --bu-orange: hsl(26 85% 62%);
@@ -200,6 +226,13 @@
     --bu-toast-bg: hsl(32 48% 85%);
     --bu-toast-fg: hsl(30 19% 13%);
     --bu-danger-btn: hsl(4 70% 40%);
+    --bu-green-btn: hsl(152 51% 27%);
+    --bu-blue-btn: hsl(194 59% 30%);
+    --bu-yellow-btn: hsl(43 69% 27%);
+    --bu-orange-btn: hsl(26 85% 31%);
+    --bu-purple-btn: hsl(242 52% 53%);
+    --bu-gray-btn: hsl(35 27% 34%);
+    --bu-faint-btn: hsl(34 22% 35%);
     --bu-shadow-s:
       0 1px 2px rgba(0, 0, 0, 0.228), 0 3.4px 6.7px rgba(0, 0, 0, 0.242),
       0 15px 30px rgba(0, 0, 0, 0.27);
@@ -259,6 +292,9 @@
   --color-caution: var(--bu-orange);
   --color-caution-bg: var(--bu-orange-bg);
   --color-caution-label: var(--bu-orange-label);
+  --color-label: var(--bu-label);
+  --color-label-bg: var(--bu-label-bg);
+  --color-faint-pill-bg: var(--bu-faint-pill-bg);
   --color-ok: var(--bu-green);
   --color-ok-bg: var(--bu-green-bg);
   --color-info: var(--bu-blue);
@@ -272,6 +308,13 @@
   --color-toast-bg: var(--bu-toast-bg);
   --color-toast-fg: var(--bu-toast-fg);
   --color-danger-btn: var(--bu-danger-btn);
+  --color-ok-btn: var(--bu-green-btn);
+  --color-info-btn: var(--bu-blue-btn);
+  --color-warn-btn: var(--bu-yellow-btn);
+  --color-caution-btn: var(--bu-orange-btn);
+  --color-violet-btn: var(--bu-purple-btn);
+  --color-gray-btn: var(--bu-gray-btn);
+  --color-faint-btn: var(--bu-faint-btn);
   --shadow-pane: var(--bu-shadow-s);
   --shadow-pop: var(--bu-shadow-l);
   --shadow-btn: var(--bu-sh-btn);

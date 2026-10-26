@@ -18,18 +18,15 @@ import {
   SideOrg,
   TabPager,
   TabRow,
-  ToastProvider,
   TopBar,
   useWindow,
   useWindows,
-  WindowProvider,
   type AddAction,
   type MaxPrefs,
   type PhoneModule,
   type ShellLink,
   type ShellModule,
   type TabRowProps,
-  type WindowLabels,
 } from '@buhuchet/ui';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -41,7 +38,7 @@ import { ProfileWindow } from '../profile/profile-window';
 import { QueryProvider } from '../query';
 import { useModuleStats } from '../lists/stats';
 import { ModuleScreen, screenHasPlates } from '../screens/module-screen';
-import { PHONE_QUERY, saveMaxPrefs, saveNavHidden, saveTree, toggleTheme } from './browser';
+import { PHONE_QUERY, saveNavHidden, saveTree, toggleTheme } from './browser';
 import { Clock } from './clock';
 import { ShellContext, type AddRequest } from './context';
 import {
@@ -57,6 +54,7 @@ import {
   visibleTabs,
   type ShellAccess,
 } from './modules';
+import { UiProviders } from './ui-providers';
 
 export { useShell, type AddRequest } from './context';
 
@@ -100,33 +98,11 @@ interface ShellProps {
  * экраны берут из `@buhuchet/ui`: тексты и выбор «На весь экран» им даёт оболочка.
  */
 export function Shell({ initialMax, ...props }: ShellProps) {
-  const t = useT();
-  const windowLabels = useMemo<WindowLabels>(
-    () => ({
-      maximize: t('window.maximize'),
-      restore: t('window.restore'),
-      maximizeHint: t('window.maximize_hint'),
-      close: t('window.close'),
-      cancel: t('btn.cancel'),
-      confirm: t('btn.confirm'),
-      discardTitle: t('window.discard_title'),
-      discardText: t('window.discard_text'),
-      discardOk: t('window.discard_ok'),
-      tabPosition: (n, total) => t('window.tab_position', { n, total }),
-    }),
-    [t],
-  );
-  const toastLabels = useMemo(
-    () => ({ close: t('toast.close'), closeTitle: t('toast.close_title') }),
-    [t],
-  );
   return (
     <QueryProvider>
-      <WindowProvider labels={windowLabels} initialMax={initialMax} onMaxChange={saveMaxPrefs}>
-        <ToastProvider labels={toastLabels}>
-          <ShellPage {...props} />
-        </ToastProvider>
-      </WindowProvider>
+      <UiProviders initialMax={initialMax}>
+        <ShellPage {...props} />
+      </UiProviders>
     </QueryProvider>
   );
 }

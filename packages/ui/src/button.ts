@@ -1,7 +1,8 @@
 /**
  * Классы кнопок прототипа (spec/prototype/src/css/controls.css): `.btn`, `.btn.cta` — основная
  * (светлый текст на тёмно-коричневой кнопке, контраст не ниже 4,5 : 1 в обеих темах, решение
- * заказчика 19.10.2026), `.btn.danger` — опасное действие (красная, с подтверждением), `.btn.ghost`,
+ * заказчика 19.10.2026), `.btn.danger` — опасное действие (красная, с подтверждением), `.btn.ok` —
+ * «Выполнено», «Подтвердить» (зелёная, светлый текст не ниже 4,5 : 1 в обеих темах), `.btn.ghost`,
  * `.btn.sm`, `.icon-btn`, `.linkbtn`. Подпись и значок — цветом текста кнопки, не приглушаются.
  */
 const BUTTON_BASE =
@@ -12,6 +13,7 @@ const BUTTON_VARIANTS = {
     'bg-btn text-ink shadow-btn hover:bg-btn-hover hover:shadow-btn-hover active:shadow-btn-active',
   cta: 'bg-accent text-on-accent shadow-cta hover:bg-accent-hover active:shadow-btn-active',
   danger: 'bg-danger-btn text-on-accent shadow-cta',
+  ok: 'bg-ok-btn text-on-accent shadow-cta',
   ghost: 'bg-transparent text-muted hover:bg-row-hover hover:text-ink',
 } as const;
 
