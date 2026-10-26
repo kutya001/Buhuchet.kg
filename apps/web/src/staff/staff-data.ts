@@ -45,8 +45,9 @@ export const policyQuery = queryOptions({
   queryFn: async () => json(await api.api.org.policy.$get(), (v) => OrgPolicy.parse(v), 'policy'),
 });
 
-/** Счётчик вкладки: ноль не показывается, как в прототипе. */
-const tabCount = (value: number | null): ShellCount | undefined => (value ? { value } : undefined);
+/** Счётчик вкладки; ноль показывается серым, как у вкладок модуля в прототипе; null — вкладки нет. */
+const tabCount = (value: number | null): ShellCount | undefined =>
+  value === null ? undefined : { value };
 
 /**
  * Счётчики вкладок модуля (прототип staffTabs): у «Сотрудников» — активных сотрудников, у «Ролей» —

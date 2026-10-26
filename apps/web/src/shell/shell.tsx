@@ -54,7 +54,7 @@ import {
   visibleTabs,
   type ShellAccess,
 } from './modules';
-import { useTabCounts } from './tab-counts';
+import { useTabCounts, withTabCounts } from './tab-counts';
 import { UiProviders } from './ui-providers';
 
 export { useShell, type AddRequest } from './context';
@@ -133,12 +133,10 @@ function HelpFooter({ kbHref }: { kbHref: string }) {
 function ModuleTabRow({
   moduleId,
   plates,
-  tabs: plain,
-  ...rest
+  ...props
 }: TabRowProps & { moduleId: MenuModuleId; plates: boolean }) {
-  const tabs = useTabCounts(moduleId, plain);
-  if (!plates) return <TabRow tabs={tabs} {...rest} />;
-  return <TabRowWithStats moduleId={moduleId} tabs={tabs} {...rest} />;
+  if (!plates) return <TabRow {...props} />;
+  return <TabRowWithStats moduleId={moduleId} {...props} />;
 }
 
 function TabRowWithStats({ moduleId, ...props }: TabRowProps & { moduleId: MenuModuleId }) {
@@ -205,9 +203,10 @@ function ShellPage({
   }, [pathname, moduleId, router]);
 
   const access = useMemo(() => shellAccess(me), [me]);
+  const counts = useTabCounts(me.modules);
   const modules = useMemo(
-    () => me.modules.map((id) => shellModule(id, access, t)),
-    [me.modules, access, t],
+    () => me.modules.map((id) => withTabCounts(shellModule(id, access, t), counts[id])),
+    [me.modules, access, t, counts],
   );
   const current = modules.find((m) => m.id === moduleId) ?? null;
   const currentTab = current?.tabs.find((tab) => tab.id === tabId) ?? null;

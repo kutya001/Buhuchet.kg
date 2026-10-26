@@ -257,6 +257,13 @@ test.describe('Этап 1: сотрудники и роли (экраны)', () 
     const tabs = page.locator('[data-tabrow]');
     await expect(tabs.locator('a[href="/app/staff/list"]')).toHaveText(/^Сотрудники\s*[1-9]\d*$/);
     await expect(tabs.locator('a[href="/app/staff/roles"]')).toHaveText(/^Роли\s*[1-9]\d*$/);
+    // Те же числа — у вкладок модуля в левой панели (на ПК).
+    if (!isMobile) {
+      await page.getByRole('button', { name: 'Раскрыть вкладки: Сотрудники' }).click();
+      await expect(page.locator('aside a[href="/app/staff/roles"]')).toHaveText(
+        /^Роли\s*[1-9]\d*$/,
+      );
+    }
 
     await test.step('роль владельца — «все права», «Изменить» недоступно, в карточке права не меняются', async () => {
       await search(page, isMobile, 'Владелец организации');
