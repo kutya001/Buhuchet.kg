@@ -151,7 +151,7 @@ const fetchOrgs: FetchListPage<AdminOrganization> = async (params) => {
 /** Значения столбца для фильтра-галочек; `q` — «Найти значение» по всем значениям. */
 const fetchOrgValues = async (col: string, q?: string) => {
   const res = await api.api.admin.organizations.values.$get({ query: q ? { col, q } : { col } });
-  if (!res.ok) throw new Error(`admin organization values: ${res.status}`);
+  if (!res.ok) throw await apiFailure(res);
   return ListValues.parse(await res.json());
 };
 
@@ -306,6 +306,7 @@ export function OrgsList() {
         onPageChange={list.setPage}
         error={list.error}
         errorText={list.errorText}
+        errorTextOf={list.errorTextOf}
         onRetry={list.retry}
         filters={list.filters}
         onFiltersChange={list.setFilters}

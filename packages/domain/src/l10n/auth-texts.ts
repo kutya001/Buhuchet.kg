@@ -114,7 +114,7 @@ export const AUTH_TEXTS = {
   'err.internal_error': { ru: 'Внутренняя ошибка', section: 'Ошибки' },
   // Защита тяжёлых запросов (docs/decisions.md, п. 38; docs/deviations.md, п. 42).
   'err.query_timeout': {
-    ru: 'Запрос выполнялся слишком долго. Сузьте список поиском или фильтром и попробуйте ещё раз.',
+    ru: 'Запрос выполнялся слишком долго. Попробуйте ещё раз.',
     section: 'Ошибки',
   },
   'err.export_busy': {

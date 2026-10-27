@@ -33,8 +33,13 @@ export async function takeRateLimit(
 }
 
 /** Действие закончилось: можно следующее (в счёте за окно оно остаётся). */
-export async function releaseRateLimit(db: Db, ticket: number): Promise<void> {
-  await db.execute(sql`select app.rate_limit_release(${ticket})`);
+export async function releaseRateLimit(
+  db: Db,
+  limit: RateLimit,
+  subject: string,
+  ticket: number,
+): Promise<void> {
+  await db.execute(sql`select app.rate_limit_release(${ticket}, ${limit.kind}, ${subject})`);
 }
 
 /** Строки частоты хранятся сутки: окна всех пределов короче. */

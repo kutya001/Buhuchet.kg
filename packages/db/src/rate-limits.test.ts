@@ -114,7 +114,12 @@ describe.skipIf(!databaseAvailable())('защита тяжёлых запрос�
       // У другого пользователя и у другого вида действия — свой счёт.
       expect((await takeRateLimit(t.app.db, limit(), 'u-other')).ok).toBe(true);
       expect((await takeRateLimit(t.app.db, limit({ kind: 'test-2' }), 'u-busy')).ok).toBe(true);
-      if (first.ok) await releaseRateLimit(t.app.db, first.ticket);
+      if (!first.ok) throw new Error('first');
+      // Номер отпускает только своё действие: с чужим видом или субъектом строка остаётся занятой.
+      await releaseRateLimit(t.app.db, limit(), 'u-other', first.ticket);
+      await releaseRateLimit(t.app.db, limit({ kind: 'test-2' }), 'u-busy', first.ticket);
+      expect((await takeRateLimit(t.app.db, limit(), 'u-busy')).ok).toBe(false);
+      await releaseRateLimit(t.app.db, limit(), 'u-busy', first.ticket);
       expect((await takeRateLimit(t.app.db, limit(), 'u-busy')).ok).toBe(true);
     });
 
@@ -122,7 +127,7 @@ describe.skipIf(!databaseAvailable())('защита тяжёлых запрос�
       for (let i = 0; i < 3; i++) {
         const take = await takeRateLimit(t.app.db, limit(), 'u-limit');
         expect(take.ok).toBe(true);
-        if (take.ok) await releaseRateLimit(t.app.db, take.ticket);
+        if (take.ok) await releaseRateLimit(t.app.db, limit(), 'u-limit', take.ticket);
       }
       expect(await takeRateLimit(t.app.db, limit(), 'u-limit')).toEqual({
         ok: false,

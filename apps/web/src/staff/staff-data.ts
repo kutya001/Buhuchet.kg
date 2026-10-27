@@ -4,7 +4,7 @@ import { Employee, PhoneCodes, RoleList, StaffTabCounts } from '@buhuchet/shared
 import type { ShellCount } from '@buhuchet/ui';
 import { queryOptions, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
-import { api } from '../api-client';
+import { api, apiFailure } from '../api-client';
 
 /**
  * Данные окон модуля «Сотрудники» через TanStack Query: карточка сотрудника, все роли для выбора,
@@ -15,16 +15,15 @@ import { api } from '../api-client';
 
 type JsonResponse = { ok: boolean; status: number; json(): Promise<unknown> };
 
-const json = async <T>(res: JsonResponse, parse: (v: unknown) => T, what: string) => {
-  if (!res.ok) throw new Error(`${what}: ${res.status}`);
+const json = async <T>(res: JsonResponse, parse: (v: unknown) => T) => {
+  if (!res.ok) throw await apiFailure(res);
   return parse(await res.json());
 };
 
 /** Справочник «Коды телефонов» — один раз за сеанс страницы. */
 export const phoneCodesQuery = queryOptions({
   queryKey: ['phone-codes'],
-  queryFn: async () =>
-    json(await api.api['phone-codes'].$get(), (v) => PhoneCodes.parse(v).items, 'phone-codes'),
+  queryFn: async () => json(await api.api['phone-codes'].$get(), (v) => PhoneCodes.parse(v).items),
   staleTime: Infinity,
 });
 
@@ -35,7 +34,6 @@ export const allRolesQuery = queryOptions({
     json(
       await api.api.roles.$get({ query: { size: 'all', sort: 'name.asc' } }),
       (v) => RoleList.parse(v).items,
-      'roles',
     ),
 });
 
@@ -50,10 +48,8 @@ const tabCount = (value: number | null): ShellCount | undefined =>
 export const staffTabCountsQuery = queryOptions({
   queryKey: ['staff', 'tab-counts'],
   queryFn: async (): Promise<Partial<Record<string, ShellCount>>> => {
-    const counts = await json(
-      await api.api.staff['tab-counts'].$get(),
-      (v) => StaffTabCounts.parse(v),
-      'staff tab counts',
+    const counts = await json(await api.api.staff['tab-counts'].$get(), (v) =>
+      StaffTabCounts.parse(v),
     );
     return { list: tabCount(counts.list), roles: tabCount(counts.roles) };
   },
@@ -64,11 +60,7 @@ export const employeeQuery = (id: string) =>
   queryOptions({
     queryKey: ['staff', id],
     queryFn: async () =>
-      json(
-        await api.api.staff[':id'].$get({ param: { id } }),
-        (v) => Employee.parse(v),
-        'employee',
-      ),
+      json(await api.api.staff[':id'].$get({ param: { id } }), (v) => Employee.parse(v)),
   });
 
 export function useEmployee(id: string) {

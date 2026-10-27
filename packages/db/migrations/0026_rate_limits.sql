@@ -51,12 +51,16 @@ CREATE FUNCTION app.rate_limit_take(
   END
   $$;
 --> statement-breakpoint
--- Действие закончилось (успешно или нет): строка больше не «занята», но считается в окне.
-CREATE FUNCTION app.rate_limit_release(p_ticket bigint)
+-- Действие закончилось (успешно или нет): строка больше не «занята», но считается в окне. Номер
+-- строки сверяется с видом и субъектом: чужое действие по номеру не отпустить.
+CREATE FUNCTION app.rate_limit_release(p_ticket bigint, p_kind text, p_subject text)
   RETURNS void
   LANGUAGE sql VOLATILE SECURITY DEFINER
   SET search_path = pg_catalog, pg_temp
-  AS $$ UPDATE public.rate_limits SET busy_until = NULL WHERE id = p_ticket $$;
+  AS $$
+    UPDATE public.rate_limits SET busy_until = NULL
+    WHERE id = p_ticket AND kind = p_kind AND subject = p_subject
+  $$;
 --> statement-breakpoint
 -- Очистка по расписанию: строки старше p_keep_seconds, которые уже не «заняты». Окна всех пределов
 -- короче, поэтому удаление ничего не меняет в счёте.
@@ -76,12 +80,12 @@ CREATE FUNCTION app.rate_limit_cleanup(p_keep_seconds integer)
 --> statement-breakpoint
 REVOKE ALL ON FUNCTION app.rate_limit_take(text, text, integer, integer, integer) FROM PUBLIC;
 --> statement-breakpoint
-REVOKE ALL ON FUNCTION app.rate_limit_release(bigint) FROM PUBLIC;
+REVOKE ALL ON FUNCTION app.rate_limit_release(bigint, text, text) FROM PUBLIC;
 --> statement-breakpoint
 REVOKE ALL ON FUNCTION app.rate_limit_cleanup(integer) FROM PUBLIC;
 --> statement-breakpoint
 GRANT EXECUTE ON FUNCTION app.rate_limit_take(text, text, integer, integer, integer),
-  app.rate_limit_release(bigint), app.rate_limit_cleanup(integer) TO buhuchet_app;
+  app.rate_limit_release(bigint, text, text), app.rate_limit_cleanup(integer) TO buhuchet_app;
 --> statement-breakpoint
 -- Таблицу и её счётчик номеров роль приложения не читает и не меняет напрямую — только функциями выше.
 REVOKE ALL ON TABLE public.rate_limits FROM buhuchet_app;

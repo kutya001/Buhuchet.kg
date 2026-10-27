@@ -118,7 +118,7 @@ const loadForm = async (client: QueryClient, id: string) => {
 
 const fetchRoleValues = async (col: string, q?: string) => {
   const res = await api.api.roles.values.$get({ query: q ? { col, q } : { col } });
-  if (!res.ok) throw new Error(`roles values: ${res.status}`);
+  if (!res.ok) throw await apiFailure(res);
   return ListValues.parse(await res.json());
 };
 
@@ -235,6 +235,7 @@ export function RolesList() {
         onPageChange={list.setPage}
         error={list.error}
         errorText={list.errorText}
+        errorTextOf={list.errorTextOf}
         onRetry={list.retry}
         filters={list.filters}
         onFiltersChange={list.setFilters}

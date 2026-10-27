@@ -56,19 +56,22 @@ export const xlsxContent = {
 /**
  * Выгрузки одного пользователя (docs/decisions.md, п. 38): одна одновременно и не больше
  * `EXPORT_HOURLY_LIMIT` за час. Выгрузка, которую не отпустили (сбой процесса), перестаёт мешать через
- * 2 минуты: запрос к базе — до 60 с, плюс сборка файла.
+ * 5 минут — столько живёт функция API (`maxDuration`): предел 60 с — у каждого запроса к базе, а не у
+ * всей выгрузки, поэтому срок короче мог бы кончиться раньше самой выгрузки.
  */
 export const EXPORT_RATE_LIMIT: RateLimit = {
   kind: 'export',
   max: EXPORT_HOURLY_LIMIT,
   windowSeconds: 3600,
-  leaseSeconds: 120,
+  leaseSeconds: 300,
 };
 
 /**
  * Выгрузка «В Excel» по очереди: идёт прежняя выгрузка пользователя — 429 `export_busy`, за час уже
  * `EXPORT_HOURLY_LIMIT` — 429 `export_limit`; иначе `run`, и выгрузка отпускается, чем бы она ни
- * кончилась. Вызывать после разбора параметров (`listQueryOf`): запрос не в формате в счёт не идёт.
+ * кончилась. Вызывать после разбора параметров (`listQueryOf`): запрос не в формате (фильтры, страница)
+ * в счёт не идёт. Неизвестные столбцы и поля сортировки проверяет база уже внутри `run` — такая попытка
+ * считается, но выгрузка отпускается сразу.
  * Запросы к базе внутри `run` — с видом работы `export` (`withOrgContext(…, { …, kind: 'export' })`).
  */
 export async function withExportSlot<T>(
@@ -86,7 +89,7 @@ export async function withExportSlot<T>(
   try {
     return await run();
   } finally {
-    await releaseRateLimit(deps.db, slot.ticket).catch((err: unknown) =>
+    await releaseRateLimit(deps.db, EXPORT_RATE_LIMIT, userId, slot.ticket).catch((err: unknown) =>
       deps.logger.error({ err }, 'выгрузка не отпущена'),
     );
   }

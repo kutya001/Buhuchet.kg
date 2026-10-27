@@ -1,6 +1,6 @@
 import { formatText, UI_TEXTS } from '@buhuchet/domain';
 import { describe, expect, it } from 'vitest';
-import { makeErrorText } from '../l10n/translate';
+import { makeErrorText, makeTranslate } from '../l10n/translate';
 import { exportFailureText, exportFileName } from './export';
 
 describe('«В Excel»: имя скачанного файла', () => {
@@ -24,7 +24,7 @@ describe('«В Excel»: отказ сервера — причина в увед
   const texts = Object.fromEntries(Object.entries(UI_TEXTS).map(([k, v]) => [k, v.ru]));
   const errorText = makeErrorText(texts);
   const failed = formatText(UI_TEXTS['grid.export_failed'].ru);
-  const text = (body: unknown) => exportFailureText(body, errorText, failed);
+  const text = (body: unknown) => exportFailureText(body, makeTranslate(texts), errorText, failed);
 
   it('идёт прежняя выгрузка, предел за час, долгий запрос — тексты словаря', () => {
     expect(text({ error: { code: 'export_busy', message: '…' } })).toBe(
@@ -38,7 +38,8 @@ describe('«В Excel»: отказ сервера — причина в увед
     );
   });
 
-  it('ответ не в общем формате — «Не удалось выгрузить список»', () => {
+  it('другая ошибка или ответ не в общем формате — «Не удалось выгрузить список»', () => {
+    expect(text({ error: { code: 'internal_error', message: 'Внутренняя ошибка' } })).toBe(failed);
     expect(text(null)).toBe(failed);
     expect(text('<html>')).toBe(failed);
   });

@@ -20,9 +20,10 @@ import {
   type GridPage,
 } from '@buhuchet/ui';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ApiFailure } from '../api-client';
-import { useErrorText } from '../l10n/provider';
+import { useErrorText, useT } from '../l10n/provider';
+import { limitFailureText } from './limit-text';
 
 /** Страница списка с сервера по параметрам запроса (`sort`, `page`, `size`, `filters`, `q` …). */
 export type FetchListPage<Row> = (params: Record<string, string>) => Promise<GridPage<Row>>;
@@ -104,8 +105,13 @@ export function useListPage<Row>({
     placeholderData: keepPreviousData,
     enabled,
   });
+  const t = useT();
   const errorText = useErrorText();
-  const failure = result.error instanceof ApiFailure ? result.error.error : null;
+  const failureText = useCallback(
+    (error: unknown) =>
+      limitFailureText(error instanceof ApiFailure ? error.error : null, t, errorText),
+    [t, errorText],
+  );
 
   // Сервер вернул другую страницу (за концом списка — последняя): номер на экране — как у сервера.
   const served = result.isPlaceholderData ? undefined : result.data?.page;
@@ -115,10 +121,12 @@ export function useListPage<Row>({
     data: result.data,
     error: result.isError,
     /**
-     * Причина ошибки из ответа сервера («Запрос выполнялся слишком долго»); null — обрыв связи или
-     * ответ не в общем формате: тогда экран просит проверить подключение.
+     * Причина ошибки — предел сервера («Запрос выполнялся слишком долго…», `limitFailureText`); null —
+     * другая ошибка или обрыв связи: экран просит проверить подключение, как прототип.
      */
-    errorText: failure && failure.code !== 'unknown' ? errorText(failure) : null,
+    errorText: failureText(result.error),
+    /** То же правило для значений фильтра-галочек (`errorTextOf` у `DataGrid`). */
+    errorTextOf: failureText,
     retry: () => void result.refetch(),
     setPage,
     filters,

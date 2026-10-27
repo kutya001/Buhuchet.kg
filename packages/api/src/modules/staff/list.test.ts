@@ -408,10 +408,16 @@ describe.skipIf(!databaseAvailable())(
         200,
       );
 
-      // 18 выгрузок за последний час уже были (вместе с той, что закончилась).
       await f.t.admin.db.update(schema.rateLimits).set({ busyUntil: null }).where(mine);
+      // Неизвестный столбец база отклоняет уже внутри выгрузки: 400, попытка считается, но выгрузка
+      // отпущена — следующая проходит сразу.
+      const unknown = await apiRequest(f.app, 'GET', '/api/staff/export?cols=nope', ownerB);
+      expect(unknown.status).toBe(400);
+      expect((await exportB()).status).toBe(200);
+
+      // 18 выгрузок за последний час уже были (вместе с тремя выше).
       await f.t.admin.db.insert(schema.rateLimits).values(
-        Array.from({ length: 17 }, () => ({
+        Array.from({ length: 15 }, () => ({
           kind: 'export',
           subject: user!.id,
           at: new Date(Date.now() - 30 * 60_000),

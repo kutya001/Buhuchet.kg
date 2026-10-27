@@ -5,7 +5,8 @@ import { ApiError } from '@buhuchet/shared';
 import { useToast } from '@buhuchet/ui';
 import { useCallback, useState } from 'react';
 import { useErrorText, useT } from '../l10n/provider';
-import type { ApiErrorLike } from '../l10n/translate';
+import type { ApiErrorLike, Translate } from '../l10n/translate';
+import { limitFailureText } from './limit-text';
 
 /**
  * Ответ метода выгрузки: файл и заголовки (`content-disposition`, `x-export-rows`, `x-export-more`);
@@ -19,17 +20,18 @@ interface ExportResponse {
 }
 
 /**
- * Текст уведомления об отказе в выгрузке: причина из ответа сервера по словарю («Предыдущая выгрузка
- * в Excel ещё готовится», «Не больше 20 выгрузок в Excel за час», «Запрос выполнялся слишком долго»);
- * ответ не в общем формате — `fallback`.
+ * Текст уведомления об отказе в выгрузке: предел сервера по словарю («Предыдущая выгрузка в Excel ещё
+ * готовится», «Не больше 20 выгрузок в Excel за час», «Запрос выполнялся слишком долго…»,
+ * `limitFailureText`); другая ошибка или ответ не в общем формате — `fallback`.
  */
 export function exportFailureText(
   body: unknown,
+  t: Translate,
   errorText: (error: ApiErrorLike) => string,
   fallback: string,
 ): string {
   const parsed = ApiError.safeParse(body);
-  return parsed.success ? errorText(parsed.data.error) : fallback;
+  return limitFailureText(parsed.success ? parsed.data.error : null, t, errorText) ?? fallback;
 }
 
 /** Имя файла из `filename*=UTF-8''…` (русское название списка и дата); нет — `export.xlsx`. */
@@ -74,7 +76,7 @@ export function useListExport(send: () => Promise<ExportResponse>) {
       const res = await send();
       if (!res.ok) {
         const body: unknown = await res.json().catch(() => null);
-        toast(exportFailureText(body, errorText, t('grid.export_failed')), {
+        toast(exportFailureText(body, t, errorText, t('grid.export_failed')), {
           icon: 'alert',
           bad: true,
         });
