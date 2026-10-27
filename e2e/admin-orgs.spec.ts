@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { ADMIN_PASSWORD, platformAdmin, search, uniqueInn } from './admin';
+import { ADMIN_PASSWORD, ownerPassword, platformAdmin, search, uniqueInn } from './admin';
 import { signIn, uniqueLogin } from './helpers';
 
 // Админка → «Организации» (ТЗ «Админка» → «Модуль организаций»; просьба заказчика 27.10.2026 —
@@ -7,7 +7,7 @@ import { signIn, uniqueLogin } from './helpers';
 // «Новая организация» с владельцем, блокировка и разблокировка. Администратор свой на каждый тест и
 // проект (`platformAdmin`).
 
-const OWNER_PASSWORD = 'Bh-E2E7-BLK9';
+const OWNER_PASSWORD = ownerPassword();
 
 test.describe('Админка: организации', () => {
   test('администратор видит плашки и все организации; демо-организацию стенда заблокировать нельзя', async ({

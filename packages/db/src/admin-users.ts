@@ -6,7 +6,7 @@ import {
   type AccountStatus,
   type ListQuery,
 } from '@buhuchet/domain';
-import { eq, sql } from 'drizzle-orm';
+import { eq, sql, type AnyColumn, type SQL } from 'drizzle-orm';
 import { boolean, integer, pgSchema, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 import type { Tx } from './client';
 import { writeHistory } from './history';
@@ -15,13 +15,13 @@ import {
   selectListExport,
   selectListPage,
   selectListValues,
-  textLiteral,
   type ListColumns,
   type ListFrom,
   type ListPageResult,
   type ListTexts,
   type ListWindowFields,
 } from './list';
+import { textLiteral } from './sql-text';
 import { endUserSessions } from './staff';
 
 /**
@@ -103,15 +103,18 @@ type Row = {
 function toRecord(r: Row): AdminUserRecord {
   const blocked = r.blocked ?? false;
   const employeeActive = r.employeeActive ?? true;
+  // Подписи «Администратор платформы» и «Платформа» — только у администратора платформы: у
+  // пользователя организации без записи сотрудника пусто, а не чужая роль.
+  const admin = r.isPlatformAdmin ?? false;
   const createdBy = auditActorName(r.createdBy, r.createdByName);
   return {
     id: r.id!,
     login: r.login!,
-    fullName: r.fullName ?? PLATFORM_ADMIN_NAME,
+    fullName: r.fullName ?? (admin ? PLATFORM_ADMIN_NAME : ''),
     orgId: r.orgId,
-    orgName: r.orgName ?? PLATFORM_ORG_NAME,
-    role: r.roleName ?? PLATFORM_ADMIN_NAME,
-    isPlatformAdmin: r.isPlatformAdmin ?? false,
+    orgName: r.orgName ?? (admin ? PLATFORM_ORG_NAME : ''),
+    role: r.roleName ?? (admin ? PLATFORM_ADMIN_NAME : ''),
+    isPlatformAdmin: admin,
     lastLoginAt: r.lastLoginAt,
     blocked,
     employeeActive,
@@ -128,6 +131,9 @@ function toRecord(r: Row): AdminUserRecord {
 
 const CREATED_BY = auditActorValue(v.createdBy, v.createdByName);
 const ADMIN_NAME = textLiteral(PLATFORM_ADMIN_NAME);
+/** Подпись администратора платформы, у остальных — их значение (пусто без записи сотрудника). */
+const adminOr = (value: AnyColumn, label: SQL) =>
+  sql`coalesce(${value}, case when ${v.isPlatformAdmin} then ${label}::text end)`;
 const STATUS = sql`case when ${v.blocked} then 'blocked' when not ${v.employeeActive} then 'owner_blocked' else 'active' end`;
 
 /**
@@ -144,17 +150,17 @@ export function adminUserListColumns(t: ListTexts): ListColumns {
     fullName: {
       type: 'text',
       label: 'accounts.col.full_name',
-      value: sql`coalesce(${v.fullName}, ${ADMIN_NAME}::text)`,
+      value: adminOr(v.fullName, ADMIN_NAME),
     },
     org: {
       type: 'enum',
       label: 'accounts.col.org',
-      value: sql`coalesce(${v.orgName}, ${textLiteral(PLATFORM_ORG_NAME)}::text)`,
+      value: adminOr(v.orgName, textLiteral(PLATFORM_ORG_NAME)),
     },
     role: {
       type: 'enum',
       label: 'accounts.col.role',
-      value: sql`coalesce(${v.roleName}, ${ADMIN_NAME}::text)`,
+      value: adminOr(v.roleName, ADMIN_NAME),
     },
     lastLoginAt: { type: 'datetime', label: 'accounts.col.last_login', value: v.lastLoginAt },
     active: {

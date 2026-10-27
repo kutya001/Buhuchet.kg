@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
-import { platformAdmin, search, uniqueInn } from './admin';
+import { ownerPassword, platformAdmin, search, uniqueInn } from './admin';
 import { DEMO_PASSWORD, hire, signIn, uniqueLogin } from './helpers';
 
 // Админка → «Учётные записи» (ТЗ «Админка» → «Модуль учётных записей»; прототип
@@ -7,7 +7,7 @@ import { DEMO_PASSWORD, hire, signIn, uniqueLogin } from './helpers';
 // разблокировка; сотрудник, которого заблокировал владелец, — своим статусом (docs/deviations.md,
 // п. 49, решение А). Администратор свой на каждый тест и проект (`platformAdmin`).
 
-const OWNER_PASSWORD = 'Bh-E2E7-ACC9';
+const OWNER_PASSWORD = ownerPassword();
 
 /** Новая организация с владельцем (временный пароль `OWNER_PASSWORD`); вход — в `api` администратора. */
 async function newOrg(api: APIRequestContext, origin: string) {

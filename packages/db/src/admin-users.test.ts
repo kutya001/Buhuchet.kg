@@ -293,5 +293,23 @@ describe.skipIf(!databaseAvailable())(
       );
       expect(row?.blocked).toBe(false);
     });
+
+    it('пользователь организации без записи сотрудника — не «Администратор платформы»: ФИО и роль пустые', async () => {
+      const [orphan] = await db.admin.db
+        .insert(users)
+        .values({ login: 'orphan', passwordHash: '!', orgId: a.orgId })
+        .returning({ id: users.id });
+      const page = await withUserContext(db.app.db, adminId, (tx) =>
+        listAdminUsersPage(tx, query({ search: { q: 'orphan', keys: ['login'] } }), t),
+      );
+      expect(page.rows.map((r) => [r.login, r.fullName, r.orgName, r.role])).toEqual([
+        ['orphan', '', 'ОсОО «Альфа»', ''],
+      ]);
+      const roles = await withUserContext(db.app.db, adminId, (tx) =>
+        listAdminUserValues(tx, 'role', t),
+      );
+      expect(roles.items.find((i) => i.value === 'Администратор платформы')?.count).toBe(2);
+      await db.admin.db.delete(users).where(eq(users.id, orphan!.id));
+    });
   },
 );

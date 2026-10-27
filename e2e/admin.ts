@@ -11,6 +11,8 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url));
 // Пароль администратора — свой на каждый прогон: в базе, где шёл тест, не остаётся администраторов с
 // известным паролем.
 export const ADMIN_PASSWORD = `Adm-${randomBytes(12).toString('base64url')}`;
+/** Временный пароль владельца новой организации — тоже свой на каждый прогон. */
+export const ownerPassword = () => `Own-${randomBytes(9).toString('base64url')}`;
 
 /** Администратор платформы с уже сменённым временным паролем; сеанс — в `api`. */
 export async function platformAdmin(api: APIRequestContext, origin: string): Promise<string> {

@@ -19,6 +19,7 @@ import {
   type ListSort,
 } from '@buhuchet/domain';
 import { and, or, sql, type AnyColumn, type SQL } from 'drizzle-orm';
+import { textLiteral } from './sql-text';
 
 /**
  * Страница списка на сервере (ТЗ «Списки записей»: «сортировка, страницы и фильтры на сервере»,
@@ -244,14 +245,6 @@ function filterCondition(key: string, column: ListColumn, filter: ListFilterValu
       return sql`(${sql.join(parts, sql` and `)})`;
     }
   }
-}
-
-/**
- * Постоянный текст прямо в запросе, а не параметром: Drizzle даёт параметру новый номер в каждом месте
- * запроса, и PostgreSQL не считает `select` и `group by` с ним одним выражением.
- */
-export function textLiteral(value: string): SQL {
-  return sql.raw(`'${value.replace(/'/g, "''")}'`);
 }
 
 /**
