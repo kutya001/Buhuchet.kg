@@ -63,6 +63,18 @@ export function orgFileKey(orgId: string, section: string, fileId: string): stri
   return `org/${orgId}/${section}/${fileId}`;
 }
 
+/** Ключ общего файла платформы (картинки новостей и т. п.): `platform/<раздел>/<id>`. */
+export function platformFileKey(section: string, fileId: string): string {
+  for (const [name, value] of [
+    ['section', section],
+    ['fileId', fileId],
+  ] as const) {
+    if (!SEGMENT.test(value))
+      throw new RangeError(`Недопустимая часть пути файла ${name}: «${value}»`);
+  }
+  return `platform/${section}/${fileId}`;
+}
+
 /** Content-Disposition для скачивания с русским именем файла (RFC 6266 / RFC 5987). */
 export function attachmentDisposition(fileName?: string): string {
   if (!fileName) return 'attachment';

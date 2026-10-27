@@ -139,6 +139,12 @@ describe('вкладки и «+ Добавить» по правам и учёт
     expect(kpi.find((a) => a.id === 'excel')?.separate).toBe(true);
     expect(ids(addActions('dicts', shellAccess(me({ permissions: [] }))))).toEqual(['request']);
   });
+
+  it('у «Базы знаний (содержимое)» способ добавления — своей вкладки: «Новость» только на «Новостях»', () => {
+    const access = shellAccess(me({ admin: true }));
+    expect(ids(addActions('kbadm', access, 'news'))).toEqual(['news']);
+    expect(addActions('kbadm', access, 'steps')).toEqual([]);
+  });
 });
 
 describe('вошедший для правил формы роли', () => {

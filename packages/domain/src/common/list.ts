@@ -446,6 +446,8 @@ export const GRID_KEYS = [
   'staff.list',
   'staff.roles',
   'kb.team',
+  // Админка → «База знаний (содержимое)» → «Новости».
+  'kbadm.news',
   'accounts.list',
   'orgs.list',
   'l10n.list',

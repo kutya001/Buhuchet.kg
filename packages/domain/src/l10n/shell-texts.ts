@@ -218,6 +218,7 @@ export const SHELL_TEXTS = {
   'add.dicts.request': { ru: 'Попросить добавить', section: 'Добавление' },
   'add.orgs.org': { ru: 'Организация', section: 'Добавление' },
   'add.tg.cast': { ru: 'Объявление', section: 'Добавление' },
+  'add.kbadm.news': { ru: 'Новость', section: 'Добавление' },
 
   // Оболочка
   'shell.mode.business': { ru: 'Business', section: 'Оболочка' },

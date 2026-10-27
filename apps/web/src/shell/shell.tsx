@@ -34,9 +34,11 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { api } from '../api-client';
 import { kbStateQuery } from '../kb/kb-data';
-import { KbContext, useKbRuntime } from '../kb/kb-provider';
+import { KbContext, useKbRuntime, type KbControls } from '../kb/kb-provider';
 import { useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
+import { newsUnreadQuery } from '../news/news-data';
+import { NewsContext, useNewsRuntime, type NewsControls } from '../news/news-provider';
 import { OrgProfileWindow } from '../org/org-profile-window';
 import { ProfileWindow } from '../profile/profile-window';
 import { QueryProvider } from '../query';
@@ -213,15 +215,24 @@ function ShellPage({
   // «Начните с Базы знаний»: точка у модуля, пока уровень 0 % (прототип kbDot).
   const kbProgress = useQuery(kbStateQuery).data?.progress;
   const kbStart = !!kbProgress && kbProgress.total > 0 && kbProgress.pct === 0;
+  // Непрочитанные новости: красный счётчик у модуля и вкладки «Новости» — вместо точки (прототип kbTabs).
+  const newsUnread = useQuery({ ...newsUnreadQuery, enabled: me.modules.includes('kb') }).data ?? 0;
   const modules = useMemo(
     () =>
       me.modules.map((id) => {
         const m = withTabCounts(shellModule(id, access, t), counts[id]);
-        return id === 'kb' && kbStart
-          ? { ...m, count: { value: '', dot: true, title: t('kb.dot') } }
-          : m;
+        if (id !== 'kb') return m;
+        if (newsUnread) {
+          const count = { value: newsUnread, tone: 'red' as const, title: t('news.badge') };
+          return {
+            ...m,
+            count,
+            tabs: m.tabs.map((tab) => (tab.id === 'news' ? { ...tab, count } : tab)),
+          };
+        }
+        return kbStart ? { ...m, count: { value: '', dot: true, title: t('kb.dot') } } : m;
       }),
-    [me.modules, access, t, counts, kbStart],
+    [me.modules, access, t, counts, kbStart, newsUnread],
   );
   const current = modules.find((m) => m.id === moduleId) ?? null;
   const currentTab = current?.tabs.find((tab) => tab.id === tabId) ?? null;
@@ -269,7 +280,7 @@ function ShellPage({
   }, []);
 
   const actions: AddAction[] = current
-    ? addActions(current.id as MenuModuleId, access).map((a) => ({
+    ? addActions(current.id as MenuModuleId, access, tabId ?? current.tabs[0]?.id).map((a) => ({
         id: a.id,
         label: t(a.label),
         icon: a.icon,
@@ -371,6 +382,13 @@ function ShellPage({
     kbHref: moduleHref('kb', access),
     lessonsHref: tabHref('kb', 'lessons'),
   });
+  // «Новости»: окно новости и «Что нового» после входа (задача 2.32).
+  const news = useNewsRuntime({
+    tabHrefOf,
+    openArticle: kb.controls.openArticle,
+    newsHref: tabHref('kb', 'news'),
+    lessonsHref: tabHref('kb', 'lessons'),
+  });
   const openHelp = () => {
     if (!moduleId || !isModuleId(moduleId)) return setHelpOpen(true);
     void kb.controls.help(moduleId).then((found) => {
@@ -383,7 +401,7 @@ function ShellPage({
 
   return (
     <ShellContext.Provider value={state}>
-      <KbContext.Provider value={kb.controls}>
+      <KbProviders kb={kb.controls} news={news.controls}>
         <AppFrame
           navHidden={navHidden}
           paneLabel={title}
@@ -437,7 +455,9 @@ function ShellPage({
               menu={{
                 label: t('shell.menu'),
                 onClick: toggleNav,
-                dot: phone.other.find((m) => m.count?.dot)?.count?.title,
+                // Точка у «Меню»: «Начните с Базы знаний» или непрочитанные новости в «Других модулях».
+                dot: phone.other.find((m) => m.count?.dot || (m.id === 'kb' && m.count?.value))
+                  ?.count?.title,
               }}
               info={{
                 label: t('shell.module_info'),
@@ -582,6 +602,7 @@ function ShellPage({
           )}
         </AppFrame>
         {kb.overlays}
+        {news.overlays}
         {/* «?» без статьи о модуле — описание модуля (прототип kb.js kbHelp). */}
         <Modal
           open={helpOpen}
@@ -612,7 +633,24 @@ function ShellPage({
           danger
           onConfirm={() => void logout(askLogout?.replace ?? false)}
         />
-      </KbContext.Provider>
+      </KbProviders>
     </ShellContext.Provider>
+  );
+}
+
+/** Управление «Базой знаний» и «Новостями» для экранов модулей (задачи 2.30 и 2.32). */
+function KbProviders({
+  kb,
+  news,
+  children,
+}: {
+  kb: KbControls;
+  news: NewsControls;
+  children: ReactNode;
+}) {
+  return (
+    <KbContext.Provider value={kb}>
+      <NewsContext.Provider value={news}>{children}</NewsContext.Provider>
+    </KbContext.Provider>
   );
 }

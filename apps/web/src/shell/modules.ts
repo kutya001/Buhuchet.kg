@@ -76,6 +76,8 @@ export interface AddDef {
   beta?: boolean;
   /** На ПК — отдельной кнопкой рядом с «+ Добавить» (в прототипе `btn: true`). */
   separate?: boolean;
+  /** Только на этих вкладках модуля (у «Базы знаний (содержимое)» на каждой вкладке своё). */
+  tabs?: readonly string[];
   when?: When;
 }
 
@@ -383,6 +385,7 @@ export const MODULES: Record<MenuModuleId, ModuleDef> = {
       { id: 'levels', icon: 'grad', label: 'tab.kbadm.levels' },
       { id: 'news', icon: 'bell', label: 'tab.kbadm.news' },
     ],
+    add: [{ id: 'news', icon: 'bell', label: 'add.kbadm.news', tabs: ['news'] }],
   },
   tg: {
     icon: 'tg',
@@ -435,8 +438,14 @@ export function visibleTabs(id: MenuModuleId, access: ShellAccess): readonly Tab
 }
 
 /** Способы добавления, на которые есть право; пусто — кнопки «+ Добавить» нет. */
-export function addActions(id: MenuModuleId, access: ShellAccess): readonly AddDef[] {
-  return (MODULES[id].add ?? []).filter((a) => !a.when || a.when(access));
+export function addActions(
+  id: MenuModuleId,
+  access: ShellAccess,
+  tabId?: string | null,
+): readonly AddDef[] {
+  return (MODULES[id].add ?? []).filter(
+    (a) => (!a.when || a.when(access)) && (!a.tabs || !tabId || a.tabs.includes(tabId)),
+  );
 }
 
 export function tabHref(moduleId: MenuModuleId, tabId: string): string {

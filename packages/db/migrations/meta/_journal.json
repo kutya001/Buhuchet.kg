@@ -302,6 +302,20 @@
       "when": 1793118671431,
       "tag": "0042_kb_grants",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1793119373179,
+      "tag": "0043_news",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1793119375157,
+      "tag": "0044_news_grants",
+      "breakpoints": true
     }
   ]
 }
