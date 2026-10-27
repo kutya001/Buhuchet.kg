@@ -66,8 +66,12 @@ export const orgAccounts = pgTable(
   (t) => [
     index('org_accounts_org_idx').on(t.orgId, t.createdAt),
     // По одному «Основному» для налогов и для обслуживания (ТЗ).
-    uniqueIndex('org_accounts_main_tax_key').on(t.orgId).where(sql`${t.mainTax}`),
-    uniqueIndex('org_accounts_main_fee_key').on(t.orgId).where(sql`${t.mainFee}`),
+    uniqueIndex('org_accounts_main_tax_key')
+      .on(t.orgId)
+      .where(sql`${t.mainTax}`),
+    uniqueIndex('org_accounts_main_fee_key')
+      .on(t.orgId)
+      .where(sql`${t.mainFee}`),
     check('org_accounts_kind_check', sql`${t.kind} in (${oneOf(REQUISITE_KINDS)})`),
     check('org_accounts_purpose_check', sql`${t.purpose} in (${oneOf(ACCOUNT_PURPOSES)})`),
     check(
@@ -120,7 +124,9 @@ export const employeeWallets = pgTable(
     }).onDelete('cascade'),
     index('employee_wallets_employee_idx').on(t.employeeId, t.createdAt),
     index('employee_wallets_org_idx').on(t.orgId),
-    uniqueIndex('employee_wallets_main_key').on(t.employeeId).where(sql`${t.isMain}`),
+    uniqueIndex('employee_wallets_main_key')
+      .on(t.employeeId)
+      .where(sql`${t.isMain}`),
     check('employee_wallets_kind_check', sql`${t.kind} in (${oneOf(REQUISITE_KINDS)})`),
     check(
       'employee_wallets_fields_check',

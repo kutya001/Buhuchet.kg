@@ -541,10 +541,7 @@ export interface BankRecord {
  * «Банковские провайдеры» по порядку справочника. Реквизиту нужны и отключённые:
  * банк, выбранный до отключения, остаётся в реквизите с названием (`all`).
  */
-export async function listBanks(
-  db: Db | Tx,
-  options: DictListOptions = {},
-): Promise<BankRecord[]> {
+export async function listBanks(db: Db | Tx, options: DictListOptions = {}): Promise<BankRecord[]> {
   return db
     .select({
       code: banks.code,

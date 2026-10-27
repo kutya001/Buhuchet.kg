@@ -10,6 +10,7 @@ import {
   purposeServes,
   requisiteNumberText,
   requisiteProblem,
+  requisiteProblems,
   requisiteText,
   taxRequisiteChoices,
   walletMains,
@@ -92,6 +93,19 @@ describe('проверка реквизита', () => {
     expect(requisiteProblem(account({ bik: '10901a' }), 'org', BANKS, CODES)?.problem).toBe(
       'bik_invalid',
     );
+  });
+
+  it('ошибки сразу под всеми неверными полями', () => {
+    expect(
+      requisiteProblems(account({ accountNo: '123', bik: '1' }), 'org', BANKS, CODES).map(
+        (p) => p.field,
+      ),
+    ).toEqual(['accountNo', 'bik']);
+    expect(
+      requisiteProblems(byPhone({ phone: null, phoneBanks: [] }), 'org', BANKS, CODES).map(
+        (p) => p.problem,
+      ),
+    ).toEqual(['invalid_phone', 'phone_banks_required']);
   });
 
   it('банк не из действующих — отказ; прежний банк реквизита после отключения остаётся допустимым', () => {

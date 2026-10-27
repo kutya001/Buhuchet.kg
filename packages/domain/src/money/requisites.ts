@@ -54,6 +54,9 @@ export function bankChoices(
   return banks.filter((b) => (b.active && (kind === 'acc' || b.byPhone)) || keep.includes(b.code));
 }
 
+/** Банк нового расчётного счёта организации по умолчанию — как в прототипе: Optima Bank. */
+export const DEFAULT_ORG_BANK_CODE = 'БНК-14';
+
 /** Сколько цифр в строке: номер счёта вводят как удобно — с пробелами или без. */
 const digitCount = (value: string) => value.replace(/\D/g, '').length;
 
@@ -98,45 +101,55 @@ export interface RequisiteInput {
   phoneBanks: readonly string[];
 }
 
+/** Поле формы реквизита, к которому относится ошибка. */
+export type RequisiteField = 'bankCode' | 'accountNo' | 'bik' | 'phone' | 'phoneBanks';
+
 /**
- * Почему реквизит не сохранить; null — можно (прототип orgAccDlg и walletDlg). `owner` — чей реквизит:
- * у организации номер счёта — 16 цифр и БИК — 6 цифр, у сотрудника номер — не меньше 6 цифр и БИКа нет.
- * `keep` — коды банков, выбранные в реквизите до правки: отключённый с тех пор банк остаётся допустимым.
+ * Почему реквизит не сохранить — по полю (прототип orgAccDlg и walletDlg: ошибки сразу под всеми
+ * неверными полями); пусто — можно. `owner` — чей реквизит: у организации номер счёта — 16 цифр и БИК —
+ * 6 цифр, у сотрудника номер — не меньше 6 цифр и БИКа нет. `keep` — коды банков, выбранные в реквизите
+ * до правки: отключённый с тех пор банк остаётся допустимым.
  */
+export function requisiteProblems(
+  input: RequisiteInput,
+  owner: 'org' | 'employee',
+  banks: readonly BankOption[],
+  codes: readonly PhoneCode[],
+  keep: readonly string[] = [],
+): { problem: RequisiteProblem; field: RequisiteField }[] {
+  const allowed = new Set(bankChoices(banks, input.kind, keep).map((b) => b.code));
+  const problems: { problem: RequisiteProblem; field: RequisiteField }[] = [];
+  const add = (problem: RequisiteProblem, field: RequisiteField) =>
+    problems.push({ problem, field });
+  if (input.kind === 'acc') {
+    if (!input.bankCode) add('bank_required', 'bankCode');
+    else if (!allowed.has(input.bankCode)) add('bank_unavailable', 'bankCode');
+    const digits = digitCount(input.accountNo ?? '');
+    if (owner === 'org') {
+      if (digits < ACCOUNT_NO_DIGITS) add('account_no_invalid', 'accountNo');
+      if (!/^\d{6}$/.test(input.bik ?? '')) add('bik_invalid', 'bik');
+    } else if (digits < WALLET_NO_MIN_DIGITS) {
+      add('wallet_no_invalid', 'accountNo');
+    }
+    return problems;
+  }
+  if (!input.phone || phoneProblem(input.phone, codes)) add('invalid_phone', 'phone');
+  if (input.phoneBanks.length === 0) add('phone_banks_required', 'phoneBanks');
+  else if (input.phoneBanks.some((code) => !allowed.has(code))) {
+    add('bank_unavailable', 'phoneBanks');
+  }
+  return problems;
+}
+
+/** Первая причина, почему реквизит не сохранить (`requisiteProblems`); null — можно. */
 export function requisiteProblem(
   input: RequisiteInput,
   owner: 'org' | 'employee',
   banks: readonly BankOption[],
   codes: readonly PhoneCode[],
   keep: readonly string[] = [],
-): {
-  problem: RequisiteProblem;
-  field: 'bankCode' | 'accountNo' | 'bik' | 'phone' | 'phoneBanks';
-} | null {
-  const allowed = new Set(bankChoices(banks, input.kind, keep).map((b) => b.code));
-  if (input.kind === 'acc') {
-    if (!input.bankCode) return { problem: 'bank_required', field: 'bankCode' };
-    if (!allowed.has(input.bankCode)) return { problem: 'bank_unavailable', field: 'bankCode' };
-    const number = input.accountNo ?? '';
-    if (owner === 'org') {
-      if (digitCount(number) < ACCOUNT_NO_DIGITS) {
-        return { problem: 'account_no_invalid', field: 'accountNo' };
-      }
-      if (!/^\d{6}$/.test(input.bik ?? '')) return { problem: 'bik_invalid', field: 'bik' };
-    } else if (digitCount(number) < WALLET_NO_MIN_DIGITS) {
-      return { problem: 'wallet_no_invalid', field: 'accountNo' };
-    }
-    return null;
-  }
-  if (!input.phone || phoneProblem(input.phone, codes)) {
-    return { problem: 'invalid_phone', field: 'phone' };
-  }
-  if (input.phoneBanks.length === 0)
-    return { problem: 'phone_banks_required', field: 'phoneBanks' };
-  if (input.phoneBanks.some((code) => !allowed.has(code))) {
-    return { problem: 'bank_unavailable', field: 'phoneBanks' };
-  }
-  return null;
+): { problem: RequisiteProblem; field: RequisiteField } | null {
+  return requisiteProblems(input, owner, banks, codes, keep)[0] ?? null;
 }
 
 /**

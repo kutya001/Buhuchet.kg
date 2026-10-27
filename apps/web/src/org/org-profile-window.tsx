@@ -4,6 +4,7 @@ import { buttonClass, Icon, Modal, Note, useWindow } from '@buhuchet/ui';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useT } from '../l10n/provider';
+import { OrgAccountsBox } from '../money/org-accounts';
 import { phoneCodesQuery } from '../staff/staff-data';
 import { orgProfileQuery, policyQuery } from './org-data';
 import { OrgMainView } from './org-main';
@@ -13,8 +14,8 @@ const ORG_MAIN_HREF = '/app/org/main';
 
 /**
  * Профиль организации по нажатию на организацию в левой панели и в панели «Меню» телефона (прототип
- * modules/profile.js, orgProfileDlg): сведения «Основного» только для просмотра; с правом «Настройки и
- * учётная политика» — «Редактировать», которая ведёт на «Основное».
+ * modules/profile.js, orgProfileDlg): сведения «Основного» и счета организации только для просмотра;
+ * с правом «Настройки и учётная политика» — «Редактировать», которая ведёт на «Основное».
  */
 export function OrgProfileWindow({
   open,
@@ -51,6 +52,7 @@ export function OrgProfileWindow({
           codes={codes.data}
         />
       ) : null}
+      {profile.data ? <OrgAccountsBox editable={false} orgName={profile.data.name} /> : null}
     </Modal>
   );
 }

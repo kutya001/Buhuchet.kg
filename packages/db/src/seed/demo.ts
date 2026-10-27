@@ -31,10 +31,7 @@ export const DEMO_ORG_ID = '00000000-0000-4000-8000-000000000001';
  * Постоянный uuid записи демо-организации по её коду в demoDB.json (e3, acc, …): наполнители модулей
  * ссылаются друг на друга так же, как записи прототипа (у контрагента resp: 'e3').
  */
-export function demoId(
-  kind: 'employee' | 'user' | 'role' | 'requisite',
-  protoId: string,
-): string {
+export function demoId(kind: 'employee' | 'user' | 'role' | 'requisite', protoId: string): string {
   const h = createHash('sha256').update(`buhuchet-demo:${kind}:${protoId}`).digest('hex');
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-8${h.slice(17, 20)}-${h.slice(20, 32)}`;
 }
