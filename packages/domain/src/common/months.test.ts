@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { addMonths, isYearMonth, monthDay, monthOf, monthRange, monthText } from './months';
+import {
+  addMonths,
+  daysInMonth,
+  isYearMonth,
+  lastDayOf,
+  monthDay,
+  monthLabel,
+  monthLabelGen,
+  monthOf,
+  monthRange,
+  monthText,
+} from './months';
 
 describe('месяцы показателей', () => {
   it('YYYY-MM — месяц, остальное — нет', () => {
@@ -31,5 +42,14 @@ describe('месяцы показателей', () => {
     expect(() => monthRange('2026-01', 'x')).toThrow(RangeError);
     expect(() => monthText('')).toThrow(RangeError);
     expect(() => monthDay('2026-13', 1)).toThrow(RangeError);
+  });
+
+  it('дни месяца и названия', () => {
+    expect(daysInMonth('2026-02')).toBe(28);
+    expect(daysInMonth('2028-02')).toBe(29);
+    expect(lastDayOf('2026-10')).toBe('2026-10-31');
+    expect(lastDayOf('2026-11')).toBe('2026-11-30');
+    expect(monthLabel('2026-10')).toBe('октябрь 2026');
+    expect(monthLabelGen('2026-09')).toBe('сентября 2026');
   });
 });

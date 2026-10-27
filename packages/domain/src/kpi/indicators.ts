@@ -1,5 +1,5 @@
 import { formatSom } from '../common/money';
-import type { YearMonth } from './months';
+import type { YearMonth } from '../common/months';
 
 /*
  * Показатели контрагентов (ТЗ «Показатели контрагентов» → «Настройка показателей» и «Значение

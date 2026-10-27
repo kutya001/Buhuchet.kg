@@ -1,6 +1,6 @@
 import { diffDays, type IsoDate } from '../common/dates';
 import { DUE_DAY_DEFAULT, type IndicatorScope } from './indicators';
-import { addMonths, monthDay, monthOf, monthRange, type YearMonth } from './months';
+import { addMonths, monthDay, monthOf, monthRange, type YearMonth } from '../common/months';
 
 /*
  * Кому и за какие месяцы показатель обязателен, статус заполнения месяца, «Не заполнено» и индикатор

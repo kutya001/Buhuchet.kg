@@ -1,7 +1,7 @@
 import type { IsoDate } from '../common/dates';
 import { indicatorOn, type KpiIndicator, type KpiTarget } from './fill';
 import type { IndicatorScope } from './indicators';
-import { monthOf, type YearMonth } from './months';
+import { monthOf, type YearMonth } from '../common/months';
 
 /*
  * «Кому вести»: включение и выключение показателя у контрагента — галочкой во вкладке «Кому вести»,

@@ -1,8 +1,9 @@
-import type { IsoDate } from '../common/dates';
+import type { IsoDate } from './dates';
 
 /**
- * Месяц показателей — строка `YYYY-MM` (как `ym` прототипа, core/data.js): месяц значения, «Вести с»,
- * месяцы обслуживания контрагента. Строки сравниваются как числа: «2026-01» < «2026-10».
+ * Месяц — строка `YYYY-MM` (как `ym` прототипа, core/data.js): месяц значения показателя, «Вести с»,
+ * месяцы обслуживания контрагента, начисления платы за обслуживание. Строки сравниваются как числа:
+ * «2026-01» < «2026-10».
  */
 export type YearMonth = string;
 
@@ -41,6 +42,57 @@ export function monthRange(from: YearMonth, to: YearMonth): YearMonth[] {
 export function monthText(month: YearMonth): string {
   const [y, m] = parts(month);
   return `${String(m).padStart(2, '0')}.${y}`;
+}
+
+/** Число дней в месяце. */
+export function daysInMonth(month: YearMonth): number {
+  const [y, m] = parts(month);
+  return new Date(Date.UTC(y, m, 0)).getUTCDate();
+}
+
+/** Последний день месяца (прототип `lastDay`). */
+export const lastDayOf = (month: YearMonth): IsoDate =>
+  `${month}-${String(daysInMonth(month)).padStart(2, '0')}`;
+
+const MONTH_NAMES = [
+  'январь',
+  'февраль',
+  'март',
+  'апрель',
+  'май',
+  'июнь',
+  'июль',
+  'август',
+  'сентябрь',
+  'октябрь',
+  'ноябрь',
+  'декабрь',
+] as const;
+const MONTH_NAMES_GEN = [
+  'января',
+  'февраля',
+  'марта',
+  'апреля',
+  'мая',
+  'июня',
+  'июля',
+  'августа',
+  'сентября',
+  'октября',
+  'ноября',
+  'декабря',
+] as const;
+
+/** «октябрь 2026» (прототип `ymLabel`). */
+export function monthLabel(month: YearMonth): string {
+  const [y, m] = parts(month);
+  return `${MONTH_NAMES[m - 1]} ${y}`;
+}
+
+/** «октября 2026» — после «с» (прототип `ymG`). */
+export function monthLabelGen(month: YearMonth): string {
+  const [y, m] = parts(month);
+  return `${MONTH_NAMES_GEN[m - 1]} ${y}`;
 }
 
 /** Дата `day`-го числа месяца (`day` от 1 до 28 — в любом месяце есть). */
