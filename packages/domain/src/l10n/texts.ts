@@ -1,5 +1,6 @@
 import { ADMIN_ACCOUNTS_TEXTS, ADMIN_L10N_TEXTS, ADMIN_TEXTS } from './admin-texts';
 import { AUTH_TEXTS } from './auth-texts';
+import { CONTRACTORS_TEXTS } from './contractors-texts';
 import { DICTS_TEXTS } from './dicts-texts';
 import { FILES_TEXTS } from './files-texts';
 import { GRID_TEXTS } from './grid-texts';
@@ -53,8 +54,8 @@ const SYSTEM_TEXTS = {
  * разложены по файлам экранов: служебные — здесь, оболочки — `shell-texts.ts`, входа и «Мой профиль» —
  * `auth-texts.ts`, списков — `grid-texts.ts`, сотрудников — `staff-texts.ts`, шкалы и истории статусов —
  * `status-texts.ts`, «Моей организации» — `org-texts.ts`, Админки — `admin-texts.ts`, «Справочников» и сроков
- * видов отчётов словами — `dicts-texts.ts`, реквизитов для переводов — `money-texts.ts`, блока «Файлы» —
- * `files-texts.ts`.
+ * видов отчётов словами — `dicts-texts.ts`, контрагентов и сверки с ГКЭД — `contractors-texts.ts`, реквизитов для
+ * переводов — `money-texts.ts`, блока «Файлы» — `files-texts.ts`.
  */
 export const UI_TEXTS = {
   ...SYSTEM_TEXTS,
@@ -64,6 +65,7 @@ export const UI_TEXTS = {
   ...STAFF_TEXTS,
   ...STATUS_TEXTS,
   ...ORG_TEXTS,
+  ...CONTRACTORS_TEXTS,
   ...ADMIN_ACCOUNTS_TEXTS,
   ...ADMIN_L10N_TEXTS,
   ...ADMIN_TEXTS,

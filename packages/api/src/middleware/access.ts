@@ -25,6 +25,20 @@ export function requirePermission(permission: PermissionId) {
   });
 }
 
+/**
+ * Любое из прав: «Сменить ответственного» доступно с правом «Назначать отчёты контрагентам» или
+ * «Создавать и изменять контрагентов» (прототип cpActions).
+ */
+export function requireAnyPermission(...permissions: PermissionId[]) {
+  return createMiddleware<AppEnv>(async (c, next) => {
+    const access = c.get('access');
+    if (!access || !permissions.some((p) => hasPermission(access.subject, p))) {
+      return c.json(forbidden(), 403);
+    }
+    return next();
+  });
+}
+
 /** Метод для любого сотрудника организации (свой профиль и т. п.), не для администратора платформы. */
 export const requireEmployee = createMiddleware<AppEnv>(async (c, next) => {
   if (!c.get('access')) return c.json(forbidden(), 403);

@@ -26,5 +26,7 @@ export * from './dicts/tax-pick';
 export * from './dicts/org-report-types';
 export * from './dicts/platform-dicts';
 export * from './dicts/value-guide';
+export * from './contractors/rules';
+export * from './contractors/gked';
 export * from './money/requisites';
 export * from './files/files';
