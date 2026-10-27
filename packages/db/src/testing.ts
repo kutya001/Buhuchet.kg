@@ -8,6 +8,7 @@ import { createDb, type Db, type DbHandle } from './client';
 import { ensureAppLoginRole, runMigrations } from './migrate';
 import { platformReference } from './schema';
 import { seedPermissions, seedRoleTemplates } from './seed/access';
+import { seedGked, seedPlatformReference } from './seed/platform';
 import { seedPlatformDicts } from './seed/platform-dicts';
 import { readSpecJson } from './spec-data';
 
@@ -112,4 +113,16 @@ export async function seedTaxes(db: Db): Promise<void> {
 export async function seedPlatformDictionaries(db: Db): Promise<void> {
   const refDB = await readSpecJson<Record<string, unknown>>('data/refDB.json');
   await seedPlatformDicts(db, refDB, { update: false });
+}
+
+/**
+ * Справочники платформы целиком, как после `pnpm db:seed`: свои таблицы, мелкие разделы refDB.json
+ * (`platform_reference`: группы справочников, банки, категории задач, статусы, шаблоны, налоги…) и
+ * ГКЭД — для «Справочников платформы» организации.
+ */
+export async function seedAllPlatformDictionaries(db: Db): Promise<void> {
+  const refDB = await readSpecJson<Record<string, unknown>>('data/refDB.json');
+  await seedPlatformDicts(db, refDB, { update: false });
+  await seedPlatformReference(db, refDB, 'test', { update: false });
+  await seedGked(db, await readSpecJson('data/gkedDB.json'), { update: false });
 }

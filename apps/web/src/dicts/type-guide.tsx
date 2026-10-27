@@ -29,11 +29,12 @@ import type { Catalog } from './dicts-data';
  * modules/dict-guide.js и report-pick.js): форма просмотра налога (`TaxGuide`), вида отчёта
  * (`TypeGuide`) и описание строки в «Выборе налогов» (`TypeDesc`). Пустые значения и «—» не
  * показываются, раздел без значений — тоже; в описании строки «Выбора налогов» «—» видно, как в
- * прототипе (`pkDescHtml`).
+ * прототипе (`pkDescHtml`). Пары, разделы и «Сверить» — общие с описаниями значений справочников
+ * платформы (`value-guide.tsx`).
  */
 
 /** Строка «подпись — значение»; пустое значение — строки нет. */
-type KvRow = readonly [label: string, value: ReactNode, mono?: boolean] | null | false;
+export type KvRow = readonly [label: string, value: ReactNode, mono?: boolean] | null | false;
 
 const blank = (v: ReactNode, dash = false) =>
   v === null ||
@@ -45,7 +46,7 @@ const blank = (v: ReactNode, dash = false) =>
  * Пары «подпись — значение» без пустых (прототип tgKv); нет ни одной — ничего. `dash` — строка со
  * значением «—» остаётся (прототип pkDescHtml).
  */
-function kv(rows: readonly KvRow[], columns: 'auto' | 2 = 'auto', dash = false): ReactNode {
+export function kv(rows: readonly KvRow[], columns: 'auto' | 2 = 'auto', dash = false): ReactNode {
   const items: KeyValueItem[] = rows.flatMap((r, i) =>
     r && !blank(r[1], dash)
       ? [{ id: String(i), label: r[0], value: r[1], mono: r[2] ?? false }]
@@ -55,7 +56,7 @@ function kv(rows: readonly KvRow[], columns: 'auto' | 2 = 'auto', dash = false):
 }
 
 /** Раздел формы (`.tg-sec`): заголовок прописными со значком; пустой раздел не показывается. */
-function Section({
+export function Section({
   title,
   icon,
   children,
@@ -77,10 +78,10 @@ function Section({
 }
 
 /** Разделы одной формы: между ними черта (`.tg-sec + .tg-sec`). */
-const SECTIONS_CLASS =
+export const SECTIONS_CLASS =
   'flex min-w-0 flex-col gap-3 [&>section+section]:border-t [&>section+section]:border-line [&>section+section]:pt-3';
 
-const Para = ({ children }: { children: ReactNode }) => (
+export const Para = ({ children }: { children: ReactNode }) => (
   <p className="m-0 text-[13.5px] leading-normal text-ink">{children}</p>
 );
 
@@ -93,7 +94,7 @@ const List = ({ items }: { items: readonly ReactNode[] }) =>
     </ul>
   ) : null;
 
-const Mono = ({ children }: { children: ReactNode }) => (
+export const Mono = ({ children }: { children: ReactNode }) => (
   <span className={MONO_CLASS}>{children}</span>
 );
 
@@ -108,7 +109,7 @@ function SourceLink({ url, title }: { url: string; title?: string }) {
 }
 
 /** «Сверить: … Проверьте на сайте ГНС или в органе перед применением.» */
-function VerifyNote({ on, text }: { on: boolean; text: string }) {
+export function VerifyNote({ on, text }: { on: boolean; text: string }) {
   const t = useT();
   if (!on) return null;
   return (
@@ -119,7 +120,7 @@ function VerifyNote({ on, text }: { on: boolean; text: string }) {
   );
 }
 
-const VerifyPill = () => {
+export const VerifyPill = () => {
   const t = useT();
   return (
     <Pill tone="warn" size="sm" icon="alert">
@@ -151,10 +152,10 @@ const periodText = (x: ReportType, t: Translate) =>
 
 const whoText = (x: ReportType, t: Translate) => t(`dicts.guide.who.${x.payer}`);
 
-const gkedEmpty = (r: GkedRule | null): r is null => !r || (!r.in.length && !r.ex.length);
+export const gkedEmpty = (r: GkedRule | null): r is null => !r || (!r.in.length && !r.ex.length);
 
 /** «Виды деятельности (ГКЭД)»: коды или «все», «кроме …» (прототип gkRuleTxt). */
-const gkedText = (r: GkedRule, t: Translate) =>
+export const gkedText = (r: GkedRule, t: Translate) =>
   [
     r.in.length ? r.in.join(', ') : t('dicts.guide.gked_all'),
     r.ex.length ? t('dicts.guide.gked_except', { codes: r.ex.join(', ') }) : '',
