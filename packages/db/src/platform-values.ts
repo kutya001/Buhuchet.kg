@@ -33,6 +33,7 @@ import {
 } from './list';
 import {
   listAuthorities,
+  listBanks,
   listDueChangeReasons,
   listOwnershipForms,
   listReportBases,
@@ -44,6 +45,7 @@ import {
 } from './platform-dicts';
 import {
   authorities,
+  banks,
   dueChangeReasons,
   gkedItems,
   ownershipForms,
@@ -82,8 +84,8 @@ async function referencePayload(db: Db | Tx, key: string): Promise<unknown> {
   return row?.payload ?? null;
 }
 
-/** Действующие значения справочника раздела `dictionaries` (банки, категории задач). */
-async function referenceItems(db: Db | Tx, dict: 'banks' | 'cats') {
+/** Действующие значения справочника раздела `dictionaries` (категории задач). */
+async function referenceItems(db: Db | Tx, dict: 'cats') {
   const payload = await referencePayload(db, 'dictionaries');
   const section = (payload as Record<string, unknown> | null)?.[dict];
   return Items.parse(section ?? {}).items.flatMap((x) => {
@@ -219,11 +221,7 @@ const WINDOW_ROWS: Record<
       city: x.region,
     })),
   banks: async (db) =>
-    (await referenceItems(db, 'banks')).map((x) => ({
-      id: x.code || x.name,
-      name: x.name,
-      code: x.code,
-    })),
+    (await listBanks(db)).map((x) => ({ id: x.code, name: x.name, code: x.code })),
   calendar: calendarRows,
   // Пояснения статусов отчёта — по названию статуса; порядок — шкала сдачи (в jsonb порядок ключей
   // раздела не хранится).
@@ -559,6 +557,7 @@ async function valueRows(
     case 'bases':
       return named(listReportBases(db), reportBases);
     case 'banks':
+      return named(listBanks(db), banks);
     case 'cats':
       return (await referenceItems(db, d)).map((x) => make(x.code || x.name, x.name));
     case 'phones':

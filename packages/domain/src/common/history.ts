@@ -13,6 +13,8 @@ export const HISTORY_ENTITIES = [
   'role',
   'org_report_type',
   'dict_request',
+  'org_account',
+  'employee_wallet',
   'ui_text',
   'platform_dict',
 ] as const;

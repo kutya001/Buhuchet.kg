@@ -12,6 +12,7 @@ import { eq, inArray, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Db } from '../client';
 import { seedDemoDictRequests } from './demo-dicts';
+import { seedDemoMoney } from './demo-money';
 import {
   employees,
   organizations,
@@ -32,7 +33,7 @@ export const DEMO_ORG_ID = '00000000-0000-4000-8000-000000000001';
  * ссылаются друг на друга так же, как записи прототипа (у контрагента resp: 'e3').
  */
 export function demoId(
-  kind: 'employee' | 'user' | 'role' | 'dict_request',
+  kind: 'employee' | 'user' | 'role' | 'requisite' | 'dict_request',
   protoId: string,
 ): string {
   const h = createHash('sha256').update(`buhuchet-demo:${kind}:${protoId}`).digest('hex');
@@ -285,6 +286,8 @@ export async function seedDemoOrganization(
     request: (key) => demoId('dict_request', key),
     user: userOf,
   });
+
+  await seedDemoMoney(db, file, orgId);
 
   return { orgId, created: created.length > 0, employees: insertedEmployees.length };
 }

@@ -243,15 +243,29 @@
     {
       "idx": 34,
       "version": "7",
-      "when": 1793098953535,
-      "tag": "0034_platform_audit_log",
+      "when": 1793102242598,
+      "tag": "0034_money_requisites",
       "breakpoints": true
     },
     {
       "idx": 35,
       "version": "7",
-      "when": 1793103753326,
-      "tag": "0035_admin_platform_dicts",
+      "when": 1793102250612,
+      "tag": "0035_banks_read_only",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1793109145144,
+      "tag": "0036_platform_audit_log",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1793109330693,
+      "tag": "0037_admin_platform_dicts",
       "breakpoints": true
     }
   ]

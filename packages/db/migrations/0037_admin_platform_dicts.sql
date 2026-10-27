@@ -1,4 +1,5 @@
 ALTER TABLE "authorities" ADD COLUMN "created_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "banks" ADD COLUMN "created_at" timestamp with time zone;--> statement-breakpoint
 ALTER TABLE "due_change_reasons" ADD COLUMN "created_at" timestamp with time zone;--> statement-breakpoint
 ALTER TABLE "ownership_forms" ADD COLUMN "created_at" timestamp with time zone;--> statement-breakpoint
 ALTER TABLE "production_calendar" ADD COLUMN "created_at" timestamp with time zone;--> statement-breakpoint
