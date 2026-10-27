@@ -67,6 +67,8 @@ export interface DataGridProps<Row> {
   onPageChange: (page: number) => void;
   loading?: boolean;
   error?: boolean;
+  /** Причина ошибки из ответа сервера вместо «Проверьте подключение к интернету…»; нет — общий текст. */
+  errorText?: string | null;
   onRetry?: () => void;
   /** Что показать, если записей нет: `EmptyState` или `NothingFound` (при поиске и фильтрах). */
   empty: ReactNode;
@@ -124,6 +126,7 @@ export function DataGrid<Row>({
   onPageChange,
   loading = false,
   error = false,
+  errorText,
   onRetry,
   empty,
   rowKey,
@@ -249,7 +252,7 @@ export function DataGrid<Row>({
       <EmptyState
         icon="alert"
         title={labels.loadError}
-        text={labels.loadErrorText}
+        text={errorText ?? labels.loadErrorText}
         actions={
           onRetry
             ? [

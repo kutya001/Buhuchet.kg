@@ -21,6 +21,8 @@ import {
 } from '@buhuchet/ui';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
+import { ApiFailure } from '../api-client';
+import { useErrorText } from '../l10n/provider';
 
 /** Страница списка с сервера по параметрам запроса (`sort`, `page`, `size`, `filters`, `q` …). */
 export type FetchListPage<Row> = (params: Record<string, string>) => Promise<GridPage<Row>>;
@@ -102,6 +104,8 @@ export function useListPage<Row>({
     placeholderData: keepPreviousData,
     enabled,
   });
+  const errorText = useErrorText();
+  const failure = result.error instanceof ApiFailure ? result.error.error : null;
 
   // Сервер вернул другую страницу (за концом списка — последняя): номер на экране — как у сервера.
   const served = result.isPlaceholderData ? undefined : result.data?.page;
@@ -110,6 +114,11 @@ export function useListPage<Row>({
   return {
     data: result.data,
     error: result.isError,
+    /**
+     * Причина ошибки из ответа сервера («Запрос выполнялся слишком долго»); null — обрыв связи или
+     * ответ не в общем формате: тогда экран просит проверить подключение.
+     */
+    errorText: failure && failure.code !== 'unknown' ? errorText(failure) : null,
     retry: () => void result.refetch(),
     setPage,
     filters,

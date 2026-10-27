@@ -35,7 +35,7 @@ import type { Context } from 'hono';
 import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
 import { apiFail, listQueryOf, listQueryResponses } from '../../errors';
-import { xlsxContent, xlsxResponse } from '../../lists/export';
+import { exportRateResponses, withExportSlot, xlsxContent, xlsxResponse } from '../../lists/export';
 import { orgContextOf, requirePermission } from '../../middleware/access';
 import { serverTexts } from '../l10n/texts';
 
@@ -282,6 +282,7 @@ export const exportEmployeesRoute = createRoute({
       content: xlsxContent,
     },
     ...listQueryResponses,
+    ...exportRateResponses,
     401: { description: 'Нет входа', content: error },
     403: {
       description: 'Нет права «Просматривать сотрудников» или «Выгружать в Excel»',
@@ -302,17 +303,19 @@ export function exportEmployeesHandler(
     const params = c.req.valid('query');
     const query = listQueryOf(params);
     const keys = [...new Set(params.cols.split(','))];
-    const t = await serverTexts(deps);
-    const result = await withOrgContext(deps.db, orgContextOf(c), (tx) =>
-      exportEmployees(tx, query, keys, t),
-    );
-    return xlsxResponse(c, {
-      title: t('nav.staff'),
-      today: deps.clock.now(),
-      columns: result.columns,
-      rows: result.rows,
-      more: result.more,
-      t,
+    return withExportSlot(deps, c.get('session')!.userId, async () => {
+      const t = await serverTexts(deps);
+      const result = await withOrgContext(deps.db, { ...orgContextOf(c), kind: 'export' }, (tx) =>
+        exportEmployees(tx, query, keys, t),
+      );
+      return xlsxResponse(c, {
+        title: t('nav.staff'),
+        today: deps.clock.now(),
+        columns: result.columns,
+        rows: result.rows,
+        more: result.more,
+        t,
+      });
     });
   };
 }

@@ -383,6 +383,58 @@ describe.skipIf(!databaseAvailable())(
       expect(logins.slice(1).sort()).toEqual(['acc-b', 'owner-b']);
     });
 
+    it('«В Excel»: одна выгрузка одновременно и не больше 20 за час на пользователя', async () => {
+      const ownerB = await signIn(f.app, 'owner-b', TEST_PASSWORD);
+      const [user] = await f.t.admin.db
+        .select({ id: schema.users.id })
+        .from(schema.users)
+        .where(eq(schema.users.login, 'owner-b'));
+      const mine = eq(schema.rateLimits.subject, user!.id);
+      const exportB = () => apiRequest(f.app, 'GET', '/api/staff/export?cols=login', ownerB);
+      const code = async (res: Response) => ApiError.parse(await res.json()).error;
+      await f.t.admin.db.delete(schema.rateLimits).where(mine);
+
+      // Идёт прежняя выгрузка — «готовится», и в счёт этот отказ не идёт.
+      await f.t.admin.db.insert(schema.rateLimits).values({
+        kind: 'export',
+        subject: user!.id,
+        busyUntil: new Date(Date.now() + 60_000),
+      });
+      const busy = await exportB();
+      expect(busy.status).toBe(429);
+      expect(await code(busy)).toMatchObject({ code: 'export_busy' });
+      // Другой пользователь выгружает, пока выгрузка Б «готовится».
+      expect((await apiRequest(f.app, 'GET', '/api/staff/export?cols=login', owner)).status).toBe(
+        200,
+      );
+
+      // 18 выгрузок за последний час уже были (вместе с той, что закончилась).
+      await f.t.admin.db.update(schema.rateLimits).set({ busyUntil: null }).where(mine);
+      await f.t.admin.db.insert(schema.rateLimits).values(
+        Array.from({ length: 17 }, () => ({
+          kind: 'export',
+          subject: user!.id,
+          at: new Date(Date.now() - 30 * 60_000),
+        })),
+      );
+      // 19-я и 20-я проходят: выгрузка отпускается сама, следующую можно сразу.
+      expect((await exportB()).status).toBe(200);
+      expect((await exportB()).status).toBe(200);
+      const limited = await exportB();
+      expect(limited.status).toBe(429);
+      expect(await code(limited)).toEqual({
+        code: 'export_limit',
+        message: 'Слишком много выгрузок за час',
+        details: { n: 20 },
+      });
+      // Фильтры не в формате — 400 до счёта, а не 429.
+      const bad = await apiRequest(f.app, 'GET', '/api/staff/export?cols=login&filters=x', ownerB);
+      expect(bad.status).toBe(400);
+      const rows = await f.t.admin.db.select().from(schema.rateLimits).where(mine);
+      expect(rows).toHaveLength(20);
+      expect(rows.every((r) => r.busyUntil === null)).toBe(true);
+    });
+
     it('неверные сортировка, страница и фильтры — 400', async () => {
       for (const qs of [
         'sort=password.asc',

@@ -1,4 +1,4 @@
-import { boolean, pgTable, primaryKey, text, timestamp } from 'drizzle-orm/pg-core';
+import { bigint, boolean, index, pgTable, primaryKey, text, timestamp } from 'drizzle-orm/pg-core';
 import { platformService } from './rls';
 
 /**
@@ -16,4 +16,24 @@ export const schedulerRuns = pgTable(
     error: text('error'),
   },
   (t) => [primaryKey({ columns: [t.job, t.slot] }), platformService('scheduler_runs_service')],
+).enableRLS();
+
+/**
+ * Частота действий (docs/decisions.md, п. 38): строка — одно действие вида `kind` от `subject`
+ * (выгрузка «В Excel» — номер пользователя; поток Е добавит коды страницы контрагента). Действий
+ * за окно — не больше предела, одновременно — одно, пока `busy_until` впереди. Роль приложения таблицу
+ * не видит и не меняет: только функции app.rate_limit_* (миграция 0026), строки старше суток удаляет
+ * задача очистки.
+ */
+export const rateLimits = pgTable(
+  'rate_limits',
+  {
+    id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    kind: text('kind').notNull(),
+    subject: text('subject').notNull(),
+    at: timestamp('at', { withTimezone: true }).notNull().defaultNow(),
+    /** Пока действие идёт — до какого момента; закончилось (или не следится) — пусто. */
+    busyUntil: timestamp('busy_until', { withTimezone: true }),
+  },
+  (t) => [index('rate_limits_subject_idx').on(t.kind, t.subject, t.at)],
 ).enableRLS();

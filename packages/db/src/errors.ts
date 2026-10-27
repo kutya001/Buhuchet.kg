@@ -16,3 +16,11 @@ export function uniqueViolation(error: unknown): string | null {
 export function foreignKeyViolation(error: unknown): string | null {
   return pgError(error, '23503');
 }
+
+/**
+ * Запрос прерван по пределу времени (`statement_timeout`, код 57014): так база отвечает на запрос
+ * дольше предела вида работы (`QUERY_TIMEOUT_MS`). Отменять запросы иначе приложение не умеет.
+ */
+export function queryTimedOut(error: unknown): boolean {
+  return pgError(error, '57014') !== null;
+}

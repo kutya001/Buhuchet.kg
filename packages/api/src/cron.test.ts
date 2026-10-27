@@ -8,6 +8,7 @@ import { createApp } from './app';
 import type { Job } from './deps';
 import {
   cleanupLoginAttemptsJob,
+  cleanupRateLimitsJob,
   cleanupSchedulerRuns,
   jobs,
   jobsFor,
@@ -38,9 +39,13 @@ describe('/api/cron/tick без базы', () => {
     expect(await res.json()).toEqual({ ran: [], skipped: [] });
   });
 
-  it('в реестре есть очистка журнала запусков и счёта неверных паролей', () => {
+  it('в реестре есть очистка журнала запусков, счёта неверных паролей и частоты выгрузок', () => {
     expect(jobs.map((j) => j.name)).toEqual(
-      expect.arrayContaining(['system.cleanup-scheduler-runs', 'auth.cleanup-login-attempts']),
+      expect.arrayContaining([
+        'system.cleanup-scheduler-runs',
+        'auth.cleanup-login-attempts',
+        'system.cleanup-rate-limits',
+      ]),
     );
   });
 
@@ -184,5 +189,15 @@ describe.skipIf(!databaseAvailable())('/api/cron/tick с базой', () => {
     await cleanupLoginAttemptsJob.run(createTestDeps({ db: t.app.db }), new Date());
     const left = (await t.admin.db.select().from(schema.loginAttempts)).map((r) => r.login);
     expect(left.sort()).toEqual(['recent', 'still-locked']);
+  });
+
+  it('очистка частоты выгрузок: строки старше суток удаляются, свежие остаются', async () => {
+    await t.admin.db.insert(schema.rateLimits).values([
+      { kind: 'export', subject: 'old', at: new Date(Date.now() - 25 * 3600_000) },
+      { kind: 'export', subject: 'fresh' },
+    ]);
+    await cleanupRateLimitsJob.run(createTestDeps({ db: t.app.db }), new Date());
+    const left = (await t.admin.db.select().from(schema.rateLimits)).map((r) => r.subject);
+    expect(left).toEqual(['fresh']);
   });
 });

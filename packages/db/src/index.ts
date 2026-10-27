@@ -15,4 +15,5 @@ export * from './list';
 export * from './views';
 export * from './platform-dicts';
 export * from './admin-orgs';
+export * from './rate-limits';
 export * as schema from './schema';
