@@ -1,7 +1,7 @@
 import type { MemoryStorage } from '@buhuchet/adapters';
 import { schema } from '@buhuchet/db';
 import { databaseAvailable } from '@buhuchet/db/testing';
-import { FILE_MAX_BYTES, FILE_MESSAGES } from '@buhuchet/domain';
+import { FILE_MAX_BYTES, FILE_MESSAGES, FILE_UPLOADS_PER_HOUR } from '@buhuchet/domain';
 import {
   ApiError,
   FileItem,
@@ -17,7 +17,7 @@ import { apiRequest, createStaffFixture, signIn, TEST_PASSWORD } from '../../tes
 import { cleanupPendingFiles } from './cleanup';
 import { FILE_SOURCES, type FileSource } from './sources';
 
-const { auditLog, files } = schema;
+const { auditLog, files, rateLimits } = schema;
 
 type Fixture = Awaited<ReturnType<typeof createStaffFixture>>;
 
@@ -144,6 +144,10 @@ describe.skipIf(!databaseAvailable())('Файлы записей: API', () => {
         'kind=manual&id=00000000-0000-4000-8000-000000000001',
         'kind=record&id=00000000-0000-4000-8000-000000000001',
         'kind=record',
+        // Поля прототипа объекта — не источники.
+        'kind=constructor',
+        'kind=__proto__',
+        'kind=to_string',
       ]) {
         const res = await call('GET', `/api/files?${query}`, chief);
         expect(res.status, query).toBe(404);
@@ -222,6 +226,8 @@ describe.skipIf(!databaseAvailable())('Файлы записей: API', () => {
       });
       expect(ticket.upload.url).toContain(`org/${f.a.orgId}/files/${ticket.id}`);
       expect(ticket.upload.url).toContain('size=2048');
+      // Ссылка на загрузку — 2 минуты: показанный в записи файл ею потом не подменить.
+      expect(ticket.upload.url).toContain('expires=120');
       // Пока файл не загружен, его нет в записи.
       expect((await list(acc)).items.some((i) => i.id === ticket.id)).toBe(false);
     });
@@ -266,6 +272,38 @@ describe.skipIf(!databaseAvailable())('Файлы записей: API', () => {
       expect(res.status).toBe(409);
       expect(await storage.exists(key)).toBe(false);
       expect(await f.t.admin.db.select().from(files).where(eq(files.id, ticket.id))).toEqual([]);
+    });
+
+    it('в хранилище файл другого типа (не тот, что подписан) — загрузка отменяется', async () => {
+      const ticket = FileUploadTicket.parse(await (await start(acc, 'акт.pdf', 5)).json());
+      const key = await keyOf(ticket.id);
+      await storage.put(key, new Uint8Array(5), { contentType: 'text/html' });
+      const res = await call('POST', `/api/files/${ticket.id}/complete`, acc);
+      expect(res.status).toBe(409);
+      expect((await apiErr(res)).code).toBe('file_not_uploaded');
+      expect(await storage.exists(key)).toBe(false);
+      expect(await f.t.admin.db.select().from(files).where(eq(files.id, ticket.id))).toEqual([]);
+    });
+
+    it('больше 300 начатых загрузок за час — 429, загрузка не начинается', async () => {
+      const userId = f.people['hr-a']!.userId;
+      const hr = await signIn(app, 'hr-a', TEST_PASSWORD);
+      await f.t.admin.db.insert(rateLimits).values(
+        Array.from({ length: FILE_UPLOADS_PER_HOUR - 1 }, () => ({
+          kind: 'file_upload',
+          subject: userId,
+        })),
+      );
+      expect((await start(hr, 'последний.pdf', 5)).status).toBe(201);
+      const res = await start(hr, 'лишний.pdf', 5);
+      expect(res.status).toBe(429);
+      expect(await apiErr(res)).toEqual({
+        code: 'file_upload_limit',
+        message: FILE_MESSAGES.file_upload_limit,
+      });
+      // Другому пользователю предел не мешает.
+      expect((await start(acc, 'свой.pdf', 5)).status).toBe(201);
+      await f.t.admin.db.delete(rateLimits).where(eq(rateLimits.subject, userId));
     });
 
     it('в хранилище больше 20 МБ — 400 «Файл больше 20 МБ», файл удаляется', async () => {

@@ -4,6 +4,7 @@ import { orgFileKey } from '@buhuchet/adapters';
 import {
   dropPendingFile,
   getFile,
+  takeRateLimit,
   insertPendingFile,
   listSourceFiles,
   markFileDeleted,
@@ -12,6 +13,7 @@ import {
   withOrgContext,
   writeHistory,
   type FileRecord,
+  type RateLimit,
   type Tx,
 } from '@buhuchet/db';
 import {
@@ -19,6 +21,8 @@ import {
   FILE_LINK_SECONDS,
   FILE_MAX_BYTES,
   FILE_MESSAGES,
+  FILE_UPLOAD_LINK_SECONDS,
+  FILE_UPLOADS_PER_HOUR,
   fileContentType,
   fileDeleteRefusal,
   fileUploadProblem,
@@ -62,9 +66,18 @@ const FILES_SECTION = 'files';
 
 type FileSources = Readonly<Record<string, FileSource>>;
 
-function sourcesOf(deps: ApiDeps): FileSources {
-  return deps.fileSources ?? FILE_SOURCES;
+/** Источник файлов по виду: только свои ключи реестра (`constructor`, `__proto__` — не источники). */
+function sourceOf(deps: ApiDeps, kind: string): FileSource | undefined {
+  const sources: FileSources = deps.fileSources ?? FILE_SOURCES;
+  return Object.hasOwn(sources, kind) ? sources[kind] : undefined;
 }
+
+/** Начатые загрузки пользователя за час (незаконченные лежат в хранилище сутки до очистки). */
+const UPLOAD_RATE_LIMIT: RateLimit = {
+  kind: 'file_upload',
+  max: FILE_UPLOADS_PER_HOUR,
+  windowSeconds: 3600,
+};
 
 function subjectOf(c: Context<AppEnv>): AccessSubject {
   return c.get('access')!.subject;
@@ -111,7 +124,7 @@ async function visibleSource(
   kind: string,
   id: string | null,
 ): Promise<FileSourceRecord> {
-  const source = sourcesOf(deps)[kind];
+  const source = sourceOf(deps, kind);
   const record = source ? await source.resolve(tx, subject, id) : null;
   if (!record || !canView(subject, record)) return notFound();
   return record;
@@ -196,7 +209,7 @@ export const startUploadRoute = createRoute({
   method: 'post',
   path: '/files/uploads',
   tags: ['files'],
-  summary: 'Начать загрузку файла к записи: ссылка на хранилище на 15 минут',
+  summary: 'Начать загрузку файла к записи: ссылка на хранилище на 2 минуты',
   middleware: [requirePermission('filesUpload')] as const,
   request: {
     body: { required: true, content: { 'application/json': { schema: FileUploadStart } } },
@@ -216,6 +229,7 @@ export const startUploadRoute = createRoute({
       content: error,
     },
     404: { description: 'Записи нет или она вне области', content: error },
+    429: { description: 'Больше 300 загрузок за час', content: error },
   },
 });
 
@@ -235,6 +249,9 @@ export function startUploadHandler(deps: ApiDeps): RouteHandler<typeof startUplo
     const subject = subjectOf(c);
     const id = randomUUID();
     const storageKey = orgFileKey(ctx.orgId, FILES_SECTION, id);
+    // Предел — до транзакции и на `db`: проверка держит блокировку пользователя до своего конца.
+    const slot = await takeRateLimit(deps.db, UPLOAD_RATE_LIMIT, ctx.userId!);
+    if (!slot.ok) apiFail(429, 'file_upload_limit', FILE_MESSAGES.file_upload_limit);
     await withOrgContext(deps.db, ctx, async (tx) => {
       await requireFilesFeature(tx, ctx.orgId);
       const record = await visibleSource(deps, tx, subject, source.kind, source.id);
@@ -251,9 +268,9 @@ export function startUploadHandler(deps: ApiDeps): RouteHandler<typeof startUplo
       });
     });
     // Срок — по настоящим часам: подпись хранилища ставит их же, а не часы демо-стенда (FIXED_NOW).
-    const expiresAt = new Date(Date.now() + FILE_LINK_SECONDS * 1000);
+    const expiresAt = new Date(Date.now() + FILE_UPLOAD_LINK_SECONDS * 1000);
     const upload = await deps.storage.signedUploadUrl(storageKey, {
-      expiresInSeconds: FILE_LINK_SECONDS,
+      expiresInSeconds: FILE_UPLOAD_LINK_SECONDS,
       contentType,
       size,
     });
@@ -291,7 +308,7 @@ export const completeUploadRoute = createRoute({
       content: error,
     },
     404: { description: 'Нет такой начатой загрузки этого пользователя', content: error },
-    409: { description: 'Файл не дошёл до хранилища', content: error },
+    409: { description: 'Файл не дошёл до хранилища или он не тот, что заявлен', content: error },
   },
 });
 
@@ -312,7 +329,13 @@ export function completeUploadHandler(
     }
     const stored = await deps.storage.stat(pending.storageKey);
     if (!stored) apiFail(409, 'file_not_uploaded', FILE_MESSAGES.file_not_uploaded);
-    if (stored.size !== pending.sizeBytes || stored.size > FILE_MAX_BYTES) {
+    // Размер и тип подписаны в ссылке, но проверяются ещё раз: не всякое хранилище S3 сверяет подпись
+    // типа одинаково.
+    if (
+      stored.size !== pending.sizeBytes ||
+      stored.size > FILE_MAX_BYTES ||
+      stored.contentType !== pending.contentType
+    ) {
       await withOrgContext(deps.db, ctx, (tx) => dropPendingFile(tx, id));
       await dropObject(deps, pending.storageKey);
       if (stored.size > FILE_MAX_BYTES)

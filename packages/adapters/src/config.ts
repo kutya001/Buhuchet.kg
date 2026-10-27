@@ -182,6 +182,18 @@ const AppEnv = z
     }
     if (
       (env.APP_ENV === 'staging' || env.APP_ENV === 'production') &&
+      env.S3_PUBLIC_ENDPOINT &&
+      !env.S3_PUBLIC_ENDPOINT.startsWith('https://')
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['S3_PUBLIC_ENDPOINT'],
+        message:
+          'на стенде и рабочем сайте — адрес хранилища по https (подписанная ссылка даёт доступ к файлу)',
+      });
+    }
+    if (
+      (env.APP_ENV === 'staging' || env.APP_ENV === 'production') &&
       !env.APP_BASE_URL.startsWith('https://')
     ) {
       ctx.addIssue({

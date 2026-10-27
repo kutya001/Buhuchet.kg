@@ -11,8 +11,17 @@ export const FILE_MAX_BYTES = 20 * 1048576;
 /** Имя файла — не длиннее 255 символов, как в файловых системах. */
 export const FILE_NAME_MAX_LENGTH = 255;
 
-/** Ссылка на скачивание и на загрузку живёт 15 минут, как ссылка на логотип. */
+/** Ссылка на скачивание живёт 15 минут, как ссылка на логотип. */
 export const FILE_LINK_SECONDS = 15 * 60;
+
+/**
+ * Ссылка на загрузку — 2 минуты: браузер начинает загрузку сразу (хранилище проверяет срок в начале
+ * запроса, большой файл успеет), а файл, уже показанный в записи, этой ссылкой потом не подменить.
+ */
+export const FILE_UPLOAD_LINK_SECONDS = 2 * 60;
+
+/** Не больше 300 начатых загрузок в час от одного пользователя: незаконченные лежат в хранилище сутки. */
+export const FILE_UPLOADS_PER_HOUR = 300;
 
 const DAY_MS = 86_400_000;
 
@@ -43,6 +52,7 @@ export const FILE_MESSAGES = {
   file_delete_forbidden:
     'Нужно право «Удалять файлы»: свой файл можно удалить без права в течение суток',
   file_not_uploaded: 'Файл не загрузился. Попробуйте ещё раз',
+  file_upload_limit: 'Слишком много загрузок за час. Попробуйте позже',
   files_off: 'Файлы в карточках выключены в учётной политике',
 } as const;
 export type FileProblem = keyof typeof FILE_MESSAGES;
@@ -63,8 +73,10 @@ export const FILE_BLOCKED_EXTENSIONS: ReadonlySet<string> = new Set([
   'exe', 'msi', 'msp', 'com', 'scr', 'pif', 'cpl', 'dll', 'sys', 'lnk', 'reg', 'inf',
   'bat', 'cmd', 'ps1', 'psm1', 'vbs', 'vbe', 'js', 'jse', 'mjs', 'cjs', 'wsf', 'wsh', 'hta',
   'jar', 'sh', 'bash', 'app', 'dmg', 'pkg', 'apk', 'deb', 'rpm',
-  'html', 'htm', 'xhtml', 'shtml', 'mht', 'mhtml', 'svg', 'svgz',
+  'html', 'htm', 'xhtml', 'xht', 'shtml', 'mht', 'mhtml', 'svg', 'svgz',
   'php', 'phtml', 'asp', 'aspx', 'jsp',
+  'chm', 'iso', 'img', 'vhd', 'vhdx', 'msc', 'url', 'scf', 'xll', 'ws', 'wsc', 'sct',
+  'appx', 'msix', 'appinstaller', 'application', 'jnlp', 'settingcontent-ms', 'library-ms',
 ]); // prettier-ignore
 
 /** Тип содержимого по расширению: под ним файл лежит в хранилище и отдаётся при скачивании. */
@@ -103,9 +115,13 @@ export function fileContentType(name: string): string {
   return CONTENT_TYPES[fileExtension(name) ?? ''] ?? 'application/octet-stream';
 }
 
-/** Управляющие символы и разделители пути — в имени файла их не бывает. */
+/**
+ * Управляющие символы и разделители пути — в имени файла их не бывает; знаки смены направления текста
+ * показали бы в списке другое имя (программа выглядела бы как «.pdf»); точка в конце — Windows её срезает
+ * при сохранении, и «Акт.exe.» стал бы программой.
+ */
 // eslint-disable-next-line no-control-regex
-const BAD_NAME = /[\u0000-\u001f\u007f/\\]/;
+const BAD_NAME = /[\u0000-\u001f\u007f/\\\u200e\u200f\u202a-\u202e\u2066-\u2069]|\.$/;
 
 /** Что не так с загружаемым файлом: имя, тип, затем размер. */
 export function fileUploadProblem(file: { name: string; size: number }): FileProblem | null {

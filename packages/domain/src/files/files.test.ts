@@ -36,7 +36,15 @@ describe('файлы записей', () => {
   });
 
   it('программы, сценарии и веб-страницы не загружаются; документы, картинки и архивы — да', () => {
-    for (const name of ['setup.exe', 'run.BAT', 'page.html', 'logo.svg', 'x.js']) {
+    for (const name of [
+      'setup.exe',
+      'run.BAT',
+      'page.html',
+      'logo.svg',
+      'x.js',
+      'help.chm',
+      'a.iso',
+    ]) {
       expect(fileUploadProblem({ name, size: 10 })).toBe('file_type_forbidden');
     }
     for (const name of [
@@ -59,6 +67,16 @@ describe('файлы записей', () => {
     );
     for (const name of ['../x.pdf', 'a\\b.pdf', 'a\nb.pdf', 'a\u0000.pdf']) {
       expect(fileUploadProblem({ name, size: 1 })).toBe('file_name_invalid');
+    }
+    // Точка в конце (Windows её срежет: «Акт.exe.» → «Акт.exe») и знаки смены направления текста.
+    for (const name of [
+      'Акт.exe.',
+      'Акт.pdf..',
+      'Акт\u202efdp.exe',
+      'a\u2066b.pdf',
+      'a\u200fb.pdf',
+    ]) {
+      expect(fileUploadProblem({ name, size: 1 }), JSON.stringify(name)).toBe('file_name_invalid');
     }
   });
 

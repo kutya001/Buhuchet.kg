@@ -12,7 +12,7 @@ import {
 } from '@buhuchet/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
-import { api, callApi } from '../api-client';
+import { api, ApiFailure, callApi } from '../api-client';
 import { useErrorText, useT } from '../l10n/provider';
 import { fileMeta, filesQuery, pickedFilesProblem, uploadFile } from './files-data';
 
@@ -44,6 +44,9 @@ export function RecordFiles({ source }: { source: FileSource }) {
     [t],
   );
 
+  // Нет права «Просматривать файлы» или «Файлы в карточках» выключены — блока нет (ТЗ: выключенная
+  // функция и раздел без права не показываются).
+  if (files.error instanceof ApiFailure && files.error.status === 403) return null;
   if (files.isError) return <Note tone="bad">{t('files.load_error')}</Note>;
   if (!files.data) return null;
   const items: FilesBoxItem[] = files.data.items.map((f) => ({
