@@ -6,7 +6,13 @@ import { iconButtonClass, TOUCH_AREA } from '../button';
 import { Icon } from '../icon';
 import { aggText, groupLabelSpan, type GroupNode } from './grid-groups';
 import { clampWidth, columnWidth, dropColumn, setColumnWidth } from './grid-state';
-import type { GridColumn, GridLabels, GridRowSelection, GridRowTone } from './types';
+import type {
+  GridColumn,
+  GridLabels,
+  GridRowSelection,
+  GridRowStripe,
+  GridRowTone,
+} from './types';
 import type { RowEvents } from './row-events';
 
 /** Ширина столбца «⋯» (`.actc` прототипа). */
@@ -27,12 +33,25 @@ const TONE_ROW: Record<GridRowTone, string> = {
   warn: '[&>td:first-child]:shadow-[inset_3px_0_0_var(--bu-orange)]',
 };
 
+/** Тон строки с цветной полоской: своя полоска тона уступает (как в прототипе), фон остаётся. */
+const TONE_ROW_STRIPED: Record<GridRowTone, string> = {
+  muted: TONE_ROW.muted,
+  overdue: '[&>td]:bg-danger-bg',
+  warn: '',
+};
+
+const STRIPE_ROW: Record<GridRowStripe, string> = {
+  info: '[&>td:first-child]:shadow-[inset_3px_0_0_var(--bu-blue)]',
+  violet: '[&>td:first-child]:shadow-[inset_3px_0_0_var(--bu-purple)]',
+};
+
 interface TableProps<Row> {
   columns: readonly GridColumn<Row>[];
   allKeys: readonly string[];
   rows: readonly Row[];
   rowKey: (row: Row) => string;
   rowTone?: (row: Row) => GridRowTone | undefined;
+  rowStripe?: (row: Row) => GridRowStripe | undefined;
   settings: GridViewSettings;
   onSettingsChange: (settings: GridViewSettings) => void;
   sort: ListSort | null;
@@ -138,6 +157,7 @@ export function GridTable<Row>({
   rows,
   rowKey,
   rowTone,
+  rowStripe,
   settings,
   onSettingsChange,
   sort,
@@ -254,6 +274,8 @@ export function GridTable<Row>({
   const dataRow = (row: Row, last: boolean): ReactNode => {
     const id = rowKey(row);
     const tone = rowTone?.(row);
+    const stripe = rowStripe?.(row);
+    const toneClass = tone ? (stripe ? TONE_ROW_STRIPED : TONE_ROW)[tone] : '';
     const picked = selection?.has(row) ?? false;
     return (
       <tr
@@ -261,7 +283,7 @@ export function GridTable<Row>({
         data-id={id}
         tabIndex={0}
         {...events.handlers(row)}
-        className={`group/row focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-blue [&:hover>td]:bg-row-hover ${clickable ? 'cursor-pointer' : ''} ${tone ? TONE_ROW[tone] : ''} ${picked ? '[&>td]:bg-sel' : ''}`}
+        className={`group/row focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-blue [&:hover>td]:bg-row-hover ${clickable ? 'cursor-pointer' : ''} ${toneClass} ${stripe ? STRIPE_ROW[stripe] : ''} ${picked ? '[&>td]:bg-sel' : ''}`}
       >
         {selection && (
           <td className={`${cell} px-0! text-center ${last ? 'border-b-0' : ''}`}>

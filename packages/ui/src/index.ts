@@ -142,6 +142,7 @@ export type {
   GridLabels,
   GridPage,
   GridRowSelection,
+  GridRowStripe,
   GridRowTone,
   GridValues,
 } from './grid/types';
