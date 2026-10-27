@@ -17,7 +17,7 @@ import { monthOf, type YearMonth } from './months';
 /**
  * С какого месяца показатель требуется, когда его снова включают у контрагента (ТЗ: «он требуется с
  * текущего месяца (месяц можно изменить в «с <месяц>»)»).
- * Решение заказчика 27.10.2026 (docs/deviations.md п. 51): как в ТЗ; прототип ставит прошлый месяц.
+ * Решение заказчика 27.10.2026 (docs/deviations.md п. В-3): как в ТЗ; прототип ставит прошлый месяц.
  */
 export function reenableMonth(today: IsoDate): YearMonth {
   return monthOf(today);
