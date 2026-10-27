@@ -11,6 +11,7 @@ import { adminModule } from './modules/admin';
 import { authModule } from './modules/auth';
 import { contractorsModule } from './modules/contractors';
 import { l10nModule } from './modules/l10n';
+import { moneyModule } from './modules/money';
 import { orgModule } from './modules/org';
 import { platformDictsModule } from './modules/platform-dicts';
 import { dictsModule } from './modules/dicts';
@@ -78,6 +79,7 @@ export function createApp(deps: ApiDeps) {
     .route('/', orgModule(deps))
     .route('/', platformDictsModule(deps))
     .route('/', dictsModule(deps))
+    .route('/', moneyModule(deps))
     .route('/', viewsModule(deps))
     .route('/', adminModule(deps));
 

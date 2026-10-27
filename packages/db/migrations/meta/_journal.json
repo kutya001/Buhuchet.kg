@@ -243,15 +243,29 @@
     {
       "idx": 34,
       "version": "7",
-      "when": 1793103872360,
-      "tag": "0034_contractors",
+      "when": 1793102242598,
+      "tag": "0034_money_requisites",
       "breakpoints": true
     },
     {
       "idx": 35,
       "version": "7",
-      "when": 1793103885190,
-      "tag": "0035_contractors_guards",
+      "when": 1793102250612,
+      "tag": "0035_banks_read_only",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1793109981919,
+      "tag": "0036_contractors",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1793109983690,
+      "tag": "0037_contractors_guards",
       "breakpoints": true
     }
   ]

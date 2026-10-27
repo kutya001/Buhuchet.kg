@@ -27,3 +27,4 @@ export * from './dicts/platform-dicts';
 export * from './dicts/value-guide';
 export * from './contractors/rules';
 export * from './contractors/gked';
+export * from './money/requisites';

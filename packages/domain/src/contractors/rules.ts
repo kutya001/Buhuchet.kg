@@ -23,9 +23,6 @@ export type TariffPeriod = (typeof TARIFF_PERIODS)[number];
 export const SERVICE_STATUSES = ['active', 'paused', 'archived'] as const;
 export type ServiceStatus = (typeof SERVICE_STATUSES)[number];
 
-/** Куда контрагент переводит деньги на налоги: на счёт ответственного сотрудника или на счёт организации. */
-export const PAYS_TO = ['emp', 'org'] as const;
-
 /**
  * Регистрационные данные (ТЗ «Необязательные поля» → «Реквизиты из регистрационных документов»;
  * прототип contractor-regdocs.js, REG_F): хранятся только заполненные.

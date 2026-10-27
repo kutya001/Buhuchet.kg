@@ -105,7 +105,8 @@ test.describe('Этап 1: Моя организация', () => {
     await expect(
       main.getByText('Редактировать может только владелец организации.', { exact: false }),
     ).toBeVisible();
-    await expect(main.getByText(ORG_NAME)).toBeVisible();
+    // Название — в данных организации; оно же «Получатель» у счетов организации ниже.
+    await expect(main.getByRole('definition').filter({ hasText: ORG_NAME })).toBeVisible();
     await expect(main.getByText('01203201910123')).toBeVisible();
     await expect(main.getByRole('textbox')).toHaveCount(0);
     await expect(main.getByRole('button', { name: 'Сохранить' })).toHaveCount(0);
