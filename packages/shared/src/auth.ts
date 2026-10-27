@@ -159,7 +159,10 @@ export const PasswordResetCodeForm = z
   .refine(samePasswords, mismatch);
 export type PasswordResetCodeForm = z.infer<typeof PasswordResetCodeForm>;
 
-/** Смена пароля: в «Мой профиль» и обязательная смена временного пароля. */
+/**
+ * Смена пароля: в «Мой профиль» и обязательная смена временного пароля. Новый пароль не совпадает с
+ * текущим (решение заказчика 27.10.2026, docs/deviations.md п. 41).
+ */
 export const ChangePasswordForm = z
   .object({
     currentPassword: z
@@ -168,5 +171,9 @@ export const ChangePasswordForm = z
       .max(PASSWORD_MAX_LENGTH, message('form.too_long')),
     ...newPasswordFields,
   })
-  .refine(samePasswords, mismatch);
+  .refine(samePasswords, mismatch)
+  .refine((v) => v.newPassword !== v.currentPassword, {
+    path: ['newPassword'],
+    ...message('auth.err.same'),
+  });
 export type ChangePasswordForm = z.infer<typeof ChangePasswordForm>;

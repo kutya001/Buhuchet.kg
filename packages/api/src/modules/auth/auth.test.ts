@@ -400,7 +400,7 @@ describe.skipIf(!databaseAvailable())('вход, сеансы и проверк�
     ]);
   });
 
-  it('неверный текущий пароль — 400 и считается неверной попыткой; новый короче 8 — 400', async () => {
+  it('неверный текущий пароль — 400 и считается неверной попыткой; новый короче 8 или равный текущему — 400', async () => {
     const cookie = await signIn(app, 'acc-a', PASSWORD);
     const wrong = await app.request(
       '/api/auth/password',
@@ -423,6 +423,22 @@ describe.skipIf(!databaseAvailable())('вход, сеансы и проверк�
     );
     expect(short.status).toBe(400);
     expect(await errorCode(short)).toBe('validation_failed');
+
+    // Новый пароль, равный текущему, — отказ (docs/deviations.md п. 41); текущий верный — счёт снят.
+    const same = await app.request(
+      '/api/auth/password',
+      json({ currentPassword: PASSWORD, newPassword: PASSWORD }, { cookie }),
+    );
+    expect(same.status).toBe(400);
+    expect(ApiError.parse(await same.json()).error).toMatchObject({
+      code: 'password_same',
+      message: 'Новый пароль совпадает с текущим',
+    });
+    const [after] = await t.admin.db
+      .select()
+      .from(loginAttempts)
+      .where(eq(loginAttempts.login, 'acc-a'));
+    expect(after?.failures ?? 0).toBe(0);
     expect((await get(app, '/api/auth/me', cookie)).status).toBe(200);
   });
 
@@ -439,6 +455,18 @@ describe.skipIf(!databaseAvailable())('вход, сеансы и проверк�
     expect(await errorCode(fifth)).toBe('login_locked');
     expect(await errorCode(await attempt())).toBe('login_locked');
     expect(await errorCode(await login(app, 'pwlock-a'))).toBe('login_locked');
+    // Верный текущий и тот же новый пароль при закрытом входе — тоже 429, блокировка не снимается.
+    const same = await app.request(
+      '/api/auth/password',
+      json({ currentPassword: PASSWORD, newPassword: PASSWORD }, { cookie }),
+    );
+    expect(same.status).toBe(429);
+    expect(await errorCode(same)).toBe('login_locked');
+    const [locked] = await t.admin.db
+      .select()
+      .from(loginAttempts)
+      .where(eq(loginAttempts.login, 'pwlock-a'));
+    expect(locked!.lockedUntil!.getTime()).toBeGreaterThan(Date.now());
   });
 
   it('временный пароль: до смены доступны только «кто я» и смена пароля', async () => {
