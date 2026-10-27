@@ -53,12 +53,14 @@ const orgSettings = (...anyField: string[]): KbDoneRule => ({
 
 /** Работающие шаги программы организации по порядку групп ТЗ. */
 export const KB_STEP_RULES: Readonly<Record<string, KbStepRule>> = {
-  // 1. Моя организация. «Реквизиты» — с задачей 2.18, «Занятый объём» — с 2.29.
+  // 1. Моя организация. «Занятый объём» — с задачей 2.29.
   profile: {
     module: 'org',
     done: { kind: 'history', entity: 'organization', actions: ['update'] },
     savedUnchanged: true,
   },
+  // Реквизиты для приёма денег (задача 2.18): «добавлен счёт организации».
+  accs: { module: 'org', done: { kind: 'history', entity: 'org_account', actions: ['create'] } },
   policy: { module: 'org', done: orgSettings('features') },
   // ТЗ: «добавлен или убран день напоминания в учётной политике».
   remind: { module: 'org', done: orgSettings('remindDays') },

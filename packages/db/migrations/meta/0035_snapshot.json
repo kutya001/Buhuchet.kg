@@ -1,6 +1,6 @@
 {
-  "id": "aa600e3d-6edf-4497-ae4c-ac3e1126f2ed",
-  "prevId": "31e77ee0-8e86-4e3a-a7cf-4a5b68ac151e",
+  "id": "e7dd11f6-b2ef-4d3d-899f-a474660e2e30",
+  "prevId": "067fb6fa-912e-4e3c-9b7d-377b96748d84",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1666,39 +1666,6 @@
           "method": "btree",
           "concurrently": false
         },
-        "audit_log_actor_idx": {
-          "name": "audit_log_actor_idx",
-          "columns": [
-            {
-              "expression": "org_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "actor_user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "entity",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "with": {},
-          "method": "btree",
-          "concurrently": false
-        },
         "audit_log_contractor_idx": {
           "name": "audit_log_contractor_idx",
           "columns": [
@@ -2620,472 +2587,6 @@
       },
       "isRLSEnabled": true
     },
-    "public.kb_article_reads": {
-      "name": "kb_article_reads",
-      "schema": "",
-      "columns": {
-        "user_id": {
-          "name": "user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "org_id": {
-          "name": "org_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false,
-          "default": "app.current_org_id()"
-        },
-        "article_id": {
-          "name": "article_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "read_at": {
-          "name": "read_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "kb_article_reads_org_idx": {
-          "name": "kb_article_reads_org_idx",
-          "columns": [
-            {
-              "expression": "org_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "with": {},
-          "method": "btree",
-          "concurrently": false
-        }
-      },
-      "foreignKeys": {
-        "kb_article_reads_user_id_users_id_fk": {
-          "name": "kb_article_reads_user_id_users_id_fk",
-          "tableFrom": "kb_article_reads",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "tableTo": "users",
-          "columnsTo": [
-            "id"
-          ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
-        },
-        "kb_article_reads_org_id_organizations_id_fk": {
-          "name": "kb_article_reads_org_id_organizations_id_fk",
-          "tableFrom": "kb_article_reads",
-          "columnsFrom": [
-            "org_id"
-          ],
-          "tableTo": "organizations",
-          "columnsTo": [
-            "id"
-          ],
-          "onUpdate": "no action",
-          "onDelete": "restrict"
-        },
-        "kb_article_reads_user_org_fk": {
-          "name": "kb_article_reads_user_org_fk",
-          "tableFrom": "kb_article_reads",
-          "columnsFrom": [
-            "user_id",
-            "org_id"
-          ],
-          "tableTo": "users",
-          "columnsTo": [
-            "id",
-            "org_id"
-          ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
-        }
-      },
-      "compositePrimaryKeys": {
-        "kb_article_reads_pk": {
-          "name": "kb_article_reads_pk",
-          "columns": [
-            "user_id",
-            "article_id"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "policies": {
-        "kb_article_reads_isolation": {
-          "name": "kb_article_reads_isolation",
-          "as": "PERMISSIVE",
-          "for": "SELECT",
-          "to": [
-            "buhuchet_app"
-          ],
-          "using": "\"kb_article_reads\".\"org_id\" = app.current_org_id()"
-        },
-        "kb_article_reads_own_insert": {
-          "name": "kb_article_reads_own_insert",
-          "as": "PERMISSIVE",
-          "for": "INSERT",
-          "to": [
-            "buhuchet_app"
-          ],
-          "withCheck": "\"kb_article_reads\".\"org_id\" = app.current_org_id() and \"kb_article_reads\".\"user_id\" = app.current_user_id()"
-        },
-        "kb_article_reads_own_update": {
-          "name": "kb_article_reads_own_update",
-          "as": "PERMISSIVE",
-          "for": "UPDATE",
-          "to": [
-            "buhuchet_app"
-          ],
-          "using": "\"kb_article_reads\".\"org_id\" = app.current_org_id() and \"kb_article_reads\".\"user_id\" = app.current_user_id()",
-          "withCheck": "\"kb_article_reads\".\"org_id\" = app.current_org_id() and \"kb_article_reads\".\"user_id\" = app.current_user_id()"
-        },
-        "kb_article_reads_platform_admin": {
-          "name": "kb_article_reads_platform_admin",
-          "as": "PERMISSIVE",
-          "for": "ALL",
-          "to": [
-            "buhuchet_app"
-          ],
-          "using": "\"kb_article_reads\".\"org_id\" is null and app.current_org_id() is null and \"kb_article_reads\".\"user_id\" = app.current_user_id()",
-          "withCheck": "\"kb_article_reads\".\"org_id\" is null and app.current_org_id() is null and \"kb_article_reads\".\"user_id\" = app.current_user_id()"
-        }
-      },
-      "checkConstraints": {
-        "kb_article_reads_article_check": {
-          "name": "kb_article_reads_article_check",
-          "value": "\"kb_article_reads\".\"article_id\" ~ '^[a-z0-9][a-z0-9_-]{0,63}$'"
-        }
-      },
-      "isRLSEnabled": true
-    },
-    "public.kb_levels": {
-      "name": "kb_levels",
-      "schema": "",
-      "columns": {
-        "user_id": {
-          "name": "user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "org_id": {
-          "name": "org_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false,
-          "default": "app.current_org_id()"
-        },
-        "level": {
-          "name": "level",
-          "type": "smallint",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "reached_at": {
-          "name": "reached_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "kb_levels_org_idx": {
-          "name": "kb_levels_org_idx",
-          "columns": [
-            {
-              "expression": "org_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "with": {},
-          "method": "btree",
-          "concurrently": false
-        }
-      },
-      "foreignKeys": {
-        "kb_levels_user_id_users_id_fk": {
-          "name": "kb_levels_user_id_users_id_fk",
-          "tableFrom": "kb_levels",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "tableTo": "users",
-          "columnsTo": [
-            "id"
-          ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
-        },
-        "kb_levels_org_id_organizations_id_fk": {
-          "name": "kb_levels_org_id_organizations_id_fk",
-          "tableFrom": "kb_levels",
-          "columnsFrom": [
-            "org_id"
-          ],
-          "tableTo": "organizations",
-          "columnsTo": [
-            "id"
-          ],
-          "onUpdate": "no action",
-          "onDelete": "restrict"
-        },
-        "kb_levels_user_org_fk": {
-          "name": "kb_levels_user_org_fk",
-          "tableFrom": "kb_levels",
-          "columnsFrom": [
-            "user_id",
-            "org_id"
-          ],
-          "tableTo": "users",
-          "columnsTo": [
-            "id",
-            "org_id"
-          ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
-        }
-      },
-      "compositePrimaryKeys": {
-        "kb_levels_pk": {
-          "name": "kb_levels_pk",
-          "columns": [
-            "user_id",
-            "level"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "policies": {
-        "kb_levels_isolation": {
-          "name": "kb_levels_isolation",
-          "as": "PERMISSIVE",
-          "for": "SELECT",
-          "to": [
-            "buhuchet_app"
-          ],
-          "using": "\"kb_levels\".\"org_id\" = app.current_org_id()"
-        },
-        "kb_levels_own_insert": {
-          "name": "kb_levels_own_insert",
-          "as": "PERMISSIVE",
-          "for": "INSERT",
-          "to": [
-            "buhuchet_app"
-          ],
-          "withCheck": "\"kb_levels\".\"org_id\" = app.current_org_id() and \"kb_levels\".\"user_id\" = app.current_user_id()"
-        },
-        "kb_levels_own_update": {
-          "name": "kb_levels_own_update",
-          "as": "PERMISSIVE",
-          "for": "UPDATE",
-          "to": [
-            "buhuchet_app"
-          ],
-          "using": "\"kb_levels\".\"org_id\" = app.current_org_id() and \"kb_levels\".\"user_id\" = app.current_user_id()",
-          "withCheck": "\"kb_levels\".\"org_id\" = app.current_org_id() and \"kb_levels\".\"user_id\" = app.current_user_id()"
-        },
-        "kb_levels_platform_admin": {
-          "name": "kb_levels_platform_admin",
-          "as": "PERMISSIVE",
-          "for": "ALL",
-          "to": [
-            "buhuchet_app"
-          ],
-          "using": "\"kb_levels\".\"org_id\" is null and app.current_org_id() is null and \"kb_levels\".\"user_id\" = app.current_user_id()",
-          "withCheck": "\"kb_levels\".\"org_id\" is null and app.current_org_id() is null and \"kb_levels\".\"user_id\" = app.current_user_id()"
-        }
-      },
-      "checkConstraints": {
-        "kb_levels_level_check": {
-          "name": "kb_levels_level_check",
-          "value": "\"kb_levels\".\"level\" between 0 and 20"
-        }
-      },
-      "isRLSEnabled": true
-    },
-    "public.kb_progress": {
-      "name": "kb_progress",
-      "schema": "",
-      "columns": {
-        "user_id": {
-          "name": "user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "org_id": {
-          "name": "org_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false,
-          "default": "app.current_org_id()"
-        },
-        "step_id": {
-          "name": "step_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "done_how": {
-          "name": "done_how",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "done_at": {
-          "name": "done_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "skipped_at": {
-          "name": "skipped_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {
-        "kb_progress_org_idx": {
-          "name": "kb_progress_org_idx",
-          "columns": [
-            {
-              "expression": "org_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "with": {},
-          "method": "btree",
-          "concurrently": false
-        }
-      },
-      "foreignKeys": {
-        "kb_progress_user_id_users_id_fk": {
-          "name": "kb_progress_user_id_users_id_fk",
-          "tableFrom": "kb_progress",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "tableTo": "users",
-          "columnsTo": [
-            "id"
-          ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
-        },
-        "kb_progress_org_id_organizations_id_fk": {
-          "name": "kb_progress_org_id_organizations_id_fk",
-          "tableFrom": "kb_progress",
-          "columnsFrom": [
-            "org_id"
-          ],
-          "tableTo": "organizations",
-          "columnsTo": [
-            "id"
-          ],
-          "onUpdate": "no action",
-          "onDelete": "restrict"
-        },
-        "kb_progress_user_org_fk": {
-          "name": "kb_progress_user_org_fk",
-          "tableFrom": "kb_progress",
-          "columnsFrom": [
-            "user_id",
-            "org_id"
-          ],
-          "tableTo": "users",
-          "columnsTo": [
-            "id",
-            "org_id"
-          ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
-        }
-      },
-      "compositePrimaryKeys": {
-        "kb_progress_pk": {
-          "name": "kb_progress_pk",
-          "columns": [
-            "user_id",
-            "step_id"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "policies": {
-        "kb_progress_isolation": {
-          "name": "kb_progress_isolation",
-          "as": "PERMISSIVE",
-          "for": "SELECT",
-          "to": [
-            "buhuchet_app"
-          ],
-          "using": "\"kb_progress\".\"org_id\" = app.current_org_id()"
-        },
-        "kb_progress_own_insert": {
-          "name": "kb_progress_own_insert",
-          "as": "PERMISSIVE",
-          "for": "INSERT",
-          "to": [
-            "buhuchet_app"
-          ],
-          "withCheck": "\"kb_progress\".\"org_id\" = app.current_org_id() and \"kb_progress\".\"user_id\" = app.current_user_id()"
-        },
-        "kb_progress_own_update": {
-          "name": "kb_progress_own_update",
-          "as": "PERMISSIVE",
-          "for": "UPDATE",
-          "to": [
-            "buhuchet_app"
-          ],
-          "using": "\"kb_progress\".\"org_id\" = app.current_org_id() and \"kb_progress\".\"user_id\" = app.current_user_id()",
-          "withCheck": "\"kb_progress\".\"org_id\" = app.current_org_id() and \"kb_progress\".\"user_id\" = app.current_user_id()"
-        },
-        "kb_progress_platform_admin": {
-          "name": "kb_progress_platform_admin",
-          "as": "PERMISSIVE",
-          "for": "ALL",
-          "to": [
-            "buhuchet_app"
-          ],
-          "using": "\"kb_progress\".\"org_id\" is null and app.current_org_id() is null and \"kb_progress\".\"user_id\" = app.current_user_id()",
-          "withCheck": "\"kb_progress\".\"org_id\" is null and app.current_org_id() is null and \"kb_progress\".\"user_id\" = app.current_user_id()"
-        }
-      },
-      "checkConstraints": {
-        "kb_progress_step_check": {
-          "name": "kb_progress_step_check",
-          "value": "\"kb_progress\".\"step_id\" ~ '^[a-z0-9][a-z0-9_-]{0,63}$'"
-        },
-        "kb_progress_how_check": {
-          "name": "kb_progress_how_check",
-          "value": "\"kb_progress\".\"done_how\" is null or \"kb_progress\".\"done_how\" in ('action', 'data', 'show', 'art', 'use', 'visit')"
-        },
-        "kb_progress_done_check": {
-          "name": "kb_progress_done_check",
-          "value": "(\"kb_progress\".\"done_how\" is null) = (\"kb_progress\".\"done_at\" is null)"
-        }
-      },
-      "isRLSEnabled": true
-    },
     "public.status_history": {
       "name": "status_history",
       "schema": "",
@@ -3422,6 +2923,148 @@
         }
       },
       "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.banks": {
+      "name": "banks",
+      "schema": "",
+      "columns": {
+        "code": {
+          "name": "code",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "by_phone": {
+          "name": "by_phone",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "note": {
+          "name": "note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "active": {
+          "name": "active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "sort_order": {
+          "name": "sort_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_by": {
+          "name": "updated_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        }
+      },
+      "indexes": {
+        "banks_name_key": {
+          "name": "banks_name_key",
+          "columns": [
+            {
+              "expression": "name",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "banks_created_by_users_id_fk": {
+          "name": "banks_created_by_users_id_fk",
+          "tableFrom": "banks",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "banks_updated_by_users_id_fk": {
+          "name": "banks_updated_by_users_id_fk",
+          "tableFrom": "banks",
+          "columnsFrom": [
+            "updated_by"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "banks_read": {
+          "name": "banks_read",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "buhuchet_app"
+          ],
+          "using": "true"
+        }
+      },
+      "checkConstraints": {
+        "banks_kind_check": {
+          "name": "banks_kind_check",
+          "value": "\"banks\".\"kind\" in ('bank', 'wallet')"
+        }
+      },
       "isRLSEnabled": true
     },
     "public.due_change_reasons": {
@@ -5934,6 +5577,552 @@
         "org_report_types_remind_days_check": {
           "name": "org_report_types_remind_days_check",
           "value": "1 <= all(\"org_report_types\".\"remind_days\") and 60 >= all(\"org_report_types\".\"remind_days\")"
+        }
+      },
+      "isRLSEnabled": true
+    },
+    "public.employee_wallets": {
+      "name": "employee_wallets",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "org_id": {
+          "name": "org_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "employee_id": {
+          "name": "employee_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "bank_code": {
+          "name": "bank_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "account_no": {
+          "name": "account_no",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "phone": {
+          "name": "phone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "phone_banks": {
+          "name": "phone_banks",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'"
+        },
+        "holder_name": {
+          "name": "holder_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "is_main": {
+          "name": "is_main",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_by": {
+          "name": "updated_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        }
+      },
+      "indexes": {
+        "employee_wallets_employee_idx": {
+          "name": "employee_wallets_employee_idx",
+          "columns": [
+            {
+              "expression": "employee_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "employee_wallets_org_idx": {
+          "name": "employee_wallets_org_idx",
+          "columns": [
+            {
+              "expression": "org_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "employee_wallets_main_key": {
+          "name": "employee_wallets_main_key",
+          "columns": [
+            {
+              "expression": "employee_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "with": {},
+          "method": "btree",
+          "where": "\"employee_wallets\".\"is_main\"",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "employee_wallets_org_id_organizations_id_fk": {
+          "name": "employee_wallets_org_id_organizations_id_fk",
+          "tableFrom": "employee_wallets",
+          "columnsFrom": [
+            "org_id"
+          ],
+          "tableTo": "organizations",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        },
+        "employee_wallets_bank_code_banks_code_fk": {
+          "name": "employee_wallets_bank_code_banks_code_fk",
+          "tableFrom": "employee_wallets",
+          "columnsFrom": [
+            "bank_code"
+          ],
+          "tableTo": "banks",
+          "columnsTo": [
+            "code"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "employee_wallets_created_by_users_id_fk": {
+          "name": "employee_wallets_created_by_users_id_fk",
+          "tableFrom": "employee_wallets",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "employee_wallets_updated_by_users_id_fk": {
+          "name": "employee_wallets_updated_by_users_id_fk",
+          "tableFrom": "employee_wallets",
+          "columnsFrom": [
+            "updated_by"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "employee_wallets_employee_fk": {
+          "name": "employee_wallets_employee_fk",
+          "tableFrom": "employee_wallets",
+          "columnsFrom": [
+            "employee_id",
+            "org_id"
+          ],
+          "tableTo": "employees",
+          "columnsTo": [
+            "id",
+            "org_id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "employee_wallets_isolation": {
+          "name": "employee_wallets_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "buhuchet_app"
+          ],
+          "using": "\"employee_wallets\".\"org_id\" = app.current_org_id()",
+          "withCheck": "\"employee_wallets\".\"org_id\" = app.current_org_id()"
+        },
+        "employee_wallets_insert_own": {
+          "name": "employee_wallets_insert_own",
+          "as": "RESTRICTIVE",
+          "for": "INSERT",
+          "to": [
+            "buhuchet_app"
+          ],
+          "withCheck": "\"employee_wallets\".\"employee_id\" in (select e.id from employees e where e.user_id = app.current_user_id())"
+        },
+        "employee_wallets_update_own": {
+          "name": "employee_wallets_update_own",
+          "as": "RESTRICTIVE",
+          "for": "UPDATE",
+          "to": [
+            "buhuchet_app"
+          ],
+          "using": "\"employee_wallets\".\"employee_id\" in (select e.id from employees e where e.user_id = app.current_user_id())",
+          "withCheck": "\"employee_wallets\".\"employee_id\" in (select e.id from employees e where e.user_id = app.current_user_id())"
+        },
+        "employee_wallets_delete_own": {
+          "name": "employee_wallets_delete_own",
+          "as": "RESTRICTIVE",
+          "for": "DELETE",
+          "to": [
+            "buhuchet_app"
+          ],
+          "using": "\"employee_wallets\".\"employee_id\" in (select e.id from employees e where e.user_id = app.current_user_id())"
+        }
+      },
+      "checkConstraints": {
+        "employee_wallets_kind_check": {
+          "name": "employee_wallets_kind_check",
+          "value": "\"employee_wallets\".\"kind\" in ('acc', 'phone')"
+        },
+        "employee_wallets_fields_check": {
+          "name": "employee_wallets_fields_check",
+          "value": "(\"employee_wallets\".\"kind\" = 'acc' and \"employee_wallets\".\"bank_code\" is not null and \"employee_wallets\".\"account_no\" is not null and \"employee_wallets\".\"phone\" is null and cardinality(\"employee_wallets\".\"phone_banks\") = 0) or (\"employee_wallets\".\"kind\" = 'phone' and \"employee_wallets\".\"phone\" ~ '^[+][0-9]{6,15}$' and cardinality(\"employee_wallets\".\"phone_banks\") between 1 and 50 and \"employee_wallets\".\"bank_code\" is null and \"employee_wallets\".\"account_no\" is null)"
+        },
+        "employee_wallets_length_check": {
+          "name": "employee_wallets_length_check",
+          "value": "length(coalesce(\"employee_wallets\".\"account_no\", '')) <= 40 and length(\"employee_wallets\".\"holder_name\") <= 200"
+        }
+      },
+      "isRLSEnabled": true
+    },
+    "public.org_accounts": {
+      "name": "org_accounts",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "org_id": {
+          "name": "org_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "bank_code": {
+          "name": "bank_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "account_no": {
+          "name": "account_no",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "bik": {
+          "name": "bik",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "phone": {
+          "name": "phone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "phone_banks": {
+          "name": "phone_banks",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'"
+        },
+        "holder_name": {
+          "name": "holder_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "purpose": {
+          "name": "purpose",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'both'"
+        },
+        "main_tax": {
+          "name": "main_tax",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "main_fee": {
+          "name": "main_fee",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_by": {
+          "name": "updated_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        }
+      },
+      "indexes": {
+        "org_accounts_org_idx": {
+          "name": "org_accounts_org_idx",
+          "columns": [
+            {
+              "expression": "org_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "org_accounts_main_tax_key": {
+          "name": "org_accounts_main_tax_key",
+          "columns": [
+            {
+              "expression": "org_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "with": {},
+          "method": "btree",
+          "where": "\"org_accounts\".\"main_tax\"",
+          "concurrently": false
+        },
+        "org_accounts_main_fee_key": {
+          "name": "org_accounts_main_fee_key",
+          "columns": [
+            {
+              "expression": "org_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "with": {},
+          "method": "btree",
+          "where": "\"org_accounts\".\"main_fee\"",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "org_accounts_org_id_organizations_id_fk": {
+          "name": "org_accounts_org_id_organizations_id_fk",
+          "tableFrom": "org_accounts",
+          "columnsFrom": [
+            "org_id"
+          ],
+          "tableTo": "organizations",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        },
+        "org_accounts_bank_code_banks_code_fk": {
+          "name": "org_accounts_bank_code_banks_code_fk",
+          "tableFrom": "org_accounts",
+          "columnsFrom": [
+            "bank_code"
+          ],
+          "tableTo": "banks",
+          "columnsTo": [
+            "code"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "org_accounts_created_by_users_id_fk": {
+          "name": "org_accounts_created_by_users_id_fk",
+          "tableFrom": "org_accounts",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "org_accounts_updated_by_users_id_fk": {
+          "name": "org_accounts_updated_by_users_id_fk",
+          "tableFrom": "org_accounts",
+          "columnsFrom": [
+            "updated_by"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "org_accounts_isolation": {
+          "name": "org_accounts_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "buhuchet_app"
+          ],
+          "using": "\"org_accounts\".\"org_id\" = app.current_org_id()",
+          "withCheck": "\"org_accounts\".\"org_id\" = app.current_org_id()"
+        }
+      },
+      "checkConstraints": {
+        "org_accounts_kind_check": {
+          "name": "org_accounts_kind_check",
+          "value": "\"org_accounts\".\"kind\" in ('acc', 'phone')"
+        },
+        "org_accounts_purpose_check": {
+          "name": "org_accounts_purpose_check",
+          "value": "\"org_accounts\".\"purpose\" in ('both', 'tax', 'fee')"
+        },
+        "org_accounts_fields_check": {
+          "name": "org_accounts_fields_check",
+          "value": "(\"org_accounts\".\"kind\" = 'acc' and \"org_accounts\".\"bank_code\" is not null and \"org_accounts\".\"account_no\" is not null and \"org_accounts\".\"bik\" ~ '^[0-9]{6}$' and \"org_accounts\".\"phone\" is null and cardinality(\"org_accounts\".\"phone_banks\") = 0) or (\"org_accounts\".\"kind\" = 'phone' and \"org_accounts\".\"phone\" ~ '^[+][0-9]{6,15}$' and cardinality(\"org_accounts\".\"phone_banks\") between 1 and 50 and \"org_accounts\".\"bank_code\" is null and \"org_accounts\".\"account_no\" is null and \"org_accounts\".\"bik\" is null)"
+        },
+        "org_accounts_main_check": {
+          "name": "org_accounts_main_check",
+          "value": "(not \"org_accounts\".\"main_tax\" or \"org_accounts\".\"purpose\" <> 'fee') and (not \"org_accounts\".\"main_fee\" or \"org_accounts\".\"purpose\" <> 'tax')"
+        },
+        "org_accounts_length_check": {
+          "name": "org_accounts_length_check",
+          "value": "length(coalesce(\"org_accounts\".\"account_no\", '')) <= 40 and length(\"org_accounts\".\"holder_name\") <= 200"
         }
       },
       "isRLSEnabled": true

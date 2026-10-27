@@ -9,6 +9,8 @@ export * from './org';
 export * from './kb';
 export * from './l10n';
 export * from './status';
+export * from './files';
 export * from './platform-dicts';
 export * from './admin';
 export * from './dicts';
+export * from './money';

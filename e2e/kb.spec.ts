@@ -58,6 +58,31 @@ test.describe('Этап 2: База знаний — программа, уро�
     await expect(step.getByRole('button', { name: 'Перейти' })).toHaveCount(0);
   });
 
+  test('(шаг из задачи 2.18) «Перейти» у «Добавить реквизиты для приёма денег» сразу открывает «Счёт организации»; добавленный счёт засчитывает шаг', async ({
+    page,
+    baseURL,
+  }) => {
+    await newOrgOwner(page.request, new URL(baseURL!).origin);
+    await page.goto('/app/kb/lessons');
+    const step = page.locator('[data-kb-step="accs"]');
+    await expect(step).toHaveAttribute('data-kb-state', 'open');
+    await step.getByRole('button', { name: 'Перейти' }).click();
+    await expect(page).toHaveURL(/\/app\/org\/main/);
+    const dialog = page.getByRole('dialog', { name: 'Счёт организации' });
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole('button', { name: 'Перевод по номеру телефона' }).click();
+    await dialog.getByLabel('Номер телефона').fill('555123456');
+    await dialog.getByRole('checkbox', { name: 'M-Bank' }).check();
+    await dialog.getByRole('button', { name: 'Добавить', exact: true }).click();
+    await expect(dialog).toBeHidden();
+    await expect(
+      page.getByRole('dialog', {
+        name: 'Готово: шаг «Добавить реквизиты для приёма денег» выполнен',
+      }),
+    ).toBeVisible();
+    expect(stepDone(await kbMe(page.request), 'accs')).toMatchObject({ how: 'action' });
+  });
+
   test('(п. 75) «Перейти» у шага «Посмотреть»: полоса-таймер, через 3 секунды «Шаг выполнен»; ушли с экрана раньше — шаг не засчитан', async ({
     page,
     baseURL,

@@ -291,7 +291,10 @@ export function useKbRuntime(shell: KbShellInfo): { controls: KbControls; overla
       else if (open && module) setPendingAdd({ module, add: open.add });
       if (!open || open === 'profile') {
         const phone = window.matchMedia('(max-width: 767px)').matches;
-        flashTarget(phone && target?.phoneFlash ? target.phoneFlash : (target?.flash ?? 'main'));
+        flashTarget(
+          phone && target?.phoneFlash ? target.phoneFlash : (target?.flash ?? 'main'),
+          target?.press ? (el) => el.click() : undefined,
+        );
       }
     },
     [router, tabHrefOf, onProfile],

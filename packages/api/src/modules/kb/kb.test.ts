@@ -67,7 +67,7 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
     const own = await state(owner);
     expect(own.admin).toBe(false);
     expect(own.lessons.map((l) => l.id)).toEqual(['org', 'me', 'dicts', 'staff', 'lists']);
-    expect(own.progress).toMatchObject({ total: 16, done: 0, pct: 0, level: 0, next: 1, need: 4 });
+    expect(own.progress).toMatchObject({ total: 17, done: 0, pct: 0, level: 0, next: 1, need: 5 });
     expect(own.progress.levels.map((l) => l.name)).toEqual([
       'Новичок',
       'Ученик',
@@ -166,7 +166,7 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
     );
     expect(second.fresh.map((x) => x.id).sort()).toEqual(['profile', 'remind', 'settings']);
     expect(second.congrats).toBe('Ученик');
-    expect(second.state.progress).toMatchObject({ done: 5, pct: 31, level: 1 });
+    expect(second.state.progress).toMatchObject({ done: 5, pct: 29, level: 1 });
     // Повтор ничего не меняет.
     const again = KbMarkResult.parse(
       await ok(await call('POST', '/api/kb/sync', owner, { reason: 'open' })),
@@ -256,7 +256,7 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
       levelName: 'Ученик',
       of: 5,
       done: 6,
-      total: 16,
+      total: 17,
       levelAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
     });
     const accRow = team.items.find((r) => r.fullName === 'Сотрудник acc-a');
@@ -303,7 +303,7 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
     expect(own.items.find((e) => e.login === 'owner-a')?.kb).toEqual({
       level: 1,
       name: 'Ученик',
-      pct: 37,
+      pct: 35,
       of: 5,
     });
     const sorted = await staff(

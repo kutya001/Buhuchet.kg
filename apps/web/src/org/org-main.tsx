@@ -41,6 +41,7 @@ import { api, callApi, type ApiResult } from '../api-client';
 import { fieldError } from '../auth/fields';
 import { useKb } from '../kb/kb-provider';
 import { useErrorText, useT } from '../l10n/provider';
+import { OrgAccountsBox } from '../money/org-accounts';
 import { useShell } from '../shell/context';
 import { phoneCodesQuery } from '../staff/staff-data';
 import { orgProfileQuery, policyQuery, useOrgRefresh } from './org-data';
@@ -61,7 +62,7 @@ const LOGO_TYPES = new Set(['image/png', 'image/jpeg']);
  * «Моя организация» → «Основное» (прототип modules/org.js, renderOrg → main). С правом «Настройки и
  * учётная политика» — форма: название, ИНН, телефон, адрес, руководитель, «Адрес страницы организации»
  * (если включена «Страница контрагента по ссылке») и логотип с предпросмотром; без права — те же
- * сведения только для просмотра. Реквизиты для приёма денег — своя задача (поток В).
+ * сведения только для просмотра. Ниже — «Реквизиты для приёма денег от контрагентов» (задача 2.18).
  */
 export function OrgMain() {
   const t = useT();
@@ -79,10 +80,16 @@ export function OrgMain() {
       <div className="flex flex-col gap-3.5">
         <Note icon="lock">{t('org.readonly')}</Note>
         <OrgMainView profile={profile.data} cppage={cppage} codes={codes.data} />
+        <OrgAccountsBox editable={false} orgName={profile.data.name} />
       </div>
     );
   }
-  return <OrgMainEdit profile={profile.data} cppage={cppage} codes={codes.data} />;
+  return (
+    <div className="flex flex-col gap-3.5">
+      <OrgMainEdit profile={profile.data} cppage={cppage} codes={codes.data} />
+      <OrgAccountsBox editable orgName={profile.data.name} />
+    </div>
+  );
 }
 
 /**

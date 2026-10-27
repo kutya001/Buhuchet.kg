@@ -258,17 +258,32 @@ describe.skipIf(!databaseAvailable())('«База знаний»: прогрес
           action: 'update',
           changes: [{ field: 'needFile', from: false, to: true }],
         },
+        {
+          entity: 'org_account',
+          entityId: '00000000-0000-4000-8000-000000000001',
+          action: 'create',
+          changes: [{ field: 'bank', from: null, to: 'M-Bank' }],
+        },
       ),
     );
     await db.admin.db
       .insert(telegramLinks)
       .values({ userId: a.ownerUserId, orgId: a.orgId, chatId: 7001 });
-    const steps = ['profile', 'policy', 'remind', 'types', 'typecfg', 'tg', 'emps'].map((id) => ({
-      id,
-      rule: KB_STEP_RULES[id]!.done!,
-    }));
+    const steps = ['profile', 'accs', 'policy', 'remind', 'types', 'typecfg', 'tg', 'emps'].map(
+      (id) => ({
+        id,
+        rule: KB_STEP_RULES[id]!.done!,
+      }),
+    );
     const owner = await asOwner(a, (tx) => kbDoneFacts(tx, a.ownerUserId, steps));
-    expect([...owner.keys()].sort()).toEqual(['emps', 'policy', 'profile', 'tg', 'typecfg']);
+    expect([...owner.keys()].sort()).toEqual([
+      'accs',
+      'emps',
+      'policy',
+      'profile',
+      'tg',
+      'typecfg',
+    ]);
     expect(owner.get('tg')).toBeInstanceOf(Date);
     // Действия владельца сотруднику не засчитываются.
     const acc = await inOrg(a, accUserId, (tx) => kbDoneFacts(tx, accUserId, steps));

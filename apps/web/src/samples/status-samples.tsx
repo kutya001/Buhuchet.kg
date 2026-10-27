@@ -19,8 +19,11 @@ import {
   useToast,
   type MaxPrefs,
 } from '@buhuchet/ui';
+import type { FileSource } from '@buhuchet/shared';
 import { useState } from 'react';
+import { RecordFiles } from '../files/record-files';
 import { useT } from '../l10n/provider';
+import { QueryProvider } from '../query';
 import type { Translate } from '../l10n/translate';
 import { UiProviders } from '../shell/ui-providers';
 import {
@@ -51,6 +54,8 @@ interface StatusSamplesProps {
   actor: string;
   /** Есть ли у вошедшего право «Откат статусов» (на странице его можно выключить и включить). */
   canRollback: boolean;
+  /** Показать блок «Файлы»: право «Просматривать файлы» и функция «Файлы в карточках» включена. */
+  showFiles: boolean;
   initialMax: MaxPrefs;
   /** Момент показа страницы на сервере (мс): от него отсчитана демо-история. */
   now: number;
@@ -59,15 +64,21 @@ interface StatusSamplesProps {
 /**
  * Страница образцов общих компонентов (задача #17; на рабочем сайте её нет): шкалы статусов всех
  * видов на демо-записях — компактные в плитках, полные и «История статусов» в карточке записи,
- * переход на следующий шаг и откат с причиной. Ничего не сохраняется.
+ * переход на следующий шаг и откат с причиной (ничего не сохраняется); блок «Файлы» записи (задача
+ * 2.04) — на общих файлах организации, файлы сохраняются по-настоящему.
  */
 export function StatusSamples({ initialMax, ...props }: StatusSamplesProps) {
   return (
-    <UiProviders initialMax={initialMax}>
-      <SamplesPage {...props} />
-    </UiProviders>
+    <QueryProvider>
+      <UiProviders initialMax={initialMax}>
+        <SamplesPage {...props} />
+      </UiProviders>
+    </QueryProvider>
   );
 }
+
+/** Общие файлы организации — запись без номера («Загружен вручную»). */
+const ORG_FILES: FileSource = { kind: 'manual', id: null };
 
 /** Момент действия (из обработчиков нажатий): часы устройства, но не раньше прошлой записи истории. */
 const actionTime = (after: number) => Math.max(Date.now(), after);
@@ -78,6 +89,7 @@ type StepTarget = { index: number; to: string; open: boolean };
 function SamplesPage({
   actor,
   canRollback,
+  showFiles,
   now: serverNow,
 }: Omit<StatusSamplesProps, 'initialMax'>) {
   const t = useT();
@@ -141,6 +153,15 @@ function SamplesPage({
           ))}
         </ul>
       </Card>
+
+      {showFiles ? (
+        <Card title={t('samples.files_title')}>
+          <p className="mt-0 mb-3 text-[13px] text-muted">{t('samples.files_hint')}</p>
+          <div data-sample-files="">
+            <RecordFiles source={ORG_FILES} />
+          </div>
+        </Card>
+      ) : null}
 
       {sample ? (
         <Modal

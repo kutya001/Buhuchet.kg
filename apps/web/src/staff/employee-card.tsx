@@ -20,6 +20,7 @@ import { useState, type ReactNode } from 'react';
 import { KbMemberBox } from '../kb/kb-team';
 import { useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
+import { EmployeeWalletsBox } from '../money/wallets';
 import { useEmployee } from './staff-data';
 
 type CardTabId = 'main' | 'cps';
@@ -203,9 +204,12 @@ function MainTab({ t, e }: { t: Translate; e: Employee }) {
     },
   ];
   return (
-    <Box>
-      <KeyValues items={items} />
-    </Box>
+    <>
+      <Box>
+        <KeyValues items={items} />
+      </Box>
+      <EmployeeWalletsBox employeeId={e.id} />
+    </>
   );
 }
 

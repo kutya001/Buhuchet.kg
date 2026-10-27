@@ -15,6 +15,8 @@ export interface KbTarget {
   phoneFlash?: string;
   /** Сразу открыть: «+ Добавить» модуля этим способом или «Мой профиль». */
   open?: { add: string } | 'profile';
+  /** Нажать подсвеченную кнопку (у блока на экране своё «+ Добавить», не в меню модуля). */
+  press?: boolean;
 }
 
 /** Строки списка: таблица на ПК и карточки на телефоне. */
@@ -22,6 +24,7 @@ const LIST = '[data-grid-scroll], [data-grid-cards]';
 
 export const KB_GO: Readonly<Record<string, KbTarget>> = {
   profile: { module: 'org', tab: 'main', flash: 'main section' },
+  accs: { module: 'org', tab: 'main', flash: '[data-org-account-add]', press: true },
   policy: { module: 'org', tab: 'policy', flash: 'main section' },
   remind: { module: 'org', tab: 'policy', flash: '[data-remind-days]' },
   settings: { module: 'org', tab: 'settings', flash: 'main [type=submit]' },
@@ -50,7 +53,7 @@ const FLASH_MS = 2800;
  * середину экрана и дважды вспыхивает рамкой. Экран после перехода может ещё грузиться — элемент
  * ищется до 2,5 секунд. `onFlash` — элемент найден и подсвечен.
  */
-export function flashTarget(selector: string, onFlash?: () => void): () => void {
+export function flashTarget(selector: string, onFlash?: (el: HTMLElement) => void): () => void {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const started = Date.now();
   const find = () => {
@@ -66,7 +69,7 @@ export function flashTarget(selector: string, onFlash?: () => void): () => void 
     el.removeAttribute('data-ck-flash');
     void el.offsetWidth;
     el.setAttribute('data-ck-flash', '');
-    onFlash?.();
+    onFlash?.(el);
     timer = setTimeout(() => el.removeAttribute('data-ck-flash'), FLASH_MS);
   };
   timer = setTimeout(find, 380);

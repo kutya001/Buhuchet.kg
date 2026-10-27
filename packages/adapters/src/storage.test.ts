@@ -106,6 +106,30 @@ function contract(name: string, make: () => Promise<Storage>, opts: { skip?: boo
       await storage.ping();
       await storage.delete(key);
     });
+
+    it('сообщает размер и тип лежащего файла; нет файла — null', async () => {
+      const storage = await make();
+      const key = orgFileKey('test', 'contract', randomUUID());
+      expect(await storage.stat(key)).toBeNull();
+      await storage.put(key, new Uint8Array(12), { contentType: 'application/pdf' });
+      expect(await storage.stat(key)).toEqual({ size: 12, contentType: 'application/pdf' });
+      await storage.delete(key);
+    });
+
+    it('выдаёт ссылку на загрузку с подписанным типом и сроком не больше 15 минут', async () => {
+      const storage = await make();
+      const key = orgFileKey('test', 'contract', randomUUID());
+      const upload = await storage.signedUploadUrl(key, {
+        expiresInSeconds: 60,
+        contentType: 'application/pdf',
+        size: 3,
+      });
+      expect(upload.url).toContain(key);
+      expect(upload.headers).toEqual({ 'content-type': 'application/pdf' });
+      await expect(
+        storage.signedUploadUrl(key, { expiresInSeconds: 901, contentType: 'x/y', size: 1 }),
+      ).rejects.toThrow(RangeError);
+    });
   });
 }
 
@@ -149,6 +173,42 @@ describe.skipIf(!s3Available)('S3: подписанная ссылка реал�
     await storage.put(key, '<script>alert(1)</script>', { contentType: 'text/html' });
     const res = await fetch(await storage.signedDownloadUrl(key, { expiresInSeconds: 60 }));
     expect(res.headers.get('content-disposition')).toBe('attachment');
+    await storage.delete(key);
+  });
+
+  it('загрузка по ссылке принимает только подписанные размер и тип', async () => {
+    const storage = createS3Storage(loadStorageConfig());
+    const key = orgFileKey('test', 'upload', randomUUID());
+    const upload = await storage.signedUploadUrl(key, {
+      expiresInSeconds: 60,
+      contentType: 'application/pdf',
+      size: 10,
+    });
+    const put = (size: number, headers = upload.headers) =>
+      fetch(upload.url, { method: 'PUT', body: new Uint8Array(size), headers });
+    expect((await put(11)).status).toBe(403);
+    expect((await put(10, { 'content-type': 'text/html' })).status).toBe(403);
+    expect(await storage.exists(key)).toBe(false);
+    expect((await put(10)).status).toBe(200);
+    expect(await storage.stat(key)).toEqual({ size: 10, contentType: 'application/pdf' });
+    await storage.delete(key);
+  });
+
+  it('ссылки для браузера подписаны по S3_PUBLIC_ENDPOINT, файлы сервер берёт по S3_ENDPOINT', async () => {
+    const config = loadStorageConfig();
+    const storage = createS3Storage({ ...config, S3_PUBLIC_ENDPOINT: 'https://files.example.kg' });
+    const key = orgFileKey('test', 'public', randomUUID());
+    await storage.put(key, 'x', { contentType: 'text/plain' });
+    expect(await storage.signedDownloadUrl(key, { expiresInSeconds: 60 })).toMatch(
+      /^https:\/\/files\.example\.kg\//,
+    );
+    const upload = await storage.signedUploadUrl(key, {
+      expiresInSeconds: 60,
+      contentType: 'text/plain',
+      size: 1,
+    });
+    expect(upload.url).toMatch(/^https:\/\/files\.example\.kg\//);
+    expect(await storage.stat(key)).toEqual({ size: 1, contentType: 'text/plain' });
     await storage.delete(key);
   });
 
