@@ -73,8 +73,9 @@ describe('ячейки «Ввода за месяц»', () => {
       ['k1', 'early', '2026-01'],
       ['k2', 'early', '2026-01'],
     ]);
-    expect(monthContractors(book, [onr, single, contractor('c4', { oneOff: true })], '2026-09'))
-      .toEqual([onr, single]);
+    expect(
+      monthContractors(book, [onr, single, contractor('c4', { oneOff: true })], '2026-09'),
+    ).toEqual([onr, single]);
   });
 
   it('у разового и архивного ячеек для ввода нет', () => {
@@ -118,7 +119,12 @@ describe('«За период» и вкладка «Показатели» ка�
   });
 
   it('выключенный и архивный показатель видны, пока за период есть значения', () => {
-    const rows = periodRows(book, [contractor('c1'), contractor('c2', { oneOff: true })], months, valueOf);
+    const rows = periodRows(
+      book,
+      [contractor('c1'), contractor('c2', { oneOff: true })],
+      months,
+      valueOf,
+    );
     expect(rows.map((r) => [r.indicatorId, r.need, r.offSince])).toEqual([
       ['k1', 3, null],
       ['k2', 0, '2026-09'],
@@ -129,9 +135,9 @@ describe('«За период» и вкладка «Показатели» ка�
   });
 
   it('карточка: ведущиеся показатели и те, по которым есть значения', () => {
-    expect(cardRows(book, contractor('c1'), ['2026-10'], valueOf).map((r) => r.indicatorId)).toEqual(
-      ['k1'],
-    );
+    expect(
+      cardRows(book, contractor('c1'), ['2026-10'], valueOf).map((r) => r.indicatorId),
+    ).toEqual(['k1']);
     expect(cardRows(book, contractor('c1'), months, valueOf).map((r) => r.indicatorId)).toEqual([
       'k1',
       'k2',

@@ -10,6 +10,7 @@ import { createModuleApp } from './module';
 import { adminModule } from './modules/admin';
 import { authModule } from './modules/auth';
 import { contractorsModule } from './modules/contractors';
+import { kpiModule } from './modules/kpi';
 import { l10nModule } from './modules/l10n';
 import { moneyModule } from './modules/money';
 import { orgModule } from './modules/org';
@@ -81,6 +82,7 @@ export function createApp(deps: ApiDeps) {
     .route('/', platformDictsModule(deps))
     .route('/', dictsModule(deps))
     .route('/', moneyModule(deps))
+    .route('/', kpiModule(deps))
     .route('/', filesModule(deps))
     .route('/', viewsModule(deps))
     .route('/', adminModule(deps));

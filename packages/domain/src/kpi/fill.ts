@@ -62,6 +62,9 @@ export type FillStatus = (typeof FILL_STATUSES)[number];
 /** Не дальше скольких месяцев назад ищутся незаполненные месяцы (прототип `K_BACK`). */
 export const KPI_LOOKBACK_MONTHS = 35;
 
+/** «За период» — не длиннее: месяцы — столбцы списка (столбцов в списке не больше 100). */
+export const KPI_PERIOD_MAX_MONTHS = 72;
+
 /** Ведётся ли показатель у контрагента (прототип `kOn`). */
 export function indicatorOn(
   indicator: Pick<KpiIndicator, 'scope' | 'autoNew'>,

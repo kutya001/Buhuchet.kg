@@ -23,11 +23,12 @@ import {
   type KpiValueOf,
   type YearMonth,
 } from '@buhuchet/domain';
-import { and, asc, eq, gte, inArray, isNotNull, lte, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNotNull, lte, sql, type SQL } from 'drizzle-orm';
 import type { Tx } from './client';
-import { writeHistory } from './history';
+import { updateWithHistory, writeHistory } from './history';
 import { writeStatusChange } from './status';
 import {
+  auditLog,
   contractorGkedExtra,
   contractors,
   employees,
@@ -35,6 +36,8 @@ import {
   indicators,
   indicatorTargets,
   indicatorValues,
+  orgSettings,
+  statusHistory,
   taxRegimes,
 } from './schema';
 
@@ -71,9 +74,10 @@ export interface IndicatorRecord {
 }
 
 // Подзапросы — с явными именами таблиц: в запросе одной таблицы drizzle пишет столбцы без её имени.
-const VALUE_COUNT = sql<number>`(select count(*) from indicator_values v where v.indicator_id = "indicators"."id" and v.value is not null)`.mapWith(
-  Number,
-);
+const VALUE_COUNT =
+  sql<number>`(select count(*) from indicator_values v where v.indicator_id = "indicators"."id" and v.value is not null)`.mapWith(
+    Number,
+  );
 const HAS_ROWS = sql<boolean>`exists (select 1 from indicator_values v where v.indicator_id = "indicators"."id")`;
 
 const indicatorFields = {
@@ -167,11 +171,17 @@ export async function reorderIndicators(tx: Tx, ids: readonly string[]): Promise
     .orderBy(asc(indicators.sortOrder))
     .for('update');
   const known = new Set(rows.map((r) => r.id));
-  if (ids.length !== rows.length || new Set(ids).size !== ids.length || !ids.every((id) => known.has(id))) {
+  if (
+    ids.length !== rows.length ||
+    new Set(ids).size !== ids.length ||
+    !ids.every((id) => known.has(id))
+  ) {
     return false;
   }
   const before = new Map(rows.map((r) => [r.id, r.sortOrder]));
-  const moved = ids.flatMap((id, i) => (before.get(id) === i + 1 ? [] : [{ id, from: before.get(id)!, to: i + 1 }]));
+  const moved = ids.flatMap((id, i) =>
+    before.get(id) === i + 1 ? [] : [{ id, from: before.get(id)!, to: i + 1 }],
+  );
   for (const m of moved) {
     await tx.update(indicators).set({ sortOrder: m.to }).where(eq(indicators.id, m.id));
   }
@@ -187,6 +197,92 @@ export async function reorderIndicators(tx: Tx, ids: readonly string[]): Promise
   return true;
 }
 
+/**
+ * Сохранить окно показателя (с версией): изменённые поля — в историю показателя. Порядок, архив и
+ * «Кому вести» меняются отдельно.
+ */
+export async function updateIndicator(
+  tx: Tx,
+  id: string,
+  version: number,
+  fields: IndicatorFields,
+): Promise<void> {
+  await updateWithHistory(tx, {
+    table: indicators,
+    entity: 'indicator',
+    id,
+    version,
+    patch: fields,
+  });
+}
+
+/** «В архив» и «Вернуть из архива» (с версией, в историю показателя). */
+export async function archiveIndicator(
+  tx: Tx,
+  id: string,
+  version: number,
+  archived: boolean,
+): Promise<void> {
+  await updateWithHistory(tx, {
+    table: indicators,
+    entity: 'indicator',
+    id,
+    version,
+    patch: { archived },
+  });
+}
+
+/** Строка «Истории показателя». */
+export interface IndicatorHistoryRecord {
+  at: Date;
+  actor: string | null;
+  action: string;
+  /** Контрагент строки «Ведётся» → «Не ведётся»; null — правка самого показателя. */
+  contractor: string | null;
+  changes: HistoryChange[];
+}
+
+/**
+ * «История показателя» в окне показателя (прототип: последние 30 записей): сначала новые. Строки
+ * контрагентов вне области `scope` не показываются.
+ */
+export async function indicatorHistory(
+  tx: Tx,
+  id: string,
+  scope: SQL | undefined,
+  limit = 30,
+): Promise<IndicatorHistoryRecord[]> {
+  const rows = await tx
+    .select({
+      at: auditLog.at,
+      actorUserId: auditLog.actorUserId,
+      actorName: employees.shortName,
+      action: auditLog.action,
+      contractorId: auditLog.contractorId,
+      contractor: contractors.name,
+      changes: auditLog.changes,
+    })
+    .from(auditLog)
+    .leftJoin(employees, eq(employees.userId, auditLog.actorUserId))
+    .leftJoin(contractors, eq(contractors.id, auditLog.contractorId))
+    .where(
+      and(
+        eq(auditLog.entity, 'indicator'),
+        eq(auditLog.entityId, id),
+        scope ? sql`(${auditLog.contractorId} is null or (${scope}))` : undefined,
+      ),
+    )
+    .orderBy(desc(auditLog.at), desc(auditLog.id))
+    .limit(limit);
+  return rows.map((r) => ({
+    at: r.at,
+    actor: auditActorName(r.actorUserId, r.actorName),
+    action: r.action,
+    contractor: r.contractorId ? (r.contractor ?? null) : null,
+    changes: r.changes,
+  }));
+}
+
 /** Удалить показатель без значений (проверку `hasRows` делает вызывающий; держит и внешний ключ). */
 export async function deleteIndicator(
   tx: Tx,
@@ -198,7 +294,8 @@ export async function deleteIndicator(
     .where(eq(indicators.id, row.id))
     .for('update');
   if (!locked) throw new RecordNotFoundError('indicator', row.id);
-  if (locked.version !== row.version) throw new RecordChangedError('indicator', row.id, locked.version);
+  if (locked.version !== row.version)
+    throw new RecordChangedError('indicator', row.id, locked.version);
   await writeHistory(tx, {
     entity: 'indicator',
     entityId: row.id,
@@ -372,7 +469,11 @@ export function loadValues(
     .from(indicatorValues)
     .where(
       and(
-        ids ? (ids.length ? inArray(indicatorValues.contractorId, [...ids]) : sql`false`) : undefined,
+        ids
+          ? ids.length
+            ? inArray(indicatorValues.contractorId, [...ids])
+            : sql`false`
+          : undefined,
         options.from ? gte(indicatorValues.month, options.from) : undefined,
         options.to ? lte(indicatorValues.month, options.to) : undefined,
         options.filled ? isNotNull(indicatorValues.value) : undefined,
@@ -408,7 +509,11 @@ export function loadMonths(
     .from(indicatorMonths)
     .where(
       and(
-        ids ? (ids.length ? inArray(indicatorMonths.contractorId, [...ids]) : sql`false`) : undefined,
+        ids
+          ? ids.length
+            ? inArray(indicatorMonths.contractorId, [...ids])
+            : sql`false`
+          : undefined,
         options.from ? gte(indicatorMonths.month, options.from) : undefined,
         options.to ? lte(indicatorMonths.month, options.to) : undefined,
       ),
@@ -424,7 +529,11 @@ export interface KpiData {
   book: KpiBook;
   valueOf: KpiValueOf;
   /** Строка значения по ключу (и пустая). */
-  valueRow(contractorId: string, indicatorId: string, month: YearMonth): IndicatorValueRecord | undefined;
+  valueRow(
+    contractorId: string,
+    indicatorId: string,
+    month: YearMonth,
+  ): IndicatorValueRecord | undefined;
   /** Записать строку значения в данные (после сохранения). */
   putValue(row: IndicatorValueRecord): void;
 }
@@ -455,7 +564,12 @@ export function kpiData(
  */
 export async function loadKpiData(
   tx: Tx,
-  options: { contractorIds?: readonly string[]; from?: YearMonth; to?: YearMonth; filled?: boolean } = {},
+  options: {
+    contractorIds?: readonly string[];
+    from?: YearMonth;
+    to?: YearMonth;
+    filled?: boolean;
+  } = {},
 ): Promise<KpiData> {
   const [list, targets, values] = await Promise.all([
     listIndicators(tx),
@@ -588,6 +702,30 @@ export async function resyncFillStatuses(
       .map((month) => ({ contractor, month }));
   });
   return syncFillStatuses(tx, data, pairs);
+}
+
+/** Последняя смена статуса месяцев: когда и кто (подсказка компактной шкалы). */
+export async function lastFillEvents(
+  tx: Tx,
+  monthIds: readonly string[],
+): Promise<Map<string, { at: Date; actor: string | null }>> {
+  if (monthIds.length === 0) return new Map();
+  const rows = await tx
+    .selectDistinctOn([statusHistory.entityId], {
+      entityId: statusHistory.entityId,
+      at: statusHistory.at,
+      actorUserId: statusHistory.actorUserId,
+      actorName: employees.shortName,
+    })
+    .from(statusHistory)
+    .leftJoin(employees, eq(employees.userId, statusHistory.actorUserId))
+    .where(
+      and(eq(statusHistory.scale, 'indicator'), inArray(statusHistory.entityId, [...monthIds])),
+    )
+    .orderBy(statusHistory.entityId, desc(statusHistory.at), desc(statusHistory.id));
+  return new Map(
+    rows.map((r) => [r.entityId, { at: r.at, actor: auditActorName(r.actorUserId, r.actorName) }]),
+  );
 }
 
 /** Строка статуса месяца с проверкой версии — для «Проверено» и отката. */
@@ -766,11 +904,18 @@ export async function saveIndicatorValues(
   const ids = [...new Set(writes.map((w) => w.contractorId))];
   const months = writes.map((w) => w.month).sort();
   // Значения перечитаны под блокировкой: правка, сохранённая другим сотрудником, не затирается молча.
-  const fresh = await loadValues(tx, { contractorIds: ids, from: months[0]!, to: months[months.length - 1]! });
+  const fresh = await loadValues(tx, {
+    contractorIds: ids,
+    from: months[0]!,
+    to: months[months.length - 1]!,
+  });
   for (const row of fresh) data.putValue(row);
 
   const changed: ValueWrite[] = [];
-  const edited = new Map<string, { contractor: KpiContractor; month: YearMonth; edited: boolean }>();
+  const edited = new Map<
+    string,
+    { contractor: KpiContractor; month: YearMonth; edited: boolean }
+  >();
   for (const w of writes) {
     const row = data.valueRow(w.contractorId, w.indicatorId, w.month);
     const before = row?.value ?? null;
@@ -848,6 +993,37 @@ export async function saveIndicatorValues(
   }
   const statuses = await syncFillStatuses(tx, data, [...edited.values()]);
   return { changed, statuses };
+}
+
+/** Строка значения по номеру — для блока «Файлы»: контрагент и показатель. */
+export async function indicatorValueOwner(
+  tx: Tx,
+  id: string,
+  scope: SQL | undefined,
+): Promise<{
+  id: string;
+  contractorId: string;
+  responsibleEmployeeId: string | null;
+  contractorArchived: boolean;
+  indicatorArchived: boolean;
+  /** Функция «Показатели контрагентов» включена в учётной политике. */
+  enabled: boolean;
+} | null> {
+  if (!UUID_RE.test(id)) return null;
+  const [row] = await tx
+    .select({
+      id: indicatorValues.id,
+      contractorId: indicatorValues.contractorId,
+      responsibleEmployeeId: contractors.responsibleEmployeeId,
+      contractorArchived: sql<boolean>`${contractors.serviceStatus} = 'archived'`,
+      indicatorArchived: indicators.archived,
+      enabled: sql<boolean>`coalesce((select (${orgSettings.features} ->> 'indicators')::boolean from ${orgSettings} where ${orgSettings.orgId} = app.current_org_id()), false)`,
+    })
+    .from(indicatorValues)
+    .innerJoin(contractors, eq(contractors.id, indicatorValues.contractorId))
+    .innerJoin(indicators, eq(indicators.id, indicatorValues.indicatorId))
+    .where(and(eq(indicatorValues.id, id), scope));
+  return row ?? null;
 }
 
 /* ───────────── История значений ───────────── */

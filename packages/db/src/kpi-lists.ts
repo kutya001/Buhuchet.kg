@@ -15,12 +15,7 @@ import {
 } from '@buhuchet/domain';
 import { sql, type SQL } from 'drizzle-orm';
 import type { Tx } from './client';
-import {
-  kpiContractorOf,
-  kpiContractorRecords,
-  loadKpiData,
-  loadMonths,
-} from './kpi';
+import { kpiContractorOf, kpiContractorRecords, loadKpiData, loadMonths } from './kpi';
 import {
   selectListExport,
   selectListPage,
@@ -65,8 +60,22 @@ const numberColumn = (key: string, label: string): ListColumn => ({
 });
 
 /** Короткая подпись месяца в заголовке: «авг 26» (прототип `ymS`). */
-const MONTHS_SHORT = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
-export const monthShort = (m: YearMonth) => `${MONTHS_SHORT[Number(m.slice(5, 7)) - 1]} ${m.slice(2, 4)}`;
+const MONTHS_SHORT = [
+  'янв',
+  'фев',
+  'мар',
+  'апр',
+  'май',
+  'июн',
+  'июл',
+  'авг',
+  'сен',
+  'окт',
+  'ноя',
+  'дек',
+];
+export const monthShort = (m: YearMonth) =>
+  `${MONTHS_SHORT[Number(m.slice(5, 7)) - 1]} ${m.slice(2, 4)}`;
 
 /** Месяц в ключе столбца «За период»: `m2026-08`. */
 export const monthColumnKey = (m: YearMonth) => `m${m}`;
@@ -157,7 +166,8 @@ function periodColumns(months: readonly YearMonth[]): ListColumns {
     cp: { type: 'text', label: 'kpi.col.contractor', value: field('cp') },
     ind: { type: 'enum', label: 'kpi.col.indicator', value: field('ind') },
   };
-  for (const m of months) columns[monthColumnKey(m)] = numberColumn(monthColumnKey(m), monthShort(m));
+  for (const m of months)
+    columns[monthColumnKey(m)] = numberColumn(monthColumnKey(m), monthShort(m));
   for (const k of KPI_PERIOD_TOTALS) columns[k] = numberColumn(k, `kpi.total.${k}`);
   columns.resp = { type: 'enum', label: 'kpi.col.responsible', value: field('resp') };
   columns.unit = { type: 'enum', label: 'kpi.col.unit', value: field('unit') };
@@ -180,7 +190,11 @@ function periodColumns(months: readonly YearMonth[]): ListColumns {
 const textOf = (type: IndicatorType, value: number | null) =>
   value === null ? '' : indicatorNumberText(type, value);
 
-function periodSource(rows: readonly KpiPeriodListRow[], months: readonly YearMonth[], t: ListTexts) {
+function periodSource(
+  rows: readonly KpiPeriodListRow[],
+  months: readonly YearMonth[],
+  t: ListTexts,
+) {
   const defs: [string, string][] = [
     ['cp', 'text'],
     ['ind', 'text'],

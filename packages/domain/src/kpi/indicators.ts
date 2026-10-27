@@ -226,3 +226,19 @@ export function indicatorTotals(values: readonly (IndicatorValue | null)[]): Ind
     last: filled[filled.length - 1]!,
   };
 }
+
+/** Отказы методов модуля (код — ключ словаря `err.<код>`). */
+export const KPI_MESSAGES = {
+  indicators_off: 'Показатели контрагентов выключены в учётной политике',
+  indicator_has_values: 'По показателю уже есть значения — отправьте его в архив',
+  indicator_archived: 'Показатель в архиве: новых значений по нему нет',
+  indicator_order: 'Порядок устарел — обновите страницу',
+  value_invalid: 'Введите число',
+  cell_off: 'Показатель у этого контрагента не ведётся или не нужен в этом месяце',
+  month_in_future: 'Месяц ещё не наступил',
+  target_off: 'Показатель у этого контрагента не ведётся',
+  from_in_future: 'Не позже текущего месяца',
+  check_not_filled: 'Проверить можно только заполненный месяц',
+  period_too_long: 'Период — не длиннее 72 месяцев',
+} as const;
+export type KpiRefusal = keyof typeof KPI_MESSAGES;
