@@ -14,6 +14,8 @@ export interface ShellCount {
   tone?: 'red' | 'yellow';
   /** Подсказка, например «Просрочено». */
   title?: string;
+  /** Синяя точка вместо числа (прототип `.kb-dot`: «Начните с Базы знаний»). */
+  dot?: boolean;
 }
 
 export interface ShellTab {

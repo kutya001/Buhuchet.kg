@@ -448,6 +448,7 @@ export const GRID_KEYS = [
   // «Показатели контрагентов»: вкладки «За период» и «Не заполнено».
   'kpi.period',
   'kpi.missing',
+  'kb.team',
   'accounts.list',
   'orgs.list',
   'l10n.list',

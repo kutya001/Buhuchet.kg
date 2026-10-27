@@ -11,6 +11,7 @@ const TONES = {
 
 /** Счётчик-«таблетка» (прототип `.badge`): число записей у модуля или вкладки. */
 export function CountBadge({ count, className = '' }: { count: ShellCount; className?: string }) {
+  if (count.dot) return <NavDot title={count.title} className={className} />;
   // Нулевой счётчик — серый, даже если вкладка «красная» (как в прототипе).
   const tone = count.value && count.tone ? count.tone : 'none';
   return (
@@ -20,5 +21,17 @@ export function CountBadge({ count, className = '' }: { count: ShellCount; class
     >
       {count.value}
     </span>
+  );
+}
+
+/** Синяя точка у модуля или на кнопке «Меню» (прототип `.kb-dot`, `#burger.has-dot`). */
+export function NavDot({ title, className = '' }: { title?: string; className?: string }) {
+  return (
+    <span
+      title={title}
+      aria-label={title}
+      role={title ? 'img' : undefined}
+      className={`h-2 w-2 flex-none rounded-full bg-info shadow-[0_0_0_3px_var(--color-info-bg)] ${className}`}
+    />
   );
 }

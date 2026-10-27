@@ -1,3 +1,5 @@
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { expect, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 
 // Общее для сквозных тестов: вход и новый сотрудник через API, бот-подделка (fake-telegram.ts),
@@ -170,4 +172,46 @@ export async function settledBox(locator: Locator) {
     })
     .toBe(true);
   return (await locator.boundingBox())!;
+}
+
+const ROOT = fileURLToPath(new URL('..', import.meta.url));
+
+/** Свой ИНН (14 цифр) на каждый запуск: второй организации с тем же ИНН быть не может. */
+export const uniqueInn = () =>
+  `9${Date.now().toString().slice(-9)}${Math.floor(Math.random() * 10_000)
+    .toString()
+    .padStart(4, '0')}`;
+
+/**
+ * Новая организация с владельцем (`pnpm db:create-org`, база сайта — та же, что в .env): владелец
+ * входит в `api` и сразу меняет временный пароль. Для проверок, которым нужна организация без
+ * истории действий (своя на каждый тест и проект), — демо-организацию они не трогают.
+ */
+export async function newOrgOwner(api: APIRequestContext, origin: string) {
+  const login = uniqueLogin('e2e-org');
+  const out = execFileSync(
+    'pnpm',
+    [
+      '--silent',
+      'db:create-org',
+      '--name',
+      `ОсОО «${login}»`,
+      '--inn',
+      uniqueInn(),
+      '--owner-fio',
+      'Новикова Сквозная',
+      '--owner-login',
+      login,
+    ],
+    { cwd: ROOT, encoding: 'utf8' },
+  );
+  const temporary = /Временный пароль[^:]*:\s*(\S+)/.exec(out)?.[1];
+  expect(temporary, out).toBeTruthy();
+  await signIn(api, origin, login, temporary!);
+  const changed = await api.post('/api/auth/password', {
+    headers: { origin },
+    data: { currentPassword: temporary, newPassword: 'Свой-пароль-e2e-1' },
+  });
+  expect(changed.status(), await changed.text()).toBe(200);
+  return login;
 }

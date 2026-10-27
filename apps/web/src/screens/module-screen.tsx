@@ -6,6 +6,10 @@ import { L10nList } from '../admin/l10n-list';
 import { OrgsList } from '../admin/orgs-list';
 import { PlatformDicts } from '../dicts/platform-tab';
 import { ReportTypesList } from '../dicts/report-types-list';
+import { KbArticlesTab } from '../kb/kb-articles';
+import { KbLessonsTab } from '../kb/kb-lessons';
+import { KbLevelTab } from '../kb/kb-level';
+import { KbTeamTab } from '../kb/kb-team';
 import { KpiScreen } from '../kpi/kpi-screen';
 import { OrgMain } from '../org/org-main';
 import { OrgPolicyTab } from '../org/org-policy';
@@ -46,6 +50,15 @@ export function ModuleScreen({
     const tab = tabId ?? 'types';
     if (tab === 'types') return <ReportTypesList />;
     return <PlatformDicts />;
+  }
+  if (moduleId === 'kb') {
+    const tab = tabId ?? 'level';
+    if (tab === 'level') return <KbLevelTab />;
+    if (tab === 'lessons') return <KbLessonsTab />;
+    if (tab === 'arts') return <KbArticlesTab />;
+    if (tab === 'team') return <KbTeamTab />;
+    // «Новости» — задача 2.32.
+    return <ModuleStub moduleId={moduleId} />;
   }
   if (moduleId === 'accounts') return <AccountsList />;
   if (moduleId === 'orgs') return <OrgsList />;

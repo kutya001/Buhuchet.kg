@@ -35,6 +35,7 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Fragment, useId, useState } from 'react';
 import { api, callApi } from '../api-client';
+import { useFeatureLesson } from '../kb/kb-provider';
 import { useErrorText, useT } from '../l10n/provider';
 import { useShell } from '../shell/context';
 import { policyHistoryQuery, policyQuery, useOrgRefresh } from './org-data';
@@ -72,6 +73,8 @@ function PolicyEdit({ policy, readOnly }: { policy: OrgPolicy; readOnly: boolean
   /** Только что включённая функция — окно «Функция «…» включена». */
   const [enabled, setEnabled] = useState<Feature | null>(null);
   const [enabledOpen, setEnabledOpen] = useState(false);
+  /** «Пройти урок» — когда урок функции есть в «Базе знаний» (задача 2.30). */
+  const learn = useFeatureLesson(enabled);
   const off = readOnly || busy || changed;
   const feature = (f: Feature) => t(`org.feature.${f}`);
 
@@ -242,6 +245,19 @@ function PolicyEdit({ policy, readOnly }: { policy: OrgPolicy; readOnly: boolean
             >
               {t('org.feature.later')}
             </button>
+            {learn ? (
+              <button
+                type="button"
+                className={buttonClass('cta')}
+                onClick={() => {
+                  setEnabledOpen(false);
+                  learn();
+                }}
+              >
+                <Icon name="play" size="sm" />
+                {t('kb.feat_on.learn')}
+              </button>
+            ) : null}
           </>
         }
       >
@@ -258,6 +274,7 @@ function PolicyEdit({ policy, readOnly }: { policy: OrgPolicy; readOnly: boolean
             </div>
           </div>
         ) : null}
+        {learn ? <p className="m-0 text-muted">{t('kb.feat_on.text')}</p> : null}
       </Modal>
     </div>
   );
