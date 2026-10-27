@@ -4,6 +4,7 @@ import {
   bigint,
   boolean,
   check,
+  foreignKey,
   index,
   pgPolicy,
   pgTable,
@@ -11,6 +12,7 @@ import {
   timestamp,
   uuid,
 } from 'drizzle-orm/pg-core';
+import { files } from './files';
 import { organizations } from './organizations';
 import { appRole, currentOrgId, orgIsolation } from './rls';
 import { users } from './users';
@@ -43,6 +45,8 @@ export const statusHistory = pgTable(
     isRollback: boolean('is_rollback').notNull().default(false),
     /** Комментарий или причина (у отката обязательна). */
     reason: text('reason'),
+    /** Файл к смене статуса (например, квитанция о приёме); пусто — без файла. */
+    fileId: uuid('file_id'),
     /** Пусто — система (задача по расписанию). */
     actorUserId: uuid('actor_user_id')
       .default(sql`app.current_user_id()`)
@@ -51,6 +55,11 @@ export const statusHistory = pgTable(
   },
   (t) => [
     index('status_history_entity_idx').on(t.orgId, t.scale, t.entityId, t.at),
+    foreignKey({
+      name: 'status_history_file_fk',
+      columns: [t.fileId, t.orgId],
+      foreignColumns: [files.id, files.orgId],
+    }).onDelete('restrict'),
     check(
       'status_history_status_check',
       sql.join(

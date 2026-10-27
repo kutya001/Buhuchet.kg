@@ -285,6 +285,30 @@ describe('«История статусов» (statusHistHtml)', () => {
       },
     ]);
     expect(e!.at.toISOString()).toBe('2026-10-05T08:20:00.000Z');
+    expect(e!.file).toBeNull();
+    const id = '00000000-0000-4000-8000-0000000000f1';
+    const entry = { at: '2026-10-05T08:20:00.000Z', from: null, to: 'todo' } as const;
+    const withFile = statusEvents([
+      {
+        ...entry,
+        rollback: false,
+        reason: null,
+        actor: null,
+        file: { id, name: 'чек.pdf', available: true },
+      },
+      {
+        ...entry,
+        rollback: false,
+        reason: null,
+        actor: null,
+        file: { id, name: 'чек.pdf', available: false },
+      },
+    ]);
+    // Файл к смене статуса — ссылка на скачивание; удалённый — только имя.
+    expect(withFile.map((x) => x.file)).toEqual([
+      { name: 'чек.pdf', href: `/api/files/${id}/download` },
+      { name: 'чек.pdf', href: undefined },
+    ]);
     expect(rollbackTitle(t, 'report', 'submitted', 'in_progress')).toBe(
       'Откатить: «Сдан» → «В работе»',
     );

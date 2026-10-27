@@ -13,7 +13,7 @@ import {
   type StatusScaleKey,
   type StatusTone,
 } from '@buhuchet/domain';
-import type { StatusHistoryEntry } from '@buhuchet/shared';
+import { fileDownloadPath, type StatusHistoryEntry } from '@buhuchet/shared';
 import type {
   IconName,
   RollbackDialogLabels,
@@ -44,9 +44,18 @@ export interface StatusEvent {
   file?: { name: string; href?: string } | null;
 }
 
-/** История из ответа API (`StatusHistoryEntry`, время строкой ISO). */
+/**
+ * История из ответа API (`StatusHistoryEntry`, время строкой ISO). Файл к смене статуса — ссылка на
+ * скачивание; удалённый файл — только имя.
+ */
 export function statusEvents(entries: readonly StatusHistoryEntry[]): StatusEvent[] {
-  return entries.map((e) => ({ ...e, at: new Date(e.at) }));
+  return entries.map(({ file, ...e }) => ({
+    ...e,
+    at: new Date(e.at),
+    file: file
+      ? { name: file.name, href: file.available ? fileDownloadPath(file.id) : undefined }
+      : null,
+  }));
 }
 
 /** Название статуса из словаря. */

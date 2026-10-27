@@ -5,6 +5,7 @@ export * from './context';
 export * from './errors';
 export * from './history';
 export * from './status';
+export * from './files';
 export * from './auth';
 export * from './telegram';
 export * from './staff';

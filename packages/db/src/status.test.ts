@@ -135,14 +135,22 @@ describe.skipIf(!databaseAvailable())('история статусов', () => {
       .from(employees)
       .where(eq(employees.id, a.ownerEmployeeId));
     expect(history.map(({ at: _at, ...e }) => e)).toEqual([
-      { from: null, to: 'todo', rollback: false, reason: null, actor: null },
-      { from: 'todo', to: 'in_progress', rollback: false, reason: null, actor: 'Тилекова А.' },
+      { from: null, to: 'todo', rollback: false, reason: null, actor: null, file: null },
+      {
+        from: 'todo',
+        to: 'in_progress',
+        rollback: false,
+        reason: null,
+        actor: 'Тилекова А.',
+        file: null,
+      },
       {
         from: 'in_progress',
         to: 'todo',
         rollback: true,
         reason: 'поставили по ошибке',
         actor: owner!.shortName,
+        file: null,
       },
     ]);
     expect(history.every((e) => e.at instanceof Date)).toBe(true);

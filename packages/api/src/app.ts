@@ -14,6 +14,7 @@ import { moneyModule } from './modules/money';
 import { orgModule } from './modules/org';
 import { platformDictsModule } from './modules/platform-dicts';
 import { dictsModule } from './modules/dicts';
+import { filesModule } from './modules/files';
 import { LOGO_PATH } from './modules/org/logo';
 import { rolesModule } from './modules/roles';
 import { staffModule } from './modules/staff';
@@ -78,6 +79,7 @@ export function createApp(deps: ApiDeps) {
     .route('/', platformDictsModule(deps))
     .route('/', dictsModule(deps))
     .route('/', moneyModule(deps))
+    .route('/', filesModule(deps))
     .route('/', viewsModule(deps))
     .route('/', adminModule(deps));
 

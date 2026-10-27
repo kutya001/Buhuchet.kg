@@ -253,6 +253,20 @@
       "when": 1793102250612,
       "tag": "0035_banks_read_only",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1793109441212,
+      "tag": "0036_files",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1793109443658,
+      "tag": "0037_files_column_grants",
+      "breakpoints": true
     }
   ]
 }
