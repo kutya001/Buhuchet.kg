@@ -3,6 +3,7 @@ import {
   BENEFIT_KINDS,
   BIZ_SIZES,
   CALENDAR_DAY_KINDS,
+  DECLARATION_FOR,
   DUE_FROM,
   PAYER_KINDS,
   PICK_GROUPS,
@@ -431,5 +432,87 @@ export const productionCalendar = pgTable(
     ),
     check('production_calendar_kind_check', oneOf(t.kind, CALENDAR_DAY_KINDS)),
     platformReadOnly('production_calendar_read'),
+  ],
+).enableRLS();
+
+/*
+ * Формы собственности, ставки единого налога и причины изменения срока (задача 2.01): прежде лежали
+ * копиями разделов refDB.json в `platform_reference`, теперь — свои таблицы с тем же устройством.
+ */
+
+/** «Формы собственности»: организационно-правовые формы по ГК КР. */
+export const ownershipForms = pgTable(
+  'ownership_forms',
+  {
+    /** ФС-01 … */
+    code: text('code').primaryKey(),
+    /** Название, которым форма показывается у контрагента («ОсОО», «ИП»). */
+    name: text('name').notNull(),
+    /** «Полное название». */
+    fullName: text('full_name').notNull().default(''),
+    /** «Краткое название». */
+    shortName: text('short_name').notNull().default(''),
+    /** «Для ЕНД»: контрагенту доступна ЕНД для организаций или ЕНД для ИП. */
+    declarationFor: text('declaration_for', { enum: DECLARATION_FOR }).notNull().default('org'),
+    /** «Что меняет в налогах» — пояснение, которое видят все организации. */
+    note: text('note').notNull().default(''),
+    ...dictColumns(),
+  },
+  (t) => [
+    uniqueIndex('ownership_forms_name_key').on(t.name),
+    check('ownership_forms_declaration_for_check', oneOf(t.declarationFor, DECLARATION_FOR)),
+    platformReadOnly('ownership_forms_read'),
+  ],
+).enableRLS();
+
+/**
+ * «Ставки единого налога» (ст. 423 НК КР): у ЕН в назначении контрагента хранится код строки, а не
+ * процент — безналичная и наличная ставки строки действуют вместе.
+ */
+export const singleTaxRates = pgTable(
+  'single_tax_rates',
+  {
+    /** ЕНС-01 … */
+    code: text('code').primaryKey(),
+    /** «Деятельность». */
+    activity: text('activity').notNull(),
+    /** «Ставка» текстом, как в кодексе («2 % безнал + 4 % нал»). */
+    rate: text('rate').notNull(),
+    /** Ставки безналичной и наличной выручки; пусто — одна ставка `rate` на всю выручку. */
+    rateCashless: text('rate_cashless').notNull().default(''),
+    rateCash: text('rate_cash').notNull().default(''),
+    /** «Условие». */
+    conditions: text('conditions').notNull().default(''),
+    article: text('article').notNull().default(''),
+    /** «Когда применяется» — пояснение ставки, которое видят все организации. */
+    explanation: text('explanation').notNull().default(''),
+    gked: jsonb('gked').$type<GkedRule>(),
+    /**
+     * «Добавляется к ставкам»: коды строк, к которым строка добавляется (ЕНС-16 — к ЕНС-01, 02, …);
+     * пусто — самостоятельная ставка. Коды проверяет наполнение (и Админка — поток Д).
+     */
+    addsTo: text('adds_to').array().notNull().default([]),
+    ...dictColumns(),
+  },
+  (t) => [
+    check('single_tax_rates_adds_to_check', sql`not (${t.code} = any(${t.addsTo}))`),
+    platformReadOnly('single_tax_rates_read'),
+  ],
+).enableRLS();
+
+/** «Причины изменения срока отчёта»: выбираются при ручном отчёте и изменении срока. */
+export const dueChangeReasons = pgTable(
+  'due_change_reasons',
+  {
+    /** ПРЧ-001 … */
+    code: text('code').primaryKey(),
+    name: text('name').notNull(),
+    /** «Пояснение». */
+    note: text('note').notNull().default(''),
+    ...dictColumns(),
+  },
+  (t) => [
+    uniqueIndex('due_change_reasons_name_key').on(t.name),
+    platformReadOnly('due_change_reasons_read'),
   ],
 ).enableRLS();

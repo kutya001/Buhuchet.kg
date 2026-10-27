@@ -5,6 +5,7 @@ import type {
   BenefitSuggest,
   BizSize,
   CalendarEntry,
+  DeclarationFor,
   DueFrom,
   GkedRule,
   PayerKind,
@@ -21,11 +22,14 @@ import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import type { Db, Tx } from './client';
 import {
   authorities,
+  dueChangeReasons,
+  ownershipForms,
   productionCalendar,
   reportBases,
   reportTypeBases,
   reportTypeRegimes,
   reportTypes,
+  singleTaxRates,
   taxBenefitDueRules,
   taxBenefitOffices,
   taxBenefitReportTypes,
@@ -35,7 +39,7 @@ import {
 } from './schema';
 
 /*
- * Справочники платформы для форм и списков организаций (задача #20): только чтение, по порядку
+ * Справочники платформы для форм и списков организаций (задачи #20, 2.01): только чтение, по порядку
  * справочника. По умолчанию — только действующие значения: отключённое не предлагается в новых записях
  * (ТЗ «Справочники платформы» → «Общие правила»). `all` — со отключёнными: в уже созданных записях
  * значение показывается как есть, Админка видит весь справочник.
@@ -425,4 +429,98 @@ export async function productionCalendarEntries(db: Db | Tx): Promise<CalendarEn
     })
     .from(productionCalendar)
     .orderBy(asc(productionCalendar.day));
+}
+
+export interface OwnershipFormRecord {
+  code: string;
+  name: string;
+  fullName: string;
+  shortName: string;
+  declarationFor: DeclarationFor;
+  note: string;
+  active: boolean;
+}
+
+/** «Формы собственности». */
+export async function listOwnershipForms(
+  db: Db | Tx,
+  options: DictListOptions = {},
+): Promise<OwnershipFormRecord[]> {
+  return db
+    .select({
+      code: ownershipForms.code,
+      name: ownershipForms.name,
+      fullName: ownershipForms.fullName,
+      shortName: ownershipForms.shortName,
+      declarationFor: ownershipForms.declarationFor,
+      note: ownershipForms.note,
+      active: ownershipForms.active,
+    })
+    .from(ownershipForms)
+    .where(activeOnly(ownershipForms.active, options))
+    .orderBy(asc(ownershipForms.sortOrder), asc(ownershipForms.code));
+}
+
+export interface SingleTaxRateRecord {
+  code: string;
+  activity: string;
+  rate: string;
+  rateCashless: string;
+  rateCash: string;
+  conditions: string;
+  article: string;
+  explanation: string;
+  gked: GkedRule | null;
+  /** «Добавляется к ставкам». */
+  addsTo: string[];
+  active: boolean;
+}
+
+/** «Ставки единого налога». */
+export async function listSingleTaxRates(
+  db: Db | Tx,
+  options: DictListOptions = {},
+): Promise<SingleTaxRateRecord[]> {
+  return db
+    .select({
+      code: singleTaxRates.code,
+      activity: singleTaxRates.activity,
+      rate: singleTaxRates.rate,
+      rateCashless: singleTaxRates.rateCashless,
+      rateCash: singleTaxRates.rateCash,
+      conditions: singleTaxRates.conditions,
+      article: singleTaxRates.article,
+      explanation: singleTaxRates.explanation,
+      gked: singleTaxRates.gked,
+      addsTo: singleTaxRates.addsTo,
+      active: singleTaxRates.active,
+    })
+    .from(singleTaxRates)
+    .where(activeOnly(singleTaxRates.active, options))
+    .orderBy(asc(singleTaxRates.sortOrder), asc(singleTaxRates.code));
+}
+
+export interface DueChangeReasonRecord {
+  code: string;
+  name: string;
+  /** «Пояснение». */
+  note: string;
+  active: boolean;
+}
+
+/** «Причины изменения срока отчёта». */
+export async function listDueChangeReasons(
+  db: Db | Tx,
+  options: DictListOptions = {},
+): Promise<DueChangeReasonRecord[]> {
+  return db
+    .select({
+      code: dueChangeReasons.code,
+      name: dueChangeReasons.name,
+      note: dueChangeReasons.note,
+      active: dueChangeReasons.active,
+    })
+    .from(dueChangeReasons)
+    .where(activeOnly(dueChangeReasons.active, options))
+    .orderBy(asc(dueChangeReasons.sortOrder), asc(dueChangeReasons.code));
 }

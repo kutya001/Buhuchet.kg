@@ -2,6 +2,7 @@ import {
   BENEFIT_KINDS,
   BIZ_SIZES,
   CALENDAR_DAY_KINDS,
+  DECLARATION_FOR,
   DUE_FROM,
   PAYER_KINDS,
   PICK_GROUPS,
@@ -14,7 +15,7 @@ import { z } from 'zod';
 import { IsoDate } from './common';
 
 /*
- * Справочники платформы для форм и списков организаций (только чтение; задача #20). Ссылки между
+ * Справочники платформы для форм и списков организаций (только чтение; задачи #20, 2.01). Ссылки между
  * справочниками — постоянными кодами. Правка — Админка → «Справочники платформы» (поток Д).
  */
 
@@ -212,6 +213,50 @@ export const TaxBenefit = z.object({
 });
 export const TaxBenefits = z.object({ items: z.array(TaxBenefit) });
 export type TaxBenefit = z.infer<typeof TaxBenefit>;
+
+/** «Формы собственности». */
+export const OwnershipForm = z.object({
+  code: z.string(),
+  name: z.string(),
+  fullName: z.string(),
+  shortName: z.string(),
+  /** «Для ЕНД»: ЕНД для организаций или для ИП. */
+  declarationFor: z.enum(DECLARATION_FOR),
+  note: z.string(),
+  active: z.boolean(),
+});
+export const OwnershipForms = z.object({ items: z.array(OwnershipForm) });
+export type OwnershipForm = z.infer<typeof OwnershipForm>;
+
+/** «Ставки единого налога»: строку целиком (код ЕНС) хранит назначение ЕН контрагента. */
+export const SingleTaxRate = z.object({
+  code: z.string(),
+  activity: z.string(),
+  rate: z.string(),
+  /** Безналичная и наличная ставки; пусто — одна ставка на всю выручку. */
+  rateCashless: z.string(),
+  rateCash: z.string(),
+  conditions: z.string(),
+  article: z.string(),
+  explanation: z.string(),
+  gked: GkedRule.nullable(),
+  /** «Добавляется к ставкам»: коды строк ЕНС; пусто — самостоятельная ставка. */
+  addsTo: Codes,
+  active: z.boolean(),
+});
+export const SingleTaxRates = z.object({ items: z.array(SingleTaxRate) });
+export type SingleTaxRate = z.infer<typeof SingleTaxRate>;
+
+/** «Причины изменения срока отчёта». */
+export const DueChangeReason = z.object({
+  code: z.string(),
+  name: z.string(),
+  /** «Пояснение». */
+  note: z.string(),
+  active: z.boolean(),
+});
+export const DueChangeReasons = z.object({ items: z.array(DueChangeReason) });
+export type DueChangeReason = z.infer<typeof DueChangeReason>;
 
 /** Год производственного календаря. */
 export const CalendarQuery = z.object({

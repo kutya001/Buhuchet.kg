@@ -46,6 +46,10 @@ export type RegimeKind = (typeof REGIME_KINDS)[number];
 export const BENEFIT_KINDS = ['benefit', 'status'] as const;
 export type BenefitKind = (typeof BENEFIT_KINDS)[number];
 
+/** «Для ЕНД» у формы собственности: контрагенту доступна ЕНД для организаций или ЕНД для ИП. */
+export const DECLARATION_FOR = ['org', 'ip'] as const;
+export type DeclarationFor = (typeof DECLARATION_FOR)[number];
+
 /** Что делает статус с видом отчёта: добавляет его или делает ненужным. */
 export const BENEFIT_EFFECTS = ['adds', 'removes'] as const;
 export type BenefitEffect = (typeof BENEFIT_EFFECTS)[number];

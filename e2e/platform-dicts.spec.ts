@@ -7,7 +7,11 @@ import { DEMO_PASSWORD, signIn } from './helpers';
 type Entry = { active: boolean };
 type RefDB = {
   reportTypes: (Entry & { id: string })[];
-  dictionaries: Record<'regimes' | 'benefits' | 'bases' | 'ugns' | 'organs', { items: Entry[] }>;
+  enRates: (Entry & { code: string })[];
+  dictionaries: Record<
+    'regimes' | 'benefits' | 'bases' | 'ugns' | 'organs' | 'forms' | 'reasons',
+    { items: (Entry & { code?: string })[] }
+  >;
   holidays: Record<string, string>;
   workingSaturdays: string[];
 };
@@ -78,5 +82,52 @@ test.describe('Этап 1: справочники платформы', () => {
     // Перенос выходного — отдельный вид дня.
     expect(byDate.get('2026-03-09')?.kind).toBe('transfer');
     expect(byDate.get('2026-01-01')?.kind).toBe('holiday');
+  });
+});
+
+// Формы собственности, ставки единого налога и причины изменения срока (задача 2.01, #57).
+const STAGE2_DICTS: [string, (Entry & { code?: string })[]][] = [
+  ['/api/ownership-forms', d.forms.items],
+  ['/api/single-tax-rates', refDB.enRates],
+  ['/api/due-change-reasons', d.reasons.items],
+];
+
+test.describe('Этап 2: формы собственности, ставки единого налога, причины изменения срока', () => {
+  test.beforeEach(async ({ request, baseURL }) => {
+    await signIn(request, new URL(baseURL!).origin, 'erkin', DEMO_PASSWORD);
+  });
+
+  test('(проверка задачи #57) после наполнения число записей совпадает с refDB.json', async ({
+    request,
+  }) => {
+    for (const [path, entries] of STAGE2_DICTS) {
+      const res = await request.get(`${path}?all=true`);
+      expect(res.status(), path).toBe(200);
+      const { items } = (await res.json()) as { items: Item[] };
+      // Те же записи и в том же порядке, что в справочнике refDB.json.
+      expect(
+        items.map((i) => i.code),
+        path,
+      ).toEqual(entries.map((e) => e.code));
+    }
+  });
+
+  test('(проверка задачи #57) отключённое значение не приходит для новых записей', async ({
+    request,
+  }) => {
+    for (const [path] of STAGE2_DICTS) {
+      const all = (await (await request.get(`${path}?all=true`)).json()) as { items: Item[] };
+      const res = await request.get(path);
+      expect(res.status(), path).toBe(200);
+      const { items } = (await res.json()) as { items: Item[] };
+      expect(
+        items.map((i) => i.code),
+        path,
+      ).toEqual(all.items.filter((i) => i.active).map((i) => i.code));
+      expect(
+        items.every((i) => i.active),
+        path,
+      ).toBe(true);
+    }
   });
 });
