@@ -312,7 +312,9 @@ describe.skipIf(!databaseAvailable())('справочники платформы
     expect(rates.find((r) => r.code === 'ЕНС-16')!.addsTo).toContain('ЕНС-01');
 
     const reasons = await listDueChangeReasons(t.app.db, { all: true });
-    expect(reasons).toEqual(ref.dictionaries.reasons.items.map((x) => without(x, AUDIT)));
+    expect(reasons.map(({ note, ...r }) => ({ ...r, ...(note && { note }) }))).toEqual(
+      ref.dictionaries.reasons.items.map((x) => without(x, AUDIT)),
+    );
   });
 
   it('вид отчёта в базе — те же значения, что в refDB.json (ссылки — кодами)', async () => {

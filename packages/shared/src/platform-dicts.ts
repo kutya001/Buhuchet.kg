@@ -251,6 +251,8 @@ export type SingleTaxRate = z.infer<typeof SingleTaxRate>;
 export const DueChangeReason = z.object({
   code: z.string(),
   name: z.string(),
+  /** «Пояснение». */
+  note: z.string(),
   active: z.boolean(),
 });
 export const DueChangeReasons = z.object({ items: z.array(DueChangeReason) });

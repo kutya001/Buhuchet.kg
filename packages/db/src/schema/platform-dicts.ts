@@ -454,7 +454,7 @@ export const ownershipForms = pgTable(
     shortName: text('short_name').notNull().default(''),
     /** «Для ЕНД»: контрагенту доступна ЕНД для организаций или ЕНД для ИП. */
     declarationFor: text('declaration_for', { enum: DECLARATION_FOR }).notNull().default('org'),
-    /** Пояснение для бухгалтера (справка «Формы собственности»). */
+    /** «Что меняет в налогах» — пояснение, которое видят все организации. */
     note: text('note').notNull().default(''),
     ...dictColumns(),
   },
@@ -484,7 +484,7 @@ export const singleTaxRates = pgTable(
     /** «Условие». */
     conditions: text('conditions').notNull().default(''),
     article: text('article').notNull().default(''),
-    /** Пояснение ставки для бухгалтера (справка «Ставки единого налога»). */
+    /** «Когда применяется» — пояснение ставки, которое видят все организации. */
     explanation: text('explanation').notNull().default(''),
     gked: jsonb('gked').$type<GkedRule>(),
     /**
@@ -507,6 +507,8 @@ export const dueChangeReasons = pgTable(
     /** ПРЧ-001 … */
     code: text('code').primaryKey(),
     name: text('name').notNull(),
+    /** «Пояснение». */
+    note: text('note').notNull().default(''),
     ...dictColumns(),
   },
   (t) => [

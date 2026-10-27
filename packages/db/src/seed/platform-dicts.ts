@@ -328,6 +328,7 @@ const ReasonSchema = z
   .object({
     code: z.string().min(1),
     name: z.string().min(1),
+    note: z.string().default(''),
     active: z.boolean(),
     ...audit,
   })
@@ -667,6 +668,7 @@ export function platformDictRows(refDB: unknown) {
   const reasonRows = d.reasons.items.map((r, i) => ({
     code: r.code,
     name: r.name,
+    note: r.note,
     active: r.active,
     sortOrder: i + 1,
   }));

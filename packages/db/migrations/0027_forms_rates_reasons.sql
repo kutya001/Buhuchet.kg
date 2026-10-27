@@ -1,6 +1,7 @@
 CREATE TABLE "due_change_reasons" (
 	"code" text PRIMARY KEY NOT NULL,
 	"name" text NOT NULL,
+	"note" text DEFAULT '' NOT NULL,
 	"active" boolean DEFAULT true NOT NULL,
 	"sort_order" integer NOT NULL,
 	"created_by" uuid,

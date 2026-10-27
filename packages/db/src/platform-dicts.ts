@@ -503,6 +503,8 @@ export async function listSingleTaxRates(
 export interface DueChangeReasonRecord {
   code: string;
   name: string;
+  /** «Пояснение». */
+  note: string;
   active: boolean;
 }
 
@@ -515,6 +517,7 @@ export async function listDueChangeReasons(
     .select({
       code: dueChangeReasons.code,
       name: dueChangeReasons.name,
+      note: dueChangeReasons.note,
       active: dueChangeReasons.active,
     })
     .from(dueChangeReasons)
