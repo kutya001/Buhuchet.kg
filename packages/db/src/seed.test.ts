@@ -12,6 +12,7 @@ import {
   reportTypes,
   roles,
   sessions,
+  taskCategories,
   users,
 } from './schema';
 import {
@@ -59,17 +60,21 @@ describe.skipIf(!databaseAvailable())('начальное наполнение �
     expect(result.roleTemplates.inserted).toBe(2);
     expect(result.uiTexts.inserted).toBeGreaterThan(0);
 
-    // Разделы со своими таблицами в platform_reference не копируются, у `dictionaries` остаются мелкие.
+    // Разделы со своими таблицами в platform_reference не копируются; у `dictionaries` справочников без
+    // своей таблицы не осталось (категории задач — с задачи 2.23).
     const keys = (await t.admin.db.select().from(platformReference)).map((r) => r.key);
     for (const key of TABLE_SECTIONS) expect(keys).not.toContain(key);
     const [dictionaries] = await t.admin.db
       .select()
       .from(platformReference)
       .where(sql`${platformReference.key} = 'dictionaries'`);
-    expect(Object.keys(dictionaries!.payload as object).sort()).toEqual(['cats']);
+    expect(Object.keys(dictionaries!.payload as object).sort()).toEqual([]);
     expect(await t.admin.db.$count(reportTypes)).toBe((refDB.reportTypes as unknown[]).length);
     expect(await t.admin.db.$count(banks)).toBe(
       (refDB.dictionaries as { banks: { items: unknown[] } }).banks.items.length,
+    );
+    expect(await t.admin.db.$count(taskCategories)).toBe(
+      (refDB.dictionaries as { cats: { items: unknown[] } }).cats.items.length,
     );
     expect(
       await t.admin.db.$count(gkedItems, sql`${gkedItems.level} = 'subclass'`),
@@ -143,7 +148,7 @@ describe.skipIf(!databaseAvailable())('начальное наполнение �
       .select()
       .from(platformReference)
       .where(sql`${platformReference.key} = 'dictionaries'`);
-    expect(Object.keys(dictionaries!.payload as object).sort()).toEqual(['cats']);
+    expect(Object.keys(dictionaries!.payload as object).sort()).toEqual([]);
   });
 
   it('справочники платформы читаются ролью приложения, демо-организация — только в своём контексте', async () => {

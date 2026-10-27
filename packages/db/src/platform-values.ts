@@ -40,6 +40,7 @@ import {
   listSingleTaxRates,
   listTaxBenefits,
   listTaxOffices,
+  listTaskCategories,
   listTaxRegimes,
   productionCalendarEntries,
 } from './platform-dicts';
@@ -53,6 +54,7 @@ import {
   productionCalendar,
   reportBases,
   reportTypes,
+  taskCategories,
   taxBenefits,
   taxOffices,
   taxRegimes,
@@ -73,8 +75,6 @@ import { listTaxes } from './taxes';
 type Row = Record<string, string>;
 
 const text = z.string().catch('');
-const Item = z.object({ name: text, code: text, active: z.boolean().catch(true) });
-const Items = z.object({ items: z.array(z.unknown()).catch([]) });
 
 async function referencePayload(db: Db | Tx, key: string): Promise<unknown> {
   const [row] = await db
@@ -82,16 +82,6 @@ async function referencePayload(db: Db | Tx, key: string): Promise<unknown> {
     .from(platformReference)
     .where(eq(platformReference.key, key));
   return row?.payload ?? null;
-}
-
-/** Действующие значения справочника раздела `dictionaries` (категории задач). */
-async function referenceItems(db: Db | Tx, dict: 'cats') {
-  const payload = await referencePayload(db, 'dictionaries');
-  const section = (payload as Record<string, unknown> | null)?.[dict];
-  return Items.parse(section ?? {}).items.flatMap((x) => {
-    const item = Item.safeParse(x);
-    return item.success && item.data.active && item.data.name ? [item.data] : [];
-  });
 }
 
 /** Объект «ключ → текст» из `platform_reference` (statusNotes, templateNotes, messageTemplates). */
@@ -233,8 +223,8 @@ const WINDOW_ROWS: Record<
     });
   },
   cats: async (db, t) => [
-    ...(await referenceItems(db, 'cats')).map((x) => ({
-      id: `cat|${x.code || x.name}`,
+    ...(await listTaskCategories(db)).map((x) => ({
+      id: `cat|${x.code}`,
       kind: 'cat',
       kind_text: t('dicts.platform.cats.cat'),
       code: x.code,
@@ -554,7 +544,7 @@ async function valueRows(
     case 'banks':
       return named(listBanks(db), banks);
     case 'cats':
-      return (await referenceItems(db, d)).map((x) => make(x.code || x.name, x.name));
+      return named(listTaskCategories(db), taskCategories);
     case 'phones':
       return (await phoneCodeList(db))
         .filter((x) => x.active)

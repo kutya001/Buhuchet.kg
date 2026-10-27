@@ -288,6 +288,20 @@
       "when": 1793116484743,
       "tag": "0040_contractors_guards",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1793120297395,
+      "tag": "0041_tasks",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1793120298463,
+      "tag": "0042_tasks_guards",
+      "breakpoints": true
     }
   ]
 }

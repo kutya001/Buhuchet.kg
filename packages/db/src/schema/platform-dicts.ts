@@ -542,3 +542,21 @@ export const banks = pgTable(
     platformReadOnly('banks_read'),
   ],
 ).enableRLS();
+
+/**
+ * «Категории задач» (задача 2.23; ТЗ «Справочники платформы» → «Категории задач»): категория ручной
+ * задачи в форме задачи. Раньше — раздел `dictionaries.cats` в `platform_reference`.
+ */
+export const taskCategories = pgTable(
+  'task_categories',
+  {
+    /** КАТ-001 … */
+    code: text('code').primaryKey(),
+    name: text('name').notNull(),
+    ...dictColumns(),
+  },
+  (t) => [
+    uniqueIndex('task_categories_name_key').on(t.name),
+    platformReadOnly('task_categories_read'),
+  ],
+).enableRLS();

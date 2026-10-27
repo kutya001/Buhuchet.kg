@@ -38,6 +38,7 @@ import {
   taxBenefitDueRules,
   taxBenefitOffices,
   taxBenefitReportTypes,
+  taskCategories,
   taxBenefits,
   taxOffices,
   taxRegimes,
@@ -74,6 +75,7 @@ export const TABLE_DICTIONARIES = [
   'forms',
   'reasons',
   'banks',
+  'cats',
 ] as const;
 
 // Служебные отметки прототипа «кто и когда создал и изменил» в базу не переносятся: история продукта —
@@ -336,6 +338,16 @@ const ReasonSchema = z
   })
   .strict();
 
+/** «Категории задач». */
+const CategorySchema = z
+  .object({
+    code: z.string().min(1),
+    name: z.string().min(1),
+    active: z.boolean(),
+    ...audit,
+  })
+  .strict();
+
 /** «Банковские провайдеры»: «Тип» в refDB.json — словами. */
 const BANK_KIND_OF = { Банк: 'bank', 'Электронный кошелёк': 'wallet' } as const;
 
@@ -367,6 +379,7 @@ const RefSections = z.object({
     forms: Dictionary(FormSchema),
     reasons: Dictionary(ReasonSchema),
     banks: Dictionary(BankSchema),
+    cats: Dictionary(CategorySchema),
   }),
   reportTypes: z.array(ReportTypeSchema),
   enRates: z.array(EnRateSchema),
@@ -387,6 +400,7 @@ export type PlatformDictsReport = Record<
   | 'singleTaxRates'
   | 'dueChangeReasons'
   | 'banks'
+  | 'taskCategories'
   | 'productionCalendar',
   SeedReport
 >;
@@ -451,6 +465,10 @@ export function platformDictRows(refDB: unknown) {
   unique(
     d.banks.items.map((x) => x.code),
     'banks',
+  );
+  unique(
+    d.cats.items.map((x) => x.code),
+    'cats',
   );
 
   const authorityByName = new Map(d.organs.items.map((o) => [o.name, o.code]));
@@ -706,6 +724,13 @@ export function platformDictRows(refDB: unknown) {
     sortOrder: i + 1,
   }));
 
+  const categoryRows = d.cats.items.map((c, i) => ({
+    code: c.code,
+    name: c.name,
+    active: c.active,
+    sortOrder: i + 1,
+  }));
+
   const workingSaturdays = new Set(ref.workingSaturdays);
   const calendarRows: CalendarEntry[] = [
     ...Object.entries(ref.holidays).map(([day, name]) => ({
@@ -738,6 +763,7 @@ export function platformDictRows(refDB: unknown) {
     singleTaxRates: enRateRows,
     dueChangeReasons: reasonRows,
     banks: bankRows,
+    taskCategories: categoryRows,
     productionCalendar: calendarRows,
   };
 }
@@ -897,6 +923,13 @@ export async function seedPlatformDicts(
     update,
   );
   const bank = await upsertDict(db, banks, banks.code, rows.banks, update);
+  const category = await upsertDict(
+    db,
+    taskCategories,
+    taskCategories.code,
+    rows.taskCategories,
+    update,
+  );
   const calendar = await upsertDict(
     db,
     productionCalendar,
@@ -934,6 +967,7 @@ export async function seedPlatformDicts(
     singleTaxRates: enRate.report,
     dueChangeReasons: reason.report,
     banks: bank.report,
+    taskCategories: category.report,
     productionCalendar: calendar.report,
   };
 }
