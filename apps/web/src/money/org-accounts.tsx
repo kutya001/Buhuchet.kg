@@ -115,6 +115,7 @@ export function OrgAccountsBox({
           <button
             type="button"
             className={buttonClass('default', 'sm')}
+            data-org-account-add
             onClick={() => setDialog({ account: null })}
           >
             <Icon name="plus" size="sm" />

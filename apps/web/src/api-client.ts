@@ -3,9 +3,30 @@ import { ApiError } from '@buhuchet/shared';
 import { hc } from 'hono/client';
 import type { ApiErrorLike } from './l10n/translate';
 
+/**
+ * Событие окна после удачного сохранения (запрос не GET): «База знаний» сверяет шаги «Сделать» с
+ * историей действий пользователя и сразу показывает «Готово: шаг выполнен» (задача 2.30).
+ */
+export const SAVED_EVENT = 'buhuchet:saved';
+
+/** Запросы, после которых сверять шаги незачем: сама «База знаний», вид списков, вход и пароль. */
+const NOT_SAVES = ['/api/kb/', '/api/view-settings/', '/api/auth/'];
+
+const savingFetch: typeof fetch = async (input, init) => {
+  const res = await fetch(input, init);
+  const method = (init?.method ?? 'GET').toUpperCase();
+  if (res.ok && method !== 'GET' && method !== 'HEAD' && typeof window !== 'undefined') {
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+    const path = new URL(url, window.location.origin).pathname;
+    if (!NOT_SAVES.some((p) => path.startsWith(p))) window.dispatchEvent(new Event(SAVED_EVENT));
+  }
+  return res;
+};
+
 /** Типизированный клиент API: изменение метода сразу видно здесь как ошибка типов. */
 export const api = hc<ApiApp>(
   typeof window === 'undefined' ? 'http://localhost' : window.location.origin,
+  { fetch: savingFetch },
 );
 
 /** Ответ метода: данные или ошибка в общем формате API; нет связи с сервером — код `network`. */
