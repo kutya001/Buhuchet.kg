@@ -69,6 +69,8 @@ import {
   adminCalendarCopyPlanHandler,
   adminCalendarCopyPlanRoute,
   adminCalendarCopyRoute,
+  adminCalendarHistoryHandler,
+  adminCalendarHistoryRoute,
   adminCalendarValuesHandler,
   adminCalendarValuesRoute,
   deleteAdminCalendarDayHandler,
@@ -115,6 +117,7 @@ export function platformDictsModule(deps: ApiDeps) {
       .openapi(exportAdminCalendarRoute, exportAdminCalendarHandler(deps))
       .openapi(adminCalendarCopyPlanRoute, adminCalendarCopyPlanHandler(deps))
       .openapi(adminCalendarCopyRoute, adminCalendarCopyHandler(deps))
+      .openapi(adminCalendarHistoryRoute, adminCalendarHistoryHandler(deps))
       .openapi(addAdminCalendarDayRoute, addAdminCalendarDayHandler(deps))
       .openapi(deleteAdminCalendarDayRoute, deleteAdminCalendarDayHandler(deps))
       .openapi(listAdminDictRoute, listAdminDictHandler(deps))

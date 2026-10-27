@@ -96,10 +96,11 @@ export interface AdminDictMeta {
 }
 
 export const ADMIN_DICT_META: Readonly<Record<AdminValueDict, AdminDictMeta>> = {
-  // Новое основание — с постоянным ключом, как у наполнения (employees, property…).
+  // Новое основание — с постоянным ключом, как у наполнения (employees, property…). Без «№» и
+  // «Выше»/«Ниже» (docs/deviations.md п. Д-2): список — в порядке справочника.
   bases: {
     code: { key: 'base' },
-    ordered: true,
+    ordered: false,
     fields: ['name', 'description', 'types', 'note'],
     links: ['types'],
     contractorTable: 'contractor_bases',
@@ -314,7 +315,6 @@ const STATUS = c('active', 'enum', 'pdicts.col.status');
  */
 export const ADMIN_DICT_COLUMNS: Readonly<Record<AdminValueDict, readonly AdminDictColumn[]>> = {
   bases: [
-    N,
     c('code', 'text', 'pdicts.col.code', true),
     c('name', 'text', 'pdicts.col.name'),
     c('description', 'text', 'pdicts.col.description'),
@@ -408,7 +408,7 @@ export const ADMIN_CALENDAR_SORT: ListSort = { key: 'date', dir: 'asc' };
 
 /**
  * Сортировка списка по умолчанию (как в прототипе, docs/deviations.md п. 48): короткий справочник — в
- * своём порядке («№»), УГНС — по региону, коды стран — в порядке справочника без «№» (null).
+ * своём порядке («№»), УГНС — по региону, основания и коды стран — в порядке справочника без «№» (null).
  */
 export function adminDictDefaultSort(dict: AdminValueDict): ListSort | null {
   if (ADMIN_DICT_META[dict].ordered) return { key: 'n', dir: 'asc' };

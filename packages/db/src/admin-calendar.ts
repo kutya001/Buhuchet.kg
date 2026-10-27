@@ -14,10 +14,12 @@ import {
   type CalendarCopyItem,
   type CalendarDayKind,
   type CalendarEntry,
+  type HistoryChange,
   type IsoDate,
   type ListQuery,
 } from '@buhuchet/domain';
-import { asc, eq, sql, type SQL } from 'drizzle-orm';
+import { and, asc, count, desc, eq, sql, type SQL } from 'drizzle-orm';
+import type { AdminDictHistoryItem } from './admin-platform-dicts';
 import type { Tx } from './client';
 import {
   selectListExport,
@@ -29,7 +31,7 @@ import {
   type ListTexts,
 } from './list';
 import { writePlatformHistory } from './platform-history';
-import { productionCalendar } from './schema';
+import { platformAuditLog, productionCalendar } from './schema';
 
 /*
  * Админка → «Справочники платформы» → «Календарь» (задача 2.36; ТЗ «Производственный календарь КР»;
@@ -380,9 +382,12 @@ export async function adminCalendarCopy(
 ): Promise<{ ok: true; year: number; copied: number; recalculated: number } | { ok: false }> {
   const plan = await adminCalendarCopyPlan(tx, today);
   const history = [];
-  for (const x of plan.items) {
+  for (const [i, x] of plan.items.entries()) {
     const version = await insertDay(tx, x.to, x.kind, x.name);
-    if (version === null) return { ok: false };
+    // Пусто — в контексте не администратор: тогда уже первый день не записан. После записанных дней
+    // так не бывает, но если случится — исключение откатывает всё копирование.
+    if (version === null && i === 0) return { ok: false };
+    if (version === null) throw new Error(`День ${x.to} не скопирован`);
     if (version > 0) history.push(createdHistory(x.to, x.kind, x.name));
   }
   await writePlatformHistory(tx, ...history);
@@ -391,5 +396,46 @@ export async function adminCalendarCopy(
     year: plan.year,
     copied: history.length,
     recalculated: history.length ? await recalcOpenReportDues(tx) : 0,
+  };
+}
+
+// ОТКЛОНЕНИЕ: docs/deviations.md#Д-6
+/**
+ * «История изменений» календаря (ТЗ: «История видна блоком «История изменений» под каждым
+ * справочником»; в прототипе у календаря блока нет): последние записи, сначала новые, и сколько всего.
+ * Код записи — день, подпись — название дня из самой записи (у удалённого дня — из записи удаления).
+ */
+export async function adminCalendarHistory(
+  tx: Tx,
+  limit: number,
+): Promise<{ total: number; items: AdminDictHistoryItem[] }> {
+  const where = and(
+    eq(platformAuditLog.entity, 'platform_dict'),
+    sql`starts_with(${platformAuditLog.entityId}, 'calendar:')`,
+  );
+  const [rows, [counted]] = await Promise.all([
+    tx
+      .select()
+      .from(platformAuditLog)
+      .where(where)
+      .orderBy(desc(platformAuditLog.at), desc(platformAuditLog.id))
+      .limit(limit),
+    tx.select({ n: count() }).from(platformAuditLog).where(where),
+  ]);
+  return {
+    total: counted?.n ?? 0,
+    items: rows.map((r) => {
+      const changes = (r.changes ?? []) as HistoryChange[];
+      const name = changes.find((c) => c.field === 'name');
+      return {
+        id: String(r.id),
+        at: r.at,
+        actor: auditActorName(r.actorUserId, null),
+        action: r.action,
+        code: r.entityId.slice('calendar:'.length),
+        label: String(name?.to ?? name?.from ?? ''),
+        changes,
+      };
+    }),
   };
 }

@@ -4,6 +4,7 @@ import {
   adminCalendarCopy,
   adminCalendarCopyPlan,
   adminCalendarDelete,
+  adminCalendarHistory,
   exportAdminCalendar,
   listAdminCalendarPage,
   listAdminCalendarValues,
@@ -13,6 +14,7 @@ import {
 import {
   bishkekDate,
   calendarAdminYears,
+  DICT_HISTORY_SHOWN,
   RecordChangedError,
   RecordNotFoundError,
   type CalendarAddProblem,
@@ -25,6 +27,7 @@ import {
   AdminCalendarDayParam,
   AdminCalendarList,
   AdminDictDeleteQuery,
+  AdminDictHistory,
   ApiError,
   ListExportParams,
   ListQueryParams,
@@ -43,7 +46,8 @@ import { serverTexts } from '../l10n/texts';
 /*
  * Админка → «Справочники платформы» → «Календарь» (задача 2.36; ТЗ «Производственный календарь КР»;
  * прототип renderPDicts, holidayDlg, calCopyDlg): дни текущего и следующего года, значения фильтра,
- * «В Excel», «Нерабочий день», «Удалить» и «Календарь на следующий год копированием». Только
+ * «В Excel», «Нерабочий день», «Удалить», «Календарь на следующий год копированием» и «История
+ * изменений». Только
  * администратору платформы. Адреса без кода справочника — раньше общих `/admin/platform-dicts/{dict}`.
  */
 
@@ -323,6 +327,35 @@ export function adminCalendarCopyHandler(
     const result = await adminTx(deps, c, (tx) => adminCalendarCopy(tx, todayOf(deps)));
     if (!result.ok) throw new RecordNotFoundError('platform_dict', 'calendar');
     const { ok: _, ...body } = result;
+    return c.json(body, 200);
+  };
+}
+
+// ОТКЛОНЕНИЕ: docs/deviations.md#Д-6
+export const adminCalendarHistoryRoute = createRoute({
+  method: 'get',
+  path: `${P}/history`,
+  tags: ['platform-dicts'],
+  summary: '«История изменений» календаря',
+  middleware: [requirePlatformAdmin] as const,
+  responses: {
+    200: {
+      description: `Последние ${DICT_HISTORY_SHOWN} записей, сначала новые, и сколько их всего`,
+      content: json(AdminDictHistory),
+    },
+    ...denied,
+  },
+});
+
+export function adminCalendarHistoryHandler(
+  deps: ApiDeps,
+): RouteHandler<typeof adminCalendarHistoryRoute, AppEnv> {
+  return async (c) => {
+    const history = await adminTx(deps, c, (tx) => adminCalendarHistory(tx, DICT_HISTORY_SHOWN));
+    const body: AdminDictHistory = {
+      total: history.total,
+      items: history.items.map((h) => ({ ...h, at: h.at.toISOString() })),
+    };
     return c.json(body, 200);
   };
 }

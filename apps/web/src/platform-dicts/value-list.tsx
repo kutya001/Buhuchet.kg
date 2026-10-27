@@ -212,7 +212,7 @@ const AUDIT: GridAudit<AdminDictValue> = {
 };
 
 const COUNT: Readonly<Record<AdminValueDict, CountKey>> = {
-  bases: 'pdicts.count',
+  bases: 'pdicts.bases_count',
   regimes: 'pdicts.regimes_count',
   forms: 'pdicts.count',
   phones: 'pdicts.phones_count',
@@ -221,6 +221,19 @@ const COUNT: Readonly<Record<AdminValueDict, CountKey>> = {
   ugns: 'pdicts.ugns_count',
   banks: 'pdicts.count',
 };
+
+/**
+ * Список и на телефоне — таблицей, без «Таблица / Карточки» (прототип `fixedView: 'table'`): короткие
+ * справочники, основания и коды стран; режимы и УГНС — карточками.
+ */
+const TABLE_ONLY: ReadonlySet<AdminValueDict> = new Set([
+  'bases',
+  'forms',
+  'phones',
+  'organs',
+  'banks',
+  'reasons',
+]);
 
 /** Пояснение над списком (прототип: у шаблонов для организаций и у УГНС). */
 const NOTES: Partial<Record<AdminValueDict, UiTextKey>> = {
@@ -494,9 +507,11 @@ export function ValueDictList({ dict }: { dict: AdminValueDict }) {
         rowTone={(x) => (x.active ? undefined : 'muted')}
         actions={actions}
         onOpen={(x) => open(x)}
-        {...(ordered || dict === 'phones' ? { fixedView: 'table' as const } : {})}
+        {...(TABLE_ONLY.has(dict) ? { fixedView: 'table' as const } : {})}
       />
       <DictHistory dict={dict} />
+      {/* Прототип: у кодов стран пояснение — под списком и историей. */}
+      {dict === 'phones' ? <Note icon="info">{t('pdicts.note.phones')}</Note> : null}
       {edit ? (
         <ValueDialog
           key={`edit-${edit.n}`}

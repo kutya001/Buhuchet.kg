@@ -66,6 +66,7 @@ describe.skipIf(!databaseAvailable())('Админка → «Справочник
       `${P}/calendar/values?col=kind`,
       `${P}/calendar/export?cols=date`,
       `${P}/calendar/copy`,
+      `${P}/calendar/history`,
       '/api/admin/dict-requests',
       '/api/admin/dict-requests/values?col=status',
       '/api/admin/dict-requests/export?cols=what',
@@ -343,7 +344,7 @@ describe.skipIf(!databaseAvailable())('Админка → «Справочник
     const res = await send('POST', `${P}/bases`, { name: 'Есть роялти', types: ['roy'] });
     expect(res.status, await res.clone().text()).toBe(201);
     const created = AdminDictValue.parse(await res.json());
-    expect(created).toMatchObject({ n: 15, used: 1, contractors: 0, data: { types: ['roy'] } });
+    expect(created).toMatchObject({ n: null, used: 1, contractors: 0, data: { types: ['roy'] } });
     const taken = await send('POST', `${P}/bases`, { name: 'Есть роялти' });
     expect((await errorOf(taken)).code).toBe('dict_value_taken');
   });
@@ -418,13 +419,25 @@ describe.skipIf(!databaseAvailable())('Админка → «Справочник
     expect((await send('DELETE', `${P}/calendar/not-a-day?version=1`)).status).toBe(400);
 
     const plan = AdminCalendarCopyPlan.parse(await (await get(`${P}/calendar/copy`)).json());
-    expect([plan.year, plan.items.length]).toEqual([2027, 4]);
+    // Перенос, Орозо айт и Курман айт; рабочая суббота 14.03 — нет: 14.03.2027 — воскресенье.
+    expect([plan.year, plan.items.length]).toEqual([2027, 3]);
     const copy = await send('POST', `${P}/calendar/copy`);
     expect(AdminCalendarCopied.parse(await copy.json())).toEqual({
       year: 2027,
-      copied: 4,
+      copied: 3,
       recalculated: 0,
     });
+    // «История изменений» календаря: три скопированных дня, удалённый и добавленный перенос.
+    const history = AdminDictHistory.parse(await (await get(`${P}/calendar/history`)).json());
+    expect(history.total).toBe(5);
+    expect(history.items.map((h) => h.action)).toEqual([
+      'create',
+      'create',
+      'create',
+      'delete',
+      'create',
+    ]);
+    expect(history.items[3]).toMatchObject({ code: '2027-01-04', label: 'Перенос: Новый год' });
   });
 
   it('«Запросы»: администратор видит запросы всех организаций и отвечает; организация видит ответ', async () => {

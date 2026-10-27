@@ -491,7 +491,8 @@ describe.skipIf(!databaseAvailable())(
 
     it('основания: виды отчётов — связь «Основание» вида, правится из основания; привязанное не удаляется', async () => {
       const page = await asAdmin((tx) => listAdminDictPage(tx, 'bases', query(), t));
-      expect(page.rows[0]).toMatchObject({ n: 1, code: 'employees', data: { types: ['soc'] } });
+      // Без «№» (docs/deviations.md п. Д-2) — в порядке справочника.
+      expect(page.rows[0]).toMatchObject({ n: null, code: 'employees', data: { types: ['soc'] } });
       expect(page.rows[0]!.usage).toEqual({ total: 1, contractors: 0 });
       const transport = page.rows.find((x) => x.code === 'transport')!;
       expect([transport.data.types, transport.usage.total]).toEqual([[], 0]);
@@ -676,6 +677,9 @@ describe.skipIf(!databaseAvailable())(
       ).rejects.toEqual(permissionDenied);
       await expect(
         asAdmin((tx) => tx.execute(sql`select * from app.platform_dict_specs`)),
+      ).rejects.toEqual(permissionDenied);
+      await expect(
+        asAdmin((tx) => tx.execute(sql`select * from app.platform_dict_links`)),
       ).rejects.toEqual(permissionDenied);
       // Неизвестный справочник — пусто.
       const [unknown] = await asAdmin((tx) =>

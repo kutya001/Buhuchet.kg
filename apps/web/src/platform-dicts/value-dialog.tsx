@@ -293,7 +293,6 @@ export function ValueDialog({
           id={`${id}-name`}
           label={t('pdicts.col.name')}
           required
-          hint={current ? t('pdicts.value.name_hint') : undefined}
           error={fieldError(t, errors.name)}
           full
         >

@@ -367,8 +367,12 @@ test.describe('Админка: справочники платформы', () =>
       const saved = (await values(page.request, 'bases')).find((x) => x.name === base)!;
       const baseRow = await row(page, isMobile, base, saved.code);
       await expect(baseRow).toContainText(type.shortName);
-      // Основание с видом отчёта «используется» — удалить нельзя, пока связь есть.
+      // Основание с видом отчёта «используется» — удалить нельзя, пока связь есть; у оснований нет
+      // «Выше»/«Ниже» (docs/deviations.md п. Д-2).
       await expect(await rowAction(page, baseRow, 'Удалить')).toBeDisabled();
+      await expect(
+        page.getByRole('menu', { name: 'Действия' }).getByRole('menuitem', { name: 'Выше' }),
+      ).toHaveCount(0);
       await page.keyboard.press('Escape');
     } finally {
       await cleanup(page.request, origin, 'regimes', regime);
@@ -389,6 +393,7 @@ test.describe('Админка: справочники платформы', () =>
   }) => {
     await platformAdmin(page.request, new URL(baseURL!).origin);
     await page.goto('/app/pdicts/phones');
+    await expect(page.getByText('У Казахстана и России общий код +7')).toBeVisible();
     const found = await row(page, isMobile, 'Кыргызстан', 'KG');
     await expect(found).toContainText('+996');
     await expect(found).toContainText('+996 555 123 456');
@@ -464,6 +469,10 @@ test.describe('Админка: справочники платформы', () =>
       await ask.getByRole('button', { name: 'Удалить' }).click();
       await expect(toast('Удалено')).toBeVisible();
       await expect(found).toHaveCount(0);
+      // «История изменений» под календарём (ТЗ; docs/deviations.md п. Д-6).
+      const history = page.locator('[data-pdicts-history]');
+      await expect(history).toContainText(`Календарь: «${ru} ${name}» удалено`);
+      await expect(history).toContainText(`Календарь: добавлено «${ru} ${name}»`);
 
       // Государственный праздник «каждый год» удалить нельзя.
       found = await row(page, isMobile, 'Новый год', `${year}-01-01|01-01`);

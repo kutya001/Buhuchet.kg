@@ -48,8 +48,9 @@ ON CONFLICT DO NOTHING;
 -- «Виды деятельности (ГКЭД)» режима (столбец gked) — не в перечне: их правит задача 2.38.
 -- «Используется» — ссылки внешними ключами (виды отчётов, контрагенты) считаются сами. Коды стран не
 -- удаляются (только отключаются) и Кыргызстан не отключается — это проверяет сервер (ADMIN_DICT_META).
+-- «№» и «Выше»/«Ниже» — только у режимов; основания и коды стран — без них (docs/deviations.md п. Д-2).
 INSERT INTO app.platform_dict_specs (dict, table_name, columns, ordered) VALUES
-  ('bases', 'report_bases', ARRAY['name', 'description', 'note'], true),
+  ('bases', 'report_bases', ARRAY['name', 'description', 'note'], false),
   ('regimes', 'tax_regimes', ARRAY['name', 'full_name', 'kind', 'frees', 'who', 'how', 'combines', 'accountant_note', 'article'], true),
   ('phones', 'phone_codes', ARRAY['name', 'flag', 'dial_code', 'mask'], false);
 --> statement-breakpoint

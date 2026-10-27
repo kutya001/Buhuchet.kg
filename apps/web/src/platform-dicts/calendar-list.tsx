@@ -59,6 +59,8 @@ import { useGridLabels } from '../lists/grid-labels';
 import { useListPage, type FetchListPage } from '../lists/use-list-page';
 import { useViewSettings } from '../lists/view-settings';
 import { useShell } from '../shell/context';
+import { DictHistory } from './dict-history-box';
+import { pdictsHistoryQuery } from './pdicts-data';
 
 const cal = api.api.admin['platform-dicts'].calendar;
 
@@ -79,12 +81,13 @@ const copyPlanQuery = {
   queryFn: async () => json(await cal.copy.$get(), (v) => AdminCalendarCopyPlan.parse(v)),
 };
 
-/** После правки календаря: список и план копирования перечитываются. */
+/** После правки календаря: список, план копирования и «История изменений» перечитываются. */
 function useCalendarRefresh() {
   const client = useQueryClient();
   return useCallback(() => {
     void client.invalidateQueries({ queryKey: ['list', 'pdicts.calendar'] });
     void client.invalidateQueries({ queryKey: copyPlanQuery.queryKey });
+    void client.invalidateQueries({ queryKey: pdictsHistoryQuery('calendar').queryKey });
   }, [client]);
 }
 
@@ -503,6 +506,7 @@ export function CalendarList() {
         labels={labels}
         actions={actions}
       />
+      <DictHistory dict="calendar" />
       {adding ? (
         <HolidayDialog
           key={`add-${adding.n}`}

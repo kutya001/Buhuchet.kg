@@ -6,6 +6,7 @@ import {
   adminCalendarCopy,
   adminCalendarCopyPlan,
   adminCalendarDelete,
+  adminCalendarHistory,
   exportAdminCalendar,
   listAdminCalendarPage,
   listAdminCalendarValues,
@@ -199,19 +200,29 @@ describe.skipIf(!databaseAvailable())(
         ),
       );
       expect(deleted?.action).toBe('delete');
+      // «История изменений» календаря: сначала новые; у удалённого дня название — из записи удаления.
+      const history = await asAdmin((tx) => adminCalendarHistory(tx, 12));
+      expect(history.total).toBe(3);
+      expect(history.items.map((h) => [h.action, h.code, h.label])).toEqual([
+        ['delete', '2027-01-04', 'Перенос: Новый год'],
+        ['create', '2027-02-27', ''],
+        ['create', '2027-01-04', 'Перенос: Новый год'],
+      ]);
+      // Не администратору записи истории не видны (политика platform_audit_log).
+      expect((await asOwner((tx) => adminCalendarHistory(tx, 12))).total).toBe(0);
     });
 
     it('«Календарь на следующий год копированием»: даты «только в этом году» — на год вперёд, занятые — нет', async () => {
       const plan = await asAdmin((tx) => adminCalendarCopyPlan(tx, TODAY));
       expect(plan.year).toBe(2027);
+      // Рабочая суббота 14.03.2026 не копируется: 14.03.2027 — воскресенье.
       expect(plan.items.map((x) => [x.from, x.to, x.kind])).toEqual([
         ['2026-03-09', '2027-03-09', 'transfer'],
-        ['2026-03-14', '2027-03-14', 'workday'],
         ['2026-03-20', '2027-03-20', 'holiday'],
         ['2026-05-27', '2027-05-27', 'holiday'],
       ]);
       const copied = await asAdmin((tx) => adminCalendarCopy(tx, TODAY));
-      expect(copied).toEqual({ ok: true, year: 2027, copied: 4, recalculated: 0 });
+      expect(copied).toEqual({ ok: true, year: 2027, copied: 3, recalculated: 0 });
       const [orozo] = await db.admin.db
         .select({ name: productionCalendar.name, by: productionCalendar.createdBy })
         .from(productionCalendar)

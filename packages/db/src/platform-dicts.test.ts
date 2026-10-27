@@ -14,6 +14,7 @@ import {
 } from './platform-dicts';
 import {
   authorities,
+  countryPhoneCodes,
   dueChangeReasons,
   ownershipForms,
   platformAuditLog,
@@ -634,6 +635,7 @@ describe.skipIf(!databaseAvailable())('справочники платформы
       singleTaxRates,
       dueChangeReasons,
       productionCalendar,
+      countryPhoneCodes,
     ].map((table) => getTableName(table));
     const rights = await app.execute<{ name: string; read: boolean; write: boolean }>(sql`
       select t.name,
@@ -666,6 +668,9 @@ describe.skipIf(!databaseAvailable())('справочники платформы
       app.insert(dueChangeReasons).values({ code: 'ПРЧ-999', name: 'Взлом', sortOrder: 99 }),
     ).rejects.toThrow(permissionDenied);
     await expect(app.delete(singleTaxRates)).rejects.toThrow(permissionDenied);
+    await expect(
+      app.update(countryPhoneCodes).set({ dialCode: '1' }).where(eq(countryPhoneCodes.code, 'KG')),
+    ).rejects.toThrow(permissionDenied);
     // Режим, орган и основание, на которые ссылаются виды отчётов, не удаляются (внешние ключи).
     await expect(
       t.admin.db.delete(taxRegimes).where(eq(taxRegimes.code, 'РЕЖ-01')),

@@ -512,12 +512,17 @@ async function prepareLinks(
 }
 
 /** Записать поля-связи значения (`app.admin_dict_set_links`); у справочника без связей — ничего. */
+/**
+ * Связи значения — сразу после записи самого значения в той же транзакции. Отказ функции здесь не
+ * бывает (права и значение те же, что у только что прошедшей записи), но если он случится — исключение
+ * откатывает и запись значения: значение без своих связей и без истории не сохраняется.
+ */
 async function saveLinks(tx: Tx, dict: AdminValueDict, code: string, input: AdminDictInput) {
-  if (!linkFields(dict).length) return true;
+  if (!linkFields(dict).length) return;
   const [row] = await tx.execute<{ ok: boolean | null }>(
     sql`select app.admin_dict_set_links(${dict}, ${code}, ${JSON.stringify(linkRow(dict, input))}::jsonb) as ok`,
   );
-  return row?.ok === true;
+  if (row?.ok !== true) throw new Error(`Связи значения ${dict}:${code} не сохранены`);
 }
 
 const recordInput = (x: AdminDictValueRecord): AdminDictInput => ({ name: x.name, data: x.data });
@@ -573,9 +578,8 @@ export async function adminDictCreate(
     sql`select app.admin_dict_insert(${dict}, ${code}, ${JSON.stringify(dbRow(dict, input))}::jsonb) as version`,
   );
   // Пусто — в контексте не администратор: права проверил вызывающий (`requirePlatformAdmin`).
-  if (row?.version == null || !(await saveLinks(tx, dict, code, input))) {
-    return { ok: false, reason: 'not_found' };
-  }
+  if (row?.version == null) return { ok: false, reason: 'not_found' };
+  await saveLinks(tx, dict, code, input);
   const fields = historyFields(dict, input);
   await writePlatformHistory(tx, {
     entity: 'platform_dict',
@@ -620,7 +624,7 @@ export async function adminDictUpdate(
     sql`select app.admin_dict_update(${dict}, ${code}, ${JSON.stringify(dbRow(dict, input))}::jsonb, ${version}) as version`,
   );
   if (row?.version == null) return { ok: false, reason: 'changed' };
-  if (!(await saveLinks(tx, dict, code, input))) return { ok: false, reason: 'changed' };
+  await saveLinks(tx, dict, code, input);
   await writePlatformHistory(tx, {
     entity: 'platform_dict',
     entityId: entityId(dict, code),
