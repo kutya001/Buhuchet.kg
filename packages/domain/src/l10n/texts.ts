@@ -6,6 +6,7 @@ import { FILES_TEXTS } from './files-texts';
 import { GRID_TEXTS } from './grid-texts';
 import { MONEY_TEXTS } from './money-texts';
 import { ORG_TEXTS } from './org-texts';
+import { REPORTS_TEXTS } from './reports-texts';
 import { SHELL_TEXTS } from './shell-texts';
 import { STAFF_TEXTS } from './staff-texts';
 import { STATUS_TEXTS } from './status-texts';
@@ -66,6 +67,7 @@ export const UI_TEXTS = {
   ...STATUS_TEXTS,
   ...ORG_TEXTS,
   ...CONTRACTORS_TEXTS,
+  ...REPORTS_TEXTS,
   ...ADMIN_ACCOUNTS_TEXTS,
   ...ADMIN_L10N_TEXTS,
   ...ADMIN_TEXTS,

@@ -162,7 +162,14 @@ export const Contractor = z.object({
   gkedExtra: z.array(Named),
   taxOffice: Named.nullable(),
   bizSize: z.enum(BIZ_SIZES),
-  benefits: z.array(Named.extend({ validFrom: IsoDate.nullable(), validTo: IsoDate.nullable() })),
+  /** `byOffice` — статус ставит УГНС контрагента: метка «по УГНС». */
+  benefits: z.array(
+    Named.extend({
+      validFrom: IsoDate.nullable(),
+      validTo: IsoDate.nullable(),
+      byOffice: z.boolean(),
+    }),
+  ),
   bases: z.array(Named),
   /** null — нет ответственного (после блокировки сотрудника): контрагент подсвечивается. */
   responsible: z.object({ id: Uuid, shortName: z.string(), active: z.boolean() }).nullable(),
@@ -191,6 +198,10 @@ export const Contractor = z.object({
   version: RecordVersion,
 });
 export type Contractor = z.infer<typeof Contractor>;
+
+/** Ответ на создание и «Изменить»: карточка и уведомления «Отмечен статус «…» по УГНС». */
+export const ContractorSaved = Contractor.extend({ notices: z.array(z.string()) });
+export type ContractorSaved = z.infer<typeof ContractorSaved>;
 
 /** Строка списка контрагентов (прототип cpCols): тексты, как в столбцах экрана. */
 export const ContractorRow = z.object({
@@ -250,6 +261,8 @@ export type AssignContractorsResult = z.infer<typeof AssignContractorsResult>;
 export const TransferContractorsQuery = z.object({ from: Uuid });
 export const TransferContractorsPreview = z.object({
   contractors: z.number().int().nonnegative(),
+  /** Незавершённые отчёты этих контрагентов, которые перейдут вместе с ними. */
+  reports: z.number().int().nonnegative(),
   /** «Кому» по умолчанию — главный бухгалтер; null — передать некому. */
   defaultTo: Uuid.nullable(),
 });

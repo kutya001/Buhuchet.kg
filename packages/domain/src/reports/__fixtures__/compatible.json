@@ -1,0 +1,2067 @@
+{
+  "source": "spec/prototype/src/js/core/reference.js",
+  "date": "2026-10-27",
+  "rates": [
+    { "code": "ЕНС-01", "rate": "0,5 %", "rateCashless": "", "rateCash": "", "addsTo": [] },
+    {
+      "code": "ЕНС-02",
+      "rate": "2 % безнал + 4 % нал",
+      "rateCashless": "2 %",
+      "rateCash": "4 %",
+      "addsTo": []
+    },
+    {
+      "code": "ЕНС-03",
+      "rate": "2 % безнал + 4 % нал",
+      "rateCashless": "2 %",
+      "rateCash": "4 %",
+      "addsTo": []
+    },
+    {
+      "code": "ЕНС-04",
+      "rate": "4 % безнал + 6 % нал",
+      "rateCashless": "4 %",
+      "rateCash": "6 %",
+      "addsTo": []
+    },
+    {
+      "code": "ЕНС-05",
+      "rate": "3 % (Кабинет министров может снизить по товарам)",
+      "rateCashless": "",
+      "rateCash": "",
+      "addsTo": []
+    },
+    { "code": "ЕНС-06", "rate": "0,5 %", "rateCashless": "", "rateCash": "", "addsTo": [] },
+    {
+      "code": "ЕНС-07",
+      "rate": "с частичной переработкой — 1 %, в неизменном виде — 3 %",
+      "rateCashless": "",
+      "rateCash": "",
+      "addsTo": []
+    },
+    { "code": "ЕНС-08", "rate": "0,25 %", "rateCashless": "", "rateCash": "", "addsTo": [] },
+    { "code": "ЕНС-09", "rate": "8 %", "rateCashless": "", "rateCash": "", "addsTo": [] },
+    { "code": "ЕНС-10", "rate": "5 %", "rateCashless": "", "rateCash": "", "addsTo": [] },
+    { "code": "ЕНС-11", "rate": "4 %", "rateCashless": "", "rateCash": "", "addsTo": [] },
+    {
+      "code": "ЕНС-12",
+      "rate": "Бишкек и Ош — 5 %, остальная территория — 3 %",
+      "rateCashless": "",
+      "rateCash": "",
+      "addsTo": []
+    },
+    {
+      "code": "ЕНС-13",
+      "rate": "0 % с 01.08.2026 по 31.07.2031, 1 % с 01.08.2031 (1 % было с 01.01.2025 по 31.07.2026)",
+      "rateCashless": "",
+      "rateCash": "",
+      "addsTo": []
+    },
+    { "code": "ЕНС-14", "rate": "0,1 %", "rateCashless": "", "rateCash": "", "addsTo": [] },
+    { "code": "ЕНС-15", "rate": "0 %", "rateCashless": "", "rateCash": "", "addsTo": [] },
+    {
+      "code": "ЕНС-16",
+      "rate": "4 %",
+      "rateCashless": "",
+      "rateCash": "",
+      "addsTo": ["ЕНС-01", "ЕНС-02", "ЕНС-03", "ЕНС-04", "ЕНС-06", "ЕНС-08", "ЕНС-15"]
+    },
+    {
+      "code": "ЕНС-17",
+      "rate": "по ставкам ЕНС-04",
+      "rateCashless": "",
+      "rateCash": "",
+      "addsTo": []
+    },
+    { "code": "ЕНС-18", "rate": "0 %", "rateCashless": "", "rateCash": "", "addsTo": [] },
+    { "code": "ЕНС-19", "rate": "0 %", "rateCashless": "", "rateCash": "", "addsTo": [] },
+    {
+      "code": "ЕНС-20",
+      "rate": "8 % от разницы цены продажи и покупки",
+      "rateCashless": "",
+      "rateCash": "",
+      "addsTo": []
+    }
+  ],
+  "types": [
+    { "code": "endo", "payer": "org", "kind": "cross", "regimes": [] },
+    { "code": "endi", "payer": "ip", "kind": "cross", "regimes": [] },
+    { "code": "gam", "payer": "org", "kind": "regime", "regimes": ["РЕЖ-08"] },
+    { "code": "patw", "payer": "ip", "kind": "regime", "regimes": ["РЕЖ-02", "РЕЖ-03", "РЕЖ-09"] },
+    { "code": "socip", "payer": "ip", "kind": "cross", "regimes": [] },
+    { "code": "soc", "payer": "all", "kind": "cross", "regimes": [] },
+    { "code": "t1q", "payer": "org", "kind": "cross", "regimes": [] },
+    { "code": "nds", "payer": "all", "kind": "regime", "regimes": ["РЕЖ-01"] },
+    { "code": "nspm", "payer": "all", "kind": "regime", "regimes": ["РЕЖ-01"] },
+    { "code": "nspq", "payer": "all", "kind": "regime", "regimes": ["РЕЖ-01"] },
+    { "code": "npa", "payer": "all", "kind": "regime", "regimes": ["РЕЖ-01"] },
+    { "code": "akc", "payer": "all", "kind": "regime", "regimes": ["РЕЖ-01"] },
+    { "code": "gdn", "payer": "all", "kind": "regime", "regimes": ["РЕЖ-01"] },
+    { "code": "enq", "payer": "all", "kind": "regime", "regimes": ["РЕЖ-03"] },
+    { "code": "enm", "payer": "all", "kind": "regime", "regimes": ["РЕЖ-03"] },
+    { "code": "etr", "payer": "all", "kind": "regime", "regimes": ["РЕЖ-07"] },
+    { "code": "min", "payer": "all", "kind": "regime", "regimes": ["РЕЖ-06"] },
+    { "code": "gamo", "payer": "org", "kind": "regime", "regimes": ["РЕЖ-08"] },
+    { "code": "zon", "payer": "all", "kind": "regime", "regimes": ["РЕЖ-09"] },
+    { "code": "pat", "payer": "all", "kind": "regime", "regimes": ["РЕЖ-02"] },
+    { "code": "pvt", "payer": "all", "kind": "regime", "regimes": ["РЕЖ-05"] },
+    { "code": "pvtd", "payer": "all", "kind": "regime", "regimes": ["РЕЖ-05"] },
+    { "code": "sez", "payer": "org", "kind": "regime", "regimes": ["РЕЖ-04"] }
+  ],
+  "cases": [
+    {
+      "name": "ОсОО «Ала-Тоо Трейд»",
+      "subject": {
+        "form": { "code": "ФС-01", "declarationFor": "org" },
+        "regimes": [{ "code": "РЕЖ-01", "name": "ОНР" }],
+        "assignments": [
+          { "reportTypeCode": "nds", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "nspm", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "soc", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "npa", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "endo", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "t1m", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "inv1q", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "t1y", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "fin", "endedOn": null, "enRates": [] }
+        ]
+      },
+      "expected": {
+        "endo": "",
+        "endi": "Для организаций назначается «ЕНД для организаций»",
+        "gam": "Не подходит к режиму «ОНР»",
+        "patw": "Для организаций назначается «ЕНД для организаций»",
+        "socip": "Для организаций назначается «ЕНД для организаций»",
+        "soc": "",
+        "t1q": "",
+        "nds": "",
+        "nspm": "",
+        "nspq": "",
+        "npa": "",
+        "akc": "",
+        "gdn": "",
+        "enq": "Не подходит к режиму «ОНР»",
+        "enm": "Не подходит к режиму «ОНР»",
+        "etr": "Не подходит к режиму «ОНР»",
+        "min": "Не подходит к режиму «ОНР»",
+        "gamo": "Не подходит к режиму «ОНР»",
+        "zon": "Не подходит к режиму «ОНР»",
+        "pat": "Не подходит к режиму «ОНР»",
+        "pvt": "Не подходит к режиму «ОНР»",
+        "pvtd": "Не подходит к режиму «ОНР»",
+        "sez": "Не подходит к режиму «ОНР»"
+      }
+    },
+    {
+      "name": "ОсОО «Бишкек Стройсервис»",
+      "subject": {
+        "form": { "code": "ФС-01", "declarationFor": "org" },
+        "regimes": [{ "code": "РЕЖ-01", "name": "ОНР" }],
+        "assignments": [
+          { "reportTypeCode": "nds", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "nspm", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "soc", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "npa", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "endo", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "t1m", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "inv1q", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "tbo", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "t1y", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "fin", "endedOn": null, "enRates": [] }
+        ]
+      },
+      "expected": {
+        "endo": "",
+        "endi": "Для организаций назначается «ЕНД для организаций»",
+        "gam": "Не подходит к режиму «ОНР»",
+        "patw": "Для организаций назначается «ЕНД для организаций»",
+        "socip": "Для организаций назначается «ЕНД для организаций»",
+        "soc": "",
+        "t1q": "",
+        "nds": "",
+        "nspm": "",
+        "nspq": "",
+        "npa": "",
+        "akc": "",
+        "gdn": "",
+        "enq": "Не подходит к режиму «ОНР»",
+        "enm": "Не подходит к режиму «ОНР»",
+        "etr": "Не подходит к режиму «ОНР»",
+        "min": "Не подходит к режиму «ОНР»",
+        "gamo": "Не подходит к режиму «ОНР»",
+        "zon": "Не подходит к режиму «ОНР»",
+        "pat": "Не подходит к режиму «ОНР»",
+        "pvt": "Не подходит к режиму «ОНР»",
+        "pvtd": "Не подходит к режиму «ОНР»",
+        "sez": "Не подходит к режиму «ОНР»"
+      }
+    },
+    {
+      "name": "ИП Абдыкадыров Т. К.",
+      "subject": {
+        "form": { "code": "ФС-02", "declarationFor": "ip" },
+        "regimes": [{ "code": "РЕЖ-03", "name": "Единый налог" }],
+        "assignments": [
+          {
+            "reportTypeCode": "enm",
+            "endedOn": null,
+            "enRates": [
+              { "code": "ЕНС-02", "variant": null },
+              { "code": "ЕНС-16", "variant": null }
+            ]
+          },
+          { "reportTypeCode": "endi", "endedOn": null, "enRates": [] }
+        ]
+      },
+      "expected": {
+        "endo": "Для ИП назначается «ЕНД для ИП»",
+        "endi": "",
+        "gam": "Для ИП назначается «ЕНД для ИП»",
+        "patw": "",
+        "socip": "",
+        "soc": "",
+        "t1q": "Для ИП назначается «ЕНД для ИП»",
+        "nds": "Не подходит к режиму «Единый налог»",
+        "nspm": "Не подходит к режиму «Единый налог»",
+        "nspq": "Не подходит к режиму «Единый налог»",
+        "npa": "Не подходит к режиму «Единый налог»",
+        "akc": "Не подходит к режиму «Единый налог»",
+        "gdn": "Не подходит к режиму «Единый налог»",
+        "enq": "",
+        "enm": "",
+        "etr": "Не подходит к режиму «Единый налог»",
+        "min": "Не подходит к режиму «Единый налог»",
+        "gamo": "Для ИП назначается «ЕНД для ИП»",
+        "zon": "Не подходит к режиму «Единый налог»",
+        "pat": "Не подходит к режиму «Единый налог»",
+        "pvt": "Не подходит к режиму «Единый налог»",
+        "pvtd": "Не подходит к режиму «Единый налог»",
+        "sez": "Для ИП назначается «ЕНД для ИП»"
+      }
+    },
+    {
+      "name": "ОсОО «Нур Логистик»",
+      "subject": {
+        "form": { "code": "ФС-01", "declarationFor": "org" },
+        "regimes": [{ "code": "РЕЖ-01", "name": "ОНР" }],
+        "assignments": [
+          { "reportTypeCode": "nds", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "nspm", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "soc", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "npa", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "endo", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "t1m", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "tbo", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "t1y", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "fin", "endedOn": null, "enRates": [] }
+        ]
+      },
+      "expected": {
+        "endo": "",
+        "endi": "Для организаций назначается «ЕНД для организаций»",
+        "gam": "Не подходит к режиму «ОНР»",
+        "patw": "Для организаций назначается «ЕНД для организаций»",
+        "socip": "Для организаций назначается «ЕНД для организаций»",
+        "soc": "",
+        "t1q": "",
+        "nds": "",
+        "nspm": "",
+        "nspq": "",
+        "npa": "",
+        "akc": "",
+        "gdn": "",
+        "enq": "Не подходит к режиму «ОНР»",
+        "enm": "Не подходит к режиму «ОНР»",
+        "etr": "Не подходит к режиму «ОНР»",
+        "min": "Не подходит к режиму «ОНР»",
+        "gamo": "Не подходит к режиму «ОНР»",
+        "zon": "Не подходит к режиму «ОНР»",
+        "pat": "Не подходит к режиму «ОНР»",
+        "pvt": "Не подходит к режиму «ОНР»",
+        "pvtd": "Не подходит к режиму «ОНР»",
+        "sez": "Не подходит к режиму «ОНР»"
+      }
+    },
+    {
+      "name": "ОсОО «Иссык-Куль Тур»",
+      "subject": {
+        "form": { "code": "ФС-01", "declarationFor": "org" },
+        "regimes": [{ "code": "РЕЖ-03", "name": "Единый налог" }],
+        "assignments": [
+          {
+            "reportTypeCode": "enq",
+            "endedOn": null,
+            "enRates": [
+              { "code": "ЕНС-03", "variant": null },
+              { "code": "ЕНС-04", "variant": null }
+            ]
+          },
+          { "reportTypeCode": "soc", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "endo", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "t1m", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "t1y", "endedOn": null, "enRates": [] }
+        ]
+      },
+      "expected": {
+        "endo": "",
+        "endi": "Для организаций назначается «ЕНД для организаций»",
+        "gam": "Не подходит к режиму «Единый налог»",
+        "patw": "Для организаций назначается «ЕНД для организаций»",
+        "socip": "Для организаций назначается «ЕНД для организаций»",
+        "soc": "",
+        "t1q": "",
+        "nds": "Не подходит к режиму «Единый налог»",
+        "nspm": "Не подходит к режиму «Единый налог»",
+        "nspq": "Не подходит к режиму «Единый налог»",
+        "npa": "Не подходит к режиму «Единый налог»",
+        "akc": "Не подходит к режиму «Единый налог»",
+        "gdn": "Не подходит к режиму «Единый налог»",
+        "enq": "",
+        "enm": "",
+        "etr": "Не подходит к режиму «Единый налог»",
+        "min": "Не подходит к режиму «Единый налог»",
+        "gamo": "Не подходит к режиму «Единый налог»",
+        "zon": "Не подходит к режиму «Единый налог»",
+        "pat": "Не подходит к режиму «Единый налог»",
+        "pvt": "Не подходит к режиму «Единый налог»",
+        "pvtd": "Не подходит к режиму «Единый налог»",
+        "sez": "Не подходит к режиму «Единый налог»"
+      }
+    },
+    {
+      "name": "ОсОО «Агро Продукт KG»",
+      "subject": {
+        "form": { "code": "ФС-01", "declarationFor": "org" },
+        "regimes": [{ "code": "РЕЖ-03", "name": "Единый налог" }],
+        "assignments": [
+          {
+            "reportTypeCode": "enq",
+            "endedOn": null,
+            "enRates": [
+              { "code": "ЕНС-03", "variant": null },
+              { "code": "ЕНС-02", "variant": null }
+            ]
+          },
+          { "reportTypeCode": "soc", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "endo", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "tbo", "endedOn": null, "enRates": [] }
+        ]
+      },
+      "expected": {
+        "endo": "",
+        "endi": "Для организаций назначается «ЕНД для организаций»",
+        "gam": "Не подходит к режиму «Единый налог»",
+        "patw": "Для организаций назначается «ЕНД для организаций»",
+        "socip": "Для организаций назначается «ЕНД для организаций»",
+        "soc": "",
+        "t1q": "",
+        "nds": "Не подходит к режиму «Единый налог»",
+        "nspm": "Не подходит к режиму «Единый налог»",
+        "nspq": "Не подходит к режиму «Единый налог»",
+        "npa": "Не подходит к режиму «Единый налог»",
+        "akc": "Не подходит к режиму «Единый налог»",
+        "gdn": "Не подходит к режиму «Единый налог»",
+        "enq": "",
+        "enm": "",
+        "etr": "Не подходит к режиму «Единый налог»",
+        "min": "Не подходит к режиму «Единый налог»",
+        "gamo": "Не подходит к режиму «Единый налог»",
+        "zon": "Не подходит к режиму «Единый налог»",
+        "pat": "Не подходит к режиму «Единый налог»",
+        "pvt": "Не подходит к режиму «Единый налог»",
+        "pvtd": "Не подходит к режиму «Единый налог»",
+        "sez": "Не подходит к режиму «Единый налог»"
+      }
+    },
+    {
+      "name": "ОсОО «Тянь-Шань Фарм»",
+      "subject": {
+        "form": { "code": "ФС-01", "declarationFor": "org" },
+        "regimes": [{ "code": "РЕЖ-01", "name": "ОНР" }],
+        "assignments": [
+          { "reportTypeCode": "nds", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "nspm", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "soc", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "npa", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "endo", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "t1m", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "t1y", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "fin", "endedOn": null, "enRates": [] }
+        ]
+      },
+      "expected": {
+        "endo": "",
+        "endi": "Для организаций назначается «ЕНД для организаций»",
+        "gam": "Не подходит к режиму «ОНР»",
+        "patw": "Для организаций назначается «ЕНД для организаций»",
+        "socip": "Для организаций назначается «ЕНД для организаций»",
+        "soc": "",
+        "t1q": "",
+        "nds": "",
+        "nspm": "",
+        "nspq": "",
+        "npa": "",
+        "akc": "",
+        "gdn": "",
+        "enq": "Не подходит к режиму «ОНР»",
+        "enm": "Не подходит к режиму «ОНР»",
+        "etr": "Не подходит к режиму «ОНР»",
+        "min": "Не подходит к режиму «ОНР»",
+        "gamo": "Не подходит к режиму «ОНР»",
+        "zon": "Не подходит к режиму «ОНР»",
+        "pat": "Не подходит к режиму «ОНР»",
+        "pvt": "Не подходит к режиму «ОНР»",
+        "pvtd": "Не подходит к режиму «ОНР»",
+        "sez": "Не подходит к режиму «ОНР»"
+      }
+    },
+    {
+      "name": "ИП Мамытова А. Ж.",
+      "subject": {
+        "form": { "code": "ФС-02", "declarationFor": "ip" },
+        "regimes": [{ "code": "РЕЖ-02", "name": "Патент" }],
+        "assignments": [{ "reportTypeCode": "pat", "endedOn": null, "enRates": [] }]
+      },
+      "expected": {
+        "endo": "Для ИП назначается «ЕНД для ИП»",
+        "endi": "ЕНД не сдают плательщики режима «Патент» (ст. 106)",
+        "gam": "Для ИП назначается «ЕНД для ИП»",
+        "patw": "",
+        "socip": "",
+        "soc": "",
+        "t1q": "Для ИП назначается «ЕНД для ИП»",
+        "nds": "Не подходит к режиму «Патент»",
+        "nspm": "Не подходит к режиму «Патент»",
+        "nspq": "Не подходит к режиму «Патент»",
+        "npa": "Не подходит к режиму «Патент»",
+        "akc": "Не подходит к режиму «Патент»",
+        "gdn": "Не подходит к режиму «Патент»",
+        "enq": "Не подходит к режиму «Патент»",
+        "enm": "Не подходит к режиму «Патент»",
+        "etr": "Не подходит к режиму «Патент»",
+        "min": "Не подходит к режиму «Патент»",
+        "gamo": "Для ИП назначается «ЕНД для ИП»",
+        "zon": "Не подходит к режиму «Патент»",
+        "pat": "",
+        "pvt": "Не подходит к режиму «Патент»",
+        "pvtd": "Не подходит к режиму «Патент»",
+        "sez": "Для ИП назначается «ЕНД для ИП»"
+      }
+    },
+    {
+      "name": "ОсОО «Ош Текстиль»",
+      "subject": {
+        "form": { "code": "ФС-01", "declarationFor": "org" },
+        "regimes": [{ "code": "РЕЖ-03", "name": "Единый налог" }],
+        "assignments": [
+          {
+            "reportTypeCode": "enq",
+            "endedOn": null,
+            "enRates": [{ "code": "ЕНС-08", "variant": null }]
+          },
+          { "reportTypeCode": "soc", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "endo", "endedOn": null, "enRates": [] }
+        ]
+      },
+      "expected": {
+        "endo": "",
+        "endi": "Для организаций назначается «ЕНД для организаций»",
+        "gam": "Не подходит к режиму «Единый налог»",
+        "patw": "Для организаций назначается «ЕНД для организаций»",
+        "socip": "Для организаций назначается «ЕНД для организаций»",
+        "soc": "",
+        "t1q": "",
+        "nds": "Не подходит к режиму «Единый налог»",
+        "nspm": "Не подходит к режиму «Единый налог»",
+        "nspq": "Не подходит к режиму «Единый налог»",
+        "npa": "Не подходит к режиму «Единый налог»",
+        "akc": "Не подходит к режиму «Единый налог»",
+        "gdn": "Не подходит к режиму «Единый налог»",
+        "enq": "",
+        "enm": "",
+        "etr": "Не подходит к режиму «Единый налог»",
+        "min": "Не подходит к режиму «Единый налог»",
+        "gamo": "Не подходит к режиму «Единый налог»",
+        "zon": "Не подходит к режиму «Единый налог»",
+        "pat": "Не подходит к режиму «Единый налог»",
+        "pvt": "Не подходит к режиму «Единый налог»",
+        "pvtd": "Не подходит к режиму «Единый налог»",
+        "sez": "Не подходит к режиму «Единый налог»"
+      }
+    },
+    {
+      "name": "ОсОО «Каракол Мед Сервис»",
+      "subject": {
+        "form": { "code": "ФС-01", "declarationFor": "org" },
+        "regimes": [{ "code": "РЕЖ-03", "name": "Единый налог" }],
+        "assignments": [
+          {
+            "reportTypeCode": "enq",
+            "endedOn": null,
+            "enRates": [{ "code": "ЕНС-04", "variant": null }]
+          },
+          { "reportTypeCode": "soc", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "endo", "endedOn": null, "enRates": [] }
+        ]
+      },
+      "expected": {
+        "endo": "",
+        "endi": "Для организаций назначается «ЕНД для организаций»",
+        "gam": "Не подходит к режиму «Единый налог»",
+        "patw": "Для организаций назначается «ЕНД для организаций»",
+        "socip": "Для организаций назначается «ЕНД для организаций»",
+        "soc": "",
+        "t1q": "",
+        "nds": "Не подходит к режиму «Единый налог»",
+        "nspm": "Не подходит к режиму «Единый налог»",
+        "nspq": "Не подходит к режиму «Единый налог»",
+        "npa": "Не подходит к режиму «Единый налог»",
+        "akc": "Не подходит к режиму «Единый налог»",
+        "gdn": "Не подходит к режиму «Единый налог»",
+        "enq": "",
+        "enm": "",
+        "etr": "Не подходит к режиму «Единый налог»",
+        "min": "Не подходит к режиму «Единый налог»",
+        "gamo": "Не подходит к режиму «Единый налог»",
+        "zon": "Не подходит к режиму «Единый налог»",
+        "pat": "Не подходит к режиму «Единый налог»",
+        "pvt": "Не подходит к режиму «Единый налог»",
+        "pvtd": "Не подходит к режиму «Единый налог»",
+        "sez": "Не подходит к режиму «Единый налог»"
+      }
+    },
+    {
+      "name": "ОсОО «Софт Бишкек»",
+      "subject": {
+        "form": { "code": "ФС-01", "declarationFor": "org" },
+        "regimes": [{ "code": "РЕЖ-05", "name": "ПВТ" }],
+        "assignments": [
+          { "reportTypeCode": "pvtd", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "soc", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "endo", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "t1m", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "t1y", "endedOn": null, "enRates": [] }
+        ]
+      },
+      "expected": {
+        "endo": "",
+        "endi": "Для организаций назначается «ЕНД для организаций»",
+        "gam": "Не подходит к режиму «ПВТ»",
+        "patw": "Для организаций назначается «ЕНД для организаций»",
+        "socip": "Для организаций назначается «ЕНД для организаций»",
+        "soc": "",
+        "t1q": "",
+        "nds": "Не подходит к режиму «ПВТ»",
+        "nspm": "Не подходит к режиму «ПВТ»",
+        "nspq": "Не подходит к режиму «ПВТ»",
+        "npa": "Не подходит к режиму «ПВТ»",
+        "akc": "Не подходит к режиму «ПВТ»",
+        "gdn": "Не подходит к режиму «ПВТ»",
+        "enq": "Не подходит к режиму «ПВТ»",
+        "enm": "Не подходит к режиму «ПВТ»",
+        "etr": "Не подходит к режиму «ПВТ»",
+        "min": "Не подходит к режиму «ПВТ»",
+        "gamo": "Не подходит к режиму «ПВТ»",
+        "zon": "Не подходит к режиму «ПВТ»",
+        "pat": "Не подходит к режиму «ПВТ»",
+        "pvt": "",
+        "pvtd": "",
+        "sez": "Не подходит к режиму «ПВТ»"
+      }
+    },
+    {
+      "name": "ОсОО «Чуй Сүт»",
+      "subject": {
+        "form": { "code": "ФС-01", "declarationFor": "org" },
+        "regimes": [{ "code": "РЕЖ-01", "name": "ОНР" }],
+        "assignments": [
+          { "reportTypeCode": "nds", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "nspm", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "soc", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "npa", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "endo", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "t1m", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "pni", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "imn", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "opu", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "odds", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "bal", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "cap", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "t1y", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "fin", "endedOn": null, "enRates": [] }
+        ]
+      },
+      "expected": {
+        "endo": "",
+        "endi": "Для организаций назначается «ЕНД для организаций»",
+        "gam": "Не подходит к режиму «ОНР»",
+        "patw": "Для организаций назначается «ЕНД для организаций»",
+        "socip": "Для организаций назначается «ЕНД для организаций»",
+        "soc": "",
+        "t1q": "",
+        "nds": "",
+        "nspm": "",
+        "nspq": "",
+        "npa": "",
+        "akc": "",
+        "gdn": "",
+        "enq": "Не подходит к режиму «ОНР»",
+        "enm": "Не подходит к режиму «ОНР»",
+        "etr": "Не подходит к режиму «ОНР»",
+        "min": "Не подходит к режиму «ОНР»",
+        "gamo": "Не подходит к режиму «ОНР»",
+        "zon": "Не подходит к режиму «ОНР»",
+        "pat": "Не подходит к режиму «ОНР»",
+        "pvt": "Не подходит к режиму «ОНР»",
+        "pvtd": "Не подходит к режиму «ОНР»",
+        "sez": "Не подходит к режиму «ОНР»"
+      }
+    },
+    {
+      "name": "ИП Сатыбалдиев Н. Т.",
+      "subject": {
+        "form": { "code": "ФС-02", "declarationFor": "ip" },
+        "regimes": [{ "code": "РЕЖ-03", "name": "Единый налог" }],
+        "assignments": [
+          {
+            "reportTypeCode": "enm",
+            "endedOn": null,
+            "enRates": [{ "code": "ЕНС-04", "variant": null }]
+          },
+          { "reportTypeCode": "endi", "endedOn": null, "enRates": [] }
+        ]
+      },
+      "expected": {
+        "endo": "Для ИП назначается «ЕНД для ИП»",
+        "endi": "",
+        "gam": "Для ИП назначается «ЕНД для ИП»",
+        "patw": "",
+        "socip": "",
+        "soc": "",
+        "t1q": "Для ИП назначается «ЕНД для ИП»",
+        "nds": "Не подходит к режиму «Единый налог»",
+        "nspm": "Не подходит к режиму «Единый налог»",
+        "nspq": "Не подходит к режиму «Единый налог»",
+        "npa": "Не подходит к режиму «Единый налог»",
+        "akc": "Не подходит к режиму «Единый налог»",
+        "gdn": "Не подходит к режиму «Единый налог»",
+        "enq": "",
+        "enm": "",
+        "etr": "Не подходит к режиму «Единый налог»",
+        "min": "Не подходит к режиму «Единый налог»",
+        "gamo": "Для ИП назначается «ЕНД для ИП»",
+        "zon": "Не подходит к режиму «Единый налог»",
+        "pat": "Не подходит к режиму «Единый налог»",
+        "pvt": "Не подходит к режиму «Единый налог»",
+        "pvtd": "Не подходит к режиму «Единый налог»",
+        "sez": "Для ИП назначается «ЕНД для ИП»"
+      }
+    },
+    {
+      "name": "ОсОО «Манас Авто Плюс»",
+      "subject": {
+        "form": { "code": "ФС-01", "declarationFor": "org" },
+        "regimes": [{ "code": "РЕЖ-01", "name": "ОНР" }],
+        "assignments": [
+          { "reportTypeCode": "nds", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "nspm", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "soc", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "npa", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "endo", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "t1m", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "tbo", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "opu", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "odds", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "bal", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "cap", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "t1y", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "fin", "endedOn": null, "enRates": [] }
+        ]
+      },
+      "expected": {
+        "endo": "",
+        "endi": "Для организаций назначается «ЕНД для организаций»",
+        "gam": "Не подходит к режиму «ОНР»",
+        "patw": "Для организаций назначается «ЕНД для организаций»",
+        "socip": "Для организаций назначается «ЕНД для организаций»",
+        "soc": "",
+        "t1q": "",
+        "nds": "",
+        "nspm": "",
+        "nspq": "",
+        "npa": "",
+        "akc": "",
+        "gdn": "",
+        "enq": "Не подходит к режиму «ОНР»",
+        "enm": "Не подходит к режиму «ОНР»",
+        "etr": "Не подходит к режиму «ОНР»",
+        "min": "Не подходит к режиму «ОНР»",
+        "gamo": "Не подходит к режиму «ОНР»",
+        "zon": "Не подходит к режиму «ОНР»",
+        "pat": "Не подходит к режиму «ОНР»",
+        "pvt": "Не подходит к режиму «ОНР»",
+        "pvtd": "Не подходит к режиму «ОНР»",
+        "sez": "Не подходит к режиму «ОНР»"
+      }
+    },
+    {
+      "name": "ОсОО «Ак-Тилек Строй»",
+      "subject": {
+        "form": { "code": "ФС-01", "declarationFor": "org" },
+        "regimes": [{ "code": "РЕЖ-01", "name": "ОНР" }],
+        "assignments": [
+          { "reportTypeCode": "nds", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "nspm", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "soc", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "npa", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "endo", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "t1m", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "imn", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "inv1q", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "t1y", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "fin", "endedOn": null, "enRates": [] }
+        ]
+      },
+      "expected": {
+        "endo": "",
+        "endi": "Для организаций назначается «ЕНД для организаций»",
+        "gam": "Не подходит к режиму «ОНР»",
+        "patw": "Для организаций назначается «ЕНД для организаций»",
+        "socip": "Для организаций назначается «ЕНД для организаций»",
+        "soc": "",
+        "t1q": "",
+        "nds": "",
+        "nspm": "",
+        "nspq": "",
+        "npa": "",
+        "akc": "",
+        "gdn": "",
+        "enq": "Не подходит к режиму «ОНР»",
+        "enm": "Не подходит к режиму «ОНР»",
+        "etr": "Не подходит к режиму «ОНР»",
+        "min": "Не подходит к режиму «ОНР»",
+        "gamo": "Не подходит к режиму «ОНР»",
+        "zon": "Не подходит к режиму «ОНР»",
+        "pat": "Не подходит к режиму «ОНР»",
+        "pvt": "Не подходит к режиму «ОНР»",
+        "pvtd": "Не подходит к режиму «ОНР»",
+        "sez": "Не подходит к режиму «ОНР»"
+      }
+    },
+    {
+      "name": "ОсОО «Талас Бал»",
+      "subject": {
+        "form": { "code": "ФС-01", "declarationFor": "org" },
+        "regimes": [{ "code": "РЕЖ-03", "name": "Единый налог" }],
+        "assignments": [
+          {
+            "reportTypeCode": "enq",
+            "endedOn": null,
+            "enRates": [{ "code": "ЕНС-04", "variant": null }]
+          },
+          { "reportTypeCode": "soc", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "endo", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "t1m", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "t1y", "endedOn": null, "enRates": [] }
+        ]
+      },
+      "expected": {
+        "endo": "",
+        "endi": "Для организаций назначается «ЕНД для организаций»",
+        "gam": "Не подходит к режиму «Единый налог»",
+        "patw": "Для организаций назначается «ЕНД для организаций»",
+        "socip": "Для организаций назначается «ЕНД для организаций»",
+        "soc": "",
+        "t1q": "",
+        "nds": "Не подходит к режиму «Единый налог»",
+        "nspm": "Не подходит к режиму «Единый налог»",
+        "nspq": "Не подходит к режиму «Единый налог»",
+        "npa": "Не подходит к режиму «Единый налог»",
+        "akc": "Не подходит к режиму «Единый налог»",
+        "gdn": "Не подходит к режиму «Единый налог»",
+        "enq": "",
+        "enm": "",
+        "etr": "Не подходит к режиму «Единый налог»",
+        "min": "Не подходит к режиму «Единый налог»",
+        "gamo": "Не подходит к режиму «Единый налог»",
+        "zon": "Не подходит к режиму «Единый налог»",
+        "pat": "Не подходит к режиму «Единый налог»",
+        "pvt": "Не подходит к режиму «Единый налог»",
+        "pvtd": "Не подходит к режиму «Единый налог»",
+        "sez": "Не подходит к режиму «Единый налог»"
+      }
+    },
+    {
+      "name": "ОсОО «Нарын Жүн»",
+      "subject": {
+        "form": { "code": "ФС-01", "declarationFor": "org" },
+        "regimes": [{ "code": "РЕЖ-03", "name": "Единый налог" }],
+        "assignments": [
+          {
+            "reportTypeCode": "enq",
+            "endedOn": null,
+            "enRates": [{ "code": "ЕНС-04", "variant": null }]
+          },
+          { "reportTypeCode": "soc", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "endo", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "tbo", "endedOn": null, "enRates": [] }
+        ]
+      },
+      "expected": {
+        "endo": "",
+        "endi": "Для организаций назначается «ЕНД для организаций»",
+        "gam": "Не подходит к режиму «Единый налог»",
+        "patw": "Для организаций назначается «ЕНД для организаций»",
+        "socip": "Для организаций назначается «ЕНД для организаций»",
+        "soc": "",
+        "t1q": "",
+        "nds": "Не подходит к режиму «Единый налог»",
+        "nspm": "Не подходит к режиму «Единый налог»",
+        "nspq": "Не подходит к режиму «Единый налог»",
+        "npa": "Не подходит к режиму «Единый налог»",
+        "akc": "Не подходит к режиму «Единый налог»",
+        "gdn": "Не подходит к режиму «Единый налог»",
+        "enq": "",
+        "enm": "",
+        "etr": "Не подходит к режиму «Единый налог»",
+        "min": "Не подходит к режиму «Единый налог»",
+        "gamo": "Не подходит к режиму «Единый налог»",
+        "zon": "Не подходит к режиму «Единый налог»",
+        "pat": "Не подходит к режиму «Единый налог»",
+        "pvt": "Не подходит к режиму «Единый налог»",
+        "pvtd": "Не подходит к режиму «Единый налог»",
+        "sez": "Не подходит к режиму «Единый налог»"
+      }
+    },
+    {
+      "name": "ИП Токтосунова Г. А.",
+      "subject": {
+        "form": { "code": "ФС-02", "declarationFor": "ip" },
+        "regimes": [{ "code": "РЕЖ-07", "name": "Электронная торговля" }],
+        "assignments": [
+          { "reportTypeCode": "etr", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "endi", "endedOn": null, "enRates": [] }
+        ]
+      },
+      "expected": {
+        "endo": "Для ИП назначается «ЕНД для ИП»",
+        "endi": "",
+        "gam": "Для ИП назначается «ЕНД для ИП»",
+        "patw": "Не подходит к режиму «Электронная торговля»",
+        "socip": "",
+        "soc": "",
+        "t1q": "Для ИП назначается «ЕНД для ИП»",
+        "nds": "Не подходит к режиму «Электронная торговля»",
+        "nspm": "Не подходит к режиму «Электронная торговля»",
+        "nspq": "Не подходит к режиму «Электронная торговля»",
+        "npa": "Не подходит к режиму «Электронная торговля»",
+        "akc": "Не подходит к режиму «Электронная торговля»",
+        "gdn": "Не подходит к режиму «Электронная торговля»",
+        "enq": "Не подходит к режиму «Электронная торговля»",
+        "enm": "Не подходит к режиму «Электронная торговля»",
+        "etr": "",
+        "min": "Не подходит к режиму «Электронная торговля»",
+        "gamo": "Для ИП назначается «ЕНД для ИП»",
+        "zon": "Не подходит к режиму «Электронная торговля»",
+        "pat": "Не подходит к режиму «Электронная торговля»",
+        "pvt": "Не подходит к режиму «Электронная торговля»",
+        "pvtd": "Не подходит к режиму «Электронная торговля»",
+        "sez": "Для ИП назначается «ЕНД для ИП»"
+      }
+    },
+    {
+      "name": "ОсОО «Айгуль Дизайн Студио»",
+      "subject": {
+        "form": { "code": "ФС-01", "declarationFor": "org" },
+        "regimes": [{ "code": "РЕЖ-03", "name": "Единый налог" }],
+        "assignments": [
+          {
+            "reportTypeCode": "enq",
+            "endedOn": null,
+            "enRates": [{ "code": "ЕНС-13", "variant": null }]
+          },
+          { "reportTypeCode": "soc", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "tbo", "endedOn": null, "enRates": [] }
+        ]
+      },
+      "expected": {
+        "endo": "ЕНД не сдают плательщики единого налога по ставке ЕНС-13 · 0 % (ст. 106)",
+        "endi": "Для организаций назначается «ЕНД для организаций»",
+        "gam": "Не подходит к режиму «Единый налог»",
+        "patw": "Для организаций назначается «ЕНД для организаций»",
+        "socip": "Для организаций назначается «ЕНД для организаций»",
+        "soc": "",
+        "t1q": "",
+        "nds": "Не подходит к режиму «Единый налог»",
+        "nspm": "Не подходит к режиму «Единый налог»",
+        "nspq": "Не подходит к режиму «Единый налог»",
+        "npa": "Не подходит к режиму «Единый налог»",
+        "akc": "Не подходит к режиму «Единый налог»",
+        "gdn": "Не подходит к режиму «Единый налог»",
+        "enq": "",
+        "enm": "",
+        "etr": "Не подходит к режиму «Единый налог»",
+        "min": "Не подходит к режиму «Единый налог»",
+        "gamo": "Не подходит к режиму «Единый налог»",
+        "zon": "Не подходит к режиму «Единый налог»",
+        "pat": "Не подходит к режиму «Единый налог»",
+        "pvt": "Не подходит к режиму «Единый налог»",
+        "pvtd": "Не подходит к режиму «Единый налог»",
+        "sez": "Не подходит к режиму «Единый налог»"
+      }
+    },
+    {
+      "name": "ОсОО «Боом Транзит»",
+      "subject": {
+        "form": { "code": "ФС-01", "declarationFor": "org" },
+        "regimes": [{ "code": "РЕЖ-01", "name": "ОНР" }],
+        "assignments": [
+          { "reportTypeCode": "nds", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "nspm", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "soc", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "npa", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "endo", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "t1m", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "imn", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "t1y", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "fin", "endedOn": null, "enRates": [] }
+        ]
+      },
+      "expected": {
+        "endo": "",
+        "endi": "Для организаций назначается «ЕНД для организаций»",
+        "gam": "Не подходит к режиму «ОНР»",
+        "patw": "Для организаций назначается «ЕНД для организаций»",
+        "socip": "Для организаций назначается «ЕНД для организаций»",
+        "soc": "",
+        "t1q": "",
+        "nds": "",
+        "nspm": "",
+        "nspq": "",
+        "npa": "",
+        "akc": "",
+        "gdn": "",
+        "enq": "Не подходит к режиму «ОНР»",
+        "enm": "Не подходит к режиму «ОНР»",
+        "etr": "Не подходит к режиму «ОНР»",
+        "min": "Не подходит к режиму «ОНР»",
+        "gamo": "Не подходит к режиму «ОНР»",
+        "zon": "Не подходит к режиму «ОНР»",
+        "pat": "Не подходит к режиму «ОНР»",
+        "pvt": "Не подходит к режиму «ОНР»",
+        "pvtd": "Не подходит к режиму «ОНР»",
+        "sez": "Не подходит к режиму «ОНР»"
+      }
+    },
+    {
+      "name": "ОсОО «Алай Цемент Сервис»",
+      "subject": {
+        "form": { "code": "ФС-01", "declarationFor": "org" },
+        "regimes": [{ "code": "РЕЖ-01", "name": "ОНР" }],
+        "assignments": [
+          { "reportTypeCode": "nds", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "nspm", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "soc", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "npa", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "endo", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "t1m", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "imn", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "inv1q", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "t1y", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "fin", "endedOn": null, "enRates": [] }
+        ]
+      },
+      "expected": {
+        "endo": "",
+        "endi": "Для организаций назначается «ЕНД для организаций»",
+        "gam": "Не подходит к режиму «ОНР»",
+        "patw": "Для организаций назначается «ЕНД для организаций»",
+        "socip": "Для организаций назначается «ЕНД для организаций»",
+        "soc": "",
+        "t1q": "",
+        "nds": "",
+        "nspm": "",
+        "nspq": "",
+        "npa": "",
+        "akc": "",
+        "gdn": "",
+        "enq": "Не подходит к режиму «ОНР»",
+        "enm": "Не подходит к режиму «ОНР»",
+        "etr": "Не подходит к режиму «ОНР»",
+        "min": "Не подходит к режиму «ОНР»",
+        "gamo": "Не подходит к режиму «ОНР»",
+        "zon": "Не подходит к режиму «ОНР»",
+        "pat": "Не подходит к режиму «ОНР»",
+        "pvt": "Не подходит к режиму «ОНР»",
+        "pvtd": "Не подходит к режиму «ОНР»",
+        "sez": "Не подходит к режиму «ОНР»"
+      }
+    },
+    {
+      "name": "ОсОО «Токмок Пласт»",
+      "subject": {
+        "form": { "code": "ФС-01", "declarationFor": "org" },
+        "regimes": [{ "code": "РЕЖ-03", "name": "Единый налог" }],
+        "assignments": [
+          {
+            "reportTypeCode": "enm",
+            "endedOn": null,
+            "enRates": [{ "code": "ЕНС-03", "variant": null }]
+          },
+          { "reportTypeCode": "soc", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "endo", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "t1m", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "t1y", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "fin", "endedOn": null, "enRates": [] }
+        ]
+      },
+      "expected": {
+        "endo": "",
+        "endi": "Для организаций назначается «ЕНД для организаций»",
+        "gam": "Не подходит к режиму «Единый налог»",
+        "patw": "Для организаций назначается «ЕНД для организаций»",
+        "socip": "Для организаций назначается «ЕНД для организаций»",
+        "soc": "",
+        "t1q": "",
+        "nds": "Не подходит к режиму «Единый налог»",
+        "nspm": "Не подходит к режиму «Единый налог»",
+        "nspq": "Не подходит к режиму «Единый налог»",
+        "npa": "Не подходит к режиму «Единый налог»",
+        "akc": "Не подходит к режиму «Единый налог»",
+        "gdn": "Не подходит к режиму «Единый налог»",
+        "enq": "",
+        "enm": "",
+        "etr": "Не подходит к режиму «Единый налог»",
+        "min": "Не подходит к режиму «Единый налог»",
+        "gamo": "Не подходит к режиму «Единый налог»",
+        "zon": "Не подходит к режиму «Единый налог»",
+        "pat": "Не подходит к режиму «Единый налог»",
+        "pvt": "Не подходит к режиму «Единый налог»",
+        "pvtd": "Не подходит к режиму «Единый налог»",
+        "sez": "Не подходит к режиму «Единый налог»"
+      }
+    },
+    {
+      "name": "ОАО «Кант Энерго Ремонт»",
+      "subject": {
+        "form": { "code": "ФС-03", "declarationFor": "org" },
+        "regimes": [
+          { "code": "РЕЖ-01", "name": "ОНР" },
+          { "code": "РЕЖ-06", "name": "Майнинг" }
+        ],
+        "assignments": [
+          { "reportTypeCode": "nds", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "nspm", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "soc", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "npa", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "endo", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "t1m", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "min", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "tbo", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "t1y", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "fin", "endedOn": null, "enRates": [] }
+        ]
+      },
+      "expected": {
+        "endo": "",
+        "endi": "Для организаций назначается «ЕНД для организаций»",
+        "gam": "Не подходит к режиму «ОНР + Майнинг»",
+        "patw": "Для организаций назначается «ЕНД для организаций»",
+        "socip": "Для организаций назначается «ЕНД для организаций»",
+        "soc": "",
+        "t1q": "",
+        "nds": "",
+        "nspm": "",
+        "nspq": "",
+        "npa": "",
+        "akc": "",
+        "gdn": "",
+        "enq": "Не подходит к режиму «ОНР + Майнинг»",
+        "enm": "Не подходит к режиму «ОНР + Майнинг»",
+        "etr": "Не подходит к режиму «ОНР + Майнинг»",
+        "min": "",
+        "gamo": "Не подходит к режиму «ОНР + Майнинг»",
+        "zon": "Не подходит к режиму «ОНР + Майнинг»",
+        "pat": "Не подходит к режиму «ОНР + Майнинг»",
+        "pvt": "Не подходит к режиму «ОНР + Майнинг»",
+        "pvtd": "Не подходит к режиму «ОНР + Майнинг»",
+        "sez": "Не подходит к режиму «ОНР + Майнинг»"
+      }
+    },
+    {
+      "name": "ОсОО «Сары-Челек Эко»",
+      "subject": {
+        "form": { "code": "ФС-01", "declarationFor": "org" },
+        "regimes": [{ "code": "РЕЖ-03", "name": "Единый налог" }],
+        "assignments": [
+          {
+            "reportTypeCode": "enm",
+            "endedOn": null,
+            "enRates": [{ "code": "ЕНС-04", "variant": null }]
+          },
+          { "reportTypeCode": "soc", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "endo", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "fin", "endedOn": null, "enRates": [] }
+        ]
+      },
+      "expected": {
+        "endo": "",
+        "endi": "Для организаций назначается «ЕНД для организаций»",
+        "gam": "Не подходит к режиму «Единый налог»",
+        "patw": "Для организаций назначается «ЕНД для организаций»",
+        "socip": "Для организаций назначается «ЕНД для организаций»",
+        "soc": "",
+        "t1q": "",
+        "nds": "Не подходит к режиму «Единый налог»",
+        "nspm": "Не подходит к режиму «Единый налог»",
+        "nspq": "Не подходит к режиму «Единый налог»",
+        "npa": "Не подходит к режиму «Единый налог»",
+        "akc": "Не подходит к режиму «Единый налог»",
+        "gdn": "Не подходит к режиму «Единый налог»",
+        "enq": "",
+        "enm": "",
+        "etr": "Не подходит к режиму «Единый налог»",
+        "min": "Не подходит к режиму «Единый налог»",
+        "gamo": "Не подходит к режиму «Единый налог»",
+        "zon": "Не подходит к режиму «Единый налог»",
+        "pat": "Не подходит к режиму «Единый налог»",
+        "pvt": "Не подходит к режиму «Единый налог»",
+        "pvtd": "Не подходит к режиму «Единый налог»",
+        "sez": "Не подходит к режиму «Единый налог»"
+      }
+    },
+    {
+      "name": "ОсОО «Ысык-Көл Балык»",
+      "subject": {
+        "form": { "code": "ФС-01", "declarationFor": "org" },
+        "regimes": [{ "code": "РЕЖ-03", "name": "Единый налог" }],
+        "assignments": [
+          {
+            "reportTypeCode": "enq",
+            "endedOn": null,
+            "enRates": [{ "code": "ЕНС-04", "variant": null }]
+          },
+          { "reportTypeCode": "soc", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "endo", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "t1m", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "t1y", "endedOn": null, "enRates": [] }
+        ]
+      },
+      "expected": {
+        "endo": "",
+        "endi": "Для организаций назначается «ЕНД для организаций»",
+        "gam": "Не подходит к режиму «Единый налог»",
+        "patw": "Для организаций назначается «ЕНД для организаций»",
+        "socip": "Для организаций назначается «ЕНД для организаций»",
+        "soc": "",
+        "t1q": "",
+        "nds": "Не подходит к режиму «Единый налог»",
+        "nspm": "Не подходит к режиму «Единый налог»",
+        "nspq": "Не подходит к режиму «Единый налог»",
+        "npa": "Не подходит к режиму «Единый налог»",
+        "akc": "Не подходит к режиму «Единый налог»",
+        "gdn": "Не подходит к режиму «Единый налог»",
+        "enq": "",
+        "enm": "",
+        "etr": "Не подходит к режиму «Единый налог»",
+        "min": "Не подходит к режиму «Единый налог»",
+        "gamo": "Не подходит к режиму «Единый налог»",
+        "zon": "Не подходит к режиму «Единый налог»",
+        "pat": "Не подходит к режиму «Единый налог»",
+        "pvt": "Не подходит к режиму «Единый налог»",
+        "pvtd": "Не подходит к режиму «Единый налог»",
+        "sez": "Не подходит к режиму «Единый налог»"
+      }
+    },
+    {
+      "name": "ИП Жумабеков Р. С.",
+      "subject": {
+        "form": { "code": "ФС-02", "declarationFor": "ip" },
+        "regimes": [{ "code": "РЕЖ-02", "name": "Патент" }],
+        "assignments": [{ "reportTypeCode": "pat", "endedOn": null, "enRates": [] }]
+      },
+      "expected": {
+        "endo": "Для ИП назначается «ЕНД для ИП»",
+        "endi": "ЕНД не сдают плательщики режима «Патент» (ст. 106)",
+        "gam": "Для ИП назначается «ЕНД для ИП»",
+        "patw": "",
+        "socip": "",
+        "soc": "",
+        "t1q": "Для ИП назначается «ЕНД для ИП»",
+        "nds": "Не подходит к режиму «Патент»",
+        "nspm": "Не подходит к режиму «Патент»",
+        "nspq": "Не подходит к режиму «Патент»",
+        "npa": "Не подходит к режиму «Патент»",
+        "akc": "Не подходит к режиму «Патент»",
+        "gdn": "Не подходит к режиму «Патент»",
+        "enq": "Не подходит к режиму «Патент»",
+        "enm": "Не подходит к режиму «Патент»",
+        "etr": "Не подходит к режиму «Патент»",
+        "min": "Не подходит к режиму «Патент»",
+        "gamo": "Для ИП назначается «ЕНД для ИП»",
+        "zon": "Не подходит к режиму «Патент»",
+        "pat": "",
+        "pvt": "Не подходит к режиму «Патент»",
+        "pvtd": "Не подходит к режиму «Патент»",
+        "sez": "Для ИП назначается «ЕНД для ИП»"
+      }
+    },
+    {
+      "name": "ОсОО «Кемин Агро»",
+      "subject": {
+        "form": { "code": "ФС-01", "declarationFor": "org" },
+        "regimes": [{ "code": "РЕЖ-03", "name": "Единый налог" }],
+        "assignments": [
+          {
+            "reportTypeCode": "enq",
+            "endedOn": null,
+            "enRates": [{ "code": "ЕНС-04", "variant": null }]
+          },
+          { "reportTypeCode": "soc", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "endo", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "tbo", "endedOn": null, "enRates": [] }
+        ]
+      },
+      "expected": {
+        "endo": "",
+        "endi": "Для организаций назначается «ЕНД для организаций»",
+        "gam": "Не подходит к режиму «Единый налог»",
+        "patw": "Для организаций назначается «ЕНД для организаций»",
+        "socip": "Для организаций назначается «ЕНД для организаций»",
+        "soc": "",
+        "t1q": "",
+        "nds": "Не подходит к режиму «Единый налог»",
+        "nspm": "Не подходит к режиму «Единый налог»",
+        "nspq": "Не подходит к режиму «Единый налог»",
+        "npa": "Не подходит к режиму «Единый налог»",
+        "akc": "Не подходит к режиму «Единый налог»",
+        "gdn": "Не подходит к режиму «Единый налог»",
+        "enq": "",
+        "enm": "",
+        "etr": "Не подходит к режиму «Единый налог»",
+        "min": "Не подходит к режиму «Единый налог»",
+        "gamo": "Не подходит к режиму «Единый налог»",
+        "zon": "Не подходит к режиму «Единый налог»",
+        "pat": "Не подходит к режиму «Единый налог»",
+        "pvt": "Не подходит к режиму «Единый налог»",
+        "pvtd": "Не подходит к режиму «Единый налог»",
+        "sez": "Не подходит к режиму «Единый налог»"
+      }
+    },
+    {
+      "name": "ОсОО «Дата Лаб Азия»",
+      "subject": {
+        "form": { "code": "ФС-01", "declarationFor": "org" },
+        "regimes": [{ "code": "РЕЖ-05", "name": "ПВТ" }],
+        "assignments": [
+          { "reportTypeCode": "pvtd", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "soc", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "endo", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "t1m", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "tbo", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "t1y", "endedOn": null, "enRates": [] }
+        ]
+      },
+      "expected": {
+        "endo": "",
+        "endi": "Для организаций назначается «ЕНД для организаций»",
+        "gam": "Не подходит к режиму «ПВТ»",
+        "patw": "Для организаций назначается «ЕНД для организаций»",
+        "socip": "Для организаций назначается «ЕНД для организаций»",
+        "soc": "",
+        "t1q": "",
+        "nds": "Не подходит к режиму «ПВТ»",
+        "nspm": "Не подходит к режиму «ПВТ»",
+        "nspq": "Не подходит к режиму «ПВТ»",
+        "npa": "Не подходит к режиму «ПВТ»",
+        "akc": "Не подходит к режиму «ПВТ»",
+        "gdn": "Не подходит к режиму «ПВТ»",
+        "enq": "Не подходит к режиму «ПВТ»",
+        "enm": "Не подходит к режиму «ПВТ»",
+        "etr": "Не подходит к режиму «ПВТ»",
+        "min": "Не подходит к режиму «ПВТ»",
+        "gamo": "Не подходит к режиму «ПВТ»",
+        "zon": "Не подходит к режиму «ПВТ»",
+        "pat": "Не подходит к режиму «ПВТ»",
+        "pvt": "",
+        "pvtd": "",
+        "sez": "Не подходит к режиму «ПВТ»"
+      }
+    },
+    {
+      "name": "ОсОО «Укс»",
+      "subject": {
+        "form": { "code": "ФС-01", "declarationFor": "org" },
+        "regimes": [{ "code": "РЕЖ-03", "name": "Единый налог" }],
+        "assignments": [
+          {
+            "reportTypeCode": "enq",
+            "endedOn": null,
+            "enRates": [{ "code": "ЕНС-04", "variant": null }]
+          },
+          { "reportTypeCode": "soc", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "pni", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "endo", "endedOn": null, "enRates": [] },
+          { "reportTypeCode": "tbo", "endedOn": null, "enRates": [] }
+        ]
+      },
+      "expected": {
+        "endo": "",
+        "endi": "Для организаций назначается «ЕНД для организаций»",
+        "gam": "Не подходит к режиму «Единый налог»",
+        "patw": "Для организаций назначается «ЕНД для организаций»",
+        "socip": "Для организаций назначается «ЕНД для организаций»",
+        "soc": "",
+        "t1q": "",
+        "nds": "Не подходит к режиму «Единый налог»",
+        "nspm": "Не подходит к режиму «Единый налог»",
+        "nspq": "Не подходит к режиму «Единый налог»",
+        "npa": "Не подходит к режиму «Единый налог»",
+        "akc": "Не подходит к режиму «Единый налог»",
+        "gdn": "Не подходит к режиму «Единый налог»",
+        "enq": "",
+        "enm": "",
+        "etr": "Не подходит к режиму «Единый налог»",
+        "min": "Не подходит к режиму «Единый налог»",
+        "gamo": "Не подходит к режиму «Единый налог»",
+        "zon": "Не подходит к режиму «Единый налог»",
+        "pat": "Не подходит к режиму «Единый налог»",
+        "pvt": "Не подходит к режиму «Единый налог»",
+        "pvtd": "Не подходит к режиму «Единый налог»",
+        "sez": "Не подходит к режиму «Единый налог»"
+      }
+    },
+    {
+      "name": "ОсОО «Эско»",
+      "subject": {
+        "form": { "code": "ФС-01", "declarationFor": "org" },
+        "regimes": [{ "code": "РЕЖ-01", "name": "ОНР" }],
+        "assignments": []
+      },
+      "expected": {
+        "endo": "",
+        "endi": "Для организаций назначается «ЕНД для организаций»",
+        "gam": "Не подходит к режиму «ОНР»",
+        "patw": "Для организаций назначается «ЕНД для организаций»",
+        "socip": "Для организаций назначается «ЕНД для организаций»",
+        "soc": "",
+        "t1q": "",
+        "nds": "",
+        "nspm": "",
+        "nspq": "",
+        "npa": "",
+        "akc": "",
+        "gdn": "",
+        "enq": "Не подходит к режиму «ОНР»",
+        "enm": "Не подходит к режиму «ОНР»",
+        "etr": "Не подходит к режиму «ОНР»",
+        "min": "Не подходит к режиму «ОНР»",
+        "gamo": "Не подходит к режиму «ОНР»",
+        "zon": "Не подходит к режиму «ОНР»",
+        "pat": "Не подходит к режиму «ОНР»",
+        "pvt": "Не подходит к режиму «ОНР»",
+        "pvtd": "Не подходит к режиму «ОНР»",
+        "sez": "Не подходит к режиму «ОНР»"
+      }
+    },
+    {
+      "name": "ИП · Единый налог",
+      "subject": {
+        "form": { "code": "ФС-02", "declarationFor": "ip" },
+        "regimes": [{ "code": "РЕЖ-03", "name": "Единый налог" }],
+        "assignments": []
+      },
+      "expected": {
+        "endo": "Для ИП назначается «ЕНД для ИП»",
+        "endi": "",
+        "gam": "Для ИП назначается «ЕНД для ИП»",
+        "patw": "",
+        "socip": "",
+        "soc": "",
+        "t1q": "Для ИП назначается «ЕНД для ИП»",
+        "nds": "Не подходит к режиму «Единый налог»",
+        "nspm": "Не подходит к режиму «Единый налог»",
+        "nspq": "Не подходит к режиму «Единый налог»",
+        "npa": "Не подходит к режиму «Единый налог»",
+        "akc": "Не подходит к режиму «Единый налог»",
+        "gdn": "Не подходит к режиму «Единый налог»",
+        "enq": "",
+        "enm": "",
+        "etr": "Не подходит к режиму «Единый налог»",
+        "min": "Не подходит к режиму «Единый налог»",
+        "gamo": "Для ИП назначается «ЕНД для ИП»",
+        "zon": "Не подходит к режиму «Единый налог»",
+        "pat": "Не подходит к режиму «Единый налог»",
+        "pvt": "Не подходит к режиму «Единый налог»",
+        "pvtd": "Не подходит к режиму «Единый налог»",
+        "sez": "Для ИП назначается «ЕНД для ИП»"
+      }
+    },
+    {
+      "name": "ИП · ОНР + Патент",
+      "subject": {
+        "form": { "code": "ФС-02", "declarationFor": "ip" },
+        "regimes": [
+          { "code": "РЕЖ-01", "name": "ОНР" },
+          { "code": "РЕЖ-02", "name": "Патент" }
+        ],
+        "assignments": []
+      },
+      "expected": {
+        "endo": "Для ИП назначается «ЕНД для ИП»",
+        "endi": "ЕНД не сдают плательщики режима «Патент» (ст. 106)",
+        "gam": "Для ИП назначается «ЕНД для ИП»",
+        "patw": "",
+        "socip": "",
+        "soc": "",
+        "t1q": "Для ИП назначается «ЕНД для ИП»",
+        "nds": "",
+        "nspm": "",
+        "nspq": "",
+        "npa": "",
+        "akc": "",
+        "gdn": "",
+        "enq": "Не подходит к режиму «ОНР + Патент»",
+        "enm": "Не подходит к режиму «ОНР + Патент»",
+        "etr": "Не подходит к режиму «ОНР + Патент»",
+        "min": "Не подходит к режиму «ОНР + Патент»",
+        "gamo": "Для ИП назначается «ЕНД для ИП»",
+        "zon": "Не подходит к режиму «ОНР + Патент»",
+        "pat": "",
+        "pvt": "Не подходит к режиму «ОНР + Патент»",
+        "pvtd": "Не подходит к режиму «ОНР + Патент»",
+        "sez": "Для ИП назначается «ЕНД для ИП»"
+      }
+    },
+    {
+      "name": "Крестьянское (фермерское) хозяйство · Единый налог",
+      "subject": {
+        "form": { "code": "ФС-11", "declarationFor": "ip" },
+        "regimes": [{ "code": "РЕЖ-03", "name": "Единый налог" }],
+        "assignments": []
+      },
+      "expected": {
+        "endo": "Для ИП назначается «ЕНД для ИП»",
+        "endi": "КФХ без юрлица ЕНД не сдаёт (ст. 106)",
+        "gam": "Для ИП назначается «ЕНД для ИП»",
+        "patw": "",
+        "socip": "",
+        "soc": "",
+        "t1q": "Для ИП назначается «ЕНД для ИП»",
+        "nds": "Не подходит к режиму «Единый налог»",
+        "nspm": "Не подходит к режиму «Единый налог»",
+        "nspq": "Не подходит к режиму «Единый налог»",
+        "npa": "Не подходит к режиму «Единый налог»",
+        "akc": "Не подходит к режиму «Единый налог»",
+        "gdn": "Не подходит к режиму «Единый налог»",
+        "enq": "",
+        "enm": "",
+        "etr": "Не подходит к режиму «Единый налог»",
+        "min": "Не подходит к режиму «Единый налог»",
+        "gamo": "Для ИП назначается «ЕНД для ИП»",
+        "zon": "Не подходит к режиму «Единый налог»",
+        "pat": "Не подходит к режиму «Единый налог»",
+        "pvt": "Не подходит к режиму «Единый налог»",
+        "pvtd": "Не подходит к режиму «Единый налог»",
+        "sez": "Для ИП назначается «ЕНД для ИП»"
+      }
+    },
+    {
+      "name": "Крестьянское (фермерское) хозяйство с образованием юрлица · Единый налог",
+      "subject": {
+        "form": { "code": "ФС-10", "declarationFor": "org" },
+        "regimes": [{ "code": "РЕЖ-03", "name": "Единый налог" }],
+        "assignments": []
+      },
+      "expected": {
+        "endo": "",
+        "endi": "Для организаций назначается «ЕНД для организаций»",
+        "gam": "Не подходит к режиму «Единый налог»",
+        "patw": "Для организаций назначается «ЕНД для организаций»",
+        "socip": "Для организаций назначается «ЕНД для организаций»",
+        "soc": "",
+        "t1q": "",
+        "nds": "Не подходит к режиму «Единый налог»",
+        "nspm": "Не подходит к режиму «Единый налог»",
+        "nspq": "Не подходит к режиму «Единый налог»",
+        "npa": "Не подходит к режиму «Единый налог»",
+        "akc": "Не подходит к режиму «Единый налог»",
+        "gdn": "Не подходит к режиму «Единый налог»",
+        "enq": "",
+        "enm": "",
+        "etr": "Не подходит к режиму «Единый налог»",
+        "min": "Не подходит к режиму «Единый налог»",
+        "gamo": "Не подходит к режиму «Единый налог»",
+        "zon": "Не подходит к режиму «Единый налог»",
+        "pat": "Не подходит к режиму «Единый налог»",
+        "pvt": "Не подходит к режиму «Единый налог»",
+        "pvtd": "Не подходит к режиму «Единый налог»",
+        "sez": "Не подходит к режиму «Единый налог»"
+      }
+    },
+    {
+      "name": "Физическое лицо на патенте (индивидуальная трудовая деятельность) · Патент",
+      "subject": {
+        "form": { "code": "ФС-22", "declarationFor": "ip" },
+        "regimes": [{ "code": "РЕЖ-02", "name": "Патент" }],
+        "assignments": []
+      },
+      "expected": {
+        "endo": "Для ИП назначается «ЕНД для ИП»",
+        "endi": "ЕНД не сдают плательщики режима «Патент» (ст. 106)",
+        "gam": "Для ИП назначается «ЕНД для ИП»",
+        "patw": "",
+        "socip": "",
+        "soc": "",
+        "t1q": "Для ИП назначается «ЕНД для ИП»",
+        "nds": "Не подходит к режиму «Патент»",
+        "nspm": "Не подходит к режиму «Патент»",
+        "nspq": "Не подходит к режиму «Патент»",
+        "npa": "Не подходит к режиму «Патент»",
+        "akc": "Не подходит к режиму «Патент»",
+        "gdn": "Не подходит к режиму «Патент»",
+        "enq": "Не подходит к режиму «Патент»",
+        "enm": "Не подходит к режиму «Патент»",
+        "etr": "Не подходит к режиму «Патент»",
+        "min": "Не подходит к режиму «Патент»",
+        "gamo": "Для ИП назначается «ЕНД для ИП»",
+        "zon": "Не подходит к режиму «Патент»",
+        "pat": "",
+        "pvt": "Не подходит к режиму «Патент»",
+        "pvtd": "Не подходит к режиму «Патент»",
+        "sez": "Для ИП назначается «ЕНД для ИП»"
+      }
+    },
+    {
+      "name": "ОсОО · Зона торговли",
+      "subject": {
+        "form": { "code": "ФС-01", "declarationFor": "org" },
+        "regimes": [{ "code": "РЕЖ-09", "name": "Зона торговли" }],
+        "assignments": []
+      },
+      "expected": {
+        "endo": "ЕНД не сдают плательщики режима «Зона торговли» (ст. 106)",
+        "endi": "Для организаций назначается «ЕНД для организаций»",
+        "gam": "Не подходит к режиму «Зона торговли»",
+        "patw": "Для организаций назначается «ЕНД для организаций»",
+        "socip": "Для организаций назначается «ЕНД для организаций»",
+        "soc": "",
+        "t1q": "",
+        "nds": "Не подходит к режиму «Зона торговли»",
+        "nspm": "Не подходит к режиму «Зона торговли»",
+        "nspq": "Не подходит к режиму «Зона торговли»",
+        "npa": "Не подходит к режиму «Зона торговли»",
+        "akc": "Не подходит к режиму «Зона торговли»",
+        "gdn": "Не подходит к режиму «Зона торговли»",
+        "enq": "Не подходит к режиму «Зона торговли»",
+        "enm": "Не подходит к режиму «Зона торговли»",
+        "etr": "Не подходит к режиму «Зона торговли»",
+        "min": "Не подходит к режиму «Зона торговли»",
+        "gamo": "Не подходит к режиму «Зона торговли»",
+        "zon": "",
+        "pat": "Не подходит к режиму «Зона торговли»",
+        "pvt": "Не подходит к режиму «Зона торговли»",
+        "pvtd": "Не подходит к режиму «Зона торговли»",
+        "sez": "Не подходит к режиму «Зона торговли»"
+      }
+    },
+    {
+      "name": "ОсОО · ОНР + Налог на транзакцию",
+      "subject": {
+        "form": { "code": "ФС-01", "declarationFor": "org" },
+        "regimes": [
+          { "code": "РЕЖ-01", "name": "ОНР" },
+          { "code": "РЕЖ-11", "name": "Налог на транзакцию" }
+        ],
+        "assignments": []
+      },
+      "expected": {
+        "endo": "ЕНД не сдают плательщики режима «Налог на транзакцию» (ст. 106)",
+        "endi": "Для организаций назначается «ЕНД для организаций»",
+        "gam": "Не подходит к режиму «ОНР + Налог на транзакцию»",
+        "patw": "Для организаций назначается «ЕНД для организаций»",
+        "socip": "Для организаций назначается «ЕНД для организаций»",
+        "soc": "",
+        "t1q": "",
+        "nds": "",
+        "nspm": "",
+        "nspq": "",
+        "npa": "",
+        "akc": "",
+        "gdn": "",
+        "enq": "Не подходит к режиму «ОНР + Налог на транзакцию»",
+        "enm": "Не подходит к режиму «ОНР + Налог на транзакцию»",
+        "etr": "Не подходит к режиму «ОНР + Налог на транзакцию»",
+        "min": "Не подходит к режиму «ОНР + Налог на транзакцию»",
+        "gamo": "Не подходит к режиму «ОНР + Налог на транзакцию»",
+        "zon": "Не подходит к режиму «ОНР + Налог на транзакцию»",
+        "pat": "Не подходит к режиму «ОНР + Налог на транзакцию»",
+        "pvt": "Не подходит к режиму «ОНР + Налог на транзакцию»",
+        "pvtd": "Не подходит к режиму «ОНР + Налог на транзакцию»",
+        "sez": "Не подходит к режиму «ОНР + Налог на транзакцию»"
+      }
+    },
+    {
+      "name": "ОсОО · без режима",
+      "subject": {
+        "form": { "code": "ФС-01", "declarationFor": "org" },
+        "regimes": [],
+        "assignments": []
+      },
+      "expected": {
+        "endo": "",
+        "endi": "Для организаций назначается «ЕНД для организаций»",
+        "gam": "",
+        "patw": "Для организаций назначается «ЕНД для организаций»",
+        "socip": "Для организаций назначается «ЕНД для организаций»",
+        "soc": "",
+        "t1q": "",
+        "nds": "",
+        "nspm": "",
+        "nspq": "",
+        "npa": "",
+        "akc": "",
+        "gdn": "",
+        "enq": "",
+        "enm": "",
+        "etr": "",
+        "min": "",
+        "gamo": "",
+        "zon": "",
+        "pat": "",
+        "pvt": "",
+        "pvtd": "",
+        "sez": ""
+      }
+    },
+    {
+      "name": "ОсОО · ОНР + Игорная деятельность",
+      "subject": {
+        "form": { "code": "ФС-01", "declarationFor": "org" },
+        "regimes": [
+          { "code": "РЕЖ-01", "name": "ОНР" },
+          { "code": "РЕЖ-08", "name": "Игорная деятельность" }
+        ],
+        "assignments": []
+      },
+      "expected": {
+        "endo": "",
+        "endi": "Для организаций назначается «ЕНД для организаций»",
+        "gam": "",
+        "patw": "Для организаций назначается «ЕНД для организаций»",
+        "socip": "Для организаций назначается «ЕНД для организаций»",
+        "soc": "",
+        "t1q": "",
+        "nds": "",
+        "nspm": "",
+        "nspq": "",
+        "npa": "",
+        "akc": "",
+        "gdn": "",
+        "enq": "Не подходит к режиму «ОНР + Игорная деятельность»",
+        "enm": "Не подходит к режиму «ОНР + Игорная деятельность»",
+        "etr": "Не подходит к режиму «ОНР + Игорная деятельность»",
+        "min": "Не подходит к режиму «ОНР + Игорная деятельность»",
+        "gamo": "",
+        "zon": "Не подходит к режиму «ОНР + Игорная деятельность»",
+        "pat": "Не подходит к режиму «ОНР + Игорная деятельность»",
+        "pvt": "Не подходит к режиму «ОНР + Игорная деятельность»",
+        "pvtd": "Не подходит к режиму «ОНР + Игорная деятельность»",
+        "sez": "Не подходит к режиму «ОНР + Игорная деятельность»"
+      }
+    },
+    {
+      "name": "ОсОО · Единый налог",
+      "subject": {
+        "form": { "code": "ФС-01", "declarationFor": "org" },
+        "regimes": [{ "code": "РЕЖ-03", "name": "Единый налог" }],
+        "assignments": [
+          {
+            "reportTypeCode": "enq",
+            "endedOn": null,
+            "enRates": [{ "code": "ЕНС-15", "variant": null }]
+          }
+        ]
+      },
+      "expected": {
+        "endo": "ЕНД не сдают плательщики единого налога по ставке ЕНС-15 · 0 % (ст. 106)",
+        "endi": "Для организаций назначается «ЕНД для организаций»",
+        "gam": "Не подходит к режиму «Единый налог»",
+        "patw": "Для организаций назначается «ЕНД для организаций»",
+        "socip": "Для организаций назначается «ЕНД для организаций»",
+        "soc": "",
+        "t1q": "",
+        "nds": "Не подходит к режиму «Единый налог»",
+        "nspm": "Не подходит к режиму «Единый налог»",
+        "nspq": "Не подходит к режиму «Единый налог»",
+        "npa": "Не подходит к режиму «Единый налог»",
+        "akc": "Не подходит к режиму «Единый налог»",
+        "gdn": "Не подходит к режиму «Единый налог»",
+        "enq": "",
+        "enm": "",
+        "etr": "Не подходит к режиму «Единый налог»",
+        "min": "Не подходит к режиму «Единый налог»",
+        "gamo": "Не подходит к режиму «Единый налог»",
+        "zon": "Не подходит к режиму «Единый налог»",
+        "pat": "Не подходит к режиму «Единый налог»",
+        "pvt": "Не подходит к режиму «Единый налог»",
+        "pvtd": "Не подходит к режиму «Единый налог»",
+        "sez": "Не подходит к режиму «Единый налог»"
+      }
+    },
+    {
+      "name": "ОсОО · Единый налог",
+      "subject": {
+        "form": { "code": "ФС-01", "declarationFor": "org" },
+        "regimes": [{ "code": "РЕЖ-03", "name": "Единый налог" }],
+        "assignments": [
+          {
+            "reportTypeCode": "enq",
+            "endedOn": null,
+            "enRates": [
+              { "code": "ЕНС-01", "variant": null },
+              { "code": "ЕНС-16", "variant": null }
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "endo": "ЕНД не сдают плательщики единого налога по ставке ЕНС-01 · 0,5 % (ст. 106)",
+        "endi": "Для организаций назначается «ЕНД для организаций»",
+        "gam": "Не подходит к режиму «Единый налог»",
+        "patw": "Для организаций назначается «ЕНД для организаций»",
+        "socip": "Для организаций назначается «ЕНД для организаций»",
+        "soc": "",
+        "t1q": "",
+        "nds": "Не подходит к режиму «Единый налог»",
+        "nspm": "Не подходит к режиму «Единый налог»",
+        "nspq": "Не подходит к режиму «Единый налог»",
+        "npa": "Не подходит к режиму «Единый налог»",
+        "akc": "Не подходит к режиму «Единый налог»",
+        "gdn": "Не подходит к режиму «Единый налог»",
+        "enq": "",
+        "enm": "",
+        "etr": "Не подходит к режиму «Единый налог»",
+        "min": "Не подходит к режиму «Единый налог»",
+        "gamo": "Не подходит к режиму «Единый налог»",
+        "zon": "Не подходит к режиму «Единый налог»",
+        "pat": "Не подходит к режиму «Единый налог»",
+        "pvt": "Не подходит к режиму «Единый налог»",
+        "pvtd": "Не подходит к режиму «Единый налог»",
+        "sez": "Не подходит к режиму «Единый налог»"
+      }
+    },
+    {
+      "name": "ОсОО · Единый налог",
+      "subject": {
+        "form": { "code": "ФС-01", "declarationFor": "org" },
+        "regimes": [{ "code": "РЕЖ-03", "name": "Единый налог" }],
+        "assignments": [
+          {
+            "reportTypeCode": "enq",
+            "endedOn": null,
+            "enRates": [
+              { "code": "ЕНС-01", "variant": null },
+              { "code": "ЕНС-04", "variant": null }
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "endo": "",
+        "endi": "Для организаций назначается «ЕНД для организаций»",
+        "gam": "Не подходит к режиму «Единый налог»",
+        "patw": "Для организаций назначается «ЕНД для организаций»",
+        "socip": "Для организаций назначается «ЕНД для организаций»",
+        "soc": "",
+        "t1q": "",
+        "nds": "Не подходит к режиму «Единый налог»",
+        "nspm": "Не подходит к режиму «Единый налог»",
+        "nspq": "Не подходит к режиму «Единый налог»",
+        "npa": "Не подходит к режиму «Единый налог»",
+        "akc": "Не подходит к режиму «Единый налог»",
+        "gdn": "Не подходит к режиму «Единый налог»",
+        "enq": "",
+        "enm": "",
+        "etr": "Не подходит к режиму «Единый налог»",
+        "min": "Не подходит к режиму «Единый налог»",
+        "gamo": "Не подходит к режиму «Единый налог»",
+        "zon": "Не подходит к режиму «Единый налог»",
+        "pat": "Не подходит к режиму «Единый налог»",
+        "pvt": "Не подходит к режиму «Единый налог»",
+        "pvtd": "Не подходит к режиму «Единый налог»",
+        "sez": "Не подходит к режиму «Единый налог»"
+      }
+    },
+    {
+      "name": "ОсОО · Единый налог",
+      "subject": {
+        "form": { "code": "ФС-01", "declarationFor": "org" },
+        "regimes": [{ "code": "РЕЖ-03", "name": "Единый налог" }],
+        "assignments": [
+          {
+            "reportTypeCode": "enq",
+            "endedOn": null,
+            "enRates": [{ "code": "ЕНС-13", "variant": null }]
+          }
+        ]
+      },
+      "expected": {
+        "endo": "ЕНД не сдают плательщики единого налога по ставке ЕНС-13 · 0 % (ст. 106)",
+        "endi": "Для организаций назначается «ЕНД для организаций»",
+        "gam": "Не подходит к режиму «Единый налог»",
+        "patw": "Для организаций назначается «ЕНД для организаций»",
+        "socip": "Для организаций назначается «ЕНД для организаций»",
+        "soc": "",
+        "t1q": "",
+        "nds": "Не подходит к режиму «Единый налог»",
+        "nspm": "Не подходит к режиму «Единый налог»",
+        "nspq": "Не подходит к режиму «Единый налог»",
+        "npa": "Не подходит к режиму «Единый налог»",
+        "akc": "Не подходит к режиму «Единый налог»",
+        "gdn": "Не подходит к режиму «Единый налог»",
+        "enq": "",
+        "enm": "",
+        "etr": "Не подходит к режиму «Единый налог»",
+        "min": "Не подходит к режиму «Единый налог»",
+        "gamo": "Не подходит к режиму «Единый налог»",
+        "zon": "Не подходит к режиму «Единый налог»",
+        "pat": "Не подходит к режиму «Единый налог»",
+        "pvt": "Не подходит к режиму «Единый налог»",
+        "pvtd": "Не подходит к режиму «Единый налог»",
+        "sez": "Не подходит к режиму «Единый налог»"
+      }
+    },
+    {
+      "name": "ОсОО · Единый налог",
+      "subject": {
+        "form": { "code": "ФС-01", "declarationFor": "org" },
+        "regimes": [{ "code": "РЕЖ-03", "name": "Единый налог" }],
+        "assignments": [
+          {
+            "reportTypeCode": "enq",
+            "endedOn": null,
+            "enRates": [
+              { "code": "ЕНС-14", "variant": null },
+              { "code": "ЕНС-06", "variant": null }
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "endo": "ЕНД не сдают плательщики единого налога по ставке ЕНС-14 · 0,1 %, ЕНС-06 · 0,5 % (ст. 106)",
+        "endi": "Для организаций назначается «ЕНД для организаций»",
+        "gam": "Не подходит к режиму «Единый налог»",
+        "patw": "Для организаций назначается «ЕНД для организаций»",
+        "socip": "Для организаций назначается «ЕНД для организаций»",
+        "soc": "",
+        "t1q": "",
+        "nds": "Не подходит к режиму «Единый налог»",
+        "nspm": "Не подходит к режиму «Единый налог»",
+        "nspq": "Не подходит к режиму «Единый налог»",
+        "npa": "Не подходит к режиму «Единый налог»",
+        "akc": "Не подходит к режиму «Единый налог»",
+        "gdn": "Не подходит к режиму «Единый налог»",
+        "enq": "",
+        "enm": "",
+        "etr": "Не подходит к режиму «Единый налог»",
+        "min": "Не подходит к режиму «Единый налог»",
+        "gamo": "Не подходит к режиму «Единый налог»",
+        "zon": "Не подходит к режиму «Единый налог»",
+        "pat": "Не подходит к режиму «Единый налог»",
+        "pvt": "Не подходит к режиму «Единый налог»",
+        "pvtd": "Не подходит к режиму «Единый налог»",
+        "sez": "Не подходит к режиму «Единый налог»"
+      }
+    },
+    {
+      "name": "ИП · Единый налог",
+      "subject": {
+        "form": { "code": "ФС-02", "declarationFor": "ip" },
+        "regimes": [{ "code": "РЕЖ-03", "name": "Единый налог" }],
+        "assignments": [
+          {
+            "reportTypeCode": "enq",
+            "endedOn": null,
+            "enRates": [{ "code": "ЕНС-12", "variant": 0 }]
+          }
+        ]
+      },
+      "expected": {
+        "endo": "Для ИП назначается «ЕНД для ИП»",
+        "endi": "",
+        "gam": "Для ИП назначается «ЕНД для ИП»",
+        "patw": "",
+        "socip": "",
+        "soc": "",
+        "t1q": "Для ИП назначается «ЕНД для ИП»",
+        "nds": "Не подходит к режиму «Единый налог»",
+        "nspm": "Не подходит к режиму «Единый налог»",
+        "nspq": "Не подходит к режиму «Единый налог»",
+        "npa": "Не подходит к режиму «Единый налог»",
+        "akc": "Не подходит к режиму «Единый налог»",
+        "gdn": "Не подходит к режиму «Единый налог»",
+        "enq": "",
+        "enm": "",
+        "etr": "Не подходит к режиму «Единый налог»",
+        "min": "Не подходит к режиму «Единый налог»",
+        "gamo": "Для ИП назначается «ЕНД для ИП»",
+        "zon": "Не подходит к режиму «Единый налог»",
+        "pat": "Не подходит к режиму «Единый налог»",
+        "pvt": "Не подходит к режиму «Единый налог»",
+        "pvtd": "Не подходит к режиму «Единый налог»",
+        "sez": "Для ИП назначается «ЕНД для ИП»"
+      }
+    },
+    {
+      "name": "ИП · Единый налог",
+      "subject": {
+        "form": { "code": "ФС-02", "declarationFor": "ip" },
+        "regimes": [{ "code": "РЕЖ-03", "name": "Единый налог" }],
+        "assignments": [
+          {
+            "reportTypeCode": "enq",
+            "endedOn": null,
+            "enRates": [{ "code": "ЕНС-12", "variant": 2 }]
+          }
+        ]
+      },
+      "expected": {
+        "endo": "Для ИП назначается «ЕНД для ИП»",
+        "endi": "",
+        "gam": "Для ИП назначается «ЕНД для ИП»",
+        "patw": "",
+        "socip": "",
+        "soc": "",
+        "t1q": "Для ИП назначается «ЕНД для ИП»",
+        "nds": "Не подходит к режиму «Единый налог»",
+        "nspm": "Не подходит к режиму «Единый налог»",
+        "nspq": "Не подходит к режиму «Единый налог»",
+        "npa": "Не подходит к режиму «Единый налог»",
+        "akc": "Не подходит к режиму «Единый налог»",
+        "gdn": "Не подходит к режиму «Единый налог»",
+        "enq": "",
+        "enm": "",
+        "etr": "Не подходит к режиму «Единый налог»",
+        "min": "Не подходит к режиму «Единый налог»",
+        "gamo": "Для ИП назначается «ЕНД для ИП»",
+        "zon": "Не подходит к режиму «Единый налог»",
+        "pat": "Не подходит к режиму «Единый налог»",
+        "pvt": "Не подходит к режиму «Единый налог»",
+        "pvtd": "Не подходит к режиму «Единый налог»",
+        "sez": "Для ИП назначается «ЕНД для ИП»"
+      }
+    },
+    {
+      "name": "ОсОО · Единый налог",
+      "subject": {
+        "form": { "code": "ФС-01", "declarationFor": "org" },
+        "regimes": [{ "code": "РЕЖ-03", "name": "Единый налог" }],
+        "assignments": [
+          {
+            "reportTypeCode": "enq",
+            "endedOn": null,
+            "enRates": [{ "code": "ЕНС-16", "variant": null }]
+          }
+        ]
+      },
+      "expected": {
+        "endo": "",
+        "endi": "Для организаций назначается «ЕНД для организаций»",
+        "gam": "Не подходит к режиму «Единый налог»",
+        "patw": "Для организаций назначается «ЕНД для организаций»",
+        "socip": "Для организаций назначается «ЕНД для организаций»",
+        "soc": "",
+        "t1q": "",
+        "nds": "Не подходит к режиму «Единый налог»",
+        "nspm": "Не подходит к режиму «Единый налог»",
+        "nspq": "Не подходит к режиму «Единый налог»",
+        "npa": "Не подходит к режиму «Единый налог»",
+        "akc": "Не подходит к режиму «Единый налог»",
+        "gdn": "Не подходит к режиму «Единый налог»",
+        "enq": "",
+        "enm": "",
+        "etr": "Не подходит к режиму «Единый налог»",
+        "min": "Не подходит к режиму «Единый налог»",
+        "gamo": "Не подходит к режиму «Единый налог»",
+        "zon": "Не подходит к режиму «Единый налог»",
+        "pat": "Не подходит к режиму «Единый налог»",
+        "pvt": "Не подходит к режиму «Единый налог»",
+        "pvtd": "Не подходит к режиму «Единый налог»",
+        "sez": "Не подходит к режиму «Единый налог»"
+      }
+    },
+    {
+      "name": "ОсОО · Единый налог",
+      "subject": {
+        "form": { "code": "ФС-01", "declarationFor": "org" },
+        "regimes": [{ "code": "РЕЖ-03", "name": "Единый налог" }],
+        "assignments": [
+          {
+            "reportTypeCode": "enq",
+            "endedOn": "2026-09-30",
+            "enRates": [{ "code": "ЕНС-15", "variant": null }]
+          }
+        ]
+      },
+      "expected": {
+        "endo": "",
+        "endi": "Для организаций назначается «ЕНД для организаций»",
+        "gam": "Не подходит к режиму «Единый налог»",
+        "patw": "Для организаций назначается «ЕНД для организаций»",
+        "socip": "Для организаций назначается «ЕНД для организаций»",
+        "soc": "",
+        "t1q": "",
+        "nds": "Не подходит к режиму «Единый налог»",
+        "nspm": "Не подходит к режиму «Единый налог»",
+        "nspq": "Не подходит к режиму «Единый налог»",
+        "npa": "Не подходит к режиму «Единый налог»",
+        "akc": "Не подходит к режиму «Единый налог»",
+        "gdn": "Не подходит к режиму «Единый налог»",
+        "enq": "",
+        "enm": "",
+        "etr": "Не подходит к режиму «Единый налог»",
+        "min": "Не подходит к режиму «Единый налог»",
+        "gamo": "Не подходит к режиму «Единый налог»",
+        "zon": "Не подходит к режиму «Единый налог»",
+        "pat": "Не подходит к режиму «Единый налог»",
+        "pvt": "Не подходит к режиму «Единый налог»",
+        "pvtd": "Не подходит к режиму «Единый налог»",
+        "sez": "Не подходит к режиму «Единый налог»"
+      }
+    },
+    {
+      "name": "Другое · СЭЗ",
+      "subject": {
+        "form": { "code": "ФС-24", "declarationFor": "org" },
+        "regimes": [{ "code": "РЕЖ-04", "name": "СЭЗ" }],
+        "assignments": []
+      },
+      "expected": {
+        "endo": "",
+        "endi": "Для организаций назначается «ЕНД для организаций»",
+        "gam": "Не подходит к режиму «СЭЗ»",
+        "patw": "Для организаций назначается «ЕНД для организаций»",
+        "socip": "Для организаций назначается «ЕНД для организаций»",
+        "soc": "",
+        "t1q": "",
+        "nds": "Не подходит к режиму «СЭЗ»",
+        "nspm": "Не подходит к режиму «СЭЗ»",
+        "nspq": "Не подходит к режиму «СЭЗ»",
+        "npa": "Не подходит к режиму «СЭЗ»",
+        "akc": "Не подходит к режиму «СЭЗ»",
+        "gdn": "Не подходит к режиму «СЭЗ»",
+        "enq": "Не подходит к режиму «СЭЗ»",
+        "enm": "Не подходит к режиму «СЭЗ»",
+        "etr": "Не подходит к режиму «СЭЗ»",
+        "min": "Не подходит к режиму «СЭЗ»",
+        "gamo": "Не подходит к режиму «СЭЗ»",
+        "zon": "Не подходит к режиму «СЭЗ»",
+        "pat": "Не подходит к режиму «СЭЗ»",
+        "pvt": "Не подходит к режиму «СЭЗ»",
+        "pvtd": "Не подходит к режиму «СЭЗ»",
+        "sez": ""
+      }
+    }
+  ]
+}
