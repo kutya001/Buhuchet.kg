@@ -25,7 +25,7 @@ import { useShell } from '../shell/context';
 import { EmployeeCard } from './employee-card';
 import { ChangeRoleDialog, EditEmployeeDialog, NewEmployeeDialog } from './employee-forms';
 import { allRolesQuery, phoneCodesQuery, useStaffRefresh } from './staff-data';
-import { staffMenu } from './staff-menu';
+import { canEditEmployee, staffMenu } from './staff-menu';
 
 interface NewEmployeeData {
   roles: RoleListItem[];
@@ -166,6 +166,7 @@ export function useStaffActions(): {
           open={card.open}
           onClose={() => setCard(closeSlot)}
           actions={cardActions}
+          onEdit={(e) => (canEditEmployee(canManage, employeeId, e) ? () => run.edit(e) : null)}
         />
       ) : null}
       {role ? (

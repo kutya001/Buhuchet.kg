@@ -26,9 +26,10 @@ type CardTabId = 'main' | 'cps';
 /**
  * Карточка сотрудника (прототип modules/staff.js, empCard): вкладки «Основное» — кто создал и изменил,
  * логин, телефон со ссылками «Позвонить» и WhatsApp, роль, Telegram, последний вход, статус — и
- * «Контрагенты» — закреплённые за ним контрагенты. Внизу «Действия» (те же пункты, что в меню списка,
- * кроме «Открыть карточку»; без права «Сотрудники и роли» и в чужой карточке владельца кнопки нет, в
- * своей карточке владельца — только «Изменить») и
+ * «Контрагенты» — закреплённые за ним контрагенты. Внизу «Изменить» — ФИО и телефон (docs/deviations.md,
+ * п. 16; ТЗ: «кнопкой «Изменить» в карточке сотрудника»; у владельца — только в своей карточке),
+ * «Действия» (те же пункты, что в меню списка, кроме «Открыть карточку» и «Изменить»; без права
+ * «Сотрудники и роли» и у владельца организации кнопки нет) и
  * «Готово». Плашки «Несданных отчётов», «Просрочено», «Открытых задач», вкладку «Счёт», реквизиты и
  * уровень знаний добавят их модули; список контрагентов наполнит модуль «Контрагенты».
  */
@@ -38,6 +39,7 @@ export function EmployeeCard({
   open,
   onClose,
   actions,
+  onEdit,
 }: {
   id: string;
   /** Строка списка — показывается, пока карточка не загрузилась. */
@@ -46,6 +48,8 @@ export function EmployeeCard({
   onClose: () => void;
   /** Пункты «Действия» для сотрудника; пусто — кнопки нет. */
   actions: (e: Employee) => ActionEntry[];
+  /** Кнопка «Изменить» (ФИО и телефон) у этого сотрудника; null — кнопки нет. */
+  onEdit: (e: Employee) => (() => void) | null;
 }) {
   const t = useT();
   const query = useEmployee(id);
@@ -53,6 +57,7 @@ export function EmployeeCard({
   const [tab, setTab] = useState<CardTabId>('main');
   const [menu, setMenu] = useState<HTMLElement | null>(null);
   const items = employee ? actions(employee) : [];
+  const edit = employee ? onEdit(employee) : null;
   const tabs: CardTab[] = [
     { id: 'main', label: t('staff.card.tab.main'), icon: 'user' },
     { id: 'cps', label: t('staff.card.tab.cps'), icon: 'building' },
@@ -80,6 +85,12 @@ export function EmployeeCard({
       }}
       footer={
         <>
+          {edit ? (
+            <button type="button" className={buttonClass('default')} onClick={edit}>
+              <Icon name="edit" size="sm" />
+              {t('staff.action.edit')}
+            </button>
+          ) : null}
           {items.length > 0 ? (
             <button
               type="button"

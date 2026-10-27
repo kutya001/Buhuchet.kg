@@ -21,7 +21,8 @@ export interface StaffMenuRun {
  * строке «Сменить роль», «Сбросить пароль» и «Заблокировать» недоступны с причиной: свою роль меняет
  * владелец, себя не блокируют, а свой пароль меняют в «Мой профиль». Остальные запреты проверяет
  * сервер (docs/deviations.md, п. 15). «Передать контрагентов» добавит модуль «Контрагенты» (поток А).
- * `card` — меню кнопки «Действия» в карточке: без «Открыть карточку».
+ * `card` — меню кнопки «Действия» в карточке: без «Открыть карточку» и без «Изменить» — в карточке
+ * это отдельная кнопка (ТЗ «Сотрудники»: «кнопкой «Изменить» в карточке сотрудника»; `canEditEmployee`).
  */
 export function staffMenu({
   canManage,
@@ -42,17 +43,14 @@ export function staffMenu({
       ? []
       : [{ id: 'open', label: t('staff.action.open'), icon: 'user', run: () => run.open(e) }];
     const self = e.id === employeeId;
-    const edit: ActionEntry = {
-      id: 'edit',
-      label: t('staff.action.edit'),
-      icon: 'edit',
-      run: () => run.edit(e),
-    };
+    const edit: ActionEntry[] = card
+      ? []
+      : [{ id: 'edit', label: t('staff.action.edit'), icon: 'edit', run: () => run.edit(e) }];
     if (!canManage) return open;
-    if (e.role.isOwner) return self ? [...open, edit] : open;
+    if (e.role.isOwner) return self ? [...open, ...edit] : open;
     return [
       ...open,
-      edit,
+      ...edit,
       {
         id: 'change-role',
         label: t('staff.action.change_role'),
@@ -88,4 +86,16 @@ export function staffMenu({
           },
     ];
   };
+}
+
+/**
+ * Можно ли «Изменить» ФИО и телефон сотрудника (docs/deviations.md, п. 16): с правом «Сотрудники и
+ * роли» — у любого не владельца, в том числе у себя; ФИО и телефон владельца — только сам владелец.
+ */
+export function canEditEmployee(
+  canManage: boolean,
+  employeeId: string | null,
+  e: Pick<Employee, 'id' | 'role'>,
+): boolean {
+  return canManage && (!e.role.isOwner || e.id === employeeId);
 }

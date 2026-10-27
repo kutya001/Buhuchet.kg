@@ -70,7 +70,7 @@ export function deleteRoleHandler(deps: ApiDeps): RouteHandler<typeof deleteRole
           apiFail(
             400,
             'role_is_default',
-            'Эту роль получают новые сотрудники: сначала выберите другую в учётной политике',
+            'Эту роль получают новые сотрудники: сначала выберите другую в «Моя организация» → «Настройки»',
           );
         }
         await deleteRole(tx, role);

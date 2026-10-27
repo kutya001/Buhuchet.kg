@@ -207,11 +207,12 @@ test.describe('Этап 1: сотрудники и роли (экраны)', () 
       'https://wa.me/996555100200',
     );
 
-    // «Действия» — пункты меню списка без «Открыть карточку».
+    // «Изменить» — отдельной кнопкой; «Действия» — пункты меню списка без «Открыть карточку» и
+    // «Изменить».
+    await expect(card.getByRole('button', { name: 'Изменить' })).toBeVisible();
     await card.getByRole('button', { name: 'Действия' }).click();
     const menu = page.getByRole('menu', { name: 'Действия' });
     await expect(menu.getByRole('menuitem')).toHaveText([
-      'Изменить',
       'Сменить роль',
       'Сбросить пароль',
       'Заблокировать',
@@ -284,14 +285,10 @@ test.describe('Этап 1: сотрудники и роли (экраны)', () 
     // Новые ФИО — в строке списка.
     await expect(row).toContainText(after);
 
-    // Телефон — из «Действий» открытой карточки: карточка обновляется после сохранения.
+    // Телефон — кнопкой «Изменить» в открытой карточке: карточка обновляется после сохранения.
     await row.getByText(after).click();
     const card = page.getByRole('dialog', { name: after });
-    await card.getByRole('button', { name: 'Действия' }).click();
-    await page
-      .getByRole('menu', { name: 'Действия' })
-      .getByRole('menuitem', { name: 'Изменить' })
-      .click();
+    await card.getByRole('button', { name: 'Изменить' }).click();
     await expect(form.getByLabel('ФИО')).toHaveValue(after);
     const phone = form.getByLabel('Телефон');
     await phone.fill('70011');
