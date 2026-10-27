@@ -3,6 +3,51 @@ import type { UiTextDefault } from './texts';
 const S = 'Админка';
 
 /**
+ * Тексты Админки → «Учётные записи» (ТЗ «Админка» → «Модуль учётных записей»; прототип
+ * admin/accounts-orgs.js, renderAccounts и accActions). «Пароль сброшен» и «Временный пароль:» — из
+ * словаря «Сотрудников».
+ */
+export const ADMIN_ACCOUNTS_TEXTS = {
+  'accounts.count.one': { ru: '{n} учётная запись', section: S },
+  'accounts.count.few': { ru: '{n} учётные записи', section: S },
+  'accounts.count.many': { ru: '{n} учётных записей', section: S },
+  'accounts.col.login': { ru: 'Логин', section: S },
+  'accounts.col.full_name': { ru: 'ФИО', section: S },
+  'accounts.col.org': { ru: 'Организация', section: S },
+  'accounts.col.role': { ru: 'Роль', section: S },
+  'accounts.col.last_login': { ru: 'Последний вход', section: S },
+  'accounts.col.active': { ru: 'Статус', section: S },
+  'accounts.active': { ru: 'Активен', section: S },
+  'accounts.blocked': { ru: 'Заблокирован', section: S },
+  'accounts.owner_blocked': { ru: 'Заблокирован владельцем', section: S },
+  'accounts.owner_blocked_hint': {
+    ru: 'Сотрудника заблокировал владелец организации: снять эту блокировку может только он.',
+    section: S,
+  },
+  'accounts.action.reset': { ru: 'Сбросить пароль', section: S },
+  'accounts.action.block': { ru: 'Заблокировать', section: S },
+  'accounts.action.unblock': { ru: 'Разблокировать', section: S },
+  'accounts.self': { ru: 'Это вы', section: S },
+  'accounts.block.title': { ru: 'Заблокировать {login}?', section: S },
+  'accounts.block.text': {
+    ru: 'Пользователь не сможет войти, его сеансы завершатся.',
+    section: S,
+  },
+  'accounts.block.done': { ru: 'Учётная запись заблокирована', section: S },
+  'accounts.unblock.done': { ru: 'Учётная запись разблокирована', section: S },
+  'accounts.reset.sessions': { ru: 'Все сеансы пользователя завершены.', section: S },
+  'accounts.reset.sessions_tg': {
+    ru: 'Все сеансы пользователя завершены, бот сообщил о смене пароля в Telegram.',
+    section: S,
+  },
+  'err.account_self': { ru: 'Это ваша учётная запись', section: 'Ошибки' },
+  'err.account_platform_admin': {
+    ru: 'Учётные записи администраторов платформы здесь не меняются',
+    section: 'Ошибки',
+  },
+} as const satisfies Record<string, UiTextDefault>;
+
+/**
  * Тексты Админки → «Организации» (ТЗ «Админка» → «Модуль организаций»; прототип
  * admin/accounts-orgs.js, renderOrgs и addOrgDlg). Общие ошибки формы («Введите название», «ИНН —
  * 14 цифр», логин, временный пароль, «Такой логин уже занят на платформе») — из словаря «Моей

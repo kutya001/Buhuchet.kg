@@ -21,6 +21,8 @@ export interface ShellState {
   clearAddRequest: () => void;
   /** Что можно вошедшему: права (например, «Выгружать в Excel») и функции учётной политики. */
   access: ShellAccess;
+  /** Учётная запись вошедшего (у администратора платформы — тоже): «Это вы» в «Учётных записях». */
+  userId: string | null;
   /** Вошедший сотрудник; у администратора платформы — null. */
   employeeId: string | null;
   /**
@@ -43,6 +45,7 @@ export const ShellContext = createContext<ShellState>({
   addRequest: null,
   clearAddRequest: () => {},
   access: NO_ACCESS,
+  userId: null,
   employeeId: null,
   editor: null,
 });

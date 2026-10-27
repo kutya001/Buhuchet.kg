@@ -1,52 +1,13 @@
-import { execFileSync } from 'node:child_process';
-import { randomBytes } from 'node:crypto';
-import { fileURLToPath } from 'node:url';
-import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
+import { ADMIN_PASSWORD, ownerPassword, platformAdmin, search, uniqueInn } from './admin';
 import { signIn, uniqueLogin } from './helpers';
 
 // Админка → «Организации» (ТЗ «Админка» → «Модуль организаций»; просьба заказчика 27.10.2026 —
 // стенд, где администратор платформы создаёт организации): плашки, список всех организаций,
 // «Новая организация» с владельцем, блокировка и разблокировка. Администратор свой на каждый тест и
-// проект: его создаёт `pnpm db:create-admin` (база сайта — та же, что в .env), временный пароль
-// сразу меняется через API.
+// проект (`platformAdmin`).
 
-const ROOT = fileURLToPath(new URL('..', import.meta.url));
-// Пароль администратора — свой на каждый прогон: в базе, где шёл тест, не остаётся администраторов с
-// известным паролем.
-const ADMIN_PASSWORD = `Adm-${randomBytes(12).toString('base64url')}`;
-const OWNER_PASSWORD = 'Bh-E2E7-BLK9';
-
-/** Администратор платформы с уже сменённым временным паролем; сеанс — в `api`. */
-async function platformAdmin(api: APIRequestContext, origin: string): Promise<string> {
-  const login = uniqueLogin('e2e-adm');
-  const out = execFileSync('pnpm', ['--silent', 'db:create-admin', '--login', login], {
-    cwd: ROOT,
-    encoding: 'utf8',
-  });
-  const temporary = /Временный пароль[^:]*:\s*(\S+)/.exec(out)?.[1];
-  expect(temporary, out).toBeTruthy();
-  await signIn(api, origin, login, temporary!);
-  const changed = await api.post('/api/auth/password', {
-    headers: { origin },
-    data: { currentPassword: temporary, newPassword: ADMIN_PASSWORD },
-  });
-  expect(changed.status(), await changed.text()).toBe(200);
-  return login;
-}
-
-/** Свой ИНН (14 цифр) на каждый запуск: второй организации с тем же ИНН быть не может. */
-const uniqueInn = () =>
-  `9${Date.now().toString().slice(-9)}${Math.floor(Math.random() * 10_000)
-    .toString()
-    .padStart(4, '0')}`;
-
-/** Общий поиск по вкладке (на телефоне — кнопкой «Поиск» в верхней панели). */
-async function search(page: Page, isMobile: boolean, text: string) {
-  if (isMobile && !(await page.getByRole('searchbox').first().isVisible())) {
-    await page.getByRole('button', { name: 'Поиск', exact: true }).click();
-  }
-  await page.getByRole('searchbox').first().fill(text);
-}
+const OWNER_PASSWORD = ownerPassword();
 
 test.describe('Админка: организации', () => {
   test('администратор видит плашки и все организации; демо-организацию стенда заблокировать нельзя', async ({

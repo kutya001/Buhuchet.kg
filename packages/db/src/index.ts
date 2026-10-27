@@ -15,6 +15,7 @@ export * from './list';
 export * from './views';
 export * from './platform-dicts';
 export * from './admin-orgs';
+export * from './admin-users';
 export * from './rate-limits';
 export * from './dicts';
 export * from './taxes';
