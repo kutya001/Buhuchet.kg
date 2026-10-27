@@ -145,7 +145,11 @@ export function createTaskHandler(deps: ApiDeps): RouteHandler<typeof createTask
       const settings = await requireTasks(tx, orgContextOf(c).orgId);
       const fields = await fieldsOf(tx, subject, body, settings.files, null);
       const id = await createTask(tx, fields, subject.employeeId);
-      return taskOut(tx, (await getTask(tx, id, undefined))!, { today, filesOn: settings.files });
+      return taskOut(tx, (await getTask(tx, id, undefined))!, {
+        today,
+        filesOn: settings.files,
+        subject,
+      });
     });
     return c.json(out, 201);
   };
@@ -212,7 +216,11 @@ export function updateTaskHandler(deps: ApiDeps): RouteHandler<typeof updateTask
         to ? { from: lock.status, to, reason: t('task.hist.confirm_off') } : null,
         lock.contractorId,
       );
-      return taskOut(tx, (await getTask(tx, id, undefined))!, { today, filesOn: settings.files });
+      return taskOut(tx, (await getTask(tx, id, undefined))!, {
+        today,
+        filesOn: settings.files,
+        subject,
+      });
     });
     return c.json(out, 200);
   };

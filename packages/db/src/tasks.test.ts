@@ -233,6 +233,12 @@ describe.skipIf(!databaseAvailable())('Задачи: данные', () => {
     await expect(
       inB((tx) => tx.insert(taskComments).values({ orgId: a.orgId, taskId: id, text: 'x' })),
     ).rejects.toThrow();
+    // Изменить задачу чужой организации нельзя: строка не видна — 0 строк.
+    const changed = await inB((tx) =>
+      tx.update(tasks).set({ title: 'чужая' }).where(eq(tasks.id, id)).returning({ id: tasks.id }),
+    );
+    expect(changed).toEqual([]);
+    expect((await inA((tx) => getTask(tx, id, undefined)))?.title).not.toBe('чужая');
     // Без контекста не видно ничего.
     expect(await db.app.db.select().from(tasks)).toEqual([]);
   });

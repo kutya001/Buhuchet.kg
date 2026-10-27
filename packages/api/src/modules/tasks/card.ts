@@ -12,7 +12,12 @@ import {
   type TaskRecord,
   type Tx,
 } from '@buhuchet/db';
-import type { IsoDate } from '@buhuchet/domain';
+import {
+  canSeeContractor,
+  hasPermission,
+  type AccessSubject,
+  type IsoDate,
+} from '@buhuchet/domain';
 import {
   ContractorTasks,
   Task,
@@ -37,17 +42,30 @@ import {
 
 const off = 'Задачи выключены в учётной политике';
 
-/** Карточка для ответа API: строка, описание, причины, комментарии, «История статусов» и история. */
+/**
+ * Видит ли сотрудник файлы задачи (как модуль файлов, `canView`): «Файлы в карточках», право
+ * «Просматривать файлы» и область группы «Файловый менеджер» по контрагенту задачи.
+ */
+function taskFilesVisible(subject: AccessSubject, r: TaskRecord, filesOn: boolean): boolean {
+  if (!filesOn || !hasPermission(subject, 'filesView')) return false;
+  return !r.contractor || canSeeContractor(subject, 'files', r.contractor);
+}
+
+/**
+ * Карточка для ответа API: строка, описание, причины, комментарии, «История статусов» и история.
+ * Имя файла результата в «Истории статусов» — только тому, кто видит файлы задачи.
+ */
 export async function taskOut(
   tx: Tx,
   r: TaskRecord,
-  options: { today: IsoDate; filesOn: boolean },
+  options: { today: IsoDate; filesOn: boolean; subject: AccessSubject },
 ): Promise<TaskBody> {
   const [comments, statuses, history] = await Promise.all([
     listTaskComments(tx, r.id),
     readStatusHistory(tx, 'task', r.id),
     taskHistory(tx, r.id),
   ]);
+  const filesVisible = taskFilesVisible(options.subject, r, options.filesOn);
   return {
     ...rowBody(r, options.today),
     description: r.description,
@@ -62,7 +80,11 @@ export async function taskOut(
     confirmNote: r.confirmNote,
     filesOn: options.filesOn,
     comments: comments.map((x) => ({ ...x, at: x.at.toISOString() })),
-    statusHistory: statuses.map((h) => ({ ...h, at: h.at.toISOString() })),
+    statusHistory: statuses.map((h) => ({
+      ...h,
+      at: h.at.toISOString(),
+      file: filesVisible ? h.file : null,
+    })),
     history: history.map((h) => ({ ...h, at: h.at.toISOString() })),
   };
 }
@@ -102,7 +124,7 @@ export function getTaskHandler(deps: ApiDeps): RouteHandler<typeof getTaskRoute,
       const settings = await requireTasks(tx, orgContextOf(c).orgId);
       const r = await getTask(tx, id, taskAccessOf(subject));
       if (!r) taskNotFound();
-      return taskOut(tx, r, { today, filesOn: settings.files });
+      return taskOut(tx, r, { today, filesOn: settings.files, subject });
     });
     return c.json(body, 200);
   };

@@ -126,7 +126,11 @@ async function runAction<B>(
     const ctx = { tx, subject, task, lock, filesOn: settings.files, now: deps.clock.now(), t };
     const result = await act(ctx, body);
     if (result) await changeTaskStatus(tx, id, result.change, result.patch);
-    return taskOut(tx, (await getTask(tx, id, undefined))!, { today, filesOn: settings.files });
+    return taskOut(tx, (await getTask(tx, id, undefined))!, {
+      today,
+      filesOn: settings.files,
+      subject,
+    });
   });
 }
 

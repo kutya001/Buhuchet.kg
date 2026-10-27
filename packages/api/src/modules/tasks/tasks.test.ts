@@ -232,6 +232,54 @@ describe.skipIf(!databaseAvailable())('Задачи: методы API', () => {
     expect((await call('GET', `/api/tasks/${byCp.id}`, acc)).status).toBe(404);
   });
 
+  it('чужая организация: правка, действия, комментарии, файлы, вкладка контрагента, значения и выгрузка — как несуществующие', async () => {
+    await f.t.admin.db
+      .update(schema.orgSettings)
+      .set({ features: { tasks: true, files: true } })
+      .where(eq(schema.orgSettings.orgId, f.b.orgId));
+    const task = await create(chief, { title: 'Задача организации А', contractorId: cpAcc.id });
+    const edit = await call('PATCH', `/api/tasks/${task.id}`, ownerB, {
+      ...body(),
+      version: task.version,
+    });
+    expect(edit.status).toBe(404);
+    const attempts: [string, unknown][] = [
+      ['start', {}],
+      ['done', {}],
+      ['fail', { reason: 'x' }],
+      ['confirm', {}],
+      ['rework', { reason: 'x' }],
+      ['cancel', {}],
+      ['rollback', { to: 'todo', reason: 'x' }],
+      ['comments', { text: 'x' }],
+    ];
+    for (const [action, payload] of attempts) {
+      expect((await act(ownerB, task.id, action, payload)).status, action).toBe(404);
+    }
+    expect((await call('GET', `/api/files?kind=task&id=${task.id}`, ownerB)).status).toBe(404);
+    expect((await call('GET', `/api/contractors/${cpAcc.id}/tasks`, ownerB)).status).toBe(404);
+    for (const col of ['title', 'cp', 'exec']) {
+      const values = ListValues.parse(
+        await (await call('GET', `/api/tasks/values?col=${col}&tab=all`, ownerB)).json(),
+      );
+      expect(
+        values.items.filter((v) => v.value !== 'general'),
+        col,
+      ).toEqual([]);
+    }
+    const res = await call('GET', '/api/tasks/export?tab=all&cols=title,cp', ownerB);
+    expect(res.status).toBe(200);
+    expect(JSON.stringify(unzipTexts(new Uint8Array(await res.arrayBuffer())))).not.toContain(
+      'Задача организации А',
+    );
+    // Без «Видеть задачи всех» в значениях столбца «Контрагент» — только контрагенты своих задач.
+    const hrValues = ListValues.parse(
+      await (await call('GET', '/api/tasks/values?col=cp&tab=all', hr)).json(),
+    );
+    expect(hrValues.items.map((v) => v.label)).not.toContain(cpAcc.name);
+    expect((await card(chief, task.id)).status).toBe('todo');
+  });
+
   it('п. 40: исполнитель не подтверждает свою; вместо постановщика — видно в истории', async () => {
     const task = await create(chief);
     await acted(acc, task.id, 'start');
@@ -327,6 +375,12 @@ describe.skipIf(!databaseAvailable())('Задачи: методы API', () => {
       file: { id: fileId, name: 'акт-сверки.pdf', available: true },
     });
     expect(done.history.map((h) => h.action)).toContain('file_attach');
+    // Кто не видит файлы задачи (здесь — «Файлы в карточках» выключены), не видит и имя файла.
+    await features({ tasks: true });
+    expect(
+      (await card(chief, task.id)).statusHistory.find((h) => h.to === 'done')?.file,
+    ).toBeNull();
+    await features({ tasks: true, files: true });
   });
 
   it('права действий: «Выполнена» — исполнитель, «Изменить» и «Отменить» — постановщик или владелец', async () => {
