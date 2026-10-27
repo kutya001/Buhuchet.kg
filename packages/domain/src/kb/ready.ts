@@ -1,4 +1,5 @@
 import type { HistoryAction, HistoryEntity, HistoryValue } from '../common/history';
+import type { StatusScaleKey } from '../common/status';
 import type { BusinessModuleId, MenuModuleId } from '../org/modules';
 
 /*
@@ -25,7 +26,12 @@ export type KbDoneRule =
       change?: { field: string; to: HistoryValue };
     }
   /** Привязан свой Telegram (`telegram_links`). */
-  | { kind: 'telegram' };
+  | { kind: 'telegram' }
+  /**
+   * Сам поставил статус по шкале (`status_history`, не откат): например, месяц показателей —
+   * «Проверено». Смена статуса пишется в историю статусов, а не в историю изменений.
+   */
+  | { kind: 'status'; scale: StatusScaleKey; to: string };
 
 export interface KbStepRule {
   /**
@@ -96,6 +102,23 @@ export const KB_STEP_RULES: Readonly<Record<string, KbStepRule>> = {
   roles: { module: 'staff' },
   emps: { module: 'staff', done: { kind: 'history', entity: 'employee', actions: ['create'] } },
   empcard: { module: 'staff' },
+  // 11. Показатели контрагентов (задача 2.27). «Ввести показатели из Excel» — с задачей 2.28,
+  // «Вкладка «Показатели» в карточке контрагента» — с карточкой контрагента (2.11).
+  kset: {
+    module: 'kpi',
+    done: { kind: 'history', entity: 'indicator', actions: ['create', 'update', 'delete'] },
+  },
+  // ТЗ: «изменено, каким контрагентам вести показатель» — «Ведётся» → «Не ведётся» и обратно.
+  kwho: {
+    module: 'kpi',
+    done: { kind: 'history', entity: 'indicator', actions: ['update'], anyField: ['enabled'] },
+  },
+  kval: {
+    module: 'kpi',
+    done: { kind: 'history', entity: 'indicator_value', actions: ['create', 'update'] },
+  },
+  kper: { module: 'kpi' },
+  kchk: { module: 'kpi', done: { kind: 'status', scale: 'indicator', to: 'checked' } },
   // 14. Работа со списками и интерфейсом: пока нет «Контрагентов», «Перейти» ведёт в список «Видов
   // отчётов» — он виден всем. «Статистика» — с первым экраном организации с плашками (2.13).
   search: { module: null },
@@ -113,6 +136,8 @@ export const KB_READY_MODULES: ReadonlySet<string> = new Set<MenuModuleId>([
   'staff',
   'dicts',
   'org',
+  // «Показатели контрагентов» (2.27).
+  'kpi',
   'kb',
   // Админка: «Учётные записи» (2.35), «Организации».
   'accounts',

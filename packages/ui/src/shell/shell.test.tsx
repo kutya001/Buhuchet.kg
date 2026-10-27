@@ -185,6 +185,17 @@ describe('TopBar — верхняя панель', () => {
     expect(badge).toContain('bg-info');
   });
 
+  it('точка на «Меню» от незаполненных показателей — красная или жёлтая', () => {
+    const red = renderToStaticMarkup(
+      <TopBar {...TOP} menu={{ ...TOP.menu, dot: 'Есть просроченные', dotTone: 'red' }} />,
+    );
+    expect(red).toMatch(/title="Есть просроченные"[^>]*class="[^"]*bg-danger /);
+    const yellow = renderToStaticMarkup(
+      <TopBar {...TOP} menu={{ ...TOP.menu, dot: 'Срок не прошёл', dotTone: 'yellow' }} />,
+    );
+    expect(yellow).toMatch(/title="Срок не прошёл"[^>]*class="[^"]*bg-warn /);
+  });
+
   it('«Меню», модуль и вкладка, поиск по вкладке, время, «?» и тема', () => {
     const html = renderToStaticMarkup(<TopBar {...TOP} />);
     expect(html).toContain('<header');

@@ -40,7 +40,7 @@ export function KpiSetupTab({ onEdit }: { onEdit: (id: string | null) => void })
   const { setupView } = useKpiChoice();
   return (
     <div className="flex flex-col gap-3.5">
-      <div>
+      <div data-kpi-setup-view="">
         <Segments<'list' | 'who'>
           label={t('kpi.setup.view')}
           value={setupView}
@@ -142,12 +142,12 @@ function IndicatorList({ onEdit }: { onEdit: (id: string | null) => void }) {
   };
 
   return (
-    <div className="flex flex-col gap-3.5">
+    <div className="flex flex-col gap-3.5" data-kpi-setup-list="">
       <Note>{t('kpi.setup.note')}</Note>
       {items.length === 0 ? (
         <EmptyState icon="gauge" title={t('kpi.no_indicators')} />
       ) : (
-        <ul className="m-0 flex list-none flex-col gap-2 p-0" data-kpi-setup-list="">
+        <ul className="m-0 flex list-none flex-col gap-2 p-0">
           {items.map((i, j) => (
             <li
               key={i.id}

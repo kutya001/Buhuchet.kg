@@ -56,7 +56,10 @@ function periodColumns(
       width: 190,
       text: (r) => r.indicatorName,
       cell: (r) => (
-        <span className="inline-flex min-w-0 items-center gap-1.5">
+        <span
+          className="inline-flex min-w-0 items-center gap-1.5"
+          title={off(r) ? `${r.indicatorName} · ${off(r)}` : undefined}
+        >
           <span className="truncate">{r.indicatorName}</span>
           {r.indicatorArchived ? <Tag>{t('kpi.archived_tag')}</Tag> : null}
           {off(r) ? <Tag>{off(r)}</Tag> : null}

@@ -87,8 +87,9 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
       screens: [],
       done: null,
     });
-    // Работающих уроков выключенных функций ещё нет: «Можно включить» пусто (правило стыков).
-    expect(own.offers).toEqual([]);
+    // «Можно включить» — выключенные функции с работающим уроком (правило стыков): пока только
+    // «Показатели контрагентов» (2.27).
+    expect(own.offers.map((o) => o.feature)).toEqual(['indicators']);
     // «Пройти урок» есть только у функции, чей урок уже в программе: «Напоминания в Telegram» — «Мой профиль».
     expect(own.featureLessons).toEqual({ telegram: 'me' });
 

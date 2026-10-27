@@ -60,7 +60,7 @@ import {
   visibleTabs,
   type ShellAccess,
 } from './modules';
-import { useTabCounts, withTabCounts } from './tab-counts';
+import { menuDot, useTabCounts, withTabCounts } from './tab-counts';
 import { UiProviders } from './ui-providers';
 
 export { useShell, type AddRequest } from './context';
@@ -437,7 +437,7 @@ function ShellPage({
               menu={{
                 label: t('shell.menu'),
                 onClick: toggleNav,
-                dot: phone.other.find((m) => m.count?.dot)?.count?.title,
+                ...menuDot(phone.other),
               }}
               info={{
                 label: t('shell.module_info'),

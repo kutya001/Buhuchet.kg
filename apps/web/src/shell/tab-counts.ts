@@ -66,3 +66,19 @@ export function withTabCounts(
     }),
   };
 }
+
+/**
+ * Точка на «Меню» телефона (прототип renderSheetDot): у модуля из «Других модулей» цветной счётчик —
+ * точка его цвета (незаполненные показатели); иначе точка модуля с точкой («Начните с Базы знаний»).
+ */
+export function menuDot(others: readonly { title: string; count?: ShellCount | undefined }[]): {
+  dot?: string;
+  dotTone?: 'red' | 'yellow';
+} {
+  const colored = others.find((m) => m.count?.tone && m.count.value);
+  if (colored?.count?.tone) {
+    return { dot: colored.count.title ?? colored.title, dotTone: colored.count.tone };
+  }
+  const title = others.find((m) => m.count?.dot)?.count?.title;
+  return title ? { dot: title } : {};
+}

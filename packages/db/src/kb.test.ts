@@ -23,6 +23,7 @@ import {
 import { createOrganization, type CreatedOrganization } from './organizations';
 import { kbArticleReads, kbLevels, kbProgress, telegramLinks, users } from './schema';
 import { createEmployee } from './staff';
+import { writeStatusChange } from './status';
 import {
   createTestDatabase,
   databaseAvailable,
@@ -299,6 +300,25 @@ describe.skipIf(!databaseAvailable())('«База знаний»: прогрес
     // Другая организация не видит ни истории, ни Telegram владельца «Альфы».
     expect((await asOwner(b, (tx) => kbDoneFacts(tx, a.ownerUserId, steps))).size).toBe(0);
     expect(await asOwner(a, (tx) => kbDoneFacts(tx, a.ownerUserId, []))).toEqual(new Map());
+  });
+
+  it('факты «Сделать» — из своей истории статусов: «Проверить месяц» показателей', async () => {
+    const steps = [{ id: 'kchk', rule: KB_STEP_RULES.kchk!.done! }];
+    const month = '00000000-0000-4000-8000-0000000000a1';
+    // Другой статус той же шкалы не засчитывается, «Заполнено» → «Проверено» — да.
+    await asOwner(a, (tx) =>
+      writeStatusChange(tx, { scale: 'indicator', entityId: month, from: null, to: 'filled' }),
+    );
+    expect((await asOwner(a, (tx) => kbDoneFacts(tx, a.ownerUserId, steps))).size).toBe(0);
+    await asOwner(a, (tx) =>
+      writeStatusChange(tx, { scale: 'indicator', entityId: month, from: 'filled', to: 'checked' }),
+    );
+    expect(
+      (await asOwner(a, (tx) => kbDoneFacts(tx, a.ownerUserId, steps))).get('kchk'),
+    ).toBeInstanceOf(Date);
+    // Проверку владельца сотруднику не засчитывают, чужая организация её не видит.
+    expect((await inOrg(a, accUserId, (tx) => kbDoneFacts(tx, accUserId, steps))).size).toBe(0);
+    expect((await asOwner(b, (tx) => kbDoneFacts(tx, a.ownerUserId, steps))).size).toBe(0);
   });
 
   it('«Подключили функцию» — дата последнего включения по истории учётной политики', async () => {

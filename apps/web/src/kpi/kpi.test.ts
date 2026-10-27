@@ -3,7 +3,7 @@ import type { WhoContractor } from '@buhuchet/shared';
 import type { ShellModule } from '@buhuchet/ui';
 import { describe, expect, it } from 'vitest';
 import { makeTranslate } from '../l10n/translate';
-import { kpiMissingCount, withTabCounts } from '../shell/tab-counts';
+import { kpiMissingCount, menuDot, withTabCounts } from '../shell/tab-counts';
 import {
   columnSub,
   monthGenName,
@@ -207,5 +207,21 @@ describe('счётчик «Не заполнено» у вкладки и мод
     const m = withTabCounts(module, { missing: zero });
     expect(m.count).toBeUndefined();
     expect(m.tabs.find((x) => x.id === 'missing')?.count).toEqual(zero);
+  });
+
+  it('точка на «Меню»: цвет счётчика показателей важнее синей точки Базы знаний', () => {
+    const kb = {
+      title: 'База знаний',
+      count: { value: '', dot: true, title: 'Начните с Базы знаний' },
+    };
+    const red = kpiMissingCount(t, { count: 2, overdue: true, contractors: [] });
+    expect(menuDot([kb, { title: 'Показатели', count: red }])).toEqual({
+      dot: 'Не заполнены показатели, есть просроченные месяцы',
+      dotTone: 'red',
+    });
+    expect(menuDot([kb, { title: 'Показатели', count: { value: 0 } }])).toEqual({
+      dot: 'Начните с Базы знаний',
+    });
+    expect(menuDot([{ title: 'Файлы' }])).toEqual({});
   });
 });
