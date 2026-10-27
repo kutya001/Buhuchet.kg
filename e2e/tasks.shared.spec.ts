@@ -1,9 +1,11 @@
 import { expect, test, type APIRequestContext } from '@playwright/test';
+import { platformAdmin } from './admin';
 import { DEMO_PASSWORD, signIn } from './helpers';
 
-// «Задачи» (задача 2.23, #79): выключенная в учётной политике «Задачи требуют подтверждения». Меняет
-// общую запись демо-организации, поэтому файл *.shared.spec.ts: идёт после остальных тестов и по
-// одному (playwright.config.ts). Политика возвращается как была.
+// «Задачи» (задача 2.23, #79): выключенная в учётной политике «Задачи требуют подтверждения» и
+// «Категории задач» в Админке. Меняет общую запись демо-организации и создаёт администратора
+// платформы, поэтому файл *.shared.spec.ts: идёт после остальных тестов и по одному
+// (playwright.config.ts). Политика возвращается как была.
 
 test.describe.configure({ mode: 'serial' });
 
@@ -71,5 +73,26 @@ test.describe('Этап 2: задачи — учётная политика', ()
       await setTaskConfirm(owner, origin, before);
       await owner.dispose();
     }
+  });
+});
+
+test.describe('Этап 2: задачи — «Категории задач» в Админке', () => {
+  test('администратор видит «Категории задач»: пояснение, значения, «Используется» по задачам организаций', async ({
+    page,
+    baseURL,
+  }) => {
+    await platformAdmin(page.request, new URL(baseURL!).origin);
+    await page.goto('/app/pdicts/cats');
+    await expect(page.locator('[data-pdicts-head]')).toContainText(
+      'Работа системы · Категории задач',
+    );
+    await expect(page.getByText('Шаблон для организаций: категории ручных задач')).toBeVisible();
+    await expect(page.getByText('Сбор документов').first()).toBeVisible();
+    const res = await page.request.get('/api/admin/platform-dicts/cats?size=all');
+    expect(res.status(), await res.text()).toBe(200);
+    const items = ((await res.json()) as { items: { code: string; used: number }[] }).items;
+    expect(items.map((x) => x.code)).toContain('КАТ-001');
+    // Демо-задачи ссылаются на категории — значит, «Используется» не ноль.
+    expect(items.some((x) => x.used > 0)).toBe(true);
   });
 });
