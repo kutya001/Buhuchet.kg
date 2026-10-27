@@ -1,3 +1,39 @@
 @import 'tailwindcss';
 @import '@buhuchet/ui/theme.css';
 @source '../../../packages/ui/src';
+
+/* «База знаний» (задача 2.30, прототип css/kb.css): подсветка места шага после «Перейти» и полоса-таймер
+   шага «Посмотреть» («Смотрите экран… 3»). */
+@keyframes bu-ck-flash {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+  50% {
+    box-shadow: 0 0 0 4px var(--bu-b-blue);
+  }
+}
+
+[data-ck-flash] {
+  border-radius: 10px;
+  animation: bu-ck-flash 1.3s ease-in-out 2;
+}
+
+@keyframes bu-ck-timer {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-ck-flash] {
+    animation: none;
+    box-shadow: 0 0 0 4px var(--bu-b-blue);
+  }
+  [data-ck-timer] {
+    animation: none !important;
+  }
+}

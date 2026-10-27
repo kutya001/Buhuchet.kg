@@ -492,6 +492,7 @@ function teamSource(team: readonly KbMemberProgress[], t: ListTexts): SQL {
     active: p.member.active,
     level: p.stats.level,
     level_name: p.levels[p.stats.level]?.n ?? '',
+    levels: p.levels.length,
     pct: p.stats.pct,
     done: p.stats.done,
     total: p.stats.total,
@@ -500,7 +501,7 @@ function teamSource(team: readonly KbMemberProgress[], t: ListTexts): SQL {
       .replace('{total}', String(p.stats.total)),
     level_at: p.lastAt ? bishkekDate(p.lastAt) : null,
   }));
-  return sql`jsonb_to_recordset(${JSON.stringify(rows)}::jsonb) as r(id uuid, n integer, full_name text, role text, active boolean, level integer, level_name text, pct integer, done integer, total integer, steps text, level_at date)`;
+  return sql`jsonb_to_recordset(${JSON.stringify(rows)}::jsonb) as r(id uuid, n integer, full_name text, role text, active boolean, level integer, level_name text, levels integer, pct integer, done integer, total integer, steps text, level_at date)`;
 }
 
 /** Столбец строки из `jsonb_to_recordset`: имена — постоянные, не ввод пользователя. */
@@ -567,6 +568,7 @@ export async function listKbTeamPage(tx: Tx, orgId: string, query: ListQuery, t:
           active: sql<boolean>`${col('active')}`,
           level: sql<number>`${col('level')}`,
           levelName: sql<string>`${col('level_name')}`,
+          levels: sql<number>`${col('levels')}`,
           pct: sql<number>`${col('pct')}`,
           done: sql<number>`${col('done')}`,
           total: sql<number>`${col('total')}`,

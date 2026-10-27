@@ -4,7 +4,7 @@ import { TELEGRAM_LINK_TTL_MINUTES } from '@buhuchet/domain';
 import { MeResponse, TelegramLinkResponse } from '@buhuchet/shared';
 import { buttonClass, Icon, MONO_CLASS, useToast } from '@buhuchet/ui';
 import { useEffect, useState } from 'react';
-import { api, callApi } from '../api-client';
+import { api, callApi, SAVED_EVENT } from '../api-client';
 import { useT } from '../l10n/provider';
 import type { ApiErrorLike } from '../l10n/translate';
 
@@ -64,6 +64,8 @@ export function useTelegramLink(): TelegramLinkState {
         clearInterval(poll);
         clearTimeout(renew);
         setState({ status: 'linked', me });
+        // Привязку сохранил бот: «База знаний» засчитает шаг «Привязать Telegram» сразу.
+        window.dispatchEvent(new Event(SAVED_EVENT));
       }
     }, POLL_MS);
     return () => {

@@ -38,7 +38,12 @@ function kbPolicies(table: string, t: { orgId: AnyPgColumn; userId: AnyPgColumn 
       to: appRole,
       using: sql`${t.orgId} = ${currentOrgId}`,
     }),
-    pgPolicy(`${table}_own_insert`, { as: 'permissive', for: 'insert', to: appRole, withCheck: own }),
+    pgPolicy(`${table}_own_insert`, {
+      as: 'permissive',
+      for: 'insert',
+      to: appRole,
+      withCheck: own,
+    }),
     pgPolicy(`${table}_own_update`, {
       as: 'permissive',
       for: 'update',

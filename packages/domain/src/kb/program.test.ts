@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Feature, PermissionId } from '../roles/permissions';
 import type { KbCatalog, KbLevelDef, KbStepDef } from './catalog';
 import {
+  kbFeatureGroup,
   kbGroupStatus,
   kbHitCounts,
   kbLevelsToRecord,
@@ -97,9 +98,16 @@ function access(o: {
 }
 
 const OWNER = access({ owner: true, features: ['indicators', 'taxpay'] });
-const ACCOUNTANT = access({ perms: ['assign'], features: ['taxpay'], modules: ['home', 'cps', 'org', 'kb'] });
+const ACCOUNTANT = access({
+  perms: ['assign'],
+  features: ['taxpay'],
+  modules: ['home', 'cps', 'org', 'kb'],
+});
 
-const done = (at = '2026-10-20T10:00:00Z'): KbMark => ({ done: { how: 'action', at }, skipped: false });
+const done = (at = '2026-10-20T10:00:00Z'): KbMark => ({
+  done: { how: 'action', at },
+  skipped: false,
+});
 const marks = (ids: string[], at?: string) => new Map(ids.map((id) => [id, done(at)]));
 const ids = (program: ReturnType<typeof kbProgram>) => kbProgramSteps(program).map((s) => s.def.id);
 
@@ -114,20 +122,47 @@ describe('программа обучения', () => {
     expect(ids(kbProgram(CATALOG, noKpi, RULES))).not.toContain('kset');
     expect(ids(kbProgram(CATALOG, OWNER, RULES))).toEqual(expect.arrayContaining(['kset', 'kper']));
     const noMenu = access({ owner: true, features: ['indicators', 'taxpay'], modules: ['org'] });
-    expect(ids(kbProgram(CATALOG, noMenu, RULES))).toEqual(['profile', 'policy', 'settings', 'tg', 'theme']);
+    expect(ids(kbProgram(CATALOG, noMenu, RULES))).toEqual([
+      'profile',
+      'policy',
+      'settings',
+      'tg',
+      'theme',
+    ]);
   });
 
   it('шаги модулей, которых ещё нет, и выключенные администратором шаги скрыты', () => {
-    expect(kbStepVisible(CATALOG.steps.find((s) => s.id === 'cols')!, OWNER, RULES)).toBe(false);
+    expect(
+      kbStepVisible(
+        CATALOG.steps.find((s) => s.id === 'cols')!,
+        OWNER,
+        RULES,
+      ),
+    ).toBe(false);
     expect(kbStepVisible({ ...CATALOG.steps[0]!, active: false }, OWNER, RULES)).toBe(false);
     // Реестр работающих шагов продукта: шагов контрагентов пока нет.
     expect(Object.keys(KB_STEP_RULES)).not.toContain('cp1');
-    expect(kbStepVisible(CATALOG.steps.find((s) => s.id === 'profile')!, OWNER)).toBe(true);
+    expect(
+      kbStepVisible(
+        CATALOG.steps.find((s) => s.id === 'profile')!,
+        OWNER,
+      ),
+    ).toBe(true);
   });
 
   it('у владельца группы в порядке первичной настройки, у сотрудника «Главная и аналитика» — первой', () => {
-    expect(kbProgram(CATALOG, OWNER, RULES).map((g) => g.def.id)).toEqual(['org', 'me', 'cps', 'kpi', 'home']);
-    expect(kbProgram(CATALOG, ACCOUNTANT, RULES).map((g) => g.def.id)).toEqual(['home', 'me', 'cps']);
+    expect(kbProgram(CATALOG, OWNER, RULES).map((g) => g.def.id)).toEqual([
+      'org',
+      'me',
+      'cps',
+      'kpi',
+      'home',
+    ]);
+    expect(kbProgram(CATALOG, ACCOUNTANT, RULES).map((g) => g.def.id)).toEqual([
+      'home',
+      'me',
+      'cps',
+    ]);
   });
 
   it('у администратора платформы — своя программа', () => {
@@ -200,7 +235,12 @@ describe('уровень и процент', () => {
   });
 
   it('пустая программа — «Новичок» и 0 %', () => {
-    expect(kbStats([], new Map(), LEVELS, null)).toMatchObject({ total: 0, pct: 0, level: 0, next: 1 });
+    expect(kbStats([], new Map(), LEVELS, null)).toMatchObject({
+      total: 0,
+      pct: 0,
+      level: 0,
+      next: 1,
+    });
   });
 });
 
@@ -244,12 +284,22 @@ describe('«Новое»', () => {
   it('шаги функции, включённой за последние 30 дней, — «Новое», пока не выполнены', () => {
     expect(kbStepIsNew(kper, new Map(), { indicators: '2026-10-01' }, '2026-10-27')).toBe(true);
     expect(kbStepIsNew(kper, new Map(), { indicators: '2026-09-26' }, '2026-10-27')).toBe(false);
-    expect(kbStepIsNew(kper, marks(['kper']), { indicators: '2026-10-20' }, '2026-10-27')).toBe(false);
+    expect(kbStepIsNew(kper, marks(['kper']), { indicators: '2026-10-20' }, '2026-10-27')).toBe(
+      false,
+    );
     expect(kbStepIsNew(tg, new Map(), { indicators: '2026-10-20' }, '2026-10-27')).toBe(false);
   });
 
   it('шаг, добавленный администратором позже, — «Новое»', () => {
-    expect(kbStepIsNew({ ...tg, def: { ...tg.def, isNew: true } }, new Map(), {}, '2026-10-27')).toBe(true);
+    expect(
+      kbStepIsNew({ ...tg, def: { ...tg.def, isNew: true } }, new Map(), {}, '2026-10-27'),
+    ).toBe(true);
+  });
+
+  it('урок функции для «Пройти урок»: у функции без своего урока — нет', () => {
+    expect(kbFeatureGroup('indicators')).toBe('kpi');
+    expect(kbFeatureGroup('taxpay')).toBe('money');
+    expect(kbFeatureGroup('cppage')).toBeNull();
   });
 });
 
@@ -263,7 +313,15 @@ describe('урок, экран шага, первое использование
       ['theme', done('2026-10-22T09:00:00Z')],
     ]);
     expect(kbGroupStatus(me, m)).toEqual({ state: 'done', at: '2026-10-22T09:00:00Z' });
-    expect(kbGroupStatus(me, new Map([['tg', done()], ['theme', { done: null, skipped: true }]]))).toEqual({
+    expect(
+      kbGroupStatus(
+        me,
+        new Map([
+          ['tg', done()],
+          ['theme', { done: null, skipped: true }],
+        ]),
+      ),
+    ).toEqual({
       state: 'partial',
     });
     expect(kbGroupStatus(me, new Map([['tg', done()]]))).toBeNull();
@@ -279,7 +337,13 @@ describe('урок, экран шага, первое использование
   it('первое использование засчитывает «Сделать» и «Посмотреть» раздела списков, а не прочие «Посмотреть»', () => {
     const theme = me.steps.find((s) => s.def.id === 'theme')!;
     expect(kbHitCounts(theme, 'theme')).toBe(false);
-    const cols = { def: CATALOG.steps.find((s) => s.id === 'cols')!, rule: { module: null }, module: null, learn: true, star: false };
+    const cols = {
+      def: CATALOG.steps.find((s) => s.id === 'cols')!,
+      rule: { module: null },
+      module: null,
+      learn: true,
+      star: false,
+    };
     expect(kbHitCounts(cols, 'cols')).toBe(true);
     expect(kbHitCounts(cols, 'grp')).toBe(false);
     const remind = { ...cols, learn: false, def: { ...cols.def, g: 'org', hit: 'remind' } };

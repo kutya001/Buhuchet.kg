@@ -98,6 +98,11 @@ export const KB_GROUP_FEATURES: Readonly<Record<string, Feature>> = {
   files: 'files',
 };
 
+/** Группа шагов (урок) функции учётной политики; null — у функции нет своего урока. */
+export function kbFeatureGroup(feature: Feature): string | null {
+  return Object.keys(KB_GROUP_FEATURES).find((g) => KB_GROUP_FEATURES[g] === feature) ?? null;
+}
+
 function isFeature(value: string, access: KbAccess): boolean {
   return access.feature(value as Feature);
 }

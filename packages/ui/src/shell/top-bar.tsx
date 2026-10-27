@@ -137,6 +137,7 @@ export function TopBar({ title, tab, menu, info, search, clock, help, theme }: T
           aria-label={search.openLabel}
           title={search.openLabel}
           className={`${iconButtonClass()} md:hidden`}
+          data-search-open
         >
           <Icon name="search" />
         </button>

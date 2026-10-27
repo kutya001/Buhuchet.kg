@@ -17,6 +17,7 @@ import {
   type KeyValueItem,
 } from '@buhuchet/ui';
 import { useState, type ReactNode } from 'react';
+import { KbMemberBox } from '../kb/kb-team';
 import { useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { useEmployee } from './staff-data';
@@ -30,8 +31,9 @@ type CardTabId = 'main' | 'cps';
  * п. 16; ТЗ: «кнопкой «Изменить» в карточке сотрудника»; у владельца — только в своей карточке),
  * «Действия» (те же пункты, что в меню списка, кроме «Открыть карточку» и «Изменить»; без права
  * «Сотрудники и роли» и у владельца организации кнопки нет) и
- * «Готово». Плашки «Несданных отчётов», «Просрочено», «Открытых задач», вкладку «Счёт», реквизиты и
- * уровень знаний добавят их модули; список контрагентов наполнит модуль «Контрагенты».
+ * «Готово». Под сведениями — «Уровень знаний» (свой — всегда, чужой — с правом «Видеть уровни
+ * сотрудников»). Плашки «Несданных отчётов», «Просрочено», «Открытых задач», вкладку «Счёт» и реквизиты
+ * добавят их модули; список контрагентов наполнит модуль «Контрагенты».
  */
 export function EmployeeCard({
   id,
@@ -112,7 +114,12 @@ export function EmployeeCard({
     >
       <div data-employee-card={id} className="flex flex-col gap-3.5">
         {query.isError && !employee ? <Note tone="bad">{t('staff.card.load_error')}</Note> : null}
-        {employee && tab === 'main' ? <MainTab t={t} e={employee} /> : null}
+        {employee && tab === 'main' ? (
+          <>
+            <MainTab t={t} e={employee} />
+            <KbMemberBox employeeId={employee.id} />
+          </>
+        ) : null}
         {employee && tab === 'cps' ? <ContractorsTab t={t} /> : null}
       </div>
       {menu && employee ? (

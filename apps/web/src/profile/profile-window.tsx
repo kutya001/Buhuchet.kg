@@ -16,22 +16,27 @@ import {
   useToast,
   useWindow,
 } from '@buhuchet/ui';
+import { useQuery } from '@tanstack/react-query';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { api, callApi } from '../api-client';
 import { fieldError, NewPasswordFields } from '../auth/fields';
 import { TelegramLinkRow, useTelegramLink } from '../auth/telegram-link';
+import { kbStateQuery } from '../kb/kb-data';
+import { BOX_LINK_CLASS, KbBox } from '../kb/kb-parts';
 import { useErrorText, useT } from '../l10n/provider';
 import { currentTheme, setTheme } from '../shell/browser';
+import { tabHref } from '../shell/modules';
 import type { Theme } from '../shell/prefs';
 
 /**
  * «Мой профиль» (ТЗ «Профиль пользователя», прототип modules/profile.js profileDlg): основное
  * (ФИО, логин, телефон, роль), Telegram для уведомлений (привязка по ссылке, «Отвязать»), тема и смена
- * пароля. Окно — карточка; пока в «Смене пароля» что-то введено, протяжка вниз, «Назад» и выход из
- * аккаунта спрашивают. Уровень знаний, реквизиты для переводов и уведомления придут со своими
- * задачами (потоки В и Г).
+ * пароля, вверху — уровень знаний («Открыть Базу знаний»). Окно — карточка; пока в «Смене пароля» что-то
+ * введено, протяжка вниз, «Назад» и выход из аккаунта спрашивают. Реквизиты для переводов и уведомления
+ * придут со своими задачами (поток В, задача 2.24).
  */
 export function ProfileWindow({
   open,
@@ -60,6 +65,7 @@ export function ProfileWindow({
       sub={fullName}
       footer={<ProfileFooter />}
     >
+      <ProfileKbBox />
       <Box title={t('profile.main')}>
         <KeyValues
           items={[
@@ -84,6 +90,24 @@ export function ProfileWindow({
       </Box>
       <PasswordBox onDirty={setDirty} />
     </Modal>
+  );
+}
+
+/** Свой уровень знаний (прототип profileDlg → kbBox с «Открыть Базу знаний»). */
+function ProfileKbBox() {
+  const t = useT();
+  const { leave } = useWindow();
+  const state = useQuery(kbStateQuery).data;
+  if (!state) return null;
+  return (
+    <KbBox
+      progress={state.progress}
+      action={
+        <Link href={tabHref('kb', 'level')} replace onClick={leave} className={BOX_LINK_CLASS}>
+          {t('kb.open')}
+        </Link>
+      }
+    />
   );
 }
 
@@ -121,38 +145,40 @@ function TelegramBox({ initial }: { initial: TelegramInfo | null }) {
   };
 
   return (
-    <Box title={t('profile.tg')}>
-      {telegram ? (
-        <div className="flex flex-wrap items-center gap-2.5">
-          <Pill tone="ok" icon="check">
-            {t('profile.tg_linked')}
-          </Pill>
-          <span className={MONO_CLASS}>{telegram.name}</span>
-          <div className="grow" />
-          <button
-            type="button"
-            className={buttonClass('ghost', 'sm')}
-            onClick={unlink}
-            disabled={busy}
-          >
-            {t('profile.tg_unlink')}
-          </button>
-        </div>
-      ) : (
-        <TelegramLinkPanel
-          onLinked={(info) => {
-            setTelegram(info);
-            toast(t('profile.tg_done'), { icon: 'tg' });
-            router.refresh();
-          }}
-        />
-      )}
-      {error ? (
-        <Note tone="bad" alert>
-          {error}
-        </Note>
-      ) : null}
-    </Box>
+    <div data-profile-telegram="" className="flex flex-col">
+      <Box title={t('profile.tg')}>
+        {telegram ? (
+          <div className="flex flex-wrap items-center gap-2.5">
+            <Pill tone="ok" icon="check">
+              {t('profile.tg_linked')}
+            </Pill>
+            <span className={MONO_CLASS}>{telegram.name}</span>
+            <div className="grow" />
+            <button
+              type="button"
+              className={buttonClass('ghost', 'sm')}
+              onClick={unlink}
+              disabled={busy}
+            >
+              {t('profile.tg_unlink')}
+            </button>
+          </div>
+        ) : (
+          <TelegramLinkPanel
+            onLinked={(info) => {
+              setTelegram(info);
+              toast(t('profile.tg_done'), { icon: 'tg' });
+              router.refresh();
+            }}
+          />
+        )}
+        {error ? (
+          <Note tone="bad" alert>
+            {error}
+          </Note>
+        ) : null}
+      </Box>
+    </div>
   );
 }
 

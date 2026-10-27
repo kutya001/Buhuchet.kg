@@ -67,7 +67,7 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
     const own = await state(owner);
     expect(own.admin).toBe(false);
     expect(own.lessons.map((l) => l.id)).toEqual(['org', 'me', 'dicts', 'staff', 'lists']);
-    expect(own.progress).toMatchObject({ total: 17, done: 0, pct: 0, level: 0, next: 1, need: 5 });
+    expect(own.progress).toMatchObject({ total: 16, done: 0, pct: 0, level: 0, next: 1, need: 4 });
     expect(own.progress.levels.map((l) => l.name)).toEqual([
       'Новичок',
       'Ученик',
@@ -94,7 +94,6 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
     expect(mine.lessons.map((l) => l.id)).toEqual(['me', 'dicts', 'lists']);
     expect(steps(mine).map((s) => s.id)).toEqual([
       'tg',
-      'theme',
       'pdicts',
       'search',
       'cols',
@@ -130,7 +129,7 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
     );
     expect(other.fresh).toEqual([]);
 
-    // Ещё 4 шага — 5 из 17 (29 %): уровень «Ученик».
+    // Ещё 4 шага — 5 из 16 (31 %): уровень «Ученик».
     await saved(f.a.ownerUserId, 'organization', 'name');
     await saved(f.a.ownerUserId, 'org_settings', 'remindDays');
     await saved(f.a.ownerUserId, 'org_settings', 'timezone');
@@ -141,7 +140,7 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
     );
     expect(second.fresh.map((x) => x.id).sort()).toEqual(['profile', 'remind', 'settings']);
     expect(second.congrats).toBe('Ученик');
-    expect(second.state.progress).toMatchObject({ done: 5, pct: 29, level: 1 });
+    expect(second.state.progress).toMatchObject({ done: 5, pct: 31, level: 1 });
     // Повтор ничего не меняет.
     const again = KbMarkResult.parse(
       await ok(await call('POST', '/api/kb/sync', owner, { reason: 'open' })),
@@ -172,7 +171,7 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
   it('«Пропустить» и «Вернуть»: следующий шаг идёт мимо пропущенного; выполненный не пропускается', async () => {
     const skipped = KbState.parse(await ok(await call('POST', '/api/kb/steps/tg/skip', acc)));
     expect(step(skipped, 'tg')?.skipped).toBe(true);
-    expect(skipped.nextStepId).toBe('theme');
+    expect(skipped.nextStepId).toBe('search');
     const done = KbState.parse(await ok(await call('POST', '/api/kb/steps/pdicts/skip', acc)));
     expect(step(done, 'pdicts')).toMatchObject({ skipped: false, done: { how: 'visit' } });
     const back = KbState.parse(await ok(await call('DELETE', '/api/kb/steps/tg/skip', acc)));
@@ -229,12 +228,13 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
       fullName: 'Владелец owner-a',
       level: 1,
       levelName: 'Ученик',
+      of: 5,
       done: 6,
-      total: 17,
+      total: 16,
       levelAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
     });
     const accRow = team.items.find((r) => r.fullName === 'Сотрудник acc-a');
-    expect(accRow).toMatchObject({ level: 0, done: 1, total: 8, pct: 12 });
+    expect(accRow).toMatchObject({ level: 0, done: 1, total: 7, pct: 14 });
     const values = ListValues.parse(
       await ok(await call('GET', '/api/kb/team/values?col=level', owner)),
     );
@@ -260,7 +260,7 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
     const self = KbMemberProgress.parse(
       await ok(await call('GET', `/api/kb/employees/${id}`, acc)),
     );
-    expect(self).toMatchObject({ employeeId: id, progress: { done: 1, total: 8 } });
+    expect(self).toMatchObject({ employeeId: id, progress: { done: 1, total: 7 } });
     expect(self.progress.groups.map((g) => g.id)).toEqual(['me', 'dicts', 'lists']);
     expect((await call('GET', `/api/kb/employees/${id}`, owner)).status).toBe(200);
     expect((await call('GET', `/api/kb/employees/${id}`, hr)).status).toBe(403);
@@ -277,7 +277,7 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
     expect(own.items.find((e) => e.login === 'owner-a')?.kb).toEqual({
       level: 1,
       name: 'Ученик',
-      pct: 35,
+      pct: 37,
       of: 5,
     });
     const sorted = await staff(

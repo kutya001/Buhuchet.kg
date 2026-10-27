@@ -101,4 +101,5 @@ export interface KbCatalog {
 }
 
 /** Флаг из refDB: там встречаются и `1`, и `true`. */
-export const kbFlag = (value: boolean | number | undefined): boolean => value === true || value === 1;
+export const kbFlag = (value: boolean | number | undefined): boolean =>
+  value === true || value === 1;

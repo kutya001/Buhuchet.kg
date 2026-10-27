@@ -207,6 +207,8 @@ export const KbTeamMember = z.object({
   /** Номер уровня и название. */
   level: z.number().int().nonnegative(),
   levelName: z.string(),
+  /** Уровней в лесенке — «Уровень знаний 2 из 5». */
+  of: z.number().int(),
   pct: z.number().int(),
   done: z.number().int(),
   total: z.number().int(),

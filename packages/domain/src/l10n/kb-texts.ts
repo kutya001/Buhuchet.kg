@@ -4,10 +4,10 @@ const S = 'База знаний';
 
 /**
  * Тексты «Базы знаний» (задача 2.30; прототип modules/kb.js — renderKB, kbArtDlg, kbScreenHtml,
- * kbUserDlg, kbBox; modules/kb-lessons.js — ckDoneDlg, ckBar, kbCongrats, CK_HOW, тексты уведомлений;
- * modules/onboard.js — featOnDlg).
+ * kbUserDlg, kbBox; modules/kb-lessons.js — ckDoneDlg, ckBar, kbCongrats, CK_HOW, тексты уведомлений).
  */
 export const KB_TEXTS = {
+  'kb.load_error': { ru: 'Не удалось загрузить Базу знаний', section: S },
   // Уровень
   'kb.level.head': { ru: '{name} · {pct} %', section: S },
   'kb.level.of': {
@@ -142,6 +142,12 @@ export const KB_TEXTS = {
   'kb.toast.viewed': { ru: 'База знаний: шаг просмотрен — «{title}»', section: S },
   'kb.toast.viewed_n': { ru: 'База знаний: просмотрено шагов: {n}', section: S },
   'kb.toast.read': { ru: 'Статья прочитана', section: S },
+  // Окно «Функция … включена» в учётной политике
+  'kb.feat_on.text': {
+    ru: 'Уроки по этой функции появились в «Базе знаний» у всех сотрудников с отметкой «Новое».',
+    section: S,
+  },
+  'kb.feat_on.learn': { ru: 'Пройти урок', section: S },
 
   // Статьи
   'kb.arts.search': { ru: 'Поиск по тексту статей', section: S },
@@ -183,18 +189,4 @@ export const KB_TEXTS = {
   'kb.box.title': { ru: 'Уровень знаний', section: S },
   'kb.box.got': { ru: 'уровень «{name}» получен {date}', section: S },
   'staff.col.kb': { ru: 'Уровень знаний', section: 'Сотрудники' },
-
-  // Функция включена (учётная политика)
-  'kb.feat_on.title': { ru: 'Функция «{name}» включена', section: S },
-  'kb.feat_on.title_n': { ru: 'Включено функций: {n}', section: S },
-  'kb.feat_on.text': {
-    ru: 'Уроки по этой функции появились в «Базе знаний» у всех сотрудников с отметкой «Новое».',
-    section: S,
-  },
-  'kb.feat_on.text_n': {
-    ru: 'Уроки по этим функциям появились в «Базе знаний» у всех сотрудников с отметкой «Новое».',
-    section: S,
-  },
-  'kb.later': { ru: 'Позже', section: S },
-  'kb.feat_on.learn': { ru: 'Пройти урок', section: S },
 } as const satisfies Record<string, UiTextDefault>;

@@ -55,10 +55,13 @@ export const KB_STEP_RULES: Readonly<Record<string, KbStepRule>> = {
   policy: { module: 'org', done: orgSettings('features') },
   // ТЗ: «добавлен или убран день напоминания в учётной политике».
   remind: { module: 'org', done: orgSettings('remindDays') },
-  settings: { module: 'org', done: orgSettings('timezone', 'digestTime', 'overdueRepeat', 'defaultRoleId') },
-  // 2. Мой профиль. «Режим и виды уведомлений» — с задачей 2.24.
+  settings: {
+    module: 'org',
+    done: orgSettings('timezone', 'digestTime', 'overdueRepeat', 'defaultRoleId'),
+  },
+  // 2. Мой профиль. «Режим и виды уведомлений» — с задачей 2.24; «Тема оформления» — с 2.31: шаг
+  // «Посмотреть» без экрана и статьи засчитывается только показом «Показать как».
   tg: { module: null, done: { kind: 'telegram' } },
-  theme: { module: null },
   // 3. Справочники.
   types: {
     module: 'dicts',
