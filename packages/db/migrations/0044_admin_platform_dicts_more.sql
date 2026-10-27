@@ -79,7 +79,8 @@ INSERT INTO app.platform_dict_links (dict, field, table_name, key_column, link_c
 -- Сначала убираются связи, которых нет в новом списке (по всем полям), потом добавляются новые — так
 -- код, перенесённый из одного поля в другое той же таблицы, не теряется. Есть ли связанные значения,
 -- проверяют внешние ключи таблицы связей. Строка значения на время записи закрыта для других правок.
--- Отвечает true; false — нет значения; пусто — справочника нет в перечне или не администратор.
+-- Отвечает true; false — нет значения; пусто — справочника нет в перечне, не администратор или
+-- поле-связь в p_links не массив.
 CREATE OR REPLACE FUNCTION app.admin_dict_set_links(p_dict text, p_code text, p_links jsonb)
   RETURNS boolean
   LANGUAGE plpgsql VOLATILE SECURITY DEFINER
@@ -97,6 +98,12 @@ CREATE OR REPLACE FUNCTION app.admin_dict_set_links(p_dict text, p_code text, p_
     END IF;
     SELECT * INTO spec FROM app.platform_dict_specs s WHERE s.dict = p_dict;
     IF NOT FOUND THEN
+      RETURN NULL;
+    END IF;
+    IF EXISTS (
+      SELECT 1 FROM app.platform_dict_links l
+      WHERE l.dict = p_dict AND p_links ? l.field AND jsonb_typeof(p_links -> l.field) <> 'array'
+    ) THEN
       RETURN NULL;
     END IF;
     EXECUTE format('SELECT 1 FROM public.%I t WHERE t.code = $1 FOR UPDATE', spec.table_name)

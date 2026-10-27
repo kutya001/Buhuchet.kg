@@ -55,6 +55,7 @@ export function dictHistoryText(dict: AdminValueDict, item: Item, t: Translate):
   const renamed = change('name');
   if ((dict === 'regimes' || dict === 'bases') && renamed) {
     // ТЗ: переименование видно в истории — «старое» → «новое», у режима и число других полей.
+    // ОТКЛОНЕНИЕ: docs/deviations.md#Д-8
     const words = { dict: title, from: shown(renamed.from), to: shown(renamed.to) };
     const n = dict === 'regimes' ? item.changes.length - 1 : 0;
     return n > 0

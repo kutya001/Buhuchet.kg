@@ -676,6 +676,20 @@ describe.skipIf(!databaseAvailable())(
       ).rejects.toThrow();
     });
 
+    it('поле-связь не массивом — функция отказывает, связи не меняются', async () => {
+      const before = await asAdmin((tx) => getAdminDictValue(tx, 'bases', 'employees'));
+      const bad = JSON.stringify({ types: 'nds' });
+      expect(
+        await asAdmin((tx) =>
+          tx.execute(
+            sql`select app.admin_dict_set_links('bases', 'employees', ${bad}::jsonb) as ok`,
+          ),
+        ),
+      ).toEqual([{ ok: null }]);
+      const after = await asAdmin((tx) => getAdminDictValue(tx, 'bases', 'employees'));
+      expect(after?.data.types).toEqual(before?.data.types);
+    });
+
     it('не администратору — ни списка, ни правки; таблицы справочников роль приложения не меняет', async () => {
       expect(await asOwner((tx) => adminDictUsage(tx, 'organs'))).toEqual(new Map());
       const [row] = await asOwner((tx) =>

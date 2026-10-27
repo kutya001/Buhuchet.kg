@@ -591,6 +591,8 @@ export function ValueDialog({
       open={open}
       onClose={onClose}
       kind="form"
+      // Окна режима и основания — шире (прототип regimeDlg, baseDlg: `size: 'mid'`).
+      {...(dict === 'regimes' || dict === 'bases' ? { size: 'mid' as const } : {})}
       title={
         dict === 'phones'
           ? t(current ? 'pdicts.phone.title' : 'pdicts.phone.title_new')
