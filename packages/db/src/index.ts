@@ -10,6 +10,7 @@ export * from './files';
 export * from './auth';
 export * from './telegram';
 export * from './staff';
+export * from './contractors';
 export * from './roles';
 export * from './org';
 export * from './l10n';
