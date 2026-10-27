@@ -1,8 +1,11 @@
 import { createRoute, type RouteHandler } from '@hono/zod-openapi';
 import {
   listAuthorities,
+  listDueChangeReasons,
+  listOwnershipForms,
   listReportBases,
   listReportTypes,
+  listSingleTaxRates,
   listTaxBenefits,
   listTaxOffices,
   listTaxRegimes,
@@ -14,9 +17,12 @@ import {
   Authorities,
   CalendarQuery,
   DictListQuery,
+  DueChangeReasons,
+  OwnershipForms,
   ProductionCalendarYear,
   ReportBases,
   ReportTypes,
+  SingleTaxRates,
   TaxBenefits,
   TaxOffices,
   TaxRegimes,
@@ -26,7 +32,7 @@ import type { AppEnv } from '../../env';
 import { asSessionUser } from '../../middleware/access';
 
 /*
- * Справочники платформы для форм и списков (задача #20): читает любой вошедший — сотрудник любой
+ * Справочники платформы для форм и списков (задачи #20, 2.01): читает любой вошедший — сотрудник любой
  * организации и администратор платформы; меняет только Админка (поток Д). Без `all=true` — только
  * действующие значения: отключённое не предлагается в новых записях (ТЗ «Справочники платформы»).
  */
@@ -146,6 +152,69 @@ export function authoritiesHandler(deps: ApiDeps): RouteHandler<typeof authoriti
     const options = allOf(c.req.valid('query'));
     const items = await asSessionUser(deps, c.get('session')!, (tx) =>
       listAuthorities(tx, options),
+    );
+    return c.json({ items }, 200);
+  };
+}
+
+export const ownershipFormsRoute = createRoute({
+  method: 'get',
+  path: '/ownership-forms',
+  tags: ['platform-dicts'],
+  summary: 'Справочник платформы «Формы собственности»',
+  request: { query: DictListQuery },
+  responses: listResponses(OwnershipForms, 'Формы собственности по порядку справочника'),
+});
+
+export function ownershipFormsHandler(
+  deps: ApiDeps,
+): RouteHandler<typeof ownershipFormsRoute, AppEnv> {
+  return async (c) => {
+    const options = allOf(c.req.valid('query'));
+    const items = await asSessionUser(deps, c.get('session')!, (tx) =>
+      listOwnershipForms(tx, options),
+    );
+    return c.json({ items }, 200);
+  };
+}
+
+export const singleTaxRatesRoute = createRoute({
+  method: 'get',
+  path: '/single-tax-rates',
+  tags: ['platform-dicts'],
+  summary: 'Справочник платформы «Ставки единого налога» (ст. 423 НК КР)',
+  request: { query: DictListQuery },
+  responses: listResponses(SingleTaxRates, 'Строки ставок ЕН по порядку справочника'),
+});
+
+export function singleTaxRatesHandler(
+  deps: ApiDeps,
+): RouteHandler<typeof singleTaxRatesRoute, AppEnv> {
+  return async (c) => {
+    const options = allOf(c.req.valid('query'));
+    const items = await asSessionUser(deps, c.get('session')!, (tx) =>
+      listSingleTaxRates(tx, options),
+    );
+    return c.json({ items }, 200);
+  };
+}
+
+export const dueChangeReasonsRoute = createRoute({
+  method: 'get',
+  path: '/due-change-reasons',
+  tags: ['platform-dicts'],
+  summary: 'Справочник платформы «Причины изменения срока отчёта»',
+  request: { query: DictListQuery },
+  responses: listResponses(DueChangeReasons, 'Причины по порядку справочника'),
+});
+
+export function dueChangeReasonsHandler(
+  deps: ApiDeps,
+): RouteHandler<typeof dueChangeReasonsRoute, AppEnv> {
+  return async (c) => {
+    const options = allOf(c.req.valid('query'));
+    const items = await asSessionUser(deps, c.get('session')!, (tx) =>
+      listDueChangeReasons(tx, options),
     );
     return c.json({ items }, 200);
   };

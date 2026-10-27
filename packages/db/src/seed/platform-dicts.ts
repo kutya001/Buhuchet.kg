@@ -1,6 +1,7 @@
 import {
   BIZ_SIZES,
   calendarEntryProblem,
+  DECLARATION_FOR,
   calendarKindOf,
   LAST_DAY_OF_MONTH,
   PAYER_KINDS,
@@ -25,11 +26,14 @@ import { z } from 'zod';
 import type { Db } from '../client';
 import {
   authorities,
+  dueChangeReasons,
+  ownershipForms,
   productionCalendar,
   reportBases,
   reportTypeBases,
   reportTypeRegimes,
   reportTypes,
+  singleTaxRates,
   taxBenefitDueRules,
   taxBenefitOffices,
   taxBenefitReportTypes,
@@ -50,6 +54,7 @@ import type { SeedOptions, SeedReport } from './platform';
 /** Разделы refDB.json, которые лежат в своих таблицах и в `platform_reference` не копируются. */
 export const TABLE_SECTIONS = [
   'reportTypes',
+  'enRates',
   'holidays',
   'workingSaturdays',
   // Копии разделов, у которых таблицы уже были: ui_texts, permissions, role_templates.
@@ -59,7 +64,15 @@ export const TABLE_SECTIONS = [
 ] as const;
 
 /** Справочники раздела `dictionaries`, которые лежат в своих таблицах. */
-export const TABLE_DICTIONARIES = ['organs', 'regimes', 'bases', 'ugns', 'benefits'] as const;
+export const TABLE_DICTIONARIES = [
+  'organs',
+  'regimes',
+  'bases',
+  'ugns',
+  'benefits',
+  'forms',
+  'reasons',
+] as const;
 
 // Служебные отметки прототипа «кто и когда создал и изменил» в базу не переносятся: история продукта —
 // audit_log с первой правки в Админке.
@@ -281,10 +294,49 @@ const ReportTypeSchema = z
   })
   .strict();
 
+const FormSchema = z
+  .object({
+    code: z.string().min(1),
+    name: z.string().min(1),
+    full: z.string().default(''),
+    short: z.string().default(''),
+    end: z.enum(DECLARATION_FOR),
+    note: z.string().default(''),
+    active: z.boolean(),
+    ...audit,
+  })
+  .strict();
+
+const EnRateSchema = z
+  .object({
+    code: z.string().min(1),
+    activity: z.string().min(1),
+    rate: z.string().min(1),
+    rateCashless: z.string().default(''),
+    rateCash: z.string().default(''),
+    cond: z.string().default(''),
+    art: z.string().default(''),
+    explain: z.string().default(''),
+    gked: GkedRuleSchema.optional(),
+    addTo: Codes.default([]),
+    active: z.boolean(),
+    ...audit,
+  })
+  .strict();
+
+const ReasonSchema = z
+  .object({
+    code: z.string().min(1),
+    name: z.string().min(1),
+    active: z.boolean(),
+    ...audit,
+  })
+  .strict();
+
 const Dictionary = <T extends z.ZodType>(item: T) =>
   z.object({ title: z.string(), items: z.array(item) }).strict();
 
-/** Раздел `platform_reference`, на коды которого ссылаются справочники (ставки ЕН, формы, налоги). */
+/** Раздел `platform_reference`, на коды которого ссылаются справочники (налоги и платежи). */
 const CodedSection = z.array(z.object({ code: z.string() }));
 
 const RefSections = z.object({
@@ -294,10 +346,11 @@ const RefSections = z.object({
     bases: Dictionary(BaseSchema),
     ugns: Dictionary(UgnsSchema),
     benefits: Dictionary(BenefitSchema),
-    forms: z.object({ items: CodedSection }),
+    forms: Dictionary(FormSchema),
+    reasons: Dictionary(ReasonSchema),
   }),
   reportTypes: z.array(ReportTypeSchema),
-  enRates: CodedSection,
+  enRates: z.array(EnRateSchema),
   taxes: CodedSection,
   holidays: z.record(z.string(), z.string().min(1)),
   workingSaturdays: z.array(z.iso.date()),
@@ -311,6 +364,9 @@ export type PlatformDictsReport = Record<
   | 'taxOffices'
   | 'reportTypes'
   | 'taxBenefits'
+  | 'ownershipForms'
+  | 'singleTaxRates'
+  | 'dueChangeReasons'
   | 'productionCalendar',
   SeedReport
 >;
@@ -359,6 +415,18 @@ export function platformDictRows(refDB: unknown) {
   unique(
     ref.reportTypes.map((x) => x.id),
     'reportTypes',
+  );
+  unique(
+    d.forms.items.map((x) => x.code),
+    'forms',
+  );
+  unique(
+    ref.enRates.map((x) => x.code),
+    'enRates',
+  );
+  unique(
+    d.reasons.items.map((x) => x.code),
+    'reasons',
   );
 
   const authorityByName = new Map(d.organs.items.map((o) => [o.name, o.code]));
@@ -563,6 +631,46 @@ export function platformDictRows(refDB: unknown) {
     })),
   );
 
+  const formRows = d.forms.items.map((f, i) => ({
+    code: f.code,
+    name: f.name,
+    fullName: f.full,
+    shortName: f.short,
+    declarationFor: f.end,
+    note: f.note,
+    active: f.active,
+    sortOrder: i + 1,
+  }));
+
+  const enRateRows = ref.enRates.map((r, i) => {
+    for (const c of r.addTo) {
+      if (c === r.code)
+        throw new Error(`refDB.json: enRates.${r.code}.addTo — ставка у самой себя`);
+      lookup(enRateCodes, c, `enRates.${r.code}.addTo`);
+    }
+    return {
+      code: r.code,
+      activity: r.activity,
+      rate: r.rate,
+      rateCashless: r.rateCashless,
+      rateCash: r.rateCash,
+      conditions: r.cond,
+      article: r.art,
+      explanation: r.explain,
+      gked: r.gked ?? null,
+      addsTo: r.addTo,
+      active: r.active,
+      sortOrder: i + 1,
+    };
+  });
+
+  const reasonRows = d.reasons.items.map((r, i) => ({
+    code: r.code,
+    name: r.name,
+    active: r.active,
+    sortOrder: i + 1,
+  }));
+
   const workingSaturdays = new Set(ref.workingSaturdays);
   const calendarRows: CalendarEntry[] = [
     ...Object.entries(ref.holidays).map(([day, name]) => ({
@@ -591,6 +699,9 @@ export function platformDictRows(refDB: unknown) {
     taxBenefitReportTypes: benefitTypeRows,
     taxBenefitOffices: benefitOfficeRows,
     taxBenefitDueRules: benefitDueRows,
+    ownershipForms: formRows,
+    singleTaxRates: enRateRows,
+    dueChangeReasons: reasonRows,
     productionCalendar: calendarRows,
   };
 }
@@ -728,6 +839,27 @@ export async function seedPlatformDicts(
     rows.taxBenefitDueRules,
     benefit.seeded,
   );
+  const form = await upsertDict(
+    db,
+    ownershipForms,
+    ownershipForms.code,
+    rows.ownershipForms,
+    update,
+  );
+  const enRate = await upsertDict(
+    db,
+    singleTaxRates,
+    singleTaxRates.code,
+    rows.singleTaxRates,
+    update,
+  );
+  const reason = await upsertDict(
+    db,
+    dueChangeReasons,
+    dueChangeReasons.code,
+    rows.dueChangeReasons,
+    update,
+  );
   const calendar = await upsertDict(
     db,
     productionCalendar,
@@ -761,6 +893,9 @@ export async function seedPlatformDicts(
     taxOffices: office.report,
     reportTypes: type.report,
     taxBenefits: benefit.report,
+    ownershipForms: form.report,
+    singleTaxRates: enRate.report,
+    dueChangeReasons: reason.report,
     productionCalendar: calendar.report,
   };
 }

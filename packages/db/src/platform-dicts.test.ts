@@ -2,8 +2,11 @@ import { eq, getTableName, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   listAuthorities,
+  listDueChangeReasons,
+  listOwnershipForms,
   listReportBases,
   listReportTypes,
+  listSingleTaxRates,
   listTaxBenefits,
   listTaxOffices,
   listTaxRegimes,
@@ -11,11 +14,14 @@ import {
 } from './platform-dicts';
 import {
   authorities,
+  dueChangeReasons,
+  ownershipForms,
   productionCalendar,
   reportBases,
   reportTypeBases,
   reportTypeRegimes,
   reportTypes,
+  singleTaxRates,
   taxBenefitDueRules,
   taxBenefitOffices,
   taxBenefitReportTypes,
@@ -40,8 +46,12 @@ const violates = (constraint: string) =>
 
 type Item = Record<string, unknown> & { active: boolean };
 interface RefDB {
-  dictionaries: Record<'organs' | 'regimes' | 'bases' | 'ugns' | 'benefits', { items: Item[] }>;
+  dictionaries: Record<
+    'organs' | 'regimes' | 'bases' | 'ugns' | 'benefits' | 'forms' | 'reasons',
+    { items: Item[] }
+  >;
   reportTypes: Item[];
+  enRates: Item[];
   holidays: Record<string, string>;
   workingSaturdays: string[];
 }
@@ -66,6 +76,9 @@ describe('справочники платформы из refDB.json: прове�
     expect(rows.taxOffices).toHaveLength(ref.dictionaries.ugns.items.length);
     expect(rows.taxBenefits).toHaveLength(ref.dictionaries.benefits.items.length);
     expect(rows.reportTypes).toHaveLength(ref.reportTypes.length);
+    expect(rows.ownershipForms).toHaveLength(ref.dictionaries.forms.items.length);
+    expect(rows.singleTaxRates).toHaveLength(ref.enRates.length);
+    expect(rows.dueChangeReasons).toHaveLength(ref.dictionaries.reasons.items.length);
     expect(rows.productionCalendar).toHaveLength(
       Object.keys(ref.holidays).length + ref.workingSaturdays.length,
     );
@@ -90,7 +103,7 @@ describe('справочники платформы из refDB.json: прове�
     expect(() => platformDictRows(office)).toThrow(/ЛЬГ-30\.suggest\.ugns/);
   });
 
-  it('коды ставок ЕН, форм собственности и налогов из мелких разделов тоже проверяются', () => {
+  it('коды ставок ЕН, форм собственности и налогов в ссылках тоже проверяются', () => {
     const rate = clone(ref);
     rate.reportTypes.find((x) => (x.enRatesNot as string[] | undefined)?.length)!.enRatesNot = [
       'ЕНС-99',
@@ -105,6 +118,13 @@ describe('справочники платформы из refDB.json: прове�
     const tax = clone(ref);
     tax.dictionaries.benefits.items.find((b) => b.tax)!.tax = 'ПЛТ-99';
     expect(() => platformDictRows(tax)).toThrow(/\.tax — «ПЛТ-99»/);
+    // «Добавляется к ставкам» — только к существующим строкам ЕНС и не к самой себе.
+    const addTo = clone(ref);
+    addTo.enRates.find((r) => r.code === 'ЕНС-16')!.addTo = ['ЕНС-01', 'ЕНС-99'];
+    expect(() => platformDictRows(addTo)).toThrow(/enRates\.ЕНС-16\.addTo — «ЕНС-99»/);
+    const self = clone(ref);
+    self.enRates.find((r) => r.code === 'ЕНС-16')!.addTo = ['ЕНС-16'];
+    expect(() => platformDictRows(self)).toThrow(/ЕНС-16\.addTo — ставка у самой себя/);
   });
 
   it('повторный код и неизвестное поле тоже останавливают: данные не теряются молча', () => {
@@ -114,6 +134,18 @@ describe('справочники платформы из refDB.json: прове�
     const field = clone(ref);
     field.dictionaries.regimes.items[0]!.newField = 'x';
     expect(() => platformDictRows(field)).toThrow(/newField/);
+    const formField = clone(ref);
+    formField.dictionaries.forms.items[0]!.newField = 'x';
+    expect(() => platformDictRows(formField)).toThrow(/newField/);
+    const rateField = clone(ref);
+    rateField.enRates[0]!.sumLines = ['Выручка'];
+    expect(() => platformDictRows(rateField)).toThrow(/sumLines/);
+    const reasonTwice = clone(ref);
+    reasonTwice.dictionaries.reasons.items.push(clone(reasonTwice.dictionaries.reasons.items[0]!));
+    expect(() => platformDictRows(reasonTwice)).toThrow(/reasons — код «ПРЧ-001» повторяется/);
+    const declaration = clone(ref);
+    declaration.dictionaries.forms.items[0]!.end = 'all';
+    expect(() => platformDictRows(declaration)).toThrow(/end/);
     const calendar = clone(ref);
     calendar.workingSaturdays.push('2026-03-13');
     expect(() => platformDictRows(calendar)).toThrow(/рабочая суббота — не суббота/);
@@ -143,6 +175,9 @@ describe.skipIf(!databaseAvailable())('справочники платформы
       taxOffices: d.ugns.items.length,
       reportTypes: ref.reportTypes.length,
       taxBenefits: d.benefits.items.length,
+      ownershipForms: d.forms.items.length,
+      singleTaxRates: ref.enRates.length,
+      dueChangeReasons: d.reasons.items.length,
       productionCalendar: Object.keys(ref.holidays).length + ref.workingSaturdays.length,
     };
     for (const [table, n] of Object.entries(expected))
@@ -158,6 +193,9 @@ describe.skipIf(!databaseAvailable())('справочники платформы
     expect(await db.$count(taxOffices)).toBe(expected.taxOffices);
     expect(await db.$count(reportTypes)).toBe(expected.reportTypes);
     expect(await db.$count(taxBenefits)).toBe(expected.taxBenefits);
+    expect(await db.$count(ownershipForms)).toBe(expected.ownershipForms);
+    expect(await db.$count(singleTaxRates)).toBe(expected.singleTaxRates);
+    expect(await db.$count(dueChangeReasons)).toBe(expected.dueChangeReasons);
     expect(await db.$count(productionCalendar)).toBe(expected.productionCalendar);
     // Связи — столько же, сколько ссылок в refDB.json.
     const count = (f: (x: Item) => unknown[]) =>
@@ -185,6 +223,9 @@ describe.skipIf(!databaseAvailable())('справочники платформы
       [listAuthorities, d.organs.items, 'code'],
       [listTaxBenefits, d.benefits.items, 'code'],
       [listReportTypes, ref.reportTypes, 'id'],
+      [listOwnershipForms, d.forms.items, 'code'],
+      [listSingleTaxRates, ref.enRates, 'code'],
+      [listDueChangeReasons, d.reasons.items, 'code'],
     ] as const;
     for (const [list, items, key] of cases) {
       const active = await list(t.app.db);
@@ -203,6 +244,75 @@ describe.skipIf(!databaseAvailable())('справочники платформы
     expect(
       (await listReportTypes(t.app.db, { all: true })).find((x) => x.code === 't1q'),
     ).toMatchObject({ active: false });
+  });
+
+  it('отключённые форма собственности, ставка ЕН и причина изменения срока не приходят для новых записей', async () => {
+    // В refDB.json отключённых среди них нет — отключаем, как это сделает Админка.
+    const off = [
+      [ownershipForms, ownershipForms.code, 'ФС-23', listOwnershipForms],
+      [singleTaxRates, singleTaxRates.code, 'ЕНС-17', listSingleTaxRates],
+      [dueChangeReasons, dueChangeReasons.code, 'ПРЧ-003', listDueChangeReasons],
+    ] as const;
+    for (const [table, key, code] of off)
+      await t.admin.db.update(table).set({ active: false }).where(eq(key, code));
+    try {
+      for (const [, , code, list] of off) {
+        const active = await list(t.app.db);
+        const all = await list(t.app.db, { all: true });
+        expect(active.map((x) => x.code)).not.toContain(code);
+        expect(all.find((x) => x.code === code)).toMatchObject({ active: false });
+        expect(all.length - active.length, code).toBe(1);
+      }
+    } finally {
+      for (const [table, key, code] of off)
+        await t.admin.db.update(table).set({ active: true }).where(eq(key, code));
+    }
+  });
+
+  it('формы собственности, ставки ЕН и причины изменения срока — те же значения, что в refDB.json', async () => {
+    const forms = await listOwnershipForms(t.app.db, { all: true });
+    expect(
+      forms.map((f) => ({
+        name: f.name,
+        active: f.active,
+        code: f.code,
+        full: f.fullName,
+        short: f.shortName,
+        end: f.declarationFor,
+        ...(f.note && { note: f.note }),
+      })),
+    ).toEqual(ref.dictionaries.forms.items.map((x) => without(x, AUDIT)));
+    expect(forms.find((f) => f.code === 'ФС-02')).toMatchObject({
+      name: 'ИП',
+      declarationFor: 'ip',
+    });
+
+    const rates = await listSingleTaxRates(t.app.db, { all: true });
+    expect(
+      rates.map((r) => ({
+        code: r.code,
+        activity: r.activity,
+        rate: r.rate,
+        rateCashless: r.rateCashless,
+        rateCash: r.rateCash,
+        cond: r.conditions,
+        art: r.article,
+        active: r.active,
+        ...(r.gked && { gked: r.gked }),
+        explain: r.explanation,
+        ...(r.addsTo.length && { addTo: r.addsTo }),
+      })),
+    ).toEqual(ref.enRates.map((x) => without(x, AUDIT)));
+    // Безналичная и наличная ставки строки хранятся вместе; ЕНС-16 добавляется к другим строкам.
+    expect(rates.find((r) => r.code === 'ЕНС-04')).toMatchObject({
+      rateCashless: '4 %',
+      rateCash: '6 %',
+      addsTo: [],
+    });
+    expect(rates.find((r) => r.code === 'ЕНС-16')!.addsTo).toContain('ЕНС-01');
+
+    const reasons = await listDueChangeReasons(t.app.db, { all: true });
+    expect(reasons).toEqual(ref.dictionaries.reasons.items.map((x) => without(x, AUDIT)));
   });
 
   it('вид отчёта в базе — те же значения, что в refDB.json (ссылки — кодами)', async () => {
@@ -450,6 +560,9 @@ describe.skipIf(!databaseAvailable())('справочники платформы
       taxBenefitReportTypes,
       taxBenefitOffices,
       taxBenefitDueRules,
+      ownershipForms,
+      singleTaxRates,
+      dueChangeReasons,
       productionCalendar,
     ].map((table) => getTableName(table));
     const rights = await app.execute<{ name: string; read: boolean; write: boolean }>(sql`
@@ -476,6 +589,13 @@ describe.skipIf(!databaseAvailable())('справочники платформы
       }),
     ).rejects.toThrow(permissionDenied);
     await expect(app.delete(reportTypeRegimes)).rejects.toThrow(permissionDenied);
+    await expect(
+      app.update(ownershipForms).set({ active: false }).where(eq(ownershipForms.code, 'ФС-01')),
+    ).rejects.toThrow(permissionDenied);
+    await expect(
+      app.insert(dueChangeReasons).values({ code: 'ПРЧ-999', name: 'Взлом', sortOrder: 99 }),
+    ).rejects.toThrow(permissionDenied);
+    await expect(app.delete(singleTaxRates)).rejects.toThrow(permissionDenied);
     // Режим, орган и основание, на которые ссылаются виды отчётов, не удаляются (внешние ключи).
     await expect(
       t.admin.db.delete(taxRegimes).where(eq(taxRegimes.code, 'РЕЖ-01')),
@@ -496,5 +616,17 @@ describe.skipIf(!databaseAvailable())('справочники платформы
     await expect(
       t.admin.db.insert(productionCalendar).values({ day: '03-14', kind: 'workday' }),
     ).rejects.toThrow(violates('production_calendar_day_check'));
+    // «Для ЕНД» — организация или ИП; строка ЕНС не добавляется к самой себе.
+    await expect(
+      t.admin.db.execute(
+        sql`update ownership_forms set declaration_for = 'all' where code = 'ФС-01'`,
+      ),
+    ).rejects.toThrow(violates('ownership_forms_declaration_for_check'));
+    await expect(
+      t.admin.db
+        .update(singleTaxRates)
+        .set({ addsTo: ['ЕНС-16'] })
+        .where(eq(singleTaxRates.code, 'ЕНС-16')),
+    ).rejects.toThrow(violates('single_tax_rates_adds_to_check'));
   });
 });

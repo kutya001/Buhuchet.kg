@@ -65,12 +65,7 @@ describe.skipIf(!databaseAvailable())('начальное наполнение �
       .select()
       .from(platformReference)
       .where(sql`${platformReference.key} = 'dictionaries'`);
-    expect(Object.keys(dictionaries!.payload as object).sort()).toEqual([
-      'banks',
-      'cats',
-      'forms',
-      'reasons',
-    ]);
+    expect(Object.keys(dictionaries!.payload as object).sort()).toEqual(['banks', 'cats']);
     expect(await t.admin.db.$count(reportTypes)).toBe((refDB.reportTypes as unknown[]).length);
     expect(
       await t.admin.db.$count(gkedItems, sql`${gkedItems.level} = 'subclass'`),
@@ -114,6 +109,36 @@ describe.skipIf(!databaseAvailable())('начальное наполнение �
     expect(
       await t.admin.db.$count(platformReference, sql`${platformReference.key} = 'reportTypes'`),
     ).toBe(0);
+  });
+
+  it('с --update из наполнения этапа 1 уходят копии ставок ЕН, форм собственности и причин (задача 2.01)', async () => {
+    const refDB = await readSpecJson<Record<string, unknown>>('data/refDB.json');
+    const dicts = refDB.dictionaries as Record<string, unknown>;
+    // Как на стенде до 2.01: ставки ЕН — своим разделом, формы и причины — внутри `dictionaries`.
+    await t.admin.db
+      .insert(platformReference)
+      .values({ key: 'enRates', payload: refDB.enRates, checksum: 'x', source: 'этап 1' });
+    await t.admin.db
+      .update(platformReference)
+      .set({
+        payload: {
+          banks: dicts.banks,
+          cats: dicts.cats,
+          forms: dicts.forms,
+          reasons: dicts.reasons,
+        },
+        checksum: 'x',
+      })
+      .where(sql`${platformReference.key} = 'dictionaries'`);
+    const report = await seedPlatformReference(t.admin.db, refDB, 'test', { update: true });
+    expect(report.removed).toBe(1);
+    const keys = (await t.admin.db.select().from(platformReference)).map((r) => r.key);
+    expect(keys).not.toContain('enRates');
+    const [dictionaries] = await t.admin.db
+      .select()
+      .from(platformReference)
+      .where(sql`${platformReference.key} = 'dictionaries'`);
+    expect(Object.keys(dictionaries!.payload as object).sort()).toEqual(['banks', 'cats']);
   });
 
   it('справочники платформы читаются ролью приложения, демо-организация — только в своём контексте', async () => {
