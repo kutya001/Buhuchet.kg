@@ -8,7 +8,7 @@ import { platformAuditLog } from './schema';
 export type PlatformHistoryEntry = Omit<HistoryEntry, 'contractorId'>;
 
 /**
- * Записать в историю общих данных платформы (`platform_audit_log`, миграция 0036) в текущей
+ * Записать в историю общих данных платформы (`platform_audit_log`, миграция 0038) в текущей
  * транзакции: если правка откатится, исчезнет и запись. Автор и время — из контекста
  * (`withUserContext` администратора платформы); другому пользователю база запись не примет.
  */
