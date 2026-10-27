@@ -1,0 +1,6136 @@
+{
+  "source": "spec/prototype/src/js/core/socfund.js",
+  "today": "2026-10-27",
+  "dict": {
+    "tariffs": [
+      {
+        "id": "spino",
+        "name": "Тариф для субъектов предпринимательства и НКО (СПиНО)",
+        "short": "СПиНО",
+        "total": "12,25 %",
+        "statuses": ["ЛЬГ-29"],
+        "parts": [
+          { "payer": "Работодатель", "rate": "2,25 %" },
+          { "payer": "Работник (удерживается из зарплаты)", "rate": "10 %" }
+        ],
+        "cap": { "base": "720 940 сом", "amount": "88 315,15 сом", "since": "01.01.2026" },
+        "verify": false
+      },
+      {
+        "id": "general",
+        "name": "Общий тариф (для исключений и без подтверждения 12,25 %)",
+        "short": "Базовый тариф",
+        "total": "27,25 %",
+        "statuses": [],
+        "parts": [
+          { "payer": "Работодатель", "rate": "17,25 %" },
+          { "payer": "Работник (удерживается из зарплаты)", "rate": "10 %" }
+        ],
+        "cap": { "base": "720 940 сом", "amount": "196 456,15 сом", "since": "01.01.2026" },
+        "verify": true
+      },
+      {
+        "id": "pvtpki",
+        "name": "Резиденты ПВТ и ПКИ без наёмных работников",
+        "short": "Тариф ПВТ / ПКИ",
+        "total": "12 % от среднемесячной зарплаты",
+        "statuses": ["ЛЬГ-01", "ЛЬГ-02"],
+        "parts": [{ "payer": "Сам резидент", "rate": "12 % от СМЗ" }],
+        "cap": null,
+        "verify": true
+      }
+    ],
+    "status": {
+      "code": "ЛЬГ-29",
+      "name": "Тариф Соцфонда 12,25 % (СПиНО)",
+      "ex": [
+        "64.11.0",
+        "64.19.1",
+        "35.11",
+        "35.12",
+        "35.13",
+        "35.14",
+        "35.21",
+        "35.22",
+        "35.23",
+        "35.30",
+        "11.01.0",
+        "11.02.0",
+        "11.03.0",
+        "11.04.0",
+        "11.05.0",
+        "12.00.0",
+        "61.20.0"
+      ],
+      "warn": [
+        "84",
+        "64.19.2",
+        "64.19.9",
+        "64.92.0",
+        "64.99.0",
+        "05",
+        "06",
+        "07",
+        "08",
+        "09",
+        "19.20.1",
+        "46.34",
+        "46.35",
+        "46.71",
+        "61.10.0",
+        "61.30.0",
+        "61.90.0"
+      ],
+      "warnForms": ["ФС-12", "ФС-13", "ФС-14"]
+    },
+    "statusNames": [
+      ["ЛЬГ-01", "Резидент ПКИ"],
+      ["ЛЬГ-02", "Резидент ПВТ"]
+    ],
+    "exceptions": [
+      { "text": "организации на бюджетном финансировании", "codes": ["84"] },
+      {
+        "text": "коммерческие банки и специализированные финансово-кредитные учреждения",
+        "codes": ["64.11.0", "64.19.1", "64.19.2", "64.92.0", "64.99.0"]
+      },
+      {
+        "text": "добыча по лицензиям на недра общегосударственного значения",
+        "codes": ["05", "06", "07", "08", "09"]
+      },
+      {
+        "text": "поставщики электрической, тепловой энергии и газа",
+        "codes": ["35.11", "35.12", "35.13", "35.14", "35.21", "35.22", "35.23", "35.30"]
+      },
+      {
+        "text": "производители и импортёры алкоголя, табака и ГСМ, кроме переработчиков нефти и природного газа",
+        "codes": [
+          "11.01.0",
+          "11.02.0",
+          "11.03.0",
+          "11.04.0",
+          "11.05.0",
+          "12.00.0",
+          "19.20.1",
+          "46.34",
+          "46.35",
+          "46.71"
+        ]
+      },
+      { "text": "операторы сотовой связи", "codes": ["61.20.0"] },
+      { "text": "интернет-провайдеры", "codes": ["61.10.0", "61.30.0", "61.90.0"] }
+    ],
+    "gkedNames": [
+      ["64.11.0", "Деятельность центральных банков"],
+      ["64.19.1", "Деятельность банков"],
+      ["35.11", "Производство электроэнергии"],
+      ["35.12", "Передача электроэнергии"],
+      ["35.13", "Распределение электроэнергии"],
+      ["35.14", "Продажа электроэнергии"],
+      ["35.21", "Производство газообразного топлива"],
+      ["35.22", "Распределение газообразного топлива через системы газоснабжения"],
+      ["35.23", "Продажа газообразного топлива, поступающего через системы газоснабжения"],
+      ["35.30", "Обеспечение (снабжение) паром и кондиционированным воздухом"],
+      ["11.01.0", "Очистка ректификация и купажирование спиртов"],
+      ["11.02.0", "Производство вина из винограда"],
+      ["11.03.0", "Производство сидра и прочих плодово-ягодных вин"],
+      ["11.04.0", "Производство прочих недистиллированных напитков из сброженного материала"],
+      ["11.05.0", "Производство пива"],
+      ["12.00.0", "Производство табачных изделий"],
+      ["61.20.0", "Предоставление услуг беспроводной связи"],
+      ["84", "Государственное управление и оборона; обязательное социальное обеспечение"],
+      ["64.19.2", "Денежное посредничество прочих финансовых учреждений"],
+      ["64.19.9", "Прочее денежное посредничество"],
+      ["64.92.0", "Предоставление кредита"],
+      ["64.99.0", "Прочее финансовое посредничество, не включенное в другие группировки"],
+      ["05", "Добыча каменного угля и бурого угля (лигнита)"],
+      ["06", "Добыча сырой нефти и природного газа"],
+      ["07", "Добыча металлических руд"],
+      ["08", "Добыча прочих полезных ископаемых"],
+      ["09", "Предоставление услуг по добыче полезных ископаемых"],
+      ["19.20.1", "Производство очищенных нефтепродуктов, в том числе брикетов из нефтепродуктов"],
+      ["46.34", "Оптовая торговля алкогольными и другими напитками"],
+      ["46.35", "Оптовая торговля табачными изделиями"],
+      ["46.71", "Оптовая торговля топливом"],
+      ["61.10.0", "Предоставление услуг проводной связи"],
+      ["61.30.0", "Предоставление услуг спутниковой связи"],
+      ["61.90.0", "Предоставление прочих телекоммуникационных услуг"]
+    ],
+    "index": [
+      { "code": "46.34.0", "level": "subclass", "parent": "46.34", "active": true },
+      { "code": "46.34", "level": "class", "parent": "46.3", "active": true },
+      { "code": "46.3", "level": "group", "parent": "46", "active": true },
+      { "code": "46", "level": "division", "parent": "G", "active": true },
+      { "code": "G", "level": "section", "parent": null, "active": true },
+      { "code": "41.20.0", "level": "subclass", "parent": "41.20", "active": true },
+      { "code": "41.20", "level": "class", "parent": "41.2", "active": true },
+      { "code": "41.2", "level": "group", "parent": "41", "active": true },
+      { "code": "41", "level": "division", "parent": "F", "active": true },
+      { "code": "F", "level": "section", "parent": null, "active": true },
+      { "code": "47.11.0", "level": "subclass", "parent": "47.11", "active": true },
+      { "code": "47.11", "level": "class", "parent": "47.1", "active": true },
+      { "code": "47.1", "level": "group", "parent": "47", "active": true },
+      { "code": "47", "level": "division", "parent": "G", "active": true },
+      { "code": "49.41.0", "level": "subclass", "parent": "49.41", "active": true },
+      { "code": "49.41", "level": "class", "parent": "49.4", "active": true },
+      { "code": "49.4", "level": "group", "parent": "49", "active": true },
+      { "code": "49", "level": "division", "parent": "H", "active": true },
+      { "code": "H", "level": "section", "parent": null, "active": true },
+      { "code": "79.12.0", "level": "subclass", "parent": "79.12", "active": true },
+      { "code": "79.12", "level": "class", "parent": "79.1", "active": true },
+      { "code": "79.1", "level": "group", "parent": "79", "active": true },
+      { "code": "79", "level": "division", "parent": "N", "active": true },
+      { "code": "N", "level": "section", "parent": null, "active": true },
+      { "code": "10.39.0", "level": "subclass", "parent": "10.39", "active": true },
+      { "code": "10.39", "level": "class", "parent": "10.3", "active": true },
+      { "code": "10.3", "level": "group", "parent": "10", "active": true },
+      { "code": "10", "level": "division", "parent": "CA", "active": true },
+      { "code": "CA", "level": "subsection", "parent": "C", "active": true },
+      { "code": "C", "level": "section", "parent": null, "active": true },
+      { "code": "46.46.0", "level": "subclass", "parent": "46.46", "active": true },
+      { "code": "46.46", "level": "class", "parent": "46.4", "active": true },
+      { "code": "46.4", "level": "group", "parent": "46", "active": true },
+      { "code": "47.89.0", "level": "subclass", "parent": "47.89", "active": true },
+      { "code": "47.89", "level": "class", "parent": "47.8", "active": true },
+      { "code": "47.8", "level": "group", "parent": "47", "active": true },
+      { "code": "14.13.0", "level": "subclass", "parent": "14.13", "active": true },
+      { "code": "14.13", "level": "class", "parent": "14.1", "active": true },
+      { "code": "14.1", "level": "group", "parent": "14", "active": true },
+      { "code": "14", "level": "division", "parent": "CB", "active": true },
+      { "code": "CB", "level": "subsection", "parent": "C", "active": true },
+      { "code": "86.21.0", "level": "subclass", "parent": "86.21", "active": true },
+      { "code": "86.21", "level": "class", "parent": "86.2", "active": true },
+      { "code": "86.2", "level": "group", "parent": "86", "active": true },
+      { "code": "86", "level": "division", "parent": "QA", "active": true },
+      { "code": "QA", "level": "subsection", "parent": "Q", "active": true },
+      { "code": "Q", "level": "section", "parent": null, "active": true },
+      { "code": "62.01.0", "level": "subclass", "parent": "62.01", "active": true },
+      { "code": "62.01", "level": "class", "parent": "62.0", "active": true },
+      { "code": "62.0", "level": "group", "parent": "62", "active": true },
+      { "code": "62", "level": "division", "parent": "JC", "active": true },
+      { "code": "JC", "level": "subsection", "parent": "J", "active": true },
+      { "code": "J", "level": "section", "parent": null, "active": true },
+      { "code": "01.41.0", "level": "subclass", "parent": "01.41", "active": true },
+      { "code": "01.41", "level": "class", "parent": "01.4", "active": true },
+      { "code": "01.4", "level": "group", "parent": "01", "active": true },
+      { "code": "01", "level": "division", "parent": "A", "active": true },
+      { "code": "A", "level": "section", "parent": null, "active": true },
+      { "code": "45.20.1", "level": "subclass", "parent": "45.20", "active": true },
+      { "code": "45.20", "level": "class", "parent": "45.2", "active": true },
+      { "code": "45.2", "level": "group", "parent": "45", "active": true },
+      { "code": "45", "level": "division", "parent": "G", "active": true },
+      { "code": "45.11.1", "level": "subclass", "parent": "45.11", "active": true },
+      { "code": "45.11", "level": "class", "parent": "45.1", "active": true },
+      { "code": "45.1", "level": "group", "parent": "45", "active": true },
+      { "code": "01.49.0", "level": "subclass", "parent": "01.49", "active": true },
+      { "code": "01.49", "level": "class", "parent": "01.4", "active": true },
+      { "code": "13.10.1", "level": "subclass", "parent": "13.10", "active": true },
+      { "code": "13.10", "level": "class", "parent": "13.1", "active": true },
+      { "code": "13.1", "level": "group", "parent": "13", "active": true },
+      { "code": "13", "level": "division", "parent": "CB", "active": true },
+      { "code": "47.91.0", "level": "subclass", "parent": "47.91", "active": true },
+      { "code": "47.91", "level": "class", "parent": "47.9", "active": true },
+      { "code": "47.9", "level": "group", "parent": "47", "active": true },
+      { "code": "74.10.0", "level": "subclass", "parent": "74.10", "active": true },
+      { "code": "74.10", "level": "class", "parent": "74.1", "active": true },
+      { "code": "74.1", "level": "group", "parent": "74", "active": true },
+      { "code": "74", "level": "division", "parent": "MC", "active": true },
+      { "code": "MC", "level": "subsection", "parent": "M", "active": true },
+      { "code": "M", "level": "section", "parent": null, "active": true },
+      { "code": "52.29.0", "level": "subclass", "parent": "52.29", "active": true },
+      { "code": "52.29", "level": "class", "parent": "52.2", "active": true },
+      { "code": "52.2", "level": "group", "parent": "52", "active": true },
+      { "code": "52", "level": "division", "parent": "H", "active": true },
+      { "code": "23.51.0", "level": "subclass", "parent": "23.51", "active": true },
+      { "code": "23.51", "level": "class", "parent": "23.5", "active": true },
+      { "code": "23.5", "level": "group", "parent": "23", "active": true },
+      { "code": "23", "level": "division", "parent": "CG", "active": true },
+      { "code": "CG", "level": "subsection", "parent": "C", "active": true },
+      { "code": "22.22.0", "level": "subclass", "parent": "22.22", "active": true },
+      { "code": "22.22", "level": "class", "parent": "22.2", "active": true },
+      { "code": "22.2", "level": "group", "parent": "22", "active": true },
+      { "code": "22", "level": "division", "parent": "CG", "active": true },
+      { "code": "35.13.0", "level": "subclass", "parent": "35.13", "active": true },
+      { "code": "35.13", "level": "class", "parent": "35.1", "active": true },
+      { "code": "35.1", "level": "group", "parent": "35", "active": true },
+      { "code": "35", "level": "division", "parent": "D", "active": true },
+      { "code": "D", "level": "section", "parent": null, "active": true },
+      { "code": "55.20.0", "level": "subclass", "parent": "55.20", "active": true },
+      { "code": "55.20", "level": "class", "parent": "55.2", "active": true },
+      { "code": "55.2", "level": "group", "parent": "55", "active": true },
+      { "code": "55", "level": "division", "parent": "I", "active": true },
+      { "code": "I", "level": "section", "parent": null, "active": true },
+      { "code": "03.22.0", "level": "subclass", "parent": "03.22", "active": true },
+      { "code": "03.22", "level": "class", "parent": "03.2", "active": true },
+      { "code": "03.2", "level": "group", "parent": "03", "active": true },
+      { "code": "03", "level": "division", "parent": "A", "active": true },
+      { "code": "96.02.0", "level": "subclass", "parent": "96.02", "active": true },
+      { "code": "96.02", "level": "class", "parent": "96.0", "active": true },
+      { "code": "96.0", "level": "group", "parent": "96", "active": true },
+      { "code": "96", "level": "division", "parent": "S", "active": true },
+      { "code": "S", "level": "section", "parent": null, "active": true },
+      { "code": "01.11.1", "level": "subclass", "parent": "01.11", "active": true },
+      { "code": "01.11", "level": "class", "parent": "01.1", "active": true },
+      { "code": "01.1", "level": "group", "parent": "01", "active": true },
+      { "code": "62.02.0", "level": "subclass", "parent": "62.02", "active": true },
+      { "code": "62.02", "level": "class", "parent": "62.0", "active": true },
+      { "code": "64.19.1", "level": "subclass", "parent": "64.19", "active": true },
+      { "code": "64.19", "level": "class", "parent": "64.1", "active": true },
+      { "code": "64.1", "level": "group", "parent": "64", "active": true },
+      { "code": "64", "level": "division", "parent": "K", "active": true },
+      { "code": "K", "level": "section", "parent": null, "active": true },
+      { "code": "64.92.0", "level": "subclass", "parent": "64.92", "active": true },
+      { "code": "64.92", "level": "class", "parent": "64.9", "active": true },
+      { "code": "64.9", "level": "group", "parent": "64", "active": true },
+      { "code": "61.20.0", "level": "subclass", "parent": "61.20", "active": true },
+      { "code": "61.20", "level": "class", "parent": "61.2", "active": true },
+      { "code": "61.2", "level": "group", "parent": "61", "active": true },
+      { "code": "61", "level": "division", "parent": "JB", "active": true },
+      { "code": "JB", "level": "subsection", "parent": "J", "active": true },
+      { "code": "11.01.0", "level": "subclass", "parent": "11.01", "active": true },
+      { "code": "11.01", "level": "class", "parent": "11.0", "active": true },
+      { "code": "11.0", "level": "group", "parent": "11", "active": true },
+      { "code": "11", "level": "division", "parent": "CA", "active": true },
+      { "code": "85.10.0", "level": "subclass", "parent": "85.10", "active": true },
+      { "code": "85.10", "level": "class", "parent": "85.1", "active": true },
+      { "code": "85.1", "level": "group", "parent": "85", "active": true },
+      { "code": "85", "level": "division", "parent": "P", "active": true },
+      { "code": "P", "level": "section", "parent": null, "active": true }
+    ],
+    "reportTypes": ["soc"],
+    "penalties": [
+      {
+        "type": "soc",
+        "start": "с 21-го числа",
+        "rate": "0,09 % от долга за каждый день просрочки",
+        "cap": "пеня не больше 100 % долга"
+      }
+    ]
+  },
+  "titles": [
+    {
+      "id": "spino",
+      "title": "Тариф Соцфонда 12,25 % (СПиНО)",
+      "short": "СПиНО",
+      "rates": "работодатель 2,25 %, работник 10 %; итого 12,25 %",
+      "cap": "база не выше 720 940 сом в месяц на работника, взносы не больше 88 315,15 сом в месяц на работника, с 01.01.2026"
+    },
+    {
+      "id": "general",
+      "title": "Базовый тариф",
+      "short": "Базовый тариф",
+      "rates": "работодатель 17,25 %, работник 10 %; итого 27,25 %",
+      "cap": "база не выше 720 940 сом в месяц на работника, взносы не больше 196 456,15 сом в месяц на работника, с 01.01.2026"
+    },
+    {
+      "id": "pvtpki",
+      "title": "Тариф ПВТ / ПКИ",
+      "short": "Тариф ПВТ / ПКИ",
+      "rates": "сам резидент 12 % от СМЗ; итого 12 % от среднемесячной зарплаты",
+      "cap": ""
+    }
+  ],
+  "cases": [
+    {
+      "name": "ОсОО «Ала-Тоо Трейд»",
+      "subject": {
+        "kind": "regular",
+        "bases": ["employees", "statSample"],
+        "activeTypes": ["nds", "nspm", "soc", "npa", "endo", "t1m", "inv1q", "t1y", "fin"],
+        "gked": "46.34.0",
+        "form": { "code": "ФС-01", "name": "ОсОО" },
+        "benefits": ["ЛЬГ-29"],
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+      },
+      "current": { "tariff": "spino", "manual": false, "reason": "" },
+      "expected": {
+        "needed": true,
+        "auto": {
+          "t": "spino",
+          "why": ["Все условия выполнены"],
+          "miss": [],
+          "warn": [
+            "Проверьте право на СПиНО по виду деятельности: основной ГКЭД 46.34.0 — производители и импортёры алкоголя, табака и ГСМ, кроме переработчиков нефти и природного газа"
+          ]
+        },
+        "state": { "bad": false, "none": false, "ask": false, "why": "" }
+      }
+    },
+    {
+      "name": "ОсОО «Бишкек Стройсервис»",
+      "subject": {
+        "kind": "regular",
+        "bases": ["employees", "statSample"],
+        "activeTypes": ["nds", "nspm", "soc", "npa", "endo", "t1m", "inv1q", "tbo", "t1y", "fin"],
+        "gked": "41.20.0",
+        "form": { "code": "ФС-01", "name": "ОсОО" },
+        "benefits": ["ЛЬГ-29"],
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+      },
+      "current": { "tariff": "spino", "manual": false, "reason": "" },
+      "expected": {
+        "needed": true,
+        "auto": { "t": "spino", "why": ["Все условия выполнены"], "miss": [], "warn": [] },
+        "state": { "bad": false, "none": false, "ask": false, "why": "" }
+      }
+    },
+    {
+      "name": "ИП Абдыкадыров Т. К.",
+      "subject": {
+        "kind": "regular",
+        "bases": [],
+        "activeTypes": ["enm", "endi"],
+        "gked": "47.11.0",
+        "form": { "code": "ФС-02", "name": "ИП" },
+        "benefits": [],
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null }
+      },
+      "current": { "tariff": null, "manual": false, "reason": "" },
+      "expected": { "needed": false, "auto": null, "state": null }
+    },
+    {
+      "name": "ОсОО «Нур Логистик»",
+      "subject": {
+        "kind": "regular",
+        "bases": ["employees", "statSample"],
+        "activeTypes": ["nds", "nspm", "soc", "npa", "endo", "t1m", "tbo", "t1y", "fin"],
+        "gked": "49.41.0",
+        "form": { "code": "ФС-01", "name": "ОсОО" },
+        "benefits": ["ЛЬГ-29"],
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+      },
+      "current": { "tariff": "spino", "manual": false, "reason": "" },
+      "expected": {
+        "needed": true,
+        "auto": { "t": "spino", "why": ["Все условия выполнены"], "miss": [], "warn": [] },
+        "state": { "bad": false, "none": false, "ask": false, "why": "" }
+      }
+    },
+    {
+      "name": "ОсОО «Иссык-Куль Тур»",
+      "subject": {
+        "kind": "regular",
+        "bases": ["employees", "statSample"],
+        "activeTypes": ["enq", "soc", "endo", "t1m", "t1y"],
+        "gked": "79.12.0",
+        "form": { "code": "ФС-01", "name": "ОсОО" },
+        "benefits": ["ЛЬГ-29"],
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+      },
+      "current": { "tariff": "spino", "manual": false, "reason": "" },
+      "expected": {
+        "needed": true,
+        "auto": { "t": "spino", "why": ["Все условия выполнены"], "miss": [], "warn": [] },
+        "state": { "bad": false, "none": false, "ask": false, "why": "" }
+      }
+    },
+    {
+      "name": "ОсОО «Агро Продукт KG»",
+      "subject": {
+        "kind": "regular",
+        "bases": ["employees"],
+        "activeTypes": ["enq", "soc", "endo", "tbo"],
+        "gked": "10.39.0",
+        "form": { "code": "ФС-01", "name": "ОсОО" },
+        "benefits": ["ЛЬГ-29"],
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+      },
+      "current": { "tariff": "spino", "manual": false, "reason": "" },
+      "expected": {
+        "needed": true,
+        "auto": { "t": "spino", "why": ["Все условия выполнены"], "miss": [], "warn": [] },
+        "state": { "bad": false, "none": false, "ask": false, "why": "" }
+      }
+    },
+    {
+      "name": "ОсОО «Тянь-Шань Фарм»",
+      "subject": {
+        "kind": "regular",
+        "bases": ["employees", "statSample"],
+        "activeTypes": ["nds", "nspm", "soc", "npa", "endo", "t1m", "t1y", "fin"],
+        "gked": "46.46.0",
+        "form": { "code": "ФС-01", "name": "ОсОО" },
+        "benefits": ["ЛЬГ-29"],
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+      },
+      "current": { "tariff": "spino", "manual": false, "reason": "" },
+      "expected": {
+        "needed": true,
+        "auto": { "t": "spino", "why": ["Все условия выполнены"], "miss": [], "warn": [] },
+        "state": { "bad": false, "none": false, "ask": false, "why": "" }
+      }
+    },
+    {
+      "name": "ИП Мамытова А. Ж.",
+      "subject": {
+        "kind": "regular",
+        "bases": [],
+        "activeTypes": ["pat"],
+        "gked": "47.89.0",
+        "form": { "code": "ФС-02", "name": "ИП" },
+        "benefits": [],
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null }
+      },
+      "current": { "tariff": null, "manual": false, "reason": "" },
+      "expected": { "needed": false, "auto": null, "state": null }
+    },
+    {
+      "name": "ОсОО «Ош Текстиль»",
+      "subject": {
+        "kind": "regular",
+        "bases": ["employees"],
+        "activeTypes": ["enq", "soc", "endo"],
+        "gked": "14.13.0",
+        "form": { "code": "ФС-01", "name": "ОсОО" },
+        "benefits": ["ЛЬГ-09", "ЛЬГ-29"],
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+      },
+      "current": { "tariff": "spino", "manual": false, "reason": "" },
+      "expected": {
+        "needed": true,
+        "auto": { "t": "spino", "why": ["Все условия выполнены"], "miss": [], "warn": [] },
+        "state": { "bad": false, "none": false, "ask": false, "why": "" }
+      }
+    },
+    {
+      "name": "ОсОО «Каракол Мед Сервис»",
+      "subject": {
+        "kind": "regular",
+        "bases": ["employees"],
+        "activeTypes": ["enq", "soc", "endo"],
+        "gked": "86.21.0",
+        "form": { "code": "ФС-01", "name": "ОсОО" },
+        "benefits": ["ЛЬГ-29"],
+        "flags": { "cashless": false, "registry": true, "confirmed": true, "gov": false }
+      },
+      "current": {
+        "tariff": "spino",
+        "manual": true,
+        "reason": "Зарплата переводится на карты с ноября, в октябре часть выплачена наличными"
+      },
+      "expected": {
+        "needed": true,
+        "auto": { "t": "general", "why": ["Зарплата не безналично"], "miss": [], "warn": [] },
+        "state": { "bad": true, "none": false, "ask": true, "why": "Зарплата не безналично" }
+      }
+    },
+    {
+      "name": "ОсОО «Софт Бишкек»",
+      "subject": {
+        "kind": "regular",
+        "bases": ["employees", "statSample"],
+        "activeTypes": ["pvtd", "soc", "endo", "t1m", "t1y"],
+        "gked": "62.01.0",
+        "form": { "code": "ФС-01", "name": "ОсОО" },
+        "benefits": ["ЛЬГ-02"],
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+      },
+      "current": { "tariff": "pvtpki", "manual": false, "reason": "" },
+      "expected": {
+        "needed": true,
+        "auto": {
+          "t": "pvtpki",
+          "why": ["Статус «Резидент ПВТ»"],
+          "miss": [],
+          "warn": [
+            "Ставки «Тариф ПВТ / ПКИ» для работников резидентов ещё сверяются: проверьте в Соцфонде"
+          ]
+        },
+        "state": { "bad": false, "none": false, "ask": false, "why": "" }
+      }
+    },
+    {
+      "name": "ОсОО «Чуй Сүт»",
+      "subject": {
+        "kind": "regular",
+        "bases": ["employees", "property", "land", "foreignPayments", "statSample"],
+        "activeTypes": [
+          "nds",
+          "nspm",
+          "soc",
+          "npa",
+          "endo",
+          "t1m",
+          "pni",
+          "imn",
+          "opu",
+          "odds",
+          "bal",
+          "cap",
+          "t1y",
+          "fin"
+        ],
+        "gked": "01.41.0",
+        "form": { "code": "ФС-01", "name": "ОсОО" },
+        "benefits": ["ЛЬГ-03", "ЛЬГ-29"],
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+      },
+      "current": { "tariff": "spino", "manual": false, "reason": "" },
+      "expected": {
+        "needed": true,
+        "auto": { "t": "spino", "why": ["Все условия выполнены"], "miss": [], "warn": [] },
+        "state": { "bad": false, "none": false, "ask": false, "why": "" }
+      }
+    },
+    {
+      "name": "ИП Сатыбалдиев Н. Т.",
+      "subject": {
+        "kind": "regular",
+        "bases": [],
+        "activeTypes": ["enm", "endi"],
+        "gked": "45.20.1",
+        "form": { "code": "ФС-02", "name": "ИП" },
+        "benefits": [],
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null }
+      },
+      "current": { "tariff": null, "manual": false, "reason": "" },
+      "expected": { "needed": false, "auto": null, "state": null }
+    },
+    {
+      "name": "ОсОО «Манас Авто Плюс»",
+      "subject": {
+        "kind": "regular",
+        "bases": ["employees", "statSample"],
+        "activeTypes": [
+          "nds",
+          "nspm",
+          "soc",
+          "npa",
+          "endo",
+          "t1m",
+          "tbo",
+          "opu",
+          "odds",
+          "bal",
+          "cap",
+          "t1y",
+          "fin"
+        ],
+        "gked": "45.11.1",
+        "form": { "code": "ФС-01", "name": "ОсОО" },
+        "benefits": ["ЛЬГ-29"],
+        "flags": { "cashless": false, "registry": true, "confirmed": true, "gov": false }
+      },
+      "current": { "tariff": "spino", "manual": false, "reason": "" },
+      "expected": {
+        "needed": true,
+        "auto": { "t": "general", "why": ["Зарплата не безналично"], "miss": [], "warn": [] },
+        "state": { "bad": true, "none": false, "ask": false, "why": "Зарплата не безналично" }
+      }
+    },
+    {
+      "name": "ОсОО «Ак-Тилек Строй»",
+      "subject": {
+        "kind": "regular",
+        "bases": ["employees", "property", "land", "statSample"],
+        "activeTypes": ["nds", "nspm", "soc", "npa", "endo", "t1m", "imn", "inv1q", "t1y", "fin"],
+        "gked": "41.20.0",
+        "form": { "code": "ФС-01", "name": "ОсОО" },
+        "benefits": ["ЛЬГ-29"],
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+      },
+      "current": { "tariff": "spino", "manual": false, "reason": "" },
+      "expected": {
+        "needed": true,
+        "auto": { "t": "spino", "why": ["Все условия выполнены"], "miss": [], "warn": [] },
+        "state": { "bad": false, "none": false, "ask": false, "why": "" }
+      }
+    },
+    {
+      "name": "ОсОО «Талас Бал»",
+      "subject": {
+        "kind": "regular",
+        "bases": ["employees", "statSample"],
+        "activeTypes": ["enq", "soc", "endo", "t1m", "t1y"],
+        "gked": "01.49.0",
+        "form": { "code": "ФС-01", "name": "ОсОО" },
+        "benefits": ["ЛЬГ-29"],
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+      },
+      "current": { "tariff": "spino", "manual": false, "reason": "" },
+      "expected": {
+        "needed": true,
+        "auto": { "t": "spino", "why": ["Все условия выполнены"], "miss": [], "warn": [] },
+        "state": { "bad": false, "none": false, "ask": false, "why": "" }
+      }
+    },
+    {
+      "name": "ОсОО «Нарын Жүн»",
+      "subject": {
+        "kind": "regular",
+        "bases": ["employees"],
+        "activeTypes": ["enq", "soc", "endo", "tbo"],
+        "gked": "13.10.1",
+        "form": { "code": "ФС-01", "name": "ОсОО" },
+        "benefits": [],
+        "flags": { "cashless": true, "registry": null, "confirmed": true, "gov": false }
+      },
+      "current": { "tariff": null, "manual": false, "reason": "" },
+      "expected": {
+        "needed": true,
+        "auto": { "t": null, "why": [], "miss": ["реестр работников"], "warn": [] },
+        "state": { "bad": false, "none": true, "ask": true, "why": "" }
+      }
+    },
+    {
+      "name": "ИП Токтосунова Г. А.",
+      "subject": {
+        "kind": "regular",
+        "bases": [],
+        "activeTypes": ["etr", "endi"],
+        "gked": "47.91.0",
+        "form": { "code": "ФС-02", "name": "ИП" },
+        "benefits": [],
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null }
+      },
+      "current": { "tariff": null, "manual": false, "reason": "" },
+      "expected": { "needed": false, "auto": null, "state": null }
+    },
+    {
+      "name": "ОсОО «Айгуль Дизайн Студио»",
+      "subject": {
+        "kind": "regular",
+        "bases": ["employees"],
+        "activeTypes": ["enq", "soc", "tbo"],
+        "gked": "74.10.0",
+        "form": { "code": "ФС-01", "name": "ОсОО" },
+        "benefits": ["ЛЬГ-01"],
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+      },
+      "current": { "tariff": "pvtpki", "manual": false, "reason": "" },
+      "expected": {
+        "needed": true,
+        "auto": {
+          "t": "pvtpki",
+          "why": ["Статус «Резидент ПКИ»"],
+          "miss": [],
+          "warn": [
+            "Ставки «Тариф ПВТ / ПКИ» для работников резидентов ещё сверяются: проверьте в Соцфонде"
+          ]
+        },
+        "state": { "bad": false, "none": false, "ask": false, "why": "" }
+      }
+    },
+    {
+      "name": "ОсОО «Боом Транзит»",
+      "subject": {
+        "kind": "regular",
+        "bases": ["employees", "property", "land", "statSample"],
+        "activeTypes": ["nds", "nspm", "soc", "npa", "endo", "t1m", "imn", "t1y", "fin"],
+        "gked": "52.29.0",
+        "form": { "code": "ФС-01", "name": "ОсОО" },
+        "benefits": ["ЛЬГ-29"],
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+      },
+      "current": { "tariff": "spino", "manual": false, "reason": "" },
+      "expected": {
+        "needed": true,
+        "auto": { "t": "spino", "why": ["Все условия выполнены"], "miss": [], "warn": [] },
+        "state": { "bad": false, "none": false, "ask": false, "why": "" }
+      }
+    },
+    {
+      "name": "ОсОО «Алай Цемент Сервис»",
+      "subject": {
+        "kind": "regular",
+        "bases": ["employees", "property", "land", "statSample"],
+        "activeTypes": ["nds", "nspm", "soc", "npa", "endo", "t1m", "imn", "inv1q", "t1y", "fin"],
+        "gked": "23.51.0",
+        "form": { "code": "ФС-01", "name": "ОсОО" },
+        "benefits": [],
+        "flags": { "cashless": true, "registry": true, "confirmed": false, "gov": false }
+      },
+      "current": { "tariff": "general", "manual": false, "reason": "" },
+      "expected": {
+        "needed": true,
+        "auto": { "t": "general", "why": ["Тариф не подтверждён ГНС"], "miss": [], "warn": [] },
+        "state": { "bad": false, "none": false, "ask": false, "why": "" }
+      }
+    },
+    {
+      "name": "ОсОО «Токмок Пласт»",
+      "subject": {
+        "kind": "regular",
+        "bases": ["employees", "statSample"],
+        "activeTypes": ["enm", "soc", "endo", "t1m", "t1y", "fin"],
+        "gked": "22.22.0",
+        "form": { "code": "ФС-01", "name": "ОсОО" },
+        "benefits": ["ЛЬГ-29"],
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+      },
+      "current": { "tariff": "spino", "manual": false, "reason": "" },
+      "expected": {
+        "needed": true,
+        "auto": { "t": "spino", "why": ["Все условия выполнены"], "miss": [], "warn": [] },
+        "state": { "bad": false, "none": false, "ask": false, "why": "" }
+      }
+    },
+    {
+      "name": "ОАО «Кант Энерго Ремонт»",
+      "subject": {
+        "kind": "regular",
+        "bases": ["employees", "statSample"],
+        "activeTypes": ["nds", "nspm", "soc", "npa", "endo", "t1m", "min", "tbo", "t1y", "fin"],
+        "gked": "35.13.0",
+        "form": { "code": "ФС-03", "name": "ОАО" },
+        "benefits": ["ЛЬГ-30"],
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+      },
+      "current": { "tariff": "general", "manual": false, "reason": "" },
+      "expected": {
+        "needed": true,
+        "auto": {
+          "t": "general",
+          "why": [
+            "Основной ГКЭД 35.13.0 не допускает СПиНО: поставщики электрической, тепловой энергии и газа"
+          ],
+          "miss": [],
+          "warn": []
+        },
+        "state": { "bad": false, "none": false, "ask": false, "why": "" }
+      }
+    },
+    {
+      "name": "ОсОО «Сары-Челек Эко»",
+      "subject": {
+        "kind": "regular",
+        "bases": ["employees"],
+        "activeTypes": ["enm", "soc", "endo", "fin"],
+        "gked": "55.20.0",
+        "form": { "code": "ФС-01", "name": "ОсОО" },
+        "benefits": ["ЛЬГ-29"],
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+      },
+      "current": { "tariff": "spino", "manual": false, "reason": "" },
+      "expected": {
+        "needed": true,
+        "auto": { "t": "spino", "why": ["Все условия выполнены"], "miss": [], "warn": [] },
+        "state": { "bad": false, "none": false, "ask": false, "why": "" }
+      }
+    },
+    {
+      "name": "ОсОО «Ысык-Көл Балык»",
+      "subject": {
+        "kind": "regular",
+        "bases": ["employees", "statSample"],
+        "activeTypes": ["enq", "soc", "endo", "t1m", "t1y"],
+        "gked": "03.22.0",
+        "form": { "code": "ФС-01", "name": "ОсОО" },
+        "benefits": ["ЛЬГ-29"],
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+      },
+      "current": { "tariff": "spino", "manual": false, "reason": "" },
+      "expected": {
+        "needed": true,
+        "auto": { "t": "spino", "why": ["Все условия выполнены"], "miss": [], "warn": [] },
+        "state": { "bad": false, "none": false, "ask": false, "why": "" }
+      }
+    },
+    {
+      "name": "ИП Жумабеков Р. С.",
+      "subject": {
+        "kind": "regular",
+        "bases": [],
+        "activeTypes": ["pat"],
+        "gked": "96.02.0",
+        "form": { "code": "ФС-02", "name": "ИП" },
+        "benefits": [],
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null }
+      },
+      "current": { "tariff": null, "manual": false, "reason": "" },
+      "expected": { "needed": false, "auto": null, "state": null }
+    },
+    {
+      "name": "ОсОО «Кемин Агро»",
+      "subject": {
+        "kind": "regular",
+        "bases": ["employees"],
+        "activeTypes": ["enq", "soc", "endo", "tbo"],
+        "gked": "01.11.1",
+        "form": { "code": "ФС-01", "name": "ОсОО" },
+        "benefits": ["ЛЬГ-29"],
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+      },
+      "current": { "tariff": "spino", "manual": false, "reason": "" },
+      "expected": {
+        "needed": true,
+        "auto": { "t": "spino", "why": ["Все условия выполнены"], "miss": [], "warn": [] },
+        "state": { "bad": false, "none": false, "ask": false, "why": "" }
+      }
+    },
+    {
+      "name": "ОсОО «Дата Лаб Азия»",
+      "subject": {
+        "kind": "regular",
+        "bases": ["employees", "statSample"],
+        "activeTypes": ["pvtd", "soc", "endo", "t1m", "tbo", "t1y"],
+        "gked": "62.02.0",
+        "form": { "code": "ФС-01", "name": "ОсОО" },
+        "benefits": ["ЛЬГ-02"],
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+      },
+      "current": { "tariff": "pvtpki", "manual": false, "reason": "" },
+      "expected": {
+        "needed": true,
+        "auto": {
+          "t": "pvtpki",
+          "why": ["Статус «Резидент ПВТ»"],
+          "miss": [],
+          "warn": [
+            "Ставки «Тариф ПВТ / ПКИ» для работников резидентов ещё сверяются: проверьте в Соцфонде"
+          ]
+        },
+        "state": { "bad": false, "none": false, "ask": false, "why": "" }
+      }
+    },
+    {
+      "name": "ОсОО «Укс»",
+      "subject": {
+        "kind": "regular",
+        "bases": ["employees", "foreignPayments"],
+        "activeTypes": ["enq", "soc", "pni", "endo", "tbo"],
+        "gked": null,
+        "form": { "code": "ФС-01", "name": "ОсОО" },
+        "benefits": [],
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+      },
+      "current": { "tariff": null, "manual": false, "reason": "" },
+      "expected": {
+        "needed": true,
+        "auto": { "t": null, "why": [], "miss": ["основной ГКЭД"], "warn": [] },
+        "state": { "bad": false, "none": true, "ask": true, "why": "" }
+      }
+    },
+    {
+      "name": "ОсОО «Эско»",
+      "subject": {
+        "kind": "oneoff",
+        "bases": [],
+        "activeTypes": [],
+        "gked": null,
+        "form": { "code": "ФС-01", "name": "ОсОО" },
+        "benefits": [],
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null }
+      },
+      "current": { "tariff": null, "manual": false, "reason": "" },
+      "expected": { "needed": false, "auto": null, "state": null }
+    },
+    {
+      "name": "п. 38: 47.11, все признаки",
+      "subject": {
+        "kind": "regular",
+        "bases": ["employees"],
+        "activeTypes": [],
+        "gked": "47.11.0",
+        "form": { "code": "ФС-01", "name": "ОсОО" },
+        "benefits": [],
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+      },
+      "current": { "tariff": null, "manual": false, "reason": "" },
+      "expected": {
+        "needed": true,
+        "auto": { "t": "spino", "why": ["Все условия выполнены"], "miss": [], "warn": [] },
+        "state": { "bad": false, "none": true, "ask": true, "why": "" }
+      }
+    },
+    {
+      "name": "п. 38: СПиНО определён автоматически",
+      "subject": {
+        "kind": "regular",
+        "bases": ["employees"],
+        "activeTypes": [],
+        "gked": "47.11.0",
+        "form": { "code": "ФС-01", "name": "ОсОО" },
+        "benefits": ["ЛЬГ-29"],
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+      },
+      "current": { "tariff": "spino", "manual": false, "reason": "" },
+      "expected": {
+        "needed": true,
+        "auto": { "t": "spino", "why": ["Все условия выполнены"], "miss": [], "warn": [] },
+        "state": { "bad": false, "none": false, "ask": false, "why": "" }
+      }
+    },
+    {
+      "name": "п. 38: после смены ГКЭД на 64.19.1",
+      "subject": {
+        "kind": "regular",
+        "bases": ["employees"],
+        "activeTypes": [],
+        "gked": "64.19.1",
+        "form": { "code": "ФС-01", "name": "ОсОО" },
+        "benefits": ["ЛЬГ-29"],
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+      },
+      "current": { "tariff": "spino", "manual": false, "reason": "" },
+      "expected": {
+        "needed": true,
+        "auto": {
+          "t": "general",
+          "why": [
+            "Основной ГКЭД 64.19.1 не допускает СПиНО: коммерческие банки и специализированные финансово-кредитные учреждения"
+          ],
+          "miss": [],
+          "warn": []
+        },
+        "state": {
+          "bad": true,
+          "none": false,
+          "ask": false,
+          "why": "Основной ГКЭД 64.19.1 не допускает СПиНО: коммерческие банки и специализированные финансово-кредитные учреждения"
+        }
+      }
+    },
+    {
+      "name": "п. 39: резидент ПКИ",
+      "subject": {
+        "kind": "regular",
+        "bases": ["employees"],
+        "activeTypes": [],
+        "gked": "62.01.0",
+        "form": { "code": "ФС-01", "name": "ОсОО" },
+        "benefits": ["ЛЬГ-01"],
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null }
+      },
+      "current": { "tariff": null, "manual": false, "reason": "" },
+      "expected": {
+        "needed": true,
+        "auto": {
+          "t": "pvtpki",
+          "why": ["Статус «Резидент ПКИ»"],
+          "miss": [],
+          "warn": [
+            "Ставки «Тариф ПВТ / ПКИ» для работников резидентов ещё сверяются: проверьте в Соцфонде"
+          ]
+        },
+        "state": { "bad": false, "none": true, "ask": true, "why": "" }
+      }
+    },
+    {
+      "name": "п. 39: резидент ПКИ, СПиНО вручную",
+      "subject": {
+        "kind": "regular",
+        "bases": ["employees"],
+        "activeTypes": [],
+        "gked": "62.01.0",
+        "form": { "code": "ФС-01", "name": "ОсОО" },
+        "benefits": ["ЛЬГ-01", "ЛЬГ-29"],
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null }
+      },
+      "current": { "tariff": "spino", "manual": true, "reason": "письмо ГНС" },
+      "expected": {
+        "needed": true,
+        "auto": {
+          "t": "pvtpki",
+          "why": ["Статус «Резидент ПКИ»"],
+          "miss": [],
+          "warn": [
+            "Ставки «Тариф ПВТ / ПКИ» для работников резидентов ещё сверяются: проверьте в Соцфонде"
+          ]
+        },
+        "state": { "bad": true, "none": false, "ask": true, "why": "Статус «Резидент ПКИ»" }
+      }
+    },
+    {
+      "name": "резидент ПВТ и ПКИ",
+      "subject": {
+        "kind": "regular",
+        "bases": ["employees"],
+        "activeTypes": [],
+        "gked": "62.01.0",
+        "form": { "code": "ФС-01", "name": "ОсОО" },
+        "benefits": ["ЛЬГ-02", "ЛЬГ-01"],
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+      },
+      "current": { "tariff": null, "manual": false, "reason": "" },
+      "expected": {
+        "needed": true,
+        "auto": {
+          "t": "pvtpki",
+          "why": ["Статус «Резидент ПВТ», «Резидент ПКИ»"],
+          "miss": [],
+          "warn": [
+            "Ставки «Тариф ПВТ / ПКИ» для работников резидентов ещё сверяются: проверьте в Соцфонде"
+          ]
+        },
+        "state": { "bad": false, "none": true, "ask": true, "why": "" }
+      }
+    },
+    {
+      "name": "предупреждение по ГКЭД 64.92",
+      "subject": {
+        "kind": "regular",
+        "bases": ["employees"],
+        "activeTypes": [],
+        "gked": "64.92.0",
+        "form": { "code": "ФС-01", "name": "ОсОО" },
+        "benefits": [],
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+      },
+      "current": { "tariff": null, "manual": false, "reason": "" },
+      "expected": {
+        "needed": true,
+        "auto": {
+          "t": "spino",
+          "why": ["Все условия выполнены"],
+          "miss": [],
+          "warn": [
+            "Проверьте право на СПиНО по виду деятельности: основной ГКЭД 64.92.0 — коммерческие банки и специализированные финансово-кредитные учреждения"
+          ]
+        },
+        "state": { "bad": false, "none": true, "ask": true, "why": "" }
+      }
+    },
+    {
+      "name": "предупреждение по разделу 84",
+      "subject": {
+        "kind": "regular",
+        "bases": ["employees"],
+        "activeTypes": [],
+        "gked": "84.11.0",
+        "form": { "code": "ФС-01", "name": "ОсОО" },
+        "benefits": [],
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+      },
+      "current": { "tariff": null, "manual": false, "reason": "" },
+      "expected": {
+        "needed": true,
+        "auto": {
+          "t": "spino",
+          "why": ["Все условия выполнены"],
+          "miss": [],
+          "warn": [
+            "Проверьте право на СПиНО по виду деятельности: основной ГКЭД 84.11.0 — организации на бюджетном финансировании"
+          ]
+        },
+        "state": { "bad": false, "none": true, "ask": true, "why": "" }
+      }
+    },
+    {
+      "name": "сотовая связь — запрет",
+      "subject": {
+        "kind": "regular",
+        "bases": ["employees"],
+        "activeTypes": [],
+        "gked": "61.20.0",
+        "form": { "code": "ФС-01", "name": "ОсОО" },
+        "benefits": [],
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+      },
+      "current": { "tariff": null, "manual": false, "reason": "" },
+      "expected": {
+        "needed": true,
+        "auto": {
+          "t": "general",
+          "why": ["Основной ГКЭД 61.20.0 не допускает СПиНО: операторы сотовой связи"],
+          "miss": [],
+          "warn": []
+        },
+        "state": { "bad": false, "none": true, "ask": true, "why": "" }
+      }
+    },
+    {
+      "name": "алкоголь — запрет, без признаков",
+      "subject": {
+        "kind": "regular",
+        "bases": ["employees"],
+        "activeTypes": [],
+        "gked": "11.01.0",
+        "form": { "code": "ФС-01", "name": "ОсОО" },
+        "benefits": [],
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null }
+      },
+      "current": { "tariff": null, "manual": false, "reason": "" },
+      "expected": {
+        "needed": true,
+        "auto": {
+          "t": "general",
+          "why": [
+            "Основной ГКЭД 11.01.0 не допускает СПиНО: производители и импортёры алкоголя, табака и ГСМ, кроме переработчиков нефти и природного газа"
+          ],
+          "miss": ["способ выплаты зарплаты", "реестр работников", "подтверждение ГНС"],
+          "warn": []
+        },
+        "state": { "bad": false, "none": true, "ask": true, "why": "" }
+      }
+    },
+    {
+      "name": "госфинансирование",
+      "subject": {
+        "kind": "regular",
+        "bases": ["employees"],
+        "activeTypes": [],
+        "gked": "47.11.0",
+        "form": { "code": "ФС-01", "name": "ОсОО" },
+        "benefits": [],
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": true }
+      },
+      "current": { "tariff": null, "manual": false, "reason": "" },
+      "expected": {
+        "needed": true,
+        "auto": { "t": "general", "why": ["Госфинансирование"], "miss": [], "warn": [] },
+        "state": { "bad": false, "none": true, "ask": true, "why": "" }
+      }
+    },
+    {
+      "name": "Учреждение — проверить госфинансирование",
+      "subject": {
+        "kind": "regular",
+        "bases": ["employees"],
+        "activeTypes": [],
+        "gked": "85.10.0",
+        "form": { "code": "ФС-14", "name": "Учреждение" },
+        "benefits": [],
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+      },
+      "current": { "tariff": null, "manual": false, "reason": "" },
+      "expected": {
+        "needed": true,
+        "auto": {
+          "t": "spino",
+          "why": ["Все условия выполнены"],
+          "miss": [],
+          "warn": [
+            "Форма «Учреждение» часто означает бюджетное финансирование: проверьте признак «Госфинансирование»"
+          ]
+        },
+        "state": { "bad": false, "none": true, "ask": true, "why": "" }
+      }
+    },
+    {
+      "name": "зарплата не безналично",
+      "subject": {
+        "kind": "regular",
+        "bases": ["employees"],
+        "activeTypes": [],
+        "gked": "47.11.0",
+        "form": { "code": "ФС-01", "name": "ОсОО" },
+        "benefits": [],
+        "flags": { "cashless": false, "registry": true, "confirmed": true, "gov": false }
+      },
+      "current": { "tariff": null, "manual": false, "reason": "" },
+      "expected": {
+        "needed": true,
+        "auto": { "t": "general", "why": ["Зарплата не безналично"], "miss": [], "warn": [] },
+        "state": { "bad": false, "none": true, "ask": true, "why": "" }
+      }
+    },
+    {
+      "name": "нет подтверждения ГНС и реестра",
+      "subject": {
+        "kind": "regular",
+        "bases": ["employees"],
+        "activeTypes": [],
+        "gked": "47.11.0",
+        "form": { "code": "ФС-01", "name": "ОсОО" },
+        "benefits": [],
+        "flags": { "cashless": true, "registry": null, "confirmed": null, "gov": null }
+      },
+      "current": { "tariff": null, "manual": false, "reason": "" },
+      "expected": {
+        "needed": true,
+        "auto": {
+          "t": null,
+          "why": [],
+          "miss": ["реестр работников", "подтверждение ГНС"],
+          "warn": []
+        },
+        "state": { "bad": false, "none": true, "ask": true, "why": "" }
+      }
+    },
+    {
+      "name": "нет ГКЭД",
+      "subject": {
+        "kind": "regular",
+        "bases": ["employees"],
+        "activeTypes": [],
+        "gked": null,
+        "form": { "code": "ФС-01", "name": "ОсОО" },
+        "benefits": [],
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+      },
+      "current": { "tariff": null, "manual": false, "reason": "" },
+      "expected": {
+        "needed": true,
+        "auto": { "t": null, "why": [], "miss": ["основной ГКЭД"], "warn": [] },
+        "state": { "bad": false, "none": true, "ask": true, "why": "" }
+      }
+    },
+    {
+      "name": "нет ни ГКЭД, ни признаков",
+      "subject": {
+        "kind": "regular",
+        "bases": ["employees"],
+        "activeTypes": [],
+        "gked": null,
+        "form": { "code": "ФС-01", "name": "ОсОО" },
+        "benefits": [],
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null }
+      },
+      "current": { "tariff": null, "manual": false, "reason": "" },
+      "expected": {
+        "needed": true,
+        "auto": {
+          "t": null,
+          "why": [],
+          "miss": [
+            "основной ГКЭД",
+            "способ выплаты зарплаты",
+            "реестр работников",
+            "подтверждение ГНС"
+          ],
+          "warn": []
+        },
+        "state": { "bad": false, "none": true, "ask": true, "why": "" }
+      }
+    },
+    {
+      "name": "без наёмных сотрудников",
+      "subject": {
+        "kind": "regular",
+        "bases": [],
+        "activeTypes": [],
+        "gked": "47.11.0",
+        "form": { "code": "ФС-01", "name": "ОсОО" },
+        "benefits": [],
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+      },
+      "current": { "tariff": null, "manual": false, "reason": "" },
+      "expected": { "needed": false, "auto": null, "state": null }
+    },
+    {
+      "name": "без основания, но со STI-161",
+      "subject": {
+        "kind": "regular",
+        "bases": [],
+        "activeTypes": ["soc"],
+        "gked": "47.11.0",
+        "form": { "code": "ФС-01", "name": "ОсОО" },
+        "benefits": [],
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+      },
+      "current": { "tariff": null, "manual": false, "reason": "" },
+      "expected": {
+        "needed": true,
+        "auto": { "t": "spino", "why": ["Все условия выполнены"], "miss": [], "warn": [] },
+        "state": { "bad": false, "none": true, "ask": true, "why": "" }
+      }
+    },
+    {
+      "name": "снятое STI-161",
+      "subject": {
+        "kind": "regular",
+        "bases": [],
+        "activeTypes": [],
+        "gked": "47.11.0",
+        "form": { "code": "ФС-01", "name": "ОсОО" },
+        "benefits": [],
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+      },
+      "current": { "tariff": null, "manual": false, "reason": "" },
+      "expected": { "needed": false, "auto": null, "state": null }
+    },
+    {
+      "name": "разовый",
+      "subject": {
+        "kind": "oneoff",
+        "bases": ["employees"],
+        "activeTypes": [],
+        "gked": "47.11.0",
+        "form": { "code": "ФС-01", "name": "ОсОО" },
+        "benefits": [],
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+      },
+      "current": { "tariff": null, "manual": false, "reason": "" },
+      "expected": { "needed": false, "auto": null, "state": null }
+    },
+    {
+      "name": "базовый вручную при условиях СПиНО",
+      "subject": {
+        "kind": "regular",
+        "bases": ["employees"],
+        "activeTypes": [],
+        "gked": "47.11.0",
+        "form": { "code": "ФС-01", "name": "ОсОО" },
+        "benefits": [],
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+      },
+      "current": { "tariff": "general", "manual": true, "reason": "так решил" },
+      "expected": {
+        "needed": true,
+        "auto": { "t": "spino", "why": ["Все условия выполнены"], "miss": [], "warn": [] },
+        "state": { "bad": true, "none": false, "ask": true, "why": "по условиям подходит «СПиНО»" }
+      }
+    },
+    {
+      "name": "базовый автоматически, условия изменились на СПиНО",
+      "subject": {
+        "kind": "regular",
+        "bases": ["employees"],
+        "activeTypes": [],
+        "gked": "47.11.0",
+        "form": { "code": "ФС-01", "name": "ОсОО" },
+        "benefits": [],
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+      },
+      "current": { "tariff": "general", "manual": false, "reason": "" },
+      "expected": {
+        "needed": true,
+        "auto": { "t": "spino", "why": ["Все условия выполнены"], "miss": [], "warn": [] },
+        "state": { "bad": true, "none": false, "ask": false, "why": "по условиям подходит «СПиНО»" }
+      }
+    },
+    {
+      "name": "ПВТ / ПКИ без статуса",
+      "subject": {
+        "kind": "regular",
+        "bases": ["employees"],
+        "activeTypes": [],
+        "gked": "47.11.0",
+        "form": { "code": "ФС-01", "name": "ОсОО" },
+        "benefits": [],
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+      },
+      "current": { "tariff": "pvtpki", "manual": false, "reason": "" },
+      "expected": {
+        "needed": true,
+        "auto": { "t": "spino", "why": ["Все условия выполнены"], "miss": [], "warn": [] },
+        "state": {
+          "bad": true,
+          "none": false,
+          "ask": false,
+          "why": "нет статуса «Резидент ПВТ» или «Резидент ПКИ»"
+        }
+      }
+    },
+    {
+      "name": "СПиНО при неопределённом тарифе",
+      "subject": {
+        "kind": "regular",
+        "bases": ["employees"],
+        "activeTypes": [],
+        "gked": "47.11.0",
+        "form": { "code": "ФС-01", "name": "ОсОО" },
+        "benefits": [],
+        "flags": { "cashless": true, "registry": null, "confirmed": null, "gov": null }
+      },
+      "current": { "tariff": "spino", "manual": false, "reason": "" },
+      "expected": {
+        "needed": true,
+        "auto": {
+          "t": null,
+          "why": [],
+          "miss": ["реестр работников", "подтверждение ГНС"],
+          "warn": []
+        },
+        "state": { "bad": false, "none": false, "ask": false, "why": "" }
+      }
+    }
+  ],
+  "saves": [
+    {
+      "case": 0,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": []
+      }
+    },
+    {
+      "case": 0,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": []
+      }
+    },
+    {
+      "case": 0,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": []
+      }
+    },
+    {
+      "case": 0,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "general",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: СПиНО → Базовый тариф (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 0,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "pvtpki",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: СПиНО → Тариф ПВТ / ПКИ (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 1,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": []
+      }
+    },
+    {
+      "case": 1,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": []
+      }
+    },
+    {
+      "case": 1,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": []
+      }
+    },
+    {
+      "case": 1,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "general",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: СПиНО → Базовый тариф (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 1,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "pvtpki",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: СПиНО → Тариф ПВТ / ПКИ (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 2,
+      "input": {
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "tariff": null,
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 2,
+      "input": {
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 2,
+      "input": {
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 2,
+      "input": {
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 2,
+      "input": {
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 3,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": []
+      }
+    },
+    {
+      "case": 3,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": []
+      }
+    },
+    {
+      "case": 3,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": []
+      }
+    },
+    {
+      "case": 3,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "general",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: СПиНО → Базовый тариф (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 3,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "pvtpki",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: СПиНО → Тариф ПВТ / ПКИ (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 4,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": []
+      }
+    },
+    {
+      "case": 4,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": []
+      }
+    },
+    {
+      "case": 4,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": []
+      }
+    },
+    {
+      "case": 4,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "general",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: СПиНО → Базовый тариф (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 4,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "pvtpki",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: СПиНО → Тариф ПВТ / ПКИ (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 5,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": []
+      }
+    },
+    {
+      "case": 5,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": []
+      }
+    },
+    {
+      "case": 5,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": []
+      }
+    },
+    {
+      "case": 5,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "general",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: СПиНО → Базовый тариф (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 5,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "pvtpki",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: СПиНО → Тариф ПВТ / ПКИ (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 6,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": []
+      }
+    },
+    {
+      "case": 6,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": []
+      }
+    },
+    {
+      "case": 6,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": []
+      }
+    },
+    {
+      "case": 6,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "general",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: СПиНО → Базовый тариф (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 6,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "pvtpki",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: СПиНО → Тариф ПВТ / ПКИ (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 7,
+      "input": {
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "tariff": null,
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 7,
+      "input": {
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 7,
+      "input": {
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 7,
+      "input": {
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 7,
+      "input": {
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 8,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": []
+      }
+    },
+    {
+      "case": 8,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": []
+      }
+    },
+    {
+      "case": 8,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": []
+      }
+    },
+    {
+      "case": 8,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "general",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: СПиНО → Базовый тариф (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 8,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "pvtpki",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: СПиНО → Тариф ПВТ / ПКИ (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 9,
+      "input": {
+        "flags": { "cashless": false, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": true,
+        "sfWhy": "Зарплата переводится на карты с ноября, в октябре часть выплачена наличными",
+        "spino": true,
+        "log": []
+      }
+    },
+    {
+      "case": 9,
+      "input": {
+        "flags": { "cashless": false, "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "general",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": ["Тариф Соцфонда: СПиНО → Базовый тариф (определён автоматически)"]
+      }
+    },
+    {
+      "case": 9,
+      "input": {
+        "flags": { "cashless": false, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "spino",
+        "sfMan": true,
+        "sfWhy": "Зарплата переводится на карты с ноября, в октябре часть выплачена наличными",
+        "spino": true,
+        "log": []
+      }
+    },
+    {
+      "case": 9,
+      "input": {
+        "flags": { "cashless": false, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "general",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": ["Тариф Соцфонда: СПиНО → Базовый тариф (определён автоматически)"]
+      }
+    },
+    {
+      "case": 9,
+      "input": {
+        "flags": { "cashless": false, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "pvtpki",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: СПиНО → Тариф ПВТ / ПКИ (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 10,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "pvtpki",
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "pvtpki",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 10,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "pvtpki",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 10,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "spino",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": true,
+        "log": ["Тариф Соцфонда: Тариф ПВТ / ПКИ → СПиНО (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 10,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "general",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: Тариф ПВТ / ПКИ → Базовый тариф (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 10,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "pvtpki",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 11,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": []
+      }
+    },
+    {
+      "case": 11,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": []
+      }
+    },
+    {
+      "case": 11,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": []
+      }
+    },
+    {
+      "case": 11,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "general",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: СПиНО → Базовый тариф (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 11,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "pvtpki",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: СПиНО → Тариф ПВТ / ПКИ (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 12,
+      "input": {
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "tariff": null,
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 12,
+      "input": {
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 12,
+      "input": {
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 12,
+      "input": {
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 12,
+      "input": {
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 13,
+      "input": {
+        "flags": { "cashless": false, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": []
+      }
+    },
+    {
+      "case": 13,
+      "input": {
+        "flags": { "cashless": false, "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "general",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": ["Тариф Соцфонда: СПиНО → Базовый тариф (определён автоматически)"]
+      }
+    },
+    {
+      "case": 13,
+      "input": {
+        "flags": { "cashless": false, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "spino",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": true,
+        "log": ["Тариф Соцфонда: СПиНО → СПиНО (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 13,
+      "input": {
+        "flags": { "cashless": false, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "general",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": ["Тариф Соцфонда: СПиНО → Базовый тариф (определён автоматически)"]
+      }
+    },
+    {
+      "case": 13,
+      "input": {
+        "flags": { "cashless": false, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "pvtpki",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: СПиНО → Тариф ПВТ / ПКИ (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 14,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": []
+      }
+    },
+    {
+      "case": 14,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": []
+      }
+    },
+    {
+      "case": 14,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": []
+      }
+    },
+    {
+      "case": 14,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "general",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: СПиНО → Базовый тариф (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 14,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "pvtpki",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: СПиНО → Тариф ПВТ / ПКИ (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 15,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": []
+      }
+    },
+    {
+      "case": 15,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": []
+      }
+    },
+    {
+      "case": 15,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": []
+      }
+    },
+    {
+      "case": 15,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "general",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: СПиНО → Базовый тариф (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 15,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "pvtpki",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: СПиНО → Тариф ПВТ / ПКИ (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 16,
+      "input": {
+        "flags": { "cashless": true, "registry": null, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 16,
+      "input": {
+        "flags": { "cashless": true, "registry": null, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 16,
+      "input": {
+        "flags": { "cashless": true, "registry": null, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "spino",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": true,
+        "log": ["Тариф Соцфонда: не определён → СПиНО (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 16,
+      "input": {
+        "flags": { "cashless": true, "registry": null, "confirmed": true, "gov": false },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "general",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: не определён → Базовый тариф (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 16,
+      "input": {
+        "flags": { "cashless": true, "registry": null, "confirmed": true, "gov": false },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "pvtpki",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: не определён → Тариф ПВТ / ПКИ (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 17,
+      "input": {
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "tariff": null,
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 17,
+      "input": {
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 17,
+      "input": {
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 17,
+      "input": {
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 17,
+      "input": {
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 18,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "pvtpki",
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "pvtpki",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 18,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "pvtpki",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 18,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "spino",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": true,
+        "log": ["Тариф Соцфонда: Тариф ПВТ / ПКИ → СПиНО (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 18,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "general",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: Тариф ПВТ / ПКИ → Базовый тариф (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 18,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "pvtpki",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 19,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": []
+      }
+    },
+    {
+      "case": 19,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": []
+      }
+    },
+    {
+      "case": 19,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": []
+      }
+    },
+    {
+      "case": 19,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "general",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: СПиНО → Базовый тариф (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 19,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "pvtpki",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: СПиНО → Тариф ПВТ / ПКИ (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 20,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": false, "gov": false },
+        "tariff": "general",
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "general",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 20,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": false, "gov": false },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "general",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 20,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": false, "gov": false },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "spino",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": true,
+        "log": ["Тариф Соцфонда: Базовый тариф → СПиНО (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 20,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": false, "gov": false },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "general",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 20,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": false, "gov": false },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "pvtpki",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: Базовый тариф → Тариф ПВТ / ПКИ (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 21,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": []
+      }
+    },
+    {
+      "case": 21,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": []
+      }
+    },
+    {
+      "case": 21,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": []
+      }
+    },
+    {
+      "case": 21,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "general",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: СПиНО → Базовый тариф (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 21,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "pvtpki",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: СПиНО → Тариф ПВТ / ПКИ (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 22,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "general",
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "general",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 22,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "general",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 22,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "spino",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": true,
+        "log": ["Тариф Соцфонда: Базовый тариф → СПиНО (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 22,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "general",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 22,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "pvtpki",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: Базовый тариф → Тариф ПВТ / ПКИ (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 23,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": []
+      }
+    },
+    {
+      "case": 23,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": []
+      }
+    },
+    {
+      "case": 23,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": []
+      }
+    },
+    {
+      "case": 23,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "general",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: СПиНО → Базовый тариф (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 23,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "pvtpki",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: СПиНО → Тариф ПВТ / ПКИ (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 24,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": []
+      }
+    },
+    {
+      "case": 24,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": []
+      }
+    },
+    {
+      "case": 24,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": []
+      }
+    },
+    {
+      "case": 24,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "general",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: СПиНО → Базовый тариф (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 24,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "pvtpki",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: СПиНО → Тариф ПВТ / ПКИ (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 25,
+      "input": {
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "tariff": null,
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 25,
+      "input": {
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 25,
+      "input": {
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 25,
+      "input": {
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 25,
+      "input": {
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 26,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": []
+      }
+    },
+    {
+      "case": 26,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": []
+      }
+    },
+    {
+      "case": 26,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": []
+      }
+    },
+    {
+      "case": 26,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "general",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: СПиНО → Базовый тариф (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 26,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "pvtpki",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: СПиНО → Тариф ПВТ / ПКИ (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 27,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "pvtpki",
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "pvtpki",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 27,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "pvtpki",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 27,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "spino",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": true,
+        "log": ["Тариф Соцфонда: Тариф ПВТ / ПКИ → СПиНО (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 27,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "general",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: Тариф ПВТ / ПКИ → Базовый тариф (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 27,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "pvtpki",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 28,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 28,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 28,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "spino",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": true,
+        "log": ["Тариф Соцфонда: не определён → СПиНО (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 28,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "general",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: не определён → Базовый тариф (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 28,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "pvtpki",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: не определён → Тариф ПВТ / ПКИ (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 29,
+      "input": {
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "tariff": null,
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 29,
+      "input": {
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 29,
+      "input": {
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 29,
+      "input": {
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 29,
+      "input": {
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 30,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": ["Тариф Соцфонда: не определён → СПиНО (определён автоматически)"]
+      }
+    },
+    {
+      "case": 30,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": ["Тариф Соцфонда: не определён → СПиНО (определён автоматически)"]
+      }
+    },
+    {
+      "case": 30,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": ["Тариф Соцфонда: не определён → СПиНО (определён автоматически)"]
+      }
+    },
+    {
+      "case": 30,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "general",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: не определён → Базовый тариф (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 30,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "pvtpki",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: не определён → Тариф ПВТ / ПКИ (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 31,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": []
+      }
+    },
+    {
+      "case": 31,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": []
+      }
+    },
+    {
+      "case": 31,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": []
+      }
+    },
+    {
+      "case": 31,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "general",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: СПиНО → Базовый тариф (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 31,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "pvtpki",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: СПиНО → Тариф ПВТ / ПКИ (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 32,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": []
+      }
+    },
+    {
+      "case": 32,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "general",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": ["Тариф Соцфонда: СПиНО → Базовый тариф (определён автоматически)"]
+      }
+    },
+    {
+      "case": 32,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "spino",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": true,
+        "log": ["Тариф Соцфонда: СПиНО → СПиНО (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 32,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "general",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": ["Тариф Соцфонда: СПиНО → Базовый тариф (определён автоматически)"]
+      }
+    },
+    {
+      "case": 32,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "pvtpki",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: СПиНО → Тариф ПВТ / ПКИ (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 33,
+      "input": {
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "tariff": null,
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "pvtpki",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": ["Тариф Соцфонда: не определён → Тариф ПВТ / ПКИ (определён автоматически)"]
+      }
+    },
+    {
+      "case": 33,
+      "input": {
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "pvtpki",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": ["Тариф Соцфонда: не определён → Тариф ПВТ / ПКИ (определён автоматически)"]
+      }
+    },
+    {
+      "case": 33,
+      "input": {
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "spino",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": true,
+        "log": ["Тариф Соцфонда: не определён → СПиНО (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 33,
+      "input": {
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "general",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: не определён → Базовый тариф (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 33,
+      "input": {
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "pvtpki",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": ["Тариф Соцфонда: не определён → Тариф ПВТ / ПКИ (определён автоматически)"]
+      }
+    },
+    {
+      "case": 34,
+      "input": {
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "tariff": "spino",
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": true,
+        "sfWhy": "письмо ГНС",
+        "spino": true,
+        "log": []
+      }
+    },
+    {
+      "case": 34,
+      "input": {
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "pvtpki",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": ["Тариф Соцфонда: СПиНО → Тариф ПВТ / ПКИ (определён автоматически)"]
+      }
+    },
+    {
+      "case": 34,
+      "input": {
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "spino",
+        "sfMan": true,
+        "sfWhy": "письмо ГНС",
+        "spino": true,
+        "log": []
+      }
+    },
+    {
+      "case": 34,
+      "input": {
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "general",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: СПиНО → Базовый тариф (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 34,
+      "input": {
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "pvtpki",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": ["Тариф Соцфонда: СПиНО → Тариф ПВТ / ПКИ (определён автоматически)"]
+      }
+    },
+    {
+      "case": 35,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "pvtpki",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": ["Тариф Соцфонда: не определён → Тариф ПВТ / ПКИ (определён автоматически)"]
+      }
+    },
+    {
+      "case": 35,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "pvtpki",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": ["Тариф Соцфонда: не определён → Тариф ПВТ / ПКИ (определён автоматически)"]
+      }
+    },
+    {
+      "case": 35,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "spino",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": true,
+        "log": ["Тариф Соцфонда: не определён → СПиНО (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 35,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "general",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: не определён → Базовый тариф (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 35,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "pvtpki",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": ["Тариф Соцфонда: не определён → Тариф ПВТ / ПКИ (определён автоматически)"]
+      }
+    },
+    {
+      "case": 36,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": ["Тариф Соцфонда: не определён → СПиНО (определён автоматически)"]
+      }
+    },
+    {
+      "case": 36,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": ["Тариф Соцфонда: не определён → СПиНО (определён автоматически)"]
+      }
+    },
+    {
+      "case": 36,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": ["Тариф Соцфонда: не определён → СПиНО (определён автоматически)"]
+      }
+    },
+    {
+      "case": 36,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "general",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: не определён → Базовый тариф (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 36,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "pvtpki",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: не определён → Тариф ПВТ / ПКИ (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 37,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": ["Тариф Соцфонда: не определён → СПиНО (определён автоматически)"]
+      }
+    },
+    {
+      "case": 37,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": ["Тариф Соцфонда: не определён → СПиНО (определён автоматически)"]
+      }
+    },
+    {
+      "case": 37,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": ["Тариф Соцфонда: не определён → СПиНО (определён автоматически)"]
+      }
+    },
+    {
+      "case": 37,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "general",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: не определён → Базовый тариф (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 37,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "pvtpki",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: не определён → Тариф ПВТ / ПКИ (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 38,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "general",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": ["Тариф Соцфонда: не определён → Базовый тариф (определён автоматически)"]
+      }
+    },
+    {
+      "case": 38,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "general",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": ["Тариф Соцфонда: не определён → Базовый тариф (определён автоматически)"]
+      }
+    },
+    {
+      "case": 38,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "spino",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": true,
+        "log": ["Тариф Соцфонда: не определён → СПиНО (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 38,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "general",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": ["Тариф Соцфонда: не определён → Базовый тариф (определён автоматически)"]
+      }
+    },
+    {
+      "case": 38,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "pvtpki",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: не определён → Тариф ПВТ / ПКИ (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 39,
+      "input": {
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "tariff": null,
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "general",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": ["Тариф Соцфонда: не определён → Базовый тариф (определён автоматически)"]
+      }
+    },
+    {
+      "case": 39,
+      "input": {
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "general",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": ["Тариф Соцфонда: не определён → Базовый тариф (определён автоматически)"]
+      }
+    },
+    {
+      "case": 39,
+      "input": {
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "spino",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": true,
+        "log": ["Тариф Соцфонда: не определён → СПиНО (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 39,
+      "input": {
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "general",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": ["Тариф Соцфонда: не определён → Базовый тариф (определён автоматически)"]
+      }
+    },
+    {
+      "case": 39,
+      "input": {
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "pvtpki",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: не определён → Тариф ПВТ / ПКИ (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 40,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": true },
+        "tariff": null,
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "general",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": ["Тариф Соцфонда: не определён → Базовый тариф (определён автоматически)"]
+      }
+    },
+    {
+      "case": 40,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": true },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "general",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": ["Тариф Соцфонда: не определён → Базовый тариф (определён автоматически)"]
+      }
+    },
+    {
+      "case": 40,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": true },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "spino",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": true,
+        "log": ["Тариф Соцфонда: не определён → СПиНО (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 40,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": true },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "general",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": ["Тариф Соцфонда: не определён → Базовый тариф (определён автоматически)"]
+      }
+    },
+    {
+      "case": 40,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": true },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "pvtpki",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: не определён → Тариф ПВТ / ПКИ (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 41,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": ["Тариф Соцфонда: не определён → СПиНО (определён автоматически)"]
+      }
+    },
+    {
+      "case": 41,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": ["Тариф Соцфонда: не определён → СПиНО (определён автоматически)"]
+      }
+    },
+    {
+      "case": 41,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": ["Тариф Соцфонда: не определён → СПиНО (определён автоматически)"]
+      }
+    },
+    {
+      "case": 41,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "general",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: не определён → Базовый тариф (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 41,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "pvtpki",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: не определён → Тариф ПВТ / ПКИ (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 42,
+      "input": {
+        "flags": { "cashless": false, "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "general",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": ["Тариф Соцфонда: не определён → Базовый тариф (определён автоматически)"]
+      }
+    },
+    {
+      "case": 42,
+      "input": {
+        "flags": { "cashless": false, "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "general",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": ["Тариф Соцфонда: не определён → Базовый тариф (определён автоматически)"]
+      }
+    },
+    {
+      "case": 42,
+      "input": {
+        "flags": { "cashless": false, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "spino",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": true,
+        "log": ["Тариф Соцфонда: не определён → СПиНО (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 42,
+      "input": {
+        "flags": { "cashless": false, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "general",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": ["Тариф Соцфонда: не определён → Базовый тариф (определён автоматически)"]
+      }
+    },
+    {
+      "case": 42,
+      "input": {
+        "flags": { "cashless": false, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "pvtpki",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: не определён → Тариф ПВТ / ПКИ (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 43,
+      "input": {
+        "flags": { "cashless": true, "registry": null, "confirmed": null, "gov": null },
+        "tariff": null,
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 43,
+      "input": {
+        "flags": { "cashless": true, "registry": null, "confirmed": null, "gov": null },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 43,
+      "input": {
+        "flags": { "cashless": true, "registry": null, "confirmed": null, "gov": null },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "spino",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": true,
+        "log": ["Тариф Соцфонда: не определён → СПиНО (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 43,
+      "input": {
+        "flags": { "cashless": true, "registry": null, "confirmed": null, "gov": null },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "general",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: не определён → Базовый тариф (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 43,
+      "input": {
+        "flags": { "cashless": true, "registry": null, "confirmed": null, "gov": null },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "pvtpki",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: не определён → Тариф ПВТ / ПКИ (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 44,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 44,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 44,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "spino",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": true,
+        "log": ["Тариф Соцфонда: не определён → СПиНО (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 44,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "general",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: не определён → Базовый тариф (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 44,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "pvtpki",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: не определён → Тариф ПВТ / ПКИ (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 45,
+      "input": {
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "tariff": null,
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 45,
+      "input": {
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 45,
+      "input": {
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "spino",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": true,
+        "log": ["Тариф Соцфонда: не определён → СПиНО (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 45,
+      "input": {
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "general",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: не определён → Базовый тариф (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 45,
+      "input": {
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "pvtpki",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: не определён → Тариф ПВТ / ПКИ (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 46,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 46,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 46,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 46,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 46,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 47,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": ["Тариф Соцфонда: не определён → СПиНО (определён автоматически)"]
+      }
+    },
+    {
+      "case": 47,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": ["Тариф Соцфонда: не определён → СПиНО (определён автоматически)"]
+      }
+    },
+    {
+      "case": 47,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": ["Тариф Соцфонда: не определён → СПиНО (определён автоматически)"]
+      }
+    },
+    {
+      "case": 47,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "general",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: не определён → Базовый тариф (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 47,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "pvtpki",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: не определён → Тариф ПВТ / ПКИ (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 48,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 48,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 48,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 48,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 48,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 49,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 49,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 49,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 49,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 49,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 50,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "general",
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "general",
+        "sfMan": true,
+        "sfWhy": "так решил",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 50,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": ["Тариф Соцфонда: Базовый тариф → СПиНО (определён автоматически)"]
+      }
+    },
+    {
+      "case": 50,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": ["Тариф Соцфонда: Базовый тариф → СПиНО (определён автоматически)"]
+      }
+    },
+    {
+      "case": 50,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "general",
+        "sfMan": true,
+        "sfWhy": "так решил",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 50,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "pvtpki",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: Базовый тариф → Тариф ПВТ / ПКИ (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 51,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "general",
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "general",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 51,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": ["Тариф Соцфонда: Базовый тариф → СПиНО (определён автоматически)"]
+      }
+    },
+    {
+      "case": 51,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": ["Тариф Соцфонда: Базовый тариф → СПиНО (определён автоматически)"]
+      }
+    },
+    {
+      "case": 51,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "general",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: Базовый тариф → Базовый тариф (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 51,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "pvtpki",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: Базовый тариф → Тариф ПВТ / ПКИ (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 52,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "pvtpki",
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "pvtpki",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 52,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": ["Тариф Соцфонда: Тариф ПВТ / ПКИ → СПиНО (определён автоматически)"]
+      }
+    },
+    {
+      "case": 52,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": ["Тариф Соцфонда: Тариф ПВТ / ПКИ → СПиНО (определён автоматически)"]
+      }
+    },
+    {
+      "case": 52,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "general",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: Тариф ПВТ / ПКИ → Базовый тариф (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 52,
+      "input": {
+        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "pvtpki",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: Тариф ПВТ / ПКИ → Тариф ПВТ / ПКИ (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 53,
+      "input": {
+        "flags": { "cashless": true, "registry": null, "confirmed": null, "gov": null },
+        "tariff": "spino",
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 53,
+      "input": {
+        "flags": { "cashless": true, "registry": null, "confirmed": null, "gov": null },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 53,
+      "input": {
+        "flags": { "cashless": true, "registry": null, "confirmed": null, "gov": null },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "spino",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": true,
+        "log": ["Тариф Соцфонда: СПиНО → СПиНО (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 53,
+      "input": {
+        "flags": { "cashless": true, "registry": null, "confirmed": null, "gov": null },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "general",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: СПиНО → Базовый тариф (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 53,
+      "input": {
+        "flags": { "cashless": true, "registry": null, "confirmed": null, "gov": null },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "pvtpki",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: СПиНО → Тариф ПВТ / ПКИ (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 31,
+      "input": {
+        "flags": { "cashless": false, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": [
+          "Признаки для тарифа Соцфонда: Зарплата только безналично (на карты) — нет; Реестр наёмных работников загружен в Салык.кг — да; Тариф подтверждён ГНС — да; Госфинансирование — нет"
+        ]
+      }
+    },
+    {
+      "case": 31,
+      "input": {
+        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "tariff": "spino",
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": ["Признаки для тарифа Соцфонда: "]
+      }
+    }
+  ],
+  "penalties": [
+    {
+      "report": {
+        "reportTypeCode": "soc",
+        "dueDate": "2026-10-20",
+        "payDue": "2026-10-20",
+        "overdue": true,
+        "amount": 1000000,
+        "paid": 0
+      },
+      "expected": "С 21-го числа начисляется пеня 0,09 % в день от неуплаченной суммы (пеня не больше 100 % долга). Примерно на сегодня: ≈ 63 сом за 7 дн. от 10 000 сом. Это подсказка: в суммы к уплате и деньги контрагента пеня не попадает."
+    },
+    {
+      "report": {
+        "reportTypeCode": "soc",
+        "dueDate": "2026-10-20",
+        "payDue": "2026-10-20",
+        "overdue": true,
+        "amount": null,
+        "paid": 0
+      },
+      "expected": "С 21-го числа начисляется пеня 0,09 % в день от неуплаченной суммы (пеня не больше 100 % долга). Это подсказка: в суммы к уплате и деньги контрагента пеня не попадает."
+    },
+    {
+      "report": {
+        "reportTypeCode": "soc",
+        "dueDate": "2026-10-20",
+        "payDue": "2026-10-20",
+        "overdue": true,
+        "amount": 1000000,
+        "paid": 1000000
+      },
+      "expected": ""
+    },
+    {
+      "report": {
+        "reportTypeCode": "soc",
+        "dueDate": "2026-10-20",
+        "payDue": "2026-10-20",
+        "overdue": true,
+        "amount": 1000000,
+        "paid": 250050
+      },
+      "expected": "С 21-го числа начисляется пеня 0,09 % в день от неуплаченной суммы (пеня не больше 100 % долга). Примерно на сегодня: ≈ 47,25 сом за 7 дн. от 7 499,50 сом. Это подсказка: в суммы к уплате и деньги контрагента пеня не попадает."
+    },
+    {
+      "report": {
+        "reportTypeCode": "soc",
+        "dueDate": "2025-01-20",
+        "payDue": "2025-01-20",
+        "overdue": true,
+        "amount": 10000,
+        "paid": 0
+      },
+      "expected": "С 21-го числа начисляется пеня 0,09 % в день от неуплаченной суммы (пеня не больше 100 % долга). Примерно на сегодня: ≈ 58,05 сом за 645 дн. от 100 сом. Это подсказка: в суммы к уплате и деньги контрагента пеня не попадает."
+    },
+    {
+      "report": {
+        "reportTypeCode": "soc",
+        "dueDate": "2026-11-20",
+        "payDue": "2026-11-20",
+        "overdue": false,
+        "amount": 1000000,
+        "paid": 0
+      },
+      "expected": ""
+    },
+    {
+      "report": {
+        "reportTypeCode": "nds",
+        "dueDate": "2026-10-20",
+        "payDue": "2026-10-20",
+        "overdue": true,
+        "amount": 1000000,
+        "paid": 0
+      },
+      "expected": ""
+    }
+  ]
+}

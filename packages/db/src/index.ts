@@ -12,6 +12,7 @@ export * from './auth';
 export * from './telegram';
 export * from './staff';
 export * from './contractors';
+export * from './socfund';
 export * from './reports';
 export * from './report-list';
 export * from './tasks';

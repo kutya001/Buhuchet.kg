@@ -27,19 +27,25 @@ import {
   updateContractorHandler,
   updateContractorRoute,
 } from './save';
+import {
+  saveSocfundHandler,
+  saveSocfundRoute,
+  socfundCheckHandler,
+  socfundCheckRoute,
+} from './socfund';
 
 /**
  * Модуль «Контрагенты»: список (значения для фильтра, выгрузка в Excel, счётчики вкладок), карточка,
- * сверка с ГКЭД для формы, создание одним целым, «Изменить», удаление, назначение ответственного и
- * передача дел. Экраны — задачи 2.09–2.11; подбор отчётов, тариф Соцфонда, приостановка и архив —
- * свои задачи.
+ * сверка с ГКЭД и тариф Соцфонда для формы, создание одним целым, «Изменить», удаление, назначение
+ * ответственного, передача дел и окно «Тариф Соцфонда». Экраны — задачи 2.09–2.11; подбор отчётов,
+ * приостановка и архив — свои задачи.
  */
 export function contractorsModule(deps: ApiDeps) {
   return (
     createModuleApp()
       .openapi(listContractorsRoute, listContractorsHandler(deps))
-      // Раньше `/contractors/{id}`: иначе «values», «export», «tab-counts», «transfer» и «gked-check»
-      // разбирались бы как номер контрагента.
+      // Раньше `/contractors/{id}`: иначе «values», «export», «tab-counts», «transfer», «gked-check» и
+      // «socfund-check» разбирались бы как номер контрагента.
       .openapi(contractorValuesRoute, contractorValuesHandler(deps))
       .openapi(contractorTabCountsRoute, contractorTabCountsHandler(deps))
       .openapi(exportContractorsRoute, exportContractorsHandler(deps))
@@ -47,9 +53,11 @@ export function contractorsModule(deps: ApiDeps) {
       .openapi(transferContractorsRoute, transferContractorsHandler(deps))
       .openapi(assignContractorsRoute, assignContractorsHandler(deps))
       .openapi(gkedCheckRoute, gkedCheckHandler(deps))
+      .openapi(socfundCheckRoute, socfundCheckHandler(deps))
       .openapi(getContractorRoute, getContractorHandler(deps))
       .openapi(createContractorRoute, createContractorHandler(deps))
       .openapi(updateContractorRoute, updateContractorHandler(deps))
       .openapi(deleteContractorRoute, deleteContractorHandler(deps))
+      .openapi(saveSocfundRoute, saveSocfundHandler(deps))
   );
 }

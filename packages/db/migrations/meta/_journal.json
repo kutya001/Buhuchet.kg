@@ -358,6 +358,13 @@
       "when": 1793307716180,
       "tag": "0050_reports_guards",
       "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1793308300648,
+      "tag": "0051_contractors_socfund",
+      "breakpoints": true
     }
   ]
 }

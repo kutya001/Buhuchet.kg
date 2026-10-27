@@ -5,9 +5,12 @@ import {
   gkedSignature,
   parseContract,
   PAYS_TO,
+  SOCFUND_TARIFFS,
+  socfundFlagsOf,
   TARIFF_PERIODS,
   type HistoryValue,
 } from '@buhuchet/domain';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Db } from '../client';
 import {
@@ -71,6 +74,11 @@ const DemoContractor = z.object({
     .default([]),
   /** Подтверждение права на режим по ГКЭД (прототип gkEnOk). */
   gkOk: z.object({ by: z.string(), at: z.iso.date(), ask: z.string() }).optional(),
+  /** Признаки для тарифа Соцфонда, тариф, выбран ли вручную и почему (задача 2.08). */
+  sf: z.record(z.string(), z.boolean()).default({}),
+  sfT: z.enum(SOCFUND_TARIFFS).optional(),
+  sfMan: z.boolean().default(false),
+  sfWhy: z.string().default(''),
   _cb: z.string(),
   _ca: Stamp,
   _ub: z.string(),
@@ -81,10 +89,11 @@ const DemoContractors = z.object({ contractors: z.array(DemoContractor).default(
 
 /**
  * Контрагенты демо-организации (задача 2.05): поля, дополнительные ГКЭД, льготы, основания отчётов,
- * журнал ставок и подтверждение права на режим. Справочные значения demoDB.json названы словами —
+ * журнал ставок, подтверждение права на режим и тариф Соцфонда с признаками (задача 2.08; статус СПиНО
+ * в льготах demoDB.json стоит ровно у контрагентов с тарифом СПиНО). Справочные значения demoDB.json названы словами —
  * они переводятся в коды справочников платформы; неизвестное название — ошибка наполнения. Повторный
- * запуск досоздаёт только недостающее. Назначенные отчёты, Соцфонд, приостановки, деньги и файлы
- * добавят свои задачи.
+ * запуск досоздаёт только недостающее. Назначенные отчёты, приостановки, деньги и файлы добавят
+ * свои задачи.
  */
 export async function seedDemoContractors(
   db: Db,
@@ -179,6 +188,10 @@ export async function seedDemoContractors(
         paysTo: c.paysTo,
         serviceStatus: c.archived ? ('archived' as const) : ('active' as const),
         gkedConfirmation: confirmation ?? null,
+        socfundFlags: socfundFlagsOf(c.sf),
+        socfundTariff: c.sfT
+          ? { id: c.sfT, manual: c.sfMan, reason: c.sfMan && c.sfWhy ? c.sfWhy : null }
+          : null,
         createdBy: user(c._cb),
         updatedBy: user(c._ub),
         createdAt: stampOf(c._ca),
@@ -232,6 +245,21 @@ export async function seedDemoContractors(
   if (baseRows.length) await db.insert(contractorBases).values(baseRows).onConflictDoNothing();
   if (tariffRows.length) {
     await db.insert(contractorTariffs).values(tariffRows).onConflictDoNothing();
+  }
+  // Тариф Соцфонда появился после контрагентов (задача 2.08): у созданных раньше он досоздаётся,
+  // если признаки и тариф ещё не заданы.
+  for (const { contractor } of rows) {
+    if (!contractor.socfundTariff && !Object.keys(contractor.socfundFlags).length) continue;
+    await db
+      .update(contractors)
+      .set({ socfundFlags: contractor.socfundFlags, socfundTariff: contractor.socfundTariff })
+      .where(
+        and(
+          eq(contractors.id, contractor.id),
+          sql`${contractors.socfundFlags} = '{}'::jsonb`,
+          isNull(contractors.socfundTariff),
+        ),
+      );
   }
 
   // Подтверждение права на режим — в истории контрагента (п. 58: «в истории — кто подтвердил»);
