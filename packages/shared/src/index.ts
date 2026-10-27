@@ -4,6 +4,7 @@ export * from './system';
 export * from './auth';
 export * from './telegram';
 export * from './staff';
+export * from './contractors';
 export * from './roles';
 export * from './org';
 export * from './kb';

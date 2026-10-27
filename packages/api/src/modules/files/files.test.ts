@@ -1,6 +1,6 @@
 import type { MemoryStorage } from '@buhuchet/adapters';
 import { schema } from '@buhuchet/db';
-import { databaseAvailable } from '@buhuchet/db/testing';
+import { databaseAvailable, seedAllPlatformDictionaries } from '@buhuchet/db/testing';
 import { FILE_MAX_BYTES, FILE_MESSAGES, FILE_UPLOADS_PER_HOUR } from '@buhuchet/domain';
 import {
   ApiError,
@@ -112,6 +112,18 @@ describe.skipIf(!databaseAvailable())('Файлы записей: API', () => {
 
   beforeAll(async () => {
     f = await createStaffFixture();
+    // Контрагент записей-подделок: на него ссылаются файлы и история (внешние ключи на контрагентов).
+    await seedAllPlatformDictionaries(f.t.admin.db);
+    await f.t.admin.db.insert(schema.contractors).values({
+      id: '00000000-0000-4000-8000-0000000000c1',
+      orgId: f.a.orgId,
+      name: 'ОсОО «Ала-Тоо Трейд»',
+      inn: '03744097401851',
+      phone: '+996505890076',
+      formCode: 'ФС-01',
+      regimeCode: 'РЕЖ-01',
+      startDate: '2026-01-15',
+    });
     storage = f.deps.storage as MemoryStorage;
     app = createApp({ ...f.deps, fileSources: { ...FILE_SOURCES, record: recordSource } });
     owner = await signIn(app, 'owner-a', TEST_PASSWORD);
