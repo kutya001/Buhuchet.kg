@@ -19,4 +19,6 @@ export * from './admin-orgs';
 export * from './rate-limits';
 export * from './dicts';
 export * from './taxes';
+export * from './platform-values';
+export * from './dict-requests';
 export * as schema from './schema';

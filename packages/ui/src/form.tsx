@@ -156,6 +156,8 @@ export interface KeyValueItem {
   value: ReactNode;
   /** Значение моноширинным (логин, код). */
   mono?: boolean;
+  /** Во всю ширину, через оба столбца (`.pk-wide`: «Что даёт» и «Условия» в описании льготы). */
+  wide?: boolean;
 }
 
 /** Ровно два столбца, на телефоне — один (`.pk-kv`: описание вида в «Подборе отчётов» и «Выборе налогов»). */
@@ -173,7 +175,10 @@ export function KeyValues({
   return (
     <dl ref={ref} className={`m-0 ${columns === 2 ? KV_TWO_CLASS : KV_CLASS}`}>
       {items.map((item) => (
-        <div key={item.id} className="flex min-w-0 flex-col gap-0.5">
+        <div
+          key={item.id}
+          className={`flex min-w-0 flex-col gap-0.5${item.wide ? ' col-span-full' : ''}`}
+        >
           <dt className="text-[11.5px] font-semibold text-faint">{item.label}</dt>
           <dd
             data-kv-value=""

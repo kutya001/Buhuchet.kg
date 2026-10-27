@@ -13,6 +13,7 @@ export const HISTORY_ENTITIES = [
   'role',
   'file',
   'org_report_type',
+  'dict_request',
 ] as const;
 export type HistoryEntity = (typeof HISTORY_ENTITIES)[number];
 

@@ -3,14 +3,25 @@
 import type { TaxPickCatalog } from '@buhuchet/domain';
 import {
   Authorities,
+  DictRequests,
   OrgReportTypeSettings,
+  OwnershipForms,
+  PlatformDictGroups,
   ReportBases,
   ReportTypes,
+  SingleTaxRates,
   TaxBenefits,
   Taxes,
+  TaxOffices,
   TaxRegimes,
+  type Authority,
+  type OwnershipForm,
+  type ReportBase,
   type ReportType,
+  type SingleTaxRate,
   type TaxBenefit,
+  type TaxOffice,
+  type TaxRegime,
 } from '@buhuchet/shared';
 import { queryOptions, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
@@ -19,7 +30,8 @@ import { api, apiFailure } from '../api-client';
 /**
  * Данные модуля «Справочники» через TanStack Query: каталог видов отчётов платформы с органами,
  * режимами, основаниями и льготами (для формы просмотра вида и окна «Выбор налогов»), «Налоги и ставки»
- * и настройки организации по видам. После сохранения — `useDictsRefresh`.
+ * и настройки организации по видам. После сохранения — `useDictsRefresh`. Вкладка «Справочники
+ * платформы» — плитки, справочники для описаний значений и «Мои запросы».
  */
 
 type JsonResponse = { ok: boolean; status: number; json(): Promise<unknown> };
@@ -42,6 +54,10 @@ export interface Catalog {
   /** Основание — название по коду. */
   base: (code: string) => string;
   benefits: readonly TaxBenefit[];
+  /** Действующие органы, режимы и основания — для описаний значений «Справочников платформы». */
+  authorities: readonly Authority[];
+  regimes: readonly TaxRegime[];
+  bases: readonly ReportBase[];
   /** Для «Выбора налогов»: режимы и орган — названиями. */
   pick: TaxPickCatalog;
 }
@@ -80,6 +96,9 @@ export const catalogQuery = queryOptions({
       regime,
       base: nameBy(bases.items),
       benefits: benefits.items,
+      authorities: authorities.items,
+      regimes: regimes.items,
+      bases: bases.items,
       pick: {
         types: active.map((x) => ({
           code: x.code,
@@ -111,6 +130,46 @@ export const typeSettingsQuery = queryOptions({
   queryKey: ['dicts', 'settings'],
   queryFn: async () =>
     json(await api.api['org-report-types'].settings.$get(), (v) => OrgReportTypeSettings.parse(v)),
+});
+
+/** «Справочники платформы»: плитки справочников по группам с числом значений. */
+export const platformTilesQuery = queryOptions({
+  queryKey: ['dicts', 'platform'],
+  queryFn: async () =>
+    json(await api.api['platform-dicts'].$get(), (v) => PlatformDictGroups.parse(v)),
+});
+
+/**
+ * Справочники для описаний значений, которых нет в каталоге: формы собственности, ставки единого
+ * налога, УГНС (у льготы — «Ставится по УГНС»). Как каталог — один раз за сеанс страницы.
+ */
+export interface ValueDicts {
+  forms: readonly OwnershipForm[];
+  rates: readonly SingleTaxRate[];
+  offices: readonly TaxOffice[];
+}
+
+export const valueDictsQuery = queryOptions({
+  queryKey: ['dicts', 'value-dicts'],
+  queryFn: async (): Promise<ValueDicts> => {
+    const [forms, rates, offices] = await Promise.all([
+      api.api['ownership-forms']
+        .$get({ query: {} })
+        .then((r) => json(r, (v) => OwnershipForms.parse(v))),
+      api.api['single-tax-rates']
+        .$get({ query: {} })
+        .then((r) => json(r, (v) => SingleTaxRates.parse(v))),
+      api.api['tax-offices'].$get({ query: {} }).then((r) => json(r, (v) => TaxOffices.parse(v))),
+    ]);
+    return { forms: forms.items, rates: rates.items, offices: offices.items };
+  },
+  staleTime: Infinity,
+});
+
+/** «Мои запросы»: запросы организации администратору платформы. */
+export const dictRequestsQuery = queryOptions({
+  queryKey: ['dicts', 'requests'],
+  queryFn: async () => json(await api.api['dict-requests'].$get(), (v) => DictRequests.parse(v)),
 });
 
 /** После подключения или правки вида: перечитать список «Виды отчётов» и настройки организации. */

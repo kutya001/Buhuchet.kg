@@ -1,6 +1,26 @@
 import type { ApiDeps } from '../../deps';
 import { createModuleApp } from '../../module';
 import {
+  createDictRequestHandler,
+  createDictRequestRoute,
+  exportPlatformDictHandler,
+  exportPlatformDictRoute,
+  exportPlatformValuesHandler,
+  exportPlatformValuesRoute,
+  listDictRequestsHandler,
+  listDictRequestsRoute,
+  platformDictListHandler,
+  platformDictListRoute,
+  platformDictTilesHandler,
+  platformDictTilesRoute,
+  platformDictValuesHandler,
+  platformDictValuesRoute,
+  platformValuesHandler,
+  platformValuesRoute,
+  platformValueValuesHandler,
+  platformValueValuesRoute,
+} from './platform';
+import {
   connectOrgReportTypesHandler,
   connectOrgReportTypesRoute,
   exportOrgReportTypesHandler,
@@ -18,7 +38,9 @@ import {
 /**
  * Модуль «Справочники» организации: вкладка «Виды отчётов» — список каталога с настройками
  * организации (значения для фильтра, выгрузка в Excel), подключение из каталога («Выбор налогов»),
- * переключатели и настройки вида. Справочники платформы для чтения — модуль `platform-dicts`.
+ * переключатели и настройки вида; вкладка «Справочники платформы» — плитки, окна справочников,
+ * «Поиск по всем значениям», «Попросить добавить» и «Мои запросы». Справочники платформы для форм —
+ * модуль `platform-dicts`.
  */
 export function dictsModule(deps: ApiDeps) {
   return (
@@ -30,5 +52,14 @@ export function dictsModule(deps: ApiDeps) {
       .openapi(orgReportTypeSettingsRoute, orgReportTypeSettingsHandler(deps))
       .openapi(connectOrgReportTypesRoute, connectOrgReportTypesHandler(deps))
       .openapi(saveOrgReportTypeRoute, saveOrgReportTypeHandler(deps))
+      .openapi(platformDictTilesRoute, platformDictTilesHandler(deps))
+      .openapi(platformDictListRoute, platformDictListHandler(deps))
+      .openapi(platformDictValuesRoute, platformDictValuesHandler(deps))
+      .openapi(exportPlatformDictRoute, exportPlatformDictHandler(deps))
+      .openapi(platformValueValuesRoute, platformValueValuesHandler(deps))
+      .openapi(exportPlatformValuesRoute, exportPlatformValuesHandler(deps))
+      .openapi(platformValuesRoute, platformValuesHandler(deps))
+      .openapi(createDictRequestRoute, createDictRequestHandler(deps))
+      .openapi(listDictRequestsRoute, listDictRequestsHandler(deps))
   );
 }

@@ -7,16 +7,17 @@ import { useShell } from '../shell/context';
 
 /**
  * «+ Добавить» в модуле «Справочники» (прототип core/registry.js, `add` модуля dicts): «Подключить из
- * каталога» — окно «Выбор налогов» на любой вкладке модуля. «Попросить добавить» появится с запросами
- * администратору платформы (задача 2.03), пока — уведомление, как у модуля без экрана.
+ * каталога» — окно «Выбор налогов», «Попросить добавить» — запрос администратору платформы; оба — на
+ * любой вкладке модуля. Другой способ — уведомление, как у модуля без экрана.
  */
-export function useDictsAddRequest(run: { catalog: () => void }) {
+export function useDictsAddRequest(run: { catalog: () => void; request: () => void }) {
   const t = useT();
   const toast = useToast();
   const { addRequest, clearAddRequest } = useShell();
   const request = addRequest?.moduleId === 'dicts' ? addRequest : null;
   const start = useEffectEvent((actionId: string, label: string) => {
     if (actionId === 'catalog') run.catalog();
+    else if (actionId === 'request') run.request();
     else toast(t('shell.stub_add', { action: label }), { icon: 'info' });
   });
   useEffect(() => {

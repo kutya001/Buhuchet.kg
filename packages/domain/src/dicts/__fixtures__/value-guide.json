@@ -1,0 +1,1241 @@
+{
+  "source": "spec/prototype/src/js/core/reference.js, modules/report-pick.js, core/tax-lines.js",
+  "types": {
+    "nds": {
+      "shortName": "НДС",
+      "period": "M",
+      "dueDay": 25,
+      "dueAfter": 1,
+      "dueMonth": null,
+      "dueFrom": "end",
+      "oneOff": false,
+      "act": "both",
+      "payDay": 25,
+      "payAfter": 1,
+      "payMonth": null,
+      "paySchedule": null
+    },
+    "nspm": {
+      "shortName": "НсП мес.",
+      "period": "M",
+      "dueDay": 20,
+      "dueAfter": 1,
+      "dueMonth": null,
+      "dueFrom": "end",
+      "oneOff": false,
+      "act": "both",
+      "payDay": null,
+      "payAfter": null,
+      "payMonth": null,
+      "paySchedule": null
+    },
+    "zon": {
+      "shortName": "Зона торг.",
+      "period": "M",
+      "dueDay": 1,
+      "dueAfter": 0,
+      "dueMonth": null,
+      "dueFrom": "start",
+      "oneOff": false,
+      "act": "pay",
+      "payDay": null,
+      "payAfter": null,
+      "payMonth": null,
+      "paySchedule": null
+    },
+    "imn": {
+      "shortName": "Имущество нежил.",
+      "period": "Y",
+      "dueDay": 20,
+      "dueAfter": null,
+      "dueMonth": 3,
+      "dueFrom": "start",
+      "oneOff": false,
+      "act": "pay",
+      "payDay": null,
+      "payAfter": null,
+      "payMonth": null,
+      "paySchedule": [
+        [3, 20],
+        [6, 20],
+        [9, 20],
+        [12, 20]
+      ]
+    },
+    "imi": {
+      "shortName": "Инф. расчёт имущ.",
+      "period": "Y",
+      "dueDay": 1,
+      "dueAfter": null,
+      "dueMonth": 3,
+      "dueFrom": "start",
+      "oneOff": false,
+      "act": "sub",
+      "payDay": null,
+      "payAfter": null,
+      "payMonth": null,
+      "paySchedule": null
+    },
+    "t1m": {
+      "shortName": "1-Т",
+      "period": "M",
+      "dueDay": 10,
+      "dueAfter": 1,
+      "dueMonth": null,
+      "dueFrom": "end",
+      "oneOff": false,
+      "act": "sub",
+      "payDay": null,
+      "payAfter": null,
+      "payMonth": null,
+      "paySchedule": null
+    }
+  },
+  "benefits": [
+    {
+      "name": "Крупный налогоплательщик",
+      "rules": [
+        {
+          "reportType": "nds",
+          "dueDay": 31,
+          "dueAfter": 1,
+          "dueMonth": null,
+          "payDay": 25,
+          "payAfter": 1
+        }
+      ],
+      "expected": "НДС: сдача — до последнего дня месяца после отчётного; уплата — до 25-го числа месяца после отчётного"
+    },
+    {
+      "name": "Статус 1",
+      "rules": [
+        {
+          "reportType": "t1m",
+          "dueDay": 31,
+          "dueAfter": 1,
+          "dueMonth": null,
+          "payDay": null,
+          "payAfter": null
+        },
+        {
+          "reportType": "imi",
+          "dueDay": 31,
+          "dueAfter": 1,
+          "dueMonth": null,
+          "payDay": null,
+          "payAfter": null
+        },
+        {
+          "reportType": "zon",
+          "dueDay": 31,
+          "dueAfter": 1,
+          "dueMonth": null,
+          "payDay": null,
+          "payAfter": null
+        },
+        {
+          "reportType": "imn",
+          "dueDay": 31,
+          "dueAfter": 1,
+          "dueMonth": null,
+          "payDay": null,
+          "payAfter": null
+        },
+        {
+          "reportType": "nds",
+          "dueDay": 31,
+          "dueAfter": 1,
+          "dueMonth": null,
+          "payDay": null,
+          "payAfter": null
+        },
+        {
+          "reportType": "nspm",
+          "dueDay": 31,
+          "dueAfter": 1,
+          "dueMonth": null,
+          "payDay": null,
+          "payAfter": null
+        }
+      ],
+      "expected": "1-Т: сдача — до последнего дня месяца после отчётного; Инф. расчёт имущ.: сдача — до 31 марта того же года; Зона торг.: уплата — до последнего дня месяца после отчётного; Имущество нежил.: уплата — до 31 марта того же года; НДС: сдача — до последнего дня месяца после отчётного; уплата — до 25-го числа месяца после отчётного; НсП мес.: сдача — до последнего дня месяца после отчётного"
+    },
+    {
+      "name": "Статус 2",
+      "rules": [
+        {
+          "reportType": "t1m",
+          "dueDay": 15,
+          "dueAfter": null,
+          "dueMonth": null,
+          "payDay": null,
+          "payAfter": null
+        },
+        {
+          "reportType": "imi",
+          "dueDay": 15,
+          "dueAfter": null,
+          "dueMonth": null,
+          "payDay": null,
+          "payAfter": null
+        },
+        {
+          "reportType": "zon",
+          "dueDay": 15,
+          "dueAfter": null,
+          "dueMonth": null,
+          "payDay": null,
+          "payAfter": null
+        },
+        {
+          "reportType": "imn",
+          "dueDay": 15,
+          "dueAfter": null,
+          "dueMonth": null,
+          "payDay": null,
+          "payAfter": null
+        },
+        {
+          "reportType": "nds",
+          "dueDay": 15,
+          "dueAfter": null,
+          "dueMonth": null,
+          "payDay": null,
+          "payAfter": null
+        },
+        {
+          "reportType": "nspm",
+          "dueDay": 15,
+          "dueAfter": null,
+          "dueMonth": null,
+          "payDay": null,
+          "payAfter": null
+        }
+      ],
+      "expected": "1-Т: сдача — до 15-го числа месяца после отчётного; Инф. расчёт имущ.: сдача — до 15 марта того же года; Зона торг.: уплата — оплата до 15-го числа месяца, за который платится; Имущество нежил.: уплата — до 15 марта того же года; НДС: сдача — до 15-го числа месяца после отчётного; уплата — до 25-го числа месяца после отчётного; НсП мес.: сдача — до 15-го числа месяца после отчётного"
+    },
+    {
+      "name": "Статус 3",
+      "rules": [
+        {
+          "reportType": "t1m",
+          "dueDay": null,
+          "dueAfter": null,
+          "dueMonth": null,
+          "payDay": 25,
+          "payAfter": 1
+        },
+        {
+          "reportType": "imi",
+          "dueDay": null,
+          "dueAfter": null,
+          "dueMonth": null,
+          "payDay": 25,
+          "payAfter": 1
+        },
+        {
+          "reportType": "zon",
+          "dueDay": null,
+          "dueAfter": null,
+          "dueMonth": null,
+          "payDay": 25,
+          "payAfter": 1
+        },
+        {
+          "reportType": "imn",
+          "dueDay": null,
+          "dueAfter": null,
+          "dueMonth": null,
+          "payDay": 25,
+          "payAfter": 1
+        },
+        {
+          "reportType": "nds",
+          "dueDay": null,
+          "dueAfter": null,
+          "dueMonth": null,
+          "payDay": 25,
+          "payAfter": 1
+        },
+        {
+          "reportType": "nspm",
+          "dueDay": null,
+          "dueAfter": null,
+          "dueMonth": null,
+          "payDay": 25,
+          "payAfter": 1
+        }
+      ],
+      "expected": "1-Т: сдача — до 10-го числа месяца после отчётного; Инф. расчёт имущ.: сдача — до 1 марта того же года; Зона торг.: уплата — до 25-го числа месяца после отчётного; Имущество нежил.: уплата — до 25 марта того же года; НДС: сдача — до 25-го числа месяца после отчётного; уплата — до 25-го числа месяца после отчётного; НсП мес.: сдача — до 20-го числа месяца после отчётного; уплата — до 25-го числа месяца после отчётного"
+    },
+    {
+      "name": "Статус 4",
+      "rules": [
+        {
+          "reportType": "t1m",
+          "dueDay": 10,
+          "dueAfter": 2,
+          "dueMonth": null,
+          "payDay": 20,
+          "payAfter": null
+        },
+        {
+          "reportType": "imi",
+          "dueDay": 10,
+          "dueAfter": 2,
+          "dueMonth": null,
+          "payDay": 20,
+          "payAfter": null
+        },
+        {
+          "reportType": "zon",
+          "dueDay": 10,
+          "dueAfter": 2,
+          "dueMonth": null,
+          "payDay": 20,
+          "payAfter": null
+        },
+        {
+          "reportType": "imn",
+          "dueDay": 10,
+          "dueAfter": 2,
+          "dueMonth": null,
+          "payDay": 20,
+          "payAfter": null
+        },
+        {
+          "reportType": "nds",
+          "dueDay": 10,
+          "dueAfter": 2,
+          "dueMonth": null,
+          "payDay": 20,
+          "payAfter": null
+        },
+        {
+          "reportType": "nspm",
+          "dueDay": 10,
+          "dueAfter": 2,
+          "dueMonth": null,
+          "payDay": 20,
+          "payAfter": null
+        }
+      ],
+      "expected": "1-Т: сдача — до 10-го числа 2-го месяца после месяца; Инф. расчёт имущ.: сдача — до 10 марта того же года; Зона торг.: уплата — оплата до 20-го числа месяца, за который платится; Имущество нежил.: уплата — до 20 марта того же года; НДС: сдача — до 10-го числа 2-го месяца после месяца; уплата — до 20-го числа месяца после отчётного; НсП мес.: сдача — до 10-го числа 2-го месяца после месяца; уплата — до 20-го числа месяца после отчётного"
+    },
+    {
+      "name": "Статус 5",
+      "rules": [
+        {
+          "reportType": "t1m",
+          "dueDay": 30,
+          "dueAfter": null,
+          "dueMonth": 4,
+          "payDay": null,
+          "payAfter": null
+        },
+        {
+          "reportType": "imi",
+          "dueDay": 30,
+          "dueAfter": null,
+          "dueMonth": 4,
+          "payDay": null,
+          "payAfter": null
+        },
+        {
+          "reportType": "zon",
+          "dueDay": 30,
+          "dueAfter": null,
+          "dueMonth": 4,
+          "payDay": null,
+          "payAfter": null
+        },
+        {
+          "reportType": "imn",
+          "dueDay": 30,
+          "dueAfter": null,
+          "dueMonth": 4,
+          "payDay": null,
+          "payAfter": null
+        },
+        {
+          "reportType": "nds",
+          "dueDay": 30,
+          "dueAfter": null,
+          "dueMonth": 4,
+          "payDay": null,
+          "payAfter": null
+        },
+        {
+          "reportType": "nspm",
+          "dueDay": 30,
+          "dueAfter": null,
+          "dueMonth": 4,
+          "payDay": null,
+          "payAfter": null
+        }
+      ],
+      "expected": "1-Т: сдача — до 30-го числа месяца после отчётного; Инф. расчёт имущ.: сдача — до 30 апреля того же года; Зона торг.: уплата — оплата до 30-го числа месяца, за который платится; Имущество нежил.: уплата — до 30 апреля того же года; НДС: сдача — до 30-го числа месяца после отчётного; уплата — до 25-го числа месяца после отчётного; НсП мес.: сдача — до 30-го числа месяца после отчётного"
+    },
+    {
+      "name": "Статус 6",
+      "rules": [
+        {
+          "reportType": "t1m",
+          "dueDay": null,
+          "dueAfter": 0,
+          "dueMonth": null,
+          "payDay": null,
+          "payAfter": null
+        },
+        {
+          "reportType": "imi",
+          "dueDay": null,
+          "dueAfter": 0,
+          "dueMonth": null,
+          "payDay": null,
+          "payAfter": null
+        },
+        {
+          "reportType": "zon",
+          "dueDay": null,
+          "dueAfter": 0,
+          "dueMonth": null,
+          "payDay": null,
+          "payAfter": null
+        },
+        {
+          "reportType": "imn",
+          "dueDay": null,
+          "dueAfter": 0,
+          "dueMonth": null,
+          "payDay": null,
+          "payAfter": null
+        },
+        {
+          "reportType": "nds",
+          "dueDay": null,
+          "dueAfter": 0,
+          "dueMonth": null,
+          "payDay": null,
+          "payAfter": null
+        },
+        {
+          "reportType": "nspm",
+          "dueDay": null,
+          "dueAfter": 0,
+          "dueMonth": null,
+          "payDay": null,
+          "payAfter": null
+        }
+      ],
+      "expected": "1-Т: сдача — до 10-го числа месяца, за который платится; Инф. расчёт имущ.: сдача — до 1 марта того же года; Зона торг.: уплата — оплата до 1-го числа месяца, за который платится; Имущество нежил.: уплата — оплата до 20-го числа месяца, за который платится; НДС: сдача — до 25-го числа месяца, за который платится; уплата — до 25-го числа месяца после отчётного; НсП мес.: сдача — до 20-го числа месяца, за который платится"
+    },
+    {
+      "name": "Вид не из каталога",
+      "rules": [
+        {
+          "reportType": "no-such-type",
+          "dueDay": 5,
+          "dueAfter": null,
+          "dueMonth": null,
+          "payDay": null,
+          "payAfter": null
+        }
+      ],
+      "expected": ""
+    }
+  ],
+  "rates": [
+    { "code": "ЕНС-01", "rate": "0,5 %", "rateCashless": "", "rateCash": "" },
+    { "code": "ЕНС-02", "rate": "2 % безнал + 4 % нал", "rateCashless": "2 %", "rateCash": "4 %" },
+    { "code": "ЕНС-03", "rate": "2 % безнал + 4 % нал", "rateCashless": "2 %", "rateCash": "4 %" },
+    { "code": "ЕНС-04", "rate": "4 % безнал + 6 % нал", "rateCashless": "4 %", "rateCash": "6 %" },
+    {
+      "code": "ЕНС-05",
+      "rate": "3 % (Кабинет министров может снизить по товарам)",
+      "rateCashless": "",
+      "rateCash": ""
+    },
+    { "code": "ЕНС-06", "rate": "0,5 %", "rateCashless": "", "rateCash": "" },
+    {
+      "code": "ЕНС-07",
+      "rate": "с частичной переработкой — 1 %, в неизменном виде — 3 %",
+      "rateCashless": "",
+      "rateCash": ""
+    },
+    { "code": "ЕНС-08", "rate": "0,25 %", "rateCashless": "", "rateCash": "" },
+    { "code": "ЕНС-09", "rate": "8 %", "rateCashless": "", "rateCash": "" },
+    { "code": "ЕНС-10", "rate": "5 %", "rateCashless": "", "rateCash": "" },
+    { "code": "ЕНС-11", "rate": "4 %", "rateCashless": "", "rateCash": "" },
+    {
+      "code": "ЕНС-12",
+      "rate": "Бишкек и Ош — 5 %, остальная территория — 3 %",
+      "rateCashless": "",
+      "rateCash": ""
+    },
+    {
+      "code": "ЕНС-13",
+      "rate": "0 % с 01.08.2026 по 31.07.2031, 1 % с 01.08.2031 (1 % было с 01.01.2025 по 31.07.2026)",
+      "rateCashless": "",
+      "rateCash": ""
+    },
+    { "code": "ЕНС-14", "rate": "0,1 %", "rateCashless": "", "rateCash": "" },
+    { "code": "ЕНС-15", "rate": "0 %", "rateCashless": "", "rateCash": "" },
+    { "code": "ЕНС-16", "rate": "4 %", "rateCashless": "", "rateCash": "" },
+    { "code": "ЕНС-17", "rate": "по ставкам ЕНС-04", "rateCashless": "", "rateCash": "" },
+    { "code": "ЕНС-18", "rate": "0 %", "rateCashless": "", "rateCash": "" },
+    { "code": "ЕНС-19", "rate": "0 %", "rateCashless": "", "rateCash": "" },
+    {
+      "code": "ЕНС-20",
+      "rate": "8 % от разницы цены продажи и покупки",
+      "rateCashless": "",
+      "rateCash": ""
+    },
+    { "code": "ЕНС-91", "rate": "по ставкам ЕНС-12", "rateCashless": "", "rateCash": "" },
+    { "code": "ЕНС-92", "rate": "по ставкам ЕНС-92", "rateCashless": "", "rateCash": "" },
+    { "code": "ЕНС-93", "rate": "1 % с 01.01.2027", "rateCashless": "", "rateCash": "" },
+    {
+      "code": "ЕНС-94",
+      "rate": "2 % с 01.01.2020 по 31.12.2021, 3 % с 01.01.2022 по 31.12.2023",
+      "rateCashless": "",
+      "rateCash": ""
+    },
+    { "code": "ЕНС-95", "rate": "без ставки", "rateCashless": "", "rateCash": "" },
+    {
+      "code": "ЕНС-96",
+      "rate": "город — 2 %, село — 1 %, горы — 0,5 %",
+      "rateCashless": "",
+      "rateCash": ""
+    }
+  ],
+  "rateCases": [
+    {
+      "code": "ЕНС-01",
+      "date": "2026-10-27",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "0,5 %" }]
+    },
+    {
+      "code": "ЕНС-01",
+      "date": "2025-03-01",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "0,5 %" }]
+    },
+    {
+      "code": "ЕНС-01",
+      "date": "2031-08-01",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "0,5 %" }]
+    },
+    {
+      "code": "ЕНС-01",
+      "date": "2019-01-01",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "0,5 %" }]
+    },
+    {
+      "code": "ЕНС-02",
+      "date": "2026-10-27",
+      "variant": 0,
+      "expected": [
+        { "name": "Безналичная выручка", "pct": "2 %" },
+        { "name": "Наличная выручка", "pct": "4 %" }
+      ]
+    },
+    {
+      "code": "ЕНС-02",
+      "date": "2025-03-01",
+      "variant": 0,
+      "expected": [
+        { "name": "Безналичная выручка", "pct": "2 %" },
+        { "name": "Наличная выручка", "pct": "4 %" }
+      ]
+    },
+    {
+      "code": "ЕНС-02",
+      "date": "2031-08-01",
+      "variant": 0,
+      "expected": [
+        { "name": "Безналичная выручка", "pct": "2 %" },
+        { "name": "Наличная выручка", "pct": "4 %" }
+      ]
+    },
+    {
+      "code": "ЕНС-02",
+      "date": "2019-01-01",
+      "variant": 0,
+      "expected": [
+        { "name": "Безналичная выручка", "pct": "2 %" },
+        { "name": "Наличная выручка", "pct": "4 %" }
+      ]
+    },
+    {
+      "code": "ЕНС-03",
+      "date": "2026-10-27",
+      "variant": 0,
+      "expected": [
+        { "name": "Безналичная выручка", "pct": "2 %" },
+        { "name": "Наличная выручка", "pct": "4 %" }
+      ]
+    },
+    {
+      "code": "ЕНС-03",
+      "date": "2025-03-01",
+      "variant": 0,
+      "expected": [
+        { "name": "Безналичная выручка", "pct": "2 %" },
+        { "name": "Наличная выручка", "pct": "4 %" }
+      ]
+    },
+    {
+      "code": "ЕНС-03",
+      "date": "2031-08-01",
+      "variant": 0,
+      "expected": [
+        { "name": "Безналичная выручка", "pct": "2 %" },
+        { "name": "Наличная выручка", "pct": "4 %" }
+      ]
+    },
+    {
+      "code": "ЕНС-03",
+      "date": "2019-01-01",
+      "variant": 0,
+      "expected": [
+        { "name": "Безналичная выручка", "pct": "2 %" },
+        { "name": "Наличная выручка", "pct": "4 %" }
+      ]
+    },
+    {
+      "code": "ЕНС-04",
+      "date": "2026-10-27",
+      "variant": 0,
+      "expected": [
+        { "name": "Безналичная выручка", "pct": "4 %" },
+        { "name": "Наличная выручка", "pct": "6 %" }
+      ]
+    },
+    {
+      "code": "ЕНС-04",
+      "date": "2025-03-01",
+      "variant": 0,
+      "expected": [
+        { "name": "Безналичная выручка", "pct": "4 %" },
+        { "name": "Наличная выручка", "pct": "6 %" }
+      ]
+    },
+    {
+      "code": "ЕНС-04",
+      "date": "2031-08-01",
+      "variant": 0,
+      "expected": [
+        { "name": "Безналичная выручка", "pct": "4 %" },
+        { "name": "Наличная выручка", "pct": "6 %" }
+      ]
+    },
+    {
+      "code": "ЕНС-04",
+      "date": "2019-01-01",
+      "variant": 0,
+      "expected": [
+        { "name": "Безналичная выручка", "pct": "4 %" },
+        { "name": "Наличная выручка", "pct": "6 %" }
+      ]
+    },
+    {
+      "code": "ЕНС-05",
+      "date": "2026-10-27",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "3 %" }]
+    },
+    {
+      "code": "ЕНС-05",
+      "date": "2025-03-01",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "3 %" }]
+    },
+    {
+      "code": "ЕНС-05",
+      "date": "2031-08-01",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "3 %" }]
+    },
+    {
+      "code": "ЕНС-05",
+      "date": "2019-01-01",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "3 %" }]
+    },
+    {
+      "code": "ЕНС-06",
+      "date": "2026-10-27",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "0,5 %" }]
+    },
+    {
+      "code": "ЕНС-06",
+      "date": "2025-03-01",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "0,5 %" }]
+    },
+    {
+      "code": "ЕНС-06",
+      "date": "2031-08-01",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "0,5 %" }]
+    },
+    {
+      "code": "ЕНС-06",
+      "date": "2019-01-01",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "0,5 %" }]
+    },
+    {
+      "code": "ЕНС-07",
+      "date": "2026-10-27",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "1 %" }]
+    },
+    {
+      "code": "ЕНС-07",
+      "date": "2025-03-01",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "1 %" }]
+    },
+    {
+      "code": "ЕНС-07",
+      "date": "2031-08-01",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "1 %" }]
+    },
+    {
+      "code": "ЕНС-07",
+      "date": "2019-01-01",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "1 %" }]
+    },
+    {
+      "code": "ЕНС-08",
+      "date": "2026-10-27",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "0,25 %" }]
+    },
+    {
+      "code": "ЕНС-08",
+      "date": "2025-03-01",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "0,25 %" }]
+    },
+    {
+      "code": "ЕНС-08",
+      "date": "2031-08-01",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "0,25 %" }]
+    },
+    {
+      "code": "ЕНС-08",
+      "date": "2019-01-01",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "0,25 %" }]
+    },
+    {
+      "code": "ЕНС-09",
+      "date": "2026-10-27",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "8 %" }]
+    },
+    {
+      "code": "ЕНС-09",
+      "date": "2025-03-01",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "8 %" }]
+    },
+    {
+      "code": "ЕНС-09",
+      "date": "2031-08-01",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "8 %" }]
+    },
+    {
+      "code": "ЕНС-09",
+      "date": "2019-01-01",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "8 %" }]
+    },
+    {
+      "code": "ЕНС-10",
+      "date": "2026-10-27",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "5 %" }]
+    },
+    {
+      "code": "ЕНС-10",
+      "date": "2025-03-01",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "5 %" }]
+    },
+    {
+      "code": "ЕНС-10",
+      "date": "2031-08-01",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "5 %" }]
+    },
+    {
+      "code": "ЕНС-10",
+      "date": "2019-01-01",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "5 %" }]
+    },
+    {
+      "code": "ЕНС-11",
+      "date": "2026-10-27",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "4 %" }]
+    },
+    {
+      "code": "ЕНС-11",
+      "date": "2025-03-01",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "4 %" }]
+    },
+    {
+      "code": "ЕНС-11",
+      "date": "2031-08-01",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "4 %" }]
+    },
+    {
+      "code": "ЕНС-11",
+      "date": "2019-01-01",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "4 %" }]
+    },
+    {
+      "code": "ЕНС-12",
+      "date": "2026-10-27",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "5 %" }]
+    },
+    {
+      "code": "ЕНС-12",
+      "date": "2025-03-01",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "5 %" }]
+    },
+    {
+      "code": "ЕНС-12",
+      "date": "2031-08-01",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "5 %" }]
+    },
+    {
+      "code": "ЕНС-12",
+      "date": "2019-01-01",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "5 %" }]
+    },
+    {
+      "code": "ЕНС-13",
+      "date": "2026-10-27",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "0 %" }]
+    },
+    {
+      "code": "ЕНС-13",
+      "date": "2025-03-01",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "1 %" }]
+    },
+    {
+      "code": "ЕНС-13",
+      "date": "2031-08-01",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "1 %" }]
+    },
+    {
+      "code": "ЕНС-13",
+      "date": "2019-01-01",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "0 %" }]
+    },
+    {
+      "code": "ЕНС-14",
+      "date": "2026-10-27",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "0,1 %" }]
+    },
+    {
+      "code": "ЕНС-14",
+      "date": "2025-03-01",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "0,1 %" }]
+    },
+    {
+      "code": "ЕНС-14",
+      "date": "2031-08-01",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "0,1 %" }]
+    },
+    {
+      "code": "ЕНС-14",
+      "date": "2019-01-01",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "0,1 %" }]
+    },
+    {
+      "code": "ЕНС-15",
+      "date": "2026-10-27",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "0 %" }]
+    },
+    {
+      "code": "ЕНС-15",
+      "date": "2025-03-01",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "0 %" }]
+    },
+    {
+      "code": "ЕНС-15",
+      "date": "2031-08-01",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "0 %" }]
+    },
+    {
+      "code": "ЕНС-15",
+      "date": "2019-01-01",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "0 %" }]
+    },
+    {
+      "code": "ЕНС-16",
+      "date": "2026-10-27",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "4 %" }]
+    },
+    {
+      "code": "ЕНС-16",
+      "date": "2025-03-01",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "4 %" }]
+    },
+    {
+      "code": "ЕНС-16",
+      "date": "2031-08-01",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "4 %" }]
+    },
+    {
+      "code": "ЕНС-16",
+      "date": "2019-01-01",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "4 %" }]
+    },
+    {
+      "code": "ЕНС-17",
+      "date": "2026-10-27",
+      "variant": 0,
+      "expected": [
+        { "name": "Безналичная выручка", "pct": "4 %" },
+        { "name": "Наличная выручка", "pct": "6 %" }
+      ]
+    },
+    {
+      "code": "ЕНС-17",
+      "date": "2025-03-01",
+      "variant": 0,
+      "expected": [
+        { "name": "Безналичная выручка", "pct": "4 %" },
+        { "name": "Наличная выручка", "pct": "6 %" }
+      ]
+    },
+    {
+      "code": "ЕНС-17",
+      "date": "2031-08-01",
+      "variant": 0,
+      "expected": [
+        { "name": "Безналичная выручка", "pct": "4 %" },
+        { "name": "Наличная выручка", "pct": "6 %" }
+      ]
+    },
+    {
+      "code": "ЕНС-17",
+      "date": "2019-01-01",
+      "variant": 0,
+      "expected": [
+        { "name": "Безналичная выручка", "pct": "4 %" },
+        { "name": "Наличная выручка", "pct": "6 %" }
+      ]
+    },
+    {
+      "code": "ЕНС-18",
+      "date": "2026-10-27",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "0 %" }]
+    },
+    {
+      "code": "ЕНС-18",
+      "date": "2025-03-01",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "0 %" }]
+    },
+    {
+      "code": "ЕНС-18",
+      "date": "2031-08-01",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "0 %" }]
+    },
+    {
+      "code": "ЕНС-18",
+      "date": "2019-01-01",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "0 %" }]
+    },
+    {
+      "code": "ЕНС-19",
+      "date": "2026-10-27",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "0 %" }]
+    },
+    {
+      "code": "ЕНС-19",
+      "date": "2025-03-01",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "0 %" }]
+    },
+    {
+      "code": "ЕНС-19",
+      "date": "2031-08-01",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "0 %" }]
+    },
+    {
+      "code": "ЕНС-19",
+      "date": "2019-01-01",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "0 %" }]
+    },
+    {
+      "code": "ЕНС-20",
+      "date": "2026-10-27",
+      "variant": 0,
+      "expected": [{ "name": "Сумма разницы цены продажи и покупки", "pct": "8 %" }]
+    },
+    {
+      "code": "ЕНС-20",
+      "date": "2025-03-01",
+      "variant": 0,
+      "expected": [{ "name": "Сумма разницы цены продажи и покупки", "pct": "8 %" }]
+    },
+    {
+      "code": "ЕНС-20",
+      "date": "2031-08-01",
+      "variant": 0,
+      "expected": [{ "name": "Сумма разницы цены продажи и покупки", "pct": "8 %" }]
+    },
+    {
+      "code": "ЕНС-20",
+      "date": "2019-01-01",
+      "variant": 0,
+      "expected": [{ "name": "Сумма разницы цены продажи и покупки", "pct": "8 %" }]
+    },
+    {
+      "code": "ЕНС-91",
+      "date": "2026-10-27",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "5 %" }]
+    },
+    {
+      "code": "ЕНС-91",
+      "date": "2025-03-01",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "5 %" }]
+    },
+    {
+      "code": "ЕНС-91",
+      "date": "2031-08-01",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "5 %" }]
+    },
+    {
+      "code": "ЕНС-91",
+      "date": "2019-01-01",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "5 %" }]
+    },
+    { "code": "ЕНС-92", "date": "2026-10-27", "variant": 0, "expected": [] },
+    { "code": "ЕНС-92", "date": "2025-03-01", "variant": 0, "expected": [] },
+    { "code": "ЕНС-92", "date": "2031-08-01", "variant": 0, "expected": [] },
+    { "code": "ЕНС-92", "date": "2019-01-01", "variant": 0, "expected": [] },
+    {
+      "code": "ЕНС-93",
+      "date": "2026-10-27",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "1 %" }]
+    },
+    {
+      "code": "ЕНС-93",
+      "date": "2025-03-01",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "1 %" }]
+    },
+    {
+      "code": "ЕНС-93",
+      "date": "2031-08-01",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "1 %" }]
+    },
+    {
+      "code": "ЕНС-93",
+      "date": "2019-01-01",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "1 %" }]
+    },
+    {
+      "code": "ЕНС-94",
+      "date": "2026-10-27",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "3 %" }]
+    },
+    {
+      "code": "ЕНС-94",
+      "date": "2025-03-01",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "3 %" }]
+    },
+    {
+      "code": "ЕНС-94",
+      "date": "2031-08-01",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "3 %" }]
+    },
+    {
+      "code": "ЕНС-94",
+      "date": "2019-01-01",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "2 %" }]
+    },
+    { "code": "ЕНС-95", "date": "2026-10-27", "variant": 0, "expected": [] },
+    { "code": "ЕНС-95", "date": "2025-03-01", "variant": 0, "expected": [] },
+    { "code": "ЕНС-95", "date": "2031-08-01", "variant": 0, "expected": [] },
+    { "code": "ЕНС-95", "date": "2019-01-01", "variant": 0, "expected": [] },
+    {
+      "code": "ЕНС-96",
+      "date": "2026-10-27",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "2 %" }]
+    },
+    {
+      "code": "ЕНС-96",
+      "date": "2025-03-01",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "2 %" }]
+    },
+    {
+      "code": "ЕНС-96",
+      "date": "2031-08-01",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "2 %" }]
+    },
+    {
+      "code": "ЕНС-96",
+      "date": "2019-01-01",
+      "variant": 0,
+      "expected": [{ "name": "Выручка", "pct": "2 %" }]
+    },
+    {
+      "code": "ЕНС-07",
+      "date": "2026-10-27",
+      "variant": 1,
+      "expected": [{ "name": "Выручка", "pct": "3 %" }]
+    },
+    {
+      "code": "ЕНС-07",
+      "date": "2026-10-27",
+      "variant": 2,
+      "expected": [{ "name": "Выручка", "pct": "3 %" }]
+    },
+    {
+      "code": "ЕНС-07",
+      "date": "2026-10-27",
+      "variant": 5,
+      "expected": [{ "name": "Выручка", "pct": "3 %" }]
+    },
+    {
+      "code": "ЕНС-07",
+      "date": "2026-10-27",
+      "variant": -1,
+      "expected": [{ "name": "Выручка", "pct": "1 %" }]
+    },
+    {
+      "code": "ЕНС-12",
+      "date": "2026-10-27",
+      "variant": 1,
+      "expected": [{ "name": "Выручка", "pct": "3 %" }]
+    },
+    {
+      "code": "ЕНС-12",
+      "date": "2026-10-27",
+      "variant": 2,
+      "expected": [{ "name": "Выручка", "pct": "3 %" }]
+    },
+    {
+      "code": "ЕНС-12",
+      "date": "2026-10-27",
+      "variant": 5,
+      "expected": [{ "name": "Выручка", "pct": "3 %" }]
+    },
+    {
+      "code": "ЕНС-12",
+      "date": "2026-10-27",
+      "variant": -1,
+      "expected": [{ "name": "Выручка", "pct": "5 %" }]
+    },
+    {
+      "code": "ЕНС-96",
+      "date": "2026-10-27",
+      "variant": 1,
+      "expected": [{ "name": "Выручка", "pct": "1 %" }]
+    },
+    {
+      "code": "ЕНС-96",
+      "date": "2026-10-27",
+      "variant": 2,
+      "expected": [{ "name": "Выручка", "pct": "0,5 %" }]
+    },
+    {
+      "code": "ЕНС-96",
+      "date": "2026-10-27",
+      "variant": 5,
+      "expected": [{ "name": "Выручка", "pct": "0,5 %" }]
+    },
+    {
+      "code": "ЕНС-96",
+      "date": "2026-10-27",
+      "variant": -1,
+      "expected": [{ "name": "Выручка", "pct": "2 %" }]
+    },
+    {
+      "code": "ЕНС-91",
+      "date": "2026-10-27",
+      "variant": 1,
+      "expected": [{ "name": "Выручка", "pct": "3 %" }]
+    },
+    {
+      "code": "ЕНС-91",
+      "date": "2026-10-27",
+      "variant": 2,
+      "expected": [{ "name": "Выручка", "pct": "3 %" }]
+    },
+    {
+      "code": "ЕНС-91",
+      "date": "2026-10-27",
+      "variant": 5,
+      "expected": [{ "name": "Выручка", "pct": "3 %" }]
+    },
+    {
+      "code": "ЕНС-91",
+      "date": "2026-10-27",
+      "variant": -1,
+      "expected": [{ "name": "Выручка", "pct": "5 %" }]
+    }
+  ]
+}
