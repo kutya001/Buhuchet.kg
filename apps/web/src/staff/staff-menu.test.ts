@@ -3,7 +3,7 @@ import type { Employee } from '@buhuchet/shared';
 import type { ActionEntry, ActionItem } from '@buhuchet/ui';
 import { describe, expect, it, vi } from 'vitest';
 import { makeTranslate } from '../l10n/translate';
-import { staffMenu } from './staff-menu';
+import { canEditEmployee, staffMenu } from './staff-menu';
 
 // Пункты меню сотрудника в списке и кнопки «Действия» в карточке (прототип modules/staff.js,
 // empActions): кому какие пункты и какие недоступны с причиной.
@@ -58,19 +58,27 @@ describe('меню сотрудника', () => {
     ).toEqual([]);
   });
 
-  it('сам владелец на своей строке и в своей карточке может «Изменить» ФИО и телефон', () => {
+  it('сам владелец на своей строке может «Изменить» ФИО и телефон; в карточке «Действий» нет', () => {
     const r = run();
     const owner = employee({ id: ME, isOwner: true });
-    expect(labels(staffMenu({ canManage: true, employeeId: ME, t, run: r })(owner))).toEqual([
-      'Открыть карточку',
-      'Изменить',
-    ]);
-    const [edit] = items(
-      staffMenu({ canManage: true, employeeId: ME, t, run: r, card: true })(owner),
-    );
+    const list = staffMenu({ canManage: true, employeeId: ME, t, run: r })(owner);
+    expect(labels(list)).toEqual(['Открыть карточку', 'Изменить']);
+    const edit = items(list)[1]!;
     expect(edit).toMatchObject({ label: 'Изменить', icon: 'edit' });
-    edit!.run();
+    edit.run();
     expect(r.edit).toHaveBeenCalledWith(owner);
+    expect(staffMenu({ canManage: true, employeeId: ME, t, run: r, card: true })(owner)).toEqual(
+      [],
+    );
+  });
+
+  it('кнопка «Изменить» в карточке: с правом — у любого не владельца и у себя; владельца — только сам он', () => {
+    expect(canEditEmployee(true, ME, employee())).toBe(true);
+    expect(canEditEmployee(true, ME, employee({ id: ME }))).toBe(true);
+    expect(canEditEmployee(true, ME, employee({ id: ME, isOwner: true }))).toBe(true);
+    expect(canEditEmployee(true, ME, employee({ isOwner: true }))).toBe(false);
+    expect(canEditEmployee(false, ME, employee())).toBe(false);
+    expect(canEditEmployee(false, ME, employee({ id: ME, isOwner: true }))).toBe(false);
   });
 
   it('активному — «Открыть карточку», «Изменить», «Сменить роль», «Сбросить пароль», черта и красное «Заблокировать»', () => {
@@ -98,17 +106,11 @@ describe('меню сотрудника', () => {
     expect(r.block).toHaveBeenCalledWith(e);
   });
 
-  it('в карточке «Действия» — те же пункты без «Открыть карточку»', () => {
+  it('в карточке «Действия» — те же пункты без «Открыть карточку» и «Изменить» (это отдельная кнопка)', () => {
     const list = staffMenu({ canManage: true, employeeId: ME, t, run: run(), card: true })(
       employee(),
     );
-    expect(labels(list)).toEqual([
-      'Изменить',
-      'Сменить роль',
-      'Сбросить пароль',
-      '—',
-      'Заблокировать',
-    ]);
+    expect(labels(list)).toEqual(['Сменить роль', 'Сбросить пароль', '—', 'Заблокировать']);
   });
 
   it('заблокированному вместо «Заблокировать» — «Разблокировать»', () => {
