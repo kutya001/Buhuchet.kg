@@ -220,8 +220,8 @@ describe.skipIf(!databaseAvailable())('Справочники платформы
       const res = await apiRequest(f.app, 'GET', `/api/production-calendar${q}`, cookie);
       expect(res.status, q).toBe(400);
     }
-    expect((await apiRequest(f.app, 'GET', '/api/report-types?all=yes', cookie)).status).toBe(400);
     for (const [path] of DICTS) {
+      expect((await apiRequest(f.app, 'GET', `${path}?all=yes`, cookie)).status, path).toBe(400);
       expect((await apiRequest(f.app, 'GET', path)).status, path).toBe(401);
     }
     expect((await apiRequest(f.app, 'GET', '/api/production-calendar?year=2026')).status).toBe(401);
