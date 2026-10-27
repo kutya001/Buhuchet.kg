@@ -1,5 +1,5 @@
 {
-  "id": "2513e515-71e6-40d0-bd7e-5ef6646c78a8",
+  "id": "1ccfa8e0-3de2-4f7a-83ba-2f2b619019ea",
   "prevId": "9a9f569f-3259-4910-8053-05001cc76a2d",
   "version": "7",
   "dialect": "postgresql",
@@ -1666,39 +1666,6 @@
           "method": "btree",
           "with": {}
         },
-        "audit_log_actor_idx": {
-          "name": "audit_log_actor_idx",
-          "columns": [
-            {
-              "expression": "org_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "actor_user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "entity",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "audit_log_contractor_idx": {
           "name": "audit_log_contractor_idx",
           "columns": [
@@ -1777,6 +1744,142 @@
             "buhuchet_app"
           ],
           "withCheck": "\"audit_log\".\"actor_user_id\" is not distinct from app.current_user_id() and \"audit_log\".\"at\" = now() and app.history_actor_allowed(\"audit_log\".\"actor_user_id\", \"audit_log\".\"org_id\")"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.platform_audit_log": {
+      "name": "platform_audit_log",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "platform_audit_log_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "9223372036854775807",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "entity": {
+          "name": "entity",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "entity_id": {
+          "name": "entity_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "action": {
+          "name": "action",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "changes": {
+          "name": "changes",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "actor_user_id": {
+          "name": "actor_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "app.current_user_id()"
+        },
+        "at": {
+          "name": "at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "platform_audit_log_entity_idx": {
+          "name": "platform_audit_log_entity_idx",
+          "columns": [
+            {
+              "expression": "entity",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "entity_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "platform_audit_log_actor_user_id_users_id_fk": {
+          "name": "platform_audit_log_actor_user_id_users_id_fk",
+          "tableFrom": "platform_audit_log",
+          "tableTo": "users",
+          "columnsFrom": [
+            "actor_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "platform_audit_log_read": {
+          "name": "platform_audit_log_read",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "buhuchet_app"
+          ],
+          "using": "app.is_platform_admin()"
+        },
+        "platform_audit_log_insert": {
+          "name": "platform_audit_log_insert",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "buhuchet_app"
+          ],
+          "withCheck": "app.is_platform_admin() and \"platform_audit_log\".\"actor_user_id\" = app.current_user_id() and \"platform_audit_log\".\"at\" = now()"
         }
       },
       "checkConstraints": {},
@@ -2616,472 +2719,6 @@
         "view_settings_size_check": {
           "name": "view_settings_size_check",
           "value": "octet_length(\"view_settings\".\"settings\"::text) <= 32768"
-        }
-      },
-      "isRLSEnabled": true
-    },
-    "public.kb_article_reads": {
-      "name": "kb_article_reads",
-      "schema": "",
-      "columns": {
-        "user_id": {
-          "name": "user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "org_id": {
-          "name": "org_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false,
-          "default": "app.current_org_id()"
-        },
-        "article_id": {
-          "name": "article_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "read_at": {
-          "name": "read_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "kb_article_reads_org_idx": {
-          "name": "kb_article_reads_org_idx",
-          "columns": [
-            {
-              "expression": "org_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "kb_article_reads_user_id_users_id_fk": {
-          "name": "kb_article_reads_user_id_users_id_fk",
-          "tableFrom": "kb_article_reads",
-          "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "kb_article_reads_org_id_organizations_id_fk": {
-          "name": "kb_article_reads_org_id_organizations_id_fk",
-          "tableFrom": "kb_article_reads",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "org_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        },
-        "kb_article_reads_user_org_fk": {
-          "name": "kb_article_reads_user_org_fk",
-          "tableFrom": "kb_article_reads",
-          "tableTo": "users",
-          "columnsFrom": [
-            "user_id",
-            "org_id"
-          ],
-          "columnsTo": [
-            "id",
-            "org_id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "kb_article_reads_pk": {
-          "name": "kb_article_reads_pk",
-          "columns": [
-            "user_id",
-            "article_id"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "policies": {
-        "kb_article_reads_isolation": {
-          "name": "kb_article_reads_isolation",
-          "as": "PERMISSIVE",
-          "for": "SELECT",
-          "to": [
-            "buhuchet_app"
-          ],
-          "using": "\"kb_article_reads\".\"org_id\" = app.current_org_id()"
-        },
-        "kb_article_reads_own_insert": {
-          "name": "kb_article_reads_own_insert",
-          "as": "PERMISSIVE",
-          "for": "INSERT",
-          "to": [
-            "buhuchet_app"
-          ],
-          "withCheck": "\"kb_article_reads\".\"org_id\" = app.current_org_id() and \"kb_article_reads\".\"user_id\" = app.current_user_id()"
-        },
-        "kb_article_reads_own_update": {
-          "name": "kb_article_reads_own_update",
-          "as": "PERMISSIVE",
-          "for": "UPDATE",
-          "to": [
-            "buhuchet_app"
-          ],
-          "using": "\"kb_article_reads\".\"org_id\" = app.current_org_id() and \"kb_article_reads\".\"user_id\" = app.current_user_id()",
-          "withCheck": "\"kb_article_reads\".\"org_id\" = app.current_org_id() and \"kb_article_reads\".\"user_id\" = app.current_user_id()"
-        },
-        "kb_article_reads_platform_admin": {
-          "name": "kb_article_reads_platform_admin",
-          "as": "PERMISSIVE",
-          "for": "ALL",
-          "to": [
-            "buhuchet_app"
-          ],
-          "using": "\"kb_article_reads\".\"org_id\" is null and app.current_org_id() is null and \"kb_article_reads\".\"user_id\" = app.current_user_id()",
-          "withCheck": "\"kb_article_reads\".\"org_id\" is null and app.current_org_id() is null and \"kb_article_reads\".\"user_id\" = app.current_user_id()"
-        }
-      },
-      "checkConstraints": {
-        "kb_article_reads_article_check": {
-          "name": "kb_article_reads_article_check",
-          "value": "\"kb_article_reads\".\"article_id\" ~ '^[a-z0-9][a-z0-9_-]{0,63}$'"
-        }
-      },
-      "isRLSEnabled": true
-    },
-    "public.kb_levels": {
-      "name": "kb_levels",
-      "schema": "",
-      "columns": {
-        "user_id": {
-          "name": "user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "org_id": {
-          "name": "org_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false,
-          "default": "app.current_org_id()"
-        },
-        "level": {
-          "name": "level",
-          "type": "smallint",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "reached_at": {
-          "name": "reached_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "kb_levels_org_idx": {
-          "name": "kb_levels_org_idx",
-          "columns": [
-            {
-              "expression": "org_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "kb_levels_user_id_users_id_fk": {
-          "name": "kb_levels_user_id_users_id_fk",
-          "tableFrom": "kb_levels",
-          "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "kb_levels_org_id_organizations_id_fk": {
-          "name": "kb_levels_org_id_organizations_id_fk",
-          "tableFrom": "kb_levels",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "org_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        },
-        "kb_levels_user_org_fk": {
-          "name": "kb_levels_user_org_fk",
-          "tableFrom": "kb_levels",
-          "tableTo": "users",
-          "columnsFrom": [
-            "user_id",
-            "org_id"
-          ],
-          "columnsTo": [
-            "id",
-            "org_id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "kb_levels_pk": {
-          "name": "kb_levels_pk",
-          "columns": [
-            "user_id",
-            "level"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "policies": {
-        "kb_levels_isolation": {
-          "name": "kb_levels_isolation",
-          "as": "PERMISSIVE",
-          "for": "SELECT",
-          "to": [
-            "buhuchet_app"
-          ],
-          "using": "\"kb_levels\".\"org_id\" = app.current_org_id()"
-        },
-        "kb_levels_own_insert": {
-          "name": "kb_levels_own_insert",
-          "as": "PERMISSIVE",
-          "for": "INSERT",
-          "to": [
-            "buhuchet_app"
-          ],
-          "withCheck": "\"kb_levels\".\"org_id\" = app.current_org_id() and \"kb_levels\".\"user_id\" = app.current_user_id()"
-        },
-        "kb_levels_own_update": {
-          "name": "kb_levels_own_update",
-          "as": "PERMISSIVE",
-          "for": "UPDATE",
-          "to": [
-            "buhuchet_app"
-          ],
-          "using": "\"kb_levels\".\"org_id\" = app.current_org_id() and \"kb_levels\".\"user_id\" = app.current_user_id()",
-          "withCheck": "\"kb_levels\".\"org_id\" = app.current_org_id() and \"kb_levels\".\"user_id\" = app.current_user_id()"
-        },
-        "kb_levels_platform_admin": {
-          "name": "kb_levels_platform_admin",
-          "as": "PERMISSIVE",
-          "for": "ALL",
-          "to": [
-            "buhuchet_app"
-          ],
-          "using": "\"kb_levels\".\"org_id\" is null and app.current_org_id() is null and \"kb_levels\".\"user_id\" = app.current_user_id()",
-          "withCheck": "\"kb_levels\".\"org_id\" is null and app.current_org_id() is null and \"kb_levels\".\"user_id\" = app.current_user_id()"
-        }
-      },
-      "checkConstraints": {
-        "kb_levels_level_check": {
-          "name": "kb_levels_level_check",
-          "value": "\"kb_levels\".\"level\" between 0 and 20"
-        }
-      },
-      "isRLSEnabled": true
-    },
-    "public.kb_progress": {
-      "name": "kb_progress",
-      "schema": "",
-      "columns": {
-        "user_id": {
-          "name": "user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "org_id": {
-          "name": "org_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false,
-          "default": "app.current_org_id()"
-        },
-        "step_id": {
-          "name": "step_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "done_how": {
-          "name": "done_how",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "done_at": {
-          "name": "done_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "skipped_at": {
-          "name": "skipped_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {
-        "kb_progress_org_idx": {
-          "name": "kb_progress_org_idx",
-          "columns": [
-            {
-              "expression": "org_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "kb_progress_user_id_users_id_fk": {
-          "name": "kb_progress_user_id_users_id_fk",
-          "tableFrom": "kb_progress",
-          "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "kb_progress_org_id_organizations_id_fk": {
-          "name": "kb_progress_org_id_organizations_id_fk",
-          "tableFrom": "kb_progress",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "org_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        },
-        "kb_progress_user_org_fk": {
-          "name": "kb_progress_user_org_fk",
-          "tableFrom": "kb_progress",
-          "tableTo": "users",
-          "columnsFrom": [
-            "user_id",
-            "org_id"
-          ],
-          "columnsTo": [
-            "id",
-            "org_id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "kb_progress_pk": {
-          "name": "kb_progress_pk",
-          "columns": [
-            "user_id",
-            "step_id"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "policies": {
-        "kb_progress_isolation": {
-          "name": "kb_progress_isolation",
-          "as": "PERMISSIVE",
-          "for": "SELECT",
-          "to": [
-            "buhuchet_app"
-          ],
-          "using": "\"kb_progress\".\"org_id\" = app.current_org_id()"
-        },
-        "kb_progress_own_insert": {
-          "name": "kb_progress_own_insert",
-          "as": "PERMISSIVE",
-          "for": "INSERT",
-          "to": [
-            "buhuchet_app"
-          ],
-          "withCheck": "\"kb_progress\".\"org_id\" = app.current_org_id() and \"kb_progress\".\"user_id\" = app.current_user_id()"
-        },
-        "kb_progress_own_update": {
-          "name": "kb_progress_own_update",
-          "as": "PERMISSIVE",
-          "for": "UPDATE",
-          "to": [
-            "buhuchet_app"
-          ],
-          "using": "\"kb_progress\".\"org_id\" = app.current_org_id() and \"kb_progress\".\"user_id\" = app.current_user_id()",
-          "withCheck": "\"kb_progress\".\"org_id\" = app.current_org_id() and \"kb_progress\".\"user_id\" = app.current_user_id()"
-        },
-        "kb_progress_platform_admin": {
-          "name": "kb_progress_platform_admin",
-          "as": "PERMISSIVE",
-          "for": "ALL",
-          "to": [
-            "buhuchet_app"
-          ],
-          "using": "\"kb_progress\".\"org_id\" is null and app.current_org_id() is null and \"kb_progress\".\"user_id\" = app.current_user_id()",
-          "withCheck": "\"kb_progress\".\"org_id\" is null and app.current_org_id() is null and \"kb_progress\".\"user_id\" = app.current_user_id()"
-        }
-      },
-      "checkConstraints": {
-        "kb_progress_step_check": {
-          "name": "kb_progress_step_check",
-          "value": "\"kb_progress\".\"step_id\" ~ '^[a-z0-9][a-z0-9_-]{0,63}$'"
-        },
-        "kb_progress_how_check": {
-          "name": "kb_progress_how_check",
-          "value": "\"kb_progress\".\"done_how\" is null or \"kb_progress\".\"done_how\" in ('action', 'data', 'show', 'art', 'use', 'visit')"
-        },
-        "kb_progress_done_check": {
-          "name": "kb_progress_done_check",
-          "value": "(\"kb_progress\".\"done_how\" is null) = (\"kb_progress\".\"done_at\" is null)"
         }
       },
       "isRLSEnabled": true

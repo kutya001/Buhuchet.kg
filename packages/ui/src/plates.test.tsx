@@ -30,6 +30,23 @@ describe('Статистика модуля — плашки-итоги (про�
     expect(html).toContain('сом</small>');
   });
 
+  it('недоступная плашка-действие без числа: бледная кнопка, не нажимается', () => {
+    const html = renderToStaticMarkup(
+      <Plate
+        id="add"
+        icon="plus"
+        color="gray"
+        label="Добавить язык"
+        sub="Пока не используется"
+        disabled
+      />,
+    );
+    expect(html).toMatch(/<button type="button" data-plate="add" disabled=""/);
+    expect(html).toContain('opacity-60');
+    expect(html).toContain('Пока не используется');
+    expect(html).not.toContain('text-[25px]');
+  });
+
   it('скрытая кнопкой «Статистика» — ряда плашек нет', () => {
     const html = renderToStaticMarkup(
       <Plates shown={false}>

@@ -2,6 +2,7 @@
 
 import type { MenuModuleId } from '@buhuchet/domain';
 import { AccountsList } from '../admin/accounts-list';
+import { L10nList } from '../admin/l10n-list';
 import { OrgsList } from '../admin/orgs-list';
 import { PlatformDicts } from '../dicts/platform-tab';
 import { ReportTypesList } from '../dicts/report-types-list';
@@ -59,6 +60,7 @@ export function ModuleScreen({
   }
   if (moduleId === 'accounts') return <AccountsList />;
   if (moduleId === 'orgs') return <OrgsList />;
+  if (moduleId === 'l10n') return <L10nList />;
   return <ModuleStub moduleId={moduleId} />;
 }
 
@@ -67,7 +69,7 @@ export function ModuleScreen({
  * модуля»): только у них в ряду вкладок кнопка «Статистика». Экран с плашками добавляет сюда свою
  * вкладку («модуль/вкладка») и показывает плашки по `useModuleStats`.
  */
-const SCREENS_WITH_PLATES: ReadonlySet<string> = new Set<string>(['orgs/']);
+const SCREENS_WITH_PLATES: ReadonlySet<string> = new Set<string>(['orgs/', 'l10n/']);
 
 export function screenHasPlates(moduleId: MenuModuleId, tabId: string | null): boolean {
   return SCREENS_WITH_PLATES.has(`${moduleId}/${tabId ?? ''}`);
