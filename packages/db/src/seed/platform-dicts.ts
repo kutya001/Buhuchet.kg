@@ -15,6 +15,8 @@ import {
 } from '@buhuchet/domain';
 import {
   and,
+  desc,
+  eq,
   getTableColumns,
   getTableName,
   inArray,
@@ -32,6 +34,7 @@ import {
   countryPhoneCodes,
   dueChangeReasons,
   ownershipForms,
+  platformAuditLog,
   productionCalendar,
   reportBases,
   reportTypeBases,
@@ -887,14 +890,64 @@ async function editedKeys(db: Db, key: PgColumn, updatedBy: PgColumn): Promise<s
   );
 }
 
+/**
+ * Значения справочника `dict`, удалённые в Админке (последняя запись истории значения — «delete»,
+ * задача 2.36): наполнение их не возвращает, иначе удалённое появлялось бы снова после каждого
+ * `db:seed`. Значение, которое потом добавили заново, удалённым не считается.
+ */
+async function deletedKeys(db: Db, dict: string): Promise<ReadonlySet<string>> {
+  const prefix = `${dict}:`;
+  const rows = await db
+    .selectDistinctOn([platformAuditLog.entityId], {
+      id: platformAuditLog.entityId,
+      action: platformAuditLog.action,
+    })
+    .from(platformAuditLog)
+    .where(
+      and(
+        eq(platformAuditLog.entity, 'platform_dict'),
+        sql`starts_with(${platformAuditLog.entityId}, ${prefix})`,
+      ),
+    )
+    .orderBy(platformAuditLog.entityId, desc(platformAuditLog.at), desc(platformAuditLog.id));
+  return new Set(rows.filter((r) => r.action === 'delete').map((r) => r.id.slice(prefix.length)));
+}
+
+/** Строки без удалённых в Админке значений (`key` — поле строки с кодом). */
+const kept = <T extends object>(
+  rows: readonly T[],
+  deleted: ReadonlySet<string>,
+  key: keyof T,
+): T[] => rows.filter((r) => !deleted.has(String(r[key])));
+
 /** Справочники для контрагентов и отчётов из refDB.json → свои таблицы. */
 export async function seedPlatformDicts(
   db: Db,
   refDB: unknown,
   options: SeedOptions,
 ): Promise<PlatformDictsReport> {
-  const rows = platformDictRows(refDB);
+  const all = platformDictRows(refDB);
   const { update } = options;
+  // Удалённые в Админке значения и связи с ними не возвращаются (справочники механизма 2.36).
+  const [organs, regimes, bases, ugns, forms, reasons, bankKeys, days] = await Promise.all(
+    ['organs', 'regimes', 'bases', 'ugns', 'forms', 'reasons', 'banks', 'calendar'].map((d) =>
+      deletedKeys(db, d),
+    ),
+  );
+  const rows = {
+    ...all,
+    authorities: kept(all.authorities, organs!, 'code'),
+    taxRegimes: kept(all.taxRegimes, regimes!, 'code'),
+    reportBases: kept(all.reportBases, bases!, 'code'),
+    taxOffices: kept(all.taxOffices, ugns!, 'code'),
+    ownershipForms: kept(all.ownershipForms, forms!, 'code'),
+    dueChangeReasons: kept(all.dueChangeReasons, reasons!, 'code'),
+    banks: kept(all.banks, bankKeys!, 'code'),
+    productionCalendar: kept(all.productionCalendar, days!, 'day'),
+    reportTypeRegimes: kept(all.reportTypeRegimes, regimes!, 'regimeCode'),
+    reportTypeBases: kept(all.reportTypeBases, bases!, 'baseCode'),
+    taxBenefitOffices: kept(all.taxBenefitOffices, ugns!, 'taxOfficeCode'),
+  };
   const authority = await upsertDict(db, authorities, authorities.code, rows.authorities, update);
   const regime = await upsertDict(db, taxRegimes, taxRegimes.code, rows.taxRegimes, update);
   const base = await upsertDict(db, reportBases, reportBases.code, rows.reportBases, update);
@@ -990,7 +1043,7 @@ export async function seedPlatformDicts(
           isNull(productionCalendar.updatedBy),
           notInArray(
             productionCalendar.day,
-            rows.productionCalendar.map((r) => r.day),
+            all.productionCalendar.map((r) => r.day),
           ),
         ),
       )

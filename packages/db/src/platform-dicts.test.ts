@@ -16,6 +16,7 @@ import {
   authorities,
   dueChangeReasons,
   ownershipForms,
+  platformAuditLog,
   productionCalendar,
   reportBases,
   reportTypeBases,
@@ -561,6 +562,57 @@ describe.skipIf(!databaseAvailable())('справочники платформы
       kind: 'holiday',
       name: 'Новый год',
     });
+  });
+
+  it('значение и день календаря, удалённые в Админке, наполнение не возвращает; добавленные заново — да', async () => {
+    const [admin] = await t.admin.db
+      .insert(users)
+      .values({ login: 'dict-admin-del', passwordHash: 'x', isPlatformAdmin: true })
+      .returning({ id: users.id });
+    // Удаление в Админке (поток Д): строка удалена, в истории — «delete».
+    const removed = async (entityId: string) =>
+      t.admin.db
+        .insert(platformAuditLog)
+        .values({ entity: 'platform_dict', entityId, action: 'delete', actorUserId: admin!.id });
+    await t.admin.db.delete(dueChangeReasons).where(eq(dueChangeReasons.code, 'ПРЧ-005'));
+    await removed('reasons:ПРЧ-005');
+    await t.admin.db.delete(productionCalendar).where(eq(productionCalendar.day, '2026-03-09'));
+    await removed('calendar:2026-03-09');
+    // Основание удалено вместе со связями: связь вида отчёта с ним тоже не возвращается.
+    await t.admin.db.delete(reportTypeBases).where(eq(reportTypeBases.baseCode, 'land'));
+    await t.admin.db.delete(reportBases).where(eq(reportBases.code, 'land'));
+    await removed('bases:land');
+
+    for (const update of [false, true]) {
+      const report = await seedPlatformDicts(t.admin.db, ref, { update });
+      expect(report.dueChangeReasons.inserted).toBe(0);
+      expect(report.productionCalendar.inserted).toBe(0);
+      expect(report.reportBases.inserted).toBe(0);
+    }
+    const reasons = await t.admin.db
+      .select({ code: dueChangeReasons.code })
+      .from(dueChangeReasons)
+      .where(eq(dueChangeReasons.code, 'ПРЧ-005'));
+    expect(reasons).toEqual([]);
+    expect((await productionCalendarEntries(t.app.db)).map((x) => x.day)).not.toContain(
+      '2026-03-09',
+    );
+    const links = await t.admin.db
+      .select()
+      .from(reportTypeBases)
+      .where(eq(reportTypeBases.baseCode, 'land'));
+    expect(links).toEqual([]);
+
+    // Добавлено заново (последняя запись истории — «create»): наполнение снова ведёт значение.
+    await t.admin.db.insert(platformAuditLog).values({
+      entity: 'platform_dict',
+      entityId: 'calendar:2026-03-09',
+      action: 'create',
+      actorUserId: admin!.id,
+      at: new Date(Date.now() + 1000),
+    });
+    const again = await seedPlatformDicts(t.admin.db, ref, { update: false });
+    expect(again.productionCalendar.inserted).toBe(1);
   });
 
   it('приложение только читает справочники; используемое значение удалить нельзя', async () => {
