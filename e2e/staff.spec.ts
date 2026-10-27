@@ -3,8 +3,8 @@ import { expect, test, type APIRequestContext, type Locator, type Page } from '@
 // Сотрудники и роли через настоящий сайт (Next.js → API): владелец демо-организации создаёт
 // сотрудника, тот входит временным паролем и обязан его сменить; заблокированный не входит (методы
 // API, задача #10). Экраны (задача #18): «Новый сотрудник», карточка сотрудника с «Действиями»,
-// «Сменить роль», вкладка «Роли», карточка и форма роли. Логины свои на каждый запуск и проект (ПК и
-// телефон).
+// «Сменить роль», вкладка «Роли», карточка и форма роли; «Изменить» сотрудника и «Удалить» роль
+// (docs/deviations.md, п. 16). Логины свои на каждый запуск и проект (ПК и телефон).
 const DEMO_PASSWORD = process.env.DEMO_PASSWORD ?? 'demo';
 
 const uniqueLogin = (prefix: string) =>
@@ -17,14 +17,19 @@ async function signIn(api: APIRequestContext, origin: string, login: string, pas
 }
 
 /** Владелец демо-организации создаёт сотрудника с ролью «Бухгалтер». */
-async function hire(owner: APIRequestContext, origin: string, login: string) {
+async function hire(
+  owner: APIRequestContext,
+  origin: string,
+  login: string,
+  fullName = 'Проверкин Сквозной Тестович',
+) {
   const roles = await owner.get('/api/roles?size=all');
   expect(roles.status()).toBe(200);
   const { items } = (await roles.json()) as { items: { id: string; name: string }[] };
   const roleId = items.find((r) => r.name === 'Бухгалтер')!.id;
   const res = await owner.post('/api/staff', {
     headers: { origin },
-    data: { fullName: 'Проверкин Сквозной Тестович', login, roleId },
+    data: { fullName, login, roleId },
   });
   expect(res.status(), await res.text()).toBe(201);
   return (await res.json()) as {
@@ -107,6 +112,10 @@ async function add(page: Page, name: string) {
   await page.getByRole('menu', { name: 'Добавить' }).getByRole('menuitem', { name }).click();
 }
 
+/** Слово для ФИО, своё на каждый запуск: по нему запись находится общим поиском. */
+const randomWord = (prefix: string) =>
+  `${prefix}${Array.from({ length: 6 }, () => 'абвгдежзиклмнопрстуф'[Math.floor(Math.random() * 20)]).join('')}`;
+
 /** Общий поиск по вкладке (на телефоне — кнопкой «Поиск» в верхней панели). */
 async function search(page: Page, isMobile: boolean, text: string) {
   if (isMobile) await page.getByRole('button', { name: 'Поиск', exact: true }).click();
@@ -122,7 +131,7 @@ test.describe('Этап 1: сотрудники и роли (экраны)', () 
     const origin = new URL(baseURL!).origin;
     // Своё слово в ФИО на каждый запуск: по нему сотрудник находится общим поиском (логин на
     // телефоне в видимых столбцах не показан, а поиск — по видимым).
-    const word = `Нов${Array.from({ length: 6 }, () => 'абвгдежзиклмнопрстуф'[Math.floor(Math.random() * 20)]).join('')}`;
+    const word = randomWord('Нов');
     const fullName = `Новиков ${word} Тестович`;
     await signIn(page.request, origin, 'erkin', DEMO_PASSWORD);
     await page.goto('/app/staff/list');
@@ -202,6 +211,7 @@ test.describe('Этап 1: сотрудники и роли (экраны)', () 
     await card.getByRole('button', { name: 'Действия' }).click();
     const menu = page.getByRole('menu', { name: 'Действия' });
     await expect(menu.getByRole('menuitem')).toHaveText([
+      'Изменить',
       'Сменить роль',
       'Сбросить пароль',
       'Заблокировать',
@@ -236,6 +246,118 @@ test.describe('Этап 1: сотрудники и роли (экраны)', () 
       user: { login, mustChangePassword: true },
       employee: { roleName: 'Главный бухгалтер' },
     });
+  });
+
+  test('«Изменить» сотрудника: ошибки под полями; новые ФИО и телефон видны в списке и в открытой карточке', async ({
+    page,
+    baseURL,
+    isMobile,
+  }) => {
+    const origin = new URL(baseURL!).origin;
+    const word = randomWord('Изм');
+    const before = `Правкин ${word} Тестович`;
+    const after = `Исправкин ${word} Тестович`;
+    await signIn(page.request, origin, 'erkin', DEMO_PASSWORD);
+    const { employee } = await hire(page.request, origin, uniqueLogin('e2e-edit'), before);
+    await page.goto('/app/staff/list');
+    await search(page, isMobile, word);
+    const row = page.locator(`[data-grid] [data-id="${employee.id}"]`);
+    await expect(row).toContainText(before);
+
+    await row.locator('[data-row-menu]').click();
+    await page
+      .getByRole('menu', { name: 'Действия' })
+      .getByRole('menuitem', { name: 'Изменить' })
+      .click();
+    const form = page.getByRole('dialog', { name: 'Изменить сотрудника' });
+    const save = form.getByRole('button', { name: 'Сохранить' });
+    const fio = form.getByLabel('ФИО');
+    await expect(fio).toHaveValue(before);
+    await fio.fill('');
+    await save.click();
+    await expect(form).toContainText('Введите фамилию и имя');
+    await fio.fill(after);
+    await save.click();
+    await expect(form).toBeHidden();
+    const done = page.getByRole('status').filter({ hasText: 'Данные сотрудника сохранены' });
+    await expect(done).toBeVisible();
+    // Новые ФИО — в строке списка.
+    await expect(row).toContainText(after);
+
+    // Телефон — из «Действий» открытой карточки: карточка обновляется после сохранения.
+    await row.getByText(after).click();
+    const card = page.getByRole('dialog', { name: after });
+    await card.getByRole('button', { name: 'Действия' }).click();
+    await page
+      .getByRole('menu', { name: 'Действия' })
+      .getByRole('menuitem', { name: 'Изменить' })
+      .click();
+    await expect(form.getByLabel('ФИО')).toHaveValue(after);
+    const phone = form.getByLabel('Телефон');
+    await phone.fill('70011');
+    await save.click();
+    await expect(form).toContainText('Номер — 9 цифр');
+    await phone.fill('700111222');
+    await expect(phone).toHaveValue('700 111 222');
+    await save.click();
+    await expect(form).toBeHidden();
+    await expect(card.getByRole('link', { name: '+996 700 111 222' })).toHaveAttribute(
+      'href',
+      'tel:+996700111222',
+    );
+    const saved = (await (await page.request.get(`/api/staff/${employee.id}`)).json()) as {
+      fullName: string;
+      phone: string | null;
+    };
+    expect(saved).toMatchObject({ fullName: after, phone: '+996700111222' });
+  });
+
+  test('«Удалить» роль: роль без сотрудников удаляется после вопроса; у роли владельца и роли с сотрудниками пункт недоступен с причиной', async ({
+    page,
+    baseURL,
+    isMobile,
+  }) => {
+    const origin = new URL(baseURL!).origin;
+    await signIn(page.request, origin, 'erkin', DEMO_PASSWORD);
+    const name = `Роль ${uniqueLogin('e2e-del')}`;
+    const created = await page.request.post('/api/roles', { headers: { origin }, data: { name } });
+    expect(created.status(), await created.text()).toBe(201);
+    await page.goto('/app/staff/roles');
+    const rows = page.locator('[data-grid] [data-id]');
+    const menu = page.getByRole('menu', { name: 'Действия' });
+    await expect(rows.first()).toBeVisible();
+
+    // Причины недоступного пункта видны в меню; меню закрывается Esc. Ролей в демо-организации много —
+    // нужная находится общим поиском (на телефоне поле открывается кнопкой один раз).
+    if (isMobile) await page.getByRole('button', { name: 'Поиск', exact: true }).click();
+    const find = (text: string) => page.getByRole('searchbox').first().fill(text);
+    const refused = async (role: string, reason: string) => {
+      await find(role);
+      const row = rows.filter({ has: page.getByText(role, { exact: true }) });
+      await expect(row).toHaveCount(1);
+      await row.locator('[data-row-menu]').click();
+      await expect(menu.getByRole('menuitem', { name: 'Удалить' })).toBeDisabled();
+      await expect(menu).toContainText(reason);
+      await page.keyboard.press('Escape');
+      await expect(menu).toHaveCount(0);
+    };
+    await refused('Владелец организации', 'Роль владельца не удаляется');
+    await refused('Бухгалтер', 'Роль назначена сотрудникам: сначала смените им роль');
+
+    await find(name);
+    const row = rows.filter({ hasText: name });
+    await expect(row).toHaveCount(1);
+    await row.locator('[data-row-menu]').click();
+    await menu.getByRole('menuitem', { name: 'Удалить' }).click();
+    const ask = page.getByRole('dialog', { name: `Удалить роль «${name}»?` });
+    await expect(ask).toContainText('Права роли удалятся вместе с ней, вернуть роль будет нельзя.');
+    await ask.getByRole('button', { name: 'Удалить' }).click();
+    await expect(page.getByRole('status').filter({ hasText: 'Роль удалена' })).toBeVisible();
+    await expect(row).toHaveCount(0);
+    const roles = (await (await page.request.get('/api/roles?size=all')).json()) as {
+      items: { name: string }[];
+    };
+    expect(roles.items.map((r) => r.name)).not.toContain(name);
   });
 
   test('форма роли: группы модулей с описанием под каждым правом, «Выбрать все» в «Задачах» отмечает три права, на телефоне группы свёрнуты и показывают «Выбрано N из M»', async ({

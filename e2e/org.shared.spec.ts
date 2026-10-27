@@ -18,6 +18,8 @@ type Policy = {
   defaultRoleName: string | null;
 };
 
+type Logo = { logo: { url: string } | null };
+
 /** Картинка PNG 1 × 1. */
 const PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
@@ -156,7 +158,7 @@ test.describe('Этап 1: Моя организация — правки вла
     }
   });
 
-  test('дни напоминаний добавляются вводом и убираются крестиком; настройки сохраняются кнопкой', async ({
+  test('дни напоминаний добавляются вводом и убираются крестиком, неверный день — ошибка под полем; настройки сохраняются кнопкой', async ({
     page,
     baseURL,
   }) => {
@@ -167,7 +169,14 @@ test.describe('Этап 1: Моя организация — правки вла
       await page.goto('/app/org/policy');
       const main = page.locator('main');
       const add = main.getByRole('textbox', { name: 'Добавить день напоминания' });
+      // Неверный день — ошибка под полем, день не добавляется; ввод убирает ошибку.
+      await add.fill('61');
+      await add.press('Enter');
+      await expect(add).toHaveAttribute('aria-invalid', 'true');
+      await expect(main.getByText('От 1 до 60 дней', { exact: true })).toBeVisible();
+      await expect(main.locator('[data-chip="61"]')).toHaveCount(0);
       await add.fill('14');
+      await expect(add).not.toHaveAttribute('aria-invalid', 'true');
       await add.press('Enter');
       await expect(
         page.getByRole('status').filter({ hasText: 'Набор дней сохранён' }),
@@ -175,6 +184,13 @@ test.describe('Этап 1: Моя организация — правки вла
       const chip = main.locator('[data-chip="14"]');
       await expect(chip).toHaveText('за 14 дней');
       expect((await policy(page.request)).remindDays).toContain(14);
+      // Повтор дня не добавляется — уведомление об этом.
+      await add.fill('14');
+      await add.press('Enter');
+      await expect(
+        page.getByRole('status').filter({ hasText: 'За 14 дней уже есть в наборе' }),
+      ).toBeVisible();
+      await expect(main.locator('[data-chip="14"]')).toHaveCount(1);
       await chip.getByRole('button', { name: 'Убрать' }).click();
       await expect(chip).toHaveCount(0);
       await expect.poll(async () => (await policy(page.request)).remindDays).not.toContain(14);
@@ -243,7 +259,7 @@ test.describe('Этап 1: Моя организация — правки вла
     }
   });
 
-  test('логотип PNG до 2 МБ: предпросмотр до сохранения, после «Сохранить» — у организации', async ({
+  test('логотип PNG до 2 МБ: предпросмотр до сохранения, после «Сохранить» — у организации; «Убрать» и «Сохранить» убирают его', async ({
     page,
     baseURL,
   }) => {
@@ -265,22 +281,38 @@ test.describe('Этап 1: Моя организация — правки вла
       await page.goto('/app/org/main');
       const main = page.locator('main');
       await expect(main.locator('[data-org-logo]')).toHaveCount(0);
-      await main.getByLabel('Логотип').setInputFiles({
-        name: 'logo.png',
-        mimeType: 'image/png',
-        buffer: PNG,
-      });
+      const file = main.getByLabel('Логотип');
+      const remove = main.getByRole('button', { name: 'Убрать', exact: true });
+      const pick = () =>
+        file.setInputFiles({ name: 'logo.png', mimeType: 'image/png', buffer: PNG });
+      await expect(remove).toHaveCount(0);
+      // «Убрать» у выбранного, ещё не сохранённого файла отменяет выбор.
+      await pick();
+      await expect(main.locator('[data-org-logo]')).toHaveAttribute('src', /^blob:/);
+      await remove.click();
+      await expect(main.locator('[data-org-logo]')).toHaveCount(0);
+      await expect(file).toHaveValue('');
       // Предпросмотр — выбранный файл, ещё не сохранённый.
+      await pick();
       await expect(main.locator('[data-org-logo]')).toHaveAttribute('src', /^blob:/);
       await main.getByRole('button', { name: 'Сохранить' }).click();
       await expect(page.getByRole('status').filter({ hasText: 'Сохранено' })).toBeVisible();
       // Картинку отдаёт хранилище по временной ссылке (в docker-e2e браузер до него не дотягивается,
       // поэтому проверяется ссылка, а не то, что картинка открылась).
       await expect(main.locator('[data-org-logo]')).not.toHaveAttribute('src', /^blob:/);
-      const profile = (await (await page.request.get('/api/org')).json()) as {
-        logo: { url: string } | null;
-      };
+      const profile = (await (await page.request.get('/api/org')).json()) as Logo;
       expect(profile.logo?.url).toBeTruthy();
+
+      // «Убрать» у сохранённого логотипа: картинка пропадает сразу, у организации — после «Сохранить».
+      await remove.click();
+      await expect(main.locator('[data-org-logo]')).toHaveCount(0);
+      await expect(remove).toHaveCount(0);
+      await main.getByRole('button', { name: 'Сохранить' }).click();
+      await expect
+        .poll(async () => ((await (await page.request.get('/api/org')).json()) as Logo).logo)
+        .toBeNull();
+      await page.reload();
+      await expect(main.locator('[data-org-logo]')).toHaveCount(0);
     } finally {
       await removeLogo();
     }

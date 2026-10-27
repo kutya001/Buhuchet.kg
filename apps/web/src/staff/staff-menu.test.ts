@@ -27,6 +27,7 @@ const employee = (over: { id?: string; active?: boolean; isOwner?: boolean } = {
 
 const run = () => ({
   open: vi.fn(),
+  edit: vi.fn(),
   changeRole: vi.fn(),
   resetPassword: vi.fn(),
   block: vi.fn(),
@@ -57,20 +58,38 @@ describe('меню сотрудника', () => {
     ).toEqual([]);
   });
 
-  it('активному — «Открыть карточку», «Сменить роль», «Сбросить пароль», черта и красное «Заблокировать»', () => {
+  it('сам владелец на своей строке и в своей карточке может «Изменить» ФИО и телефон', () => {
+    const r = run();
+    const owner = employee({ id: ME, isOwner: true });
+    expect(labels(staffMenu({ canManage: true, employeeId: ME, t, run: r })(owner))).toEqual([
+      'Открыть карточку',
+      'Изменить',
+    ]);
+    const [edit] = items(
+      staffMenu({ canManage: true, employeeId: ME, t, run: r, card: true })(owner),
+    );
+    expect(edit).toMatchObject({ label: 'Изменить', icon: 'edit' });
+    edit!.run();
+    expect(r.edit).toHaveBeenCalledWith(owner);
+  });
+
+  it('активному — «Открыть карточку», «Изменить», «Сменить роль», «Сбросить пароль», черта и красное «Заблокировать»', () => {
     const r = run();
     const e = employee();
     const list = staffMenu({ canManage: true, employeeId: ME, t, run: r })(e);
     expect(labels(list)).toEqual([
       'Открыть карточку',
+      'Изменить',
       'Сменить роль',
       'Сбросить пароль',
       '—',
       'Заблокировать',
     ]);
-    const [, role, reset, block] = items(list);
+    const [, edit, role, reset, block] = items(list);
     expect(role).toMatchObject({ icon: 'shield', disabled: false });
     expect(block).toMatchObject({ danger: true, disabled: false, icon: 'lock' });
+    edit!.run();
+    expect(r.edit).toHaveBeenCalledWith(e);
     role!.run();
     reset!.run();
     block!.run();
@@ -83,7 +102,13 @@ describe('меню сотрудника', () => {
     const list = staffMenu({ canManage: true, employeeId: ME, t, run: run(), card: true })(
       employee(),
     );
-    expect(labels(list)).toEqual(['Сменить роль', 'Сбросить пароль', '—', 'Заблокировать']);
+    expect(labels(list)).toEqual([
+      'Изменить',
+      'Сменить роль',
+      'Сбросить пароль',
+      '—',
+      'Заблокировать',
+    ]);
   });
 
   it('заблокированному вместо «Заблокировать» — «Разблокировать»', () => {
@@ -97,9 +122,10 @@ describe('меню сотрудника', () => {
   });
 
   it('на своей строке «Сменить роль», «Сбросить пароль» и «Заблокировать» недоступны с причиной', () => {
-    const [, role, reset, block] = items(
+    const [, edit, role, reset, block] = items(
       staffMenu({ canManage: true, employeeId: ME, t, run: run() })(employee({ id: ME })),
     );
+    expect(edit!.disabled).toBeFalsy();
     expect(role).toMatchObject({ disabled: true, reason: 'Свою роль меняет владелец' });
     expect(reset).toMatchObject({ disabled: true, reason: 'Свой пароль меняют в «Мой профиль»' });
     expect(block).toMatchObject({ disabled: true, reason: 'Нельзя заблокировать себя' });

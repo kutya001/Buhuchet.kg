@@ -134,3 +134,8 @@ export const NewEmployeeForm = z.object({
 });
 export type NewEmployeeFormInput = z.input<typeof NewEmployeeForm>;
 export type NewEmployeeForm = z.output<typeof NewEmployeeForm>;
+
+/** Форма «Изменить сотрудника» (docs/deviations.md, п. 16): ФИО — как у нового; телефон проверяет поле ввода. */
+export const EditEmployeeForm = NewEmployeeForm.pick({ fullName: true });
+export type EditEmployeeFormInput = z.input<typeof EditEmployeeForm>;
+export type EditEmployeeForm = z.output<typeof EditEmployeeForm>;

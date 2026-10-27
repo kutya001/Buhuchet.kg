@@ -24,6 +24,8 @@ export const ORG_TEXTS = {
   },
   'org.field.logo': { ru: 'Логотип', section: S },
   'org.field.logo_hint': { ru: 'PNG или JPG до 2 МБ', section: S },
+  // Убрать логотип (docs/deviations.md, п. 19): применяется кнопкой «Сохранить».
+  'org.logo.remove': { ru: 'Убрать', section: S },
   'org.field.since': { ru: 'На платформе с', section: S },
   'org.saved': { ru: 'Сохранено', section: S },
   'org.readonly': {
@@ -197,6 +199,10 @@ export const ORG_TEXTS = {
   'org.remind.day.many': { ru: 'за {n} дней', section: S },
   'org.remind.remove': { ru: 'Убрать', section: S },
   'org.remind.add': { ru: '+ день', section: S },
+  // Повтор дня в наборе (прототип v59, docs/deviations.md, п. 19): день не добавляется.
+  'org.remind.exists.one': { ru: 'За {n} день уже есть в наборе', section: S },
+  'org.remind.exists.few': { ru: 'За {n} дня уже есть в наборе', section: S },
+  'org.remind.exists.many': { ru: 'За {n} дней уже есть в наборе', section: S },
   'org.remind.add_label': { ru: 'Добавить день напоминания', section: S },
   'org.remind.deadline': { ru: 'в день срока — всегда', section: S },
   'org.remind.hint': {

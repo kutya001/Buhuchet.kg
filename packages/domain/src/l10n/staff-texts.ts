@@ -49,6 +49,7 @@ export const STAFF_TEXTS = {
   'staff.first.add': { ru: 'Добавить сотрудника', section: 'Сотрудники' },
   'staff.action.open': { ru: 'Открыть карточку', section: 'Сотрудники' },
   'staff.action.change_role': { ru: 'Сменить роль', section: 'Сотрудники' },
+  'staff.action.edit': { ru: 'Изменить', section: 'Сотрудники' },
   'staff.action.more': { ru: 'Действия', section: 'Сотрудники' },
   'staff.card.tabs': { ru: 'Разделы карточки сотрудника', section: 'Сотрудники' },
   'staff.card.tab.main': { ru: 'Основное', section: 'Сотрудники' },
@@ -66,6 +67,9 @@ export const STAFF_TEXTS = {
   'staff.card.cps.empty': { ru: 'Нет закреплённых контрагентов', section: 'Сотрудники' },
   'staff.role.title': { ru: 'Роль сотрудника', section: 'Сотрудники' },
   'staff.role.done': { ru: 'Роль изменена', section: 'Сотрудники' },
+  // «Изменить»: ФИО и телефон (docs/deviations.md, п. 16, решение А).
+  'staff.edit.title': { ru: 'Изменить сотрудника', section: 'Сотрудники' },
+  'staff.edit.done': { ru: 'Данные сотрудника сохранены', section: 'Сотрудники' },
   'staff.new.title': { ru: 'Новый сотрудник', section: 'Сотрудники' },
   'staff.new.sub': { ru: 'Вход по логину и паролю, без почты', section: 'Сотрудники' },
   'staff.new.login_hint': { ru: 'Уникален на всей платформе', section: 'Сотрудники' },
@@ -99,6 +103,14 @@ export const STAFF_TEXTS = {
   'roles.of_total': { ru: 'из {total}', section: 'Роли' },
   'roles.action.open': { ru: 'Открыть', section: 'Роли' },
   'roles.action.edit': { ru: 'Изменить', section: 'Роли' },
+  // «Удалить» у роли, которая никому не назначена (docs/deviations.md, п. 16, решение А).
+  'roles.action.delete': { ru: 'Удалить', section: 'Роли' },
+  'roles.delete.title': { ru: 'Удалить роль «{name}»?', section: 'Роли' },
+  'roles.delete.text': {
+    ru: 'Права роли удалятся вместе с ней, вернуть роль будет нельзя.',
+    section: 'Роли',
+  },
+  'roles.delete.done': { ru: 'Роль удалена', section: 'Роли' },
   'roles.card.sub': { ru: '{n} чел. · прав {k} из {total}', section: 'Роли' },
   'roles.load_error': { ru: 'Не удалось загрузить роль', section: 'Роли' },
   'roles.card.owner_note': {
@@ -168,6 +180,19 @@ export const STAFF_TEXTS = {
 
   // Отказы сервера в действиях над сотрудником (`refuse` в packages/api: код и details.variant).
   'err.own_account': { ru: 'Нельзя заблокировать себя', section: 'Ошибки' },
+  'err.role_in_use': {
+    ru: 'Роль назначена сотрудникам: сначала смените им роль',
+    section: 'Ошибки',
+  },
+  'err.role_is_default': {
+    ru: 'Эту роль получают новые сотрудники: сначала выберите другую в учётной политике',
+    section: 'Ошибки',
+  },
+  'err.owner_role.delete': { ru: 'Роль владельца не удаляется', section: 'Ошибки' },
+  'err.owner_granted_role.delete': {
+    ru: 'Роль с правами, которые выдаёт только владелец, удаляет владелец',
+    section: 'Ошибки',
+  },
   'err.owner_employee': {
     ru: 'Роль, блокировку и пароль владельца организации ведёт администратор платформы',
     section: 'Ошибки',

@@ -63,7 +63,7 @@ export function deleteRoleHandler(deps: ApiDeps): RouteHandler<typeof deleteRole
         if (role.version !== version) throw new RecordChangedError('role', id, role.version);
         const permissions = role.isOwner ? [] : await rolePermissionIds(tx, id);
         const refusal = roleDeleteRefusal(actor, { isOwner: role.isOwner, permissions });
-        if (refusal) apiFail(403, refusal, DELETE_REFUSALS[refusal]);
+        if (refusal) apiFail(403, refusal, DELETE_REFUSALS[refusal], { variant: 'delete' });
         const inUse = await roleInUse(tx, id);
         if (inUse === 'employees') apiFail(400, ROLE_IN_USE.error.code, ROLE_IN_USE.error.message);
         if (inUse === 'default') {

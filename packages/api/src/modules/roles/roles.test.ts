@@ -549,7 +549,12 @@ describe.skipIf(!databaseAvailable())('Роли: API', () => {
         owner,
       );
       expect(own.status).toBe(403);
-      expect((await apiErr(own)).code).toBe('owner_role');
+      // Вариант «delete»: интерфейс берёт текст удаления, а не назначения (err.owner_role.delete).
+      expect(await apiErr(own)).toEqual({
+        code: 'owner_role',
+        message: 'Роль владельца не удаляется',
+        details: { variant: 'delete' },
+      });
       expect((await call('DELETE', `/api/roles/${ownerRole.id}`, owner)).status).toBe(400);
       expect((await call('DELETE', `/api/roles/${ownerRole.id}?version=1`, acc)).status).toBe(403);
     });
@@ -569,6 +574,7 @@ describe.skipIf(!databaseAvailable())('Роли: API', () => {
       expect(await apiErr(byHr)).toEqual({
         code: 'owner_granted_role',
         message: 'Роль с правами, которые выдаёт только владелец, удаляет владелец',
+        details: { variant: 'delete' },
       });
       expect(
         (await call('DELETE', `/api/roles/${r.id}?version=${saved.version}`, owner)).status,

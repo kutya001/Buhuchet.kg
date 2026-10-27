@@ -466,6 +466,7 @@ test.describe('Списки: UnifiedDataGrid', () => {
     await more.click();
     await expect(menu.getByRole('menuitem')).toHaveText([
       'Открыть карточку',
+      'Изменить',
       'Сменить роль',
       'Сбросить пароль',
       'Заблокировать',

@@ -15,6 +15,7 @@ import {
   type ActionEntry,
 } from '@buhuchet/ui';
 import { useQueryClient } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
 import { api, callApi } from '../api-client';
 import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
@@ -22,7 +23,7 @@ import { useErrorText, useT } from '../l10n/provider';
 import { policyQuery } from '../org/org-data';
 import { useShell } from '../shell/context';
 import { EmployeeCard } from './employee-card';
-import { ChangeRoleDialog, NewEmployeeDialog } from './employee-forms';
+import { ChangeRoleDialog, EditEmployeeDialog, NewEmployeeDialog } from './employee-forms';
 import { allRolesQuery, phoneCodesQuery, useStaffRefresh } from './staff-data';
 import { staffMenu } from './staff-menu';
 
@@ -35,7 +36,8 @@ interface NewEmployeeData {
 /**
  * Действия над сотрудником (прототип modules/staff.js, empActions, empCard, empAddDlg, blockDlg;
  * пункты — `staffMenu`): в списке — кнопкой «⋯», долгим нажатием и правым кликом; в карточке —
- * кнопкой «Действия». «Открыть карточку»; «Сменить роль»; «Сбросить пароль» — окно с временным
+ * кнопкой «Действия». «Открыть карточку»; «Изменить» — ФИО и телефон (docs/deviations.md, п. 16);
+ * «Сменить роль»; «Сбросить пароль» — окно с временным
  * паролем; «Заблокировать» — после подтверждения; «Разблокировать» — сразу; «Новый сотрудник».
  * Отказ сервера (роль с правами, которые выдаёт только владелец, или шире ваших) — уведомлением с
  * текстом из словаря. «Передать контрагентов» — вместе с контрагентами (поток А).
@@ -52,6 +54,7 @@ export function useStaffActions(): {
   const client = useQueryClient();
   const refresh = useStaffRefresh();
   const { access, employeeId } = useShell();
+  const router = useRouter();
   const canManage = access.can('staff');
   const [card, setCard] = useState<DialogSlot<Employee> | null>(null);
   const [role, setRole] = useState<DialogSlot<{
@@ -59,6 +62,10 @@ export function useStaffActions(): {
     roles: RoleListItem[];
   }> | null>(null);
   const [hire, setHire] = useState<DialogSlot<NewEmployeeData> | null>(null);
+  const [edit, setEdit] = useState<DialogSlot<{
+    employee: Employee;
+    codes: PhoneCodes['items'];
+  }> | null>(null);
   const [askBlock, setAskBlock] = useState<Employee | null>(null);
   const [reset, setReset] = useState<{ employee: Employee; password: string } | null>(null);
   // Сотрудники, по которым запрос ещё идёт: повторное действие над ними не шлёт второй запрос
@@ -120,6 +127,11 @@ export function useStaffActions(): {
     if (roles) setRole(openSlot({ employee: e, roles }));
   };
 
+  const editEmployee = async (e: Employee) => {
+    const codes = await load('codes', () => client.fetchQuery(phoneCodesQuery));
+    if (codes) setEdit(openSlot({ employee: e, codes }));
+  };
+
   const newEmployee = async () => {
     const data = await load('new', () =>
       Promise.all([
@@ -135,6 +147,7 @@ export function useStaffActions(): {
   // В карточке — свежая запись (версия для «Заблокировать»); в списке — строка списка.
   const run = {
     open: (e: Employee) => setCard(openSlot(e)),
+    edit: (e: Employee) => void editEmployee(e),
     changeRole: (e: Employee) => void changeRole(e),
     resetPassword: (e: Employee) => void resetPassword(e),
     block: setAskBlock,
@@ -163,6 +176,20 @@ export function useStaffActions(): {
           open={role.open}
           onClose={() => setRole(closeSlot)}
           onDone={refresh}
+        />
+      ) : null}
+      {edit ? (
+        <EditEmployeeDialog
+          key={`edit-${edit.n}`}
+          employee={edit.data.employee}
+          codes={edit.data.codes}
+          open={edit.open}
+          onClose={() => setEdit(closeSlot)}
+          onDone={(e) => {
+            refresh();
+            // Свои ФИО и телефон видны и в оболочке («Меню», «Мой профиль»): их отдаёт сервер.
+            if (e.id === employeeId) router.refresh();
+          }}
         />
       ) : null}
       {hire ? (

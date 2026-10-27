@@ -3,25 +3,26 @@
 import { formatMomentRu, PERMISSION_IDS, type ListSort } from '@buhuchet/domain';
 import { ListValues, RoleList, Uuid, type Role, type RoleListItem } from '@buhuchet/shared';
 import {
+  ConfirmDialog,
   DataGrid,
   EmptyState,
   Note,
   Tag,
   useToast,
-  type ActionEntry,
   type GridColumn,
 } from '@buhuchet/ui';
-import { useQueryClient, type QueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { api } from '../api-client';
+import { api, callApi } from '../api-client';
 import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
-import { useT } from '../l10n/provider';
+import { useErrorText, useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { useListExport } from '../lists/export';
 import { useGridLabels } from '../lists/grid-labels';
 import { useListPage, type FetchListPage } from '../lists/use-list-page';
 import { useViewSettings } from '../lists/view-settings';
+import { policyQuery } from '../org/org-data';
 import { useShell } from '../shell/context';
 import { tabHref } from '../shell/modules';
 import { useStaffAddRequest } from '../staff/staff-add';
@@ -32,6 +33,7 @@ import type { CatalogPermission } from './permission-view';
 import { RoleCard } from './role-card';
 import { permissionCatalogQuery, roleQuery } from './role-data';
 import { RoleForm } from './role-form';
+import { roleMenu } from './roles-menu';
 
 /** По умолчанию — по названию роли (прототип `sort:{key:'name',dir:1}`). */
 const DEFAULT_SORT: ListSort = { key: 'name', dir: 'asc' };
@@ -124,12 +126,16 @@ const fetchRoleValues = async (col: string, q?: string) => {
  * «Сотрудники» → «Роли» (ТЗ «Сотрудники» → «Вкладка Роли»; прототип modules/staff.js, renderStaff,
  * roleActions): пояснение, как устроены права, и общий список ролей — роль, сотрудников, прав,
  * изменено. Строка открывает карточку роли; в меню — «Открыть» и «Изменить» (у роли владельца
- * недоступно: её права не меняются). «+ Добавить» — «Сотрудник» и «Роль»; новая роль открывается в
- * форме прав (адрес вкладки с `?edit=`).
+ * недоступно: её права не меняются), с правом «Сотрудники и роли» — ещё «Удалить» (docs/deviations.md,
+ * п. 16): после вопроса «Удалить роль «…»?»; у роли владельца, роли с сотрудниками и роли новых
+ * сотрудников по учётной политике недоступно с причиной, остальные отказы (заблокированные с этой
+ * ролью, роль с правами, которые выдаёт только владелец) — уведомлением с текстом сервера. «+ Добавить» — «Сотрудник» и
+ * «Роль»; новая роль открывается в форме прав (адрес вкладки с `?edit=`).
  */
 export function RolesList() {
   const t = useT();
   const toast = useToast();
+  const errorText = useErrorText();
   const client = useQueryClient();
   const refresh = useStaffRefresh();
   const labels = useGridLabels('roles.count');
@@ -160,6 +166,19 @@ export function RolesList() {
     role: Role;
     catalog: CatalogPermission[];
   }> | null>(null);
+  const [askDelete, setAskDelete] = useState<RoleListItem | null>(null);
+  /** Роль новых сотрудников по учётной политике не удаляется: её сначала меняют в «Настройках». */
+  const defaultRoleId = useQuery({ ...policyQuery, enabled: access.can('staff') }).data
+    ?.defaultRoleId;
+
+  const removeRole = async (r: RoleListItem) => {
+    const res = await callApi(() =>
+      api.api.roles[':id'].$delete({ param: { id: r.id }, query: { version: String(r.version) } }),
+    );
+    refresh();
+    if (!res.ok) return toast(errorText(res.error), { bad: true });
+    toast(t('roles.delete.done'), { icon: 'check' });
+  };
 
   /** Форма открывается, когда роль и справочник прав загружены: фокус сразу в «Названии роли». */
   const openForm = async (id: string) => {
@@ -191,22 +210,16 @@ export function RolesList() {
     );
   }, [editId, client, toast, t]);
 
-  const actions = (r: RoleListItem): ActionEntry[] => [
-    {
-      id: 'open',
-      label: t('roles.action.open'),
-      icon: 'shield',
-      run: () => setCard(openSlot(r)),
+  const actions = roleMenu({
+    canDelete: access.can('staff'),
+    defaultRoleId,
+    t,
+    run: {
+      open: (r) => setCard(openSlot(r)),
+      edit: (r) => void openForm(r.id),
+      remove: setAskDelete,
     },
-    {
-      id: 'edit',
-      label: t('roles.action.edit'),
-      icon: 'edit',
-      disabled: r.isOwner,
-      reason: r.isOwner ? t('roles.lock.owner_role') : undefined,
-      run: () => void openForm(r.id),
-    },
-  ];
+  });
 
   return (
     <div className="flex flex-col gap-3.5">
@@ -259,6 +272,15 @@ export function RolesList() {
           onDone={refresh}
         />
       ) : null}
+      <ConfirmDialog
+        open={askDelete !== null}
+        onClose={() => setAskDelete(null)}
+        title={t('roles.delete.title', { name: askDelete?.name ?? '' })}
+        text={t('roles.delete.text')}
+        ok={t('roles.action.delete')}
+        danger
+        onConfirm={() => askDelete && void removeRole(askDelete)}
+      />
       {staff.dialogs}
       {newRole.dialog}
     </div>
