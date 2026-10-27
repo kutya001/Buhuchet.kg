@@ -31,7 +31,14 @@ import {
 } from './contractors';
 import { readHistory, writeHistory } from './history';
 import { createOrganization, type CreatedOrganization } from './organizations';
-import { auditLog, contractors, contractorTariffs } from './schema';
+import {
+  auditLog,
+  contractorBases,
+  contractorBenefits,
+  contractorGkedExtra,
+  contractors,
+  contractorTariffs,
+} from './schema';
 import { seedPermissions, seedRoleTemplates } from './seed';
 import { readSpecJson } from './spec-data';
 import { createEmployee } from './staff';
@@ -213,6 +220,38 @@ describe.skipIf(!databaseAvailable())('Контрагенты: данные', ()
     expect(rows).toEqual([]);
   });
 
+  it('дочерние записи чужой организации не видны и не создаются', async () => {
+    const children = [
+      [contractorGkedExtra, { gked: '62.01.0', sortOrder: 5 }],
+      [contractorBenefits, { benefitCode: 'ЛЬГ-01', validFrom: null, validTo: null }],
+      [contractorBases, { baseCode: 'property' }],
+      [
+        contractorTariffs,
+        { amount: 100, period: 'M' as const, validFrom: '2026-02-01', note: 'Чужая' },
+      ],
+    ] as const;
+    // В А у первого контрагента есть дополнительный ГКЭД, основание и ставка; Б их не видит.
+    for (const [table] of children) {
+      const own = await inA((tx) => tx.select().from(table).where(eq(table.contractorId, firstId)));
+      const foreign = await inB((tx) =>
+        tx.select().from(table).where(eq(table.contractorId, firstId)),
+      );
+      expect(foreign).toEqual([]);
+      if (table !== contractorBenefits) expect(own.length).toBeGreaterThan(0);
+    }
+    // Б не добавит запись к контрагенту А: ни от имени А (политика RLS), ни от своего (составной
+    // внешний ключ на контрагента своей организации).
+    for (const [table, values] of children) {
+      for (const orgId of [a.orgId, b.orgId]) {
+        await expect(
+          inB((tx) =>
+            tx.insert(table as never).values({ ...values, orgId, contractorId: firstId } as never),
+          ),
+        ).rejects.toThrow();
+      }
+    }
+  });
+
   it('запись истории не ссылается на контрагента другой организации', async () => {
     const foreign = await inB((tx) => findContractorByInn(tx, '03744097401851'));
     await expect(
@@ -279,6 +318,7 @@ describe.skipIf(!databaseAvailable())('Контрагенты: данные', ()
       id,
       name: 'ИП Асанов',
       archived: true,
+      responsibleEmployeeId: null,
     });
     expect(await inA((tx) => findContractorByInn(tx, inn, id))).toBeNull();
     await expect(inA((tx) => createContractor(tx, a.orgId, fields({ inn }), null))).rejects.toEqual(

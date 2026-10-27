@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { withOrgContext } from './context';
 import { contractorGkedDicts, getContractor, listContractorsPage } from './contractors';
+import { readHistory } from './history';
 import { contractors, contractorTariffs } from './schema';
 import { DEMO_ORG_ID, demoId, seedAll } from './seed';
 import { createTestDatabase, databaseAvailable, type TestDatabase } from './testing';
@@ -14,6 +15,9 @@ describe.skipIf(!databaseAvailable())('Контрагенты демо-орга�
   let db: TestDatabase;
   const inDemo = <T>(fn: Parameters<typeof withOrgContext<T>>[2]) =>
     withOrgContext(db.app.db, { orgId: DEMO_ORG_ID, userId: demoId('user', 'e1') }, fn);
+
+  const confirmations = () =>
+    inDemo((tx) => readHistory(tx, 'contractor', demoId('contractor', '26')));
 
   beforeAll(async () => {
     db = await createTestDatabase();
@@ -107,6 +111,21 @@ describe.skipIf(!databaseAvailable())('Контрагенты демо-орга�
     expect(gkedCheckTexts(check, t).regime).toEqual([
       'Режим «Патент»: ни один вид деятельности контрагента не входит в перечень для ИП — подтвердил Айгерим С. 23.10.2026',
     ]);
+    // В истории контрагента — кто и когда подтвердил (п. 58).
+    expect(await confirmations()).toEqual([
+      expect.objectContaining({
+        action: 'update',
+        actorUserId: demoId('user', 'e4'),
+        at: new Date('2026-10-23T04:00:00.000Z'),
+        changes: [
+          expect.objectContaining({
+            field: 'gkedConfirmation',
+            from: null,
+            to: expect.objectContaining({ employeeId: demoId('employee', 'e4'), ask: '' }),
+          }),
+        ],
+      }),
+    ]);
   });
 
   it('повторное наполнение не задваивает контрагентов и ставки', async () => {
@@ -125,5 +144,6 @@ describe.skipIf(!databaseAvailable())('Контрагенты демо-орга�
       (await db.admin.db.select().from(contractors).where(eq(contractors.orgId, DEMO_ORG_ID)))
         .length,
     ).toBe(30);
+    expect(await confirmations()).toHaveLength(1);
   });
 });

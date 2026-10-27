@@ -597,4 +597,121 @@ describe.skipIf(!databaseAvailable())('Контрагенты: методы API'
     expect((await get(acc, '/api/contractors/export?cols=name,fee')).status).toBe(400);
     expect((await get(senior, '/api/contractors/export?cols=name')).status).toBe(403);
   });
+
+  it('день оплаты и «Первый неполный месяц» — только тому, кто видит плату; по умолчанию — 10-е и «Пропорционально дням»', async () => {
+    const own = await created(owner, { feeDay: 20, firstMonthMode: 'next' });
+    expect(own).toMatchObject({ feeDay: 20, firstMonthMode: 'next' });
+    const byAcc = await created(acc, { tariff: null });
+    expect(byAcc).toMatchObject({ feeDay: null, firstMonthMode: null });
+    expect(await card(owner, byAcc.id)).toMatchObject({ feeDay: 10, firstMonthMode: 'prorate' });
+
+    expect((await post(acc, { tariff: null, feeDay: 12 })).status).toBe(403);
+    expect((await post(acc, { tariff: null, firstMonthMode: 'full' })).status).toBe(403);
+    const patch = await apiRequest(f.app, 'PATCH', `/api/contractors/${byAcc.id}`, acc, {
+      version: byAcc.version,
+      feeDay: 12,
+    });
+    expect(patch.status).toBe(403);
+    // Дата начала и «Первый неполный месяц» после создания не меняются: поля «Изменить» их не берут.
+    const saved = await apiRequest(f.app, 'PATCH', `/api/contractors/${own.id}`, owner, {
+      version: own.version,
+      feeDay: 25,
+      startDate: '2020-01-01',
+      firstMonthMode: 'full',
+    });
+    expect(saved.status).toBe(200);
+    expect(Contractor.parse(await saved.json())).toMatchObject({
+      feeDay: 25,
+      startDate: '2024-07-16',
+      firstMonthMode: 'next',
+    });
+  });
+
+  it('дубль ИНН вне области называет найденного, но без номера записи', async () => {
+    const foreign = await created(owner, {
+      name: 'ОсОО «Чужой дубль»',
+      responsibleEmployeeId: employee('chief-a'),
+    });
+    const err = await failure(await post(acc, { inn: foreign.inn, tariff: null }));
+    expect(err).toMatchObject({ code: 'inn_duplicate', details: { name: 'ОсОО «Чужой дубль»' } });
+    expect(err.details).not.toHaveProperty('id');
+    const ownerErr = await failure(await post(owner, { inn: foreign.inn }));
+    expect(ownerErr.details).toMatchObject({ id: foreign.id });
+  });
+
+  it('нулевой символ в тексте — 400, а не ошибка сервера', async () => {
+    for (const patch of [
+      { name: 'ОсОО\u0000' },
+      { note: 'x\u0000' },
+      { formCode: 'ФС\u000001' },
+      { registration: { address: 'г. Бишкек\u0000' } },
+    ]) {
+      const res = await post(owner, patch);
+      expect(res.status, JSON.stringify(patch)).toBe(400);
+      expect((await failure(res)).code).toBe('validation_failed');
+    }
+  });
+
+  it('история: подтверждение права на режим, удаление архивного, правка без ГКЭД', async () => {
+    const cp = await created(owner, {
+      gked: '61.10.0',
+      gkedExtra: [],
+      regimeCode: 'РЕЖ-03',
+      gkedConfirm: true,
+    });
+    const [entry] = await history(cp.id);
+    expect(entry!.changes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field: 'gkedConfirmation',
+          to: expect.objectContaining({
+            employeeId: f.a.ownerEmployeeId,
+            ask: 'Оказывает услуги интернета?',
+          }),
+        }),
+      ]),
+    );
+
+    // У созданного без ГКЭД (до справочника) «Изменить» требует его указать — свой текст.
+    await f.t.admin.db
+      .update(schema.contractors)
+      .set({ gked: null, gkedConfirmation: null, regimeCode: 'РЕЖ-01' })
+      .where(eq(schema.contractors.id, cp.id));
+    const noGked = await failure(
+      await apiRequest(f.app, 'PATCH', `/api/contractors/${cp.id}`, owner, {
+        version: cp.version,
+        note: 'Без ГКЭД',
+      }),
+    );
+    expect(noGked).toMatchObject({
+      code: 'gked_required',
+      message: 'Укажите основной вид деятельности (ГКЭД)',
+      details: { field: 'gked', variant: 'edit' },
+    });
+    expect(screen(noGked)).toBe(noGked.message);
+
+    await f.t.admin.db
+      .update(schema.contractors)
+      .set({ serviceStatus: 'archived' })
+      .where(eq(schema.contractors.id, cp.id));
+    const del = await apiRequest(f.app, 'DELETE', `/api/contractors/${cp.id}`, owner);
+    expect(del.status).toBe(409);
+    expect((await failure(del)).code).toBe('contractor_archived');
+  });
+
+  it('бухгалтер со «Своими»: значения фильтра и Excel — только его контрагенты', async () => {
+    await created(owner, {
+      name: 'ОсОО «Не для бухгалтера»',
+      responsibleEmployeeId: employee('chief-a'),
+    });
+    const values = ListValues.parse(
+      await (await get(acc, '/api/contractors/values?col=responsible')).json(),
+    );
+    expect(values.items.map((v) => v.label)).toEqual(['acc-a']);
+    const file = await get(acc, '/api/contractors/export?cols=name,responsible');
+    expect(file.status).toBe(200);
+    const texts = Object.values(unzipTexts(new Uint8Array(await file.arrayBuffer()))).join('');
+    expect(texts).not.toContain('Не для бухгалтера');
+    expect(texts).not.toContain('chief-a');
+  });
 });

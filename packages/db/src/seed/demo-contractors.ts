@@ -6,10 +6,12 @@ import {
   parseContract,
   PAYS_TO,
   TARIFF_PERIODS,
+  type HistoryValue,
 } from '@buhuchet/domain';
 import { z } from 'zod';
 import type { Db } from '../client';
 import {
+  auditLog,
   contractorBases,
   contractorBenefits,
   contractorGkedExtra,
@@ -230,6 +232,33 @@ export async function seedDemoContractors(
   if (baseRows.length) await db.insert(contractorBases).values(baseRows).onConflictDoNothing();
   if (tariffRows.length) {
     await db.insert(contractorTariffs).values(tariffRows).onConflictDoNothing();
+  }
+
+  // Подтверждение права на режим — в истории контрагента (п. 58: «в истории — кто подтвердил»);
+  // пишется вместе с новым контрагентом, поэтому повторный запуск его не задваивает.
+  const created = new Set(inserted.map((r) => r.id));
+  const confirmations = rows.filter(
+    (r) => r.contractor.gkedConfirmation && created.has(r.contractor.id),
+  );
+  if (confirmations.length) {
+    await db.insert(auditLog).values(
+      confirmations.map(({ contractor, c }) => ({
+        orgId,
+        entity: 'contractor',
+        entityId: contractor.id,
+        action: 'update',
+        changes: [
+          {
+            field: 'gkedConfirmation',
+            from: null,
+            to: contractor.gkedConfirmation as unknown as HistoryValue,
+          },
+        ],
+        contractorId: contractor.id,
+        actorUserId: user(c.gkOk!.by),
+        at: new Date(`${c.gkOk!.at}T10:00:00+06:00`),
+      })),
+    );
   }
   return inserted.length;
 }
