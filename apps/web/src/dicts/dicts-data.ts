@@ -33,6 +33,7 @@ const json = async <T>(res: JsonResponse, parse: (v: unknown) => T) => {
 export interface Catalog {
   /** Действующие виды отчётов в порядке каталога. */
   types: readonly ReportType[];
+  /** Вид по коду — и отключённый в каталоге (его название нужно в «Связях» налога). */
   type: (code: string) => ReportType | undefined;
   /** Орган — название по коду. */
   authority: (code: string) => string;
@@ -58,25 +59,29 @@ export const catalogQuery = queryOptions({
   queryKey: ['dicts', 'catalog'],
   queryFn: async (): Promise<Catalog> => {
     const [types, authorities, regimes, bases, benefits] = await Promise.all([
-      api.api['report-types'].$get({ query: {} }).then((r) => json(r, (v) => ReportTypes.parse(v))),
+      api.api['report-types']
+        .$get({ query: { all: 'true' } })
+        .then((r) => json(r, (v) => ReportTypes.parse(v))),
       api.api.authorities.$get({ query: {} }).then((r) => json(r, (v) => Authorities.parse(v))),
       api.api['tax-regimes'].$get({ query: {} }).then((r) => json(r, (v) => TaxRegimes.parse(v))),
       api.api['report-bases'].$get({ query: {} }).then((r) => json(r, (v) => ReportBases.parse(v))),
       api.api['tax-benefits'].$get({ query: {} }).then((r) => json(r, (v) => TaxBenefits.parse(v))),
     ]);
     const byCode = new Map(types.items.map((x) => [x.code, x]));
+    // Подключать и выбирать — только действующие виды; отключённые — лишь для названий (прототип `T`).
+    const active = types.items.filter((x) => x.active);
     const authority = nameBy(authorities.items);
     const regime = nameBy(regimes.items);
     const fullNames = new Map(regimes.items.map((r) => [r.name, r.fullName]));
     return {
-      types: types.items,
+      types: active,
       type: (code) => byCode.get(code),
       authority,
       regime,
       base: nameBy(bases.items),
       benefits: benefits.items,
       pick: {
-        types: types.items.map((x) => ({
+        types: active.map((x) => ({
           code: x.code,
           kind: x.kind,
           pickGroup: x.pickGroup,

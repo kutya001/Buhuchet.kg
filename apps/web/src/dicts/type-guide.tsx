@@ -28,19 +28,28 @@ import type { Catalog } from './dicts-data';
  * Содержательные описания справочников (ТЗ «Форма просмотра налога и вида отчёта»; прототип
  * modules/dict-guide.js и report-pick.js): форма просмотра налога (`TaxGuide`), вида отчёта
  * (`TypeGuide`) и описание строки в «Выборе налогов» (`TypeDesc`). Пустые значения и «—» не
- * показываются, раздел без значений — тоже.
+ * показываются, раздел без значений — тоже; в описании строки «Выбора налогов» «—» видно, как в
+ * прототипе (`pkDescHtml`).
  */
 
 /** Строка «подпись — значение»; пустое значение — строки нет. */
 type KvRow = readonly [label: string, value: ReactNode, mono?: boolean] | null | false;
 
-const blank = (v: ReactNode) =>
-  v === null || v === undefined || v === false || (typeof v === 'string' && /^\s*(—\s*)?$/.test(v));
+const blank = (v: ReactNode, dash = false) =>
+  v === null ||
+  v === undefined ||
+  v === false ||
+  (typeof v === 'string' && (dash ? /^\s*$/ : /^\s*(—\s*)?$/).test(v));
 
-/** Пары «подпись — значение» без пустых (прототип tgKv); нет ни одной — ничего. */
-function kv(rows: readonly KvRow[], columns: 'auto' | 2 = 'auto'): ReactNode {
+/**
+ * Пары «подпись — значение» без пустых (прототип tgKv); нет ни одной — ничего. `dash` — строка со
+ * значением «—» остаётся (прототип pkDescHtml).
+ */
+function kv(rows: readonly KvRow[], columns: 'auto' | 2 = 'auto', dash = false): ReactNode {
   const items: KeyValueItem[] = rows.flatMap((r, i) =>
-    r && !blank(r[1]) ? [{ id: String(i), label: r[0], value: r[1], mono: r[2] ?? false }] : [],
+    r && !blank(r[1], dash)
+      ? [{ id: String(i), label: r[0], value: r[1], mono: r[2] ?? false }]
+      : [],
   );
   return items.length ? <KeyValues items={items} columns={columns} /> : null;
 }
@@ -587,6 +596,7 @@ export function TypeDesc({
           x.source ? [t('dicts.guide.source'), <SourceLink key="src" url={x.source} />] : null,
         ],
         2,
+        true,
       )}
       {taxes
         ? own.map((tax) => (
