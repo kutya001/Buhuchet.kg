@@ -5,6 +5,7 @@ import {
   listTaskValues,
   taskPendingStats,
   taskTabCounts,
+  tasksOrgEmpty,
   withOrgContext,
   type TaskListOptions,
   type TaskTab,
@@ -100,7 +101,7 @@ export const taskSummaryRoute = createRoute({
   responses: {
     200: {
       description:
-        'Мои открытые, поставленные мной открытые, просроченные; ждущие подтверждения и сколько из них можно подтвердить',
+        'Мои открытые, поставленные мной открытые, просроченные; ждущие подтверждения и сколько из них можно подтвердить; есть ли в организации задачи',
       content: { 'application/json': { schema: TaskSummary } },
     },
     401: { description: 'Нет входа', content: error },
@@ -115,11 +116,12 @@ export function taskSummaryHandler(deps: ApiDeps): RouteHandler<typeof taskSumma
     const today = todayOf(deps);
     const body = await withOrgContext(deps.db, orgContextOf(c), async (tx) => {
       await requireTasks(tx, orgContextOf(c).orgId);
-      const [counts, pending] = await Promise.all([
+      const [counts, pending, empty] = await Promise.all([
         taskTabCounts(tx, viewer, today),
         taskPendingStats(tx, viewer),
+        tasksOrgEmpty(tx),
       ]);
-      return { ...counts, ...pending, monthStart: monthStart(today) };
+      return { ...counts, ...pending, monthStart: monthStart(today), empty };
     });
     return c.json(body, 200);
   };
@@ -202,6 +204,7 @@ export function exportTasksHandler(deps: ApiDeps): RouteHandler<typeof exportTas
         columns: result.columns,
         rows: result.rows,
         more: result.more,
+        total: result.total,
         t: o.t,
       });
     });

@@ -59,9 +59,8 @@ export const contractorTasksQuery = (contractorId: string) =>
   queryOptions({
     queryKey: ['tasks', 'contractor', contractorId],
     queryFn: async () =>
-      json(
-        await api.api.contractors[':id'].tasks.$get({ param: { id: contractorId } }),
-        (v) => ContractorTasks.parse(v),
+      json(await api.api.contractors[':id'].tasks.$get({ param: { id: contractorId } }), (v) =>
+        ContractorTasks.parse(v),
       ),
   });
 

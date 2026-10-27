@@ -59,6 +59,11 @@ export const TASKS_TEXTS = {
   'task.plate.pending_none': { ru: 'выполненных задач без подтверждения нет', section: S },
   'task.empty': { ru: 'Задач нет', section: S },
   'task.empty.overdue': { ru: 'Просроченных задач нет', section: S },
+  'task.empty.first': {
+    ru: 'Регулярные задачи создадутся сами по отчётам; ручную задачу можно поставить сейчас',
+    section: S,
+  },
+  'task.empty.add': { ru: 'Добавить', section: S },
   'task.action.open': { ru: 'Открыть', section: S },
   'task.action.start': { ru: 'Взять в работу', section: S },
   'task.action.done': { ru: 'Выполнена', section: S },
@@ -85,6 +90,7 @@ export const TASKS_TEXTS = {
     ru: '«{title}» получит статус «Отменена». Исполнитель увидит это в Telegram.',
     section: S,
   },
+  'task.card.load_error': { ru: 'Не удалось загрузить задачу', section: S },
   'task.card.rework': { ru: 'Возвращена на доработку', section: S },
   'task.card.pending': {
     ru: 'Ждёт подтверждения: {name} или сотрудник с правом «Подтверждать задачи».',
@@ -138,6 +144,12 @@ export const TASKS_TEXTS = {
     section: S,
   },
   'task.done.file_required': { ru: 'Прикрепите файл', section: S },
+  'task.done.file_attached': { ru: '{name} · {at}', section: S },
+  'task.done.file_other': { ru: 'Выбрать другой файл', section: S },
+  'task.done.no_upload': {
+    ru: 'Прикрепить файл можно с правом «Загружать файлы»: попросите владельца добавить его в роль',
+    section: S,
+  },
   'task.confirm.title': { ru: 'Подтвердить выполнение', section: S },
   'task.confirm.instead': {
     ru: 'Задачу ставил {name}. Вы подтверждаете вместо постановщика: это будет видно в истории.',
@@ -192,7 +204,17 @@ export const TASKS_TEXTS = {
   'task.form.month_required': { ru: 'Укажите месяц', section: S },
   'task.form.exec_required': { ru: 'Выберите исполнителя', section: S },
   'task.cp_tab.summary': { ru: 'Задач: {n} · открытых {m}', section: S },
+  'task.cp_tab.summary_none': { ru: 'Задач: {n}', section: S },
   'task.cp_tab.add': { ru: 'Задача', section: S },
+  'task.cp_tab.empty': { ru: 'Задач по контрагенту пока нет', section: S },
+  'task.cp_tab.empty_text': {
+    ru: 'Регулярные задачи появятся сами по назначенным отчётам; ручную задачу можно поставить сейчас.',
+    section: S,
+  },
+  'task.cp_tab.more': {
+    ru: 'Показаны последние {n}; все задачи — в модуле «Задачи»',
+    section: S,
+  },
   'task.comment.required': { ru: 'Введите комментарий', section: S },
   'task.hist.created': { ru: 'Задача поставлена', section: S },
   'task.hist.changed': { ru: '{field}: {from} → {to}', section: S },

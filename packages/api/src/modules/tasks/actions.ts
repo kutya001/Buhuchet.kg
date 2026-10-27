@@ -156,6 +156,7 @@ const start: Act<null> = async (ctx) => {
  */
 const done: Act<z.infer<typeof TaskDoneRequest>> = async (ctx, body) => {
   allowed(ctx, 'done');
+  // ОТКЛОНЕНИЕ: docs/deviations.md#Б-1
   const required = ctx.lock.needFile && ctx.filesOn;
   if (required && !body.fileId) {
     apiFail(400, 'task_file_required', 'Прикрепите файл', { field: 'fileId' });

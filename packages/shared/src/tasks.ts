@@ -69,7 +69,8 @@ export type TaskList = z.infer<typeof TaskList>;
 /**
  * Счётчики вкладок и плашка «На подтверждении» (прототип `taskTabs`, `renderTasks`): мои открытые,
  * поставленные мной открытые, просроченные; ждущие подтверждения и сколько из них можно подтвердить;
- * `monthStart` — с какого дня список («С <месяц>, вперёд и всё просроченное»).
+ * `monthStart` — с какого дня список («С <месяц>, вперёд и всё просроченное»); `empty` — задач в
+ * организации ещё нет (прототип ui/empty.js).
  */
 export const TaskSummary = z.object({
   mine: z.number().int().nonnegative(),
@@ -78,6 +79,8 @@ export const TaskSummary = z.object({
   pending: z.number().int().nonnegative(),
   canConfirm: z.number().int().nonnegative(),
   monthStart: IsoDate,
+  /** В организации ещё нет ни одной задачи: пустой список с подсказкой первого входа. */
+  empty: z.boolean(),
 });
 export type TaskSummary = z.infer<typeof TaskSummary>;
 

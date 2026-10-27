@@ -11,6 +11,7 @@ export type CountKey =
   | 'grid.count'
   | 'staff.count'
   | 'roles.count'
+  | 'task.count'
   | 'accounts.count'
   | 'orgs.count'
   | 'locale.count'

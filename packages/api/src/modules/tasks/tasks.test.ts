@@ -25,7 +25,6 @@ describe.skipIf(!databaseAvailable())('Задачи: методы API', () => {
   let chief: string;
   let acc: string;
   let hr: string;
-  let senior: string;
   let ownerB: string;
   /** Контрагент бухгалтера (видит и бухгалтер) и главного бухгалтера (бухгалтеру не виден). */
   let cpAcc: Contractor;
@@ -116,12 +115,11 @@ describe.skipIf(!databaseAvailable())('Задачи: методы API', () => {
     f = await createStaffFixture();
     await seedAllPlatformDictionaries(f.t.admin.db);
     await features({ tasks: true, files: true });
-    [owner, chief, acc, hr, senior, ownerB] = await Promise.all([
+    [owner, chief, acc, hr, ownerB] = await Promise.all([
       signIn(f.app, 'owner-a', TEST_PASSWORD),
       signIn(f.app, 'chief-a', TEST_PASSWORD),
       signIn(f.app, 'acc-a', TEST_PASSWORD),
       signIn(f.app, 'hr-a', TEST_PASSWORD),
-      signIn(f.app, 'senior-a', TEST_PASSWORD),
       signIn(f.app, 'owner-b', TEST_PASSWORD),
     ]);
     cpAcc = await contractor('ОсОО «Ала-Тоо Трейд»', '03744097401851', employee('acc-a'));
@@ -130,6 +128,12 @@ describe.skipIf(!databaseAvailable())('Задачи: методы API', () => {
 
   afterAll(async () => {
     await f?.t.drop();
+  });
+
+  it('пока задач нет — «empty» (подсказка первого входа); после первой задачи — нет', async () => {
+    const before = TaskSummary.parse(await (await call('GET', '/api/tasks/summary', acc)).json());
+    expect(before).toMatchObject({ empty: true, mine: 0, byme: 0, overdue: 0, pending: 0 });
+    expect(before.monthStart).toBe('2026-10-01');
   });
 
   it('ставит задачу: постановщик из сеанса, «На месяц» — до последнего дня, «Поставил»', async () => {
@@ -243,6 +247,7 @@ describe.skipIf(!databaseAvailable())('Задачи: методы API', () => {
     );
     expect(summary.pending).toBeGreaterThanOrEqual(1);
     expect(summary.canConfirm).toBe(summary.pending);
+    expect(summary.empty).toBe(false);
     const confirmed = await acted(owner, task.id, 'confirm', { comment: 'проверил сам' });
     expect(confirmed).toMatchObject({
       status: 'confirmed',

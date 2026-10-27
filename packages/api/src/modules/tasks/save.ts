@@ -103,6 +103,7 @@ async function fieldsOf(
     executorEmployeeId: body.executorEmployeeId,
     term: body.term,
     dueDate: body.term === 'month' ? monthLastDay(body.dueDate.slice(0, 7)) : body.dueDate,
+    // ОТКЛОНЕНИЕ: docs/deviations.md#Б-1
     needFile: filesOn ? body.needFile : (before?.lock.needFile ?? false),
     confirm: confirmLocked ? before.lock.confirm : body.confirm,
   };

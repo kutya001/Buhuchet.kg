@@ -13,6 +13,7 @@ import { RolesList } from '../roles/roles-list';
 import { ModuleStub } from '../shell/module-stub';
 import { StaffList } from '../staff/staff-list';
 import { StaffStub } from '../staff/staff-stub';
+import { TasksList, type TaskTab } from '../tasks/tasks-list';
 
 /**
  * Экран модуля на вкладке. Экраны — клиентские компоненты (данные — из API через TanStack Query),
@@ -40,6 +41,10 @@ export function ModuleScreen({
     if (tab === 'settings') return <OrgSettingsTab />;
     return <OrgMain />;
   }
+  if (moduleId === 'tasks') {
+    const tab = (tabId ?? 'mine') as TaskTab;
+    return <TasksList key={tab} tab={TASK_TABS.includes(tab) ? tab : 'mine'} />;
+  }
   if (moduleId === 'dicts') {
     const tab = tabId ?? 'types';
     if (tab === 'types') return <ReportTypesList />;
@@ -56,7 +61,17 @@ export function ModuleScreen({
  * модуля»): только у них в ряду вкладок кнопка «Статистика». Экран с плашками добавляет сюда свою
  * вкладку («модуль/вкладка») и показывает плашки по `useModuleStats`.
  */
-const SCREENS_WITH_PLATES: ReadonlySet<string> = new Set<string>(['orgs/', 'l10n/']);
+const SCREENS_WITH_PLATES: ReadonlySet<string> = new Set<string>([
+  'tasks/',
+  'tasks/mine',
+  'tasks/byme',
+  'tasks/all',
+  'tasks/overdue',
+  'orgs/',
+  'l10n/',
+]);
+
+const TASK_TABS: readonly TaskTab[] = ['mine', 'byme', 'all', 'overdue'];
 
 export function screenHasPlates(moduleId: MenuModuleId, tabId: string | null): boolean {
   return SCREENS_WITH_PLATES.has(`${moduleId}/${tabId ?? ''}`);
