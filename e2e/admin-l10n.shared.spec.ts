@@ -9,7 +9,10 @@ import { DEMO_PASSWORD, signIn } from './helpers';
 
 type UiText = { key: string; text: string; version: number };
 
+// Правка на ПК и на телефоне идёт одновременно (fullyParallel), поэтому у каждого свой текст на
+// экране: заметка над списком и пояснение плашки «Добавить язык».
 const NOTE_KEY = 'locale.note';
+const ADD_LANG_SUB_KEY = 'locale.add_lang_sub';
 
 /** Текст словаря через API администратора: ключ, текст, версия. */
 async function uiText(api: APIRequestContext, key: string): Promise<UiText> {
@@ -50,7 +53,8 @@ test.describe('Админка: Локализация', () => {
   }) => {
     const origin = new URL(baseURL!).origin;
     await platformAdmin(page.request, origin);
-    const before = await uiText(page.request, NOTE_KEY);
+    const key = isMobile ? ADD_LANG_SUB_KEY : NOTE_KEY;
+    const before = await uiText(page.request, key);
     const changed = `Тексты правятся здесь, без выпуска новой версии (${isMobile ? 'телефон' : 'ПК'}).`;
 
     try {
@@ -68,12 +72,12 @@ test.describe('Админка: Локализация', () => {
       // Добавление языка заложено, но пока недоступно.
       await expect(plates.locator('[data-plate="add"]')).toBeDisabled();
       await expect(plates.locator('[data-plate="add"]')).toContainText('Добавить язык');
-      // Заметка — над списком (тот же текст может быть и в строке словаря).
+      // Текст — над списком: заметка на ПК, пояснение плашки на телефоне (он же может быть в строке словаря).
       await expect(
         page.getByText(before.text).and(page.locator(':not([data-grid] *)')),
       ).toBeVisible();
 
-      const dialog = await openText(page, isMobile, NOTE_KEY);
+      const dialog = await openText(page, isMobile, key);
       await expect(dialog.getByLabel('Русский')).toHaveValue(before.text);
       await expect(dialog).toContainText('Изменение применится без изменения кода');
       await dialog.getByLabel('Русский').fill(changed);
@@ -81,18 +85,18 @@ test.describe('Админка: Локализация', () => {
       await expect(dialog).toBeHidden();
       await expect(page.getByText('Текст сохранён')).toBeVisible();
 
-      // Новый текст — сразу на экране: в заметке над списком (не в строке словаря), прежнего нет.
+      // Новый текст — сразу на экране над списком (не только в строке словаря), прежнего нет.
       await expect(page.getByText(changed).and(page.locator(':not([data-grid] *)'))).toBeVisible();
       await expect(page.getByText(before.text)).toHaveCount(0);
       // И в словаре сайта.
       const dictionary = (await (await page.request.get('/api/l10n')).json()) as {
         texts: Record<string, string>;
       };
-      expect(dictionary.texts[NOTE_KEY]).toBe(changed);
+      expect(dictionary.texts[key]).toBe(changed);
       // «Изменил» — администратор платформы, в «Изменено» — время правки.
-      const row = page.locator(`[data-grid] [data-id="${NOTE_KEY}"]`);
+      const row = page.locator(`[data-grid] [data-id="${key}"]`);
       await expect(row).toContainText(changed);
-      const saved = await uiText(page.request, NOTE_KEY);
+      const saved = await uiText(page.request, key);
       expect(saved).toMatchObject({ text: changed, version: before.version + 1 });
     } finally {
       await restore(page.request, origin, before);
