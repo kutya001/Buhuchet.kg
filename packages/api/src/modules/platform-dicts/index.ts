@@ -62,6 +62,22 @@ import {
   listAdminDictRequestsHandler,
   listAdminDictRequestsRoute,
 } from './admin-requests';
+import {
+  addAdminCalendarDayHandler,
+  addAdminCalendarDayRoute,
+  adminCalendarCopyHandler,
+  adminCalendarCopyPlanHandler,
+  adminCalendarCopyPlanRoute,
+  adminCalendarCopyRoute,
+  adminCalendarValuesHandler,
+  adminCalendarValuesRoute,
+  deleteAdminCalendarDayHandler,
+  deleteAdminCalendarDayRoute,
+  exportAdminCalendarHandler,
+  exportAdminCalendarRoute,
+  listAdminCalendarHandler,
+  listAdminCalendarRoute,
+} from './admin-calendar';
 import { phoneCodesHandler, phoneCodesRoute } from './phone-codes';
 
 /**
@@ -94,6 +110,13 @@ export function platformDictsModule(deps: ApiDeps) {
       .openapi(adminDictRequestValuesRoute, adminDictRequestValuesHandler(deps))
       .openapi(exportAdminDictRequestsRoute, exportAdminDictRequestsHandler(deps))
       .openapi(answerDictRequestRoute, answerDictRequestHandler(deps))
+      .openapi(listAdminCalendarRoute, listAdminCalendarHandler(deps))
+      .openapi(adminCalendarValuesRoute, adminCalendarValuesHandler(deps))
+      .openapi(exportAdminCalendarRoute, exportAdminCalendarHandler(deps))
+      .openapi(adminCalendarCopyPlanRoute, adminCalendarCopyPlanHandler(deps))
+      .openapi(adminCalendarCopyRoute, adminCalendarCopyHandler(deps))
+      .openapi(addAdminCalendarDayRoute, addAdminCalendarDayHandler(deps))
+      .openapi(deleteAdminCalendarDayRoute, deleteAdminCalendarDayHandler(deps))
       .openapi(listAdminDictRoute, listAdminDictHandler(deps))
       .openapi(adminDictValuesRoute, adminDictValuesHandler(deps))
       .openapi(exportAdminDictRoute, exportAdminDictHandler(deps))

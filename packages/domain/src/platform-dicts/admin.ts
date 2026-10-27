@@ -290,7 +290,7 @@ export const DICT_HISTORY_SHOWN = 12;
 /** Столбец списка справочника в Админке: ключ, тип, подпись (ключ словаря) и скрыт ли по умолчанию. */
 export interface AdminDictColumn {
   key: string;
-  type: 'text' | 'enum' | 'int';
+  type: 'text' | 'enum' | 'int' | 'date';
   label: string;
   hidden?: boolean;
 }
@@ -392,6 +392,19 @@ export const ADMIN_DICT_COLUMNS: Readonly<Record<AdminValueDict, readonly AdminD
   ],
   reasons: [N, CODE, VALUE, c('note', 'text', 'pdicts.col.note', true), USED, STATUS],
 };
+
+/**
+ * Столбцы вкладки «Календарь» (прототип renderPDicts, `adm-cal`): дни текущего и следующего года, по
+ * умолчанию — по дате.
+ */
+export const ADMIN_CALENDAR_COLUMNS: readonly AdminDictColumn[] = [
+  c('date', 'date', 'pdicts.cal.col.date'),
+  c('dow', 'enum', 'pdicts.cal.col.dow'),
+  c('name', 'text', 'pdicts.cal.col.name'),
+  c('kind', 'enum', 'pdicts.cal.col.kind'),
+  c('rule', 'enum', 'pdicts.cal.col.rule'),
+];
+export const ADMIN_CALENDAR_SORT: ListSort = { key: 'date', dir: 'asc' };
 
 /**
  * Сортировка списка по умолчанию (как в прототипе, docs/deviations.md п. 48): короткий справочник — в

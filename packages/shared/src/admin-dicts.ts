@@ -1,6 +1,8 @@
 import {
   ADMIN_VALUE_DICTS,
   BANK_KINDS,
+  CALENDAR_ADD_TYPES,
+  CALENDAR_DAY_KINDS,
   DECLARATION_FOR,
   DICT_NAME_MAX,
   DICT_NOTE_MAX,
@@ -8,6 +10,7 @@ import {
   DICT_REQUEST_ANSWERS,
   DICT_REQUEST_DICTS,
   DICT_REQUEST_STATUSES,
+  isIsoDate,
   ORGAN_CONTACTS_MAX,
   PHONE_DIAL_CODE_PATTERN,
   PHONE_MASK_PATTERN,
@@ -18,7 +21,7 @@ import {
   type UiTextKey,
 } from '@buhuchet/domain';
 import { z } from 'zod';
-import { RecordAudit, RecordVersion, Uuid } from './common';
+import { IsoDate, RecordAudit, RecordVersion, Uuid } from './common';
 import { listPageSchema } from './list';
 
 /*
@@ -215,6 +218,72 @@ export const AdminDictHistory = z.object({
   ),
 });
 export type AdminDictHistory = z.infer<typeof AdminDictHistory>;
+
+/**
+ * День вкладки «Календарь»: ключ записи (`MM-DD` — праздник каждый год, иначе дата), дата в году
+ * списка, вид и название. У дней из наполнения «Создано» пусто, как у значений справочников.
+ */
+export const AdminCalendarDay = z.object({
+  key: z.string(),
+  date: IsoDate,
+  kind: z.enum(CALENDAR_DAY_KINDS),
+  name: z.string(),
+  everyYear: z.boolean(),
+  audit: RecordAudit.extend({ createdAt: z.iso.datetime().nullable() }),
+  version: RecordVersion,
+});
+export type AdminCalendarDay = z.infer<typeof AdminCalendarDay>;
+
+/** Дни текущего и следующего года; `nextFilled` — в следующем году уже есть даты «только в этом году». */
+export const AdminCalendarList = listPageSchema(AdminCalendarDay).extend({
+  year: z.number().int(),
+  nextFilled: z.boolean(),
+});
+export type AdminCalendarList = z.infer<typeof AdminCalendarList>;
+
+/** Окно «Нерабочий день» (прототип holidayDlg): дата, тип и название праздника. */
+export const AdminCalendarAddForm = z
+  .object({
+    date: z.string().trim().refine(isIsoDate, message('pdicts.cal.err.date')),
+    type: z.enum(CALENDAR_ADD_TYPES),
+    name: text(DICT_NAME_MAX),
+  })
+  .refine((x) => x.type === 'workday' || x.name.length > 0, {
+    path: ['name'],
+    ...message('pdicts.cal.err.name'),
+  });
+export type AdminCalendarAddFormInput = z.input<typeof AdminCalendarAddForm>;
+export type AdminCalendarAddForm = z.output<typeof AdminCalendarAddForm>;
+
+/** Ключ дня календаря: `MM-DD` или `YYYY-MM-DD`. */
+export const AdminCalendarDayParam = z.object({
+  key: z.string().regex(/^(\d{4}-)?\d{2}-\d{2}$/),
+});
+
+/** Ответ правки календаря: у скольких несданных отчётов пересчитан срок. */
+export const AdminCalendarChanged = z.object({ recalculated: z.number().int().nonnegative() });
+export type AdminCalendarChanged = z.infer<typeof AdminCalendarChanged>;
+
+/** «Календарь на следующий год копированием»: что будет скопировано в год `year`. */
+export const AdminCalendarCopyPlan = z.object({
+  year: z.number().int(),
+  items: z.array(
+    z.object({
+      from: IsoDate,
+      to: IsoDate,
+      kind: z.enum(CALENDAR_DAY_KINDS),
+      name: z.string(),
+    }),
+  ),
+});
+export type AdminCalendarCopyPlan = z.infer<typeof AdminCalendarCopyPlan>;
+
+/** Скопировано дней и у скольких несданных отчётов пересчитан срок. */
+export const AdminCalendarCopied = AdminCalendarChanged.extend({
+  year: z.number().int(),
+  copied: z.number().int().nonnegative(),
+});
+export type AdminCalendarCopied = z.infer<typeof AdminCalendarCopied>;
 
 /** Каталог видов отчётов кратко: выбор видов у основания и подписи «Виды отчётов». */
 export const AdminReportTypeOptions = z.object({

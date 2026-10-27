@@ -135,3 +135,56 @@ CREATE OR REPLACE FUNCTION app.admin_dict_set_links(p_dict text, p_code text, p_
 REVOKE ALL ON FUNCTION app.admin_dict_set_links(text, text, jsonb) FROM PUBLIC;
 --> statement-breakpoint
 GRANT EXECUTE ON FUNCTION app.admin_dict_set_links(text, text, jsonb) TO buhuchet_app;
+--> statement-breakpoint
+-- Админка → «Справочники платформы» → «Календарь»: у производственного календаря ключ — день (`MM-DD`
+-- или дата), а не код значения, поэтому свои функции вместо общего механизма. Роль приложения таблицу
+-- только читает (миграция 0023); пишет администратор платформы из контекста.
+-- Новый день календаря: отвечает версией; 0 — такой день уже есть; пусто — не администратор. Вид и
+-- формат дня проверяют ограничения таблицы.
+CREATE OR REPLACE FUNCTION app.admin_calendar_insert(p_day text, p_kind text, p_name text)
+  RETURNS integer
+  LANGUAGE plpgsql VOLATILE SECURITY DEFINER
+  SET search_path = pg_catalog, pg_temp
+  AS $$
+  DECLARE
+    result integer;
+  BEGIN
+    IF NOT app.is_platform_admin() THEN
+      RETURN NULL;
+    END IF;
+    INSERT INTO public.production_calendar AS t (day, kind, name, created_at, created_by, updated_by, updated_at)
+      VALUES (p_day, p_kind, coalesce(p_name, ''), now(), app.current_user_id(), app.current_user_id(), now())
+      ON CONFLICT (day) DO NOTHING
+      RETURNING t.version INTO result;
+    RETURN coalesce(result, 0);
+  END
+  $$;
+--> statement-breakpoint
+-- Удалить день календаря той версии, что видел администратор. Государственный праздник «каждый год»
+-- (`MM-DD`) не удаляется (прототип: «Государственный праздник по закону, удалить нельзя»). Отвечает true;
+-- false — нет такого дня, версия устарела или день — праздник «каждый год»; пусто — не администратор.
+CREATE OR REPLACE FUNCTION app.admin_calendar_delete(p_day text, p_version integer)
+  RETURNS boolean
+  LANGUAGE plpgsql VOLATILE SECURITY DEFINER
+  SET search_path = pg_catalog, pg_temp
+  AS $$
+  DECLARE
+    deleted integer;
+  BEGIN
+    IF NOT app.is_platform_admin() THEN
+      RETURN NULL;
+    END IF;
+    DELETE FROM public.production_calendar AS t
+      WHERE t.day = p_day AND t.version = p_version AND t.day !~ '^[0-9]{2}-[0-9]{2}$';
+    GET DIAGNOSTICS deleted = ROW_COUNT;
+    RETURN deleted > 0;
+  END
+  $$;
+--> statement-breakpoint
+REVOKE ALL ON FUNCTION app.admin_calendar_insert(text, text, text) FROM PUBLIC;
+--> statement-breakpoint
+REVOKE ALL ON FUNCTION app.admin_calendar_delete(text, integer) FROM PUBLIC;
+--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION app.admin_calendar_insert(text, text, text) TO buhuchet_app;
+--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION app.admin_calendar_delete(text, integer) TO buhuchet_app;

@@ -1,6 +1,10 @@
 import { databaseAvailable, seedAllPlatformDictionaries } from '@buhuchet/db/testing';
 import { DICT_REQUEST_HOURLY_LIMIT } from '@buhuchet/domain';
 import {
+  AdminCalendarChanged,
+  AdminCalendarCopied,
+  AdminCalendarCopyPlan,
+  AdminCalendarList,
   AdminDictGroups,
   AdminDictHistory,
   AdminDictList,
@@ -58,6 +62,10 @@ describe.skipIf(!databaseAvailable())('Админка → «Справочник
       `${P}/report-type-options`,
       `${P}/forms/history`,
       `${P}/forms/${encodeURIComponent('ФС-01')}`,
+      `${P}/calendar`,
+      `${P}/calendar/values?col=kind`,
+      `${P}/calendar/export?cols=date`,
+      `${P}/calendar/copy`,
       '/api/admin/dict-requests',
       '/api/admin/dict-requests/values?col=status',
       '/api/admin/dict-requests/export?cols=what',
@@ -73,6 +81,9 @@ describe.skipIf(!databaseAvailable())('Админка → «Справочник
       ['POST', `${form}/move`, { step: 1, version: 1 }],
       ['POST', `${form}/active`, { active: false, version: 1 }],
       ['DELETE', `${form}?version=1`, undefined],
+      ['POST', `${P}/calendar`, { date: '2027-01-04', type: 'off', name: 'Взлом' }],
+      ['DELETE', `${P}/calendar/2026-03-20?version=1`, undefined],
+      ['POST', `${P}/calendar/copy`, undefined],
       [
         'POST',
         '/api/admin/dict-requests/00000000-0000-4000-8000-000000000000/answer',
@@ -364,6 +375,56 @@ describe.skipIf(!databaseAvailable())('Админка → «Справочник
     // Порядка у кодов стран нет.
     const move = await send('POST', `${P}/phones/KG/move`, { step: 1, version: kg.version });
     expect(move.status).toBe(404);
+  });
+
+  it('календарь: дни текущего и следующего года, «Нерабочий день», «Удалить», копирование на следующий год', async () => {
+    const list = AdminCalendarList.parse(await (await get(`${P}/calendar?size=all`)).json());
+    expect([list.year, list.nextFilled]).toEqual([2026, true]);
+    expect(list.items[0]).toMatchObject({ key: '01-01', date: '2026-01-01', everyYear: true });
+    const file = await get(`${P}/calendar/export?cols=date,name`);
+    expect(file.headers.get('content-type')).toContain('spreadsheetml');
+
+    const add = (body: unknown) => send('POST', `${P}/calendar`, body);
+    const saturday = await add({ date: '2027-03-15', type: 'workday', name: '' });
+    expect([saturday.status, await errorOf(saturday)]).toMatchObject([
+      400,
+      { code: 'calendar_not_saturday', details: { field: 'date' } },
+    ]);
+    const year = await add({ date: '2030-01-04', type: 'off', name: 'Праздник' });
+    expect(await errorOf(year)).toMatchObject({
+      code: 'calendar_date_year',
+      details: { field: 'date', y: 2026, next: 2027 },
+    });
+    const noName = await add({ date: '2027-01-04', type: 'off', name: ' ' });
+    expect([noName.status, (await errorOf(noName)).code]).toEqual([400, 'validation_failed']);
+    const res = await add({ date: '2027-01-04', type: 'off', name: 'Перенос: Новый год' });
+    expect(res.status, await res.clone().text()).toBe(201);
+    expect(AdminCalendarChanged.parse(await res.json())).toEqual({ recalculated: 0 });
+    const taken = await add({ date: '2027-01-04', type: 'off', name: 'Ещё раз' });
+    expect((await errorOf(taken)).code).toBe('calendar_date_taken');
+
+    const after = AdminCalendarList.parse(await (await get(`${P}/calendar?size=all`)).json());
+    const day = after.items.find((x) => x.key === '2027-01-04')!;
+    expect(day).toMatchObject({ kind: 'transfer', everyYear: false });
+    const fixed = await send('DELETE', `${P}/calendar/01-01?version=1`);
+    expect([fixed.status, (await errorOf(fixed)).code]).toEqual([409, 'calendar_day_fixed']);
+    const stale = await send('DELETE', `${P}/calendar/2027-01-04?version=${day.version + 1}`);
+    expect(stale.status).toBe(409);
+    const del = await send('DELETE', `${P}/calendar/2027-01-04?version=${day.version}`);
+    expect(del.status).toBe(204);
+    expect((await send('DELETE', `${P}/calendar/2027-01-04?version=${day.version}`)).status).toBe(
+      404,
+    );
+    expect((await send('DELETE', `${P}/calendar/not-a-day?version=1`)).status).toBe(400);
+
+    const plan = AdminCalendarCopyPlan.parse(await (await get(`${P}/calendar/copy`)).json());
+    expect([plan.year, plan.items.length]).toEqual([2027, 4]);
+    const copy = await send('POST', `${P}/calendar/copy`);
+    expect(AdminCalendarCopied.parse(await copy.json())).toEqual({
+      year: 2027,
+      copied: 4,
+      recalculated: 0,
+    });
   });
 
   it('«Запросы»: администратор видит запросы всех организаций и отвечает; организация видит ответ', async () => {

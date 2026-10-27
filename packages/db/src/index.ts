@@ -21,6 +21,7 @@ export * from './admin-users';
 export * from './admin-ui-texts';
 export * from './admin-platform-dicts';
 export * from './admin-dict-requests';
+export * from './admin-calendar';
 export * from './rate-limits';
 export * from './dicts';
 export * from './taxes';

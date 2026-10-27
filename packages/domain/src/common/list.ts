@@ -474,6 +474,7 @@ export const GRID_KEYS = [
   'pdicts.organs',
   'pdicts.ugns',
   'pdicts.banks',
+  'pdicts.calendar',
   'pdicts.reasons',
   'pdicts.requests',
 ] as const;

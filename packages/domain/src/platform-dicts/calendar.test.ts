@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import fixture from './__fixtures__/calendar.json';
 import {
+  calendarAddKind,
+  calendarAddProblems,
+  calendarAdminYears,
+  calendarCopyPlan,
   calendarEntryProblem,
   calendarKindOf,
   calendarYear,
@@ -130,5 +134,52 @@ describe('запись календаря', () => {
     expect(
       calendarEntryProblem({ day: '2026-03-20', kind: 'other' as 'holiday', name: 'X' }),
     ).toMatch(/неизвестный вид/);
+  });
+});
+
+describe('Админка → «Календарь»', () => {
+  const base: CalendarEntry[] = [
+    { day: '01-01', kind: 'holiday', name: 'Новый год' },
+    { day: '02-29', kind: 'holiday', name: 'Високосный' },
+    { day: '2026-03-20', kind: 'holiday', name: 'Орозо айт' },
+    { day: '2026-03-14', kind: 'workday', name: '' },
+    { day: '2026-03-09', kind: 'transfer', name: 'Перенос: 8 марта' },
+    { day: '2027-03-09', kind: 'holiday', name: 'Уже внесено' },
+    { day: '2028-02-29', kind: 'transfer', name: 'Перенос' },
+  ];
+  const today = '2026-10-27';
+
+  it('годы вкладки — текущий по Бишкеку и следующий', () => {
+    expect(calendarAdminYears(today)).toEqual([2026, 2027]);
+  });
+
+  it('вид нового дня: перенос — по названию «Перенос…», рабочая суббота — по типу', () => {
+    expect(calendarAddKind('off', 'Орозо айт')).toBe('holiday');
+    expect(calendarAddKind('off', ' Перенос: 8 марта')).toBe('transfer');
+    expect(calendarAddKind('workday', 'что угодно')).toBe('workday');
+  });
+
+  it('«Нерабочий день»: дата, год вкладки, суббота, повтор даты, название праздника', () => {
+    const problems = (date: string, type: 'off' | 'workday', name = 'Праздник') =>
+      calendarAddProblems({ date, type, name }, base, today).map((p) => p.code);
+    expect(problems('', 'off')).toEqual(['date_required']);
+    expect(problems('2026-02-30', 'off')).toEqual(['date_required']);
+    expect(problems('2025-12-31', 'off')).toEqual(['date_year']);
+    expect(problems('2028-01-03', 'off')).toEqual(['date_year']);
+    expect(problems('2027-03-15', 'workday')).toEqual(['not_saturday']);
+    expect(problems('2027-03-13', 'workday', '')).toEqual([]);
+    expect(problems('2027-01-01', 'off')).toEqual(['date_taken']);
+    expect(problems('2026-03-20', 'off')).toEqual(['date_taken']);
+    expect(problems('2027-01-04', 'off', ' ')).toEqual(['name_required']);
+    expect(problems('', 'off', '')).toEqual(['date_required', 'name_required']);
+  });
+
+  it('копирование: только даты «только в этом году», на ту же дату следующего года, занятые — нет', () => {
+    expect(calendarCopyPlan(base, 2026)).toEqual([
+      { from: '2026-03-14', to: '2027-03-14', kind: 'workday', name: '' },
+      { from: '2026-03-20', to: '2027-03-20', kind: 'holiday', name: 'Орозо айт' },
+    ]);
+    // 29 февраля в невисокосный год не копируется.
+    expect(calendarCopyPlan(base, 2028)).toEqual([]);
   });
 });
