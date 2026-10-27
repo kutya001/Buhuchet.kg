@@ -445,6 +445,7 @@ export interface GridViewSettings {
 export const GRID_KEYS = [
   'staff.list',
   'staff.roles',
+  'accounts.list',
   'orgs.list',
   'dicts.types',
   // «Справочники платформы»: «Поиск по всем значениям» и окно каждого справочника (ORG_DICT_WINDOW_IDS).

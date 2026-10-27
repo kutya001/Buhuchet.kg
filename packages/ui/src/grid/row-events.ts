@@ -46,6 +46,11 @@ interface RowEventOptions<Row> {
   onMenu?: (row: Row, place: MenuPlace) => void;
   /** Меню есть не у всех записей (у владельца в списке сотрудников действий нет); без него — у всех. */
   hasMenu?: (row: Row) => boolean;
+  /**
+   * Без карточки записи нажатие на строку и Enter открывают её меню у строки (прототип: `open` списка
+   * вызывает `menu`, как в Админке → «Учётные записи»).
+   */
+  openMenu?: boolean;
 }
 
 /**
@@ -57,7 +62,7 @@ interface RowEventOptions<Row> {
  */
 export function rowEvents<Row>(
   press: PressState,
-  { onOpen, onMenu, hasMenu }: RowEventOptions<Row>,
+  { onOpen, onMenu, hasMenu, openMenu }: RowEventOptions<Row>,
 ): RowEvents<Row> {
   const cancel = () => {
     clearTimeout(press.timer);
@@ -70,6 +75,12 @@ export function rowEvents<Row>(
     hasMenu: (row) => !!menuOf(row),
     handlers: (row) => {
       const menu = menuOf(row);
+      // Нажатие на строку: карточка записи или, если карточки нет, меню у строки.
+      const open: ((anchor: HTMLElement) => void) | undefined = onOpen
+        ? () => onOpen(row)
+        : openMenu && menu
+          ? (anchor) => menu(row, { anchor })
+          : undefined;
       return {
         onClick: (e) => {
           if (press.pressed) {
@@ -77,7 +88,7 @@ export function rowEvents<Row>(
             return;
           }
           if ((e.target as HTMLElement).closest(INTERACTIVE)) return;
-          onOpen?.(row);
+          open?.(e.currentTarget);
         },
         onContextMenu: (e) => {
           if (!menu || (e.target as HTMLElement).closest('a')) return;
@@ -87,9 +98,9 @@ export function rowEvents<Row>(
         },
         onKeyDown: (e) => {
           if (e.target !== e.currentTarget) return;
-          if (e.key === 'Enter' && onOpen) {
+          if (e.key === 'Enter' && open) {
             e.preventDefault();
-            onOpen(row);
+            open(e.currentTarget);
           }
           if (menu && (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10'))) {
             e.preventDefault();
