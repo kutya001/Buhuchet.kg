@@ -7,22 +7,15 @@ const EMPLOYEE_BLOCKED = 'Учётная запись заблокирована
 /**
  * Почему войти нельзя, даже с верным паролем. При входе сообщается только после верного пароля
  * (docs/deviations.md, п. 4, решение Б), в открытом сеансе — при следующем запросе. Тексты — из
- * прототипа core/login.js: там и администратор платформы, блокируя учётную запись сотрудника,
- * выключает сотрудника, поэтому сотрудник видит одно сообщение — «Обратитесь к владельцу организации».
- * Экран берёт текст из словаря (`err.<код>`): в `details` — название организации (`org`) и вариант
- * текста для администратора платформы (`variant`).
+ * прототипа core/login.js (`LG_T`) и словаря refDB v59: организация — без названия; там и
+ * администратор платформы, блокируя учётную запись сотрудника, выключает сотрудника, поэтому сотрудник
+ * видит одно сообщение — «Обратитесь к владельцу организации». Экран берёт текст из словаря: в
+ * `details` — вариант текста для администратора платформы (`variant`).
  */
-export function denialError(
-  denial: LoginDenial,
-  account: { orgName: string | null; isPlatformAdmin: boolean },
-) {
+export function denialError(denial: LoginDenial, account: { isPlatformAdmin: boolean }) {
   switch (denial) {
     case 'org_blocked':
-      return apiError(
-        denial,
-        `Организация ${account.orgName ? `${account.orgName} ` : ''}заблокирована. Обратитесь к администратору платформы.`,
-        account.orgName ? { org: account.orgName } : undefined,
-      );
+      return apiError(denial, 'Организация заблокирована. Обратитесь к администратору платформы.');
     case 'employee_blocked':
       return apiError(denial, EMPLOYEE_BLOCKED);
     case 'user_blocked':
@@ -34,18 +27,10 @@ export function denialError(
   }
 }
 
-/** «14:35» по Бишкеку: все сроки и время на платформе — по часовому поясу организации. */
-export function bishkekTime(at: Date): string {
-  return at.toLocaleTimeString('ru-RU', {
-    timeZone: 'Asia/Bishkek',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
-
 /**
- * Вход закрыт после неверных паролей: до какого момента — в тексте, `details.lockedUntil` и Retry-After;
- * для текста словаря (`err.login_locked`) — `details.minutes` и `details.time` («14:35» по Бишкеку).
+ * Вход закрыт после неверных паролей (текст — как в прототипе core/login.js и словаре refDB v59
+ * `auth.locked`, одинаковый для любого логина): до какого момента — в `details.lockedUntil` и
+ * Retry-After; для текста словаря (`err.login_locked`) — `details.minutes`.
  */
 export function lockedError(c: Context, until: Date | null) {
   if (until) {
@@ -54,13 +39,7 @@ export function lockedError(c: Context, until: Date | null) {
   }
   return apiError(
     'login_locked',
-    `Слишком много неверных паролей. Вход закрыт на ${LOGIN_LOCK_MINUTES} минут${
-      until ? `, попробуйте снова после ${bishkekTime(until)}` : ''
-    }.`,
-    {
-      lockedUntil: until?.toISOString() ?? null,
-      minutes: LOGIN_LOCK_MINUTES,
-      ...(until ? { time: bishkekTime(until) } : {}),
-    },
+    `Вход временно закрыт: слишком много неверных попыток. Попробуйте через ${LOGIN_LOCK_MINUTES} минут.`,
+    { lockedUntil: until?.toISOString() ?? null, minutes: LOGIN_LOCK_MINUTES },
   );
 }
