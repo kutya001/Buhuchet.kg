@@ -62,6 +62,7 @@ export function useTaskActions(): {
         isOwner: editor?.isOwner ?? false,
         canConfirm: access.can('tasksConfirm'),
         canRollback: access.can('rollback'),
+        canCreate: access.can('tasksCreate'),
       }
     : null;
   const [card, setCard] = useState<DialogSlot<TaskRow> | null>(null);

@@ -29,6 +29,7 @@ const actor = (employeeId: string, over: Partial<TaskActor> = {}): TaskActor => 
   isOwner: false,
   canConfirm: false,
   canRollback: false,
+  canCreate: true,
   ...over,
 });
 

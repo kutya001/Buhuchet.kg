@@ -85,6 +85,8 @@ export interface TaskActor {
   isOwner: boolean;
   canConfirm: boolean;
   canRollback: boolean;
+  /** Право «Ставить задачи»: ТЗ — «менять и отменять поставленные собой». */
+  canCreate: boolean;
 }
 
 /** Что нужно знать о задаче для решений. */
@@ -105,6 +107,16 @@ export function taskIsBoss(task: Pick<TaskFacts, 'authorId'>, actor: TaskActor):
   return task.authorId === actor.employeeId || actor.isOwner;
 }
 
+/**
+ * «Изменить» и «Отменить»: постановщик или владелец; постановщику нужно право «Ставить задачи» (ТЗ
+ * «менять и отменять поставленные собой»; прототип `taskIsBoss` право не проверяет).
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#Б-4
+function bossRefusal(boss: boolean, actor: TaskActor): TaskRefusal | null {
+  if (!boss) return 'task_author_only';
+  return actor.isOwner || actor.canCreate ? null : 'task_create_right';
+}
+
 /** Почему действие с задачей недоступно: ключ текста `TASK_MESSAGES`. */
 export type TaskRefusal =
   | 'task_not_pending'
@@ -113,6 +125,7 @@ export type TaskRefusal =
   | 'task_executor_only'
   | 'task_start_forbidden'
   | 'task_author_only'
+  | 'task_create_right'
   | 'task_closed';
 
 /** Тексты отказов — как подсказки у пунктов меню прототипа (`taskConfWhy`, `reason`). */
@@ -124,6 +137,7 @@ export const TASK_MESSAGES: Readonly<Record<TaskRefusal, string>> = {
   task_executor_only: 'Отметить может только исполнитель',
   task_start_forbidden: 'Менять статус может исполнитель или постановщик',
   task_author_only: 'Изменить и отменить задачу может только постановщик или владелец',
+  task_create_right: 'Нужно право «Ставить задачи»',
   task_closed: 'Задача уже закрыта',
 };
 
@@ -177,10 +191,10 @@ export function taskActionRefusal(
       return taskConfirmRefusal(task, actor);
     case 'edit':
       if (!open && !taskPending(task.status)) return 'task_closed';
-      return boss ? null : 'task_author_only';
+      return bossRefusal(boss, actor);
     case 'cancel':
       if (!open) return 'task_closed';
-      return boss ? null : 'task_author_only';
+      return bossRefusal(boss, actor);
   }
 }
 

@@ -422,6 +422,7 @@ export function TaskFormDialog({
               ),
               { required: true, hint: t('task.form.month_hint') },
             )}
+        {/* ОТКЛОНЕНИЕ: docs/deviations.md#Б-1 */}
         {options.filesOn ? (
           <SwitchField
             id={`${id}-file`}

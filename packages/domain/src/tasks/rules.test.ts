@@ -26,7 +26,8 @@ import {
 
 const actorOf = (id: string): TaskActor => {
   const a = fixture.actors.find((x) => x.employeeId === id)!;
-  return { ...a, canRollback: false };
+  // Прототип право «Ставить задачи» не проверяет; постановщики демо-данных его имеют.
+  return { ...a, canRollback: false, canCreate: true };
 };
 const factsOf = (id: string, status: string, confirm: boolean): TaskFacts => {
   const t = fixture.tasks.find((x) => x.id === id)!;
@@ -90,14 +91,27 @@ describe('задачи: сверка с прототипом (modules/tasks.js)'
 });
 
 describe('задачи: правила ТЗ', () => {
-  const owner: TaskActor = { employeeId: 'o', isOwner: true, canConfirm: true, canRollback: true };
+  const owner: TaskActor = {
+    employeeId: 'o',
+    isOwner: true,
+    canConfirm: true,
+    canRollback: true,
+    canCreate: true,
+  };
   const chief: TaskActor = {
     employeeId: 'c',
     isOwner: false,
     canConfirm: true,
     canRollback: false,
+    canCreate: true,
   };
-  const acc: TaskActor = { employeeId: 'a', isOwner: false, canConfirm: false, canRollback: false };
+  const acc: TaskActor = {
+    employeeId: 'a',
+    isOwner: false,
+    canConfirm: false,
+    canRollback: false,
+    canCreate: false,
+  };
   const task = (status: TaskStatus, over: Partial<TaskFacts> = {}): TaskFacts => ({
     status,
     confirm: true,
@@ -149,6 +163,10 @@ describe('задачи: правила ТЗ', () => {
     expect(taskActionRefusal('edit', task('done'), chief)).toBe('task_closed');
     expect(taskActionRefusal('cancel', task('on_confirm'), chief)).toBe('task_closed');
     expect(taskActionRefusal('cancel', task('todo'), owner)).toBeNull();
+    // ТЗ: «Ставить задачи» — «менять и отменять поставленные собой»; без права постановщик не меняет.
+    const formerChief = { ...chief, canCreate: false };
+    expect(taskActionRefusal('edit', task('todo'), formerChief)).toBe('task_create_right');
+    expect(taskActionRefusal('cancel', task('todo'), formerChief)).toBe('task_create_right');
     expect(taskActionRefusal('start', task('todo'), acc)).toBeNull();
     expect(taskActionRefusal('start', task('in_progress'), acc)).toBe('task_closed');
   });

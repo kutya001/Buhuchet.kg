@@ -258,6 +258,10 @@ export function taskListColumns(t: ListTexts): ListColumns {
       label: 'task.col.cp',
       value: sql`coalesce(${tasks.contractorId}::text, 'general')`,
       display: sql`coalesce(${contractors.name}, ${t('task.cp.general_filter')})`,
+      // На экране у общей задачи — «Общая» (по нему ищет поиск), в Excel колонка контрагента пустая
+      // (ТЗ «Задачи» → «Общие задачи в списке»).
+      searchDisplay: sql`coalesce(${contractors.name}, ${t('task.cp.general')})`,
+      exportDisplay: contractors.name,
       // «Общие задачи» — первыми (прототип: pin), остальные — по названию по-русски.
       sort: {
         value: sql`(${tasks.contractorId} is not null, ${contractors.name} collate app.ru_natural)`,

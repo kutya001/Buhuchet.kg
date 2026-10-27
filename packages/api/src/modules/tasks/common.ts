@@ -53,6 +53,7 @@ export function actorOf(subject: AccessSubject): TaskActor {
     isOwner: subject.isOwner,
     canConfirm: hasPermission(subject, 'tasksConfirm'),
     canRollback: hasPermission(subject, 'rollback'),
+    canCreate: hasPermission(subject, 'tasksCreate'),
   };
 }
 

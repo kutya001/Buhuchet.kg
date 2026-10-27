@@ -249,6 +249,7 @@ export const TASKS_TEXTS = {
   'err.task_executor_only': { ru: TASK_MESSAGES.task_executor_only, section: E },
   'err.task_start_forbidden': { ru: TASK_MESSAGES.task_start_forbidden, section: E },
   'err.task_author_only': { ru: TASK_MESSAGES.task_author_only, section: E },
+  'err.task_create_right': { ru: TASK_MESSAGES.task_create_right, section: E },
   'err.task_closed': { ru: TASK_MESSAGES.task_closed, section: E },
   'err.task_not_found': { ru: 'Задача не найдена', section: E },
   'err.tasks_off': { ru: 'Задачи выключены в учётной политике', section: E },

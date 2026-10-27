@@ -366,7 +366,7 @@ describe.skipIf(!databaseAvailable())('Задачи: данные', () => {
     expect(pendingRows.rows.every((r) => r.status === 'on_confirm')).toBe(true);
   });
 
-  it('фильтр «Контрагент»: «Общие задачи» — первым значением; «Вид задачи» в выгрузке', async () => {
+  it('фильтр «Контрагент»: «Общие задачи» — первым значением; поиск по «Общая»; в выгрузке контрагент общей задачи пустой', async () => {
     await byChief({ title: 'Общая для фильтра' });
     await byChief({ title: 'По контрагенту для фильтра', contractorId: cpId });
     const values = await inA((tx) =>
@@ -389,7 +389,19 @@ describe.skipIf(!databaseAvailable())('Задачи: данные', () => {
       'task.col.date',
     ]);
     const general = file.rows.find((r) => r[0] === 'Общая для фильтра')!;
+    // У общей задачи колонка контрагента в Excel пустая (ТЗ), «Вид задачи» — «Общая».
+    expect(general[1]).toBeNull();
     expect(general[2]).toBe('Общая');
+    // Поиск — по тому, что на экране: «Общая».
+    const found = await inA((tx) =>
+      listTasksPage(
+        tx,
+        query({ search: { q: 'общая', keys: ['cp'] } }),
+        options(viewer(chief, { all: true })),
+      ),
+    );
+    expect(found.rows.map((r) => r.title)).toContain('Общая для фильтра');
+    expect(found.rows.map((r) => r.title)).not.toContain('По контрагенту для фильтра');
     const byCp = file.rows.find((r) => r[0] === 'По контрагенту для фильтра')!;
     expect(byCp.slice(1, 3)).toEqual(['ОсОО «Ала-Тоо Трейд»', 'По контрагенту']);
   });
