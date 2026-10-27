@@ -58,7 +58,7 @@ export function fileExtension(name: string): string | null {
  * Что не загружается: программы и сценарии, веб-страницы и картинки SVG — такой файл выполнит код,
  * если его открыть. Остальное — любое: договоры, выписки, отчёты, таблицы, картинки, архивы.
  */
-// ОТКЛОНЕНИЕ: docs/deviations.md#49
+// ОТКЛОНЕНИЕ: docs/deviations.md#50
 export const FILE_BLOCKED_EXTENSIONS: ReadonlySet<string> = new Set([
   'exe', 'msi', 'msp', 'com', 'scr', 'pif', 'cpl', 'dll', 'sys', 'lnk', 'reg', 'inf',
   'bat', 'cmd', 'ps1', 'psm1', 'vbs', 'vbe', 'js', 'jse', 'mjs', 'cjs', 'wsf', 'wsh', 'hta',
