@@ -42,31 +42,41 @@ test.describe('Этап 1: окна и уведомления', () => {
     await signIn(page.request, new URL(baseURL!).origin);
     await page.goto('/app/reports/week');
     const view = page.viewportSize()!;
+    // Размер окна меряется, пока не совпадёт с ожидаемым (`toPass`): на медленной машине CI два
+    // одинаковых замера подряд могут прийтись на окно, которое ещё не начало переключаться.
     // Обычное окно: на ПК — 780 px по центру, на телефоне — шторка снизу во всю ширину.
     const normal = async (help: Locator) => {
-      const box = await settledBox(help);
-      if (isMobile) {
-        expect(box.width).toBeCloseTo(view.width, 0);
-        expect(box.y + box.height).toBeCloseTo(view.height, 0);
-        expect(box.y).toBeGreaterThan(view.height * 0.3);
-      } else {
-        expect(box.width).toBeCloseTo(780, 0);
-        expect(box.x + box.width / 2).toBeCloseTo(view.width / 2, 0);
-      }
+      await expect(help.getByRole('button', { name: 'На весь экран' })).toHaveAttribute(
+        'aria-pressed',
+        'false',
+      );
+      await expect(async () => {
+        const box = await settledBox(help);
+        if (isMobile) {
+          expect(box.width).toBeCloseTo(view.width, 0);
+          expect(box.y + box.height).toBeCloseTo(view.height, 0);
+          expect(box.y).toBeGreaterThan(view.height * 0.3);
+        } else {
+          expect(box.width).toBeCloseTo(780, 0);
+          expect(box.x + box.width / 2).toBeCloseTo(view.width / 2, 0);
+        }
+      }).toPass();
     };
     // Развёрнутое: на ПК — всё окно браузера с отступом 12 px, на телефоне — весь экран.
     const maximized = async (help: Locator) => {
       const inset = isMobile ? 0 : 12;
-      expectBox(await settledBox(help), {
-        x: inset,
-        y: inset,
-        width: view.width - inset * 2,
-        height: view.height - inset * 2,
-      });
       await expect(help.getByRole('button', { name: 'Свернуть окно' })).toHaveAttribute(
         'aria-pressed',
         'true',
       );
+      await expect(async () =>
+        expectBox(await settledBox(help), {
+          x: inset,
+          y: inset,
+          width: view.width - inset * 2,
+          height: view.height - inset * 2,
+        }),
+      ).toPass();
     };
 
     let help = await openHelp(page);
@@ -144,6 +154,8 @@ test.describe('Этап 1: окна и уведомления', () => {
       const before = (await settledBox(card)).width;
       const narrow = (await table.boundingBox())!.width;
       await card.getByRole('button', { name: 'На весь экран' }).click();
+      // Окно развёрнуто — кнопка сменилась; только потом ждём, пока оно встанет на место.
+      await expect(card.getByRole('button', { name: 'Свернуть окно' })).toBeVisible();
       expectBox(await settledBox(card), {
         x: 12,
         y: 12,

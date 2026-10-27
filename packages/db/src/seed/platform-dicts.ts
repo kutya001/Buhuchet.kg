@@ -26,6 +26,7 @@ import { z } from 'zod';
 import type { Db } from '../client';
 import {
   authorities,
+  banks,
   dueChangeReasons,
   ownershipForms,
   productionCalendar,
@@ -72,6 +73,7 @@ export const TABLE_DICTIONARIES = [
   'benefits',
   'forms',
   'reasons',
+  'banks',
 ] as const;
 
 // Служебные отметки прототипа «кто и когда создал и изменил» в базу не переносятся: история продукта —
@@ -334,6 +336,21 @@ const ReasonSchema = z
   })
   .strict();
 
+/** «Банковские провайдеры»: «Тип» в refDB.json — словами. */
+const BANK_KIND_OF = { Банк: 'bank', 'Электронный кошелёк': 'wallet' } as const;
+
+const BankSchema = z
+  .object({
+    code: z.string().min(1),
+    name: z.string().min(1),
+    type: z.enum(['Банк', 'Электронный кошелёк']),
+    byPhone: z.boolean().default(false),
+    note: z.string().default(''),
+    active: z.boolean(),
+    ...audit,
+  })
+  .strict();
+
 const Dictionary = <T extends z.ZodType>(item: T) =>
   z.object({ title: z.string(), items: z.array(item) }).strict();
 
@@ -349,6 +366,7 @@ const RefSections = z.object({
     benefits: Dictionary(BenefitSchema),
     forms: Dictionary(FormSchema),
     reasons: Dictionary(ReasonSchema),
+    banks: Dictionary(BankSchema),
   }),
   reportTypes: z.array(ReportTypeSchema),
   enRates: z.array(EnRateSchema),
@@ -368,6 +386,7 @@ export type PlatformDictsReport = Record<
   | 'ownershipForms'
   | 'singleTaxRates'
   | 'dueChangeReasons'
+  | 'banks'
   | 'productionCalendar',
   SeedReport
 >;
@@ -428,6 +447,10 @@ export function platformDictRows(refDB: unknown) {
   unique(
     d.reasons.items.map((x) => x.code),
     'reasons',
+  );
+  unique(
+    d.banks.items.map((x) => x.code),
+    'banks',
   );
 
   const authorityByName = new Map(d.organs.items.map((o) => [o.name, o.code]));
@@ -673,6 +696,16 @@ export function platformDictRows(refDB: unknown) {
     sortOrder: i + 1,
   }));
 
+  const bankRows = d.banks.items.map((b, i) => ({
+    code: b.code,
+    name: b.name,
+    kind: BANK_KIND_OF[b.type],
+    byPhone: b.byPhone,
+    note: b.note,
+    active: b.active,
+    sortOrder: i + 1,
+  }));
+
   const workingSaturdays = new Set(ref.workingSaturdays);
   const calendarRows: CalendarEntry[] = [
     ...Object.entries(ref.holidays).map(([day, name]) => ({
@@ -704,6 +737,7 @@ export function platformDictRows(refDB: unknown) {
     ownershipForms: formRows,
     singleTaxRates: enRateRows,
     dueChangeReasons: reasonRows,
+    banks: bankRows,
     productionCalendar: calendarRows,
   };
 }
@@ -862,6 +896,7 @@ export async function seedPlatformDicts(
     rows.dueChangeReasons,
     update,
   );
+  const bank = await upsertDict(db, banks, banks.code, rows.banks, update);
   const calendar = await upsertDict(
     db,
     productionCalendar,
@@ -898,6 +933,7 @@ export async function seedPlatformDicts(
     ownershipForms: form.report,
     singleTaxRates: enRate.report,
     dueChangeReasons: reason.report,
+    banks: bank.report,
     productionCalendar: calendar.report,
   };
 }

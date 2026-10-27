@@ -14,6 +14,8 @@ export const HISTORY_ENTITIES = [
   'file',
   'org_report_type',
   'dict_request',
+  'org_account',
+  'employee_wallet',
 ] as const;
 export type HistoryEntity = (typeof HISTORY_ENTITIES)[number];
 

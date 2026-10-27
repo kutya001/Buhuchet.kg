@@ -12,6 +12,7 @@ export { Card, StatusDot } from './card';
 export { CardTabs, type CardTab } from './card-tabs';
 export { CHECKBOX_CLASS, CheckRow, Hint, SWITCH_CLASS } from './check-row';
 export { Chip } from './chip';
+export { CheckList, ChipSelect, type CheckListOption, type ChipOption } from './chip-select';
 export { EmptyState, NothingFound, type EmptyAction } from './empty-state';
 export { FilesBox, type FilesBoxItem, type FilesBoxLabels, type FilesBoxProps } from './files-box';
 export { Icon } from './icon';
@@ -75,7 +76,7 @@ export {
   type KeyValueItem,
 } from './form';
 export { PACK_QUERY } from './form-pack';
-export { MiniTable, type MiniColumn, type MiniRow } from './mini-table';
+export { MINI_WIDE_CHARS, MiniTable, miniWide, type MiniColumn, type MiniRow } from './mini-table';
 export { PhoneInput, type PhoneInputCode, type PhoneInputValue } from './phone-input';
 export { Segments, type SegmentOption } from './segments';
 export { Timeline, type TimelineItem } from './timeline';

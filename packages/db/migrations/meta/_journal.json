@@ -236,15 +236,36 @@
     {
       "idx": 33,
       "version": "7",
-      "when": 1793098481105,
-      "tag": "0033_files",
+      "when": 1793098080323,
+      "tag": "0033_admin_users",
       "breakpoints": true
     },
     {
       "idx": 34,
       "version": "7",
-      "when": 1793098483221,
-      "tag": "0034_files_column_grants",
+      "when": 1793102242598,
+      "tag": "0034_money_requisites",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1793102250612,
+      "tag": "0035_banks_read_only",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1793109441212,
+      "tag": "0036_files",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1793109443658,
+      "tag": "0037_files_column_grants",
       "breakpoints": true
     }
   ]
