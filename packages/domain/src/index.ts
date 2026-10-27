@@ -24,3 +24,7 @@ export * from './dicts/tax-pick';
 export * from './dicts/org-report-types';
 export * from './dicts/platform-dicts';
 export * from './dicts/value-guide';
+export * from './kb/catalog';
+export * from './kb/ready';
+export * from './kb/program';
+export * from './kb/articles';
