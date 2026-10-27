@@ -1,12 +1,21 @@
 import { sql } from 'drizzle-orm';
-import { boolean, check, pgTable, text, uuid, type AnyPgColumn } from 'drizzle-orm/pg-core';
+import {
+  boolean,
+  check,
+  pgPolicy,
+  pgTable,
+  text,
+  uuid,
+  type AnyPgColumn,
+} from 'drizzle-orm/pg-core';
 import { recordVersion, timestamps } from './columns';
-import { orgIsolation } from './rls';
+import { appRole, orgIsolation } from './rls';
 import { users } from './users';
 
 /**
  * Организации (тенанты) и их «Основное» в модуле «Моя организация». Роль приложения меняет только поля
- * профиля (права на столбцы, миграция 0015); статус и блокировку ведёт администратор платформы.
+ * профиля (права на столбцы, миграция 0015) и создаёт только активную не демо-организацию
+ * (`organizations_insert_guard`, миграция 0025); статус и блокировку ведёт администратор платформы.
  */
 export const organizations = pgTable(
   'organizations',
@@ -42,5 +51,14 @@ export const organizations = pgTable(
   (t) => [
     check('organizations_status_check', sql`${t.status} in ('active', 'blocked')`),
     orgIsolation('organizations_isolation', t.id),
+    // Новую организацию роль приложения создаёт только активной, без причины блокировки и не демо:
+    // статус и блокировку ведёт администратор платформы (app.admin_set_org_status), демо — наполнение.
+    // Права на столбцы при вставке не годятся — Drizzle перечисляет в INSERT все столбцы.
+    pgPolicy('organizations_insert_guard', {
+      as: 'restrictive',
+      for: 'insert',
+      to: appRole,
+      withCheck: sql`${t.status} = 'active' and ${t.blockedReason} is null and not ${t.isDemo}`,
+    }),
   ],
 ).enableRLS();

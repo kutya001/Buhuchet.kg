@@ -1,6 +1,7 @@
 'use client';
 
 import type { MenuModuleId } from '@buhuchet/domain';
+import { OrgsList } from '../admin/orgs-list';
 import { OrgMain } from '../org/org-main';
 import { OrgPolicyTab } from '../org/org-policy';
 import { OrgSettingsTab } from '../org/org-settings';
@@ -35,6 +36,7 @@ export function ModuleScreen({
     if (tab === 'settings') return <OrgSettingsTab />;
     return <OrgMain />;
   }
+  if (moduleId === 'orgs') return <OrgsList />;
   return <ModuleStub moduleId={moduleId} />;
 }
 
@@ -43,7 +45,7 @@ export function ModuleScreen({
  * модуля»): только у них в ряду вкладок кнопка «Статистика». Экран с плашками добавляет сюда свою
  * вкладку («модуль/вкладка») и показывает плашки по `useModuleStats`.
  */
-const SCREENS_WITH_PLATES: ReadonlySet<string> = new Set<string>();
+const SCREENS_WITH_PLATES: ReadonlySet<string> = new Set<string>(['orgs/']);
 
 export function screenHasPlates(moduleId: MenuModuleId, tabId: string | null): boolean {
   return SCREENS_WITH_PLATES.has(`${moduleId}/${tabId ?? ''}`);

@@ -436,7 +436,7 @@ export interface GridViewSettings {
  * каждого пользователя и каждого списка»): ключ — «модуль.вкладка». Новый список добавляет свой ключ
  * сюда — сервер не хранит настройки списков, которых нет.
  */
-export const GRID_KEYS = ['staff.list', 'staff.roles'] as const;
+export const GRID_KEYS = ['staff.list', 'staff.roles', 'orgs.list'] as const;
 export type GridKey = (typeof GRID_KEYS)[number];
 
 export function isGridKey(value: string): value is GridKey {
