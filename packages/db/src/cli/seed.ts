@@ -1,4 +1,5 @@
 import { loadDatabaseConfig } from '@buhuchet/adapters/config';
+import { serializeError } from '@buhuchet/adapters/logger';
 import { createDb } from '../client';
 import { seedAll } from '../seed';
 
@@ -16,8 +17,16 @@ try {
     update: args.has('--update'),
     demo,
     demoPassword: config.DEMO_PASSWORD ?? null,
+    platformAdmin:
+      config.PLATFORM_ADMIN_LOGIN && config.PLATFORM_ADMIN_PASSWORD
+        ? { login: config.PLATFORM_ADMIN_LOGIN, password: config.PLATFORM_ADMIN_PASSWORD }
+        : null,
   });
   console.log(JSON.stringify(result, null, 2));
+} catch (error) {
+  // Текст ошибки запроса Drizzle содержит значения параметров (хеши паролей) — печатаем без них.
+  console.error(`Наполнение не удалось:\n${JSON.stringify(serializeError(error), null, 2)}`);
+  process.exitCode = 1;
 } finally {
   await handle.close();
 }

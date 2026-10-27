@@ -1,6 +1,7 @@
 import type { Db } from '../client';
 import { readSpecJson, specCommit } from '../spec-data';
 import { seedPermissions, seedRoleTemplates } from './access';
+import { seedPlatformAdmin, type PlatformAdminReport, type PlatformAdminSeed } from './admin';
 import { seedDemoOrganization, type DemoSeedReport } from './demo';
 import { seedUiTexts } from './l10n';
 import { seedGked, seedPlatformReference, type SeedReport } from './platform';
@@ -8,6 +9,7 @@ import { seedPlatformDicts, type PlatformDictsReport } from './platform-dicts';
 
 export { checksumOf } from './checksum';
 export { seedPermissions, seedRoleTemplates } from './access';
+export { seedPlatformAdmin, type PlatformAdminReport, type PlatformAdminSeed } from './admin';
 export {
   DEMO_ORG_ID,
   demoId,
@@ -39,12 +41,18 @@ export interface SeedAllResult {
   roleTemplates: SeedReport;
   uiTexts: SeedReport;
   demo: DemoSeedReport | null;
+  platformAdmin: PlatformAdminReport | null;
 }
 
 /** Всё начальное наполнение из spec/data. Подключение — владельцем схемы (обходит RLS). */
 export async function seedAll(
   db: Db,
-  options: { update: boolean; demo: boolean; demoPassword?: string | null },
+  options: {
+    update: boolean;
+    demo: boolean;
+    demoPassword?: string | null;
+    platformAdmin?: PlatformAdminSeed | null;
+  },
 ): Promise<SeedAllResult> {
   const commit = await specCommit();
   return db.transaction(async (tx) => {
@@ -67,6 +75,18 @@ export async function seedAll(
           password: options.demoPassword ?? null,
         })
       : null;
-    return { platformReference, platformDicts, gked, permissions, roleTemplates, uiTexts, demo };
+    const platformAdmin = options.platformAdmin
+      ? await seedPlatformAdmin(t, options.platformAdmin)
+      : null;
+    return {
+      platformReference,
+      platformDicts,
+      gked,
+      permissions,
+      roleTemplates,
+      uiTexts,
+      demo,
+      platformAdmin,
+    };
   });
 }

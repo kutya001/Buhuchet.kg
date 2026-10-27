@@ -1,5 +1,6 @@
 import { parseArgs } from 'node:util';
 import { loadDatabaseConfig } from '@buhuchet/adapters/config';
+import { serializeError } from '@buhuchet/adapters/logger';
 import { generateTemporaryPassword, hashPassword } from '@buhuchet/adapters/password';
 import { isValidLogin, normalizeLogin } from '@buhuchet/domain';
 import { createDb } from '../client';
@@ -45,6 +46,12 @@ try {
       `Администратор платформы создан: ${login}\nВременный пароль (показывается один раз, при входе его нужно сменить): ${password}`,
     );
   }
+} catch (error) {
+  // Текст ошибки запроса Drizzle содержит значения параметров (хеш пароля) — печатаем без них.
+  console.error(
+    `Не удалось создать администратора:\n${JSON.stringify(serializeError(error), null, 2)}`,
+  );
+  process.exitCode = 1;
 } finally {
   await handle.close();
 }

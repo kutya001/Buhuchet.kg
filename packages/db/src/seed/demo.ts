@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { hashPassword } from '@buhuchet/adapters/password';
+import { hashPassword, verifyPassword } from '@buhuchet/adapters/password';
 import {
   FEATURES,
   defaultOrgPolicy,
@@ -17,6 +17,7 @@ import {
   rolePermissions,
   roleScopes,
   roles,
+  sessions,
   users,
 } from '../schema';
 
@@ -94,7 +95,7 @@ export interface DemoSeedReport {
 /**
  * Демо-организация из demoDB.json: организация, роли (владелец, «Главный бухгалтер», «Бухгалтер»),
  * сотрудники с учётными записями и учётная политика. Повторный запуск досоздаёт только недостающее;
- * с --update и паролем — обновляет пароль демо-сотрудников. Модули по мере появления таблиц
+ * с --update и новым паролем — меняет пароль демо-сотрудников и закрывает их сеансы. Модули по мере появления таблиц
  * добавляют сюда свои наполнители (контрагенты, отчёты…) с тем же DEMO_ORG_ID и demoId.
  */
 export async function seedDemoOrganization(
@@ -187,7 +188,23 @@ export async function seedDemoOrganization(
     )
     .onConflictDoNothing();
   if (options.update && options.password) {
-    await db.update(users).set({ passwordHash }).where(inArray(users.id, userIds));
+    // Пароль сменился — новый хеш и выход со всех устройств: иначе вошедший со старым паролем так и
+    // оставался бы в системе. С тем же паролем ничего не меняется, повторный запуск никого не выкидывает.
+    const current = await db
+      .select({ id: users.id, passwordHash: users.passwordHash })
+      .from(users)
+      .where(inArray(users.id, userIds));
+    const changed: string[] = [];
+    for (const u of current) {
+      if (!(await verifyPassword(u.passwordHash, options.password))) changed.push(u.id);
+    }
+    if (changed.length > 0) {
+      await db
+        .update(users)
+        .set({ passwordHash, version: sql`${users.version} + 1` })
+        .where(inArray(users.id, changed));
+      await db.delete(sessions).where(inArray(sessions.userId, changed));
+    }
   }
   const insertedEmployees = await db
     .insert(employees)
