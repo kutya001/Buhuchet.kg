@@ -180,9 +180,14 @@ export function cardRows(
     .map(({ row }) => row);
 }
 
-/** Итоги столбца «Ввода за месяц» по всем контрагентам в фильтре (прототип `foot`): «по 3 из 5». */
+/**
+ * Итоги столбца «Ввода за месяц» по всем контрагентам в фильтре (прототип `foot`): «по 3 из 5».
+ * ОТКЛОНЕНИЕ: docs/deviations.md#В-7 — ячейки, где показатель у контрагента не ведётся, в итоги не
+ * входят (как в ТЗ).
+ */
 export function columnTotals(
-  values: readonly (IndicatorValue | null)[],
+  cells: readonly { value: IndicatorValue | null; state: KpiCellState }[],
 ): IndicatorTotals & { of: number } {
-  return { ...indicatorTotals(values), of: values.length };
+  const counted = cells.filter((c) => c.state !== 'off').map((c) => c.value);
+  return { ...indicatorTotals(counted), of: counted.length };
 }

@@ -849,6 +849,10 @@ export async function writeTargets(
           updatedBy: sql`excluded.updated_by`,
           updatedAt: sql`now()`,
         },
+        // Строки без изменений (например, контрагенты вне области сотрудника) не трогаются:
+        // «Изменил» и время у них остаются прежними.
+        setWhere: sql`(${indicatorTargets.enabled}, ${indicatorTargets.fromMonth}, ${indicatorTargets.offSince})
+          is distinct from (excluded.enabled, excluded.from_month, excluded.off_since)`,
       });
   }
   const history = writes.flatMap((w) => {

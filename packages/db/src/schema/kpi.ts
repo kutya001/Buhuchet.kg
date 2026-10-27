@@ -45,8 +45,7 @@ const oneOf = (column: AnyPgColumn, values: readonly string[]): SQL =>
   sql`${column} in (${sql.raw(values.map((v) => `'${v}'`).join(', '))})`;
 
 /** Месяц «YYYY-MM». */
-const isMonth = (column: AnyPgColumn): SQL =>
-  sql`${column} ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'`;
+const isMonth = (column: AnyPgColumn): SQL => sql`${column} ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'`;
 
 const orgColumn = () =>
   uuid('org_id')
@@ -213,9 +212,7 @@ export const indicatorMonths = pgTable(
     orgId: orgColumn(),
     contractorId: uuid('contractor_id').notNull(),
     month: text('month').notNull(),
-    status: text('status', { enum: FILL_STATUSES })
-      .notNull()
-      .default('empty'),
+    status: text('status', { enum: FILL_STATUSES }).notNull().default('empty'),
     /** Когда установлен статус — под шкалой. */
     statusAt: timestamp('status_at', { withTimezone: true }).notNull().defaultNow(),
     ...timestamps(),

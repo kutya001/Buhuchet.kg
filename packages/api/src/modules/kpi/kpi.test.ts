@@ -28,6 +28,7 @@ type Fixture = Awaited<ReturnType<typeof createStaffFixture>>;
 const C1 = '00000000-0000-4000-8000-0000000000a1';
 const C2 = '00000000-0000-4000-8000-0000000000a2';
 const C3 = '00000000-0000-4000-8000-0000000000a3';
+const C4 = '00000000-0000-4000-8000-0000000000a4';
 const B1 = '00000000-0000-4000-8000-0000000000b1';
 
 /** Сотые: 1 250 000 сом → 125000000. */
@@ -74,6 +75,7 @@ describe.skipIf(!databaseAvailable())('Показатели контрагент
       value: number | null;
       note?: string;
       prev?: number | null;
+      prevNote?: string;
     }[],
   ) => call(cookie, 'PUT', '/api/kpi/values', { values });
   const features = (orgId: string, on: Record<string, boolean>) =>
@@ -565,5 +567,111 @@ describe.skipIf(!databaseAvailable())('Показатели контрагент
       200,
     );
     expect(await valueOf()).toBe(som(650_000));
+    // Комментарий тоже сверяется: его уже поменял другой — 409.
+    expect(
+      (await put(chief, [{ ...cell, value: som(650_000), note: 'По выписке', prevNote: '' }]))
+        .status,
+    ).toBe(200);
+    const stale = await put(acc, [{ ...cell, value: som(650_000), note: 'Сверено', prevNote: '' }]);
+    expect(stale.status).toBe(409);
+    expect((await errorOf(stale)).code).toBe('record_changed');
+  });
+
+  it('«Настраивать» и «Проверять» с областью «Свои»: «Всем» не включает чужих, чужой месяц — 404', async () => {
+    // «Кадры» (область «Свои») получают права настройки, проверки и отката; свой контрагент — C3.
+    await f.t.admin.db.insert(schema.rolePermissions).values(
+      ['indSetup', 'indCheck', 'rollback'].map((permissionId) => ({
+        orgId: f.a.orgId,
+        roleId: f.roleIds.hr,
+        permissionId,
+      })),
+    );
+    await f.t.admin.db
+      .update(schema.contractors)
+      .set({ responsibleEmployeeId: f.people['hr-a']!.employeeId })
+      .where(eq(schema.contractors.id, C3));
+    const hr = await signIn(app, 'hr-a', TEST_PASSWORD);
+    const onFor = async (cp: string) =>
+      KpiWho.parse(await (await call(owner, 'GET', '/api/kpi/who')).json())
+        .contractors.find((x) => x.id === cp)!
+        .cells.find((x) => x.indicatorId === revenue)!.on;
+    expect(await onFor(C2)).toBe(false);
+
+    const card = IndicatorCard.parse(
+      await (await call(hr, 'GET', `/api/kpi/indicators/${revenue}`)).json(),
+    );
+    const {
+      id: _id,
+      archived: _a,
+      order: _o,
+      valueCount: _v,
+      hasRows: _h,
+      on: _n,
+      history: _hs,
+      ...fields
+    } = card;
+    const res = await call(hr, 'PUT', `/api/kpi/indicators/${revenue}`, {
+      ...fields,
+      scope: 'all',
+    });
+    expect(res.status).toBe(200);
+    // C2 — не своего сотрудника: «Всем» его не включает, свой C3 ведётся как прежде.
+    expect(await onFor(C2)).toBe(false);
+    expect(await onFor(C3)).toBe(true);
+
+    const version = (await entry(C1, '2026-09')).status!.version;
+    const body = { contractorId: C1, month: '2026-09', version };
+    expect((await call(hr, 'POST', '/api/kpi/months/check', body)).status).toBe(404);
+    expect(
+      (
+        await call(hr, 'POST', '/api/kpi/months/rollback', {
+          ...body,
+          to: 'filled',
+          reason: 'Ошибка',
+        })
+      ).status,
+    ).toBe(404);
+  });
+
+  it('«Выбранным» → «Всем» у владельца включает и архивного контрагента, как в прототипе', async () => {
+    await f.t.admin.db.insert(schema.contractors).values({
+      ...contractor(C4, f.a.orgId, 'ОсОО «Архив»', '03744097401854', 'РЕЖ-01'),
+      serviceStatus: 'archived',
+    });
+    const save = async (scope: 'all' | 'selected') => {
+      const {
+        id: _id,
+        archived: _a,
+        order: _o,
+        valueCount: _v,
+        hasRows: _h,
+        on: _n,
+        history: _hs,
+        ...fields
+      } = IndicatorCard.parse(
+        await (await call(owner, 'GET', `/api/kpi/indicators/${revenue}`)).json(),
+      );
+      const res = await call(owner, 'PUT', `/api/kpi/indicators/${revenue}`, {
+        ...fields,
+        scope,
+        selected: [C1],
+      });
+      expect(res.status).toBe(200);
+    };
+    const target = async () =>
+      (
+        await f.t.admin.db
+          .select({ enabled: schema.indicatorTargets.enabled })
+          .from(schema.indicatorTargets)
+          .where(eq(schema.indicatorTargets.contractorId, C4))
+      )[0];
+    await save('selected');
+    await f.t.admin.db
+      .update(schema.indicatorTargets)
+      .set({ enabled: false })
+      .where(eq(schema.indicatorTargets.contractorId, C4));
+    expect(await target()).toEqual({ enabled: false });
+    await save('all');
+    expect(await target()).toEqual({ enabled: true });
   });
 });

@@ -146,8 +146,18 @@ describe('«За период» и вкладка «Показатели» ка�
     expect(cardRows(book, contractor('c9', { archived: true }), months, valueOf)).toEqual([]);
   });
 
-  it('итоги столбца «Ввода за месяц» — по заполненным из всех строк', () => {
-    expect(columnTotals([100, null, 300])).toMatchObject({ count: 2, sum: 400, avg: 200, of: 3 });
-    expect(columnTotals([null])).toEqual({ count: 0, of: 1 });
+  it('итоги столбца «Ввода за месяц» — по заполненным из всех строк, без невключённых (В-7)', () => {
+    const on = (value: number | null) => ({ value, state: 'required' as const });
+    expect(columnTotals([on(100), on(null), on(300)])).toMatchObject({
+      count: 2,
+      sum: 400,
+      avg: 200,
+      of: 3,
+    });
+    expect(columnTotals([on(null)])).toEqual({ count: 0, of: 1 });
+    // Значение выключенного у контрагента показателя в итоги не входит и в «из N» не считается.
+    expect(
+      columnTotals([on(100), { value: 900, state: 'off' }, { value: 50, state: 'early' }]),
+    ).toMatchObject({ count: 2, sum: 150, of: 2 });
   });
 });

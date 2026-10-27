@@ -72,6 +72,7 @@ export const KPI_TEXTS = {
     section: S,
   },
   'kpi.early_cell': { ru: 'Ведётся с {from}: значение за этот месяц необязательно', section: S },
+  'kpi.early_card': { ru: 'Ведётся с {from}: значение необязательно', section: S },
   'kpi.off_since': { ru: 'Не ведётся с {month}', section: S },
   'kpi.cell_off': {
     ru: 'Показатель у этого контрагента не ведётся или не нужен в этом месяце',

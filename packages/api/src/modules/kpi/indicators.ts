@@ -183,7 +183,13 @@ async function whoPlan(
       if (!visible.has(c.id) && indicatorOn(previous, targetOf(c.id))) selected.add(c.id);
     }
   }
-  const frozen = new Set(all.filter((c) => !visible.has(c.id)).map((c) => c.id));
+  // Не меняются только контрагенты вне области сотрудника; архивные в своей области при «Всем»
+  // включаются, как в прототипе.
+  const scope = kpiScopeOf(subject);
+  const inScope = scope
+    ? new Set((await kpiContractorRecords(tx, { scope, archived: true })).map((c) => c.id))
+    : null;
+  const frozen = new Set(inScope ? all.filter((c) => !inScope.has(c.id)).map((c) => c.id) : []);
   return { all, selected, targetOf, frozen };
 }
 

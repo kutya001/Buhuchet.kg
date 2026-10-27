@@ -170,7 +170,7 @@ export function KpiCardTab({ contractorId }: { contractorId: string }) {
             value={v}
             readOnly={false}
             label={t('kpi.month_cell_label', { ind: r.indicator.name, month: monthName(t, m) })}
-            title={early ? t('kpi.early_cell', { from: monthText(r.start) }) : undefined}
+            title={early ? t('kpi.early_card', { from: monthText(r.start) }) : undefined}
             onCommit={async (value, prev) => {
               const done = await save([
                 { contractorId, indicatorId: r.indicator.id, month: m, value, prev },

@@ -358,12 +358,12 @@ describe.skipIf(!databaseAvailable())('Показатели контрагент
           enabled: false,
         }),
       ),
-    ).rejects.toThrow();
+    ).rejects.toThrow(rlsViolation);
     await expect(
       inB((tx) =>
         tx.insert(indicatorMonths).values({ orgId: a.orgId, contractorId: cp1, month: '2026-01' }),
       ),
-    ).rejects.toThrow();
+    ).rejects.toThrow(rlsViolation);
     await expect(
       inB((tx) =>
         tx.insert(indicators).values({
@@ -401,6 +401,17 @@ describe.skipIf(!databaseAvailable())('Показатели контрагент
       tx.update(indicatorValues).set({ value: 1 }).returning({ id: indicatorValues.id }),
     );
     expect(rewritten).toEqual([]);
+    const retargeted = await inB((tx) =>
+      tx
+        .update(indicatorTargets)
+        .set({ enabled: false })
+        .returning({ contractorId: indicatorTargets.contractorId }),
+    );
+    expect(retargeted).toEqual([]);
+    const restatused = await inB((tx) =>
+      tx.update(indicatorMonths).set({ status: 'checked' }).returning({ id: indicatorMonths.id }),
+    );
+    expect(restatused).toEqual([]);
     expect((await inA((tx) => getIndicator(tx, revenue)))!.name).toBe('Выручка');
     // Без контекста организации не видно ничего.
     const none = await db.app.db.transaction((tx) =>

@@ -401,9 +401,7 @@ function MonthTable({
               </th>
               {cols.map((col, c) => {
                 // ОТКЛОНЕНИЕ: docs/deviations.md#В-7 — выключенные у контрагента показатели в итоги не входят.
-                const totals = columnTotals(
-                  rows.filter((r) => r.cells[c]!.state !== 'off').map((r) => r.cells[c]!.value),
-                );
+                const totals = columnTotals(rows.map((r) => r.cells[c]!));
                 return (
                   <td
                     key={col.id}
