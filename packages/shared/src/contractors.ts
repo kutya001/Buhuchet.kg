@@ -14,9 +14,12 @@ import { IsoDate, RecordAudit, RecordVersion, Tyiyn, Uuid } from './common';
 import { listPageSchema } from './list';
 import { Phone } from './staff';
 
+/** Без нулевого символа: PostgreSQL его в тексте не принимает, и сохранение упало бы ошибкой сервера. */
+const noNul = (s: string) => !s.includes('\u0000');
+
 /** Постоянный код значения справочника платформы (ФС-01, РЕЖ-03, ЛЬГ-01, employees, 47.11.0). */
-const Code = z.string().trim().min(1).max(60);
-const Text = (max: number) => z.string().trim().max(max);
+const Code = z.string().trim().min(1).max(60).refine(noNul);
+const Text = (max: number) => z.string().trim().max(max).refine(noNul);
 
 /** Значение справочника в ответе: код и название, как его видит пользователь. */
 const Named = z.object({ code: z.string(), name: z.string() });
@@ -49,8 +52,8 @@ export const ContractorTariffRequest = z.object({
 
 /** Поля формы контрагента, общие для создания и «Изменить» (ТЗ «Обязательные поля», «Необязательные поля»). */
 const contractorFields = {
-  name: z.string().trim().min(1).max(CONTRACTOR_TEXT_MAX.name),
-  inn: z.string().trim().max(20),
+  name: z.string().trim().min(1).max(CONTRACTOR_TEXT_MAX.name).refine(noNul),
+  inn: z.string().trim().max(20).refine(noNul),
   phone: Phone.min(1),
   formCode: Code,
   regimeCode: Code.nullable(),
@@ -100,8 +103,10 @@ export const CreateContractorRequest = z.object({
   contractDate: contractorFields.contractDate.default(null),
   note: contractorFields.note.default(''),
   registration: ContractorRegistration.default({}),
-  firstMonthMode: contractorFields.firstMonthMode.default('full'),
-  feeDay: contractorFields.feeDay.default(10),
+  // День оплаты и «Первый неполный месяц» задаёт только тот, кто видит плату за обслуживание;
+  // не переданы — 10-е число и «Пропорционально дням» (ТЗ, docs/deviations.md п. А-1).
+  firstMonthMode: contractorFields.firstMonthMode.optional(),
+  feeDay: contractorFields.feeDay.optional(),
   paysTo: contractorFields.paysTo.default('emp'),
   tariff: ContractorTariffRequest.nullable().default(null),
 });
@@ -110,10 +115,12 @@ export type CreateContractorRequest = z.input<typeof CreateContractorRequest>;
 /**
  * «Изменить» в карточке (прототип editCpDlg): не переданное поле не меняется. Ответственного меняет
  * «Сменить ответственного» (`AssignContractorsRequest`), тариф — журнал тарифов (поток В), статус —
- * приостановка и архив (задача 2.12).
+ * приостановка и архив (задача 2.12); дата начала обслуживания и «Первый неполный месяц» после
+ * создания не меняются («тариф и дата начала меняются своими действиями»).
  */
 export const UpdateContractorRequest = z
   .object(contractorFields)
+  .omit({ startDate: true, firstMonthMode: true })
   .partial()
   .extend({ version: RecordVersion });
 export type UpdateContractorRequest = z.infer<typeof UpdateContractorRequest>;
@@ -165,8 +172,9 @@ export const Contractor = z.object({
   note: z.string(),
   registration: ContractorRegistration,
   startDate: IsoDate,
-  firstMonthMode: z.enum(FIRST_MONTH_MODES),
-  feeDay: z.number().int(),
+  /** День оплаты и «Первый неполный месяц»; null — нет права «Видеть плату за обслуживание». */
+  firstMonthMode: z.enum(FIRST_MONTH_MODES).nullable(),
+  feeDay: z.number().int().nullable(),
   paysTo: z.enum(PAYS_TO),
   serviceStatus: z.enum(SERVICE_STATUSES),
   /** Действующая ставка обслуживания; null — нет ставки или нет права «Видеть плату за обслуживание». */

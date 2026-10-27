@@ -17,7 +17,7 @@ import {
   CONTRACTOR_DELETE_MESSAGES,
   CONTRACTOR_MESSAGES,
   contractorDeleteRefusal,
-  innDuplicateMessage,
+  DEFAULT_FEE_DAY,
   type AccessSubject,
   type Translate,
 } from '@buhuchet/domain';
@@ -27,6 +27,7 @@ import {
   UpdateContractorRequest,
   Uuid,
 } from '@buhuchet/shared';
+import type { Context } from 'hono';
 import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
 import { apiFail, versionedSaveResponses } from '../../errors';
@@ -36,8 +37,10 @@ import {
   checkContractor,
   checkResponsible,
   contractorOut,
+  duplicateFail,
   error,
   feeVisible,
+  ownEmployeeOf,
   scopeSqlOf,
   subjectOf,
   todayOf,
@@ -84,7 +87,7 @@ export const createContractorRoute = createRoute({
     401: { description: 'Нет входа', content: error },
     403: {
       description:
-        'Нет права «Создавать и изменять контрагентов» или стоимость обслуживания без права «Видеть плату за обслуживание»',
+        'Нет права «Создавать и изменять контрагентов» или стоимость, день оплаты, первый неполный месяц без права «Видеть плату за обслуживание»',
       content: error,
     },
     409: { description: 'Такой ИНН уже есть в организации (и в архиве)', content: error },
@@ -110,8 +113,11 @@ export function createContractorHandler(
     try {
       const out = await withOrgContext(deps.db, ctx, async (tx) => {
         const fee = await feeVisible(tx, ctx.orgId, subject);
-        if (body.tariff && !fee) {
-          forbidden('Стоимость обслуживания задаёт тот, кто видит плату за обслуживание');
+        if (
+          !fee &&
+          (body.tariff || body.feeDay !== undefined || body.firstMonthMode !== undefined)
+        ) {
+          forbidden(FEE_ONLY);
         }
         if (body.tariff && body.kind === 'oneoff') {
           apiFail(400, 'validation_failed', 'У разового контрагента нет тарифа', {
@@ -146,8 +152,9 @@ export function createContractorHandler(
           note: body.note,
           registration: body.registration,
           startDate: body.startDate,
-          firstMonthMode: body.firstMonthMode,
-          feeDay: body.feeDay,
+          // ОТКЛОНЕНИЕ: docs/deviations.md#А-1 — без поля «по умолчанию — «Пропорционально дням»» (ТЗ).
+          firstMonthMode: body.firstMonthMode ?? 'prorate',
+          feeDay: body.feeDay ?? DEFAULT_FEE_DAY,
           paysTo: body.paysTo,
           gkedConfirmation: null,
         };
@@ -155,6 +162,7 @@ export function createContractorHandler(
           before: null,
           gkedConfirm: body.gkedConfirm ?? false,
           employeeId: subject.employeeId,
+          ownEmployeeId: ownEmployeeOf(subject),
           today,
           t,
         });
@@ -173,22 +181,31 @@ export function createContractorHandler(
       });
       return c.json(out, 201);
     } catch (err) {
-      // Одновременное сохранение того же ИНН: второй получает тот же ответ, что и при проверке.
-      if (uniqueViolation(err) === 'contractors_org_inn_key') {
-        const found = await withOrgContext(deps.db, ctx, (tx) => findContractorByInn(tx, body.inn));
-        if (found) {
-          apiFail(409, 'inn_duplicate', innDuplicateMessage(found, 'create'), {
-            field: 'inn',
-            id: found.id,
-            name: found.name,
-            archived: found.archived,
-            ...(found.archived ? { variant: 'archived' } : {}),
-          });
-        }
-      }
+      await innRace(deps, c, err, body.inn, null);
       throw err;
     }
   };
+}
+
+const FEE_ONLY =
+  'Стоимость, день оплаты и первый неполный месяц задаёт тот, кто видит плату за обслуживание';
+
+/**
+ * Одновременное сохранение того же ИНН: уникальный ключ базы отклоняет второе, и оно получает тот же
+ * ответ, что и при проверке.
+ */
+async function innRace(
+  deps: ApiDeps,
+  c: Context<AppEnv>,
+  err: unknown,
+  inn: string | undefined,
+  exceptId: string | null,
+): Promise<void> {
+  if (!inn || uniqueViolation(err) !== 'contractors_org_inn_key') return;
+  const found = await withOrgContext(deps.db, orgContextOf(c), (tx) =>
+    findContractorByInn(tx, inn, exceptId ?? undefined),
+  );
+  if (found) duplicateFail(found, exceptId ? 'edit' : 'create', ownEmployeeOf(subjectOf(c)));
 }
 
 /** Льготы без повторов: у одной льготы — один срок (последний переданный). */
@@ -217,7 +234,11 @@ export const updateContractorRoute = createRoute({
       content: error,
     },
     401: { description: 'Нет входа', content: error },
-    403: { description: 'Нет права «Создавать и изменять контрагентов»', content: error },
+    403: {
+      description:
+        'Нет права «Создавать и изменять контрагентов» или день оплаты без права «Видеть плату за обслуживание»',
+      content: error,
+    },
     ...versionedSaveResponses,
     404: { description: 'Нет такого контрагента или он вне области сотрудника', content: error },
     409: {
@@ -244,44 +265,60 @@ export function updateContractorHandler(
     const today = todayOf(deps);
     const t = await translateOf(deps);
     const scope = scopeSqlOf(subject);
-    const out = await withOrgContext(deps.db, ctx, async (tx) => {
-      const row = await lockContractor(tx, id, scope);
-      if (!row) notFound();
-      if (row.serviceStatus === 'archived') {
-        apiFail(409, 'contractor_archived', 'Контрагент в архиве — сначала верните его из архива');
-      }
-      const before = await readContractorFields(tx, row);
-      const next: ContractorFields = {
-        ...before,
-        ...Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined)),
-      };
-      if (patch.gkedExtra) next.gkedExtra = [...new Set(patch.gkedExtra)];
-      if (patch.benefits) next.benefits = uniqueBy(patch.benefits);
-      if (patch.bases) next.bases = [...new Set(patch.bases)];
-      const confirmation = await checkContractor(tx, next, {
-        before: { id, fields: before },
-        gkedConfirm: gkedConfirm ?? false,
-        employeeId: subject.employeeId,
-        today,
-        t,
-      });
-      await updateContractor(
-        tx,
-        ctx.orgId,
-        id,
-        version,
-        {
+    try {
+      return c.json(await update(), 200);
+    } catch (err) {
+      await innRace(deps, c, err, patch.inn, id);
+      throw err;
+    }
+
+    async function update() {
+      return withOrgContext(deps.db, ctx, async (tx) => {
+        const row = await lockContractor(tx, id, scope);
+        if (!row) notFound();
+        if (row.serviceStatus === 'archived') {
+          apiFail(
+            409,
+            'contractor_archived',
+            'Контрагент в архиве — сначала верните его из архива',
+          );
+        }
+        if (patch.feeDay !== undefined && !(await feeVisible(tx, ctx.orgId, subject))) {
+          forbidden(FEE_ONLY);
+        }
+        const before = await readContractorFields(tx, row);
+        const next: ContractorFields = {
+          ...before,
           ...Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined)),
-          ...(patch.gkedExtra ? { gkedExtra: next.gkedExtra } : {}),
-          ...(patch.benefits ? { benefits: next.benefits } : {}),
-          ...(patch.bases ? { bases: next.bases } : {}),
-          gkedConfirmation: confirmation,
-        },
-        scope,
-      );
-      return savedOut(tx, id, { orgId: ctx.orgId, subject, today, t });
-    });
-    return c.json(out, 200);
+        };
+        if (patch.gkedExtra) next.gkedExtra = [...new Set(patch.gkedExtra)];
+        if (patch.benefits) next.benefits = uniqueBy(patch.benefits);
+        if (patch.bases) next.bases = [...new Set(patch.bases)];
+        const confirmation = await checkContractor(tx, next, {
+          before: { id, fields: before },
+          gkedConfirm: gkedConfirm ?? false,
+          employeeId: subject.employeeId,
+          ownEmployeeId: ownEmployeeOf(subject),
+          today,
+          t,
+        });
+        await updateContractor(
+          tx,
+          ctx.orgId,
+          id,
+          version,
+          {
+            ...Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined)),
+            ...(patch.gkedExtra ? { gkedExtra: next.gkedExtra } : {}),
+            ...(patch.benefits ? { benefits: next.benefits } : {}),
+            ...(patch.bases ? { bases: next.bases } : {}),
+            gkedConfirmation: confirmation,
+          },
+          scope,
+        );
+        return savedOut(tx, id, { orgId: ctx.orgId, subject, today, t });
+      });
+    }
   };
 }
 
@@ -302,7 +339,7 @@ export const deleteContractorRoute = createRoute({
     404: { description: 'Нет такого контрагента или он вне области сотрудника', content: error },
     409: {
       description:
-        'По контрагенту есть отчёты, деньги или проекты — его можно только отправить в архив',
+        'По контрагенту есть отчёты, деньги или проекты — его можно только отправить в архив; контрагент в архиве',
       content: error,
     },
   },
@@ -322,6 +359,10 @@ export function deleteContractorHandler(
     await withOrgContext(deps.db, orgContextOf(c), async (tx) => {
       const row = await lockContractor(tx, id, scopeSqlOf(subject));
       if (!row) notFound();
+      // «Удалить» у архивного нет (прототип cpActions): сначала вернуть из архива.
+      if (row.serviceStatus === 'archived') {
+        apiFail(409, 'contractor_archived', 'Контрагент в архиве — сначала верните его из архива');
+      }
       const refusal = contractorDeleteRefusal(await contractorUsage(tx, id));
       if (refusal) {
         apiFail(409, 'contractor_in_use', CONTRACTOR_DELETE_MESSAGES[refusal], {

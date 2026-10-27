@@ -657,12 +657,29 @@ export async function findContractorByInn(
   tx: Tx,
   inn: string,
   exceptId?: string,
-): Promise<{ id: string; name: string; archived: boolean } | null> {
+): Promise<{
+  id: string;
+  name: string;
+  archived: boolean;
+  responsibleEmployeeId: string | null;
+} | null> {
   const [row] = await tx
-    .select({ id: contractors.id, name: contractors.name, status: contractors.serviceStatus })
+    .select({
+      id: contractors.id,
+      name: contractors.name,
+      status: contractors.serviceStatus,
+      responsibleEmployeeId: contractors.responsibleEmployeeId,
+    })
     .from(contractors)
     .where(and(eq(contractors.inn, inn), exceptId ? ne(contractors.id, exceptId) : undefined));
-  return row ? { id: row.id, name: row.name, archived: row.status === 'archived' } : null;
+  return row
+    ? {
+        id: row.id,
+        name: row.name,
+        archived: row.status === 'archived',
+        responsibleEmployeeId: row.responsibleEmployeeId,
+      }
+    : null;
 }
 
 /** Строка контрагента для решения о правке; блокируется до конца транзакции. */
@@ -938,28 +955,58 @@ export async function assignContractors(
   employeeId: string,
   scope: SQL | undefined,
 ): Promise<{ changed: number; archived: string[] }> {
-  const locked = [];
-  for (const id of [...new Set(ids)].sort()) {
-    const row = await lockContractor(tx, id, scope);
-    if (!row) throw new RecordNotFoundError('contractor', id);
-    locked.push(row);
+  const wanted = [...new Set(ids)];
+  const bad = wanted.find((id) => !UUID_RE.test(id));
+  if (bad) throw new RecordNotFoundError('contractor', bad);
+  if (wanted.length === 0) return { changed: 0, archived: [] };
+  // Все строки — одним запросом и в одном порядке: одновременные назначения не встанут друг другу
+  // поперёк.
+  const locked = await tx
+    .select({
+      id: contractors.id,
+      responsibleEmployeeId: contractors.responsibleEmployeeId,
+      serviceStatus: contractors.serviceStatus,
+    })
+    .from(contractors)
+    .where(and(inArray(contractors.id, wanted), scope))
+    .orderBy(asc(contractors.id))
+    .for('update');
+  if (locked.length !== wanted.length) {
+    const found = new Set(locked.map((r) => r.id));
+    throw new RecordNotFoundError(
+      'contractor',
+      wanted.find((id) => !found.has(id))!,
+    );
   }
   const archived = locked.filter((r) => r.serviceStatus === 'archived').map((r) => r.id);
   if (archived.length) return { changed: 0, archived };
-  let changed = 0;
-  for (const row of locked) {
-    if (row.responsibleEmployeeId === employeeId) continue;
-    await updateWithHistory(tx, {
-      table: contractors,
-      entity: 'contractor',
-      id: row.id,
-      version: row.version,
-      patch: { responsibleEmployeeId: employeeId },
-      contractorId: row.id,
-    });
-    changed++;
-  }
-  return { changed, archived: [] };
+  const moving = locked.filter((r) => r.responsibleEmployeeId !== employeeId);
+  if (moving.length === 0) return { changed: 0, archived: [] };
+  await tx
+    .update(contractors)
+    .set({
+      responsibleEmployeeId: employeeId,
+      version: sql`${contractors.version} + 1`,
+      updatedAt: sql`now()`,
+      updatedBy: sql`app.current_user_id()`,
+    })
+    .where(
+      inArray(
+        contractors.id,
+        moving.map((r) => r.id),
+      ),
+    );
+  await writeHistory(
+    tx,
+    ...moving.map((r) => ({
+      entity: 'contractor' as const,
+      entityId: r.id,
+      action: 'update' as const,
+      changes: [{ field: 'responsibleEmployeeId', from: r.responsibleEmployeeId, to: employeeId }],
+      contractorId: r.id,
+    })),
+  );
+  return { changed: moving.length, archived: [] };
 }
 
 /** Контрагенты сотрудника на обслуживании (не в архиве) — для передачи дел. */

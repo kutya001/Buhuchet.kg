@@ -53,7 +53,7 @@ export function subjectOf(c: Context<AppEnv>): AccessSubject {
  * Область «Свои контрагенты» группы «Контрагенты»: условие для запросов (вне области — «не найден»).
  */
 export function scopeSqlOf(subject: AccessSubject): SQL | undefined {
-  return contractorScope(scopeOf(subject, 'cps') === 'own' ? subject.employeeId : null);
+  return contractorScope(ownEmployeeOf(subject));
 }
 
 /**
@@ -144,6 +144,8 @@ export async function contractorOut(
   return {
     ...r,
     tariff: options.fee ? r.tariff : null,
+    feeDay: options.fee ? r.feeDay : null,
+    firstMonthMode: options.fee ? r.firstMonthMode : null,
     gkedConfirmation: r.gkedConfirmation && {
       by: r.gkedConfirmation.by,
       employeeId: r.gkedConfirmation.employeeId,
@@ -196,6 +198,8 @@ export async function checkContractor(
     before: ContractorBefore | null;
     gkedConfirm: boolean;
     employeeId: string;
+    /** Область «Свои контрагенты»: сотрудник, иначе null — вся организация. */
+    ownEmployeeId: string | null;
     today: string;
     t: Translate;
   },
@@ -206,6 +210,13 @@ export async function checkContractor(
   const phone = phoneProblem(fields.phone, await phoneCodes(tx));
   if (phone) apiFail(400, 'invalid_phone', phone, { field: 'phone' });
   const [problem] = contractorFieldProblems(fields);
+  if (problem?.problem === 'gked_required' && before) {
+    // У созданного без ГКЭД — свой текст (прототип editCpDlg).
+    apiFail(400, 'gked_required', options.t('err.gked_required.edit'), {
+      field: 'gked',
+      variant: 'edit',
+    });
+  }
   if (problem) {
     apiFail(400, problem.problem, CONTRACTOR_MESSAGES[problem.problem], { field: problem.field });
   }
@@ -253,16 +264,7 @@ export async function checkContractor(
   }
 
   const duplicate = await findContractorByInn(tx, fields.inn, before?.id);
-  if (duplicate) {
-    const mode = before ? 'edit' : 'create';
-    apiFail(409, 'inn_duplicate', innDuplicateMessage(duplicate, mode), {
-      field: 'inn',
-      id: duplicate.id,
-      name: duplicate.name,
-      archived: duplicate.archived,
-      ...(duplicate.archived ? { variant: before ? 'archived_edit' : 'archived' } : {}),
-    });
-  }
+  if (duplicate) duplicateFail(duplicate, before ? 'edit' : 'create', options.ownEmployeeId);
 
   const dicts = await contractorGkedDicts(tx, codes);
   const subject = subjectFor(
@@ -296,6 +298,29 @@ export async function checkContractor(
     ask,
   };
 }
+
+/**
+ * Отказ «Такой ИНН уже есть» (ТЗ: дубль называет найденного, в том числе в архиве). Номер найденного —
+ * только если он в области сотрудника: открыть контрагента вне области сотрудник всё равно не может.
+ */
+export function duplicateFail(
+  found: { id: string; name: string; archived: boolean; responsibleEmployeeId: string | null },
+  mode: 'create' | 'edit',
+  ownEmployeeId: string | null,
+): never {
+  const visible = ownEmployeeId === null || found.responsibleEmployeeId === ownEmployeeId;
+  apiFail(409, 'inn_duplicate', innDuplicateMessage(found, mode), {
+    field: 'inn',
+    ...(visible ? { id: found.id } : {}),
+    name: found.name,
+    archived: found.archived,
+    ...(found.archived ? { variant: mode === 'edit' ? 'archived_edit' : 'archived' } : {}),
+  });
+}
+
+/** Сотрудник области «Свои контрагенты» или null — вся организация. */
+export const ownEmployeeOf = (subject: AccessSubject): string | null =>
+  scopeOf(subject, 'cps') === 'own' ? subject.employeeId : null;
 
 /** Ответственный — сотрудник организации и не заблокирован. */
 export async function checkResponsible(tx: Tx, employeeId: string): Promise<void> {

@@ -100,6 +100,7 @@ export const CONTRACTORS_TEXTS = {
   },
   'err.inn_duplicate.archived_edit': { ru: 'Такой ИНН уже есть: {name} (в архиве)', section: E },
   'err.gked_required': { ru: CONTRACTOR_MESSAGES.gked_required, section: E },
+  'err.gked_required.edit': { ru: 'Укажите основной вид деятельности (ГКЭД)', section: E },
   'err.gked_not_subclass': { ru: CONTRACTOR_MESSAGES.gked_not_subclass, section: E },
   'err.gked_inactive': { ru: CONTRACTOR_MESSAGES.gked_inactive, section: E },
   'err.gked_extra_main': { ru: CONTRACTOR_MESSAGES.gked_extra_main, section: E },
