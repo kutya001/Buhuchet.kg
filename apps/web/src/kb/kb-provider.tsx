@@ -209,17 +209,24 @@ export function useKbRuntime(shell: KbShellInfo): { controls: KbControls; overla
     },
     [client, t, toast],
   );
+  // Отклик берётся из ref: `apply` меняется вместе со словарём (после `router.refresh()` сохранения
+  // приходит новый), а сверки и таймер после сохранения от этого не должны перезапускаться или
+  // сбрасываться — иначе шаг засчитала бы тихая сверка, без окна «Готово».
+  const applyRef = useRef(apply);
+  useEffect(() => {
+    applyRef.current = apply;
+  }, [apply]);
 
   // При входе — тихая сверка: что пользователь уже делал раньше, засчитывается без окон.
   useEffect(() => {
     let alive = true;
     kbSync('open')
-      .then((r) => alive && apply(r, 'open'))
+      .then((r) => alive && applyRef.current(r, 'open'))
       .catch(() => {});
     return () => {
       alive = false;
     };
-  }, [apply]);
+  }, []);
 
   // После сохранения — сверка с историей: шаг «Сделать» засчитывается сразу с откликом.
   useEffect(() => {
@@ -228,7 +235,7 @@ export function useKbRuntime(shell: KbShellInfo): { controls: KbControls; overla
       clearTimeout(timer);
       timer = setTimeout(() => {
         kbSync('saved')
-          .then((r) => apply(r, 'saved'))
+          .then((r) => applyRef.current(r, 'saved'))
           .catch(() => {});
       }, SYNC_DELAY_MS);
     };
@@ -237,7 +244,7 @@ export function useKbRuntime(shell: KbShellInfo): { controls: KbControls; overla
       window.removeEventListener(SAVED_EVENT, saved);
       clearTimeout(timer);
     };
-  }, [apply]);
+  }, []);
 
   const hit = useCallback(
     (name: string) => {
@@ -336,13 +343,13 @@ export function useKbRuntime(shell: KbShellInfo): { controls: KbControls; overla
       () => {
         setLook(null);
         kbLook(look.id)
-          .then((r) => apply(r, 'look'))
+          .then((r) => applyRef.current(r, 'look'))
           .catch(() => {});
       },
       Math.max(0, look.end - Date.now()),
     );
     return () => clearTimeout(timer);
-  }, [look, onScreen, apply]);
+  }, [look, onScreen]);
 
   const openArticle = useCallback(
     (view: ArticleView) => {
