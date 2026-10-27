@@ -150,9 +150,14 @@ export function socfundInputOf(
  * Причина ручного выбора, который расходится с условиями (прототип sfValid): без неё — отказ 400 у поля.
  * `s` — контрагент с новыми признаками.
  */
-export function requireSocfundReason(s: SocfundSubject, input: SocfundInput, dict: SocfundDict) {
+export function requireSocfundReason(
+  s: SocfundSubject,
+  input: SocfundInput,
+  dict: SocfundDict,
+  t: Translate,
+) {
   if (socfundManualMismatch(s, input, dict) && !(input.reason ?? '').trim()) {
-    apiFail(400, 'socfund_reason_required', 'Укажите, почему тариф выбран вручную', {
+    apiFail(400, 'socfund_reason_required', t('err.socfund_reason_required'), {
       field: 'socfund.reason',
     });
   }

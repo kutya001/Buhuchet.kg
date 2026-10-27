@@ -422,6 +422,9 @@ describe.skipIf(!databaseAvailable())('Тариф Соцфонда: методы
         cap: expect.any(String),
       },
       auto: expect.objectContaining({ id: 'spino' }),
+      capHint: expect.stringMatching(
+        /^Взносы не начисляются на часть зарплаты выше предельной базы \(база не выше /,
+      ),
     });
     expect(aug.socfund!.tariff!.rates).toMatch(/работодатель/i);
     expect(aug.penalty).toMatch(/^С 21-го числа/);

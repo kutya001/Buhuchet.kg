@@ -164,8 +164,17 @@ for (const { i, st } of saves) {
   }
 }
 
-// Пеня: просроченный неоплаченный STI-161 на сегодня с суммой и без.
+// Пеня: просроченный неоплаченный STI-161 на сегодня с суммой и без; сданный, но с просроченной оплатой.
 const penalties = [
+  {
+    t: 'soc',
+    due: '2026-10-20',
+    payDue: '2026-10-20',
+    overdue: false,
+    payOverdue: true,
+    sum: 10000,
+    paid: 0,
+  },
   { t: 'soc', due: '2026-10-20', payDue: '2026-10-20', overdue: true, sum: 10000, paid: 0 },
   { t: 'soc', due: '2026-10-20', payDue: '2026-10-20', overdue: true, sum: null, paid: 0 },
   { t: 'soc', due: '2026-10-20', payDue: '2026-10-20', overdue: true, sum: 10000, paid: 10000 },
@@ -205,6 +214,8 @@ vm.runInContext(
   ${block(SFUI, 'sfManBad')}
   ${pick(SFUI, /^const sfDraft=/)}
   ${block(SFUI, 'sfApply')}
+  ${pick(SFUI, /^const sfTypeIds=/)}
+  ${block(SFUI, 'sfTypeNote')}
   const state = (c) => {
     const a = sfAuto(c);
     const s = sfState(c);
@@ -212,6 +223,7 @@ vm.runInContext(
       needed: sfNeed(c),
       auto: a && { t: a.t ? a.t.id : null, why: a.why, miss: a.miss, warn: a.warn },
       state: s && { bad: s.bad, none: s.none, ask: s.ask, why: sfBadWhy(s) },
+      typeNote: sfTypeNote({ id: sfTypeIds()[0] }, c).replace(/<[^>]+>/g, ''),
     };
   };
   globalThis.oracle = {
@@ -356,7 +368,8 @@ const fixture = {
       reportTypeCode: r.t,
       dueDate: r.due,
       payDue: r.payDue,
-      overdue: !!(r.overdue || r.payOverdue),
+      overdue: !!r.overdue,
+      payOverdue: !!r.payOverdue,
       amount: r.sum === null ? null : Math.round(r.sum * 100),
       paid: Math.round(r.paid * 100),
     },

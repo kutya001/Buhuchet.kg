@@ -176,6 +176,20 @@ export const CONTRACTORS_TEXTS = {
   'cp.socfund.cap.base': { ru: 'база не выше {base} в месяц на работника', section: S },
   'cp.socfund.cap.amount': { ru: 'взносы не больше {amount} в месяц на работника', section: S },
   'cp.socfund.cap.since': { ru: 'с {since}', section: S },
+  'cp.socfund.cap_hint': {
+    ru: 'Взносы не начисляются на часть зарплаты выше предельной базы ({cap})',
+    section: S,
+  },
+  'cp.socfund.type_note.none': {
+    ru: 'Тариф Соцфонда не определён: ставки взносов зависят от него',
+    section: S,
+  },
+  'cp.socfund.type_note.title': { ru: 'Тариф: {tariff}', section: S },
+  'cp.socfund.type_note.auto': { ru: '(по условиям)', section: S },
+  'cp.socfund.type_note.cap': {
+    ru: 'Предельная база: {cap}. Взносы не начисляются на часть зарплаты выше предельной базы.',
+    section: S,
+  },
   'cp.socfund.reason': { ru: 'Почему тариф выбран вручную', section: S },
   'cp.socfund.reason_placeholder': { ru: 'Например: подтверждено письмом ГНС', section: S },
   'cp.socfund.confirm_title': { ru: 'Тариф не совпадает с условиями', section: S },

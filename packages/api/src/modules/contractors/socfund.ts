@@ -193,7 +193,7 @@ export function saveSocfundHandler(deps: ApiDeps): RouteHandler<typeof saveSocfu
       const row = await lockContractor(tx, id, scope);
       if (!row) notFound();
       if (row.serviceStatus === 'archived') {
-        apiFail(409, 'contractor_archived', 'Контрагент в архиве — сначала верните его из архива');
+        apiFail(409, 'contractor_archived', t('err.contractor_archived'));
       }
       const fields = await readContractorFields(tx, row);
       const [{ dict, form }, types] = await Promise.all([
@@ -209,7 +209,7 @@ export function saveSocfundHandler(deps: ApiDeps): RouteHandler<typeof saveSocfu
       if (!socfundNeeded(s, dict)) {
         apiFail(400, 'socfund_not_needed', t('err.socfund_not_needed'));
       }
-      requireSocfundReason(s, input, dict);
+      requireSocfundReason(s, input, dict, t);
       requireSocfundConfirm(s, fields.socfundTariff, input, dict, confirm ?? false, t);
       const patch = socfundPatch(
         { ...s, flags: fields.socfundFlags },

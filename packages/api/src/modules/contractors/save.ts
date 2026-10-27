@@ -221,7 +221,7 @@ export function createContractorHandler(
           sf.form,
           [],
         );
-        requireSocfundReason(sfSubject, sfInput, sf.dict);
+        requireSocfundReason(sfSubject, sfInput, sf.dict, t);
         fields.gkedConfirmation = await checkContractor(tx, fields, {
           before: null,
           gkedConfirm: body.gkedConfirm ?? false,
@@ -388,7 +388,7 @@ export function updateContractorHandler(
           sf.form,
           types,
         );
-        requireSocfundReason(sfSubject, sfInput, sf.dict);
+        requireSocfundReason(sfSubject, sfInput, sf.dict, t);
         const confirmation = await checkContractor(tx, next, {
           before: { id, fields: before },
           gkedConfirm: gkedConfirm ?? false,

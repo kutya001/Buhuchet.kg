@@ -1,5 +1,5 @@
 {
-  "id": "49077424-5c48-40ae-b071-ac96f606a77c",
+  "id": "d5d88999-c0a7-4bac-9363-2ddeb692ed55",
   "prevId": "cf3a497d-b2c1-4f48-a0dd-23de7214f05a",
   "version": "7",
   "dialect": "postgresql",
@@ -2338,7 +2338,7 @@
         },
         "contractors_socfund_tariff_check": {
           "name": "contractors_socfund_tariff_check",
-          "value": "\"contractors\".\"socfund_tariff\" is null or (jsonb_typeof(\"contractors\".\"socfund_tariff\") = 'object' and \"contractors\".\"socfund_tariff\" - array['id', 'manual', 'reason'] = '{}'::jsonb and \"contractors\".\"socfund_tariff\" ->> 'id' in ('spino', 'general', 'pvtpki') and jsonb_typeof(\"contractors\".\"socfund_tariff\" -> 'manual') = 'boolean' and coalesce(jsonb_typeof(\"contractors\".\"socfund_tariff\" -> 'reason'), 'null') in ('null', 'string') and (\"contractors\".\"socfund_tariff\" -> 'manual' = 'true' or coalesce(jsonb_typeof(\"contractors\".\"socfund_tariff\" -> 'reason'), 'null') = 'null'))"
+          "value": "\"contractors\".\"socfund_tariff\" is null or (jsonb_typeof(\"contractors\".\"socfund_tariff\") = 'object' and \"contractors\".\"socfund_tariff\" - array['id', 'manual', 'reason'] = '{}'::jsonb and coalesce(\"contractors\".\"socfund_tariff\" ->> 'id', '') in ('spino', 'general', 'pvtpki') and coalesce(jsonb_typeof(\"contractors\".\"socfund_tariff\" -> 'manual'), 'null') = 'boolean' and coalesce(jsonb_typeof(\"contractors\".\"socfund_tariff\" -> 'reason'), 'null') in ('null', 'string') and (\"contractors\".\"socfund_tariff\" -> 'manual' = 'true' or coalesce(jsonb_typeof(\"contractors\".\"socfund_tariff\" -> 'reason'), 'null') = 'null'))"
         }
       },
       "isRLSEnabled": true

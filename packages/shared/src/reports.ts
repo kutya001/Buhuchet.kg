@@ -263,7 +263,14 @@ export const ReportCard = ReportRow.extend({
    * Тариф Соцфонда у вида со взносами (STI-161; ТЗ «Связь с отчётами»): выбранный у контрагента и тариф
    * по условиям; null — у вида взносов нет или тариф контрагенту не нужен.
    */
-  socfund: z.object({ tariff: SocfundBrief.nullable(), auto: SocfundBrief.nullable() }).nullable(),
+  socfund: z
+    .object({
+      tariff: SocfundBrief.nullable(),
+      auto: SocfundBrief.nullable(),
+      /** «Взносы не начисляются на часть зарплаты выше предельной базы (…)»; '' — нет базы или тарифа. */
+      capHint: z.string(),
+    })
+    .nullable(),
   /** Подсказка о пене у просроченного (ТЗ «Пеня (информационно)»); '' — подсказки нет. */
   penalty: z.string(),
   versions: z.array(

@@ -164,6 +164,12 @@ describe.skipIf(!databaseAvailable())('Тариф Соцфонда: данные
       [{ socfundFlags: { salary: true } as never }, 'contractors_socfund_flags_check'],
       [{ socfundFlags: { cashless: null } as never }, 'contractors_socfund_flags_check'],
       [{ socfundTariff: { id: 'other' } as never }, 'contractors_socfund_tariff_check'],
+      // Без ключа id или manual — тоже нельзя.
+      [{ socfundTariff: { id: 'spino' } as never }, 'contractors_socfund_tariff_check'],
+      [
+        { socfundTariff: { manual: false, reason: null } as never },
+        'contractors_socfund_tariff_check',
+      ],
       [
         { socfundTariff: { id: 'spino', manual: 'да', reason: null } as never },
         'contractors_socfund_tariff_check',

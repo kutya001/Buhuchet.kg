@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext } from '@playwright/test';
-import { asOwner } from './reports';
+import { asOwner, assign, reportsOf } from './reports';
 
 // Тариф Соцфонда (задача 2.08, #64). Экранов у задачи нет (форма — 2.09, список — 2.10, карточка —
 // 2.11, подбор отчётов — 2.07), поэтому пункты 38 и 39 проверяются через API сайта под владельцем
@@ -20,7 +20,14 @@ type Socfund = {
   badWhy: string;
   ask: boolean;
 };
-type Saved = { id: string; version: number; benefits: { code: string }[]; socfund: Socfund };
+type Saved = {
+  id: string;
+  inn: string;
+  version: number;
+  benefits: { code: string }[];
+  socfund: Socfund;
+};
+type Brief = { id: string; short: string; total: string; rates: string; cap: string };
 
 async function newContractor(
   api: APIRequestContext,
@@ -48,13 +55,13 @@ async function newContractor(
     },
   });
   expect(res.status(), await res.text()).toBe(201);
-  return (await res.json()) as Saved;
+  return { ...((await res.json()) as Omit<Saved, 'inn'>), inn };
 }
 
 const codes = (cp: Saved) => cp.benefits.map((b) => b.code).sort();
 
 test.describe('Этап 2: тариф Соцфонда', () => {
-  test('(проверка задачи #64) п. 38: ОсОО с ГКЭД 47.11 и всеми признаками получает СПиНО автоматически, после смены ГКЭД на 64.19.1 — «больше не применим» и «Сменить на базовый»', async ({
+  test('(проверка задачи #64) п. 38: ОсОО с ГКЭД 47.11 и всеми признаками получает СПиНО автоматически, у STI-161 видны ставки, после смены ГКЭД на 64.19.1 — «больше не применим» и «Сменить на базовый»', async ({
     request,
     baseURL,
   }) => {
@@ -70,6 +77,21 @@ test.describe('Этап 2: тариф Соцфонда', () => {
       bad: false,
     });
     expect(codes(cp)).toEqual(['ЛЬГ-29']);
+
+    // У STI-161 видны ставки тарифа: карточка отчёта вида со взносами.
+    const month = `${new Date(Date.now() + 6 * 3_600_000).toISOString().slice(0, 7)}-01`;
+    await assign(request, origin, { contractorId: cp.id, reportTypeCode: 'soc', fromMonth: month });
+    const [soc] = (await reportsOf(request, cp.inn)) as unknown as { id: string }[];
+    const report = await request.get(`/api/reports/${soc!.id}`);
+    expect(report.status()).toBe(200);
+    const { socfund } = (await report.json()) as {
+      socfund: { tariff: Brief | null; auto: Brief | null; capHint: string } | null;
+    };
+    expect(socfund?.tariff).toMatchObject({ id: 'spino', short: 'СПиНО', total: '12,25 %' });
+    expect(socfund?.tariff?.rates).toBe('работодатель 2,25 %, работник 10 %; итого 12,25 %');
+    expect(socfund?.capHint).toMatch(
+      /^Взносы не начисляются на часть зарплаты выше предельной базы/,
+    );
 
     const moved = await request.patch(`/api/contractors/${cp.id}`, {
       headers: { origin },

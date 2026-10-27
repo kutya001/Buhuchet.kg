@@ -129,8 +129,8 @@ const tariffOf = (dict: SocfundDict, id: SocfundTariffId | null | undefined) =>
   id ? (dict.tariffs.find((t) => t.id === id) ?? null) : null;
 
 /**
- * Тариф нужен и без основания «Есть наёмные сотрудники», если у контрагента действует назначение вида
- * со взносами (STI-161), — как в прототипе (sfNeed). ТЗ называет только основание.
+ * true — тариф нужен и без основания «Есть наёмные сотрудники», если у контрагента действует назначение
+ * вида со взносами (STI-161), как в прототипе (sfNeed); false — только по основанию, как в ТЗ.
  */
 // ОТКЛОНЕНИЕ: docs/deviations.md#А-5 — до решения заказчика по ТЗ.
 export const SOCFUND_BY_REPORT = false;
@@ -305,6 +305,35 @@ export function socfundCapText(x: SocfundTariff | null, t: Translate): string {
     .join(', ');
 }
 
+/** Подсказка под тарифом в карточке отчёта (прототип report-card.js); '' — у тарифа нет предельной базы. */
+export function socfundCapHint(x: SocfundTariff | null, t: Translate): string {
+  const cap = socfundCapText(x, t);
+  return cap ? t('cp.socfund.cap_hint', { cap }) : '';
+}
+
+/**
+ * Пояснение к виду со взносами в «Подборе отчётов» (прототип sfTypeNote): выбранный тариф, без него —
+ * тариф по условиям со ставками и предельной базой; нет ни того ни другого — предупреждение. `title`
+ * экран выделяет, `text` идёт следом.
+ */
+export function socfundTypeNote(
+  cur: SocfundTariff | null,
+  auto: SocfundTariff | null,
+  t: Translate,
+): { warn: boolean; title: string; text: string } {
+  const x = cur ?? auto;
+  if (!x) return { warn: true, title: '', text: t('cp.socfund.type_note.none') };
+  const cap = socfundCapText(x, t);
+  return {
+    warn: false,
+    title: t('cp.socfund.type_note.title', { tariff: socfundShort(x) }),
+    text:
+      (cur ? '' : ` ${t('cp.socfund.type_note.auto')}`) +
+      ` — ${socfundRatesText(x, t)}.` +
+      (cap ? ` ${t('cp.socfund.type_note.cap', { cap: cap.replace(/^база /, '') })}` : ''),
+  };
+}
+
 /**
  * Что пришло из формы: признаки, выбранный тариф (`undefined` — выбор не трогали, `null` — «Определить
  * автоматически») и причина ручного выбора.
@@ -431,11 +460,15 @@ export interface SocfundPenalty {
   cap: string;
 }
 
-/** Отчёт для подсказки о пене: срок, срок оплаты, просрочен ли, сумма к уплате и оплачено (тыйыны). */
+/**
+ * Отчёт для подсказки о пене: срок, срок оплаты, просрочена ли сдача и оплата, сумма к уплате и
+ * оплачено (тыйыны).
+ */
 export interface PenaltyReport {
   dueDate: IsoDate;
   payDue: IsoDate | null;
   overdue: boolean;
+  payOverdue: boolean;
   amount: Tyiyn | null;
   paid: Tyiyn;
 }
@@ -451,7 +484,7 @@ export function penaltyText(
   today: IsoDate,
   t: Translate,
 ): string {
-  if (!p || !r.overdue) return '';
+  if (!p || !(r.overdue || r.payOverdue)) return '';
   const pct = parseFloat(p.rate.replace(',', '.'));
   // Как прототип: сомы с копейками, округление пени до копейки.
   const sum = r.amount === null ? 0 : r.amount / 100;

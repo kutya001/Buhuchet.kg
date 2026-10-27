@@ -7,6 +7,7 @@ import {
   socfundAuto,
   socfundAutoTexts,
   socfundBadWhy,
+  socfundCapHint,
   socfundCapText,
   socfundConfirmText,
   socfundDecide,
@@ -19,6 +20,7 @@ import {
   socfundState,
   socfundTariffHistoryText,
   socfundTitle,
+  socfundTypeNote,
   SOCFUND_BY_REPORT,
   type SocfundChoice,
   type SocfundDict,
@@ -88,6 +90,12 @@ describe('Тариф Соцфонда по условиям — как в про
         ask: expected.state.ask,
       });
       expect(socfundBadWhy(st!, dict, t)).toBe(expected.state.why);
+      // Пояснение к STI-161 в «Подборе отчётов» (прототип sfTypeNote).
+      const tariff = (id: SocfundTariffId | null | undefined) =>
+        dict.tariffs.find((x) => x.id === id) ?? null;
+      const note = socfundTypeNote(tariff(st!.choice?.id), tariff(st!.auto.tariff), t);
+      expect(note.title + note.text).toBe(expected.typeNote);
+      expect(note.warn).toBe(!st!.choice && !st!.auto.tariff);
     },
   );
 
@@ -173,6 +181,10 @@ describe('Названия, ставки и предельная база тар
     expect(socfundShort(x)).toBe(short);
     expect(socfundRatesText(x, t)).toBe(rates);
     expect(socfundCapText(x, t)).toBe(cap);
+    // Подсказка карточки отчёта (прототип report-card.js): только у тарифа с предельной базой.
+    expect(socfundCapHint(x, t)).toBe(
+      cap ? `Взносы не начисляются на часть зарплаты выше предельной базы (${cap})` : '',
+    );
   });
 });
 

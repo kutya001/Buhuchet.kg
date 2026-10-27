@@ -136,9 +136,10 @@ export const contractors = pgTable(
     ),
     check(
       'contractors_socfund_tariff_check',
-      sql`${t.socfundTariff} is null or (jsonb_typeof(${t.socfundTariff}) = 'object' and ${t.socfundTariff} - ${sql.raw(jsonKeys(['id', 'manual', 'reason']))} = '{}'::jsonb and ${t.socfundTariff} ->> 'id' in (${sql.raw(
+      // coalesce: без ключа id или manual проверка дала бы NULL, а CHECK с NULL проходит.
+      sql`${t.socfundTariff} is null or (jsonb_typeof(${t.socfundTariff}) = 'object' and ${t.socfundTariff} - ${sql.raw(jsonKeys(['id', 'manual', 'reason']))} = '{}'::jsonb and coalesce(${t.socfundTariff} ->> 'id', '') in (${sql.raw(
         SOCFUND_TARIFFS.map((v) => `'${v}'`).join(', '),
-      )}) and jsonb_typeof(${t.socfundTariff} -> 'manual') = 'boolean' and coalesce(jsonb_typeof(${t.socfundTariff} -> 'reason'), 'null') in ('null', 'string') and (${t.socfundTariff} -> 'manual' = 'true' or coalesce(jsonb_typeof(${t.socfundTariff} -> 'reason'), 'null') = 'null'))`,
+      )}) and coalesce(jsonb_typeof(${t.socfundTariff} -> 'manual'), 'null') = 'boolean' and coalesce(jsonb_typeof(${t.socfundTariff} -> 'reason'), 'null') in ('null', 'string') and (${t.socfundTariff} -> 'manual' = 'true' or coalesce(jsonb_typeof(${t.socfundTariff} -> 'reason'), 'null') = 'null'))`,
     ),
     orgIsolation('contractors_isolation', t.orgId),
   ],

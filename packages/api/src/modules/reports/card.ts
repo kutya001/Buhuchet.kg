@@ -18,6 +18,7 @@ import {
   ORG_REPORT_TYPE_MESSAGES,
   penaltyText,
   REPORT_MESSAGES,
+  socfundCapHint,
   socfundCapText,
   socfundRatesText,
   socfundShort,
@@ -99,8 +100,8 @@ function socfundBrief(dict: SocfundDict, id: SocfundTariffId | null, t: Translat
 /**
  * Тариф Соцфонда и подсказка о пене для карточки отчёта (ТЗ «Связь с отчётами», «Пеня (информационно)»;
  * прототип report-card.js, sfPeniNote): тариф — у вида со взносами (STI-161), если он нужен контрагенту;
- * пеня — у просроченного по виду, у налога которого есть пеня. Оплаченного по отчёту пока нет (деньги —
- * поток В): примерная пеня считается от всей суммы к уплате.
+ * пеня — у просроченного по виду, у налога которого есть пеня. Оплаченного по отчёту и просрочки оплаты
+ * пока нет (деньги — поток В): пеня — у просроченной сдачи, примерная — от всей суммы к уплате.
  */
 async function socfundOfReport(tx: Tx, card: ReportCardData, today: IsoDate, t: Translate) {
   const [penalty, contractor, types] = await Promise.all([
@@ -113,6 +114,8 @@ async function socfundOfReport(tx: Tx, card: ReportCardData, today: IsoDate, t: 
       dueDate: card.dueDate,
       payDue: card.payDue,
       overdue: card.overdue,
+      // Просрочку оплаты (прототип derive: payOverdue) и оплаченное передаст задача денег.
+      payOverdue: false,
       amount: card.amount,
       paid: 0,
     },
@@ -146,6 +149,7 @@ async function socfundOfReport(tx: Tx, card: ReportCardData, today: IsoDate, t: 
     socfund: st && {
       tariff: socfundBrief(dict, st.choice?.id ?? null, t),
       auto: socfundBrief(dict, st.auto.tariff, t),
+      capHint: socfundCapHint(dict.tariffs.find((x) => x.id === st.choice?.id) ?? null, t),
     },
     penalty: penaltyNote,
   };
