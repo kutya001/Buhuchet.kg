@@ -2,6 +2,7 @@ import { ADMIN_ACCOUNTS_TEXTS, ADMIN_TEXTS } from './admin-texts';
 import { AUTH_TEXTS } from './auth-texts';
 import { DICTS_TEXTS } from './dicts-texts';
 import { GRID_TEXTS } from './grid-texts';
+import { MONEY_TEXTS } from './money-texts';
 import { ORG_TEXTS } from './org-texts';
 import { SHELL_TEXTS } from './shell-texts';
 import { STAFF_TEXTS } from './staff-texts';
@@ -51,7 +52,7 @@ const SYSTEM_TEXTS = {
  * разложены по файлам экранов: служебные — здесь, оболочки — `shell-texts.ts`, входа и «Мой профиль» —
  * `auth-texts.ts`, списков — `grid-texts.ts`, сотрудников — `staff-texts.ts`, шкалы и истории статусов —
  * `status-texts.ts`, «Моей организации» — `org-texts.ts`, Админки — `admin-texts.ts`, «Справочников» и сроков
- * видов отчётов словами — `dicts-texts.ts`.
+ * видов отчётов словами — `dicts-texts.ts`, реквизитов для переводов — `money-texts.ts`.
  */
 export const UI_TEXTS = {
   ...SYSTEM_TEXTS,
@@ -64,6 +65,7 @@ export const UI_TEXTS = {
   ...ADMIN_ACCOUNTS_TEXTS,
   ...ADMIN_TEXTS,
   ...DICTS_TEXTS,
+  ...MONEY_TEXTS,
 } as const satisfies Record<string, UiTextDefault>;
 
 /** Ключ текста интерфейса: только из `UI_TEXTS`, поэтому опечатка в ключе — ошибка типов. */

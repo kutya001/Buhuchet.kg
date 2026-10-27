@@ -22,3 +22,4 @@ export * from './taxes';
 export * from './platform-values';
 export * from './dict-requests';
 export * as schema from './schema';
+export * from './money';

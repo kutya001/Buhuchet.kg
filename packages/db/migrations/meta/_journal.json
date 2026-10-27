@@ -239,6 +239,20 @@
       "when": 1793098080323,
       "tag": "0033_admin_users",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1793102242598,
+      "tag": "0034_money_requisites",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1793102250612,
+      "tag": "0035_banks_read_only",
+      "breakpoints": true
     }
   ]
 }
