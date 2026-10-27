@@ -67,7 +67,7 @@ test.describe('Этап 2: База знаний — программа, уро�
     await page.goto('/app/kb/lessons');
     const bar = page.locator('[data-kb-bar="look"]');
 
-    // Пробыли на экране шага 3 секунды — окно «Шаг выполнен» с «Следующий шаг» и «Вернуться к Базе знаний».
+    // Пробыли на экране шага 3 секунды — окно «Шаг выполнен» с теми же кнопками, что у «Сделать».
     await page.locator('[data-kb-step="roles"]').getByRole('button', { name: 'Перейти' }).click();
     await expect(page).toHaveURL(/\/app\/staff\/roles/);
     await expect(bar).toContainText('Смотрите экран…');
@@ -78,8 +78,8 @@ test.describe('Этап 2: База знаний — программа, уро�
     await expect(looked).toBeVisible({ timeout: 8000 });
     expect(Date.now() - started).toBeGreaterThan(2500);
     await expect(looked.getByRole('button', { name: /^Следующий шаг: / })).toBeVisible();
-    // По ТЗ у «Посмотреть» — без «Остаться здесь» (docs/deviations.md п. Г-2).
-    await expect(looked.getByRole('button', { name: 'Остаться здесь' })).toHaveCount(0);
+    // «Остаться здесь» — и у «Посмотреть», как в прототипе (docs/deviations.md п. Г-2).
+    await expect(looked.getByRole('button', { name: 'Остаться здесь' })).toBeVisible();
     expect(stepDone(await kbMe(page.request), 'roles')).toMatchObject({ how: 'visit' });
     await looked.getByRole('button', { name: 'Вернуться к Базе знаний' }).click();
     await expect(page).toHaveURL(/\/app\/kb\/lessons/);

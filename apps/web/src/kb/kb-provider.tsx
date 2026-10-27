@@ -557,11 +557,10 @@ function StepDoneDialog({
       size="mid"
       title={t(dialog.look ? 'kb.done.look_title' : 'kb.done.title', { title: dialog.title })}
       sub={p ? t('kb.done.sub', { name: p.levels[p.level]?.name ?? '', pct: p.pct }) : undefined}
-      footer={<DoneFooter next={next} stay={!dialog.look} onNext={onNext} onBack={onBack} />}
+      footer={<DoneFooter next={next} onNext={onNext} onBack={onBack} />}
     >
       <p data-kb-done={dialog.id} className="m-0 leading-[1.55] text-muted">
-        {next ? t('kb.done.next', { title: next.title }) : t('kb.done.all')}{' '}
-        {t(dialog.look ? 'kb.done.look_text' : 'kb.done.text')}
+        {next ? t('kb.done.next', { title: next.title }) : t('kb.done.all')} {t('kb.done.text')}
       </p>
     </Modal>
   );
@@ -571,26 +570,21 @@ const short = (s: string) => (s.length > 34 ? `${s.slice(0, 32)}…` : s);
 
 function DoneFooter({
   next,
-  stay,
   onNext,
   onBack,
 }: {
   next: KbStep | null;
-  /** «Остаться здесь»; у «Посмотреть» по ТЗ только «Следующий шаг» и «Вернуться к Базе знаний». */
-  stay: boolean;
   onNext: (id: string) => void;
   onBack: () => void;
 }) {
   const t = useT();
   const { close, leave } = useWindow();
-  // ОТКЛОНЕНИЕ: docs/deviations.md#Г-2 — у «Посмотреть» нет «Остаться здесь» (как в ТЗ).
+  // ОТКЛОНЕНИЕ: docs/deviations.md#Г-2 — «Остаться здесь» и после «Посмотреть», как в прототипе.
   return (
     <>
-      {stay ? (
-        <button type="button" className={buttonClass('ghost')} onClick={close}>
-          {t('kb.done.stay')}
-        </button>
-      ) : null}
+      <button type="button" className={buttonClass('ghost')} onClick={close}>
+        {t('kb.done.stay')}
+      </button>
       {next ? (
         <button
           type="button"

@@ -127,10 +127,6 @@ export const KB_TEXTS = {
     ru: 'Можно вернуться к Базе знаний, сразу перейти к следующему шагу или остаться здесь.',
     section: S,
   },
-  'kb.done.look_text': {
-    ru: 'Можно вернуться к Базе знаний или сразу перейти к следующему шагу.',
-    section: S,
-  },
   'kb.done.stay': { ru: 'Остаться здесь', section: S },
   'kb.done.next_btn': { ru: 'Следующий шаг: {title}', section: S },
   'kb.done.back': { ru: 'Вернуться к Базе знаний', section: S },
