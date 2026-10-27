@@ -128,6 +128,12 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
       await ok(await call('POST', '/api/kb/steps/a-dicts/look', admin)),
     );
     expect(step(looked.state, 'a-dicts')?.done?.how).toBe('visit');
+    const l10n = KbMarkResult.parse(
+      await ok(await call('POST', '/api/kb/steps/a-l10n/look', admin)),
+    );
+    expect(step(l10n.state, 'a-l10n')?.done?.how).toBe('visit');
+    // Шаг «Сделать» просмотром не засчитывается.
+    expect((await call('POST', '/api/kb/steps/a-org/look', admin)).status).toBe(400);
     // «Создать организацию и её владельца» — организацией, созданной им самим.
     const created = await call('POST', '/api/admin/organizations', admin, {
       name: 'ОсОО «Урок»',
