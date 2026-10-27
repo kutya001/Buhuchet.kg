@@ -42,6 +42,9 @@ import {
 
 const off = 'Задачи выключены в учётной политике';
 
+/** Записи истории модуля файлов: в них имя файла. */
+const FILE_ACTIONS: ReadonlySet<string> = new Set(['file_attach', 'file_delete']);
+
 /**
  * Видит ли сотрудник файлы задачи (как модуль файлов, `canView`): «Файлы в карточках», право
  * «Просматривать файлы» и область группы «Файловый менеджер» по контрагенту задачи.
@@ -53,7 +56,8 @@ function taskFilesVisible(subject: AccessSubject, r: TaskRecord, filesOn: boolea
 
 /**
  * Карточка для ответа API: строка, описание, причины, комментарии, «История статусов» и история.
- * Имя файла результата в «Истории статусов» — только тому, кто видит файлы задачи.
+ * Имя файла результата в «Истории статусов» и записи истории о файлах — только тому, кто видит файлы
+ * задачи.
  */
 export async function taskOut(
   tx: Tx,
@@ -85,7 +89,9 @@ export async function taskOut(
       at: h.at.toISOString(),
       file: filesVisible ? h.file : null,
     })),
-    history: history.map((h) => ({ ...h, at: h.at.toISOString() })),
+    history: history
+      .filter((h) => filesVisible || !FILE_ACTIONS.has(h.action))
+      .map((h) => ({ ...h, at: h.at.toISOString() })),
   };
 }
 

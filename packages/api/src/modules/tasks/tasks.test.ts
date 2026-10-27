@@ -377,9 +377,9 @@ describe.skipIf(!databaseAvailable())('Задачи: методы API', () => {
     expect(done.history.map((h) => h.action)).toContain('file_attach');
     // Кто не видит файлы задачи (здесь — «Файлы в карточках» выключены), не видит и имя файла.
     await features({ tasks: true });
-    expect(
-      (await card(chief, task.id)).statusHistory.find((h) => h.to === 'done')?.file,
-    ).toBeNull();
+    const hidden = await card(chief, task.id);
+    expect(hidden.statusHistory.find((h) => h.to === 'done')?.file).toBeNull();
+    expect(hidden.history.map((h) => h.action)).not.toContain('file_attach');
     await features({ tasks: true, files: true });
   });
 
