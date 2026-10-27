@@ -11,7 +11,15 @@
  * Новый справочник добавляет сюда строку, перечень полей ниже и строку перечня
  * `app.platform_dict_specs` в базе.
  */
-export const ADMIN_VALUE_DICTS = ['regimes', 'forms', 'organs', 'ugns', 'banks', 'reasons'] as const;
+export const ADMIN_VALUE_DICTS = [
+  'bases',
+  'regimes',
+  'forms',
+  'organs',
+  'ugns',
+  'banks',
+  'reasons',
+] as const;
 export type AdminValueDict = (typeof ADMIN_VALUE_DICTS)[number];
 
 export function isAdminValueDict(value: string): value is AdminValueDict {
@@ -19,7 +27,7 @@ export function isAdminValueDict(value: string): value is AdminValueDict {
 }
 
 import type { ListSort } from '../common/list';
-import { BANK_KINDS, REGIME_KINDS, type BankKind } from './catalog';
+import { BANK_KINDS, REGIME_KINDS, type BankKind, type ReportKind } from './catalog';
 
 /**
  * Как получается код нового значения: префикс и номер (ФС-25, ПРЧ-006), префикс по типу провайдера
@@ -38,10 +46,23 @@ export interface AdminDictMeta {
    */
   // ОТКЛОНЕНИЕ: docs/deviations.md#Д-2
   ordered: boolean;
-  /** Поля значения, которые правит администратор (столбцы перечня `app.platform_dict_specs`). */
+  /**
+   * Поля значения, которые правит администратор: столбцы перечня `app.platform_dict_specs` и поля-связи
+   * (`links`).
+   */
   fields: readonly string[];
   /** Обязательные поля сверх названия: у УГНС — краткое название, у режима — полное. */
   required?: readonly ('shortName' | 'fullName')[];
+  /**
+   * Поля-связи: коды значений другого справочника в отдельной таблице связей, а не в столбце значения
+   * (виды отчётов основания — «по полю «Основание» вида», ТЗ). Пишет `app.admin_dict_set_links`.
+   */
+  links?: readonly string[];
+  /**
+   * Таблица ссылок контрагентов на значение: по ней столбец «Контрагентов» и причина «Указан у N
+   * контрагентов»; остальные ссылки — просто «Используется».
+   */
+  contractorTable?: string;
   /**
    * «Тип» значения (поле `kind`): допустимые значения, тип нового значения и ключ словаря подписи
    * (`<text>.<тип>`).
@@ -54,6 +75,14 @@ export interface AdminDictMeta {
 }
 
 export const ADMIN_DICT_META: Readonly<Record<AdminValueDict, AdminDictMeta>> = {
+  // Новое основание — с постоянным ключом, как у наполнения (employees, property…).
+  bases: {
+    code: { key: 'base' },
+    ordered: true,
+    fields: ['name', 'description', 'types', 'note'],
+    links: ['types'],
+    contractorTable: 'contractor_bases',
+  },
   // Новый режим — специальный (прототип regimeDlg): общий режим один.
   regimes: {
     code: { prefix: 'РЕЖ', digits: 2 },
@@ -89,6 +118,7 @@ export const ADMIN_DICT_META: Readonly<Record<AdminValueDict, AdminDictMeta>> = 
     ordered: false,
     fields: ['name', 'shortName', 'gnsCode', 'region'],
     required: ['shortName'],
+    contractorTable: 'contractors',
   },
   banks: {
     code: { byKind: { bank: 'БНК', wallet: 'КШЛ' }, digits: 2 },
@@ -102,7 +132,8 @@ export const ADMIN_DICT_META: Readonly<Record<AdminValueDict, AdminDictMeta>> = 
 /**
  * Код нового значения (прототип `nextCode`: префикс и номер с нулями): следующий после самого большого
  * номера справочника, а не «число значений + 1» — после удаления номер не повторится. У УГНС —
- * постоянный ключ `ugns-<случайное>` (прототип ugnsDlg): код ГНС у нового управления может быть пуст.
+ * постоянный ключ `ugns-<случайное>` (прототип ugnsDlg): код ГНС у нового управления может быть пуст;
+ * у основания — `base-<случайное>` (прототип baseDlg).
  * У банковских провайдеров префикс — по типу (`kind`), как у значений из наполнения.
  */
 export function nextDictCode(
@@ -120,6 +151,30 @@ export function nextDictCode(
     return Number.isInteger(n) && n > m ? n : m;
   }, 0);
   return `${head}${String(max + 1).padStart(rule.digits, '0')}`;
+}
+
+/** Вид отчёта для выбора в окне основания: код, тип и действует ли. */
+export interface BaseTypeOption {
+  code: string;
+  kind: ReportKind;
+  active: boolean;
+}
+
+/**
+ * Виды отчётов, которых не может быть у основания (прототип baseDlg): основание включает только
+ * сквозные действующие виды; уже привязанный остаётся, даже если его отключили или сменили тип.
+ */
+export function badBaseTypes(
+  codes: readonly string[],
+  catalog: readonly BaseTypeOption[],
+  before: readonly string[],
+): string[] {
+  const byCode = new Map(catalog.map((t) => [t.code, t]));
+  return codes.filter((code) => {
+    const t = byCode.get(code);
+    if (!t) return true;
+    return !before.includes(code) && (t.kind !== 'cross' || !t.active);
+  });
 }
 
 /** Код ГНС управления: ровно три цифры, как в кабинете налогоплательщика; пусто — не сверен. */
@@ -169,13 +224,7 @@ export function dictValueProblems(
   return problems;
 }
 
-/**
- * Таблица ссылок на управление у контрагентов: по ней столбец УГНС «Контрагентов» и причина «Указан у
- * N контрагентов» (прототип renderPDicts0); остальные ссылки — просто «Используется».
- */
-export const UGNS_CONTRACTOR_TABLE = 'contractors';
-
-/** Сколько раз значение используется: всего и у контрагентов (только для УГНС). */
+/** Сколько раз значение используется: всего и у контрагентов (у УГНС и основания). */
 export interface DictUsage {
   total: number;
   contractors: number;
@@ -220,6 +269,7 @@ const c = (key: string, type: AdminDictColumn['type'], label: string, hidden = f
   hidden ? { key, type, label, hidden } : { key, type, label };
 
 const N = c('n', 'int', 'pdicts.col.n');
+const CONTRACTORS = c('contractors', 'int', 'pdicts.col.contractors');
 const CODE = c('code', 'text', 'pdicts.col.code');
 const VALUE = c('name', 'text', 'pdicts.col.value');
 const USED = c('used', 'int', 'pdicts.col.used');
@@ -233,6 +283,17 @@ const STATUS = c('active', 'enum', 'pdicts.col.status');
  * «Переводы по номеру телефона». Служебные столбцы добавляет список.
  */
 export const ADMIN_DICT_COLUMNS: Readonly<Record<AdminValueDict, readonly AdminDictColumn[]>> = {
+  bases: [
+    N,
+    c('code', 'text', 'pdicts.col.code', true),
+    c('name', 'text', 'pdicts.col.name'),
+    c('description', 'text', 'pdicts.col.description'),
+    c('types', 'text', 'pdicts.col.types'),
+    c('note', 'text', 'pdicts.col.remark', true),
+    CONTRACTORS,
+    c('used', 'int', 'pdicts.col.used', true),
+    STATUS,
+  ],
   regimes: [
     N,
     c('code', 'text', 'pdicts.col.code', true),
@@ -276,7 +337,7 @@ export const ADMIN_DICT_COLUMNS: Readonly<Record<AdminValueDict, readonly AdminD
     c('name', 'text', 'pdicts.col.ugns_name'),
     c('shortName', 'text', 'pdicts.col.short'),
     c('region', 'enum', 'pdicts.col.region'),
-    c('contractors', 'int', 'pdicts.col.contractors'),
+    CONTRACTORS,
     c('used', 'int', 'pdicts.col.used', true),
     STATUS,
   ],

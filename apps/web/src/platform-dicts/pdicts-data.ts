@@ -7,6 +7,7 @@ import {
   AdminDictList,
   AdminDictRequestList,
   AdminDictValue,
+  AdminReportTypeOptions,
   ListValues,
   PdictsTabCounts,
   type AdminDictRequest,
@@ -36,6 +37,13 @@ export const pdictsGroupsQuery = queryOptions({
   queryKey: ['admin', 'pdicts', 'groups'],
   queryFn: async () => json(await pd.groups.$get(), (v) => AdminDictGroups.parse(v).items),
   staleTime: Infinity,
+});
+
+/** Каталог видов отчётов кратко: выбор видов у основания и подписи «Виды отчётов». */
+export const reportTypeOptionsQuery = queryOptions({
+  queryKey: ['admin', 'pdicts', 'report-type-options'],
+  queryFn: async () =>
+    json(await pd['report-type-options'].$get(), (v) => AdminReportTypeOptions.parse(v).items),
 });
 
 /** Число новых запросов на вкладке «Запросы» (прототип pdTabs: `count` — новые). */

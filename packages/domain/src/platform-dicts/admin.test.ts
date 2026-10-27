@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ADMIN_DICT_META,
   ADMIN_VALUE_DICTS,
+  badBaseTypes,
   dictRequestAnswerProblem,
   dictValueProblems,
   isAdminValueDict,
@@ -68,6 +69,27 @@ describe('dictValueProblems', () => {
     expect(
       dictValueProblems({ code: 'ugns-lenin', name: 'Ленинский', gnsCode: '002' }, ugns),
     ).toEqual([]);
+  });
+});
+
+describe('badBaseTypes', () => {
+  const catalog = [
+    { code: 'soc', kind: 'cross', active: true },
+    { code: 'imn', kind: 'cross', active: false },
+    { code: 'nds', kind: 'regime', active: true },
+  ] as const;
+
+  it('основание включает только сквозные действующие виды из каталога', () => {
+    expect(badBaseTypes(['soc'], catalog, [])).toEqual([]);
+    expect(badBaseTypes(['soc', 'imn', 'nds', 'nope'], catalog, [])).toEqual([
+      'imn',
+      'nds',
+      'nope',
+    ]);
+  });
+
+  it('уже привязанный вид остаётся, даже если отключён; неизвестный — нет', () => {
+    expect(badBaseTypes(['imn', 'nds', 'nope'], catalog, ['imn', 'nds', 'nope'])).toEqual(['nope']);
   });
 });
 

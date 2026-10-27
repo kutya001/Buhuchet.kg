@@ -29,6 +29,7 @@ import {
   dueChangeReasons,
   orgAccounts,
   ownershipForms,
+  reportTypeBases,
   taxOffices,
   taxRegimes,
   users,
@@ -485,6 +486,101 @@ describe.skipIf(!databaseAvailable())(
         accountantNote: 'один отчёт',
         frees: '',
       });
+    });
+
+    it('основания: виды отчётов — связь «Основание» вида, правится из основания; привязанное не удаляется', async () => {
+      const page = await asAdmin((tx) => listAdminDictPage(tx, 'bases', query(), t));
+      expect(page.rows[0]).toMatchObject({ n: 1, code: 'employees', data: { types: ['soc'] } });
+      expect(page.rows[0]!.usage).toEqual({ total: 1, contractors: 0 });
+      const transport = page.rows.find((x) => x.code === 'transport')!;
+      expect([transport.data.types, transport.usage.total]).toEqual([[], 0]);
+      const file = await asAdmin((tx) =>
+        exportAdminDict(tx, 'bases', query(), ['name', 'types'], t),
+      );
+      expect(file.rows[0]).toEqual(['Есть наёмные сотрудники', 'Соцфонд']);
+      expect(file.rows.find((r) => r[0] === transport.name)?.[1]).toBe('—');
+
+      // Не сквозной вид (НДС — режимный) — отказ, ничего не записано.
+      const bad = await asAdmin((tx) =>
+        adminDictCreate(tx, 'bases', { name: 'Есть НДС', data: { types: ['nds'] } }, random),
+      );
+      expect(bad).toEqual({ ok: false, reason: 'bad_link', field: 'types' });
+
+      const created = await asAdmin((tx) =>
+        adminDictCreate(
+          tx,
+          'bases',
+          { name: 'Есть роялти', data: { description: 'Недра', types: ['bon', 'roy', 'roy'] } },
+          random,
+        ),
+      );
+      expect(created.ok).toBe(true);
+      if (!created.ok) return;
+      // Коды — в порядке каталога, без повторов; вид отчёта видит основание у себя.
+      expect(created.record.code).toMatch(/^base-t\d+$/);
+      expect(created.record.data.types).toEqual(['roy', 'bon']);
+      const links = await db.admin.db
+        .select()
+        .from(reportTypeBases)
+        .where(eq(reportTypeBases.baseCode, created.record.code));
+      expect(links.map((l) => l.reportTypeCode).sort()).toEqual(['bon', 'roy']);
+      const used = await asAdmin((tx) =>
+        adminDictDelete(tx, 'bases', created.record.code, created.record.version),
+      );
+      expect(used).toMatchObject({
+        ok: false,
+        reason: 'used',
+        usage: { total: 2, contractors: 0 },
+      });
+
+      // Убрать вид — новая версия, «было → стало» в истории; без видов основание удаляется.
+      const updated = await asAdmin((tx) =>
+        adminDictUpdate(
+          tx,
+          'bases',
+          created.record.code,
+          { name: 'Есть роялти', data: { ...created.record.data, types: ['bon'] } },
+          created.record.version,
+        ),
+      );
+      expect(updated.ok && [updated.record.version, updated.record.data.types]).toEqual([
+        created.record.version + 1,
+        ['bon'],
+      ]);
+      const history = await asAdmin((tx) => adminDictHistory(tx, 'bases', 5));
+      expect(history.items[0]!.changes).toEqual([
+        { field: 'types', from: ['roy', 'bon'], to: ['bon'] },
+      ]);
+      const emptied = await asAdmin((tx) =>
+        adminDictUpdate(
+          tx,
+          'bases',
+          created.record.code,
+          { name: 'Есть роялти', data: { types: [] } },
+          created.record.version + 1,
+        ),
+      );
+      expect(emptied.ok).toBe(true);
+      const deleted = await asAdmin((tx) =>
+        adminDictDelete(tx, 'bases', created.record.code, created.record.version + 2),
+      );
+      expect(deleted).toEqual({ ok: true });
+    });
+
+    it('связи пишет только администратор платформы', async () => {
+      const links = JSON.stringify({ types: ['nds'] });
+      expect(
+        await asOwner((tx) =>
+          tx.execute(
+            sql`select app.admin_dict_set_links('bases', 'employees', ${links}::jsonb) as ok`,
+          ),
+        ),
+      ).toEqual([{ ok: null }]);
+      await expect(
+        asOwner((tx) =>
+          tx.insert(reportTypeBases).values({ reportTypeCode: 'nds', baseCode: 'employees' }),
+        ),
+      ).rejects.toThrow();
     });
 
     it('не администратору — ни списка, ни правки; таблицы справочников роль приложения не меняет', async () => {

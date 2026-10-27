@@ -3,12 +3,12 @@ import {
   ADMIN_DICT_META,
   adminDictDefaultSort,
   auditActorName,
+  badBaseTypes,
   dictValueProblems,
   nextDictCode,
   regimeAccountantNote,
   toHistoryValue,
   sameHistoryValue,
-  UGNS_CONTRACTOR_TABLE,
   type AdminValueDict,
   type AuthorityContact,
   type DictUsage,
@@ -16,6 +16,7 @@ import {
   type HistoryChange,
   type HistoryValue,
   type ListQuery,
+  type ReportKind,
 } from '@buhuchet/domain';
 import { and, asc, count, desc, eq, getTableColumns, sql, type SQL } from 'drizzle-orm';
 import type { PgColumn, PgTable } from 'drizzle-orm/pg-core';
@@ -36,6 +37,9 @@ import {
   dueChangeReasons,
   ownershipForms,
   platformAuditLog,
+  reportBases,
+  reportTypeBases,
+  reportTypes,
   taxOffices,
   taxRegimes,
 } from './schema';
@@ -60,6 +64,7 @@ type DictTable = PgTable & {
 };
 
 const TABLES: Readonly<Record<AdminValueDict, DictTable>> = {
+  bases: reportBases,
   regimes: taxRegimes,
   forms: ownershipForms,
   organs: authorities,
@@ -70,9 +75,9 @@ const TABLES: Readonly<Record<AdminValueDict, DictTable>> = {
 
 /**
  * Поля значения сверх кода и названия — как в таблице (`contacts` — массив, `gnsCode` — null,
- * `byPhone` — да или нет).
+ * `byPhone` — да или нет); поле-связь — коды связанных значений (`types` основания).
  */
-export type AdminDictData = Record<string, string | boolean | null | AuthorityContact[]>;
+export type AdminDictData = Record<string, string | boolean | null | AuthorityContact[] | string[]>;
 
 /** Значение справочника в Админке. */
 export interface AdminDictValueRecord {
@@ -107,6 +112,56 @@ type TableRow = Record<string, unknown> & {
 const dataFields = (dict: AdminValueDict) =>
   ADMIN_DICT_META[dict].fields.filter((f) => f !== 'name');
 
+/** Поля-связи справочника: хранятся в таблице связей, не в столбцах значения. */
+const linkFields = (dict: AdminValueDict) => ADMIN_DICT_META[dict].links ?? [];
+const isLink = (dict: AdminValueDict, f: string) => linkFields(dict).includes(f);
+
+/** Вид отчёта для выбора в окне основания и подписи «Виды отчётов»: в порядке каталога. */
+export interface ReportTypeOption {
+  code: string;
+  name: string;
+  shortName: string;
+  kind: ReportKind;
+  active: boolean;
+}
+
+/** Каталог видов отчётов кратко: для выбора видов у основания и подписей связей. */
+export async function reportTypeOptions(tx: Tx): Promise<ReportTypeOption[]> {
+  return tx
+    .select({
+      code: reportTypes.code,
+      name: reportTypes.name,
+      shortName: reportTypes.shortName,
+      kind: reportTypes.kind,
+      active: reportTypes.active,
+    })
+    .from(reportTypes)
+    .orderBy(asc(reportTypes.sortOrder), asc(reportTypes.code));
+}
+
+/**
+ * Поля-связи каждого значения: виды отчётов основания (по полю «Основание» вида; ТЗ «связь с видами
+ * правится с любой стороны») — в порядке каталога.
+ */
+async function linkValues(
+  tx: Tx,
+  dict: AdminValueDict,
+): Promise<Map<string, Record<string, string[]>>> {
+  const links = new Map<string, Record<string, string[]>>();
+  if (dict !== 'bases') return links;
+  const rows = await tx
+    .select({ code: reportTypeBases.baseCode, link: reportTypeBases.reportTypeCode })
+    .from(reportTypeBases)
+    .innerJoin(reportTypes, eq(reportTypes.code, reportTypeBases.reportTypeCode))
+    .orderBy(asc(reportTypes.sortOrder), asc(reportTypes.code));
+  for (const r of rows) {
+    const own = links.get(r.code) ?? { types: [] };
+    own.types!.push(r.link);
+    links.set(r.code, own);
+  }
+  return links;
+}
+
 /**
  * Поле значения из строки таблицы. «Для бухгалтера:» в начале пояснения режима (так оно в наполнении)
  * не показывается и не сохраняется: подпись уже есть у столбца и поля (прототип `accTxt`).
@@ -128,11 +183,12 @@ export async function adminDictUsage(
     sql`select code, ref, n from app.admin_dict_usage(${dict})`,
   );
   const usage = new Map<string, DictUsage>();
+  const contractors = ADMIN_DICT_META[dict].contractorTable;
   for (const r of rows) {
     const u = usage.get(r.code) ?? { total: 0, contractors: 0 };
     const n = Number(r.n);
     u.total += n;
-    if (r.ref === UGNS_CONTRACTOR_TABLE) u.contractors += n;
+    if (r.ref === contractors) u.contractors += n;
     usage.set(r.code, u);
   }
   return usage;
@@ -143,11 +199,12 @@ const NO_USAGE: DictUsage = { total: 0, contractors: 0 };
 /** Все значения справочника в его порядке (`sort_order`, при равных — код), с «№» и «Используется». */
 async function dictRecords(tx: Tx, dict: AdminValueDict): Promise<AdminDictValueRecord[]> {
   const table = TABLES[dict];
-  const [rows, usage] = await Promise.all([
+  const [rows, usage, links] = await Promise.all([
     tx.select().from(table).orderBy(asc(table.sortOrder), asc(table.code)) as unknown as Promise<
       TableRow[]
     >,
     adminDictUsage(tx, dict),
+    linkValues(tx, dict),
   ]);
   const ordered = ADMIN_DICT_META[dict].ordered;
   return rows.map((r, i) => {
@@ -156,7 +213,12 @@ async function dictRecords(tx: Tx, dict: AdminValueDict): Promise<AdminDictValue
       code: r.code,
       n: ordered ? i + 1 : null,
       name: r.name,
-      data: Object.fromEntries(dataFields(dict).map((f) => [f, dataValue(f, r[f])])),
+      data: Object.fromEntries(
+        dataFields(dict).map((f) => [
+          f,
+          isLink(dict, f) ? (links.get(r.code)?.[f] ?? []) : dataValue(f, r[f]),
+        ]),
+      ),
       active: r.active,
       usage: usage.get(r.code) ?? NO_USAGE,
       audit: {
@@ -181,8 +243,17 @@ const contactsText = (value: unknown) =>
     ? (value as AuthorityContact[]).map((c) => `${c.label}: ${c.value}`).join('; ')
     : '';
 
-/** Строка списка для `jsonb_to_recordset`: тексты столбцов, подписи кодов и служебные поля. */
-function listRow(dict: AdminValueDict, x: AdminDictValueRecord, ord: number, t: ListTexts) {
+/**
+ * Строка списка для `jsonb_to_recordset`: тексты столбцов, подписи кодов и служебные поля; поле-связь
+ * — краткими названиями связанных значений (`names`).
+ */
+function listRow(
+  dict: AdminValueDict,
+  x: AdminDictValueRecord,
+  ord: number,
+  t: ListTexts,
+  names: ReadonlyMap<string, string>,
+) {
   const row: Record<string, string | number | null> = {
     id: x.code,
     ord,
@@ -201,6 +272,8 @@ function listRow(dict: AdminValueDict, x: AdminDictValueRecord, ord: number, t: 
   for (const f of dataFields(dict)) {
     const value = x.data[f];
     if (f === 'contacts') row[f] = contactsText(value);
+    else if (isLink(dict, f))
+      row[f] = (value as string[]).map((code) => names.get(code) ?? code).join(', ');
     else if (f === 'byPhone') row[f] = value ? 'yes' : 'no';
     else row[f] = (value as string | null) ?? '';
   }
@@ -241,7 +314,9 @@ export function adminDictListColumns(dict: AdminValueDict): ListColumns {
       column.display = field(`${c.key}_text`);
       column.sort = { value: field(`${c.key}_text`), text: true };
     }
-    if (c.key === 'gnsCode') column.display = sql`coalesce(nullif(${field('gnsCode')}, ''), '—')`;
+    if (c.key === 'gnsCode' || isLink(dict, c.key)) {
+      column.display = sql`coalesce(nullif(${field(c.key)}, ''), '—')`;
+    }
     columns[c.key] = column;
   }
   return {
@@ -260,8 +335,12 @@ const naturalQuery = (dict: AdminValueDict, query: ListQuery): ListQuery =>
   query.sort === undefined ? { ...query, sort: adminDictDefaultSort(dict) } : query;
 
 async function listSource(tx: Tx, dict: AdminValueDict, t: ListTexts) {
-  const records = await dictRecords(tx, dict);
-  const source = recordset(records.map((x, i) => listRow(dict, x, i + 1, t)));
+  const [records, types] = await Promise.all([
+    dictRecords(tx, dict),
+    linkFields(dict).length ? reportTypeOptions(tx) : [],
+  ]);
+  const names = new Map(types.map((x) => [x.code, x.shortName]));
+  const source = recordset(records.map((x, i) => listRow(dict, x, i + 1, t, names)));
   return { records, source };
 }
 
@@ -363,7 +442,7 @@ function dbRow(dict: AdminValueDict, input: AdminDictInput): Record<string, unkn
     if (f === 'name') return input.name.trim();
     const v = input.data[f];
     if (f === 'contacts') {
-      return (Array.isArray(v) ? v : [])
+      return (Array.isArray(v) ? (v as AuthorityContact[]) : [])
         .map((c) => ({ label: c.label.trim(), value: c.value.trim() }))
         .filter((c) => c.label || c.value);
     }
@@ -374,16 +453,59 @@ function dbRow(dict: AdminValueDict, input: AdminDictInput): Record<string, unkn
     if (f === 'accountantNote') return regimeAccountantNote(text);
     return text;
   };
-  return Object.fromEntries(ADMIN_DICT_META[dict].fields.map((f) => [columns[f]!.name, value(f)]));
+  return Object.fromEntries(
+    ADMIN_DICT_META[dict].fields
+      .filter((f) => !isLink(dict, f))
+      .map((f) => [columns[f]!.name, value(f)]),
+  );
 }
+
+/** Поля-связи значения для `app.admin_dict_set_links`: коды без повторов. */
+const linkRow = (dict: AdminValueDict, input: AdminDictInput) =>
+  Object.fromEntries(
+    linkFields(dict).map((f) => [f, [...new Set((input.data[f] as string[] | undefined) ?? [])]]),
+  );
 
 /** Поля значения для истории: название и поля справочника, как их сохранит база. */
 function historyFields(dict: AdminValueDict, input: AdminDictInput): Record<string, HistoryValue> {
   const columns = getTableColumns(TABLES[dict]) as Record<string, PgColumn>;
   const row = dbRow(dict, input);
+  const links = linkRow(dict, input);
   return Object.fromEntries(
-    ADMIN_DICT_META[dict].fields.map((f) => [f, toHistoryValue(row[columns[f]!.name])]),
+    ADMIN_DICT_META[dict].fields.map((f) => [
+      f,
+      toHistoryValue(isLink(dict, f) ? links[f] : row[columns[f]!.name]),
+    ]),
   );
+}
+
+/**
+ * Поля-связи в порядке каталога (как их читает список) и проверка: у основания — только сквозные
+ * действующие виды отчётов; уже привязанный остаётся (`badBaseTypes`). Не подходит — поле с ошибкой.
+ */
+async function prepareLinks(
+  tx: Tx,
+  dict: AdminValueDict,
+  input: AdminDictInput,
+  before: AdminDictValueRecord | undefined,
+): Promise<{ input: AdminDictInput; bad: string | null }> {
+  if (!linkFields(dict).length) return { input, bad: null };
+  const catalog = await reportTypeOptions(tx);
+  const order = new Map(catalog.map((x, i) => [x.code, i]));
+  const types = linkRow(dict, input).types ?? [];
+  const was = (before?.data.types as string[] | undefined) ?? [];
+  if (badBaseTypes(types, catalog, was).length) return { input, bad: 'types' };
+  const sorted = [...types].sort((a, b) => order.get(a)! - order.get(b)!);
+  return { input: { ...input, data: { ...input.data, types: sorted } }, bad: null };
+}
+
+/** Записать поля-связи значения (`app.admin_dict_set_links`); у справочника без связей — ничего. */
+async function saveLinks(tx: Tx, dict: AdminValueDict, code: string, input: AdminDictInput) {
+  if (!linkFields(dict).length) return true;
+  const [row] = await tx.execute<{ ok: boolean | null }>(
+    sql`select app.admin_dict_set_links(${dict}, ${code}, ${JSON.stringify(linkRow(dict, input))}::jsonb) as ok`,
+  );
+  return row?.ok === true;
 }
 
 const recordInput = (x: AdminDictValueRecord): AdminDictInput => ({ name: x.name, data: x.data });
@@ -391,6 +513,7 @@ const recordInput = (x: AdminDictValueRecord): AdminDictInput => ({ name: x.name
 export type AdminDictSaveResult =
   | { ok: true; record: AdminDictValueRecord }
   | { ok: false; reason: 'not_found' | 'changed' }
+  | { ok: false; reason: 'bad_link'; field: string }
   | { ok: false; reason: 'taken'; problems: DictValueProblem[] }
   | { ok: false; reason: 'used'; usage: DictUsage };
 
@@ -431,11 +554,16 @@ export async function adminDictCreate(
   );
   const problems = problemsOf(dict, code, input, records);
   if (problems.length) return { ok: false, reason: 'taken', problems };
+  const links = await prepareLinks(tx, dict, input, undefined);
+  if (links.bad) return { ok: false, reason: 'bad_link', field: links.bad };
+  input = links.input;
   const [row] = await tx.execute<{ version: number | null }>(
     sql`select app.admin_dict_insert(${dict}, ${code}, ${JSON.stringify(dbRow(dict, input))}::jsonb) as version`,
   );
   // Пусто — в контексте не администратор: права проверил вызывающий (`requirePlatformAdmin`).
-  if (row?.version == null) return { ok: false, reason: 'not_found' };
+  if (row?.version == null || !(await saveLinks(tx, dict, code, input))) {
+    return { ok: false, reason: 'not_found' };
+  }
   const fields = historyFields(dict, input);
   await writePlatformHistory(tx, {
     entity: 'platform_dict',
@@ -465,6 +593,9 @@ export async function adminDictUpdate(
   const before = records.find((x) => x.code === code);
   if (!before) return { ok: false, reason: 'not_found' };
   if (before.version !== version) return { ok: false, reason: 'changed' };
+  const links = await prepareLinks(tx, dict, input, before);
+  if (links.bad) return { ok: false, reason: 'bad_link', field: links.bad };
+  input = links.input;
   const was = historyFields(dict, recordInput(before));
   const now = historyFields(dict, input);
   const changes: HistoryChange[] = ADMIN_DICT_META[dict].fields
@@ -477,6 +608,7 @@ export async function adminDictUpdate(
     sql`select app.admin_dict_update(${dict}, ${code}, ${JSON.stringify(dbRow(dict, input))}::jsonb, ${version}) as version`,
   );
   if (row?.version == null) return { ok: false, reason: 'changed' };
+  if (!(await saveLinks(tx, dict, code, input))) return { ok: false, reason: 'changed' };
   await writePlatformHistory(tx, {
     entity: 'platform_dict',
     entityId: entityId(dict, code),

@@ -45,6 +45,8 @@ import {
   moveAdminDictValueRoute,
   pdictsTabCountsHandler,
   pdictsTabCountsRoute,
+  reportTypeOptionsHandler,
+  reportTypeOptionsRoute,
   setAdminDictActiveHandler,
   setAdminDictActiveRoute,
   updateAdminDictValueHandler,
@@ -87,6 +89,7 @@ export function platformDictsModule(deps: ApiDeps) {
       // справочник или код.
       .openapi(adminDictGroupsRoute, adminDictGroupsHandler(deps))
       .openapi(pdictsTabCountsRoute, pdictsTabCountsHandler(deps))
+      .openapi(reportTypeOptionsRoute, reportTypeOptionsHandler(deps))
       .openapi(listAdminDictRequestsRoute, listAdminDictRequestsHandler(deps))
       .openapi(adminDictRequestValuesRoute, adminDictRequestValuesHandler(deps))
       .openapi(exportAdminDictRequestsRoute, exportAdminDictRequestsHandler(deps))

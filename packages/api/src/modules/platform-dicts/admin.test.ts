@@ -7,6 +7,7 @@ import {
   AdminDictRequest,
   AdminDictRequestList,
   AdminDictValue,
+  AdminReportTypeOptions,
   ApiError,
   DictRequest,
   DictRequests,
@@ -54,6 +55,7 @@ describe.skipIf(!databaseAvailable())('Админка → «Справочник
       `${P}/forms/export?cols=name`,
       `${P}/groups`,
       `${P}/tab-counts`,
+      `${P}/report-type-options`,
       `${P}/forms/history`,
       `${P}/forms/${encodeURIComponent('ФС-01')}`,
       '/api/admin/dict-requests',
@@ -310,6 +312,29 @@ describe.skipIf(!databaseAvailable())('Админка → «Справочник
       used: expect.any(Number),
     });
     expect(regimes.items.find((x) => x.name === 'ОНР')!.used).toBeGreaterThan(0);
+  });
+
+  it('основание: виды отчётов — только сквозные действующие; каталог видов кратко', async () => {
+    const options = AdminReportTypeOptions.parse(
+      await (await get(`${P}/report-type-options`)).json(),
+    ).items;
+    expect(options[0]).toMatchObject({
+      code: 'nds',
+      shortName: 'НДС',
+      kind: 'regime',
+      active: true,
+    });
+    const bad = await send('POST', `${P}/bases`, { name: 'Есть НДС', types: ['nds'] });
+    expect([bad.status, await errorOf(bad)]).toMatchObject([
+      400,
+      { code: 'invalid_link', details: { field: 'types' } },
+    ]);
+    const res = await send('POST', `${P}/bases`, { name: 'Есть роялти', types: ['roy'] });
+    expect(res.status, await res.clone().text()).toBe(201);
+    const created = AdminDictValue.parse(await res.json());
+    expect(created).toMatchObject({ n: 15, used: 1, contractors: 0, data: { types: ['roy'] } });
+    const taken = await send('POST', `${P}/bases`, { name: 'Есть роялти' });
+    expect((await errorOf(taken)).code).toBe('dict_value_taken');
   });
 
   it('«Запросы»: администратор видит запросы всех организаций и отвечает; организация видит ответ', async () => {

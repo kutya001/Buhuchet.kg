@@ -14,6 +14,7 @@ import {
   listAdminDictPage,
   listAdminDictValues,
   platformDictGroupDefs,
+  reportTypeOptions,
   withUserContext,
   type AdminDictInput,
   type AdminDictSaveResult,
@@ -38,6 +39,7 @@ import {
   AdminDictValue,
   AdminDictValueForm,
   AdminDictValueUpdate,
+  AdminReportTypeOptions,
   AdminValueDictParam,
   ApiError,
   ListExportParams,
@@ -233,6 +235,31 @@ export function adminDictGroupsHandler(
   };
 }
 
+export const reportTypeOptionsRoute = createRoute({
+  method: 'get',
+  path: '/admin/platform-dicts/report-type-options',
+  tags: ['platform-dicts'],
+  summary: 'Каталог видов отчётов кратко',
+  middleware: [requirePlatformAdmin] as const,
+  responses: {
+    200: {
+      description: 'Код, название, краткое название, тип и статус вида — в порядке каталога',
+      content: json(AdminReportTypeOptions),
+    },
+    ...denied,
+  },
+});
+
+/** Виды отчётов для окна основания (прототип baseDlg) и подписей «Виды отчётов». */
+export function reportTypeOptionsHandler(
+  deps: ApiDeps,
+): RouteHandler<typeof reportTypeOptionsRoute, AppEnv> {
+  return async (c) => {
+    const items = await adminTx(deps, c, (tx) => reportTypeOptions(tx));
+    return c.json({ items }, 200);
+  };
+}
+
 export const pdictsTabCountsRoute = createRoute({
   method: 'get',
   path: '/admin/platform-dicts/tab-counts',
@@ -323,8 +350,9 @@ function inputOf(dict: AdminValueDict, form: AdminDictValueForm): AdminDictInput
     if (f === 'name') continue;
     const v = values[f];
     if (f === 'byPhone') data[f] = v === true;
-    else if (f === 'contacts') data[f] = (v as AdminDictInput['data'][string]) ?? [];
-    else data[f] = (v as string) ?? '';
+    else if (f === 'contacts' || meta.links?.includes(f)) {
+      data[f] = (v as AdminDictInput['data'][string]) ?? [];
+    } else data[f] = (v as string) ?? '';
   }
   if (dict === 'forms' && !data.declarationFor) data.declarationFor = 'org';
   if (meta.kind) {
@@ -374,6 +402,11 @@ async function failOf(
     apiFail(400, errCode, message, { field });
   }
   if (result.reason === 'used') return usedFail(result.usage);
+  if (result.reason === 'bad_link') {
+    apiFail(400, 'invalid_link', 'Можно выбрать только сквозные действующие виды отчётов', {
+      field: result.field,
+    });
+  }
   if (result.reason === 'changed') {
     const now = await adminTx(deps, c, (tx) => getAdminDictValue(tx, dict, code));
     if (now) throw new RecordChangedError('platform_dict', code, now.version);

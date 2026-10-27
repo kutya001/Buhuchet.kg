@@ -1,6 +1,7 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useQuery } from '@tanstack/react-query';
 import {
   BANK_KINDS,
   DECLARATION_FOR,
@@ -19,6 +20,7 @@ import {
 import {
   buttonClass,
   CheckRow,
+  ChipMultiSelect,
   Field,
   FormGrid,
   Hint,
@@ -31,11 +33,11 @@ import {
   useToast,
 } from '@buhuchet/ui';
 import { useId, useState, type FormEvent } from 'react';
-import { Controller, useFieldArray, useForm, type Path } from 'react-hook-form';
+import { Controller, useFieldArray, useForm, type FieldError, type Path } from 'react-hook-form';
 import { api, callApi } from '../api-client';
 import { fieldError } from '../auth/fields';
 import { useErrorText, useT } from '../l10n/provider';
-import { fetchAdminDictValue } from './pdicts-data';
+import { fetchAdminDictValue, reportTypeOptionsQuery } from './pdicts-data';
 
 const pd = api.api.admin['platform-dicts'];
 
@@ -48,6 +50,8 @@ function formOf(
   const d = x?.data ?? {};
   const name = x?.name ?? '';
   switch (dict) {
+    case 'bases':
+      return { name, description: d.description ?? '', types: d.types ?? [], note: d.note ?? '' };
     case 'regimes':
       return {
         name,
@@ -97,13 +101,14 @@ const FIELD_OF: Readonly<Record<string, [Path<AdminDictValueFormInput>, UiTextKe
   ugns_code_taken: ['gnsCode', 'pdicts.err.ugns_code_taken'],
   short_name_required: ['shortName', 'pdicts.err.short_required'],
   full_name_required: ['fullName', 'pdicts.err.full_required'],
+  invalid_link: ['types', 'pdicts.err.bad_types'],
 };
 
 /** Повтор названия словами справочника: у режима — «Такой режим уже есть» (прототип regimeDlg). */
 const TAKEN_TEXT: Partial<Record<AdminValueDict, UiTextKey>> = {
+  bases: 'pdicts.err.base_taken',
   regimes: 'pdicts.err.regime_taken',
 };
-
 
 /**
  * Окно значения справочника (прототип admin/platform-dicts-forms.js valueDlg и ugnsDlg): название
@@ -151,6 +156,8 @@ export function ValueDialog({
     defaultValues: formOf(dict, item, t('pdicts.ugns.region_default')),
   });
   const contacts = useFieldArray({ control, name: 'contacts' });
+  // Виды отчётов основания: сквозные действующие и уже привязанные (прототип baseDlg).
+  const typeOptions = useQuery({ ...reportTypeOptionsQuery, enabled: dict === 'bases' });
 
   const reload = async () => {
     if (!item) return;
@@ -226,7 +233,60 @@ export function ValueDialog({
   );
 
   let body;
-  if (dict === 'regimes') {
+  if (dict === 'bases') {
+    const linked = item?.data.types ?? [];
+    const chips = (typeOptions.data ?? [])
+      .filter((x) => (x.kind === 'cross' && x.active) || linked.includes(x.code))
+      .map((x) => ({ value: x.code, label: x.shortName || x.name, title: x.name }));
+    const typesError = fieldError(t, errors.types as FieldError | undefined);
+    body = (
+      <FormGrid>
+        <Field
+          id={`${id}-name`}
+          label={t('pdicts.col.name')}
+          required
+          hint={current ? t('pdicts.value.name_hint') : undefined}
+          error={fieldError(t, errors.name)}
+          full
+        >
+          {(c) => (
+            <input
+              {...c}
+              {...register('name')}
+              placeholder={t('pdicts.base.name_ph')}
+              className={inputClass()}
+            />
+          )}
+        </Field>
+        {note('description', t('pdicts.col.description'), t('pdicts.base.desc_hint'))}
+        <Field
+          id={`${id}-types`}
+          label={t('pdicts.col.types')}
+          hint={t('pdicts.base.types_hint')}
+          error={typesError}
+          full
+        >
+          {(c) => (
+            <Controller
+              control={control}
+              name="types"
+              render={({ field }) => (
+                <ChipMultiSelect
+                  id={c.id}
+                  label={t('pdicts.col.types')}
+                  options={chips}
+                  value={field.value ?? []}
+                  onChange={field.onChange}
+                  {...(c['aria-describedby'] ? { describedBy: c['aria-describedby'] } : {})}
+                />
+              )}
+            />
+          )}
+        </Field>
+        {text('note', t('pdicts.col.remark'))}
+      </FormGrid>
+    );
+  } else if (dict === 'regimes') {
     body = (
       <FormGrid>
         <Field
@@ -263,7 +323,11 @@ export function ValueDialog({
         {text('how', t('pdicts.col.how'))}
         {text('combines', t('pdicts.col.combines'), t('pdicts.regime.combines_hint'))}
         {note('accountantNote', t('pdicts.col.acc'), t('pdicts.regime.acc_hint'))}
-        <Field id={`${id}-article`} label={t('pdicts.col.article')} error={fieldError(t, errors.article)}>
+        <Field
+          id={`${id}-article`}
+          label={t('pdicts.col.article')}
+          error={fieldError(t, errors.article)}
+        >
           {(c) => (
             <input
               {...c}
@@ -481,17 +545,29 @@ export function ValueDialog({
       onClose={onClose}
       kind="form"
       title={
-        dict === 'regimes'
+        dict === 'bases'
           ? current
-            ? current.data.fullName || current.name
-            : t('pdicts.regime.title_new')
-          : ugns
-            ? t(current ? 'pdicts.ugns.title' : 'pdicts.ugns.title_new')
-            : current
-              ? t('pdicts.value.edit_title')
-              : t('pdicts.value.new_title', { dict: dictTitle })
+            ? current.name
+            : t('pdicts.base.title_new')
+          : dict === 'regimes'
+            ? current
+              ? current.data.fullName || current.name
+              : t('pdicts.regime.title_new')
+            : ugns
+              ? t(current ? 'pdicts.ugns.title' : 'pdicts.ugns.title_new')
+              : current
+                ? t('pdicts.value.edit_title')
+                : t('pdicts.value.new_title', { dict: dictTitle })
       }
-      sub={ugns ? t('pdicts.ugns.sub') : dict === 'regimes' ? t('pdicts.regime.sub') : undefined}
+      sub={
+        ugns
+          ? t('pdicts.ugns.sub')
+          : dict === 'regimes'
+            ? t('pdicts.regime.sub')
+            : dict === 'bases'
+              ? t('pdicts.base.sub')
+              : undefined
+      }
       dirty={isDirty}
       footer={
         <>

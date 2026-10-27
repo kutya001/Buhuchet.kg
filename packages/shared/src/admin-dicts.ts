@@ -9,6 +9,7 @@ import {
   DICT_REQUEST_DICTS,
   DICT_REQUEST_STATUSES,
   ORGAN_CONTACTS_MAX,
+  REPORT_KINDS,
   organSiteUrl,
   REGIME_KINDS,
   UGNS_CODE_PATTERN,
@@ -59,6 +60,8 @@ export const AdminDictData = z.object({
   combines: z.string().optional(),
   accountantNote: z.string().optional(),
   article: z.string().optional(),
+  /** У основания: коды видов отчётов, в порядке каталога. */
+  types: z.array(z.string()).optional(),
 });
 export type AdminDictData = z.infer<typeof AdminDictData>;
 
@@ -131,6 +134,7 @@ export const AdminDictValueForm = z.object({
   combines: text(DICT_NOTE_MAX).optional(),
   accountantNote: text(DICT_NOTE_MAX).optional(),
   article: text(DICT_NAME_MAX).optional(),
+  types: z.array(z.string().min(1).max(80)).max(500).optional(),
 });
 export type AdminDictValueFormInput = z.input<typeof AdminDictValueForm>;
 export type AdminDictValueForm = z.output<typeof AdminDictValueForm>;
@@ -192,6 +196,20 @@ export const AdminDictHistory = z.object({
   ),
 });
 export type AdminDictHistory = z.infer<typeof AdminDictHistory>;
+
+/** Каталог видов отчётов кратко: выбор видов у основания и подписи «Виды отчётов». */
+export const AdminReportTypeOptions = z.object({
+  items: z.array(
+    z.object({
+      code: z.string(),
+      name: z.string(),
+      shortName: z.string(),
+      kind: z.enum(REPORT_KINDS),
+      active: z.boolean(),
+    }),
+  ),
+});
+export type AdminReportTypeOptions = z.infer<typeof AdminReportTypeOptions>;
 
 /** Шапки вкладок: группы справочников платформы (раздел `dictGroups`) — что это и где используется. */
 export const AdminDictGroups = z.object({

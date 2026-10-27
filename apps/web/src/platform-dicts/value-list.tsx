@@ -22,6 +22,7 @@ import {
   type GridAudit,
   type GridColumn,
 } from '@buhuchet/ui';
+import { useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useEffectEvent, useMemo, useState } from 'react';
 import { api, callApi, type ApiResult } from '../api-client';
 import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
@@ -33,7 +34,12 @@ import { useListPage } from '../lists/use-list-page';
 import { useViewSettings } from '../lists/view-settings';
 import { useShell } from '../shell/context';
 import { DictHistory } from './dict-history-box';
-import { fetchAdminDict, fetchAdminDictValues, usePdictsRefresh } from './pdicts-data';
+import {
+  fetchAdminDict,
+  fetchAdminDictValues,
+  reportTypeOptionsQuery,
+  usePdictsRefresh,
+} from './pdicts-data';
 import { ValueDialog } from './value-dialog';
 
 const pd = api.api.admin['platform-dicts'];
@@ -47,7 +53,6 @@ const WIDTHS: Readonly<Record<string, number>> = {
   declarationFor: 130,
   fullName: 280,
   note: 340,
-  description: 340,
   contacts: 260,
   hours: 200,
   site: 180,
@@ -62,6 +67,8 @@ const WIDTHS: Readonly<Record<string, number>> = {
   combines: 260,
   accountantNote: 340,
   article: 100,
+  description: 340,
+  types: 220,
   contractors: 130,
   used: 130,
   active: 130,
@@ -69,6 +76,7 @@ const WIDTHS: Readonly<Record<string, number>> = {
 
 /** Свои ширины справочника: у режима краткое название узкое. */
 const DICT_WIDTHS: Partial<Record<AdminValueDict, Readonly<Record<string, number>>>> = {
+  bases: { code: 130, name: 260, description: 320, note: 240, contractors: 120 },
   regimes: { code: 90, name: 180, kind: 120 },
 };
 
@@ -76,8 +84,18 @@ const ugnsName = (dict: AdminValueDict, x: AdminDictValue) =>
   dict === 'ugns' ? `${x.data.gnsCode ?? ''} ${x.data.shortName ?? ''}`.trim() : x.name;
 
 /** Значение столбца строкой — для подсказки, карточки и «—» у пустого. */
-function cellText(dict: AdminValueDict, key: string, x: AdminDictValue, t: Translate): string {
+function cellText(
+  dict: AdminValueDict,
+  key: string,
+  x: AdminDictValue,
+  t: Translate,
+  names: ReadonlyMap<string, string>,
+): string {
   switch (key) {
+    case 'types': {
+      const types = x.data.types ?? [];
+      return types.length ? types.map((code) => names.get(code) ?? code).join(', ') : '—';
+    }
     case 'n':
       return x.n === null ? '' : String(x.n);
     case 'code':
@@ -109,15 +127,22 @@ function cellText(dict: AdminValueDict, key: string, x: AdminDictValue, t: Trans
   }
 }
 
-/** Столбцы списка — ключи и подписи общие с сервером (`ADMIN_DICT_COLUMNS`). */
-export function adminDictColumns(dict: AdminValueDict, t: Translate): GridColumn<AdminDictValue>[] {
+/**
+ * Столбцы списка — ключи и подписи общие с сервером (`ADMIN_DICT_COLUMNS`); `names` — краткие названия
+ * видов отчётов для «Виды отчётов» основания.
+ */
+export function adminDictColumns(
+  dict: AdminValueDict,
+  t: Translate,
+  names: ReadonlyMap<string, string> = new Map(),
+): GridColumn<AdminDictValue>[] {
   return ADMIN_DICT_COLUMNS[dict].map((c) => {
     const column: GridColumn<AdminDictValue> = {
       key: c.key,
       label: t(c.label as UiTextKey),
       type: c.type,
       width: DICT_WIDTHS[dict]?.[c.key] ?? WIDTHS[c.key],
-      text: (x) => cellText(dict, c.key, x, t),
+      text: (x) => cellText(dict, c.key, x, t, names),
     };
     if (c.key === 'name') {
       column.cell = (x) => <span className="font-semibold">{x.name}</span>;
@@ -154,6 +179,7 @@ const AUDIT: GridAudit<AdminDictValue> = {
 };
 
 const COUNT: Readonly<Record<AdminValueDict, CountKey>> = {
+  bases: 'pdicts.count',
   regimes: 'pdicts.regimes_count',
   forms: 'pdicts.count',
   organs: 'pdicts.count',
@@ -164,23 +190,52 @@ const COUNT: Readonly<Record<AdminValueDict, CountKey>> = {
 
 /** Пояснение над списком (прототип: у шаблонов для организаций и у УГНС). */
 const NOTES: Partial<Record<AdminValueDict, UiTextKey>> = {
+  bases: 'pdicts.note.bases',
   regimes: 'pdicts.note.regimes',
   reasons: 'pdicts.note.reasons',
   ugns: 'pdicts.note.ugns',
 };
 
 /** Способ «+ Добавить» на вкладке справочника (прототип pdAdd): «Значение», «Режим», «Налоговый орган». */
-const ADD_ACTION: Partial<Record<AdminValueDict, string>> = { regimes: 'regime', ugns: 'ugns' };
+const ADD_ACTION: Partial<Record<AdminValueDict, string>> = {
+  bases: 'base',
+  regimes: 'regime',
+  ugns: 'ugns',
+};
 
 /** Тексты справочника вместо общих («Значение отключено», «Значение нигде не используется…»). */
 const OFF_TOAST: Partial<Record<AdminValueDict, UiTextKey>> = {
+  bases: 'pdicts.toast.off_base',
   regimes: 'pdicts.toast.off_regime',
   ugns: 'pdicts.toast.off_ugns',
 };
 const DELETE_TEXT: Partial<Record<AdminValueDict, UiTextKey>> = {
+  bases: 'pdicts.delete.text_base',
   regimes: 'pdicts.delete.text_regime',
   ugns: 'pdicts.delete.text_ugns',
 };
+
+/** Пояснение «Отключить»: что будет с отключённым значением. */
+const OFF_SUB: Partial<Record<AdminValueDict, UiTextKey>> = {
+  bases: 'pdicts.action.off_sub_base',
+  ugns: 'pdicts.action.off_sub_ugns',
+};
+
+/**
+ * Почему удалить нельзя (прототип): у УГНС и основания — «Указан (отмечено) у N контрагентов», у
+ * основания, привязанного только к видам отчётов, — «Привязано к видам отчётов»; у остальных — «Используется
+ * в N записях».
+ */
+function usedReason(dict: AdminValueDict, x: AdminDictValue, t: Translate): string {
+  if (dict === 'ugns' && x.contractors > 0)
+    return t('pdicts.delete.used_ugns', { n: x.contractors });
+  if (dict === 'bases') {
+    return x.contractors > 0
+      ? t('pdicts.delete.used_base', { n: x.contractors })
+      : t('pdicts.delete.linked_base');
+  }
+  return t('pdicts.delete.used', { n: x.used });
+}
 
 /** «+ Добавить» → способ добавления вкладки справочника. */
 function useValueAddRequest(dict: AdminValueDict, run: () => void) {
@@ -212,7 +267,11 @@ export function ValueDictList({ dict }: { dict: AdminValueDict }) {
   const gridKey = `pdicts.${dict}` as GridKey;
   const ordered = ADMIN_DICT_META[dict].ordered;
   const labels = useGridLabels(COUNT[dict]);
-  const columns = useMemo(() => adminDictColumns(dict, t), [dict, t]);
+  const types = useQuery({ ...reportTypeOptionsQuery, enabled: dict === 'bases' });
+  const columns = useMemo(
+    () => adminDictColumns(dict, t, new Map((types.data ?? []).map((x) => [x.code, x.shortName]))),
+    [dict, t, types.data],
+  );
   const defaultVisible = useMemo(
     () => ADMIN_DICT_COLUMNS[dict].filter((c) => !c.hidden).map((c) => c.key),
     [dict],
@@ -297,7 +356,7 @@ export function ValueDictList({ dict }: { dict: AdminValueDict }) {
     const edit: ActionEntry = {
       id: 'edit',
       label: t(
-        dict === 'forms' || dict === 'banks' || dict === 'regimes' || ugns
+        dict === 'forms' || dict === 'banks' || dict === 'regimes' || dict === 'bases' || ugns
           ? 'pdicts.action.edit'
           : 'pdicts.action.rename',
       ),
@@ -322,10 +381,6 @@ export function ValueDictList({ dict }: { dict: AdminValueDict }) {
           },
         ]
       : [];
-    const usedReason =
-      ugns && x.contractors > 0
-        ? t('pdicts.delete.used_ugns', { n: x.contractors })
-        : t('pdicts.delete.used', { n: x.used });
     return [
       edit,
       ...order,
@@ -335,7 +390,7 @@ export function ValueDictList({ dict }: { dict: AdminValueDict }) {
             id: 'off',
             label: t('pdicts.action.off'),
             icon: 'ban',
-            sub: t(ugns ? 'pdicts.action.off_sub_ugns' : 'pdicts.action.off_sub'),
+            sub: t(OFF_SUB[dict] ?? 'pdicts.action.off_sub'),
             run: () => void setActive(x, false),
           }
         : {
@@ -350,7 +405,7 @@ export function ValueDictList({ dict }: { dict: AdminValueDict }) {
         icon: 'trash',
         danger: true,
         disabled: x.used > 0,
-        ...(x.used > 0 ? { reason: usedReason } : {}),
+        ...(x.used > 0 ? { reason: usedReason(dict, x, t) } : {}),
         run: () => setAskDelete(x),
       },
     ];
