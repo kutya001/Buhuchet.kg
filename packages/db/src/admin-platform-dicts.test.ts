@@ -628,8 +628,36 @@ describe.skipIf(!databaseAvailable())(
           ),
         ),
       ).rejects.toThrow();
+      // Две правки подряд: в истории — вся строка кода страны до и после каждой (прототип).
+      const masked = await asAdmin((tx) =>
+        adminDictUpdate(
+          tx,
+          'phones',
+          'X-01',
+          { name: 'Монголия', data: { dialCode: '976', mask: 'XX XX XXXX', flag: '🇲🇳' } },
+          disabled.ok ? disabled.record.version : 0,
+        ),
+      );
+      if (!masked.ok) throw new Error('не сохранено');
+      await asAdmin((tx) =>
+        adminDictUpdate(
+          tx,
+          'phones',
+          'X-01',
+          { name: 'Монголия', data: { dialCode: '977', mask: 'XX XX XXXX', flag: '🇲🇳' } },
+          masked.record.version,
+        ),
+      );
       const history = await asAdmin((tx) => adminDictHistory(tx, 'phones', 5));
-      expect(history.items[0]).toMatchObject({ action: 'update', label: 'Монголия' });
+      expect(history.items.slice(0, 3).map((h) => [h.action, h.label, h.summary])).toEqual([
+        [
+          'update',
+          'Монголия',
+          { from: 'Монголия +976 XX XX XXXX', to: 'Монголия +977 XX XX XXXX' },
+        ],
+        ['update', 'Монголия', { from: 'Монголия +976 XXXX XXXX', to: 'Монголия +976 XX XX XXXX' }],
+        ['update', 'Монголия', undefined],
+      ]);
     });
 
     it('связи пишет только администратор платформы', async () => {

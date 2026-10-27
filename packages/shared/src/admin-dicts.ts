@@ -214,6 +214,8 @@ export const AdminDictHistory = z.object({
       /** Как значение называлось: название, у УГНС — «код кратко». */
       label: z.string(),
       changes: z.array(HistoryChange),
+      /** Правка кода страны: вся строка до и после («Кыргызстан +996 XXX XXX XXX»), как в прототипе. */
+      summary: z.object({ from: z.string(), to: z.string() }).optional(),
     }),
   ),
 });

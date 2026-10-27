@@ -776,6 +776,8 @@ export interface AdminDictHistoryItem {
   /** Как значение называлось: название, у УГНС — «код кратко»; у удалённого — из записи удаления. */
   label: string;
   changes: HistoryChange[];
+  /** Правка кода страны: вся строка до и после («Кыргызстан +996 XXX XXX XXX»), как в прототипе. */
+  summary?: { from: string; to: string };
 }
 
 /** Подпись значения: у УГНС — «002 Ленинский р-н, Бишкек» (прототип pdLog), у остальных — название. */
@@ -812,12 +814,24 @@ export async function adminDictHistory(
   const labels = new Map(
     records.map((x) => [x.code, labelOf(dict, historyFields(dict, recordInput(x)))]),
   );
+  // Поля значений после каждой записи: от нынешних назад по записям, сначала новые (для кода страны).
+  const state = new Map(records.map((x) => [x.code, historyFields(dict, recordInput(x))]));
   return {
     total: counted?.n ?? 0,
     items: rows.map((r) => {
       const code = r.entityId.slice(dict.length + 1);
       const changes = (r.changes ?? []) as HistoryChange[];
       const own = Object.fromEntries(changes.map((c) => [c.field, c.from ?? c.to]));
+      const after = state.get(code);
+      const before = after && {
+        ...after,
+        ...Object.fromEntries(changes.map((c) => [c.field, c.from ?? null])),
+      };
+      if (before) state.set(code, before);
+      const line =
+        dict === 'phones' && r.action === 'update' && after && before
+          ? { from: phoneLine(before), to: phoneLine(after) }
+          : null;
       return {
         id: String(r.id),
         at: r.at,
@@ -826,7 +840,17 @@ export async function adminDictHistory(
         code,
         label: (r.action === 'update' ? labels.get(code) : labelOf(dict, own)) || code,
         changes,
+        // Только включение/отключение — строка та же, без «было → стало».
+        ...(line && line.from !== line.to ? { summary: line } : {}),
       };
     }),
   };
+}
+
+/**
+ * Код страны одной строкой, как пишет историю прототип (phoneCodeDlg): «Кыргызстан +996 XXX XXX XXX».
+ */
+function phoneLine(fields: Record<string, HistoryValue | undefined>): string {
+  const text = (v: HistoryValue | undefined) => (typeof v === 'string' ? v : '');
+  return `${text(fields.name)} +${text(fields.dialCode)} ${text(fields.mask)}`;
 }

@@ -14,29 +14,11 @@ type Item = AdminDictHistory['items'][number];
 const shown = (v: unknown) => (v === null || v === undefined || v === '' ? '—' : String(v));
 
 /**
- * Код страны словами прототипа (phoneCodeDlg): «Кыргызстан +996 XXX XXX XXX». Из полей — только
- * изменённые (кроме названия): прежних значений остальных полей в записи истории нет.
- */
-function phoneText(item: Item, side: 'from' | 'to'): string | null {
-  const change = (field: string) => item.changes.find((c) => c.field === field);
-  const name = change('name');
-  const dial = change('dialCode');
-  const mask = change('mask');
-  if (!name && !dial && !mask) return null;
-  return [
-    name ? shown(name[side]) : item.label,
-    dial ? `+${shown(dial[side])}` : null,
-    mask ? shown(mask[side]) : null,
-  ]
-    .filter((x) => x !== null)
-    .join(' ');
-}
-
-/**
  * Что изменено, словами — как пишет прототип (admin/platform-dicts*.js, pdLog): «Формы: добавлено
  * «ОсОО»», «Органы: «ГНС» → «ГНС при МФ»», «отключено (было: активно)», «перемещено с № 3 на № 2»; у
  * УГНС — «изменено. Было: … Стало: …» по изменённым полям; у режима — «изменено: 2 поля», у
- * основания — «изменено», у кода страны — «было → стало» и «добавлено «…» +код».
+ * основания — «изменено», у кода страны — вся строка «было → стало» и «добавлено «…» +код».
+ * Переименование режима и основания — «старое» → «новое», как требует ТЗ (у прототипа его не видно).
  */
 export function dictHistoryText(dict: AdminValueDict, item: Item, t: Translate): string {
   const title = t(`pdicts.title.${dict}`);
@@ -70,16 +52,28 @@ export function dictHistoryText(dict: AdminValueDict, item: Item, t: Translate):
       to: item.changes.map((c) => shown(c.to)).join(' · '),
     });
   }
+  const renamed = change('name');
+  if ((dict === 'regimes' || dict === 'bases') && renamed) {
+    // ТЗ: переименование видно в истории — «старое» → «новое», у режима и число других полей.
+    const words = { dict: title, from: shown(renamed.from), to: shown(renamed.to) };
+    const n = dict === 'regimes' ? item.changes.length - 1 : 0;
+    return n > 0
+      ? t(`pdicts.hist.rename_more.${pluralForm(n)}`, { ...words, n })
+      : t('pdicts.hist.rename', words);
+  }
   if (dict === 'regimes') {
     const n = item.changes.length;
     return t(`pdicts.hist.fields_n.${pluralForm(n)}`, { dict: title, name, n });
   }
   if (dict === 'bases') return t('pdicts.hist.changed', { dict: title, name });
-  const phone = dict === 'phones' ? phoneText(item, 'from') : null;
-  if (phone) {
-    return t('pdicts.hist.phone_update', { dict: title, from: phone, to: phoneText(item, 'to')! });
+  // Код страны — всей строкой до и после (прототип phoneCodeDlg); строки собирает сервер.
+  if (dict === 'phones' && item.summary) {
+    return t('pdicts.hist.phone_update', {
+      dict: title,
+      from: item.summary.from,
+      to: item.summary.to,
+    });
   }
-  const renamed = change('name');
   if (renamed) {
     return t('pdicts.hist.rename', {
       dict: title,

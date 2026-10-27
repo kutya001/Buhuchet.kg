@@ -58,23 +58,32 @@ describe('«История изменений» справочника', () => {
     );
     const base = item({ label: 'Есть НДС', changes: [{ field: 'types', from: [], to: ['nds'] }] });
     expect(dictHistoryText('bases', base, t)).toBe('Основания для отчётов: «Есть НДС» изменено');
-    const phone = item({
-      label: 'Кыргызстан',
+    // Переименование видно, как требует ТЗ: «старое» → «новое».
+    const regimeRenamed = item({
+      label: 'ЕН (ст. 418)',
       changes: [
-        { field: 'dialCode', from: '996', to: '997' },
-        { field: 'mask', from: 'XXX XXX XXX', to: 'XX XXX XXXX' },
+        { field: 'name', from: 'ЕН', to: 'ЕН (ст. 418)' },
+        { field: 'article', from: '418', to: '418–430' },
       ],
     });
-    expect(dictHistoryText('phones', phone, t)).toBe(
-      'Коды стран: Кыргызстан +996 XXX XXX XXX → Кыргызстан +997 XX XXX XXXX',
+    expect(dictHistoryText('regimes', regimeRenamed, t)).toBe(
+      'Режимы налогообложения: «ЕН» → «ЕН (ст. 418)»; изменено ещё: 1 поле',
     );
-    const renamed = item({
-      label: 'Кыргызстан',
-      changes: [{ field: 'name', from: 'Киргизия', to: 'Кыргызстан' }],
+    const baseRenamed = item({
+      label: 'Плательщик НДС',
+      changes: [{ field: 'name', from: 'Есть НДС', to: 'Плательщик НДС' }],
     });
-    expect(dictHistoryText('phones', renamed, t)).toBe('Коды стран: Киргизия → Кыргызстан');
-    const flag = item({ label: 'Кыргызстан', changes: [{ field: 'flag', from: '', to: '🇰🇬' }] });
-    expect(dictHistoryText('phones', flag, t)).toBe('Коды стран: «Кыргызстан» — изменены поля');
+    expect(dictHistoryText('bases', baseRenamed, t)).toBe(
+      'Основания для отчётов: «Есть НДС» → «Плательщик НДС»',
+    );
+    const phone = item({
+      label: 'Кыргызстан',
+      changes: [{ field: 'dialCode', from: '996', to: '997' }],
+      summary: { from: 'Кыргызстан +996 XXX XXX XXX', to: 'Кыргызстан +997 XXX XXX XXX' },
+    });
+    expect(dictHistoryText('phones', phone, t)).toBe(
+      'Коды стран: Кыргызстан +996 XXX XXX XXX → Кыргызстан +997 XXX XXX XXX',
+    );
     const added = item({
       action: 'create',
       label: 'Монголия',

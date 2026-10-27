@@ -274,7 +274,7 @@ export const PLATFORM_DICTS_TEXTS = {
   },
   'pdicts.cal.copy.title': { ru: 'Создать календарь {y} года копированием', section: S },
   'pdicts.cal.copy.sub': {
-    ru: 'Праздники «Каждый год» уже есть в {y} году; копируются переносы, плавающие праздники и рабочие субботы {prev} года',
+    ru: 'Праздники «Каждый год» уже есть в {y} году; копируются переносы и плавающие праздники {prev} года. Рабочие субботы не копируются: в {y} году эти даты — другие дни недели',
     section: S,
   },
   'pdicts.cal.copy.warn': {
@@ -282,7 +282,7 @@ export const PLATFORM_DICTS_TEXTS = {
     section: S,
   },
   'pdicts.cal.copy.none': {
-    ru: 'Все даты {prev} года уже есть в календаре {y} года — копировать нечего.',
+    ru: 'Переносы и плавающие праздники {prev} года уже есть в календаре {y} года — копировать нечего.',
     section: S,
   },
   'pdicts.cal.copy.ok.one': { ru: 'Скопировать {n} дату', section: S },
@@ -353,6 +353,18 @@ export const PLATFORM_DICTS_TEXTS = {
   'pdicts.hist.fields_n.few': { ru: '{dict}: «{name}» — изменено: {n} поля', section: S },
   'pdicts.hist.fields_n.many': { ru: '{dict}: «{name}» — изменено: {n} полей', section: S },
   'pdicts.hist.changed': { ru: '{dict}: «{name}» изменено', section: S },
+  'pdicts.hist.rename_more.one': {
+    ru: '{dict}: «{from}» → «{to}»; изменено ещё: {n} поле',
+    section: S,
+  },
+  'pdicts.hist.rename_more.few': {
+    ru: '{dict}: «{from}» → «{to}»; изменено ещё: {n} поля',
+    section: S,
+  },
+  'pdicts.hist.rename_more.many': {
+    ru: '{dict}: «{from}» → «{to}»; изменено ещё: {n} полей',
+    section: S,
+  },
   'pdicts.hist.phone_create': { ru: '{dict}: добавлено «{name}» +{code}', section: S },
   'pdicts.hist.phone_update': { ru: '{dict}: {from} → {to}', section: S },
   'pdicts.cal.hist.create': { ru: 'Календарь: добавлено «{date} {name}»', section: S },
