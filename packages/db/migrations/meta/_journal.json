@@ -306,8 +306,15 @@
     {
       "idx": 43,
       "version": "7",
-      "when": 1793123583248,
-      "tag": "0043_kpi",
+      "when": 1793122969901,
+      "tag": "0043_admin_platform_dicts",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1793125660857,
+      "tag": "0044_kpi",
       "breakpoints": true
     }
   ]

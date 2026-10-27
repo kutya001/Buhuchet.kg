@@ -321,6 +321,24 @@ describe.skipIf(!databaseAvailable())('«База знаний»: прогрес
     expect((await asOwner(b, (tx) => kbDoneFacts(tx, a.ownerUserId, steps))).size).toBe(0);
   });
 
+  it('шаг Админки «Создать организацию и её владельца» — по организации, созданной самим администратором', async () => {
+    const steps = [{ id: 'a-org', rule: KB_STEP_RULES['a-org']!.done! }];
+    const asAdmin = () =>
+      withUserContext(db.app.db, adminId, (tx) => kbDoneFacts(tx, adminId, steps));
+    // «Альфу» и «Бету» создало наполнение, не администратор.
+    expect((await asAdmin()).size).toBe(0);
+    await createOrganization(db.app.db, {
+      name: 'ОсОО «Гамма»',
+      inn: '03811201810458',
+      slug: 'gamma',
+      owner: { fullName: 'Гапарова Гульнара', login: 'gaparova', passwordHash: '!' },
+      createdBy: adminId,
+    });
+    expect((await asAdmin()).get('a-org')).toBeInstanceOf(Date);
+    // Сотруднику организации представление Админки пусто.
+    expect((await asOwner(a, (tx) => kbDoneFacts(tx, adminId, steps))).size).toBe(0);
+  });
+
   it('«Подключили функцию» — дата последнего включения по истории учётной политики', async () => {
     const since = new Date(Date.now() - 60_000);
     const on = await asOwner(a, (tx) => kbFeatureOnDates(tx, since));

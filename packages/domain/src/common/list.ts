@@ -470,6 +470,13 @@ export const GRID_KEYS = [
   'dicts.platform.statuses',
   'dicts.platform.cats',
   'dicts.platform.templates',
+  // Админка → «Справочники платформы»: справочник каждой вкладки и «Запросы».
+  'pdicts.forms',
+  'pdicts.organs',
+  'pdicts.ugns',
+  'pdicts.banks',
+  'pdicts.reasons',
+  'pdicts.requests',
 ] as const;
 export type GridKey = (typeof GRID_KEYS)[number];
 

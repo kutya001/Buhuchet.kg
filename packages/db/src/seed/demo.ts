@@ -12,6 +12,7 @@ import { eq, inArray, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Db } from '../client';
 import { seedDemoContractors } from './demo-contractors';
+import { seedDemoDictRequests } from './demo-dicts';
 import { seedDemoMoney } from './demo-money';
 import { seedDemoKpi } from './demo-kpi';
 import {
@@ -39,7 +40,8 @@ export type DemoKind =
   | 'requisite'
   | 'indicator'
   | 'indicator_value'
-  | 'indicator_month';
+  | 'indicator_month'
+  | 'dict_request';
 export type DemoIdOf = (kind: DemoKind, protoId: string) => string;
 
 /**
@@ -296,6 +298,10 @@ export async function seedDemoOrganization(
   // Контрагенты (задача 2.05).
   const employeeIds = demo.employees.map((e) => e.id);
   await seedDemoContractors(db, file, { orgId, demoId, employees: employeeIds });
+  await seedDemoDictRequests(db, file, orgId, {
+    request: (key) => demoId('dict_request', key),
+    user: userOf,
+  });
 
   await seedDemoMoney(db, file, orgId);
 

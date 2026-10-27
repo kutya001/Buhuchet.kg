@@ -52,6 +52,10 @@ export const KB_GO: Readonly<Record<string, KbTarget>> = {
   grp: { module: 'dicts', tab: 'types', flash: '[data-grid-group-button]' },
   xls: { module: 'dicts', tab: 'types', flash: '[data-grid-export]' },
   swipe: { module: 'dicts', tab: 'types', flash: '[data-tabrow]' },
+  // Админка. Прототип ведёт на «Режимы» — вкладка придёт со второй частью задачи 2.36.
+  'a-dicts': { module: 'pdicts', tab: 'forms', flash: 'main' },
+  'a-l10n': { module: 'l10n', flash: 'main' },
+  'a-org': { module: 'orgs', flash: LIST, open: { add: 'org' } },
 };
 
 /** Сколько ждать, пока нужный элемент появится на экране после перехода, мс. */

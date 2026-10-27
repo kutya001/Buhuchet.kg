@@ -8,6 +8,7 @@ import { useMemo } from 'react';
 import { missingSummaryQuery } from '../kpi/kpi-data';
 import { useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
+import { pdictsTabCountsQuery } from '../platform-dicts/pdicts-data';
 import { staffTabCountsQuery } from '../staff/staff-data';
 
 /** Числа у вкладок модулей: модуль → вкладка → счётчик. */
@@ -15,20 +16,23 @@ export type TabCounts = Partial<Record<MenuModuleId, Partial<Record<string, Shel
 
 /**
  * Счётчики вкладок модулей меню (прототип: `count` у вкладок, например staffTabs; их видно и в ряду
- * вкладок, и в левой панели). Счётчики есть у модулей с экранами — пока у «Сотрудников»; у
- * остальных их добавят их экраны. Запрос — только для модулей, доступных пользователю; пока ответа
- * нет или запрос не удался — вкладки без чисел.
+ * вкладок, и в левой панели). Счётчики есть у модулей с экранами — у «Показателей контрагентов»
+ * («Не заполнено»), «Сотрудников» и «Запросов» «Справочников платформы»; у остальных их добавят их
+ * экраны. Запрос — только для модулей, доступных пользователю; пока ответа нет или запрос не удался —
+ * вкладки без чисел.
  */
 export function useTabCounts(modules: readonly MenuModuleId[]): TabCounts {
   const t = useT();
   const staff = useQuery({ ...staffTabCountsQuery, enabled: modules.includes('staff') });
   const kpi = useQuery({ ...missingSummaryQuery, enabled: modules.includes('kpi') });
+  const pdicts = useQuery({ ...pdictsTabCountsQuery, enabled: modules.includes('pdicts') });
   return useMemo(
     () => ({
       ...(kpi.data ? { kpi: { missing: kpiMissingCount(t, kpi.data) } } : {}),
       ...(staff.data ? { staff: staff.data } : {}),
+      ...(pdicts.data ? { pdicts: pdicts.data } : {}),
     }),
-    [kpi.data, staff.data, t],
+    [kpi.data, staff.data, pdicts.data, t],
   );
 }
 

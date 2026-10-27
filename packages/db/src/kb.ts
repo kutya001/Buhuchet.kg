@@ -22,6 +22,7 @@ import {
 } from '@buhuchet/domain';
 import { and, asc, eq, gte, inArray, sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
+import { adminOrganizations } from './admin-orgs';
 import type { Db, Tx } from './client';
 import {
   selectListExport,
@@ -258,6 +259,11 @@ export async function kbDoneFacts(
         eq(statusHistory.isRollback, false),
       );
       return sql`(select ${id}::text as step_id, max(${statusHistory.at}) as at from ${statusHistory} where ${done})`;
+    }
+    if (rule.kind === 'org_created') {
+      // Представление Админки: строки — только администратору платформы.
+      const v = adminOrganizations;
+      return sql`(select ${id}::text as step_id, max(${v.createdAt}) as at from ${v} where ${v.createdBy} = ${userId})`;
     }
     const where = and(
       eq(auditLog.actorUserId, userId),

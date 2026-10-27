@@ -21,6 +21,7 @@ export const HISTORY_ENTITIES = [
   'indicator',
   'indicator_value',
   'ui_text',
+  'platform_dict',
 ] as const;
 export type HistoryEntity = (typeof HISTORY_ENTITIES)[number];
 
