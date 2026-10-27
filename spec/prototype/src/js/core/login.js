@@ -2,29 +2,57 @@
 // Вход и восстановление пароля
 /* ═════════════ Login & password recovery ═════════════ */
 function logoutDlg(){
-  const dirty=MODALS.some(m=>m.o.form);
+  // «Выйти без сохранения?» — только если в открытой форме есть несохранённые изменения (решение заказчика 26.10.2026), как при закрытии окна
+  const dirty=MODALS.some(m=>m.o.form&&m.dirty);
   const doOut=()=>{MODALS.slice().forEach(m=>m.close());S.loggedIn=false;showLogin()};
   if(dirty)confirmDlg({title:'Выйти без сохранения?',text:'В открытом окне есть несохранённые изменения. Если выйти сейчас, они пропадут.',ok:'Выйти',danger:true,run:doOut});else doOut();
 }
+// Сообщения на странице входа не выдают, есть ли такой логин (решение заказчика 26.10.2026, v59). Неверные попытки считаются по логину, в том числе несуществующему: 5 подряд — вход по нему закрыт на 15 минут. В макете счётчик живёт до перезагрузки страницы, в продукте его ведёт сервер
+const LG_FAIL={},LG_MAX=5,LG_LOCK=15*60*1000;
+// Пароли, сменённые в макете (первый вход, «Забыли пароль?», «Мой профиль»), — до перезагрузки страницы; остальные входят с паролем demo. У сотрудника с временным паролем (e.tmpPass) подходит только он
+const LG_PW={};const lgPass=u=>u.tmpPass||LG_PW[u.login]||'demo';
+const LG_T={bad:'Неверный логин или пароль',lock:'Вход временно закрыт: слишком много неверных попыток. Попробуйте через 15 минут.',user:'Учётная запись заблокирована. Обратитесь к владельцу организации.',org:'Организация заблокирована. Обратитесь к администратору платформы.',demo:'В макете можно войти только в демо-организацию',code:'Если к логину привязан Telegram, бот пришлёт код. Если код не пришёл, пароль сбросит владелец организации.',same:'Новый пароль совпадает с текущим'};
+const find0=l=>[...EMP,PLATFORM_ADMIN].find(u=>u.login===String(l).trim().toLowerCase());
 function showLogin(step='login',ctx={}){
   let el=$('#login');if(!el){el=document.createElement('div');el.id='login';el.className='login';document.body.appendChild(el)}
   const head=`<div class="row" style="gap:11px"><div class="logo" aria-hidden="true"><i></i><i></i><i></i></div><div><div class="brand-name">Buhuchet.kg</div><div class="mode">Автоматизация бухгалтерского аутсорсинга</div></div></div>`;
+  const M=s=>`<span class="mono">${s}</span>`;
   let body='';
-  if(step==='login')body=`<h2>Вход</h2>${fld('Логин',inp('lg-login',ctx.login||'','autocomplete="username"'),{id:'lg-login'})}${fld('Пароль',inp('lg-pass','','type="password" autocomplete="current-password"'),{id:'lg-pass'})}<button class="btn cta" id="lg-go" style="justify-content:center">Войти</button><button class="linkbtn" id="lg-forgot" style="align-self:flex-start">Забыли пароль?</button><div class="note">${ic('info')}<span>Демо: логины <span class="mono">erkin</span>, <span class="mono">meerim</span>, <span class="mono">alisher</span>, <span class="mono">aigerim</span>, <span class="mono">nurlan</span>, <span class="mono">admin</span>; пароль <span class="mono">demo</span>. Логин <span class="mono">easybuh</span> показывает вход в заблокированную организацию.</span></div>`;
-  if(step==='forgot')body=`<h2>Восстановление пароля</h2><p class="muted" style="margin:0">Введите логин. Бот пришлёт одноразовый код в привязанный Telegram. Код действует 10 минут.</p>${fld('Логин',inp('fg-login',ctx.login||''),{id:'fg-login'})}<button class="btn cta" id="fg-go" style="justify-content:center">${ic('tg')}Получить код</button><button class="linkbtn" id="fg-back" style="align-self:flex-start">Вернуться ко входу</button>`;
-  if(step==='code')body=`<h2>Введите код</h2><div class="note">${ic('tg')}<span>Код отправлен в Telegram ${esc(ctx.tg)}. Демо-код: <b class="mono">482913</b></span></div>${fld('Код из Telegram',inp('fg-code','','inputmode="numeric" maxlength="6" class="inp mono"'),{id:'fg-code'})}${fld('Новый пароль',inp('fg-p1','','type="password" autocomplete="new-password"'),{id:'fg-p1',hint:'Не короче 8 символов'})}${fld('Повторите пароль',inp('fg-p2','','type="password" autocomplete="new-password"'),{id:'fg-p2'})}<button class="btn cta" id="fg-set" style="justify-content:center">Сменить пароль</button><div class="hint">После смены пароля все прежние сеансы завершатся, а бот сообщит о смене в Telegram.</div>`;
+  if(step==='login')body=`<h2>Вход</h2>${fld('Логин',inp('lg-login',ctx.login||'','autocomplete="username"'),{id:'lg-login'})}${fld('Пароль',inp('lg-pass','','type="password" autocomplete="current-password"'),{id:'lg-pass'})}<div class="note bad" id="lg-msg" role="alert" hidden></div><button class="btn cta" id="lg-go" style="justify-content:center">Войти</button><button class="linkbtn" id="lg-forgot" style="align-self:flex-start">Забыли пароль?</button><div class="note">${ic('info')}<span>Демо: логины ${['erkin','meerim','alisher','aigerim','nurlan','admin'].map(M).join(', ')}; пароль ${M('demo')}. Логин ${M('bakyt')} — заблокированный сотрудник, ${M('easybuh')} — заблокированная организация. После 5 неверных попыток подряд вход по логину закрыт на 15 минут (в макете — до перезагрузки страницы). Сотрудник, которого создали или которому сбросили пароль в «Сотрудниках», входит с временным паролем и сразу задаёт свой; сменённые пароли действуют до перезагрузки страницы.</span></div>`;
+  if(step==='forgot')body=`<h2>Восстановление пароля</h2><p class="muted" style="margin:0">Введите логин и нажмите «Получить код».</p>${fld('Логин',inp('fg-login',ctx.login||'','autocomplete="username"'),{id:'fg-login'})}<button class="btn cta" id="fg-go" style="justify-content:center">${ic('tg')}Получить код</button><button class="linkbtn" id="fg-back" style="align-self:flex-start">Вернуться ко входу</button>`;
+  // Вход с временным паролем: в программу не пускает, пока пароль не сменён; новый пароль не совпадает с текущим (решение заказчика 27.10.2026). Тексты — как в продукте (auth-texts.ts)
+  if(step==='first')body=`<h2>Смените временный пароль</h2><p class="muted" style="margin:0">Вы вошли с временным паролем. Придумайте свой: пока пароль не сменён, работать в программе нельзя.</p>${fld('Новый пароль',inp('fp-p1','','type="password" autocomplete="new-password"'),{id:'fp-p1',hint:'Не короче 8 символов'})}${fld('Повторите пароль',inp('fp-p2','','type="password" autocomplete="new-password"'),{id:'fp-p2'})}<button class="btn cta" id="fp-set" style="justify-content:center">Сменить пароль</button><button class="linkbtn" id="fp-back" style="align-self:flex-start">Выйти из аккаунта</button>`;
+  // После смены временного пароля без привязанного Telegram — «Привяжите Telegram» (ТЗ: привязка предлагается при первом входе); в макете привязку изображает «Демо: привязать»
+  // Тексты — как в продукте (auth-texts.ts); «Позже» сразу пускает в программу, привязать можно потом в «Мой профиль»
+  if(step==='tglink'){const u=find0(ctx.login||'');body=`<h2>Привяжите Telegram</h2><p class="muted" style="margin:0">Бот будет напоминать о сроках отчётов и пришлёт код, если вы забудете пароль. Откройте ссылку в Telegram — бот привяжет чат и пришлёт подтверждение.</p>${u&&u.tg?`<div class="note ok">${ic('check')}<span>Telegram привязан</span></div><button class="btn cta" id="tl-go" style="justify-content:center">Продолжить</button>`:`<div class="row" style="flex-wrap:wrap"><span class="mono" style="overflow-wrap:anywhere">t.me/buhuchet_bot?start=a7f3c91e</span><button class="btn sm" id="tl-copy">${ic('copy','sm')}Скопировать ссылку</button><button class="btn sm cta" id="tl-demo">Демо: привязать</button></div><div class="hint">Ссылка одноразовая и действует 15 минут. Бот проверит её, привяжет чат и пришлёт подтверждение.</div><button class="btn" id="tl-go" style="justify-content:center">Позже</button>`}`}
+  if(step==='code')body=`<h2>Введите код</h2><div class="note">${ic('tg')}<span>${LG_T.code} Код действует 10 минут. Демо-код: <b class="mono">482913</b> — подходит, если к логину привязан Telegram (у ${M('nurlan')} не привязан).</span></div>${fld('Код из Telegram',inp('fg-code','','inputmode="numeric" maxlength="6" class="inp mono"'),{id:'fg-code'})}${fld('Новый пароль',inp('fg-p1','','type="password" autocomplete="new-password"'),{id:'fg-p1',hint:'Не короче 8 символов'})}${fld('Повторите пароль',inp('fg-p2','','type="password" autocomplete="new-password"'),{id:'fg-p2'})}<button class="btn cta" id="fg-set" style="justify-content:center">Сменить пароль</button><button class="linkbtn" id="fg-back" style="align-self:flex-start">Вернуться ко входу</button><div class="hint">После смены пароля все прежние сеансы завершатся, а бот сообщит о смене в Telegram.</div>`;
   el.innerHTML=`<div class="card">${head}${body}</div>`;
-  const users=[...EMP,PLATFORM_ADMIN];
-  const find=l=>users.find(u=>u.login===l.trim().toLowerCase());
-  if(step==='login'){const go_=()=>{const u=find(val(el,'lg-login'));const okU=setErr(el,'lg-login',u?'':'Нет такого логина');const okP=setErr(el,'lg-pass',val(el,'lg-pass')==='demo'?'':'Неверный пароль. После 5 неверных попыток вход блокируется на 15 минут.');
-      if(okU&&u.active===false){setErr(el,'lg-login','Учётная запись заблокирована. Обратитесь к владельцу организации.');return}
-      if(okU&&okP){el.remove();S.loggedIn=true;switchUser(u.id)}};
-    const go0=go_;const go2=()=>{const l=val(el,'lg-login').trim().toLowerCase();const ou=OTHER_USERS.find(x=>x.login===l);if(ou&&!find(l)){const org=ORGS.find(o=>o.id===ou.org);if(org&&org.active===false){setErr(el,'lg-login',`Организация ${org.name} заблокирована. Обратитесь к администратору платформы.`);return}if(ou.active===false){setErr(el,'lg-login','Учётная запись заблокирована. Обратитесь к владельцу организации.');return}setErr(el,'lg-login','В макете можно войти только в демо-организацию');return}go0()};
-    $('#lg-go',el).onclick=go2;el.onkeydown=e=>{if(e.key==='Enter')go2()};$('#lg-forgot',el).onclick=()=>showLogin('forgot',{login:val(el,'lg-login')});$('#lg-login',el).focus()}
-  if(step==='forgot'){$('#fg-back',el).onclick=()=>showLogin('login');$('#fg-go',el).onclick=()=>{const u=find(val(el,'fg-login'));if(!setErr(el,'fg-login',u?'':'Нет такого логина'))return;
-      if(!u.tg){setErr(el,'fg-login',u.role==='owner'?'Telegram не привязан. Пароль сбросит администратор платформы.':'Telegram не привязан. Пароль сбросит владелец организации.');return}
-      showLogin('code',{login:u.login,tg:u.tg})}}
-  if(step==='code'){$('#fg-set',el).onclick=()=>{const a=setErr(el,'fg-code',val(el,'fg-code')==='482913'?'':'Код неверный или истёк');const p=val(el,'fg-p1');const b=setErr(el,'fg-p1',p.length>=8?'':'Пароль короче 8 символов');const c=setErr(el,'fg-p2',p===val(el,'fg-p2')?'':'Пароли не совпадают');
-      if(a&&b&&c){showLogin('login',{login:ctx.login});toast('Пароль изменён. Войдите с новым паролем.','key')}}}
+  const find=find0;
+  if(step==='login'){const box=$('#lg-msg',el),msg=t=>{box.hidden=!t;box.innerHTML=t?ic('alert','sm')+`<span>${esc(t)}</span>`:''};
+    const go=()=>{const l=val(el,'lg-login').trim().toLowerCase(),p=val(el,'lg-pass');msg('');
+      const a=setErr(el,'lg-login',l?'':'Введите логин'),b=setErr(el,'lg-pass',p?'':'Введите пароль');if(!a||!b)return;
+      const now=Date.now();let f=LG_FAIL[l];if(f&&f.till&&f.till<=now)f=LG_FAIL[l]=null;
+      if(f&&f.till)return msg(LG_T.lock);
+      // Пароль в макете у всех — demo; несуществующий логин — такая же неверная попытка, как неверный пароль
+      const u=find(l),ou=!u&&OTHER_USERS.find(x=>x.login===l);
+      if(!(u||ou)||p!==(u?lgPass(u):'demo')){f=LG_FAIL[l]=f||{n:0,till:0};if(++f.n>=LG_MAX){f.till=now+LG_LOCK;return msg(LG_T.lock)}return msg(LG_T.bad)}
+      delete LG_FAIL[l];
+      // О блокировке сотрудника или организации — только после верного пароля и без названия организации
+      if(ou){const org=ORGS.find(o=>o.id===ou.org);return msg(org&&org.active===false?LG_T.org:ou.active===false?LG_T.user:LG_T.demo)}
+      if(u.active===false)return msg(LG_T.user);
+      if(u.tmpPass)return showLogin('first',{login:l});
+      el.remove();S.loggedIn=true;switchUser(u.id)};
+    $('#lg-go',el).onclick=go;el.onkeydown=e=>{if(e.key==='Enter')go()};$('#lg-forgot',el).onclick=()=>showLogin('forgot',{login:val(el,'lg-login')});$('#lg-login',el).focus()}
+  // «Забыли пароль?»: ответ один для любого логина, дальше всегда ввод кода
+  if(step==='forgot'){$('#fg-back',el).onclick=()=>showLogin('login',{login:val(el,'fg-login')});const go=()=>{const l=val(el,'fg-login').trim().toLowerCase();if(setErr(el,'fg-login',l?'':'Введите логин'))showLogin('code',{login:l})};
+    $('#fg-go',el).onclick=go;el.onkeydown=e=>{if(e.key==='Enter')go()};$('#fg-login',el).focus()}
+  if(step==='first'){const u=find(ctx.login||'');$('#fp-back',el).onclick=()=>showLogin('login',{login:ctx.login});const go=()=>{const p=val(el,'fp-p1');
+      const a=setErr(el,'fp-p1',p.length<8?'Пароль короче 8 символов':u&&p===lgPass(u)?LG_T.same:''),b=setErr(el,'fp-p2',p===val(el,'fp-p2')?'':'Пароли не совпадают');if(!a||!b||!u)return;
+      LG_PW[u.login]=p;delete u.tmpPass;log('emp',u.id,'Временный пароль заменён своим');if(!u.tg&&u.id!=='admin')return showLogin('tglink',{login:u.login});el.remove();S.loggedIn=true;switchUser(u.id)};
+    $('#fp-set',el).onclick=go;el.onkeydown=e=>{if(e.key==='Enter')go()};$('#fp-p1',el).focus()}
+  if(step==='tglink'){const u=find(ctx.login||'');el.onkeydown=null;const cp=$('#tl-copy',el);if(cp)cp.onclick=()=>copyText('https://t.me/buhuchet_bot?start=a7f3c91e','Ссылка скопирована');
+    const dm=$('#tl-demo',el);if(dm)dm.onclick=()=>{u.tg='@'+u.login;log('emp',u.id,'Telegram привязан');showLogin('tglink',ctx)};const gb=$('#tl-go',el);if(gb){gb.onclick=()=>{el.remove();S.loggedIn=true;switchUser(u.id)};gb.focus()}}
+  // «Забыли пароль?»: совпадение с текущим не проверяется (решение заказчика 27.10.2026)
+  if(step==='code'){el.onkeydown=null;$('#fg-back',el).onclick=()=>showLogin('login',{login:ctx.login});$('#fg-set',el).onclick=()=>{const u=find(ctx.login||'');const a=setErr(el,'fg-code',val(el,'fg-code')==='482913'&&u&&u.tg?'':'Код неверный или истёк');const p=val(el,'fg-p1');const b=setErr(el,'fg-p1',p.length>=8?'':'Пароль короче 8 символов');const c=setErr(el,'fg-p2',p===val(el,'fg-p2')?'':'Пароли не совпадают');
+      if(a&&b&&c){LG_PW[u.login]=p;delete u.tmpPass;showLogin('login',{login:ctx.login});toast('Пароль изменён. Войдите с новым паролем.','key')}};$('#fg-code',el).focus()}
 }
-

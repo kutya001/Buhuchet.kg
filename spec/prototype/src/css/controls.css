@@ -8,8 +8,8 @@
 .btn.cta:active{box-shadow:var(--sh-btn-a)}
 /* Подпись внутри кнопки берёт цвет и размер кнопки: класс .lbl у полей формы приглушённый, на кнопке он сливался с фоном */
 .btn .lbl,.btn .bl,.tab .lbl,.fab .lbl{color:inherit;font-size:inherit;font-weight:inherit;letter-spacing:inherit}
-.btn.danger{background:var(--red);color:var(--on-accent);box-shadow:var(--sh-cta)}
-.btn.ok{background:var(--green);color:var(--on-accent);box-shadow:var(--sh-cta)}
+.btn.danger{background:var(--red-btn);color:var(--on-accent);box-shadow:var(--sh-cta)}
+.btn.ok{background:var(--green-btn);color:var(--on-accent);box-shadow:var(--sh-cta)}
 .btn.ghost{background:transparent;box-shadow:none;color:var(--muted)}
 .btn.ghost:hover{background:var(--row-hover);color:var(--text)}
 .btn.sm{min-height:29px;padding:4px 10px;font-size:12.5px}
@@ -55,7 +55,7 @@ input[type=checkbox]:not(.sw){accent-color:var(--accent);width:16px;height:16px;
 @media (max-width:600px){.form{grid-template-columns:minmax(0,1fr)}}
 
 /* ── Pills & tags ── */
-.pill{display:inline-flex;align-items:center;gap:5px;padding:1px 9px 1px 7px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap;line-height:20px;background:var(--sel);color:var(--muted);vertical-align:middle}
+.pill{display:inline-flex;align-items:center;gap:5px;padding:1px 9px 1px 7px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap;line-height:20px;background:var(--label-bg);color:var(--label);vertical-align:middle}
 .pill .ic{width:12px;height:12px;stroke-width:2.3}
 .pill.red{background:var(--red-bg);color:var(--red)}
 .pill.orange{background:var(--orange-bg);color:var(--orange)}
@@ -65,9 +65,9 @@ input[type=checkbox]:not(.sw){accent-color:var(--accent);width:16px;height:16px;
 .pill.actp{gap:3px}.pill.actp .ic{width:13px;height:13px}.pill.act-sub{background:var(--blue-bg);color:var(--blue)}.pill.act-pay{background:var(--green-bg);color:var(--green)}.pill.act-both{background:linear-gradient(90deg,var(--blue-bg),var(--green-bg));color:var(--blue)}
 .actq{margin:2px 0 10px}.actq button .n{opacity:.7;margin-left:4px}
 .pill.purple{background:var(--purple-bg);color:var(--purple)}
-.pill.faint{background:transparent;color:var(--faint);box-shadow:inset 0 0 0 1px var(--border)}
+.pill.faint{background:var(--faint-pill-bg,transparent);color:var(--label);box-shadow:inset 0 0 0 1px var(--border)}
 .pill.sm{font-size:11px;line-height:17px;padding:0 7px 0 6px}
-.tag{display:inline-block;font-size:10.5px;font-weight:650;letter-spacing:.03em;padding:0 6px;border-radius:4px;background:var(--sel);color:var(--muted);line-height:17px;vertical-align:1px;white-space:nowrap}
+.tag{display:inline-block;font-size:10.5px;font-weight:650;letter-spacing:.03em;padding:0 6px;border-radius:4px;background:var(--label-bg);color:var(--label);line-height:17px;vertical-align:1px;white-space:nowrap}
 .tag.blue{background:var(--blue-bg);color:var(--blue)}
 .tag.yellow{background:var(--yellow-bg);color:var(--yellow)}
 .tag.red{background:var(--red-bg);color:var(--red)}
@@ -92,7 +92,7 @@ input[type=checkbox]:not(.sw){accent-color:var(--accent);width:16px;height:16px;
 .tabs>:first-child{margin-left:auto}.tabs>:last-child{margin-right:auto}
 .tab{flex:none;display:inline-flex;align-items:center;gap:7px;padding:7px 14px;border-radius:999px;border:1px solid var(--border);color:var(--muted);background:var(--pane-alt);font-weight:550;font-size:13px;cursor:pointer;text-decoration:none;transition:background .2s,color .2s,transform .2s}
 .tab:hover{background:var(--raised);color:var(--text);transform:translateY(-1px)}
-.tab.on{background:var(--raised);color:var(--text);border-color:transparent;box-shadow:var(--sh-btn);animation:pop .32s ease-out}
+.tab.on{background:var(--raised);color:var(--text);border-color:transparent;box-shadow:var(--sh-btn);animation:pop .25s ease-out}
 .tab .ic{width:15px;height:15px}
 .tabs.compact .tab .lbl{display:none}
 .tabs.compact .tab{padding:7px 11px}

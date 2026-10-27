@@ -95,7 +95,7 @@ describe('SideNav — панель модулей на ПК', () => {
     expect(html).toContain('aria-label="Свернуть вкладки: Отчеты для сдачи"');
     expect(html).toMatch(/href="\/app\/reports\/week" aria-current="page"[^>]*>.*На неделе/);
     expect(html).toMatch(/href="\/app\/reports\/overdue" class="[^"]*text-muted/);
-    expect(html).toMatch(/bg-sel text-muted[^"]*">0</);
+    expect(html).toMatch(/bg-label-bg text-label[^"]*">0</);
   });
 
   it('стрелка раскрывает и сворачивает ветку модуля', () => {

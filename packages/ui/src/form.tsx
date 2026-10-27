@@ -311,7 +311,7 @@ export function Tag({
     <span
       data-tag=""
       title={title}
-      className="inline-flex flex-none items-center gap-1 rounded px-1.5 align-[1px] text-[10.5px] leading-[17px] font-[650] tracking-[.03em] whitespace-nowrap bg-sel text-label"
+      className="inline-flex flex-none items-center gap-1 rounded px-1.5 align-[1px] text-[10.5px] leading-[17px] font-[650] tracking-[.03em] whitespace-nowrap bg-label-bg text-label"
     >
       {icon ? <Icon name={icon} size="sm" /> : null}
       {children}
