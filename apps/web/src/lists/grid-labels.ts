@@ -8,7 +8,13 @@ import type { Translate } from '../l10n/translate';
 
 /** Ключи числа записей в трёх формах: `grid.count` — «записей», `staff.count` — «сотрудников». */
 export type CountKey =
-  'grid.count' | 'staff.count' | 'roles.count' | 'accounts.count' | 'orgs.count' | 'dicts.count';
+  | 'grid.count'
+  | 'staff.count'
+  | 'roles.count'
+  | 'accounts.count'
+  | 'orgs.count'
+  | 'dicts.count'
+  | 'dicts.platform.count';
 
 /** Тексты списка из словаря; число записей — в форме для числа (1 сотрудник, 2 сотрудника, 5 сотрудников). */
 export function gridLabels(t: Translate, count: CountKey): GridLabels {

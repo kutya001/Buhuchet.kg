@@ -30,7 +30,7 @@ const rlsViolation = expect.objectContaining({
 const fkViolation = expect.objectContaining({
   cause: expect.objectContaining({ code: '23503' }),
 });
-// Нет права на столбец (миграция 0031: роль приложения меняет у учётной записи только пароль).
+// Нет права на столбец (миграция 0033: роль приложения меняет у учётной записи только пароль).
 const columnDenied = expect.objectContaining({
   cause: expect.objectContaining({ code: '42501' }),
 });

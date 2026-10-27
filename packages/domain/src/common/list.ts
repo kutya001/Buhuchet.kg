@@ -448,6 +448,23 @@ export const GRID_KEYS = [
   'accounts.list',
   'orgs.list',
   'dicts.types',
+  // «Справочники платформы»: «Поиск по всем значениям» и окно каждого справочника (ORG_DICT_WINDOW_IDS).
+  'dicts.platform',
+  'dicts.platform.taxes',
+  'dicts.platform.en_rates',
+  'dicts.platform.bases',
+  'dicts.platform.regimes',
+  'dicts.platform.benefits',
+  'dicts.platform.gked',
+  'dicts.platform.forms',
+  'dicts.platform.phones',
+  'dicts.platform.organs',
+  'dicts.platform.ugns',
+  'dicts.platform.banks',
+  'dicts.platform.calendar',
+  'dicts.platform.statuses',
+  'dicts.platform.cats',
+  'dicts.platform.templates',
 ] as const;
 export type GridKey = (typeof GRID_KEYS)[number];
 

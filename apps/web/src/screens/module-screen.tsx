@@ -3,7 +3,7 @@
 import type { MenuModuleId } from '@buhuchet/domain';
 import { AccountsList } from '../admin/accounts-list';
 import { OrgsList } from '../admin/orgs-list';
-import { DictsStub } from '../dicts/dicts-stub';
+import { PlatformDicts } from '../dicts/platform-tab';
 import { ReportTypesList } from '../dicts/report-types-list';
 import { OrgMain } from '../org/org-main';
 import { OrgPolicyTab } from '../org/org-policy';
@@ -42,7 +42,7 @@ export function ModuleScreen({
   if (moduleId === 'dicts') {
     const tab = tabId ?? 'types';
     if (tab === 'types') return <ReportTypesList />;
-    return <DictsStub />;
+    return <PlatformDicts />;
   }
   if (moduleId === 'accounts') return <AccountsList />;
   if (moduleId === 'orgs') return <OrgsList />;
