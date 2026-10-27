@@ -38,6 +38,11 @@ export const TASK_DESCRIPTION_MAX = 2000;
 export const TASK_COMMENT_MAX = 2000;
 /** Причина «Не выполнена», «На доработку» и комментарий подтверждения — в «Истории статусов». */
 export const TASK_REASON_MAX = ROLLBACK_REASON_MAX;
+/**
+ * Комментарий «Подтвердить»: в «Истории статусов» перед ним стоит «вместо постановщика <имя>, », а вся
+ * запись — не длиннее `ROLLBACK_REASON_MAX`.
+ */
+export const TASK_CONFIRM_NOTE_MAX = 400;
 
 /** Открытая задача — её ещё делают (прототип `taskOpen`: «К выполнению», «В работе», «На доработке»). */
 const OPEN: readonly TaskStatus[] = ['todo', 'in_progress', 'rework'];
@@ -55,7 +60,10 @@ export function taskPending(status: TaskStatus): boolean {
  * Просрочена: срок прошёл, а задача открыта (прототип `taskOver`). «Выполнена» до срока и ждущая
  * подтверждения — не просрочена; возвращённая на доработку после срока — просрочена (ТЗ «Срок»).
  */
-export function taskOverdue(task: { status: TaskStatus; dueDate: IsoDate }, today: IsoDate): boolean {
+export function taskOverdue(
+  task: { status: TaskStatus; dueDate: IsoDate },
+  today: IsoDate,
+): boolean {
   return taskOpen(task.status) && task.dueDate < today;
 }
 
@@ -185,7 +193,10 @@ export function taskMenu(
   actor: TaskActor,
 ): { action: TaskAction; refusal: TaskRefusal | null }[] {
   const boss = taskIsBoss(task, actor);
-  const item = (action: TaskAction) => ({ action, refusal: taskActionRefusal(action, task, actor) });
+  const item = (action: TaskAction) => ({
+    action,
+    refusal: taskActionRefusal(action, task, actor),
+  });
   if (taskPending(task.status)) {
     return [item('confirm'), item('rework'), ...(boss ? [item('edit')] : [])];
   }
@@ -258,7 +269,7 @@ export function taskConfirmMark(task: {
 /** Файл при выполнении (прототип: столбец «Файл» — «приложен», «нужен» или пусто). */
 export type TaskFileMark = 'attached' | 'needed' | 'none';
 
-export function taskFileMark(task: { needFile: boolean; fileId: string | null }): TaskFileMark {
+export function taskFileMark(task: { needFile: boolean; hasFile: boolean }): TaskFileMark {
   if (!task.needFile) return 'none';
-  return task.fileId ? 'attached' : 'needed';
+  return task.hasFile ? 'attached' : 'needed';
 }

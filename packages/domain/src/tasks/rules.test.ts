@@ -44,7 +44,9 @@ describe('задачи: сверка с прототипом (modules/tasks.js)'
       }));
       // Прототип не объясняет, почему «Взять в работу» недоступно, — у продукта подсказка есть.
       const want = m.items.map((x) =>
-        x.action === 'start' && x.disabled ? { ...x, reason: TASK_MESSAGES.task_start_forbidden } : x,
+        x.action === 'start' && x.disabled
+          ? { ...x, reason: TASK_MESSAGES.task_start_forbidden }
+          : x,
       );
       expect(got, `${m.actor} ${m.task} ${m.status}`).toEqual(want);
     }
@@ -89,7 +91,12 @@ describe('задачи: сверка с прототипом (modules/tasks.js)'
 
 describe('задачи: правила ТЗ', () => {
   const owner: TaskActor = { employeeId: 'o', isOwner: true, canConfirm: true, canRollback: true };
-  const chief: TaskActor = { employeeId: 'c', isOwner: false, canConfirm: true, canRollback: false };
+  const chief: TaskActor = {
+    employeeId: 'c',
+    isOwner: false,
+    canConfirm: true,
+    canRollback: false,
+  };
   const acc: TaskActor = { employeeId: 'a', isOwner: false, canConfirm: false, canRollback: false };
   const task = (status: TaskStatus, over: Partial<TaskFacts> = {}): TaskFacts => ({
     status,
@@ -118,9 +125,9 @@ describe('задачи: правила ТЗ', () => {
   it('п. 40: подтверждает постановщик или сотрудник с правом, свою — никто', () => {
     expect(taskConfirmRefusal(task('on_confirm'), chief)).toBeNull();
     expect(taskConfirmRefusal(task('on_confirm', { authorId: 'x' }), owner)).toBeNull();
-    expect(
-      taskConfirmRefusal(task('on_confirm', { authorId: 'x', executorId: 'y' }), acc),
-    ).toBe('task_confirm_right');
+    expect(taskConfirmRefusal(task('on_confirm', { authorId: 'x', executorId: 'y' }), acc)).toBe(
+      'task_confirm_right',
+    );
     // Поставил сам себе — подтверждает другой сотрудник с правом.
     expect(taskConfirmRefusal(task('on_confirm', { executorId: 'c' }), chief)).toBe(
       'task_confirm_own',
@@ -180,7 +187,10 @@ describe('задачи: правила ТЗ', () => {
     expect(taskRollbackTarget('cancelled')).toBe('in_progress');
     expect(taskRollbackTarget('todo')).toBeNull();
     expect(taskRollbackTarget('rework')).toBeNull();
-    expect(taskRollbackClears('confirmed', 'on_confirm')).toEqual({ done: false, confirmation: true });
+    expect(taskRollbackClears('confirmed', 'on_confirm')).toEqual({
+      done: false,
+      confirmation: true,
+    });
     expect(taskRollbackClears('done', 'in_progress')).toEqual({ done: true, confirmation: false });
   });
 
@@ -191,8 +201,8 @@ describe('задачи: правила ТЗ', () => {
     expect(taskConfirmMark({ confirm: true, status: 'on_confirm', confirmedBy: null })).toBe(
       'required',
     );
-    expect(taskFileMark({ needFile: true, fileId: 'f' })).toBe('attached');
-    expect(taskFileMark({ needFile: true, fileId: null })).toBe('needed');
-    expect(taskFileMark({ needFile: false, fileId: null })).toBe('none');
+    expect(taskFileMark({ needFile: true, hasFile: true })).toBe('attached');
+    expect(taskFileMark({ needFile: true, hasFile: false })).toBe('needed');
+    expect(taskFileMark({ needFile: false, hasFile: false })).toBe('none');
   });
 });

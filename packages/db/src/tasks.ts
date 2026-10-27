@@ -2,6 +2,7 @@ import {
   auditActorName,
   scaleStatuses,
   type HistoryChange,
+  type HistoryValue,
   type IsoDate,
   type ListQuery,
   type TaskStatus,
@@ -23,9 +24,11 @@ import {
   type ListWindowFields,
 } from './list';
 import {
+  auditLog,
   contractors,
   employees,
   files,
+  orgSettings,
   statusHistory,
   taskCategories,
   taskComments,
@@ -760,7 +763,7 @@ export const CONTRACTOR_TASKS_SHOWN = 40;
 
 /**
  * Вкладка «Задачи» карточки контрагента (ТЗ: «Задач: N · открытых M», последние 40): все задачи
- * контрагента, сначала новые.
+ * контрагента, сначала с поздним сроком (прототип: сортировка по сроку).
  */
 export async function contractorTasks(
   tx: Tx,
@@ -772,7 +775,7 @@ export async function contractorTasks(
     .where(eq(tasks.contractorId, contractorId));
   const rows = await fromTasks(tx, rowFields())
     .where(eq(tasks.contractorId, contractorId))
-    .orderBy(desc(tasks.createdAt), desc(tasks.id))
+    .orderBy(desc(tasks.dueDate), desc(tasks.createdAt), desc(tasks.id))
     .limit(CONTRACTOR_TASKS_SHOWN);
   return {
     total: Number(counts?.total ?? 0),
@@ -800,6 +803,88 @@ export async function taskCategoryActive(tx: Tx, code: string): Promise<boolean 
     .from(taskCategories)
     .where(eq(taskCategories.code, code));
   return row ? row.active : null;
+}
+
+/**
+ * Контрагент для формы задачи: виден ли в области `scope` (`contractorScope`), в архиве ли и кто
+ * ответственный (исполнитель по умолчанию); null — нет такого или он вне области.
+ */
+export async function taskContractorOf(
+  tx: Tx,
+  id: string,
+  scope: SQL | undefined,
+): Promise<{ id: string; archived: boolean; responsibleEmployeeId: string | null } | null> {
+  if (!UUID_RE.test(id)) return null;
+  const [row] = await tx
+    .select({
+      id: contractors.id,
+      status: contractors.serviceStatus,
+      responsibleEmployeeId: contractors.responsibleEmployeeId,
+    })
+    .from(contractors)
+    .where(and(eq(contractors.id, id), scope));
+  return row
+    ? {
+        id: row.id,
+        archived: row.status === 'archived',
+        responsibleEmployeeId: row.responsibleEmployeeId,
+      }
+    : null;
+}
+
+/**
+ * Учётная политика для задач: включён ли модуль «Задачи», «Файлы в карточках» и значение «Требуется
+ * подтверждение» для новых задач («Задачи требуют подтверждения»). Записи нет — всё выключено. Без
+ * `orgId` — организация из контекста.
+ */
+export async function taskOrgSettings(
+  tx: Tx,
+  orgId?: string,
+): Promise<{ tasks: boolean; files: boolean; confirmDefault: boolean }> {
+  const [row] = await tx
+    .select({ features: orgSettings.features, taskConfirm: orgSettings.taskConfirm })
+    .from(orgSettings)
+    .where(eq(orgSettings.orgId, orgId ?? sql`app.current_org_id()`));
+  const features = (row?.features ?? {}) as Record<string, boolean>;
+  return {
+    tasks: features.tasks === true,
+    files: features.files === true,
+    confirmDefault: row?.taskConfirm ?? true,
+  };
+}
+
+/** Сколько контрагентов предлагает поле «Контрагент» формы задачи (как «Все записи» списка). */
+export const TASK_FORM_CONTRACTORS_MAX = 5000;
+
+/**
+ * Значения для формы задачи (прототип `taskDlg`): действующие исполнители организации и контрагенты в
+ * области (`scope`) без архивных (прототип `visCps`) с ответственным — исполнителем по умолчанию.
+ */
+export async function taskFormOptions(
+  tx: Tx,
+  scope: SQL | undefined,
+): Promise<{
+  executors: { id: string; shortName: string }[];
+  contractors: { id: string; name: string; responsibleEmployeeId: string | null }[];
+}> {
+  const [executors, cps] = await Promise.all([
+    tx
+      .select({ id: employees.id, shortName: employees.shortName })
+      .from(employees)
+      .where(eq(employees.active, true))
+      .orderBy(sql`${employees.shortName} collate app.ru_natural`, employees.id),
+    tx
+      .select({
+        id: contractors.id,
+        name: contractors.name,
+        responsibleEmployeeId: contractors.responsibleEmployeeId,
+      })
+      .from(contractors)
+      .where(and(sql`${contractors.serviceStatus} <> 'archived'`, scope))
+      .orderBy(sql`${contractors.name} collate app.ru_natural`, contractors.id)
+      .limit(TASK_FORM_CONTRACTORS_MAX),
+  ]);
+  return { executors, contractors: cps };
 }
 
 /** Сотрудник текущего пользователя: исполнитель и постановщик задач — сотрудники. */
@@ -833,11 +918,7 @@ export async function moveContractorTasks(
         updatedBy: sql`app.current_user_id()`,
       })
       .where(
-        and(
-          eq(tasks.contractorId, m.contractorId),
-          eq(tasks.executorEmployeeId, m.from),
-          OPEN_SQL,
-        ),
+        and(eq(tasks.contractorId, m.contractorId), eq(tasks.executorEmployeeId, m.from), OPEN_SQL),
       )
       .returning({ id: tasks.id });
     for (const r of rows) changes.push({ id: r.id, contractorId: m.contractorId, from: m.from });
@@ -882,4 +963,82 @@ export async function openTasksOf(tx: Tx, executorEmployeeId: string): Promise<n
     .from(tasks)
     .where(and(eq(tasks.executorEmployeeId, executorEmployeeId), OPEN_SQL));
   return Number(row?.n ?? 0);
+}
+
+/** Запись истории задачи: номера сотрудников, контрагента и код категории — названиями. */
+export interface TaskHistoryItem {
+  at: Date;
+  actor: string | null;
+  action: string;
+  changes: HistoryChange[];
+}
+
+/** Поля-ссылки задачи: в истории — номер или код, на экране — название. */
+const REF_FIELDS = ['executorEmployeeId', 'contractorId', 'categoryCode'] as const;
+
+/** История задачи («Создана», «было → стало», файлы), сначала новые. */
+export async function taskHistory(tx: Tx, taskId: string): Promise<TaskHistoryItem[]> {
+  const actor = alias(employees, 'history_actor');
+  const rows = await tx
+    .select({
+      at: auditLog.at,
+      actorUserId: auditLog.actorUserId,
+      actorName: actor.shortName,
+      action: auditLog.action,
+      changes: auditLog.changes,
+    })
+    .from(auditLog)
+    .leftJoin(actor, eq(actor.userId, auditLog.actorUserId))
+    .where(and(eq(auditLog.entity, 'task'), eq(auditLog.entityId, taskId)))
+    .orderBy(desc(auditLog.at), desc(auditLog.id));
+  const ids = {
+    executorEmployeeId: new Set<string>(),
+    contractorId: new Set<string>(),
+    categoryCode: new Set<string>(),
+  };
+  for (const r of rows)
+    for (const c of (r.changes ?? []) as HistoryChange[])
+      if ((REF_FIELDS as readonly string[]).includes(c.field))
+        for (const v of [c.from, c.to])
+          if (typeof v === 'string') ids[c.field as (typeof REF_FIELDS)[number]].add(v);
+  const [people, cps, cats] = await Promise.all([
+    ids.executorEmployeeId.size
+      ? tx
+          .select({ id: employees.id, name: employees.shortName })
+          .from(employees)
+          .where(inArray(employees.id, [...ids.executorEmployeeId]))
+      : [],
+    ids.contractorId.size
+      ? tx
+          .select({ id: contractors.id, name: contractors.name })
+          .from(contractors)
+          .where(inArray(contractors.id, [...ids.contractorId]))
+      : [],
+    ids.categoryCode.size
+      ? tx
+          .select({ id: taskCategories.code, name: taskCategories.name })
+          .from(taskCategories)
+          .where(inArray(taskCategories.code, [...ids.categoryCode]))
+      : [],
+  ]);
+  const names: Record<(typeof REF_FIELDS)[number], Map<string, string>> = {
+    executorEmployeeId: new Map(people.map((x) => [x.id, x.name])),
+    contractorId: new Map(cps.map((x) => [x.id, x.name])),
+    categoryCode: new Map(cats.map((x) => [x.id, x.name])),
+  };
+  const named = (field: string, v: HistoryValue | undefined): HistoryValue | undefined => {
+    if (typeof v !== 'string' || !(REF_FIELDS as readonly string[]).includes(field)) return v;
+    // Удалённый контрагент и т. п. — без названия, но и без номера.
+    return names[field as (typeof REF_FIELDS)[number]].get(v) ?? '—';
+  };
+  return rows.map((r) => ({
+    at: r.at,
+    actor: auditActorName(r.actorUserId, r.actorName),
+    action: r.action,
+    changes: ((r.changes ?? []) as HistoryChange[]).map((c) => ({
+      field: c.field,
+      ...(c.from !== undefined ? { from: named(c.field, c.from) } : {}),
+      ...(c.to !== undefined ? { to: named(c.field, c.to) } : {}),
+    })),
+  }));
 }

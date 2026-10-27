@@ -20,6 +20,7 @@ import { LOGO_PATH } from './modules/org/logo';
 import { rolesModule } from './modules/roles';
 import { staffModule } from './modules/staff';
 import { systemModule } from './modules/system';
+import { tasksModule } from './modules/tasks';
 import { telegramModule } from './modules/telegram';
 import { viewsModule } from './modules/views';
 
@@ -77,6 +78,7 @@ export function createApp(deps: ApiDeps) {
     .route('/', staffModule(deps))
     .route('/', rolesModule(deps))
     .route('/', contractorsModule(deps))
+    .route('/', tasksModule(deps))
     .route('/', orgModule(deps))
     .route('/', platformDictsModule(deps))
     .route('/', dictsModule(deps))
