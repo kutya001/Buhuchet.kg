@@ -169,6 +169,13 @@
       "when": 1793043504551,
       "tag": "0023_platform_dicts_read_only",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1793071264186,
+      "tag": "0024_admin_organizations",
+      "breakpoints": true
     }
   ]
 }
