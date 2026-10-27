@@ -21,7 +21,7 @@ import {
   useToast,
 } from '@buhuchet/ui';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { useForm } from 'react-hook-form';
 import { api, callApi } from '../api-client';
 import { useErrorText, useT } from '../l10n/provider';
@@ -150,12 +150,16 @@ function LoginStep({
   // по ней не видно, логин неверный или пароль. Пустые поля — под полями.
   const [message, setMessage] = useState('');
 
-  const submit = handleSubmit(async (values) => {
-    setMessage('');
+  const send = handleSubmit(async (values) => {
     const res = await callApi(() => api.api.auth.login.$post({ json: values }));
     if (res.ok) return onSignedIn(MeResponse.parse(res.data), values.password);
     setMessage(loginErrorText(t, errorText, res.error));
   });
+  // Прежняя ошибка гаснет при каждом нажатии «Войти», и при пустом поле тоже (прототип `msg('')`).
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    setMessage('');
+    return send(event);
+  };
 
   return (
     <form onSubmit={submit} noValidate className="flex flex-col gap-3.5">

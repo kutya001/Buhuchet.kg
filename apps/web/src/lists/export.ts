@@ -98,7 +98,7 @@ export function useListExport(send: () => Promise<ExportResponse>) {
       const blob = await res.blob();
       saveFile(blob, exportFileName(res.headers.get('content-disposition')));
       toast(exportDoneText(res.headers, t), {
-        icon: res.headers.get('x-export-more') === '1' ? 'info' : 'download',
+        icon: res.headers.get('x-export-more') === '1' ? 'alert' : 'download',
       });
     } catch {
       toast(t('grid.export_failed'), { icon: 'alert', bad: true });

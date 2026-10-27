@@ -103,6 +103,13 @@ test.describe('Этап 1: экраны входа и «Мой профиль»'
       await expectLoginAlert(page, BAD_LOGIN);
     });
 
+    await test.step('после ошибки «Войти» с пустым паролем — плашка гаснет, «Введите пароль» под полем', async () => {
+      await page.getByLabel('Пароль', { exact: true }).fill('');
+      await page.getByRole('button', { name: 'Войти' }).click();
+      await expect(page.getByText('Введите пароль')).toBeVisible();
+      await expect(loginAlert(page)).toHaveCount(0);
+    });
+
     await test.step('пятый неверный пароль закрывает вход на 15 минут — даже верным паролем', async () => {
       await signInByForm(page, login, 'неверный-5');
       await expectLoginAlert(page, LOCKED);

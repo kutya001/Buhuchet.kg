@@ -81,8 +81,8 @@ export const resetRequestRoute = createRoute({
  * проверяются до
  * того, как его считать, чтобы запросы сверх лимита не нагружали сервер.
  */
-// ОТКЛОНЕНИЕ: docs/deviations.md#4 — решение Б: в прототипе «Нет такого логина», «Telegram не
-// привязан…» и «Код отправлен в Telegram @имя»; здесь для любого логина один ответ без имени Telegram.
+// docs/deviations.md п. 4, решение Б (с v59 так же в ТЗ и прототипе core/login.js): для любого логина
+// один ответ без имени Telegram.
 export function resetRequestHandler(deps: ApiDeps): RouteHandler<typeof resetRequestRoute, AppEnv> {
   return async (c) => {
     if (!deps.telegram) {
