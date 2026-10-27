@@ -2,7 +2,7 @@ import { auditActorName, isScaleStatus, type StatusScaleKey } from '@buhuchet/do
 import { and, asc, eq } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { Tx } from './client';
-import { employees, statusHistory } from './schema';
+import { employees, files, statusHistory } from './schema';
 
 /** Смена статуса на шкале — одна запись «Истории статусов». */
 export interface StatusChange {
@@ -15,6 +15,11 @@ export interface StatusChange {
   reason?: string | null;
   /** Откат — шаг назад (право «Откат статусов» проверяет API до записи). */
   rollback?: boolean;
+  /**
+   * Файл к смене статуса (квитанция и т. п.). База проверяет только, что файл этой организации: что он
+   * загружен (`ready`) и прикреплён к этой же записи, проверяет вызывающий модуль.
+   */
+  fileId?: string | null;
 }
 
 /**
@@ -41,6 +46,7 @@ export async function writeStatusChange(tx: Tx, ...changes: StatusChange[]): Pro
       toStatus: c.to,
       isRollback: c.rollback ?? false,
       reason: c.reason?.trim() || null,
+      fileId: c.fileId ?? null,
     })),
   );
 }
@@ -53,6 +59,8 @@ export interface StatusHistoryItem {
   rollback: boolean;
   reason: string | null;
   actor: string | null;
+  /** Файл к смене статуса; `available` — не удалён (его можно скачать). */
+  file: { id: string; name: string; available: boolean } | null;
 }
 
 const actor = alias(employees, 'actor');
@@ -76,13 +84,19 @@ export async function readStatusHistory(
       reason: statusHistory.reason,
       actorUserId: statusHistory.actorUserId,
       actorName: actor.shortName,
+      fileId: files.id,
+      fileName: files.name,
+      fileState: files.state,
     })
     .from(statusHistory)
     .leftJoin(actor, eq(actor.userId, statusHistory.actorUserId))
+    .leftJoin(files, eq(files.id, statusHistory.fileId))
     .where(and(eq(statusHistory.scale, scale), eq(statusHistory.entityId, entityId)))
     .orderBy(asc(statusHistory.at), asc(statusHistory.id));
-  return rows.map(({ actorUserId, actorName, ...r }) => ({
+  return rows.map(({ actorUserId, actorName, fileId, fileName, fileState, ...r }) => ({
     ...r,
     actor: auditActorName(actorUserId, actorName),
+    file:
+      fileId && fileName ? { id: fileId, name: fileName, available: fileState === 'ready' } : null,
   }));
 }

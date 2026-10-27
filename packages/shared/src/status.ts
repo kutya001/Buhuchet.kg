@@ -19,6 +19,8 @@ export const StatusHistoryEntry = z.object({
   rollback: z.boolean(),
   reason: z.string().nullable(),
   actor: z.string().nullable(),
+  /** Файл к смене статуса (квитанция и т. п.); `available` — не удалён и его можно скачать. */
+  file: z.object({ id: z.uuid(), name: z.string(), available: z.boolean() }).nullable().optional(),
 });
 export type StatusHistoryEntry = z.infer<typeof StatusHistoryEntry>;
 

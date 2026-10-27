@@ -25,6 +25,19 @@ type LoadDictionary = (lang: UiLanguage) => Promise<UiDictionary>;
 const loaders = new WeakMap<ApiDeps, LoadDictionary>();
 
 /**
+ * Правки словаря в этом процессе: число правок по языку. Счётчик — на `globalThis`, а не в модуле:
+ * Next.js собирает метод API и страницы отдельно, у каждой сборки своя копия модуля, а правка в
+ * «Локализации» должна сразу дойти и до словаря страниц (корневой макет).
+ */
+const EDITS = Symbol.for('buhuchet.l10n.edits');
+
+function edits(): Map<UiLanguage, number> {
+  const g = globalThis as { [EDITS]?: Map<UiLanguage, number> };
+  g[EDITS] ??= new Map();
+  return g[EDITS];
+}
+
+/**
  * Словарь текстов в памяти API — один на приложение: тексты базы (`ui_texts`) поверх текстов по
  * умолчанию. Не чаще раза в секунду он сверяется с отметкой базы (число текстов и хеш) и
  * перечитывается, только когда она изменилась. Им пользуются метод словаря для экранов и методы,
@@ -34,15 +47,19 @@ export function uiDictionary(deps: ApiDeps): LoadDictionary {
   const existing = loaders.get(deps);
   if (existing) return existing;
   const recheckMs = deps.l10nRecheckMs ?? RECHECK_MS;
-  const cache = new Map<UiLanguage, { stamp: string; checkedAt: number; body: UiDictionary }>();
+  const cache = new Map<
+    UiLanguage,
+    { stamp: string; checkedAt: number; edits: number; body: UiDictionary }
+  >();
 
   const load: LoadDictionary = async (lang) => {
     const cached = cache.get(lang);
     const now = Date.now();
-    if (cached && now - cached.checkedAt < recheckMs) return cached.body;
+    const edited = edits().get(lang) ?? 0;
+    if (cached && cached.edits === edited && now - cached.checkedAt < recheckMs) return cached.body;
     const stamp = await uiTextsStamp(deps.db, lang);
     if (cached?.stamp === stamp) {
-      cached.checkedAt = now;
+      Object.assign(cached, { checkedAt: now, edits: edited });
       return cached.body;
     }
     const body: UiDictionary = {
@@ -50,11 +67,19 @@ export function uiDictionary(deps: ApiDeps): LoadDictionary {
       version: versionOf(lang, stamp),
       texts: { ...DEFAULT_TEXTS, ...(await loadUiTexts(deps.db, lang)) },
     };
-    cache.set(lang, { stamp, checkedAt: now, body });
+    cache.set(lang, { stamp, checkedAt: now, edits: edited, body });
     return body;
   };
   loaders.set(deps, load);
   return load;
+}
+
+/**
+ * Правка словаря в «Локализации» сохранена: все словари языка в этом процессе сверятся с базой при
+ * следующем запросе, не дожидаясь своей секунды. Другие процессы — не позже чем через секунду.
+ */
+export function uiDictionaryEdited(lang: UiLanguage): void {
+  edits().set(lang, (edits().get(lang) ?? 0) + 1);
 }
 
 /**

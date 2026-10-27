@@ -11,10 +11,12 @@ export const HISTORY_ENTITIES = [
   'user',
   'employee',
   'role',
+  'file',
   'org_report_type',
   'dict_request',
   'org_account',
   'employee_wallet',
+  'ui_text',
 ] as const;
 export type HistoryEntity = (typeof HISTORY_ENTITIES)[number];
 
@@ -22,7 +24,14 @@ export type HistoryEntity = (typeof HISTORY_ENTITIES)[number];
  * Что сделали с записью. Смена статуса с откатом — отдельная «История статусов» (#17), не здесь.
  * Модуль добавляет свои действия (например, «напоминание отправлено»), когда они появляются.
  */
-export const HISTORY_ACTIONS = ['create', 'update', 'delete'] as const;
+export const HISTORY_ACTIONS = [
+  'create',
+  'update',
+  'delete',
+  // Файлы записи (блок «Файлы»): «Прикреплён файл», «Удалён файл» — в истории той записи.
+  'file_attach',
+  'file_delete',
+] as const;
 export type HistoryAction = (typeof HISTORY_ACTIONS)[number];
 
 /** Значение поля в истории — как в JSON. */
