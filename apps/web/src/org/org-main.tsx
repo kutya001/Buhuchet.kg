@@ -29,6 +29,7 @@ import {
   Note,
   PhoneInput,
   RecordChangedNotice,
+  TOUCH_AREA,
   useToast,
   type KeyValueItem,
   type PhoneInputValue,
@@ -206,6 +207,8 @@ function OrgMainEdit({
   const [phoneError, setPhoneError] = useState<string | undefined>();
   const [logo, setLogo] = useState<{ file: File; url: string } | null>(null);
   const [logoError, setLogoError] = useState<string | undefined>();
+  /** «Убрать» у сохранённого логотипа: логотип уходит с «Сохранить» (docs/deviations.md, п. 19). */
+  const [dropLogo, setDropLogo] = useState(false);
   /** Новый адрес страницы ждёт подтверждения «Сменить адрес страницы организации?». */
   const [pending, setPending] = useState<{ values: OrgMainForm; phone: string | null } | null>(
     null,
@@ -255,6 +258,17 @@ function OrgMainEdit({
     setLogo(file ? { file, url: URL.createObjectURL(file) } : null);
   };
 
+  /** «Убрать»: выбранный файл — отменить выбор; сохранённый логотип — убрать при «Сохранить». */
+  const removeLogo = () => {
+    if (logo) {
+      setLogo(null);
+      setLogoError(undefined);
+      if (fileRef.current) fileRef.current.value = '';
+      return;
+    }
+    setDropLogo(true);
+  };
+
   const fail = (res: Extract<ApiResult<unknown>, { ok: false }>) => {
     const code = res.error.code;
     if (code === 'record_changed') return setChanged(true);
@@ -299,7 +313,16 @@ function OrgMainEdit({
         setSaved(current);
         setLogo(null);
         if (fileRef.current) fileRef.current.value = '';
+      } else if (dropLogo && current.logo) {
+        const version = current.version;
+        const res = await callApi(() =>
+          api.api.org.logo.$delete({ query: { version: String(version) } }),
+        );
+        if (!res.ok) return fail(res);
+        current = OrgProfile.parse(res.data);
+        setSaved(current);
       }
+      setDropLogo(false);
       reset(formValues(current));
       toast(t('org.saved'), { icon: 'check' });
       refresh();
@@ -332,6 +355,7 @@ function OrgMainEdit({
       reset(formValues(fresh));
       setPhone(splitPhone(fresh.phone, codes));
       setPhoneError(undefined);
+      setDropLogo(false);
       setChanged(false);
     } catch {
       toast(t('err.unknown'), { bad: true });
@@ -343,7 +367,7 @@ function OrgMainEdit({
   // Ссылка на сохранённый логотип — из свежих данных, если запись та же: новая ссылка взамен истёкшей
   // приходит перечитыванием «Основного», а не сохранением.
   const savedLogo = profile.version === saved.version ? profile.logo : saved.logo;
-  const shownLogo = logo?.url ?? savedLogo?.url;
+  const shownLogo = logo?.url ?? (dropLogo ? undefined : savedLogo?.url);
   return (
     <div className="flex flex-col gap-3.5">
       <Box title={t('org.main.title')}>
@@ -460,6 +484,15 @@ function OrgMainEdit({
                     onChange={(e) => pickLogo(e.target.files?.[0])}
                     className={`${inputClass({ file: true })} cursor-pointer`}
                   />
+                  {shownLogo ? (
+                    <button
+                      type="button"
+                      className={`${buttonClass('ghost', 'sm')} ${TOUCH_AREA}`}
+                      onClick={removeLogo}
+                    >
+                      {t('org.logo.remove')}
+                    </button>
+                  ) : null}
                 </div>
               )}
             </Field>

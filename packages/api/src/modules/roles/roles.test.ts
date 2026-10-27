@@ -569,6 +569,7 @@ describe.skipIf(!databaseAvailable())('Роли: API', () => {
       expect(await apiErr(byHr)).toEqual({
         code: 'owner_granted_role',
         message: 'Роль с правами, которые выдаёт только владелец, удаляет владелец',
+        details: { variant: 'delete' },
       });
       expect(
         (await call('DELETE', `/api/roles/${r.id}?version=${saved.version}`, owner)).status,

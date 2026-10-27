@@ -354,7 +354,8 @@ function WaitDays({
 
 /**
  * «Напоминания о сроках по умолчанию» (прототип: chip «за N дней» с крестиком, поле «+ день» по Enter,
- * метка «в день срока — всегда»): дни от 1 до 60, без повторов, от большего к меньшему.
+ * метка «в день срока — всегда»): дни от 1 до 60, от большего к меньшему; повтор не добавляется —
+ * уведомление «За N дней уже есть в наборе».
  */
 function RemindDays({
   days,
@@ -375,7 +376,8 @@ function RemindDays({
     if (!draft.trim()) return;
     if (!isValidRemindDays([n])) return toast(t('err.remind_days_invalid'), { bad: true });
     setDraft('');
-    if (!days.includes(n)) onSave([...days, n], t('org.remind.saved'));
+    if (days.includes(n)) return toast(t(`org.remind.exists.${pluralForm(n)}`, { n }));
+    onSave([...days, n], t('org.remind.saved'));
   };
   return (
     <Box title={t('org.remind.title')}>

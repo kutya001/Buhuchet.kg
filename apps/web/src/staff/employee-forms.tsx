@@ -1,11 +1,13 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { joinPhone } from '@buhuchet/domain';
+import { joinPhone, splitPhone } from '@buhuchet/domain';
 import {
   CreatedEmployee,
+  EditEmployeeForm,
   Employee,
   NewEmployeeForm,
+  type EditEmployeeFormInput,
   type NewEmployeeFormInput,
   type PhoneCodes,
   type RoleListItem,
@@ -355,6 +357,158 @@ export function NewEmployeeDialog({
           </Field>
         </FormGrid>
         <Note icon="tg">{t('staff.new.tg_note')}</Note>
+      </form>
+    </Modal>
+  );
+}
+
+/**
+ * «Изменить» — ФИО и телефон сотрудника (docs/deviations.md, п. 16, решение А; в прототипе окна нет):
+ * поля как в «Новом сотруднике», «Сохранить» отправляет только изменённое. ФИО и телефон владельца
+ * меняет сам владелец — отказ сервера уведомлением; запись изменили другие — «Запись изменена другим
+ * пользователем» и «Перечитать».
+ */
+export function EditEmployeeDialog({
+  employee,
+  codes,
+  open,
+  onClose,
+  onDone,
+}: {
+  employee: Employee;
+  codes: PhoneCodes['items'];
+  open: boolean;
+  onClose: () => void;
+  onDone: (employee: Employee) => void;
+}) {
+  const t = useT();
+  const toast = useToast();
+  const errorText = useErrorText();
+  const id = useId();
+  const [current, setCurrent] = useState(employee);
+  const [phone, setPhone] = useState<PhoneInputValue>(() => splitPhone(employee.phone, codes));
+  const [phoneError, setPhoneError] = useState<string | undefined>();
+  const [changed, setChanged] = useState(false);
+  const [reloading, setReloading] = useState(false);
+  const {
+    register,
+    handleSubmit,
+    setError,
+    reset,
+    formState: { errors, isSubmitting, isDirty },
+  } = useForm<EditEmployeeFormInput, unknown, EditEmployeeForm>({
+    resolver: zodResolver(EditEmployeeForm),
+    defaultValues: { fullName: employee.fullName },
+  });
+  const fullName = register('fullName');
+  const phoneId = `${id}-phone`;
+  const typedPhone = joinPhone(phone.cc, phone.local, codes);
+  const phoneDirty = typedPhone.phone !== current.phone;
+
+  const reload = async () => {
+    setReloading(true);
+    const res = await callApi(() => api.api.staff[':id'].$get({ param: { id: employee.id } }));
+    setReloading(false);
+    const fresh = res.ok ? Employee.safeParse(res.data) : null;
+    if (!fresh?.success) return toast(t('err.unknown'), { bad: true });
+    setCurrent(fresh.data);
+    reset({ fullName: fresh.data.fullName });
+    setPhone(splitPhone(fresh.data.phone, codes));
+    setPhoneError(undefined);
+    setChanged(false);
+  };
+
+  const submit = (event: FormEvent) => {
+    const bad = typedPhone.missing > 0 ? t('staff.err.phone', { n: typedPhone.need }) : undefined;
+    setPhoneError(bad);
+    void handleSubmit(async (values) => {
+      if (bad) return document.getElementById(phoneId)?.focus();
+      const patch = {
+        ...(values.fullName !== current.fullName ? { fullName: values.fullName } : {}),
+        ...(phoneDirty ? { phone: typedPhone.phone } : {}),
+      };
+      if (Object.keys(patch).length === 0) return onClose();
+      const res = await callApi(() =>
+        api.api.staff[':id'].$patch({
+          param: { id: employee.id },
+          json: { version: current.version, ...patch },
+        }),
+      );
+      if (res.ok) {
+        const body = Employee.safeParse(res.data);
+        if (body.success) onDone(body.data);
+        onClose();
+        return toast(t('staff.edit.done'), { icon: 'check' });
+      }
+      const code = res.error.code;
+      if (code === 'record_changed') return setChanged(true);
+      const message = errorText(res.error);
+      if (code === 'invalid_full_name')
+        return setError('fullName', { type: 'server', message }, { shouldFocus: true });
+      if (code === 'invalid_phone') {
+        setPhoneError(message);
+        return document.getElementById(phoneId)?.focus();
+      }
+      toast(message, { bad: true });
+    })(event);
+  };
+  const formId = `${id}-form`;
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      kind="form"
+      title={t('staff.edit.title')}
+      sub={current.fullName}
+      dirty={isDirty || phoneDirty}
+      footer={
+        <>
+          <button type="button" className={buttonClass('ghost')} onClick={onClose}>
+            {t('btn.cancel')}
+          </button>
+          <button
+            type="submit"
+            form={formId}
+            className={buttonClass('cta')}
+            disabled={isSubmitting || changed}
+          >
+            {t('btn.save')}
+          </button>
+        </>
+      }
+    >
+      {changed ? (
+        <RecordChangedNotice
+          message={t('err.record_changed')}
+          reloadLabel={t('form.reload')}
+          onReload={() => void reload()}
+          reloading={reloading}
+        />
+      ) : null}
+      <form id={formId} onSubmit={submit} noValidate className="flex flex-col gap-3.5">
+        <Field
+          id={`${id}-fio`}
+          label={t('staff.col.full_name')}
+          required
+          error={fieldError(t, errors.fullName)}
+        >
+          {(control) => <input {...control} {...fullName} type="text" className={inputClass()} />}
+        </Field>
+        <Field id={phoneId} label={t('staff.col.phone')} error={phoneError}>
+          {(control) => (
+            <PhoneInput
+              codes={codes}
+              value={phone}
+              onChange={(next) => {
+                setPhone(next);
+                setPhoneError(undefined);
+              }}
+              control={control}
+              codeLabel={t('staff.phone.code')}
+            />
+          )}
+        </Field>
       </form>
     </Modal>
   );

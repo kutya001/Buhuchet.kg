@@ -5,6 +5,7 @@ import type { Translate } from '../l10n/translate';
 /** Что делают пункты меню сотрудника: открывают окно или отправляют запрос. */
 export interface StaffMenuRun {
   open: (e: Employee) => void;
+  edit: (e: Employee) => void;
   changeRole: (e: Employee) => void;
   resetPassword: (e: Employee) => void;
   block: (e: Employee) => void;
@@ -13,8 +14,10 @@ export interface StaffMenuRun {
 
 /**
  * Пункты меню сотрудника (прототип modules/staff.js, empActions): «Открыть карточку» — всем, кто видит
- * список. С правом «Сотрудники и роли» и не у владельца организации — ещё «Сменить роль», «Сбросить
- * пароль», черта и «Заблокировать» (красным) или у заблокированного — «Разблокировать». На своей
+ * список. С правом «Сотрудники и роли» и не у владельца организации — ещё «Изменить» (ФИО и телефон,
+ * docs/deviations.md, п. 16), «Сменить роль», «Сбросить пароль», черта и «Заблокировать» (красным)
+ * или у заблокированного — «Разблокировать». ФИО и телефон владельца меняет только он сам: у него на
+ * своей строке — «Изменить», у остальных строка владельца — только «Открыть карточку». На своей
  * строке «Сменить роль», «Сбросить пароль» и «Заблокировать» недоступны с причиной: свою роль меняет
  * владелец, себя не блокируют, а свой пароль меняют в «Мой профиль». Остальные запреты проверяет
  * сервер (docs/deviations.md, п. 15). «Передать контрагентов» добавит модуль «Контрагенты» (поток А).
@@ -38,10 +41,18 @@ export function staffMenu({
     const open: ActionEntry[] = card
       ? []
       : [{ id: 'open', label: t('staff.action.open'), icon: 'user', run: () => run.open(e) }];
-    if (!canManage || e.role.isOwner) return open;
     const self = e.id === employeeId;
+    const edit: ActionEntry = {
+      id: 'edit',
+      label: t('staff.action.edit'),
+      icon: 'edit',
+      run: () => run.edit(e),
+    };
+    if (!canManage) return open;
+    if (e.role.isOwner) return self ? [...open, edit] : open;
     return [
       ...open,
+      edit,
       {
         id: 'change-role',
         label: t('staff.action.change_role'),
