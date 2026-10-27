@@ -1,4 +1,5 @@
 import {
+  ACCOUNT_STATUSES,
   FULL_NAME_MAX_LENGTH,
   isValidLogin,
   isValidOrgInn,
@@ -77,6 +78,41 @@ export type CreatedOrganization = z.infer<typeof CreatedOrganization>;
 /** Заблокировать или разблокировать организацию: версия, которую видел администратор. */
 export const OrganizationVersionRequest = z.object({ version: RecordVersion });
 export type OrganizationVersionRequest = z.infer<typeof OrganizationVersionRequest>;
+
+/**
+ * Учётная запись в Админке → «Учётные записи» (ТЗ «Админка» → «Модуль учётных записей»; прототип
+ * admin/accounts-orgs.js, renderAccounts): логин, ФИО, организация, роль, последний вход, статус. У
+ * администратора платформы ФИО и роль — «Администратор платформы», организация — «Платформа».
+ */
+export const AdminUser = z.object({
+  id: Uuid,
+  login: z.string(),
+  fullName: z.string(),
+  /** null — администратор платформы. */
+  orgId: Uuid.nullable(),
+  orgName: z.string(),
+  role: z.string(),
+  isPlatformAdmin: z.boolean(),
+  lastLoginAt: z.iso.datetime().nullable(),
+  /** Заблокирована администратором платформы. */
+  blocked: z.boolean(),
+  /**
+   * `blocked` — администратором платформы, `owner_blocked` — сотрудника заблокировал владелец
+   * организации (docs/deviations.md, п. 49).
+   */
+  status: z.enum(ACCOUNT_STATUSES),
+  audit: RecordAudit,
+  version: RecordVersion,
+});
+export type AdminUser = z.infer<typeof AdminUser>;
+
+/** Страница списка учётных записей платформы: сортировка, страницы и фильтры — на сервере. */
+export const AdminUserList = listPageSchema(AdminUser);
+export type AdminUserList = z.infer<typeof AdminUserList>;
+
+/** Заблокировать или разблокировать учётную запись: версия, которую видел администратор. */
+export const AdminUserVersionRequest = z.object({ version: RecordVersion });
+export type AdminUserVersionRequest = z.infer<typeof AdminUserVersionRequest>;
 
 const message = (key: UiTextKey) => ({ message: key });
 

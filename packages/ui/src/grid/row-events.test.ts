@@ -176,6 +176,29 @@ describe('нажатия по строке списка', () => {
     expect(setup(false).events.hasMenu(ROW)).toBe(false);
   });
 
+  it('список без карточки с `openMenu`: нажатие и Enter открывают меню у строки, у записи без меню — ничего', () => {
+    const onMenu = vi.fn();
+    const events = rowEvents<typeof ROW>(press(), {
+      onMenu,
+      hasMenu: (r) => r.id !== 'self',
+      openMenu: true,
+    });
+    const h = events.handlers(ROW);
+    h.onClick(mouse());
+    h.onKeyDown(key('Enter'));
+    h.onClick(mouse({ tag: 'button' }));
+    expect(onMenu.mock.calls).toEqual([
+      [ROW, { anchor: row }],
+      [ROW, { anchor: row }],
+    ]);
+    events.handlers({ id: 'self' }).onClick(mouse());
+    expect(onMenu).toHaveBeenCalledTimes(2);
+    // Без `openMenu` нажатие на строку без карточки ничего не делает.
+    const plain = rowEvents<typeof ROW>(press(), { onMenu });
+    plain.handlers(ROW).onClick(mouse());
+    expect(onMenu).toHaveBeenCalledTimes(2);
+  });
+
   it('у записи без действий (владелец) меню нет: ни правым кликом, ни клавишами, ни пальцем', () => {
     const onMenu = vi.fn();
     const OWNER = { id: 'owner' };

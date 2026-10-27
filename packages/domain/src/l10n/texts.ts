@@ -1,4 +1,4 @@
-import { ADMIN_TEXTS } from './admin-texts';
+import { ADMIN_ACCOUNTS_TEXTS, ADMIN_TEXTS } from './admin-texts';
 import { AUTH_TEXTS } from './auth-texts';
 import { DICTS_TEXTS } from './dicts-texts';
 import { GRID_TEXTS } from './grid-texts';
@@ -62,6 +62,7 @@ export const UI_TEXTS = {
   ...STAFF_TEXTS,
   ...STATUS_TEXTS,
   ...ORG_TEXTS,
+  ...ADMIN_ACCOUNTS_TEXTS,
   ...ADMIN_TEXTS,
   ...DICTS_TEXTS,
   ...MONEY_TEXTS,

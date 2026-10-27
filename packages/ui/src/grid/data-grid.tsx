@@ -83,6 +83,8 @@ export interface DataGridProps<Row> {
   actions?: (row: Row) => readonly ActionEntry[];
   /** Открыть запись (карточку) нажатием на строку или Enter. */
   onOpen?: (row: Row) => void;
+  /** Карточки нет: нажатие на строку и Enter открывают меню действий у строки (прототип: `open` — `menu`). */
+  openMenu?: boolean;
   /** Массовые действия: есть — у строк галочки, при выборе — панель «Выбрано: N». */
   bulk?: readonly GridBulkAction<Row>[];
   /** Вид закреплён модулем: переключателя «Таблица / Карточки» нет. */
@@ -138,6 +140,7 @@ export function DataGrid<Row>({
   rowTone,
   actions,
   onOpen,
+  openMenu = false,
   bulk,
   fixedView,
   filters = NO_FILTERS,
@@ -164,6 +167,7 @@ export function DataGrid<Row>({
     onOpen,
     onMenu: actions ? (row, place) => setMenu({ row, place }) : undefined,
     hasMenu: actions ? (row) => actions(row).length > 0 : undefined,
+    openMenu,
   });
 
   const keys = columns.map((c) => c.key);
@@ -301,7 +305,7 @@ export function DataGrid<Row>({
         totals={data.totals}
         total={data.total}
         hasActions={!!actions}
-        clickable={!!onOpen}
+        clickable={!!onOpen || (openMenu && !!actions)}
         events={events}
         selection={selection}
         filter={
@@ -327,7 +331,7 @@ export function DataGrid<Row>({
         rows={data.items}
         rowKey={rowKey}
         rowTone={rowTone}
-        clickable={!!onOpen}
+        clickable={!!onOpen || (openMenu && !!actions)}
         events={events}
         selection={selection}
         totals={data.totals}
