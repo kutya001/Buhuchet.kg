@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { KeyboardEvent, ReactNode } from 'react';
 
 /** Столбец маленькой таблицы карточки: ключ, подпись, число справа. */
 export interface MiniColumn {
@@ -16,13 +16,15 @@ export interface MiniRow {
 /**
  * Маленькая таблица в карточке записи (прототип css/cards.css `table.mini.m-cards`): на ПК —
  * таблица с серой шапкой, узкая прокручивается вбок; на телефоне — строки карточками по два значения с
- * подписями, первый столбец — заголовок карточки. Пустая — одна строка с серым текстом.
+ * подписями, первый столбец — заголовок карточки. Пустая — одна строка с серым текстом. С `onOpen`
+ * строка открывает запись (нажатием или Enter), как строка списка.
  */
 export function MiniTable({
   columns,
   rows,
   empty,
   label,
+  onOpen,
 }: {
   columns: readonly MiniColumn[];
   rows: readonly MiniRow[];
@@ -30,6 +32,8 @@ export function MiniTable({
   empty: string;
   /** Название таблицы для экранного диктора. */
   label: string;
+  /** Открыть запись строки (ключ строки). */
+  onOpen?: (key: string) => void;
 }) {
   const num = (c: MiniColumn) => (c.numeric ? 'text-left md:text-right' : 'text-left');
   return (
@@ -63,7 +67,19 @@ export function MiniTable({
             rows.map((row) => (
               <tr
                 key={row.key}
-                className="md:last:[&>td]:border-b-0 max-md:mb-2 max-md:grid max-md:grid-cols-2 max-md:gap-x-3 max-md:gap-y-1.5 max-md:rounded-lg max-md:border max-md:border-line max-md:bg-pane max-md:px-3 max-md:py-2.5 max-md:last:mb-0"
+                {...(onOpen
+                  ? {
+                      'data-open': '',
+                      tabIndex: 0,
+                      onClick: () => onOpen(row.key),
+                      onKeyDown: (e: KeyboardEvent<HTMLTableRowElement>) => {
+                        if (e.key !== 'Enter') return;
+                        e.preventDefault();
+                        onOpen(row.key);
+                      },
+                    }
+                  : {})}
+                className="data-open:cursor-pointer data-open:hover:bg-row-hover data-open:focus-visible:bg-row-hover data-open:focus-visible:outline-none md:last:[&>td]:border-b-0 max-md:mb-2 max-md:grid max-md:grid-cols-2 max-md:gap-x-3 max-md:gap-y-1.5 max-md:rounded-lg max-md:border max-md:border-line max-md:bg-pane max-md:px-3 max-md:py-2.5 max-md:last:mb-0"
               >
                 {columns.map((c, i) => (
                   <td

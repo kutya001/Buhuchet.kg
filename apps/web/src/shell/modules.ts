@@ -310,6 +310,7 @@ export const MODULES: Record<MenuModuleId, ModuleDef> = {
         when: (a) => a.can('dicts'),
       },
       { id: 'request', icon: 'send', label: 'add.dicts.request' },
+      { id: 'mine', icon: 'list', label: 'add.dicts.mine' },
     ],
   },
   org: {

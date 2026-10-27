@@ -17,6 +17,7 @@ import {
   Field,
   FormGrid,
   inputClass,
+  KeyValues,
   MiniTable,
   Modal,
   StatusPill,
@@ -37,9 +38,18 @@ const dictTitle = (t: Translate, dict: DictRequestDict) => t(`dicts.platform.dic
 /**
  * «Попросить добавить» (прототип modules/dicts.js `requestDlg`): справочник (по умолчанию «Виды
  * отчётов»), «Что добавить» — обязательно, комментарий. Запрос уходит администратору платформы со
- * статусом «Новый»; после отправки — уведомление «Запрос отправлен администратору платформы».
+ * статусом «Новый»; после отправки — уведомление «Запрос отправлен администратору платформы» со ссылкой
+ * «Мои запросы».
  */
-function DictRequestDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+function DictRequestDialog({
+  open,
+  onClose,
+  onMine,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onMine: () => void;
+}) {
   const t = useT();
   const toast = useToast();
   const errorText = useErrorText();
@@ -66,7 +76,10 @@ function DictRequestDialog({ open, onClose }: { open: boolean; onClose: () => vo
     if (!res.ok) return toast(errorText(res.error), { bad: true, icon: 'alert' });
     void client.invalidateQueries({ queryKey: dictRequestsQuery.queryKey });
     onClose();
-    toast(t('dicts.req.sent'), { icon: 'send' });
+    toast(t('dicts.req.sent'), {
+      icon: 'send',
+      action: { label: t('dicts.req.mine'), run: onMine },
+    });
   };
 
   return (
@@ -149,49 +162,95 @@ const STATUS_LOOK: Record<DictRequestStatus, { tone: StatusTone; icon: IconName 
   rejected: { tone: 'faint', icon: 'ban' },
 };
 
-/** Строка «Моих запросов»: дата, справочник, что просили (с комментарием), статус, ответ, кто отправил. */
+const dash = <span className="text-faint">—</span>;
+const dateOf = (r: DictRequest) => formatDateRu(bishkekDate(new Date(r.createdAt)));
+
+function statusPill(t: Translate, r: DictRequest) {
+  return (
+    <StatusPill {...STATUS_LOOK[r.status]} label={t(`dicts.req.status.${r.status}`)} size="sm" />
+  );
+}
+
+/** Строка «Моих запросов» — столбцы прототипа v59 (`reqCols`): дата, справочник, что просили, комментарий, кто отправил, статус, ответ. */
 function requestRow(r: DictRequest, t: Translate) {
   return {
     key: r.id,
     cells: {
-      at: formatDateRu(bishkekDate(new Date(r.createdAt))),
+      at: dateOf(r),
       dict: dictTitle(t, r.dict),
-      what: (
-        <span className="flex flex-col gap-px">
-          <b className="font-semibold">{r.what}</b>
-          {r.comment ? <span className="text-[12px] text-muted">{r.comment}</span> : null}
-        </span>
-      ),
-      status: (
-        <StatusPill
-          {...STATUS_LOOK[r.status]}
-          label={t(`dicts.req.status.${r.status}`)}
-          size="sm"
-        />
-      ),
-      answer: r.answer || <span className="text-faint">—</span>,
+      what: <b className="font-semibold">{r.what}</b>,
+      comment: r.comment || dash,
       by: r.createdBy ?? '',
+      status: statusPill(t, r),
+      answer: r.answer || dash,
     },
   };
 }
 
+/** Запрос целиком, только просмотр (прототип v59 `reqViewDlg`): длинный ответ читается полностью. */
+function RequestView({
+  open,
+  onClose,
+  request: r,
+}: {
+  open: boolean;
+  onClose: () => void;
+  request: DictRequest;
+}) {
+  const t = useT();
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      kind="card"
+      title={r.what}
+      sub={`${dictTitle(t, r.dict)} · ${dateOf(r)}`}
+      footer={
+        <>
+          <div className="flex-1" />
+          <button type="button" className={buttonClass('cta')} onClick={onClose}>
+            {t('btn.done')}
+          </button>
+        </>
+      }
+    >
+      <KeyValues
+        items={[
+          { id: 'status', label: t('dicts.req.col.status'), value: statusPill(t, r) },
+          { id: 'by', label: t('dicts.req.col.by'), value: r.createdBy ?? '' },
+          { id: 'comment', label: t('dicts.req.col.comment'), value: r.comment || '—', wide: true },
+          {
+            id: 'answer',
+            label: t('dicts.req.col.answer'),
+            value: r.answer || t('dicts.req.view.no_answer'),
+            wide: true,
+          },
+        ]}
+      />
+    </Modal>
+  );
+}
+
 // ОТКЛОНЕНИЕ: docs/deviations.md#46 — решение А: в прототипе своих запросов организация не видит.
 /**
- * «Мои запросы» (решение заказчика 27.10.2026, docs/deviations.md п. 46): запросы организации
- * администратору платформы, сначала новые — что просили, статус («Новый», «Добавлено», «Отклонено»)
- * и ответ администратора.
+ * «Мои запросы» (решение заказчика 27.10.2026, docs/deviations.md п. 46; прототип v59 `myReqDlg`):
+ * запросы организации администратору платформы, сначала новые — что просили, статус («Новый»,
+ * «Добавлено», «Отклонено») и ответ администратора; строка открывает запрос целиком.
  */
 function MyRequestsWindow({ open, onClose }: { open: boolean; onClose: () => void }) {
   const t = useT();
   const requests = useQuery(dictRequestsQuery);
+  const [viewing, setViewing] = useState<DialogSlot<DictRequest> | null>(null);
   const columns = [
     { key: 'at', label: t('dicts.req.col.at') },
     { key: 'dict', label: t('dicts.req.col.dict') },
     { key: 'what', label: t('dicts.req.col.what') },
+    { key: 'comment', label: t('dicts.req.col.comment') },
+    { key: 'by', label: t('dicts.req.col.by') },
     { key: 'status', label: t('dicts.req.col.status') },
     { key: 'answer', label: t('dicts.req.col.answer') },
-    { key: 'by', label: t('dicts.req.col.by') },
   ];
+  const items = requests.data?.items;
   let body: ReactNode;
   if (requests.isError) {
     body = (
@@ -209,15 +268,21 @@ function MyRequestsWindow({ open, onClose }: { open: boolean; onClose: () => voi
         ]}
       />
     );
-  } else if (!requests.data) {
+  } else if (!items) {
     body = <div className="h-24" aria-busy="true" />;
+  } else if (items.length === 0) {
+    body = <EmptyState icon="send" title={t('dicts.req.empty')} text={t('dicts.req.empty_text')} />;
   } else {
     body = (
       <MiniTable
         columns={columns}
-        rows={requests.data.items.map((r) => requestRow(r, t))}
+        rows={items.map((r) => requestRow(r, t))}
         empty={t('dicts.req.empty')}
         label={t('dicts.req.mine')}
+        onOpen={(key) => {
+          const r = items.find((x) => x.id === key);
+          if (r) setViewing(openSlot(r));
+        }}
       />
     );
   }
@@ -226,25 +291,33 @@ function MyRequestsWindow({ open, onClose }: { open: boolean; onClose: () => voi
       open={open}
       onClose={onClose}
       kind="card"
-      size="mid"
+      size="wide"
       title={t('dicts.req.mine')}
       sub={t('dicts.req.mine_sub')}
       footer={
         <>
           <div className="flex-1" />
           <button type="button" className={buttonClass('cta')} onClick={onClose}>
-            {t('btn.close')}
+            {t('btn.done')}
           </button>
         </>
       }
     >
       <div data-dict-requests="">{body}</div>
+      {viewing ? (
+        <RequestView
+          key={`view-${viewing.n}`}
+          open={viewing.open}
+          onClose={() => setViewing(closeSlot)}
+          request={viewing.data}
+        />
+      ) : null}
     </Modal>
   );
 }
 
-/** Окно «Попросить добавить»: открыть заново — пустая форма. */
-export function useDictRequest(): { open: () => void; dialog: ReactNode } {
+/** Окно «Попросить добавить»: открыть заново — пустая форма; `onMine` — ссылка «Мои запросы» в уведомлении. */
+export function useDictRequest(onMine: () => void): { open: () => void; dialog: ReactNode } {
   const [slot, setSlot] = useState<DialogSlot<null> | null>(null);
   return {
     open: () => setSlot(openSlot(null)),
@@ -253,6 +326,7 @@ export function useDictRequest(): { open: () => void; dialog: ReactNode } {
         key={`request-${slot.n}`}
         open={slot.open}
         onClose={() => setSlot(closeSlot)}
+        onMine={onMine}
       />
     ) : null,
   };

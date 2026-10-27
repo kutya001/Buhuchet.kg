@@ -218,6 +218,7 @@ export const SHELL_TEXTS = {
   'add.staff.role': { ru: 'Роль', section: 'Добавление' },
   'add.dicts.catalog': { ru: 'Подключить из каталога', section: 'Добавление' },
   'add.dicts.request': { ru: 'Попросить добавить', section: 'Добавление' },
+  'add.dicts.mine': { ru: 'Мои запросы', section: 'Добавление' },
   'add.orgs.org': { ru: 'Организация', section: 'Добавление' },
   'add.tg.cast': { ru: 'Объявление', section: 'Добавление' },
 

@@ -202,18 +202,18 @@ function Tiles({
 /**
  * «Справочники» → «Справочники платформы» (ТЗ «Справочники платформы — только просмотр»; прототип
  * modules/dicts.js `renderDicts`, dict-guide.js `orgDictGroups`): пояснение, что списки ведёт
- * администратор платформы, с «Попросить добавить» и «Мои запросы» (docs/deviations.md п. 46); плитки
- * справочников по группам — плитка открывает окно со значениями, «Виды отчётов» — свою вкладку;
- * «Поиск по всем значениям». «+ Добавить» → «Попросить добавить» и «Подключить из каталога» — тоже
+ * администратор платформы, с «Попросить добавить»; плитки справочников по группам — плитка открывает
+ * окно со значениями, «Виды отчётов» — свою вкладку; «Поиск по всем значениям». «+ Добавить» →
+ * «Подключить из каталога», «Попросить добавить» и «Мои запросы» (docs/deviations.md п. 46) — тоже
  * здесь.
  */
 export function PlatformDicts() {
   const t = useT();
   const router = useRouter();
   const pick = useTaxPick();
-  const request = useDictRequest();
   const mine = useMyRequests();
-  useDictsAddRequest({ catalog: pick.open, request: request.open });
+  const request = useDictRequest(mine.open);
+  useDictsAddRequest({ catalog: pick.open, request: request.open, mine: mine.open });
   const [win, setWin] = useState<DialogSlot<DictTile> | null>(null);
 
   const open = (x: PlatformDictGroups['groups'][number]['tabs'][number], group: string) => {
@@ -226,16 +226,10 @@ export function PlatformDicts() {
       <Note icon="lock">
         <span className="flex flex-wrap items-center gap-2.5">
           <span className="min-w-0 flex-1">{t('dicts.platform.note')}</span>
-          <span className="flex flex-wrap gap-2">
-            <button type="button" className={buttonClass('default', 'sm')} onClick={request.open}>
-              <Icon name="send" size="sm" />
-              {t('dicts.req.title')}
-            </button>
-            <button type="button" className={buttonClass('default', 'sm')} onClick={mine.open}>
-              <Icon name="history" size="sm" />
-              {t('dicts.req.mine')}
-            </button>
-          </span>
+          <button type="button" className={buttonClass('default', 'sm')} onClick={request.open}>
+            <Icon name="send" size="sm" />
+            {t('dicts.req.title')}
+          </button>
         </span>
       </Note>
       <Tiles onOpen={open} />

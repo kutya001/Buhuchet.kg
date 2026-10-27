@@ -134,10 +134,13 @@ describe('вкладки и «+ Добавить» по правам и учёт
     expect(addActions('staff', access)).toEqual([]);
   });
 
-  it('загрузка показателей из Excel — отдельной кнопкой; «Запросить вид отчёта» — без права', () => {
+  it('загрузка показателей из Excel — отдельной кнопкой; «Попросить добавить» и «Мои запросы» — без права', () => {
     const kpi = addActions('kpi', shellAccess(me()));
     expect(kpi.find((a) => a.id === 'excel')?.separate).toBe(true);
-    expect(ids(addActions('dicts', shellAccess(me({ permissions: [] }))))).toEqual(['request']);
+    expect(ids(addActions('dicts', shellAccess(me({ permissions: [] }))))).toEqual([
+      'request',
+      'mine',
+    ]);
   });
 
   it('«Справочники платформы»: вкладки по группам, «+ Добавить» — по вкладке', () => {

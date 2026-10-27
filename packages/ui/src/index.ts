@@ -50,6 +50,7 @@ export {
   ToastProvider,
   useToast,
   type ShowToast,
+  type ToastAction,
   type ToastLabels,
   type ToastOptions,
 } from './toast';

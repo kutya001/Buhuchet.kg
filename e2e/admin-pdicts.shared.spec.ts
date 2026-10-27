@@ -262,7 +262,11 @@ test.describe('Админка: справочники платформы', () =>
     // Организация видит статус и ответ в окне «Мои запросы».
     await signIn(page.request, origin, 'erkin', DEMO_PASSWORD);
     await page.goto('/app/dicts/platform');
-    await page.getByRole('button', { name: 'Мои запросы' }).click();
+    await page.getByRole('button', { name: 'Добавить', exact: true }).click();
+    await page
+      .getByRole('menu', { name: 'Добавить' })
+      .getByRole('menuitem', { name: 'Мои запросы' })
+      .click();
     const mine = page.getByRole('dialog', { name: 'Мои запросы' });
     const rejected = mine.locator('[data-mini-table] tr').filter({ hasText: what });
     await expect(rejected).toContainText('Отклонено');
@@ -270,5 +274,10 @@ test.describe('Админка: справочники платформы', () =>
     await expect(mine.locator('[data-mini-table] tr').filter({ hasText: added })).toContainText(
       'Добавлено',
     );
+    // Нажатие на строку показывает ответ целиком.
+    await rejected.click();
+    const full = page.getByRole('dialog', { name: what });
+    await expect(full).toContainText('Отклонено');
+    await expect(full).toContainText('Это не форма собственности');
   });
 });
