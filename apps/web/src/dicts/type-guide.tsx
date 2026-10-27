@@ -382,17 +382,22 @@ export function TaxGuide({
 const benefitName = (catalog: Catalog) => (code: string) =>
   catalog.benefits.find((b) => b.code === code)?.name ?? code;
 
-/** Налог свёрнутым блоком (`details.tg-tax`): название и код; один налог — раскрыт. */
+/**
+ * Налог свёрнутым блоком (`details.tg-tax`): название и код (`code`; в описании строки «Выбора
+ * налогов» — без кода, как `pkDescHtml`); один налог — раскрыт.
+ */
 function TaxBlock({
   tax,
   open,
   prefix,
+  code = true,
   catalog,
   gkedNames,
 }: {
   tax: Tax;
   open: boolean;
   prefix: string;
+  code?: boolean;
   catalog: Catalog;
   gkedNames: Taxes['gkedNames'];
 }) {
@@ -406,7 +411,8 @@ function TaxBlock({
         <Icon name="coins" size="sm" />
         <span className="min-w-0 flex-1">
           {prefix ? `${prefix} ` : ''}
-          <b>{tax.name}</b> <span className={`text-faint ${MONO_CLASS}`}>{tax.code}</span>
+          <b>{tax.name}</b>
+          {code ? <span className={`text-faint ${MONO_CLASS}`}> {tax.code}</span> : null}
         </span>
         <Icon name="down" size="sm" className="transition-transform group-open:rotate-180" />
       </summary>
@@ -605,6 +611,7 @@ export function TypeDesc({
               tax={tax}
               open={false}
               prefix={t('dicts.guide.tax_more')}
+              code={false}
               catalog={catalog}
               gkedNames={taxes.gkedNames}
             />
