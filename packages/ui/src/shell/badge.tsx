@@ -1,7 +1,8 @@
 import type { ShellCount } from './types';
 
 const TONES = {
-  none: 'bg-sel text-muted',
+  // Серый — `--label` на `--label-bg`, как в прототипе v59: не ниже 4,5 : 1 (docs/deviations.md, п. 26).
+  none: 'bg-label-bg text-label',
   // Красный — цвет опасной кнопки: в тёмной теме темнее, чем в прототипе, контраст не ниже 4,5 : 1.
   red: 'bg-danger-btn text-on-accent',
   yellow:

@@ -45,7 +45,7 @@
 
 /* ── Login ── */
 .login{position:fixed;inset:0;z-index:100;background:var(--frame);display:grid;place-items:center;padding:24px 16px;overflow:auto}
-.login .card{width:min(400px,100%);background:var(--pane);border:1px solid var(--border);border-radius:var(--r-xl);box-shadow:var(--shadow-l);padding:28px 26px;display:flex;flex-direction:column;gap:14px;animation:slideUp .35s forwards}
+.login .card{width:min(400px,100%);background:var(--pane);border:1px solid var(--border);border-radius:var(--r-xl);box-shadow:var(--shadow-l);padding:28px 26px;display:flex;flex-direction:column;gap:14px;animation:slideUp .25s forwards}
 .login h2{margin:0;font-size:20px;font-weight:720;letter-spacing:-.015em}
 
 /* Тариф Соцфонда: признаки Да / Нет, выбор тарифа, ставки (ТЗ «Тариф страховых взносов в Соцфонд (СПиНО)») */

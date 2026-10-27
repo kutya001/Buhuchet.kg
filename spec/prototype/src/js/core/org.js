@@ -14,7 +14,22 @@ permsBuild();
 function permsBuild(){PERMS.splice(0,PERMS.length,...PERM_REF.map(p=>[p.id,p.name,p.desc,p.group]));PERM_GROUPS.forEach(g=>g.perms=PERMS.filter(p=>p[3]===g.id))}
 // Кто может менять галочку права в роли: владелец — всё, кроме прав, которые есть только у владельца; остальные (с правом «Сотрудники и роли») — не свою роль и не права, которые выдаёт только владелец
 const OWNER_ONLY=['org'],OWNER_GRANTS=['rollback','archiveRest','staff'];
-function roleLock(r,p,sel){if(r.locked)return 'Права владельца не меняются';const v=PERM_VIEW[permGroup(p)];if(sel&&v&&v!==p&&!sel.has(v))return 'Сначала дайте просмотр';if(OWNER_ONLY.includes(p))return 'Это право есть только у владельца организации';if(me().role==='owner')return '';if(myRole()&&myRole().id===r.id)return 'Права своей роли меняет владелец';if(OWNER_GRANTS.includes(p))return 'Это право выдаёт только владелец';return ''}
+function roleLock(r,p,sel){if(r.locked)return 'Права владельца не меняются';const v=PERM_VIEW[permGroup(p)];if(sel&&v&&v!==p&&!sel.has(v))return 'Сначала дайте просмотр';if(OWNER_ONLY.includes(p))return 'Это право есть только у владельца организации';if(me().role==='owner')return '';if(myRole()&&myRole().id===r.id)return 'Права своей роли меняет владелец';if(OWNER_GRANTS.includes(p))return 'Это право выдаёт только владелец';if(!(myRole()||{perms:[]}).perms.includes(p))return 'Этого права нет у вашей роли';return ''}
+// Сотрудник с правом «Сотрудники и роли», не владелец (ТЗ «Сотрудники → Роли», решение заказчика 27.10.2026): свою роль, роли с правами «выдаёт только владелец» и роли шире своей
+// не меняет, не назначает и не снимает; себе и сотрудникам с такими ролями не меняет роль, не сбрасывает пароль, не блокирует и не разблокирует; недоступные кнопки скрыты
+// «Шире своей» — по действующим правам и области, как в продукте (roleWithinRights): право группы без её «Просматривать …» и «Все контрагенты» без просмотра группы не считаются
+const roleEff=r=>r.perms.filter(p=>{const v=PERM_VIEW[permGroup(p)];return !v||v===p||r.perms.includes(v)});
+const roleAllIn=(r,g,eff)=>eff.includes(PERM_VIEW[g])&&(eff.includes('viewAll')||roleScope(r)[g]==='all');
+const roleWider=(r,m)=>{if(!m||r.locked)return true;const er=roleEff(r),em=roleEff(m);return er.some(p=>!em.includes(p))||SCOPE_GROUPS.some(g=>roleAllIn(r,g,er)&&!roleAllIn(m,g,em))};
+function roleEditOff(r){if(r.locked||r.id==='owner')return 'Права владельца не меняются';if(me().role==='owner')return '';const m=myRole();if(m&&m.id===r.id)return 'Права своей роли меняет владелец';if(r.perms.some(p=>OWNER_GRANTS.includes(p)))return 'Роль с правами, которые выдаёт только владелец, меняет владелец';return ''}
+function roleAssignOff(r){const w=roleEditOff(r);if(w||me().role==='owner')return w;return roleWider(r,myRole())?'Роль с правами шире ваших меняет владелец':''}
+const rolesAssignable=()=>ROLES.filter(r=>r.id!=='owner'&&!roleAssignOff(r));
+// Сменить роль, сбросить пароль, заблокировать: владельца — никто; себя и сотрудников с ролями, которые нельзя назначить, — только владелец
+const empLocked=e=>e.role==='owner'||me().role!=='owner'&&(e.id===S.me||!!roleAssignOff(ROLES.find(r=>r.id===e.role)||{perms:[]}));
+// Переключатель «Все контрагенты» у группы: не владельцу — только если у его роли в этой группе «Все контрагенты»
+const roleScopeOff=g=>me().role==='owner'||seeAll(g)?'':'«Все контрагенты» нет у вашей роли';
+// «Изменить» (ФИО и телефон) — у любого сотрудника; данные владельца меняет только он сам
+const empEditOff=e=>!can('staff')||e.role==='owner'&&e.id!==S.me;
 const ROLES=DB.roles;
 /* Шаблоны ролей платформы: новая организация получает их копии и дальше меняет у себя */
 const ROLE_TPL=DB.ref.roleTemplates;

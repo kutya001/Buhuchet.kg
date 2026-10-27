@@ -17,7 +17,7 @@
 .fl-list label .n{margin-left:auto;font-size:11px;color:var(--faint);font-variant-numeric:tabular-nums}
 .pop-actions{display:flex;gap:6px;justify-content:flex-end}
 .cover{position:fixed;inset:0;z-index:50;background:var(--cover);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);display:grid;place-items:center;padding:24px 16px;animation:fade .2s}
-.modal{background:var(--pane);border:1px solid var(--border-strong);border-radius:var(--r-xl);box-shadow:var(--shadow-l);width:min(580px,100%);max-height:calc(100dvh - 48px);display:flex;flex-direction:column;animation:slideUp .3s forwards;min-width:0}
+.modal{background:var(--pane);border:1px solid var(--border-strong);border-radius:var(--r-xl);box-shadow:var(--shadow-l);width:min(580px,100%);max-height:calc(100dvh - 48px);display:flex;flex-direction:column;animation:slideUp .25s forwards;min-width:0}
 .modal.wide{width:min(1100px,100%);height:min(860px,calc(100dvh - 48px))}
 .modal.mid{width:min(780px,100%)}
 .mh{display:flex;align-items:flex-start;gap:12px;padding:18px 18px 10px 22px}
@@ -79,7 +79,7 @@
 .kc-miss{align-items:center}
 @media (max-width:767px){.kw-li{flex-wrap:wrap}.kw-list .kw-li>.grow{flex-basis:100%}.kc-miss{flex-wrap:wrap}.kc-miss>.grow{flex-basis:calc(100% - 30px)}.kc-miss .btn{width:100%;justify-content:center}}
 .kcell{background:none;border:0;padding:2px 4px;border-radius:5px;font:inherit;color:inherit;cursor:pointer;font-variant-numeric:tabular-nums}
-.kcell:hover{background:var(--row-hover)}.kcell.emp{color:var(--b-yellow);font-style:italic}
+.kcell:hover{background:var(--row-hover)}.kcell.emp{color:var(--yellow);font-style:italic}
 .kset{display:flex;flex-direction:column;gap:8px}
 .kset-i{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r-m);background:var(--pane);cursor:pointer}
 .kset-i.arch{opacity:.65}.kset-i.over{border-color:var(--b-blue);box-shadow:0 0 0 2px var(--sel)}.kset-i.dragging{opacity:.4}
@@ -170,3 +170,6 @@
 /* Кнопка действия в шапке карточки (например, «Принять оплату» у контрагента): на телефоне — только значок */
 .mh .hd-btn{flex:none;align-self:center;margin-right:4px}
 @media (max-width:767px){.mh .hd-btn .bl{display:none}.mh .hd-btn{padding-inline:8px}}
+/* Причина, почему переключатель области в форме роли неактивен — под переключателем (ТЗ «Сотрудники → Роли», 27.10.2026) */
+.pg-scw{flex-wrap:wrap}.pg-scw .pg-why{flex-basis:100%;color:var(--orange);font-size:12px}
+.pg-sc.seg button:disabled{cursor:not-allowed;opacity:.6}

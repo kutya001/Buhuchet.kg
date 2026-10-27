@@ -36,20 +36,16 @@ function vars(block: string, prefix: string): Map<string, string> {
 }
 
 /**
- * Цвета, которых нет в прототипе (docs/deviations.md, п. 26): опасная кнопка и красный счётчик, текст
- * цветных меток и заметок.
+ * Цвета продукта под другими именами в прототипе версии 59 (docs/deviations.md, п. 26): опасная кнопка
+ * и красный счётчик — `--red-btn`, текст цветных меток и заметок — сами цвета меток.
  */
-const PRODUCT_ONLY = [
-  'danger-btn',
-  'red-label',
-  'orange-label',
-  'yellow-label',
-  'blue-label',
-  'label',
-  'label-bg',
-  'faint-pill-bg',
-  ...['green', 'blue', 'yellow', 'orange', 'purple', 'gray', 'faint'].map((c) => `${c}-btn`),
-];
+const PROTO_NAME: Readonly<Record<string, string>> = {
+  'danger-btn': 'red-btn',
+  'red-label': 'red',
+  'orange-label': 'orange',
+  'yellow-label': 'yellow',
+  'blue-label': 'blue',
+};
 
 const light = vars(blockAfter(theme, ':root {'), 'bu-');
 const dark = vars(blockAfter(theme, ":root[data-theme='dark'] {"), 'bu-');
@@ -114,13 +110,16 @@ describe('тема оформления', () => {
   });
 
   it('цвета и тени — как в прототипе (css/base.css), в обеих темах', () => {
+    // В светлой теме у прототипа нет `--faint-pill-bg`: бледная метка — без подложки (`transparent`).
+    expect(light.get('faint-pill-bg')).toBe('hsla(0 0% 100% / 0)');
     for (const [name, value] of light) {
-      if (PRODUCT_ONLY.includes(name)) continue;
-      expect([name, norm(protoLight.get(name))]).toEqual([name, norm(value)]);
+      if (name === 'faint-pill-bg') continue;
+      const proto = PROTO_NAME[name] ?? name;
+      expect([name, norm(protoLight.get(proto))]).toEqual([name, norm(value)]);
     }
     for (const [name, value] of dark) {
-      if (PRODUCT_ONLY.includes(name)) continue;
-      expect([name, norm(protoDark.get(name))]).toEqual([name, norm(value)]);
+      const proto = PROTO_NAME[name] ?? name;
+      expect([name, norm(protoDark.get(proto))]).toEqual([name, norm(value)]);
     }
   });
 
