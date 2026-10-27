@@ -154,6 +154,8 @@ test.describe('Этап 1: окна и уведомления', () => {
       const before = (await settledBox(card)).width;
       const narrow = (await table.boundingBox())!.width;
       await card.getByRole('button', { name: 'На весь экран' }).click();
+      // Окно развёрнуто — кнопка сменилась; только потом ждём, пока оно встанет на место.
+      await expect(card.getByRole('button', { name: 'Свернуть окно' })).toBeVisible();
       expectBox(await settledBox(card), {
         x: 12,
         y: 12,

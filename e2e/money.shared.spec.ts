@@ -177,12 +177,18 @@ test.describe('Этап 2. Деньги: реквизиты организаци
     baseURL,
     isMobile,
   }) => {
+    // Много шагов в трёх учётных записях: в CI не укладывается в 30 секунд.
+    test.slow();
     const origin = new URL(baseURL!).origin;
     await signIn(page.request, origin, 'meerim', DEMO_PASSWORD);
     const me = (await (await page.request.get('/api/auth/me')).json()) as {
       employee: { id: string; fullName: string };
     };
-    const before = await wallets(page.request);
+    // Как в наполнении: без номера из этого теста и с основным реквизитом — даже если прошлая попытка
+    // не успела вернуть всё на место.
+    const before = (await wallets(page.request)).filter((w) => w.phone !== '+996700330441');
+    if (before.length && !before.some((w) => w.isMain)) before[0]!.isMain = true;
+    await restoreWallets(page.request, origin, before);
     try {
       await page.goto('/app/home/today');
       if (isMobile) {
@@ -223,10 +229,14 @@ test.describe('Этап 2. Деньги: реквизиты организаци
       expect(seen.status()).toBe(200);
       expect(JSON.stringify(await seen.json())).toContain('+996700330441');
       await ownerPage.goto('/app/staff/list');
+      // Другие тесты добавляют сотрудников: строка Мээрим может уйти со страницы — ищем по имени.
+      if (isMobile) await ownerPage.getByRole('button', { name: 'Поиск', exact: true }).click();
+      await ownerPage.getByRole('searchbox').first().fill(me.employee.fullName);
       await ownerPage
         .locator('[data-grid] [data-id]')
         .filter({ hasText: me.employee.fullName })
-        .getByText(me.employee.fullName)
+        .first()
+        .getByText(me.employee.fullName, { exact: true })
         .click();
       const card = ownerPage.getByRole('dialog', { name: me.employee.fullName });
       await expect(card).toContainText('Реквизиты для переводов');
