@@ -1,6 +1,7 @@
 'use client';
 
 import type { MenuModuleId } from '@buhuchet/domain';
+import { AccountsList } from '../admin/accounts-list';
 import { OrgsList } from '../admin/orgs-list';
 import { DictsStub } from '../dicts/dicts-stub';
 import { ReportTypesList } from '../dicts/report-types-list';
@@ -43,6 +44,7 @@ export function ModuleScreen({
     if (tab === 'types') return <ReportTypesList />;
     return <DictsStub />;
   }
+  if (moduleId === 'accounts') return <AccountsList />;
   if (moduleId === 'orgs') return <OrgsList />;
   return <ModuleStub moduleId={moduleId} />;
 }

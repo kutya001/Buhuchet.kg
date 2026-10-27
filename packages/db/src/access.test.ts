@@ -30,6 +30,10 @@ const rlsViolation = expect.objectContaining({
 const fkViolation = expect.objectContaining({
   cause: expect.objectContaining({ code: '23503' }),
 });
+// Нет права на столбец (миграция 0031: роль приложения меняет у учётной записи только пароль).
+const columnDenied = expect.objectContaining({
+  cause: expect.objectContaining({ code: '42501' }),
+});
 
 describe.skipIf(!databaseAvailable())('RLS: сотрудники, роли и учётные записи', () => {
   let t: TestDatabase;
@@ -89,7 +93,11 @@ describe.skipIf(!databaseAvailable())('RLS: сотрудники, роли и у
   it('чужую роль и чужого сотрудника нельзя изменить', async () => {
     const changed = await withOrgContext(t.app.db, { orgId: ORG_A }, async (tx) => [
       ...(await tx.update(roles).set({ name: 'Взлом' }).where(eq(roles.id, ROLE_B)).returning()),
-      ...(await tx.update(users).set({ blocked: true }).where(eq(users.id, USER_B)).returning()),
+      ...(await tx
+        .update(users)
+        .set({ mustChangePassword: true })
+        .where(eq(users.id, USER_B))
+        .returning()),
       ...(await tx.delete(employees).where(eq(employees.orgId, ORG_B)).returning()),
     ]);
     expect(changed).toEqual([]);
@@ -163,12 +171,12 @@ describe.skipIf(!databaseAvailable())('RLS: сотрудники, роли и у
       withOrgContext(t.app.db, { orgId: ORG_A }, (tx) =>
         tx.update(users).set({ orgId: ORG_B }).where(eq(users.id, USER_A)),
       ),
-    ).rejects.toThrow(rlsViolation);
+    ).rejects.toThrow(columnDenied);
     await expect(
       withOrgContext(t.app.db, { orgId: ORG_A }, (tx) =>
         tx.update(users).set({ orgId: null, isPlatformAdmin: true }).where(eq(users.id, USER_A)),
       ),
-    ).rejects.toThrow(rlsViolation);
+    ).rejects.toThrow(columnDenied);
     const [a] = await t.admin.db.select().from(users).where(eq(users.id, USER_A));
     expect(a).toMatchObject({ orgId: ORG_A, isPlatformAdmin: false });
   });

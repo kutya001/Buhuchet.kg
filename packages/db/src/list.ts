@@ -250,7 +250,7 @@ function filterCondition(key: string, column: ListColumn, filter: ListFilterValu
  * Постоянный текст прямо в запросе, а не параметром: Drizzle даёт параметру новый номер в каждом месте
  * запроса, и PostgreSQL не считает `select` и `group by` с ним одним выражением.
  */
-function textLiteral(value: string): SQL {
+export function textLiteral(value: string): SQL {
   return sql.raw(`'${value.replace(/'/g, "''")}'`);
 }
 

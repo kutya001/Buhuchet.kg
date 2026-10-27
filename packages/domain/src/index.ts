@@ -10,6 +10,7 @@ export * from './org/modules';
 export * from './auth/login';
 export * from './staff/names';
 export * from './staff/rules';
+export * from './admin/accounts';
 export * from './common/history';
 export * from './common/status';
 export * from './common/errors';
