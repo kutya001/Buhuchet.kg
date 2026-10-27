@@ -22,10 +22,7 @@ type OrgAccount = {
   version: number;
 };
 
-type Wallet = Omit<OrgAccount, 'bik' | 'purpose' | 'mainTax' | 'mainFee'> & {
-  employeeId: string;
-  isMain: boolean;
-};
+type Wallet = Omit<OrgAccount, 'bik' | 'purpose' | 'mainTax' | 'mainFee'> & { isMain: boolean };
 
 async function accounts(api: APIRequestContext) {
   const res = await api.get('/api/org/accounts');
@@ -67,7 +64,7 @@ async function restoreWallets(api: APIRequestContext, origin: string, before: Wa
     });
     expect(res.status(), await res.text()).toBe(200);
   }
-  for (const { id, version: _old, employeeId: _emp, ...fields } of before) {
+  for (const { id, version: _old, ...fields } of before) {
     const now = (await wallets(api)).find((w) => w.id === id)!;
     const res = await api.patch(`/api/profile/wallets/${id}`, {
       headers: { origin },

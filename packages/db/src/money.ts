@@ -46,10 +46,15 @@ export interface WalletInput extends Omit<RequisiteFields, 'bik'> {
   isMain: boolean;
 }
 
+/** Реквизит сотрудника, как его отдаёт API («Мои реквизиты», карточка сотрудника). */
 export interface WalletRecord extends WalletInput {
   id: string;
-  employeeId: string;
   version: number;
+}
+
+/** Реквизит с сотрудником — внутри правки. */
+interface OwnedWallet extends WalletRecord {
+  employeeId: string;
 }
 
 /** Номер записи, которую правят, и её версия, которую видел пользователь. */
@@ -75,7 +80,6 @@ const accountFields = {
 
 const walletFields = {
   id: employeeWallets.id,
-  employeeId: employeeWallets.employeeId,
   kind: employeeWallets.kind,
   bankCode: employeeWallets.bankCode,
   accountNo: employeeWallets.accountNo,
@@ -278,10 +282,10 @@ export function listEmployeeWallets(tx: Tx, employeeId: string): Promise<WalletR
     .orderBy(asc(employeeWallets.createdAt), asc(employeeWallets.id));
 }
 
-async function lockWallets(tx: Tx, employeeId: string): Promise<WalletRecord[]> {
+async function lockWallets(tx: Tx, employeeId: string): Promise<OwnedWallet[]> {
   await lockOwner(tx, sql`${`employee_wallets:${employeeId}`}`);
   return tx
-    .select(walletFields)
+    .select({ ...walletFields, employeeId: employeeWallets.employeeId })
     .from(employeeWallets)
     .where(eq(employeeWallets.employeeId, employeeId))
     .orderBy(asc(employeeWallets.createdAt), asc(employeeWallets.id))
@@ -291,7 +295,7 @@ async function lockWallets(tx: Tx, employeeId: string): Promise<WalletRecord[]> 
 /** Привести «Основной» реквизитов сотрудника к `mains` (как `applyAccountMains`). */
 async function applyWalletMains(
   tx: Tx,
-  before: readonly WalletRecord[],
+  before: readonly OwnedWallet[],
   mains: ReadonlyMap<string, boolean>,
   own?: { id: string; fields: WalletInput },
 ): Promise<void> {

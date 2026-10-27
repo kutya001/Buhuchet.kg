@@ -224,9 +224,14 @@ describe.skipIf(!databaseAvailable())('Реквизиты для перевод�
   });
 
   it('«Мои реквизиты»: первый — основной, «Сделать основным», удаление; администратор платформы — 403', async () => {
-    const first = Wallets.parse(
-      await (await call(acc, 'POST', '/api/profile/wallets', WALLET)).json(),
-    ).items;
+    const created = (await (await call(acc, 'POST', '/api/profile/wallets', WALLET)).json()) as {
+      items: Record<string, unknown>[];
+    };
+    // Ответ — ровно поля схемы: номера сотрудника в нём нет.
+    expect(Object.keys(created.items[0]!).sort()).toEqual(
+      Object.keys(Wallets.shape.items.element.shape).sort(),
+    );
+    const first = Wallets.parse(created).items;
     expect(first.map((w) => w.isMain)).toEqual([true]);
     const second = await call(acc, 'POST', '/api/profile/wallets', {
       ...WALLET,
