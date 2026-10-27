@@ -239,6 +239,12 @@ export const KpiValuesSave = z.strictObject({
         month: YearMonth,
         value: IndicatorValue,
         note: z.string().max(INDICATOR_NOTE_MAX_LENGTH).optional(),
+        /**
+         * Значение и комментарий, которые видел сотрудник: на сервере уже другие — 409 «Запись изменена
+         * другим пользователем», ничего не записано. Не заданы — без проверки.
+         */
+        prev: IndicatorValue.optional(),
+        prevNote: z.string().max(INDICATOR_NOTE_MAX_LENGTH).optional(),
       }),
     )
     .min(1)

@@ -170,14 +170,10 @@ export function KpiCardTab({ contractorId }: { contractorId: string }) {
             value={v}
             readOnly={false}
             label={t('kpi.month_cell_label', { ind: r.indicator.name, month: monthName(t, m) })}
-            title={
-              early
-                ? t('kpi.early_cell', { since: t('kpi.early_tag', { from: monthText(r.start) }) })
-                : undefined
-            }
-            onCommit={async (value) => {
+            title={early ? t('kpi.early_cell', { from: monthText(r.start) }) : undefined}
+            onCommit={async (value, prev) => {
               const done = await save([
-                { contractorId, indicatorId: r.indicator.id, month: m, value },
+                { contractorId, indicatorId: r.indicator.id, month: m, value, prev },
               ]);
               if (done) toast(t('kpi.card.saved'));
             }}
@@ -734,9 +730,15 @@ function PastDialog({
                                 ind: col.name,
                                 month: monthName(t, row.month),
                               })}
-                              onCommit={(value) =>
+                              onCommit={(value, prev) =>
                                 void save([
-                                  { contractorId, indicatorId: col.id, month: row.month, value },
+                                  {
+                                    contractorId,
+                                    indicatorId: col.id,
+                                    month: row.month,
+                                    value,
+                                    prev,
+                                  },
                                 ])
                               }
                               onBad={(text) => toast(t('kpi.not_number', { text }), { bad: true })}

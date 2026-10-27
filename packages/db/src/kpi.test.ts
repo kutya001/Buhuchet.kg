@@ -100,10 +100,7 @@ describe.skipIf(!databaseAvailable())('Показатели контрагент
     withOrgContext(db.app.db, { orgId: b.orgId, userId: b.ownerUserId }, fn);
 
   /** Записать значения, как метод API: данные контрагентов, правила — домена. */
-  const save = (
-    writes: Parameters<typeof saveIndicatorValues>[3],
-    reason: string | null = null,
-  ) =>
+  const save = (writes: Parameters<typeof saveIndicatorValues>[3], reason: string | null = null) =>
     inA(async (tx) => {
       const ids = [...new Set(writes.map((w) => w.contractorId))];
       const list = await kpiContractorRecords(tx, { scope: undefined, ids });
@@ -142,10 +139,7 @@ describe.skipIf(!databaseAvailable())('Показатели контрагент
       owner: await owner('kpi-owner-b'),
       today: '2026-01-15',
     });
-    [revenue, staff] = (await inA((tx) => listIndicators(tx))).map((i) => i.id) as [
-      string,
-      string,
-    ];
+    [revenue, staff] = (await inA((tx) => listIndicators(tx))).map((i) => i.id) as [string, string];
     [cp1, cp2] = await inA(async (tx) => [
       await createContractor(tx, a.orgId, contractorFields(), null),
       await createContractor(
@@ -163,12 +157,17 @@ describe.skipIf(!databaseAvailable())('Показатели контрагент
 
   it('новой организации — два показателя-примера: «Выручка» (сумма) и «Количество сотрудников» (среднее)', async () => {
     const list = await inA((tx) => listIndicators(tx));
-    expect(list.map((i) => [i.name, i.unit, i.type, i.total, i.required, i.startMonth, i.scope])).toEqual([
+    expect(
+      list.map((i) => [i.name, i.unit, i.type, i.total, i.required, i.startMonth, i.scope]),
+    ).toEqual([
       ['Выручка', 'сом', 'som', 'sum', true, '2026-01', 'all'],
       ['Количество сотрудников', 'чел.', 'int', 'avg', true, '2026-01', 'all'],
     ]);
     const [history] = await inA((tx) => readHistory(tx, 'indicator', revenue));
-    expect(history).toMatchObject({ action: 'create', changes: [{ field: 'name', to: 'Выручка' }] });
+    expect(history).toMatchObject({
+      action: 'create',
+      changes: [{ field: 'name', to: 'Выручка' }],
+    });
   });
 
   it('п. 22: три месяца «Выручки» — сумма, среднее, максимум, минимум в «За период»', async () => {
@@ -181,7 +180,12 @@ describe.skipIf(!databaseAvailable())('Показатели контрагент
       kpiPeriodRows(tx, { scope: undefined, from: '2026-07', to: '2026-09', today: TODAY }),
     );
     const row = rows.find((r) => r.contractorId === cp1 && r.indicatorId === revenue)!;
-    expect(row.totals).toEqual({ sum: 45_000_000, avg: 15_000_000, max: 20_000_000, min: 10_000_000 });
+    expect(row.totals).toEqual({
+      sum: 45_000_000,
+      avg: 15_000_000,
+      max: 20_000_000,
+      min: 10_000_000,
+    });
     expect(row.count).toBe(3);
   });
 
@@ -193,10 +197,14 @@ describe.skipIf(!databaseAvailable())('Показатели контрагент
     const { statuses } = await save([
       { contractorId: cp1, indicatorId: staff, month: '2026-07', value: 0 },
     ]);
-    expect(statuses).toEqual([{ contractorId: cp1, month: '2026-07', from: 'empty', to: 'filled' }]);
+    expect(statuses).toEqual([
+      { contractorId: cp1, month: '2026-07', from: 'empty', to: 'filled' },
+    ]);
     expect(await statusOf('2026-07')).toBe('filled');
     // Без изменений ничего не пишется.
-    expect((await save([{ contractorId: cp1, indicatorId: staff, month: '2026-07', value: 0 }])).changed).toEqual([]);
+    expect(
+      (await save([{ contractorId: cp1, indicatorId: staff, month: '2026-07', value: 0 }])).changed,
+    ).toEqual([]);
     await save([{ contractorId: cp1, indicatorId: staff, month: '2026-07', value: null }]);
     expect(await statusOf('2026-07')).toBe('empty');
   });
@@ -209,7 +217,9 @@ describe.skipIf(!databaseAvailable())('Показатели контрагент
       return setFillStatus(tx, row, 'checked', { version: row.version });
     });
     expect(checked.status).toBe('checked');
-    await save([{ contractorId: cp1, indicatorId: staff, month: '2026-08', value: 3_800, note: 'по штатке' }]);
+    await save([
+      { contractorId: cp1, indicatorId: staff, month: '2026-08', value: 3_800, note: 'по штатке' },
+    ]);
     const history = await inA((tx) => readStatusHistory(tx, 'indicator', checked.id));
     expect(history.map((h) => [h.from, h.to, h.reason])).toEqual([
       ['empty', 'filled', null],
@@ -218,12 +228,19 @@ describe.skipIf(!databaseAvailable())('Показатели контрагент
     ]);
     // Устаревшая версия — «изменено другим пользователем».
     await expect(
-      inA(async (tx) => setFillStatus(tx, (await lockFillMonth(tx, cp1, '2026-08'))!, 'checked', { version: checked.version })),
+      inA(async (tx) =>
+        setFillStatus(tx, (await lockFillMonth(tx, cp1, '2026-08'))!, 'checked', {
+          version: checked.version,
+        }),
+      ),
     ).rejects.toMatchObject({ code: 'record_changed' });
   });
 
   it('история значения: было → стало, кто; пометка «Из Excel»', async () => {
-    await save([{ contractorId: cp1, indicatorId: staff, month: '2026-08', value: 3_900 }], 'Из Excel');
+    await save(
+      [{ contractorId: cp1, indicatorId: staff, month: '2026-08', value: 3_900 }],
+      'Из Excel',
+    );
     const items = await inA((tx) => valueHistory(tx, cp1, '2026-08'));
     expect(items.map((x) => [x.indicatorId, x.from, x.to, x.reason, x.actor])).toEqual([
       [staff, 3_800, 3_900, 'Из Excel', 'Организации В.'],
@@ -241,7 +258,14 @@ describe.skipIf(!databaseAvailable())('Показатели контрагент
   it('«Кому вести»: «Выбранным» — история показателя у контрагента; пересчёт статусов месяцев', async () => {
     const id = await inA((tx) => insertIndicator(tx, indicatorFields({ required: true })));
     await inA(async (tx) => {
-      const changes = applyWho(null, 'selected', new Set([cp1]), [{ id: cp1 }, { id: cp2 }], () => undefined, TODAY);
+      const changes = applyWho(
+        null,
+        'selected',
+        new Set([cp1]),
+        [{ id: cp1 }, { id: cp2 }],
+        () => undefined,
+        TODAY,
+      );
       await writeTargets(tx, id, changes);
       await resyncFillStatuses(tx, TODAY);
     });
@@ -249,12 +273,21 @@ describe.skipIf(!databaseAvailable())('Показатели контрагент
     expect(targets.get(`${id}|${cp1}`)).toEqual({ on: true, from: null, offSince: null });
     expect(targets.get(`${id}|${cp2}`)).toEqual({ on: false, from: null, offSince: null });
     // Новый обязательный показатель: месяцы cp1 больше не заполнены.
-    const months = await inA((tx) => loadMonths(tx, { contractorIds: [cp1], from: '2026-08', to: '2026-08' }));
+    const months = await inA((tx) =>
+      loadMonths(tx, { contractorIds: [cp1], from: '2026-08', to: '2026-08' }),
+    );
     expect(months[0]?.status).toBe('empty');
     // Выключение у контрагента — в историю показателя с контрагентом.
     await inA(async (tx) => {
       const prev = (await getIndicator(tx, id))!;
-      const changes = applyWho(prev, 'selected', new Set(), [{ id: cp1 }], (c) => targets.get(`${id}|${c}`), TODAY);
+      const changes = applyWho(
+        prev,
+        'selected',
+        new Set(),
+        [{ id: cp1 }],
+        (c) => targets.get(`${id}|${c}`),
+        TODAY,
+      );
       await writeTargets(tx, id, changes);
     });
     const log = await inA((tx) => readHistory(tx, 'indicator', id));
@@ -272,7 +305,9 @@ describe.skipIf(!databaseAvailable())('Показатели контрагент
     expect(await inA((tx) => reorderIndicators(tx, ids))).toBe(true);
     expect((await inA((tx) => listIndicators(tx))).map((i) => i.id)).toEqual(ids);
     expect(await inA((tx) => reorderIndicators(tx, ids.slice(1)))).toBe(false);
-    const fresh = await inA((tx) => insertIndicator(tx, indicatorFields({ name: 'Площадь', unit: 'м²', type: 'dec' })));
+    const fresh = await inA((tx) =>
+      insertIndicator(tx, indicatorFields({ name: 'Площадь', unit: 'м²', type: 'dec' })),
+    );
     const row = (await inA((tx) => getIndicator(tx, fresh)))!;
     expect(row).toMatchObject({ valueCount: 0, hasRows: false, sortOrder: list.length + 1 });
     await inA((tx) => deleteIndicator(tx, row));
@@ -297,7 +332,9 @@ describe.skipIf(!databaseAvailable())('Показатели контрагент
     const staffRow = period.rows.find((r) => r.contractorId === cp1 && r.indicatorId === staff)!;
     expect(staffRow.values).toEqual([null, 3_900, null, null]);
     expect(staffRow.empty).toEqual([true, false, true, false]);
-    const list = await inA((tx) => listKpiPeriodPage(tx, query({ search: { q: 'Асанов', keys: [] } }), { ...period, t }));
+    const list = await inA((tx) =>
+      listKpiPeriodPage(tx, query({ search: { q: 'Асанов', keys: [] } }), { ...period, t }),
+    );
     expect(list.rows.every((r) => r.contractorName === 'ИП Асанов')).toBe(true);
   });
 
@@ -327,8 +364,53 @@ describe.skipIf(!databaseAvailable())('Показатели контрагент
         tx.insert(indicatorMonths).values({ orgId: a.orgId, contractorId: cp1, month: '2026-01' }),
       ),
     ).rejects.toThrow();
+    await expect(
+      inB((tx) =>
+        tx.insert(indicators).values({
+          orgId: a.orgId,
+          name: 'Чужой',
+          unit: 'сом',
+          type: 'som',
+          total: 'sum',
+          startMonth: '2026-01',
+          sortOrder: 99,
+        }),
+      ),
+    ).rejects.toThrow(rlsViolation);
+    await expect(
+      inB((tx) =>
+        tx.insert(indicatorValues).values({
+          orgId: a.orgId,
+          contractorId: cp1,
+          indicatorId: revenue,
+          month: '2025-01',
+          value: 1,
+        }),
+      ),
+    ).rejects.toThrow(rlsViolation);
+    // Чужие строки не меняются: изменение их просто не находит.
+    const renamed = await inB((tx) =>
+      tx
+        .update(indicators)
+        .set({ name: 'Чужая правка' })
+        .where(eq(indicators.id, revenue))
+        .returning(),
+    );
+    expect(renamed).toEqual([]);
+    const rewritten = await inB((tx) =>
+      tx.update(indicatorValues).set({ value: 1 }).returning({ id: indicatorValues.id }),
+    );
+    expect(rewritten).toEqual([]);
+    expect((await inA((tx) => getIndicator(tx, revenue)))!.name).toBe('Выручка');
     // Без контекста организации не видно ничего.
-    const none = await db.app.db.transaction((tx) => tx.execute(sql`select count(*)::int as n from indicators`));
+    const none = await db.app.db.transaction((tx) =>
+      tx.execute(sql`select count(*)::int as n from indicators`),
+    );
     expect(none[0]).toEqual({ n: 0 });
   });
+});
+
+/** Ошибка именно политики RLS, а не другого ограничения таблицы. */
+const rlsViolation = expect.objectContaining({
+  cause: expect.objectContaining({ message: expect.stringMatching(/row-level security/) }),
 });

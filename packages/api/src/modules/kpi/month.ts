@@ -178,6 +178,10 @@ export const saveValuesRoute = createRoute({
     401: noAuth,
     403: { description: 'Нет права «Вносить значения показателей»', content: error },
     404: { description: 'Нет контрагента в области сотрудника или показателя', content: error },
+    409: {
+      description: 'Значение изменил другой сотрудник (`prev` не совпал): ничего не записано',
+      content: error,
+    },
   },
 });
 
@@ -185,7 +189,7 @@ export const saveValuesRoute = createRoute({
  * Значения ячеек, блока из Excel или окна значения (прототип `kSet`): пусто — «не заполнено», 0 —
  * «внесено, равно нулю»; каждое изменение — в историю; статус месяца пересчитывается («Заполнено», когда
  * внесены все обязательные; правка в «Проверено» возвращает на «Заполнено»). Любая неверная ячейка —
- * 400 для всего запроса, ничего не записано.
+ * 400 для всего запроса, ничего не записано; значение, которое уже изменил другой (`prev`), — 409.
  */
 export function saveValuesHandler(deps: ApiDeps): RouteHandler<typeof saveValuesRoute, AppEnv> {
   return async (c) => {
@@ -224,6 +228,8 @@ export function saveValuesHandler(deps: ApiDeps): RouteHandler<typeof saveValues
           month: v.month,
           value: v.value,
           ...(v.note !== undefined ? { note: v.note.trim() } : {}),
+          ...(v.prev !== undefined ? { prev: v.prev } : {}),
+          ...(v.prevNote !== undefined ? { prevNote: v.prevNote.trim() } : {}),
         };
       });
       const saved = await saveIndicatorValues(tx, data, contractors, writes);

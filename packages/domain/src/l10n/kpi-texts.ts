@@ -54,6 +54,12 @@ export const KPI_TEXTS = {
   // Общее
   'kpi.load_error': { ru: 'Не удалось загрузить показатели', section: S },
   'kpi.no_indicators': { ru: 'Показателей нет', section: S },
+  'kpi.first.title': { ru: 'Показатели вносятся по контрагентам', section: S },
+  'kpi.first.text': {
+    ru: 'Добавьте первого контрагента — и здесь можно будет вести его выручку, численность и другие показатели по месяцам.',
+    section: S,
+  },
+  'kpi.first.go_cps': { ru: 'Перейти к контрагентам', section: S },
   'kpi.no_indicators_text': {
     ru: 'Создайте показатели во вкладке «Настройка показателей».',
     section: S,
@@ -65,7 +71,7 @@ export const KPI_TEXTS = {
     ru: 'Месяц раньше «с {from}»: значение можно внести, но оно необязательно',
     section: S,
   },
-  'kpi.early_cell': { ru: 'Значение за этот месяц необязательно: {since}', section: S },
+  'kpi.early_cell': { ru: 'Ведётся с {from}: значение за этот месяц необязательно', section: S },
   'kpi.off_since': { ru: 'Не ведётся с {month}', section: S },
   'kpi.cell_off': {
     ru: 'Показатель у этого контрагента не ведётся или не нужен в этом месяце',

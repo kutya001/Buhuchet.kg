@@ -13,6 +13,7 @@ import {
   MiniTable,
   Modal,
   Note,
+  RecordChangedNotice,
   RollbackDialog,
   StatusHistory,
   StatusPill,
@@ -21,7 +22,7 @@ import {
   useToast,
 } from '@buhuchet/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useId, useState, type FormEvent } from 'react';
+import { useCallback, useId, useMemo, useState, type FormEvent } from 'react';
 import { api, ApiFailure, callApi } from '../api-client';
 import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
 import { RecordFiles } from '../files/record-files';
@@ -105,10 +106,15 @@ function EntryDialog({
   const errorText = useErrorText();
   const refresh = useKpiRefresh();
   const id = useId();
+  const client = useQueryClient();
   const query = useQuery(entryQuery(contractorId, month));
   const data = query.data!;
-  const [start] = useState(() => draftOf(data));
+  /** Значения, с которых начата правка: с ними сервер сверит, не изменил ли их другой. */
+  const [base, setBase] = useState(data);
+  const start = useMemo(() => draftOf(base), [base]);
   const [draft, setDraft] = useState(start);
+  const [changed, setChanged] = useState(false);
+  const [reloading, setReloading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [askCheck, setAskCheck] = useState(false);
@@ -126,8 +132,10 @@ function EntryDialog({
       month: string;
       value: number | null;
       note: string;
+      prev: number | null;
+      prevNote: string;
     }[] = [];
-    for (const item of data.items) {
+    for (const item of base.items) {
       if (item.indicator.archived) continue;
       const d = draft[item.indicator.id]!;
       const value = parseCell(item.indicator.type, d.value);
@@ -144,6 +152,8 @@ function EntryDialog({
           month,
           value,
           note: d.note.trim(),
+          prev: item.value,
+          prevNote: item.note,
         });
       }
     }
@@ -158,9 +168,26 @@ function EntryDialog({
     const res = await callApi(() => api.api.kpi.values.$put({ json: { values } }));
     setBusy(false);
     void refresh();
+    if (!res.ok && res.error.code === 'record_changed') return setChanged(true);
     if (!res.ok) return toast(errorText(res.error), { bad: true });
     onClose();
     toast(t('kpi.entry.saved', { n: KpiValuesSaved.parse(res.data).changed }), { icon: 'check' });
+  };
+
+  /** «Запись изменена другим пользователем» → «Перечитать»: значения с сервера, своя правка сброшена. */
+  const reload = async () => {
+    setReloading(true);
+    try {
+      const fresh = await client.fetchQuery({ ...entryQuery(contractorId, month), staleTime: 0 });
+      setBase(fresh);
+      setDraft(draftOf(fresh));
+      setErrors({});
+      setChanged(false);
+    } catch (e) {
+      toast(e instanceof ApiFailure ? errorText(e.error) : t('err.unknown'), { bad: true });
+    } finally {
+      setReloading(false);
+    }
   };
 
   const check = async () => {
@@ -223,13 +250,26 @@ function EntryDialog({
             {t(data.editable ? 'btn.cancel' : 'btn.close')}
           </button>
           {data.editable ? (
-            <button type="submit" form={formId} className={buttonClass('cta')} disabled={busy}>
+            <button
+              type="submit"
+              form={formId}
+              className={buttonClass('cta')}
+              disabled={busy || changed}
+            >
               {t('btn.save')}
             </button>
           ) : null}
         </>
       }
     >
+      {changed ? (
+        <RecordChangedNotice
+          message={t('err.record_changed')}
+          reloadLabel={t('form.reload')}
+          onReload={() => void reload()}
+          reloading={reloading}
+        />
+      ) : null}
       <form
         id={formId}
         onSubmit={submit}
@@ -254,10 +294,10 @@ function EntryDialog({
           {t('kpi.entry.note')}
           {data.editable ? '' : ` ${t('kpi.entry.readonly')}`}
         </Note>
-        {data.items.length === 0 ? (
+        {base.items.length === 0 ? (
           <Note icon="gauge">{t('kpi.entry.none')}</Note>
         ) : (
-          data.items.map((item) => {
+          base.items.map((item) => {
             const col = item.indicator;
             const readOnly = !data.editable || col.archived;
             const d = draft[col.id]!;

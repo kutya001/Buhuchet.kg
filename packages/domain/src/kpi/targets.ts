@@ -61,6 +61,8 @@ export interface WhoChange {
  * не вёлся, ставит «с <месяц>» — текущий месяц; «Выбранным» ведётся у отмеченных, у остальных — нет,
  * у снятых — «Не ведётся с <текущий месяц>». `contractors` — все неразовые контрагенты организации (и в
  * архиве). В историю показателя и контрагента пишутся строки, где `before` не `null` и не равно `after`.
+ * `frozen` — контрагенты вне области сотрудника («Свои»): у них ведётся ли показатель, не меняется, и
+ * при переходе на «Всем» тоже (выключенный остаётся выключенным).
  */
 export function applyWho(
   previous: Pick<KpiIndicator, 'scope' | 'autoNew'> | null,
@@ -69,11 +71,18 @@ export function applyWho(
   contractors: readonly { id: string }[],
   targetOf: (contractorId: string) => KpiTarget | undefined,
   today: IsoDate,
+  frozen: ReadonlySet<string> = new Set(),
 ): WhoChange[] {
   const stayAll = previous?.scope === 'all' && scope === 'all';
   return contractors.map((c) => {
     const t = previous ? targetOf(c.id) : undefined;
     const before = previous ? indicatorOn(previous, t) : null;
+    if (before !== null && frozen.has(c.id)) {
+      // Запись остаётся прежней; без записи — явная, если без неё «Всем» включило бы показатель.
+      const keep =
+        t ?? (scope === 'all' && before ? null : { on: before, from: null, offSince: null });
+      return { contractorId: c.id, before, after: before, target: keep };
+    }
     const after = scope === 'selected' ? selected.has(c.id) : stayAll ? before! : true;
     let from = t?.from ?? null;
     let offSince = scope === 'all' && !stayAll ? null : (t?.offSince ?? null);

@@ -884,6 +884,9 @@ export interface ValueWrite {
   value: number | null;
   /** Комментарий; не задан — без изменений. */
   note?: string;
+  /** Значение и комментарий, которые видел сотрудник; другие в базе — `RecordChangedError`. */
+  prev?: number | null;
+  prevNote?: string;
 }
 
 /**
@@ -903,7 +906,7 @@ export async function saveIndicatorValues(
   await lockKpi(tx);
   const ids = [...new Set(writes.map((w) => w.contractorId))];
   const months = writes.map((w) => w.month).sort();
-  // Значения перечитаны под блокировкой: правка, сохранённая другим сотрудником, не затирается молча.
+  // Значения перечитаны под блокировкой: правку, сохранённую другим сотрудником, видно по `prev`.
   const fresh = await loadValues(tx, {
     contractorIds: ids,
     from: months[0]!,
@@ -922,6 +925,17 @@ export async function saveIndicatorValues(
     const noteChanged = w.note !== undefined && w.note !== (row?.note ?? '');
     if (before === w.value && !noteChanged) continue;
     if (!row && w.value === null && !noteChanged) continue;
+    // Пока сотрудник правил, значение сохранил другой: не затирать молча (ТЗ, общие правила).
+    if (
+      (w.prev !== undefined && w.prev !== before) ||
+      (noteChanged && w.prevNote !== undefined && w.prevNote !== (row?.note ?? ''))
+    ) {
+      throw new RecordChangedError(
+        'indicator_value',
+        row?.id ?? valueKey(w.contractorId, w.indicatorId, w.month),
+        row?.version ?? 0,
+      );
+    }
     const changes: HistoryChange[] = [];
     if (before !== w.value) changes.push({ field: 'value', from: before, to: w.value });
     if (noteChanged) changes.push({ field: 'note', from: row?.note ?? '', to: w.note! });
@@ -1005,6 +1019,7 @@ export async function indicatorValueOwner(
   contractorId: string;
   responsibleEmployeeId: string | null;
   contractorArchived: boolean;
+  contractorOneOff: boolean;
   indicatorArchived: boolean;
   /** Функция «Показатели контрагентов» включена в учётной политике. */
   enabled: boolean;
@@ -1016,6 +1031,7 @@ export async function indicatorValueOwner(
       contractorId: indicatorValues.contractorId,
       responsibleEmployeeId: contractors.responsibleEmployeeId,
       contractorArchived: sql<boolean>`${contractors.serviceStatus} = 'archived'`,
+      contractorOneOff: sql<boolean>`${contractors.kind} = 'oneoff'`,
       indicatorArchived: indicators.archived,
       enabled: sql<boolean>`coalesce((select (${orgSettings.features} ->> 'indicators')::boolean from ${orgSettings} where ${orgSettings.orgId} = app.current_org_id()), false)`,
     })

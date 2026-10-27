@@ -197,7 +197,10 @@ export const indicatorValueSource: FileSource = {
     return {
       contractor,
       editable:
-        hasPermission(subject, 'kpiEdit') && !row.indicatorArchived && !row.contractorArchived,
+        hasPermission(subject, 'kpiEdit') &&
+        !row.indicatorArchived &&
+        !row.contractorArchived &&
+        !row.contractorOneOff,
       history: () => ({
         entity: 'indicator_value' as const,
         entityId: row.id,

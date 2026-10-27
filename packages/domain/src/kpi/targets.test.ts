@@ -158,4 +158,22 @@ describe('«Кому вести» — правила ТЗ', () => {
       ['2', { on: true, from: null, offSince: null }],
     ]);
   });
+
+  it('контрагенты вне области сотрудника не меняются — и при переходе «Выбранным» → «Всем»', () => {
+    const previous = { scope: 'selected' as const, autoNew: false };
+    const off = { on: false, from: null, offSince: '2026-05' };
+    const changes = applyWho(
+      previous,
+      'all',
+      new Set(),
+      [{ id: 'own' }, { id: 'other' }],
+      () => off,
+      '2026-10-18',
+      new Set(['other']),
+    );
+    expect(changes.map((c) => [c.contractorId, c.before, c.after, c.target])).toEqual([
+      ['own', false, true, { on: true, from: '2026-10', offSince: null }],
+      ['other', false, false, { on: false, from: null, offSince: '2026-05' }],
+    ]);
+  });
 });

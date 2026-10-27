@@ -360,16 +360,17 @@ function MonthTable({
                         !row.editable
                           ? t('kpi.readonly_cell')
                           : early
-                            ? t('kpi.early_cell', { since })
+                            ? t('kpi.early_cell', { from: monthText(cell.start) })
                             : undefined
                       }
-                      onCommit={(value) =>
+                      onCommit={(value, prev) =>
                         onSave([
                           {
                             contractorId: row.contractorId,
                             indicatorId: col.id,
                             month: data.month,
                             value,
+                            prev,
                           },
                         ])
                       }
@@ -399,7 +400,10 @@ function MonthTable({
                 {t(`kpi.total.${key}`)}
               </th>
               {cols.map((col, c) => {
-                const totals = columnTotals(rows.map((r) => r.cells[c]!.value));
+                // ОТКЛОНЕНИЕ: docs/deviations.md#В-7 — выключенные у контрагента показатели в итоги не входят.
+                const totals = columnTotals(
+                  rows.filter((r) => r.cells[c]!.state !== 'off').map((r) => r.cells[c]!.value),
+                );
                 return (
                   <td
                     key={col.id}

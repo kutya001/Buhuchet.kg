@@ -19,6 +19,7 @@ import {
 } from '@buhuchet/db';
 import {
   applyWho,
+  hasPermission,
   indicatorOn,
   indicatorProblems,
   INDICATOR_MESSAGES,
@@ -81,7 +82,7 @@ async function visibleRegular(tx: Tx, subject: AccessSubject) {
   return list.filter((c) => c.kind !== 'oneoff');
 }
 
-function indicatorBody(r: IndicatorRecord, on: number): Indicator {
+function indicatorBody(r: IndicatorRecord, on: number, setup = true): Indicator {
   return {
     id: r.id,
     name: r.name,
@@ -97,8 +98,9 @@ function indicatorBody(r: IndicatorRecord, on: number): Indicator {
     archived: r.archived,
     order: r.sortOrder,
     version: r.version,
-    valueCount: r.valueCount,
-    hasRows: r.hasRows,
+    // Число значений — по всей организации: его видит только тот, кто настраивает показатели.
+    valueCount: setup ? r.valueCount : 0,
+    hasRows: setup && r.hasRows,
     on,
   };
 }
@@ -113,7 +115,7 @@ async function indicatorsBody(tx: Tx, subject: AccessSubject): Promise<Indicator
   const items = list.map((r) => {
     const i = kpiIndicatorOf(r);
     const on = contractors.filter((c) => indicatorOn(i, targets.get(`${r.id}|${c.id}`))).length;
-    return indicatorBody(r, on);
+    return indicatorBody(r, on, hasPermission(subject, 'indSetup'));
   });
   return { items, contractors: contractors.length };
 }
@@ -160,7 +162,7 @@ function checkIndicator(
 /**
  * «Кому вести» из окна показателя (прототип `kWhoApply`) по всем неразовым контрагентам организации (и в
  * архиве). Отмечать при «Выбранным» можно только контрагентов в своей области: у остальных показатель
- * остаётся, как был. `selected` — кто отмечен в итоге (для проверки «Выберите хотя бы одного»).
+ * остаётся, как был, и при переходе на «Всем» (`frozen`). `selected` — кто отмечен в итоге (для проверки «Выберите хотя бы одного»).
  */
 async function whoPlan(
   tx: Tx,
@@ -181,7 +183,8 @@ async function whoPlan(
       if (!visible.has(c.id) && indicatorOn(previous, targetOf(c.id))) selected.add(c.id);
     }
   }
-  return { all, selected, targetOf };
+  const frozen = new Set(all.filter((c) => !visible.has(c.id)).map((c) => c.id));
+  return { all, selected, targetOf, frozen };
 }
 
 async function saveWho(
@@ -193,7 +196,15 @@ async function saveWho(
   today: IsoDate,
 ) {
   // У нового показателя строк «Кому вести» ещё нет: план считали без них.
-  const changes = applyWho(previous, scope, plan.selected, plan.all, plan.targetOf, today);
+  const changes = applyWho(
+    previous,
+    scope,
+    plan.selected,
+    plan.all,
+    plan.targetOf,
+    today,
+    plan.frozen,
+  );
   await writeTargets(tx, id, changes);
 }
 

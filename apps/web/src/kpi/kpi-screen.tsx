@@ -1,9 +1,13 @@
 'use client';
 
-import { useToast } from '@buhuchet/ui';
+import { EmptyState, useToast } from '@buhuchet/ui';
+import { useQuery } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
 import { useEffect, useEffectEvent } from 'react';
 import { useT } from '../l10n/provider';
 import { useShell } from '../shell/context';
+import { moduleHref } from '../shell/modules';
+import { indicatorsQuery } from './kpi-data';
 import { useIndicatorDialog } from './kpi-indicator-dialog';
 import { KpiMissingTab } from './kpi-missing';
 import { KpiMonthTab } from './kpi-month';
@@ -19,9 +23,12 @@ import { KpiSetupTab } from './kpi-setup';
 export function KpiScreen({ tab }: { tab: string }) {
   const indicator = useIndicatorDialog();
   useKpiAddRequest(() => indicator.open(null));
+  const noContractors = useQuery(indicatorsQuery).data?.contractors === 0;
   return (
     <>
-      {tab === 'period' ? (
+      {noContractors && tab !== 'setup' ? (
+        <NoContractors />
+      ) : tab === 'period' ? (
         <KpiPeriodTab />
       ) : tab === 'missing' ? (
         <KpiMissingTab />
@@ -32,6 +39,32 @@ export function KpiScreen({ tab }: { tab: string }) {
       )}
       {indicator.dialog}
     </>
+  );
+}
+
+/**
+ * Первый вход: у сотрудника нет ни одного неразового контрагента — вместо таблиц подсказка и «Перейти к
+ * контрагентам» (прототип ui/empty.js, `firstEmpty`); «Настройка показателей» открывается как обычно.
+ */
+function NoContractors() {
+  const t = useT();
+  const router = useRouter();
+  const { access } = useShell();
+  return (
+    <EmptyState
+      icon="gauge"
+      title={t('kpi.first.title')}
+      text={t('kpi.first.text')}
+      actions={[
+        {
+          id: 'cps',
+          label: t('kpi.first.go_cps'),
+          icon: 'building',
+          primary: true,
+          onClick: () => router.push(moduleHref('cps', access)),
+        },
+      ]}
+    />
   );
 }
 

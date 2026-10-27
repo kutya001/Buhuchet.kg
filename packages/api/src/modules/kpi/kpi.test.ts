@@ -73,6 +73,7 @@ describe.skipIf(!databaseAvailable())('Показатели контрагент
       month: string;
       value: number | null;
       note?: string;
+      prev?: number | null;
     }[],
   ) => call(cookie, 'PUT', '/api/kpi/values', { values });
   const features = (orgId: string, on: Record<string, boolean>) =>
@@ -304,12 +305,10 @@ describe.skipIf(!databaseAvailable())('Показатели контрагент
       { contractorId: C2, indicatorId: revenue, month: '2026-08', value: 1 },
     ]);
     expect((await errorOf(off)).code).toBe('cell_off');
-    await f.t.admin.db
-      .insert(schema.contractors)
-      .values({
-        ...contractor(C3, f.a.orgId, 'ОсОО «Новый»', '03744097401853', 'РЕЖ-01'),
-        startDate: '2026-08-01',
-      });
+    await f.t.admin.db.insert(schema.contractors).values({
+      ...contractor(C3, f.a.orgId, 'ОсОО «Новый»', '03744097401853', 'РЕЖ-01'),
+      startDate: '2026-08-01',
+    });
     const who = KpiWho.parse(await (await call(owner, 'GET', '/api/kpi/who')).json());
     expect(
       who.contractors.find((x) => x.id === C3)!.cells.find((x) => x.indicatorId === revenue)!.on,
@@ -528,5 +527,43 @@ describe.skipIf(!databaseAvailable())('Показатели контрагент
         .status,
     ).toBe(404);
     expect((await month('2026-09', ownerB)).rows.map((r) => r.contractorId)).toEqual([B1]);
+  });
+
+  it('область «Свои»: контрагент не своего бухгалтера не виден в окне значения, карточке и списках', async () => {
+    expect((await call(acc, 'GET', `/api/kpi/entry?contractorId=${C2}&month=2026-09`)).status).toBe(
+      404,
+    );
+    expect((await call(acc, 'GET', `/api/kpi/contractors/${C2}`)).status).toBe(404);
+    for (const path of [
+      '/api/kpi/period?from=2026-01&to=2026-09&size=all',
+      '/api/kpi/missing?size=all',
+    ]) {
+      const res = await call(acc, 'GET', path);
+      expect(res.status).toBe(200);
+      const { items } = (await res.json()) as { items: { contractorId: string }[] };
+      expect(new Set(items.map((r) => r.contractorId))).toEqual(new Set([C1]));
+    }
+    // Число значений показателя — по всей организации: его видит только тот, кто настраивает показатели.
+    expect((await indicators(acc)).items.every((i) => i.valueCount === 0 && !i.hasRows)).toBe(true);
+    expect(
+      (await indicators(chief)).items.find((i) => i.id === revenue)!.valueCount,
+    ).toBeGreaterThan(0);
+  });
+
+  it('одновременная правка: значение уже изменил другой — 409 «Запись изменена другим пользователем», ничего не записано', async () => {
+    const valueOf = async () =>
+      (await entry(C1, '2026-09')).items.find((i) => i.indicator.id === revenue)!.value;
+    const cell = { contractorId: C1, indicatorId: revenue, month: '2026-09' };
+    const seen = await valueOf();
+    expect((await put(chief, [{ ...cell, value: som(700_000), prev: seen }])).status).toBe(200);
+    const late = await put(acc, [{ ...cell, value: som(650_000), prev: seen }]);
+    expect(late.status).toBe(409);
+    expect((await errorOf(late)).code).toBe('record_changed');
+    expect(await valueOf()).toBe(som(700_000));
+    // Перечитал — сохраняется.
+    expect((await put(acc, [{ ...cell, value: som(650_000), prev: som(700_000) }])).status).toBe(
+      200,
+    );
+    expect(await valueOf()).toBe(som(650_000));
   });
 });

@@ -96,6 +96,9 @@ describe.skipIf(!databaseAvailable())('история изменений и ве
       'user',
       'employee',
       'org_settings',
+      // Показатели-примеры «Выручка» и «Количество сотрудников».
+      'indicator',
+      'indicator',
     ]);
     expect(rows.every((r) => r.actorUserId === platformAdminId && r.orgId === a.orgId)).toBe(true);
     // Без администратора (служебная команда без автора) — «Система».

@@ -4,6 +4,7 @@ import type { IndicatorType } from '@buhuchet/domain';
 import { Icon, iconButtonClass, Popover } from '@buhuchet/ui';
 import {
   useCallback,
+  useRef,
   useState,
   type ClipboardEvent,
   type KeyboardEvent,
@@ -51,9 +52,10 @@ export interface CellRef {
   type: IndicatorType;
 }
 
-/** Значение ячейки после правки или вставки. */
+/** Значение ячейки после правки или вставки; `prev` — что было в ячейке, когда её начали править. */
 export interface CellChange extends Omit<CellRef, 'type'> {
   value: number | null;
+  prev: number | null;
 }
 
 /**
@@ -85,12 +87,14 @@ export function ValueInput({
   title?: string | undefined;
   /** Шире (список месяцев на телефоне, `.kmlist .kin`). */
   wide?: boolean;
-  onCommit: (value: number | null) => void;
+  /** `prev` — значение, когда поле получило фокус: сервер сверит, не изменил ли его другой. */
+  onCommit: (value: number | null, prev: number | null) => void;
   onBad: (text: string) => void;
   onPaste: (r: number, c: number, block: string[][]) => void;
   onMove: (r: number, c: number, key: string, input: HTMLInputElement) => boolean;
 }) {
   const [text, setText] = useState<string | null>(null);
+  const seen = useRef(value);
   const shown = text ?? numberText(cell.type, value);
 
   const commit = () => {
@@ -98,7 +102,7 @@ export function ValueInput({
     setText(null);
     const next = parseCell(cell.type, text);
     if (next === undefined) return onBad(text);
-    if (next !== value) onCommit(next);
+    if (next !== seen.current) onCommit(next, seen.current);
   };
 
   return (
@@ -110,6 +114,7 @@ export function ValueInput({
       data-ind={cell.indicatorId}
       data-m={cell.month}
       data-type={cell.type}
+      data-prev={value ?? ''}
       value={shown}
       readOnly={readOnly}
       inputMode="decimal"
@@ -118,6 +123,7 @@ export function ValueInput({
       title={title}
       aria-label={label}
       onFocus={(e) => {
+        seen.current = value;
         if (!readOnly) setText(numberText(cell.type, value));
         e.currentTarget.select();
       }}
@@ -188,13 +194,14 @@ export function useCellGrid(
         line.forEach((text, dc) => {
           const el = at(r0 + dr, c0 + dc);
           if (!el || el.readOnly) return;
-          const { cid, ind, m, type } = el.dataset;
+          const { cid, ind, m, type, prev } = el.dataset;
           const value = parseCell(type as IndicatorType, text);
           if (value === undefined) {
             bad += 1;
             return;
           }
-          changes.push({ contractorId: cid!, indicatorId: ind!, month: m!, value });
+          const was = prev ? Number(prev) : null;
+          changes.push({ contractorId: cid!, indicatorId: ind!, month: m!, value, prev: was });
         }),
       );
       return { changes, bad };
