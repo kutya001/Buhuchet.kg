@@ -11,6 +11,7 @@ import { PLATFORM_DICTS_TEXTS } from './platform-dicts-texts';
 import { SHELL_TEXTS } from './shell-texts';
 import { STAFF_TEXTS } from './staff-texts';
 import { STATUS_TEXTS } from './status-texts';
+import { TASKS_TEXTS } from './tasks-texts';
 
 /**
  * Языки интерфейса (ТЗ, Админка → «Локализация»). Сейчас язык один — русский; добавление языка
@@ -56,7 +57,7 @@ const SYSTEM_TEXTS = {
  * разложены по файлам экранов: служебные — здесь, оболочки — `shell-texts.ts`, входа и «Мой профиль» —
  * `auth-texts.ts`, списков — `grid-texts.ts`, сотрудников — `staff-texts.ts`, шкалы и истории статусов —
  * `status-texts.ts`, «Моей организации» — `org-texts.ts`, Админки — `admin-texts.ts`, «Справочников» и сроков
- * видов отчётов словами — `dicts-texts.ts`, контрагентов и сверки с ГКЭД — `contractors-texts.ts`, реквизитов для
+ * видов отчётов словами — `dicts-texts.ts`, контрагентов и сверки с ГКЭД — `contractors-texts.ts`, задач — `tasks-texts.ts`, реквизитов для
  * переводов — `money-texts.ts`, блока «Файлы» — `files-texts.ts`, «Базы знаний» — `kb-texts.ts`, Админки →
  * «Справочники платформы» — `platform-dicts-texts.ts`.
  */
@@ -69,6 +70,7 @@ export const UI_TEXTS = {
   ...STATUS_TEXTS,
   ...ORG_TEXTS,
   ...CONTRACTORS_TEXTS,
+  ...TASKS_TEXTS,
   ...ADMIN_ACCOUNTS_TEXTS,
   ...ADMIN_L10N_TEXTS,
   ...ADMIN_TEXTS,

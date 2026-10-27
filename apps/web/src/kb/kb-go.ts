@@ -35,6 +35,11 @@ export const KB_GO: Readonly<Record<string, KbTarget>> = {
   roles: { module: 'staff', tab: 'roles', flash: 'main' },
   emps: { module: 'staff', tab: 'list', flash: LIST, open: { add: 'employee' } },
   empcard: { module: 'staff', tab: 'list', flash: LIST },
+  // Задачи (задача 2.23).
+  mtask: { module: 'tasks', tab: 'byme', flash: LIST, open: { add: 'task' } },
+  daymonth: { module: 'tasks', tab: 'mine', flash: '[data-task-legend]' },
+  tdone: { module: 'tasks', tab: 'mine', flash: LIST },
+  tconf: { module: 'tasks', tab: 'mine', flash: '[data-plate="pend"], main' },
   search: { module: null, flash: '[role=search]', phoneFlash: '[data-search-open]' },
   // Пока нет «Контрагентов» — на списке «Видов отчётов»: он виден всем.
   cols: { module: 'dicts', tab: 'types', flash: '[data-grid-columns-button]' },

@@ -443,6 +443,11 @@ export interface GridViewSettings {
  * сюда — сервер не хранит настройки списков, которых нет.
  */
 export const GRID_KEYS = [
+  // «Задачи»: у каждой вкладки свой вид, как `'tasks-'+tab` в прототипе.
+  'tasks.mine',
+  'tasks.byme',
+  'tasks.all',
+  'tasks.overdue',
   'staff.list',
   'staff.roles',
   'kb.team',

@@ -36,6 +36,7 @@ import {
   dueChangeReasons,
   ownershipForms,
   platformAuditLog,
+  taskCategories,
   taxOffices,
 } from './schema';
 
@@ -63,6 +64,7 @@ const TABLES: Readonly<Record<AdminValueDict, DictTable>> = {
   organs: authorities,
   ugns: taxOffices,
   banks,
+  cats: taskCategories,
   reasons: dueChangeReasons,
 };
 

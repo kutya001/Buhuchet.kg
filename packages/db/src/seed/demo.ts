@@ -14,6 +14,7 @@ import type { Db } from '../client';
 import { seedDemoContractors } from './demo-contractors';
 import { seedDemoDictRequests } from './demo-dicts';
 import { seedDemoMoney } from './demo-money';
+import { seedDemoTasks } from './demo-tasks';
 import {
   employees,
   organizations,
@@ -31,7 +32,15 @@ export const DEMO_ORG_ID = '00000000-0000-4000-8000-000000000001';
 
 /** Вид записи демо-организации для постоянного uuid: у каждого модуля — свои. */
 export type DemoKind =
-  'employee' | 'user' | 'role' | 'contractor' | 'tariff' | 'requisite' | 'dict_request';
+  | 'employee'
+  | 'user'
+  | 'role'
+  | 'contractor'
+  | 'tariff'
+  | 'task'
+  | 'task_comment'
+  | 'requisite'
+  | 'dict_request';
 export type DemoIdOf = (kind: DemoKind, protoId: string) => string;
 
 /**
@@ -288,6 +297,8 @@ export async function seedDemoOrganization(
   // Контрагенты (задача 2.05).
   const employeeIds = demo.employees.map((e) => e.id);
   await seedDemoContractors(db, file, { orgId, demoId, employees: employeeIds });
+  // Ручные задачи (задача 2.23).
+  await seedDemoTasks(db, file, { orgId, demoId, employees: employeeIds });
   await seedDemoDictRequests(db, file, orgId, {
     request: (key) => demoId('dict_request', key),
     user: userOf,

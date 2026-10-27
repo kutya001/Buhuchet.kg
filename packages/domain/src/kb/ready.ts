@@ -1,4 +1,5 @@
 import type { HistoryAction, HistoryEntity, HistoryValue } from '../common/history';
+import type { StatusScaleKey } from '../common/status';
 import type { MenuModuleId } from '../org/modules';
 
 /*
@@ -24,6 +25,11 @@ export type KbDoneRule =
       /** Поле получило это значение. */
       change?: { field: string; to: HistoryValue };
     }
+  /**
+   * Смена статуса записи самим пользователем («История статусов», `status_history`; откат не
+   * считается): шкала, из каких статусов и в какие. Действия с задачей пишутся только туда.
+   */
+  | { kind: 'status'; scale: StatusScaleKey; from: readonly string[]; to: readonly string[] }
   /** Привязан свой Telegram (`telegram_links`). */
   | { kind: 'telegram' }
   /** Администратор платформы сам создал организацию (`organizations.created_by`). */
@@ -98,6 +104,24 @@ export const KB_STEP_RULES: Readonly<Record<string, KbStepRule>> = {
   roles: { module: 'staff' },
   emps: { module: 'staff', done: { kind: 'history', entity: 'employee', actions: ['create'] } },
   empcard: { module: 'staff' },
+  // 9. Задачи (задача 2.23). «Регулярные задачи по отчётам» — с задачей 2.24. «Выполнена» или «Не
+  // выполнена» — и отправленная на подтверждение (прототип `KB_EV['t.done']`); «Подтвердить» или «На
+  // доработку» (`KB_EV['t.conf']`).
+  mtask: { module: 'tasks', done: { kind: 'history', entity: 'task', actions: ['create'] } },
+  daymonth: { module: 'tasks' },
+  tdone: {
+    module: 'tasks',
+    done: {
+      kind: 'status',
+      scale: 'task',
+      from: ['todo', 'in_progress', 'rework'],
+      to: ['on_confirm', 'done', 'failed'],
+    },
+  },
+  tconf: {
+    module: 'tasks',
+    done: { kind: 'status', scale: 'task', from: ['on_confirm'], to: ['confirmed', 'rework'] },
+  },
   // 14. Работа со списками и интерфейсом: пока нет «Контрагентов», «Перейти» ведёт в список «Видов
   // отчётов» — он виден всем. «Статистика» — с первым экраном организации с плашками (2.13).
   search: { module: null },
@@ -120,6 +144,7 @@ export const KB_READY_MODULES: ReadonlySet<string> = new Set<MenuModuleId>([
   'staff',
   'dicts',
   'org',
+  'tasks',
   'kb',
   // Админка: «Учётные записи» (2.35), «Организации», «Локализация» (2.40). Статья «Справочников
   // платформы» описывает и загрузку из Excel — модуль добавит задача 2.37.

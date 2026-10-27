@@ -143,6 +143,7 @@ const AUDIT: GridAudit<AdminDictValue> = {
 const COUNT: Readonly<Record<AdminValueDict, CountKey>> = {
   forms: 'pdicts.count',
   organs: 'pdicts.count',
+  cats: 'pdicts.count',
   reasons: 'pdicts.count',
   ugns: 'pdicts.ugns_count',
   banks: 'pdicts.count',
@@ -150,6 +151,7 @@ const COUNT: Readonly<Record<AdminValueDict, CountKey>> = {
 
 /** Пояснение над списком (прототип: у шаблонов для организаций и у УГНС). */
 const NOTES: Partial<Record<AdminValueDict, UiTextKey>> = {
+  cats: 'pdicts.note.cats',
   reasons: 'pdicts.note.reasons',
   ugns: 'pdicts.note.ugns',
 };

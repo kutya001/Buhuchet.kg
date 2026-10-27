@@ -6,25 +6,28 @@ import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { pdictsTabCountsQuery } from '../platform-dicts/pdicts-data';
 import { staffTabCountsQuery } from '../staff/staff-data';
+import { taskTabCountsQuery } from '../tasks/tasks-data';
 
 /** Числа у вкладок модулей: модуль → вкладка → счётчик. */
 export type TabCounts = Partial<Record<MenuModuleId, Partial<Record<string, ShellCount>>>>;
 
 /**
  * Счётчики вкладок модулей меню (прототип: `count` у вкладок, например staffTabs; их видно и в ряду
- * вкладок, и в левой панели). Счётчики есть у модулей с экранами — у «Сотрудников» и у «Запросов»
- * «Справочников платформы»; у остальных их добавят их экраны. Запрос — только для модулей, доступных пользователю; пока ответа
+ * вкладок, и в левой панели). Счётчики есть у модулей с экранами — у «Сотрудников», «Задач» и у
+ * «Запросов» «Справочников платформы»; у остальных их добавят их экраны. Запрос — только для модулей, доступных пользователю; пока ответа
  * нет или запрос не удался — вкладки без чисел.
  */
 export function useTabCounts(modules: readonly MenuModuleId[]): TabCounts {
   const staff = useQuery({ ...staffTabCountsQuery, enabled: modules.includes('staff') });
+  const tasks = useQuery({ ...taskTabCountsQuery, enabled: modules.includes('tasks') });
   const pdicts = useQuery({ ...pdictsTabCountsQuery, enabled: modules.includes('pdicts') });
   return useMemo(
     () => ({
       ...(staff.data ? { staff: staff.data } : {}),
+      ...(tasks.data ? { tasks: tasks.data } : {}),
       ...(pdicts.data ? { pdicts: pdicts.data } : {}),
     }),
-    [staff.data, pdicts.data],
+    [staff.data, tasks.data, pdicts.data],
   );
 }
 
