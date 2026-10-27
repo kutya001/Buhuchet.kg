@@ -48,6 +48,43 @@ export const ADMIN_ACCOUNTS_TEXTS = {
 } as const satisfies Record<string, UiTextDefault>;
 
 /**
+ * Тексты Админки → «Локализация» (ТЗ «Модуль Локализация»; прототип admin/l10n.js, renderL10n):
+ * плашки языков, заметка, список словаря и окно «Текст интерфейса». Ошибки правки — п. Д-1
+ * docs/deviations.md.
+ */
+export const ADMIN_L10N_TEXTS = {
+  'locale.count.one': { ru: '{n} строка', section: S },
+  'locale.count.few': { ru: '{n} строки', section: S },
+  'locale.count.many': { ru: '{n} строк', section: S },
+  'locale.col.key': { ru: 'Ключ', section: S },
+  'locale.col.text': { ru: 'Русский текст', section: S },
+  'locale.col.section': { ru: 'Раздел', section: S },
+  'locale.lang.ru': { ru: 'Русский', section: S },
+  'locale.lang.default_on': { ru: 'язык по умолчанию · включён', section: S },
+  'locale.share': { ru: '{n} %', section: S },
+  'locale.add_lang': { ru: 'Добавить язык', section: S },
+  'locale.add_lang_sub': {
+    ru: 'Заложено в логику, пока не используется. Выбор языка в профиле появится, когда языков станет больше одного.',
+    section: S,
+  },
+  'locale.note': { ru: 'Изменённый текст применяется без изменения кода.', section: S },
+  'locale.action.edit': { ru: 'Изменить текст', section: S },
+  'locale.edit.title': { ru: 'Текст интерфейса', section: S },
+  'locale.edit.field': { ru: 'Русский', section: S },
+  'locale.edit.hint': { ru: 'Изменение применится без изменения кода', section: S },
+  'locale.saved': { ru: 'Текст сохранён', section: S },
+  'locale.err.empty': { ru: 'Введите текст', section: 'Ошибки' },
+  'err.ui_text_placeholders': {
+    ru: 'Подстановки в тексте должны остаться прежними: {names}',
+    section: 'Ошибки',
+  },
+  'err.ui_text_placeholders.none': {
+    ru: 'Уберите подстановки в фигурных скобках: у этого текста их нет',
+    section: 'Ошибки',
+  },
+} as const satisfies Record<string, UiTextDefault>;
+
+/**
  * Тексты Админки → «Организации» (ТЗ «Админка» → «Модуль организаций»; прототип
  * admin/accounts-orgs.js, renderOrgs и addOrgDlg). Общие ошибки формы («Введите название», «ИНН —
  * 14 цифр», логин, временный пароль, «Такой логин уже занят на платформе») — из словаря «Моей
