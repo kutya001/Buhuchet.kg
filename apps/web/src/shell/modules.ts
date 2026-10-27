@@ -1,4 +1,10 @@
-import type { Feature, MenuModuleId, PermissionId, UiTextKey } from '@buhuchet/domain';
+import type {
+  Feature,
+  MenuModuleId,
+  PermissionId,
+  RoleSaveEditor,
+  UiTextKey,
+} from '@buhuchet/domain';
 import type { MeResponse } from '@buhuchet/shared';
 import type { IconName } from '@buhuchet/ui';
 
@@ -26,6 +32,24 @@ export function shellAccess(me: MeResponse): ShellAccess {
     reportConfirm: me.reportConfirm,
     can: (p) => permissions.has(p),
     feature: (f) => me.features[f] === true,
+  };
+}
+
+/**
+ * Вошедший сотрудник для правил ролей на экране (`roleFormLock`, `roleScopeLock`): своя роль, его
+ * действующие права и область — как их отдал сервер (`/api/auth/me`). У администратора — null.
+ */
+export function roleEditorOf(me: MeResponse): RoleSaveEditor | null {
+  if (!me.employee) return null;
+  return {
+    isOwner: me.employee.isOwner,
+    roleId: me.employee.roleId,
+    subject: {
+      employeeId: me.employee.id,
+      isOwner: me.employee.isOwner,
+      permissions: new Set(me.permissions),
+      scopes: me.scopes,
+    },
   };
 }
 

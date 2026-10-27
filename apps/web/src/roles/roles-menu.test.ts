@@ -19,6 +19,7 @@ const role = (over: Partial<RoleListItem> = {}) =>
     templateCode: null,
     employees: 0,
     permissionCount: 5,
+    readOnly: null,
     version: 2,
     ...over,
   }) as RoleListItem;
@@ -46,6 +47,18 @@ describe('меню роли', () => {
     expect(remove.reason).toBeUndefined();
     remove.run();
     expect(r.remove).toHaveBeenCalledWith(target);
+  });
+
+  it('роль только для чтения (своя, с правами «выдаёт только владелец», шире своей) — только «Открыть»', () => {
+    const r = run();
+    const menu = roleMenu({ canDelete: true, defaultRoleId: DEFAULT, t, run: r });
+    for (const readOnly of ['own_role', 'owner_granted_role', 'beyond_own_role'] as const) {
+      const target = role({ readOnly });
+      const list = menu(target);
+      expect(labels(list)).toEqual(['Открыть']);
+      items(list)[0]!.run();
+      expect(r.open).toHaveBeenLastCalledWith(target);
+    }
   });
 
   it('«Удалить» недоступно с причиной у роли владельца, роли с сотрудниками и роли новых сотрудников', () => {

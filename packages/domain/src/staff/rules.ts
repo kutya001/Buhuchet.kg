@@ -195,3 +195,15 @@ export function newEmployeeRoleRefusal(
   if (hasOwnerGrantedPermission(role)) return 'owner_granted';
   return roleWithinRights(actor, role) ? null : 'beyond_own';
 }
+
+/**
+ * Показывать ли у сотрудника «Сменить роль», «Сбросить пароль», «Заблокировать» и «Разблокировать»
+ * (ТЗ «Сотрудники → Роли», решение заказчика 27.10.2026: недоступные кнопки скрыты; прототип
+ * core/org.js, empLocked): не у владельца организации и не у себя; не владельцу — не у сотрудника с
+ * правами «выдаёт только владелец» и не у сотрудника с ролью шире своей. Те же правила, что у
+ * `staffActionRefusal`; право «Сотрудники и роли» проверяет вызывающий.
+ */
+export function staffManageable(actor: StaffActor, target: StaffTarget): boolean {
+  if (actor.employeeId === target.employeeId) return false;
+  return staffActionRefusal(actor, target, 'resetPassword') === null;
+}

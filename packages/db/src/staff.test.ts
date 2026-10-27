@@ -7,12 +7,13 @@ import { createOrganization, type CreatedOrganization } from './organizations';
 import { lockRole } from './roles';
 import { seedPermissions, seedRoleTemplates } from './seed';
 import { readSpecJson } from './spec-data';
-import { roleAccess } from './staff';
+import { roleAccess, roleRightsMap } from './staff';
 import { createTestDatabase, databaseAvailable, type TestDatabase } from './testing';
 
 describe.skipIf(!databaseAvailable())('роль для решения о сотруднике (roleAccess)', () => {
   let t: TestDatabase;
   let a: CreatedOrganization;
+  let b: CreatedOrganization;
   const ctx = (): OrgContext => ({ orgId: a.orgId, userId: a.ownerUserId });
   const accRoleId = () => a.roles.find((r) => r.templateCode === 'acc')!.id;
 
@@ -31,6 +32,16 @@ describe.skipIf(!databaseAvailable())('роль для решения о сот�
         passwordHash: await hashPassword('Bh-4821-temp'),
       },
     });
+    b = await createOrganization(t.app.db, {
+      name: 'Организация Б',
+      inn: '02811201810457',
+      slug: 'org-b',
+      owner: {
+        fullName: 'Владелец Другой',
+        login: 'owner-b',
+        passwordHash: await hashPassword('Bh-4821-temp'),
+      },
+    });
   });
 
   afterAll(async () => {
@@ -46,6 +57,27 @@ describe.skipIf(!databaseAvailable())('роль для решения о сот�
     const owner = await withOrgContext(t.app.db, ctx(), (tx) => roleAccess(tx, ownerRoleId));
     expect(owner).toMatchObject({ isOwner: true, permissions: [] });
     expect(Object.values(owner!.scopes)).toEqual(SCOPE_GROUPS.map(() => 'all'));
+  });
+
+  it('права и область нескольких ролей сразу — как у roleAccess (roleRightsMap)', async () => {
+    const ownerRoleId = a.roles.find((r) => r.isOwner)!.id;
+    const unknown = '00000000-0000-4000-8000-000000000000';
+    // Роль другой организации не видна (RLS), как и несуществующая.
+    const foreign = b.roles.find((r) => r.templateCode === 'acc')!.id;
+    const [map, acc, owner, empty] = await withOrgContext(t.app.db, ctx(), async (tx) => [
+      await roleRightsMap(tx, [accRoleId(), ownerRoleId, accRoleId(), unknown, foreign]),
+      await roleAccess(tx, accRoleId()),
+      await roleAccess(tx, ownerRoleId),
+      await roleRightsMap(tx, []),
+    ]);
+    expect([...map.keys()].sort()).toEqual([accRoleId(), ownerRoleId].sort());
+    expect(map.get(accRoleId())).toEqual({
+      isOwner: false,
+      permissions: acc!.permissions,
+      scopes: acc!.scopes,
+    });
+    expect(map.get(ownerRoleId)).toEqual({ isOwner: true, permissions: [], scopes: owner!.scopes });
+    expect(empty.size).toBe(0);
   });
 
   it('пока роль правят (lockRole), решение по ней ждёт сохранения правки', async () => {

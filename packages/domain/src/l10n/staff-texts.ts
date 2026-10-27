@@ -27,8 +27,6 @@ export const STAFF_TEXTS = {
   'staff.action.reset_password': { ru: 'Сбросить пароль', section: 'Сотрудники' },
   'staff.action.block': { ru: 'Заблокировать', section: 'Сотрудники' },
   'staff.action.unblock': { ru: 'Разблокировать', section: 'Сотрудники' },
-  'staff.action.block_self': { ru: 'Нельзя заблокировать себя', section: 'Сотрудники' },
-  'staff.action.reset_self': { ru: 'Свой пароль меняют в «Мой профиль»', section: 'Сотрудники' },
   'staff.block.title': { ru: 'Заблокировать {name}?', section: 'Сотрудники' },
   'staff.block.text': {
     ru: 'Сотрудник не сможет войти. Его история сохранится.',
@@ -67,6 +65,11 @@ export const STAFF_TEXTS = {
   'staff.card.cps.empty': { ru: 'Нет закреплённых контрагентов', section: 'Сотрудники' },
   'staff.role.title': { ru: 'Роль сотрудника', section: 'Сотрудники' },
   'staff.role.done': { ru: 'Роль изменена', section: 'Сотрудники' },
+  // Подсказка под «Роль» у не владельца: каких ролей нет в списке (ТЗ, решение заказчика 27.10.2026).
+  'staff.role.hint': {
+    ru: 'Роли с правами, которые выдаёт только владелец, и роли шире вашей назначает владелец',
+    section: 'Сотрудники',
+  },
   // «Изменить»: ФИО и телефон (docs/deviations.md, п. 16, решение А).
   'staff.edit.title': { ru: 'Изменить сотрудника', section: 'Сотрудники' },
   'staff.edit.done': { ru: 'Данные сотрудника сохранены', section: 'Сотрудники' },
@@ -117,6 +120,19 @@ export const STAFF_TEXTS = {
     ru: 'У владельца организации все права, они не меняются.',
     section: 'Роли',
   },
+  // Роль, которую не владелец видит только для чтения (`RoleReadOnly`, прототип roleCard).
+  'roles.readonly.own_role': {
+    ru: 'Только для чтения: права своей роли меняет владелец.',
+    section: 'Роли',
+  },
+  'roles.readonly.owner_granted_role': {
+    ru: 'Только для чтения: роль с правами, которые выдаёт только владелец, меняет владелец.',
+    section: 'Роли',
+  },
+  'roles.readonly.beyond_own_role': {
+    ru: 'Только для чтения: роль с правами шире ваших меняет владелец.',
+    section: 'Роли',
+  },
   'roles.search': { ru: 'Поиск по названию и описанию права', section: 'Роли' },
   'roles.search_label': { ru: 'Поиск права', section: 'Роли' },
   'roles.nothing': { ru: 'Ничего не найдено', section: 'Роли' },
@@ -159,6 +175,8 @@ export const STAFF_TEXTS = {
   },
   'roles.lock.own_role': { ru: 'Права своей роли меняет владелец', section: 'Роли' },
   'roles.lock.owner_granted': { ru: 'Это право выдаёт только владелец', section: 'Роли' },
+  'roles.lock.not_own': { ru: 'Этого права нет у вашей роли', section: 'Роли' },
+  'roles.lock.not_own_scope': { ru: '«Все контрагенты» нет у вашей роли', section: 'Роли' },
   'roles.err.owner_granted_role': {
     ru: 'Роль с правами, которые выдаёт только владелец, меняет владелец',
     section: 'Роли',
@@ -168,6 +186,7 @@ export const STAFF_TEXTS = {
     ru: 'Область «Все контрагенты» можно дать только там, где она есть у вас',
     section: 'Роли',
   },
+  'roles.err.beyond_own_role': { ru: 'Роль с правами шире ваших меняет владелец', section: 'Роли' },
   'roles.err.name': { ru: 'Введите название', section: 'Ошибки' },
   'roles.form.title': { ru: 'Права роли', section: 'Роли' },
   'roles.form.name': { ru: 'Название роли', section: 'Роли' },
@@ -191,6 +210,11 @@ export const STAFF_TEXTS = {
   'err.owner_role.delete': { ru: 'Роль владельца не удаляется', section: 'Ошибки' },
   'err.owner_granted_role.delete': {
     ru: 'Роль с правами, которые выдаёт только владелец, удаляет владелец',
+    section: 'Ошибки',
+  },
+  'err.own_role.delete': { ru: 'Свою роль удаляет владелец', section: 'Ошибки' },
+  'err.beyond_own_role.delete': {
+    ru: 'Роль с правами шире ваших удаляет владелец',
     section: 'Ошибки',
   },
   'err.owner_employee': {

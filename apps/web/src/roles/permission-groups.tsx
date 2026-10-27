@@ -21,6 +21,7 @@ import {
   type PermissionGroupView,
   type PermissionLockOf,
   type PermissionState,
+  type ScopeLockOf,
 } from './permission-view';
 
 /** Подсветка права «Просматривать …» группы (прототип `.pg-p.pg-v`). */
@@ -30,7 +31,8 @@ const VIEW_ROW = '-mx-3.5 px-3.5 bg-[color-mix(in_srgb,var(--bu-blue-bg)_45%,tra
  * Права роли по группам модулей (ТЗ «Сотрудники» → «Вкладка Роли»; прототип modules/staff.js,
  * permGroupsHtml, permGroupsBind, pgSearch; css/cards.css `.pg`): поиск по названию и описанию права;
  * в заголовке группы — «Выбрано N из M», «Выбрать все» / «Снять все» и область «Свои / Все
- * контрагенты»; под каждым правом — что оно разрешает, у неактивной галочки — почему. Выключенный в
+ * контрагенты» (закрытая — с причиной под ней); под каждым правом — что оно разрешает, у неактивной
+ * галочки — почему. Выключенный в
  * учётной политике модуль — серым и свёрнут. На ПК группы раскрыты, шире 1100 px — в две колонки; на
  * телефоне свёрнуты. Без `onChange` — только просмотр (карточка роли): «есть» и «нет» вместо галочек.
  */
@@ -38,12 +40,15 @@ export function PermissionGroups({
   catalog,
   state,
   lockWith,
+  scopeLock,
   onChange,
 }: {
   catalog: readonly CatalogPermission[];
   state: PermissionState;
-  /** Почему галочка закрыта при данном наборе прав (`rolePermissionLock`). */
+  /** Почему галочка закрыта при данном наборе прав (`roleFormLock`). */
   lockWith: (selected: ReadonlySet<PermissionId>) => PermissionLockOf;
+  /** Почему переключатель области группы закрыт (`roleScopeLock`). */
+  scopeLock?: ScopeLockOf;
   onChange?: (next: PermissionState) => void;
 }) {
   const t = useT();
@@ -61,6 +66,7 @@ export function PermissionGroups({
     toggled,
     phone,
     feature: access.feature,
+    scopeLock,
   });
   const flip = (id: string) =>
     setToggled((prev) => {
@@ -288,22 +294,34 @@ function GroupScope({
   const value = group.scope ?? 'own';
   const label = (s: Scope) => t(s === 'all' ? 'roles.scope.all' : 'roles.scope.own');
   return (
-    <div className="flex basis-full items-center gap-2 pl-[22px] text-[12.5px] max-md:pl-0">
+    <div className="flex basis-full flex-wrap items-center gap-2 pl-[22px] text-[12.5px] max-md:pl-0">
       <span className="text-muted">{t('roles.scope')}</span>
       {onChange && !group.scopeFixed ? (
-        <div className={phone ? 'min-w-0 flex-1' : 'flex-none'}>
-          <Segments
-            options={[
-              { value: 'own', label: label('own') },
-              { value: 'all', label: label('all') },
-            ]}
-            value={value}
-            onChange={onChange}
-            label={t('roles.scope_label')}
-            fill={phone}
-            size="sm"
-          />
-        </div>
+        <>
+          <div className={phone ? 'min-w-0 flex-1' : 'flex-none'}>
+            <Segments
+              options={[
+                { value: 'own', label: label('own') },
+                { value: 'all', label: label('all') },
+              ]}
+              value={value}
+              onChange={onChange}
+              label={t('roles.scope_label')}
+              fill={phone}
+              size="sm"
+              disabled={group.scopeLock !== null}
+            />
+          </div>
+          {group.scopeLock ? (
+            <span
+              data-lock={group.scopeLock}
+              className="flex basis-full items-center gap-1 text-[12px] text-caution-label"
+            >
+              <Icon name="lock" size="sm" />
+              {t(`roles.lock.${group.scopeLock}`)}
+            </span>
+          ) : null}
+        </>
       ) : (
         <Tag
           icon={value === 'all' ? 'building' : 'user'}

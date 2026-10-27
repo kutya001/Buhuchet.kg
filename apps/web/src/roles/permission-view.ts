@@ -4,7 +4,7 @@ import {
   type Feature,
   type PermissionGroupId,
   type PermissionId,
-  type RoleLock,
+  type RoleFormLock,
   type Scope,
   type ScopeGroupId,
 } from '@buhuchet/domain';
@@ -24,7 +24,10 @@ export interface PermissionState {
 }
 
 /** Почему галочку права менять нельзя; null — можно. */
-export type PermissionLockOf = (permission: PermissionId) => RoleLock | null;
+export type PermissionLockOf = (permission: PermissionId) => RoleFormLock | null;
+
+/** Почему переключатель «Свои / Все контрагенты» группы закрыт (`roleScopeLock`); null — открыт. */
+export type ScopeLockOf = (group: ScopeGroupId) => 'not_own_scope' | null;
 
 /** Группа прав на экране (прототип modules/staff.js, permGroupsHtml). */
 export interface PermissionGroupView {
@@ -47,6 +50,8 @@ export interface PermissionGroupView {
   scope: Scope | null;
   /** Область задана правом «Видеть все отчёты и всех контрагентов» — выбора нет. */
   scopeFixed: boolean;
+  /** Переключатель области закрыт с причиной (только в форме, не у заданной правом области). */
+  scopeLock: 'not_own_scope' | null;
 }
 
 /**
@@ -89,6 +94,7 @@ export function permissionGroupsView(o: {
   toggled: ReadonlySet<string>;
   phone: boolean;
   feature: (feature: Feature) => boolean;
+  scopeLock?: ScopeLockOf;
 }): PermissionGroupView[] {
   const q = searchText(o.query.trim());
   return PERMISSION_GROUPS.flatMap((g): PermissionGroupView[] => {
@@ -100,6 +106,7 @@ export function permissionGroupsView(o: {
     const off = g.feature !== null && !o.feature(g.feature);
     const free = freeOf(perms, g.view, o.lock);
     const allOn = free.length > 0 && free.every((p) => o.state.selected.has(p.id));
+    const scopeFixed = o.state.selected.has('viewAll');
     return [
       {
         id: g.id,
@@ -112,7 +119,8 @@ export function permissionGroupsView(o: {
         off,
         toggle: o.readOnly || free.length === 0 ? null : allOn ? 'clear' : 'select',
         scope: g.scope ? formScope(o.state, g.id) : null,
-        scopeFixed: o.state.selected.has('viewAll'),
+        scopeFixed,
+        scopeLock: g.scope && !o.readOnly && !scopeFixed && o.scopeLock ? o.scopeLock(g.id) : null,
       },
     ];
   });

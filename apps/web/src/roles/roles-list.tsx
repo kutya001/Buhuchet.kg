@@ -184,7 +184,7 @@ export function RolesList() {
   const openForm = async (id: string) => {
     try {
       const data = await loadForm(client, id);
-      if (!data.role.isOwner) setForm(openSlot(data));
+      if (!data.role.isOwner && !data.role.readOnly) setForm(openSlot(data));
     } catch {
       toast(t('err.unknown'), { bad: true });
     }
@@ -204,7 +204,7 @@ export function RolesList() {
     if (!Uuid.safeParse(editId).success) return;
     loadForm(client, editId).then(
       (data) => {
-        if (!data.role.isOwner) setForm(openSlot(data));
+        if (!data.role.isOwner && !data.role.readOnly) setForm(openSlot(data));
       },
       () => toast(t('err.unknown'), { bad: true }),
     );

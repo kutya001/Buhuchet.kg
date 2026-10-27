@@ -7,7 +7,6 @@ import {
   schema,
   updateWithHistory,
   withOrgContext,
-  type EmployeeRecord,
   type Tx,
 } from '@buhuchet/db';
 import {
@@ -24,7 +23,7 @@ import type { AppEnv } from '../../env';
 import { apiFail, versionedSaveResponses } from '../../errors';
 import { orgContextOf, requirePermission } from '../../middleware/access';
 import { checkFullName, checkPhone } from './create';
-import { employeeBody, error, refuse, staffActor } from './employees';
+import { employeeOut, error, refuse, staffActor } from './employees';
 
 const { employees } = schema;
 
@@ -110,9 +109,9 @@ export function updateEmployeeHandler(
         patch,
         changes,
       });
-      return (await getEmployee(tx, id))!;
+      return employeeOut(tx, actor, (await getEmployee(tx, id))!);
     });
-    return c.json(employeeBody(updated), 200);
+    return c.json(updated, 200);
   };
 }
 
@@ -123,7 +122,7 @@ async function setActive(
   id: string,
   version: number,
   active: boolean,
-): Promise<EmployeeRecord> {
+): Promise<Employee> {
   const { employee, target } = await employeeForChange(tx, id, version);
   const action = active ? 'unblock' : 'block';
   const refusal = staffActionRefusal(actor, target, action);
@@ -137,7 +136,7 @@ async function setActive(
   });
   // Заблокированный не входит: сеансы закрываются сразу, а не при следующем запросе.
   if (!active) await endUserSessions(tx, employee.userId);
-  return (await getEmployee(tx, id))!;
+  return employeeOut(tx, actor, (await getEmployee(tx, id))!);
 }
 
 const activeRoute = (action: 'block' | 'unblock') =>
@@ -186,7 +185,7 @@ export function blockEmployeeHandler(
     const employee = await withOrgContext(deps.db, orgContextOf(c), (tx) =>
       setActive(tx, staffActor(c), id, version, false),
     );
-    return c.json(employeeBody(employee), 200);
+    return c.json(employee, 200);
   };
 }
 
@@ -200,6 +199,6 @@ export function unblockEmployeeHandler(
     const employee = await withOrgContext(deps.db, orgContextOf(c), (tx) =>
       setActive(tx, staffActor(c), id, version, true),
     );
-    return c.json(employeeBody(employee), 200);
+    return c.json(employee, 200);
   };
 }

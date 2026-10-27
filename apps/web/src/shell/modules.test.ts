@@ -17,6 +17,7 @@ import {
   parseAppPath,
   phoneModules,
   resolveAppRoute,
+  roleEditorOf,
   shellAccess,
   visibleTabs,
 } from './modules';
@@ -137,6 +138,35 @@ describe('вкладки и «+ Добавить» по правам и учёт
     const kpi = addActions('kpi', shellAccess(me()));
     expect(kpi.find((a) => a.id === 'excel')?.separate).toBe(true);
     expect(ids(addActions('dicts', shellAccess(me({ permissions: [] }))))).toEqual(['request']);
+  });
+});
+
+describe('вошедший для правил формы роли', () => {
+  it('своя роль, действующие права и область из «Кто я»; у администратора — никто', () => {
+    expect(roleEditorOf(me({ admin: true }))).toBeNull();
+    const editor = roleEditorOf({
+      ...me({ permissions: ['cpView', 'staffView', 'staff'] }),
+      employee: {
+        id: '00000000-0000-4000-8000-000000000002',
+        fullName: 'Кадров Тест',
+        shortName: 'Тест К.',
+        phone: null,
+        roleId: '00000000-0000-4000-8000-000000000003',
+        roleName: 'Кадры',
+        isOwner: false,
+      },
+      scopes: { cps: 'all', reports: 'own' },
+    });
+    expect(editor).toEqual({
+      isOwner: false,
+      roleId: '00000000-0000-4000-8000-000000000003',
+      subject: {
+        employeeId: '00000000-0000-4000-8000-000000000002',
+        isOwner: false,
+        permissions: new Set(['cpView', 'staffView', 'staff']),
+        scopes: { cps: 'all', reports: 'own' },
+      },
+    });
   });
 });
 

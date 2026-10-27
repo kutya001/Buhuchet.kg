@@ -43,6 +43,13 @@ export const RoleListItem = z.object({
   employees: z.number().int().nonnegative(),
   /** Число прав; у роли владельца — все. */
   permissionCount: z.number().int().nonnegative(),
+  /**
+   * Почему тому, кто смотрит, роль только для чтения (`roleReadOnly`; ТЗ, решение заказчика
+   * 27.10.2026): своя, с правами «выдаёт только владелец», шире своей — без «Изменить» и «Удалить», нет
+   * в списках «Роль» окон «Новый сотрудник» и «Сменить роль». null — можно менять (у роли владельца
+   * своя причина, `isOwner`).
+   */
+  readOnly: z.enum(['own_role', 'owner_granted_role', 'beyond_own_role']).nullable(),
   audit: RecordAudit,
   version: RecordVersion,
 });

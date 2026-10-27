@@ -4,7 +4,8 @@ import { expect, test, type APIRequestContext, type Locator, type Page } from '@
 // сотрудника, тот входит временным паролем и обязан его сменить; заблокированный не входит (методы
 // API, задача #10). Экраны (задача #18): «Новый сотрудник», карточка сотрудника с «Действиями»,
 // «Сменить роль», вкладка «Роли», карточка и форма роли; «Изменить» сотрудника и «Удалить» роль
-// (docs/deviations.md, п. 16). Логины свои на каждый запуск и проект (ПК и телефон).
+// (docs/deviations.md, п. 16); что не владелец с правом «Сотрудники и роли» видит и может (п. 15).
+// Логины свои на каждый запуск и проект (ПК и телефон).
 const DEMO_PASSWORD = process.env.DEMO_PASSWORD ?? 'demo';
 
 const uniqueLogin = (prefix: string) =>
@@ -355,6 +356,171 @@ test.describe('Этап 1: сотрудники и роли (экраны)', () 
       items: { name: string }[];
     };
     expect(roles.items.map((r) => r.name)).not.toContain(name);
+  });
+
+  test('не владелец с правом «Сотрудники и роли»: недоступные кнопки скрыты, своя роль и роли шире своей — только для чтения, в форме роли закрыто то, чего нет у его роли', async ({
+    page,
+    playwright,
+    baseURL,
+    isMobile,
+  }) => {
+    const origin = new URL(baseURL!).origin;
+    const word = randomWord('Кадр');
+    // Владелец: роль кадровика — права «Бухгалтера», просмотр сотрудников и «Сотрудники и роли»
+    // (выдаёт владелец); сам кадровик, бухгалтер и главный бухгалтер с общим словом в ФИО.
+    const setup = await playwright.request.newContext({ baseURL });
+    await signIn(setup, origin, 'erkin', DEMO_PASSWORD);
+    const { items } = (await (await setup.get('/api/roles?size=all')).json()) as {
+      items: { id: string; name: string }[];
+    };
+    const roleId = (name: string) => items.find((r) => r.name === name)!.id;
+    const roleName = `Кадры ${word}`;
+    const made = await setup.post('/api/roles', {
+      headers: { origin },
+      data: { name: roleName, copyFromRoleId: roleId('Бухгалтер') },
+    });
+    expect(made.status(), await made.text()).toBe(201);
+    const role = (await made.json()) as { id: string; version: number; permissions: string[] };
+    const saved = await setup.patch(`/api/roles/${role.id}`, {
+      headers: { origin },
+      data: { version: role.version, permissions: [...role.permissions, 'staffView', 'staff'] },
+    });
+    expect(saved.status(), await saved.text()).toBe(200);
+    const person = async (surname: string, rid: string) => {
+      const res = await setup.post('/api/staff', {
+        headers: { origin },
+        data: {
+          fullName: `${surname} ${word} Тестович`,
+          login: uniqueLogin('e2e-ro'),
+          roleId: rid,
+        },
+      });
+      expect(res.status(), await res.text()).toBe(201);
+      return (await res.json()) as {
+        employee: { id: string; login: string };
+        temporaryPassword: string;
+      };
+    };
+    const manager = await person('Кадров', role.id);
+    const colleague = await person('Бухгалтеров', roleId('Бухгалтер'));
+    const chief = await person('Главбухов', roleId('Главный бухгалтер'));
+    // Роль с «Откатом статусов» — правом, которое выдаёт только владелец.
+    const seniorName = `Старший ${word}`;
+    const senior = (await (
+      await setup.post('/api/roles', { headers: { origin }, data: { name: seniorName } })
+    ).json()) as { id: string; version: number };
+    const granted = await setup.patch(`/api/roles/${senior.id}`, {
+      headers: { origin },
+      data: { version: senior.version, permissions: ['cpView', 'rollback'] },
+    });
+    expect(granted.status(), await granted.text()).toBe(200);
+    await setup.dispose();
+    await signIn(page.request, origin, manager.employee.login, manager.temporaryPassword);
+    const changed = await page.request.post('/api/auth/password', {
+      headers: { origin },
+      data: { currentPassword: manager.temporaryPassword, newPassword: 'Свой-пароль-e2e-1' },
+    });
+    expect(changed.status(), await changed.text()).toBe(200);
+
+    const menu = page.getByRole('menu', { name: 'Действия' });
+    const grid = page.locator('[data-grid]');
+    /** Пункты меню «⋯» записи; меню закрывается Esc. */
+    const menuOf = async (id: string, names: string[]) => {
+      await grid.locator(`[data-id="${id}"] [data-row-menu]`).click();
+      await expect(menu.getByRole('menuitem')).toHaveText(names);
+      await page.keyboard.press('Escape');
+      await expect(menu).toHaveCount(0);
+    };
+
+    await test.step('сотрудники: «Сменить роль», «Сбросить пароль», «Заблокировать» — только у того, кого можно вести', async () => {
+      await page.goto('/app/staff/list');
+      await search(page, isMobile, word);
+      await expect(grid.locator('[data-id]')).toHaveCount(3);
+      await menuOf(colleague.employee.id, [
+        'Открыть карточку',
+        'Изменить',
+        'Сменить роль',
+        'Сбросить пароль',
+        'Заблокировать',
+      ]);
+      // Главный бухгалтер шире кадровика, а себя не ведут: пунктов нет вовсе, не неактивны.
+      await menuOf(chief.employee.id, ['Открыть карточку', 'Изменить']);
+      await menuOf(manager.employee.id, ['Открыть карточку', 'Изменить']);
+
+      // В «Сменить роль» нет роли владельца, своей роли и ролей шире своей; под полем — почему.
+      await grid.locator(`[data-id="${colleague.employee.id}"] [data-row-menu]`).click();
+      await menu.getByRole('menuitem', { name: 'Сменить роль' }).click();
+      const dialog = page.getByRole('dialog', { name: 'Роль сотрудника' });
+      const select = dialog.getByLabel('Роль');
+      await expect(select.locator('option').filter({ hasText: /^Бухгалтер$/ })).toHaveCount(1);
+      const options = await select.locator('option').allTextContents();
+      expect(options).not.toContain('Главный бухгалтер');
+      expect(options).not.toContain('Владелец организации');
+      expect(options).not.toContain(roleName);
+      await expect(dialog).toContainText(
+        'Роли с правами, которые выдаёт только владелец, и роли шире вашей назначает владелец',
+      );
+      await dialog.getByRole('button', { name: 'Отмена' }).click();
+      await expect(dialog).toBeHidden();
+
+      // В «Новый сотрудник» — тот же список ролей и та же подсказка.
+      await add(page, 'Сотрудник');
+      const hire = page.getByRole('dialog', { name: 'Новый сотрудник' });
+      const roles = hire.getByLabel('Роль');
+      await expect(roles.locator('option').filter({ hasText: /^Бухгалтер$/ })).toHaveCount(1);
+      const offered = await roles.locator('option').allTextContents();
+      for (const name of ['Главный бухгалтер', 'Владелец организации', roleName, seniorName]) {
+        expect(offered).not.toContain(name);
+      }
+      await expect(hire).toContainText(
+        'Роли с правами, которые выдаёт только владелец, и роли шире вашей назначает владелец',
+      );
+      await hire.getByRole('button', { name: 'Отмена' }).click();
+      await expect(hire).toBeHidden();
+    });
+
+    await test.step('роли: своя, с правами «выдаёт только владелец» и шире своей — только «Открыть», в карточке «Только для чтения» и нет «Изменить»', async () => {
+      const cases = [
+        [
+          roleId('Главный бухгалтер'),
+          'Главный бухгалтер',
+          'роль с правами шире ваших меняет владелец',
+        ],
+        [role.id, roleName, 'права своей роли меняет владелец'],
+        [senior.id, seniorName, 'роль с правами, которые выдаёт только владелец, меняет владелец'],
+      ] as const;
+      for (const [id, name, why] of cases) {
+        await page.goto('/app/staff/roles');
+        await search(page, isMobile, name);
+        await menuOf(id, ['Открыть']);
+        await grid.locator(`[data-id="${id}"] [data-row-menu]`).click();
+        await menu.getByRole('menuitem', { name: 'Открыть' }).click();
+        const card = page.getByRole('dialog', { name });
+        await expect(card).toContainText(`Только для чтения: ${why}.`);
+        await expect(card.getByRole('button', { name: 'Изменить' })).toHaveCount(0);
+        await card.getByRole('button', { name: 'Готово' }).click();
+        await expect(card).toBeHidden();
+      }
+    });
+
+    await test.step('новая роль: права и «Все контрагенты», которых нет у своей роли, закрыты с причиной', async () => {
+      await add(page, 'Роль');
+      const create = page.getByRole('dialog', { name: 'Новая роль' });
+      await create.getByLabel('Название').fill(`Своя ${word}`);
+      await create.getByRole('button', { name: 'Создать' }).click();
+      const form = page.getByRole('dialog', { name: 'Права роли' });
+      await expect(form).toContainText(`Своя ${word}`);
+      const common = form.locator('[data-permission-group="common"]');
+      if (isMobile) await common.getByRole('button', { name: 'Общие права' }).click();
+      const viewAll = common.locator('[data-permission="viewAll"]');
+      await expect(viewAll.getByRole('checkbox')).toBeDisabled();
+      await expect(viewAll).toContainText('Этого права нет у вашей роли');
+      const reports = form.locator('[data-permission-group="reports"]');
+      await expect(reports.getByRole('button', { name: 'Все контрагенты' })).toBeDisabled();
+      await expect(reports).toContainText('«Все контрагенты» нет у вашей роли');
+      await form.getByRole('button', { name: 'Отмена' }).click();
+      await expect(form).toBeHidden();
+    });
   });
 
   test('форма роли: группы модулей с описанием под каждым правом, «Выбрать все» в «Задачах» отмечает три права, на телефоне группы свёрнуты и показывают «Выбрано N из M»', async ({

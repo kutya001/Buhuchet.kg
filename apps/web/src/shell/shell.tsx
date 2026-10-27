@@ -50,6 +50,7 @@ import {
   moduleHref,
   parseAppPath,
   phoneModules,
+  roleEditorOf,
   shellAccess,
   tabHref,
   visibleTabs,
@@ -316,9 +317,9 @@ function ShellPage({
       clearAddRequest: () => setAddRequest(null),
       access,
       employeeId: me.employee?.id ?? null,
-      role: me.employee ? { id: me.employee.roleId, isOwner: me.employee.isOwner } : null,
+      editor: roleEditorOf(me),
     }),
-    [search, addRequest, setAddRequest, access, me.employee],
+    [search, addRequest, setAddRequest, access, me],
   );
   const mode = t(access.admin ? 'shell.mode.admin' : 'shell.mode.business');
   const fullName = me.employee?.fullName ?? t('profile.platform_admin');

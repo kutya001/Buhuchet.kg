@@ -19,7 +19,7 @@ const SEGMENT_SIZES = {
 /**
  * Переключатель из кнопок (прототип css/controls.css `.seg`, `.seg.sm`): выбранная кнопка светлая с
  * тенью. Для компоновки форм на телефоне помечен `data-segments`. `fill` — кнопки на всю ширину
- * (на телефоне в заголовке группы прав).
+ * (на телефоне в заголовке группы прав). `disabled` — выбор закрыт (причину показывает экран рядом).
  */
 export function Segments<T extends string>({
   options,
@@ -28,6 +28,7 @@ export function Segments<T extends string>({
   label,
   fill = false,
   size = 'md',
+  disabled = false,
 }: {
   options: readonly SegmentOption<T>[];
   value: T;
@@ -36,6 +37,7 @@ export function Segments<T extends string>({
   label: string;
   fill?: boolean;
   size?: keyof typeof SEGMENT_SIZES;
+  disabled?: boolean;
 }) {
   return (
     <div
@@ -49,8 +51,9 @@ export function Segments<T extends string>({
           key={o.value}
           type="button"
           aria-pressed={o.value === value}
+          disabled={disabled}
           onClick={() => onChange(o.value)}
-          className={`inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-md border-0 ${SEGMENT_SIZES[size]} font-[550] focus-visible:outline-2 focus-visible:outline-accent ${fill ? 'flex-1' : ''} ${o.value === value ? 'bg-raised text-ink shadow-btn' : 'bg-transparent text-muted'}`}
+          className={`inline-flex cursor-pointer items-center disabled:cursor-default disabled:opacity-60 justify-center gap-1.5 rounded-md border-0 ${SEGMENT_SIZES[size]} font-[550] focus-visible:outline-2 focus-visible:outline-accent ${fill ? 'flex-1' : ''} ${o.value === value ? 'bg-raised text-ink shadow-btn' : 'bg-transparent text-muted'}`}
         >
           {o.icon ? <Icon name={o.icon} size="sm" /> : null}
           <span>{o.label}</span>
