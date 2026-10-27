@@ -1,4 +1,4 @@
--- «База знаний» (docs/decisions.md п. 44): отметки обучения не удаляются; у прочитанных статей и
+-- «База знаний» (docs/decisions.md п. Г-2): отметки обучения не удаляются; у прочитанных статей и
 -- полученных уровней — только добавление, у шагов меняются лишь способ, момент и пропуск.
 REVOKE DELETE, TRUNCATE ON TABLE kb_progress, kb_article_reads, kb_levels FROM buhuchet_app;
 --> statement-breakpoint

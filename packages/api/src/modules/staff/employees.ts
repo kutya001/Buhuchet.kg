@@ -2,11 +2,13 @@ import { createRoute, z, type RouteHandler } from '@hono/zod-openapi';
 import {
   exportEmployees,
   getEmployee,
+  kbEmployeeLevels,
   listEmployeeValues,
   listEmployeesPage,
   roleRightsMap,
   staffTabCounts,
   withOrgContext,
+  type EmployeeKbLevels,
   type EmployeeRecord,
   type Tx,
 } from '@buhuchet/db';
@@ -41,6 +43,16 @@ import { serverTexts } from '../l10n/texts';
 
 export const error = { 'application/json': { schema: ApiError } };
 
+/**
+ * Столбец «Уровень знаний» — только тому, кто видит уровни сотрудников (право «Видеть уровни
+ * сотрудников», прототип modules/staff.js); уровни считает «База знаний».
+ */
+async function kbLevelsFor(c: Context<AppEnv>, tx: Tx): Promise<EmployeeKbLevels | undefined> {
+  const access = c.get('access');
+  if (!access || !hasPermission(access.subject, 'kbLevels')) return undefined;
+  return kbEmployeeLevels(tx, orgContextOf(c).orgId);
+}
+
 /** Сотрудник для ответа API: только поля схемы, моменты — строкой ISO. */
 export function employeeBody(e: EmployeeRecord, manageable: boolean): Employee {
   return {
@@ -65,6 +77,7 @@ export function employeeBody(e: EmployeeRecord, manageable: boolean): Employee {
       updatedBy: e.audit.updatedBy,
     },
     version: e.version,
+    kb: e.kb,
   };
 }
 
@@ -187,7 +200,7 @@ export function listEmployeesHandler(
     const t = await serverTexts(deps);
     const actor = staffActor(c);
     const { page, items } = await withOrgContext(deps.db, orgContextOf(c), async (tx) => {
-      const page = await listEmployeesPage(tx, query, t);
+      const page = await listEmployeesPage(tx, query, t, await kbLevelsFor(c, tx));
       return { page, items: await employeeBodies(tx, actor, page.rows) };
     });
     return c.json(
@@ -262,8 +275,8 @@ export function employeeValuesHandler(
   return async (c) => {
     const { col, q } = c.req.valid('query');
     const t = await serverTexts(deps);
-    const values = await withOrgContext(deps.db, orgContextOf(c), (tx) =>
-      listEmployeeValues(tx, col, t, q),
+    const values = await withOrgContext(deps.db, orgContextOf(c), async (tx) =>
+      listEmployeeValues(tx, col, t, q, await kbLevelsFor(c, tx)),
     );
     return c.json(values, 200);
   };
@@ -305,8 +318,10 @@ export function exportEmployeesHandler(
     const keys = [...new Set(params.cols.split(','))];
     return withExportSlot(deps, c.get('session')!.userId, async () => {
       const t = await serverTexts(deps);
-      const result = await withOrgContext(deps.db, { ...orgContextOf(c), kind: 'export' }, (tx) =>
-        exportEmployees(tx, query, keys, t),
+      const result = await withOrgContext(
+        deps.db,
+        { ...orgContextOf(c), kind: 'export' },
+        async (tx) => exportEmployees(tx, query, keys, t, await kbLevelsFor(c, tx)),
       );
       return xlsxResponse(c, {
         title: t('nav.staff'),

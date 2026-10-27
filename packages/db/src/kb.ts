@@ -2,18 +2,36 @@ import {
   bishkekDate,
   FEATURES,
   isKbHow,
+  kbBusinessAccess,
+  kbProgram,
+  kbStats,
   type Feature,
   type IsoDate,
   type KbArticleDef,
   type KbCatalog,
   type KbDoneRule,
   type KbFeatureInfo,
+  type KbHow,
+  type KbLevelDef,
   type KbMark,
+  type KbProgramGroup,
   type KbScreenUi,
+  type KbStats,
+  type ListQuery,
+  type ListSort,
 } from '@buhuchet/domain';
 import { and, asc, eq, gte, inArray, sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Db, Tx } from './client';
+import {
+  selectListExport,
+  selectListPage,
+  selectListValues,
+  type ListColumns,
+  type ListFrom,
+  type ListTexts,
+} from './list';
+import { orgMenuSettings } from './org';
 import {
   auditLog,
   employees,
@@ -24,9 +42,10 @@ import {
   roles,
   telegramLinks,
 } from './schema';
+import { roleRightsMap, type EmployeeKbLevels } from './staff';
 
 /*
- * «База знаний» (задача 2.30, docs/decisions.md п. 44): содержимое из `platform_reference` (разделы
+ * «База знаний» (задача 2.30, docs/decisions.md п. Г-2): содержимое из `platform_reference` (разделы
  * refDB.json `kbSteps`, `kbGroups`, `kbLevels`, `kbArticles`, `kbUi`) и прогресс пользователей —
  * отметки шагов, прочитанные статьи, полученные уровни. Всё — в `withOrgContext`: читается прогресс
  * своей организации, пишется только свой (RLS).
@@ -252,7 +271,7 @@ export async function kbDoneFacts(
  * «Пропущенный шаг засчитывается сам, если пользователь потом выполнил его условие»). true — шаг
  * засчитан сейчас, false — был засчитан раньше.
  */
-export async function kbMarkDone(tx: Tx, stepId: string, how: KbMark['done'] extends infer D ? (D extends { how: infer H } ? H : never) : never): Promise<boolean> {
+export async function kbMarkDone(tx: Tx, stepId: string, how: KbHow): Promise<boolean> {
   const rows = await tx
     .insert(kbProgress)
     .values({
@@ -382,4 +401,222 @@ export async function kbMembers(tx: Tx, employeeIds?: readonly string[]): Promis
     .innerJoin(roles, eq(roles.id, employees.roleId))
     .where(employeeIds ? inArray(employees.id, [...employeeIds]) : undefined)
     .orderBy(asc(employees.fullName));
+}
+
+/** Уровень сотрудника для «Уровней сотрудников», столбца «Уровень знаний» и его карточки. */
+export interface KbMemberProgress {
+  member: KbMember;
+  stats: KbStats;
+  /** Уровни программы организации (`kbLevels.business`). */
+  levels: readonly KbLevelDef[];
+  /** Полученные уровни с датами, по возрастанию. */
+  reached: KbReachedLevel[];
+  /** Когда получен последний уровень; null — уровней ещё нет (не открывал «Базу знаний»). */
+  lastAt: Date | null;
+}
+
+/**
+ * Уровни сотрудников организации из контекста (прототип kbFor): программа каждого — из прав его роли
+ * и функций учётной политики, засчитанные шаги — сохранённые отметки (ТЗ «Как считается»: шаг
+ * засчитывается тому, кто сам сделал действие; свои прошлые действия засчитываются при входе в
+ * программу). Уровень не ниже полученного раньше.
+ */
+export async function kbTeam(
+  tx: Tx,
+  orgId: string,
+  employeeIds?: readonly string[],
+): Promise<KbMemberProgress[]> {
+  const members = await kbMembers(tx, employeeIds);
+  if (!members.length) return [];
+  const catalog = await kbCatalog(tx);
+  const { features } = await orgMenuSettings(tx, orgId);
+  const rights = await roleRightsMap(
+    tx,
+    members.map((m) => m.roleId),
+  );
+  const userIds = members.map((m) => m.userId);
+  const marks = await kbMarksOf(tx, userIds);
+  const reached = await kbReachedOf(tx, userIds);
+  const programs = new Map<string, KbProgramGroup[]>();
+  return members.map((member) => {
+    let program = programs.get(member.roleId);
+    if (!program) {
+      const r = rights.get(member.roleId);
+      const subject = {
+        employeeId: member.employeeId,
+        isOwner: r?.isOwner ?? false,
+        permissions: new Set(r?.permissions ?? []),
+        scopes: r?.scopes ?? {},
+      };
+      program = kbProgram(catalog, kbBusinessAccess(subject, features));
+      programs.set(member.roleId, program);
+    }
+    const got = reached.get(member.userId) ?? [];
+    const max = got.length ? got[got.length - 1]!.level : null;
+    return {
+      member,
+      stats: kbStats(program, marks.get(member.userId) ?? new Map(), catalog.levels.business, max),
+      levels: catalog.levels.business,
+      reached: got,
+      lastAt: got.length ? got[got.length - 1]!.at : null,
+    };
+  });
+}
+
+/** Уровни знаний для столбца «Уровень знаний» списка сотрудников (`listEmployeesPage`). */
+export async function kbEmployeeLevels(tx: Tx, orgId: string): Promise<EmployeeKbLevels> {
+  const team = await kbTeam(tx, orgId);
+  return {
+    rows: team.map((p) => ({
+      employeeId: p.member.employeeId,
+      level: p.stats.level,
+      name: p.levels[p.stats.level]?.n ?? '',
+      pct: p.stats.pct,
+    })),
+    of: team[0]?.levels.length ?? 0,
+  };
+}
+
+/* ───────────── «Уровни сотрудников» ───────────── */
+
+/**
+ * Строки списка — посчитанные уровни сотрудников одним параметром запроса (`jsonb_to_recordset`), а
+ * поиск, фильтры, сортировка, группировка и выгрузка — общим механизмом списков.
+ */
+function teamSource(team: readonly KbMemberProgress[], t: ListTexts): SQL {
+  const rows = team.map((p, n) => ({
+    id: p.member.employeeId,
+    n,
+    full_name: p.member.fullName,
+    role: p.member.roleName,
+    active: p.member.active,
+    level: p.stats.level,
+    level_name: p.levels[p.stats.level]?.n ?? '',
+    pct: p.stats.pct,
+    done: p.stats.done,
+    total: p.stats.total,
+    steps: t('kb.team.steps')
+      .replace('{done}', String(p.stats.done))
+      .replace('{total}', String(p.stats.total)),
+    level_at: p.lastAt ? bishkekDate(p.lastAt) : null,
+  }));
+  return sql`jsonb_to_recordset(${JSON.stringify(rows)}::jsonb) as r(id uuid, n integer, full_name text, role text, active boolean, level integer, level_name text, pct integer, done integer, total integer, steps text, level_at date)`;
+}
+
+/** Столбец строки из `jsonb_to_recordset`: имена — постоянные, не ввод пользователя. */
+const col = (key: string) => sql.raw(`"r"."${key}"`);
+
+/** Столбцы «Уровней сотрудников» (прототип modules/kb.js, вкладка team). */
+export const KB_TEAM_COLUMNS: ListColumns = {
+  fullName: { type: 'text', label: 'kb.team.col.full_name', value: col('full_name') },
+  role: { type: 'enum', label: 'kb.team.col.role', value: col('role') },
+  level: {
+    type: 'enum',
+    label: 'kb.team.col.level',
+    value: col('level_name'),
+    // По номеру уровня: значение сортировки зависит только от значения столбца, иначе группы и
+    // значения фильтра разделились бы по проценту.
+    sort: { value: col('level'), text: false },
+  },
+  pct: { type: 'int', label: 'kb.team.col.pct', value: col('pct') },
+  steps: {
+    type: 'text',
+    label: 'kb.team.col.steps',
+    value: col('steps'),
+    sort: { value: col('done'), text: false },
+  },
+  levelAt: { type: 'date', label: 'kb.team.col.level_at', value: col('level_at') },
+};
+
+/** По умолчанию — от высшего уровня (прототип `sort:{key:'lvl',dir:-1}`). */
+const TEAM_SORT: ListSort = { key: 'level', dir: 'desc' };
+
+const teamFrom =
+  (tx: Tx, source: SQL): ListFrom =>
+  (fields) =>
+    tx.select(fields).from(source).$dynamic();
+
+export interface KbTeamRow {
+  id: string;
+  fullName: string;
+  role: string;
+  active: boolean;
+  level: number;
+  levelName: string;
+  pct: number;
+  done: number;
+  total: number;
+  levelAt: string | null;
+}
+
+/** Страница «Уровней сотрудников» организации из контекста. */
+export async function listKbTeamPage(tx: Tx, orgId: string, query: ListQuery, t: ListTexts) {
+  const source = teamSource(await kbTeam(tx, orgId), t);
+  const page = await selectListPage({
+    query,
+    columns: KB_TEAM_COLUMNS,
+    natural: [col('n')],
+    defaultSort: TEAM_SORT,
+    scope: undefined,
+    select: ({ window, where, orderBy, limit, offset }) =>
+      tx
+        .select({
+          id: sql<string>`${col('id')}`,
+          fullName: sql<string>`${col('full_name')}`,
+          role: sql<string>`${col('role')}`,
+          active: sql<boolean>`${col('active')}`,
+          level: sql<number>`${col('level')}`,
+          levelName: sql<string>`${col('level_name')}`,
+          pct: sql<number>`${col('pct')}`,
+          done: sql<number>`${col('done')}`,
+          total: sql<number>`${col('total')}`,
+          levelAt: sql<string | null>`to_char(${col('level_at')}, 'YYYY-MM-DD')`,
+          ...window,
+        })
+        .from(source)
+        .where(where)
+        .orderBy(...orderBy)
+        .limit(limit)
+        .offset(offset),
+    from: teamFrom(tx, source),
+  });
+  return page;
+}
+
+/** Значения столбца «Уровней сотрудников» для фильтра-галочек; `q` — «Найти значение». */
+export async function listKbTeamValues(
+  tx: Tx,
+  orgId: string,
+  key: string,
+  t: ListTexts,
+  q?: string,
+) {
+  const source = teamSource(await kbTeam(tx, orgId), t);
+  return selectListValues({
+    columns: KB_TEAM_COLUMNS,
+    key,
+    scope: undefined,
+    from: teamFrom(tx, source),
+    q,
+  });
+}
+
+/** «Уровни сотрудников» для выгрузки в Excel: все под поиском и фильтрами, столбцы `keys`. */
+export async function exportKbTeam(
+  tx: Tx,
+  orgId: string,
+  query: ListQuery,
+  keys: readonly string[],
+  t: ListTexts,
+) {
+  const source = teamSource(await kbTeam(tx, orgId), t);
+  return selectListExport({
+    query,
+    columns: KB_TEAM_COLUMNS,
+    keys,
+    natural: [col('n')],
+    defaultSort: TEAM_SORT,
+    scope: undefined,
+    from: teamFrom(tx, source),
+  });
 }

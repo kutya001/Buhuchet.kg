@@ -1,6 +1,14 @@
 import { addDays, type IsoDate } from '../common/dates';
+import { ADMIN_MENU_MODULES, menuModules } from '../org/modules';
+import { hasPermission, type AccessSubject } from '../roles/access';
 import type { Feature, PermissionId } from '../roles/permissions';
-import { kbFlag, type KbCatalog, type KbGroupDef, type KbLevelDef, type KbStepDef } from './catalog';
+import {
+  kbFlag,
+  type KbCatalog,
+  type KbGroupDef,
+  type KbLevelDef,
+  type KbStepDef,
+} from './catalog';
 import { KB_STEP_RULES, type KbStepRule } from './ready';
 
 /*
@@ -20,6 +28,31 @@ export interface KbAccess {
   feature: (feature: Feature) => boolean;
   /** Модули меню пользователя. */
   modules: ReadonlySet<string>;
+}
+
+/** Доступ сотрудника организации: его права и функции учётной политики (модули — как в меню). */
+export function kbBusinessAccess(
+  subject: AccessSubject,
+  features: Readonly<Partial<Record<Feature, boolean>>>,
+): KbAccess {
+  return {
+    admin: false,
+    isOwner: subject.isOwner,
+    can: (p) => hasPermission(subject, p),
+    feature: (f) => features[f] === true,
+    modules: new Set(menuModules(subject, features)),
+  };
+}
+
+/** Доступ администратора платформы: модули Админки, прав и функций организации нет. */
+export function kbAdminAccess(): KbAccess {
+  return {
+    admin: true,
+    isOwner: false,
+    can: () => false,
+    feature: () => false,
+    modules: new Set(ADMIN_MENU_MODULES),
+  };
 }
 
 /** Как засчитан шаг (ТЗ: «с датой и способом»; прототип `CK_HOW`). */
@@ -248,7 +281,11 @@ export function kbGroupStatus(
 ): { state: 'done'; at: string | null } | { state: 'partial' } | null {
   const done = group.steps.filter((s) => isDone(marks, s.def.id));
   if (done.length === group.steps.length) {
-    const at = done.map((s) => marks.get(s.def.id)!.done!.at).sort().pop() ?? null;
+    const at =
+      done
+        .map((s) => marks.get(s.def.id)!.done!.at)
+        .sort()
+        .pop() ?? null;
     return { state: 'done', at };
   }
   const skipped = group.steps.filter((s) => isSkipped(marks, s.def.id)).length;

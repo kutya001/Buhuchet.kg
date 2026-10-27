@@ -11,7 +11,7 @@ import {
   type Scope,
   type ScopeGroupId,
 } from '@buhuchet/domain';
-import { count, eq, inArray, sql } from 'drizzle-orm';
+import { count, eq, inArray, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { Db, Tx } from './client';
 import { writeHistory } from './history';
@@ -66,7 +66,32 @@ export interface EmployeeRecord {
   lastLoginAt: Date | null;
   audit: AuditRecord;
   version: number;
+  /** Уровень знаний в списке — только у того, кто видит уровни сотрудников; иначе null. */
+  kb: { level: number; name: string; pct: number; of: number } | null;
 }
+
+/**
+ * Уровни знаний сотрудников для столбца «Уровень знаний» списка (прототип modules/staff.js, столбец
+ * `kb`): их считает «База знаний» (`kbTeam`), сюда они приходят одним параметром запроса.
+ */
+export interface EmployeeKbLevels {
+  rows: readonly { employeeId: string; level: number; name: string; pct: number }[];
+  /** Уровней всего: «Уровень знаний N из M». */
+  of: number;
+}
+
+/** Уровни знаний как таблица запроса `kb`; без них — пустая (столбца в списке нет). */
+function kbSource(kb: EmployeeKbLevels | undefined): SQL {
+  const rows = (kb?.rows ?? []).map((r) => ({
+    employee_id: r.employeeId,
+    level: r.level,
+    name: r.name,
+    pct: r.pct,
+  }));
+  return sql`jsonb_to_recordset(${JSON.stringify(rows)}::jsonb) as kb(employee_id uuid, level integer, name text, pct integer)`;
+}
+
+const KB_ON = sql`"kb"."employee_id" = ${employees.id}`;
 
 const creator = alias(employees, 'creator');
 const updater = alias(employees, 'updater');
@@ -108,19 +133,26 @@ function selectEmployees(tx: Tx) {
 }
 
 /** То же для страницы списка — с числом записей, итогами и группами (`selectListPage`). */
-function selectEmployeePage(tx: Tx, window: ListWindowFields) {
+function selectEmployeePage(tx: Tx, window: ListWindowFields, kb: EmployeeKbLevels | undefined) {
   return tx
-    .select({ ...employeeFields, ...window })
+    .select({
+      ...employeeFields,
+      kbLevel: sql<number | null>`"kb"."level"`,
+      kbName: sql<string | null>`"kb"."name"`,
+      kbPct: sql<number | null>`"kb"."pct"`,
+      ...window,
+    })
     .from(employees)
     .innerJoin(users, eq(users.id, employees.userId))
     .innerJoin(roles, eq(roles.id, employees.roleId))
     .leftJoin(telegramLinks, eq(telegramLinks.userId, employees.userId))
     .leftJoin(creator, eq(creator.userId, employees.createdBy))
-    .leftJoin(updater, eq(updater.userId, employees.updatedBy));
+    .leftJoin(updater, eq(updater.userId, employees.updatedBy))
+    .leftJoin(kbSource(kb), KB_ON);
 }
 
 /** Те же таблицы с любыми полями — для групп, значений фильтра и выгрузки (`ListFrom`). */
-function employeeListFrom(tx: Tx): ListFrom {
+function employeeListFrom(tx: Tx, kb: EmployeeKbLevels | undefined): ListFrom {
   return (fields) =>
     tx
       .select(fields)
@@ -130,6 +162,7 @@ function employeeListFrom(tx: Tx): ListFrom {
       .leftJoin(telegramLinks, eq(telegramLinks.userId, employees.userId))
       .leftJoin(creator, eq(creator.userId, employees.createdBy))
       .leftJoin(updater, eq(updater.userId, employees.updatedBy))
+      .leftJoin(kbSource(kb), KB_ON)
       .$dynamic();
 }
 
@@ -137,7 +170,9 @@ type EmployeeRow = Awaited<ReturnType<typeof selectEmployees>>[number];
 
 type PhoneCodes = Awaited<ReturnType<typeof phoneCodes>>;
 
-function toEmployee(r: EmployeeRow, codes: PhoneCodes): EmployeeRecord {
+type KbFields = { kbLevel?: number | null; kbName?: string | null; kbPct?: number | null };
+
+function toEmployee(r: EmployeeRow & KbFields, codes: PhoneCodes, kbOf = 0): EmployeeRecord {
   return {
     id: r.id,
     userId: r.userId,
@@ -159,6 +194,10 @@ function toEmployee(r: EmployeeRow, codes: PhoneCodes): EmployeeRecord {
       updatedBy: auditActorName(r.updatedBy, r.updatedByName),
     },
     version: r.version,
+    kb:
+      r.kbLevel !== null && r.kbLevel !== undefined && r.kbName !== null && r.kbName !== undefined
+        ? { level: r.kbLevel, name: r.kbName, pct: r.kbPct ?? 0, of: kbOf }
+        : null,
   };
 }
 
@@ -172,8 +211,17 @@ function toEmployee(r: EmployeeRow, codes: PhoneCodes): EmployeeRecord {
  */
 const CREATED_BY = auditActorValue(employees.createdBy, creator.shortName);
 
-export function employeeListColumns(t: ListTexts): ListColumns {
+export function employeeListColumns(t: ListTexts, kb?: EmployeeKbLevels): ListColumns {
   return {
+    ...(kb && {
+      kb: {
+        type: 'enum',
+        label: 'staff.col.kb',
+        value: sql`"kb"."name"`,
+        // По номеру уровня (как группы и значения фильтра — по названию уровня).
+        sort: { value: sql`"kb"."level"`, text: false },
+      },
+    }),
     fullName: { type: 'text', label: 'staff.col.full_name', value: employees.fullName },
     login: { type: 'text', label: 'staff.col.login', value: users.login },
     phone: { type: 'text', label: 'staff.col.phone', value: employees.phone, compact: true },
@@ -224,23 +272,24 @@ export async function listEmployeesPage(
   tx: Tx,
   query: ListQuery,
   t: ListTexts,
+  kb?: EmployeeKbLevels,
 ): Promise<ListPageResult<EmployeeRecord>> {
   const page = await selectListPage({
     query,
-    columns: employeeListColumns(t),
+    columns: employeeListColumns(t, kb),
     natural: EMPLOYEE_NATURAL,
     // У сотрудников нет области «Свои»: список — вся организация (её отсекает RLS).
     scope: undefined,
     select: ({ window, where, orderBy, limit, offset }) =>
-      selectEmployeePage(tx, window)
+      selectEmployeePage(tx, window, kb)
         .where(where)
         .orderBy(...orderBy)
         .limit(limit)
         .offset(offset),
-    from: employeeListFrom(tx),
+    from: employeeListFrom(tx, kb),
   });
   const codes = await phoneCodes(tx);
-  return { ...page, rows: page.rows.map((r) => toEmployee(r, codes)) };
+  return { ...page, rows: page.rows.map((r) => toEmployee(r, codes, kb?.of)) };
 }
 
 /**
@@ -260,12 +309,18 @@ export async function staffTabCounts(tx: Tx): Promise<{ active: number; roles: n
  * Значения столбца списка сотрудников для фильтра-галочек (роль — названия ролей, статус — подписи);
  * `q` — «Найти значение» по всем значениям столбца.
  */
-export function listEmployeeValues(tx: Tx, key: string, t: ListTexts, q?: string) {
+export function listEmployeeValues(
+  tx: Tx,
+  key: string,
+  t: ListTexts,
+  q?: string,
+  kb?: EmployeeKbLevels,
+) {
   return selectListValues({
-    columns: employeeListColumns(t),
+    columns: employeeListColumns(t, kb),
     key,
     scope: undefined,
-    from: employeeListFrom(tx),
+    from: employeeListFrom(tx, kb),
     q,
   });
 }
@@ -279,14 +334,15 @@ export async function exportEmployees(
   query: ListQuery,
   keys: readonly string[],
   t: ListTexts,
+  kb?: EmployeeKbLevels,
 ) {
   const result = await selectListExport({
     query,
-    columns: employeeListColumns(t),
+    columns: employeeListColumns(t, kb),
     keys,
     natural: EMPLOYEE_NATURAL,
     scope: undefined,
-    from: employeeListFrom(tx),
+    from: employeeListFrom(tx, kb),
   });
   const phone = keys.indexOf('phone');
   if (phone < 0) return result;

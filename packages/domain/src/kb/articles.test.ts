@@ -19,7 +19,10 @@ describe('статья по блокам', () => {
         '<p>Здесь <b>всё обучение</b> работе.</p><h4>Уроки</h4><h5>Вкладки</h5><blockquote>Совет</blockquote><kb-screen data-mod="staff"></kb-screen>',
       ),
     ).toEqual([
-      { type: 'p', inline: [{ text: 'Здесь ' }, { text: 'всё обучение', bold: true }, { text: ' работе.' }] },
+      {
+        type: 'p',
+        inline: [{ text: 'Здесь ' }, { text: 'всё обучение', bold: true }, { text: ' работе.' }],
+      },
       { type: 'h4', inline: [{ text: 'Уроки' }] },
       { type: 'h5', inline: [{ text: 'Вкладки' }] },
       { type: 'quote', inline: [{ text: 'Совет' }] },
@@ -32,13 +35,19 @@ describe('статья по блокам', () => {
       kbArticleBlocks('<ol><li><b>Шаг</b> один</li><ul><li>а</li><li>б</li></ul><li>два</li></ol>'),
     ).toEqual([
       {
-        type: 'ol',
+        type: 'list',
         items: [
-          [{ text: 'Шаг', bold: true }, { text: ' один' }],
-          { type: 'ul', items: [[{ text: 'а' }], [{ text: 'б' }]] },
-          [{ text: 'два' }],
+          { depth: 0, ordered: true, inline: [{ text: 'Шаг', bold: true }, { text: ' один' }] },
+          { depth: 1, ordered: false, inline: [{ text: 'а' }] },
+          { depth: 1, ordered: false, inline: [{ text: 'б' }] },
+          { depth: 0, ordered: true, inline: [{ text: 'два' }] },
         ],
       },
+    ]);
+    // Лишний закрывающий тег списка не ломает разбор.
+    expect(kbArticleBlocks('<ul><li>а</li></ul></ul><p>б</p>')).toEqual([
+      { type: 'list', items: [{ depth: 0, ordered: false, inline: [{ text: 'а' }] }] },
+      { type: 'p', inline: [{ text: 'б' }] },
     ]);
   });
 
@@ -73,7 +82,11 @@ describe('поиск по статьям', () => {
 
   it('отрывок: без поиска — 150 знаков, с поиском — найденное и вокруг него', () => {
     const long = 'а'.repeat(200);
-    expect(kbArticleSnippet(long, '')).toEqual({ before: `${'а'.repeat(150)}…`, mark: '', after: '' });
+    expect(kbArticleSnippet(long, '')).toEqual({
+      before: `${'а'.repeat(150)}…`,
+      mark: '',
+      after: '',
+    });
     const text = `${'x'.repeat(100)}Права роли${'y'.repeat(100)}`;
     const s = kbArticleSnippet(text, 'права');
     expect(s.mark).toBe('Права');
@@ -83,7 +96,12 @@ describe('поиск по статьям', () => {
   });
 });
 
-function access(o: { perms?: PermissionId[]; features?: Feature[]; modules?: string[]; admin?: boolean }): KbAccess {
+function access(o: {
+  perms?: PermissionId[];
+  features?: Feature[];
+  modules?: string[];
+  admin?: boolean;
+}): KbAccess {
   const perms = new Set(o.perms ?? []);
   const features = new Set(o.features ?? []);
   return {
@@ -95,7 +113,13 @@ function access(o: { perms?: PermissionId[]; features?: Feature[]; modules?: str
   };
 }
 
-const article = (o: Partial<KbArticleDef>): KbArticleDef => ({ id: 'a', sec: 'Модули', t: 'Статья', html: '', ...o });
+const article = (o: Partial<KbArticleDef>): KbArticleDef => ({
+  id: 'a',
+  sec: 'Модули',
+  t: 'Статья',
+  html: '',
+  ...o,
+});
 
 describe('какие статьи видны', () => {
   it('по режиму: «all» — всем, «biz» — организации, «adm» — администратору', () => {
@@ -145,7 +169,11 @@ describe('статья шага', () => {
 describe('описание экрана модуля', () => {
   it('вкладки, элементы, плашки, кнопки и формы с обязательными полями — из kbUi', () => {
     const ui = {
-      tabs: { 'staff.list': 'Все сотрудники', 'staff.roles': 'Роли и права', 'org.main': 'Профиль' },
+      tabs: {
+        'staff.list': 'Все сотрудники',
+        'staff.roles': 'Роли и права',
+        'org.main': 'Профиль',
+      },
       screens: { staff: ['add', 'Активные', '+ Добавить'] },
       els: [{ id: 'add', t: 'Кнопка «+ Добавить»', x: 'Добавляет сотрудника' }],
       plates: { Активные: 'Сколько активных' },

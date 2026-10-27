@@ -9,6 +9,7 @@ import { sessionGuard } from './middleware/session';
 import { createModuleApp } from './module';
 import { adminModule } from './modules/admin';
 import { authModule } from './modules/auth';
+import { kbModule } from './modules/kb';
 import { l10nModule } from './modules/l10n';
 import { orgModule } from './modules/org';
 import { platformDictsModule } from './modules/platform-dicts';
@@ -74,6 +75,7 @@ export function createApp(deps: ApiDeps) {
     .route('/', staffModule(deps))
     .route('/', rolesModule(deps))
     .route('/', orgModule(deps))
+    .route('/', kbModule(deps))
     .route('/', platformDictsModule(deps))
     .route('/', dictsModule(deps))
     .route('/', viewsModule(deps))

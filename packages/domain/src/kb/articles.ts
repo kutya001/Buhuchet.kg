@@ -16,10 +16,21 @@ export interface KbInline {
   bold?: true;
 }
 
+/**
+ * Пункт списка. Вложенные списки — плоско, по порядку статьи, с глубиной: так у ответа API нет
+ * рекурсивной схемы; экран собирает вложенность обратно (пункты глубже предыдущего — его подсписок).
+ */
+export interface KbListItem {
+  /** 0 — верхний список. */
+  depth: number;
+  /** Нумерованный список (`ol`). */
+  ordered: boolean;
+  inline: KbInline[];
+}
+
 export interface KbList {
-  type: 'ul' | 'ol';
-  /** Пункт — строка текста или вложенный список. */
-  items: (KbInline[] | KbList)[];
+  type: 'list';
+  items: KbListItem[];
 }
 
 export type KbBlock =
@@ -40,7 +51,8 @@ const ENTITIES: Readonly<Record<string, string>> = {
 function decode(text: string): string {
   return text.replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (m, code: string) => {
     if (code[0] === '#') {
-      const n = code[1] === 'x' || code[1] === 'X' ? parseInt(code.slice(2), 16) : Number(code.slice(1));
+      const n =
+        code[1] === 'x' || code[1] === 'X' ? parseInt(code.slice(2), 16) : Number(code.slice(1));
       return Number.isFinite(n) && n > 0 && n <= 0x10ffff ? String.fromCodePoint(n) : m;
     }
     return ENTITIES[code.toLowerCase()] ?? m;
@@ -96,7 +108,9 @@ function tidy(inline: KbInline[]): KbInline[] {
  */
 export function kbArticleBlocks(html: string): KbBlock[] {
   const blocks: KbBlock[] = [];
-  const lists: KbList[] = [];
+  /** Открытые списки: нумерованный ли каждый. */
+  const lists: boolean[] = [];
+  let list: KbList | null = null;
   let inline: KbInline[] | null = null;
   let textBlock: 'h4' | 'h5' | 'p' | 'quote' | null = null;
   let bold = 0;
@@ -110,10 +124,15 @@ export function kbArticleBlocks(html: string): KbBlock[] {
     textBlock = null;
   };
   const flushItem = () => {
-    const list = lists[lists.length - 1];
-    if (list && inline && !textBlock) {
+    if (list && lists.length && inline && !textBlock) {
       const parts = tidy(inline);
-      if (parts.length) list.items.push(parts);
+      if (parts.length) {
+        list.items.push({
+          depth: lists.length - 1,
+          ordered: lists[lists.length - 1]!,
+          inline: parts,
+        });
+      }
     }
     if (!textBlock) inline = null;
   };
@@ -135,11 +154,11 @@ export function kbArticleBlocks(html: string): KbBlock[] {
       else if (tag === 'ul' || tag === 'ol') {
         flushText();
         flushItem();
-        const list: KbList = { type: tag, items: [] };
-        const parent = lists[lists.length - 1];
-        if (parent) parent.items.push(list);
-        else blocks.push(list);
-        lists.push(list);
+        if (!lists.length) {
+          list = { type: 'list', items: [] };
+          blocks.push(list);
+        }
+        lists.push(tag === 'ol');
       } else if (tag === 'li') {
         flushItem();
         inline = [];
@@ -158,7 +177,7 @@ export function kbArticleBlocks(html: string): KbBlock[] {
     const tag = token.close;
     if (tag === 'b' || tag === 'strong') bold = Math.max(0, bold - 1);
     else if (tag === 'li') flushItem();
-    else if (tag === 'ul' || tag === 'ol') {
+    else if ((tag === 'ul' || tag === 'ol') && lists.length) {
       flushItem();
       lists.pop();
     } else if (Object.hasOwn(TEXT_BLOCKS, tag) && !lists.length) flushText();
@@ -246,7 +265,11 @@ export interface KbScreenBlocks {
   /** Вкладка модуля → что на ней; названия и порядок вкладок даёт экран (по правам пользователя). */
   tabs: Record<string, string>;
   items: KbScreenItem[];
-  forms: { title: string; text: string; fields: { name: string; required: boolean; text: string }[] }[];
+  forms: {
+    title: string;
+    text: string;
+    fields: { name: string; required: boolean; text: string }[];
+  }[];
 }
 
 /**
