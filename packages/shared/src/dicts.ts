@@ -92,7 +92,7 @@ export type OrgReportTypeSave = z.infer<typeof OrgReportTypeSave>;
 
 /**
  * Окно «Выбор налогов»: подключить отмеченные, отключить снятые; дни напоминаний для новых
- * подключённых (без них — набор из учётной политики).
+ * подключённых (без них или пустым набором — набор из учётной политики).
  */
 export const OrgReportTypesConnect = z.object({
   connect: z.array(TypeCode).max(500),

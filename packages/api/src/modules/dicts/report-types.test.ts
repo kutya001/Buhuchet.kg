@@ -152,6 +152,31 @@ describe.skipIf(!databaseAvailable())('Справочники → «Виды о�
     expect((await settings(owner)).items.some((s) => s.code === 'tbo')).toBe(false);
   });
 
+  it('повторное подключение: переключателем — прежние настройки, в «Выборе налогов» — дни из окна', async () => {
+    const soc = async () => (await settings(owner)).items.find((s) => s.code === 'soc')!;
+    const put = async (body: Record<string, unknown>) => {
+      const res = await save(owner, 'soc', { ...body, version: (await soc()).version });
+      expect(res.status, await res.clone().text()).toBe(200);
+    };
+    await put({ needReceipt: true });
+    await put({ enabled: false });
+    // Переключатель «Подключён» возвращает строку с её днями, файлом и квитанцией.
+    await put({ enabled: true });
+    expect(await soc()).toMatchObject({ enabled: true, remindDays: [10, 5], needReceipt: true });
+    await put({ enabled: false });
+    // «Выбор налогов» с пустым полем дней — дни учётной политики; файл и квитанция — как были.
+    const res = await apiRequest(f.app, 'POST', '/api/org-report-types/connect', owner, {
+      connect: ['soc'],
+      disconnect: [],
+      remindDays: [],
+    });
+    expect(OrgReportTypesConnected.parse(await res.json())).toEqual({
+      connected: 1,
+      disconnected: 0,
+    });
+    expect(await soc()).toMatchObject({ enabled: true, remindDays: [7, 3], needReceipt: true });
+  });
+
   it('чужая организация не видна: у организации Б своих подключённых видов нет', async () => {
     expect((await settings(ownerB)).items).toEqual([]);
     const list = OrgReportTypeList.parse(
@@ -181,6 +206,27 @@ describe.skipIf(!databaseAvailable())('Справочники → «Виды о�
     expect(file.status).toBe(200);
     const sheet = unzipTexts(new Uint8Array(await file.arrayBuffer()))['xl/worksheets/sheet1.xml'];
     expect(sheet).toContain('Подключён');
+    // «Старший» (только cpView и rollback): список видит, выгрузить не может.
+    const senior = await signIn(f.app, 'senior-a', TEST_PASSWORD);
+    expect((await apiRequest(f.app, 'GET', '/api/org-report-types?size=25', senior)).status).toBe(
+      200,
+    );
+    expect(
+      (await apiRequest(f.app, 'GET', '/api/org-report-types/export?cols=name', senior)).status,
+    ).toBe(403);
+  });
+
+  it('администратор платформы — не сотрудник организации: ни списка, ни правки, ни подключения', async () => {
+    const admin = await signIn(f.app, 'platform-admin', TEST_PASSWORD);
+    for (const path of ['/api/org-report-types', '/api/org-report-types/settings']) {
+      expect((await apiRequest(f.app, 'GET', path, admin)).status).toBe(403);
+    }
+    expect((await save(admin, 'nds', { enabled: true, version: null })).status).toBe(403);
+    const connect = await apiRequest(f.app, 'POST', '/api/org-report-types/connect', admin, {
+      connect: ['nds'],
+      disconnect: [],
+    });
+    expect(connect.status).toBe(403);
   });
 
   it('«Налоги и ставки» для формы просмотра вида — любому вошедшему', async () => {

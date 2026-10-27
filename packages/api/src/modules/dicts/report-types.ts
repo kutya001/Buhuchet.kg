@@ -322,7 +322,11 @@ export const connectOrgReportTypesRoute = createRoute({
     401: { description: 'Нет входа', content: error },
     403: { description: 'Нет права «Вести справочники организации»', content: error },
     404: { description: 'Нет такого вида в каталоге', content: error },
-    409: { description: 'Вид отключён в каталоге платформы', content: error },
+    409: {
+      description:
+        'Вид отключён в каталоге платформы или его только что подключил или изменил другой пользователь',
+      content: error,
+    },
   },
 });
 
@@ -342,7 +346,8 @@ export function connectOrgReportTypesHandler(
     if (connect.some((code) => disconnect.includes(code))) {
       apiFail(400, 'validation_failed', 'Вид отчёта не может быть и подключён, и отключён');
     }
-    const days = body.remindDays && normalizeRemindDays(body.remindDays);
+    // Пустой набор — как без поля: дни учётной политики (прототип txApply).
+    const days = body.remindDays?.length ? normalizeRemindDays(body.remindDays) : undefined;
     if (days) {
       const problem = orgReportTypeProblem(
         { active: true, act: 'both' },

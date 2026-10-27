@@ -1,6 +1,7 @@
 import {
   auditActorName,
   dueRuleText,
+  RecordChangedError,
   formatText,
   payRuleText,
   paysText,
@@ -50,6 +51,12 @@ export interface OrgReportTypeSetting {
   version: number;
 }
 
+/**
+ * Строка своей организации. RLS и так отдаёт только её; условие в запросе — страховка на случай запроса
+ * вне `withOrgContext` и путь к первичному ключу (организация, код вида).
+ */
+const OWN = eq(orgReportTypes.orgId, sql`app.current_org_id()`);
+
 const settingFields = {
   code: orgReportTypes.reportTypeCode,
   enabled: orgReportTypes.enabled,
@@ -65,6 +72,7 @@ export function listOrgReportTypeSettings(tx: Tx): Promise<OrgReportTypeSetting[
     .select(settingFields)
     .from(orgReportTypes)
     .innerJoin(reportTypes, eq(reportTypes.code, orgReportTypes.reportTypeCode))
+    .where(OWN)
     .orderBy(asc(reportTypes.sortOrder), asc(reportTypes.code));
 }
 
@@ -76,7 +84,7 @@ export async function getOrgReportTypeSetting(
   const [row] = await tx
     .select(settingFields)
     .from(orgReportTypes)
-    .where(eq(orgReportTypes.reportTypeCode, code));
+    .where(and(OWN, eq(orgReportTypes.reportTypeCode, code)));
   return row ?? null;
 }
 
@@ -113,7 +121,8 @@ export interface OrgReportTypePatch {
 
 /**
  * Подключить вид впервые: строка с настройками по умолчанию (дни — из учётной политики или заданные) и
- * запись «Подключён» в истории.
+ * запись «Подключён» в истории. Если строку только что создал другой пользователь (оба подключали вид
+ * впервые одновременно) — `RecordChangedError`, как у устаревшей версии.
  */
 export async function createOrgReportType(
   tx: Tx,
@@ -129,14 +138,16 @@ export async function createOrgReportType(
       createdBy: sql`app.current_user_id()`,
       updatedBy: sql`app.current_user_id()`,
     })
+    .onConflictDoNothing()
     .returning(settingFields);
+  if (!row) throw new RecordChangedError('org_report_type', code, 1);
   await writeHistory(tx, {
     entity: 'org_report_type',
     entityId: code,
     action: 'create',
     changes: Object.entries(values).map(([field, to]) => ({ field, to })),
   });
-  return row!;
+  return row;
 }
 
 /**
@@ -177,7 +188,7 @@ export function lockOrgReportTypes(
   return tx
     .select(settingFields)
     .from(orgReportTypes)
-    .where(inArray(orgReportTypes.reportTypeCode, [...codes]))
+    .where(and(OWN, inArray(orgReportTypes.reportTypeCode, [...codes])))
     .for('update');
 }
 
@@ -395,7 +406,7 @@ function listFrom(tx: Tx, rules: SQL) {
       .select(fields)
       .from(reportTypes)
       .innerJoin(authorities, eq(authorities.code, reportTypes.authorityCode))
-      .leftJoin(orgReportTypes, eq(orgReportTypes.reportTypeCode, reportTypes.code))
+      .leftJoin(orgReportTypes, and(OWN, eq(orgReportTypes.reportTypeCode, reportTypes.code)))
       .leftJoin(creator, eq(creator.userId, orgReportTypes.createdBy))
       .leftJoin(updater, eq(updater.userId, orgReportTypes.updatedBy))
       .leftJoin(rules, sql`${RULES.code} = ${reportTypes.code}`)
@@ -458,7 +469,7 @@ export async function listOrgReportTypesPage(
         .select(rowFields(window))
         .from(reportTypes)
         .innerJoin(authorities, eq(authorities.code, reportTypes.authorityCode))
-        .leftJoin(orgReportTypes, eq(orgReportTypes.reportTypeCode, reportTypes.code))
+        .leftJoin(orgReportTypes, and(OWN, eq(orgReportTypes.reportTypeCode, reportTypes.code)))
         .leftJoin(creator, eq(creator.userId, orgReportTypes.createdBy))
         .leftJoin(updater, eq(updater.userId, orgReportTypes.updatedBy))
         .leftJoin(rules, sql`${RULES.code} = ${reportTypes.code}`)

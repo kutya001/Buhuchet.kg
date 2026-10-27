@@ -141,32 +141,6 @@ export function typeColumns(
       cell: (r) => (r.act === 'sub' ? <Dash /> : r.pays),
     },
     {
-      key: 'file',
-      label: t('dicts.col.file'),
-      type: 'enum',
-      width: 200,
-      text: (r) => yesNo(r.needFile, t),
-      cell: (r) =>
-        r.enabled && r.act !== 'pay' ? (
-          sw(r, 'needFile', t('dicts.types.file_label', { name: r.shortName }))
-        ) : (
-          <Dash />
-        ),
-    },
-    {
-      key: 'receipt',
-      label: t('dicts.col.receipt'),
-      type: 'enum',
-      width: 230,
-      text: (r) => yesNo(r.needReceipt, t),
-      cell: (r) =>
-        r.enabled ? (
-          sw(r, 'needReceipt', t('dicts.types.receipt_label', { name: r.shortName }))
-        ) : (
-          <Dash />
-        ),
-    },
-    {
       key: 'short',
       label: t('dicts.col.short'),
       type: 'text',
@@ -221,6 +195,34 @@ export function typeColumns(
       type: 'text',
       width: 130,
       text: (r) => r.rates.join('; '),
+    },
+    // ОТКЛОНЕНИЕ: docs/deviations.md#44 — порядок как в ТЗ: «Файл…» и «Квитанция…» после срока, перед
+    // «Назначено контрагентам» (в прототипе — сразу после «Что уплачивается»).
+    {
+      key: 'file',
+      label: t('dicts.col.file'),
+      type: 'enum',
+      width: 200,
+      text: (r) => yesNo(r.needFile, t),
+      cell: (r) =>
+        r.enabled && r.act !== 'pay' ? (
+          sw(r, 'needFile', t('dicts.types.file_label', { name: r.shortName }))
+        ) : (
+          <Dash />
+        ),
+    },
+    {
+      key: 'receipt',
+      label: t('dicts.col.receipt'),
+      type: 'enum',
+      width: 230,
+      text: (r) => yesNo(r.needReceipt, t),
+      cell: (r) =>
+        r.enabled ? (
+          sw(r, 'needReceipt', t('dicts.types.receipt_label', { name: r.shortName }))
+        ) : (
+          <Dash />
+        ),
     },
     {
       key: 'used',

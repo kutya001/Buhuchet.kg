@@ -62,7 +62,7 @@ describe.skipIf(!databaseAvailable())('Справочники: виды отчё
     await db?.drop();
   });
 
-  it('чужая организация не видна: подключённые виды и настройки — только свои', async () => {
+  it('чужая организация не видна, не меняется и не создаётся', async () => {
     expect(await inOrg(ORG_B, (tx) => listOrgReportTypeSettings(tx))).toEqual([]);
     expect(await inOrg(ORG_B, (tx) => getOrgReportTypeSetting(tx, 'nds'))).toBeNull();
     expect(await inOrg(ORG_B, (tx) => enabledReportTypeCount(tx))).toBe(0);
@@ -81,6 +81,20 @@ describe.skipIf(!databaseAvailable())('Справочники: виды отчё
       .from(orgReportTypes)
       .where(eq(orgReportTypes.orgId, ORG_A));
     expect(row?.enabled).toBe(true);
+    // Строку для чужой организации не вставить: политика проверяет org_id новой строки.
+    await expect(
+      inOrg(ORG_B, (tx) =>
+        tx.insert(orgReportTypes).values({ orgId: ORG_A, reportTypeCode: 'akc', remindDays: [7] }),
+      ),
+    ).rejects.toThrow(permissionDenied);
+  });
+
+  it('вид уже подключили одновременно с нами — «изменена другим пользователем», а не ошибка базы', async () => {
+    await expect(
+      inOrg(ORG_A, (tx) => createOrgReportType(tx, 'soc', defaults)),
+    ).rejects.toBeInstanceOf(RecordChangedError);
+    const history = await inOrg(ORG_A, (tx) => readHistory(tx, 'org_report_type', 'soc'));
+    expect(history.map((h) => h.action)).toEqual(['create']);
   });
 
   it('список: весь действующий каталог, подключённые сверху, сроки словами как в прототипе', async () => {
