@@ -598,12 +598,18 @@ describe.skipIf(!databaseAvailable())('Контрагенты: методы API'
     expect((await get(senior, '/api/contractors/export?cols=name')).status).toBe(403);
   });
 
-  it('день оплаты и «Первый неполный месяц» — только тому, кто видит плату; по умолчанию — 10-е и «Пропорционально дням»', async () => {
+  it('день оплаты и «Первый неполный месяц» — только тому, кто видит плату; по умолчанию — 10-е, без поля — «Полный месяц»', async () => {
     const own = await created(owner, { feeDay: 20, firstMonthMode: 'next' });
     expect(own).toMatchObject({ feeDay: 20, firstMonthMode: 'next' });
+    // Поле в форме по умолчанию — «Пропорционально дням»; при ставке «в год» поля нет.
+    expect(await created(owner)).toMatchObject({ firstMonthMode: 'prorate' });
+    expect(await created(owner, { tariff: { amount: 12_000_000, period: 'Y' } })).toMatchObject({
+      firstMonthMode: 'full',
+    });
+    // Создал бухгалтер без права на плату — «Полный месяц» (решение заказчика 27.10.2026, п. А-1).
     const byAcc = await created(acc, { tariff: null });
     expect(byAcc).toMatchObject({ feeDay: null, firstMonthMode: null });
-    expect(await card(owner, byAcc.id)).toMatchObject({ feeDay: 10, firstMonthMode: 'prorate' });
+    expect(await card(owner, byAcc.id)).toMatchObject({ feeDay: 10, firstMonthMode: 'full' });
 
     expect((await post(acc, { tariff: null, feeDay: 12 })).status).toBe(403);
     expect((await post(acc, { tariff: null, firstMonthMode: 'full' })).status).toBe(403);

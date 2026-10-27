@@ -104,7 +104,8 @@ export const CreateContractorRequest = z.object({
   note: contractorFields.note.default(''),
   registration: ContractorRegistration.default({}),
   // День оплаты и «Первый неполный месяц» задаёт только тот, кто видит плату за обслуживание;
-  // не переданы — 10-е число и «Пропорционально дням» (ТЗ, docs/deviations.md п. А-1).
+  // не переданы — 10-е число и «Пропорционально дням» при ставке «в месяц», иначе «Полный месяц»
+  // (docs/deviations.md п. А-1).
   firstMonthMode: contractorFields.firstMonthMode.optional(),
   feeDay: contractorFields.feeDay.optional(),
   paysTo: contractorFields.paysTo.default('emp'),

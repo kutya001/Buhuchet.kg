@@ -63,7 +63,7 @@ CREATE TABLE "contractors" (
 	"note" text DEFAULT '' NOT NULL,
 	"registration" jsonb DEFAULT '{}'::jsonb NOT NULL,
 	"start_date" date NOT NULL,
-	"first_month_mode" text DEFAULT 'prorate' NOT NULL,
+	"first_month_mode" text DEFAULT 'full' NOT NULL,
 	"fee_day" smallint DEFAULT 10 NOT NULL,
 	"pays_to" text DEFAULT 'emp' NOT NULL,
 	"service_status" text DEFAULT 'active' NOT NULL,

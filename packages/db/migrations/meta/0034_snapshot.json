@@ -1,5 +1,5 @@
 {
-  "id": "205f9689-00c2-4eea-8e0e-37e358f3307c",
+  "id": "6063ad53-2200-4ac5-b1a6-d3036bae01f8",
   "prevId": "c32a91ae-9010-464b-bd21-8f80c5e6d398",
   "version": "7",
   "dialect": "postgresql",
@@ -2014,7 +2014,7 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "default": "'prorate'"
+          "default": "'full'"
         },
         "fee_day": {
           "name": "fee_day",

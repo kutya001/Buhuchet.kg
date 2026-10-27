@@ -77,9 +77,8 @@ export const contractors = pgTable(
     registration: jsonb('registration').$type<ContractorRegistration>().notNull().default({}),
     /** Начало обслуживания (у разового — дата первого обращения). */
     startDate: date('start_date', { mode: 'string' }).notNull(),
-    firstMonthMode: text('first_month_mode', { enum: FIRST_MONTH_MODES })
-      .notNull()
-      .default('prorate'),
+    /** «Первый неполный месяц»; без поля в форме — «Полный месяц» (docs/deviations.md п. А-1). */
+    firstMonthMode: text('first_month_mode', { enum: FIRST_MONTH_MODES }).notNull().default('full'),
     /** День оплаты обслуживания в месяце. */
     feeDay: smallint('fee_day').notNull().default(10),
     /** Куда переводит деньги на налоги (поток В, задача 2.18). */

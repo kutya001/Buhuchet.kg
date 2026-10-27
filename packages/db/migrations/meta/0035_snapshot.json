@@ -1,6 +1,6 @@
 {
-  "id": "fba5bd22-26c6-447d-b7aa-967539195b56",
-  "prevId": "205f9689-00c2-4eea-8e0e-37e358f3307c",
+  "id": "483a01c8-3915-4c8e-8365-a7996755ad58",
+  "prevId": "6063ad53-2200-4ac5-b1a6-d3036bae01f8",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -2014,7 +2014,7 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "default": "'prorate'"
+          "default": "'full'"
         },
         "fee_day": {
           "name": "fee_day",
