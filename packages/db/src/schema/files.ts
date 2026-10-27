@@ -49,7 +49,7 @@ export const files = pgTable(
     sourceId: uuid('source_id'),
     /**
      * Контрагент записи; пусто — общий файл организации. Ключ на пару (contractor_id, org_id) с
-     * ON DELETE SET NULL (contractor_id) — в миграции 0039 (контрагенты): Drizzle не умеет SET NULL части ключа.
+     * ON DELETE SET NULL (contractor_id) — в миграции 0040 (контрагенты): Drizzle не умеет SET NULL части ключа.
      */
     contractorId: uuid('contractor_id'),
     /** Имя файла, как у пользователя: «Договор_обслуживания_1851.pdf». */
