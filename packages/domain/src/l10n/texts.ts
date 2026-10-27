@@ -1,5 +1,6 @@
 import { ADMIN_TEXTS } from './admin-texts';
 import { AUTH_TEXTS } from './auth-texts';
+import { DICTS_TEXTS } from './dicts-texts';
 import { GRID_TEXTS } from './grid-texts';
 import { ORG_TEXTS } from './org-texts';
 import { SHELL_TEXTS } from './shell-texts';
@@ -49,7 +50,8 @@ const SYSTEM_TEXTS = {
  * который есть и в refDB.json, пишется с тем же текстом (это проверяет тест наполнения). Тексты
  * разложены по файлам экранов: служебные — здесь, оболочки — `shell-texts.ts`, входа и «Мой профиль» —
  * `auth-texts.ts`, списков — `grid-texts.ts`, сотрудников — `staff-texts.ts`, шкалы и истории статусов —
- * `status-texts.ts`, «Моей организации» — `org-texts.ts`, Админки — `admin-texts.ts`.
+ * `status-texts.ts`, «Моей организации» — `org-texts.ts`, Админки — `admin-texts.ts`, «Справочников» и сроков
+ * видов отчётов словами — `dicts-texts.ts`.
  */
 export const UI_TEXTS = {
   ...SYSTEM_TEXTS,
@@ -60,6 +62,7 @@ export const UI_TEXTS = {
   ...STATUS_TEXTS,
   ...ORG_TEXTS,
   ...ADMIN_TEXTS,
+  ...DICTS_TEXTS,
 } as const satisfies Record<string, UiTextDefault>;
 
 /** Ключ текста интерфейса: только из `UI_TEXTS`, поэтому опечатка в ключе — ошибка типов. */
@@ -67,6 +70,9 @@ export type UiTextKey = keyof typeof UI_TEXTS;
 
 /** Подстановки в текст: `{from}`, `{total}` и т. п. */
 export type UiTextParams = Readonly<Record<string, string | number>>;
+
+/** Текст по ключу из словаря с подстановками `{имя}` (`useT` на экране, тексты словаря на сервере). */
+export type Translate = (key: UiTextKey, params?: UiTextParams) => string;
 
 /** Текст с подстановками: `{имя}` заменяется значением; подстановки без значения остаются как есть. */
 export function formatText(template: string, params?: UiTextParams): string {

@@ -1,0 +1,4061 @@
+{
+  "source": "spec/prototype/src/js/core/reference.js",
+  "types": [
+    {
+      "code": "nds",
+      "rule": {
+        "period": "M",
+        "dueDay": 25,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "both",
+        "payDay": 25,
+        "payAfter": 1,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "ГНС",
+      "payments": [{ "name": "НДС", "authority": "ГНС" }],
+      "expected": {
+        "due": "до 25-го числа месяца после отчётного",
+        "pay": "до 25-го числа месяца после отчётного",
+        "pays": "НДС"
+      }
+    },
+    {
+      "code": "nspm",
+      "rule": {
+        "period": "M",
+        "dueDay": 20,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "both",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "ГНС",
+      "payments": [
+        { "name": "Налог с продаж, ежемесячный (средний и крупный бизнес)", "authority": "ГНС" }
+      ],
+      "expected": {
+        "due": "до 20-го числа месяца после отчётного",
+        "pay": "как срок сдачи",
+        "pays": "Налог с продаж, ежемесячный (средний и крупный бизнес)"
+      }
+    },
+    {
+      "code": "nspq",
+      "rule": {
+        "period": "Q",
+        "dueDay": 20,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "both",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "ГНС",
+      "payments": [
+        { "name": "Налог с продаж, квартальный (малый бизнес, до 8 млн сом)", "authority": "ГНС" }
+      ],
+      "expected": {
+        "due": "до 20-го числа месяца после квартала",
+        "pay": "как срок сдачи",
+        "pays": "Налог с продаж, квартальный (малый бизнес, до 8 млн сом)"
+      }
+    },
+    {
+      "code": "npa",
+      "rule": {
+        "period": "Q",
+        "dueDay": 20,
+        "dueAfter": 2,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "both",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "ГНС",
+      "payments": [{ "name": "Налог на прибыль, предварительная сумма", "authority": "ГНС" }],
+      "expected": {
+        "due": "до 20-го числа 2-го месяца после квартала",
+        "pay": "как срок сдачи",
+        "pays": "Налог на прибыль, предварительная сумма"
+      }
+    },
+    {
+      "code": "akc",
+      "rule": {
+        "period": "M",
+        "dueDay": 20,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "both",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "ГНС",
+      "payments": [{ "name": "Акцизный налог", "authority": "ГНС" }],
+      "expected": {
+        "due": "до 20-го числа месяца после отчётного",
+        "pay": "как срок сдачи",
+        "pays": "Акцизный налог"
+      }
+    },
+    {
+      "code": "gdn",
+      "rule": {
+        "period": "M",
+        "dueDay": 20,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "both",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "ГНС",
+      "payments": [{ "name": "Налог на доходы горнодобывающих предприятий", "authority": "ГНС" }],
+      "expected": {
+        "due": "до 20-го числа месяца после отчётного",
+        "pay": "как срок сдачи",
+        "pays": "Налог на доходы горнодобывающих предприятий"
+      }
+    },
+    {
+      "code": "roy",
+      "rule": {
+        "period": "M",
+        "dueDay": 20,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "both",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "ГНС",
+      "payments": [{ "name": "Роялти за недропользование", "authority": "ГНС" }],
+      "expected": {
+        "due": "до 20-го числа месяца после отчётного",
+        "pay": "как срок сдачи",
+        "pays": "Роялти за недропользование"
+      }
+    },
+    {
+      "code": "bon",
+      "rule": {
+        "period": "Y",
+        "dueDay": 30,
+        "dueAfter": null,
+        "dueMonth": 1,
+        "dueFrom": "end",
+        "oneOff": true,
+        "act": "both",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "ГНС",
+      "payments": [{ "name": "Бонус за недропользование", "authority": "ГНС" }],
+      "expected": {
+        "due": "в течение 30 дней после события",
+        "pay": "как срок сдачи",
+        "pays": "Бонус за недропользование"
+      }
+    },
+    {
+      "code": "enq",
+      "rule": {
+        "period": "Q",
+        "dueDay": 20,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "both",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "ГНС",
+      "payments": [{ "name": "Единый налог, квартальный", "authority": "ГНС" }],
+      "expected": {
+        "due": "до 20-го числа месяца после квартала",
+        "pay": "как срок сдачи",
+        "pays": "Единый налог, квартальный"
+      }
+    },
+    {
+      "code": "enm",
+      "rule": {
+        "period": "M",
+        "dueDay": 20,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "both",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "ГНС",
+      "payments": [{ "name": "Единый налог, ежемесячный", "authority": "ГНС" }],
+      "expected": {
+        "due": "до 20-го числа месяца после отчётного",
+        "pay": "как срок сдачи",
+        "pays": "Единый налог, ежемесячный"
+      }
+    },
+    {
+      "code": "etr",
+      "rule": {
+        "period": "Q",
+        "dueDay": 20,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "both",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "ГНС",
+      "payments": [{ "name": "Налог на электронную торговлю", "authority": "ГНС" }],
+      "expected": {
+        "due": "до 20-го числа месяца после квартала",
+        "pay": "как срок сдачи",
+        "pays": "Налог на электронную торговлю"
+      }
+    },
+    {
+      "code": "min",
+      "rule": {
+        "period": "M",
+        "dueDay": 20,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "both",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "ГНС",
+      "payments": [{ "name": "Налог на майнинг", "authority": "ГНС" }],
+      "expected": {
+        "due": "до 20-го числа месяца после отчётного",
+        "pay": "как срок сдачи",
+        "pays": "Налог на майнинг"
+      }
+    },
+    {
+      "code": "gam",
+      "rule": {
+        "period": "M",
+        "dueDay": 1,
+        "dueAfter": 0,
+        "dueMonth": null,
+        "dueFrom": "start",
+        "oneOff": false,
+        "act": "both",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "ГНС",
+      "payments": [{ "name": "Налог на игорную деятельность", "authority": "ГНС" }],
+      "expected": {
+        "due": "до 1-го числа месяца, за который платится",
+        "pay": "как срок сдачи",
+        "pays": "Налог на игорную деятельность"
+      }
+    },
+    {
+      "code": "gamo",
+      "rule": {
+        "period": "Q",
+        "dueDay": 20,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "both",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "ГНС",
+      "payments": [{ "name": "Налог на игорную деятельность, онлайн-казино", "authority": "ГНС" }],
+      "expected": {
+        "due": "до 20-го числа месяца после квартала",
+        "pay": "как срок сдачи",
+        "pays": "Налог на игорную деятельность, онлайн-казино"
+      }
+    },
+    {
+      "code": "zon",
+      "rule": {
+        "period": "M",
+        "dueDay": 1,
+        "dueAfter": 0,
+        "dueMonth": null,
+        "dueFrom": "start",
+        "oneOff": false,
+        "act": "pay",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "ГНС",
+      "payments": [{ "name": "Налог в зоне торговли с особым режимом", "authority": "ГНС" }],
+      "expected": {
+        "due": "оплата до 1-го числа месяца, за который платится",
+        "pay": "как срок сдачи",
+        "pays": "Налог в зоне торговли с особым режимом"
+      }
+    },
+    {
+      "code": "pat",
+      "rule": {
+        "period": "M",
+        "dueDay": 1,
+        "dueAfter": 0,
+        "dueMonth": 1,
+        "dueFrom": "start",
+        "oneOff": false,
+        "act": "pay",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "ГНС",
+      "payments": [{ "name": "Стоимость патента", "authority": "ГНС" }],
+      "expected": {
+        "due": "оплата до 1-го числа месяца, за который платится",
+        "pay": "как срок сдачи",
+        "pays": "Стоимость патента"
+      }
+    },
+    {
+      "code": "patw",
+      "rule": {
+        "period": "M",
+        "dueDay": 1,
+        "dueAfter": 0,
+        "dueMonth": 1,
+        "dueFrom": "start",
+        "oneOff": false,
+        "act": "pay",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "ГНС",
+      "payments": [{ "name": "Патент на наёмного работника", "authority": "ГНС" }],
+      "expected": {
+        "due": "оплата до 1-го числа месяца, за который платится",
+        "pay": "как срок сдачи",
+        "pays": "Патент на наёмного работника"
+      }
+    },
+    {
+      "code": "pvt",
+      "rule": {
+        "period": "Q",
+        "dueDay": 20,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "both",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Дирекция ПВТ",
+      "payments": [
+        { "name": "Отчёт резидента ПВТ / ПКИ (взнос 1 %)", "authority": "Дирекция ПВТ" }
+      ],
+      "expected": {
+        "due": "до 20-го числа месяца после квартала",
+        "pay": "как срок сдачи",
+        "pays": "Отчёт резидента ПВТ / ПКИ (взнос 1 %)"
+      }
+    },
+    {
+      "code": "pvtd",
+      "rule": {
+        "period": "Q",
+        "dueDay": 20,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "both",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Дирекция ПВТ",
+      "payments": [{ "name": "Отчисления резидента ПВТ в дирекцию", "authority": "Дирекция ПВТ" }],
+      "expected": {
+        "due": "до 20-го числа месяца после квартала",
+        "pay": "как срок сдачи",
+        "pays": "Отчисления резидента ПВТ в дирекцию"
+      }
+    },
+    {
+      "code": "sez",
+      "rule": {
+        "period": "Q",
+        "dueDay": 20,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Генеральная дирекция СЭЗ",
+      "payments": [],
+      "expected": {
+        "due": "до 20-го числа месяца после квартала",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "soc",
+      "rule": {
+        "period": "M",
+        "dueDay": 20,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "both",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "ГНС",
+      "payments": [
+        { "name": "Подоходный налог", "authority": "ГНС" },
+        { "name": "Страховые взносы", "authority": "Соцфонд" }
+      ],
+      "expected": {
+        "due": "до 20-го числа месяца после отчётного",
+        "pay": "как срок сдачи",
+        "pays": "Подоходный налог (ГНС); Страховые взносы (Соцфонд)"
+      }
+    },
+    {
+      "code": "socip",
+      "rule": {
+        "period": "M",
+        "dueDay": 20,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "pay",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Соцфонд",
+      "payments": [{ "name": "Страховые взносы ИП за себя", "authority": "Соцфонд" }],
+      "expected": {
+        "due": "до 20-го числа месяца после отчётного",
+        "pay": "как срок сдачи",
+        "pays": "Страховые взносы ИП за себя"
+      }
+    },
+    {
+      "code": "pni",
+      "rule": {
+        "period": "M",
+        "dueDay": 20,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "both",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "ГНС",
+      "payments": [
+        { "name": "Налог у источника с доходов иностранных организаций", "authority": "ГНС" }
+      ],
+      "expected": {
+        "due": "до 20-го числа месяца после отчётного",
+        "pay": "как срок сдачи",
+        "pays": "Налог у источника с доходов иностранных организаций"
+      }
+    },
+    {
+      "code": "imp",
+      "rule": {
+        "period": "M",
+        "dueDay": 20,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "both",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "ГНС",
+      "payments": [
+        { "name": "НДС при импорте", "authority": "ГНС" },
+        { "name": "Акциз при импорте", "authority": "ГНС" }
+      ],
+      "expected": {
+        "due": "до 20-го числа месяца после отчётного",
+        "pay": "как срок сдачи",
+        "pays": "НДС при импорте (ГНС); Акциз при импорте (ГНС)"
+      }
+    },
+    {
+      "code": "imn",
+      "rule": {
+        "period": "Y",
+        "dueDay": 20,
+        "dueAfter": null,
+        "dueMonth": 3,
+        "dueFrom": "start",
+        "oneOff": false,
+        "act": "pay",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": [
+          [3, 20],
+          [6, 20],
+          [9, 20],
+          [12, 20]
+        ]
+      },
+      "authority": "ГНС",
+      "payments": [
+        { "name": "Налог на имущество — нежилые здания, сооружения и земли", "authority": "ГНС" }
+      ],
+      "expected": {
+        "due": "до 20 марта того же года",
+        "pay": "4 платежа: до 20.03; 20.06; 20.09; 20.12",
+        "pays": "Налог на имущество — нежилые здания, сооружения и земли"
+      }
+    },
+    {
+      "code": "ims",
+      "rule": {
+        "period": "Y",
+        "dueDay": 1,
+        "dueAfter": null,
+        "dueMonth": 11,
+        "dueFrom": "start",
+        "oneOff": false,
+        "act": "pay",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "ГНС",
+      "payments": [
+        { "name": "Налог на имущество — сельскохозяйственные угодья", "authority": "ГНС" }
+      ],
+      "expected": {
+        "due": "до 1 ноября того же года",
+        "pay": "как срок сдачи",
+        "pays": "Налог на имущество — сельскохозяйственные угодья"
+      }
+    },
+    {
+      "code": "imh",
+      "rule": {
+        "period": "Y",
+        "dueDay": 1,
+        "dueAfter": null,
+        "dueMonth": 9,
+        "dueFrom": "start",
+        "oneOff": false,
+        "act": "pay",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "ГНС",
+      "payments": [{ "name": "Налог на имущество — жилые объекты", "authority": "ГНС" }],
+      "expected": {
+        "due": "до 1 сентября того же года",
+        "pay": "как срок сдачи",
+        "pays": "Налог на имущество — жилые объекты"
+      }
+    },
+    {
+      "code": "imi",
+      "rule": {
+        "period": "Y",
+        "dueDay": 1,
+        "dueAfter": null,
+        "dueMonth": 3,
+        "dueFrom": "start",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "ГНС",
+      "payments": [],
+      "expected": { "due": "до 1 марта того же года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "imu",
+      "rule": {
+        "period": "Y",
+        "dueDay": 1,
+        "dueAfter": null,
+        "dueMonth": 3,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "pay",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "ГНС",
+      "payments": [{ "name": "Налог на имущество, недвижимость", "authority": "ГНС" }],
+      "expected": {
+        "due": "до 1 марта следующего года",
+        "pay": "как срок сдачи",
+        "pays": "Налог на имущество, недвижимость"
+      }
+    },
+    {
+      "code": "trn",
+      "rule": {
+        "period": "Y",
+        "dueDay": 1,
+        "dueAfter": null,
+        "dueMonth": 3,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "pay",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "ГНС",
+      "payments": [{ "name": "Налог на имущество, транспорт", "authority": "ГНС" }],
+      "expected": {
+        "due": "до 1 марта следующего года",
+        "pay": "как срок сдачи",
+        "pays": "Налог на имущество, транспорт"
+      }
+    },
+    {
+      "code": "zem",
+      "rule": {
+        "period": "Y",
+        "dueDay": 1,
+        "dueAfter": null,
+        "dueMonth": 3,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "pay",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "ГНС",
+      "payments": [{ "name": "Земельный налог", "authority": "ГНС" }],
+      "expected": {
+        "due": "до 1 марта следующего года",
+        "pay": "как срок сдачи",
+        "pays": "Земельный налог"
+      }
+    },
+    {
+      "code": "endo",
+      "rule": {
+        "period": "Y",
+        "dueDay": 1,
+        "dueAfter": null,
+        "dueMonth": 4,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "both",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "ГНС",
+      "payments": [{ "name": "Налог на прибыль, доплата по году", "authority": "ГНС" }],
+      "expected": {
+        "due": "до 1 апреля следующего года",
+        "pay": "как срок сдачи",
+        "pays": "Налог на прибыль, доплата по году"
+      }
+    },
+    {
+      "code": "endi",
+      "rule": {
+        "period": "Y",
+        "dueDay": 1,
+        "dueAfter": null,
+        "dueMonth": 5,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "both",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "ГНС",
+      "payments": [{ "name": "Доплата по году", "authority": "ГНС" }],
+      "expected": {
+        "due": "до 1 мая следующего года",
+        "pay": "как срок сдачи",
+        "pays": "Доплата по году"
+      }
+    },
+    {
+      "code": "t1q",
+      "rule": {
+        "period": "Q",
+        "dueDay": 10,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": {
+        "due": "до 10-го числа месяца после квартала",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "t1y",
+      "rule": {
+        "period": "Y",
+        "dueDay": 16,
+        "dueAfter": null,
+        "dueMonth": 1,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 16 января следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "pre",
+      "rule": {
+        "period": "Y",
+        "dueDay": 1,
+        "dueAfter": null,
+        "dueMonth": 4,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 1 апреля следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "inv",
+      "rule": {
+        "period": "Q",
+        "dueDay": 10,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": {
+        "due": "до 10-го числа месяца после квартала",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "t1m",
+      "rule": {
+        "period": "M",
+        "dueDay": 10,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": {
+        "due": "до 10-го числа месяца после отчётного",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "t1nov",
+      "rule": {
+        "period": "Y",
+        "dueDay": 10,
+        "dueAfter": null,
+        "dueMonth": 12,
+        "dueFrom": "start",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 10 декабря того же года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "fhd",
+      "rule": {
+        "period": "Y",
+        "dueDay": 1,
+        "dueAfter": null,
+        "dueMonth": 3,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 1 марта следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "fd1",
+      "rule": {
+        "period": "Y",
+        "dueDay": 1,
+        "dueAfter": null,
+        "dueMonth": 3,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 1 марта следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "f6",
+      "rule": {
+        "period": "Y",
+        "dueDay": 1,
+        "dueAfter": null,
+        "dueMonth": 3,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 1 марта следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "f1q",
+      "rule": {
+        "period": "Q",
+        "dueDay": 25,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": {
+        "due": "до 25-го числа месяца после квартала",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "micy",
+      "rule": {
+        "period": "Y",
+        "dueDay": 1,
+        "dueAfter": null,
+        "dueMonth": 3,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 1 марта следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "micq",
+      "rule": {
+        "period": "Q",
+        "dueDay": 20,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": {
+        "due": "до 20-го числа месяца после квартала",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "fin4y",
+      "rule": {
+        "period": "Y",
+        "dueDay": 1,
+        "dueAfter": null,
+        "dueMonth": 2,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 1 февраля следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "fin4h",
+      "rule": {
+        "period": "H",
+        "dueDay": 20,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": {
+        "due": "до 20-го числа месяца после полугодия",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "kby",
+      "rule": {
+        "period": "Y",
+        "dueDay": 20,
+        "dueAfter": null,
+        "dueMonth": 2,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 20 февраля следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "kbq",
+      "rule": {
+        "period": "Q",
+        "dueDay": 20,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": {
+        "due": "до 20-го числа месяца после квартала",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "mcry",
+      "rule": {
+        "period": "Y",
+        "dueDay": 25,
+        "dueAfter": null,
+        "dueMonth": 2,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 25 февраля следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "mcrq",
+      "rule": {
+        "period": "Q",
+        "dueDay": 20,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": {
+        "due": "до 20-го числа месяца после квартала",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "crdy",
+      "rule": {
+        "period": "Y",
+        "dueDay": 1,
+        "dueAfter": null,
+        "dueMonth": 3,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 1 марта следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "crdq",
+      "rule": {
+        "period": "Q",
+        "dueDay": 25,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": {
+        "due": "до 25-го числа месяца после квартала",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "sky",
+      "rule": {
+        "period": "Y",
+        "dueDay": 1,
+        "dueAfter": null,
+        "dueMonth": 3,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 1 марта следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "skq",
+      "rule": {
+        "period": "Q",
+        "dueDay": 20,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": {
+        "due": "до 20-го числа месяца после квартала",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "ify",
+      "rule": {
+        "period": "Y",
+        "dueDay": 1,
+        "dueAfter": null,
+        "dueMonth": 3,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 1 марта следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "fby",
+      "rule": {
+        "period": "Y",
+        "dueDay": 1,
+        "dueAfter": null,
+        "dueMonth": 5,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 1 мая следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "lizy",
+      "rule": {
+        "period": "Y",
+        "dueDay": 1,
+        "dueAfter": null,
+        "dueMonth": 3,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 1 марта следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "os11",
+      "rule": {
+        "period": "Y",
+        "dueDay": 1,
+        "dueAfter": null,
+        "dueMonth": 3,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 1 марта следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "p1m",
+      "rule": {
+        "period": "M",
+        "dueDay": 1,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": {
+        "due": "до 1-го числа месяца после отчётного",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "p1y",
+      "rule": {
+        "period": "Y",
+        "dueDay": 1,
+        "dueAfter": null,
+        "dueMonth": 3,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 1 марта следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "ptep",
+      "rule": {
+        "period": "M",
+        "dueDay": 1,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": {
+        "due": "до 1-го числа месяца после отчётного",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "pel",
+      "rule": {
+        "period": "M",
+        "dueDay": 1,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": {
+        "due": "до 1-го числа месяца после отчётного",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "pgas",
+      "rule": {
+        "period": "M",
+        "dueDay": 1,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": {
+        "due": "до 1-го числа месяца после отчётного",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "pipm",
+      "rule": {
+        "period": "M",
+        "dueDay": 23,
+        "dueAfter": 0,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": {
+        "due": "до 23-го числа месяца, за который платится",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "pipy",
+      "rule": {
+        "period": "Y",
+        "dueDay": 1,
+        "dueAfter": null,
+        "dueMonth": 3,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 1 марта следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "syrq",
+      "rule": {
+        "period": "Q",
+        "dueDay": 15,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": {
+        "due": "до 15-го числа месяца после квартала",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "en24",
+      "rule": {
+        "period": "Y",
+        "dueDay": 1,
+        "dueAfter": null,
+        "dueMonth": 3,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 1 марта следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "teb",
+      "rule": {
+        "period": "Y",
+        "dueDay": 25,
+        "dueAfter": null,
+        "dueMonth": 1,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 25 января следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "inn4",
+      "rule": {
+        "period": "Y",
+        "dueDay": 1,
+        "dueAfter": null,
+        "dueMonth": 4,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 1 апреля следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "inv2m",
+      "rule": {
+        "period": "M",
+        "dueDay": 2,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": {
+        "due": "до 2-го числа месяца после отчётного",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "inv2y",
+      "rule": {
+        "period": "Y",
+        "dueDay": 15,
+        "dueAfter": null,
+        "dueMonth": 2,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 15 февраля следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "ks1m",
+      "rule": {
+        "period": "M",
+        "dueDay": 2,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": {
+        "due": "до 2-го числа месяца после отчётного",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "ks1y",
+      "rule": {
+        "period": "Y",
+        "dueDay": 20,
+        "dueAfter": null,
+        "dueMonth": 2,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 20 февраля следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "ks4",
+      "rule": {
+        "period": "Y",
+        "dueDay": 20,
+        "dueAfter": null,
+        "dueMonth": 2,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 20 февраля следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "inv1q",
+      "rule": {
+        "period": "Q",
+        "dueDay": 20,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": {
+        "due": "до 20-го числа месяца после квартала",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "inv1y",
+      "rule": {
+        "period": "Y",
+        "dueDay": 1,
+        "dueAfter": null,
+        "dueMonth": 3,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 1 марта следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "ks9",
+      "rule": {
+        "period": "Q",
+        "dueDay": 20,
+        "dueAfter": 0,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": {
+        "due": "до 20-го числа месяца, за который платится",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "trg1",
+      "rule": {
+        "period": "M",
+        "dueDay": 1,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": {
+        "due": "до 1-го числа месяца после отчётного",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "trg12",
+      "rule": {
+        "period": "Y",
+        "dueDay": 25,
+        "dueAfter": null,
+        "dueMonth": 1,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 25 января следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "trg14",
+      "rule": {
+        "period": "Q",
+        "dueDay": 25,
+        "dueAfter": 0,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": {
+        "due": "до 25-го числа месяца, за который платится",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "trgz",
+      "rule": {
+        "period": "Y",
+        "dueDay": 20,
+        "dueAfter": null,
+        "dueMonth": 1,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 20 января следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "ecom",
+      "rule": {
+        "period": "Y",
+        "dueDay": 1,
+        "dueAfter": null,
+        "dueMonth": 3,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 1 марта следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "avt1",
+      "rule": {
+        "period": "M",
+        "dueDay": 1,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": {
+        "due": "до 1-го числа месяца после отчётного",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "avt65q",
+      "rule": {
+        "period": "Q",
+        "dueDay": 18,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": {
+        "due": "до 18-го числа месяца после квартала",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "avt65y",
+      "rule": {
+        "period": "Y",
+        "dueDay": 1,
+        "dueAfter": null,
+        "dueMonth": 3,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 1 марта следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "ga12",
+      "rule": {
+        "period": "M",
+        "dueDay": 12,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": {
+        "due": "до 12-го числа месяца после отчётного",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "ga16",
+      "rule": {
+        "period": "M",
+        "dueDay": 12,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": {
+        "due": "до 12-го числа месяца после отчётного",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "ga67",
+      "rule": {
+        "period": "Y",
+        "dueDay": 1,
+        "dueAfter": null,
+        "dueMonth": 3,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 1 марта следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "sv1q",
+      "rule": {
+        "period": "Q",
+        "dueDay": 30,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": {
+        "due": "до 30-го числа месяца после квартала",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "sv1y",
+      "rule": {
+        "period": "Y",
+        "dueDay": 15,
+        "dueAfter": null,
+        "dueMonth": 3,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 15 марта следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "tf1q",
+      "rule": {
+        "period": "Q",
+        "dueDay": 10,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": {
+        "due": "до 10-го числа месяца после квартала",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "tur1q",
+      "rule": {
+        "period": "Q",
+        "dueDay": 10,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": {
+        "due": "до 10-го числа месяца после квартала",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "cp1",
+      "rule": {
+        "period": "M",
+        "dueDay": 25,
+        "dueAfter": 0,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": {
+        "due": "до 25-го числа месяца, за который платится",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "oc1",
+      "rule": {
+        "period": "M",
+        "dueDay": 22,
+        "dueAfter": 0,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": {
+        "due": "до 22-го числа месяца, за который платится",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "avtt",
+      "rule": {
+        "period": "M",
+        "dueDay": 25,
+        "dueAfter": 0,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": {
+        "due": "до 25-го числа месяца, за который платится",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "ss5",
+      "rule": {
+        "period": "M",
+        "dueDay": 25,
+        "dueAfter": 0,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": {
+        "due": "до 25-го числа месяца, за который платится",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "si7",
+      "rule": {
+        "period": "M",
+        "dueDay": 25,
+        "dueAfter": 0,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": {
+        "due": "до 25-го числа месяца, за который платится",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "ved1",
+      "rule": {
+        "period": "M",
+        "dueDay": 22,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": {
+        "due": "до 22-го числа месяца после отчётного",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "ves8",
+      "rule": {
+        "period": "Q",
+        "dueDay": 15,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": {
+        "due": "до 15-го числа месяца после квартала",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "eaeu1",
+      "rule": {
+        "period": "M",
+        "dueDay": 20,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": {
+        "due": "до 20-го числа месяца после отчётного",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "ikt2",
+      "rule": {
+        "period": "Y",
+        "dueDay": 20,
+        "dueAfter": null,
+        "dueMonth": 2,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 20 февраля следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "air2",
+      "rule": {
+        "period": "Y",
+        "dueDay": 20,
+        "dueAfter": null,
+        "dueMonth": 1,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 20 января следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "os4",
+      "rule": {
+        "period": "Y",
+        "dueDay": 25,
+        "dueAfter": null,
+        "dueMonth": 1,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 25 января следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "wst1",
+      "rule": {
+        "period": "Y",
+        "dueDay": 30,
+        "dueAfter": null,
+        "dueMonth": 1,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 30 января следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "wst2",
+      "rule": {
+        "period": "Y",
+        "dueDay": 30,
+        "dueAfter": null,
+        "dueMonth": 1,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 30 января следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "gr01",
+      "rule": {
+        "period": "Y",
+        "dueDay": 20,
+        "dueAfter": null,
+        "dueMonth": 1,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 20 января следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "vdk1",
+      "rule": {
+        "period": "Y",
+        "dueDay": 15,
+        "dueAfter": null,
+        "dueMonth": 3,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 15 марта следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "ban1",
+      "rule": {
+        "period": "Y",
+        "dueDay": 1,
+        "dueAfter": null,
+        "dueMonth": 3,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 1 марта следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "blg1",
+      "rule": {
+        "period": "Y",
+        "dueDay": 20,
+        "dueAfter": null,
+        "dueMonth": 2,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 20 февраля следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "gil1",
+      "rule": {
+        "period": "Y",
+        "dueDay": 25,
+        "dueAfter": null,
+        "dueMonth": 1,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 25 января следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "k85",
+      "rule": {
+        "period": "Y",
+        "dueDay": 5,
+        "dueAfter": null,
+        "dueMonth": 1,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 5 января следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "osh1",
+      "rule": {
+        "period": "Y",
+        "dueDay": 20,
+        "dueAfter": null,
+        "dueMonth": 9,
+        "dueFrom": "start",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 20 сентября того же года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "nk1",
+      "rule": {
+        "period": "Y",
+        "dueDay": 5,
+        "dueAfter": null,
+        "dueMonth": 1,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 5 января следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "nk2",
+      "rule": {
+        "period": "Y",
+        "dueDay": 1,
+        "dueAfter": null,
+        "dueMonth": 11,
+        "dueFrom": "start",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 1 ноября того же года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "nk3",
+      "rule": {
+        "period": "Y",
+        "dueDay": 1,
+        "dueAfter": null,
+        "dueMonth": 11,
+        "dueFrom": "start",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 1 ноября того же года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "nauka1",
+      "rule": {
+        "period": "Y",
+        "dueDay": 25,
+        "dueAfter": null,
+        "dueMonth": 1,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 25 января следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "nk8",
+      "rule": {
+        "period": "Y",
+        "dueDay": 15,
+        "dueAfter": null,
+        "dueMonth": 1,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 15 января следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "nk9",
+      "rule": {
+        "period": "Y",
+        "dueDay": 17,
+        "dueAfter": null,
+        "dueMonth": 1,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 17 января следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "nk11",
+      "rule": {
+        "period": "Y",
+        "dueDay": 15,
+        "dueAfter": null,
+        "dueMonth": 1,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 15 января следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "nk12",
+      "rule": {
+        "period": "Y",
+        "dueDay": 25,
+        "dueAfter": null,
+        "dueMonth": 1,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 25 января следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "kino1",
+      "rule": {
+        "period": "Y",
+        "dueDay": 15,
+        "dueAfter": null,
+        "dueMonth": 1,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 15 января следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "tvn7",
+      "rule": {
+        "period": "Y",
+        "dueDay": 15,
+        "dueAfter": null,
+        "dueMonth": 1,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 15 января следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "fk1",
+      "rule": {
+        "period": "Y",
+        "dueDay": 25,
+        "dueAfter": null,
+        "dueMonth": 1,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 25 января следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "kc1",
+      "rule": {
+        "period": "Y",
+        "dueDay": 25,
+        "dueAfter": null,
+        "dueMonth": 1,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 25 января следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "sh4",
+      "rule": {
+        "period": "Y",
+        "dueDay": 3,
+        "dueAfter": null,
+        "dueMonth": 6,
+        "dueFrom": "start",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 3 июня того же года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "sh7",
+      "rule": {
+        "period": "M",
+        "dueDay": 23,
+        "dueAfter": 0,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": {
+        "due": "до 23-го числа месяца, за который платится",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "sh12",
+      "rule": {
+        "period": "M",
+        "dueDay": 27,
+        "dueAfter": 0,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": {
+        "due": "до 27-го числа месяца, за который платится",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "sh29",
+      "rule": {
+        "period": "Y",
+        "dueDay": 20,
+        "dueAfter": null,
+        "dueMonth": 11,
+        "dueFrom": "start",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 20 ноября того же года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "sh24y",
+      "rule": {
+        "period": "Y",
+        "dueDay": 12,
+        "dueAfter": null,
+        "dueMonth": 1,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 12 января следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "sh24m",
+      "rule": {
+        "period": "M",
+        "dueDay": 5,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": {
+        "due": "до 5-го числа месяца после отчётного",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "sh10",
+      "rule": {
+        "period": "Y",
+        "dueDay": 1,
+        "dueAfter": null,
+        "dueMonth": 12,
+        "dueFrom": "start",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 1 декабря того же года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "real7",
+      "rule": {
+        "period": "Y",
+        "dueDay": 2,
+        "dueAfter": null,
+        "dueMonth": 1,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 2 января следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "cen2",
+      "rule": {
+        "period": "M",
+        "dueDay": 20,
+        "dueAfter": 0,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": {
+        "due": "до 20-го числа месяца, за который платится",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "s11",
+      "rule": {
+        "period": "Y",
+        "dueDay": 1,
+        "dueAfter": null,
+        "dueMonth": 4,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Нацстатком",
+      "payments": [],
+      "expected": { "due": "до 1 апреля следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "tbo",
+      "rule": {
+        "period": "Y",
+        "dueDay": 1,
+        "dueAfter": null,
+        "dueMonth": 3,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "pay",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Местная администрация",
+      "payments": [{ "name": "Сбор за вывоз мусора (ТБО)", "authority": "Местная администрация" }],
+      "expected": {
+        "due": "до 1 марта следующего года",
+        "pay": "как срок сдачи",
+        "pays": "Сбор за вывоз мусора (ТБО)"
+      }
+    },
+    {
+      "code": "fin",
+      "rule": {
+        "period": "Y",
+        "dueDay": 1,
+        "dueAfter": null,
+        "dueMonth": 6,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Госфиннадзор",
+      "payments": [],
+      "expected": { "due": "до 1 июня следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "eco",
+      "rule": {
+        "period": "Q",
+        "dueDay": 20,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "both",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Минприроды",
+      "payments": [{ "name": "Плата за загрязнение окружающей среды", "authority": "Минприроды" }],
+      "expected": {
+        "due": "до 20-го числа месяца после квартала",
+        "pay": "как срок сдачи",
+        "pays": "Плата за загрязнение окружающей среды"
+      }
+    },
+    {
+      "code": "utlq",
+      "rule": {
+        "period": "Q",
+        "dueDay": 15,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "both",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "ГП «Эко Оператор»",
+      "payments": [{ "name": "Утилизационный сбор", "authority": "ГП «Эко Оператор»" }],
+      "expected": {
+        "due": "до 15-го числа месяца после квартала",
+        "pay": "как срок сдачи",
+        "pays": "Утилизационный сбор"
+      }
+    },
+    {
+      "code": "utli",
+      "rule": {
+        "period": "Y",
+        "dueDay": 15,
+        "dueAfter": null,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": true,
+        "act": "pay",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "ГП «Эко Оператор»",
+      "payments": [{ "name": "Утилизационный сбор", "authority": "ГП «Эко Оператор»" }],
+      "expected": {
+        "due": "в течение 15 дней после события",
+        "pay": "как срок сдачи",
+        "pays": "Утилизационный сбор"
+      }
+    },
+    {
+      "code": "opu",
+      "rule": {
+        "period": "Y",
+        "dueDay": 1,
+        "dueAfter": null,
+        "dueMonth": 4,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Сам контрагент",
+      "payments": [],
+      "expected": { "due": "до 1 апреля следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "odds",
+      "rule": {
+        "period": "Y",
+        "dueDay": 1,
+        "dueAfter": null,
+        "dueMonth": 4,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Сам контрагент",
+      "payments": [],
+      "expected": { "due": "до 1 апреля следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "bal",
+      "rule": {
+        "period": "Y",
+        "dueDay": 1,
+        "dueAfter": null,
+        "dueMonth": 4,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Сам контрагент",
+      "payments": [],
+      "expected": { "due": "до 1 апреля следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "cap",
+      "rule": {
+        "period": "Y",
+        "dueDay": 1,
+        "dueAfter": null,
+        "dueMonth": 4,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Сам контрагент",
+      "payments": [],
+      "expected": { "due": "до 1 апреля следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "pkid",
+      "rule": {
+        "period": "Q",
+        "dueDay": 20,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "pay",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "authority": "Дирекция ПКИ",
+      "payments": [{ "name": "Отчисления в дирекцию ПКИ", "authority": "Дирекция ПКИ" }],
+      "expected": {
+        "due": "до 20-го числа месяца после квартала",
+        "pay": "как срок сдачи",
+        "pays": "Отчисления в дирекцию ПКИ"
+      }
+    },
+    {
+      "code": "case-1",
+      "rule": {
+        "period": "M",
+        "dueDay": 10,
+        "dueAfter": 0,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "both",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "payments": [],
+      "expected": {
+        "due": "до 10-го числа месяца, за который платится",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "case-2",
+      "rule": {
+        "period": "M",
+        "dueDay": 10,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "both",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "payments": [],
+      "expected": {
+        "due": "до 10-го числа месяца после отчётного",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "case-3",
+      "rule": {
+        "period": "M",
+        "dueDay": 10,
+        "dueAfter": 2,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "both",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "payments": [],
+      "expected": {
+        "due": "до 10-го числа 2-го месяца после месяца",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "case-4",
+      "rule": {
+        "period": "M",
+        "dueDay": 10,
+        "dueAfter": 3,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "both",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "payments": [],
+      "expected": {
+        "due": "до 10-го числа 3-го месяца после месяца",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "case-5",
+      "rule": {
+        "period": "M",
+        "dueDay": 10,
+        "dueAfter": 0,
+        "dueMonth": null,
+        "dueFrom": "start",
+        "oneOff": false,
+        "act": "both",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "payments": [],
+      "expected": {
+        "due": "до 10-го числа месяца, за который платится",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "case-6",
+      "rule": {
+        "period": "M",
+        "dueDay": 10,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "start",
+        "oneOff": false,
+        "act": "both",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "payments": [],
+      "expected": {
+        "due": "до 10-го числа месяца после отчётного",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "case-7",
+      "rule": {
+        "period": "M",
+        "dueDay": 10,
+        "dueAfter": 2,
+        "dueMonth": null,
+        "dueFrom": "start",
+        "oneOff": false,
+        "act": "both",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "payments": [],
+      "expected": {
+        "due": "до 10-го числа 2-го месяца после месяца",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "case-8",
+      "rule": {
+        "period": "M",
+        "dueDay": 10,
+        "dueAfter": 3,
+        "dueMonth": null,
+        "dueFrom": "start",
+        "oneOff": false,
+        "act": "both",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "payments": [],
+      "expected": {
+        "due": "до 10-го числа 3-го месяца после месяца",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "case-9",
+      "rule": {
+        "period": "Q",
+        "dueDay": 10,
+        "dueAfter": 0,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "both",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "payments": [],
+      "expected": {
+        "due": "до 10-го числа месяца, за который платится",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "case-10",
+      "rule": {
+        "period": "Q",
+        "dueDay": 10,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "both",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "payments": [],
+      "expected": {
+        "due": "до 10-го числа месяца после квартала",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "case-11",
+      "rule": {
+        "period": "Q",
+        "dueDay": 10,
+        "dueAfter": 2,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "both",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "payments": [],
+      "expected": {
+        "due": "до 10-го числа 2-го месяца после квартала",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "case-12",
+      "rule": {
+        "period": "Q",
+        "dueDay": 10,
+        "dueAfter": 3,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "both",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "payments": [],
+      "expected": {
+        "due": "до 10-го числа 3-го месяца после квартала",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "case-13",
+      "rule": {
+        "period": "Q",
+        "dueDay": 10,
+        "dueAfter": 0,
+        "dueMonth": null,
+        "dueFrom": "start",
+        "oneOff": false,
+        "act": "both",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "payments": [],
+      "expected": {
+        "due": "до 10-го числа первого месяца квартала",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "case-14",
+      "rule": {
+        "period": "Q",
+        "dueDay": 10,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "start",
+        "oneOff": false,
+        "act": "both",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "payments": [],
+      "expected": {
+        "due": "до 10-го числа 2-го месяца квартала",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "case-15",
+      "rule": {
+        "period": "Q",
+        "dueDay": 10,
+        "dueAfter": 2,
+        "dueMonth": null,
+        "dueFrom": "start",
+        "oneOff": false,
+        "act": "both",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "payments": [],
+      "expected": {
+        "due": "до 10-го числа 3-го месяца квартала",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "case-16",
+      "rule": {
+        "period": "Q",
+        "dueDay": 10,
+        "dueAfter": 3,
+        "dueMonth": null,
+        "dueFrom": "start",
+        "oneOff": false,
+        "act": "both",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "payments": [],
+      "expected": {
+        "due": "до 10-го числа 4-го месяца квартала",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "case-17",
+      "rule": {
+        "period": "H",
+        "dueDay": 10,
+        "dueAfter": 0,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "both",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "payments": [],
+      "expected": {
+        "due": "до 10-го числа месяца, за который платится",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "case-18",
+      "rule": {
+        "period": "H",
+        "dueDay": 10,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "both",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "payments": [],
+      "expected": {
+        "due": "до 10-го числа месяца после полугодия",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "case-19",
+      "rule": {
+        "period": "H",
+        "dueDay": 10,
+        "dueAfter": 2,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "both",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "payments": [],
+      "expected": {
+        "due": "до 10-го числа 2-го месяца после полугодия",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "case-20",
+      "rule": {
+        "period": "H",
+        "dueDay": 10,
+        "dueAfter": 3,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "both",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "payments": [],
+      "expected": {
+        "due": "до 10-го числа 3-го месяца после полугодия",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "case-21",
+      "rule": {
+        "period": "H",
+        "dueDay": 10,
+        "dueAfter": 0,
+        "dueMonth": null,
+        "dueFrom": "start",
+        "oneOff": false,
+        "act": "both",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "payments": [],
+      "expected": {
+        "due": "до 10-го числа первого месяца полугодия",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "case-22",
+      "rule": {
+        "period": "H",
+        "dueDay": 10,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "start",
+        "oneOff": false,
+        "act": "both",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "payments": [],
+      "expected": {
+        "due": "до 10-го числа 2-го месяца полугодия",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "case-23",
+      "rule": {
+        "period": "H",
+        "dueDay": 10,
+        "dueAfter": 2,
+        "dueMonth": null,
+        "dueFrom": "start",
+        "oneOff": false,
+        "act": "both",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "payments": [],
+      "expected": {
+        "due": "до 10-го числа 3-го месяца полугодия",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "case-24",
+      "rule": {
+        "period": "H",
+        "dueDay": 10,
+        "dueAfter": 3,
+        "dueMonth": null,
+        "dueFrom": "start",
+        "oneOff": false,
+        "act": "both",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "payments": [],
+      "expected": {
+        "due": "до 10-го числа 4-го месяца полугодия",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "case-25",
+      "rule": {
+        "period": "Y",
+        "dueDay": 30,
+        "dueAfter": null,
+        "dueMonth": 4,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "payments": [],
+      "expected": { "due": "до 30 апреля следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "case-26",
+      "rule": {
+        "period": "Y",
+        "dueDay": 30,
+        "dueAfter": null,
+        "dueMonth": 4,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "pay",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "payments": [],
+      "expected": { "due": "до 30 апреля следующего года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "case-27",
+      "rule": {
+        "period": "Y",
+        "dueDay": 30,
+        "dueAfter": null,
+        "dueMonth": 4,
+        "dueFrom": "start",
+        "oneOff": false,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "payments": [],
+      "expected": { "due": "до 30 апреля того же года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "case-28",
+      "rule": {
+        "period": "Y",
+        "dueDay": 30,
+        "dueAfter": null,
+        "dueMonth": 4,
+        "dueFrom": "start",
+        "oneOff": false,
+        "act": "pay",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "payments": [],
+      "expected": { "due": "до 30 апреля того же года", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "case-29",
+      "rule": {
+        "period": "M",
+        "dueDay": 31,
+        "dueAfter": 0,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "pay",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "payments": [],
+      "expected": {
+        "due": "оплата до последнего дня месяца, за который платится",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "case-30",
+      "rule": {
+        "period": "M",
+        "dueDay": 31,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "pay",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "payments": [],
+      "expected": {
+        "due": "до последнего дня месяца после отчётного",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "case-31",
+      "rule": {
+        "period": "Q",
+        "dueDay": 31,
+        "dueAfter": 0,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "pay",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "payments": [],
+      "expected": {
+        "due": "оплата до последнего дня месяца, за который платится",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "case-32",
+      "rule": {
+        "period": "Q",
+        "dueDay": 31,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "pay",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "payments": [],
+      "expected": {
+        "due": "до последнего дня месяца после квартала",
+        "pay": "как срок сдачи",
+        "pays": ""
+      }
+    },
+    {
+      "code": "case-33",
+      "rule": {
+        "period": "M",
+        "dueDay": 20,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "both",
+        "payDay": 15,
+        "payAfter": 2,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "payments": [],
+      "expected": {
+        "due": "до 20-го числа месяца после отчётного",
+        "pay": "до 15-го числа 2-го месяца после месяца",
+        "pays": ""
+      }
+    },
+    {
+      "code": "case-34",
+      "rule": {
+        "period": "Q",
+        "dueDay": 20,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "start",
+        "oneOff": false,
+        "act": "both",
+        "payDay": 15,
+        "payAfter": 2,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "payments": [],
+      "expected": {
+        "due": "до 20-го числа 2-го месяца квартала",
+        "pay": "до 15-го числа 3-го месяца квартала",
+        "pays": ""
+      }
+    },
+    {
+      "code": "case-35",
+      "rule": {
+        "period": "Y",
+        "dueDay": 31,
+        "dueAfter": null,
+        "dueMonth": 3,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "both",
+        "payDay": 15,
+        "payAfter": 2,
+        "payMonth": 6,
+        "paySchedule": null
+      },
+      "payments": [],
+      "expected": {
+        "due": "до 31 марта следующего года",
+        "pay": "до 15 июня следующего года",
+        "pays": ""
+      }
+    },
+    {
+      "code": "case-36",
+      "rule": {
+        "period": "M",
+        "dueDay": 20,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "both",
+        "payDay": 31,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "payments": [],
+      "expected": {
+        "due": "до 20-го числа месяца после отчётного",
+        "pay": "до последнего дня месяца после отчётного",
+        "pays": ""
+      }
+    },
+    {
+      "code": "case-37",
+      "rule": {
+        "period": "Q",
+        "dueDay": 20,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "start",
+        "oneOff": false,
+        "act": "both",
+        "payDay": 31,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "payments": [],
+      "expected": {
+        "due": "до 20-го числа 2-го месяца квартала",
+        "pay": "до последнего дня 2-го месяца квартала",
+        "pays": ""
+      }
+    },
+    {
+      "code": "case-38",
+      "rule": {
+        "period": "Y",
+        "dueDay": 31,
+        "dueAfter": null,
+        "dueMonth": 3,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "both",
+        "payDay": 31,
+        "payAfter": null,
+        "payMonth": 6,
+        "paySchedule": null
+      },
+      "payments": [],
+      "expected": {
+        "due": "до 31 марта следующего года",
+        "pay": "до 31 июня следующего года",
+        "pays": ""
+      }
+    },
+    {
+      "code": "case-39",
+      "rule": {
+        "period": "M",
+        "dueDay": 20,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "both",
+        "payDay": 5,
+        "payAfter": 0,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "payments": [],
+      "expected": {
+        "due": "до 20-го числа месяца после отчётного",
+        "pay": "до 5-го числа месяца, за который платится",
+        "pays": ""
+      }
+    },
+    {
+      "code": "case-40",
+      "rule": {
+        "period": "Q",
+        "dueDay": 20,
+        "dueAfter": 1,
+        "dueMonth": null,
+        "dueFrom": "start",
+        "oneOff": false,
+        "act": "both",
+        "payDay": 5,
+        "payAfter": 0,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "payments": [],
+      "expected": {
+        "due": "до 20-го числа 2-го месяца квартала",
+        "pay": "до 5-го числа первого месяца квартала",
+        "pays": ""
+      }
+    },
+    {
+      "code": "case-41",
+      "rule": {
+        "period": "Y",
+        "dueDay": 31,
+        "dueAfter": null,
+        "dueMonth": 3,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "both",
+        "payDay": 5,
+        "payAfter": 0,
+        "payMonth": 6,
+        "paySchedule": null
+      },
+      "payments": [],
+      "expected": {
+        "due": "до 31 марта следующего года",
+        "pay": "до 5 июня следующего года",
+        "pays": ""
+      }
+    },
+    {
+      "code": "case-42",
+      "rule": {
+        "period": "M",
+        "dueDay": 1,
+        "dueAfter": null,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": true,
+        "act": "both",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "payments": [],
+      "expected": { "due": "в течение 1 дня после события", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "case-43",
+      "rule": {
+        "period": "M",
+        "dueDay": 21,
+        "dueAfter": null,
+        "dueMonth": null,
+        "dueFrom": "end",
+        "oneOff": true,
+        "act": "sub",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": null
+      },
+      "payments": [],
+      "expected": { "due": "в течение 21 дня после события", "pay": "как срок сдачи", "pays": "" }
+    },
+    {
+      "code": "case-44",
+      "rule": {
+        "period": "Y",
+        "dueDay": 20,
+        "dueAfter": null,
+        "dueMonth": 3,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "pay",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": [[3, 20]]
+      },
+      "payments": [],
+      "expected": { "due": "до 20 марта следующего года", "pay": "1 платёж: до 20.03", "pays": "" }
+    },
+    {
+      "code": "case-45",
+      "rule": {
+        "period": "Y",
+        "dueDay": 20,
+        "dueAfter": null,
+        "dueMonth": 3,
+        "dueFrom": "end",
+        "oneOff": false,
+        "act": "pay",
+        "payDay": null,
+        "payAfter": null,
+        "payMonth": null,
+        "paySchedule": [
+          [2, 5],
+          [5, 25],
+          [11, 1]
+        ]
+      },
+      "payments": [],
+      "expected": {
+        "due": "до 20 марта следующего года",
+        "pay": "3 платежа: до 05.02; 25.05; 01.11",
+        "pays": ""
+      }
+    }
+  ]
+}

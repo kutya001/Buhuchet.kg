@@ -2,12 +2,12 @@ import {
   formatText,
   PASSWORD_MIN_LENGTH,
   RESET_CODE_LENGTH,
+  type Translate,
   type UiTextKey,
   type UiTextParams,
 } from '@buhuchet/domain';
 
-/** Текст по ключу из словаря с подстановками `{имя}`. */
-export type Translate = (key: UiTextKey, params?: UiTextParams) => string;
+export type { Translate };
 
 /** Функция `t` над текстами словаря; ключа нет в словаре (не должно быть) — показывается сам ключ. */
 export function makeTranslate(texts: Readonly<Record<string, string>>): Translate {

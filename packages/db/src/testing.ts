@@ -99,6 +99,15 @@ export async function seedPhoneCodes(db: Db): Promise<void> {
     .onConflictDoNothing();
 }
 
+/** Справочник «Налоги и ставки» из refDB.json — для формы просмотра налога. */
+export async function seedTaxes(db: Db): Promise<void> {
+  const refDB = await readSpecJson<Record<string, unknown>>('data/refDB.json');
+  await db
+    .insert(platformReference)
+    .values({ key: 'taxes', payload: refDB.taxes, checksum: 'test', source: 'test' })
+    .onConflictDoNothing();
+}
+
 /** Справочники платформы для контрагентов и отчётов из refDB.json (виды отчётов, режимы, УГНС, календарь…). */
 export async function seedPlatformDictionaries(db: Db): Promise<void> {
   const refDB = await readSpecJson<Record<string, unknown>>('data/refDB.json');

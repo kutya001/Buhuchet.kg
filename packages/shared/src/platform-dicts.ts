@@ -277,3 +277,89 @@ export const ProductionCalendarYear = z.object({
   ),
 });
 export type ProductionCalendarYear = z.infer<typeof ProductionCalendarYear>;
+
+/** Тариф по фондам у налога со страховыми взносами: общий тариф, доли, раскладка, предельная база. */
+const TaxTariff = z.object({
+  name: z.string(),
+  total: z.string(),
+  who: z.string(),
+  since: z.string(),
+  law: z.string(),
+  verify: z.boolean(),
+  verifyNote: z.string(),
+  parts: z.array(
+    z.object({
+      payer: z.string(),
+      rate: z.string(),
+      funds: z.array(z.object({ fund: z.string(), rate: z.string() })),
+    }),
+  ),
+  cap: z.object({ amount: z.string(), since: z.string(), note: z.string() }).nullable(),
+});
+
+/**
+ * Форма просмотра налога (ТЗ «Форма просмотра налога»; прототип taxGuideHtml): «Что это», «Кто платит и
+ * с чего», «Ставки», «Сроки», «Связи», «Освобождения», «Важно знать», «Как проверить», «Статья НК»,
+ * «Источники». Связи — кодами: льготы, основания, виды отчётов, ГКЭД.
+ */
+const TaxGuide = z.object({
+  about: z.string(),
+  payers: z.string(),
+  base: z.string(),
+  rates: z.array(z.object({ rate: z.string(), when: z.string() })),
+  tariffs: z.array(TaxTariff),
+  exceptions27: z.array(z.string()),
+  admin: z.array(z.object({ organ: z.string(), what: z.string() })),
+  period: z.string(),
+  reportDue: z.string(),
+  payDue: z.string(),
+  pays: z.string(),
+  form: z.string(),
+  organ: z.string(),
+  art: z.string(),
+  reportTypes: Codes,
+  regimesPay: z.string(),
+  regimesFree: z.string(),
+  benefits: Codes,
+  bases: Codes,
+  gked: Codes,
+  gkedExclude: Codes,
+  exemptions: z.string(),
+  notes: z.array(z.string()),
+  check: z
+    .object({
+      title: z.string(),
+      ways: z.array(z.object({ name: z.string(), steps: z.array(z.string()) })),
+    })
+    .nullable(),
+  verifyNote: z.string(),
+  sources: z.array(z.object({ title: z.string(), url: z.string() })),
+});
+
+/** «Налоги и ставки»: налог или платёж и его форма просмотра. */
+export const Tax = z.object({
+  code: z.string(),
+  name: z.string(),
+  group: z.string(),
+  level: z.string(),
+  organ: z.string(),
+  period: z.string(),
+  payers: z.string(),
+  base: z.string(),
+  rates: z.string(),
+  reportDue: z.string(),
+  payDue: z.string(),
+  form: z.string(),
+  art: z.string(),
+  reportTypes: Codes,
+  verify: z.boolean(),
+  active: z.boolean(),
+  guide: TaxGuide,
+});
+/** Налоги и названия кодов ГКЭД из их связей («Виды деятельности (ГКЭД)», «Кроме ГКЭД»). */
+export const Taxes = z.object({
+  items: z.array(Tax),
+  gkedNames: z.record(z.string(), z.string()),
+});
+export type Taxes = z.infer<typeof Taxes>;
+export type Tax = z.infer<typeof Tax>;

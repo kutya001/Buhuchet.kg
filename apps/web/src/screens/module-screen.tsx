@@ -2,6 +2,8 @@
 
 import type { MenuModuleId } from '@buhuchet/domain';
 import { OrgsList } from '../admin/orgs-list';
+import { DictsStub } from '../dicts/dicts-stub';
+import { ReportTypesList } from '../dicts/report-types-list';
 import { OrgMain } from '../org/org-main';
 import { OrgPolicyTab } from '../org/org-policy';
 import { OrgSettingsTab } from '../org/org-settings';
@@ -35,6 +37,11 @@ export function ModuleScreen({
     if (tab === 'policy') return <OrgPolicyTab />;
     if (tab === 'settings') return <OrgSettingsTab />;
     return <OrgMain />;
+  }
+  if (moduleId === 'dicts') {
+    const tab = tabId ?? 'types';
+    if (tab === 'types') return <ReportTypesList />;
+    return <DictsStub />;
   }
   if (moduleId === 'orgs') return <OrgsList />;
   return <ModuleStub moduleId={moduleId} />;

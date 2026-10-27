@@ -8,8 +8,10 @@ import {
   listSingleTaxRates,
   listTaxBenefits,
   listTaxOffices,
+  listTaxes,
   listTaxRegimes,
   productionCalendarEntries,
+  taxGkedNames,
 } from '@buhuchet/db';
 import { calendarYear } from '@buhuchet/domain';
 import {
@@ -24,6 +26,7 @@ import {
   ReportTypes,
   SingleTaxRates,
   TaxBenefits,
+  Taxes,
   TaxOffices,
   TaxRegimes,
 } from '@buhuchet/shared';
@@ -241,5 +244,29 @@ export function productionCalendarHandler(
       productionCalendarEntries(tx),
     );
     return c.json({ year, days: calendarYear(entries, year) }, 200);
+  };
+}
+
+export const taxesRoute = createRoute({
+  method: 'get',
+  path: '/taxes',
+  tags: ['platform-dicts'],
+  summary: 'Справочник платформы «Налоги и ставки» — с формой просмотра налога',
+  request: { query: DictListQuery },
+  responses: listResponses(
+    Taxes,
+    'Налоги и платежи по порядку справочника: «Что это», ставки, сроки, связи (кодами), «Сверить»; названия кодов ГКЭД из связей',
+  ),
+});
+
+/** Блок «Налог» в форме просмотра вида отчёта (ТЗ «Форма просмотра налога»): налоги, у которых вид в «Видах отчётов». */
+export function taxesHandler(deps: ApiDeps): RouteHandler<typeof taxesRoute, AppEnv> {
+  return async (c) => {
+    const options = allOf(c.req.valid('query'));
+    const body = await asSessionUser(deps, c.get('session')!, async (tx) => {
+      const items = await listTaxes(tx, options);
+      return { items, gkedNames: await taxGkedNames(tx, items) };
+    });
+    return c.json(body, 200);
   };
 }

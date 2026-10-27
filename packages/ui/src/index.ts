@@ -6,6 +6,7 @@ export {
   TOUCH_AREA,
   type ButtonVariant,
 } from './button';
+export { ActPill } from './act-pill';
 export { Avatar } from './avatar';
 export { Card, StatusDot } from './card';
 export { CardTabs, type CardTab } from './card-tabs';

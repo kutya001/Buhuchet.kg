@@ -11,6 +11,7 @@ export const HISTORY_ENTITIES = [
   'user',
   'employee',
   'role',
+  'org_report_type',
 ] as const;
 export type HistoryEntity = (typeof HISTORY_ENTITIES)[number];
 

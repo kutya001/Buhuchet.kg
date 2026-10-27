@@ -158,11 +158,20 @@ export interface KeyValueItem {
   mono?: boolean;
 }
 
-export function KeyValues({ items }: { items: readonly KeyValueItem[] }) {
+/** Ровно два столбца, на телефоне — один (`.pk-kv`: описание вида в «Подборе отчётов» и «Выборе налогов»). */
+const KV_TWO_CLASS = 'grid grid-cols-2 gap-x-[18px] gap-y-3 max-md:grid-cols-1';
+
+export function KeyValues({
+  items,
+  columns = 'auto',
+}: {
+  items: readonly KeyValueItem[];
+  columns?: 'auto' | 2;
+}) {
   const ref = useRef<HTMLDListElement>(null);
   useFormPack(ref, 'kv');
   return (
-    <dl ref={ref} className={`m-0 ${KV_CLASS}`}>
+    <dl ref={ref} className={`m-0 ${columns === 2 ? KV_TWO_CLASS : KV_CLASS}`}>
       {items.map((item) => (
         <div key={item.id} className="flex min-w-0 flex-col gap-0.5">
           <dt className="text-[11.5px] font-semibold text-faint">{item.label}</dt>
@@ -246,6 +255,7 @@ const PILL_TONES = {
   ok: 'bg-ok-bg text-ok',
   bad: 'bg-danger-bg text-danger-label',
   caution: 'bg-caution-bg text-caution-label',
+  warn: 'bg-warn-bg text-warn-label',
 } as const;
 
 const PILL_SIZES = {
@@ -259,7 +269,8 @@ export function pillClass(size: keyof typeof PILL_SIZES = 'md'): string {
 }
 
 /**
- * Метка (`.pill`): «Привязан», «Основной»; `caution` — оранжевая (`.pill.orange`, «не привязан»);
+ * Метка (`.pill`): «Привязан», «Основной»; `caution` — оранжевая (`.pill.orange`, «не привязан»),
+ * `warn` — жёлтая (`.pill.yellow`, «сверить»);
  * `sm` — маленькая (`.pill.sm`). В компактном списке метка ниже (`data-pill`).
  */
 export function Pill({

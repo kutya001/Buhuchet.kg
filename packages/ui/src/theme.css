@@ -32,10 +32,12 @@
   --bu-red: hsl(4 56% 45%);
   --bu-red-bg: hsla(4 72% 55% / 0.12);
   /* Текст цветных меток и заметок — не ниже 4,5 : 1 на карточке и под наведением строки
-     (docs/deviations.md, п. 26); в прототипе — те же `--red`, `--orange`, `--yellow`. */
+     (docs/deviations.md, п. 26); в прототипе — те же `--red`, `--orange`, `--yellow`, `--blue`
+     (синяя — метка «Сдача» у вида отчёта, в тёмной теме чуть светлее). */
   --bu-red-label: hsl(4 56% 43%);
   --bu-orange-label: hsl(18 69% 37%);
   --bu-yellow-label: hsl(40 98% 23%);
+  --bu-blue-label: hsl(200 64% 34%);
   /* Серые метки и текст статуса на подложке — не ниже 4,5 : 1 (прототип версии 59 — `--label`). */
   --bu-label: hsl(35 28% 33%);
   --bu-label-bg: hsla(34 37% 70% / 0.16);
@@ -126,6 +128,7 @@
   --bu-red-label: hsl(4 88% 76%);
   --bu-orange-label: hsl(26 85% 70%);
   --bu-yellow-label: hsl(43 69% 63%);
+  --bu-blue-label: hsl(194 59% 67%);
   --bu-label: hsl(35 27% 58%);
   --bu-label-bg: hsla(30 20% 8% / 0.4);
   --bu-faint-pill-bg: hsla(30 20% 8% / 0.3);
@@ -209,6 +212,7 @@
     --bu-red-label: hsl(4 88% 76%);
     --bu-orange-label: hsl(26 85% 70%);
     --bu-yellow-label: hsl(43 69% 63%);
+    --bu-blue-label: hsl(194 59% 67%);
     --bu-label: hsl(35 27% 58%);
     --bu-label-bg: hsla(30 20% 8% / 0.4);
     --bu-faint-pill-bg: hsla(30 20% 8% / 0.3);
@@ -293,6 +297,7 @@
   --color-warn: var(--bu-yellow);
   --color-warn-bg: var(--bu-yellow-bg);
   --color-warn-label: var(--bu-yellow-label);
+  --color-info-label: var(--bu-blue-label);
   --color-caution: var(--bu-orange);
   --color-caution-bg: var(--bu-orange-bg);
   --color-caution-label: var(--bu-orange-label);

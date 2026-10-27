@@ -3,6 +3,7 @@ import { hashPassword, verifyPassword } from '@buhuchet/adapters/password';
 import {
   FEATURES,
   defaultOrgPolicy,
+  normalizeRemindDays,
   normalizeRolePermissions,
   normalizeScopes,
   SCOPE_GROUPS,
@@ -13,6 +14,7 @@ import type { Db } from '../client';
 import {
   employees,
   organizations,
+  orgReportTypes,
   orgSettings,
   rolePermissions,
   roleScopes,
@@ -38,6 +40,22 @@ const NO_PASSWORD = '!';
 
 const Phone = z.object({ cc: z.string(), digits: z.string() }).nullable().optional();
 
+/** «2025-02-14 11:20» — момент по Бишкеку, как `_ca` и `_ua` записей прототипа. */
+const Stamp = z.string().regex(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
+const stampOf = (value: string) => new Date(`${value.replace(' ', 'T')}:00+06:00`);
+
+/** Подключённый вид отчёта демо-организации (`organization.types` в demoDB.json). */
+const DemoReportType = z.object({
+  on: z.boolean(),
+  days: z.array(z.number().int()),
+  needFile: z.boolean(),
+  needReceipt: z.boolean(),
+  _cb: z.string(),
+  _ca: Stamp,
+  _ub: z.string(),
+  _ua: Stamp,
+});
+
 const DemoFile = z.object({
   organization: z.object({
     name: z.string(),
@@ -57,6 +75,7 @@ const DemoFile = z.object({
     taskConfirm: z.boolean().optional(),
     repConfirm: z.boolean().optional(),
     payFirst: z.boolean().optional(),
+    types: z.record(z.string(), DemoReportType).default({}),
   }),
   roles: z.array(
     z.object({
@@ -94,7 +113,7 @@ export interface DemoSeedReport {
 
 /**
  * Демо-организация из demoDB.json: организация, роли (владелец, «Главный бухгалтер», «Бухгалтер»),
- * сотрудники с учётными записями и учётная политика. Повторный запуск досоздаёт только недостающее;
+ * сотрудники с учётными записями, учётная политика и подключённые виды отчётов. Повторный запуск досоздаёт только недостающее;
  * с --update и новым паролем — меняет пароль демо-сотрудников и закрывает их сеансы. Модули по мере появления таблиц
  * добавляют сюда свои наполнители (контрагенты, отчёты…) с тем же DEMO_ORG_ID и demoId.
  */
@@ -241,6 +260,23 @@ export async function seedDemoOrganization(
       pageSections: defaults.pageSections,
     })
     .onConflictDoNothing();
+
+  // Виды отчётов демо-организации (модуль «Справочники», задача 2.02): автор — демо-сотрудник.
+  const userOf = (protoId: string) =>
+    demo.employees.some((e) => e.id === protoId) ? demoId('user', protoId) : null;
+  const typeRows = Object.entries(org.types).map(([code, x]) => ({
+    orgId,
+    reportTypeCode: code,
+    enabled: x.on,
+    remindDays: normalizeRemindDays(x.days),
+    needFile: x.needFile,
+    needReceipt: x.needReceipt,
+    createdBy: userOf(x._cb),
+    updatedBy: userOf(x._ub),
+    createdAt: stampOf(x._ca),
+    updatedAt: stampOf(x._ua),
+  }));
+  if (typeRows.length > 0) await db.insert(orgReportTypes).values(typeRows).onConflictDoNothing();
 
   return { orgId, created: created.length > 0, employees: insertedEmployees.length };
 }
