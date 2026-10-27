@@ -16,7 +16,30 @@ import {
 // «Забыли пароль?» с кодом от бота-подделки (fake-telegram.ts) и «Мой профиль». Неверные пароли
 // вводятся только новым сотрудникам: демо-сотрудникам закрывать вход нельзя — им пользуются все тесты.
 const OWN_PASSWORD = 'Свой-пароль-e2e-1';
-const LOCK_WARNING = 'После 5 неверных попыток вход блокируется на 15 минут.';
+// Тексты страницы входа — словарь refDB v59 и прототип core/login.js `LG_T` (ТЗ «Сообщения на
+// странице входа», решение заказчика 26.10.2026).
+const BAD_LOGIN = 'Неверный логин или пароль';
+const LOCKED = 'Вход временно закрыт: слишком много неверных попыток. Попробуйте через 15 минут.';
+const CODE_SENT =
+  'Если к логину привязан Telegram, бот пришлёт код. Если код не пришёл, пароль сбросит владелец организации. Код действует 10 минут.';
+
+/** Ошибка входа — общая плашка над «Войти» (прототип `#lg-msg`), а не подсказка под полем. */
+const loginAlert = (page: Page) => page.locator('main form').getByRole('alert');
+
+async function expectLoginAlert(page: Page, text: string) {
+  const alert = loginAlert(page);
+  await expect(alert).toHaveText(text);
+  const box = (await alert.boundingBox())!;
+  const password = (await page.getByLabel('Пароль', { exact: true }).boundingBox())!;
+  const button = (await page.getByRole('button', { name: 'Войти' }).boundingBox())!;
+  expect(box.y).toBeGreaterThan(password.y + password.height - 1);
+  expect(box.y + box.height).toBeLessThanOrEqual(button.y + 1);
+  await expect(page.getByLabel('Пароль', { exact: true })).not.toHaveAttribute(
+    'aria-invalid',
+    'true',
+  );
+  await expect(page.getByLabel('Логин')).not.toHaveAttribute('aria-invalid', 'true');
+}
 
 async function signInByForm(page: Page, login: string, password: string) {
   await page.getByLabel('Логин').fill(login);
@@ -46,7 +69,7 @@ async function hiredAndSignedIn(
 }
 
 test.describe('Этап 1: экраны входа и «Мой профиль»', () => {
-  test('вход демо-сотрудником открывает рабочую страницу; неверный пароль — ошибка и предупреждение о блокировке после 5 попыток', async ({
+  test('вход демо-сотрудником открывает рабочую страницу; неверный пароль — «Неверный логин или пароль» плашкой над «Войти», пятый подряд закрывает вход на 15 минут', async ({
     page,
     playwright,
     baseURL,
@@ -59,39 +82,39 @@ test.describe('Этап 1: экраны входа и «Мой профиль»'
 
     await page.goto('/login');
     await expect(page.getByRole('heading', { name: 'Вход' })).toBeVisible();
-    const password = page.getByLabel('Пароль', { exact: true });
 
-    await test.step('пустая форма — «Введите логин», «Введите пароль»', async () => {
+    await test.step('пустая форма — «Введите логин», «Введите пароль» под полями', async () => {
       await page.getByRole('button', { name: 'Войти' }).click();
       await expect(page.getByText('Введите логин')).toBeVisible();
       await expect(page.getByText('Введите пароль')).toBeVisible();
       await expect(page.getByLabel('Логин')).toBeFocused();
     });
 
-    await test.step('неверный пароль: одно сообщение для любого логина и предупреждение о блокировке', async () => {
+    await test.step('неверный пароль: «Неверный логин или пароль» без предупреждения о попытках', async () => {
       for (let i = 1; i <= 4; i++) {
         await signInByForm(page, login, `неверный-${i}`);
-        await expect(page.getByText(`Неверный логин или пароль. ${LOCK_WARNING}`)).toBeVisible();
-        await expect(password).toHaveAttribute('aria-invalid', 'true');
+        await expectLoginAlert(page, BAD_LOGIN);
       }
       await expect(page).toHaveURL(/\/login$/);
     });
 
-    await test.step('логина нет на платформе — то же сообщение под тем же полем', async () => {
+    await test.step('логина нет на платформе — то же сообщение', async () => {
       await signInByForm(page, uniqueLogin('e2e-nobody'), 'неверный');
-      await expect(page.getByText(`Неверный логин или пароль. ${LOCK_WARNING}`)).toBeVisible();
-      await expect(password).toHaveAttribute('aria-invalid', 'true');
-      await expect(page.getByLabel('Логин')).not.toHaveAttribute('aria-invalid', 'true');
+      await expectLoginAlert(page, BAD_LOGIN);
+    });
+
+    await test.step('после ошибки «Войти» с пустым паролем — плашка гаснет, «Введите пароль» под полем', async () => {
+      await page.getByLabel('Пароль', { exact: true }).fill('');
+      await page.getByRole('button', { name: 'Войти' }).click();
+      await expect(page.getByText('Введите пароль')).toBeVisible();
+      await expect(loginAlert(page)).toHaveCount(0);
     });
 
     await test.step('пятый неверный пароль закрывает вход на 15 минут — даже верным паролем', async () => {
       await signInByForm(page, login, 'неверный-5');
-      const locked = page.getByText(
-        /^Слишком много неверных паролей\. Вход закрыт на 15 минут, попробуйте снова после \d{2}:\d{2}\.$/,
-      );
-      await expect(locked).toBeVisible();
+      await expectLoginAlert(page, LOCKED);
       await signInByForm(page, login, temporaryPassword);
-      await expect(locked).toBeVisible();
+      await expectLoginAlert(page, LOCKED);
       await expect(page).toHaveURL(/\/login$/);
     });
 
@@ -102,6 +125,47 @@ test.describe('Этап 1: экраны входа и «Мой профиль»'
       await expect(
         page.getByRole('link', { name: 'Главная', exact: true }).first(),
       ).toHaveAttribute('aria-current', 'page');
+    });
+  });
+
+  test('несуществующий логин и неверный пароль — одно «Неверный логин или пароль»; заблокированный сотрудник видит «Учётная запись заблокирована…» только после верного пароля', async ({
+    page,
+    playwright,
+    baseURL,
+  }) => {
+    const origin = new URL(baseURL!).origin;
+    const owner = await playwright.request.newContext({ baseURL });
+    const login = uniqueLogin('e2e-blocked');
+    const hired = (await hire(owner, origin, login)) as {
+      temporaryPassword: string;
+      employee: { id: string; version: number };
+    };
+    await signIn(owner, origin, 'erkin', DEMO_PASSWORD);
+    const blocked = await owner.post(`/api/staff/${hired.employee.id}/block`, {
+      headers: { origin },
+      data: { version: hired.employee.version },
+    });
+    expect(blocked.status(), await blocked.text()).toBe(200);
+    await owner.dispose();
+
+    await page.goto('/login');
+    await test.step('логина нет — «Неверный логин или пароль»', async () => {
+      await signInByForm(page, uniqueLogin('e2e-nobody'), 'неверный');
+      await expectLoginAlert(page, BAD_LOGIN);
+    });
+
+    await test.step('заблокированный сотрудник с неверным паролем — то же сообщение, о блокировке ни слова', async () => {
+      await signInByForm(page, login, 'неверный');
+      await expectLoginAlert(page, BAD_LOGIN);
+    });
+
+    await test.step('с верным паролем — «Учётная запись заблокирована. Обратитесь к владельцу организации.»', async () => {
+      await signInByForm(page, login, hired.temporaryPassword);
+      await expectLoginAlert(
+        page,
+        'Учётная запись заблокирована. Обратитесь к владельцу организации.',
+      );
+      await expect(page).toHaveURL(/\/login$/);
     });
   });
 
@@ -185,7 +249,7 @@ test.describe('Этап 1: экраны входа и «Мой профиль»'
     await page.getByLabel('Логин').fill(login);
     await page.getByRole('button', { name: 'Получить код' }).click();
     await expect(page.getByRole('heading', { name: 'Введите код' })).toBeVisible();
-    await expect(page.getByText('Если к логину привязан Telegram, бот пришлёт код.')).toBeVisible();
+    await expect(page.getByText(CODE_SENT, { exact: true })).toBeVisible();
 
     let code = '';
     await expect
@@ -212,10 +276,57 @@ test.describe('Этап 1: экраны входа и «Мой профиль»'
       await expect(page.getByRole('heading', { name: 'Вход' })).toBeVisible();
       await expect(page.getByLabel('Логин')).toHaveValue(login);
       await signInByForm(page, login, OWN_PASSWORD);
-      await expect(page.getByText(`Неверный логин или пароль. ${LOCK_WARNING}`)).toBeVisible();
+      await expectLoginAlert(page, BAD_LOGIN);
       await signInByForm(page, login, 'Новый-пароль-e2e-2');
       await expect(page).toHaveURL(/\/app\/home\/today$/);
     });
+  });
+
+  test('«Забыли пароль?» с несуществующим логином и с логином без Telegram — тот же ответ и тот же экран ввода кода, что с привязанным Telegram; имени Telegram нет', async ({
+    page,
+    playwright,
+    baseURL,
+  }) => {
+    const origin = new URL(baseURL!).origin;
+    const linked = await playwright.request.newContext({ baseURL });
+    const withTelegram = await hiredAndSignedIn(linked, origin, 'e2e-forgot-tg');
+    const chat = uniqueChat();
+    await linkTelegram(linked, origin, chat);
+    await linked.dispose();
+    const plain = await playwright.request.newContext({ baseURL });
+    const withoutTelegram = await hiredAndSignedIn(plain, origin, 'e2e-forgot-notg');
+    await plain.dispose();
+
+    const answers: string[] = [];
+    for (const login of [uniqueLogin('e2e-nobody'), withoutTelegram, withTelegram]) {
+      await test.step(`логин ${login}`, async () => {
+        await page.goto('/login');
+        await page.getByRole('button', { name: 'Забыли пароль?' }).click();
+        await expect(page.getByRole('heading', { name: 'Восстановление пароля' })).toBeVisible();
+        await expect(page.getByText('Введите логин и нажмите «Получить код».')).toBeVisible();
+        await page.getByLabel('Логин').fill(login);
+        await page.getByRole('button', { name: 'Получить код' }).click();
+
+        await expect(page.getByRole('heading', { name: 'Введите код' })).toBeVisible();
+        const note = page.getByText(CODE_SENT, { exact: true });
+        await expect(note).toBeVisible();
+        answers.push((await page.locator('main').innerText()).replace(login, '<логин>'));
+        // Имени Telegram (у бота-подделки — @e2e_<чат>) на экране нет.
+        await expect(page.locator('main')).not.toContainText('@');
+        for (const label of ['Код из Telegram', 'Новый пароль', 'Повторите пароль']) {
+          await expect(page.getByLabel(label)).toBeVisible();
+        }
+
+        await page.getByRole('button', { name: 'Вернуться ко входу' }).click();
+        await expect(page.getByRole('heading', { name: 'Вход' })).toBeVisible();
+        await expect(page.getByLabel('Логин')).toHaveValue(login);
+      });
+    }
+    expect(new Set(answers).size).toBe(1);
+    // Код ушёл только в привязанный Telegram.
+    await expect
+      .poll(async () => (await botMessages(page.request, chat)).some((m) => /\b\d{6}\b/.test(m)))
+      .toBe(true);
   });
 
   test('«Мой профиль»: данные, Telegram, тема и смена пароля; несохранённый пароль спрашивает «Закрыть без сохранения?» и «Выйти без сохранения?»', async ({

@@ -22,6 +22,9 @@ import { notifyPasswordChanged } from '../telegram/bot';
 
 const error = { 'application/json': { schema: ApiError } };
 
+/** Запись в истории после смены временного пароля своим (ТЗ «Вход в систему»). */
+export const TEMP_PASSWORD_REPLACED = 'Временный пароль заменён своим';
+
 export const changePasswordRoute = createRoute({
   method: 'post',
   path: '/auth/password',
@@ -89,6 +92,8 @@ export function changePasswordHandler(
         { orgId: session.orgId, userId: session.userId },
         async (tx) => {
           await change(tx);
+          // Смена временного пароля — в истории сотрудника «Временный пароль заменён своим»
+          // (прототип core/login.js, шаг `first`), как «Пароль сброшен» у сброса пароля владельцем.
           await writeHistory(tx, {
             entity: 'user',
             entityId: session.userId,
@@ -99,6 +104,7 @@ export function changePasswordHandler(
                 ? [{ field: 'mustChangePassword', from: true, to: false }]
                 : []),
             ],
+            reason: account.mustChangePassword ? TEMP_PASSWORD_REPLACED : null,
           });
         },
       );
