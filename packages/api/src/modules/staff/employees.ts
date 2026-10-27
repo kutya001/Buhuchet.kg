@@ -329,6 +329,7 @@ export function exportEmployeesHandler(
         columns: result.columns,
         rows: result.rows,
         more: result.more,
+        total: result.total,
         t,
       });
     });

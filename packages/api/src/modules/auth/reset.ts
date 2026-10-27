@@ -51,9 +51,9 @@ async function atLeast<T>(floorMs: number, fn: () => Promise<T>): Promise<T> {
   return result;
 }
 
-/** Один ответ для любого логина (docs/deviations.md, п. 4, решение Б). */
+/** Один ответ для любого логина (docs/deviations.md, п. 4, решение Б); текст — refDB `auth.code_sent`. */
 export const RESET_REQUESTED_MESSAGE =
-  'Если к логину привязан Telegram, бот пришлёт код. Если код не пришёл, пароль сбросит владелец организации, а владельцу — администратор платформы.';
+  'Если к логину привязан Telegram, бот пришлёт код. Если код не пришёл, пароль сбросит владелец организации.';
 
 export const resetRequestRoute = createRoute({
   method: 'post',
@@ -81,15 +81,15 @@ export const resetRequestRoute = createRoute({
  * проверяются до
  * того, как его считать, чтобы запросы сверх лимита не нагружали сервер.
  */
-// ОТКЛОНЕНИЕ: docs/deviations.md#4 — решение Б: в прототипе «Нет такого логина», «Telegram не
-// привязан…» и «Код отправлен в Telegram @имя»; здесь для любого логина один ответ без имени Telegram.
+// docs/deviations.md п. 4, решение Б (с v59 так же в ТЗ и прототипе core/login.js): для любого логина
+// один ответ без имени Telegram.
 export function resetRequestHandler(deps: ApiDeps): RouteHandler<typeof resetRequestRoute, AppEnv> {
   return async (c) => {
     if (!deps.telegram) {
       return c.json(
         apiError(
           'telegram_unavailable',
-          'Telegram-бот пока не подключён к платформе. Пароль сбросит владелец организации, а владельцу — администратор платформы.',
+          'Telegram-бот пока не подключён к платформе. Пароль сбросит владелец организации.',
           // Текст «Забыли пароль?» в словаре — err.telegram_unavailable.reset.
           { variant: 'reset' },
         ),

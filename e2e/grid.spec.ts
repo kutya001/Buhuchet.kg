@@ -10,6 +10,9 @@ import { DEMO_PASSWORD, finger, hire, settledBox, signIn, uniqueLogin } from './
 const isStaffList = (r: Response) =>
   r.request().method() === 'GET' && new URL(r.url()).pathname === '/api/staff';
 
+/** Число с разрядами через неразрывный пробел, как «Показано 1 – 25 из 1 250» внизу списка. */
+const grouped = (n: number) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+
 interface StaffPage {
   items: { id: string; fullName: string }[];
   total: number;
@@ -159,7 +162,7 @@ test.describe('Списки: UnifiedDataGrid', () => {
     const grid = page.locator('[data-grid]');
     const footer = page.locator('[data-grid-footer]');
     await expect(grid.locator('[data-id]')).toHaveCount(25);
-    await expect(footer).toContainText(`Показано 1 – 25 из ${first.total}`);
+    await expect(footer).toContainText(`Показано 1 – 25 из ${grouped(first.total)}`);
     await expect(page.locator('[data-grid-page]')).toHaveText(`1 / ${Math.ceil(first.total / 25)}`);
 
     const secondLoad = page.waitForResponse(
@@ -172,7 +175,7 @@ test.describe('Списки: UnifiedDataGrid', () => {
     expect(second.items[0]!.id).not.toBe(first.items[0]!.id);
     await expect(grid.locator('[data-id]').first()).toHaveAttribute('data-id', second.items[0]!.id);
     await expect(grid.locator('[data-id]')).toHaveCount(25);
-    await expect(footer).toContainText(`Показано 26 – 50 из ${second.total}`);
+    await expect(footer).toContainText(`Показано 26 – 50 из ${grouped(second.total)}`);
     await expect(page.locator('[data-grid-page]')).toHaveText(
       `2 / ${Math.ceil(second.total / 25)}`,
     );
