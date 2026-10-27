@@ -337,6 +337,35 @@ describe.skipIf(!databaseAvailable())('Админка → «Справочник
     expect((await errorOf(taken)).code).toBe('dict_value_taken');
   });
 
+  it('код страны: код и маска обязательны; Кыргызстан не отключается, коды стран не удаляются', async () => {
+    const base = { name: 'Монголия', flag: '🇲🇳' };
+    const noCode = await send('POST', `${P}/phones`, { ...base, mask: 'XXXX XXXX' });
+    expect([noCode.status, await errorOf(noCode)]).toMatchObject([
+      400,
+      { code: 'dial_code_required', details: { field: 'dialCode' } },
+    ]);
+    const badMask = await send('POST', `${P}/phones`, { ...base, dialCode: '976', mask: '99-99' });
+    expect([badMask.status, (await errorOf(badMask)).code]).toEqual([400, 'validation_failed']);
+    const res = await send('POST', `${P}/phones`, { ...base, dialCode: '976', mask: 'XXXX XXXX' });
+    expect(res.status, await res.clone().text()).toBe(201);
+    expect(AdminDictValue.parse(await res.json())).toMatchObject({
+      code: 'X-01',
+      n: null,
+      data: { dialCode: '976', mask: 'XXXX XXXX', flag: '🇲🇳' },
+    });
+    const taken = await send('POST', `${P}/phones`, { ...base, dialCode: '976', mask: 'XX' });
+    expect((await errorOf(taken)).code).toBe('dict_value_taken');
+
+    const kg = await value(`${P}/phones/KG`);
+    const off = await send('POST', `${P}/phones/KG/active`, { active: false, version: kg.version });
+    expect([off.status, (await errorOf(off)).code]).toEqual([409, 'dict_value_fixed']);
+    const del = await send('DELETE', `${P}/phones/KG?version=${kg.version}`);
+    expect([del.status, (await errorOf(del)).code]).toEqual([409, 'dict_value_undeletable']);
+    // Порядка у кодов стран нет.
+    const move = await send('POST', `${P}/phones/KG/move`, { step: 1, version: kg.version });
+    expect(move.status).toBe(404);
+  });
+
   it('«Запросы»: администратор видит запросы всех организаций и отвечает; организация видит ответ', async () => {
     const sent = DictRequest.parse(
       await (

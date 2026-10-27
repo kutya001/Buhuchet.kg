@@ -26,6 +26,7 @@ import { createDictRequest, listDictRequests } from './dict-requests';
 import { createOrganization, type CreatedOrganization } from './organizations';
 import {
   authorities,
+  countryPhoneCodes,
   dueChangeReasons,
   orgAccounts,
   ownershipForms,
@@ -565,6 +566,69 @@ describe.skipIf(!databaseAvailable())(
         adminDictDelete(tx, 'bases', created.record.code, created.record.version + 2),
       );
       expect(deleted).toEqual({ ok: true });
+    });
+
+    it('коды стран: «+код», «Цифр», «Пример»; Кыргызстан не отключается, коды не удаляются', async () => {
+      const page = await asAdmin((tx) => listAdminDictPage(tx, 'phones', query(), t));
+      expect(page.rows[0]).toMatchObject({
+        n: null,
+        code: 'KG',
+        name: 'Кыргызстан',
+        data: { dialCode: '996', mask: 'XXX XXX XXX' },
+      });
+      const file = await asAdmin((tx) =>
+        exportAdminDict(tx, 'phones', query(), ['name', 'dialCode', 'digits', 'example'], t),
+      );
+      expect(file.rows[0]).toEqual(['Кыргызстан', '+996', 9, '+996 555 123 456']);
+
+      const kg = page.rows[0]!;
+      const off = await asAdmin((tx) => adminDictSetActive(tx, 'phones', 'KG', false, kg.version));
+      expect(off).toEqual({ ok: false, reason: 'fixed' });
+      const kept = await asAdmin((tx) => adminDictDelete(tx, 'phones', 'KG', kg.version));
+      expect(kept).toEqual({ ok: false, reason: 'undeletable' });
+
+      const taken = await asAdmin((tx) =>
+        adminDictCreate(
+          tx,
+          'phones',
+          { name: 'Кыргызстан', data: { dialCode: '996', mask: 'XXX XXX XXX', flag: '' } },
+          random,
+        ),
+      );
+      expect(taken).toMatchObject({ ok: false, reason: 'taken' });
+      const created = await asAdmin((tx) =>
+        adminDictCreate(
+          tx,
+          'phones',
+          { name: 'Монголия', data: { dialCode: '976', mask: 'XXXX XXXX', flag: '🇲🇳' } },
+          random,
+        ),
+      );
+      expect(created.ok && [created.record.code, created.record.data]).toEqual([
+        'X-01',
+        { flag: '🇲🇳', dialCode: '976', mask: 'XXXX XXXX' },
+      ]);
+      if (!created.ok) throw new Error('не создано');
+      const disabled = await asAdmin((tx) =>
+        adminDictSetActive(tx, 'phones', 'X-01', false, created.record.version),
+      );
+      expect(disabled.ok && disabled.record.active).toBe(false);
+      // Отключённая страна остаётся в таблице: сохранённые номера с ней не меняются.
+      const [stored] = await db.admin.db
+        .select({ active: countryPhoneCodes.active })
+        .from(countryPhoneCodes)
+        .where(eq(countryPhoneCodes.code, 'X-01'));
+      expect(stored).toEqual({ active: false });
+      // Неверный код или маску не пропустит и база.
+      await expect(
+        asAdmin((tx) =>
+          tx.execute(
+            sql`select app.admin_dict_insert('phones', 'X-02', '{"name":"Ошибка","dial_code":"99999","mask":"XX"}'::jsonb)`,
+          ),
+        ),
+      ).rejects.toThrow();
+      const history = await asAdmin((tx) => adminDictHistory(tx, 'phones', 5));
+      expect(history.items[0]).toMatchObject({ action: 'update', label: 'Монголия' });
     });
 
     it('связи пишет только администратор платформы', async () => {

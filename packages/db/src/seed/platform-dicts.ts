@@ -5,6 +5,8 @@ import {
   calendarKindOf,
   LAST_DAY_OF_MONTH,
   PAYER_KINDS,
+  PHONE_DIAL_CODE_PATTERN,
+  PHONE_MASK_PATTERN,
   PICK_GROUPS,
   REPORT_ACTS,
   REPORT_KINDS,
@@ -27,6 +29,7 @@ import type { Db } from '../client';
 import {
   authorities,
   banks,
+  countryPhoneCodes,
   dueChangeReasons,
   ownershipForms,
   productionCalendar,
@@ -58,6 +61,7 @@ export const TABLE_SECTIONS = [
   'enRates',
   'holidays',
   'workingSaturdays',
+  'phoneCodes',
   // Копии разделов, у которых таблицы уже были: ui_texts, permissions, role_templates.
   'localization',
   'permissions',
@@ -351,6 +355,19 @@ const BankSchema = z
   })
   .strict();
 
+/** «Коды стран телефонов»: `cc` — страна (код записи), `code` — телефонный код без «+». */
+const PhoneCodeSchema = z
+  .object({
+    cc: z.string().min(1),
+    flag: z.string().default(''),
+    name: z.string().min(1),
+    code: z.string().regex(PHONE_DIAL_CODE_PATTERN),
+    mask: z.string().regex(PHONE_MASK_PATTERN),
+    active: z.boolean().default(true),
+    ...audit,
+  })
+  .strict();
+
 const Dictionary = <T extends z.ZodType>(item: T) =>
   z.object({ title: z.string(), items: z.array(item) }).strict();
 
@@ -373,6 +390,7 @@ const RefSections = z.object({
   taxes: CodedSection,
   holidays: z.record(z.string(), z.string().min(1)),
   workingSaturdays: z.array(z.iso.date()),
+  phoneCodes: z.array(PhoneCodeSchema),
 });
 type RefSections = z.infer<typeof RefSections>;
 
@@ -387,6 +405,7 @@ export type PlatformDictsReport = Record<
   | 'singleTaxRates'
   | 'dueChangeReasons'
   | 'banks'
+  | 'phoneCodes'
   | 'productionCalendar',
   SeedReport
 >;
@@ -706,6 +725,20 @@ export function platformDictRows(refDB: unknown) {
     sortOrder: i + 1,
   }));
 
+  unique(
+    ref.phoneCodes.map((x) => x.cc),
+    'phoneCodes',
+  );
+  const phoneCodeRows = ref.phoneCodes.map((p, i) => ({
+    code: p.cc,
+    name: p.name,
+    flag: p.flag,
+    dialCode: p.code,
+    mask: p.mask,
+    active: p.active,
+    sortOrder: i + 1,
+  }));
+
   const workingSaturdays = new Set(ref.workingSaturdays);
   const calendarRows: CalendarEntry[] = [
     ...Object.entries(ref.holidays).map(([day, name]) => ({
@@ -738,6 +771,7 @@ export function platformDictRows(refDB: unknown) {
     singleTaxRates: enRateRows,
     dueChangeReasons: reasonRows,
     banks: bankRows,
+    phoneCodes: phoneCodeRows,
     productionCalendar: calendarRows,
   };
 }
@@ -930,6 +964,13 @@ export async function seedPlatformDicts(
     update,
   );
   const bank = await upsertDict(db, banks, banks.code, rows.banks, update);
+  const phone = await upsertDict(
+    db,
+    countryPhoneCodes,
+    countryPhoneCodes.code,
+    rows.phoneCodes,
+    update,
+  );
   const calendar = await upsertDict(
     db,
     productionCalendar,
@@ -967,6 +1008,7 @@ export async function seedPlatformDicts(
     singleTaxRates: enRate.report,
     dueChangeReasons: reason.report,
     banks: bank.report,
+    phoneCodes: phone.report,
     productionCalendar: calendar.report,
   };
 }

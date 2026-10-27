@@ -389,6 +389,7 @@ export const MODULES: Record<MenuModuleId, ModuleDef> = {
         label: 'pdicts.add.value',
         tabs: ['forms', 'organs', 'banks', 'reasons'],
       },
+      { id: 'phone', icon: 'globe', label: 'pdicts.add.phone', tabs: ['phones'] },
       { id: 'ugns', icon: 'landmark', label: 'pdicts.add.ugns', tabs: ['ugns'] },
     ],
   },

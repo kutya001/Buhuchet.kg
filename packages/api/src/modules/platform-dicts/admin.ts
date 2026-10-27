@@ -16,6 +16,7 @@ import {
   platformDictGroupDefs,
   reportTypeOptions,
   withUserContext,
+  type AdminDictDeleteResult,
   type AdminDictInput,
   type AdminDictSaveResult,
   type AdminDictValueRecord,
@@ -368,9 +369,11 @@ function inputOf(dict: AdminValueDict, form: AdminDictValueForm): AdminDictInput
 const REQUIRED = {
   shortName: ['short_name_required', 'Введите краткое название'],
   fullName: ['full_name_required', 'Введите полное название'],
+  dialCode: ['dial_code_required', '1–4 цифры'],
+  mask: ['mask_required', 'Только X и пробелы'],
 } as const;
 
-/** Краткое название управления и полное название режима обязательны. */
+/** Краткое название управления, полное название режима, код и маска страны обязательны. */
 function checkRequired(dict: AdminValueDict, input: AdminDictInput) {
   for (const field of ADMIN_DICT_META[dict].required ?? []) {
     if (!String(input.data[field] ?? '').trim()) {
@@ -392,7 +395,7 @@ const TAKEN = {
 async function failOf(
   deps: ApiDeps,
   c: Context<AppEnv>,
-  result: Exclude<AdminDictSaveResult, { ok: true }>,
+  result: Exclude<AdminDictSaveResult | AdminDictDeleteResult, { ok: true }>,
   dict: AdminValueDict,
   code: string,
 ): Promise<never> {
@@ -402,6 +405,12 @@ async function failOf(
     apiFail(400, errCode, message, { field });
   }
   if (result.reason === 'used') return usedFail(result.usage);
+  if (result.reason === 'fixed') {
+    apiFail(409, 'dict_value_fixed', 'Код по умолчанию отключить нельзя');
+  }
+  if (result.reason === 'undeletable') {
+    apiFail(409, 'dict_value_undeletable', 'Значение можно только отключить');
+  }
   if (result.reason === 'bad_link') {
     apiFail(400, 'invalid_link', 'Можно выбрать только сквозные действующие виды отчётов', {
       field: result.field,
@@ -556,6 +565,11 @@ export const setAdminDictActiveRoute = createRoute({
     },
     ...denied,
     ...versionedSaveResponses,
+    409: {
+      description:
+        'Изменено другим пользователем или значение по умолчанию (Кыргызстан) отключить нельзя',
+      content: error,
+    },
   },
 });
 
@@ -584,7 +598,8 @@ export const deleteAdminDictValueRoute = createRoute({
     204: { description: 'Удалено' },
     404: { description: 'Нет такого значения', content: error },
     409: {
-      description: 'Значение используется (только отключить) или изменено другим пользователем',
+      description:
+        'Значение используется или его удалять нельзя (только отключить), или изменено другим пользователем',
       content: error,
     },
     ...denied,

@@ -4,7 +4,9 @@ import {
   ADMIN_DICT_COLUMNS,
   ADMIN_DICT_META,
   adminDictDefaultSort,
+  DEFAULT_PHONE_COUNTRY,
   formatMomentRu,
+  phoneCodeExample,
   type AdminValueDict,
   type GridKey,
   type UiTextKey,
@@ -17,6 +19,7 @@ import {
   MONO_CLASS,
   Note,
   StatusPill,
+  Tag,
   useToast,
   type ActionEntry,
   type GridAudit,
@@ -69,6 +72,10 @@ const WIDTHS: Readonly<Record<string, number>> = {
   article: 100,
   description: 340,
   types: 220,
+  dialCode: 90,
+  mask: 160,
+  digits: 90,
+  example: 200,
   contractors: 130,
   used: 130,
   active: 130,
@@ -78,7 +85,14 @@ const WIDTHS: Readonly<Record<string, number>> = {
 const DICT_WIDTHS: Partial<Record<AdminValueDict, Readonly<Record<string, number>>>> = {
   bases: { code: 130, name: 260, description: 320, note: 240, contractors: 120 },
   regimes: { code: 90, name: 180, kind: 120 },
+  phones: { code: 90, name: 200 },
 };
+
+/** Столбцы моноширинным шрифтом: коды, маски и номера. */
+const MONO = new Set(['code', 'gnsCode', 'dialCode', 'mask', 'example']);
+
+/** «Цифр» в номере по маске (прототип: число «X»). */
+const maskDigits = (mask: string) => mask.split('X').length - 1;
 
 const ugnsName = (dict: AdminValueDict, x: AdminDictValue) =>
   dict === 'ugns' ? `${x.data.gnsCode ?? ''} ${x.data.shortName ?? ''}`.trim() : x.name;
@@ -120,6 +134,12 @@ function cellText(
       return (x.data.contacts ?? []).map((c) => `${c.label}: ${c.value}`).join('; ');
     case 'gnsCode':
       return x.data.gnsCode || '—';
+    case 'dialCode':
+      return `+${x.data.dialCode ?? ''}`;
+    case 'digits':
+      return String(maskDigits(x.data.mask ?? ''));
+    case 'example':
+      return phoneCodeExample(x.data.dialCode ?? '', x.data.mask ?? '');
     default: {
       const v = (x.data as Record<string, unknown>)[key];
       return typeof v === 'string' ? v : '';
@@ -145,9 +165,22 @@ export function adminDictColumns(
       text: (x) => cellText(dict, c.key, x, t, names),
     };
     if (c.key === 'name') {
-      column.cell = (x) => <span className="font-semibold">{x.name}</span>;
+      column.cell =
+        dict === 'phones'
+          ? (x) => (
+              <span>
+                {x.data.flag} <span className="font-semibold">{x.name}</span>
+                {x.code === DEFAULT_PHONE_COUNTRY ? (
+                  <>
+                    {' '}
+                    <Tag>{t('pdicts.phone.default_tag')}</Tag>
+                  </>
+                ) : null}
+              </span>
+            )
+          : (x) => <span className="font-semibold">{x.name}</span>;
     }
-    if (c.key === 'code' || c.key === 'gnsCode') column.className = MONO_CLASS;
+    if (MONO.has(c.key)) column.className = MONO_CLASS;
     if (c.key === 'byPhone') {
       column.cell = (x) =>
         x.data.byPhone ? (
@@ -182,6 +215,7 @@ const COUNT: Readonly<Record<AdminValueDict, CountKey>> = {
   bases: 'pdicts.count',
   regimes: 'pdicts.regimes_count',
   forms: 'pdicts.count',
+  phones: 'pdicts.phones_count',
   organs: 'pdicts.count',
   reasons: 'pdicts.count',
   ugns: 'pdicts.ugns_count',
@@ -200,6 +234,7 @@ const NOTES: Partial<Record<AdminValueDict, UiTextKey>> = {
 const ADD_ACTION: Partial<Record<AdminValueDict, string>> = {
   bases: 'base',
   regimes: 'regime',
+  phones: 'phone',
   ugns: 'ugns',
 };
 
@@ -207,6 +242,7 @@ const ADD_ACTION: Partial<Record<AdminValueDict, string>> = {
 const OFF_TOAST: Partial<Record<AdminValueDict, UiTextKey>> = {
   bases: 'pdicts.toast.off_base',
   regimes: 'pdicts.toast.off_regime',
+  phones: 'pdicts.toast.off_phone',
   ugns: 'pdicts.toast.off_ugns',
 };
 const DELETE_TEXT: Partial<Record<AdminValueDict, UiTextKey>> = {
@@ -218,6 +254,7 @@ const DELETE_TEXT: Partial<Record<AdminValueDict, UiTextKey>> = {
 /** Пояснение «Отключить»: что будет с отключённым значением. */
 const OFF_SUB: Partial<Record<AdminValueDict, UiTextKey>> = {
   bases: 'pdicts.action.off_sub_base',
+  phones: 'pdicts.action.off_sub_phone',
   ugns: 'pdicts.action.off_sub_ugns',
 };
 
@@ -265,7 +302,7 @@ export function ValueDictList({ dict }: { dict: AdminValueDict }) {
   const errorText = useErrorText();
   const refresh = usePdictsRefresh();
   const gridKey = `pdicts.${dict}` as GridKey;
-  const ordered = ADMIN_DICT_META[dict].ordered;
+  const { ordered, fixed, undeletable } = ADMIN_DICT_META[dict];
   const labels = useGridLabels(COUNT[dict]);
   const types = useQuery({ ...reportTypeOptionsQuery, enabled: dict === 'bases' });
   const columns = useMemo(
@@ -356,7 +393,12 @@ export function ValueDictList({ dict }: { dict: AdminValueDict }) {
     const edit: ActionEntry = {
       id: 'edit',
       label: t(
-        dict === 'forms' || dict === 'banks' || dict === 'regimes' || dict === 'bases' || ugns
+        dict === 'forms' ||
+          dict === 'banks' ||
+          dict === 'regimes' ||
+          dict === 'bases' ||
+          dict === 'phones' ||
+          ugns
           ? 'pdicts.action.edit'
           : 'pdicts.action.rename',
       ),
@@ -391,6 +433,9 @@ export function ValueDictList({ dict }: { dict: AdminValueDict }) {
             label: t('pdicts.action.off'),
             icon: 'ban',
             sub: t(OFF_SUB[dict] ?? 'pdicts.action.off_sub'),
+            ...(x.code === fixed
+              ? { disabled: true, reason: t('pdicts.action.off_fixed_phone') }
+              : {}),
             run: () => void setActive(x, false),
           }
         : {
@@ -399,15 +444,20 @@ export function ValueDictList({ dict }: { dict: AdminValueDict }) {
             icon: 'check',
             run: () => void setActive(x, true),
           },
-      {
-        id: 'delete',
-        label: t('pdicts.action.delete'),
-        icon: 'trash',
-        danger: true,
-        disabled: x.used > 0,
-        ...(x.used > 0 ? { reason: usedReason(dict, x, t) } : {}),
-        run: () => setAskDelete(x),
-      },
+      // Коды стран не удаляются — только отключаются (прототип).
+      ...(undeletable
+        ? []
+        : [
+            {
+              id: 'delete',
+              label: t('pdicts.action.delete'),
+              icon: 'trash',
+              danger: true,
+              disabled: x.used > 0,
+              ...(x.used > 0 ? { reason: usedReason(dict, x, t) } : {}),
+              run: () => setAskDelete(x),
+            } satisfies ActionEntry,
+          ]),
     ];
   };
   const note = NOTES[dict];
@@ -444,7 +494,7 @@ export function ValueDictList({ dict }: { dict: AdminValueDict }) {
         rowTone={(x) => (x.active ? undefined : 'muted')}
         actions={actions}
         onOpen={(x) => open(x)}
-        {...(ordered ? { fixedView: 'table' as const } : {})}
+        {...(ordered || dict === 'phones' ? { fixedView: 'table' as const } : {})}
       />
       <DictHistory dict={dict} />
       {edit ? (

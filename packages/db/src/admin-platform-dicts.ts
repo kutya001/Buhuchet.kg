@@ -5,7 +5,9 @@ import {
   auditActorName,
   badBaseTypes,
   dictValueProblems,
+  maskDigits,
   nextDictCode,
+  phoneCodeExample,
   regimeAccountantNote,
   toHistoryValue,
   sameHistoryValue,
@@ -34,6 +36,7 @@ import { writePlatformHistory } from './platform-history';
 import {
   authorities,
   banks,
+  countryPhoneCodes,
   dueChangeReasons,
   ownershipForms,
   platformAuditLog,
@@ -67,6 +70,7 @@ const TABLES: Readonly<Record<AdminValueDict, DictTable>> = {
   bases: reportBases,
   regimes: taxRegimes,
   forms: ownershipForms,
+  phones: countryPhoneCodes,
   organs: authorities,
   ugns: taxOffices,
   banks,
@@ -283,10 +287,18 @@ function listRow(
   if (dict === 'banks') {
     row.byPhone_text = t(x.data.byPhone ? 'pdicts.bank.by_phone.yes' : 'pdicts.bank.by_phone.no');
   }
+  if (dict === 'phones') {
+    // «Цифр» и «Пример» — по маске (прототип: «+996 555 123 456»).
+    const mask = x.data.mask as string;
+    row.dialCode = `+${x.data.dialCode as string}`;
+    row.digits = maskDigits(mask);
+    row.example = phoneCodeExample(x.data.dialCode as string, mask);
+  }
   return row;
 }
 
 const RECORD_TYPES: Readonly<Record<string, string>> = {
+  digits: 'integer',
   ord: 'integer',
   n: 'integer',
   used: 'integer',
@@ -512,7 +524,7 @@ const recordInput = (x: AdminDictValueRecord): AdminDictInput => ({ name: x.name
 
 export type AdminDictSaveResult =
   | { ok: true; record: AdminDictValueRecord }
-  | { ok: false; reason: 'not_found' | 'changed' }
+  | { ok: false; reason: 'not_found' | 'changed' | 'fixed' }
   | { ok: false; reason: 'bad_link'; field: string }
   | { ok: false; reason: 'taken'; problems: DictValueProblem[] }
   | { ok: false; reason: 'used'; usage: DictUsage };
@@ -634,6 +646,8 @@ export async function adminDictSetActive(
   if (!before) return { ok: false, reason: 'not_found' };
   if (before.version !== version) return { ok: false, reason: 'changed' };
   if (before.active === active) return { ok: true, record: before };
+  // Кыргызстан — код по умолчанию: отключить нельзя (ТЗ «Коды стран телефонов»).
+  if (!active && ADMIN_DICT_META[dict].fixed === code) return { ok: false, reason: 'fixed' };
   const [row] = await tx.execute<{ version: number | null }>(
     sql`select app.admin_dict_set_active(${dict}, ${code}, ${active}, ${version}) as version`,
   );
@@ -683,7 +697,7 @@ export async function adminDictMove(
 
 export type AdminDictDeleteResult =
   | { ok: true }
-  | { ok: false; reason: 'not_found' | 'changed' }
+  | { ok: false; reason: 'not_found' | 'changed' | 'undeletable' }
   | { ok: false; reason: 'used'; usage: DictUsage };
 
 /** Ошибка базы «значение используется» (23503): внешний ключ или отказ `app.admin_dict_delete`. */
@@ -705,6 +719,7 @@ export async function adminDictDelete(
 ): Promise<AdminDictDeleteResult> {
   const before = await getAdminDictValue(tx, dict, code);
   if (!before) return { ok: false, reason: 'not_found' };
+  if (ADMIN_DICT_META[dict].undeletable) return { ok: false, reason: 'undeletable' };
   if (before.version !== version) return { ok: false, reason: 'changed' };
   if (before.usage.total > 0) return { ok: false, reason: 'used', usage: before.usage };
   let deleted: boolean | null | undefined;

@@ -8,6 +8,9 @@ import {
   isAdminValueDict,
   nextDictCode,
   organSiteUrl,
+  PHONE_DIAL_CODE_PATTERN,
+  PHONE_MASK_PATTERN,
+  phoneCodeExample,
   UGNS_CODE_PATTERN,
 } from './admin';
 
@@ -38,6 +41,11 @@ describe('nextDictCode', () => {
     expect(nextDictCode('banks', codes, random, 'bank')).toBe('БНК-33');
     expect(nextDictCode('banks', codes, random, 'wallet')).toBe('КШЛ-06');
     expect(nextDictCode('banks', codes, random)).toBe('БНК-33');
+  });
+
+  it('у страны, добавленной администратором, — X-01, X-02…; коды стран из наполнения не мешают', () => {
+    expect(nextDictCode('phones', ['KG', 'KZ', 'RU'], random)).toBe('X-01');
+    expect(nextDictCode('phones', ['KG', 'X-01', 'X-07'], random)).toBe('X-08');
   });
 });
 
@@ -118,6 +126,27 @@ describe('ADMIN_DICT_META', () => {
   it('isAdminValueDict знает только справочники механизма', () => {
     expect(isAdminValueDict('forms')).toBe(true);
     expect(isAdminValueDict('types')).toBe(false);
+  });
+
+  it('код страны по умолчанию не отключается, коды стран не удаляются', () => {
+    expect(ADMIN_DICT_META.phones.fixed).toBe('KG');
+    expect(ADMIN_DICT_META.phones.undeletable).toBe(true);
+    expect(ADMIN_DICT_META.forms.undeletable).toBeUndefined();
+  });
+
+  it('телефонный код — 1–4 цифры, маска — только X и пробелы, хотя бы одна X', () => {
+    expect(PHONE_DIAL_CODE_PATTERN.test('996')).toBe(true);
+    expect(PHONE_DIAL_CODE_PATTERN.test('7')).toBe(true);
+    expect(PHONE_DIAL_CODE_PATTERN.test('12345')).toBe(false);
+    expect(PHONE_DIAL_CODE_PATTERN.test('+996')).toBe(false);
+    expect(PHONE_MASK_PATTERN.test('XXX XXX XXX')).toBe(true);
+    expect(PHONE_MASK_PATTERN.test('XXX-XXX')).toBe(false);
+    expect(PHONE_MASK_PATTERN.test('   ')).toBe(false);
+  });
+
+  it('«Пример» номера — код и цифры по маске', () => {
+    expect(phoneCodeExample('996', 'XXX XXX XXX')).toBe('+996 555 123 456');
+    expect(phoneCodeExample('7', 'XXX XXX XX XX')).toBe('+7 555 123 45 67');
   });
 
   it('код ГНС — ровно три цифры', () => {

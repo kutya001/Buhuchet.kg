@@ -9,6 +9,8 @@ import {
   DICT_REQUEST_DICTS,
   DICT_REQUEST_STATUSES,
   ORGAN_CONTACTS_MAX,
+  PHONE_DIAL_CODE_PATTERN,
+  PHONE_MASK_PATTERN,
   REPORT_KINDS,
   organSiteUrl,
   REGIME_KINDS,
@@ -62,6 +64,10 @@ export const AdminDictData = z.object({
   article: z.string().optional(),
   /** У основания: коды видов отчётов, в порядке каталога. */
   types: z.array(z.string()).optional(),
+  /** У кода страны: флаг, телефонный код без «+» и маска номера. */
+  flag: z.string().optional(),
+  dialCode: z.string().optional(),
+  mask: z.string().optional(),
 });
 export type AdminDictData = z.infer<typeof AdminDictData>;
 
@@ -135,6 +141,13 @@ export const AdminDictValueForm = z.object({
   accountantNote: text(DICT_NOTE_MAX).optional(),
   article: text(DICT_NAME_MAX).optional(),
   types: z.array(z.string().min(1).max(80)).max(500).optional(),
+  flag: text(16).optional(),
+  dialCode: z
+    .string()
+    .trim()
+    .regex(PHONE_DIAL_CODE_PATTERN, message('pdicts.err.dial_code'))
+    .optional(),
+  mask: z.string().trim().max(30).regex(PHONE_MASK_PATTERN, message('pdicts.err.mask')).optional(),
 });
 export type AdminDictValueFormInput = z.input<typeof AdminDictValueForm>;
 export type AdminDictValueForm = z.output<typeof AdminDictValueForm>;
@@ -155,6 +168,12 @@ export const RegimeValueForm = AdminDictValueForm.extend({
     .trim()
     .min(1, message('pdicts.err.full_required'))
     .max(DICT_NAME_MAX, message('form.too_long')),
+});
+
+/** Окно кода страны: телефонный код и маска обязательны. */
+export const PhoneValueForm = AdminDictValueForm.extend({
+  dialCode: z.string().trim().regex(PHONE_DIAL_CODE_PATTERN, message('pdicts.err.dial_code')),
+  mask: z.string().trim().max(30).regex(PHONE_MASK_PATTERN, message('pdicts.err.mask')),
 });
 
 /** Изменить значение: поля окна и версия, которую видел администратор. */

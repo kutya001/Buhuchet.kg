@@ -12,6 +12,7 @@ import {
 } from '@buhuchet/domain';
 import {
   AdminDictValueForm,
+  PhoneValueForm,
   RegimeValueForm,
   UgnsValueForm,
   type AdminDictValue,
@@ -64,6 +65,13 @@ function formOf(
         accountantNote: regimeAccountantNote(d.accountantNote ?? ''),
         article: d.article ?? '',
       };
+    case 'phones':
+      return {
+        name,
+        dialCode: d.dialCode ?? '',
+        mask: x ? (d.mask ?? '') : 'XXX XXX XXX',
+        flag: x ? (d.flag ?? '') : '🏳️',
+      };
     case 'forms':
       return {
         name,
@@ -102,12 +110,15 @@ const FIELD_OF: Readonly<Record<string, [Path<AdminDictValueFormInput>, UiTextKe
   short_name_required: ['shortName', 'pdicts.err.short_required'],
   full_name_required: ['fullName', 'pdicts.err.full_required'],
   invalid_link: ['types', 'pdicts.err.bad_types'],
+  dial_code_required: ['dialCode', 'pdicts.err.dial_code'],
+  mask_required: ['mask', 'pdicts.err.mask'],
 };
 
 /** Повтор названия словами справочника: у режима — «Такой режим уже есть» (прототип regimeDlg). */
 const TAKEN_TEXT: Partial<Record<AdminValueDict, UiTextKey>> = {
   bases: 'pdicts.err.base_taken',
   regimes: 'pdicts.err.regime_taken',
+  phones: 'pdicts.err.phone_taken',
 };
 
 /**
@@ -151,7 +162,13 @@ export function ValueDialog({
   } = useForm<AdminDictValueFormInput, unknown, AdminDictValueForm>({
     // У УГНС обязательно краткое название, у режима — полное.
     resolver: zodResolver(
-      ugns ? UgnsValueForm : dict === 'regimes' ? RegimeValueForm : AdminDictValueForm,
+      ugns
+        ? UgnsValueForm
+        : dict === 'regimes'
+          ? RegimeValueForm
+          : dict === 'phones'
+            ? PhoneValueForm
+            : AdminDictValueForm,
     ),
     defaultValues: formOf(dict, item, t('pdicts.ugns.region_default')),
   });
@@ -184,7 +201,9 @@ export function ValueDialog({
       if (res.ok) {
         onDone();
         onClose();
-        return toast(t('pdicts.toast.saved'), { icon: 'check' });
+        const done =
+          !current && dict === 'phones' ? 'pdicts.toast.added_phone' : 'pdicts.toast.saved';
+        return toast(t(done), { icon: 'check' });
       }
       const code = res.error.code;
       if (code === 'record_changed') return setChanged(true);
@@ -232,8 +251,37 @@ export function ValueDialog({
     </Field>
   );
 
+  const mono = (name: 'dialCode' | 'mask', label: string, numeric = false) => (
+    <Field id={`${id}-${name}`} label={label} required error={fieldError(t, errors[name])}>
+      {(c) => (
+        <input
+          {...c}
+          {...register(name)}
+          {...(numeric ? { inputMode: 'numeric' as const, maxLength: 4 } : {})}
+          className={inputClass({ mono: true })}
+        />
+      )}
+    </Field>
+  );
+
   let body;
-  if (dict === 'bases') {
+  if (dict === 'phones') {
+    body = (
+      <FormGrid>
+        <Field
+          id={`${id}-name`}
+          label={t('pdicts.col.country')}
+          required
+          error={fieldError(t, errors.name)}
+        >
+          {(c) => <input {...c} {...register('name')} className={inputClass()} />}
+        </Field>
+        {mono('dialCode', t('pdicts.phone.dial_code'), true)}
+        {mono('mask', t('pdicts.phone.mask'))}
+        {text('flag', t('pdicts.phone.flag'), undefined, false)}
+      </FormGrid>
+    );
+  } else if (dict === 'bases') {
     const linked = item?.data.types ?? [];
     const chips = (typeOptions.data ?? [])
       .filter((x) => (x.kind === 'cross' && x.active) || linked.includes(x.code))
@@ -545,28 +593,32 @@ export function ValueDialog({
       onClose={onClose}
       kind="form"
       title={
-        dict === 'bases'
-          ? current
-            ? current.name
-            : t('pdicts.base.title_new')
-          : dict === 'regimes'
+        dict === 'phones'
+          ? t(current ? 'pdicts.phone.title' : 'pdicts.phone.title_new')
+          : dict === 'bases'
             ? current
-              ? current.data.fullName || current.name
-              : t('pdicts.regime.title_new')
-            : ugns
-              ? t(current ? 'pdicts.ugns.title' : 'pdicts.ugns.title_new')
-              : current
-                ? t('pdicts.value.edit_title')
-                : t('pdicts.value.new_title', { dict: dictTitle })
+              ? current.name
+              : t('pdicts.base.title_new')
+            : dict === 'regimes'
+              ? current
+                ? current.data.fullName || current.name
+                : t('pdicts.regime.title_new')
+              : ugns
+                ? t(current ? 'pdicts.ugns.title' : 'pdicts.ugns.title_new')
+                : current
+                  ? t('pdicts.value.edit_title')
+                  : t('pdicts.value.new_title', { dict: dictTitle })
       }
       sub={
-        ugns
-          ? t('pdicts.ugns.sub')
-          : dict === 'regimes'
-            ? t('pdicts.regime.sub')
-            : dict === 'bases'
-              ? t('pdicts.base.sub')
-              : undefined
+        dict === 'phones' && current
+          ? t('pdicts.phone.sub')
+          : ugns
+            ? t('pdicts.ugns.sub')
+            : dict === 'regimes'
+              ? t('pdicts.regime.sub')
+              : dict === 'bases'
+                ? t('pdicts.base.sub')
+                : undefined
       }
       dirty={isDirty}
       footer={
@@ -580,7 +632,7 @@ export function ValueDialog({
             className={buttonClass('cta')}
             disabled={isSubmitting || changed}
           >
-            {t('btn.save')}
+            {t(!current && dict === 'phones' ? 'pdicts.phone.add' : 'btn.save')}
           </button>
         </>
       }

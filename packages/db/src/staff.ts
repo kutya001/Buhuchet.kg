@@ -11,7 +11,7 @@ import {
   type Scope,
   type ScopeGroupId,
 } from '@buhuchet/domain';
-import { count, eq, inArray, sql } from 'drizzle-orm';
+import { asc, count, eq, inArray, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { Db, Tx } from './client';
 import { writeHistory } from './history';
@@ -28,8 +28,8 @@ import {
   type ListWindowFields,
 } from './list';
 import {
+  countryPhoneCodes,
   employees,
-  platformReference,
   rolePermissions,
   roleScopes,
   roles,
@@ -490,29 +490,22 @@ export interface PhoneCodeRecord {
   active: boolean;
 }
 
-/**
- * Справочник платформы «Коды телефонов» (refDB → phoneCodes) по порядку справочника; строки без
- * страны, кода из цифр или маски пропускаются.
- */
+/** Справочник платформы «Коды стран телефонов» (таблица phone_codes) по порядку справочника. */
 export async function phoneCodeList(db: Db | Tx): Promise<PhoneCodeRecord[]> {
-  const [row] = await db
-    .select({ payload: platformReference.payload })
-    .from(platformReference)
-    .where(eq(platformReference.key, 'phoneCodes'));
-  const payload = row?.payload;
-  if (!Array.isArray(payload)) return [];
-  const text = (v: unknown) => (typeof v === 'string' ? v : '');
-  return payload.flatMap((p: unknown) => {
-    const c = p as Record<string, unknown>;
-    const code = text(c.code);
-    const mask = text(c.mask);
-    const cc = text(c.cc);
-    if (!cc || !/^\d+$/.test(code) || !mask.includes('X')) return [];
-    return [{ cc, flag: text(c.flag), name: text(c.name), code, mask, active: c.active !== false }];
-  });
+  return db
+    .select({
+      cc: countryPhoneCodes.code,
+      flag: countryPhoneCodes.flag,
+      name: countryPhoneCodes.name,
+      code: countryPhoneCodes.dialCode,
+      mask: countryPhoneCodes.mask,
+      active: countryPhoneCodes.active,
+    })
+    .from(countryPhoneCodes)
+    .orderBy(asc(countryPhoneCodes.sortOrder), asc(countryPhoneCodes.code));
 }
 
-/** Справочник платформы «Коды телефонов» (refDB → phoneCodes): код страны и маска номера. */
+/** Справочник платформы «Коды стран телефонов»: код страны и маска номера. */
 export async function phoneCodes(db: Db | Tx): Promise<{ code: string; mask: string }[]> {
   return (await phoneCodeList(db)).map(({ code, mask }) => ({ code, mask }));
 }

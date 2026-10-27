@@ -15,6 +15,7 @@ export const ADMIN_VALUE_DICTS = [
   'bases',
   'regimes',
   'forms',
+  'phones',
   'organs',
   'ugns',
   'banks',
@@ -27,6 +28,7 @@ export function isAdminValueDict(value: string): value is AdminValueDict {
 }
 
 import type { ListSort } from '../common/list';
+import { applyPhoneMask } from '../staff/rules';
 import { BANK_KINDS, REGIME_KINDS, type BankKind, type ReportKind } from './catalog';
 
 /**
@@ -37,6 +39,18 @@ type CodeRule =
   | { prefix: string; digits: number }
   | { byKind: Readonly<Record<BankKind, string>>; digits: number }
   | { key: string };
+
+/** Страна телефона по умолчанию: Кыргызстан, отключить нельзя (ТЗ «Коды стран телефонов»). */
+export const DEFAULT_PHONE_COUNTRY = 'KG';
+/** Телефонный код страны без «+»: от 1 до 4 цифр (прототип phoneCodeDlg «1–4 цифры»). */
+export const PHONE_DIAL_CODE_PATTERN = /^\d{1,4}$/;
+/** Маска номера: «X» — цифра, и пробелы; хотя бы одна цифра (прототип «Только X и пробелы»). */
+export const PHONE_MASK_PATTERN = /^(?=.*X)[X ]+$/;
+
+/** «Пример» номера в списке кодов стран (прототип): «+996 555 123 456». */
+export function phoneCodeExample(dialCode: string, mask: string): string {
+  return `+${dialCode} ${applyPhoneMask(mask, '5551234567890')}`;
+}
 
 export interface AdminDictMeta {
   code: CodeRule;
@@ -51,8 +65,11 @@ export interface AdminDictMeta {
    * (`links`).
    */
   fields: readonly string[];
-  /** Обязательные поля сверх названия: у УГНС — краткое название, у режима — полное. */
-  required?: readonly ('shortName' | 'fullName')[];
+  /**
+   * Обязательные поля сверх названия: у УГНС — краткое название, у режима — полное, у кода страны —
+   * телефонный код и маска.
+   */
+  required?: readonly ('shortName' | 'fullName' | 'dialCode' | 'mask')[];
   /**
    * Поля-связи: коды значений другого справочника в отдельной таблице связей, а не в столбце значения
    * (виды отчётов основания — «по полю «Основание» вида», ТЗ). Пишет `app.admin_dict_set_links`.
@@ -63,6 +80,10 @@ export interface AdminDictMeta {
    * контрагентов»; остальные ссылки — просто «Используется».
    */
   contractorTable?: string;
+  /** Удалять нельзя — только отключить (коды стран: ТЗ «Изменить» и «Отключить» / «Включить»). */
+  undeletable?: boolean;
+  /** Значение, которое нельзя отключить (Кыргызстан — код по умолчанию). */
+  fixed?: string;
   /**
    * «Тип» значения (поле `kind`): допустимые значения, тип нового значения и ключ словаря подписи
    * (`<text>.<тип>`).
@@ -112,6 +133,15 @@ export const ADMIN_DICT_META: Readonly<Record<AdminValueDict, AdminDictMeta>> = 
     code: { prefix: 'ОРГ', digits: 2 },
     ordered: true,
     fields: ['name', 'description', 'contacts', 'hours', 'site', 'contactsNote'],
+  },
+  // Код значения — страна (KG, KZ…); у страны, добавленной администратором, — X-01 (прототип phoneCodeDlg).
+  phones: {
+    code: { prefix: 'X', digits: 2 },
+    ordered: false,
+    fields: ['name', 'flag', 'dialCode', 'mask'],
+    required: ['dialCode', 'mask'],
+    undeletable: true,
+    fixed: DEFAULT_PHONE_COUNTRY,
   },
   ugns: {
     code: { key: 'ugns' },
@@ -309,6 +339,15 @@ export const ADMIN_DICT_COLUMNS: Readonly<Record<AdminValueDict, readonly AdminD
     USED,
     STATUS,
   ],
+  phones: [
+    c('code', 'text', 'pdicts.col.code', true),
+    c('name', 'text', 'pdicts.col.country'),
+    c('dialCode', 'text', 'pdicts.col.dial_code'),
+    c('mask', 'text', 'pdicts.col.mask'),
+    c('digits', 'int', 'pdicts.col.digits'),
+    c('example', 'text', 'pdicts.col.example'),
+    STATUS,
+  ],
   forms: [
     N,
     CODE,
@@ -356,8 +395,9 @@ export const ADMIN_DICT_COLUMNS: Readonly<Record<AdminValueDict, readonly AdminD
 
 /**
  * Сортировка списка по умолчанию (как в прототипе, docs/deviations.md п. 48): короткий справочник — в
- * своём порядке («№»), УГНС — по региону.
+ * своём порядке («№»), УГНС — по региону, коды стран — в порядке справочника без «№» (null).
  */
-export function adminDictDefaultSort(dict: AdminValueDict): ListSort {
-  return ADMIN_DICT_META[dict].ordered ? { key: 'n', dir: 'asc' } : { key: 'region', dir: 'asc' };
+export function adminDictDefaultSort(dict: AdminValueDict): ListSort | null {
+  if (ADMIN_DICT_META[dict].ordered) return { key: 'n', dir: 'asc' };
+  return dict === 'ugns' ? { key: 'region', dir: 'asc' } : null;
 }

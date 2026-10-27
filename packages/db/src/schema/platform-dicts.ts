@@ -525,6 +525,31 @@ export const dueChangeReasons = pgTable(
  * электронные кошельки для реквизитов организации и сотрудников. В «Переводе по номеру телефона»
  * выбираются только провайдеры с «Переводы по номеру телефона».
  */
+/**
+ * «Коды стран телефонов» (ТЗ): страна, телефонный код и маска номера; длина номера — по маске. Номер
+ * сотрудника хранится строкой «+996…», поэтому новые маска и код действуют только для новых номеров.
+ */
+export const countryPhoneCodes = pgTable(
+  'phone_codes',
+  {
+    /** Страна: KG, KZ…; у добавленной администратором — X-01 … */
+    code: text('code').primaryKey(),
+    name: text('name').notNull(),
+    flag: text('flag').notNull().default(''),
+    /** Телефонный код без «+»: 996. */
+    dialCode: text('dial_code').notNull(),
+    /** Маска номера после кода: «XXX XXX XXX», X — цифра. */
+    mask: text('mask').notNull(),
+    ...dictColumns(),
+  },
+  (t) => [
+    uniqueIndex('phone_codes_name_key').on(t.name),
+    check('phone_codes_dial_code_check', sql`${t.dialCode} ~ '^[0-9]{1,4}$'`),
+    check('phone_codes_mask_check', sql`${t.mask} ~ '^[X ]+$' and strpos(${t.mask}, 'X') > 0`),
+    platformReadOnly('phone_codes_read'),
+  ],
+).enableRLS();
+
 export const banks = pgTable(
   'banks',
   {

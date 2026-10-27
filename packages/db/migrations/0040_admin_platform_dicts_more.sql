@@ -1,10 +1,57 @@
--- Админка → «Справочники платформы», часть 2 задачи 2.36: основания для отчётов и режимы
--- налогообложения правятся общим механизмом (миграция 0039) — строками перечня. «Виды деятельности
--- (ГКЭД)» режима (столбец gked) — не в перечне: их правит задача 2.38. «Используется» — ссылки
--- внешними ключами (виды отчётов, контрагенты) считаются сами.
+CREATE TABLE "phone_codes" (
+	"code" text PRIMARY KEY NOT NULL,
+	"name" text NOT NULL,
+	"flag" text DEFAULT '' NOT NULL,
+	"dial_code" text NOT NULL,
+	"mask" text NOT NULL,
+	"active" boolean DEFAULT true NOT NULL,
+	"sort_order" integer NOT NULL,
+	"created_at" timestamp with time zone,
+	"created_by" uuid,
+	"updated_by" uuid,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL,
+	CONSTRAINT "phone_codes_dial_code_check" CHECK ("phone_codes"."dial_code" ~ '^[0-9]{1,4}$'),
+	CONSTRAINT "phone_codes_mask_check" CHECK ("phone_codes"."mask" ~ '^[X ]+$' and strpos("phone_codes"."mask", 'X') > 0)
+);
+--> statement-breakpoint
+ALTER TABLE "phone_codes" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "phone_codes" ADD CONSTRAINT "phone_codes_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "phone_codes" ADD CONSTRAINT "phone_codes_updated_by_users_id_fk" FOREIGN KEY ("updated_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+CREATE UNIQUE INDEX "phone_codes_name_key" ON "phone_codes" USING btree ("name");--> statement-breakpoint
+CREATE POLICY "phone_codes_read" ON "phone_codes" AS PERMISSIVE FOR SELECT TO "buhuchet_app" USING (true);
+
+--> statement-breakpoint
+-- «Коды стран телефонов» переезжают из platform_reference (раздел phoneCodes) в свою таблицу, чтобы их
+-- правил администратор платформы. Роль приложения таблицу только читает, как остальные справочники
+-- платформы (миграции 0023, 0028, 0035). Строки переносятся сразу, чтобы проверка телефона сотрудника
+-- работала и до наполнения (`db:seed --update` потом уберёт копию раздела).
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON TABLE phone_codes FROM buhuchet_app;
+--> statement-breakpoint
+INSERT INTO phone_codes (code, name, flag, dial_code, mask, active, sort_order)
+SELECT p ->> 'cc', p ->> 'name', coalesce(p ->> 'flag', ''), p ->> 'code', p ->> 'mask',
+       coalesce((p ->> 'active')::boolean, true), x.n
+FROM platform_reference r
+CROSS JOIN LATERAL jsonb_array_elements(
+  CASE WHEN jsonb_typeof(r.payload) = 'array' THEN r.payload ELSE '[]'::jsonb END
+) WITH ORDINALITY AS x(p, n)
+WHERE r.key = 'phoneCodes'
+  AND coalesce(p ->> 'cc', '') <> ''
+  AND coalesce(p ->> 'name', '') <> ''
+  AND coalesce(p ->> 'code', '') ~ '^[0-9]{1,4}$'
+  AND coalesce(p ->> 'mask', '') ~ '^[X ]+$'
+  AND strpos(p ->> 'mask', 'X') > 0
+ON CONFLICT DO NOTHING;
+--> statement-breakpoint
+-- Админка → «Справочники платформы», часть 2 задачи 2.36: основания для отчётов, режимы
+-- налогообложения и коды стран правятся общим механизмом (миграция 0039) — строками перечня.
+-- «Виды деятельности (ГКЭД)» режима (столбец gked) — не в перечне: их правит задача 2.38.
+-- «Используется» — ссылки внешними ключами (виды отчётов, контрагенты) считаются сами. Коды стран не
+-- удаляются (только отключаются) и Кыргызстан не отключается — это проверяет сервер (ADMIN_DICT_META).
 INSERT INTO app.platform_dict_specs (dict, table_name, columns, ordered) VALUES
   ('bases', 'report_bases', ARRAY['name', 'description', 'note'], true),
-  ('regimes', 'tax_regimes', ARRAY['name', 'full_name', 'kind', 'frees', 'who', 'how', 'combines', 'accountant_note', 'article'], true);
+  ('regimes', 'tax_regimes', ARRAY['name', 'full_name', 'kind', 'frees', 'who', 'how', 'combines', 'accountant_note', 'article'], true),
+  ('phones', 'phone_codes', ARRAY['name', 'flag', 'dial_code', 'mask'], false);
 --> statement-breakpoint
 -- Поля-связи значения: коды значений другого справочника в таблице связей, а не в столбце значения.
 -- Виды отчётов основания — та же связь, что «Основание» у вида отчёта (ТЗ «связь с видами правится с
