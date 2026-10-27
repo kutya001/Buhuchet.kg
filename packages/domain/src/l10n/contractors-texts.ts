@@ -1,0 +1,134 @@
+import { CONTRACTOR_DELETE_MESSAGES, CONTRACTOR_MESSAGES } from '../contractors/rules';
+import type { UiTextDefault } from './texts';
+
+const S = 'Контрагенты';
+const E = 'Ошибки';
+
+/**
+ * Тексты модуля «Контрагенты»: сверка с ГКЭД (прототип core/gked.js, gkCheck и gkNote — те же строки),
+ * названия столбцов списка (modules/contractors.js, cpCols) и ошибки сохранения. Вставки в шаблоны
+ * сверки собирает `gkedCheckTexts`: пробел перед «(…)» и между ставками — в коде, а не в тексте.
+ */
+export const CONTRACTORS_TEXTS = {
+  'cp.col.name': { ru: 'Название', section: S },
+  'cp.col.inn': { ru: 'ИНН', section: S },
+  'cp.col.phone': { ru: 'Телефон', section: S },
+  'cp.col.form': { ru: 'Форма', section: S },
+  'cp.col.regime': { ru: 'Режим налогообложения', section: S },
+  'cp.col.regime2': { ru: 'Дополнительный режим', section: S },
+  'cp.col.benefits': { ru: 'Льготы и особые статусы', section: S },
+  'cp.col.gked': { ru: 'Основной ГКЭД', section: S },
+  'cp.col.gked_extra': { ru: 'Дополнительные ГКЭД', section: S },
+  'cp.col.gked_set': { ru: 'ГКЭД указан', section: S },
+  'cp.col.tax_office': { ru: 'Налоговый орган', section: S },
+  'cp.col.kind': { ru: 'Тип обслуживания', section: S },
+  'cp.col.service': { ru: 'Статус обслуживания', section: S },
+  'cp.col.responsible': { ru: 'Ответственный', section: S },
+  'cp.col.start': { ru: 'Начало обслуживания', section: S },
+  'cp.col.contract': { ru: 'Договор', section: S },
+  'cp.col.head': { ru: 'Руководитель', section: S },
+  'cp.col.contact': { ru: 'Контактное лицо', section: S },
+  'cp.col.fee': { ru: 'Стоимость обслуживания', section: S },
+  'cp.kind.regular': { ru: 'Постоянное', section: S },
+  'cp.kind.oneoff': { ru: 'Разовое', section: S },
+  'cp.yes': { ru: 'Да', section: S },
+  'cp.no': { ru: 'Нет', section: S },
+  'cp.no_responsible': { ru: 'нет ответственного', section: S },
+  'cp.no_gked': { ru: 'Без ГКЭД', section: S },
+  'cp.contract': { ru: '№ {no} от {date}', section: S },
+  'cp.tariff.first': { ru: 'Первая ставка', section: S },
+  'cp.contract.no_number': { ru: 'Без номера от {date}', section: S },
+  'cp.gked.list': {
+    ru: 'Режим «{regime}»: ни один вид деятельности контрагента не входит в перечень {list} — {state}',
+    section: S,
+  },
+  'cp.gked.list.org': { ru: 'для организаций', section: S },
+  'cp.gked.list.ip': { ru: 'для ИП', section: S },
+  'cp.gked.list.itd': { ru: 'для физлиц на ИТД', section: S },
+  'cp.gked.warn': {
+    ru: 'Режим «{regime}» при основном ГКЭД {code}{group}: код не отличает запрещённую деятельность от разрешённой ({article}) — {state}',
+    section: S,
+  },
+  'cp.gked.warn.group': { ru: '({group})', section: S },
+  'cp.gked.state.need': { ru: 'нужно подтверждение', section: S },
+  'cp.gked.state.ok': { ru: 'подтвердил {who} {date}', section: S },
+  'cp.gked.state.ask': { ru: ': «{ask}» — нет', section: S },
+  'cp.gked.unfit': {
+    ru: 'Режим «{regime}» не подходит к видам деятельности контрагента',
+    section: S,
+  },
+  'cp.gked.excluded': {
+    ru: 'Режим «{regime}» не применяется к ГКЭД {codes}: по этим видам деятельности — другой режим',
+    section: S,
+  },
+  'cp.gked.benefit': {
+    ru: 'Виды деятельности контрагента не соответствуют статусу «{benefit}»',
+    section: S,
+  },
+  'cp.gked.verify.list': { ru: '(перечень ещё сверяется)', section: S },
+  'cp.gked.verify.partial': { ru: '(часть перечня ещё сверяется)', section: S },
+  'cp.gked.rate.main': {
+    ru: 'Ставка единого налога по основному ГКЭД {code}: {rates}',
+    section: S,
+  },
+  'cp.gked.rate.item': { ru: '{rate} ({activity})', section: S },
+  'cp.gked.rate.or': { ru: 'или', section: S },
+  'cp.gked.rate.one': {
+    ru: 'При этой ставке налог считается по ней со всей деятельности, дополнительные виды отдельно не облагаются (ст. 423 ч. 7)',
+    section: S,
+  },
+  'cp.gked.rate.extra': {
+    ru: 'ГКЭД {code}: ставка {rate} — налог считается отдельно по каждому виду деятельности (ст. 423 ч. 7){one}',
+    section: S,
+  },
+  'cp.gked.rate.extra_one': {
+    ru: '; при ставке {rates} — одна ставка на всю деятельность',
+    section: S,
+  },
+  'cp.gked.block': {
+    ru: 'Режим «{regime}» нельзя применять при основном ГКЭД {code}: этот вид деятельности запрещён для него ({article})',
+    section: S,
+  },
+  'cp.gked.types': { ru: 'Не подходят по ГКЭД назначенные отчёты: {types}', section: S },
+  'cp.gked.off': { ru: 'Код {code} больше не действует: замените его', section: S },
+  'err.inn_format': { ru: CONTRACTOR_MESSAGES.inn_format, section: E },
+  'err.inn_start': { ru: CONTRACTOR_MESSAGES.inn_start, section: E },
+  'err.inn_duplicate': { ru: 'Такой ИНН уже есть: {name}', section: E },
+  'err.inn_duplicate.archived': {
+    ru: 'Такой ИНН уже есть: {name} (в архиве — верните его из архива, а не создавайте заново)',
+    section: E,
+  },
+  'err.inn_duplicate.archived_edit': { ru: 'Такой ИНН уже есть: {name} (в архиве)', section: E },
+  'err.gked_required': { ru: CONTRACTOR_MESSAGES.gked_required, section: E },
+  'err.gked_not_subclass': { ru: CONTRACTOR_MESSAGES.gked_not_subclass, section: E },
+  'err.gked_inactive': { ru: CONTRACTOR_MESSAGES.gked_inactive, section: E },
+  'err.gked_extra_main': { ru: CONTRACTOR_MESSAGES.gked_extra_main, section: E },
+  'err.gked_blocked': { ru: 'Режим нельзя применять при этом основном ГКЭД', section: E },
+  'err.gked_confirm_required': {
+    ru: 'Подтвердите право на режим по виду деятельности',
+    section: E,
+  },
+  'err.regime2_without_regime': { ru: CONTRACTOR_MESSAGES.regime2_without_regime, section: E },
+  'err.regime2_same': { ru: CONTRACTOR_MESSAGES.regime2_same, section: E },
+  'err.benefit_dates': { ru: CONTRACTOR_MESSAGES.benefit_dates, section: E },
+  'err.tariff_required': { ru: CONTRACTOR_MESSAGES.tariff_required, section: E },
+  'err.responsible_required': { ru: CONTRACTOR_MESSAGES.responsible_required, section: E },
+  'err.responsible_inactive': { ru: CONTRACTOR_MESSAGES.responsible_inactive, section: E },
+  'err.value_inactive': { ru: CONTRACTOR_MESSAGES.value_inactive, section: E },
+  'err.okpo_format': { ru: CONTRACTOR_MESSAGES.okpo_format, section: E },
+  'err.email_format': { ru: CONTRACTOR_MESSAGES.email_format, section: E },
+  'err.contractor_not_found': { ru: 'Контрагент не найден', section: E },
+  'err.contractor_save_failed': {
+    ru: 'Не удалось сохранить контрагента, ничего не создано',
+    section: E,
+  },
+  'err.contractor_in_use.has_reports': { ru: CONTRACTOR_DELETE_MESSAGES.has_reports, section: E },
+  'err.contractor_in_use.has_money': { ru: CONTRACTOR_DELETE_MESSAGES.has_money, section: E },
+  'err.contractor_in_use.has_projects': { ru: CONTRACTOR_DELETE_MESSAGES.has_projects, section: E },
+  'err.contractor_archived': {
+    ru: 'Контрагент в архиве — сначала верните его из архива',
+    section: E,
+  },
+  'err.transfer_same': { ru: 'Выберите другого сотрудника', section: E },
+  'err.employee_not_found': { ru: 'Сотрудник не найден', section: E },
+} as const satisfies Record<string, UiTextDefault>;

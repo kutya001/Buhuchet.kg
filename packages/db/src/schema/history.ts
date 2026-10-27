@@ -34,7 +34,8 @@ export const auditLog = pgTable(
     entityId: text('entity_id').notNull(),
     /**
      * Контрагент, к которому относится запись, — для истории в карточке контрагента. Ключ на пару
-     * (contractor_id, org_id) появится вместе с таблицей контрагентов.
+     * (contractor_id, org_id) с ON DELETE SET NULL (contractor_id) — в миграции 0034: Drizzle не
+     * описывает обнуление одного столбца составного ключа.
      */
     contractorId: uuid('contractor_id'),
     /** `HistoryAction` из @buhuchet/domain. */

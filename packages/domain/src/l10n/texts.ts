@@ -1,5 +1,6 @@
 import { ADMIN_TEXTS } from './admin-texts';
 import { AUTH_TEXTS } from './auth-texts';
+import { CONTRACTORS_TEXTS } from './contractors-texts';
 import { DICTS_TEXTS } from './dicts-texts';
 import { GRID_TEXTS } from './grid-texts';
 import { ORG_TEXTS } from './org-texts';
@@ -51,7 +52,7 @@ const SYSTEM_TEXTS = {
  * разложены по файлам экранов: служебные — здесь, оболочки — `shell-texts.ts`, входа и «Мой профиль» —
  * `auth-texts.ts`, списков — `grid-texts.ts`, сотрудников — `staff-texts.ts`, шкалы и истории статусов —
  * `status-texts.ts`, «Моей организации» — `org-texts.ts`, Админки — `admin-texts.ts`, «Справочников» и сроков
- * видов отчётов словами — `dicts-texts.ts`.
+ * видов отчётов словами — `dicts-texts.ts`, контрагентов и сверки с ГКЭД — `contractors-texts.ts`.
  */
 export const UI_TEXTS = {
   ...SYSTEM_TEXTS,
@@ -61,6 +62,7 @@ export const UI_TEXTS = {
   ...STAFF_TEXTS,
   ...STATUS_TEXTS,
   ...ORG_TEXTS,
+  ...CONTRACTORS_TEXTS,
   ...ADMIN_TEXTS,
   ...DICTS_TEXTS,
 } as const satisfies Record<string, UiTextDefault>;

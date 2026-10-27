@@ -232,6 +232,20 @@
       "when": 1793092523799,
       "tag": "0032_dict_change_requests_admin",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1793100280275,
+      "tag": "0033_contractors",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1793100288186,
+      "tag": "0034_contractors_guards",
+      "breakpoints": true
     }
   ]
 }

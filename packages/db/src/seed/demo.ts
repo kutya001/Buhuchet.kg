@@ -11,6 +11,7 @@ import {
 import { eq, inArray, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Db } from '../client';
+import { seedDemoContractors } from './demo-contractors';
 import {
   employees,
   organizations,
@@ -26,11 +27,15 @@ import {
 /** Постоянный идентификатор демо-организации «Бухгалтер Плюс» на стенде и в тестах. */
 export const DEMO_ORG_ID = '00000000-0000-4000-8000-000000000001';
 
+/** Вид записи демо-организации для постоянного uuid: у каждого модуля — свои. */
+export type DemoKind = 'employee' | 'user' | 'role' | 'contractor' | 'tariff';
+export type DemoIdOf = (kind: DemoKind, protoId: string) => string;
+
 /**
  * Постоянный uuid записи демо-организации по её коду в demoDB.json (e3, acc, …): наполнители модулей
  * ссылаются друг на друга так же, как записи прототипа (у контрагента resp: 'e3').
  */
-export function demoId(kind: 'employee' | 'user' | 'role', protoId: string): string {
+export function demoId(kind: DemoKind, protoId: string): string {
   const h = createHash('sha256').update(`buhuchet-demo:${kind}:${protoId}`).digest('hex');
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-8${h.slice(17, 20)}-${h.slice(20, 32)}`;
 }
@@ -277,6 +282,9 @@ export async function seedDemoOrganization(
     updatedAt: stampOf(x._ua),
   }));
   if (typeRows.length > 0) await db.insert(orgReportTypes).values(typeRows).onConflictDoNothing();
+  // Контрагенты (задача 2.05).
+  const employeeIds = demo.employees.map((e) => e.id);
+  await seedDemoContractors(db, file, { orgId, demoId, employees: employeeIds });
 
   return { orgId, created: created.length > 0, employees: insertedEmployees.length };
 }

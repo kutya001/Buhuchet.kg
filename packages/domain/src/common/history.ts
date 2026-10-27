@@ -11,6 +11,7 @@ export const HISTORY_ENTITIES = [
   'user',
   'employee',
   'role',
+  'contractor',
   'org_report_type',
   'dict_request',
 ] as const;
