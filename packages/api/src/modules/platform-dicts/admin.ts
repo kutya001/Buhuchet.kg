@@ -18,6 +18,7 @@ import {
   withUserContext,
   type AdminDictDeleteResult,
   type AdminDictInput,
+  type AdminDictLinkProblem,
   type AdminDictSaveResult,
   type AdminDictValueRecord,
 } from '@buhuchet/db';
@@ -340,6 +341,10 @@ export function getAdminDictValueHandler(
   };
 }
 
+/** Поля формы со списком: телефоны органа, поля-связи и «Меняет сроки» статуса. */
+const isListField = (dict: AdminValueDict, f: string) =>
+  f === 'contacts' || f === 'dueRules' || (ADMIN_DICT_META[dict].links ?? []).includes(f);
+
 /**
  * Поля формы → поля значения справочника (только поля этого справочника). «Тип» не этого справочника
  * (у режима — «Банк») — 400 под полем; пустой — тип нового значения.
@@ -351,10 +356,9 @@ function inputOf(dict: AdminValueDict, form: AdminDictValueForm): AdminDictInput
   for (const f of meta.fields) {
     if (f === 'name') continue;
     const v = values[f];
-    if (f === 'byPhone') data[f] = v === true;
-    else if (f === 'contacts' || meta.links?.includes(f)) {
-      data[f] = (v as AdminDictInput['data'][string]) ?? [];
-    } else data[f] = (v as string) ?? '';
+    if (f === 'byPhone' || f === 'verify') data[f] = v === true;
+    else if (isListField(dict, f)) data[f] = (v as AdminDictInput['data'][string]) ?? [];
+    else data[f] = (v as string) ?? '';
   }
   if (dict === 'forms' && !data.declarationFor) data.declarationFor = 'org';
   if (meta.kind) {
@@ -372,9 +376,13 @@ const REQUIRED = {
   fullName: ['full_name_required', 'Введите полное название'],
   dialCode: ['dial_code_required', '1–4 цифры'],
   mask: ['mask_required', 'Только X и пробелы'],
+  gives: ['gives_required', 'Опишите, что даёт статус'],
 } as const;
 
-/** Краткое название управления, полное название режима, код и маска страны обязательны. */
+/**
+ * Краткое название управления, полное название режима, код и маска страны, «Что даёт» льготы
+ * обязательны.
+ */
 function checkRequired(dict: AdminValueDict, input: AdminDictInput) {
   for (const field of ADMIN_DICT_META[dict].required ?? []) {
     if (!String(input.data[field] ?? '').trim()) {
@@ -383,6 +391,22 @@ function checkRequired(dict: AdminValueDict, input: AdminDictInput) {
     }
   }
 }
+
+/** Связи не подходят: код ошибки и текст под полем (`field` — поле окна). */
+const BAD_LINK = {
+  types: ['invalid_link', 'Можно выбрать только сквозные действующие виды отчётов'],
+  benefit_types: [
+    'invalid_link',
+    'Можно выбрать только действующие виды отчётов, кроме внутренних',
+  ],
+  both: ['benefit_types_both', 'Один вид отчёта не может быть и ненужным, и добавленным'],
+  offices: ['invalid_link', 'Можно выбрать только действующие УГНС'],
+  no_due: ['due_rule_empty', 'Выберите вид отчёта и новый срок сдачи или уплаты'],
+  due_type: [
+    'invalid_due_rule',
+    'Свой срок можно задать только действующему виду отчёта со сроком из каталога',
+  ],
+} as const satisfies Record<AdminDictLinkProblem, readonly [string, string]>;
 
 const TAKEN = {
   name: ['dict_value_taken', 'Такое значение уже есть'],
@@ -413,9 +437,8 @@ async function failOf(
     apiFail(409, 'dict_value_undeletable', 'Значение можно только отключить');
   }
   if (result.reason === 'bad_link') {
-    apiFail(400, 'invalid_link', 'Можно выбрать только сквозные действующие виды отчётов', {
-      field: result.field,
-    });
+    const [errCode, message] = BAD_LINK[result.problem];
+    apiFail(400, errCode, message, { field: result.field });
   }
   if (result.reason === 'changed') {
     const now = await adminTx(deps, c, (tx) => getAdminDictValue(tx, dict, code));
@@ -450,7 +473,7 @@ async function saving<T>(run: () => Promise<T>): Promise<T> {
 
 const valueTaken = {
   description:
-    'Название пустое или уже есть, не заполнено обязательное поле, тип не этого справочника, код ГНС не из трёх цифр или уже есть',
+    'Название пустое или уже есть, не заполнено обязательное поле, тип не этого справочника, код ГНС не из трёх цифр или уже есть, связь или «Меняет сроки» не подходят',
   content: error,
 };
 

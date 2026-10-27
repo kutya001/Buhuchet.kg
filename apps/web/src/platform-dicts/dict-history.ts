@@ -17,8 +17,10 @@ const shown = (v: unknown) => (v === null || v === undefined || v === '' ? '—'
  * Что изменено, словами — как пишет прототип (admin/platform-dicts*.js, pdLog): «Формы: добавлено
  * «ОсОО»», «Органы: «ГНС» → «ГНС при МФ»», «отключено (было: активно)», «перемещено с № 3 на № 2»; у
  * УГНС — «изменено. Было: … Стало: …» по изменённым полям; у режима — «изменено: 2 поля», у
- * основания — «изменено», у кода страны — вся строка «было → стало» и «добавлено «…» +код».
- * Переименование режима и основания — «старое» → «новое», как требует ТЗ (у прототипа его не видно).
+ * основания — «изменено», у кода страны — вся строка «было → стало» и «добавлено «…» +код»; у
+ * льготы — «изменено», после правки «Меняет сроки» — «сроки по статусу пересчитаны у N отчётов».
+ * Переименование режима, основания и льготы — «старое» → «новое», как требует ТЗ (у прототипа его не
+ * видно).
  */
 export function dictHistoryText(dict: AdminValueDict, item: Item, t: Translate): string {
   const title = t(`pdicts.title.${dict}`);
@@ -53,6 +55,20 @@ export function dictHistoryText(dict: AdminValueDict, item: Item, t: Translate):
     });
   }
   const renamed = change('name');
+  if (dict === 'benefits') {
+    const recalculated = change('recalculated');
+    const n = Number(recalculated?.to ?? 0);
+    // ОТКЛОНЕНИЕ: docs/deviations.md#Д-8
+    if (renamed) {
+      const words = { dict: title, from: shown(renamed.from), to: shown(renamed.to) };
+      return recalculated
+        ? t(`pdicts.hist.rename_due.${pluralForm(n)}`, { ...words, n })
+        : t('pdicts.hist.rename', words);
+    }
+    return recalculated
+      ? t(`pdicts.hist.benefit_due.${pluralForm(n)}`, { dict: title, name, n })
+      : t('pdicts.hist.changed', { dict: title, name });
+  }
   if ((dict === 'regimes' || dict === 'bases') && renamed) {
     // ТЗ: переименование видно в истории — «старое» → «новое», у режима и число других полей.
     // ОТКЛОНЕНИЕ: docs/deviations.md#Д-8

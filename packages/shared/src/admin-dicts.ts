@@ -2,6 +2,7 @@ import {
   ADMIN_TAX_LISTS,
   ADMIN_VALUE_DICTS,
   BANK_KINDS,
+  BENEFIT_KINDS,
   CALENDAR_ADD_TYPES,
   CALENDAR_DAY_KINDS,
   DECLARATION_FOR,
@@ -11,11 +12,16 @@ import {
   DICT_REQUEST_ANSWERS,
   DICT_REQUEST_DICTS,
   DICT_REQUEST_STATUSES,
+  DUE_FROM,
   isIsoDate,
+  LAST_DAY_OF_MONTH,
   ORGAN_CONTACTS_MAX,
   PHONE_DIAL_CODE_PATTERN,
+  PAYER_KINDS,
   PHONE_MASK_PATTERN,
+  REPORT_ACTS,
   REPORT_KINDS,
+  REPORT_PERIODS,
   organSiteUrl,
   REGIME_KINDS,
   UGNS_CODE_PATTERN,
@@ -39,8 +45,28 @@ export const AdminDictCodeParam = AdminValueDictParam.extend({ code: z.string().
 
 const Contact = z.object({ label: z.string(), value: z.string() });
 
-/** «Тип»: у банковского провайдера — банк или кошелёк, у режима — общий или специальный. */
-const Kind = z.enum([...BANK_KINDS, ...REGIME_KINDS]);
+/**
+ * «Тип»: у банковского провайдера — банк или кошелёк, у режима — общий или специальный, у льготы —
+ * льгота или статус.
+ */
+const Kind = z.enum([...BANK_KINDS, ...REGIME_KINDS, ...BENEFIT_KINDS]);
+
+const dueDay = z.number().int().min(1).max(LAST_DAY_OF_MONTH).nullable();
+const dueAfter = z.number().int().min(0).max(12).nullable();
+
+/**
+ * Строка «Меняет сроки» статуса: свой срок сдачи и (или) уплаты вида отчёта; пусто — как у вида, день
+ * 31 — последний день месяца.
+ */
+export const BenefitDueRule = z.object({
+  reportType: z.string().min(1).max(80),
+  dueDay,
+  dueAfter,
+  dueMonth: z.number().int().min(1).max(12).nullable(),
+  payDay: dueDay,
+  payAfter: dueAfter,
+});
+export type BenefitDueRule = z.infer<typeof BenefitDueRule>;
 
 /** Поля значения сверх кода и названия — у каждого справочника свои (`ADMIN_DICT_META.fields`). */
 export const AdminDictData = z.object({
@@ -72,6 +98,25 @@ export const AdminDictData = z.object({
   flag: z.string().optional(),
   dialCode: z.string().optional(),
   mask: z.string().optional(),
+  /**
+   * У льготы: «Что даёт», «Кто может применять», «Условия», «Как подтверждается», «Срок действия»,
+   * «Действует до» (null — без даты), «Сверить» и «Что сверить».
+   */
+  gives: z.string().optional(),
+  payer: z.enum(PAYER_KINDS).optional(),
+  conditions: z.string().optional(),
+  confirmation: z.string().optional(),
+  term: z.string().optional(),
+  validUntil: IsoDate.nullable().optional(),
+  verify: z.boolean().optional(),
+  verifyNote: z.string().optional(),
+  /** У льготы: виды отчётов, которые статус делает ненужными и добавляет, — в порядке каталога. */
+  removes: z.array(z.string()).optional(),
+  adds: z.array(z.string()).optional(),
+  /** У льготы: «Меняет сроки» — в порядке каталога видов. */
+  dueRules: z.array(BenefitDueRule).optional(),
+  /** У льготы: «Ставится по УГНС» — постоянные ключи управлений. */
+  offices: z.array(z.string()).optional(),
 });
 export type AdminDictData = z.infer<typeof AdminDictData>;
 
@@ -152,6 +197,23 @@ export const AdminDictValueForm = z.object({
     .regex(PHONE_DIAL_CODE_PATTERN, message('pdicts.err.dial_code'))
     .optional(),
   mask: z.string().trim().max(30).regex(PHONE_MASK_PATTERN, message('pdicts.err.mask')).optional(),
+  gives: text(DICT_NOTE_MAX).optional(),
+  payer: z.enum(PAYER_KINDS).optional(),
+  conditions: text(DICT_NOTE_MAX).optional(),
+  confirmation: text(DICT_NOTE_MAX).optional(),
+  term: text(DICT_NAME_MAX).optional(),
+  // Пусто — без даты окончания.
+  validUntil: z
+    .string()
+    .trim()
+    .refine((v) => v === '' || isIsoDate(v), message('pdicts.err.until'))
+    .optional(),
+  verify: z.boolean().optional(),
+  verifyNote: text(300).optional(),
+  removes: z.array(z.string().min(1).max(80)).max(500).optional(),
+  adds: z.array(z.string().min(1).max(80)).max(500).optional(),
+  dueRules: z.array(BenefitDueRule).max(500).optional(),
+  offices: z.array(z.string().min(1).max(80)).max(500).optional(),
 });
 export type AdminDictValueFormInput = z.input<typeof AdminDictValueForm>;
 export type AdminDictValueForm = z.output<typeof AdminDictValueForm>;
@@ -173,6 +235,17 @@ export const RegimeValueForm = AdminDictValueForm.extend({
     .min(1, message('pdicts.err.full_required'))
     .max(DICT_NAME_MAX, message('form.too_long')),
 });
+
+/** Окно льготы или статуса: «Что даёт» тоже обязательно — «Опишите, что даёт статус». */
+export const BenefitValueForm = AdminDictValueForm.extend({
+  gives: z
+    .string()
+    .trim()
+    .min(1, message('pdicts.err.gives_required'))
+    .max(DICT_NOTE_MAX, message('form.too_long')),
+});
+export type BenefitValueFormInput = z.input<typeof BenefitValueForm>;
+export type BenefitValueForm = z.output<typeof BenefitValueForm>;
 
 /** Окно кода страны: телефонный код и маска обязательны. */
 export const PhoneValueForm = AdminDictValueForm.extend({
@@ -288,7 +361,10 @@ export const AdminCalendarCopied = AdminCalendarChanged.extend({
 });
 export type AdminCalendarCopied = z.infer<typeof AdminCalendarCopied>;
 
-/** Каталог видов отчётов кратко: выбор видов у основания и подписи «Виды отчётов». */
+/**
+ * Каталог видов отчётов кратко: выбор видов у основания и статуса, подписи «Виды отчётов» и правило
+ * срока сдачи — для строк «Меняет сроки» статуса.
+ */
 export const AdminReportTypeOptions = z.object({
   items: z.array(
     z.object({
@@ -297,6 +373,14 @@ export const AdminReportTypeOptions = z.object({
       shortName: z.string(),
       kind: z.enum(REPORT_KINDS),
       active: z.boolean(),
+      period: z.enum(REPORT_PERIODS),
+      dueDay: z.number().int(),
+      dueAfter: z.number().int().nullable(),
+      dueMonth: z.number().int().nullable(),
+      dueFrom: z.enum(DUE_FROM),
+      act: z.enum(REPORT_ACTS),
+      oneOff: z.boolean(),
+      periodPerAssignment: z.boolean(),
     }),
   ),
 });

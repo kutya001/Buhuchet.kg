@@ -341,6 +341,9 @@ describe.skipIf(!databaseAvailable())('Админка → «Справочник
       shortName: 'НДС',
       kind: 'regime',
       active: true,
+      period: 'M',
+      oneOff: false,
+      periodPerAssignment: false,
     });
     const bad = await send('POST', `${P}/bases`, { name: 'Есть НДС', types: ['nds'] });
     expect([bad.status, await errorOf(bad)]).toMatchObject([
@@ -352,6 +355,74 @@ describe.skipIf(!databaseAvailable())('Админка → «Справочник
     const created = AdminDictValue.parse(await res.json());
     expect(created).toMatchObject({ n: null, used: 1, contractors: 0, data: { types: ['roy'] } });
     const taken = await send('POST', `${P}/bases`, { name: 'Есть роялти' });
+    expect((await errorOf(taken)).code).toBe('dict_value_taken');
+  });
+
+  it('льгота или статус: «Что даёт» обязательно, связи и «Меняет сроки» проверяются; список по коду', async () => {
+    const list = AdminDictList.parse(await (await get(`${P}/benefits`)).json());
+    expect(list.items[0]).toMatchObject({ code: 'ЛЬГ-01', n: null, data: { kind: 'benefit' } });
+    const rule = { reportType: 'nds', dueDay: 31, dueAfter: 1, dueMonth: null };
+    const bad: [Record<string, unknown>, string, string][] = [
+      [{ gives: ' ' }, 'gives_required', 'gives'],
+      [{ removes: ['nope'] }, 'invalid_link', 'removes'],
+      [{ removes: ['nds'], adds: ['nds'] }, 'benefit_types_both', 'adds'],
+      [{ offices: ['nope'] }, 'invalid_link', 'offices'],
+      [
+        { dueRules: [{ ...rule, dueDay: null, dueAfter: null, payDay: null, payAfter: null }] },
+        'due_rule_empty',
+        'dueRules',
+      ],
+      [{ kind: 'bank' }, 'invalid_kind', 'kind'],
+    ];
+    for (const [patch, code, field] of bad) {
+      const res = await send('POST', `${P}/benefits`, {
+        name: 'Резидент СЭЗ',
+        gives: 'Освобождение от НДС',
+        ...patch,
+      });
+      expect([res.status, await errorOf(res)], code).toMatchObject([
+        400,
+        { code, details: { field } },
+      ]);
+    }
+    // День срока вне 1–31 и неверная дата — схема.
+    const day = await send('POST', `${P}/benefits`, {
+      name: 'Резидент СЭЗ',
+      gives: 'Освобождение от НДС',
+      dueRules: [{ ...rule, dueDay: 32, payDay: null, payAfter: null }],
+    });
+    expect(day.status).toBe(400);
+    const date = await send('POST', `${P}/benefits`, {
+      name: 'Резидент СЭЗ',
+      gives: 'Освобождение от НДС',
+      validUntil: '31.12.2030',
+    });
+    expect(date.status).toBe(400);
+
+    const res = await send('POST', `${P}/benefits`, {
+      name: 'Резидент СЭЗ',
+      gives: 'Освобождение от НДС',
+      kind: 'status',
+      validUntil: '2030-12-31',
+      verify: true,
+      adds: ['soc'],
+      dueRules: [{ ...rule, payDay: 25, payAfter: 1 }],
+    });
+    expect(res.status, await res.clone().text()).toBe(201);
+    const created = AdminDictValue.parse(await res.json());
+    expect(created).toMatchObject({
+      code: 'ЛЬГ-32',
+      n: null,
+      data: {
+        kind: 'status',
+        payer: 'all',
+        validUntil: '2030-12-31',
+        verify: true,
+        adds: ['soc'],
+        dueRules: [{ ...rule, payDay: 25, payAfter: 1 }],
+      },
+    });
+    const taken = await send('POST', `${P}/benefits`, { name: 'Резидент СЭЗ', gives: 'Другое' });
     expect((await errorOf(taken)).code).toBe('dict_value_taken');
   });
 

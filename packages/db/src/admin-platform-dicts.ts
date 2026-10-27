@@ -4,6 +4,9 @@ import {
   adminDictDefaultSort,
   auditActorName,
   badBaseTypes,
+  badBenefitOffices,
+  badBenefitTypes,
+  benefitDueRulesProblem,
   dictValueProblems,
   maskDigits,
   nextDictCode,
@@ -13,12 +16,16 @@ import {
   sameHistoryValue,
   type AdminValueDict,
   type AuthorityContact,
+  type BenefitDueOverride,
   type DictUsage,
   type DictValueProblem,
   type HistoryChange,
   type HistoryValue,
+  type DueFrom,
   type ListQuery,
+  type ReportAct,
   type ReportKind,
+  type ReportPeriod,
 } from '@buhuchet/domain';
 import { and, asc, count, desc, eq, getTableColumns, sql, type SQL } from 'drizzle-orm';
 import type { PgColumn, PgTable } from 'drizzle-orm/pg-core';
@@ -43,6 +50,10 @@ import {
   reportBases,
   reportTypeBases,
   reportTypes,
+  taxBenefitDueRules,
+  taxBenefitOffices,
+  taxBenefitReportTypes,
+  taxBenefits,
   taxOffices,
   taxRegimes,
 } from './schema';
@@ -69,6 +80,7 @@ type DictTable = PgTable & {
 const TABLES: Readonly<Record<AdminValueDict, DictTable>> = {
   bases: reportBases,
   regimes: taxRegimes,
+  benefits: taxBenefits,
   forms: ownershipForms,
   phones: countryPhoneCodes,
   organs: authorities,
@@ -78,10 +90,14 @@ const TABLES: Readonly<Record<AdminValueDict, DictTable>> = {
 };
 
 /**
- * Поля значения сверх кода и названия — как в таблице (`contacts` — массив, `gnsCode` — null,
- * `byPhone` — да или нет); поле-связь — коды связанных значений (`types` основания).
+ * Поля значения сверх кода и названия — как в таблице (`contacts` — массив, `gnsCode` и `validUntil` —
+ * null, `byPhone` и `verify` — да или нет); поле-связь — коды связанных значений (`types` основания),
+ * «Меняет сроки» статуса — строки сроков (`dueRules`).
  */
-export type AdminDictData = Record<string, string | boolean | null | AuthorityContact[] | string[]>;
+export type AdminDictData = Record<
+  string,
+  string | boolean | null | AuthorityContact[] | string[] | BenefitDueOverride[]
+>;
 
 /** Значение справочника в Админке. */
 export interface AdminDictValueRecord {
@@ -119,17 +135,33 @@ const dataFields = (dict: AdminValueDict) =>
 /** Поля-связи справочника: хранятся в таблице связей, не в столбцах значения. */
 const linkFields = (dict: AdminValueDict) => ADMIN_DICT_META[dict].links ?? [];
 const isLink = (dict: AdminValueDict, f: string) => linkFields(dict).includes(f);
+/** «Меняет сроки» статуса: строки своей таблицы, не столбец значения. */
+const isDueRules = (dict: AdminValueDict, f: string) =>
+  f === 'dueRules' && ADMIN_DICT_META[dict].dueRules === true;
+/** Поле значения, которое хранится в столбце его таблицы. */
+const isColumn = (dict: AdminValueDict, f: string) => !isLink(dict, f) && !isDueRules(dict, f);
 
-/** Вид отчёта для выбора в окне основания и подписи «Виды отчётов»: в порядке каталога. */
+/**
+ * Вид отчёта для выбора в окнах основания и статуса и подписи «Виды отчётов»: в порядке каталога; с
+ * правилом срока сдачи — для строк «Меняет сроки» статуса.
+ */
 export interface ReportTypeOption {
   code: string;
   name: string;
   shortName: string;
   kind: ReportKind;
   active: boolean;
+  period: ReportPeriod;
+  dueDay: number;
+  dueAfter: number | null;
+  dueMonth: number | null;
+  dueFrom: DueFrom;
+  act: ReportAct;
+  oneOff: boolean;
+  periodPerAssignment: boolean;
 }
 
-/** Каталог видов отчётов кратко: для выбора видов у основания и подписей связей. */
+/** Каталог видов отчётов кратко: для выбора видов у основания и статуса и подписей связей. */
 export async function reportTypeOptions(tx: Tx): Promise<ReportTypeOption[]> {
   return tx
     .select({
@@ -138,30 +170,78 @@ export async function reportTypeOptions(tx: Tx): Promise<ReportTypeOption[]> {
       shortName: reportTypes.shortName,
       kind: reportTypes.kind,
       active: reportTypes.active,
+      period: reportTypes.period,
+      dueDay: reportTypes.dueDay,
+      dueAfter: reportTypes.dueAfter,
+      dueMonth: reportTypes.dueMonth,
+      dueFrom: reportTypes.dueFrom,
+      act: reportTypes.act,
+      oneOff: reportTypes.oneOff,
+      periodPerAssignment: reportTypes.periodPerAssignment,
     })
     .from(reportTypes)
     .orderBy(asc(reportTypes.sortOrder), asc(reportTypes.code));
 }
 
+/** Поля-связи и «Меняет сроки» значений: код значения → поле → коды или строки сроков. */
+type LinkValues = Map<string, Record<string, string[] | BenefitDueOverride[]>>;
+
+/** Добавить связанное значение в поле значения `code`. */
+function pushLink(links: LinkValues, code: string, field: string, value: unknown) {
+  const own = links.get(code) ?? {};
+  ((own[field] ??= []) as unknown[]).push(value);
+  links.set(code, own);
+}
+
 /**
  * Поля-связи каждого значения: виды отчётов основания (по полю «Основание» вида; ТЗ «связь с видами
- * правится с любой стороны») — в порядке каталога.
+ * правится с любой стороны»), у статуса — «Делает ненужными», «Добавляет» и «Меняет сроки» в порядке
+ * каталога видов, «Ставится по УГНС» — в порядке справочника УГНС.
  */
-async function linkValues(
-  tx: Tx,
-  dict: AdminValueDict,
-): Promise<Map<string, Record<string, string[]>>> {
-  const links = new Map<string, Record<string, string[]>>();
-  if (dict !== 'bases') return links;
-  const rows = await tx
-    .select({ code: reportTypeBases.baseCode, link: reportTypeBases.reportTypeCode })
-    .from(reportTypeBases)
-    .innerJoin(reportTypes, eq(reportTypes.code, reportTypeBases.reportTypeCode))
-    .orderBy(asc(reportTypes.sortOrder), asc(reportTypes.code));
-  for (const r of rows) {
-    const own = links.get(r.code) ?? { types: [] };
-    own.types!.push(r.link);
-    links.set(r.code, own);
+async function linkValues(tx: Tx, dict: AdminValueDict): Promise<LinkValues> {
+  const links: LinkValues = new Map();
+  const byCatalog = [asc(reportTypes.sortOrder), asc(reportTypes.code)];
+  if (dict === 'bases') {
+    const rows = await tx
+      .select({ code: reportTypeBases.baseCode, link: reportTypeBases.reportTypeCode })
+      .from(reportTypeBases)
+      .innerJoin(reportTypes, eq(reportTypes.code, reportTypeBases.reportTypeCode))
+      .orderBy(...byCatalog);
+    for (const r of rows) pushLink(links, r.code, 'types', r.link);
+  }
+  if (dict === 'benefits') {
+    const [types, offices, rules] = await Promise.all([
+      tx
+        .select({
+          code: taxBenefitReportTypes.benefitCode,
+          link: taxBenefitReportTypes.reportTypeCode,
+          effect: taxBenefitReportTypes.effect,
+        })
+        .from(taxBenefitReportTypes)
+        .innerJoin(reportTypes, eq(reportTypes.code, taxBenefitReportTypes.reportTypeCode))
+        .orderBy(...byCatalog),
+      tx
+        .select({ code: taxBenefitOffices.benefitCode, link: taxBenefitOffices.taxOfficeCode })
+        .from(taxBenefitOffices)
+        .innerJoin(taxOffices, eq(taxOffices.code, taxBenefitOffices.taxOfficeCode))
+        .orderBy(asc(taxOffices.sortOrder), asc(taxOffices.code)),
+      tx
+        .select({
+          code: taxBenefitDueRules.benefitCode,
+          reportType: taxBenefitDueRules.reportTypeCode,
+          dueDay: taxBenefitDueRules.dueDay,
+          dueAfter: taxBenefitDueRules.dueAfter,
+          dueMonth: taxBenefitDueRules.dueMonth,
+          payDay: taxBenefitDueRules.payDay,
+          payAfter: taxBenefitDueRules.payAfter,
+        })
+        .from(taxBenefitDueRules)
+        .innerJoin(reportTypes, eq(reportTypes.code, taxBenefitDueRules.reportTypeCode))
+        .orderBy(...byCatalog),
+    ]);
+    for (const r of types) pushLink(links, r.code, r.effect, r.link);
+    for (const r of offices) pushLink(links, r.code, 'offices', r.link);
+    for (const { code, ...rule } of rules) pushLink(links, code, 'dueRules', rule);
   }
   return links;
 }
@@ -220,7 +300,7 @@ async function dictRecords(tx: Tx, dict: AdminValueDict): Promise<AdminDictValue
       data: Object.fromEntries(
         dataFields(dict).map((f) => [
           f,
-          isLink(dict, f) ? (links.get(r.code)?.[f] ?? []) : dataValue(f, r[f]),
+          isColumn(dict, f) ? dataValue(f, r[f]) : (links.get(r.code)?.[f] ?? []),
         ]),
       ),
       active: r.active,
@@ -275,10 +355,13 @@ function listRow(
   };
   for (const f of dataFields(dict)) {
     const value = x.data[f];
+    // «Меняет сроки» и «Ставится по УГНС» — не столбцы списка.
+    if (isDueRules(dict, f) || f === 'offices') continue;
     if (f === 'contacts') row[f] = contactsText(value);
     else if (isLink(dict, f))
       row[f] = (value as string[]).map((code) => names.get(code) ?? code).join(', ');
-    else if (f === 'byPhone') row[f] = value ? 'yes' : 'no';
+    else if (f === 'byPhone' || f === 'verify') row[f] = value ? 'yes' : 'no';
+    else if (f === 'validUntil') row[f] = (value as string | null) ?? null;
     else row[f] = (value as string | null) ?? '';
   }
   if (dict === 'forms') row.declarationFor_text = t(`dicts.platform.end.${x.data.declarationFor}`);
@@ -298,6 +381,7 @@ function listRow(
 }
 
 const RECORD_TYPES: Readonly<Record<string, string>> = {
+  validUntil: 'date',
   digits: 'integer',
   ord: 'integer',
   n: 'integer',
@@ -458,57 +542,135 @@ function dbRow(dict: AdminValueDict, input: AdminDictInput): Record<string, unkn
         .map((c) => ({ label: c.label.trim(), value: c.value.trim() }))
         .filter((c) => c.label || c.value);
     }
-    if (f === 'byPhone') return v === true;
+    if (f === 'byPhone' || f === 'verify') return v === true;
     const text = typeof v === 'string' ? v.trim() : '';
-    if (f === 'gnsCode') return text || null;
+    if (f === 'gnsCode' || f === 'validUntil') return text || null;
     if (f === 'kind') return text || ADMIN_DICT_META[dict].kind?.default;
+    if (f === 'payer') return text || 'all';
     if (f === 'accountantNote') return regimeAccountantNote(text);
     return text;
   };
   return Object.fromEntries(
     ADMIN_DICT_META[dict].fields
-      .filter((f) => !isLink(dict, f))
+      .filter((f) => isColumn(dict, f))
       .map((f) => [columns[f]!.name, value(f)]),
   );
 }
 
 /** Поля-связи значения для `app.admin_dict_set_links`: коды без повторов. */
-const linkRow = (dict: AdminValueDict, input: AdminDictInput) =>
+const linkRow = (dict: AdminValueDict, input: AdminDictInput): Record<string, string[]> =>
   Object.fromEntries(
     linkFields(dict).map((f) => [f, [...new Set((input.data[f] as string[] | undefined) ?? [])]]),
   );
+
+/** «Меняет сроки» значения для `app.admin_benefit_set_due_rules`: только поля строки срока. */
+const dueRulesOf = (input: AdminDictInput): BenefitDueOverride[] =>
+  ((input.data.dueRules as BenefitDueOverride[] | undefined) ?? []).map((r) => ({
+    reportType: r.reportType,
+    dueDay: r.dueDay ?? null,
+    dueAfter: r.dueAfter ?? null,
+    dueMonth: r.dueMonth ?? null,
+    payDay: r.payDay ?? null,
+    payAfter: r.payAfter ?? null,
+  }));
 
 /** Поля значения для истории: название и поля справочника, как их сохранит база. */
 function historyFields(dict: AdminValueDict, input: AdminDictInput): Record<string, HistoryValue> {
   const columns = getTableColumns(TABLES[dict]) as Record<string, PgColumn>;
   const row = dbRow(dict, input);
   const links = linkRow(dict, input);
-  return Object.fromEntries(
-    ADMIN_DICT_META[dict].fields.map((f) => [
-      f,
-      toHistoryValue(isLink(dict, f) ? links[f] : row[columns[f]!.name]),
-    ]),
-  );
+  const value = (f: string): unknown => {
+    if (isLink(dict, f)) return links[f];
+    if (isDueRules(dict, f)) return dueRulesOf(input);
+    return row[columns[f]!.name];
+  };
+  return Object.fromEntries(ADMIN_DICT_META[dict].fields.map((f) => [f, toHistoryValue(value(f))]));
 }
 
 /**
+ * Что не так с полями-связями: у основания — не сквозные действующие виды (`types`); у статуса —
+ * отключённые или внутренние виды (`benefit_types`), один вид и в «Делает ненужными», и в
+ * «Добавляет» (`both`), отключённое УГНС (`offices`), строка «Меняет сроки» без нового срока
+ * (`no_due`) или с видом, которому свой срок не задать (`due_type`).
+ */
+export type AdminDictLinkProblem =
+  'types' | 'benefit_types' | 'both' | 'offices' | 'no_due' | 'due_type';
+
+type PreparedLinks =
+  | { input: AdminDictInput; bad: null }
+  | { input: AdminDictInput; bad: { field: string; problem: AdminDictLinkProblem } };
+
+/**
  * Поля-связи в порядке каталога (как их читает список) и проверка: у основания — только сквозные
- * действующие виды отчётов; уже привязанный остаётся (`badBaseTypes`). Не подходит — поле с ошибкой.
+ * действующие виды отчётов; уже привязанный остаётся (`badBaseTypes`). У статуса — `prepareBenefit`.
+ * Не подходит — поле с ошибкой.
  */
 async function prepareLinks(
   tx: Tx,
   dict: AdminValueDict,
   input: AdminDictInput,
   before: AdminDictValueRecord | undefined,
-): Promise<{ input: AdminDictInput; bad: string | null }> {
+): Promise<PreparedLinks> {
+  if (dict === 'benefits') return prepareBenefit(tx, input, before);
   if (!linkFields(dict).length) return { input, bad: null };
   const catalog = await reportTypeOptions(tx);
   const order = new Map(catalog.map((x, i) => [x.code, i]));
   const types = linkRow(dict, input).types ?? [];
   const was = (before?.data.types as string[] | undefined) ?? [];
-  if (badBaseTypes(types, catalog, was).length) return { input, bad: 'types' };
+  if (badBaseTypes(types, catalog, was).length) {
+    return { input, bad: { field: 'types', problem: 'types' } };
+  }
   const sorted = [...types].sort((a, b) => order.get(a)! - order.get(b)!);
   return { input: { ...input, data: { ...input.data, types: sorted } }, bad: null };
+}
+
+/**
+ * Связи и «Меняет сроки» статуса (прототип benefitDlg): виды отчётов — действующие, кроме внутренних
+ * (`badBenefitTypes`), и не в двух полях сразу; УГНС — действующие (`badBenefitOffices`); строки
+ * сроков — `benefitDueRulesProblem`. Уже выбранное остаётся, даже если его потом отключили. Виды — в
+ * порядке каталога, УГНС — в порядке справочника.
+ */
+async function prepareBenefit(
+  tx: Tx,
+  input: AdminDictInput,
+  before: AdminDictValueRecord | undefined,
+): Promise<PreparedLinks> {
+  const [catalog, offices] = await Promise.all([
+    reportTypeOptions(tx),
+    tx
+      .select({ code: taxOffices.code, active: taxOffices.active })
+      .from(taxOffices)
+      .orderBy(asc(taxOffices.sortOrder), asc(taxOffices.code)),
+  ]);
+  const links = linkRow('benefits', input);
+  const was = (f: string) => (before?.data[f] as string[] | undefined) ?? [];
+  const fail = (field: string, problem: AdminDictLinkProblem): PreparedLinks => ({
+    input,
+    bad: { field, problem },
+  });
+  for (const f of ['removes', 'adds']) {
+    if (badBenefitTypes(links[f]!, catalog, was(f)).length) return fail(f, 'benefit_types');
+  }
+  // ОТКЛОНЕНИЕ: docs/deviations.md#Д-9
+  if (links.removes!.some((code) => links.adds!.includes(code))) return fail('adds', 'both');
+  if (badBenefitOffices(links.offices!, offices, was('offices')).length) {
+    return fail('offices', 'offices');
+  }
+  const rules = dueRulesOf(input);
+  const beforeRules = before ? dueRulesOf(recordInput(before)) : [];
+  const problem = benefitDueRulesProblem(rules, catalog, beforeRules);
+  if (problem) return fail('dueRules', problem === 'no_due' ? 'no_due' : 'due_type');
+  const typeOrder = new Map(catalog.map((x, i) => [x.code, i]));
+  const officeOrder = new Map(offices.map((x, i) => [x.code, i]));
+  const byType = (a: string, b: string) => typeOrder.get(a)! - typeOrder.get(b)!;
+  const data = {
+    ...input.data,
+    removes: [...links.removes!].sort(byType),
+    adds: [...links.adds!].sort(byType),
+    offices: [...links.offices!].sort((a, b) => officeOrder.get(a)! - officeOrder.get(b)!),
+    dueRules: [...rules].sort((a, b) => byType(a.reportType, b.reportType)),
+  };
+  return { input: { ...input, data }, bad: null };
 }
 
 /** Записать поля-связи значения (`app.admin_dict_set_links`); у справочника без связей — ничего. */
@@ -518,11 +680,27 @@ async function prepareLinks(
  * откатывает и запись значения: значение без своих связей и без истории не сохраняется.
  */
 async function saveLinks(tx: Tx, dict: AdminValueDict, code: string, input: AdminDictInput) {
-  if (!linkFields(dict).length) return;
-  const [row] = await tx.execute<{ ok: boolean | null }>(
-    sql`select app.admin_dict_set_links(${dict}, ${code}, ${JSON.stringify(linkRow(dict, input))}::jsonb) as ok`,
-  );
-  if (row?.ok !== true) throw new Error(`Связи значения ${dict}:${code} не сохранены`);
+  if (linkFields(dict).length) {
+    const [row] = await tx.execute<{ ok: boolean | null }>(
+      sql`select app.admin_dict_set_links(${dict}, ${code}, ${JSON.stringify(linkRow(dict, input))}::jsonb) as ok`,
+    );
+    if (row?.ok !== true) throw new Error(`Связи значения ${dict}:${code} не сохранены`);
+  }
+  if (ADMIN_DICT_META[dict].dueRules) {
+    const [row] = await tx.execute<{ ok: boolean | null }>(
+      sql`select app.admin_benefit_set_due_rules(${code}, ${JSON.stringify(dueRulesOf(input))}::jsonb) as ok`,
+    );
+    if (row?.ok !== true) throw new Error(`Сроки статуса ${code} не сохранены`);
+  }
+}
+
+/**
+ * Пересчёт сроков несданных отчётов контрагентов со статусом после правки «Меняет сроки» (прототип
+ * `cpRedue`): отчётов организаций ещё нет — пересчёт подключит задача отчётов (правило стыков,
+ * docs/decisions.md п. Д-5).
+ */
+async function recalcBenefitReportDues(_tx: Tx, _code: string): Promise<number> {
+  return 0;
 }
 
 const recordInput = (x: AdminDictValueRecord): AdminDictInput => ({ name: x.name, data: x.data });
@@ -530,7 +708,7 @@ const recordInput = (x: AdminDictValueRecord): AdminDictInput => ({ name: x.name
 export type AdminDictSaveResult =
   | { ok: true; record: AdminDictValueRecord }
   | { ok: false; reason: 'not_found' | 'changed' | 'fixed' }
-  | { ok: false; reason: 'bad_link'; field: string }
+  | { ok: false; reason: 'bad_link'; field: string; problem: AdminDictLinkProblem }
   | { ok: false; reason: 'taken'; problems: DictValueProblem[] }
   | { ok: false; reason: 'used'; usage: DictUsage };
 
@@ -572,7 +750,7 @@ export async function adminDictCreate(
   const problems = problemsOf(dict, code, input, records);
   if (problems.length) return { ok: false, reason: 'taken', problems };
   const links = await prepareLinks(tx, dict, input, undefined);
-  if (links.bad) return { ok: false, reason: 'bad_link', field: links.bad };
+  if (links.bad) return { ok: false, reason: 'bad_link', ...links.bad };
   input = links.input;
   const [row] = await tx.execute<{ version: number | null }>(
     sql`select app.admin_dict_insert(${dict}, ${code}, ${JSON.stringify(dbRow(dict, input))}::jsonb) as version`,
@@ -610,7 +788,7 @@ export async function adminDictUpdate(
   if (!before) return { ok: false, reason: 'not_found' };
   if (before.version !== version) return { ok: false, reason: 'changed' };
   const links = await prepareLinks(tx, dict, input, before);
-  if (links.bad) return { ok: false, reason: 'bad_link', field: links.bad };
+  if (links.bad) return { ok: false, reason: 'bad_link', ...links.bad };
   input = links.input;
   const was = historyFields(dict, recordInput(before));
   const now = historyFields(dict, input);
@@ -625,6 +803,10 @@ export async function adminDictUpdate(
   );
   if (row?.version == null) return { ok: false, reason: 'changed' };
   await saveLinks(tx, dict, code, input);
+  // Новые сроки статуса — у несданных отчётов контрагентов с ним; в историю — у скольких (прототип).
+  if (changes.some((c) => isDueRules(dict, c.field))) {
+    changes.push({ field: 'recalculated', to: await recalcBenefitReportDues(tx, code) });
+  }
   await writePlatformHistory(tx, {
     entity: 'platform_dict',
     entityId: entityId(dict, code),

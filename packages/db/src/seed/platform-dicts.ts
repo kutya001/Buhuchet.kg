@@ -929,11 +929,20 @@ export async function seedPlatformDicts(
   const all = platformDictRows(refDB);
   const { update } = options;
   // Удалённые в Админке значения и связи с ними не возвращаются (справочники механизма 2.36).
-  const [organs, regimes, bases, ugns, forms, reasons, bankKeys, days] = await Promise.all(
-    ['organs', 'regimes', 'bases', 'ugns', 'forms', 'reasons', 'banks', 'calendar'].map((d) =>
-      deletedKeys(db, d),
-    ),
-  );
+  const [organs, regimes, bases, ugns, forms, reasons, bankKeys, days, benefits] =
+    await Promise.all(
+      [
+        'organs',
+        'regimes',
+        'bases',
+        'ugns',
+        'forms',
+        'reasons',
+        'banks',
+        'calendar',
+        'benefits',
+      ].map((d) => deletedKeys(db, d)),
+    );
   const rows = {
     ...all,
     authorities: kept(all.authorities, organs!, 'code'),
@@ -946,7 +955,14 @@ export async function seedPlatformDicts(
     productionCalendar: kept(all.productionCalendar, days!, 'day'),
     reportTypeRegimes: kept(all.reportTypeRegimes, regimes!, 'regimeCode'),
     reportTypeBases: kept(all.reportTypeBases, bases!, 'baseCode'),
-    taxBenefitOffices: kept(all.taxBenefitOffices, ugns!, 'taxOfficeCode'),
+    taxBenefits: kept(all.taxBenefits, benefits!, 'code'),
+    taxBenefitReportTypes: kept(all.taxBenefitReportTypes, benefits!, 'benefitCode'),
+    taxBenefitOffices: kept(
+      kept(all.taxBenefitOffices, ugns!, 'taxOfficeCode'),
+      benefits!,
+      'benefitCode',
+    ),
+    taxBenefitDueRules: kept(all.taxBenefitDueRules, benefits!, 'benefitCode'),
   };
   const authority = await upsertDict(db, authorities, authorities.code, rows.authorities, update);
   const regime = await upsertDict(db, taxRegimes, taxRegimes.code, rows.taxRegimes, update);

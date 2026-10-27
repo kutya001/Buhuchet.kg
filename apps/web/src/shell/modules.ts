@@ -383,6 +383,7 @@ export const MODULES: Record<MenuModuleId, ModuleDef> = {
     add: [
       { id: 'base', icon: 'plus', label: 'pdicts.add.base', tabs: ['bases'] },
       { id: 'regime', icon: 'plus', label: 'pdicts.add.regime', tabs: ['regimes'] },
+      { id: 'benefit', icon: 'plus', label: 'pdicts.add.benefit', tabs: ['benefits'] },
       {
         id: 'value',
         icon: 'plus',

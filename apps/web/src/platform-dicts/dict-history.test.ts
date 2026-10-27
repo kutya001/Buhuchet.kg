@@ -34,6 +34,30 @@ describe('«История изменений» справочника', () => {
     expect(dictHistoryText('organs', fields, t)).toBe('Органы: «ГНС» — изменены поля');
   });
 
+  it('льгота: «изменено», после правки «Меняет сроки» — сколько отчётов пересчитано', () => {
+    const benefit = (changes: Parameters<typeof item>[0]['changes']) =>
+      dictHistoryText('benefits', item({ label: 'Крупный налогоплательщик', changes }), t);
+    expect(benefit([{ field: 'gives', from: 'А', to: 'Б' }])).toBe(
+      'Налоговые льготы и особые статусы: «Крупный налогоплательщик» изменено',
+    );
+    const due = { field: 'dueRules', from: [], to: [] };
+    expect(benefit([due, { field: 'recalculated', to: 1 }])).toBe(
+      'Налоговые льготы и особые статусы: «Крупный налогоплательщик» изменено, сроки по статусу пересчитаны у 1 отчёта',
+    );
+    expect(benefit([due, { field: 'recalculated', to: 0 }])).toBe(
+      'Налоговые льготы и особые статусы: «Крупный налогоплательщик» изменено, сроки по статусу пересчитаны у 0 отчётов',
+    );
+    expect(
+      benefit([
+        { field: 'name', from: 'Крупный', to: 'Крупный налогоплательщик' },
+        due,
+        { field: 'recalculated', to: 3 },
+      ]),
+    ).toBe(
+      'Налоговые льготы и особые статусы: «Крупный» → «Крупный налогоплательщик», сроки по статусу пересчитаны у 3 отчётов',
+    );
+  });
+
   it('отключено и включено, перемещено по «№»', () => {
     const off = item({ changes: [{ field: 'active', from: true, to: false }] });
     expect(dictHistoryText('reasons', off, t)).toBe(

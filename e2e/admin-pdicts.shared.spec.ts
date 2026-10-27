@@ -13,7 +13,13 @@ type Value = {
   name: string;
   used: number;
   version: number;
-  data: { gnsCode?: string | null; site?: string; kind?: string; byPhone?: boolean };
+  data: {
+    gnsCode?: string | null;
+    site?: string;
+    kind?: string;
+    byPhone?: boolean;
+    adds?: string[];
+  };
 };
 
 /** Значения справочника через API администратора. */
@@ -429,6 +435,66 @@ test.describe('Админка: справочники платформы', () =>
         });
       }
       await cleanup(page.request, origin, 'bases', base);
+    }
+  });
+
+  test('(проверка задачи #92) льготы и статусы: «Что даёт» обязательно, тип, отчёты и «Меняет сроки»; после правки сроков — строка в истории', async ({
+    page,
+    baseURL,
+    isMobile,
+  }, testInfo) => {
+    const origin = new URL(baseURL!).origin;
+    await platformAdmin(page.request, origin);
+    const name = `Статус ${testInfo.project.name} ${Date.now()}`;
+
+    try {
+      await page.goto('/app/pdicts/benefits');
+      await expect(page.getByText('Признаки контрагента, от которых зависят ставки')).toBeVisible();
+      await page.getByRole('button', { name: 'Добавить', exact: true }).click();
+      const dialog = page.getByRole('dialog', { name: 'Новая льгота или статус' });
+      await dialog.getByLabel('Название').fill(name);
+      await dialog.getByRole('button', { name: 'Сохранить' }).click();
+      await expect(dialog.getByText('Опишите, что даёт статус')).toBeVisible();
+      await dialog.getByLabel('Что даёт').fill('Сдача НДС до последнего дня');
+      await dialog
+        .getByLabel('Тип')
+        .selectOption({ label: 'Статус — льгот не даёт, меняет отчёты или сроки' });
+      await dialog
+        .getByRole('group', { name: 'Отчёты, которые статус добавляет' })
+        .getByRole('button', { name: 'Соцфонд', exact: true })
+        .click();
+      // «Меняет сроки»: без нового срока — подсказка, с ним — строка с правилом словами.
+      await expect(dialog.getByText('Сроки не меняет')).toBeVisible();
+      await dialog.getByLabel('Вид отчёта', { exact: true }).selectOption({ label: 'НДС' });
+      await dialog.getByRole('button', { name: 'Добавить', exact: true }).click();
+      await expect(
+        page.getByText('Выберите вид отчёта и новый срок сдачи или уплаты'),
+      ).toBeVisible();
+      await dialog.getByLabel('Срок сдачи').selectOption({ label: 'сдача до последнего дня' });
+      await dialog.getByLabel('Срок уплаты').selectOption({ label: 'уплата до 25-го' });
+      await dialog.getByRole('button', { name: 'Добавить', exact: true }).click();
+      await expect(dialog.locator('[data-due-rule]')).toHaveText(
+        /НДС\s*сдача — до последнего дня месяца после отчётного; уплата — до 25-го числа месяца после отчётного/,
+      );
+      await dialog.getByRole('button', { name: 'Сохранить' }).click();
+      await expect(dialog).toBeHidden();
+      const created = (await values(page.request, 'benefits')).find((x) => x.name === name)!;
+      expect(created.code).toMatch(/^ЛЬГ-\d{2}$/);
+      expect(created.data).toMatchObject({ kind: 'status', adds: ['soc'] });
+
+      // Убрать срок — в истории «сроки по статусу пересчитаны» (прототип benefitDlg).
+      const found = await row(page, isMobile, name, created.code);
+      await (await rowAction(page, found, 'Изменить')).click();
+      const edit = page.getByRole('dialog', { name });
+      await edit.locator('[data-due-rule]').getByRole('button', { name: 'Убрать' }).click();
+      await expect(edit.getByText('Сроки не меняет')).toBeVisible();
+      await edit.getByRole('button', { name: 'Сохранить' }).click();
+      await expect(edit).toBeHidden();
+      await expect(
+        page.getByText(`«${name}» изменено, сроки по статусу пересчитаны у 0 отчётов`),
+      ).toBeVisible();
+    } finally {
+      await cleanup(page.request, origin, 'benefits', name);
     }
   });
 

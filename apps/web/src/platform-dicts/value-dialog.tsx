@@ -100,6 +100,9 @@ function formOf(
       return { name, kind: d.kind ?? 'bank', byPhone: d.byPhone ?? false, note: d.note ?? '' };
     case 'reasons':
       return { name, note: d.note ?? '' };
+    // У льготы своё окно — BenefitDialog.
+    case 'benefits':
+      return { name };
   }
 }
 

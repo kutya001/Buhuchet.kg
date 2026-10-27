@@ -1,8 +1,17 @@
 import { describe, expect, it } from 'vitest';
+import type { DueRule } from '../dicts/report-types';
+import type { BenefitDueOverride } from '../dicts/value-guide';
+import { formatText, UI_TEXTS, type Translate } from '../l10n/texts';
 import {
   ADMIN_DICT_META,
   ADMIN_VALUE_DICTS,
+  adminDictDefaultSort,
   badBaseTypes,
+  badBenefitOffices,
+  badBenefitTypes,
+  benefitDueRulesProblem,
+  benefitDueRuleText,
+  type BenefitTypeOption,
   dictRequestAnswerProblem,
   dictValueProblems,
   isAdminValueDict,
@@ -22,6 +31,7 @@ describe('nextDictCode', () => {
     expect(nextDictCode('reasons', ['ПРЧ-001', 'ПРЧ-005'], random)).toBe('ПРЧ-006');
     expect(nextDictCode('organs', [], random)).toBe('ОРГ-01');
     expect(nextDictCode('regimes', ['РЕЖ-01', 'РЕЖ-12'], random)).toBe('РЕЖ-13');
+    expect(nextDictCode('benefits', ['ЛЬГ-01', 'ЛЬГ-31'], random)).toBe('ЛЬГ-32');
   });
 
   it('после удаления номер не повторяется: дыры в номерах не заполняются', () => {
@@ -98,6 +108,97 @@ describe('badBaseTypes', () => {
 
   it('уже привязанный вид остаётся, даже если отключён; неизвестный — нет', () => {
     expect(badBaseTypes(['imn', 'nds', 'nope'], catalog, ['imn', 'nds', 'nope'])).toEqual(['nope']);
+  });
+});
+
+describe('Льготы и статусы', () => {
+  const t: Translate = (key, params) => formatText(UI_TEXTS[key].ru, params);
+  const type = (code: string, x: Partial<BenefitTypeOption> = {}): BenefitTypeOption => ({
+    code,
+    kind: 'cross',
+    active: true,
+    oneOff: false,
+    periodPerAssignment: false,
+    ...x,
+  });
+  const catalog = [
+    type('nds', { kind: 'regime' }),
+    type('stat', { kind: 'cross' }),
+    type('old', { active: false }),
+    type('own', { kind: 'internal' }),
+    type('event', { oneOff: true }),
+    type('assign', { periodPerAssignment: true }),
+  ];
+  const rule = (reportType: string, x: Partial<BenefitDueOverride> = {}): BenefitDueOverride => ({
+    reportType,
+    dueDay: 31,
+    dueAfter: 1,
+    dueMonth: null,
+    payDay: null,
+    payAfter: null,
+    ...x,
+  });
+
+  it('список — по коду, без «№»; новый статус — ЛЬГ-NN', () => {
+    expect(adminDictDefaultSort('benefits')).toEqual({ key: 'code', dir: 'asc' });
+    expect(ADMIN_DICT_META.benefits.ordered).toBe(false);
+    expect(ADMIN_DICT_META.benefits.required).toEqual(['gives']);
+  });
+
+  it('«Делает ненужными» и «Добавляет» — действующие виды, кроме внутренних; выбранный остаётся', () => {
+    expect(badBenefitTypes(['nds', 'stat', 'old', 'own', 'nope'], catalog, [])).toEqual([
+      'old',
+      'own',
+      'nope',
+    ]);
+    expect(badBenefitTypes(['old', 'own'], catalog, ['old', 'own'])).toEqual([]);
+  });
+
+  it('«Ставится по УГНС» — действующие управления; выбранное остаётся', () => {
+    const offices = [
+      { code: 'ugns-large', active: true },
+      { code: 'ugns-old', active: false },
+    ];
+    expect(badBenefitOffices(['ugns-large', 'ugns-old', 'nope'], offices, [])).toEqual([
+      'ugns-old',
+      'nope',
+    ]);
+    expect(badBenefitOffices(['ugns-old'], offices, ['ugns-old'])).toEqual([]);
+  });
+
+  it('«Меняет сроки»: новый срок обязателен, вид — один раз и со сроком из каталога', () => {
+    expect(benefitDueRulesProblem([rule('nds')], catalog, [])).toBeNull();
+    expect(
+      benefitDueRulesProblem([rule('nds', { dueDay: null, dueAfter: null })], catalog, []),
+    ).toBe('no_due');
+    expect(benefitDueRulesProblem([rule('nds'), rule('nds')], catalog, [])).toBe('bad_type');
+    for (const code of ['old', 'own', 'event', 'assign', 'nope']) {
+      expect(benefitDueRulesProblem([rule(code)], catalog, [])).toBe('bad_type');
+    }
+    // Строка, которая уже была у статуса, остаётся, даже если вид потом отключили.
+    expect(benefitDueRulesProblem([rule('old')], catalog, [rule('old')])).toBeNull();
+  });
+
+  it('строка «Меняет сроки» в окне — как в прототипе (ovRuleTxt)', () => {
+    const nds: DueRule = {
+      period: 'M',
+      dueDay: 20,
+      dueAfter: 1,
+      dueMonth: null,
+      dueFrom: 'end',
+      oneOff: false,
+      act: 'both',
+    };
+    expect(benefitDueRuleText(rule('nds', { payDay: 25, payAfter: 1 }), nds, t)).toBe(
+      'сдача — до последнего дня месяца после отчётного; уплата — до 25-го числа месяца после отчётного',
+    );
+    expect(
+      benefitDueRuleText(
+        rule('nds', { dueDay: null, dueAfter: null, payDay: 15, payAfter: 0 }),
+        nds,
+        t,
+      ),
+    ).toBe('уплата — до 15-го числа месяца, за который платится');
   });
 });
 
