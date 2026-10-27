@@ -445,6 +445,7 @@ export interface GridViewSettings {
 export const GRID_KEYS = [
   'staff.list',
   'staff.roles',
+  'kb.team',
   'accounts.list',
   'orgs.list',
   'l10n.list',

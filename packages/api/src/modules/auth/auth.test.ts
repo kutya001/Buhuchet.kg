@@ -246,17 +246,17 @@ describe.skipIf(!databaseAvailable())('вход, сеансы и проверк�
     expect(body.error).toMatchObject({
       code: 'login_locked',
     });
-    expect(body.error.message).toMatch(
-      /^Слишком много неверных паролей\. Вход закрыт на 15 минут, попробуйте снова после \d{2}:\d{2}\.$/,
+    // Текст — как в прототипе v59 и словаре refDB (`auth.locked`), одинаковый для любого логина.
+    expect(body.error.message).toBe(
+      'Вход временно закрыт: слишком много неверных попыток. Попробуйте через 15 минут.',
     );
     const retryAfter = Number(fifth.headers.get('retry-after'));
     expect(retryAfter).toBeGreaterThan(14 * 60);
     expect(retryAfter).toBeLessThanOrEqual(15 * 60);
-    // Для текста словаря err.login_locked — минуты и время по Бишкеку, как в тексте сервера.
-    const details = body.error.details as { lockedUntil: string; minutes: number; time: string };
+    // Для текста словаря err.login_locked — минуты; срок — в lockedUntil.
+    const details = body.error.details as { lockedUntil: string; minutes: number };
     expect(details.lockedUntil).toMatch(/^\d{4}-/);
     expect(details.minutes).toBe(15);
-    expect(body.error.message).toContain(`после ${details.time}.`);
 
     const correct = await login(app, 'lock-a');
     expect(correct.status).toBe(429);
@@ -501,8 +501,12 @@ describe.skipIf(!databaseAvailable())('вход, сеансы и проверк�
           eq(auditLog.action, 'update'),
         ),
       );
-    expect(history.map((h) => h.changes)).toEqual([
-      [{ field: 'passwordHash' }, { field: 'mustChangePassword', from: true, to: false }],
+    // В истории — «Временный пароль заменён своим» (прототип core/login.js, ТЗ «Вход в систему»).
+    expect(history.map((h) => [h.changes, h.reason])).toEqual([
+      [
+        [{ field: 'passwordHash' }, { field: 'mustChangePassword', from: true, to: false }],
+        'Временный пароль заменён своим',
+      ],
     ]);
   });
 
@@ -548,10 +552,10 @@ describe.skipIf(!databaseAvailable())('вход, сеансы и проверк�
       .update(organizations)
       .set({ status: 'blocked', blockedReason: 'Заблокирована администратором' })
       .where(eq(organizations.id, c.orgId));
+    // Без названия организации (прототип v59, словарь refDB `auth.org_blocked`).
     const expected = {
       code: 'org_blocked',
-      message: 'Организация Организация В заблокирована. Обратитесь к администратору платформы.',
-      details: { org: 'Организация В' },
+      message: 'Организация заблокирована. Обратитесь к администратору платформы.',
     };
     const open = await get(app, '/api/auth/me', cookie);
     expect(open.status).toBe(403);

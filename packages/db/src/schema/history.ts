@@ -34,7 +34,8 @@ export const auditLog = pgTable(
     entityId: text('entity_id').notNull(),
     /**
      * Контрагент, к которому относится запись, — для истории в карточке контрагента. Ключ на пару
-     * (contractor_id, org_id) появится вместе с таблицей контрагентов.
+     * (contractor_id, org_id) с ON DELETE SET NULL (contractor_id) — в миграции 0040: Drizzle не
+     * описывает обнуление одного столбца составного ключа.
      */
     contractorId: uuid('contractor_id'),
     /** `HistoryAction` из @buhuchet/domain. */
@@ -50,6 +51,8 @@ export const auditLog = pgTable(
   },
   (t) => [
     index('audit_log_entity_idx').on(t.orgId, t.entity, t.entityId, t.at),
+    // Свои действия пользователя: отметка шагов «Базы знаний» по истории (docs/decisions.md п. Г-2).
+    index('audit_log_actor_idx').on(t.orgId, t.actorUserId, t.entity, t.at),
     index('audit_log_contractor_idx')
       .on(t.orgId, t.contractorId, t.at)
       .where(sql`${t.contractorId} is not null`),
