@@ -211,9 +211,13 @@ describe.skipIf(!databaseAvailable())(
             sql`insert into organizations (id, slug, name, status, blocked_reason, is_demo) values (${id}, 'guard', 'Guard', ${extra})`,
           ),
         );
-      await expect(insert(sql`'blocked', 'причина', false`)).rejects.toThrow();
-      await expect(insert(sql`'active', 'причина', false`)).rejects.toThrow();
-      await expect(insert(sql`'active', null, true`)).rejects.toThrow();
+      // Отказ — именно политика вставки, а не другая ошибка.
+      const rls = expect.objectContaining({
+        cause: expect.objectContaining({ message: expect.stringMatching(/row-level security/) }),
+      });
+      await expect(insert(sql`'blocked', 'причина', false`)).rejects.toThrow(rls);
+      await expect(insert(sql`'active', 'причина', false`)).rejects.toThrow(rls);
+      await expect(insert(sql`'active', null, true`)).rejects.toThrow(rls);
       await insert(sql`'active', null, false`);
       const org = await withUserContext(db.app.db, adminId, (tx) => adminGetOrganization(tx, id));
       expect(org).toMatchObject({ active: true, isDemo: false });
