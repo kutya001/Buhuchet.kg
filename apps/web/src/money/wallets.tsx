@@ -437,6 +437,7 @@ export function EmployeeWalletsBox({ employeeId }: { employeeId: string }) {
       {wallets.data.length > 0 ? (
         <MiniTable
           label={t('money.staff.title')}
+          headless
           empty=""
           columns={[
             { key: 'kind', label: t('money.col.kind') },

@@ -81,7 +81,7 @@ const row = (page: Page, text: string) =>
 const toast = (page: Page, text: string) => page.getByRole('status').filter({ hasText: text });
 
 test.describe('Этап 2. Деньги: реквизиты организации и сотрудников', () => {
-  test('(п. 67) владелец добавляет счёт «Перевод по номеру телефона» 0555 123 456 (M-Bank, Бакай Банк), отмечает основным для налогов, меняет и удаляет', async ({
+  test('(п. 67) владелец добавляет счёт «Перевод по номеру телефона» 0555 123 456 (M-Bank, Бакай Банк), отмечает основным для налогов и обслуживания, меняет и удаляет', async ({
     page,
     baseURL,
   }) => {
@@ -106,18 +106,21 @@ test.describe('Этап 2. Деньги: реквизиты организаци
       // В списке банков номера — только провайдеры с переводами по номеру телефона.
       await expect(dialog.getByRole('checkbox', { name: 'Банк Азии' })).toHaveCount(0);
       await dialog.getByRole('switch', { name: /Основной для налогов/ }).check();
+      await dialog.getByRole('switch', { name: /Основной для обслуживания/ }).check();
       await dialog.getByRole('button', { name: 'Добавить', exact: true }).click();
       await expect(dialog).toBeHidden();
       await expect(toast(page, 'Счёт добавлен')).toBeVisible();
 
-      // Новый счёт — основной для налогов; у прежнего основного отметка снята. Банки номера — по
+      // Новый счёт — основной для налогов и обслуживания; у прежних основных отметки сняты. Банки номера — по
       // порядку справочника.
       const added = row(page, '0555 123 456');
       await expect(added).toContainText('Перевод по номеру телефона');
       await expect(added).toContainText('Бакай Банк, M-Bank');
       await expect(added).toContainText('Налоги и обслуживание');
       await expect(added).toContainText('Основной для налогов');
+      await expect(added).toContainText('Основной для обслуживания');
       await expect(row(page, 'Optima Bank')).not.toContainText('Основной для налогов');
+      await expect(row(page, '0700 901 234')).not.toContainText('Основной для обслуживания');
 
       await added.getByRole('button', { name: 'Изменить счёт' }).click();
       const edit = page.getByRole('dialog', { name: 'Изменить счёт организации' });

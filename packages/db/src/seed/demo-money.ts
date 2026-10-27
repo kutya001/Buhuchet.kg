@@ -1,3 +1,4 @@
+import { asc } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Db } from '../client';
 import { banks, employeeWallets, orgAccounts } from '../schema';
@@ -61,12 +62,20 @@ const createdAt = (i: number) => new Date(SEEDED_AT + i * 60_000);
 
 export async function seedDemoMoney(db: Db, file: unknown, orgId: string): Promise<void> {
   const demo = DemoMoneyFile.parse(file);
-  const bankList = await db.select({ code: banks.code, name: banks.name }).from(banks);
+  const bankList = await db
+    .select({ code: banks.code, name: banks.name })
+    .from(banks)
+    .orderBy(asc(banks.sortOrder), asc(banks.code));
   const codeOf = new Map(bankList.map((b) => [b.name, b.code]));
   const bank = (name: string) => {
     const code = codeOf.get(name);
     if (!code) throw new Error(`demoDB.json: банка «${name}» нет в справочнике`);
     return code;
+  };
+  // Банки номера — по порядку справочника, как их сохраняет форма (`normalizeRequisite`).
+  const phoneBanks = (names: readonly string[]) => {
+    const codes = new Set(names.map(bank));
+    return bankList.map((b) => b.code).filter((code) => codes.has(code));
   };
 
   const accounts = demo.organization.accounts.map((a, i) => ({
@@ -75,7 +84,7 @@ export async function seedDemoMoney(db: Db, file: unknown, orgId: string): Promi
     kind: a.kind,
     ...(a.kind === 'acc'
       ? { bankCode: bank(a.bank), accountNo: a.acc, bik: a.bik }
-      : { phone: `+${a.phone.digits}`, phoneBanks: a.banks.map(bank) }),
+      : { phone: `+${a.phone.digits}`, phoneBanks: phoneBanks(a.banks) }),
     holderName: a.name,
     purpose: a.use,
     mainTax: a.mainTax,
@@ -93,7 +102,7 @@ export async function seedDemoMoney(db: Db, file: unknown, orgId: string): Promi
       kind: w.kind,
       ...(w.kind === 'acc'
         ? { bankCode: bank(w.prov), accountNo: w.num }
-        : { phone: `+${w.phone.digits}`, phoneBanks: w.banks.map(bank) }),
+        : { phone: `+${w.phone.digits}`, phoneBanks: phoneBanks(w.banks) }),
       holderName: w.name,
       isMain: w.main,
       createdBy: demoId('user', e.id),

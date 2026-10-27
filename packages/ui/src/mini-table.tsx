@@ -35,9 +35,12 @@ export function MiniTable({
   rows,
   empty,
   label,
+  headless = false,
 }: {
   columns: readonly MiniColumn[];
   rows: readonly MiniRow[];
+  /** Без строки заголовков и подписей у значений на телефоне (реквизиты в карточке сотрудника). */
+  headless?: boolean;
   /** «Нет закреплённых контрагентов». */
   empty: string;
   /** Название таблицы для экранного диктора. */
@@ -49,8 +52,9 @@ export function MiniTable({
   const phone = (c: MiniColumn, i: number, row: MiniRow) => {
     if (i === 0) return `max-md:col-span-2 max-md:text-[14px] ${hasActions ? 'max-md:pr-10' : ''}`;
     if (c.actions) return 'max-md:absolute max-md:top-1.5 max-md:right-1.5';
-    const label =
-      'max-md:before:text-[11px] max-md:before:font-[650] max-md:before:text-faint max-md:before:content-[attr(data-label)]';
+    const label = headless
+      ? ''
+      : 'max-md:before:text-[11px] max-md:before:font-[650] max-md:before:text-faint max-md:before:content-[attr(data-label)]';
     return row.wide?.includes(c.key) ? `${label} max-md:col-span-2` : label;
   };
   return (
@@ -60,7 +64,7 @@ export function MiniTable({
         data-mini-table=""
         className="w-full border-collapse text-[13px] tabular-nums max-md:block"
       >
-        <thead className="max-md:hidden">
+        <thead className={headless ? 'hidden' : 'max-md:hidden'}>
           <tr>
             {columns.map((c) => (
               <th

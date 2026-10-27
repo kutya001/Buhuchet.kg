@@ -172,6 +172,20 @@ describe('MiniTable — маленькая таблица карточки (пр
     expect(act).not.toContain('content-[attr(data-label)]');
   });
 
+  it('headless — без строки заголовков и без подписей у значений на телефоне (прототип staff.js)', () => {
+    const html = renderToStaticMarkup(
+      <MiniTable
+        columns={columns}
+        rows={[{ key: '1', cells: { name: 'Optima Bank', open: 'Основной' } }]}
+        empty="—"
+        label="Реквизиты"
+        headless
+      />,
+    );
+    expect(html).toContain('<thead class="hidden">');
+    expect(html).not.toContain('content-[attr(data-label)]');
+  });
+
   it('miniWide — ключи значений длиннее 22 знаков без лишних пробелов', () => {
     expect(
       miniWide({ short: 'Optima Bank', long: 'Бакай Банк, M-Bank, О!Банк', spaced: '  a   b  ' }),

@@ -141,4 +141,5 @@ export const MONEY_TEXTS = {
   'err.bik_invalid': { ru: REQUISITE_MESSAGES.bik_invalid, section: E },
   'err.wallet_no_invalid': { ru: REQUISITE_MESSAGES.wallet_no_invalid, section: E },
   'err.phone_banks_required': { ru: REQUISITE_MESSAGES.phone_banks_required, section: E },
+  'err.invalid_phone': { ru: REQUISITE_MESSAGES.invalid_phone, section: E },
 } as const satisfies Record<string, UiTextDefault>;
