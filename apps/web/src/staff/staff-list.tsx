@@ -15,7 +15,7 @@ import {
   type GridColumn,
 } from '@buhuchet/ui';
 import { useCallback, useMemo } from 'react';
-import { api } from '../api-client';
+import { api, apiFailure } from '../api-client';
 import { useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { useListExport } from '../lists/export';
@@ -130,7 +130,7 @@ const STAFF_AUDIT: GridAudit<Employee> = {
 
 const fetchStaff: FetchListPage<Employee> = async (params) => {
   const res = await api.api.staff.$get({ query: params });
-  if (!res.ok) throw new Error(`staff: ${res.status}`);
+  if (!res.ok) throw await apiFailure(res);
   return EmployeeList.parse(await res.json());
 };
 
@@ -140,7 +140,7 @@ const fetchStaff: FetchListPage<Employee> = async (params) => {
  */
 const fetchStaffValues = async (col: string, q?: string) => {
   const res = await api.api.staff.values.$get({ query: q ? { col, q } : { col } });
-  if (!res.ok) throw new Error(`staff values: ${res.status}`);
+  if (!res.ok) throw await apiFailure(res);
   return ListValues.parse(await res.json());
 };
 
@@ -208,6 +208,8 @@ export function StaffList() {
         data={view.ready ? list.data : undefined}
         onPageChange={list.setPage}
         error={list.error}
+        errorText={list.errorText}
+        errorTextOf={list.errorTextOf}
         onRetry={list.retry}
         filters={list.filters}
         onFiltersChange={list.setFilters}

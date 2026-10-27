@@ -4,7 +4,7 @@ import { OrgPolicy, OrgPolicyHistory, OrgProfile, OrgRoleOptions } from '@buhuch
 import { queryOptions, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useCallback } from 'react';
-import { api } from '../api-client';
+import { api, apiFailure } from '../api-client';
 
 /**
  * Данные модуля «Моя организация» через TanStack Query: «Основное», учётная политика и настройки,
@@ -13,43 +13,35 @@ import { api } from '../api-client';
 
 type JsonResponse = { ok: boolean; status: number; json(): Promise<unknown> };
 
-const json = async <T>(res: JsonResponse, parse: (v: unknown) => T, what: string) => {
-  if (!res.ok) throw new Error(`${what}: ${res.status}`);
+const json = async <T>(res: JsonResponse, parse: (v: unknown) => T) => {
+  if (!res.ok) throw await apiFailure(res);
   return parse(await res.json());
 };
 
 /** «Основное»: название, ИНН, адрес, телефон, руководитель, адрес страницы, ссылка на логотип. */
 export const orgProfileQuery = queryOptions({
   queryKey: ['org', 'profile'],
-  queryFn: async () => json(await api.api.org.$get(), (v) => OrgProfile.parse(v), 'org'),
+  queryFn: async () => json(await api.api.org.$get(), (v) => OrgProfile.parse(v)),
 });
 
 /** Учётная политика и настройки; роль новых сотрудников (прототип `ORG.defaultRole`). */
 export const policyQuery = queryOptions({
   queryKey: ['org', 'policy'],
-  queryFn: async () => json(await api.api.org.policy.$get(), (v) => OrgPolicy.parse(v), 'policy'),
+  queryFn: async () => json(await api.api.org.policy.$get(), (v) => OrgPolicy.parse(v)),
 });
 
 /** «История изменений учётной политики»: сначала новые. */
 export const policyHistoryQuery = queryOptions({
   queryKey: ['org', 'policy-history'],
   queryFn: async () =>
-    json(
-      await api.api.org.policy.history.$get(),
-      (v) => OrgPolicyHistory.parse(v),
-      'policy history',
-    ),
+    json(await api.api.org.policy.history.$get(), (v) => OrgPolicyHistory.parse(v)),
 });
 
 /** Роли для «Роли по умолчанию» — только с правом «Настройки и учётная политика». */
 export const roleOptionsQuery = queryOptions({
   queryKey: ['org', 'role-options'],
   queryFn: async () =>
-    json(
-      await api.api.org['role-options'].$get(),
-      (v) => OrgRoleOptions.parse(v).items,
-      'role options',
-    ),
+    json(await api.api.org['role-options'].$get(), (v) => OrgRoleOptions.parse(v).items),
 });
 
 /**

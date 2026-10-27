@@ -28,7 +28,7 @@ import {
 import { queryOptions, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useEffectEvent, useMemo, useState } from 'react';
-import { api, callApi } from '../api-client';
+import { api, apiFailure, callApi } from '../api-client';
 import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
 import { useErrorText, useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
@@ -144,14 +144,14 @@ const ORGS_AUDIT: GridAudit<AdminOrganization> = {
 
 const fetchOrgs: FetchListPage<AdminOrganization> = async (params) => {
   const res = await api.api.admin.organizations.$get({ query: params });
-  if (!res.ok) throw new Error(`admin organizations: ${res.status}`);
+  if (!res.ok) throw await apiFailure(res);
   return AdminOrganizationList.parse(await res.json());
 };
 
 /** Значения столбца для фильтра-галочек; `q` — «Найти значение» по всем значениям. */
 const fetchOrgValues = async (col: string, q?: string) => {
   const res = await api.api.admin.organizations.values.$get({ query: q ? { col, q } : { col } });
-  if (!res.ok) throw new Error(`admin organization values: ${res.status}`);
+  if (!res.ok) throw await apiFailure(res);
   return ListValues.parse(await res.json());
 };
 
@@ -305,6 +305,8 @@ export function OrgsList() {
         data={view.ready ? list.data : undefined}
         onPageChange={list.setPage}
         error={list.error}
+        errorText={list.errorText}
+        errorTextOf={list.errorTextOf}
         onRetry={list.retry}
         filters={list.filters}
         onFiltersChange={list.setFilters}

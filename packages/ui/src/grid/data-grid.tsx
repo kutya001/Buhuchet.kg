@@ -67,6 +67,11 @@ export interface DataGridProps<Row> {
   onPageChange: (page: number) => void;
   loading?: boolean;
   error?: boolean;
+  // ОТКЛОНЕНИЕ: docs/deviations.md#42 — в прототипе сервера нет, ошибка всегда про подключение.
+  /** Причина ошибки из ответа сервера вместо «Проверьте подключение к интернету…»; нет — общий текст. */
+  errorText?: string | null;
+  /** Причина ошибки загрузки значений фильтра-галочек тем же правилом; null — общий текст. */
+  errorTextOf?: (error: unknown) => string | null;
   onRetry?: () => void;
   /** Что показать, если записей нет: `EmptyState` или `NothingFound` (при поиске и фильтрах). */
   empty: ReactNode;
@@ -124,6 +129,8 @@ export function DataGrid<Row>({
   onPageChange,
   loading = false,
   error = false,
+  errorText,
+  errorTextOf,
   onRetry,
   empty,
   rowKey,
@@ -249,7 +256,7 @@ export function DataGrid<Row>({
       <EmptyState
         icon="alert"
         title={labels.loadError}
-        text={labels.loadErrorText}
+        text={errorText ?? labels.loadErrorText}
         actions={
           onRetry
             ? [
@@ -433,6 +440,7 @@ export function DataGrid<Row>({
             filter={filters[filterColumn.key]}
             grouped={group.includes(filterColumn.key)}
             loadValues={loadValues}
+            errorTextOf={errorTextOf}
             onApply={(filter, names) => {
               if (names) setValueLabels((prev) => ({ ...prev, [filterColumn.key]: names }));
               setFilter(filterColumn.key, filter);

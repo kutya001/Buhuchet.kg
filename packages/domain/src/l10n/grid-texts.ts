@@ -150,6 +150,11 @@ export const GRID_TEXTS = {
     ru: 'Не удалось выгрузить список. Проверьте подключение к интернету.',
     section: 'Списки',
   },
+  // Запрос списка, значений фильтра или «В Excel» дольше предела сервера (docs/deviations.md, п. 42).
+  'grid.query_timeout': {
+    ru: 'Запрос выполнялся слишком долго. Сузьте список поиском или фильтром и попробуйте ещё раз.',
+    section: 'Списки',
+  },
   'grid.total_by_filter': { ru: 'Итого по фильтру · {n}', section: 'Списки' },
   'grid.created_line': { ru: 'Создал: {text}', section: 'Списки' },
   'grid.updated_line': { ru: 'Изменил: {text}', section: 'Списки' },

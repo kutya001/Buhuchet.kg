@@ -444,6 +444,13 @@ describe('UnifiedDataGrid: состояния', () => {
     expect(html).not.toContain('250 сотрудников');
   });
 
+  it('ошибка с причиной от сервера — причина вместо «проверьте подключение»', () => {
+    const html = grid({ error: true, errorText: 'Запрос выполнялся слишком долго.' });
+    expect(html).toContain('Не удалось загрузить список');
+    expect(html).toContain('Запрос выполнялся слишком долго.');
+    expect(html).not.toContain('Проверьте подключение');
+  });
+
   it('пустой список — пустое состояние экрана', () => {
     const html = grid({ data: { items: [], total: 0, page: 1, totals: {} } });
     expect(html).toContain('<p>пусто</p>');

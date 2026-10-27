@@ -52,6 +52,7 @@ export function FilterPanel<Row>({
   filter,
   grouped,
   loadValues,
+  errorTextOf,
   onApply,
   onToggleGroup,
   labels,
@@ -62,6 +63,8 @@ export function FilterPanel<Row>({
   grouped: boolean;
   /** Значения столбца для галочек с сервера; `q` — «Найти значение» по всем значениям. */
   loadValues?: (key: string, q?: string) => Promise<GridValues>;
+  /** Причина, по которой значения не загрузились (ответ сервера); null — «Проверьте подключение…». */
+  errorTextOf?: (error: unknown) => string | null;
   /** Новый фильтр (null — убрать) и подписи значений галочек для чипа. */
   onApply: (filter: ListFilterValue | null, valueLabels?: ValueLabels) => void;
   onToggleGroup: () => void;
@@ -80,6 +83,7 @@ export function FilterPanel<Row>({
   const [find, setFind] = useState('');
   const [found, setFound] = useState<{ q: string; values: GridValues | 'error' } | null>(null);
   const [tooMany, setTooMany] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     if (type !== 'enum' || !loadValues) return;
@@ -90,7 +94,11 @@ export function FilterPanel<Row>({
         setValues(v);
         setNames((prev) => ({ ...prev, ...labelsOf(v) }));
       },
-      () => live && setValues('error'),
+      (error: unknown) => {
+        if (!live) return;
+        setLoadError(errorTextOf?.(error) ?? null);
+        setValues('error');
+      },
     );
     return () => {
       live = false;
@@ -112,14 +120,18 @@ export function FilterPanel<Row>({
           setFound({ q: needle, values: v });
           setNames((prev) => ({ ...prev, ...labelsOf(v) }));
         },
-        () => live && setFound({ q: needle, values: 'error' }),
+        (error: unknown) => {
+          if (!live) return;
+          setLoadError(errorTextOf?.(error) ?? null);
+          setFound({ q: needle, values: 'error' });
+        },
       );
     }, FIND_DELAY);
     return () => {
       live = false;
       clearTimeout(timer);
     };
-  }, [partial, needle, loadValues, column.key]);
+  }, [partial, needle, loadValues, errorTextOf, column.key]);
 
   const labelOf: EnumLabelOf = (v) => (Object.hasOwn(names, v) ? names[v] : undefined);
   const step = (next: EnumStep) => {
@@ -233,6 +245,7 @@ export function FilterPanel<Row>({
       {type === 'enum' && (
         <EnumValues
           values={loadValues ? values : 'error'}
+          loadError={loadError}
           found={found}
           selection={selection}
           labelOf={labelOf}
@@ -283,6 +296,7 @@ function initialBound<Row>(
  */
 function EnumValues({
   values,
+  loadError,
   found,
   selection,
   labelOf,
@@ -293,6 +307,8 @@ function EnumValues({
   labels,
 }: {
   values: GridValues | 'loading' | 'error';
+  /** Причина ошибки загрузки из ответа сервера; null — `labels.filterLoadError`. */
+  loadError: string | null;
   found: { q: string; values: GridValues | 'error' } | null;
   selection: EnumSelection;
   labelOf: EnumLabelOf;
@@ -304,7 +320,9 @@ function EnumValues({
 }) {
   if (values === 'loading') return <div className={HINT}>{labels.filterLoading}</div>;
   if (values === 'error') {
-    return <div className="text-[12.5px] text-danger-label">{labels.filterLoadError}</div>;
+    return (
+      <div className="text-[12.5px] text-danger-label">{loadError ?? labels.filterLoadError}</div>
+    );
   }
   const needle = find.trim();
   let shown: GridValues | 'error' = values;
@@ -330,7 +348,7 @@ function EnumValues({
         />
       )}
       {shown === 'error' ? (
-        <div className="text-[12.5px] text-danger-label">{labels.filterLoadError}</div>
+        <div className="text-[12.5px] text-danger-label">{loadError ?? labels.filterLoadError}</div>
       ) : (
         <EnumList
           shown={shown}

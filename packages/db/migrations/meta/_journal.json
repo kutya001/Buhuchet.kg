@@ -183,6 +183,13 @@
       "when": 1793073182458,
       "tag": "0025_organizations_insert_guard",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1793080527530,
+      "tag": "0026_rate_limits",
+      "breakpoints": true
     }
   ]
 }

@@ -40,7 +40,7 @@ import {
 import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
 import { apiFail, listQueryOf, listQueryResponses, versionedSaveResponses } from '../../errors';
-import { xlsxContent, xlsxResponse } from '../../lists/export';
+import { exportRateResponses, withExportSlot, xlsxContent, xlsxResponse } from '../../lists/export';
 import { requirePlatformAdmin } from '../../middleware/access';
 import { serverTexts } from '../l10n/texts';
 
@@ -162,6 +162,7 @@ export const exportOrganizationsRoute = createRoute({
       content: xlsxContent,
     },
     ...listQueryResponses,
+    ...exportRateResponses,
     ...denied,
   },
 });
@@ -174,17 +175,23 @@ export function exportOrganizationsHandler(
     const params = c.req.valid('query');
     const query = listQueryOf(params);
     const keys = [...new Set(params.cols.split(','))];
-    const t = await serverTexts(deps);
-    const result = await withUserContext(deps.db, c.get('session')!.userId, (tx) =>
-      exportAdminOrgs(tx, query, keys, t),
-    );
-    return xlsxResponse(c, {
-      title: t('nav.organizations'),
-      today: deps.clock.now(),
-      columns: result.columns,
-      rows: result.rows,
-      more: result.more,
-      t,
+    const userId = c.get('session')!.userId;
+    return withExportSlot(deps, userId, async () => {
+      const t = await serverTexts(deps);
+      const result = await withUserContext(
+        deps.db,
+        userId,
+        (tx) => exportAdminOrgs(tx, query, keys, t),
+        'export',
+      );
+      return xlsxResponse(c, {
+        title: t('nav.organizations'),
+        today: deps.clock.now(),
+        columns: result.columns,
+        rows: result.rows,
+        more: result.more,
+        t,
+      });
     });
   };
 }

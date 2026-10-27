@@ -1,6 +1,16 @@
-import { bishkekDate, formatDateRu, isNumericColumn, type ListColumnType } from '@buhuchet/domain';
+import { releaseRateLimit, takeRateLimit, type RateLimit } from '@buhuchet/db';
+import {
+  bishkekDate,
+  EXPORT_HOURLY_LIMIT,
+  formatDateRu,
+  isNumericColumn,
+  type ListColumnType,
+} from '@buhuchet/domain';
+import { ApiError } from '@buhuchet/shared';
 import { z } from '@hono/zod-openapi';
 import type { Context } from 'hono';
+import type { ApiDeps } from '../deps';
+import { apiFail } from '../errors';
 import { buildXlsx, XLSX_TYPE, type XlsxCell } from './xlsx';
 
 /**
@@ -42,3 +52,53 @@ export async function xlsxResponse(
 export const xlsxContent = {
   [XLSX_TYPE]: { schema: z.string().openapi({ format: 'binary' }) },
 };
+
+/**
+ * Выгрузки одного пользователя (docs/decisions.md, п. 38): одна одновременно и не больше
+ * `EXPORT_HOURLY_LIMIT` за час. Выгрузка, которую не отпустили (сбой процесса), перестаёт мешать через
+ * 5 минут — столько живёт функция API (`maxDuration`): предел 60 с — у каждого запроса к базе, а не у
+ * всей выгрузки, поэтому срок короче мог бы кончиться раньше самой выгрузки.
+ */
+export const EXPORT_RATE_LIMIT: RateLimit = {
+  kind: 'export',
+  max: EXPORT_HOURLY_LIMIT,
+  windowSeconds: 3600,
+  leaseSeconds: 300,
+};
+
+/**
+ * Выгрузка «В Excel» по очереди: идёт прежняя выгрузка пользователя — 429 `export_busy`, за час уже
+ * `EXPORT_HOURLY_LIMIT` — 429 `export_limit`; иначе `run`, и выгрузка отпускается, чем бы она ни
+ * кончилась. Вызывать после разбора параметров (`listQueryOf`): запрос не в формате (фильтры, страница)
+ * в счёт не идёт. Неизвестные столбцы и поля сортировки проверяет база уже внутри `run` — такая попытка
+ * считается, но выгрузка отпускается сразу.
+ * Запросы к базе внутри `run` — с видом работы `export` (`withOrgContext(…, { …, kind: 'export' })`).
+ */
+export async function withExportSlot<T>(
+  deps: ApiDeps,
+  userId: string,
+  run: () => Promise<T>,
+): Promise<T> {
+  const slot = await takeRateLimit(deps.db, EXPORT_RATE_LIMIT, userId);
+  if (!slot.ok) {
+    if (slot.reason === 'busy') {
+      apiFail(429, 'export_busy', 'Предыдущая выгрузка ещё готовится');
+    }
+    apiFail(429, 'export_limit', 'Слишком много выгрузок за час', { n: EXPORT_HOURLY_LIMIT });
+  }
+  try {
+    return await run();
+  } finally {
+    await releaseRateLimit(deps.db, EXPORT_RATE_LIMIT, userId, slot.ticket).catch((err: unknown) =>
+      deps.logger.error({ err }, 'выгрузка не отпущена'),
+    );
+  }
+}
+
+/** Ответ 429 метода выгрузки — для описания OpenAPI (`createRoute`). */
+export const exportRateResponses = {
+  429: {
+    description: 'Идёт прежняя выгрузка пользователя или за час их уже 20',
+    content: { 'application/json': { schema: ApiError } },
+  },
+} as const;

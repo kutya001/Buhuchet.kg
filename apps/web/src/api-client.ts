@@ -38,3 +38,27 @@ export async function callApi(send: () => Promise<ResponseLike>): Promise<ApiRes
     error: parsed.success ? parsed.data.error : { code: 'unknown', message: '' },
   };
 }
+
+/**
+ * Ошибка ответа API в запросах данных (react-query): код и текст из ответа, чтобы экран показал
+ * понятную причину («Запрос выполнялся слишком долго»), а не «проверьте подключение».
+ */
+export class ApiFailure extends Error {
+  constructor(
+    readonly status: number,
+    readonly error: ApiErrorLike,
+  ) {
+    super(`${error.code} (${status})`);
+    this.name = 'ApiFailure';
+  }
+}
+
+/** `ApiFailure` из ответа с ошибкой; тело не в общем формате — код `unknown`. */
+export async function apiFailure(res: ResponseLike): Promise<ApiFailure> {
+  const body: unknown = await res.json().catch(() => null);
+  const parsed = ApiError.safeParse(body);
+  return new ApiFailure(
+    res.status,
+    parsed.success ? parsed.data.error : { code: 'unknown', message: '' },
+  );
+}

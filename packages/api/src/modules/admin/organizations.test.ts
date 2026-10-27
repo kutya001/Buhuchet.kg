@@ -1,3 +1,4 @@
+import { schema } from '@buhuchet/db';
 import { databaseAvailable } from '@buhuchet/db/testing';
 import {
   AdminOrganization,
@@ -8,6 +9,7 @@ import {
   ListValues,
   MeResponse,
 } from '@buhuchet/shared';
+import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { apiRequest, createStaffFixture, signIn, TEST_PASSWORD, unzipTexts } from '../../testing';
 
@@ -161,5 +163,19 @@ describe.skipIf(!databaseAvailable())('Админка → «Организаци
     const sheet = Object.entries(files).find(([name]) => name.includes('sheet1'))?.[1] ?? '';
     expect(sheet).toContain('Организация А');
     expect(sheet).toContain('owner-b');
+
+    // Выгрузки администратора считаются так же, как у сотрудника: пока идёт прежняя — 429.
+    const [user] = await f.t.admin.db
+      .select({ id: schema.users.id })
+      .from(schema.users)
+      .where(eq(schema.users.login, 'platform-admin'));
+    await f.t.admin.db.insert(schema.rateLimits).values({
+      kind: 'export',
+      subject: user!.id,
+      busyUntil: new Date(Date.now() + 60_000),
+    });
+    const busy = await get('/api/admin/organizations/export?cols=name');
+    expect(busy.status).toBe(429);
+    expect(ApiError.parse(await busy.json()).error.code).toBe('export_busy');
   });
 });

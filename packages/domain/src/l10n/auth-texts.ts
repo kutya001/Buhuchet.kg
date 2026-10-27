@@ -112,6 +112,19 @@ export const AUTH_TEXTS = {
   'err.origin_mismatch': { ru: 'Запрос с другого сайта отклонён', section: 'Ошибки' },
   'err.validation_failed': { ru: 'Неверные данные запроса', section: 'Ошибки' },
   'err.internal_error': { ru: 'Внутренняя ошибка', section: 'Ошибки' },
+  // Защита тяжёлых запросов (docs/decisions.md, п. 38; docs/deviations.md, п. 42).
+  'err.query_timeout': {
+    ru: 'Запрос выполнялся слишком долго. Попробуйте ещё раз.',
+    section: 'Ошибки',
+  },
+  'err.export_busy': {
+    ru: 'Предыдущая выгрузка в Excel ещё готовится. Попробуйте позже.',
+    section: 'Ошибки',
+  },
+  'err.export_limit': {
+    ru: 'Не больше {n} выгрузок в Excel за час. Попробуйте позже.',
+    section: 'Ошибки',
+  },
   // Обрыв связи и непонятный ответ сервера.
   'err.network': {
     ru: 'Нет связи с сервером. Проверьте интернет и попробуйте ещё раз.',

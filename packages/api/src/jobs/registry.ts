@@ -1,5 +1,5 @@
 import type { AppConfig } from '@buhuchet/adapters';
-import { cleanupLoginAttempts, schema } from '@buhuchet/db';
+import { cleanupLoginAttempts, cleanupRateLimits, schema } from '@buhuchet/db';
 import { lt } from 'drizzle-orm';
 import type { Job } from '../deps';
 
@@ -31,11 +31,27 @@ export const cleanupLoginAttemptsJob: Job = {
   },
 };
 
+/** Строки частоты действий (выгрузки «В Excel») старше суток удаляются раз в час. */
+export const cleanupRateLimitsJob: Job = {
+  name: 'system.cleanup-rate-limits',
+  cron: '15 * * * *',
+  lookbackMinutes: 60,
+  async run(ctx) {
+    await cleanupRateLimits(ctx.db);
+  },
+};
+
 /**
  * Все задачи по расписанию. Модули добавляют сюда свои: создание отчётов, напоминания 7 и 3 дня
- * и в день срока, сводка по понедельникам, отправка очереди Telegram.
+ * и в день срока, сводка по понедельникам, отправка очереди Telegram. Данные организации задача
+ * читает и меняет в `withOrgContext(ctx.db, { orgId, kind: 'job' })`: предел времени запроса у задач
+ * больше, чем у методов API (docs/decisions.md, п. 38).
  */
-export const jobs: readonly Job[] = [cleanupSchedulerRuns, cleanupLoginAttemptsJob];
+export const jobs: readonly Job[] = [
+  cleanupSchedulerRuns,
+  cleanupLoginAttemptsJob,
+  cleanupRateLimitsJob,
+];
 
 /**
  * Вебхук бота: Telegram присылает обновления на `<APP_BASE_URL>/api/telegram/webhook` с секретом

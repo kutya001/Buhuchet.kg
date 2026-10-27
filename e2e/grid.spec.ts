@@ -511,4 +511,31 @@ test.describe('Списки: UnifiedDataGrid', () => {
     });
     await setup.dispose();
   });
+
+  test('(проверка задачи #56) после 20 выгрузок «В Excel» за час — уведомление «Не больше 20 выгрузок в Excel за час. Попробуйте позже.»', async ({
+    page,
+    baseURL,
+  }) => {
+    test.setTimeout(120_000);
+    const origin = new URL(baseURL!).origin;
+    // Свой главный бухгалтер: его предел выгрузок не мешает другим тестам.
+    await signInAsNewChief(page, origin);
+    // 20 выгрузок подряд через API (выгрузка отпускается сама, следующую можно сразу), 21-я — отказ.
+    for (let i = 0; i < 20; i++) {
+      const file = await page.request.get('/api/staff/export?cols=fullName');
+      expect(file.status(), await file.text()).toBe(200);
+    }
+    const limited = await page.request.get('/api/staff/export?cols=fullName');
+    expect(limited.status()).toBe(429);
+    expect(((await limited.json()) as { error: { code: string } }).error.code).toBe('export_limit');
+
+    await page.goto('/app/staff/list');
+    await expect(page.locator('[data-grid] [data-id]').first()).toBeVisible();
+    await page.getByRole('button', { name: 'В Excel' }).click();
+    await expect(
+      page
+        .getByRole('status')
+        .filter({ hasText: 'Не больше 20 выгрузок в Excel за час. Попробуйте позже.' }),
+    ).toBeVisible();
+  });
 });

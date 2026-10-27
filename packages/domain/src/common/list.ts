@@ -298,6 +298,12 @@ export interface ListQuery {
 /** Строк в выгрузке в Excel — не больше стольких за раз (годовые отчёты большой организации — около 8 000). */
 export const EXPORT_ROWS_LIMIT = 50_000;
 
+/**
+ * «В Excel» — не больше стольких выгрузок за час на пользователя и одна одновременно: файл собирается в
+ * памяти сервера (docs/decisions.md, п. 38).
+ */
+export const EXPORT_HOURLY_LIMIT = 20;
+
 /** Целое с разрядами через неразрывный пробел: «50 000» (как суммы `formatSom`, без копеек). */
 export function formatCount(n: number): string {
   return String(Math.trunc(n)).replace(/\B(?=(\d{3})+(?!\d))/g, '\u00a0');

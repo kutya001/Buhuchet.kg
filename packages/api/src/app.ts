@@ -88,7 +88,16 @@ export function createApp(deps: ApiDeps) {
       return err.res ? err.getResponse() : c.json(apiError('http_error', err.message), err.status);
     }
     const record = recordErrorResponse(err);
-    if (record) return c.json(record.body, record.status);
+    if (record) {
+      // Чтобы по журналу было видно, какие запросы упираются в предел времени.
+      if (record.status === 503) {
+        deps.logger.warn(
+          { requestId: c.get('requestId'), path: c.req.path },
+          'запрос дольше предела',
+        );
+      }
+      return c.json(record.body, record.status);
+    }
     deps.logger.error({ err, requestId: c.get('requestId'), path: c.req.path }, 'ошибка API');
     return c.json(apiError('internal_error', 'Внутренняя ошибка'), 500);
   });

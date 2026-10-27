@@ -2,7 +2,7 @@
 
 import { PermissionCatalog, Role } from '@buhuchet/shared';
 import { queryOptions } from '@tanstack/react-query';
-import { api } from '../api-client';
+import { api, apiFailure } from '../api-client';
 
 /**
  * Данные карточки и формы роли через TanStack Query: справочник «Права ролей» (названия и описания —
@@ -14,7 +14,7 @@ export const permissionCatalogQuery = queryOptions({
   queryKey: ['permissions'],
   queryFn: async () => {
     const res = await api.api.permissions.$get();
-    if (!res.ok) throw new Error(`permissions: ${res.status}`);
+    if (!res.ok) throw await apiFailure(res);
     return PermissionCatalog.parse(await res.json()).items;
   },
   staleTime: Infinity,
@@ -26,7 +26,7 @@ export const roleQuery = (id: string) =>
     queryKey: ['role', id],
     queryFn: async () => {
       const res = await api.api.roles[':id'].$get({ param: { id } });
-      if (!res.ok) throw new Error(`role: ${res.status}`);
+      if (!res.ok) throw await apiFailure(res);
       return Role.parse(await res.json());
     },
   });

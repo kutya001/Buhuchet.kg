@@ -14,7 +14,7 @@ import {
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { api, callApi } from '../api-client';
+import { api, apiFailure, callApi } from '../api-client';
 import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
 import { useErrorText, useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
@@ -103,7 +103,7 @@ export function roleColumns(t: Translate): GridColumn<RoleListItem>[] {
 
 const fetchRoles: FetchListPage<RoleListItem> = async (params) => {
   const res = await api.api.roles.$get({ query: params });
-  if (!res.ok) throw new Error(`roles: ${res.status}`);
+  if (!res.ok) throw await apiFailure(res);
   return RoleList.parse(await res.json());
 };
 
@@ -118,7 +118,7 @@ const loadForm = async (client: QueryClient, id: string) => {
 
 const fetchRoleValues = async (col: string, q?: string) => {
   const res = await api.api.roles.values.$get({ query: q ? { col, q } : { col } });
-  if (!res.ok) throw new Error(`roles values: ${res.status}`);
+  if (!res.ok) throw await apiFailure(res);
   return ListValues.parse(await res.json());
 };
 
@@ -234,6 +234,8 @@ export function RolesList() {
         data={view.ready ? list.data : undefined}
         onPageChange={list.setPage}
         error={list.error}
+        errorText={list.errorText}
+        errorTextOf={list.errorTextOf}
         onRetry={list.retry}
         filters={list.filters}
         onFiltersChange={list.setFilters}

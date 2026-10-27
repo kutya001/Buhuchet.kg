@@ -130,6 +130,23 @@ describe('служебное', () => {
     expect(JSON.stringify(await res.json())).not.toContain('секретная');
   });
 
+  it('запрос к базе дольше предела — 503 query_timeout, а не «Внутренняя ошибка»', async () => {
+    const app = signedInApp();
+    app.get('/slow', () => {
+      // Так ошибку отдаёт drizzle: ошибка PostgreSQL 57014 — в причине.
+      throw Object.assign(new Error('Failed query: select …'), {
+        cause: Object.assign(new Error('canceling statement due to statement timeout'), {
+          code: '57014',
+        }),
+      });
+    });
+    const res = await app.request('/api/slow', { headers: signedIn });
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual({
+      error: { code: 'query_timeout', message: 'Запрос выполнялся слишком долго' },
+    });
+  });
+
   it('неверные данные запроса — 400 validation_failed с подробностями', async () => {
     const { createRoute, z } = await import('@hono/zod-openapi');
     const app = signedInApp();

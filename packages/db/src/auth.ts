@@ -13,6 +13,7 @@ import {
 } from '@buhuchet/domain';
 import { eq, sql } from 'drizzle-orm';
 import type { Db, Tx } from './client';
+import { timeoutSetting, type QueryKind } from './context';
 import { employees, organizations, rolePermissions, roleScopes, roles } from './schema';
 
 /**
@@ -209,15 +210,19 @@ export async function changeOwnPassword(
   await tx.execute(sql`select app.auth_reset_revoke(app.current_user_id())`);
 }
 
-/** Транзакция от имени пользователя без организации (администратор платформы). */
+/**
+ * Транзакция от имени пользователя без организации (администратор платформы); предел времени
+ * запросов — по виду работы, как у `withOrgContext`.
+ */
 export async function withUserContext<T>(
   db: Db,
   userId: string,
   fn: (tx: Tx) => Promise<T>,
+  kind: QueryKind = 'request',
 ): Promise<T> {
   return db.transaction(async (tx) => {
     await tx.execute(
-      sql`select set_config('app.org_id', '', true), set_config('app.user_id', ${userId}, true)`,
+      sql`select set_config('app.org_id', '', true), set_config('app.user_id', ${userId}, true), ${timeoutSetting(kind)}`,
     );
     return fn(tx);
   });
