@@ -404,6 +404,16 @@ test.describe('Этап 1: сотрудники и роли (экраны)', () 
     const manager = await person('Кадров', role.id);
     const colleague = await person('Бухгалтеров', roleId('Бухгалтер'));
     const chief = await person('Главбухов', roleId('Главный бухгалтер'));
+    // Роль с «Откатом статусов» — правом, которое выдаёт только владелец.
+    const seniorName = `Старший ${word}`;
+    const senior = (await (
+      await setup.post('/api/roles', { headers: { origin }, data: { name: seniorName } })
+    ).json()) as { id: string; version: number };
+    const granted = await setup.patch(`/api/roles/${senior.id}`, {
+      headers: { origin },
+      data: { version: senior.version, permissions: ['cpView', 'rollback'] },
+    });
+    expect(granted.status(), await granted.text()).toBe(200);
     await setup.dispose();
     await signIn(page.request, origin, manager.employee.login, manager.temporaryPassword);
     const changed = await page.request.post('/api/auth/password', {
@@ -452,9 +462,24 @@ test.describe('Этап 1: сотрудники и роли (экраны)', () 
       );
       await dialog.getByRole('button', { name: 'Отмена' }).click();
       await expect(dialog).toBeHidden();
+
+      // В «Новый сотрудник» — тот же список ролей и та же подсказка.
+      await add(page, 'Сотрудник');
+      const hire = page.getByRole('dialog', { name: 'Новый сотрудник' });
+      const roles = hire.getByLabel('Роль');
+      await expect(roles.locator('option').filter({ hasText: /^Бухгалтер$/ })).toHaveCount(1);
+      const offered = await roles.locator('option').allTextContents();
+      for (const name of ['Главный бухгалтер', 'Владелец организации', roleName, seniorName]) {
+        expect(offered).not.toContain(name);
+      }
+      await expect(hire).toContainText(
+        'Роли с правами, которые выдаёт только владелец, и роли шире вашей назначает владелец',
+      );
+      await hire.getByRole('button', { name: 'Отмена' }).click();
+      await expect(hire).toBeHidden();
     });
 
-    await test.step('роли: своя и шире своей — только «Открыть», в карточке «Только для чтения» и нет «Изменить»', async () => {
+    await test.step('роли: своя, с правами «выдаёт только владелец» и шире своей — только «Открыть», в карточке «Только для чтения» и нет «Изменить»', async () => {
       const cases = [
         [
           roleId('Главный бухгалтер'),
@@ -462,6 +487,7 @@ test.describe('Этап 1: сотрудники и роли (экраны)', () 
           'роль с правами шире ваших меняет владелец',
         ],
         [role.id, roleName, 'права своей роли меняет владелец'],
+        [senior.id, seniorName, 'роль с правами, которые выдаёт только владелец, меняет владелец'],
       ] as const;
       for (const [id, name, why] of cases) {
         await page.goto('/app/staff/roles');

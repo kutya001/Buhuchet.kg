@@ -109,9 +109,11 @@ export function listRolesHandler(deps: ApiDeps): RouteHandler<typeof listRolesRo
         ),
       };
     });
+    // Роль удалили между запросами: не владельцу — только для чтения, как сотрудник без признака.
     const readOnly = (r: RoleSummary) => {
       const role = rights.get(r.id);
-      return role ? roleReadOnly(editor, { id: r.id, ...role }) : null;
+      if (role) return roleReadOnly(editor, { id: r.id, ...role });
+      return editor.isOwner || r.isOwner ? null : 'beyond_own_role';
     };
     return c.json(
       {

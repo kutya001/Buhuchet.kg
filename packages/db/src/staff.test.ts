@@ -13,6 +13,7 @@ import { createTestDatabase, databaseAvailable, type TestDatabase } from './test
 describe.skipIf(!databaseAvailable())('роль для решения о сотруднике (roleAccess)', () => {
   let t: TestDatabase;
   let a: CreatedOrganization;
+  let b: CreatedOrganization;
   const ctx = (): OrgContext => ({ orgId: a.orgId, userId: a.ownerUserId });
   const accRoleId = () => a.roles.find((r) => r.templateCode === 'acc')!.id;
 
@@ -28,6 +29,16 @@ describe.skipIf(!databaseAvailable())('роль для решения о сот�
       owner: {
         fullName: 'Владелец Организации',
         login: 'owner-a',
+        passwordHash: await hashPassword('Bh-4821-temp'),
+      },
+    });
+    b = await createOrganization(t.app.db, {
+      name: 'Организация Б',
+      inn: '02811201810457',
+      slug: 'org-b',
+      owner: {
+        fullName: 'Владелец Другой',
+        login: 'owner-b',
         passwordHash: await hashPassword('Bh-4821-temp'),
       },
     });
@@ -51,8 +62,10 @@ describe.skipIf(!databaseAvailable())('роль для решения о сот�
   it('права и область нескольких ролей сразу — как у roleAccess (roleRightsMap)', async () => {
     const ownerRoleId = a.roles.find((r) => r.isOwner)!.id;
     const unknown = '00000000-0000-4000-8000-000000000000';
+    // Роль другой организации не видна (RLS), как и несуществующая.
+    const foreign = b.roles.find((r) => r.templateCode === 'acc')!.id;
     const [map, acc, owner, empty] = await withOrgContext(t.app.db, ctx(), async (tx) => [
-      await roleRightsMap(tx, [accRoleId(), ownerRoleId, accRoleId(), unknown]),
+      await roleRightsMap(tx, [accRoleId(), ownerRoleId, accRoleId(), unknown, foreign]),
       await roleAccess(tx, accRoleId()),
       await roleAccess(tx, ownerRoleId),
       await roleRightsMap(tx, []),

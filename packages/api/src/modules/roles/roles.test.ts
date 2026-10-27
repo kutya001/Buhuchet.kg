@@ -213,6 +213,14 @@ describe.skipIf(!databaseAvailable())('Роли: API', () => {
       ).toBe(404);
       expect((await call('DELETE', `/api/roles/${id}?version=1`, ownerB)).status).toBe(404);
       expect((await role(id)).name).toBe('Кадры');
+      // Не владелец с правом «Сотрудники и роли»: роль чужой организации — тоже 404, а не отказ по
+      // правилам ролей: по ответу не узнать, что она есть.
+      const foreign = f.b.roles.find((r) => r.templateCode === 'chief')!.id;
+      expect((await call('GET', `/api/roles/${foreign}`, hr)).status).toBe(404);
+      expect(
+        (await call('PATCH', `/api/roles/${foreign}`, hr, { version: 1, name: 'X' })).status,
+      ).toBe(404);
+      expect((await call('DELETE', `/api/roles/${foreign}?version=1`, hr)).status).toBe(404);
     });
   });
 
