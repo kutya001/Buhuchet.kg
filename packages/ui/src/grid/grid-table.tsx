@@ -6,13 +6,7 @@ import { iconButtonClass, TOUCH_AREA } from '../button';
 import { Icon } from '../icon';
 import { aggText, groupLabelSpan, type GroupNode } from './grid-groups';
 import { clampWidth, columnWidth, dropColumn, setColumnWidth } from './grid-state';
-import type {
-  GridColumn,
-  GridLabels,
-  GridRowSelection,
-  GridRowStripe,
-  GridRowTone,
-} from './types';
+import type { GridColumn, GridLabels, GridRowSelection, GridRowStripe, GridRowTone } from './types';
 import type { RowEvents } from './row-events';
 
 /** Ширина столбца «⋯» (`.actc` прототипа). */

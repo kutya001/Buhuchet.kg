@@ -131,4 +131,6 @@ mkdirSync(new URL('.', out), { recursive: true });
 const filepath = fileURLToPath(out);
 const json = JSON.stringify({ actors, tasks, menus, overdue, marks });
 writeFileSync(out, await format(json, { ...(await resolveConfig(filepath)), filepath }));
-console.log(`tasks.json: ${menus.length} меню, ${overdue.length} сроков, ${marks.length} отметок прототипа`);
+console.log(
+  `tasks.json: ${menus.length} меню, ${overdue.length} сроков, ${marks.length} отметок прототипа`,
+);

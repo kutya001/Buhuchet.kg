@@ -4,13 +4,7 @@ import { Fragment, type ReactNode } from 'react';
 import { aggText, type GroupNode } from './grid-groups';
 import { GroupToggle, RowMenuButton, SELECT_BOX, type GridTableGroups } from './grid-table';
 import type { RowEvents } from './row-events';
-import type {
-  GridColumn,
-  GridLabels,
-  GridRowSelection,
-  GridRowStripe,
-  GridRowTone,
-} from './types';
+import type { GridColumn, GridLabels, GridRowSelection, GridRowStripe, GridRowTone } from './types';
 
 /** Как `.gcard.<класс>` прототипа: приглушения у карточек нет (`.gt tr.muted` — только таблица). */
 const TONE_CARD: Record<GridRowTone, string> = {

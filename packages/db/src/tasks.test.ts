@@ -169,7 +169,10 @@ describe.skipIf(!databaseAvailable())('Задачи: данные', () => {
       });
     Object.assign(acc, await add('task-acc', 'Токтогулов Алишер Бакытович', 'Алишер Т.', 'acc'));
     Object.assign(chief, await add('task-chief', 'Кадырова Мээрим Асановна', 'Мээрим К.', 'chief'));
-    Object.assign(other, await add('task-other', 'Осмонова Айгерим Талантовна', 'Айгерим О.', 'acc'));
+    Object.assign(
+      other,
+      await add('task-other', 'Осмонова Айгерим Талантовна', 'Айгерим О.', 'acc'),
+    );
     cpId = await inA((tx) =>
       createContractor(tx, a.orgId, contractor({ responsibleEmployeeId: acc.employeeId }), null),
     );
@@ -250,9 +253,9 @@ describe.skipIf(!databaseAvailable())('Задачи: данные', () => {
         }),
       ),
     ).rejects.toEqual(permissionDenied);
-    await expect(
-      inA((tx) => tx.update(taskComments).set({ text: 'другой' })),
-    ).rejects.toEqual(permissionDenied);
+    await expect(inA((tx) => tx.update(taskComments).set({ text: 'другой' }))).rejects.toEqual(
+      permissionDenied,
+    );
     await expect(inA((tx) => tx.delete(taskComments))).rejects.toEqual(permissionDenied);
   });
 
@@ -280,7 +283,10 @@ describe.skipIf(!databaseAvailable())('Задачи: данные', () => {
 
   it('видимость: свои задачи, все — по праву, ждущие подтверждения — с правом «Подтверждать»', async () => {
     const mine = await byChief({ title: 'Видимость: моя' });
-    const foreign = await byChief({ title: 'Видимость: чужая', executorEmployeeId: other.employeeId });
+    const foreign = await byChief({
+      title: 'Видимость: чужая',
+      executorEmployeeId: other.employeeId,
+    });
     const pending = await byChief({
       title: 'Видимость: ждёт',
       executorEmployeeId: other.employeeId,
@@ -363,7 +369,12 @@ describe.skipIf(!databaseAvailable())('Задачи: данные', () => {
     expect(values.items[0]).toMatchObject({ value: 'general', label: 'Общие задачи' });
     expect(values.items.map((x) => x.label)).toContain('ОсОО «Ала-Тоо Трейд»');
     const file = await inA((tx) =>
-      exportTasks(tx, query(), ['title', 'cp', 'scope', 'date'], options(viewer(chief, { all: true }))),
+      exportTasks(
+        tx,
+        query(),
+        ['title', 'cp', 'scope', 'date'],
+        options(viewer(chief, { all: true })),
+      ),
     );
     expect(file.columns.map((c) => c.label)).toEqual([
       'task.col.title',
@@ -385,10 +396,7 @@ describe.skipIf(!databaseAvailable())('Задачи: данные', () => {
     await expect(
       inA((tx) => updateTask(tx, id, 1, task({ title: 'Старая правка' }), null, null)),
     ).rejects.toBeInstanceOf(RecordChangedError);
-    await inA(
-      (tx) => changeTaskStatus(tx, id, { from: 'todo', to: 'in_progress' }),
-      acc.userId,
-    );
+    await inA((tx) => changeTaskStatus(tx, id, { from: 'todo', to: 'in_progress' }), acc.userId);
     await inA(
       (tx) =>
         updateTask(
@@ -428,8 +436,7 @@ describe.skipIf(!databaseAvailable())('Задачи: данные', () => {
       executorEmployeeId: chief.employeeId,
     });
     await inA((tx) => assignContractors(tx, [cp], other.employeeId, undefined));
-    const exec = async (id: string) =>
-      (await inA((tx) => lockTask(tx, id)))!.executorEmployeeId;
+    const exec = async (id: string) => (await inA((tx) => lockTask(tx, id)))!.executorEmployeeId;
     expect(await exec(open)).toBe(other.employeeId);
     expect(await exec(done)).toBe(acc.employeeId);
     expect(await exec(foreign)).toBe(chief.employeeId);
@@ -445,13 +452,18 @@ describe.skipIf(!databaseAvailable())('Задачи: данные', () => {
     const access = taskContractorAccess(contractorScope(other.employeeId));
     expect(await inA((tx) => getTask(tx, foreign, access))).not.toBeNull();
     expect(
-      await inA((tx) => getTask(tx, foreign, taskContractorAccess(contractorScope(acc.employeeId)))),
+      await inA((tx) =>
+        getTask(tx, foreign, taskContractorAccess(contractorScope(acc.employeeId))),
+      ),
     ).toBeNull();
     // Удалённый контрагент уносит свои задачи (прототип: «вместе с задачами и файлами карточки»).
     await inA((tx) => deleteContractor(tx, { id: cp, name: 'x', inn: '02000000000077' }));
     expect(await inA((tx) => lockTask(tx, open))).toBeNull();
     expect(
-      await db.admin.db.select({ n: sql<number>`count(*)::int` }).from(tasks).where(eq(tasks.id, open)),
+      await db.admin.db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(tasks)
+        .where(eq(tasks.id, open)),
     ).toEqual([{ n: 0 }]);
   });
 });

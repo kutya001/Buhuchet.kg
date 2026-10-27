@@ -45,9 +45,7 @@ const DemoTask = z.object({
   confBy: z.string().optional(),
   confAt: Stamp.optional(),
   confNote: z.string().optional(),
-  comments: z
-    .array(z.object({ who: z.string(), at: Stamp, text: z.string() }))
-    .default([]),
+  comments: z.array(z.object({ who: z.string(), at: Stamp, text: z.string() })).default([]),
   _cb: z.string(),
   _ca: Stamp,
   _ub: z.string(),

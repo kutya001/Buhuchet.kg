@@ -31,14 +31,7 @@ export const DEMO_ORG_ID = '00000000-0000-4000-8000-000000000001';
 
 /** Вид записи демо-организации для постоянного uuid: у каждого модуля — свои. */
 export type DemoKind =
-  | 'employee'
-  | 'user'
-  | 'role'
-  | 'contractor'
-  | 'tariff'
-  | 'task'
-  | 'task_comment'
-  | 'requisite';
+  'employee' | 'user' | 'role' | 'contractor' | 'tariff' | 'task' | 'task_comment' | 'requisite';
 export type DemoIdOf = (kind: DemoKind, protoId: string) => string;
 
 /**
