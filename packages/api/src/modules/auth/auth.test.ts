@@ -455,6 +455,18 @@ describe.skipIf(!databaseAvailable())('вход, сеансы и проверк�
     expect(await errorCode(fifth)).toBe('login_locked');
     expect(await errorCode(await attempt())).toBe('login_locked');
     expect(await errorCode(await login(app, 'pwlock-a'))).toBe('login_locked');
+    // Верный текущий и тот же новый пароль при закрытом входе — тоже 429, блокировка не снимается.
+    const same = await app.request(
+      '/api/auth/password',
+      json({ currentPassword: PASSWORD, newPassword: PASSWORD }, { cookie }),
+    );
+    expect(same.status).toBe(429);
+    expect(await errorCode(same)).toBe('login_locked');
+    const [locked] = await t.admin.db
+      .select()
+      .from(loginAttempts)
+      .where(eq(loginAttempts.login, 'pwlock-a'));
+    expect(locked!.lockedUntil!.getTime()).toBeGreaterThan(Date.now());
   });
 
   it('временный пароль: до смены доступны только «кто я» и смена пароля', async () => {

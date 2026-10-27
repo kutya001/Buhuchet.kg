@@ -5,6 +5,7 @@ export type { Logger };
 /** Поля, которые никогда не попадают в журнал, на любом уровне вложенности до трёх. */
 const SECRET_KEYS = [
   'password',
+  'currentPassword',
   'newPassword',
   'passwordHash',
   'password_hash',

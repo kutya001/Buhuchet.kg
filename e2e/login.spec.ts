@@ -286,6 +286,15 @@ test.describe('Этап 1: экраны входа и «Мой профиль»'
     });
 
     const discard = page.getByRole('dialog', { name: 'Закрыть без сохранения?' });
+    await test.step('новый пароль, равный текущему, — ошибка под полем «Новый пароль»', async () => {
+      // Решение заказчика 27.10.2026, docs/deviations.md п. 41.
+      await profile.getByLabel('Текущий пароль').fill(OWN_PASSWORD);
+      await profile.getByLabel('Новый пароль').fill(OWN_PASSWORD);
+      await profile.getByLabel('Повторите').fill(OWN_PASSWORD);
+      await profile.getByRole('button', { name: 'Сменить пароль' }).click();
+      await expect(profile.getByText('Новый пароль совпадает с текущим')).toBeVisible();
+    });
+
     await test.step('неверный текущий пароль — ошибка под полем', async () => {
       await profile.getByLabel('Текущий пароль').fill('неверный');
       await profile.getByLabel('Новый пароль').fill('Новый-пароль-e2e-3');
