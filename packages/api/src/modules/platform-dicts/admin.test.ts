@@ -58,6 +58,7 @@ describe.skipIf(!databaseAvailable())('Админка → «Справочник
       `${P}/forms/${encodeURIComponent('ФС-01')}`,
       '/api/admin/dict-requests',
       '/api/admin/dict-requests/values?col=status',
+      '/api/admin/dict-requests/export?cols=what',
     ];
     for (const path of reads) {
       expect((await get(path, owner)).status, path).toBe(403);
@@ -70,6 +71,11 @@ describe.skipIf(!databaseAvailable())('Админка → «Справочник
       ['POST', `${form}/move`, { step: 1, version: 1 }],
       ['POST', `${form}/active`, { active: false, version: 1 }],
       ['DELETE', `${form}?version=1`, undefined],
+      [
+        'POST',
+        '/api/admin/dict-requests/00000000-0000-4000-8000-000000000000/answer',
+        { status: 'added', answer: '', version: 1 },
+      ],
     ];
     for (const [method, path, body] of writes) {
       expect((await send(method, path, body, owner)).status, path).toBe(403);

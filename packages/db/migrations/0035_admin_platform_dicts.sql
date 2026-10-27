@@ -66,9 +66,10 @@ CREATE OR REPLACE FUNCTION app.admin_dict_usage(p_dict text)
       RETURN;
     END IF;
     FOR link IN
-      SELECT c.conrelid::regclass AS tbl, a.attname AS col, cl.relname AS name
+      SELECT ns.nspname AS schema, a.attname AS col, cl.relname AS name
       FROM pg_constraint c
       JOIN pg_class cl ON cl.oid = c.conrelid
+      JOIN pg_namespace ns ON ns.oid = cl.relnamespace
       JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = c.conkey[1]
       JOIN pg_attribute fa ON fa.attrelid = c.confrelid AND fa.attnum = c.confkey[1]
       WHERE c.contype = 'f'
@@ -77,8 +78,8 @@ CREATE OR REPLACE FUNCTION app.admin_dict_usage(p_dict text)
         AND fa.attname = 'code'
     LOOP
       parts := parts || format(
-        'SELECT %1$I::text AS code, %2$L::text AS ref FROM %3$s WHERE %1$I IS NOT NULL',
-        link.col, link.name, link.tbl);
+        'SELECT %1$I::text AS code, %2$L::text AS ref FROM %3$I.%2$I WHERE %1$I IS NOT NULL',
+        link.col, link.name, link.schema);
     END LOOP;
     FOR link IN
       SELECT r.table_name, r.column_name FROM app.platform_dict_array_refs r WHERE r.dict = p_dict
