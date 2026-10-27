@@ -27,6 +27,7 @@ const SECRET_KEYS = [
   'TELEGRAM_BOT_TOKEN',
   'TELEGRAM_WEBHOOK_SECRET',
   'DEMO_PASSWORD',
+  'PLATFORM_ADMIN_PASSWORD',
   // Поля тела ошибки S3, которые SDK копирует в объект ошибки (подпись запроса).
   'AWSAccessKeyId',
   'StringToSign',

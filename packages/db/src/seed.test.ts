@@ -10,6 +10,7 @@ import {
   platformReference,
   reportTypes,
   roles,
+  sessions,
   users,
 } from './schema';
 import {
@@ -178,6 +179,56 @@ describe.skipIf(!databaseAvailable())('начальное наполнение �
     expect(await verifyPassword(await hashOf(), 'demo')).toBe(false);
     await seedAll(t.admin.db, { update: true, demo: true, demoPassword: 'demo' });
     expect(await verifyPassword(await hashOf(), 'demo')).toBe(true);
+
+    // Тот же пароль — хеш и сеансы не меняются; новый пароль — старые сеансы закрываются.
+    const userId = demoId('user', 'e3');
+    await t.admin.db.insert(sessions).values({
+      userId,
+      orgId: DEMO_ORG_ID,
+      tokenHash: 'seed-test-session',
+      expiresAt: new Date(Date.now() + 86_400_000),
+    });
+    const sessionsOf = () => t.admin.db.select().from(sessions).where(eq(sessions.userId, userId));
+    const before = await hashOf();
+    await seedAll(t.admin.db, { update: true, demo: true, demoPassword: 'demo' });
+    expect(await hashOf()).toBe(before);
+    expect(await sessionsOf()).toHaveLength(1);
+    await seedAll(t.admin.db, { update: true, demo: true, demoPassword: 'demo-2026-new' });
+    expect(await verifyPassword(await hashOf(), 'demo-2026-new')).toBe(true);
+    expect(await sessionsOf()).toHaveLength(0);
+    await seedAll(t.admin.db, { update: true, demo: true, demoPassword: 'demo' });
+  });
+
+  it('администратор платформы: создаётся с временным паролем, повторное наполнение пароль не меняет', async () => {
+    const result = await seedAll(t.admin.db, {
+      update: true,
+      demo: false,
+      platformAdmin: { login: ' KutmanAmin ', password: '12345678' },
+    });
+    expect(result.platformAdmin).toEqual({ login: 'kutmanamin', created: true });
+    const adminOf = async () =>
+      (await t.admin.db.select().from(users).where(eq(users.login, 'kutmanamin')))[0]!;
+    const admin = await adminOf();
+    expect(admin).toMatchObject({ isPlatformAdmin: true, mustChangePassword: true, orgId: null });
+    expect(await verifyPassword(admin.passwordHash, '12345678')).toBe(true);
+    // Пароль в отчёте наполнения не печатается.
+    expect(JSON.stringify(result)).not.toContain('12345678');
+
+    const again = await seedAll(t.admin.db, {
+      update: true,
+      demo: false,
+      platformAdmin: { login: 'kutmanamin', password: 'другой-пароль' },
+    });
+    expect(again.platformAdmin).toEqual({ login: 'kutmanamin', created: false });
+    expect((await adminOf()).passwordHash).toBe(admin.passwordHash);
+
+    await expect(
+      seedAll(t.admin.db, {
+        update: false,
+        demo: false,
+        platformAdmin: { login: 'ERKIN', password: '12345678' },
+      }),
+    ).rejects.toThrow(/занят сотрудником организации/);
   });
 
   it('каталог прав из refDB.json должен совпадать с системным', async () => {

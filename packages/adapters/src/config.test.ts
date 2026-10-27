@@ -238,6 +238,78 @@ describe('пароль демо-сотрудников', () => {
   });
 });
 
+describe('администратор платформы для наполнения', () => {
+  const db = { APP_ENV: 'staging', DATABASE_URL: base.DATABASE_URL };
+
+  it('логин приводится к нижнему регистру, пароль — от 8 символов', () => {
+    const config = loadDatabaseConfig({
+      ...db,
+      PLATFORM_ADMIN_LOGIN: ' KutmanAmin ',
+      PLATFORM_ADMIN_PASSWORD: '12345678',
+    });
+    expect(config.PLATFORM_ADMIN_LOGIN).toBe('kutmanamin');
+    expect(config.PLATFORM_ADMIN_PASSWORD).toBe('12345678');
+    expect(() =>
+      loadDatabaseConfig({
+        ...db,
+        PLATFORM_ADMIN_LOGIN: 'admin',
+        PLATFORM_ADMIN_PASSWORD: '1234567',
+      }),
+    ).toThrow(/PLATFORM_ADMIN_PASSWORD/);
+    // Перевод строки, вставленный в секрет, — ошибка, а не пароль, который нельзя набрать.
+    expect(() =>
+      loadDatabaseConfig({
+        ...db,
+        PLATFORM_ADMIN_LOGIN: 'admin',
+        PLATFORM_ADMIN_PASSWORD: '12345678\n',
+      }),
+    ).toThrow(/PLATFORM_ADMIN_PASSWORD/);
+    expect(() =>
+      loadDatabaseConfig({
+        ...db,
+        PLATFORM_ADMIN_LOGIN: 'а б',
+        PLATFORM_ADMIN_PASSWORD: '12345678',
+      }),
+    ).toThrow(/PLATFORM_ADMIN_LOGIN/);
+  });
+
+  it('логин и пароль задаются вместе; пустые значения — «не задано»', () => {
+    expect(() => loadDatabaseConfig({ ...db, PLATFORM_ADMIN_LOGIN: 'admin' })).toThrow(
+      /PLATFORM_ADMIN_PASSWORD/,
+    );
+    expect(() => loadDatabaseConfig({ ...db, PLATFORM_ADMIN_PASSWORD: '12345678' })).toThrow(
+      /PLATFORM_ADMIN_LOGIN/,
+    );
+    const empty = loadDatabaseConfig({
+      ...db,
+      PLATFORM_ADMIN_LOGIN: '',
+      PLATFORM_ADMIN_PASSWORD: '',
+    });
+    expect(empty.PLATFORM_ADMIN_LOGIN).toBeUndefined();
+  });
+
+  it('на рабочем сайте не задаётся', () => {
+    const prod = { ...db, APP_ENV: 'production' };
+    expect(() =>
+      loadDatabaseConfig({
+        ...prod,
+        PLATFORM_ADMIN_LOGIN: 'admin',
+        PLATFORM_ADMIN_PASSWORD: '12345678',
+      }),
+    ).toThrow(/PLATFORM_ADMIN_LOGIN/);
+    expect(loadDatabaseConfig(prod).PLATFORM_ADMIN_LOGIN).toBeUndefined();
+  });
+
+  it('сайту не нужен: в настройках приложения его нет', () => {
+    const config = loadConfig({
+      ...base,
+      PLATFORM_ADMIN_LOGIN: 'admin',
+      PLATFORM_ADMIN_PASSWORD: '12345678',
+    }) as Record<string, unknown>;
+    expect(config.PLATFORM_ADMIN_PASSWORD).toBeUndefined();
+  });
+});
+
 describe('частичные конфигурации', () => {
   it('база и хранилище читаются по отдельности', () => {
     expect(

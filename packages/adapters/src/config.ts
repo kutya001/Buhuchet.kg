@@ -1,3 +1,9 @@
+import {
+  isValidLogin,
+  normalizeLogin,
+  PASSWORD_MAX_LENGTH,
+  PASSWORD_MIN_LENGTH,
+} from '@buhuchet/domain';
 import { z } from 'zod';
 
 /**
@@ -55,7 +61,45 @@ function checkDemoPassword(
   }
 }
 
-const DatabaseEnv = DatabaseFields.superRefine(checkDemoPassword);
+/**
+ * Администратор платформы, которого создаёт `pnpm db:seed`, если его ещё нет (стенд: секреты
+ * TEST_ADMIN_LOGIN и TEST_ADMIN_PASSWORD в migrate-test.yml). Пароль временный: при первом входе его
+ * нужно сменить; повторное наполнение пароль не меняет. Только для инструментов базы, не для сайта;
+ * на рабочем сайте не задаётся.
+ */
+const SeedFields = z.object({
+  PLATFORM_ADMIN_LOGIN: z
+    .string()
+    .transform(normalizeLogin)
+    .refine(isValidLogin, 'латиница, цифры, точка, дефис; от 3 символов'),
+  // Перевод строки, вставленный в секрет вместе с паролем, дал бы пароль, который нельзя набрать, —
+  // а созданного администратора наполнение уже не поправит.
+  PLATFORM_ADMIN_PASSWORD: z
+    .string()
+    .min(PASSWORD_MIN_LENGTH)
+    .max(PASSWORD_MAX_LENGTH)
+    .refine((v) => v === v.trim(), 'без пробелов и переводов строки по краям'),
+});
+
+const DatabaseEnv = DatabaseFields.extend(SeedFields.partial().shape).superRefine((env, ctx) => {
+  checkDemoPassword(env, ctx);
+  // Рабочему сайту — нет: наполнение воссоздавало бы удалённого администратора с паролем, который
+  // лежит в секретах; первого администратора рабочего сайта решим вместе с его выпуском.
+  if (env.APP_ENV === 'production' && (env.PLATFORM_ADMIN_LOGIN || env.PLATFORM_ADMIN_PASSWORD)) {
+    ctx.addIssue({
+      code: 'custom',
+      path: [env.PLATFORM_ADMIN_LOGIN ? 'PLATFORM_ADMIN_LOGIN' : 'PLATFORM_ADMIN_PASSWORD'],
+      message: 'на рабочем сайте администратора наполнение не создаёт — не задаётся',
+    });
+  }
+  if (Boolean(env.PLATFORM_ADMIN_LOGIN) !== Boolean(env.PLATFORM_ADMIN_PASSWORD)) {
+    ctx.addIssue({
+      code: 'custom',
+      path: [env.PLATFORM_ADMIN_LOGIN ? 'PLATFORM_ADMIN_PASSWORD' : 'PLATFORM_ADMIN_LOGIN'],
+      message: 'PLATFORM_ADMIN_LOGIN и PLATFORM_ADMIN_PASSWORD задаются вместе',
+    });
+  }
+});
 
 // Ключи, регион и корзину вставляют копированием: лишний пробел или перевод строки в конце ломает подпись S3.
 const StorageEnv = z.object({

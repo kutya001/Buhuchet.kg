@@ -77,6 +77,10 @@ jobs:
           # Пароль демо-сотрудников (erkin, meerim…). Секрета нет — пустая строка значит «не задано»:
           # наполнение идёт, пароль демо-сотрудников не меняется (пока он ни разу не задан, войти нельзя).
           DEMO_PASSWORD: ${{ secrets.TEST_DEMO_PASSWORD }}
+          # Администратор платформы: создаётся, если его нет, с временным паролем (сменить при первом
+          # входе); уже созданного наполнение не трогает. Без секретов — не создаётся.
+          PLATFORM_ADMIN_LOGIN: ${{ secrets.TEST_ADMIN_LOGIN }}
+          PLATFORM_ADMIN_PASSWORD: ${{ secrets.TEST_ADMIN_PASSWORD }}
       - name: Корзина файлов
         if: steps.ready.outputs.ok == 'true'
         run: pnpm storage:init
