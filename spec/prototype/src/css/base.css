@@ -17,19 +17,23 @@
   --muted:hsl(35 28% 40%);
   --faint:hsl(34 26% 55%);
   --accent:hsl(30 26% 42%);
-  --accent-hover:hsl(28 30% 47%);
+  --accent-hover:hsl(28 30% 37%);
   --on-accent:hsl(36 38% 98%);
-  --link:hsl(40 98% 32%);
+  --link:hsl(40 98% 28%);
   --hover:hsla(36 38% 98% / .55);
   --row-hover:hsla(34 37% 70% / .13);
   --nav-active:hsla(36 38% 98% / .8);
   --sel:hsla(34 37% 70% / .22);
-  --red:hsl(4 56% 45%);      --red-bg:hsla(4 72% 55% / .12);
-  --orange:hsl(18 69% 42%);  --orange-bg:hsla(21 81% 59% / .16);
-  --yellow:hsl(40 98% 30%);  --yellow-bg:hsla(43 83% 57% / .24);
-  --green:hsl(153 65% 27%);  --green-bg:hsla(148 48% 47% / .15);
-  --blue:hsl(200 64% 34%);   --blue-bg:hsla(202 66% 48% / .13);
-  --purple:hsl(275 37% 42%); --purple-bg:hsla(277 35% 59% / .15);
+  /* Цветной текст, метки и счётчики — контраст не ниже 4,5 : 1 в обеих темах, в том числе в строке «Просрочено» под курсором (ТЗ «Принципы оформления», 26.10.2026) */
+  --red:hsl(4 56% 42%);      --red-bg:hsla(4 72% 55% / .09);
+  --orange:hsl(18 69% 36%);  --orange-bg:hsla(21 81% 59% / .12);
+  --yellow:hsl(40 98% 23%);  --yellow-bg:hsla(43 83% 57% / .18);
+  --green:hsl(153 65% 26%);  --green-bg:hsla(148 48% 47% / .11);
+  --blue:hsl(200 64% 32%);   --blue-bg:hsla(202 66% 48% / .095);
+  --purple:hsl(275 37% 42%); --purple-bg:hsla(277 35% 59% / .11);
+  --label:hsl(35 28% 33%);   --label-bg:hsla(34 37% 70% / .16); /* серые метки, теги и счётчики */
+  /* Залитые цветом кнопки и кружки шкалы статусов со светлым текстом; красная — кнопка опасного действия (решение заказчика 26.10.2026) */
+  --red-btn:hsl(4 56% 45%); --orange-btn:hsl(18 69% 36%); --yellow-btn:hsl(40 98% 23%); --green-btn:hsl(153 65% 26%); --blue-btn:hsl(200 64% 32%); --purple-btn:hsl(275 37% 42%); --gray-btn:hsl(35 28% 40%); --faint-btn:hsl(34 26% 40%);
   --b-red:hsl(4 56% 48%); --b-yellow:hsl(43 83% 57%); --b-blue:hsl(200 64% 37%);
   --knob:hsl(36 38% 98%);
   --cover:hsla(33 30% 35% / .22);
@@ -54,12 +58,15 @@
   --accent:hsl(28 28% 30%); --accent-hover:hsl(26 31% 35%); --on-accent:hsl(32 48% 87%);
   --link:hsl(43 69% 63%);
   --hover:hsla(0 0% 0% / .22); --row-hover:hsla(31 27% 40% / .14); --nav-active:hsla(33 20% 20% / .95); --sel:hsla(34 24% 40% / .25);
-  --red:hsl(4 88% 66%); --red-bg:hsla(4 88% 61% / .15);
-  --orange:hsl(26 85% 62%); --orange-bg:hsla(24 84% 50% / .17);
-  --yellow:hsl(43 69% 63%); --yellow-bg:hsla(42 79% 51% / .17);
-  --green:hsl(152 51% 56%); --green-bg:hsla(154 57% 42% / .17);
-  --blue:hsl(194 59% 62%); --blue-bg:hsla(194 59% 56% / .15);
-  --purple:hsl(242 52% 74%); --purple-bg:hsla(241 45% 57% / .18);
+  /* В тёмной теме заливки меток и кнопок темнее, текст остаётся светлым: контраст не ниже 4,5 : 1 */
+  --red:hsl(4 88% 70%); --red-bg:hsla(4 80% 24% / .28);
+  --orange:hsl(26 85% 62%); --orange-bg:hsla(24 84% 27% / .35);
+  --yellow:hsl(43 69% 63%); --yellow-bg:hsla(42 79% 30% / .3);
+  --green:hsl(152 51% 56%); --green-bg:hsla(154 57% 26% / .3);
+  --blue:hsl(194 59% 62%); --blue-bg:hsla(194 59% 29% / .3);
+  --purple:hsl(242 52% 74%); --purple-bg:hsla(241 45% 37% / .35);
+  --label:hsl(35 27% 58%); --label-bg:hsla(30 20% 8% / .4); --faint-pill-bg:hsla(30 20% 8% / .3);
+  --red-btn:hsl(4 62% 40%); --orange-btn:hsl(26 85% 31%); --yellow-btn:hsl(43 69% 27%); --green-btn:hsl(152 51% 27%); --blue-btn:hsl(194 59% 30%); --purple-btn:hsl(242 52% 53%); --gray-btn:hsl(35 27% 34%); --faint-btn:hsl(34 22% 35%);
   --b-red:hsl(4 88% 61%); --b-yellow:hsl(42 79% 51%); --b-blue:hsl(197 48% 49%);
   --knob:hsl(32 48% 85%);
   --cover:hsla(30 20% 4% / .45);
@@ -81,12 +88,15 @@
   --accent:hsl(28 28% 30%); --accent-hover:hsl(26 31% 35%); --on-accent:hsl(32 48% 87%);
   --link:hsl(43 69% 63%);
   --hover:hsla(0 0% 0% / .22); --row-hover:hsla(31 27% 40% / .14); --nav-active:hsla(33 20% 20% / .95); --sel:hsla(34 24% 40% / .25);
-  --red:hsl(4 88% 66%); --red-bg:hsla(4 88% 61% / .15);
-  --orange:hsl(26 85% 62%); --orange-bg:hsla(24 84% 50% / .17);
-  --yellow:hsl(43 69% 63%); --yellow-bg:hsla(42 79% 51% / .17);
-  --green:hsl(152 51% 56%); --green-bg:hsla(154 57% 42% / .17);
-  --blue:hsl(194 59% 62%); --blue-bg:hsla(194 59% 56% / .15);
-  --purple:hsl(242 52% 74%); --purple-bg:hsla(241 45% 57% / .18);
+  /* В тёмной теме заливки меток и кнопок темнее, текст остаётся светлым: контраст не ниже 4,5 : 1 */
+  --red:hsl(4 88% 70%); --red-bg:hsla(4 80% 24% / .28);
+  --orange:hsl(26 85% 62%); --orange-bg:hsla(24 84% 27% / .35);
+  --yellow:hsl(43 69% 63%); --yellow-bg:hsla(42 79% 30% / .3);
+  --green:hsl(152 51% 56%); --green-bg:hsla(154 57% 26% / .3);
+  --blue:hsl(194 59% 62%); --blue-bg:hsla(194 59% 29% / .3);
+  --purple:hsl(242 52% 74%); --purple-bg:hsla(241 45% 37% / .35);
+  --label:hsl(35 27% 58%); --label-bg:hsla(30 20% 8% / .4); --faint-pill-bg:hsla(30 20% 8% / .3);
+  --red-btn:hsl(4 62% 40%); --orange-btn:hsl(26 85% 31%); --yellow-btn:hsl(43 69% 27%); --green-btn:hsl(152 51% 27%); --blue-btn:hsl(194 59% 30%); --purple-btn:hsl(242 52% 53%); --gray-btn:hsl(35 27% 34%); --faint-btn:hsl(34 22% 35%);
   --b-red:hsl(4 88% 61%); --b-yellow:hsl(42 79% 51%); --b-blue:hsl(197 48% 49%);
   --knob:hsl(32 48% 85%);
   --cover:hsla(30 20% 4% / .45);

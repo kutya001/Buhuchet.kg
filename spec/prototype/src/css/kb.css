@@ -28,7 +28,7 @@
 #kb-cg{position:fixed;right:22px;bottom:calc(22px + env(safe-area-inset-bottom,0px));z-index:95;display:flex;align-items:center;gap:12px;padding:12px 16px;border-radius:var(--r-l);background:var(--raised);border:1px solid var(--border);box-shadow:var(--shadow-l);opacity:0;transform:translateY(12px);pointer-events:none;transition:opacity .25s,transform .25s;font-size:13.5px}
 #kb-cg svg{width:26px;height:26px;color:var(--purple)}#kb-cg.on{opacity:1;transform:none}
 @media (max-width:767px){#kb-cg{left:12px;right:12px;top:calc(12px + env(safe-area-inset-top,0px));bottom:auto;transform:translateY(-12px)}}
-#ckbar{position:fixed;right:22px;bottom:calc(18px + env(safe-area-inset-bottom,0px));z-index:45;display:flex;align-items:center;gap:10px;padding:6px 6px 6px 14px;background:var(--raised);border:1px solid var(--border-strong);border-radius:999px;box-shadow:var(--shadow-l);font-size:13px;max-width:min(680px,calc(100vw - 24px));animation:slideUp .3s forwards}
+#ckbar{position:fixed;right:22px;bottom:calc(18px + env(safe-area-inset-bottom,0px));z-index:45;display:flex;align-items:center;gap:10px;padding:6px 6px 6px 14px;background:var(--raised);border:1px solid var(--border-strong);border-radius:999px;box-shadow:var(--shadow-l);font-size:13px;max-width:min(680px,calc(100vw - 24px));animation:slideUp .25s forwards}
 #ckbar .grow{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #ckbar .ck-ok{color:var(--green);font-weight:600}
 @media (max-width:767px){#ckbar{bottom:calc(84px + env(safe-area-inset-bottom,0px));left:12px;right:12px;max-width:none;border-radius:var(--r-l)}}
@@ -37,8 +37,8 @@
 .chk-done .ic{color:var(--b-green,#3a8a5c)}
 #tour{position:fixed;inset:0;z-index:95}
 #tour[hidden]{display:none}
-.tour-hole{position:fixed;border-radius:14px;box-shadow:0 0 0 9999px rgba(15,12,8,.58);transition:left .3s,top .3s,width .3s,height .3s;pointer-events:none;outline:2px solid rgba(255,255,255,.85)}
-.tour-bub{position:fixed;background:var(--raised);color:var(--text);border:1px solid var(--border-strong);border-radius:var(--r-xl);box-shadow:var(--shadow-l);padding:14px 16px 12px;display:flex;flex-direction:column;gap:6px;transition:left .3s,top .3s}
+.tour-hole{position:fixed;border-radius:14px;box-shadow:0 0 0 9999px rgba(15,12,8,.58);transition:left .25s,top .25s,width .25s,height .25s;pointer-events:none;outline:2px solid rgba(255,255,255,.85)}
+.tour-bub{position:fixed;background:var(--raised);color:var(--text);border:1px solid var(--border-strong);border-radius:var(--r-xl);box-shadow:var(--shadow-l);padding:14px 16px 12px;display:flex;flex-direction:column;gap:6px;transition:left .25s,top .25s}
 .tour-bub b{font-size:15.5px;letter-spacing:-.01em}
 .tour-bub p{margin:0 0 6px;font-size:13.5px;line-height:1.55;color:var(--muted)}
 .tour-n{font-size:11.5px;color:var(--faint);font-weight:650;letter-spacing:.04em}
@@ -55,7 +55,7 @@
   .mh{padding:12px 14px 8px 16px}.mb{padding:4px 16px 16px}.mf{padding:10px 16px 12px}
 }
 .toasts{position:fixed;left:50%;bottom:calc(22px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:90;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none;width:max-content;max-width:calc(100vw - 32px)}
-.toast{background:var(--toast-bg);color:var(--toast-fg);padding:10px 16px;border-radius:var(--r-m);box-shadow:var(--shadow-l);font-size:13px;display:flex;gap:9px;align-items:center;animation:slideUp .3s forwards;font-weight:550}
+.toast{background:var(--toast-bg);color:var(--toast-fg);padding:10px 16px;border-radius:var(--r-m);box-shadow:var(--shadow-l);font-size:13px;display:flex;gap:9px;align-items:center;animation:slideUp .25s forwards;font-weight:550}
 .toast.bad .ic{color:var(--b-red)}
 .toast{pointer-events:auto;touch-action:pan-y;user-select:none;-webkit-user-select:none}
 .toast-x{display:inline-grid;place-items:center;width:24px;height:24px;margin:-4px -8px -4px 2px;border:0;border-radius:var(--r-s,6px);background:transparent;color:inherit;opacity:.7;cursor:pointer;flex:none}.toast-x:hover,.toast-x:focus-visible{opacity:1;background:rgba(127,127,127,.22)}
@@ -146,3 +146,5 @@ body.wl-open{overflow:hidden}
 #ckbar .ck-tm i{display:block;height:100%;background:var(--accent,var(--green));animation:ck-tm linear forwards;transform-origin:left}
 @keyframes ck-tm{from{transform:scaleX(1)}to{transform:scaleX(0)}}
 @media (prefers-reduced-motion:reduce){#ckbar .ck-tm i{animation:none}}
+/* Ссылка-действие в уведомлении («Мои запросы» после отправки запроса) */
+.toast-a{border:0;background:transparent;color:inherit;font:inherit;font-weight:650;text-decoration:underline;text-underline-offset:2px;cursor:pointer;padding:0 2px;white-space:nowrap}
