@@ -178,6 +178,8 @@ export function nextFillStatus(current: FillStatus, filled: boolean, edited: boo
  * Текущий месяц заполнения — прошлый календарный месяц (ТЗ «Индикатор незаполненных показателей»):
  * за идущий месяц значения вносить можно, но незаполненным он не считается, пока не закончится.
  * По умолчанию его же показывает «Ввод за месяц».
+ * ОТКЛОНЕНИЕ: docs/deviations.md#50 — прототип (`kPrev`) берёт идущий месяц, если в прошлом месяце не
+ * обслуживался ни один контрагент.
  */
 export function fillMonth(today: IsoDate): YearMonth {
   return addMonths(monthOf(today), -1);

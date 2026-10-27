@@ -264,6 +264,94 @@ vm.runInContext(
   ctx,
 );
 
+// «Кому вести»: kSetOn (галочка, переключатель «Вести», массово) и kWhoApply (окно показателя) на
+// показателях demoDB.json; каждый случай — на свежей копии. После — у каждого неразового контрагента:
+// вёлся ли до, ведётся ли после, «с <месяц>», «Не ведётся с <месяц>», свой «с <месяц>» и поставлен ли он сейчас.
+const NEW = {
+  id: 'k9',
+  name: 'Новый',
+  unit: 'шт.',
+  type: 'int',
+  main: 'sum',
+  desc: '',
+  req: true,
+  dueDay: 10,
+  start: '2026-10',
+  archived: false,
+  order: 5,
+  scope: 'all',
+  cps: [],
+  off: {},
+  from: {},
+  seen: [],
+  autoNew: true,
+};
+const WHO_TODAY = '2026-10-18';
+const whoCases = [
+  ...[
+    ['k1', 25, false],
+    ['k1', 3, false],
+    ['k1', 3, true],
+    ['k3', 3, true],
+    ['k3', 8, false],
+    ['k4', 12, false],
+    ['k4', 5, true],
+    ['k4', 12, true],
+    ['k2', 10, false],
+  ].map(([ind, cp, on]) => ({ kind: 'toggle', ind, cp, on })),
+  { kind: 'who', ind: 'k1', scope: 'all', sel: [], autoNew: true },
+  { kind: 'who', ind: 'k3', scope: 'all', sel: [], autoNew: true },
+  { kind: 'who', ind: 'k3', scope: 'sel', sel: [1, 2, 3, 8, 20], autoNew: false },
+  { kind: 'who', ind: 'k4', scope: 'all', sel: [], autoNew: false },
+  { kind: 'who', ind: 'k4', scope: 'sel', sel: [12, 5, 6], autoNew: true },
+  { kind: 'who', ind: 'k9', scope: 'sel', sel: [1, 2], autoNew: false },
+  { kind: 'who', ind: 'k9', scope: 'all', sel: [], autoNew: false },
+];
+const who = whoCases.map((w) => {
+  const db = clone(demo);
+  const context = vm.createContext({
+    IND: db.indicators,
+    CPS: db.contractors,
+    NEW: clone(NEW),
+    W: w,
+  });
+  vm.runInContext(
+    `'use strict';
+    const TODAY = '${WHO_TODAY}';
+    const S = { me: 'e1' };
+    const touch = () => {}, log = () => {}, kResync = () => {};
+    ${pick(DATA, /^const (D|toIso|ym|addMonths)=/)}
+    ${pick('spec/prototype/src/js/core/org.js', /^const inService=/)}
+    ${pick(KPI, /^const (kNew|kOn|kSvc0|kStartI|kStart|kPrev)=/)}
+    ${block(KPI, 'kSetOn')}
+    ${block(KPI, 'kWhoApply')}
+    const isNew = W.ind === NEW.id;
+    const i = isNew ? NEW : IND.find((x) => x.id === W.ind);
+    const cs = CPS.filter((c) => c.kind !== 'oneoff');
+    const before = new Map(cs.map((c) => [c.id, isNew ? '' : kOn(i, c) ? 1 : 0]));
+    const fromBefore = new Map(cs.map((c) => [c.id, (i.from || {})[c.id]]));
+    let changed = null;
+    if (W.kind === 'toggle') changed = kSetOn(i, CPS.find((c) => c.id === W.cp), W.on, true);
+    else kWhoApply(i, { scope: W.scope, sel: new Set(W.sel), autoNew: W.autoNew }, isNew);
+    globalThis.oracle = {
+      changed,
+      autoNew: !!i.autoNew,
+      rows: cs.map((c) => {
+        const on = kOn(i, c), from = (i.from || {})[c.id];
+        const off = !on && i.off && i.off[c.id] ? i.off[c.id] : '';
+        return [c.id, before.get(c.id), on ? 1 : 0, kStart(i, c), off, from || '', from && from !== fromBefore.get(c.id) ? 1 : 0].join('|');
+      }),
+    };`,
+    context,
+  );
+  return {
+    ...w,
+    sel: (w.sel ?? []).map(String),
+    cp: w.cp === undefined ? undefined : String(w.cp),
+    expected: context.oracle,
+  };
+});
+
 // Статус месяца после изменения: kSync на всех сочетаниях статуса, «всё внесено» и «значение изменено».
 const sync = vm.createContext({});
 vm.runInContext(
@@ -289,6 +377,11 @@ const fixture = {
   parse: ctx.oracle.parse,
   show: ctx.oracle.show,
   sync: sync.oracle,
+  who: {
+    today: WHO_TODAY,
+    newIndicator: input({ indicators: [NEW], contractors: [] }).indicators[0],
+    cases: who,
+  },
 };
 
 const out = fileURLToPath(new URL('../src/kpi/__fixtures__/kpi.json', import.meta.url));

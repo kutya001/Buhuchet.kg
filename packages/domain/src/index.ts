@@ -27,3 +27,4 @@ export * from './dicts/value-guide';
 export * from './kpi/months';
 export * from './kpi/indicators';
 export * from './kpi/fill';
+export * from './kpi/targets';
