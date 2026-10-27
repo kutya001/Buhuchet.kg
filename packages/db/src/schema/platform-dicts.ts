@@ -1,4 +1,5 @@
 import {
+  BANK_KINDS,
   BENEFIT_EFFECTS,
   BENEFIT_KINDS,
   BIZ_SIZES,
@@ -514,5 +515,30 @@ export const dueChangeReasons = pgTable(
   (t) => [
     uniqueIndex('due_change_reasons_name_key').on(t.name),
     platformReadOnly('due_change_reasons_read'),
+  ],
+).enableRLS();
+
+/**
+ * «Банковские провайдеры» (задача 2.18; ТЗ «Справочники платформы» → «Банковские провайдеры»): банки и
+ * электронные кошельки для реквизитов организации и сотрудников. В «Переводе по номеру телефона»
+ * выбираются только провайдеры с «Переводы по номеру телефона».
+ */
+export const banks = pgTable(
+  'banks',
+  {
+    /** БНК-01 … — банки, КШЛ-01 … — кошельки. */
+    code: text('code').primaryKey(),
+    name: text('name').notNull(),
+    kind: text('kind', { enum: BANK_KINDS }).notNull(),
+    /** «Переводы по номеру телефона». */
+    byPhone: boolean('by_phone').notNull().default(false),
+    /** «Пояснение». */
+    note: text('note').notNull().default(''),
+    ...dictColumns(),
+  },
+  (t) => [
+    uniqueIndex('banks_name_key').on(t.name),
+    check('banks_kind_check', oneOf(t.kind, BANK_KINDS)),
+    platformReadOnly('banks_read'),
   ],
 ).enableRLS();

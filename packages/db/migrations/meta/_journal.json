@@ -232,6 +232,20 @@
       "when": 1793092523799,
       "tag": "0032_dict_change_requests_admin",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1793097848265,
+      "tag": "0033_money_requisites",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1793097849321,
+      "tag": "0034_banks_read_only",
+      "breakpoints": true
     }
   ]
 }

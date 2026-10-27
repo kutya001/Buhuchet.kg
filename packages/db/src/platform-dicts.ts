@@ -1,5 +1,6 @@
 import type {
   AuthorityContact,
+  BankKind,
   BenefitEffect,
   BenefitKind,
   BenefitSuggest,
@@ -22,6 +23,7 @@ import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import type { Db, Tx } from './client';
 import {
   authorities,
+  banks,
   dueChangeReasons,
   ownershipForms,
   productionCalendar,
@@ -523,4 +525,36 @@ export async function listDueChangeReasons(
     .from(dueChangeReasons)
     .where(activeOnly(dueChangeReasons.active, options))
     .orderBy(asc(dueChangeReasons.sortOrder), asc(dueChangeReasons.code));
+}
+
+export interface BankRecord {
+  code: string;
+  name: string;
+  kind: BankKind;
+  /** «Переводы по номеру телефона». */
+  byPhone: boolean;
+  note: string;
+  active: boolean;
+}
+
+/**
+ * «Банковские провайдеры» по порядку справочника. Реквизиту нужны и отключённые:
+ * банк, выбранный до отключения, остаётся в реквизите с названием (`all`).
+ */
+export async function listBanks(
+  db: Db | Tx,
+  options: DictListOptions = {},
+): Promise<BankRecord[]> {
+  return db
+    .select({
+      code: banks.code,
+      name: banks.name,
+      kind: banks.kind,
+      byPhone: banks.byPhone,
+      note: banks.note,
+      active: banks.active,
+    })
+    .from(banks)
+    .where(activeOnly(banks.active, options))
+    .orderBy(asc(banks.sortOrder), asc(banks.code));
 }

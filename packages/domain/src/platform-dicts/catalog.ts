@@ -54,6 +54,10 @@ export type DeclarationFor = (typeof DECLARATION_FOR)[number];
 export const BENEFIT_EFFECTS = ['adds', 'removes'] as const;
 export type BenefitEffect = (typeof BENEFIT_EFFECTS)[number];
 
+/** «Тип» банковского провайдера: банк или электронный кошелёк. */
+export const BANK_KINDS = ['bank', 'wallet'] as const;
+export type BankKind = (typeof BANK_KINDS)[number];
+
 /** День срока 31 и больше — последний день месяца (прототип ruleDate; «до последнего дня»). */
 export const LAST_DAY_OF_MONTH = 31;
 
