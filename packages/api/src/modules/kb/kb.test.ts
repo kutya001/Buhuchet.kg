@@ -129,6 +129,12 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
     );
     expect(other.fresh).toEqual([]);
 
+    // Шаг с событием в истории вызовом «первого использования» не засчитывается.
+    const remindHit = KbMarkResult.parse(
+      await ok(await call('POST', '/api/kb/hits/remind', owner)),
+    );
+    expect(remindHit.fresh).toEqual([]);
+
     // Ещё 4 шага — 5 из 16 (31 %): уровень «Ученик».
     await saved(f.a.ownerUserId, 'organization', 'name');
     await saved(f.a.ownerUserId, 'org_settings', 'remindDays');

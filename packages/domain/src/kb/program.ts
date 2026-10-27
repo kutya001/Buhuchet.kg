@@ -306,8 +306,10 @@ export function kbOnStepScreen(step: KbStepDef, module: string, tab: string | nu
 /**
  * Засчитывает ли первое использование функции `hit` этот шаг (прототип ckHit): шаг «Сделать» — да,
  * «Посмотреть» — только в разделе «Работа со списками и интерфейсом»; остальные «Посмотреть» —
- * только показом или статьёй.
+ * только показом или статьёй. Шаг с событием в истории (`rule.done`) засчитывается только им: в
+ * прототипе `ckHit` у них звался после самого действия, а здесь действие видно в истории и без него
+ * (ТЗ «Шаг засчитывается только тому, кто сам сделал действие»).
  */
 export function kbHitCounts(step: KbProgramStep, hit: string): boolean {
-  return step.def.hit === hit && (!step.learn || step.def.g === 'lists');
+  return step.def.hit === hit && !step.rule.done && (!step.learn || step.def.g === 'lists');
 }

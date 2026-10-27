@@ -346,7 +346,9 @@ describe('урок, экран шага, первое использование
     };
     expect(kbHitCounts(cols, 'cols')).toBe(true);
     expect(kbHitCounts(cols, 'grp')).toBe(false);
+    // «Сделать» с событием в истории («Дни напоминаний») засчитывается только историей, не вызовом.
     const remind = { ...cols, learn: false, def: { ...cols.def, g: 'org', hit: 'remind' } };
     expect(kbHitCounts(remind, 'remind')).toBe(true);
+    expect(kbHitCounts({ ...remind, rule: KB_STEP_RULES.remind! }, 'remind')).toBe(false);
   });
 });
