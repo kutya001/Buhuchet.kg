@@ -80,6 +80,16 @@ import {
   listAdminCalendarHandler,
   listAdminCalendarRoute,
 } from './admin-calendar';
+import {
+  adminTaxInfoHandler,
+  adminTaxInfoRoute,
+  adminTaxValuesHandler,
+  adminTaxValuesRoute,
+  exportAdminTaxesHandler,
+  exportAdminTaxesRoute,
+  listAdminTaxesHandler,
+  listAdminTaxesRoute,
+} from './admin-taxes';
 import { phoneCodesHandler, phoneCodesRoute } from './phone-codes';
 
 /**
@@ -112,6 +122,10 @@ export function platformDictsModule(deps: ApiDeps) {
       .openapi(adminDictRequestValuesRoute, adminDictRequestValuesHandler(deps))
       .openapi(exportAdminDictRequestsRoute, exportAdminDictRequestsHandler(deps))
       .openapi(answerDictRequestRoute, answerDictRequestHandler(deps))
+      .openapi(adminTaxInfoRoute, adminTaxInfoHandler(deps))
+      .openapi(listAdminTaxesRoute, listAdminTaxesHandler(deps))
+      .openapi(adminTaxValuesRoute, adminTaxValuesHandler(deps))
+      .openapi(exportAdminTaxesRoute, exportAdminTaxesHandler(deps))
       .openapi(listAdminCalendarRoute, listAdminCalendarHandler(deps))
       .openapi(adminCalendarValuesRoute, adminCalendarValuesHandler(deps))
       .openapi(exportAdminCalendarRoute, exportAdminCalendarHandler(deps))

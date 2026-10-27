@@ -70,6 +70,52 @@ test.describe('Админка: справочники платформы', () =>
     await expect(page.getByText('Шаблон для организаций: причины')).toBeVisible();
   });
 
+  test('(п. 37) «Налоги и ставки»: строка налога открывает ту же форму просмотра налога; ставки единого налога и налога на имущество, размер бизнеса', async ({
+    page,
+    baseURL,
+    isMobile,
+  }) => {
+    await platformAdmin(page.request, new URL(baseURL!).origin);
+    await page.goto('/app/pdicts/taxes');
+    await expect(page.getByText('Справка по НК КР (ред. 06.08.2026 № 145)')).toBeVisible();
+    for (const title of [
+      'Налоги и обязательные платежи',
+      'Ставки единого налога (ст. 423)',
+      'Ставки налога на имущество (ст. 379)',
+      'Размер бизнеса (ст. 4)',
+    ]) {
+      await expect(page.getByRole('heading', { name: title })).toBeVisible();
+    }
+    // Над ставками единого налога — кто не может его применять; размер бизнеса — «правило; примечание».
+    await expect(page.getByText('Кто не может применять ЕН (ст. 419 ч. 2)')).toBeVisible();
+    await expect(
+      page.getByText(
+        'выручка за 12 месяцев до 8 млн сом; единый налог и налог с продаж — ежеквартально',
+      ),
+    ).toBeVisible();
+    // Ставки на имущество — сомы за м²: с копейками только дробные.
+    const city = page.locator('[data-grid] [data-id="ИМН-01"]');
+    await expect(city).toContainText('г. Джалал-Абад');
+    await expect(city).toContainText('50,50');
+    await expect(city).not.toContainText('116,00');
+
+    const tax = await row(page, isMobile, 'НДС на облагаемые', 'НАЛ-06');
+    await expect(tax).toContainText('Сверить');
+    await tax.getByText('НДС на облагаемые поставки', { exact: true }).click();
+    const view = page.getByRole('dialog', { name: 'НДС на облагаемые поставки' });
+    await expect(view).toContainText(
+      'НАЛ-06 · Общегосударственные налоги · справочник платформы «Налоги и ставки»',
+    );
+    for (const section of ['Что это', 'Кто платит и с чего', 'Ставки', 'Сроки']) {
+      await expect(view.getByText(section, { exact: true }).first()).toBeVisible();
+    }
+    await view.getByRole('button', { name: 'Закрыть' }).last().click();
+    await expect(view).toBeHidden();
+    // То же — «Открыть» в действиях строки.
+    await (await rowAction(page, tax, 'Открыть')).click();
+    await expect(view).toBeVisible();
+  });
+
   test('(проверка задачи #92) органы: добавить с телефоном, повтор названия — ошибка, «Выше», переименовать, отключить, удалить только неиспользуемое; история', async ({
     page,
     baseURL,

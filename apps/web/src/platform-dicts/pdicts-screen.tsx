@@ -5,6 +5,7 @@ import { ModuleStub } from '../shell/module-stub';
 import { CalendarList } from './calendar-list';
 import { PdictsHead } from './pdicts-head';
 import { RequestsList } from './requests-list';
+import { TaxesTab } from './taxes-tab';
 import { ValueDictList } from './value-list';
 
 /**
@@ -17,6 +18,7 @@ export function PlatformDictsAdmin({ tabId }: { tabId: string }) {
   let body;
   if (tabId === 'requests') body = <RequestsList />;
   else if (isAdminValueDict(tabId)) body = <ValueDictList key={tabId} dict={tabId} />;
+  else if (tabId === 'taxes') body = <TaxesTab />;
   else if (tabId === 'calendar') body = <CalendarList />;
   else body = <ModuleStub moduleId="pdicts" handleAdd={false} />;
   return (

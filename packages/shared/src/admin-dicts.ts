@@ -1,4 +1,5 @@
 import {
+  ADMIN_TAX_LISTS,
   ADMIN_VALUE_DICTS,
   BANK_KINDS,
   CALENDAR_ADD_TYPES,
@@ -358,3 +359,26 @@ export const DictRequestAnswerRequest = DictRequestAnswerForm.extend({
   path: ['answer'],
 });
 export type DictRequestAnswerRequest = z.infer<typeof DictRequestAnswerRequest>;
+
+/** Таблица вкладки «Налоги и ставки»: налоги и платежи, ставки единого налога, ставки на имущество. */
+export const AdminTaxListParam = z.object({ list: z.enum(ADMIN_TAX_LISTS) });
+
+/** Строка таблицы «Налогов и ставок»: ключ и значения столбцов (деньги — в тыйынах). */
+export const AdminTaxRow = z.object({
+  id: z.string(),
+  values: z.record(z.string(), z.union([z.string(), z.number()])),
+});
+export type AdminTaxRow = z.infer<typeof AdminTaxRow>;
+
+export const AdminTaxRowList = listPageSchema(AdminTaxRow);
+export type AdminTaxRowList = z.infer<typeof AdminTaxRowList>;
+
+/** Пояснения вкладки: размер бизнеса, кто не может применять единый налог, ставки на имущество. */
+export const AdminTaxInfo = z.object({
+  bizSize: z.array(
+    z.object({ code: z.string(), name: z.string(), rule: z.string(), note: z.string() }),
+  ),
+  enRates: z.array(z.string()),
+  propertyRates: z.string(),
+});
+export type AdminTaxInfo = z.infer<typeof AdminTaxInfo>;

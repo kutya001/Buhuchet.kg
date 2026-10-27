@@ -12,6 +12,8 @@ import {
   AdminDictRequestList,
   AdminDictValue,
   AdminReportTypeOptions,
+  AdminTaxInfo,
+  AdminTaxRowList,
   ApiError,
   DictRequest,
   DictRequests,
@@ -67,6 +69,10 @@ describe.skipIf(!databaseAvailable())('Админка → «Справочник
       `${P}/calendar/export?cols=date`,
       `${P}/calendar/copy`,
       `${P}/calendar/history`,
+      '/api/admin/tax-ref/info',
+      '/api/admin/tax-ref/taxes',
+      '/api/admin/tax-ref/en_rates/values?col=rate',
+      '/api/admin/tax-ref/property_rates/export?cols=place',
       '/api/admin/dict-requests',
       '/api/admin/dict-requests/values?col=status',
       '/api/admin/dict-requests/export?cols=what',
@@ -438,6 +444,36 @@ describe.skipIf(!databaseAvailable())('Админка → «Справочник
       'create',
     ]);
     expect(history.items[3]).toMatchObject({ code: '2027-01-04', label: 'Перенос: Новый год' });
+  });
+
+  it('«Налоги и ставки»: три таблицы только для просмотра, значения фильтра, Excel и пояснения', async () => {
+    const T = '/api/admin/tax-ref';
+    const taxes = AdminTaxRowList.parse(await (await get(`${T}/taxes?size=all`)).json());
+    expect(taxes.total).toBe(30);
+    expect(taxes.items[0]).toMatchObject({
+      id: 'НАЛ-01',
+      values: { code: 'НАЛ-01', verify: 'yes', verify_text: 'Сверить' },
+    });
+    const rates = AdminTaxRowList.parse(await (await get(`${T}/en_rates`)).json());
+    expect(rates.items[0]!.values.code).toBe('ЕНС-01');
+    const property = AdminTaxRowList.parse(
+      await (await get(`${T}/property_rates?size=all`)).json(),
+    );
+    expect(property.items.find((x) => x.id === 'ИМН-01')!.values.homeA).toBe(5050);
+
+    const verify = ListValues.parse(await (await get(`${T}/taxes/values?col=verify`)).json());
+    expect(verify.items.map((x) => x.label).sort()).toEqual(['Сверить', '—']);
+    const file = await get(`${T}/en_rates/export?cols=code,rate`);
+    expect(file.status).toBe(200);
+    expect(file.headers.get('content-type')).toContain('spreadsheetml');
+
+    const info = AdminTaxInfo.parse(await (await get(`${T}/info`)).json());
+    expect(info.bizSize.map((x) => x.name)).toEqual(['Малый', 'Средний', 'Крупный']);
+    expect(info.enRates).toHaveLength(2);
+
+    // Нет такой таблицы или столбца — 400.
+    expect((await get(`${T}/gked`)).status).toBe(400);
+    expect((await get(`${T}/taxes/values?col=nope`)).status).toBe(400);
   });
 
   it('«Запросы»: администратор видит запросы всех организаций и отвечает; организация видит ответ', async () => {

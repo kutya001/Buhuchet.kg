@@ -22,6 +22,7 @@ export * from './l10n/texts';
 export * from './platform-dicts/catalog';
 export * from './platform-dicts/calendar';
 export * from './platform-dicts/admin';
+export * from './platform-dicts/admin-taxes';
 export * from './dicts/report-types';
 export * from './dicts/tax-pick';
 export * from './dicts/org-report-types';
