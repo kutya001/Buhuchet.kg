@@ -124,6 +124,7 @@ export function listAdminDictHandler(
     return c.json(
       {
         items: page.rows.map(valueBody),
+        count: page.count,
         total: page.total,
         page: page.page,
         size: page.size,

@@ -666,15 +666,17 @@ export async function listPlatformValuesPage(
   });
   return {
     ...page,
-    rows: page.rows.map(({ createdAt, updatedAt, createdBy, updatedBy, ...r }): PlatformValueRow => ({
-      ...r,
-      audit: {
-        createdAt: createdAt ? new Date(createdAt).toISOString() : null,
-        updatedAt: updatedAt ? new Date(updatedAt).toISOString() : null,
-        createdBy,
-        updatedBy,
-      },
-    })),
+    rows: page.rows.map(
+      ({ createdAt, updatedAt, createdBy, updatedBy, ...r }): PlatformValueRow => ({
+        ...r,
+        audit: {
+          createdAt: createdAt ? new Date(createdAt).toISOString() : null,
+          updatedAt: updatedAt ? new Date(updatedAt).toISOString() : null,
+          createdBy,
+          updatedBy,
+        },
+      }),
+    ),
   };
 }
 

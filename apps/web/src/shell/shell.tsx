@@ -72,12 +72,17 @@ function shellModule(id: MenuModuleId, access: ShellAccess, t: Translate): Shell
     title: t(def.title),
     icon: def.icon,
     href: moduleHref(id, access),
-    tabs: visibleTabs(id, access).map((tab) => ({
-      id: tab.id,
-      label: t(tab.label),
-      icon: tab.icon,
-      href: tabHref(id, tab.id),
-    })),
+    tabs: visibleTabs(id, access).map((tab) => {
+      const label = t(tab.label);
+      const group = tab.group && t(tab.group);
+      return {
+        id: tab.id,
+        label,
+        icon: tab.icon,
+        href: tabHref(id, tab.id),
+        ...(group ? { group, title: t('tab.grouped', { group, tab: label }) } : {}),
+      };
+    }),
   };
 }
 
@@ -256,7 +261,7 @@ function ShellPage({
   }, []);
 
   const actions: AddAction[] = current
-    ? addActions(current.id as MenuModuleId, access).map((a) => ({
+    ? addActions(current.id as MenuModuleId, access, tabId).map((a) => ({
         id: a.id,
         label: t(a.label),
         icon: a.icon,

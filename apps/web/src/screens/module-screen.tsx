@@ -9,6 +9,7 @@ import { ReportTypesList } from '../dicts/report-types-list';
 import { OrgMain } from '../org/org-main';
 import { OrgPolicyTab } from '../org/org-policy';
 import { OrgSettingsTab } from '../org/org-settings';
+import { PlatformDictsAdmin } from '../platform-dicts/pdicts-screen';
 import { RolesList } from '../roles/roles-list';
 import { ModuleStub } from '../shell/module-stub';
 import { StaffList } from '../staff/staff-list';
@@ -47,6 +48,7 @@ export function ModuleScreen({
   }
   if (moduleId === 'accounts') return <AccountsList />;
   if (moduleId === 'orgs') return <OrgsList />;
+  if (moduleId === 'pdicts') return <PlatformDictsAdmin tabId={tabId ?? 'types'} />;
   if (moduleId === 'l10n') return <L10nList />;
   return <ModuleStub moduleId={moduleId} />;
 }

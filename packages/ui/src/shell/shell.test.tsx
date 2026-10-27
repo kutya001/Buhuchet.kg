@@ -228,6 +228,31 @@ describe('TabRow — вкладки и «+ Добавить»', () => {
     expect(html).toMatch(/href="\/app\/reports\/week" role="tab" aria-selected="false"/);
   });
 
+  it('группы вкладок: черта только между группами, подсказка — «Группа · Название»', () => {
+    const tab = (id: string, group: string) => ({
+      id,
+      label: id,
+      icon: 'tag' as const,
+      href: `/app/pdicts/${id}`,
+      group,
+      title: `${group} · ${id}`,
+    });
+    const html = renderToStaticMarkup(
+      <TabRow
+        tabs={[tab('types', 'Налоги'), tab('bases', 'Налоги'), tab('regimes', 'Режимы')]}
+        activeTab="types"
+        label="Справочники платформы"
+        addActions={[]}
+        addLabel="Добавить"
+        onAdd={() => {}}
+      />,
+    );
+    expect(html.match(/data-tab-sep/g)).toHaveLength(1);
+    expect(html.indexOf('data-tab-sep')).toBeGreaterThan(html.indexOf('/app/pdicts/bases'));
+    expect(html.indexOf('data-tab-sep')).toBeLessThan(html.indexOf('/app/pdicts/regimes'));
+    expect(html).toContain('title="Режимы · regimes"');
+  });
+
   it('«Статистика»: только у экрана с плашками; подсказка — что сделает нажатие', () => {
     const toggle = vi.fn();
     const row = (shown: boolean) =>

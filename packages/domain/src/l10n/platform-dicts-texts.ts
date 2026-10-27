@@ -16,7 +16,6 @@ export const PLATFORM_DICTS_TEXTS = {
   'tab.pdicts.group.organs': { ru: 'Органы и банки', section: 'Вкладки' },
   'tab.pdicts.group.system': { ru: 'Работа системы', section: 'Вкладки' },
   'tab.pdicts.group.service': { ru: 'Служебное', section: 'Вкладки' },
-  'pdicts.head.used_in': { ru: 'Где используется: {text}', section: S },
   // Справочники в истории и окнах (прототип: `title` справочника).
   'pdicts.title.forms': { ru: 'Формы собственности', section: S },
   'pdicts.title.organs': { ru: 'Органы', section: S },

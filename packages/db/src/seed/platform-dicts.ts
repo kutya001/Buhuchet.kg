@@ -708,7 +708,13 @@ export function platformDictRows(refDB: unknown) {
   };
 }
 
-const SERVICE_COLUMNS = new Set(['created_at', 'created_by', 'updated_by', 'updated_at', 'version']);
+const SERVICE_COLUMNS = new Set([
+  'created_at',
+  'created_by',
+  'updated_by',
+  'updated_at',
+  'version',
+]);
 
 /**
  * Записи справочника по ключу: новые добавляются; с `update` изменившиеся обновляются (версия +1,

@@ -22,6 +22,10 @@ export interface ShellTab {
   icon: IconName;
   href: string;
   count?: ShellCount;
+  /** Группа вкладки: между группами в ряду — черта (прототип `.tab-sep`). */
+  group?: string;
+  /** Подсказка вкладки, например «Группа · Название»; без неё — `label`. */
+  title?: string;
 }
 
 export interface ShellModule {

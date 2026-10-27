@@ -64,7 +64,10 @@ export const AdminDictValue = z.object({
 });
 export type AdminDictValue = z.infer<typeof AdminDictValue>;
 
-export const AdminDictList = listPageSchema(AdminDictValue);
+export const AdminDictList = listPageSchema(AdminDictValue).extend({
+  /** Всего значений в справочнике (без фильтров): «Ниже» у последнего по «№» недоступно. */
+  count: z.number().int().nonnegative(),
+});
 export type AdminDictList = z.infer<typeof AdminDictList>;
 
 const text = (max: number) => z.string().trim().max(max, message('form.too_long'));

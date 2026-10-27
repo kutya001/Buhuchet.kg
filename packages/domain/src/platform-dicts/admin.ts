@@ -27,8 +27,9 @@ export interface AdminDictMeta {
   code: CodeRule;
   /**
    * Столбец «№» и кнопки «Выше» и «Ниже», список по умолчанию — в порядке справочника: только у
-   * коротких справочников; длинные идут по своему ключу (docs/deviations.md, п. Д-2).
+   * коротких справочников; длинные идут по своему ключу (решение заказчика 27.10.2026).
    */
+  // ОТКЛОНЕНИЕ: docs/deviations.md#Д-2
   ordered: boolean;
   /** Поля значения, которые правит администратор (столбцы перечня `app.platform_dict_specs`). */
   fields: readonly string[];
@@ -40,7 +41,8 @@ export const ADMIN_DICT_META: Readonly<Record<AdminValueDict, AdminDictMeta>> = 
     ordered: true,
     fields: ['name', 'fullName', 'shortName', 'declarationFor', 'note'],
   },
-  // Контакты органа — по ТЗ (телефоны с подписью, график, сайт, «Сверить»): docs/deviations.md, п. Д-3.
+  // Контакты органа — по ТЗ (телефоны с подписью, график, сайт, «Сверить»; решение заказчика 27.10.2026).
+  // ОТКЛОНЕНИЕ: docs/deviations.md#Д-3
   organs: {
     code: { prefix: 'ОРГ', digits: 2 },
     ordered: true,

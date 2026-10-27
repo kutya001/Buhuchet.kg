@@ -40,7 +40,8 @@ describe.skipIf(!databaseAvailable())('Админка → «Справочник
 
   const P = '/api/admin/platform-dicts';
   const get = (path: string, cookie = admin) => apiRequest(f.app, 'GET', path, cookie);
-  const send = (method: string, path: string, body?: unknown, cookie = admin) =>
+  type Method = Parameters<typeof apiRequest>[1];
+  const send = (method: Method, path: string, body?: unknown, cookie = admin) =>
     apiRequest(f.app, method, path, cookie, body);
   const errorOf = async (res: Response) => ApiError.parse(await res.json()).error;
   const value = async (path: string) => AdminDictValue.parse(await (await get(path)).json());
@@ -63,7 +64,7 @@ describe.skipIf(!databaseAvailable())('Админка → «Справочник
       expect((await get(path, '')).status, path).toBe(401);
     }
     const form = `${P}/forms/${encodeURIComponent('ФС-01')}`;
-    const writes: [string, string, unknown][] = [
+    const writes: [Method, string, unknown][] = [
       ['POST', `${P}/forms`, { name: 'Взлом' }],
       ['PUT', form, { name: 'Взлом', version: 1 }],
       ['POST', `${form}/move`, { step: 1, version: 1 }],

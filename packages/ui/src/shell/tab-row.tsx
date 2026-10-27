@@ -1,6 +1,6 @@
 'use client';
 
-import { useLayoutEffect, useRef } from 'react';
+import { Fragment, useLayoutEffect, useRef } from 'react';
 import { buttonClass, iconButtonClass } from '../button';
 import { Icon } from '../icon';
 import { BetaBadge, MenuItems, type MenuItem } from '../menu';
@@ -71,7 +71,7 @@ export interface StatsToggle {
 /**
  * Ряд вкладок и кнопка «+ Добавить» (прототип ui/shell.js, renderPage; css/controls.css `.tabrow`,
  * `.tab`, `.add-btn`): вкладки-«острова» со значком и счётчиком по центру, кнопка справа на том же
- * уровне. Один способ добавления — кнопка сразу его запускает, несколько — открывает меню выбора. На
+ * уровне; между группами вкладок — черта (`.tab-sep`). Один способ добавления — кнопка сразу его запускает, несколько — открывает меню выбора. На
  * телефоне вместо кнопки — круглая «+» справа внизу со всеми способами. У экрана с плашками-итогами
  * перед ними — значок «Статистика» (на ПК и на телефоне).
  */
@@ -112,23 +112,32 @@ export function TabRow({
           data-swiping="false"
           className="group/tabs relative -mt-0.5 mb-0.5 flex min-w-0 flex-[0_1_auto] gap-1.5 overflow-x-auto px-0.5 pt-1 pb-1.5 [scrollbar-width:none] data-[fit=tight]:gap-1 data-[fit=labels]:gap-1 max-md:flex-[1_1_auto] [&::-webkit-scrollbar]:hidden [&>:first-child]:ml-auto [&>:last-child]:mr-auto"
         >
-          {tabs.map((t) => {
+          {tabs.map((t, i) => {
             const on = t.id === activeTab;
+            const sep = i > 0 && !!t.group && t.group !== tabs[i - 1]!.group;
             return (
-              <Link
-                key={t.id}
-                href={t.href}
-                role="tab"
-                aria-selected={on}
-                title={t.label}
-                className={`inline-flex flex-none cursor-pointer items-center gap-[7px] rounded-full border px-3.5 py-[7px] text-[13px] font-[550] no-underline transition-[background-color,color,transform] duration-200 group-data-[fit=icons]/tabs:px-[11px] group-data-[fit=labels]/tabs:gap-[5px] group-data-[fit=labels]/tabs:px-[9px] group-data-[fit=tight]/tabs:gap-[5px] group-data-[fit=tight]/tabs:px-[9px] ${on ? 'animate-pop border-transparent bg-raised text-ink shadow-btn group-data-[swiping=true]/tabs:animate-none group-data-[swiping=true]/tabs:border-line group-data-[swiping=true]/tabs:bg-pane-alt group-data-[swiping=true]/tabs:text-muted group-data-[swiping=true]/tabs:shadow-none' : 'border-line bg-pane-alt text-muted hover:-translate-y-px hover:bg-raised hover:text-ink'}`}
-              >
-                <span className="inline-grid group-data-[fit=labels]/tabs:hidden">
-                  <Icon name={t.icon} size="tab" />
-                </span>
-                <span className="group-data-[fit=icons]/tabs:hidden">{t.label}</span>
-                {t.count && <CountBadge count={t.count} />}
-              </Link>
+              <Fragment key={t.id}>
+                {sep ? (
+                  <span
+                    aria-hidden="true"
+                    data-tab-sep
+                    className="mx-0.5 my-1 w-px flex-none self-stretch bg-line-strong"
+                  />
+                ) : null}
+                <Link
+                  href={t.href}
+                  role="tab"
+                  aria-selected={on}
+                  title={t.title ?? t.label}
+                  className={`inline-flex flex-none cursor-pointer items-center gap-[7px] rounded-full border px-3.5 py-[7px] text-[13px] font-[550] no-underline transition-[background-color,color,transform] duration-200 group-data-[fit=icons]/tabs:px-[11px] group-data-[fit=labels]/tabs:gap-[5px] group-data-[fit=labels]/tabs:px-[9px] group-data-[fit=tight]/tabs:gap-[5px] group-data-[fit=tight]/tabs:px-[9px] ${on ? 'animate-pop border-transparent bg-raised text-ink shadow-btn group-data-[swiping=true]/tabs:animate-none group-data-[swiping=true]/tabs:border-line group-data-[swiping=true]/tabs:bg-pane-alt group-data-[swiping=true]/tabs:text-muted group-data-[swiping=true]/tabs:shadow-none' : 'border-line bg-pane-alt text-muted hover:-translate-y-px hover:bg-raised hover:text-ink'}`}
+                >
+                  <span className="inline-grid group-data-[fit=labels]/tabs:hidden">
+                    <Icon name={t.icon} size="tab" />
+                  </span>
+                  <span className="group-data-[fit=icons]/tabs:hidden">{t.label}</span>
+                  {t.count && <CountBadge count={t.count} />}
+                </Link>
+              </Fragment>
             );
           })}
         </div>

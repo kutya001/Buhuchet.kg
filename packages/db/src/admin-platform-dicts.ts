@@ -270,7 +270,7 @@ export async function listAdminDictPage(
         .offset(offset),
     from: fromOf(tx, source),
   });
-  return { ...page, rows: page.rows.map((r) => byCode.get(r.id)!) };
+  return { ...page, rows: page.rows.map((r) => byCode.get(r.id)!), count: records.length };
 }
 
 /** Значения столбца справочника для фильтра-галочек; `q` — «Найти значение». */
