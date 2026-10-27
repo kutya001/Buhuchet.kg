@@ -257,7 +257,7 @@ export function ValueDialog({
           required
           hint={current ? t('pdicts.value.name_hint') : undefined}
           error={fieldError(t, errors.name)}
-          full={dict !== 'reasons'}
+          full={dict === 'forms' || dict === 'banks'}
         >
           {(c) => <input {...c} {...register('name')} className={inputClass()} />}
         </Field>

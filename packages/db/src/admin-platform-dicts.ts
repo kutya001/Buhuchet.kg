@@ -543,9 +543,16 @@ export type AdminDictDeleteResult =
   | { ok: false; reason: 'not_found' | 'changed' }
   | { ok: false; reason: 'used'; usage: DictUsage };
 
+/** Ошибка базы «значение используется» (23503): внешний ключ или отказ `app.admin_dict_delete`. */
+function isForeignKeyViolation(err: unknown): boolean {
+  const cause = (err as { cause?: { code?: string } })?.cause ?? err;
+  return (cause as { code?: string })?.code === '23503';
+}
+
 /**
  * «Удалить» — только значение, которое нигде не используется (ТЗ: используемое — только отключить);
- * используется — `used` с числом записей. В историю — что удалено (название, у УГНС — код и кратко).
+ * используется — `used` с числом записей. Ссылку могли сохранить между проверкой и удалением — тогда
+ * отказ базы, и тоже `used` с новым числом. В историю — что удалено (название, у УГНС — код и кратко).
  */
 export async function adminDictDelete(
   tx: Tx,
@@ -557,10 +564,21 @@ export async function adminDictDelete(
   if (!before) return { ok: false, reason: 'not_found' };
   if (before.version !== version) return { ok: false, reason: 'changed' };
   if (before.usage.total > 0) return { ok: false, reason: 'used', usage: before.usage };
-  const [row] = await tx.execute<{ deleted: boolean | null }>(
-    sql`select app.admin_dict_delete(${dict}, ${code}, ${version}) as deleted`,
-  );
-  if (!row?.deleted) return { ok: false, reason: 'changed' };
+  let deleted: boolean | null | undefined;
+  try {
+    // Точка сохранения: после отказа базы транзакция остаётся рабочей, чтобы пересчитать «Используется».
+    deleted = await tx.transaction(async (sp) => {
+      const [row] = await sp.execute<{ deleted: boolean | null }>(
+        sql`select app.admin_dict_delete(${dict}, ${code}, ${version}) as deleted`,
+      );
+      return row?.deleted;
+    });
+  } catch (err) {
+    if (!isForeignKeyViolation(err)) throw err;
+    const now = await getAdminDictValue(tx, dict, code);
+    return { ok: false, reason: 'used', usage: now?.usage ?? before.usage };
+  }
+  if (!deleted) return { ok: false, reason: 'changed' };
   const fields = historyFields(dict, recordInput(before));
   const kept = dict === 'ugns' ? ['name', 'shortName', 'gnsCode'] : ['name'];
   await writePlatformHistory(tx, {

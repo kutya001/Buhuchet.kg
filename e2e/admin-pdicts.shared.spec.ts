@@ -238,28 +238,44 @@ test.describe('Админка: справочники платформы', () =>
     }
   });
 
-  test('(проверка задачи #92) «Запросы»: отказ без ответа — ошибка, «Добавлено» — без ответа; статус и ответ видны организации в «Моих запросах»', async ({
+  test('(проверка задачи #92) «Запросы»: бухгалтер просит «Форма 1-ИП (Нацстатком)», отказ без ответа — ошибка, отказ с ответом и «Добавлено» без ответа; в «Моих запросах» бухгалтера — статус и ответ целиком', async ({
     page,
     baseURL,
     isMobile,
-    playwright,
   }, testInfo) => {
     const origin = new URL(baseURL!).origin;
-    const org = await playwright.request.newContext({ baseURL });
-    await signIn(org, origin, 'erkin', DEMO_PASSWORD);
-    const what = `Фонд ${testInfo.project.name} ${Date.now()}`;
-    const ask = async (text: string, comment: string) => {
-      const sent = await org.post('/api/dict-requests', {
-        headers: { origin },
-        data: { dict: 'forms', what: text, comment },
-      });
-      expect(sent.status(), await sent.text()).toBe(201);
-      return ((await sent.json()) as { id: string }).id;
+    const suffix = `${testInfo.project.name} ${Date.now()}`;
+    const what = `Форма 1-ИП (Нацстатком) ${suffix}`;
+    const answer =
+      'В каталоге уже есть формы Нацстаткома для ИП: «Форма 1-П срочная (ИП)», месячная и годовая. Если нужна другая форма, пришлите её номер и индекс из перечня Нацстаткома.';
+    const openAdd = async (item: string) => {
+      await page.getByRole('button', { name: 'Добавить', exact: true }).click();
+      await page
+        .getByRole('menu', { name: 'Добавить' })
+        .getByRole('menuitem', { name: item })
+        .click();
     };
-    const id = await ask(what, 'Для НКО');
-    const added = `Учреждение ${testInfo.project.name} ${Date.now()}`;
-    const addedId = await ask(added, '');
-    await org.dispose();
+
+    // Бухгалтер (без права на справочники) просит добавить вид отчёта — из окна, как в ТЗ.
+    await signIn(page.request, origin, 'aigerim', DEMO_PASSWORD);
+    await page.goto('/app/dicts/platform');
+    await openAdd('Попросить добавить');
+    const ask = page.getByRole('dialog', { name: 'Попросить добавить' });
+    await ask.getByLabel('Что добавить').fill(what);
+    await ask.getByLabel('Комментарий').fill('Сдаём в Нацстатком');
+    await ask.getByRole('button', { name: 'Отправить запрос' }).click();
+    await expect(ask).toBeHidden();
+    const added = `Учреждение ${suffix}`;
+    const sent = await page.request.post('/api/dict-requests', {
+      headers: { origin },
+      data: { dict: 'forms', what: added, comment: '' },
+    });
+    expect(sent.status(), await sent.text()).toBe(201);
+    const addedId = ((await sent.json()) as { id: string }).id;
+    const mineRes = await page.request.get('/api/dict-requests');
+    const id = ((await mineRes.json()) as { items: { id: string; what: string }[] }).items.find(
+      (x) => x.what === what,
+    )!.id;
 
     await platformAdmin(page.request, origin);
     await page.goto('/app/pdicts/requests');
@@ -271,17 +287,17 @@ test.describe('Админка: справочники платформы', () =>
     await expect(dialog).toContainText('Обязательно при отказе');
     await dialog.getByRole('button', { name: 'Отклонить' }).click();
     await expect(dialog.getByText('Напишите, почему запрос отклонён')).toBeVisible();
-    await dialog.getByLabel('Ответ организации').fill('Это не форма собственности');
+    await dialog.getByLabel('Ответ организации').fill(answer);
     await dialog.getByRole('button', { name: 'Отклонить' }).click();
     await expect(dialog).toBeHidden();
     await expect(page.getByText('Организация увидит ответ в «Мои запросы»')).toBeVisible();
     await expect(found).toContainText('Отклонено');
 
-    // Строка открывает запрос целиком.
+    // Строка открывает запрос целиком; «Отправил» — ФИО из учётной записи.
     await found.click();
     const view = page.getByRole('dialog', { name: what });
-    await expect(view).toContainText('Для НКО');
-    await expect(view).toContainText('Это не форма собственности');
+    await expect(view).toContainText('Сдаём в Нацстатком');
+    await expect(view).toContainText(answer);
     await view.getByRole('button', { name: 'Готово' }).click();
 
     // «Добавлено» — ответ по желанию.
@@ -292,18 +308,13 @@ test.describe('Админка: справочники платформы', () =>
     await expect(yes).toBeHidden();
     await expect(done).toContainText('Добавлено');
 
-    // Организация видит статус и ответ в окне «Мои запросы».
-    await signIn(page.request, origin, 'erkin', DEMO_PASSWORD);
+    // Бухгалтер видит статус и ответ в окне «Мои запросы».
+    await signIn(page.request, origin, 'aigerim', DEMO_PASSWORD);
     await page.goto('/app/dicts/platform');
-    await page.getByRole('button', { name: 'Добавить', exact: true }).click();
-    await page
-      .getByRole('menu', { name: 'Добавить' })
-      .getByRole('menuitem', { name: 'Мои запросы' })
-      .click();
+    await openAdd('Мои запросы');
     const mine = page.getByRole('dialog', { name: 'Мои запросы' });
     const rejected = mine.locator('[data-mini-table] tr').filter({ hasText: what });
     await expect(rejected).toContainText('Отклонено');
-    await expect(rejected).toContainText('Это не форма собственности');
     await expect(mine.locator('[data-mini-table] tr').filter({ hasText: added })).toContainText(
       'Добавлено',
     );
@@ -311,6 +322,6 @@ test.describe('Админка: справочники платформы', () =>
     await rejected.click();
     const full = page.getByRole('dialog', { name: what });
     await expect(full).toContainText('Отклонено');
-    await expect(full).toContainText('Это не форма собственности');
+    await expect(full).toContainText(answer);
   });
 });

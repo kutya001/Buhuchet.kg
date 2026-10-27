@@ -204,7 +204,7 @@ function RequestView({
       onClose={onClose}
       kind="card"
       title={r.what}
-      sub={`${dictTitle(t, r.dict)} · ${dateOf(r)}`}
+      sub={`${r.orgName} · ${dictTitle(t, r.dict)} · ${dateOf(r)}`}
       footer={
         <>
           <div className="flex-1" />

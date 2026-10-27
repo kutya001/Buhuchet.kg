@@ -274,6 +274,9 @@ CREATE OR REPLACE FUNCTION app.admin_dict_move(p_dict text, p_code text, p_step 
 -- «Удалить»: только значение, которое нигде не используется (ТЗ «Значение, которое уже используется,
 -- нельзя удалить — только отключить»). Используется — ошибка foreign_key_violation, как у внешнего
 -- ключа. Отвечает true — удалено; false — нет значения или версия устарела; пусто — не администратор.
+-- Пока идёт удаление, ссылку не добавить: таблицы со ссылками массивом кодов закрыты для записи
+-- (у массива нет внешнего ключа, который подождал бы удаления), а строка значения — для ссылок
+-- внешними ключами; проверка «Используется» — после блокировок и видит всё, что успели сохранить.
 CREATE OR REPLACE FUNCTION app.admin_dict_delete(p_dict text, p_code text, p_version integer)
   RETURNS boolean
   LANGUAGE plpgsql VOLATILE SECURITY DEFINER
@@ -281,6 +284,7 @@ CREATE OR REPLACE FUNCTION app.admin_dict_delete(p_dict text, p_code text, p_ver
   AS $$
   DECLARE
     spec app.platform_dict_specs;
+    link record;
     deleted integer;
   BEGIN
     IF NOT app.is_platform_admin() THEN
@@ -290,6 +294,13 @@ CREATE OR REPLACE FUNCTION app.admin_dict_delete(p_dict text, p_code text, p_ver
     IF NOT FOUND THEN
       RETURN NULL;
     END IF;
+    FOR link IN
+      SELECT r.table_name FROM app.platform_dict_array_refs r WHERE r.dict = p_dict ORDER BY r.table_name
+    LOOP
+      EXECUTE format('LOCK TABLE public.%I IN SHARE MODE', link.table_name);
+    END LOOP;
+    EXECUTE format('SELECT 1 FROM public.%I t WHERE t.code = $1 FOR UPDATE', spec.table_name)
+      USING p_code;
     IF EXISTS (SELECT 1 FROM app.admin_dict_usage(p_dict) u WHERE u.code = p_code) THEN
       RAISE EXCEPTION 'platform dict value % is in use', p_code USING ERRCODE = 'foreign_key_violation';
     END IF;
@@ -327,7 +338,8 @@ GRANT EXECUTE ON FUNCTION app.admin_dict_delete(text, text, integer) TO buhuchet
 -- Админка → «Справочники платформы» → «Запросы» (прототип v59 renderPDicts0, решение заказчика по
 -- docs/deviations.md п. 46): запросы «Попросить добавить» всех организаций. Под RLS их видно только
 -- своей организации, поэтому — представление от владельца схемы, как app.admin_users (миграция 0033):
--- строки только администратору платформы. Название организации и краткое ФИО отправившего.
+-- строки только администратору платформы. Название организации и ФИО отправившего (ТЗ «ФИО из
+-- учётной записи»).
 CREATE VIEW app.admin_dict_change_requests WITH (security_barrier = true) AS
   SELECT
     r.id,
@@ -340,7 +352,7 @@ CREATE VIEW app.admin_dict_change_requests WITH (security_barrier = true) AS
     r.answer,
     r.created_at,
     r.created_by,
-    e.short_name AS created_by_name,
+    e.full_name AS created_by_name,
     r.decided_at,
     r.decided_by,
     r.updated_at,

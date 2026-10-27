@@ -378,6 +378,45 @@ describe.skipIf(!databaseAvailable())(
       });
     });
 
+    it('удаление ждёт, пока сохраняется реквизит с этим банком, и тогда отказывает — «Используется»', async () => {
+      const created = await asAdmin((tx) =>
+        adminDictCreate(
+          tx,
+          'banks',
+          { name: 'Кошелёк на удаление', data: { kind: 'wallet', byPhone: true, note: '' } },
+          random,
+        ),
+      );
+      if (!created.ok) throw new Error('не создано');
+      const { code, version } = created.record;
+      let release!: () => void;
+      const held = new Promise<void>((resolve) => (release = resolve));
+      let inserted!: () => void;
+      const ready = new Promise<void>((resolve) => (inserted = resolve));
+      // Организация сохраняет номер перевода с этим кошельком, транзакция ещё не закончена.
+      const writer = db.admin.db.transaction(async (w) => {
+        await w.insert(orgAccounts).values({
+          orgId: org.orgId,
+          kind: 'phone',
+          phone: '+996700654321',
+          phoneBanks: [code],
+        });
+        inserted();
+        await held;
+      });
+      await ready;
+      const deleting = asAdmin((tx) => adminDictDelete(tx, 'banks', code, version));
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      release();
+      await writer;
+      expect(await deleting).toEqual({
+        ok: false,
+        reason: 'used',
+        usage: { total: 1, contractors: 0 },
+      });
+      expect(await asAdmin((tx) => getAdminDictValue(tx, 'banks', code))).not.toBeNull();
+    });
+
     it('УГНС: пустой код ГНС — null, повтор кода — «Такой код уже есть»', async () => {
       const created = await asAdmin((tx) =>
         adminDictCreate(
@@ -411,6 +450,14 @@ describe.skipIf(!databaseAvailable())(
         ),
       );
       expect(row?.v).toBeNull();
+      const [edits] = await asOwner((tx) =>
+        tx.execute<{ u: number | null; m: number | null; d: boolean | null }>(
+          sql`select app.admin_dict_update('forms', 'ФС-01', '{"name":"Взлом"}'::jsonb, 1) as u,
+                     app.admin_dict_move('forms', 'ФС-02', -1, 1) as m,
+                     app.admin_dict_delete('reasons', 'ПРЧ-001', 1) as d`,
+        ),
+      );
+      expect(edits).toEqual({ u: null, m: null, d: null });
       const [blocked] = await withUserContext(db.app.db, blockedAdminId, (tx) =>
         tx.execute<{ v: number | null }>(
           sql`select app.admin_dict_set_active('forms', 'ФС-01', false, 1) as v`,
@@ -432,6 +479,10 @@ describe.skipIf(!databaseAvailable())(
         ),
       );
       expect(unknown?.v).toBeNull();
+      const users = await asAdmin((tx) =>
+        tx.execute(sql`select * from app.admin_dict_usage('users')`),
+      );
+      expect(users.length).toBe(0);
       const [office] = await db.admin.db
         .select({ name: taxOffices.name })
         .from(taxOffices)
@@ -452,7 +503,7 @@ describe.skipIf(!databaseAvailable())(
         dict: 'forms',
         what: 'Фонд',
         status: 'new',
-        audit: { createdBy: 'Асан А.' },
+        audit: { createdBy: 'Асанов Асан' },
       });
       // При отказе без ответа функция базы не сохраняет.
       const empty = await asAdmin((tx) =>

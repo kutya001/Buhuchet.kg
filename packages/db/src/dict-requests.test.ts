@@ -65,6 +65,7 @@ describe.skipIf(!databaseAvailable())('«Попросить добавить»: 
       }),
     );
     expect(created).toMatchObject({
+      orgName: 'ОсОО «Альфа»',
       dict: 'types',
       what: 'Отчёт по НДС на импорт услуг',
       comment: '',
