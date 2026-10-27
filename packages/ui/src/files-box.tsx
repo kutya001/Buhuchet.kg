@@ -65,9 +65,10 @@ export function FilesBox({
       actions={
         canUpload ? (
           <>
+            {/* В прототипе «Прикрепить» — подпись `label.btn` в заголовке блока: прописными, как он. */}
             <button
               type="button"
-              className={buttonClass('default', 'sm')}
+              className={`${buttonClass('default', 'sm')} uppercase`}
               disabled={busy}
               aria-busy={busy || undefined}
               onClick={() => input.current?.click()}
