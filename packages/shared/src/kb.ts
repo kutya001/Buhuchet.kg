@@ -99,6 +99,8 @@ export const KbState = z.object({
   articles: z.object({ total: z.number().int(), read: z.number().int() }),
   /** «Можно включить»: выключенные функции, у которых есть уроки, и польза от них. */
   offers: z.array(z.object({ feature: z.string(), benefit: z.string() })),
+  /** Урок функции учётной политики в программе («Пройти урок» в окне «Функция … включена»). */
+  featureLessons: z.record(z.string(), KbCode),
 });
 export type KbState = z.infer<typeof KbState>;
 

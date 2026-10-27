@@ -137,6 +137,10 @@ describe('какие статьи видны', () => {
     expect(kbArticleVisible(article({ mod: 'staff' }), access({ modules: ['org'] }))).toBe(false);
     // «Контрагенты» в меню, но экрана ещё нет.
     expect(kbArticleVisible(article({ mod: 'cps' }), access({}))).toBe(false);
+    // Админка: «Учётные записи» сделаны, «Справочники платформы» — ещё нет.
+    const adm = access({ admin: true, modules: ['accounts', 'orgs', 'pdicts', 'kb'] });
+    expect(kbArticleVisible(article({ aud: 'adm', mod: 'accounts' }), adm)).toBe(true);
+    expect(kbArticleVisible(article({ aud: 'adm', mod: 'pdicts' }), adm)).toBe(false);
   });
 
   it('по праву, функции и включённости', () => {

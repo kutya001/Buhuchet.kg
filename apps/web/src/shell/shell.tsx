@@ -28,10 +28,12 @@ import {
   type ShellModule,
   type TabRowProps,
 } from '@buhuchet/ui';
+import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { api } from '../api-client';
+import { kbStateQuery } from '../kb/kb-data';
 import { KbContext, useKbRuntime } from '../kb/kb-provider';
 import { useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
@@ -208,9 +210,18 @@ function ShellPage({
 
   const access = useMemo(() => shellAccess(me), [me]);
   const counts = useTabCounts(me.modules);
+  // «Начните с Базы знаний»: точка у модуля, пока уровень 0 % (прототип kbDot).
+  const kbProgress = useQuery(kbStateQuery).data?.progress;
+  const kbStart = !!kbProgress && kbProgress.total > 0 && kbProgress.pct === 0;
   const modules = useMemo(
-    () => me.modules.map((id) => withTabCounts(shellModule(id, access, t), counts[id])),
-    [me.modules, access, t, counts],
+    () =>
+      me.modules.map((id) => {
+        const m = withTabCounts(shellModule(id, access, t), counts[id]);
+        return id === 'kb' && kbStart
+          ? { ...m, count: { value: '', dot: true, title: t('kb.dot') } }
+          : m;
+      }),
+    [me.modules, access, t, counts, kbStart],
   );
   const current = modules.find((m) => m.id === moduleId) ?? null;
   const currentTab = current?.tabs.find((tab) => tab.id === tabId) ?? null;
@@ -218,7 +229,7 @@ function ShellPage({
     const split = phoneModules(me.modules, access.admin);
     const pick = (id: MenuModuleId, title: string): PhoneModule => {
       const m = modules.find((x) => x.id === id)!;
-      return { id, title, icon: m.icon, href: m.href };
+      return { id, title, icon: m.icon, href: m.href, count: m.count };
     };
     return {
       bottom: split.bottom.map((id) => pick(id, t(MODULES[id].short))),
@@ -423,7 +434,11 @@ function ShellPage({
             <TopBar
               title={title}
               tab={currentTab?.label ?? null}
-              menu={{ label: t('shell.menu'), onClick: toggleNav }}
+              menu={{
+                label: t('shell.menu'),
+                onClick: toggleNav,
+                dot: phone.other.find((m) => m.count?.dot)?.count?.title,
+              }}
               info={{
                 label: t('shell.module_info'),
                 content: (

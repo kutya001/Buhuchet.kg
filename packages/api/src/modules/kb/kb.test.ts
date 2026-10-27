@@ -89,6 +89,8 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
     });
     // Работающих уроков выключенных функций ещё нет: «Можно включить» пусто (правило стыков).
     expect(own.offers).toEqual([]);
+    // «Пройти урок» есть только у функции, чей урок уже в программе: «Напоминания в Telegram» — «Мой профиль».
+    expect(own.featureLessons).toEqual({ telegram: 'me' });
 
     const mine = await state(acc);
     expect(mine.lessons.map((l) => l.id)).toEqual(['me', 'dicts', 'lists']);
@@ -106,8 +108,19 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
 
   it('администратор платформы — своя программа (уроки Админки придут с её задачами)', async () => {
     const s = await state(admin);
-    expect(s).toMatchObject({ admin: true, lessons: [], nextStepId: null, offers: [] });
+    expect(s).toMatchObject({
+      admin: true,
+      lessons: [],
+      nextStepId: null,
+      offers: [],
+      featureLessons: {},
+    });
     expect(s.progress.levels).toHaveLength(5);
+    // Статьи Админки — только о сделанных модулях («Справочники платформы» — ещё нет).
+    const arts = KbArticleList.parse(await ok(await call('GET', '/api/kb/articles', admin)));
+    const ids = arts.items.map((a) => a.id);
+    expect(ids).toEqual(expect.arrayContaining(['a19_1', 'a19_2']));
+    expect(ids).not.toContain('a19_3');
   });
 
   it('«Сделать» засчитывается по истории своих действий: недавнее — «действием», поздравление с уровнем', async () => {
@@ -134,6 +147,13 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
       await ok(await call('POST', '/api/kb/hits/remind', owner)),
     );
     expect(remindHit.fresh).toEqual([]);
+    // «Сохранить» без изменений («Настройки», «Профиль») — тоже действие, но только у своего шага.
+    const savedAsIs = KbMarkResult.parse(
+      await ok(await call('POST', '/api/kb/hits/settings', ownerB)),
+    );
+    expect(savedAsIs.fresh.map((x) => [x.id, x.how])).toEqual([['settings', 'action']]);
+    const notMine = KbMarkResult.parse(await ok(await call('POST', '/api/kb/hits/profile', acc)));
+    expect(notMine.fresh).toEqual([]);
 
     // Ещё 4 шага — 5 из 16 (31 %): уровень «Ученик».
     await saved(f.a.ownerUserId, 'organization', 'name');
@@ -303,8 +323,13 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
   });
 
   it('прогресс у каждого свой: другая организация не видит отметок', async () => {
+    // У владельца Б — только своя отметка «Настроек» (сохранение без изменений выше).
     const b = await state(ownerB);
-    expect(b.progress.done).toBe(0);
-    expect(steps(b).every((s) => s.done === null)).toBe(true);
+    expect(b.progress.done).toBe(1);
+    expect(
+      steps(b)
+        .filter((s) => s.done)
+        .map((s) => s.id),
+    ).toEqual(['settings']);
   });
 });

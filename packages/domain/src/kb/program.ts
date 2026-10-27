@@ -98,11 +98,6 @@ export const KB_GROUP_FEATURES: Readonly<Record<string, Feature>> = {
   files: 'files',
 };
 
-/** Группа шагов (урок) функции учётной политики; null — у функции нет своего урока. */
-export function kbFeatureGroup(feature: Feature): string | null {
-  return Object.keys(KB_GROUP_FEATURES).find((g) => KB_GROUP_FEATURES[g] === feature) ?? null;
-}
-
 function isFeature(value: string, access: KbAccess): boolean {
   return access.feature(value as Feature);
 }
@@ -304,12 +299,16 @@ export function kbOnStepScreen(step: KbStepDef, module: string, tab: string | nu
 }
 
 /**
- * Засчитывает ли первое использование функции `hit` этот шаг (прототип ckHit): шаг «Сделать» — да,
+ * Как засчитывает этот шаг первое использование функции `hit` (прототип ckHit); null — никак: шаг «Сделать» — да,
  * «Посмотреть» — только в разделе «Работа со списками и интерфейсом»; остальные «Посмотреть» —
  * только показом или статьёй. Шаг с событием в истории (`rule.done`) засчитывается только им: в
  * прототипе `ckHit` у них звался после самого действия, а здесь действие видно в истории и без него
  * (ТЗ «Шаг засчитывается только тому, кто сам сделал действие»).
  */
-export function kbHitCounts(step: KbProgramStep, hit: string): boolean {
-  return step.def.hit === hit && !step.rule.done && (!step.learn || step.def.g === 'lists');
+export function kbHitMark(step: KbProgramStep, hit: string): KbHow | null {
+  // Сохранение без изменений — тоже действие пользователя (`savedUnchanged`).
+  if (step.rule.savedUnchanged && hit === step.def.id) return 'action';
+  return step.def.hit === hit && !step.rule.done && (!step.learn || step.def.g === 'lists')
+    ? 'use'
+    : null;
 }

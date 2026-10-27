@@ -1,6 +1,6 @@
 import { createRoute, z, type RouteHandler } from '@hono/zod-openapi';
 import { kbSetSkipped } from '@buhuchet/db';
-import { kbHitCounts, kbProgramSteps } from '@buhuchet/domain';
+import { kbHitMark, kbProgramSteps } from '@buhuchet/domain';
 import { ApiError, KbCode, KbHit, KbMarkResult, KbState, KbSyncRequest } from '@buhuchet/shared';
 import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
@@ -134,9 +134,10 @@ export function kbHitHandler(deps: ApiDeps): RouteHandler<typeof kbHitRoute, App
     const { hit } = c.req.valid('param');
     const body = await asLearner(deps, c, async (tx, learner) => {
       const ctx = await programContext(tx, learner);
-      const marks = kbProgramSteps(ctx.program)
-        .filter((s) => kbHitCounts(s, hit))
-        .map((step) => ({ step, how: 'use' as const }));
+      const marks = kbProgramSteps(ctx.program).flatMap((step) => {
+        const how = kbHitMark(step, hit);
+        return how ? [{ step, how }] : [];
+      });
       return markSteps(tx, ctx, marks, deps.clock.now(), { congrats: true });
     });
     return c.json(body, 200);

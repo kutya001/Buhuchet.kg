@@ -28,17 +28,42 @@ import { flashTarget } from './kb-go';
 import { KbBadge, KbBar, levelDate, nextText } from './kb-parts';
 import { useKb } from './kb-provider';
 
+/** Свёрнутые уроки — на этом устройстве у каждого пользователя (прототип `ck.closed.<пользователь>`). */
+const closedKey = (userId: string | null) => `bu.kb.closed.${userId ?? ''}`;
+
+function readClosed(key: string): ReadonlySet<string> {
+  if (typeof window === 'undefined') return new Set();
+  try {
+    const value: unknown = JSON.parse(window.localStorage.getItem(key) ?? '[]');
+    return new Set(Array.isArray(value) ? value.filter((x) => typeof x === 'string') : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function writeClosed(key: string, closed: ReadonlySet<string>) {
+  try {
+    window.localStorage.setItem(key, JSON.stringify([...closed]));
+  } catch {
+    // Хранилище браузера недоступно — выбор живёт до ухода со страницы.
+  }
+}
+
 /**
  * «База знаний» → «Уроки» (прототип modules/kb.js, renderKB → уроки): программа обучения — уровень,
  * «Продолжить», уроки по модулям со шагами: ★ основной, «Посмотреть» или «Сделать», «Новое», статья
  * шага, как и когда засчитан, «Перейти» и «⋯» («Пропустить», «Вернуть»); урок «Пройден» или
  * «Пройден частично»; «Можно включить». «Показать как» и «Показать экран» добавит задача 2.31.
- * С `?step=` (из «Пройти урок») подсвечен этот шаг, иначе — следующий.
+ * С `?step=` (из «Пройти урок») подсвечен этот шаг, иначе — следующий; урок этого шага раскрыт, даже
+ * если его свернули раньше. Свёрнутые уроки запоминаются.
  */
 export function KbLessonsTab() {
   const t = useT();
   const query = useQuery(kbStateQuery);
-  const [closed, setClosed] = useState<ReadonlySet<string>>(new Set());
+  const key = closedKey(useShell().userId);
+  const [closed, setClosed] = useState(() => readClosed(key));
+  /** Урок шага из адреса свернули или раскрыли сами — дальше он как все. */
+  const [focusToggled, setFocusToggled] = useState(false);
   const flashed = useRef(false);
   const state = query.data;
   const nextId = state?.nextStepId ?? null;
@@ -72,13 +97,18 @@ export function KbLessonsTab() {
       />
     );
   }
-  const toggle = (id: string) =>
-    setClosed((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+  const focusLesson = focusToggled
+    ? null
+    : (state.lessons.find((l) => l.steps.some((s) => s.id === focusId))?.id ?? null);
+  const isOpen = (id: string) => id === focusLesson || !closed.has(id);
+  const toggle = (id: string) => {
+    const next = new Set(closed);
+    if (isOpen(id)) next.add(id);
+    else next.delete(id);
+    if (id === focusLesson) setFocusToggled(true);
+    setClosed(next);
+    writeClosed(key, next);
+  };
   return (
     <div className="flex flex-col gap-3.5">
       <ProgramBox state={state} />
@@ -88,7 +118,7 @@ export function KbLessonsTab() {
           n={i + 1}
           lesson={lesson}
           nextId={nextId}
-          open={!closed.has(lesson.id)}
+          open={isOpen(lesson.id)}
           onToggle={() => toggle(lesson.id)}
         />
       ))}

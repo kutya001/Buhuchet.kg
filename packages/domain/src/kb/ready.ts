@@ -1,5 +1,5 @@
 import type { HistoryAction, HistoryEntity, HistoryValue } from '../common/history';
-import type { BusinessModuleId } from '../org/modules';
+import type { BusinessModuleId, MenuModuleId } from '../org/modules';
 
 /*
  * Какие шаги «Базы знаний» уже работают (задача 2.30, правило стыков docs/decisions.md п. Г-2): шаг
@@ -36,6 +36,12 @@ export interface KbStepRule {
   module: BusinessModuleId | null;
   /** Шаг «Сделать» с событием; «Посмотреть» и «первое использование» отмечаются без него. */
   done?: KbDoneRule;
+  /**
+   * Засчитывается и сохранением без изменений (ТЗ: «при сохранении профиля», «сохранены
+   * «Настройки»»): истории тогда нет, и экран сам сообщает о сохранении первым использованием с кодом
+   * шага (`POST /api/kb/hits/<шаг>`). Шаг виден только тому, кто может сохранить экран.
+   */
+  savedUnchanged?: boolean;
 }
 
 const orgSettings = (...anyField: string[]): KbDoneRule => ({
@@ -51,6 +57,7 @@ export const KB_STEP_RULES: Readonly<Record<string, KbStepRule>> = {
   profile: {
     module: 'org',
     done: { kind: 'history', entity: 'organization', actions: ['update'] },
+    savedUnchanged: true,
   },
   policy: { module: 'org', done: orgSettings('features') },
   // ТЗ: «добавлен или убран день напоминания в учётной политике».
@@ -58,6 +65,7 @@ export const KB_STEP_RULES: Readonly<Record<string, KbStepRule>> = {
   settings: {
     module: 'org',
     done: orgSettings('timezone', 'digestTime', 'overdueRepeat', 'defaultRoleId'),
+    savedUnchanged: true,
   },
   // 2. Мой профиль. «Режим и виды уведомлений» — с задачей 2.24; «Тема оформления» — с 2.31: шаг
   // «Посмотреть» без экрана и статьи засчитывается только показом «Показать как».
@@ -99,9 +107,12 @@ export const KB_STEP_RULES: Readonly<Record<string, KbStepRule>> = {
  * Модули, у которых уже есть экраны: статьи остальных модулей скрыты, как и их шаги (их описания
  * экранов пока не совпадают с продуктом). Модуль, слитый позже, добавляет себя сюда.
  */
-export const KB_READY_MODULES: ReadonlySet<string> = new Set<BusinessModuleId>([
+export const KB_READY_MODULES: ReadonlySet<string> = new Set<MenuModuleId>([
   'staff',
   'dicts',
   'org',
   'kb',
+  // Админка: «Учётные записи» (2.35), «Организации».
+  'accounts',
+  'orgs',
 ]);

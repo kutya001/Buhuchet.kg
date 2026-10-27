@@ -2,9 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { Feature, PermissionId } from '../roles/permissions';
 import type { KbCatalog, KbLevelDef, KbStepDef } from './catalog';
 import {
-  kbFeatureGroup,
   kbGroupStatus,
-  kbHitCounts,
+  kbHitMark,
   kbLevelsToRecord,
   kbNextStep,
   kbOnStepScreen,
@@ -295,12 +294,6 @@ describe('«Новое»', () => {
       kbStepIsNew({ ...tg, def: { ...tg.def, isNew: true } }, new Map(), {}, '2026-10-27'),
     ).toBe(true);
   });
-
-  it('урок функции для «Пройти урок»: у функции без своего урока — нет', () => {
-    expect(kbFeatureGroup('indicators')).toBe('kpi');
-    expect(kbFeatureGroup('taxpay')).toBe('money');
-    expect(kbFeatureGroup('cppage')).toBeNull();
-  });
 });
 
 describe('урок, экран шага, первое использование', () => {
@@ -336,7 +329,7 @@ describe('урок, экран шага, первое использование
 
   it('первое использование засчитывает «Сделать» и «Посмотреть» раздела списков, а не прочие «Посмотреть»', () => {
     const theme = me.steps.find((s) => s.def.id === 'theme')!;
-    expect(kbHitCounts(theme, 'theme')).toBe(false);
+    expect(kbHitMark(theme, 'theme')).toBeNull();
     const cols = {
       def: CATALOG.steps.find((s) => s.id === 'cols')!,
       rule: { module: null },
@@ -344,11 +337,23 @@ describe('урок, экран шага, первое использование
       learn: true,
       star: false,
     };
-    expect(kbHitCounts(cols, 'cols')).toBe(true);
-    expect(kbHitCounts(cols, 'grp')).toBe(false);
+    expect(kbHitMark(cols, 'cols')).toBe('use');
+    expect(kbHitMark(cols, 'grp')).toBeNull();
     // «Сделать» с событием в истории («Дни напоминаний») засчитывается только историей, не вызовом.
-    const remind = { ...cols, learn: false, def: { ...cols.def, g: 'org', hit: 'remind' } };
-    expect(kbHitCounts(remind, 'remind')).toBe(true);
-    expect(kbHitCounts({ ...remind, rule: KB_STEP_RULES.remind! }, 'remind')).toBe(false);
+    const remind = {
+      ...cols,
+      learn: false,
+      def: { ...cols.def, id: 'remind', g: 'org', hit: 'remind' },
+    };
+    expect(kbHitMark(remind, 'remind')).toBe('use');
+    expect(kbHitMark({ ...remind, rule: KB_STEP_RULES.remind! }, 'remind')).toBeNull();
+    // «Профиль» и «Настройки» — и сохранением без изменений, «действием».
+    const profile = {
+      ...remind,
+      def: { ...remind.def, id: 'profile', hit: undefined },
+      rule: KB_STEP_RULES.profile!,
+    };
+    expect(kbHitMark(profile, 'profile')).toBe('action');
+    expect(kbHitMark(profile, 'settings')).toBeNull();
   });
 });

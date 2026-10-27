@@ -1,6 +1,6 @@
 'use client';
 
-import { kbFeatureGroup, pluralForm, type Feature, type MenuModuleId } from '@buhuchet/domain';
+import { pluralForm, type Feature, type MenuModuleId } from '@buhuchet/domain';
 import type { KbMarkResult, KbState, KbStep } from '@buhuchet/shared';
 import { buttonClass, Icon, iconButtonClass, Modal, useToast, useWindow } from '@buhuchet/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -82,9 +82,8 @@ export function useKb(): KbControls {
 export function useFeatureLesson(feature: Feature | null): (() => void) | null {
   const kb = useKb();
   const state = useQuery(kbStateQuery).data;
-  const group = feature ? kbFeatureGroup(feature) : null;
-  const lesson = group ? state?.lessons.find((l) => l.id === group) : undefined;
-  return lesson ? () => kb.openLesson(lesson.id) : null;
+  const lesson = feature ? state?.featureLessons[feature] : undefined;
+  return lesson ? () => kb.openLesson(lesson) : null;
 }
 
 /** Адрес «Уроков» с шагом, который нужно подсветить (`?step=`). */
@@ -558,10 +557,11 @@ function StepDoneDialog({
       size="mid"
       title={t(dialog.look ? 'kb.done.look_title' : 'kb.done.title', { title: dialog.title })}
       sub={p ? t('kb.done.sub', { name: p.levels[p.level]?.name ?? '', pct: p.pct }) : undefined}
-      footer={<DoneFooter next={next} onNext={onNext} onBack={onBack} />}
+      footer={<DoneFooter next={next} stay={!dialog.look} onNext={onNext} onBack={onBack} />}
     >
       <p data-kb-done={dialog.id} className="m-0 leading-[1.55] text-muted">
-        {next ? t('kb.done.next', { title: next.title }) : t('kb.done.all')} {t('kb.done.text')}
+        {next ? t('kb.done.next', { title: next.title }) : t('kb.done.all')}{' '}
+        {t(dialog.look ? 'kb.done.look_text' : 'kb.done.text')}
       </p>
     </Modal>
   );
@@ -571,20 +571,26 @@ const short = (s: string) => (s.length > 34 ? `${s.slice(0, 32)}…` : s);
 
 function DoneFooter({
   next,
+  stay,
   onNext,
   onBack,
 }: {
   next: KbStep | null;
+  /** «Остаться здесь»; у «Посмотреть» по ТЗ только «Следующий шаг» и «Вернуться к Базе знаний». */
+  stay: boolean;
   onNext: (id: string) => void;
   onBack: () => void;
 }) {
   const t = useT();
   const { close, leave } = useWindow();
+  // ОТКЛОНЕНИЕ: docs/deviations.md#Г-2 — у «Посмотреть» нет «Остаться здесь» (как в ТЗ).
   return (
     <>
-      <button type="button" className={buttonClass('ghost')} onClick={close}>
-        {t('kb.done.stay')}
-      </button>
+      {stay ? (
+        <button type="button" className={buttonClass('ghost')} onClick={close}>
+          {t('kb.done.stay')}
+        </button>
+      ) : null}
       {next ? (
         <button
           type="button"

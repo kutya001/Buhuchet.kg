@@ -78,6 +78,8 @@ test.describe('Этап 2: База знаний — программа, уро�
     await expect(looked).toBeVisible({ timeout: 8000 });
     expect(Date.now() - started).toBeGreaterThan(2500);
     await expect(looked.getByRole('button', { name: /^Следующий шаг: / })).toBeVisible();
+    // По ТЗ у «Посмотреть» — без «Остаться здесь» (docs/deviations.md п. Г-2).
+    await expect(looked.getByRole('button', { name: 'Остаться здесь' })).toHaveCount(0);
     expect(stepDone(await kbMe(page.request), 'roles')).toMatchObject({ how: 'visit' });
     await looked.getByRole('button', { name: 'Вернуться к Базе знаний' }).click();
     await expect(page).toHaveURL(/\/app\/kb\/lessons/);

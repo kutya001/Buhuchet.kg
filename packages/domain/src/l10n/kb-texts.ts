@@ -27,6 +27,7 @@ export const KB_TEXTS = {
   'kb.next_top': { ru: 'это высший уровень', section: S },
   'kb.top': { ru: 'Высший уровень', section: S },
   'kb.top_lower': { ru: 'высший уровень', section: S },
+  'kb.dot': { ru: 'Начните с Базы знаний', section: S },
   'kb.rules.title': { ru: 'Как считается уровень', section: S },
   'kb.rules.program': {
     ru: 'Программа — шаги модулей, включённых в учётной политике, и действий, разрешённых вашей ролью. Остального в подсчёте нет.',
@@ -124,6 +125,10 @@ export const KB_TEXTS = {
   'kb.done.all': { ru: 'Все шаги вашей программы пройдены.', section: S },
   'kb.done.text': {
     ru: 'Можно вернуться к Базе знаний, сразу перейти к следующему шагу или остаться здесь.',
+    section: S,
+  },
+  'kb.done.look_text': {
+    ru: 'Можно вернуться к Базе знаний или сразу перейти к следующему шагу.',
     section: S,
   },
   'kb.done.stay': { ru: 'Остаться здесь', section: S },

@@ -8,6 +8,7 @@ import { MenuItems } from '../menu';
 import { Popover } from '../popover';
 import { BottomSheet } from '../sheet';
 import { AppFrame } from './app-frame';
+import { CountBadge } from './badge';
 import { BottomNav, PhoneMenu, SheetAction, type PhoneModule } from './phone-nav';
 import { SideFootButton, SideNav, SideOrg } from './side-nav';
 import { TabPager } from './tab-pager';
@@ -168,6 +169,22 @@ const TOP: TopBarProps = {
 };
 
 describe('TopBar — верхняя панель', () => {
+  it('точка «Начните с Базы знаний» на «Меню» — только на телефоне; у модуля — точка вместо числа', () => {
+    const plain = renderToStaticMarkup(<TopBar {...TOP} />);
+    expect(plain).not.toContain('Начните с Базы знаний');
+    const html = renderToStaticMarkup(
+      <TopBar {...TOP} menu={{ ...TOP.menu, dot: 'Начните с Базы знаний' }} />,
+    );
+    expect(html).toMatch(
+      /title="Начните с Базы знаний"[^>]*class="[^"]*rounded-full[^"]*md:hidden"/,
+    );
+    const badge = renderToStaticMarkup(
+      <CountBadge count={{ value: '', dot: true, title: 'Начните с Базы знаний' }} />,
+    );
+    expect(badge).toContain('aria-label="Начните с Базы знаний"');
+    expect(badge).toContain('bg-info');
+  });
+
   it('«Меню», модуль и вкладка, поиск по вкладке, время, «?» и тема', () => {
     const html = renderToStaticMarkup(<TopBar {...TOP} />);
     expect(html).toContain('<header');

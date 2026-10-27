@@ -32,6 +32,7 @@ import {
   type KbAccess,
   type KbArticleDef,
   type KbCatalog,
+  type KbScreenUi,
   type KbHow,
   type KbLevelDef,
   type KbMarks,
@@ -156,12 +157,11 @@ export async function visibleArticles(tx: Tx, access: KbAccess): Promise<KbArtic
  * `kbUi.features`, у которых уже есть работающие уроки — иначе обещание «уроки появятся» неверно
  * (правило стыков: функция появится здесь со своей задачей).
  */
-async function featureOffers(
-  tx: Tx,
+function featureOffers(
+  info: KbFeatures,
   ctx: KbProgramContext,
-): Promise<{ feature: string; benefit: string }[]> {
+): { feature: string; benefit: string }[] {
   if (ctx.learner.access.admin) return [];
-  const info = (await kbScreenUi(tx)).features ?? {};
   return FEATURES.filter((f) => {
     const g = info[f]?.g;
     return (
@@ -173,9 +173,26 @@ async function featureOffers(
   }).map((f) => ({ feature: f, benefit: info[f]!.benefit! }));
 }
 
+type KbFeatures = NonNullable<KbScreenUi['features']>;
+
+/**
+ * Урок каждой функции учётной политики, который есть в программе (прототип featOnDlg: группа из
+ * `kbUi.features[…].g`) — для «Пройти урок» в окне «Функция … включена».
+ */
+function featureLessons(info: KbFeatures, ctx: KbProgramContext): Record<string, string> {
+  const lessons = new Set(ctx.program.map((g) => g.def.id));
+  return Object.fromEntries(
+    FEATURES.flatMap((f) => {
+      const g = info[f]?.g;
+      return g && lessons.has(g) ? [[f, g]] : [];
+    }),
+  );
+}
+
 /** Своя программа целиком (вкладки «Мой уровень» и «Уроки», «Мой профиль»). */
 export async function stateBody(tx: Tx, ctx: KbProgramContext, now: Date): Promise<KbState> {
   const today = bishkekDate(now);
+  const features = (await kbScreenUi(tx)).features ?? {};
   const articles = await visibleArticles(tx, ctx.learner.access);
   const read = await kbReadArticles(tx, ctx.learner.userId);
   const featureOn = ctx.learner.orgId
@@ -213,7 +230,8 @@ export async function stateBody(tx: Tx, ctx: KbProgramContext, now: Date): Promi
     }),
     nextStepId: kbNextStep(ctx.program, ctx.marks)?.def.id ?? null,
     articles: { total: articles.length, read: articles.filter((a) => read.has(a.id)).length },
-    offers: await featureOffers(tx, ctx),
+    offers: featureOffers(features, ctx),
+    featureLessons: featureLessons(features, ctx),
   };
 }
 
