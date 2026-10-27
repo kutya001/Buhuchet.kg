@@ -70,6 +70,11 @@ test.describe('Этап 2: База знаний — программа, уро�
     await expect(page).toHaveURL(/\/app\/org\/main/);
     const dialog = page.getByRole('dialog', { name: 'Счёт организации' });
     await expect(dialog).toBeVisible();
+    // Несохранённые поля профиля после добавления счёта не сбрасываются (ТЗ, шаг «Реквизиты»).
+    await dialog.getByRole('button', { name: 'Отмена' }).click();
+    const address = page.locator('main').getByLabel('Адрес', { exact: true });
+    await address.fill('г. Бишкек, ул. Несохранённая, 7');
+    await page.getByRole('button', { name: 'Добавить счёт' }).click();
     await dialog.getByRole('button', { name: 'Перевод по номеру телефона' }).click();
     await dialog.getByLabel('Номер телефона').fill('555123456');
     await dialog.getByRole('checkbox', { name: 'M-Bank' }).check();
@@ -81,6 +86,7 @@ test.describe('Этап 2: База знаний — программа, уро�
       }),
     ).toBeVisible();
     expect(stepDone(await kbMe(page.request), 'accs')).toMatchObject({ how: 'action' });
+    await expect(address).toHaveValue('г. Бишкек, ул. Несохранённая, 7');
   });
 
   test('(п. 75) «Перейти» у шага «Посмотреть»: полоса-таймер, через 3 секунды «Шаг выполнен»; ушли с экрана раньше — шаг не засчитан', async ({

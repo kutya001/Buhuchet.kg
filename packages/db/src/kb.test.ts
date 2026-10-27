@@ -285,7 +285,15 @@ describe.skipIf(!databaseAvailable())('«База знаний»: прогрес
       'typecfg',
     ]);
     expect(owner.get('tg')).toBeInstanceOf(Date);
-    // Действия владельца сотруднику не засчитываются.
+    // Действия владельца сотруднику не засчитываются; правка счёта (не «Добавлен») — тоже нет.
+    await inOrg(a, accUserId, (tx) =>
+      writeHistory(tx, {
+        entity: 'org_account',
+        entityId: '00000000-0000-4000-8000-000000000001',
+        action: 'update',
+        changes: [{ field: 'holder', from: 'А', to: 'Б' }],
+      }),
+    );
     const acc = await inOrg(a, accUserId, (tx) => kbDoneFacts(tx, accUserId, steps));
     expect(acc.size).toBe(0);
     // Другая организация не видит ни истории, ни Telegram владельца «Альфы».
