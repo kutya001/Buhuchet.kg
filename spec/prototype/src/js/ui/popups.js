@@ -82,7 +82,9 @@ function openModal(o){
   return m;
 }
 // Уведомление внизу экрана: исчезает само через 3,2 с; на ПК — крестик «Закрыть», на телефоне — свайп влево или вправо (ТЗ «Уведомления внизу экрана»)
-function toast(msg,icon='check',bad=false){if(!bad&&typeof ckSoon==='function'&&!CK.quiet)ckSoon();const t=document.createElement('div');t.className='toast'+(bad?' bad':'');t.setAttribute('role','status');t.innerHTML=ic(icon)+`<span>${esc(msg)}</span><button type="button" class="toast-x" aria-label="Закрыть уведомление" title="Закрыть">${ic('x','sm')}</button>`;$('#toasts').appendChild(t);
+// act — необязательная ссылка в уведомлении {label, run}, например «Мои запросы» после отправки запроса
+function toast(msg,icon='check',bad=false,act=null){if(!bad&&typeof ckSoon==='function'&&!CK.quiet)ckSoon();const t=document.createElement('div');t.className='toast'+(bad?' bad':'');t.setAttribute('role','status');t.innerHTML=ic(icon)+`<span>${esc(msg)}</span>${act?`<button type="button" class="toast-a">${esc(act.label)}</button>`:''}<button type="button" class="toast-x" aria-label="Закрыть уведомление" title="Закрыть">${ic('x','sm')}</button>`;$('#toasts').appendChild(t);
+  if(act)t.querySelector('.toast-a').onclick=()=>{t.gone=true;t.remove();act.run()};
   const gone=()=>{if(t.gone)return;t.gone=true;t.style.transition='opacity .3s';t.style.opacity='0';setTimeout(()=>t.remove(),320)};
   t.querySelector('.toast-x').onclick=()=>{t.gone=true;t.remove()};swipeAway(t,()=>{t.gone=true;t.remove()});
   setTimeout(()=>{if(t.dragging)t.later=gone;else gone()},3200)}
