@@ -467,6 +467,7 @@ export const GRID_KEYS = [
   'dicts.platform.cats',
   'dicts.platform.templates',
   // Админка → «Справочники платформы»: справочник каждой вкладки и «Запросы».
+  'pdicts.regimes',
   'pdicts.forms',
   'pdicts.organs',
   'pdicts.ugns',

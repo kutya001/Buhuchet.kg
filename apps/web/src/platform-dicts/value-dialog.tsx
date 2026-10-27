@@ -1,9 +1,17 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { BANK_KINDS, DECLARATION_FOR, type AdminValueDict, type UiTextKey } from '@buhuchet/domain';
+import {
+  BANK_KINDS,
+  DECLARATION_FOR,
+  REGIME_KINDS,
+  regimeAccountantNote,
+  type AdminValueDict,
+  type UiTextKey,
+} from '@buhuchet/domain';
 import {
   AdminDictValueForm,
+  RegimeValueForm,
   UgnsValueForm,
   type AdminDictValue,
   type AdminDictValueFormInput,
@@ -40,6 +48,18 @@ function formOf(
   const d = x?.data ?? {};
   const name = x?.name ?? '';
   switch (dict) {
+    case 'regimes':
+      return {
+        name,
+        fullName: d.fullName ?? '',
+        kind: d.kind ?? 'special',
+        frees: d.frees ?? '',
+        who: d.who ?? '',
+        how: d.how ?? '',
+        combines: d.combines ?? '',
+        accountantNote: regimeAccountantNote(d.accountantNote ?? ''),
+        article: d.article ?? '',
+      };
     case 'forms':
       return {
         name,
@@ -71,12 +91,19 @@ function formOf(
   }
 }
 
-/** Отказ сервера под полем: повтор названия или кода, пустое краткое название. */
+/** Отказ сервера под полем: повтор названия или кода, пустое краткое или полное название. */
 const FIELD_OF: Readonly<Record<string, [Path<AdminDictValueFormInput>, UiTextKey]>> = {
   dict_value_taken: ['name', 'pdicts.err.name_taken'],
   ugns_code_taken: ['gnsCode', 'pdicts.err.ugns_code_taken'],
   short_name_required: ['shortName', 'pdicts.err.short_required'],
+  full_name_required: ['fullName', 'pdicts.err.full_required'],
 };
+
+/** Повтор названия словами справочника: у режима — «Такой режим уже есть» (прототип regimeDlg). */
+const TAKEN_TEXT: Partial<Record<AdminValueDict, UiTextKey>> = {
+  regimes: 'pdicts.err.regime_taken',
+};
+
 
 /**
  * Окно значения справочника (прототип admin/platform-dicts-forms.js valueDlg и ugnsDlg): название
@@ -117,7 +144,10 @@ export function ValueDialog({
     reset,
     formState: { errors, isSubmitting, isDirty },
   } = useForm<AdminDictValueFormInput, unknown, AdminDictValueForm>({
-    resolver: zodResolver(ugns ? UgnsValueForm : AdminDictValueForm),
+    // У УГНС обязательно краткое название, у режима — полное.
+    resolver: zodResolver(
+      ugns ? UgnsValueForm : dict === 'regimes' ? RegimeValueForm : AdminDictValueForm,
+    ),
     defaultValues: formOf(dict, item, t('pdicts.ugns.region_default')),
   });
   const contacts = useFieldArray({ control, name: 'contacts' });
@@ -153,7 +183,7 @@ export function ValueDialog({
       if (code === 'record_changed') return setChanged(true);
       const field = FIELD_OF[code];
       if (field) {
-        const message = t(field[1]);
+        const message = t((code === 'dict_value_taken' && TAKEN_TEXT[dict]) || field[1]);
         return setError(field[0], { type: 'server', message }, { shouldFocus: true });
       }
       toast(errorText(res.error), { bad: true });
@@ -173,11 +203,15 @@ export function ValueDialog({
       {(c) => <input {...c} {...register(name)} className={inputClass()} />}
     </Field>
   );
-  const note = (name: 'note' | 'description', label: string) => (
+  const note = (
+    name: 'note' | 'description' | 'who' | 'accountantNote',
+    label: string,
+    hint: string | null = t('pdicts.value.note_hint'),
+  ) => (
     <Field
       id={`${id}-${name}`}
       label={label}
-      hint={t('pdicts.value.note_hint')}
+      hint={hint ?? undefined}
       error={fieldError(t, errors[name])}
       full
     >
@@ -192,7 +226,56 @@ export function ValueDialog({
   );
 
   let body;
-  if (ugns) {
+  if (dict === 'regimes') {
+    body = (
+      <FormGrid>
+        <Field
+          id={`${id}-name`}
+          label={t('pdicts.col.regime_short')}
+          required
+          hint={current ? t('pdicts.value.name_hint') : undefined}
+          error={fieldError(t, errors.name)}
+        >
+          {(c) => <input {...c} {...register('name')} className={inputClass()} />}
+        </Field>
+        <Field id={`${id}-kind`} label={t('pdicts.col.kind')}>
+          {(c) => (
+            <select {...c} {...register('kind')} className={`${inputClass()} cursor-pointer`}>
+              {REGIME_KINDS.map((x) => (
+                <option key={x} value={x}>
+                  {t(`dicts.value.regime_kind.${x}`)}
+                </option>
+              ))}
+            </select>
+          )}
+        </Field>
+        <Field
+          id={`${id}-fullName`}
+          label={t('pdicts.regime.full')}
+          required
+          error={fieldError(t, errors.fullName)}
+          full
+        >
+          {(c) => <input {...c} {...register('fullName')} className={inputClass()} />}
+        </Field>
+        {text('frees', t('pdicts.col.frees'), t('pdicts.regime.frees_hint'))}
+        {note('who', t('pdicts.col.who'), null)}
+        {text('how', t('pdicts.col.how'))}
+        {text('combines', t('pdicts.col.combines'), t('pdicts.regime.combines_hint'))}
+        {note('accountantNote', t('pdicts.col.acc'), t('pdicts.regime.acc_hint'))}
+        <Field id={`${id}-article`} label={t('pdicts.col.article')} error={fieldError(t, errors.article)}>
+          {(c) => (
+            <input
+              {...c}
+              {...register('article')}
+              placeholder={t('pdicts.regime.article_ph')}
+              className={inputClass()}
+            />
+          )}
+        </Field>
+      </FormGrid>
+    );
+  } else if (ugns) {
     body = (
       <FormGrid>
         <Field
@@ -359,7 +442,7 @@ export function ValueDialog({
         ) : null}
         {dict === 'banks' ? (
           <>
-            <Field id={`${id}-kind`} label={t('pdicts.col.bank_kind')}>
+            <Field id={`${id}-kind`} label={t('pdicts.col.kind')}>
               {(c) => (
                 <select {...c} {...register('kind')} className={`${inputClass()} cursor-pointer`}>
                   {BANK_KINDS.map((x) => (
@@ -398,13 +481,17 @@ export function ValueDialog({
       onClose={onClose}
       kind="form"
       title={
-        ugns
-          ? t(current ? 'pdicts.ugns.title' : 'pdicts.ugns.title_new')
-          : current
-            ? t('pdicts.value.edit_title')
-            : t('pdicts.value.new_title', { dict: dictTitle })
+        dict === 'regimes'
+          ? current
+            ? current.data.fullName || current.name
+            : t('pdicts.regime.title_new')
+          : ugns
+            ? t(current ? 'pdicts.ugns.title' : 'pdicts.ugns.title_new')
+            : current
+              ? t('pdicts.value.edit_title')
+              : t('pdicts.value.new_title', { dict: dictTitle })
       }
-      sub={ugns ? t('pdicts.ugns.sub') : undefined}
+      sub={ugns ? t('pdicts.ugns.sub') : dict === 'regimes' ? t('pdicts.regime.sub') : undefined}
       dirty={isDirty}
       footer={
         <>

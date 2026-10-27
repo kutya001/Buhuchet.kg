@@ -5,12 +5,12 @@ import {
   auditActorName,
   dictValueProblems,
   nextDictCode,
+  regimeAccountantNote,
   toHistoryValue,
   sameHistoryValue,
   UGNS_CONTRACTOR_TABLE,
   type AdminValueDict,
   type AuthorityContact,
-  type BankKind,
   type DictUsage,
   type DictValueProblem,
   type HistoryChange,
@@ -37,6 +37,7 @@ import {
   ownershipForms,
   platformAuditLog,
   taxOffices,
+  taxRegimes,
 } from './schema';
 
 /*
@@ -59,6 +60,7 @@ type DictTable = PgTable & {
 };
 
 const TABLES: Readonly<Record<AdminValueDict, DictTable>> = {
+  regimes: taxRegimes,
   forms: ownershipForms,
   organs: authorities,
   ugns: taxOffices,
@@ -106,6 +108,15 @@ const dataFields = (dict: AdminValueDict) =>
   ADMIN_DICT_META[dict].fields.filter((f) => f !== 'name');
 
 /**
+ * Поле значения из строки таблицы. «Для бухгалтера:» в начале пояснения режима (так оно в наполнении)
+ * не показывается и не сохраняется: подпись уже есть у столбца и поля (прототип `accTxt`).
+ */
+function dataValue(f: string, value: unknown): AdminDictData[string] {
+  if (f === 'accountantNote' && typeof value === 'string') return regimeAccountantNote(value);
+  return (value ?? null) as AdminDictData[string];
+}
+
+/**
  * Сколько раз используется каждое значение (`app.admin_dict_usage`): всего и у контрагентов —
  * ссылками из любых таблиц, в том числе организаций.
  */
@@ -145,9 +156,7 @@ async function dictRecords(tx: Tx, dict: AdminValueDict): Promise<AdminDictValue
       code: r.code,
       n: ordered ? i + 1 : null,
       name: r.name,
-      data: Object.fromEntries(
-        dataFields(dict).map((f) => [f, (r[f] ?? null) as AdminDictData[string]]),
-      ),
+      data: Object.fromEntries(dataFields(dict).map((f) => [f, dataValue(f, r[f])])),
       active: r.active,
       usage: usage.get(r.code) ?? NO_USAGE,
       audit: {
@@ -196,8 +205,9 @@ function listRow(dict: AdminValueDict, x: AdminDictValueRecord, ord: number, t: 
     else row[f] = (value as string | null) ?? '';
   }
   if (dict === 'forms') row.declarationFor_text = t(`dicts.platform.end.${x.data.declarationFor}`);
+  const kind = ADMIN_DICT_META[dict].kind;
+  if (kind) row.kind_text = t(`${kind.text}.${x.data.kind as string}`);
   if (dict === 'banks') {
-    row.kind_text = t(`pdicts.bank.kind.${x.data.kind as BankKind}`);
     row.byPhone_text = t(x.data.byPhone ? 'pdicts.bank.by_phone.yes' : 'pdicts.bank.by_phone.no');
   }
   return row;
@@ -345,7 +355,7 @@ export interface AdminDictInput {
 
 /**
  * Поля для функции базы: имена столбцов таблицы, строки без пробелов по краям, пустой код ГНС — null,
- * «Переводы по номеру телефона» — да или нет, тип провайдера по умолчанию — банк.
+ * «Переводы по номеру телефона» — да или нет, пустой «Тип» — тип нового значения справочника.
  */
 function dbRow(dict: AdminValueDict, input: AdminDictInput): Record<string, unknown> {
   const columns = getTableColumns(TABLES[dict]) as Record<string, PgColumn>;
@@ -360,7 +370,8 @@ function dbRow(dict: AdminValueDict, input: AdminDictInput): Record<string, unkn
     if (f === 'byPhone') return v === true;
     const text = typeof v === 'string' ? v.trim() : '';
     if (f === 'gnsCode') return text || null;
-    if (f === 'kind') return text || 'bank';
+    if (f === 'kind') return text || ADMIN_DICT_META[dict].kind?.default;
+    if (f === 'accountantNote') return regimeAccountantNote(text);
     return text;
   };
   return Object.fromEntries(ADMIN_DICT_META[dict].fields.map((f) => [columns[f]!.name, value(f)]));

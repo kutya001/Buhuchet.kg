@@ -17,6 +17,7 @@ export type CountKey =
   | 'dicts.count'
   | 'dicts.platform.count'
   | 'pdicts.count'
+  | 'pdicts.regimes_count'
   | 'pdicts.ugns_count'
   | 'pdicts.req.count';
 

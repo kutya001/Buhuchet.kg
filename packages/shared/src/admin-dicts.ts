@@ -10,6 +10,7 @@ import {
   DICT_REQUEST_STATUSES,
   ORGAN_CONTACTS_MAX,
   organSiteUrl,
+  REGIME_KINDS,
   UGNS_CODE_PATTERN,
   type UiTextKey,
 } from '@buhuchet/domain';
@@ -31,6 +32,9 @@ export const AdminDictCodeParam = AdminValueDictParam.extend({ code: z.string().
 
 const Contact = z.object({ label: z.string(), value: z.string() });
 
+/** «Тип»: у банковского провайдера — банк или кошелёк, у режима — общий или специальный. */
+const Kind = z.enum([...BANK_KINDS, ...REGIME_KINDS]);
+
 /** Поля значения сверх кода и названия — у каждого справочника свои (`ADMIN_DICT_META.fields`). */
 export const AdminDictData = z.object({
   fullName: z.string().optional(),
@@ -45,9 +49,16 @@ export const AdminDictData = z.object({
   /** Код ГНС управления; null — не сверен. */
   gnsCode: z.string().nullable().optional(),
   region: z.string().optional(),
-  /** У банковского провайдера: «Тип» и «Переводы по номеру телефона». */
-  kind: z.enum(BANK_KINDS).optional(),
+  /** У банковского провайдера и режима — «Тип»; у провайдера — «Переводы по номеру телефона». */
+  kind: Kind.optional(),
   byPhone: z.boolean().optional(),
+  /** У режима: «Освобождает от», «Кто применяет», «Как переходят», «Совмещается с». */
+  frees: z.string().optional(),
+  who: z.string().optional(),
+  how: z.string().optional(),
+  combines: z.string().optional(),
+  accountantNote: z.string().optional(),
+  article: z.string().optional(),
 });
 export type AdminDictData = z.infer<typeof AdminDictData>;
 
@@ -112,8 +123,14 @@ export const AdminDictValueForm = z.object({
     .refine((v) => v === '' || UGNS_CODE_PATTERN.test(v), message('pdicts.err.ugns_code'))
     .optional(),
   region: text(DICT_NAME_MAX).optional(),
-  kind: z.enum(BANK_KINDS).optional(),
+  kind: Kind.optional(),
   byPhone: z.boolean().optional(),
+  frees: text(DICT_NOTE_MAX).optional(),
+  who: text(DICT_NOTE_MAX).optional(),
+  how: text(DICT_NOTE_MAX).optional(),
+  combines: text(DICT_NOTE_MAX).optional(),
+  accountantNote: text(DICT_NOTE_MAX).optional(),
+  article: text(DICT_NAME_MAX).optional(),
 });
 export type AdminDictValueFormInput = z.input<typeof AdminDictValueForm>;
 export type AdminDictValueForm = z.output<typeof AdminDictValueForm>;
@@ -124,6 +141,15 @@ export const UgnsValueForm = AdminDictValueForm.extend({
     .string()
     .trim()
     .min(1, message('pdicts.err.short_required'))
+    .max(DICT_NAME_MAX, message('form.too_long')),
+});
+
+/** Окно режима: полное название тоже обязательно — «Введите полное название». */
+export const RegimeValueForm = AdminDictValueForm.extend({
+  fullName: z
+    .string()
+    .trim()
+    .min(1, message('pdicts.err.full_required'))
     .max(DICT_NAME_MAX, message('form.too_long')),
 });
 

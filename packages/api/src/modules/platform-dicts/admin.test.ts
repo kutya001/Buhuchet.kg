@@ -276,6 +276,42 @@ describe.skipIf(!databaseAvailable())('Админка → «Справочник
     });
   });
 
+  it('режим: полное название обязательно, новый — специальный с кодом РЕЖ; тип не режима — 400', async () => {
+    const base = { name: 'Новый режим', fullName: 'Налог на новое' };
+    const noFull = await send('POST', `${P}/regimes`, { ...base, fullName: ' ' });
+    expect([noFull.status, await errorOf(noFull)]).toMatchObject([
+      400,
+      { code: 'full_name_required', details: { field: 'fullName' } },
+    ]);
+    const bank = await send('POST', `${P}/regimes`, { ...base, kind: 'bank' });
+    expect([bank.status, await errorOf(bank)]).toMatchObject([
+      400,
+      { code: 'invalid_kind', details: { field: 'kind' } },
+    ]);
+    const special = await send('POST', `${P}/banks`, { name: 'Четвёртый', kind: 'special' });
+    expect([special.status, (await errorOf(special)).code]).toEqual([400, 'invalid_kind']);
+
+    const res = await send('POST', `${P}/regimes`, {
+      ...base,
+      accountantNote: 'Для бухгалтера: один отчёт',
+      article: 'гл. 66',
+    });
+    expect(res.status, await res.clone().text()).toBe(201);
+    expect(AdminDictValue.parse(await res.json())).toMatchObject({
+      code: 'РЕЖ-13',
+      n: 13,
+      data: { kind: 'special', accountantNote: 'один отчёт', article: 'гл. 66', frees: '' },
+    });
+    const taken = await send('POST', `${P}/regimes`, { name: 'ОНР', fullName: 'Ещё один' });
+    expect((await errorOf(taken)).code).toBe('dict_value_taken');
+    const regimes = AdminDictList.parse(await (await get(`${P}/regimes?size=all`)).json());
+    expect(regimes.items.find((x) => x.name === 'ОНР')).toMatchObject({
+      data: { kind: 'general' },
+      used: expect.any(Number),
+    });
+    expect(regimes.items.find((x) => x.name === 'ОНР')!.used).toBeGreaterThan(0);
+  });
+
   it('«Запросы»: администратор видит запросы всех организаций и отвечает; организация видит ответ', async () => {
     const sent = DictRequest.parse(
       await (

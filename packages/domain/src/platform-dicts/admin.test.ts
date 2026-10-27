@@ -17,6 +17,7 @@ describe('nextDictCode', () => {
     expect(nextDictCode('forms', ['ФС-01', 'ФС-24', 'ФС-03'], random)).toBe('ФС-25');
     expect(nextDictCode('reasons', ['ПРЧ-001', 'ПРЧ-005'], random)).toBe('ПРЧ-006');
     expect(nextDictCode('organs', [], random)).toBe('ОРГ-01');
+    expect(nextDictCode('regimes', ['РЕЖ-01', 'РЕЖ-12'], random)).toBe('РЕЖ-13');
   });
 
   it('после удаления номер не повторяется: дыры в номерах не заполняются', () => {
@@ -81,6 +82,15 @@ describe('dictRequestAnswerProblem', () => {
 describe('ADMIN_DICT_META', () => {
   it('у каждого справочника есть название среди полей', () => {
     for (const dict of ADMIN_VALUE_DICTS) expect(ADMIN_DICT_META[dict].fields).toContain('name');
+  });
+
+  it('«Тип» нового значения — из типов справочника, обязательные поля — среди полей', () => {
+    for (const dict of ADMIN_VALUE_DICTS) {
+      const { kind, fields, required = [] } = ADMIN_DICT_META[dict];
+      if (kind) expect(kind.values).toContain(kind.default);
+      if (kind) expect(fields).toContain('kind');
+      for (const f of required) expect(fields).toContain(f);
+    }
   });
 
   it('isAdminValueDict знает только справочники механизма', () => {

@@ -30,6 +30,7 @@ import {
   orgAccounts,
   ownershipForms,
   taxOffices,
+  taxRegimes,
   users,
 } from './schema';
 import {
@@ -440,6 +441,50 @@ describe.skipIf(!databaseAvailable())(
         ),
       );
       expect(taken).toMatchObject({ reason: 'taken', problems: [{ field: 'gnsCode' }] });
+    });
+
+    it('режимы: «Тип» подписью, «Для бухгалтера» без подписи в начале; сохранение без правки — без новой версии', async () => {
+      const page = await asAdmin((tx) => listAdminDictPage(tx, 'regimes', query(), t));
+      expect(page.rows.slice(0, 2).map((x) => [x.n, x.code, x.name, x.data.kind])).toEqual([
+        [1, 'РЕЖ-01', 'ОНР', 'general'],
+        [2, 'РЕЖ-02', 'Патент', 'special'],
+      ]);
+      // ОНР указан у видов отчётов — «Используется».
+      expect(page.rows[0]!.usage.total).toBeGreaterThan(0);
+      expect(page.rows.map((x) => x.data.accountantNote)).not.toContainEqual(
+        expect.stringMatching(/^Для бухгалтера/),
+      );
+      const kinds = await asAdmin((tx) => listAdminDictValues(tx, 'regimes', 'kind', t));
+      expect(kinds.items.map((x) => x.label).sort()).toEqual(['Общий', 'Специальный']);
+
+      const onr = page.rows[0]!;
+      const same = await asAdmin((tx) =>
+        adminDictUpdate(tx, 'regimes', onr.code, { name: onr.name, data: onr.data }, onr.version),
+      );
+      expect(same.ok && same.record.version).toBe(onr.version);
+      const [stored] = await db.admin.db
+        .select({ note: taxRegimes.accountantNote })
+        .from(taxRegimes)
+        .where(eq(taxRegimes.code, onr.code));
+      expect(stored!.note).toMatch(/^Для бухгалтера: /);
+
+      const created = await asAdmin((tx) =>
+        adminDictCreate(
+          tx,
+          'regimes',
+          {
+            name: 'Новый режим',
+            data: { fullName: 'Налог на новое', accountantNote: 'Для бухгалтера: один отчёт' },
+          },
+          random,
+        ),
+      );
+      expect(created.ok && [created.record.code, created.record.n]).toEqual(['РЕЖ-13', 13]);
+      expect(created.ok && created.record.data).toMatchObject({
+        kind: 'special',
+        accountantNote: 'один отчёт',
+        frees: '',
+      });
     });
 
     it('не администратору — ни списка, ни правки; таблицы справочников роль приложения не меняет', async () => {

@@ -281,6 +281,13 @@
       "when": 1793112928703,
       "tag": "0039_admin_platform_dicts",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1793118281184,
+      "tag": "0040_admin_platform_dicts_more",
+      "breakpoints": true
     }
   ]
 }

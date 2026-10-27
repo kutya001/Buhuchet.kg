@@ -311,11 +311,15 @@ export function getAdminDictValueHandler(
   };
 }
 
-/** Поля формы → поля значения справочника (только поля этого справочника). */
+/**
+ * Поля формы → поля значения справочника (только поля этого справочника). «Тип» не этого справочника
+ * (у режима — «Банк») — 400 под полем; пустой — тип нового значения.
+ */
 function inputOf(dict: AdminValueDict, form: AdminDictValueForm): AdminDictInput {
+  const meta = ADMIN_DICT_META[dict];
   const values = form as Record<string, unknown>;
   const data: AdminDictInput['data'] = {};
-  for (const f of ADMIN_DICT_META[dict].fields) {
+  for (const f of meta.fields) {
     if (f === 'name') continue;
     const v = values[f];
     if (f === 'byPhone') data[f] = v === true;
@@ -323,14 +327,28 @@ function inputOf(dict: AdminValueDict, form: AdminDictValueForm): AdminDictInput
     else data[f] = (v as string) ?? '';
   }
   if (dict === 'forms' && !data.declarationFor) data.declarationFor = 'org';
-  if (dict === 'banks' && !data.kind) data.kind = 'bank';
+  if (meta.kind) {
+    data.kind ||= meta.kind.default;
+    if (!meta.kind.values.includes(data.kind as string)) {
+      apiFail(400, 'invalid_kind', 'Такого типа у справочника нет', { field: 'kind' });
+    }
+  }
   return { name: form.name, data };
 }
 
-/** Краткое название управления обязательно (прототип ugnsDlg «Введите краткое название»). */
+/** Обязательные поля сверх названия (прототип ugnsDlg, regimeDlg). */
+const REQUIRED = {
+  shortName: ['short_name_required', 'Введите краткое название'],
+  fullName: ['full_name_required', 'Введите полное название'],
+} as const;
+
+/** Краткое название управления и полное название режима обязательны. */
 function checkRequired(dict: AdminValueDict, input: AdminDictInput) {
-  if (dict === 'ugns' && !String(input.data.shortName ?? '').trim()) {
-    apiFail(400, 'short_name_required', 'Введите краткое название', { field: 'shortName' });
+  for (const field of ADMIN_DICT_META[dict].required ?? []) {
+    if (!String(input.data[field] ?? '').trim()) {
+      const [code, message] = REQUIRED[field];
+      apiFail(400, code, message, { field });
+    }
   }
 }
 
@@ -388,7 +406,8 @@ async function saving<T>(run: () => Promise<T>): Promise<T> {
 }
 
 const valueTaken = {
-  description: 'Название пустое или уже есть, код ГНС не из трёх цифр или уже есть',
+  description:
+    'Название пустое или уже есть, не заполнено обязательное поле, тип не этого справочника, код ГНС не из трёх цифр или уже есть',
   content: error,
 };
 

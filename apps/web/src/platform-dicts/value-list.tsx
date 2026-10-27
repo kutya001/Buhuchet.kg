@@ -56,9 +56,20 @@ const WIDTHS: Readonly<Record<string, number>> = {
   region: 170,
   kind: 170,
   byPhone: 150,
+  frees: 260,
+  who: 300,
+  how: 260,
+  combines: 260,
+  accountantNote: 340,
+  article: 100,
   contractors: 130,
   used: 130,
   active: 130,
+};
+
+/** Свои ширины справочника: у режима краткое название узкое. */
+const DICT_WIDTHS: Partial<Record<AdminValueDict, Readonly<Record<string, number>>>> = {
+  regimes: { code: 90, name: 180, kind: 120 },
 };
 
 const ugnsName = (dict: AdminValueDict, x: AdminDictValue) =>
@@ -81,8 +92,10 @@ function cellText(dict: AdminValueDict, key: string, x: AdminDictValue, t: Trans
       return t(x.active ? 'pdicts.status.on' : 'pdicts.status.off');
     case 'declarationFor':
       return x.data.declarationFor ? t(`dicts.platform.end.${x.data.declarationFor}`) : '';
-    case 'kind':
-      return x.data.kind ? t(`pdicts.bank.kind.${x.data.kind}`) : '';
+    case 'kind': {
+      const kind = ADMIN_DICT_META[dict].kind;
+      return kind && x.data.kind ? t(`${kind.text}.${x.data.kind}` as UiTextKey) : '';
+    }
     case 'byPhone':
       return t(x.data.byPhone ? 'pdicts.bank.by_phone.yes' : 'pdicts.bank.by_phone.no');
     case 'contacts':
@@ -103,7 +116,7 @@ export function adminDictColumns(dict: AdminValueDict, t: Translate): GridColumn
       key: c.key,
       label: t(c.label as UiTextKey),
       type: c.type,
-      width: WIDTHS[c.key],
+      width: DICT_WIDTHS[dict]?.[c.key] ?? WIDTHS[c.key],
       text: (x) => cellText(dict, c.key, x, t),
     };
     if (c.key === 'name') {
@@ -141,6 +154,7 @@ const AUDIT: GridAudit<AdminDictValue> = {
 };
 
 const COUNT: Readonly<Record<AdminValueDict, CountKey>> = {
+  regimes: 'pdicts.regimes_count',
   forms: 'pdicts.count',
   organs: 'pdicts.count',
   reasons: 'pdicts.count',
@@ -150,16 +164,30 @@ const COUNT: Readonly<Record<AdminValueDict, CountKey>> = {
 
 /** Пояснение над списком (прототип: у шаблонов для организаций и у УГНС). */
 const NOTES: Partial<Record<AdminValueDict, UiTextKey>> = {
+  regimes: 'pdicts.note.regimes',
   reasons: 'pdicts.note.reasons',
   ugns: 'pdicts.note.ugns',
 };
 
-/** «+ Добавить» → «Значение» или «Налоговый орган» на вкладке справочника. */
+/** Способ «+ Добавить» на вкладке справочника (прототип pdAdd): «Значение», «Режим», «Налоговый орган». */
+const ADD_ACTION: Partial<Record<AdminValueDict, string>> = { regimes: 'regime', ugns: 'ugns' };
+
+/** Тексты справочника вместо общих («Значение отключено», «Значение нигде не используется…»). */
+const OFF_TOAST: Partial<Record<AdminValueDict, UiTextKey>> = {
+  regimes: 'pdicts.toast.off_regime',
+  ugns: 'pdicts.toast.off_ugns',
+};
+const DELETE_TEXT: Partial<Record<AdminValueDict, UiTextKey>> = {
+  regimes: 'pdicts.delete.text_regime',
+  ugns: 'pdicts.delete.text_ugns',
+};
+
+/** «+ Добавить» → способ добавления вкладки справочника. */
 function useValueAddRequest(dict: AdminValueDict, run: () => void) {
   const { addRequest, clearAddRequest } = useShell();
   const request = addRequest?.moduleId === 'pdicts' ? addRequest : null;
   const start = useEffectEvent((actionId: string) => {
-    if (actionId === (dict === 'ugns' ? 'ugns' : 'value')) run();
+    if (actionId === (ADD_ACTION[dict] ?? 'value')) run();
   });
   useEffect(() => {
     if (!request) return;
@@ -254,7 +282,7 @@ export function ValueDictList({ dict }: { dict: AdminValueDict }) {
           param: param(x),
           json: { active, version: x.version },
         }),
-      active ? undefined : dict === 'ugns' ? 'pdicts.toast.off_ugns' : 'pdicts.toast.off',
+      active ? undefined : (OFF_TOAST[dict] ?? 'pdicts.toast.off'),
     );
   const remove = (x: AdminDictValue) =>
     act(
@@ -269,7 +297,7 @@ export function ValueDictList({ dict }: { dict: AdminValueDict }) {
     const edit: ActionEntry = {
       id: 'edit',
       label: t(
-        dict === 'forms' || dict === 'banks' || ugns
+        dict === 'forms' || dict === 'banks' || dict === 'regimes' || ugns
           ? 'pdicts.action.edit'
           : 'pdicts.action.rename',
       ),
@@ -378,7 +406,7 @@ export function ValueDictList({ dict }: { dict: AdminValueDict }) {
         open={askDelete !== null}
         onClose={() => setAskDelete(null)}
         title={t('pdicts.delete.title', { name: askDelete ? ugnsName(dict, askDelete) : '' })}
-        text={t(dict === 'ugns' ? 'pdicts.delete.text_ugns' : 'pdicts.delete.text')}
+        text={t(DELETE_TEXT[dict] ?? 'pdicts.delete.text')}
         ok={t('pdicts.action.delete')}
         danger
         onConfirm={() => askDelete && void remove(askDelete)}

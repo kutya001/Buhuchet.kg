@@ -7,11 +7,11 @@
  */
 
 /**
- * Справочники, которые правятся общим механизмом (часть 1 задачи 2.36), в порядке вкладок модуля.
+ * Справочники, которые правятся общим механизмом (части 1 и 2 задачи 2.36), в порядке вкладок модуля.
  * Новый справочник добавляет сюда строку, перечень полей ниже и строку перечня
  * `app.platform_dict_specs` в базе.
  */
-export const ADMIN_VALUE_DICTS = ['forms', 'organs', 'ugns', 'banks', 'reasons'] as const;
+export const ADMIN_VALUE_DICTS = ['regimes', 'forms', 'organs', 'ugns', 'banks', 'reasons'] as const;
 export type AdminValueDict = (typeof ADMIN_VALUE_DICTS)[number];
 
 export function isAdminValueDict(value: string): value is AdminValueDict {
@@ -19,7 +19,7 @@ export function isAdminValueDict(value: string): value is AdminValueDict {
 }
 
 import type { ListSort } from '../common/list';
-import type { BankKind } from './catalog';
+import { BANK_KINDS, REGIME_KINDS, type BankKind } from './catalog';
 
 /**
  * Как получается код нового значения: префикс и номер (ФС-25, ПРЧ-006), префикс по типу провайдера
@@ -40,9 +40,38 @@ export interface AdminDictMeta {
   ordered: boolean;
   /** Поля значения, которые правит администратор (столбцы перечня `app.platform_dict_specs`). */
   fields: readonly string[];
+  /** Обязательные поля сверх названия: у УГНС — краткое название, у режима — полное. */
+  required?: readonly ('shortName' | 'fullName')[];
+  /**
+   * «Тип» значения (поле `kind`): допустимые значения, тип нового значения и ключ словаря подписи
+   * (`<text>.<тип>`).
+   */
+  kind?: {
+    values: readonly string[];
+    default: string;
+    text: 'pdicts.bank.kind' | 'dicts.value.regime_kind';
+  };
 }
 
 export const ADMIN_DICT_META: Readonly<Record<AdminValueDict, AdminDictMeta>> = {
+  // Новый режим — специальный (прототип regimeDlg): общий режим один.
+  regimes: {
+    code: { prefix: 'РЕЖ', digits: 2 },
+    ordered: true,
+    fields: [
+      'name',
+      'fullName',
+      'kind',
+      'frees',
+      'who',
+      'how',
+      'combines',
+      'accountantNote',
+      'article',
+    ],
+    required: ['fullName'],
+    kind: { values: REGIME_KINDS, default: 'special', text: 'dicts.value.regime_kind' },
+  },
   forms: {
     code: { prefix: 'ФС', digits: 2 },
     ordered: true,
@@ -59,11 +88,13 @@ export const ADMIN_DICT_META: Readonly<Record<AdminValueDict, AdminDictMeta>> = 
     code: { key: 'ugns' },
     ordered: false,
     fields: ['name', 'shortName', 'gnsCode', 'region'],
+    required: ['shortName'],
   },
   banks: {
     code: { byKind: { bank: 'БНК', wallet: 'КШЛ' }, digits: 2 },
     ordered: true,
     fields: ['name', 'kind', 'byPhone', 'note'],
+    kind: { values: BANK_KINDS, default: 'bank', text: 'pdicts.bank.kind' },
   },
   reasons: { code: { prefix: 'ПРЧ', digits: 3 }, ordered: true, fields: ['name', 'note'] },
 };
@@ -202,6 +233,21 @@ const STATUS = c('active', 'enum', 'pdicts.col.status');
  * «Переводы по номеру телефона». Служебные столбцы добавляет список.
  */
 export const ADMIN_DICT_COLUMNS: Readonly<Record<AdminValueDict, readonly AdminDictColumn[]>> = {
+  regimes: [
+    N,
+    c('code', 'text', 'pdicts.col.code', true),
+    c('name', 'text', 'pdicts.col.regime_short'),
+    c('fullName', 'text', 'pdicts.col.regime_full'),
+    c('kind', 'enum', 'pdicts.col.kind'),
+    c('frees', 'text', 'pdicts.col.frees', true),
+    c('who', 'text', 'pdicts.col.who', true),
+    c('how', 'text', 'pdicts.col.how', true),
+    c('combines', 'text', 'pdicts.col.combines', true),
+    c('accountantNote', 'text', 'pdicts.col.acc'),
+    c('article', 'text', 'pdicts.col.article'),
+    USED,
+    STATUS,
+  ],
   forms: [
     N,
     CODE,
@@ -238,7 +284,7 @@ export const ADMIN_DICT_COLUMNS: Readonly<Record<AdminValueDict, readonly AdminD
     N,
     CODE,
     VALUE,
-    c('kind', 'enum', 'pdicts.col.bank_kind'),
+    c('kind', 'enum', 'pdicts.col.kind'),
     c('byPhone', 'enum', 'pdicts.col.by_phone'),
     c('note', 'text', 'pdicts.col.note', true),
     USED,
