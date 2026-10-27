@@ -19,6 +19,7 @@ export type CountKey =
   | 'pdicts.count'
   | 'pdicts.regimes_count'
   | 'pdicts.phones_count'
+  | 'pdicts.calendar_count'
   | 'pdicts.ugns_count'
   | 'pdicts.req.count';
 

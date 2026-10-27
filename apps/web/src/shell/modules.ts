@@ -391,6 +391,13 @@ export const MODULES: Record<MenuModuleId, ModuleDef> = {
       },
       { id: 'phone', icon: 'globe', label: 'pdicts.add.phone', tabs: ['phones'] },
       { id: 'ugns', icon: 'landmark', label: 'pdicts.add.ugns', tabs: ['ugns'] },
+      { id: 'holiday', icon: 'calendar', label: 'pdicts.add.holiday', tabs: ['calendar'] },
+      {
+        id: 'calendar_copy',
+        icon: 'copy',
+        label: 'pdicts.add.calendar_copy',
+        tabs: ['calendar'],
+      },
     ],
   },
   l10n: {
