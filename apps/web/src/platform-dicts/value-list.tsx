@@ -54,6 +54,8 @@ const WIDTHS: Readonly<Record<string, number>> = {
   contactsNote: 220,
   gnsCode: 90,
   region: 170,
+  kind: 170,
+  byPhone: 150,
   contractors: 130,
   used: 130,
   active: 130,
@@ -79,6 +81,10 @@ function cellText(dict: AdminValueDict, key: string, x: AdminDictValue, t: Trans
       return t(x.active ? 'pdicts.status.on' : 'pdicts.status.off');
     case 'declarationFor':
       return x.data.declarationFor ? t(`dicts.platform.end.${x.data.declarationFor}`) : '';
+    case 'kind':
+      return x.data.kind ? t(`pdicts.bank.kind.${x.data.kind}`) : '';
+    case 'byPhone':
+      return t(x.data.byPhone ? 'pdicts.bank.by_phone.yes' : 'pdicts.bank.by_phone.no');
     case 'contacts':
       return (x.data.contacts ?? []).map((c) => `${c.label}: ${c.value}`).join('; ');
     case 'gnsCode':
@@ -104,6 +110,14 @@ export function adminDictColumns(dict: AdminValueDict, t: Translate): GridColumn
       column.cell = (x) => <span className="font-semibold">{x.name}</span>;
     }
     if (c.key === 'code' || c.key === 'gnsCode') column.className = MONO_CLASS;
+    if (c.key === 'byPhone') {
+      column.cell = (x) =>
+        x.data.byPhone ? (
+          <StatusPill tone="green" icon="phone" label={t('pdicts.bank.by_phone.yes')} size="sm" />
+        ) : (
+          <span className="text-faint">{t('pdicts.bank.by_phone.no')}</span>
+        );
+    }
     if (c.key === 'active') {
       column.cell = (x) =>
         x.active ? (
@@ -131,6 +145,7 @@ const COUNT: Readonly<Record<AdminValueDict, CountKey>> = {
   organs: 'pdicts.count',
   reasons: 'pdicts.count',
   ugns: 'pdicts.ugns_count',
+  banks: 'pdicts.count',
 };
 
 /** Пояснение над списком (прототип: у шаблонов для организаций и у УГНС). */
@@ -154,12 +169,12 @@ function useValueAddRequest(dict: AdminValueDict, run: () => void) {
 }
 
 /**
- * Админка → «Справочники платформы» → формы собственности, органы, УГНС, причины изменения срока
- * (ТЗ «Общие правила для всех справочников»; прототип admin/platform-dicts.js renderPDicts0): «№»
- * по порядку справочника (только у коротких — решение заказчика 27.10.2026, docs/deviations.md п.
- * Д-2; УГНС — по региону), «Используется», «Статус»; отключённые — приглушённо. Действия:
- * «Изменить»/«Переименовать», «Выше» и «Ниже», «Отключить»/«Включить», «Удалить» — только
- * неиспользуемое, после вопроса. Под списком — «История изменений».
+ * Админка → «Справочники платформы» → формы собственности, органы, УГНС, банковские провайдеры,
+ * причины изменения срока (ТЗ «Общие правила для всех справочников»; прототип admin/platform-dicts.js
+ * renderPDicts0): «№» по порядку справочника (только у коротких — решение заказчика 27.10.2026,
+ * docs/deviations.md п. Д-2; УГНС — по региону), «Используется», «Статус»; отключённые —
+ * приглушённо. Действия: «Изменить»/«Переименовать», «Выше» и «Ниже», «Отключить»/«Включить»,
+ * «Удалить» — только неиспользуемое, после вопроса. Под списком — «История изменений».
  */
 export function ValueDictList({ dict }: { dict: AdminValueDict }) {
   const t = useT();
@@ -253,7 +268,11 @@ export function ValueDictList({ dict }: { dict: AdminValueDict }) {
     const ugns = dict === 'ugns';
     const edit: ActionEntry = {
       id: 'edit',
-      label: t(dict === 'forms' || ugns ? 'pdicts.action.edit' : 'pdicts.action.rename'),
+      label: t(
+        dict === 'forms' || dict === 'banks' || ugns
+          ? 'pdicts.action.edit'
+          : 'pdicts.action.rename',
+      ),
       icon: 'edit',
       run: () => open(x),
     };

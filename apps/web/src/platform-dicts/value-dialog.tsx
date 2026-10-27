@@ -1,7 +1,7 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { DECLARATION_FOR, type AdminValueDict, type UiTextKey } from '@buhuchet/domain';
+import { BANK_KINDS, DECLARATION_FOR, type AdminValueDict, type UiTextKey } from '@buhuchet/domain';
 import {
   AdminDictValueForm,
   UgnsValueForm,
@@ -10,8 +10,10 @@ import {
 } from '@buhuchet/shared';
 import {
   buttonClass,
+  CheckRow,
   Field,
   FormGrid,
+  Hint,
   Icon,
   iconButtonClass,
   inputClass,
@@ -21,7 +23,7 @@ import {
   useToast,
 } from '@buhuchet/ui';
 import { useId, useState, type FormEvent } from 'react';
-import { useFieldArray, useForm, type Path } from 'react-hook-form';
+import { Controller, useFieldArray, useForm, type Path } from 'react-hook-form';
 import { api, callApi } from '../api-client';
 import { fieldError } from '../auth/fields';
 import { useErrorText, useT } from '../l10n/provider';
@@ -62,6 +64,8 @@ function formOf(
         gnsCode: d.gnsCode ?? '',
         region: x ? (d.region ?? '') : region,
       };
+    case 'banks':
+      return { name, kind: d.kind ?? 'bank', byPhone: d.byPhone ?? false, note: d.note ?? '' };
     case 'reasons':
       return { name, note: d.note ?? '' };
   }
@@ -78,7 +82,8 @@ const FIELD_OF: Readonly<Record<string, [Path<AdminDictValueFormInput>, UiTextKe
  * Окно значения справочника (прототип admin/platform-dicts-forms.js valueDlg и ugnsDlg): название
  * обязательно и не повторяется; у форм — полное и краткое название и «Для ЕНД»; у органов — телефоны с
  * подписью, график, сайт и «Сверить» (решение заказчика 27.10.2026, docs/deviations.md п. Д-3); у
- * налогового органа — код ГНС (три цифры или пусто), регион, полное и краткое название. Пояснение
+ * налогового органа — код ГНС (три цифры или пусто), регион, полное и краткое название; у банковского
+ * провайдера — «Тип» и «Переводы по номеру телефона». Пояснение
  * видят все организации. Новое название сразу видно у всех организаций, в том числе в старых записях:
  * записи ссылаются на код. Пока окно было открыто, значение изменил другой администратор — «Запись
  * изменена другим пользователем» и «Перечитать».
@@ -350,6 +355,36 @@ export function ValueDialog({
               t('pdicts.col.contacts_note'),
               t('pdicts.organ.contacts_note_hint'),
             )}
+          </>
+        ) : null}
+        {dict === 'banks' ? (
+          <>
+            <Field id={`${id}-kind`} label={t('pdicts.col.bank_kind')}>
+              {(c) => (
+                <select {...c} {...register('kind')} className={`${inputClass()} cursor-pointer`}>
+                  {BANK_KINDS.map((x) => (
+                    <option key={x} value={x}>
+                      {t(`pdicts.bank.kind.${x}`)}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </Field>
+            <Controller
+              control={control}
+              name="byPhone"
+              render={({ field }) => (
+                <CheckRow
+                  checked={field.value === true}
+                  onChange={field.onChange}
+                  label={t('pdicts.col.by_phone')}
+                  plain
+                >
+                  <Hint>{t('pdicts.bank.by_phone_hint')}</Hint>
+                </CheckRow>
+              )}
+            />
+            {note('note', t('pdicts.col.note'))}
           </>
         ) : null}
         {dict === 'reasons' ? note('note', t('pdicts.col.note')) : null}

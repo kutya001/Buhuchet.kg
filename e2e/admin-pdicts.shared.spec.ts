@@ -3,7 +3,7 @@ import { platformAdmin, search } from './admin';
 import { DEMO_PASSWORD, signIn } from './helpers';
 
 // Админка → «Справочники платформы», часть 1 задачи 2.36 (ТЗ «Админка» → «Справочники платформы»;
-// прототип admin/platform-dicts*.js): вкладки по группам с шапкой, правка органов и УГНС, «Запросы»
+// прототип admin/platform-dicts*.js): вкладки по группам с шапкой, правка органов, УГНС и банков, «Запросы»
 // организаций с ответом. Справочники общие для всех организаций, поэтому файл — *.shared.spec.ts, а
 // добавленные значения в конце удаляются.
 
@@ -13,7 +13,7 @@ type Value = {
   name: string;
   used: number;
   version: number;
-  data: { gnsCode?: string | null; site?: string };
+  data: { gnsCode?: string | null; site?: string; kind?: string; byPhone?: boolean };
 };
 
 /** Значения справочника через API администратора. */
@@ -202,6 +202,39 @@ test.describe('Админка: справочники платформы', () =>
       await page.keyboard.press('Escape');
     } finally {
       await cleanup(page.request, origin, 'ugns', name);
+    }
+  });
+
+  test('(проверка задачи #92) банковские провайдеры: «Тип» и «Переводы по номеру телефона», у кошелька код КШЛ', async ({
+    page,
+    baseURL,
+    isMobile,
+  }, testInfo) => {
+    const origin = new URL(baseURL!).origin;
+    await platformAdmin(page.request, origin);
+    const name = `Кошелёк ${testInfo.project.name} ${Date.now()}`;
+
+    try {
+      await page.goto('/app/pdicts/banks');
+      await expect(page.locator('[data-grid] [data-id]').first()).toBeVisible();
+      await page.getByRole('button', { name: 'Добавить', exact: true }).click();
+      const dialog = page.getByRole('dialog', { name: 'Новое значение · Банковские провайдеры' });
+      await dialog.getByLabel('Название').fill(name);
+      await dialog.getByLabel('Тип').selectOption({ label: 'Электронный кошелёк' });
+      await dialog.getByRole('switch', { name: /Переводы по номеру телефона/ }).check();
+      await dialog.getByRole('button', { name: 'Сохранить' }).click();
+      await expect(dialog).toBeHidden();
+
+      const created = (await values(page.request, 'banks')).find((x) => x.name === name)!;
+      expect(created).toMatchObject({ data: { kind: 'wallet', byPhone: true } });
+      expect(created.code).toMatch(/^КШЛ-\d{2}$/);
+      const found = await row(page, isMobile, name, created.code);
+      await expect(found).toContainText('Электронный кошелёк');
+      await expect(found).toContainText('Да');
+      await expect(await rowAction(page, found, 'Изменить')).toBeVisible();
+      await page.keyboard.press('Escape');
+    } finally {
+      await cleanup(page.request, origin, 'banks', name);
     }
   });
 

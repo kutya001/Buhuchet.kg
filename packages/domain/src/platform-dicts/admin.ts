@@ -11,7 +11,7 @@
  * Новый справочник добавляет сюда строку, перечень полей ниже и строку перечня
  * `app.platform_dict_specs` в базе.
  */
-export const ADMIN_VALUE_DICTS = ['forms', 'organs', 'ugns', 'reasons'] as const;
+export const ADMIN_VALUE_DICTS = ['forms', 'organs', 'ugns', 'banks', 'reasons'] as const;
 export type AdminValueDict = (typeof ADMIN_VALUE_DICTS)[number];
 
 export function isAdminValueDict(value: string): value is AdminValueDict {
@@ -19,9 +19,16 @@ export function isAdminValueDict(value: string): value is AdminValueDict {
 }
 
 import type { ListSort } from '../common/list';
+import type { BankKind } from './catalog';
 
-/** Как получается код нового значения: префикс и номер (ФС-25, ПРЧ-006) или постоянный ключ УГНС. */
-type CodeRule = { prefix: string; digits: number } | { key: string };
+/**
+ * Как получается код нового значения: префикс и номер (ФС-25, ПРЧ-006), префикс по типу провайдера
+ * (банк — БНК-33, электронный кошелёк — КШЛ-06; ТЗ «код (БНК, КШЛ)») или постоянный ключ УГНС.
+ */
+type CodeRule =
+  | { prefix: string; digits: number }
+  | { byKind: Readonly<Record<BankKind, string>>; digits: number }
+  | { key: string };
 
 export interface AdminDictMeta {
   code: CodeRule;
@@ -53,6 +60,11 @@ export const ADMIN_DICT_META: Readonly<Record<AdminValueDict, AdminDictMeta>> = 
     ordered: false,
     fields: ['name', 'shortName', 'gnsCode', 'region'],
   },
+  banks: {
+    code: { byKind: { bank: 'БНК', wallet: 'КШЛ' }, digits: 2 },
+    ordered: true,
+    fields: ['name', 'kind', 'byPhone', 'note'],
+  },
   reasons: { code: { prefix: 'ПРЧ', digits: 3 }, ordered: true, fields: ['name', 'note'] },
 };
 
@@ -60,15 +72,17 @@ export const ADMIN_DICT_META: Readonly<Record<AdminValueDict, AdminDictMeta>> = 
  * Код нового значения (прототип `nextCode`: префикс и номер с нулями): следующий после самого большого
  * номера справочника, а не «число значений + 1» — после удаления номер не повторится. У УГНС —
  * постоянный ключ `ugns-<случайное>` (прототип ugnsDlg): код ГНС у нового управления может быть пуст.
+ * У банковских провайдеров префикс — по типу (`kind`), как у значений из наполнения.
  */
 export function nextDictCode(
   dict: AdminValueDict,
   codes: readonly string[],
   random: () => string,
+  kind: BankKind = 'bank',
 ): string {
   const rule = ADMIN_DICT_META[dict].code;
   if ('key' in rule) return `${rule.key}-${random()}`;
-  const head = `${rule.prefix}-`;
+  const head = `${'byKind' in rule ? rule.byKind[kind] : rule.prefix}-`;
   const max = codes.reduce((m, code) => {
     if (!code.startsWith(head)) return m;
     const n = Number(code.slice(head.length));
@@ -184,7 +198,8 @@ const STATUS = c('active', 'enum', 'pdicts.col.status');
  * Столбцы справочников, как в прототипе (renderPDicts0): «№», «Код», «Значение», поля справочника,
  * «Используется», «Статус». Пояснения — отдельным столбцом (ТЗ «в таблицах они — отдельным
  * столбцом»), контакты органа — скрытыми столбцами (ТЗ: «остальные скрыты»). У УГНС — «Код» ГНС,
- * «Полное название», «Кратко», «Регион», «Контрагентов». Служебные столбцы добавляет список.
+ * «Полное название», «Кратко», «Регион», «Контрагентов»; у банковских провайдеров — «Тип» и
+ * «Переводы по номеру телефона». Служебные столбцы добавляет список.
  */
 export const ADMIN_DICT_COLUMNS: Readonly<Record<AdminValueDict, readonly AdminDictColumn[]>> = {
   forms: [
@@ -217,6 +232,16 @@ export const ADMIN_DICT_COLUMNS: Readonly<Record<AdminValueDict, readonly AdminD
     c('region', 'enum', 'pdicts.col.region'),
     c('contractors', 'int', 'pdicts.col.contractors'),
     c('used', 'int', 'pdicts.col.used', true),
+    STATUS,
+  ],
+  banks: [
+    N,
+    CODE,
+    VALUE,
+    c('kind', 'enum', 'pdicts.col.bank_kind'),
+    c('byPhone', 'enum', 'pdicts.col.by_phone'),
+    c('note', 'text', 'pdicts.col.note', true),
+    USED,
     STATUS,
   ],
   reasons: [N, CODE, VALUE, c('note', 'text', 'pdicts.col.note', true), USED, STATUS],

@@ -318,10 +318,12 @@ function inputOf(dict: AdminValueDict, form: AdminDictValueForm): AdminDictInput
   for (const f of ADMIN_DICT_META[dict].fields) {
     if (f === 'name') continue;
     const v = values[f];
-    data[f] =
-      f === 'contacts' ? ((v as AdminDictInput['data'][string]) ?? []) : ((v as string) ?? '');
+    if (f === 'byPhone') data[f] = v === true;
+    else if (f === 'contacts') data[f] = (v as AdminDictInput['data'][string]) ?? [];
+    else data[f] = (v as string) ?? '';
   }
   if (dict === 'forms' && !data.declarationFor) data.declarationFor = 'org';
+  if (dict === 'banks' && !data.kind) data.kind = 'bank';
   return { name: form.name, data };
 }
 

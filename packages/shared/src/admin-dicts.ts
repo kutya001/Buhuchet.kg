@@ -1,5 +1,6 @@
 import {
   ADMIN_VALUE_DICTS,
+  BANK_KINDS,
   DECLARATION_FOR,
   DICT_NAME_MAX,
   DICT_NOTE_MAX,
@@ -44,6 +45,9 @@ export const AdminDictData = z.object({
   /** Код ГНС управления; null — не сверен. */
   gnsCode: z.string().nullable().optional(),
   region: z.string().optional(),
+  /** У банковского провайдера: «Тип» и «Переводы по номеру телефона». */
+  kind: z.enum(BANK_KINDS).optional(),
+  byPhone: z.boolean().optional(),
 });
 export type AdminDictData = z.infer<typeof AdminDictData>;
 
@@ -108,6 +112,8 @@ export const AdminDictValueForm = z.object({
     .refine((v) => v === '' || UGNS_CODE_PATTERN.test(v), message('pdicts.err.ugns_code'))
     .optional(),
   region: text(DICT_NAME_MAX).optional(),
+  kind: z.enum(BANK_KINDS).optional(),
+  byPhone: z.boolean().optional(),
 });
 export type AdminDictValueFormInput = z.input<typeof AdminDictValueForm>;
 export type AdminDictValueForm = z.output<typeof AdminDictValueForm>;

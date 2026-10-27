@@ -43,7 +43,14 @@ INSERT INTO app.platform_dict_specs (dict, table_name, columns, ordered) VALUES
   ('forms', 'ownership_forms', ARRAY['name', 'full_name', 'short_name', 'declaration_for', 'note'], true),
   ('organs', 'authorities', ARRAY['name', 'description', 'contacts', 'hours', 'site', 'contacts_note'], true),
   ('ugns', 'tax_offices', ARRAY['name', 'short_name', 'gns_code', 'region'], false),
+  ('banks', 'banks', ARRAY['name', 'kind', 'by_phone', 'note'], true),
   ('reasons', 'due_change_reasons', ARRAY['name', 'note'], true);
+--> statement-breakpoint
+-- Банк в «Переводе по номеру телефона» реквизита организации и сотрудника (миграция 0034) — массив
+-- кодов без внешнего ключа: такой банк тоже «Используется», удалить его нельзя.
+INSERT INTO app.platform_dict_array_refs (dict, table_name, column_name) VALUES
+  ('banks', 'org_accounts', 'phone_banks'),
+  ('banks', 'employee_wallets', 'phone_banks');
 --> statement-breakpoint
 -- Сколько раз используется каждое значение справочника: ссылки внешними ключами на его код из любых
 -- таблиц, в том числе таблиц организаций (RLS функции владельца схемы не мешает) — ссылки следующих

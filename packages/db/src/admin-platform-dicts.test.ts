@@ -24,7 +24,14 @@ import type { Tx } from './client';
 import { withOrgContext } from './context';
 import { createDictRequest, listDictRequests } from './dict-requests';
 import { createOrganization, type CreatedOrganization } from './organizations';
-import { authorities, dueChangeReasons, ownershipForms, taxOffices, users } from './schema';
+import {
+  authorities,
+  dueChangeReasons,
+  orgAccounts,
+  ownershipForms,
+  taxOffices,
+  users,
+} from './schema';
 import {
   createTestDatabase,
   databaseAvailable,
@@ -298,6 +305,77 @@ describe.skipIf(!databaseAvailable())(
       expect(deleted).toEqual({ ok: true });
       const history = await asAdmin((tx) => adminDictHistory(tx, 'organs', 12));
       expect(history.items[0]).toMatchObject({ action: 'delete', label: 'Минфин' });
+    });
+
+    it('банковские провайдеры: «Тип» и «Переводы по номеру», код по типу, номер в реквизите — «Используется»', async () => {
+      const page = await asAdmin((tx) => listAdminDictPage(tx, 'banks', query(), t));
+      expect(page.rows[0]).toMatchObject({ code: 'БНК-01', n: 1, data: { kind: 'bank' } });
+      const kinds = await asAdmin((tx) => listAdminDictValues(tx, 'banks', 'kind', t));
+      expect(kinds.items.map((v) => v.label)).toEqual(['Банк', 'Электронный кошелёк']);
+      const phone = await asAdmin((tx) =>
+        listAdminDictPage(
+          tx,
+          'banks',
+          query({ filters: { byPhone: { type: 'enum', vals: ['yes'] } } }),
+          t,
+        ),
+      );
+      expect(phone.total).toBeGreaterThan(0);
+      expect(phone.rows.every((x) => x.data.byPhone === true)).toBe(true);
+
+      const wallet = await asAdmin((tx) =>
+        adminDictCreate(
+          tx,
+          'banks',
+          { name: 'Тест Кошелёк', data: { kind: 'wallet', byPhone: true, note: '' } },
+          random,
+        ),
+      );
+      if (!wallet.ok) throw new Error('не создано');
+      expect(wallet.record).toMatchObject({
+        code: 'КШЛ-06',
+        n: 38,
+        data: { kind: 'wallet', byPhone: true },
+      });
+      const bank = await asAdmin((tx) =>
+        adminDictCreate(tx, 'banks', { name: 'Тест Банк', data: { note: '' } }, random),
+      );
+      expect(bank.ok && bank.record).toMatchObject({
+        code: 'БНК-33',
+        data: { kind: 'bank', byPhone: false },
+      });
+
+      // Номер перевода, привязанный к кошельку: ссылка массивом кодов — тоже «Используется».
+      await db.admin.db.insert(orgAccounts).values({
+        orgId: org.orgId,
+        kind: 'phone',
+        phone: '+996700123456',
+        phoneBanks: ['КШЛ-06'],
+      });
+      const used = (await asAdmin((tx) => getAdminDictValue(tx, 'banks', 'КШЛ-06')))!;
+      expect(used.usage.total).toBe(1);
+      expect(await asAdmin((tx) => adminDictDelete(tx, 'banks', 'КШЛ-06', used.version))).toEqual({
+        ok: false,
+        reason: 'used',
+        usage: { total: 1, contractors: 0 },
+      });
+
+      const off = await asAdmin((tx) =>
+        adminDictUpdate(
+          tx,
+          'banks',
+          'КШЛ-06',
+          { name: 'Тест Кошелёк', data: { kind: 'wallet', byPhone: false, note: '' } },
+          used.version,
+        ),
+      );
+      expect(off.ok && off.record.data.byPhone).toBe(false);
+      const history = await asAdmin((tx) => adminDictHistory(tx, 'banks', 12));
+      expect(history.items[0]).toMatchObject({
+        action: 'update',
+        label: 'Тест Кошелёк',
+        changes: [{ field: 'byPhone', from: true, to: false }],
+      });
     });
 
     it('УГНС: пустой код ГНС — null, повтор кода — «Такой код уже есть»', async () => {

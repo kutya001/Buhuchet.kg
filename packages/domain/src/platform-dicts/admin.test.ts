@@ -30,6 +30,13 @@ describe('nextDictCode', () => {
   it('у УГНС — постоянный ключ, код ГНС может быть пуст', () => {
     expect(nextDictCode('ugns', ['ugns-large'], random)).toBe('ugns-k3x9');
   });
+
+  it('у банковских провайдеров префикс по типу: банк — БНК, электронный кошелёк — КШЛ', () => {
+    const codes = ['БНК-01', 'БНК-32', 'КШЛ-05'];
+    expect(nextDictCode('banks', codes, random, 'bank')).toBe('БНК-33');
+    expect(nextDictCode('banks', codes, random, 'wallet')).toBe('КШЛ-06');
+    expect(nextDictCode('banks', codes, random)).toBe('БНК-33');
+  });
 });
 
 describe('dictValueProblems', () => {

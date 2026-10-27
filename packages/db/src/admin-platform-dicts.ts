@@ -10,6 +10,7 @@ import {
   UGNS_CONTRACTOR_TABLE,
   type AdminValueDict,
   type AuthorityContact,
+  type BankKind,
   type DictUsage,
   type DictValueProblem,
   type HistoryChange,
@@ -31,6 +32,7 @@ import {
 import { writePlatformHistory } from './platform-history';
 import {
   authorities,
+  banks,
   dueChangeReasons,
   ownershipForms,
   platformAuditLog,
@@ -60,11 +62,15 @@ const TABLES: Readonly<Record<AdminValueDict, DictTable>> = {
   forms: ownershipForms,
   organs: authorities,
   ugns: taxOffices,
+  banks,
   reasons: dueChangeReasons,
 };
 
-/** Поля значения сверх кода и названия — как в таблице (`contacts` — массив, `gnsCode` — null). */
-export type AdminDictData = Record<string, string | null | AuthorityContact[]>;
+/**
+ * Поля значения сверх кода и названия — как в таблице (`contacts` — массив, `gnsCode` — null,
+ * `byPhone` — да или нет).
+ */
+export type AdminDictData = Record<string, string | boolean | null | AuthorityContact[]>;
 
 /** Значение справочника в Админке. */
 export interface AdminDictValueRecord {
@@ -185,9 +191,15 @@ function listRow(dict: AdminValueDict, x: AdminDictValueRecord, ord: number, t: 
   };
   for (const f of dataFields(dict)) {
     const value = x.data[f];
-    row[f] = f === 'contacts' ? contactsText(value) : ((value as string | null) ?? '');
+    if (f === 'contacts') row[f] = contactsText(value);
+    else if (f === 'byPhone') row[f] = value ? 'yes' : 'no';
+    else row[f] = (value as string | null) ?? '';
   }
   if (dict === 'forms') row.declarationFor_text = t(`dicts.platform.end.${x.data.declarationFor}`);
+  if (dict === 'banks') {
+    row.kind_text = t(`pdicts.bank.kind.${x.data.kind as BankKind}`);
+    row.byPhone_text = t(x.data.byPhone ? 'pdicts.bank.by_phone.yes' : 'pdicts.bank.by_phone.no');
+  }
   return row;
 }
 
@@ -207,12 +219,15 @@ function recordset(rows: readonly Record<string, string | number | null>[]) {
   return sql`jsonb_to_recordset(${JSON.stringify(rows)}::jsonb) as r(${sql.raw(defs || 'id text')})`;
 }
 
+/** Столбцы с кодом в значении (фильтр по коду), на экране и в сортировке — подпись (`<ключ>_text`). */
+const TEXT_SHOWN = new Set(['active', 'declarationFor', 'kind', 'byPhone']);
+
 /** Столбцы списка справочника на сервере — ключи и подписи, как у экрана (`ADMIN_DICT_COLUMNS`). */
 export function adminDictListColumns(dict: AdminValueDict): ListColumns {
   const columns: Record<string, ListColumn> = {};
   for (const c of ADMIN_DICT_COLUMNS[dict]) {
     const column: ListColumn = { type: c.type, label: c.label, value: field(c.key) };
-    if (c.key === 'active' || c.key === 'declarationFor') {
+    if (TEXT_SHOWN.has(c.key)) {
       column.display = field(`${c.key}_text`);
       column.sort = { value: field(`${c.key}_text`), text: true };
     }
@@ -328,7 +343,10 @@ export interface AdminDictInput {
   data: AdminDictData;
 }
 
-/** Поля для функции базы: имена столбцов таблицы, строки без пробелов по краям, пустой код ГНС — null. */
+/**
+ * Поля для функции базы: имена столбцов таблицы, строки без пробелов по краям, пустой код ГНС — null,
+ * «Переводы по номеру телефона» — да или нет, тип провайдера по умолчанию — банк.
+ */
 function dbRow(dict: AdminValueDict, input: AdminDictInput): Record<string, unknown> {
   const columns = getTableColumns(TABLES[dict]) as Record<string, PgColumn>;
   const value = (f: string): unknown => {
@@ -339,8 +357,10 @@ function dbRow(dict: AdminValueDict, input: AdminDictInput): Record<string, unkn
         .map((c) => ({ label: c.label.trim(), value: c.value.trim() }))
         .filter((c) => c.label || c.value);
     }
+    if (f === 'byPhone') return v === true;
     const text = typeof v === 'string' ? v.trim() : '';
     if (f === 'gnsCode') return text || null;
+    if (f === 'kind') return text || 'bank';
     return text;
   };
   return Object.fromEntries(ADMIN_DICT_META[dict].fields.map((f) => [columns[f]!.name, value(f)]));
@@ -396,6 +416,7 @@ export async function adminDictCreate(
     dict,
     records.map((x) => x.code),
     random,
+    input.data.kind === 'wallet' ? 'wallet' : 'bank',
   );
   const problems = problemsOf(dict, code, input, records);
   if (problems.length) return { ok: false, reason: 'taken', problems };

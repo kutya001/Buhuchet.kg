@@ -146,6 +146,31 @@ describe.skipIf(!databaseAvailable())('Админка → «Справочник
     expect([empty.status, (await errorOf(empty)).code]).toEqual([400, 'validation_failed']);
   });
 
+  it('банковский провайдер: «Тип» и «Переводы по номеру телефона», код по типу; неверный тип — 400', async () => {
+    const res = await send('POST', `${P}/banks`, {
+      name: 'Тест Кошелёк',
+      kind: 'wallet',
+      byPhone: true,
+    });
+    expect(res.status, await res.clone().text()).toBe(201);
+    expect(AdminDictValue.parse(await res.json())).toMatchObject({
+      code: 'КШЛ-06',
+      data: { kind: 'wallet', byPhone: true, note: '' },
+    });
+    // Без типа — банк, без «Переводов по номеру» — нет.
+    const bank = await send('POST', `${P}/banks`, { name: 'Тест Банк' });
+    expect(AdminDictValue.parse(await bank.json())).toMatchObject({
+      code: 'БНК-33',
+      data: { kind: 'bank', byPhone: false },
+    });
+    const wrong = await send('POST', `${P}/banks`, { name: 'Третий', kind: 'card' });
+    expect([wrong.status, (await errorOf(wrong)).code]).toEqual([400, 'validation_failed']);
+    const list = AdminDictList.parse(
+      await (await get(`${P}/banks?sort=code.desc&size=all`)).json(),
+    );
+    expect(list.items[0]).toMatchObject({ code: 'КШЛ-06' });
+  });
+
   it('изменить: новое название — в истории «было → стало»; устаревшая версия — 409, нет значения — 404', async () => {
     const before = await value(at('ОРГ-16'));
     const res = await send('PUT', at('ОРГ-16'), {
