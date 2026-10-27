@@ -186,6 +186,7 @@ export function GridToolbar<Row>({
             aria-expanded={open}
             aria-controls={id}
             aria-haspopup="dialog"
+            data-grid-columns-button
             title={phone ? columnsLabel : undefined}
             aria-label={phone ? columnsLabel : undefined}
             className={phone ? PHONE_TOOL : buttonClass('default', 'sm')}

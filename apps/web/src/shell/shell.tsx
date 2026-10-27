@@ -28,10 +28,13 @@ import {
   type ShellModule,
   type TabRowProps,
 } from '@buhuchet/ui';
+import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { api } from '../api-client';
+import { kbStateQuery } from '../kb/kb-data';
+import { KbContext, useKbRuntime } from '../kb/kb-provider';
 import { useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { OrgProfileWindow } from '../org/org-profile-window';
@@ -46,6 +49,7 @@ import {
   addActions,
   APP_PATH,
   canEnter,
+  isModuleId,
   MODULES,
   moduleHref,
   parseAppPath,
@@ -206,9 +210,18 @@ function ShellPage({
 
   const access = useMemo(() => shellAccess(me), [me]);
   const counts = useTabCounts(me.modules);
+  // «Начните с Базы знаний»: точка у модуля, пока уровень 0 % (прототип kbDot).
+  const kbProgress = useQuery(kbStateQuery).data?.progress;
+  const kbStart = !!kbProgress && kbProgress.total > 0 && kbProgress.pct === 0;
   const modules = useMemo(
-    () => me.modules.map((id) => withTabCounts(shellModule(id, access, t), counts[id])),
-    [me.modules, access, t, counts],
+    () =>
+      me.modules.map((id) => {
+        const m = withTabCounts(shellModule(id, access, t), counts[id]);
+        return id === 'kb' && kbStart
+          ? { ...m, count: { value: '', dot: true, title: t('kb.dot') } }
+          : m;
+      }),
+    [me.modules, access, t, counts, kbStart],
   );
   const current = modules.find((m) => m.id === moduleId) ?? null;
   const currentTab = current?.tabs.find((tab) => tab.id === tabId) ?? null;
@@ -216,7 +229,7 @@ function ShellPage({
     const split = phoneModules(me.modules, access.admin);
     const pick = (id: MenuModuleId, title: string): PhoneModule => {
       const m = modules.find((x) => x.id === id)!;
-      return { id, title, icon: m.icon, href: m.href };
+      return { id, title, icon: m.icon, href: m.href, count: m.count };
     };
     return {
       bottom: split.bottom.map((id) => pick(id, t(MODULES[id].short))),
@@ -322,224 +335,284 @@ function ShellPage({
     }),
     [search, addRequest, setAddRequest, access, me],
   );
+  // «База знаний»: «Перейти» у шага, полоса урока, отметки шагов (задача 2.30).
+  const tabHrefOf = useCallback(
+    (module: MenuModuleId, tab?: string) => {
+      if (!me.modules.includes(module)) return null;
+      return tab && visibleTabs(module, access).some((x) => x.id === tab)
+        ? tabHref(module, tab)
+        : moduleHref(module, access);
+    },
+    [me.modules, access],
+  );
+  const kb = useKbRuntime({
+    moduleId,
+    screen: current ? [current.id, tabId ?? current.tabs[0]?.id].filter(Boolean).join('.') : null,
+    tabHrefOf,
+    hrefOf: (module) => (isModuleId(module) ? tabHrefOf(module) : null),
+    tabsOf: (module) =>
+      isModuleId(module)
+        ? visibleTabs(module, access).map((x) => ({ id: x.id, label: t(x.label) }))
+        : [],
+    onAdd: useCallback(
+      (module: MenuModuleId, actionId: string) => {
+        const action = addActions(module, access).find((a) => a.id === actionId);
+        if (!action) return;
+        setAddRequest((prev) => ({
+          moduleId: module,
+          actionId,
+          label: t(action.label),
+          n: (prev?.n ?? 0) + 1,
+        }));
+      },
+      [access, t],
+    ),
+    onProfile: useCallback(() => setProfileOpen(true), [setProfileOpen]),
+    kbHref: moduleHref('kb', access),
+    lessonsHref: tabHref('kb', 'lessons'),
+  });
+  const openHelp = () => {
+    if (!moduleId || !isModuleId(moduleId)) return setHelpOpen(true);
+    void kb.controls.help(moduleId).then((found) => {
+      if (!found) setHelpOpen(true);
+    });
+  };
+
   const mode = t(access.admin ? 'shell.mode.admin' : 'shell.mode.business');
   const fullName = me.employee?.fullName ?? t('profile.platform_admin');
 
   return (
     <ShellContext.Provider value={state}>
-      <AppFrame
-        navHidden={navHidden}
-        paneLabel={title}
-        side={
-          <SideNav
-            mode={mode}
-            modules={modules}
-            activeModule={moduleId}
-            activeTab={tabId}
-            openIds={openIds}
-            onToggle={toggleBranch}
-            labels={{
-              nav: t('shell.modules'),
-              expand: t('shell.expand_tabs'),
-              collapse: t('shell.collapse_tabs'),
-            }}
-            Link={NextLink}
-            footer={
-              <>
-                {me.organization && (
-                  <SideOrg
-                    name={me.organization.name}
-                    sub={
-                      me.organization.inn ? t('shell.org_inn', { inn: me.organization.inn }) : ''
-                    }
-                    title={t('shell.org_profile')}
-                    onClick={() => setOrgOpen(true)}
-                  />
-                )}
-                <SideFootRow>
-                  <SideFootButton
-                    icon="user"
-                    label={t('profile.title')}
-                    onClick={() => setProfileOpen(true)}
-                  />
-                  <SideFootButton
-                    icon="logout"
-                    label={t('shell.logout')}
-                    onClick={() => requestLogout()}
-                    disabled={leaving}
-                  />
-                </SideFootRow>
-              </>
-            }
-          />
-        }
-        topBar={
-          <TopBar
-            title={title}
-            tab={currentTab?.label ?? null}
-            menu={{ label: t('shell.menu'), onClick: toggleNav }}
-            info={{
-              label: t('shell.module_info'),
-              content: (
+      <KbContext.Provider value={kb.controls}>
+        <AppFrame
+          navHidden={navHidden}
+          paneLabel={title}
+          side={
+            <SideNav
+              mode={mode}
+              modules={modules}
+              activeModule={moduleId}
+              activeTab={tabId}
+              openIds={openIds}
+              onToggle={toggleBranch}
+              labels={{
+                nav: t('shell.modules'),
+                expand: t('shell.expand_tabs'),
+                collapse: t('shell.collapse_tabs'),
+              }}
+              Link={NextLink}
+              footer={
                 <>
-                  <h4 className="m-0 text-xs font-[650] tracking-[0.07em] text-faint uppercase">
-                    {title}
-                  </h4>
-                  <div className="max-w-[300px] text-[13px] leading-normal">{desc}</div>
-                </>
-              ),
-            }}
-            search={{
-              value: search,
-              onChange: setSearch,
-              placeholder: t('shell.search'),
-              scope: currentTab?.label ?? title,
-              openLabel: t('shell.search_open'),
-            }}
-            clock={<Clock initial={serverNow} />}
-            help={{
-              label: t('shell.help'),
-              title: t('shell.help_title'),
-              onClick: () => setHelpOpen(true),
-            }}
-            theme={{
-              label: t('shell.theme'),
-              title: t('shell.theme_title'),
-              onToggle: toggleTheme,
-            }}
-          />
-        }
-        bottomNav={
-          <BottomNav
-            modules={phone.bottom}
-            active={moduleId}
-            label={t('shell.modules')}
-            Link={NextLink}
-          />
-        }
-        sheet={
-          <BottomSheet open={sheetOpen} onClose={() => setSheetOpen(false)} label={t('shell.menu')}>
-            {(leave) => (
-              <PhoneMenu
-                mode={mode}
-                modules={phone.other}
-                active={moduleId}
-                label={t('shell.other_modules')}
-                // Выбор модуля закрывает панель; уже открытый модуль — просто закрывает.
-                onSelect={(e, m) => {
-                  if (m.href === pathname) {
-                    e.preventDefault();
-                    setSheetOpen(false);
-                  } else {
-                    leave();
-                  }
-                }}
-                Link={ReplaceLink}
-                footer={
-                  <>
-                    {me.organization && (
-                      <SideOrg
-                        name={me.organization.name}
-                        sub={t('shell.org_profile')}
-                        title={t('shell.org_profile')}
-                        onClick={() => {
-                          setSheetOpen(false);
-                          setOrgOpen(true);
-                        }}
-                      />
-                    )}
-                    <SheetAction
-                      icon="user"
-                      avatar={initials(fullName)}
-                      label={t('profile.title')}
-                      sub={fullName}
-                      onClick={() => {
-                        setSheetOpen(false);
-                        setProfileOpen(true);
-                      }}
+                  {me.organization && (
+                    <SideOrg
+                      name={me.organization.name}
+                      sub={
+                        me.organization.inn ? t('shell.org_inn', { inn: me.organization.inn }) : ''
+                      }
+                      title={t('shell.org_profile')}
+                      onClick={() => setOrgOpen(true)}
                     />
-                    <SheetAction
+                  )}
+                  <SideFootRow>
+                    <SideFootButton
+                      icon="user"
+                      label={t('profile.title')}
+                      onClick={() => setProfileOpen(true)}
+                    />
+                    <SideFootButton
                       icon="logout"
                       label={t('shell.logout')}
-                      onClick={() => {
-                        leave();
-                        requestLogout(true);
-                      }}
+                      onClick={() => requestLogout()}
                       disabled={leaving}
                     />
+                  </SideFootRow>
+                </>
+              }
+            />
+          }
+          topBar={
+            <TopBar
+              title={title}
+              tab={currentTab?.label ?? null}
+              menu={{
+                label: t('shell.menu'),
+                onClick: toggleNav,
+                dot: phone.other.find((m) => m.count?.dot)?.count?.title,
+              }}
+              info={{
+                label: t('shell.module_info'),
+                content: (
+                  <>
+                    <h4 className="m-0 text-xs font-[650] tracking-[0.07em] text-faint uppercase">
+                      {title}
+                    </h4>
+                    <div className="max-w-[300px] text-[13px] leading-normal">{desc}</div>
                   </>
-                }
-              />
-            )}
-          </BottomSheet>
-        }
-      >
-        {current && (
-          <ModuleTabRow
-            moduleId={current.id as MenuModuleId}
-            plates={screenHasPlates(current.id as MenuModuleId, tabId)}
-            tabs={current.tabs}
-            activeTab={tabId}
-            label={title}
-            addActions={actions}
-            addLabel={t('btn.add')}
-            onAdd={(actionId) =>
-              setAddRequest((prev) => ({
-                moduleId: current.id,
-                actionId,
-                label: actions.find((a) => a.id === actionId)?.label ?? '',
-                n: (prev?.n ?? 0) + 1,
-              }))
-            }
-            Link={NextLink}
+                ),
+              }}
+              search={{
+                value: search,
+                onChange: (value) => {
+                  setSearch(value);
+                  if (value.trim()) kb.controls.hit('search');
+                },
+                placeholder: t('shell.search'),
+                scope: currentTab?.label ?? title,
+                openLabel: t('shell.search_open'),
+              }}
+              clock={<Clock initial={serverNow} />}
+              help={{
+                label: t('shell.help'),
+                title: t('shell.help_title'),
+                onClick: openHelp,
+              }}
+              theme={{
+                label: t('shell.theme'),
+                title: t('shell.theme_title'),
+                onToggle: toggleTheme,
+              }}
+            />
+          }
+          bottomNav={
+            <BottomNav
+              modules={phone.bottom}
+              active={moduleId}
+              label={t('shell.modules')}
+              Link={NextLink}
+            />
+          }
+          sheet={
+            <BottomSheet
+              open={sheetOpen}
+              onClose={() => setSheetOpen(false)}
+              label={t('shell.menu')}
+            >
+              {(leave) => (
+                <PhoneMenu
+                  mode={mode}
+                  modules={phone.other}
+                  active={moduleId}
+                  label={t('shell.other_modules')}
+                  // Выбор модуля закрывает панель; уже открытый модуль — просто закрывает.
+                  onSelect={(e, m) => {
+                    if (m.href === pathname) {
+                      e.preventDefault();
+                      setSheetOpen(false);
+                    } else {
+                      leave();
+                    }
+                  }}
+                  Link={ReplaceLink}
+                  footer={
+                    <>
+                      {me.organization && (
+                        <SideOrg
+                          name={me.organization.name}
+                          sub={t('shell.org_profile')}
+                          title={t('shell.org_profile')}
+                          onClick={() => {
+                            setSheetOpen(false);
+                            setOrgOpen(true);
+                          }}
+                        />
+                      )}
+                      <SheetAction
+                        icon="user"
+                        avatar={initials(fullName)}
+                        label={t('profile.title')}
+                        sub={fullName}
+                        onClick={() => {
+                          setSheetOpen(false);
+                          setProfileOpen(true);
+                        }}
+                      />
+                      <SheetAction
+                        icon="logout"
+                        label={t('shell.logout')}
+                        onClick={() => {
+                          leave();
+                          requestLogout(true);
+                        }}
+                        disabled={leaving}
+                      />
+                    </>
+                  }
+                />
+              )}
+            </BottomSheet>
+          }
+        >
+          {current && (
+            <ModuleTabRow
+              moduleId={current.id as MenuModuleId}
+              plates={screenHasPlates(current.id as MenuModuleId, tabId)}
+              tabs={current.tabs}
+              activeTab={tabId}
+              label={title}
+              addActions={actions}
+              addLabel={t('btn.add')}
+              onAdd={(actionId) =>
+                setAddRequest((prev) => ({
+                  moduleId: current.id,
+                  actionId,
+                  label: actions.find((a) => a.id === actionId)?.label ?? '',
+                  n: (prev?.n ?? 0) + 1,
+                }))
+              }
+              Link={NextLink}
+            />
+          )}
+          {current ? (
+            <TabPager
+              tabs={current.tabs.map((tab) => tab.id)}
+              activeTab={tabId}
+              scope={current.id}
+              renderTab={(tab) => (
+                <ModuleScreen moduleId={current.id as MenuModuleId} tabId={tab} />
+              )}
+              onSwipe={(tab) => {
+                kb.controls.hit('swipe');
+                router.replace(tabHref(current.id as MenuModuleId, tab), { scroll: false });
+              }}
+            >
+              {children}
+            </TabPager>
+          ) : (
+            children
+          )}
+        </AppFrame>
+        {kb.overlays}
+        {/* «?» без статьи о модуле — описание модуля (прототип kb.js kbHelp). */}
+        <Modal
+          open={helpOpen}
+          onClose={() => setHelpOpen(false)}
+          size="mid"
+          title={title}
+          sub={t('kb.title')}
+          footer={<HelpFooter kbHref={moduleHref('kb', access)} />}
+        >
+          <p className="m-0 leading-[1.6]">{desc}</p>
+          <p className="m-0 text-muted">{t('kb.no_article')}</p>
+        </Modal>
+        <ProfileWindow open={profileOpen} onClose={() => setProfileOpen(false)} me={me} />
+        {me.organization && (
+          <OrgProfileWindow
+            open={orgOpen}
+            onClose={() => setOrgOpen(false)}
+            name={me.organization.name}
+            canEdit={access.can('org')}
           />
         )}
-        {current ? (
-          <TabPager
-            tabs={current.tabs.map((tab) => tab.id)}
-            activeTab={tabId}
-            scope={current.id}
-            renderTab={(tab) => <ModuleScreen moduleId={current.id as MenuModuleId} tabId={tab} />}
-            onSwipe={(tab) =>
-              router.replace(tabHref(current.id as MenuModuleId, tab), { scroll: false })
-            }
-          >
-            {children}
-          </TabPager>
-        ) : (
-          children
-        )}
-      </AppFrame>
-      {/* «?»: статей «Базы знаний» о модулях ещё нет — описание модуля (прототип kb.js kbHelp). */}
-      <Modal
-        open={helpOpen}
-        onClose={() => setHelpOpen(false)}
-        size="mid"
-        title={title}
-        sub={t('kb.title')}
-        footer={<HelpFooter kbHref={moduleHref('kb', access)} />}
-      >
-        <p className="m-0 leading-[1.6]">{desc}</p>
-        <p className="m-0 text-muted">{t('kb.no_article')}</p>
-      </Modal>
-      <ProfileWindow open={profileOpen} onClose={() => setProfileOpen(false)} me={me} />
-      {me.organization && (
-        <OrgProfileWindow
-          open={orgOpen}
-          onClose={() => setOrgOpen(false)}
-          name={me.organization.name}
-          canEdit={access.can('org')}
+        <ConfirmDialog
+          open={askLogout !== null}
+          onClose={() => setAskLogout(null)}
+          title={t('shell.logout_discard_title')}
+          text={t('shell.logout_discard_text')}
+          ok={t('shell.logout_discard_ok')}
+          danger
+          onConfirm={() => void logout(askLogout?.replace ?? false)}
         />
-      )}
-      <ConfirmDialog
-        open={askLogout !== null}
-        onClose={() => setAskLogout(null)}
-        title={t('shell.logout_discard_title')}
-        text={t('shell.logout_discard_text')}
-        ok={t('shell.logout_discard_ok')}
-        danger
-        onConfirm={() => void logout(askLogout?.replace ?? false)}
-      />
+      </KbContext.Provider>
     </ShellContext.Provider>
   );
 }

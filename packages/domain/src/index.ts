@@ -31,3 +31,7 @@ export * from './contractors/gked';
 export * from './tasks/rules';
 export * from './money/requisites';
 export * from './files/files';
+export * from './kb/catalog';
+export * from './kb/ready';
+export * from './kb/program';
+export * from './kb/articles';

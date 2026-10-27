@@ -14,6 +14,7 @@ export * from './contractors';
 export * from './tasks';
 export * from './roles';
 export * from './org';
+export * from './kb';
 export * from './l10n';
 export * from './list';
 export * from './views';

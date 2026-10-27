@@ -450,6 +450,7 @@ export const GRID_KEYS = [
   'tasks.overdue',
   'staff.list',
   'staff.roles',
+  'kb.team',
   'accounts.list',
   'orgs.list',
   'l10n.list',

@@ -10,6 +10,7 @@ import {
 } from '@buhuchet/domain';
 import { z } from 'zod';
 import { RecordAudit, RecordVersion, Uuid } from './common';
+import { KbLevelBadge } from './kb';
 import { listPageSchema } from './list';
 import { TelegramInfo } from './telegram';
 
@@ -36,7 +37,7 @@ export type PhoneCodes = z.infer<typeof PhoneCodes>;
 
 /**
  * Сотрудник в списке и в карточке (прототип modules/staff.js, renderStaff и empCard). Число
- * контрагентов и отчётов, счёт и уровень знаний добавят их модули.
+ * контрагентов и отчётов и счёт добавят их модули.
  */
 export const Employee = z.object({
   id: Uuid,
@@ -62,6 +63,8 @@ export const Employee = z.object({
   lastLoginAt: z.iso.datetime().nullable(),
   audit: RecordAudit,
   version: RecordVersion,
+  /** Уровень знаний — в списке и только с правом «Видеть уровни сотрудников»; иначе null. */
+  kb: KbLevelBadge.nullable(),
 });
 export type Employee = z.infer<typeof Employee>;
 

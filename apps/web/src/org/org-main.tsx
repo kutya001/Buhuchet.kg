@@ -39,6 +39,7 @@ import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { api, callApi, type ApiResult } from '../api-client';
 import { fieldError } from '../auth/fields';
+import { useKb } from '../kb/kb-provider';
 import { useErrorText, useT } from '../l10n/provider';
 import { OrgAccountsBox } from '../money/org-accounts';
 import { useShell } from '../shell/context';
@@ -204,6 +205,7 @@ function OrgMainEdit({
 }) {
   const t = useT();
   const toast = useToast();
+  const kb = useKb();
   const errorText = useErrorText();
   const client = useQueryClient();
   const refresh = useOrgRefresh();
@@ -329,6 +331,9 @@ function OrgMainEdit({
         current = OrgProfile.parse(res.data);
         setSaved(current);
       }
+      // Без изменений запроса нет и истории нет — шаг «Заполнить профиль организации» засчитывается
+      // самим сохранением (docs/decisions.md п. Г-2).
+      if (current === saved) kb.hit('profile');
       setDropLogo(false);
       reset(formValues(current));
       toast(t('org.saved'), { icon: 'check' });

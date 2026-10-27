@@ -51,6 +51,8 @@ export const auditLog = pgTable(
   },
   (t) => [
     index('audit_log_entity_idx').on(t.orgId, t.entity, t.entityId, t.at),
+    // Свои действия пользователя: отметка шагов «Базы знаний» по истории (docs/decisions.md п. Г-2).
+    index('audit_log_actor_idx').on(t.orgId, t.actorUserId, t.entity, t.at),
     index('audit_log_contractor_idx')
       .on(t.orgId, t.contractorId, t.at)
       .where(sql`${t.contractorId} is not null`),
