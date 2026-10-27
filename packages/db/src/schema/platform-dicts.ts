@@ -553,6 +553,8 @@ export const taskCategories = pgTable(
     /** КАТ-001 … */
     code: text('code').primaryKey(),
     name: text('name').notNull(),
+    /** «Пояснение» (Админка, прототип `valueDlg`): видят все организации. */
+    note: text('note').notNull().default(''),
     ...dictColumns(),
   },
   (t) => [

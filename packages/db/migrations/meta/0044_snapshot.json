@@ -1,6 +1,6 @@
 {
-  "id": "2c56933c-0b2f-460b-bc27-ba7e010012b6",
-  "prevId": "54a0249f-e945-4fc1-9fee-7743154bd1ed",
+  "id": "202d9fba-d0db-4bce-a6c9-87f122519a30",
+  "prevId": "a8187c6d-3253-476c-a73f-f7b81e696b45",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -6600,6 +6600,13 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "note": {
+          "name": "note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
         },
         "active": {
           "name": "active",

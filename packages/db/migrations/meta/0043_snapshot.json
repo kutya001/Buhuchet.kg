@@ -1,5 +1,5 @@
 {
-  "id": "54a0249f-e945-4fc1-9fee-7743154bd1ed",
+  "id": "a8187c6d-3253-476c-a73f-f7b81e696b45",
   "prevId": "c26fcdc4-f747-418e-9af6-d7b5665e5b2c",
   "version": "7",
   "dialect": "postgresql",
@@ -6600,6 +6600,13 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "note": {
+          "name": "note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
         },
         "active": {
           "name": "active",

@@ -343,6 +343,7 @@ const CategorySchema = z
   .object({
     code: z.string().min(1),
     name: z.string().min(1),
+    note: z.string().optional(),
     active: z.boolean(),
     ...audit,
   })
@@ -727,6 +728,7 @@ export function platformDictRows(refDB: unknown) {
   const categoryRows = d.cats.items.map((c, i) => ({
     code: c.code,
     name: c.name,
+    note: c.note ?? '',
     active: c.active,
     sortOrder: i + 1,
   }));

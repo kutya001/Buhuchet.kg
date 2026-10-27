@@ -48,6 +48,7 @@ ALTER TABLE "tasks" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE TABLE "task_categories" (
 	"code" text PRIMARY KEY NOT NULL,
 	"name" text NOT NULL,
+	"note" text DEFAULT '' NOT NULL,
 	"active" boolean DEFAULT true NOT NULL,
 	"sort_order" integer NOT NULL,
 	"created_by" uuid,
