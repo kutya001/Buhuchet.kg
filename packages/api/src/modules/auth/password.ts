@@ -3,6 +3,7 @@ import { hashPassword, verifyPassword } from '@buhuchet/adapters/password';
 import { hashSessionToken, newSessionToken } from '@buhuchet/adapters/tokens';
 import {
   changeOwnPassword,
+  clearLoginAttempts,
   findLogin,
   reserveLoginAttempt,
   withOrgContext,
@@ -45,7 +46,7 @@ export const changePasswordRoute = createRoute({
 
 /**
  * Смена пароля (прототип modules/profile.js: «Пароль изменён. Другие сеансы завершены.») — и
- * обязательная смена временного пароля. Неверный текущий пароль считается как неверный пароль при
+ * обязательная смена временного пароля; новый пароль не может совпадать с текущим. Неверный текущий пароль считается как неверный пароль при
  * входе: так украденный сеанс не позволит подобрать пароль. Новая cookie выдаётся и этому сеансу:
  * старая больше не действует нигде. Бот сообщает о смене пароля в привязанный Telegram.
  */
@@ -64,6 +65,14 @@ export function changePasswordHandler(
     if (!(await verifyPassword(account.passwordHash, currentPassword))) {
       if (attempt.locked) return c.json(lockedError(c, attempt.lockedUntil), 429);
       return c.json(apiError('current_password_invalid', 'Текущий пароль неверный'), 400);
+    }
+    // Новый пароль не совпадает с текущим (решение заказчика 27.10.2026, docs/deviations.md п. 41):
+    // иначе обязательная смена временного пароля, который видел выдавший его, ничего не меняет.
+    // Сверяется после проверки текущего пароля — без него ответ ничего не говорит о пароле; текущий
+    // верный, поэтому счёт неверных паролей снимается, как при входе.
+    if (newPassword === currentPassword) {
+      await clearLoginAttempts(deps.db, account.login);
+      return c.json(apiError('password_same', 'Новый пароль совпадает с текущим'), 400);
     }
 
     const passwordHash = await hashPassword(newPassword);

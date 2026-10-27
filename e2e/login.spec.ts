@@ -105,7 +105,7 @@ test.describe('Этап 1: экраны входа и «Мой профиль»'
     });
   });
 
-  test('с временным паролем после входа — смена пароля, уйти с неё нельзя; после смены — предложение привязать Telegram', async ({
+  test('с временным паролем после входа — смена пароля, уйти с неё нельзя, тот же пароль не принимается; после смены — предложение привязать Telegram', async ({
     page,
     playwright,
     baseURL,
@@ -133,8 +133,13 @@ test.describe('Этап 1: экраны входа и «Мой профиль»'
       expect(api.status()).toBe(403);
     });
 
-    await test.step('страницу открыли заново — спрашивает временный пароль; пароли должны совпасть', async () => {
+    await test.step('страницу открыли заново — спрашивает временный пароль; новый не равен временному, пароли должны совпасть', async () => {
       await page.getByLabel('Временный пароль').fill(temporaryPassword);
+      // Тот же пароль не принимается (решение заказчика 27.10.2026, docs/deviations.md п. 41).
+      await page.getByLabel('Новый пароль').fill(temporaryPassword);
+      await page.getByLabel('Повторите пароль').fill(temporaryPassword);
+      await page.getByRole('button', { name: 'Сменить пароль' }).click();
+      await expect(page.getByText('Новый пароль совпадает с текущим')).toBeVisible();
       await page.getByLabel('Новый пароль').fill(OWN_PASSWORD);
       await page.getByLabel('Повторите пароль').fill('Другой-пароль-e2e');
       await page.getByRole('button', { name: 'Сменить пароль' }).click();

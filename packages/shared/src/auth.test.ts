@@ -139,7 +139,7 @@ describe('формы входа и смены пароля (сообщения �
     });
   });
 
-  it('смена пароля: текущий обязателен, новый и повтор — как в «Забыли пароль?»', () => {
+  it('смена пароля: текущий обязателен, новый и повтор — как в «Забыли пароль?», новый не равен текущему', () => {
     const base = { currentPassword: 'old', newPassword: 'Новый-пароль', repeat: 'Новый-пароль' };
     expect(ChangePasswordForm.safeParse(base).success).toBe(true);
     expect(errors(ChangePasswordForm.safeParse({ ...base, currentPassword: '' }))).toEqual({
@@ -148,6 +148,16 @@ describe('формы входа и смены пароля (сообщения �
     expect(errors(ChangePasswordForm.safeParse({ ...base, repeat: '' }))).toEqual({
       repeat: 'auth.err.mismatch',
     });
+    // Новый пароль не совпадает с текущим (docs/deviations.md п. 41).
+    expect(
+      errors(
+        ChangePasswordForm.safeParse({
+          currentPassword: 'Старый-пароль',
+          newPassword: 'Старый-пароль',
+          repeat: 'Старый-пароль',
+        }),
+      ),
+    ).toEqual({ newPassword: 'auth.err.same' });
     // Форма отправляет методу смены пароля только его поля.
     const { currentPassword, newPassword } = ChangePasswordForm.parse(base);
     expect(ChangePasswordRequest.safeParse({ currentPassword, newPassword }).success).toBe(true);

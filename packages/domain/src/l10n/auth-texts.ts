@@ -67,6 +67,7 @@ export const AUTH_TEXTS = {
   'auth.err.current': { ru: 'Введите текущий пароль', section: 'Вход' },
   'auth.err.short': { ru: 'Пароль короче {min} символов', section: 'Вход' },
   'auth.err.mismatch': { ru: 'Пароли не совпадают', section: 'Вход' },
+  'auth.err.same': { ru: 'Новый пароль совпадает с текущим', section: 'Вход' },
   'auth.err.code': { ru: 'Введите код из Telegram: {code} цифр', section: 'Вход' },
   'form.too_long': { ru: 'Слишком длинное значение', section: 'Формы' },
   // Ошибки ответа API по коду (`err.<код>`, useErrorText; `err.<код>.<вариант>` — по details.variant).
@@ -97,6 +98,7 @@ export const AUTH_TEXTS = {
     section: 'Ошибки',
   },
   'err.current_password_invalid': { ru: 'Текущий пароль неверный', section: 'Ошибки' },
+  'err.password_same': { ru: 'Новый пароль совпадает с текущим', section: 'Ошибки' },
   'err.reset_code_invalid': { ru: 'Код неверный или истёк', section: 'Ошибки' },
   'err.telegram_unavailable': {
     ru: 'Telegram-бот пока не подключён к платформе',
