@@ -513,6 +513,12 @@ describe.skipIf(!databaseAvailable())('справочники платформы
       .update(productionCalendar)
       .set({ name: 'Новый год (правка)', updatedBy: admin!.id })
       .where(eq(productionCalendar.day, '01-01'));
+    // Виды отчётов основания из окна основания: основание поправлено, вид — нет.
+    await t.admin.db
+      .update(reportBases)
+      .set({ updatedBy: admin!.id })
+      .where(eq(reportBases.code, 'land'));
+    await t.admin.db.insert(reportTypeBases).values({ reportTypeCode: 'soc', baseCode: 'land' });
     await t.admin.db
       .insert(productionCalendar)
       .values({ day: '2027-12-31', kind: 'holiday', name: 'Из Админки', createdBy: admin!.id });
@@ -524,6 +530,8 @@ describe.skipIf(!databaseAvailable())('справочники платформы
     expect(nds).toMatchObject({ name: 'НДС (правка Админки)', regimes: ['РЕЖ-01', 'РЕЖ-03'] });
     const calendar = await productionCalendarEntries(t.app.db);
     expect(calendar).toContainEqual({ day: '01-01', kind: 'holiday', name: 'Новый год (правка)' });
+    const land = (await listReportBases(t.app.db, { all: true })).find((x) => x.code === 'land')!;
+    expect(land.reportTypes).toEqual(expect.arrayContaining(['imn', 'soc']));
     // День, заведённый в Админке, наполнение не удаляет, хотя его нет в refDB.json.
     expect(report.productionCalendar.removed).toBe(0);
     expect(calendar).toContainEqual({ day: '2027-12-31', kind: 'holiday', name: 'Из Админки' });
@@ -537,7 +545,15 @@ describe.skipIf(!databaseAvailable())('справочники платформы
       .update(productionCalendar)
       .set({ updatedBy: null })
       .where(eq(productionCalendar.day, '01-01'));
+    await t.admin.db
+      .update(reportBases)
+      .set({ updatedBy: null })
+      .where(eq(reportBases.code, 'land'));
     await seedPlatformDicts(t.admin.db, ref, { update: true });
+    const landBack = (await listReportBases(t.app.db, { all: true })).find(
+      (x) => x.code === 'land',
+    )!;
+    expect(landBack.reportTypes).toEqual(['imn']);
     const back = (await listReportTypes(t.app.db, { all: true })).find((x) => x.code === 'nds')!;
     expect(back).toMatchObject({ name: 'НДС', regimes: ['РЕЖ-01'] });
     expect(await productionCalendarEntries(t.app.db)).toContainEqual({

@@ -814,7 +814,9 @@ async function upsertDict(
 
 /**
  * Связи записей (виды отчётов → режимы, основания; льготы → виды, УГНС, сроки) у записей `scope`:
- * становятся как в refDB.json (прежние удаляются, недостающие добавляются).
+ * становятся как в refDB.json (прежние удаляются, недостающие добавляются). `frozen` — связи с
+ * записями второй стороны, которые поправлены в Админке (виды отчётов основания правятся и из окна
+ * основания): их наполнение не трогает.
  */
 async function syncLinks(
   db: Db,
@@ -822,14 +824,33 @@ async function syncLinks(
   owner: PgColumn,
   rows: readonly object[],
   scope: string[],
+  frozen?: { column: PgColumn; keys: readonly string[] },
 ): Promise<void> {
   if (!scope.length) return;
-  const ownerKey = Object.entries(getTableColumns(table)).find(([, c]) => c === owner)![0];
-  const wanted = (rows as Record<string, unknown>[]).filter((r) =>
-    scope.includes(String(r[ownerKey])),
+  const columns = Object.entries(getTableColumns(table));
+  const keyOf = (column: PgColumn) => columns.find(([, c]) => c === column)![0];
+  const ownerKey = keyOf(owner);
+  const frozenKey = frozen ? keyOf(frozen.column) : '';
+  const isFrozen = (r: Record<string, unknown>) =>
+    !!frozen && frozen.keys.includes(String(r[frozenKey]));
+  const wanted = (rows as Record<string, unknown>[]).filter(
+    (r) => scope.includes(String(r[ownerKey])) && !isFrozen(r),
   );
-  await db.delete(table).where(inArray(owner, scope));
+  await db
+    .delete(table)
+    .where(
+      frozen?.keys.length
+        ? and(inArray(owner, scope), notInArray(frozen.column, [...frozen.keys]))
+        : inArray(owner, scope),
+    );
   if (wanted.length) await db.insert(table).values(wanted).onConflictDoNothing();
+}
+
+/** Записи, поправленные в Админке (`updated_by` задан): их связи наполнение не трогает. */
+async function editedKeys(db: Db, key: PgColumn, updatedBy: PgColumn): Promise<string[]> {
+  return (await db.select({ key }).from(key.table).where(isNotNull(updatedBy))).map((r) =>
+    String(r.key),
+  );
 }
 
 /** Справочники для контрагентов и отчётов из refDB.json → свои таблицы. */
@@ -852,12 +873,18 @@ export async function seedPlatformDicts(
     rows.reportTypeRegimes,
     type.seeded,
   );
+  // Виды отчётов основания правятся и из окна основания (задача 2.36): у поправленного основания связи
+  // остаются как в Админке.
   await syncLinks(
     db,
     reportTypeBases,
     reportTypeBases.reportTypeCode,
     rows.reportTypeBases,
     type.seeded,
+    {
+      column: reportTypeBases.baseCode,
+      keys: await editedKeys(db, reportBases.code, reportBases.updatedBy),
+    },
   );
   const benefit = await upsertDict(db, taxBenefits, taxBenefits.code, rows.taxBenefits, update);
   await syncLinks(
