@@ -1,6 +1,6 @@
 import type { HistoryAction, HistoryEntity, HistoryValue } from '../common/history';
 import type { StatusScaleKey } from '../common/status';
-import type { BusinessModuleId, MenuModuleId } from '../org/modules';
+import type { MenuModuleId } from '../org/modules';
 
 /*
  * Какие шаги «Базы знаний» уже работают (задача 2.30, правило стыков docs/decisions.md п. Г-2): шаг
@@ -31,15 +31,17 @@ export type KbDoneRule =
    */
   | { kind: 'status'; scale: StatusScaleKey; from: readonly string[]; to: readonly string[] }
   /** Привязан свой Telegram (`telegram_links`). */
-  | { kind: 'telegram' };
+  | { kind: 'telegram' }
+  /** Администратор платформы сам создал организацию (`organizations.created_by`). */
+  | { kind: 'org_created' };
 
 export interface KbStepRule {
   /**
    * Модуль шага: шаг виден, только если модуль в меню пользователя (ТЗ «Шаг «Посмотреть» показывается,
    * если есть право хотя бы смотреть этот модуль»); статья модуля — статья шага. null — шаг без модуля
-   * (Telegram, тема, поиск).
+   * (Telegram, тема, поиск). У шагов Админки — модуль Админки.
    */
-  module: BusinessModuleId | null;
+  module: MenuModuleId | null;
   /** Шаг «Сделать» с событием; «Посмотреть» и «первое использование» отмечаются без него. */
   done?: KbDoneRule;
   /**
@@ -127,6 +129,11 @@ export const KB_STEP_RULES: Readonly<Record<string, KbStepRule>> = {
   grp: { module: 'dicts' },
   xls: { module: 'dicts' },
   swipe: { module: 'dicts' },
+  // Админка (задачи 2.35, 2.36, 2.40). «Каталог видов отчётов», календарь, шаблоны и загрузка из
+  // Excel — с их вкладками (2.36, 2.37).
+  'a-dicts': { module: 'pdicts' },
+  'a-l10n': { module: 'l10n' },
+  'a-org': { module: 'orgs', done: { kind: 'org_created' } },
 };
 
 /**
@@ -139,7 +146,9 @@ export const KB_READY_MODULES: ReadonlySet<string> = new Set<MenuModuleId>([
   'org',
   'tasks',
   'kb',
-  // Админка: «Учётные записи» (2.35), «Организации».
+  // Админка: «Учётные записи» (2.35), «Организации», «Локализация» (2.40). Статья «Справочников
+  // платформы» описывает и загрузку из Excel — модуль добавит задача 2.37.
   'accounts',
   'orgs',
+  'l10n',
 ]);

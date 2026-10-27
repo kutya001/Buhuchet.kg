@@ -5,6 +5,7 @@ import { verifyPassword } from '@buhuchet/adapters/password';
 import { eq } from 'drizzle-orm';
 import {
   banks,
+  dictChangeRequests,
   employees,
   gkedItems,
   organizations,
@@ -180,6 +181,33 @@ describe.skipIf(!databaseAvailable())('начальное наполнение �
       address: 'г. Бишкек, ул. Киевская, 95, офис 12',
       head: 'Новый руководитель',
     });
+  });
+
+  it('запросы «Попросить добавить» демо-организации из demoDB.json: статус, ответ, автор; повтор не дублирует', async () => {
+    const rows = await withOrgContext(t.app.db, { orgId: DEMO_ORG_ID }, (tx) =>
+      tx
+        .select({
+          dict: dictChangeRequests.dict,
+          what: dictChangeRequests.what,
+          status: dictChangeRequests.status,
+          answer: dictChangeRequests.answer,
+          by: users.login,
+          decided: dictChangeRequests.decidedAt,
+        })
+        .from(dictChangeRequests)
+        .innerJoin(users, eq(users.id, dictChangeRequests.createdBy))
+        .orderBy(dictChangeRequests.createdAt),
+    );
+    // Запрос другой организации из demoDB.json в демо-организацию не попадает; seedAll уже запускался дважды.
+    expect(rows.map((r) => [r.dict, r.what, r.status])).toEqual([
+      ['types', 'Форма 1-ИП (Нацстатком)', 'rejected'],
+      ['banks', 'Элдик Банк', 'added'],
+      ['cats', 'Сверка с Соцфондом', 'new'],
+    ]);
+    expect(rows[0]!.answer).toContain('В каталоге уже есть формы Нацстаткома для ИП');
+    expect(rows[0]!.decided).toEqual(new Date('2026-10-07T04:20:00Z'));
+    expect(rows[2]).toMatchObject({ answer: '', decided: null });
+    expect(new Set(rows.map((r) => r.by)).size).toBe(3);
   });
 
   it('демо-сотрудники: роли из demoDB.json, вход паролем DEMO_PASSWORD только после --update с паролем', async () => {

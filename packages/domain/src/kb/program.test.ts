@@ -3,6 +3,7 @@ import type { Feature, PermissionId } from '../roles/permissions';
 import type { KbCatalog, KbLevelDef, KbStepDef } from './catalog';
 import {
   kbGroupStatus,
+  kbAdminAccess,
   kbHitMark,
   kbLevelsToRecord,
   kbNextStep,
@@ -167,6 +168,22 @@ describe('программа обучения', () => {
   it('у администратора платформы — своя программа', () => {
     const admin = access({ admin: true, modules: [] });
     expect(kbProgram(CATALOG, admin, RULES).map((g) => g.def.id)).toEqual(['adm']);
+  });
+
+  it('шаги Админки: справочники платформы, «Локализация», «Создать организацию» (остальные — с их вкладками)', () => {
+    const steps = ['a-dicts', 'a-types', 'a-xls', 'a-cal', 'a-tpl', 'a-l10n', 'a-org'].map(
+      (id, i) => step(id, 'adm', 70 + i),
+    );
+    const program = kbProgram({ steps, groups: CATALOG.groups }, kbAdminAccess());
+    expect(program.flatMap((g) => g.steps.map((s) => [s.def.id, s.module, !!s.rule.done]))).toEqual(
+      [
+        ['a-dicts', 'pdicts', false],
+        ['a-l10n', 'l10n', false],
+        ['a-org', 'orgs', true],
+      ],
+    );
+    // Сотруднику организации шаги Админки не видны.
+    expect(kbProgram({ steps, groups: CATALOG.groups }, OWNER)).toEqual([]);
   });
 
   it('шаги группы — по порядку, флаги «★» и «Посмотреть»', () => {

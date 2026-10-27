@@ -1,5 +1,6 @@
 import { expect, test, type APIRequestContext } from '@playwright/test';
-import { newOrgOwner } from './helpers';
+import { platformAdmin, uniqueInn } from './admin';
+import { newOrgOwner, uniqueLogin } from './helpers';
 
 // «База знаний»: программа обучения, уроки и уровни (задача 2.30). Шаги засчитываются один раз и
 // навсегда по истории действий пользователя, поэтому каждый тест — со своей новой организацией и её
@@ -137,5 +138,42 @@ test.describe('Этап 2: База знаний — программа, уро�
         name: /^Шаг выполнен: вы посмотрели «Посмотреть справочники платформы/,
       }),
     ).toBeVisible({ timeout: 8000 });
+  });
+
+  test('(шаги Админки, задача 2.36) администратор: «Перейти» у «Создать организацию и её владельца» сразу открывает «Новая организация», созданная организация засчитывает шаг; «Проверить справочники платформы» — 3 секунды на «Формах»', async ({
+    page,
+    baseURL,
+  }) => {
+    await platformAdmin(page.request, new URL(baseURL!).origin);
+    const before = await kbMe(page.request);
+    for (const id of ['a-org', 'a-dicts', 'a-l10n']) expect(stepDone(before, id)).toBeNull();
+    await page.goto('/app/kb/lessons');
+
+    await page.locator('[data-kb-step="a-org"]').getByRole('button', { name: 'Перейти' }).click();
+    await expect(page).toHaveURL(/\/app\/orgs/);
+    const form = page.getByRole('dialog', { name: 'Новая организация' });
+    await expect(form).toBeVisible();
+    await form.getByLabel('Название').fill(`ОсОО «${uniqueLogin('Урок')}»`);
+    await form.getByLabel('ИНН').fill(uniqueInn());
+    await form.getByLabel('ФИО владельца').fill('Урокова Айпери');
+    await form.getByLabel('Логин владельца').fill(uniqueLogin('e2e-kb'));
+    await form.getByRole('button', { name: 'Создать' }).click();
+    await expect(form).toBeHidden();
+    const done = page.getByRole('dialog', {
+      name: 'Готово: шаг «Создать организацию и её владельца» выполнен',
+    });
+    await expect(done).toBeVisible();
+    expect(stepDone(await kbMe(page.request), 'a-org')).toMatchObject({ how: 'action' });
+    await done.getByRole('button', { name: 'Вернуться к Базе знаний' }).click();
+    await expect(page).toHaveURL(/\/app\/kb\/lessons/);
+
+    await page.locator('[data-kb-step="a-dicts"]').getByRole('button', { name: 'Перейти' }).click();
+    await expect(page).toHaveURL(/\/app\/pdicts\/forms/);
+    await expect(
+      page.getByRole('dialog', {
+        name: /^Шаг выполнен: вы посмотрели «Проверить справочники платформы/,
+      }),
+    ).toBeVisible({ timeout: 8000 });
+    expect(stepDone(await kbMe(page.request), 'a-dicts')).toMatchObject({ how: 'visit' });
   });
 });

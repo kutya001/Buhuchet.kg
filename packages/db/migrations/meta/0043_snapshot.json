@@ -1,5 +1,5 @@
 {
-  "id": "a8187c6d-3253-476c-a73f-f7b81e696b45",
+  "id": "8cfc5119-3084-45ef-bb6b-97a693fbd451",
   "prevId": "c26fcdc4-f747-418e-9af6-d7b5665e5b2c",
   "version": "7",
   "dialect": "postgresql",
@@ -2322,619 +2322,6 @@
       },
       "isRLSEnabled": true
     },
-    "public.task_comments": {
-      "name": "task_comments",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "org_id": {
-          "name": "org_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "task_id": {
-          "name": "task_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "author_user_id": {
-          "name": "author_user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "app.current_user_id()"
-        },
-        "text": {
-          "name": "text",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "task_comments_task_idx": {
-          "name": "task_comments_task_idx",
-          "columns": [
-            {
-              "expression": "org_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "task_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "created_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "task_comments_org_id_organizations_id_fk": {
-          "name": "task_comments_org_id_organizations_id_fk",
-          "tableFrom": "task_comments",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "org_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        },
-        "task_comments_author_user_id_users_id_fk": {
-          "name": "task_comments_author_user_id_users_id_fk",
-          "tableFrom": "task_comments",
-          "tableTo": "users",
-          "columnsFrom": [
-            "author_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "task_comments_task_fk": {
-          "name": "task_comments_task_fk",
-          "tableFrom": "task_comments",
-          "tableTo": "tasks",
-          "columnsFrom": [
-            "task_id",
-            "org_id"
-          ],
-          "columnsTo": [
-            "id",
-            "org_id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {
-        "task_comments_isolation": {
-          "name": "task_comments_isolation",
-          "as": "PERMISSIVE",
-          "for": "ALL",
-          "to": [
-            "buhuchet_app"
-          ],
-          "using": "\"task_comments\".\"org_id\" = app.current_org_id()",
-          "withCheck": "\"task_comments\".\"org_id\" = app.current_org_id()"
-        },
-        "task_comments_insert_own": {
-          "name": "task_comments_insert_own",
-          "as": "RESTRICTIVE",
-          "for": "INSERT",
-          "to": [
-            "buhuchet_app"
-          ],
-          "withCheck": "\"task_comments\".\"author_user_id\" = app.current_user_id() and \"task_comments\".\"created_at\" = now()"
-        }
-      },
-      "checkConstraints": {
-        "task_comments_text_check": {
-          "name": "task_comments_text_check",
-          "value": "char_length(btrim(\"task_comments\".\"text\")) > 0"
-        }
-      },
-      "isRLSEnabled": true
-    },
-    "public.tasks": {
-      "name": "tasks",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "org_id": {
-          "name": "org_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "title": {
-          "name": "title",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "description": {
-          "name": "description",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "''"
-        },
-        "category_code": {
-          "name": "category_code",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "contractor_id": {
-          "name": "contractor_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "executor_employee_id": {
-          "name": "executor_employee_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "author_employee_id": {
-          "name": "author_employee_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "term": {
-          "name": "term",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'day'"
-        },
-        "due_date": {
-          "name": "due_date",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "need_file": {
-          "name": "need_file",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "confirm": {
-          "name": "confirm",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'todo'"
-        },
-        "done_at": {
-          "name": "done_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "fail_reason": {
-          "name": "fail_reason",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "''"
-        },
-        "rework_reason": {
-          "name": "rework_reason",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "''"
-        },
-        "rework_by_employee_id": {
-          "name": "rework_by_employee_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "confirmed_by_employee_id": {
-          "name": "confirmed_by_employee_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "confirmed_at": {
-          "name": "confirmed_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "confirm_note": {
-          "name": "confirm_note",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "''"
-        },
-        "created_by": {
-          "name": "created_by",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "updated_by": {
-          "name": "updated_by",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "version": {
-          "name": "version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        }
-      },
-      "indexes": {
-        "tasks_executor_idx": {
-          "name": "tasks_executor_idx",
-          "columns": [
-            {
-              "expression": "org_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "executor_employee_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "status",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "tasks_author_idx": {
-          "name": "tasks_author_idx",
-          "columns": [
-            {
-              "expression": "org_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "author_employee_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "status",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "tasks_contractor_idx": {
-          "name": "tasks_contractor_idx",
-          "columns": [
-            {
-              "expression": "org_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "contractor_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "created_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "tasks_due_idx": {
-          "name": "tasks_due_idx",
-          "columns": [
-            {
-              "expression": "org_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "due_date",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "tasks_pending_idx": {
-          "name": "tasks_pending_idx",
-          "columns": [
-            {
-              "expression": "org_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "where": "\"tasks\".\"status\" = 'on_confirm'",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "tasks_org_id_organizations_id_fk": {
-          "name": "tasks_org_id_organizations_id_fk",
-          "tableFrom": "tasks",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "org_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        },
-        "tasks_category_code_task_categories_code_fk": {
-          "name": "tasks_category_code_task_categories_code_fk",
-          "tableFrom": "tasks",
-          "tableTo": "task_categories",
-          "columnsFrom": [
-            "category_code"
-          ],
-          "columnsTo": [
-            "code"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "tasks_created_by_users_id_fk": {
-          "name": "tasks_created_by_users_id_fk",
-          "tableFrom": "tasks",
-          "tableTo": "users",
-          "columnsFrom": [
-            "created_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "tasks_updated_by_users_id_fk": {
-          "name": "tasks_updated_by_users_id_fk",
-          "tableFrom": "tasks",
-          "tableTo": "users",
-          "columnsFrom": [
-            "updated_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "tasks_contractor_fk": {
-          "name": "tasks_contractor_fk",
-          "tableFrom": "tasks",
-          "tableTo": "contractors",
-          "columnsFrom": [
-            "contractor_id",
-            "org_id"
-          ],
-          "columnsTo": [
-            "id",
-            "org_id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "tasks_executor_fk": {
-          "name": "tasks_executor_fk",
-          "tableFrom": "tasks",
-          "tableTo": "employees",
-          "columnsFrom": [
-            "executor_employee_id",
-            "org_id"
-          ],
-          "columnsTo": [
-            "id",
-            "org_id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "tasks_author_fk": {
-          "name": "tasks_author_fk",
-          "tableFrom": "tasks",
-          "tableTo": "employees",
-          "columnsFrom": [
-            "author_employee_id",
-            "org_id"
-          ],
-          "columnsTo": [
-            "id",
-            "org_id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "tasks_rework_by_fk": {
-          "name": "tasks_rework_by_fk",
-          "tableFrom": "tasks",
-          "tableTo": "employees",
-          "columnsFrom": [
-            "rework_by_employee_id",
-            "org_id"
-          ],
-          "columnsTo": [
-            "id",
-            "org_id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "tasks_confirmed_by_fk": {
-          "name": "tasks_confirmed_by_fk",
-          "tableFrom": "tasks",
-          "tableTo": "employees",
-          "columnsFrom": [
-            "confirmed_by_employee_id",
-            "org_id"
-          ],
-          "columnsTo": [
-            "id",
-            "org_id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "tasks_id_org_unique": {
-          "name": "tasks_id_org_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "id",
-            "org_id"
-          ]
-        }
-      },
-      "policies": {
-        "tasks_isolation": {
-          "name": "tasks_isolation",
-          "as": "PERMISSIVE",
-          "for": "ALL",
-          "to": [
-            "buhuchet_app"
-          ],
-          "using": "\"tasks\".\"org_id\" = app.current_org_id()",
-          "withCheck": "\"tasks\".\"org_id\" = app.current_org_id()"
-        }
-      },
-      "checkConstraints": {
-        "tasks_title_check": {
-          "name": "tasks_title_check",
-          "value": "char_length(btrim(\"tasks\".\"title\")) > 0"
-        },
-        "tasks_term_check": {
-          "name": "tasks_term_check",
-          "value": "\"tasks\".\"term\" in ('day', 'month')"
-        },
-        "tasks_status_check": {
-          "name": "tasks_status_check",
-          "value": "\"tasks\".\"status\" in ('todo', 'in_progress', 'rework', 'on_confirm', 'confirmed', 'done', 'failed', 'cancelled')"
-        },
-        "tasks_month_due_check": {
-          "name": "tasks_month_due_check",
-          "value": "\"tasks\".\"term\" <> 'month' or \"tasks\".\"due_date\" = (date_trunc('month', \"tasks\".\"due_date\") + interval '1 month - 1 day')::date"
-        },
-        "tasks_confirm_status_check": {
-          "name": "tasks_confirm_status_check",
-          "value": "\"tasks\".\"confirm\" or \"tasks\".\"status\" not in ('on_confirm', 'confirmed', 'rework')"
-        },
-        "tasks_confirmed_check": {
-          "name": "tasks_confirmed_check",
-          "value": "\"tasks\".\"status\" <> 'confirmed' or (\"tasks\".\"confirmed_by_employee_id\" is not null and \"tasks\".\"confirmed_at\" is not null)"
-        }
-      },
-      "isRLSEnabled": true
-    },
     "public.org_settings": {
       "name": "org_settings",
       "schema": "",
@@ -5069,6 +4456,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_by": {
           "name": "created_by",
           "type": "uuid",
@@ -5206,6 +4599,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_by": {
           "name": "created_by",
           "type": "uuid",
@@ -5334,6 +4733,12 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
         },
         "created_by": {
           "name": "created_by",
@@ -5480,6 +4885,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_by": {
           "name": "created_by",
           "type": "uuid",
@@ -5595,6 +5006,12 @@
           "primaryKey": false,
           "notNull": true,
           "default": "''"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
         },
         "created_by": {
           "name": "created_by",
@@ -5719,6 +5136,12 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
         },
         "created_by": {
           "name": "created_by",
@@ -6291,6 +5714,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_by": {
           "name": "created_by",
           "type": "uuid",
@@ -6508,6 +5937,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_by": {
           "name": "created_by",
           "type": "uuid",
@@ -6583,130 +6018,6 @@
           "value": "not (\"single_tax_rates\".\"code\" = any(\"single_tax_rates\".\"adds_to\"))"
         }
       },
-      "isRLSEnabled": true
-    },
-    "public.task_categories": {
-      "name": "task_categories",
-      "schema": "",
-      "columns": {
-        "code": {
-          "name": "code",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "name": {
-          "name": "name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "note": {
-          "name": "note",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "''"
-        },
-        "active": {
-          "name": "active",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": true
-        },
-        "sort_order": {
-          "name": "sort_order",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_by": {
-          "name": "created_by",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "updated_by": {
-          "name": "updated_by",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "version": {
-          "name": "version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        }
-      },
-      "indexes": {
-        "task_categories_name_key": {
-          "name": "task_categories_name_key",
-          "columns": [
-            {
-              "expression": "name",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "task_categories_created_by_users_id_fk": {
-          "name": "task_categories_created_by_users_id_fk",
-          "tableFrom": "task_categories",
-          "tableTo": "users",
-          "columnsFrom": [
-            "created_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "task_categories_updated_by_users_id_fk": {
-          "name": "task_categories_updated_by_users_id_fk",
-          "tableFrom": "task_categories",
-          "tableTo": "users",
-          "columnsFrom": [
-            "updated_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {
-        "task_categories_read": {
-          "name": "task_categories_read",
-          "as": "PERMISSIVE",
-          "for": "SELECT",
-          "to": [
-            "buhuchet_app"
-          ],
-          "using": "true"
-        }
-      },
-      "checkConstraints": {},
       "isRLSEnabled": true
     },
     "public.tax_benefit_due_rules": {
@@ -7127,6 +6438,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_by": {
           "name": "created_by",
           "type": "uuid",
@@ -7285,6 +6602,12 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
         },
         "created_by": {
           "name": "created_by",
@@ -7468,6 +6791,12 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
         },
         "created_by": {
           "name": "created_by",

@@ -64,6 +64,8 @@ interface TabDef {
   id: string;
   icon: IconName;
   label: UiTextKey;
+  /** Группа вкладки (прототип `group` у вкладок «Справочников платформы»): черта между группами. */
+  group?: UiTextKey;
   when?: When;
 }
 
@@ -76,6 +78,8 @@ export interface AddDef {
   beta?: boolean;
   /** На ПК — отдельной кнопкой рядом с «+ Добавить» (в прототипе `btn: true`). */
   separate?: boolean;
+  /** Только на этих вкладках модуля (прототип: `*Add` по `S.tab`); без них — на всех. */
+  tabs?: readonly string[];
   when?: When;
 }
 
@@ -92,6 +96,16 @@ interface ModuleDef {
 const taxVis: When = (a) => a.feature('taxpay') && a.can('money');
 /** Плата за обслуживание с правом её видеть (`feat('fee') && can('fee')` прототипа). */
 const feeVis: When = (a) => a.feature('fee') && a.can('fee');
+
+/** Группы вкладок «Справочников платформы» (ТЗ «Группы справочников»). */
+const G = {
+  taxes: 'tab.pdicts.group.taxes',
+  regimes: 'tab.pdicts.group.regimes',
+  classes: 'tab.pdicts.group.classes',
+  organs: 'tab.pdicts.group.organs',
+  system: 'tab.pdicts.group.system',
+  service: 'tab.pdicts.group.service',
+} as const satisfies Record<string, UiTextKey>;
 
 export const MODULES: Record<MenuModuleId, ModuleDef> = {
   home: {
@@ -296,6 +310,7 @@ export const MODULES: Record<MenuModuleId, ModuleDef> = {
         when: (a) => a.can('dicts'),
       },
       { id: 'request', icon: 'send', label: 'add.dicts.request' },
+      { id: 'mine', icon: 'list', label: 'add.dicts.mine' },
     ],
   },
   org: {
@@ -335,34 +350,44 @@ export const MODULES: Record<MenuModuleId, ModuleDef> = {
     desc: 'nav.desc.orgs',
     add: [{ id: 'org', icon: 'building', label: 'add.orgs.org' }],
   },
-  // Способы добавления справочников платформы и содержимого «Базы знаний» зависят от вкладки — придут
-  // с их экранами (поток Д).
+  // Способы добавления содержимого «Базы знаний» зависят от вкладки — придут с его экраном (поток Д).
   pdicts: {
     icon: 'book',
     title: 'nav.platform_dicts',
     short: 'nav.short.pdicts',
     desc: 'nav.desc.pdicts',
+    // Группы — как раздел `dictGroups` справочников платформы (прототип pdTabs).
     tabs: [
-      { id: 'types', icon: 'file', label: 'tab.pdicts.types' },
-      { id: 'taxes', icon: 'coins', label: 'tab.pdicts.taxes' },
-      { id: 'bases', icon: 'tag', label: 'tab.pdicts.bases' },
-      { id: 'regimes', icon: 'tag', label: 'tab.pdicts.regimes' },
-      { id: 'benefits', icon: 'star', label: 'tab.pdicts.benefits' },
-      { id: 'gked', icon: 'list', label: 'tab.pdicts.gked' },
-      { id: 'forms', icon: 'building', label: 'tab.pdicts.forms' },
-      { id: 'phones', icon: 'globe', label: 'tab.pdicts.phones' },
-      { id: 'organs', icon: 'landmark', label: 'tab.pdicts.organs' },
-      { id: 'ugns', icon: 'landmark', label: 'tab.pdicts.ugns' },
-      { id: 'banks', icon: 'wallet', label: 'tab.pdicts.banks' },
-      { id: 'calendar', icon: 'calendar', label: 'tab.pdicts.calendar' },
-      { id: 'statuses', icon: 'ok', label: 'tab.pdicts.statuses' },
-      { id: 'cats', icon: 'tag', label: 'tab.pdicts.cats' },
-      { id: 'reasons', icon: 'calendar', label: 'tab.pdicts.reasons' },
-      { id: 'roletpl', icon: 'users', label: 'tab.pdicts.roletpl' },
-      { id: 'perms', icon: 'shield', label: 'tab.pdicts.perms' },
-      { id: 'templates', icon: 'chat', label: 'tab.pdicts.templates' },
-      { id: 'loads', icon: 'history', label: 'tab.pdicts.loads' },
-      { id: 'requests', icon: 'send', label: 'tab.pdicts.requests' },
+      { id: 'types', icon: 'file', label: 'tab.pdicts.types', group: G.taxes },
+      { id: 'taxes', icon: 'coins', label: 'tab.pdicts.taxes', group: G.taxes },
+      { id: 'bases', icon: 'tag', label: 'tab.pdicts.bases', group: G.taxes },
+      { id: 'regimes', icon: 'tag', label: 'tab.pdicts.regimes', group: G.regimes },
+      { id: 'benefits', icon: 'star', label: 'tab.pdicts.benefits', group: G.regimes },
+      { id: 'gked', icon: 'list', label: 'tab.pdicts.gked', group: G.classes },
+      { id: 'forms', icon: 'building', label: 'tab.pdicts.forms', group: G.classes },
+      { id: 'phones', icon: 'globe', label: 'tab.pdicts.phones', group: G.classes },
+      { id: 'organs', icon: 'landmark', label: 'tab.pdicts.organs', group: G.organs },
+      { id: 'ugns', icon: 'landmark', label: 'tab.pdicts.ugns', group: G.organs },
+      { id: 'banks', icon: 'wallet', label: 'tab.pdicts.banks', group: G.organs },
+      { id: 'calendar', icon: 'calendar', label: 'tab.pdicts.calendar', group: G.system },
+      { id: 'statuses', icon: 'ok', label: 'tab.pdicts.statuses', group: G.system },
+      { id: 'cats', icon: 'tag', label: 'tab.pdicts.cats', group: G.system },
+      { id: 'reasons', icon: 'calendar', label: 'tab.pdicts.reasons', group: G.system },
+      { id: 'roletpl', icon: 'users', label: 'tab.pdicts.roletpl', group: G.system },
+      { id: 'perms', icon: 'shield', label: 'tab.pdicts.perms', group: G.system },
+      { id: 'templates', icon: 'chat', label: 'tab.pdicts.templates', group: G.system },
+      { id: 'loads', icon: 'history', label: 'tab.pdicts.loads', group: G.service },
+      { id: 'requests', icon: 'send', label: 'tab.pdicts.requests', group: G.service },
+    ],
+    // Способы добавления — по вкладке (прототип pdAdd); вкладки других частей задачи добавят свои.
+    add: [
+      {
+        id: 'value',
+        icon: 'plus',
+        label: 'pdicts.add.value',
+        tabs: ['forms', 'organs', 'banks', 'cats', 'reasons'],
+      },
+      { id: 'ugns', icon: 'landmark', label: 'pdicts.add.ugns', tabs: ['ugns'] },
     ],
   },
   l10n: {
@@ -434,9 +459,17 @@ export function visibleTabs(id: MenuModuleId, access: ShellAccess): readonly Tab
   return (MODULES[id].tabs ?? []).filter((t) => !t.when || t.when(access));
 }
 
-/** Способы добавления, на которые есть право; пусто — кнопки «+ Добавить» нет. */
-export function addActions(id: MenuModuleId, access: ShellAccess): readonly AddDef[] {
-  return (MODULES[id].add ?? []).filter((a) => !a.when || a.when(access));
+/**
+ * Способы добавления, на которые есть право, на вкладке `tabId`; пусто — кнопки «+ Добавить» нет.
+ */
+export function addActions(
+  id: MenuModuleId,
+  access: ShellAccess,
+  tabId: string | null = null,
+): readonly AddDef[] {
+  return (MODULES[id].add ?? []).filter(
+    (a) => (!a.when || a.when(access)) && (!a.tabs || (tabId !== null && a.tabs.includes(tabId))),
+  );
 }
 
 export function tabHref(moduleId: MenuModuleId, tabId: string): string {

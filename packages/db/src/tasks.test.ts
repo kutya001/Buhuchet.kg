@@ -2,6 +2,14 @@ import { hashPassword } from '@buhuchet/adapters/password';
 import { RecordChangedError, UI_TEXTS, type ListQuery } from '@buhuchet/domain';
 import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import {
+  adminDictCreate,
+  adminDictDelete,
+  adminDictUsage,
+  getAdminDictValue,
+} from './admin-platform-dicts';
+import { withUserContext } from './auth';
+import type { Tx } from './client';
 import { withOrgContext, type OrgContext } from './context';
 import {
   assignContractors,
@@ -12,7 +20,8 @@ import {
 } from './contractors';
 import { readHistory } from './history';
 import { createOrganization, type CreatedOrganization } from './organizations';
-import { employees, taskComments, tasks } from './schema';
+import { listTaskCategories } from './platform-dicts';
+import { employees, taskComments, tasks, users } from './schema';
 import { seedPermissions, seedRoleTemplates } from './seed';
 import { readSpecJson } from './spec-data';
 import { createEmployee } from './staff';
@@ -483,5 +492,46 @@ describe.skipIf(!databaseAvailable())('Задачи: данные', () => {
         .from(tasks)
         .where(eq(tasks.id, open)),
     ).toEqual([{ n: 0 }]);
+  });
+
+  it('Админка → «Категории задач»: администратор добавляет категорию; категория задачи — «Используется», не удалить', async () => {
+    const [admin] = await db.admin.db
+      .insert(users)
+      .values({ login: 'platform-tasks', passwordHash: '!', isPlatformAdmin: true })
+      .returning({ id: users.id });
+    const asAdmin = <T>(fn: (tx: Tx) => Promise<T>) => withUserContext(db.app.db, admin!.id, fn);
+    await byChief({ categoryCode: 'КАТ-006' });
+    expect((await asAdmin((tx) => adminDictUsage(tx, 'cats'))).get('КАТ-006')?.total).toBe(1);
+    const created = await asAdmin((tx) =>
+      adminDictCreate(
+        tx,
+        'cats',
+        { name: 'Отчёт в банк', data: { note: 'По запросу банка' } },
+        () => 'x',
+      ),
+    );
+    if (!created.ok) throw new Error('не создано');
+    expect(created.record).toMatchObject({
+      code: 'КАТ-008',
+      name: 'Отчёт в банк',
+      data: { note: 'По запросу банка' },
+    });
+    // Новая категория сразу предлагается организациям в форме задачи.
+    expect((await inA((tx) => listTaskCategories(tx))).map((c) => c.code)).toContain('КАТ-008');
+    const used = (await asAdmin((tx) => getAdminDictValue(tx, 'cats', 'КАТ-006')))!;
+    expect(
+      await asAdmin((tx) => adminDictDelete(tx, 'cats', 'КАТ-006', used.version)),
+    ).toMatchObject({
+      ok: false,
+      reason: 'used',
+    });
+    // Сотрудник организации справочник не правит: функция Админки ему ничего не делает.
+    const [denied] = await inA((tx) =>
+      tx.execute<{ n: number | null }>(
+        sql`select app.admin_dict_delete('cats', 'КАТ-008', 1) as n`,
+      ),
+    );
+    expect(denied?.n).toBeNull();
+    expect((await inA((tx) => listTaskCategories(tx))).map((c) => c.code)).toContain('КАТ-008');
   });
 });

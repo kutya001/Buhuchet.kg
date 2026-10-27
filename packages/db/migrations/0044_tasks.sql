@@ -51,6 +51,7 @@ CREATE TABLE "task_categories" (
 	"note" text DEFAULT '' NOT NULL,
 	"active" boolean DEFAULT true NOT NULL,
 	"sort_order" integer NOT NULL,
+	"created_at" timestamp with time zone,
 	"created_by" uuid,
 	"updated_by" uuid,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
