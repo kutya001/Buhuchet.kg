@@ -1,6 +1,7 @@
 'use client';
 
 import type { MenuModuleId } from '@buhuchet/domain';
+import { AccountsList } from '../admin/accounts-list';
 import { OrgsList } from '../admin/orgs-list';
 import { PlatformDicts } from '../dicts/platform-tab';
 import { ReportTypesList } from '../dicts/report-types-list';
@@ -56,6 +57,7 @@ export function ModuleScreen({
     // «Новости» — задача 2.32.
     return <ModuleStub moduleId={moduleId} />;
   }
+  if (moduleId === 'accounts') return <AccountsList />;
   if (moduleId === 'orgs') return <OrgsList />;
   return <ModuleStub moduleId={moduleId} />;
 }

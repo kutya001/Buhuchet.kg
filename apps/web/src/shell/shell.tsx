@@ -318,6 +318,7 @@ function ShellPage({
       addRequest,
       clearAddRequest: () => setAddRequest(null),
       access,
+      userId: me.user.id,
       employeeId: me.employee?.id ?? null,
       editor: roleEditorOf(me),
     }),
