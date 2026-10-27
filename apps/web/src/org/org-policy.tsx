@@ -20,6 +20,7 @@ import {
   CheckRow,
   Chip,
   Field,
+  fieldControl,
   FormGrid,
   Hint,
   Icon,
@@ -354,8 +355,9 @@ function WaitDays({
 
 /**
  * «Напоминания о сроках по умолчанию» (прототип: chip «за N дней» с крестиком, поле «+ день» по Enter,
- * метка «в день срока — всегда»): дни от 1 до 60, от большего к меньшему; повтор не добавляется —
- * уведомление «За N дней уже есть в наборе».
+ * метка «в день срока — всегда»): дни от 1 до 60 — иначе ошибка под полем «От 1 до 60 дней» (ТЗ
+ * «Учётная политика»), от большего к меньшему; повтор не добавляется — уведомление «За N дней уже есть
+ * в наборе».
  */
 function RemindDays({
   days,
@@ -370,11 +372,13 @@ function RemindDays({
 }) {
   const t = useT();
   const toast = useToast();
+  const id = `${useId()}-day`;
   const [draft, setDraft] = useState('');
+  const [error, setError] = useState<string | undefined>();
   const add = () => {
     const n = Number(draft.trim());
     if (!draft.trim()) return;
-    if (!isValidRemindDays([n])) return toast(t('err.remind_days_invalid'), { bad: true });
+    if (!isValidRemindDays([n])) return setError(t('err.remind_days_invalid'));
     setDraft('');
     if (days.includes(n)) return toast(t(`org.remind.exists.${pluralForm(n)}`, { n }));
     onSave([...days, n], t('org.remind.saved'));
@@ -400,13 +404,17 @@ function RemindDays({
         ))}
         {readOnly ? null : (
           <input
+            {...fieldControl({ id, error })}
             type="text"
             inputMode="numeric"
             aria-label={t('org.remind.add_label')}
             placeholder={t('org.remind.add')}
             value={draft}
             disabled={disabled}
-            onChange={(e) => setDraft(e.target.value)}
+            onChange={(e) => {
+              setDraft(e.target.value);
+              setError(undefined);
+            }}
             onKeyDown={(e) => {
               if (e.key === 'Enter') add();
             }}
@@ -417,6 +425,12 @@ function RemindDays({
           {t('org.remind.deadline')}
         </Pill>
       </div>
+      {error ? (
+        <div id={`${id}-err`} className="flex items-start gap-[5px] text-[12px] text-danger">
+          <Icon name="alert" size="sm" className="mt-px" />
+          <span>{error}</span>
+        </div>
+      ) : null}
       <Hint>{t('org.remind.hint')}</Hint>
     </Box>
   );

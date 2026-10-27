@@ -158,7 +158,7 @@ test.describe('Этап 1: Моя организация — правки вла
     }
   });
 
-  test('дни напоминаний добавляются вводом и убираются крестиком; настройки сохраняются кнопкой', async ({
+  test('дни напоминаний добавляются вводом и убираются крестиком, неверный день — ошибка под полем; настройки сохраняются кнопкой', async ({
     page,
     baseURL,
   }) => {
@@ -169,7 +169,14 @@ test.describe('Этап 1: Моя организация — правки вла
       await page.goto('/app/org/policy');
       const main = page.locator('main');
       const add = main.getByRole('textbox', { name: 'Добавить день напоминания' });
+      // Неверный день — ошибка под полем, день не добавляется; ввод убирает ошибку.
+      await add.fill('61');
+      await add.press('Enter');
+      await expect(add).toHaveAttribute('aria-invalid', 'true');
+      await expect(main.getByText('От 1 до 60 дней', { exact: true })).toBeVisible();
+      await expect(main.locator('[data-chip="61"]')).toHaveCount(0);
       await add.fill('14');
+      await expect(add).not.toHaveAttribute('aria-invalid', 'true');
       await add.press('Enter');
       await expect(
         page.getByRole('status').filter({ hasText: 'Набор дней сохранён' }),
