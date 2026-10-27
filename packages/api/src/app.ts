@@ -13,6 +13,7 @@ import { l10nModule } from './modules/l10n';
 import { orgModule } from './modules/org';
 import { platformDictsModule } from './modules/platform-dicts';
 import { dictsModule } from './modules/dicts';
+import { filesModule } from './modules/files';
 import { LOGO_PATH } from './modules/org/logo';
 import { rolesModule } from './modules/roles';
 import { staffModule } from './modules/staff';
@@ -74,6 +75,7 @@ export function createApp(deps: ApiDeps) {
     .route('/', staffModule(deps))
     .route('/', rolesModule(deps))
     .route('/', orgModule(deps))
+    .route('/', filesModule(deps))
     .route('/', platformDictsModule(deps))
     .route('/', dictsModule(deps))
     .route('/', viewsModule(deps))

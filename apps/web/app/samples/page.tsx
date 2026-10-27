@@ -19,6 +19,7 @@ export default async function SamplesPage() {
     <StatusSamples
       actor={me.employee?.shortName ?? me.user.login}
       canRollback={me.permissions.includes('rollback')}
+      showFiles={me.permissions.includes('filesView') && me.features.files === true}
       initialMax={parseMaxPrefs(store.get(MAX_COOKIE)?.value)}
       now={requestNow()}
     />

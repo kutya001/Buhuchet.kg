@@ -10,6 +10,7 @@ export * from './auth';
 export * from './telegram';
 export * from './l10n';
 export * from './views';
+export * from './files';
 export * from './status';
 export * from './platform-dicts';
 export * from './dicts';

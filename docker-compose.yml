@@ -15,6 +15,8 @@ x-app-env: &app-env
   S3_ACCESS_KEY_ID: buhuchet
   S3_SECRET_ACCESS_KEY: buhuchet-secret
   S3_FORCE_PATH_STYLE: 'true'
+  # Браузер открывает и загружает файлы по подписанным ссылкам: ему хранилище видно на localhost:9000.
+  S3_PUBLIC_ENDPOINT: http://localhost:9000
   CRON_SECRET: ${CRON_SECRET:-local-cron-secret-change-me}
   FIXED_NOW: ${FIXED_NOW:-}
   # Бот из .env. Подделка Telegram сквозных тестов слушает на этом компьютере (порт 8091), а из

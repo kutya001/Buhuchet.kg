@@ -109,6 +109,12 @@ const StorageEnv = z.object({
   S3_ACCESS_KEY_ID: z.string().trim().min(1),
   S3_SECRET_ACCESS_KEY: z.string().trim().min(1),
   S3_FORCE_PATH_STYLE: bool.default(true),
+  /**
+   * Адрес хранилища для браузера, если он не тот, что у сервера: в docker-compose сервер ходит в
+   * http://minio:9000, а браузер — в http://localhost:9000; на VPS — свой поддомен через Caddy. По нему
+   * подписываются ссылки на скачивание и загрузку файлов. Не задан — тот же S3_ENDPOINT.
+   */
+  S3_PUBLIC_ENDPOINT: z.url().optional(),
 });
 
 /** Имя бота-подделки из .env.example (локально и в CI). */

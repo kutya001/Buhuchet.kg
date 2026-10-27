@@ -22,3 +22,4 @@ export * from './platform-dicts/calendar';
 export * from './dicts/report-types';
 export * from './dicts/tax-pick';
 export * from './dicts/org-report-types';
+export * from './files/files';
