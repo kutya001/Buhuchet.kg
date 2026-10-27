@@ -9,7 +9,6 @@ import {
   Note,
   Tag,
   useToast,
-  type ActionEntry,
   type GridColumn,
 } from '@buhuchet/ui';
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
@@ -20,10 +19,10 @@ import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
 import { useErrorText, useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { useListExport } from '../lists/export';
-import { policyQuery } from '../org/org-data';
 import { useGridLabels } from '../lists/grid-labels';
 import { useListPage, type FetchListPage } from '../lists/use-list-page';
 import { useViewSettings } from '../lists/view-settings';
+import { policyQuery } from '../org/org-data';
 import { useShell } from '../shell/context';
 import { tabHref } from '../shell/modules';
 import { useStaffAddRequest } from '../staff/staff-add';
@@ -34,6 +33,7 @@ import type { CatalogPermission } from './permission-view';
 import { RoleCard } from './role-card';
 import { permissionCatalogQuery, roleQuery } from './role-data';
 import { RoleForm } from './role-form';
+import { roleMenu } from './roles-menu';
 
 /** По умолчанию — по названию роли (прототип `sort:{key:'name',dir:1}`). */
 const DEFAULT_SORT: ListSort = { key: 'name', dir: 'asc' };
@@ -210,42 +210,16 @@ export function RolesList() {
     );
   }, [editId, client, toast, t]);
 
-  const actions = (r: RoleListItem): ActionEntry[] => [
-    {
-      id: 'open',
-      label: t('roles.action.open'),
-      icon: 'shield',
-      run: () => setCard(openSlot(r)),
+  const actions = roleMenu({
+    canDelete: access.can('staff'),
+    defaultRoleId,
+    t,
+    run: {
+      open: (r) => setCard(openSlot(r)),
+      edit: (r) => void openForm(r.id),
+      remove: setAskDelete,
     },
-    {
-      id: 'edit',
-      label: t('roles.action.edit'),
-      icon: 'edit',
-      disabled: r.isOwner,
-      reason: r.isOwner ? t('roles.lock.owner_role') : undefined,
-      run: () => void openForm(r.id),
-    },
-    ...(access.can('staff')
-      ? ([
-          { id: 'sep', separator: true },
-          {
-            id: 'delete',
-            label: t('roles.action.delete'),
-            icon: 'trash',
-            danger: true,
-            disabled: r.isOwner || r.employees > 0 || r.id === defaultRoleId,
-            reason: r.isOwner
-              ? t('roles.lock.owner_delete')
-              : r.employees > 0
-                ? t('err.role_in_use')
-                : r.id === defaultRoleId
-                  ? t('err.role_is_default')
-                  : undefined,
-            run: () => setAskDelete(r),
-          },
-        ] satisfies ActionEntry[])
-      : []),
-  ];
+  });
 
   return (
     <div className="flex flex-col gap-3.5">

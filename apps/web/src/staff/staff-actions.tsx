@@ -15,6 +15,7 @@ import {
   type ActionEntry,
 } from '@buhuchet/ui';
 import { useQueryClient } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
 import { api, callApi } from '../api-client';
 import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
@@ -53,6 +54,7 @@ export function useStaffActions(): {
   const client = useQueryClient();
   const refresh = useStaffRefresh();
   const { access, employeeId } = useShell();
+  const router = useRouter();
   const canManage = access.can('staff');
   const [card, setCard] = useState<DialogSlot<Employee> | null>(null);
   const [role, setRole] = useState<DialogSlot<{
@@ -183,7 +185,11 @@ export function useStaffActions(): {
           codes={edit.data.codes}
           open={edit.open}
           onClose={() => setEdit(closeSlot)}
-          onDone={refresh}
+          onDone={(e) => {
+            refresh();
+            // Свои ФИО и телефон видны и в оболочке («Меню», «Мой профиль»): их отдаёт сервер.
+            if (e.id === employeeId) router.refresh();
+          }}
         />
       ) : null}
       {hire ? (

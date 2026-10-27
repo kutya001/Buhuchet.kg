@@ -107,11 +107,10 @@ export const STAFF_TEXTS = {
   'roles.action.delete': { ru: 'Удалить', section: 'Роли' },
   'roles.delete.title': { ru: 'Удалить роль «{name}»?', section: 'Роли' },
   'roles.delete.text': {
-    ru: 'Роль никому не назначена. Её права удалятся вместе с ней, вернуть роль будет нельзя.',
+    ru: 'Права роли удалятся вместе с ней, вернуть роль будет нельзя.',
     section: 'Роли',
   },
   'roles.delete.done': { ru: 'Роль удалена', section: 'Роли' },
-  'roles.lock.owner_delete': { ru: 'Роль владельца не удаляется', section: 'Роли' },
   'roles.card.sub': { ru: '{n} чел. · прав {k} из {total}', section: 'Роли' },
   'roles.load_error': { ru: 'Не удалось загрузить роль', section: 'Роли' },
   'roles.card.owner_note': {
@@ -189,6 +188,7 @@ export const STAFF_TEXTS = {
     ru: 'Эту роль получают новые сотрудники: сначала выберите другую в учётной политике',
     section: 'Ошибки',
   },
+  'err.owner_role.delete': { ru: 'Роль владельца не удаляется', section: 'Ошибки' },
   'err.owner_granted_role.delete': {
     ru: 'Роль с правами, которые выдаёт только владелец, удаляет владелец',
     section: 'Ошибки',

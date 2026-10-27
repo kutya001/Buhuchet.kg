@@ -248,7 +248,7 @@ test.describe('Этап 1: сотрудники и роли (экраны)', () 
     });
   });
 
-  test('«Изменить» сотрудника: ошибки под полями; новые ФИО и телефон видны в списке и в карточке', async ({
+  test('«Изменить» сотрудника: ошибки под полями; новые ФИО и телефон видны в списке и в открытой карточке', async ({
     page,
     baseURL,
     isMobile,
@@ -277,6 +277,22 @@ test.describe('Этап 1: сотрудники и роли (экраны)', () 
     await save.click();
     await expect(form).toContainText('Введите фамилию и имя');
     await fio.fill(after);
+    await save.click();
+    await expect(form).toBeHidden();
+    const done = page.getByRole('status').filter({ hasText: 'Данные сотрудника сохранены' });
+    await expect(done).toBeVisible();
+    // Новые ФИО — в строке списка.
+    await expect(row).toContainText(after);
+
+    // Телефон — из «Действий» открытой карточки: карточка обновляется после сохранения.
+    await row.getByText(after).click();
+    const card = page.getByRole('dialog', { name: after });
+    await card.getByRole('button', { name: 'Действия' }).click();
+    await page
+      .getByRole('menu', { name: 'Действия' })
+      .getByRole('menuitem', { name: 'Изменить' })
+      .click();
+    await expect(form.getByLabel('ФИО')).toHaveValue(after);
     const phone = form.getByLabel('Телефон');
     await phone.fill('70011');
     await save.click();
@@ -285,14 +301,6 @@ test.describe('Этап 1: сотрудники и роли (экраны)', () 
     await expect(phone).toHaveValue('700 111 222');
     await save.click();
     await expect(form).toBeHidden();
-    await expect(
-      page.getByRole('status').filter({ hasText: 'Данные сотрудника сохранены' }),
-    ).toBeVisible();
-
-    // Новые ФИО — в строке списка; карточка — с новыми ФИО и телефоном.
-    await expect(row).toContainText(after);
-    await row.getByText(after).click();
-    const card = page.getByRole('dialog', { name: after });
     await expect(card.getByRole('link', { name: '+996 700 111 222' })).toHaveAttribute(
       'href',
       'tel:+996700111222',
@@ -342,7 +350,7 @@ test.describe('Этап 1: сотрудники и роли (экраны)', () 
     await row.locator('[data-row-menu]').click();
     await menu.getByRole('menuitem', { name: 'Удалить' }).click();
     const ask = page.getByRole('dialog', { name: `Удалить роль «${name}»?` });
-    await expect(ask).toContainText('Роль никому не назначена.');
+    await expect(ask).toContainText('Права роли удалятся вместе с ней, вернуть роль будет нельзя.');
     await ask.getByRole('button', { name: 'Удалить' }).click();
     await expect(page.getByRole('status').filter({ hasText: 'Роль удалена' })).toBeVisible();
     await expect(row).toHaveCount(0);
