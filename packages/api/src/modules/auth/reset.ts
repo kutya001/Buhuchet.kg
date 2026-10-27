@@ -51,9 +51,9 @@ async function atLeast<T>(floorMs: number, fn: () => Promise<T>): Promise<T> {
   return result;
 }
 
-/** Один ответ для любого логина (docs/deviations.md, п. 4, решение Б). */
+/** Один ответ для любого логина (docs/deviations.md, п. 4, решение Б); текст — refDB `auth.code_sent`. */
 export const RESET_REQUESTED_MESSAGE =
-  'Если к логину привязан Telegram, бот пришлёт код. Если код не пришёл, пароль сбросит владелец организации, а владельцу — администратор платформы.';
+  'Если к логину привязан Telegram, бот пришлёт код. Если код не пришёл, пароль сбросит владелец организации.';
 
 export const resetRequestRoute = createRoute({
   method: 'post',

@@ -1,5 +1,6 @@
 import {
   enumChecked,
+  EXPORT_ROWS_LIMIT,
   formatSom,
   formatSomWithUnit,
   matchesSearch,
@@ -58,6 +59,11 @@ const MANY_COLUMNS: ListColumns = {
   name: { type: 'enum', label: 'test.name', value: many.name },
 };
 
+/** Записей больше, чем входит в выгрузку «В Excel» (`EXPORT_ROWS_LIMIT`). */
+const BIG = EXPORT_ROWS_LIMIT + 12;
+const big = pgTable('list_test_big', { id: integer('id').primaryKey() });
+const BIG_COLUMNS: ListColumns = { id: { type: 'int', label: 'test.id', value: big.id } };
+
 /** Отчёты для пункта приёмки «компания А, 09.2026 — 10 500 сом»: только для этого теста. */
 const reports = pgTable('list_test_reports', {
   id: integer('id').primaryKey(),
@@ -102,6 +108,10 @@ describe.skipIf(!databaseAvailable())('страница списка на сер
     await t.admin.sql.unsafe(`create table list_test_many as
       select i as id, 'Значение ' || i as name from generate_series(1, ${MANY}) i`);
     await t.admin.sql`grant select on list_test_many to buhuchet_app`;
+    await t.admin.sql.unsafe(
+      `create table list_test_big as select i as id from generate_series(1, ${BIG}) i`,
+    );
+    await t.admin.sql`grant select on list_test_big to buhuchet_app`;
     await t.admin.db.insert(reports).values(
       [
         { id: 1, company: 'Компания А', kind: 'Соцфонд', period: '2026-09-01', sum: 250_000 },
@@ -127,6 +137,7 @@ describe.skipIf(!databaseAvailable())('страница списка на сер
 
   const from: ListFrom = (fields) => t.app.db.select(fields).from(items).$dynamic();
   const manyFrom: ListFrom = (fields) => t.app.db.select(fields).from(many).$dynamic();
+  const bigFrom: ListFrom = (fields) => t.app.db.select(fields).from(big).$dynamic();
   const page = (query: Partial<ListQuery>) =>
     selectListPage({
       query: { sort: undefined, page: 1, size: 25, filters: {}, ...query },
@@ -494,6 +505,7 @@ describe.skipIf(!databaseAvailable())('страница списка на сер
         ['Ель_синяя', 700, null],
       ],
       more: false,
+      total: 3,
     });
     // В файл — только записи области модуля.
     const scoped = await selectListExport({
@@ -505,6 +517,31 @@ describe.skipIf(!databaseAvailable())('страница списка на сер
       from,
     });
     expect(scoped.rows).toEqual([['b'], ['b']]);
+  });
+
+  it('выгрузка больше 50 000 записей: в файл — первые 50 000, всего под фильтром — для уведомления', async () => {
+    const query = { sort: null, page: 1, size: 25 as const, filters: {} };
+    const exported = await selectListExport({
+      query,
+      columns: BIG_COLUMNS,
+      keys: ['id'],
+      natural: [big.id],
+      scope: undefined,
+      from: bigFrom,
+    });
+    expect(exported.rows).toHaveLength(EXPORT_ROWS_LIMIT);
+    expect(exported.rows.at(-1)).toEqual([EXPORT_ROWS_LIMIT]);
+    expect(exported).toMatchObject({ more: true, total: BIG });
+    // Под фильтром — столько, сколько подходит, а не сколько в таблице.
+    const filtered = await selectListExport({
+      query: { ...query, filters: { id: { type: 'num', from: 11 } } },
+      columns: BIG_COLUMNS,
+      keys: ['id'],
+      natural: [big.id],
+      scope: undefined,
+      from: bigFrom,
+    });
+    expect(filtered).toMatchObject({ more: true, total: BIG - 10 });
   });
 
   it('итог по любому фильтру: «компания А, 09.2026» — 10 500 сом (механизм итогов пункта приёмки)', async () => {

@@ -15,8 +15,8 @@ import { buildXlsx, XLSX_TYPE, type XlsxCell } from './xlsx';
 
 /**
  * Ответ выгрузки списка в Excel: файл «<список> <дата>.xlsx» с заголовками из словаря. Сколько строк
- * в файле и все ли вошли — в заголовках `x-export-rows` и `x-export-more`: экран говорит об этом
- * уведомлением.
+ * в файле, все ли вошли и сколько записей под фильтрами — в заголовках `x-export-rows`,
+ * `x-export-more` и `x-export-total` (если вошли не все): экран говорит об этом уведомлением.
  */
 export async function xlsxResponse(
   c: Context,
@@ -26,6 +26,8 @@ export async function xlsxResponse(
     columns: readonly { label: string; type: ListColumnType }[];
     rows: readonly XlsxCell[][];
     more: boolean;
+    /** Сколько записей под фильтрами всего (`selectListExport`). */
+    total?: number;
     t: (key: string) => string;
   },
 ): Promise<Response> {
@@ -45,6 +47,7 @@ export async function xlsxResponse(
     'cache-control': 'no-store',
     'x-export-rows': String(rows.length),
     'x-export-more': more ? '1' : '0',
+    ...(more && options.total !== undefined ? { 'x-export-total': String(options.total) } : {}),
   });
 }
 

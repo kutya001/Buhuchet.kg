@@ -1,12 +1,7 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import {
-  LOGIN_LOCK_MINUTES,
-  LOGIN_MAX_FAILURES,
-  RESET_CODE_LENGTH,
-  RESET_CODE_TTL_MINUTES,
-} from '@buhuchet/domain';
+import { RESET_CODE_LENGTH, RESET_CODE_TTL_MINUTES } from '@buhuchet/domain';
 import {
   ChangePasswordForm,
   LoginForm,
@@ -31,6 +26,7 @@ import { useForm } from 'react-hook-form';
 import { api, callApi } from '../api-client';
 import { useErrorText, useT } from '../l10n/provider';
 import { fieldError, NewPasswordFields } from './fields';
+import { loginErrorText } from './login-errors';
 import { TelegramLinkRow, useTelegramLink } from './telegram-link';
 
 /** Шаг страницы входа: вход, «Забыли пароль?» (логин, затем код), смена временного пароля, Telegram. */
@@ -44,9 +40,6 @@ type Step =
 const STEP_TITLE = 'm-0 text-[20px] font-[720] tracking-[-.015em]';
 const WIDE_CTA = `${buttonClass('cta')} justify-center`;
 const LINK_LEFT = `${linkButtonClass()} self-start`;
-
-/** Почему войти нельзя даже с верным паролем — сообщение под логином (docs/deviations.md, п. 4). */
-const DENIALS = new Set(['org_blocked', 'user_blocked', 'employee_blocked']);
 
 /**
  * Страница входа (прототип core/login.js showLogin): логин и пароль, «Забыли пароль?» с кодом из
@@ -101,7 +94,11 @@ function LoginCard({ me }: { me: MeResponse | null }) {
       break;
     case 'code':
       body = (
-        <CodeStep login={step.login} onDone={() => setStep({ id: 'login', login: step.login })} />
+        <CodeStep
+          login={step.login}
+          onDone={() => setStep({ id: 'login', login: step.login })}
+          onBack={() => setStep({ id: 'login', login: step.login })}
+        />
       );
       break;
     case 'change':
@@ -143,28 +140,21 @@ function LoginStep({
   const {
     register,
     handleSubmit,
-    setError,
     getValues,
     formState: { errors, isSubmitting },
   } = useForm<LoginForm>({
     resolver: zodResolver(LoginForm),
     defaultValues: { login: initialLogin, password: '' },
   });
+  // Ошибка входа — общей плашкой над «Войти», а не под полем (прототип core/login.js `#lg-msg`):
+  // по ней не видно, логин неверный или пароль. Пустые поля — под полями.
+  const [message, setMessage] = useState('');
 
   const submit = handleSubmit(async (values) => {
+    setMessage('');
     const res = await callApi(() => api.api.auth.login.$post({ json: values }));
     if (res.ok) return onSignedIn(MeResponse.parse(res.data), values.password);
-    // Неверный логин или пароль — одно сообщение для любого логина и предупреждение о блокировке
-    // (docs/deviations.md, п. 4); о блокировке сотрудника или организации — под логином.
-    const message =
-      res.error.code === 'invalid_credentials'
-        ? t('auth.wrong_credentials', { count: LOGIN_MAX_FAILURES, minutes: LOGIN_LOCK_MINUTES })
-        : errorText(res.error);
-    setError(
-      DENIALS.has(res.error.code) ? 'login' : 'password',
-      { type: 'server', message },
-      { shouldFocus: true },
-    );
+    setMessage(loginErrorText(t, errorText, res.error));
   });
 
   return (
@@ -194,6 +184,11 @@ function LoginStep({
           />
         )}
       </Field>
+      {message ? (
+        <Note tone="bad" alert>
+          {message}
+        </Note>
+      ) : null}
       <button type="submit" className={WIDE_CTA} disabled={isSubmitting}>
         {t('auth.sign_in')}
       </button>
@@ -235,7 +230,7 @@ function ForgotStep({
   return (
     <form onSubmit={submit} noValidate className="flex flex-col gap-3.5">
       <h1 className={STEP_TITLE}>{t('auth.reset_title')}</h1>
-      <p className="m-0 text-muted">{t('auth.reset_text', { minutes: RESET_CODE_TTL_MINUTES })}</p>
+      <p className="m-0 text-muted">{t('auth.reset_text')}</p>
       <Field id="fg-login" label={t('auth.login')} error={fieldError(t, errors.login)}>
         {(control) => (
           <input
@@ -260,7 +255,15 @@ function ForgotStep({
   );
 }
 
-function CodeStep({ login, onDone }: { login: string; onDone: () => void }) {
+function CodeStep({
+  login,
+  onDone,
+  onBack,
+}: {
+  login: string;
+  onDone: () => void;
+  onBack: () => void;
+}) {
   const t = useT();
   const errorText = useErrorText();
   const toast = useToast();
@@ -296,7 +299,9 @@ function CodeStep({ login, onDone }: { login: string; onDone: () => void }) {
     <form onSubmit={submit} noValidate className="flex flex-col gap-3.5">
       <h1 className={STEP_TITLE}>{t('auth.code_title')}</h1>
       {/* Один ответ для любого логина: пришлёт ли бот код, не сообщается (docs/deviations.md, п. 4). */}
-      <Note icon="tg">{t('auth.reset_requested')}</Note>
+      <Note icon="tg">
+        {t('auth.code_sent')} {t('auth.code_ttl', { minutes: RESET_CODE_TTL_MINUTES })}
+      </Note>
       <Field id="fg-code" label={t('auth.code')} error={fieldError(t, errors.code)}>
         {(control) => (
           <input
@@ -318,6 +323,9 @@ function CodeStep({ login, onDone }: { login: string; onDone: () => void }) {
       />
       <button type="submit" className={WIDE_CTA} disabled={isSubmitting}>
         {t('auth.change')}
+      </button>
+      <button type="button" className={LINK_LEFT} onClick={onBack}>
+        {t('auth.back')}
       </button>
       <div className="text-[11.5px] leading-[1.4] text-faint">{t('auth.reset_note')}</div>
     </form>
