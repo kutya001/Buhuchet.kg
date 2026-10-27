@@ -468,20 +468,23 @@ export async function platformDictTiles(
 
 /* ───────────── «Поиск по всем значениям» ───────────── */
 
-/** Кто и когда менял значение (у разделов `platform_reference` — нет). */
+/** Кто и когда добавил и менял значение (у разделов `platform_reference` — нет). */
 interface Audit {
+  /** Когда администратор добавил значение; у значений из наполнения — нет. */
+  createdAt: string | null;
   updatedAt: string | null;
   createdBy: string | null;
   updatedBy: string | null;
 }
 
 type AuditTable = PgTable & {
+  createdAt: PgColumn;
   createdBy: PgColumn;
   updatedBy: PgColumn;
   updatedAt: PgColumn;
 };
 
-/** «Изменено», «Создал», «Изменил» значений таблицы по коду; автор без сотрудника — администратор платформы. */
+/** «Создано», «Изменено», «Создал», «Изменил» значений таблицы по коду; автор без сотрудника — администратор платформы. */
 async function auditOf(
   db: Db | Tx,
   table: AuditTable,
@@ -490,6 +493,7 @@ async function auditOf(
   const rows = await db
     .select({
       code: sql<string>`${code}`,
+      createdAt: sql<string | null>`${table.createdAt}`,
       updatedAt: sql<string | null>`${table.updatedAt}`,
       createdBy: sql<string | null>`${table.createdBy}`,
       updatedBy: sql<string | null>`${table.updatedBy}`,
@@ -499,6 +503,7 @@ async function auditOf(
     rows.map((r) => [
       r.code,
       {
+        createdAt: r.createdAt ? new Date(r.createdAt).toISOString() : null,
         updatedAt: r.updatedAt ? new Date(r.updatedAt).toISOString() : null,
         createdBy: auditActorName(r.createdBy, null),
         updatedBy: auditActorName(r.updatedBy, null),
@@ -514,7 +519,7 @@ interface ValueRow extends Audit {
   name: string;
 }
 
-const NO_AUDIT: Audit = { updatedAt: null, createdBy: null, updatedBy: null };
+const NO_AUDIT: Audit = { createdAt: null, updatedAt: null, createdBy: null, updatedBy: null };
 
 /** Значения одного справочника для «Поиска по всем значениям» (прототип: d — справочник, name — значение). */
 async function valueRows(
@@ -581,9 +586,9 @@ const ALL_VALUE_COLUMNS: ListColumns = {
     sort: { value: field('d_text'), text: true },
   },
   name: { type: 'text', label: 'dicts.platform.col.all.name', value: field('name') },
-  // ОТКЛОНЕНИЕ: docs/deviations.md#48 — даты появления значения у справочников платформы нет,
-  // «Создано» пусто (в прототипе — `_ca` значения).
-  createdAt: { type: 'datetime', label: 'grid.col.created_at', value: sql`null::timestamptz` },
+  // «Создано» — у значений, добавленных в Админке (docs/deviations.md, п. 48); у значений из
+  // наполнения и разделов без своей таблицы — пусто.
+  createdAt: { type: 'datetime', label: 'grid.col.created_at', value: field('created_at') },
   updatedAt: { type: 'datetime', label: 'grid.col.updated_at', value: field('updated_at') },
   createdBy: { type: 'enum', label: 'grid.col.created_by', value: field('created_by') },
   updatedBy: { type: 'enum', label: 'grid.col.updated_by', value: field('updated_by') },
@@ -599,6 +604,7 @@ async function allValuesRecordset(db: Db | Tx, t: ListTexts, today: string) {
       d: r.d,
       d_text: r.d_text,
       name: r.name,
+      created_at: r.createdAt,
       updated_at: r.updatedAt,
       created_by: r.createdBy,
       updated_by: r.updatedBy,
@@ -607,6 +613,7 @@ async function allValuesRecordset(db: Db | Tx, t: ListTexts, today: string) {
       { key: 'd', type: 'text' },
       { key: 'd_text', type: 'text' },
       { key: 'name', type: 'text' },
+      { key: 'created_at', type: 'timestamptz' },
       { key: 'updated_at', type: 'timestamptz' },
       { key: 'created_by', type: 'text' },
       { key: 'updated_by', type: 'text' },
@@ -644,6 +651,7 @@ export async function listPlatformValuesPage(
           dict: sql<AllValuesDict>`${field('d')}`,
           dictName: sql<string>`${field('d_text')}`,
           name: sql<string>`${field('name')}`,
+          createdAt: sql<string | null>`${field('created_at')}`,
           updatedAt: sql<string | null>`${field('updated_at')}`,
           createdBy: sql<string | null>`${field('created_by')}`,
           updatedBy: sql<string | null>`${field('updated_by')}`,
@@ -658,9 +666,10 @@ export async function listPlatformValuesPage(
   });
   return {
     ...page,
-    rows: page.rows.map(({ updatedAt, createdBy, updatedBy, ...r }): PlatformValueRow => ({
+    rows: page.rows.map(({ createdAt, updatedAt, createdBy, updatedBy, ...r }): PlatformValueRow => ({
       ...r,
       audit: {
+        createdAt: createdAt ? new Date(createdAt).toISOString() : null,
         updatedAt: updatedAt ? new Date(updatedAt).toISOString() : null,
         createdBy,
         updatedBy,

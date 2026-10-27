@@ -166,6 +166,8 @@ export const SHELL_TEXTS = {
   'tab.kb.arts': { ru: 'Статьи', section: 'Вкладки' },
   'tab.kb.news': { ru: 'Новости', section: 'Вкладки' },
   'tab.kb.team': { ru: 'Уровни сотрудников', section: 'Вкладки' },
+  // Подсказка вкладки, у которой есть группа (ТЗ «Справочники платформы»: «Группа · Название»).
+  'tab.grouped': { ru: '{group} · {tab}', section: 'Вкладки' },
   'tab.pdicts.types': { ru: 'Виды отчётов', section: 'Вкладки' },
   'tab.pdicts.taxes': { ru: 'Налоги и ставки', section: 'Вкладки' },
   'tab.pdicts.bases': { ru: 'Основания для отчётов', section: 'Вкладки' },

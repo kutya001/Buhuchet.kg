@@ -14,6 +14,7 @@ export const HISTORY_ENTITIES = [
   'org_report_type',
   'dict_request',
   'ui_text',
+  'platform_dict',
 ] as const;
 export type HistoryEntity = (typeof HISTORY_ENTITIES)[number];
 

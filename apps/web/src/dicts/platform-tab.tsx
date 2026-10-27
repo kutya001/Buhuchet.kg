@@ -61,11 +61,11 @@ function valueColumns(t: Translate): GridColumn<PlatformValueRow>[] {
   ];
 }
 
-/** Кто и когда менял значение в Админке; даты появления у справочников платформы нет. */
+/** Кто и когда добавил и менял значение в Админке; у значений из наполнения «Создано» пусто. */
 const VALUE_AUDIT: GridAudit<PlatformValueRow> = {
   createdBy: (r) => r.audit.createdBy ?? '',
   updatedBy: (r) => r.audit.updatedBy ?? r.audit.createdBy ?? '',
-  createdAt: () => '',
+  createdAt: (r) => (r.audit.createdAt ? formatMomentRu(new Date(r.audit.createdAt)) : ''),
   updatedAt: (r) => (r.audit.updatedAt ? formatMomentRu(new Date(r.audit.updatedAt)) : ''),
 };
 

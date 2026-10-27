@@ -13,8 +13,10 @@ import {
   withOrgContext,
   type DictRequestRecord,
   type ListPageResult,
+  takeRateLimit,
+  type RateLimit,
 } from '@buhuchet/db';
-import { bishkekDate } from '@buhuchet/domain';
+import { bishkekDate, DICT_REQUEST_HOURLY_LIMIT } from '@buhuchet/domain';
 import {
   ApiError,
   DictRequest,
@@ -31,7 +33,7 @@ import {
 } from '@buhuchet/shared';
 import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
-import { listQueryOf, listQueryResponses } from '../../errors';
+import { apiFail, listQueryOf, listQueryResponses } from '../../errors';
 import { exportRateResponses, withExportSlot, xlsxContent, xlsxResponse } from '../../lists/export';
 import { orgContextOf, requireEmployee, requirePermission } from '../../middleware/access';
 import { serverTexts } from '../l10n/texts';
@@ -318,15 +320,41 @@ export const createDictRequestRoute = createRoute({
       content: { 'application/json': { schema: DictRequest } },
     },
     400: { description: 'Не выбран справочник или пусто «Что добавить»', content: error },
+    429: {
+      description: 'Больше `DICT_REQUEST_HOURLY_LIMIT` запросов за час от пользователя',
+      content: error,
+    },
     ...access,
   },
 });
 
+/** Предел «Попросить добавить» (docs/decisions.md, п. Д-2): запросов за час от одного пользователя. */
+export const DICT_REQUEST_RATE_LIMIT: RateLimit = {
+  kind: 'dict_request',
+  max: DICT_REQUEST_HOURLY_LIMIT,
+  windowSeconds: 3600,
+};
+
+/**
+ * Отправить запрос; больше `DICT_REQUEST_HOURLY_LIMIT` за час от пользователя — 429
+ * `dict_request_rate`, чтобы запросами не завалили «Запросы» администратора. Попытка с неверными
+ * данными (400) в счёт не идёт: тело проверено раньше.
+ */
 export function createDictRequestHandler(
   deps: ApiDeps,
 ): RouteHandler<typeof createDictRequestRoute, AppEnv> {
   return async (c) => {
     const body = c.req.valid('json');
+    const userId = c.get('session')!.userId;
+    const take = await takeRateLimit(deps.db, DICT_REQUEST_RATE_LIMIT, userId);
+    if (!take.ok) {
+      apiFail(
+        429,
+        'dict_request_rate',
+        `Не больше ${DICT_REQUEST_HOURLY_LIMIT} запросов за час. Попробуйте позже.`,
+        { n: DICT_REQUEST_HOURLY_LIMIT },
+      );
+    }
     const created = await withOrgContext(deps.db, orgContextOf(c), (tx) =>
       createDictRequest(tx, { dict: body.dict, what: body.what, comment: body.comment ?? '' }),
     );

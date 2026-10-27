@@ -156,7 +156,8 @@ export const PlatformValueRow = z.object({
   dictName: z.string(),
   name: z.string(),
   audit: z.object({
-    /** Даты появления значения у справочников платформы нет. */
+    /** Когда администратор добавил значение; у значений из наполнения — нет. */
+    createdAt: z.iso.datetime().nullable(),
     updatedAt: z.iso.datetime().nullable(),
     createdBy: z.string().nullable(),
     updatedBy: z.string().nullable(),
