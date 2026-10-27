@@ -86,6 +86,16 @@ export const DICT_NOTE_MAX = 2000;
 /** Не больше телефонов у органа. */
 export const ORGAN_CONTACTS_MAX = 20;
 
+/**
+ * Сайт органа — адрес с `https://`: у организации он открывается ссылкой в новой вкладке (ТЗ), а
+ * ссылкой окно органа делает только адрес с протоколом. «sti.gov.kg» → «https://sti.gov.kg».
+ */
+export function organSiteUrl(site: string): string {
+  // ОТКЛОНЕНИЕ: docs/deviations.md#Д-4
+  const s = site.trim();
+  return s && !/^https?:\/\//i.test(s) ? `https://${s}` : s;
+}
+
 /** Значение, с которым сверяется новое: код, название и код ГНС (у УГНС). */
 export interface DictValueKey {
   code: string;

@@ -13,7 +13,7 @@ type Value = {
   name: string;
   used: number;
   version: number;
-  data: { gnsCode?: string | null };
+  data: { gnsCode?: string | null; site?: string };
 };
 
 /** Значения справочника через API администратора. */
@@ -95,6 +95,8 @@ test.describe('Админка: справочники платформы', () =>
       await dialog.getByLabel('Название').fill(name);
       await dialog.getByRole('button', { name: 'Добавить телефон' }).click();
       await dialog.getByLabel('Подпись').fill('Приёмная');
+      await dialog.getByRole('button', { name: 'Сохранить' }).click();
+      await expect(dialog.getByText('Введите номер')).toBeVisible();
       await dialog.getByLabel('Номер').fill('+996 312 62 05 10');
       await dialog.getByLabel('Сайт').fill('mineconom.gov.kg');
       await dialog.getByRole('button', { name: 'Сохранить' }).click();
@@ -103,6 +105,8 @@ test.describe('Админка: справочники платформы', () =>
 
       const created = (await values(page.request, 'organs')).find((x) => x.name === name)!;
       expect(created.n).toBe(before.length + 1);
+      // Сайт без протокола сохраняется с https:// — у организации он открывается ссылкой.
+      expect(created.data.site).toBe('https://mineconom.gov.kg');
       let found = await row(page, isMobile, name, created.code);
       // «№» — первый столбец таблицы (вид закреплён: «Таблица» и на телефоне, как в прототипе).
       const n = found.locator('td').first();
@@ -201,7 +205,7 @@ test.describe('Админка: справочники платформы', () =>
     }
   });
 
-  test('(проверка задачи #92) «Запросы»: отказ без ответа — ошибка; ответ виден организации в «Моих запросах»', async ({
+  test('(проверка задачи #92) «Запросы»: отказ без ответа — ошибка, «Добавлено» — без ответа; статус и ответ видны организации в «Моих запросах»', async ({
     page,
     baseURL,
     isMobile,
@@ -211,12 +215,18 @@ test.describe('Админка: справочники платформы', () =>
     const org = await playwright.request.newContext({ baseURL });
     await signIn(org, origin, 'erkin', DEMO_PASSWORD);
     const what = `Фонд ${testInfo.project.name} ${Date.now()}`;
-    const sent = await org.post('/api/dict-requests', {
-      headers: { origin },
-      data: { dict: 'forms', what, comment: 'Для НКО' },
-    });
-    expect(sent.status(), await sent.text()).toBe(201);
-    const { id } = (await sent.json()) as { id: string };
+    const ask = async (text: string, comment: string) => {
+      const sent = await org.post('/api/dict-requests', {
+        headers: { origin },
+        data: { dict: 'forms', what: text, comment },
+      });
+      expect(sent.status(), await sent.text()).toBe(201);
+      return ((await sent.json()) as { id: string }).id;
+    };
+    const id = await ask(what, 'Для НКО');
+    const added = `Учреждение ${testInfo.project.name} ${Date.now()}`;
+    const addedId = await ask(added, '');
+    await org.dispose();
 
     await platformAdmin(page.request, origin);
     await page.goto('/app/pdicts/requests');
@@ -241,13 +251,24 @@ test.describe('Админка: справочники платформы', () =>
     await expect(view).toContainText('Это не форма собственности');
     await view.getByRole('button', { name: 'Готово' }).click();
 
-    const mine = (await (await org.get('/api/dict-requests')).json()) as {
-      items: { id: string; status: string; answer: string }[];
-    };
-    expect(mine.items.find((r) => r.id === id)).toMatchObject({
-      status: 'rejected',
-      answer: 'Это не форма собственности',
-    });
-    await org.dispose();
+    // «Добавлено» — ответ по желанию.
+    const done = await row(page, isMobile, added, addedId);
+    await (await rowAction(page, done, 'Добавлено')).click();
+    const yes = page.getByRole('dialog', { name: 'Запрос выполнен' });
+    await yes.getByRole('button', { name: 'Отметить добавленным' }).click();
+    await expect(yes).toBeHidden();
+    await expect(done).toContainText('Добавлено');
+
+    // Организация видит статус и ответ в окне «Мои запросы».
+    await signIn(page.request, origin, 'erkin', DEMO_PASSWORD);
+    await page.goto('/app/dicts/platform');
+    await page.getByRole('button', { name: 'Мои запросы' }).click();
+    const mine = page.getByRole('dialog', { name: 'Мои запросы' });
+    const rejected = mine.locator('[data-mini-table] tr').filter({ hasText: what });
+    await expect(rejected).toContainText('Отклонено');
+    await expect(rejected).toContainText('Это не форма собственности');
+    await expect(mine.locator('[data-mini-table] tr').filter({ hasText: added })).toContainText(
+      'Добавлено',
+    );
   });
 });

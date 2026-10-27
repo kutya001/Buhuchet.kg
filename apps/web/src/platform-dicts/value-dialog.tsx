@@ -286,31 +286,49 @@ export function ValueDialog({
               <legend className="mb-[5px] p-0 text-[12px] font-semibold tracking-[.01em] text-muted">
                 {t('pdicts.col.contacts')}
               </legend>
-              {contacts.fields.map((f, i) => (
-                <div key={f.id} data-contact className="flex items-center gap-2">
-                  <input
-                    {...register(`contacts.${i}.label`)}
-                    aria-label={t('pdicts.organ.contact_label')}
-                    placeholder={t('pdicts.organ.contact_label_ph')}
-                    className={`${inputClass({ full: false })} w-[40%] min-w-0`}
-                  />
-                  <input
-                    {...register(`contacts.${i}.value`)}
-                    aria-label={t('pdicts.organ.contact_value')}
-                    inputMode="tel"
-                    className={`${inputClass({ full: false })} min-w-0 grow`}
-                  />
-                  <button
-                    type="button"
-                    className={iconButtonClass()}
-                    aria-label={t('pdicts.organ.contact_remove')}
-                    title={t('pdicts.organ.contact_remove')}
-                    onClick={() => contacts.remove(i)}
-                  >
-                    <Icon name="x" />
-                  </button>
-                </div>
-              ))}
+              {contacts.fields.map((f, i) => {
+                const error = fieldError(t, errors.contacts?.[i]?.value);
+                const errorId = `${id}-contact-${i}-err`;
+                return (
+                  <div key={f.id} data-contact className="flex flex-col gap-1">
+                    <div className="flex items-center gap-2">
+                      <input
+                        {...register(`contacts.${i}.label`)}
+                        aria-label={t('pdicts.organ.contact_label')}
+                        placeholder={t('pdicts.organ.contact_label_ph')}
+                        className={`${inputClass({ full: false })} w-[40%] min-w-0`}
+                      />
+                      <input
+                        {...register(`contacts.${i}.value`)}
+                        aria-label={t('pdicts.organ.contact_value')}
+                        inputMode="tel"
+                        {...(error
+                          ? { 'aria-invalid': true as const, 'aria-describedby': errorId }
+                          : {})}
+                        className={`${inputClass({ full: false })} min-w-0 grow`}
+                      />
+                      <button
+                        type="button"
+                        className={iconButtonClass()}
+                        aria-label={t('pdicts.organ.contact_remove')}
+                        title={t('pdicts.organ.contact_remove')}
+                        onClick={() => contacts.remove(i)}
+                      >
+                        <Icon name="x" />
+                      </button>
+                    </div>
+                    {error ? (
+                      <div
+                        id={errorId}
+                        className="flex items-start gap-[5px] text-[12px] text-danger"
+                      >
+                        <Icon name="alert" size="sm" className="mt-px" />
+                        <span>{error}</span>
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
               <div className="flex items-center gap-2">
                 <button
                   type="button"

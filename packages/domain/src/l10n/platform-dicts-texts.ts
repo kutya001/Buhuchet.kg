@@ -123,6 +123,7 @@ export const PLATFORM_DICTS_TEXTS = {
   'pdicts.err.ugns_code': { ru: 'Ровно три цифры', section: E },
   'pdicts.err.ugns_code_taken': { ru: 'Такой код уже есть', section: E },
   'pdicts.err.short_required': { ru: 'Введите краткое название', section: E },
+  'pdicts.err.phone_required': { ru: 'Введите номер', section: E },
   'err.dict_value_used': {
     ru: 'Значение используется в {n} записях — его можно только отключить',
     section: E,

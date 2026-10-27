@@ -346,6 +346,7 @@ export function createDictRequestHandler(
   return async (c) => {
     const body = c.req.valid('json');
     const userId = c.get('session')!.userId;
+    // ОТКЛОНЕНИЕ: docs/deviations.md#Д-4 — не больше 20 запросов в час от пользователя.
     const take = await takeRateLimit(deps.db, DICT_REQUEST_RATE_LIMIT, userId);
     if (!take.ok) {
       apiFail(

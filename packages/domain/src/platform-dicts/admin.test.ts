@@ -6,6 +6,7 @@ import {
   dictValueProblems,
   isAdminValueDict,
   nextDictCode,
+  organSiteUrl,
   UGNS_CODE_PATTERN,
 } from './admin';
 
@@ -84,5 +85,14 @@ describe('ADMIN_DICT_META', () => {
     expect(UGNS_CODE_PATTERN.test('002')).toBe(true);
     expect(UGNS_CODE_PATTERN.test('02')).toBe(false);
     expect(UGNS_CODE_PATTERN.test('0021')).toBe(false);
+  });
+});
+
+describe('organSiteUrl', () => {
+  it('без протокола — дописывает https://; с протоколом и пустой — как есть', () => {
+    expect(organSiteUrl(' sti.gov.kg ')).toBe('https://sti.gov.kg');
+    expect(organSiteUrl('http://sf.gov.kg')).toBe('http://sf.gov.kg');
+    expect(organSiteUrl('HTTPS://sf.gov.kg/')).toBe('HTTPS://sf.gov.kg/');
+    expect(organSiteUrl('')).toBe('');
   });
 });

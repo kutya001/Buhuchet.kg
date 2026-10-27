@@ -122,9 +122,19 @@ describe.skipIf(!databaseAvailable())('Админка → «Справочник
       active: true,
       used: 0,
       version: 1,
-      data: { contacts: [{ label: 'Приёмная', value: '+996 312 62 05 10' }] },
+      data: {
+        contacts: [{ label: 'Приёмная', value: '+996 312 62 05 10' }],
+        site: 'https://mineconom.gov.kg',
+      },
     });
     expect(created.audit.createdAt).not.toBeNull();
+
+    // Подпись без номера — ошибка под номером, ничего не записано.
+    const noPhone = await send('POST', `${P}/organs`, {
+      name: 'Минтруд',
+      contacts: [{ label: 'Приёмная', value: ' ' }],
+    });
+    expect([noPhone.status, (await errorOf(noPhone)).code]).toEqual([400, 'validation_failed']);
 
     const taken = await send('POST', `${P}/organs`, { name: 'Минэкономики' });
     expect(taken.status).toBe(400);

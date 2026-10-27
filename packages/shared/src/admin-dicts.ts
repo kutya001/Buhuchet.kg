@@ -8,6 +8,7 @@ import {
   DICT_REQUEST_DICTS,
   DICT_REQUEST_STATUSES,
   ORGAN_CONTACTS_MAX,
+  organSiteUrl,
   UGNS_CODE_PATTERN,
   type UiTextKey,
 } from '@buhuchet/domain';
@@ -87,12 +88,19 @@ export const AdminDictValueForm = z.object({
   declarationFor: z.enum(DECLARATION_FOR).optional(),
   note: text(DICT_NOTE_MAX).optional(),
   description: text(DICT_NOTE_MAX).optional(),
+  // Строка телефона с подписью — с номером; пустые строки сервер не сохраняет.
+  // ОТКЛОНЕНИЕ: docs/deviations.md#Д-4
   contacts: z
-    .array(z.object({ label: text(100), value: text(100) }))
+    .array(
+      z.object({ label: text(100), value: text(100) }).refine((c) => !c.label || c.value, {
+        path: ['value'],
+        ...message('pdicts.err.phone_required'),
+      }),
+    )
     .max(ORGAN_CONTACTS_MAX)
     .optional(),
   hours: text(300).optional(),
-  site: text(300).optional(),
+  site: text(300).transform(organSiteUrl).optional(),
   contactsNote: text(300).optional(),
   gnsCode: z
     .string()
