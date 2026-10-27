@@ -17,6 +17,7 @@ export function CountBadge({ count, className = '' }: { count: ShellCount; class
   return (
     <span
       title={count.title}
+      data-tone={tone}
       className={`min-w-5 flex-none rounded-full px-1.5 text-center text-[11px] leading-[18px] font-[650] tabular-nums ${TONES[tone]} ${className}`}
     >
       {count.value}
@@ -49,6 +50,7 @@ export function NavDot({
       title={title}
       aria-label={title}
       role={title ? 'img' : undefined}
+      data-tone={tone}
       className={`h-2 w-2 flex-none rounded-full ${DOT_TONES[tone]} ${className}`}
     />
   );

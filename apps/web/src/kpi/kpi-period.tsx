@@ -71,7 +71,11 @@ function periodColumns(
       label: monthShortName(t, m),
       type: 'money',
       width: 105,
-      text: (r) => numberText(r.type, r.values[j] ?? null),
+      // «пусто» и в тексте: на телефоне карточка показывает ячейку только с непустым текстом.
+      text: (r) => {
+        const v = r.values[j] ?? null;
+        return v === null && r.needed[j] ? t('kpi.empty') : numberText(r.type, v);
+      },
       cell: (r) => {
         const v = r.values[j] ?? null;
         const empty = v === null && r.needed[j] && m < current;

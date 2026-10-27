@@ -131,6 +131,8 @@ export function ValueInput({
           return;
         }
         if (onMove(r, c, e.key, e.currentTarget)) e.preventDefault();
+        // Enter в последней строке: ниже ячейки нет — сохранить, как «change» поля в прототипе.
+        else if (e.key === 'Enter') commit();
       }}
       onPaste={(e: ClipboardEvent<HTMLInputElement>) => {
         const block = pasteBlock(e.clipboardData.getData('text'));
