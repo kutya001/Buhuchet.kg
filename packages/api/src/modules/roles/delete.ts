@@ -5,6 +5,7 @@ import {
   lockRole,
   roleInUse,
   rolePermissionIds,
+  roleScopeMap,
   withOrgContext,
 } from '@buhuchet/db';
 import { RecordChangedError, RecordNotFoundError, roleDeleteRefusal } from '@buhuchet/domain';
@@ -18,7 +19,9 @@ import { error } from './roles';
 
 const DELETE_REFUSALS = {
   owner_role: 'Роль владельца не удаляется',
+  own_role: 'Свою роль удаляет владелец',
   owner_granted_role: 'Роль с правами, которые выдаёт только владелец, удаляет владелец',
+  beyond_own_role: 'Роль с правами шире ваших удаляет владелец',
 } as const;
 
 const ROLE_IN_USE = apiError('role_in_use', 'Роль назначена сотрудникам: сначала смените им роль');
@@ -38,7 +41,8 @@ export const deleteRoleRoute = createRoute({
     },
     401: { description: 'Нет входа', content: error },
     403: {
-      description: 'Нет права; роль владельца или роль с правами, которые выдаёт только владелец',
+      description:
+        'Нет права; роль владельца, своя роль, роль с правами, которые выдаёт только владелец, или шире ваших',
       content: error,
     },
     ...versionedSaveResponses,
@@ -48,8 +52,8 @@ export const deleteRoleRoute = createRoute({
 /**
  * Удаление неиспользуемой роли (задача #7; в прототипе кнопки нет — docs/deviations.md, п. 16): не
  * роль владельца, нет сотрудников с ней, даже заблокированных, и её не получают новые сотрудники
- * («Моя организация» → «Настройки»). Роль с правами, которые выдаёт только владелец, удаляет только владелец — как и
- * меняет (docs/deviations.md, п. 15). Права и область удаляются вместе с ролью, удаление — в истории.
+ * («Моя организация» → «Настройки»). Свою роль, роль с правами, которые выдаёт только владелец, и роль
+ * шире своей удаляет только владелец — как и меняет (`roleDeleteRefusal`, docs/deviations.md, п. 15). Права и область удаляются вместе с ролью, удаление — в истории.
  */
 export function deleteRoleHandler(deps: ApiDeps): RouteHandler<typeof deleteRoleRoute, AppEnv> {
   return async (c) => {
@@ -62,7 +66,13 @@ export function deleteRoleHandler(deps: ApiDeps): RouteHandler<typeof deleteRole
         if (!role) throw new RecordNotFoundError('role', id);
         if (role.version !== version) throw new RecordChangedError('role', id, role.version);
         const permissions = role.isOwner ? [] : await rolePermissionIds(tx, id);
-        const refusal = roleDeleteRefusal(actor, { isOwner: role.isOwner, permissions });
+        const scopes = await roleScopeMap(tx, id);
+        const refusal = roleDeleteRefusal(actor, {
+          id,
+          isOwner: role.isOwner,
+          permissions,
+          scopes,
+        });
         if (refusal) apiFail(403, refusal, DELETE_REFUSALS[refusal], { variant: 'delete' });
         const inUse = await roleInUse(tx, id);
         if (inUse === 'employees') apiFail(400, ROLE_IN_USE.error.code, ROLE_IN_USE.error.message);

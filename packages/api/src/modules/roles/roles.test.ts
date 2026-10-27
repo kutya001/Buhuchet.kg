@@ -1,6 +1,6 @@
 import { schema } from '@buhuchet/db';
 import { databaseAvailable } from '@buhuchet/db/testing';
-import { PERMISSIONS, PERMISSION_IDS, SCOPE_GROUPS } from '@buhuchet/domain';
+import { PERMISSIONS, PERMISSION_IDS, SCOPE_GROUPS, UI_TEXTS } from '@buhuchet/domain';
 import {
   ApiError,
   ListValues,
@@ -146,6 +146,28 @@ describe.skipIf(!databaseAvailable())('Роли: API', () => {
       expect(texts).toContain('Кадры');
       const fileB = await call('GET', `/api/roles/export?${params}`, ownerB);
       expect(fileB.headers.get('x-export-rows')).toBe('3');
+    });
+
+    it('не владельцу своя роль, роли с правами «выдаёт только владелец» и шире своей — только для чтения', async () => {
+      const readOnly = async (cookie: string) => {
+        const res = await call('GET', '/api/roles?size=all', cookie);
+        expect(res.status).toBe(200);
+        const { items } = RoleList.parse(await res.json());
+        return Object.fromEntries(items.map((r) => [r.name, r.readOnly]));
+      };
+      expect(await readOnly(hr)).toMatchObject({
+        'Владелец организации': null,
+        'Главный бухгалтер': 'beyond_own_role',
+        Бухгалтер: null,
+        Кадры: 'own_role',
+        Старший: 'owner_granted_role',
+      });
+      expect(Object.values(await readOnly(owner)).every((v) => v === null)).toBe(true);
+      expect(await role(f.templateRole(f.a, 'chief'), hr)).toMatchObject({
+        readOnly: 'beyond_own_role',
+      });
+      expect(await role(f.roleIds.hr, hr)).toMatchObject({ readOnly: 'own_role' });
+      expect(await role(f.templateRole(f.a, 'acc'), hr)).toMatchObject({ readOnly: null });
     });
 
     it('без права «Сотрудники и роли» роли и справочник прав не отдаются', async () => {
@@ -481,6 +503,49 @@ describe.skipIf(!databaseAvailable())('Роли: API', () => {
         scopes: { cps: 'all' },
       });
       expect(wide.status).toBe(200);
+    });
+
+    it('роль шире своей и свою роль не владелец не меняет и не удаляет', async () => {
+      const chiefRole = await role(f.templateRole(f.a, 'chief'));
+      for (const body of [{ name: 'Главный (переименован)' }, { permissions: ['cpView'] }]) {
+        const res = await call('PATCH', `/api/roles/${chiefRole.id}`, hr, {
+          version: chiefRole.version,
+          ...body,
+        });
+        expect(res.status).toBe(403);
+        expect(await apiErr(res)).toEqual({
+          code: 'beyond_own_role',
+          message: 'Роль с правами шире ваших меняет владелец',
+        });
+      }
+      const wide = await call(
+        'DELETE',
+        `/api/roles/${chiefRole.id}?version=${chiefRole.version}`,
+        hr,
+      );
+      expect(wide.status).toBe(403);
+      expect(await apiErr(wide)).toEqual({
+        code: 'beyond_own_role',
+        message: 'Роль с правами шире ваших удаляет владелец',
+        details: { variant: 'delete' },
+      });
+      const ownRole = await role(f.roleIds.hr);
+      const own = await call('DELETE', `/api/roles/${ownRole.id}?version=${ownRole.version}`, hr);
+      expect(own.status).toBe(403);
+      expect(await apiErr(own)).toEqual({
+        code: 'own_role',
+        message: 'Свою роль удаляет владелец',
+        details: { variant: 'delete' },
+      });
+      // Экран берёт тексты из словаря: err.<код>.delete и roles.err.<код> — те же, что у сервера.
+      expect(UI_TEXTS['err.beyond_own_role.delete'].ru).toBe(
+        'Роль с правами шире ваших удаляет владелец',
+      );
+      expect(UI_TEXTS['err.own_role.delete'].ru).toBe('Свою роль удаляет владелец');
+      expect(await role(chiefRole.id)).toMatchObject({
+        name: chiefRole.name,
+        version: chiefRole.version,
+      });
     });
 
     it('устаревшая версия — 409, правка не затирает чужую; занятое название — 400', async () => {

@@ -29,10 +29,22 @@ import { useForm } from 'react-hook-form';
 import { api, callApi } from '../api-client';
 import { fieldError } from '../auth/fields';
 import { useErrorText, useT } from '../l10n/provider';
+import { useShell } from '../shell/context';
 import { suggestTemporaryPassword } from './temp-password';
 
-/** Роли, которые можно назначить: все, кроме роли владельца организации (прототип `r.id!=='owner'`). */
-const assignable = (roles: readonly RoleListItem[]) => roles.filter((r) => !r.isOwner);
+/**
+ * Роли, которые можно назначить (прототип core/org.js, rolesAssignable): не роль владельца
+ * организации и не роль, которую смотрящий видит только для чтения — свою, с правами «выдаёт только
+ * владелец» и шире своей (ТЗ, решение заказчика 27.10.2026).
+ */
+export const assignable = (roles: readonly RoleListItem[]) =>
+  roles.filter((r) => !r.isOwner && !r.readOnly);
+
+/** Подсказка под «Роль» у не владельца: каких ролей в списке нет и почему. */
+function useRoleHint(): string | undefined {
+  const t = useT();
+  return useShell().editor?.isOwner ? undefined : t('staff.role.hint');
+}
 
 /** Отказы сервера в роли — ошибка под полем «Роль». */
 const ROLE_CODES = new Set([
@@ -44,8 +56,8 @@ const ROLE_CODES = new Set([
 ]);
 
 /**
- * «Сменить роль» (прототип modules/staff.js, empActions): одно поле «Роль» без роли владельца и
- * «Сохранить». Роль действует со следующего запроса сотрудника. Отказ сервера (своя роль, роль с
+ * «Сменить роль» (прототип modules/staff.js, empActions): одно поле «Роль» (`assignable`, у не
+ * владельца — с подсказкой, каких ролей нет) и «Сохранить». Роль действует со следующего запроса сотрудника. Отказ сервера (своя роль, роль с
  * правами, которые выдаёт только владелец, или шире ваших) — под полем; запись изменили другие —
  * «Запись изменена другим пользователем» и «Перечитать».
  */
@@ -66,6 +78,7 @@ export function ChangeRoleDialog({
   const toast = useToast();
   const errorText = useErrorText();
   const id = useId();
+  const roleHint = useRoleHint();
   const [current, setCurrent] = useState(employee);
   const [roleId, setRoleId] = useState(employee.role.id);
   const [error, setError] = useState<string | undefined>();
@@ -135,7 +148,7 @@ export function ChangeRoleDialog({
           reloading={busy}
         />
       ) : null}
-      <Field id={`${id}-role`} label={t('staff.col.role')} error={error}>
+      <Field id={`${id}-role`} label={t('staff.col.role')} hint={roleHint} error={error}>
         {(control) => (
           <select
             {...control}
@@ -185,6 +198,7 @@ export function NewEmployeeDialog({
   const toast = useToast();
   const errorText = useErrorText();
   const id = useId();
+  const roleHint = useRoleHint();
   const options = assignable(roles);
   const [initial] = useState(() => {
     const role = options.find((r) => r.id === defaultRoleId) ?? options[0];
@@ -343,6 +357,7 @@ export function NewEmployeeDialog({
             id={`${id}-role`}
             label={t('staff.col.role')}
             required
+            hint={roleHint}
             error={fieldError(t, errors.roleId)}
           >
             {(control) => (

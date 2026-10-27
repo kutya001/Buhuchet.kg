@@ -53,7 +53,7 @@ export function createRoleHandler(deps: ApiDeps): RouteHandler<typeof createRole
         });
         return (await getRole(tx, id))!;
       });
-      return c.json(roleBody(role), 201);
+      return c.json(roleBody(role, actor), 201);
     } catch (err) {
       if (uniqueViolation(err) === 'roles_org_name_unique') return c.json(ROLE_NAME_TAKEN, 400);
       throw err;

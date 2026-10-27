@@ -104,6 +104,17 @@ describe('Segments — переключатель (прототип .seg, .seg.s
     buttons[1]!.props.onClick();
     expect(got).toBe('all');
   });
+
+  it('закрытый выбор — кнопки неактивны', () => {
+    const html = renderToStaticMarkup(
+      <Segments options={options} value="own" onChange={() => {}} label="Область" disabled />,
+    );
+    expect(html.match(/<button[^>]*disabled=""/g)).toHaveLength(2);
+    const open = renderToStaticMarkup(
+      <Segments options={options} value="own" onChange={() => {}} label="Область" />,
+    );
+    expect(open).not.toContain('disabled=""');
+  });
 });
 
 describe('MiniTable — маленькая таблица карточки (прототип table.mini.m-cards)', () => {

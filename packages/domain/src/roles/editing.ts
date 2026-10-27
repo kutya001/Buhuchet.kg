@@ -73,13 +73,16 @@ export type RoleChangeLock =
   /** Право, которого нет у того, кто правит: больше своих прав не выдают. */
   | 'beyond_own'
   /** Область «Все контрагенты» в группе, где у того, кто правит, — «Свои». */
-  | 'beyond_own_scope';
+  | 'beyond_own_scope'
+  /** Роль шире прав того, кто правит: её меняет только владелец (ТЗ, решение заказчика 27.10.2026). */
+  | 'beyond_own_role';
 
 export const ROLE_CHANGE_MESSAGES: Record<RoleChangeLock, string> = {
   ...ROLE_LOCK_MESSAGES,
   owner_granted_role: 'Роль с правами, которые выдаёт только владелец, меняет владелец',
   beyond_own: 'Можно выдать только те права, что есть у вас',
   beyond_own_scope: 'Область «Все контрагенты» можно дать только там, где она есть у вас',
+  beyond_own_role: 'Роль с правами шире ваших меняет владелец',
 };
 
 /** Кто сохраняет роль: кроме своей роли — его действующие права и область (`AccessSubject`). */
@@ -123,8 +126,9 @@ function seesAll(holder: AccessSubject, group: ScopeGroupId): boolean {
  * право и не действует (`hasPermission`), так что снять его можно.
  *
  * Сверх прототипа сотруднику не владельцу (ОТКЛОНЕНИЕ: docs/deviations.md#15): роль с правами,
- * которые выдаёт только владелец, меняет только владелец — иначе такие права гасили бы снятием
- * просмотра группы, а двое их носителей расширяли бы роли друг другу. И он не выдаёт больше, чем есть
+ * которые выдаёт только владелец, и роль шире его собственной меняет только владелец (`roleReadOnly`)
+ * — иначе такие права гасили бы снятием просмотра группы, а двое их носителей расширяли бы роли друг
+ * другу. И он не выдаёт больше, чем есть
  * у него самого: каждое право, которое после правки начинает действовать у носителей роли (и то, что
  * оживает, когда в роль возвращают просмотр группы), должно действовать у него; область «Все
  * контрагенты» он ставит и делает действующей только в группе, где она есть у него. Иначе через роль
@@ -137,12 +141,13 @@ export function roleChangeProblem(
   after: RoleDraft,
 ): RoleChangeProblem | null {
   if (role.isOwner) return { lock: 'owner_role' };
-  if (!editor.isOwner) {
-    if (editor.roleId === role.id) return { lock: 'own_role' };
-    if (hasOwnerGrantedPermission({ isOwner: false, permissions: before.permissions })) {
-      return { lock: 'owner_granted_role' };
-    }
-  }
+  const readOnly = roleReadOnly(editor, {
+    id: role.id,
+    isOwner: false,
+    permissions: [...before.permissions],
+    scopes: before.scopes,
+  });
+  if (readOnly) return { lock: readOnly };
   for (const permission of PERMISSION_IDS) {
     if (!after.permissions.has(permission) || before.permissions.has(permission)) continue;
     const lock = rolePermissionLock(editor, role, permission, after.permissions);
@@ -186,6 +191,54 @@ export function roleWithinRights(subject: AccessSubject, role: RoleRights): bool
   return SCOPE_GROUPS.every((g) => !seesAll(holder, g) || seesAll(subject, g));
 }
 
+/** Почему роль открывается не владельцу только для чтения: своя, с правами «выдаёт только владелец», шире своей. */
+export type RoleReadOnly = 'own_role' | 'owner_granted_role' | 'beyond_own_role';
+
+/**
+ * Можно ли сотруднику не владельцу менять и удалять роль (ТЗ «Сотрудники → Роли», решение заказчика
+ * 27.10.2026; прототип core/org.js, roleEditOff и roleAssignOff): свою роль, роль с правами, которые
+ * выдаёт только владелец, и роль шире своей (`roleWithinRights`) он видит только для чтения. Владельцу
+ * можно любую роль; роль владельца не меняется никем — это `owner_role` у `roleChangeProblem`.
+ */
+export function roleReadOnly(
+  editor: RoleSaveEditor,
+  role: { id: string } & RoleRights,
+): RoleReadOnly | null {
+  if (editor.isOwner || role.isOwner) return null;
+  if (editor.roleId === role.id) return 'own_role';
+  if (hasOwnerGrantedPermission(role)) return 'owner_granted_role';
+  return roleWithinRights(editor.subject, role) ? null : 'beyond_own_role';
+}
+
+/** Почему галочку права в форме роли менять нельзя: причины `rolePermissionLock` и право не своей роли. */
+export type RoleFormLock = RoleLock | 'not_own';
+
+/**
+ * Галочка права в форме роли (прототип core/org.js, roleLock): причины `rolePermissionLock`, а у
+ * сотрудника не владельца ещё и право, которого у него нет, — «Этого права нет у вашей роли»; на
+ * сохранении то же проверяет `roleChangeProblem` (`beyond_own`).
+ */
+export function roleFormLock(
+  editor: RoleSaveEditor,
+  role: EditedRole,
+  permission: PermissionId,
+  selected?: ReadonlySet<PermissionId>,
+): RoleFormLock | null {
+  const lock = rolePermissionLock(editor, role, permission, selected);
+  if (lock || editor.isOwner) return lock;
+  return hasPermission(editor.subject, permission) ? null : 'not_own';
+}
+
+/**
+ * Переключатель «Свои / Все контрагенты» группы в форме роли (прототип core/org.js, roleScopeOff): у
+ * сотрудника не владельца — только в группе, где «Все контрагенты» действует у него самого; иначе
+ * «Все контрагенты» нет у вашей роли». На сохранении то же проверяет `roleChangeProblem`
+ * (`beyond_own_scope`).
+ */
+export function roleScopeLock(editor: RoleSaveEditor, group: ScopeGroupId): 'not_own_scope' | null {
+  return editor.isOwner || seesAll(editor.subject, group) ? null : 'not_own_scope';
+}
+
 /**
  * Права новой роли из роли-образца («Скопировать права из», прототип modules/staff.js, roleAddDlg):
  * без прав только владельца, а у сотрудника не владельца — и без прав, которые выдаёт только
@@ -207,16 +260,17 @@ export function copiedRolePermissions(
 }
 
 /**
- * Можно ли удалить роль по её правам (удаления в прототипе нет — docs/deviations.md, п. 16): роль
- * владельца не удаляется; роль с правами, которые выдаёт только владелец, удаляет только он — как и
- * меняет (ОТКЛОНЕНИЕ: docs/deviations.md#15). Сотрудники с ролью и учётная политика проверяются в базе.
+ * Можно ли удалить роль по её правам (docs/deviations.md, п. 16): роль владельца не удаляется; роль,
+ * которая не владельцу открывается только для чтения (своя, с правами «выдаёт только владелец», шире
+ * своей — `roleReadOnly`), удаляет только владелец — как и меняет. Сотрудники с ролью и учётная
+ * политика проверяются в базе.
  */
 export function roleDeleteRefusal(
-  editor: Pick<RoleEditor, 'isOwner'>,
-  role: { isOwner: boolean; permissions: Iterable<PermissionId> },
-): 'owner_role' | 'owner_granted_role' | null {
+  editor: RoleSaveEditor,
+  role: { id: string } & RoleRights,
+): 'owner_role' | RoleReadOnly | null {
   if (role.isOwner) return 'owner_role';
-  return !editor.isOwner && hasOwnerGrantedPermission(role) ? 'owner_granted_role' : null;
+  return roleReadOnly(editor, role);
 }
 
 /** Есть ли среди прав роли те, что выдаёт и снимает только владелец. */

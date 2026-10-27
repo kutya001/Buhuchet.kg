@@ -50,6 +50,12 @@ export const Employee = z.object({
   role: z.object({ id: Uuid, name: z.string(), isOwner: z.boolean() }),
   /** Нет — заблокирован: не входит, сеансы закрыты. */
   active: z.boolean(),
+  /**
+   * Может ли тот, кто смотрит, сменить роль, сбросить пароль, заблокировать и разблокировать
+   * сотрудника (`staffManageable`; ТЗ, решение заказчика 27.10.2026: недоступные кнопки скрыты). Без
+   * права «Сотрудники и роли» — нет.
+   */
+  manageable: z.boolean(),
   /** Привязанный Telegram; null — не привязан. */
   telegram: TelegramInfo.nullable(),
   /** null — ещё не входил. */

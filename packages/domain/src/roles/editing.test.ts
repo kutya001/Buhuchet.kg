@@ -9,7 +9,10 @@ import {
   roleChangeProblem,
   rolePermissionCount,
   roleDeleteRefusal,
+  roleFormLock,
   rolePermissionLock,
+  roleReadOnly,
+  roleScopeLock,
   roleWithinRights,
   type RoleLock,
 } from './editing';
@@ -187,7 +190,7 @@ describe('roleChangeProblem — сохранение роли на сервер�
       ...hr,
       subject: { ...hrSubject, scopes: { cps: 'all' as const, fin: 'all' as const } },
     };
-    expect(change(blind, accRole, set('finView'), set('finView'), { fin: 'all' })).toEqual({
+    expect(change(blind, accRole, set(), set(), { fin: 'all' })).toEqual({
       lock: 'beyond_own_scope',
       group: 'fin',
     });
@@ -214,7 +217,15 @@ describe('roleChangeProblem — сохранение роли на сервер�
 
   it('снять право можно, права группы без просмотра остаются и не действуют', () => {
     expect(change(hr, accRole, set('cpView', 'createCp'), set('createCp'))).toBeNull();
-    expect(change(hr, accRole, set('finView', 'money'), set())).toBeNull();
+    expect(change(hr, accRole, set('cpView', 'money'), set('cpView'))).toBeNull();
+  });
+
+  it('роль шире своей не владелец не меняет вовсе — ни снять право, ни переименовать', () => {
+    const problem = { lock: 'beyond_own_role' };
+    expect(change(hr, accRole, set('finView', 'money'), set())).toEqual(problem);
+    expect(change(hr, accRole, set('finView'), set('finView'))).toEqual(problem);
+    expect(change(hr, accRole, set('repView'), set(), {}, { reports: 'all' })).toEqual(problem);
+    expect(change(owner, accRole, set('finView', 'money'), set())).toBeNull();
   });
 
   it('у каждой причины есть текст', () => {
@@ -223,6 +234,7 @@ describe('roleChangeProblem — сохранение роли на сервер�
       'owner_granted_role',
       'beyond_own',
       'beyond_own_scope',
+      'beyond_own_role',
     ]) {
       expect(ROLE_CHANGE_MESSAGES[lock as keyof typeof ROLE_CHANGE_MESSAGES]).toBeTruthy();
     }
@@ -317,14 +329,68 @@ describe('copiedRolePermissions — «Скопировать права из»',
   });
 });
 
+describe('roleReadOnly — какие роли не владелец видит только для чтения', () => {
+  const role = (id: string, permissions: PermissionId[], scopes = {}) => ({
+    id,
+    isOwner: false,
+    permissions,
+    scopes,
+  });
+
+  it('свою, с правами «выдаёт только владелец» и шире своей; владельцу — все роли', () => {
+    expect(roleReadOnly(hr, role('hr', ['cpView']))).toBe('own_role');
+    expect(roleReadOnly(hr, role('chief', ['cpView', 'rollback']))).toBe('owner_granted_role');
+    expect(roleReadOnly(hr, role('fin', ['finView']))).toBe('beyond_own_role');
+    expect(roleReadOnly(hr, role('rep', ['repView'], { reports: 'all' }))).toBe('beyond_own_role');
+    expect(roleReadOnly(hr, role('acc', ['cpView', 'createCp'], { cps: 'all' }))).toBeNull();
+    // Права группы без её просмотра не действуют — роль не шире.
+    expect(roleReadOnly(hr, role('acc', ['cpView', 'money']))).toBeNull();
+    expect(roleReadOnly(owner, role('owner', ['cpView']))).toBeNull();
+    expect(roleReadOnly(owner, role('chief', ['rollback', 'finView']))).toBeNull();
+    // Роль владельца закрыта для всех своей причиной (`owner_role`).
+    expect(roleReadOnly(hr, { id: 'o', isOwner: true, permissions: [], scopes: {} })).toBeNull();
+  });
+});
+
+describe('roleFormLock и roleScopeLock — галочки и область в форме роли', () => {
+  it('не владельцу закрыты права, которых у него нет; остальные причины — как у rolePermissionLock', () => {
+    expect(roleFormLock(hr, accRole, 'finView')).toBe('not_own');
+    expect(roleFormLock(hr, accRole, 'viewAll')).toBe('not_own');
+    expect(roleFormLock(hr, accRole, 'export')).toBeNull();
+    expect(roleFormLock(hr, accRole, 'rollback')).toBe('owner_granted');
+    expect(roleFormLock(hr, accRole, 'createCp', set())).toBe('view_required');
+    expect(roleFormLock(hr, { id: 'hr', isOwner: false }, 'export')).toBe('own_role');
+    expect(roleFormLock(owner, accRole, 'finView')).toBeNull();
+    expect(roleFormLock(owner, accRole, 'org')).toBe('owner_only');
+  });
+
+  it('«Все контрагенты» — только в группах, где это действует у него самого', () => {
+    expect(roleScopeLock(hr, 'cps')).toBeNull();
+    expect(roleScopeLock(hr, 'reports')).toBe('not_own_scope');
+    expect(roleScopeLock(hr, 'fin')).toBe('not_own_scope');
+    expect(roleScopeLock(owner, 'fin')).toBeNull();
+    const seesAll = { ...hr, subject: { ...hrSubject, permissions: set('repView', 'viewAll') } };
+    expect(roleScopeLock(seesAll, 'reports')).toBeNull();
+  });
+});
+
 describe('roleDeleteRefusal — удаление роли', () => {
-  it('роль владельца не удаляется; роль с правами «выдаёт только владелец» удаляет владелец', () => {
-    expect(roleDeleteRefusal(owner, { isOwner: true, permissions: [] })).toBe('owner_role');
-    expect(roleDeleteRefusal(hr, { isOwner: false, permissions: ['cpView', 'rollback'] })).toBe(
-      'owner_granted_role',
+  const role = (id: string, permissions: PermissionId[]) => ({
+    id,
+    isOwner: false,
+    permissions,
+    scopes: {},
+  });
+
+  it('роль владельца не удаляется; роль только для чтения удаляет владелец', () => {
+    expect(roleDeleteRefusal(owner, { id: 'o', isOwner: true, permissions: [], scopes: {} })).toBe(
+      'owner_role',
     );
-    expect(roleDeleteRefusal(owner, { isOwner: false, permissions: ['rollback'] })).toBeNull();
-    expect(roleDeleteRefusal(hr, { isOwner: false, permissions: ['viewAll'] })).toBeNull();
+    expect(roleDeleteRefusal(hr, role('chief', ['cpView', 'rollback']))).toBe('owner_granted_role');
+    expect(roleDeleteRefusal(hr, role('hr', ['cpView']))).toBe('own_role');
+    expect(roleDeleteRefusal(hr, role('fin', ['finView']))).toBe('beyond_own_role');
+    expect(roleDeleteRefusal(owner, role('chief', ['rollback']))).toBeNull();
+    expect(roleDeleteRefusal(hr, role('acc', ['cpView', 'export']))).toBeNull();
   });
 });
 
@@ -354,6 +420,18 @@ describe('тексты формы роли в словаре', () => {
     for (const [lock, message] of Object.entries(ROLE_CHANGE_MESSAGES)) {
       const key = lock in ROLE_LOCK_MESSAGES ? `roles.lock.${lock}` : `roles.err.${lock}`;
       expect(texts[key]?.ru, key).toBe(message);
+    }
+  });
+
+  it('причины формы сверх сервера и пометка «Только для чтения» — в словаре', () => {
+    for (const key of [
+      'roles.lock.not_own',
+      'roles.lock.not_own_scope',
+      'roles.readonly.own_role',
+      'roles.readonly.owner_granted_role',
+      'roles.readonly.beyond_own_role',
+    ]) {
+      expect(texts[key]?.ru, key).toBeTruthy();
     }
   });
 

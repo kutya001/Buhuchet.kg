@@ -10,6 +10,7 @@ import {
   phoneProblem,
   splitPhone,
   staffActionRefusal,
+  staffManageable,
   type StaffActor,
   type StaffTarget,
 } from './rules';
@@ -180,6 +181,20 @@ describe('действия над сотрудником', () => {
     expect(staffActionRefusal(owner, target('e3', staffRole), 'resetPassword')).toBeNull();
     expect(staffActionRefusal(owner, target('e3', finRole), 'resetPassword')).toBeNull();
     expect(staffActionRefusal(hr, target('e3'), 'resetPassword')).toBeNull();
+  });
+
+  it('кнопки «Сменить роль», «Сбросить пароль», «Заблокировать» — только у тех, кого можно вести', () => {
+    // Владелец организации и сам себе — ни у кого.
+    expect(staffManageable(owner, target('e1', ownerRole))).toBe(false);
+    expect(staffManageable(hr, target('e1', ownerRole))).toBe(false);
+    expect(staffManageable(hr, target('e2'))).toBe(false);
+    // Владелец ведёт всех остальных.
+    expect(staffManageable(owner, target('e3', staffRole))).toBe(true);
+    expect(staffManageable(owner, target('e3', finRole))).toBe(true);
+    // Не владелец — только сотрудников с ролью не шире своей и без прав «выдаёт только владелец».
+    expect(staffManageable(hr, target('e3'))).toBe(true);
+    expect(staffManageable(hr, target('e3', staffRole))).toBe(false);
+    expect(staffManageable(hr, target('e3', finRole))).toBe(false);
   });
 
   it('роль нового сотрудника', () => {

@@ -23,7 +23,7 @@ import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
 import { apiError, apiFail } from '../../errors';
 import { orgContextOf, requirePermission } from '../../middleware/access';
-import { employeeBody, error, refuse, staffActor } from './employees';
+import { employeeOut, error, refuse, staffActor } from './employees';
 
 export const createEmployeeRoute = createRoute({
   method: 'post',
@@ -97,9 +97,9 @@ export function createEmployeeHandler(
           phone,
           role,
         });
-        return (await getEmployee(tx, id))!;
+        return employeeOut(tx, actor, (await getEmployee(tx, id))!);
       });
-      return c.json({ employee: employeeBody(employee), temporaryPassword }, 201);
+      return c.json({ employee, temporaryPassword }, 201);
     } catch (err) {
       if (uniqueViolation(err) === 'users_login_unique') {
         return c.json(apiError('login_taken', 'Такой логин уже занят на платформе'), 400);

@@ -1,5 +1,6 @@
 'use client';
 
+import type { RoleSaveEditor } from '@buhuchet/domain';
 import { createContext, useContext } from 'react';
 import type { ShellAccess } from './modules';
 
@@ -22,8 +23,11 @@ export interface ShellState {
   access: ShellAccess;
   /** Вошедший сотрудник; у администратора платформы — null. */
   employeeId: string | null;
-  /** Роль вошедшего (для формы роли: права своей роли меняет владелец); у администратора — null. */
-  role: { id: string; isOwner: boolean } | null;
+  /**
+   * Вошедший для формы роли: своя роль, действующие права и область (права своей роли меняет
+   * владелец, больше своего не выдают); у администратора — null.
+   */
+  editor: RoleSaveEditor | null;
 }
 
 const NO_ACCESS: ShellAccess = {
@@ -40,7 +44,7 @@ export const ShellContext = createContext<ShellState>({
   clearAddRequest: () => {},
   access: NO_ACCESS,
   employeeId: null,
-  role: null,
+  editor: null,
 });
 
 /** Состояние рабочей страницы для экранов модулей: поиск, права и выбранный способ добавления. */

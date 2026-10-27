@@ -7,10 +7,11 @@ import {
   SCOPE_GROUPS,
   type ListQuery,
   type PermissionId,
+  type RoleRights,
   type Scope,
   type ScopeGroupId,
 } from '@buhuchet/domain';
-import { count, eq, sql } from 'drizzle-orm';
+import { count, eq, inArray, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { Db, Tx } from './client';
 import { writeHistory } from './history';
@@ -364,6 +365,50 @@ export async function rolePermissionIds(tx: Tx, roleId: string): Promise<Permiss
     .where(eq(rolePermissions.roleId, roleId));
   const ids = new Set(rows.map((r) => r.id).filter(isPermissionId));
   return PERMISSION_IDS.filter((p) => ids.has(p));
+}
+
+/**
+ * Права и область нескольких ролей сразу — для признаков строк списков (какие роли только для чтения,
+ * каких сотрудников можно вести). Без блокировки: решение при самом действии принимает `roleAccess`.
+ * У роли владельца права не перечисляются, область — «Все»; роли не из организации в ответ не попадают.
+ */
+export async function roleRightsMap(
+  tx: Tx,
+  roleIds: Iterable<string>,
+): Promise<Map<string, RoleRights>> {
+  const ids = [...new Set(roleIds)];
+  const result = new Map<string, RoleRights>();
+  if (ids.length === 0) return result;
+  const found = await tx
+    .select({ id: roles.id, isOwner: roles.isOwner })
+    .from(roles)
+    .where(inArray(roles.id, ids));
+  const perms = await tx
+    .select({ roleId: rolePermissions.roleId, id: rolePermissions.permissionId })
+    .from(rolePermissions)
+    .where(inArray(rolePermissions.roleId, ids));
+  const scopes = await tx
+    .select({ roleId: roleScopes.roleId, group: roleScopes.permGroup, scope: roleScopes.scope })
+    .from(roleScopes)
+    .where(inArray(roleScopes.roleId, ids));
+  const all = normalizeScopes(Object.fromEntries(SCOPE_GROUPS.map((g) => [g, 'all'])));
+  for (const role of found) {
+    if (role.isOwner) {
+      result.set(role.id, { isOwner: true, permissions: [], scopes: all });
+      continue;
+    }
+    const own = new Set(perms.filter((p) => p.roleId === role.id).map((p) => p.id));
+    result.set(role.id, {
+      isOwner: false,
+      permissions: PERMISSION_IDS.filter((p) => own.has(p)),
+      scopes: normalizeScopes(
+        Object.fromEntries(
+          scopes.filter((r) => r.roleId === role.id).map((r) => [r.group, r.scope]),
+        ),
+      ),
+    });
+  }
+  return result;
 }
 
 export interface NewEmployee {

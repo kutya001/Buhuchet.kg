@@ -2,9 +2,11 @@
 
 import {
   PERMISSION_IDS,
-  rolePermissionLock,
+  roleFormLock,
+  roleScopeLock,
   SCOPE_GROUPS,
   type PermissionId,
+  type RoleSaveEditor,
   type UiTextKey,
 } from '@buhuchet/domain';
 import { ROLE_NAME_MAX_LENGTH, Role } from '@buhuchet/shared';
@@ -34,7 +36,19 @@ const LOCK_CODES = new Set([
   'owner_granted',
 ]);
 /** Почему роль не сохранить сверх галочек (`RoleChangeLock`) — текст `roles.err.<код>`. */
-const SAVE_CODES = new Set(['owner_granted_role', 'beyond_own', 'beyond_own_scope']);
+const SAVE_CODES = new Set([
+  'owner_granted_role',
+  'beyond_own',
+  'beyond_own_scope',
+  'beyond_own_role',
+]);
+
+/** Нет вошедшего сотрудника (администратор платформы формы роли не открывает): закрыто всё, что не владельцу. */
+const NO_EDITOR: RoleSaveEditor = {
+  isOwner: false,
+  roleId: '',
+  subject: { employeeId: '', isOwner: false, permissions: new Set(), scopes: {} },
+};
 
 /**
  * Отказ сервера в сохранении роли — своими текстами: коды совпадают с отказами в действиях над
@@ -58,9 +72,11 @@ const sameSet = (a: ReadonlySet<string>, b: ReadonlySet<string>) =>
  * Форма роли «Права роли» (ТЗ «Сотрудники» → «Вкладка Роли»; прототип modules/staff.js, roleForm):
  * «Название роли», поиск и права по группам модулей с областью «Свои / Все контрагенты»; внизу —
  * «Выбрано прав: N из 39», «Отмена» и «Сохранить». Галочки закрыты по тем же правилам, что проверяет
- * сервер (`rolePermissionLock`: права владельца, «Сначала дайте просмотр», право только владельца,
- * своя роль, право выдаёт только владелец); остальные отказы сервера (docs/deviations.md, п. 15) —
- * текстом над правами. Запись изменили другие — «Запись изменена другим пользователем» и «Перечитать».
+ * сервер (`roleFormLock`: права владельца, «Сначала дайте просмотр», право только владельца, своя
+ * роль, право выдаёт только владелец, у не владельца — права, которого нет у его роли), переключатель
+ * «Все контрагенты» — там, где его нет у роли не владельца (`roleScopeLock`; ТЗ, решение заказчика
+ * 27.10.2026); остальные отказы сервера (docs/deviations.md, п. 15) — текстом над правами. Запись
+ * изменили другие — «Запись изменена другим пользователем» и «Перечитать».
  */
 export function RoleForm({
   role: initial,
@@ -78,7 +94,7 @@ export function RoleForm({
   const t = useT();
   const toast = useToast();
   const errorText = useErrorText();
-  const { role: mine } = useShell();
+  const editor = useShell().editor ?? NO_EDITOR;
   const id = useId();
   const [role, setRole] = useState(initial);
   const [name, setName] = useState(initial.name);
@@ -87,9 +103,8 @@ export function RoleForm({
   const [refusal, setRefusal] = useState<string | undefined>();
   const [changed, setChanged] = useState(false);
   const [busy, setBusy] = useState(false);
-  const editor = { isOwner: mine?.isOwner ?? false, roleId: mine?.id ?? '' };
   const lockWith = (selected: ReadonlySet<PermissionId>) => (p: PermissionId) =>
-    rolePermissionLock(editor, role, p, selected);
+    roleFormLock(editor, role, p, selected);
   const scopes = Object.fromEntries(SCOPE_GROUPS.map((g) => [g, state.scopes[g] ?? 'own']));
   const dirty =
     name !== role.name ||
@@ -208,6 +223,7 @@ export function RoleForm({
           catalog={catalog}
           state={state}
           lockWith={lockWith}
+          scopeLock={(group) => roleScopeLock(editor, group)}
           onChange={(next) => {
             setState(next);
             setRefusal(undefined);

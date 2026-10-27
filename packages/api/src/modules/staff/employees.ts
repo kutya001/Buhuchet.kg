@@ -4,13 +4,16 @@ import {
   getEmployee,
   listEmployeeValues,
   listEmployeesPage,
+  roleRightsMap,
   staffTabCounts,
   withOrgContext,
   type EmployeeRecord,
+  type Tx,
 } from '@buhuchet/db';
 import {
   hasPermission,
   RecordNotFoundError,
+  staffManageable,
   telegramName,
   type RoleSaveEditor,
   type StaffAction,
@@ -39,7 +42,7 @@ import { serverTexts } from '../l10n/texts';
 export const error = { 'application/json': { schema: ApiError } };
 
 /** Сотрудник для ответа API: только поля схемы, моменты — строкой ISO. */
-export function employeeBody(e: EmployeeRecord): Employee {
+export function employeeBody(e: EmployeeRecord, manageable: boolean): Employee {
   return {
     id: e.id,
     fullName: e.fullName,
@@ -49,6 +52,7 @@ export function employeeBody(e: EmployeeRecord): Employee {
     phoneText: e.phoneText,
     role: e.role,
     active: e.active,
+    manageable,
     telegram: e.telegram && {
       name: telegramName(e.telegram),
       linkedAt: e.telegram.linkedAt.toISOString(),
@@ -62,6 +66,33 @@ export function employeeBody(e: EmployeeRecord): Employee {
     },
     version: e.version,
   };
+}
+
+/**
+ * Сотрудники для ответа API с признаком `manageable` для того, кто смотрит (`staffManageable`: кнопки
+ * «Сменить роль», «Сбросить пароль», «Заблокировать» скрыты, где нельзя): права ролей строк читаются
+ * одним запросом. Без права «Сотрудники и роли» — нельзя ни у кого.
+ */
+export async function employeeBodies(
+  tx: Tx,
+  actor: StaffActor,
+  rows: readonly EmployeeRecord[],
+): Promise<Employee[]> {
+  if (!hasPermission(actor, 'staff')) return rows.map((e) => employeeBody(e, false));
+  const rights = await roleRightsMap(
+    tx,
+    rows.map((e) => e.role.id),
+  );
+  return rows.map((e) => {
+    const role = rights.get(e.role.id);
+    return employeeBody(e, !!role && staffManageable(actor, { employeeId: e.id, role }));
+  });
+}
+
+/** Один сотрудник для ответа API (`employeeBodies`). */
+export async function employeeOut(tx: Tx, actor: StaffActor, e: EmployeeRecord): Promise<Employee> {
+  const [body] = await employeeBodies(tx, actor, [e]);
+  return body!;
 }
 
 /**
@@ -154,12 +185,14 @@ export function listEmployeesHandler(
   return async (c) => {
     const query = listQueryOf(c.req.valid('query'));
     const t = await serverTexts(deps);
-    const page = await withOrgContext(deps.db, orgContextOf(c), (tx) =>
-      listEmployeesPage(tx, query, t),
-    );
+    const actor = staffActor(c);
+    const { page, items } = await withOrgContext(deps.db, orgContextOf(c), async (tx) => {
+      const page = await listEmployeesPage(tx, query, t);
+      return { page, items: await employeeBodies(tx, actor, page.rows) };
+    });
     return c.json(
       {
-        items: page.rows.map(employeeBody),
+        items,
         total: page.total,
         page: page.page,
         size: page.size,
@@ -303,8 +336,12 @@ export const getEmployeeRoute = createRoute({
 export function getEmployeeHandler(deps: ApiDeps): RouteHandler<typeof getEmployeeRoute, AppEnv> {
   return async (c) => {
     const { id } = c.req.valid('param');
-    const employee = await withOrgContext(deps.db, orgContextOf(c), (tx) => getEmployee(tx, id));
+    const actor = staffActor(c);
+    const employee = await withOrgContext(deps.db, orgContextOf(c), async (tx) => {
+      const found = await getEmployee(tx, id);
+      return found && employeeOut(tx, actor, found);
+    });
     if (!employee) throw new RecordNotFoundError('employee', id);
-    return c.json(employeeBody(employee), 200);
+    return c.json(employee, 200);
   };
 }

@@ -14,15 +14,15 @@ export interface StaffMenuRun {
 
 /**
  * Пункты меню сотрудника (прототип modules/staff.js, empActions): «Открыть карточку» — всем, кто видит
- * список. С правом «Сотрудники и роли» и не у владельца организации — ещё «Изменить» (ФИО и телефон,
- * docs/deviations.md, п. 16), «Сменить роль», «Сбросить пароль», черта и «Заблокировать» (красным)
- * или у заблокированного — «Разблокировать». ФИО и телефон владельца меняет только он сам: у него на
- * своей строке — «Изменить», у остальных строка владельца — только «Открыть карточку». На своей
- * строке «Сменить роль», «Сбросить пароль» и «Заблокировать» недоступны с причиной: свою роль меняет
- * владелец, себя не блокируют, а свой пароль меняют в «Мой профиль». Остальные запреты проверяет
- * сервер (docs/deviations.md, п. 15). «Передать контрагентов» добавит модуль «Контрагенты» (поток А).
- * `card` — меню кнопки «Действия» в карточке: без «Открыть карточку» и без «Изменить» — в карточке
- * это отдельная кнопка (ТЗ «Сотрудники»: «кнопкой «Изменить» в карточке сотрудника»; `canEditEmployee`).
+ * список. С правом «Сотрудники и роли» — ещё «Изменить» (ФИО и телефон, docs/deviations.md, п. 16;
+ * владельца меняет только он сам — `canEditEmployee`), а у того, кого можно вести (`manageable` с
+ * сервера), — «Сменить роль», «Сбросить пароль», черта и «Заблокировать» (красным) или у
+ * заблокированного — «Разблокировать». Где вести нельзя — у владельца организации, у себя, у
+ * сотрудника с правами «выдаёт только владелец» и с ролью шире своей, — этих пунктов нет (ТЗ, решение
+ * заказчика 27.10.2026: недоступные кнопки скрыты; прототип core/org.js, empLocked). «Передать
+ * контрагентов» добавит модуль «Контрагенты» (поток А). `card` — меню кнопки «Действия» в карточке:
+ * без «Открыть карточку» и без «Изменить» — в карточке это отдельная кнопка (ТЗ «Сотрудники»:
+ * «кнопкой «Изменить» в карточке сотрудника»).
  */
 export function staffMenu({
   canManage,
@@ -42,12 +42,12 @@ export function staffMenu({
     const open: ActionEntry[] = card
       ? []
       : [{ id: 'open', label: t('staff.action.open'), icon: 'user', run: () => run.open(e) }];
-    const self = e.id === employeeId;
-    const edit: ActionEntry[] = card
-      ? []
-      : [{ id: 'edit', label: t('staff.action.edit'), icon: 'edit', run: () => run.edit(e) }];
+    const edit: ActionEntry[] =
+      card || !canEditEmployee(canManage, employeeId, e)
+        ? []
+        : [{ id: 'edit', label: t('staff.action.edit'), icon: 'edit', run: () => run.edit(e) }];
     if (!canManage) return open;
-    if (e.role.isOwner) return self ? [...open, ...edit] : open;
+    if (!e.manageable) return [...open, ...edit];
     return [
       ...open,
       ...edit,
@@ -55,16 +55,12 @@ export function staffMenu({
         id: 'change-role',
         label: t('staff.action.change_role'),
         icon: 'shield',
-        disabled: self,
-        reason: self ? t('err.own_role') : undefined,
         run: () => run.changeRole(e),
       },
       {
         id: 'reset-password',
         label: t('staff.action.reset_password'),
         icon: 'key',
-        disabled: self,
-        reason: self ? t('staff.action.reset_self') : undefined,
         run: () => run.resetPassword(e),
       },
       { id: 'sep', separator: true },
@@ -74,8 +70,6 @@ export function staffMenu({
             label: t('staff.action.block'),
             icon: 'lock',
             danger: true,
-            disabled: self,
-            reason: self ? t('staff.action.block_self') : undefined,
             run: () => run.block(e),
           }
         : {

@@ -119,6 +119,35 @@ describe.skipIf(!databaseAvailable())('Сотрудники: API', () => {
       expect((await call('GET', values)).status).toBe(401);
     });
 
+    it('кого смотрящий может вести (сменить роль, сбросить пароль, заблокировать) — признак manageable', async () => {
+      const manageable = async (cookie: string) => {
+        const res = await call('GET', '/api/staff?size=all', cookie);
+        expect(res.status).toBe(200);
+        const { items } = EmployeeList.parse(await res.json());
+        return Object.fromEntries(items.map((e) => [e.login, e.manageable]));
+      };
+      // Владелец — всех, кроме себя.
+      expect(await manageable(owner)).toMatchObject({
+        'owner-a': false,
+        'chief-a': true,
+        'acc-a': true,
+        'hr-a': true,
+        'senior-a': true,
+      });
+      // Не владелец — не владельца, не себя, не с правами «выдаёт только владелец», не шире себя.
+      expect(await manageable(hr)).toMatchObject({
+        'owner-a': false,
+        'chief-a': false,
+        'acc-a': true,
+        'hr-a': false,
+        'senior-a': false,
+      });
+      // Без права «Сотрудники и роли» — никого.
+      expect(Object.values(await manageable(chief)).every((v) => v === false)).toBe(true);
+      expect(await card(hr, f.people['acc-a']!.employeeId)).toMatchObject({ manageable: true });
+      expect(await card(hr, f.people['chief-a']!.employeeId)).toMatchObject({ manageable: false });
+    });
+
     it('карточка: своя организация — 200; чужая — 404; не номер — 400', async () => {
       const e = await card(chief, f.people['hr-a']!.employeeId);
       expect(e).toMatchObject({ login: 'hr-a', role: { name: 'Кадры', isOwner: false } });

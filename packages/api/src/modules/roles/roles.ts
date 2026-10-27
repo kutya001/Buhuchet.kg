@@ -5,11 +5,18 @@ import {
   listRolesPage,
   listRoleValues,
   permissionCatalog,
+  roleRightsMap,
   withOrgContext,
   type RoleRecord,
   type RoleSummary,
 } from '@buhuchet/db';
-import { permissionGroup, RecordNotFoundError } from '@buhuchet/domain';
+import {
+  permissionGroup,
+  RecordNotFoundError,
+  roleReadOnly,
+  type RoleReadOnly,
+  type RoleSaveEditor,
+} from '@buhuchet/domain';
 import {
   ApiError,
   ListExportParams,
@@ -28,11 +35,12 @@ import { listQueryOf, listQueryResponses } from '../../errors';
 import { xlsxContent, xlsxResponse } from '../../lists/export';
 import { orgContextOf, requirePermission } from '../../middleware/access';
 import { serverTexts } from '../l10n/texts';
+import { staffActor } from '../staff/employees';
 
 export const error = { 'application/json': { schema: ApiError } };
 
-/** Роль в списке для ответа API: моменты — строкой ISO. */
-export function roleSummaryBody(r: RoleSummary): RoleListItem {
+/** Роль в списке для ответа API: моменты — строкой ISO; `readOnly` — для того, кто смотрит. */
+export function roleSummaryBody(r: RoleSummary, readOnly: RoleReadOnly | null): RoleListItem {
   return {
     id: r.id,
     name: r.name,
@@ -40,6 +48,7 @@ export function roleSummaryBody(r: RoleSummary): RoleListItem {
     templateCode: r.templateCode,
     employees: r.employees,
     permissionCount: r.permissionCount,
+    readOnly,
     audit: {
       createdAt: r.audit.createdAt.toISOString(),
       createdBy: r.audit.createdBy,
@@ -50,9 +59,16 @@ export function roleSummaryBody(r: RoleSummary): RoleListItem {
   };
 }
 
-/** Карточка роли для ответа API. */
-export function roleBody(r: RoleRecord): Role {
-  return { ...roleSummaryBody(r), permissions: r.permissions, scopes: r.scopes };
+/**
+ * Карточка роли для ответа API: только ли для чтения она тому, кто смотрит (`roleReadOnly`: своя, с
+ * правами «выдаёт только владелец», шире своей).
+ */
+export function roleBody(r: RoleRecord, editor: RoleSaveEditor): Role {
+  return {
+    ...roleSummaryBody(r, roleReadOnly(editor, r)),
+    permissions: r.permissions,
+    scopes: r.scopes,
+  };
 }
 
 export const listRolesRoute = createRoute({
@@ -82,10 +98,24 @@ export const listRolesRoute = createRoute({
 export function listRolesHandler(deps: ApiDeps): RouteHandler<typeof listRolesRoute, AppEnv> {
   return async (c) => {
     const query = listQueryOf(c.req.valid('query'));
-    const page = await withOrgContext(deps.db, orgContextOf(c), (tx) => listRolesPage(tx, query));
+    const editor = staffActor(c);
+    const { page, rights } = await withOrgContext(deps.db, orgContextOf(c), async (tx) => {
+      const page = await listRolesPage(tx, query);
+      return {
+        page,
+        rights: await roleRightsMap(
+          tx,
+          page.rows.map((r) => r.id),
+        ),
+      };
+    });
+    const readOnly = (r: RoleSummary) => {
+      const role = rights.get(r.id);
+      return role ? roleReadOnly(editor, { id: r.id, ...role }) : null;
+    };
     return c.json(
       {
-        items: page.rows.map(roleSummaryBody),
+        items: page.rows.map((r) => roleSummaryBody(r, readOnly(r))),
         total: page.total,
         page: page.page,
         size: page.size,
@@ -186,7 +216,7 @@ export function getRoleHandler(deps: ApiDeps): RouteHandler<typeof getRoleRoute,
     const { id } = c.req.valid('param');
     const role = await withOrgContext(deps.db, orgContextOf(c), (tx) => getRole(tx, id));
     if (!role) throw new RecordNotFoundError('role', id);
-    return c.json(roleBody(role), 200);
+    return c.json(roleBody(role, staffActor(c)), 200);
   };
 }
 

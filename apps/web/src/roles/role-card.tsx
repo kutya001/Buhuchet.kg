@@ -14,7 +14,9 @@ const NO_LOCK = () => () => null;
  * Карточка роли (прототип modules/staff.js, roleCard): права по группам модулей только для чтения —
  * зелёная галочка у выданного, серый крестик у остального; область групп — ярлыком. Под названием —
  * сколько активных сотрудников с ролью и сколько у неё прав. У роли владельца — пояснение, что её
- * права не меняются, и нет «Изменить».
+ * права не меняются, и нет «Изменить». Роль, которую не владелец видит только для чтения (своя, с
+ * правами «выдаёт только владелец», шире своей), — «Только для чтения: …» и тоже без «Изменить» (ТЗ,
+ * решение заказчика 27.10.2026; прототип roleCard).
  */
 export function RoleCard({
   role,
@@ -49,7 +51,7 @@ export function RoleCard({
       })}
       footer={
         <>
-          {onEdit && !role.isOwner ? (
+          {onEdit && !role.isOwner && !shown.readOnly ? (
             <button type="button" className={buttonClass('default')} onClick={() => onEdit(shown)}>
               <Icon name="edit" size="sm" />
               {t('roles.action.edit')}
@@ -64,6 +66,9 @@ export function RoleCard({
     >
       <div data-role-card={role.id} className="flex flex-col gap-3.5">
         {role.isOwner ? <Note icon="lock">{t('roles.card.owner_note')}</Note> : null}
+        {!role.isOwner && shown.readOnly ? (
+          <Note icon="lock">{t(`roles.readonly.${shown.readOnly}`)}</Note>
+        ) : null}
         {failed ? <Note tone="bad">{t('roles.load_error')}</Note> : null}
         {full.data && catalog.data ? (
           <PermissionGroups
