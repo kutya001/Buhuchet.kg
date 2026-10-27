@@ -170,8 +170,20 @@ export type PlatformValueList = z.infer<typeof PlatformValueList>;
 /** «Попросить добавить»: справочник, что добавить (обязательно), комментарий. */
 export const DictRequestCreate = z.object({
   dict: z.enum(DICT_REQUEST_DICTS),
-  what: z.string().trim().min(1).max(DICT_REQUEST_WHAT_MAX),
-  comment: z.string().trim().max(DICT_REQUEST_COMMENT_MAX).default(''),
+  // Как причина отката: только пробелы и невидимые символы — не текст; нулевой символ база не примет.
+  what: z
+    .string()
+    .trim()
+    .min(1)
+    .max(DICT_REQUEST_WHAT_MAX)
+    .refine((s) => /[^\s\p{Cf}]/u.test(s))
+    .refine((s) => !s.includes('\u0000')),
+  comment: z
+    .string()
+    .trim()
+    .max(DICT_REQUEST_COMMENT_MAX)
+    .refine((s) => !s.includes('\u0000'))
+    .default(''),
 });
 export type DictRequestCreate = z.input<typeof DictRequestCreate>;
 

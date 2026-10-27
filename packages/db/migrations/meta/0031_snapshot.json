@@ -5230,6 +5230,15 @@
           ],
           "using": "\"dict_change_requests\".\"org_id\" = app.current_org_id()",
           "withCheck": "\"dict_change_requests\".\"org_id\" = app.current_org_id()"
+        },
+        "dict_change_requests_insert_guard": {
+          "name": "dict_change_requests_insert_guard",
+          "as": "RESTRICTIVE",
+          "for": "INSERT",
+          "to": [
+            "buhuchet_app"
+          ],
+          "withCheck": "\"dict_change_requests\".\"created_by\" = app.current_user_id() and \"dict_change_requests\".\"status\" = 'new' and \"dict_change_requests\".\"answer\" = '' and \"dict_change_requests\".\"decided_by\" is null and \"dict_change_requests\".\"decided_at\" is null"
         }
       },
       "checkConstraints": {

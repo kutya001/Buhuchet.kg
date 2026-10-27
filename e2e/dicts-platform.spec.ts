@@ -91,6 +91,78 @@ test.describe('Этап 2: справочники платформы для ор
     await expect(page.getByText('Каталог видов отчётов один на всю платформу')).toBeVisible();
   });
 
+  test('строка налога открывает форму налога; строки режима, формы, льготы и основания — окно значения; строки ГКЭД, УГНС и календаря — ничего', async ({
+    page,
+    baseURL,
+  }) => {
+    await openTab(page, baseURL);
+    const opens = [
+      {
+        tile: 'taxes',
+        tab: 'Налоги и ставки',
+        code: 'НАЛ-03',
+        title: 'Налог на прибыль',
+        texts: ['НАЛ-03 · Общегосударственные налоги', 'Кто платит и с чего'],
+      },
+      {
+        tile: 'regimes',
+        tab: 'Режимы',
+        code: 'РЕЖ-01',
+        title: 'ОНР',
+        texts: ['Режимы · справочник платформы', 'Для бухгалтера'],
+      },
+      {
+        tile: 'forms',
+        tab: 'Формы',
+        code: 'ФС-01',
+        title: 'ОсОО',
+        texts: ['Формы · справочник платформы', 'Считается', 'организация'],
+      },
+      {
+        tile: 'benefits',
+        tab: 'Льготы и статусы',
+        code: 'ЛЬГ-30',
+        title: 'Крупный налогоплательщик',
+        texts: ['Меняет сроки'],
+      },
+      {
+        tile: 'bases',
+        tab: 'Основания для отчётов',
+        code: 'employees',
+        title: 'Есть наёмные сотрудники',
+        texts: ['Виды отчётов'],
+      },
+    ];
+    for (const x of opens) {
+      await page.locator(`[data-dict-tile="${x.tile}"]`).click();
+      const win = page.getByRole('dialog', { name: x.tab, exact: true });
+      await win.getByRole('searchbox', { name: 'Найти значение' }).fill(x.title);
+      await win.locator(`[data-grid] [data-id="${x.code}"]`).getByText(x.title).first().click();
+      const value = page.getByRole('dialog', { name: x.title, exact: true });
+      for (const text of x.texts) await expect(value).toContainText(text);
+      await value.getByRole('button', { name: 'Закрыть' }).last().click();
+      await expect(value).toBeHidden();
+      await win.getByRole('button', { name: 'Закрыть' }).last().click();
+      await expect(win).toBeHidden();
+    }
+
+    // У ГКЭД, УГНС и календаря строка ничего не открывает (прототип: `open: null`).
+    for (const x of [
+      { tile: 'gked', tab: 'ГКЭД' },
+      { tile: 'ugns', tab: 'УГНС' },
+      { tile: 'calendar', tab: 'Календарь' },
+    ]) {
+      await page.locator(`[data-dict-tile="${x.tile}"]`).click();
+      const win = page.getByRole('dialog', { name: x.tab, exact: true });
+      const row = win.locator('[data-grid] [data-id]').first();
+      await expect(row).toBeVisible();
+      await row.click();
+      await expect(page.getByRole('dialog')).toHaveCount(1);
+      await win.getByRole('button', { name: 'Закрыть' }).last().click();
+      await expect(win).toBeHidden();
+    }
+  });
+
   test('«Поиск по всем значениям»: справочник и значение по общему поиску', async ({
     page,
     baseURL,

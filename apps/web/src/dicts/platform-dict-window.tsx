@@ -294,6 +294,7 @@ export function PlatformDictWindow({
   const list = useListPage({
     gridKey,
     columns,
+    // ОТКЛОНЕНИЕ: docs/deviations.md#48 — столбцы прототипа, без служебных и остальных полей значения.
     audit: false,
     defaultVisible,
     settings: viewSettings.settings,
@@ -350,6 +351,7 @@ export function PlatformDictWindow({
               </div>
             ) : null}
           </div>
+          {/* ОТКЛОНЕНИЕ: docs/deviations.md#47 — своё поле: общий поиск под окном недоступен. */}
           <label htmlFor={searchId} className="relative flex items-center">
             <Icon
               name="search"

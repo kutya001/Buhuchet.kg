@@ -36,6 +36,7 @@ import { platformTilesQuery } from './dicts-data';
 import { PlatformDictWindow, type DictTile } from './platform-dict-window';
 import { useTaxPick } from './tax-pick';
 
+// ОТКЛОНЕНИЕ: docs/deviations.md#48 — как в прототипе, не по «Создано» из ТЗ «Списки».
 /** «Поиск по всем значениям» — по справочнику (прототип `sort: {key: 'd', dir: 1}`). */
 const ALL_SORT: ListSort = { key: 'd', dir: 'asc' };
 const ALL_VISIBLE = ['d', 'name'];

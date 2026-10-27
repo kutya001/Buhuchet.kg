@@ -5,6 +5,7 @@ import {
   check,
   index,
   integer,
+  pgPolicy,
   pgTable,
   primaryKey,
   text,
@@ -14,7 +15,7 @@ import {
 import { recordVersion, timestamps } from './columns';
 import { organizations } from './organizations';
 import { reportTypes } from './platform-dicts';
-import { orgIsolation } from './rls';
+import { appRole, orgIsolation } from './rls';
 import { users } from './users';
 
 /**
@@ -94,5 +95,12 @@ export const dictChangeRequests = pgTable(
     check('dict_change_requests_what_check', sql`length(btrim(${t.what})) between 1 and 300`),
     check('dict_change_requests_comment_check', sql`length(${t.comment}) <= 2000`),
     orgIsolation('dict_change_requests_isolation', t.orgId),
+    // Организация только отправляет запрос: автор — текущий пользователь, статус «Новый», без ответа.
+    pgPolicy('dict_change_requests_insert_guard', {
+      as: 'restrictive',
+      for: 'insert',
+      to: appRole,
+      withCheck: sql`${t.createdBy} = app.current_user_id() and ${t.status} = 'new' and ${t.answer} = '' and ${t.decidedBy} is null and ${t.decidedAt} is null`,
+    }),
   ],
 ).enableRLS();

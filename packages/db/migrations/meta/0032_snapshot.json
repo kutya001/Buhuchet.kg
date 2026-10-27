@@ -5172,50 +5172,50 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "dict_change_requests_org_id_organizations_id_fk": {
           "name": "dict_change_requests_org_id_organizations_id_fk",
           "tableFrom": "dict_change_requests",
+          "tableTo": "organizations",
           "columnsFrom": [
             "org_id"
           ],
-          "tableTo": "organizations",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "dict_change_requests_created_by_users_id_fk": {
           "name": "dict_change_requests_created_by_users_id_fk",
           "tableFrom": "dict_change_requests",
+          "tableTo": "users",
           "columnsFrom": [
             "created_by"
           ],
-          "tableTo": "users",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         },
         "dict_change_requests_decided_by_users_id_fk": {
           "name": "dict_change_requests_decided_by_users_id_fk",
           "tableFrom": "dict_change_requests",
+          "tableTo": "users",
           "columnsFrom": [
             "decided_by"
           ],
-          "tableTo": "users",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -5230,6 +5230,15 @@
           ],
           "using": "\"dict_change_requests\".\"org_id\" = app.current_org_id()",
           "withCheck": "\"dict_change_requests\".\"org_id\" = app.current_org_id()"
+        },
+        "dict_change_requests_insert_guard": {
+          "name": "dict_change_requests_insert_guard",
+          "as": "RESTRICTIVE",
+          "for": "INSERT",
+          "to": [
+            "buhuchet_app"
+          ],
+          "withCheck": "\"dict_change_requests\".\"created_by\" = app.current_user_id() and \"dict_change_requests\".\"status\" = 'new' and \"dict_change_requests\".\"answer\" = '' and \"dict_change_requests\".\"decided_by\" is null and \"dict_change_requests\".\"decided_at\" is null"
         }
       },
       "checkConstraints": {

@@ -126,9 +126,12 @@ describe.skipIf(!databaseAvailable())('Справочники → «Справо
     expect(other.items).toEqual([]);
   });
 
-  it('пустое «Что добавить» и чужой справочник — 400', async () => {
+  it('пустое «Что добавить», нулевой символ и чужой справочник — 400', async () => {
     for (const body of [
       { dict: 'types', what: '   ' },
+      { dict: 'types', what: '\u200b\u2060' },
+      { dict: 'types', what: 'Отчёт\u0000' },
+      { dict: 'types', what: 'Отчёт', comment: 'Нужен\u0000' },
       { dict: 'permissions', what: 'Право' },
       { dict: 'types', what: 'x'.repeat(301) },
     ]) {

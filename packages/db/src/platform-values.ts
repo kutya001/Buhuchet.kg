@@ -318,6 +318,7 @@ const fromOf =
 
 const NATURAL = [field('n')];
 
+// ОТКЛОНЕНИЕ: docs/deviations.md#48 — как в прототипе, не по «Создано» из ТЗ «Списки».
 /** Сортировка по умолчанию: по первому столбцу; статусы и шаблоны — в порядке справочника. */
 function windowSort(id: OrgDictWindowId): ListSort | null {
   return ORG_DICT_NATURAL_ORDER.has(id) ? null : { key: ORG_DICT_COLUMNS[id][0]!.key, dir: 'asc' };
@@ -580,7 +581,8 @@ const ALL_VALUE_COLUMNS: ListColumns = {
     sort: { value: field('d_text'), text: true },
   },
   name: { type: 'text', label: 'dicts.platform.col.all.name', value: field('name') },
-  // Даты появления значения у справочников платформы нет — «Создано» пусто.
+  // ОТКЛОНЕНИЕ: docs/deviations.md#48 — даты появления значения у справочников платформы нет,
+  // «Создано» пусто (в прототипе — `_ca` значения).
   createdAt: { type: 'datetime', label: 'grid.col.created_at', value: sql`null::timestamptz` },
   updatedAt: { type: 'datetime', label: 'grid.col.updated_at', value: field('updated_at') },
   createdBy: { type: 'enum', label: 'grid.col.created_by', value: field('created_by') },

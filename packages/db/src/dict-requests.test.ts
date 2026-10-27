@@ -117,6 +117,21 @@ describe.skipIf(!databaseAvailable())('«Попросить добавить»: 
     );
   });
 
+  it('организация только отправляет запрос: чужой автор, готовый статус или ответ база не примет', async () => {
+    const base = { orgId: a.orgId, dict: 'types', what: 'Отчёт', createdBy: a.ownerUserId };
+    for (const values of [
+      { ...base, createdBy: b.ownerUserId },
+      { ...base, status: 'added' },
+      { ...base, answer: 'Добавили' },
+      { ...base, decidedBy: a.ownerUserId },
+      { ...base, decidedAt: new Date() },
+    ]) {
+      await expect(
+        asOwner(a, (tx) => tx.insert(dictChangeRequests).values(values)),
+      ).rejects.toThrow(permissionDenied);
+    }
+  });
+
   it('справочник — из списка, «Что добавить» не пустое', async () => {
     await expect(
       asOwner(a, (tx) =>

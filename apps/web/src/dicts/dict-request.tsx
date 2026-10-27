@@ -53,7 +53,8 @@ function DictRequestDialog({ open, onClose }: { open: boolean; onClose: () => vo
 
   const send = async () => {
     const value = what.trim();
-    if (!value) {
+    // Только пробелы и невидимые символы — не текст (как проверяет сервер).
+    if (!/[^\s\p{Cf}]/u.test(value)) {
       setWhatError(t('dicts.req.what_required'));
       return document.getElementById(`${id}-what`)?.focus();
     }
@@ -174,6 +175,7 @@ function requestRow(r: DictRequest, t: Translate) {
   };
 }
 
+// ОТКЛОНЕНИЕ: docs/deviations.md#46 — решение А: в прототипе своих запросов организация не видит.
 /**
  * «Мои запросы» (решение заказчика 27.10.2026, docs/deviations.md п. 46): запросы организации
  * администратору платформы, сначала новые — что просили, статус («Новый», «Добавлено», «Отклонено»)
