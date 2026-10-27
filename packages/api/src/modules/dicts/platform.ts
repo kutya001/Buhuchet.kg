@@ -194,6 +194,7 @@ export function exportPlatformDictHandler(
         columns: result.columns,
         rows: result.rows,
         more: result.more,
+        total: result.total,
         t,
       });
     });
@@ -294,6 +295,7 @@ export function exportPlatformValuesHandler(
         columns: result.columns,
         rows: result.rows,
         more: result.more,
+        total: result.total,
         t,
       });
     });

@@ -278,15 +278,43 @@
     {
       "idx": 39,
       "version": "7",
-      "when": 1793112928703,
-      "tag": "0039_admin_platform_dicts",
+      "when": 1793116483383,
+      "tag": "0039_contractors",
       "breakpoints": true
     },
     {
       "idx": 40,
       "version": "7",
-      "when": 1793119160444,
-      "tag": "0040_admin_platform_dicts_more",
+      "when": 1793116484743,
+      "tag": "0040_contractors_guards",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1793118667935,
+      "tag": "0041_kb",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1793118671431,
+      "tag": "0042_kb_grants",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1793122969901,
+      "tag": "0043_admin_platform_dicts",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1793124004611,
+      "tag": "0044_admin_platform_dicts_more",
       "breakpoints": true
     }
   ]

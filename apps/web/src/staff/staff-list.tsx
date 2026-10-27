@@ -16,6 +16,7 @@ import {
 } from '@buhuchet/ui';
 import { useCallback, useMemo } from 'react';
 import { api, apiFailure } from '../api-client';
+import { KbBadge } from '../kb/kb-parts';
 import { useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { useListExport } from '../lists/export';
@@ -32,10 +33,11 @@ const DEFAULT_SORT: ListSort = { key: 'createdAt', dir: 'desc' };
 
 /**
  * Видимые по умолчанию (ТЗ «Столбцы, видимые по умолчанию»: ФИО, роль, телефон, контрагентов,
- * просрочено, статус, уровень знаний). Контрагентов, несданные, просрочено, баланс счёта и уровень
- * знаний добавят их модули.
+ * просрочено, статус, уровень знаний). Контрагентов, несданные, просрочено и баланс счёта добавят их
+ * модули; «Уровень знаний» — только с правом «Видеть уровни сотрудников».
  */
 const DEFAULT_VISIBLE = ['fullName', 'role', 'phone', 'active'];
+const DEFAULT_VISIBLE_KB = [...DEFAULT_VISIBLE, 'kb'];
 
 const moment = (iso: string | null) => (iso ? formatMomentRu(new Date(iso)) : '');
 
@@ -44,8 +46,8 @@ const moment = (iso: string | null) => (iso ? formatMomentRu(new Date(iso)) : ''
  * Столбцы списка сотрудников — как в прототипе (modules/staff.js, renderStaff), ключи — как на сервере.
  * Служебные «Создал», «Изменил», «Создано», «Изменено» добавляет сам список (`STAFF_AUDIT`).
  */
-export function staffColumns(t: Translate): GridColumn<Employee>[] {
-  return [
+export function staffColumns(t: Translate, kb = false): GridColumn<Employee>[] {
+  const columns: GridColumn<Employee>[] = [
     {
       key: 'fullName',
       label: t('staff.col.full_name'),
@@ -118,6 +120,18 @@ export function staffColumns(t: Translate): GridColumn<Employee>[] {
         ),
     },
   ];
+  if (kb) {
+    columns.push({
+      key: 'kb',
+      label: t('staff.col.kb'),
+      type: 'enum',
+      width: 230,
+      text: (e) => e.kb?.name ?? '',
+      cell: (e) =>
+        e.kb ? <KbBadge level={e.kb.level} name={e.kb.name} pct={e.kb.pct} of={e.kb.of} /> : null,
+    });
+  }
+  return columns;
 }
 
 /** Значения служебных столбцов; «Изменил» у записи без правок — тот, кто создал (прототип `_ub || _cb`). */
@@ -154,13 +168,15 @@ const fetchStaffValues = async (col: string, q?: string) => {
 export function StaffList() {
   const t = useT();
   const labels = useGridLabels('staff.count');
-  const columns = useMemo(() => staffColumns(t), [t]);
-  const view = useViewSettings('staff.list');
   const { search, clearSearch, access } = useShell();
+  const kb = access.can('kbLevels');
+  const columns = useMemo(() => staffColumns(t, kb), [t, kb]);
+  const defaultVisible = kb ? DEFAULT_VISIBLE_KB : DEFAULT_VISIBLE;
+  const view = useViewSettings('staff.list');
   const list = useListPage({
     gridKey: 'staff.list',
     columns,
-    defaultVisible: DEFAULT_VISIBLE,
+    defaultVisible,
     settings: view.settings,
     defaultSort: DEFAULT_SORT,
     search,
@@ -200,7 +216,7 @@ export function StaffList() {
       <DataGrid
         columns={columns}
         audit={STAFF_AUDIT}
-        defaultVisible={DEFAULT_VISIBLE}
+        defaultVisible={defaultVisible}
         defaultSort={DEFAULT_SORT}
         settings={view.settings}
         onSettingsChange={view.save}

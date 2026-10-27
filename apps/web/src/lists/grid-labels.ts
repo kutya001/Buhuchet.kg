@@ -49,7 +49,9 @@ export function gridLabels(t: Translate, count: CountKey): GridLabels {
     sortBy: (label) => t('grid.sort_by', { label }),
     columnWidth: t('grid.column_width'),
     actions: t('grid.actions'),
-    shown: (from, to, total) => t('grid.shown', { from, to, total }),
+    // «Показано 1 – 5 000 из 8 200» — с разрядами (прототип ui/grid.js `.gfoot`, ТЗ «Все записи»).
+    shown: (from, to, total) =>
+      t('grid.shown', { from: formatCount(from), to: formatCount(to), total: formatCount(total) }),
     perPage: t('grid.per_page'),
     allRows: t('grid.all_rows'),
     prev: t('grid.prev'),

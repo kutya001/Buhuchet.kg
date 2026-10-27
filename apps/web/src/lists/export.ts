@@ -1,6 +1,6 @@
 'use client';
 
-import { EXPORT_ROWS_LIMIT, formatCount, pluralForm } from '@buhuchet/domain';
+import { formatCount, pluralForm } from '@buhuchet/domain';
 import { ApiError } from '@buhuchet/shared';
 import { useToast } from '@buhuchet/ui';
 import { useCallback, useState } from 'react';
@@ -9,8 +9,8 @@ import type { ApiErrorLike, Translate } from '../l10n/translate';
 import { limitFailureText } from './limit-text';
 
 /**
- * Ответ метода выгрузки: файл и заголовки (`content-disposition`, `x-export-rows`, `x-export-more`);
- * отказ — ошибка в общем формате API.
+ * Ответ метода выгрузки: файл и заголовки (`content-disposition`, `x-export-rows`, `x-export-more`,
+ * `x-export-total`); отказ — ошибка в общем формате API.
  */
 interface ExportResponse {
   ok: boolean;
@@ -45,6 +45,20 @@ export function exportFileName(disposition: string | null): string {
   }
 }
 
+/**
+ * Уведомление после выгрузки: «Скачан файл Excel: 120 строк»; если вошли не все — «Выгружено 50 000
+ * строк из 62 300 — сузьте фильтр, чтобы выгрузить остальные» (ТЗ «Списки», решение заказчика
+ * 26.10.2026; прототип ui/grid.js).
+ */
+export function exportDoneText(headers: Pick<Headers, 'get'>, t: Translate): string {
+  const rows = Number(headers.get('x-export-rows') ?? 0);
+  if (headers.get('x-export-more') !== '1') {
+    return t(`grid.exported.${pluralForm(rows)}`, { n: rows });
+  }
+  const total = Number(headers.get('x-export-total') ?? 0);
+  return t('grid.export_more', { n: formatCount(rows), total: formatCount(Math.max(total, rows)) });
+}
+
 /** Отдать файл браузеру на скачивание. */
 function saveFile(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob);
@@ -60,9 +74,8 @@ function saveFile(blob: Blob, name: string) {
 /**
  * «В Excel» (ТЗ «Экспорт в Excel всех отфильтрованных записей; файл формируется на сервере»): файл
  * собирает сервер по тем же поиску, фильтрам и сортировке, что у списка, со столбцами экрана;
- * браузер его только скачивает. Уведомление — сколько строк в файле; если все не вошли — «В файл
- * вошли первые 50 000 записей». Отказ сервера — уведомление с причиной (`exportFailureText`), обрыв
- * связи — «Не удалось выгрузить список».
+ * браузер его только скачивает. Уведомление — сколько строк в файле (`exportDoneText`). Отказ сервера —
+ * уведомление с причиной (`exportFailureText`), обрыв связи — «Не удалось выгрузить список».
  */
 export function useListExport(send: () => Promise<ExportResponse>) {
   const toast = useToast();
@@ -84,12 +97,9 @@ export function useListExport(send: () => Promise<ExportResponse>) {
       }
       const blob = await res.blob();
       saveFile(blob, exportFileName(res.headers.get('content-disposition')));
-      const rows = Number(res.headers.get('x-export-rows') ?? 0);
-      if (res.headers.get('x-export-more') === '1') {
-        toast(t('grid.export_more', { n: formatCount(EXPORT_ROWS_LIMIT) }), { icon: 'info' });
-      } else {
-        toast(t(`grid.exported.${pluralForm(rows)}`, { n: rows }), { icon: 'download' });
-      }
+      toast(exportDoneText(res.headers, t), {
+        icon: res.headers.get('x-export-more') === '1' ? 'alert' : 'download',
+      });
     } catch {
       toast(t('grid.export_failed'), { icon: 'alert', bad: true });
     } finally {

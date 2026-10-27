@@ -10,6 +10,9 @@ import { DEMO_PASSWORD, finger, hire, settledBox, signIn, uniqueLogin } from './
 const isStaffList = (r: Response) =>
   r.request().method() === 'GET' && new URL(r.url()).pathname === '/api/staff';
 
+/** Число с разрядами через неразрывный пробел, как «Показано 1 – 25 из 1 250» внизу списка. */
+const grouped = (n: number) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+
 interface StaffPage {
   items: { id: string; fullName: string }[];
   total: number;
@@ -159,7 +162,7 @@ test.describe('Списки: UnifiedDataGrid', () => {
     const grid = page.locator('[data-grid]');
     const footer = page.locator('[data-grid-footer]');
     await expect(grid.locator('[data-id]')).toHaveCount(25);
-    await expect(footer).toContainText(`Показано 1 – 25 из ${first.total}`);
+    await expect(footer).toContainText(`Показано 1 – 25 из ${grouped(first.total)}`);
     await expect(page.locator('[data-grid-page]')).toHaveText(`1 / ${Math.ceil(first.total / 25)}`);
 
     const secondLoad = page.waitForResponse(
@@ -172,7 +175,7 @@ test.describe('Списки: UnifiedDataGrid', () => {
     expect(second.items[0]!.id).not.toBe(first.items[0]!.id);
     await expect(grid.locator('[data-id]').first()).toHaveAttribute('data-id', second.items[0]!.id);
     await expect(grid.locator('[data-id]')).toHaveCount(25);
-    await expect(footer).toContainText(`Показано 26 – 50 из ${second.total}`);
+    await expect(footer).toContainText(`Показано 26 – 50 из ${grouped(second.total)}`);
     await expect(page.locator('[data-grid-page]')).toHaveText(
       `2 / ${Math.ceil(second.total / 25)}`,
     );
@@ -189,7 +192,8 @@ test.describe('Списки: UnifiedDataGrid', () => {
     await expect(page.locator('[data-grid] [data-id]').first()).toBeVisible();
     // На телефоне по умолчанию — карточки: переключаемся на таблицу (выбор тоже запоминается).
     if (isMobile) await page.getByRole('button', { name: 'Вид списка: Таблица' }).click();
-    await expect.poll(() => headers(page)).toEqual(['fullName', 'role', 'phone', 'active']);
+    // «Уровень» — у главбуха есть право «Видеть уровни сотрудников» (База знаний, 2.30).
+    await expect.poll(() => headers(page)).toEqual(['fullName', 'role', 'phone', 'active', 'kb']);
 
     // «Столбцы»: скрыть «Телефон», «Роль» — наверх.
     await page.getByRole('button', { name: /^Столбцы/ }).click();
@@ -199,7 +203,7 @@ test.describe('Списки: UnifiedDataGrid', () => {
     for (let i = 0; i < 2; i++) await panel.getByRole('button', { name: 'Выше: Роль' }).click();
     await page.keyboard.press('Escape');
     await expect(panel).toBeHidden();
-    await expect.poll(() => headers(page)).toEqual(['role', 'fullName', 'active']);
+    await expect.poll(() => headers(page)).toEqual(['role', 'fullName', 'active', 'kb']);
 
     // Сортировка по «ФИО»: настройки уходят на сервер вместе со всеми правками.
     const saved = page.waitForResponse(
@@ -225,7 +229,7 @@ test.describe('Списки: UnifiedDataGrid', () => {
     );
     await page.reload();
     expect((await reloaded).status()).toBe(200);
-    await expect.poll(() => headers(page)).toEqual(['role', 'fullName', 'active']);
+    await expect.poll(() => headers(page)).toEqual(['role', 'fullName', 'active', 'kb']);
     await expect(page.locator('th[data-column="fullName"]')).toHaveAttribute(
       'aria-sort',
       'ascending',
@@ -475,7 +479,8 @@ test.describe('Списки: UnifiedDataGrid', () => {
     const ask = page.getByRole('dialog', { name: /^Заблокировать / });
     await expect(ask).toContainText('Сотрудник не сможет войти. Его история сохранится.');
     await ask.getByRole('button', { name: 'Заблокировать' }).click();
-    await expect(toast).toHaveText('Сотрудник заблокирован');
+    // Рядом могут быть уведомления «Базы знаний» о первом поиске и группировке (задача 2.30).
+    await expect(toast.filter({ hasText: 'Сотрудник заблокирован' })).toBeVisible();
     await expect(card(first!.id)).toContainText('Заблокирован');
 
     // Меню без «⋯»: на телефоне — долгим нажатием на плитку, на ПК — правым кликом.
