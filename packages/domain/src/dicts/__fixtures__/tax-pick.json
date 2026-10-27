@@ -1,0 +1,1465 @@
+{
+  "source": "spec/prototype/src/js/modules/tax-pick.js",
+  "catalog": {
+    "types": [
+      {
+        "code": "nds",
+        "kind": "regime",
+        "pickGroup": "regime",
+        "regimes": ["ОНР"],
+        "bases": [],
+        "authority": "ГНС",
+        "preselect": true
+      },
+      {
+        "code": "nspm",
+        "kind": "regime",
+        "pickGroup": "regime",
+        "regimes": ["ОНР"],
+        "bases": [],
+        "authority": "ГНС",
+        "preselect": true
+      },
+      {
+        "code": "nspq",
+        "kind": "regime",
+        "pickGroup": "regime",
+        "regimes": ["ОНР"],
+        "bases": [],
+        "authority": "ГНС",
+        "preselect": true
+      },
+      {
+        "code": "npa",
+        "kind": "regime",
+        "pickGroup": "regime",
+        "regimes": ["ОНР"],
+        "bases": [],
+        "authority": "ГНС",
+        "preselect": true
+      },
+      {
+        "code": "akc",
+        "kind": "regime",
+        "pickGroup": "basis",
+        "regimes": ["ОНР"],
+        "bases": ["excise"],
+        "authority": "ГНС",
+        "preselect": true
+      },
+      {
+        "code": "gdn",
+        "kind": "regime",
+        "pickGroup": "status",
+        "regimes": ["ОНР"],
+        "bases": [],
+        "authority": "ГНС",
+        "preselect": true
+      },
+      {
+        "code": "roy",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["subsoil"],
+        "authority": "ГНС",
+        "preselect": true
+      },
+      {
+        "code": "bon",
+        "kind": "cross",
+        "pickGroup": "optional",
+        "regimes": [],
+        "bases": ["subsoil"],
+        "authority": "ГНС",
+        "preselect": false
+      },
+      {
+        "code": "enq",
+        "kind": "regime",
+        "pickGroup": "regime",
+        "regimes": ["Единый налог"],
+        "bases": [],
+        "authority": "ГНС",
+        "preselect": true
+      },
+      {
+        "code": "enm",
+        "kind": "regime",
+        "pickGroup": "regime",
+        "regimes": ["Единый налог"],
+        "bases": [],
+        "authority": "ГНС",
+        "preselect": true
+      },
+      {
+        "code": "etr",
+        "kind": "regime",
+        "pickGroup": "regime",
+        "regimes": ["Электронная торговля"],
+        "bases": [],
+        "authority": "ГНС",
+        "preselect": true
+      },
+      {
+        "code": "min",
+        "kind": "regime",
+        "pickGroup": "regime",
+        "regimes": ["Майнинг"],
+        "bases": [],
+        "authority": "ГНС",
+        "preselect": true
+      },
+      {
+        "code": "gam",
+        "kind": "regime",
+        "pickGroup": "regime",
+        "regimes": ["Игорная деятельность"],
+        "bases": [],
+        "authority": "ГНС",
+        "preselect": false
+      },
+      {
+        "code": "gamo",
+        "kind": "regime",
+        "pickGroup": "regime",
+        "regimes": ["Игорная деятельность"],
+        "bases": [],
+        "authority": "ГНС",
+        "preselect": false
+      },
+      {
+        "code": "zon",
+        "kind": "regime",
+        "pickGroup": "regime",
+        "regimes": ["Зона торговли"],
+        "bases": [],
+        "authority": "ГНС",
+        "preselect": true
+      },
+      {
+        "code": "pat",
+        "kind": "regime",
+        "pickGroup": "regime",
+        "regimes": ["Патент"],
+        "bases": [],
+        "authority": "ГНС",
+        "preselect": true
+      },
+      {
+        "code": "patw",
+        "kind": "regime",
+        "pickGroup": "regime",
+        "regimes": ["Патент", "Единый налог", "Зона торговли"],
+        "bases": [],
+        "authority": "ГНС",
+        "preselect": false
+      },
+      {
+        "code": "pvtd",
+        "kind": "regime",
+        "pickGroup": "regime",
+        "regimes": ["ПВТ"],
+        "bases": [],
+        "authority": "Дирекция ПВТ",
+        "preselect": true
+      },
+      {
+        "code": "sez",
+        "kind": "regime",
+        "pickGroup": "regime",
+        "regimes": ["СЭЗ"],
+        "bases": [],
+        "authority": "Генеральная дирекция СЭЗ",
+        "preselect": true
+      },
+      {
+        "code": "soc",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["employees"],
+        "authority": "ГНС",
+        "preselect": true
+      },
+      {
+        "code": "socip",
+        "kind": "cross",
+        "pickGroup": "all",
+        "regimes": [],
+        "bases": [],
+        "authority": "Соцфонд",
+        "preselect": true
+      },
+      {
+        "code": "pni",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["foreignPayments"],
+        "authority": "ГНС",
+        "preselect": true
+      },
+      {
+        "code": "imp",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["importEAEU"],
+        "authority": "ГНС",
+        "preselect": true
+      },
+      {
+        "code": "imn",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["property", "land"],
+        "authority": "ГНС",
+        "preselect": true
+      },
+      {
+        "code": "imh",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["residential"],
+        "authority": "ГНС",
+        "preselect": true
+      },
+      {
+        "code": "imi",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["rentState"],
+        "authority": "ГНС",
+        "preselect": true
+      },
+      {
+        "code": "endo",
+        "kind": "cross",
+        "pickGroup": "all",
+        "regimes": [],
+        "bases": [],
+        "authority": "ГНС",
+        "preselect": true
+      },
+      {
+        "code": "endi",
+        "kind": "cross",
+        "pickGroup": "all",
+        "regimes": [],
+        "bases": [],
+        "authority": "ГНС",
+        "preselect": true
+      },
+      {
+        "code": "t1y",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": true
+      },
+      {
+        "code": "t1m",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": true
+      },
+      {
+        "code": "t1nov",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "fhd",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "fd1",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "f6",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "f1q",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "micy",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "micq",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "fin4y",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "fin4h",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "kby",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "kbq",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "mcry",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "mcrq",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "crdy",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "crdq",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "sky",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "skq",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "ify",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "fby",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "lizy",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "os11",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "p1m",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "p1y",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "ptep",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "pel",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "pgas",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "pipm",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "pipy",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "syrq",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "en24",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "teb",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "inn4",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "inv2m",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "inv2y",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "ks1m",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "ks1y",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "ks4",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "inv1q",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "inv1y",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "ks9",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "trg1",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "trg12",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "trg14",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "trgz",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "ecom",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "avt1",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "avt65q",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "avt65y",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "ga12",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "ga16",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "ga67",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "sv1q",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "sv1y",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "tf1q",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "tur1q",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "cp1",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "oc1",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "avtt",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "ss5",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "si7",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "ved1",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "ves8",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "eaeu1",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "ikt2",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "air2",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "os4",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "wst1",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "wst2",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "gr01",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "vdk1",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "ban1",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "blg1",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "gil1",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "k85",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "osh1",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "nk1",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "nk2",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "nk3",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "nauka1",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "nk8",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "nk9",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "nk11",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "nk12",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "kino1",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "tvn7",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "fk1",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "kc1",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "sh4",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "sh7",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "sh12",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "sh29",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "sh24y",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "sh24m",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "sh10",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "real7",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "cen2",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "s11",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["statSample"],
+        "authority": "Нацстатком",
+        "preselect": false
+      },
+      {
+        "code": "tbo",
+        "kind": "cross",
+        "pickGroup": "all",
+        "regimes": [],
+        "bases": [],
+        "authority": "Местная администрация",
+        "preselect": false
+      },
+      {
+        "code": "fin",
+        "kind": "cross",
+        "pickGroup": "all",
+        "regimes": [],
+        "bases": [],
+        "authority": "Госфиннадзор",
+        "preselect": true
+      },
+      {
+        "code": "eco",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["emissions"],
+        "authority": "Минприроды",
+        "preselect": true
+      },
+      {
+        "code": "utlq",
+        "kind": "cross",
+        "pickGroup": "basis",
+        "regimes": [],
+        "bases": ["utilGoods"],
+        "authority": "ГП «Эко Оператор»",
+        "preselect": true
+      },
+      {
+        "code": "utli",
+        "kind": "cross",
+        "pickGroup": "optional",
+        "regimes": [],
+        "bases": ["utilGoods"],
+        "authority": "ГП «Эко Оператор»",
+        "preselect": false
+      },
+      {
+        "code": "opu",
+        "kind": "internal",
+        "pickGroup": "optional",
+        "regimes": [],
+        "bases": [],
+        "authority": "Сам контрагент",
+        "preselect": false
+      },
+      {
+        "code": "odds",
+        "kind": "internal",
+        "pickGroup": "optional",
+        "regimes": [],
+        "bases": [],
+        "authority": "Сам контрагент",
+        "preselect": false
+      },
+      {
+        "code": "bal",
+        "kind": "internal",
+        "pickGroup": "optional",
+        "regimes": [],
+        "bases": [],
+        "authority": "Сам контрагент",
+        "preselect": false
+      },
+      {
+        "code": "cap",
+        "kind": "internal",
+        "pickGroup": "optional",
+        "regimes": [],
+        "bases": [],
+        "authority": "Сам контрагент",
+        "preselect": false
+      },
+      {
+        "code": "pkid",
+        "kind": "cross",
+        "pickGroup": "status",
+        "regimes": [],
+        "bases": [],
+        "authority": "Дирекция ПКИ",
+        "preselect": true
+      }
+    ],
+    "bases": [
+      { "code": "employees", "name": "Есть наёмные сотрудники" },
+      { "code": "property", "name": "Есть имущество (здания, сооружения)" },
+      { "code": "residential", "name": "Есть жилые объекты" },
+      { "code": "land", "name": "Есть земля" },
+      { "code": "importEAEU", "name": "Импорт из ЕАЭС" },
+      { "code": "exportEAEU", "name": "Экспорт в ЕАЭС" },
+      { "code": "excise", "name": "Подакцизные товары" },
+      { "code": "subsoil", "name": "Недропользование" },
+      { "code": "foreignPayments", "name": "Выплаты иностранным организациям" },
+      { "code": "rentState", "name": "Аренда государственного имущества" },
+      { "code": "statSample", "name": "В списке Нацстаткома" },
+      { "code": "emissions", "name": "Есть выбросы, сбросы или размещение отходов" },
+      { "code": "utilGoods", "name": "Производство или импорт товаров с утилизационным сбором" }
+    ],
+    "benefitAdds": ["pkid", "pvtd", "gdn", "roy", "fin"],
+    "regimeFullNames": {
+      "ОНР": "Общий налоговый режим (ОНР)",
+      "Патент": "Налог на основе патента",
+      "Единый налог": "Единый налог (упрощённая система)",
+      "СЭЗ": "Свободная экономическая зона (СЭЗ)",
+      "ПВТ": "Парк высоких технологий (ПВТ)",
+      "Майнинг": "Налог на майнинг",
+      "Электронная торговля": "Налог на деятельность в сфере электронной торговли",
+      "Игорная деятельность": "Налог на игорную деятельность",
+      "Зона торговли": "Налог на деятельность в зоне торговли с особым режимом",
+      "СФИТ «Тамчы»": "Специальная финансовая инвестиционная территория «Тамчы»",
+      "Налог на транзакцию": "Налог на транзакцию",
+      "ПКИ": "Парк креативных индустрий (ПКИ) — не режим"
+    }
+  },
+  "expected": {
+    "groups": [
+      {
+        "id": "reg:ОНР",
+        "title": "Общий режим (ОНР)",
+        "who": "Клиенты на режиме «Общий налоговый режим (ОНР)»",
+        "subs": [{ "title": "", "codes": ["nds", "nspm", "nspq", "npa", "akc", "gdn"] }]
+      },
+      {
+        "id": "reg:Единый налог",
+        "title": "Единый налог",
+        "who": "Клиенты на режиме «Единый налог (упрощённая система)»",
+        "subs": [{ "title": "", "codes": ["enq", "enm", "patw"] }]
+      },
+      {
+        "id": "reg:Патент",
+        "title": "Патент",
+        "who": "Клиенты на режиме «Налог на основе патента»",
+        "subs": [{ "title": "", "codes": ["pat", "patw"] }]
+      },
+      {
+        "id": "reg:Зона торговли",
+        "title": "Зона торговли",
+        "who": "Клиенты на режиме «Налог на деятельность в зоне торговли с особым режимом»",
+        "subs": [{ "title": "", "codes": ["zon", "patw"] }]
+      },
+      {
+        "id": "reg:Игорная деятельность",
+        "title": "Игорная деятельность",
+        "who": "Клиенты на режиме «Налог на игорную деятельность»",
+        "subs": [{ "title": "", "codes": ["gam", "gamo"] }]
+      },
+      {
+        "id": "reg:Майнинг",
+        "title": "Майнинг",
+        "who": "Клиенты на режиме «Налог на майнинг»",
+        "subs": [{ "title": "", "codes": ["min"] }]
+      },
+      {
+        "id": "reg:Электронная торговля",
+        "title": "Электронная торговля",
+        "who": "Клиенты на режиме «Налог на деятельность в сфере электронной торговли»",
+        "subs": [{ "title": "", "codes": ["etr"] }]
+      },
+      {
+        "id": "all",
+        "title": "Для всех",
+        "who": "Сдают все организации и ИП, без условий: декларации и годовая финансовая отчётность",
+        "subs": [
+          {
+            "title": "",
+            "codes": ["socip", "endo", "endi", "tbo", "fin", "opu", "odds", "bal", "cap"]
+          }
+        ]
+      },
+      {
+        "id": "basis",
+        "title": "По основаниям",
+        "who": "Если у клиента есть сотрудники, имущество, земля, импорт и другое",
+        "subs": [
+          { "title": "Есть наёмные сотрудники", "codes": ["soc"] },
+          { "title": "Есть имущество (здания, сооружения)", "codes": ["imn"] },
+          { "title": "Есть жилые объекты", "codes": ["imh"] },
+          { "title": "Есть земля", "codes": ["imn"] },
+          { "title": "Импорт из ЕАЭС", "codes": ["imp"] },
+          { "title": "Недропользование", "codes": ["roy", "bon"] },
+          { "title": "Выплаты иностранным организациям", "codes": ["pni"] },
+          { "title": "Аренда государственного имущества", "codes": ["imi"] },
+          { "title": "Есть выбросы, сбросы или размещение отходов", "codes": ["eco"] },
+          {
+            "title": "Производство или импорт товаров с утилизационным сбором",
+            "codes": ["utlq", "utli"]
+          }
+        ]
+      },
+      {
+        "id": "status",
+        "title": "По статусам",
+        "who": "Резиденты ПВТ, ПКИ, СЭЗ и другие льготы и особые статусы",
+        "subs": [{ "title": "", "codes": ["gdn", "roy", "pvtd", "sez", "fin", "pkid"] }]
+      },
+      {
+        "id": "stat",
+        "title": "Статистика",
+        "who": "Если клиент в списке Нацстаткома: формы по труду, предприятию, инвестициям",
+        "subs": [
+          {
+            "title": "",
+            "codes": [
+              "t1y",
+              "t1m",
+              "t1nov",
+              "fhd",
+              "fd1",
+              "f6",
+              "f1q",
+              "micy",
+              "micq",
+              "fin4y",
+              "fin4h",
+              "kby",
+              "kbq",
+              "mcry",
+              "mcrq",
+              "crdy",
+              "crdq",
+              "sky",
+              "skq",
+              "ify",
+              "fby",
+              "lizy",
+              "os11",
+              "p1m",
+              "p1y",
+              "ptep",
+              "pel",
+              "pgas",
+              "pipm",
+              "pipy",
+              "syrq",
+              "en24",
+              "teb",
+              "inn4",
+              "inv2m",
+              "inv2y",
+              "ks1m",
+              "ks1y",
+              "ks4",
+              "inv1q",
+              "inv1y",
+              "ks9",
+              "trg1",
+              "trg12",
+              "trg14",
+              "trgz",
+              "ecom",
+              "avt1",
+              "avt65q",
+              "avt65y",
+              "ga12",
+              "ga16",
+              "ga67",
+              "sv1q",
+              "sv1y",
+              "tf1q",
+              "tur1q",
+              "cp1",
+              "oc1",
+              "avtt",
+              "ss5",
+              "si7",
+              "ved1",
+              "ves8",
+              "eaeu1",
+              "ikt2",
+              "air2",
+              "os4",
+              "wst1",
+              "wst2",
+              "gr01",
+              "vdk1",
+              "ban1",
+              "blg1",
+              "gil1",
+              "k85",
+              "osh1",
+              "nk1",
+              "nk2",
+              "nk3",
+              "nauka1",
+              "nk8",
+              "nk9",
+              "nk11",
+              "nk12",
+              "kino1",
+              "tvn7",
+              "fk1",
+              "kc1",
+              "sh4",
+              "sh7",
+              "sh12",
+              "sh29",
+              "sh24y",
+              "sh24m",
+              "sh10",
+              "real7",
+              "cen2",
+              "s11"
+            ]
+          }
+        ]
+      }
+    ],
+    "main": ["nds", "nspm", "nspq", "npa", "enq", "enm", "soc", "endo", "endi"]
+  }
+}

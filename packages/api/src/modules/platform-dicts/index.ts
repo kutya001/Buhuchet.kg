@@ -17,6 +17,8 @@ import {
   singleTaxRatesRoute,
   taxBenefitsHandler,
   taxBenefitsRoute,
+  taxesHandler,
+  taxesRoute,
   taxOfficesHandler,
   taxOfficesRoute,
   taxRegimesHandler,
@@ -26,7 +28,7 @@ import { phoneCodesHandler, phoneCodesRoute } from './phone-codes';
 
 /**
  * Справочники платформы для экранов организаций (только чтение): коды телефонов, виды отчётов, режимы,
- * льготы и статусы, основания, УГНС, органы, формы собственности, ставки единого налога, причины
+ * налоги и ставки, льготы и статусы, основания, УГНС, органы, формы собственности, ставки единого налога, причины
  * изменения срока, производственный календарь. Правка справочников —
  * Админка → «Справочники платформы» (поток Д).
  */
@@ -42,5 +44,6 @@ export function platformDictsModule(deps: ApiDeps) {
     .openapi(ownershipFormsRoute, ownershipFormsHandler(deps))
     .openapi(singleTaxRatesRoute, singleTaxRatesHandler(deps))
     .openapi(dueChangeReasonsRoute, dueChangeReasonsHandler(deps))
+    .openapi(taxesRoute, taxesHandler(deps))
     .openapi(productionCalendarRoute, productionCalendarHandler(deps));
 }

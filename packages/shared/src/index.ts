@@ -10,3 +10,4 @@ export * from './l10n';
 export * from './status';
 export * from './platform-dicts';
 export * from './admin';
+export * from './dicts';
