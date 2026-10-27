@@ -23,15 +23,15 @@ import { api, callApi } from '../api-client';
 import { fieldError, NewPasswordFields } from '../auth/fields';
 import { TelegramLinkRow, useTelegramLink } from '../auth/telegram-link';
 import { useErrorText, useT } from '../l10n/provider';
+import { MyWalletsBox } from '../money/wallets';
 import { currentTheme, setTheme } from '../shell/browser';
 import type { Theme } from '../shell/prefs';
 
 /**
  * «Мой профиль» (ТЗ «Профиль пользователя», прототип modules/profile.js profileDlg): основное
- * (ФИО, логин, телефон, роль), Telegram для уведомлений (привязка по ссылке, «Отвязать»), тема и смена
- * пароля. Окно — карточка; пока в «Смене пароля» что-то введено, протяжка вниз, «Назад» и выход из
- * аккаунта спрашивают. Уровень знаний, реквизиты для переводов и уведомления придут со своими
- * задачами (потоки В и Г).
+ * (ФИО, логин, телефон, роль), Telegram для уведомлений (привязка по ссылке, «Отвязать»), «Мои реквизиты
+ * для переводов» (задача 2.18), тема и смена пароля. Окно — карточка; пока в «Смене пароля» что-то введено, протяжка вниз, «Назад» и выход из
+ * аккаунта спрашивают. Уровень знаний и уведомления придут со своими задачами (поток Г).
  */
 export function ProfileWindow({
   open,
@@ -77,6 +77,7 @@ export function ProfileWindow({
         />
       </Box>
       <TelegramBox initial={me.telegram} />
+      {me.employee ? <MyWalletsBox holderDefault={me.employee.shortName} /> : null}
       <Box title={t('profile.settings')}>
         <FormGrid>
           <ThemeField />

@@ -2,7 +2,7 @@ import type { ReactElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { inputClass, Tag, type FieldControl } from './form';
-import { MiniTable } from './mini-table';
+import { MiniTable, miniWide } from './mini-table';
 import { PhoneInput, type PhoneInputCode, type PhoneInputValue } from './phone-input';
 import { Segments } from './segments';
 
@@ -146,6 +146,50 @@ describe('MiniTable — маленькая таблица карточки (пр
     expect(html).toContain('data-label="Несданных"');
     expect(html).toContain('max-md:col-span-2');
     expect(html).toContain('md:text-right');
+  });
+
+  it('на телефоне кнопки строки — в правом верхнем углу, длинное значение — на всю ширину (прототип mCardsTable)', () => {
+    const cells = (html: string) => html.split('<td').slice(1);
+    const html = renderToStaticMarkup(
+      <MiniTable
+        columns={[...columns, { key: 'act', label: '', actions: true }]}
+        rows={[
+          {
+            key: '1',
+            cells: { name: 'ОсОО «Ала-Тоо»', open: 'Бакай Банк, M-Bank, О!Банк', act: 'x' },
+            wide: miniWide({ open: 'Бакай Банк, M-Bank, О!Банк' }),
+          },
+        ]}
+        empty="—"
+        label="Счета"
+      />,
+    );
+    const [title, open, act] = cells(html);
+    expect(html).toContain('max-md:relative');
+    expect(title).toContain('max-md:pr-10');
+    expect(open).toContain('max-md:col-span-2');
+    expect(act).toContain('max-md:absolute');
+    expect(act).not.toContain('content-[attr(data-label)]');
+  });
+
+  it('headless — без строки заголовков и без подписей у значений на телефоне (прототип staff.js)', () => {
+    const html = renderToStaticMarkup(
+      <MiniTable
+        columns={columns}
+        rows={[{ key: '1', cells: { name: 'Optima Bank', open: 'Основной' } }]}
+        empty="—"
+        label="Реквизиты"
+        headless
+      />,
+    );
+    expect(html).toContain('<thead class="hidden">');
+    expect(html).not.toContain('content-[attr(data-label)]');
+  });
+
+  it('miniWide — ключи значений длиннее 22 знаков без лишних пробелов', () => {
+    expect(
+      miniWide({ short: 'Optima Bank', long: 'Бакай Банк, M-Bank, О!Банк', spaced: '  a   b  ' }),
+    ).toEqual(['long']);
   });
 });
 

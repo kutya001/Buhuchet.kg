@@ -4,6 +4,7 @@ import { withOrgContext } from './context';
 import { verifyPassword } from '@buhuchet/adapters/password';
 import { eq } from 'drizzle-orm';
 import {
+  banks,
   employees,
   gkedItems,
   organizations,
@@ -65,8 +66,11 @@ describe.skipIf(!databaseAvailable())('начальное наполнение �
       .select()
       .from(platformReference)
       .where(sql`${platformReference.key} = 'dictionaries'`);
-    expect(Object.keys(dictionaries!.payload as object).sort()).toEqual(['banks', 'cats']);
+    expect(Object.keys(dictionaries!.payload as object).sort()).toEqual(['cats']);
     expect(await t.admin.db.$count(reportTypes)).toBe((refDB.reportTypes as unknown[]).length);
+    expect(await t.admin.db.$count(banks)).toBe(
+      (refDB.dictionaries as { banks: { items: unknown[] } }).banks.items.length,
+    );
     expect(
       await t.admin.db.$count(gkedItems, sql`${gkedItems.level} = 'subclass'`),
     ).toBeGreaterThan(0);
@@ -114,7 +118,8 @@ describe.skipIf(!databaseAvailable())('начальное наполнение �
   it('с --update из наполнения этапа 1 уходят копии ставок ЕН, форм собственности и причин (задача 2.01)', async () => {
     const refDB = await readSpecJson<Record<string, unknown>>('data/refDB.json');
     const dicts = refDB.dictionaries as Record<string, unknown>;
-    // Как на стенде до 2.01: ставки ЕН — своим разделом, формы и причины — внутри `dictionaries`.
+    // Как на стенде до 2.01: ставки ЕН — своим разделом, формы, причины и банки (до 2.18) — внутри
+    // `dictionaries`.
     await t.admin.db
       .insert(platformReference)
       .values({ key: 'enRates', payload: refDB.enRates, checksum: 'x', source: 'этап 1' });
@@ -138,7 +143,7 @@ describe.skipIf(!databaseAvailable())('начальное наполнение �
       .select()
       .from(platformReference)
       .where(sql`${platformReference.key} = 'dictionaries'`);
-    expect(Object.keys(dictionaries!.payload as object).sort()).toEqual(['banks', 'cats']);
+    expect(Object.keys(dictionaries!.payload as object).sort()).toEqual(['cats']);
   });
 
   it('справочники платформы читаются ролью приложения, демо-организация — только в своём контексте', async () => {
