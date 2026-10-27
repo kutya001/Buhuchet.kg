@@ -24,3 +24,6 @@ export * from './dicts/tax-pick';
 export * from './dicts/org-report-types';
 export * from './dicts/platform-dicts';
 export * from './dicts/value-guide';
+export * from './kpi/months';
+export * from './kpi/indicators';
+export * from './kpi/fill';
