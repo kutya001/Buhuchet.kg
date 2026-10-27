@@ -89,7 +89,7 @@ export function resetRequestHandler(deps: ApiDeps): RouteHandler<typeof resetReq
       return c.json(
         apiError(
           'telegram_unavailable',
-          'Telegram-бот пока не подключён к платформе. Пароль сбросит владелец организации, а владельцу — администратор платформы.',
+          'Telegram-бот пока не подключён к платформе. Пароль сбросит владелец организации.',
           // Текст «Забыли пароль?» в словаре — err.telegram_unavailable.reset.
           { variant: 'reset' },
         ),

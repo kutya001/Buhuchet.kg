@@ -27,7 +27,7 @@ export async function xlsxResponse(
     rows: readonly XlsxCell[][];
     more: boolean;
     /** Сколько записей под фильтрами всего (`selectListExport`). */
-    total?: number;
+    total: number;
     t: (key: string) => string;
   },
 ): Promise<Response> {
@@ -47,7 +47,7 @@ export async function xlsxResponse(
     'cache-control': 'no-store',
     'x-export-rows': String(rows.length),
     'x-export-more': more ? '1' : '0',
-    ...(more && options.total !== undefined ? { 'x-export-total': String(options.total) } : {}),
+    ...(more ? { 'x-export-total': String(options.total) } : {}),
   });
 }
 

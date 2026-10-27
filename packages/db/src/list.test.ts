@@ -542,6 +542,16 @@ describe.skipIf(!databaseAvailable())('страница списка на сер
       from: bigFrom,
     });
     expect(filtered).toMatchObject({ more: true, total: BIG - 10 });
+    // И только в области модуля: записи вне области не считаются.
+    const scoped = await selectListExport({
+      query,
+      columns: BIG_COLUMNS,
+      keys: ['id'],
+      natural: [big.id],
+      scope: sql`${big.id} > 5`,
+      from: bigFrom,
+    });
+    expect(scoped).toMatchObject({ more: true, total: BIG - 5 });
   });
 
   it('итог по любому фильтру: «компания А, 09.2026» — 10 500 сом (механизм итогов пункта приёмки)', async () => {
