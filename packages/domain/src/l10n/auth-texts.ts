@@ -3,11 +3,12 @@ import type { UiTextDefault } from './texts';
 /**
  * Тексты входа и «Мой профиль» (задача #13): страница входа, «Забыли пароль?» и ввод кода — прототип
  * core/login.js showLogin; «Мой профиль» — modules/profile.js profileDlg; смена временного пароля и
- * предложение привязать Telegram после неё — по ТЗ («при следующем входе система требует сменить его»,
- * «привязка предлагается при первом входе»), в прототипе этих шагов нет. Ключ `auth.forgot` — из
- * раздела `localization` refDB.json, с тем же текстом. `{min}` — наименьшая длина пароля, `{code}` —
- * число цифр кода, `{count}` и `{minutes}` — числа из правил входа (@buhuchet/domain). Тексты ошибок
- * `err.*` совпадают с текстами ответов сервера (packages/api/src/auth-errors.ts, modules/auth).
+ * предложение привязать Telegram после неё — core/login.js (шаги `first` и `tglink`). Ключи
+ * `auth.forgot`, `auth.bad_login`, `auth.locked`, `auth.user_blocked`, `auth.org_blocked` и
+ * `auth.code_sent` — из раздела `localization` refDB.json, с тем же текстом: их показывает страница
+ * входа. `{min}` — наименьшая длина пароля, `{code}` — число цифр кода, `{minutes}` — числа из правил
+ * входа (@buhuchet/domain). Тексты ошибок `err.*` совпадают с текстами ответов сервера
+ * (packages/api/src/auth-errors.ts, modules/auth).
  */
 export const AUTH_TEXTS = {
   // Страница входа
@@ -17,24 +18,32 @@ export const AUTH_TEXTS = {
   'auth.password': { ru: 'Пароль', section: 'Вход' },
   'auth.sign_in': { ru: 'Войти', section: 'Вход' },
   'auth.forgot': { ru: 'Забыли пароль?', section: 'Вход' },
-  'auth.wrong_credentials': {
-    ru: 'Неверный логин или пароль. После {count} неверных попыток вход блокируется на {minutes} минут.',
+  // Ошибка входа — плашкой над «Войти» (прототип core/login.js `LG_T`, решение заказчика 26.10.2026).
+  'auth.bad_login': { ru: 'Неверный логин или пароль', section: 'Вход' },
+  'auth.locked': {
+    ru: 'Вход временно закрыт: слишком много неверных попыток. Попробуйте через 15 минут.',
+    section: 'Вход',
+  },
+  'auth.user_blocked': {
+    ru: 'Учётная запись заблокирована. Обратитесь к владельцу организации.',
+    section: 'Вход',
+  },
+  'auth.org_blocked': {
+    ru: 'Организация заблокирована. Обратитесь к администратору платформы.',
     section: 'Вход',
   },
 
   // «Забыли пароль?»
   'auth.reset_title': { ru: 'Восстановление пароля', section: 'Вход' },
-  'auth.reset_text': {
-    ru: 'Введите логин. Бот пришлёт одноразовый код в привязанный Telegram. Код действует {minutes} минут.',
-    section: 'Вход',
-  },
+  'auth.reset_text': { ru: 'Введите логин и нажмите «Получить код».', section: 'Вход' },
   'auth.get_code': { ru: 'Получить код', section: 'Вход' },
   'auth.back': { ru: 'Вернуться ко входу', section: 'Вход' },
   'auth.code_title': { ru: 'Введите код', section: 'Вход' },
-  'auth.reset_requested': {
-    ru: 'Если к логину привязан Telegram, бот пришлёт код. Если код не пришёл, пароль сбросит владелец организации, а владельцу — администратор платформы.',
+  'auth.code_sent': {
+    ru: 'Если к логину привязан Telegram, бот пришлёт код. Если код не пришёл, пароль сбросит владелец организации.',
     section: 'Вход',
   },
+  'auth.code_ttl': { ru: 'Код действует {minutes} минут.', section: 'Вход' },
   'auth.code': { ru: 'Код из Telegram', section: 'Вход' },
   'auth.new_password': { ru: 'Новый пароль', section: 'Вход' },
   'auth.password_hint': { ru: 'Не короче {min} символов', section: 'Вход' },
@@ -74,7 +83,7 @@ export const AUTH_TEXTS = {
   // Подстановки — из details ответа; чего-то нет — экран показывает текст сервера.
   'err.invalid_credentials': { ru: 'Неверный логин или пароль', section: 'Ошибки' },
   'err.login_locked': {
-    ru: 'Слишком много неверных паролей. Вход закрыт на {minutes} минут, попробуйте снова после {time}.',
+    ru: 'Вход временно закрыт: слишком много неверных попыток. Попробуйте через {minutes} минут.',
     section: 'Ошибки',
   },
   'err.employee_blocked': {
@@ -90,7 +99,7 @@ export const AUTH_TEXTS = {
     section: 'Ошибки',
   },
   'err.org_blocked': {
-    ru: 'Организация {org} заблокирована. Обратитесь к администратору платформы.',
+    ru: 'Организация заблокирована. Обратитесь к администратору платформы.',
     section: 'Ошибки',
   },
   'err.password_change_required': {
@@ -105,7 +114,7 @@ export const AUTH_TEXTS = {
     section: 'Ошибки',
   },
   'err.telegram_unavailable.reset': {
-    ru: 'Telegram-бот пока не подключён к платформе. Пароль сбросит владелец организации, а владельцу — администратор платформы.',
+    ru: 'Telegram-бот пока не подключён к платформе. Пароль сбросит владелец организации.',
     section: 'Ошибки',
   },
   'err.unauthorized': { ru: 'Войдите в систему', section: 'Ошибки' },

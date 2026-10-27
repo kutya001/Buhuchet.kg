@@ -142,8 +142,9 @@ export const GRID_TEXTS = {
   'grid.exported.one': { ru: 'Скачан файл Excel: {n} строка', section: 'Списки' },
   'grid.exported.few': { ru: 'Скачан файл Excel: {n} строки', section: 'Списки' },
   'grid.exported.many': { ru: 'Скачан файл Excel: {n} строк', section: 'Списки' },
+  // Прототип ui/grid.js, ТЗ «Списки» (решение 26.10.2026): {n} — 50 000, {total} — всего под фильтрами.
   'grid.export_more': {
-    ru: 'В файл вошли первые {n} записей — сузьте список фильтром',
+    ru: 'Выгружено {n} строк из {total} — сузьте фильтр, чтобы выгрузить остальные',
     section: 'Списки',
   },
   'grid.export_failed': {

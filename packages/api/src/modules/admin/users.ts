@@ -169,6 +169,7 @@ export function exportUsersHandler(deps: ApiDeps): RouteHandler<typeof exportUse
         columns: result.columns,
         rows: result.rows,
         more: result.more,
+        total: result.total,
         t,
       });
     });

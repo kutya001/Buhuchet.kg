@@ -61,8 +61,8 @@ export const INVALID_CREDENTIALS_MESSAGE = 'Неверный логин или �
  * логина сверяется с подставным хешем). О блокировке сотрудника, учётной записи или организации
  * сообщается только после верного пароля. Верный пароль снимает счёт неверных.
  */
-// ОТКЛОНЕНИЕ: docs/deviations.md#4 — решение Б: в прототипе «Нет такого логина» и «Неверный пароль…»,
-// а сообщение о блокировке — до проверки пароля.
+// docs/deviations.md п. 4, решение Б (с v59 так же в ТЗ и прототипе core/login.js): одно «Неверный
+// логин или пароль», о блокировке — только после верного пароля.
 export function loginHandler(deps: ApiDeps): RouteHandler<typeof loginRoute, AppEnv> {
   return async (c) => {
     const { login: typed, password } = c.req.valid('json');
