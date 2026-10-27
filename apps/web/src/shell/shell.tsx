@@ -216,7 +216,7 @@ function ShellPage({
     const split = phoneModules(me.modules, access.admin);
     const pick = (id: MenuModuleId, title: string): PhoneModule => {
       const m = modules.find((x) => x.id === id)!;
-      return { id, title, icon: m.icon, href: m.href };
+      return { id, title, icon: m.icon, href: m.href, ...(m.count ? { count: m.count } : {}) };
     };
     return {
       bottom: split.bottom.map((id) => pick(id, t(MODULES[id].short))),

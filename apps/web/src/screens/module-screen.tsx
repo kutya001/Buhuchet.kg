@@ -6,6 +6,7 @@ import { L10nList } from '../admin/l10n-list';
 import { OrgsList } from '../admin/orgs-list';
 import { PlatformDicts } from '../dicts/platform-tab';
 import { ReportTypesList } from '../dicts/report-types-list';
+import { KpiScreen } from '../kpi/kpi-screen';
 import { OrgMain } from '../org/org-main';
 import { OrgPolicyTab } from '../org/org-policy';
 import { OrgSettingsTab } from '../org/org-settings';
@@ -28,6 +29,7 @@ export function ModuleScreen({
   moduleId: MenuModuleId;
   tabId: string | null;
 }) {
+  if (moduleId === 'kpi') return <KpiScreen tab={tabId ?? 'month'} />;
   if (moduleId === 'staff') {
     const tab = tabId ?? 'list';
     if (tab === 'list') return <StaffList />;
@@ -56,7 +58,14 @@ export function ModuleScreen({
  * модуля»): только у них в ряду вкладок кнопка «Статистика». Экран с плашками добавляет сюда свою
  * вкладку («модуль/вкладка») и показывает плашки по `useModuleStats`.
  */
-const SCREENS_WITH_PLATES: ReadonlySet<string> = new Set<string>(['orgs/', 'l10n/']);
+const SCREENS_WITH_PLATES: ReadonlySet<string> = new Set<string>([
+  'kpi/',
+  'kpi/month',
+  'kpi/period',
+  'kpi/missing',
+  'orgs/',
+  'l10n/',
+]);
 
 export function screenHasPlates(moduleId: MenuModuleId, tabId: string | null): boolean {
   return SCREENS_WITH_PLATES.has(`${moduleId}/${tabId ?? ''}`);
