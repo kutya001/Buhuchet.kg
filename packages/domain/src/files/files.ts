@@ -37,7 +37,7 @@ export const FILE_PENDING_TTL_MS = DAY_MS;
  * модулей ТЗ) и подключает его в API (`FILE_SOURCES` в packages/api). «manual» — «Загружен вручную»:
  * файл без записи, общий файл организации.
  */
-export const FILE_SOURCE_KINDS = ['manual'] as const;
+export const FILE_SOURCE_KINDS = ['manual', 'indicator_value'] as const;
 export type FileSourceKind = (typeof FILE_SOURCE_KINDS)[number];
 
 export function isFileSourceKind(value: string): value is FileSourceKind {

@@ -288,6 +288,13 @@
       "when": 1793116484743,
       "tag": "0040_contractors_guards",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1793120044683,
+      "tag": "0041_kpi",
+      "breakpoints": true
     }
   ]
 }

@@ -56,7 +56,8 @@ export interface KpiBook {
 }
 
 /** Статус заполнения месяца по контрагенту: 1 Не заполнено → 2 Заполнено → 3 Проверено. */
-export type FillStatus = 'empty' | 'filled' | 'checked';
+export const FILL_STATUSES = ['empty', 'filled', 'checked'] as const;
+export type FillStatus = (typeof FILL_STATUSES)[number];
 
 /** Не дальше скольких месяцев назад ищутся незаполненные месяцы (прототип `K_BACK`). */
 export const KPI_LOOKBACK_MONTHS = 35;

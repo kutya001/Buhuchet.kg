@@ -33,6 +33,8 @@ export const DUE_DAY_DEFAULT = 10;
 export const INDICATOR_NAME_MAX_LENGTH = 100;
 export const INDICATOR_UNIT_MAX_LENGTH = 20;
 export const INDICATOR_DESCRIPTION_MAX_LENGTH = 1000;
+/** Комментарий к значению (например, «по выписке банка»). */
+export const INDICATOR_NOTE_MAX_LENGTH = 500;
 
 /** Значение показателя — целое число сотых. */
 export type IndicatorValue = number;

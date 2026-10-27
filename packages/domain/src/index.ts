@@ -33,4 +33,5 @@ export * from './money/requisites';
 export * from './kpi/indicators';
 export * from './kpi/fill';
 export * from './kpi/targets';
+export * from './kpi/views';
 export * from './files/files';

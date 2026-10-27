@@ -445,6 +445,9 @@ export interface GridViewSettings {
 export const GRID_KEYS = [
   'staff.list',
   'staff.roles',
+  // «Показатели контрагентов»: вкладки «За период» и «Не заполнено».
+  'kpi.period',
+  'kpi.missing',
   'accounts.list',
   'orgs.list',
   'l10n.list',
