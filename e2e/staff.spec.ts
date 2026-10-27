@@ -141,7 +141,7 @@ test.describe('Этап 1: сотрудники и роли (экраны)', () 
     const form = page.getByRole('dialog', { name: 'Новый сотрудник' });
     await expect(form).toContainText('Вход по логину и паролю, без почты');
     await expect(form).toContainText('При первом входе сотруднику предложат привязать Telegram');
-    // Временный пароль уже подставлен; роль — из учётной политики («Бухгалтер»).
+    // Временный пароль уже подставлен; роль — по умолчанию для новых сотрудников («Бухгалтер»).
     const password = form.getByLabel('Временный пароль');
     await expect(password).toHaveValue(/^Bh-[A-Z2-9]{4}-[A-Z2-9]{4}$/);
     const temporaryPassword = await password.inputValue();
