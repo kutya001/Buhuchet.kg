@@ -76,6 +76,23 @@ describe('loadConfig', () => {
     expect(loadConfig(base).APP_BASE_URL).toBe('http://localhost:3000');
   });
 
+  it('на стенде и рабочем сайте адрес хранилища для браузера — только https', () => {
+    const site = { ...base, CRON_SECRET: 'f'.repeat(40), APP_BASE_URL: 'https://buhuchet.kg' };
+    for (const APP_ENV of ['staging', 'production']) {
+      expect(() =>
+        loadConfig({ ...site, APP_ENV, S3_PUBLIC_ENDPOINT: 'http://files.buhuchet.kg' }),
+      ).toThrow(/S3_PUBLIC_ENDPOINT/);
+      expect(
+        loadConfig({ ...site, APP_ENV, S3_PUBLIC_ENDPOINT: 'https://files.buhuchet.kg' })
+          .S3_PUBLIC_ENDPOINT,
+      ).toBe('https://files.buhuchet.kg');
+      expect(loadConfig({ ...site, APP_ENV }).S3_PUBLIC_ENDPOINT).toBeUndefined();
+    }
+    expect(
+      loadConfig({ ...base, S3_PUBLIC_ENDPOINT: 'http://localhost:9000' }).S3_PUBLIC_ENDPOINT,
+    ).toBe('http://localhost:9000');
+  });
+
   it('запрещает фиксированное время на рабочем сайте', () => {
     expect(() =>
       loadConfig({ ...base, APP_ENV: 'production', FIXED_NOW: '2026-10-18T06:00:00Z' }),

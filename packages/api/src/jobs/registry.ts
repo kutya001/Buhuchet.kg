@@ -2,6 +2,7 @@ import type { AppConfig } from '@buhuchet/adapters';
 import { cleanupLoginAttempts, cleanupRateLimits, schema } from '@buhuchet/db';
 import { lt } from 'drizzle-orm';
 import type { Job } from '../deps';
+import { cleanupPendingFiles } from '../modules/files/cleanup';
 
 const { schedulerRuns } = schema;
 
@@ -42,6 +43,19 @@ export const cleanupRateLimitsJob: Job = {
 };
 
 /**
+ * Незаконченные загрузки файлов (браузер не положил файл в хранилище или окно закрыли) старше суток
+ * убираются раз в час — время загрузки ставит база по настоящим часам, поэтому и срок — по ним.
+ */
+export const cleanupPendingFilesJob: Job = {
+  name: 'files.cleanup-pending',
+  cron: '45 * * * *',
+  lookbackMinutes: 60,
+  async run(ctx) {
+    await cleanupPendingFiles(ctx);
+  },
+};
+
+/**
  * Все задачи по расписанию. Модули добавляют сюда свои: создание отчётов, напоминания 7 и 3 дня
  * и в день срока, сводка по понедельникам, отправка очереди Telegram. Данные организации задача
  * читает и меняет в `withOrgContext(ctx.db, { orgId, kind: 'job' })`: предел времени запроса у задач
@@ -51,6 +65,7 @@ export const jobs: readonly Job[] = [
   cleanupSchedulerRuns,
   cleanupLoginAttemptsJob,
   cleanupRateLimitsJob,
+  cleanupPendingFilesJob,
 ];
 
 /**

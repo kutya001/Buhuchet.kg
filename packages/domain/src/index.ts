@@ -27,3 +27,4 @@ export * from './dicts/org-report-types';
 export * from './dicts/platform-dicts';
 export * from './dicts/value-guide';
 export * from './money/requisites';
+export * from './files/files';

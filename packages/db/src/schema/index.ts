@@ -14,3 +14,4 @@ export * from './status';
 export * from './platform-dicts';
 export * from './dicts';
 export * from './money';
+export * from './files';
