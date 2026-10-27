@@ -95,7 +95,7 @@ export const NewOrganizationForm = z.object({
   ownerFullName: z
     .string()
     .trim()
-    .min(1, message('orgs.err.owner_fio'))
+    .min(1, message('err.owner_fio_required'))
     .max(FULL_NAME_MAX_LENGTH, message('form.too_long')),
   ownerLogin: z
     .string()

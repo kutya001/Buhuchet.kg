@@ -42,8 +42,11 @@ import { tabHref } from '../shell/modules';
 import { NewOrganizationDialog } from './new-org-dialog';
 import { orgMenu } from './orgs-menu';
 
-/** Сортировка по умолчанию — по дате регистрации, от старых к новым (прототип `sort:{key:'created',dir:1}`). */
-const DEFAULT_SORT: ListSort = { key: 'registered', dir: 'asc' };
+/**
+ * Сортировка по умолчанию во всех списках — от новых к старым по «Создано» (ТЗ «Сортировка»; прототип
+ * defSort: при служебных столбцах `sort` списка не действует).
+ */
+const DEFAULT_SORT: ListSort = { key: 'createdAt', dir: 'desc' };
 
 /** Видимые по умолчанию (прототип ui/grid.js, SHOW['adm-orgs']); адрес страницы и регистрация — в «Столбцах». */
 const DEFAULT_VISIBLE = ['name', 'inn', 'owner', 'contractors', 'employees', 'active'];

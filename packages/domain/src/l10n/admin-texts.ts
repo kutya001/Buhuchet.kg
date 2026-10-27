@@ -48,8 +48,7 @@ export const ADMIN_TEXTS = {
     section: S,
   },
   'orgs.new.done': { ru: 'Организация и владелец созданы', section: S },
-  'orgs.err.owner_fio': { ru: 'Введите ФИО', section: 'Ошибки' },
-  'err.owner_fio_required': { ru: 'Введите ФИО владельца', section: 'Ошибки' },
+  'err.owner_fio_required': { ru: 'Введите ФИО', section: 'Ошибки' },
   'err.org_not_found': { ru: 'Организация не найдена', section: 'Ошибки' },
   'err.demo_org': { ru: 'Демо-организацию стенда не блокируют', section: 'Ошибки' },
 } as const satisfies Record<string, UiTextDefault>;

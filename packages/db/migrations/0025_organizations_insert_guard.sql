@@ -1,0 +1,3 @@
+-- Новую организацию роль приложения создаёт только активной, без причины блокировки и не демо: статус
+-- и блокировку ведёт администратор платформы (app.admin_set_org_status, миграция 0024), демо — наполнение.
+CREATE POLICY "organizations_insert_guard" ON "organizations" AS RESTRICTIVE FOR INSERT TO "buhuchet_app" WITH CHECK ("organizations"."status" = 'active' and "organizations"."blocked_reason" is null and not "organizations"."is_demo");

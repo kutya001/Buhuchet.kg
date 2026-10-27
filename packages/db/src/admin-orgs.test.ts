@@ -1,6 +1,6 @@
 import { hashPassword } from '@buhuchet/adapters/password';
 import type { ListQuery } from '@buhuchet/domain';
-import { sql } from 'drizzle-orm';
+import { sql, type SQL } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   adminGetOrganization,
@@ -179,14 +179,19 @@ describe.skipIf(!databaseAvailable())(
       ]);
     });
 
-    it('владелец организации статус не меняет ни функцией, ни напрямую', async () => {
+    it('владелец, заблокированный администратор и запрос без контекста статус не меняют ни функцией, ни напрямую', async () => {
       const owner = { orgId: a.orgId, userId: a.ownerUserId };
-      const viaFunction = await withOrgContext(db.app.db, owner, (tx) =>
-        tx.execute<{ v: number | null }>(
-          sql`select app.admin_set_org_status(${a.orgId}, 'blocked', null, 1) as v`,
-        ),
+      const block = sql`select app.admin_set_org_status(${a.orgId}, 'blocked', null, 1) as v`;
+      const viaOwner = await withOrgContext(db.app.db, owner, (tx) =>
+        tx.execute<{ v: number | null }>(block),
       );
-      expect(viaFunction[0]!.v).toBeNull();
+      expect(viaOwner[0]!.v).toBeNull();
+      const viaBlocked = await withUserContext(db.app.db, blockedAdminId, (tx) =>
+        tx.execute<{ v: number | null }>(block),
+      );
+      expect(viaBlocked[0]!.v).toBeNull();
+      const bare = await db.app.db.transaction((tx) => tx.execute<{ v: number | null }>(block));
+      expect(bare[0]!.v).toBeNull();
       await expect(
         withOrgContext(db.app.db, owner, (tx) =>
           tx.execute(sql`update organizations set status = 'blocked' where id = ${a.orgId}`),
@@ -196,6 +201,22 @@ describe.skipIf(!databaseAvailable())(
         adminGetOrganization(tx, a.orgId),
       );
       expect(org?.active).toBe(true);
+    });
+
+    it('роль приложения создаёт организацию только активной и не демо', async () => {
+      const id = '00000000-0000-4000-8000-0000000000c1';
+      const insert = (extra: SQL) =>
+        withOrgContext(db.app.db, { orgId: id, userId: adminId }, (tx) =>
+          tx.execute(
+            sql`insert into organizations (id, slug, name, status, blocked_reason, is_demo) values (${id}, 'guard', 'Guard', ${extra})`,
+          ),
+        );
+      await expect(insert(sql`'blocked', 'причина', false`)).rejects.toThrow();
+      await expect(insert(sql`'active', 'причина', false`)).rejects.toThrow();
+      await expect(insert(sql`'active', null, true`)).rejects.toThrow();
+      await insert(sql`'active', null, false`);
+      const org = await withUserContext(db.app.db, adminId, (tx) => adminGetOrganization(tx, id));
+      expect(org).toMatchObject({ active: true, isDemo: false });
     });
   },
 );

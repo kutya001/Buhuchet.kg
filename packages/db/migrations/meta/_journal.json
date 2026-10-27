@@ -176,6 +176,13 @@
       "when": 1793071264186,
       "tag": "0024_admin_organizations",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1793073182458,
+      "tag": "0025_organizations_insert_guard",
+      "breakpoints": true
     }
   ]
 }

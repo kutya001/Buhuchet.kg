@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import { signIn, uniqueLogin } from './helpers';
@@ -10,7 +11,9 @@ import { signIn, uniqueLogin } from './helpers';
 // сразу меняется через API.
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const ADMIN_PASSWORD = 'Админ-пароль-e2e-1';
+// Пароль администратора — свой на каждый прогон: в базе, где шёл тест, не остаётся администраторов с
+// известным паролем.
+const ADMIN_PASSWORD = `Adm-${randomBytes(12).toString('base64url')}`;
 const OWNER_PASSWORD = 'Bh-E2E7-BLK9';
 
 /** Администратор платформы с уже сменённым временным паролем; сеанс — в `api`. */
