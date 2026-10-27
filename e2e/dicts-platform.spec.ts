@@ -177,15 +177,21 @@ test.describe('Этап 2: справочники платформы для ор
     await expect(row).toContainText('— Нооруз');
   });
 
-  test('«Попросить добавить»: пустое «Что добавить» — ошибка; запрос виден в «Моих запросах» со статусом «Новый»', async ({
+  test('«Попросить добавить»: пустое «Что добавить» — ошибка; ссылка в уведомлении открывает «Мои запросы», запрос там со статусом «Новый», строка открывает его целиком', async ({
     page,
     baseURL,
   }, testInfo) => {
-    // Демо-бухгалтер без права на справочники тоже может попросить.
+    // Демо-бухгалтер без права на справочники тоже может попросить и посмотреть свои запросы.
     await openTab(page, baseURL, 'aigerim');
     const what = `Отчёт по НДС на импорт услуг ${testInfo.project.name} ${Date.now()}`;
-    // Без права на справочники в «+ Добавить» один способ — «Попросить добавить»: окно открывается сразу.
-    await page.getByRole('button', { name: 'Добавить', exact: true }).click();
+    const add = async (item: string) => {
+      await page.getByRole('button', { name: 'Добавить', exact: true }).click();
+      await page
+        .getByRole('menu', { name: 'Добавить' })
+        .getByRole('menuitem', { name: item })
+        .click();
+    };
+    await add('Попросить добавить');
     const dialog = page.getByRole('dialog', { name: 'Попросить добавить' });
     await expect(dialog).toContainText('Запрос уйдёт администратору платформы');
     await expect(dialog.getByLabel('Справочник')).toHaveValue('types');
@@ -195,17 +201,28 @@ test.describe('Этап 2: справочники платформы для ор
     await dialog.getByLabel('Что добавить').fill(what);
     await dialog.getByLabel('Комментарий').fill('Нужен для реквизитов');
     await dialog.getByRole('button', { name: 'Отправить запрос' }).click();
-    await expect(page.getByText('Запрос отправлен администратору платформы')).toBeVisible();
+    const toast = page
+      .getByRole('status')
+      .filter({ hasText: 'Запрос отправлен администратору платформы' });
+    await expect(toast).toBeVisible();
     await expect(dialog).toBeHidden();
 
-    await page.getByRole('button', { name: 'Мои запросы' }).click();
+    await toast.getByRole('button', { name: 'Мои запросы' }).click();
     const mine = page.getByRole('dialog', { name: 'Мои запросы' });
     const row = mine.locator('[data-mini-table] tr').filter({ hasText: what });
     await expect(row).toHaveCount(1);
     await expect(row).toContainText('Банковские провайдеры');
     await expect(row).toContainText('Нужен для реквизитов');
     await expect(row).toContainText('Новый');
-    await mine.getByRole('button', { name: 'Закрыть' }).last().click();
+    await row.click();
+    const view = page.getByRole('dialog', { name: what });
+    await expect(view).toContainText('Ответа пока нет');
+    await view.getByRole('button', { name: 'Готово' }).click();
+    await mine.getByRole('button', { name: 'Готово' }).click();
     await expect(mine).toBeHidden();
+
+    // «Мои запросы» есть и в «+ Добавить».
+    await add('Мои запросы');
+    await expect(mine.locator('[data-mini-table] tr').filter({ hasText: what })).toHaveCount(1);
   });
 });

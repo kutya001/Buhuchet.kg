@@ -57,8 +57,10 @@ const oneOf = (column: AnyPgColumn, values: readonly string[]): SQL =>
 const allOf = (column: AnyPgColumn, values: readonly string[]): SQL =>
   sql`${column} <@ array[${sql.raw(values.map((v) => `'${v}'`).join(', '))}]::text[]`;
 
-/** Кто завёл и кто поправил значение в Админке; null — значение из наполнения. */
+/** Кто и когда завёл и кто поправил значение в Админке; null — значение из наполнения. */
 const auditColumns = () => ({
+  /** «Создано»: когда администратор добавил значение (docs/deviations.md, п. 48). */
+  createdAt: timestamp('created_at', { withTimezone: true }),
   createdBy: uuid('created_by').references(() => users.id),
   /** Поправленное в Админке значение `db:seed --update` не затирает. */
   updatedBy: uuid('updated_by').references(() => users.id),

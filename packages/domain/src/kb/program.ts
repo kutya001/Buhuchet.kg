@@ -145,7 +145,9 @@ export function kbProgram(
             def: s,
             rule,
             module: rule.module,
-            learn: kbFlag(s.learn),
+            // ОТКЛОНЕНИЕ: docs/deviations.md#Д-7
+            // Вид события «open» — «Посмотреть» и без `learn` (шаги Админки «Проверить …»).
+            learn: kbFlag(s.learn) || s.evk === 'open',
             star: kbFlag(s.star),
           };
         }),

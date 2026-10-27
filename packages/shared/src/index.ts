@@ -15,3 +15,4 @@ export * from './platform-dicts';
 export * from './admin';
 export * from './dicts';
 export * from './money';
+export * from './admin-dicts';

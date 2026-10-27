@@ -106,21 +106,49 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
     expect((await call('GET', '/api/kb/me')).status).toBe(401);
   });
 
-  it('администратор платформы — своя программа (уроки Админки придут с её задачами)', async () => {
+  it('администратор платформы — своя программа: шаги сделанных модулей Админки', async () => {
     const s = await state(admin);
-    expect(s).toMatchObject({
-      admin: true,
-      lessons: [],
-      nextStepId: null,
-      offers: [],
-      featureLessons: {},
-    });
+    expect(s).toMatchObject({ admin: true, offers: [], featureLessons: {} });
     expect(s.progress.levels).toHaveLength(5);
-    // Статьи Админки — только о сделанных модулях («Справочники платформы» — ещё нет).
+    // «Каталог видов отчётов», календарь, шаблоны и загрузка из Excel — с их вкладками.
+    expect(steps(s).map((x) => [x.id, x.module, x.learn])).toEqual([
+      ['a-dicts', 'pdicts', true],
+      ['a-l10n', 'l10n', true],
+      ['a-org', 'orgs', false],
+    ]);
+    expect(step(s, 'a-dicts')!.screens).toContain('pdicts.forms');
+    // Статьи Админки — только о сделанных модулях («Справочники платформы» — с задачей 2.37).
     const arts = KbArticleList.parse(await ok(await call('GET', '/api/kb/articles', admin)));
     const ids = arts.items.map((a) => a.id);
-    expect(ids).toEqual(expect.arrayContaining(['a19_1', 'a19_2']));
+    expect(ids).toEqual(expect.arrayContaining(['a19_1', 'a19_2', 'a19_4']));
     expect(ids).not.toContain('a19_3');
+
+    // «Проверить справочники платформы» — 3 секунды на экране шага (docs/deviations.md п. Д-7).
+    const looked = KbMarkResult.parse(
+      await ok(await call('POST', '/api/kb/steps/a-dicts/look', admin)),
+    );
+    expect(step(looked.state, 'a-dicts')?.done?.how).toBe('visit');
+    const l10n = KbMarkResult.parse(
+      await ok(await call('POST', '/api/kb/steps/a-l10n/look', admin)),
+    );
+    expect(step(l10n.state, 'a-l10n')?.done?.how).toBe('visit');
+    // Шаг «Сделать» просмотром не засчитывается.
+    expect((await call('POST', '/api/kb/steps/a-org/look', admin)).status).toBe(400);
+    // «Создать организацию и её владельца» — организацией, созданной им самим.
+    const created = await call('POST', '/api/admin/organizations', admin, {
+      name: 'ОсОО «Урок»',
+      inn: '03811201810458',
+      ownerFullName: 'Урокова Айпери',
+      ownerLogin: 'urokova',
+      temporaryPassword: 'Bh-7K4M-Q9TX',
+    });
+    expect(created.status, await created.clone().text()).toBe(201);
+    const synced = KbMarkResult.parse(
+      await ok(await call('POST', '/api/kb/sync', admin, { reason: 'saved' })),
+    );
+    expect(synced.fresh).toEqual([
+      { id: 'a-org', title: 'Создать организацию и её владельца', learn: false, how: 'action' },
+    ]);
   });
 
   it('«Сделать» засчитывается по истории своих действий: недавнее — «действием», поздравление с уровнем', async () => {
