@@ -218,8 +218,8 @@ export async function adminGetOrganization(
 
 /**
  * Плашки над списком (прототип renderOrgs): активных организаций, контрагентов на платформе (пока 0 —
- * появятся с модулем «Контрагенты»), учётных записей организаций и запросов на добавление в
- * справочники (пока 0 — появятся со «Справочниками платформы»).
+ * появятся с модулем «Контрагенты»), учётных записей организаций и запросов организаций на добавление
+ * в справочники («Попросить добавить», все — как `REQUESTS.length` прототипа).
  */
 export async function adminOrgSummary(
   tx: Tx,
@@ -229,7 +229,13 @@ export async function adminOrgSummary(
     .from(v)
     .where(eq(v.status, 'active'));
   const [users] = await tx.execute<{ n: number }>(sql`select app.admin_platform_users() as n`);
-  return { active: orgs?.n ?? 0, contractors: 0, users: users?.n ?? 0, requests: 0 };
+  const [requests] = await tx.execute<{ n: number }>(sql`select app.admin_dict_requests() as n`);
+  return {
+    active: orgs?.n ?? 0,
+    contractors: 0,
+    users: users?.n ?? 0,
+    requests: requests?.n ?? 0,
+  };
 }
 
 /** Адреса страниц всех организаций — чтобы новой подобрать свободный (`slugFree`). */
