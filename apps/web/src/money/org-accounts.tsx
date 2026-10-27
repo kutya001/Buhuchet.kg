@@ -428,6 +428,7 @@ function OrgAccountDialog({
           {purposeServes(purpose, 'tax') ? (
             <CheckRow
               data-main="tax"
+              plain
               checked={mainTax}
               onChange={setMainTax}
               label={t('money.main.tax')}
@@ -438,6 +439,7 @@ function OrgAccountDialog({
           {purposeServes(purpose, 'fee') ? (
             <CheckRow
               data-main="fee"
+              plain
               checked={mainFee}
               onChange={setMainFee}
               label={t('money.main.fee')}
