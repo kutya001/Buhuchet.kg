@@ -22,8 +22,11 @@ export interface PlateProps {
   icon: IconName;
   color: PlateColor;
   label: string;
-  /** Число или сумма строкой («12», «1 250,50»); нули показываются, а не пустое место (ТЗ). */
-  value: string;
+  /**
+   * Число или сумма строкой («12», «1 250,50»); нули показываются, а не пустое место (ТЗ). Без значения —
+   * плашка-действие из подписи и пояснения («Добавить язык» в «Локализации»).
+   */
+  value?: string;
   /** Единица мелко после числа: «сом». */
   unit?: string;
   /** Пояснение под числом. */
@@ -32,6 +35,8 @@ export interface PlateProps {
   on?: boolean;
   /** Нажатие: поставить или снять фильтр списка, открыть вкладку. Без него — только итог. */
   onClick?: () => void;
+  /** Недоступная плашка-действие: видна бледной, не нажимается (прототип `disabled`, `opacity:.6`). */
+  disabled?: boolean;
 }
 
 /**
@@ -49,6 +54,7 @@ export function Plate({
   sub,
   on = false,
   onClick,
+  disabled = false,
 }: PlateProps) {
   const content = (
     <>
@@ -58,19 +64,33 @@ export function Plate({
         </span>
         {label}
       </span>
-      <span className="text-[25px] leading-[1.05] font-[720] tracking-[-0.025em] tabular-nums max-md:text-[21px]">
-        {value}
-        {unit && (
-          <small className="ml-[3px] text-[13px] font-[550] tracking-normal text-faint">
-            {unit}
-          </small>
-        )}
-      </span>
+      {value !== undefined && (
+        <span className="text-[25px] leading-[1.05] font-[720] tracking-[-0.025em] tabular-nums max-md:text-[21px]">
+          {value}
+          {unit && (
+            <small className="ml-[3px] text-[13px] font-[550] tracking-normal text-faint">
+              {unit}
+            </small>
+          )}
+        </span>
+      )}
       {sub && <span className="text-[12px] text-faint">{sub}</span>}
     </>
   );
   const box =
     'flex min-w-0 flex-col gap-[7px] rounded-xl border border-line bg-raised px-3.5 pt-3 pb-[13px] text-left text-ink';
+  if (disabled) {
+    return (
+      <button
+        type="button"
+        data-plate={id}
+        disabled
+        className={`${box} cursor-not-allowed font-[inherit] opacity-60`}
+      >
+        {content}
+      </button>
+    );
+  }
   if (!onClick) {
     return (
       <div data-plate={id} className={box}>

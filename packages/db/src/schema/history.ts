@@ -62,3 +62,45 @@ export const auditLog = pgTable(
     }),
   ],
 ).enableRLS();
+
+/**
+ * История изменений общих данных платформы, которые правит Админка (тексты «Локализации», дальше —
+ * справочники платформы): как `audit_log`, но без организации — у администратора платформы её нет.
+ * Читает и пишет только незаблокированный администратор платформы (`app.is_platform_admin()`), автор и
+ * время — из контекста транзакции; записи не меняются и не удаляются (миграция 0034: права UPDATE и
+ * DELETE у роли приложения отозваны).
+ */
+export const platformAuditLog = pgTable(
+  'platform_audit_log',
+  {
+    id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    /** Какая запись: `HistoryEntity` из @buhuchet/domain (`ui_text`). */
+    entity: text('entity').notNull(),
+    entityId: text('entity_id').notNull(),
+    /** `HistoryAction` из @buhuchet/domain. */
+    action: text('action').notNull(),
+    /** Изменённые поля: было → стало. */
+    changes: jsonb('changes').$type<HistoryChange[]>().notNull().default([]),
+    reason: text('reason'),
+    actorUserId: uuid('actor_user_id')
+      .notNull()
+      .default(sql`app.current_user_id()`)
+      .references(() => users.id, { onDelete: 'restrict' }),
+    at: timestamp('at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('platform_audit_log_entity_idx').on(t.entity, t.entityId, t.at),
+    pgPolicy('platform_audit_log_read', {
+      as: 'permissive',
+      for: 'select',
+      to: appRole,
+      using: sql`app.is_platform_admin()`,
+    }),
+    pgPolicy('platform_audit_log_insert', {
+      as: 'permissive',
+      for: 'insert',
+      to: appRole,
+      withCheck: sql`app.is_platform_admin() and ${t.actorUserId} = app.current_user_id() and ${t.at} = now()`,
+    }),
+  ],
+).enableRLS();

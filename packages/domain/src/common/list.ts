@@ -447,6 +447,7 @@ export const GRID_KEYS = [
   'staff.roles',
   'accounts.list',
   'orgs.list',
+  'l10n.list',
   'dicts.types',
   // «Справочники платформы»: «Поиск по всем значениям» и окно каждого справочника (ORG_DICT_WINDOW_IDS).
   'dicts.platform',

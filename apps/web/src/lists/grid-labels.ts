@@ -13,6 +13,7 @@ export type CountKey =
   | 'roles.count'
   | 'accounts.count'
   | 'orgs.count'
+  | 'locale.count'
   | 'dicts.count'
   | 'dicts.platform.count';
 
