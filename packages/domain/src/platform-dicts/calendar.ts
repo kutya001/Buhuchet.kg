@@ -150,6 +150,7 @@ export type CalendarAddProblem =
   | { field: 'date'; code: 'date_required' | 'date_year' | 'not_saturday' | 'date_taken' }
   | { field: 'name'; code: 'name_required' };
 
+// ОТКЛОНЕНИЕ: docs/deviations.md#Д-5
 /**
  * Что не так с новым днём календаря: дата обязательна и — в годах вкладки (иначе её не будет видно в
  * списке); рабочая суббота — суббота; у праздника — название (прототип «Введите название праздника»);
@@ -183,6 +184,7 @@ export interface CalendarCopyItem {
   name: string;
 }
 
+// ОТКЛОНЕНИЕ: docs/deviations.md#Д-5
 /**
  * Что скопировать из года `year` в следующий (прототип calCopyDlg): праздники «каждый год» уже есть в
  * следующем году, копируются записи «только в этом году» — переносы, плавающие праздники и рабочие

@@ -324,4 +324,169 @@ test.describe('Админка: справочники платформы', () =>
     await expect(full).toContainText('Отклонено');
     await expect(full).toContainText(answer);
   });
+  test('(проверка задачи #92) режимы и основания: полное название режима обязательно; виды отчётов основания — из сквозных', async ({
+    page,
+    baseURL,
+    isMobile,
+  }, testInfo) => {
+    const origin = new URL(baseURL!).origin;
+    await platformAdmin(page.request, origin);
+    const regime = `Режим ${testInfo.project.name} ${Date.now()}`;
+    const base = `Основание ${testInfo.project.name} ${Date.now()}`;
+    const options = await page.request.get('/api/admin/platform-dicts/report-type-options');
+    const type = (
+      (await options.json()) as { items: { kind: string; active: boolean; shortName: string }[] }
+    ).items.find((x) => x.kind === 'cross' && x.active)!;
+
+    try {
+      await page.goto('/app/pdicts/regimes');
+      await expect(page.getByText('Состав — по ст. 46 НК КР')).toBeVisible();
+      await page.getByRole('button', { name: 'Добавить', exact: true }).click();
+      const dialog = page.getByRole('dialog', { name: 'Новый режим' });
+      await dialog.getByLabel('Краткое название').fill(regime);
+      await dialog.getByRole('button', { name: 'Сохранить' }).click();
+      await expect(dialog.getByText('Введите полное название')).toBeVisible();
+      await dialog.getByLabel('Полное название').fill(`${regime} — полное`);
+      await dialog.getByRole('button', { name: 'Сохранить' }).click();
+      await expect(dialog).toBeHidden();
+      const created = (await values(page.request, 'regimes')).find((x) => x.name === regime)!;
+      expect(created.code).toMatch(/^РЕЖ-\d{2}$/);
+      const found = await row(page, isMobile, regime, created.code);
+      await expect(found).toContainText('Специальный');
+
+      await page.goto('/app/pdicts/bases');
+      await page.getByRole('button', { name: 'Добавить', exact: true }).click();
+      const baseDialog = page.getByRole('dialog', { name: 'Новое основание' });
+      await baseDialog.getByLabel('Название').fill(base);
+      await baseDialog
+        .getByRole('group', { name: 'Виды отчётов' })
+        .getByRole('button', { name: type.shortName, exact: true })
+        .click();
+      await baseDialog.getByRole('button', { name: 'Сохранить' }).click();
+      await expect(baseDialog).toBeHidden();
+      const saved = (await values(page.request, 'bases')).find((x) => x.name === base)!;
+      const baseRow = await row(page, isMobile, base, saved.code);
+      await expect(baseRow).toContainText(type.shortName);
+      // Основание с видом отчёта «используется» — удалить нельзя, пока связь есть.
+      await expect(await rowAction(page, baseRow, 'Удалить')).toBeDisabled();
+      await page.keyboard.press('Escape');
+    } finally {
+      await cleanup(page.request, origin, 'regimes', regime);
+      for (const x of (await values(page.request, 'bases')).filter((v) => v.name === base)) {
+        await page.request.put(`/api/admin/platform-dicts/bases/${encodeURIComponent(x.code)}`, {
+          headers: { origin },
+          data: { name: x.name, types: [], version: x.version },
+        });
+      }
+      await cleanup(page.request, origin, 'bases', base);
+    }
+  });
+
+  test('(проверка задачи #92) коды стран: Кыргызстан по умолчанию не отключается, коды стран не удаляются', async ({
+    page,
+    baseURL,
+    isMobile,
+  }) => {
+    await platformAdmin(page.request, new URL(baseURL!).origin);
+    await page.goto('/app/pdicts/phones');
+    const found = await row(page, isMobile, 'Кыргызстан', 'KG');
+    await expect(found).toContainText('+996');
+    await expect(found).toContainText('+996 555 123 456');
+    const off = await rowAction(page, found, 'Отключить');
+    await expect(off).toBeDisabled();
+    await expect(off).toContainText('Код по умолчанию отключить нельзя');
+    await expect(
+      page.getByRole('menu', { name: 'Действия' }).getByRole('menuitem', { name: 'Удалить' }),
+    ).toHaveCount(0);
+    await page
+      .getByRole('menu', { name: 'Действия' })
+      .getByRole('menuitem', { name: 'Изменить' })
+      .click();
+    const dialog = page.getByRole('dialog', { name: 'Изменить код страны' });
+    await expect(dialog).toContainText('сохранённые номера не меняются');
+    // С «+» код не сохраняется: поле — только цифры.
+    await dialog.getByLabel('Код без +').fill('+996');
+    await dialog.getByRole('button', { name: 'Сохранить' }).click();
+    await expect(dialog.getByText('1–4 цифры')).toBeVisible();
+    await dialog.getByRole('button', { name: 'Отмена' }).click();
+  });
+
+  test('(проверка задачи #92) календарь: нерабочий день добавляется и удаляется, праздник «каждый год» не удаляется; копирование на следующий год', async ({
+    page,
+    baseURL,
+    isMobile,
+  }, testInfo) => {
+    const origin = new URL(baseURL!).origin;
+    await platformAdmin(page.request, origin);
+    type Day = { key: string; date: string; version: number };
+    const days = async () => {
+      const res = await page.request.get('/api/admin/platform-dicts/calendar?size=all');
+      expect(res.status(), await res.text()).toBe(200);
+      return (await res.json()) as { year: number; items: Day[] };
+    };
+    const { year, items } = await days();
+    const next = year + 1;
+    // Свободный будний день следующего года: с 1 июня вперёд.
+    const taken = new Set(items.map((x) => x.date));
+    let date = `${next}-06-01`;
+    while (taken.has(date) || [0, 6].includes(new Date(`${date}T00:00:00Z`).getUTCDay())) {
+      const d = new Date(`${date}T00:00:00Z`);
+      d.setUTCDate(d.getUTCDate() + 1);
+      date = d.toISOString().slice(0, 10);
+    }
+    const ru = `${date.slice(8)}.${date.slice(5, 7)}.${date.slice(0, 4)}`;
+    const name = `Перенос: проверка ${testInfo.project.name}`;
+    const toast = (text: string) => page.getByRole('status').filter({ hasText: text });
+
+    try {
+      await page.goto('/app/pdicts/calendar');
+      await expect(page.getByText('Правило «суббота → понедельник» не используется')).toBeVisible();
+      await page.getByRole('button', { name: 'Добавить', exact: true }).click();
+      await page.getByRole('menuitem', { name: 'Нерабочий день' }).click();
+      const dialog = page.getByRole('dialog', { name: 'Нерабочий день' });
+      await expect(dialog.getByLabel('Название')).toHaveValue('Орозо айт');
+      await dialog.getByLabel('Дата').fill(date);
+      await dialog.getByLabel('Тип').selectOption({ label: 'Рабочая суббота' });
+      await dialog.getByRole('button', { name: 'Добавить' }).click();
+      await expect(dialog.getByText('Рабочая суббота — только суббота')).toBeVisible();
+      await dialog.getByLabel('Тип').selectOption({ label: 'Праздник или перенос' });
+      await dialog.getByLabel('Название').fill(name);
+      await dialog.getByRole('button', { name: 'Добавить' }).click();
+      await expect(dialog).toBeHidden();
+      await expect(toast('Календарь обновлён, сроки пересчитаны')).toBeVisible();
+
+      let found = await row(page, isMobile, name, `${date}|${date}`);
+      await expect(found).toContainText('Перенос');
+      await expect(found).toContainText('Только в этом году');
+      await (await rowAction(page, found, 'Удалить')).click();
+      const ask = page.getByRole('dialog', { name: `Удалить ${ru}?` });
+      await expect(ask).toContainText('Сроки несданных отчётов будут пересчитаны.');
+      await ask.getByRole('button', { name: 'Удалить' }).click();
+      await expect(toast('Удалено')).toBeVisible();
+      await expect(found).toHaveCount(0);
+
+      // Государственный праздник «каждый год» удалить нельзя.
+      found = await row(page, isMobile, 'Новый год', `${year}-01-01|01-01`);
+      const remove = await rowAction(page, found, 'Удалить');
+      await expect(remove).toBeDisabled();
+      await expect(remove).toContainText('Государственный праздник по закону, удалить нельзя');
+      await page.keyboard.press('Escape');
+
+      await page.getByRole('button', { name: `Создать ${next} год копированием` }).click();
+      const copy = page.getByRole('dialog', {
+        name: `Создать календарь ${next} года копированием`,
+      });
+      await expect(copy).toContainText(`Праздники «Каждый год» уже есть в ${next} году`);
+      // Кнопка внизу окна: «Отмена», а если копировать нечего — «Закрыть» (у крестика нет текста).
+      await copy.getByText(/^(Отмена|Закрыть)$/).click();
+      await expect(copy).toBeHidden();
+    } finally {
+      for (const x of (await days()).items.filter((d) => d.key === date)) {
+        await page.request.delete(`/api/admin/platform-dicts/calendar/${x.key}`, {
+          headers: { origin },
+          params: { version: x.version },
+        });
+      }
+    }
+  });
 });
