@@ -31,6 +31,17 @@ export interface Storage {
     key: string,
     options: { expiresInSeconds: number; fileName?: string },
   ): Promise<string>;
+  /**
+   * Временная ссылка на загрузку одного файла запросом `PUT` из браузера, мимо API (тело запроса к API
+   * ограничено). Размер и тип подписаны: файл другого размера или с другим типом хранилище не примет.
+   * Заголовки ответа браузер передаёт вместе с файлом.
+   */
+  signedUploadUrl(
+    key: string,
+    options: { expiresInSeconds: number; contentType: string; size: number },
+  ): Promise<{ url: string; headers: Record<string, string> }>;
+  /** Размер и тип лежащего файла (проверка после загрузки браузером); нет файла — null. */
+  stat(key: string): Promise<{ size: number; contentType: string | null } | null>;
   /** Проверка доступности корзины (страница «здоровья»). */
   ping(): Promise<void>;
   /** Создать корзину, если её нет (локально и в CI). */
@@ -133,14 +144,21 @@ export function explainStorageError(error: unknown, bucket: string): string {
 }
 
 export function createS3Storage(config: StorageConfig): Storage {
-  const client = new S3Client({
-    endpoint: config.S3_ENDPOINT,
+  const options = {
     region: config.S3_REGION,
     forcePathStyle: config.S3_FORCE_PATH_STYLE,
     credentials: {
       accessKeyId: config.S3_ACCESS_KEY_ID,
       secretAccessKey: config.S3_SECRET_ACCESS_KEY,
     },
+  };
+  const client = new S3Client({ ...options, endpoint: config.S3_ENDPOINT });
+  // Ссылки для браузера подписываются по его адресу хранилища (подпись S3 включает адрес). Контрольную
+  // сумму в ссылку не добавлять: SDK посчитал бы её от пустого тела, и хранилище отвергло бы файл.
+  const signer = new S3Client({
+    ...options,
+    endpoint: config.S3_PUBLIC_ENDPOINT ?? config.S3_ENDPOINT,
+    requestChecksumCalculation: 'WHEN_REQUIRED',
   });
   const Bucket = config.S3_BUCKET;
 
@@ -178,7 +196,31 @@ export function createS3Storage(config: StorageConfig): Storage {
         Key: key,
         ResponseContentDisposition: attachmentDisposition(fileName),
       });
-      return getSignedUrl(client, command, { expiresIn: expiresInSeconds });
+      return getSignedUrl(signer, command, { expiresIn: expiresInSeconds });
+    },
+    async signedUploadUrl(key, { expiresInSeconds, contentType, size }) {
+      checkExpiry(expiresInSeconds);
+      const command = new PutObjectCommand({
+        Bucket,
+        Key: key,
+        ContentType: contentType,
+        ContentLength: size,
+      });
+      const url = await getSignedUrl(signer, command, {
+        expiresIn: expiresInSeconds,
+        signableHeaders: new Set(['content-type', 'content-length']),
+      });
+      // Content-Length браузер ставит сам по размеру файла; подписан и он.
+      return { url, headers: { 'content-type': contentType } };
+    },
+    async stat(key) {
+      try {
+        const out = await client.send(new HeadObjectCommand({ Bucket, Key: key }));
+        return { size: out.ContentLength ?? 0, contentType: out.ContentType ?? null };
+      } catch (error) {
+        if (isNotFound(error)) return null;
+        throw error;
+      }
     },
     async ping() {
       await client.send(new HeadBucketCommand({ Bucket }));
@@ -235,6 +277,18 @@ export function createMemoryStorage(): MemoryStorage {
       const params = new URLSearchParams({ expires: String(expiresInSeconds) });
       if (fileName) params.set('name', fileName);
       return `memory://${key}?${params.toString()}`;
+    },
+    async signedUploadUrl(key, { expiresInSeconds, contentType, size }) {
+      checkExpiry(expiresInSeconds);
+      const params = new URLSearchParams({ expires: String(expiresInSeconds), size: String(size) });
+      return {
+        url: `memory://${key}?${params.toString()}`,
+        headers: { 'content-type': contentType },
+      };
+    },
+    async stat(key) {
+      const file = files.get(key);
+      return file ? { size: file.body.length, contentType: file.contentType } : null;
     },
     async ping() {},
     async ensureBucket() {},

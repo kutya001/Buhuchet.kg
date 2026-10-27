@@ -33,6 +33,7 @@ import { readHistory, writeHistory } from './history';
 import { createOrganization, type CreatedOrganization } from './organizations';
 import {
   auditLog,
+  files,
   contractorBases,
   contractorBenefits,
   contractorGkedExtra,
@@ -342,7 +343,7 @@ describe.skipIf(!databaseAvailable())('Контрагенты: данные', ()
     });
   });
 
-  it('журнал тарифов не меняется и не удаляется; с контрагентом удаляется каскадом', async () => {
+  it('журнал тарифов не меняется и не удаляется; с контрагентом удаляется каскадом, файлы остаются', async () => {
     await expect(inA((tx) => tx.update(contractorTariffs).set({ amount: 1 }))).rejects.toEqual(
       permissionDenied,
     );
@@ -355,10 +356,26 @@ describe.skipIf(!databaseAvailable())('Контрагенты: данные', ()
         note: '',
       }),
     );
+    const fileId = '00000000-0000-4000-8000-0000000000f1';
+    await db.admin.db.insert(files).values({
+      id: fileId,
+      orgId: a.orgId,
+      sourceKind: 'manual',
+      contractorId: id,
+      name: 'Договор.pdf',
+      contentType: 'application/pdf',
+      sizeBytes: 1024,
+      storageKey: `org/${a.orgId}/files/${fileId}`,
+      state: 'ready',
+      createdBy: a.ownerUserId,
+    });
     await inA(async (tx) => {
       const row = await lockContractor(tx, id, undefined);
       await deleteContractor(tx, row!);
     });
+    // Файл удалённого контрагента остаётся общим файлом организации.
+    const [file] = await db.admin.db.select().from(files).where(eq(files.id, fileId));
+    expect(file!.contractorId).toBeNull();
     const tariffs = await db.admin.db
       .select()
       .from(contractorTariffs)

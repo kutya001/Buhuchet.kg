@@ -7,3 +7,9 @@ REVOKE UPDATE, DELETE, TRUNCATE ON TABLE contractor_tariffs FROM buhuchet_app;
 ALTER TABLE audit_log
   ADD CONSTRAINT audit_log_contractor_fk FOREIGN KEY (contractor_id, org_id)
   REFERENCES contractors (id, org_id) ON DELETE SET NULL (contractor_id);
+--> statement-breakpoint
+-- Файл записи ссылается на контрагента своей организации (ключ, обещанный задачей 2.04 «Файлы»). Удалённый
+-- контрагент (без отчётов, денег и проектов) оставляет файлы общими файлами организации.
+ALTER TABLE files
+  ADD CONSTRAINT files_contractor_fk FOREIGN KEY (contractor_id, org_id)
+  REFERENCES contractors (id, org_id) ON DELETE SET NULL (contractor_id);

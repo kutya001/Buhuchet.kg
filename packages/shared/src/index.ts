@@ -9,6 +9,7 @@ export * from './roles';
 export * from './org';
 export * from './l10n';
 export * from './status';
+export * from './files';
 export * from './platform-dicts';
 export * from './admin';
 export * from './dicts';
