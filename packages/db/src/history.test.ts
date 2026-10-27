@@ -6,7 +6,15 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { withOrgContext, type OrgContext } from './context';
 import { readHistory, updateWithHistory, writeHistory } from './history';
 import { createOrganization, type CreatedOrganization } from './organizations';
-import { auditLog, employees, orgSettings, roles, users } from './schema';
+import {
+  auditLog,
+  contractors,
+  employees,
+  orgSettings,
+  ownershipForms,
+  roles,
+  users,
+} from './schema';
 import { seedPermissions, seedRoleTemplates } from './seed';
 import { readSpecJson } from './spec-data';
 import { createTestDatabase, databaseAvailable, type TestDatabase } from './testing';
@@ -285,7 +293,22 @@ describe.skipIf(!databaseAvailable())('история изменений и ве
   });
 
   it('причина и контрагент сохраняются, пустая причина — не причина; без пользователя — система', async () => {
+    // Контрагент истории — запись своей организации (внешний ключ, миграция 0034).
     const contractorId = randomUUID();
+    await t.admin.db
+      .insert(ownershipForms)
+      .values({ code: 'ФС-01', name: 'ОсОО', sortOrder: 1 })
+      .onConflictDoNothing();
+    await t.admin.db.insert(contractors).values({
+      id: contractorId,
+      orgId: a.orgId,
+      name: 'ОсОО «История»',
+      inn: '01234567890123',
+      phone: '+996555100200',
+      kind: 'regular',
+      formCode: 'ФС-01',
+      startDate: '2026-10-01',
+    });
     await withOrgContext(t.app.db, { orgId: a.orgId }, (tx) =>
       writeHistory(
         tx,
