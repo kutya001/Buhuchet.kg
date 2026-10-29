@@ -23,6 +23,7 @@ export const HISTORY_ENTITIES = [
   // Показатели контрагентов: показатель (настройка, «Кому вести») и значение за месяц.
   'indicator',
   'indicator_value',
+  'news',
   'ui_text',
   'platform_dict',
 ] as const;

@@ -10,10 +10,10 @@ import type { ApiErrorLike } from './l10n/translate';
 export const SAVED_EVENT = 'buhuchet:saved';
 
 /**
- * Запросы, после которых сверять шаги незачем: сама «База знаний», вид списков, вход и пароль,
- * страница контрагента без входа.
+ * Запросы, после которых сверять шаги незачем: сама «База знаний», отметки прочитанных новостей, вид
+ * списков, вход и пароль, страница контрагента без входа.
  */
-const NOT_SAVES = ['/api/kb/', '/api/view-settings/', '/api/auth/', '/api/page/'];
+const NOT_SAVES = ['/api/kb/', '/api/news/', '/api/view-settings/', '/api/auth/', '/api/page/'];
 
 const savingFetch: typeof fetch = async (input, init) => {
   const res = await fetch(input, init);

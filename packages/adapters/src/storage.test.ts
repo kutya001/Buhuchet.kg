@@ -8,6 +8,7 @@ import {
   createS3Storage,
   explainStorageError,
   orgFileKey,
+  platformFileKey,
   type Storage,
 } from './storage';
 
@@ -18,6 +19,16 @@ describe('orgFileKey', () => {
 
   it.each([['..'], ['a/b'], [''], ['файл']])('отказывает части пути «%s»', (bad) => {
     expect(() => orgFileKey('org', bad, 'id')).toThrow(RangeError);
+  });
+});
+
+describe('platformFileKey', () => {
+  it('собирает путь platform/<раздел>/<id>', () => {
+    expect(platformFileKey('news', 'f-1')).toBe('platform/news/f-1');
+  });
+
+  it.each([['..'], ['a/b'], ['']])('отказывает части пути «%s»', (bad) => {
+    expect(() => platformFileKey('news', bad)).toThrow(RangeError);
   });
 });
 

@@ -15,6 +15,7 @@ import { kbModule } from './modules/kb';
 import { kpiModule } from './modules/kpi';
 import { l10nModule } from './modules/l10n';
 import { moneyModule } from './modules/money';
+import { NEWS_IMAGE_UPLOAD_PATH, newsModule } from './modules/news';
 import { orgModule } from './modules/org';
 import { platformDictsModule } from './modules/platform-dicts';
 import { dictsModule } from './modules/dicts';
@@ -33,8 +34,11 @@ import { viewsModule } from './modules/views';
  */
 const API_BODY_LIMIT = 1024 * 1024;
 
-/** Логотип организации (до 2 МБ) идёт через API: сервер проверяет, что это картинка, до сохранения. */
-const OWN_BODY_LIMIT_PATHS: ReadonlySet<string> = new Set([LOGO_PATH]);
+/**
+ * Логотип организации и картинки новостей (до 2 МБ) идут через API: сервер проверяет, что это
+ * картинка, до сохранения.
+ */
+const OWN_BODY_LIMIT_PATHS: ReadonlySet<string> = new Set([LOGO_PATH, NEWS_IMAGE_UPLOAD_PATH]);
 
 /** Приложение API. Монтируется по пути /api (Next.js catch-all или отдельный сервер). */
 export function createApp(deps: ApiDeps) {
@@ -85,6 +89,7 @@ export function createApp(deps: ApiDeps) {
     .route('/', tasksModule(deps))
     .route('/', orgModule(deps))
     .route('/', kbModule(deps))
+    .route('/', newsModule(deps))
     .route('/', platformDictsModule(deps))
     .route('/', dictsModule(deps))
     .route('/', moneyModule(deps))

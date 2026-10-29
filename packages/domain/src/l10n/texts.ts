@@ -8,6 +8,7 @@ import { GRID_TEXTS } from './grid-texts';
 import { KB_TEXTS } from './kb-texts';
 import { KPI_TEXTS } from './kpi-texts';
 import { MONEY_TEXTS } from './money-texts';
+import { NEWS_TEXTS } from './news-texts';
 import { ORG_TEXTS } from './org-texts';
 import { PLATFORM_DICTS_TEXTS } from './platform-dicts-texts';
 import { SHELL_TEXTS } from './shell-texts';
@@ -62,8 +63,8 @@ const SYSTEM_TEXTS = {
  * видов отчётов словами — `dicts-texts.ts`, контрагентов и сверки с ГКЭД — `contractors-texts.ts`, страницы
  * контрагента по ссылке — `contractor-page-texts.ts`, задач —
  * `tasks-texts.ts`, реквизитов для переводов — `money-texts.ts`, показателей контрагентов и названий месяцев —
- * `kpi-texts.ts`, блока «Файлы» — `files-texts.ts`, «Базы знаний» — `kb-texts.ts`, Админки → «Справочники
- * платформы» — `platform-dicts-texts.ts`.
+ * `kpi-texts.ts`, блока «Файлы» — `files-texts.ts`, «Базы знаний» — `kb-texts.ts`, «Новостей» — `news-texts.ts`,
+ * Админки → «Справочники платформы» — `platform-dicts-texts.ts`.
  */
 export const UI_TEXTS = {
   ...SYSTEM_TEXTS,
@@ -84,6 +85,7 @@ export const UI_TEXTS = {
   ...KPI_TEXTS,
   ...FILES_TEXTS,
   ...KB_TEXTS,
+  ...NEWS_TEXTS,
   ...PLATFORM_DICTS_TEXTS,
 } as const satisfies Record<string, UiTextDefault>;
 
