@@ -34,7 +34,7 @@ CREATE POLICY "message_templates_read" ON "message_templates" AS PERMISSIVE FOR 
 CREATE POLICY "status_tones_read" ON "status_tones" AS PERMISSIVE FOR SELECT TO "buhuchet_app" USING (true);--> statement-breakpoint
 -- Админка → «Справочники платформы», часть 3 задачи 2.36: «Статусы» (цвета), «Права ролей», «Шаблоны
 -- ролей» и «Шаблоны» сообщений. Роль приложения эти таблицы только читает, как остальные справочники
--- платформы (миграции 0017, 0023, 0044); правит администратор платформы узкими функциями ниже.
+-- платформы (миграции 0017, 0023, 0051); правит администратор платформы узкими функциями ниже.
 -- «Изменил» (updated_by) не даёт наполнению `db:seed --update` затереть правку. Названия статусов и
 -- периодичности — тексты словаря: их меняет `app.admin_set_ui_text` (миграция 0038).
 REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON TABLE status_tones, message_templates, permissions, role_templates FROM buhuchet_app;

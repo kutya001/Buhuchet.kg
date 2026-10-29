@@ -21,6 +21,7 @@ export const ADMIN_VALUE_DICTS = [
   'organs',
   'ugns',
   'banks',
+  'cats',
   'reasons',
 ] as const;
 export type AdminValueDict = (typeof ADMIN_VALUE_DICTS)[number];
@@ -228,6 +229,8 @@ export const ADMIN_DICT_META: Readonly<Record<AdminValueDict, AdminDictMeta>> = 
     fields: ['name', 'kind', 'byPhone', 'note'],
     kind: { values: BANK_KINDS, default: 'bank', text: 'pdicts.bank.kind' },
   },
+  // «Категории задач» (задача 2.23): код КАТ-001 и т. д., как у значений из наполнения.
+  cats: { code: { prefix: 'КАТ', digits: 3 }, ordered: true, fields: ['name', 'note'] },
   reasons: { code: { prefix: 'ПРЧ', digits: 3 }, ordered: true, fields: ['name', 'note'] },
 };
 
@@ -475,9 +478,9 @@ const STATUS = c('active', 'enum', 'pdicts.col.status');
  */
 export const ADMIN_DICT_COLUMNS: Readonly<Record<AdminValueDict, readonly AdminDictColumn[]>> = {
   // Виды отчётов (прототип `adm-types`): «Что сделать», «Что уплачивается», код формы, орган,
-  // периодичность и срок сдачи видны; «Используется» — вместо «Назначен» прототипа: назначений
-  // контрагентам ещё нет (задача 2.06), считаются подключения организаций и ссылки статусов.
-  // «Виды деятельности (ГКЭД)» добавит задача 2.38, «Сверено с ГНС» — задача 2.37.
+  // периодичность и срок сдачи видны; «Назначен» — у скольких контрагентов на обслуживании вид
+  // назначен сейчас, по всем организациям. «Виды деятельности (ГКЭД)» добавит задача 2.38, «Сверено
+  // с ГНС» — задача 2.37.
   types: [
     c('code', 'text', 'pdicts.col.code', true),
     c('name', 'text', 'pdicts.col.name'),
@@ -493,7 +496,7 @@ export const ADMIN_DICT_COLUMNS: Readonly<Record<AdminValueDict, readonly AdminD
     c('rates', 'text', 'dicts.col.rates', true),
     c('regimes', 'text', 'dicts.col.regimes', true),
     c('payer', 'enum', 'pdicts.col.payer', true),
-    c('used', 'int', 'pdicts.col.used', true),
+    c('assigned', 'int', 'pdicts.col.assigned', true),
     c('active', 'enum', 'pdicts.col.status', true),
   ],
   bases: [
@@ -584,6 +587,7 @@ export const ADMIN_DICT_COLUMNS: Readonly<Record<AdminValueDict, readonly AdminD
     USED,
     STATUS,
   ],
+  cats: [N, CODE, VALUE, c('note', 'text', 'pdicts.col.note', true), USED, STATUS],
   reasons: [N, CODE, VALUE, c('note', 'text', 'pdicts.col.note', true), USED, STATUS],
 };
 

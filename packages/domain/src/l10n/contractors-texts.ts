@@ -37,6 +37,8 @@ export const CONTRACTORS_TEXTS = {
   'cp.no_gked': { ru: 'Без ГКЭД', section: S },
   'cp.contract': { ru: '№ {no} от {date}', section: S },
   'cp.tariff.first': { ru: 'Первая ставка', section: S },
+  'cp.notice.ugns_marked': { ru: 'Отмечен статус «{name}» по УГНС', section: S },
+  'cp.notice.ugns_dropped': { ru: 'Снят статус «{name}» по УГНС', section: S },
   'cp.contract.no_number': { ru: 'Без номера от {date}', section: S },
   'cp.gked.list': {
     ru: 'Режим «{regime}»: ни один вид деятельности контрагента не входит в перечень {list} — {state}',

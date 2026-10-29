@@ -191,6 +191,7 @@ export const PLATFORM_DICTS_TEXTS = {
   'pdicts.title.organs': { ru: 'Органы', section: S },
   'pdicts.title.ugns': { ru: 'УГНС', section: S },
   'pdicts.title.banks': { ru: 'Банковские провайдеры', section: S },
+  'pdicts.title.cats': { ru: 'Категории задач', section: S },
   'pdicts.title.reasons': { ru: 'Причины изменения срока', section: S },
   'pdicts.note.types': {
     ru: 'Единый каталог для всех организаций. Вид, назначенный контрагентам, нельзя удалить — только отключить. При изменении правила срока пересчитываются только несданные отчёты. Коды форм, периоды и сроки сверяются с ГНС: у каждого вида видно, когда и кто проверял.',
@@ -206,6 +207,10 @@ export const PLATFORM_DICTS_TEXTS = {
   },
   'pdicts.note.benefits': {
     ru: 'Признаки контрагента, от которых зависят ставки и набор отчётов. У контрагента их может быть несколько. При назначении отчётов система подсказывает ненужные виды и льготную ставку, решение остаётся за бухгалтером. За 60 дней до окончания льготы по кодексу ответственный и главный бухгалтер получают предупреждение.',
+    section: S,
+  },
+  'pdicts.note.cats': {
+    ru: 'Шаблон для организаций: категории ручных задач. Организации видят значения на чтение; отключённое значение не предлагается в новых записях.',
     section: S,
   },
   'pdicts.note.reasons': {
@@ -302,6 +307,7 @@ export const PLATFORM_DICTS_TEXTS = {
   'pdicts.col.note': { ru: 'Пояснение', section: S },
   'pdicts.col.payer': { ru: 'Для кого', section: S },
   'pdicts.col.used': { ru: 'Используется', section: S },
+  'pdicts.col.assigned': { ru: 'Назначен', section: S },
   'pdicts.col.status': { ru: 'Статус', section: S },
   'pdicts.status.on': { ru: 'Активно', section: S },
   'pdicts.status.off': { ru: 'Отключено', section: S },

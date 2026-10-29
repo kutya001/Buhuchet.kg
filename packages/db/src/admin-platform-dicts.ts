@@ -41,7 +41,8 @@ import {
 } from '@buhuchet/domain';
 import { and, asc, count, desc, eq, getTableColumns, sql, type SQL } from 'drizzle-orm';
 import type { PgColumn, PgTable } from 'drizzle-orm/pg-core';
-import type { Tx } from './client';
+import type { Db, Tx } from './client';
+import { withOrgContext } from './context';
 import {
   selectListExport,
   selectListPage,
@@ -51,7 +52,9 @@ import {
   type ListFrom,
   type ListTexts,
 } from './list';
+import { orgIds } from './organizations';
 import { writePlatformHistory } from './platform-history';
+import { activeAssignmentCounts } from './reports';
 import {
   authorities,
   banks,
@@ -64,6 +67,7 @@ import {
   reportTypeRegimes,
   reportTypes,
   singleTaxRates,
+  taskCategories,
   taxBenefitDueRules,
   taxBenefitOffices,
   taxBenefitReportTypes,
@@ -101,6 +105,7 @@ const TABLES: Readonly<Record<AdminValueDict, DictTable>> = {
   organs: authorities,
   ugns: taxOffices,
   banks,
+  cats: taskCategories,
   reasons: dueChangeReasons,
 };
 
@@ -143,6 +148,8 @@ export interface AdminDictValueRecord {
   texts?: Record<string, string>;
   /** У вида отчёта — созданные по нему отчёты (для предупреждений окна вида). */
   reports?: TypeReportCounts;
+  /** У вида отчёта в списке — «Назначен»: у скольких контрагентов вид назначен сейчас. */
+  assigned?: number;
   audit: {
     createdAt: Date | null;
     createdBy: string | null;
@@ -508,6 +515,7 @@ function listRow(
       regimes: texts.regimes ?? '',
       payer: d.payer as string,
       payer_text: texts.payer ?? '',
+      assigned: x.assigned ?? 0,
     };
   }
   for (const f of dataFields(dict)) {
@@ -543,6 +551,7 @@ const RECORD_TYPES: Readonly<Record<string, string>> = {
   ord: 'integer',
   n: 'integer',
   used: 'integer',
+  assigned: 'integer',
   contractors: 'integer',
   created_at: 'timestamptz',
   updated_at: 'timestamptz',
@@ -596,11 +605,41 @@ const NATURAL = [field('ord')];
 const naturalQuery = (dict: AdminValueDict, query: ListQuery): ListQuery =>
   query.sort === undefined ? { ...query, sort: adminDictDefaultSort(dict) } : query;
 
-async function listSource(tx: Tx, dict: AdminValueDict, t: ListTexts) {
+/**
+ * «Назначен» видов отчётов (прототип `adm-types`): у скольких контрагентов на обслуживании вид назначен
+ * сейчас — по всем организациям. Каждая организация — своя транзакция в её контексте
+ * (`activeAssignmentCounts` модуля отчётов): обхода RLS у администратора платформы нет.
+ */
+export async function adminAssignedTypeCounts(db: Db): Promise<Map<string, number>> {
+  const total = new Map<string, number>();
+  for (const orgId of await orgIds(db)) {
+    const counts = await withOrgContext(db, { orgId }, (tx) => activeAssignmentCounts(tx));
+    for (const [code, n] of counts) total.set(code, (total.get(code) ?? 0) + n);
+  }
+  return total;
+}
+
+/** Что список берёт не из таблицы справочника: «Назначен» видов отчётов (`adminAssignedTypeCounts`). */
+export interface AdminDictListExtras {
+  assigned?: ReadonlyMap<string, number>;
+}
+
+async function listSource(
+  tx: Tx,
+  dict: AdminValueDict,
+  t: ListTexts,
+  extras: AdminDictListExtras = {},
+) {
   const [all, names] = await Promise.all([dictRecords(tx, dict), listNames(tx, dict)]);
   const tr = translate(t);
   const records =
-    dict === 'types' ? all.map((x) => ({ ...x, texts: typeTexts(x, tr, names) })) : all;
+    dict === 'types'
+      ? all.map((x) => ({
+          ...x,
+          texts: typeTexts(x, tr, names),
+          assigned: extras.assigned?.get(x.code) ?? 0,
+        }))
+      : all;
   const source = recordset(records.map((x, i) => listRow(dict, x, i + 1, t, names)));
   return { records, source };
 }
@@ -616,8 +655,9 @@ export async function listAdminDictPage(
   dict: AdminValueDict,
   query: ListQuery,
   t: ListTexts,
+  extras?: AdminDictListExtras,
 ) {
-  const { records, source } = await listSource(tx, dict, t);
+  const { records, source } = await listSource(tx, dict, t, extras);
   const byCode = new Map(records.map((x) => [x.code, x]));
   const page = await selectListPage({
     query: naturalQuery(dict, query),
@@ -645,8 +685,9 @@ export async function listAdminDictValues(
   key: string,
   t: ListTexts,
   q?: string,
+  extras?: AdminDictListExtras,
 ) {
-  const { source } = await listSource(tx, dict, t);
+  const { source } = await listSource(tx, dict, t, extras);
   return selectListValues({
     columns: adminDictListColumns(dict),
     key,
@@ -663,8 +704,9 @@ export async function exportAdminDict(
   query: ListQuery,
   keys: readonly string[],
   t: ListTexts,
+  extras?: AdminDictListExtras,
 ) {
-  const { source } = await listSource(tx, dict, t);
+  const { source } = await listSource(tx, dict, t, extras);
   return selectListExport({
     query: naturalQuery(dict, query),
     columns: adminDictListColumns(dict),

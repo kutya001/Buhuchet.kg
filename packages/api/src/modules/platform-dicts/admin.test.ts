@@ -443,6 +443,8 @@ describe.skipIf(!databaseAvailable())('Админка → «Справочник
       n: null,
       data: { act: 'both', kind: 'regime', regimes: ['РЕЖ-01'] },
       texts: { act: 'Сдача + уплата', authorityCode: 'ГНС' },
+      // «Назначен» — по всем организациям; назначений в тесте нет.
+      assigned: 0,
     });
     const base = {
       name: 'Плата за загрязнение',

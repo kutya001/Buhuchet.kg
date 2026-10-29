@@ -4,6 +4,7 @@ import { seedPermissions, seedRoleTemplates } from './access';
 import { seedPlatformAdmin, type PlatformAdminReport, type PlatformAdminSeed } from './admin';
 import { seedDemoOrganization, type DemoSeedReport } from './demo';
 import { seedUiTexts } from './l10n';
+import { seedNews } from './news';
 import { seedGked, seedPlatformReference, type SeedReport } from './platform';
 import { seedPlatformDicts, type PlatformDictsReport } from './platform-dicts';
 import { seedMessageTemplates, seedStatusTones } from './system-dicts';
@@ -19,6 +20,7 @@ export {
   type DemoSeedReport,
 } from './demo';
 export { seedUiTexts, uiTextSeedRows, type UiTextSeedRow } from './l10n';
+export { newsSeedRows, seedNews } from './news';
 export {
   referenceSections,
   seedGked,
@@ -44,6 +46,7 @@ export interface SeedAllResult {
   statusTones: SeedReport;
   messageTemplates: SeedReport;
   uiTexts: SeedReport;
+  news: SeedReport;
   demo: DemoSeedReport | null;
   platformAdmin: PlatformAdminReport | null;
 }
@@ -80,6 +83,7 @@ export async function seedAll(
       options,
     );
     const uiTexts = await seedUiTexts(t, refDB.localization, options);
+    const newsReport = await seedNews(t, refDB.news, options);
     const demo = options.demo
       ? await seedDemoOrganization(t, await readSpecJson('data/demoDB.json'), {
           update: options.update,
@@ -98,6 +102,7 @@ export async function seedAll(
       statusTones,
       messageTemplates,
       uiTexts,
+      news: newsReport,
       demo,
       platformAdmin,
     };

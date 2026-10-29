@@ -35,6 +35,22 @@ export const KB_GO: Readonly<Record<string, KbTarget>> = {
   roles: { module: 'staff', tab: 'roles', flash: 'main' },
   emps: { module: 'staff', tab: 'list', flash: LIST, open: { add: 'employee' } },
   empcard: { module: 'staff', tab: 'list', flash: LIST },
+  // Задачи (задача 2.23).
+  mtask: { module: 'tasks', tab: 'byme', flash: LIST, open: { add: 'task' } },
+  daymonth: { module: 'tasks', tab: 'mine', flash: '[data-task-legend]' },
+  tdone: { module: 'tasks', tab: 'mine', flash: LIST },
+  tconf: { module: 'tasks', tab: 'mine', flash: '[data-plate="pend"], main' },
+  // «Показатели контрагентов» (2.27): «Кому вести» — нажать переключатель вида.
+  kset: { module: 'kpi', tab: 'setup', flash: '[data-kpi-setup-list]' },
+  kwho: {
+    module: 'kpi',
+    tab: 'setup',
+    flash: '[data-kpi-setup-view] button:last-child',
+    press: true,
+  },
+  kval: { module: 'kpi', tab: 'month', flash: '[data-kpi-table], [data-kpi-tile]' },
+  kper: { module: 'kpi', tab: 'period', flash: LIST },
+  kchk: { module: 'kpi', tab: 'period', flash: LIST },
   search: { module: null, flash: '[role=search]', phoneFlash: '[data-search-open]' },
   // Пока нет «Контрагентов» — на списке «Видов отчётов»: он виден всем.
   cols: { module: 'dicts', tab: 'types', flash: '[data-grid-columns-button]' },

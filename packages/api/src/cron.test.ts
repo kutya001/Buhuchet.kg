@@ -39,12 +39,13 @@ describe('/api/cron/tick без базы', () => {
     expect(await res.json()).toEqual({ ran: [], skipped: [] });
   });
 
-  it('в реестре есть очистка журнала запусков, счёта неверных паролей, частоты выгрузок и брошенных загрузок', () => {
+  it('в реестре есть очистка журнала запусков, счёта неверных паролей, частоты выгрузок, брошенных загрузок и создание отчётов', () => {
     expect(jobs.map((j) => j.name)).toEqual(
       expect.arrayContaining([
         'system.cleanup-scheduler-runs',
         'auth.cleanup-login-attempts',
         'system.cleanup-rate-limits',
+        'reports.create-due',
         'files.cleanup-pending',
       ]),
     );

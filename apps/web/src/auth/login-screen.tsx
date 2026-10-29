@@ -25,6 +25,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNo
 import { useForm } from 'react-hook-form';
 import { api, callApi } from '../api-client';
 import { useErrorText, useT } from '../l10n/provider';
+import { markSignedIn } from '../news/signed-in';
 import { fieldError, NewPasswordFields } from './fields';
 import { loginErrorText } from './login-errors';
 import { TelegramLinkRow, useTelegramLink } from './telegram-link';
@@ -66,7 +67,11 @@ function LoginCard({ me }: { me: MeResponse | null }) {
   const [step, setStep] = useState<Step>(
     me ? { id: 'change', me, current: null } : { id: 'login', login: '' },
   );
-  const enter = useCallback(() => router.replace('/app'), [router]);
+  // После входа рабочая страница один раз покажет «Что нового» (задача 2.32).
+  const enter = useCallback(() => {
+    markSignedIn();
+    router.replace('/app');
+  }, [router]);
 
   let body: ReactNode;
   switch (step.id) {

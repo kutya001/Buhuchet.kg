@@ -12,9 +12,10 @@ export interface TopBarProps {
   tab: string | null;
   /**
    * «Меню»: показать или скрыть левую панель; `dot` — на телефоне точка на кнопке, когда в «Других
-   * модулях» есть модуль с точкой (прототип renderSheetDot).
+   * модулях» есть модуль с точкой или цветным счётчиком (прототип renderSheetDot); `dotTone` — цвет
+   * счётчика (не заполнены показатели), без него точка синяя.
    */
-  menu: { label: string; onClick: () => void; dot?: string };
+  menu: { label: string; onClick: () => void; dot?: string; dotTone?: 'red' | 'yellow' };
   /** «ⓘ» у названия: описание модуля — при наведении (ПК) или по нажатию. */
   info: { label: string; content: ReactNode };
   /** Общий поиск по текущей вкладке. */
@@ -67,7 +68,13 @@ export function TopBar({ title, tab, menu, info, search, clock, help, theme }: T
         className={`${iconButtonClass()} ${other} ${menu.dot ? 'relative' : ''}`}
       >
         <Icon name="menu" />
-        {menu.dot ? <NavDot title={menu.dot} className="absolute top-1 right-1 md:hidden" /> : null}
+        {menu.dot ? (
+          <NavDot
+            title={menu.dot}
+            tone={menu.dotTone ?? 'info'}
+            className="absolute top-1 right-1 md:hidden"
+          />
+        ) : null}
       </button>
       <button
         type="button"
