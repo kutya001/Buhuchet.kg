@@ -586,6 +586,9 @@ describe.skipIf(!databaseAvailable())('справочники платформы
     // Статус удалён вместе со своими связями (каскад): ни он, ни они не возвращаются.
     await t.admin.db.delete(taxBenefits).where(eq(taxBenefits.code, 'ЛЬГ-03'));
     await removed('benefits:ЛЬГ-03');
+    // Вид отчёта удалён вместе со связями с режимами и основаниями — они тоже не возвращаются.
+    await t.admin.db.delete(reportTypes).where(eq(reportTypes.code, 'bon'));
+    await removed('types:bon');
 
     for (const update of [false, true]) {
       const report = await seedPlatformDicts(t.admin.db, ref, { update });
@@ -593,7 +596,17 @@ describe.skipIf(!databaseAvailable())('справочники платформы
       expect(report.productionCalendar.inserted).toBe(0);
       expect(report.reportBases.inserted).toBe(0);
       expect(report.taxBenefits.inserted).toBe(0);
+      expect(report.reportTypes.inserted).toBe(0);
     }
+    const typeRows = await Promise.all([
+      t.admin.db.select().from(reportTypes).where(eq(reportTypes.code, 'bon')),
+      t.admin.db.select().from(reportTypeBases).where(eq(reportTypeBases.reportTypeCode, 'bon')),
+      t.admin.db
+        .select()
+        .from(reportTypeRegimes)
+        .where(eq(reportTypeRegimes.reportTypeCode, 'bon')),
+    ]);
+    expect(typeRows).toEqual([[], [], []]);
     const benefitRows = await Promise.all([
       t.admin.db.select().from(taxBenefits).where(eq(taxBenefits.code, 'ЛЬГ-03')),
       t.admin.db

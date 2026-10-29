@@ -19,6 +19,8 @@ type Value = {
     kind?: string;
     byPhone?: boolean;
     adds?: string[];
+    act?: string;
+    regimes?: string[];
   };
 };
 
@@ -495,6 +497,76 @@ test.describe('Админка: справочники платформы', () =>
       ).toBeVisible();
     } finally {
       await cleanup(page.request, origin, 'benefits', name);
+    }
+  });
+
+  test('(проверка задачи #92) виды отчётов: краткое название и «Что нужно сделать» обязательны, режимный — с режимом, «Что уплачивается» и график оплаты; правка срока — предупреждение и строка в истории', async ({
+    page,
+    baseURL,
+    isMobile,
+  }, testInfo) => {
+    const origin = new URL(baseURL!).origin;
+    await platformAdmin(page.request, origin);
+    const name = `Вид ${testInfo.project.name} ${Date.now()}`;
+    const short = `В-${Date.now() % 100000}`;
+
+    try {
+      await page.goto('/app/pdicts/types');
+      await expect(page.getByText('Единый каталог для всех организаций.')).toBeVisible();
+      await page.getByRole('button', { name: 'Добавить', exact: true }).click();
+      const dialog = page.getByRole('dialog', { name: 'Новый вид отчёта' });
+      await dialog.getByRole('textbox', { name: 'Название', exact: true }).fill(name);
+      await dialog.getByRole('button', { name: 'Сохранить' }).click();
+      await expect(dialog.getByText('Введите краткое название')).toBeVisible();
+      await expect(dialog.getByText('Выберите, что нужно сделать')).toBeVisible();
+      await dialog.getByLabel('Краткое название').fill(short);
+      // «Сдача + уплата» — сразу платёж с названием вида; режимный без режима — ошибка.
+      await dialog
+        .getByRole('group', { name: 'Что нужно сделать' })
+        .getByRole('button', { name: 'Сдача + уплата' })
+        .click();
+      await expect(dialog.getByLabel('Платёж')).toHaveValue(name);
+      await dialog.getByLabel('Тип', { exact: true }).selectOption({ label: 'Режимный' });
+      await dialog.getByLabel('График оплаты').fill('20/03');
+      await dialog.getByRole('button', { name: 'Сохранить' }).click();
+      await expect(dialog.getByText('Выберите хотя бы один режим')).toBeVisible();
+      await expect(dialog.getByText('Формат: ДД.ММ через точку с запятой')).toBeVisible();
+      await dialog
+        .getByRole('group', { name: 'Применимые режимы' })
+        .getByRole('button', { name: 'ОНР', exact: true })
+        .click();
+      await dialog.getByLabel('График оплаты').fill('20.03; 20.09');
+      await dialog.getByRole('button', { name: 'Сохранить' }).click();
+      await expect(dialog).toBeHidden();
+      const created = (await values(page.request, 'types')).find((x) => x.name === name)!;
+      expect(created.code).toMatch(/^type-[0-9a-f]{8}$/);
+      expect(created.data).toMatchObject({
+        act: 'both',
+        kind: 'regime',
+        regimes: ['РЕЖ-01'],
+        paySchedule: [
+          [3, 20],
+          [9, 20],
+        ],
+      });
+
+      // Правка правила срока — предупреждение о пересчёте; в истории — поле «было → стало».
+      const found = await row(page, isMobile, name, created.code);
+      await (await rowAction(page, found, 'Изменить')).click();
+      const edit = page.getByRole('dialog', { name });
+      await edit.getByLabel('Срок сдачи: N-е число').fill('15');
+      await expect(
+        edit.getByText(
+          'Правило срока изменится: сроки пересчитаются у 0 несданных отчётов. Сданные не меняются.',
+        ),
+      ).toBeVisible();
+      await edit.getByRole('button', { name: 'Сохранить' }).click();
+      await expect(edit).toBeHidden();
+      await expect(
+        page.getByText(`Виды отчётов: ${short} — срок: число: «20» → «15»`),
+      ).toBeVisible();
+    } finally {
+      await cleanup(page.request, origin, 'types', name);
     }
   });
 

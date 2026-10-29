@@ -22,6 +22,7 @@ export type CountKey =
   | 'pdicts.property_rates_count'
   | 'pdicts.bases_count'
   | 'pdicts.regimes_count'
+  | 'pdicts.types_count'
   | 'pdicts.benefits_count'
   | 'pdicts.phones_count'
   | 'pdicts.calendar_count'

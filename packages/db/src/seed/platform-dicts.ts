@@ -929,7 +929,7 @@ export async function seedPlatformDicts(
   const all = platformDictRows(refDB);
   const { update } = options;
   // Удалённые в Админке значения и связи с ними не возвращаются (справочники механизма 2.36).
-  const [organs, regimes, bases, ugns, forms, reasons, bankKeys, days, benefits] =
+  const [organs, regimes, bases, ugns, forms, reasons, bankKeys, days, benefits, types] =
     await Promise.all(
       [
         'organs',
@@ -941,6 +941,7 @@ export async function seedPlatformDicts(
         'banks',
         'calendar',
         'benefits',
+        'types',
       ].map((d) => deletedKeys(db, d)),
     );
   const rows = {
@@ -953,16 +954,29 @@ export async function seedPlatformDicts(
     dueChangeReasons: kept(all.dueChangeReasons, reasons!, 'code'),
     banks: kept(all.banks, bankKeys!, 'code'),
     productionCalendar: kept(all.productionCalendar, days!, 'day'),
-    reportTypeRegimes: kept(all.reportTypeRegimes, regimes!, 'regimeCode'),
-    reportTypeBases: kept(all.reportTypeBases, bases!, 'baseCode'),
+    reportTypes: kept(all.reportTypes, types!, 'code'),
+    reportTypeRegimes: kept(
+      kept(all.reportTypeRegimes, regimes!, 'regimeCode'),
+      types!,
+      'reportTypeCode',
+    ),
+    reportTypeBases: kept(kept(all.reportTypeBases, bases!, 'baseCode'), types!, 'reportTypeCode'),
     taxBenefits: kept(all.taxBenefits, benefits!, 'code'),
-    taxBenefitReportTypes: kept(all.taxBenefitReportTypes, benefits!, 'benefitCode'),
+    taxBenefitReportTypes: kept(
+      kept(all.taxBenefitReportTypes, benefits!, 'benefitCode'),
+      types!,
+      'reportTypeCode',
+    ),
     taxBenefitOffices: kept(
       kept(all.taxBenefitOffices, ugns!, 'taxOfficeCode'),
       benefits!,
       'benefitCode',
     ),
-    taxBenefitDueRules: kept(all.taxBenefitDueRules, benefits!, 'benefitCode'),
+    taxBenefitDueRules: kept(
+      kept(all.taxBenefitDueRules, benefits!, 'benefitCode'),
+      types!,
+      'reportTypeCode',
+    ),
   };
   const authority = await upsertDict(db, authorities, authorities.code, rows.authorities, update);
   const regime = await upsertDict(db, taxRegimes, taxRegimes.code, rows.taxRegimes, update);

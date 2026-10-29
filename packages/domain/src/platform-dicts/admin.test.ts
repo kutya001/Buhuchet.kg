@@ -226,7 +226,9 @@ describe('ADMIN_DICT_META', () => {
 
   it('isAdminValueDict знает только справочники механизма', () => {
     expect(isAdminValueDict('forms')).toBe(true);
-    expect(isAdminValueDict('types')).toBe(false);
+    expect(isAdminValueDict('types')).toBe(true);
+    expect(isAdminValueDict('calendar')).toBe(false);
+    expect(isAdminValueDict('taxes')).toBe(false);
   });
 
   it('код страны по умолчанию не отключается, коды стран не удаляются', () => {

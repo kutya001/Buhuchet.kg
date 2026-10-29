@@ -381,6 +381,7 @@ export const MODULES: Record<MenuModuleId, ModuleDef> = {
     ],
     // Способы добавления — по вкладке (прототип pdAdd); вкладки других частей задачи добавят свои.
     add: [
+      { id: 'type', icon: 'file', label: 'pdicts.add.type', tabs: ['types'] },
       { id: 'base', icon: 'plus', label: 'pdicts.add.base', tabs: ['bases'] },
       { id: 'regime', icon: 'plus', label: 'pdicts.add.regime', tabs: ['regimes'] },
       { id: 'benefit', icon: 'plus', label: 'pdicts.add.benefit', tabs: ['benefits'] },

@@ -58,6 +58,39 @@ describe('«История изменений» справочника', () => {
     );
   });
 
+  it('вид отчёта: добавлен, удалён, каждое поле «было» → «стало», как в прототипе', () => {
+    const names = new Map([
+      ['ОРГ-01', 'ГНС'],
+      ['ОРГ-02', 'Соцфонд'],
+      ['РЕЖ-01', 'ОНР'],
+    ]);
+    const type = (patch: Parameters<typeof item>[0]) =>
+      dictHistoryText('types', item({ code: 'nds', label: 'НДС', ...patch }), t, names);
+    expect(type({ action: 'create' })).toBe('Виды отчётов: добавлен «НДС»');
+    expect(type({ action: 'delete' })).toBe('Виды отчётов: удалён «НДС»');
+    expect(
+      type({
+        changes: [
+          { field: 'dueDay', from: 25, to: 28 },
+          { field: 'shortName', from: 'НДС', to: 'НДС-1' },
+          { field: 'act', from: 'sub', to: 'both' },
+          { field: 'authorityCode', from: 'ОРГ-01', to: 'ОРГ-02' },
+          { field: 'regimes', from: [], to: ['РЕЖ-01'] },
+          { field: 'shiftToWorkday', from: true, to: false },
+          { field: 'payDay', from: null, to: 20 },
+          { field: 'paySchedule', from: null, to: [[3, 20]] },
+          { field: 'payments', from: [], to: [{ name: 'НДС', authority: 'ОРГ-01', kbk: '' }] },
+        ],
+      }),
+    ).toBe(
+      'Виды отчётов: НДС — срок: число: «25» → «28»; кратко: «НДС» → «НДС-1»; что нужно сделать: «Сдача» → «Сдача + уплата»; орган: «ГНС» → «Соцфонд»; режимы: «» → «ОНР»; перенос срока: «да» → «нет»; срок оплаты: число: «как срок сдачи» → «20»; график оплаты: «один платёж» → «20.03»; что уплачивается: «» → «НДС (ГНС)»',
+    );
+    // Отключено и включено — общей строкой.
+    expect(type({ changes: [{ field: 'active', from: true, to: false }] })).toBe(
+      'Виды отчётов: «НДС» отключено (было: активно)',
+    );
+  });
+
   it('отключено и включено, перемещено по «№»', () => {
     const off = item({ changes: [{ field: 'active', from: true, to: false }] });
     expect(dictHistoryText('reasons', off, t)).toBe(

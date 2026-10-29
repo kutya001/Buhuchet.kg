@@ -14,6 +14,7 @@ import {
 } from '@buhuchet/domain';
 import type { AdminDictValue } from '@buhuchet/shared';
 import {
+  ActPill,
   ConfirmDialog,
   DataGrid,
   EmptyState,
@@ -38,6 +39,7 @@ import { useListPage } from '../lists/use-list-page';
 import { useViewSettings } from '../lists/view-settings';
 import { useShell } from '../shell/context';
 import { BenefitDialog } from './benefit-dialog';
+import { TypeDialog } from './type-dialog';
 import { DictHistory } from './dict-history-box';
 import {
   fetchAdminDict,
@@ -78,6 +80,16 @@ const WIDTHS: Readonly<Record<string, number>> = {
   removes: 200,
   adds: 140,
   validUntil: 120,
+  act: 175,
+  pays: 220,
+  formCode: 110,
+  authorityCode: 150,
+  period: 120,
+  rule: 250,
+  payRule: 250,
+  rates: 150,
+  regimes: 170,
+  payer: 120,
   dialCode: 90,
   mask: 160,
   digits: 90,
@@ -89,6 +101,7 @@ const WIDTHS: Readonly<Record<string, number>> = {
 
 /** Свои ширины справочника: у режима краткое название узкое. */
 const DICT_WIDTHS: Partial<Record<AdminValueDict, Readonly<Record<string, number>>>> = {
+  types: { code: 80, name: 280, shortName: 100, kind: 110, used: 100, active: 120 },
   bases: { code: 130, name: 260, description: 320, note: 240, contractors: 120 },
   regimes: { code: 90, name: 180, kind: 120 },
   benefits: { code: 90, name: 280, article: 110, contractors: 120 },
@@ -96,7 +109,20 @@ const DICT_WIDTHS: Partial<Record<AdminValueDict, Readonly<Record<string, number
 };
 
 /** Столбцы моноширинным шрифтом: коды, маски и номера. */
-const MONO = new Set(['code', 'gnsCode', 'dialCode', 'mask', 'example']);
+const MONO = new Set(['code', 'gnsCode', 'dialCode', 'mask', 'example', 'formCode']);
+
+/** Столбцы вида отчёта словами — их считает сервер (`texts`): срок, «Что уплачивается», орган. */
+const TYPE_TEXTS = new Set([
+  'act',
+  'pays',
+  'authorityCode',
+  'period',
+  'rule',
+  'payRule',
+  'rates',
+  'regimes',
+  'payer',
+]);
 
 /** «Цифр» в номере по маске (прототип: число «X»). */
 const maskDigits = (mask: string) => mask.split('X').length - 1;
@@ -112,6 +138,7 @@ function cellText(
   t: Translate,
   names: ReadonlyMap<string, string>,
 ): string {
+  if (dict === 'types' && TYPE_TEXTS.has(key)) return x.texts?.[key] ?? '';
   switch (key) {
     case 'types':
     case 'removes':
@@ -192,6 +219,10 @@ export function adminDictColumns(
           : (x) => <span className="font-semibold">{x.name}</span>;
     }
     if (MONO.has(c.key)) column.className = MONO_CLASS;
+    if (dict === 'types' && c.key === 'act') {
+      column.cell = (x) =>
+        x.data.act ? <ActPill act={x.data.act} label={x.texts?.act ?? ''} /> : null;
+    }
     if (c.key === 'byPhone') {
       column.cell = (x) =>
         x.data.byPhone ? (
@@ -223,6 +254,7 @@ const AUDIT: GridAudit<AdminDictValue> = {
 };
 
 const COUNT: Readonly<Record<AdminValueDict, CountKey>> = {
+  types: 'pdicts.types_count',
   bases: 'pdicts.bases_count',
   regimes: 'pdicts.regimes_count',
   benefits: 'pdicts.benefits_count',
@@ -249,6 +281,7 @@ const TABLE_ONLY: ReadonlySet<AdminValueDict> = new Set([
 
 /** Пояснение над списком (прототип: у шаблонов для организаций и у УГНС). */
 const NOTES: Partial<Record<AdminValueDict, UiTextKey>> = {
+  types: 'pdicts.note.types',
   bases: 'pdicts.note.bases',
   regimes: 'pdicts.note.regimes',
   benefits: 'pdicts.note.benefits',
@@ -258,6 +291,7 @@ const NOTES: Partial<Record<AdminValueDict, UiTextKey>> = {
 
 /** Способ «+ Добавить» на вкладке справочника (прототип pdAdd): «Значение», «Режим», «Налоговый орган». */
 const ADD_ACTION: Partial<Record<AdminValueDict, string>> = {
+  types: 'type',
   bases: 'base',
   regimes: 'regime',
   benefits: 'benefit',
@@ -267,6 +301,7 @@ const ADD_ACTION: Partial<Record<AdminValueDict, string>> = {
 
 /** Тексты справочника вместо общих («Значение отключено», «Значение нигде не используется…»). */
 const OFF_TOAST: Partial<Record<AdminValueDict, UiTextKey>> = {
+  types: 'pdicts.toast.off_type',
   bases: 'pdicts.toast.off_base',
   regimes: 'pdicts.toast.off_regime',
   benefits: 'pdicts.toast.off_benefit',
@@ -274,6 +309,7 @@ const OFF_TOAST: Partial<Record<AdminValueDict, UiTextKey>> = {
   ugns: 'pdicts.toast.off_ugns',
 };
 const DELETE_TEXT: Partial<Record<AdminValueDict, UiTextKey>> = {
+  types: 'pdicts.delete.text_type',
   bases: 'pdicts.delete.text_base',
   regimes: 'pdicts.delete.text_regime',
   benefits: 'pdicts.delete.text_benefit',
@@ -282,6 +318,7 @@ const DELETE_TEXT: Partial<Record<AdminValueDict, UiTextKey>> = {
 
 /** Пояснение «Отключить»: что будет с отключённым значением. */
 const OFF_SUB: Partial<Record<AdminValueDict, UiTextKey>> = {
+  types: 'pdicts.action.off_sub_type',
   bases: 'pdicts.action.off_sub_base',
   benefits: 'pdicts.action.off_sub_benefit',
   phones: 'pdicts.action.off_sub_phone',
@@ -291,9 +328,11 @@ const OFF_SUB: Partial<Record<AdminValueDict, UiTextKey>> = {
 /**
  * Почему удалить нельзя (прототип): у УГНС, льготы и основания — «Указан (отмечено) у N
  * контрагентов», у основания, привязанного только к видам отчётов, — «Привязано к видам отчётов»; у
- * остальных — «Используется в N записях».
+ * остальных — «Используется в N записях»; у вида отчёта — «подключён в организациях или указан у
+ * статусов».
  */
 function usedReason(dict: AdminValueDict, x: AdminDictValue, t: Translate): string {
+  if (dict === 'types') return t('pdicts.delete.used_type');
   if ((dict === 'ugns' || dict === 'benefits') && x.contractors > 0)
     return t('pdicts.delete.used_ugns', { n: x.contractors });
   if (dict === 'bases') {
@@ -418,7 +457,7 @@ export function ValueDictList({ dict }: { dict: AdminValueDict }) {
       x,
       () =>
         pd[':dict'][':code'].$delete({ param: param(x), query: { version: String(x.version) } }),
-      'pdicts.toast.deleted',
+      dict === 'types' ? 'pdicts.toast.type_deleted' : 'pdicts.toast.deleted',
     );
 
   const actions = (x: AdminDictValue): ActionEntry[] => {
@@ -426,7 +465,8 @@ export function ValueDictList({ dict }: { dict: AdminValueDict }) {
     const edit: ActionEntry = {
       id: 'edit',
       label: t(
-        dict === 'forms' ||
+        dict === 'types' ||
+          dict === 'forms' ||
           dict === 'banks' ||
           dict === 'regimes' ||
           dict === 'benefits' ||
@@ -533,7 +573,15 @@ export function ValueDictList({ dict }: { dict: AdminValueDict }) {
       <DictHistory dict={dict} />
       {/* Прототип: у кодов стран пояснение — под списком и историей. */}
       {dict === 'phones' ? <Note icon="info">{t('pdicts.note.phones')}</Note> : null}
-      {edit && dict === 'benefits' ? (
+      {edit && dict === 'types' ? (
+        <TypeDialog
+          key={`edit-${edit.n}`}
+          open={edit.open}
+          onClose={() => setEdit(closeSlot)}
+          item={edit.data}
+          onDone={() => refresh(dict)}
+        />
+      ) : edit && dict === 'benefits' ? (
         <BenefitDialog
           key={`edit-${edit.n}`}
           open={edit.open}

@@ -725,6 +725,198 @@ describe.skipIf(!databaseAvailable())(
       ).rejects.toThrow();
     });
 
+    it('виды отчётов: столбцы словами, связи с режимами и основаниями, проверки окна, история и удаление', async () => {
+      const page = await asAdmin((tx) => listAdminDictPage(tx, 'types', query(), t));
+      // Без «№» (docs/deviations.md п. Д-2) — в порядке каталога.
+      expect(page.rows[0]).toMatchObject({
+        n: null,
+        code: 'nds',
+        name: 'НДС',
+        data: {
+          shortName: 'НДС',
+          formCode: 'STI-062',
+          authorityCode: 'ОРГ-01',
+          period: 'M',
+          dueDay: 25,
+          dueAfter: 1,
+          payDay: 25,
+          act: 'both',
+          kind: 'regime',
+          regimes: ['РЕЖ-01'],
+          notForRegimes: [],
+          payments: [{ name: 'НДС', authority: 'ОРГ-01', kbk: '' }],
+        },
+        texts: { act: 'Сдача + уплата', pays: 'НДС', authorityCode: 'ГНС', period: 'Месяц' },
+        reports: { total: 0, open: 0, orgs: 0 },
+      });
+      const endo = page.rows.find((x) => x.code === 'endo')!;
+      expect(endo.data.notForRegimes).toEqual(['РЕЖ-02', 'РЕЖ-09', 'РЕЖ-11']);
+      const soc = page.rows.find((x) => x.code === 'soc')!;
+      expect(soc.texts?.pays).toBe('Подоходный налог (ГНС); Страховые взносы (Соцфонд)');
+      const imn = page.rows.find((x) => x.code === 'imn')!;
+      expect(imn.texts?.payRule).toMatch(/^4 платежа: до 20\.03; 20\.06; 20\.09; 20\.12/);
+      // Фильтр по «Что сделать» — по коду, на экране — подпись.
+      const pay = await asAdmin((tx) =>
+        listAdminDictPage(
+          tx,
+          'types',
+          query({ filters: { act: { type: 'enum', vals: ['pay'] } } }),
+          t,
+        ),
+      );
+      expect(pay.rows.length).toBeGreaterThan(5);
+      expect(pay.rows.every((x) => x.data.act === 'pay')).toBe(true);
+      const file = await asAdmin((tx) =>
+        exportAdminDict(tx, 'types', query(), ['name', 'act', 'authorityCode', 'period'], t),
+      );
+      expect(file.rows[0]).toEqual(['НДС', 'Сдача + уплата', 'ГНС', 'Месяц']);
+
+      const input = (data: Record<string, unknown>) => ({
+        name: 'Отчёт о выбросах',
+        data: {
+          shortName: '2-ТП',
+          formCode: '',
+          authorityCode: 'ОРГ-01',
+          period: 'Y',
+          dueFrom: 'end',
+          dueDay: 1,
+          dueAfter: null,
+          dueMonth: 3,
+          payDay: null,
+          payAfter: null,
+          payMonth: null,
+          paySchedule: null,
+          kind: 'cross',
+          payer: 'all',
+          regimes: [],
+          notForRegimes: [],
+          bases: [],
+          pickGroup: 'basis',
+          bizSizes: [],
+          notForEnRates: [],
+          preselect: false,
+          rates: [],
+          shiftToWorkday: true,
+          oneOff: false,
+          eventLabel: 'не нужно',
+          act: 'sub',
+          payments: [{ name: 'Плата', authority: 'ОРГ-01', kbk: '' }],
+          ...data,
+        },
+      });
+      const create = (data: Record<string, unknown>) =>
+        asAdmin((tx) => adminDictCreate(tx, 'types', input(data) as never, random));
+      // Режимный без режимов, уплата без платежа, отключённый режим, режим в обоих списках, отключённое
+      // основание, неизвестный орган, неизвестная ставка ЕН — отказ под своим полем.
+      expect(await create({ kind: 'regime' })).toMatchObject({
+        field: 'regimes',
+        problem: 'regimes_required',
+      });
+      expect(await create({ act: 'pay', payments: [] })).toMatchObject({
+        field: 'payments',
+        problem: 'payments_required',
+      });
+      expect(await create({ kind: 'regime', regimes: ['РЕЖ-12'] })).toMatchObject({
+        field: 'regimes',
+        problem: 'regimes',
+      });
+      expect(
+        await create({ kind: 'regime', regimes: ['РЕЖ-01'], notForRegimes: ['РЕЖ-01'] }),
+      ).toMatchObject({ field: 'notForRegimes', problem: 'regimes_both' });
+      expect(await create({ bases: ['transport'] })).toMatchObject({
+        field: 'bases',
+        problem: 'bases',
+      });
+      expect(await create({ authorityCode: 'ОРГ-99' })).toMatchObject({
+        field: 'authorityCode',
+        problem: 'authority',
+      });
+      expect(
+        await create({ act: 'pay', payments: [{ name: 'Плата', authority: 'ОРГ-99', kbk: '' }] }),
+      ).toMatchObject({ field: 'payments', problem: 'payment_authority' });
+      expect(await create({ notForEnRates: ['ЕНС-99'] })).toMatchObject({
+        field: 'notForEnRates',
+        problem: 'en_rates',
+      });
+
+      const created = await create({
+        bases: ['emissions', 'property'],
+        notForEnRates: [' ЕНС-01 ', 'ЕНС-01'],
+        rates: ['2 %', ''],
+      });
+      expect(created.ok).toBe(true);
+      if (!created.ok) return;
+      // Код — постоянный ключ; у «Сдачи» нет платежей; «Название даты события» — только у разового;
+      // основания — в порядке справочника; списки — без пустых и повторов.
+      expect(created.record.code).toMatch(/^type-t\d+$/);
+      expect(created.record.data).toMatchObject({
+        payments: [],
+        eventLabel: '',
+        bases: ['property', 'emissions'],
+        notForEnRates: ['ЕНС-01'],
+        rates: ['2 %'],
+        dueMonth: 3,
+        preselect: false,
+      });
+      expect(created.record.usage).toEqual({ total: 0, contractors: 0 });
+
+      // Правка срока и «Что нужно сделать»: в истории — каждое поле «было → стало».
+      const updated = await asAdmin((tx) =>
+        adminDictUpdate(
+          tx,
+          'types',
+          created.record.code,
+          {
+            name: created.record.name,
+            data: {
+              ...created.record.data,
+              dueDay: 15,
+              act: 'both',
+              payments: [{ name: 'Плата', authority: 'ОРГ-02', kbk: ' 1234 ' }],
+              paySchedule: [
+                [3, 15],
+                [9, 15],
+              ],
+            },
+          },
+          created.record.version,
+        ),
+      );
+      expect(updated.ok && updated.record.data).toMatchObject({
+        dueDay: 15,
+        act: 'both',
+        payments: [{ name: 'Плата', authority: 'ОРГ-02', kbk: '1234' }],
+        paySchedule: [
+          [3, 15],
+          [9, 15],
+        ],
+      });
+      const history = await asAdmin((tx) => adminDictHistory(tx, 'types', 5));
+      expect(history.items[0]).toMatchObject({ action: 'update', label: '2-ТП' });
+      expect(history.items[0]!.changes.map((c) => c.field)).toEqual([
+        'dueDay',
+        'paySchedule',
+        'act',
+        'payments',
+      ]);
+      expect(history.items[1]).toMatchObject({ action: 'create', label: 'Отчёт о выбросах' });
+
+      // Удаление — вместе со связями с основаниями.
+      const deleted = await asAdmin((tx) =>
+        adminDictDelete(tx, 'types', created.record.code, created.record.version + 1),
+      );
+      expect(deleted).toEqual({ ok: true });
+      expect(
+        await db.admin.db
+          .select()
+          .from(reportTypeBases)
+          .where(eq(reportTypeBases.reportTypeCode, created.record.code)),
+      ).toEqual([]);
+      // Вид, подключённый в организации или указанный у статуса, — «Используется».
+      const usage = await asAdmin((tx) => adminDictUsage(tx, 'types'));
+      expect(usage.get('nds')?.total ?? 0).toBeGreaterThan(0);
+    });
+
     it('коды стран: «+код», «Цифр», «Пример»; Кыргызстан не отключается, коды не удаляются', async () => {
       const page = await asAdmin((tx) => listAdminDictPage(tx, 'phones', query(), t));
       expect(page.rows[0]).toMatchObject({

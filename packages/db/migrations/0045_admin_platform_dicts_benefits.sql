@@ -98,3 +98,17 @@ CREATE OR REPLACE FUNCTION app.admin_benefit_set_due_rules(p_code text, p_rules 
 REVOKE ALL ON FUNCTION app.admin_benefit_set_due_rules(text, jsonb) FROM PUBLIC;
 --> statement-breakpoint
 GRANT EXECUTE ON FUNCTION app.admin_benefit_set_due_rules(text, jsonb) TO buhuchet_app;
+--> statement-breakpoint
+-- «Виды отчётов» правятся тем же механизмом (прототип typeEditDlg). «Применимые режимы» и «Не для
+-- режимов» — строки report_type_regimes с меткой relation, «Основания» — report_type_bases (та же
+-- связь, что «Виды отчётов» основания). «Виды деятельности (ГКЭД)» (gked) правит задача 2.38, сверку с
+-- ГНС (gns_checked_at, gns_checked_by) — задача 2.37; «Пропускать кварталы», «Период по назначению»,
+-- «Добавляемые строки ставок», «Подсказка подбора» и «Примечание» окно вида не правит — их меняет
+-- только наполнение. Без «№» и «Выше»/«Ниже» (docs/deviations.md п. Д-2): список — в порядке каталога.
+INSERT INTO app.platform_dict_specs (dict, table_name, columns, ordered) VALUES
+  ('types', 'report_types', ARRAY['name', 'short_name', 'form_code', 'stat_index', 'respondents', 'authority_code', 'period', 'due_day', 'due_after', 'due_month', 'due_from', 'pay_day', 'pay_after', 'pay_month', 'pay_schedule', 'shift_to_workday', 'one_off', 'event_label', 'act', 'payments', 'kind', 'payer', 'rates', 'not_for_en_rates', 'biz_sizes', 'pick_group', 'preselect', 'choice_note', 'description', 'client_note', 'article', 'source', 'verify', 'verify_note'], false);
+--> statement-breakpoint
+INSERT INTO app.platform_dict_links (dict, field, table_name, key_column, link_column, tag_column, tag) VALUES
+  ('types', 'regimes', 'report_type_regimes', 'report_type_code', 'regime_code', 'relation', 'applies'),
+  ('types', 'notForRegimes', 'report_type_regimes', 'report_type_code', 'regime_code', 'relation', 'excludes'),
+  ('types', 'bases', 'report_type_bases', 'report_type_code', 'base_code', NULL, NULL);

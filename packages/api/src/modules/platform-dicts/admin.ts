@@ -25,6 +25,7 @@ import {
 import {
   ADMIN_DICT_META,
   DICT_HISTORY_SHOWN,
+  NEW_REPORT_TYPE,
   RecordChangedError,
   RecordNotFoundError,
   type AdminValueDict,
@@ -83,6 +84,8 @@ function valueBody(x: AdminDictValueRecord): AdminDictValue {
     active: x.active,
     used: x.usage.total,
     contractors: x.usage.contractors,
+    ...(x.texts ? { texts: x.texts } : {}),
+    ...(x.reports ? { reports: x.reports } : {}),
     audit: {
       createdAt: x.audit.createdAt?.toISOString() ?? null,
       createdBy: x.audit.createdBy,
@@ -341,22 +344,49 @@ export function getAdminDictValueHandler(
   };
 }
 
-/** Поля формы со списком: телефоны органа, поля-связи и «Меняет сроки» статуса. */
+/**
+ * Поля формы со списком: телефоны органа, поля-связи, «Меняет сроки» статуса; у вида отчёта — платежи,
+ * ставки, «Не для ставок ЕН» и размер бизнеса.
+ */
+const LIST_FIELDS = new Set([
+  'contacts',
+  'dueRules',
+  'payments',
+  'rates',
+  'notForEnRates',
+  'bizSizes',
+]);
 const isListField = (dict: AdminValueDict, f: string) =>
-  f === 'contacts' || f === 'dueRules' || (ADMIN_DICT_META[dict].links ?? []).includes(f);
+  LIST_FIELDS.has(f) || (ADMIN_DICT_META[dict].links ?? []).includes(f);
+
+/** Поля «да»/«нет» и числа срока вида отчёта (пусто — null). */
+const FLAG_FIELDS = new Set(['byPhone', 'verify', 'shiftToWorkday', 'oneOff', 'preselect']);
+const NUMBER_FIELDS = new Set([
+  'dueDay',
+  'dueAfter',
+  'dueMonth',
+  'payDay',
+  'payAfter',
+  'payMonth',
+  'paySchedule',
+]);
 
 /**
  * Поля формы → поля значения справочника (только поля этого справочника). «Тип» не этого справочника
- * (у режима — «Банк») — 400 под полем; пустой — тип нового значения.
+ * (у режима — «Банк») — 400 под полем; пустой — тип нового значения. У вида отчёта поле, которого нет
+ * в запросе, — как у нового вида (`NEW_REPORT_TYPE`).
  */
 function inputOf(dict: AdminValueDict, form: AdminDictValueForm): AdminDictInput {
   const meta = ADMIN_DICT_META[dict];
   const values = form as Record<string, unknown>;
+  const fallback = (f: string): unknown =>
+    dict === 'types' ? NEW_REPORT_TYPE[f as keyof typeof NEW_REPORT_TYPE] : undefined;
   const data: AdminDictInput['data'] = {};
   for (const f of meta.fields) {
     if (f === 'name') continue;
-    const v = values[f];
-    if (f === 'byPhone' || f === 'verify') data[f] = v === true;
+    const v = values[f] ?? fallback(f);
+    if (FLAG_FIELDS.has(f)) data[f] = v === true;
+    else if (NUMBER_FIELDS.has(f)) data[f] = (v as AdminDictInput['data'][string]) ?? null;
     else if (isListField(dict, f)) data[f] = (v as AdminDictInput['data'][string]) ?? [];
     else data[f] = (v as string) ?? '';
   }
@@ -377,11 +407,13 @@ const REQUIRED = {
   dialCode: ['dial_code_required', '1–4 цифры'],
   mask: ['mask_required', 'Только X и пробелы'],
   gives: ['gives_required', 'Опишите, что даёт статус'],
+  authorityCode: ['authority_required', 'Выберите орган'],
+  act: ['act_required', 'Выберите, что нужно сделать'],
 } as const;
 
 /**
- * Краткое название управления, полное название режима, код и маска страны, «Что даёт» льготы
- * обязательны.
+ * Краткое название управления, полное название режима, код и маска страны, «Что даёт» льготы, краткое
+ * название, орган и «Что нужно сделать» вида отчёта обязательны.
  */
 function checkRequired(dict: AdminValueDict, input: AdminDictInput) {
   for (const field of ADMIN_DICT_META[dict].required ?? []) {
@@ -406,6 +438,14 @@ const BAD_LINK = {
     'invalid_due_rule',
     'Свой срок можно задать только действующему виду отчёта со сроком из каталога',
   ],
+  regimes_required: ['regimes_required', 'Выберите хотя бы один режим'],
+  payments_required: ['payments_required', 'Укажите название каждого платежа'],
+  regimes: ['invalid_link', 'Можно выбрать только действующие режимы'],
+  regimes_both: ['regimes_both', 'Режим не может быть и применимым, и в «Не для режимов»'],
+  bases: ['invalid_link', 'Можно выбрать только действующие основания'],
+  authority: ['invalid_link', 'Выберите действующий орган'],
+  payment_authority: ['invalid_link', 'Получатель — орган из справочника'],
+  en_rates: ['invalid_en_rates', 'Таких ставок единого налога нет — проверьте коды'],
 } as const satisfies Record<AdminDictLinkProblem, readonly [string, string]>;
 
 const TAKEN = {
@@ -473,7 +513,7 @@ async function saving<T>(run: () => Promise<T>): Promise<T> {
 
 const valueTaken = {
   description:
-    'Название пустое или уже есть, не заполнено обязательное поле, тип не этого справочника, код ГНС не из трёх цифр или уже есть, связь или «Меняет сроки» не подходят',
+    'Название пустое или уже есть, не заполнено обязательное поле, тип не этого справочника, код ГНС не из трёх цифр или уже есть, связь или «Меняет сроки» не подходят; у вида отчёта — нет режима у режимного, платежа у вида с уплатой, органа или ставки ЕН',
   content: error,
 };
 

@@ -12,6 +12,7 @@
  * `app.platform_dict_specs` в базе.
  */
 export const ADMIN_VALUE_DICTS = [
+  'types',
   'bases',
   'regimes',
   'benefits',
@@ -33,7 +34,15 @@ import { dueRuleText, type DueRule } from '../dicts/report-types';
 import type { BenefitDueOverride } from '../dicts/value-guide';
 import type { Translate } from '../l10n/texts';
 import { applyPhoneMask } from '../staff/rules';
-import { BANK_KINDS, BENEFIT_KINDS, REGIME_KINDS, type BankKind, type ReportKind } from './catalog';
+import { inactiveLinks, REPORT_TYPE_FIELDS } from './admin-types';
+import {
+  BANK_KINDS,
+  BENEFIT_KINDS,
+  REGIME_KINDS,
+  REPORT_KINDS,
+  type BankKind,
+  type ReportKind,
+} from './catalog';
 
 /**
  * Как получается код нового значения: префикс и номер (ФС-25, ПРЧ-006), префикс по типу провайдера
@@ -71,9 +80,12 @@ export interface AdminDictMeta {
   fields: readonly string[];
   /**
    * Обязательные поля сверх названия: у УГНС — краткое название, у режима — полное, у кода страны —
-   * телефонный код и маска, у льготы — «Что даёт».
+   * телефонный код и маска, у льготы — «Что даёт», у вида отчёта — краткое название, орган и «Что
+   * нужно сделать».
    */
-  required?: readonly ('shortName' | 'fullName' | 'dialCode' | 'mask' | 'gives')[];
+  required?: readonly (
+    'shortName' | 'fullName' | 'dialCode' | 'mask' | 'gives' | 'authorityCode' | 'act'
+  )[];
   /**
    * Поля-связи: коды значений другого справочника в отдельной таблице связей, а не в столбце значения
    * (виды отчётов основания — «по полю «Основание» вида», ТЗ). Пишет `app.admin_dict_set_links`.
@@ -100,11 +112,23 @@ export interface AdminDictMeta {
   kind?: {
     values: readonly string[];
     default: string;
-    text: 'pdicts.bank.kind' | 'dicts.value.regime_kind' | 'pdicts.benefit.kind';
+    text: 'pdicts.bank.kind' | 'dicts.value.regime_kind' | 'pdicts.benefit.kind' | 'report.kind';
   };
 }
 
 export const ADMIN_DICT_META: Readonly<Record<AdminValueDict, AdminDictMeta>> = {
+  // Виды отчётов (прототип typeEditDlg): «Применимые режимы» и «Не для режимов» — строки
+  // report_type_regimes, «Основания» — report_type_bases (та же связь, что у основания). Новый вид — с
+  // постоянным ключом `type-<случайное>`, как основание. Без «№» и «Выше»/«Ниже» (docs/deviations.md
+  // п. Д-2): список — в порядке каталога.
+  types: {
+    code: { key: 'type' },
+    ordered: false,
+    fields: REPORT_TYPE_FIELDS,
+    required: ['shortName', 'authorityCode', 'act'],
+    links: ['regimes', 'notForRegimes', 'bases'],
+    kind: { values: REPORT_KINDS, default: 'cross', text: 'report.kind' },
+  },
   // Новое основание — с постоянным ключом, как у наполнения (employees, property…). Без «№» и
   // «Выше»/«Ниже» (docs/deviations.md п. Д-2): список — в порядке справочника.
   bases: {
@@ -278,8 +302,7 @@ export function badBenefitOffices(
   offices: readonly { code: string; active: boolean }[],
   before: readonly string[],
 ): string[] {
-  const active = new Map(offices.map((x) => [x.code, x.active]));
-  return codes.filter((code) => !active.has(code) || (!before.includes(code) && !active.get(code)));
+  return inactiveLinks(codes, offices, before);
 }
 
 /**
@@ -442,6 +465,28 @@ const STATUS = c('active', 'enum', 'pdicts.col.status');
  * «Переводы по номеру телефона». Служебные столбцы добавляет список.
  */
 export const ADMIN_DICT_COLUMNS: Readonly<Record<AdminValueDict, readonly AdminDictColumn[]>> = {
+  // Виды отчётов (прототип `adm-types`): «Что сделать», «Что уплачивается», код формы, орган,
+  // периодичность и срок сдачи видны; «Используется» — вместо «Назначен» прототипа: назначений
+  // контрагентам ещё нет (задача 2.06), считаются подключения организаций и ссылки статусов.
+  // «Виды деятельности (ГКЭД)» добавит задача 2.38, «Сверено с ГНС» — задача 2.37.
+  types: [
+    c('code', 'text', 'pdicts.col.code', true),
+    c('name', 'text', 'pdicts.col.name'),
+    c('act', 'enum', 'dicts.col.act'),
+    c('pays', 'text', 'dicts.col.pays'),
+    c('shortName', 'text', 'dicts.col.short', true),
+    c('formCode', 'text', 'dicts.col.code'),
+    c('authorityCode', 'enum', 'dicts.col.organ'),
+    c('period', 'enum', 'dicts.col.per'),
+    c('rule', 'text', 'dicts.col.rule'),
+    c('payRule', 'text', 'dicts.col.payrule', true),
+    c('kind', 'enum', 'pdicts.col.kind'),
+    c('rates', 'text', 'dicts.col.rates', true),
+    c('regimes', 'text', 'dicts.col.regimes', true),
+    c('payer', 'enum', 'pdicts.col.payer', true),
+    c('used', 'int', 'pdicts.col.used', true),
+    c('active', 'enum', 'pdicts.col.status', true),
+  ],
   bases: [
     c('code', 'text', 'pdicts.col.code', true),
     c('name', 'text', 'pdicts.col.name'),
@@ -548,8 +593,8 @@ export const ADMIN_CALENDAR_SORT: ListSort = { key: 'date', dir: 'asc' };
 
 /**
  * Сортировка списка по умолчанию (как в прототипе, docs/deviations.md п. 48): короткий справочник — в
- * своём порядке («№»), УГНС — по региону, льготы — по коду, основания и коды стран — в порядке
- * справочника без «№» (null).
+ * своём порядке («№»), УГНС — по региону, льготы — по коду, виды отчётов, основания и коды стран — в
+ * порядке справочника без «№» (null).
  */
 export function adminDictDefaultSort(dict: AdminValueDict): ListSort | null {
   if (ADMIN_DICT_META[dict].ordered) return { key: 'n', dir: 'asc' };
