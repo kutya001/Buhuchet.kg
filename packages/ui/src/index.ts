@@ -89,6 +89,14 @@ export { PhoneInput, type PhoneInputCode, type PhoneInputValue } from './phone-i
 export { Segments, type SegmentOption } from './segments';
 export { Timeline, type TimelineItem } from './timeline';
 export {
+  TourOverlay,
+  tourBubblePlace,
+  tourHole,
+  type Rect as TourRect,
+  type TourLabels,
+  type TourOverlayProps,
+} from './tour';
+export {
   StatusMini,
   StatusMiniNone,
   StatusNone,

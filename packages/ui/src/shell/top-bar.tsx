@@ -80,6 +80,7 @@ export function TopBar({ title, tab, menu, info, search, clock, help, theme }: T
         type="button"
         onClick={() => setFull((v) => !v)}
         title={tab ? `${title} · ${tab}` : title}
+        data-page-title
         className={`flex max-w-[360px] min-w-0 flex-[0_1_auto] cursor-pointer flex-col items-start justify-center gap-px border-0 bg-transparent px-1 py-0.5 text-left text-ink max-md:max-w-none max-md:flex-1 ${other}`}
       >
         <b className={`block max-w-full text-[15px] font-bold tracking-[-0.01em] ${wrap}`}>
@@ -170,6 +171,7 @@ export function TopBar({ title, tab, menu, info, search, clock, help, theme }: T
       <button
         type="button"
         onClick={theme.onToggle}
+        data-theme-toggle
         aria-label={theme.label}
         title={theme.title}
         className={`${iconButtonClass()} ${other}`}

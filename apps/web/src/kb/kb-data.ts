@@ -4,8 +4,11 @@ import {
   KbArticle,
   KbArticleList,
   KbArticleReadResult,
+  KbKnownCount,
+  KbKnownList,
   KbMarkResult,
   KbMemberProgress,
+  KbShowContent,
   KbState,
 } from '@buhuchet/shared';
 import { queryOptions } from '@tanstack/react-query';
@@ -89,5 +92,46 @@ export async function kbRead(id: string, stepId?: string): Promise<KbArticleRead
       json: stepId ? { stepId } : {},
     }),
     (v) => KbArticleReadResult.parse(v),
+  );
+}
+
+/* ───────────── «Показать как» и «Обзор экрана» (задача 2.31) ───────────── */
+
+/** Сценарии шагов и тексты облачков: одинаковы для всех, меняются только с наполнением. */
+export const kbShowsQuery = queryOptions({
+  queryKey: ['kb', 'shows'],
+  queryFn: async () => json(await api.api.kb.shows.$get(), (v) => KbShowContent.parse(v)),
+  staleTime: Infinity,
+});
+
+export const KB_KNOWN_KEY = ['kb', 'known'] as const;
+
+/** Свои знакомые элементы показов. */
+export const kbKnownQuery = queryOptions({
+  queryKey: KB_KNOWN_KEY,
+  queryFn: async () => json(await api.api.kb.known.$get(), (v) => KbKnownList.parse(v)),
+});
+
+/** Запомнить знакомые элементы (облачка, с которых ушли «Далее» или «Готово»). */
+export async function kbAddKnown(keys: string[]): Promise<KbKnownCount> {
+  return json(await api.api.kb.known.$post({ json: { keys } }), (v) => KbKnownCount.parse(v));
+}
+
+/** «Показывать всё заново». */
+export async function kbResetKnown(): Promise<KbKnownCount> {
+  return json(await api.api.kb.known.$delete(), (v) => KbKnownCount.parse(v));
+}
+
+/** «Показать как» шага «Посмотреть» пройден до «Готово». */
+export async function kbStepShown(id: string): Promise<KbMarkResult> {
+  return json(await api.api.kb.steps[':id'].show.$post({ param: { id } }), (v) =>
+    KbMarkResult.parse(v),
+  );
+}
+
+/** «Обзор экрана» пройден до «Готово»: засчитать шаги «Посмотреть» этого экрана. */
+export async function kbScreenShown(screen: string): Promise<KbMarkResult> {
+  return json(await api.api.kb.screens.show.$post({ json: { screen } }), (v) =>
+    KbMarkResult.parse(v),
   );
 }

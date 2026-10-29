@@ -22,6 +22,8 @@ import {
   OrgReportTypesConnected,
   type Onboarding,
   type OnboardingContent,
+  type KbState,
+  type KbStep,
 } from '@buhuchet/shared';
 import {
   BrandMark,
@@ -56,6 +58,7 @@ import { api, callApi } from '../api-client';
 import { catalogQuery, useDictsRefresh } from '../dicts/dicts-data';
 import { TaxPickList } from '../dicts/tax-pick';
 import { kbStateQuery } from '../kb/kb-data';
+import { SHOW_AFTER_GO_MS, useKb } from '../kb/kb-provider';
 import { useErrorText, useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { policyQuery } from '../org/org-data';
@@ -722,15 +725,20 @@ function PlanScreen({
   );
 }
 
+/** Первые три невыполненных шага программы, основные «★» — первыми (прототип wlFirst). */
+function firstSteps(state: KbState | undefined): KbStep[] {
+  const open = (state?.lessons ?? []).flatMap((l) => l.steps).filter((x) => !x.done);
+  return [...open.filter((x) => x.star), ...open.filter((x) => !x.star)]
+    .slice(0, 3)
+    .sort((a, b) => open.indexOf(a) - open.indexOf(b));
+}
+
 /** Экран 5 «С чего начать»: первые три невыполненных шага программы, основные «★» — первыми. */
 function StartScreen({ content, lead }: { content: OnboardingContent; lead: boolean }) {
   const t = useT();
   const state = useQuery(kbStateQuery).data;
   const s = content.s4;
-  const open = (state?.lessons ?? []).flatMap((l) => l.steps).filter((x) => !x.done);
-  const first = [...open.filter((x) => x.star), ...open.filter((x) => !x.star)]
-    .slice(0, 3)
-    .sort((a, b) => open.indexOf(a) - open.indexOf(b));
+  const first = firstSteps(state);
   return (
     <>
       <ScreenHead title={s.t} lead={lead ? s.lead : s.leadStaff} />
@@ -799,14 +807,22 @@ function WelcomeFooter({
   const refreshDicts = useDictsRefresh();
   const { leave } = useWindow();
   const [connecting, setConnecting] = useState(false);
+  const kb = useKb();
+  const state = useQuery(kbStateQuery).data;
   const to = (href: string) => {
     leave();
     router.replace(href);
   };
+  // «Начать обучение»: «Уроки» и «Показать как» первого шага (прототип wlClick, `learn`).
+  const learn = () => {
+    const first = firstSteps(state)[0];
+    to(lessonsHref);
+    if (first) setTimeout(() => kb.show(first.id), SHOW_AFTER_GO_MS);
+  };
   const cta = buttonClass('cta');
   const wide = 'max-md:min-h-[42px] max-md:flex-auto';
 
-  const connect = async (href: string) => {
+  const connect = async (then: () => void) => {
     setConnecting(true);
     const res = await callApi(() =>
       api.api['org-report-types'].connect.$post({
@@ -821,7 +837,7 @@ function WelcomeFooter({
     const done = OrgReportTypesConnected.parse(res.data);
     refreshDicts();
     toast(t('onboarding.tax.done', { n: done.connected }), { icon: 'check' });
-    to(href);
+    then();
   };
 
   let right: ReactNode;
@@ -866,7 +882,7 @@ function WelcomeFooter({
           type="button"
           className={`${buttonClass()} ${wide}`}
           disabled={!n || connecting}
-          onClick={() => void connect(homeHref)}
+          onClick={() => void connect(() => to(homeHref))}
         >
           {t('onboarding.tax.self')}
         </button>
@@ -875,7 +891,7 @@ function WelcomeFooter({
           type="button"
           className={`${cta} ${wide}`}
           disabled={!n || connecting}
-          onClick={() => void connect(lessonsHref)}
+          onClick={() => void connect(learn)}
         >
           <Icon name="play" size="sm" />
           {t('onboarding.tax.learn')}
@@ -898,12 +914,7 @@ function WelcomeFooter({
         >
           {t('onboarding.self')}
         </button>
-        <button
-          ref={ctaRef}
-          type="button"
-          className={`${cta} ${wide}`}
-          onClick={() => to(lessonsHref)}
-        >
+        <button ref={ctaRef} type="button" className={`${cta} ${wide}`} onClick={learn}>
           <Icon name="play" size="sm" />
           {t('onboarding.learn')}
         </button>

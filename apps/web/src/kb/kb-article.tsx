@@ -7,12 +7,13 @@ import Link from 'next/link';
 import { Fragment, useEffect, useRef, type ReactNode } from 'react';
 import { useT } from '../l10n/provider';
 import { kbArticleQuery } from './kb-data';
+import { useKb } from './kb-provider';
 
 /**
  * Окно статьи «Базы знаний» (прототип modules/kb.js, kbArtDlg): текст статьи блоками без разметки,
  * описания экранов модулей (`kbScreenHtml`) и «Конец статьи». Статья прочитана, когда её дочитали до
  * последнего абзаца; короткая, которая видна целиком, — через 2 секунды. Из «?» в шапке — с кнопкой
- * «Открыть Базу знаний». «Показать экран» добавит задача 2.31.
+ * «Открыть Базу знаний» и «Показать экран» (задача 2.31).
  */
 
 type Block = KbArticle['blocks'][number];
@@ -108,7 +109,15 @@ export function KbArticleDialog({
         </>
       }
       label={article.title}
-      footer={<ArticleFooter help={!!view.help} kbHref={info.kbHref} goHref={goHref} />}
+      footer={
+        <ArticleFooter
+          help={!!view.help}
+          kbHref={info.kbHref}
+          goHref={goHref}
+          screen={module && info.hrefOf(module) ? module : null}
+          here={module === info.moduleId}
+        />
+      }
     >
       <div data-kb-article={article.id} className="max-w-[820px] text-[14px] leading-[1.6]">
         {article.blocks.map((b, i) => (
@@ -132,12 +141,19 @@ function ArticleFooter({
   help,
   kbHref,
   goHref,
+  screen,
+  here,
 }: {
   help: boolean;
   kbHref: string;
   goHref: string | null;
+  /** Модуль статьи доступен: «Показать экран» (задача 2.31). */
+  screen: string | null;
+  /** Статья о модуле, который сейчас открыт. */
+  here: boolean;
 }) {
   const t = useT();
+  const kb = useKb();
   const { close, leave } = useWindow();
   return (
     <>
@@ -148,6 +164,21 @@ function ArticleFooter({
         </Link>
       ) : null}
       <div className="flex-1" />
+      {screen ? (
+        <button
+          type="button"
+          data-kb-show-screen=""
+          className={buttonClass()}
+          title={t('kb.show.screen_hint')}
+          onClick={() => {
+            close();
+            kb.showScreen(here ? null : screen);
+          }}
+        >
+          <Icon name="play" size="sm" />
+          {t('kb.show.screen')}
+        </button>
+      ) : null}
       {goHref ? (
         <Link href={goHref} replace onClick={leave} className={buttonClass()}>
           <Icon name="right" size="sm" />

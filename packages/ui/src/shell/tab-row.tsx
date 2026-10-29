@@ -163,6 +163,7 @@ export function TabRow({
             type="button"
             onClick={() => onAdd(a.id)}
             title={a.label}
+            data-add-action={a.id}
             className={`${buttonClass()} max-md:hidden`}
           >
             <Icon name={a.icon} />
@@ -222,6 +223,7 @@ function AddControl({
           onClick={() => onAdd(actions[0]!.id)}
           aria-label={fab ? label : undefined}
           title={label}
+          data-add-button={fab ? 'fab' : 'button'}
           className={look}
         >
           {content}
@@ -243,6 +245,7 @@ function AddControl({
           aria-haspopup="menu"
           aria-expanded={open}
           aria-controls={id}
+          data-add-button={fab ? 'fab' : 'button'}
           className={look}
         >
           {content}

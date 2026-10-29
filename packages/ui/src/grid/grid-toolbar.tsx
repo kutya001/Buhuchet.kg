@@ -110,6 +110,7 @@ export function GridToolbar<Row>({
           <div
             role="group"
             aria-label={labels.view}
+            data-grid-view
             className="inline-flex gap-0.5 rounded-lg border border-line bg-pane-alt p-[3px]"
           >
             {(['table', 'cards'] as const).map((v) => (
@@ -219,6 +220,7 @@ export function GridToolbar<Row>({
             aria-haspopup="menu"
             title={labels.viewOptionsHint}
             aria-label={labels.viewOptions}
+            data-grid-options-button
             className={phone ? PHONE_TOOL : RAISED_ICON}
           >
             <Icon name="sliders" size="sm" />
@@ -496,6 +498,7 @@ function PhoneViewToggle({
       title={labels[to]}
       aria-label={labels.viewTo(labels[to])}
       onClick={() => onChange(to)}
+      data-grid-view
       className={PHONE_TOOL}
     >
       <Icon name={to} size="sm" />

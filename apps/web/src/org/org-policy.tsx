@@ -188,6 +188,7 @@ function PolicyEdit({ policy, readOnly }: { policy: OrgPolicy; readOnly: boolean
       {policy.features.tasks ? (
         <Box title={t('org.policy.tasks')}>
           <CheckRow
+            data-task-confirm=""
             checked={policy.taskConfirm}
             disabled={off}
             onChange={(on) =>
