@@ -11,6 +11,7 @@ import {
 import { eq, inArray, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Db } from '../client';
+import { seedDemoContractorPages } from './demo-contractor-page';
 import { seedDemoContractors } from './demo-contractors';
 import { seedDemoDictRequests } from './demo-dicts';
 import { seedDemoMoney } from './demo-money';
@@ -301,6 +302,8 @@ export async function seedDemoOrganization(
   // Контрагенты (задача 2.05).
   const employeeIds = demo.employees.map((e) => e.id);
   await seedDemoContractors(db, file, { orgId, demoId, employees: employeeIds });
+  // Страницы контрагентов по ссылке (задача 2.42).
+  await seedDemoContractorPages(db, file, { orgId, demoId, employees: employeeIds });
   // Ручные задачи (задача 2.23).
   await seedDemoTasks(db, file, { orgId, demoId, employees: employeeIds });
   await seedDemoDictRequests(db, file, orgId, {

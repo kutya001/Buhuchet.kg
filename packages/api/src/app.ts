@@ -9,6 +9,7 @@ import { sessionGuard } from './middleware/session';
 import { createModuleApp } from './module';
 import { adminModule } from './modules/admin';
 import { authModule } from './modules/auth';
+import { contractorPageModule } from './modules/contractor-page';
 import { contractorsModule } from './modules/contractors';
 import { kbModule } from './modules/kb';
 import { kpiModule } from './modules/kpi';
@@ -80,6 +81,7 @@ export function createApp(deps: ApiDeps) {
     .route('/', staffModule(deps))
     .route('/', rolesModule(deps))
     .route('/', contractorsModule(deps))
+    .route('/', contractorPageModule(deps))
     .route('/', tasksModule(deps))
     .route('/', orgModule(deps))
     .route('/', kbModule(deps))

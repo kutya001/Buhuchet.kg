@@ -11,6 +11,7 @@ export * from './auth';
 export * from './telegram';
 export * from './staff';
 export * from './contractors';
+export * from './contractor-page';
 export * from './tasks';
 export * from './roles';
 export * from './org';

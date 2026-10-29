@@ -23,6 +23,15 @@ const PUBLIC_PATHS = new Set([
   '/api/telegram/webhook',
 ]);
 
+/**
+ * Открытые группы методов: страница контрагента по ссылке (`/api/page/<адрес организации>/<ИНН>`) —
+ * без входа, только чтение одного контрагента после кода доступа (задача 2.42).
+ */
+const PUBLIC_PREFIXES = ['/api/page/'];
+
+const isPublicPath = (path: string) =>
+  PUBLIC_PATHS.has(path) || PUBLIC_PREFIXES.some((prefix) => path.startsWith(prefix));
+
 /** Что доступно, пока пользователь не сменил временный пароль. */
 const BEFORE_PASSWORD_CHANGE = new Set(['/api/auth/me', '/api/auth/password']);
 
@@ -37,7 +46,7 @@ export function sessionGuard(deps: ApiDeps) {
   return createMiddleware<AppEnv>(async (c, next) => {
     c.set('session', null);
     c.set('access', null);
-    if (PUBLIC_PATHS.has(c.req.path)) return next();
+    if (isPublicPath(c.req.path)) return next();
 
     const token = readSessionToken(c, deps);
     const tokenHash = token ? hashSessionToken(token) : null;

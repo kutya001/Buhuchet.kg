@@ -30,6 +30,7 @@ export * from './dicts/value-guide';
 export * from './common/months';
 export * from './contractors/rules';
 export * from './contractors/gked';
+export * from './contractor-page/page';
 export * from './tasks/rules';
 export * from './money/requisites';
 export * from './kpi/indicators';

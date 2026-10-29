@@ -12,6 +12,8 @@ export const HISTORY_ENTITIES = [
   'employee',
   'role',
   'contractor',
+  // Страница контрагента по ссылке (задача 2.42): включение, код, разделы, открытия.
+  'contractor_page',
   'task',
   'file',
   'org_report_type',
@@ -37,6 +39,15 @@ export const HISTORY_ACTIONS = [
   // Файлы записи (блок «Файлы»): «Прикреплён файл», «Удалён файл» — в истории той записи.
   'file_attach',
   'file_delete',
+  // Страница контрагента по ссылке: включена, выключена, сменён код, скопирована и отправлена ссылка,
+  // открыта контрагентом, ввод кода закрыт после неверных кодов подряд.
+  'page_on',
+  'page_off',
+  'page_code',
+  'page_copy',
+  'page_send',
+  'page_open',
+  'page_lock',
 ] as const;
 export type HistoryAction = (typeof HISTORY_ACTIONS)[number];
 
