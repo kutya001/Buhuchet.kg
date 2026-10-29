@@ -39,8 +39,10 @@ export function pageHistoryText(t: Translate, entry: PageHistoryEntry): string {
   const after = sectionsOf(change.to);
   return PAGE_SECTIONS.flatMap((s) => {
     const name = t(`org.page.section.${s}`);
-    if (after.includes(s) && !before.includes(s)) return [t('cppage.hist.hidden', { section: name })];
-    if (before.includes(s) && !after.includes(s)) return [t('cppage.hist.shown', { section: name })];
+    if (after.includes(s) && !before.includes(s))
+      return [t('cppage.hist.hidden', { section: name })];
+    if (before.includes(s) && !after.includes(s))
+      return [t('cppage.hist.shown', { section: name })];
     return [];
   }).join('; ');
 }

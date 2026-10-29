@@ -143,7 +143,10 @@ export const CONTRACTOR_PAGE_TEXTS = {
     ru: 'Функция «Страница контрагента по ссылке» выключена в учётной политике',
     section: E,
   },
-  'err.page_unavailable': { ru: 'Страница недоступна. Обратитесь к вашему бухгалтеру.', section: E },
+  'err.page_unavailable': {
+    ru: 'Страница недоступна. Обратитесь к вашему бухгалтеру.',
+    section: E,
+  },
   'err.page_code_wrong': { ru: 'Неверный код. Осталось попыток: {triesLeft}', section: E },
   'err.page_locked': { ru: 'Ввод кода временно закрыт', section: E },
   'err.page_ip_locked': { ru: 'Ввод кода временно закрыт', section: E },

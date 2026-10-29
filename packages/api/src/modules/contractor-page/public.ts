@@ -38,7 +38,8 @@ import { logoLink } from '../org/logo-link';
 const error = { 'application/json': { schema: ApiError } };
 
 /** Адрес организации и ИНН в правильном виде; остальное — «недоступна» без запроса к базе. */
-const pageShape = (slug: string, inn: string) => /^[a-z0-9-]{3,30}$/.test(slug) && /^\d{14}$/.test(inn);
+const pageShape = (slug: string, inn: string) =>
+  /^[a-z0-9-]{3,30}$/.test(slug) && /^\d{14}$/.test(inn);
 
 /**
  * Cookie страницы (ТЗ «Верный код запоминается в этом браузере на 30 дней»): своя у каждой ссылки
@@ -112,7 +113,10 @@ export function publicPageHandler(deps: ApiDeps): RouteHandler<typeof publicPage
       return c.json({ state: state.state } as PublicPageBody, 200);
     }
     if (state.state === 'locked') {
-      return c.json({ state: 'locked', lockedUntil: timeOf(state.lockedUntil) } as PublicPageBody, 200);
+      return c.json(
+        { state: 'locked', lockedUntil: timeOf(state.lockedUntil) } as PublicPageBody,
+        200,
+      );
     }
     const { orgId, contractorId } = state;
     const device = pageDevice(c.req.header('user-agent') ?? '');
@@ -197,9 +201,14 @@ export function publicPageCodeHandler(
         return c.json({ ok: true as const }, 200);
       }
       case 'wrong':
-        return apiFail(403, 'page_code_wrong', `Неверный код. Осталось попыток: ${result.triesLeft}`, {
-          triesLeft: result.triesLeft,
-        });
+        return apiFail(
+          403,
+          'page_code_wrong',
+          `Неверный код. Осталось попыток: ${result.triesLeft}`,
+          {
+            triesLeft: result.triesLeft,
+          },
+        );
       case 'locked': {
         const locked = result.lockedNow;
         if (locked) {

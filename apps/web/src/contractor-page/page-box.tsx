@@ -296,7 +296,8 @@ export function ContractorPageBox({ contractorId }: { contractorId: string }) {
         ok={t('cppage.btn.code')}
         onConfirm={() =>
           void run('code').then((next) => {
-            if (next) toast(t('cppage.toast.code', { code: pageCodeText(next.code!) }), { icon: 'link' });
+            if (next)
+              toast(t('cppage.toast.code', { code: pageCodeText(next.code!) }), { icon: 'link' });
           })
         }
       />

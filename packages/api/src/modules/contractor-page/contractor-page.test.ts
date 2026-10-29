@@ -37,7 +37,12 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
   };
   const page = (cookie: string, id: string) => call('GET', `/api/contractors/${id}/page`, cookie);
   const act = (cookie: string, id: string, action: string, body?: unknown) =>
-    call(action === 'sections' ? 'PUT' : 'POST', `/api/contractors/${id}/page/${action}`, cookie, body);
+    call(
+      action === 'sections' ? 'PUT' : 'POST',
+      `/api/contractors/${id}/page/${action}`,
+      cookie,
+      body,
+    );
   const features = (orgId: string, value: Record<string, boolean>) =>
     f.t.admin.db
       .update(schema.orgSettings)
@@ -294,9 +299,7 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
     // Cookie подходит только к своей ссылке, выдуманный — как без cookie.
     expect(await visited(`org-a/${cpOther.inn}`, { cookie })).toEqual({ state: 'unavailable' });
     expect(await visited(path, { cookie: 'bh_page=not-a-token' })).toEqual({ state: 'code' });
-    expect(
-      await visited(path, { cookie: `bh_page=${'A'.repeat(43)}` }),
-    ).toEqual({ state: 'code' });
+    expect(await visited(path, { cookie: `bh_page=${'A'.repeat(43)}` })).toEqual({ state: 'code' });
   });
 
   it('«Страница недоступна»: неизвестный адрес или ИНН, чужая организация, не включена', async () => {
