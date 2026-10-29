@@ -1,6 +1,12 @@
 import { fixedClock } from '@buhuchet/adapters';
 import { schema } from '@buhuchet/db';
-import { KPI_IMPORT_HOURLY_LIMIT, KPI_MESSAGES } from '@buhuchet/domain';
+import {
+  KPI_IMPORT_HOURLY_LIMIT,
+  KPI_IMPORT_MAX_BYTES,
+  KPI_IMPORT_MAX_CELLS,
+  KPI_IMPORT_MAX_CONTRACTORS,
+  KPI_MESSAGES,
+} from '@buhuchet/domain';
 import { databaseAvailable, seedAllPlatformDictionaries } from '@buhuchet/db/testing';
 import {
   Indicators,
@@ -15,7 +21,8 @@ import { and, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../../app';
 import { buildXlsx, type XlsxCell } from '../../lists/xlsx';
-import { readXlsxRows } from '../../lists/xlsx-read';
+import { buildImportTemplate } from './import-file';
+import { readSheetRows, readXlsxRows } from '../../lists/xlsx-read';
 import {
   apiRequest,
   createStaffFixture,
@@ -48,6 +55,39 @@ const sheet = (rows: XlsxCell[][]) =>
     rows[0]!.map((title) => ({ title: String(title), kind: 'text' as const })),
     rows.slice(1),
   );
+
+describe('Ввод из Excel: самый большой шаблон загружается обратно', () => {
+  it('1 000 контрагентов и 480 000 заполненных ячеек: файл меньше 4 МБ и в пределах листа', async () => {
+    const columns = KPI_IMPORT_MAX_CELLS / KPI_IMPORT_MAX_CONTRACTORS;
+    const head = [
+      'ИНН',
+      'Контрагент',
+      ...Array.from(
+        { length: columns },
+        (_, j) =>
+          `Показатель ${j % 20} · ${String((j % 12) + 1).padStart(2, '0')}.2026 (сом, сумма)`,
+      ),
+    ];
+    const file = await buildImportTemplate({
+      sheet: 'Показатели',
+      tipsSheet: 'Подсказки',
+      head,
+      rows: Array.from({ length: KPI_IMPORT_MAX_CONTRACTORS }, (_, i) => ({
+        inn: `0${1e12 + i}`,
+        name: `ОсОО «Контрагент ${i}»`,
+        cells: Array.from({ length: columns }, (_, j) => ({
+          kind: 'input' as const,
+          value: 12_345_678_900 + i * 1000 + j,
+        })),
+      })),
+      tips: ['Как заполнить шаблон'],
+    });
+    expect(file.length).toBeLessThan(KPI_IMPORT_MAX_BYTES);
+    const rows = readSheetRows(file);
+    expect(rows).toHaveLength(KPI_IMPORT_MAX_CONTRACTORS + 1);
+    expect(rows[KPI_IMPORT_MAX_CONTRACTORS]).toHaveLength(columns + 2);
+  });
+});
 
 describe.skipIf(!databaseAvailable())('Показатели контрагентов: ввод из Excel', () => {
   let f: Fixture;

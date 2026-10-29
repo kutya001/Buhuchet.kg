@@ -37,8 +37,8 @@ export const KpiImportTemplateQuery = z.object({
 export const KpiImportTemplatePreview = z.object({
   contractors: z.number().int().nonnegative(),
   columns: z.number().int().nonnegative(),
-  /** Шаблон не собирается: больше 24 месяцев или 1 000 контрагентов. */
-  tooMany: z.enum(['months', 'contractors']).nullable(),
+  /** Шаблон не собирается: больше 24 месяцев, 1 000 контрагентов или 480 000 ячеек показателей. */
+  tooMany: z.enum(['months', 'contractors', 'cells']).nullable(),
   head: z.array(
     z.object({
       indicatorId: Uuid,

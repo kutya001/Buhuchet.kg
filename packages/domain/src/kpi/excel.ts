@@ -17,6 +17,29 @@ export const KPI_IMPORT_MAX_CONTRACTORS = 1000;
 export const KPI_IMPORT_MAX_MONTHS = 24;
 
 /**
+ * Ячеек показателей в одном шаблоне (контрагенты × столбцы) — не больше: шаблон больше не загрузится
+ * обратно (пределы загруженного листа — `packages/api/src/lists/xlsx-read.ts`). 1 000 контрагентов
+ * за 24 месяца — это до 20 показателей. В прототипе такого предела нет (docs/deviations.md п. В-8).
+ */
+export const KPI_IMPORT_MAX_CELLS = 480_000;
+
+/** Почему шаблон не собирается: больше месяцев, контрагентов или ячеек показателей. */
+export type ImportTooMany = 'months' | 'contractors' | 'cells';
+
+/** Шаблон больше пределов: `months` — месяцев, `contractors` — строк, `cells` — ячеек показателей. */
+export function importTooMany(
+  months: number,
+  contractors: number,
+  columns: number,
+): ImportTooMany | null {
+  if (months > KPI_IMPORT_MAX_MONTHS) return 'months';
+  if (contractors > KPI_IMPORT_MAX_CONTRACTORS) return 'contractors';
+  // ОТКЛОНЕНИЕ: docs/deviations.md#В-8
+  if (contractors * columns > KPI_IMPORT_MAX_CELLS) return 'cells';
+  return null;
+}
+
+/**
  * Файл загрузки — не больше 4 МБ: он идёт телом запроса, а площадка (Vercel) принимает тело до 4,5 МБ.
  * Шаблон на 1 000 контрагентов и 24 месяца по нескольким показателям в него помещается.
  */

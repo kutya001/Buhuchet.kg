@@ -663,6 +663,7 @@ export const KPI_TEXTS = {
   'err.period_too_long': { ru: KPI_MESSAGES.period_too_long, section: E },
   'err.import_too_many_months': { ru: KPI_MESSAGES.import_too_many_months, section: E },
   'err.import_too_many_contractors': { ru: KPI_MESSAGES.import_too_many_contractors, section: E },
+  'err.import_too_many_cells': { ru: KPI_MESSAGES.import_too_many_cells, section: E },
   'err.import_empty': { ru: KPI_MESSAGES.import_empty, section: E },
   'err.import_nothing': { ru: KPI_MESSAGES.import_nothing, section: E },
   'err.import_file_unreadable': { ru: KPI_MESSAGES.import_file_unreadable, section: E },

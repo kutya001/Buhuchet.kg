@@ -26,11 +26,10 @@ import {
   importHead,
   importInn,
   importTemplate,
+  importTooMany,
   importWrites,
   KPI_IMPORT_HOURLY_LIMIT,
   KPI_IMPORT_MAX_BYTES,
-  KPI_IMPORT_MAX_CONTRACTORS,
-  KPI_IMPORT_MAX_MONTHS,
   KPI_MESSAGES,
   KPI_PERIOD_MAX_MONTHS,
   monthRange,
@@ -254,12 +253,7 @@ async function templateOf(deps: ApiDeps, c: Context<AppEnv>, tx: Tx, query: Temp
     name: byId.get(k.id)!.name,
     cells: tpl.cells[n]!,
   }));
-  const tooMany =
-    months.length > KPI_IMPORT_MAX_MONTHS
-      ? ('months' as const)
-      : rows.length > KPI_IMPORT_MAX_CONTRACTORS
-        ? ('contractors' as const)
-        : null;
+  const tooMany = importTooMany(months.length, rows.length, tpl.columns.length);
   return { tooMany, months, rows, tpl, data };
 }
 
@@ -341,7 +335,8 @@ export const templateRoute = createRoute({
   responses: {
     200: { description: 'Шаблон: лист «Показатели» и лист «Подсказки»', content: xlsxContent },
     400: {
-      description: 'Больше 24 месяцев или 1 000 контрагентов, шаблон пуст, месяц не наступил',
+      description:
+        'Больше 24 месяцев, 1 000 контрагентов или 480 000 ячеек, шаблон пуст, месяц не наступил',
       content: error,
     },
     ...exportRateResponses,
@@ -358,6 +353,7 @@ export function templateHandler(deps: ApiDeps): RouteHandler<typeof templateRout
       const r = await inKpi(deps, c, (tx) => templateOf(deps, c, tx, query), 'export');
       if (r.tooMany === 'months') kpiFail(400, 'import_too_many_months');
       if (r.tooMany === 'contractors') kpiFail(400, 'import_too_many_contractors');
+      if (r.tooMany === 'cells') kpiFail(400, 'import_too_many_cells');
       if (!r.tpl || !r.rows.length || !r.tpl.columns.length) kpiFail(400, 'import_empty');
       const head = headOf(t, r.data!, r.tpl.columns);
       const indicators = r.data!.indicators.filter((i) => query.inds.includes(i.id) && !i.archived);

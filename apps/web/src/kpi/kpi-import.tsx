@@ -462,15 +462,7 @@ function TemplateStep({
             </div>
           </div>
         </FormGrid>
-        {data?.tooMany ? (
-          <Note tone="warn">
-            {t(
-              data.tooMany === 'months'
-                ? 'err.import_too_many_months'
-                : 'err.import_too_many_contractors',
-            )}
-          </Note>
-        ) : null}
+        {data?.tooMany ? <Note tone="warn">{t(`err.import_too_many_${data.tooMany}`)}</Note> : null}
         {/* Период длиннее 72 месяцев шаблон не считает — только предупреждение. */}
         {data && !(data.tooMany === 'months' && data.contractors === 0) ? (
           <TemplateSummary data={data} />

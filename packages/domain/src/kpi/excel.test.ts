@@ -7,6 +7,7 @@ import {
   importHead,
   importInn,
   importTemplate,
+  importTooMany,
   importWrites,
   parseImportHead,
   planImport,
@@ -92,6 +93,12 @@ describe('шаблон «Ввода из Excel»', () => {
     expect(parseImportHead('a · 01.2026('.repeat(30))).toBeNull();
     expect(parseImportHead(`${'a'.repeat(280)} · 09.2026`)).not.toBeNull();
     expect(excelColumn(0)).toBe('A');
+    // Пределы шаблона: месяцы, контрагенты, ячейки показателей (docs/deviations.md п. В-8).
+    expect(importTooMany(24, 1000, 480)).toBeNull();
+    expect(importTooMany(25, 1, 1)).toBe('months');
+    expect(importTooMany(24, 1001, 1)).toBe('contractors');
+    expect(importTooMany(24, 1000, 481)).toBe('cells');
+    expect(importTooMany(1, 100, 2400)).toBeNull();
     expect(excelColumn(27)).toBe('AB');
   });
 
