@@ -11,12 +11,15 @@ import {
   ReportBases,
   TaxRegimes,
   AdminDictHistory,
+  AdminDictIoFile,
   AdminDictList,
+  AdminDictLoadList,
   AdminDictRequestList,
   AdminDictValue,
   AdminReportTypeOptions,
   ListValues,
   PdictsTabCounts,
+  type AdminDictLoad,
   type AdminDictRequest,
   type AdminPermission,
 } from '@buhuchet/shared';
@@ -179,6 +182,26 @@ export const fetchDictRequests: FetchListPage<AdminDictRequest> = async (params)
 export const fetchDictRequestValues = async (col: string, q?: string) =>
   json(await requests.values.$get({ query: q ? { col, q } : { col } }), (v) => ListValues.parse(v));
 
+const loads = api.api.admin['platform-dict-loads'];
+
+/** «Загрузки» (задача 2.37): страница и значения фильтра. */
+export const fetchDictLoads: FetchListPage<AdminDictLoad> = async (params) =>
+  json(await loads.$get({ query: params }), (v) => AdminDictLoadList.parse(v));
+
+export const fetchDictLoadValues = async (col: string, q?: string) =>
+  json(await loads.values.$get({ query: q ? { col, q } : { col } }), (v) => ListValues.parse(v));
+
+const io = api.api.admin['platform-dicts-io'];
+
+/** Справочник в формате загрузки — для окна «Выгрузка». */
+export const dictIoFileQuery = (dict: AdminValueDict) =>
+  queryOptions({
+    queryKey: ['admin', 'pdicts', 'io', dict],
+    queryFn: async () =>
+      json(await io[':dict'].$get({ param: { dict } }), (v) => AdminDictIoFile.parse(v)),
+    staleTime: 0,
+  });
+
 /**
  * После правки: список и история справочника, число запросов на вкладке; справочники организаций
  * (окна «Справочников платформы» и поля форм) перечитаются при следующем открытии.
@@ -186,7 +209,7 @@ export const fetchDictRequestValues = async (col: string, q?: string) =>
 export function usePdictsRefresh() {
   const client = useQueryClient();
   return useCallback(
-    (dict: AdminValueDict | AdminSystemDict | 'requests') => {
+    (dict: AdminValueDict | AdminSystemDict | 'requests' | 'loads') => {
       void client.invalidateQueries({ queryKey: ['list', `pdicts.${dict}`] });
       void client.invalidateQueries({ queryKey: ['admin', 'pdicts'] });
     },
