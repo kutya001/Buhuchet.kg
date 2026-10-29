@@ -2,7 +2,7 @@ import { expect, test, type APIRequestContext, type Locator, type Page } from '@
 import { finger, settledBox } from './helpers';
 
 // Окна и уведомления оболочки (задача #12) через настоящий сайт. Карточек записей ещё нет: окно —
-// помощь «?» (карточка «Базы знаний» о модуле, как kbHelp прототипа), уведомление — выбор способа
+// помощь «?» (статья «Базы знаний» о модуле, как kbHelp прототипа), уведомление — выбор способа
 // в «+ Добавить» на экране-заглушке. Выбор «На весь экран» хранится в cookie браузера теста.
 const DEMO_PASSWORD = process.env.DEMO_PASSWORD ?? 'demo';
 
@@ -19,7 +19,7 @@ const helpWindow = (page: Page) => page.getByRole('dialog', { name: 'Отчет�
 async function openHelp(page: Page): Promise<Locator> {
   await page.getByRole('button', { name: 'Помощь' }).click();
   const help = helpWindow(page);
-  await expect(help).toContainText('Отчёты создаются автоматически по назначениям');
+  await expect(help).toContainText('Главный рабочий модуль');
   return help;
 }
 
@@ -44,7 +44,8 @@ test.describe('Этап 1: окна и уведомления', () => {
     const view = page.viewportSize()!;
     // Размер окна меряется, пока не совпадёт с ожидаемым (`toPass`): на медленной машине CI два
     // одинаковых замера подряд могут прийтись на окно, которое ещё не начало переключаться.
-    // Обычное окно: на ПК — 780 px по центру, на телефоне — шторка снизу во всю ширину.
+    // Обычное окно: на ПК — по центру и уже окна браузера (статья «Базы знаний» — 1 100 px), на
+    // телефоне — шторка снизу во всю ширину, не до верха экрана.
     const normal = async (help: Locator) => {
       await expect(help.getByRole('button', { name: 'На весь экран' })).toHaveAttribute(
         'aria-pressed',
@@ -55,9 +56,9 @@ test.describe('Этап 1: окна и уведомления', () => {
         if (isMobile) {
           expect(box.width).toBeCloseTo(view.width, 0);
           expect(box.y + box.height).toBeCloseTo(view.height, 0);
-          expect(box.y).toBeGreaterThan(view.height * 0.3);
+          expect(box.y).toBeGreaterThan(24);
         } else {
-          expect(box.width).toBeCloseTo(780, 0);
+          expect(box.width).toBeCloseTo(Math.min(1100, view.width - 24), 0);
           expect(box.x + box.width / 2).toBeCloseTo(view.width / 2, 0);
         }
       }).toPass();

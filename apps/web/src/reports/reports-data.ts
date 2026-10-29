@@ -35,14 +35,18 @@ export const reportSummaryQuery = queryOptions({
  * Числа у вкладок (прототип repTabs): «На неделе», «Просрочено» — красным, «Ожидают подтверждения»; у
  * «Все отчёты» числа нет. Нулевой счётчик не показывается.
  */
+export const reportTabCounts = (
+  s: Pick<ReportTabCounts, 'week' | 'overdue' | 'waiting'>,
+): Partial<Record<string, ShellCount>> => ({
+  week: s.week ? { value: s.week } : undefined,
+  overdue: s.overdue ? { value: s.overdue, tone: 'red' } : undefined,
+  waiting: s.waiting ? { value: s.waiting } : undefined,
+});
+
 export const reportTabCountsQuery = queryOptions({
   queryKey: ['reports', 'summary'],
   queryFn: summaryFn,
-  select: (s): Partial<Record<string, ShellCount>> => ({
-    week: s.week ? { value: s.week } : undefined,
-    overdue: s.overdue ? { value: s.overdue, tone: 'red' } : undefined,
-    waiting: s.waiting ? { value: s.waiting } : undefined,
-  }),
+  select: reportTabCounts,
 });
 
 /** Списки окна «Разовый отчёт»: контрагенты в области и подключённые виды. */

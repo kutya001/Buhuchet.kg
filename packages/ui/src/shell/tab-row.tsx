@@ -134,7 +134,8 @@ export function TabRow({
                   <span className="inline-grid group-data-[fit=labels]/tabs:hidden">
                     <Icon name={t.icon} size="tab" />
                   </span>
-                  <span className="group-data-[fit=icons]/tabs:hidden">{t.label}</span>
+                  {/* Без места — только значок; название остаётся в имени вкладки для экранного диктора. */}
+                  <span className="group-data-[fit=icons]/tabs:sr-only">{t.label}</span>
                   {t.count && <CountBadge count={t.count} />}
                 </Link>
               </Fragment>

@@ -153,7 +153,9 @@ test.describe('Этап 1: оболочка на телефоне', () => {
     const y = pane.y + pane.height * 0.6;
     const left = { x: pane.x + pane.width * 0.85, y };
     const right = { x: pane.x + pane.width * 0.15, y };
-    const tab = (name: string) => page.getByRole('tab', { name, exact: true });
+    // У вкладок «Отчетов для сдачи» — счётчики: «На неделе 4».
+    const tab = (name: string) =>
+      page.getByRole('tab', { name: new RegExp(`^${name}(\\s[\\d\\s]+)?$`) });
 
     await test.step('вкладки: медленно на 60 px — страница возвращается, вкладка та же', async () => {
       await swipe.drag(left, { x: left.x - 60, y });
@@ -204,6 +206,11 @@ test.describe('Этап 1: оболочка на телефоне', () => {
     });
 
     await test.step('при открытом меню «+» свайп по нему не листает вкладки; «Назад» закрывает окошко и уходит со страницы', async () => {
+      // Меню «+» из нескольких способов — у «Контрагентов»: у «Отчетов для сдачи» до задачи 2.15 способ
+      // один, кнопка сразу открывает «Разовый отчёт».
+      await bottomNav(page).getByRole('link', { name: 'Контрагенты' }).click();
+      await expect(page).toHaveURL(/\/app\/cps\/[a-z]+$/);
+      const cps = page.url();
       await page.getByRole('button', { name: 'Добавить', exact: true }).click();
       const add = page.getByRole('menu', { name: 'Добавить' });
       await expect(add).toBeVisible();
@@ -211,7 +218,7 @@ test.describe('Этап 1: оболочка на телефоне', () => {
       const from = { x: box.x + box.width - 12, y: box.y + box.height / 2 };
       await swipe.drag(from, { x: from.x - pane.width / 2, y: from.y });
       await page.waitForTimeout(400);
-      await expect(page).toHaveURL(/\/app\/reports\/week$/);
+      await expect(page).toHaveURL(cps);
       await expect(add).toBeVisible();
       await page.keyboard.press('Escape');
       await expect(add).toBeHidden();
@@ -221,7 +228,7 @@ test.describe('Этап 1: оболочка на телефоне', () => {
       const info = page.getByRole('dialog', { name: 'Описание модуля' });
       await expect(info).toBeVisible();
       await page.evaluate(() => history.back());
-      await expect(page).toHaveURL(/\/app\/home\/today$/);
+      await expect(page).toHaveURL(/\/app\/reports\/week$/);
       await expect(info).toBeHidden();
     });
   });

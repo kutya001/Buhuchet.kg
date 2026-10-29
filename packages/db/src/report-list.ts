@@ -296,11 +296,12 @@ export function reportListColumns(
       display: TAX_OFFICE_LABEL,
       sort: { value: TAX_OFFICE_LABEL, text: true },
     },
+    // Значение — краткое название, как в прототипе (`val: T[r.t].short`): «1-Т» месячный и годовой —
+    // одно значение фильтра и одна группа.
     type: {
       type: 'enum',
       label: 'report.col.type',
-      value: reports.reportTypeCode,
-      display: reportTypes.shortName,
+      value: reportTypes.shortName,
       sort: { value: reportTypes.shortName, text: true },
     },
     act: {

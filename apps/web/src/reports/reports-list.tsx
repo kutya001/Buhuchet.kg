@@ -1,12 +1,10 @@
 'use client';
 
 import {
-  addDays,
   formatCount,
   formatDateRu,
   formatSom,
   type GridKey,
-  type ListFilterValue,
   type UiTextKey,
 } from '@buhuchet/domain';
 import { ListValues, ReportList, type ReportQuick, type ReportRow } from '@buhuchet/shared';
@@ -33,6 +31,7 @@ import { useViewSettings } from '../lists/view-settings';
 import { useShell } from '../shell/context';
 import { moduleHref, tabHref } from '../shell/modules';
 import { useReportActions, useReportAddRequest } from './report-actions';
+import { isPlateFilter, plateFilters, type PlateFilter } from './report-plates';
 import {
   REPORT_AUDIT,
   REPORT_DEFAULT_SORT,
@@ -61,24 +60,6 @@ const quickStore = {
 };
 
 const QUICK: readonly ReportQuick[] = ['all', 'sub', 'pay'];
-
-/** Плашки «Сдано в этом месяце» и «К уплате за <месяц>» ставят фильтр на «Все отчёты» (адрес `?plate=`). */
-type PlateFilter = 'submitted' | 'to_pay';
-
-/** Последний день месяца по его первому числу. */
-function monthEnd(month: string): string {
-  const [y, m] = month.split('-').map(Number) as [number, number];
-  const next = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`;
-  return addDays(next, -1);
-}
-
-/** Фильтры плашки (прототип renderReports: `subm` — статус и дата сдачи, `sum` — срок оплаты). */
-export function plateFilters(plate: PlateFilter, month: string): Record<string, ListFilterValue> {
-  const range = { type: 'date' as const, from: month, to: monthEnd(month) };
-  return plate === 'submitted'
-    ? { status: { type: 'enum', vals: ['submitted'] }, submitted: range }
-    : { payDue: range };
-}
 
 /** «октябрь 2026», «за октябрь» — название месяца строчными (прототип ymLabel, MONTHS). */
 function monthName(t: Translate, month: string): string {
@@ -157,7 +138,7 @@ export function ReportsList({ tab }: { tab: ReportListTab }) {
 
   // Плашка с другой вкладки: фильтр на «Все отчёты» и адрес без `?plate=`.
   useEffect(() => {
-    if (tab !== 'all' || !s || (plateParam !== 'submitted' && plateParam !== 'to_pay')) return;
+    if (tab !== 'all' || !s || !isPlateFilter(plateParam)) return;
     setFilters(plateFilters(plateParam, s.month));
     router.replace(tabHref('reports', 'all'), { scroll: false });
   }, [tab, s, plateParam, setFilters, router]);
