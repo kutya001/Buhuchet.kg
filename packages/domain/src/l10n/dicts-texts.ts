@@ -440,6 +440,10 @@ export const DICTS_TEXTS = {
     section: 'Ошибки',
   },
   'err.need_file_pay': { ru: ORG_REPORT_TYPE_MESSAGES.need_file_pay, section: 'Ошибки' },
+  'err.report_type_assigned': {
+    ru: ORG_REPORT_TYPE_MESSAGES.report_type_assigned,
+    section: 'Ошибки',
+  },
   ...(Object.fromEntries(
     MONTHS_GEN.map((ru, i) => [`rule.month_gen.${i + 1}`, { ru, section: R }]),
   ) as Record<`rule.month_gen.${1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12}`, UiTextDefault>),

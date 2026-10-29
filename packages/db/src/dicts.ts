@@ -26,7 +26,9 @@ import {
   type ListWindowFields,
 } from './list';
 import {
+  assignments,
   authorities,
+  contractors,
   employees,
   orgReportTypes,
   reportTypeRegimes,
@@ -217,7 +219,7 @@ export interface OrgReportTypeRow {
   needReceipt: boolean;
   /** Версия строки организации; null — вид ещё ни разу не подключали. */
   version: number | null;
-  /** «Назначено контрагентам»: действующих контрагентов с этим видом (назначения — задача 2.06). */
+  /** «Назначено контрагентам»: действующих назначений этого вида у контрагентов не в архиве. */
   assigned: number;
   /** «Создано» — когда организация подключила вид впервые; у неподключавшегося вида — null. */
   audit: AuditRecord | null;
@@ -290,6 +292,11 @@ const regimeNames = sql<string>`coalesce((select string_agg(g.name, ', ' order b
   from ${reportTypeRegimes} l join ${taxRegimes} g on g.code = l.regime_code
   where l.report_type_code = "report_types"."code" and l.relation = 'applies'), '')`;
 const remindText = sql<string>`case when ${enabled} then array_to_string(${orgReportTypes.remindDays}, ', ') else '' end`;
+/**
+ * «Назначено контрагентам» (прототип dict-types, used): действующие назначения вида у контрагентов не
+ * в архиве (RLS — только своя организация).
+ */
+const ASSIGNED = sql<number>`(select count(*)::int from ${assignments} a join ${contractors} c on c.id = a.contractor_id where a.report_type_code = "report_types"."code" and a.ended_on is null and c.service_status <> 'archived')`;
 const periodValue = sql<string>`case when ${reportTypes.oneOff} then 'oneoff' else ${reportTypes.period} end`;
 
 /**
@@ -369,8 +376,7 @@ export function orgReportTypeColumns(t: ListTexts): ListColumns {
       label: 'dicts.col.rates',
       value: sql`array_to_string(${reportTypes.rates}, '; ')`,
     },
-    // Назначений пока нет — они появятся с задачей 2.06 («Отчёты: назначения…»).
-    used: { type: 'int', label: 'dicts.col.used', value: sql`0` },
+    used: { type: 'int', label: 'dicts.col.used', value: ASSIGNED },
     regimes: { type: 'text', label: 'dicts.col.regimes', value: regimeNames },
     days: {
       type: 'text',
@@ -444,6 +450,7 @@ function rowFields(window: ListWindowFields) {
     updatedAt: orgReportTypes.updatedAt,
     updatedBy: orgReportTypes.updatedBy,
     updatedByName: updater.shortName,
+    assigned: ASSIGNED,
     ...window,
   };
 }
@@ -485,7 +492,7 @@ export async function listOrgReportTypesPage(
       ({ createdAt, createdBy, createdByName, updatedAt, updatedBy, updatedByName, ...r }) => ({
         ...r,
         regimes: r.regimes ? r.regimes.split(', ') : [],
-        assigned: 0,
+        assigned: Number(r.assigned),
         audit:
           createdAt && updatedAt
             ? {

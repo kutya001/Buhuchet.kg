@@ -3,12 +3,14 @@ import { formatText, UI_TEXTS, type Translate } from '../l10n/texts';
 import type { GkedRule, ReportKind } from '../platform-dicts/catalog';
 import fixture from './__fixtures__/gked.json';
 import {
+  defaultSingleTaxRates,
   gkedAncestors,
   gkedCheck,
   gkedCheckTexts,
   gkedHit,
   gkedRates,
   gkedSignature,
+  placeVariant,
   type GkedConfirmation,
   type GkedDicts,
   type GkedList,
@@ -171,5 +173,45 @@ describe('Коды ГКЭД', () => {
       types: [],
       off: [],
     });
+  });
+});
+
+describe('Строки ЕНС по умолчанию в назначении (прототип enAuto)', () => {
+  const subject = (patch: Partial<Parameters<typeof defaultSingleTaxRates>[0]> = {}) => ({
+    gked: null,
+    gkedExtra: [],
+    benefits: [],
+    place: '',
+    ...patch,
+  });
+  const rates = (patch: Partial<Parameters<typeof defaultSingleTaxRates>[0]>) =>
+    defaultSingleTaxRates(subject(patch), dicts.rates, dicts.index);
+
+  it('основная — по основному ГКЭД, без ГКЭД — «Остальные виды деятельности»', () => {
+    expect(rates({})).toEqual([{ code: 'ЕНС-04', variant: null }]);
+    expect(rates({ gked: '46.34.0' })).toEqual([{ code: 'ЕНС-06', variant: null }]);
+  });
+
+  it('дополнительные ГКЭД — свои строки; при ставке на всю деятельность — только она', () => {
+    expect(rates({ gked: '46.34.0', gkedExtra: ['56.10.0', '46.31.0'], place: 'г. Ош' })).toEqual([
+      { code: 'ЕНС-06', variant: null },
+      { code: 'ЕНС-12', variant: 0 },
+    ]);
+    expect(rates({ gked: '47.11.0', gkedExtra: ['56.10.0'] })).toEqual([
+      { code: 'ЕНС-01', variant: null },
+    ]);
+  });
+
+  it('вариант по месту: город УГНС или адрес, иначе «остальная территория»; не по месту — первый', () => {
+    const food = 'Бишкек и Ош — 5 %, остальная территория — 3 %';
+    expect(placeVariant(food, 'г. Бишкек')).toBe(0);
+    expect(placeVariant(food, 'Иссык-Кульская обл., г. Каракол')).toBe(1);
+    expect(placeVariant(food, '')).toBe(0);
+    // «Ошская область» — не город Ош.
+    expect(placeVariant(food, 'Ошская область')).toBe(1);
+    expect(placeVariant('с частичной переработкой — 1 %, в неизменном виде — 3 %', 'г. Ош')).toBe(
+      0,
+    );
+    expect(placeVariant('4 % безнал + 6 % нал', 'г. Ош')).toBeNull();
   });
 });

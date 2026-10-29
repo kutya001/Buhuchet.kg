@@ -5,6 +5,7 @@ export * from './users';
 export * from './roles';
 export * from './staff';
 export * from './contractors';
+export * from './reports';
 export * from './tasks';
 export * from './org-settings';
 export * from './history';

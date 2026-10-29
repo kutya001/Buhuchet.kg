@@ -1,5 +1,6 @@
 import { createRoute, type RouteHandler } from '@hono/zod-openapi';
 import {
+  activeAssignmentCounts,
   catalogTypes,
   createOrgReportType,
   exportOrgReportTypes,
@@ -255,7 +256,8 @@ export const saveOrgReportTypeRoute = createRoute({
     ...versionedSaveResponses,
     404: { description: 'Нет такого вида в каталоге', content: error },
     409: {
-      description: 'Запись изменена другим пользователем, вид отключён в каталоге или не подключён',
+      description:
+        'Запись изменена другим пользователем, вид отключён в каталоге, не подключён или назначен действующим контрагентам',
       content: error,
     },
   },
@@ -283,7 +285,8 @@ export function saveOrgReportTypeHandler(
       const [type] = await catalogTypes(tx, [code]);
       if (!type) throw new RecordNotFoundError('org_report_type', code);
       const [current] = await lockOrgReportTypes(tx, [code]);
-      const problem = orgReportTypeProblem(type, current ?? null, change);
+      const assigned = (await activeAssignmentCounts(tx)).get(code) ?? 0;
+      const problem = orgReportTypeProblem(type, current ?? null, change, assigned);
       if (problem) refuse(problem);
       if (!current) {
         return createOrgReportType(tx, code, {
@@ -325,7 +328,7 @@ export const connectOrgReportTypesRoute = createRoute({
     404: { description: 'Нет такого вида в каталоге', content: error },
     409: {
       description:
-        'Вид отключён в каталоге платформы или его только что подключил или изменил другой пользователь',
+        'Вид отключён в каталоге платформы, назначен действующим контрагентам или его только что подключил или изменил другой пользователь',
       content: error,
     },
   },
@@ -335,7 +338,8 @@ export const connectOrgReportTypesRoute = createRoute({
  * Окно «Выбор налогов» (прототип txApply): новые подключённые получают дни из поля «Напоминать до
  * срока, за дней» (пусто — из учётной политики), «Файл при сдаче» и «Квитанция» — как были (у нового
  * — выключены); снятые отключаются. Уже подключённые и уже отключённые не трогаются. Контрагентам
- * ничего не назначается. Всё — одной транзакцией.
+ * ничего не назначается; вид, назначенный действующим контрагентам, не отключается (прототип
+ * renderDicts: «Отключить нельзя»). Всё — одной транзакцией.
  */
 export function connectOrgReportTypesHandler(
   deps: ApiDeps,
@@ -383,9 +387,17 @@ export function connectOrgReportTypesHandler(
         connected++;
       }
       let disconnected = 0;
+      const assigned = disconnect.length ? await activeAssignmentCounts(tx) : new Map();
       for (const code of disconnect) {
         const row = rows.get(code);
         if (!row?.enabled) continue;
+        const problem = orgReportTypeProblem(
+          types.get(code)!,
+          row,
+          { enabled: false },
+          assigned.get(code) ?? 0,
+        );
+        if (problem) refuse(problem);
         await updateOrgReportType(tx, code, row.version, { enabled: false });
         disconnected++;
       }
