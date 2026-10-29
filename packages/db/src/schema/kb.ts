@@ -1,4 +1,4 @@
-import { KB_HOWS } from '@buhuchet/domain';
+import { KB_HOWS, KB_KNOWN_KEY_MAX } from '@buhuchet/domain';
 import { sql, type SQL } from 'drizzle-orm';
 import {
   check,
@@ -149,4 +149,51 @@ export const kbLevels = pgTable(
     check('kb_levels_level_check', sql`${t.level} between 0 and 20`),
     ...kbPolicies('kb_levels', t),
   ],
+).enableRLS();
+
+/**
+ * Знакомые элементы показов (задача 2.31, ТЗ «Знакомые элементы»; docs/decisions.md п. Г-5): облачко,
+ * с которого ушли «Далее» или «Готово», в следующих «Показать как» и «Обзоре экрана» пропускается.
+ * Ключ — `kbKnownKey` из @buhuchet/domain. Список хранится у пользователя и общий для ПК и телефона;
+ * видит, добавляет и удаляет («Показывать всё заново») его только сам пользователь — даже владелец
+ * организации чужой список не видит. Менять строки нельзя (у роли приложения нет UPDATE).
+ */
+export const kbKnown = pgTable(
+  'kb_known',
+  {
+    ...userColumns(),
+    key: text('key').notNull(),
+    knownAt: timestamp('known_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => {
+    const own: SQL = sql`${t.orgId} = ${currentOrgId} and ${t.userId} = ${currentUserId}`;
+    const admin: SQL = sql`${t.orgId} is null and ${currentOrgId} is null and ${t.userId} = ${currentUserId} and app.is_platform_admin()`;
+    return [
+      primaryKey({ name: 'kb_known_pk', columns: [t.userId, t.key] }),
+      foreignKey({
+        name: 'kb_known_user_org_fk',
+        columns: [t.userId, t.orgId],
+        foreignColumns: [users.id, users.orgId],
+      }).onDelete('cascade'),
+      index('kb_known_org_idx').on(t.orgId),
+      check(
+        'kb_known_key_check',
+        sql`char_length(${t.key}) between 3 and ${sql.raw(String(KB_KNOWN_KEY_MAX))} and ${t.key} ~ '^[gs]:'`,
+      ),
+      pgPolicy('kb_known_own', {
+        as: 'permissive',
+        for: 'all',
+        to: appRole,
+        using: own,
+        withCheck: own,
+      }),
+      pgPolicy('kb_known_platform_admin', {
+        as: 'permissive',
+        for: 'all',
+        to: appRole,
+        using: admin,
+        withCheck: admin,
+      }),
+    ];
+  },
 ).enableRLS();

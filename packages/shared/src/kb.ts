@@ -1,4 +1,11 @@
-import { KB_HOWS } from '@buhuchet/domain';
+import {
+  KB_HOWS,
+  KB_KNOWN_BATCH,
+  KB_KNOWN_KEY_MAX,
+  KB_SHOW_AUTOS,
+  kbKnownKeyOk,
+  kbScreenOk,
+} from '@buhuchet/domain';
 import { z } from 'zod';
 import { IsoDate, Uuid } from './common';
 import { listPageSchema } from './list';
@@ -239,3 +246,121 @@ export const KbLevelBadge = z.object({
   of: z.number().int(),
 });
 export type KbLevelBadge = z.infer<typeof KbLevelBadge>;
+
+/* ───────────── «Показать как» и «Обзор экрана» ───────────── */
+
+/** Действие перед облачком: `row`, `menu`, `cols`… или `{ tab }`, `{ click, in, pop }`, `{ row }`. */
+export const KbShowAction = z.union([
+  z.string(),
+  z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])),
+]);
+
+/** Облачко сценария (refDB `kbShows[].items`). */
+export const KbShowItem = z.object({
+  s: z.string().nullable().optional(),
+  m: z.string().nullable().optional(),
+  t: z.string().optional(),
+  x: z.string().optional(),
+  in: z.string().optional(),
+  txt: z.string().optional(),
+  up: z.string().optional(),
+  ctx: z.string().optional(),
+  pre: z.array(KbShowAction).optional(),
+  sub: z.array(KbShowAction).optional(),
+  auto: z.enum(KB_SHOW_AUTOS).optional(),
+  common: z.boolean().optional(),
+  noBody: z.boolean().optional(),
+});
+
+/** Сценарий «Показать как» шага. */
+export const KbShow = z.object({
+  id: KbCode,
+  step: KbCode,
+  scr: z.string().optional(),
+  items: z.array(KbShowItem),
+  doit: z.array(KbShowAction).optional(),
+  active: z.boolean().optional(),
+});
+export type KbShow = z.infer<typeof KbShow>;
+
+const KbDict = z.record(z.string(), z.string()).optional();
+
+/** Тексты облачков (refDB `kbUi`): служебные, модулей, вкладок, кнопок, плашек, полей, элементов. */
+export const KbShowUi = z.object({
+  ui: KbDict,
+  plateMode: KbDict,
+  mods: KbDict,
+  tabs: KbDict,
+  add: KbDict,
+  addItems: KbDict,
+  plates: KbDict,
+  boxes: KbDict,
+  ctabs: KbDict,
+  cards: KbDict,
+  buttons: KbDict,
+  acts: KbDict,
+  forms: KbDict,
+  rows: KbDict,
+  fields: z
+    .record(
+      z.string(),
+      z.object({
+        n: z.string().optional(),
+        req: z.union([z.boolean(), z.number()]).optional(),
+        x: z.string().optional(),
+      }),
+    )
+    .optional(),
+  /** Особые элементы экранов: где («модуль» или «модуль.вкладка», `*` — везде) и в каком месте обзора. */
+  els: z
+    .array(
+      z.object({
+        id: z.string(),
+        scr: z.string(),
+        s: z.string().nullable().optional(),
+        m: z.string().nullable().optional(),
+        in: z.string().optional(),
+        txt: z.string().optional(),
+        up: z.string().optional(),
+        t: z.string(),
+        x: z.string().optional(),
+        at: z.string().optional(),
+      }),
+    )
+    .optional(),
+});
+export type KbShowUi = z.infer<typeof KbShowUi>;
+
+/** Сценарии и тексты для показов. */
+export const KbShowContent = z.object({ ui: KbShowUi, shows: z.array(KbShow) });
+export type KbShowContent = z.infer<typeof KbShowContent>;
+
+/** Ключ знакомого элемента (`kbKnownKey` из @buhuchet/domain). */
+export const KbKnownKey = z
+  .string()
+  .max(KB_KNOWN_KEY_MAX)
+  .refine(kbKnownKeyOk, { message: 'Неверный ключ элемента' });
+
+/** Свои знакомые элементы: ключи и предел. */
+export const KbKnownList = z.object({
+  keys: z.array(z.string()),
+  limit: z.number().int(),
+});
+export type KbKnownList = z.infer<typeof KbKnownList>;
+
+/** Запомнить знакомые элементы (ушёл с облачка «Далее» или «Готово»). */
+export const KbKnownAddRequest = z.object({
+  keys: z.array(KbKnownKey).min(1).max(KB_KNOWN_BATCH),
+});
+
+/** Сколько знакомых элементов теперь; у «Показывать всё заново» — и сколько было забыто. */
+export const KbKnownCount = z.object({
+  count: z.number().int().nonnegative(),
+  removed: z.number().int().nonnegative().optional(),
+});
+export type KbKnownCount = z.infer<typeof KbKnownCount>;
+
+/** «Обзор экрана» пройден до конца: экран «модуль» или «модуль.вкладка». */
+export const KbScreenShowRequest = z.object({
+  screen: z.string().refine(kbScreenOk, { message: 'Неверный экран' }),
+});

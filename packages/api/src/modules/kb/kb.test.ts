@@ -6,8 +6,11 @@ import {
   KbArticle,
   KbArticleList,
   KbArticleReadResult,
+  KbKnownCount,
+  KbKnownList,
   KbMarkResult,
   KbMemberProgress,
+  KbShowContent,
   KbState,
   KbTeamList,
   ListValues,
@@ -107,6 +110,7 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
     expect(mine.lessons.map((l) => l.id)).toEqual(['me', 'dicts', 'tasks', 'files', 'lists']);
     expect(steps(mine).map((s) => s.id)).toEqual([
       'tg',
+      'theme',
       'pdicts',
       'daymonth',
       'tdone',
@@ -244,7 +248,7 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
   it('«Пропустить» и «Вернуть»: следующий шаг идёт мимо пропущенного; выполненный не пропускается', async () => {
     const skipped = KbState.parse(await ok(await call('POST', '/api/kb/steps/tg/skip', acc)));
     expect(step(skipped, 'tg')?.skipped).toBe(true);
-    expect(skipped.nextStepId).toBe('daymonth');
+    expect(skipped.nextStepId).toBe('theme');
     const done = KbState.parse(await ok(await call('POST', '/api/kb/steps/pdicts/skip', acc)));
     expect(step(done, 'pdicts')).toMatchObject({ skipped: false, done: { how: 'visit' } });
     const back = KbState.parse(await ok(await call('DELETE', '/api/kb/steps/tg/skip', acc)));
@@ -384,5 +388,81 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
         .filter((s) => s.done)
         .map((s) => s.id),
     ).toEqual(['settings']);
+  });
+  it('«Показать как»: сценарии и тексты облачков — любому вошедшему; без входа — 401', async () => {
+    const content = KbShowContent.parse(await ok(await call('GET', '/api/kb/shows', acc)));
+    expect(content.shows.find((x) => x.step === 'profile')?.items[0]).toMatchObject({
+      t: 'Профиль организации',
+    });
+    expect(content.ui.ui?.skipped).toBe('Пропущено знакомых элементов: {n}');
+    KbShowContent.parse(await ok(await call('GET', '/api/kb/shows', admin)));
+    expect((await call('GET', '/api/kb/shows')).status).toBe(401);
+  });
+
+  it('знакомые элементы: свои у каждого, общие для ПК и телефона; «Показывать всё заново»', async () => {
+    const known = async (cookie: string) =>
+      KbKnownList.parse(await ok(await call('GET', '/api/kb/known', cookie)));
+    const add = (cookie: string, keys: unknown) =>
+      call('POST', '/api/kb/known', cookie, { keys });
+    expect(KbKnownCount.parse(await ok(await add(acc, ['g:max', 's:org.main|ИНН'])))).toEqual({
+      count: 2,
+    });
+    expect(KbKnownCount.parse(await ok(await add(acc, ['g:max'])))).toEqual({ count: 2 });
+    expect((await known(acc)).keys.sort()).toEqual(['g:max', 's:org.main|ИНН']);
+    expect((await known(acc)).limit).toBeGreaterThan(100);
+    // Список у каждого свой: владелец своей и чужой организации его не видит.
+    expect((await known(owner)).keys).toEqual([]);
+    expect((await known(ownerB)).keys).toEqual([]);
+    // Неверные ключи и пустой список — 400.
+    for (const keys of [[], ['x:bad'], ['g:'], [`g:${'я'.repeat(400)}`], 'g:max']) {
+      const res = await add(acc, keys);
+      expect(res.status).toBe(400);
+      expect(await errorOf(res)).toBe('validation_failed');
+    }
+    expect((await add(acc, Array.from({ length: 101 }, (_, i) => `g:k${i}`))).status).toBe(400);
+    // Администратор платформы — свой список без организации.
+    expect(KbKnownCount.parse(await ok(await add(admin, ['g:search'])))).toEqual({ count: 1 });
+    expect(
+      KbKnownCount.parse(await ok(await call('DELETE', '/api/kb/known', acc))),
+    ).toEqual({ count: 0, removed: 2 });
+    expect((await known(acc)).keys).toEqual([]);
+    expect((await known(admin)).keys).toEqual(['g:search']);
+    expect((await call('GET', '/api/kb/known')).status).toBe(401);
+    expect((await call('DELETE', '/api/kb/known')).status).toBe(401);
+  });
+
+  it('«Показать как» до «Готово» засчитывает шаг «Посмотреть» показом; «Сделать» — нет', async () => {
+    const r = KbMarkResult.parse(await ok(await call('POST', '/api/kb/steps/theme/show', acc)));
+    expect(r.fresh).toEqual([{ id: 'theme', title: expect.any(String), learn: true, how: 'show' }]);
+    expect(step(r.state, 'theme')?.done?.how).toBe('show');
+    // Повторно — уже засчитан.
+    expect(
+      KbMarkResult.parse(await ok(await call('POST', '/api/kb/steps/theme/show', acc))).fresh,
+    ).toEqual([]);
+    const doStep = await call('POST', '/api/kb/steps/tdone/show', acc);
+    expect(doStep.status).toBe(400);
+    expect(await errorOf(doStep)).toBe('validation_failed');
+    // Шага нет в программе бухгалтера (роли — только с правом) — 404; чужой код — 400.
+    expect((await call('POST', '/api/kb/steps/roles/show', acc)).status).toBe(404);
+    expect((await call('POST', '/api/kb/steps/Bad!/show', acc)).status).toBe(400);
+    expect((await call('POST', '/api/kb/steps/theme/show')).status).toBe(401);
+  });
+
+  it('«Обзор экрана» до «Готово» засчитывает только шаги «Посмотреть» этого экрана', async () => {
+    // У кадровика шаг «Посмотреть роли и права» ещё не засчитан.
+    const before = await state(hr);
+    expect(step(before, 'roles')?.done).toBeNull();
+    const screen = (body: unknown) => call('POST', '/api/kb/screens/show', hr, body);
+    const r = KbMarkResult.parse(await ok(await screen({ screen: 'staff.roles' })));
+    expect(r.fresh.map((x) => [x.id, x.how])).toEqual([['roles', 'show']]);
+    // Экран без шагов «Посмотреть» ничего не засчитывает; «Сделать» этого экрана — тоже.
+    const none = KbMarkResult.parse(await ok(await screen({ screen: 'staff.list' })));
+    expect(none.fresh).toEqual([]);
+    expect(step(none.state, 'emps')?.done).toBeNull();
+    for (const body of [{ screen: 'Staff' }, { screen: 'a.b.c' }, {}]) {
+      expect((await screen(body)).status).toBe(400);
+    }
+    // Чужая организация отметки не видит.
+    expect(step(await state(ownerB), 'roles')?.done).toBeNull();
   });
 });
