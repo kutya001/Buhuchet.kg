@@ -29,6 +29,7 @@ import {
   index,
   integer,
   jsonb,
+  pgPolicy,
   pgTable,
   primaryKey,
   smallint,
@@ -39,7 +40,7 @@ import {
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { recordVersion } from './columns';
-import { platformReadOnly } from './rls';
+import { appRole, platformReadOnly } from './rls';
 import { users } from './users';
 
 /*
@@ -638,5 +639,85 @@ export const taskCategories = pgTable(
   (t) => [
     uniqueIndex('task_categories_name_key').on(t.name),
     platformReadOnly('task_categories_read'),
+  ],
+).enableRLS();
+
+/** Добавленное загрузкой значение и его версия после загрузки. */
+export interface DictLoadAdded {
+  code: string;
+  version: number;
+}
+
+/** Значение до загрузки из Excel: название, «Активно» и поля — и его версия после загрузки. */
+export interface DictLoadBefore {
+  code: string;
+  name: string;
+  active: boolean;
+  data: Record<string, unknown>;
+  /** Версия после загрузки: изменённое позже значение откат не трогает. */
+  version: number;
+}
+
+/**
+ * «Загрузки» (задача 2.37; ТЗ «Каждая загрузка — отдельная запись в истории (кто, когда, сколько строк);
+ * последнюю загрузку можно откатить»; прототип admin/platform-dicts-io.js: PD_LOADS, renderLoads,
+ * rollbackLoad): загрузка справочника платформы из Excel — сколько строк в файле, добавлено, изменено,
+ * отключено и с ошибками; что было у изменённых значений до загрузки и какие добавлены — для отката.
+ * Пишет и откатывает только незаблокированный администратор платформы (автор и время — из контекста);
+ * запись не удаляется, у отката меняются только «кто» и «когда» (права на столбцы — в миграции).
+ */
+export const dictLoads = pgTable(
+  'dict_loads',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    /** Справочник (`AdminValueDict` из @buhuchet/domain). */
+    dict: text('dict').notNull(),
+    rows: integer('rows').notNull(),
+    added: integer('added').notNull(),
+    changed: integer('changed').notNull(),
+    disabled: integer('disabled').notNull(),
+    errors: integer('errors').notNull(),
+    /** Изменённые и отключённые значения до загрузки. */
+    before: jsonb('before').$type<DictLoadBefore[]>().notNull(),
+    /** Добавленные значения. */
+    addedValues: jsonb('added_values').$type<DictLoadAdded[]>().notNull(),
+    createdBy: uuid('created_by')
+      .notNull()
+      .default(sql`app.current_user_id()`)
+      .references(() => users.id, { onDelete: 'restrict' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    rolledBackBy: uuid('rolled_back_by').references(() => users.id, { onDelete: 'restrict' }),
+    rolledBackAt: timestamp('rolled_back_at', { withTimezone: true }),
+  },
+  (t) => [
+    index('dict_loads_created_idx').on(t.createdAt),
+    check(
+      'dict_loads_counts_check',
+      sql`least(${t.rows}, ${t.added}, ${t.changed}, ${t.disabled}, ${t.errors}) >= 0`,
+    ),
+    check(
+      'dict_loads_rollback_check',
+      sql`(${t.rolledBackAt} is null) = (${t.rolledBackBy} is null)`,
+    ),
+    pgPolicy('dict_loads_read', {
+      as: 'permissive',
+      for: 'select',
+      to: appRole,
+      using: sql`app.is_platform_admin()`,
+    }),
+    pgPolicy('dict_loads_insert', {
+      as: 'permissive',
+      for: 'insert',
+      to: appRole,
+      withCheck: sql`app.is_platform_admin() and ${t.createdBy} = app.current_user_id() and ${t.createdAt} = now() and ${t.rolledBackAt} is null`,
+    }),
+    // Откатить можно один раз: «кто» — администратор из контекста, «когда» — сейчас.
+    pgPolicy('dict_loads_rollback', {
+      as: 'permissive',
+      for: 'update',
+      to: appRole,
+      using: sql`app.is_platform_admin() and ${t.rolledBackAt} is null`,
+      withCheck: sql`app.is_platform_admin() and ${t.rolledBackBy} = app.current_user_id() and ${t.rolledBackAt} = now()`,
+    }),
   ],
 ).enableRLS();

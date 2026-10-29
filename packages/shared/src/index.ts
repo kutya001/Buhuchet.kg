@@ -20,4 +20,5 @@ export * from './dicts';
 export * from './money';
 export * from './kpi';
 export * from './admin-dicts';
+export * from './admin-dict-io';
 export * from './admin-system';

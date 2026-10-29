@@ -426,7 +426,7 @@ export function ioTsv(rows: readonly (readonly string[])[]): string {
  * разделитель и переводы строк, «""» внутри — кавычка. Пустые строки пропускаются.
  */
 export function parseIoText(text: string): string[][] {
-  const t = text.replace(/^﻿/, '').replace(/\r\n?/g, '\n');
+  const t = text.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n');
   const first = t.split('\n').find((l) => l.trim()) ?? '';
   const dl = first.includes('\t') ? '\t' : first.includes(';') ? ';' : ',';
   const rows: string[][] = [];
@@ -528,12 +528,9 @@ function parsePayments(ctx: IoContext, text: string): Parsed {
   for (const part of split(text)) {
     const [name = '', organ = '', kbk = '', ...rest] = part.split(/\s\/\s/).map((x) => x.trim());
     if (rest.length || !name) return bad(ctx, 'pdicts.io.err.payments');
-    let authority = '';
-    if (organ) {
-      const code = refCode(ctx, 'organs', organ);
-      if (!code) return bad(ctx, 'pdicts.io.err.ref.organs', { value: organ });
-      authority = code;
-    }
+    // Получатель не из справочника органов остаётся текстом: у вида из наполнения он бывает таким
+    // («ПКИ (взнос 1 %)»), а изменённую строку сервер проверит, как окно вида.
+    const authority = organ ? (refCode(ctx, 'organs', organ) ?? organ) : '';
     out.push({ name, authority, kbk });
   }
   return { value: out };

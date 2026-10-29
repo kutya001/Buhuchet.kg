@@ -124,4 +124,50 @@ export const PLATFORM_DICTS_IO_TEXTS = {
     section: E,
   },
   'pdicts.io.err.line': { ru: 'Строка {n}: {text}', section: E },
+  'pdicts.io.err.invalid': { ru: 'неверное значение', section: E },
+  'pdicts.io.err.fixed': { ru: 'код по умолчанию отключить нельзя', section: E },
+  'pdicts.io.err.changed': {
+    ru: 'значение только что изменил другой администратор — сравните заново',
+    section: E,
+  },
+  'err.import_empty': { ru: 'Вставьте данные или выберите файл', section: E },
+  'err.import_no_rows': {
+    ru: 'Нужна строка заголовков и хотя бы одна строка данных',
+    section: E,
+  },
+  'err.import_no_code': {
+    ru: 'Нет столбца «Код»: без кода строки не сопоставить',
+    section: E,
+  },
+  'err.import_changed': {
+    ru: 'Справочник или файл изменились после сравнения — сравните заново',
+    section: E,
+  },
+  'err.import_nothing': {
+    ru: 'Нечего применять: нет строк, которые добавят, изменят или отключат значение',
+    section: E,
+  },
+  'err.load_not_last': { ru: 'Откатить можно только последнюю загрузку', section: E },
+  'err.load_changed_after': {
+    ru: 'Значение «{name}» изменили после загрузки — откат затёр бы эту правку',
+    section: E,
+  },
+  'err.load_restore_failed': {
+    ru: 'Значение «{name}» не вернуть к прежнему виду: его связи или название уже заняты',
+    section: E,
+  },
+  // «Загрузки» (прототип renderLoads).
+  'pdicts.loads.file': { ru: 'Загрузки справочников', section: S },
+  'pdicts.loads.col.at': { ru: 'Когда', section: S },
+  'pdicts.loads.col.dict': { ru: 'Справочник', section: S },
+  'pdicts.loads.col.by': { ru: 'Кто', section: S },
+  'pdicts.loads.col.rows': { ru: 'Строк', section: S },
+  'pdicts.loads.col.added': { ru: 'Добавлено', section: S },
+  'pdicts.loads.col.changed': { ru: 'Изменено', section: S },
+  'pdicts.loads.col.disabled': { ru: 'Отключено', section: S },
+  'pdicts.loads.col.errors': { ru: 'Ошибок', section: S },
+  'pdicts.loads.col.status': { ru: 'Статус', section: S },
+  'pdicts.loads.status.last': { ru: 'Последняя', section: S },
+  'pdicts.loads.status.applied': { ru: 'Применена', section: S },
+  'pdicts.loads.status.rolled': { ru: 'Откачена', section: S },
 } as const satisfies Record<string, UiTextDefault>;

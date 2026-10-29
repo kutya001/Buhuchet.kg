@@ -28,6 +28,7 @@ export * from './admin-users';
 export * from './admin-ui-texts';
 export * from './admin-platform-dicts';
 export * from './admin-dict-requests';
+export * from './admin-dict-io';
 export * from './admin-calendar';
 export * from './admin-taxes';
 export * from './admin-system-dicts';

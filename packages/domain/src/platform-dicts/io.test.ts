@@ -314,7 +314,7 @@ describe('Выгрузка и загрузка справочников: раз�
     expect(benefit('kind', 'статус')).toEqual({ value: 'status' });
   });
 
-  it('«Что уплачивается»: «Платёж / Орган / КБК»; без органа — пусто; неизвестный орган — ошибка', () => {
+  it('«Что уплачивается»: «Платёж / Орган / КБК»; без органа — пусто; получатель не из органов — текстом', () => {
     const cell = (text: string) =>
       parseIoCell(
         IO_COLUMNS.types.find((c) => c.key === 'payments')!,
@@ -328,7 +328,9 @@ describe('Выгрузка и загрузка справочников: раз�
       ],
     });
     expect(cell('Пошлина')).toEqual({ value: [{ name: 'Пошлина', authority: '', kbk: '' }] });
-    expect(cell('Пошлина / Минюст')).toEqual({ error: 'органа «Минюст» нет в справочнике' });
+    expect(cell('Пошлина / Минюст')).toEqual({
+      value: [{ name: 'Пошлина', authority: 'Минюст', kbk: '' }],
+    });
     expect(cell('А / Б / В / Г')).toEqual({ error: t('pdicts.io.err.payments') });
   });
 

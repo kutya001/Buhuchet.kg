@@ -121,6 +121,24 @@ import {
   systemHistoryHandler,
   templatesHistoryRoute,
 } from './admin-system';
+import {
+  adminDictImportApplyHandler,
+  adminDictImportApplyRoute,
+  adminDictImportPreviewHandler,
+  adminDictImportPreviewRoute,
+  adminDictIoFileHandler,
+  adminDictIoFileRoute,
+  adminDictIoXlsxHandler,
+  adminDictIoXlsxRoute,
+  dictLoadValuesHandler,
+  dictLoadValuesRoute,
+  exportDictLoadsHandler,
+  exportDictLoadsRoute,
+  listDictLoadsHandler,
+  listDictLoadsRoute,
+  rollbackDictLoadHandler,
+  rollbackDictLoadRoute,
+} from './admin-io';
 import { phoneCodesHandler, phoneCodesRoute } from './phone-codes';
 
 /**
@@ -184,6 +202,14 @@ export function platformDictsModule(deps: ApiDeps) {
         systemHistoryHandler(deps, 'templates', templatesHistoryRoute),
       )
       .openapi(saveMessageTemplatesRoute, saveMessageTemplatesHandler(deps))
+      .openapi(adminDictIoFileRoute, adminDictIoFileHandler(deps))
+      .openapi(adminDictIoXlsxRoute, adminDictIoXlsxHandler(deps))
+      .openapi(adminDictImportPreviewRoute, adminDictImportPreviewHandler(deps))
+      .openapi(adminDictImportApplyRoute, adminDictImportApplyHandler(deps))
+      .openapi(listDictLoadsRoute, listDictLoadsHandler(deps))
+      .openapi(dictLoadValuesRoute, dictLoadValuesHandler(deps))
+      .openapi(exportDictLoadsRoute, exportDictLoadsHandler(deps))
+      .openapi(rollbackDictLoadRoute, rollbackDictLoadHandler(deps))
       .openapi(listAdminDictRoute, listAdminDictHandler(deps))
       .openapi(adminDictValuesRoute, adminDictValuesHandler(deps))
       .openapi(exportAdminDictRoute, exportAdminDictHandler(deps))

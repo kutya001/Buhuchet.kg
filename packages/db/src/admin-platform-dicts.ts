@@ -356,7 +356,7 @@ async function typeReportCounts(_tx: Tx): Promise<Map<string, TypeReportCounts>>
 }
 
 /** Все значения справочника в его порядке (`sort_order`, при равных — код), с «№» и «Используется». */
-async function dictRecords(tx: Tx, dict: AdminValueDict): Promise<AdminDictValueRecord[]> {
+export async function adminDictRecords(tx: Tx, dict: AdminValueDict): Promise<AdminDictValueRecord[]> {
   const table = TABLES[dict];
   const [rows, usage, links, reports] = await Promise.all([
     tx.select().from(table).orderBy(asc(table.sortOrder), asc(table.code)) as unknown as Promise<
@@ -630,7 +630,7 @@ async function listSource(
   t: ListTexts,
   extras: AdminDictListExtras = {},
 ) {
-  const [all, names] = await Promise.all([dictRecords(tx, dict), listNames(tx, dict)]);
+  const [all, names] = await Promise.all([adminDictRecords(tx, dict), listNames(tx, dict)]);
   const tr = translate(t);
   const records =
     dict === 'types'
@@ -724,7 +724,7 @@ export async function getAdminDictValue(
   dict: AdminValueDict,
   code: string,
 ): Promise<AdminDictValueRecord | null> {
-  return (await dictRecords(tx, dict)).find((x) => x.code === code) ?? null;
+  return (await adminDictRecords(tx, dict)).find((x) => x.code === code) ?? null;
 }
 
 /* ───────────── Правка ───────────── */
@@ -1075,21 +1075,25 @@ function problemsOf(
 /**
  * «+ Добавить» → «Значение» (прототип valueDlg, ugnsDlg): новое значение действующее, в конце
  * порядка, с кодом `nextDictCode`; повтор названия («Такое значение уже есть») или кода ГНС («Такой
- * код уже есть») — `taken`. Создание и поля — в историю.
+ * код уже есть») — `taken`. Создание и поля — в историю. Загрузка из Excel передаёт новый код из
+ * файла (`fileCode`, формат проверен `ioCodeValid`).
  */
 export async function adminDictCreate(
   tx: Tx,
   dict: AdminValueDict,
   input: AdminDictInput,
   random: () => string,
+  fileCode?: string,
 ): Promise<AdminDictSaveResult> {
-  const records = await dictRecords(tx, dict);
-  const code = nextDictCode(
-    dict,
-    records.map((x) => x.code),
-    random,
-    input.data.kind === 'wallet' ? 'wallet' : 'bank',
-  );
+  const records = await adminDictRecords(tx, dict);
+  const code =
+    fileCode ??
+    nextDictCode(
+      dict,
+      records.map((x) => x.code),
+      random,
+      input.data.kind === 'wallet' ? 'wallet' : 'bank',
+    );
   const problems = problemsOf(dict, code, input, records);
   if (problems.length) return { ok: false, reason: 'taken', problems };
   const links = await prepareLinks(tx, dict, input, undefined);
@@ -1126,7 +1130,7 @@ export async function adminDictUpdate(
   input: AdminDictInput,
   version: number,
 ): Promise<AdminDictSaveResult> {
-  const records = await dictRecords(tx, dict);
+  const records = await adminDictRecords(tx, dict);
   const before = records.find((x) => x.code === code);
   if (!before) return { ok: false, reason: 'not_found' };
   if (before.version !== version) return { ok: false, reason: 'changed' };
@@ -1208,7 +1212,7 @@ export async function adminDictMove(
   version: number,
 ): Promise<AdminDictSaveResult> {
   if (!ADMIN_DICT_META[dict].ordered) return { ok: false, reason: 'not_found' };
-  const records = await dictRecords(tx, dict);
+  const records = await adminDictRecords(tx, dict);
   const before = records.find((x) => x.code === code);
   if (!before?.n) return { ok: false, reason: 'not_found' };
   if (before.version !== version) return { ok: false, reason: 'changed' };
@@ -1346,7 +1350,7 @@ export async function adminDictHistory(
       .orderBy(desc(platformAuditLog.at), desc(platformAuditLog.id))
       .limit(limit),
     tx.select({ n: count() }).from(platformAuditLog).where(where),
-    dictRecords(tx, dict),
+    adminDictRecords(tx, dict),
   ]);
   // Поля значений после каждой записи: от нынешних назад по записям, сначала новые. По ним — подпись
   // записи, какой она была тогда (прототип пишет строку истории сразу), и код страны строкой.

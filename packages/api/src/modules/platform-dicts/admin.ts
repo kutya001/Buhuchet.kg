@@ -381,12 +381,22 @@ const NUMBER_FIELDS = new Set([
   'paySchedule',
 ]);
 
+/** Отказ проверки поля: код ошибки (текст — `err.<код>` словаря), текст по умолчанию и поле окна. */
+export interface FieldProblem {
+  code: string;
+  message: string;
+  field: string;
+}
+
 /**
  * Поля формы → поля значения справочника (только поля этого справочника). «Тип» не этого справочника
- * (у режима — «Банк») — 400 под полем; пустой — тип нового значения. У вида отчёта поле, которого нет
- * в запросе, — как у нового вида (`NEW_REPORT_TYPE`).
+ * (у режима — «Банк») — отказ под полем; пустой — тип нового значения. У вида отчёта поле, которого нет
+ * в запросе, — как у нового вида (`NEW_REPORT_TYPE`). Загрузка из Excel проверяет строку так же.
  */
-function inputOf(dict: AdminValueDict, form: AdminDictValueForm): AdminDictInput {
+export function valueInputOf(
+  dict: AdminValueDict,
+  form: AdminDictValueForm,
+): { input: AdminDictInput } | { problem: FieldProblem } {
   const meta = ADMIN_DICT_META[dict];
   const values = form as Record<string, unknown>;
   const fallback = (f: string): unknown =>
@@ -404,11 +414,21 @@ function inputOf(dict: AdminValueDict, form: AdminDictValueForm): AdminDictInput
   if (meta.kind) {
     data.kind ||= meta.kind.default;
     if (!meta.kind.values.includes(data.kind as string)) {
-      apiFail(400, 'invalid_kind', 'Такого типа у справочника нет', { field: 'kind' });
+      return {
+        problem: { code: 'invalid_kind', message: 'Такого типа у справочника нет', field: 'kind' },
+      };
     }
   }
-  return { name: form.name, data };
+  return { input: { name: form.name, data } };
 }
+
+function inputOf(dict: AdminValueDict, form: AdminDictValueForm): AdminDictInput {
+  const result = valueInputOf(dict, form);
+  if ('problem' in result) return fieldFail(result.problem);
+  return result.input;
+}
+
+const fieldFail = (p: FieldProblem): never => apiFail(400, p.code, p.message, { field: p.field });
 
 /** Обязательные поля сверх названия (прототип ugnsDlg, regimeDlg). */
 const REQUIRED = {
@@ -425,13 +445,19 @@ const REQUIRED = {
  * Краткое название управления, полное название режима, код и маска страны, «Что даёт» льготы, краткое
  * название, орган и «Что нужно сделать» вида отчёта обязательны.
  */
-function checkRequired(dict: AdminValueDict, input: AdminDictInput) {
+export function requiredProblem(dict: AdminValueDict, input: AdminDictInput): FieldProblem | null {
   for (const field of ADMIN_DICT_META[dict].required ?? []) {
     if (!String(input.data[field] ?? '').trim()) {
       const [code, message] = REQUIRED[field];
-      apiFail(400, code, message, { field });
+      return { code, message, field };
     }
   }
+  return null;
+}
+
+function checkRequired(dict: AdminValueDict, input: AdminDictInput) {
+  const problem = requiredProblem(dict, input);
+  if (problem) fieldFail(problem);
 }
 
 /** Связи не подходят: код ошибки и текст под полем (`field` — поле окна). */
@@ -463,6 +489,22 @@ const TAKEN = {
   gnsCode: ['ugns_code_taken', 'Такой код уже есть'],
 } as const;
 
+/** Отказ сохранения под полем: повтор названия или кода ГНС, связь или «Меняет сроки» не подходят. */
+export function saveProblem(
+  result: Exclude<AdminDictSaveResult | AdminDictDeleteResult, { ok: true }>,
+): FieldProblem | null {
+  if (result.reason === 'taken') {
+    const field = result.problems[0]!.field;
+    const [code, message] = TAKEN[field];
+    return { code, message, field };
+  }
+  if (result.reason === 'bad_link') {
+    const [code, message] = BAD_LINK[result.problem];
+    return { code, message, field: result.field };
+  }
+  return null;
+}
+
 /**
  * Отказ сохранения: повтор — 400 под полем; используется — 409 `dict_value_used` с числом записей;
  * устаревшая версия — 409 «запись изменена другим пользователем» с нынешней версией; нет значения — 404.
@@ -474,21 +516,14 @@ async function failOf(
   dict: AdminValueDict,
   code: string,
 ): Promise<never> {
-  if (result.reason === 'taken') {
-    const field = result.problems[0]!.field;
-    const [errCode, message] = TAKEN[field];
-    apiFail(400, errCode, message, { field });
-  }
+  const problem = saveProblem(result);
+  if (problem) fieldFail(problem);
   if (result.reason === 'used') return usedFail(result.usage);
   if (result.reason === 'fixed') {
     apiFail(409, 'dict_value_fixed', 'Код по умолчанию отключить нельзя');
   }
   if (result.reason === 'undeletable') {
     apiFail(409, 'dict_value_undeletable', 'Значение можно только отключить');
-  }
-  if (result.reason === 'bad_link') {
-    const [errCode, message] = BAD_LINK[result.problem];
-    apiFail(400, errCode, message, { field: result.field });
   }
   if (result.reason === 'changed') {
     const now = await adminTx(deps, c, (tx) => getAdminDictValue(tx, dict, code));

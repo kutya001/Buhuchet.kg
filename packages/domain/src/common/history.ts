@@ -40,6 +40,9 @@ export const HISTORY_ACTIONS = [
   // Файлы записи (блок «Файлы»): «Прикреплён файл», «Удалён файл» — в истории той записи.
   'file_attach',
   'file_delete',
+  // Справочники платформы: загрузка из Excel и её откат («Загрузки»).
+  'import',
+  'rollback',
 ] as const;
 export type HistoryAction = (typeof HISTORY_ACTIONS)[number];
 
