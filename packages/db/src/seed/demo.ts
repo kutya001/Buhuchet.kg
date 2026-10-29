@@ -15,6 +15,7 @@ import { seedDemoContractors } from './demo-contractors';
 import { seedDemoDictRequests } from './demo-dicts';
 import { seedDemoMoney } from './demo-money';
 import { seedDemoKpi } from './demo-kpi';
+import { seedDemoReports } from './demo-reports';
 import { seedDemoTasks } from './demo-tasks';
 import {
   employees,
@@ -38,6 +39,8 @@ export type DemoKind =
   | 'role'
   | 'contractor'
   | 'tariff'
+  | 'assignment'
+  | 'report'
   | 'task'
   | 'task_comment'
   | 'requisite'
@@ -301,6 +304,8 @@ export async function seedDemoOrganization(
   // Контрагенты (задача 2.05).
   const employeeIds = demo.employees.map((e) => e.id);
   await seedDemoContractors(db, file, { orgId, demoId, employees: employeeIds });
+  // Назначения и отчёты (задача 2.06).
+  await seedDemoReports(db, file, { orgId, demoId, employees: employeeIds });
   // Ручные задачи (задача 2.23).
   await seedDemoTasks(db, file, { orgId, demoId, employees: employeeIds });
   await seedDemoDictRequests(db, file, orgId, {

@@ -177,6 +177,52 @@ describe.skipIf(!databaseAvailable())('Справочники → «Виды о�
     expect(await soc()).toMatchObject({ enabled: true, remindDays: [7, 3], needReceipt: true });
   });
 
+  it('вид, назначенный действующим контрагентам, не отключается; «Назначено контрагентам» — их число', async () => {
+    const [cp] = await f.t.admin.db
+      .insert(schema.contractors)
+      .values({
+        orgId: f.a.orgId,
+        name: 'ОсОО «Ала-Тоо»',
+        inn: '03744097400001',
+        phone: '+996505890076',
+        formCode: 'ФС-01',
+        startDate: '2026-01-15',
+      })
+      .returning({ id: schema.contractors.id });
+    await f.t.admin.db.insert(schema.assignments).values({
+      orgId: f.a.orgId,
+      contractorId: cp!.id,
+      reportTypeCode: 'nds',
+      fromMonth: '2026-10-01',
+    });
+    const assigned = async () => {
+      const filters = encodeURIComponent('{"on":{"type":"enum","vals":["yes"]}}');
+      const res = await apiRequest(f.app, 'GET', `/api/org-report-types?filters=${filters}`, acc);
+      return OrgReportTypeList.parse(await res.json()).items.find((r) => r.code === 'nds')!
+        .assigned;
+    };
+    expect(await assigned()).toBe(1);
+    const nds = async () => (await settings(owner)).items.find((s) => s.code === 'nds')!;
+    const off = await save(owner, 'nds', { enabled: false, version: (await nds()).version });
+    expect([off.status, await errorCode(off)]).toEqual([409, 'report_type_assigned']);
+    const connect = await apiRequest(f.app, 'POST', '/api/org-report-types/connect', owner, {
+      connect: [],
+      disconnect: ['nds'],
+    });
+    expect([connect.status, await errorCode(connect)]).toEqual([409, 'report_type_assigned']);
+    expect((await nds()).enabled).toBe(true);
+    // Контрагент в архиве не считается: вид можно отключить.
+    await f.t.admin.db
+      .update(schema.contractors)
+      .set({ serviceStatus: 'archived' })
+      .where(eq(schema.contractors.id, cp!.id));
+    expect(await assigned()).toBe(0);
+    const ok = await save(owner, 'nds', { enabled: false, version: (await nds()).version });
+    expect(ok.status).toBe(200);
+    await save(owner, 'nds', { enabled: true, version: (await nds()).version });
+    expect((await nds()).enabled).toBe(true);
+  });
+
   it('чужая организация не видна: у организации Б своих подключённых видов нет', async () => {
     expect((await settings(ownerB)).items).toEqual([]);
     const list = OrgReportTypeList.parse(
