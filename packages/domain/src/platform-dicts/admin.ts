@@ -93,13 +93,7 @@ export interface AdminDictMeta {
    * нужно сделать».
    */
   required?: readonly (
-    | 'shortName'
-    | 'fullName'
-    | 'dialCode'
-    | 'mask'
-    | 'gives'
-    | 'authorityCode'
-    | 'act'
+    'shortName' | 'fullName' | 'dialCode' | 'mask' | 'gives' | 'authorityCode' | 'act'
   )[];
   /**
    * Поля-связи: коды значений другого справочника в отдельной таблице связей, а не в столбце значения
