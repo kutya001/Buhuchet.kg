@@ -240,5 +240,11 @@ export const KPI_MESSAGES = {
   from_in_future: 'Не позже текущего месяца',
   check_not_filled: 'Проверить можно только заполненный месяц',
   period_too_long: 'Период — не длиннее 72 месяцев',
+  import_too_many_months: 'В одном шаблоне — не больше 24 месяцев. Сократите период.',
+  import_too_many_contractors: 'В одном шаблоне — не больше 1 000 контрагентов. Сузьте фильтр.',
+  import_empty: 'За выбранный период и фильтр показатели не ведутся',
+  import_nothing: 'В файле нет новых или изменённых значений',
+  import_file_unreadable: 'Не удалось прочитать файл: нужен заполненный шаблон .xlsx или CSV',
+  import_file_too_big: 'Файл больше 4 МБ',
 } as const;
 export type KpiRefusal = keyof typeof KPI_MESSAGES;

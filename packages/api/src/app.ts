@@ -12,6 +12,7 @@ import { authModule } from './modules/auth';
 import { contractorsModule } from './modules/contractors';
 import { kbModule } from './modules/kb';
 import { kpiModule } from './modules/kpi';
+import { KPI_IMPORT_UPLOAD_PATHS } from './modules/kpi/import';
 import { l10nModule } from './modules/l10n';
 import { moneyModule } from './modules/money';
 import { orgModule } from './modules/org';
@@ -32,8 +33,11 @@ import { viewsModule } from './modules/views';
  */
 const API_BODY_LIMIT = 1024 * 1024;
 
-/** Логотип организации (до 2 МБ) идёт через API: сервер проверяет, что это картинка, до сохранения. */
-const OWN_BODY_LIMIT_PATHS: ReadonlySet<string> = new Set([LOGO_PATH]);
+/**
+ * Логотип организации (до 2 МБ) идёт через API: сервер проверяет, что это картинка, до сохранения.
+ * Файл «Ввода из Excel» показателей (до 4 МБ) разбирается сервером и нигде не хранится.
+ */
+const OWN_BODY_LIMIT_PATHS: ReadonlySet<string> = new Set([LOGO_PATH, ...KPI_IMPORT_UPLOAD_PATHS]);
 
 /** Приложение API. Монтируется по пути /api (Next.js catch-all или отдельный сервер). */
 export function createApp(deps: ApiDeps) {
