@@ -43,6 +43,7 @@ import {
   reportBases,
   reportTypeBases,
   reportTypes,
+  taskCategories,
   taxOffices,
   taxRegimes,
 } from './schema';
@@ -74,6 +75,7 @@ const TABLES: Readonly<Record<AdminValueDict, DictTable>> = {
   organs: authorities,
   ugns: taxOffices,
   banks,
+  cats: taskCategories,
   reasons: dueChangeReasons,
 };
 

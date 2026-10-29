@@ -9,3 +9,9 @@ import { sql, type SQL } from 'drizzle-orm';
 export function textLiteral(value: string): SQL {
   return sql.raw(`'${value.replace(/'/g, "''")}'`);
 }
+
+/** Дата `YYYY-MM-DD` прямо в запросе (сегодня по Бишкеку для «Дней до срока» и просрочки). */
+export function dateLiteral(value: string): SQL {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error(`dateLiteral: не дата «${value}»`);
+  return sql.raw(`'${value}'::date`);
+}

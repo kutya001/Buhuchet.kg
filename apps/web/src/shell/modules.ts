@@ -387,7 +387,7 @@ export const MODULES: Record<MenuModuleId, ModuleDef> = {
         id: 'value',
         icon: 'plus',
         label: 'pdicts.add.value',
-        tabs: ['forms', 'organs', 'banks', 'reasons'],
+        tabs: ['forms', 'organs', 'banks', 'cats', 'reasons'],
       },
       { id: 'phone', icon: 'globe', label: 'pdicts.add.phone', tabs: ['phones'] },
       { id: 'ugns', icon: 'landmark', label: 'pdicts.add.ugns', tabs: ['ugns'] },
@@ -418,6 +418,7 @@ export const MODULES: Record<MenuModuleId, ModuleDef> = {
       { id: 'levels', icon: 'grad', label: 'tab.kbadm.levels' },
       { id: 'news', icon: 'bell', label: 'tab.kbadm.news' },
     ],
+    add: [{ id: 'news', icon: 'bell', label: 'add.kbadm.news', tabs: ['news'] }],
   },
   tg: {
     icon: 'tg',

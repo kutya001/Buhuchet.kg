@@ -12,11 +12,18 @@ export const HISTORY_ENTITIES = [
   'employee',
   'role',
   'contractor',
+  'assignment',
+  'report',
+  'task',
   'file',
   'org_report_type',
   'dict_request',
   'org_account',
   'employee_wallet',
+  // Показатели контрагентов: показатель (настройка, «Кому вести») и значение за месяц.
+  'indicator',
+  'indicator_value',
+  'news',
   'ui_text',
   'platform_dict',
 ] as const;

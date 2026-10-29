@@ -99,6 +99,12 @@ export interface GridRowSelection<Row> {
 /** Подсветка строки (прототип `rowClass`): заблокированный — приглушённо, просроченный — красным. */
 export type GridRowTone = 'muted' | 'overdue' | 'warn';
 
+/**
+ * Цветная полоска слева у строки и плитки (прототип `.gt tr.k-day`, `.gcard.k-month`): вид срока задачи
+ * — «На день» синим, «На месяц» фиолетовым; цвет дополняет текстовая метка в строке.
+ */
+export type GridRowStripe = 'info' | 'violet';
+
 /** Тексты списка из словаря (компонент своих текстов не пишет). */
 export interface GridLabels {
   /** «250 сотрудников». */

@@ -228,3 +228,20 @@ export function parseContract(text: string): { no: string; date: string | null }
   if (!m) return { no: s === '—' ? '' : s, date: null };
   return { no: m[1] ?? '', date: m[2] ? `${m[4]}-${m[3]}-${m[2]}` : null };
 }
+
+/**
+ * Статусы «Ставится по УГНС» при выборе или смене УГНС (ТЗ «Окно «Льготы и особые статусы»»; прототип
+ * ugAuto и ugDrop): отмечаются статусы, которые ставит новое УГНС, а снимаются те, что ставит прежнее и
+ * не ставит новое; поставленные вручную при другом УГНС не трогаются.
+ */
+export function officeBenefitChanges(
+  current: readonly string[],
+  byOldOffice: readonly string[],
+  byNewOffice: readonly string[],
+): { add: string[]; drop: string[] } {
+  const keep = new Set(byNewOffice);
+  return {
+    add: byNewOffice.filter((code) => !current.includes(code)),
+    drop: byOldOffice.filter((code) => current.includes(code) && !keep.has(code)),
+  };
+}

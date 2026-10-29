@@ -41,6 +41,7 @@ import {
   kbProgress,
   platformReference,
   roles,
+  statusHistory,
   telegramLinks,
 } from './schema';
 import { roleRightsMap, type EmployeeKbLevels } from './staff';
@@ -239,7 +240,7 @@ function changesCondition(rule: Extract<KbDoneRule, { kind: 'history' }>): SQL |
 /**
  * Когда пользователь сам выполнил условие шагов «Сделать» (ТЗ «если он уже делал это раньше (есть в
  * истории изменений под его именем), шаг отмечается сразу»): шаг → момент последней подходящей записи
- * истории или привязки Telegram. Одним запросом на все шаги.
+ * истории, «Истории статусов» или привязки Telegram. Одним запросом на все шаги.
  */
 export async function kbDoneFacts(
   tx: Tx,
@@ -249,6 +250,16 @@ export async function kbDoneFacts(
   const parts = steps.map(({ id, rule }) => {
     if (rule.kind === 'telegram') {
       return sql`(select ${id}::text as step_id, max(${telegramLinks.linkedAt}) as at from ${telegramLinks} where ${telegramLinks.userId} = ${userId})`;
+    }
+    if (rule.kind === 'status') {
+      const changed = and(
+        eq(statusHistory.actorUserId, userId),
+        eq(statusHistory.scale, rule.scale),
+        eq(statusHistory.isRollback, false),
+        inArray(statusHistory.fromStatus, [...rule.from]),
+        inArray(statusHistory.toStatus, [...rule.to]),
+      );
+      return sql`(select ${id}::text as step_id, max(${statusHistory.at}) as at from ${statusHistory} where ${changed})`;
     }
     if (rule.kind === 'org_created') {
       // Представление Админки: строки — только администратору платформы.

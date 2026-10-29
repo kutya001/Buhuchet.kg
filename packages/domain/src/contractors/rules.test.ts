@@ -4,6 +4,7 @@ import {
   contractorFieldProblems,
   innDuplicateMessage,
   innProblem,
+  officeBenefitChanges,
   parseContract,
   type ContractorFieldsInput,
 } from './rules';
@@ -110,5 +111,22 @@ describe('Договор из строки прототипа', () => {
     expect(parseContract('—')).toEqual({ no: '', date: null });
     expect(parseContract('')).toEqual({ no: '', date: null });
     expect(parseContract('устный')).toEqual({ no: 'устный', date: null });
+  });
+});
+
+describe('Статусы «Ставится по УГНС»', () => {
+  it('новое УГНС отмечает свои статусы, прежнее снимает свои; ручные не трогаются', () => {
+    expect(officeBenefitChanges([], [], ['ЛЬГ-30'])).toEqual({ add: ['ЛЬГ-30'], drop: [] });
+    expect(officeBenefitChanges(['ЛЬГ-30'], [], ['ЛЬГ-30'])).toEqual({ add: [], drop: [] });
+    expect(officeBenefitChanges(['ЛЬГ-30', 'ЛЬГ-29'], ['ЛЬГ-30'], [])).toEqual({
+      add: [],
+      drop: ['ЛЬГ-30'],
+    });
+    // Поставлен вручную при другом УГНС: смена УГНС его не снимает.
+    expect(officeBenefitChanges(['ЛЬГ-30'], [], [])).toEqual({ add: [], drop: [] });
+    expect(officeBenefitChanges(['ЛЬГ-30'], ['ЛЬГ-30'], ['ЛЬГ-30'])).toEqual({
+      add: [],
+      drop: [],
+    });
   });
 });

@@ -52,6 +52,7 @@ export function useListPage<Row>({
   search = '',
   enabled,
   fetchPage,
+  extra,
 }: {
   gridKey: GridKey;
   /**
@@ -69,6 +70,11 @@ export function useListPage<Row>({
   /** Ждать настроек вида: первый запрос сразу с сохранённой сортировкой и размером страницы. */
   enabled: boolean;
   fetchPage: FetchListPage<Row>;
+  /**
+   * Свои параметры списка, кроме общих (период «За период» у «Показателей»): уходят в запрос и в
+   * выгрузку; их смена — снова первая страница.
+   */
+  extra?: Readonly<Record<string, string>>;
 }) {
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState<Filters>({});
@@ -80,7 +86,7 @@ export function useListPage<Row>({
   const group = effectiveGroup(keys, settings);
 
   // Поиск, фильтры или группировка сменились — список с первой страницы (прототип `s.page = 0`).
-  const scope = JSON.stringify([q, filters, group]);
+  const scope = JSON.stringify([q, filters, group, extra ?? null]);
   const [shownScope, setShownScope] = useState(scope);
   let current = page;
   if (shownScope !== scope) {
@@ -97,7 +103,7 @@ export function useListPage<Row>({
     ...(q ? { search: { q, keys: visible } } : {}),
     ...(group.length ? { group, agg: groupAggs(all, visible, settings) } : {}),
   };
-  const params = listQueryParams(query);
+  const params = { ...listQueryParams(query), ...extra };
 
   const result = useQuery({
     queryKey: ['list', gridKey, params],

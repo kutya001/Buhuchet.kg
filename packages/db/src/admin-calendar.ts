@@ -37,7 +37,7 @@ import { platformAuditLog, productionCalendar } from './schema';
  * Админка → «Справочники платформы» → «Календарь» (задача 2.36; ТЗ «Производственный календарь КР»;
  * прототип admin/platform-dicts.js и platform-dicts-edit.js: holidayRows, holidayDlg, calCopyDlg): дни
  * текущего и следующего года, «Нерабочий день», «Удалить» и «Календарь на следующий год копированием».
- * Пишет администратор платформы функциями базы (миграция 0044), история — в `platform_audit_log`
+ * Пишет администратор платформы функциями базы (миграция 0051), история — в `platform_audit_log`
  * (сущность `platform_dict`, ключ `calendar:<день>`).
  */
 

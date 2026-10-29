@@ -19,6 +19,7 @@ export const ADMIN_VALUE_DICTS = [
   'organs',
   'ugns',
   'banks',
+  'cats',
   'reasons',
 ] as const;
 export type AdminValueDict = (typeof ADMIN_VALUE_DICTS)[number];
@@ -157,6 +158,8 @@ export const ADMIN_DICT_META: Readonly<Record<AdminValueDict, AdminDictMeta>> = 
     fields: ['name', 'kind', 'byPhone', 'note'],
     kind: { values: BANK_KINDS, default: 'bank', text: 'pdicts.bank.kind' },
   },
+  // «Категории задач» (задача 2.23): код КАТ-001 и т. д., как у значений из наполнения.
+  cats: { code: { prefix: 'КАТ', digits: 3 }, ordered: true, fields: ['name', 'note'] },
   reasons: { code: { prefix: 'ПРЧ', digits: 3 }, ordered: true, fields: ['name', 'note'] },
 };
 
@@ -390,6 +393,7 @@ export const ADMIN_DICT_COLUMNS: Readonly<Record<AdminValueDict, readonly AdminD
     USED,
     STATUS,
   ],
+  cats: [N, CODE, VALUE, c('note', 'text', 'pdicts.col.note', true), USED, STATUS],
   reasons: [N, CODE, VALUE, c('note', 'text', 'pdicts.col.note', true), USED, STATUS],
 };
 

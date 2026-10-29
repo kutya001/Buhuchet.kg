@@ -313,8 +313,57 @@
     {
       "idx": 44,
       "version": "7",
-      "when": 1793124004611,
-      "tag": "0044_admin_platform_dicts_more",
+      "when": 1793126080800,
+      "tag": "0044_tasks",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1793126158389,
+      "tag": "0045_tasks_guards",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1793304250253,
+      "tag": "0046_kpi",
+      "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1793305644537,
+      "tag": "0047_news",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1793305645772,
+      "tag": "0048_news_grants",
+      "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1793307703218,
+      "tag": "0049_reports",
+      "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1793307716180,
+      "tag": "0050_reports_guards",
+      "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1793310036754,
+      "tag": "0051_admin_platform_dicts_more",
       "breakpoints": true
     }
   ]

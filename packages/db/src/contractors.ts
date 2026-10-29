@@ -1,6 +1,7 @@
 import {
   auditActorName,
   formatPhone,
+  officeBenefitChanges,
   RecordNotFoundError,
   type BizSize,
   type ContractorGkedConfirmation,
@@ -15,6 +16,7 @@ import {
   type ListQuery,
   type ReportKind,
   type ServiceStatus,
+  type SingleTaxSubject,
   type TariffPeriod,
 } from '@buhuchet/domain';
 import { and, asc, count, eq, inArray, ne, sql, type SQL } from 'drizzle-orm';
@@ -48,11 +50,21 @@ import {
   reportTypes,
   roles,
   singleTaxRates,
+  taxBenefitOffices,
   taxBenefits,
   taxOffices,
   taxRegimes,
 } from './schema';
+import {
+  contractorReportCount,
+  moveUnfinishedReports,
+  redueContractorReports,
+  statusDueRules,
+  unfinishedReportsCount,
+  type RedueTexts,
+} from './reports';
 import { phoneCodes, type AuditRecord } from './staff';
+import { moveContractorTasks, openTasksOfContractors } from './tasks';
 
 /**
  * Модуль «Контрагенты»: контрагенты организации из контекста `withOrgContext` (RLS) с дополнительными
@@ -113,7 +125,14 @@ export interface ContractorRecord {
   gkedExtra: { code: string; name: string }[];
   taxOffice: { code: string; name: string } | null;
   bizSize: BizSize;
-  benefits: { code: string; name: string; validFrom: IsoDate | null; validTo: IsoDate | null }[];
+  /** `byOffice` — статус ставит УГНС контрагента (метка «по УГНС» в окне «Льготы и особые статусы»). */
+  benefits: {
+    code: string;
+    name: string;
+    validFrom: IsoDate | null;
+    validTo: IsoDate | null;
+    byOffice: boolean;
+  }[];
   bases: { code: string; name: string }[];
   responsible: { id: string; shortName: string; active: boolean } | null;
   head: string;
@@ -579,6 +598,7 @@ export async function getContractor(
         name: taxBenefits.name,
         validFrom: contractorBenefits.validFrom,
         validTo: contractorBenefits.validTo,
+        byOffice: sql<boolean>`exists (select 1 from ${taxBenefitOffices} where ${taxBenefitOffices.benefitCode} = ${contractorBenefits.benefitCode} and ${taxBenefitOffices.taxOfficeCode} = ${(r.taxOfficeCode as string | null) ?? null})`,
       })
       .from(contractorBenefits)
       .innerJoin(taxBenefits, eq(taxBenefits.code, contractorBenefits.benefitCode))
@@ -889,9 +909,118 @@ const isEmptyList = (v: unknown) =>
   (typeof v === 'object' && v !== null && !Array.isArray(v) && Object.keys(v).length === 0);
 
 /**
+ * Контрагент для строк ЕНС по умолчанию (прототип enAuto, enPlace): ГКЭД, статусы и место деятельности —
+ * город УГНС и юридический адрес. Контрагента уже проверили на область.
+ */
+export async function singleTaxSubject(tx: Tx, contractorId: string): Promise<SingleTaxSubject> {
+  const [[row], extra, benefits] = await Promise.all([
+    tx
+      .select({
+        gked: contractors.gked,
+        region: taxOffices.region,
+        registration: contractors.registration,
+      })
+      .from(contractors)
+      .leftJoin(taxOffices, eq(taxOffices.code, contractors.taxOfficeCode))
+      .where(eq(contractors.id, contractorId)),
+    tx
+      .select({ code: contractorGkedExtra.gked })
+      .from(contractorGkedExtra)
+      .where(eq(contractorGkedExtra.contractorId, contractorId))
+      .orderBy(asc(contractorGkedExtra.sortOrder)),
+    tx
+      .select({ code: contractorBenefits.benefitCode })
+      .from(contractorBenefits)
+      .where(eq(contractorBenefits.contractorId, contractorId)),
+  ]);
+  if (!row) throw new RecordNotFoundError('contractor', contractorId);
+  const address = (row.registration as ContractorRegistration).address ?? '';
+  return {
+    gked: row.gked,
+    gkedExtra: extra.map((x) => x.code),
+    benefits: benefits.map((b) => b.code),
+    place: [row.region, address].filter(Boolean).join(' '),
+  };
+}
+
+/** Статусы, которые ставит УГНС («Ставится по УГНС», прототип ugBens): действующие. */
+export async function officeBenefits(
+  tx: Tx,
+  officeCode: string | null,
+): Promise<{ code: string; name: string }[]> {
+  if (!officeCode) return [];
+  return tx
+    .select({ code: taxBenefits.code, name: taxBenefits.name })
+    .from(taxBenefitOffices)
+    .innerJoin(taxBenefits, eq(taxBenefits.code, taxBenefitOffices.benefitCode))
+    .where(and(eq(taxBenefitOffices.taxOfficeCode, officeCode), eq(taxBenefits.active, true)))
+    .orderBy(asc(taxBenefits.code));
+}
+
+/** Уведомления «по УГНС»: шаблоны с `{name}` — название статуса. */
+export interface OfficeBenefitTexts {
+  marked: string;
+  dropped: string;
+}
+
+/**
+ * Статусы «Ставится по УГНС» при выборе или смене УГНС (ТЗ «Окно «Льготы и особые статусы»»; прототип
+ * ugAuto, ugDrop, ugMsg): льготы и статусы контрагента после смены и уведомления «Отмечен статус «…» по
+ * УГНС», «Снят статус «…» по УГНС». Новый статус — без дат действия. УГНС не менялось — без изменений.
+ */
+export async function withOfficeBenefits(
+  tx: Tx,
+  benefits: ContractorFields['benefits'],
+  offices: { from: string | null; to: string | null },
+  texts: OfficeBenefitTexts,
+): Promise<{ benefits: ContractorFields['benefits']; notes: string[] }> {
+  if (offices.from === offices.to) return { benefits, notes: [] };
+  const [byOld, byNew] = await Promise.all([
+    officeBenefits(tx, offices.from),
+    officeBenefits(tx, offices.to),
+  ]);
+  const { add, drop } = officeBenefitChanges(
+    benefits.map((b) => b.code),
+    byOld.map((b) => b.code),
+    byNew.map((b) => b.code),
+  );
+  const names = new Map([...byOld, ...byNew].map((b) => [b.code, b.name]));
+  const note = (template: string, code: string) => template.replace('{name}', names.get(code)!);
+  return {
+    benefits: [
+      ...benefits.filter((b) => !drop.includes(b.code)),
+      ...add.map((code) => ({ code, validFrom: null, validTo: null })),
+    ],
+    notes: [
+      ...add.map((code) => note(texts.marked, code)),
+      ...drop.map((code) => note(texts.dropped, code)),
+    ],
+  };
+}
+
+/** Уведомления «по УГНС» — отдельными записями истории контрагента (прототип log у ugApply). */
+export async function writeContractorNotes(
+  tx: Tx,
+  contractorId: string,
+  notes: readonly string[],
+): Promise<void> {
+  await writeHistory(
+    tx,
+    ...notes.map((reason) => ({
+      entity: 'contractor' as const,
+      entityId: contractorId,
+      action: 'update' as const,
+      reason,
+      contractorId,
+    })),
+  );
+}
+
+/**
  * Изменить контрагента («Изменить» в карточке): поля, дополнительные ГКЭД, льготы и основания — с
  * защитой от одновременной правки и историей «было → стало» в той же транзакции. Устаревшая версия —
- * `RecordChangedError`, вне области — `RecordNotFoundError`.
+ * `RecordChangedError`, вне области — `RecordNotFoundError`. С `redue` сменившиеся статусы пересчитывают
+ * сроки несданных отчётов.
  */
 export async function updateContractor(
   tx: Tx,
@@ -900,6 +1029,7 @@ export async function updateContractor(
   version: number,
   patch: Partial<ContractorFields>,
   scope: SQL | undefined,
+  redue?: { today: IsoDate; texts: RedueTexts },
 ): Promise<void> {
   const current = await lockContractor(tx, id, scope);
   if (!current) throw new RecordNotFoundError('contractor', id);
@@ -907,6 +1037,8 @@ export async function updateContractor(
     CONTRACTOR_COLUMNS.filter((k) => patch[k] !== undefined).map((k) => [k, patch[k]]),
   );
   const changes: HistoryChange[] = [];
+  // Статусы со своим сроком до правки: от них в историю отчёта — «снят статус «…»».
+  const was = redue && patch.benefits ? await statusDueRules(tx, [id], redue.today) : null;
   if (current.version === version) {
     const before = await childrenOf(tx, id);
     const replace: Partial<Pick<ContractorFields, 'gkedExtra' | 'benefits' | 'bases'>> = {};
@@ -939,6 +1071,17 @@ export async function updateContractor(
     where: scope,
     contractorId: id,
   });
+  // Сменился ответственный — к новому переходят незавершённые отчёты (прототип transferCp).
+  const to = patch.responsibleEmployeeId;
+  if (to && to !== current.responsibleEmployeeId) {
+    await moveUnfinishedReports(tx, [
+      { contractorId: id, from: current.responsibleEmployeeId, to },
+    ]);
+  }
+  // Статусы со своим сроком поменялись — сроки несданных пересчитываются (прототип cpRedue).
+  if (redue && was && changes.some((c) => c.field === 'benefits')) {
+    await redueContractorReports(tx, id, redue.today, { was, texts: redue.texts });
+  }
 }
 
 const sameJson = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
@@ -1006,6 +1149,16 @@ export async function assignContractors(
       contractorId: r.id,
     })),
   );
+  await moveUnfinishedReports(
+    tx,
+    moving.map((r) => ({ contractorId: r.id, from: r.responsibleEmployeeId, to: employeeId })),
+  );
+  // Открытые задачи по контрагенту у прежнего ответственного переходят к новому (прототип `transferCp`).
+  await moveContractorTasks(
+    tx,
+    moving.map((r) => ({ contractorId: r.id, from: r.responsibleEmployeeId })),
+    employeeId,
+  );
   return { changed: moving.length, archived: [] };
 }
 
@@ -1024,14 +1177,14 @@ async function employeeContractorIds(tx: Tx, employeeId: string): Promise<string
 }
 
 /**
- * Что перейдёт при передаче дел (прототип transferDlg): число контрагентов и «Кому» по умолчанию —
- * активный сотрудник с ролью из шаблона «Главный бухгалтер», иначе первый активный, кроме самого
- * сотрудника. Незавершённые отчёты, задачи и деньги добавят их задачи.
+ * Что перейдёт при передаче дел (прототип transferDlg): число контрагентов, открытые задачи по ним,
+ * незавершённые отчёты (`unfinishedReportsCount`) и «Кому» по умолчанию — активный сотрудник с ролью
+ * из шаблона «Главный бухгалтер», иначе первый активный, кроме самого сотрудника. Деньги добавит их задача.
  */
 export async function transferPreview(
   tx: Tx,
   fromEmployeeId: string,
-): Promise<{ contractors: number; defaultTo: string | null }> {
+): Promise<{ contractors: number; tasks: number; reports: number; defaultTo: string | null }> {
   const ids = await employeeContractorIds(tx, fromEmployeeId);
   const candidates = await tx
     .select({ id: employees.id, chief: sql<boolean>`${roles.templateCode} = 'chief'` })
@@ -1040,7 +1193,12 @@ export async function transferPreview(
     .where(and(eq(employees.active, true), ne(employees.id, fromEmployeeId)))
     .orderBy(asc(employees.createdAt), asc(employees.id));
   const to = candidates.find((c) => c.chief) ?? candidates[0];
-  return { contractors: ids.length, defaultTo: to?.id ?? null };
+  return {
+    contractors: ids.length,
+    tasks: await openTasksOfContractors(tx, ids, fromEmployeeId),
+    reports: await unfinishedReportsCount(tx, ids, fromEmployeeId),
+    defaultTo: to?.id ?? null,
+  };
 }
 
 /**
@@ -1059,11 +1217,11 @@ export async function transferContractors(
 
 /**
  * Что есть по контрагенту — отчёты, деньги, проекты и услуги: без них его можно удалить (ТЗ
- * «Контрагента нельзя удалить, если по нему есть отчёты»). Таблиц отчётов, денег и проектов ещё нет —
- * счёт добавят задачи 2.06, 2.19 и 2.22, 2.16 в эту функцию.
+ * «Контрагента нельзя удалить, если по нему есть отчёты»). Деньги и проекты добавят задачи 2.19 и
+ * 2.22, 2.16 в эту функцию.
  */
-export async function contractorUsage(_tx: Tx, _id: string): Promise<ContractorUsage> {
-  return { reports: 0, money: 0, projects: 0 };
+export async function contractorUsage(tx: Tx, id: string): Promise<ContractorUsage> {
+  return { reports: await contractorReportCount(tx, id), money: 0, projects: 0 };
 }
 
 /**

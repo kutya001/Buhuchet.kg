@@ -98,6 +98,7 @@ function formOf(
       };
     case 'banks':
       return { name, kind: d.kind ?? 'bank', byPhone: d.byPhone ?? false, note: d.note ?? '' };
+    case 'cats':
     case 'reasons':
       return { name, note: d.note ?? '' };
   }
@@ -581,7 +582,7 @@ export function ValueDialog({
             {note('note', t('pdicts.col.note'))}
           </>
         ) : null}
-        {dict === 'reasons' ? note('note', t('pdicts.col.note')) : null}
+        {dict === 'cats' || dict === 'reasons' ? note('note', t('pdicts.col.note')) : null}
       </FormGrid>
     );
   }

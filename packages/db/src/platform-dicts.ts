@@ -35,6 +35,7 @@ import {
   taxBenefitDueRules,
   taxBenefitOffices,
   taxBenefitReportTypes,
+  taskCategories,
   taxBenefits,
   taxOffices,
   taxRegimes,
@@ -554,4 +555,29 @@ export async function listBanks(db: Db | Tx, options: DictListOptions = {}): Pro
     .from(banks)
     .where(activeOnly(banks.active, options))
     .orderBy(asc(banks.sortOrder), asc(banks.code));
+}
+
+export interface TaskCategoryRecord {
+  code: string;
+  name: string;
+  active: boolean;
+}
+
+/**
+ * «Категории задач» по порядку справочника. Задаче нужны и отключённые: категория, выбранная до
+ * отключения, остаётся в задаче с названием (`all`).
+ */
+export async function listTaskCategories(
+  db: Db | Tx,
+  options: DictListOptions = {},
+): Promise<TaskCategoryRecord[]> {
+  return db
+    .select({
+      code: taskCategories.code,
+      name: taskCategories.name,
+      active: taskCategories.active,
+    })
+    .from(taskCategories)
+    .where(activeOnly(taskCategories.active, options))
+    .orderBy(asc(taskCategories.sortOrder), asc(taskCategories.code));
 }
