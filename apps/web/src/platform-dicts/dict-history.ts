@@ -3,12 +3,14 @@ import {
   bishkekTime,
   formatDateRu,
   isAdminSystemDict,
+  payRuleText,
   paysText,
   payScheduleText,
   pluralForm,
   SCOPE_GROUPS,
   type AdminSystemDict,
   type AdminValueDict,
+  type PayRule,
   type UiTextKey,
 } from '@buhuchet/domain';
 import type { AdminDictHistory } from '@buhuchet/shared';
@@ -37,12 +39,13 @@ const TYPE_VALUE_KEYS: Readonly<Record<string, (v: string) => string>> = {
 
 /**
  * Значение поля вида отчёта в истории — как прототип (`fv`): подписи кодов, «да»/«нет», названия
- * органов, режимов и оснований, платежи «Налог (ГНС)», график «20.03; 20.06»; пустой свой срок
- * оплаты — «как срок сдачи», пустой график — «один платёж».
+ * органов, режимов и оснований, платежи «Налог (ГНС)», график «20.03; 20.06»; срок оплаты — правилом
+ * словами («как срок сдачи»), пустой график — «один платёж».
  */
 function typeValueText(field: string, v: unknown, t: Translate, names: HistoryNames): string {
   const name = (code: string) => names.get(code) ?? code;
-  if (field === 'payDay' && v === null) return t('pdicts.type.hist.pay_as_due');
+  // Срок оплаты — правилом целиком: «как срок сдачи», «до 25-го числа месяца после отчётного».
+  if (field === 'pay') return payRuleText({ ...(v as PayRule), paySchedule: null }, t);
   if (field === 'paySchedule') {
     const schedule = (v ?? []) as [number, number][];
     return schedule.length ? payScheduleText(schedule) : t('pdicts.type.hist.one_payment');

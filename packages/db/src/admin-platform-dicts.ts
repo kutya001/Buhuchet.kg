@@ -7,6 +7,7 @@ import {
   badBenefitOffices,
   badBenefitTypes,
   benefitDueRulesProblem,
+  dictStatusKey,
   dictValueProblems,
   dueRuleText,
   formatText,
@@ -479,7 +480,7 @@ function listRow(
     used: x.usage.total,
     contractors: x.usage.contractors,
     active: x.active ? 'on' : 'off',
-    active_text: t(x.active ? 'pdicts.status.on' : 'pdicts.status.off'),
+    active_text: t(dictStatusKey(dict, x.active)),
     created_at: x.audit.createdAt?.toISOString() ?? null,
     updated_at: x.audit.updatedAt.toISOString(),
     created_by: x.audit.createdBy,
@@ -1305,14 +1306,8 @@ export async function adminDictHistory(
     tx.select({ n: count() }).from(platformAuditLog).where(where),
     dictRecords(tx, dict),
   ]);
-  const labels = new Map(
-    records.map((x) => [x.code, labelOf(dict, historyFields(dict, recordInput(x)))]),
-  );
-  // Правка полей вида отчёта подписана кратким названием, включение и отключение — названием.
-  const updateLabels = new Map(
-    records.map((x) => [x.code, labelOf(dict, historyFields(dict, recordInput(x)), 'update')]),
-  );
-  // Поля значений после каждой записи: от нынешних назад по записям, сначала новые (для кода страны).
+  // Поля значений после каждой записи: от нынешних назад по записям, сначала новые. По ним — подпись
+  // записи, какой она была тогда (прототип пишет строку истории сразу), и код страны строкой.
   const state = new Map(records.map((x) => [x.code, historyFields(dict, recordInput(x))]));
   return {
     total: counted?.n ?? 0,
@@ -1326,6 +1321,10 @@ export async function adminDictHistory(
         ...Object.fromEntries(changes.map((c) => [c.field, c.from ?? null])),
       };
       if (before) state.set(code, before);
+      const shown =
+        dict === 'types' && r.action === 'update' && after && before
+          ? joinPayChanges(changes, before, after)
+          : changes;
       const line =
         dict === 'phones' && r.action === 'update' && after && before
           ? { from: phoneLine(before), to: phoneLine(after) }
@@ -1336,18 +1335,52 @@ export async function adminDictHistory(
         actor: auditActorName(r.actorUserId, null),
         action: r.action,
         code,
+        // Правка полей вида отчёта подписана кратким названием, включение и отключение — названием.
         label:
           (r.action !== 'update'
             ? labelOf(dict, own)
-            : changes.some((c) => c.field === 'active')
-              ? labels.get(code)
-              : updateLabels.get(code)) || code,
-        changes,
+            : after &&
+              labelOf(
+                dict,
+                after,
+                changes.some((c) => c.field === 'active') ? undefined : 'update',
+              )) || code,
+        changes: shown,
         // Только включение/отключение — строка та же, без «было → стало».
         ...(line && line.from !== line.to ? { summary: line } : {}),
       };
     }),
   };
+}
+
+const PAY_FIELDS = ['payDay', 'payAfter', 'payMonth'];
+
+/**
+ * Срок оплаты вида отчёта в истории — одним полем `pay`, как у прототипа (`TL.pay`): было и стало —
+ * правило целиком (с периодичностью и сроком сдачи), словами его пишет экран (`payRuleText`).
+ */
+function joinPayChanges(
+  changes: HistoryChange[],
+  before: Record<string, HistoryValue | undefined>,
+  after: Record<string, HistoryValue | undefined>,
+): HistoryChange[] {
+  const at = changes.findIndex((c) => PAY_FIELDS.includes(c.field));
+  if (at < 0) return changes;
+  const rule = (f: Record<string, HistoryValue | undefined>): HistoryValue => ({
+    period: f.period ?? null,
+    dueFrom: f.dueFrom ?? null,
+    dueDay: f.dueDay ?? null,
+    dueAfter: f.dueAfter ?? null,
+    dueMonth: f.dueMonth ?? null,
+    oneOff: f.oneOff ?? false,
+    act: f.act ?? null,
+    payDay: f.payDay ?? null,
+    payAfter: f.payAfter ?? null,
+    payMonth: f.payMonth ?? null,
+  });
+  const rest = changes.filter((c) => !PAY_FIELDS.includes(c.field));
+  rest.splice(at, 0, { field: 'pay', from: rule(before), to: rule(after) });
+  return rest;
 }
 
 /**

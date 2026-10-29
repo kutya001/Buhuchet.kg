@@ -1008,6 +1008,20 @@ describe.skipIf(!databaseAvailable())(
       ]);
     });
 
+    it('ни одна таблица организации не ссылается на справочник платформы с ON DELETE CASCADE', async () => {
+      // Удаление значения в Админке не должно молча стирать строки организаций: такая ссылка
+      // считается использованием (app.admin_dict_usage), а каскад от неё запрещён этим тестом.
+      const rows = await db.admin.db.execute<{ ref: string; dict: string }>(sql`
+        select cl.relname as ref, s.dict
+        from pg_constraint c
+        join pg_class cl on cl.oid = c.conrelid
+        join app.platform_dict_specs s on c.confrelid = format('public.%I', s.table_name)::regclass
+        where c.contype = 'f' and c.confdeltype = 'c'
+          and exists (select 1 from pg_attribute a
+                      where a.attrelid = c.conrelid and a.attname = 'org_id' and not a.attisdropped)`);
+      expect(rows).toEqual([]);
+    });
+
     it('связи пишет только администратор платформы', async () => {
       const links = JSON.stringify({ types: ['nds'] });
       expect(

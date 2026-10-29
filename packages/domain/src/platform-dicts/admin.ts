@@ -29,6 +29,15 @@ export function isAdminValueDict(value: string): value is AdminValueDict {
   return (ADMIN_VALUE_DICTS as readonly string[]).includes(value);
 }
 
+/**
+ * Ключ словаря столбца «Статус»: у видов отчётов — «Активен» / «Отключён» (прототип `adm-types`), у
+ * остальных справочников — «Активно» / «Отключено».
+ */
+export function dictStatusKey(dict: AdminValueDict, active: boolean) {
+  if (dict === 'types') return active ? 'pdicts.status.on_type' : 'pdicts.status.off_type';
+  return active ? 'pdicts.status.on' : 'pdicts.status.off';
+}
+
 import type { ListSort } from '../common/list';
 import { dueRuleText, type DueRule } from '../dicts/report-types';
 import type { BenefitDueOverride } from '../dicts/value-guide';
@@ -84,7 +93,13 @@ export interface AdminDictMeta {
    * нужно сделать».
    */
   required?: readonly (
-    'shortName' | 'fullName' | 'dialCode' | 'mask' | 'gives' | 'authorityCode' | 'act'
+    | 'shortName'
+    | 'fullName'
+    | 'dialCode'
+    | 'mask'
+    | 'gives'
+    | 'authorityCode'
+    | 'act'
   )[];
   /**
    * Поля-связи: коды значений другого справочника в отдельной таблице связей, а не в столбце значения
