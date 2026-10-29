@@ -20,6 +20,13 @@ export type CountKey =
   | 'dicts.count'
   | 'dicts.platform.count'
   | 'pdicts.count'
+  | 'pdicts.taxes_count'
+  | 'pdicts.en_rates_count'
+  | 'pdicts.property_rates_count'
+  | 'pdicts.bases_count'
+  | 'pdicts.regimes_count'
+  | 'pdicts.phones_count'
+  | 'pdicts.calendar_count'
   | 'pdicts.ugns_count'
   | 'pdicts.req.count'
   | 'news.count';

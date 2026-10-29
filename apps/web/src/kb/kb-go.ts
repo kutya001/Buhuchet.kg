@@ -57,8 +57,9 @@ export const KB_GO: Readonly<Record<string, KbTarget>> = {
   grp: { module: 'dicts', tab: 'types', flash: '[data-grid-group-button]' },
   xls: { module: 'dicts', tab: 'types', flash: '[data-grid-export]' },
   swipe: { module: 'dicts', tab: 'types', flash: '[data-tabrow]' },
-  // Админка. Прототип ведёт на «Режимы» — вкладка придёт со второй частью задачи 2.36.
-  'a-dicts': { module: 'pdicts', tab: 'forms', flash: 'main' },
+  // Админка.
+  'a-dicts': { module: 'pdicts', tab: 'regimes', flash: 'main' },
+  'a-cal': { module: 'pdicts', tab: 'calendar', flash: 'main' },
   'a-l10n': { module: 'l10n', flash: 'main' },
   'a-org': { module: 'orgs', flash: LIST, open: { add: 'org' } },
 };

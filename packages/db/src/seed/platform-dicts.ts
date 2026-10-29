@@ -5,6 +5,8 @@ import {
   calendarKindOf,
   LAST_DAY_OF_MONTH,
   PAYER_KINDS,
+  PHONE_DIAL_CODE_PATTERN,
+  PHONE_MASK_PATTERN,
   PICK_GROUPS,
   REPORT_ACTS,
   REPORT_KINDS,
@@ -13,6 +15,8 @@ import {
 } from '@buhuchet/domain';
 import {
   and,
+  desc,
+  eq,
   getTableColumns,
   getTableName,
   inArray,
@@ -27,8 +31,10 @@ import type { Db } from '../client';
 import {
   authorities,
   banks,
+  countryPhoneCodes,
   dueChangeReasons,
   ownershipForms,
+  platformAuditLog,
   productionCalendar,
   reportBases,
   reportTypeBases,
@@ -59,6 +65,7 @@ export const TABLE_SECTIONS = [
   'enRates',
   'holidays',
   'workingSaturdays',
+  'phoneCodes',
   // Копии разделов, у которых таблицы уже были: ui_texts, permissions, role_templates.
   'localization',
   'permissions',
@@ -366,6 +373,19 @@ const BankSchema = z
   })
   .strict();
 
+/** «Коды стран телефонов»: `cc` — страна (код записи), `code` — телефонный код без «+». */
+const PhoneCodeSchema = z
+  .object({
+    cc: z.string().min(1),
+    flag: z.string().default(''),
+    name: z.string().min(1),
+    code: z.string().regex(PHONE_DIAL_CODE_PATTERN),
+    mask: z.string().regex(PHONE_MASK_PATTERN),
+    active: z.boolean().default(true),
+    ...audit,
+  })
+  .strict();
+
 const Dictionary = <T extends z.ZodType>(item: T) =>
   z.object({ title: z.string(), items: z.array(item) }).strict();
 
@@ -389,6 +409,7 @@ const RefSections = z.object({
   taxes: CodedSection,
   holidays: z.record(z.string(), z.string().min(1)),
   workingSaturdays: z.array(z.iso.date()),
+  phoneCodes: z.array(PhoneCodeSchema),
 });
 type RefSections = z.infer<typeof RefSections>;
 
@@ -403,6 +424,7 @@ export type PlatformDictsReport = Record<
   | 'singleTaxRates'
   | 'dueChangeReasons'
   | 'banks'
+  | 'phoneCodes'
   | 'taskCategories'
   | 'productionCalendar',
   SeedReport
@@ -727,6 +749,20 @@ export function platformDictRows(refDB: unknown) {
     sortOrder: i + 1,
   }));
 
+  unique(
+    ref.phoneCodes.map((x) => x.cc),
+    'phoneCodes',
+  );
+  const phoneCodeRows = ref.phoneCodes.map((p, i) => ({
+    code: p.cc,
+    name: p.name,
+    flag: p.flag,
+    dialCode: p.code,
+    mask: p.mask,
+    active: p.active,
+    sortOrder: i + 1,
+  }));
+
   const categoryRows = d.cats.items.map((c, i) => ({
     code: c.code,
     name: c.name,
@@ -767,6 +803,7 @@ export function platformDictRows(refDB: unknown) {
     singleTaxRates: enRateRows,
     dueChangeReasons: reasonRows,
     banks: bankRows,
+    phoneCodes: phoneCodeRows,
     taskCategories: categoryRows,
     productionCalendar: calendarRows,
   };
@@ -844,7 +881,9 @@ async function upsertDict(
 
 /**
  * Связи записей (виды отчётов → режимы, основания; льготы → виды, УГНС, сроки) у записей `scope`:
- * становятся как в refDB.json (прежние удаляются, недостающие добавляются).
+ * становятся как в refDB.json (прежние удаляются, недостающие добавляются). `frozen` — связи с
+ * записями второй стороны, которые поправлены в Админке (виды отчётов основания правятся и из окна
+ * основания): их наполнение не трогает.
  */
 async function syncLinks(
   db: Db,
@@ -852,15 +891,64 @@ async function syncLinks(
   owner: PgColumn,
   rows: readonly object[],
   scope: string[],
+  frozen?: { column: PgColumn; keys: readonly string[] },
 ): Promise<void> {
   if (!scope.length) return;
-  const ownerKey = Object.entries(getTableColumns(table)).find(([, c]) => c === owner)![0];
-  const wanted = (rows as Record<string, unknown>[]).filter((r) =>
-    scope.includes(String(r[ownerKey])),
+  const columns = Object.entries(getTableColumns(table));
+  const keyOf = (column: PgColumn) => columns.find(([, c]) => c === column)![0];
+  const ownerKey = keyOf(owner);
+  const frozenKey = frozen ? keyOf(frozen.column) : '';
+  const isFrozen = (r: Record<string, unknown>) =>
+    !!frozen && frozen.keys.includes(String(r[frozenKey]));
+  const wanted = (rows as Record<string, unknown>[]).filter(
+    (r) => scope.includes(String(r[ownerKey])) && !isFrozen(r),
   );
-  await db.delete(table).where(inArray(owner, scope));
+  await db
+    .delete(table)
+    .where(
+      frozen?.keys.length
+        ? and(inArray(owner, scope), notInArray(frozen.column, [...frozen.keys]))
+        : inArray(owner, scope),
+    );
   if (wanted.length) await db.insert(table).values(wanted).onConflictDoNothing();
 }
+
+/** Записи, поправленные в Админке (`updated_by` задан): их связи наполнение не трогает. */
+async function editedKeys(db: Db, key: PgColumn, updatedBy: PgColumn): Promise<string[]> {
+  return (await db.select({ key }).from(key.table).where(isNotNull(updatedBy))).map((r) =>
+    String(r.key),
+  );
+}
+
+/**
+ * Значения справочника `dict`, удалённые в Админке (последняя запись истории значения — «delete»,
+ * задача 2.36): наполнение их не возвращает, иначе удалённое появлялось бы снова после каждого
+ * `db:seed`. Значение, которое потом добавили заново, удалённым не считается.
+ */
+async function deletedKeys(db: Db, dict: string): Promise<ReadonlySet<string>> {
+  const prefix = `${dict}:`;
+  const rows = await db
+    .selectDistinctOn([platformAuditLog.entityId], {
+      id: platformAuditLog.entityId,
+      action: platformAuditLog.action,
+    })
+    .from(platformAuditLog)
+    .where(
+      and(
+        eq(platformAuditLog.entity, 'platform_dict'),
+        sql`starts_with(${platformAuditLog.entityId}, ${prefix})`,
+      ),
+    )
+    .orderBy(platformAuditLog.entityId, desc(platformAuditLog.at), desc(platformAuditLog.id));
+  return new Set(rows.filter((r) => r.action === 'delete').map((r) => r.id.slice(prefix.length)));
+}
+
+/** Строки без удалённых в Админке значений (`key` — поле строки с кодом). */
+const kept = <T extends object>(
+  rows: readonly T[],
+  deleted: ReadonlySet<string>,
+  key: keyof T,
+): T[] => rows.filter((r) => !deleted.has(String(r[key])));
 
 /** Справочники для контрагентов и отчётов из refDB.json → свои таблицы. */
 export async function seedPlatformDicts(
@@ -868,8 +956,28 @@ export async function seedPlatformDicts(
   refDB: unknown,
   options: SeedOptions,
 ): Promise<PlatformDictsReport> {
-  const rows = platformDictRows(refDB);
+  const all = platformDictRows(refDB);
   const { update } = options;
+  // Удалённые в Админке значения и связи с ними не возвращаются (справочники механизма 2.36).
+  const [organs, regimes, bases, ugns, forms, reasons, bankKeys, days] = await Promise.all(
+    ['organs', 'regimes', 'bases', 'ugns', 'forms', 'reasons', 'banks', 'calendar'].map((d) =>
+      deletedKeys(db, d),
+    ),
+  );
+  const rows = {
+    ...all,
+    authorities: kept(all.authorities, organs!, 'code'),
+    taxRegimes: kept(all.taxRegimes, regimes!, 'code'),
+    reportBases: kept(all.reportBases, bases!, 'code'),
+    taxOffices: kept(all.taxOffices, ugns!, 'code'),
+    ownershipForms: kept(all.ownershipForms, forms!, 'code'),
+    dueChangeReasons: kept(all.dueChangeReasons, reasons!, 'code'),
+    banks: kept(all.banks, bankKeys!, 'code'),
+    productionCalendar: kept(all.productionCalendar, days!, 'day'),
+    reportTypeRegimes: kept(all.reportTypeRegimes, regimes!, 'regimeCode'),
+    reportTypeBases: kept(all.reportTypeBases, bases!, 'baseCode'),
+    taxBenefitOffices: kept(all.taxBenefitOffices, ugns!, 'taxOfficeCode'),
+  };
   const authority = await upsertDict(db, authorities, authorities.code, rows.authorities, update);
   const regime = await upsertDict(db, taxRegimes, taxRegimes.code, rows.taxRegimes, update);
   const base = await upsertDict(db, reportBases, reportBases.code, rows.reportBases, update);
@@ -882,12 +990,18 @@ export async function seedPlatformDicts(
     rows.reportTypeRegimes,
     type.seeded,
   );
+  // Виды отчётов основания правятся и из окна основания (задача 2.36): у поправленного основания связи
+  // остаются как в Админке.
   await syncLinks(
     db,
     reportTypeBases,
     reportTypeBases.reportTypeCode,
     rows.reportTypeBases,
     type.seeded,
+    {
+      column: reportTypeBases.baseCode,
+      keys: await editedKeys(db, reportBases.code, reportBases.updatedBy),
+    },
   );
   const benefit = await upsertDict(db, taxBenefits, taxBenefits.code, rows.taxBenefits, update);
   await syncLinks(
@@ -933,6 +1047,13 @@ export async function seedPlatformDicts(
     update,
   );
   const bank = await upsertDict(db, banks, banks.code, rows.banks, update);
+  const phone = await upsertDict(
+    db,
+    countryPhoneCodes,
+    countryPhoneCodes.code,
+    rows.phoneCodes,
+    update,
+  );
   const category = await upsertDict(
     db,
     taskCategories,
@@ -959,7 +1080,7 @@ export async function seedPlatformDicts(
           isNull(productionCalendar.updatedBy),
           notInArray(
             productionCalendar.day,
-            rows.productionCalendar.map((r) => r.day),
+            all.productionCalendar.map((r) => r.day),
           ),
         ),
       )
@@ -977,6 +1098,7 @@ export async function seedPlatformDicts(
     singleTaxRates: enRate.report,
     dueChangeReasons: reason.report,
     banks: bank.report,
+    phoneCodes: phone.report,
     taskCategories: category.report,
     productionCalendar: calendar.report,
   };

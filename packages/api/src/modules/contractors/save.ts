@@ -9,7 +9,9 @@ import {
   readContractorFields,
   uniqueViolation,
   updateContractor,
+  withOfficeBenefits,
   withOrgContext,
+  writeContractorNotes,
   type ContractorFields,
   type Tx,
 } from '@buhuchet/db';
@@ -22,7 +24,7 @@ import {
   type Translate,
 } from '@buhuchet/domain';
 import {
-  Contractor,
+  ContractorSaved,
   CreateContractorRequest,
   UpdateContractorRequest,
   Uuid,
@@ -49,18 +51,42 @@ import {
 
 const forbidden = (message: string) => apiFail(403, 'forbidden', message);
 
-/** Ответ с карточкой после сохранения: контрагент читается заново, без области (его только что сохранили). */
+/**
+ * Ответ с карточкой после сохранения: контрагент читается заново, без области (его только что
+ * сохранили); `notices` — уведомления «Отмечен статус «…» по УГНС».
+ */
 async function savedOut(
   tx: Tx,
   id: string,
-  options: { orgId: string; subject: AccessSubject; today: string; t: Translate },
-): Promise<Contractor> {
+  options: {
+    orgId: string;
+    subject: AccessSubject;
+    today: string;
+    t: Translate;
+    notices: string[];
+  },
+): Promise<ContractorSaved> {
   const r = await getContractor(tx, id, { scope: undefined, today: options.today });
-  return contractorOut(tx, r!, {
-    fee: await feeVisible(tx, options.orgId, options.subject),
-    t: options.t,
-  });
+  return {
+    ...(await contractorOut(tx, r!, {
+      fee: await feeVisible(tx, options.orgId, options.subject),
+      t: options.t,
+    })),
+    notices: options.notices,
+  };
 }
+
+/** Статусы «Ставится по УГНС» при выборе или смене УГНС (прототип ugApply). */
+const officeBenefitsOf = (
+  tx: Tx,
+  benefits: ContractorFields['benefits'],
+  offices: { from: string | null; to: string | null },
+  t: Translate,
+) =>
+  withOfficeBenefits(tx, benefits, offices, {
+    marked: t('cp.notice.ugns_marked'),
+    dropped: t('cp.notice.ugns_dropped'),
+  });
 
 /** Первое число месяца даты: с него действует первая ставка обслуживания (прототип: start.slice(0, 7)). */
 const monthOf = (date: string) => `${date.slice(0, 7)}-01`;
@@ -77,7 +103,7 @@ export const createContractorRoute = createRoute({
   responses: {
     201: {
       description: 'Контрагент создан одним целым (с первой ставкой обслуживания и историей)',
-      content: { 'application/json': { schema: Contractor } },
+      content: { 'application/json': { schema: ContractorSaved } },
     },
     400: {
       description:
@@ -160,6 +186,13 @@ export function createContractorHandler(
           paysTo: body.paysTo,
           gkedConfirmation: null,
         };
+        const office = await officeBenefitsOf(
+          tx,
+          fields.benefits,
+          { from: null, to: fields.taxOfficeCode },
+          t,
+        );
+        fields.benefits = office.benefits;
         fields.gkedConfirmation = await checkContractor(tx, fields, {
           before: null,
           gkedConfirm: body.gkedConfirm ?? false,
@@ -179,7 +212,8 @@ export function createContractorHandler(
             note: t('cp.tariff.first'),
           },
         );
-        return savedOut(tx, id, { orgId: ctx.orgId, subject, today, t });
+        await writeContractorNotes(tx, id, office.notes);
+        return savedOut(tx, id, { orgId: ctx.orgId, subject, today, t, notices: office.notes });
       });
       return c.json(out, 201);
     } catch (err) {
@@ -228,7 +262,7 @@ export const updateContractorRoute = createRoute({
   responses: {
     200: {
       description: 'Контрагент сохранён; изменения — в истории «было → стало»',
-      content: { 'application/json': { schema: Contractor } },
+      content: { 'application/json': { schema: ContractorSaved } },
     },
     400: {
       description:
@@ -296,6 +330,13 @@ export function updateContractorHandler(
         if (patch.gkedExtra) next.gkedExtra = [...new Set(patch.gkedExtra)];
         if (patch.benefits) next.benefits = uniqueBy(patch.benefits);
         if (patch.bases) next.bases = [...new Set(patch.bases)];
+        const office = await officeBenefitsOf(
+          tx,
+          next.benefits,
+          { from: before.taxOfficeCode, to: next.taxOfficeCode },
+          t,
+        );
+        next.benefits = office.benefits;
         const confirmation = await checkContractor(tx, next, {
           before: { id, fields: before },
           gkedConfirm: gkedConfirm ?? false,
@@ -312,13 +353,22 @@ export function updateContractorHandler(
           {
             ...Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined)),
             ...(patch.gkedExtra ? { gkedExtra: next.gkedExtra } : {}),
-            ...(patch.benefits ? { benefits: next.benefits } : {}),
+            ...(patch.benefits || office.notes.length ? { benefits: next.benefits } : {}),
             ...(patch.bases ? { bases: next.bases } : {}),
             gkedConfirmation: confirmation,
           },
           scope,
+          {
+            today,
+            texts: {
+              byStatus: t('report.reason.due_status'),
+              byCatalog: t('report.reason.due_catalog'),
+              byCatalogDropped: t('report.reason.due_catalog_dropped'),
+            },
+          },
         );
-        return savedOut(tx, id, { orgId: ctx.orgId, subject, today, t });
+        await writeContractorNotes(tx, id, office.notes);
+        return savedOut(tx, id, { orgId: ctx.orgId, subject, today, t, notices: office.notes });
       });
     }
   };

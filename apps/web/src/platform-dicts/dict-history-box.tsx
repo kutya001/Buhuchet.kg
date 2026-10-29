@@ -11,7 +11,7 @@ import { pdictsHistoryQuery } from './pdicts-data';
  * «История изменений · N» под списком справочника (прототип pdHistHtml): последние записи, сначала
  * новые — что изменено словами и кто. Пока изменений нет, блока нет.
  */
-export function DictHistory({ dict }: { dict: AdminValueDict }) {
+export function DictHistory({ dict }: { dict: AdminValueDict | 'calendar' }) {
   const t = useT();
   const history = useQuery(pdictsHistoryQuery(dict));
   if (!history.data?.total) return null;

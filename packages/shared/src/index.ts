@@ -5,6 +5,7 @@ export * from './auth';
 export * from './telegram';
 export * from './staff';
 export * from './contractors';
+export * from './reports';
 export * from './tasks';
 export * from './roles';
 export * from './org';

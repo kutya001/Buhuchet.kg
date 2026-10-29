@@ -21,6 +21,7 @@ import { platformDictsModule } from './modules/platform-dicts';
 import { dictsModule } from './modules/dicts';
 import { filesModule } from './modules/files';
 import { LOGO_PATH } from './modules/org/logo';
+import { reportsModule } from './modules/reports';
 import { rolesModule } from './modules/roles';
 import { staffModule } from './modules/staff';
 import { systemModule } from './modules/system';
@@ -85,6 +86,7 @@ export function createApp(deps: ApiDeps) {
     .route('/', staffModule(deps))
     .route('/', rolesModule(deps))
     .route('/', contractorsModule(deps))
+    .route('/', reportsModule(deps))
     .route('/', tasksModule(deps))
     .route('/', orgModule(deps))
     .route('/', onboardingModule(deps))

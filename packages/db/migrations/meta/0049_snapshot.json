@@ -1,5 +1,5 @@
 {
-  "id": "74958894-55dd-4130-b3ce-5e0d59d1ca1e",
+  "id": "d37fd20b-75f3-4936-99da-e1f97f53da6e",
   "prevId": "40967d75-91ba-45f6-a7b7-f04642ea4582",
   "version": "7",
   "dialect": "postgresql",
@@ -2322,6 +2322,962 @@
       },
       "isRLSEnabled": true
     },
+    "public.assignments": {
+      "name": "assignments",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "org_id": {
+          "name": "org_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "app.current_org_id()"
+        },
+        "contractor_id": {
+          "name": "contractor_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "report_type_code": {
+          "name": "report_type_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "from_month": {
+          "name": "from_month",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "until_month": {
+          "name": "until_month",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ended_on": {
+          "name": "ended_on",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "responsible_employee_id": {
+          "name": "responsible_employee_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "rate": {
+          "name": "rate",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "en_rates": {
+          "name": "en_rates",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "rate_additions": {
+          "name": "rate_additions",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'"
+        },
+        "due_day": {
+          "name": "due_day",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "own_period": {
+          "name": "own_period",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "own_day": {
+          "name": "own_day",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "own_month": {
+          "name": "own_month",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fixed_amount": {
+          "name": "fixed_amount",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "note": {
+          "name": "note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_by": {
+          "name": "updated_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        }
+      },
+      "indexes": {
+        "assignments_active_key": {
+          "name": "assignments_active_key",
+          "columns": [
+            {
+              "expression": "org_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "contractor_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "report_type_code",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"assignments\".\"ended_on\" is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "assignments_type_idx": {
+          "name": "assignments_type_idx",
+          "columns": [
+            {
+              "expression": "org_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "report_type_code",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "assignments_org_id_organizations_id_fk": {
+          "name": "assignments_org_id_organizations_id_fk",
+          "tableFrom": "assignments",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "org_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "assignments_report_type_code_report_types_code_fk": {
+          "name": "assignments_report_type_code_report_types_code_fk",
+          "tableFrom": "assignments",
+          "tableTo": "report_types",
+          "columnsFrom": [
+            "report_type_code"
+          ],
+          "columnsTo": [
+            "code"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "assignments_created_by_users_id_fk": {
+          "name": "assignments_created_by_users_id_fk",
+          "tableFrom": "assignments",
+          "tableTo": "users",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "assignments_updated_by_users_id_fk": {
+          "name": "assignments_updated_by_users_id_fk",
+          "tableFrom": "assignments",
+          "tableTo": "users",
+          "columnsFrom": [
+            "updated_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "assignments_contractor_fk": {
+          "name": "assignments_contractor_fk",
+          "tableFrom": "assignments",
+          "tableTo": "contractors",
+          "columnsFrom": [
+            "contractor_id",
+            "org_id"
+          ],
+          "columnsTo": [
+            "id",
+            "org_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "assignments_responsible_fk": {
+          "name": "assignments_responsible_fk",
+          "tableFrom": "assignments",
+          "tableTo": "employees",
+          "columnsFrom": [
+            "responsible_employee_id",
+            "org_id"
+          ],
+          "columnsTo": [
+            "id",
+            "org_id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "assignments_id_org_unique": {
+          "name": "assignments_id_org_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "org_id"
+          ]
+        }
+      },
+      "policies": {
+        "assignments_isolation": {
+          "name": "assignments_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "buhuchet_app"
+          ],
+          "using": "\"assignments\".\"org_id\" = app.current_org_id()",
+          "withCheck": "\"assignments\".\"org_id\" = app.current_org_id()"
+        }
+      },
+      "checkConstraints": {
+        "assignments_from_check": {
+          "name": "assignments_from_check",
+          "value": "\"assignments\".\"from_month\" = date_trunc('month', \"assignments\".\"from_month\")::date"
+        },
+        "assignments_until_check": {
+          "name": "assignments_until_check",
+          "value": "\"assignments\".\"until_month\" is null or (\"assignments\".\"until_month\" = date_trunc('month', \"assignments\".\"until_month\")::date and \"assignments\".\"until_month\" >= \"assignments\".\"from_month\")"
+        },
+        "assignments_due_day_check": {
+          "name": "assignments_due_day_check",
+          "value": "\"assignments\".\"due_day\" is null or \"assignments\".\"due_day\" in (10, 15, 20, 25, 31)"
+        },
+        "assignments_own_check": {
+          "name": "assignments_own_check",
+          "value": "(\"assignments\".\"own_period\" is null and \"assignments\".\"own_day\" is null and \"assignments\".\"own_month\" is null) or (\"assignments\".\"own_period\" in ('M', 'Q', 'H', 'Y') and \"assignments\".\"own_day\" between 1 and 31 and \"assignments\".\"own_month\" between case when \"assignments\".\"own_period\" = 'Y' then 1 else 0 end and 12)"
+        },
+        "assignments_en_rates_check": {
+          "name": "assignments_en_rates_check",
+          "value": "jsonb_typeof(\"assignments\".\"en_rates\") = 'array'"
+        },
+        "assignments_fixed_check": {
+          "name": "assignments_fixed_check",
+          "value": "\"assignments\".\"fixed_amount\" is null or \"assignments\".\"fixed_amount\" >= 0"
+        }
+      },
+      "isRLSEnabled": true
+    },
+    "public.report_due_changes": {
+      "name": "report_due_changes",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "org_id": {
+          "name": "org_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "app.current_org_id()"
+        },
+        "report_id": {
+          "name": "report_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "from_due": {
+          "name": "from_due",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "to_due": {
+          "name": "to_due",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reason_code": {
+          "name": "reason_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "comment": {
+          "name": "comment",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "app.current_user_id()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "report_due_changes_report_idx": {
+          "name": "report_due_changes_report_idx",
+          "columns": [
+            {
+              "expression": "org_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "report_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "report_due_changes_org_id_organizations_id_fk": {
+          "name": "report_due_changes_org_id_organizations_id_fk",
+          "tableFrom": "report_due_changes",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "org_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "report_due_changes_reason_code_due_change_reasons_code_fk": {
+          "name": "report_due_changes_reason_code_due_change_reasons_code_fk",
+          "tableFrom": "report_due_changes",
+          "tableTo": "due_change_reasons",
+          "columnsFrom": [
+            "reason_code"
+          ],
+          "columnsTo": [
+            "code"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "report_due_changes_created_by_users_id_fk": {
+          "name": "report_due_changes_created_by_users_id_fk",
+          "tableFrom": "report_due_changes",
+          "tableTo": "users",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "report_due_changes_report_fk": {
+          "name": "report_due_changes_report_fk",
+          "tableFrom": "report_due_changes",
+          "tableTo": "reports",
+          "columnsFrom": [
+            "report_id",
+            "org_id"
+          ],
+          "columnsTo": [
+            "id",
+            "org_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "report_due_changes_isolation": {
+          "name": "report_due_changes_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "buhuchet_app"
+          ],
+          "using": "\"report_due_changes\".\"org_id\" = app.current_org_id()",
+          "withCheck": "\"report_due_changes\".\"org_id\" = app.current_org_id()"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.reports": {
+      "name": "reports",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "org_id": {
+          "name": "org_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "app.current_org_id()"
+        },
+        "contractor_id": {
+          "name": "contractor_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "report_type_code": {
+          "name": "report_type_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "assignment_id": {
+          "name": "assignment_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "period": {
+          "name": "period",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "period_start": {
+          "name": "period_start",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "event_date": {
+          "name": "event_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "act": {
+          "name": "act",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "revision": {
+          "name": "revision",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "superseded": {
+          "name": "superseded",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "due_base": {
+          "name": "due_base",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "due_date": {
+          "name": "due_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "due_manual": {
+          "name": "due_manual",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "pay_due": {
+          "name": "pay_due",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'todo'"
+        },
+        "submitted_on": {
+          "name": "submitted_on",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "submitted_at": {
+          "name": "submitted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "submitted_by": {
+          "name": "submitted_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "confirmed_at": {
+          "name": "confirmed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "confirmed_by": {
+          "name": "confirmed_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "confirm_note": {
+          "name": "confirm_note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "amount": {
+          "name": "amount",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "amount_auto": {
+          "name": "amount_auto",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "responsible_employee_id": {
+          "name": "responsible_employee_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_by": {
+          "name": "updated_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        }
+      },
+      "indexes": {
+        "reports_due_idx": {
+          "name": "reports_due_idx",
+          "columns": [
+            {
+              "expression": "org_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "due_date",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "reports_contractor_idx": {
+          "name": "reports_contractor_idx",
+          "columns": [
+            {
+              "expression": "org_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "contractor_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "report_type_code",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "reports_responsible_idx": {
+          "name": "reports_responsible_idx",
+          "columns": [
+            {
+              "expression": "org_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "responsible_employee_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "reports_org_id_organizations_id_fk": {
+          "name": "reports_org_id_organizations_id_fk",
+          "tableFrom": "reports",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "org_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "reports_report_type_code_report_types_code_fk": {
+          "name": "reports_report_type_code_report_types_code_fk",
+          "tableFrom": "reports",
+          "tableTo": "report_types",
+          "columnsFrom": [
+            "report_type_code"
+          ],
+          "columnsTo": [
+            "code"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "reports_submitted_by_users_id_fk": {
+          "name": "reports_submitted_by_users_id_fk",
+          "tableFrom": "reports",
+          "tableTo": "users",
+          "columnsFrom": [
+            "submitted_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "reports_confirmed_by_users_id_fk": {
+          "name": "reports_confirmed_by_users_id_fk",
+          "tableFrom": "reports",
+          "tableTo": "users",
+          "columnsFrom": [
+            "confirmed_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "reports_created_by_users_id_fk": {
+          "name": "reports_created_by_users_id_fk",
+          "tableFrom": "reports",
+          "tableTo": "users",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "reports_updated_by_users_id_fk": {
+          "name": "reports_updated_by_users_id_fk",
+          "tableFrom": "reports",
+          "tableTo": "users",
+          "columnsFrom": [
+            "updated_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "reports_contractor_fk": {
+          "name": "reports_contractor_fk",
+          "tableFrom": "reports",
+          "tableTo": "contractors",
+          "columnsFrom": [
+            "contractor_id",
+            "org_id"
+          ],
+          "columnsTo": [
+            "id",
+            "org_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "reports_assignment_fk": {
+          "name": "reports_assignment_fk",
+          "tableFrom": "reports",
+          "tableTo": "assignments",
+          "columnsFrom": [
+            "assignment_id",
+            "org_id"
+          ],
+          "columnsTo": [
+            "id",
+            "org_id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "reports_responsible_fk": {
+          "name": "reports_responsible_fk",
+          "tableFrom": "reports",
+          "tableTo": "employees",
+          "columnsFrom": [
+            "responsible_employee_id",
+            "org_id"
+          ],
+          "columnsTo": [
+            "id",
+            "org_id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "reports_id_org_unique": {
+          "name": "reports_id_org_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "org_id"
+          ]
+        },
+        "reports_period_key": {
+          "name": "reports_period_key",
+          "nullsNotDistinct": true,
+          "columns": [
+            "org_id",
+            "contractor_id",
+            "report_type_code",
+            "period_start",
+            "event_date",
+            "revision"
+          ]
+        }
+      },
+      "policies": {
+        "reports_isolation": {
+          "name": "reports_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "buhuchet_app"
+          ],
+          "using": "\"reports\".\"org_id\" = app.current_org_id()",
+          "withCheck": "\"reports\".\"org_id\" = app.current_org_id()"
+        }
+      },
+      "checkConstraints": {
+        "reports_period_check": {
+          "name": "reports_period_check",
+          "value": "\"reports\".\"period\" in ('M', 'Q', 'H', 'Y')"
+        },
+        "reports_period_start_check": {
+          "name": "reports_period_start_check",
+          "value": "\"reports\".\"period_start\" = date_trunc('month', \"reports\".\"period_start\")::date"
+        },
+        "reports_event_check": {
+          "name": "reports_event_check",
+          "value": "\"reports\".\"event_date\" is null or date_trunc('month', \"reports\".\"event_date\")::date = \"reports\".\"period_start\""
+        },
+        "reports_revision_check": {
+          "name": "reports_revision_check",
+          "value": "\"reports\".\"revision\" >= 0"
+        },
+        "reports_act_check": {
+          "name": "reports_act_check",
+          "value": "\"reports\".\"act\" in ('sub', 'pay', 'both')"
+        },
+        "reports_status_check": {
+          "name": "reports_status_check",
+          "value": "\"reports\".\"status\" in ('todo', 'in_progress', 'submitted', 'needs_fix', 'not_required')"
+        },
+        "reports_amount_check": {
+          "name": "reports_amount_check",
+          "value": "\"reports\".\"amount\" is null or \"reports\".\"amount\" >= 0"
+        }
+      },
+      "isRLSEnabled": true
+    },
     "public.task_comments": {
       "name": "task_comments",
       "schema": "",
@@ -3123,217 +4079,6 @@
           ],
           "using": "\"org_settings\".\"org_id\" = app.current_org_id()",
           "withCheck": "\"org_settings\".\"org_id\" = app.current_org_id()"
-        }
-      },
-      "checkConstraints": {},
-      "isRLSEnabled": true
-    },
-    "public.org_onboarding": {
-      "name": "org_onboarding",
-      "schema": "",
-      "columns": {
-        "org_id": {
-          "name": "org_id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "state": {
-          "name": "state",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'new'"
-        },
-        "answers": {
-          "name": "answers",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'{}'::jsonb"
-        },
-        "done_at": {
-          "name": "done_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "done_by": {
-          "name": "done_by",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "version": {
-          "name": "version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "org_onboarding_org_id_organizations_id_fk": {
-          "name": "org_onboarding_org_id_organizations_id_fk",
-          "tableFrom": "org_onboarding",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "org_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "org_onboarding_done_by_users_id_fk": {
-          "name": "org_onboarding_done_by_users_id_fk",
-          "tableFrom": "org_onboarding",
-          "tableTo": "users",
-          "columnsFrom": [
-            "done_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {
-        "org_onboarding_isolation": {
-          "name": "org_onboarding_isolation",
-          "as": "PERMISSIVE",
-          "for": "ALL",
-          "to": [
-            "buhuchet_app"
-          ],
-          "using": "\"org_onboarding\".\"org_id\" = app.current_org_id()",
-          "withCheck": "\"org_onboarding\".\"org_id\" = app.current_org_id()"
-        }
-      },
-      "checkConstraints": {
-        "org_onboarding_state_check": {
-          "name": "org_onboarding_state_check",
-          "value": "\"org_onboarding\".\"state\" in ('new', 'later', 'done')"
-        }
-      },
-      "isRLSEnabled": true
-    },
-    "public.welcome_seen": {
-      "name": "welcome_seen",
-      "schema": "",
-      "columns": {
-        "user_id": {
-          "name": "user_id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "org_id": {
-          "name": "org_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "app.current_org_id()"
-        },
-        "seen_at": {
-          "name": "seen_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "welcome_seen_org_idx": {
-          "name": "welcome_seen_org_idx",
-          "columns": [
-            {
-              "expression": "org_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "welcome_seen_user_id_users_id_fk": {
-          "name": "welcome_seen_user_id_users_id_fk",
-          "tableFrom": "welcome_seen",
-          "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "welcome_seen_org_id_organizations_id_fk": {
-          "name": "welcome_seen_org_id_organizations_id_fk",
-          "tableFrom": "welcome_seen",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "org_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "welcome_seen_user_org_fk": {
-          "name": "welcome_seen_user_org_fk",
-          "tableFrom": "welcome_seen",
-          "tableTo": "users",
-          "columnsFrom": [
-            "user_id",
-            "org_id"
-          ],
-          "columnsTo": [
-            "id",
-            "org_id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {
-        "welcome_seen_own": {
-          "name": "welcome_seen_own",
-          "as": "PERMISSIVE",
-          "for": "ALL",
-          "to": [
-            "buhuchet_app"
-          ],
-          "using": "\"welcome_seen\".\"org_id\" = app.current_org_id() and \"welcome_seen\".\"user_id\" = app.current_user_id()",
-          "withCheck": "\"welcome_seen\".\"org_id\" = app.current_org_id() and \"welcome_seen\".\"user_id\" = app.current_user_id()"
         }
       },
       "checkConstraints": {},

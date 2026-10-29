@@ -28,6 +28,16 @@ describe('Подключение вида отчёта и настройки о�
     expect(orgReportTypeProblem(both, { enabled: true }, { enabled: false })).toBeNull();
   });
 
+  it('вид, назначенный действующим контрагентам, не отключается', () => {
+    expect(orgReportTypeProblem(both, { enabled: true }, { enabled: false }, 2)).toBe(
+      'report_type_assigned',
+    );
+    expect(orgReportTypeProblem(both, { enabled: true }, { enabled: false }, 0)).toBeNull();
+    // Уже отключённый вид и правка настроек назначенного вида — можно.
+    expect(orgReportTypeProblem(both, { enabled: false }, { enabled: false }, 2)).toBeNull();
+    expect(orgReportTypeProblem(both, { enabled: true }, { needReceipt: true }, 2)).toBeNull();
+  });
+
   it('у вида «Уплата» нет «Файла при сдаче»; дни — от 1 до 60', () => {
     expect(
       orgReportTypeProblem({ active: true, act: 'pay' }, { enabled: true }, { needFile: true }),
