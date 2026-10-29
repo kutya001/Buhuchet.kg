@@ -103,6 +103,7 @@ export const manualSource: FileListSource = {
 };
 
 /** Файлы задач в списке: модуль «Задачи» включён; видны задачи, которые сотрудник может открыть. */
+// ОТКЛОНЕНИЕ: docs/deviations.md#Г-9 — в прототипе видны файлы всех задач контрагентов области.
 function taskFilesList({ subject, features }: FileListContext): FileListPart | null {
   return features.tasks ? taskFilesPart(taskAccessOf(subject)) : null;
 }

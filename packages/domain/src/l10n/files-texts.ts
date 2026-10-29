@@ -54,7 +54,12 @@ export const FILES_TEXTS = {
   'files.count.one': { ru: '{n} файл', section: FM },
   'files.count.few': { ru: '{n} файла', section: FM },
   'files.count.many': { ru: '{n} файлов', section: FM },
-  'files.empty.add': { ru: 'Загрузить файл', section: FM },
+  'files.empty.first': { ru: 'Здесь будут все файлы организации', section: FM },
+  'files.empty.first_text': {
+    ru: 'Отчёты, квитанции и документы, прикреплённые в любом модуле, собираются сюда сами.',
+    section: FM,
+  },
+  'files.empty.add': { ru: 'Добавить', section: FM },
   'files.act.open': { ru: 'Открыть', section: FM },
   'files.act.download': { ru: 'Скачать', section: FM },
   'files.act.source': { ru: 'Перейти к источнику', section: FM },
@@ -71,6 +76,7 @@ export const FILES_TEXTS = {
     ru: 'Просмотр — только у картинок и PDF: остальные файлы скачиваются',
     section: FM,
   },
+  'files.window.open_tab': { ru: 'Открыть в новой вкладке', section: FM },
   'files.window.preview_error': {
     ru: 'Не удалось показать файл. Скачайте его',
     section: FM,

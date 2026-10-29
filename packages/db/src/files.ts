@@ -28,7 +28,7 @@ import {
   tasks,
   type FileState,
 } from './schema';
-import { textLiteral } from './sql-text';
+import { dictLiteral, textLiteral } from './sql-text';
 
 /** Описание файла организации (без комментария ручной загрузки — он у Файлового менеджера). */
 export interface FileRecord {
@@ -162,6 +162,55 @@ export async function markFileDeleted(tx: Tx, id: string, version: number): Prom
     .where(and(eq(files.id, id), eq(files.version, version)));
 }
 
+/**
+ * Файлы удаляемого контрагента — в той же транзакции, что и удаление: загруженные получают отметку
+ * «удалён» с автором и временем, незаконченные загрузки стираются. Иначе по `on delete set null` они
+ * стали бы общими файлами организации, видными всем. Ответ — ключи хранилища: файлы оттуда удаляют
+ * после фиксации.
+ */
+export async function deleteContractorFiles(tx: Tx, contractorId: string): Promise<string[]> {
+  const ready = await tx
+    .update(files)
+    .set({
+      state: 'deleted',
+      deletedAt: sql`now()`,
+      deletedBy: sql`app.current_user_id()`,
+      version: sql`${files.version} + 1`,
+      updatedAt: sql`now()`,
+      updatedBy: sql`app.current_user_id()`,
+    })
+    .where(and(eq(files.contractorId, contractorId), eq(files.state, 'ready')))
+    .returning({ storageKey: files.storageKey });
+  const pending = await tx
+    .delete(files)
+    .where(and(eq(files.contractorId, contractorId), eq(files.state, 'pending')))
+    .returning({ storageKey: files.storageKey });
+  return [...ready, ...pending].map((f) => f.storageKey);
+}
+
+/**
+ * У записи сменился контрагент (задача): её файлы — за новым, иначе область «Свои контрагенты» в
+ * Файловом менеджере смотрела бы на прежнего.
+ */
+export async function moveSourceFiles(
+  tx: Tx,
+  kind: FileSourceKind,
+  sourceId: string,
+  contractorId: string | null,
+): Promise<void> {
+  await tx
+    .update(files)
+    .set({
+      contractorId,
+      version: sql`${files.version} + 1`,
+      updatedAt: sql`now()`,
+      updatedBy: sql`app.current_user_id()`,
+    })
+    .where(
+      and(eq(files.sourceKind, kind), eq(files.sourceId, sourceId), ne(files.state, 'deleted')),
+    );
+}
+
 /** Убрать запись незаконченной загрузки (файл не дошёл или оказался больше предела). */
 export async function dropPendingFile(tx: Tx, id: string): Promise<void> {
   await tx.delete(files).where(and(eq(files.id, id), eq(files.state, 'pending')));
@@ -214,7 +263,7 @@ export type FileListParts = Readonly<Partial<Record<FileSourceKind, FileListPart
 
 /** «Загружен вручную»: файл без записи, виден по одной области группы «Файловый менеджер». */
 export function manualFilesPart(t: ListTexts): FileListPart {
-  return { visible: undefined, source: sql`${textLiteral(t('files.kind.manual'))}::text` };
+  return { visible: undefined, source: sql`${dictLiteral(t('files.kind.manual'))}::text` };
 }
 
 /**
@@ -234,7 +283,7 @@ export function taskFilesPart(access: SQL | undefined): FileListPart {
  */
 export function indicatorFilesPart(scope: SQL | undefined, t: ListTexts): FileListPart {
   const month = sql`(substr(${indicatorValues.month}, 6, 2) || '.' || substr(${indicatorValues.month}, 1, 4))`;
-  const label = sql`replace(replace(${textLiteral(t('files.src.indicator'))}::text, '{name}', ${indicators.name}), '{month}', ${month})`;
+  const label = sql`replace(replace(${dictLiteral(t('files.src.indicator'))}::text, '{name}', ${indicators.name}), '{month}', ${month})`;
   return {
     visible: sql`exists (select 1 from ${indicatorValues} join ${contractors} on ${contractors.id} = ${indicatorValues.contractorId} where ${indicatorValues.id} = ${files.sourceId} and ${scope ?? sql`true`})`,
     source: sql`(select ${label} from ${indicatorValues} join ${indicators} on ${indicators.id} = ${indicatorValues.indicatorId} where ${indicatorValues.id} = ${files.sourceId})`,

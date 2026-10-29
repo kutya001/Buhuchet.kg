@@ -50,16 +50,30 @@ function Preview({ file }: { file: FileManagerRow }) {
         <img
           src={link.data.url}
           alt={file.name}
+          referrerPolicy="no-referrer"
           className="max-h-[60vh] max-w-full rounded-[10px] object-contain"
         />
       </div>
     ) : (
-      <iframe
-        data-file-preview="pdf"
-        src={link.data.url}
-        title={file.name}
-        className="h-[60vh] w-full rounded-[10px] border border-line bg-raised"
-      />
+      <div className="flex flex-col items-end gap-1.5">
+        <iframe
+          data-file-preview="pdf"
+          src={link.data.url}
+          title={file.name}
+          referrerPolicy="no-referrer"
+          className="h-[60vh] w-full rounded-[10px] border border-line bg-raised"
+        />
+        {/* Браузер телефона PDF во фрейме часто не показывает — открыть его отдельно. */}
+        <a
+          href={link.data.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          data-file-open-tab=""
+          className="text-[13px] break-words text-link"
+        >
+          {t('files.window.open_tab')}
+        </a>
+      </div>
     );
   }
   return (

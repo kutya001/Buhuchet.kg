@@ -1,6 +1,7 @@
 import type { MemoryStorage } from '@buhuchet/adapters';
 import { schema } from '@buhuchet/db';
 import { databaseAvailable, seedAllPlatformDictionaries } from '@buhuchet/db/testing';
+import { bishkekDate } from '@buhuchet/domain';
 import {
   ApiError,
   Contractor,
@@ -241,6 +242,7 @@ describe.skipIf(!databaseAvailable())('Файловый менеджер: мет
         { kind: 'manual', count: 2 },
       ],
       canUpload: true,
+      empty: false,
     });
     const filters = encodeURIComponent(
       JSON.stringify({ kind: { type: 'enum', vals: ['manual'] } }),
@@ -272,12 +274,15 @@ describe.skipIf(!databaseAvailable())('Файловый менеджер: мет
 
   it('без права «Просматривать файлы» — 403; чужая организация не видит файлов организации А', async () => {
     expect((await call('GET', '/api/files/manager', senior)).status).toBe(403);
-    expect((await call('GET', '/api/files/usage', senior)).status).toBe(403);
+    // «Хранилище файлов» в «Настройках» видят все (прототип org.js, `#org-storage`).
+    expect((await call('GET', '/api/files/usage', senior)).status).toBe(200);
     await f.t.admin.db
       .update(schema.orgSettings)
       .set({ features: { files: true, tasks: true } })
       .where(eq(schema.orgSettings.orgId, f.b.orgId));
     expect((await manager(accB)).items).toEqual([]);
+    // Пустой модуль — «Здесь будут все файлы организации» на экране.
+    expect((await summary(accB)).empty).toBe(true);
     expect(FileUsage.parse(await (await call('GET', '/api/files/usage', accB)).json())).toEqual({
       bytes: 0,
       count: 0,
@@ -366,5 +371,80 @@ describe.skipIf(!databaseAvailable())('Файловый менеджер: мет
     expect(text).toContain('Договор обслуживания.pdf');
     expect(text).toContain('Сверка с Ала-Тоо');
     expect(text).not.toContain('Садыков');
+  });
+
+  it('фильтр по дате загрузки', async () => {
+    const today = bishkekDate(new Date());
+    const total = (await manager(owner)).total;
+    const on = (from: string, to: string) =>
+      `filters=${encodeURIComponent(JSON.stringify({ date: { type: 'date', from, to } }))}`;
+    expect((await manager(owner, on(today, today))).total).toBe(total);
+    expect((await manager(owner, on('2020-01-01', '2020-12-31'))).total).toBe(0);
+  });
+
+  it('удаление из списка файла контрагента: файла нет в списке, в истории — у контрагента', async () => {
+    const id = await upload(owner, {
+      source: MANUAL,
+      name: 'Акт на удаление.pdf',
+      contractorId: cpAcc.id,
+    });
+    const row = (await manager(owner, `q=${encodeURIComponent('Акт на удаление')}`)).items[0]!;
+    const del = await call('DELETE', `/api/files/${id}?version=${row.version}`, owner);
+    expect(del.status, JSON.stringify(await del.clone().json())).toBe(200);
+    expect(await names(owner)).not.toContain('Акт на удаление.pdf');
+    const [entry] = await f.t.admin.db
+      .select({ entity: schema.auditLog.entity, contractorId: schema.auditLog.contractorId })
+      .from(schema.auditLog)
+      .where(and(eq(schema.auditLog.entityId, id), eq(schema.auditLog.action, 'file_delete')));
+    expect(entry).toEqual({ entity: 'file', contractorId: cpAcc.id });
+  });
+
+  it('сменили контрагента задачи — её файл в списке за новым контрагентом', async () => {
+    const body = {
+      title: 'Переезд документов',
+      description: '',
+      categoryCode: 'КАТ-001',
+      contractorId: null,
+      executorEmployeeId: employee('acc-a'),
+      term: 'day',
+      dueDate: '2026-10-25',
+      needFile: false,
+      confirm: true,
+    };
+    const moved = await task(owner, body);
+    const id = await upload(acc, {
+      source: { kind: 'task', id: moved.id },
+      name: 'Опись документов.pdf',
+    });
+    // Задача без контрагента — файл общий, бухгалтер со «Свои» его видит.
+    expect(await names(acc)).toContain('Опись документов.pdf');
+    const res = await call('PATCH', `/api/tasks/${moved.id}`, owner, {
+      ...body,
+      contractorId: cpOther.id,
+      version: moved.version,
+    });
+    expect(res.status, JSON.stringify(await res.clone().json())).toBe(200);
+    // Теперь файл — у контрагента главного бухгалтера: в списке бухгалтера его нет.
+    expect(await names(acc)).not.toContain('Опись документов.pdf');
+    const row = (await manager(owner, `q=${encodeURIComponent('Опись документов')}`)).items[0];
+    expect(row).toMatchObject({ id, contractor: { id: cpOther.id } });
+  });
+
+  it('удалили контрагента — его файлы удалены вместе с ним, а не стали общими файлами организации', async () => {
+    const tmp = await contractor('ОсОО «Временный»', '03744097401853', employee('acc-a'));
+    const id = await upload(owner, { source: MANUAL, name: 'Временный.pdf', contractorId: tmp.id });
+    const [stored] = await f.t.admin.db
+      .select({ key: schema.files.storageKey })
+      .from(schema.files)
+      .where(eq(schema.files.id, id));
+    const del = await call('DELETE', `/api/contractors/${tmp.id}`, owner);
+    expect(del.status).toBe(204);
+    const [row] = await f.t.admin.db
+      .select({ state: schema.files.state, contractorId: schema.files.contractorId })
+      .from(schema.files)
+      .where(eq(schema.files.id, id));
+    expect(row).toEqual({ state: 'deleted', contractorId: null });
+    expect(await names(owner)).not.toContain('Временный.pdf');
+    expect(await f.deps.storage.exists(stored!.key)).toBe(false);
   });
 });

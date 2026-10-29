@@ -166,6 +166,11 @@ async function dropObject(deps: ApiDeps, key: string): Promise<void> {
   }
 }
 
+/** Удалить файлы из хранилища после фиксации — например, файлы удалённого контрагента. */
+export async function dropObjects(deps: ApiDeps, keys: readonly string[]): Promise<void> {
+  for (const key of keys) await dropObject(deps, key);
+}
+
 export const listFilesRoute = createRoute({
   method: 'get',
   path: '/files',

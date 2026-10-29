@@ -11,6 +11,7 @@ import {
 import { and, asc, count, desc, eq, inArray, isNotNull, or, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { Tx } from './client';
+import { moveSourceFiles } from './files';
 import { updateWithHistory, writeHistory } from './history';
 import {
   auditActorValue,
@@ -696,6 +697,10 @@ export async function updateTask(
     patch: { ...fields, ...(status ? { status: status.to } : {}) },
     contractorId: fields.contractorId ?? contractorBefore,
   });
+  // Файлы задачи — за её контрагентом (область «Свои» в Файловом менеджере).
+  if (fields.contractorId !== contractorBefore) {
+    await moveSourceFiles(tx, 'task', id, fields.contractorId);
+  }
   if (status) await writeStatusChange(tx, { scale: 'task', entityId: id, ...status });
 }
 

@@ -52,6 +52,16 @@ async function openManager(page: Page, isMobile: boolean, text: string) {
 
 const fileRow = (page: Page, id: string) => page.locator(`[data-grid] [data-id="${id}"]`);
 
+/** Учётная политика: включить или выключить «Файлы в карточках». */
+async function filesFeature(api: APIRequestContext, origin: string, files: boolean) {
+  const current = (await (await api.get('/api/org/policy')).json()) as { version: number };
+  const res = await api.patch('/api/org/policy', {
+    headers: { origin },
+    data: { version: current.version, features: { files } },
+  });
+  expect(res.status(), await res.text()).toBe(200);
+}
+
 test.describe('Этап 2: Файловый менеджер', () => {
   test('(проверка задачи #85) бухгалтер со «Свои» не видит файлов чужих контрагентов; общий файл и файл своего — видит', async ({
     page,
@@ -83,6 +93,16 @@ test.describe('Этап 2: Файловый менеджер', () => {
     await owner.dispose();
 
     await openManager(page, isMobile, tag);
+    // Столбцы по умолчанию — как в ТЗ: название, источник, контрагент, дата, кто загрузил.
+    if (!isMobile) {
+      await expect
+        .poll(() =>
+          page
+            .locator('[data-grid] th[data-column]')
+            .evaluateAll((ths) => ths.map((th) => th.getAttribute('data-column'))),
+        )
+        .toEqual(['name', 'src', 'cp', 'date', 'by']);
+    }
     await expect(fileRow(page, general)).toBeVisible();
     await expect(fileRow(page, ofMine)).toBeVisible();
     await expect(fileRow(page, ofOther)).toHaveCount(0);
@@ -155,16 +175,7 @@ test.describe('Этап 2: Файловый менеджер', () => {
   }) => {
     const origin = new URL(baseURL!).origin;
     await newOrgOwner(page.request, origin);
-    const policy = async (files: boolean) => {
-      const current = (await (await page.request.get('/api/org/policy')).json()) as {
-        version: number;
-      };
-      const res = await page.request.patch('/api/org/policy', {
-        headers: { origin },
-        data: { version: current.version, features: { files } },
-      });
-      expect(res.status(), await res.text()).toBe(200);
-    };
+    const policy = (files: boolean) => filesFeature(page.request, origin, files);
     await policy(true);
 
     await page.goto('/app/kb/lessons');
@@ -204,6 +215,23 @@ test.describe('Этап 2: Файловый менеджер', () => {
     await page.reload();
     await expect(page.locator('[data-kb-step="upload"]')).toBeVisible();
     await expect(page.locator('[data-kb-step="ffind"]')).toBeVisible();
+  });
+
+  test('пустой модуль: «Здесь будут все файлы организации» с пояснением, «Добавить» открывает окно загрузки', async ({
+    page,
+    baseURL,
+  }) => {
+    const origin = new URL(baseURL!).origin;
+    await newOrgOwner(page.request, origin);
+    await filesFeature(page.request, origin, true);
+    await page.goto('/app/files');
+    const grid = page.locator('[data-grid]');
+    await expect(grid).toContainText('Здесь будут все файлы организации');
+    await expect(grid).toContainText(
+      'Отчёты, квитанции и документы, прикреплённые в любом модуле, собираются сюда сами.',
+    );
+    await grid.getByRole('button', { name: 'Добавить', exact: true }).click();
+    await expect(page.getByRole('dialog', { name: 'Загрузить файл' })).toBeVisible();
   });
 
   test('«Моя организация» → «Настройки»: «Хранилище файлов» — занято и сколько файлов', async ({

@@ -15,6 +15,7 @@ import {
   type Tx,
 } from '@buhuchet/db';
 import {
+  FILE_MESSAGES,
   fileDeleteRefusal,
   fileManagerPlates,
   filePreviewKind,
@@ -43,7 +44,7 @@ import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
 import { apiFail, listQueryOf, listQueryResponses } from '../../errors';
 import { exportRateResponses, withExportSlot, xlsxContent, xlsxResponse } from '../../lists/export';
-import { orgContextOf, requirePermission } from '../../middleware/access';
+import { orgContextOf, requireEmployee, requirePermission } from '../../middleware/access';
 import { serverTexts } from '../l10n/texts';
 import {
   downloadLink,
@@ -296,6 +297,7 @@ export function managerSummaryHandler(
       {
         plates: fileManagerPlates(counts.kinds as Partial<Record<FileSourceKind, number>>),
         canUpload: hasPermission(subjectOf(c), 'filesUpload'),
+        empty: counts.count === 0,
       },
       200,
     );
@@ -339,22 +341,24 @@ export const fileUsageRoute = createRoute({
   path: '/files/usage',
   tags: ['files'],
   summary: 'Хранилище файлов: занятый объём и число файлов',
-  middleware: [requirePermission('filesView')] as const,
+  middleware: [requireEmployee] as const,
   responses: {
     200: {
       description:
-        'Сколько занимают файлы, которые сотрудник видит в Файловом менеджере (у владельца — все)',
+        'Сколько занимают файлы в области группы «Файловый менеджер» — те же, что в списке модуля',
       content: { 'application/json': { schema: FileUsage } },
     },
     401: noAuth,
-    403: { description: 'Нет права «Просматривать файлы»', content: error },
+    403: { description: 'Вход не сотрудника организации', content: error },
   },
 });
 
 /**
  * «Хранилище файлов» в «Моя организация» → «Настройки» (прототип: `allFiles()` → «Занято … · файлов:
- * N»): те же файлы, что сотрудник видит в Файловом менеджере. Учётная политика не проверяется: файлы
- * занимают место и при выключенных «Файлах в карточках».
+ * N»): блок видят все, кто открывает «Настройки», как в прототипе, — без права «Просматривать файлы».
+ * Считаются файлы, как в прототипе, в области группы «Файловый менеджер» и только видимых видов
+ * источника: файлы задач — при включённых «Задачах». «Файлы в карточках» не проверяются: загруженные
+ * файлы занимают место и при выключенной функции.
  */
 export function fileUsageHandler(deps: ApiDeps): RouteHandler<typeof fileUsageRoute, AppEnv> {
   return async (c) => {
@@ -389,7 +393,7 @@ export function fileViewHandler(deps: ApiDeps): RouteHandler<typeof fileViewRout
   return async (c) => {
     const { file } = await visibleFile(deps, c, c.req.valid('param').id);
     if (!filePreviewKind(file.contentType)) {
-      apiFail(400, 'file_no_preview', 'Этот файл не открывается в окне: скачайте его');
+      apiFail(400, 'file_no_preview', FILE_MESSAGES.file_no_preview);
     }
     return c.json(await downloadLink(deps, file, { contentType: file.contentType }), 200);
   };

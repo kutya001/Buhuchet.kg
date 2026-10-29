@@ -114,6 +114,8 @@ export type FileManagerList = z.infer<typeof FileManagerList>;
 export const FileManagerSummary = z.object({
   plates: z.array(z.object({ kind: FileSourceKind, count: z.number().int().nonnegative() })),
   canUpload: z.boolean(),
+  /** Видимых файлов нет совсем — «Здесь будут все файлы организации» (пустой модуль). */
+  empty: z.boolean(),
 });
 export type FileManagerSummary = z.infer<typeof FileManagerSummary>;
 

@@ -4,21 +4,18 @@ import { formatCount } from '@buhuchet/domain';
 import { Box, Hint } from '@buhuchet/ui';
 import { useQuery } from '@tanstack/react-query';
 import { useT } from '../l10n/provider';
-import { useShell } from '../shell/context';
 import { fileSizeText, fileUsageQuery } from './files-data';
 
 /**
  * «Хранилище файлов» в «Моя организация» → «Настройки» (задача 2.29; ТЗ «в «Моя организация» виден
  * занятый объём»; прототип modules/org.js, `#org-storage`): «Занято 12,4 МБ · файлов: 37» и
- * «Ограничение на один файл — 20 МБ». Считаются файлы, которые сотрудник видит в Файловом менеджере;
- * без права «Просматривать файлы» блока нет.
+ * «Ограничение на один файл — 20 МБ». Блок видят все, кто открывает «Настройки», как в прототипе;
+ * считаются файлы в области группы «Файловый менеджер».
  */
 export function FilesStorageBox() {
   const t = useT();
-  const { access } = useShell();
-  const canView = access.can('filesView');
-  const usage = useQuery({ ...fileUsageQuery, enabled: canView });
-  if (!canView || !usage.data) return null;
+  const usage = useQuery(fileUsageQuery);
+  if (!usage.data) return null;
   return (
     <div data-org-storage="">
       <Box title={t('files.storage.title')}>

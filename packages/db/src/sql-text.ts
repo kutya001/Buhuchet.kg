@@ -9,3 +9,17 @@ import { sql, type SQL } from 'drizzle-orm';
 export function textLiteral(value: string): SQL {
   return sql.raw(`'${value.replace(/'/g, "''")}'`);
 }
+
+/**
+ * Текст словаря прямо в запросе — там, где нельзя параметр (`textLiteral`). Тексты правит
+ * администратор платформы, поэтому они в долларовых кавычках: внутри них ничего не экранируется, и ни
+ * кавычка, ни обратная косая черта запрос не меняют. Метка подбирается так, чтобы закрывающая метка не
+ * нашлась раньше конца текста; нулевой символ (в тексте PostgreSQL его не бывает) убирается. Ввод
+ * пользователя организации — всё равно только параметром.
+ */
+export function dictLiteral(value: string): SQL {
+  const text = value.replaceAll('\0', '');
+  let tag = 't';
+  for (let i = 1; `${text}$${tag}$`.indexOf(`$${tag}$`) !== text.length; i++) tag = `t${i}`;
+  return sql.raw(`$${tag}$${text}$${tag}$`);
+}

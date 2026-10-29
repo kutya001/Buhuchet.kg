@@ -230,24 +230,28 @@ export function FilesManager() {
   };
 
   const plates = summary.data?.plates ?? [];
-  const empty = (
+  const addAction = canUpload
+    ? [
+        {
+          id: 'add',
+          icon: 'plus' as const,
+          label: t('files.empty.add'),
+          primary: true,
+          onClick: startUpload,
+        },
+      ]
+    : [];
+  // Файлов нет совсем — пустой модуль с пояснением (ТЗ «Пустые состояния и первый вход»; прототип
+  // ui/empty.js, `files`).
+  const empty = summary.data?.empty ? (
     <EmptyState
       icon="folder"
-      title={t('files.empty')}
-      actions={
-        canUpload
-          ? [
-              {
-                id: 'add',
-                icon: 'upload',
-                label: t('files.empty.add'),
-                primary: true,
-                onClick: startUpload,
-              },
-            ]
-          : []
-      }
+      title={t('files.empty.first')}
+      text={t('files.empty.first_text')}
+      actions={addAction}
     />
+  ) : (
+    <EmptyState icon="folder" title={t('files.empty')} actions={addAction} />
   );
 
   return (
