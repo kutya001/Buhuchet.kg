@@ -20,7 +20,7 @@ import {
   DEFAULT_UI_LANGUAGE,
   DICT_HISTORY_SHOWN,
   isStatusTone,
-  MESSAGE_TEMPLATE_VARIABLES,
+  messageTemplateVariables,
   roleTemplateProblem,
   sameName,
   scaleStatuses,
@@ -457,7 +457,7 @@ export function adminMessageTemplatesHandler(
       {
         items: items.map((x) => ({
           ...x,
-          variables: [...(MESSAGE_TEMPLATE_VARIABLES[x.key] ?? [])],
+          variables: [...messageTemplateVariables(x.key)],
         })),
       },
       200,
@@ -502,7 +502,9 @@ export function saveMessageTemplatesHandler(
         apiFail(400, 'unknown_vars', 'Нет такой подстановки', {
           field: item.key,
           list: unknown.map((v) => `{${v}}`).join(', '),
-          known: (MESSAGE_TEMPLATE_VARIABLES[item.key] ?? []).map((v) => `{${v}}`).join(', '),
+          known: messageTemplateVariables(item.key)
+            .map((v) => `{${v}}`)
+            .join(', '),
         });
       }
     }

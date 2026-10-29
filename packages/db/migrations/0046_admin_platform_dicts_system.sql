@@ -114,8 +114,9 @@ CREATE OR REPLACE FUNCTION app.admin_set_permission(p_id text, p_name text, p_de
       RETURNING version
   $$;
 --> statement-breakpoint
--- «Шаблоны ролей»: название, права и область по группам. Права — только из каталога прав; какие из них
--- можно дать роли и область по группам проверяет сервер (roleTemplateProblem). Роли уже созданных
+-- «Шаблоны ролей»: название, права и область по группам. Права — только из каталога прав и без права
+-- только владельца 'org' (OWNER_ONLY_PERMISSIONS); область — «own» или «all» у групп с областью
+-- (SCOPE_GROUPS). Право без просмотра группы проверяет сервер (roleTemplateProblem). Роли уже созданных
 -- организаций не меняются: шаблон копируется только при регистрации. Ответ — как у права.
 CREATE OR REPLACE FUNCTION app.admin_set_role_template(p_code text, p_name text, p_permissions text[], p_scopes jsonb, p_version integer)
   RETURNS integer
@@ -134,7 +135,13 @@ CREATE OR REPLACE FUNCTION app.admin_set_role_template(p_code text, p_name text,
         AND length(btrim(p_name)) BETWEEN 1 AND 100
         AND p_permissions IS NOT NULL
         AND p_permissions <@ ARRAY(SELECT p.id FROM public.permissions p)
+        AND NOT (p_permissions && ARRAY['org'])
         AND jsonb_typeof(p_scopes) = 'object'
+        AND NOT EXISTS (
+          SELECT 1 FROM jsonb_each(p_scopes) s
+            WHERE s.key NOT IN ('cps', 'reports', 'fin', 'projects', 'kpi', 'files')
+              OR s.value NOT IN ('"own"'::jsonb, '"all"'::jsonb)
+        )
         AND app.is_platform_admin()
       RETURNING version
   $$;

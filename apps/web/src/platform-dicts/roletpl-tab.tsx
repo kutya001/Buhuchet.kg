@@ -228,7 +228,10 @@ export function RoletplTab() {
     [permissions.data],
   );
 
-  const rename = (x: AdminRoleTemplate) =>
+  const rename = (x: AdminRoleTemplate) => {
+    // Права и область уходят вместе с названием: после «Перечитать» — свежие, иначе правка другого
+    // администратора молча откатилась бы.
+    let latest = x;
     setDialog(
       openSlot<Dialog>({
         kind: 'name',
@@ -242,21 +245,24 @@ export function RoletplTab() {
               param: { code: x.code },
               json: {
                 name,
-                permissions: x.permissions,
-                scopes: x.scopes as Record<string, Scope>,
+                permissions: latest.permissions,
+                scopes: latest.scopes as Record<string, Scope>,
                 version,
               },
             }),
           reload: async () => {
             const all = await client.fetchQuery({ ...pdictsRoleTemplatesQuery, staleTime: 0 });
             const y = all.find((z) => z.code === x.code);
-            return y ? { name: y.name, version: y.version } : null;
+            if (!y) return null;
+            latest = y;
+            return { name: y.name, version: y.version };
           },
           taken: { code: 'roletpl_taken', text: t('pdicts.err.roletpl_taken') },
           toast: t('pdicts.toast.saved'),
         },
       }),
     );
+  };
 
   return (
     <div className="flex flex-col gap-3.5">

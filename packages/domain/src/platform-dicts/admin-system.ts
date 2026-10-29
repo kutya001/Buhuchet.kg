@@ -201,6 +201,7 @@ export const TEMPLATE_PERMISSION_COUNT = PERMISSION_IDS.length - OWNER_ONLY_PERM
  * Подстановки шаблонов сообщений (прототип TPL_VARS): под каждым шаблоном — какие в нём доступны.
  * Набор шаблонов задаёт система; у неизвестного шаблона подстановок нет.
  */
+// ОТКЛОНЕНИЕ: docs/deviations.md#Д-14
 export const MESSAGE_TEMPLATE_VARIABLES: Readonly<Record<string, readonly string[]>> = {
   waTax: ['контрагент', 'отчёт', 'период', 'срок', 'сумма', 'дата', 'реквизиты'],
   waFee: ['контрагент', 'месяц', 'сумма', 'дата', 'реквизиты'],
@@ -215,6 +216,11 @@ export const MESSAGE_TEMPLATE_VARIABLES: Readonly<Record<string, readonly string
   tgCode: ['код'],
   tgTask: ['автор', 'задача', 'срок'],
 };
+
+/** Подстановки шаблона; у неизвестного ключа (в том числе `constructor`) — нет. */
+export function messageTemplateVariables(key: string): readonly string[] {
+  return Object.hasOwn(MESSAGE_TEMPLATE_VARIABLES, key) ? MESSAGE_TEMPLATE_VARIABLES[key]! : [];
+}
 
 /**
  * Порядок шаблонов во вкладке (прототип: WhatsApp, потом Telegram); в справочнике организации —
@@ -242,7 +248,7 @@ export function messageTemplateLabelKey(key: string): string {
 
 /** Подстановки в тексте, которых нет у шаблона: «{кантрагент}» — опечатка, её никто не заполнит. */
 export function unknownTemplateVariables(key: string, text: string): string[] {
-  const known = new Set(MESSAGE_TEMPLATE_VARIABLES[key] ?? []);
+  const known = new Set(messageTemplateVariables(key));
   const used = [...text.matchAll(/\{([^{}\s]+)\}/g)].map((m) => m[1]!);
   return [...new Set(used.filter((v) => !known.has(v)))];
 }

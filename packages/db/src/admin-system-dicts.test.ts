@@ -104,13 +104,19 @@ describe.skipIf(!databaseAvailable())(
       await expect(db.app.db.update(roleTemplates).set({ name: 'x' })).rejects.toThrow(
         permissionDenied,
       );
-      // Сотрудник организации функцией ничего не меняет: ответ пустой.
-      const [row] = await withUserContext(db.app.db, userId, (tx) =>
-        tx.execute<{ version: number | null }>(
-          sql`select app.admin_set_status_tone('report', 'todo', 'red', 1) as version`,
-        ),
-      );
-      expect(row?.version).toBeNull();
+      // Сотрудник организации функциями ничего не меняет: ответ пустой.
+      const calls = [
+        sql`select app.admin_set_status_tone('report', 'todo', 'red', 1) as version`,
+        sql`select app.admin_set_permission('cpView', 'Взлом', 'Взлом', 1) as version`,
+        sql`select app.admin_set_role_template('acc', 'Взлом', array['cpView'], '{}'::jsonb, 1) as version`,
+        sql`select app.admin_set_message_template('tgCode', 'Взлом {код}', 1) as version`,
+      ];
+      for (const call of calls) {
+        const [row] = await withUserContext(db.app.db, userId, (tx) =>
+          tx.execute<{ version: number | null }>(call),
+        );
+        expect(row?.version).toBeNull();
+      }
     });
 
     it('«Статусы»: все шкалы с местом на шкале; цвет и название — для всех организаций, в историю', async () => {
@@ -232,13 +238,20 @@ describe.skipIf(!databaseAvailable())(
       const fields = history.items[0]!.changes.map((c) => c.field);
       expect(fields).toContain('name');
       if (tpl!.permissions.includes('cpImport')) expect(fields).toContain('permissions');
-      // Права вне каталога функция не примет.
-      const [row] = await asAdmin((tx) =>
-        tx.execute<{ version: number | null }>(
-          sql`select app.admin_set_role_template(${tpl!.code}, 'X', array['nope'], '{}'::jsonb, ${after!.version}) as version`,
-        ),
-      );
-      expect(row?.version).toBeNull();
+      // Права вне каталога, право только владельца и неверную область функция не примет.
+      for (const [perms, scopes] of [
+        [sql`array['nope']`, '{}'],
+        [sql`array['cpView', 'org']`, '{}'],
+        [sql`array['cpView']`, '{"cps": "some"}'],
+        [sql`array['cpView']`, '{"staff": "all"}'],
+      ] as const) {
+        const [row] = await asAdmin((tx) =>
+          tx.execute<{ version: number | null }>(
+            sql`select app.admin_set_role_template(${tpl!.code}, 'X', ${perms}, ${scopes}::jsonb, ${after!.version}) as version`,
+          ),
+        );
+        expect(row?.version).toBeNull();
+      }
     });
 
     it('«Шаблоны»: текст для Telegram и WhatsApp; наполнение правку не затирает', async () => {

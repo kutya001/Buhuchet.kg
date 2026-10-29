@@ -48,7 +48,8 @@ export function NameDialog({
   const toast = useToast();
   const errorText = useErrorText();
   const id = useId();
-  const [version, setVersion] = useState(target.version);
+  // Название и версия, от которых правят: после «Перечитать» — свежие.
+  const [base, setBase] = useState({ name: target.name, version: target.version });
   const [changed, setChanged] = useState(false);
   const [reloading, setReloading] = useState(false);
   const {
@@ -67,15 +68,15 @@ export function NameDialog({
     const fresh = await target.reload().catch(() => null);
     setReloading(false);
     if (!fresh) return toast(t('err.unknown'), { bad: true });
-    setVersion(fresh.version);
+    setBase(fresh);
     reset({ name: fresh.name });
     setChanged(false);
   };
 
   const submit = (event: FormEvent) =>
     void handleSubmit(async ({ name }) => {
-      if (!isDirty || name === target.name) return onClose();
-      const res = await callApi(() => target.save(name, version));
+      if (!isDirty || name === base.name) return onClose();
+      const res = await callApi(() => target.save(name, base.version));
       if (res.ok) {
         onDone();
         onClose();

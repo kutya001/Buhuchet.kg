@@ -6,6 +6,7 @@ import {
   isAdminSystemDict,
   MESSAGE_TEMPLATE_ORDER,
   MESSAGE_TEMPLATE_VARIABLES,
+  messageTemplateVariables,
   roleTemplateProblem,
   sameName,
   statusPlace,
@@ -115,5 +116,8 @@ describe('Админка → «Шаблоны» сообщений', () => {
     expect(
       unknownTemplateVariables('tgWeek', 'сдать {n1}, оплатить {n2}, просрочено {n3}'),
     ).toEqual([]);
+    // Ключ из запроса не достаёт свойства объекта: у неизвестного шаблона подстановок нет.
+    expect(messageTemplateVariables('constructor')).toEqual([]);
+    expect(unknownTemplateVariables('__proto__', '{код}')).toEqual(['код']);
   });
 });

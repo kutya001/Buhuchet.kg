@@ -55,6 +55,8 @@ export async function seedPermissions(
             name: sql`case when ${permissions.updatedBy} is null then excluded.name else ${permissions.name} end`,
             description: sql`case when ${permissions.updatedBy} is null then excluded.description else ${permissions.description} end`,
             sortOrder: sql`excluded.sort_order`,
+            // Открытое окно «Право роли» после наполнения получит «запись изменена».
+            version: sql`${permissions.version} + 1`,
             updatedAt: sql`now()`,
           },
           setWhere: sql`(${permissions.permGroup}, ${permissions.sortOrder}) is distinct from (excluded.perm_group, excluded.sort_order)
