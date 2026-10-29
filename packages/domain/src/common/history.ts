@@ -22,6 +22,7 @@ export const HISTORY_ENTITIES = [
   'indicator',
   'indicator_value',
   'indicator_import',
+  'news',
   'ui_text',
   'platform_dict',
 ] as const;

@@ -454,6 +454,8 @@ export const GRID_KEYS = [
   'kpi.period',
   'kpi.missing',
   'kb.team',
+  // Админка → «База знаний (содержимое)» → «Новости».
+  'kbadm.news',
   'accounts.list',
   'orgs.list',
   'l10n.list',
