@@ -693,7 +693,9 @@ export class TourDom {
     const form = !!o.form && w.dataset.windowKind !== 'card';
     const mod = (this.env.screen() ?? '').split('.')[0] ?? '';
     const kt = clean(w.querySelector('[data-window-head] h2')?.textContent);
-    const c = { ctx: o.ctx, pre: o.pre, mt: form ? kt : `card:${mod}` };
+    // Название записи в кавычках («Показатель «Выручка»») в ключ знакомого элемента не попадает: формы
+    // разных записей — одно окно, а названия записей не хранятся у пользователя.
+    const c = { ctx: o.ctx, pre: o.pre, mt: form ? kt.replace(/«[^»]*»/gu, '«…»') : `card:${mod}` };
     const at = (sel: string, n?: number): TourLoc => ({
       root: 'window',
       sel,

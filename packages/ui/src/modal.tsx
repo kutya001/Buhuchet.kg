@@ -557,11 +557,11 @@ export function WindowFrame({
               <button
                 type="button"
                 aria-pressed={max}
-                data-window-max
                 aria-label={maxLabel}
                 title={phone ? maxLabel : `${maxLabel} ${labels.maximizeHint}`}
                 onClick={onToggleMax}
                 className={iconButtonClass()}
+                data-window-max
               >
                 <Icon name={max ? 'minimize' : 'maximize'} />
               </button>

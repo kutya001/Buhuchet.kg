@@ -163,8 +163,8 @@ export function TabRow({
             type="button"
             onClick={() => onAdd(a.id)}
             title={a.label}
-            data-add-action={a.id}
             className={`${buttonClass()} max-md:hidden`}
+            data-add-action={a.id}
           >
             <Icon name={a.icon} />
             <span className="group-data-[slim=true]/row:hidden">{a.label}</span>
@@ -223,8 +223,8 @@ function AddControl({
           onClick={() => onAdd(actions[0]!.id)}
           aria-label={fab ? label : undefined}
           title={label}
-          data-add-button={fab ? 'fab' : 'button'}
           className={look}
+          data-add-button={fab ? 'fab' : 'button'}
         >
           {content}
         </button>

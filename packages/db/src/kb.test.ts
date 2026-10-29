@@ -289,6 +289,13 @@ describe.skipIf(!databaseAvailable())('«База знаний»: прогрес
     const [row] = await db.admin.db.select().from(kbKnown).where(eq(kbKnown.userId, adminId));
     expect(row).toMatchObject({ orgId: null, key: 'g:search' });
     expect(await asOwner(a, (tx) => tx.select().from(kbKnown))).toEqual([]);
+    // Пользователь организации вне её контекста строку «без организации» не создаёт и не видит чужих.
+    const asUser = <T>(fn: Parameters<typeof withUserContext<T>>[2]) =>
+      withUserContext(db.app.db, a.ownerUserId, fn);
+    await expect(
+      asUser((tx) => tx.insert(kbKnown).values({ userId: a.ownerUserId, key: 'g:x' })),
+    ).rejects.toEqual(permissionDenied);
+    expect(await asUser((tx) => tx.select().from(kbKnown))).toEqual([]);
     expect(await asAdmin((tx) => kbResetKnown(tx))).toBe(1);
   });
 
