@@ -9,6 +9,7 @@ import {
   readXlsxRows,
   SHEET_TEXT_MAX_LENGTH,
   SheetReadError,
+  xmlUnescape,
 } from './xlsx-read';
 
 /** Книга из своих файлов листа: как сохраняют Excel и LibreOffice (общие строки, ссылки листа). */
@@ -146,9 +147,9 @@ describe('Чтение загруженной таблицы (.xlsx и CSV)', ()
 
   it('«архивная бомба», слишком много строк, столбцов или ячеек — «в файле слишком много»', async () => {
     const huge = await book(
-      `<row r="1"><c r="A1"><v>1</v></c></row>${' '.repeat(65 * 1024 * 1024)}`,
+      `<row r="1"><c r="A1"><v>1</v></c></row>${' '.repeat(25 * 1024 * 1024)}`,
     );
-    // Сжатый файл маленький, а распакованный — больше 64 МБ.
+    // Сжатый файл маленький, а распакованный — больше 24 МБ.
     expect(huge.length).toBeLessThan(1024 * 1024);
     expect(code(() => readXlsxRows(huge))).toBe('sheet_too_big');
     const cells = await book(
@@ -185,6 +186,23 @@ describe('Чтение загруженной таблицы (.xlsx и CSV)', ()
     expect(code(() => readXlsxRows(strings))).toBe('file_unreadable');
     const noEnd = await book('<row><c><v>1</v>');
     expect(code(() => readXlsxRows(noEnd))).toBe('file_unreadable');
+    // Значение нужного атрибута длиннее 1 000 символов (тип ячейки из 2 млн сущностей) не разбирается.
+    const attr = await book(`<row><c t="${'&#65;'.repeat(2_000_000)}"><v>1</v></c></row>`);
+    expect(code(() => readXlsxRows(attr))).toBe('file_unreadable');
+  });
+
+  it('сущности XML — в символы за один проход; не сущность остаётся как есть', async () => {
+    expect(xmlUnescape('&lt;a&gt; &amp;amp; &quot;&apos; &#1046;&#x4F;&#x1F600;')).toBe(
+      '<a> &amp; "\' ЖO😀',
+    );
+    expect(xmlUnescape('a & b &foo; &#0; &#xZZ; &lt')).toBe('a & b &foo;  &#xZZ; &lt');
+    expect(xmlUnescape(`&#${'0'.repeat(20)}65;`)).toBe(`&#${'0'.repeat(20)}65;`);
+    // Почти 24 МБ распакованного — 2 400 ячеек по 2 000 сущностей: текст каждой — до 1 000 символов.
+    const cell = `<c t="str"><v>${'&#65;'.repeat(2_000)}</v></c>`;
+    const file = await book(`${`<row>${cell.repeat(50)}</row>`.repeat(48)}`);
+    const rows = readXlsxRows(file);
+    expect(rows).toHaveLength(48);
+    expect(rows[47]![49]).toBe(`${'A'.repeat(SHEET_TEXT_MAX_LENGTH)}…`);
   });
 
   it('текст ячейки — не длиннее 1 000 символов; теги с приставкой пространства имён читаются', async () => {

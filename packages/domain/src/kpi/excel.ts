@@ -1,4 +1,4 @@
-import { searchText } from '../common/list';
+import { EXPORT_ROWS_LIMIT, searchText } from '../common/list';
 import type { YearMonth } from '../common/months';
 import { activeIndicators, type KpiBook, type KpiContractor, type KpiIndicator } from './fill';
 import { parseIndicatorValue, type IndicatorType, type IndicatorValue } from './indicators';
@@ -22,6 +22,12 @@ export const KPI_IMPORT_MAX_MONTHS = 24;
  */
 export const KPI_IMPORT_MAX_BYTES = 4 * 1024 * 1024;
 
+/**
+ * Разборов загруженного файла (предпросмотр и «Применить») от одного пользователя — не больше за час;
+ * одновременно — один (docs/decisions.md, п. В-3).
+ */
+export const KPI_IMPORT_HOURLY_LIMIT = 60;
+
 /** Имя файла в «Истории загрузок» — не длиннее (длиннее обрезается). */
 export const KPI_IMPORT_FILE_MAX_LENGTH = 255;
 
@@ -38,6 +44,9 @@ const IMPORT_HEAD_MAX_LENGTH = 300;
 
 /** Значение ячейки в ошибке загрузки — не длиннее (длиннее обрезается, в конце «…»). */
 export const IMPORT_ERROR_VALUE_MAX_LENGTH = 200;
+
+/** Ошибок в разборе файла хранится не больше — столько строк и в файле ошибок (выгрузка в Excel). */
+export const IMPORT_ERRORS_KEPT = EXPORT_ROWS_LIMIT;
 
 /**
  * Заголовок столбца загруженного файла: «Выручка · 09.2026 (сом, сумма в сом)» → название показателя и
@@ -164,7 +173,12 @@ export interface ImportPlan {
   changed: ImportItem[];
   /** «Без изменений». */
   same: number;
+  /**
+   * Ошибки по порядку — первые `IMPORT_ERRORS_KEPT` (больше не покажет ни предпросмотр, ни файл
+   * ошибок); всего ошибок — `errorCount`.
+   */
   errors: ImportError[];
+  errorCount: number;
   /** Значений в строках с ошибками: такие строки не записываются. */
   skipped: number;
   /** Месяцы прочитанных значений — период загрузки в «Истории загрузок». */
@@ -213,7 +227,17 @@ export function planImport(
   rows: readonly (readonly ImportCellValue[] | undefined)[],
   lookup: ImportLookup,
 ): ImportPlan {
-  const plan: ImportPlan = { added: [], changed: [], same: 0, errors: [], skipped: 0, months: [] };
+  const plan: ImportPlan = {
+    added: [],
+    changed: [],
+    same: 0,
+    errors: [],
+    errorCount: 0,
+    skipped: 0,
+    months: [],
+  };
+  // Строки Excel с ошибками: такие не записываются.
+  const bad = new Set<number>();
   const err = (
     r: number,
     c: number,
@@ -221,6 +245,8 @@ export function planImport(
     contractorId: string | null,
     value: ImportCellValue | undefined,
   ) => {
+    bad.add(r + 1);
+    if (++plan.errorCount > IMPORT_ERRORS_KEPT) return;
     const text = value == null ? '' : String(value);
     plan.errors.push({
       row: r + 1,
@@ -305,7 +331,6 @@ export function planImport(
       else items.push(item);
     });
   }
-  const bad = new Set(plan.errors.map((e) => e.row));
   for (const item of items) {
     if (bad.has(item.row)) plan.skipped++;
     else if (item.old === null) plan.added.push(item);

@@ -11,10 +11,13 @@ import {
   loadKpiData,
   loadMonths,
   lockKpi,
+  releaseRateLimit,
   saveIndicatorValues,
+  takeRateLimit,
   type IndicatorImportRecord,
   type KpiContractorRecord,
   type KpiData,
+  type RateLimit,
   type Tx,
 } from '@buhuchet/db';
 import {
@@ -24,6 +27,7 @@ import {
   importInn,
   importTemplate,
   importWrites,
+  KPI_IMPORT_HOURLY_LIMIT,
   KPI_IMPORT_MAX_BYTES,
   KPI_IMPORT_MAX_CONTRACTORS,
   KPI_IMPORT_MAX_MONTHS,
@@ -54,7 +58,7 @@ import { bodyLimit } from 'hono/body-limit';
 import { HTTPException } from 'hono/http-exception';
 import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
-import { apiError } from '../../errors';
+import { apiError, apiFail } from '../../errors';
 import { exportRateResponses, withExportSlot, xlsxContent } from '../../lists/export';
 import { buildXlsx, XLSX_TYPE } from '../../lists/xlsx';
 import { readSheetRows, SheetReadError, type SheetCell } from '../../lists/xlsx-read';
@@ -103,6 +107,42 @@ const importBodyLimit = bodyLimit({
   maxSize: KPI_IMPORT_MAX_BYTES,
   onError: (c) => c.json(tooBigBody(), 413),
 });
+
+/**
+ * Разборы файла пользователя (предпросмотр и «Применить»): один одновременно и не больше
+ * `KPI_IMPORT_HOURLY_LIMIT` за час — разбор большого файла занимает процессор, а повторять его можно
+ * сколько угодно. Не отпущенный (сбой процесса) перестаёт мешать через 5 минут, как выгрузка.
+ */
+export const KPI_IMPORT_RATE_LIMIT: RateLimit = {
+  kind: 'kpi_import',
+  max: KPI_IMPORT_HOURLY_LIMIT,
+  windowSeconds: 3600,
+  leaseSeconds: 300,
+};
+
+/** Разбор файла по очереди: идёт прежний — 429 `import_busy`, за час уже предел — 429 `import_limit`. */
+async function withImportSlot<T>(deps: ApiDeps, c: Context<AppEnv>, run: () => Promise<T>) {
+  const userId = c.get('session')!.userId;
+  const slot = await takeRateLimit(deps.db, KPI_IMPORT_RATE_LIMIT, userId);
+  if (!slot.ok) {
+    if (slot.reason === 'busy') apiFail(429, 'import_busy', KPI_MESSAGES.import_busy);
+    apiFail(429, 'import_limit', KPI_MESSAGES.import_limit);
+  }
+  try {
+    return await run();
+  } finally {
+    await releaseRateLimit(deps.db, KPI_IMPORT_RATE_LIMIT, userId, slot.ticket).catch(
+      (err: unknown) => deps.logger.error({ err }, 'разбор файла показателей не отпущен'),
+    );
+  }
+}
+
+const importRateResponses = {
+  429: {
+    description: 'Идёт прежний разбор файла пользователя или за час их уже 60',
+    content: error,
+  },
+} as const;
 
 const fileBody = {
   required: true,
@@ -369,7 +409,7 @@ export function templateHandler(deps: ApiDeps): RouteHandler<typeof templateRout
 
 /**
  * Таблица из тела запроса: больше 4 МБ — 413; не читается или больше пределов листа (строк, столбцов,
- * ячеек; распакованный — больше 64 МБ) — 400.
+ * ячеек; распакованный — больше 24 МБ) — 400.
  */
 async function sheetOf(c: Context<AppEnv>): Promise<SheetCell[][]> {
   const bytes = Buffer.from(await c.req.arrayBuffer());
@@ -492,7 +532,7 @@ function previewOf(p: Planned) {
     changedChecked: p.plan.changed.filter((x) => x.checked).length,
     same: p.plan.same,
     skipped: p.plan.skipped,
-    errorCount: p.plan.errors.length,
+    errorCount: p.plan.errorCount,
     errors: errorsOf(p, PREVIEW_ERRORS),
     addedItems: p.plan.added.slice(0, PREVIEW_ITEMS).map(item),
     changedItems: p.plan.changed.slice(0, PREVIEW_ITEMS).map(item),
@@ -522,6 +562,7 @@ export const importPreviewRoute = createRoute({
       content: { 'application/json': { schema: KpiImportPreview } },
     },
     ...uploadResponses,
+    ...importRateResponses,
   },
 });
 
@@ -529,8 +570,10 @@ export function importPreviewHandler(
   deps: ApiDeps,
 ): RouteHandler<typeof importPreviewRoute, AppEnv> {
   return async (c) => {
-    const rows = await sheetOf(c);
-    const body = await inKpi(deps, c, async (tx) => previewOf(await planOf(deps, c, tx, rows)));
+    const body = await withImportSlot(deps, c, async () => {
+      const rows = await sheetOf(c);
+      return inKpi(deps, c, async (tx) => previewOf(await planOf(deps, c, tx, rows)));
+    });
     return c.json(body, 200);
   };
 }
@@ -553,6 +596,7 @@ export const importApplyRoute = createRoute({
       content: { 'application/json': { schema: KpiImportApplied } },
     },
     ...uploadResponses,
+    ...importRateResponses,
   },
 });
 
@@ -564,60 +608,62 @@ export const importApplyRoute = createRoute({
 export function importApplyHandler(deps: ApiDeps): RouteHandler<typeof importApplyRoute, AppEnv> {
   return async (c) => {
     const { file, withChecked } = c.req.valid('query');
-    const rows = await sheetOf(c);
-    const body = await inKpi(deps, c, async (tx) => {
-      await lockKpi(tx);
-      const p = await planOf(deps, c, tx, rows);
-      if (!p.plan.added.length && !p.plan.changed.length) kpiFail(400, 'import_nothing');
-      const items = importWrites(p.plan, withChecked);
-      const contractors = new Map([...p.records.values()].map((r) => [r.id, kpiContractorOf(r)]));
-      const saved = await saveIndicatorValues(
-        tx,
-        p.data,
-        contractors,
-        items.map((x) => ({
-          contractorId: x.contractorId,
-          indicatorId: x.indicatorId,
-          month: x.month,
-          value: x.value,
-        })),
-        KPI_IMPORT_REASON,
-      );
-      const isNew = new Set(
-        items
-          .filter((x) => x.old === null)
-          .map((x) => `${x.contractorId}|${x.indicatorId}|${x.month}`),
-      );
-      const added = saved.changed.filter((w) =>
-        isNew.has(`${w.contractorId}|${w.indicatorId}|${w.month}`),
-      ).length;
-      const rec = {
-        fileName: file,
-        from: p.plan.months[0] ?? null,
-        to: p.plan.months[p.plan.months.length - 1] ?? null,
-        added,
-        changed: saved.changed.length - added,
-        errors: p.plan.errors.length,
-        skippedChecked: withChecked ? 0 : p.plan.changed.filter((x) => x.checked).length,
-      };
-      const { id, at } = await insertIndicatorImport(tx, rec);
-      // Прототип: запись истории «Ввод показателей из Excel «файл»: новых, изменённых, ошибок».
-      await writeHistory(tx, {
-        entity: 'indicator_import',
-        entityId: id,
-        action: 'create',
-        changes: [
-          { field: 'fileName', to: importFileName(file) },
-          { field: 'added', to: rec.added },
-          { field: 'changed', to: rec.changed },
-          { field: 'errors', to: rec.errors },
-        ],
+    const body = await withImportSlot(deps, c, async () => {
+      const rows = await sheetOf(c);
+      return inKpi(deps, c, async (tx) => {
+        await lockKpi(tx);
+        const p = await planOf(deps, c, tx, rows);
+        if (!p.plan.added.length && !p.plan.changed.length) kpiFail(400, 'import_nothing');
+        const items = importWrites(p.plan, withChecked);
+        const contractors = new Map([...p.records.values()].map((r) => [r.id, kpiContractorOf(r)]));
+        const saved = await saveIndicatorValues(
+          tx,
+          p.data,
+          contractors,
+          items.map((x) => ({
+            contractorId: x.contractorId,
+            indicatorId: x.indicatorId,
+            month: x.month,
+            value: x.value,
+          })),
+          KPI_IMPORT_REASON,
+        );
+        const isNew = new Set(
+          items
+            .filter((x) => x.old === null)
+            .map((x) => `${x.contractorId}|${x.indicatorId}|${x.month}`),
+        );
+        const added = saved.changed.filter((w) =>
+          isNew.has(`${w.contractorId}|${w.indicatorId}|${w.month}`),
+        ).length;
+        const rec = {
+          fileName: file,
+          from: p.plan.months[0] ?? null,
+          to: p.plan.months[p.plan.months.length - 1] ?? null,
+          added,
+          changed: saved.changed.length - added,
+          errors: p.plan.errorCount,
+          skippedChecked: withChecked ? 0 : p.plan.changed.filter((x) => x.checked).length,
+        };
+        const { id, at } = await insertIndicatorImport(tx, rec);
+        // Прототип: запись истории «Ввод показателей из Excel «файл»: новых, изменённых, ошибок».
+        await writeHistory(tx, {
+          entity: 'indicator_import',
+          entityId: id,
+          action: 'create',
+          changes: [
+            { field: 'fileName', to: importFileName(file) },
+            { field: 'added', to: rec.added },
+            { field: 'changed', to: rec.changed },
+            { field: 'errors', to: rec.errors },
+          ],
+        });
+        const [me] = (await listIndicatorImports(tx)).filter((r) => r.id === id);
+        return {
+          record: recordBody(me ?? { ...rec, id, at, actor: null, fileName: file }),
+          preview: previewOf(p),
+        };
       });
-      const [me] = (await listIndicatorImports(tx)).filter((r) => r.id === id);
-      return {
-        record: recordBody(me ?? { ...rec, id, at, actor: null, fileName: file }),
-        preview: previewOf(p),
-      };
     });
     return c.json(body, 200);
   };

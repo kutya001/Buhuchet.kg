@@ -3,6 +3,7 @@ import type { YearMonth } from '../common/months';
 import {
   excelColumn,
   IMPORT_ERROR_VALUE_MAX_LENGTH,
+  IMPORT_ERRORS_KEPT,
   importHead,
   importInn,
   importTemplate,
@@ -229,6 +230,17 @@ describe('загрузка заполненного шаблона', () => {
       ['A3', 'unknown_contractor', IMPORT_ERROR_VALUE_MAX_LENGTH + 1],
     ]);
     expect(p.errors[0]!.value.endsWith('x…')).toBe(true);
+  });
+
+  it('ошибок больше, чем хранится: в плане — первые, счёт — все, строки с ошибками не пишутся', () => {
+    const p = plan([
+      ...Array.from({ length: IMPORT_ERRORS_KEPT + 5 }, () => ['03744097401851', '', 'abc']),
+      ['21503199000123', 'ИП Асанов', null, null, 3],
+    ]);
+    expect(p.errors).toHaveLength(IMPORT_ERRORS_KEPT);
+    expect(p.errorCount).toBe(IMPORT_ERRORS_KEPT + 5);
+    expect(p.errors[0]).toMatchObject({ ref: 'C2', problem: 'not_number' });
+    expect(p.added.map((x) => x.contractorId)).toEqual(['c2']);
   });
 
   it('ИНН из ячейки: пробелы убираются, 13 цифр — с нулём впереди', () => {

@@ -6,7 +6,7 @@ import { inflateRawSync } from 'node:zlib';
  * (`xlsx.ts`), без библиотеки: архив ZIP и XML листа разбираются здесь, формулы не вычисляются (берётся
  * сохранённое значение). Файл присылает пользователь, поэтому разбор — один проход по тегам без
  * регулярных выражений по всему XML (время растёт линейно с размером файла), а пределы защищают сервер
- * от «архивной бомбы» и огромных листов: распакованный файл — не больше 64 МБ, строк, столбцов и ячеек —
+ * от «архивной бомбы» и огромных листов: распакованный файл — не больше 24 МБ, строк, столбцов и ячеек —
  * не больше `SheetLimits`, текст ячейки — не длиннее `SHEET_TEXT_MAX_LENGTH`.
  */
 
@@ -14,7 +14,7 @@ export type SheetCell = string | number | null;
 
 /**
  * Файл не читается как таблица: `file_unreadable` — не .xlsx и не CSV или испорчен, `sheet_too_big` —
- * больше пределов `SheetLimits` или распакованный больше 64 МБ.
+ * больше пределов `SheetLimits` или распакованный больше 24 МБ.
  */
 export class SheetReadError extends Error {
   constructor(readonly code: 'file_unreadable' | 'sheet_too_big') {
@@ -50,7 +50,13 @@ export const SHEET_TEXT_MAX_LENGTH = 1_000;
 /** Сколько символов XML читается для текста ячейки: сущность «&#x10FFFF;» — 10 символов на один. */
 const TEXT_RAW_MAX_LENGTH = SHEET_TEXT_MAX_LENGTH * 10;
 
-const MAX_UNPACKED = 64 * 1024 * 1024;
+/**
+ * Распакованный файл (все части книги, которые читаются) — не больше: шаблон на 1 000 контрагентов и
+ * 24 месяца по 20 показателям — около 18 МБ.
+ */
+const MAX_UNPACKED = 24 * 1024 * 1024;
+/** Значение нужного атрибута (адрес, тип, связь листа) — не длиннее: длиннее — файл испорчен. */
+const ATTR_MAX_LENGTH = 1_000;
 /** Строк и столбцов на листе Excel: адрес дальше — файл испорчен. */
 const EXCEL_ROWS = 1_048_576;
 const EXCEL_COLUMNS = 16_384;
@@ -126,17 +132,76 @@ function zipText(buf: Buffer, entry: ZipEntry, budget: { left: number }): string
   return data.toString('utf8');
 }
 
-/** Текст XML без разметки: сущности &lt; &amp; &#1234; &#x4F; — в символы. */
-export function xmlUnescape(text: string): string {
-  return text.replace(/&(#x[0-9a-fA-F]+|#\d+|lt|gt|amp|quot|apos);/g, (_, e: string) => {
-    if (e === 'lt') return '<';
-    if (e === 'gt') return '>';
-    if (e === 'amp') return '&';
-    if (e === 'quot') return '"';
-    if (e === 'apos') return "'";
-    const code = e[1] === 'x' ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10);
-    return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : '';
-  });
+/** Самая длинная сущность без «&» и «;»: «#1114111», «#x10FFFF» — с запасом на ведущие нули. */
+const ENTITY_MAX_LENGTH = 10;
+const NAMED_ENTITIES: readonly (readonly [string, number])[] = [
+  ['lt;', 60],
+  ['gt;', 62],
+  ['amp;', 38],
+  ['quot;', 34],
+  ['apos;', 39],
+];
+/** Код символа сущности, которую нашла `entityEnd`. */
+let entityCode = 0;
+
+/**
+ * Сущность XML с «&» в позиции `amp` — &lt; &amp; &#1234; &#x4F;: где она кончается (после «;»), код
+ * символа — в `entityCode`; не сущность — -1. Просматривает не больше `ENTITY_MAX_LENGTH` символов.
+ */
+function entityEnd(text: string, amp: number): number {
+  if (text.charCodeAt(amp + 1) !== 35) {
+    for (const [name, code] of NAMED_ENTITIES) {
+      if (text.startsWith(name, amp + 1)) {
+        entityCode = code;
+        return amp + 1 + name.length;
+      }
+    }
+    return -1;
+  }
+  const hex = text.charCodeAt(amp + 2) === 120;
+  const start = amp + (hex ? 3 : 2);
+  const last = Math.min(text.length, amp + 1 + ENTITY_MAX_LENGTH);
+  let code = 0;
+  let i = start;
+  for (; i < last; i++) {
+    const ch = text.charCodeAt(i);
+    let digit: number;
+    if (ch >= 48 && ch <= 57) digit = ch - 48;
+    else if (hex && ch >= 97 && ch <= 102) digit = ch - 87;
+    else if (hex && ch >= 65 && ch <= 70) digit = ch - 55;
+    else break;
+    code = code * (hex ? 16 : 10) + digit;
+  }
+  if (i === start || text.charCodeAt(i) !== 59) return -1;
+  entityCode = code;
+  return i + 1;
+}
+
+/**
+ * Текст XML без разметки: сущности &lt; &amp; &#1234; &#x4F; — в символы; не сущность остаётся как
+ * есть, код вне Юникода — пропадает. Один проход без регулярных выражений; `max` — дальше этой длины
+ * результата текст не разбирается (результат тогда длиннее `max`).
+ */
+export function xmlUnescape(text: string, max = Infinity): string {
+  let amp = text.indexOf('&');
+  if (amp < 0) return text;
+  const parts: string[] = [];
+  let length = 0;
+  let at = 0;
+  while (amp >= 0 && length <= max) {
+    const end = entityEnd(text, amp);
+    if (end < 0) {
+      amp = text.indexOf('&', amp + 1);
+      continue;
+    }
+    if (amp > at) parts.push(text.slice(at, amp));
+    length += amp - at + 1;
+    if (entityCode > 0 && entityCode <= 0x10ffff) parts.push(String.fromCodePoint(entityCode));
+    at = end;
+    amp = text.indexOf('&', at);
+  }
+  parts.push(length > max ? '' : text.slice(at));
+  return parts.join('');
 }
 
 /** Текст не длиннее предела: длиннее — обрезан, в конце «…». */
@@ -146,8 +211,9 @@ function clip(text: string): string {
 
 /** Текст ячейки из XML: сущности — в символы, длина — не больше предела. */
 function cellText(raw: string): string {
-  if (raw.length <= TEXT_RAW_MAX_LENGTH) return clip(xmlUnescape(raw));
-  return `${xmlUnescape(raw.slice(0, TEXT_RAW_MAX_LENGTH)).slice(0, SHEET_TEXT_MAX_LENGTH)}…`;
+  if (raw.length <= TEXT_RAW_MAX_LENGTH) return clip(xmlUnescape(raw, SHEET_TEXT_MAX_LENGTH));
+  const text = xmlUnescape(raw.slice(0, TEXT_RAW_MAX_LENGTH), SHEET_TEXT_MAX_LENGTH);
+  return `${text.slice(0, SHEET_TEXT_MAX_LENGTH)}…`;
 }
 
 /** Текст из нескольких кусков (`<t>` форматированного текста): после предела куски не добавляются. */
@@ -172,6 +238,7 @@ function attrOf(tag: string, name: string): string | undefined {
     if (close < 0) return undefined;
     const key = tag.slice(at, eq).trim();
     if (key === name || (name[0] === ':' && key.endsWith(name))) {
+      if (close - open - 1 > ATTR_MAX_LENGTH) throw unreadable();
       return xmlUnescape(tag.slice(open + 1, close));
     }
     at = close + 1;

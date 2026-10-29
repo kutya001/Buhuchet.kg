@@ -1,6 +1,6 @@
 import { fixedClock } from '@buhuchet/adapters';
 import { schema } from '@buhuchet/db';
-import { KPI_MESSAGES } from '@buhuchet/domain';
+import { KPI_IMPORT_HOURLY_LIMIT, KPI_MESSAGES } from '@buhuchet/domain';
 import { databaseAvailable, seedAllPlatformDictionaries } from '@buhuchet/db/testing';
 import {
   Indicators,
@@ -468,5 +468,45 @@ describe.skipIf(!databaseAvailable())('Показатели контрагент
       KpiImportHistory.parse(await (await call(ownerB, 'GET', '/api/kpi/import/history')).json())
         .items,
     ).toEqual([]);
+  });
+
+  it('разбор файла по очереди: идёт прежний — 429 «ещё разбирается», за час уже 60 — 429', async () => {
+    const { userId } = f.people['acc-a']!;
+    const mine = and(
+      eq(schema.rateLimits.kind, 'kpi_import'),
+      eq(schema.rateLimits.subject, userId),
+    );
+    await f.t.admin.db.delete(schema.rateLimits).where(mine);
+    const file = `ИНН;${REVENUE}\r\n${INN1};1\r\n`;
+    await f.t.admin.db.insert(schema.rateLimits).values({
+      kind: 'kpi_import',
+      subject: userId,
+      busyUntil: new Date(Date.now() + 60_000),
+    });
+    const busy = await upload(acc, '/api/kpi/import/preview?file=a.csv', file);
+    expect(busy.status).toBe(429);
+    expect(await errorOf(busy)).toEqual({
+      code: 'import_busy',
+      message: KPI_MESSAGES.import_busy,
+    });
+    // Другой сотрудник в это время разбирает свой файл.
+    await preview(owner, file);
+    await f.t.admin.db.update(schema.rateLimits).set({ busyUntil: null }).where(mine);
+    // Отказ «ещё разбирается» в счёт не идёт: за час — прежний разбор, этот и ещё 58.
+    await preview(acc, file);
+    await f.t.admin.db.insert(schema.rateLimits).values(
+      Array.from({ length: KPI_IMPORT_HOURLY_LIMIT - 2 }, () => ({
+        kind: 'kpi_import',
+        subject: userId,
+        at: new Date(Date.now() - 30 * 60_000),
+      })),
+    );
+    const limited = await apply(acc, file);
+    expect(limited.status).toBe(429);
+    expect(await errorOf(limited)).toEqual({
+      code: 'import_limit',
+      message: KPI_MESSAGES.import_limit,
+    });
+    await f.t.admin.db.delete(schema.rateLimits).where(mine);
   });
 });

@@ -158,17 +158,24 @@ export function indicatorProblems(
   return out;
 }
 
+/** Введённое значение — не длиннее (без пробелов по краям). */
+export const INDICATOR_VALUE_TEXT_MAX_LENGTH = 64;
+
 /** Разбор введённого значения (прототип `kParse`). */
 export type ParsedIndicatorValue = { ok: true; value: IndicatorValue | null } | { ok: false };
 
 /**
  * «1 250 000», «1250000,50», «12,5 %», «−300» → сотые; пусто — `null` («не заполнено»). Целое число
  * округляется до целого, остальные — до сотых, как в прототипе. Только цифры: «1e3» и «0x10», которые
- * прототип принимает, — ошибка; минус «−» (так его показывает `formatSom`) принимается.
+ * прототип принимает, — ошибка; минус «−» (так его показывает `formatSom`) принимается. Длиннее
+ * `INDICATOR_VALUE_TEXT_MAX_LENGTH` — не число: в сотых до 16 цифр, с пробелами и знаками короче
+ * (длинный текст из загруженного файла не разбирается).
  */
 export function parseIndicatorValue(type: IndicatorType, text: string): ParsedIndicatorValue {
-  if (text.trim() === '') return { ok: true, value: null };
-  const t = text.trim().replace('%', '').replace(/\s/g, '').replace('−', '-').replace(',', '.');
+  const trimmed = text.trim();
+  if (trimmed === '') return { ok: true, value: null };
+  if (trimmed.length > INDICATOR_VALUE_TEXT_MAX_LENGTH) return { ok: false };
+  const t = trimmed.replace('%', '').replace(/\s/g, '').replace('−', '-').replace(',', '.');
   if (!/^-?(\d+(\.\d*)?|\.\d+)$/.test(t)) return { ok: false };
   const n = Number(t);
   const value = type === 'int' ? Math.round(n) * 100 : Math.round(n * 100);
@@ -248,5 +255,7 @@ export const KPI_MESSAGES = {
   import_file_too_big: 'Файл больше 4 МБ',
   import_sheet_too_big:
     'В файле слишком много строк, столбцов или ячеек: в шаблоне — до 1 000 контрагентов и 24 месяцев',
+  import_busy: 'Предыдущий файл ещё разбирается. Попробуйте позже.',
+  import_limit: 'Не больше 60 загрузок файла за час. Попробуйте позже.',
 } as const;
 export type KpiRefusal = keyof typeof KPI_MESSAGES;

@@ -668,4 +668,6 @@ export const KPI_TEXTS = {
   'err.import_file_unreadable': { ru: KPI_MESSAGES.import_file_unreadable, section: E },
   'err.import_file_too_big': { ru: KPI_MESSAGES.import_file_too_big, section: E },
   'err.import_sheet_too_big': { ru: KPI_MESSAGES.import_sheet_too_big, section: E },
+  'err.import_busy': { ru: KPI_MESSAGES.import_busy, section: E },
+  'err.import_limit': { ru: KPI_MESSAGES.import_limit, section: E },
 } as const satisfies Record<string, UiTextDefault>;
