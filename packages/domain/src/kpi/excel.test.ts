@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { YearMonth } from '../common/months';
 import {
   excelColumn,
+  IMPORT_ERROR_VALUE_MAX_LENGTH,
   importHead,
   importInn,
   importTemplate,
@@ -85,6 +86,10 @@ describe('шаблон «Ввода из Excel»', () => {
     expect(parseImportHead(' Выручка · 09.2026 ')).toEqual({ name: 'Выручка', month: '2026-09' });
     expect(parseImportHead('Выручка · 13.2026')).toBeNull();
     expect(parseImportHead('Выручка 09.2026')).toBeNull();
+    // Длинный текст — не заголовок шаблона: выражение его не разбирает (повторы «· ММ.ГГГГ(» были бы
+    // для него квадратичными).
+    expect(parseImportHead('a · 01.2026('.repeat(30))).toBeNull();
+    expect(parseImportHead(`${'a'.repeat(280)} · 09.2026`)).not.toBeNull();
     expect(excelColumn(0)).toBe('A');
     expect(excelColumn(27)).toBe('AB');
   });
@@ -211,6 +216,19 @@ describe('загрузка заполненного шаблона', () => {
       lookup,
     );
     expect(twice.added.map((x) => x.value)).toEqual([100]);
+  });
+
+  it('длинное значение в ошибке обрезается: в предпросмотр и файл ошибок не идёт весь текст ячейки', () => {
+    const long = 'x'.repeat(1_000);
+    const p = plan([
+      ['03744097401851', 'ОсОО «Укс»', null, long],
+      [long, ''],
+    ]);
+    expect(p.errors.map((e) => [e.ref, e.problem, e.value.length])).toEqual([
+      ['D2', 'not_number', IMPORT_ERROR_VALUE_MAX_LENGTH + 1],
+      ['A3', 'unknown_contractor', IMPORT_ERROR_VALUE_MAX_LENGTH + 1],
+    ]);
+    expect(p.errors[0]!.value.endsWith('x…')).toBe(true);
   });
 
   it('ИНН из ячейки: пробелы убираются, 13 цифр — с нулём впереди', () => {

@@ -31,10 +31,20 @@ export function importHead(name: string, month: YearMonth): string {
 }
 
 /**
+ * Заголовок столбца шаблона — не длиннее: название показателя (до 100), месяц и единица в скобках
+ * короче. Длиннее — не заголовок шаблона (и разбор выражением не тратит время на длинный текст).
+ */
+const IMPORT_HEAD_MAX_LENGTH = 300;
+
+/** Значение ячейки в ошибке загрузки — не длиннее (длиннее обрезается, в конце «…»). */
+export const IMPORT_ERROR_VALUE_MAX_LENGTH = 200;
+
+/**
  * Заголовок столбца загруженного файла: «Выручка · 09.2026 (сом, сумма в сом)» → название показателя и
  * месяц (единица в скобках не нужна); не такой заголовок — null.
  */
 export function parseImportHead(text: string): { name: string; month: YearMonth } | null {
+  if (text.length > IMPORT_HEAD_MAX_LENGTH) return null;
   const m = /^(.+?) · (\d{2})\.(\d{4})(?:\s*\(.*\))?$/.exec(text.trim());
   if (!m) return null;
   const month = Number(m[2]);
@@ -210,15 +220,20 @@ export function planImport(
     problem: ImportProblem,
     contractorId: string | null,
     value: ImportCellValue | undefined,
-  ) =>
+  ) => {
+    const text = value == null ? '' : String(value);
     plan.errors.push({
       row: r + 1,
       col: c,
       ref: `${excelColumn(c)}${r + 1}`,
       contractorId,
-      value: value == null ? '' : String(value),
+      value:
+        text.length > IMPORT_ERROR_VALUE_MAX_LENGTH
+          ? `${text.slice(0, IMPORT_ERROR_VALUE_MAX_LENGTH)}…`
+          : text,
       problem,
     });
+  };
   const head = rows[0] ?? [];
   const innCol = head.findIndex((h) => searchText(String(h ?? '')).trim() === 'инн');
   if (innCol < 0) {

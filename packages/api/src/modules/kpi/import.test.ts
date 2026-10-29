@@ -1,5 +1,6 @@
 import { fixedClock } from '@buhuchet/adapters';
 import { schema } from '@buhuchet/db';
+import { KPI_MESSAGES } from '@buhuchet/domain';
 import { databaseAvailable, seedAllPlatformDictionaries } from '@buhuchet/db/testing';
 import {
   Indicators,
@@ -428,6 +429,13 @@ describe.skipIf(!databaseAvailable())('Показатели контрагент
     expect((await errorOf(unreadable)).code).toBe('import_file_unreadable');
     const empty = await upload(acc, '/api/kpi/import/preview?file=a.xlsx', '');
     expect((await errorOf(empty)).code).toBe('import_file_unreadable');
+    // Строк больше предела листа (в шаблоне — до 1 000 контрагентов) — 400, файл не разбирается.
+    const tall = await upload(acc, '/api/kpi/import/preview?file=a.csv', 'ИНН\n'.repeat(5_001));
+    expect(tall.status).toBe(400);
+    expect(await errorOf(tall)).toMatchObject({
+      code: 'import_sheet_too_big',
+      message: KPI_MESSAGES.import_sheet_too_big,
+    });
     const noInn = await preview(acc, `Контрагент;${REVENUE}\r\nОсОО «Укс»;1\r\n`);
     expect(noInn.errors).toEqual([
       { ref: 'A1', row: 1, col: 'A', contractor: null, value: '', problem: 'no_inn' },

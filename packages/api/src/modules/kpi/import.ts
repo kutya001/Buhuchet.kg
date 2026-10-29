@@ -367,7 +367,10 @@ export function templateHandler(deps: ApiDeps): RouteHandler<typeof templateRout
 
 /* ───────────── Шаг 2: загрузка заполненного шаблона ───────────── */
 
-/** Таблица из тела запроса; не читается — 400, больше предела — 413. */
+/**
+ * Таблица из тела запроса: больше 4 МБ — 413; не читается или больше пределов листа (строк, столбцов,
+ * ячеек; распакованный — больше 64 МБ) — 400.
+ */
 async function sheetOf(c: Context<AppEnv>): Promise<SheetCell[][]> {
   const bytes = Buffer.from(await c.req.arrayBuffer());
   if (bytes.length > KPI_IMPORT_MAX_BYTES) tooBig();
@@ -376,8 +379,10 @@ async function sheetOf(c: Context<AppEnv>): Promise<SheetCell[][]> {
     return readSheetRows(bytes);
   } catch (err) {
     if (err instanceof SheetReadError) {
-      if (err.code === 'file_too_big') tooBig();
-      kpiFail(400, 'import_file_unreadable');
+      kpiFail(
+        400,
+        err.code === 'sheet_too_big' ? 'import_sheet_too_big' : 'import_file_unreadable',
+      );
     }
     throw err;
   }
@@ -495,7 +500,10 @@ function previewOf(p: Planned) {
 }
 
 const uploadResponses = {
-  400: { description: 'Файл не читается как таблица', content: error },
+  400: {
+    description: 'Файл не читается как таблица или в нём больше строк, столбцов, ячеек, чем можно',
+    content: error,
+  },
   401: noAuth,
   403: noImport,
   413: { description: 'Файл больше 4 МБ', content: error },
@@ -633,9 +641,9 @@ export const importErrorsRoute = createRoute({
 });
 
 export function importErrorsHandler(deps: ApiDeps): RouteHandler<typeof importErrorsRoute, AppEnv> {
-  return async (c) => {
-    const rows = await sheetOf(c);
-    return withExportSlot(deps, c.get('session')!.userId, async () => {
+  return async (c) =>
+    withExportSlot(deps, c.get('session')!.userId, async () => {
+      const rows = await sheetOf(c);
       const t = await serverTexts(deps);
       const errors = await inKpi(deps, c, async (tx) =>
         errorsOf(await planOf(deps, c, tx, rows), EXPORT_ROWS_LIMIT),
@@ -666,7 +674,6 @@ export function importErrorsHandler(deps: ApiDeps): RouteHandler<typeof importEr
         'cache-control': 'no-store',
       });
     });
-  };
 }
 
 export const importHistoryRoute = createRoute({

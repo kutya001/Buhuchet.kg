@@ -2,7 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { buildImportTemplate } from '../modules/kpi/import-file';
 import { unzipTexts } from '../testing';
 import { buildXlsx, zip } from './xlsx';
-import { readCsvRows, readSheetRows, readXlsxRows, SheetReadError } from './xlsx-read';
+import {
+  DEFAULT_SHEET_LIMITS,
+  readCsvRows,
+  readSheetRows,
+  readXlsxRows,
+  SHEET_TEXT_MAX_LENGTH,
+  SheetReadError,
+} from './xlsx-read';
 
 /** Книга из своих файлов листа: как сохраняют Excel и LibreOffice (общие строки, ссылки листа). */
 function book(sheet: string, extra: Record<string, string> = {}) {
@@ -137,17 +144,66 @@ describe('Чтение загруженной таблицы (.xlsx и CSV)', ()
     expect(code(() => readXlsxRows(wide))).toBe('file_unreadable');
   });
 
-  it('«архивная бомба» и слишком много ячеек — «файл слишком большой»', async () => {
+  it('«архивная бомба», слишком много строк, столбцов или ячеек — «в файле слишком много»', async () => {
     const huge = await book(
       `<row r="1"><c r="A1"><v>1</v></c></row>${' '.repeat(65 * 1024 * 1024)}`,
     );
     // Сжатый файл маленький, а распакованный — больше 64 МБ.
     expect(huge.length).toBeLessThan(1024 * 1024);
-    expect(code(() => readXlsxRows(huge))).toBe('file_too_big');
+    expect(code(() => readXlsxRows(huge))).toBe('sheet_too_big');
     const cells = await book(
       '<row r="1"><c r="A1"><v>1</v></c><c r="B1"><v>2</v></c><c r="C1"><v>3</v></c></row>',
     );
-    expect(code(() => readXlsxRows(cells, 2))).toBe('file_too_big');
-    expect(code(() => readCsvRows(Buffer.from('1;2;3'), 2))).toBe('file_too_big');
+    expect(code(() => readXlsxRows(cells, { cells: 2 }))).toBe('sheet_too_big');
+    expect(code(() => readCsvRows(Buffer.from('1;2;3'), { cells: 2 }))).toBe('sheet_too_big');
+    // Строка дальше предела, столбец дальше предела (но в пределах листа Excel).
+    const far = await book(`<row r="${DEFAULT_SHEET_LIMITS.rows + 1}"><c><v>1</v></c></row>`);
+    expect(code(() => readXlsxRows(far))).toBe('sheet_too_big');
+    const xfd = await book('<row><c r="XFD1"><v>1</v></c></row>');
+    expect(code(() => readXlsxRows(xfd))).toBe('sheet_too_big');
+    // Строки по одной ячейке в далёком столбце: в памяти каждая — 4 000 ячеек.
+    const wide = await book('<row><c r="EWV1"><v>1</v></c></row>'.repeat(1_000));
+    expect(code(() => readXlsxRows(wide))).toBe('sheet_too_big');
+    expect(code(() => readCsvRows(Buffer.from('\n'.repeat(DEFAULT_SHEET_LIMITS.rows + 1))))).toBe(
+      'sheet_too_big',
+    );
+    const csvWide = Buffer.from(';'.repeat(DEFAULT_SHEET_LIMITS.columns));
+    expect(code(() => readCsvRows(csvWide))).toBe('sheet_too_big');
+  });
+
+  it('испорченный XML разбирается за один проход: незакрытые строки и ячейки — «не удалось прочитать»', async () => {
+    // Регулярное выражение «до </row>» на каждом из 200 000 незакрытых тегов просматривало бы весь лист.
+    const rows = await book('<row>'.repeat(200_000));
+    expect(code(() => readXlsxRows(rows))).toBe('file_unreadable');
+    const cells = await book(`<row>${'<c>'.repeat(200_000)}</row>`);
+    expect(code(() => readXlsxRows(cells))).toBe('file_unreadable');
+    const nested = await book('<sheetData>'.repeat(200_000));
+    expect(code(() => readXlsxRows(nested))).toBe('file_unreadable');
+    const strings = await book('<row><c t="s"><v>0</v></c></row>', {
+      'xl/sharedStrings.xml': `<sst>${'<si><t>a</t>'.repeat(100_000)}</sst>`,
+    });
+    expect(code(() => readXlsxRows(strings))).toBe('file_unreadable');
+    const noEnd = await book('<row><c><v>1</v>');
+    expect(code(() => readXlsxRows(noEnd))).toBe('file_unreadable');
+  });
+
+  it('текст ячейки — не длиннее 1 000 символов; теги с приставкой пространства имён читаются', async () => {
+    const long = 'я '.repeat(1_000_000);
+    const file = await book(
+      '<x:row r="1"><x:c r="A1" t="s"><x:v>0</x:v></x:c>' +
+        `<x:c r="B1" t="inlineStr"><x:is><x:t>${long}</x:t><x:t>!</x:t></x:is></x:c>` +
+        `<x:c r="C1" t="str"><x:v>${'&amp;'.repeat(5_000)}</x:v></x:c></x:row>`,
+      { 'xl/sharedStrings.xml': `<sst><si><t>${long}</t></si></sst>` },
+    );
+    const [row] = readXlsxRows(file);
+    expect(row!.map((v) => String(v).length)).toEqual([
+      SHEET_TEXT_MAX_LENGTH + 1,
+      SHEET_TEXT_MAX_LENGTH + 1,
+      SHEET_TEXT_MAX_LENGTH + 1,
+    ]);
+    expect(row![0]).toBe(`${long.slice(0, SHEET_TEXT_MAX_LENGTH)}…`);
+    expect(row![2]).toBe(`${'&'.repeat(SHEET_TEXT_MAX_LENGTH)}…`);
+    const csv = readCsvRows(Buffer.from(`ИНН;"${long}"\n`));
+    expect(csv[0]![1]).toBe(`${long.slice(0, SHEET_TEXT_MAX_LENGTH)}…`);
   });
 });

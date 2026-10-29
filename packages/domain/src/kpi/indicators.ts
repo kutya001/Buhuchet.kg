@@ -246,5 +246,7 @@ export const KPI_MESSAGES = {
   import_nothing: 'В файле нет новых или изменённых значений',
   import_file_unreadable: 'Не удалось прочитать файл: нужен заполненный шаблон .xlsx или CSV',
   import_file_too_big: 'Файл больше 4 МБ',
+  import_sheet_too_big:
+    'В файле слишком много строк, столбцов или ячеек: в шаблоне — до 1 000 контрагентов и 24 месяцев',
 } as const;
 export type KpiRefusal = keyof typeof KPI_MESSAGES;
