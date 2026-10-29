@@ -7,6 +7,7 @@ export * from './staff';
 export * from './contractors';
 export * from './tasks';
 export * from './org-settings';
+export * from './onboarding';
 export * from './history';
 export * from './auth';
 export * from './telegram';

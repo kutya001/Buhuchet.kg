@@ -8,6 +8,7 @@ export * from './contractors';
 export * from './tasks';
 export * from './roles';
 export * from './org';
+export * from './onboarding';
 export * from './kb';
 export * from './news';
 export * from './l10n';

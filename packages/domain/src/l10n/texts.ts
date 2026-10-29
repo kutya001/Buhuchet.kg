@@ -8,6 +8,7 @@ import { KB_TEXTS } from './kb-texts';
 import { KPI_TEXTS } from './kpi-texts';
 import { MONEY_TEXTS } from './money-texts';
 import { NEWS_TEXTS } from './news-texts';
+import { ONBOARDING_TEXTS } from './onboarding-texts';
 import { ORG_TEXTS } from './org-texts';
 import { PLATFORM_DICTS_TEXTS } from './platform-dicts-texts';
 import { SHELL_TEXTS } from './shell-texts';
@@ -72,6 +73,7 @@ export const UI_TEXTS = {
   ...STAFF_TEXTS,
   ...STATUS_TEXTS,
   ...ORG_TEXTS,
+  ...ONBOARDING_TEXTS,
   ...CONTRACTORS_TEXTS,
   ...TASKS_TEXTS,
   ...ADMIN_ACCOUNTS_TEXTS,

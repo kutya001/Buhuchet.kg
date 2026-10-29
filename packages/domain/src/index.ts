@@ -7,6 +7,7 @@ export * from './org/slug';
 export * from './org/inn';
 export * from './org/profile';
 export * from './org/modules';
+export * from './onboarding/onboarding';
 export * from './auth/login';
 export * from './staff/names';
 export * from './staff/rules';

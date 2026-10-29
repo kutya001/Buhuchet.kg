@@ -197,6 +197,8 @@ const actor = alias(employees, 'actor');
  * пишутся отдельно (modules/org.js: log('org', 'settings')).
  */
 export const ORG_POLICY_FIELDS = [
+  // Отметка опросника «по опроснику» (задача 2.33, `ONBOARDING_HISTORY_FIELD`).
+  'quiz',
   'features',
   'taskConfirm',
   'reportConfirm',
