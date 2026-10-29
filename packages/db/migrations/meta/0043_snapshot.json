@@ -1,5 +1,5 @@
 {
-  "id": "70362074-8797-476a-a191-ee998a24f48f",
+  "id": "8cfc5119-3084-45ef-bb6b-97a693fbd451",
   "prevId": "c26fcdc4-f747-418e-9af6-d7b5665e5b2c",
   "version": "7",
   "dialect": "postgresql",
@@ -3856,8 +3856,8 @@
           "to": [
             "buhuchet_app"
           ],
-          "using": "\"kb_article_reads\".\"org_id\" is null and app.current_org_id() is null and \"kb_article_reads\".\"user_id\" = app.current_user_id() and app.is_platform_admin()",
-          "withCheck": "\"kb_article_reads\".\"org_id\" is null and app.current_org_id() is null and \"kb_article_reads\".\"user_id\" = app.current_user_id() and app.is_platform_admin()"
+          "using": "\"kb_article_reads\".\"org_id\" is null and app.current_org_id() is null and \"kb_article_reads\".\"user_id\" = app.current_user_id()",
+          "withCheck": "\"kb_article_reads\".\"org_id\" is null and app.current_org_id() is null and \"kb_article_reads\".\"user_id\" = app.current_user_id()"
         }
       },
       "checkConstraints": {
@@ -4005,8 +4005,8 @@
           "to": [
             "buhuchet_app"
           ],
-          "using": "\"kb_levels\".\"org_id\" is null and app.current_org_id() is null and \"kb_levels\".\"user_id\" = app.current_user_id() and app.is_platform_admin()",
-          "withCheck": "\"kb_levels\".\"org_id\" is null and app.current_org_id() is null and \"kb_levels\".\"user_id\" = app.current_user_id() and app.is_platform_admin()"
+          "using": "\"kb_levels\".\"org_id\" is null and app.current_org_id() is null and \"kb_levels\".\"user_id\" = app.current_user_id()",
+          "withCheck": "\"kb_levels\".\"org_id\" is null and app.current_org_id() is null and \"kb_levels\".\"user_id\" = app.current_user_id()"
         }
       },
       "checkConstraints": {
@@ -4165,8 +4165,8 @@
           "to": [
             "buhuchet_app"
           ],
-          "using": "\"kb_progress\".\"org_id\" is null and app.current_org_id() is null and \"kb_progress\".\"user_id\" = app.current_user_id() and app.is_platform_admin()",
-          "withCheck": "\"kb_progress\".\"org_id\" is null and app.current_org_id() is null and \"kb_progress\".\"user_id\" = app.current_user_id() and app.is_platform_admin()"
+          "using": "\"kb_progress\".\"org_id\" is null and app.current_org_id() is null and \"kb_progress\".\"user_id\" = app.current_user_id()",
+          "withCheck": "\"kb_progress\".\"org_id\" is null and app.current_org_id() is null and \"kb_progress\".\"user_id\" = app.current_user_id()"
         }
       },
       "checkConstraints": {
@@ -4183,422 +4183,6 @@
           "value": "(\"kb_progress\".\"done_how\" is null) = (\"kb_progress\".\"done_at\" is null)"
         }
       },
-      "isRLSEnabled": true
-    },
-    "public.news": {
-      "name": "news",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "title": {
-          "name": "title",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "type": {
-          "name": "type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "release": {
-          "name": "release",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "publish_date": {
-          "name": "publish_date",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "short": {
-          "name": "short",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "md": {
-          "name": "md",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "link_kind": {
-          "name": "link_kind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "link_id": {
-          "name": "link_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "pinned": {
-          "name": "pinned",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "show_on_login": {
-          "name": "show_on_login",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": true
-        },
-        "audience": {
-          "name": "audience",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'all'"
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'draft'"
-        },
-        "off": {
-          "name": "off",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "published_at": {
-          "name": "published_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "edited_at": {
-          "name": "edited_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_by": {
-          "name": "created_by",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "updated_by": {
-          "name": "updated_by",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "version": {
-          "name": "version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        }
-      },
-      "indexes": {
-        "news_publish_idx": {
-          "name": "news_publish_idx",
-          "columns": [
-            {
-              "expression": "publish_date",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "news_created_by_users_id_fk": {
-          "name": "news_created_by_users_id_fk",
-          "tableFrom": "news",
-          "tableTo": "users",
-          "columnsFrom": [
-            "created_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
-        "news_updated_by_users_id_fk": {
-          "name": "news_updated_by_users_id_fk",
-          "tableFrom": "news",
-          "tableTo": "users",
-          "columnsFrom": [
-            "updated_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {
-        "news_read": {
-          "name": "news_read",
-          "as": "PERMISSIVE",
-          "for": "SELECT",
-          "to": [
-            "buhuchet_app"
-          ],
-          "using": "app.is_platform_admin() or (\"news\".\"status\" = 'published' and not \"news\".\"off\" and \"news\".\"audience\" = 'all' and (\"news\".\"publish_date\" + time '09:00') at time zone 'Asia/Bishkek' <= now())"
-        },
-        "news_admin_insert": {
-          "name": "news_admin_insert",
-          "as": "PERMISSIVE",
-          "for": "INSERT",
-          "to": [
-            "buhuchet_app"
-          ],
-          "withCheck": "app.is_platform_admin()"
-        },
-        "news_admin_update": {
-          "name": "news_admin_update",
-          "as": "PERMISSIVE",
-          "for": "UPDATE",
-          "to": [
-            "buhuchet_app"
-          ],
-          "using": "app.is_platform_admin()",
-          "withCheck": "app.is_platform_admin()"
-        },
-        "news_admin_delete": {
-          "name": "news_admin_delete",
-          "as": "PERMISSIVE",
-          "for": "DELETE",
-          "to": [
-            "buhuchet_app"
-          ],
-          "using": "app.is_platform_admin() and \"news\".\"status\" = 'draft'"
-        }
-      },
-      "checkConstraints": {
-        "news_id_check": {
-          "name": "news_id_check",
-          "value": "\"news\".\"id\" ~ '^[a-z0-9][a-z0-9_-]{0,63}$'"
-        },
-        "news_type_check": {
-          "name": "news_type_check",
-          "value": "\"news\".\"type\" in ('update', 'feature', 'fix', 'announce')"
-        },
-        "news_audience_check": {
-          "name": "news_audience_check",
-          "value": "\"news\".\"audience\" in ('all', 'adm')"
-        },
-        "news_status_check": {
-          "name": "news_status_check",
-          "value": "\"news\".\"status\" in ('draft', 'published')"
-        },
-        "news_link_check": {
-          "name": "news_link_check",
-          "value": "(\"news\".\"link_kind\" is null and \"news\".\"link_id\" is null) or (\"news\".\"link_kind\" in ('art', 'mod') and \"news\".\"link_id\" ~ '^[A-Za-z0-9_-]{1,64}$')"
-        },
-        "news_published_check": {
-          "name": "news_published_check",
-          "value": "(\"news\".\"status\" = 'published') = (\"news\".\"published_at\" is not null)"
-        }
-      },
-      "isRLSEnabled": true
-    },
-    "public.news_reads": {
-      "name": "news_reads",
-      "schema": "",
-      "columns": {
-        "user_id": {
-          "name": "user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "org_id": {
-          "name": "org_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false,
-          "default": "app.current_org_id()"
-        },
-        "news_id": {
-          "name": "news_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "read_at": {
-          "name": "read_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "news_reads_news_idx": {
-          "name": "news_reads_news_idx",
-          "columns": [
-            {
-              "expression": "news_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "news_reads_org_idx": {
-          "name": "news_reads_org_idx",
-          "columns": [
-            {
-              "expression": "org_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "news_reads_user_id_users_id_fk": {
-          "name": "news_reads_user_id_users_id_fk",
-          "tableFrom": "news_reads",
-          "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "news_reads_org_id_organizations_id_fk": {
-          "name": "news_reads_org_id_organizations_id_fk",
-          "tableFrom": "news_reads",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "org_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        },
-        "news_reads_news_id_news_id_fk": {
-          "name": "news_reads_news_id_news_id_fk",
-          "tableFrom": "news_reads",
-          "tableTo": "news",
-          "columnsFrom": [
-            "news_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "news_reads_user_org_fk": {
-          "name": "news_reads_user_org_fk",
-          "tableFrom": "news_reads",
-          "tableTo": "users",
-          "columnsFrom": [
-            "user_id",
-            "org_id"
-          ],
-          "columnsTo": [
-            "id",
-            "org_id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "news_reads_pk": {
-          "name": "news_reads_pk",
-          "columns": [
-            "user_id",
-            "news_id"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "policies": {
-        "news_reads_own": {
-          "name": "news_reads_own",
-          "as": "PERMISSIVE",
-          "for": "ALL",
-          "to": [
-            "buhuchet_app"
-          ],
-          "using": "\"news_reads\".\"org_id\" = app.current_org_id() and \"news_reads\".\"user_id\" = app.current_user_id()",
-          "withCheck": "\"news_reads\".\"org_id\" = app.current_org_id() and \"news_reads\".\"user_id\" = app.current_user_id()"
-        },
-        "news_reads_platform_admin": {
-          "name": "news_reads_platform_admin",
-          "as": "PERMISSIVE",
-          "for": "ALL",
-          "to": [
-            "buhuchet_app"
-          ],
-          "using": "\"news_reads\".\"org_id\" is null and app.current_org_id() is null and \"news_reads\".\"user_id\" = app.current_user_id() and app.is_platform_admin()",
-          "withCheck": "\"news_reads\".\"org_id\" is null and app.current_org_id() is null and \"news_reads\".\"user_id\" = app.current_user_id() and app.is_platform_admin()"
-        },
-        "news_reads_admin_count": {
-          "name": "news_reads_admin_count",
-          "as": "PERMISSIVE",
-          "for": "SELECT",
-          "to": [
-            "buhuchet_app"
-          ],
-          "using": "app.is_platform_admin()"
-        }
-      },
-      "checkConstraints": {},
       "isRLSEnabled": true
     },
     "public.status_history": {
@@ -4872,6 +4456,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_by": {
           "name": "created_by",
           "type": "uuid",
@@ -5009,6 +4599,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_by": {
           "name": "created_by",
           "type": "uuid",
@@ -5137,6 +4733,12 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
         },
         "created_by": {
           "name": "created_by",
@@ -5283,6 +4885,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_by": {
           "name": "created_by",
           "type": "uuid",
@@ -5398,6 +5006,12 @@
           "primaryKey": false,
           "notNull": true,
           "default": "''"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
         },
         "created_by": {
           "name": "created_by",
@@ -5522,6 +5136,12 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
         },
         "created_by": {
           "name": "created_by",
@@ -6094,6 +5714,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_by": {
           "name": "created_by",
           "type": "uuid",
@@ -6310,6 +5936,12 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
         },
         "created_by": {
           "name": "created_by",
@@ -6806,6 +6438,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_by": {
           "name": "created_by",
           "type": "uuid",
@@ -6964,6 +6602,12 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
         },
         "created_by": {
           "name": "created_by",
@@ -7147,6 +6791,12 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
         },
         "created_by": {
           "name": "created_by",

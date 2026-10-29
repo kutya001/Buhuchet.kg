@@ -33,6 +33,13 @@ export interface ToastOptions {
   icon?: IconName;
   /** Ошибка: значок красный. */
   bad?: boolean;
+  /** Ссылка-действие после текста (прототип `.toast-a`): «Мои запросы» после отправки запроса. */
+  action?: ToastAction;
+}
+
+export interface ToastAction {
+  label: string;
+  run: () => void;
 }
 
 /** Показать уведомление внизу экрана: короткий результат действия («Сохранено», «Скопировано»). */
@@ -90,6 +97,7 @@ interface ToastItem {
   message: string;
   icon: IconName;
   bad: boolean;
+  action?: ToastAction;
 }
 
 /**
@@ -101,10 +109,10 @@ interface ToastItem {
 export function ToastProvider({ labels, children }: { labels: ToastLabels; children: ReactNode }) {
   const [items, setItems] = useState<readonly ToastItem[]>([]);
   const seq = useRef(0);
-  const show = useCallback<ShowToast>((message, { icon = 'check', bad = false } = {}) => {
+  const show = useCallback<ShowToast>((message, { icon = 'check', bad = false, action } = {}) => {
     seq.current += 1;
     const id = seq.current;
-    setItems((list) => [...list, { id, message, icon, bad }]);
+    setItems((list) => [...list, { id, message, icon, bad, ...(action ? { action } : {}) }]);
   }, []);
   const remove = useCallback((id: number) => {
     setItems((list) => list.filter((t) => t.id !== id));
@@ -120,6 +128,7 @@ export function ToastProvider({ labels, children }: { labels: ToastLabels; child
             message={t.message}
             icon={t.icon}
             bad={t.bad}
+            {...(t.action ? { action: t.action } : {})}
             labels={labels}
             onGone={() => remove(t.id)}
           />
@@ -139,12 +148,14 @@ export function Toast({
   message,
   icon,
   bad,
+  action,
   labels,
   onGone,
 }: {
   message: string;
   icon: IconName;
   bad: boolean;
+  action?: ToastAction;
   labels: ToastLabels;
   onGone: () => void;
 }) {
@@ -250,6 +261,19 @@ export function Toast({
     >
       <Icon name={icon} className={bad ? 'text-brand-red' : ''} />
       <span>{message}</span>
+      {action ? (
+        <button
+          type="button"
+          onClick={() => {
+            life.current?.stop();
+            onGone();
+            action.run();
+          }}
+          className="cursor-pointer border-0 bg-transparent px-0.5 font-[650] whitespace-nowrap text-inherit underline underline-offset-2"
+        >
+          {action.label}
+        </button>
+      ) : null}
       <button
         type="button"
         aria-label={labels.close}

@@ -11,11 +11,15 @@ export type CountKey =
   | 'grid.count'
   | 'staff.count'
   | 'roles.count'
+  | 'task.count'
   | 'accounts.count'
   | 'orgs.count'
   | 'locale.count'
   | 'dicts.count'
   | 'dicts.platform.count'
+  | 'pdicts.count'
+  | 'pdicts.ugns_count'
+  | 'pdicts.req.count'
   | 'news.count';
 
 /** Тексты списка из словаря; число записей — в форме для числа (1 сотрудник, 2 сотрудника, 5 сотрудников). */

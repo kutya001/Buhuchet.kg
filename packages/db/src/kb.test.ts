@@ -23,6 +23,7 @@ import {
 import { createOrganization, type CreatedOrganization } from './organizations';
 import { kbArticleReads, kbLevels, kbProgress, telegramLinks, users } from './schema';
 import { createEmployee } from './staff';
+import { writeStatusChange } from './status';
 import {
   createTestDatabase,
   databaseAvailable,
@@ -299,6 +300,46 @@ describe.skipIf(!databaseAvailable())('«База знаний»: прогрес
     // Другая организация не видит ни истории, ни Telegram владельца «Альфы».
     expect((await asOwner(b, (tx) => kbDoneFacts(tx, a.ownerUserId, steps))).size).toBe(0);
     expect(await asOwner(a, (tx) => kbDoneFacts(tx, a.ownerUserId, []))).toEqual(new Map());
+  });
+
+  it('факты «Сделать» задач — из своей «Истории статусов»', async () => {
+    const entityId = '00000000-0000-4000-8000-0000000000aa';
+    const steps = ['tdone', 'tconf'].map((id) => ({ id, rule: KB_STEP_RULES[id]!.done! }));
+    await inOrg(a, accUserId, (tx) =>
+      writeStatusChange(
+        tx,
+        { scale: 'task', entityId, from: 'todo', to: 'in_progress' },
+        { scale: 'task', entityId, from: 'in_progress', to: 'on_confirm' },
+      ),
+    );
+    const acc = await inOrg(a, accUserId, (tx) => kbDoneFacts(tx, accUserId, steps));
+    expect([...acc.keys()]).toEqual(['tdone']);
+    // Смены статусов сотрудника владельцу не засчитываются; подтверждение — засчитывается ему.
+    expect((await asOwner(a, (tx) => kbDoneFacts(tx, a.ownerUserId, steps))).size).toBe(0);
+    await asOwner(a, (tx) =>
+      writeStatusChange(tx, { scale: 'task', entityId, from: 'on_confirm', to: 'confirmed' }),
+    );
+    const owner = await asOwner(a, (tx) => kbDoneFacts(tx, a.ownerUserId, steps));
+    expect([...owner.keys()]).toEqual(['tconf']);
+    expect((await asOwner(b, (tx) => kbDoneFacts(tx, a.ownerUserId, steps))).size).toBe(0);
+  });
+
+  it('шаг Админки «Создать организацию и её владельца» — по организации, созданной самим администратором', async () => {
+    const steps = [{ id: 'a-org', rule: KB_STEP_RULES['a-org']!.done! }];
+    const asAdmin = () =>
+      withUserContext(db.app.db, adminId, (tx) => kbDoneFacts(tx, adminId, steps));
+    // «Альфу» и «Бету» создало наполнение, не администратор.
+    expect((await asAdmin()).size).toBe(0);
+    await createOrganization(db.app.db, {
+      name: 'ОсОО «Гамма»',
+      inn: '03811201810458',
+      slug: 'gamma',
+      owner: { fullName: 'Гапарова Гульнара', login: 'gaparova', passwordHash: '!' },
+      createdBy: adminId,
+    });
+    expect((await asAdmin()).get('a-org')).toBeInstanceOf(Date);
+    // Сотруднику организации представление Админки пусто.
+    expect((await asOwner(a, (tx) => kbDoneFacts(tx, adminId, steps))).size).toBe(0);
   });
 
   it('«Подключили функцию» — дата последнего включения по истории учётной политики', async () => {

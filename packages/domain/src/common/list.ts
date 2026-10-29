@@ -443,6 +443,11 @@ export interface GridViewSettings {
  * сюда — сервер не хранит настройки списков, которых нет.
  */
 export const GRID_KEYS = [
+  // «Задачи»: у каждой вкладки свой вид, как `'tasks-'+tab` в прототипе.
+  'tasks.mine',
+  'tasks.byme',
+  'tasks.all',
+  'tasks.overdue',
   'staff.list',
   'staff.roles',
   'kb.team',
@@ -469,6 +474,13 @@ export const GRID_KEYS = [
   'dicts.platform.statuses',
   'dicts.platform.cats',
   'dicts.platform.templates',
+  // Админка → «Справочники платформы»: справочник каждой вкладки и «Запросы».
+  'pdicts.forms',
+  'pdicts.organs',
+  'pdicts.ugns',
+  'pdicts.banks',
+  'pdicts.reasons',
+  'pdicts.requests',
 ] as const;
 export type GridKey = (typeof GRID_KEYS)[number];
 

@@ -12,6 +12,7 @@ export const HISTORY_ENTITIES = [
   'employee',
   'role',
   'contractor',
+  'task',
   'file',
   'org_report_type',
   'dict_request',
@@ -19,6 +20,7 @@ export const HISTORY_ENTITIES = [
   'employee_wallet',
   'news',
   'ui_text',
+  'platform_dict',
 ] as const;
 export type HistoryEntity = (typeof HISTORY_ENTITIES)[number];
 

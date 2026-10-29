@@ -57,8 +57,10 @@ const oneOf = (column: AnyPgColumn, values: readonly string[]): SQL =>
 const allOf = (column: AnyPgColumn, values: readonly string[]): SQL =>
   sql`${column} <@ array[${sql.raw(values.map((v) => `'${v}'`).join(', '))}]::text[]`;
 
-/** Кто завёл и кто поправил значение в Админке; null — значение из наполнения. */
+/** Кто и когда завёл и кто поправил значение в Админке; null — значение из наполнения. */
 const auditColumns = () => ({
+  /** «Создано»: когда администратор добавил значение (docs/deviations.md, п. 48). */
+  createdAt: timestamp('created_at', { withTimezone: true }),
   createdBy: uuid('created_by').references(() => users.id),
   /** Поправленное в Админке значение `db:seed --update` не затирает. */
   updatedBy: uuid('updated_by').references(() => users.id),
@@ -540,5 +542,25 @@ export const banks = pgTable(
     uniqueIndex('banks_name_key').on(t.name),
     check('banks_kind_check', oneOf(t.kind, BANK_KINDS)),
     platformReadOnly('banks_read'),
+  ],
+).enableRLS();
+
+/**
+ * «Категории задач» (задача 2.23; ТЗ «Справочники платформы» → «Категории задач»): категория ручной
+ * задачи в форме задачи. Раньше — раздел `dictionaries.cats` в `platform_reference`.
+ */
+export const taskCategories = pgTable(
+  'task_categories',
+  {
+    /** КАТ-001 … */
+    code: text('code').primaryKey(),
+    name: text('name').notNull(),
+    /** «Пояснение» (Админка, прототип `valueDlg`): видят все организации. */
+    note: text('note').notNull().default(''),
+    ...dictColumns(),
+  },
+  (t) => [
+    uniqueIndex('task_categories_name_key').on(t.name),
+    platformReadOnly('task_categories_read'),
   ],
 ).enableRLS();
