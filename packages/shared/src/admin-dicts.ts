@@ -1,6 +1,9 @@
 import {
+  ADMIN_TAX_LISTS,
   ADMIN_VALUE_DICTS,
   BANK_KINDS,
+  CALENDAR_ADD_TYPES,
+  CALENDAR_DAY_KINDS,
   DECLARATION_FOR,
   DICT_NAME_MAX,
   DICT_NOTE_MAX,
@@ -8,13 +11,18 @@ import {
   DICT_REQUEST_ANSWERS,
   DICT_REQUEST_DICTS,
   DICT_REQUEST_STATUSES,
+  isIsoDate,
   ORGAN_CONTACTS_MAX,
+  PHONE_DIAL_CODE_PATTERN,
+  PHONE_MASK_PATTERN,
+  REPORT_KINDS,
   organSiteUrl,
+  REGIME_KINDS,
   UGNS_CODE_PATTERN,
   type UiTextKey,
 } from '@buhuchet/domain';
 import { z } from 'zod';
-import { RecordAudit, RecordVersion, Uuid } from './common';
+import { IsoDate, RecordAudit, RecordVersion, Uuid } from './common';
 import { listPageSchema } from './list';
 
 /*
@@ -31,6 +39,9 @@ export const AdminDictCodeParam = AdminValueDictParam.extend({ code: z.string().
 
 const Contact = z.object({ label: z.string(), value: z.string() });
 
+/** «Тип»: у банковского провайдера — банк или кошелёк, у режима — общий или специальный. */
+const Kind = z.enum([...BANK_KINDS, ...REGIME_KINDS]);
+
 /** Поля значения сверх кода и названия — у каждого справочника свои (`ADMIN_DICT_META.fields`). */
 export const AdminDictData = z.object({
   fullName: z.string().optional(),
@@ -45,9 +56,22 @@ export const AdminDictData = z.object({
   /** Код ГНС управления; null — не сверен. */
   gnsCode: z.string().nullable().optional(),
   region: z.string().optional(),
-  /** У банковского провайдера: «Тип» и «Переводы по номеру телефона». */
-  kind: z.enum(BANK_KINDS).optional(),
+  /** У банковского провайдера и режима — «Тип»; у провайдера — «Переводы по номеру телефона». */
+  kind: Kind.optional(),
   byPhone: z.boolean().optional(),
+  /** У режима: «Освобождает от», «Кто применяет», «Как переходят», «Совмещается с». */
+  frees: z.string().optional(),
+  who: z.string().optional(),
+  how: z.string().optional(),
+  combines: z.string().optional(),
+  accountantNote: z.string().optional(),
+  article: z.string().optional(),
+  /** У основания: коды видов отчётов, в порядке каталога. */
+  types: z.array(z.string()).optional(),
+  /** У кода страны: флаг, телефонный код без «+» и маска номера. */
+  flag: z.string().optional(),
+  dialCode: z.string().optional(),
+  mask: z.string().optional(),
 });
 export type AdminDictData = z.infer<typeof AdminDictData>;
 
@@ -112,8 +136,22 @@ export const AdminDictValueForm = z.object({
     .refine((v) => v === '' || UGNS_CODE_PATTERN.test(v), message('pdicts.err.ugns_code'))
     .optional(),
   region: text(DICT_NAME_MAX).optional(),
-  kind: z.enum(BANK_KINDS).optional(),
+  kind: Kind.optional(),
   byPhone: z.boolean().optional(),
+  frees: text(DICT_NOTE_MAX).optional(),
+  who: text(DICT_NOTE_MAX).optional(),
+  how: text(DICT_NOTE_MAX).optional(),
+  combines: text(DICT_NOTE_MAX).optional(),
+  accountantNote: text(DICT_NOTE_MAX).optional(),
+  article: text(DICT_NAME_MAX).optional(),
+  types: z.array(z.string().min(1).max(80)).max(500).optional(),
+  flag: text(16).optional(),
+  dialCode: z
+    .string()
+    .trim()
+    .regex(PHONE_DIAL_CODE_PATTERN, message('pdicts.err.dial_code'))
+    .optional(),
+  mask: z.string().trim().max(30).regex(PHONE_MASK_PATTERN, message('pdicts.err.mask')).optional(),
 });
 export type AdminDictValueFormInput = z.input<typeof AdminDictValueForm>;
 export type AdminDictValueForm = z.output<typeof AdminDictValueForm>;
@@ -125,6 +163,21 @@ export const UgnsValueForm = AdminDictValueForm.extend({
     .trim()
     .min(1, message('pdicts.err.short_required'))
     .max(DICT_NAME_MAX, message('form.too_long')),
+});
+
+/** Окно режима: полное название тоже обязательно — «Введите полное название». */
+export const RegimeValueForm = AdminDictValueForm.extend({
+  fullName: z
+    .string()
+    .trim()
+    .min(1, message('pdicts.err.full_required'))
+    .max(DICT_NAME_MAX, message('form.too_long')),
+});
+
+/** Окно кода страны: телефонный код и маска обязательны. */
+export const PhoneValueForm = AdminDictValueForm.extend({
+  dialCode: z.string().trim().regex(PHONE_DIAL_CODE_PATTERN, message('pdicts.err.dial_code')),
+  mask: z.string().trim().max(30).regex(PHONE_MASK_PATTERN, message('pdicts.err.mask')),
 });
 
 /** Изменить значение: поля окна и версия, которую видел администратор. */
@@ -162,10 +215,92 @@ export const AdminDictHistory = z.object({
       /** Как значение называлось: название, у УГНС — «код кратко». */
       label: z.string(),
       changes: z.array(HistoryChange),
+      /** Правка кода страны: вся строка до и после («Кыргызстан +996 XXX XXX XXX»), как в прототипе. */
+      summary: z.object({ from: z.string(), to: z.string() }).optional(),
     }),
   ),
 });
 export type AdminDictHistory = z.infer<typeof AdminDictHistory>;
+
+/**
+ * День вкладки «Календарь»: ключ записи (`MM-DD` — праздник каждый год, иначе дата), дата в году
+ * списка, вид и название. У дней из наполнения «Создано» пусто, как у значений справочников.
+ */
+export const AdminCalendarDay = z.object({
+  key: z.string(),
+  date: IsoDate,
+  kind: z.enum(CALENDAR_DAY_KINDS),
+  name: z.string(),
+  everyYear: z.boolean(),
+  audit: RecordAudit.extend({ createdAt: z.iso.datetime().nullable() }),
+  version: RecordVersion,
+});
+export type AdminCalendarDay = z.infer<typeof AdminCalendarDay>;
+
+/** Дни текущего и следующего года; `nextFilled` — в следующем году уже есть даты «только в этом году». */
+export const AdminCalendarList = listPageSchema(AdminCalendarDay).extend({
+  year: z.number().int(),
+  nextFilled: z.boolean(),
+});
+export type AdminCalendarList = z.infer<typeof AdminCalendarList>;
+
+/** Окно «Нерабочий день» (прототип holidayDlg): дата, тип и название праздника. */
+export const AdminCalendarAddForm = z
+  .object({
+    date: z.string().trim().refine(isIsoDate, message('pdicts.cal.err.date')),
+    type: z.enum(CALENDAR_ADD_TYPES),
+    name: text(DICT_NAME_MAX),
+  })
+  .refine((x) => x.type === 'workday' || x.name.length > 0, {
+    path: ['name'],
+    ...message('pdicts.cal.err.name'),
+  });
+export type AdminCalendarAddFormInput = z.input<typeof AdminCalendarAddForm>;
+export type AdminCalendarAddForm = z.output<typeof AdminCalendarAddForm>;
+
+/** Ключ дня календаря: `MM-DD` или `YYYY-MM-DD`. */
+export const AdminCalendarDayParam = z.object({
+  key: z.string().regex(/^(\d{4}-)?\d{2}-\d{2}$/),
+});
+
+/** Ответ правки календаря: у скольких несданных отчётов пересчитан срок. */
+export const AdminCalendarChanged = z.object({ recalculated: z.number().int().nonnegative() });
+export type AdminCalendarChanged = z.infer<typeof AdminCalendarChanged>;
+
+/** «Календарь на следующий год копированием»: что будет скопировано в год `year`. */
+export const AdminCalendarCopyPlan = z.object({
+  year: z.number().int(),
+  items: z.array(
+    z.object({
+      from: IsoDate,
+      to: IsoDate,
+      kind: z.enum(CALENDAR_DAY_KINDS),
+      name: z.string(),
+    }),
+  ),
+});
+export type AdminCalendarCopyPlan = z.infer<typeof AdminCalendarCopyPlan>;
+
+/** Скопировано дней и у скольких несданных отчётов пересчитан срок. */
+export const AdminCalendarCopied = AdminCalendarChanged.extend({
+  year: z.number().int(),
+  copied: z.number().int().nonnegative(),
+});
+export type AdminCalendarCopied = z.infer<typeof AdminCalendarCopied>;
+
+/** Каталог видов отчётов кратко: выбор видов у основания и подписи «Виды отчётов». */
+export const AdminReportTypeOptions = z.object({
+  items: z.array(
+    z.object({
+      code: z.string(),
+      name: z.string(),
+      shortName: z.string(),
+      kind: z.enum(REPORT_KINDS),
+      active: z.boolean(),
+    }),
+  ),
+});
+export type AdminReportTypeOptions = z.infer<typeof AdminReportTypeOptions>;
 
 /** Шапки вкладок: группы справочников платформы (раздел `dictGroups`) — что это и где используется. */
 export const AdminDictGroups = z.object({
@@ -224,3 +359,26 @@ export const DictRequestAnswerRequest = DictRequestAnswerForm.extend({
   path: ['answer'],
 });
 export type DictRequestAnswerRequest = z.infer<typeof DictRequestAnswerRequest>;
+
+/** Таблица вкладки «Налоги и ставки»: налоги и платежи, ставки единого налога, ставки на имущество. */
+export const AdminTaxListParam = z.object({ list: z.enum(ADMIN_TAX_LISTS) });
+
+/** Строка таблицы «Налогов и ставок»: ключ и значения столбцов (деньги — в тыйынах). */
+export const AdminTaxRow = z.object({
+  id: z.string(),
+  values: z.record(z.string(), z.union([z.string(), z.number()])),
+});
+export type AdminTaxRow = z.infer<typeof AdminTaxRow>;
+
+export const AdminTaxRowList = listPageSchema(AdminTaxRow);
+export type AdminTaxRowList = z.infer<typeof AdminTaxRowList>;
+
+/** Пояснения вкладки: размер бизнеса, кто не может применять единый налог, ставки на имущество. */
+export const AdminTaxInfo = z.object({
+  bizSize: z.array(
+    z.object({ code: z.string(), name: z.string(), rule: z.string(), note: z.string() }),
+  ),
+  enRates: z.array(z.string()),
+  propertyRates: z.string(),
+});
+export type AdminTaxInfo = z.infer<typeof AdminTaxInfo>;

@@ -40,7 +40,7 @@ export const KB_GO: Readonly<Record<string, KbTarget>> = {
   daymonth: { module: 'tasks', tab: 'mine', flash: '[data-task-legend]' },
   tdone: { module: 'tasks', tab: 'mine', flash: LIST },
   tconf: { module: 'tasks', tab: 'mine', flash: '[data-plate="pend"], main' },
-  // «Показатели контрагентов» (2.27): «Кому вести» — нажать переключатель вида.
+  // «Показатели контрагентов» (2.27, 2.28): «Кому вести» — нажать переключатель вида.
   kset: { module: 'kpi', tab: 'setup', flash: '[data-kpi-setup-list]' },
   kwho: {
     module: 'kpi',
@@ -49,6 +49,8 @@ export const KB_GO: Readonly<Record<string, KbTarget>> = {
     press: true,
   },
   kval: { module: 'kpi', tab: 'month', flash: '[data-kpi-table], [data-kpi-tile]' },
+  // «Ввод из Excel» (2.28): сразу открыть окно шаблона и загрузки.
+  kxls: { module: 'kpi', tab: 'month', flash: '[data-kpi-import]', open: { add: 'excel' } },
   kper: { module: 'kpi', tab: 'period', flash: LIST },
   kchk: { module: 'kpi', tab: 'period', flash: LIST },
   search: { module: null, flash: '[role=search]', phoneFlash: '[data-search-open]' },
@@ -57,8 +59,9 @@ export const KB_GO: Readonly<Record<string, KbTarget>> = {
   grp: { module: 'dicts', tab: 'types', flash: '[data-grid-group-button]' },
   xls: { module: 'dicts', tab: 'types', flash: '[data-grid-export]' },
   swipe: { module: 'dicts', tab: 'types', flash: '[data-tabrow]' },
-  // Админка. Прототип ведёт на «Режимы» — вкладка придёт со второй частью задачи 2.36.
-  'a-dicts': { module: 'pdicts', tab: 'forms', flash: 'main' },
+  // Админка.
+  'a-dicts': { module: 'pdicts', tab: 'regimes', flash: 'main' },
+  'a-cal': { module: 'pdicts', tab: 'calendar', flash: 'main' },
   'a-l10n': { module: 'l10n', flash: 'main' },
   'a-org': { module: 'orgs', flash: LIST, open: { add: 'org' } },
 };

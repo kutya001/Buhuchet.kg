@@ -58,14 +58,16 @@ export function Plate({
 }: PlateProps) {
   const content = (
     <>
-      <span className="flex items-center gap-2 text-[12.5px] font-semibold text-muted">
-        <span className={`grid h-6 w-6 flex-none place-items-center rounded-[7px] ${DOT[color]}`}>
+      <span className="flex items-center gap-2 text-[12.5px] font-semibold text-muted max-md:group-data-static/plates:gap-1.5 max-md:group-data-static/plates:text-[11.5px]">
+        <span
+          className={`grid h-6 w-6 flex-none place-items-center rounded-[7px] max-md:group-data-static/plates:h-5 max-md:group-data-static/plates:w-5 ${DOT[color]}`}
+        >
           <Icon name={icon} size="sm" />
         </span>
         {label}
       </span>
       {value !== undefined && (
-        <span className="text-[25px] leading-[1.05] font-[720] tracking-[-0.025em] tabular-nums max-md:text-[21px]">
+        <span className="text-[25px] leading-[1.05] font-[720] tracking-[-0.025em] tabular-nums max-md:text-[21px] max-md:group-data-static/plates:text-[18px]">
           {value}
           {unit && (
             <small className="ml-[3px] text-[13px] font-[550] tracking-normal text-faint">
@@ -74,11 +76,15 @@ export function Plate({
           )}
         </span>
       )}
-      {sub && <span className="text-[12px] text-faint">{sub}</span>}
+      {sub && (
+        <span className="text-[12px] text-faint group-data-static/plates:leading-[1.35] max-md:group-data-static/plates:line-clamp-2 max-md:group-data-static/plates:text-[11px]">
+          {sub}
+        </span>
+      )}
     </>
   );
   const box =
-    'flex min-w-0 flex-col gap-[7px] rounded-xl border border-line bg-raised px-3.5 pt-3 pb-[13px] text-left text-ink';
+    'flex min-w-0 flex-col gap-[7px] rounded-xl border border-line bg-raised px-3.5 pt-3 pb-[13px] text-left text-ink max-md:group-data-static/plates:gap-1 max-md:group-data-static/plates:px-3 max-md:group-data-static/plates:py-2.5';
   if (disabled) {
     return (
       <button
@@ -114,15 +120,25 @@ export function Plate({
 /**
  * Статистика модуля — ряд плашек-итогов над списком (прототип `.plates`; ТЗ «Статистика модуля
  * (плашки-итоги)»): на ПК — сколько поместится, не уже 158 px, на телефоне — по две в строку, число
- * 21 px. Скрыта кнопкой «Статистика» в ряду вкладок (`shown` = false) — ряда нет. Плашки внутри
- * карточки записи (компактнее на телефоне, `.plates.static`) добавят экраны карточек.
+ * 21 px. Скрыта кнопкой «Статистика» в ряду вкладок (`shown` = false) — ряда нет. `static` — плашки
+ * внутри окна (`.plates.static`): на ПК не уже 200 px, на телефоне компактнее — число 18 px, пояснение
+ * в две строки.
  */
-export function Plates({ shown = true, children }: { shown?: boolean; children: ReactNode }) {
+export function Plates({
+  shown = true,
+  static: inWindow = false,
+  children,
+}: {
+  shown?: boolean;
+  static?: boolean;
+  children: ReactNode;
+}) {
   if (!shown) return null;
   return (
     <div
       data-plates
-      className="grid grid-cols-[repeat(auto-fit,minmax(158px,1fr))] gap-2.5 max-md:grid-cols-2"
+      data-static={inWindow ? '' : undefined}
+      className={`group/plates grid gap-2.5 max-md:grid-cols-2 ${inWindow ? 'grid-cols-[repeat(auto-fit,minmax(200px,1fr))] max-md:gap-2' : 'grid-cols-[repeat(auto-fit,minmax(158px,1fr))]'}`}
     >
       {children}
     </div>

@@ -477,11 +477,19 @@ export const GRID_KEYS = [
   'dicts.platform.statuses',
   'dicts.platform.cats',
   'dicts.platform.templates',
-  // Админка → «Справочники платформы»: справочник каждой вкладки и «Запросы».
+  // Админка → «Справочники платформы»: справочник каждой вкладки (у «Налогов и ставок» — три таблицы)
+  // и «Запросы».
+  'pdicts.taxes',
+  'pdicts.en_rates',
+  'pdicts.property_rates',
+  'pdicts.bases',
+  'pdicts.regimes',
   'pdicts.forms',
+  'pdicts.phones',
   'pdicts.organs',
   'pdicts.ugns',
   'pdicts.banks',
+  'pdicts.calendar',
   'pdicts.reasons',
   'pdicts.requests',
 ] as const;

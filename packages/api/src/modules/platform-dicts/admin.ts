@@ -14,7 +14,9 @@ import {
   listAdminDictPage,
   listAdminDictValues,
   platformDictGroupDefs,
+  reportTypeOptions,
   withUserContext,
+  type AdminDictDeleteResult,
   type AdminDictInput,
   type AdminDictSaveResult,
   type AdminDictValueRecord,
@@ -38,6 +40,7 @@ import {
   AdminDictValue,
   AdminDictValueForm,
   AdminDictValueUpdate,
+  AdminReportTypeOptions,
   AdminValueDictParam,
   ApiError,
   ListExportParams,
@@ -234,6 +237,31 @@ export function adminDictGroupsHandler(
   };
 }
 
+export const reportTypeOptionsRoute = createRoute({
+  method: 'get',
+  path: '/admin/platform-dicts/report-type-options',
+  tags: ['platform-dicts'],
+  summary: 'Каталог видов отчётов кратко',
+  middleware: [requirePlatformAdmin] as const,
+  responses: {
+    200: {
+      description: 'Код, название, краткое название, тип и статус вида — в порядке каталога',
+      content: json(AdminReportTypeOptions),
+    },
+    ...denied,
+  },
+});
+
+/** Виды отчётов для окна основания (прототип baseDlg) и подписей «Виды отчётов». */
+export function reportTypeOptionsHandler(
+  deps: ApiDeps,
+): RouteHandler<typeof reportTypeOptionsRoute, AppEnv> {
+  return async (c) => {
+    const items = await adminTx(deps, c, (tx) => reportTypeOptions(tx));
+    return c.json({ items }, 200);
+  };
+}
+
 export const pdictsTabCountsRoute = createRoute({
   method: 'get',
   path: '/admin/platform-dicts/tab-counts',
@@ -312,26 +340,47 @@ export function getAdminDictValueHandler(
   };
 }
 
-/** Поля формы → поля значения справочника (только поля этого справочника). */
+/**
+ * Поля формы → поля значения справочника (только поля этого справочника). «Тип» не этого справочника
+ * (у режима — «Банк») — 400 под полем; пустой — тип нового значения.
+ */
 function inputOf(dict: AdminValueDict, form: AdminDictValueForm): AdminDictInput {
+  const meta = ADMIN_DICT_META[dict];
   const values = form as Record<string, unknown>;
   const data: AdminDictInput['data'] = {};
-  for (const f of ADMIN_DICT_META[dict].fields) {
+  for (const f of meta.fields) {
     if (f === 'name') continue;
     const v = values[f];
     if (f === 'byPhone') data[f] = v === true;
-    else if (f === 'contacts') data[f] = (v as AdminDictInput['data'][string]) ?? [];
-    else data[f] = (v as string) ?? '';
+    else if (f === 'contacts' || meta.links?.includes(f)) {
+      data[f] = (v as AdminDictInput['data'][string]) ?? [];
+    } else data[f] = (v as string) ?? '';
   }
   if (dict === 'forms' && !data.declarationFor) data.declarationFor = 'org';
-  if (dict === 'banks' && !data.kind) data.kind = 'bank';
+  if (meta.kind) {
+    data.kind ||= meta.kind.default;
+    if (!meta.kind.values.includes(data.kind as string)) {
+      apiFail(400, 'invalid_kind', 'Такого типа у справочника нет', { field: 'kind' });
+    }
+  }
   return { name: form.name, data };
 }
 
-/** Краткое название управления обязательно (прототип ugnsDlg «Введите краткое название»). */
+/** Обязательные поля сверх названия (прототип ugnsDlg, regimeDlg). */
+const REQUIRED = {
+  shortName: ['short_name_required', 'Введите краткое название'],
+  fullName: ['full_name_required', 'Введите полное название'],
+  dialCode: ['dial_code_required', '1–4 цифры'],
+  mask: ['mask_required', 'Только X и пробелы'],
+} as const;
+
+/** Краткое название управления, полное название режима, код и маска страны обязательны. */
 function checkRequired(dict: AdminValueDict, input: AdminDictInput) {
-  if (dict === 'ugns' && !String(input.data.shortName ?? '').trim()) {
-    apiFail(400, 'short_name_required', 'Введите краткое название', { field: 'shortName' });
+  for (const field of ADMIN_DICT_META[dict].required ?? []) {
+    if (!String(input.data[field] ?? '').trim()) {
+      const [code, message] = REQUIRED[field];
+      apiFail(400, code, message, { field });
+    }
   }
 }
 
@@ -347,7 +396,7 @@ const TAKEN = {
 async function failOf(
   deps: ApiDeps,
   c: Context<AppEnv>,
-  result: Exclude<AdminDictSaveResult, { ok: true }>,
+  result: Exclude<AdminDictSaveResult | AdminDictDeleteResult, { ok: true }>,
   dict: AdminValueDict,
   code: string,
 ): Promise<never> {
@@ -357,6 +406,17 @@ async function failOf(
     apiFail(400, errCode, message, { field });
   }
   if (result.reason === 'used') return usedFail(result.usage);
+  if (result.reason === 'fixed') {
+    apiFail(409, 'dict_value_fixed', 'Код по умолчанию отключить нельзя');
+  }
+  if (result.reason === 'undeletable') {
+    apiFail(409, 'dict_value_undeletable', 'Значение можно только отключить');
+  }
+  if (result.reason === 'bad_link') {
+    apiFail(400, 'invalid_link', 'Можно выбрать только сквозные действующие виды отчётов', {
+      field: result.field,
+    });
+  }
   if (result.reason === 'changed') {
     const now = await adminTx(deps, c, (tx) => getAdminDictValue(tx, dict, code));
     if (now) throw new RecordChangedError('platform_dict', code, now.version);
@@ -389,7 +449,8 @@ async function saving<T>(run: () => Promise<T>): Promise<T> {
 }
 
 const valueTaken = {
-  description: 'Название пустое или уже есть, код ГНС не из трёх цифр или уже есть',
+  description:
+    'Название пустое или уже есть, не заполнено обязательное поле, тип не этого справочника, код ГНС не из трёх цифр или уже есть',
   content: error,
 };
 
@@ -505,6 +566,11 @@ export const setAdminDictActiveRoute = createRoute({
     },
     ...denied,
     ...versionedSaveResponses,
+    409: {
+      description:
+        'Изменено другим пользователем или значение по умолчанию (Кыргызстан) отключить нельзя',
+      content: error,
+    },
   },
 });
 
@@ -533,7 +599,8 @@ export const deleteAdminDictValueRoute = createRoute({
     204: { description: 'Удалено' },
     404: { description: 'Нет такого значения', content: error },
     409: {
-      description: 'Значение используется (только отключить) или изменено другим пользователем',
+      description:
+        'Значение используется или его удалять нельзя (только отключить), или изменено другим пользователем',
       content: error,
     },
     ...denied,

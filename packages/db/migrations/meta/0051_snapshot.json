@@ -1,5 +1,5 @@
 {
-  "id": "d5d88999-c0a7-4bac-9363-2ddeb692ed55",
+  "id": "331ab6dc-3b66-4b51-a9b1-4569990825d3",
   "prevId": "cf3a497d-b2c1-4f48-a0dd-23de7214f05a",
   "version": "7",
   "dialect": "postgresql",
@@ -2043,19 +2043,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "socfund_flags": {
-          "name": "socfund_flags",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'{}'::jsonb"
-        },
-        "socfund_tariff": {
-          "name": "socfund_tariff",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
         "created_by": {
           "name": "created_by",
           "type": "uuid",
@@ -2331,14 +2318,6 @@
         "contractors_regime2_check": {
           "name": "contractors_regime2_check",
           "value": "\"contractors\".\"regime2_code\" is null or (\"contractors\".\"regime_code\" is not null and \"contractors\".\"regime2_code\" <> \"contractors\".\"regime_code\")"
-        },
-        "contractors_socfund_flags_check": {
-          "name": "contractors_socfund_flags_check",
-          "value": "jsonb_typeof(\"contractors\".\"socfund_flags\") = 'object' and \"contractors\".\"socfund_flags\" - array['cashless', 'registry', 'confirmed', 'gov'] = '{}'::jsonb and coalesce(jsonb_typeof(socfund_flags -> 'cashless'), 'boolean') = 'boolean' and coalesce(jsonb_typeof(socfund_flags -> 'registry'), 'boolean') = 'boolean' and coalesce(jsonb_typeof(socfund_flags -> 'confirmed'), 'boolean') = 'boolean' and coalesce(jsonb_typeof(socfund_flags -> 'gov'), 'boolean') = 'boolean'"
-        },
-        "contractors_socfund_tariff_check": {
-          "name": "contractors_socfund_tariff_check",
-          "value": "\"contractors\".\"socfund_tariff\" is null or (jsonb_typeof(\"contractors\".\"socfund_tariff\") = 'object' and \"contractors\".\"socfund_tariff\" - array['id', 'manual', 'reason'] = '{}'::jsonb and coalesce(\"contractors\".\"socfund_tariff\" ->> 'id', '') in ('spino', 'general', 'pvtpki') and coalesce(jsonb_typeof(\"contractors\".\"socfund_tariff\" -> 'manual'), 'null') = 'boolean' and coalesce(jsonb_typeof(\"contractors\".\"socfund_tariff\" -> 'reason'), 'null') in ('null', 'string') and (\"contractors\".\"socfund_tariff\" -> 'manual' = 'true' or coalesce(jsonb_typeof(\"contractors\".\"socfund_tariff\" -> 'reason'), 'null') = 'null'))"
         }
       },
       "isRLSEnabled": true
@@ -6700,6 +6679,157 @@
         "banks_kind_check": {
           "name": "banks_kind_check",
           "value": "\"banks\".\"kind\" in ('bank', 'wallet')"
+        }
+      },
+      "isRLSEnabled": true
+    },
+    "public.phone_codes": {
+      "name": "phone_codes",
+      "schema": "",
+      "columns": {
+        "code": {
+          "name": "code",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "flag": {
+          "name": "flag",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "dial_code": {
+          "name": "dial_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "mask": {
+          "name": "mask",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "active": {
+          "name": "active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "sort_order": {
+          "name": "sort_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_by": {
+          "name": "updated_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        }
+      },
+      "indexes": {
+        "phone_codes_name_key": {
+          "name": "phone_codes_name_key",
+          "columns": [
+            {
+              "expression": "name",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "phone_codes_created_by_users_id_fk": {
+          "name": "phone_codes_created_by_users_id_fk",
+          "tableFrom": "phone_codes",
+          "tableTo": "users",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "phone_codes_updated_by_users_id_fk": {
+          "name": "phone_codes_updated_by_users_id_fk",
+          "tableFrom": "phone_codes",
+          "tableTo": "users",
+          "columnsFrom": [
+            "updated_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "phone_codes_read": {
+          "name": "phone_codes_read",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "buhuchet_app"
+          ],
+          "using": "true"
+        }
+      },
+      "checkConstraints": {
+        "phone_codes_dial_code_check": {
+          "name": "phone_codes_dial_code_check",
+          "value": "\"phone_codes\".\"dial_code\" ~ '^[0-9]{1,4}$'"
+        },
+        "phone_codes_mask_check": {
+          "name": "phone_codes_mask_check",
+          "value": "\"phone_codes\".\"mask\" ~ '^[X ]+$' and strpos(\"phone_codes\".\"mask\", 'X') > 0"
         }
       },
       "isRLSEnabled": true

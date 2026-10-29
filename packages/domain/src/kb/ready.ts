@@ -122,8 +122,8 @@ export const KB_STEP_RULES: Readonly<Record<string, KbStepRule>> = {
     module: 'tasks',
     done: { kind: 'status', scale: 'task', from: ['on_confirm'], to: ['confirmed', 'rework'] },
   },
-  // 11. Показатели контрагентов (задача 2.27). «Ввести показатели из Excel» — с задачей 2.28,
-  // «Вкладка «Показатели» в карточке контрагента» — с карточкой контрагента (2.11).
+  // 11. Показатели контрагентов (задачи 2.27, 2.28). «Вкладка «Показатели» в карточке контрагента» — с
+  // карточкой контрагента (2.11).
   kset: {
     module: 'kpi',
     done: { kind: 'history', entity: 'indicator', actions: ['create', 'update', 'delete'] },
@@ -137,6 +137,11 @@ export const KB_STEP_RULES: Readonly<Record<string, KbStepRule>> = {
     module: 'kpi',
     done: { kind: 'history', entity: 'indicator_value', actions: ['create', 'update'] },
   },
+  // Прототип: запись истории «Ввод показателей из Excel …» после «Применить».
+  kxls: {
+    module: 'kpi',
+    done: { kind: 'history', entity: 'indicator_import', actions: ['create'] },
+  },
   kper: { module: 'kpi' },
   kchk: {
     module: 'kpi',
@@ -149,9 +154,10 @@ export const KB_STEP_RULES: Readonly<Record<string, KbStepRule>> = {
   grp: { module: 'dicts' },
   xls: { module: 'dicts' },
   swipe: { module: 'dicts' },
-  // Админка (задачи 2.35, 2.36, 2.40). «Каталог видов отчётов», календарь, шаблоны и загрузка из
-  // Excel — с их вкладками (2.36, 2.37).
+  // Админка (задачи 2.35, 2.36, 2.40). «Каталог видов отчётов», шаблоны и загрузка из Excel — с их
+  // вкладками (2.36, 2.37).
   'a-dicts': { module: 'pdicts' },
+  'a-cal': { module: 'pdicts' },
   'a-l10n': { module: 'l10n' },
   'a-org': { module: 'orgs', done: { kind: 'org_created' } },
 };

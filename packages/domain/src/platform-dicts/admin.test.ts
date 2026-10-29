@@ -2,11 +2,15 @@ import { describe, expect, it } from 'vitest';
 import {
   ADMIN_DICT_META,
   ADMIN_VALUE_DICTS,
+  badBaseTypes,
   dictRequestAnswerProblem,
   dictValueProblems,
   isAdminValueDict,
   nextDictCode,
   organSiteUrl,
+  PHONE_DIAL_CODE_PATTERN,
+  PHONE_MASK_PATTERN,
+  phoneCodeExample,
   UGNS_CODE_PATTERN,
 } from './admin';
 
@@ -17,6 +21,7 @@ describe('nextDictCode', () => {
     expect(nextDictCode('forms', ['ФС-01', 'ФС-24', 'ФС-03'], random)).toBe('ФС-25');
     expect(nextDictCode('reasons', ['ПРЧ-001', 'ПРЧ-005'], random)).toBe('ПРЧ-006');
     expect(nextDictCode('organs', [], random)).toBe('ОРГ-01');
+    expect(nextDictCode('regimes', ['РЕЖ-01', 'РЕЖ-12'], random)).toBe('РЕЖ-13');
   });
 
   it('после удаления номер не повторяется: дыры в номерах не заполняются', () => {
@@ -36,6 +41,11 @@ describe('nextDictCode', () => {
     expect(nextDictCode('banks', codes, random, 'bank')).toBe('БНК-33');
     expect(nextDictCode('banks', codes, random, 'wallet')).toBe('КШЛ-06');
     expect(nextDictCode('banks', codes, random)).toBe('БНК-33');
+  });
+
+  it('у страны, добавленной администратором, — X-01, X-02…; коды стран из наполнения не мешают', () => {
+    expect(nextDictCode('phones', ['KG', 'KZ', 'RU'], random)).toBe('X-01');
+    expect(nextDictCode('phones', ['KG', 'X-01', 'X-07'], random)).toBe('X-08');
   });
 });
 
@@ -70,6 +80,27 @@ describe('dictValueProblems', () => {
   });
 });
 
+describe('badBaseTypes', () => {
+  const catalog = [
+    { code: 'soc', kind: 'cross', active: true },
+    { code: 'imn', kind: 'cross', active: false },
+    { code: 'nds', kind: 'regime', active: true },
+  ] as const;
+
+  it('основание включает только сквозные действующие виды из каталога', () => {
+    expect(badBaseTypes(['soc'], catalog, [])).toEqual([]);
+    expect(badBaseTypes(['soc', 'imn', 'nds', 'nope'], catalog, [])).toEqual([
+      'imn',
+      'nds',
+      'nope',
+    ]);
+  });
+
+  it('уже привязанный вид остаётся, даже если отключён; неизвестный — нет', () => {
+    expect(badBaseTypes(['imn', 'nds', 'nope'], catalog, ['imn', 'nds', 'nope'])).toEqual(['nope']);
+  });
+});
+
 describe('dictRequestAnswerProblem', () => {
   it('при отказе ответ обязателен, при «Добавлено» — нет', () => {
     expect(dictRequestAnswerProblem('rejected', '  ')).toBe('answer_required');
@@ -83,9 +114,39 @@ describe('ADMIN_DICT_META', () => {
     for (const dict of ADMIN_VALUE_DICTS) expect(ADMIN_DICT_META[dict].fields).toContain('name');
   });
 
+  it('«Тип» нового значения — из типов справочника, обязательные поля — среди полей', () => {
+    for (const dict of ADMIN_VALUE_DICTS) {
+      const { kind, fields, required = [] } = ADMIN_DICT_META[dict];
+      if (kind) expect(kind.values).toContain(kind.default);
+      if (kind) expect(fields).toContain('kind');
+      for (const f of required) expect(fields).toContain(f);
+    }
+  });
+
   it('isAdminValueDict знает только справочники механизма', () => {
     expect(isAdminValueDict('forms')).toBe(true);
     expect(isAdminValueDict('types')).toBe(false);
+  });
+
+  it('код страны по умолчанию не отключается, коды стран не удаляются', () => {
+    expect(ADMIN_DICT_META.phones.fixed).toBe('KG');
+    expect(ADMIN_DICT_META.phones.undeletable).toBe(true);
+    expect(ADMIN_DICT_META.forms.undeletable).toBeUndefined();
+  });
+
+  it('телефонный код — 1–4 цифры, маска — только X и пробелы, хотя бы одна X', () => {
+    expect(PHONE_DIAL_CODE_PATTERN.test('996')).toBe(true);
+    expect(PHONE_DIAL_CODE_PATTERN.test('7')).toBe(true);
+    expect(PHONE_DIAL_CODE_PATTERN.test('12345')).toBe(false);
+    expect(PHONE_DIAL_CODE_PATTERN.test('+996')).toBe(false);
+    expect(PHONE_MASK_PATTERN.test('XXX XXX XXX')).toBe(true);
+    expect(PHONE_MASK_PATTERN.test('XXX-XXX')).toBe(false);
+    expect(PHONE_MASK_PATTERN.test('   ')).toBe(false);
+  });
+
+  it('«Пример» номера — код и цифры по маске', () => {
+    expect(phoneCodeExample('996', 'XXX XXX XXX')).toBe('+996 555 123 456');
+    expect(phoneCodeExample('7', 'XXX XXX XX XX')).toBe('+7 555 123 45 67');
   });
 
   it('код ГНС — ровно три цифры', () => {

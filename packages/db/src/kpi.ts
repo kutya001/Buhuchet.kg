@@ -893,6 +893,9 @@ export interface ValueWrite {
   prevNote?: string;
 }
 
+/** Ячеек в одном запросе записи: параметров запроса не больше 65 535. */
+const VALUE_BATCH = 1000;
+
 /**
  * Записать значения (одно или блок, вставленный из Excel) с историей «было → стало» и пересчитать
  * статусы их месяцев. Ячейки уже проверены вызывающим (показатель ведётся у контрагента или месяц раньше
@@ -918,12 +921,15 @@ export async function saveIndicatorValues(
   });
   for (const row of fresh) data.putValue(row);
 
-  const changed: ValueWrite[] = [];
-  const edited = new Map<
-    string,
-    { contractor: KpiContractor; month: YearMonth; edited: boolean }
-  >();
-  for (const w of writes) {
+  // Одна ячейка — одна запись: повтор ячейки в запросе — берётся последний.
+  const unique = new Map(writes.map((w) => [valueKey(w.contractorId, w.indicatorId, w.month), w]));
+  const pending: {
+    w: ValueWrite;
+    row: IndicatorValueRecord | undefined;
+    changes: HistoryChange[];
+    edited: boolean;
+  }[] = [];
+  for (const w of unique.values()) {
     const row = data.valueRow(w.contractorId, w.indicatorId, w.month);
     const before = row?.value ?? null;
     const noteChanged = w.note !== undefined && w.note !== (row?.note ?? '');
@@ -943,28 +949,38 @@ export async function saveIndicatorValues(
     const changes: HistoryChange[] = [];
     if (before !== w.value) changes.push({ field: 'value', from: before, to: w.value });
     if (noteChanged) changes.push({ field: 'note', from: row?.note ?? '', to: w.note! });
-    let saved: { id: string; version: number; updatedAt: Date };
-    if (row) {
-      const [u] = await tx
-        .update(indicatorValues)
-        .set({
-          value: w.value,
-          ...(w.note !== undefined ? { note: w.note } : {}),
-          updatedBy: sql`app.current_user_id()`,
-          updatedAt: sql`now()`,
-          version: sql`${indicatorValues.version} + 1`,
-        })
-        .where(eq(indicatorValues.id, row.id))
-        .returning({
-          id: indicatorValues.id,
-          version: indicatorValues.version,
-          updatedAt: indicatorValues.updatedAt,
-        });
-      saved = u!;
-    } else {
-      const [c] = await tx
-        .insert(indicatorValues)
-        .values({
+    pending.push({ w, row, changes, edited: before !== w.value });
+  }
+
+  // Записи — пачками: загрузка из Excel пишет тысячи ячеек одним запросом на пачку, а не по одной.
+  const saved = new Map<string, { id: string; version: number; updatedAt: Date }>();
+  const updates = pending.filter((p) => p.row);
+  for (let i = 0; i < updates.length; i += VALUE_BATCH) {
+    const batch = updates.slice(i, i + VALUE_BATCH).map((p) => ({
+      id: p.row!.id,
+      value: p.w.value,
+      note: p.w.note ?? null,
+    }));
+    const rows = await tx.execute<{ id: string; version: number; updated_at: Date | string }>(sql`
+      update ${indicatorValues} as v
+      set value = x.value,
+          note = coalesce(x.note, v.note),
+          updated_by = app.current_user_id(),
+          updated_at = now(),
+          version = v.version + 1
+      from jsonb_to_recordset(${JSON.stringify(batch)}::jsonb) as x(id uuid, value bigint, note text)
+      where v.id = x.id
+      returning v.id, v.version, v.updated_at`);
+    for (const r of rows) {
+      saved.set(r.id, { id: r.id, version: r.version, updatedAt: new Date(r.updated_at) });
+    }
+  }
+  const inserts = pending.filter((p) => !p.row);
+  for (let i = 0; i < inserts.length; i += VALUE_BATCH) {
+    const rows = await tx
+      .insert(indicatorValues)
+      .values(
+        inserts.slice(i, i + VALUE_BATCH).map(({ w }) => ({
           orgId: sql`app.current_org_id()`,
           contractorId: w.contractorId,
           indicatorId: w.indicatorId,
@@ -973,31 +989,47 @@ export async function saveIndicatorValues(
           note: w.note ?? '',
           createdBy: sql`app.current_user_id()`,
           updatedBy: sql`app.current_user_id()`,
-        })
-        .returning({
-          id: indicatorValues.id,
-          version: indicatorValues.version,
-          updatedAt: indicatorValues.updatedAt,
-        });
-      saved = c!;
+        })),
+      )
+      .returning({
+        id: indicatorValues.id,
+        version: indicatorValues.version,
+        updatedAt: indicatorValues.updatedAt,
+        contractorId: indicatorValues.contractorId,
+        indicatorId: indicatorValues.indicatorId,
+        month: indicatorValues.month,
+      });
+    for (const r of rows) {
+      saved.set(valueKey(r.contractorId, r.indicatorId, r.month as YearMonth), r);
     }
-    await writeHistory(tx, {
+  }
+
+  const changed: ValueWrite[] = [];
+  const edited = new Map<
+    string,
+    { contractor: KpiContractor; month: YearMonth; edited: boolean }
+  >();
+  const history: Parameters<typeof writeHistory>[1][] = [];
+  for (const { w, row, changes, edited: valueEdited } of pending) {
+    const s = row ? saved.get(row.id) : saved.get(valueKey(w.contractorId, w.indicatorId, w.month));
+    if (!s) throw new Error('indicator value was not saved');
+    history.push({
       entity: 'indicator_value',
-      entityId: saved.id,
+      entityId: s.id,
       action: row ? 'update' : 'create',
       contractorId: w.contractorId,
       changes,
       reason,
     });
     data.putValue({
-      id: saved.id,
+      id: s.id,
       contractorId: w.contractorId,
       indicatorId: w.indicatorId,
       month: w.month,
       value: w.value,
       note: w.note ?? row?.note ?? '',
-      version: saved.version,
-      updatedAt: saved.updatedAt,
+      version: s.version,
+      updatedAt: s.updatedAt,
       updatedBy: null,
     });
     changed.push(w);
@@ -1005,9 +1037,12 @@ export async function saveIndicatorValues(
     if (contractor) {
       const key = monthKey(w.contractorId, w.month);
       const x = edited.get(key) ?? { contractor, month: w.month, edited: false };
-      if (before !== w.value) x.edited = true;
+      if (valueEdited) x.edited = true;
       edited.set(key, x);
     }
+  }
+  for (let i = 0; i < history.length; i += VALUE_BATCH) {
+    await writeHistory(tx, ...history.slice(i, i + VALUE_BATCH));
   }
   const statuses = await syncFillStatuses(tx, data, [...edited.values()]);
   return { changed, statuses };

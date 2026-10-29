@@ -4,7 +4,9 @@ import {
   ADMIN_DICT_COLUMNS,
   ADMIN_DICT_META,
   adminDictDefaultSort,
+  DEFAULT_PHONE_COUNTRY,
   formatMomentRu,
+  phoneCodeExample,
   type AdminValueDict,
   type GridKey,
   type UiTextKey,
@@ -17,11 +19,13 @@ import {
   MONO_CLASS,
   Note,
   StatusPill,
+  Tag,
   useToast,
   type ActionEntry,
   type GridAudit,
   type GridColumn,
 } from '@buhuchet/ui';
+import { useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useEffectEvent, useMemo, useState } from 'react';
 import { api, callApi, type ApiResult } from '../api-client';
 import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
@@ -33,7 +37,12 @@ import { useListPage } from '../lists/use-list-page';
 import { useViewSettings } from '../lists/view-settings';
 import { useShell } from '../shell/context';
 import { DictHistory } from './dict-history-box';
-import { fetchAdminDict, fetchAdminDictValues, usePdictsRefresh } from './pdicts-data';
+import {
+  fetchAdminDict,
+  fetchAdminDictValues,
+  reportTypeOptionsQuery,
+  usePdictsRefresh,
+} from './pdicts-data';
 import { ValueDialog } from './value-dialog';
 
 const pd = api.api.admin['platform-dicts'];
@@ -47,7 +56,6 @@ const WIDTHS: Readonly<Record<string, number>> = {
   declarationFor: 130,
   fullName: 280,
   note: 340,
-  description: 340,
   contacts: 260,
   hours: 200,
   site: 180,
@@ -56,17 +64,52 @@ const WIDTHS: Readonly<Record<string, number>> = {
   region: 170,
   kind: 170,
   byPhone: 150,
+  frees: 260,
+  who: 300,
+  how: 260,
+  combines: 260,
+  accountantNote: 340,
+  article: 100,
+  description: 340,
+  types: 220,
+  dialCode: 90,
+  mask: 160,
+  digits: 90,
+  example: 200,
   contractors: 130,
   used: 130,
   active: 130,
 };
 
+/** Свои ширины справочника: у режима краткое название узкое. */
+const DICT_WIDTHS: Partial<Record<AdminValueDict, Readonly<Record<string, number>>>> = {
+  bases: { code: 130, name: 260, description: 320, note: 240, contractors: 120 },
+  regimes: { code: 90, name: 180, kind: 120 },
+  phones: { code: 90, name: 200 },
+};
+
+/** Столбцы моноширинным шрифтом: коды, маски и номера. */
+const MONO = new Set(['code', 'gnsCode', 'dialCode', 'mask', 'example']);
+
+/** «Цифр» в номере по маске (прототип: число «X»). */
+const maskDigits = (mask: string) => mask.split('X').length - 1;
+
 const ugnsName = (dict: AdminValueDict, x: AdminDictValue) =>
   dict === 'ugns' ? `${x.data.gnsCode ?? ''} ${x.data.shortName ?? ''}`.trim() : x.name;
 
 /** Значение столбца строкой — для подсказки, карточки и «—» у пустого. */
-function cellText(dict: AdminValueDict, key: string, x: AdminDictValue, t: Translate): string {
+function cellText(
+  dict: AdminValueDict,
+  key: string,
+  x: AdminDictValue,
+  t: Translate,
+  names: ReadonlyMap<string, string>,
+): string {
   switch (key) {
+    case 'types': {
+      const types = x.data.types ?? [];
+      return types.length ? types.map((code) => names.get(code) ?? code).join(', ') : '—';
+    }
     case 'n':
       return x.n === null ? '' : String(x.n);
     case 'code':
@@ -81,14 +124,22 @@ function cellText(dict: AdminValueDict, key: string, x: AdminDictValue, t: Trans
       return t(x.active ? 'pdicts.status.on' : 'pdicts.status.off');
     case 'declarationFor':
       return x.data.declarationFor ? t(`dicts.platform.end.${x.data.declarationFor}`) : '';
-    case 'kind':
-      return x.data.kind ? t(`pdicts.bank.kind.${x.data.kind}`) : '';
+    case 'kind': {
+      const kind = ADMIN_DICT_META[dict].kind;
+      return kind && x.data.kind ? t(`${kind.text}.${x.data.kind}` as UiTextKey) : '';
+    }
     case 'byPhone':
       return t(x.data.byPhone ? 'pdicts.bank.by_phone.yes' : 'pdicts.bank.by_phone.no');
     case 'contacts':
       return (x.data.contacts ?? []).map((c) => `${c.label}: ${c.value}`).join('; ');
     case 'gnsCode':
       return x.data.gnsCode || '—';
+    case 'dialCode':
+      return `+${x.data.dialCode ?? ''}`;
+    case 'digits':
+      return String(maskDigits(x.data.mask ?? ''));
+    case 'example':
+      return phoneCodeExample(x.data.dialCode ?? '', x.data.mask ?? '');
     default: {
       const v = (x.data as Record<string, unknown>)[key];
       return typeof v === 'string' ? v : '';
@@ -96,20 +147,40 @@ function cellText(dict: AdminValueDict, key: string, x: AdminDictValue, t: Trans
   }
 }
 
-/** Столбцы списка — ключи и подписи общие с сервером (`ADMIN_DICT_COLUMNS`). */
-export function adminDictColumns(dict: AdminValueDict, t: Translate): GridColumn<AdminDictValue>[] {
+/**
+ * Столбцы списка — ключи и подписи общие с сервером (`ADMIN_DICT_COLUMNS`); `names` — краткие названия
+ * видов отчётов для «Виды отчётов» основания.
+ */
+export function adminDictColumns(
+  dict: AdminValueDict,
+  t: Translate,
+  names: ReadonlyMap<string, string> = new Map(),
+): GridColumn<AdminDictValue>[] {
   return ADMIN_DICT_COLUMNS[dict].map((c) => {
     const column: GridColumn<AdminDictValue> = {
       key: c.key,
       label: t(c.label as UiTextKey),
       type: c.type,
-      width: WIDTHS[c.key],
-      text: (x) => cellText(dict, c.key, x, t),
+      width: DICT_WIDTHS[dict]?.[c.key] ?? WIDTHS[c.key],
+      text: (x) => cellText(dict, c.key, x, t, names),
     };
     if (c.key === 'name') {
-      column.cell = (x) => <span className="font-semibold">{x.name}</span>;
+      column.cell =
+        dict === 'phones'
+          ? (x) => (
+              <span>
+                {x.data.flag} <span className="font-semibold">{x.name}</span>
+                {x.code === DEFAULT_PHONE_COUNTRY ? (
+                  <>
+                    {' '}
+                    <Tag>{t('pdicts.phone.default_tag')}</Tag>
+                  </>
+                ) : null}
+              </span>
+            )
+          : (x) => <span className="font-semibold">{x.name}</span>;
     }
-    if (c.key === 'code' || c.key === 'gnsCode') column.className = MONO_CLASS;
+    if (MONO.has(c.key)) column.className = MONO_CLASS;
     if (c.key === 'byPhone') {
       column.cell = (x) =>
         x.data.byPhone ? (
@@ -141,7 +212,10 @@ const AUDIT: GridAudit<AdminDictValue> = {
 };
 
 const COUNT: Readonly<Record<AdminValueDict, CountKey>> = {
+  bases: 'pdicts.bases_count',
+  regimes: 'pdicts.regimes_count',
   forms: 'pdicts.count',
+  phones: 'pdicts.phones_count',
   organs: 'pdicts.count',
   cats: 'pdicts.count',
   reasons: 'pdicts.count',
@@ -149,19 +223,78 @@ const COUNT: Readonly<Record<AdminValueDict, CountKey>> = {
   banks: 'pdicts.count',
 };
 
+/**
+ * Список и на телефоне — таблицей, без «Таблица / Карточки» (прототип `fixedView: 'table'`): короткие
+ * справочники, основания и коды стран; режимы и УГНС — карточками.
+ */
+const TABLE_ONLY: ReadonlySet<AdminValueDict> = new Set([
+  'bases',
+  'forms',
+  'phones',
+  'organs',
+  'banks',
+  'reasons',
+]);
+
 /** Пояснение над списком (прототип: у шаблонов для организаций и у УГНС). */
 const NOTES: Partial<Record<AdminValueDict, UiTextKey>> = {
+  bases: 'pdicts.note.bases',
+  regimes: 'pdicts.note.regimes',
   cats: 'pdicts.note.cats',
   reasons: 'pdicts.note.reasons',
   ugns: 'pdicts.note.ugns',
 };
 
-/** «+ Добавить» → «Значение» или «Налоговый орган» на вкладке справочника. */
+/** Способ «+ Добавить» на вкладке справочника (прототип pdAdd): «Значение», «Режим», «Налоговый орган». */
+const ADD_ACTION: Partial<Record<AdminValueDict, string>> = {
+  bases: 'base',
+  regimes: 'regime',
+  phones: 'phone',
+  ugns: 'ugns',
+};
+
+/** Тексты справочника вместо общих («Значение отключено», «Значение нигде не используется…»). */
+const OFF_TOAST: Partial<Record<AdminValueDict, UiTextKey>> = {
+  bases: 'pdicts.toast.off_base',
+  regimes: 'pdicts.toast.off_regime',
+  phones: 'pdicts.toast.off_phone',
+  ugns: 'pdicts.toast.off_ugns',
+};
+const DELETE_TEXT: Partial<Record<AdminValueDict, UiTextKey>> = {
+  bases: 'pdicts.delete.text_base',
+  regimes: 'pdicts.delete.text_regime',
+  ugns: 'pdicts.delete.text_ugns',
+};
+
+/** Пояснение «Отключить»: что будет с отключённым значением. */
+const OFF_SUB: Partial<Record<AdminValueDict, UiTextKey>> = {
+  bases: 'pdicts.action.off_sub_base',
+  phones: 'pdicts.action.off_sub_phone',
+  ugns: 'pdicts.action.off_sub_ugns',
+};
+
+/**
+ * Почему удалить нельзя (прототип): у УГНС и основания — «Указан (отмечено) у N контрагентов», у
+ * основания, привязанного только к видам отчётов, — «Привязано к видам отчётов»; у остальных — «Используется
+ * в N записях».
+ */
+function usedReason(dict: AdminValueDict, x: AdminDictValue, t: Translate): string {
+  if (dict === 'ugns' && x.contractors > 0)
+    return t('pdicts.delete.used_ugns', { n: x.contractors });
+  if (dict === 'bases') {
+    return x.contractors > 0
+      ? t('pdicts.delete.used_base', { n: x.contractors })
+      : t('pdicts.delete.linked_base');
+  }
+  return t('pdicts.delete.used', { n: x.used });
+}
+
+/** «+ Добавить» → способ добавления вкладки справочника. */
 function useValueAddRequest(dict: AdminValueDict, run: () => void) {
   const { addRequest, clearAddRequest } = useShell();
   const request = addRequest?.moduleId === 'pdicts' ? addRequest : null;
   const start = useEffectEvent((actionId: string) => {
-    if (actionId === (dict === 'ugns' ? 'ugns' : 'value')) run();
+    if (actionId === (ADD_ACTION[dict] ?? 'value')) run();
   });
   useEffect(() => {
     if (!request) return;
@@ -184,9 +317,13 @@ export function ValueDictList({ dict }: { dict: AdminValueDict }) {
   const errorText = useErrorText();
   const refresh = usePdictsRefresh();
   const gridKey = `pdicts.${dict}` as GridKey;
-  const ordered = ADMIN_DICT_META[dict].ordered;
+  const { ordered, fixed, undeletable } = ADMIN_DICT_META[dict];
   const labels = useGridLabels(COUNT[dict]);
-  const columns = useMemo(() => adminDictColumns(dict, t), [dict, t]);
+  const types = useQuery({ ...reportTypeOptionsQuery, enabled: dict === 'bases' });
+  const columns = useMemo(
+    () => adminDictColumns(dict, t, new Map((types.data ?? []).map((x) => [x.code, x.shortName]))),
+    [dict, t, types.data],
+  );
   const defaultVisible = useMemo(
     () => ADMIN_DICT_COLUMNS[dict].filter((c) => !c.hidden).map((c) => c.key),
     [dict],
@@ -256,7 +393,7 @@ export function ValueDictList({ dict }: { dict: AdminValueDict }) {
           param: param(x),
           json: { active, version: x.version },
         }),
-      active ? undefined : dict === 'ugns' ? 'pdicts.toast.off_ugns' : 'pdicts.toast.off',
+      active ? undefined : (OFF_TOAST[dict] ?? 'pdicts.toast.off'),
     );
   const remove = (x: AdminDictValue) =>
     act(
@@ -271,7 +408,12 @@ export function ValueDictList({ dict }: { dict: AdminValueDict }) {
     const edit: ActionEntry = {
       id: 'edit',
       label: t(
-        dict === 'forms' || dict === 'banks' || ugns
+        dict === 'forms' ||
+          dict === 'banks' ||
+          dict === 'regimes' ||
+          dict === 'bases' ||
+          dict === 'phones' ||
+          ugns
           ? 'pdicts.action.edit'
           : 'pdicts.action.rename',
       ),
@@ -296,10 +438,6 @@ export function ValueDictList({ dict }: { dict: AdminValueDict }) {
           },
         ]
       : [];
-    const usedReason =
-      ugns && x.contractors > 0
-        ? t('pdicts.delete.used_ugns', { n: x.contractors })
-        : t('pdicts.delete.used', { n: x.used });
     return [
       edit,
       ...order,
@@ -309,7 +447,10 @@ export function ValueDictList({ dict }: { dict: AdminValueDict }) {
             id: 'off',
             label: t('pdicts.action.off'),
             icon: 'ban',
-            sub: t(ugns ? 'pdicts.action.off_sub_ugns' : 'pdicts.action.off_sub'),
+            sub: t(OFF_SUB[dict] ?? 'pdicts.action.off_sub'),
+            ...(x.code === fixed
+              ? { disabled: true, reason: t('pdicts.action.off_fixed_phone') }
+              : {}),
             run: () => void setActive(x, false),
           }
         : {
@@ -318,15 +459,20 @@ export function ValueDictList({ dict }: { dict: AdminValueDict }) {
             icon: 'check',
             run: () => void setActive(x, true),
           },
-      {
-        id: 'delete',
-        label: t('pdicts.action.delete'),
-        icon: 'trash',
-        danger: true,
-        disabled: x.used > 0,
-        ...(x.used > 0 ? { reason: usedReason } : {}),
-        run: () => setAskDelete(x),
-      },
+      // Коды стран не удаляются — только отключаются (прототип).
+      ...(undeletable
+        ? []
+        : [
+            {
+              id: 'delete',
+              label: t('pdicts.action.delete'),
+              icon: 'trash',
+              danger: true,
+              disabled: x.used > 0,
+              ...(x.used > 0 ? { reason: usedReason(dict, x, t) } : {}),
+              run: () => setAskDelete(x),
+            } satisfies ActionEntry,
+          ]),
     ];
   };
   const note = NOTES[dict];
@@ -363,9 +509,11 @@ export function ValueDictList({ dict }: { dict: AdminValueDict }) {
         rowTone={(x) => (x.active ? undefined : 'muted')}
         actions={actions}
         onOpen={(x) => open(x)}
-        {...(ordered ? { fixedView: 'table' as const } : {})}
+        {...(TABLE_ONLY.has(dict) ? { fixedView: 'table' as const } : {})}
       />
       <DictHistory dict={dict} />
+      {/* Прототип: у кодов стран пояснение — под списком и историей. */}
+      {dict === 'phones' ? <Note icon="info">{t('pdicts.note.phones')}</Note> : null}
       {edit ? (
         <ValueDialog
           key={`edit-${edit.n}`}
@@ -380,7 +528,7 @@ export function ValueDictList({ dict }: { dict: AdminValueDict }) {
         open={askDelete !== null}
         onClose={() => setAskDelete(null)}
         title={t('pdicts.delete.title', { name: askDelete ? ugnsName(dict, askDelete) : '' })}
-        text={t(dict === 'ugns' ? 'pdicts.delete.text_ugns' : 'pdicts.delete.text')}
+        text={t(DELETE_TEXT[dict] ?? 'pdicts.delete.text')}
         ok={t('pdicts.action.delete')}
         danger
         onConfirm={() => askDelete && void remove(askDelete)}

@@ -1,7 +1,7 @@
 import type { ReactElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-import { CheckList, ChipSelect } from './chip-select';
+import { CheckList, ChipMultiSelect, ChipSelect } from './chip-select';
 
 // Поля реквизита (задача 2.18): вид плашками и банки номера галочками. Разметка —
 // renderToStaticMarkup, обработчики — вызовом компонента как функции.
@@ -31,6 +31,37 @@ describe('ChipSelect — выбор одного варианта плашкам
     const buttons = (root.props as { children: Clickable[] }).children;
     buttons[1]!.props.onClick!();
     expect(onChange).toHaveBeenCalledWith('phone');
+  });
+});
+
+describe('ChipMultiSelect — выбор нескольких плашками (виды отчётов основания)', () => {
+  const options = [
+    { value: 'soc', label: 'Соцфонд', title: 'Расчёт по страховым взносам' },
+    { value: 'imn', label: 'Имущество' },
+    { value: 'zem', label: 'Земля' },
+  ];
+
+  it('отмеченные нажаты, у плашки — подсказка с полным названием', () => {
+    const html = renderToStaticMarkup(
+      <ChipMultiSelect
+        label="Виды отчётов"
+        options={options}
+        value={['soc', 'zem']}
+        onChange={() => {}}
+      />,
+    );
+    expect(html.match(/aria-pressed="true"/g)).toHaveLength(2);
+    expect(html).toContain('title="Расчёт по страховым взносам"');
+  });
+
+  it('нажатие отмечает или снимает плашку; выбранные — по порядку вариантов', () => {
+    const onChange = vi.fn();
+    const root = ChipMultiSelect({ label: 'Виды', options, value: ['zem'], onChange });
+    const buttons = (root.props as { children: Clickable[] }).children;
+    buttons[0]!.props.onClick!();
+    expect(onChange).toHaveBeenLastCalledWith(['soc', 'zem']);
+    buttons[2]!.props.onClick!();
+    expect(onChange).toHaveBeenLastCalledWith([]);
   });
 });
 
