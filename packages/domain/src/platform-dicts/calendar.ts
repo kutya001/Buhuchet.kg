@@ -119,3 +119,92 @@ export function calendarYear(entries: readonly CalendarEntry[], year: number): C
     })
     .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.kind < b.kind ? -1 : 1));
 }
+
+/* ───────────── Админка → «Справочники платформы» → «Календарь» (задача 2.36) ───────────── */
+
+/**
+ * Тип в окне «Нерабочий день» (прототип holidayDlg): «Праздник или перенос» — нерабочий день только в этом
+ * году (перенос — если название начинается с «Перенос»), «Рабочая суббота» — рабочий день.
+ */
+export const CALENDAR_ADD_TYPES = ['off', 'workday'] as const;
+export type CalendarAddType = (typeof CALENDAR_ADD_TYPES)[number];
+
+/** Вид дня, который добавляет окно «Нерабочий день». */
+export function calendarAddKind(type: CalendarAddType, name: string): CalendarDayKind {
+  return calendarKindOf(name.trim(), type === 'workday');
+}
+
+/** Годы вкладки «Календарь»: текущий по Бишкеку и следующий (прототип: holidayRows(y) и holidayRows(y + 1)). */
+export function calendarAdminYears(today: IsoDate): readonly [number, number] {
+  const year = Number(today.slice(0, 4));
+  return [year, year + 1];
+}
+
+export interface CalendarAddInput {
+  date: string;
+  type: CalendarAddType;
+  name: string;
+}
+
+export type CalendarAddProblem =
+  | { field: 'date'; code: 'date_required' | 'date_year' | 'not_saturday' | 'date_taken' }
+  | { field: 'name'; code: 'name_required' };
+
+// ОТКЛОНЕНИЕ: docs/deviations.md#Д-5
+/**
+ * Что не так с новым днём календаря: дата обязательна и — в годах вкладки (иначе её не будет видно в
+ * списке); рабочая суббота — суббота; у праздника — название (прототип «Введите название праздника»);
+ * дата, которая уже есть в календаре этого года (в том числе праздник «каждый год»), — повтор.
+ */
+export function calendarAddProblems(
+  input: CalendarAddInput,
+  entries: readonly CalendarEntry[],
+  today: IsoDate,
+): CalendarAddProblem[] {
+  const problems: CalendarAddProblem[] = [];
+  const date = input.date.trim();
+  if (!isIsoDate(date)) problems.push({ field: 'date', code: 'date_required' });
+  else if (!calendarAdminYears(today).includes(Number(date.slice(0, 4)))) {
+    problems.push({ field: 'date', code: 'date_year' });
+  } else if (input.type === 'workday' && weekdayMondayFirst(date) !== 5) {
+    problems.push({ field: 'date', code: 'not_saturday' });
+  } else if (calendarYear(entries, Number(date.slice(0, 4))).some((d) => d.date === date)) {
+    problems.push({ field: 'date', code: 'date_taken' });
+  }
+  if (input.type === 'off' && !input.name.trim())
+    problems.push({ field: 'name', code: 'name_required' });
+  return problems;
+}
+
+/** День, который «Календарь на следующий год копированием» перенесёт на год вперёд. */
+export interface CalendarCopyItem {
+  from: IsoDate;
+  to: IsoDate;
+  kind: CalendarDayKind;
+  name: string;
+}
+
+// ОТКЛОНЕНИЕ: docs/deviations.md#Д-5
+/**
+ * Что скопировать из года `year` в следующий (прототип calCopyDlg): праздники «каждый год» уже есть в
+ * следующем году, копируются записи «только в этом году» — переносы и плавающие праздники — на ту же
+ * дату следующего года, чтобы потом поправить даты. Не копируются: рабочая суббота, если та же дата
+ * следующего года — не суббота (а так всегда: год сдвигает день недели); день, дата которого в
+ * следующем году уже есть в календаре (одна запись на дату; прототип сверял дату с типом); 29 февраля
+ * в невисокосный год.
+ */
+export function calendarCopyPlan(
+  entries: readonly CalendarEntry[],
+  year: number,
+): CalendarCopyItem[] {
+  const taken = new Set(calendarYear(entries, year + 1).map((d) => d.date));
+  return calendarYear(entries, year)
+    .filter((d) => !d.everyYear)
+    .map((d) => ({ from: d.date, to: `${year + 1}${d.date.slice(4)}`, kind: d.kind, name: d.name }))
+    .filter(
+      (x) =>
+        isIsoDate(x.to) &&
+        !taken.has(x.to) &&
+        (x.kind !== 'workday' || weekdayMondayFirst(x.to) === 5),
+    );
+}

@@ -107,7 +107,7 @@ const isoOf = (s: string | undefined) => {
 };
 
 /** Варианты ставки по территории или виду (прототип `rtVars`); ставка по датам — не варианты. */
-function rateVariants(rate: string): { name: string; pct: string }[] {
+export function rateVariants(rate: string): { name: string; pct: string }[] {
   const parts = segments(rate);
   if (parts.length < 2 || parts.some((s) => SINCE.test(s))) return [];
   const variants = parts.map((s) => {

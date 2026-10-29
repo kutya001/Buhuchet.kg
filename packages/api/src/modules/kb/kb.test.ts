@@ -128,10 +128,12 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
     // «Каталог видов отчётов», календарь, шаблоны и загрузка из Excel — с их вкладками.
     expect(steps(s).map((x) => [x.id, x.module, x.learn])).toEqual([
       ['a-dicts', 'pdicts', true],
+      ['a-cal', 'pdicts', true],
       ['a-l10n', 'l10n', true],
       ['a-org', 'orgs', false],
     ]);
-    expect(step(s, 'a-dicts')!.screens).toContain('pdicts.forms');
+    expect(step(s, 'a-dicts')!.screens).toContain('pdicts.regimes');
+    expect(step(s, 'a-cal')!.screens).toEqual(['pdicts.calendar']);
     // Статьи Админки — только о сделанных модулях («Справочники платформы» — с задачей 2.37).
     const arts = KbArticleList.parse(await ok(await call('GET', '/api/kb/articles', admin)));
     const ids = arts.items.map((a) => a.id);

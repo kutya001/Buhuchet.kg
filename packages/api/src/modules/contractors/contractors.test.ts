@@ -5,6 +5,7 @@ import {
   ApiError,
   AssignContractorsResult,
   Contractor,
+  ContractorSaved,
   ContractorGkedNotes,
   ContractorList,
   ContractorTabCounts,
@@ -379,6 +380,43 @@ describe.skipIf(!databaseAvailable())('Контрагенты: методы API'
         })
       ).status,
     ).toBe(403);
+  });
+
+  it('УГНС крупных налогоплательщиков отмечает статус сам, смена УГНС снимает его; ручной не трогается', async () => {
+    const res = await post(owner, { taxOfficeCode: 'ugns-large' });
+    expect(res.status).toBe(201);
+    const cp = ContractorSaved.parse(await res.json());
+    expect(cp.benefits.map((b) => [b.code, b.byOffice])).toEqual([['ЛЬГ-30', true]]);
+    expect(cp.notices).toEqual(['Отмечен статус «Крупный налогоплательщик» по УГНС']);
+    const reasons = async () => (await history(cp.id)).map((e) => e.reason).filter(Boolean);
+    expect(await reasons()).toEqual(['Отмечен статус «Крупный налогоплательщик» по УГНС']);
+
+    const patch = (version: number, data: Record<string, unknown>) =>
+      apiRequest(f.app, 'PATCH', `/api/contractors/${cp.id}`, owner, { version, ...data });
+    const moved = ContractorSaved.parse(
+      await (await patch(cp.version, { taxOfficeCode: 'ugns-bishkek-lenin' })).json(),
+    );
+    expect(moved.benefits).toEqual([]);
+    expect(moved.notices).toEqual(['Снят статус «Крупный налогоплательщик» по УГНС']);
+    expect(await reasons()).toEqual([
+      'Отмечен статус «Крупный налогоплательщик» по УГНС',
+      'Снят статус «Крупный налогоплательщик» по УГНС',
+    ]);
+
+    // Отмеченный вручную при другом УГНС смена УГНС не снимает.
+    const manual = ContractorSaved.parse(
+      await (
+        await patch(moved.version, {
+          benefits: [{ code: 'ЛЬГ-30', validFrom: null, validTo: null }],
+        })
+      ).json(),
+    );
+    expect(manual.notices).toEqual([]);
+    const again = ContractorSaved.parse(
+      await (await patch(manual.version, { taxOfficeCode: 'ugns-bishkek-okt' })).json(),
+    );
+    expect(again.benefits.map((b) => [b.code, b.byOffice])).toEqual([['ЛЬГ-30', false]]);
+    expect(again.notices).toEqual([]);
   });
 
   it('область «Свои контрагенты»: бухгалтер видит только своих, чужой — «не найден»', async () => {
