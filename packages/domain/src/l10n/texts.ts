@@ -11,6 +11,7 @@ import { MONEY_TEXTS } from './money-texts';
 import { NEWS_TEXTS } from './news-texts';
 import { ORG_TEXTS } from './org-texts';
 import { PLATFORM_DICTS_TEXTS } from './platform-dicts-texts';
+import { REPORTS_TEXTS } from './reports-texts';
 import { SHELL_TEXTS } from './shell-texts';
 import { STAFF_TEXTS } from './staff-texts';
 import { STATUS_TEXTS } from './status-texts';
@@ -76,6 +77,7 @@ export const UI_TEXTS = {
   ...ORG_TEXTS,
   ...CONTRACTORS_TEXTS,
   ...CONTRACTOR_PAGE_TEXTS,
+  ...REPORTS_TEXTS,
   ...TASKS_TEXTS,
   ...ADMIN_ACCOUNTS_TEXTS,
   ...ADMIN_L10N_TEXTS,

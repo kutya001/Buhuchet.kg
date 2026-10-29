@@ -1,3 +1,4 @@
+import { rateVariants } from '../dicts/value-guide';
 import type { Translate } from '../l10n/texts';
 import type { GkedRule, ReportKind } from '../platform-dicts/catalog';
 
@@ -297,6 +298,63 @@ export function gkedRates(
     if (other) best = [other];
   }
   return best;
+}
+
+/** Контрагент для строк ЕНС по умолчанию: ГКЭД, статусы и место деятельности. */
+export interface SingleTaxSubject {
+  gked: string | null;
+  gkedExtra: readonly string[];
+  benefits: readonly string[];
+  /** Город УГНС и юридический адрес (прототип enPlace). */
+  place: string;
+}
+
+/** Города в названии варианта: «Бишкек и Ош» → «Бишкек», «Ош»; «остальная территория» — без городов. */
+const placeNames = (name: string) => (/^[А-ЯЁ]/.test(name) ? name.split(/\s+и\s+|,\s*/) : []);
+
+/**
+ * Вариант ставки по месту (прототип enVarAuto): у вариантов по городам («Бишкек и Ош — 5 %, остальная
+ * территория — 3 %») — вариант с городом места деятельности, иначе вариант без городов; у вариантов не
+ * по месту и без места — первый; у ставки без вариантов — пусто.
+ */
+export function placeVariant(rate: string, place: string): number | null {
+  const variants = rateVariants(rate);
+  if (variants.length < 2) return null;
+  if (!place || !variants.some((v) => placeNames(v.name).length)) return 0;
+  const word = (w: string) =>
+    new RegExp(`(^|[^А-Яа-яЁё])${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^А-Яа-яЁё]|$)`);
+  const hit = variants.findIndex((v) => placeNames(v.name).some((w) => word(w).test(place)));
+  return hit >= 0
+    ? hit
+    : Math.max(
+        0,
+        variants.findIndex((v) => !placeNames(v.name).length),
+      );
+}
+
+/**
+ * Строки «Ставок единого налога» по умолчанию в назначении (прототип enAuto, enItem): основная — по
+ * основному ГКЭД и статусам (резидент ПКИ — ЕНС-13), без ГКЭД — «Остальные виды деятельности»;
+ * дополнительные ГКЭД с другой ставкой — свои строки, кроме ставок на всю деятельность (ЕНС-01, 05, 13,
+ * 15); вариант — по месту деятельности.
+ */
+export function defaultSingleTaxRates(
+  s: SingleTaxSubject,
+  rates: readonly GkedRate[],
+  index: GkedIndex,
+): { code: string; variant: number | null }[] {
+  const main = s.gked
+    ? gkedRates(s.gked, s.benefits, rates, index)[0]
+    : rates.find((x) => x.code === EN_OTHER);
+  if (!main) return [];
+  const out = [main];
+  if (!EN_ONE.includes(main.code)) {
+    for (const code of s.gkedExtra) {
+      const x = gkedRates(code, s.benefits, rates, index).find((y) => !EN_ONE.includes(y.code));
+      if (x && !out.some((e) => e.code === x.code)) out.push(x);
+    }
+  }
+  return out.map((x) => ({ code: x.code, variant: placeVariant(x.rate, s.place) }));
 }
 
 /**
