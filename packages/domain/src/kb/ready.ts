@@ -25,13 +25,13 @@ export type KbDoneRule =
       /** Поле получило это значение. */
       change?: { field: string; to: HistoryValue };
     }
+  /**
+   * Смена статуса записи самим пользователем («История статусов», `status_history`; откат не
+   * считается): шкала, из каких статусов и в какие. Действия с задачей пишутся только туда.
+   */
+  | { kind: 'status'; scale: StatusScaleKey; from: readonly string[]; to: readonly string[] }
   /** Привязан свой Telegram (`telegram_links`). */
   | { kind: 'telegram' }
-  /**
-   * Сам поставил статус по шкале (`status_history`, не откат): например, месяц показателей —
-   * «Проверено». Смена статуса пишется в историю статусов, а не в историю изменений.
-   */
-  | { kind: 'status'; scale: StatusScaleKey; to: string }
   /** Администратор платформы сам создал организацию (`organizations.created_by`). */
   | { kind: 'org_created' };
 
@@ -104,6 +104,24 @@ export const KB_STEP_RULES: Readonly<Record<string, KbStepRule>> = {
   roles: { module: 'staff' },
   emps: { module: 'staff', done: { kind: 'history', entity: 'employee', actions: ['create'] } },
   empcard: { module: 'staff' },
+  // 9. Задачи (задача 2.23). «Регулярные задачи по отчётам» — с задачей 2.24. «Выполнена» или «Не
+  // выполнена» — и отправленная на подтверждение (прототип `KB_EV['t.done']`); «Подтвердить» или «На
+  // доработку» (`KB_EV['t.conf']`).
+  mtask: { module: 'tasks', done: { kind: 'history', entity: 'task', actions: ['create'] } },
+  daymonth: { module: 'tasks' },
+  tdone: {
+    module: 'tasks',
+    done: {
+      kind: 'status',
+      scale: 'task',
+      from: ['todo', 'in_progress', 'rework'],
+      to: ['on_confirm', 'done', 'failed'],
+    },
+  },
+  tconf: {
+    module: 'tasks',
+    done: { kind: 'status', scale: 'task', from: ['on_confirm'], to: ['confirmed', 'rework'] },
+  },
   // 11. Показатели контрагентов (задача 2.27). «Ввести показатели из Excel» — с задачей 2.28,
   // «Вкладка «Показатели» в карточке контрагента» — с карточкой контрагента (2.11).
   kset: {
@@ -120,7 +138,10 @@ export const KB_STEP_RULES: Readonly<Record<string, KbStepRule>> = {
     done: { kind: 'history', entity: 'indicator_value', actions: ['create', 'update'] },
   },
   kper: { module: 'kpi' },
-  kchk: { module: 'kpi', done: { kind: 'status', scale: 'indicator', to: 'checked' } },
+  kchk: {
+    module: 'kpi',
+    done: { kind: 'status', scale: 'indicator', from: ['filled'], to: ['checked'] },
+  },
   // 14. Работа со списками и интерфейсом: пока нет «Контрагентов», «Перейти» ведёт в список «Видов
   // отчётов» — он виден всем. «Статистика» — с первым экраном организации с плашками (2.13).
   search: { module: null },
@@ -143,6 +164,7 @@ export const KB_READY_MODULES: ReadonlySet<string> = new Set<MenuModuleId>([
   'staff',
   'dicts',
   'org',
+  'tasks',
   // «Показатели контрагентов» (2.27).
   'kpi',
   'kb',

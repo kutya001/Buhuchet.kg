@@ -12,6 +12,7 @@ export const HISTORY_ENTITIES = [
   'employee',
   'role',
   'contractor',
+  'task',
   'file',
   'org_report_type',
   'dict_request',

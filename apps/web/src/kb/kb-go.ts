@@ -35,6 +35,11 @@ export const KB_GO: Readonly<Record<string, KbTarget>> = {
   roles: { module: 'staff', tab: 'roles', flash: 'main' },
   emps: { module: 'staff', tab: 'list', flash: LIST, open: { add: 'employee' } },
   empcard: { module: 'staff', tab: 'list', flash: LIST },
+  // Задачи (задача 2.23).
+  mtask: { module: 'tasks', tab: 'byme', flash: LIST, open: { add: 'task' } },
+  daymonth: { module: 'tasks', tab: 'mine', flash: '[data-task-legend]' },
+  tdone: { module: 'tasks', tab: 'mine', flash: LIST },
+  tconf: { module: 'tasks', tab: 'mine', flash: '[data-plate="pend"], main' },
   // «Показатели контрагентов» (2.27): «Кому вести» — нажать переключатель вида.
   kset: { module: 'kpi', tab: 'setup', flash: '[data-kpi-setup-list]' },
   kwho: {

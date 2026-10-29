@@ -11,7 +11,7 @@
  * Новый справочник добавляет сюда строку, перечень полей ниже и строку перечня
  * `app.platform_dict_specs` в базе.
  */
-export const ADMIN_VALUE_DICTS = ['forms', 'organs', 'ugns', 'banks', 'reasons'] as const;
+export const ADMIN_VALUE_DICTS = ['forms', 'organs', 'ugns', 'banks', 'cats', 'reasons'] as const;
 export type AdminValueDict = (typeof ADMIN_VALUE_DICTS)[number];
 
 export function isAdminValueDict(value: string): value is AdminValueDict {
@@ -65,6 +65,8 @@ export const ADMIN_DICT_META: Readonly<Record<AdminValueDict, AdminDictMeta>> = 
     ordered: true,
     fields: ['name', 'kind', 'byPhone', 'note'],
   },
+  // «Категории задач» (задача 2.23): код КАТ-001 и т. д., как у значений из наполнения.
+  cats: { code: { prefix: 'КАТ', digits: 3 }, ordered: true, fields: ['name', 'note'] },
   reasons: { code: { prefix: 'ПРЧ', digits: 3 }, ordered: true, fields: ['name', 'note'] },
 };
 
@@ -244,6 +246,7 @@ export const ADMIN_DICT_COLUMNS: Readonly<Record<AdminValueDict, readonly AdminD
     USED,
     STATUS,
   ],
+  cats: [N, CODE, VALUE, c('note', 'text', 'pdicts.col.note', true), USED, STATUS],
   reasons: [N, CODE, VALUE, c('note', 'text', 'pdicts.col.note', true), USED, STATUS],
 };
 

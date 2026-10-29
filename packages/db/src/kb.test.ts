@@ -302,6 +302,28 @@ describe.skipIf(!databaseAvailable())('«База знаний»: прогрес
     expect(await asOwner(a, (tx) => kbDoneFacts(tx, a.ownerUserId, []))).toEqual(new Map());
   });
 
+  it('факты «Сделать» задач — из своей «Истории статусов»', async () => {
+    const entityId = '00000000-0000-4000-8000-0000000000aa';
+    const steps = ['tdone', 'tconf'].map((id) => ({ id, rule: KB_STEP_RULES[id]!.done! }));
+    await inOrg(a, accUserId, (tx) =>
+      writeStatusChange(
+        tx,
+        { scale: 'task', entityId, from: 'todo', to: 'in_progress' },
+        { scale: 'task', entityId, from: 'in_progress', to: 'on_confirm' },
+      ),
+    );
+    const acc = await inOrg(a, accUserId, (tx) => kbDoneFacts(tx, accUserId, steps));
+    expect([...acc.keys()]).toEqual(['tdone']);
+    // Смены статусов сотрудника владельцу не засчитываются; подтверждение — засчитывается ему.
+    expect((await asOwner(a, (tx) => kbDoneFacts(tx, a.ownerUserId, steps))).size).toBe(0);
+    await asOwner(a, (tx) =>
+      writeStatusChange(tx, { scale: 'task', entityId, from: 'on_confirm', to: 'confirmed' }),
+    );
+    const owner = await asOwner(a, (tx) => kbDoneFacts(tx, a.ownerUserId, steps));
+    expect([...owner.keys()]).toEqual(['tconf']);
+    expect((await asOwner(b, (tx) => kbDoneFacts(tx, a.ownerUserId, steps))).size).toBe(0);
+  });
+
   it('факты «Сделать» — из своей истории статусов: «Проверить месяц» показателей', async () => {
     const steps = [{ id: 'kchk', rule: KB_STEP_RULES.kchk!.done! }];
     const month = '00000000-0000-4000-8000-0000000000a1';

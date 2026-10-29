@@ -53,6 +53,7 @@ import {
   taxRegimes,
 } from './schema';
 import { phoneCodes, type AuditRecord } from './staff';
+import { moveContractorTasks, openTasksOfContractors } from './tasks';
 
 /**
  * Модуль «Контрагенты»: контрагенты организации из контекста `withOrgContext` (RLS) с дополнительными
@@ -1006,6 +1007,12 @@ export async function assignContractors(
       contractorId: r.id,
     })),
   );
+  // Открытые задачи по контрагенту у прежнего ответственного переходят к новому (прототип `transferCp`).
+  await moveContractorTasks(
+    tx,
+    moving.map((r) => ({ contractorId: r.id, from: r.responsibleEmployeeId })),
+    employeeId,
+  );
   return { changed: moving.length, archived: [] };
 }
 
@@ -1024,14 +1031,14 @@ async function employeeContractorIds(tx: Tx, employeeId: string): Promise<string
 }
 
 /**
- * Что перейдёт при передаче дел (прототип transferDlg): число контрагентов и «Кому» по умолчанию —
- * активный сотрудник с ролью из шаблона «Главный бухгалтер», иначе первый активный, кроме самого
- * сотрудника. Незавершённые отчёты, задачи и деньги добавят их задачи.
+ * Что перейдёт при передаче дел (прототип transferDlg): число контрагентов, открытые задачи по ним и
+ * «Кому» по умолчанию — активный сотрудник с ролью из шаблона «Главный бухгалтер», иначе первый
+ * активный, кроме самого сотрудника. Незавершённые отчёты и деньги добавят их задачи.
  */
 export async function transferPreview(
   tx: Tx,
   fromEmployeeId: string,
-): Promise<{ contractors: number; defaultTo: string | null }> {
+): Promise<{ contractors: number; tasks: number; defaultTo: string | null }> {
   const ids = await employeeContractorIds(tx, fromEmployeeId);
   const candidates = await tx
     .select({ id: employees.id, chief: sql<boolean>`${roles.templateCode} = 'chief'` })
@@ -1040,7 +1047,8 @@ export async function transferPreview(
     .where(and(eq(employees.active, true), ne(employees.id, fromEmployeeId)))
     .orderBy(asc(employees.createdAt), asc(employees.id));
   const to = candidates.find((c) => c.chief) ?? candidates[0];
-  return { contractors: ids.length, defaultTo: to?.id ?? null };
+  const tasks = await openTasksOfContractors(tx, ids, fromEmployeeId);
+  return { contractors: ids.length, tasks, defaultTo: to?.id ?? null };
 }
 
 /**

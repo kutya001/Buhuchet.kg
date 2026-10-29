@@ -10,29 +10,32 @@ import { useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { pdictsTabCountsQuery } from '../platform-dicts/pdicts-data';
 import { staffTabCountsQuery } from '../staff/staff-data';
+import { taskTabCountsQuery } from '../tasks/tasks-data';
 
 /** Числа у вкладок модулей: модуль → вкладка → счётчик. */
 export type TabCounts = Partial<Record<MenuModuleId, Partial<Record<string, ShellCount>>>>;
 
 /**
  * Счётчики вкладок модулей меню (прототип: `count` у вкладок, например staffTabs; их видно и в ряду
- * вкладок, и в левой панели). Счётчики есть у модулей с экранами — у «Показателей контрагентов»
- * («Не заполнено»), «Сотрудников» и «Запросов» «Справочников платформы»; у остальных их добавят их
- * экраны. Запрос — только для модулей, доступных пользователю; пока ответа нет или запрос не удался —
- * вкладки без чисел.
+ * вкладок, и в левой панели). Счётчики есть у модулей с экранами — у «Сотрудников», «Задач»,
+ * «Показателей контрагентов» («Не заполнено») и у «Запросов» «Справочников платформы»; у остальных их
+ * добавят их экраны. Запрос — только для модулей, доступных пользователю; пока ответа нет или запрос не
+ * удался — вкладки без чисел.
  */
 export function useTabCounts(modules: readonly MenuModuleId[]): TabCounts {
   const t = useT();
   const staff = useQuery({ ...staffTabCountsQuery, enabled: modules.includes('staff') });
+  const tasks = useQuery({ ...taskTabCountsQuery, enabled: modules.includes('tasks') });
   const kpi = useQuery({ ...missingSummaryQuery, enabled: modules.includes('kpi') });
   const pdicts = useQuery({ ...pdictsTabCountsQuery, enabled: modules.includes('pdicts') });
   return useMemo(
     () => ({
-      ...(kpi.data ? { kpi: { missing: kpiMissingCount(t, kpi.data) } } : {}),
       ...(staff.data ? { staff: staff.data } : {}),
+      ...(tasks.data ? { tasks: tasks.data } : {}),
+      ...(kpi.data ? { kpi: { missing: kpiMissingCount(t, kpi.data) } } : {}),
       ...(pdicts.data ? { pdicts: pdicts.data } : {}),
     }),
-    [kpi.data, staff.data, pdicts.data, t],
+    [staff.data, tasks.data, kpi.data, pdicts.data, t],
   );
 }
 

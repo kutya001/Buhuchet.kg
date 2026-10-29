@@ -21,7 +21,12 @@ export const PLATFORM_DICTS_TEXTS = {
   'pdicts.title.organs': { ru: 'Органы', section: S },
   'pdicts.title.ugns': { ru: 'УГНС', section: S },
   'pdicts.title.banks': { ru: 'Банковские провайдеры', section: S },
+  'pdicts.title.cats': { ru: 'Категории задач', section: S },
   'pdicts.title.reasons': { ru: 'Причины изменения срока', section: S },
+  'pdicts.note.cats': {
+    ru: 'Шаблон для организаций: категории ручных задач. Организации видят значения на чтение; отключённое значение не предлагается в новых записях.',
+    section: S,
+  },
   'pdicts.note.reasons': {
     ru: 'Шаблон для организаций: причины, которые выбирают при изменении срока отчёта. Организации видят значения на чтение; отключённое значение не предлагается в новых записях.',
     section: S,
