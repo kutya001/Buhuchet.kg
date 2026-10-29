@@ -111,7 +111,7 @@ export async function ioRefs(tx: Tx): Promise<IoRefs> {
   };
 }
 
-/** Подпись, которая повторяется, — кодом значения. */
+/** Подпись, которая повторяется, — кодом значения (ОТКЛОНЕНИЕ: docs/deviations.md#Д-16). */
 function uniqueLabels(refs: IoRef[]): IoRef[] {
   const seen = new Map<string, number>();
   for (const r of refs) {
@@ -360,7 +360,7 @@ export type DictLoadRollbackResult =
  * «Откатить» последнюю загрузку (прототип rollbackLoad): изменённые и отключённые значения
  * возвращаются к виду до неё, добавленные удаляются, а используемые — отключаются. Значение,
  * изменённое после загрузки, откат не трогает: отказ с его названием, ничего не меняется
- * (ОТКЛОНЕНИЕ: docs/deviations.md#Д-16). В историю — строки значений и «загрузка от … откачена».
+ * (ОТКЛОНЕНИЕ: docs/deviations.md#Д-15). В историю — строки значений и «загрузка от … откачена».
  */
 export async function rollbackDictLoad(tx: Tx, id: string): Promise<DictLoadRollbackResult> {
   await lockDictLoads(tx);
