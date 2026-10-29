@@ -171,7 +171,8 @@ export const MODULES: Record<MenuModuleId, ModuleDef> = {
       },
     ],
     add: [
-      { id: 'mass', icon: 'matrix', label: 'add.reports.mass', when: (a) => a.can('assign') },
+      // «Назначить отчёты массово» откроет задача 2.15 («Кто что сдаёт»): до неё способ скрыт.
+      { id: 'mass', icon: 'matrix', label: 'add.reports.mass', when: () => false },
       { id: 'adhoc', icon: 'file', label: 'add.reports.adhoc', when: (a) => a.can('changeStatus') },
     ],
   },

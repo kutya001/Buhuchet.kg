@@ -104,6 +104,19 @@ export const KB_STEP_RULES: Readonly<Record<string, KbStepRule>> = {
   roles: { module: 'staff' },
   emps: { module: 'staff', done: { kind: 'history', entity: 'employee', actions: ['create'] } },
   empcard: { module: 'staff' },
+  // 6. Отчеты для сдачи (задача 2.13): вкладки списка и «Создать уточнённый» — у прежней версии
+  // ставится «superseded». Назначение и «Кто что сдаёт» — с задачами 2.11 и 2.15, сдача, подтверждение,
+  // массовая отметка, «Не требуется» и шкала — с 2.14.
+  rtabs: { module: 'reports' },
+  ver: {
+    module: 'reports',
+    done: {
+      kind: 'history',
+      entity: 'report',
+      actions: ['update'],
+      change: { field: 'superseded', to: true },
+    },
+  },
   // 9. Задачи (задача 2.23). «Регулярные задачи по отчётам» — с задачей 2.24. «Выполнена» или «Не
   // выполнена» — и отправленная на подтверждение (прототип `KB_EV['t.done']`); «Подтвердить» или «На
   // доработку» (`KB_EV['t.conf']`).
@@ -143,12 +156,13 @@ export const KB_STEP_RULES: Readonly<Record<string, KbStepRule>> = {
     done: { kind: 'status', scale: 'indicator', from: ['filled'], to: ['checked'] },
   },
   // 14. Работа со списками и интерфейсом: пока нет «Контрагентов», «Перейти» ведёт в список «Видов
-  // отчётов» — он виден всем. «Статистика» — с первым экраном организации с плашками (2.13).
+  // отчётов» — он виден всем. «Статистика» и «Свайпы» — на «Отчетах для сдачи», как в прототипе (2.13).
   search: { module: null },
   cols: { module: 'dicts' },
   grp: { module: 'dicts' },
   xls: { module: 'dicts' },
-  swipe: { module: 'dicts' },
+  stats: { module: 'reports' },
+  swipe: { module: 'reports' },
   // Админка (задачи 2.35, 2.36, 2.40). «Каталог видов отчётов», календарь, шаблоны и загрузка из
   // Excel — с их вкладками (2.36, 2.37).
   'a-dicts': { module: 'pdicts' },
@@ -164,6 +178,8 @@ export const KB_READY_MODULES: ReadonlySet<string> = new Set<MenuModuleId>([
   'staff',
   'dicts',
   'org',
+  // «Отчеты для сдачи» (2.13).
+  'reports',
   'tasks',
   // «Показатели контрагентов» (2.27).
   'kpi',

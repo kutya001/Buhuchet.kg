@@ -533,6 +533,8 @@ export interface ReportRow {
   /** Когда и кто отметил «Сдан»; у отмеченных при назначении момента и сотрудника нет. */
   submittedAt: Date | null;
   submittedBy: { id: string; shortName: string } | null;
+  /** Сколько дней сдача ждёт подтверждения (прототип repWaitDays); подтверждённый и несданный — пусто. */
+  waitDays: number | null;
   /** Подтверждение сдачи старшим бухгалтером (отметка на шаге «Сдан», задача 2.14). */
   confirmedAt: Date | null;
   confirmedBy: { id: string; shortName: string } | null;
@@ -596,6 +598,9 @@ function rowFields(today: IsoDate) {
     submittedAt: reports.submittedAt,
     submitterId: submitter.id,
     submitterName: submitter.shortName,
+    waitDays: sql<
+      number | null
+    >`case when ${reports.status} = 'submitted' and ${reports.act} <> 'pay' and ${reports.confirmedAt} is null then ${dateLiteral(today)} - ${SUBMITTED_DAY} end`,
     confirmedAt: reports.confirmedAt,
     confirmerId: confirmer.id,
     confirmerName: confirmer.shortName,
@@ -664,6 +669,7 @@ function toRow(r: RowData): ReportRow {
     submittedOn: r.submittedOn as IsoDate | null,
     submittedAt: momentOf(r.submittedAt),
     submittedBy: personOf(r.submitterId, r.submitterName),
+    waitDays: r.waitDays == null ? null : Number(r.waitDays),
     confirmedAt: momentOf(r.confirmedAt),
     confirmedBy: personOf(r.confirmerId, r.confirmerName),
     lastStatus: r.statusAt

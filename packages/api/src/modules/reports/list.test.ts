@@ -315,6 +315,7 @@ describe.skipIf(!databaseAvailable())(
       expect(aug).toMatchObject({
         submittedAt: '2026-10-10T05:00:00.000Z',
         submittedBy: { id: employee('acc-a'), shortName: 'acc-a' },
+        waitDays: 8,
         confirmedAt: null,
         confirmedBy: null,
         lastStatus: { at: '2026-10-10T05:00:00.000Z', by: 'acc-a' },

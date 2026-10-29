@@ -214,6 +214,8 @@ export const ReportRow = z.object({
   /** Когда и кто отметил «Сдан» (у отмеченных при назначении — пусто). */
   submittedAt: z.iso.datetime().nullable(),
   submittedBy: Person.nullable(),
+  /** Сколько дней сдача ждёт подтверждения (подтверждённый и несданный — пусто). */
+  waitDays: z.number().int().nullable(),
   /** Подтверждение сдачи: когда и кто (отметка на шаге «Сдан»). */
   confirmedAt: z.iso.datetime().nullable(),
   confirmedBy: Person.nullable(),

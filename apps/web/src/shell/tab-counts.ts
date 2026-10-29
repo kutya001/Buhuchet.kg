@@ -10,6 +10,7 @@ import { useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { newsDraftsCountQuery } from '../news/news-data';
 import { pdictsTabCountsQuery } from '../platform-dicts/pdicts-data';
+import { reportTabCountsQuery } from '../reports/reports-data';
 import { staffTabCountsQuery } from '../staff/staff-data';
 import { taskTabCountsQuery } from '../tasks/tasks-data';
 
@@ -18,13 +19,14 @@ export type TabCounts = Partial<Record<MenuModuleId, Partial<Record<string, Shel
 
 /**
  * Счётчики вкладок модулей меню (прототип: `count` у вкладок, например staffTabs; их видно и в ряду
- * вкладок, и в левой панели). Счётчики есть у модулей с экранами — у «Сотрудников», «Задач»,
+ * вкладок, и в левой панели). Счётчики есть у модулей с экранами — у «Отчетов для сдачи», «Сотрудников», «Задач»,
  * «Показателей контрагентов» («Не заполнено»), у «Запросов» «Справочников платформы» и черновики
  * «Новостей» в Админке; у остальных их добавят их экраны. Запрос — только для модулей, доступных пользователю; пока ответа нет или запрос не
  * удался — вкладки без чисел.
  */
 export function useTabCounts(modules: readonly MenuModuleId[]): TabCounts {
   const t = useT();
+  const reports = useQuery({ ...reportTabCountsQuery, enabled: modules.includes('reports') });
   const staff = useQuery({ ...staffTabCountsQuery, enabled: modules.includes('staff') });
   const tasks = useQuery({ ...taskTabCountsQuery, enabled: modules.includes('tasks') });
   const kpi = useQuery({ ...missingSummaryQuery, enabled: modules.includes('kpi') });
@@ -32,13 +34,14 @@ export function useTabCounts(modules: readonly MenuModuleId[]): TabCounts {
   const kbadm = useQuery({ ...newsDraftsCountQuery, enabled: modules.includes('kbadm') });
   return useMemo(
     () => ({
+      ...(reports.data ? { reports: reports.data } : {}),
       ...(staff.data ? { staff: staff.data } : {}),
       ...(tasks.data ? { tasks: tasks.data } : {}),
       ...(kpi.data ? { kpi: { missing: kpiMissingCount(t, kpi.data) } } : {}),
       ...(pdicts.data ? { pdicts: pdicts.data } : {}),
       ...(kbadm.data ? { kbadm: kbadm.data } : {}),
     }),
-    [staff.data, tasks.data, kpi.data, pdicts.data, kbadm.data, t],
+    [reports.data, staff.data, tasks.data, kpi.data, pdicts.data, kbadm.data, t],
   );
 }
 
@@ -55,9 +58,13 @@ export function kpiMissingCount(t: Translate, s: KpiMissingSummary): ShellCount 
 
 /**
  * Вкладка, чей цветной счётчик показывается и у самого модуля — в левой панели, в нижней панели
- * телефона и в «Других модулях» (прототип ui/shell.js: у «Показателей» — kMissBadge).
+ * телефона и в «Других модулях» (прототип ui/shell.js: у «Отчетов для сдачи» — просроченные, у
+ * «Показателей» — kMissBadge).
  */
-const MODULE_COUNT_TAB: Partial<Record<MenuModuleId, string>> = { kpi: 'missing' };
+const MODULE_COUNT_TAB: Partial<Record<MenuModuleId, string>> = {
+  reports: 'overdue',
+  kpi: 'missing',
+};
 
 /** Модуль меню с числами у вкладок. */
 export function withTabCounts(
