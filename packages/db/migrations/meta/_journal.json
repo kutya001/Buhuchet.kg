@@ -365,6 +365,20 @@
       "when": 1793310036754,
       "tag": "0051_admin_platform_dicts_more",
       "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1793311529605,
+      "tag": "0052_kpi_import",
+      "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1793311530943,
+      "tag": "0053_kpi_import_guards",
+      "breakpoints": true
     }
   ]
 }

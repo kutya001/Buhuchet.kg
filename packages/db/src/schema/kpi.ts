@@ -9,6 +9,7 @@ import {
   INDICATOR_TOTALS,
   INDICATOR_TYPES,
   INDICATOR_UNIT_MAX_LENGTH,
+  KPI_IMPORT_FILE_MAX_LENGTH,
 } from '@buhuchet/domain';
 import { sql, type SQL } from 'drizzle-orm';
 import {
@@ -226,5 +227,43 @@ export const indicatorMonths = pgTable(
     check('indicator_months_month_check', isMonth(t.month)),
     check('indicator_months_status_check', oneOf(t.status, FILL_STATUSES)),
     orgIsolation('indicator_months_isolation', t.orgId),
+  ],
+).enableRLS();
+
+/**
+ * «История загрузок» ввода из Excel (задача 2.28; прототип `DB.indicatorImports`, `kxApply`): кто,
+ * когда, какой файл, период прочитанных значений и сколько записано новых, изменённых, сколько ошибок и
+ * пропущенных проверенных. Сами значения пишутся в `indicator_values` с пометкой «Из Excel» в истории.
+ */
+export const indicatorImports = pgTable(
+  'indicator_imports',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: orgColumn(),
+    fileName: text('file_name').notNull(),
+    /** Период загрузки: первый и последний месяц прочитанных значений; нет значений — null. */
+    fromMonth: text('from_month'),
+    toMonth: text('to_month'),
+    added: integer('added').notNull(),
+    changed: integer('changed').notNull(),
+    errors: integer('errors').notNull(),
+    /** Изменения проверенных значений, которые не применили («Применить без них»). */
+    skippedChecked: integer('skipped_checked').notNull(),
+    createdBy: uuid('created_by').references(() => users.id),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('indicator_imports_org_idx').on(t.orgId, t.createdAt),
+    check('indicator_imports_from_check', sql`${t.fromMonth} is null or ${isMonth(t.fromMonth)}`),
+    check('indicator_imports_to_check', sql`${t.toMonth} is null or ${isMonth(t.toMonth)}`),
+    check(
+      'indicator_imports_file_check',
+      sql`char_length(${t.fileName}) between 1 and ${sql.raw(String(KPI_IMPORT_FILE_MAX_LENGTH))}`,
+    ),
+    check(
+      'indicator_imports_counts_check',
+      sql`${t.added} >= 0 and ${t.changed} >= 0 and ${t.errors} >= 0 and ${t.skippedChecked} >= 0`,
+    ),
+    orgIsolation('indicator_imports_isolation', t.orgId),
   ],
 ).enableRLS();

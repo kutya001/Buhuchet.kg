@@ -43,6 +43,7 @@ export * from './kpi/indicators';
 export * from './kpi/fill';
 export * from './kpi/targets';
 export * from './kpi/views';
+export * from './kpi/excel';
 export * from './files/files';
 export * from './kb/catalog';
 export * from './kb/ready';
