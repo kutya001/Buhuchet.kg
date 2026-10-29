@@ -200,7 +200,7 @@ export function saveSocfundHandler(deps: ApiDeps): RouteHandler<typeof saveSocfu
         socfundContext(tx, fields.gked, fields.formCode),
         activeReportTypes(tx, id),
       ]);
-      const input = socfundInputOf(req, fields.socfundFlags);
+      const input = socfundInputOf(req, fields.socfundFlags ?? {});
       const s = socfundSubjectOf(
         { ...fields, benefits: fields.benefits.map((b) => b.code), flags: input.flags },
         form,
@@ -210,10 +210,10 @@ export function saveSocfundHandler(deps: ApiDeps): RouteHandler<typeof saveSocfu
         apiFail(400, 'socfund_not_needed', t('err.socfund_not_needed'));
       }
       requireSocfundReason(s, input, dict, t);
-      requireSocfundConfirm(s, fields.socfundTariff, input, dict, confirm ?? false, t);
+      requireSocfundConfirm(s, fields.socfundTariff ?? null, input, dict, confirm ?? false, t);
       const patch = socfundPatch(
-        { ...s, flags: fields.socfundFlags },
-        fields.socfundTariff,
+        { ...s, flags: fields.socfundFlags ?? {} },
+        fields.socfundTariff ?? null,
         input,
         dict,
         fields.benefits,

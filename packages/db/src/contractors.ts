@@ -106,9 +106,12 @@ export interface ContractorFields {
   feeDay: number;
   paysTo: 'emp' | 'org';
   gkedConfirmation: ContractorGkedConfirmation | null;
-  /** Признаки для тарифа Соцфонда и выбранный тариф (docs/decisions.md п. А-3). */
-  socfundFlags: SocfundFlags;
-  socfundTariff: SocfundChoice | null;
+  /**
+   * Признаки для тарифа Соцфонда и выбранный тариф (docs/decisions.md п. А-3); не переданы — признаки
+   * не указаны и тарифа нет (так создают контрагентов тесты модулей, которым тариф не нужен).
+   */
+  socfundFlags?: SocfundFlags;
+  socfundTariff?: SocfundChoice | null;
 }
 
 /** Первая запись журнала тарифов: сумма в тыйынах, периодичность и месяц (первое число). */

@@ -382,7 +382,7 @@ export function updateContractorHandler(
           t,
         );
         next.benefits = office.benefits;
-        const sfInput = socfundInputOf(socfund, before.socfundFlags);
+        const sfInput = socfundInputOf(socfund, before.socfundFlags ?? {});
         const sfSubject = socfundSubjectOf(
           { ...next, benefits: next.benefits.map((b) => b.code), flags: sfInput.flags },
           sf.form,
@@ -399,15 +399,15 @@ export function updateContractorHandler(
         });
         requireSocfundConfirm(
           sfSubject,
-          before.socfundTariff,
+          before.socfundTariff ?? null,
           sfInput,
           sf.dict,
           socfundConfirm ?? false,
           t,
         );
         const sfPatch = socfundPatch(
-          { ...sfSubject, flags: before.socfundFlags },
-          before.socfundTariff,
+          { ...sfSubject, flags: before.socfundFlags ?? {} },
+          before.socfundTariff ?? null,
           sfInput,
           sf.dict,
           next.benefits,
