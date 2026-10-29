@@ -6,7 +6,7 @@ import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
 import { orgContextOf, requirePermission } from '../../middleware/access';
 import { subjectOf, todayOf, translateOf } from '../contractors/common';
-import { assigneeScopeOf, error } from './common';
+import { assigneeScopeOf, error, withReportErrors } from './common';
 
 /*
  * Окно «+ Добавить» → «Разовый отчёт» модуля «Отчеты для сдачи» (задача 2.13, прототип
@@ -75,6 +75,7 @@ export const manualReportDueRoute = createRoute({
     401: { description: 'Нет входа', content: error },
     403: noRight,
     404: { description: 'Нет такого контрагента или он вне области сотрудника', content: error },
+    409: { description: 'Контрагент в архиве', content: error },
   },
 });
 
@@ -83,8 +84,10 @@ export function manualReportDueHandler(
 ): RouteHandler<typeof manualReportDueRoute, AppEnv> {
   return async (c) => {
     const query = c.req.valid('query');
-    const due = await withOrgContext(deps.db, orgContextOf(c), (tx) =>
-      manualReportDue(tx, query, { today: todayOf(deps), scope: assigneeScopeOf(subjectOf(c)) }),
+    const due = await withReportErrors(() =>
+      withOrgContext(deps.db, orgContextOf(c), (tx) =>
+        manualReportDue(tx, query, { today: todayOf(deps), scope: assigneeScopeOf(subjectOf(c)) }),
+      ),
     );
     return c.json({ due }, 200);
   };

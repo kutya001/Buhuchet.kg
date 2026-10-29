@@ -1782,14 +1782,16 @@ export async function manualReportOptions(
 /**
  * Срок «Разового отчёта» разового вида по дате события — до сохранения (прототип adhocDlg, `evDue`):
  * правило вида и статуса контрагента, перенос с нерабочего дня — как при создании. null — вид не
- * разовый или его нет. Контрагент вне области — `RecordNotFoundError`.
+ * разовый или его нет. Контрагент вне области — `RecordNotFoundError`, архивный —
+ * `ContractorArchivedError`, как при создании.
  */
 export async function manualReportDue(
   tx: Tx,
   input: { contractorId: string; reportTypeCode: string; eventDate: IsoDate },
   context: { today: IsoDate; scope: SQL | undefined },
 ): Promise<IsoDate | null> {
-  await lockAssignee(tx, input.contractorId, context.scope, 'share');
+  const cp = await lockAssignee(tx, input.contractorId, context.scope, 'share');
+  if (cp.serviceStatus === 'archived') throw new ContractorArchivedError(input.contractorId);
   const [types, calendar, statuses] = await Promise.all([
     reportTypeInfos(tx, [input.reportTypeCode]),
     calendarOf(tx),

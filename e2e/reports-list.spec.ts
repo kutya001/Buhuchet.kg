@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { DEMO_PASSWORD, finger, settledBox, signIn } from './helpers';
+import { DEMO_PASSWORD, finger, newOrgOwner, settledBox, signIn } from './helpers';
 import { asOwner, manualReport, newContractor, staffIds } from './reports';
 
 // «Отчеты для сдачи» → вкладки и список (задача 2.13, #69) через настоящий сайт. Отчёты — «Разовым
@@ -270,5 +270,28 @@ test.describe('Этап 2: отчёты — список и вкладки', () 
     await expect(row(nds)).toContainText('17.01.2030');
     await expect(row(nds)).toContainText('перенос');
     await expect(row(t1)).toContainText('15.01.2030');
+  });
+
+  test('(проверка задачи 2.13) «Перейти» у шага «Скрыть и показать статистику модуля» ведёт на «На неделе» «Отчетов для сдачи», кнопка статистики засчитывает шаг', async ({
+    page,
+    baseURL,
+  }) => {
+    // Шаги засчитываются один раз и навсегда — у владельца новой организации.
+    await newOrgOwner(page.request, new URL(baseURL!).origin);
+    const stepDone = async () => {
+      const res = await page.request.get('/api/kb/me');
+      expect(res.status()).toBe(200);
+      const me = (await res.json()) as { lessons: { steps: { id: string; done: unknown }[] }[] };
+      return me.lessons.flatMap((l) => l.steps).find((x) => x.id === 'stats')?.done ?? null;
+    };
+    expect(await stepDone()).toBeNull();
+    await page.goto('/app/kb/lessons');
+    await page.locator('[data-kb-step="stats"]').getByRole('button', { name: 'Перейти' }).click();
+    await expect(page).toHaveURL(/\/app\/reports\/week$/);
+    const toggle = page.locator('[data-stats-toggle]');
+    await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    await expect.poll(stepDone).not.toBeNull();
   });
 });

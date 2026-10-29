@@ -91,6 +91,7 @@ const TEXT_FIELDS = [
   'overdue_sub',
   'mark_waiting',
   'mark_confirmed',
+  'mark_confirmed_by',
 ] as const;
 
 /**
@@ -146,6 +147,7 @@ async function listTexts(tx: Tx, t: ListTexts, today: IsoDate): Promise<SQL> {
     overdue_sub: t('report.overdue.sub'),
     mark_waiting: t('status.report.waiting'),
     mark_confirmed: t('status.report.confirmed'),
+    mark_confirmed_by: t('status.mark_confirmed_by'),
     months: Array.from({ length: 12 }, (_, i) => t(`report.month.${i + 1}`)),
     en,
     adds,
@@ -386,11 +388,11 @@ export function reportListColumns(
       sort: { value: responsible.shortName, text: true },
     },
     formCode: { type: 'text', label: 'report.col.form_code', value: reportTypes.formCode },
+    // Текстом, как в прототипе (`type: 'text'`): фильтр — по части слова, «III квартал».
     periodFull: {
-      type: 'enum',
+      type: 'text',
       label: 'report.col.period_full',
-      value: PERIOD_KEY,
-      display: PERIOD_FULL,
+      value: PERIOD_FULL,
       sort: { value: PERIOD_KEY, text: false },
     },
     dueBase: { type: 'date', label: 'report.col.due_base', value: reports.dueBase },
@@ -398,8 +400,9 @@ export function reportListColumns(
     confirm: {
       type: 'enum',
       label: 'report.col.confirm',
-      value: sql`case when ${marked} then case when ${reports.confirmedAt} is null then 'waiting' else 'confirmed' end end`,
-      display: sql`case when ${marked} then case when ${reports.confirmedAt} is null then ${lt('mark_waiting')} else ${lt('mark_confirmed')} end end`,
+      // «Ждёт подтверждения» или «Подтвердил <кто>» (прототип repConfTxt): у каждого подтвердившего — своё значение.
+      value: sql`case when ${marked} then case when ${reports.confirmedAt} is null then 'waiting' else coalesce(${confirmer.id}::text, 'confirmed') end end`,
+      display: sql`case when ${marked} then case when ${reports.confirmedAt} is null then ${lt('mark_waiting')} when ${confirmer.id} is null then ${lt('mark_confirmed')} else replace(${lt('mark_confirmed_by')}, '{who}', ${confirmer.shortName}) end end`,
     },
     confirmedOn: {
       type: 'date',
@@ -553,10 +556,10 @@ export interface ReportRow {
   version: number;
 }
 
-/** Праздник срока по закону — на эту дату или «каждый год» (прототип holidayName). */
+/** Праздник или перенос выходного на дату срока по закону — на эту дату или «каждый год» (прототип holidayName). */
 const DUE_HOLIDAY = sql<
   string | null
->`case when ${reports.dueDate} <> ${reports.dueBase} and not ${reports.dueManual} then coalesce((select h.name from ${productionCalendar} h where h.kind = 'holiday' and h.day in (${reports.dueBase}::text, to_char(${reports.dueBase}, 'MM-DD')) order by length(h.day) desc limit 1), '') end`;
+>`case when ${reports.dueDate} <> ${reports.dueBase} and not ${reports.dueManual} then coalesce((select h.name from ${productionCalendar} h where h.kind in ('holiday', 'transfer') and h.day in (${reports.dueBase}::text, to_char(${reports.dueBase}, 'MM-DD')) order by length(h.day) desc limit 1), '') end`;
 
 /** Последняя смена статуса отчёта: поле записи «Истории статусов». */
 const lastStatus = (field: SQL) =>
@@ -703,7 +706,8 @@ const REPORT_NATURAL = [reports.dueDate, reports.id];
 
 const columnsOf = (o: ReportListOptions) =>
   reportListColumns(o.t, { today: o.today, confirm: o.waiting.confirm });
-const DEFAULT_SORT = { key: 'due', dir: 'asc' } as const;
+/** Как на экране (ТЗ «Списки записей», прототип defSort): от новых к старым по «Создано». */
+const DEFAULT_SORT = { key: 'createdAt', dir: 'desc' } as const;
 
 const listFrom =
   (tx: Tx, texts: SQL): ListFrom =>

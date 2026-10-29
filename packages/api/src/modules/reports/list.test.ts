@@ -285,6 +285,17 @@ describe.skipIf(!databaseAvailable())(
       // ответственный — главный бухгалтер; в «Ожидают» его нет, во «Все отчёты» — есть (п. А-2).
       expect(await names(acc, '&tab=waiting')).toEqual(of('ndsAug'));
       expect((await summary(acc)).waiting).toBe(1);
+      // Те же границы — у значений фильтра и выгрузки вкладки.
+      const accValues = ListValues.parse(
+        await (await get(acc, '/api/reports/values?col=submittedBy&tab=waiting')).json(),
+      );
+      expect(accValues.items.map((v) => v.label)).toEqual(['acc-a']);
+      const accFile = await get(acc, '/api/reports/export?cols=cp,type&tab=waiting');
+      expect(accFile.status).toBe(200);
+      const accSheet = unzipTexts(new Uint8Array(await accFile.arrayBuffer()))[
+        'xl/worksheets/sheet1.xml'
+      ]!;
+      expect((accSheet.match(/<row /g) ?? []).length).toBe(2);
       expect(await names(acc)).toContain(ids.ndsJun);
       expect(await names(acc)).not.toContain(ids.ndsJul);
       expect((await names(chief, '&tab=waiting')).sort()).toEqual(of('ndsAug', 'ndsJun'));
@@ -307,6 +318,21 @@ describe.skipIf(!databaseAvailable())(
       } finally {
         await policy(true);
       }
+    });
+
+    it('итог «К уплате» — по вкладке, быстрому фильтру и фильтрам столбцов; у «Сдача» суммы нет', async () => {
+      const total = async (query: string) => (await list(owner, query)).totals.amount;
+      // Июль 2 000, август 3 000, патент 5 000; у июня 0, у сентября не указана.
+      expect(await total('')).toBe(1_000_000);
+      expect(await total('&tab=waiting')).toBe(300_000);
+      expect(await total('&quick=pay')).toBe(1_000_000);
+      expect(await total('&quick=sub')).toBe(0);
+      const filters = encodeURIComponent(JSON.stringify({ cp: { type: 'text', q: 'Садыков' } }));
+      expect(await total(`&filters=${filters}`)).toBe(200_000);
+      const types = encodeURIComponent(JSON.stringify({ act: { type: 'enum', vals: ['sub'] } }));
+      expect(await total(`&filters=${types}`)).toBe(0);
+      // Бухгалтер с областью «Свои» — только суммы своих отчётов (ndsJul у чужого контрагента).
+      expect((await list(acc)).totals.amount).toBe(800_000);
     });
 
     it('строка: кто сдал, кто подтвердил, последняя смена статуса; «Ждёт, дней» и «Подтверждение»', async () => {
@@ -340,7 +366,8 @@ describe.skipIf(!databaseAvailable())(
       expect(confirm.items).toEqual(
         expect.arrayContaining([
           { value: 'waiting', label: 'Ждёт подтверждения', count: 2 },
-          { value: 'confirmed', label: 'Подтверждено', count: 2 },
+          // Подтверждённые — по тому, кто подтвердил (прототип repConfTxt).
+          { value: f.a.ownerEmployeeId, label: 'Подтвердил owner-a В.', count: 2 },
         ]),
       );
       const by = ListValues.parse(
@@ -364,6 +391,8 @@ describe.skipIf(!databaseAvailable())(
 
       expect((await apiRequest(f.app, 'GET', '/api/reports/tab-counts')).status).toBe(401);
       expect((await get(senior, '/api/reports/tab-counts')).status).toBe(403);
+      expect((await get(senior, '/api/reports/values?col=cp&tab=waiting')).status).toBe(403);
+      expect((await get(senior, '/api/reports/export?cols=cp&tab=waiting')).status).toBe(403);
       expect((await list(ownerB, '&tab=waiting')).items).toEqual([]);
     });
 
@@ -411,6 +440,24 @@ describe.skipIf(!databaseAvailable())(
       expect(
         (await due(senior, `contractorId=${cpA}&reportTypeCode=utli&eventDate=2026-11-05`)).status,
       ).toBe(403);
+      expect(
+        (
+          await apiRequest(
+            f.app,
+            'GET',
+            `/api/reports/manual-due?contractorId=${cpA}&reportTypeCode=utli&eventDate=2026-11-05`,
+          )
+        ).status,
+      ).toBe(401);
+      // Архивному контрагенту разовый отчёт не создаётся — и срок для него не считается (как POST).
+      const archived = await due(
+        owner,
+        `contractorId=${cpArchived}&reportTypeCode=utli&eventDate=2026-11-05`,
+      );
+      expect(archived.status).toBe(409);
+      expect(((await archived.json()) as { error: { code: string } }).error.code).toBe(
+        'contractor_archived',
+      );
     });
   },
 );

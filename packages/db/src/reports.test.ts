@@ -1,4 +1,10 @@
-import { formatText, RecordNotFoundError, UI_TEXTS, type ListQuery } from '@buhuchet/domain';
+import {
+  formatText,
+  KB_STEP_RULES,
+  RecordNotFoundError,
+  UI_TEXTS,
+  type ListQuery,
+} from '@buhuchet/domain';
 import { and, asc, eq, sql, type SQL } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { withOrgContext, type OrgContext } from './context';
@@ -13,6 +19,7 @@ import {
   type ContractorFields,
 } from './contractors';
 import { readHistory } from './history';
+import { kbDoneFacts } from './kb';
 import {
   exportReports,
   getReportRow,
@@ -578,6 +585,10 @@ describe.skipIf(!databaseAvailable())('Отчёты: назначения и о�
       [0, true, 'submitted'],
       [1, false, 'todo'],
     ]);
+    // Шаг «Базы знаний» «Создать уточнённый отчёт» засчитывается тому, кто его создал (задача 2.13).
+    const ver = [{ id: 'ver', rule: KB_STEP_RULES.ver!.done! }];
+    expect([...(await inA((tx) => kbDoneFacts(tx, ctxA().userId, ver))).keys()]).toEqual(['ver']);
+    expect((await inB((tx) => kbDoneFacts(tx, ctxA().userId, ver))).size).toBe(0);
     await expect(
       inA((tx) =>
         createRevision(tx, july!.id, {

@@ -76,7 +76,8 @@ export function withTabCounts(
   const own = tab ? counts[tab] : undefined;
   return {
     ...module,
-    ...(own?.tone ? { count: own } : {}),
+    // У модуля — только ненулевой цветной счётчик (прототип: `cn.overdue ? badge : ''`).
+    ...(own?.tone && own.value ? { count: own } : {}),
     tabs: module.tabs.map((tab) => {
       const count = counts[tab.id];
       return count ? { ...tab, count } : tab;

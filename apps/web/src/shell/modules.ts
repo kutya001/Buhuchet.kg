@@ -67,6 +67,8 @@ interface TabDef {
   /** Группа вкладки (прототип `group` у вкладок «Справочников платформы»): черта между группами. */
   group?: UiTextKey;
   when?: When;
+  /** Куда вести, когда вкладка скрыта (прототип renderReports: «Ожидают» без подтверждения → «Все»). */
+  fallback?: string;
 }
 
 export interface AddDef {
@@ -160,6 +162,7 @@ export const MODULES: Record<MenuModuleId, ModuleDef> = {
         icon: 'hourglass',
         label: 'tab.reports.waiting',
         when: (a) => a.reportConfirm,
+        fallback: 'all',
       },
       { id: 'all', icon: 'list', label: 'tab.reports.all' },
       { id: 'matrix', icon: 'matrix', label: 'tab.reports.matrix' },
@@ -503,7 +506,7 @@ export function parseAppPath(pathname: string): { moduleId: string | null; tabId
 
 /**
  * Куда вести по адресу: модуль, которого нет в меню вошедшего, — на первый модуль меню; вкладка,
- * которой нет или которая не видна, — на первую видимую (как route() прототипа).
+ * которой нет или которая не видна, — на её `fallback` или первую видимую (как route() прототипа).
  */
 export function resolveAppRoute(
   me: MeResponse,
@@ -526,5 +529,7 @@ export function resolveAppRoute(
   if (tabPath?.length === 1 && tabs.some((t) => t.id === tabId)) {
     return { moduleId: allowed, tabId: tabId! };
   }
-  return { redirect: tabHref(allowed, tabs[0]!.id) };
+  const fallback = (MODULES[allowed].tabs ?? []).find((t) => t.id === tabId)?.fallback;
+  const to = tabs.find((t) => t.id === fallback) ?? tabs[0]!;
+  return { redirect: tabHref(allowed, to.id) };
 }

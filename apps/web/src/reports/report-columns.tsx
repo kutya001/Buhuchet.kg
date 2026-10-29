@@ -78,6 +78,7 @@ export function reportMarkText(t: Translate, r: ReportRow, confirm: boolean): st
 /** Подсказка у метки «перенос»: с какого дня и почему (прототип dueHtml). */
 export function dueMovedTitle(t: Translate, r: ReportRow): string {
   const date = formatDateRu(r.dueBase);
+  // ОТКЛОНЕНИЕ: docs/deviations.md#Б-5
   if (r.dueManual) return t('report.due.manual_title', { date });
   return t('report.due.moved_title', { date, why: r.dueHoliday || t('report.due.weekend') });
 }
@@ -390,7 +391,7 @@ export function reportColumns(t: Translate, o: ReportColumnsOptions): GridColumn
     {
       key: 'periodFull',
       label: t('report.col.period_full'),
-      type: 'enum',
+      type: 'text',
       width: 170,
       text: (r) => r.periodFull,
     },

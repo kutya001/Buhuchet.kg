@@ -1,8 +1,9 @@
 import { defaultUiTexts } from '@buhuchet/domain';
 import type { ReportRow } from '@buhuchet/shared';
-import type { ActionEntry, ActionItem } from '@buhuchet/ui';
+import type { ActionEntry, ActionItem, ShellModule } from '@buhuchet/ui';
 import { describe, expect, it, vi } from 'vitest';
 import { makeTranslate } from '../l10n/translate';
+import { withTabCounts } from '../shell/tab-counts';
 import {
   amountText,
   dueMovedTitle,
@@ -194,11 +195,25 @@ describe('плашки и счётчики', () => {
     expect(isPlateFilter('overdue')).toBe(false);
   });
 
-  it('у вкладок — «На неделе», «Просрочено» красным и «Ожидают подтверждения»; нулевых чисел нет', () => {
+  it('у вкладок — «На неделе», «Просрочено» красным и «Ожидают подтверждения»; ноль тоже виден', () => {
     expect(reportTabCounts({ week: 4, overdue: 53, waiting: 0 })).toEqual({
       week: { value: 4 },
       overdue: { value: 53, tone: 'red' },
-      waiting: undefined,
+      waiting: { value: 0 },
     });
+  });
+
+  it('у модуля в левой панели — число просроченных, только когда оно больше нуля', () => {
+    const module = {
+      id: 'reports',
+      title: 'Отчеты для сдачи',
+      tabs: [{ id: 'overdue', label: 'Просрочено' }],
+    } as unknown as ShellModule;
+    expect(
+      withTabCounts(module, reportTabCounts({ week: 0, overdue: 3, waiting: 0 })).count,
+    ).toEqual({ value: 3, tone: 'red' });
+    expect(
+      withTabCounts(module, reportTabCounts({ week: 0, overdue: 0, waiting: 0 })).count,
+    ).toBeUndefined();
   });
 });

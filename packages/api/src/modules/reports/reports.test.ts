@@ -45,7 +45,12 @@ describe.skipIf(!databaseAvailable())('Отчёты: назначения и о�
   const reportsOf = async (cp: string, type: string) =>
     (await list(owner)).items
       .filter((r) => r.contractor.id === cp && r.type.code === type)
-      .sort((a, b) => a.periodStart.localeCompare(b.periodStart));
+      .sort(
+        (a, b) =>
+          a.periodStart.localeCompare(b.periodStart) ||
+          a.dueDate.localeCompare(b.dueDate) ||
+          a.revision - b.revision,
+      );
 
   async function contractor(orgId: string, name: string, inn: string, responsible: string) {
     const [row] = await f.t.admin.db

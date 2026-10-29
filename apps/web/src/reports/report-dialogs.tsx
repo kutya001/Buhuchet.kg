@@ -167,7 +167,7 @@ export function DueChangeDialog({
       open={open}
       onClose={onClose}
       kind="form"
-      dirty={due !== report.dueDate || comment !== ''}
+      dirty={due !== report.dueDate || comment !== '' || reason !== (reasons[0]?.code ?? '')}
       title={t('report.due.title')}
       sub={`${report.contractor.name} · ${report.type.shortName} ${report.periodLabel}`}
       footer={<Footer t={t} onClose={onClose} label={t('btn.save')} busy={busy} onOk={save} />}
@@ -277,13 +277,21 @@ export function ManualReportDialog({
     reasons.find((r) => r.name === t('report.manual.reason_default'))?.code ??
     reasons[0]?.code ??
     '';
-  const [cp, setCp] = useState(options.contractors[0]?.id ?? '');
-  const [typeCode, setTypeCode] = useState(firstType);
-  const [month, setMonth] = useState(previousMonth(today));
-  const [event, setEvent] = useState(today);
-  const [due, setDue] = useState(addDays(today, 7));
+  const [initial] = useState(() => ({
+    cp: options.contractors[0]?.id ?? '',
+    typeCode: firstType,
+    month: previousMonth(today),
+    event: today,
+    due: addDays(today, 7),
+    reason: otherReason,
+  }));
+  const [cp, setCp] = useState(initial.cp);
+  const [typeCode, setTypeCode] = useState(initial.typeCode);
+  const [month, setMonth] = useState(initial.month);
+  const [event, setEvent] = useState(initial.event);
+  const [due, setDue] = useState(initial.due);
   const [dueTouched, setDueTouched] = useState(false);
-  const [reason, setReason] = useState(otherReason);
+  const [reason, setReason] = useState(initial.reason);
   const [errors, setErrors] = useState<Partial<Record<ManualField, string>>>({});
   const [busy, setBusy] = useState(false);
   const type: ManualType | undefined = options.types.find((x) => x.code === typeCode);
@@ -372,11 +380,21 @@ export function ManualReportDialog({
     </Field>
   );
 
+  // Любое изменённое поле — вопрос «Закрыть без сохранения?» (прототип ui/popups.js).
+  const dirty =
+    cp !== initial.cp ||
+    typeCode !== initial.typeCode ||
+    month !== initial.month ||
+    event !== initial.event ||
+    due !== initial.due ||
+    reason !== initial.reason;
+
   return (
     <Modal
       open={open}
       onClose={onClose}
       kind="form"
+      dirty={dirty}
       title={t('report.manual.title')}
       sub={
         oneOff && type

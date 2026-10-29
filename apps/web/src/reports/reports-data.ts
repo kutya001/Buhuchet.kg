@@ -33,14 +33,14 @@ export const reportSummaryQuery = queryOptions({
 
 /**
  * Числа у вкладок (прототип repTabs): «На неделе», «Просрочено» — красным, «Ожидают подтверждения»; у
- * «Все отчёты» числа нет. Нулевой счётчик не показывается.
+ * «Все отчёты» числа нет. Ноль — серым, как в прототипе (`badge` без цвета).
  */
 export const reportTabCounts = (
   s: Pick<ReportTabCounts, 'week' | 'overdue' | 'waiting'>,
 ): Partial<Record<string, ShellCount>> => ({
-  week: s.week ? { value: s.week } : undefined,
-  overdue: s.overdue ? { value: s.overdue, tone: 'red' } : undefined,
-  waiting: s.waiting ? { value: s.waiting } : undefined,
+  week: { value: s.week },
+  overdue: { value: s.overdue, tone: 'red' },
+  waiting: { value: s.waiting },
 });
 
 export const reportTabCountsQuery = queryOptions({
