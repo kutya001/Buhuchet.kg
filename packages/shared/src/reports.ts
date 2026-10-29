@@ -185,6 +185,8 @@ export const AssignmentEnded = z.object({
 export const AssignmentIdParam = z.object({ id: Uuid });
 export const ReportIdParam = z.object({ id: Uuid });
 
+const Person = z.object({ id: Uuid, shortName: z.string() });
+
 /** Строка списка отчётов (прототип repCols): тексты, как в столбцах экрана. */
 export const ReportRow = z.object({
   id: Uuid,
@@ -203,15 +205,25 @@ export const ReportRow = z.object({
   dueDate: IsoDate,
   dueBase: IsoDate,
   dueManual: z.boolean(),
+  /** Срок перенесён с нерабочего дня: название праздника, у выходного — пусто; без переноса — null. */
+  dueHoliday: z.string().nullable(),
   days: z.number().int().nullable(),
   overdue: z.boolean(),
   status: z.enum(REPORT_STATUSES),
   submittedOn: IsoDate.nullable(),
+  /** Когда и кто отметил «Сдан» (у отмеченных при назначении — пусто). */
+  submittedAt: z.iso.datetime().nullable(),
+  submittedBy: Person.nullable(),
+  /** Подтверждение сдачи: когда и кто (отметка на шаге «Сдан»). */
+  confirmedAt: z.iso.datetime().nullable(),
+  confirmedBy: Person.nullable(),
+  /** Последняя смена статуса: когда и кем (под шкалой в строке). */
+  lastStatus: z.object({ at: z.iso.datetime(), by: z.string().nullable() }).nullable(),
   amount: Tyiyn.nullable(),
   amountAuto: z.boolean(),
   payDue: IsoDate.nullable(),
   pays: z.string(),
-  responsible: z.object({ id: Uuid, shortName: z.string() }).nullable(),
+  responsible: Person.nullable(),
   formCode: z.string(),
   ownershipForm: z.string(),
   regime: z.string().nullable(),
@@ -223,15 +235,43 @@ export type ReportRow = z.infer<typeof ReportRow>;
 export const ReportList = listPageSchema(ReportRow);
 export type ReportList = z.infer<typeof ReportList>;
 
-/** Вкладка списка (прототип repTabs): «На этой неделе», «Просроченные», «Все». */
+/**
+ * Вкладка списка (прототип repTabs) и быстрый фильтр над ним «Все / Сдать / Уплатить» (ТЗ «Метка «Что
+ * нужно сделать»»).
+ */
 export const ReportTabParam = z.object({
-  tab: z.enum(['week', 'overdue', 'all']).default('all'),
+  tab: z.enum(['week', 'overdue', 'waiting', 'all']).default('all'),
+  quick: z.enum(['all', 'sub', 'pay']).default('all'),
 });
+export type ReportTab = z.infer<typeof ReportTabParam>['tab'];
+export type ReportQuick = z.infer<typeof ReportTabParam>['quick'];
 
-/** Счётчики вкладок: просрочено и на этой неделе — в области сотрудника. */
+const Count = z.number().int().nonnegative();
+const QuickCounts = z.object({ all: Count, sub: Count, pay: Count });
+
+/**
+ * Счётчики вкладок, плашки и числа быстрого фильтра в области сотрудника (прототип counts,
+ * renderReports): `month` — первое число текущего месяца, `weekFrom` и `weekTo` — «На этой неделе»,
+ * `waitDays` — через сколько дней ожидания старшим бухгалтерам уходит напоминание (учётная политика),
+ * `empty` — в организации ещё нет отчётов.
+ */
 export const ReportTabCounts = z.object({
-  overdue: z.number().int().nonnegative(),
-  week: z.number().int().nonnegative(),
+  overdue: Count,
+  week: Count,
+  waiting: Count,
+  submittedMonth: Count,
+  toPayMonth: Tyiyn,
+  quick: z.object({
+    week: QuickCounts,
+    overdue: QuickCounts,
+    waiting: QuickCounts,
+    all: QuickCounts,
+  }),
+  month: IsoDate,
+  weekFrom: IsoDate,
+  weekTo: IsoDate,
+  waitDays: z.number().int().nonnegative(),
+  empty: z.boolean(),
 });
 export type ReportTabCounts = z.infer<typeof ReportTabCounts>;
 
@@ -290,6 +330,33 @@ export const ManualReportCreate = z.strictObject({
   due: ReportDate.nullable().default(null),
   reasonCode: Code,
 });
+
+/** Списки окна «Разовый отчёт»: контрагенты в области (кроме архивных) и подключённые действующие виды. */
+export const ManualReportOptions = z.object({
+  contractors: z.array(z.object({ id: Uuid, name: z.string() })),
+  types: z.array(
+    z.object({
+      code: z.string(),
+      name: z.string(),
+      shortName: z.string(),
+      act: z.enum(REPORT_ACTS),
+      oneOff: z.boolean(),
+      /** Подпись даты события разового вида («Дата ввоза»); пусто — «Дата события». */
+      eventLabel: z.string(),
+      /** Срок словами (прототип ruleText): «в течение 15 дней после события». */
+      dueText: z.string(),
+    }),
+  ),
+});
+export type ManualReportOptions = z.infer<typeof ManualReportOptions>;
+
+/** Срок разового вида по дате события — до сохранения (прототип adhocDlg, `evDue`). */
+export const ManualReportDueQuery = z.object({
+  contractorId: Uuid,
+  reportTypeCode: Code,
+  eventDate: ReportDate,
+});
+export const ManualReportDue = z.object({ due: IsoDate.nullable() });
 
 /** «Создать уточнённый»: версия сданного отчёта. */
 export const ReportRevisionCreate = z.strictObject({ version: RecordVersion });

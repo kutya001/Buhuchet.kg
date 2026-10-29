@@ -7,6 +7,7 @@ import {
   type AssignmentEnRate,
   type CompatibilityRate,
   type CompatibilitySubject,
+  type DueRule,
   endsWithAssignment,
   OPEN_REPORT_STATUSES,
   pastPeriods,
@@ -1730,6 +1731,83 @@ export async function createManualReport(
     contractorId: input.contractorId,
   });
   return created;
+}
+
+/** Что можно выбрать в окне «Разовый отчёт». */
+export interface ManualReportOptions {
+  /** Контрагенты в области «Свои» группы «Отчеты для сдачи», кроме архивных (прототип visCps). */
+  contractors: { id: string; name: string }[];
+  /** Подключённые в организации и действующие виды по порядку каталога, с правилом срока. */
+  types: (DueRule & {
+    code: string;
+    name: string;
+    shortName: string;
+    eventLabel: string;
+  })[];
+}
+
+/** Списки окна «Разовый отчёт» (прототип adhocDlg). */
+export async function manualReportOptions(
+  tx: Tx,
+  scope: SQL | undefined,
+): Promise<ManualReportOptions> {
+  const [cps, types] = await Promise.all([
+    tx
+      .select({ id: contractors.id, name: contractors.name })
+      .from(contractors)
+      .where(and(ne(contractors.serviceStatus, 'archived'), scope))
+      .orderBy(asc(contractors.name), asc(contractors.id)),
+    tx
+      .select({
+        code: reportTypes.code,
+        name: reportTypes.name,
+        shortName: reportTypes.shortName,
+        act: reportTypes.act,
+        oneOff: reportTypes.oneOff,
+        eventLabel: reportTypes.eventLabel,
+        period: reportTypes.period,
+        dueDay: reportTypes.dueDay,
+        dueAfter: reportTypes.dueAfter,
+        dueMonth: reportTypes.dueMonth,
+        dueFrom: reportTypes.dueFrom,
+      })
+      .from(reportTypes)
+      .innerJoin(orgReportTypes, eq(orgReportTypes.reportTypeCode, reportTypes.code))
+      .where(and(eq(orgReportTypes.enabled, true), eq(reportTypes.active, true)))
+      .orderBy(asc(reportTypes.sortOrder), asc(reportTypes.code)),
+  ]);
+  return { contractors: cps, types };
+}
+
+/**
+ * Срок «Разового отчёта» разового вида по дате события — до сохранения (прототип adhocDlg, `evDue`):
+ * правило вида и статуса контрагента, перенос с нерабочего дня — как при создании. null — вид не
+ * разовый или его нет. Контрагент вне области — `RecordNotFoundError`.
+ */
+export async function manualReportDue(
+  tx: Tx,
+  input: { contractorId: string; reportTypeCode: string; eventDate: IsoDate },
+  context: { today: IsoDate; scope: SQL | undefined },
+): Promise<IsoDate | null> {
+  await lockAssignee(tx, input.contractorId, context.scope, 'share');
+  const [types, calendar, statuses] = await Promise.all([
+    reportTypeInfos(tx, [input.reportTypeCode]),
+    calendarOf(tx),
+    statusDueRules(tx, [input.contractorId], context.today),
+  ]);
+  const type = types.get(input.reportTypeCode);
+  if (!type?.oneOff) return null;
+  const rule = effectiveRule(
+    type,
+    null,
+    statuses.get(ruleKey(input.contractorId, input.reportTypeCode)) ?? null,
+  );
+  const ref = {
+    period: 'M' as const,
+    start: periodStartOf('M', input.eventDate),
+    event: input.eventDate,
+  };
+  return reportDue(rule, ref, calendar).due;
 }
 
 /**

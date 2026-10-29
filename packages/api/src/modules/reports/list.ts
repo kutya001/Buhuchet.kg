@@ -3,12 +3,15 @@ import {
   exportReports,
   listReportsPage,
   listReportValues,
-  reportTabCounts,
+  reportConfirmPolicy,
+  reportSummary,
   withOrgContext,
   type ReportListOptions,
   type ReportRow,
-  type ReportTab,
+  type ReportWaitingView,
+  type Tx,
 } from '@buhuchet/db';
+import { hasPermission, reportWeek, type AccessSubject } from '@buhuchet/domain';
 import {
   ListExportParams,
   ListQueryParams,
@@ -20,6 +23,7 @@ import {
   type ReportRow as ReportRowBody,
 } from '@buhuchet/shared';
 import type { Context } from 'hono';
+import type { z } from 'zod';
 import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
 import { listQueryOf, listQueryResponses } from '../../errors';
@@ -30,25 +34,52 @@ import { subjectOf, todayOf } from '../contractors/common';
 import { error, reportScopeOf } from './common';
 
 /*
- * Список отчётов (прототип modules/reports.js: repGrid, repTabs; экран — задача 2.13): вкладки «На этой
- * неделе», «Просроченные», «Все»; прежние версии уточнённых не показываются; область — п. А-2.
+ * Список отчётов (прототип modules/reports.js: repGrid, repTabs, renderReports; экран — задача 2.13):
+ * вкладки «На неделе», «Просрочено», «Ожидают подтверждения», «Все отчёты», быстрый фильтр «Все /
+ * Сдать / Уплатить»; прежние версии уточнённых не показываются; область — п. А-2.
  */
 
 const noView = { description: 'Нет права «Просматривать отчёты»', content: error };
 
-async function listOptions(deps: ApiDeps, c: Context<AppEnv>, tab: ReportTab) {
+/**
+ * «Ожидают подтверждения» (прототип repWaitList): тому, кто может подтверждать, — все в области,
+ * остальным — только отчёты, где он ответственный.
+ */
+function waitingView(subject: AccessSubject, confirm: boolean): ReportWaitingView {
+  if (hasPermission(subject, 'repConfirm')) return { confirm, own: null };
+  // Без сотрудника (администратор платформы сюда не попадает) своих отчётов нет.
+  return { confirm: confirm && !!subject.employeeId, own: subject.employeeId };
+}
+
+type TabQuery = z.infer<typeof ReportTabParam>;
+
+async function listOptions(
+  deps: ApiDeps,
+  c: Context<AppEnv>,
+  tx: Tx,
+  q: TabQuery,
+): Promise<ReportListOptions> {
+  const subject = subjectOf(c);
+  const policy = await reportConfirmPolicy(tx, orgContextOf(c).orgId);
   return {
     t: await serverTexts(deps),
     today: todayOf(deps),
-    scope: reportScopeOf(subjectOf(c)),
-    tab,
-  } satisfies ReportListOptions;
+    scope: reportScopeOf(subject),
+    tab: q.tab,
+    quick: q.quick,
+    waiting: waitingView(subject, policy.confirm),
+  };
 }
 
 /** Строка для ответа API: моменты — строкой ISO. */
-export function reportRowBody<T extends ReportRow>(r: T): Omit<T, 'audit'> & ReportRowBody {
+export function reportRowBody<T extends ReportRow>(
+  r: T,
+): Omit<T, 'audit' | 'submittedAt' | 'confirmedAt' | 'lastStatus'> & ReportRowBody {
   return {
     ...r,
+    submittedAt: r.submittedAt?.toISOString() ?? null,
+    confirmedAt: r.confirmedAt?.toISOString() ?? null,
+    lastStatus: r.lastStatus ? { at: r.lastStatus.at.toISOString(), by: r.lastStatus.by } : null,
     audit: {
       createdAt: r.audit.createdAt.toISOString(),
       createdBy: r.audit.createdBy,
@@ -81,9 +112,8 @@ export function listReportsHandler(deps: ApiDeps): RouteHandler<typeof listRepor
   return async (c) => {
     const params = c.req.valid('query');
     const query = listQueryOf(params);
-    const o = await listOptions(deps, c, params.tab);
-    const page = await withOrgContext(deps.db, orgContextOf(c), (tx) =>
-      listReportsPage(tx, query, o),
+    const page = await withOrgContext(deps.db, orgContextOf(c), async (tx) =>
+      listReportsPage(tx, query, await listOptions(deps, c, tx, params)),
     );
     return c.json(
       {
@@ -103,11 +133,12 @@ export const reportTabCountsRoute = createRoute({
   method: 'get',
   path: '/reports/tab-counts',
   tags: ['reports'],
-  summary: 'Счётчики вкладок и плашек модуля «Отчеты для сдачи»',
+  summary: 'Счётчики вкладок, плашек и быстрого фильтра модуля «Отчеты для сдачи»',
   middleware: [requirePermission('repView')] as const,
   responses: {
     200: {
-      description: 'Просроченных и со сроком на этой неделе — в области сотрудника',
+      description:
+        'Просрочено, на этой неделе, ожидают подтверждения, сдано в этом месяце, к уплате за месяц и числа «Все / Сдать / Уплатить» каждой вкладки — в области сотрудника',
       content: { 'application/json': { schema: ReportTabCounts } },
     },
     401: { description: 'Нет входа', content: error },
@@ -119,10 +150,25 @@ export function reportTabCountsHandler(
   deps: ApiDeps,
 ): RouteHandler<typeof reportTabCountsRoute, AppEnv> {
   return async (c) => {
-    const counts = await withOrgContext(deps.db, orgContextOf(c), (tx) =>
-      reportTabCounts(tx, reportScopeOf(subjectOf(c)), todayOf(deps)),
-    );
-    return c.json(counts, 200);
+    const subject = subjectOf(c);
+    const today = todayOf(deps);
+    const body = await withOrgContext(deps.db, orgContextOf(c), async (tx) => {
+      const policy = await reportConfirmPolicy(tx, orgContextOf(c).orgId);
+      const summary = await reportSummary(tx, {
+        scope: reportScopeOf(subject),
+        today,
+        waiting: waitingView(subject, policy.confirm),
+      });
+      const week = reportWeek(today);
+      return {
+        ...summary,
+        month: `${today.slice(0, 7)}-01`,
+        weekFrom: week.from,
+        weekTo: week.to,
+        waitDays: policy.waitDays,
+      };
+    });
+    return c.json(body, 200);
   };
 }
 
@@ -146,10 +192,9 @@ export const reportValuesRoute = createRoute({
 
 export function reportValuesHandler(deps: ApiDeps): RouteHandler<typeof reportValuesRoute, AppEnv> {
   return async (c) => {
-    const { col, q, tab } = c.req.valid('query');
-    const o = await listOptions(deps, c, tab);
-    const values = await withOrgContext(deps.db, orgContextOf(c), (tx) =>
-      listReportValues(tx, col, o, q),
+    const { col, q, ...tab } = c.req.valid('query');
+    const values = await withOrgContext(deps.db, orgContextOf(c), async (tx) =>
+      listReportValues(tx, col, await listOptions(deps, c, tx, tab), q),
     );
     return c.json(values, 200);
   };
@@ -185,18 +230,20 @@ export function exportReportsHandler(
     const query = listQueryOf(params);
     const keys = [...new Set(params.cols.split(','))];
     return withExportSlot(deps, c.get('session')!.userId, async () => {
-      const o = await listOptions(deps, c, params.tab);
-      const result = await withOrgContext(deps.db, { ...orgContextOf(c), kind: 'export' }, (tx) =>
-        exportReports(tx, query, keys, o),
+      const t = await serverTexts(deps);
+      const result = await withOrgContext(
+        deps.db,
+        { ...orgContextOf(c), kind: 'export' },
+        async (tx) => exportReports(tx, query, keys, await listOptions(deps, c, tx, params)),
       );
       return xlsxResponse(c, {
-        title: o.t('nav.reports'),
+        title: t('nav.reports'),
         today: deps.clock.now(),
         columns: result.columns,
         rows: result.rows,
         more: result.more,
         total: result.total,
-        t: o.t,
+        t,
       });
     });
   };
