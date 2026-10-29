@@ -23,6 +23,7 @@ export * from './platform-dicts/catalog';
 export * from './platform-dicts/calendar';
 export * from './platform-dicts/admin';
 export * from './platform-dicts/admin-types';
+export * from './platform-dicts/admin-system';
 export * from './platform-dicts/admin-taxes';
 export * from './dicts/report-types';
 export * from './dicts/tax-pick';

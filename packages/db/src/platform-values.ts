@@ -2,6 +2,7 @@ import {
   ALL_VALUES_DICTS,
   auditActorName,
   calendarYear,
+  defaultUiTexts,
   formatDateRu,
   ORG_DICT_COLUMNS,
   ORG_DICT_NATURAL_ORDER,
@@ -48,6 +49,7 @@ import {
   banks,
   dueChangeReasons,
   gkedItems,
+  messageTemplateTexts,
   ownershipForms,
   platformReference,
   productionCalendar,
@@ -94,11 +96,26 @@ async function referenceItems(db: Db | Tx, dict: 'cats') {
   });
 }
 
-/** Объект «ключ → текст» из `platform_reference` (statusNotes, templateNotes, messageTemplates). */
+/** Объект «ключ → текст» из `platform_reference` (statusNotes). */
 async function referenceTexts(db: Db | Tx, key: string): Promise<[string, string][]> {
   const payload = await referencePayload(db, key);
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return [];
   return Object.entries(payload).flatMap(([k, v]) => (typeof v === 'string' ? [[k, v]] : []));
+}
+
+/**
+ * Пояснения статусов отчёта по коду (раздел `statusNotes` — по названию статуса по умолчанию:
+ * переименование в Админке пояснение не теряет).
+ */
+export async function reportStatusNotes(db: Db | Tx): Promise<Map<string, string>> {
+  const notes = new Map(await referenceTexts(db, 'statusNotes'));
+  const defaults = defaultUiTexts();
+  return new Map(
+    scaleStatuses('report').flatMap((code) => {
+      const note = notes.get(defaults[`status.report.${code}`] ?? '');
+      return note ? [[code, note] as const] : [];
+    }),
+  );
 }
 
 const Groups = z.array(
@@ -113,25 +130,6 @@ export async function platformDictGroupDefs(db: Db | Tx): Promise<DictGroupDef[]
   const parsed = Groups.safeParse(await referencePayload(db, 'dictGroups'));
   return parsed.success ? parsed.data : [];
 }
-
-/**
- * Порядок шаблонов сообщений, как в справочнике (refDB `templateNotes`): набор шаблонов задаёт система,
- * а jsonb порядок ключей не хранит. Новый шаблон без места здесь — в конце.
- */
-const TEMPLATE_ORDER = [
-  'waTax',
-  'waFee',
-  'tgBefore',
-  'tgToday',
-  'tgOver',
-  'tgPay',
-  'tgWeek',
-  'tgCode',
-  'tgTask',
-  'tgConfWait',
-  'tgFix',
-  'waPage',
-];
 
 /** Год календаря — текущий по Бишкеку (прототип `holidayRows(+TODAY.slice(0, 4))`). */
 const yearOf = (today: string) => Number(today.slice(0, 4));
@@ -223,14 +221,14 @@ const WINDOW_ROWS: Record<
   banks: async (db) =>
     (await listBanks(db)).map((x) => ({ id: x.code, name: x.name, code: x.code })),
   calendar: calendarRows,
-  // Пояснения статусов отчёта — по названию статуса; порядок — шкала сдачи (в jsonb порядок ключей
-  // раздела не хранится).
+  // Порядок — шкала сдачи (в jsonb порядок ключей раздела не хранится).
   statuses: async (db, t) => {
-    const notes = new Map(await referenceTexts(db, 'statusNotes'));
-    return scaleStatuses('report').map((code) => {
-      const name = t(`status.report.${code}`);
-      return { id: code, name, note: notes.get(name) ?? '' };
-    });
+    const notes = await reportStatusNotes(db);
+    return scaleStatuses('report').map((code) => ({
+      id: code,
+      name: t(`status.report.${code}`),
+      note: notes.get(code) ?? '',
+    }));
   },
   cats: async (db, t) => [
     ...(await referenceItems(db, 'cats')).map((x) => ({
@@ -248,16 +246,18 @@ const WINDOW_ROWS: Record<
       name: x.name,
     })),
   ],
-  templates: async (db) => {
-    const texts = new Map(await referenceTexts(db, 'messageTemplates'));
-    const order = (key: string) => {
-      const i = TEMPLATE_ORDER.indexOf(key);
-      return i < 0 ? TEMPLATE_ORDER.length : i;
-    };
-    return (await referenceTexts(db, 'templateNotes'))
-      .sort(([a], [b]) => order(a) - order(b) || a.localeCompare(b))
-      .map(([key, note]) => ({ id: key, name: note, text: texts.get(key) ?? '' }));
-  },
+  // Шаблоны сообщений — таблица message_templates (правит Админка), в порядке справочника.
+  templates: async (db) =>
+    (
+      await db
+        .select({
+          key: messageTemplateTexts.key,
+          note: messageTemplateTexts.note,
+          text: messageTemplateTexts.text,
+        })
+        .from(messageTemplateTexts)
+        .orderBy(asc(messageTemplateTexts.sortOrder), asc(messageTemplateTexts.key))
+    ).map((x) => ({ id: x.key, name: x.note, text: x.text })),
 };
 
 /** Столбцы-справочники с кодом значения: на экране и в поиске — текст `<ключ>_text`. */

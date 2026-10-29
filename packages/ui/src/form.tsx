@@ -301,17 +301,20 @@ export function Pill({
 export function Tag({
   icon,
   title,
+  wide = false,
   children,
 }: {
   icon?: IconName;
   title?: string;
+  /** Не уже 58 px, текст по центру — метки «Этап N» столбиком (Админка → «Статусы»). */
+  wide?: boolean;
   children: ReactNode;
 }) {
   return (
     <span
       data-tag=""
       title={title}
-      className="inline-flex flex-none items-center gap-1 rounded px-1.5 align-[1px] text-[10.5px] leading-[17px] font-[650] tracking-[.03em] whitespace-nowrap bg-label-bg text-label"
+      className={`inline-flex flex-none items-center gap-1 rounded px-1.5 align-[1px] text-[10.5px] leading-[17px] font-[650] tracking-[.03em] whitespace-nowrap bg-label-bg text-label${wide ? ' min-w-[58px] justify-center' : ''}`}
     >
       {icon ? <Icon name={icon} size="sm" /> : null}
       {children}

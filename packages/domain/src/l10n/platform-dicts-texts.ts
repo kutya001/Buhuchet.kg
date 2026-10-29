@@ -19,6 +19,156 @@ const MONTHS = [
 ] as const;
 
 /**
+ * Тексты вкладок группы «Работа системы» (задача 2.36, часть 3; прототип admin/platform-dicts.js):
+ * «Статусы», «Права ролей», «Шаблоны ролей» и «Шаблоны» сообщений.
+ */
+const SYSTEM_TEXTS = {
+  // «Статусы» (прототип renderPDicts, вкладка statuses).
+  'pdicts.note.statuses': {
+    ru: 'Состав статусов зашит в систему: от него зависят расчёты и напоминания. Администратор меняет только названия и цвета; новое название сразу видно на шкалах и метках у всех организаций.',
+    section: S,
+  },
+  'pdicts.status.scale.report': { ru: 'Статусы сдачи отчётов', section: S },
+  'pdicts.status.scale.payment': { ru: 'Статусы оплаты', section: S },
+  'pdicts.status.scale.task': { ru: 'Статусы задач', section: S },
+  'pdicts.status.scale.service': { ru: 'Статусы обслуживания контрагента', section: S },
+  'pdicts.status.scale.project': { ru: 'Статусы проектов', section: S },
+  'pdicts.status.scale.indicator': { ru: 'Статусы показателей', section: S },
+  'pdicts.status.note.report': {
+    ru: '1 К сдаче → 2 В работе → 3 Сдан. Отметки «Ждёт подтверждения» и «Подтверждено» стоят на шаге «Сдан», если в учётной политике организации включено подтверждение сдачи.',
+    section: S,
+  },
+  'pdicts.status.note.task': {
+    ru: 'Только для ручных задач. Регулярная задача показывает статус своего отчёта. Без подтверждения: 1 К выполнению → 2 В работе → 3 Выполнена; с подтверждением: 1 → 2 → 3 На подтверждении → 4 Подтверждена; «На доработке» — отметка на шаге 2.',
+    section: S,
+  },
+  'pdicts.status.step': { ru: 'Этап {n}', section: S },
+  'pdicts.status.mark': { ru: 'отметка', section: S },
+  'pdicts.status.side': { ru: 'боковой', section: S },
+  'pdicts.status.step_title': { ru: 'Порядок этапа на шкале', section: S },
+  'pdicts.status.mark_title': { ru: 'Отметка подтверждения на шаге «Сдан»', section: S },
+  'pdicts.status.side_title': { ru: 'Боковой статус, не шаг шкалы', section: S },
+  'pdicts.status.tone.gray': { ru: 'Серый', section: S },
+  'pdicts.status.tone.blue': { ru: 'Синий', section: S },
+  'pdicts.status.tone.yellow': { ru: 'Жёлтый', section: S },
+  'pdicts.status.tone.green': { ru: 'Зелёный', section: S },
+  'pdicts.status.tone.orange': { ru: 'Оранжевый', section: S },
+  'pdicts.status.tone.red': { ru: 'Красный', section: S },
+  'pdicts.status.tone.purple': { ru: 'Фиолетовый', section: S },
+  'pdicts.status.tone.faint': { ru: 'Блёклый', section: S },
+  'pdicts.status.tone_label': { ru: 'Цвет статуса «{name}»', section: S },
+  'pdicts.status.rename': { ru: 'Переименовать', section: S },
+  'pdicts.status.rename_label': { ru: 'Переименовать статус «{name}»', section: S },
+  'pdicts.status.title': { ru: 'Название статуса', section: S },
+  'pdicts.status.now': { ru: 'Сейчас: «{name}»', section: S },
+  'pdicts.status.field': { ru: 'Новое название', section: S },
+  'pdicts.status.hint': {
+    ru: 'Смысл и порядок этапа не меняются: меняется только надпись на шкалах и метках',
+    section: S,
+  },
+  'pdicts.status.toast_tone': { ru: 'Цвет статуса изменён для всех организаций', section: S },
+  'pdicts.status.toast_name': {
+    ru: 'Название статуса изменено для всех организаций',
+    section: S,
+  },
+  'pdicts.period.box': { ru: 'Периодичность отчётов', section: S },
+  'pdicts.period.box_hint': {
+    ru: 'Состав зашит в систему: от него считаются периоды и сроки. Меняется только название.',
+    section: S,
+  },
+  'pdicts.period.per_year': { ru: '{n} в году', section: S },
+  'pdicts.period.rename_label': { ru: 'Переименовать «{name}»', section: S },
+  'pdicts.period.title': { ru: 'Название периодичности', section: S },
+  'pdicts.period.hint': {
+    ru: 'Расчёт периодов и сроков не меняется: меняется только надпись в списках и формах',
+    section: S,
+  },
+  'pdicts.period.toast': { ru: 'Название изменено для всех организаций', section: S },
+  'pdicts.period.name': { ru: 'Периодичность', section: S },
+  // «Права ролей» (прототип permEditDlg).
+  'pdicts.note.perms': {
+    ru: 'Набор прав задаёт система: от него зависят кнопки, вкладки и проверки на сервере. Администратор меняет только название и описание права; тексты сразу видят все организации в форме роли.',
+    section: S,
+  },
+  'pdicts.perm.col.group': { ru: 'Группа', section: S },
+  'pdicts.perm.col.name': { ru: 'Право', section: S },
+  'pdicts.perm.col.description': { ru: 'Описание', section: S },
+  'pdicts.perm.col.code': { ru: 'Код', section: S },
+  'pdicts.perms_count.one': { ru: '{n} право', section: S },
+  'pdicts.perms_count.few': { ru: '{n} права', section: S },
+  'pdicts.perms_count.many': { ru: '{n} прав', section: S },
+  'pdicts.perm.title': { ru: 'Право роли', section: S },
+  'pdicts.perm.sub': { ru: '{group} · код {code}', section: S },
+  'pdicts.perm.description_hint': {
+    ru: 'Одна-две фразы: что разрешает и где это видно',
+    section: S,
+  },
+  'pdicts.perm.toast': { ru: 'Право сохранено для всех организаций', section: S },
+  // «Шаблоны ролей» (прототип roleTplPermsDlg).
+  'pdicts.note.roletpl': {
+    ru: 'Шаблоны ролей для новых организаций. При регистрации организация получает копии этих ролей и дальше меняет их у себя. Изменение шаблона не трогает роли уже созданных организаций.',
+    section: S,
+  },
+  'pdicts.roletpl.count': { ru: '{n} из {m} прав', section: S },
+  'pdicts.roletpl.group': { ru: '{group} · {n} из {m}', section: S },
+  'pdicts.roletpl.perms': { ru: 'Права', section: S },
+  'pdicts.roletpl.rename_label': { ru: 'Переименовать шаблон «{name}»', section: S },
+  'pdicts.roletpl.title': { ru: 'Название шаблона роли', section: S },
+  'pdicts.roletpl.perms_title': { ru: 'Права шаблона роли', section: S },
+  'pdicts.roletpl.selected': { ru: 'Выбрано прав: {n} из {m}', section: S },
+  'pdicts.roletpl.toast': {
+    ru: 'Шаблон роли изменён: действует для новых организаций',
+    section: S,
+  },
+  'pdicts.roletpl.no_changes': { ru: 'Изменений нет', section: S },
+  // «Шаблоны» сообщений (прототип renderPDicts, вкладка templates).
+  'pdicts.note.templates': {
+    ru: 'Подстановки в фигурных скобках заполняются сами; под каждым шаблоном — какие в нём доступны. Организации меняют текст WhatsApp только в окне перед отправкой.',
+    section: S,
+  },
+  'pdicts.tpl.label.wa_tax': { ru: 'WhatsApp: перевод денег на налог', section: S },
+  'pdicts.tpl.label.wa_fee': { ru: 'WhatsApp: долг за обслуживание', section: S },
+  'pdicts.tpl.label.wa_page': { ru: 'WhatsApp: ссылка на страницу контрагента', section: S },
+  'pdicts.tpl.label.tg_before': { ru: 'Telegram: за N дней до срока', section: S },
+  'pdicts.tpl.label.tg_today': { ru: 'Telegram: в день срока', section: S },
+  'pdicts.tpl.label.tg_over': { ru: 'Telegram: просрочка', section: S },
+  'pdicts.tpl.label.tg_pay': { ru: 'Telegram: срок оплаты налога', section: S },
+  'pdicts.tpl.label.tg_conf_wait': { ru: 'Telegram: сдача ждёт подтверждения', section: S },
+  'pdicts.tpl.label.tg_fix': { ru: 'Telegram: возврат «На исправление»', section: S },
+  'pdicts.tpl.label.tg_week': { ru: 'Telegram: еженедельная сводка', section: S },
+  'pdicts.tpl.label.tg_code': { ru: 'Telegram: код восстановления пароля', section: S },
+  'pdicts.tpl.label.tg_task': { ru: 'Telegram: новая задача', section: S },
+  'pdicts.tpl.vars': { ru: 'Подстановки: {list}', section: S },
+  'pdicts.tpl.save': { ru: 'Сохранить шаблоны', section: S },
+  'pdicts.tpl.toast': { ru: 'Шаблоны сохранены', section: S },
+  // Ошибки вкладок «Работа системы».
+  'pdicts.err.period_taken': { ru: 'Такое название уже есть', section: E },
+  'pdicts.err.perm_taken': { ru: 'Такое право уже есть', section: E },
+  'pdicts.err.description_required': { ru: 'Введите описание', section: E },
+  'pdicts.err.roletpl_taken': { ru: 'Такой шаблон уже есть', section: E },
+  'pdicts.err.view_required': { ru: 'Сначала дайте просмотр', section: E },
+  'pdicts.err.owner_only': { ru: 'Это право есть только у владельца организации', section: E },
+  'pdicts.err.text_required': { ru: 'Введите текст шаблона', section: E },
+  'pdicts.err.unknown_vars': {
+    ru: 'Нет такой подстановки: {list}. Доступны: {known}',
+    section: E,
+  },
+  // «История изменений» вкладок (прототип pdLog).
+  'pdicts.hist.status_rename': { ru: '{dict}: «{from}» переименован в «{to}»', section: S },
+  'pdicts.hist.status_tone': { ru: '{dict}: «{name}» — цвет «{from}» → «{to}»', section: S },
+  'pdicts.hist.period_rename': { ru: 'Периодичность: «{from}» → «{to}»', section: S },
+  'pdicts.hist.perm_rename': { ru: '{dict}: «{from}» переименовано в «{to}»', section: S },
+  'pdicts.hist.perm_description': { ru: '{dict}: «{name}» — изменено описание', section: S },
+  'pdicts.hist.roletpl_add': { ru: '{dict}: «{name}» — добавлено право «{perm}»', section: S },
+  'pdicts.hist.roletpl_remove': { ru: '{dict}: «{name}» — убрано право «{perm}»', section: S },
+  'pdicts.hist.roletpl_scope': {
+    ru: '{dict}: «{name}» — область «{group}»: «{scope}»',
+    section: S,
+  },
+  'pdicts.hist.template': { ru: '{dict}: «{name}» — изменён текст', section: S },
+} as const satisfies Record<string, UiTextDefault>;
+
+/**
  * Тексты Админки → «Справочники платформы» (задача 2.36; ТЗ «Модуль Справочники платформы»; прототип
  * admin/platform-dicts*.js): группы вкладок и шапка, списки значений, окна правки, «История изменений»
  * и «Запросы» организаций. Названия справочников и статусов запросов — из словаря «Справочников».
@@ -882,6 +1032,7 @@ export const PLATFORM_DICTS_TEXTS = {
   'pdicts.req.answer.done': { ru: 'Организация увидит ответ в «Мои запросы»', section: S },
   'pdicts.req.view.sub': { ru: '{org} · {dict} · {date}', section: S },
   'pdicts.req.view.no_answer': { ru: 'Ответа пока нет', section: S },
+  ...SYSTEM_TEXTS,
   // Месяцы в окне вида отчёта (прототип MONTHS): срок годового отчёта и срок оплаты.
   ...(Object.fromEntries(
     MONTHS.map((ru, i) => [`pdicts.type.month.${i + 1}`, { ru, section: S }]),

@@ -65,6 +65,8 @@ export const TABLE_SECTIONS = [
   'holidays',
   'workingSaturdays',
   'phoneCodes',
+  'messageTemplates',
+  'templateNotes',
   // Копии разделов, у которых таблицы уже были: ui_texts, permissions, role_templates.
   'localization',
   'permissions',

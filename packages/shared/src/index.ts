@@ -16,3 +16,4 @@ export * from './admin';
 export * from './dicts';
 export * from './money';
 export * from './admin-dicts';
+export * from './admin-system';

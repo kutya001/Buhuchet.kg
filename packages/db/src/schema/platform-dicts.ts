@@ -13,6 +13,8 @@ import {
   REPORT_ACTS,
   REPORT_KINDS,
   REPORT_PERIODS,
+  STATUS_SCALES,
+  STATUS_TONES,
   type AuthorityContact,
   type BenefitSuggest,
   type GkedRule,
@@ -568,4 +570,53 @@ export const banks = pgTable(
     check('banks_kind_check', oneOf(t.kind, BANK_KINDS)),
     platformReadOnly('banks_read'),
   ],
+).enableRLS();
+
+/**
+ * Цвета статусов (задача 2.36, часть 3; ТЗ «Справочники, на которых держится логика системы»): шкала,
+ * код статуса и цвет из набора. Состав статусов задаёт система (`STATUS_SCALE_DEFS` в @buhuchet/domain):
+ * наполнение добавляет недостающие строки, цвет меняет администратор платформы
+ * (`app.admin_set_status_tone`). Экраны получают цвета вместе с текстами словаря (`/api/l10n`).
+ * Названия статусов и периодичности — тексты словаря (`status.<шкала>.<код>`, `report.period.<код>`).
+ */
+export const statusTones = pgTable(
+  'status_tones',
+  {
+    scale: text('scale', { enum: STATUS_SCALES }).notNull(),
+    status: text('status').notNull(),
+    tone: text('tone', { enum: STATUS_TONES }).notNull(),
+    /** Кто поправил цвет в Админке; null — цвет из наполнения. */
+    updatedBy: uuid('updated_by').references(() => users.id),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    version: recordVersion(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.scale, t.status] }),
+    check('status_tones_scale_check', oneOf(t.scale, STATUS_SCALES)),
+    check('status_tones_tone_check', oneOf(t.tone, STATUS_TONES)),
+    platformReadOnly('status_tones_read'),
+  ],
+).enableRLS();
+
+/**
+ * Шаблоны сообщений (задача 2.36, часть 3; ТЗ «Шаблоны для организаций»: WhatsApp контрагенту и тексты
+ * Telegram): ключ шаблона прототипа (waTax, tgBefore, …), текст с подстановками «{контрагент}» и
+ * пояснение. Набор шаблонов задаёт система, текст меняет администратор платформы
+ * (`app.admin_set_message_template`). Очередь и отправку сообщений добавит задача 2.25 (#81).
+ */
+export const messageTemplateTexts = pgTable(
+  'message_templates',
+  {
+    key: text('key').primaryKey(),
+    text: text('text').notNull(),
+    /** Что за шаблон (раздел `templateNotes` refDB.json): в справочнике организации — «Шаблон». */
+    note: text('note').notNull().default(''),
+    sortOrder: integer('sort_order').notNull(),
+    /** Кто поправил текст в Админке; null — текст из наполнения. */
+    updatedBy: uuid('updated_by').references(() => users.id),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    version: recordVersion(),
+  },
+  () => [platformReadOnly('message_templates_read')],
 ).enableRLS();

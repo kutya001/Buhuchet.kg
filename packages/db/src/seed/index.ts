@@ -6,6 +6,7 @@ import { seedDemoOrganization, type DemoSeedReport } from './demo';
 import { seedUiTexts } from './l10n';
 import { seedGked, seedPlatformReference, type SeedReport } from './platform';
 import { seedPlatformDicts, type PlatformDictsReport } from './platform-dicts';
+import { seedMessageTemplates, seedStatusTones } from './system-dicts';
 
 export { checksumOf } from './checksum';
 export { seedPermissions, seedRoleTemplates } from './access';
@@ -32,6 +33,7 @@ export {
   TABLE_SECTIONS,
   type PlatformDictsReport,
 } from './platform-dicts';
+export { seedMessageTemplates, seedStatusTones } from './system-dicts';
 
 export interface SeedAllResult {
   platformReference: SeedReport;
@@ -39,6 +41,8 @@ export interface SeedAllResult {
   gked: SeedReport;
   permissions: SeedReport;
   roleTemplates: SeedReport;
+  statusTones: SeedReport;
+  messageTemplates: SeedReport;
   uiTexts: SeedReport;
   demo: DemoSeedReport | null;
   platformAdmin: PlatformAdminReport | null;
@@ -68,6 +72,13 @@ export async function seedAll(
     const gked = await seedGked(t, await readSpecJson('data/gkedDB.json'), options);
     const permissions = await seedPermissions(t, refDB.permissions, options);
     const roleTemplates = await seedRoleTemplates(t, refDB.roleTemplates, options);
+    const statusTones = await seedStatusTones(t, options);
+    const messageTemplates = await seedMessageTemplates(
+      t,
+      refDB.messageTemplates,
+      refDB.templateNotes,
+      options,
+    );
     const uiTexts = await seedUiTexts(t, refDB.localization, options);
     const demo = options.demo
       ? await seedDemoOrganization(t, await readSpecJson('data/demoDB.json'), {
@@ -84,6 +95,8 @@ export async function seedAll(
       gked,
       permissions,
       roleTemplates,
+      statusTones,
+      messageTemplates,
       uiTexts,
       demo,
       platformAdmin,

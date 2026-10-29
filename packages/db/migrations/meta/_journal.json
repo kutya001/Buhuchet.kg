@@ -323,6 +323,13 @@
       "when": 1793125718424,
       "tag": "0045_admin_platform_dicts_benefits",
       "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1793306355138,
+      "tag": "0046_admin_platform_dicts_system",
+      "breakpoints": true
     }
   ]
 }

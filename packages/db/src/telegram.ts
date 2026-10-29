@@ -8,7 +8,7 @@ import {
 import { and, eq, sql } from 'drizzle-orm';
 import { clearLoginAttempts } from './auth';
 import type { Db, Tx } from './client';
-import { platformReference, sessions, users } from './schema';
+import { messageTemplateTexts, sessions, users } from './schema';
 
 /**
  * Telegram и «Забыли пароль?» — через функции app.telegram_* и app.auth_reset_* (миграция 0011):
@@ -319,17 +319,13 @@ export async function setTemporaryPassword(
   return { mustChangePasswordBefore: before.mustChangePassword };
 }
 
-/** Шаблоны сообщений из «Справочников платформы» (refDB → messageTemplates): ключ → текст. */
+/**
+ * Шаблоны сообщений из «Справочников платформы» (таблица message_templates, правит Админка): ключ
+ * шаблона прототипа (tgCode, tgBefore, …) → текст с подстановками как есть.
+ */
 export async function messageTemplates(db: Db | Tx): Promise<Record<string, string>> {
-  const [row] = await db
-    .select({ payload: platformReference.payload })
-    .from(platformReference)
-    .where(eq(platformReference.key, 'messageTemplates'));
-  const payload = row?.payload;
-  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return {};
-  return Object.fromEntries(
-    Object.entries(payload as Record<string, unknown>).filter(
-      (e): e is [string, string] => typeof e[1] === 'string',
-    ),
-  );
+  const rows = await db
+    .select({ key: messageTemplateTexts.key, text: messageTemplateTexts.text })
+    .from(messageTemplateTexts);
+  return Object.fromEntries(rows.map((r) => [r.key, r.text]));
 }

@@ -27,6 +27,7 @@ export type CountKey =
   | 'pdicts.phones_count'
   | 'pdicts.calendar_count'
   | 'pdicts.ugns_count'
+  | 'pdicts.perms_count'
   | 'pdicts.req.count';
 
 /** Тексты списка из словаря; число записей — в форме для числа (1 сотрудник, 2 сотрудника, 5 сотрудников). */
