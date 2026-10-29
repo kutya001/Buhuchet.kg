@@ -5,6 +5,7 @@ import { Box, buttonClass, Icon, Note } from '@buhuchet/ui';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useT } from '../l10n/provider';
+import { useWelcome } from '../onboarding/welcome-provider';
 import { tabHref } from '../shell/modules';
 import { kbStateQuery } from './kb-data';
 import { KbBar, KbLadder, KbModules, levelTone } from './kb-parts';
@@ -13,12 +14,13 @@ import { useKb } from './kb-provider';
 /**
  * «База знаний» → «Мой уровень» (прототип modules/kb.js, renderKB → level): уровень и процент,
  * «Продолжить», сколько шагов до следующего уровня, как считается уровень, прогресс по модулям,
- * прочитанные статьи и лесенка уровней. «Приветствие и обзор модулей» добавит задача 2.33, «Знакомые
- * элементы в показах» — 2.31.
+ * прочитанные статьи, лесенка уровней и «Приветствие и обзор модулей» (задача 2.33; не у администратора
+ * платформы). «Знакомые элементы в показах» добавит задача 2.31.
  */
 export function KbLevelTab() {
   const t = useT();
   const kb = useKb();
+  const welcome = useWelcome();
   const query = useQuery(kbStateQuery);
   if (query.isError) return <Note tone="bad">{t('kb.load_error')}</Note>;
   const state = query.data;
@@ -102,6 +104,27 @@ export function KbLevelTab() {
       <Box title={t('kb.levels.title')}>
         <KbLadder progress={p} />
       </Box>
+      {state.admin ? null : (
+        <Box>
+          <div className="flex flex-wrap items-center gap-2.5">
+            <span className="min-w-[200px] flex-1">
+              <b>{t('onboarding.kb.title')}</b>
+              <span className="block text-[11.5px] leading-[1.4] text-faint">
+                {t('onboarding.kb.hint')}
+              </span>
+            </span>
+            <button
+              type="button"
+              data-welcome-open=""
+              className={buttonClass()}
+              onClick={() => welcome.open('again')}
+            >
+              <Icon name="play" size="sm" />
+              {t('onboarding.kb.open')}
+            </button>
+          </div>
+        </Box>
+      )}
     </div>
   );
 }
