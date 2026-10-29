@@ -45,7 +45,12 @@ CREATE OR REPLACE FUNCTION app.admin_dict_usage(p_dict text)
         AND c.confrelid = format('public.%I', spec.table_name)::regclass
         AND cardinality(c.conkey) = 1
         AND fa.attname = 'code'
-        AND c.confdeltype <> 'c'
+        -- Связи платформы с ON DELETE CASCADE уходят вместе со значением и использованием не
+        -- считаются; ссылка из таблицы организации (есть org_id) считается всегда.
+        AND (c.confdeltype <> 'c' OR EXISTS (
+          SELECT 1 FROM pg_attribute oa
+            WHERE oa.attrelid = c.conrelid AND oa.attname = 'org_id' AND NOT oa.attisdropped
+        ))
     LOOP
       parts := parts || format(
         'SELECT %1$I::text AS code, %2$L::text AS ref FROM %3$I.%2$I WHERE %1$I IS NOT NULL',

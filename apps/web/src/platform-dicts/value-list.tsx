@@ -5,6 +5,7 @@ import {
   ADMIN_DICT_META,
   adminDictDefaultSort,
   DEFAULT_PHONE_COUNTRY,
+  dictStatusKey,
   formatDateRu,
   formatMomentRu,
   phoneCodeExample,
@@ -159,7 +160,7 @@ function cellText(
     case 'contractors':
       return String(x.contractors);
     case 'active':
-      return t(x.active ? 'pdicts.status.on' : 'pdicts.status.off');
+      return t(dictStatusKey(dict, x.active));
     case 'declarationFor':
       return x.data.declarationFor ? t(`dicts.platform.end.${x.data.declarationFor}`) : '';
     case 'kind': {
@@ -234,9 +235,9 @@ export function adminDictColumns(
     if (c.key === 'active') {
       column.cell = (x) =>
         x.active ? (
-          <StatusPill tone="green" icon="check" label={t('pdicts.status.on')} size="sm" />
+          <StatusPill tone="green" icon="check" label={t(dictStatusKey(dict, true))} size="sm" />
         ) : (
-          <StatusPill tone="faint" icon="ban" label={t('pdicts.status.off')} size="sm" />
+          <StatusPill tone="faint" icon="ban" label={t(dictStatusKey(dict, false))} size="sm" />
         );
     }
     return column;

@@ -68,6 +68,16 @@ describe('«История изменений» справочника', () => {
       dictHistoryText('types', item({ code: 'nds', label: 'НДС', ...patch }), t, names);
     expect(type({ action: 'create' })).toBe('Виды отчётов: добавлен «НДС»');
     expect(type({ action: 'delete' })).toBe('Виды отчётов: удалён «НДС»');
+    // Срок оплаты — одним полем, правилом целиком (сервер собирает его из полей до и после правки).
+    const MONTHLY = {
+      period: 'M',
+      dueFrom: 'end',
+      dueDay: 28,
+      dueAfter: 1,
+      dueMonth: null,
+      oneOff: false,
+      act: 'both',
+    };
     expect(
       type({
         changes: [
@@ -77,13 +87,17 @@ describe('«История изменений» справочника', () => {
           { field: 'authorityCode', from: 'ОРГ-01', to: 'ОРГ-02' },
           { field: 'regimes', from: [], to: ['РЕЖ-01'] },
           { field: 'shiftToWorkday', from: true, to: false },
-          { field: 'payDay', from: null, to: 20 },
+          {
+            field: 'pay',
+            from: { ...MONTHLY, payDay: null, payAfter: null, payMonth: null },
+            to: { ...MONTHLY, payDay: 20, payAfter: null, payMonth: null },
+          },
           { field: 'paySchedule', from: null, to: [[3, 20]] },
           { field: 'payments', from: [], to: [{ name: 'НДС', authority: 'ОРГ-01', kbk: '' }] },
         ],
       }),
     ).toBe(
-      'Виды отчётов: НДС — срок: число: «25» → «28»; кратко: «НДС» → «НДС-1»; что нужно сделать: «Сдача» → «Сдача + уплата»; орган: «ГНС» → «Соцфонд»; режимы: «» → «ОНР»; перенос срока: «да» → «нет»; срок оплаты: число: «как срок сдачи» → «20»; график оплаты: «один платёж» → «20.03»; что уплачивается: «» → «НДС (ГНС)»',
+      'Виды отчётов: НДС — срок: число: «25» → «28»; кратко: «НДС» → «НДС-1»; что нужно сделать: «Сдача» → «Сдача + уплата»; орган: «ГНС» → «Соцфонд»; режимы: «» → «ОНР»; перенос срока: «да» → «нет»; срок оплаты: «как срок сдачи» → «до 20-го числа месяца после отчётного»; график оплаты: «один платёж» → «20.03»; что уплачивается: «» → «НДС (ГНС)»',
     );
     // Отключено и включено — общей строкой.
     expect(type({ changes: [{ field: 'active', from: true, to: false }] })).toBe(
