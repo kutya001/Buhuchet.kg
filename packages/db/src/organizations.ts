@@ -20,7 +20,6 @@ import type { Db, Tx } from './client';
 import { withOrgContext } from './context';
 import { uniqueViolation } from './errors';
 import { writeHistory } from './history';
-import { startOnboarding } from './onboarding';
 import {
   employees,
   indicators,
@@ -232,8 +231,6 @@ async function insertOrganization(
       })),
     )
     .returning({ id: indicators.id, name: indicators.name });
-  // Новая организация получает приветствие с опросником (задача 2.33, docs/decisions.md п. Г-4).
-  await startOnboarding(tx, orgId);
   // Кто создал организацию и что появилось вместе с ней; учётная политика — запись с ключом org_id.
   await writeHistory(
     tx,

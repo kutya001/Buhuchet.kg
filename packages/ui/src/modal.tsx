@@ -126,7 +126,7 @@ export function useWindow(): CurrentWindow {
   return useContext(CurrentWindowContext);
 }
 
-export type ModalSize = 'narrow' | 'mid' | 'wide' | 'large';
+export type ModalSize = 'narrow' | 'mid' | 'wide';
 
 export interface ModalProps {
   open: boolean;
@@ -142,10 +142,7 @@ export interface ModalProps {
   /** Нижняя строка с кнопками действий (кнопки справа; `<div className="flex-1" />` — распорка). */
   footer?: ReactNode;
   kind?: WindowKind;
-  /**
-   * Ширина на ПК: 580, 780 или 1100 px (у широкого окна и высота — до 860 px); `large` — приветствие:
-   * 860 px, высота до 760 px, на телефоне — на весь экран (прототип `.wl-card`).
-   */
+  /** Ширина на ПК: 580, 780 или 1100 px (у широкого окна и высота — до 860 px). */
   size?: ModalSize;
   /**
    * В форме есть несохранённые изменения: протяжка вниз, «Назад» и выход из аккаунта сначала
@@ -406,15 +403,10 @@ export function Modal({
 }
 
 const DIALOG_SIZE: Record<ModalSize, string> = {
-  narrow: 'w-[min(580px,100%)] max-h-[calc(100dvh-48px)]',
-  mid: 'w-[min(780px,100%)] max-h-[calc(100dvh-48px)]',
-  wide: 'w-[min(1100px,100%)] h-[min(860px,calc(100dvh-48px))] max-h-[calc(100dvh-48px)]',
-  large: 'w-[min(860px,100%)] max-h-[min(760px,calc(100dvh-48px))]',
+  narrow: 'w-[min(580px,100%)]',
+  mid: 'w-[min(780px,100%)]',
+  wide: 'w-[min(1100px,100%)] h-[min(860px,calc(100dvh-48px))]',
 };
-
-/** Во весь экран телефона: развёрнутое окно и приветствие. */
-const PHONE_FULL =
-  'max-md:h-dvh max-md:max-h-dvh max-md:rounded-none max-md:border-0 max-md:pt-[env(safe-area-inset-top,0px)] max-md:pb-[env(safe-area-inset-bottom,0px)]';
 
 /**
  * Классы окна: размер на ПК, шторка на телефоне, развёрнутое — во всё окно (прототип `.modal`).
@@ -422,11 +414,12 @@ const PHONE_FULL =
  * (прототип `.modal.max{animation:none}`).
  */
 export function dialogClass(size: ModalSize, max: boolean, slide = true): string {
-  const desktop = max ? 'w-full h-[calc(100dvh-24px)] max-h-none' : DIALOG_SIZE[size];
-  const phone =
-    max || size === 'large'
-      ? PHONE_FULL
-      : `max-md:w-full max-md:max-h-[92dvh] ${size === 'wide' ? 'max-md:h-[92dvh]' : 'max-md:h-auto'} max-md:rounded-b-none max-md:border-b-0 max-md:pb-[env(safe-area-inset-bottom,0px)]`;
+  const desktop = max
+    ? 'w-full h-[calc(100dvh-24px)] max-h-none'
+    : `${DIALOG_SIZE[size]} max-h-[calc(100dvh-48px)]`;
+  const phone = max
+    ? 'max-md:h-dvh max-md:max-h-dvh max-md:rounded-none max-md:border-0 max-md:pt-[env(safe-area-inset-top,0px)] max-md:pb-[env(safe-area-inset-bottom,0px)]'
+    : `max-md:w-full max-md:max-h-[92dvh] ${size === 'wide' ? 'max-md:h-[92dvh]' : 'max-md:h-auto'} max-md:rounded-b-none max-md:border-b-0 max-md:pb-[env(safe-area-inset-bottom,0px)]`;
   return `relative flex min-w-0 touch-pan-y flex-col rounded-2xl border border-line-strong bg-pane text-ink shadow-pop outline-none ${slide ? 'animate-slide-up' : ''} ${desktop} ${phone}`;
 }
 

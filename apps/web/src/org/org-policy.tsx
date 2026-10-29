@@ -25,6 +25,7 @@ import {
   Hint,
   Icon,
   inputClass,
+  Modal,
   Note,
   Pill,
   RecordChangedNotice,
@@ -34,11 +35,9 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Fragment, useId, useState } from 'react';
 import { api, callApi } from '../api-client';
+import { useFeatureLesson } from '../kb/kb-provider';
 import { useErrorText, useT } from '../l10n/provider';
-import { onboardingQuery } from '../onboarding/onboarding-data';
-import { useWelcome } from '../onboarding/welcome-provider';
 import { useShell } from '../shell/context';
-import { FeatureOnDialog } from './feature-on-dialog';
 import { policyHistoryQuery, policyQuery, useOrgRefresh } from './org-data';
 import { policyHistoryItem } from './policy-history';
 
@@ -52,7 +51,7 @@ type PolicyPatch = Omit<UpdateOrgPolicyRequest, 'version'>;
  * «что даёт» и разделами страницы контрагента, подтверждение задач и сдачи отчётов, «Сдача отчёта только
  * после оплаты», дни напоминаний по умолчанию и история изменений. Каждое изменение сохраняется сразу,
  * как в прототипе; менять может только владелец (право «Настройки и учётная политика»), остальные видят
- * то же только для просмотра. «Пройти опросник (заново)» открывает опросник приветствия (задача 2.33).
+ * то же только для просмотра. Опросник — своя задача (поток Г).
  */
 export function OrgPolicyTab() {
   const t = useT();
@@ -74,8 +73,8 @@ function PolicyEdit({ policy, readOnly }: { policy: OrgPolicy; readOnly: boolean
   /** Только что включённая функция — окно «Функция «…» включена». */
   const [enabled, setEnabled] = useState<Feature | null>(null);
   const [enabledOpen, setEnabledOpen] = useState(false);
-  const welcome = useWelcome();
-  const onboarding = useQuery(onboardingQuery).data;
+  /** «Пройти урок» — когда урок функции есть в «Базе знаний» (задача 2.30). */
+  const learn = useFeatureLesson(enabled);
   const off = readOnly || busy || changed;
   const feature = (f: Feature) => t(`org.feature.${f}`);
 
@@ -138,24 +137,7 @@ function PolicyEdit({ policy, readOnly }: { policy: OrgPolicy; readOnly: boolean
           reloading={busy}
         />
       ) : null}
-      <Box
-        title={t('org.policy.features')}
-        actions={
-          readOnly ? null : (
-            <button
-              type="button"
-              data-quiz-open=""
-              title={t('onboarding.quiz_title')}
-              disabled={!onboarding?.content}
-              onClick={() => welcome.open('retake')}
-              className={buttonClass('default', 'sm')}
-            >
-              <Icon name="list" size="sm" />
-              {t(onboarding?.quizDone ? 'onboarding.quiz_again' : 'onboarding.quiz')}
-            </button>
-          )
-        }
-      >
+      <Box title={t('org.policy.features')}>
         <span className="-mt-1 text-[11.5px] leading-[1.4] text-faint">
           {t('org.policy.features_hint')}
         </span>
@@ -247,11 +229,53 @@ function PolicyEdit({ policy, readOnly }: { policy: OrgPolicy; readOnly: boolean
         onSave={(days, done) => void save({ remindDays: days }, done)}
       />
       <PolicyHistory />
-      <FeatureOnDialog
-        features={enabled ? [enabled] : []}
+      <Modal
         open={enabledOpen}
         onClose={() => setEnabledOpen(false)}
-      />
+        kind="message"
+        size="mid"
+        title={enabled ? t('org.feature.on_title', { name: feature(enabled) }) : ''}
+        footer={
+          <>
+            <div className="flex-1" />
+            <button
+              type="button"
+              className={buttonClass('ghost')}
+              onClick={() => setEnabledOpen(false)}
+            >
+              {t('org.feature.later')}
+            </button>
+            {learn ? (
+              <button
+                type="button"
+                className={buttonClass('cta')}
+                onClick={() => {
+                  setEnabledOpen(false);
+                  learn();
+                }}
+              >
+                <Icon name="play" size="sm" />
+                {t('kb.feat_on.learn')}
+              </button>
+            ) : null}
+          </>
+        }
+      >
+        {enabled ? (
+          <div className="flex items-start gap-2.5 rounded-xl border border-line px-3 py-2">
+            <span className="inline-grid h-[34px] w-[34px] flex-none place-items-center rounded-[10px] bg-info-bg text-info">
+              <Icon name="ok" />
+            </span>
+            <div className="min-w-0 grow">
+              <b>{feature(enabled)}</b>
+              <p className="mt-[3px] mb-0 text-[13px] leading-[1.45] text-muted">
+                {t(`org.feature.${enabled}.benefit`)}
+              </p>
+            </div>
+          </div>
+        ) : null}
+        {learn ? <p className="m-0 text-muted">{t('kb.feat_on.text')}</p> : null}
+      </Modal>
     </div>
   );
 }

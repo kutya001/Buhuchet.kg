@@ -112,10 +112,6 @@ describe('окно: шапка, «На весь экран», закрытие (
     expect(dialogClass('mid', false)).toContain('max-md:max-h-[92dvh]');
     expect(dialogClass('mid', false)).toContain('max-md:rounded-b-none');
     expect(dialogClass('wide', false)).toContain('max-md:h-[92dvh]');
-    // Приветствие: 860 × до 760 px, на телефоне — на весь экран.
-    expect(dialogClass('large', false)).toContain('w-[min(860px,100%)]');
-    expect(dialogClass('large', false)).toContain('max-h-[min(760px,calc(100dvh-48px))]');
-    expect(dialogClass('large', false)).toContain('max-md:h-dvh');
     const max = dialogClass('mid', true);
     expect(max).toContain('max-md:h-dvh');
     expect(max).toContain('max-md:rounded-none');

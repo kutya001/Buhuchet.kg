@@ -77,16 +77,12 @@ export function useKb(): KbControls {
 /**
  * «Пройти урок» в окне «Функция … включена» (прототип onboard.js, featOnDlg и featLesson): урок
  * функции есть в программе пользователя — открыть его; null — у функции нет урока или его шаги ещё
- * скрыты (модуль не сделан). Включено несколько функций (опросник) — урок первой, у которой он есть.
- * «Показать как» первого шага добавит задача 2.31.
+ * скрыты (модуль не сделан). «Показать как» первого шага добавит задача 2.31.
  */
-export function useFeatureLesson(
-  features: Feature | readonly Feature[] | null,
-): (() => void) | null {
+export function useFeatureLesson(feature: Feature | null): (() => void) | null {
   const kb = useKb();
   const state = useQuery(kbStateQuery).data;
-  const list = features === null ? [] : typeof features === 'string' ? [features] : features;
-  const lesson = list.map((f) => state?.featureLessons[f]).find(Boolean);
+  const lesson = feature ? state?.featureLessons[feature] : undefined;
   return lesson ? () => kb.openLesson(lesson) : null;
 }
 
