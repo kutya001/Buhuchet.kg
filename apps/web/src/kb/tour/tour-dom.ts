@@ -92,7 +92,8 @@ function visibleIn(root: ParentNode, sel: string, popover: boolean): HTMLElement
       continue;
     }
     const seen = list.filter(
-      (el): el is HTMLElement => tourVisible(el) && (popover || !el.closest('[data-popover]')),
+      (el): el is HTMLElement =>
+        tourVisible(el) && (popover || !el.parentElement?.closest('[data-popover]')),
     );
     if (seen.length) return seen;
   }

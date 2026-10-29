@@ -59,6 +59,13 @@ export const KB_SHOW_TARGETS: Readonly<Record<string, string>> = {
   '#mbody .gscroll || #mbody .gcards': 'main [data-dict-tile]',
   // Задачи: легенда «на день / на месяц».
   '#mbody .kd-legend': '[data-task-legend]',
+  // Показатели контрагентов: месяц и период, таблица ввода (на телефоне — плитки), настройка.
+  '#mbody .kpi-bar': 'main [role=group]:has([data-kpi-month-pick]) || main [data-kpi-period]',
+  '#mbody .kt || #mbody .gcards': 'main [data-kpi-table] || main :has(> [data-kpi-tile])',
+  '#mbody .kpi-bar .seg': 'main [data-kpi-setup-view] [data-segments]',
+  '#mbody .kset': 'main [data-kpi-setup-list]',
+  '#mbody [data-ksv="list"]': 'main [data-kpi-setup-view] [data-segments] button:nth-child(1)',
+  '#mbody [data-ksv="who"]': 'main [data-kpi-setup-view] [data-segments] button:nth-child(2)',
   // База знаний: «Мой уровень» и «Уроки».
   '#mbody .kb-hero': 'main [data-box]:has([data-kb-level-head])',
   '#mbody .kb-rules': 'main [data-kb-rules]',
