@@ -1,3 +1,4 @@
+import { PLATFORM_DICTS_IO_TEXTS } from './platform-dicts-io-texts';
 import type { UiTextDefault } from './texts';
 
 const S = 'Админка';
@@ -1038,6 +1039,7 @@ export const PLATFORM_DICTS_TEXTS = {
   'pdicts.req.view.sub': { ru: '{org} · {dict} · {date}', section: S },
   'pdicts.req.view.no_answer': { ru: 'Ответа пока нет', section: S },
   ...SYSTEM_TEXTS,
+  ...PLATFORM_DICTS_IO_TEXTS,
   // Месяцы в окне вида отчёта (прототип MONTHS): срок годового отчёта и срок оплаты.
   ...(Object.fromEntries(
     MONTHS.map((ru, i) => [`pdicts.type.month.${i + 1}`, { ru, section: S }]),
