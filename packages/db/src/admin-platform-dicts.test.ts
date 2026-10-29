@@ -7,6 +7,7 @@ import {
   listAdminDictRequestsPage,
 } from './admin-dict-requests';
 import {
+  adminAssignedTypeCounts,
   adminDictCreate,
   adminDictDelete,
   adminDictHistory,
@@ -915,6 +916,57 @@ describe.skipIf(!databaseAvailable())(
       // Вид, подключённый в организации или указанный у статуса, — «Используется».
       const usage = await asAdmin((tx) => adminDictUsage(tx, 'types'));
       expect(usage.get('nds')?.total ?? 0).toBeGreaterThan(0);
+    });
+
+    it('виды отчётов: «Назначен» — действующие назначения у контрагентов на обслуживании всех организаций', async () => {
+      const other = await createOrganization(db.app.db, {
+        name: 'ОсОО «Бета»',
+        inn: '02811201810457',
+        slug: 'beta',
+        owner: { fullName: 'Бекова Бермет', login: 'bekova', passwordHash: '!' },
+      });
+      const contractor = async (orgId: string, inn: string, status = 'active') => {
+        const [row] = await db.admin.db.execute<{ id: string }>(
+          sql`insert into contractors (org_id, name, inn, phone, form_code, start_date, service_status)
+              values (${orgId}, ${`ОсОО ${inn}`}, ${inn}, '+996555000000', 'ФС-01', '2026-01-01', ${status})
+              returning id`,
+        );
+        return row!.id;
+      };
+      const assign = (
+        orgId: string,
+        contractorId: string,
+        type: string,
+        endedOn: string | null = null,
+      ) =>
+        db.admin.db.execute(
+          sql`insert into assignments (org_id, contractor_id, report_type_code, from_month, ended_on)
+              values (${orgId}, ${contractorId}, ${type}, '2026-10-01', ${endedOn})`,
+        );
+      const [a1, a2, a3, b1] = [
+        await contractor(org.orgId, '01111111111111'),
+        await contractor(org.orgId, '01111111111112'),
+        await contractor(org.orgId, '01111111111113', 'archived'),
+        await contractor(other.orgId, '02222222222221'),
+      ];
+      await assign(org.orgId, a1, 'nds');
+      await assign(org.orgId, a1, 'soc');
+      // Снятое назначение и архивный контрагент не считаются.
+      await assign(org.orgId, a2, 'nds', '2026-10-15');
+      await assign(org.orgId, a3, 'nds');
+      await assign(other.orgId, b1, 'nds');
+      const assigned = await adminAssignedTypeCounts(db.app.db);
+      expect(Object.fromEntries(assigned)).toEqual({ nds: 2, soc: 1 });
+      const page = await asAdmin((tx) =>
+        listAdminDictPage(tx, 'types', query({ sort: { key: 'assigned', dir: 'desc' } }), t, {
+          assigned,
+        }),
+      );
+      expect(page.rows.slice(0, 2).map((x) => [x.code, x.assigned])).toEqual([
+        ['nds', 2],
+        ['soc', 1],
+      ]);
+      expect(page.rows.find((x) => x.code === 'imn')?.assigned).toBe(0);
     });
 
     it('коды стран: «+код», «Цифр», «Пример»; Кыргызстан не отключается, коды не удаляются', async () => {

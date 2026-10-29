@@ -157,6 +157,7 @@ export const PLATFORM_DICTS_TEXTS = {
   'pdicts.col.note': { ru: 'Пояснение', section: S },
   'pdicts.col.payer': { ru: 'Для кого', section: S },
   'pdicts.col.used': { ru: 'Используется', section: S },
+  'pdicts.col.assigned': { ru: 'Назначен', section: S },
   'pdicts.col.status': { ru: 'Статус', section: S },
   'pdicts.status.on': { ru: 'Активно', section: S },
   'pdicts.status.off': { ru: 'Отключено', section: S },

@@ -194,6 +194,8 @@ export const AdminDictValue = z.object({
       orgs: z.number().int().nonnegative(),
     })
     .optional(),
+  /** У вида отчёта в списке — «Назначен»: у скольких контрагентов вид назначен сейчас. */
+  assigned: z.number().int().nonnegative().optional(),
   audit: RecordAudit.extend({
     /** Когда администратор добавил значение; у значений из наполнения — null. */
     createdAt: z.iso.datetime().nullable(),

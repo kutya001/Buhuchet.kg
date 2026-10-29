@@ -1,6 +1,7 @@
 import { createRoute, type RouteHandler } from '@hono/zod-openapi';
 import { randomBytes } from 'node:crypto';
 import {
+  adminAssignedTypeCounts,
   adminDictCreate,
   adminDictDelete,
   adminDictHistory,
@@ -19,6 +20,7 @@ import {
   type AdminDictDeleteResult,
   type AdminDictInput,
   type AdminDictLinkProblem,
+  type AdminDictListExtras,
   type AdminDictSaveResult,
   type AdminDictValueRecord,
 } from '@buhuchet/db';
@@ -86,6 +88,7 @@ function valueBody(x: AdminDictValueRecord): AdminDictValue {
     contractors: x.usage.contractors,
     ...(x.texts ? { texts: x.texts } : {}),
     ...(x.reports ? { reports: x.reports } : {}),
+    ...(x.assigned !== undefined ? { assigned: x.assigned } : {}),
     audit: {
       createdAt: x.audit.createdAt?.toISOString() ?? null,
       createdBy: x.audit.createdBy,
@@ -95,6 +98,10 @@ function valueBody(x: AdminDictValueRecord): AdminDictValue {
     version: x.version,
   };
 }
+
+/** «Назначен» видов отчётов — по всем организациям, до транзакции администратора. */
+const listExtras = async (deps: ApiDeps, dict: AdminValueDict): Promise<AdminDictListExtras> =>
+  dict === 'types' ? { assigned: await adminAssignedTypeCounts(deps.db) } : {};
 
 const adminTx = <T>(
   deps: ApiDeps,
@@ -127,7 +134,8 @@ export function listAdminDictHandler(
     const { dict } = c.req.valid('param');
     const query = listQueryOf(c.req.valid('query'));
     const t = await serverTexts(deps);
-    const page = await adminTx(deps, c, (tx) => listAdminDictPage(tx, dict, query, t));
+    const extras = await listExtras(deps, dict);
+    const page = await adminTx(deps, c, (tx) => listAdminDictPage(tx, dict, query, t, extras));
     return c.json(
       {
         items: page.rows.map(valueBody),
@@ -164,7 +172,8 @@ export function adminDictValuesHandler(
     const { dict } = c.req.valid('param');
     const { col, q } = c.req.valid('query');
     const t = await serverTexts(deps);
-    const values = await adminTx(deps, c, (tx) => listAdminDictValues(tx, dict, col, t, q));
+    const extras = await listExtras(deps, dict);
+    const values = await adminTx(deps, c, (tx) => listAdminDictValues(tx, dict, col, t, q, extras));
     return c.json(values, 200);
   };
 }
@@ -195,10 +204,11 @@ export function exportAdminDictHandler(
     const userId = c.get('session')!.userId;
     return withExportSlot(deps, userId, async () => {
       const t = await serverTexts(deps);
+      const extras = await listExtras(deps, dict);
       const result = await withUserContext(
         deps.db,
         userId,
-        (tx) => exportAdminDict(tx, dict, query, keys, t),
+        (tx) => exportAdminDict(tx, dict, query, keys, t, extras),
         'export',
       );
       return xlsxResponse(c, {

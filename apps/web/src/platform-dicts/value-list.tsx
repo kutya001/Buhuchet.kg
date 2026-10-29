@@ -102,7 +102,7 @@ const WIDTHS: Readonly<Record<string, number>> = {
 
 /** Свои ширины справочника: у режима краткое название узкое. */
 const DICT_WIDTHS: Partial<Record<AdminValueDict, Readonly<Record<string, number>>>> = {
-  types: { code: 80, name: 280, shortName: 100, kind: 110, used: 100, active: 120 },
+  types: { code: 80, name: 280, shortName: 100, kind: 110, assigned: 100, active: 120 },
   bases: { code: 130, name: 260, description: 320, note: 240, contractors: 120 },
   regimes: { code: 90, name: 180, kind: 120 },
   benefits: { code: 90, name: 280, article: 110, contractors: 120 },
@@ -157,6 +157,8 @@ function cellText(
       return x.name;
     case 'used':
       return String(x.used);
+    case 'assigned':
+      return String(x.assigned ?? 0);
     case 'contractors':
       return String(x.contractors);
     case 'active':

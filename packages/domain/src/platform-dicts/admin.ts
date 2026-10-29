@@ -478,9 +478,9 @@ const STATUS = c('active', 'enum', 'pdicts.col.status');
  */
 export const ADMIN_DICT_COLUMNS: Readonly<Record<AdminValueDict, readonly AdminDictColumn[]>> = {
   // Виды отчётов (прототип `adm-types`): «Что сделать», «Что уплачивается», код формы, орган,
-  // периодичность и срок сдачи видны; «Используется» — вместо «Назначен» прототипа: назначений
-  // контрагентам ещё нет (задача 2.06), считаются подключения организаций и ссылки статусов.
-  // «Виды деятельности (ГКЭД)» добавит задача 2.38, «Сверено с ГНС» — задача 2.37.
+  // периодичность и срок сдачи видны; «Назначен» — у скольких контрагентов на обслуживании вид
+  // назначен сейчас, по всем организациям. «Виды деятельности (ГКЭД)» добавит задача 2.38, «Сверено
+  // с ГНС» — задача 2.37.
   types: [
     c('code', 'text', 'pdicts.col.code', true),
     c('name', 'text', 'pdicts.col.name'),
@@ -496,7 +496,7 @@ export const ADMIN_DICT_COLUMNS: Readonly<Record<AdminValueDict, readonly AdminD
     c('rates', 'text', 'dicts.col.rates', true),
     c('regimes', 'text', 'dicts.col.regimes', true),
     c('payer', 'enum', 'pdicts.col.payer', true),
-    c('used', 'int', 'pdicts.col.used', true),
+    c('assigned', 'int', 'pdicts.col.assigned', true),
     c('active', 'enum', 'pdicts.col.status', true),
   ],
   bases: [
