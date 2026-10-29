@@ -275,6 +275,7 @@ test.describe('Этап 2: отчёты — список и вкладки', () 
   test('(проверка задачи 2.13) «Перейти» у шага «Скрыть и показать статистику модуля» ведёт на «На неделе» «Отчетов для сдачи», кнопка статистики засчитывает шаг', async ({
     page,
     baseURL,
+    isMobile,
   }) => {
     // Шаги засчитываются один раз и навсегда — у владельца новой организации.
     await newOrgOwner(page.request, new URL(baseURL!).origin);
@@ -288,10 +289,16 @@ test.describe('Этап 2: отчёты — список и вкладки', () 
     await page.goto('/app/kb/lessons');
     await page.locator('[data-kb-step="stats"]').getByRole('button', { name: 'Перейти' }).click();
     await expect(page).toHaveURL(/\/app\/reports\/week$/);
+    // Список загружен — с ним и настройки вида: отчётов в новой организации ещё нет.
+    await expect(
+      page.getByText('Отчёты появятся, когда вы назначите виды отчётов контрагентам'),
+    ).toBeVisible();
+    // Статистика по умолчанию: на ПК показана, на телефоне скрыта.
     const toggle = page.locator('[data-stats-toggle]');
-    await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    await expect(toggle).toHaveAttribute('aria-pressed', isMobile ? 'false' : 'true');
     await toggle.click();
-    await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    await expect(toggle).toHaveAttribute('aria-pressed', isMobile ? 'true' : 'false');
+    await expect(page.locator('[data-plates]')).toHaveCount(isMobile ? 1 : 0);
     await expect.poll(stepDone).not.toBeNull();
   });
 });
