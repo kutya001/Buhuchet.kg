@@ -63,6 +63,8 @@ export const TABLE_SECTIONS = [
   'localization',
   'permissions',
   'roleTemplates',
+  // «Новости» Базы знаний — таблица news (задача 2.32).
+  'news',
 ] as const;
 
 /** Справочники раздела `dictionaries`, которые лежат в своих таблицах. */

@@ -25,7 +25,8 @@ const currentUserId = sql`app.current_user_id()`;
  * шагов, статей и уровней — в `platform_reference` (refDB.json), здесь — только отметки пользователя.
  * Строки видит вся организация (уровни сотрудников у владельца и в «Сотрудниках»), а добавляет и
  * меняет пользователь только свои: шаг засчитывается тому, кто сам сделал действие. У администратора
- * платформы организации нет — его строки видит только он сам (как `view_settings`).
+ * платформы организации нет — его строки видит только он сам и только как незаблокированный
+ * администратор (`app.is_platform_admin()`).
  */
 
 /** Строки организации видны всем её пользователям, а пишутся только свои. */
@@ -55,8 +56,8 @@ function kbPolicies(table: string, t: { orgId: AnyPgColumn; userId: AnyPgColumn 
       as: 'permissive',
       for: 'all',
       to: appRole,
-      using: sql`${t.orgId} is null and ${currentOrgId} is null and ${t.userId} = ${currentUserId}`,
-      withCheck: sql`${t.orgId} is null and ${currentOrgId} is null and ${t.userId} = ${currentUserId}`,
+      using: sql`${t.orgId} is null and ${currentOrgId} is null and ${t.userId} = ${currentUserId} and app.is_platform_admin()`,
+      withCheck: sql`${t.orgId} is null and ${currentOrgId} is null and ${t.userId} = ${currentUserId} and app.is_platform_admin()`,
     }),
   ];
 }

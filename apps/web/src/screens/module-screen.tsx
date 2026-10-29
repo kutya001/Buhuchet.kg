@@ -11,6 +11,8 @@ import { KbLessonsTab } from '../kb/kb-lessons';
 import { KbLevelTab } from '../kb/kb-level';
 import { KbTeamTab } from '../kb/kb-team';
 import { KpiScreen } from '../kpi/kpi-screen';
+import { NewsAdminList } from '../news/news-admin';
+import { KbNewsTab } from '../news/news-tab';
 import { OrgMain } from '../org/org-main';
 import { OrgPolicyTab } from '../org/org-policy';
 import { OrgSettingsTab } from '../org/org-settings';
@@ -63,9 +65,11 @@ export function ModuleScreen({
     if (tab === 'lessons') return <KbLessonsTab />;
     if (tab === 'arts') return <KbArticlesTab />;
     if (tab === 'team') return <KbTeamTab />;
-    // «Новости» — задача 2.32.
+    if (tab === 'news') return <KbNewsTab />;
     return <ModuleStub moduleId={moduleId} />;
   }
+  // Админка → «База знаний (содержимое)»: «Новости» (задача 2.32), остальные вкладки — задача 2.39.
+  if (moduleId === 'kbadm' && tabId === 'news') return <NewsAdminList />;
   if (moduleId === 'accounts') return <AccountsList />;
   if (moduleId === 'orgs') return <OrgsList />;
   if (moduleId === 'pdicts') return <PlatformDictsAdmin tabId={tabId ?? 'types'} />;

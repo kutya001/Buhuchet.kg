@@ -330,6 +330,20 @@
       "when": 1793304250253,
       "tag": "0046_kpi",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1793305644537,
+      "tag": "0047_news",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1793305645772,
+      "tag": "0048_news_grants",
+      "breakpoints": true
     }
   ]
 }
