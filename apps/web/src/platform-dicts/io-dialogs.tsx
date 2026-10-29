@@ -42,6 +42,29 @@ const io = api.api.admin['platform-dicts-io'];
 
 const rowsText = (t: Translate, n: number) => t(`pdicts.io.rows.${pluralForm(n)}`, { n });
 
+/**
+ * Строка над списком справочника (прототип `ioBar`): «Выгрузка и загрузка через Excel: сопоставление по
+ * коду, перед применением — сравнение.» и кнопки «Выгрузить» и «Загрузить» — те же окна, что пункты
+ * «+ Добавить».
+ */
+export function IoBar({ onExport, onImport }: { onExport: () => void; onImport: () => void }) {
+  const t = useT();
+  return (
+    <div className="flex flex-wrap items-center gap-2" data-io-bar="">
+      <span className="text-[13px] text-muted">{t('pdicts.io.bar.text')}</span>
+      <div className="grow" />
+      <button type="button" className={buttonClass('default', 'sm')} onClick={onExport}>
+        <Icon name="download" size="sm" />
+        {t('pdicts.io.bar.export')}
+      </button>
+      <button type="button" className={buttonClass('default', 'sm')} onClick={onImport}>
+        <Icon name="upload" size="sm" />
+        {t('pdicts.io.bar.import')}
+      </button>
+    </div>
+  );
+}
+
 /** Окно «Выгрузка» (прототип exportDlg): строки для Excel, «Скопировать» и «Скачать для Excel». */
 export function ExportDialog({
   dict,
@@ -125,7 +148,7 @@ export function ExportDialog({
 
 type Preview = AdminDictImportPreview;
 
-/** Тело запроса: вставка — текстом, файл — как есть (сервер сам узнаёт .xlsx и CSV). */
+/** Тело запроса: вставка и файл CSV — текстом, файл .xlsx — как есть (его читает сервер). */
 type Upload = { kind: 'text'; text: string } | { kind: 'file'; file: File };
 
 function post(url: string, data: Upload) {
@@ -137,6 +160,21 @@ function post(url: string, data: Upload) {
     },
     body: data.kind === 'text' ? data.text : data.file,
   });
+}
+
+/** Файл .xlsx (архив ZIP): его разбирает сервер, в поле «Данные» его не показать. */
+const isXlsx = (file: File) =>
+  /\.xlsx$/i.test(file.name) ||
+  file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
+/** Текст файла CSV: UTF-8, иначе Windows-1251 — так сохраняет Excel. */
+async function fileText(file: File): Promise<string> {
+  const bytes = await file.arrayBuffer();
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes).replace(/^\uFEFF/, '');
+  } catch {
+    return new TextDecoder('windows-1251').decode(bytes);
+  }
 }
 
 /** Было → стало: зачёркнутое прежнее и жирное новое; пустое — «пусто» (прототип). */
@@ -227,6 +265,8 @@ export function ImportDialog({
   const [text, setText] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Ошибка всего файла (нет заголовков, нет столбца кода) — в подвале окна, как в прототипе.
+  const [fatal, setFatal] = useState<string | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [busy, setBusy] = useState(false);
   const current = useQuery({ ...dictIoFileQuery(dict), enabled: false });
@@ -239,8 +279,9 @@ export function ImportDialog({
     setBusy(true);
     try {
       const res = await callApi(() => post(`/api/admin/platform-dicts-io/${dict}/preview`, data));
-      if (!res.ok) return setError(errorText(res.error));
+      if (!res.ok) return setFatal(errorText(res.error));
       setError(null);
+      setFatal(null);
       setPreview(AdminDictImportPreview.parse(res.data));
     } finally {
       setBusy(false);
@@ -282,7 +323,19 @@ export function ImportDialog({
     if (!res.data) return;
     setFile(null);
     setText(ioTsv([res.data.header, ...res.data.rows]));
+    setError(null);
+    setFatal(null);
     setPreview(null);
+  };
+
+  // Файл CSV — в поле «Данные», как в прототипе: его видно и можно поправить; .xlsx — плашкой.
+  const choose = async (chosen: File) => {
+    setError(null);
+    setFatal(null);
+    if (isXlsx(chosen)) return setFile(chosen);
+    setFile(null);
+    setText(await fileText(chosen));
+    toast(t('pdicts.io.import.file_read'), { icon: 'upload' });
   };
 
   const columns = IO_COLUMNS[dict];
@@ -311,6 +364,12 @@ export function ImportDialog({
     </>
   ) : (
     <>
+      {fatal ? (
+        <span className="inline-flex items-center gap-1.5 text-[13px] text-danger" role="alert">
+          <Icon name="alert" size="sm" />
+          {fatal}
+        </span>
+      ) : null}
       <div className="grow" />
       <button type="button" className={buttonClass('ghost')} onClick={onClose}>
         {t('btn.cancel')}
@@ -363,6 +422,7 @@ export function ImportDialog({
                 onChange={(e) => {
                   setText(e.target.value);
                   setError(null);
+                  setFatal(null);
                 }}
                 placeholder={t('pdicts.io.import.placeholder')}
                 className={`${inputClass({ mono: true, multiline: true })} min-h-[220px] text-[12px]`}
@@ -380,9 +440,7 @@ export function ImportDialog({
                 onChange={(e) => {
                   const chosen = e.target.files?.[0];
                   e.target.value = '';
-                  if (!chosen) return;
-                  setFile(chosen);
-                  setError(null);
+                  if (chosen) void choose(chosen);
                 }}
               />
             </label>

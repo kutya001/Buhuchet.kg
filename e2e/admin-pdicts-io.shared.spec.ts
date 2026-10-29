@@ -43,8 +43,11 @@ test.describe('Админка: выгрузка и загрузка справо
       await page.goto('/app/pdicts/cats');
       await expect(page.locator('[data-grid] [data-id]').first()).toBeVisible();
 
-      // «Выгрузить в Excel»: строки с заголовками — в том же формате, что и загрузка.
-      await addMenu(page, 'Выгрузить в Excel');
+      // «Выгрузить» над списком (то же окно — и в «+ Добавить»): строки с заголовками — в том же формате,
+      // что и загрузка.
+      const bar = page.locator('[data-io-bar]');
+      await expect(bar).toContainText('сопоставление по коду, перед применением — сравнение');
+      await bar.getByRole('button', { name: 'Выгрузить', exact: true }).click();
       const out = page.getByRole('dialog', { name: 'Выгрузка: Категории задач' });
       const text = out.getByRole('textbox', { name: 'Строки справочника для Excel' });
       await expect(text).toHaveValue(/^Код\tНазвание\tПояснение\tАктивно\n/);
@@ -59,8 +62,19 @@ test.describe('Админка: выгрузка и загрузка справо
       const load = page.getByRole('dialog', { name: 'Загрузка: Категории задач' });
       await load.getByRole('button', { name: 'Сравнить' }).click();
       await expect(load.getByText('Вставьте данные или выберите файл')).toBeVisible();
-      await load.getByRole('button', { name: 'Подставить текущую выгрузку' }).click();
+      // Файл CSV попадает в поле «Данные», как в прототипе; без столбца кода — ошибка файла.
       const data = load.getByLabel('Данные');
+      await load.locator('input[type="file"]').setInputFiles({
+        name: 'категории.csv',
+        mimeType: 'text/csv',
+        buffer: Buffer.from('Название;Пояснение\nКатегория;Текст\n'),
+      });
+      await expect(data).toHaveValue('Название;Пояснение\nКатегория;Текст\n');
+      await load.getByRole('button', { name: 'Сравнить' }).click();
+      await expect(load.getByRole('alert')).toHaveText(
+        'Нет столбца «Код»: без кода строки не сопоставить',
+      );
+      await load.getByRole('button', { name: 'Подставить текущую выгрузку' }).click();
       await expect(data).toHaveValue(new RegExp(`\\n${cat.code}\\t`));
       const lines = (await data.inputValue()).split('\n').map((line) => {
         const cells = line.split('\t');

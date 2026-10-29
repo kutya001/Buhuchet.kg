@@ -10,6 +10,7 @@ import {
   AdminDictValue,
   ApiError,
   ListValues,
+  PdictsTabCounts,
 } from '@buhuchet/shared';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildXlsx } from '../../lists/xlsx';
@@ -360,8 +361,14 @@ describe.skipIf(!databaseAvailable())(
         [[code, 'Пояснение', 'Пояснение из Excel']],
         [head.map((h) => ({ Код: 'КАТ-900', Название: 'Новая категория' })[h] ?? '')],
       );
+      const counts = async () =>
+        PdictsTabCounts.parse(await (await get('/api/admin/platform-dicts/tab-counts')).json())
+          .loads;
+      const active = await counts();
       const { load } = await apply('cats', text);
       expect(load).toMatchObject({ added: 1, changed: 1, last: true });
+      // Число на вкладке «Загрузки» — неоткаченные загрузки.
+      expect(await counts()).toBe(active + 1);
       const listRes = await get(`${LOADS}?sort=at.desc`);
       const listBody: unknown = await listRes.json();
       expect(listRes.status, JSON.stringify(listBody)).toBe(200);
@@ -378,6 +385,7 @@ describe.skipIf(!databaseAvailable())(
       const res = await apiRequest(f.app, 'POST', `${LOADS}/${load.id}/rollback`, admin);
       expect(res.status).toBe(200);
       expect(AdminDictLoad.parse(await res.json())).toMatchObject({ last: false });
+      expect(await counts()).toBe(active);
       const now = await file('cats');
       expect(now.rows).toEqual(data.rows);
       const h = await history('cats');

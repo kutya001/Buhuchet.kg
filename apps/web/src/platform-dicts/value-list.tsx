@@ -42,7 +42,7 @@ import { useShell } from '../shell/context';
 import { BenefitDialog } from './benefit-dialog';
 import { TypeDialog } from './type-dialog';
 import { DictHistory } from './dict-history-box';
-import { ExportDialog, ImportDialog } from './io-dialogs';
+import { ExportDialog, ImportDialog, IoBar } from './io-dialogs';
 import {
   fetchAdminDict,
   fetchAdminDictValues,
@@ -553,6 +553,10 @@ export function ValueDictList({ dict }: { dict: AdminValueDict }) {
   return (
     <div className="flex flex-col gap-3.5">
       {note ? <Note icon="info">{t(note)}</Note> : null}
+      <IoBar
+        onExport={() => setIo(openSlot<IoAction>('io_export'))}
+        onImport={() => setIo(openSlot<IoAction>('io_import'))}
+      />
       <DataGrid
         columns={columns}
         audit={AUDIT}

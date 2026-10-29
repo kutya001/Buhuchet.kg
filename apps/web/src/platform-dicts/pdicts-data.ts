@@ -86,12 +86,12 @@ export const pdictsBasesQuery = queryOptions({
     ),
 });
 
-/** Число новых запросов на вкладке «Запросы» (прототип pdTabs: `count` — новые). */
+/** Числа на вкладках (прототип pdTabs): «Запросы» — новые, «Загрузки» — неоткаченные. */
 export const pdictsTabCountsQuery = queryOptions({
   queryKey: ['admin', 'pdicts', 'tab-counts'],
   queryFn: async (): Promise<Partial<Record<string, ShellCount>>> => {
     const counts = await json(await pd['tab-counts'].$get(), (v) => PdictsTabCounts.parse(v));
-    return { requests: { value: counts.requests } };
+    return { requests: { value: counts.requests }, loads: { value: counts.loads } };
   },
 });
 

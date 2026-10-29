@@ -175,6 +175,12 @@ export const PLATFORM_DICTS_IO_TEXTS = {
   // «+ Добавить» → «Выгрузить в Excel», «Загрузить из Excel» (прототип pdAdd) и строки истории (pdLog).
   'pdicts.add.io_export': { ru: 'Выгрузить в Excel', section: S },
   'pdicts.add.io_import': { ru: 'Загрузить из Excel', section: S },
+  'pdicts.io.bar.text': {
+    ru: 'Выгрузка и загрузка через Excel: сопоставление по коду, перед применением — сравнение.',
+    section: S,
+  },
+  'pdicts.io.bar.export': { ru: 'Выгрузить', section: S },
+  'pdicts.io.bar.import': { ru: 'Загрузить', section: S },
   'pdicts.hist.import': {
     ru: '{dict}: загрузка из Excel — добавлено {added}, изменено {changed}, отключено {disabled}',
     section: S,
@@ -212,6 +218,7 @@ export const PLATFORM_DICTS_IO_TEXTS = {
   },
   'pdicts.io.import.file': { ru: 'Файл Excel/CSV', section: S },
   'pdicts.io.import.file_chosen': { ru: 'Файл «{name}»: нажмите «Сравнить»', section: S },
+  'pdicts.io.import.file_read': { ru: 'Файл прочитан: нажмите «Сравнить»', section: S },
   'pdicts.io.import.current': { ru: 'Подставить текущую выгрузку', section: S },
   'pdicts.io.import.compare': { ru: 'Сравнить', section: S },
   'pdicts.io.import.back': { ru: 'Изменить данные', section: S },

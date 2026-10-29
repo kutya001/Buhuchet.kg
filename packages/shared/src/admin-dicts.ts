@@ -640,7 +640,11 @@ export const AdminDictGroups = z.object({
 export type AdminDictGroups = z.infer<typeof AdminDictGroups>;
 
 /** Числа на вкладках модуля: новых запросов. */
-export const PdictsTabCounts = z.object({ requests: z.number().int().nonnegative() });
+/** Числа на вкладках: новые запросы организаций и неоткаченные загрузки из Excel. */
+export const PdictsTabCounts = z.object({
+  requests: z.number().int().nonnegative(),
+  loads: z.number().int().nonnegative(),
+});
 export type PdictsTabCounts = z.infer<typeof PdictsTabCounts>;
 
 /** Запрос организации в «Запросах»: кто, что просил, статус и ответ. «Создал» — кто отправил. */

@@ -8,7 +8,7 @@ import {
   type IoValue,
   type ListQuery,
 } from '@buhuchet/domain';
-import { and, asc, eq, isNull, sql, type AnyColumn, type SQL } from 'drizzle-orm';
+import { and, asc, count, eq, isNull, sql, type AnyColumn, type SQL } from 'drizzle-orm';
 import type { Tx } from './client';
 import {
   adminDictDelete,
@@ -471,6 +471,12 @@ export async function rollbackDictLoad(tx: Tx, id: string): Promise<DictLoadRoll
 export async function getDictLoad(tx: Tx, id: string): Promise<DictLoadRecord | null> {
   const [row] = await tx.select(fields).from(l).where(eq(l.id, id));
   return row ? toRecord(row as Row) : null;
+}
+
+/** Число на вкладке «Загрузки» — неоткаченных загрузок (прототип pdTabs). */
+export async function countActiveDictLoads(tx: Tx): Promise<number> {
+  const [row] = await tx.select({ n: count() }).from(l).where(isNull(l.rolledBackAt));
+  return row?.n ?? 0;
 }
 
 /** Загрузки и откаты — по одному: последняя загрузка не меняется, пока идёт откат или «Применить». */

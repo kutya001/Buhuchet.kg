@@ -198,6 +198,7 @@ const cellString = (v: SheetCell | undefined) => (v === null || v === undefined 
  * сохраняет Excel), как в «Вводе из Excel». Пустые строки пропускаются. Пусто — 400, не читается или
  * слишком большой — 400.
  */
+// ОТКЛОНЕНИЕ: docs/deviations.md#Д-16 — файл и .xlsx, не только CSV.
 async function tableOf(c: Context<AppEnv>): Promise<string[][]> {
   const bytes = Buffer.from(await c.req.arrayBuffer());
   if (!bytes.length) importFail('import_empty');
@@ -261,6 +262,7 @@ function cellError(dict: AdminValueDict, t: Translate, field: string, text: stri
  * Проверка значения после строки — как у окна правки: схема формы (длины, числа, формат кода ГНС, маска
  * страны), «Тип» справочника и обязательные поля.
  */
+// ОТКЛОНЕНИЕ: docs/deviations.md#Д-16 — строка проверяется, как окно значения.
 function rowProblems(dict: AdminValueDict, x: IoValue, t: Translate) {
   const parsed = AdminDictValueForm.safeParse({ name: x.name, ...x.data });
   if (!parsed.success) {
@@ -525,6 +527,7 @@ export function adminDictImportApplyHandler(
       await lockDictLoads(tx);
       const outcome = await runImport(tx, dict, table, t);
       const { preview } = outcome;
+      // ОТКЛОНЕНИЕ: docs/deviations.md#Д-16 — справочник или файл изменились после сравнения.
       if (preview.stamp !== stamp) importFail('import_changed', 409);
       if (!preview.add.length && !preview.change.length && !preview.off.length) {
         importFail('import_nothing', 409);

@@ -8,6 +8,7 @@ import {
   adminDictMove,
   adminDictSetActive,
   adminDictUpdate,
+  countActiveDictLoads,
   countNewDictRequests,
   dictValueTakenField,
   exportAdminDict,
@@ -283,18 +284,23 @@ export const pdictsTabCountsRoute = createRoute({
   summary: 'Числа на вкладках «Справочников платформы»',
   middleware: [requirePlatformAdmin] as const,
   responses: {
-    200: { description: 'Новых запросов организаций', content: json(PdictsTabCounts) },
+    200: {
+      description: 'Новых запросов организаций и неоткаченных загрузок',
+      content: json(PdictsTabCounts),
+    },
     ...denied,
   },
 });
 
-/** Число на вкладке «Запросы» — новых запросов (прототип pdTabs). */
+/** Числа на вкладках (прототип pdTabs): «Запросы» — новых запросов, «Загрузки» — неоткаченных. */
 export function pdictsTabCountsHandler(
   deps: ApiDeps,
 ): RouteHandler<typeof pdictsTabCountsRoute, AppEnv> {
   return async (c) => {
-    const requests = await adminTx(deps, c, (tx) => countNewDictRequests(tx));
-    return c.json({ requests }, 200);
+    const [requests, loads] = await adminTx(deps, c, (tx) =>
+      Promise.all([countNewDictRequests(tx), countActiveDictLoads(tx)]),
+    );
+    return c.json({ requests, loads }, 200);
   };
 }
 
