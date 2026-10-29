@@ -381,13 +381,23 @@ export const MODULES: Record<MenuModuleId, ModuleDef> = {
     ],
     // Способы добавления — по вкладке (прототип pdAdd); вкладки других частей задачи добавят свои.
     add: [
+      { id: 'base', icon: 'plus', label: 'pdicts.add.base', tabs: ['bases'] },
+      { id: 'regime', icon: 'plus', label: 'pdicts.add.regime', tabs: ['regimes'] },
       {
         id: 'value',
         icon: 'plus',
         label: 'pdicts.add.value',
         tabs: ['forms', 'organs', 'banks', 'cats', 'reasons'],
       },
+      { id: 'phone', icon: 'globe', label: 'pdicts.add.phone', tabs: ['phones'] },
       { id: 'ugns', icon: 'landmark', label: 'pdicts.add.ugns', tabs: ['ugns'] },
+      { id: 'holiday', icon: 'calendar', label: 'pdicts.add.holiday', tabs: ['calendar'] },
+      {
+        id: 'calendar_copy',
+        icon: 'copy',
+        label: 'pdicts.add.calendar_copy',
+        tabs: ['calendar'],
+      },
     ],
   },
   l10n: {

@@ -1,5 +1,5 @@
 {
-  "id": "03381cd5-ecbc-458d-ac8e-f5ad8ffdd012",
+  "id": "331ab6dc-3b66-4b51-a9b1-4569990825d3",
   "prevId": "cf3a497d-b2c1-4f48-a0dd-23de7214f05a",
   "version": "7",
   "dialect": "postgresql",
@@ -6683,6 +6683,157 @@
       },
       "isRLSEnabled": true
     },
+    "public.phone_codes": {
+      "name": "phone_codes",
+      "schema": "",
+      "columns": {
+        "code": {
+          "name": "code",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "flag": {
+          "name": "flag",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "dial_code": {
+          "name": "dial_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "mask": {
+          "name": "mask",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "active": {
+          "name": "active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "sort_order": {
+          "name": "sort_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_by": {
+          "name": "updated_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        }
+      },
+      "indexes": {
+        "phone_codes_name_key": {
+          "name": "phone_codes_name_key",
+          "columns": [
+            {
+              "expression": "name",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "phone_codes_created_by_users_id_fk": {
+          "name": "phone_codes_created_by_users_id_fk",
+          "tableFrom": "phone_codes",
+          "tableTo": "users",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "phone_codes_updated_by_users_id_fk": {
+          "name": "phone_codes_updated_by_users_id_fk",
+          "tableFrom": "phone_codes",
+          "tableTo": "users",
+          "columnsFrom": [
+            "updated_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "phone_codes_read": {
+          "name": "phone_codes_read",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "buhuchet_app"
+          ],
+          "using": "true"
+        }
+      },
+      "checkConstraints": {
+        "phone_codes_dial_code_check": {
+          "name": "phone_codes_dial_code_check",
+          "value": "\"phone_codes\".\"dial_code\" ~ '^[0-9]{1,4}$'"
+        },
+        "phone_codes_mask_check": {
+          "name": "phone_codes_mask_check",
+          "value": "\"phone_codes\".\"mask\" ~ '^[X ]+$' and strpos(\"phone_codes\".\"mask\", 'X') > 0"
+        }
+      },
+      "isRLSEnabled": true
+    },
     "public.due_change_reasons": {
       "name": "due_change_reasons",
       "schema": "",
@@ -9923,164 +10074,6 @@
         "org_accounts_length_check": {
           "name": "org_accounts_length_check",
           "value": "length(coalesce(\"org_accounts\".\"account_no\", '')) <= 40 and length(\"org_accounts\".\"holder_name\") <= 200"
-        }
-      },
-      "isRLSEnabled": true
-    },
-    "public.indicator_imports": {
-      "name": "indicator_imports",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "org_id": {
-          "name": "org_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "file_name": {
-          "name": "file_name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "from_month": {
-          "name": "from_month",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "to_month": {
-          "name": "to_month",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "added": {
-          "name": "added",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "changed": {
-          "name": "changed",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "errors": {
-          "name": "errors",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "skipped_checked": {
-          "name": "skipped_checked",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_by": {
-          "name": "created_by",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "indicator_imports_org_idx": {
-          "name": "indicator_imports_org_idx",
-          "columns": [
-            {
-              "expression": "org_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "created_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "indicator_imports_org_id_organizations_id_fk": {
-          "name": "indicator_imports_org_id_organizations_id_fk",
-          "tableFrom": "indicator_imports",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "org_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        },
-        "indicator_imports_created_by_users_id_fk": {
-          "name": "indicator_imports_created_by_users_id_fk",
-          "tableFrom": "indicator_imports",
-          "tableTo": "users",
-          "columnsFrom": [
-            "created_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {
-        "indicator_imports_isolation": {
-          "name": "indicator_imports_isolation",
-          "as": "PERMISSIVE",
-          "for": "ALL",
-          "to": [
-            "buhuchet_app"
-          ],
-          "using": "\"indicator_imports\".\"org_id\" = app.current_org_id()",
-          "withCheck": "\"indicator_imports\".\"org_id\" = app.current_org_id()"
-        }
-      },
-      "checkConstraints": {
-        "indicator_imports_from_check": {
-          "name": "indicator_imports_from_check",
-          "value": "\"indicator_imports\".\"from_month\" is null or \"indicator_imports\".\"from_month\" ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'"
-        },
-        "indicator_imports_to_check": {
-          "name": "indicator_imports_to_check",
-          "value": "\"indicator_imports\".\"to_month\" is null or \"indicator_imports\".\"to_month\" ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'"
-        },
-        "indicator_imports_file_check": {
-          "name": "indicator_imports_file_check",
-          "value": "char_length(\"indicator_imports\".\"file_name\") between 1 and 255"
-        },
-        "indicator_imports_counts_check": {
-          "name": "indicator_imports_counts_check",
-          "value": "\"indicator_imports\".\"added\" >= 0 and \"indicator_imports\".\"changed\" >= 0 and \"indicator_imports\".\"errors\" >= 0 and \"indicator_imports\".\"skipped_checked\" >= 0"
         }
       },
       "isRLSEnabled": true
