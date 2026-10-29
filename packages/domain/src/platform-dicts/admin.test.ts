@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { DueRule } from '../dicts/report-types';
 import type { BenefitDueOverride } from '../dicts/value-guide';
+import { isGridKey } from '../common/list';
 import { formatText, UI_TEXTS, type Translate } from '../l10n/texts';
 import {
   ADMIN_DICT_META,
@@ -229,6 +230,10 @@ describe('ADMIN_DICT_META', () => {
     expect(isAdminValueDict('types')).toBe(true);
     expect(isAdminValueDict('calendar')).toBe(false);
     expect(isAdminValueDict('taxes')).toBe(false);
+  });
+
+  it('у списка каждого справочника механизма — свои настройки вида (ключ «pdicts.<справочник>»)', () => {
+    for (const dict of ADMIN_VALUE_DICTS) expect(isGridKey(`pdicts.${dict}`), dict).toBe(true);
   });
 
   it('код страны по умолчанию не отключается, коды стран не удаляются', () => {
