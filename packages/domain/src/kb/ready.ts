@@ -163,9 +163,10 @@ export const KB_STEP_RULES: Readonly<Record<string, KbStepRule>> = {
   xls: { module: 'dicts' },
   stats: { module: 'reports' },
   swipe: { module: 'reports' },
-  // Админка (задачи 2.35, 2.36, 2.40). «Каталог видов отчётов», календарь, шаблоны и загрузка из
-  // Excel — с их вкладками (2.36, 2.37).
+  // Админка (задачи 2.35, 2.36, 2.40). «Каталог видов отчётов», шаблоны и загрузка из Excel — с их
+  // вкладками (2.36, 2.37).
   'a-dicts': { module: 'pdicts' },
+  'a-cal': { module: 'pdicts' },
   'a-l10n': { module: 'l10n' },
   'a-org': { module: 'orgs', done: { kind: 'org_created' } },
 };

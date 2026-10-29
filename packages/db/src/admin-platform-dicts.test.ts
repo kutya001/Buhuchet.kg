@@ -26,10 +26,13 @@ import { createDictRequest, listDictRequests } from './dict-requests';
 import { createOrganization, type CreatedOrganization } from './organizations';
 import {
   authorities,
+  countryPhoneCodes,
   dueChangeReasons,
   orgAccounts,
   ownershipForms,
+  reportTypeBases,
   taxOffices,
+  taxRegimes,
   users,
 } from './schema';
 import {
@@ -442,6 +445,251 @@ describe.skipIf(!databaseAvailable())(
       expect(taken).toMatchObject({ reason: 'taken', problems: [{ field: 'gnsCode' }] });
     });
 
+    it('режимы: «Тип» подписью, «Для бухгалтера» без подписи в начале; сохранение без правки — без новой версии', async () => {
+      const page = await asAdmin((tx) => listAdminDictPage(tx, 'regimes', query(), t));
+      expect(page.rows.slice(0, 2).map((x) => [x.n, x.code, x.name, x.data.kind])).toEqual([
+        [1, 'РЕЖ-01', 'ОНР', 'general'],
+        [2, 'РЕЖ-02', 'Патент', 'special'],
+      ]);
+      // ОНР указан у видов отчётов — «Используется».
+      expect(page.rows[0]!.usage.total).toBeGreaterThan(0);
+      expect(page.rows.map((x) => x.data.accountantNote)).not.toContainEqual(
+        expect.stringMatching(/^Для бухгалтера/),
+      );
+      const kinds = await asAdmin((tx) => listAdminDictValues(tx, 'regimes', 'kind', t));
+      expect(kinds.items.map((x) => x.label).sort()).toEqual(['Общий', 'Специальный']);
+
+      const onr = page.rows[0]!;
+      const same = await asAdmin((tx) =>
+        adminDictUpdate(tx, 'regimes', onr.code, { name: onr.name, data: onr.data }, onr.version),
+      );
+      expect(same.ok && same.record.version).toBe(onr.version);
+      const [stored] = await db.admin.db
+        .select({ note: taxRegimes.accountantNote })
+        .from(taxRegimes)
+        .where(eq(taxRegimes.code, onr.code));
+      expect(stored!.note).toMatch(/^Для бухгалтера: /);
+
+      const created = await asAdmin((tx) =>
+        adminDictCreate(
+          tx,
+          'regimes',
+          {
+            name: 'Новый режим',
+            data: { fullName: 'Налог на новое', accountantNote: 'Для бухгалтера: один отчёт' },
+          },
+          random,
+        ),
+      );
+      expect(created.ok && [created.record.code, created.record.n]).toEqual(['РЕЖ-13', 13]);
+      expect(created.ok && created.record.data).toMatchObject({
+        kind: 'special',
+        accountantNote: 'один отчёт',
+        frees: '',
+      });
+    });
+
+    it('основания: виды отчётов — связь «Основание» вида, правится из основания; привязанное не удаляется', async () => {
+      const page = await asAdmin((tx) => listAdminDictPage(tx, 'bases', query(), t));
+      // Без «№» (docs/deviations.md п. Д-2) — в порядке справочника.
+      expect(page.rows[0]).toMatchObject({ n: null, code: 'employees', data: { types: ['soc'] } });
+      expect(page.rows[0]!.usage).toEqual({ total: 1, contractors: 0 });
+      const transport = page.rows.find((x) => x.code === 'transport')!;
+      expect([transport.data.types, transport.usage.total]).toEqual([[], 0]);
+      const file = await asAdmin((tx) =>
+        exportAdminDict(tx, 'bases', query(), ['name', 'types'], t),
+      );
+      expect(file.rows[0]).toEqual(['Есть наёмные сотрудники', 'Соцфонд']);
+      expect(file.rows.find((r) => r[0] === transport.name)?.[1]).toBe('—');
+
+      // Не сквозной вид (НДС — режимный) — отказ, ничего не записано.
+      const bad = await asAdmin((tx) =>
+        adminDictCreate(tx, 'bases', { name: 'Есть НДС', data: { types: ['nds'] } }, random),
+      );
+      expect(bad).toEqual({ ok: false, reason: 'bad_link', field: 'types' });
+
+      const created = await asAdmin((tx) =>
+        adminDictCreate(
+          tx,
+          'bases',
+          { name: 'Есть роялти', data: { description: 'Недра', types: ['bon', 'roy', 'roy'] } },
+          random,
+        ),
+      );
+      expect(created.ok).toBe(true);
+      if (!created.ok) return;
+      // Коды — в порядке каталога, без повторов; вид отчёта видит основание у себя.
+      expect(created.record.code).toMatch(/^base-t\d+$/);
+      expect(created.record.data.types).toEqual(['roy', 'bon']);
+      const links = await db.admin.db
+        .select()
+        .from(reportTypeBases)
+        .where(eq(reportTypeBases.baseCode, created.record.code));
+      expect(links.map((l) => l.reportTypeCode).sort()).toEqual(['bon', 'roy']);
+      const used = await asAdmin((tx) =>
+        adminDictDelete(tx, 'bases', created.record.code, created.record.version),
+      );
+      expect(used).toMatchObject({
+        ok: false,
+        reason: 'used',
+        usage: { total: 2, contractors: 0 },
+      });
+
+      // Убрать вид — новая версия, «было → стало» в истории; без видов основание удаляется.
+      const updated = await asAdmin((tx) =>
+        adminDictUpdate(
+          tx,
+          'bases',
+          created.record.code,
+          { name: 'Есть роялти', data: { ...created.record.data, types: ['bon'] } },
+          created.record.version,
+        ),
+      );
+      expect(updated.ok && [updated.record.version, updated.record.data.types]).toEqual([
+        created.record.version + 1,
+        ['bon'],
+      ]);
+      const history = await asAdmin((tx) => adminDictHistory(tx, 'bases', 5));
+      expect(history.items[0]!.changes).toEqual([
+        { field: 'types', from: ['roy', 'bon'], to: ['bon'] },
+      ]);
+      const emptied = await asAdmin((tx) =>
+        adminDictUpdate(
+          tx,
+          'bases',
+          created.record.code,
+          { name: 'Есть роялти', data: { types: [] } },
+          created.record.version + 1,
+        ),
+      );
+      expect(emptied.ok).toBe(true);
+      const deleted = await asAdmin((tx) =>
+        adminDictDelete(tx, 'bases', created.record.code, created.record.version + 2),
+      );
+      expect(deleted).toEqual({ ok: true });
+    });
+
+    it('коды стран: «+код», «Цифр», «Пример»; Кыргызстан не отключается, коды не удаляются', async () => {
+      const page = await asAdmin((tx) => listAdminDictPage(tx, 'phones', query(), t));
+      expect(page.rows[0]).toMatchObject({
+        n: null,
+        code: 'KG',
+        name: 'Кыргызстан',
+        data: { dialCode: '996', mask: 'XXX XXX XXX' },
+      });
+      const file = await asAdmin((tx) =>
+        exportAdminDict(tx, 'phones', query(), ['name', 'dialCode', 'digits', 'example'], t),
+      );
+      expect(file.rows[0]).toEqual(['Кыргызстан', '+996', 9, '+996 555 123 456']);
+
+      const kg = page.rows[0]!;
+      const off = await asAdmin((tx) => adminDictSetActive(tx, 'phones', 'KG', false, kg.version));
+      expect(off).toEqual({ ok: false, reason: 'fixed' });
+      const kept = await asAdmin((tx) => adminDictDelete(tx, 'phones', 'KG', kg.version));
+      expect(kept).toEqual({ ok: false, reason: 'undeletable' });
+
+      const taken = await asAdmin((tx) =>
+        adminDictCreate(
+          tx,
+          'phones',
+          { name: 'Кыргызстан', data: { dialCode: '996', mask: 'XXX XXX XXX', flag: '' } },
+          random,
+        ),
+      );
+      expect(taken).toMatchObject({ ok: false, reason: 'taken' });
+      const created = await asAdmin((tx) =>
+        adminDictCreate(
+          tx,
+          'phones',
+          { name: 'Монголия', data: { dialCode: '976', mask: 'XXXX XXXX', flag: '🇲🇳' } },
+          random,
+        ),
+      );
+      expect(created.ok && [created.record.code, created.record.data]).toEqual([
+        'X-01',
+        { flag: '🇲🇳', dialCode: '976', mask: 'XXXX XXXX' },
+      ]);
+      if (!created.ok) throw new Error('не создано');
+      const disabled = await asAdmin((tx) =>
+        adminDictSetActive(tx, 'phones', 'X-01', false, created.record.version),
+      );
+      expect(disabled.ok && disabled.record.active).toBe(false);
+      // Отключённая страна остаётся в таблице: сохранённые номера с ней не меняются.
+      const [stored] = await db.admin.db
+        .select({ active: countryPhoneCodes.active })
+        .from(countryPhoneCodes)
+        .where(eq(countryPhoneCodes.code, 'X-01'));
+      expect(stored).toEqual({ active: false });
+      // Неверный код или маску не пропустит и база.
+      await expect(
+        asAdmin((tx) =>
+          tx.execute(
+            sql`select app.admin_dict_insert('phones', 'X-02', '{"name":"Ошибка","dial_code":"99999","mask":"XX"}'::jsonb)`,
+          ),
+        ),
+      ).rejects.toThrow();
+      // Две правки подряд: в истории — вся строка кода страны до и после каждой (прототип).
+      const masked = await asAdmin((tx) =>
+        adminDictUpdate(
+          tx,
+          'phones',
+          'X-01',
+          { name: 'Монголия', data: { dialCode: '976', mask: 'XX XX XXXX', flag: '🇲🇳' } },
+          disabled.ok ? disabled.record.version : 0,
+        ),
+      );
+      if (!masked.ok) throw new Error('не сохранено');
+      await asAdmin((tx) =>
+        adminDictUpdate(
+          tx,
+          'phones',
+          'X-01',
+          { name: 'Монголия', data: { dialCode: '977', mask: 'XX XX XXXX', flag: '🇲🇳' } },
+          masked.record.version,
+        ),
+      );
+      const history = await asAdmin((tx) => adminDictHistory(tx, 'phones', 5));
+      expect(history.items.slice(0, 3).map((h) => [h.action, h.label, h.summary])).toEqual([
+        [
+          'update',
+          'Монголия',
+          { from: 'Монголия +976 XX XX XXXX', to: 'Монголия +977 XX XX XXXX' },
+        ],
+        ['update', 'Монголия', { from: 'Монголия +976 XXXX XXXX', to: 'Монголия +976 XX XX XXXX' }],
+        ['update', 'Монголия', undefined],
+      ]);
+    });
+
+    it('связи пишет только администратор платформы', async () => {
+      const links = JSON.stringify({ types: ['nds'] });
+      expect(
+        await asOwner((tx) =>
+          tx.execute(
+            sql`select app.admin_dict_set_links('bases', 'employees', ${links}::jsonb) as ok`,
+          ),
+        ),
+      ).toEqual([{ ok: null }]);
+      await expect(
+        asOwner((tx) =>
+          tx.insert(reportTypeBases).values({ reportTypeCode: 'nds', baseCode: 'employees' }),
+        ),
+      ).rejects.toThrow();
+    });
+
+    it('поле-связь не массивом — функция отказывает, связи не меняются', async () => {
+      const before = await asAdmin((tx) => getAdminDictValue(tx, 'bases', 'employees'));
+      const bad = JSON.stringify({ types: 'nds' });
+      expect(
+        await asAdmin((tx) =>
+          tx.execute(
+            sql`select app.admin_dict_set_links('bases', 'employees', ${bad}::jsonb) as ok`,
+          ),
+        ),
+      ).toEqual([{ ok: null }]);
+      const after = await asAdmin((tx) => getAdminDictValue(tx, 'bases', 'employees'));
+      expect(after?.data.types).toEqual(before?.data.types);
+    });
+
     it('не администратору — ни списка, ни правки; таблицы справочников роль приложения не меняет', async () => {
       expect(await asOwner((tx) => adminDictUsage(tx, 'organs'))).toEqual(new Map());
       const [row] = await asOwner((tx) =>
@@ -471,6 +719,9 @@ describe.skipIf(!databaseAvailable())(
       ).rejects.toEqual(permissionDenied);
       await expect(
         asAdmin((tx) => tx.execute(sql`select * from app.platform_dict_specs`)),
+      ).rejects.toEqual(permissionDenied);
+      await expect(
+        asAdmin((tx) => tx.execute(sql`select * from app.platform_dict_links`)),
       ).rejects.toEqual(permissionDenied);
       // Неизвестный справочник — пусто.
       const [unknown] = await asAdmin((tx) =>
