@@ -130,8 +130,8 @@ export const KB_STEP_RULES: Readonly<Record<string, KbStepRule>> = {
     module: 'tasks',
     done: { kind: 'status', scale: 'task', from: ['on_confirm'], to: ['confirmed', 'rework'] },
   },
-  // 11. Показатели контрагентов (задача 2.27). «Ввести показатели из Excel» — с задачей 2.28,
-  // «Вкладка «Показатели» в карточке контрагента» — с карточкой контрагента (2.11).
+  // 11. Показатели контрагентов (задачи 2.27, 2.28). «Вкладка «Показатели» в карточке контрагента» — с
+  // карточкой контрагента (2.11).
   kset: {
     module: 'kpi',
     done: { kind: 'history', entity: 'indicator', actions: ['create', 'update', 'delete'] },
@@ -144,6 +144,11 @@ export const KB_STEP_RULES: Readonly<Record<string, KbStepRule>> = {
   kval: {
     module: 'kpi',
     done: { kind: 'history', entity: 'indicator_value', actions: ['create', 'update'] },
+  },
+  // Прототип: запись истории «Ввод показателей из Excel …» после «Применить».
+  kxls: {
+    module: 'kpi',
+    done: { kind: 'history', entity: 'indicator_import', actions: ['create'] },
   },
   kper: { module: 'kpi' },
   kchk: {

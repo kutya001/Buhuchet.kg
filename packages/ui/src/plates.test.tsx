@@ -55,4 +55,16 @@ describe('Статистика модуля — плашки-итоги (про�
     );
     expect(html).toBe('');
   });
+
+  it('плашки в окне (`static`): на ПК не уже 200 px, на телефоне компактнее', () => {
+    const html = renderToStaticMarkup(
+      <Plates static>
+        <Plate id="kxn" icon="plus" color="blue" label="Новые" value="1" sub="было пусто" />
+      </Plates>,
+    );
+    expect(html).toContain('data-static=""');
+    expect(html).toContain('minmax(200px,1fr)');
+    expect(html).toContain('max-md:group-data-static/plates:text-[18px]');
+    expect(renderToStaticMarkup(<Plates>{null}</Plates>)).not.toContain('data-static');
+  });
 });
