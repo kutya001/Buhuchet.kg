@@ -356,7 +356,10 @@ async function typeReportCounts(_tx: Tx): Promise<Map<string, TypeReportCounts>>
 }
 
 /** Все значения справочника в его порядке (`sort_order`, при равных — код), с «№» и «Используется». */
-export async function adminDictRecords(tx: Tx, dict: AdminValueDict): Promise<AdminDictValueRecord[]> {
+export async function adminDictRecords(
+  tx: Tx,
+  dict: AdminValueDict,
+): Promise<AdminDictValueRecord[]> {
   const table = TABLES[dict];
   const [rows, usage, links, reports] = await Promise.all([
     tx.select().from(table).orderBy(asc(table.sortOrder), asc(table.code)) as unknown as Promise<
