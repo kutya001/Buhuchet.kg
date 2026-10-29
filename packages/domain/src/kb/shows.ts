@@ -95,7 +95,7 @@ export const KB_KNOWN_LIMIT = 3000;
 /** Сколько ключей принимается за один запрос. */
 export const KB_KNOWN_BATCH = 100;
 
-const KNOWN_KEY = /^[gs]:[^\u0000-\u001f\u007f]+$/u;
+const KNOWN_KEY = /^[gs]:\P{Cc}+$/u;
 
 /** Ключ знакомого элемента принимается сервером: `g:` или `s:`, без управляющих символов. */
 export function kbKnownKeyOk(key: string): boolean {
@@ -114,7 +114,7 @@ export function kbKnownKey(p: KbShowPoint, screen: string): string | null {
     p.g || p.common
       ? `g:${p.g || p.t}`
       : `s:${p.scr || screen}${p.mt ? `|${p.mt}` : ''}|${p.ck || p.t}`;
-  return key.replace(/[\u0000-\u001f\u007f]+/gu, ' ').slice(0, KB_KNOWN_KEY_MAX);
+  return key.replace(/\p{Cc}+/gu, ' ').slice(0, KB_KNOWN_KEY_MAX);
 }
 
 /** Тексты облачков из `kbUi.ui`: заголовок и текст «Всё на этом экране вам уже знакомо». */
