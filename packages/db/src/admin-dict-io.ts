@@ -1,4 +1,5 @@
 import {
+  ADMIN_DICT_META,
   ADMIN_VALUE_DICTS,
   auditActorName,
   type AdminValueDict,
@@ -14,6 +15,7 @@ import {
   adminDictRecords,
   adminDictSetActive,
   adminDictUpdate,
+  type AdminDictDeleteResult,
   type AdminDictSaveResult,
 } from './admin-platform-dicts';
 import {
@@ -36,6 +38,7 @@ import {
   taxRegimes,
   type DictLoadAdded,
   type DictLoadBefore,
+  type DictLoadState,
 } from './schema';
 import { textLiteral } from './sql-text';
 
@@ -48,7 +51,7 @@ import { textLiteral } from './sql-text';
  * `withUserContext` администратора платформы.
  */
 
-export type { DictLoadAdded, DictLoadBefore };
+export type { DictLoadAdded, DictLoadBefore, DictLoadState };
 
 /** Значение справочника для файла и сравнения — и его версия. */
 export interface IoRecord extends IoValue {
@@ -111,7 +114,10 @@ export async function ioRefs(tx: Tx): Promise<IoRefs> {
   };
 }
 
-/** Подпись, которая повторяется, — кодом значения (ОТКЛОНЕНИЕ: docs/deviations.md#Д-16). */
+/**
+ * Подпись, которая повторяется, — кодом значения (ОТКЛОНЕНИЕ: docs/deviations.md#Д-16); сама подпись
+ * остаётся другим написанием: по ней загрузка ответит «есть у нескольких значений — укажите код».
+ */
 function uniqueLabels(refs: IoRef[]): IoRef[] {
   const seen = new Map<string, number>();
   for (const r of refs) {
@@ -119,7 +125,9 @@ function uniqueLabels(refs: IoRef[]): IoRef[] {
     seen.set(key, (seen.get(key) ?? 0) + 1);
   }
   return refs.map((r) =>
-    (seen.get(r.label.trim().toLowerCase()) ?? 0) > 1 ? { ...r, label: r.code } : r,
+    (seen.get(r.label.trim().toLowerCase()) ?? 0) > 1
+      ? { ...r, label: r.code, alt: [r.label, ...(r.alt ?? [])] }
+      : r,
   );
 }
 
@@ -341,26 +349,54 @@ export function exportDictLoads(tx: Tx, query: ListQuery, keys: readonly string[
 
 /* ───────────── Откат ───────────── */
 
+/** JSON с ключами по алфавиту: поля значения сравниваются без учёта порядка ключей. */
+function stableJson(value: unknown): string {
+  return JSON.stringify(value, (_key, v: unknown) =>
+    v && typeof v === 'object' && !Array.isArray(v)
+      ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
+      : v,
+  );
+}
+
+/**
+ * Значение не меняли после загрузки: та же версия или тот же вид, что сразу после неё (версию поднял
+ * откат следующей загрузки, вернув значение к этому виду).
+ */
+function unchangedSince(
+  now: { version: number; name: string; active: boolean; data: unknown },
+  loaded: { version: number; after: DictLoadState },
+): boolean {
+  if (now.version === loaded.version) return true;
+  const { name, active, data } = loaded.after;
+  return now.name === name && now.active === active && stableJson(now.data) === stableJson(data);
+}
+
+/** Отказ функции правки при откате. */
+type RollbackStepFailure = Extract<AdminDictSaveResult | AdminDictDeleteResult, { ok: false }>;
+
 export type DictLoadRollbackResult =
   | { ok: true; load: DictLoadRecord }
   | { ok: false; reason: 'not_found' }
   | { ok: false; reason: 'not_last' }
-  /** Значение изменили после загрузки: откат затёр бы эту правку. */
+  /** Значение изменили или удалили после загрузки: откат затёр бы эту правку. */
   | { ok: false; reason: 'changed_after'; code: string; name: string }
-  /** Прежнее значение не сохраняется (связь отключили, название заняли). */
+  /** Прежнее значение не сохраняется (связь отключили, название заняли) или не убирается добавленное. */
   | {
       ok: false;
       reason: 'restore_failed';
       code: string;
       name: string;
-      result: AdminDictSaveResult;
+      result: RollbackStepFailure;
     };
 
 /**
- * «Откатить» последнюю загрузку (прототип rollbackLoad): изменённые и отключённые значения
- * возвращаются к виду до неё, добавленные удаляются, а используемые — отключаются. Значение,
- * изменённое после загрузки, откат не трогает: отказ с его названием, ничего не меняется
+ * «Откатить» последнюю загрузку (прототип rollbackLoad): сначала убираются добавленные значения
+ * (удаляются, а используемые и неудаляемые — отключаются), затем изменённые и отключённые возвращаются
+ * к виду до неё — так прежнее название, которое загрузка отдала новому значению, снова свободно.
+ * Значение, изменённое или удалённое после загрузки, откат не трогает: отказ с его названием
  * (ОТКЛОНЕНИЕ: docs/deviations.md#Д-15). В историю — строки значений и «загрузка от … откачена».
+ * Отказ может прийти после части записей: вызывающий обязан откатить транзакцию (бросить исключение),
+ * тогда справочник не меняется.
  */
 export async function rollbackDictLoad(tx: Tx, id: string): Promise<DictLoadRollbackResult> {
   await lockDictLoads(tx);
@@ -374,48 +410,47 @@ export async function rollbackDictLoad(tx: Tx, id: string): Promise<DictLoadRoll
   const records = new Map((await adminDictRecords(tx, dict)).map((x) => [x.code, x]));
   for (const b of load.before) {
     const now = records.get(b.code);
-    if (now && now.version !== b.version) {
-      return { ok: false, reason: 'changed_after', code: b.code, name: now.name };
+    if (!now || !unchangedSince(now, b)) {
+      return { ok: false, reason: 'changed_after', code: b.code, name: now?.name ?? b.name };
     }
   }
   for (const a of load.addedValues) {
     const now = records.get(a.code);
-    if (now && now.version !== a.version) {
+    if (now && !unchangedSince(now, a)) {
       return { ok: false, reason: 'changed_after', code: a.code, name: now.name };
     }
   }
-  for (const b of load.before) {
-    const now = records.get(b.code);
+  const failed = (code: string, name: string, result: RollbackStepFailure) =>
+    ({ ok: false, reason: 'restore_failed', code, name, result }) as const;
+  for (const a of load.addedValues) {
+    // Удалённое после загрузки добавленное значение убирать уже не нужно.
+    const now = records.get(a.code);
     if (!now) continue;
-    let version = now.version;
+    let off = now.usage.total > 0 || ADMIN_DICT_META[dict].undeletable === true;
+    if (!off) {
+      const deleted = await adminDictDelete(tx, dict, a.code, now.version);
+      // Ссылку успели сохранить между проверкой и удалением — тогда только отключить.
+      if (!deleted.ok && deleted.reason === 'used') off = true;
+      else if (!deleted.ok) return failed(a.code, now.name, deleted);
+    }
+    if (off && now.active) {
+      const active = await adminDictSetActive(tx, dict, a.code, false, now.version);
+      if (!active.ok) return failed(a.code, now.name, active);
+    }
+  }
+  for (const b of load.before) {
+    const now = records.get(b.code)!;
     const saved = await adminDictUpdate(
       tx,
       dict,
       b.code,
       { name: b.name, data: b.data as never },
-      version,
+      now.version,
     );
-    if (!saved.ok)
-      return { ok: false, reason: 'restore_failed', code: b.code, name: b.name, result: saved };
-    version = saved.record.version;
+    if (!saved.ok) return failed(b.code, b.name, saved);
     if (saved.record.active !== b.active) {
-      const active = await adminDictSetActive(tx, dict, b.code, b.active, version);
-      if (!active.ok) {
-        return { ok: false, reason: 'restore_failed', code: b.code, name: b.name, result: active };
-      }
-    }
-  }
-  for (const a of load.addedValues) {
-    const now = records.get(a.code);
-    if (!now) continue;
-    if (now.usage.total > 0) {
-      if (now.active) await adminDictSetActive(tx, dict, a.code, false, now.version);
-      continue;
-    }
-    const deleted = await adminDictDelete(tx, dict, a.code, now.version);
-    // Ссылку успели сохранить между проверкой и удалением — тогда только отключить.
-    if (!deleted.ok && deleted.reason === 'used' && now.active) {
-      await adminDictSetActive(tx, dict, a.code, false, now.version);
+      const active = await adminDictSetActive(tx, dict, b.code, b.active, saved.record.version);
+      if (!active.ok) return failed(b.code, b.name, active);
     }
   }
   await tx

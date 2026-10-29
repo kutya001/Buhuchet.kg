@@ -61,6 +61,11 @@ describe.skipIf(!databaseAvailable())(
     });
 
     const asAdmin = <T>(fn: (tx: Tx) => Promise<T>) => withUserContext(db.app.db, adminId, fn);
+    const stateOf = (x: { name: string; active: boolean; data: Record<string, unknown> }) => ({
+      name: x.name,
+      active: x.active,
+      data: x.data,
+    });
     const asOwner = <T>(fn: (tx: Tx) => Promise<T>) =>
       withOrgContext(db.app.db, { orgId: org.orgId, userId: org.ownerUserId }, fn);
 
@@ -93,6 +98,25 @@ describe.skipIf(!databaseAvailable())(
       ).rejects.toEqual(permissionDenied);
       await expect(
         asAdmin((tx) => tx.delete(dictLoads).where(eq(dictLoads.id, id))),
+      ).rejects.toEqual(permissionDenied);
+      // Подставить другого автора или время загрузки политика не даёт.
+      const row = {
+        dict: 'cats',
+        rows: 1,
+        added: 0,
+        changed: 0,
+        disabled: 0,
+        errors: 0,
+        before: [],
+        addedValues: [],
+      };
+      await expect(
+        asAdmin((tx) => tx.insert(dictLoads).values({ ...row, createdBy: org.ownerUserId })),
+      ).rejects.toEqual(permissionDenied);
+      await expect(
+        asAdmin((tx) =>
+          tx.insert(dictLoads).values({ ...row, createdAt: new Date('2026-01-01T00:00:00Z') }),
+        ),
       ).rejects.toEqual(permissionDenied);
       // Подставить другого «кто откатил» политика не даёт.
       await expect(
@@ -153,9 +177,12 @@ describe.skipIf(!databaseAvailable())(
               active: true,
               data: { note: cat!.note },
               version: saved.record.version,
+              after: stateOf(saved.record),
             },
           ],
-          added: [{ code: 'КАТ-777', version: created.record.version }],
+          added: [
+            { code: 'КАТ-777', version: created.record.version, after: stateOf(created.record) },
+          ],
         });
       });
       const older = await asAdmin((tx) =>

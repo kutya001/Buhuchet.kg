@@ -64,7 +64,8 @@ type IoField =
   /** Число; пустая ячейка — оставить как было (`keep`) или «нет» (`null`). */
   | { type: 'int'; min: number; max: number; empty: 'keep' | 'null' }
   | { type: 'yesno' }
-  | { type: 'enum'; values: readonly string[]; label: (v: string) => UiTextKey }
+  /** Одно из значений; пустая ячейка — `empty` (как в прототипе: «Срок считается» — от конца периода). */
+  | { type: 'enum'; values: readonly string[]; label: (v: string) => UiTextKey; empty?: string }
   /** Несколько значений через «;» (размер бизнеса). */
   | { type: 'enums'; values: readonly string[]; label: (v: string) => UiTextKey }
   | { type: 'ref'; ref: IoRefDict }
@@ -86,23 +87,34 @@ export interface IoColumn {
   required?: boolean;
   /** Ячейка пишется только у таких значений (у годового вида — «Месяц следующего года», а не «Месяцев после»). */
   shown?: (x: IoValue) => boolean;
+  /** Ячейка до разбора: код страны — заглавными, телефонный код — без «+» (прототип DX.phones). */
+  normalize?: (text: string) => string;
 }
 
 const yearly = (x: IoValue) => x.data.period === 'Y';
 const notYearly = (x: IoValue) => x.data.period !== 'Y';
 
-const enumOf = (values: readonly string[], label: (v: string) => string): IoField => ({
+/** Перечисление; без `empty` пустая ячейка — ошибка строки (столбец помечается `required`). */
+const enumOf = (
+  values: readonly string[],
+  label: (v: string) => string,
+  empty?: string,
+): IoField => ({
   type: 'enum',
   values,
   label: label as (v: string) => UiTextKey,
+  ...(empty === undefined ? {} : { empty }),
 });
 
 const col = (
   key: string,
   title: string,
   field: IoField = { type: 'text' },
-  extra: Pick<IoColumn, 'required' | 'shown'> = {},
+  extra: Pick<IoColumn, 'required' | 'shown' | 'normalize'> = {},
 ): IoColumn => ({ key, title: title as UiTextKey, field, ...extra });
+
+const upper = (text: string) => text.trim().toUpperCase();
+const noPlus = (text: string) => text.trim().replace(/^\+/, '');
 
 const CODE = col('code', 'pdicts.io.col.code');
 const NAME = col('name', 'pdicts.io.col.name', { type: 'text' }, { required: true });
@@ -137,6 +149,7 @@ export const IO_COLUMNS: Readonly<Record<AdminValueDict, readonly IoColumn[]>> =
       'period',
       'pdicts.io.col.period',
       enumOf(REPORT_PERIODS, (v) => `report.period.${v.toLowerCase()}`),
+      { required: true },
     ),
     col('dueDay', 'pdicts.io.col.due_day', day('keep')),
     col('dueAfter', 'pdicts.io.col.due_after', after('keep'), { shown: notYearly }),
@@ -145,18 +158,20 @@ export const IO_COLUMNS: Readonly<Record<AdminValueDict, readonly IoColumn[]>> =
       'kind',
       'pdicts.io.col.kind',
       enumOf(REPORT_KINDS, (v) => `report.kind.${v}`),
+      { required: true },
     ),
     col('rates', 'pdicts.io.col.rates', { type: 'list' }),
     col(
       'act',
       'pdicts.io.col.act',
       enumOf(REPORT_ACTS, (v) => `report.act.${v}`),
+      { required: true },
     ),
     col('payments', 'pdicts.io.col.payments', { type: 'payments' }),
     col(
       'dueFrom',
       'pdicts.io.col.due_from',
-      enumOf(DUE_FROM, (v) => `pdicts.type.from.${v}`),
+      enumOf(DUE_FROM, (v) => `pdicts.type.from.${v}`, 'end'),
     ),
     col('payDay', 'pdicts.io.col.pay_day', day('null')),
     col('payAfter', 'pdicts.io.col.pay_after', after('null'), { shown: notYearly }),
@@ -167,13 +182,13 @@ export const IO_COLUMNS: Readonly<Record<AdminValueDict, readonly IoColumn[]>> =
     col(
       'payer',
       'pdicts.io.col.payer',
-      enumOf(PAYER_KINDS, (v) => `pdicts.type.payer.${v}`),
+      enumOf(PAYER_KINDS, (v) => `pdicts.type.payer.${v}`, 'all'),
     ),
     col('shiftToWorkday', 'pdicts.io.col.shift', { type: 'yesno' }),
     col(
       'pickGroup',
       'pdicts.io.col.group',
-      enumOf(PICK_GROUPS, (v) => `pdicts.type.group.${v}`),
+      enumOf(PICK_GROUPS, (v) => `pdicts.type.group.${v}`, 'optional'),
     ),
     col('bases', 'pdicts.io.col.bases', { type: 'refs', ref: 'bases' }),
     col('bizSizes', 'pdicts.io.col.biz', {
@@ -212,6 +227,7 @@ export const IO_COLUMNS: Readonly<Record<AdminValueDict, readonly IoColumn[]>> =
       'kind',
       'pdicts.io.col.kind',
       enumOf(REGIME_KINDS, (v) => `dicts.value.regime_kind.${v}`),
+      { required: true },
     ),
     col('frees', 'pdicts.io.col.frees'),
     col('who', 'pdicts.io.col.who'),
@@ -232,7 +248,7 @@ export const IO_COLUMNS: Readonly<Record<AdminValueDict, readonly IoColumn[]>> =
     col(
       'payer',
       'pdicts.io.col.who',
-      enumOf(PAYER_KINDS, (v) => `pdicts.benefit.payer.${v}`),
+      enumOf(PAYER_KINDS, (v) => `pdicts.benefit.payer.${v}`, 'all'),
     ),
     col('conditions', 'pdicts.io.col.conditions'),
     col('confirmation', 'pdicts.io.col.confirmation'),
@@ -243,7 +259,7 @@ export const IO_COLUMNS: Readonly<Record<AdminValueDict, readonly IoColumn[]>> =
     col(
       'kind',
       'pdicts.io.col.kind',
-      enumOf(BENEFIT_KINDS, (v) => `pdicts.io.benefit_kind.${v}`),
+      enumOf(BENEFIT_KINDS, (v) => `pdicts.io.benefit_kind.${v}`, 'benefit'),
     ),
     col('dueRules', 'pdicts.io.col.due_rules', { type: 'dueRules' }),
     col('offices', 'pdicts.io.col.offices', { type: 'refs', ref: 'ugns' }),
@@ -257,15 +273,20 @@ export const IO_COLUMNS: Readonly<Record<AdminValueDict, readonly IoColumn[]>> =
     col(
       'declarationFor',
       'pdicts.io.col.end',
-      enumOf(DECLARATION_FOR, (v) => `dicts.platform.end.${v}`),
+      enumOf(DECLARATION_FOR, (v) => `dicts.platform.end.${v}`, 'org'),
     ),
     col('note', 'pdicts.io.col.forms_note'),
     ACTIVE,
   ],
   phones: [
-    col('code', 'pdicts.io.col.country_code'),
+    col('code', 'pdicts.io.col.country_code', { type: 'text' }, { normalize: upper }),
     col('name', 'pdicts.io.col.country', { type: 'text' }, { required: true }),
-    col('dialCode', 'pdicts.io.col.dial_code', { type: 'text' }, { required: true }),
+    col(
+      'dialCode',
+      'pdicts.io.col.dial_code',
+      { type: 'text' },
+      { required: true, normalize: noPlus },
+    ),
     col('mask', 'pdicts.io.col.mask', { type: 'text' }, { required: true }),
     col('flag', 'pdicts.io.col.flag'),
     ACTIVE,
@@ -295,6 +316,7 @@ export const IO_COLUMNS: Readonly<Record<AdminValueDict, readonly IoColumn[]>> =
       'kind',
       'pdicts.io.col.kind',
       enumOf(BANK_KINDS, (v) => `pdicts.bank.kind.${v}`),
+      { required: true },
     ),
     col('byPhone', 'pdicts.io.col.by_phone', { type: 'yesno' }),
     col('note', 'pdicts.io.col.note'),
@@ -306,9 +328,11 @@ export const IO_COLUMNS: Readonly<Record<AdminValueDict, readonly IoColumn[]>> =
 
 /**
  * Код нового значения в файле: латиница, цифры, «-» и «_» у видов отчётов, оснований и УГНС (ключи
- * вроде `nds`, `employees`), у остальных — ещё и кириллица (`РЕЖ-12`, `ФС-25`); до 40 знаков.
+ * вроде `nds`, `employees`), у остальных — ещё и кириллица (`РЕЖ-12`, `ФС-25`); до 40 знаков. Код
+ * страны — две латинские буквы (KG, KZ…), как в прототипе; строчные приводятся к заглавным.
  */
 export function ioCodeValid(dict: AdminValueDict, code: string): boolean {
+  if (dict === 'phones') return /^[A-Z]{2}$/.test(code);
   if ('key' in ADMIN_DICT_META[dict].code) return /^[a-z0-9][a-z0-9_-]{0,39}$/i.test(code);
   return /^[\p{L}\d][\p{L}\d_-]{0,39}$/u.test(code);
 }
@@ -461,17 +485,71 @@ export function parseIoText(text: string): string[][] {
   return rows.filter((r) => r.some((x) => x.trim()));
 }
 
-/** Сравнение подписей без учёта регистра, «ё» и лишних пробелов. */
-const same = (a: string, b: string) =>
-  searchText(a.trim().replace(/\s+/g, ' ')) === searchText(b.trim().replace(/\s+/g, ' '));
+/** Подпись для сравнения: без учёта регистра, «ё» и лишних пробелов. */
+const labelKey = (text: string) => searchText(text.trim().replace(/\s+/g, ' '));
 
-/** Код по подписи: название, код или другое написание (`alt`). */
+/** Сравнение подписей без учёта регистра, «ё» и лишних пробелов. */
+const same = (a: string, b: string) => labelKey(a) === labelKey(b);
+
+/** Подпись, которая есть у нескольких значений: по ней ссылку не выбрать. */
+const AMBIGUOUS = '';
+
+/**
+ * Поиск ссылки: код как есть, затем подписи, затем другие написания (`alt`). Подпись или написание,
+ * которые есть у нескольких значений, ведут к `AMBIGUOUS`.
+ */
+interface RefIndex {
+  codes: ReadonlySet<string>;
+  labels: ReadonlyMap<string, string>;
+  alts: ReadonlyMap<string, string>;
+}
+
+/**
+ * Указатели строятся один раз на справочник ссылок: в файле до 5 000 строк, в ячейке — сотни ссылок
+ * через «;», и перебор подписей на каждую ссылку занял бы сервер надолго.
+ */
+const refIndexes = new WeakMap<readonly IoRef[], RefIndex>();
+
+function refIndex(list: readonly IoRef[]): RefIndex {
+  const known = refIndexes.get(list);
+  if (known) return known;
+  const labels = new Map<string, string>();
+  const alts = new Map<string, string>();
+  const put = (map: Map<string, string>, text: string, code: string) => {
+    const key = labelKey(text);
+    if (!key) return;
+    const known = map.get(key);
+    map.set(key, known === undefined || known === code ? code : AMBIGUOUS);
+  };
+  for (const x of list) {
+    put(labels, x.label, x.code);
+    for (const alt of x.alt ?? []) put(alts, alt, x.code);
+  }
+  const index = { codes: new Set(list.map((x) => x.code)), labels, alts };
+  refIndexes.set(list, index);
+  return index;
+}
+
+/** Код по подписи: код, название или другое написание (`alt`); подпись нескольких значений — `AMBIGUOUS`. */
+function refLookup(ctx: IoContext, ref: IoRefDict, text: string): string | null {
+  const index = refIndex(ctx.refs[ref]);
+  const code = text.trim();
+  if (index.codes.has(code)) return code;
+  const key = labelKey(text);
+  return index.labels.get(key) ?? index.alts.get(key) ?? null;
+}
+
+/** Код по подписи; не найдено или подпись нескольких значений — null. */
 function refCode(ctx: IoContext, ref: IoRefDict, text: string): string | null {
-  const list = ctx.refs[ref];
-  const hit =
-    list.find((x) => x.code === text.trim()) ??
-    list.find((x) => same(x.label, text) || (x.alt ?? []).some((a) => same(a, text)));
-  return hit?.code ?? null;
+  return refLookup(ctx, ref, text) || null;
+}
+
+/** Ошибка ссылки: такой подписи нет — «… нет в справочнике», она у нескольких значений — «укажите код». */
+function refError(ctx: IoContext, ref: IoRefDict, text: string): Parsed {
+  const value = text.trim();
+  return refLookup(ctx, ref, text) === AMBIGUOUS
+    ? bad(ctx, 'pdicts.io.err.ref_ambiguous', { value })
+    : bad(ctx, `pdicts.io.err.ref.${ref}`, { value });
 }
 
 const split = (text: string, by = ';') =>
@@ -516,7 +594,7 @@ function parseRefs(ctx: IoContext, ref: IoRefDict, text: string): Parsed {
   const out: string[] = [];
   for (const part of split(text)) {
     const code = refCode(ctx, ref, part);
-    if (!code) return bad(ctx, `pdicts.io.err.ref.${ref}`, { value: part });
+    if (!code) return refError(ctx, ref, part);
     if (!out.includes(code)) out.push(code);
   }
   return { value: out };
@@ -560,7 +638,7 @@ function parseDueRules(ctx: IoContext, text: string): Parsed {
     const m = /^([^:]+):\s*(.+)$/.exec(part);
     if (!m) return fail;
     const type = refCode(ctx, 'types', m[1]!);
-    if (!type) return bad(ctx, 'pdicts.io.err.ref.types', { value: m[1]!.trim() });
+    if (!type) return refError(ctx, 'types', m[1]!);
     const rule: BenefitDueOverride = {
       reportType: type,
       dueDay: null,
@@ -602,7 +680,7 @@ function parseDueRules(ctx: IoContext, text: string): Parsed {
  * так в прототипе (`v[f] != null`). Пустой текст и пустой список очищают поле.
  */
 export function parseIoCell(column: IoColumn, text: string, ctx: IoContext): Parsed {
-  const s = text.trim();
+  const s = (column.normalize ? column.normalize(text) : text).trim();
   const f = column.field;
   if (!s && column.required) return bad(ctx, 'pdicts.io.err.empty');
   switch (f.type) {
@@ -633,13 +711,13 @@ export function parseIoCell(column: IoColumn, text: string, ctx: IoContext): Par
         }
         return { value: f.values.filter((v) => out.includes(v)) };
       }
-      if (!s) return { value: undefined };
+      if (!s) return { value: f.empty };
       const v = pick(s);
       return v ? { value: v } : bad(ctx, 'pdicts.io.err.enum', list);
     }
     case 'ref': {
       const code = refCode(ctx, f.ref, s);
-      return code ? { value: code } : bad(ctx, `pdicts.io.err.ref.${f.ref}`, { value: s });
+      return code ? { value: code } : refError(ctx, f.ref, s);
     }
     case 'refs':
       return parseRefs(ctx, f.ref, s);
@@ -703,7 +781,8 @@ export function parseIoRows(
         errors.push(ctx.t('pdicts.io.err.cell', { col: ctx.t(c.title), text: parsed.error }));
       else if (parsed.value !== undefined) values[c.key] = parsed.value;
     });
-    const code = (cells[at[0]!] ?? '').trim();
+    const raw = cells[at[0]!] ?? '';
+    const code = (all[0]!.normalize ? all[0]!.normalize(raw) : raw).trim();
     if (!code) errors.unshift(ctx.t('pdicts.io.err.no_code'));
     else if (seen.has(code)) errors.unshift(ctx.t('pdicts.io.err.code_twice'));
     seen.add(code);

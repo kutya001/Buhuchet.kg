@@ -113,6 +113,14 @@ export const PLATFORM_DICTS_IO_TEXTS = {
   'pdicts.io.err.ref.bases': { ru: 'основания «{value}» нет в справочнике', section: E },
   'pdicts.io.err.ref.types': { ru: 'вида «{value}» нет в каталоге', section: E },
   'pdicts.io.err.ref.ugns': { ru: 'УГНС «{value}» нет в справочнике', section: E },
+  'pdicts.io.err.ref_ambiguous': {
+    ru: '«{value}» — у нескольких значений: укажите код',
+    section: E,
+  },
+  'pdicts.io.err.code_country': {
+    ru: 'код страны — две латинские буквы (KG, KZ…)',
+    section: E,
+  },
   'pdicts.io.err.no_code': { ru: 'нет кода', section: E },
   'pdicts.io.err.code_twice': { ru: 'код повторяется в файле', section: E },
   'pdicts.io.err.code_key': {
@@ -144,7 +152,7 @@ export const PLATFORM_DICTS_IO_TEXTS = {
     section: E,
   },
   'err.import_no_code': {
-    ru: 'Нет столбца «Код»: без кода строки не сопоставить',
+    ru: 'Нет столбца «{col}»: без кода строки не сопоставить',
     section: E,
   },
   'err.import_changed': {

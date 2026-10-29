@@ -268,7 +268,7 @@ describe('Выгрузка и загрузка справочников: раз�
     ]);
   });
 
-  it('пустые ячейки: число срока и «да/нет» — как было, свой срок оплаты — «как срок сдачи», текст и список — пусто', () => {
+  it('пустые ячейки: число срока и «да/нет» — как было, свой срок оплаты — «как срок сдачи», текст и список — пусто; перечисления — как в прототипе', () => {
     const cell = (key: string, text: string) =>
       parseIoCell(
         IO_COLUMNS.types.find((c) => c.key === key)!,
@@ -278,7 +278,24 @@ describe('Выгрузка и загрузка справочников: раз�
     expect(cell('dueDay', '')).toEqual({ value: undefined });
     expect(cell('payDay', '')).toEqual({ value: null });
     expect(cell('preselect', '')).toEqual({ value: undefined });
-    expect(cell('kind', '')).toEqual({ value: undefined });
+    // Периодичность, «Тип» и «Что нужно сделать» обязательны; «Срок считается», «Для кого» и «Группа
+    // подбора» пустые — по умолчанию (прототип DX.types).
+    for (const key of ['period', 'kind', 'act']) {
+      expect(cell(key, ''), key).toEqual({ error: 'не заполнено' });
+    }
+    expect(cell('dueFrom', '')).toEqual({ value: 'end' });
+    expect(cell('payer', '')).toEqual({ value: 'all' });
+    expect(cell('pickGroup', '')).toEqual({ value: 'optional' });
+    const other = (dict: 'benefits' | 'forms' | 'regimes' | 'banks', key: string) =>
+      parseIoCell(
+        IO_COLUMNS[dict].find((c) => c.key === key)!,
+        '',
+        ctx,
+      );
+    expect(other('benefits', 'kind')).toEqual({ value: 'benefit' });
+    expect(other('forms', 'declarationFor')).toEqual({ value: 'org' });
+    expect(other('regimes', 'kind')).toEqual({ error: 'не заполнено' });
+    expect(other('banks', 'kind')).toEqual({ error: 'не заполнено' });
     expect(cell('formCode', '  ')).toEqual({ value: '' });
     expect(cell('regimes', '')).toEqual({ value: [] });
     expect(cell('paySchedule', '')).toEqual({ value: null });
@@ -312,6 +329,45 @@ describe('Выгрузка и загрузка справочников: раз�
     expect(benefit('removes', 'Налог на добавленную стоимость')).toEqual({ value: ['nds'] });
     expect(benefit('offices', '002')).toEqual({ value: ['ugns-lenin'] });
     expect(benefit('kind', 'статус')).toEqual({ value: 'status' });
+  });
+
+  it('подпись у нескольких значений — «укажите код»; код и другие подписи находятся', () => {
+    const twice: IoContext = {
+      t,
+      refs: {
+        ...ctx.refs,
+        // Повторяющееся краткое название выгружается кодом и остаётся другим написанием.
+        types: [
+          { code: 'tr-1', label: 'tr-1', alt: ['1-Т', 'Труд (месячная)'] },
+          { code: 'tr-2', label: 'tr-2', alt: ['1-Т', 'Труд (годовая)'] },
+          { code: 'nds', label: 'НДС' },
+        ],
+      },
+    };
+    const adds = IO_COLUMNS.benefits.find((c) => c.key === 'adds')!;
+    expect(parseIoCell(adds, '1-т', twice)).toEqual({
+      error: '«1-т» — у нескольких значений: укажите код',
+    });
+    expect(parseIoCell(adds, 'tr-2; Труд (месячная); ндс', twice)).toEqual({
+      value: ['tr-2', 'tr-1', 'nds'],
+    });
+    expect(parseIoCell(adds, 'Труд', twice)).toEqual({ error: 'вида «Труд» нет в каталоге' });
+  });
+
+  it('коды стран — заглавными, телефонный код — без «+»; код новой страны — две латинские буквы', () => {
+    const parsed = parseIoRows(
+      'phones',
+      [
+        ['Код страны', 'Страна', 'Телефонный код', 'Маска номера'],
+        [' kg ', 'Кыргызстан', '+996', 'XXX XXX XXX'],
+      ],
+      ctx,
+    );
+    expect(parsed).toMatchObject({
+      rows: [{ code: 'KG', values: { name: 'Кыргызстан', dialCode: '996' }, errors: [] }],
+    });
+    expect(ioCodeValid('phones', 'ZZ')).toBe(true);
+    expect(ioCodeValid('phones', 'X-01')).toBe(false);
   });
 
   it('«Что уплачивается»: «Платёж / Орган / КБК»; без органа — пусто; получатель не из органов — текстом', () => {

@@ -106,6 +106,7 @@ describe.skipIf(!databaseAvailable())(
       }
       const rollback = `${LOADS}/00000000-0000-4000-8000-000000000000/rollback`;
       expect((await apiRequest(f.app, 'POST', rollback, owner)).status).toBe(403);
+      expect((await apiRequest(f.app, 'POST', rollback, '')).status).toBe(401);
     });
 
     it('выгрузка — все значения и все поля; загрузка её без правок — без изменений', async () => {
@@ -326,20 +327,18 @@ describe.skipIf(!databaseAvailable())(
     it('вид отчёта: режимный без режимов и неизвестный орган — ошибки строки; новый вид — с кодом из файла', async () => {
       const data = await file('types');
       const head = data.header;
-      const row = (cells: Record<string, string>) => head.map((h) => cells[h] ?? '');
+      // Периодичность, «Тип» и «Что нужно сделать» обязательны (прототип DX.types).
+      const base = { Периодичность: 'Месяц', Тип: 'Сквозной', 'Что нужно сделать': 'Сдача' };
+      const row = (cells: Record<string, string>) =>
+        head.map((h) => ({ ...base, ...cells })[h] ?? '');
       const text = edited(
         data,
         [['nds', 'Применимые режимы', '']],
         [
-          row({
-            Код: 'eco-new',
-            Название: 'Новый сбор',
-            Кратко: 'Сбор',
-            Орган: 'ГНС',
-            'Что нужно сделать': 'Сдача',
-          }),
+          row({ Код: 'eco-new', Название: 'Новый сбор', Кратко: 'Сбор', Орган: 'ГНС' }),
           row({ Код: 'bad-organ', Название: 'Без органа', Кратко: 'Б', Орган: 'Минфин' }),
           row({ Код: 'Вид-1', Название: 'Кириллица', Кратко: 'К', Орган: 'ГНС' }),
+          row({ Код: 'no-period', Название: 'Без', Кратко: 'Н', Орган: 'ГНС', Периодичность: '' }),
         ],
       );
       const p = await preview('types', text);
@@ -348,6 +347,7 @@ describe.skipIf(!databaseAvailable())(
         ['nds', ['Применимые режимы: Выберите хотя бы один режим']],
         ['bad-organ', ['Орган: органа «Минфин» нет в справочнике']],
         ['Вид-1', ['код нового значения — латиница, цифры, «-» и «_», до 40 знаков']],
+        ['no-period', ['Периодичность: не заполнено']],
       ]);
     });
 
@@ -410,6 +410,185 @@ describe.skipIf(!databaseAvailable())(
       });
       const now = await file('banks');
       expect(now.rows[0]![now.header.indexOf('Пояснение')]).toBe('Правка руками');
+    });
+
+    const rollback = (id: string) => apiRequest(f.app, 'POST', `${LOADS}/${id}/rollback`, admin);
+    const valuePath = (dict: string, code: string) =>
+      `/api/admin/platform-dicts/${dict}/${encodeURIComponent(code)}`;
+    const valueOf = async (dict: string, code: string) =>
+      AdminDictValue.parse(await (await get(valuePath(dict, code))).json());
+
+    it('переименование в файле меняет значение на месте; две загрузки подряд откатываются по очереди', async () => {
+      const data = await file('reasons');
+      const [code, name] = data.rows[0]!;
+      const first = await apply('reasons', edited(data, [[code!, 'Название', `${name} (1)`]]));
+      expect(first.preview).toMatchObject({ add: [], change: [{ code, name: `${name} (1)` }] });
+      expect((await file('reasons')).rows).toHaveLength(data.rows.length);
+      const mid = await file('reasons');
+      const second = await apply('reasons', edited(mid, [[code!, 'Название', `${name} (2)`]]));
+      expect((await rollback(second.load.id)).status).toBe(200);
+      // Откат второй вернул значение к виду после первой — первую тоже можно откатить.
+      expect((await rollback(first.load.id)).status).toBe(200);
+      expect((await file('reasons')).rows).toEqual(data.rows);
+    });
+
+    it('откат: прежнее название, отданное новому значению, снова свободно; добавленный код страны отключается', async () => {
+      const cats = await file('cats');
+      const [code, name] = cats.rows[1]!;
+      const row = (values: Record<string, string>) => cats.header.map((h) => values[h] ?? '');
+      const { load } = await apply(
+        'cats',
+        edited(
+          cats,
+          [[code!, 'Название', `${name} (стар.)`]],
+          [row({ Код: 'КАТ-901', Название: name! })],
+        ),
+      );
+      expect(load).toMatchObject({ added: 1, changed: 1 });
+      expect((await rollback(load.id)).status).toBe(200);
+      expect((await file('cats')).rows).toEqual(cats.rows);
+
+      // Код страны — заглавными, «+» в телефонном коде снимается: выгрузка с такими правками — без изменений.
+      const phones = await file('phones');
+      const kg = phones.rows.findIndex((r) => r[0] === 'KG');
+      const rows = phones.rows.map((r, i) =>
+        i === kg ? r.map((v, j) => (j === 0 ? 'kg' : j === 2 ? `+${v}` : v)) : r,
+      );
+      const add = phones.header.map(
+        (h) =>
+          ({
+            'Код страны': 'zz',
+            Страна: 'Зедландия',
+            'Телефонный код': '+999',
+            'Маска номера': 'XXX XXX',
+            Активно: 'Да',
+          })[h] ?? '',
+      );
+      const bad = phones.header.map(
+        (h) =>
+          ({
+            'Код страны': 'ZZZ',
+            Страна: 'Плохая',
+            'Телефонный код': '998',
+            'Маска номера': 'XX',
+          })[h] ?? '',
+      );
+      const text = ioTsv([phones.header, ...rows, add, bad]);
+      const p = await preview('phones', text);
+      expect(p.change).toEqual([]);
+      expect(p.add.map((x) => x.code)).toEqual(['ZZ']);
+      expect(p.errors.map((x) => [x.code, x.errors])).toEqual([
+        ['ZZZ', ['код страны — две латинские буквы (KG, KZ…)']],
+      ]);
+      const applied = await apply('phones', ioTsv([phones.header, ...rows, add]));
+      expect((await valueOf('phones', 'ZZ')).data).toMatchObject({ dialCode: '999' });
+      // Код страны не удаляется — откат его отключает.
+      expect((await rollback(applied.load.id)).status).toBe(200);
+      expect(await valueOf('phones', 'ZZ')).toMatchObject({ active: false });
+    });
+
+    it('откат, который не может вернуть значение, ничего не меняет; удалённое после загрузки значение — отказ', async () => {
+      const data = await file('banks');
+      const [a, , ...restA] = data.rows[1]!;
+      const [b, nameB] = data.rows[2]!;
+      void restA;
+      const { load } = await apply(
+        'banks',
+        edited(data, [
+          [a!, 'Пояснение', 'Из файла А'],
+          [b!, 'Название', `${nameB} (стар.)`],
+        ]),
+      );
+      // Прежнее название B заняли после загрузки — вернуть B нельзя, и А тоже остаётся как после загрузки.
+      const created = await apiRequest(f.app, 'POST', '/api/admin/platform-dicts/banks', admin, {
+        name: nameB,
+        kind: 'bank',
+        byPhone: false,
+        note: '',
+      });
+      expect(created.status, await created.clone().text()).toBe(201);
+      const taken = AdminDictValue.parse(await created.json());
+      const refused = await rollback(load.id);
+      expect(refused.status).toBe(409);
+      expect(await errorOf(refused)).toMatchObject({
+        code: 'load_restore_failed',
+        details: { name: nameB },
+      });
+      expect((await valueOf('banks', a!)).data).toMatchObject({ note: 'Из файла А' });
+      const list = AdminDictLoadList.parse(await (await get(`${LOADS}?sort=at.desc`)).json());
+      expect(list.items[0]).toMatchObject({ id: load.id, last: true, rolledBackAt: null });
+      const removed = await apiRequest(
+        f.app,
+        'DELETE',
+        `${valuePath('banks', taken.code)}?version=${taken.version}`,
+        admin,
+      );
+      expect(removed.status).toBe(204);
+      expect((await rollback(load.id)).status).toBe(200);
+      expect((await file('banks')).rows).toEqual(data.rows);
+
+      // Значение из загрузки удалили после неё — откат отказывает.
+      const cat = await apiRequest(f.app, 'POST', '/api/admin/platform-dicts/cats', admin, {
+        name: 'Временная категория',
+        note: '',
+      });
+      expect(cat.status).toBe(201);
+      const temp = AdminDictValue.parse(await cat.json());
+      const cats = await file('cats');
+      const loaded = await apply('cats', edited(cats, [[temp.code, 'Пояснение', 'Из файла']]));
+      const now = await valueOf('cats', temp.code);
+      expect(
+        (
+          await apiRequest(
+            f.app,
+            'DELETE',
+            `${valuePath('cats', temp.code)}?version=${now.version}`,
+            admin,
+          )
+        ).status,
+      ).toBe(204);
+      const gone = await rollback(loaded.load.id);
+      expect(gone.status).toBe(409);
+      expect(await errorOf(gone)).toMatchObject({
+        code: 'load_changed_after',
+        details: { name: 'Временная категория' },
+      });
+    });
+
+    it('ошибки файла: нет столбца кода — с его названием, вставка больше 5 000 строк, ссылка на повторяющееся краткое название', async () => {
+      const ugns = await upload(
+        `${IO}/ugns/preview`,
+        ioTsv([
+          ['Код', 'Полное название'],
+          ['001', 'УГНС'],
+        ]),
+      );
+      expect(ugns.status).toBe(400);
+      expect(await errorOf(ugns)).toMatchObject({
+        code: 'import_no_code',
+        message: 'Нет столбца «Ключ»: без кода строки не сопоставить',
+        details: { col: 'Ключ' },
+      });
+      const many = ioTsv([
+        ['Код', 'Название'],
+        ...Array.from({ length: 5_001 }, (_, i) => [`К-${i}`, 'Х']),
+      ]);
+      const big = await upload(`${IO}/cats/preview`, many);
+      expect(big.status).toBe(400);
+      expect((await errorOf(big)).code).toBe('import_too_big');
+
+      const types = await file('types');
+      const shorts = types.rows.map((r) => r[types.header.indexOf('Кратко')]!);
+      const twice = shorts.find((x, i) => shorts.indexOf(x) !== i)!;
+      expect(twice).toBeTruthy();
+      const benefits = await file('benefits');
+      const p = await preview(
+        'benefits',
+        edited(benefits, [[benefits.rows[0]![0]!, 'Добавляет', twice]]),
+      );
+      expect(p.errors.map((x) => x.errors)).toEqual([
+        [`Добавляет: «${twice}» — у нескольких значений: укажите код`],
+      ]);
     });
   },
 );

@@ -202,7 +202,11 @@ async function tableOf(c: Context<AppEnv>): Promise<string[][]> {
   const bytes = Buffer.from(await c.req.arrayBuffer());
   if (!bytes.length) importFail('import_empty');
   if (c.req.header('content-type')?.toLowerCase().startsWith('text/plain')) {
-    return parseIoText(new TextDecoder('utf-8').decode(bytes));
+    const table = parseIoText(new TextDecoder('utf-8').decode(bytes));
+    // Вставке — те же пределы строк и столбцов, что файлу.
+    const { rows = 0, columns = 0 } = IMPORT_SHEET_LIMITS;
+    if (table.length > rows || table.some((r) => r.length > columns)) importFail('import_too_big');
+    return table;
   }
   let rows: SheetCell[][];
   try {
@@ -219,13 +223,18 @@ const IMPORT_MESSAGES = {
   import_unreadable: 'Не удалось прочитать файл: нужен файл .xlsx или CSV в формате выгрузки',
   import_too_big: 'В файле слишком много строк или столбцов для справочника',
   import_no_rows: 'Нужна строка заголовков и хотя бы одна строка данных',
-  import_no_code: 'Нет столбца «Код»: без кода строки не сопоставить',
+  import_no_code: 'Нет столбца «{col}»: без кода строки не сопоставить',
   import_changed: 'Справочник или файл изменились после сравнения — сравните заново',
   import_nothing: 'Нечего применять: нет строк, которые добавят, изменят или отключат значение',
 } as const;
 
-function importFail(code: keyof typeof IMPORT_MESSAGES, status: 400 | 409 = 400): never {
-  return apiFail(status, code, IMPORT_MESSAGES[code]);
+function importFail(
+  code: keyof typeof IMPORT_MESSAGES,
+  status: 400 | 409 = 400,
+  params?: Record<string, string>,
+): never {
+  const message = params ? formatText(IMPORT_MESSAGES[code], params) : IMPORT_MESSAGES[code];
+  return apiFail(status, code, message, params);
 }
 
 const fileBody = {
@@ -299,6 +308,12 @@ const stampOf = (dict: AdminValueDict, records: readonly IoRecord[], table: stri
     .update(JSON.stringify([dict, records.map((x) => [x.code, x.version]), table]))
     .digest('hex');
 
+/** Почему код новой строки не подходит: у кодов стран — две латинские буквы, у ключей — латиница. */
+function newCodeError(dict: AdminValueDict): UiTextKey {
+  if (dict === 'phones') return 'pdicts.io.err.code_country';
+  return 'key' in ADMIN_DICT_META[dict].code ? 'pdicts.io.err.code_key' : 'pdicts.io.err.code';
+}
+
 /**
  * Сравнение и запись строк (прототип importDictDlg: `compare` и «ОК, применить»): каждая строка без
  * ошибок разбора проверяется как окно правки и записывается в своей точке сохранения — отказ базы
@@ -313,7 +328,10 @@ async function runImport(
 ): Promise<ImportOutcome> {
   const ctx: IoContext = { t, refs: await ioRefs(tx) };
   const parsed = parseIoRows(dict, table, ctx);
-  if ('fatal' in parsed) importFail(`import_${parsed.fatal}`);
+  // Нет столбца кода — с его названием: у УГНС это «Ключ», у кодов стран — «Код страны» (прототип).
+  if ('fatal' in parsed) {
+    importFail(`import_${parsed.fatal}`, 400, { col: t(IO_COLUMNS[dict][0]!.title) });
+  }
   const records = await ioRecords(tx, dict);
   const byCode = new Map(records.map((x) => [x.code, x]));
   const preview: AdminDictImportPreview = {
@@ -337,9 +355,7 @@ async function runImport(
     }
     const base = byCode.get(row.code);
     if (!base && !ioCodeValid(dict, row.code)) {
-      fail([
-        t('key' in ADMIN_DICT_META[dict].code ? 'pdicts.io.err.code_key' : 'pdicts.io.err.code'),
-      ]);
+      fail([t(newCodeError(dict))]);
       continue;
     }
     const after = ioMerge(base ?? ioNewValue(dict, row.code), row.values);
@@ -355,12 +371,12 @@ async function runImport(
     }
     const input = checked.input;
     try {
-      const version = await tx.transaction(async (sp) => {
+      const record = await tx.transaction(async (sp) => {
         const saved = base
           ? await adminDictUpdate(sp, dict, row.code, input, base.version)
           : await adminDictCreate(sp, dict, input, random, row.code);
         if (!saved.ok) throw new RowFail(saved);
-        if (saved.record.active === after.active) return saved.record.version;
+        if (saved.record.active === after.active) return saved.record;
         const active = await adminDictSetActive(
           sp,
           dict,
@@ -369,12 +385,15 @@ async function runImport(
           saved.record.version,
         );
         if (!active.ok) throw new RowFail(active);
-        return active.record.version;
+        return active.record;
       });
       const name = after.name;
+      // Вид сразу после загрузки: по нему откат узнаёт значение, которое вернул откат следующей загрузки.
+      const loaded = { name: record.name, active: record.active, data: record.data };
+      const version = record.version;
       if (!base) {
         preview.add.push({ line: row.line, code: row.code, name });
-        added.push({ code: row.code, version });
+        added.push({ code: row.code, version, after: loaded });
         continue;
       }
       const shown = changes.map(({ title, from, to }) => ({ title, from, to }));
@@ -391,6 +410,7 @@ async function runImport(
         active: base.active,
         data: { ...base.data },
         version,
+        after: loaded,
       });
     } catch (err) {
       if (err instanceof RowFail) {

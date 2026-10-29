@@ -646,16 +646,26 @@ export const taskCategories = pgTable(
 export interface DictLoadAdded {
   code: string;
   version: number;
+  /** Значение сразу после загрузки. */
+  after: DictLoadState;
 }
 
-/** Значение до загрузки из Excel: название, «Активно» и поля — и его версия после загрузки. */
-export interface DictLoadBefore {
-  code: string;
+/** Название, «Активно» и поля значения. */
+export interface DictLoadState {
   name: string;
   active: boolean;
   data: Record<string, unknown>;
-  /** Версия после загрузки: изменённое позже значение откат не трогает. */
+}
+
+/**
+ * Значение до загрузки из Excel: название, «Активно» и поля — и его версия и вид сразу после загрузки.
+ * Изменённое позже значение откат не трогает: другая версия и другой вид. Тот же вид при другой
+ * версии — значение вернул откат следующей загрузки.
+ */
+export interface DictLoadBefore extends DictLoadState {
+  code: string;
   version: number;
+  after: DictLoadState;
 }
 
 /**
