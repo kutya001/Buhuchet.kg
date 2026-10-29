@@ -146,9 +146,11 @@ test.describe('Этап 2: приветствие и опросник', () => {
     await next(page);
     await next(page);
     await expect(w.getByRole('button', { name: 'Осмотреться самому' })).toBeVisible();
+    // «Начать обучение» открывает «Уроки» и сразу запускает «Показать как» первого невыполненного
+    // шага (задача 2.31): показ сам переходит на экран шага, поэтому «Уроки» видны недолго.
     await w.getByRole('button', { name: 'Начать обучение' }).click();
-    await expect(page).toHaveURL(/\/app\/kb\/lessons/);
     await expect(w).toHaveCount(0);
+    await expect(page.locator('[data-tour-count]')).toHaveText(/^1 из \d+$/);
   });
 
   test('(п. 50) «Отметить основные», группа «Статистика» и «Подключить и начать обучение» — виды подключены с напоминаниями за 7 и 3 дня, шаг «Подключить виды отчётов» засчитан; «Пропустить» ничего не подключает', async ({
@@ -182,8 +184,9 @@ test.describe('Этап 2: приветствие и опросник', () => {
     expect(picked).toBeGreaterThan(4);
     await learn.click();
 
-    await expect(page).toHaveURL(/\/app\/kb\/lessons/);
     await expect(page.getByText(`Подключено видов отчётов: ${picked}`)).toBeVisible();
+    // Обучение начинается показом первого невыполненного шага (задача 2.31).
+    await expect(page.locator('[data-tour-count]')).toHaveText(/^1 из \d+$/);
     const types = await connected(page.request);
     expect(types).toHaveLength(picked);
     expect(types.map((x) => x.code)).toEqual(expect.arrayContaining(['endo', 'soc']));
