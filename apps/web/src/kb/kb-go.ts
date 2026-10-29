@@ -28,6 +28,8 @@ export const KB_GO: Readonly<Record<string, KbTarget>> = {
   policy: { module: 'org', tab: 'policy', flash: 'main section' },
   remind: { module: 'org', tab: 'policy', flash: '[data-remind-days]' },
   settings: { module: 'org', tab: 'settings', flash: 'main [type=submit]' },
+  // «Хранилище файлов» (задача 2.29).
+  storage: { module: 'org', tab: 'settings', flash: '[data-org-storage]' },
   tg: { module: null, flash: '[data-profile-telegram]', open: 'profile' },
   types: { module: 'dicts', tab: 'types', flash: LIST },
   typecfg: { module: 'dicts', tab: 'types', flash: LIST },
@@ -51,6 +53,9 @@ export const KB_GO: Readonly<Record<string, KbTarget>> = {
   kval: { module: 'kpi', tab: 'month', flash: '[data-kpi-table], [data-kpi-tile]' },
   kper: { module: 'kpi', tab: 'period', flash: LIST },
   kchk: { module: 'kpi', tab: 'period', flash: LIST },
+  // «Файловый менеджер» (2.29): «Загрузить файл» сразу открывает окно загрузки.
+  upload: { module: 'files', flash: LIST, open: { add: 'upload' } },
+  ffind: { module: 'files', flash: LIST },
   search: { module: null, flash: '[role=search]', phoneFlash: '[data-search-open]' },
   // Пока нет «Контрагентов» — на списке «Видов отчётов»: он виден всем.
   cols: { module: 'dicts', tab: 'types', flash: '[data-grid-columns-button]' },

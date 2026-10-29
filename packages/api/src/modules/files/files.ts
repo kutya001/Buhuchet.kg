@@ -57,7 +57,7 @@ import { FILE_SOURCES, type FileSource, type FileSourceRecord } from './sources'
  * его в хранилище по подписанной ссылке, API проверяет размер и делает файл видимым.
  */
 
-const error = { 'application/json': { schema: ApiError } };
+export const error = { 'application/json': { schema: ApiError } };
 
 const notFound = (): never => apiFail(404, 'not_found', 'Файл не найден');
 
@@ -67,7 +67,7 @@ const FILES_SECTION = 'files';
 type FileSources = Readonly<Record<string, FileSource>>;
 
 /** Источник файлов по виду: только свои ключи реестра (`constructor`, `__proto__` — не источники). */
-function sourceOf(deps: ApiDeps, kind: string): FileSource | undefined {
+export function sourceOf(deps: ApiDeps, kind: string): FileSource | undefined {
   const sources: FileSources = deps.fileSources ?? FILE_SOURCES;
   return Object.hasOwn(sources, kind) ? sources[kind] : undefined;
 }
@@ -79,18 +79,18 @@ const UPLOAD_RATE_LIMIT: RateLimit = {
   windowSeconds: 3600,
 };
 
-function subjectOf(c: Context<AppEnv>): AccessSubject {
+export function subjectOf(c: Context<AppEnv>): AccessSubject {
   return c.get('access')!.subject;
 }
 
 /** Функция «Файлы в карточках» выключена — 403 `files_off`. */
-async function requireFilesFeature(tx: Tx, orgId: string): Promise<void> {
+export async function requireFilesFeature(tx: Tx, orgId: string): Promise<void> {
   const { features } = await orgMenuSettings(tx, orgId);
   if (!features.files) apiFail(403, 'files_off', FILE_MESSAGES.files_off);
 }
 
 /** Видит ли сотрудник файлы записи: право просмотра и область группы «Файловый менеджер». */
-function canView(subject: AccessSubject, record: FileSourceRecord): boolean {
+export function canView(subject: AccessSubject, record: FileSourceRecord): boolean {
   if (!hasPermission(subject, 'filesView')) return false;
   return !record.contractor || canSeeContractor(subject, 'files', record.contractor);
 }
@@ -99,7 +99,7 @@ function canUpload(subject: AccessSubject, record: FileSourceRecord): boolean {
   return canView(subject, record) && record.editable && hasPermission(subject, 'filesUpload');
 }
 
-function deleteRefusal(
+export function deleteRefusal(
   subject: AccessSubject,
   record: FileSourceRecord,
   file: FileRecord,
@@ -123,9 +123,10 @@ async function visibleSource(
   subject: AccessSubject,
   kind: string,
   id: string | null,
+  own?: { contractorId: string | null },
 ): Promise<FileSourceRecord> {
   const source = sourceOf(deps, kind);
-  const record = source ? await source.resolve(tx, subject, id) : null;
+  const record = source ? await source.resolve(tx, subject, id, own) : null;
   if (!record || !canView(subject, record)) return notFound();
   return record;
 }
@@ -154,7 +155,7 @@ function itemBody(
  * «Сейчас» для правила «свой файл — в течение суток»: время загрузки ставит база по настоящим часам,
  * поэтому и сравнение — с настоящими часами, а не с часами демо-стенда (FIXED_NOW).
  */
-const realNow = () => new Date();
+export const realNow = () => new Date();
 
 /** Удалить файл из хранилища, не роняя метод: запись в базе уже верная, лишний файл не опасен. */
 async function dropObject(deps: ApiDeps, key: string): Promise<void> {
@@ -240,7 +241,7 @@ export const startUploadRoute = createRoute({
  */
 export function startUploadHandler(deps: ApiDeps): RouteHandler<typeof startUploadRoute, AppEnv> {
   return async (c) => {
-    const { source, name: rawName, size } = c.req.valid('json');
+    const { source, name: rawName, size, contractorId = null, note } = c.req.valid('json');
     const problem = fileUploadProblem({ name: rawName, size });
     if (problem) apiFail(400, problem, FILE_MESSAGES[problem]);
     const name = rawName.trim();
@@ -254,7 +255,9 @@ export function startUploadHandler(deps: ApiDeps): RouteHandler<typeof startUplo
     if (!slot.ok) apiFail(429, 'file_upload_limit', FILE_MESSAGES.file_upload_limit);
     await withOrgContext(deps.db, ctx, async (tx) => {
       await requireFilesFeature(tx, ctx.orgId);
-      const record = await visibleSource(deps, tx, subject, source.kind, source.id);
+      const record = await visibleSource(deps, tx, subject, source.kind, source.id, {
+        contractorId,
+      });
       if (!canUpload(subject, record)) apiFail(403, 'forbidden', 'Нет права на это действие');
       await insertPendingFile(tx, {
         id,
@@ -265,6 +268,7 @@ export function startUploadHandler(deps: ApiDeps): RouteHandler<typeof startUplo
         contentType,
         sizeBytes: size,
         storageKey,
+        note: note || null,
       });
     });
     // Срок — по настоящим часам: подпись хранилища ставит их же, а не часы демо-стенда (FIXED_NOW).
@@ -347,7 +351,7 @@ export function completeUploadHandler(
       const file = await getFile(tx, id, { lock: true });
       if (!file || file.state !== 'pending') return notFound();
       await requireFilesFeature(tx, ctx.orgId);
-      const record = await visibleSource(deps, tx, subject, file.sourceKind, file.sourceId);
+      const record = await visibleSource(deps, tx, subject, file.sourceKind, file.sourceId, file);
       if (!canUpload(subject, record)) apiFail(403, 'forbidden', 'Нет права на это действие');
       await markFileReady(tx, id);
       await writeHistory(tx, {
@@ -363,7 +367,7 @@ export function completeUploadHandler(
 }
 
 /** Файл, который сотрудник видит: загружен, не удалён, запись-источник видна. */
-async function visibleFile(
+export async function visibleFile(
   deps: ApiDeps,
   c: Context<AppEnv>,
   id: string,
@@ -373,22 +377,37 @@ async function visibleFile(
     const file = await getFile(tx, id);
     if (!file || file.state !== 'ready') return notFound();
     await requireFilesFeature(tx, ctx.orgId);
-    const record = await visibleSource(deps, tx, subjectOf(c), file.sourceKind, file.sourceId);
+    const record = await visibleSource(
+      deps,
+      tx,
+      subjectOf(c),
+      file.sourceKind,
+      file.sourceId,
+      file,
+    );
     return { file, record };
   });
 }
 
-/** Ссылка на скачивание на 15 минут: файл отдаётся вложением с его именем. */
-async function downloadLink(deps: ApiDeps, file: FileRecord): Promise<FileLink> {
+/**
+ * Ссылка на файл на 15 минут: файл отдаётся вложением с его именем; `inline` — для просмотра в окне
+ * (только картинки и PDF: хранилище отдаёт их с проверенным типом, а не тем, что лежит у файла).
+ */
+export async function downloadLink(
+  deps: ApiDeps,
+  file: FileRecord,
+  inline?: { contentType: string },
+): Promise<FileLink> {
   const expiresAt = new Date(Date.now() + FILE_LINK_SECONDS * 1000);
   const url = await deps.storage.signedDownloadUrl(file.storageKey, {
     expiresInSeconds: FILE_LINK_SECONDS,
     fileName: file.name,
+    ...(inline ? { inline } : {}),
   });
   return { url, expiresAt: expiresAt.toISOString() };
 }
 
-const fileReadResponses = {
+export const fileReadResponses = {
   401: { description: 'Нет входа', content: error },
   403: {
     description: 'Нет права «Просматривать файлы» или «Файлы в карточках» выключены',
@@ -477,7 +496,7 @@ export function deleteFileHandler(deps: ApiDeps): RouteHandler<typeof deleteFile
       const file = await getFile(tx, id);
       if (!file || file.state !== 'ready') return notFound();
       await requireFilesFeature(tx, ctx.orgId);
-      const record = await visibleSource(deps, tx, subject, file.sourceKind, file.sourceId);
+      const record = await visibleSource(deps, tx, subject, file.sourceKind, file.sourceId, file);
       const refusal = deleteRefusal(subject, record, file, ctx.userId!, now);
       if (refusal === 'forbidden') apiFail(403, 'forbidden', 'Нет права на это действие');
       if (refusal) apiFail(403, refusal, FILE_MESSAGES[refusal]);

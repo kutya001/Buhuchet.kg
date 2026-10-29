@@ -10,6 +10,7 @@ import {
   S3ServiceException,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { filePreviewKind } from '@buhuchet/domain';
 import type { StorageConfig } from './config';
 
 /**
@@ -24,12 +25,14 @@ export interface Storage {
   delete(key: string): Promise<void>;
   exists(key: string): Promise<boolean>;
   /**
-   * Временная ссылка на скачивание (только после проверки права). Файл всегда отдаётся вложением,
-   * а не открывается в браузере: загруженный HTML или SVG не выполнится на домене хранилища.
+   * Временная ссылка на скачивание (только после проверки права). Файл отдаётся вложением, а не
+   * открывается в браузере: загруженный HTML или SVG не выполнится на домене хранилища. `inline` —
+   * просмотр в окне (Файловый менеджер): только картинки и PDF (`filePreviewKind`), и тип ответа
+   * — этот, а не тот, что лежит у файла.
    */
   signedDownloadUrl(
     key: string,
-    options: { expiresInSeconds: number; fileName?: string },
+    options: { expiresInSeconds: number; fileName?: string; inline?: { contentType: string } },
   ): Promise<string>;
   /**
    * Временная ссылка на загрузку одного файла запросом `PUT` из браузера, мимо API (тело запроса к API
@@ -76,15 +79,25 @@ export function platformFileKey(section: string, fileId: string): string {
 }
 
 /** Content-Disposition для скачивания с русским именем файла (RFC 6266 / RFC 5987). */
-export function attachmentDisposition(fileName?: string): string {
-  if (!fileName) return 'attachment';
+export function attachmentDisposition(
+  fileName?: string,
+  type: 'attachment' | 'inline' = 'attachment',
+): string {
+  if (!fileName) return type;
   const ascii = fileName.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
   // encodeURIComponent не кодирует ' ( ) *, а в filename* RFC 5987 они недопустимы.
   const encoded = encodeURIComponent(fileName).replace(
     /['()*]/g,
     (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`,
   );
-  return `attachment; filename="${ascii}"; filename*=UTF-8''${encoded}`;
+  return `${type}; filename="${ascii}"; filename*=UTF-8''${encoded}`;
+}
+
+/** Открыть в браузере можно только картинки без кода (не SVG) и PDF (`filePreviewKind`). */
+function checkInline(inline: { contentType: string } | undefined): void {
+  if (inline && !filePreviewKind(inline.contentType)) {
+    throw new RangeError(`Тип ${inline.contentType} не открывается в браузере`);
+  }
 }
 
 /** Ссылки короткие: 15 минут хватает, чтобы скачать файл. */
@@ -201,12 +214,17 @@ export function createS3Storage(config: StorageConfig): Storage {
         throw error;
       }
     },
-    async signedDownloadUrl(key, { expiresInSeconds, fileName }) {
+    async signedDownloadUrl(key, { expiresInSeconds, fileName, inline }) {
       checkExpiry(expiresInSeconds);
+      checkInline(inline);
       const command = new GetObjectCommand({
         Bucket,
         Key: key,
-        ResponseContentDisposition: attachmentDisposition(fileName),
+        ResponseContentDisposition: attachmentDisposition(
+          fileName,
+          inline ? 'inline' : 'attachment',
+        ),
+        ...(inline ? { ResponseContentType: inline.contentType } : {}),
       });
       return getSignedUrl(signer, command, { expiresIn: expiresInSeconds });
     },
@@ -284,10 +302,12 @@ export function createMemoryStorage(): MemoryStorage {
     async exists(key) {
       return files.has(key);
     },
-    async signedDownloadUrl(key, { expiresInSeconds, fileName }) {
+    async signedDownloadUrl(key, { expiresInSeconds, fileName, inline }) {
       checkExpiry(expiresInSeconds);
+      checkInline(inline);
       const params = new URLSearchParams({ expires: String(expiresInSeconds) });
       if (fileName) params.set('name', fileName);
+      if (inline) params.set('inline', inline.contentType);
       return `memory://${key}?${params.toString()}`;
     },
     async signedUploadUrl(key, { expiresInSeconds, contentType, size }) {
