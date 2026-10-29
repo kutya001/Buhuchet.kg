@@ -251,8 +251,9 @@ async function insertOrganization(
 }
 
 /**
- * Номера всех организаций для задач по расписанию (функция app.org_ids, SECURITY DEFINER):
- * задача обходит их по одной, каждую — в своей транзакции withOrgContext.
+ * Номера всех организаций (функция app.org_ids, SECURITY DEFINER) для задач по расписанию и сводок
+ * администратора платформы («Назначен» у видов отчётов): их обходят по одной, каждую — в своей
+ * транзакции withOrgContext.
  */
 export async function orgIds(db: Db): Promise<string[]> {
   const rows = await db.execute<{ id: string }>(sql`select id from app.org_ids() as id`);
