@@ -4,8 +4,17 @@ import {
   fileUploadProblem,
   type FileProblem,
 } from '@buhuchet/domain';
-import { FileItem, FileList, FileUploadTicket, type FileSource } from '@buhuchet/shared';
-import { queryOptions } from '@tanstack/react-query';
+import {
+  FileFormContractors,
+  FileItem,
+  FileList,
+  FileManagerSummary,
+  FileUploadTicket,
+  FileUsage,
+  type FileSource,
+} from '@buhuchet/shared';
+import { queryOptions, useQueryClient } from '@tanstack/react-query';
+import { useCallback } from 'react';
 import { api, apiFailure, callApi } from '../api-client';
 import type { ApiErrorLike, Translate } from '../l10n/translate';
 
@@ -31,8 +40,7 @@ export function filesQuery(source: FileSource) {
 /** «PDF · 1,2 МБ» (прототип: `fext(f) · fmtSize(size)`); без расширения — «ФАЙЛ». */
 export function fileMeta(t: Translate, name: string, size: number): string {
   const ext = fileExtension(name)?.toUpperCase() ?? t('files.no_ext');
-  const { value, unit } = fileSizeParts(size);
-  return t('files.meta', { ext, size: t(`files.size.${unit}`, { n: value }) });
+  return t('files.meta', { ext, size: fileSizeText(t, size) });
 }
 
 /**
@@ -52,6 +60,55 @@ export function pickedFilesProblem(
   return null;
 }
 
+/** Плашки Файлового менеджера и можно ли загружать вручную. */
+export const managerSummaryQuery = queryOptions({
+  queryKey: ['files', 'manager', 'summary'],
+  queryFn: async () => {
+    const res = await api.api.files.manager.summary.$get();
+    if (!res.ok) throw await apiFailure(res);
+    return FileManagerSummary.parse(await res.json());
+  },
+});
+
+/** Контрагенты окна «Загрузить файл». */
+export const formContractorsQuery = queryOptions({
+  queryKey: ['files', 'manager', 'contractors'],
+  queryFn: async () => {
+    const res = await api.api.files.manager.contractors.$get();
+    if (!res.ok) throw await apiFailure(res);
+    return FileFormContractors.parse(await res.json()).items;
+  },
+});
+
+/** «Хранилище файлов» в «Моя организация» → «Настройки». */
+export const fileUsageQuery = queryOptions({
+  queryKey: ['files', 'usage'],
+  queryFn: async () => {
+    const res = await api.api.files.usage.$get();
+    if (!res.ok) throw await apiFailure(res);
+    return FileUsage.parse(await res.json());
+  },
+});
+
+/** После загрузки и удаления: список, плашки, занятый объём и блоки «Файлы» записей. */
+export function useFilesRefresh() {
+  const client = useQueryClient();
+  return useCallback(
+    () =>
+      Promise.all([
+        client.invalidateQueries({ queryKey: ['files'] }),
+        client.invalidateQueries({ queryKey: ['list', 'files.list'] }),
+      ]),
+    [client],
+  );
+}
+
+/** «1,2 МБ», «37 КБ» (прототип `fmtSize`). */
+export function fileSizeText(t: Translate, size: number): string {
+  const { value, unit } = fileSizeParts(size);
+  return t(`files.size.${unit}`, { n: value });
+}
+
 /**
  * Загрузить один файл к записи: API начинает загрузку и подписывает ссылку, браузер кладёт файл в
  * хранилище (`PUT`), API проверяет размер и показывает файл в записи.
@@ -59,9 +116,12 @@ export function pickedFilesProblem(
 export async function uploadFile(
   source: FileSource,
   file: File,
+  manual?: { contractorId: string | null; note: string },
 ): Promise<{ ok: true; item: FileItem } | { ok: false; error: ApiErrorLike }> {
   const started = await callApi(() =>
-    api.api.files.uploads.$post({ json: { source, name: file.name, size: file.size } }),
+    api.api.files.uploads.$post({
+      json: { source, name: file.name, size: file.size, ...manual },
+    }),
   );
   if (!started.ok) return started;
   const ticket = FileUploadTicket.parse(started.data);

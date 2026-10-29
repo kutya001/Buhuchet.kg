@@ -114,6 +114,7 @@ export function kbStepVisible(
   const rule = Object.hasOwn(rules, step.id) ? rules[step.id] : undefined;
   if (!rule || step.active === false) return false;
   if (step.perm && !access.can(step.perm as PermissionId)) return false;
+  if (rule.permission && !access.can(rule.permission)) return false;
   if (step.featk && !isFeature(step.featk, access)) return false;
   return rule.module === null || access.modules.has(rule.module);
 }

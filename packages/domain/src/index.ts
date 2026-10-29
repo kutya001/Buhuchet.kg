@@ -45,6 +45,7 @@ export * from './kpi/targets';
 export * from './kpi/views';
 export * from './kpi/excel';
 export * from './files/files';
+export * from './files/manager';
 export * from './kb/catalog';
 export * from './kb/ready';
 export * from './kb/program';
