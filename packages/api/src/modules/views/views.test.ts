@@ -79,7 +79,7 @@ describe.skipIf(!databaseAvailable())('Настройки вида списко�
   });
 
   it('неизвестный список — 404; неверные настройки — 400; без входа — 401', async () => {
-    const unknown = await call('PUT', '/api/view-settings/reports.week', owner, {});
+    const unknown = await call('PUT', '/api/view-settings/reports.nope', owner, {});
     expect(unknown.status).toBe(404);
     expect(ApiError.parse(await unknown.json()).error.code).toBe('not_found');
     expect((await call('DELETE', '/api/view-settings/x.y', owner)).status).toBe(404);

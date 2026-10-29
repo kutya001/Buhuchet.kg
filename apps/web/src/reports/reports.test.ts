@@ -93,9 +93,9 @@ describe('отметка подтверждения сдачи', () => {
     expect(reportMark(report({ status: 'in_progress' }), true)).toBeNull();
     expect(reportMark(report({ act: 'pay', status: 'submitted' }), true)).toBeNull();
     expect(reportMark(report({ status: 'submitted' }), true)).toBe('waiting');
-    expect(reportMark(report({ status: 'submitted', confirmedAt: new Date() }), true)).toBe(
-      'confirmed',
-    );
+    expect(
+      reportMark(report({ status: 'submitted', confirmedAt: '2026-10-20T05:00:00.000Z' }), true),
+    ).toBe('confirmed');
   });
 
   it('«Ждёт подтверждения · N дн.» и «Подтвердил …»', () => {
@@ -107,7 +107,7 @@ describe('отметка подтверждения сдачи', () => {
         t,
         report({
           status: 'submitted',
-          confirmedAt: new Date(),
+          confirmedAt: '2026-10-20T05:00:00.000Z',
           confirmedBy: { id: '00000000-0000-4000-8000-00000000000a', shortName: 'Мээрим К.' },
         }),
         true,

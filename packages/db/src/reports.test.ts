@@ -587,8 +587,8 @@ describe.skipIf(!databaseAvailable())('Отчёты: назначения и о�
     ]);
     // Шаг «Базы знаний» «Создать уточнённый отчёт» засчитывается тому, кто его создал (задача 2.13).
     const ver = [{ id: 'ver', rule: KB_STEP_RULES.ver!.done! }];
-    expect([...(await inA((tx) => kbDoneFacts(tx, ctxA().userId, ver))).keys()]).toEqual(['ver']);
-    expect((await inB((tx) => kbDoneFacts(tx, ctxA().userId, ver))).size).toBe(0);
+    expect([...(await inA((tx) => kbDoneFacts(tx, a.ownerUserId, ver))).keys()]).toEqual(['ver']);
+    expect((await inB((tx) => kbDoneFacts(tx, a.ownerUserId, ver))).size).toBe(0);
     await expect(
       inA((tx) =>
         createRevision(tx, july!.id, {
