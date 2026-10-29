@@ -1,3 +1,6 @@
+import type { UiTextKey } from '@buhuchet/domain';
+import type { Translate } from '../../l10n/translate';
+
 /*
  * Что подсвечивает облачко «Показать как» на экране продукта (ТЗ: «какой элемент подсвечивает облачко
  * и что открыть перед показом, задаёт разработчик»; docs/decisions.md п. Г-5). Сценарии в refDB.json
@@ -103,4 +106,84 @@ export function productRoot(proto: string | undefined): TourRoot | null | undefi
   if (proto === '.pop') return 'popover';
   if (proto === '#mbody') return 'main';
   return null;
+}
+
+/**
+ * Куда подняться от найденного текста (`up` сценария): пункт меню прототипа `.mi` — пункт меню продукта,
+ * строка «название — значение» карточки `.kv > div` — строка `KeyValues`. Неизвестное — null (облачко
+ * пропускается).
+ */
+const UP_TARGETS: Readonly<Record<string, string>> = {
+  '.mi': '[role=menuitem]',
+  '.kv > div': 'dl > div',
+};
+
+export function productUp(proto: string): string | null {
+  return UP_TARGETS[proto] ?? null;
+}
+
+/**
+ * Пояснения полей `kbUi.fields` записаны по кодам полей прототипа (`ne-fio`, `og-name`): здесь — какая
+ * форма продукта какой форме прототипа соответствует. Форма на странице — по экрану, окно формы — по
+ * ключу словаря его заголовка (название записи в кавычках не сравнивается). Задача экрана с формой
+ * добавляет свою строку; у формы без строки пояснение берётся, только если поле с таким названием в
+ * справочнике одно.
+ */
+const KB_FIELD_SCREENS: Readonly<Record<string, string>> = {
+  'org.main': 'og',
+  'org.settings': 'st',
+};
+
+const KB_FIELD_WINDOWS: Readonly<Partial<Record<UiTextKey, string>>> = {
+  // Моя организация
+  'money.org.dialog.new': 'oa',
+  // Задачи
+  'task.form.new': 'tk',
+  'task.form.edit': 'tk',
+  // Показатели контрагентов
+  'kpi.indicator.new': 'ki',
+  'kpi.indicator.title': 'ki',
+  // Сотрудники и роли
+  'staff.new.title': 'ne',
+  'roles.new.title': 'nr',
+  // Мой профиль
+  'profile.title': 'pf',
+};
+
+/** Заголовок окна формы без названия записи в кавычках: «Показатель «Выручка»» → «Показатель «…»». */
+export function formTitle(title: string): string {
+  return title.replace(/«[^»]*»/gu, '«…»');
+}
+
+/** Форма прототипа для полей: экран формы на странице или заголовок окна. */
+export function fieldForm(
+  where: { screen: string | null } | { title: string },
+  t: Translate,
+): string | undefined {
+  if ('screen' in where) {
+    return where.screen && Object.hasOwn(KB_FIELD_SCREENS, where.screen)
+      ? KB_FIELD_SCREENS[where.screen]
+      : undefined;
+  }
+  const title = formTitle(where.title);
+  for (const [key, prefix] of Object.entries(KB_FIELD_WINDOWS)) {
+    if (formTitle(t(key as UiTextKey)) === title) return prefix;
+  }
+  return undefined;
+}
+
+type FieldTexts = Readonly<Record<string, { n?: string | undefined; x?: string | undefined }>>;
+
+/** Пояснение поля по названию: своя запись по названию, иначе по коду поля формы прототипа. */
+export function fieldText(
+  fields: FieldTexts | undefined,
+  label: string,
+  prefix: string | undefined,
+): string | undefined {
+  if (!fields) return undefined;
+  const own = Object.hasOwn(fields, label) ? fields[label]?.x : undefined;
+  if (own) return own;
+  const same = Object.entries(fields).filter(([, v]) => v.n === label && v.x);
+  if (prefix) return same.find(([k]) => k.startsWith(`${prefix}-`))?.[1].x;
+  return same.length === 1 ? same[0]![1].x : undefined;
 }

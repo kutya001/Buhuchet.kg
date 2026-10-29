@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
-import { newOrgOwner } from './helpers';
+import { newOrgOwner, uniqueLogin } from './helpers';
 
 // «Показать как», «Обзор экрана» и знакомые элементы (задача 2.31). Шаги засчитываются один раз, а
 // знакомые элементы копятся у пользователя, поэтому каждый тест — со своей новой организацией и её
@@ -42,14 +42,19 @@ async function forward(page: Page) {
   await expect(page.locator('[data-tour-count]')).not.toHaveText(`${i} из ${n}`);
 }
 
-/** Листать «Далее» до облачка с одной из кнопок `stop`: заголовки пройденных облачков и кнопка. */
+/**
+ * Листать «Далее» до облачка с одной из кнопок `stop`: заголовки и пояснения пройденных облачков и
+ * кнопка.
+ */
 async function toEnd(page: Page, stop: string[] = ['Готово']) {
   const titles: string[] = [];
+  const texts: string[] = [];
   for (let k = 0; k < 120; k++) {
     await position(page);
     titles.push(((await titleOf(page).textContent()) ?? '').trim());
+    texts.push(((await bubble(page).locator('p').first().textContent()) ?? '').trim());
     const label = ((await nextButton(page).textContent()) ?? '').trim();
-    if (stop.includes(label)) return { titles, label };
+    if (stop.includes(label)) return { titles, texts, label };
     await forward(page);
   }
   throw new Error(`Показ не дошёл до ${stop.join(' / ')}: ${titles.join(' · ')}`);
@@ -132,6 +137,7 @@ test.describe('Этап 2: База знаний — «Показать как»
     await expect(step.getByRole('button', { name: 'Показать ещё раз' })).toBeVisible();
   });
 
+  // ОТКЛОНЕНИЕ: docs/deviations.md#Г-7
   test('(проверка задачи #87; механизм п. 59 на «Ролях» и карточке сотрудника) после показа «Ролей» показ карточки сотрудника пропускает знакомые общие элементы: «Пропущено знакомых элементов: N» и «Показать всё»; повторный показ «Ролей» — «Всё на этом экране вам уже знакомо»; «Показывать всё заново» в «Мой уровень»', async ({
     page,
     baseURL,
@@ -248,7 +254,7 @@ test.describe('Этап 2: База знаний — «Показать как»
     await expect(page.getByText(/^Показ закончен раньше/)).toHaveCount(0);
   });
 
-  test('(проверка задачи #87) шаг «Сделать» — «Сделать сейчас»: открывается «Новый сотрудник», показ идёт по полям формы с «· обязательно»; «Понятно, заполню» оставляет форму открытой', async ({
+  test('(проверка задачи #87) шаг «Сделать» — «Сделать сейчас»: открывается «Новый сотрудник», показ идёт по полям формы с «· обязательно» и пояснением поля; «Понятно, заполню» оставляет форму открытой, сохранение засчитывает шаг', async ({
     page,
     baseURL,
   }) => {
@@ -260,11 +266,42 @@ test.describe('Этап 2: База знаний — «Показать как»
     const form = page.getByRole('dialog', { name: 'Новый сотрудник', exact: true });
     await expect(form).toBeVisible();
     const fields = await toEnd(page, ['Понятно, заполню']);
-    expect(fields.titles).toContain('ФИО · обязательно');
+    // Пояснение поля — из справочника показов по коду поля прототипа (ne-fio).
+    const fio = fields.titles.indexOf('ФИО · обязательно');
+    expect(fio).toBeGreaterThan(-1);
+    expect(fields.texts[fio]).toBe('Фамилия, имя, отчество сотрудника.');
     await nextButton(page).click();
     await expect(bubble(page)).toHaveCount(0);
     await expect(form).toBeVisible();
-    await expect(form.getByLabel('ФИО')).toBeEditable();
     expect(await stepDone(page.request, 'emps')).toBeNull();
+
+    // Форма заполнена и сохранена — шаг засчитан действием, окно «Готово: шаг … выполнен».
+    await form.getByLabel('ФИО').fill('Показов Сквозной Тестович');
+    await form.getByLabel('Логин').fill(uniqueLogin('e2e-show'));
+    await form.getByRole('button', { name: 'Создать' }).click();
+    await expect(form).toBeHidden();
+    await expect(
+      page.getByRole('dialog', { name: 'Готово: шаг «Добавить сотрудников» выполнен' }),
+    ).toBeVisible();
+    expect(await stepDone(page.request, 'emps')).toMatchObject({ how: 'action' });
+  });
+
+  test('(проверка задачи #87) «Сделать сейчас» у шага без формы: показ заканчивается, «Моя организация» открыта и нужное место подсвечено', async ({
+    page,
+    baseURL,
+  }) => {
+    await newOrgOwner(page.request, new URL(baseURL!).origin);
+    await showStep(page, 'profile');
+    const before = await toEnd(page, ['Сделать сейчас']);
+    expect(before.label).toBe('Сделать сейчас');
+    // Пояснение поля профиля — из справочника показов по коду поля прототипа (og-name).
+    const name = before.titles.indexOf('Название · обязательно');
+    expect(name).toBeGreaterThan(-1);
+    expect(before.texts[name]).toBe('Название вашей фирмы, как в документах.');
+    await nextButton(page).click();
+    await expect(bubble(page)).toHaveCount(0);
+    await expect(page).toHaveURL(/\/app\/org\/main/);
+    await expect(page.locator('main [data-ck-flash]')).toBeVisible();
+    expect(await stepDone(page.request, 'profile')).toBeNull();
   });
 });

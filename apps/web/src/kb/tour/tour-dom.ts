@@ -7,7 +7,15 @@ import {
 } from '@buhuchet/domain';
 import type { KbShowUi } from '@buhuchet/shared';
 import type { Translate } from '../../l10n/translate';
-import { productRoot, productTarget, type TourRoot } from './kb-show-targets';
+import {
+  fieldForm,
+  fieldText,
+  formTitle,
+  productRoot,
+  productTarget,
+  productUp,
+  type TourRoot,
+} from './kb-show-targets';
 
 /*
  * Показ по живому экрану (прототип ui/tour.js — tExpand, tExp*, tAct, tPrep, tBase): какие облачки
@@ -440,7 +448,11 @@ export class TourDom {
     const where = productRoot(p.in);
     if (where === null) return null;
     const root = where ?? 'doc';
-    if (p.txt) return { root, txt: p.txt, ...(p.up ? { up: p.up } : {}) };
+    if (p.txt) {
+      if (!p.up) return { root, txt: p.txt };
+      const up = productUp(p.up);
+      return up ? { root, txt: p.txt, up } : null;
+    }
     if (p.s === KB_SHOW_GO_TARGET) {
       const go = this.scene.sid ? this.env.goTarget(this.scene.sid) : null;
       return go ? { root, sel: go.sel, ...(go.phone ? { phone: go.phone } : {}) } : null;
@@ -695,7 +707,7 @@ export class TourDom {
     const kt = clean(w.querySelector('[data-window-head] h2')?.textContent);
     // Название записи в кавычках («Показатель «Выручка»») в ключ знакомого элемента не попадает: формы
     // разных записей — одно окно, а названия записей не хранятся у пользователя.
-    const c = { ctx: o.ctx, pre: o.pre, mt: form ? kt.replace(/«[^»]*»/gu, '«…»') : `card:${mod}` };
+    const c = { ctx: o.ctx, pre: o.pre, mt: form ? formTitle(kt) : `card:${mod}` };
     const at = (sel: string, n?: number): TourLoc => ({
       root: 'window',
       sel,
@@ -776,13 +788,20 @@ export class TourDom {
     if (!root) return [];
     const { t, ui } = this.env;
     const P: TourPoint[] = [];
+    // Форма полей: окно — по заголовку без названия записи, форма на странице — по экрану.
+    const form = fieldForm(
+      where === 'window'
+        ? { title: clean(topWindow()?.querySelector('[data-window-head] h2')?.textContent) }
+        : { screen: this.env.screen() },
+      t,
+    );
     visibleIn(root, '[data-field]', false).forEach((f, n) => {
       const label = f.querySelector(':scope > label');
       const l = clean(label?.childNodes[0]?.textContent);
       if (!l) return;
       const req = !!label?.querySelector('[aria-hidden="true"]');
       const hint = clean(f.querySelector(':scope > [data-hint]')?.textContent);
-      const own = ui.fields?.[l]?.x;
+      const own = fieldText(ui.fields, l, form);
       P.push({
         ...c,
         loc: { root: where, sel: '[data-field]', n },
@@ -805,7 +824,11 @@ export class TourDom {
         ...c,
         loc: { root: where, sel: '[data-check-row]', n },
         t: t('kb.show.p.switch', { name: l }),
-        x: ui.fields?.[l]?.x || tourDictText(this.switchTexts(), l) || hint || this.q('check'),
+        x:
+          fieldText(ui.fields, l, form) ||
+          tourDictText(this.switchTexts(), l) ||
+          hint ||
+          this.q('check'),
       });
     });
     return P;

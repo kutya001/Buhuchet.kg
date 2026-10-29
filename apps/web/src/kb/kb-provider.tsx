@@ -450,7 +450,8 @@ export function useKbRuntime(shell: KbShellInfo): { controls: KbControls; overla
     go,
     onLesson: (id, bar) => setLesson({ id, bar, off: false }),
     onStepShown: (result, id) => {
-      setLesson({ id, bar: true, off: false });
+      // Полоса урока — только при новой отметке, не при «Показать ещё раз» (прототип tourEnd → ckMark).
+      if (result.fresh.some((s) => s.id === id)) setLesson({ id, bar: true, off: false });
       applyRef.current(result, 'look');
     },
     onScreenShown: (result) => {

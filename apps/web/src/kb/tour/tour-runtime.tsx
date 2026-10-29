@@ -289,6 +289,15 @@ export function useTour(o: TourOptions): { controls: TourControls; overlay: Reac
       tour.busy = true;
       paint(tour);
       const sh = kbShowOf(content.shows, run.sid);
+      const go = KB_GO[run.sid];
+      // Шаг без формы (профиль организации, «Настройки»): показ заканчивается, а «Перейти» открывает
+      // экран и подсвечивает элемент уже без затемнения (прототип tourDoit → tourEnd, ckGo).
+      if (!sh?.doit && !go?.open && !go?.press) {
+        tour.busy = false;
+        end(tour, true, true);
+        opts.current.go(run.sid);
+        return;
+      }
       await dom.base(sh?.scr ?? run.scr);
       const before = dom.windows();
       const acts = sh?.doit ?? ['stepgo'];
@@ -334,7 +343,7 @@ export function useTour(o: TourOptions): { controls: TourControls; overlay: Reac
       }
       tour.busy = false;
       end(tour, true, true);
-      if (!acts.includes('stepgo')) opts.current.go(run.sid);
+      opts.current.go(run.sid);
     },
     [end, show, paint, screenKey],
   );
@@ -362,7 +371,8 @@ export function useTour(o: TourOptions): { controls: TourControls; overlay: Reac
       const content = await client.fetchQuery(kbShowsQuery).catch(() => null);
       const list = await client.fetchQuery({ ...kbKnownQuery, staleTime: 0 }).catch(() => null);
       if (!content) return;
-      if (list) known.current = new Set([...list.keys, ...pending.current]);
+      // Свежие знакомые могли ещё не записаться на сервере — они остаются.
+      if (list) known.current = new Set([...known.current, ...list.keys, ...pending.current]);
       const phone = () => window.matchMedia(PHONE_QUERY).matches;
       const env: TourEnv = {
         ui: content.ui,
