@@ -284,6 +284,16 @@ describe('UnifiedDataGrid: таблица (ТЗ «Списки записей»,
     expect(html).not.toContain('[&amp;&gt;td]:text-faint');
   });
 
+  it('цветная полоска слева (вид срока задачи): поверх полоски просрочки, фон просрочки остаётся', () => {
+    const html = grid({
+      rowTone: (p) => (p.active ? undefined : 'overdue'),
+      rowStripe: (p) => (p.active ? 'info' : 'violet'),
+    });
+    expect(html).toMatch(/data-id="p1"[^>]*var\(--bu-blue\)/);
+    expect(html).toMatch(/data-id="p2"[^>]*bg-danger-bg[^>]*var\(--bu-purple\)/);
+    expect(html).not.toMatch(/data-id="p2"[^>]*var\(--bu-red\)/);
+  });
+
   it('служебные столбцы «Создал», «Изменил», «Создано», «Изменено» список добавляет сам', () => {
     const own = COLUMNS.filter((c) => !c.audit);
     const html = grid({

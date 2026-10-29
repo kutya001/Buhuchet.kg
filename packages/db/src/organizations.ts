@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import {
+  bishkekDate,
+  DEFAULT_INDICATORS,
   defaultOrgPolicy,
   isValidLogin,
   isValidOrgInn,
@@ -7,9 +9,11 @@ import {
   ORG_PROFILE_MESSAGES,
   rolesForNewOrganization,
   SCOPE_GROUPS,
+  monthOf,
   shortName,
   SLUG_MESSAGES,
   slugProblem,
+  type IsoDate,
 } from '@buhuchet/domain';
 import { asc, eq, sql } from 'drizzle-orm';
 import type { Db, Tx } from './client';
@@ -18,6 +22,7 @@ import { uniqueViolation } from './errors';
 import { writeHistory } from './history';
 import {
   employees,
+  indicators,
   organizations,
   orgSettings,
   rolePermissions,
@@ -42,6 +47,8 @@ export interface CreateOrganizationInput {
   };
   /** Администратор платформы, который создаёт организацию. */
   createdBy?: string | null;
+  /** Сегодня по Бишкеку — «Вести с» показателей-примеров; без него — по часам сервера. */
+  today?: IsoDate;
 }
 
 export interface CreatedOrganization {
@@ -201,6 +208,29 @@ async function insertOrganization(
     createdBy,
     updatedBy: createdBy,
   });
+  // Два показателя-примера (ТЗ «Показатели контрагентов»): «Вести с» — месяц создания организации.
+  const start = monthOf(input.today ?? bishkekDate(new Date()));
+  const samples = await tx
+    .insert(indicators)
+    .values(
+      DEFAULT_INDICATORS.map((i, n) => ({
+        orgId,
+        name: i.name,
+        unit: i.unit,
+        type: i.type,
+        total: i.total,
+        description: i.description,
+        required: i.required,
+        dueDay: i.dueDay,
+        startMonth: start,
+        scope: i.scope,
+        autoNew: i.autoNew,
+        sortOrder: n + 1,
+        createdBy,
+        updatedBy: createdBy,
+      })),
+    )
+    .returning({ id: indicators.id, name: indicators.name });
   // Кто создал организацию и что появилось вместе с ней; учётная политика — запись с ключом org_id.
   await writeHistory(
     tx,
@@ -209,6 +239,12 @@ async function insertOrganization(
     { entity: 'user', entityId: user!.id, action: 'create' },
     { entity: 'employee', entityId: employee!.id, action: 'create' },
     { entity: 'org_settings', entityId: orgId, action: 'create' },
+    ...samples.map((i) => ({
+      entity: 'indicator' as const,
+      entityId: i.id,
+      action: 'create' as const,
+      changes: [{ field: 'name', to: i.name }],
+    })),
   );
 
   return { orgId, ownerUserId: user!.id, ownerEmployeeId: employee!.id, roles: created };

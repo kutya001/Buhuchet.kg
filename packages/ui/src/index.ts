@@ -52,6 +52,7 @@ export {
   ToastProvider,
   useToast,
   type ShowToast,
+  type ToastAction,
   type ToastLabels,
   type ToastOptions,
 } from './toast';
@@ -142,6 +143,7 @@ export type {
   GridLabels,
   GridPage,
   GridRowSelection,
+  GridRowStripe,
   GridRowTone,
   GridValues,
 } from './grid/types';

@@ -35,7 +35,7 @@ import { useGridLabels } from '../lists/grid-labels';
 import { useListPage, type FetchListPage } from '../lists/use-list-page';
 import { useViewSettings } from '../lists/view-settings';
 import { useShell } from '../shell/context';
-import { useDictRequest } from './dict-request';
+import { useDictRequest, useMyRequests } from './dict-request';
 import { useDictsAddRequest } from './dicts-add';
 import {
   catalogQuery,
@@ -325,8 +325,9 @@ export function ReportTypesList() {
     taxes: Taxes;
   }> | null>(null);
   const pick = useTaxPick();
-  const request = useDictRequest();
-  useDictsAddRequest({ catalog: pick.open, request: request.open });
+  const mine = useMyRequests();
+  const request = useDictRequest(mine.open);
+  useDictsAddRequest({ catalog: pick.open, request: request.open, mine: mine.open });
   const settings = useQuery(typeSettingsQuery);
 
   const flip = useCallback(
@@ -464,6 +465,7 @@ export function ReportTypesList() {
       ) : null}
       {pick.dialog}
       {request.dialog}
+      {mine.dialog}
     </div>
   );
 }

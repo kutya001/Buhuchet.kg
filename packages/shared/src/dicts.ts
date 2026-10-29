@@ -156,7 +156,8 @@ export const PlatformValueRow = z.object({
   dictName: z.string(),
   name: z.string(),
   audit: z.object({
-    /** Даты появления значения у справочников платформы нет. */
+    /** Когда администратор добавил значение; у значений из наполнения — нет. */
+    createdAt: z.iso.datetime().nullable(),
     updatedAt: z.iso.datetime().nullable(),
     createdBy: z.string().nullable(),
     updatedBy: z.string().nullable(),
@@ -190,6 +191,8 @@ export type DictRequestCreate = z.input<typeof DictRequestCreate>;
 /** Запрос организации в «Моих запросах». */
 export const DictRequest = z.object({
   id: z.uuid(),
+  /** Своя организация — в подзаголовке окна запроса. */
+  orgName: z.string(),
   dict: z.enum(DICT_REQUEST_DICTS),
   what: z.string(),
   comment: z.string(),

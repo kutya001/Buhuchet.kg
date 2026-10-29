@@ -11,11 +11,18 @@ export type CountKey =
   | 'grid.count'
   | 'staff.count'
   | 'roles.count'
+  | 'task.count'
+  | 'kpi.period.count'
+  | 'kpi.missing.count'
   | 'accounts.count'
   | 'orgs.count'
   | 'locale.count'
   | 'dicts.count'
-  | 'dicts.platform.count';
+  | 'dicts.platform.count'
+  | 'pdicts.count'
+  | 'pdicts.ugns_count'
+  | 'pdicts.req.count'
+  | 'news.count';
 
 /** Тексты списка из словаря; число записей — в форме для числа (1 сотрудник, 2 сотрудника, 5 сотрудников). */
 export function gridLabels(t: Translate, count: CountKey): GridLabels {
@@ -42,7 +49,9 @@ export function gridLabels(t: Translate, count: CountKey): GridLabels {
     sortBy: (label) => t('grid.sort_by', { label }),
     columnWidth: t('grid.column_width'),
     actions: t('grid.actions'),
-    shown: (from, to, total) => t('grid.shown', { from, to, total }),
+    // «Показано 1 – 5 000 из 8 200» — с разрядами (прототип ui/grid.js `.gfoot`, ТЗ «Все записи»).
+    shown: (from, to, total) =>
+      t('grid.shown', { from: formatCount(from), to: formatCount(to), total: formatCount(total) }),
     perPage: t('grid.per_page'),
     allRows: t('grid.all_rows'),
     prev: t('grid.prev'),

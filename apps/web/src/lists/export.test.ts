@@ -1,7 +1,7 @@
 import { formatText, UI_TEXTS } from '@buhuchet/domain';
 import { describe, expect, it } from 'vitest';
 import { makeErrorText, makeTranslate } from '../l10n/translate';
-import { exportFailureText, exportFileName } from './export';
+import { exportDoneText, exportFailureText, exportFileName } from './export';
 
 describe('«В Excel»: имя скачанного файла', () => {
   it('русское имя из filename*=UTF-8 — как прислал сервер', () => {
@@ -42,5 +42,26 @@ describe('«В Excel»: отказ сервера — причина в увед
     expect(text({ error: { code: 'internal_error', message: 'Внутренняя ошибка' } })).toBe(failed);
     expect(text(null)).toBe(failed);
     expect(text('<html>')).toBe(failed);
+  });
+});
+
+describe('«В Excel»: уведомление после выгрузки', () => {
+  const texts = Object.fromEntries(Object.entries(UI_TEXTS).map(([k, v]) => [k, v.ru]));
+  const t = makeTranslate(texts);
+  const done = (headers: Record<string, string>) => exportDoneText(new Headers(headers), t);
+
+  it('вошли все — «Скачан файл Excel: N строк»', () => {
+    expect(done({ 'x-export-rows': '120', 'x-export-more': '0' })).toBe(
+      'Скачан файл Excel: 120 строк',
+    );
+    expect(done({ 'x-export-rows': '1', 'x-export-more': '0' })).toBe(
+      'Скачан файл Excel: 1 строка',
+    );
+  });
+
+  it('больше 50 000 — «Выгружено 50 000 строк из 62 300 — сузьте фильтр…» (ТЗ «Списки»)', () => {
+    expect(
+      done({ 'x-export-rows': '50000', 'x-export-more': '1', 'x-export-total': '62300' }),
+    ).toBe('Выгружено 50\u00a0000 строк из 62\u00a0300 — сузьте фильтр, чтобы выгрузить остальные');
   });
 });

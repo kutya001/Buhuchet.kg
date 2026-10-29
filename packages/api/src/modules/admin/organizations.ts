@@ -14,6 +14,7 @@ import {
 } from '@buhuchet/db';
 import { createOrganization, OrganizationInputError } from '@buhuchet/db/organizations';
 import {
+  bishkekDate,
   isValidLogin,
   isValidOrgInn,
   normalizeLogin,
@@ -190,6 +191,7 @@ export function exportOrganizationsHandler(
         columns: result.columns,
         rows: result.rows,
         more: result.more,
+        total: result.total,
         t,
       });
     });
@@ -298,6 +300,7 @@ export function createOrganizationHandler(
         slug: slugFree(slugOf(body.name), taken),
         owner: { fullName: body.ownerFullName, login, passwordHash },
         createdBy: adminId,
+        today: bishkekDate(deps.clock.now()),
       }));
     } catch (err) {
       if (err instanceof OrganizationInputError) inputFail(err);

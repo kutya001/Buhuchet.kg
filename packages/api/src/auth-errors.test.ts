@@ -5,33 +5,38 @@ import { denialError, lockedError } from './auth-errors';
 import { RESET_REQUESTED_MESSAGE } from './modules/auth/reset';
 
 // Экран берёт тексты из словаря (`err.<код>`): подстановки и вариант текста — в details ответа.
-describe('почему войти нельзя: details для текста словаря', () => {
-  it('организация заблокирована — название в details.org; без названия details нет', () => {
-    expect(denialError('org_blocked', { orgName: 'Ромашка', isPlatformAdmin: false })).toEqual({
+describe('почему войти нельзя: тексты прототипа v59 и details для текста словаря', () => {
+  it('организация заблокирована — без названия организации', () => {
+    expect(denialError('org_blocked', { isPlatformAdmin: false })).toEqual({
       error: {
         code: 'org_blocked',
-        message: 'Организация Ромашка заблокирована. Обратитесь к администратору платформы.',
-        details: { org: 'Ромашка' },
+        message: 'Организация заблокирована. Обратитесь к администратору платформы.',
       },
-    });
-    expect(denialError('org_blocked', { orgName: null, isPlatformAdmin: false }).error).toEqual({
-      code: 'org_blocked',
-      message: 'Организация заблокирована. Обратитесь к администратору платформы.',
     });
   });
 
   it('заблокированный администратор платформы — свой вариант текста', () => {
-    expect(denialError('user_blocked', { orgName: null, isPlatformAdmin: true }).error).toEqual({
+    expect(denialError('user_blocked', { isPlatformAdmin: true }).error).toEqual({
       code: 'user_blocked',
       message: 'Учётная запись заблокирована. Обратитесь к администратору платформы.',
       details: { variant: 'platform_admin' },
     });
-    expect(
-      denialError('user_blocked', { orgName: 'Ромашка', isPlatformAdmin: false }).error,
-    ).toEqual({
+    expect(denialError('user_blocked', { isPlatformAdmin: false }).error).toEqual({
       code: 'user_blocked',
       message: 'Учётная запись заблокирована. Обратитесь к владельцу организации.',
     });
+  });
+
+  it('вход закрыт — один текст для любого логина, срок — в details и Retry-After', () => {
+    const headers = new Map<string, string>();
+    const c = { header: (k: string, v: string) => headers.set(k, v) } as unknown as Context;
+    const until = new Date(Date.now() + 10 * 60_000);
+    expect(lockedError(c, until).error).toEqual({
+      code: 'login_locked',
+      message: 'Вход временно закрыт: слишком много неверных попыток. Попробуйте через 15 минут.',
+      details: { lockedUntil: until.toISOString(), minutes: 15 },
+    });
+    expect(Number(headers.get('retry-after'))).toBeGreaterThan(9 * 60);
   });
 });
 
@@ -46,13 +51,25 @@ describe('тексты словаря err.* совпадают с текстам
 
   it('блокировки, закрытый вход и ответ «Забыли пароль?»', () => {
     const errors = [
-      denialError('org_blocked', { orgName: 'Ромашка', isPlatformAdmin: false }),
-      denialError('employee_blocked', { orgName: 'Ромашка', isPlatformAdmin: false }),
-      denialError('user_blocked', { orgName: 'Ромашка', isPlatformAdmin: false }),
-      denialError('user_blocked', { orgName: null, isPlatformAdmin: true }),
+      denialError('org_blocked', { isPlatformAdmin: false }),
+      denialError('employee_blocked', { isPlatformAdmin: false }),
+      denialError('user_blocked', { isPlatformAdmin: false }),
+      denialError('user_blocked', { isPlatformAdmin: true }),
       lockedError({ header } as unknown as Context, new Date('2026-10-26T08:35:00Z')),
     ];
     for (const { error } of errors) expect(screen(error), error.code).toBe(error.message);
-    expect(UI_TEXTS['auth.reset_requested'].ru).toBe(RESET_REQUESTED_MESSAGE);
+    expect(UI_TEXTS['auth.code_sent'].ru).toBe(RESET_REQUESTED_MESSAGE);
+  });
+
+  it('страница входа показывает тексты словаря refDB (auth.*) — те же, что в ответах сервера', () => {
+    const at = lockedError({ header } as unknown as Context, null).error.message;
+    expect(UI_TEXTS['auth.locked'].ru).toBe(at);
+    expect(UI_TEXTS['auth.org_blocked'].ru).toBe(
+      denialError('org_blocked', { isPlatformAdmin: false }).error.message,
+    );
+    expect(UI_TEXTS['auth.user_blocked'].ru).toBe(
+      denialError('employee_blocked', { isPlatformAdmin: false }).error.message,
+    );
+    expect(UI_TEXTS['auth.bad_login'].ru).toBe(UI_TEXTS['err.invalid_credentials'].ru);
   });
 });

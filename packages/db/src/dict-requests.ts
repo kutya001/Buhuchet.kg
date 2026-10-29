@@ -2,7 +2,7 @@ import { auditActorName, type DictRequestDict, type DictRequestStatus } from '@b
 import { desc, eq, sql } from 'drizzle-orm';
 import type { Tx } from './client';
 import { writeHistory } from './history';
-import { dictChangeRequests, employees } from './schema';
+import { dictChangeRequests, employees, organizations } from './schema';
 
 /*
  * «Попросить добавить» (задача 2.03; ТЗ «Если нужного значения нет, кнопка «Попросить добавить»
@@ -15,6 +15,8 @@ import { dictChangeRequests, employees } from './schema';
 /** Запрос организации: в какой справочник, что добавить, статус и ответ администратора. */
 export interface DictRequestRecord {
   id: string;
+  /** Своя организация — в подзаголовке окна запроса (прототип reqViewDlg). */
+  orgName: string;
   dict: DictRequestDict;
   what: string;
   comment: string;
@@ -28,6 +30,7 @@ export interface DictRequestRecord {
 
 const fields = {
   id: dictChangeRequests.id,
+  orgName: organizations.name,
   dict: sql<DictRequestDict>`${dictChangeRequests.dict}`,
   what: dictChangeRequests.what,
   comment: dictChangeRequests.comment,
@@ -80,6 +83,7 @@ export async function createDictRequest(
   const [row] = await tx
     .select(fields)
     .from(dictChangeRequests)
+    .innerJoin(organizations, eq(organizations.id, dictChangeRequests.orgId))
     .leftJoin(employees, eq(employees.userId, dictChangeRequests.createdBy))
     .where(eq(dictChangeRequests.id, created!.id));
   return toRecord(row!);
@@ -90,6 +94,7 @@ export async function listDictRequests(tx: Tx): Promise<DictRequestRecord[]> {
   const rows = await tx
     .select(fields)
     .from(dictChangeRequests)
+    .innerJoin(organizations, eq(organizations.id, dictChangeRequests.orgId))
     .leftJoin(employees, eq(employees.userId, dictChangeRequests.createdBy))
     .where(eq(dictChangeRequests.orgId, sql`app.current_org_id()`))
     .orderBy(desc(dictChangeRequests.createdAt), desc(dictChangeRequests.id))

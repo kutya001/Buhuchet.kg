@@ -17,6 +17,7 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useId, useState } from 'react';
 import { api, callApi } from '../api-client';
+import { useKb } from '../kb/kb-provider';
 import { useErrorText, useT } from '../l10n/provider';
 import { useShell } from '../shell/context';
 import { policyQuery, roleOptionsQuery, useOrgRefresh } from './org-data';
@@ -54,6 +55,7 @@ function SettingsForm({
 }) {
   const t = useT();
   const toast = useToast();
+  const kb = useKb();
   const errorText = useErrorText();
   const client = useQueryClient();
   const refresh = useOrgRefresh();
@@ -80,7 +82,11 @@ function SettingsForm({
       return;
     }
     if (telegram && digestTime !== policy.digestTime) patch.digestTime = digestTime;
-    if (Object.keys(patch).length === 0) return toast(t('org.settings.saved'), { icon: 'check' });
+    if (Object.keys(patch).length === 0) {
+      // Без изменений истории нет — шаг «Проверить часовой пояс…» засчитывается самим сохранением.
+      kb.hit('settings');
+      return toast(t('org.settings.saved'), { icon: 'check' });
+    }
     setBusy(true);
     const res = await callApi(() =>
       api.api.org.policy.$patch({ json: { version: policy.version, ...patch } }),

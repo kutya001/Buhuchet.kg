@@ -454,6 +454,7 @@ describe.skipIf(!databaseAvailable())('Контрагенты: данные', ()
     );
     expect(await inA((tx) => transferPreview(tx, accA))).toEqual({
       contractors: 2,
+      tasks: 0,
       reports: 0,
       defaultTo: chiefA,
     });

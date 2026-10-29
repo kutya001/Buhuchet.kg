@@ -134,10 +134,36 @@ describe('вкладки и «+ Добавить» по правам и учёт
     expect(addActions('staff', access)).toEqual([]);
   });
 
-  it('загрузка показателей из Excel — отдельной кнопкой; «Запросить вид отчёта» — без права', () => {
+  it('загрузка показателей из Excel — отдельной кнопкой; «Попросить добавить» и «Мои запросы» — без права', () => {
     const kpi = addActions('kpi', shellAccess(me()));
     expect(kpi.find((a) => a.id === 'excel')?.separate).toBe(true);
-    expect(ids(addActions('dicts', shellAccess(me({ permissions: [] }))))).toEqual(['request']);
+    expect(ids(addActions('dicts', shellAccess(me({ permissions: [] }))))).toEqual([
+      'request',
+      'mine',
+    ]);
+  });
+
+  it('«Справочники платформы»: вкладки по группам, «+ Добавить» — по вкладке', () => {
+    const access = shellAccess(me({ admin: true }));
+    const tabs = visibleTabs('pdicts', access);
+    expect(tabs.map((t) => t.group).filter((g, i, all) => g !== all[i - 1])).toEqual([
+      'tab.pdicts.group.taxes',
+      'tab.pdicts.group.regimes',
+      'tab.pdicts.group.classes',
+      'tab.pdicts.group.organs',
+      'tab.pdicts.group.system',
+      'tab.pdicts.group.service',
+    ]);
+    expect(ids(addActions('pdicts', access, 'organs'))).toEqual(['value']);
+    expect(ids(addActions('pdicts', access, 'ugns'))).toEqual(['ugns']);
+    expect(addActions('pdicts', access, 'requests')).toEqual([]);
+    expect(addActions('pdicts', access)).toEqual([]);
+  });
+
+  it('у «Базы знаний (содержимое)» способ добавления — своей вкладки: «Новость» только на «Новостях»', () => {
+    const access = shellAccess(me({ admin: true }));
+    expect(ids(addActions('kbadm', access, 'news'))).toEqual(['news']);
+    expect(addActions('kbadm', access, 'steps')).toEqual([]);
   });
 });
 

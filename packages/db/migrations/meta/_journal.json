@@ -292,15 +292,71 @@
     {
       "idx": 41,
       "version": "7",
-      "when": 1793119087727,
-      "tag": "0041_reports",
+      "when": 1793118667935,
+      "tag": "0041_kb",
       "breakpoints": true
     },
     {
       "idx": 42,
       "version": "7",
-      "when": 1793119089071,
-      "tag": "0042_reports_guards",
+      "when": 1793118671431,
+      "tag": "0042_kb_grants",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1793122969901,
+      "tag": "0043_admin_platform_dicts",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1793126080800,
+      "tag": "0044_tasks",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1793126158389,
+      "tag": "0045_tasks_guards",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1793304250253,
+      "tag": "0046_kpi",
+      "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1793305644537,
+      "tag": "0047_news",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1793305645772,
+      "tag": "0048_news_grants",
+      "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1793307703218,
+      "tag": "0049_reports",
+      "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1793307716180,
+      "tag": "0050_reports_guards",
       "breakpoints": true
     }
   ]

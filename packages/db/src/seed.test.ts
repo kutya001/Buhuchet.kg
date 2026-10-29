@@ -5,6 +5,7 @@ import { verifyPassword } from '@buhuchet/adapters/password';
 import { eq } from 'drizzle-orm';
 import {
   banks,
+  dictChangeRequests,
   employees,
   gkedItems,
   organizations,
@@ -12,6 +13,7 @@ import {
   reportTypes,
   roles,
   sessions,
+  taskCategories,
   users,
 } from './schema';
 import {
@@ -59,17 +61,21 @@ describe.skipIf(!databaseAvailable())('начальное наполнение �
     expect(result.roleTemplates.inserted).toBe(2);
     expect(result.uiTexts.inserted).toBeGreaterThan(0);
 
-    // Разделы со своими таблицами в platform_reference не копируются, у `dictionaries` остаются мелкие.
+    // Разделы со своими таблицами в platform_reference не копируются; у `dictionaries` справочников без
+    // своей таблицы не осталось (категории задач — с задачи 2.23).
     const keys = (await t.admin.db.select().from(platformReference)).map((r) => r.key);
     for (const key of TABLE_SECTIONS) expect(keys).not.toContain(key);
     const [dictionaries] = await t.admin.db
       .select()
       .from(platformReference)
       .where(sql`${platformReference.key} = 'dictionaries'`);
-    expect(Object.keys(dictionaries!.payload as object).sort()).toEqual(['cats']);
+    expect(Object.keys(dictionaries!.payload as object).sort()).toEqual([]);
     expect(await t.admin.db.$count(reportTypes)).toBe((refDB.reportTypes as unknown[]).length);
     expect(await t.admin.db.$count(banks)).toBe(
       (refDB.dictionaries as { banks: { items: unknown[] } }).banks.items.length,
+    );
+    expect(await t.admin.db.$count(taskCategories)).toBe(
+      (refDB.dictionaries as { cats: { items: unknown[] } }).cats.items.length,
     );
     expect(
       await t.admin.db.$count(gkedItems, sql`${gkedItems.level} = 'subclass'`),
@@ -143,7 +149,7 @@ describe.skipIf(!databaseAvailable())('начальное наполнение �
       .select()
       .from(platformReference)
       .where(sql`${platformReference.key} = 'dictionaries'`);
-    expect(Object.keys(dictionaries!.payload as object).sort()).toEqual(['cats']);
+    expect(Object.keys(dictionaries!.payload as object).sort()).toEqual([]);
   });
 
   it('справочники платформы читаются ролью приложения, демо-организация — только в своём контексте', async () => {
@@ -175,6 +181,33 @@ describe.skipIf(!databaseAvailable())('начальное наполнение �
       address: 'г. Бишкек, ул. Киевская, 95, офис 12',
       head: 'Новый руководитель',
     });
+  });
+
+  it('запросы «Попросить добавить» демо-организации из demoDB.json: статус, ответ, автор; повтор не дублирует', async () => {
+    const rows = await withOrgContext(t.app.db, { orgId: DEMO_ORG_ID }, (tx) =>
+      tx
+        .select({
+          dict: dictChangeRequests.dict,
+          what: dictChangeRequests.what,
+          status: dictChangeRequests.status,
+          answer: dictChangeRequests.answer,
+          by: users.login,
+          decided: dictChangeRequests.decidedAt,
+        })
+        .from(dictChangeRequests)
+        .innerJoin(users, eq(users.id, dictChangeRequests.createdBy))
+        .orderBy(dictChangeRequests.createdAt),
+    );
+    // Запрос другой организации из demoDB.json в демо-организацию не попадает; seedAll уже запускался дважды.
+    expect(rows.map((r) => [r.dict, r.what, r.status])).toEqual([
+      ['types', 'Форма 1-ИП (Нацстатком)', 'rejected'],
+      ['banks', 'Элдик Банк', 'added'],
+      ['cats', 'Сверка с Соцфондом', 'new'],
+    ]);
+    expect(rows[0]!.answer).toContain('В каталоге уже есть формы Нацстаткома для ИП');
+    expect(rows[0]!.decided).toEqual(new Date('2026-10-07T04:20:00Z'));
+    expect(rows[2]).toMatchObject({ answer: '', decided: null });
+    expect(new Set(rows.map((r) => r.by)).size).toBe(3);
   });
 
   it('демо-сотрудники: роли из demoDB.json, вход паролем DEMO_PASSWORD только после --update с паролем', async () => {

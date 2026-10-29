@@ -8,6 +8,7 @@ import { MenuItems } from '../menu';
 import { Popover } from '../popover';
 import { BottomSheet } from '../sheet';
 import { AppFrame } from './app-frame';
+import { CountBadge } from './badge';
 import { BottomNav, PhoneMenu, SheetAction, type PhoneModule } from './phone-nav';
 import { SideFootButton, SideNav, SideOrg } from './side-nav';
 import { TabPager } from './tab-pager';
@@ -78,7 +79,9 @@ describe('SideNav — панель модулей на ПК', () => {
     expect(html).toContain('title="Просрочено"');
     expect(html).toContain('>74</span>');
     // Красный счётчик — цвета опасной кнопки: число читается и в тёмной теме (theme.test.ts).
-    expect(html).toMatch(/title="Просрочено" class="[^"]*bg-danger-btn text-on-accent/);
+    expect(html).toMatch(
+      /title="Просрочено" data-tone="red" class="[^"]*bg-danger-btn text-on-accent/,
+    );
     expect(html).toContain('<span>низ</span></div></aside>');
   });
 
@@ -168,6 +171,33 @@ const TOP: TopBarProps = {
 };
 
 describe('TopBar — верхняя панель', () => {
+  it('точка «Начните с Базы знаний» на «Меню» — только на телефоне; у модуля — точка вместо числа', () => {
+    const plain = renderToStaticMarkup(<TopBar {...TOP} />);
+    expect(plain).not.toContain('Начните с Базы знаний');
+    const html = renderToStaticMarkup(
+      <TopBar {...TOP} menu={{ ...TOP.menu, dot: 'Начните с Базы знаний' }} />,
+    );
+    expect(html).toMatch(
+      /title="Начните с Базы знаний"[^>]*class="[^"]*rounded-full[^"]*md:hidden"/,
+    );
+    const badge = renderToStaticMarkup(
+      <CountBadge count={{ value: '', dot: true, title: 'Начните с Базы знаний' }} />,
+    );
+    expect(badge).toContain('aria-label="Начните с Базы знаний"');
+    expect(badge).toContain('bg-info');
+  });
+
+  it('точка на «Меню» от незаполненных показателей — красная или жёлтая', () => {
+    const red = renderToStaticMarkup(
+      <TopBar {...TOP} menu={{ ...TOP.menu, dot: 'Есть просроченные', dotTone: 'red' }} />,
+    );
+    expect(red).toMatch(/title="Есть просроченные"[^>]*class="[^"]*bg-danger /);
+    const yellow = renderToStaticMarkup(
+      <TopBar {...TOP} menu={{ ...TOP.menu, dot: 'Срок не прошёл', dotTone: 'yellow' }} />,
+    );
+    expect(yellow).toMatch(/title="Срок не прошёл"[^>]*class="[^"]*bg-warn /);
+  });
+
   it('«Меню», модуль и вкладка, поиск по вкладке, время, «?» и тема', () => {
     const html = renderToStaticMarkup(<TopBar {...TOP} />);
     expect(html).toContain('<header');
@@ -226,6 +256,31 @@ describe('TabRow — вкладки и «+ Добавить»', () => {
     expect(html).toContain('role="tablist" aria-label="Отчеты"');
     expect(html).toMatch(/href="\/app\/reports\/overdue" role="tab" aria-selected="true"/);
     expect(html).toMatch(/href="\/app\/reports\/week" role="tab" aria-selected="false"/);
+  });
+
+  it('группы вкладок: черта только между группами, подсказка — «Группа · Название»', () => {
+    const tab = (id: string, group: string) => ({
+      id,
+      label: id,
+      icon: 'tag' as const,
+      href: `/app/pdicts/${id}`,
+      group,
+      title: `${group} · ${id}`,
+    });
+    const html = renderToStaticMarkup(
+      <TabRow
+        tabs={[tab('types', 'Налоги'), tab('bases', 'Налоги'), tab('regimes', 'Режимы')]}
+        activeTab="types"
+        label="Справочники платформы"
+        addActions={[]}
+        addLabel="Добавить"
+        onAdd={() => {}}
+      />,
+    );
+    expect(html.match(/data-tab-sep/g)).toHaveLength(1);
+    expect(html.indexOf('data-tab-sep')).toBeGreaterThan(html.indexOf('/app/pdicts/bases'));
+    expect(html.indexOf('data-tab-sep')).toBeLessThan(html.indexOf('/app/pdicts/regimes'));
+    expect(html).toContain('title="Режимы · regimes"');
   });
 
   it('«Статистика»: только у экрана с плашками; подсказка — что сделает нажатие', () => {

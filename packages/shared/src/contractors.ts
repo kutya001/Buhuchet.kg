@@ -263,6 +263,8 @@ export const TransferContractorsPreview = z.object({
   contractors: z.number().int().nonnegative(),
   /** Незавершённые отчёты этих контрагентов, которые перейдут вместе с ними. */
   reports: z.number().int().nonnegative(),
+  /** «Открытые задачи по ним» — исполнитель этот сотрудник. */
+  tasks: z.number().int().nonnegative(),
   /** «Кому» по умолчанию — главный бухгалтер; null — передать некому. */
   defaultTo: Uuid.nullable(),
 });

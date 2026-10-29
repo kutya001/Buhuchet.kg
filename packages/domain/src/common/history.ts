@@ -14,12 +14,18 @@ export const HISTORY_ENTITIES = [
   'contractor',
   'assignment',
   'report',
+  'task',
   'file',
   'org_report_type',
   'dict_request',
   'org_account',
   'employee_wallet',
+  // Показатели контрагентов: показатель (настройка, «Кому вести») и значение за месяц.
+  'indicator',
+  'indicator_value',
+  'news',
   'ui_text',
+  'platform_dict',
 ] as const;
 export type HistoryEntity = (typeof HISTORY_ENTITIES)[number];
 

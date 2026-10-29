@@ -4,13 +4,18 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { iconButtonClass } from '../button';
 import { Icon } from '../icon';
 import { Popover } from '../popover';
+import { NavDot } from './badge';
 
 export interface TopBarProps {
   /** Название текущего модуля и вкладки (вкладки нет — null). */
   title: string;
   tab: string | null;
-  /** «Меню»: показать или скрыть левую панель. */
-  menu: { label: string; onClick: () => void };
+  /**
+   * «Меню»: показать или скрыть левую панель; `dot` — на телефоне точка на кнопке, когда в «Других
+   * модулях» есть модуль с точкой или цветным счётчиком (прототип renderSheetDot); `dotTone` — цвет
+   * счётчика (не заполнены показатели), без него точка синяя.
+   */
+  menu: { label: string; onClick: () => void; dot?: string; dotTone?: 'red' | 'yellow' };
   /** «ⓘ» у названия: описание модуля — при наведении (ПК) или по нажатию. */
   info: { label: string; content: ReactNode };
   /** Общий поиск по текущей вкладке. */
@@ -60,9 +65,16 @@ export function TopBar({ title, tab, menu, info, search, clock, help, theme }: T
         onClick={menu.onClick}
         aria-label={menu.label}
         title={menu.label}
-        className={`${iconButtonClass()} ${other}`}
+        className={`${iconButtonClass()} ${other} ${menu.dot ? 'relative' : ''}`}
       >
         <Icon name="menu" />
+        {menu.dot ? (
+          <NavDot
+            title={menu.dot}
+            tone={menu.dotTone ?? 'info'}
+            className="absolute top-1 right-1 md:hidden"
+          />
+        ) : null}
       </button>
       <button
         type="button"
@@ -137,6 +149,7 @@ export function TopBar({ title, tab, menu, info, search, clock, help, theme }: T
           aria-label={search.openLabel}
           title={search.openLabel}
           className={`${iconButtonClass()} md:hidden`}
+          data-search-open
         >
           <Icon name="search" />
         </button>

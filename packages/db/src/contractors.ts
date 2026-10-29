@@ -64,6 +64,7 @@ import {
   type RedueTexts,
 } from './reports';
 import { phoneCodes, type AuditRecord } from './staff';
+import { moveContractorTasks, openTasksOfContractors } from './tasks';
 
 /**
  * Модуль «Контрагенты»: контрагенты организации из контекста `withOrgContext` (RLS) с дополнительными
@@ -1152,6 +1153,12 @@ export async function assignContractors(
     tx,
     moving.map((r) => ({ contractorId: r.id, from: r.responsibleEmployeeId, to: employeeId })),
   );
+  // Открытые задачи по контрагенту у прежнего ответственного переходят к новому (прототип `transferCp`).
+  await moveContractorTasks(
+    tx,
+    moving.map((r) => ({ contractorId: r.id, from: r.responsibleEmployeeId })),
+    employeeId,
+  );
   return { changed: moving.length, archived: [] };
 }
 
@@ -1170,14 +1177,14 @@ async function employeeContractorIds(tx: Tx, employeeId: string): Promise<string
 }
 
 /**
- * Что перейдёт при передаче дел (прототип transferDlg): число контрагентов и «Кому» по умолчанию —
- * активный сотрудник с ролью из шаблона «Главный бухгалтер», иначе первый активный, кроме самого
- * сотрудника; незавершённые отчёты (`unfinishedReportsCount`). Задачи и деньги добавят их задачи.
+ * Что перейдёт при передаче дел (прототип transferDlg): число контрагентов, открытые задачи по ним,
+ * незавершённые отчёты (`unfinishedReportsCount`) и «Кому» по умолчанию — активный сотрудник с ролью
+ * из шаблона «Главный бухгалтер», иначе первый активный, кроме самого сотрудника. Деньги добавит их задача.
  */
 export async function transferPreview(
   tx: Tx,
   fromEmployeeId: string,
-): Promise<{ contractors: number; reports: number; defaultTo: string | null }> {
+): Promise<{ contractors: number; tasks: number; reports: number; defaultTo: string | null }> {
   const ids = await employeeContractorIds(tx, fromEmployeeId);
   const candidates = await tx
     .select({ id: employees.id, chief: sql<boolean>`${roles.templateCode} = 'chief'` })
@@ -1188,6 +1195,7 @@ export async function transferPreview(
   const to = candidates.find((c) => c.chief) ?? candidates[0];
   return {
     contractors: ids.length,
+    tasks: await openTasksOfContractors(tx, ids, fromEmployeeId),
     reports: await unfinishedReportsCount(tx, ids, fromEmployeeId),
     defaultTo: to?.id ?? null,
   };

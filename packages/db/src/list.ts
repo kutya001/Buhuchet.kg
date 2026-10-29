@@ -56,6 +56,13 @@ export interface ListColumn {
    * «15.03.2026 10:05» по Бишкеку, деньги «1 250,50», остальное — значение.
    */
   display?: Expr;
+  /**
+   * Текст ячейки на экране для поиска, если он не как `display`: у общей задачи в списке — «Общая», а в
+   * фильтре — «Общие задачи».
+   */
+  searchDisplay?: Expr;
+  /** Ячейка выгрузки, если не как `display` (у общих задач «Контрагент» в Excel пустой — ТЗ). */
+  exportDisplay?: Expr;
   /** Подпись столбца — ключ словаря (`staff.col.full_name`): заголовок в выгрузке Excel. */
   label: string;
 }
@@ -173,7 +180,10 @@ export function searchCondition(
   const compact = compactSearchText(search.q);
   const keys = search.keys.length ? search.keys : Object.keys(columns);
   const parts = keys.flatMap((key) => {
-    const text = searchable(displayOf(columnOf(columns, key, 'search')));
+    const column = columnOf(columns, key, 'search');
+    const text = searchable(
+      column.searchDisplay ? sql`nullif(${column.searchDisplay}::text, '')` : displayOf(column),
+    );
     const found = [sql`${text} like ${likePattern(needle)} escape '\\'`];
     if (compact.length >= SEARCH_COMPACT_MIN) {
       found.push(
@@ -577,7 +587,9 @@ export type ExportCell = string | number | null;
 /**
  * Записи для выгрузки в Excel (ТЗ «Экспорт в Excel всех отфильтрованных записей; файл формируется на
  * сервере»): все записи под поиском и фильтрами в порядке списка, столбцы `keys` по порядку экрана;
- * деньги и числа — числами (деньги в тыйынах), остальное — текстом, как на экране.
+ * деньги и числа — числами (деньги в тыйынах), остальное — текстом, как на экране. В файл — не больше
+ * `EXPORT_ROWS_LIMIT` записей; `total` — сколько их под фильтрами всего (считается, только если все
+ * не вошли: для уведомления «Выгружено 50 000 строк из 62 300»).
  */
 export async function selectListExport(options: {
   query: ListQuery;
@@ -592,19 +604,29 @@ export async function selectListExport(options: {
   columns: { key: string; label: string; type: ListColumnType }[];
   rows: ExportCell[][];
   more: boolean;
+  total: number;
 }> {
   const { query, columns } = options;
   const picked = options.keys.map((key) => ({ key, column: columnOf(columns, key, 'column') }));
   const sort = query.sort === undefined ? (options.defaultSort ?? DEFAULT_LIST_SORT) : query.sort;
   const fields: Record<string, SQL> = {};
   picked.forEach(({ column }, i) => {
-    fields[`c${i}`] = isNumericColumn(column.type) ? sql`${column.value}` : displayOf(column);
+    fields[`c${i}`] = isNumericColumn(column.type)
+      ? sql`${column.value}`
+      : column.exportDisplay
+        ? sql`nullif(${column.exportDisplay}::text, '')`
+        : displayOf(column);
   });
+  const where = and(options.scope, listWhere(columns, query.filters, query.search));
   const rows = await options
     .from(fields)
-    .where(and(options.scope, listWhere(columns, query.filters, query.search)))
+    .where(where)
     .orderBy(...listOrder(columns, sort, options.natural))
     .limit(EXPORT_ROWS_LIMIT + 1);
+  const more = rows.length > EXPORT_ROWS_LIMIT;
+  const total = more
+    ? Number((await options.from({ n: sql`count(*)` }).where(where))[0]?.n ?? 0)
+    : rows.length;
   return {
     columns: picked.map(({ key, column }) => ({ key, label: column.label, type: column.type })),
     rows: rows.slice(0, EXPORT_ROWS_LIMIT).map((r) =>
@@ -614,7 +636,8 @@ export async function selectListExport(options: {
         return isNumericColumn(column.type) ? Number(v) : String(v);
       }),
     ),
-    more: rows.length > EXPORT_ROWS_LIMIT,
+    more,
+    total,
   };
 }
 
