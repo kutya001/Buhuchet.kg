@@ -237,6 +237,19 @@ describe.skipIf(!databaseAvailable())('Показатели контрагент
       await (await call(owner, 'GET', `/api/kpi/import/template/preview?${long}`)).json(),
     );
     expect(p.tooMany).toBe('months');
+    // Как в прототипе: предупреждение, а числа и первые строки — настоящие.
+    expect([p.contractors, p.columns]).toEqual([3, 25]);
+    expect(p.rows).toHaveLength(3);
+    const tooLong = KpiImportTemplatePreview.parse(
+      await (
+        await call(
+          owner,
+          'GET',
+          `/api/kpi/import/template/preview?from=2020-01&to=2026-09&inds=${revenue}`,
+        )
+      ).json(),
+    );
+    expect([tooLong.tooMany, tooLong.contractors, tooLong.rows]).toEqual(['months', 0, []]);
     const res = await call(owner, 'GET', `/api/kpi/import/template?${long}`);
     expect(res.status).toBe(400);
     expect(await errorOf(res)).toMatchObject({

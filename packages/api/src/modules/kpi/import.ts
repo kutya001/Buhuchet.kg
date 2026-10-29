@@ -28,6 +28,7 @@ import {
   KPI_IMPORT_MAX_CONTRACTORS,
   KPI_IMPORT_MAX_MONTHS,
   KPI_MESSAGES,
+  KPI_PERIOD_MAX_MONTHS,
   monthRange,
   parseImportHead,
   planImport,
@@ -171,12 +172,16 @@ export function importOptionsHandler(
 
 type TemplateQuery = z.infer<typeof KpiImportTemplateQuery>;
 
-/** Шаблон за период по фильтру: строки, столбцы и что превышен предел (прототип `kxTpl`, `kxCps`). */
+/**
+ * Шаблон за период по фильтру: строки, столбцы и что превышен предел (прототип `kxTpl`, `kxCps`). Больше
+ * 24 месяцев шаблон не скачивается, но предпросмотр, как в прототипе, считается — до 72 месяцев, как
+ * «За период»; дальше — только предупреждение.
+ */
 async function templateOf(deps: ApiDeps, c: Context<AppEnv>, tx: Tx, query: TemplateQuery) {
   const [from, to] = query.from <= query.to ? [query.from, query.to] : [query.to, query.from];
   if (to > currentMonthOf(deps)) kpiFail(400, 'month_in_future');
   const months = monthRange(from, to);
-  if (months.length > KPI_IMPORT_MAX_MONTHS) {
+  if (months.length > KPI_PERIOD_MAX_MONTHS) {
     return { tooMany: 'months' as const, months, rows: [], tpl: null, data: null };
   }
   const q = searchText(query.q ?? '').trim();
@@ -209,7 +214,12 @@ async function templateOf(deps: ApiDeps, c: Context<AppEnv>, tx: Tx, query: Temp
     name: byId.get(k.id)!.name,
     cells: tpl.cells[n]!,
   }));
-  const tooMany = rows.length > KPI_IMPORT_MAX_CONTRACTORS ? ('contractors' as const) : null;
+  const tooMany =
+    months.length > KPI_IMPORT_MAX_MONTHS
+      ? ('months' as const)
+      : rows.length > KPI_IMPORT_MAX_CONTRACTORS
+        ? ('contractors' as const)
+        : null;
   return { tooMany, months, rows, tpl, data };
 }
 

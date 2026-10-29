@@ -471,7 +471,10 @@ function TemplateStep({
             )}
           </Note>
         ) : null}
-        {data ? <TemplateSummary data={data} /> : null}
+        {/* Период длиннее 72 месяцев шаблон не считает — только предупреждение. */}
+        {data && !(data.tooMany === 'months' && data.contractors === 0) ? (
+          <TemplateSummary data={data} />
+        ) : null}
         {data && data.contractors > 0 && data.columns > 0 ? (
           <TemplateTable data={data} />
         ) : data && !data.tooMany ? (
@@ -550,7 +553,7 @@ function TemplateTable({ data }: { data: KpiImportTemplatePreview }) {
               <tr key={row.inn}>
                 <td className={`${td} text-right text-faint`}>{k + 2}</td>
                 <td className={`${td} bg-info-bg font-mono text-[.92em]`}>{row.inn}</td>
-                <td className={`${td} bg-info-bg`}>{row.name}</td>
+                <td className={`${td} bg-info-bg font-mono text-[.92em]`}>{row.name}</td>
                 {row.cells.map((cell, j) => {
                   const type = data.head[j]!.type;
                   return (
