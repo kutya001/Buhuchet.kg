@@ -176,7 +176,7 @@ export function ContractorPageBox({ contractorId }: { contractorId: string }) {
           id: 'code',
           label: t('cppage.code'),
           value: (
-            <b data-cp-page-code="" className={MONO_CLASS}>
+            <b data-cp-page-code="" className={`${MONO_CLASS} text-[16px] tracking-[.06em]`}>
               {pageCodeText(page.code!)}
             </b>
           ),
@@ -405,7 +405,7 @@ function PageWhatsAppDialog({
       open={open}
       onClose={onClose}
       title={t('cppage.wa.title')}
-      sub={message.phoneText}
+      sub={`${message.contractor} · ${message.phoneText}`}
       kind="form"
       size="mid"
       footer={footer}
@@ -428,54 +428,78 @@ function PageWhatsAppDialog({
   );
 }
 
+/** Контрагент, выбранный в списке: включена ли у него страница и в архиве ли он. */
+export interface PageTarget {
+  id: string;
+  pageOn: boolean;
+  archived: boolean;
+}
+
 /**
- * «Включить страницу» у выбранных в списке контрагентов (ТЗ «Массово…»; прототип pgEnable): у
- * нескольких — подтверждение, у каждого свой код; уже включённые, в архиве и вне области пропускаются.
- * Подключит задача списка контрагентов: `const { open, dialog } = useEnablePages(); … open(ids)`.
+ * «Включить страницу» у выбранных в списке контрагентов (ТЗ «Массово…»; прототип pgEnable): уже
+ * включённые и архивные пропускаются сразу; у нескольких — подтверждение «Включить страницу у N…» с
+ * «Пропущено: …», у каждого свой код. Сервер ещё раз проверяет область и архив и отвечает, сколько
+ * включено. Подключит задача списка контрагентов: `const { open, dialog } = useEnablePages(); …
+ * open(выбранные)`.
  */
 export function useEnablePages(onDone?: () => void) {
   const t = useT();
   const toast = useToast();
   const errorText = useErrorText();
   const client = useQueryClient();
-  const [ids, setIds] = useState<string[] | null>(null);
+  const [ask, setAsk] = useState<{ ids: string[]; skip: number } | null>(null);
   const cps = (n: number) => t(`cppage.cps.${pluralForm(n)}`);
 
-  const send = async (list: string[]) => {
+  const send = async (ids: string[], skip: number) => {
     const res: ApiResult<unknown> = await callApi(() =>
-      api.api['contractor-pages'].enable.$post({ json: { ids: list } }),
+      api.api['contractor-pages'].enable.$post({ json: { ids } }),
     );
     if (!res.ok) return toast(errorText(res.error), { bad: true });
-    const { enabled, skipped } = ContractorPagesEnabled.parse(res.data);
+    const result = ContractorPagesEnabled.parse(res.data);
     void client.invalidateQueries({ queryKey: ['contractor-page'] });
     onDone?.();
-    if (enabled === 0) {
-      return toast(t(list.length > 1 ? 'cppage.toast.bulk_none' : 'cppage.toast.already'), {
+    const skipped = skip + result.skipped;
+    if (result.enabled === 0) {
+      return toast(t(ids.length + skip > 1 ? 'cppage.toast.bulk_none' : 'cppage.toast.already'), {
         icon: 'info',
       });
     }
-    if (list.length === 1) {
-      const page = await client.fetchQuery(contractorPageQuery(list[0]!));
+    if (ids.length === 1 && skip === 0) {
+      const page = await client.fetchQuery(contractorPageQuery(ids[0]!));
       return toast(t('cppage.toast.on', { code: pageCodeText(page?.code ?? '') }), {
         icon: 'link',
       });
     }
-    const done = t('cppage.toast.bulk', { n: enabled, cps: cps(enabled) });
+    const done = t('cppage.toast.bulk', { n: result.enabled, cps: cps(result.enabled) });
     toast(skipped ? `${done}. ${t('cppage.toast.bulk_skip', { n: skipped })}` : done, {
       icon: 'link',
     });
   };
 
-  const open = (list: string[]) => (list.length > 1 ? setIds(list) : void send(list));
+  const open = (targets: readonly PageTarget[]) => {
+    const ids = targets.filter((c) => !c.archived && !c.pageOn).map((c) => c.id);
+    const skip = targets.length - ids.length;
+    if (ids.length === 0) {
+      return toast(t(targets.length > 1 ? 'cppage.toast.bulk_none' : 'cppage.toast.already'), {
+        icon: 'info',
+      });
+    }
+    if (ids.length > 1) return setAsk({ ids, skip });
+    void send(ids, skip);
+  };
   const dialog = (
     <ConfirmDialog
-      open={ids !== null}
-      onClose={() => setIds(null)}
-      title={ids ? t('cppage.bulk.title', { n: ids.length, cps: cps(ids.length) }) : ''}
-      text={t('cppage.bulk.text')}
+      open={ask !== null}
+      onClose={() => setAsk(null)}
+      title={ask ? t('cppage.bulk.title', { n: ask.ids.length, cps: cps(ask.ids.length) }) : ''}
+      text={
+        ask?.skip
+          ? `${t('cppage.bulk.text')} ${t('cppage.bulk.skip', { n: ask.skip })}`
+          : t('cppage.bulk.text')
+      }
       ok={t('cppage.btn.on')}
       onConfirm={() => {
-        if (ids) void send(ids);
+        if (ask) void send(ask.ids, ask.skip);
       }}
     />
   );

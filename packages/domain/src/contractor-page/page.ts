@@ -16,12 +16,6 @@ export const PAGE_CODE_LENGTH = 6;
 export const PAGE_CODE_TRIES = 5;
 export const PAGE_LOCK_MINUTES = 15;
 
-/**
- * Счёт неверных кодов по ссылке забывается через час после последнего неверного, как у входа по
- * паролю: случайная опечатка раз в неделю не копится до перерыва.
- */
-export const PAGE_FAILURE_MEMORY_MINUTES = 60;
-
 /** Общий предел с одного адреса IP по всем ссылкам всех организаций (ТЗ): 30 неверных за час — час. */
 export const PAGE_IP_MAX_FAILURES = 30;
 export const PAGE_IP_WINDOW_MINUTES = 60;
@@ -29,6 +23,53 @@ export const PAGE_IP_LOCK_MINUTES = 60;
 
 /** Верный код запоминается в этом браузере (ТЗ; прототип PG_KEEP). */
 export const PAGE_REMEMBER_DAYS = 30;
+
+/** Cookie страницы с запомненным кодом: по https — с приставкой `__Secure-`. */
+export const PAGE_COOKIE = 'bh_page';
+export const PAGE_COOKIE_SECURE = '__Secure-bh_page';
+
+/**
+ * Запомненных браузеров у страницы — не больше стольких: каждый верный код добавляет один, старшие
+ * забываются (в них код спросят снова). Так таблица не растёт от повторных вводов кода.
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#Е-3
+export const PAGE_MAX_GRANTS = 20;
+
+/** Повторное открытие с того же устройства в течение минуты — то же открытие (история не растёт). */
+// ОТКЛОНЕНИЕ: docs/deviations.md#Е-3
+export const PAGE_OPEN_REPEAT_MINUTES = 1;
+
+/** Адрес организации и ИНН в правильном виде; иначе — «Страница недоступна» без запроса к базе. */
+export function isPageAddress(slug: string, inn: string): boolean {
+  return /^[a-z0-9-]{3,30}$/.test(slug) && /^\d{14}$/.test(inn);
+}
+
+/**
+ * Чей счёт неверных кодов по адресу (ТЗ «общий лимит с одного адреса IP»): адрес IPv4 — как есть
+ * (и записанный как IPv6 «::ffff:…»), IPv6 — его сеть /64: у одного подключения она своя, и перебор
+ * адресов внутри неё предел не обходит.
+ */
+export function pageIpSubject(address: string): string {
+  const ip = address.trim().toLowerCase().replace(/%.*$/, '');
+  const mapped = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/.exec(ip);
+  if (mapped) return mapped[1]!;
+  if (!ip.includes(':')) return ip;
+  const [head = '', tail] = ip.split('::');
+  const left = head ? head.split(':') : [];
+  const right = tail ? tail.split(':') : [];
+  const groups =
+    tail === undefined
+      ? left
+      : [
+          ...left,
+          ...Array<string>(Math.max(0, 8 - left.length - right.length)).fill('0'),
+          ...right,
+        ];
+  return `${groups
+    .slice(0, 4)
+    .map((g) => (parseInt(g, 16) || 0).toString(16))
+    .join(':')}::/64`;
+}
 
 export function isPageCode(value: string): boolean {
   return /^\d{6}$/.test(value);

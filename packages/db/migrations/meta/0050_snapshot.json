@@ -1,6 +1,6 @@
 {
-  "id": "9b4e2522-97ac-44e6-a943-16f365b9e4f7",
-  "prevId": "2c0b6534-0e6f-4aac-8fdf-008b516ab0d0",
+  "id": "baa95f17-9422-40e8-a05f-e343e971420d",
+  "prevId": "c7e6e4f8-a259-4632-9c0f-490c5529fa4b",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -2490,12 +2490,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": 0
-        },
-        "failed_at": {
-          "name": "failed_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
         },
         "locked_until": {
           "name": "locked_until",

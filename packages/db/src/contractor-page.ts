@@ -1,16 +1,17 @@
 import {
   PAGE_CODE_TRIES,
-  PAGE_FAILURE_MEMORY_MINUTES,
   PAGE_IP_LOCK_MINUTES,
   PAGE_IP_MAX_FAILURES,
   PAGE_IP_WINDOW_MINUTES,
   PAGE_LOCK_MINUTES,
+  PAGE_MAX_GRANTS,
+  PAGE_OPEN_REPEAT_MINUTES,
   PAGE_REMEMBER_DAYS,
   type HistoryAction,
   type HistoryChange,
   type PageSection,
 } from '@buhuchet/domain';
-import { and, desc, eq, inArray, ne, sql, type SQL } from 'drizzle-orm';
+import { and, desc, eq, gt, gte, inArray, ne, sql, type SQL } from 'drizzle-orm';
 import type { Db, Tx } from './client';
 import { updateWithHistory, writeHistory } from './history';
 import { featureSet } from './org';
@@ -69,6 +70,18 @@ export async function contractorPageOrg(tx: Tx, orgId: string) {
   };
 }
 
+const pageHistoryOf = (contractorId: string, action: HistoryAction) =>
+  and(
+    eq(auditLog.contractorId, contractorId),
+    eq(auditLog.entity, 'contractor_page'),
+    eq(auditLog.action, action),
+  );
+
+const deviceOf = (changes: readonly HistoryChange[] | undefined): string | null => {
+  const device = changes?.find((c) => c.field === 'device')?.to;
+  return typeof device === 'string' ? device : null;
+};
+
 /** Страница контрагента или null, если её ни разу не включали. */
 export async function getContractorPage(
   tx: Tx,
@@ -86,24 +99,28 @@ export async function getContractorPage(
     .from(contractorPages)
     .where(eq(contractorPages.contractorId, contractorId));
   if (!row) return null;
+  // «Последнее открытие» — после последнего «Включить»: прежние открытия были по старому коду
+  // (прототип pgEnable: `last: null`).
   const [open] = await tx
     .select({ at: auditLog.at, changes: auditLog.changes })
     .from(auditLog)
     .where(
       and(
-        eq(auditLog.contractorId, contractorId),
-        eq(auditLog.entity, 'contractor_page'),
-        eq(auditLog.action, 'page_open'),
+        pageHistoryOf(contractorId, 'page_open'),
+        gte(
+          auditLog.at,
+          sql`coalesce((select max(a.at) from audit_log a where a.contractor_id = ${contractorId} and a.entity = 'contractor_page' and a.action = 'page_on'), '-infinity'::timestamptz)`,
+        ),
       ),
     )
     .orderBy(desc(auditLog.at), desc(auditLog.id))
     .limit(1);
-  const device = open?.changes.find((c) => c.field === 'device')?.to;
+  const device = deviceOf(open?.changes);
   return {
     ...row,
     hiddenSections: row.hiddenSections as PageSection[],
     lastOpenAt: open?.at ?? null,
-    lastDevice: typeof device === 'string' ? device : null,
+    lastDevice: device,
   };
 }
 
@@ -124,12 +141,38 @@ export async function writeContractorPageHistory(
   });
 }
 
+/**
+ * Открытие страницы контрагентом — в историю контрагента с устройством (ТЗ «каждое открытие страницы
+ * (дата, время, устройство) пишутся в историю контрагента»). Повтор с того же устройства в течение
+ * минуты (обновил страницу) — то же открытие: так браузер с кодом не заваливает историю записями.
+ */
+export async function writeContractorPageOpen(
+  tx: Tx,
+  contractorId: string,
+  device: string,
+): Promise<void> {
+  const [last] = await tx
+    .select({ changes: auditLog.changes })
+    .from(auditLog)
+    .where(
+      and(
+        pageHistoryOf(contractorId, 'page_open'),
+        gt(auditLog.at, sql`now() - make_interval(mins => ${PAGE_OPEN_REPEAT_MINUTES})`),
+      ),
+    )
+    .orderBy(desc(auditLog.at), desc(auditLog.id))
+    .limit(1);
+  if (last && deviceOf(last.changes) === device) return;
+  await writeContractorPageHistory(tx, contractorId, 'page_open', {
+    changes: [{ field: 'device', to: device }],
+  });
+}
+
 /** Новый код и сброс счёта неверных кодов: при повторном включении и «Сменить код». */
 const freshCode = (code: string) => ({
   code,
   codeVersion: sql`${contractorPages.codeVersion} + 1`,
   failures: 0,
-  failedAt: null,
   lockedUntil: null,
   version: sql`${contractorPages.version} + 1`,
   updatedBy: sql`app.current_user_id()`,
@@ -325,20 +368,16 @@ export async function contractorPageState(
 /** Итог ввода кода на странице без входа (`app.contractor_page_try_code`). */
 export type ContractorPageTry =
   | { outcome: 'unavailable' }
-  | { outcome: 'ok'; orgId: string; contractorId: string }
+  | { outcome: 'ok' }
   | { outcome: 'wrong'; triesLeft: number }
-  | {
-      outcome: 'locked';
-      lockedUntil: Date;
-      /** Ввод по ссылке закрылся этой попыткой — записать в историю контрагента. */
-      lockedNow: { orgId: string; contractorId: string } | null;
-    }
+  | { outcome: 'locked'; lockedUntil: Date }
   | { outcome: 'ip_locked'; lockedUntil: Date };
 
 /**
- * Проверить код страницы: пределы — 5 неверных подряд по ссылке (15 минут) и 30 неверных за час с
- * адреса (час); верный код запоминает браузер на 30 дней (`tokenHash` — хеш токена новой cookie).
- * Адрес приходит хешем (`ipHash`). Вызывается без контекста организации.
+ * Проверить код страницы: пределы — 5 неверных подряд по ссылке (15 минут; запись в истории
+ * контрагента — в той же транзакции) и 30 неверных за час с адреса (час); верный код запоминает
+ * браузер на 30 дней (`tokenHash` — хеш токена новой cookie). Адрес приходит хешем (`ipHash`).
+ * Вызывается без контекста организации.
  */
 export async function tryContractorPageCode(
   db: Db,
@@ -348,27 +387,17 @@ export async function tryContractorPageCode(
     outcome: string;
     tries_left: number | null;
     locked_until: Date | string | null;
-    org_id: string | null;
-    contractor_id: string | null;
-    link_locked: boolean;
   }>(
-    sql`select * from app.contractor_page_try_code(${input.slug}, ${input.inn}, ${input.code}, ${input.ipHash}, ${input.tokenHash}, ${PAGE_CODE_TRIES}, ${PAGE_LOCK_MINUTES}, ${PAGE_FAILURE_MEMORY_MINUTES}, ${PAGE_IP_MAX_FAILURES}, ${PAGE_IP_WINDOW_MINUTES}, ${PAGE_IP_LOCK_MINUTES}, ${PAGE_REMEMBER_DAYS})`,
+    sql`select * from app.contractor_page_try_code(${input.slug}, ${input.inn}, ${input.code}, ${input.ipHash}, ${input.tokenHash}, ${PAGE_CODE_TRIES}, ${PAGE_LOCK_MINUTES}, ${PAGE_IP_MAX_FAILURES}, ${PAGE_IP_WINDOW_MINUTES}, ${PAGE_IP_LOCK_MINUTES}, ${PAGE_REMEMBER_DAYS}, ${PAGE_MAX_GRANTS})`,
   );
   const until = asDate(row?.locked_until);
   switch (row?.outcome) {
     case 'ok':
-      return { outcome: 'ok', orgId: row.org_id!, contractorId: row.contractor_id! };
+      return { outcome: 'ok' };
     case 'wrong':
       return { outcome: 'wrong', triesLeft: row.tries_left ?? 0 };
     case 'locked':
-      return {
-        outcome: 'locked',
-        lockedUntil: until!,
-        lockedNow:
-          row.link_locked && row.org_id && row.contractor_id
-            ? { orgId: row.org_id, contractorId: row.contractor_id }
-            : null,
-      };
+      return { outcome: 'locked', lockedUntil: until! };
     case 'ip_locked':
       return { outcome: 'ip_locked', lockedUntil: until! };
     default:

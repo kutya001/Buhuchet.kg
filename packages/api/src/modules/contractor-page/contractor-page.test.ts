@@ -87,7 +87,7 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
   const resetLock = (contractorId: string) =>
     f.t.admin.db
       .update(schema.contractorPages)
-      .set({ failures: 0, failedAt: null, lockedUntil: null })
+      .set({ failures: 0, lockedUntil: null })
       .where(eq(schema.contractorPages.contractorId, contractorId));
 
   /** Страница без входа: без cookie сеанса, со своим cookie страницы, адресом и браузером. */
@@ -300,6 +300,16 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
     expect(await visited(`org-a/${cpOther.inn}`, { cookie })).toEqual({ state: 'unavailable' });
     expect(await visited(path, { cookie: 'bh_page=not-a-token' })).toEqual({ state: 'code' });
     expect(await visited(path, { cookie: `bh_page=${'A'.repeat(43)}` })).toEqual({ state: 'code' });
+  });
+
+  it('без сеанса открыты только два пути страницы: другие пути под /api/page/ — 401', async () => {
+    for (const path of [
+      `/api/page/org-a/${cpAcc.inn}/code/more`,
+      `/api/page/org-a`,
+      `/api/page/org-a/${cpAcc.inn}/other`,
+    ]) {
+      expect((await f.app.request(path)).status, path).toBe(401);
+    }
   });
 
   it('«Страница недоступна»: неизвестный адрес или ИНН, чужая организация, не включена', async () => {

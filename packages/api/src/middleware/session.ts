@@ -24,13 +24,15 @@ const PUBLIC_PATHS = new Set([
 ]);
 
 /**
- * Открытые группы методов: страница контрагента по ссылке (`/api/page/<адрес организации>/<ИНН>`) —
- * без входа, только чтение одного контрагента после кода доступа (задача 2.42).
+ * Открытые методы с параметрами в пути: страница контрагента по ссылке — что показать
+ * (`/api/page/<адрес организации>/<ИНН>`) и ввод кода (`…/code`), без входа, только чтение одного
+ * контрагента после кода доступа (задача 2.42). Только эти два пути: новый метод под `/api/page/` без
+ * сеанса не откроется.
  */
-const PUBLIC_PREFIXES = ['/api/page/'];
+const PUBLIC_PATTERNS: readonly RegExp[] = [/^\/api\/page\/[^/]+\/[^/]+(?:\/code)?$/];
 
 const isPublicPath = (path: string) =>
-  PUBLIC_PATHS.has(path) || PUBLIC_PREFIXES.some((prefix) => path.startsWith(prefix));
+  PUBLIC_PATHS.has(path) || PUBLIC_PATTERNS.some((pattern) => pattern.test(path));
 
 /** Что доступно, пока пользователь не сменил временный пароль. */
 const BEFORE_PASSWORD_CHANGE = new Set(['/api/auth/me', '/api/auth/password']);

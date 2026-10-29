@@ -16,7 +16,6 @@ CREATE TABLE "contractor_pages" (
 	"code_version" integer DEFAULT 1 NOT NULL,
 	"hidden_sections" text[] DEFAULT '{}' NOT NULL,
 	"failures" integer DEFAULT 0 NOT NULL,
-	"failed_at" timestamp with time zone,
 	"locked_until" timestamp with time zone,
 	"created_by" uuid,
 	"updated_by" uuid,

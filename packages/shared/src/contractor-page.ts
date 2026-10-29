@@ -43,6 +43,8 @@ export const ContractorPage = z.object({
    */
   whatsApp: z
     .object({
+      /** Название контрагента — в подзаголовке окна. */
+      contractor: z.string(),
       /** Номер контрагента цифрами для ссылки wa.me и для показа («+996 505 89 00 76»). */
       phone: z.string(),
       phoneText: z.string(),

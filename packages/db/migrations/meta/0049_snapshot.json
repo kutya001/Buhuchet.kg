@@ -1,5 +1,5 @@
 {
-  "id": "2c0b6534-0e6f-4aac-8fdf-008b516ab0d0",
+  "id": "c7e6e4f8-a259-4632-9c0f-490c5529fa4b",
   "prevId": "40967d75-91ba-45f6-a7b7-f04642ea4582",
   "version": "7",
   "dialect": "postgresql",
@@ -2490,12 +2490,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": 0
-        },
-        "failed_at": {
-          "name": "failed_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
         },
         "locked_until": {
           "name": "locked_until",

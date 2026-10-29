@@ -49,9 +49,8 @@ export const contractorPages = pgTable(
       .array()
       .notNull()
       .default(sql`'{}'`),
-    /** Неверные коды подряд по этой ссылке и когда был последний — счёт ведёт функция проверки кода. */
+    /** Неверные коды подряд по этой ссылке — счёт ведёт функция проверки кода. */
     failures: integer('failures').notNull().default(0),
-    failedAt: timestamp('failed_at', { withTimezone: true }),
     /** До какого момента ввод кода по ссылке закрыт (5 неверных подряд — 15 минут). */
     lockedUntil: timestamp('locked_until', { withTimezone: true }),
     createdBy: uuid('created_by').references(() => users.id),

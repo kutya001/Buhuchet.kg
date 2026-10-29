@@ -7,9 +7,17 @@ import {
   getContractorPage,
   tryContractorPageCode,
   withOrgContext,
-  writeContractorPageHistory,
+  writeContractorPageOpen,
 } from '@buhuchet/db';
-import { pageDevice, pageVisibleSections, PAGE_REMEMBER_DAYS } from '@buhuchet/domain';
+import {
+  isPageAddress,
+  pageDevice,
+  pageIpSubject,
+  pageVisibleSections,
+  PAGE_COOKIE,
+  PAGE_COOKIE_SECURE,
+  PAGE_REMEMBER_DAYS,
+} from '@buhuchet/domain';
 import {
   ApiError,
   PublicPage,
@@ -29,17 +37,13 @@ import { logoLink } from '../org/logo-link';
 /*
  * Страница контрагента по ссылке без входа (задача 2.42; ТЗ «Страница контрагента по ссылке» →
  * «Защита»; прототип modules/cp-page.js, pubDraw). Единственные методы API без сеанса, которые
- * отдают данные организации (`PUBLIC_PREFIXES` в middleware/session.ts): страницу находит и код сверяет
+ * отдают данные организации (`PUBLIC_PATTERNS` в middleware/session.ts): страницу находит и код сверяет
  * база (`app.contractor_page_*`), данные одного контрагента читаются в контексте его организации уже
  * после этого. Выключенная страница, неизвестный адрес или ИНН, архивный контрагент — одинаково
  * «Страница недоступна». Ответы не кэшируются и не индексируются. Разделы страницы — задача 2.43.
  */
 
 const error = { 'application/json': { schema: ApiError } };
-
-/** Адрес организации и ИНН в правильном виде; остальное — «недоступна» без запроса к базе. */
-const pageShape = (slug: string, inn: string) =>
-  /^[a-z0-9-]{3,30}$/.test(slug) && /^\d{14}$/.test(inn);
 
 /**
  * Cookie страницы (ТЗ «Верный код запоминается в этом браузере на 30 дней»): своя у каждой ссылки
@@ -51,7 +55,7 @@ function pageCookie(deps: ApiDeps) {
     deps.config.APP_ENV === 'staging' ||
     deps.config.APP_ENV === 'production' ||
     deps.config.APP_BASE_URL.startsWith('https:');
-  return { name: secure ? '__Secure-bh_page' : 'bh_page', secure };
+  return { name: secure ? PAGE_COOKIE_SECURE : PAGE_COOKIE, secure };
 }
 
 export function pageCookieName(deps: ApiDeps): string {
@@ -64,13 +68,22 @@ function pageTokenHash(c: Context<AppEnv>, deps: ApiDeps): string | null {
 }
 
 /**
- * Адрес IP того, кто вводит код: первый адрес X-Forwarded-For — его ставит Vercel и Caddy на VPS
- * (входящий от клиента они заменяют). В базе — только хеш адреса. Без заголовка (локально) — общий
- * счёт «unknown».
+ * Чей счёт неверных кодов по адресу: первый адрес X-Forwarded-For — его ставит Vercel и Caddy на VPS
+ * (входящий от клиента они заменяют); IPv6 — по сети /64 (`pageIpSubject`). В базе — SHA-256 адреса:
+ * это маскировка, а не тайна (адрес IPv4 подбирается перебором), сам адрес нигде не хранится. Без
+ * заголовка (локально, в тестах) — общий счёт «unknown»; на стенде и рабочем сайте это ошибка
+ * настройки прокси — пишется предупреждение.
  */
-function clientIpHash(c: Context<AppEnv>): string {
-  const ip = c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
-  return createHash('sha256').update(`cp-page:${ip}`, 'utf8').digest('hex');
+function clientIpHash(c: Context<AppEnv>, deps: ApiDeps): string {
+  const forwarded = c.req.header('x-forwarded-for')?.split(',')[0]?.trim();
+  if (!forwarded && (deps.config.APP_ENV === 'staging' || deps.config.APP_ENV === 'production')) {
+    deps.logger.warn(
+      { requestId: c.get('requestId') },
+      'нет X-Forwarded-For: предел неверных кодов по адресу общий для всех',
+    );
+  }
+  const subject = forwarded ? pageIpSubject(forwarded) : 'unknown';
+  return createHash('sha256').update(`cp-page:${subject}`, 'utf8').digest('hex');
 }
 
 /**
@@ -107,7 +120,7 @@ export function publicPageHandler(deps: ApiDeps): RouteHandler<typeof publicPage
   return async (c) => {
     const { slug, inn } = c.req.valid('param');
     privateHeaders(c);
-    if (!pageShape(slug, inn)) return c.json({ state: 'unavailable' } as PublicPageBody, 200);
+    if (!isPageAddress(slug, inn)) return c.json({ state: 'unavailable' } as PublicPageBody, 200);
     const state = await contractorPageState(deps.db, slug, inn, pageTokenHash(c, deps));
     if (state.state === 'unavailable' || state.state === 'code') {
       return c.json({ state: state.state } as PublicPageBody, 200);
@@ -127,9 +140,7 @@ export function publicPageHandler(deps: ApiDeps): RouteHandler<typeof publicPage
         getContractorPage(tx, contractorId),
       ]);
       if (!header || !org || !own) return null;
-      await writeContractorPageHistory(tx, contractorId, 'page_open', {
-        changes: [{ field: 'device', to: device }],
-      });
+      await writeContractorPageOpen(tx, contractorId, device);
       return {
         asOf: deps.clock.now().toISOString(),
         contractor: { name: header.name, inn: header.inn, regime: header.regime },
@@ -179,13 +190,13 @@ export function publicPageCodeHandler(
     privateHeaders(c);
     const unavailable = () =>
       apiFail(404, 'page_unavailable', 'Страница недоступна. Обратитесь к вашему бухгалтеру.');
-    if (!pageShape(slug, inn)) unavailable();
+    if (!isPageAddress(slug, inn)) unavailable();
     const token = newSessionToken();
     const result = await tryContractorPageCode(deps.db, {
       slug,
       inn,
       code,
-      ipHash: clientIpHash(c),
+      ipHash: clientIpHash(c, deps),
       tokenHash: hashSessionToken(token),
     });
     switch (result.outcome) {
@@ -209,17 +220,10 @@ export function publicPageCodeHandler(
             triesLeft: result.triesLeft,
           },
         );
-      case 'locked': {
-        const locked = result.lockedNow;
-        if (locked) {
-          await withOrgContext(deps.db, { orgId: locked.orgId, userId: null }, (tx) =>
-            writeContractorPageHistory(tx, locked.contractorId, 'page_lock'),
-          );
-        }
+      case 'locked':
         return apiFail(429, 'page_locked', 'Ввод кода временно закрыт', {
           lockedUntil: timeOf(result.lockedUntil),
         });
-      }
       case 'ip_locked':
         return apiFail(429, 'page_ip_locked', 'Ввод кода временно закрыт', {
           lockedUntil: timeOf(result.lockedUntil),

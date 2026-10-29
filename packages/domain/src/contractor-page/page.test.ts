@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  isPageAddress,
   isPageCode,
   orgLogoLetters,
   pageCodeText,
   pageDevice,
+  pageIpSubject,
   pageLink,
   pageLinkText,
   pageManageRefusal,
@@ -51,6 +53,24 @@ describe('страница контрагента по ссылке', () => {
     expect(pageDevice('Mozilla/5.0 Firefox/131.0')).toBe('ПК · Firefox');
     expect(pageDevice('Opera/9.80 OPR/100')).toBe('ПК · Opera');
     expect(pageDevice('')).toBe('ПК · браузер');
+  });
+
+  it('адрес страницы: адрес организации из латиницы, цифр и дефиса и ИНН из 14 цифр', () => {
+    expect(isPageAddress('buhgalter-plyus', '03807819461915')).toBe(true);
+    expect(isPageAddress('BUH', '03807819461915')).toBe(false);
+    expect(isPageAddress('..%2F', '03807819461915')).toBe(false);
+    expect(isPageAddress('ab', '03807819461915')).toBe(false);
+    expect(isPageAddress('buh', '0380781946191')).toBe(false);
+    expect(isPageAddress('buh', '038078194619150')).toBe(false);
+  });
+
+  it('счёт по адресу: IPv4 как есть, IPv6 — по сети /64', () => {
+    expect(pageIpSubject(' 203.0.113.7 ')).toBe('203.0.113.7');
+    expect(pageIpSubject('::ffff:203.0.113.7')).toBe('203.0.113.7');
+    expect(pageIpSubject('2001:db8:1:2:3:4:5:6')).toBe('2001:db8:1:2::/64');
+    expect(pageIpSubject('2001:DB8:0001:0002::ffff')).toBe('2001:db8:1:2::/64');
+    expect(pageIpSubject('2001:db8::1')).toBe('2001:db8:0:0::/64');
+    expect(pageIpSubject('fe80::1%eth0')).toBe('fe80:0:0:0::/64');
   });
 
   it('без логотипа — инициалы названия организации без формы собственности (прототип pub-logo)', () => {

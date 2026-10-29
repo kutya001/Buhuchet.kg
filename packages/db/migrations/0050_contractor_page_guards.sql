@@ -5,8 +5,8 @@
 REVOKE UPDATE, DELETE, TRUNCATE ON TABLE contractor_pages FROM buhuchet_app;
 --> statement-breakpoint
 GRANT UPDATE (
-  enabled, code, code_version, hidden_sections, failures, failed_at, locked_until, updated_by,
-  updated_at, version
+  enabled, code, code_version, hidden_sections, failures, locked_until, updated_by, updated_at,
+  version
 ) ON TABLE contractor_pages TO buhuchet_app;
 --> statement-breakpoint
 CREATE POLICY contractor_pages_insert_own ON contractor_pages AS RESTRICTIVE FOR INSERT TO buhuchet_app
@@ -64,18 +64,17 @@ CREATE FUNCTION app.contractor_page_state(p_slug text, p_inn text, p_token_hash 
 --      закрыт на p_ip_lock_minutes: «ip_locked» (адрес приходит хешем, сам адрес не хранится);
 --   3) ввод по ссылке закрыт — «locked»;
 --   4) верный код — счёт по ссылке снимается, браузер запоминается до p_remember_days (хеш токена из
---      cookie и номер кода): «ok»;
---   5) неверный — +1 по ссылке и по адресу; на p_tries-м подряд ввод по ссылке закрывается на
---      p_lock_minutes, счёт начинается заново («locked», link_locked — записать в историю); счёт по
---      ссылке забывается через p_memory_minutes после последнего неверного; иначе «wrong» и сколько
---      попыток осталось. Неверный код, после которого адрес набрал предел, — «ip_locked».
--- Организация и контрагент отдаются только при «ok» и закрытии по ссылке — для истории контрагента.
+--      cookie и номер кода; у страницы — не больше p_max_grants запомненных браузеров, старшие
+--      забываются): «ok»;
+--   5) неверный — +1 по ссылке и по адресу; на p_tries-м подряд (до верного кода, как в прототипе)
+--      ввод по ссылке закрывается на p_lock_minutes, счёт начинается заново, в историю контрагента
+--      пишется «ввод закрыт» в той же транзакции: «locked»; иначе «wrong» и сколько попыток осталось.
+--      Неверный код, после которого адрес набрал предел, — «ip_locked».
 CREATE FUNCTION app.contractor_page_try_code(
     p_slug text, p_inn text, p_code text, p_ip_hash text, p_token_hash text, p_tries integer,
-    p_lock_minutes integer, p_memory_minutes integer, p_ip_max integer, p_ip_window_minutes integer,
-    p_ip_lock_minutes integer, p_remember_days integer)
-  RETURNS TABLE (outcome text, tries_left integer, locked_until timestamptz, org_id uuid,
-    contractor_id uuid, link_locked boolean)
+    p_lock_minutes integer, p_ip_max integer, p_ip_window_minutes integer, p_ip_lock_minutes integer,
+    p_remember_days integer, p_max_grants integer)
+  RETURNS TABLE (outcome text, tries_left integer, locked_until timestamptz)
   LANGUAGE plpgsql VOLATILE SECURITY DEFINER
   SET search_path = pg_catalog, pg_temp
   AS $$
@@ -85,8 +84,7 @@ CREATE FUNCTION app.contractor_page_try_code(
     v_failures integer;
     v_until timestamptz;
   BEGIN
-    SELECT p.org_id, p.contractor_id, p.code, p.code_version, p.failures, p.failed_at,
-        p.locked_until INTO v_page
+    SELECT p.org_id, p.contractor_id, p.code, p.code_version, p.failures, p.locked_until INTO v_page
       FROM public.organizations o
       JOIN public.org_settings s ON s.org_id = o.id
       JOIN public.contractors c ON c.org_id = o.id AND c.inn = p_inn
@@ -95,45 +93,51 @@ CREATE FUNCTION app.contractor_page_try_code(
         AND c.service_status <> 'archived' AND p.enabled
       FOR UPDATE OF p;
     IF NOT FOUND THEN
-      RETURN QUERY SELECT 'unavailable'::text, NULL::integer, NULL::timestamptz, NULL::uuid,
-        NULL::uuid, false;
+      RETURN QUERY SELECT 'unavailable'::text, NULL::integer, NULL::timestamptz;
       RETURN;
     END IF;
     PERFORM pg_advisory_xact_lock(hashtextextended('cp_page_ip:' || p_ip_hash, 0));
     SELECT max(r.busy_until) INTO v_ip_until FROM public.rate_limits r
       WHERE r.kind = 'cp_page_ip_lock' AND r.subject = p_ip_hash AND r.busy_until > now();
     IF v_ip_until IS NOT NULL THEN
-      RETURN QUERY SELECT 'ip_locked'::text, NULL::integer, v_ip_until, NULL::uuid, NULL::uuid, false;
+      RETURN QUERY SELECT 'ip_locked'::text, NULL::integer, v_ip_until;
       RETURN;
     END IF;
     IF v_page.locked_until > now() THEN
-      RETURN QUERY SELECT 'locked'::text, NULL::integer, v_page.locked_until, NULL::uuid, NULL::uuid,
-        false;
+      RETURN QUERY SELECT 'locked'::text, NULL::integer, v_page.locked_until;
       RETURN;
     END IF;
     IF p_code = v_page.code THEN
       UPDATE public.contractor_pages p
-        SET failures = 0, failed_at = NULL, locked_until = NULL
+        SET failures = 0, locked_until = NULL
         WHERE p.contractor_id = v_page.contractor_id;
       INSERT INTO public.contractor_page_grants (token_hash, org_id, contractor_id, code_version,
           expires_at)
         VALUES (p_token_hash, v_page.org_id, v_page.contractor_id, v_page.code_version,
           now() + make_interval(days => p_remember_days));
-      RETURN QUERY SELECT 'ok'::text, NULL::integer, NULL::timestamptz, v_page.org_id,
-        v_page.contractor_id, false;
+      DELETE FROM public.contractor_page_grants g
+        WHERE g.contractor_id = v_page.contractor_id
+          AND g.token_hash IN (
+            SELECT x.token_hash FROM public.contractor_page_grants x
+              WHERE x.contractor_id = v_page.contractor_id
+              ORDER BY x.created_at DESC, x.token_hash
+              OFFSET p_max_grants
+          );
+      RETURN QUERY SELECT 'ok'::text, NULL::integer, NULL::timestamptz;
       RETURN;
     END IF;
-    v_failures := CASE
-      WHEN v_page.failed_at IS NULL OR v_page.failed_at <= now() - make_interval(mins => p_memory_minutes)
-        THEN 1
-      ELSE v_page.failures + 1
-    END;
+    v_failures := v_page.failures + 1;
     v_until := CASE WHEN v_failures >= p_tries THEN now() + make_interval(mins => p_lock_minutes) END;
     UPDATE public.contractor_pages p
       SET failures = CASE WHEN v_until IS NULL THEN v_failures ELSE 0 END,
-          failed_at = CASE WHEN v_until IS NULL THEN now() END,
           locked_until = v_until
       WHERE p.contractor_id = v_page.contractor_id;
+    IF v_until IS NOT NULL THEN
+      INSERT INTO public.audit_log (org_id, entity, entity_id, action, changes, contractor_id,
+          actor_user_id)
+        VALUES (v_page.org_id, 'contractor_page', v_page.contractor_id::text, 'page_lock',
+          '[]'::jsonb, v_page.contractor_id, NULL);
+    END IF;
     INSERT INTO public.rate_limits (kind, subject) VALUES ('cp_page_ip', p_ip_hash);
     IF (
       SELECT count(*) FROM public.rate_limits r
@@ -145,13 +149,11 @@ CREATE FUNCTION app.contractor_page_try_code(
         VALUES ('cp_page_ip_lock', p_ip_hash, v_ip_until);
     END IF;
     IF v_until IS NOT NULL THEN
-      RETURN QUERY SELECT 'locked'::text, NULL::integer, v_until, v_page.org_id, v_page.contractor_id,
-        true;
+      RETURN QUERY SELECT 'locked'::text, NULL::integer, v_until;
     ELSIF v_ip_until IS NOT NULL THEN
-      RETURN QUERY SELECT 'ip_locked'::text, NULL::integer, v_ip_until, NULL::uuid, NULL::uuid, false;
+      RETURN QUERY SELECT 'ip_locked'::text, NULL::integer, v_ip_until;
     ELSE
-      RETURN QUERY SELECT 'wrong'::text, p_tries - v_failures, NULL::timestamptz, NULL::uuid,
-        NULL::uuid, false;
+      RETURN QUERY SELECT 'wrong'::text, p_tries - v_failures, NULL::timestamptz;
     END IF;
   END
   $$;

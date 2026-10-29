@@ -97,6 +97,7 @@ async function pageOut(
   if (link && page && !send) {
     const template = (await messageTemplates(tx)).waPage ?? PAGE_WHATSAPP_TEMPLATE;
     whatsApp = {
+      contractor: cp.name,
       phone: cp.phone,
       phoneText: cp.phoneText,
       text: pageWhatsAppText(template, { contractor: cp.name, link, code: page.code }),

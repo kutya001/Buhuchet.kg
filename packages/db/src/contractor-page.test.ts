@@ -13,7 +13,7 @@ import {
   getContractorPage,
   setContractorPageHidden,
   tryContractorPageCode,
-  writeContractorPageHistory,
+  writeContractorPageOpen,
 } from './contractor-page';
 import { createContractor, type ContractorFields } from './contractors';
 import { readHistory } from './history';
@@ -78,6 +78,9 @@ describe.skipIf(!databaseAvailable())('Страница контрагента �
     withOrgContext(db.app.db, { orgId: a.orgId, userId: a.ownerUserId }, fn);
   const inB = <T>(fn: Parameters<typeof withOrgContext<T>>[2]) =>
     withOrgContext(db.app.db, { orgId: b.orgId, userId: b.ownerUserId }, fn);
+  /** Страница без входа: контекст организации без пользователя. */
+  const inAnonymous = <T>(fn: Parameters<typeof withOrgContext<T>>[2]) =>
+    withOrgContext(db.app.db, { orgId: a.orgId, userId: null }, fn);
   const cppage = (orgId: string, on: boolean) =>
     db.admin.db
       .update(orgSettings)
@@ -151,14 +154,9 @@ describe.skipIf(!databaseAvailable())('Страница контрагента �
   });
 
   it('сменить код: номер кода +1, счёт неверных кодов снят; разделы — с версией и «было → стало»', async () => {
-    await db.admin.db.update(contractorPages).set({ failures: 3, failedAt: sql`now()` });
+    await db.admin.db.update(contractorPages).set({ failures: 3 });
     expect(await inA((tx) => changeContractorPageCode(tx, cpId, '444444'))).toBe(true);
-    expect((await page())[0]).toMatchObject({
-      code: '444444',
-      codeVersion: 3,
-      failures: 0,
-      failedAt: null,
-    });
+    expect((await page())[0]).toMatchObject({ code: '444444', codeVersion: 3, failures: 0 });
     const { version } = (await inA((tx) => getContractorPage(tx, cpId)))!;
     await inA((tx) => setContractorPageHidden(tx, cpId, ['fee'], version));
     await expect(inA((tx) => setContractorPageHidden(tx, cpId, [], version))).rejects.toThrow(
@@ -252,13 +250,15 @@ describe.skipIf(!databaseAvailable())('Страница контрагента �
     for (const left of [4, 3, 2, 1]) {
       expect(await attempt(wrong)).toEqual({ outcome: 'wrong', triesLeft: left });
     }
-    const locked = await attempt(wrong);
-    expect(locked).toMatchObject({
-      outcome: 'locked',
-      lockedNow: { orgId: a.orgId, contractorId: cpId },
-    });
+    expect(await attempt(wrong)).toMatchObject({ outcome: 'locked' });
+    // Перерыв — в истории контрагента той же транзакцией, без сотрудника.
+    const locks = (await inA((tx) => readHistory(tx, 'contractor_page', cpId))).filter(
+      (h) => h.action === 'page_lock',
+    );
+    expect(locks).toHaveLength(1);
+    expect(locks[0]).toMatchObject({ contractorId: cpId, actorUserId: null });
     // Пока закрыто — и верный код не принимается, счёт не идёт.
-    expect(await attempt(right)).toMatchObject({ outcome: 'locked', lockedNow: null });
+    expect(await attempt(right)).toMatchObject({ outcome: 'locked' });
     expect(await contractorPageState(db.app.db, 'page-a', INN, null)).toMatchObject({
       state: 'locked',
     });
@@ -267,12 +267,8 @@ describe.skipIf(!databaseAvailable())('Страница контрагента �
       .update(contractorPages)
       .set({ lockedUntil: sql`now() - interval '1 second'` });
     expect(await attempt(wrong)).toEqual({ outcome: 'wrong', triesLeft: 4 });
-    expect(await attempt(right, { token: 'browser-1' })).toEqual({
-      outcome: 'ok',
-      orgId: a.orgId,
-      contractorId: cpId,
-    });
-    expect((await page())[0]).toMatchObject({ failures: 0, failedAt: null, lockedUntil: null });
+    expect(await attempt(right, { token: 'browser-1' })).toEqual({ outcome: 'ok' });
+    expect((await page())[0]).toMatchObject({ failures: 0, lockedUntil: null });
     expect(await contractorPageState(db.app.db, 'page-a', INN, hash('browser-1'))).toEqual({
       state: 'open',
       orgId: a.orgId,
@@ -293,12 +289,58 @@ describe.skipIf(!databaseAvailable())('Страница контрагента �
     expect(await cleanupContractorPageGrants(db.app.db)).toBe(1);
   });
 
-  it('счёт неверных кодов по ссылке забывается через час после последнего', async () => {
+  it('«подряд» — до верного кода: давние неверные коды тоже считаются (прототип p.fails)', async () => {
     const wrong = wrongOf(await code());
     expect(await attempt(wrong)).toEqual({ outcome: 'wrong', triesLeft: 4 });
     expect(await attempt(wrong)).toEqual({ outcome: 'wrong', triesLeft: 3 });
-    await db.admin.db.update(contractorPages).set({ failedAt: sql`now() - interval '61 minutes'` });
-    expect(await attempt(wrong)).toEqual({ outcome: 'wrong', triesLeft: 4 });
+    await db.admin.db.update(contractorPages).set({ updatedAt: sql`now() - interval '30 days'` });
+    expect(await attempt(wrong)).toEqual({ outcome: 'wrong', triesLeft: 2 });
+    await db.admin.db.update(contractorPages).set({ failures: 0 });
+  });
+
+  it('одновременные неверные коды по ссылке считаются по очереди: ровно 5 до перерыва', async () => {
+    const wrong = wrongOf(await code());
+    const results = await Promise.all(Array.from({ length: 10 }, () => attempt(wrong)));
+    const outcomes = results.map((r) => r.outcome);
+    expect(outcomes.filter((o) => o === 'wrong')).toHaveLength(4);
+    expect(outcomes.filter((o) => o === 'locked')).toHaveLength(6);
+    const left = results.flatMap((r) => (r.outcome === 'wrong' ? [r.triesLeft] : []));
+    expect(left.sort()).toEqual([1, 2, 3, 4]);
+    const locks = (await inA((tx) => readHistory(tx, 'contractor_page', cpId))).filter(
+      (h) => h.action === 'page_lock',
+    );
+    expect(locks).toHaveLength(2);
+    await db.admin.db.update(contractorPages).set({ failures: 0, lockedUntil: null });
+  });
+
+  it('одновременные неверные коды с одного адреса — точный счёт', async () => {
+    const wrong = wrongOf(await code());
+    const ip = 'parallel-address';
+    // Четыре одновременные попытки (до перерыва по ссылке) — четыре строки счёта адреса.
+    await db.admin.db.update(contractorPages).set({ failures: 0, lockedUntil: null });
+    const rows = () =>
+      db.admin.db.execute(
+        sql`select count(*)::int as n from rate_limits where kind = 'cp_page_ip' and subject = ${hash(ip)}`,
+      ) as unknown as Promise<{ n: number }[]>;
+    const before = (await rows())[0]!.n;
+    await Promise.all(Array.from({ length: 4 }, () => attempt(wrong, { ip })));
+    expect((await rows())[0]!.n - before).toBe(4);
+    await db.admin.db.update(contractorPages).set({ failures: 0, lockedUntil: null });
+  });
+
+  it('у страницы не больше 20 запомненных браузеров: старшие забываются', async () => {
+    const right = await code();
+    await db.admin.db.delete(contractorPageGrants);
+    for (let i = 1; i <= 22; i++) {
+      expect(await attempt(right, { token: `many-${i}` })).toEqual({ outcome: 'ok' });
+    }
+    expect(await db.admin.db.select().from(contractorPageGrants)).toHaveLength(20);
+    expect(await contractorPageState(db.app.db, 'page-a', INN, hash('many-1'))).toEqual({
+      state: 'code',
+    });
+    expect(await contractorPageState(db.app.db, 'page-a', INN, hash('many-22'))).toMatchObject({
+      state: 'open',
+    });
   });
 
   it('30 неверных кодов за час с одного адреса по всем ссылкам — ввод с него закрыт на час', async () => {
@@ -323,15 +365,31 @@ describe.skipIf(!databaseAvailable())('Страница контрагента �
     expect(rows[0]?.n).toBe(0);
   });
 
-  it('открытие страницы — в истории контрагента с устройством; шапка страницы', async () => {
-    await inA((tx) =>
-      writeContractorPageHistory(tx, cpId, 'page_open', {
-        changes: [{ field: 'device', to: 'Телефон · Safari' }],
-      }),
-    );
+  it('открытие страницы — в истории контрагента с устройством; повтор за минуту — то же открытие; шапка', async () => {
+    const opens = async () =>
+      (await inA((tx) => readHistory(tx, 'contractor_page', cpId))).filter(
+        (h) => h.action === 'page_open',
+      );
+    const before = (await opens()).length;
+    await inAnonymous((tx) => writeContractorPageOpen(tx, cpId, 'Телефон · Safari'));
+    await inAnonymous((tx) => writeContractorPageOpen(tx, cpId, 'Телефон · Safari'));
+    await inAnonymous((tx) => writeContractorPageOpen(tx, cpId, 'ПК · Chrome'));
+    const after = await opens();
+    expect(after.length - before).toBe(2);
+    expect(after.at(-1)).toMatchObject({
+      actorUserId: null,
+      changes: [{ field: 'device', to: 'ПК · Chrome' }],
+    });
     const got = await inA((tx) => getContractorPage(tx, cpId));
-    expect(got?.lastDevice).toBe('Телефон · Safari');
+    expect(got?.lastDevice).toBe('ПК · Chrome');
     expect(got?.lastOpenAt).toBeInstanceOf(Date);
+    // «Выключить» и «Включить» снова — «Последнее открытие» начинается заново (прототип pgEnable).
+    await inA((tx) => disableContractorPage(tx, cpId));
+    await inA((tx) => enableContractorPage(tx, cpId, '135790'));
+    expect(await inA((tx) => getContractorPage(tx, cpId))).toMatchObject({
+      lastOpenAt: null,
+      lastDevice: null,
+    });
     expect(await inA((tx) => contractorPageHeader(tx, cpId))).toMatchObject({
       name: 'ОсОО «Укс»',
       inn: INN,
