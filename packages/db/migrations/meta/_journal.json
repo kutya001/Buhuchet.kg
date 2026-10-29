@@ -358,6 +358,13 @@
       "when": 1793307716180,
       "tag": "0050_reports_guards",
       "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1793310036754,
+      "tag": "0051_admin_platform_dicts_more",
+      "breakpoints": true
     }
   ]
 }

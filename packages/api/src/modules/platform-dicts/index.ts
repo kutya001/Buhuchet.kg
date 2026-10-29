@@ -45,6 +45,8 @@ import {
   moveAdminDictValueRoute,
   pdictsTabCountsHandler,
   pdictsTabCountsRoute,
+  reportTypeOptionsHandler,
+  reportTypeOptionsRoute,
   setAdminDictActiveHandler,
   setAdminDictActiveRoute,
   updateAdminDictValueHandler,
@@ -60,6 +62,34 @@ import {
   listAdminDictRequestsHandler,
   listAdminDictRequestsRoute,
 } from './admin-requests';
+import {
+  addAdminCalendarDayHandler,
+  addAdminCalendarDayRoute,
+  adminCalendarCopyHandler,
+  adminCalendarCopyPlanHandler,
+  adminCalendarCopyPlanRoute,
+  adminCalendarCopyRoute,
+  adminCalendarHistoryHandler,
+  adminCalendarHistoryRoute,
+  adminCalendarValuesHandler,
+  adminCalendarValuesRoute,
+  deleteAdminCalendarDayHandler,
+  deleteAdminCalendarDayRoute,
+  exportAdminCalendarHandler,
+  exportAdminCalendarRoute,
+  listAdminCalendarHandler,
+  listAdminCalendarRoute,
+} from './admin-calendar';
+import {
+  adminTaxInfoHandler,
+  adminTaxInfoRoute,
+  adminTaxValuesHandler,
+  adminTaxValuesRoute,
+  exportAdminTaxesHandler,
+  exportAdminTaxesRoute,
+  listAdminTaxesHandler,
+  listAdminTaxesRoute,
+} from './admin-taxes';
 import { phoneCodesHandler, phoneCodesRoute } from './phone-codes';
 
 /**
@@ -87,10 +117,23 @@ export function platformDictsModule(deps: ApiDeps) {
       // справочник или код.
       .openapi(adminDictGroupsRoute, adminDictGroupsHandler(deps))
       .openapi(pdictsTabCountsRoute, pdictsTabCountsHandler(deps))
+      .openapi(reportTypeOptionsRoute, reportTypeOptionsHandler(deps))
       .openapi(listAdminDictRequestsRoute, listAdminDictRequestsHandler(deps))
       .openapi(adminDictRequestValuesRoute, adminDictRequestValuesHandler(deps))
       .openapi(exportAdminDictRequestsRoute, exportAdminDictRequestsHandler(deps))
       .openapi(answerDictRequestRoute, answerDictRequestHandler(deps))
+      .openapi(adminTaxInfoRoute, adminTaxInfoHandler(deps))
+      .openapi(listAdminTaxesRoute, listAdminTaxesHandler(deps))
+      .openapi(adminTaxValuesRoute, adminTaxValuesHandler(deps))
+      .openapi(exportAdminTaxesRoute, exportAdminTaxesHandler(deps))
+      .openapi(listAdminCalendarRoute, listAdminCalendarHandler(deps))
+      .openapi(adminCalendarValuesRoute, adminCalendarValuesHandler(deps))
+      .openapi(exportAdminCalendarRoute, exportAdminCalendarHandler(deps))
+      .openapi(adminCalendarCopyPlanRoute, adminCalendarCopyPlanHandler(deps))
+      .openapi(adminCalendarCopyRoute, adminCalendarCopyHandler(deps))
+      .openapi(adminCalendarHistoryRoute, adminCalendarHistoryHandler(deps))
+      .openapi(addAdminCalendarDayRoute, addAdminCalendarDayHandler(deps))
+      .openapi(deleteAdminCalendarDayRoute, deleteAdminCalendarDayHandler(deps))
       .openapi(listAdminDictRoute, listAdminDictHandler(deps))
       .openapi(adminDictValuesRoute, adminDictValuesHandler(deps))
       .openapi(exportAdminDictRoute, exportAdminDictHandler(deps))

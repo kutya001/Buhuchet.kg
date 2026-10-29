@@ -12,7 +12,14 @@ export { Card, StatusDot } from './card';
 export { CardTabs, type CardTab } from './card-tabs';
 export { CHECKBOX_CLASS, CheckRow, Hint, SWITCH_CLASS } from './check-row';
 export { Chip } from './chip';
-export { CheckList, ChipSelect, type CheckListOption, type ChipOption } from './chip-select';
+export {
+  CheckList,
+  ChipMultiSelect,
+  ChipSelect,
+  type CheckListOption,
+  type ChipMultiOption,
+  type ChipOption,
+} from './chip-select';
 export { EmptyState, NothingFound, type EmptyAction } from './empty-state';
 export { FilesBox, type FilesBoxItem, type FilesBoxLabels, type FilesBoxProps } from './files-box';
 export { Icon } from './icon';
