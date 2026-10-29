@@ -131,6 +131,14 @@ export const PLATFORM_DICTS_IO_TEXTS = {
     section: E,
   },
   'err.import_empty': { ru: 'Вставьте данные или выберите файл', section: E },
+  'err.import_unreadable': {
+    ru: 'Не удалось прочитать файл: нужен файл .xlsx или CSV в формате выгрузки',
+    section: E,
+  },
+  'err.import_too_big': {
+    ru: 'В файле слишком много строк или столбцов для справочника',
+    section: E,
+  },
   'err.import_no_rows': {
     ru: 'Нужна строка заголовков и хотя бы одна строка данных',
     section: E,

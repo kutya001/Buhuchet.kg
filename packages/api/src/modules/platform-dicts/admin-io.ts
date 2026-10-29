@@ -24,6 +24,7 @@ import {
 } from '@buhuchet/db';
 import {
   ADMIN_DICT_META,
+  DICT_NOTE_MAX,
   formatText,
   IO_COLUMNS,
   ioChanges,
@@ -63,6 +64,12 @@ import type { AppEnv } from '../../env';
 import { apiFail, listQueryOf, listQueryResponses } from '../../errors';
 import { exportRateResponses, withExportSlot, xlsxContent, xlsxResponse } from '../../lists/export';
 import { buildXlsx, XLSX_TYPE } from '../../lists/xlsx';
+import {
+  readSheetRows,
+  SheetReadError,
+  type SheetCell,
+  type SheetLimits,
+} from '../../lists/xlsx-read';
 import { requirePlatformAdmin } from '../../middleware/access';
 import { serverTexts } from '../l10n/texts';
 import { requiredProblem, saveProblem, valueInputOf, type FieldProblem } from './admin';
@@ -172,23 +179,45 @@ export function adminDictIoXlsxHandler(
 /* ───────────── Загрузить ───────────── */
 
 /**
- * Таблица из тела запроса: вставка из Excel или файл CSV — текстом (UTF-8, иначе Windows-1251, как
- * сохраняет Excel); разделитель — табуляция, «;» или «,». Пусто — 400.
+ * Пределы файла загрузки: справочник — сотни строк и до полусотни столбцов; текст ячейки — до длины
+ * пояснения значения (длиннее — обрезан с «…» и не пройдёт проверку строки, а не сохранится обрезанным).
+ */
+const IMPORT_SHEET_LIMITS: Partial<SheetLimits> = {
+  rows: 5_000,
+  columns: 200,
+  cells: 200_000,
+  area: 500_000,
+  text: DICT_NOTE_MAX,
+};
+
+const cellString = (v: SheetCell | undefined) => (v === null || v === undefined ? '' : String(v));
+
+/**
+ * Таблица из тела запроса. Вставка из Excel (`text/plain`) — текстом: разделитель — табуляция, «;» или
+ * «,». Файл — .xlsx (первый лист, как «Скачать для Excel») или CSV (UTF-8, иначе Windows-1251, как
+ * сохраняет Excel), как в «Вводе из Excel». Пустые строки пропускаются. Пусто — 400, не читается или
+ * слишком большой — 400.
  */
 async function tableOf(c: Context<AppEnv>): Promise<string[][]> {
   const bytes = Buffer.from(await c.req.arrayBuffer());
   if (!bytes.length) importFail('import_empty');
-  let text: string;
-  try {
-    text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
-  } catch {
-    text = new TextDecoder('windows-1251').decode(bytes);
+  if (c.req.header('content-type')?.toLowerCase().startsWith('text/plain')) {
+    return parseIoText(new TextDecoder('utf-8').decode(bytes));
   }
-  return parseIoText(text);
+  let rows: SheetCell[][];
+  try {
+    rows = readSheetRows(bytes, IMPORT_SHEET_LIMITS);
+  } catch (err) {
+    if (!(err instanceof SheetReadError)) throw err;
+    importFail(err.code === 'sheet_too_big' ? 'import_too_big' : 'import_unreadable');
+  }
+  return rows.map((row) => Array.from(row, cellString)).filter((row) => row.some((x) => x.trim()));
 }
 
 const IMPORT_MESSAGES = {
   import_empty: 'Вставьте данные или выберите файл',
+  import_unreadable: 'Не удалось прочитать файл: нужен файл .xlsx или CSV в формате выгрузки',
+  import_too_big: 'В файле слишком много строк или столбцов для справочника',
   import_no_rows: 'Нужна строка заголовков и хотя бы одна строка данных',
   import_no_code: 'Нет столбца «Код»: без кода строки не сопоставить',
   import_changed: 'Справочник или файл изменились после сравнения — сравните заново',

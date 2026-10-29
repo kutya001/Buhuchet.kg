@@ -12,6 +12,7 @@ import {
   ListValues,
 } from '@buhuchet/shared';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { buildXlsx } from '../../lists/xlsx';
 import { apiRequest, createStaffFixture, signIn, TEST_ORIGIN, TEST_PASSWORD } from '../../testing';
 
 type Fixture = Awaited<ReturnType<typeof createStaffFixture>>;
@@ -44,6 +45,13 @@ describe.skipIf(!databaseAvailable())(
         method: 'POST',
         headers: { origin: TEST_ORIGIN, cookie, 'content-type': 'text/plain; charset=utf-8' },
         body: text,
+      });
+    /** Файл (.xlsx или CSV) — как его шлёт окно «Загрузка»: байтами. */
+    const uploadFile = (path: string, body: Uint8Array) =>
+      f.app.request(path, {
+        method: 'POST',
+        headers: { origin: TEST_ORIGIN, cookie: admin, 'content-type': 'application/octet-stream' },
+        body,
       });
     const errorOf = async (res: Response) => ApiError.parse(await res.json()).error;
     const file = async (dict: string) =>
@@ -123,6 +131,77 @@ describe.skipIf(!databaseAvailable())(
       const xlsx = await get(`${IO}/types/xlsx`);
       expect(xlsx.status).toBe(200);
       expect(xlsx.headers.get('content-type')).toContain('spreadsheetml');
+    });
+
+    it('файлом: «Скачать для Excel» без правок — без изменений, правка в Excel и CSV в Windows-1251 — одно изменение; длинный текст не обрезается молча', async () => {
+      const previewFile = async (dict: string, body: Uint8Array) => {
+        const res = await uploadFile(`${IO}/${dict}/preview`, body);
+        expect(res.status).toBe(200);
+        return AdminDictImportPreview.parse(await res.json());
+      };
+      // Выгрузка .xlsx (числа — числами) читается обратно без изменений.
+      for (const dict of ['types', 'phones']) {
+        const xlsx = new Uint8Array(await (await get(`${IO}/${dict}/xlsx`)).arrayBuffer());
+        const p = await previewFile(dict, xlsx);
+        expect({ errors: p.errors, change: p.change, add: p.add }, dict).toEqual({
+          errors: [],
+          change: [],
+          add: [],
+        });
+        expect(p.same, dict).toBe((await file(dict)).rows.length);
+      }
+
+      const data = await file('reasons');
+      const [code, name, note] = data.rows[0]!;
+      const rows = data.rows.map((r) => (r[0] === code ? [code!, name!, 'Из Excel', r[3]!] : r));
+      const xlsx = await buildXlsx(
+        'Причины',
+        data.header.map((title) => ({ title, kind: 'text' as const })),
+        rows,
+      );
+      const fromXlsx = await previewFile('reasons', xlsx);
+      expect(fromXlsx.change).toEqual([
+        {
+          line: 2,
+          code,
+          name,
+          changes: [{ title: 'Пояснение', from: note ?? '', to: 'Из Excel' }],
+        },
+      ]);
+      // CSV из Excel: «;» и Windows-1251.
+      const csv = [data.header, ...rows].map((r) => r.join(';')).join('\r\n');
+      const cp1251 = Buffer.from(
+        Array.from(csv, (ch) => {
+          const n = ch.charCodeAt(0);
+          if (n < 0x80) return n;
+          if (ch === 'ё') return 0xb8;
+          if (ch === 'Ё') return 0xa8;
+          if (ch === '«') return 0xab;
+          if (ch === '»') return 0xbb;
+          if (ch === '—') return 0x97;
+          return n - 0x350;
+        }),
+      );
+      expect((await previewFile('reasons', cp1251)).change).toEqual(fromXlsx.change);
+
+      // Текст длиннее пояснения не сохраняется обрезанным: строка с ошибкой.
+      const long = await buildXlsx(
+        'Причины',
+        data.header.map((title) => ({ title, kind: 'text' as const })),
+        [[code!, name!, 'я'.repeat(2_500), 'Да']],
+      );
+      const tooLong = await previewFile('reasons', long);
+      expect(tooLong.change).toEqual([]);
+      expect(tooLong.errors).toEqual([
+        { line: 2, code, errors: [expect.stringMatching(/^Пояснение: /)] },
+      ]);
+
+      const broken = await uploadFile(
+        `${IO}/reasons/preview`,
+        new Uint8Array([0x50, 0x4b, 3, 4, 1]),
+      );
+      expect(broken.status).toBe(400);
+      expect((await errorOf(broken)).code).toBe('import_unreadable');
     });
 
     it('(проверка задачи #93) одна изменённая строка — одно изменение в предпросмотре, после «ОК, применить» — история', async () => {
