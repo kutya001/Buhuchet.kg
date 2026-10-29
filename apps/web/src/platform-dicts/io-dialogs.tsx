@@ -165,9 +165,11 @@ function previewRows(t: Translate, p: Preview, activeTitle: string): MiniRow[] {
     const w = WHAT[key];
     return <StatusPill tone={w.tone} icon={w.icon} label={t(w.label)} size="sm" />;
   };
+  // На телефоне «Подробно» — на всю ширину карточки: там «было → стало» и тексты ошибок.
   const row = (key: string, pill: ReactNode, code: string, details: ReactNode): MiniRow => ({
     key,
     cells: { what: pill, code: <span className="font-mono">{code}</span>, details },
+    wide: ['details'],
   });
   return [
     ...p.errors.map((r) =>
@@ -433,12 +435,13 @@ function PreviewBody({ preview, activeTitle }: { preview: Preview; activeTitle: 
           sub={t(errors ? 'pdicts.io.import.plate.errors_sub' : 'pdicts.io.import.plate.no_errors')}
         />
       </Plates>
-      <div className="max-h-[340px] overflow-auto">
+      {/* На телефоне прокручивается всё окно, на ПК — только строки (прототип: max-height 340px). */}
+      <div className="md:max-h-[340px] md:overflow-auto">
         <MiniTable
           label={t('pdicts.io.import.table')}
           columns={[
-            { key: 'what', label: t('pdicts.io.import.col.what') },
-            { key: 'code', label: t('pdicts.io.import.col.code') },
+            { key: 'what', label: t('pdicts.io.import.col.what'), width: 130 },
+            { key: 'code', label: t('pdicts.io.import.col.code'), width: 110 },
             { key: 'details', label: t('pdicts.io.import.col.details') },
           ]}
           rows={rows}
