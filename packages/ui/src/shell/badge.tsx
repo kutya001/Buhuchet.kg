@@ -17,6 +17,7 @@ export function CountBadge({ count, className = '' }: { count: ShellCount; class
   return (
     <span
       title={count.title}
+      data-tone={tone}
       className={`min-w-5 flex-none rounded-full px-1.5 text-center text-[11px] leading-[18px] font-[650] tabular-nums ${TONES[tone]} ${className}`}
     >
       {count.value}
@@ -24,14 +25,33 @@ export function CountBadge({ count, className = '' }: { count: ShellCount; class
   );
 }
 
-/** Синяя точка у модуля или на кнопке «Меню» (прототип `.kb-dot`, `#burger.has-dot`). */
-export function NavDot({ title, className = '' }: { title?: string; className?: string }) {
+/** Цвет точки: синяя — «Начните с Базы знаний», красная и жёлтая — незаполненные показатели. */
+const DOT_TONES = {
+  info: 'bg-info shadow-[0_0_0_3px_var(--color-info-bg)]',
+  red: 'bg-danger shadow-[0_0_0_3px_var(--color-danger-bg)]',
+  yellow: 'bg-warn shadow-[0_0_0_3px_var(--color-warn-bg)]',
+} as const;
+
+/**
+ * Точка у модуля или на кнопке «Меню» (прототип `.kb-dot`, `#burger.has-dot`): синяя; на «Меню» —
+ * красная или жёлтая, когда не заполнены показатели (`#burger.dot-red`, `.dot-yellow`).
+ */
+export function NavDot({
+  title,
+  tone = 'info',
+  className = '',
+}: {
+  title?: string;
+  tone?: keyof typeof DOT_TONES;
+  className?: string;
+}) {
   return (
     <span
       title={title}
       aria-label={title}
       role={title ? 'img' : undefined}
-      className={`h-2 w-2 flex-none rounded-full bg-info shadow-[0_0_0_3px_var(--color-info-bg)] ${className}`}
+      data-tone={tone}
+      className={`h-2 w-2 flex-none rounded-full ${DOT_TONES[tone]} ${className}`}
     />
   );
 }

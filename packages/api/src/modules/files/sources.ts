@@ -1,5 +1,7 @@
 import type { Tx } from '@buhuchet/db';
 import type { AccessSubject, FileSourceKind, HistoryEntity } from '@buhuchet/domain';
+import { indicatorValueSource } from '../kpi/card';
+import { taskFileSource } from '../tasks/files';
 
 /** Куда пишется история «Прикреплён файл» и «Удалён файл»: запись-источник и её контрагент. */
 export interface FileHistoryTarget {
@@ -57,4 +59,6 @@ export const manualSource: FileSource = {
  */
 export const FILE_SOURCES: Readonly<Record<FileSourceKind, FileSource>> = {
   manual: manualSource,
+  task: taskFileSource,
+  indicator_value: indicatorValueSource,
 };

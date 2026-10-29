@@ -56,6 +56,13 @@ export interface ListColumn {
    * «15.03.2026 10:05» по Бишкеку, деньги «1 250,50», остальное — значение.
    */
   display?: Expr;
+  /**
+   * Текст ячейки на экране для поиска, если он не как `display`: у общей задачи в списке — «Общая», а в
+   * фильтре — «Общие задачи».
+   */
+  searchDisplay?: Expr;
+  /** Ячейка выгрузки, если не как `display` (у общих задач «Контрагент» в Excel пустой — ТЗ). */
+  exportDisplay?: Expr;
   /** Подпись столбца — ключ словаря (`staff.col.full_name`): заголовок в выгрузке Excel. */
   label: string;
 }
@@ -173,7 +180,10 @@ export function searchCondition(
   const compact = compactSearchText(search.q);
   const keys = search.keys.length ? search.keys : Object.keys(columns);
   const parts = keys.flatMap((key) => {
-    const text = searchable(displayOf(columnOf(columns, key, 'search')));
+    const column = columnOf(columns, key, 'search');
+    const text = searchable(
+      column.searchDisplay ? sql`nullif(${column.searchDisplay}::text, '')` : displayOf(column),
+    );
     const found = [sql`${text} like ${likePattern(needle)} escape '\\'`];
     if (compact.length >= SEARCH_COMPACT_MIN) {
       found.push(
@@ -601,7 +611,11 @@ export async function selectListExport(options: {
   const sort = query.sort === undefined ? (options.defaultSort ?? DEFAULT_LIST_SORT) : query.sort;
   const fields: Record<string, SQL> = {};
   picked.forEach(({ column }, i) => {
-    fields[`c${i}`] = isNumericColumn(column.type) ? sql`${column.value}` : displayOf(column);
+    fields[`c${i}`] = isNumericColumn(column.type)
+      ? sql`${column.value}`
+      : column.exportDisplay
+        ? sql`nullif(${column.exportDisplay}::text, '')`
+        : displayOf(column);
   });
   const where = and(options.scope, listWhere(columns, query.filters, query.search));
   const rows = await options

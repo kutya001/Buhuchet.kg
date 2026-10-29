@@ -11,16 +11,20 @@ import { adminModule } from './modules/admin';
 import { authModule } from './modules/auth';
 import { contractorsModule } from './modules/contractors';
 import { kbModule } from './modules/kb';
+import { kpiModule } from './modules/kpi';
 import { l10nModule } from './modules/l10n';
 import { moneyModule } from './modules/money';
+import { NEWS_IMAGE_UPLOAD_PATH, newsModule } from './modules/news';
 import { orgModule } from './modules/org';
 import { platformDictsModule } from './modules/platform-dicts';
 import { dictsModule } from './modules/dicts';
 import { filesModule } from './modules/files';
 import { LOGO_PATH } from './modules/org/logo';
+import { reportsModule } from './modules/reports';
 import { rolesModule } from './modules/roles';
 import { staffModule } from './modules/staff';
 import { systemModule } from './modules/system';
+import { tasksModule } from './modules/tasks';
 import { telegramModule } from './modules/telegram';
 import { viewsModule } from './modules/views';
 
@@ -30,8 +34,11 @@ import { viewsModule } from './modules/views';
  */
 const API_BODY_LIMIT = 1024 * 1024;
 
-/** Логотип организации (до 2 МБ) идёт через API: сервер проверяет, что это картинка, до сохранения. */
-const OWN_BODY_LIMIT_PATHS: ReadonlySet<string> = new Set([LOGO_PATH]);
+/**
+ * Логотип организации и картинки новостей (до 2 МБ) идут через API: сервер проверяет, что это
+ * картинка, до сохранения.
+ */
+const OWN_BODY_LIMIT_PATHS: ReadonlySet<string> = new Set([LOGO_PATH, NEWS_IMAGE_UPLOAD_PATH]);
 
 /** Приложение API. Монтируется по пути /api (Next.js catch-all или отдельный сервер). */
 export function createApp(deps: ApiDeps) {
@@ -78,11 +85,15 @@ export function createApp(deps: ApiDeps) {
     .route('/', staffModule(deps))
     .route('/', rolesModule(deps))
     .route('/', contractorsModule(deps))
+    .route('/', reportsModule(deps))
+    .route('/', tasksModule(deps))
     .route('/', orgModule(deps))
     .route('/', kbModule(deps))
+    .route('/', newsModule(deps))
     .route('/', platformDictsModule(deps))
     .route('/', dictsModule(deps))
     .route('/', moneyModule(deps))
+    .route('/', kpiModule(deps))
     .route('/', filesModule(deps))
     .route('/', viewsModule(deps))
     .route('/', adminModule(deps));

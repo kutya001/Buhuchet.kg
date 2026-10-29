@@ -44,6 +44,7 @@ import {
   taxBenefitDueRules,
   taxBenefitOffices,
   taxBenefitReportTypes,
+  taskCategories,
   taxBenefits,
   taxOffices,
   taxRegimes,
@@ -69,6 +70,8 @@ export const TABLE_SECTIONS = [
   'localization',
   'permissions',
   'roleTemplates',
+  // «Новости» Базы знаний — таблица news (задача 2.32).
+  'news',
 ] as const;
 
 /** Справочники раздела `dictionaries`, которые лежат в своих таблицах. */
@@ -81,6 +84,7 @@ export const TABLE_DICTIONARIES = [
   'forms',
   'reasons',
   'banks',
+  'cats',
 ] as const;
 
 // Служебные отметки прототипа «кто и когда создал и изменил» в базу не переносятся: история продукта —
@@ -343,6 +347,17 @@ const ReasonSchema = z
   })
   .strict();
 
+/** «Категории задач». */
+const CategorySchema = z
+  .object({
+    code: z.string().min(1),
+    name: z.string().min(1),
+    note: z.string().optional(),
+    active: z.boolean(),
+    ...audit,
+  })
+  .strict();
+
 /** «Банковские провайдеры»: «Тип» в refDB.json — словами. */
 const BANK_KIND_OF = { Банк: 'bank', 'Электронный кошелёк': 'wallet' } as const;
 
@@ -387,6 +402,7 @@ const RefSections = z.object({
     forms: Dictionary(FormSchema),
     reasons: Dictionary(ReasonSchema),
     banks: Dictionary(BankSchema),
+    cats: Dictionary(CategorySchema),
   }),
   reportTypes: z.array(ReportTypeSchema),
   enRates: z.array(EnRateSchema),
@@ -409,6 +425,7 @@ export type PlatformDictsReport = Record<
   | 'dueChangeReasons'
   | 'banks'
   | 'phoneCodes'
+  | 'taskCategories'
   | 'productionCalendar',
   SeedReport
 >;
@@ -473,6 +490,10 @@ export function platformDictRows(refDB: unknown) {
   unique(
     d.banks.items.map((x) => x.code),
     'banks',
+  );
+  unique(
+    d.cats.items.map((x) => x.code),
+    'cats',
   );
 
   const authorityByName = new Map(d.organs.items.map((o) => [o.name, o.code]));
@@ -742,6 +763,14 @@ export function platformDictRows(refDB: unknown) {
     sortOrder: i + 1,
   }));
 
+  const categoryRows = d.cats.items.map((c, i) => ({
+    code: c.code,
+    name: c.name,
+    note: c.note ?? '',
+    active: c.active,
+    sortOrder: i + 1,
+  }));
+
   const workingSaturdays = new Set(ref.workingSaturdays);
   const calendarRows: CalendarEntry[] = [
     ...Object.entries(ref.holidays).map(([day, name]) => ({
@@ -775,6 +804,7 @@ export function platformDictRows(refDB: unknown) {
     dueChangeReasons: reasonRows,
     banks: bankRows,
     phoneCodes: phoneCodeRows,
+    taskCategories: categoryRows,
     productionCalendar: calendarRows,
   };
 }
@@ -1054,6 +1084,13 @@ export async function seedPlatformDicts(
     rows.phoneCodes,
     update,
   );
+  const category = await upsertDict(
+    db,
+    taskCategories,
+    taskCategories.code,
+    rows.taskCategories,
+    update,
+  );
   const calendar = await upsertDict(
     db,
     productionCalendar,
@@ -1092,6 +1129,7 @@ export async function seedPlatformDicts(
     dueChangeReasons: reason.report,
     banks: bank.report,
     phoneCodes: phone.report,
+    taskCategories: category.report,
     productionCalendar: calendar.report,
   };
 }

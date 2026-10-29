@@ -443,9 +443,19 @@ export interface GridViewSettings {
  * сюда — сервер не хранит настройки списков, которых нет.
  */
 export const GRID_KEYS = [
+  // «Задачи»: у каждой вкладки свой вид, как `'tasks-'+tab` в прототипе.
+  'tasks.mine',
+  'tasks.byme',
+  'tasks.all',
+  'tasks.overdue',
   'staff.list',
   'staff.roles',
+  // «Показатели контрагентов»: вкладки «За период» и «Не заполнено».
+  'kpi.period',
+  'kpi.missing',
   'kb.team',
+  // Админка → «База знаний (содержимое)» → «Новости».
+  'kbadm.news',
   'accounts.list',
   'orgs.list',
   'l10n.list',

@@ -261,6 +261,7 @@ const PILL_TONES = {
   bad: 'bg-danger-bg text-danger-label',
   caution: 'bg-caution-bg text-caution-label',
   warn: 'bg-warn-bg text-warn-label',
+  violet: 'bg-violet-bg text-violet',
 } as const;
 
 const PILL_SIZES = {
@@ -275,7 +276,7 @@ export function pillClass(size: keyof typeof PILL_SIZES = 'md'): string {
 
 /**
  * Метка (`.pill`): «Привязан», «Основной»; `caution` — оранжевая (`.pill.orange`, «не привязан»),
- * `warn` — жёлтая (`.pill.yellow`, «сверить»);
+ * `warn` — жёлтая (`.pill.yellow`, «сверить»), `violet` — фиолетовая (`.pill.purple`, «ждёт» у задачи);
  * `sm` — маленькая (`.pill.sm`). В компактном списке метка ниже (`data-pill`).
  */
 export function Pill({
@@ -297,21 +298,32 @@ export function Pill({
   );
 }
 
-/** Ярлык (`.tag`): «все права», «Свои контрагенты» в карточке роли; `title` — подсказка. */
+const TAG_TONES = {
+  plain: 'bg-label-bg text-label',
+  info: 'bg-info-bg text-info',
+  violet: 'bg-violet-bg text-violet',
+} as const;
+
+/**
+ * Ярлык (`.tag`): «все права», «Свои контрагенты» в карточке роли; `title` — подсказка. `info` и
+ * `violet` — метки вида срока задачи «День» и «Месяц» (`.tag.kd-day`, `.tag.kd-month`).
+ */
 export function Tag({
   icon,
   title,
+  tone = 'plain',
   children,
 }: {
   icon?: IconName;
   title?: string;
+  tone?: keyof typeof TAG_TONES;
   children: ReactNode;
 }) {
   return (
     <span
       data-tag=""
       title={title}
-      className="inline-flex flex-none items-center gap-1 rounded px-1.5 align-[1px] text-[10.5px] leading-[17px] font-[650] tracking-[.03em] whitespace-nowrap bg-label-bg text-label"
+      className={`inline-flex flex-none items-center gap-1 rounded px-1.5 align-[1px] text-[10.5px] leading-[17px] font-[650] tracking-[.03em] whitespace-nowrap ${TAG_TONES[tone]}`}
     >
       {icon ? <Icon name={icon} size="sm" /> : null}
       {children}

@@ -41,6 +41,7 @@ import type {
   GridLabels,
   GridPage,
   GridRowSelection,
+  GridRowStripe,
   GridRowTone,
   GridValues,
 } from './types';
@@ -79,6 +80,8 @@ export interface DataGridProps<Row> {
   /** Столбец-заголовок карточки (`title` прототипа); по умолчанию — первый видимый. */
   titleKey?: string;
   rowTone?: (row: Row) => GridRowTone | undefined;
+  /** Цветная полоска слева: поверх полоски тона, фон тона остаётся. */
+  rowStripe?: (row: Row) => GridRowStripe | undefined;
   /** Действия записи: меню «⋯», правый клик, долгое нажатие. */
   actions?: (row: Row) => readonly ActionEntry[];
   /** Открыть запись (карточку) нажатием на строку или Enter. */
@@ -138,6 +141,7 @@ export function DataGrid<Row>({
   rowKey,
   titleKey,
   rowTone,
+  rowStripe,
   actions,
   onOpen,
   openMenu = false,
@@ -298,6 +302,7 @@ export function DataGrid<Row>({
         rows={data.items}
         rowKey={rowKey}
         rowTone={rowTone}
+        rowStripe={rowStripe}
         settings={settings}
         onSettingsChange={onSettingsChange}
         sort={sort}
@@ -331,6 +336,7 @@ export function DataGrid<Row>({
         rows={data.items}
         rowKey={rowKey}
         rowTone={rowTone}
+        rowStripe={rowStripe}
         clickable={!!onOpen || (openMenu && !!actions)}
         events={events}
         selection={selection}

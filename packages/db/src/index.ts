@@ -2,6 +2,7 @@
 // отдельными входами `@buhuchet/db/migrate`, `@buhuchet/db/seed`, `@buhuchet/db/testing`, чтобы не попадать в сборку сайта.
 export * from './client';
 export * from './context';
+export { orgIds } from './organizations';
 export * from './errors';
 export * from './history';
 export * from './platform-history';
@@ -11,9 +12,13 @@ export * from './auth';
 export * from './telegram';
 export * from './staff';
 export * from './contractors';
+export * from './reports';
+export * from './report-list';
+export * from './tasks';
 export * from './roles';
 export * from './org';
 export * from './kb';
+export * from './news';
 export * from './l10n';
 export * from './list';
 export * from './views';
@@ -32,3 +37,5 @@ export * from './platform-values';
 export * from './dict-requests';
 export * as schema from './schema';
 export * from './money';
+export * from './kpi';
+export * from './kpi-lists';

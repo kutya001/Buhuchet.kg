@@ -64,6 +64,7 @@ import {
   reportTypeRegimes,
   reportTypes,
   singleTaxRates,
+  taskCategories,
   taxBenefitDueRules,
   taxBenefitOffices,
   taxBenefitReportTypes,
@@ -101,6 +102,7 @@ const TABLES: Readonly<Record<AdminValueDict, DictTable>> = {
   organs: authorities,
   ugns: taxOffices,
   banks,
+  cats: taskCategories,
   reasons: dueChangeReasons,
 };
 

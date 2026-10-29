@@ -262,6 +262,7 @@ const COUNT: Readonly<Record<AdminValueDict, CountKey>> = {
   forms: 'pdicts.count',
   phones: 'pdicts.phones_count',
   organs: 'pdicts.count',
+  cats: 'pdicts.count',
   reasons: 'pdicts.count',
   ugns: 'pdicts.ugns_count',
   banks: 'pdicts.count',
@@ -286,6 +287,7 @@ const NOTES: Partial<Record<AdminValueDict, UiTextKey>> = {
   bases: 'pdicts.note.bases',
   regimes: 'pdicts.note.regimes',
   benefits: 'pdicts.note.benefits',
+  cats: 'pdicts.note.cats',
   reasons: 'pdicts.note.reasons',
   ugns: 'pdicts.note.ugns',
 };
