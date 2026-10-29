@@ -450,6 +450,9 @@ export const GRID_KEYS = [
   'tasks.overdue',
   'staff.list',
   'staff.roles',
+  // «Показатели контрагентов»: вкладки «За период» и «Не заполнено».
+  'kpi.period',
+  'kpi.missing',
   'kb.team',
   // Админка → «База знаний (содержимое)» → «Новости».
   'kbadm.news',

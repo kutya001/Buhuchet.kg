@@ -62,7 +62,7 @@ import {
   visibleTabs,
   type ShellAccess,
 } from './modules';
-import { useTabCounts, withTabCounts } from './tab-counts';
+import { menuDot, useTabCounts, withTabCounts } from './tab-counts';
 import { UiProviders } from './ui-providers';
 
 export { useShell, type AddRequest } from './context';
@@ -462,9 +462,15 @@ function ShellPage({
               menu={{
                 label: t('shell.menu'),
                 onClick: toggleNav,
-                // Точка у «Меню»: «Начните с Базы знаний» или непрочитанные новости в «Других модулях».
-                dot: phone.other.find((m) => m.count?.dot || (m.id === 'kb' && m.count?.value))
-                  ?.count?.title,
+                // Непрочитанные новости — обычная точка у «Меню», цветная — только у показателей
+                // (прототип renderSheetDot).
+                ...menuDot(
+                  phone.other.map((m) =>
+                    m.id === 'kb' && m.count?.value
+                      ? { ...m, count: { ...m.count, tone: undefined, dot: true } }
+                      : m,
+                  ),
+                ),
               }}
               info={{
                 label: t('shell.module_info'),

@@ -324,6 +324,25 @@ describe.skipIf(!databaseAvailable())('«База знаний»: прогрес
     expect((await asOwner(b, (tx) => kbDoneFacts(tx, a.ownerUserId, steps))).size).toBe(0);
   });
 
+  it('факты «Сделать» — из своей истории статусов: «Проверить месяц» показателей', async () => {
+    const steps = [{ id: 'kchk', rule: KB_STEP_RULES.kchk!.done! }];
+    const month = '00000000-0000-4000-8000-0000000000a1';
+    // Другой статус той же шкалы не засчитывается, «Заполнено» → «Проверено» — да.
+    await asOwner(a, (tx) =>
+      writeStatusChange(tx, { scale: 'indicator', entityId: month, from: null, to: 'filled' }),
+    );
+    expect((await asOwner(a, (tx) => kbDoneFacts(tx, a.ownerUserId, steps))).size).toBe(0);
+    await asOwner(a, (tx) =>
+      writeStatusChange(tx, { scale: 'indicator', entityId: month, from: 'filled', to: 'checked' }),
+    );
+    expect(
+      (await asOwner(a, (tx) => kbDoneFacts(tx, a.ownerUserId, steps))).get('kchk'),
+    ).toBeInstanceOf(Date);
+    // Проверку владельца сотруднику не засчитывают, чужая организация её не видит.
+    expect((await inOrg(a, accUserId, (tx) => kbDoneFacts(tx, accUserId, steps))).size).toBe(0);
+    expect((await asOwner(b, (tx) => kbDoneFacts(tx, a.ownerUserId, steps))).size).toBe(0);
+  });
+
   it('шаг Админки «Создать организацию и её владельца» — по организации, созданной самим администратором', async () => {
     const steps = [{ id: 'a-org', rule: KB_STEP_RULES['a-org']!.done! }];
     const asAdmin = () =>

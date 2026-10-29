@@ -17,4 +17,5 @@ export * from './platform-dicts';
 export * from './admin';
 export * from './dicts';
 export * from './money';
+export * from './kpi';
 export * from './admin-dicts';

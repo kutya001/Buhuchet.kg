@@ -11,6 +11,7 @@ import { adminModule } from './modules/admin';
 import { authModule } from './modules/auth';
 import { contractorsModule } from './modules/contractors';
 import { kbModule } from './modules/kb';
+import { kpiModule } from './modules/kpi';
 import { l10nModule } from './modules/l10n';
 import { moneyModule } from './modules/money';
 import { NEWS_IMAGE_UPLOAD_PATH, newsModule } from './modules/news';
@@ -90,6 +91,7 @@ export function createApp(deps: ApiDeps) {
     .route('/', platformDictsModule(deps))
     .route('/', dictsModule(deps))
     .route('/', moneyModule(deps))
+    .route('/', kpiModule(deps))
     .route('/', filesModule(deps))
     .route('/', viewsModule(deps))
     .route('/', adminModule(deps));

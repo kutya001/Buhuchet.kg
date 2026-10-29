@@ -79,7 +79,9 @@ describe('SideNav — панель модулей на ПК', () => {
     expect(html).toContain('title="Просрочено"');
     expect(html).toContain('>74</span>');
     // Красный счётчик — цвета опасной кнопки: число читается и в тёмной теме (theme.test.ts).
-    expect(html).toMatch(/title="Просрочено" class="[^"]*bg-danger-btn text-on-accent/);
+    expect(html).toMatch(
+      /title="Просрочено" data-tone="red" class="[^"]*bg-danger-btn text-on-accent/,
+    );
     expect(html).toContain('<span>низ</span></div></aside>');
   });
 
@@ -183,6 +185,17 @@ describe('TopBar — верхняя панель', () => {
     );
     expect(badge).toContain('aria-label="Начните с Базы знаний"');
     expect(badge).toContain('bg-info');
+  });
+
+  it('точка на «Меню» от незаполненных показателей — красная или жёлтая', () => {
+    const red = renderToStaticMarkup(
+      <TopBar {...TOP} menu={{ ...TOP.menu, dot: 'Есть просроченные', dotTone: 'red' }} />,
+    );
+    expect(red).toMatch(/title="Есть просроченные"[^>]*class="[^"]*bg-danger /);
+    const yellow = renderToStaticMarkup(
+      <TopBar {...TOP} menu={{ ...TOP.menu, dot: 'Срок не прошёл', dotTone: 'yellow' }} />,
+    );
+    expect(yellow).toMatch(/title="Срок не прошёл"[^>]*class="[^"]*bg-warn /);
   });
 
   it('«Меню», модуль и вкладка, поиск по вкладке, время, «?» и тема', () => {
