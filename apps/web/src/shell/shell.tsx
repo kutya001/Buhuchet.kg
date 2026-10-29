@@ -285,14 +285,16 @@ function ShellPage({
   }, []);
 
   const actions: AddAction[] = current
-    ? addActions(current.id as MenuModuleId, access, tabId ?? current.tabs[0]?.id ?? null).map((a) => ({
-        id: a.id,
-        label: t(a.label),
-        icon: a.icon,
-        sub: a.sub && t(a.sub),
-        badge: a.beta ? t('add.beta') : undefined,
-        separate: a.separate,
-      }))
+    ? addActions(current.id as MenuModuleId, access, tabId ?? current.tabs[0]?.id ?? null).map(
+        (a) => ({
+          id: a.id,
+          label: t(a.label),
+          icon: a.icon,
+          sub: a.sub && t(a.sub),
+          badge: a.beta ? t('add.beta') : undefined,
+          separate: a.separate,
+        }),
+      )
     : [];
 
   const toggleNav = () => {
