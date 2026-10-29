@@ -3,6 +3,7 @@ import {
   contractorUsage,
   createContractor,
   deleteContractor,
+  deleteContractorFiles,
   findContractorByInn,
   getContractor,
   lockContractor,
@@ -34,6 +35,7 @@ import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
 import { apiFail, versionedSaveResponses } from '../../errors';
 import { orgContextOf, requirePermission } from '../../middleware/access';
+import { dropObjects } from '../files/files';
 import { notFound } from './card';
 import {
   checkContractor,
@@ -408,7 +410,7 @@ export function deleteContractorHandler(
   return async (c) => {
     const { id } = c.req.valid('param');
     const subject = subjectOf(c);
-    await withOrgContext(deps.db, orgContextOf(c), async (tx) => {
+    const keys = await withOrgContext(deps.db, orgContextOf(c), async (tx) => {
       const row = await lockContractor(tx, id, scopeSqlOf(subject));
       if (!row) notFound();
       // «Удалить» у архивного нет (прототип cpActions): сначала вернуть из архива.
@@ -421,8 +423,12 @@ export function deleteContractorHandler(
           variant: refusal,
         });
       }
+      // Файлы контрагента удаляются вместе с ним, а не становятся общими файлами организации.
+      const fileKeys = await deleteContractorFiles(tx, id);
       await deleteContractor(tx, row);
+      return fileKeys;
     });
+    await dropObjects(deps, keys);
     return c.body(null, 204);
   };
 }

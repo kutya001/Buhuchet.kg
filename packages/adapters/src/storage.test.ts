@@ -178,6 +178,29 @@ describe.skipIf(!s3Available)('S3: подписанная ссылка реал�
     await storage.delete(key);
   });
 
+  it('просмотр в окне: картинка и PDF открываются в браузере с проверенным типом, остальное — нет', async () => {
+    const storage = createS3Storage(loadStorageConfig());
+    const key = orgFileKey('test', 'signed', randomUUID());
+    await storage.put(key, '%PDF-1.4', { contentType: 'application/pdf' });
+    const res = await fetch(
+      await storage.signedDownloadUrl(key, {
+        expiresInSeconds: 60,
+        fileName: 'Акт.pdf',
+        inline: { contentType: 'application/pdf' },
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-disposition')).toMatch(/^inline; filename="_{3}.pdf"/);
+    expect(res.headers.get('content-type')).toBe('application/pdf');
+    await expect(
+      storage.signedDownloadUrl(key, {
+        expiresInSeconds: 60,
+        inline: { contentType: 'image/svg+xml' },
+      }),
+    ).rejects.toThrow(RangeError);
+    await storage.delete(key);
+  });
+
   it('без имени файл всё равно скачивается вложением, а не открывается', async () => {
     const storage = createS3Storage(loadStorageConfig());
     const key = orgFileKey('test', 'signed', randomUUID());
