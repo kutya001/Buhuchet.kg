@@ -18,6 +18,9 @@ export const HISTORY_ENTITIES = [
   'dict_request',
   'org_account',
   'employee_wallet',
+  // Показатели контрагентов: показатель (настройка, «Кому вести») и значение за месяц.
+  'indicator',
+  'indicator_value',
   'ui_text',
   'platform_dict',
 ] as const;

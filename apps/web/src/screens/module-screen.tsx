@@ -10,6 +10,7 @@ import { KbArticlesTab } from '../kb/kb-articles';
 import { KbLessonsTab } from '../kb/kb-lessons';
 import { KbLevelTab } from '../kb/kb-level';
 import { KbTeamTab } from '../kb/kb-team';
+import { KpiScreen } from '../kpi/kpi-screen';
 import { OrgMain } from '../org/org-main';
 import { OrgPolicyTab } from '../org/org-policy';
 import { OrgSettingsTab } from '../org/org-settings';
@@ -34,6 +35,7 @@ export function ModuleScreen({
   moduleId: MenuModuleId;
   tabId: string | null;
 }) {
+  if (moduleId === 'kpi') return <KpiScreen tab={tabId ?? 'month'} />;
   if (moduleId === 'staff') {
     const tab = tabId ?? 'list';
     if (tab === 'list') return <StaffList />;
@@ -82,6 +84,10 @@ const SCREENS_WITH_PLATES: ReadonlySet<string> = new Set<string>([
   'tasks/byme',
   'tasks/all',
   'tasks/overdue',
+  'kpi/',
+  'kpi/month',
+  'kpi/period',
+  'kpi/missing',
   'orgs/',
   'l10n/',
 ]);

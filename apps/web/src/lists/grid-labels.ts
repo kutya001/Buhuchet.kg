@@ -12,6 +12,8 @@ export type CountKey =
   | 'staff.count'
   | 'roles.count'
   | 'task.count'
+  | 'kpi.period.count'
+  | 'kpi.missing.count'
   | 'accounts.count'
   | 'orgs.count'
   | 'locale.count'

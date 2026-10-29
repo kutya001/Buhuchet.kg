@@ -14,6 +14,7 @@ import type { Db } from '../client';
 import { seedDemoContractors } from './demo-contractors';
 import { seedDemoDictRequests } from './demo-dicts';
 import { seedDemoMoney } from './demo-money';
+import { seedDemoKpi } from './demo-kpi';
 import { seedDemoTasks } from './demo-tasks';
 import {
   employees,
@@ -40,6 +41,9 @@ export type DemoKind =
   | 'task'
   | 'task_comment'
   | 'requisite'
+  | 'indicator'
+  | 'indicator_value'
+  | 'indicator_month'
   | 'dict_request';
 export type DemoIdOf = (kind: DemoKind, protoId: string) => string;
 
@@ -305,6 +309,8 @@ export async function seedDemoOrganization(
   });
 
   await seedDemoMoney(db, file, orgId);
+
+  await seedDemoKpi(db, file, orgId);
 
   return { orgId, created: created.length > 0, employees: insertedEmployees.length };
 }
