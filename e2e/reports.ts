@@ -9,6 +9,7 @@ const freshInn = () =>
   `08${Date.now().toString().slice(-8)}${String(Math.floor(Math.random() * 10_000)).padStart(4, '0')}`;
 
 export type Row = {
+  id: string;
   type: { code: string };
   periodStart: string;
   dueBase: string;
