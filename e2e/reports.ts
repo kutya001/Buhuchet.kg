@@ -33,7 +33,8 @@ export type NewContractor = {
 
 /**
  * Новый контрагент демо-организации; `benefits` — коды льгот и статусов, `taxOfficeCode` — УГНС,
- * `name` — название (по умолчанию «Сроки отчётов <ИНН>»), `responsible` — id ответственного сотрудника.
+ * `name` — название (по умолчанию «Сроки отчётов <ИНН>»), `responsible` — id ответственного сотрудника,
+ * `tariff: false` — без стоимости обслуживания (в организации без «Платы за обслуживание»).
  */
 export async function newContractor(
   api: APIRequestContext,
@@ -43,6 +44,7 @@ export async function newContractor(
     taxOfficeCode?: string;
     name?: string;
     responsible?: string;
+    tariff?: boolean;
   } = {},
 ): Promise<NewContractor> {
   const staff = (await (await api.get('/api/staff?size=all')).json()) as {
@@ -67,7 +69,7 @@ export async function newContractor(
         : {}),
       startDate: '2026-01-01',
       responsibleEmployeeId: options.responsible ?? staff.items.find((e) => e.active)!.id,
-      tariff: { amount: 1_000_000, period: 'M' },
+      ...(options.tariff === false ? {} : { tariff: { amount: 1_000_000, period: 'M' } }),
     },
   });
   expect(res.status(), await res.text()).toBe(201);

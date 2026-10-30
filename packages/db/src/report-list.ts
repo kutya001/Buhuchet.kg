@@ -264,7 +264,8 @@ const PERIOD_FULL = sql<string>`case
 const PERIOD_KEY = sql<string>`${reports.periodStart}::text || coalesce(' ' || ${reports.eventDate}::text, '')`;
 
 /** Ставка назначения коротко (прототип aRateTxt, short): «ЕНС-04 · 4 / 6 %», «12 %; 1 / 2 %». */
-const enKey = sql`(e.x ->> 'code') || ':' || coalesce(e.x ->> 'variant', '0')`;
+// В скобках: `->>` связывает сильнее `||`, без них искался бы ключ «ЕНС-04», а не «ЕНС-04:0».
+const enKey = sql`((e.x ->> 'code') || ':' || coalesce(e.x ->> 'variant', '0'))`;
 const RATE = sql<string | null>`case
   when ${assignments.reportTypeCode} in (${sql.join(SINGLE_TAX_TYPES.map(textLiteral), sql`, `)})
     then (select string_agg(${lt('en')} ->> ${enKey}, '; ' order by e.ord) from jsonb_array_elements(${assignments.enRates}) with ordinality e(x, ord) where ${lt('en')} ->> ${enKey} is not null)

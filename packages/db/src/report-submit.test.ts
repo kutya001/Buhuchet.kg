@@ -11,6 +11,7 @@ import {
 } from './contractors';
 import { insertPendingFile, markFileReady } from './files';
 import { readHistory } from './history';
+import { getReportCard } from './report-list';
 import { createOrganization, type CreatedOrganization } from './organizations';
 import {
   confirmReport,
@@ -249,6 +250,14 @@ describe.skipIf(!databaseAvailable())('Отчёты: сдача, подтвер�
 
   it('п. 61: ЕН кв., ЕНС-04 безнал 300 000 и нал 200 000 → строки 12 000 + 12 000, итог 24 000', async () => {
     const q3 = await reportOf(cpA, 'enq', '2026-07-01');
+    // Ставка в списке — коротко, в карточке — полностью (прототип rateOf).
+    const card = await inA((tx) =>
+      getReportCard(tx, q3.id, { t: (k) => t(k as never), today: TODAY, scope: undefined }),
+    );
+    expect([card?.rate, card?.assignment?.rateText]).toEqual([
+      'ЕНС-04 · 4 / 6 %',
+      'ЕНС-04 · 4 % безнал + 6 % нал',
+    ]);
     const view = await inA((tx) => reportSubmitView(tx, q3.id, t));
     expect(view.lineDefs.map((d) => [d.key, d.label])).toEqual([
       ['ЕНС-04:cl', 'Безналичная выручка, 4 %'],

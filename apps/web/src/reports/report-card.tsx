@@ -132,7 +132,9 @@ function cardItems(t: Translate, r: Card): KeyValueItem[] {
       ).toLowerCase()}`,
     },
   ];
-  if (r.rate) items.push({ id: 'rate', label: t('report.card.rate'), value: r.rate });
+  // Ставка полностью, как прототип rateOf: «ЕНС-04 · 4 % безнал + 6 % нал» (в списке — коротко).
+  const rate = r.assignment?.rateText || r.rate;
+  if (rate) items.push({ id: 'rate', label: t('report.card.rate'), value: rate });
   if (r.socfund)
     items.push({
       id: 'socfund',

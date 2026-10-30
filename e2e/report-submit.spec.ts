@@ -198,7 +198,7 @@ test.describe('Этап 2: отчёты — сдача, подтверждени
     expect(await total()).toBe(1_050_000);
     const grid = page.locator('[data-grid]');
     await expect(grid).toContainText('Итого по фильтру · 3');
-    await expect(grid).toContainText(/10\s500\sсом/);
+    await expect(grid).toContainText(/10\s500,00/);
   });
 
   test('(п. 3) у статистического отчёта поля суммы нет ни в карточке, ни в «Отметить сданным», ни в меню', async ({
@@ -376,7 +376,7 @@ test.describe('Этап 2: отчёты — сдача, подтверждени
     await signIn(page.request, origin, 'erkin', DEMO_PASSWORD);
     await openTab(page, isMobile, 'all', word);
     const card = await openCard(page, enq!.id, name, 'Единый налог, квартальный');
-    await expect(card).toContainText('ЕНС-04');
+    await expect(card).toContainText('ЕНС-04 · 4 % безнал + 6 % нал');
     await card.locator('[data-report-button="submit"]').click();
     const dialog = page.getByRole('dialog', { name: 'Отметить отчёт сданным' });
     const lines = dialog.locator('[data-report-lines]');

@@ -202,7 +202,7 @@ test.describe('Этап 2: форма контрагента', () => {
       data: { currentPassword: chiefTemporary, newPassword: 'Свой-пароль-e2e-3' },
     });
     expect(chiefChanged.status(), await chiefChanged.text()).toBe(200);
-    const own = await newContractor(chief, origin, { responsible: employeeId });
+    const own = await newContractor(chief, origin, { responsible: employeeId, tariff: false });
     await chief.dispose();
     const reportId = await manualReport(acct, origin, {
       contractorId: own.id,
