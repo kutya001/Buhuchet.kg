@@ -118,8 +118,9 @@ const batchResponses = (right: string) =>
 const STATUS_RIGHT = 'Нет права «Менять статус сдачи»';
 const CONFIRM_RIGHT = 'Нет права «Подтверждать сдачу отчётов» или это свой сданный отчёт';
 
-const route = <B extends z.ZodType>(
-  path: string,
+// Путь — литералом: по нему клиент API (`hc`) строит методы, `string` ломает типы всего клиента.
+const route = <P extends string, B extends z.ZodType>(
+  path: P,
   summary: string,
   permission: PermissionId,
   schema: B,
@@ -244,7 +245,7 @@ export function fixReportHandler(deps: ApiDeps): RouteHandler<typeof fixReportRo
 }
 
 /** Шаг без окна из меню и шкалы. */
-function stepRoute(path: string, summary: string, refused: string) {
+function stepRoute<P extends string>(path: P, summary: string, refused: string) {
   return route(
     path,
     summary,
@@ -270,18 +271,39 @@ export const notRequiredReportRoute = stepRoute(
   'отчёт уже «Не требуется» или сдан и подтверждён',
 );
 
-function stepHandler(deps: ApiDeps, to: ReportStep): RouteHandler<typeof startReportRoute, AppEnv> {
-  return async (c) => {
-    const { id } = c.req.valid('param');
-    const { version } = c.req.valid('json');
-    const r = await run(deps, c, (tx, ctx) => setReportStep(tx, id, to, { ...ctx, version }));
-    return c.json({ id: r.id, version: r.version }, 200);
-  };
+/** Шаг отчёта по версии: новая версия записи. */
+async function stepOf(
+  deps: ApiDeps,
+  c: Context<AppEnv>,
+  id: string,
+  version: number,
+  to: ReportStep,
+) {
+  const r = await run(deps, c, (tx, ctx) => setReportStep(tx, id, to, { ...ctx, version }));
+  return { id: r.id, version: r.version };
 }
 
-export const startReportHandler = (deps: ApiDeps) => stepHandler(deps, 'in_progress');
-export const rejectReportHandler = (deps: ApiDeps) => stepHandler(deps, 'needs_fix');
-export const notRequiredReportHandler = (deps: ApiDeps) => stepHandler(deps, 'not_required');
+export const startReportHandler =
+  (deps: ApiDeps): RouteHandler<typeof startReportRoute, AppEnv> =>
+  async (c) =>
+    c.json(
+      await stepOf(deps, c, c.req.valid('param').id, c.req.valid('json').version, 'in_progress'),
+      200,
+    );
+export const rejectReportHandler =
+  (deps: ApiDeps): RouteHandler<typeof rejectReportRoute, AppEnv> =>
+  async (c) =>
+    c.json(
+      await stepOf(deps, c, c.req.valid('param').id, c.req.valid('json').version, 'needs_fix'),
+      200,
+    );
+export const notRequiredReportHandler =
+  (deps: ApiDeps): RouteHandler<typeof notRequiredReportRoute, AppEnv> =>
+  async (c) =>
+    c.json(
+      await stepOf(deps, c, c.req.valid('param').id, c.req.valid('json').version, 'not_required'),
+      200,
+    );
 
 export const rollbackReportRoute = route(
   '/reports/{id}/rollback',

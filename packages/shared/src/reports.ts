@@ -228,6 +228,13 @@ export const ReportRow = z.object({
   amountAuto: z.boolean(),
   payDue: IsoDate.nullable(),
   pays: z.string(),
+  /**
+   * Настройки вида в организации: «Файл при сдаче обязателен», «Квитанция о приёме обязательна»;
+   * `hasFiles` — у отчёта есть загруженные файлы (окна массовой сдачи и подтверждения).
+   */
+  needFile: z.boolean(),
+  needReceipt: z.boolean(),
+  hasFiles: z.boolean(),
   responsible: Person.nullable(),
   formCode: z.string(),
   ownershipForm: z.string(),
@@ -383,6 +390,8 @@ export const ReportCard = ReportRow.extend({
       status: z.enum(REPORT_STATUSES),
       dueDate: IsoDate,
       superseded: z.boolean(),
+      confirmed: z.boolean(),
+      amount: Tyiyn.nullable(),
     }),
   ),
 });

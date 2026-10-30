@@ -36,6 +36,7 @@ import {
   dueChangeReasons,
   employees,
   files,
+  orgReportTypes,
   reportDueChanges,
   orgSettings,
   ownershipForms,
@@ -569,6 +570,13 @@ export interface ReportRow {
   amountAuto: boolean;
   payDue: IsoDate | null;
   pays: string;
+  /**
+   * Настройки вида в организации: «Файл при сдаче обязателен», «Квитанция о приёме обязательна»;
+   * `hasFiles` — у отчёта есть загруженные файлы (массовая сдача и подтверждение помечают такие строки).
+   */
+  needFile: boolean;
+  needReceipt: boolean;
+  hasFiles: boolean;
   responsible: { id: string; shortName: string } | null;
   formCode: string;
   ownershipForm: string;
@@ -636,6 +644,9 @@ function rowFields(today: IsoDate) {
     amountAuto: reports.amountAuto,
     payDue: reports.payDue,
     pays: PAYS,
+    needFile: sql<boolean>`coalesce((select ${orgReportTypes.needFile} from ${orgReportTypes} where ${orgReportTypes.orgId} = ${reports.orgId} and ${orgReportTypes.reportTypeCode} = ${reports.reportTypeCode} limit 1), false)`,
+    needReceipt: sql<boolean>`coalesce((select ${orgReportTypes.needReceipt} from ${orgReportTypes} where ${orgReportTypes.orgId} = ${reports.orgId} and ${orgReportTypes.reportTypeCode} = ${reports.reportTypeCode} limit 1), false)`,
+    hasFiles: sql<boolean>`exists (select 1 from ${files} where ${files.orgId} = ${reports.orgId} and ${files.sourceKind} = 'report' and ${files.sourceId} = ${reports.id} and ${files.state} = 'ready')`,
     responsibleId: reports.responsibleEmployeeId,
     responsibleName: responsible.shortName,
     formCode: reportTypes.formCode,
@@ -707,6 +718,9 @@ function toRow(r: RowData): ReportRow {
     amountAuto: Boolean(r.amountAuto),
     payDue: r.payDue as IsoDate | null,
     pays: (r.pays as string | null) ?? '',
+    needFile: Boolean(r.needFile),
+    needReceipt: Boolean(r.needReceipt),
+    hasFiles: Boolean(r.hasFiles),
     responsible: responsibleId
       ? { id: responsibleId, shortName: (r.responsibleName as string | null) ?? '' }
       : null,
@@ -929,6 +943,9 @@ export interface ReportCard extends ReportRow {
     status: ReportStatus;
     dueDate: IsoDate;
     superseded: boolean;
+    /** Сдача подтверждена — в «Версиях» метка «Подтверждено» (прототип repStKey). */
+    confirmed: boolean;
+    amount: number | null;
   }[];
   superseded: boolean;
 }
@@ -989,6 +1006,8 @@ export async function getReportCard(
         status: reports.status,
         dueDate: reports.dueDate,
         superseded: reports.superseded,
+        confirmedAt: reports.confirmedAt,
+        amount: reports.amount,
       })
       .from(reports)
       // Версии — в той же области: прежнюю версию видит ответственный за неё, новую уже могли передать.
@@ -1049,6 +1068,10 @@ export async function getReportCard(
       actor: auditActorName(actorUserId, actorName),
     })),
     statusHistory,
-    versions,
+    versions: versions.map(({ confirmedAt, amount, ...v }) => ({
+      ...v,
+      confirmed: confirmedAt !== null,
+      amount: amount === null ? null : Number(amount),
+    })),
   };
 }

@@ -1,6 +1,11 @@
 'use client';
 
-import { DueChangeReasons, ManualReportOptions, ReportTabCounts } from '@buhuchet/shared';
+import {
+  DueChangeReasons,
+  ManualReportOptions,
+  ReportCard,
+  ReportTabCounts,
+} from '@buhuchet/shared';
 import type { ShellCount } from '@buhuchet/ui';
 import { queryOptions, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
@@ -8,7 +13,8 @@ import { api, apiFailure } from '../api-client';
 
 /**
  * Данные модуля «Отчеты для сдачи» через TanStack Query: счётчики вкладок, плашки и числа быстрого
- * фильтра, списки окна «Разовый отчёт», причины изменения срока. После действия — `useReportsRefresh`.
+ * фильтра, карточка отчёта, списки окна «Разовый отчёт», причины изменения срока. После действия —
+ * `useReportsRefresh`.
  */
 
 type JsonResponse = { ok: boolean; status: number; json(): Promise<unknown> };
@@ -59,6 +65,15 @@ export const reportTabCountsQuery = queryOptions({
   select: reportTabCounts,
 });
 
+/** Карточка отчёта: поля строки, сдача, строки суммы, файлы, история. */
+export function reportQuery(id: string) {
+  return queryOptions({
+    queryKey: ['reports', 'card', id],
+    queryFn: async () =>
+      json(await api.api.reports[':id'].$get({ param: { id } }), (v) => ReportCard.parse(v)),
+  });
+}
+
 /** Списки окна «Разовый отчёт»: контрагенты в области и подключённые виды. */
 export const manualOptionsQuery = queryOptions({
   queryKey: ['reports', 'manual-options'],
@@ -76,11 +91,13 @@ export const dueReasonsQuery = queryOptions({
   staleTime: 10 * 60_000,
 });
 
-/** После действия с отчётом — перечитать списки вкладок и счётчики. */
+/** После действия с отчётом — перечитать карточки, списки вкладок, счётчики и блоки «Файлы». */
 export function useReportsRefresh() {
   const client = useQueryClient();
   return useCallback(() => {
     void client.invalidateQueries({ queryKey: ['reports', 'summary'] });
+    void client.invalidateQueries({ queryKey: ['reports', 'card'] });
+    void client.invalidateQueries({ queryKey: ['files', 'report'] });
     for (const tab of REPORT_LIST_TABS)
       void client.invalidateQueries({ queryKey: ['list', `reports.${tab}`] });
   }, [client]);
