@@ -503,10 +503,6 @@ export const CONTRACTORS_TEXTS = {
     ru: 'Подтвердите снятие обязательных отчётов: {names}',
     section: E,
   },
-  'err.report_pick_bases': {
-    ru: 'Основания меняет сотрудник с правом «Создавать и изменять контрагентов»',
-    section: E,
-  },
   'err.report_pick_version': { ru: 'Нужна версия записи контрагента', section: E },
   'err.report_pick_unknown': { ru: 'Нет такого вида отчёта', section: E },
 } as const satisfies Record<string, UiTextDefault>;

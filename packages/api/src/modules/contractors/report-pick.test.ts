@@ -448,7 +448,8 @@ describe.skipIf(!databaseAvailable())('Подбор отчётов: методы
       add: ['soc'],
     });
 
-    // Только «Назначать отчёты» со своей областью: видит всех, меняет отчёты своих, основания — нет.
+    // Только «Назначать отчёты» со своей областью: видит всех, у своих меняет отчёты и основания
+    // (как в прототипе, решение заказчика — docs/deviations.md п. А-6).
     expect((await contextOf(assigner, { contractorId: chiefs.id })).edit).toEqual({
       types: false,
       bases: false,
@@ -456,20 +457,21 @@ describe.skipIf(!databaseAvailable())('Подбор отчётов: методы
     });
     expect((await contextOf(assigner, { contractorId: mine.id })).edit).toEqual({
       types: true,
-      bases: false,
+      bases: true,
       connect: false,
     });
     expect((await apply(assigner, chiefs.id, { assigned: [], codes: ['soc'] })).status).toBe(404);
-    const bases = await apply(assigner, mine.id, {
-      assigned: [],
-      codes: ['soc'],
-      bases: ['employees'],
-      version: mine.version,
-    });
-    expect([bases.status, (await failure(bases)).code]).toEqual([403, 'report_pick_bases']);
-    expect(await applied(assigner, mine.id, { assigned: [], codes: ['soc'] })).toMatchObject({
-      add: ['soc'],
-    });
+    expect(
+      await applied(assigner, mine.id, {
+        assigned: [],
+        codes: ['soc'],
+        bases: ['employees'],
+        version: mine.version,
+      }),
+    ).toMatchObject({ add: ['soc'] });
+    expect((await contextOf(assigner, { contractorId: mine.id })).subject.bases).toEqual([
+      'employees',
+    ]);
 
     // Чужая организация.
     expect((await context(ownerB, { contractorId: own.id })).status).toBe(404);

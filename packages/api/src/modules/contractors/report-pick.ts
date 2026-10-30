@@ -222,8 +222,9 @@ export function reportPickContextHandler(
         version: r?.version ?? null,
         edit: {
           types: open && editable && canPick(subject),
-          // ОТКЛОНЕНИЕ: docs/deviations.md#А-6
-          bases: open && hasPermission(subject, 'createCp'),
+          // Основания меняет тот же, кто отмечает отчёты, как в прототипе (решение заказчика,
+          // docs/deviations.md п. А-6).
+          bases: open && editable && canPick(subject),
           connect: hasPermission(subject, 'dicts'),
         },
         today,
@@ -406,10 +407,6 @@ export function applyReportPickHandler(
     const t = await translateOf(deps);
     const texts = await serverTexts(deps);
     const scope = pickScopeOf(subject);
-    // ОТКЛОНЕНИЕ: docs/deviations.md#А-6
-    if (body.bases !== undefined && !hasPermission(subject, 'createCp')) {
-      apiFail(403, 'report_pick_bases', t('err.report_pick_bases'));
-    }
     const out = await withOrgContext(deps.db, ctx, async (tx) => {
       const row = await lockContractor(tx, id, scope);
       if (!row) notFound();
