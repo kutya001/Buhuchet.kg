@@ -81,7 +81,7 @@ async function run<T>(
   );
 }
 
-const repeatTexts = (ctx: ReportConfirmContext) => ({ repeat: ctx.t('report.reason.repeat') });
+const repeatTexts = (ctx: ReportConfirmContext) => ({ repeat: ctx.t('report.amount.repeat') });
 
 const saved = { 'application/json': { schema: ReportSaved } };
 const batch = { 'application/json': { schema: ReportBatchResult } };

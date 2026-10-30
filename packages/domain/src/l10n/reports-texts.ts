@@ -472,7 +472,6 @@ export const REPORTS_TEXTS = {
     ru: 'Подтверждение выключено в учётной политике',
     section: S,
   },
-  'report.reason.repeat': { ru: 'Повторяющаяся сумма из назначения', section: S },
   'err.until_before_from': { ru: ASSIGNMENT_MESSAGES.until_before_from, section: E },
   'err.rate_invalid': { ru: ASSIGNMENT_MESSAGES.rate_invalid, section: E },
   'err.en_rates_invalid': { ru: ASSIGNMENT_MESSAGES.en_rates_invalid, section: E },
