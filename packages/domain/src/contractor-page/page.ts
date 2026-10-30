@@ -16,8 +16,11 @@ export const PAGE_CODE_LENGTH = 6;
 export const PAGE_CODE_TRIES = 5;
 export const PAGE_LOCK_MINUTES = 15;
 
-/** Общий предел с одного адреса IP по всем ссылкам всех организаций (ТЗ): 30 неверных за час — час. */
-export const PAGE_IP_MAX_FAILURES = 30;
+/**
+ * Общий предел с одного адреса IP по всем ссылкам всех организаций (ТЗ; docs/deviations.md п. Е-2,
+ * решение заказчика 30.10.2026): 3 неверных за час — час.
+ */
+export const PAGE_IP_MAX_FAILURES = 3;
 export const PAGE_IP_WINDOW_MINUTES = 60;
 export const PAGE_IP_LOCK_MINUTES = 60;
 

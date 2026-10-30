@@ -175,7 +175,7 @@ export const publicPageCodeRoute = createRoute({
     404: { description: '«Страница недоступна»', content: error },
     429: {
       description:
-        'Ввод закрыт: 5 неверных кодов подряд по ссылке (`page_locked`, 15 минут) или 30 неверных за час с адреса (`page_ip_locked`, час); до какого момента — `details.lockedUntil`',
+        'Ввод закрыт: 5 неверных кодов подряд по ссылке (`page_locked`, 15 минут) или 3 неверных за час с адреса (`page_ip_locked`, час); до какого момента — `details.lockedUntil`',
       content: error,
     },
   },

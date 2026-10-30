@@ -227,6 +227,16 @@ test.describe('Этап 1: сотрудники и роли (экраны)', () 
     await expect(page.getByRole('status').filter({ hasText: 'Роль изменена' })).toBeVisible();
     await expect(card).toContainText('Главный бухгалтер');
 
+    // «Сбросить пароль» (только у владельца): временный пароль показывается один раз.
+    await card.getByRole('button', { name: 'Действия' }).click();
+    await page.getByRole('menu', { name: 'Действия' }).getByRole('menuitem', { name: 'Сбросить пароль' }).click();
+    const reset = page.getByRole('dialog', { name: 'Пароль сброшен' });
+    await expect(reset).toContainText(fullName);
+    await expect(reset).toContainText('Передайте его сотруднику лично.');
+    const resetPassword = (await reset.locator('[data-temporary-password]').textContent())!;
+    await reset.getByRole('button', { name: 'Готово' }).click();
+    await expect(reset).toHaveCount(0);
+
     // Вкладка «Контрагенты»: закреплённых пока нет. На телефоне вкладки — список под текущей.
     if (isMobile) {
       await card.getByRole('tab', { selected: true }).click();
@@ -238,10 +248,15 @@ test.describe('Этап 1: сотрудники и роли (экраны)', () 
     await expect(card).toContainText('Закреплено контрагентов: 0');
     await expect(card).toContainText('Нет закреплённых контрагентов');
 
-    // С подставленным паролем сотрудник входит, роль — новая.
-    const res = await page.request.post('/api/auth/login', {
+    // С прежним временным паролем не входит; со сброшенным — входит, роль — новая.
+    const old = await page.request.post('/api/auth/login', {
       headers: { origin },
       data: { login, password: temporaryPassword },
+    });
+    expect(old.status(), await old.text()).toBe(401);
+    const res = await page.request.post('/api/auth/login', {
+      headers: { origin },
+      data: { login, password: resetPassword },
     });
     expect(res.status(), await res.text()).toBe(200);
     expect(await res.json()).toMatchObject({
@@ -432,15 +447,15 @@ test.describe('Этап 1: сотрудники и роли (экраны)', () 
       await expect(menu).toHaveCount(0);
     };
 
-    await test.step('сотрудники: «Сменить роль», «Сбросить пароль», «Заблокировать» — только у того, кого можно вести', async () => {
+    await test.step('сотрудники: «Сменить роль», «Заблокировать» — только у того, кого можно вести; «Сбросить пароль» — ни у кого', async () => {
       await page.goto('/app/staff/list');
       await search(page, isMobile, word);
       await expect(grid.locator('[data-id]')).toHaveCount(3);
+      // Пароль сотрудника сбрасывает только владелец (docs/deviations.md п. 11).
       await menuOf(colleague.employee.id, [
         'Открыть карточку',
         'Изменить',
         'Сменить роль',
-        'Сбросить пароль',
         'Заблокировать',
       ]);
       // Главный бухгалтер шире кадровика, а себя не ведут: пунктов нет вовсе, не неактивны.

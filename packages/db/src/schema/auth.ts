@@ -21,7 +21,7 @@ export const sessions = pgTable(
     tokenHash: text('token_hash').notNull().unique(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull().defaultNow(),
-    /** 30 дней с последнего обращения. */
+    /** 1 день с последнего обращения (`SESSION_TTL_DAYS`). */
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   },
   (t) => [

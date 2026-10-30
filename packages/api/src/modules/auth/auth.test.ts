@@ -169,7 +169,8 @@ describe.skipIf(!databaseAvailable())('вход, сеансы и проверк�
     expect(setCookie).toContain('HttpOnly');
     expect(setCookie).toContain('SameSite=Lax');
     expect(setCookie).toContain('Path=/');
-    expect(setCookie).toContain(`Max-Age=${30 * 24 * 60 * 60}`);
+    // Сеанс живёт 1 день с последнего обращения (docs/deviations.md, п. 5, решение 30.10.2026).
+    expect(setCookie).toContain(`Max-Age=${24 * 60 * 60}`);
     const me = MeResponse.parse(await res.json());
     expect(me).toMatchObject({
       user: { login: 'acc-a', isPlatformAdmin: false, mustChangePassword: false },

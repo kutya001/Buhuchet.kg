@@ -46,7 +46,7 @@ describe('меню сотрудника', () => {
   it('без права «Сотрудники и роли» — только «Открыть карточку»', () => {
     const r = run();
     const e = employee();
-    const list = staffMenu({ canManage: false, employeeId: ME, t, run: r })(e);
+    const list = staffMenu({ canManage: false, isOwner: true, employeeId: ME, t, run: r })(e);
     expect(labels(list)).toEqual(['Открыть карточку']);
     items(list)[0]!.run();
     expect(r.open).toHaveBeenCalledWith(e);
@@ -54,24 +54,24 @@ describe('меню сотрудника', () => {
 
   it('у владельца организации — только «Открыть карточку», в карточке «Действий» нет', () => {
     const owner = employee({ isOwner: true });
-    expect(labels(staffMenu({ canManage: true, employeeId: ME, t, run: run() })(owner))).toEqual([
+    expect(labels(staffMenu({ canManage: true, isOwner: true, employeeId: ME, t, run: run() })(owner))).toEqual([
       'Открыть карточку',
     ]);
     expect(
-      staffMenu({ canManage: true, employeeId: ME, t, run: run(), card: true })(owner),
+      staffMenu({ canManage: true, isOwner: true, employeeId: ME, t, run: run(), card: true })(owner),
     ).toEqual([]);
   });
 
   it('сам владелец на своей строке может «Изменить» ФИО и телефон; в карточке «Действий» нет', () => {
     const r = run();
     const owner = employee({ id: ME, isOwner: true });
-    const list = staffMenu({ canManage: true, employeeId: ME, t, run: r })(owner);
+    const list = staffMenu({ canManage: true, isOwner: true, employeeId: ME, t, run: r })(owner);
     expect(labels(list)).toEqual(['Открыть карточку', 'Изменить']);
     const edit = items(list)[1]!;
     expect(edit).toMatchObject({ label: 'Изменить', icon: 'edit' });
     edit.run();
     expect(r.edit).toHaveBeenCalledWith(owner);
-    expect(staffMenu({ canManage: true, employeeId: ME, t, run: r, card: true })(owner)).toEqual(
+    expect(staffMenu({ canManage: true, isOwner: true, employeeId: ME, t, run: r, card: true })(owner)).toEqual(
       [],
     );
   });
@@ -88,7 +88,7 @@ describe('меню сотрудника', () => {
   it('активному — «Открыть карточку», «Изменить», «Сменить роль», «Сбросить пароль», черта и красное «Заблокировать»', () => {
     const r = run();
     const e = employee();
-    const list = staffMenu({ canManage: true, employeeId: ME, t, run: r })(e);
+    const list = staffMenu({ canManage: true, isOwner: true, employeeId: ME, t, run: r })(e);
     expect(labels(list)).toEqual([
       'Открыть карточку',
       'Изменить',
@@ -113,7 +113,7 @@ describe('меню сотрудника', () => {
   });
 
   it('в карточке «Действия» — те же пункты без «Открыть карточку» и «Изменить» (это отдельная кнопка)', () => {
-    const list = staffMenu({ canManage: true, employeeId: ME, t, run: run(), card: true })(
+    const list = staffMenu({ canManage: true, isOwner: true, employeeId: ME, t, run: run(), card: true })(
       employee(),
     );
     expect(labels(list)).toEqual(['Сменить роль', 'Сбросить пароль', '—', 'Заблокировать']);
@@ -122,15 +122,28 @@ describe('меню сотрудника', () => {
   it('заблокированному вместо «Заблокировать» — «Разблокировать»', () => {
     const r = run();
     const e = employee({ active: false });
-    const unblock = items(staffMenu({ canManage: true, employeeId: ME, t, run: r })(e)).at(-1);
+    const unblock = items(staffMenu({ canManage: true, isOwner: true, employeeId: ME, t, run: r })(e)).at(-1);
     expect(unblock).toMatchObject({ label: 'Разблокировать', icon: 'key' });
     expect(unblock!.danger).toBeUndefined();
     unblock!.run();
     expect(r.unblock).toHaveBeenCalledWith(e);
   });
 
+  it('не владельцу «Сбросить пароль» не показывается: пароль сотрудника сбрасывает владелец (п. 11)', () => {
+    const menu = staffMenu({ canManage: true, isOwner: false, employeeId: ME, t, run: run() });
+    expect(labels(menu(employee()))).toEqual([
+      'Открыть карточку',
+      'Изменить',
+      'Сменить роль',
+      '—',
+      'Заблокировать',
+    ]);
+    const card = staffMenu({ canManage: true, isOwner: false, employeeId: ME, t, run: run(), card: true });
+    expect(labels(card(employee()))).toEqual(['Сменить роль', '—', 'Заблокировать']);
+  });
+
   it('у себя и у того, кого вести нельзя, «Сменить роль», «Сбросить пароль» и «Заблокировать» скрыты', () => {
-    const menu = staffMenu({ canManage: true, employeeId: ME, t, run: run() });
+    const menu = staffMenu({ canManage: true, isOwner: true, employeeId: ME, t, run: run() });
     expect(labels(menu(employee({ id: ME })))).toEqual(['Открыть карточку', 'Изменить']);
     // Сотрудник с правами «выдаёт только владелец» или с ролью шире своей: только «Изменить».
     expect(labels(menu(employee({ manageable: false })))).toEqual(['Открыть карточку', 'Изменить']);
@@ -139,7 +152,7 @@ describe('меню сотрудника', () => {
       'Изменить',
     ]);
     // В карточке «Действий» тогда нет: пусто.
-    const card = staffMenu({ canManage: true, employeeId: ME, t, run: run(), card: true });
+    const card = staffMenu({ canManage: true, isOwner: true, employeeId: ME, t, run: run(), card: true });
     expect(card(employee({ manageable: false }))).toEqual([]);
   });
 });
