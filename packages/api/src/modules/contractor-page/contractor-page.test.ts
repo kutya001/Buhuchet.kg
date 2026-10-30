@@ -264,9 +264,11 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
     expect(format.status).toBe(400);
     const wrong = await enter(path, wrongOf(code));
     expect(wrong.status).toBe(403);
+    // Остаток — меньший из двух: по ссылке 4, по адресу 2 (docs/deviations.md п. О-1).
     expect(await failure(wrong)).toMatchObject({
       code: 'page_code_wrong',
-      details: { triesLeft: 4 },
+      message: 'Неверный код. Осталось попыток: 2',
+      details: { triesLeft: 2 },
     });
 
     const ok = await enter(path, code);
