@@ -13,7 +13,7 @@ import {
   type HistoryValue,
   type ServicePeriod,
 } from '@buhuchet/domain';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Db } from '../client';
 import {
@@ -283,7 +283,7 @@ export async function seedDemoContractors(
         ),
       );
   }
-  await seedDemoServicePeriods(db, orgId, rows, month);
+  await seedDemoServicePeriods(db, orgId, rows);
 
   // Подтверждение права на режим — в истории контрагента (п. 58: «в истории — кто подтвердил»);
   // пишется вместе с новым контрагентом, поэтому повторный запуск его не задваивает.
@@ -326,7 +326,6 @@ async function seedDemoServicePeriods(
     contractor: { id: string; startDate: string; serviceStatus: string };
     c: { kind: string; archived: boolean; periods: ServicePeriod[] };
   }[],
-  month: string,
 ): Promise<void> {
   for (const { contractor, c } of rows) {
     const current = await db
@@ -335,7 +334,8 @@ async function seedDemoServicePeriods(
         to: contractorServicePeriods.toMonth,
       })
       .from(contractorServicePeriods)
-      .where(eq(contractorServicePeriods.contractorId, contractor.id));
+      .where(eq(contractorServicePeriods.contractorId, contractor.id))
+      .orderBy(asc(contractorServicePeriods.fromMonth));
     const untouched =
       current.length === 0 ||
       (current.length === 1 && current[0]!.from.slice(0, 7) === contractor.startDate.slice(0, 7));
