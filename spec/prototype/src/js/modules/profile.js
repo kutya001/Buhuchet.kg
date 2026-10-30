@@ -20,15 +20,15 @@ function profileDlg(){
       if(q('#pf-kb'))q('#pf-kb').onclick=()=>{m.close();go('kb','level')};
       bindNotify(el,u,m);q('#pf-known').onclick=()=>tKnownReset(()=>m.draw());
       q('#pf-theme').onchange=e=>{document.documentElement.setAttribute('data-theme',e.target.value);try{localStorage.setItem('bu.theme',e.target.value)}catch(_){}paintTheme()};
-      if(q('#pf-untg'))q('#pf-untg').onclick=()=>{u.tg=null;log('emp',u.id,'Telegram отвязан');m.draw();toast('Telegram отвязан')};
+      if(q('#pf-untg'))q('#pf-untg').onclick=()=>{tgSvc(u,'Telegram отвязан');u.tg=null;log('emp',u.id,'Telegram отвязан');m.draw();toast('Telegram отвязан')};
       if(q('#pf-tglink'))q('#pf-tglink').onclick=()=>copyText('https://t.me/buhuchet_bot?start=a7f3c91e','Ссылка скопирована');
-      if(q('#pf-tgdemo'))q('#pf-tgdemo').onclick=()=>{u.tg='@'+u.login;log('emp',u.id,'Telegram привязан');m.draw();toast('Telegram привязан','tg')};
+      if(q('#pf-tgdemo'))q('#pf-tgdemo').onclick=()=>{u.tg='@'+u.login;log('emp',u.id,'Telegram привязан');tgSvc(u,'Telegram привязан');m.draw();toast('Telegram привязан','tg')};
       if(q('#pf-addw'))q('#pf-addw').onclick=()=>walletDlg(u,()=>m.draw());
       $$('[data-edw]',el).forEach(b=>b.onclick=()=>walletDlg(u,()=>m.draw(),u.wallets[+b.dataset.edw]));
       $$('[data-delw]',el).forEach(b=>b.onclick=()=>{const w=u.wallets[+b.dataset.delw];confirmDlg({title:'Удалить реквизит?',text:`${esc(rqProv(w))} ${esc(rqNum(w))} больше не будет подставляться в напоминания.`,ok:'Удалить',danger:true,run:()=>{u.wallets.splice(+b.dataset.delw,1);if(u.wallets.length&&!u.wallets.some(x=>x.main))u.wallets[0].main=true;m.draw();toast('Реквизит удалён')}})});
       $$('[data-main]',el).forEach(b=>b.onclick=()=>{u.wallets.forEach((w,i)=>w.main=i===+b.dataset.main);m.draw()});
       // Новый пароль не совпадает с текущим (решение заказчика 27.10.2026); сменённый пароль в макете действует до перезагрузки страницы
-      q('#pf-pass').onclick=()=>{const u=me(),cur=lgPass(u);const a=setErr(el,'pf-p0',val(el,'pf-p0')===cur?'':'Текущий пароль неверный'+(cur==='demo'?' (демо: demo)':''));const p=val(el,'pf-p1');const b=setErr(el,'pf-p1',p.length<8?'Не короче 8 символов':p===cur?LG_T.same:'');const c=setErr(el,'pf-p2',p===val(el,'pf-p2')?'':'Пароли не совпадают');if(a&&b&&c){LG_PW[u.login]=p;toast('Пароль изменён. Другие сеансы завершены.','key');['pf-p0','pf-p1','pf-p2'].forEach(i=>el.querySelector('#'+i).value='')}};
+      q('#pf-pass').onclick=()=>{const u=me(),cur=lgPass(u);const a=setErr(el,'pf-p0',val(el,'pf-p0')===cur?'':'Текущий пароль неверный'+(cur==='demo'?' (демо: demo)':''));const p=val(el,'pf-p1');const b=setErr(el,'pf-p1',p.length<8?'Не короче 8 символов':p===cur?LG_T.same:'');const c=setErr(el,'pf-p2',p===val(el,'pf-p2')?'':'Пароли не совпадают');if(a&&b&&c){LG_PW[u.login]=p;tgSvc(u,'Пароль изменён');toast('Пароль изменён. Другие сеансы завершены.','key');['pf-p0','pf-p1','pf-p2'].forEach(i=>el.querySelector('#'+i).value='')}};
     }};
   }});
 }

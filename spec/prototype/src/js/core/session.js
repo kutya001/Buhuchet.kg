@@ -12,7 +12,8 @@ const roleScope=r=>Object.fromEntries(SCOPE_GROUPS.map(g=>[g,(r&&r.scope&&r.scop
 function seeAll(g){if(isAdmin())return false;if(me().role==='owner'||can('viewAll'))return true;return roleScope(myRole())[g||'cps']==='all'}
 const feat=f=>!!ORG.features[f];
 const visCps=(all,g)=>{const a=seeAll(g||'cps');return CPS.filter(c=>(all||!c.archived)&&(a||c.resp===S.me))};
-const visReports=()=>{const a=seeAll('reports');return REPORTS.filter(r=>!r.superseded&&(a||r.resp===S.me))};
+// «Свои» в «Отчетах для сдачи»: отчёты своих контрагентов (сотрудник — ответственный за контрагента) и отчёты, где он сам ответственный за отчёт (решение заказчика 27.10.2026, продукт п. А-2 «В»)
+const visReports=()=>{const a=seeAll('reports');return REPORTS.filter(r=>!r.superseded&&(a||r.resp===S.me||(CPM[r.cp]||{}).resp===S.me))};
 function born(o,who){o._cb=o._ub=who||S.me;o._ca=o._ua=nowStamp();return o}
 function touch(o){if(o){o._ub=S.me;o._ua=nowStamp()}return o}
 // ext — дополнительные поля записи истории, например sub — оплата внутри проекта или услуги

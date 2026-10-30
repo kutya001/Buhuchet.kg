@@ -12,6 +12,9 @@ const taskOver=t=>(t.reg?OPEN.has(t.status):taskOpen(t))&&t.date<TODAY;
 const REG_VERB={sub:'Сдать',pay:'Оплатить',both:'Сдать и оплатить'};
 // Исполнитель новой задачи по умолчанию: ответственный выбранного контрагента, иначе тот, кто ставит задачу
 const taskExec0=e=>{const r=e.cp&&CPM[e.cp]&&CPM[e.cp].resp;return r&&EMP.some(x=>x.id===r&&x.active)?r:S.me};
+// Менять и отменять ручную задачу может поставивший её — только с правом «Ставить задачи» (ТЗ; решение заказчика 30.10.2026, продукт п. Б-4) — и владелец
+const taskBoss=t=>(t.by===S.me&&can('tasksCreate'))||me().role==='owner';
+const taskBossWhy=t=>t.by===S.me&&!taskBoss(t)?'Менять и отменять свои задачи можно только с правом «Ставить задачи»':'';
 function allTasks(){
   const m=ym(TODAY);
   const reg=REPORTS.filter(r=>!r.superseded&&r.status!=='Не требуется'&&!CPM[r.cp].archived&&(ym(r.due)===m||(OPEN.has(r.status)&&r.due<TODAY&&r.due>=addDays(TODAY,-75)))).map(r=>({id:'r'+r.id,reg:true,rid:r.id,title:`${REG_VERB[actOf(r)]||'Сдать'} ${tR(r).payOnly?T[r.t].name.toLowerCase():T[r.t].short} за ${r.phuman} — ${CPM[r.cp].name}`,cat:tR(r).payOnly?'Оплата':'Сдача отчёта',cp:r.cp,exec:r.resp,by:null,kind:'day',date:r.due,needFile:!!(ORG.types[r.t]&&ORG.types[r.t].needFile),_cb:'system',_ca:r._ca,_ub:r._ub,_ua:r._ua,status:r.status,fin:repFin(r),wait:repWait(r)}));
@@ -40,12 +43,12 @@ function taskCols(){return [
  {key:'open',label:'Открыта',type:'enum',w:100,val:t=>taskOpen(t)?'Да':'Нет',hide:true}]}
 function taskActions(t){
   if(t.reg){const r=REPORTS.find(x=>x.id===t.rid);return [{label:'Открыть отчёт',icon:'file',run:()=>openReport(r)},...(OPEN.has(r.status)?[{label:'Отметить отчёт сданным',icon:'send',disabled:!can('changeStatus')||!!subPayWhy(r),reason:!can('changeStatus')?'Нет права менять статус':subPayWhy(r),run:()=>submitDlg([r])}]:[]),{label:repWait(r)?'Задача закроется сама, когда сдачу подтвердят':repConfOn()?'Задача закроется сама, когда отчёт сдадут и сдачу подтвердят':'Задача закроется сама, когда отчёт будет сдан',icon:'info',disabled:true}]}
-  const mine=t.exec===S.me,boss=t.by===S.me||me().role==='owner';const it=[{label:'Открыть',icon:'task',run:()=>openTask(t)}];
-  if(taskPend(t)){const why=taskConfWhy(t);it.push({label:'Подтвердить',icon:'check',disabled:!!why,reason:why,run:()=>taskConfDlg(t)},{label:'На доработку',icon:'refresh',disabled:!!why,reason:why,run:()=>taskReworkDlg(t)});if(boss)it.push({label:'Изменить',icon:'edit',run:()=>taskDlg(t)})}
-  if(taskOpen(t)){if(t.status==='К выполнению')it.push({label:'Взять в работу',icon:'clock',disabled:!mine&&!boss,run:()=>{t.status='В работе';log('t',t.id,'Статус: К выполнению → В работе');refreshAll();toast('Задача в работе')}});
+  const mine=t.exec===S.me,boss=taskBoss(t),why=taskBossWhy(t),edit={label:'Изменить',icon:'edit',disabled:!boss,reason:why,run:()=>taskDlg(t)};const it=[{label:'Открыть',icon:'task',run:()=>openTask(t)}];
+  if(taskPend(t)){const why=taskConfWhy(t);it.push({label:'Подтвердить',icon:'check',disabled:!!why,reason:why,run:()=>taskConfDlg(t)},{label:'На доработку',icon:'refresh',disabled:!!why,reason:why,run:()=>taskReworkDlg(t)});if(boss||why)it.push(edit)}
+  if(taskOpen(t)){if(t.status==='К выполнению')it.push({label:'Взять в работу',icon:'clock',disabled:!mine&&!boss,reason:!mine&&!boss&&(why||'Взять в работу может исполнитель или постановщик'),run:()=>{t.status='В работе';log('t',t.id,'Статус: К выполнению → В работе');refreshAll();toast('Задача в работе')}});
     it.push({label:'Выполнена',icon:'ok',disabled:!mine,reason:!mine&&'Отметить может только исполнитель',run:()=>taskDoneDlg(t)});
     it.push({label:'Не выполнена',icon:'x',disabled:!mine,reason:!mine&&'Отметить может только исполнитель',run:()=>taskFailDlg(t)});
-    if(boss)it.push({label:'Изменить',icon:'edit',run:()=>taskDlg(t)},{sep:true},{label:'Отменить задачу',icon:'ban',danger:true,run:()=>confirmDlg({title:'Отменить задачу?',text:`«${esc(t.title)}» получит статус «Отменена». Исполнитель увидит это в Telegram.`,ok:'Отменить задачу',danger:true,run:()=>{t.status='Отменена';log('t',t.id,'Задача отменена');refreshAll();toast('Задача отменена')}})})}
+    if(boss||why)it.push(edit,{sep:true},{label:'Отменить задачу',icon:'ban',danger:true,disabled:!boss,reason:why,run:()=>confirmDlg({title:'Отменить задачу?',text:`«${esc(t.title)}» получит статус «Отменена». Исполнитель увидит это в Telegram.`,ok:'Отменить задачу',danger:true,run:()=>{t.status='Отменена';log('t',t.id,'Задача отменена');refreshAll();toast('Задача отменена')}})})}
   return it}
 function renderTasks(body,tab,fresh){
   const v=S.taskView;const m=ym(TODAY);
@@ -84,7 +87,7 @@ function taskReworkDlg(t){const why=taskConfWhy(t);if(why)return toast(why,'aler
     foot:'<button class="btn ghost" data-close>Отмена</button><button class="btn cta" id="tw-ok">На доработку</button>',mount(el,m){$('#tw-ok',el).onclick=()=>{const r=val(el,'tw-r').trim();if(!setErr(el,'tw-r',r?'':'Укажите причину'))return;t.status='На доработке';t.rework=r;t.reworkBy=S.me;log('t',t.id,`Статус: На подтверждении → На доработке (${r})`);m.close();refreshAll();toast('Задача возвращена на доработку','refresh')}}})})}
 function taskFailDlg(t){openModal({form:true,render:()=>({title:'Задача не выполнена',sub:esc(t.title),body:fld('Причина',`<textarea class="inp" id="tf-r" style="min-height:70px"></textarea>`,{req:true,id:'tf-r'}),
   foot:'<button class="btn ghost" data-close>Отмена</button><button class="btn cta" id="tf-ok">Сохранить</button>',mount(el,m){$('#tf-ok',el).onclick=()=>{const r=val(el,'tf-r');if(!setErr(el,'tf-r',r?'':'Укажите причину'))return;t.status='Не выполнена';t.reason=r;log('t',t.id,'Не выполнена: '+r);m.close();refreshAll();toast('Сохранено')}}})})}
-function taskDlg(t,pre){const e=t||Object.assign({},pre||{});const st={kind:e.kind||'day',scope:e.cp?'cp':'gen',withProj:!!e.proj};const wasCp=!!(t&&t.cp);
+function taskDlg(t,pre){const e=t||Object.assign({},pre||{});const st={kind:e.kind||'day',scope:e.cp?'cp':'gen',withProj:!!e.proj,execT:!!t||!!(pre&&pre.exec)};const wasCp=!!(t&&t.cp);
   const projsOf=cp=>PROJECTS.filter(p=>p.cp===cp&&p.status!=='Отменён'&&(p.status!=='Завершён'||p.id===e.proj));
   openModal({form:true,size:'mid',render:m=>{const cpOn=st.scope==='cp',projOn=cpOn&&feat('projects')&&st.withProj;
     return {title:t?'Изменить задачу':'Новая задача',body:`<div class="form">
@@ -93,14 +96,14 @@ function taskDlg(t,pre){const e=t||Object.assign({},pre||{});const st={kind:e.ki
     ${cpOn?`${fld('Контрагент',sel('tk-cp',[['','— выберите контрагента —'],...visCps().map(c=>[c.id,c.name])],e.cp||''),{req:true,id:'tk-cp'})}${feat('projects')?`<div class="fld"><span class="lbl m-sp">&nbsp;</span><label class="row" style="min-height:35px"><input type="checkbox" class="sw" id="tk-wp" ${st.withProj?'checked':''}> Проект</label></div>`:'<div></div>'}`:''}
     ${projOn?fld('Проект',sel('tk-proj',[['',e.cp?(projsOf(e.cp).length?'— выберите проект —':'— у контрагента нет активных проектов —'):'— сначала выберите контрагента —'],...(e.cp?projsOf(e.cp).map(p=>[p.id,p.name]):[])],e.proj||''),{req:true,full:true,id:'tk-proj',hint:'Задача появится в карточке проекта'}):''}
     ${fld('Категория',sel('tk-cat',DICT.cats.items.filter(x=>x.active).map(x=>x.name),e.cat||'Сбор документов'),{id:'tk-cat'})}<div></div>
-    ${fld('Исполнитель',sel('tk-exec',EMP.filter(x=>x.active).map(x=>[x.id,x.short]),e.exec||taskExec0(e)),{req:true,id:'tk-exec'})}${fld('Вид срока',sel('tk-kind',[['day','На день'],['month','На месяц']],st.kind),{id:'tk-kind'})}
+    ${fld('Исполнитель',sel('tk-exec',EMP.filter(x=>x.active).map(x=>[x.id,x.short]),st.execT?e.exec:cpOn?taskExec0(e):S.me),{req:true,id:'tk-exec',hint:st.execT?'':cpOn?'По умолчанию — ответственный контрагента':'По умолчанию — вы'})}${fld('Вид срока',sel('tk-kind',[['day','На день'],['month','На месяц']],st.kind),{id:'tk-kind'})}
     ${st.kind==='day'?fld('Дата',inp('tk-date',e.date||addDays(TODAY,1),'type="date"'),{req:true,id:'tk-date'}):fld('Месяц',inp('tk-month',e.date?ym(e.date):ym(TODAY),'type="month"'),{req:true,id:'tk-month',hint:'Срок — последний день месяца'})}
     <div class="fld"><label class="lbl">При выполнении</label><label class="row" style="min-height:35px"><input type="checkbox" class="sw" id="tk-file" ${e.needFile?'checked':''}> Требуется файл</label></div>
     <div class="fld"><span class="lbl m-sp">&nbsp;</span><label class="row" style="min-height:35px"><input type="checkbox" class="sw" id="tk-conf" ${(t?e.confirm:e.confirm!=null?e.confirm:taskConfDef())?'checked':''} ${t&&!taskOpen(t)&&!taskPend(t)?'disabled':''}> Требуется подтверждение</label>${t&&!taskOpen(t)&&!taskPend(t)?'<span class="hint">Задача уже закрыта: признак не меняется</span>':t&&taskPend(t)?'<span class="hint">Если снять, задача сразу станет «Выполнена»</span>':'<span class="hint">По умолчанию — из учётной политики</span>'}</div></div><div class="hint">Исполнитель получит уведомление в Telegram о новой задаче и о сроке.</div>`,
     foot:'<button class="btn ghost" data-close>Отмена</button><button class="btn cta" id="tk-ok">'+(t?'Сохранить':'Поставить задачу')+'</button>',
-    mount(el){const snapT=()=>{e.title=val(el,'tk-title');e.desc=val(el,'tk-desc');e.cat=val(el,'tk-cat');if($('#tk-cp',el))e.cp=+val(el,'tk-cp')||'';if($('#tk-proj',el))e.proj=val(el,'tk-proj')||null;e.exec=val(el,'tk-exec');e.needFile=$('#tk-file',el).checked;e.confirm=$('#tk-conf',el).checked;if($('#tk-date',el))e.date=val(el,'tk-date')};
+    mount(el){const snapT=()=>{e.title=val(el,'tk-title');e.desc=val(el,'tk-desc');e.cat=val(el,'tk-cat');if($('#tk-cp',el))e.cp=+val(el,'tk-cp')||'';if($('#tk-proj',el))e.proj=val(el,'tk-proj')||null;if(st.execT)e.exec=val(el,'tk-exec');e.needFile=$('#tk-file',el).checked;e.confirm=$('#tk-conf',el).checked;if($('#tk-date',el))e.date=val(el,'tk-date')};
       $$('#tk-scope button',el).forEach(b=>b.onclick=()=>{snapT();st.scope=b.dataset.k;m.draw()});
-      $('#tk-kind',el).onchange=ev=>{snapT();st.kind=ev.target.value;m.draw()};
+      $('#tk-kind',el).onchange=ev=>{snapT();st.kind=ev.target.value;m.draw()};$('#tk-exec',el).onchange=()=>{st.execT=true;e.exec=val(el,'tk-exec')};
       if($('#tk-cp',el))$('#tk-cp',el).onchange=()=>{snapT();e.proj=null;m.draw()};
       if($('#tk-wp',el))$('#tk-wp',el).onchange=ev=>{snapT();st.withProj=ev.target.checked;if(!st.withProj)e.proj=null;m.draw()};
       $('#tk-ok',el).onclick=()=>{const title=val(el,'tk-title');if(!setErr(el,'tk-title',title?'':'Введите название'))return;

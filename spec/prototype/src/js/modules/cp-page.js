@@ -79,7 +79,8 @@ function pubDraw(keep){const el=$('#pub');if(!el||!PUB.open)return;const o=PUB.o
   const b=$('.pub-body',el);if(b)b.onclick=pubClick;
   $$('[data-pub-file]',el).forEach(a=>a.onclick=e=>{e.preventDefault();toast(`Файл «${a.dataset.pubFile}» откроется для просмотра и скачивания`,'download')})}
 // Каждое открытие — в историю контрагента: дата, время, устройство
-function pubSeen(c){const d=pgDev();Object.assign(c.page,{last:nowStamp(),lastDev:d});HIST.push({at:nowStamp(),who:'client',ent:'cp',id:c.id,cp:c.id,what:`Страница контрагента открыта: ${d}`});dbSoon()}
+// Обновление страницы в том же браузере в течение минуты новым открытием не считается (решение заказчика 30.10.2026, Е-3)
+function pubSeen(c){const k=PUB.open.slug+'|'+PUB.open.inn,sn=store.get('pgseen',{})||{},now=Date.now();if(sn[k]&&now-sn[k]<60e3)return;sn[k]=now;store.set('pgseen',sn);const d=pgDev();Object.assign(c.page,{last:nowStamp(),lastDev:d});HIST.push({at:nowStamp(),who:'client',ent:'cp',id:c.id,cp:c.id,what:`Страница контрагента открыта: ${d}`});dbSoon()}
 // Нажатия на странице: плитки «Главного» и замечания строки состояния ведут в свой раздел; плашки — фильтр «Отчётов»; плитки видов, месяцев и показателей раскрываются
 function pubClick(e){const x=e.target.closest('[data-pub-go],[data-pub-tg],[data-pub-f],[data-pub-mode],[data-pub-rt],[data-pub-rm],[data-pub-ki],[data-pub-more],[data-pub-copy]');if(!x)return;const d=x.dataset;
   if(d.pubCopy!=null){copyText(d.pubCopy,d.pubOk||'Скопировано');return}

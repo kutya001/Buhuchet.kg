@@ -215,6 +215,13 @@ export const MESSAGE_TEMPLATE_VARIABLES: Readonly<Record<string, readonly string
   tgWeek: ['даты', 'n1', 'n2', 'n3'],
   tgCode: ['код'],
   tgTask: ['автор', 'задача', 'срок'],
+  tgLinked: ['логин'],
+  tgPassChanged: ['логин'],
+  tgPassReset: ['логин', 'кто'],
+  tgRelinked: ['логин', 'телеграм'],
+  tgUnlinked: ['логин'],
+  tgLinkInvalid: [],
+  tgStart: [],
 };
 
 /** Подстановки шаблона; у неизвестного ключа (в том числе `constructor`) — нет. */
@@ -239,6 +246,13 @@ export const MESSAGE_TEMPLATE_ORDER = [
   'tgWeek',
   'tgCode',
   'tgTask',
+  'tgLinked',
+  'tgPassChanged',
+  'tgPassReset',
+  'tgRelinked',
+  'tgUnlinked',
+  'tgLinkInvalid',
+  'tgStart',
 ] as const;
 
 /** Ключ словаря подписи шаблона: `tgConfWait` → `pdicts.tpl.label.tg_conf_wait`. */

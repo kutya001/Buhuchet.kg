@@ -468,11 +468,11 @@ test.describe('Списки: UnifiedDataGrid', () => {
       await expect(menu).toHaveCount(0);
     }
     await more.click();
+    // «Сбросить пароль» — только у владельца (docs/deviations.md п. 11): у кадровика его нет.
     await expect(menu.getByRole('menuitem')).toHaveText([
       'Открыть карточку',
       'Изменить',
       'Сменить роль',
-      'Сбросить пароль',
       'Заблокировать',
     ]);
     await menu.getByRole('menuitem', { name: 'Заблокировать' }).click();
@@ -496,24 +496,6 @@ test.describe('Списки: UnifiedDataGrid', () => {
     await expect(target).toContainText('Активен');
     // После долгого нажатия карточка записи не открылась: окон нет.
     await expect(page.getByRole('dialog')).toHaveCount(0);
-
-    // «Сбросить пароль»: временный пароль показывается один раз, с ним сотрудник входит.
-    await target.locator('[data-row-menu]').click();
-    await menu.getByRole('menuitem', { name: 'Сбросить пароль' }).click();
-    const reset = page.getByRole('dialog', { name: 'Пароль сброшен' });
-    await expect(reset).toContainText(`Сочетаев ${word} Второй`);
-    await expect(reset).toContainText('Передайте его сотруднику лично.');
-    const password = (await reset.locator('[data-temporary-password]').textContent())!;
-    await reset.getByRole('button', { name: 'Готово' }).click();
-    await expect(reset).toHaveCount(0);
-    const login = await setup.post('/api/auth/login', {
-      headers: { origin },
-      data: { login: second!.login, password },
-    });
-    expect(login.status(), await login.text()).toBe(200);
-    expect(((await login.json()) as { user: { mustChangePassword: boolean } }).user).toMatchObject({
-      mustChangePassword: true,
-    });
     await setup.dispose();
   });
 

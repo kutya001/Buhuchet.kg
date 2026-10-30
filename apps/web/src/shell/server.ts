@@ -12,7 +12,7 @@ import { canEnter } from './modules';
  * null. За один показ читается один раз.
  *
  * Этот запрос сеанс не продлевает: серверный компонент не может обновить cookie в браузере. Сеанс и
- * cookie продлевают запросы самой страницы к API (не чаще раза в час, сеанс живёт 30 дней).
+ * cookie продлевают запросы самой страницы к API (не чаще раза в час, сеанс живёт 1 день).
  */
 export const loadMe = cache(async (): Promise<MeResponse | null> => {
   const cookie = (await headers()).get('cookie');
