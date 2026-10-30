@@ -144,9 +144,11 @@ describe.skipIf(!databaseAvailable())(
       ).toBe(false);
       // «Откат статусов» из группы «Общие» без «Просматривать отчёты» отчёт не откатывает.
       expect(
-        (await failure(
-          await act(senior, aug.id, 'rollback', { ...body, to: 'todo', reason: 'x' }, 403),
-        )).code,
+        (
+          await failure(
+            await act(senior, aug.id, 'rollback', { ...body, to: 'todo', reason: 'x' }, 403),
+          )
+        ).code,
       ).toBe('forbidden');
       // Чужая организация и контрагент вне области «Свои» — «не найден».
       await act(ownerB, aug.id, 'submit', body, 404);
@@ -341,7 +343,9 @@ describe.skipIf(!databaseAvailable())(
       await f.t.admin.db
         .update(schema.roleScopes)
         .set({ scope: 'all' })
-        .where(and(eq(schema.roleScopes.roleId, hrRole), eq(schema.roleScopes.permGroup, 'reports')));
+        .where(
+          and(eq(schema.roleScopes.roleId, hrRole), eq(schema.roleScopes.permGroup, 'reports')),
+        );
       await f.t.admin.db
         .delete(schema.rolePermissions)
         .where(

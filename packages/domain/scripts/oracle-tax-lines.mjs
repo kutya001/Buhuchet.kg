@@ -70,12 +70,20 @@ const stored = [
 const cases = [];
 for (const a of assignments)
   for (const date of dates)
-    for (const act of ['both', 'sub']) cases.push({ a, date, act, lines: date === dates[0] ? stored : [] });
+    for (const act of ['both', 'sub'])
+      cases.push({ a, date, act, lines: date === dates[0] ? stored : [] });
 const taxes = [];
 for (const rev of [0, 1, 99, 100, 125, 300000, 200000, 1234567.89])
-  for (const pct of ['4 %', '6 %', '0,5 %', '0,25 %', '12 %', '0 %', '2 %']) taxes.push({ rev, pct });
+  for (const pct of ['4 %', '6 %', '0,5 %', '0,25 %', '12 %', '0 %', '2 %'])
+    taxes.push({ rev, pct });
 
-const context = vm.createContext({ TYPES: types, EN_TABLE: rates, CASES: cases, TAXES: taxes, GK_EN_ONE: [] });
+const context = vm.createContext({
+  TYPES: types,
+  EN_TABLE: rates,
+  CASES: cases,
+  TAXES: taxes,
+  GK_EN_ONE: [],
+});
 vm.runInContext(
   `'use strict';
   const T = Object.fromEntries(TYPES.map((t) => [t.id, t]));

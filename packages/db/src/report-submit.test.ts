@@ -729,7 +729,9 @@ describe.skipIf(!databaseAvailable())('Отчёты: сдача, подтвер�
     expect(after!.confirmedAt).not.toBeNull();
     // Отчёты другой организации не тронуты.
     expect(
-      await inB((tx) => tx.select().from(reports).where(eq(reports.confirmNote, after!.confirmNote))),
+      await inB((tx) =>
+        tx.select().from(reports).where(eq(reports.confirmNote, after!.confirmNote)),
+      ),
     ).toEqual([]);
   });
 

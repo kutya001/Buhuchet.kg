@@ -226,7 +226,10 @@ export function updateOrgPolicyHandler(
       }
       // Включили — сданные без подтверждения его не ждут (прототип repConfSet).
       if (!current.reportConfirm && body.reportConfirm === true) {
-        await confirmSubmittedWhileOff(tx, (await serverTexts(deps))('report.reason.confirm_was_off'));
+        await confirmSubmittedWhileOff(
+          tx,
+          (await serverTexts(deps))('report.reason.confirm_was_off'),
+        );
       }
       return (await getOrgPolicy(tx, ctx.orgId))!;
     });

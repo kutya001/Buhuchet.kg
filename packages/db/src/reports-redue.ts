@@ -12,19 +12,7 @@ import {
   type ReportPeriod,
   type StatusDueRule,
 } from '@buhuchet/domain';
-import {
-  and,
-  asc,
-  count,
-  eq,
-  gte,
-  inArray,
-  isNull,
-  lte,
-  or,
-  sql,
-  type SQL,
-} from 'drizzle-orm';
+import { and, asc, count, eq, gte, inArray, isNull, lte, or, sql, type SQL } from 'drizzle-orm';
 import type { Db, Tx } from './client';
 import { withOrgContext } from './context';
 import { writeHistory } from './history';
