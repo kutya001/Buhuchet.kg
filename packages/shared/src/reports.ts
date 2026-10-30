@@ -1,6 +1,7 @@
 import {
   ASSIGNMENT_DUE_DAYS,
   REPORT_ACTS,
+  REPORT_LINE_KINDS,
   REPORT_PERIODS,
   REPORT_STATUSES,
 } from '@buhuchet/domain';
@@ -8,11 +9,12 @@ import { z } from 'zod';
 import { IsoDate, RecordAudit, RecordVersion, Tyiyn, Uuid } from './common';
 import { SocfundBrief } from './contractors';
 import { listPageSchema } from './list';
-import { StatusHistoryEntry } from './status';
+import { StatusHistoryEntry, StatusRollback } from './status';
 
 /*
  * Модуль «Отчеты для сдачи» (задача 2.06): назначения отчётов контрагентам, разовый отчёт, «Изменить
- * срок», уточнённый отчёт, список и карточка отчёта. Экраны — задачи 2.11, 2.13–2.15.
+ * срок», уточнённый отчёт, список и карточка отчёта; сдача, подтверждение, откат и сумма — задача 2.14.
+ * Экраны — задачи 2.11, 2.13–2.15.
  */
 
 /** Без нулевого символа: PostgreSQL его в тексте не принимает. */
@@ -279,8 +281,67 @@ export const ReportTabCounts = z.object({
 export type ReportTabCounts = z.infer<typeof ReportTabCounts>;
 
 /** Карточка отчёта: поля строки, назначение, журнал изменений срока, «История статусов», версии. */
+/** Строка суммы отчёта (по ставке или по платежу): выручка и налог в тыйынах. */
+export const ReportLine = z.object({
+  kind: z.enum(REPORT_LINE_KINDS),
+  key: z.string(),
+  label: z.string(),
+  pct: z.string(),
+  cash: z.boolean().nullable(),
+  revenue: Tyiyn.nullable(),
+  tax: Tyiyn,
+});
+
+/** Строка окна «Сдан» и «Указать сумму»: подпись, ставка, наличная ли выручка, прежняя ли строка. */
+export const ReportLineDef = z.object({
+  kind: z.enum(REPORT_LINE_KINDS),
+  key: z.string(),
+  label: z.string(),
+  pct: z.string(),
+  cash: z.boolean().nullable(),
+  old: z.boolean(),
+  kbk: z.string().optional(),
+});
+
+/** Запись истории отчёта: кто, когда, что изменено (было → стало). */
+export const ReportHistoryEntry = z.object({
+  at: z.iso.datetime(),
+  actor: z.string().nullable(),
+  action: z.string(),
+  reason: z.string().nullable(),
+  changes: z.array(
+    z.object({ field: z.string(), from: z.unknown().optional(), to: z.unknown().optional() }),
+  ),
+});
+export type ReportHistoryEntry = z.infer<typeof ReportHistoryEntry>;
+
 export const ReportCard = ReportRow.extend({
   superseded: z.boolean(),
+  /** Отметка на шаге «Сдан» при подтверждении сдачи: «Ждёт подтверждения» или «Подтверждено». */
+  mark: z.enum(['waiting', 'confirmed']).nullable(),
+  /** Комментарий подтверждения. */
+  confirmNote: z.string(),
+  /** Строки суммы и строки окна «Сдан» (по ставкам и по платежам). */
+  lines: z.array(ReportLine),
+  lineDefs: z.array(ReportLineDef),
+  /** «Что уплачивается»: платёж, получатель, код бюджетной классификации. */
+  payments: z.array(z.object({ name: z.string(), authority: z.string(), kbk: z.string() })),
+  /**
+   * Загруженные файлы отчёта (блок «Файлы» — `GET /api/files?kind=report&id=…`); без «Файлов в
+   * карточках» — пусто.
+   */
+  files: z.array(z.object({ id: Uuid, name: z.string() })),
+  filesOn: z.boolean(),
+  /** Без файла «Сдан» не ставится; без квитанции сдачу не подтвердить (настройки вида в организации). */
+  fileRequired: z.boolean(),
+  receiptRequired: z.boolean(),
+  /** «Повторять эту сумму»: повторяющаяся сумма действующего назначения; null — назначения нет. */
+  repeat: z.object({ fixedAmount: Tyiyn.nullable() }).nullable(),
+  /** Возврат «На исправление» или «Требует исправления»: кто, когда, причина. */
+  fix: z
+    .object({ at: z.iso.datetime(), actor: z.string().nullable(), reason: z.string().nullable() })
+    .nullable(),
+  history: z.array(ReportHistoryEntry),
   assignment: z
     .object({
       id: Uuid,
@@ -381,3 +442,101 @@ export const ReportRevisionCreate = z.strictObject({ version: RecordVersion });
 /** Созданный или изменённый отчёт: номер и версия записи (карточку интерфейс перечитывает). */
 export const ReportSaved = z.object({ id: Uuid, version: RecordVersion });
 export type ReportSaved = z.infer<typeof ReportSaved>;
+
+/* ───────────── Сдача, подтверждение, откат и сумма (задача 2.14) ───────────── */
+
+/** Сумма не меньше нуля, в тыйынах. */
+const Amount = Tyiyn.refine((v) => v >= 0, 'Сумма не меньше нуля');
+
+/** Строк суммы в окне — не больше (строки ЕНС, налога с продаж и платежей). */
+export const REPORT_LINES_MAX = 60;
+/** Файлов, загруженных в окне «Сдан» или «Подтвердить», — не больше. */
+export const REPORT_FILES_MAX = 20;
+/** Отчётов в одном массовом действии — не больше (выбор на странице списка). */
+export const REPORT_BATCH_MAX = 500;
+
+/** Введённое в строке суммы: выручка и налог (пусто — не введено). */
+const ReportLineEntry = z.strictObject({
+  key: Code,
+  revenue: Amount.nullable().default(null),
+  tax: Amount.nullable().default(null),
+});
+
+const amountFields = {
+  /** Сумма к уплате; при строках — итог строк, это поле не учитывается. */
+  amount: Amount.nullable().default(null),
+  /** Строки суммы; null — в окне строк нет или их не трогали. */
+  lines: z.array(ReportLineEntry).max(REPORT_LINES_MAX).nullable().default(null),
+};
+
+const FileIds = z.array(Uuid).max(REPORT_FILES_MAX).default([]);
+
+/** «Отметить сданным»: дата сдачи, сумма, «Повторять эту сумму», файлы, загруженные в окне. */
+export const ReportSubmitRequest = z.strictObject({
+  version: RecordVersion,
+  date: ReportDate,
+  ...amountFields,
+  repeat: z.boolean().default(false),
+  fileIds: FileIds,
+});
+export type ReportSubmitRequest = z.infer<typeof ReportSubmitRequest>;
+
+/** Массово «Отметить сданными»: одна дата, сумма — у каждого отчёта (пусто — не меняется). */
+export const ReportBatchSubmitRequest = z.strictObject({
+  date: ReportDate,
+  items: z
+    .array(
+      z.strictObject({ id: Uuid, version: RecordVersion, amount: Amount.nullable().default(null) }),
+    )
+    .min(1)
+    .max(REPORT_BATCH_MAX),
+});
+export type ReportBatchSubmitRequest = z.infer<typeof ReportBatchSubmitRequest>;
+
+/** Итог массового действия: сделано, пропущено без файла (квитанции) и по статусу или правам. */
+export const ReportBatchResult = z.object({
+  done: Count,
+  skippedFile: Count,
+  skipped: Count,
+});
+export type ReportBatchResult = z.infer<typeof ReportBatchResult>;
+
+/** «Подтвердить»: комментарий (необязательно) и квитанция, загруженная в окне. */
+export const ReportConfirmRequest = z.strictObject({
+  version: RecordVersion,
+  note: Text(REPORT_NOTE_MAX).default(''),
+  fileIds: FileIds,
+});
+export type ReportConfirmRequest = z.infer<typeof ReportConfirmRequest>;
+
+/** Массово «Подтвердить» во вкладке «Ожидают подтверждения». */
+export const ReportBatchConfirmRequest = z.strictObject({
+  note: Text(REPORT_NOTE_MAX).default(''),
+  items: z
+    .array(z.strictObject({ id: Uuid, version: RecordVersion }))
+    .min(1)
+    .max(REPORT_BATCH_MAX),
+});
+export type ReportBatchConfirmRequest = z.infer<typeof ReportBatchConfirmRequest>;
+
+/** «На исправление»: что исправить (обязательно; пустую причину отклоняет сервер своим кодом). */
+export const ReportFixRequest = z.strictObject({
+  version: RecordVersion,
+  reason: Text(REPORT_NOTE_MAX),
+});
+export type ReportFixRequest = z.infer<typeof ReportFixRequest>;
+
+/** Шаг без окна: «Взять в работу», «Требует исправления», «Не требуется» — по версии отчёта. */
+export const ReportStepRequest = z.strictObject({ version: RecordVersion });
+
+/** Откат на шаг назад: куда, почему, версия отчёта. */
+export const ReportRollbackRequest = StatusRollback.extend({ version: RecordVersion });
+export type ReportRollbackRequest = z.infer<typeof ReportRollbackRequest>;
+
+/** «Указать сумму»: итог или строки и «Повторять эту сумму». */
+export const ReportAmountRequest = z.strictObject({
+  version: RecordVersion,
+  ...amountFields,
+  repeat: z.boolean().default(false),
+});
+export type ReportAmountRequest = z.infer<typeof ReportAmountRequest>;

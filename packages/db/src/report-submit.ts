@@ -894,6 +894,9 @@ export interface ReportHistoryItem {
 
 /** Сдача в карточке: строки суммы, файлы, настройки вида, возврат на исправление, история. */
 export interface ReportSubmitView {
+  confirmNote: string;
+  /** «Что уплачивается» вида. */
+  payments: { name: string; authority: string; kbk: string }[];
   lines: ReportLine[];
   lineDefs: ReportLineDef[];
   files: { id: string; name: string }[];
@@ -918,7 +921,7 @@ export async function reportSubmitView(
   const [r] = await tx.select().from(reports).where(eq(reports.id, id));
   if (!r) throw new RecordNotFoundError('report', id);
   const lines = await storedLines(tx, id);
-  const [lineDefs, readyFiles, type, active, [fix], history] = await Promise.all([
+  const [lineDefs, readyFiles, type, active, [fix], history, [kind]] = await Promise.all([
     reportLineDefs(tx, r, t, lines),
     reportReadyFiles(tx, id),
     reportTypeFiles(tx, r.reportTypeCode),
@@ -956,8 +959,18 @@ export async function reportSubmitView(
       .leftJoin(historyActor, eq(historyActor.userId, auditLog.actorUserId))
       .where(and(eq(auditLog.entity, 'report'), eq(auditLog.entityId, id)))
       .orderBy(desc(auditLog.at), desc(auditLog.id)),
+    tx
+      .select({ payments: reportTypes.payments })
+      .from(reportTypes)
+      .where(eq(reportTypes.code, r.reportTypeCode)),
   ]);
   return {
+    confirmNote: r.confirmNote,
+    payments: (kind?.payments ?? []).map((p) => ({
+      name: p.name,
+      authority: p.authority,
+      kbk: p.kbk,
+    })),
     lines,
     lineDefs,
     files: readyFiles,

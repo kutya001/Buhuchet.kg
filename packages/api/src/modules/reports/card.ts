@@ -8,7 +8,9 @@ import {
   dueChangeReason,
   getContractor,
   getReportCard,
+  orgMenuSettings,
   penaltyOf,
+  reportSubmitView,
   withOrgContext,
   type ReportCard as ReportCardData,
   type Tx,
@@ -18,6 +20,9 @@ import {
   ORG_REPORT_TYPE_MESSAGES,
   penaltyText,
   REPORT_MESSAGES,
+  reportFileRequired,
+  reportMarkOf,
+  reportReceiptRequired,
   socfundCapHint,
   socfundCapText,
   socfundRatesText,
@@ -74,7 +79,7 @@ export const getReportRoute = createRoute({
   responses: {
     200: {
       description:
-        'Отчёт: поля строки списка, назначение, журнал изменений срока, «История статусов» и версии периода',
+        'Отчёт: поля строки списка, назначение, журнал изменений срока, «История статусов», версии периода, строки суммы, файлы, возврат на исправление и история',
       content: { 'application/json': { schema: ReportCard } },
     },
     401: { description: 'Нет входа', content: error },
@@ -167,20 +172,41 @@ export function getReportHandler(deps: ApiDeps): RouteHandler<typeof getReportRo
         today,
         scope: reportScopeOf(subjectOf(c)),
       });
-      return card && { card, ...(await socfundOfReport(tx, card, today, t)) };
+      if (!card) return null;
+      const [view, settings, socfund] = await Promise.all([
+        reportSubmitView(tx, id, t),
+        orgMenuSettings(tx, orgContextOf(c).orgId),
+        socfundOfReport(tx, card, today, t),
+      ]);
+      return { card, view, settings, ...socfund };
     });
     if (!out) notFound();
-    const { card, socfund, penalty } = out;
-    return c.json(
-      {
-        ...reportRowBody(card),
-        dueChanges: card.dueChanges.map((d) => ({ ...d, at: d.at.toISOString() })),
-        statusHistory: card.statusHistory.map((h) => ({ ...h, at: h.at.toISOString() })),
-        socfund,
-        penalty,
-      },
-      200,
-    );
+    const { card, view, settings, socfund, penalty } = out;
+    const confirmOn = settings.reportConfirm;
+    const filesOn = settings.features.files;
+    const body: ReportCard = {
+      ...reportRowBody(card),
+      dueChanges: card.dueChanges.map((d) => ({ ...d, at: d.at.toISOString() })),
+      statusHistory: card.statusHistory.map((h) => ({ ...h, at: h.at.toISOString() })),
+      socfund,
+      penalty,
+      mark: reportMarkOf(
+        { status: card.status, act: card.act, confirmed: card.confirmedAt !== null },
+        confirmOn,
+      ),
+      confirmNote: view.confirmNote,
+      lines: view.lines,
+      lineDefs: view.lineDefs,
+      payments: view.payments,
+      files: filesOn ? view.files : [],
+      filesOn,
+      fileRequired: reportFileRequired(view, { confirmOn, filesOn }),
+      receiptRequired: reportReceiptRequired(view, { filesOn }),
+      repeat: view.repeat,
+      fix: view.fix && { ...view.fix, at: view.fix.at.toISOString() },
+      history: view.history.map((h) => ({ ...h, at: h.at.toISOString() })),
+    };
+    return c.json(body, 200);
   };
 }
 

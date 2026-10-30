@@ -1,5 +1,6 @@
 import { createRoute, type RouteHandler } from '@hono/zod-openapi';
 import {
+  confirmWaitingReports,
   getOrgPolicy,
   getRole,
   orgPolicyHistory,
@@ -32,6 +33,7 @@ import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
 import { apiError, apiFail, versionedSaveResponses } from '../../errors';
 import { orgContextOf, requireEmployee, requirePermission } from '../../middleware/access';
+import { serverTexts } from '../l10n/texts';
 import { error } from './profile';
 
 const { orgSettings } = schema;
@@ -155,10 +157,9 @@ function changed<T>(next: T | undefined, current: T): T | undefined {
  * включаются и выключаются по правилам прототипа: нельзя выключить нужную другой включённой функции и
  * включить функцию без той, что ей нужна (`featureChangeProblem`); отключённая функция пропадает из
  * меню у всех со следующего запроса, данные не удаляются. Каждое изменение — в историю учётной
- * политики: что изменено, было → стало, кто, когда.
- *
- * Пока не сделано (появится вместе с отчётами): при выключении «Сдача отчётов требует подтверждения»
- * ждущие подтверждения отчёты считаются подтверждёнными с записью в их истории (прототип repConfSet).
+ * политики: что изменено, было → стало, кто, когда. При выключении «Сдача отчётов требует
+ * подтверждения» ждущие подтверждения отчёты считаются подтверждёнными с записью в их «Истории
+ * статусов» (ТЗ; прототип repConfSet; задача 2.14).
  */
 export function updateOrgPolicyHandler(
   deps: ApiDeps,
@@ -218,6 +219,9 @@ export function updateOrgPolicyHandler(
           defaultRoleId: body.defaultRoleId,
         },
       });
+      if (current.reportConfirm && body.reportConfirm === false) {
+        await confirmWaitingReports(tx, (await serverTexts(deps))('report.reason.confirm_off'));
+      }
       return (await getOrgPolicy(tx, ctx.orgId))!;
     });
     return c.json(orgPolicyBody(policy), 200);

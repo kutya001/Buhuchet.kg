@@ -5,6 +5,7 @@ import {
   ContractorOneOffError,
   contractorScope,
   ReportExistsError,
+  ReportRefusedError,
   reportScope,
   ReportStateError,
   type AssignmentTexts,
@@ -88,6 +89,9 @@ export async function withReportErrors<T>(
     if (e instanceof ReportStateError) {
       const code = STATE_CODE[e.reason];
       apiFail(409, code, REPORT_MESSAGES[code]);
+    }
+    if (e instanceof ReportRefusedError) {
+      apiFail(e.status, e.code, REPORT_MESSAGES[e.code], e.field ? { field: e.field } : undefined);
     }
     throw e;
   }
