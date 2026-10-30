@@ -1,7 +1,8 @@
 import { schema } from '@buhuchet/db';
+import type { HistoryChange } from '@buhuchet/domain';
 import { databaseAvailable, seedAllPlatformDictionaries } from '@buhuchet/db/testing';
 import { ContractorHistory, ContractorList, ContractorSummary, ReportList } from '@buhuchet/shared';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { apiRequest, createStaffFixture, signIn, TEST_PASSWORD } from '../../testing';
 
@@ -328,7 +329,8 @@ describe.skipIf(!databaseAvailable())(
       const entry = (
         entity: string,
         action: string,
-        changes: { field: string; from?: unknown; to?: unknown }[],
+        changes: HistoryChange[],
+        reason: string | null = null,
       ) => ({
         orgId: f.a.orgId,
         entity,
@@ -336,6 +338,7 @@ describe.skipIf(!databaseAvailable())(
         action,
         contractorId: cp,
         changes,
+        reason,
         actorUserId: f.a.ownerUserId,
       });
       await f.t.admin.db.insert(schema.auditLog).values([
@@ -345,6 +348,8 @@ describe.skipIf(!databaseAvailable())(
           { field: 'feeDay', to: 5 },
         ]),
         entry('contractor', 'update', [{ field: 'tariff', from: null, to: { amount: 1 } }]),
+        // Запись только о плате не видна без права целиком — и с причиной: в ней может быть сумма.
+        entry('contractor', 'update', [{ field: 'feeDay', from: 5, to: 10 }], 'Плата 12 000 сом'),
         entry('assignment', 'create', [{ field: 'typeCode', to: 'nds' }]),
         entry('report', 'update', [{ field: 'amount', from: 0, to: 500_000 }]),
         entry('task', 'create', [{ field: 'title', to: 'Сверка' }]),
@@ -358,6 +363,7 @@ describe.skipIf(!databaseAvailable())(
       await setFeatures({ fee: true, tasks: true, indicators: true, files: true });
       expect(kinds(await history(owner, cp))).toEqual([
         'assignment',
+        'contractor',
         'contractor',
         'contractor',
         'file',
@@ -377,6 +383,7 @@ describe.skipIf(!databaseAvailable())(
         { field: 'name', to: 'ОсОО «История»' },
       ]);
       expect(JSON.stringify(h)).not.toContain('1200000');
+      expect(JSON.stringify(h)).not.toContain('Плата');
 
       // Выключенные функции прячут свои записи и у владельца.
       await setFeatures({ fee: false, tasks: false, indicators: false, files: false });
@@ -384,6 +391,87 @@ describe.skipIf(!databaseAvailable())(
       expect(kinds(off)).toEqual(['assignment', 'contractor', 'report']);
       expect(off.items.find((x) => x.entity === 'contractor')?.changes).toHaveLength(1);
       await setFeatures({});
+    });
+
+    it('история: «Контрагенты — все», «Отчёты — свои» — видны записи только тех отчётов, где ответственный он сам; задача, перенесённая к другому, — без названия', async () => {
+      // «Кадры» (hr-a): права «Бухгалтера», область контрагентов — все, отчётов — свои.
+      await f.t.admin.db
+        .update(schema.roleScopes)
+        .set({ scope: 'all' })
+        .where(
+          and(eq(schema.roleScopes.roleId, f.roleIds.hr), eq(schema.roleScopes.permGroup, 'cps')),
+        );
+      const hr = await signIn(f.app, 'hr-a', TEST_PASSWORD);
+      const cp = await contractor(f.a.orgId, 'ОсОО «Чужой»', '02810201510078', {
+        responsibleEmployeeId: employee('chief-a'),
+      });
+      const other = await contractor(f.a.orgId, 'ОсОО «Другой»', '02810201510079', {
+        responsibleEmployeeId: employee('chief-a'),
+      });
+      const [mineReport, chiefReport] = await f.t.admin.db
+        .insert(schema.reports)
+        .values(
+          (['hr-a', 'chief-a'] as const).map((login, i) => ({
+            orgId: f.a.orgId,
+            period: 'M' as const,
+            act: 'sub' as const,
+            contractorId: cp,
+            responsibleEmployeeId: employee(login),
+            reportTypeCode: 't1m',
+            periodStart: `2026-0${i + 7}-01`,
+            dueBase: `2026-0${i + 8}-15`,
+            dueDate: `2026-0${i + 8}-15`,
+          })),
+        )
+        .returning({ id: schema.reports.id });
+      // Задачу завели у этого контрагента, потом перенесли к другому.
+      const [task] = await f.t.admin.db
+        .insert(schema.tasks)
+        .values({
+          orgId: f.a.orgId,
+          title: 'Секретная сверка',
+          categoryCode: 'КАТ-001',
+          contractorId: other,
+          executorEmployeeId: employee('chief-a'),
+          authorEmployeeId: employee('chief-a'),
+          dueDate: '2026-10-20',
+          confirm: false,
+        })
+        .returning({ id: schema.tasks.id });
+      const entry = (entity: string, entityId: string) => ({
+        orgId: f.a.orgId,
+        entity,
+        entityId,
+        action: 'update',
+        contractorId: cp,
+        changes: [{ field: 'note', from: null, to: 'x' }],
+        actorUserId: f.a.ownerUserId,
+      });
+      await f.t.admin.db
+        .insert(schema.auditLog)
+        .values([
+          entry('report', mineReport!.id),
+          entry('report', chiefReport!.id),
+          entry('task', task!.id),
+        ]);
+      await f.t.admin.db
+        .update(schema.orgSettings)
+        .set({ features: { tasks: true } })
+        .where(eq(schema.orgSettings.orgId, f.a.orgId));
+
+      const h = await history(hr, cp);
+      const reportsSeen = h.items.filter((x) => x.entity === 'report');
+      expect(reportsSeen).toHaveLength(1);
+      expect(reportsSeen[0]!.subject).toMatch(/07\.2026$/);
+      expect(h.items.find((x) => x.entity === 'task')?.subject).toBeNull();
+      expect(JSON.stringify(h)).not.toContain('Секретная');
+      // Владелец видит оба отчёта.
+      const all = await history(owner, cp);
+      expect(all.items.filter((x) => x.entity === 'report')).toHaveLength(2);
+      await f.t.admin.db
+        .update(schema.orgSettings)
+        .set({ features: {} })
+        .where(eq(schema.orgSettings.orgId, f.a.orgId));
     });
 
     it('история: неверный номер — 400, без входа — 401, чужая организация и чужой контрагент со «Своими» — «не найден»', async () => {

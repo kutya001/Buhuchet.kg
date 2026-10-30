@@ -12,7 +12,8 @@ import { useContractorsRefresh } from './contractor-data';
 /**
  * «Снять» у заметки «По статусу «…» не нужны» в блоке «Сдаёт отчёты» карточки (ТЗ «Подбор отчётов»;
  * прототип pkNotNeededNote с `data-nnrm` → pkConfirm): сервер считает, сколько отчётов удалится, окно
- * спрашивает, как «Применить» во вкладке «Подбор отчётов», и снимает виды тем же методом.
+ * спрашивает, как «Применить» во вкладке «Подбор отчётов» (pkConfirm: «Сохранить», красная), и снимает
+ * виды тем же методом; итог — «Снято отчётов: N».
  */
 export function useNotNeededRemove(
   contractorId: string,
@@ -60,11 +61,7 @@ export function useNotNeededRemove(
     refresh();
     if (!res.ok) return toast(errorText(res.error), { bad: true, icon: 'alert' });
     const done = ReportPickApplied.parse(res.data);
-    toast(
-      t('cp.pick.ui.done', { add: 0, remove: done.remove.length }) +
-        (done.deleted ? t('cp.pick.ui.done_deleted', { n: done.deleted }) : ''),
-      { icon: 'check' },
-    );
+    toast(t('cp.card.asg.removed', { n: done.remove.length }), { icon: 'check' });
   };
 
   const dialog = ask ? (
@@ -73,7 +70,7 @@ export function useNotNeededRemove(
       onClose={() => setAsk({ ...ask, open: false })}
       title={t('cp.pick.ui.confirm_title')}
       text={ask.text}
-      ok={t('cp.pick.ui.not_needed_remove')}
+      ok={t('btn.save')}
       danger
       onConfirm={() => void remove(ask.codes)}
     />

@@ -79,6 +79,7 @@ import { serviceScaleSteps } from './contractor-menu';
 import { useNotNeededRemove } from './not-needed-remove';
 import { RatesDialog } from './rates-dialog';
 import { NotNeededNote, ReportPickTab } from './report-pick';
+import { reportPickQuery } from './report-pick-data';
 import { serviceQuery } from './service-data';
 import { ServicePlanNote, ServiceStatusBlock } from './service-actions';
 
@@ -725,7 +726,14 @@ function AssignmentsBox({
   const [rates, setRates] = useState<DialogSlot<null> | null>(null);
   const list = (query.data ?? []).filter((a) => !a.endedOn);
   const canEdit = access.can('assign') && c.serviceStatus !== 'archived';
-  // «Снять» у «По статусу «…» не нужны» — кто может менять отчёты в «Подборе отчётов» (прототип pkEdit).
+  // «Снять» у «По статусу «…» не нужны» — кто может менять отчёты в «Подборе отчётов» (прототип pkEdit:
+  // «Создавать контрагентов» или «Назначать отчёты» в своей области), как решает сервер.
+  const pickable =
+    c.kind === 'regular' &&
+    c.serviceStatus !== 'archived' &&
+    (access.can('assign') || access.can('createCp'));
+  const pickEdit = useQuery({ ...reportPickQuery({ contractorId: c.id }), enabled: pickable }).data
+    ?.edit.types;
   const notNeeded = useNotNeededRemove(
     c.id,
     list.map((a) => a.reportTypeCode),
@@ -735,7 +743,7 @@ function AssignmentsBox({
     <Box
       title={t('cp.card.asg.title', { n: list.length })}
       actions={
-        onPick || (access.can('assign') && list.length) ? (
+        onPick || (canEdit && list.length) ? (
           <>
             {onPick ? (
               <button
@@ -749,7 +757,7 @@ function AssignmentsBox({
                 {t('cp.card.asg.pick')}
               </button>
             ) : null}
-            {access.can('assign') && list.length ? (
+            {canEdit && list.length ? (
               <button
                 type="button"
                 data-cp-rates=""
@@ -770,7 +778,7 @@ function AssignmentsBox({
           benefits={c.benefits.map((b) => b.code)}
           assigned={list.map((a) => a.reportTypeCode)}
           catalog={catalog}
-          {...(canEdit && c.kind === 'regular' ? { onRemove: notNeeded.onRemove } : {})}
+          {...(pickable && pickEdit ? { onRemove: notNeeded.onRemove } : {})}
         />
       ) : null}
       {query.data ? (

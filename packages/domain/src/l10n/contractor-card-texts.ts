@@ -254,6 +254,7 @@ export const CONTRACTOR_CARD_TEXTS = {
     section: C,
   },
   'cp.card.asg.rates': { ru: 'Ставки', section: C },
+  'cp.card.asg.removed': { ru: 'Снято отчётов: {n}', section: C },
   'cp.card.asg.rates_title': { ru: 'Ставки, повторяющиеся суммы и периодичность', section: C },
   'cp.rates.title': { ru: 'Ставки и сроки отчётов', section: C },
   'cp.rates.no_regime': { ru: 'режим не указан', section: C },

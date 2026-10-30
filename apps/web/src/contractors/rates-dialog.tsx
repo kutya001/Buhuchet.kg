@@ -314,15 +314,10 @@ export function RatesDialog({
                     </select>
                   ),
                   day: (
-                    <input
-                      className={`${inputClass({ full: false })} w-16 tabular-nums ${SMALL}`}
-                      aria-label={t('cp.rates.col.day')}
-                      inputMode="numeric"
+                    <DayInput
+                      label={t('cp.rates.col.day')}
                       value={o.day}
-                      onChange={(e) => {
-                        const n = Number.parseInt(e.target.value, 10);
-                        if (n >= 1 && n <= 31) set({ day: n });
-                      }}
+                      onChange={(day) => set({ day })}
                     />
                   ),
                   month: (
@@ -364,5 +359,36 @@ export function RatesDialog({
         <span className="text-faint">{t('cp.rates.nothing')}</span>
       ) : null}
     </Modal>
+  );
+}
+
+/**
+ * «Срок: число» — поле можно стереть и набрать заново; число от 1 до 31 сразу идёт в «Получится»,
+ * неверное при уходе из поля возвращается к прежнему (прототип проверяет при уходе).
+ */
+function DayInput({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  onChange: (day: number) => void;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  return (
+    <input
+      className={`${inputClass({ full: false })} w-16 tabular-nums ${SMALL}`}
+      aria-label={label}
+      inputMode="numeric"
+      value={draft ?? String(value)}
+      onChange={(e) => {
+        const text = e.target.value.replace(/\D/g, '').slice(0, 2);
+        setDraft(text);
+        const n = Number(text);
+        if (text && n >= 1 && n <= 31) onChange(n);
+      }}
+      onBlur={() => setDraft(null)}
+    />
   );
 }

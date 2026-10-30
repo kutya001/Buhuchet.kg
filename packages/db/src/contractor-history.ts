@@ -122,9 +122,13 @@ async function namesOf(
   return out;
 }
 
-/** Подписи записей отчётов, назначений и задач: вид и период, название вида, название задачи. */
+/**
+ * Подписи записей отчётов, назначений и задач: вид и период, название вида, название задачи. Название
+ * задачи — только пока она у этого контрагента: перенесённую к другому или общую не подписываем.
+ */
 async function subjectsOf(
   tx: Tx,
+  contractorId: string,
   rows: readonly { entity: string; entityId: string }[],
   t: Translate,
 ): Promise<Map<string, string>> {
@@ -159,7 +163,10 @@ async function subjectsOf(
           .where(inArray(assignments.id, assignmentIds))
       : [],
     taskIds.length
-      ? tx.select({ id: tasks.id, name: tasks.title }).from(tasks).where(inArray(tasks.id, taskIds))
+      ? tx
+          .select({ id: tasks.id, name: tasks.title })
+          .from(tasks)
+          .where(and(inArray(tasks.id, taskIds), eq(tasks.contractorId, contractorId)))
       : [],
   ]);
   for (const r of reportRows) {
@@ -243,11 +250,11 @@ async function visibleEntries(
   return and(or(...own), files ? undefined : notInArray(auditLog.action, [...FILE_ACTIONS]));
 }
 
-/** Запись без полей платы; запись только о плате без причины — null (её не видно). */
-function withoutFee<T extends { changes: HistoryChange[]; reason: string | null }>(r: T): T | null {
+/** Запись без полей платы; запись только о плате — null целиком, с причиной (в ней может быть сумма). */
+function withoutFee<T extends { changes: HistoryChange[] }>(r: T): T | null {
   const changes = r.changes.filter((c) => !FEE_FIELDS.has(c.field));
   if (changes.length === r.changes.length) return r;
-  return changes.length || r.reason ? { ...r, changes } : null;
+  return changes.length ? { ...r, changes } : null;
 }
 
 /** История контрагента в области `scope`; null — нет такого или он вне области. */
@@ -283,7 +290,7 @@ export async function contractorHistory(
     .then((list) => (o.access.fee ? list : list.flatMap((r) => withoutFee(r) ?? [])));
   const [names, subjects] = await Promise.all([
     namesOf(tx, referencesOf(rows)),
-    subjectsOf(tx, rows, o.t),
+    subjectsOf(tx, id, rows, o.t),
   ]);
   return {
     items: rows.map((r) => ({

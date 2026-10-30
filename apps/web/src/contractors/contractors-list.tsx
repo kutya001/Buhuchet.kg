@@ -210,10 +210,10 @@ export function ContractorsList({ tab }: { tab: ContractorTab }) {
 
   const canAdd = access.can('createCp');
   // Контрагентов нет совсем — пустое состояние первого входа (ТЗ «Пустые состояния», прототип
-  // ui/empty.js `firstEmpty`); «Загрузить из Excel» рядом подключит задача загрузки (2.16).
-  const first = tab === 'all' && !!s && s.active + s.archived === 0;
+  // ui/empty.js `firstEmpty`) на любой вкладке; «Загрузить из Excel» рядом подключит задача загрузки (2.16).
+  const first = !!s && s.active + s.archived === 0;
   const empty =
-    tab === 'mine' ? (
+    tab === 'mine' && !first ? (
       <EmptyState icon="building" title={t('cp.empty.mine')} />
     ) : (
       <EmptyState
