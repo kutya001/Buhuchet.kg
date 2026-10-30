@@ -121,6 +121,12 @@ test.describe('Этап 2: задачи', () => {
     ).toBeVisible();
 
     await search(page, isMobile, title);
+    // «Контрагент» по умолчанию скрыт, как в прототипе (docs/deviations.md п. Б-2): включаем в «Столбцах».
+    await page.getByRole('button', { name: /^Столбцы/ }).click();
+    const panel = page.getByRole('dialog', { name: 'Столбцы' });
+    await panel.getByRole('checkbox', { name: 'Контрагент' }).check();
+    await page.keyboard.press('Escape');
+    await expect(panel).toBeHidden();
     const row = page.locator('[data-grid] [data-id]').filter({ hasText: title });
     await expect(row).toHaveCount(1);
     await expect(row).toContainText('Общая');
