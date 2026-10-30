@@ -47,14 +47,18 @@ import { gkedItems, platformAuditLog, productionCalendar, reportTypes } from './
 export type SectionFail = { key: UiTextKey; params?: Record<string, string> } | 'changed';
 
 export type SectionSaveResult =
-  | { ok: true; record: IoRecord; redue?: RedueScope | null }
-  | { ok: false; fail: SectionFail };
+  { ok: true; record: IoRecord; redue?: RedueScope | null } | { ok: false; fail: SectionFail };
 
 export interface SectionWriter {
   /** Значения для файла и сравнения — в порядке справочника. */
   records(tx: Tx, today: IsoDate): Promise<IoRecord[]>;
   /** Записать строку файла: новое значение (`base` нет) или правку. */
-  save(tx: Tx, value: IoValue, base: IoRecord | undefined, today: IsoDate): Promise<SectionSaveResult>;
+  save(
+    tx: Tx,
+    value: IoValue,
+    base: IoRecord | undefined,
+    today: IsoDate,
+  ): Promise<SectionSaveResult>;
   /** Откат загрузки: убрать значение, которое она добавила. */
   remove(tx: Tx, record: IoRecord, today: IsoDate): Promise<SectionSaveResult | { ok: true }>;
 }
@@ -76,7 +80,9 @@ function changesOf(before: IoValue | null, after: IoValue): HistoryChange[] {
         ? { field: f, from: toHistoryValue(was[f]), to: toHistoryValue(now[f]) }
         : { field: f, to: toHistoryValue(now[f]) },
     )
-    .filter((c) => before || (c.to !== null && c.to !== '' && !(Array.isArray(c.to) && !c.to.length)));
+    .filter(
+      (c) => before || (c.to !== null && c.to !== '' && !(Array.isArray(c.to) && !c.to.length)),
+    );
 }
 
 async function history(
@@ -123,7 +129,8 @@ const calendarWriter: SectionWriter = {
     if (![y1, y2].includes(Number(date.slice(0, 4)))) {
       return fail('pdicts.io.err.cal_year', { y1: String(y1), y2: String(y2) });
     }
-    if (kind === 'workday' && weekdayMondayFirst(date) !== 5) return fail('pdicts.io.err.cal_saturday');
+    if (kind === 'workday' && weekdayMondayFirst(date) !== 5)
+      return fail('pdicts.io.err.cal_saturday');
     if (kind !== 'workday' && !name) return fail('pdicts.io.err.cal_name');
     const yearly = base?.data.rule === 'yearly';
     // ОТКЛОНЕНИЕ: docs/deviations.md#Д-19
@@ -187,7 +194,9 @@ const calendarWriter: SectionWriter = {
 type Stored = Record<string, unknown> & { code: string };
 
 const itemsOf = (payload: unknown): Stored[] =>
-  Array.isArray(payload) ? (payload as Stored[]).filter((x) => x && typeof x.code === 'string') : [];
+  Array.isArray(payload)
+    ? (payload as Stored[]).filter((x) => x && typeof x.code === 'string')
+    : [];
 
 /**
  * Раздел-массив `platform_reference`: значение — запись массива по коду; запись строки переписывает
@@ -204,7 +213,11 @@ function arrayWriter(
   return {
     async records(tx) {
       const ref = await readReference(tx, key);
-      return itemsOf(ref?.payload).map((x) => ({ code: x.code, ...toValue(x), version: ref!.version }));
+      return itemsOf(ref?.payload).map((x) => ({
+        code: x.code,
+        ...toValue(x),
+        version: ref!.version,
+      }));
     },
     async save(tx, value, base) {
       const problem = await check(tx, value, base);
@@ -307,7 +320,9 @@ const taxesWriter = arrayWriter(
       (value.data.gked as GkedRule | null) ?? null,
       (base?.data.gked as GkedRule | null | undefined) ?? null,
     );
-    return unknown.length ? fail('pdicts.io.err.gked_unknown', { codes: unknown.join(', ') }) : null;
+    return unknown.length
+      ? fail('pdicts.io.err.gked_unknown', { codes: unknown.join(', ') })
+      : null;
   },
 );
 
@@ -422,7 +437,9 @@ const enratesWriter: SectionWriter = {
         return row?.deleted === true;
       });
       if (deleted) {
-        await history(tx, 'enrates', record.code, 'delete', [{ field: 'name', from: now.activity }]);
+        await history(tx, 'enrates', record.code, 'delete', [
+          { field: 'name', from: now.activity },
+        ]);
         return { ok: true };
       }
     } catch (err) {
@@ -435,7 +452,9 @@ const enratesWriter: SectionWriter = {
       sql`select app.admin_dict_set_active('enrates', ${record.code}, false, ${now.version}) as version`,
     );
     if (row?.version == null) return CHANGED;
-    await history(tx, 'enrates', record.code, 'update', [{ field: 'active', from: true, to: false }]);
+    await history(tx, 'enrates', record.code, 'update', [
+      { field: 'active', from: true, to: false },
+    ]);
     return { ok: true };
   },
 };

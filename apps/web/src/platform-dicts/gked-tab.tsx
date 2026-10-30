@@ -236,6 +236,7 @@ function TreeRow({
         type="button"
         className={iconButtonClass('sm')}
         aria-label={t('grid.actions')}
+        data-row-menu=""
         aria-haspopup="menu"
         aria-expanded={menu !== null}
         onClick={(e) => setMenu(menu ? null : e.currentTarget)}
@@ -246,7 +247,7 @@ function TreeRow({
         <ActionMenu
           items={actions}
           place={{ anchor: menu }}
-          label={x.code}
+          label={t('grid.actions')}
           onClose={() => setMenu(null)}
         />
       ) : null}
@@ -761,7 +762,9 @@ export function GkedTab() {
     <div className="flex flex-col gap-3.5">
       {items.data ? <Note icon="info">{note}</Note> : null}
       <div className="flex flex-wrap items-center gap-2" data-io-bar="">
-        <span className="min-w-[220px] flex-1 text-[13px] text-muted">{t('pdicts.gked.io_note')}</span>
+        <span className="min-w-[220px] flex-1 text-[13px] text-muted">
+          {t('pdicts.gked.io_note')}
+        </span>
         <Segments
           label={t('pdicts.gked.view')}
           value={view}
@@ -793,7 +796,11 @@ export function GkedTab() {
         onIo={(dict, action) => setIo(openSlot<IoSlot>({ dict, action }))}
       />
       {view === 'tree' ? (
-        <GkedTree items={all} actions={actions} onEdit={(x) => setEdit(openSlot<GkedItem | null>(x))} />
+        <GkedTree
+          items={all}
+          actions={actions}
+          onEdit={(x) => setEdit(openSlot<GkedItem | null>(x))}
+        />
       ) : (
         <ValueDictList dict="gked" bare onGkedEdit={(x) => setEdit(openSlot<GkedItem | null>(x))} />
       )}

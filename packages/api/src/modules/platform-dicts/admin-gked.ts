@@ -279,11 +279,7 @@ function bulkFail(result: Extract<BulkResult, { ok: false }>): never {
 }
 
 /** Транзакция массового действия: отказ — исключение, правки откатываются. */
-async function bulkTx(
-  deps: ApiDeps,
-  c: Context<AppEnv>,
-  run: (tx: Tx) => Promise<BulkResult>,
-) {
+async function bulkTx(deps: ApiDeps, c: Context<AppEnv>, run: (tx: Tx) => Promise<BulkResult>) {
   return adminTx(deps, c, async (tx) => {
     const result = await run(tx);
     if (!result.ok) return bulkFail(result);
@@ -297,7 +293,10 @@ export const bulkActiveRoute = createRoute({
   tags: ['platform-dicts'],
   summary: '«Включить» / «Отключить» у отмеченных',
   middleware: [requirePlatformAdmin] as const,
-  request: { params: AdminValueDictParam, body: { required: true, content: json(AdminBulkActive) } },
+  request: {
+    params: AdminValueDictParam,
+    body: { required: true, content: json(AdminBulkActive) },
+  },
   responses: {
     200: { description: 'Сколько значений и пересчёт сроков', content: json(AdminBulkResult) },
     ...bulkResponses,
@@ -321,9 +320,15 @@ export const bulkActivePreviewRoute = createRoute({
   tags: ['platform-dicts'],
   summary: 'Предпросмотр: у скольких отчётов изменятся сроки после «Включить» / «Отключить»',
   middleware: [requirePlatformAdmin] as const,
-  request: { params: AdminValueDictParam, body: { required: true, content: json(AdminBulkActive) } },
+  request: {
+    params: AdminValueDictParam,
+    body: { required: true, content: json(AdminBulkActive) },
+  },
   responses: {
-    200: { description: 'Отчёты и организации; правка не сохраняется', content: json(AdminDuesPreview) },
+    200: {
+      description: 'Отчёты и организации; правка не сохраняется',
+      content: json(AdminDuesPreview),
+    },
     ...duesPreviewResponses,
   },
 });
@@ -374,7 +379,10 @@ export const bulkDuePreviewRoute = createRoute({
   middleware: [requirePlatformAdmin] as const,
   request: { body: { required: true, content: json(AdminBulkDue) } },
   responses: {
-    200: { description: 'Отчёты и организации; правка не сохраняется', content: json(AdminDuesPreview) },
+    200: {
+      description: 'Отчёты и организации; правка не сохраняется',
+      content: json(AdminDuesPreview),
+    },
     ...duesPreviewResponses,
   },
 });

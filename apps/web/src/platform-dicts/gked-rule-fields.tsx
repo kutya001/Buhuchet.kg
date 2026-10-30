@@ -155,7 +155,10 @@ export function GkedRuleFields({
     <>
       {r?.note ? (
         <div className="col-span-full">
-          <Note icon={verify && !r.verify ? 'alert' : 'info'} tone={verify && !r.verify ? 'warn' : 'info'}>
+          <Note
+            icon={verify && !r.verify ? 'alert' : 'info'}
+            tone={verify && !r.verify ? 'warn' : 'info'}
+          >
             {t('pdicts.gkr.note', { text: r.note })}
           </Note>
         </div>
@@ -189,7 +192,11 @@ export function GkedRuleFields({
       {state.warn
         ? input(
             'warn',
-            t(state.warn === 'status' ? 'pdicts.gkr.warn_hint_status' : 'pdicts.gkr.warn_hint_regime'),
+            t(
+              state.warn === 'status'
+                ? 'pdicts.gkr.warn_hint_status'
+                : 'pdicts.gkr.warn_hint_regime',
+            ),
           )
         : null}
     </>

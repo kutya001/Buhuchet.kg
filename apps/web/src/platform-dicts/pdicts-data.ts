@@ -229,9 +229,8 @@ export const pdictsGkedGroupsQuery = queryOptions({
 
 /** Ставка единого налога с перечнем ГКЭД и версией — окно «Виды деятельности (ГКЭД)». */
 export const fetchAdminEnRate = async (code: string) =>
-  json(
-    await api.api.admin['platform-enrates'][':code'].$get({ param: { code } }),
-    (v) => AdminEnRate.parse(v),
+  json(await api.api.admin['platform-enrates'][':code'].$get({ param: { code } }), (v) =>
+    AdminEnRate.parse(v),
   );
 
 /**

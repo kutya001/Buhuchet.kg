@@ -112,9 +112,9 @@ describe('ГКЭД в Админке (задача 2.38)', () => {
   it('действие группы: одно на группу, по кодам или ничего — текстом и из Excel', () => {
     expect(gkedGroupActText({ en: 'ex', spino: null }, 'en', t)).toBe('Запрет');
     expect(gkedGroupActText({ en: 'ex', spino: null }, 'spino', t)).toBe('—');
-    expect(
-      gkedGroupActText({ en: { '01': 'warn', '01.11': 'ex' }, spino: null }, 'en', t),
-    ).toBe('01 — предупреждение; 01.11 — запрет');
+    expect(gkedGroupActText({ en: { '01': 'warn', '01.11': 'ex' }, spino: null }, 'en', t)).toBe(
+      '01 — предупреждение; 01.11 — запрет',
+    );
     expect(parseGkedGroupActs('запрет', KNOWN, t)).toEqual({ value: 'ex' });
     expect(parseGkedGroupActs('Предупреждение', KNOWN, t)).toEqual({ value: 'warn' });
     expect(parseGkedGroupActs('—', KNOWN, t)).toEqual({ value: null });
@@ -131,7 +131,11 @@ describe('ГКЭД в Админке (задача 2.38)', () => {
   it('правка группы меняет «Кроме» и «Предупреждать при ГКЭД»: прежние коды уходят, новые — по действию', () => {
     const rule = { in: [], ex: ['64', '66'], warn: ['61'], strict: 'main' };
     const old = { codes: ['64', '61'], en: { '64': 'ex', '61': 'warn' } as const, spino: null };
-    const next = { codes: ['64.91', '62'], en: { '64.91': 'warn', '62': 'ex' } as const, spino: null };
+    const next = {
+      codes: ['64.91', '62'],
+      en: { '64.91': 'warn', '62': 'ex' } as const,
+      spino: null,
+    };
     expect(gkedGroupApply(rule, old, next, 'en')).toEqual({
       in: [],
       ex: ['66', '62'],

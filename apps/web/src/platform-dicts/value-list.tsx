@@ -542,9 +542,9 @@ export function ValueDictList({
   );
   const gkedRun = useGkedActions();
   const markGns = useMarkGns();
-  const [askStatus, setAskStatus] = useState<DialogSlot<BulkStatusAsk & { done: () => void }> | null>(
-    null,
-  );
+  const [askStatus, setAskStatus] = useState<DialogSlot<
+    BulkStatusAsk & { done: () => void }
+  > | null>(null);
   const [bulkDue, setBulkDue] = useState<DialogSlot<{
     rows: readonly AdminDictValue[];
     done: () => void;

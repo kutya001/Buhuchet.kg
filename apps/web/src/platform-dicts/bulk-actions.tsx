@@ -175,8 +175,14 @@ export function BulkStatusDialog({
   const send = useBulkSend('benefits');
   const [busy, setBusy] = useState(false);
   const body = { codes: ask.codes, active: ask.active };
-  const dues = useDuesPreview(`bulk-active:${ask.codes.join(',')}:${ask.active}`, body, (json, signal) =>
-    bulk[':dict'].active['dues-preview'].$post({ param: { dict: 'benefits' }, json }, { init: { signal } }),
+  const dues = useDuesPreview(
+    `bulk-active:${ask.codes.join(',')}:${ask.active}`,
+    body,
+    (json, signal) =>
+      bulk[':dict'].active['dues-preview'].$post(
+        { param: { dict: 'benefits' }, json },
+        { init: { signal } },
+      ),
   );
   const many = ask.codes.length > 1;
   const act = t(ask.active ? 'pdicts.bulk.on' : 'pdicts.bulk.off');
@@ -276,9 +282,7 @@ export function BulkDueDialog({
     event.preventDefault();
     const next = {
       day:
-        body.day !== undefined && (body.day < 1 || body.day > 31)
-          ? t('pdicts.err.day')
-          : undefined,
+        body.day !== undefined && (body.day < 1 || body.day > 31) ? t('pdicts.err.day') : undefined,
       after:
         body.after !== undefined && (body.after < 0 || body.after > 6)
           ? t('pdicts.bulk_due.after_err')
@@ -318,13 +322,14 @@ export function BulkDueDialog({
         </>
       }
     >
-      <form id={formId} onSubmit={(e) => void submit(e)} noValidate className="flex flex-col gap-3.5">
+      <form
+        id={formId}
+        onSubmit={(e) => void submit(e)}
+        noValidate
+        className="flex flex-col gap-3.5"
+      >
         <FormGrid>
-          <Field
-            id={`${id}-day`}
-            label={t('pdicts.bulk_due.day')}
-            error={error.day ?? error.any}
-          >
+          <Field id={`${id}-day`} label={t('pdicts.bulk_due.day')} error={error.day ?? error.any}>
             {(c) => (
               <input
                 {...c}

@@ -41,7 +41,9 @@ export function gkedUsedText(t: Translate, x: Pick<GkedItem, 'used' | 'contracto
       : '',
     rules ? t(`pdicts.gked.used_rules.${pluralForm(rules)}`, { n: rules }) : '',
   ].filter(Boolean);
-  return parts.length === 2 ? t('pdicts.gked.used_and', { a: parts[0]!, b: parts[1]! }) : (parts[0] ?? '');
+  return parts.length === 2
+    ? t('pdicts.gked.used_and', { a: parts[0]!, b: parts[1]! })
+    : (parts[0] ?? '');
 }
 
 const formOf = (x: GkedItem | null): GkedValueFormInput => ({
@@ -252,7 +254,11 @@ export function GkedDialog({
           <Field
             id={`${id}-parentCode`}
             label={t('pdicts.gked.dlg.parent')}
-            hint={names.get(parent) ? `${parent} — ${names.get(parent)}` : t('pdicts.gked.dlg.parent_hint')}
+            hint={
+              names.get(parent)
+                ? `${parent} — ${names.get(parent)}`
+                : t('pdicts.gked.dlg.parent_hint')
+            }
             error={errorOf('parentCode')}
           >
             {(c) => (

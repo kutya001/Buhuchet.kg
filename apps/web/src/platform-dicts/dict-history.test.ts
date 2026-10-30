@@ -2,7 +2,12 @@ import { defaultUiTexts } from '@buhuchet/domain';
 import { describe, expect, it } from 'vitest';
 import { makeTranslate } from '../l10n/translate';
 import { pdictsHead } from './pdicts-head';
-import { calendarHistoryText, dictHistoryItem, dictHistoryText } from './dict-history';
+import {
+  calendarHistoryText,
+  dictHistoryItem,
+  dictHistoryText,
+  sectionHistoryText,
+} from './dict-history';
 
 // Админка → «Справочники платформы»: строки «Истории изменений» — как пишет прототип (pdLog), шапка
 // вкладки — из раздела `dictGroups`.
@@ -230,6 +235,77 @@ describe('«История изменений» справочника', () => {
   it('дата и время — по Бишкеку; без автора — «Система»', () => {
     const row = dictHistoryItem('organs', item({ action: 'create', actor: null }), t);
     expect(row).toMatchObject({ date: '27.10.2026', time: '12:30', who: 'Система' });
+  });
+});
+
+describe('«История изменений» вкладок «ГКЭД» и «Налоги и ставки» (задачи 2.37 и 2.38)', () => {
+  it('коды ГКЭД: добавлен, удалён, «Действует», изменён', () => {
+    const code = { code: '69.20.8', label: 'Проверка', section: 'gked' as const };
+    expect(dictHistoryText('gked', item({ ...code, action: 'create' }), t)).toBe(
+      'ГКЭД: добавлен код 69.20.8 «Проверка»',
+    );
+    expect(sectionHistoryText(item({ ...code, action: 'delete' }), t)).toBe(
+      'ГКЭД: удалён код 69.20.8 «Проверка»',
+    );
+    const off = item({ ...code, changes: [{ field: 'active', from: true, to: false }] });
+    expect(sectionHistoryText(off, t)).toBe('ГКЭД: 69.20.8 — «Действует»: нет');
+    const note = item({ ...code, changes: [{ field: 'note', from: '', to: 'Пример' }] });
+    expect(sectionHistoryText(note, t)).toBe('ГКЭД: 69.20.8 изменён');
+  });
+
+  it('группа кодов: что изменилось — коды и действия; без них — «изменена»', () => {
+    const group = { code: 'banks', label: 'Банки', section: 'gkgroups' as const };
+    const changed = item({
+      ...group,
+      changes: [
+        { field: 'codes', from: ['64.11', '64.19.1'], to: ['64.11'] },
+        { field: 'en', from: 'ex', to: 'warn' },
+      ],
+    });
+    expect(sectionHistoryText(changed, t)).toBe(
+      'ГКЭД: группа кодов «Банки» изменена — коды 64.11; единый налог: Предупреждение',
+    );
+    const why = item({ ...group, changes: [{ field: 'why', from: '', to: 'НК' }] });
+    expect(sectionHistoryText(why, t)).toBe('ГКЭД: группа кодов «Банки» изменена');
+    expect(sectionHistoryText(item({ ...group, action: 'delete' }), t)).toBe(
+      'ГКЭД: удалена группа кодов «Банки»',
+    );
+  });
+
+  it('ставка единого налога: «Виды деятельности (ГКЭД)» было → стало; налог переименован', () => {
+    const rate = item({
+      code: 'ЕНС-01',
+      label: 'Торговля',
+      section: 'enrates',
+      changes: [
+        { field: 'gked', from: { in: ['47'], ex: [] }, to: { in: ['47', '46'], ex: ['47.30'] } },
+      ],
+    });
+    expect(sectionHistoryText(rate, t)).toBe(
+      'Ставки единого налога: ЕНС-01 — виды деятельности (ГКЭД): «47» → «47, 46; кроме 47.30»',
+    );
+    const tax = item({
+      code: 'НАЛ-01',
+      label: 'Подоходный',
+      section: 'taxes',
+      changes: [{ field: 'name', from: 'Подоходный налог', to: 'Подоходный' }],
+    });
+    expect(dictHistoryItem('taxes', tax, t).text).toBe(
+      'Налоги и обязательные платежи: «Подоходный налог» → «Подоходный»',
+    );
+  });
+
+  it('«Отметить сверку с ГНС» — одной строкой; календарь: из Excel переименован праздник', () => {
+    const gns = item({ code: '', label: '', changes: [{ field: 'gns', to: ['НДС', 'Акциз'] }] });
+    expect(dictHistoryText('types', gns, t)).toBe('Виды отчётов: сверено с ГНС — НДС, Акциз');
+    const renamed = item({
+      code: '2026-01-01',
+      label: 'Новый год (Excel)',
+      changes: [{ field: 'name', from: 'Новый год', to: 'Новый год (Excel)' }],
+    });
+    expect(calendarHistoryText(renamed, t)).toBe(
+      'Календарь: «01.01.2026 Новый год» → «Новый год (Excel)»',
+    );
   });
 });
 

@@ -60,7 +60,8 @@ export function gkedEditProblems(
   const code = value.code.trim();
   if (value.isNew) {
     if (!code) problems.push({ field: 'code', code: 'gked_code_required' });
-    else if (!GKED_CODE_PATTERN.test(code)) problems.push({ field: 'code', code: 'gked_code_format' });
+    else if (!GKED_CODE_PATTERN.test(code))
+      problems.push({ field: 'code', code: 'gked_code_format' });
     else if (index.has(code)) problems.push({ field: 'code', code: 'gked_code_taken' });
   }
   const parent = value.parentCode?.trim() || null;
@@ -160,7 +161,9 @@ export function parseGkedRule(
   const a = head.trim().toLowerCase() === all ? { codes: [] } : parseGkedCodes(head, known);
   const b = parseGkedCodes(tail, known);
   if ('unknown' in a || 'unknown' in b) {
-    return { unknown: [...('unknown' in a ? a.unknown : []), ...('unknown' in b ? b.unknown : [])] };
+    return {
+      unknown: [...('unknown' in a ? a.unknown : []), ...('unknown' in b ? b.unknown : [])],
+    };
   }
   return { in: a.codes, ex: b.codes };
 }

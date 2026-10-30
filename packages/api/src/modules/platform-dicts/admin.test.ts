@@ -722,10 +722,7 @@ describe.skipIf(!databaseAvailable())('Админка → «Справочник
     await f.t.admin.db
       .delete(schema.rateLimits)
       .where(
-        and(
-          eq(schema.rateLimits.kind, 'dict_request'),
-          eq(schema.rateLimits.subject, f.a.orgId),
-        ),
+        and(eq(schema.rateLimits.kind, 'dict_request'), eq(schema.rateLimits.subject, f.a.orgId)),
       );
     for (let i = 1; i <= DICT_REQUEST_HOURLY_LIMIT; i++) {
       expect((await post(`Вид ${i}`)).status).toBe(201);

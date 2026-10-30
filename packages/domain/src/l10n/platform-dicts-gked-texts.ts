@@ -97,7 +97,10 @@ export const PLATFORM_DICTS_GKED_TEXTS = {
   },
   'pdicts.io.err.gked_parent': { ru: '«Входит в»: {text}', section: E },
   'pdicts.io.err.tax_types': { ru: 'нет таких видов отчётов: {codes}', section: E },
-  'pdicts.io.err.adds_to': { ru: '«Добавляется к ставкам»: нет таких ставок — {codes}', section: E },
+  'pdicts.io.err.adds_to': {
+    ru: '«Добавляется к ставкам»: нет таких ставок — {codes}',
+    section: E,
+  },
 
   // Ошибки полей окон (прототип gkEditDlg, gkGrpDlg, bulkDueDlg, gkParse).
   'pdicts.err.gked_code_format': { ru: 'Формат кода: A, 01, 01.1, 01.11 или 01.11.1', section: E },

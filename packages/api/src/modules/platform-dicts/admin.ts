@@ -561,7 +561,12 @@ export function saveProblem(
     const [code, message] = BAD_LINK[result.problem];
     if (!result.codes) return { code, message, field: result.field };
     const codes = result.codes.join(', ');
-    return { code, message: message.replace('{codes}', codes), field: result.field, params: { codes } };
+    return {
+      code,
+      message: message.replace('{codes}', codes),
+      field: result.field,
+      params: { codes },
+    };
   }
   if (result.reason === 'gked') {
     const { code, field } = result.problem;
@@ -642,7 +647,13 @@ async function withActive(
 ): Promise<AdminDictSaveResult> {
   if (!saved.ok || dict !== 'gked' || form.active === undefined) return saved;
   if (saved.record.active === form.active) return saved;
-  const active = await adminDictSetActive(tx, dict, saved.record.code, form.active, saved.record.version);
+  const active = await adminDictSetActive(
+    tx,
+    dict,
+    saved.record.code,
+    form.active,
+    saved.record.version,
+  );
   return active.ok ? { ...active, redue: saved.redue ?? null } : active;
 }
 

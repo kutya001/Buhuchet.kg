@@ -275,7 +275,8 @@ export async function adminGkedGroupSave(
         taxChanges.push({ code: tax.code, from, to: tax.gked });
         continue;
       }
-      const dict = target.kind === 'regime' ? 'regimes' : target.kind === 'type' ? 'types' : 'benefits';
+      const dict =
+        target.kind === 'regime' ? 'regimes' : target.kind === 'type' ? 'types' : 'benefits';
       const record = await getAdminDictValue(tx, dict, target.code);
       if (!record) continue;
       const rule = gkedGroupApply((record.data.gked as GkedRule | null) ?? null, old, value, k);

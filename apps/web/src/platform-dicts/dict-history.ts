@@ -286,7 +286,8 @@ export function sectionHistoryText(item: Item, t: Translate): string {
     if (item.action === 'create') return t('pdicts.hist.gkgroup_create', { name });
     if (item.action === 'delete') return t('pdicts.hist.gkgroup_delete', { name });
     const parts = item.changes.flatMap((c) => {
-      if (c.field === 'codes') return [t('pdicts.hist.gkgroup_codes', { codes: strings(c.to).join(', ') })];
+      if (c.field === 'codes')
+        return [t('pdicts.hist.gkgroup_codes', { codes: strings(c.to).join(', ') })];
       if (c.field === 'en') return [t('pdicts.hist.gkgroup_en', { act: actsText(c.to, 'en', t) })];
       if (c.field === 'spino') {
         return [t('pdicts.hist.gkgroup_spino', { act: actsText(c.to, 'spino', t) })];
@@ -418,8 +419,8 @@ export function dictHistoryItem(
         : dict === 'taxes'
           ? sectionHistoryText(item, t)
           : isAdminSystemDict(dict)
-          ? systemHistoryText(dict, item, t, names)
-          : dictHistoryText(dict, item, t, names),
+            ? systemHistoryText(dict, item, t, names)
+            : dictHistoryText(dict, item, t, names),
     who: item.actor ?? t('org.history.system'),
   };
 }
