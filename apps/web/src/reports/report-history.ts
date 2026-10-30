@@ -14,11 +14,11 @@ type Change = ReportHistoryEntry['changes'][number];
 /** Подписи полей отчёта в истории «было → стало». */
 const FIELD_LABEL: Readonly<Record<string, UiTextKey>> = {
   amount: 'report.hist.field.amount',
-  dueDate: 'report.hist.field.dueDate',
-  payDue: 'report.hist.field.payDue',
-  periodStart: 'report.hist.field.periodStart',
-  eventDate: 'report.hist.field.eventDate',
-  submittedOn: 'report.hist.field.submittedOn',
+  dueDate: 'report.hist.field.due_date',
+  payDue: 'report.hist.field.pay_due',
+  periodStart: 'report.hist.field.period_start',
+  eventDate: 'report.hist.field.event_date',
+  submittedOn: 'report.hist.field.submitted_on',
 };
 
 const DATE_FIELDS = new Set(['dueDate', 'payDue', 'periodStart', 'eventDate', 'submittedOn']);
