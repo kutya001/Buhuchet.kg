@@ -9,6 +9,8 @@ export interface MenuItem {
   sub?: string;
   /** Метка рядом с названием, например «Бета». */
   badge?: string;
+  /** Черта перед пунктом (прототип `{sep: true}`, `.msep`): «Выгрузить в Excel» после способов добавления. */
+  sep?: boolean;
 }
 
 /** Метка «Бета» у способа добавления (прототип `.beta-p`). */
@@ -34,7 +36,10 @@ export function MenuItems({
   /** Выделенный пункт (прототип `.mi.on`), например текущая вкладка карточки. */
   active?: string;
 }) {
-  return items.map((item) => (
+  return items.flatMap((item) => [
+    ...(item.sep
+      ? [<div key={`${item.id}-sep`} role="separator" className="mx-1 my-[5px] h-px bg-line" />]
+      : []),
     <button
       key={item.id}
       type="button"
@@ -54,6 +59,6 @@ export function MenuItems({
         )}
         {item.sub && <span className="block text-[11.5px] text-faint">{item.sub}</span>}
       </span>
-    </button>
-  ));
+    </button>,
+  ]);
 }

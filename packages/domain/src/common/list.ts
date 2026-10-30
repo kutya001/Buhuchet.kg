@@ -479,8 +479,8 @@ export const GRID_KEYS = [
   'dicts.platform.statuses',
   'dicts.platform.cats',
   'dicts.platform.templates',
-  // Админка → «Справочники платформы»: справочник каждой вкладки (у «Налогов и ставок» — три таблицы)
-  // и «Запросы».
+  // Админка → «Справочники платформы»: справочник каждой вкладки (у «Налогов и ставок» — три таблицы),
+  // «Загрузки» и «Запросы».
   'pdicts.types',
   'pdicts.taxes',
   'pdicts.en_rates',
@@ -497,6 +497,7 @@ export const GRID_KEYS = [
   'pdicts.cats',
   'pdicts.reasons',
   'pdicts.perms',
+  'pdicts.loads',
   'pdicts.requests',
 ] as const;
 export type GridKey = (typeof GRID_KEYS)[number];

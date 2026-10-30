@@ -27,14 +27,16 @@ import {
   inputClass,
   linkButtonClass,
   Modal,
+  Note,
   RecordChangedNotice,
   useToast,
 } from '@buhuchet/ui';
 import { useId, useState, type FormEvent } from 'react';
-import { Controller, useForm, type FieldError, type Path } from 'react-hook-form';
+import { Controller, useForm, useWatch, type FieldError, type Path } from 'react-hook-form';
 import { api, apiFailure, callApi } from '../api-client';
 import { fieldError } from '../auth/fields';
 import { useErrorText, useT } from '../l10n/provider';
+import { duesNote, useDuesPreview } from './dues-preview';
 import { fetchAdminDictValue, reportTypeOptionsQuery } from './pdicts-data';
 
 const pd = api.api.admin['platform-dicts'];
@@ -143,6 +145,25 @@ export function BenefitDialog({
   const offices = useQuery(officesQuery);
   const typeOf = new Map((types.data ?? []).map((x) => [x.code, x]));
   const before = current?.data;
+
+  // «Меняет сроки» изменён у созданного статуса: сколько несданных отчётов получат новые сроки —
+  // сервер считает по правке тем же кодом, что пересчёт после сохранения.
+  // ОТКЛОНЕНИЕ: docs/deviations.md#Д-17
+  const v = useWatch({ control });
+  const rulesChanged =
+    current !== null &&
+    JSON.stringify(v.dueRules ?? []) !== JSON.stringify(formOf(current).dueRules);
+  const parsed = rulesChanged ? BenefitValueForm.safeParse(v) : null;
+  const dues = useDuesPreview(
+    `benefits:${current?.code ?? ''}`,
+    current && parsed?.success ? { ...parsed.data, version: current.version } : null,
+    (json, signal) =>
+      pd[':dict'][':code']['dues-preview'].$post(
+        { param: { dict: 'benefits', code: current!.code }, json },
+        { init: { signal } },
+      ),
+    v.dueRules ?? [],
+  );
 
   const reload = async () => {
     if (!item) return;
@@ -492,6 +513,15 @@ export function BenefitDialog({
           {typeChips('removes', t('pdicts.benefit.removes'))}
           {typeChips('adds', t('pdicts.benefit.adds'))}
           {dueRules}
+          {rulesChanged ? (
+            <div data-full="" className="col-span-full">
+              <Note tone="warn">
+                {parsed?.success
+                  ? duesNote(t, dues, 'pdicts.benefit.dues')
+                  : t('pdicts.dues.later')}
+              </Note>
+            </div>
+          ) : null}
           <Field
             id={`${id}-offices`}
             label={t('pdicts.benefit.offices')}

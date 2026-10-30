@@ -32,6 +32,7 @@ export type CountKey =
   | 'pdicts.calendar_count'
   | 'pdicts.ugns_count'
   | 'pdicts.perms_count'
+  | 'pdicts.loads.count'
   | 'pdicts.req.count'
   | 'news.count';
 

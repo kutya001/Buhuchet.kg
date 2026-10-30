@@ -55,6 +55,7 @@ import {
 import { orgIds } from './organizations';
 import { writePlatformHistory } from './platform-history';
 import { activeAssignmentCounts } from './reports';
+import { typeReportCountsOfOrg, type RedueScope } from './reports-redue';
 import {
   authorities,
   banks,
@@ -347,24 +348,42 @@ const NO_USAGE: DictUsage = { total: 0, contractors: 0 };
 const NO_REPORTS: TypeReportCounts = { total: 0, open: 0, orgs: 0 };
 
 /**
- * Отчёты организаций по видам отчётов — всего, несданных и в скольких организациях (прототип
- * typeEditDlg: «По этому виду уже создано N отчётов», `spreadTxt`). Отчётов организаций ещё нет —
- * счёт подключит задача отчётов (правило стыков, docs/decisions.md п. Д-6).
+ * Отчёты организаций по видам отчётов — всего, несданных и в скольких организациях есть несданные
+ * (прототип typeEditDlg: «По этому виду уже создано N отчётов», `spreadTxt`): по всем организациям,
+ * каждая своей транзакцией, до транзакции администратора (как «Назначен»).
  */
-async function typeReportCounts(_tx: Tx): Promise<Map<string, TypeReportCounts>> {
-  return new Map();
+export async function adminTypeReportCounts(db: Db): Promise<Map<string, TypeReportCounts>> {
+  const total = new Map<string, TypeReportCounts>();
+  for (const orgId of await orgIds(db)) {
+    const counts = await withOrgContext(db, { orgId }, (tx) => typeReportCountsOfOrg(tx));
+    for (const [code, n] of counts) {
+      const x = total.get(code) ?? { ...NO_REPORTS };
+      total.set(code, {
+        total: x.total + n.total,
+        open: x.open + n.open,
+        orgs: x.orgs + (n.open > 0 ? 1 : 0),
+      });
+    }
+  }
+  return total;
 }
 
-/** Все значения справочника в его порядке (`sort_order`, при равных — код), с «№» и «Используется». */
-async function dictRecords(tx: Tx, dict: AdminValueDict): Promise<AdminDictValueRecord[]> {
+/**
+ * Все значения справочника в его порядке (`sort_order`, при равных — код), с «№» и «Используется»;
+ * у видов отчётов — созданные отчёты (`reports`, без них — нули).
+ */
+export async function adminDictRecords(
+  tx: Tx,
+  dict: AdminValueDict,
+  reports?: ReadonlyMap<string, TypeReportCounts>,
+): Promise<AdminDictValueRecord[]> {
   const table = TABLES[dict];
-  const [rows, usage, links, reports] = await Promise.all([
+  const [rows, usage, links] = await Promise.all([
     tx.select().from(table).orderBy(asc(table.sortOrder), asc(table.code)) as unknown as Promise<
       TableRow[]
     >,
     adminDictUsage(tx, dict),
     linkValues(tx, dict),
-    dict === 'types' ? typeReportCounts(tx) : null,
   ]);
   const ordered = ADMIN_DICT_META[dict].ordered;
   return rows.map((r, i) => {
@@ -381,7 +400,7 @@ async function dictRecords(tx: Tx, dict: AdminValueDict): Promise<AdminDictValue
       ),
       active: r.active,
       usage: usage.get(r.code) ?? NO_USAGE,
-      ...(reports ? { reports: reports.get(r.code) ?? NO_REPORTS } : {}),
+      ...(dict === 'types' ? { reports: reports?.get(r.code) ?? NO_REPORTS } : {}),
       audit: {
         createdAt: r.createdAt,
         createdBy,
@@ -619,9 +638,13 @@ export async function adminAssignedTypeCounts(db: Db): Promise<Map<string, numbe
   return total;
 }
 
-/** Что список берёт не из таблицы справочника: «Назначен» видов отчётов (`adminAssignedTypeCounts`). */
+/**
+ * Что список берёт не из таблицы справочника: «Назначен» видов отчётов (`adminAssignedTypeCounts`) и
+ * созданные по ним отчёты (`adminTypeReportCounts`).
+ */
 export interface AdminDictListExtras {
   assigned?: ReadonlyMap<string, number>;
+  reports?: ReadonlyMap<string, TypeReportCounts>;
 }
 
 async function listSource(
@@ -630,7 +653,10 @@ async function listSource(
   t: ListTexts,
   extras: AdminDictListExtras = {},
 ) {
-  const [all, names] = await Promise.all([dictRecords(tx, dict), listNames(tx, dict)]);
+  const [all, names] = await Promise.all([
+    adminDictRecords(tx, dict, extras.reports),
+    listNames(tx, dict),
+  ]);
   const tr = translate(t);
   const records =
     dict === 'types'
@@ -723,8 +749,9 @@ export async function getAdminDictValue(
   tx: Tx,
   dict: AdminValueDict,
   code: string,
+  reports?: ReadonlyMap<string, TypeReportCounts>,
 ): Promise<AdminDictValueRecord | null> {
-  return (await dictRecords(tx, dict)).find((x) => x.code === code) ?? null;
+  return (await adminDictRecords(tx, dict, reports)).find((x) => x.code === code) ?? null;
 }
 
 /* ───────────── Правка ───────────── */
@@ -1007,15 +1034,6 @@ async function prepareType(
   return { input: { ...input, data: sorted }, bad: null };
 }
 
-/**
- * Пересчёт сроков несданных отчётов вида после правки правила срока (прототип typeEditDlg: `ruleCh` →
- * `dueOf`, кроме отчётов с ручным сроком): отчётов организаций ещё нет — пересчёт подключит задача
- * отчётов (правило стыков, docs/decisions.md п. Д-6).
- */
-async function recalcTypeReportDues(_tx: Tx, _code: string): Promise<number> {
-  return 0;
-}
-
 /** Записать поля-связи значения (`app.admin_dict_set_links`); у справочника без связей — ничего. */
 /**
  * Связи значения — сразу после записи самого значения в той же транзакции. Отказ функции здесь не
@@ -1038,18 +1056,40 @@ async function saveLinks(tx: Tx, dict: AdminValueDict, code: string, input: Admi
 }
 
 /**
- * Пересчёт сроков несданных отчётов контрагентов со статусом после правки «Меняет сроки» (прототип
- * `cpRedue`): отчётов организаций ещё нет — пересчёт подключит задача отчётов (правило стыков,
- * docs/decisions.md п. Д-5).
+ * Поля вида отчёта, после правки которых сроки его несданных отчётов пересчитываются: правило срока
+ * сдачи (прототип `ruleCh`) и срок оплаты — он тоже хранится у отчёта.
  */
-async function recalcBenefitReportDues(_tx: Tx, _code: string): Promise<number> {
-  return 0;
+// ОТКЛОНЕНИЕ: docs/deviations.md#Д-17
+const TYPE_REDUE_FIELDS: readonly string[] = [
+  ...REPORT_TYPE_RULE_FIELDS,
+  'payDay',
+  'payAfter',
+  'payMonth',
+];
+
+/**
+ * Что пересчитать после правки полей значения (задача 2.37): у вида — его отчёты после правки срока,
+ * у статуса — отчёты контрагентов с ним после правки «Меняет сроки» или включения и отключения
+ * (сроки дают только действующие статусы); иначе — ничего.
+ */
+function redueScopeOf(dict: AdminValueDict, code: string, fields: readonly string[]) {
+  if (dict === 'types' && fields.some((f) => TYPE_REDUE_FIELDS.includes(f))) {
+    return { kind: 'types', codes: [code] } satisfies RedueScope;
+  }
+  if (dict === 'benefits' && fields.some((f) => f === 'active' || isDueRules(dict, f))) {
+    return { kind: 'statuses', codes: [code] } satisfies RedueScope;
+  }
+  return null;
 }
 
 const recordInput = (x: AdminDictValueRecord): AdminDictInput => ({ name: x.name, data: x.data });
 
+/**
+ * Итог правки; `redue` — что пересчитать после сохранения (`redueAllOrgs` по всем организациям, каждая
+ * своей транзакцией — поэтому после конца транзакции администратора).
+ */
 export type AdminDictSaveResult =
-  | { ok: true; record: AdminDictValueRecord }
+  | { ok: true; record: AdminDictValueRecord; redue?: RedueScope | null }
   | { ok: false; reason: 'not_found' | 'changed' | 'fixed' }
   | { ok: false; reason: 'bad_link'; field: string; problem: AdminDictLinkProblem }
   | { ok: false; reason: 'taken'; problems: DictValueProblem[] }
@@ -1075,21 +1115,25 @@ function problemsOf(
 /**
  * «+ Добавить» → «Значение» (прототип valueDlg, ugnsDlg): новое значение действующее, в конце
  * порядка, с кодом `nextDictCode`; повтор названия («Такое значение уже есть») или кода ГНС («Такой
- * код уже есть») — `taken`. Создание и поля — в историю.
+ * код уже есть») — `taken`. Создание и поля — в историю. Загрузка из Excel передаёт новый код из
+ * файла (`fileCode`, формат проверен `ioCodeValid`).
  */
 export async function adminDictCreate(
   tx: Tx,
   dict: AdminValueDict,
   input: AdminDictInput,
   random: () => string,
+  fileCode?: string,
 ): Promise<AdminDictSaveResult> {
-  const records = await dictRecords(tx, dict);
-  const code = nextDictCode(
-    dict,
-    records.map((x) => x.code),
-    random,
-    input.data.kind === 'wallet' ? 'wallet' : 'bank',
-  );
+  const records = await adminDictRecords(tx, dict);
+  const code =
+    fileCode ??
+    nextDictCode(
+      dict,
+      records.map((x) => x.code),
+      random,
+      input.data.kind === 'wallet' ? 'wallet' : 'bank',
+    );
   const problems = problemsOf(dict, code, input, records);
   if (problems.length) return { ok: false, reason: 'taken', problems };
   const links = await prepareLinks(tx, dict, input, undefined);
@@ -1125,8 +1169,9 @@ export async function adminDictUpdate(
   code: string,
   input: AdminDictInput,
   version: number,
+  recalculated?: number,
 ): Promise<AdminDictSaveResult> {
-  const records = await dictRecords(tx, dict);
+  const records = await adminDictRecords(tx, dict);
   const before = records.find((x) => x.code === code);
   if (!before) return { ok: false, reason: 'not_found' };
   if (before.version !== version) return { ok: false, reason: 'changed' };
@@ -1146,13 +1191,16 @@ export async function adminDictUpdate(
   );
   if (row?.version == null) return { ok: false, reason: 'changed' };
   await saveLinks(tx, dict, code, input);
-  // Новые сроки статуса — у несданных отчётов контрагентов с ним; в историю — у скольких (прототип).
-  if (changes.some((c) => isDueRules(dict, c.field))) {
-    changes.push({ field: 'recalculated', to: await recalcBenefitReportDues(tx, code) });
-  }
-  // Новое правило срока вида — у его несданных отчётов (прототип: в историю не пишется).
-  if (dict === 'types' && changes.some((c) => REPORT_TYPE_RULE_FIELDS.includes(c.field as never))) {
-    await recalcTypeReportDues(tx, code);
+  const redue = redueScopeOf(
+    dict,
+    code,
+    changes.map((c) => c.field),
+  );
+  // Новые сроки статуса — у несданных отчётов контрагентов с ним; в историю — у скольких (прототип):
+  // число `recalculated` считают до транзакции, тем же предпросмотром, что и окно. Новое правило срока
+  // вида пересчитывается без записи в историю вида (прототип), загрузка из Excel — без числа.
+  if (recalculated !== undefined && redue && changes.some((c) => isDueRules(dict, c.field))) {
+    changes.push({ field: 'recalculated', to: recalculated });
   }
   await writePlatformHistory(tx, {
     entity: 'platform_dict',
@@ -1161,7 +1209,7 @@ export async function adminDictUpdate(
     changes,
   });
   const after = await getAdminDictValue(tx, dict, code);
-  return after ? { ok: true, record: after } : { ok: false, reason: 'not_found' };
+  return after ? { ok: true, record: after, redue } : { ok: false, reason: 'not_found' };
 }
 
 /**
@@ -1192,7 +1240,9 @@ export async function adminDictSetActive(
     changes: [{ field: 'active', from: before.active, to: active }],
   });
   const after = await getAdminDictValue(tx, dict, code);
-  return after ? { ok: true, record: after } : { ok: false, reason: 'not_found' };
+  return after
+    ? { ok: true, record: after, redue: redueScopeOf(dict, code, ['active']) }
+    : { ok: false, reason: 'not_found' };
 }
 
 /**
@@ -1208,7 +1258,7 @@ export async function adminDictMove(
   version: number,
 ): Promise<AdminDictSaveResult> {
   if (!ADMIN_DICT_META[dict].ordered) return { ok: false, reason: 'not_found' };
-  const records = await dictRecords(tx, dict);
+  const records = await adminDictRecords(tx, dict);
   const before = records.find((x) => x.code === code);
   if (!before?.n) return { ok: false, reason: 'not_found' };
   if (before.version !== version) return { ok: false, reason: 'changed' };
@@ -1346,7 +1396,7 @@ export async function adminDictHistory(
       .orderBy(desc(platformAuditLog.at), desc(platformAuditLog.id))
       .limit(limit),
     tx.select({ n: count() }).from(platformAuditLog).where(where),
-    dictRecords(tx, dict),
+    adminDictRecords(tx, dict),
   ]);
   // Поля значений после каждой записи: от нынешних назад по записям, сначала новые. По ним — подпись
   // записи, какой она была тогда (прототип пишет строку истории сразу), и код страны строкой.

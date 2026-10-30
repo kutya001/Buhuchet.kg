@@ -9,6 +9,7 @@ import { lt } from 'drizzle-orm';
 import type { Job } from '../deps';
 import { cleanupPendingFiles } from '../modules/files/cleanup';
 import { syncServiceStatusesJob } from '../modules/contractors/job';
+import { duesRecalcJob } from '../modules/platform-dicts/admin-dues';
 import { createDueReportsJob } from '../modules/reports/job';
 
 const { schedulerRuns } = schema;
@@ -89,6 +90,7 @@ export const jobs: readonly Job[] = [
   cleanupContractorPageGrantsJob,
   createDueReportsJob,
   cleanupPendingFilesJob,
+  duesRecalcJob,
 ];
 
 /**

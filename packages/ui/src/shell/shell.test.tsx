@@ -427,6 +427,12 @@ describe('Popover и меню действий', () => {
     }>[];
     items[1]!.props.onClick();
     expect(onSelect).toHaveBeenCalledWith('one');
+    // Черта перед пунктом (прототип `{sep: true}`): «Выгрузить в Excel» после способов добавления.
+    const sep = renderToStaticMarkup(
+      <MenuItems items={[ACTIONS[0]!, { ...ACTIONS[1]!, sep: true }]} onSelect={() => {}} />,
+    );
+    expect(sep.indexOf('role="separator"')).toBeGreaterThan(sep.indexOf('role="menuitem"'));
+    expect(sep.match(/role="separator"/g)).toHaveLength(1);
   });
 
   it('выделенный пункт (текущая вкладка карточки) подсвечен и отмечен для диктора', () => {

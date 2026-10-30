@@ -1,9 +1,10 @@
-import type {
-  Feature,
-  MenuModuleId,
-  PermissionId,
-  RoleSaveEditor,
-  UiTextKey,
+import {
+  ADMIN_VALUE_DICTS,
+  type Feature,
+  type MenuModuleId,
+  type PermissionId,
+  type RoleSaveEditor,
+  type UiTextKey,
 } from '@buhuchet/domain';
 import type { MeResponse } from '@buhuchet/shared';
 import type { IconName } from '@buhuchet/ui';
@@ -80,6 +81,8 @@ export interface AddDef {
   separate?: boolean;
   /** Только на этих вкладках модуля (прототип: `*Add` по `S.tab`); без них — на всех. */
   tabs?: readonly string[];
+  /** Черта перед пунктом меню (прототип `{sep: true}`). */
+  sep?: boolean;
   when?: When;
 }
 
@@ -96,6 +99,9 @@ interface ModuleDef {
 const taxVis: When = (a) => a.feature('taxpay') && a.can('money');
 /** Плата за обслуживание с правом её видеть (`feat('fee') && can('fee')` прототипа). */
 const feeVis: When = (a) => a.feature('fee') && a.can('fee');
+
+/** Вкладки «Справочников платформы» с «Выгрузить в Excel» и «Загрузить из Excel». */
+const IO_TABS: readonly string[] = ADMIN_VALUE_DICTS;
 
 /** Группы вкладок «Справочников платформы» (ТЗ «Группы справочников»). */
 const G = {
@@ -400,6 +406,15 @@ export const MODULES: Record<MenuModuleId, ModuleDef> = {
         label: 'pdicts.add.calendar_copy',
         tabs: ['calendar'],
       },
+      // «Выгрузить» и «Загрузить» (задача 2.37, прототип pdAdd `io`) — у справочников значений.
+      {
+        id: 'io_export',
+        icon: 'download',
+        label: 'pdicts.add.io_export',
+        tabs: IO_TABS,
+        sep: true,
+      },
+      { id: 'io_import', icon: 'upload', label: 'pdicts.add.io_import', tabs: IO_TABS },
     ],
   },
   l10n: {
