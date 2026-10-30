@@ -62,7 +62,7 @@ test.describe('Этап 2: страница контрагента по ссыл
     await page.setExtraHTTPHeaders({ 'x-forwarded-for': `198.18.${part()}.${part()}` });
   });
 
-  test('(проверка задачи #98) ссылка без входа просит код: неверный — «Осталось попыток: 4», верный — шапка страницы; код запоминается в браузере', async ({
+  test('(проверка задачи #98) ссылка без входа просит код: неверный — «Осталось попыток: 2», верный — шапка страницы; код запоминается в браузере', async ({
     page,
     request,
     baseURL,
@@ -80,7 +80,8 @@ test.describe('Этап 2: страница контрагента по ссыл
     await expect(page.getByText('Введите 6 цифр')).toBeVisible();
     await input.fill(code === '000000' ? '111111' : '000000');
     await page.getByRole('button', { name: 'Открыть' }).click();
-    await expect(page.getByText('Неверный код. Осталось попыток: 4')).toBeVisible();
+    // Остаток — меньший из двух: по ссылке 4, с этого адреса 2 (docs/deviations.md п. О-1).
+    await expect(page.getByText('Неверный код. Осталось попыток: 2')).toBeVisible();
 
     await input.fill(code);
     await page.getByRole('button', { name: 'Открыть' }).click();
