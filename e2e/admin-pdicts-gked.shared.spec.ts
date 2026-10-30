@@ -132,11 +132,18 @@ test.describe('Админка: ГКЭД и сверка с ГНС', () => {
       page.getByRole('status').filter({ hasText: 'Отмечена сверка с ГНС: 1' }),
     ).toBeVisible();
 
-    await row.locator('[data-row-menu]').click();
+    // Список обновляется после уведомления: меню, открытое раньше, показывает прежнюю дату —
+    // открываем заново, пока не придёт новая.
     const item = page
       .getByRole('menu', { name: 'Действия' })
       .getByRole('menuitem', { name: /Отметить сверку с ГНС/ });
-    await expect(item).toContainText(`Последняя: ${todayRu()}`);
-    await page.keyboard.press('Escape');
+    await expect(async () => {
+      await row.locator('[data-row-menu]').click();
+      try {
+        await expect(item).toContainText(`Последняя: ${todayRu()}`, { timeout: 1000 });
+      } finally {
+        await page.keyboard.press('Escape');
+      }
+    }).toPass();
   });
 });
