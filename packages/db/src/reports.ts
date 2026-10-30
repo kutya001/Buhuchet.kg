@@ -463,6 +463,8 @@ export async function createMonthReports(
 ): Promise<number> {
   const { contractorId, months, today } = options;
   if (months.length === 0) return 0;
+  // Без блокировки назначений: контрагент уже взят FOR UPDATE (`changeService`), а правка назначения
+  // сначала ждёт контрагента.
   const rows = await tx
     .select({ a: assignments, contractorResponsible: contractors.responsibleEmployeeId })
     .from(assignments)
@@ -477,8 +479,7 @@ export async function createMonthReports(
         eq(reportTypes.active, true),
         eq(reportTypes.oneOff, false),
       ),
-    )
-    .for('share', { of: assignments });
+    );
   if (rows.length === 0) return 0;
   const [types, calendar, statuses] = await Promise.all([
     reportTypeInfos(tx, [...new Set(rows.map((r) => r.a.reportTypeCode))]),
