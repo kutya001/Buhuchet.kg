@@ -229,7 +229,10 @@ test.describe('Этап 1: сотрудники и роли (экраны)', () 
 
     // «Сбросить пароль» (только у владельца): временный пароль показывается один раз.
     await card.getByRole('button', { name: 'Действия' }).click();
-    await page.getByRole('menu', { name: 'Действия' }).getByRole('menuitem', { name: 'Сбросить пароль' }).click();
+    await page
+      .getByRole('menu', { name: 'Действия' })
+      .getByRole('menuitem', { name: 'Сбросить пароль' })
+      .click();
     const reset = page.getByRole('dialog', { name: 'Пароль сброшен' });
     await expect(reset).toContainText(fullName);
     await expect(reset).toContainText('Передайте его сотруднику лично.');

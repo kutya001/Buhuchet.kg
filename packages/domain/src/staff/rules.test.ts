@@ -180,8 +180,12 @@ describe('действия над сотрудником', () => {
     expect(staffActionRefusal(owner, target('e3', staffRole), 'resetPassword')).toBeNull();
     expect(staffActionRefusal(owner, target('e3', finRole), 'resetPassword')).toBeNull();
     expect(staffActionRefusal(hr, target('e3'), 'resetPassword')).toBe('password_owner_only');
-    expect(staffActionRefusal(hr, target('e3', staffRole), 'resetPassword')).toBe('password_owner_only');
-    expect(staffActionRefusal(hr, target('e3', finRole), 'resetPassword')).toBe('password_owner_only');
+    expect(staffActionRefusal(hr, target('e3', staffRole), 'resetPassword')).toBe(
+      'password_owner_only',
+    );
+    expect(staffActionRefusal(hr, target('e3', finRole), 'resetPassword')).toBe(
+      'password_owner_only',
+    );
   });
 
   it('кнопки «Сменить роль», «Заблокировать» (у владельца и «Сбросить пароль») — только у тех, кого можно вести', () => {
