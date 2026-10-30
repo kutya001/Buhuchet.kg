@@ -28,12 +28,12 @@ import { miniView, statusName, type StatusEvent } from '../status/status-view';
 /** Сортировка по умолчанию во всех списках — от новых к старым по «Создано» (прототип defSort). */
 export const TASK_DEFAULT_SORT: ListSort = { key: 'createdAt', dir: 'desc' };
 
-// ОТКЛОНЕНИЕ: docs/deviations.md#Б-2
 /**
- * Видимые по умолчанию — как в ТЗ «Столбцы, видимые по умолчанию»: название, контрагент, исполнитель,
- * срок, статус; категория и остальные — в меню «Столбцы» (в прототипе видна и «Категория»).
+ * Видимые по умолчанию — как в прототипе (`taskCols`, решение заказчика 30.10.2026, docs/deviations.md
+ * п. Б-2): задача, категория, исполнитель, срок, статус, файл, поставил; «Контрагент» и остальные — в
+ * меню «Столбцы».
  */
-export const TASK_DEFAULT_VISIBLE = ['title', 'cp', 'exec', 'date', 'status'];
+export const TASK_DEFAULT_VISIBLE = ['title', 'cat', 'exec', 'date', 'status', 'file', 'by'];
 
 /** Срок строкой: «до 31.10.2026» у задачи на месяц (прототип `taskCols`, столбец «Срок»). */
 export function taskDueText(t: Translate, task: Pick<TaskRow, 'term' | 'dueDate'>): string {
