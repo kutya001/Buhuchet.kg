@@ -184,7 +184,8 @@ export function adminDictValuesHandler(
     const { dict } = c.req.valid('param');
     const { col, q } = c.req.valid('query');
     const t = await serverTexts(deps);
-    const extras = await listExtras(deps, dict);
+    // Обход организаций нужен только фильтру «Назначен».
+    const extras = col === 'assigned' ? await listExtras(deps, dict) : {};
     const values = await adminTx(deps, c, (tx) => listAdminDictValues(tx, dict, col, t, q, extras));
     return c.json(values, 200);
   };

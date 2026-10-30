@@ -6,6 +6,7 @@ import { L10nList } from '../admin/l10n-list';
 import { OrgsList } from '../admin/orgs-list';
 import { PlatformDicts } from '../dicts/platform-tab';
 import { ReportTypesList } from '../dicts/report-types-list';
+import { FilesManager } from '../files/files-manager';
 import { KbArticlesTab } from '../kb/kb-articles';
 import { KbLessonsTab } from '../kb/kb-lessons';
 import { KbLevelTab } from '../kb/kb-level';
@@ -38,6 +39,7 @@ export function ModuleScreen({
   tabId: string | null;
 }) {
   if (moduleId === 'kpi') return <KpiScreen tab={tabId ?? 'month'} />;
+  if (moduleId === 'files') return <FilesManager />;
   if (moduleId === 'staff') {
     const tab = tabId ?? 'list';
     if (tab === 'list') return <StaffList />;
@@ -92,6 +94,7 @@ const SCREENS_WITH_PLATES: ReadonlySet<string> = new Set<string>([
   'kpi/month',
   'kpi/period',
   'kpi/missing',
+  'files/',
   'orgs/',
   'l10n/',
 ]);

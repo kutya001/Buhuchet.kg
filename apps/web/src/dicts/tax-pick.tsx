@@ -28,7 +28,14 @@ import {
   useToast,
 } from '@buhuchet/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useId, useMemo, useState, type ReactNode } from 'react';
+import {
+  useId,
+  useMemo,
+  useState,
+  type Dispatch,
+  type ReactNode,
+  type SetStateAction,
+} from 'react';
 import { api, callApi } from '../api-client';
 import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
 import { useErrorText, useT } from '../l10n/provider';
@@ -86,46 +93,17 @@ function TaxPickDialog({
   const toast = useToast();
   const errorText = useErrorText();
   const id = useId();
-  const phone = useMediaQuery(PHONE_QUERY);
-  const taxes = useQuery(taxesQuery).data;
-  const groups = useMemo(() => taxPickGroups(catalog.pick, t), [catalog, t]);
   const was = useMemo(
     () => new Set(settings.items.filter((s) => s.enabled).map((s) => s.code)),
     [settings],
   );
   const [selected, setSelected] = useState<ReadonlySet<string>>(was);
-  const [opened, setOpened] = useState<ReadonlySet<string>>(() =>
-    phone || !groups[0] ? new Set() : new Set([groups[0].id]),
-  );
-  const [row, setRow] = useState<string | null>(null);
-  const [q, setQ] = useState('');
   const initialDays = settings.remindDays.join(', ');
   const [days, setDays] = useState(initialDays);
   const [busy, setBusy] = useState(false);
 
   const connect = [...selected].filter((c) => !was.has(c));
   const disconnect = [...was].filter((c) => !selected.has(c));
-  const query = searchText(q.trim());
-  const hit = (x: ReportType) =>
-    !query ||
-    [x.shortName, x.name, x.formCode, x.statIndex].some((v) => searchText(v).includes(query));
-
-  const toggle = (codes: readonly string[], on: boolean) =>
-    setSelected((prev) => {
-      const next = new Set(prev);
-      for (const c of codes) {
-        if (on) next.add(c);
-        else next.delete(c);
-      }
-      return next;
-    });
-  const toggleGroup = (g: TaxPickGroup) =>
-    setOpened((prev) => {
-      const next = new Set(prev);
-      if (next.has(g.id)) next.delete(g.id);
-      else next.add(g.id);
-      return next;
-    });
 
   const submit = async () => {
     const remindDays = parseDays(days);
@@ -150,6 +128,115 @@ function TaxPickDialog({
       { icon: 'check' },
     );
   };
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      kind="form"
+      size="wide"
+      title={t('dicts.tx.title')}
+      sub={t('dicts.tx.sub')}
+      dirty={connect.length > 0 || disconnect.length > 0 || days !== initialDays}
+      footer={
+        <>
+          <span data-tx-total="" className="text-[13px] text-muted">
+            {t('dicts.tx.selected', { n: selected.size })}
+            {connect.length ? ` · ${t('dicts.tx.new', { n: connect.length })}` : ''}
+            {disconnect.length ? (
+              <>
+                {' · '}
+                <span className="text-danger-label">
+                  {t('dicts.tx.off', { n: disconnect.length })}
+                </span>
+              </>
+            ) : null}
+          </span>
+          <div className="flex-1" />
+          <button type="button" className={buttonClass('ghost')} onClick={onClose}>
+            {t('btn.cancel')}
+          </button>
+          <button
+            type="button"
+            className={buttonClass('cta')}
+            disabled={busy || (!connect.length && !disconnect.length)}
+            onClick={() => void submit()}
+          >
+            <Icon name="check" size="sm" />
+            {t('dicts.tx.connect')}
+          </button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-2">
+        <TaxPickList catalog={catalog} selected={selected} setSelected={setSelected} was={was} />
+        <div className="mt-2.5">
+          <Field id={`${id}-days`} label={t('dicts.type.days')} hint={t('dicts.tx.days_hint')} full>
+            {(control) => (
+              <input
+                {...control}
+                type="text"
+                inputMode="numeric"
+                className={inputClass()}
+                value={days}
+                placeholder={t('dicts.tx.days_placeholder')}
+                onChange={(e) => setDays(e.target.value)}
+              />
+            )}
+          </Field>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+/**
+ * Список «Выбора налогов» (прототип txHtml и txMount): поиск по названию и коду формы, «Отметить
+ * основные», «Снять все» и каталог группами. Его показывают окно «Подключить из каталога» и последний
+ * экран приветствия (задача 2.33); `was` — уже подключённые (метка «Подключён»), у приветствия пусто.
+ */
+export function TaxPickList({
+  catalog,
+  selected,
+  setSelected,
+  was,
+}: {
+  catalog: Catalog;
+  selected: ReadonlySet<string>;
+  setSelected: Dispatch<SetStateAction<ReadonlySet<string>>>;
+  was: ReadonlySet<string>;
+}) {
+  const t = useT();
+  const toast = useToast();
+  const phone = useMediaQuery(PHONE_QUERY);
+  const taxes = useQuery(taxesQuery).data;
+  const groups = useMemo(() => taxPickGroups(catalog.pick, t), [catalog, t]);
+  const [opened, setOpened] = useState<ReadonlySet<string>>(() =>
+    phone || !groups[0] ? new Set() : new Set([groups[0].id]),
+  );
+  const [row, setRow] = useState<string | null>(null);
+  const [q, setQ] = useState('');
+  const query = searchText(q.trim());
+  const hit = (x: ReportType) =>
+    !query ||
+    [x.shortName, x.name, x.formCode, x.statIndex].some((v) => searchText(v).includes(query));
+
+  const toggle = (codes: readonly string[], on: boolean) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      for (const c of codes) {
+        if (on) next.add(c);
+        else next.delete(c);
+      }
+      return next;
+    });
+  const toggleGroup = (g: TaxPickGroup) =>
+    setOpened((prev) => {
+      const next = new Set(prev);
+      if (next.has(g.id)) next.delete(g.id);
+      else next.add(g.id);
+      return next;
+    });
 
   const rowView = (x: ReportType, key: string): ReactNode => {
     const on = selected.has(x.code);
@@ -282,108 +369,54 @@ function TaxPickDialog({
   }
 
   return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      kind="form"
-      size="wide"
-      title={t('dicts.tx.title')}
-      sub={t('dicts.tx.sub')}
-      dirty={connect.length > 0 || disconnect.length > 0 || days !== initialDays}
-      footer={
-        <>
-          <span data-tx-total="" className="text-[13px] text-muted">
-            {t('dicts.tx.selected', { n: selected.size })}
-            {connect.length ? ` · ${t('dicts.tx.new', { n: connect.length })}` : ''}
-            {disconnect.length ? (
-              <>
-                {' · '}
-                <span className="text-danger-label">
-                  {t('dicts.tx.off', { n: disconnect.length })}
-                </span>
-              </>
-            ) : null}
-          </span>
-          <div className="flex-1" />
-          <button type="button" className={buttonClass('ghost')} onClick={onClose}>
-            {t('btn.cancel')}
-          </button>
-          <button
-            type="button"
-            className={buttonClass('cta')}
-            disabled={busy || (!connect.length && !disconnect.length)}
-            onClick={() => void submit()}
-          >
-            <Icon name="check" size="sm" />
-            {t('dicts.tx.connect')}
-          </button>
-        </>
-      }
-    >
-      <div className="flex flex-col gap-2" data-tax-pick="">
-        <div className="sticky -top-px z-[2] flex flex-wrap items-center gap-2 bg-raised pt-1 pb-2">
-          <span className="relative flex min-w-[220px] flex-1 items-center max-md:basis-full">
-            <Icon
-              name="search"
-              size="sm"
-              className="pointer-events-none absolute left-2.5 text-faint"
-            />
-            <input
-              type="search"
-              className={`${inputClass()} pl-8`}
-              value={q}
-              placeholder={t('dicts.tx.search')}
-              aria-label={t('dicts.tx.search_label')}
-              onChange={(e) => setQ(e.target.value)}
-            />
-          </span>
-          <button
-            type="button"
-            className={buttonClass('default', 'sm')}
-            onClick={() => {
-              toggle(mainTaxPicks(catalog.pick.types), true);
-              toast(t('dicts.tx.main_done'));
-            }}
-          >
-            <Icon name="star" size="sm" />
-            {t('dicts.tx.main')}
-          </button>
-          <button
-            type="button"
-            className={buttonClass('ghost', 'sm')}
-            onClick={() => setSelected(new Set())}
-          >
-            {t('dicts.tx.none')}
-          </button>
-        </div>
-        <div className="flex flex-col gap-2">
-          {shown.length ? (
-            shown
-          ) : (
-            <EmptyState
-              icon="search"
-              title={t('dicts.tx.nothing')}
-              text={t('dicts.tx.nothing_text')}
-            />
-          )}
-        </div>
-        <div className="mt-2.5">
-          <Field id={`${id}-days`} label={t('dicts.type.days')} hint={t('dicts.tx.days_hint')} full>
-            {(control) => (
-              <input
-                {...control}
-                type="text"
-                inputMode="numeric"
-                className={inputClass()}
-                value={days}
-                placeholder={t('dicts.tx.days_placeholder')}
-                onChange={(e) => setDays(e.target.value)}
-              />
-            )}
-          </Field>
-        </div>
+    <div className="flex flex-col gap-2" data-tax-pick="">
+      <div className="sticky -top-px z-[2] flex flex-wrap items-center gap-2 bg-raised pt-1 pb-2">
+        <span className="relative flex min-w-[220px] flex-1 items-center max-md:basis-full">
+          <Icon
+            name="search"
+            size="sm"
+            className="pointer-events-none absolute left-2.5 text-faint"
+          />
+          <input
+            type="search"
+            className={`${inputClass()} pl-8`}
+            value={q}
+            placeholder={t('dicts.tx.search')}
+            aria-label={t('dicts.tx.search_label')}
+            onChange={(e) => setQ(e.target.value)}
+          />
+        </span>
+        <button
+          type="button"
+          className={buttonClass('default', 'sm')}
+          onClick={() => {
+            toggle(mainTaxPicks(catalog.pick.types), true);
+            toast(t('dicts.tx.main_done'));
+          }}
+        >
+          <Icon name="star" size="sm" />
+          {t('dicts.tx.main')}
+        </button>
+        <button
+          type="button"
+          className={buttonClass('ghost', 'sm')}
+          onClick={() => setSelected(new Set())}
+        >
+          {t('dicts.tx.none')}
+        </button>
       </div>
-    </Modal>
+      <div className="flex flex-col gap-2">
+        {shown.length ? (
+          shown
+        ) : (
+          <EmptyState
+            icon="search"
+            title={t('dicts.tx.nothing')}
+            text={t('dicts.tx.nothing_text')}
+          />
+        )}
+      </div>
+    </div>
   );
 }
 

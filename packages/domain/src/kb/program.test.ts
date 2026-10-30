@@ -117,6 +117,23 @@ describe('программа обучения', () => {
     expect(ids(kbProgram(CATALOG, OWNER, RULES))).toContain('cp1');
   });
 
+  it('шаг «Сделать» без права из реестра шагов (`permission`) скрыт: «Загрузить файл вручную» — только с правом «Загружать файлы»', () => {
+    const upload = step('upload', 'files', 60, { featk: 'files' });
+    const rules = { upload: KB_STEP_RULES.upload! };
+    const viewer = access({ perms: ['filesView'], features: ['files'], modules: ['files'] });
+    expect(kbStepVisible(upload, viewer, rules)).toBe(false);
+    const uploader = access({
+      perms: ['filesView', 'filesUpload'],
+      features: ['files'],
+      modules: ['files'],
+    });
+    expect(kbStepVisible(upload, uploader, rules)).toBe(true);
+    // Функция «Файлы в карточках» выключена — модуля в меню нет, шага тоже (п. 21 приёмки).
+    expect(
+      kbStepVisible(upload, access({ perms: ['filesView', 'filesUpload'], modules: [] }), rules),
+    ).toBe(false);
+  });
+
   it('шаги выключенной в учётной политике функции и модуля не из меню скрыты', () => {
     const noKpi = access({ owner: true, features: ['taxpay'] });
     expect(ids(kbProgram(CATALOG, noKpi, RULES))).not.toContain('kset');

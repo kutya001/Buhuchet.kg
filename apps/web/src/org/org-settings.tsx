@@ -17,6 +17,7 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useId, useState } from 'react';
 import { api, callApi } from '../api-client';
+import { FilesStorageBox } from '../files/storage-box';
 import { useKb } from '../kb/kb-provider';
 import { useErrorText, useT } from '../l10n/provider';
 import { useShell } from '../shell/context';
@@ -28,7 +29,7 @@ type RoleOption = { id: string; name: string };
  * «Моя организация» → «Настройки» (прототип modules/org.js, renderOrg → settings): часовой пояс, роль по
  * умолчанию для новых сотрудников, повтор напоминания при просрочке и время еженедельной сводки
  * (если включены «Напоминания в Telegram»); «Сохранить настройки». Без права «Настройки и учётная
- * политика» поля только для просмотра. «Хранилище файлов» появится вместе с модулем «Файлы».
+ * политика» поля только для просмотра. Вверху — «Хранилище файлов» (задача 2.29).
  */
 export function OrgSettingsTab() {
   const t = useT();
@@ -110,6 +111,7 @@ function SettingsForm({
           onReload={() => void client.invalidateQueries({ queryKey: policyQuery.queryKey })}
         />
       ) : null}
+      <FilesStorageBox />
       <Box title={t('org.settings.general')}>
         <FormGrid>
           <Field

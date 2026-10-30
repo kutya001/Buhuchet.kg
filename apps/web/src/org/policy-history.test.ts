@@ -79,4 +79,25 @@ describe('история учётной политики словами', () => 
     ).toBe('Включена функция «Задачи» (по опроснику)');
     expect(text([{ field: 'timezone', from: 'Asia/Bishkek', to: 'Asia/Almaty' }])).toBe('');
   });
+
+  it('опросник — одной строкой «по опроснику»: включены, выключены, подтверждение задач или «без изменений»', () => {
+    expect(
+      text([
+        {
+          field: 'features',
+          from: { tasks: true, taxpay: false, finops: false, files: true },
+          to: { tasks: true, taxpay: true, finops: true, files: false },
+        },
+        { field: 'taskConfirm', from: true, to: false },
+        { field: 'quiz', to: 'first' },
+      ]),
+    ).toBe(
+      'Учётная политика по опроснику: включены «Учёт оплаты налогов», ' +
+        '«Финансовые операции по контрагентам»; выключены «Файлы в карточках»; ' +
+        '«Задачи требуют подтверждения»: выключено',
+    );
+    expect(text([{ field: 'quiz', to: 'again' }])).toBe(
+      'Учётная политика по опроснику (пройден заново): без изменений',
+    );
+  });
 });
