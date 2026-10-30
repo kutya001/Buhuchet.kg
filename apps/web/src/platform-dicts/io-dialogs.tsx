@@ -505,9 +505,11 @@ function PreviewBody({ preview, activeTitle }: { preview: Preview; activeTitle: 
           })}
         </Note>
       ) : null}
-      {preview.dues.reports > 0 ? (
+      {preview.dues === null || preview.dues.reports > 0 ? (
         <Note tone="warn" icon="alert">
-          {t('pdicts.io.import.dues', { spread: spreadText(t, preview.dues) })}
+          {preview.dues
+            ? t('pdicts.io.import.dues', { spread: spreadText(t, preview.dues) })
+            : t('pdicts.dues.later')}
         </Note>
       ) : null}
       {/* На телефоне прокручивается всё окно, на ПК — только строки (прототип: max-height 340px). */}

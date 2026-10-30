@@ -378,7 +378,14 @@ export async function redueAllOrgs(
     after?: string | null;
   },
 ): Promise<RedueSummary> {
-  const summary: RedueSummary = { reports: 0, orgs: 0, failed: [], left: 0, last: null };
+  // Не успел ни одной организации — курсор остаётся прежним.
+  const summary: RedueSummary = {
+    reports: 0,
+    orgs: 0,
+    failed: [],
+    left: 0,
+    last: options.after ?? null,
+  };
   const after = options.after;
   const ids = (await orgIds(db)).filter((id) => !after || id > after);
   for (const [i, orgId] of ids.entries()) {

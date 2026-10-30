@@ -47,8 +47,11 @@ export const AdminDictImportPreview = z.object({
   errors: z.array(z.object({ line: Line, code: z.string(), errors: z.array(z.string()) })),
   same: z.number().int().nonnegative(),
   stamp: z.string(),
-  /** У скольких несданных отчётов в скольких организациях изменятся сроки. */
-  dues: AdminDuesPreview,
+  /**
+   * У скольких несданных отчётов в скольких организациях изменятся сроки; `null` — посчитать за минуту
+   * не успели: сроки пересчитаются после применения.
+   */
+  dues: AdminDuesPreview.nullable(),
   /**
    * У видов отчётов: у скольких видов меняется «Что нужно сделать» и сколько отчётов по ним уже
    * создано — они остаются с прежним (прототип `actT`, `actR`).

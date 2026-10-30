@@ -17,6 +17,7 @@ import {
   listDictLoadValues,
   lockDictLoads,
   mergeRedueScopes,
+  RedueTimeoutError,
   rollbackDictLoad,
   withUserContext,
   type AdminDictSaveResult,
@@ -468,11 +469,17 @@ async function runImport(
  */
 async function withDues(deps: ApiDeps, outcome: ImportOutcome): Promise<AdminDictImportPreview> {
   const { preview, redue, catalog, actTypes } = outcome;
-  const dues = catalog ? await previewDues(deps, redue, catalog) : preview.dues;
+  // Обход дольше минуты — сравнение без числа: сроки пересчитаются после применения.
+  const dues = catalog ? await previewDues(deps, redue, catalog).catch(untimed) : preview.dues;
   if (!actTypes.length) return { ...preview, dues };
   const counts = await adminTypeReportCounts(deps.db);
   const reports = actTypes.reduce((n, code) => n + (counts.get(code)?.total ?? 0), 0);
   return { ...preview, dues, act: { types: actTypes.length, reports } };
+}
+
+function untimed(err: unknown): null {
+  if (err instanceof RedueTimeoutError) return null;
+  throw err;
 }
 
 /** Сравнение без записи: та же запись в транзакции, которая откатывается. */

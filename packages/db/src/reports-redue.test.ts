@@ -689,6 +689,14 @@ describe.skipIf(!databaseAvailable())(
         const firstOrg = orgOf(ids[0]!);
         expect((await october(second, cpOf(second))).dueDate).toBe('2026-11-20');
         expect((await october(firstOrg, cpOf(firstOrg))).dueDate).toBe('2026-11-25');
+        // Время кончилось до первой организации — курсор прежний, а не с начала.
+        const none = await redueAllOrgs(db.app.db, types, TODAY, {
+          write: true,
+          texts: TEXTS,
+          after: ids[0],
+          until: 0,
+        });
+        expect(none).toMatchObject({ orgs: 0, left: 1, last: ids[0] });
         await expect(
           redueAllOrgs(db.app.db, types, TODAY, { write: false, texts: TEXTS, until: 0 }),
         ).rejects.toBeInstanceOf(RedueTimeoutError);

@@ -237,7 +237,7 @@ async function runTask(
     }
     const [first] = summary.failed;
     const pending = summary.left > 0 || first !== undefined;
-    await finishDuesRecalc(ctx.db, task, {
+    const finished = await finishDuesRecalc(ctx.db, task, {
       done: !pending,
       reports: summary.reports,
       orgs: summary.orgs,
@@ -245,6 +245,9 @@ async function runTask(
       after: summary.last,
       retryAfterSeconds: first ? RETRY_SECONDS : 0,
     });
+    // Аренда истекла, и строку занял другой проход: итог этого прохода не записан.
+    if (!finished)
+      ctx.logger.warn({ dues: task.id }, 'строку очереди пересчёта занял другой проход');
     return { reports: summary.reports, orgs: summary.orgs, pending };
   } catch (err) {
     logFailure(ctx, task, { err }, 'пересчёт сроков отчётов не прошёл');
