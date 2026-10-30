@@ -20,6 +20,7 @@ import {
   setNewsOff,
   type NewsInput,
 } from './news';
+import { markWelcomeSeen } from './onboarding';
 import { createOrganization, type CreatedOrganization } from './organizations';
 import { readPlatformHistory } from './platform-history';
 import { news, newsReads, platformAuditLog, users } from './schema';
@@ -172,6 +173,16 @@ describe.skipIf(!databaseAvailable())('«Новости» Базы знаний'
     const wn = await asOwner(a, (tx) => newsWhatsNew(tx));
     expect(wn.items.map((n) => n.id)).toEqual([created.id]);
     expect(wn.first).toBe(true);
+
+    // Кто видел приветствие организации, тому приветствие в окне не повторяется (решение Г-4 «А»).
+    expect((await asOwner(b, (tx) => newsWhatsNew(tx))).first).toBe(true);
+    await asOwner(b, (tx) => markWelcomeSeen(tx));
+    expect(await asOwner(b, (tx) => newsWhatsNew(tx))).toMatchObject({
+      items: [expect.objectContaining({ id: created.id })],
+      first: false,
+    });
+    // Администратор платформы без организации: строки «Приветствия» у него нет, ответ — без ошибки.
+    expect((await asAdmin((tx) => newsWhatsNew(tx))).first).toBe(true);
 
     // «Понятно»: показанные — прочитаны; окно больше не открывается.
     expect(await asOwner(a, (tx) => markNewsRead(tx, [created.id, 'draft1', 'future1']))).toBe(1);

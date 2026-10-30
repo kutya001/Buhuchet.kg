@@ -310,12 +310,15 @@ test.describe('Этап 2: Новости и «Что нового»', () => {
         page.getByText('Опросник можно пройти позже: «Моя организация» → «Учётная политика»'),
       ).toBeVisible();
 
-      // Опросник отложен: приветствие само не открывается, при входе — «Что нового» с новостью.
+      // Опросник отложен: приветствие само не открывается, при входе — «Что нового» с новостью; его
+      // приветствие «Начните с Базы знаний» тому, кто видел «Приветствие», не повторяется (решение Г-4 «А»).
       await page.request.post('/api/auth/logout', { headers: { origin } });
       await logIn(page, owner);
       const window = page.getByRole('dialog', { name: 'Что нового' });
       await expect(window).toBeVisible();
       await expect(window.locator(`[data-whats-new-item="${v16.id}"]`)).toBeVisible();
+      await expect(window).not.toContainText('Добро пожаловать');
+      await expect(window.getByRole('link', { name: 'Открыть Базу знаний' })).toHaveCount(0);
       await expect(welcome).toHaveCount(0);
       await window.getByRole('button', { name: 'Понятно' }).click();
       await expect(window).toBeHidden();
