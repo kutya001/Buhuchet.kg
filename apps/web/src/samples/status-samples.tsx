@@ -61,6 +61,8 @@ interface StatusSamplesProps {
   showPick: boolean;
   /** Контрагент вкладки «Подбор отчётов» из адреса страницы (`?cp=`). */
   cp: string | null;
+  /** «Изменить контрагента» до карточки (2.11): право «Создавать и изменять контрагентов». */
+  canEditCp: boolean;
   initialMax: MaxPrefs;
   /** Момент показа страницы на сервере (мс): от него отсчитана демо-история. */
   now: number;
@@ -98,6 +100,7 @@ function SamplesPage({
   showFiles,
   showPick,
   cp,
+  canEditCp,
   now: serverNow,
 }: Omit<StatusSamplesProps, 'initialMax'>) {
   const t = useT();
@@ -171,7 +174,7 @@ function SamplesPage({
         </Card>
       ) : null}
 
-      {showPick ? <ReportPickSamples initialCp={cp} /> : null}
+      {showPick ? <ReportPickSamples initialCp={cp} canEdit={canEditCp} /> : null}
 
       {sample ? (
         <Modal

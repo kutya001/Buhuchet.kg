@@ -139,7 +139,7 @@ export async function reportPickSubject(
       : Promise.resolve([]),
     f.enRates.length
       ? Promise.resolve(f.enRates.map((e) => e.code))
-      : singleTaxByGked(tx, f).then((rows) => rows.map((e) => e.code)),
+      : draftSingleTaxRates(tx, f).then((rows) => rows.map((e) => e.code)),
   ]);
   return {
     form: form ?? null,
@@ -157,8 +157,11 @@ export async function reportPickSubject(
   };
 }
 
-/** Строки ЕНС по основному и дополнительным ГКЭД, статусам и месту деятельности (прототип enAuto). */
-async function singleTaxByGked(tx: Tx, f: PickFields) {
+/**
+ * Строки ЕНС по основному и дополнительным ГКЭД, статусам и месту деятельности (прототип enAuto) — для
+ * черновика формы и нового контрагента.
+ */
+export async function draftSingleTaxRates(tx: Tx, f: PickFields) {
   const [dicts, [office]] = await Promise.all([
     contractorGkedDicts(
       tx,
@@ -230,7 +233,7 @@ export async function reportPickDetails(
     listTaxBenefits(tx),
     singleTaxRateRows(tx),
     subject.gked || subject.regimes.some((r) => r.code === SINGLE_TAX_REGIME)
-      ? singleTaxByGked(tx, f)
+      ? draftSingleTaxRates(tx, f)
       : Promise.resolve([]),
   ]);
   const statuses = statusRulesOf(f.benefits, benefits, today);

@@ -3,12 +3,20 @@ import {
   contractorDictValues,
   contractorGkedDicts,
   getContractor,
+  gkedNames,
+  gkedSearch,
+  orgMenuSettings,
+  responsibleOptions,
   withOrgContext,
 } from '@buhuchet/db';
+import { GKED_PICK_LIMIT } from '@buhuchet/domain';
 import {
   Contractor,
   ContractorGkedCheckRequest,
+  ContractorFormOptions,
   ContractorGkedNotes,
+  GkedSearchQuery,
+  GkedSearchResult,
   Uuid,
 } from '@buhuchet/shared';
 import type { ApiDeps } from '../../deps';
@@ -21,6 +29,7 @@ import {
   error,
   feeVisible,
   notesOf,
+  ownEmployeeOf,
   scopeSqlOf,
   subjectOf,
   todayOf,
@@ -115,7 +124,7 @@ export function gkedCheckHandler(deps: ApiDeps): RouteHandler<typeof gkedCheckRo
         confirmation = r.gkedConfirmation;
       }
       const codes = [body.gked, ...body.gkedExtra].filter((x): x is string => !!x);
-      const [dicts, values] = await Promise.all([
+      const [dicts, values, names] = await Promise.all([
         contractorGkedDicts(tx, codes, body.reportTypes),
         contractorDictValues(tx, {
           forms: body.formCode ? [body.formCode] : [],
@@ -125,6 +134,7 @@ export function gkedCheckHandler(deps: ApiDeps): RouteHandler<typeof gkedCheckRo
           taxOffices: [],
           gked: [],
         }),
+        gkedNames(tx, codes),
       ]);
       const form = body.formCode ? values.forms.get(body.formCode) : undefined;
       const { check, ok } = checkSubject(
@@ -139,8 +149,86 @@ export function gkedCheckHandler(deps: ApiDeps): RouteHandler<typeof gkedCheckRo
         confirmation,
         body.reportTypes,
       );
-      return notesOf(check, ok, t);
+      return notesOf(check, ok, t, { codes, names });
     });
     return c.json(notes, 200);
+  };
+}
+
+export const gkedSearchRoute = createRoute({
+  method: 'get',
+  path: '/contractors/gked-search',
+  tags: ['contractors'],
+  summary: 'Поиск кода ГКЭД для контрагента',
+  middleware: [requirePermission('cpView')] as const,
+  request: { query: GkedSearchQuery },
+  responses: {
+    200: {
+      description:
+        'Первые 80 действующих подклассов по порядку справочника, путь и сколько найдено',
+      content: { 'application/json': { schema: GkedSearchResult } },
+    },
+    400: { description: 'Неверный параметр запроса', content: error },
+    401: { description: 'Нет входа', content: error },
+    403: { description: 'Нет права «Просматривать контрагентов»', content: error },
+  },
+});
+
+/**
+ * Окно выбора ГКЭД в форме контрагента (ТЗ «Основной вид деятельности (ГКЭД)»; прототип gkPickDlg): по
+ * коду, началу кода или словам названия; выбирается только подкласс — нижний уровень.
+ */
+export function gkedSearchHandler(deps: ApiDeps): RouteHandler<typeof gkedSearchRoute, AppEnv> {
+  return async (c) => {
+    const { q } = c.req.valid('query');
+    const out = await withOrgContext(deps.db, orgContextOf(c), (tx) =>
+      gkedSearch(tx, q, GKED_PICK_LIMIT),
+    );
+    return c.json(out, 200);
+  };
+}
+
+export const formOptionsRoute = createRoute({
+  method: 'get',
+  path: '/contractors/form-options',
+  tags: ['contractors'],
+  summary: 'Значения для формы контрагента',
+  middleware: [requirePermission('createCp')] as const,
+  responses: {
+    200: {
+      description:
+        'Действующие сотрудники для ответственного, ответственный по умолчанию, видна ли плата за обслуживание',
+      content: { 'application/json': { schema: ContractorFormOptions } },
+    },
+    401: { description: 'Нет входа', content: error },
+    403: { description: 'Нет права «Создавать и изменять контрагентов»', content: error },
+  },
+});
+
+/**
+ * Значения формы «Новый контрагент» и «Изменить» (прототип addCpDlg: «Ответственный бухгалтер» —
+ * действующие сотрудники; стоимость обслуживания — тому, кто видит плату, остальным — замок с
+ * пояснением). Ответственный по умолчанию — сам сотрудник с областью «Свои контрагенты»: иначе новый
+ * контрагент пропал бы из его списка.
+ */
+export function formOptionsHandler(deps: ApiDeps): RouteHandler<typeof formOptionsRoute, AppEnv> {
+  return async (c) => {
+    const subject = subjectOf(c);
+    const ctx = orgContextOf(c);
+    const out = await withOrgContext(deps.db, ctx, async (tx) => {
+      const [employees, settings, fee] = await Promise.all([
+        responsibleOptions(tx),
+        orgMenuSettings(tx, ctx.orgId),
+        feeVisible(tx, ctx.orgId, subject),
+      ]);
+      const own = ownEmployeeOf(subject);
+      return {
+        employees,
+        defaultResponsible: own && employees.some((e) => e.id === own) ? own : null,
+        fee,
+        feeOn: settings.features.fee,
+      };
+    });
+    return c.json(out, 200);
   };
 }

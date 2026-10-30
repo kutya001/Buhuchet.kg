@@ -29,6 +29,7 @@ export default async function SamplesPage({
       showFiles={me.permissions.includes('filesView') && me.features.files === true}
       showPick={me.permissions.includes('cpView')}
       cp={typeof cp === 'string' && UUID.test(cp) ? cp : null}
+      canEditCp={me.permissions.includes('createCp')}
       initialMax={parseMaxPrefs(store.get(MAX_COOKIE)?.value)}
       now={requestNow()}
     />

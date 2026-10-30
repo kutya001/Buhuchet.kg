@@ -12,6 +12,7 @@ export * from './auth';
 export * from './telegram';
 export * from './staff';
 export * from './contractors';
+export { gkedNames, gkedSearch, type GkedFound } from './gked';
 export * from './socfund';
 export * from './contractor-service';
 export * from './service-periods';

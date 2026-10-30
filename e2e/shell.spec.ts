@@ -139,12 +139,18 @@ test.describe('Этап 1: оболочка рабочей страницы', ()
       /^Из свидетельства и выписки Бета/,
     ]);
 
-    // Выбор способа передаётся экрану модуля (пока — заглушка сообщает уведомлением внизу экрана,
-    // что он появится с экраном).
+    // Выбор способа передаётся экрану модуля: «Контрагент» открывает форму создания (2.09), способ без
+    // своего окна (загрузка из Excel — 2.16) пока сообщает уведомлением внизу экрана.
     await menu.getByRole('menuitem', { name: 'Контрагент', exact: true }).click();
     await expect(menu).toBeHidden();
+    const form = page.getByRole('dialog', { name: 'Новый контрагент' });
+    await expect(form).toBeVisible();
+    await form.getByRole('button', { name: 'Закрыть', exact: true }).click();
+    await expect(form).toBeHidden();
+    await page.getByRole('button', { name: 'Добавить', exact: true }).click();
+    await menu.getByRole('menuitem', { name: 'Загрузка из Excel', exact: true }).click();
     await expect(page.getByRole('status')).toHaveText(
-      '«Контрагент» появится вместе с экраном модуля.',
+      '«Загрузка из Excel» появится вместе с экраном модуля.',
     );
   });
 

@@ -18,6 +18,7 @@ import {
   formatText,
   gkedCheck,
   gkedCheckTexts,
+  gkedConfirmDialog,
   gkedSignature,
   hasPermission,
   phoneProblem,
@@ -97,12 +98,21 @@ const confirmationFor = (
 ): GkedConfirmation | null => c && { sig: c.sig, by, at: c.at, ask: c.ask };
 
 /** Сверка словами для ответа API. */
-export function notesOf(check: GkedCheck, ok: boolean, t: Translate): ContractorGkedNotes {
+export function notesOf(
+  check: GkedCheck,
+  ok: boolean,
+  t: Translate,
+  /** Коды и названия ГКЭД контрагента — для окна подтверждения (только у сверки для формы). */
+  gked?: { codes: readonly string[]; names: ReadonlyMap<string, string> },
+): ContractorGkedNotes {
   const texts = gkedCheckTexts(check, t);
+  const need = check.confirm[0];
+  const confirmNeeded = !!need && !ok;
   return {
     ...texts,
-    confirmNeeded: check.confirm.length > 0 && !ok,
-    ask: check.confirm[0]?.ask ?? '',
+    confirmNeeded,
+    ask: need?.ask ?? '',
+    confirm: confirmNeeded && gked ? gkedConfirmDialog(need, gked.codes, gked.names, t) : null,
   };
 }
 
