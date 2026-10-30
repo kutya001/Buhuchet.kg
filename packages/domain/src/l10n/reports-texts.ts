@@ -100,7 +100,7 @@ export const REPORTS_TEXTS = {
   'report.due.moved': { ru: 'перенос', section: S },
   'report.due.moved_title': { ru: 'Перенесён с {date}: {why}', section: S },
   'report.due.weekend': { ru: 'выходной день', section: S },
-  'report.due.manual_title': { ru: 'Срок изменён вручную; по закону — {date}', section: S },
+  'report.due.manual_title': { ru: 'Срок изменён вручную; по закону: {date}', section: S },
   'report.days.today': { ru: 'сегодня', section: S },
   'report.revision.tag': { ru: 'уточн. {n}', section: S },
   'report.amount.none': { ru: 'не указана', section: S },

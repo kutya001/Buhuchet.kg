@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { defaultOrgPolicy } from '@buhuchet/domain';
+import { defaultOrgPolicy, PAGE_IP_MAX_FAILURES } from '@buhuchet/domain';
 import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { withOrgContext } from './context';
@@ -316,15 +316,19 @@ describe.skipIf(!databaseAvailable())('Страница контрагента �
   it('одновременные неверные коды с одного адреса — точный счёт', async () => {
     const wrong = wrongOf(await code());
     const ip = 'parallel-address';
-    // Четыре одновременные попытки (до перерыва по ссылке) — четыре строки счёта адреса.
+    // Пять одновременных попыток (до перерыва по ссылке): ровно 3 строки счёта адреса — на третьей
+    // адрес закрыт, остальные попытки уже не считаются.
     await db.admin.db.update(contractorPages).set({ failures: 0, lockedUntil: null });
     const rows = () =>
       db.admin.db.execute(
         sql`select count(*)::int as n from rate_limits where kind = 'cp_page_ip' and subject = ${hash(ip)}`,
       ) as unknown as Promise<{ n: number }[]>;
     const before = (await rows())[0]!.n;
-    await Promise.all(Array.from({ length: 4 }, () => attempt(wrong, { ip })));
-    expect((await rows())[0]!.n - before).toBe(4);
+    const results = await Promise.all(Array.from({ length: 5 }, () => attempt(wrong, { ip })));
+    expect((await rows())[0]!.n - before).toBe(PAGE_IP_MAX_FAILURES);
+    const outcomes = results.map((r) => r.outcome);
+    expect(outcomes.filter((o) => o === 'wrong')).toHaveLength(PAGE_IP_MAX_FAILURES - 1);
+    expect(outcomes.filter((o) => o === 'ip_locked')).toHaveLength(5 - PAGE_IP_MAX_FAILURES + 1);
     await db.admin.db.update(contractorPages).set({ failures: 0, lockedUntil: null });
   });
 
@@ -343,16 +347,17 @@ describe.skipIf(!databaseAvailable())('Страница контрагента �
     });
   });
 
-  it('30 неверных кодов за час с одного адреса по всем ссылкам — ввод с него закрыт на час', async () => {
+  it('3 неверных кода за час с одного адреса по всем ссылкам — ввод с него закрыт на час', async () => {
+    // Решение заказчика 30.10.2026 (docs/deviations.md п. Е-2): 3 с адреса, по ссылке — 5 подряд.
+    expect(PAGE_IP_MAX_FAILURES).toBe(3);
     const right = await code();
     const wrong = wrongOf(right);
     const ip = 'one-address';
+    await db.admin.db.update(contractorPages).set({ failures: 0, lockedUntil: null });
     let last;
-    for (let i = 1; i <= 30; i++) {
-      // Ссылка закрылась бы на пятом — снимаем перерыв, чтобы считался только адрес.
-      await db.admin.db.update(contractorPages).set({ failures: 0, lockedUntil: null });
+    for (let i = 1; i <= 3; i++) {
       last = await attempt(wrong, { ip });
-      if (i < 30) expect(last.outcome).toBe('wrong');
+      if (i < 3) expect(last).toMatchObject({ outcome: 'wrong', triesLeft: 5 - i });
     }
     expect(last).toMatchObject({ outcome: 'ip_locked' });
     // С этого адреса закрыто и для верного кода, с другого — открыто.

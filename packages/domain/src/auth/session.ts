@@ -12,8 +12,11 @@ export const LOGIN_LOCK_MINUTES = 15;
  */
 export const LOGIN_FAILURE_MEMORY_MINUTES = 60;
 
-/** Сеанс живёт 30 дней с последнего обращения; срок продлевается не чаще раза в час. */
-export const SESSION_TTL_DAYS = 30;
+/**
+ * Сеанс живёт 1 день с последнего обращения (docs/deviations.md, п. 5, решение заказчика 30.10.2026);
+ * срок продлевается не чаще раза в час.
+ */
+export const SESSION_TTL_DAYS = 1;
 export const SESSION_TOUCH_MINUTES = 60;
 
 export const LOGIN_MAX_LENGTH = 64;
