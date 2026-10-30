@@ -1,8 +1,8 @@
 import {
   formatText,
-  KB_STEP_RULES,
   RecordNotFoundError,
   UI_TEXTS,
+  type KbDoneRule,
   type ListQuery,
 } from '@buhuchet/domain';
 import { and, asc, eq, sql, type SQL } from 'drizzle-orm';
@@ -587,8 +587,15 @@ describe.skipIf(!databaseAvailable())('Отчёты: назначения и о�
       [0, true, 'submitted'],
       [1, false, 'todo'],
     ]);
-    // Шаг «Базы знаний» «Создать уточнённый отчёт» засчитывается тому, кто его создал (задача 2.13).
-    const ver = [{ id: 'ver', rule: KB_STEP_RULES.ver!.done! }];
+    // Шаг «Базы знаний» «Создать уточнённый отчёт» (включит 2.14, docs/decisions.md п. Б-2): история
+    // засчитывает его тому, кто создал уточнённый.
+    const rule: KbDoneRule = {
+      kind: 'history',
+      entity: 'report',
+      actions: ['update'],
+      change: { field: 'superseded', to: true },
+    };
+    const ver = [{ id: 'ver', rule }];
     expect([...(await inA((tx) => kbDoneFacts(tx, a.ownerUserId, ver))).keys()]).toEqual(['ver']);
     expect((await inB((tx) => kbDoneFacts(tx, a.ownerUserId, ver))).size).toBe(0);
     await expect(

@@ -77,7 +77,7 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
       'files',
       'lists',
     ]);
-    expect(own.progress).toMatchObject({ total: 28, done: 0, pct: 0, level: 0, next: 1, need: 7 });
+    expect(own.progress).toMatchObject({ total: 27, done: 0, pct: 0, level: 0, next: 1, need: 7 });
     expect(own.progress.levels.map((l) => l.name)).toEqual([
       'Новичок',
       'Ученик',
@@ -127,7 +127,6 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
       'pdicts',
       'cp1',
       'rtabs',
-      'ver',
       'daymonth',
       'tdone',
       'upload',
@@ -221,7 +220,7 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
     const notMine = KbMarkResult.parse(await ok(await call('POST', '/api/kb/hits/profile', acc)));
     expect(notMine.fresh).toEqual([]);
 
-    // Ещё 6 шагов — 7 из 28 (25 %): уровень «Ученик». «Добавить первого контрагента» (задача 2.09) —
+    // Ещё 6 шагов — 7 из 27 (25 %): уровень «Ученик». «Добавить первого контрагента» (задача 2.09) —
     // по истории создания контрагента.
     await saved(f.a.ownerUserId, 'organization', 'name');
     await withOrgContext(f.t.app.db, { orgId: f.a.orgId, userId: f.a.ownerUserId }, (tx) =>
@@ -333,11 +332,11 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
       levelName: 'Ученик',
       of: 5,
       done: 8,
-      total: 28,
+      total: 27,
       levelAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
     });
     const accRow = team.items.find((r) => r.fullName === 'Сотрудник acc-a');
-    expect(accRow).toMatchObject({ level: 0, done: 1, total: 15, pct: 6 });
+    expect(accRow).toMatchObject({ level: 0, done: 1, total: 14, pct: 7 });
     const values = ListValues.parse(
       await ok(await call('GET', '/api/kb/team/values?col=level', owner)),
     );
@@ -363,7 +362,7 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
     const self = KbMemberProgress.parse(
       await ok(await call('GET', `/api/kb/employees/${id}`, acc)),
     );
-    expect(self).toMatchObject({ employeeId: id, progress: { done: 1, total: 15 } });
+    expect(self).toMatchObject({ employeeId: id, progress: { done: 1, total: 14 } });
     expect(self.progress.groups.map((g) => g.id)).toEqual([
       'me',
       'dicts',
@@ -388,7 +387,7 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
     expect(own.items.find((e) => e.login === 'owner-a')?.kb).toEqual({
       level: 1,
       name: 'Ученик',
-      pct: 28,
+      pct: 29,
       of: 5,
     });
     const sorted = await staff(

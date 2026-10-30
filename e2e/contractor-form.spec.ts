@@ -169,11 +169,11 @@ test.describe('Этап 2: форма контрагента', () => {
     // Остальные свои шаги — тем же, чем их засчитывают экраны: Telegram, просмотр экрана шага,
     // первое использование, своя задача «Выполнена».
     await linkTelegram(acct, origin, uniqueChat());
-    for (const id of ['pdicts', 'daymonth']) {
+    for (const id of ['pdicts', 'rtabs', 'daymonth']) {
       const look = await acct.post(`/api/kb/steps/${id}/look`, { headers: { origin } });
       expect(look.status(), await look.text()).toBe(200);
     }
-    for (const hit of ['search', 'cols', 'grp', 'xls', 'swipe']) {
+    for (const hit of ['search', 'cols', 'grp', 'xls', 'stats', 'swipe']) {
       const used = await acct.post(`/api/kb/hits/${hit}`, { headers: { origin } });
       expect(used.status(), await used.text()).toBe(200);
     }
