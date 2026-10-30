@@ -1,7 +1,7 @@
-import { PAUSE_REASON_MAX, SERVICE_STATUSES, TARIFF_PERIODS } from '@buhuchet/domain';
+import { PAUSE_REASON_MAX, SERVICE_STATUSES } from '@buhuchet/domain';
 import { z } from 'zod';
-import { RecordVersion, Tyiyn, Uuid } from './common';
-import { ContractorSaved } from './contractors';
+import { RecordVersion, Uuid } from './common';
+import { ContractorSaved, ContractorTariffRequest } from './contractors';
 import { YearMonth } from './kpi';
 import { RollbackReason, StatusHistoryEntry } from './status';
 
@@ -57,9 +57,13 @@ export type PauseServiceRequest = z.infer<typeof PauseServiceRequest>;
 export const ResumeServiceRequest = z.strictObject({ from: YearMonth, version: RecordVersion });
 export type ResumeServiceRequest = z.infer<typeof ResumeServiceRequest>;
 
-/** «Отменить приостановку» и «Вернуть из архива»: только версия окна. */
+/** «Отменить приостановку»: только версия окна. */
 export const ServiceVersionRequest = z.strictObject({ version: RecordVersion });
 export type ServiceVersionRequest = z.infer<typeof ServiceVersionRequest>;
+
+/** «Вернуть из архива»: версия необязательна — форма «Новый контрагент» знает только номер. */
+export const UnarchiveContractorRequest = z.strictObject({ version: RecordVersion.optional() });
+export type UnarchiveContractorRequest = z.infer<typeof UnarchiveContractorRequest>;
 
 /** Откат действующей приостановки: причина и месяцы, за которые досоздать отчёты. */
 export const RollbackPauseRequest = z.strictObject({
@@ -74,7 +78,7 @@ export const ToRegularRequest = z.strictObject({
   from: YearMonth,
   /** Не передан — режим не меняется; null — «не указан». */
   regimeCode: z.string().trim().min(1).max(60).nullable().optional(),
-  tariff: z.strictObject({ amount: Tyiyn, period: z.enum(TARIFF_PERIODS) }).optional(),
+  tariff: ContractorTariffRequest.strict().optional(),
   /** «Подтверждаю» на вопрос о праве на режим по ГКЭД (как в форме контрагента). */
   gkedConfirm: z.boolean().optional(),
   version: RecordVersion,

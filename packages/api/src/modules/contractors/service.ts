@@ -41,6 +41,7 @@ import {
   RollbackPauseRequest,
   ServiceVersionRequest,
   ToRegularRequest,
+  UnarchiveContractorRequest,
   Uuid,
 } from '@buhuchet/shared';
 import type { Context } from 'hono';
@@ -511,7 +512,7 @@ export const unarchiveContractorRoute = createRoute({
       required: true,
       content: {
         'application/json': {
-          schema: ServiceVersionRequest.partial(),
+          schema: UnarchiveContractorRequest,
         },
       },
     },

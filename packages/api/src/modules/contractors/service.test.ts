@@ -423,6 +423,7 @@ describe.skipIf(!databaseAvailable())('Контрагенты: обслужив�
 
     // Вернуть: только с правом архива; ответ — карточка (форма 2.09 открывает «Изменить»).
     expect((await call(chief, `/${cp}/unarchive`, {})).status).toBe(403);
+    expect((await call(owner, `/${cp}/unarchive`, { extra: 1 })).status).toBe(400);
     const stale = await call(owner, `/${cp}/unarchive`, { version: 1 });
     expect([stale.status, (await failure(stale)).code]).toEqual([409, 'record_changed']);
     const back = await call(owner, `/${cp}/unarchive`, {});
@@ -522,6 +523,11 @@ describe.skipIf(!databaseAvailable())('Контрагенты: обслужив�
     ]);
     expect(screen(noTariffError)).toBe(noTariffError.message);
     expect((await call(owner, `/${cp}/to-regular`, { ...body, from: '2026-09' })).status).toBe(400);
+    const negative = await call(owner, `/${cp}/to-regular`, {
+      ...body,
+      tariff: { amount: -100, period: 'M' },
+    });
+    expect(negative.status).toBe(400);
     expect(
       (await call(owner, `/${cp}/to-regular`, { ...body, regimeCode: 'НЕТ-ТАКОГО' })).status,
     ).toBe(400);

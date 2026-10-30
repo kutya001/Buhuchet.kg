@@ -378,6 +378,30 @@ export async function createDueReports(
   },
 ): Promise<number> {
   const { today } = options;
+  // Сначала — контрагенты, по номеру: правка назначения (`lockAssignee`, `lockAssignment`) и действие с
+  // обслуживанием (`changeService`) блокируют контрагента FOR UPDATE, поэтому сохранённое во время
+  // задачи она дождётся, а назначения и периоды обслуживания прочитает после блокировки — свежими.
+  await tx
+    .select({ id: contractors.id })
+    .from(contractors)
+    .where(
+      and(
+        ne(contractors.serviceStatus, 'archived'),
+        eq(contractors.kind, 'regular'),
+        options.contractorIds ? inArray(contractors.id, [...options.contractorIds]) : undefined,
+        options.assignmentIds
+          ? inArray(
+              contractors.id,
+              tx
+                .select({ id: assignments.contractorId })
+                .from(assignments)
+                .where(inArray(assignments.id, [...options.assignmentIds])),
+            )
+          : undefined,
+      ),
+    )
+    .orderBy(asc(contractors.id))
+    .for('share');
   const rows = await tx
     .select({ a: assignments, contractorResponsible: contractors.responsibleEmployeeId })
     .from(assignments)
@@ -397,9 +421,7 @@ export async function createDueReports(
         options.assignmentIds ? inArray(assignments.id, [...options.assignmentIds]) : undefined,
       ),
     )
-    .orderBy(asc(assignments.contractorId), asc(assignments.reportTypeCode))
-    // Снятие или «Изменить» назначения, сохранённые во время задачи, она видит до вставки отчётов.
-    .for('share', { of: assignments });
+    .orderBy(asc(assignments.contractorId), asc(assignments.reportTypeCode));
   if (rows.length === 0) return 0;
   const contractorIds = [...new Set(rows.map((r) => r.a.contractorId))];
   const [types, calendar, statuses, periods] = await Promise.all([

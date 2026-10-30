@@ -566,7 +566,11 @@ export async function syncServiceStatuses(
 ): Promise<ServiceSyncResult> {
   const month = options.today.slice(0, 7);
   const rows = await tx
-    .select({ id: contractors.id, status: contractors.serviceStatus })
+    .select({
+      id: contractors.id,
+      status: contractors.serviceStatus,
+      version: contractors.version,
+    })
     .from(contractors)
     .where(and(ne(contractors.serviceStatus, 'archived'), eq(contractors.kind, 'regular')));
   const periods = await servicePeriodsOf(
@@ -578,7 +582,8 @@ export async function syncServiceStatuses(
     const ps = periods.get(r.id)!;
     const now: ServiceState = inService(ps, month) ? 'active' : 'paused';
     if (now === r.status) continue;
-    // Сменился только у тех, кого не изменили одновременно (иначе — уже свежий статус).
+    // Только у тех, кого не изменили одновременно: действие с обслуживанием меняет версию, и периоды,
+    // прочитанные задачей, были бы устаревшими (следующий запуск сверит по свежим).
     const changed = await tx
       .update(contractors)
       .set({
@@ -586,7 +591,7 @@ export async function syncServiceStatuses(
         version: sql`${contractors.version} + 1`,
         updatedAt: sql`now()`,
       })
-      .where(and(eq(contractors.id, r.id), eq(contractors.serviceStatus, r.status)))
+      .where(and(eq(contractors.id, r.id), eq(contractors.version, r.version)))
       .returning({ id: contractors.id });
     if (changed.length === 0) continue;
     let reason: string;
