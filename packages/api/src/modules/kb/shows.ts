@@ -117,9 +117,7 @@ export const kbKnownResetRoute = createRoute({
 });
 
 /** Показы снова проходят по всем элементам; выполненные шаги и уровень не меняются. */
-export function kbKnownResetHandler(
-  deps: ApiDeps,
-): RouteHandler<typeof kbKnownResetRoute, AppEnv> {
+export function kbKnownResetHandler(deps: ApiDeps): RouteHandler<typeof kbKnownResetRoute, AppEnv> {
   return async (c) => {
     const removed = await asLearner(deps, c, (tx) => kbResetKnown(tx));
     return c.json({ count: 0, removed }, 200);
@@ -183,9 +181,7 @@ export const kbScreenShowRoute = createRoute({
  * Обзор экрана не засчитывает шаги, кроме шагов «Посмотреть» этого экрана (ТЗ; прототип tourEnd):
  * засчитываются «показом» шаги программы, у которых этот экран (или его модуль) — экран шага.
  */
-export function kbScreenShowHandler(
-  deps: ApiDeps,
-): RouteHandler<typeof kbScreenShowRoute, AppEnv> {
+export function kbScreenShowHandler(deps: ApiDeps): RouteHandler<typeof kbScreenShowRoute, AppEnv> {
   return async (c) => {
     const { screen } = c.req.valid('json');
     const [module, tab = null] = screen.split('.') as [string, string?];

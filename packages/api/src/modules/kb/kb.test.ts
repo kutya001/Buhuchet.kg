@@ -78,7 +78,7 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
       'files',
       'lists',
     ]);
-    expect(own.progress).toMatchObject({ total: 24, done: 0, pct: 0, level: 0, next: 1, need: 6 });
+    expect(own.progress).toMatchObject({ total: 25, done: 0, pct: 0, level: 0, next: 1, need: 7 });
     expect(own.progress.levels.map((l) => l.name)).toEqual([
       'Новичок',
       'Ученик',
@@ -204,7 +204,7 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
     const notMine = KbMarkResult.parse(await ok(await call('POST', '/api/kb/hits/profile', acc)));
     expect(notMine.fresh).toEqual([]);
 
-    // Ещё 5 шагов — 6 из 24 (25 %): уровень «Ученик».
+    // Ещё 6 шагов — 7 из 25 (28 %): уровень «Ученик».
     await saved(f.a.ownerUserId, 'organization', 'name');
     await saved(f.a.ownerUserId, 'org_settings', 'remindDays');
     await saved(f.a.ownerUserId, 'org_settings', 'timezone');
@@ -212,12 +212,14 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
     expect(hit.fresh.map((x) => [x.id, x.how])).toEqual([['search', 'use']]);
     const cols = KbMarkResult.parse(await ok(await call('POST', '/api/kb/hits/cols', owner)));
     expect(cols.fresh.map((x) => [x.id, x.how])).toEqual([['cols', 'use']]);
+    const grp = KbMarkResult.parse(await ok(await call('POST', '/api/kb/hits/grp', owner)));
+    expect(grp.fresh.map((x) => [x.id, x.how])).toEqual([['grp', 'use']]);
     const second = KbMarkResult.parse(
       await ok(await call('POST', '/api/kb/sync', owner, { reason: 'saved' })),
     );
     expect(second.fresh.map((x) => x.id).sort()).toEqual(['profile', 'remind', 'settings']);
     expect(second.congrats).toBe('Ученик');
-    expect(second.state.progress).toMatchObject({ done: 6, pct: 25, level: 1 });
+    expect(second.state.progress).toMatchObject({ done: 7, pct: 28, level: 1 });
     // Повтор ничего не меняет.
     const again = KbMarkResult.parse(
       await ok(await call('POST', '/api/kb/sync', owner, { reason: 'open' })),
@@ -306,12 +308,12 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
       level: 1,
       levelName: 'Ученик',
       of: 5,
-      done: 7,
-      total: 24,
+      done: 8,
+      total: 25,
       levelAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
     });
     const accRow = team.items.find((r) => r.fullName === 'Сотрудник acc-a');
-    expect(accRow).toMatchObject({ level: 0, done: 1, total: 11, pct: 9 });
+    expect(accRow).toMatchObject({ level: 0, done: 1, total: 12, pct: 8 });
     const values = ListValues.parse(
       await ok(await call('GET', '/api/kb/team/values?col=level', owner)),
     );
@@ -337,7 +339,7 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
     const self = KbMemberProgress.parse(
       await ok(await call('GET', `/api/kb/employees/${id}`, acc)),
     );
-    expect(self).toMatchObject({ employeeId: id, progress: { done: 1, total: 11 } });
+    expect(self).toMatchObject({ employeeId: id, progress: { done: 1, total: 12 } });
     expect(self.progress.groups.map((g) => g.id)).toEqual([
       'me',
       'dicts',
@@ -360,7 +362,7 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
     expect(own.items.find((e) => e.login === 'owner-a')?.kb).toEqual({
       level: 1,
       name: 'Ученик',
-      pct: 29,
+      pct: 32,
       of: 5,
     });
     const sorted = await staff(
@@ -402,8 +404,7 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
   it('знакомые элементы: свои у каждого, общие для ПК и телефона; «Показывать всё заново»', async () => {
     const known = async (cookie: string) =>
       KbKnownList.parse(await ok(await call('GET', '/api/kb/known', cookie)));
-    const add = (cookie: string, keys: unknown) =>
-      call('POST', '/api/kb/known', cookie, { keys });
+    const add = (cookie: string, keys: unknown) => call('POST', '/api/kb/known', cookie, { keys });
     expect(KbKnownCount.parse(await ok(await add(acc, ['g:max', 's:org.main|ИНН'])))).toEqual({
       count: 2,
     });
@@ -419,12 +420,20 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
       expect(res.status).toBe(400);
       expect(await errorOf(res)).toBe('validation_failed');
     }
-    expect((await add(acc, Array.from({ length: 101 }, (_, i) => `g:k${i}`))).status).toBe(400);
+    expect(
+      (
+        await add(
+          acc,
+          Array.from({ length: 101 }, (_, i) => `g:k${i}`),
+        )
+      ).status,
+    ).toBe(400);
     // Администратор платформы — свой список без организации.
     expect(KbKnownCount.parse(await ok(await add(admin, ['g:search'])))).toEqual({ count: 1 });
-    expect(
-      KbKnownCount.parse(await ok(await call('DELETE', '/api/kb/known', acc))),
-    ).toEqual({ count: 0, removed: 2 });
+    expect(KbKnownCount.parse(await ok(await call('DELETE', '/api/kb/known', acc)))).toEqual({
+      count: 0,
+      removed: 2,
+    });
     expect((await known(acc)).keys).toEqual([]);
     expect((await known(admin)).keys).toEqual(['g:search']);
     expect((await call('GET', '/api/kb/known')).status).toBe(401);

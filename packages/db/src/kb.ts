@@ -244,9 +244,7 @@ export type KbShowRecord = z.infer<typeof Show>;
  * Сценарии «Показать как» (`kbShows`, только активные) и тексты облачков (`kbUi`: служебные тексты,
  * описания модулей, вкладок, кнопок, плашек, полей, элементов экрана) — для показа на экране.
  */
-export async function kbShowContent(
-  db: Db | Tx,
-): Promise<{ ui: KbShowUi; shows: KbShowRecord[] }> {
+export async function kbShowContent(db: Db | Tx): Promise<{ ui: KbShowUi; shows: KbShowRecord[] }> {
   const p = await payloads(db, ['kbShows', 'kbUi']);
   const ui = ShowUi.safeParse(p.get('kbUi') ?? {});
   return {
@@ -274,7 +272,9 @@ export async function kbKnownKeys(tx: Tx): Promise<string[]> {
  */
 export async function kbAddKnown(tx: Tx, keys: readonly string[]): Promise<number> {
   // Одна вставка пользователя за раз: две параллельные не перешагнут предел.
-  await tx.execute(sql`select pg_advisory_xact_lock(hashtext('kb_known'), hashtext(app.current_user_id()::text))`);
+  await tx.execute(
+    sql`select pg_advisory_xact_lock(hashtext('kb_known'), hashtext(app.current_user_id()::text))`,
+  );
   const count = async () => {
     const [row] = await tx
       .select({ n: sql<number>`count(*)::int` })

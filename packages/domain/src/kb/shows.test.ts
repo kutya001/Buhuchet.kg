@@ -114,7 +114,10 @@ describe('пропуск знакомых элементов', () => {
       list: [{ t: TEXTS.allKnownT, x: TEXTS.allKnown, kind: 'done' }],
       skipped: 1,
     });
-    const screen: KbShowPoint[] = [{ t: 'Обзор', kind: 'intro' }, { t: 'Поиск', g: 'search' }];
+    const screen: KbShowPoint[] = [
+      { t: 'Обзор', kind: 'intro' },
+      { t: 'Поиск', g: 'search' },
+    ];
     const end = kbSmartList([...screen, { t: 'Конец', kind: 'end' }], () => true, 'x', TEXTS);
     expect(end.list).toEqual([{ t: TEXTS.allKnownT, x: TEXTS.allKnown, kind: 'end' }]);
   });
