@@ -41,12 +41,30 @@ import {
   socfundCheckHandler,
   socfundCheckRoute,
 } from './socfund';
+import {
+  archiveContractorsHandler,
+  archiveContractorsRoute,
+  cancelPauseHandler,
+  cancelPauseRoute,
+  getServiceHandler,
+  getServiceRoute,
+  pauseServiceHandler,
+  pauseServiceRoute,
+  resumeServiceHandler,
+  resumeServiceRoute,
+  rollbackPauseHandler,
+  rollbackPauseRoute,
+  toRegularHandler,
+  toRegularRoute,
+  unarchiveContractorHandler,
+  unarchiveContractorRoute,
+} from './service';
 
 /**
  * Модуль «Контрагенты»: список (значения для фильтра, выгрузка в Excel, счётчики вкладок), карточка,
  * сверка с ГКЭД и тариф Соцфонда для формы, создание одним целым, «Изменить», удаление, назначение
- * ответственного, передача дел, окно «Тариф Соцфонда» и «Подбор отчётов». Экраны — задачи 2.09–2.11;
- * приостановка и архив — свои задачи.
+ * ответственного, передача дел, окно «Тариф Соцфонда», «Подбор отчётов» и обслуживание (приостановка,
+ * возобновление, архив, перевод разового в постоянное — задача 2.12). Экраны — задачи 2.09–2.11.
  */
 export function contractorsModule(deps: ApiDeps) {
   return (
@@ -70,5 +88,14 @@ export function contractorsModule(deps: ApiDeps) {
       .openapi(saveSocfundRoute, saveSocfundHandler(deps))
       .openapi(reportPickPreviewRoute, reportPickPreviewHandler(deps))
       .openapi(applyReportPickRoute, applyReportPickHandler(deps))
+      // Обслуживание: приостановка, возобновление, архив, разовые (задача 2.12).
+      .openapi(archiveContractorsRoute, archiveContractorsHandler(deps))
+      .openapi(getServiceRoute, getServiceHandler(deps))
+      .openapi(pauseServiceRoute, pauseServiceHandler(deps))
+      .openapi(resumeServiceRoute, resumeServiceHandler(deps))
+      .openapi(cancelPauseRoute, cancelPauseHandler(deps))
+      .openapi(rollbackPauseRoute, rollbackPauseHandler(deps))
+      .openapi(unarchiveContractorRoute, unarchiveContractorHandler(deps))
+      .openapi(toRegularRoute, toRegularHandler(deps))
   );
 }

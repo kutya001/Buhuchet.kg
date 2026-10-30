@@ -1,8 +1,11 @@
 import {
   auditActorName,
+  bishkekDate,
   formatPhone,
+  initialPeriods,
   officeBenefitChanges,
   RecordNotFoundError,
+  serviceState,
   type BizSize,
   type ContractorGkedConfirmation,
   type ContractorKind,
@@ -917,16 +920,23 @@ export async function createContractor(
   orgId: string,
   input: ContractorFields,
   tariff: ContractorTariffInput | null,
+  options: { today?: IsoDate } = {},
 ): Promise<string> {
   const values = Object.fromEntries(CONTRACTOR_COLUMNS.map((k) => [k, input[k]])) as Pick<
     ContractorFields,
     (typeof CONTRACTOR_COLUMNS)[number]
   >;
+  // Обслуживание — с месяца начала (прототип addCpDlg: periods; первый период постоянному ставит база,
+  // миграция `contractor_service_init`); начало в будущем — «Приостановлен» до него, как cpStatus прототипа.
+  const oneOff = input.kind === 'oneoff';
+  const periods = initialPeriods(oneOff, input.startDate);
+  const month = (options.today ?? bishkekDate(new Date())).slice(0, 7);
   const [row] = await tx
     .insert(contractors)
     .values({
       ...values,
       orgId,
+      serviceStatus: serviceState({ archived: false, oneOff, periods }, month),
       createdBy: sql`app.current_user_id()`,
       updatedBy: sql`app.current_user_id()`,
     })

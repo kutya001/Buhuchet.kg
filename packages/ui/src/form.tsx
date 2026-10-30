@@ -278,7 +278,7 @@ export function pillClass(size: keyof typeof PILL_SIZES = 'md'): string {
 /**
  * Метка (`.pill`): «Привязан», «Основной»; `caution` — оранжевая (`.pill.orange`, «не привязан»),
  * `warn` — жёлтая (`.pill.yellow`, «сверить»), `violet` — фиолетовая (`.pill.purple`, «ждёт» у задачи);
- * `info` — синяя (`.pill.blue`, «по УГНС»);
+ * `info` — синяя (`.pill.blue`, «по УГНС», «Возобновление запланировано»);
  * `sm` — маленькая (`.pill.sm`). В компактном списке метка ниже (`data-pill`).
  */
 export function Pill({

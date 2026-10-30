@@ -421,6 +421,20 @@
       "when": 1793323296699,
       "tag": "0059_contractor_page_guards",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1793326243424,
+      "tag": "0060_contractor_service",
+      "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1793326244895,
+      "tag": "0061_contractor_service_init",
+      "breakpoints": true
     }
   ]
 }
