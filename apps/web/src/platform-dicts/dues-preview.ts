@@ -1,10 +1,10 @@
 'use client';
 
-import { pluralForm, type Translate } from '@buhuchet/domain';
+import { pluralForm, type Translate, type UiTextKey } from '@buhuchet/domain';
 import { AdminDuesPreview } from '@buhuchet/shared';
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
-import { apiFailure } from '../api-client';
+import { useEffect, useEffectEvent, useState } from 'react';
+import { ApiFailure, apiFailure } from '../api-client';
 
 /*
  * Предпросмотр пересчёта сроков в окнах Админки (задача 2.37; ТЗ «система показывает, сколько
@@ -17,40 +17,50 @@ type JsonResponse = { ok: boolean; status: number; json(): Promise<unknown> };
 /** Запрос через 400 мс после последней правки: окно не шлёт его на каждое нажатие клавиши. */
 const DELAY_MS = 400;
 
-function useDebounced<T>(value: T): T {
-  const [shown, setShown] = useState(value);
-  useEffect(() => {
-    const timer = setTimeout(() => setShown(value), DELAY_MS);
-    return () => clearTimeout(timer);
-  }, [value]);
-  return shown;
+/** Ответ предпросмотра: число, ещё считается (оба пусты) или посчитать не вышло. */
+export interface DuesPreviewState {
+  dues?: AdminDuesPreview;
+  failed: boolean;
 }
+
+/** Сервер ещё считает прежний предпросмотр этого администратора — повторить чуть позже. */
+const busy = (err: unknown) => err instanceof ApiFailure && err.error.code === 'dues_preview_busy';
 
 /**
  * Сколько несданных отчётов в скольких организациях изменится после правки `body`; `null` — правки,
- * влияющей на сроки, нет. Пока ответа нет — `undefined`.
+ * влияющей на сроки, нет (или форма с ошибкой). Новый запрос — только когда меняются поля срока
+ * (`relevant`, по умолчанию всё тело); прежний запрос отменяется. Пока ответа нет — пусто.
  */
 export function useDuesPreview<T>(
   key: string,
   body: T | null,
-  request: (body: T) => Promise<JsonResponse>,
-): AdminDuesPreview | undefined {
-  const shown = useDebounced(body === null ? null : JSON.stringify(body));
-  const current = body === null ? null : JSON.stringify(body);
+  request: (body: T, signal: AbortSignal) => Promise<JsonResponse>,
+  relevant?: unknown,
+): DuesPreviewState {
+  const sig = body === null ? null : JSON.stringify(relevant === undefined ? body : relevant);
+  // Через `DELAY_MS` после последней правки полей срока — тело на этот момент.
+  const [shown, setShown] = useState<{ sig: string; body: T } | null>(null);
+  const pick = useEffectEvent(() => (sig === null || body === null ? null : { sig, body }));
+  useEffect(() => {
+    const timer = setTimeout(() => setShown(pick()), DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [sig]);
   const query = useQuery({
-    queryKey: ['admin', 'pdicts', 'dues', key, shown],
-    queryFn: async () => {
-      const res = await request(JSON.parse(shown!) as T);
+    queryKey: ['admin', 'pdicts', 'dues', key, shown?.sig ?? null],
+    queryFn: async ({ signal }) => {
+      const res = await request(shown!.body, signal);
       if (!res.ok) throw await apiFailure(res);
       return AdminDuesPreview.parse(await res.json());
     },
     enabled: shown !== null,
     staleTime: 0,
     gcTime: 0,
-    retry: false,
+    retry: (count, err) => count < 3 && busy(err),
+    retryDelay: 1500,
   });
   // Ответ на прежнюю правку не показывается, пока не пришёл ответ на нынешнюю.
-  return current !== null && current === shown ? query.data : undefined;
+  const fresh = sig !== null && shown?.sig === sig;
+  return { dues: fresh ? query.data : undefined, failed: fresh && query.isError };
 }
 
 /** «12 несданных отчётов в 3 организациях» (прототип spreadTxt). */
@@ -60,4 +70,13 @@ export function spreadText(t: Translate, x: AdminDuesPreview): string {
     n: x.orgs,
     reports: t(`pdicts.type.spread.${pluralForm(x.reports)}`, { n: x.reports }),
   });
+}
+
+/**
+ * Строка предупреждения окна: с числом (`template` с `{spread}`), «Считаем…» или — посчитать не вышло —
+ * без числа: сроки пересчитаются после сохранения.
+ */
+export function duesNote(t: Translate, state: DuesPreviewState, template: UiTextKey): string {
+  if (state.dues) return t(template, { spread: spreadText(t, state.dues) });
+  return t(state.failed ? 'pdicts.dues.later' : 'pdicts.cal.dues_wait');
 }

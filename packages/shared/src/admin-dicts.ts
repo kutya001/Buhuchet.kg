@@ -588,8 +588,14 @@ export const AdminDuesPreview = z.object({
 });
 export type AdminDuesPreview = z.infer<typeof AdminDuesPreview>;
 
-/** Ответ правки календаря: у скольких несданных отчётов пересчитан срок. */
-export const AdminCalendarChanged = z.object({ recalculated: z.number().int().nonnegative() });
+/**
+ * Ответ правки календаря: у скольких несданных отчётов пересчитан срок; `pending` — пересчитано не во
+ * всех организациях, остальные догонит задача по расписанию.
+ */
+export const AdminCalendarChanged = z.object({
+  recalculated: z.number().int().nonnegative(),
+  pending: z.boolean(),
+});
 export type AdminCalendarChanged = z.infer<typeof AdminCalendarChanged>;
 
 /** «Календарь на следующий год копированием»: что будет скопировано в год `year`. */
@@ -603,8 +609,6 @@ export const AdminCalendarCopyPlan = z.object({
       name: z.string(),
     }),
   ),
-  /** У скольких несданных отчётов изменятся сроки после копирования. */
-  dues: AdminDuesPreview,
 });
 export type AdminCalendarCopyPlan = z.infer<typeof AdminCalendarCopyPlan>;
 

@@ -49,7 +49,7 @@ import {
 import { api, callApi } from '../api-client';
 import { fieldError } from '../auth/fields';
 import { useErrorText, useT } from '../l10n/provider';
-import { spreadText, useDuesPreview } from './dues-preview';
+import { duesNote, useDuesPreview } from './dues-preview';
 import {
   fetchAdminDictValue,
   pdictsBasesQuery,
@@ -419,7 +419,7 @@ export function TypeDialog({
 
   // Предупреждения у созданного вида (прототип `te-warn`): правило срока или периодичность изменились.
   // Сколько отчётов изменится — сервер считает по правке тем же кодом, что пересчёт после сохранения;
-  // пока ответа нет или форма с ошибкой — несданные отчёты вида (как в прототипе).
+  // пока ответа нет — «Считаем…», форма с ошибкой — без числа.
   const reports = current?.reports ?? { total: 0, open: 0, orgs: 0 };
   const initial = current ? formOf(current) : null;
   const ruleChanged = initial !== null && RULE_FIELDS.some((f) => initial[f] !== v[f]);
@@ -430,13 +430,18 @@ export function TypeDialog({
     current && parsed?.success
       ? { ...reportTypeBody(parsed.data), version: current.version }
       : null,
-    (json) =>
-      pd[':dict'][':code']['dues-preview'].$post({
-        param: { dict: 'types', code: current!.code },
-        json,
-      }),
+    (json, signal) =>
+      pd[':dict'][':code']['dues-preview'].$post(
+        { param: { dict: 'types', code: current!.code }, json },
+        { init: { signal } },
+      ),
+    RULE_FIELDS.map((f) => v[f]),
   );
-  const spread = spreadText(t, dues ?? { reports: reports.open, orgs: reports.orgs });
+  const ruleNote = !ruleChanged
+    ? ''
+    : parsed?.success
+      ? duesNote(t, dues, 'pdicts.type.warn_rule')
+      : t('pdicts.type.warn_rule_later');
   const actChanged = before?.act !== undefined && act !== '' && act !== before.act;
 
   return (
@@ -856,10 +861,7 @@ export function TypeDialog({
         {v.kind === 'internal' ? <Note>{t('pdicts.type.internal_note')}</Note> : null}
         {ruleChanged || periodChanged ? (
           <Note tone="warn">
-            {[
-              periodChanged ? t('pdicts.type.warn_period') : '',
-              ruleChanged ? t('pdicts.type.warn_rule', { spread }) : '',
-            ]
+            {[periodChanged ? t('pdicts.type.warn_period') : '', ruleNote]
               .filter(Boolean)
               .join(' ')}
           </Note>

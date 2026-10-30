@@ -17,7 +17,6 @@ import {
   adminDictUpdate,
   type AdminDictDeleteResult,
   type AdminDictSaveResult,
-  type DuesCounter,
 } from './admin-platform-dicts';
 import {
   auditActorValue,
@@ -401,11 +400,7 @@ export type DictLoadRollbackResult =
  * Отказ может прийти после части записей: вызывающий обязан откатить транзакцию (бросить исключение),
  * тогда справочник не меняется.
  */
-export async function rollbackDictLoad(
-  tx: Tx,
-  id: string,
-  countDues?: DuesCounter,
-): Promise<DictLoadRollbackResult> {
+export async function rollbackDictLoad(tx: Tx, id: string): Promise<DictLoadRollbackResult> {
   await lockDictLoads(tx);
   const [load] = await tx
     .select({ ...fields, before: l.before, addedValues: l.addedValues })
@@ -455,7 +450,6 @@ export async function rollbackDictLoad(
       b.code,
       { name: b.name, data: b.data as never },
       now.version,
-      countDues,
     );
     if (!saved.ok) return failed(b.code, b.name, saved);
     redue.push(saved.redue);

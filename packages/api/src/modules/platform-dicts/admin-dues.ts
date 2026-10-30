@@ -1,13 +1,24 @@
 import { createRoute, type RouteHandler } from '@hono/zod-openapi';
+import { safeErrorMessage } from '@buhuchet/adapters/logger';
 import {
   adminCalendarAdd,
+  adminCalendarCopy,
   adminCalendarDelete,
+  claimDuesRecalc,
+  cleanupDuesRecalcs,
+  dictValueTakenField,
   dueCatalog,
+  enqueueDuesRecalc,
+  finishDuesRecalc,
   redueAllOrgs,
+  releaseRateLimit,
+  rollbackDictLoad,
+  takeRateLimit,
   withUserContext,
   type CatalogRedueTexts,
   type DueCatalog,
-  type DuesCounter,
+  type DuesRecalcTask,
+  type RateLimit,
   type RedueScope,
   type Tx,
 } from '@buhuchet/db';
@@ -16,22 +27,25 @@ import {
   AdminCalendarAddForm,
   AdminCalendarDayParam,
   AdminDictDeleteQuery,
+  AdminDictLoadIdParam,
   AdminDuesPreview,
   ApiError,
 } from '@buhuchet/shared';
 import type { Context } from 'hono';
-import type { ApiDeps } from '../../deps';
+import type { ApiDeps, Job, JobContext } from '../../deps';
 import type { AppEnv } from '../../env';
+import { apiFail } from '../../errors';
 import { requirePlatformAdmin } from '../../middleware/access';
 import { serverTexts } from '../l10n/texts';
 
 /*
  * Пересчёт сроков несданных отчётов после правки каталога (задача 2.37; ТЗ «Если изменение каталога
  * влияет на сроки уже созданных отчётов, система показывает, сколько несданных отчётов в скольких
- * организациях изменится, и пересчитывает только их»): предпросмотр для окон правки и пересчёт после
- * сохранения. Оба — `redueAllOrgs`: каждая организация своей транзакцией с пределом времени задач.
- * Предпросмотр — правка в транзакции администратора, которая откатывается, и счёт по прочитанному в
- * ней каталогу, поэтому число в окне совпадает с пересчётом.
+ * организациях изменится, и пересчитывает только их»; Issue «фоновой работой с пределом времени,
+ * безопасно при повторе»). Предпросмотр для окон правки — правка в транзакции администратора, которая
+ * откатывается, и счёт по прочитанному в ней каталогу, поэтому число в окне совпадает с пересчётом.
+ * Пересчёт — через очередь (docs/decisions.md п. Д-9): правка ставит его в очередь своей транзакцией,
+ * сразу после сохранения он идёт до `INLINE_MS`, остальное догоняет задача по расписанию.
  */
 
 const error = { 'application/json': { schema: ApiError } };
@@ -41,10 +55,21 @@ const denied = {
 } as const;
 const json = <T>(schema: T) => ({ 'application/json': { schema } });
 
-const todayOf = (deps: ApiDeps) => bishkekDate(deps.clock.now());
+/** Ответы предпросмотра сверх 200: неверный запрос, очередь предпросмотров, долгий запрос к базе. */
+export const duesPreviewResponses = {
+  400: { description: 'Неверные параметры или тело запроса', content: error },
+  429: {
+    description: 'Идёт прежний предпросмотр пользователя или за час их уже слишком много',
+    content: error,
+  },
+  503: { description: 'Запрос к базе дольше предела', content: error },
+  ...denied,
+} as const;
+
+const todayOf = (deps: JobContext) => bishkekDate(deps.clock.now());
 
 /** Причины в истории отчёта: у статуса — как при установке статуса у контрагента. */
-export async function redueTexts(deps: ApiDeps): Promise<CatalogRedueTexts> {
+export async function redueTexts(deps: JobContext): Promise<CatalogRedueTexts> {
   const t = await serverTexts(deps);
   return {
     byType: t('pdicts.dues.reason.type'),
@@ -73,31 +98,36 @@ export async function previewDues(
   return { reports, orgs };
 }
 
-/** Счёт для истории статуса («сроки по статусу пересчитаны у N отчётов») по каталогу транзакции. */
-export function duesCounter(deps: ApiDeps): DuesCounter {
-  return async (tx, scope) => (await previewDues(deps, scope, await dueCatalog(tx))).reports;
-}
-
 /**
- * Пересчёт после сохранения правки: у скольких отчётов в скольких организациях изменился срок.
- * Организация, где пересчёт не прошёл и со второй попытки, — в журнал; повтор пересчёта безопасен.
+ * Предпросмотры одного администратора: один одновременно и не больше 600 за час — каждый обходит все
+ * организации. Неотпущенный (сбой процесса) перестаёт мешать через 2 минуты.
  */
-export async function recalcDues(
+export const DUES_PREVIEW_RATE_LIMIT: RateLimit = {
+  kind: 'dues-preview',
+  max: 600,
+  windowSeconds: 3600,
+  leaseSeconds: 120,
+};
+
+/** Предпросмотр по очереди: идёт прежний — 429 `dues_preview_busy`, предел за час — `dues_preview_limit`. */
+export async function withPreviewSlot<T>(
   deps: ApiDeps,
-  scope: RedueScope | null | undefined,
-): Promise<AdminDuesPreview> {
-  if (!scope) return NO_DUES;
-  const summary = await redueAllOrgs(deps.db, scope, todayOf(deps), {
-    write: true,
-    texts: await redueTexts(deps),
-  });
-  if (summary.failed.length) {
-    deps.logger.error(
-      { scope: scope.kind, failed: summary.failed },
-      'сроки отчётов не пересчитаны в части организаций',
+  c: Context<AppEnv>,
+  run: () => Promise<T>,
+): Promise<T> {
+  const userId = c.get('session')!.userId;
+  const slot = await takeRateLimit(deps.db, DUES_PREVIEW_RATE_LIMIT, userId);
+  if (!slot.ok) {
+    if (slot.reason === 'busy') apiFail(429, 'dues_preview_busy', 'Предыдущий расчёт ещё идёт');
+    apiFail(429, 'dues_preview_limit', 'Слишком много расчётов за час');
+  }
+  try {
+    return await run();
+  } finally {
+    await releaseRateLimit(deps.db, DUES_PREVIEW_RATE_LIMIT, userId, slot.ticket).catch(
+      (err: unknown) => deps.logger.error({ err }, 'предпросмотр сроков не отпущен'),
     );
   }
-  return { reports: summary.reports, orgs: summary.orgs };
 }
 
 /** Правка в транзакции администратора, которая откатывается: что пересчитать и каталог после неё. */
@@ -107,8 +137,11 @@ class DryRun extends Error {
   }
 }
 
-/** Предпросмотр правки `edit`: её запись откатывается, счёт — по каталогу после неё. */
-export async function previewEdit(
+/**
+ * Сколько изменится после правки `edit` (`false` — правка не прошла): её запись откатывается, счёт —
+ * по каталогу после неё. Такое же название успели сохранить — тоже нули: «Сохранить» скажет об этом.
+ */
+export async function countEdit(
   deps: ApiDeps,
   c: Context<AppEnv>,
   edit: (tx: Tx) => Promise<RedueScope | null | false>,
@@ -119,13 +152,138 @@ export async function previewEdit(
       throw new DryRun(scope === false ? null : { scope, catalog: await dueCatalog(tx) });
     });
   } catch (err) {
+    if (dictValueTakenField(err)) return NO_DUES;
     if (!(err instanceof DryRun)) throw err;
     return err.found ? previewDues(deps, err.found.scope, err.found.catalog) : NO_DUES;
   }
   throw new Error('предпросмотр без результата');
 }
 
+/** Предпросмотр окна: `countEdit` по очереди предпросмотров пользователя. */
+export const previewEdit = (
+  deps: ApiDeps,
+  c: Context<AppEnv>,
+  edit: (tx: Tx) => Promise<RedueScope | null | false>,
+): Promise<AdminDuesPreview> => withPreviewSlot(deps, c, () => countEdit(deps, c, edit));
+
+/* ───────────── Очередь пересчёта ───────────── */
+
+/** Сколько пересчёт идёт сразу после сохранения; что не успело — догоняет задача по расписанию. */
+const INLINE_MS = 60_000;
+/** Сколько идёт задача по расписанию за один запуск. */
+const JOB_MS = 120_000;
+/** Аренда строки очереди — дольше, чем живёт функция API (5 минут). */
+const LEASE_SECONDS = 600;
+/** Задача по расписанию берёт строки старше 2 минут: свежие проходят сразу после сохранения. */
+const JOB_OLDER_THAN_SECONDS = 120;
+/** Через сколько строку с ошибкой проходят снова. */
+const RETRY_SECONDS = 300;
+
+/** Итог пересчёта сразу после сохранения: сколько изменено и остался ли догон. */
+export interface RecalcOutcome extends AdminDuesPreview {
+  /** Пересчитано не везде: остальное догонит задача по расписанию. */
+  pending: boolean;
+}
+
+/** Правка и её пересчёт в очереди — одной транзакцией: правка без пересчёта не сохраняется. */
+export async function queued<T extends { ok: boolean; redue?: RedueScope | null }>(
+  tx: Tx,
+  result: T,
+): Promise<T & { queued?: string }> {
+  if (!result.ok || !result.redue) return result;
+  return { ...result, queued: await enqueueDuesRecalc(tx, result.redue) };
+}
+
+/**
+ * Проход строки очереди до момента `until`: пересчитано везде — строка выполнена; кончилось время —
+ * освобождается для догона; ошибка — в журнал (класс и код, без значений запроса) и повтор позже.
+ */
+async function runTask(
+  ctx: JobContext,
+  task: DuesRecalcTask,
+  until: number,
+): Promise<RecalcOutcome> {
+  try {
+    const summary = await redueAllOrgs(ctx.db, task.scope, todayOf(ctx), {
+      write: true,
+      texts: await redueTexts(ctx),
+      until,
+    });
+    for (const { orgId, error: err } of summary.failed) {
+      ctx.logger.error(
+        { dues: task.id, scope: task.scope.kind, orgId, attempt: task.attempts, err },
+        'сроки отчётов организации не пересчитаны',
+      );
+    }
+    const [first] = summary.failed;
+    const pending = summary.left > 0 || first !== undefined;
+    await finishDuesRecalc(ctx.db, task.id, {
+      done: !pending,
+      reports: summary.reports,
+      orgs: summary.orgs,
+      error: first ? safeErrorMessage(first.error) : null,
+      retryAfterSeconds: first ? RETRY_SECONDS : 0,
+    });
+    return { reports: summary.reports, orgs: summary.orgs, pending };
+  } catch (err) {
+    ctx.logger.error(
+      { dues: task.id, scope: task.scope.kind, attempt: task.attempts, err },
+      'пересчёт сроков отчётов не прошёл',
+    );
+    await finishDuesRecalc(ctx.db, task.id, {
+      done: false,
+      reports: 0,
+      orgs: 0,
+      error: safeErrorMessage(err),
+      retryAfterSeconds: RETRY_SECONDS,
+    });
+    return { ...NO_DUES, pending: true };
+  }
+}
+
+/**
+ * Пересчёт сразу после сохранения правки (строка очереди `id` из `queued`): до `INLINE_MS`, остальное —
+ * задачей по расписанию. Без строки (правка сроки не меняет) — нули.
+ */
+export async function recalcQueued(deps: ApiDeps, id: string | undefined): Promise<RecalcOutcome> {
+  if (!id) return { ...NO_DUES, pending: false };
+  const task = await claimDuesRecalc(deps.db, { id, leaseSeconds: LEASE_SECONDS });
+  // Строку уже взяла задача по расписанию — пересчёт идёт там.
+  if (!task) return { ...NO_DUES, pending: true };
+  return runTask(deps, task, Date.now() + INLINE_MS);
+}
+
+/**
+ * Догон очереди пересчёта (Issue «фоновой работой с пределом времени, безопасно при повторе»): каждые
+ * 5 минут строки, которые не довели до конца сразу после сохранения (кончилось время, ошибка базы,
+ * функцию оборвали), проходятся заново до `JOB_MS`; выполненные старше 30 дней удаляются.
+ */
+export const duesRecalcJob: Job = {
+  name: 'platform-dicts.dues-recalc',
+  cron: '*/5 * * * *',
+  lookbackMinutes: 5,
+  async run(ctx) {
+    await cleanupDuesRecalcs(ctx.db, 30);
+    const until = Date.now() + JOB_MS;
+    while (Date.now() < until) {
+      const task = await claimDuesRecalc(ctx.db, {
+        leaseSeconds: LEASE_SECONDS,
+        olderThanSeconds: JOB_OLDER_THAN_SECONDS,
+      });
+      if (!task) return;
+      const outcome = await runTask(ctx, task, until);
+      ctx.logger.info(
+        { job: 'platform-dicts.dues-recalc', dues: task.id, ...outcome },
+        'сроки отчётов пересчитаны по очереди',
+      );
+    }
+  },
+};
+
+/* ───────────── Предпросмотры календаря и отката загрузки ───────────── */
+
 const CAL = '/admin/platform-dicts/calendar';
+const CALENDAR = { kind: 'calendar' } as const;
 
 export const adminCalendarAddDuesRoute = createRoute({
   method: 'post',
@@ -139,7 +297,7 @@ export const adminCalendarAddDuesRoute = createRoute({
       description: 'Отчёты и организации; день не сохраняется. День с ошибкой — нули',
       content: json(AdminDuesPreview),
     },
-    ...denied,
+    ...duesPreviewResponses,
   },
 });
 
@@ -149,8 +307,35 @@ export function adminCalendarAddDuesHandler(
   return async (c) => {
     const input = c.req.valid('json');
     const preview = await previewEdit(deps, c, async (tx) =>
-      (await adminCalendarAdd(tx, input, todayOf(deps))).ok ? { kind: 'calendar' } : false,
+      (await adminCalendarAdd(tx, input, todayOf(deps))).ok ? CALENDAR : false,
     );
+    return c.json(preview, 200);
+  };
+}
+
+export const adminCalendarCopyDuesRoute = createRoute({
+  method: 'post',
+  path: `${CAL}/copy/dues-preview`,
+  tags: ['platform-dicts'],
+  summary: 'Предпросмотр копирования календаря: у скольких несданных отчётов изменятся сроки',
+  middleware: [requirePlatformAdmin] as const,
+  responses: {
+    200: {
+      description: 'Отчёты и организации; календарь не копируется. Копировать нечего — нули',
+      content: json(AdminDuesPreview),
+    },
+    ...duesPreviewResponses,
+  },
+});
+
+export function adminCalendarCopyDuesHandler(
+  deps: ApiDeps,
+): RouteHandler<typeof adminCalendarCopyDuesRoute, AppEnv> {
+  return async (c) => {
+    const preview = await previewEdit(deps, c, async (tx) => {
+      const copied = await adminCalendarCopy(tx, todayOf(deps));
+      return copied.ok && copied.copied > 0 ? CALENDAR : false;
+    });
     return c.json(preview, 200);
   };
 }
@@ -167,7 +352,7 @@ export const adminCalendarDeleteDuesRoute = createRoute({
       description: 'Отчёты и организации; день не удаляется. Удалить нельзя — нули',
       content: json(AdminDuesPreview),
     },
-    ...denied,
+    ...duesPreviewResponses,
   },
 });
 
@@ -178,8 +363,38 @@ export function adminCalendarDeleteDuesHandler(
     const { key } = c.req.valid('param');
     const { version } = c.req.valid('query');
     const preview = await previewEdit(deps, c, async (tx) =>
-      (await adminCalendarDelete(tx, key, version)).ok ? { kind: 'calendar' } : false,
+      (await adminCalendarDelete(tx, key, version)).ok ? CALENDAR : false,
     );
+    return c.json(preview, 200);
+  };
+}
+
+export const dictLoadRollbackDuesRoute = createRoute({
+  method: 'post',
+  path: '/admin/platform-dict-loads/{id}/dues-preview',
+  tags: ['platform-dicts'],
+  summary: 'Предпросмотр отката загрузки: у скольких несданных отчётов изменятся сроки',
+  middleware: [requirePlatformAdmin] as const,
+  request: { params: AdminDictLoadIdParam },
+  responses: {
+    200: {
+      description: 'Отчёты и организации; загрузка не откатывается. Откатить нельзя — нули',
+      content: json(AdminDuesPreview),
+    },
+    ...duesPreviewResponses,
+  },
+});
+
+/** Вопрос «Откатить последнюю загрузку?»: тот же откат в транзакции, которая откатывается. */
+export function dictLoadRollbackDuesHandler(
+  deps: ApiDeps,
+): RouteHandler<typeof dictLoadRollbackDuesRoute, AppEnv> {
+  return async (c) => {
+    const { id } = c.req.valid('param');
+    const preview = await previewEdit(deps, c, async (tx) => {
+      const rolled = await rollbackDictLoad(tx, id);
+      return rolled.ok ? rolled.redue : false;
+    });
     return c.json(preview, 200);
   };
 }

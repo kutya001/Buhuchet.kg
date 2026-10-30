@@ -1,13 +1,31 @@
 import {
   effectiveRule,
+  nextWorkingDay,
   OPEN_REPORT_STATUSES,
+  periodStartOf,
   reportDue,
+  shiftPeriod,
+  type EffectiveRule,
   type IsoDate,
   type ProductionCalendar,
+  type ReportDue,
   type ReportPeriod,
   type StatusDueRule,
 } from '@buhuchet/domain';
-import { and, asc, count, eq, gte, inArray, isNull, lte, ne, or, sql, type SQL } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  eq,
+  gte,
+  inArray,
+  isNull,
+  lte,
+  not,
+  or,
+  sql,
+  type SQL,
+} from 'drizzle-orm';
 import type { Db, Tx } from './client';
 import { withOrgContext } from './context';
 import { writeHistory } from './history';
@@ -16,8 +34,8 @@ import { assignmentRule, calendarOf, reportTypeInfos, type ReportTypeInfo } from
 import {
   assignments,
   contractorBenefits,
+  reportDueChanges,
   reports,
-  reportTypes,
   taxBenefitDueRules,
   taxBenefits,
 } from './schema';
@@ -27,11 +45,14 @@ import {
  * каталога влияет на сроки уже созданных отчётов, система показывает, сколько несданных отчётов в
  * скольких организациях изменится, и пересчитывает только их»; прототип recalcDues, typeEditDlg,
  * importDictDlg): после правки производственного календаря, правила срока вида отчёта, «Меняет сроки»
- * статуса и загрузки из Excel. Отбор и расчёт — как у `redueContractorReports`: несданные, не
- * заменённые уточнённым, без ручного срока и не разовые, срок — `reportDue` по правилу назначения.
- * Каждая организация — своей транзакцией `withOrgContext` с пределом времени задач; повтор безопасен:
- * второй раз сроки уже совпадают. Предпросмотр считает тем же кодом без записи — по каталогу, который
- * прочитан в ещё не завершённой (или откатываемой) транзакции администратора (`DueCatalog`).
+ * статуса и загрузки из Excel. Пересчитываются несданные, не заменённые уточнённым, без ручного срока.
+ * Правка календаря заново переносит на рабочий день хранимый срок по закону (`dueBase`), как прототип
+ * recalcDues. Правка правила вида или статуса считает срок заново по правилу назначения (`reportDue`,
+ * как `redueContractorReports`) — кроме разовых видов, уточнённых и созданных через «Разовый отчёт»:
+ * их срок задан не правилом (ОТКЛОНЕНИЕ: docs/deviations.md#Д-18). Каждая организация — своей
+ * транзакцией `withOrgContext`; повтор безопасен: второй раз сроки уже совпадают. Предпросмотр считает
+ * тем же кодом без записи — по каталогу, который прочитан в ещё не завершённой (или откатываемой)
+ * транзакции администратора (`DueCatalog`).
  */
 
 /** Правила сроков платформы: виды отчётов, «Меняет сроки» статусов и производственный календарь. */
@@ -108,19 +129,54 @@ export function mergeRedueScopes(scopes: readonly (RedueScope | null)[]): RedueS
   return null;
 }
 
+/** Отчёт создан через «Разовый отчёт»: его первая запись изменения срока — без прежнего срока. */
+const createdByHand = sql`exists (select 1 from ${reportDueChanges} where ${reportDueChanges.orgId} = ${reports.orgId} and ${reportDueChanges.reportId} = ${reports.id} and ${reportDueChanges.fromDue} is null)`;
+
+/**
+ * Срок по правилу — только у отчётов, созданных по правилу: не разового вида (дата события), не
+ * уточнённых и не созданных вручную.
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#Д-18
+const byRule = and(isNull(reports.eventDate), eq(reports.revision, 0), not(createdByHand));
+
 /** Отбор отчётов области в SQL. */
 function scopeSql(scope: RedueScope): SQL | undefined {
   switch (scope.kind) {
     case 'types':
-      return inArray(reports.reportTypeCode, [...scope.codes]);
+      return and(inArray(reports.reportTypeCode, [...scope.codes]), byRule);
     case 'statuses':
-      return inArray(
-        reports.contractorId,
-        sql`(select ${contractorBenefits.contractorId} from ${contractorBenefits} where ${inArray(contractorBenefits.benefitCode, [...scope.codes])})`,
+      return and(
+        inArray(
+          reports.contractorId,
+          sql`(select ${contractorBenefits.contractorId} from ${contractorBenefits} where ${inArray(contractorBenefits.benefitCode, [...scope.codes])})`,
+        ),
+        byRule,
       );
     case 'calendar':
       return undefined;
   }
+}
+
+/**
+ * Правка календаря (прототип recalcDues): хранимый срок по закону заново переносится на рабочий день.
+ * Срок оплаты без своего правила идёт за сроком сдачи (как `payFollowsDue`), со своим — переносится
+ * по правилу вида; у отчёта не своего периода (сменилась периодичность) остаётся прежним.
+ */
+function calendarDue(
+  r: typeof reports.$inferSelect,
+  rule: EffectiveRule,
+  calendar: ProductionCalendar,
+): ReportDue {
+  const due = rule.shiftToWorkday ? nextWorkingDay(calendar, r.dueBase) : r.dueBase;
+  if (r.payDue === null) return { base: r.dueBase, due, payDue: null };
+  if (r.eventDate !== null || rule.payDay === null) return { base: r.dueBase, due, payDue: due };
+  if (rule.period !== r.period) return { base: r.dueBase, due, payDue: r.payDue };
+  const { payDue } = reportDue(
+    { ...rule, act: r.act },
+    { period: r.period, start: r.periodStart },
+    calendar,
+  );
+  return { base: r.dueBase, due, payDue };
 }
 
 /**
@@ -166,8 +222,9 @@ async function contractorStatuses(
 /**
  * Пересчитать (или, без `write`, только посчитать) сроки несданных отчётов организации из контекста
  * `withOrgContext`: отвечает, у скольких отчётов срок сдачи или оплаты меняется. С `write` каждый такой
- * отчёт получает новые сроки и запись в историю «было → стало» с причиной. Каталог по умолчанию —
- * сохранённый (`dueCatalog`).
+ * отчёт получает новые сроки и запись в историю «было → стало» с причиной. Сдвинулся только срок по
+ * закону, а видимые сроки те же (оба дня переносятся на один рабочий) — он сохраняется молча: в счёт и
+ * в историю такой отчёт не идёт. Каталог по умолчанию — сохранённый (`dueCatalog`).
  */
 export async function redueOpenReports(
   tx: Tx,
@@ -211,17 +268,27 @@ export async function redueOpenReports(
   let changed = 0;
   for (const { r, a } of rows) {
     const type = catalog.types.get(r.reportTypeCode);
-    if (!type || type.oneOff) continue;
+    if (!type) continue;
     const status = rules.get(`${r.contractorId}:${r.reportTypeCode}`) ?? null;
     const rule = a ? assignmentRule(type, a, status) : effectiveRule(type, null, status);
-    if (rule.period !== r.period) continue;
-    // «Что сделать» — отчёта: он сохраняет своё, даже если вид потом поменяли (без оплаты — без срока).
-    const d = reportDue(
-      { ...rule, act: r.act },
-      { period: r.period, start: r.periodStart },
-      catalog.calendar,
-    );
-    if (d.due === r.dueDate && d.base === r.dueBase && d.payDue === r.payDue) continue;
+    let d: ReportDue;
+    if (scope.kind === 'calendar') {
+      d = calendarDue(r, rule, catalog.calendar);
+    } else {
+      if (type.oneOff || rule.period !== r.period) continue;
+      // «Что сделать» — отчёта: он сохраняет своё, даже если вид потом поменяли (без оплаты — без срока).
+      d = reportDue(
+        { ...rule, act: r.act },
+        { period: r.period, start: r.periodStart },
+        catalog.calendar,
+      );
+    }
+    if (d.due === r.dueDate && d.payDue === r.payDue) {
+      if (options.write && d.base !== r.dueBase) {
+        await tx.update(reports).set({ dueBase: d.base }).where(eq(reports.id, r.id));
+      }
+      continue;
+    }
     changed++;
     if (!options.write) continue;
     await tx
@@ -273,27 +340,34 @@ async function statusNames(tx: Tx, codes: readonly string[]): Promise<Map<string
 export interface RedueSummary {
   reports: number;
   orgs: number;
-  /** Организации, где пересчёт не прошёл и со второй попытки (ошибка базы). */
-  failed: string[];
+  /** Организации, где пересчёт не прошёл и со второй попытки, с ошибкой — для журнала. */
+  failed: { orgId: string; error: unknown }[];
+  /** Сколько организаций не начато: время прохода (`until`) кончилось. */
+  left: number;
 }
 
 /**
- * Пересчёт или предпросмотр во всех организациях: каждая — своей транзакцией с пределом времени задач,
- * не прошедшая со второй попытки не мешает остальным. Без `write` — только счёт (предпросмотр); тогда
- * ошибка поднимается: число в окне должно быть честным.
+ * Пересчёт или предпросмотр во всех организациях, каждая — своей транзакцией. Пересчёт идёт с пределом
+ * времени задач и до момента `until` (мс): организации, до которых не дошло, — в `left`, их догонит
+ * следующий проход; не прошедшая со второй попытки не мешает остальным. Предпросмотр (без `write`) —
+ * с пределом времени запроса API, и ошибка поднимается: число в окне должно быть честным.
  */
 export async function redueAllOrgs(
   db: Db,
   scope: RedueScope,
   today: IsoDate,
-  options: { write: boolean; texts: CatalogRedueTexts; catalog?: DueCatalog },
+  options: { write: boolean; texts: CatalogRedueTexts; catalog?: DueCatalog; until?: number },
 ): Promise<RedueSummary> {
-  const summary: RedueSummary = { reports: 0, orgs: 0, failed: [] };
-  for (const orgId of await orgIds(db)) {
+  const summary: RedueSummary = { reports: 0, orgs: 0, failed: [], left: 0 };
+  const ids = await orgIds(db);
+  for (const [i, orgId] of ids.entries()) {
+    if (options.until !== undefined && Date.now() >= options.until) {
+      summary.left = ids.length - i;
+      break;
+    }
+    const kind = options.write ? 'job' : 'request';
     const run = () =>
-      withOrgContext(db, { orgId, kind: 'job' }, (tx) =>
-        redueOpenReports(tx, scope, today, options),
-      );
+      withOrgContext(db, { orgId, kind }, (tx) => redueOpenReports(tx, scope, today, options));
     let n: number;
     try {
       n = await run();
@@ -301,8 +375,8 @@ export async function redueAllOrgs(
       if (!options.write) throw first;
       try {
         n = await run();
-      } catch {
-        summary.failed.push(orgId);
+      } catch (error) {
+        summary.failed.push({ orgId, error });
         continue;
       }
     }
@@ -341,35 +415,42 @@ export interface DueShiftExample {
 
 /**
  * Пример для пояснения вкладки «Календарь» (прототип renderPDicts: «Пример: <вид> за <период> —
- * дд.мм → дд.мм»): ближайший несданный отчёт без ручного срока, срок которого перенесён с нерабочего
- * дня, — в первой организации, где такой есть; без отчётов примера нет.
+ * дд.мм → дд.мм»): ближайший с сегодняшнего дня срок действующего вида по каталогу, который календарь
+ * переносит с нерабочего дня. Прототип берёт первый такой отчёт; здесь — каталог платформы, без данных
+ * организаций (docs/decisions.md п. Д-9). Переносов в ближайший год нет — примера нет.
  */
-export async function dueShiftExample(db: Db): Promise<DueShiftExample | null> {
-  for (const orgId of await orgIds(db)) {
-    const [row] = await withOrgContext(db, { orgId }, (tx) =>
-      tx
-        .select({
-          shortName: reportTypes.shortName,
-          period: reports.period,
-          periodStart: reports.periodStart,
-          dueBase: reports.dueBase,
-          dueDate: reports.dueDate,
-        })
-        .from(reports)
-        .innerJoin(reportTypes, eq(reportTypes.code, reports.reportTypeCode))
-        .where(
-          and(
-            ne(reports.dueDate, reports.dueBase),
-            inArray(reports.status, [...OPEN_REPORT_STATUSES]),
-            eq(reports.superseded, false),
-            eq(reports.dueManual, false),
-            isNull(reports.eventDate),
-          ),
-        )
-        .orderBy(asc(reports.dueDate))
-        .limit(1),
-    );
-    if (row) return row;
+export async function dueShiftExample(tx: Tx, today: IsoDate): Promise<DueShiftExample | null> {
+  const [types, calendar] = await Promise.all([reportTypeInfos(tx), calendarOf(tx)]);
+  const yearAhead = shiftPeriod('Y', today, 1);
+  let best: { code: string; example: DueShiftExample } | null = null;
+  for (const type of types.values()) {
+    if (!type.active || type.oneOff || !type.shiftToWorkday) continue;
+    const rule = effectiveRule(type, null, null);
+    const current = periodStartOf(rule.period, today);
+    // Первый период вида, чей срок ещё впереди и перенесён с нерабочего дня.
+    for (let k = -1; k <= 12; k++) {
+      const start = shiftPeriod(rule.period, current, k);
+      const d = reportDue(rule, { period: rule.period, start }, calendar);
+      if (d.due > yearAhead) break;
+      if (d.due < today || d.due === d.base) continue;
+      const better =
+        !best ||
+        d.due < best.example.dueDate ||
+        (d.due === best.example.dueDate && type.code < best.code);
+      if (better) {
+        best = {
+          code: type.code,
+          example: {
+            shortName: type.shortName,
+            period: rule.period,
+            periodStart: start,
+            dueBase: d.base,
+            dueDate: d.due,
+          },
+        };
+      }
+      break;
+    }
   }
-  return null;
+  return best?.example ?? null;
 }

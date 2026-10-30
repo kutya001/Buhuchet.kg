@@ -64,7 +64,7 @@ import { apiFail, listQueryOf, listQueryResponses, versionedSaveResponses } from
 import { exportRateResponses, withExportSlot, xlsxContent, xlsxResponse } from '../../lists/export';
 import { requirePlatformAdmin } from '../../middleware/access';
 import { serverTexts } from '../l10n/texts';
-import { duesCounter, previewEdit, recalcDues } from './admin-dues';
+import { countEdit, duesPreviewResponses, previewEdit, queued, recalcQueued } from './admin-dues';
 
 /*
  * Админка → «Справочники платформы» (задача 2.36; ТЗ «Общие правила для всех справочников»; прототип
@@ -644,12 +644,25 @@ export function updateAdminDictValueHandler(
     const { version, ...form } = c.req.valid('json');
     const input = inputOf(dict, form);
     checkRequired(dict, input);
+    // У статуса в историю — «сроки по статусу пересчитаны у N отчётов»: N — тем же предпросмотром до
+    // транзакции правки (по всем организациям — не внутри неё).
+    const recalculated =
+      dict === 'benefits'
+        ? (
+            await countEdit(deps, c, async (tx) => {
+              const saved = await adminDictUpdate(tx, dict, code, input, version);
+              return saved.ok ? (saved.redue ?? null) : false;
+            })
+          ).reports
+        : undefined;
     const result = await saving(() =>
-      adminTx(deps, c, (tx) => adminDictUpdate(tx, dict, code, input, version, duesCounter(deps))),
+      adminTx(deps, c, async (tx) =>
+        queued(tx, await adminDictUpdate(tx, dict, code, input, version, recalculated)),
+      ),
     );
     if (!result.ok) return failOf(deps, c, result, dict, code);
     // Сроки несданных отчётов — после сохранения, каждая организация своей транзакцией.
-    await recalcDues(deps, result.redue);
+    await recalcQueued(deps, result.queued);
     return c.json(valueBody(result.record), 200);
   };
 }
@@ -670,7 +683,7 @@ export const adminDictDuesPreviewRoute = createRoute({
         'Отчёты и организации; правка не сохраняется. Правка с ошибкой или без влияния на сроки — нули',
       content: json(AdminDuesPreview),
     },
-    ...denied,
+    ...duesPreviewResponses,
   },
 });
 
@@ -748,11 +761,12 @@ export function setAdminDictActiveHandler(
   return async (c) => {
     const { dict, code } = c.req.valid('param');
     const { active, version } = c.req.valid('json');
-    const result = await adminTx(deps, c, (tx) =>
-      adminDictSetActive(tx, dict, code, active, version),
+    const result = await adminTx(deps, c, async (tx) =>
+      queued(tx, await adminDictSetActive(tx, dict, code, active, version)),
     );
     if (!result.ok) return failOf(deps, c, result, dict, code);
-    await recalcDues(deps, result.redue);
+    // ОТКЛОНЕНИЕ: docs/deviations.md#Д-17 — статус со своими сроками: сроки по каталогу без числа заранее.
+    await recalcQueued(deps, result.queued);
     return c.json(valueBody(result.record), 200);
   };
 }

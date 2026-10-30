@@ -22,6 +22,7 @@ import { useGridLabels } from '../lists/grid-labels';
 import { useListPage } from '../lists/use-list-page';
 import { useViewSettings } from '../lists/view-settings';
 import { useShell } from '../shell/context';
+import { spreadText, useDuesPreview } from './dues-preview';
 import { fetchDictLoads, fetchDictLoadValues, usePdictsRefresh } from './pdicts-data';
 
 const loads = api.api.admin['platform-dict-loads'];
@@ -114,6 +115,27 @@ export function loadColumns(t: Translate): GridColumn<AdminDictLoad>[] {
  * rollbackLoad): загрузки всех справочников, сначала новые; «Откатить» — только у последней, после
  * вопроса.
  */
+/**
+ * Вопрос «Откатить последнюю загрузку?» (прототип rollbackLoad): что вернётся и — по ответу сервера —
+ * у скольких несданных отчётов в скольких организациях изменятся сроки (ТЗ «система показывает,
+ * сколько несданных отчётов в скольких организациях изменится»).
+ */
+function RollbackText({ load }: { load: AdminDictLoad }) {
+  const t = useT();
+  const { dues } = useDuesPreview(`loads:rollback:${load.id}`, load.id, (id, signal) =>
+    loads[':id']['dues-preview'].$post({ param: { id } }, { init: { signal } }),
+  );
+  const text = t('pdicts.loads.rollback.text', {
+    dict: t(`pdicts.title.${load.dict}`),
+    at: moment(load.at),
+    added: load.added,
+    changed: load.changed + load.disabled,
+  });
+  return dues && dues.reports > 0
+    ? `${text} ${t('pdicts.cal.dues', { spread: spreadText(t, dues) })}`
+    : text;
+}
+
 export function LoadsList() {
   const t = useT();
   const toast = useToast();
@@ -208,16 +230,7 @@ export function LoadsList() {
         open={asking !== null}
         onClose={() => setAsking(null)}
         title={t('pdicts.loads.rollback.title')}
-        text={
-          asking
-            ? t('pdicts.loads.rollback.text', {
-                dict: t(`pdicts.title.${asking.dict}`),
-                at: moment(asking.at),
-                added: asking.added,
-                changed: asking.changed + asking.disabled,
-              })
-            : ''
-        }
+        text={asking ? <RollbackText load={asking} /> : ''}
         ok={t('pdicts.loads.action.rollback')}
         danger
         onConfirm={() => asking && void rollback(asking)}

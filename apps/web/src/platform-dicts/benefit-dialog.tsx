@@ -36,7 +36,7 @@ import { Controller, useForm, useWatch, type FieldError, type Path } from 'react
 import { api, apiFailure, callApi } from '../api-client';
 import { fieldError } from '../auth/fields';
 import { useErrorText, useT } from '../l10n/provider';
-import { spreadText, useDuesPreview } from './dues-preview';
+import { duesNote, useDuesPreview } from './dues-preview';
 import { fetchAdminDictValue, reportTypeOptionsQuery } from './pdicts-data';
 
 const pd = api.api.admin['platform-dicts'];
@@ -157,11 +157,12 @@ export function BenefitDialog({
   const dues = useDuesPreview(
     `benefits:${current?.code ?? ''}`,
     current && parsed?.success ? { ...parsed.data, version: current.version } : null,
-    (json) =>
-      pd[':dict'][':code']['dues-preview'].$post({
-        param: { dict: 'benefits', code: current!.code },
-        json,
-      }),
+    (json, signal) =>
+      pd[':dict'][':code']['dues-preview'].$post(
+        { param: { dict: 'benefits', code: current!.code }, json },
+        { init: { signal } },
+      ),
+    v.dueRules ?? [],
   );
 
   const reload = async () => {
@@ -515,9 +516,9 @@ export function BenefitDialog({
           {rulesChanged ? (
             <div data-full="" className="col-span-full">
               <Note tone="warn">
-                {dues
-                  ? t('pdicts.benefit.dues', { spread: spreadText(t, dues) })
-                  : t('pdicts.cal.dues_wait')}
+                {parsed?.success
+                  ? duesNote(t, dues, 'pdicts.benefit.dues')
+                  : t('pdicts.dues.later')}
               </Note>
             </div>
           ) : null}

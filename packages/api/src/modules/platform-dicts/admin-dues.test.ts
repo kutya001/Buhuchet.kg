@@ -16,10 +16,28 @@ import {
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { apiRequest, createStaffFixture, signIn, TEST_ORIGIN, TEST_PASSWORD } from '../../testing';
+import { DUES_PREVIEW_RATE_LIMIT, duesRecalcJob } from './admin-dues';
 
 type Fixture = Awaited<ReturnType<typeof createStaffFixture>>;
 
-const { auditLog, contractorBenefits, contractors, productionCalendar, reports } = schema;
+/**
+ * Пример переноса вкладки «Календарь» по каталогу на 18.10.2026: срок вида 18-го числа после квартала
+ * выпадает на воскресенье и переносится на понедельник.
+ */
+const EXAMPLE = { type: '65-автом', period: 'III кв. 2026', from: '2026-10-18', to: '2026-10-19' };
+
+const {
+  auditLog,
+  contractorBenefits,
+  contractors,
+  duesRecalcs,
+  platformAuditLog,
+  productionCalendar,
+  rateLimits,
+  reports,
+  reportTypes,
+  users,
+} = schema;
 
 // Сегодня в тестах — 18.10.2026 (`createTestDeps`). НДС за октябрь — до 25.11.2026 (среда).
 describe.skipIf(!databaseAvailable())(
@@ -140,6 +158,8 @@ describe.skipIf(!databaseAvailable())(
         [`${P}/types/nds/dues-preview`, bodyOf(nds, { dueDay: 20 })],
         [`${P}/calendar/dues-preview`, { date: '2026-11-25', type: 'off', name: 'Перенос' }],
         [`${P}/calendar/03-08/dues-preview?version=1`, undefined],
+        [`${P}/calendar/copy/dues-preview`, undefined],
+        [`/api/admin/platform-dict-loads/${crypto.randomUUID()}/dues-preview`, undefined],
       ];
       for (const [path, body] of calls) {
         expect((await send('POST', path, body, owner)).status, path).toBe(403);
@@ -162,21 +182,23 @@ describe.skipIf(!databaseAvailable())(
 
       const res = await send('POST', `${P}/calendar`, holiday);
       expect(res.status, await res.clone().text()).toBe(201);
-      expect(AdminCalendarChanged.parse(await res.json())).toEqual({ recalculated: 3 });
+      expect(AdminCalendarChanged.parse(await res.json())).toEqual({
+        recalculated: 3,
+        pending: false,
+      });
       expect(await october(...ids)).toEqual([
         [0, '2026-11-26', '2026-11-26', false],
         [1, '2026-11-27', '2026-11-27', true],
         [2, '2026-11-30', '2026-11-26', false],
         [3, '2026-11-26', '2026-11-26', false],
       ]);
-      // Пояснение вкладки — пример переноса (прототип): ближайший перенесённый срок.
-      const list = AdminCalendarList.parse(await (await send('GET', `${P}/calendar`)).json());
-      expect(list.example).toEqual({
-        type: 'НДС',
-        period: '10.2026',
-        from: '2026-11-25',
-        to: '2026-11-26',
-      });
+      // Пересчёт прошёл сразу после сохранения: строка очереди выполнена.
+      const [task] = await f.t.admin.db
+        .select()
+        .from(duesRecalcs)
+        .where(eq(duesRecalcs.kind, 'calendar'));
+      expect(task).toMatchObject({ reports: 3, orgs: 2, attempts: 1, lastError: null });
+      expect(task!.doneAt).not.toBeNull();
 
       // В истории отчёта организации — было → стало с причиной.
       const [entry] = await f.t.admin.db
@@ -210,14 +232,47 @@ describe.skipIf(!databaseAvailable())(
       });
       expect((await send('DELETE', `${del}?version=${day!.version}`)).status).toBe(204);
       expect(await october(...ids)).toEqual(before);
-      const again = AdminCalendarList.parse(await (await send('GET', `${P}/calendar`)).json());
-      expect(again.example).toBeNull();
 
       // «Календарь на следующий год копированием»: сроки отчётов этого года не меняются.
       const plan = AdminCalendarCopyPlan.parse(
         await (await send('GET', `${P}/calendar/copy`)).json(),
       );
-      expect(plan.dues).toEqual({ reports: 0, orgs: 0 });
+      expect(plan.items.length).toBeGreaterThan(0);
+      expect(await dues(`${P}/calendar/copy/dues-preview`)).toEqual({ reports: 0, orgs: 0 });
+      expect(
+        AdminCalendarCopyPlan.parse(await (await send('GET', `${P}/calendar/copy`)).json()),
+      ).toEqual(plan);
+    });
+
+    it('пример переноса на вкладке «Календарь» — из каталога: ближайший срок, перенесённый с нерабочего дня', async () => {
+      const list = AdminCalendarList.parse(await (await send('GET', `${P}/calendar`)).json());
+      expect(list.example).toEqual(EXAMPLE);
+    });
+
+    it('неверные параметры предпросмотра — 400; предпросмотр не пишет историю и не меняет версию', async () => {
+      for (const path of [
+        `${P}/calendar/xx/dues-preview?version=1`,
+        `${P}/calendar/2026-11-25/dues-preview`,
+        `/api/admin/platform-dict-loads/not-a-uuid/dues-preview`,
+        `${P}/unknown/nds/dues-preview`,
+      ]) {
+        expect((await send('POST', path, {})).status, path).toBe(400);
+      }
+      expect((await send('POST', `${P}/calendar/dues-preview`, { date: 1 })).status).toBe(400);
+
+      const path = `${P}/benefits/${encodeURIComponent('ЛЬГ-30')}`;
+      const raw = await value(path);
+      const big = { ...raw, data: { ...raw.data, validUntil: raw.data.validUntil ?? '' } };
+      const audit = async () =>
+        (await f.t.admin.db.select({ id: platformAuditLog.id }).from(platformAuditLog)).length;
+      const written = await audit();
+      expect(await dues(`${path}/dues-preview`, bodyOf(big, { dueRules: [] }))).toEqual({
+        reports: 1,
+        orgs: 1,
+      });
+      expect(await audit()).toBe(written);
+      expect((await value(path)).version).toBe(raw.version);
+      expect((await october(cpBig))[0]).toEqual([0, '2026-11-30', '2026-11-25', false]);
     });
 
     it('вид отчёта: предпросмотр правки правила срока и пересчёт после «Сохранить»; отчёты вида в окне', async () => {
@@ -305,11 +360,16 @@ describe.skipIf(!databaseAvailable())(
 
       const applied = await upload(`${IO}/types/apply?stamp=${preview.stamp}`, text);
       expect(applied.status, await applied.clone().text()).toBe(200);
-      const { load, preview: done } = AdminDictImportApplied.parse(await applied.json());
-      expect(done.dues).toEqual({ reports: 2, orgs: 2 });
+      const { load, preview: done, pending } = AdminDictImportApplied.parse(await applied.json());
+      expect([done.dues, pending]).toEqual([{ reports: 2, orgs: 2 }, false]);
       // Отчёт сохраняет «Сдача + уплата»; своего срока оплаты у вида больше нет — он равен сроку сдачи.
       expect((await october(cpA))[0]).toEqual([0, '2026-11-20', '2026-11-20', false]);
 
+      // Вопрос «Откатить последнюю загрузку?» — сколько сроков изменится; загрузка остаётся.
+      expect(await dues(`/api/admin/platform-dict-loads/${load.id}/dues-preview`)).toEqual({
+        reports: 2,
+        orgs: 2,
+      });
       const rolled = await apiRequest(
         f.app,
         'POST',
@@ -318,6 +378,76 @@ describe.skipIf(!databaseAvailable())(
       );
       expect(rolled.status, await rolled.clone().text()).toBe(200);
       expect(AdminDictLoad.parse(await rolled.json()).rolledBackAt).not.toBeNull();
+      expect((await october(cpA, cpB)).map((r) => r[1])).toEqual(['2026-11-25', '2026-11-25']);
+      // Откаченную — откатить нельзя: нули.
+      expect(await dues(`/api/admin/platform-dict-loads/${load.id}/dues-preview`)).toEqual({
+        reports: 0,
+        orgs: 0,
+      });
+    });
+
+    it('предпросмотров у администратора — не больше предела за час: дальше 429', async () => {
+      const [me] = await f.t.admin.db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.login, 'platform-admin'));
+      await f.t.admin.db.insert(rateLimits).values(
+        Array.from({ length: DUES_PREVIEW_RATE_LIMIT.max }, () => ({
+          kind: DUES_PREVIEW_RATE_LIMIT.kind,
+          subject: me!.id,
+        })),
+      );
+      try {
+        const res = await send('POST', `${P}/calendar/copy/dues-preview`);
+        expect(res.status).toBe(429);
+        expect(((await res.json()) as { error: { code: string } }).error.code).toBe(
+          'dues_preview_limit',
+        );
+      } finally {
+        await f.t.admin.db.delete(rateLimits).where(eq(rateLimits.subject, me!.id));
+      }
+    });
+
+    it('пересчёт, который не прошёл сразу после сохранения, догоняет задача по расписанию', async () => {
+      // Правило вида изменено, а строка очереди осталась невыполненной (функцию оборвали).
+      await f.t.admin.db.update(reportTypes).set({ dueDay: 20 }).where(eq(reportTypes.code, 'nds'));
+      try {
+        const [row] = await f.t.admin.db
+          .insert(duesRecalcs)
+          .values({
+            kind: 'types',
+            codes: ['nds'],
+            createdAt: sql`now() - interval '10 minutes'`,
+            attempts: 1,
+            claimedUntil: sql`now() - interval '1 minute'`,
+          })
+          .returning({ id: duesRecalcs.id });
+        await duesRecalcJob.run(f.deps, new Date());
+        expect((await october(cpA, cpB)).map((r) => r[1])).toEqual(['2026-11-20', '2026-11-20']);
+        const [done] = await f.t.admin.db
+          .select()
+          .from(duesRecalcs)
+          .where(eq(duesRecalcs.id, row!.id));
+        expect(done).toMatchObject({ attempts: 2, reports: 2, orgs: 2, lastError: null });
+        expect(done!.doneAt).not.toBeNull();
+        // Повтор задачи ничего не делает: строка выполнена.
+        await duesRecalcJob.run(f.deps, new Date());
+        expect(
+          (await f.t.admin.db.select().from(duesRecalcs).where(eq(duesRecalcs.id, row!.id)))[0]!
+            .attempts,
+        ).toBe(2);
+      } finally {
+        await f.t.admin.db
+          .update(reportTypes)
+          .set({ dueDay: 25 })
+          .where(eq(reportTypes.code, 'nds'));
+        await f.t.admin.db.insert(duesRecalcs).values({
+          kind: 'types',
+          codes: ['nds'],
+          createdAt: sql`now() - interval '10 minutes'`,
+        });
+        await duesRecalcJob.run(f.deps, new Date());
+      }
       expect((await october(cpA, cpB)).map((r) => r[1])).toEqual(['2026-11-25', '2026-11-25']);
     });
   },

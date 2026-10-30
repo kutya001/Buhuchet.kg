@@ -1,4 +1,4 @@
-import { formatText, UI_TEXTS } from '@buhuchet/domain';
+import { formatText, reportDue, effectiveRule, UI_TEXTS } from '@buhuchet/domain';
 import { and, asc, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { adminCalendarAdd, adminCalendarDelete } from './admin-calendar';
@@ -9,16 +9,37 @@ import { withOrgContext } from './context';
 import { createContractor, type ContractorFields } from './contractors';
 import { readHistory } from './history';
 import { createOrganization, type CreatedOrganization } from './organizations';
-import { createAssignment, type AssignmentInput, type AssignmentTexts } from './reports';
+import {
+  claimDuesRecalc,
+  cleanupDuesRecalcs,
+  DUES_RECALC_ATTEMPTS,
+  enqueueDuesRecalc,
+  finishDuesRecalc,
+} from './dues-recalcs';
+import {
+  createAssignment,
+  createManualReport,
+  createRevision,
+  type AssignmentInput,
+  type AssignmentTexts,
+} from './reports';
 import {
   dueCatalog,
+  dueShiftExample,
   mergeRedueScopes,
   redueAllOrgs,
   redueOpenReports,
   type CatalogRedueTexts,
   type DueCatalog,
 } from './reports-redue';
-import { productionCalendar, reports, reportTypes, taxBenefitDueRules, users } from './schema';
+import {
+  duesRecalcs,
+  productionCalendar,
+  reports,
+  reportTypes,
+  taxBenefitDueRules,
+  users,
+} from './schema';
 import { seedPermissions, seedRoleTemplates } from './seed';
 import { readSpecJson } from './spec-data';
 import {
@@ -37,6 +58,8 @@ const TEXTS: CatalogRedueTexts = {
   byStatusDropped: t('report.reason.due_catalog_dropped'),
   byCatalog: t('report.reason.due_catalog'),
 };
+/** Нерабочий день на срок НДС за октябрь. */
+const HOLIDAY = { date: '2026-11-25', type: 'off' as const, name: 'Перенос' };
 const ASSIGNMENT_TEXTS: AssignmentTexts = {
   ended: 'Назначение снято',
   restored: 'Назначено снова',
@@ -227,7 +250,7 @@ describe.skipIf(!databaseAvailable())(
       expect(await dues(b, cpB)).toEqual(['2026-11-25', '2026-11-25', '2026-11-25']);
       // «Крупный налогоплательщик»: сдача — до последнего дня, уплата — до 25-го (ст. 319).
       expect(await dues(a, cpBig)).toEqual(['2026-11-30', '2026-11-30', '2026-11-25']);
-      const holiday = { date: '2026-11-25', type: 'off' as const, name: 'Перенос' };
+      const holiday = HOLIDAY;
 
       // Предпросмотр: день не сохраняется, счёт — тем же кодом по каталогу с ним.
       const catalog = await previewCatalog((tx) => adminCalendarAdd(tx, holiday, TODAY));
@@ -236,7 +259,7 @@ describe.skipIf(!databaseAvailable())(
         texts: TEXTS,
         catalog,
       });
-      expect(preview).toEqual({ reports: 3, orgs: 2, failed: [] });
+      expect(preview).toEqual({ reports: 3, orgs: 2, failed: [], left: 0 });
       expect(
         await db.admin.db
           .select()
@@ -275,7 +298,7 @@ describe.skipIf(!databaseAvailable())(
       // Повтор ничего не меняет.
       expect(
         await redueAllOrgs(db.app.db, { kind: 'calendar' }, TODAY, { write: true, texts: TEXTS }),
-      ).toEqual({ reports: 0, orgs: 0, failed: [] });
+      ).toEqual({ reports: 0, orgs: 0, failed: [], left: 0 });
 
       // Удаление дня возвращает сроки.
       const [day] = await db.admin.db
@@ -309,7 +332,7 @@ describe.skipIf(!databaseAvailable())(
         // А: октябрь cpA (ноябрь сдан) и ноябрь с ручным октябрём; у «Крупного» сроки по статусу.
         expect(counted).toBe(2);
         const summary = await redueAllOrgs(db.app.db, scope, TODAY, { write: true, texts: TEXTS });
-        expect(summary).toEqual({ reports: 2 + 2, orgs: 2, failed: [] });
+        expect(summary).toEqual({ reports: 2 + 2, orgs: 2, failed: [], left: 0 });
         expect(await dues(a, cpBig)).toEqual(['2026-11-30', '2026-11-30', '2026-11-25']);
         // Уплата НДС — своим правилом (до 25-го), оно не менялось.
         expect(await dues(a, cpA)).toEqual(['2026-11-20', '2026-11-20', '2026-11-25']);
@@ -350,13 +373,13 @@ describe.skipIf(!databaseAvailable())(
           texts: TEXTS,
           catalog: without,
         }),
-      ).toEqual({ reports: 2, orgs: 1, failed: [] });
+      ).toEqual({ reports: 2, orgs: 1, failed: [], left: 0 });
 
       await db.admin.db
         .delete(taxBenefitDueRules)
         .where(eq(taxBenefitDueRules.benefitCode, 'ЛЬГ-30'));
       const summary = await redueAllOrgs(db.app.db, scope, TODAY, { write: true, texts: TEXTS });
-      expect(summary).toEqual({ reports: 2, orgs: 1, failed: [] });
+      expect(summary).toEqual({ reports: 2, orgs: 1, failed: [], left: 0 });
       const big = await october(a, cpBig);
       expect([big.dueDate, big.payDue]).toEqual(['2026-11-25', '2026-11-25']);
       const dropped = await inOrg(a, (tx) => readHistory(tx, 'report', big.id));
@@ -427,6 +450,207 @@ describe.skipIf(!databaseAvailable())(
         sql`select count(*)::int as n from reports where due_date <> due_base and not due_manual`,
       );
       expect(left?.n).toBe(0);
+    });
+
+    it('уточнённый и «Разовый отчёт»: правило вида их срок не меняет, календарь переносит их срок по закону', async () => {
+      // «Разовый отчёт» за август со сроком, заданным руками, и уточнённый июльский.
+      const [manual, revision] = await inOrg(b, async (tx) => {
+        const made = (month: string) =>
+          createManualReport(
+            tx,
+            {
+              contractorId: cpB,
+              reportTypeCode: 'nds',
+              month,
+              eventDate: null,
+              due: '2026-11-25',
+              reasonCode: 'ПРЧ-001',
+              reasonName: 'Запрос органа',
+            },
+            { today: TODAY, scope: undefined },
+          );
+        const august = await made('2026-08-01');
+        const july = await made('2026-07-01');
+        await tx.update(reports).set({ status: 'submitted' }).where(eq(reports.id, july.id));
+        const next = await createRevision(tx, july.id, {
+          version: july.version,
+          today: TODAY,
+          scope: undefined,
+        });
+        return [august, next];
+      });
+      expect([manual.dueBase, manual.dueDate, manual.dueManual]).toEqual([
+        '2026-11-25',
+        '2026-11-25',
+        false,
+      ]);
+      expect([revision.revision, revision.dueBase, revision.dueDate]).toEqual([
+        1,
+        '2026-11-25',
+        '2026-11-25',
+      ]);
+      const byId = async (id: string) =>
+        (await inOrg(b, (tx) => tx.select().from(reports).where(eq(reports.id, id))))[0]!;
+
+      // Правило срока вида: только отчёты по назначению (октябрь и ноябрь), их срок — не правило.
+      await db.admin.db.update(reportTypes).set({ dueDay: 20 }).where(eq(reportTypes.code, 'nds'));
+      try {
+        const types = { kind: 'types', codes: ['nds'] } as const;
+        expect(
+          await inOrg(b, (tx) => redueOpenReports(tx, types, TODAY, { write: true, texts: TEXTS })),
+        ).toBe(2);
+        expect((await byId(manual.id)).dueDate).toBe('2026-11-25');
+        expect((await byId(revision.id)).dueDate).toBe('2026-11-25');
+      } finally {
+        await db.admin.db
+          .update(reportTypes)
+          .set({ dueDay: 25 })
+          .where(eq(reportTypes.code, 'nds'));
+        await redueAllOrgs(db.app.db, { kind: 'types', codes: ['nds'] }, TODAY, {
+          write: true,
+          texts: TEXTS,
+        });
+      }
+
+      // Календарь: срок по закону переносится на рабочий день у всех, срок оплаты своим правилом — за
+      // свой период; срок по закону не меняется.
+      expect(await asAdmin((tx) => adminCalendarAdd(tx, HOLIDAY, TODAY))).toEqual({ ok: true });
+      try {
+        const counted = await inOrg(b, (tx) =>
+          redueOpenReports(tx, { kind: 'calendar' }, TODAY, { write: true, texts: TEXTS }),
+        );
+        // Октябрь по назначению, август вручную и уточнённый июль.
+        expect(counted).toBe(3);
+        const [m, r] = [await byId(manual.id), await byId(revision.id)];
+        expect([m.dueBase, m.dueDate, m.payDue]).toEqual([
+          '2026-11-25',
+          '2026-11-26',
+          '2026-09-25',
+        ]);
+        expect([r.dueBase, r.dueDate, r.payDue]).toEqual([
+          '2026-11-25',
+          '2026-11-26',
+          '2026-08-25',
+        ]);
+        const history = await inOrg(b, (tx) => readHistory(tx, 'report', manual.id));
+        expect(history.at(-1)).toMatchObject({
+          reason: 'Изменён производственный календарь',
+          changes: [{ field: 'dueDate', from: '2026-11-25', to: '2026-11-26' }],
+        });
+      } finally {
+        const [day] = await db.admin.db
+          .select()
+          .from(productionCalendar)
+          .where(eq(productionCalendar.day, HOLIDAY.date));
+        await asAdmin((tx) => adminCalendarDelete(tx, HOLIDAY.date, day!.version));
+        await redueAllOrgs(db.app.db, { kind: 'calendar' }, TODAY, { write: true, texts: TEXTS });
+      }
+      expect((await byId(manual.id)).dueDate).toBe('2026-11-25');
+    });
+
+    it('сдвинулся только срок по закону: сохраняется молча — без счёта и записи в историю', async () => {
+      const types = { kind: 'types', codes: ['nds'] } as const;
+      const historyOf = async () =>
+        inOrg(a, async (tx) => readHistory(tx, 'report', (await october(a, cpA)).id));
+      // 28.11.2026 — суббота, 29.11 — воскресенье: оба переносятся на понедельник 30.11.
+      try {
+        await db.admin.db
+          .update(reportTypes)
+          .set({ dueDay: 28 })
+          .where(eq(reportTypes.code, 'nds'));
+        await redueAllOrgs(db.app.db, types, TODAY, { write: true, texts: TEXTS });
+        expect(await dues(a, cpA)).toEqual(['2026-11-28', '2026-11-30', '2026-11-25']);
+        const before = (await historyOf()).length;
+        await db.admin.db
+          .update(reportTypes)
+          .set({ dueDay: 29 })
+          .where(eq(reportTypes.code, 'nds'));
+        // Октябрьские отчёты не в счёт; ноябрьские (срок в декабре: 28 → 29, вторник) — в счёт.
+        expect(await redueAllOrgs(db.app.db, types, TODAY, { write: true, texts: TEXTS })).toEqual({
+          reports: 2,
+          orgs: 2,
+          failed: [],
+          left: 0,
+        });
+        expect(await dues(a, cpA)).toEqual(['2026-11-29', '2026-11-30', '2026-11-25']);
+        expect((await historyOf()).length).toBe(before);
+      } finally {
+        await db.admin.db
+          .update(reportTypes)
+          .set({ dueDay: 25 })
+          .where(eq(reportTypes.code, 'nds'));
+        await redueAllOrgs(db.app.db, types, TODAY, { write: true, texts: TEXTS });
+      }
+      expect(await dues(a, cpA)).toEqual(['2026-11-25', '2026-11-25', '2026-11-25']);
+    });
+
+    it('проход по организациям останавливается к сроку: до остальных не дошло — их число в `left`', async () => {
+      const summary = await redueAllOrgs(db.app.db, { kind: 'calendar' }, TODAY, {
+        write: true,
+        texts: TEXTS,
+        until: 0,
+      });
+      expect(summary).toMatchObject({ reports: 0, orgs: 0, failed: [] });
+      expect(summary.left).toBeGreaterThanOrEqual(2);
+    });
+
+    it('очередь пересчёта: строка занимается арендой, свободная после неудачи, выполненная — нет', async () => {
+      const id = await asAdmin((tx) => enqueueDuesRecalc(tx, { kind: 'types', codes: ['nds'] }));
+      const [row] = await db.admin.db.select().from(duesRecalcs).where(eq(duesRecalcs.id, id));
+      expect(row).toMatchObject({ kind: 'types', codes: ['nds'], createdBy: adminId, attempts: 0 });
+
+      // Задача по расписанию свежую строку не берёт — её проходят сразу после сохранения.
+      expect(
+        await claimDuesRecalc(db.app.db, { leaseSeconds: 60, olderThanSeconds: 600 }),
+      ).toBeNull();
+      const task = await claimDuesRecalc(db.app.db, { id, leaseSeconds: 60 });
+      expect(task).toEqual({ id, scope: { kind: 'types', codes: ['nds'] }, attempts: 1 });
+      // Занятую не выдать второй раз.
+      expect(await claimDuesRecalc(db.app.db, { id, leaseSeconds: 60 })).toBeNull();
+      await finishDuesRecalc(db.app.db, id, { done: false, reports: 2, orgs: 1, error: 'Error' });
+      const again = await claimDuesRecalc(db.app.db, { leaseSeconds: 60 });
+      expect(again).toMatchObject({ id, attempts: 2 });
+      await finishDuesRecalc(db.app.db, id, { done: true, reports: 1, orgs: 1, error: null });
+      expect(await claimDuesRecalc(db.app.db, { id, leaseSeconds: 60 })).toBeNull();
+      const [done] = await db.admin.db.select().from(duesRecalcs).where(eq(duesRecalcs.id, id));
+      expect(done).toMatchObject({ reports: 3, orgs: 2, lastError: null, claimedUntil: null });
+      expect(done!.doneAt).not.toBeNull();
+
+      // Исчерпавшая попытки строка остаётся в очереди, но не выдаётся.
+      const tired = await asAdmin((tx) => enqueueDuesRecalc(tx, { kind: 'calendar' }));
+      await db.admin.db
+        .update(duesRecalcs)
+        .set({ attempts: DUES_RECALC_ATTEMPTS })
+        .where(eq(duesRecalcs.id, tired));
+      expect(await claimDuesRecalc(db.app.db, { id: tired, leaseSeconds: 60 })).toBeNull();
+
+      // Выполненные старше срока удаляются, невыполненные — нет.
+      await db.admin.db
+        .update(duesRecalcs)
+        .set({ doneAt: sql`now() - interval '31 days'` })
+        .where(eq(duesRecalcs.id, id));
+      await cleanupDuesRecalcs(db.app.db, 30);
+      const left = await db.admin.db.select({ id: duesRecalcs.id }).from(duesRecalcs);
+      expect(left).toEqual([{ id: tired }]);
+      await db.admin.db.delete(duesRecalcs);
+    });
+
+    it('пример переноса на вкладке «Календарь» — из каталога платформы, без данных организаций', async () => {
+      const example = await asAdmin((tx) => dueShiftExample(tx, TODAY));
+      expect(example).not.toBeNull();
+      const { shortName, period, periodStart, dueBase, dueDate } = example!;
+      expect(dueDate > dueBase).toBe(true);
+      expect(dueDate >= TODAY).toBe(true);
+      // Тот же расчёт, что у отчётов: срок вида за этот период по календарю.
+      const catalog = await asAdmin((tx) => dueCatalog(tx));
+      const type = [...catalog.types.values()].find((x) => x.shortName === shortName)!;
+      expect(
+        reportDue(
+          effectiveRule(type, null, null),
+          { period, start: periodStart },
+          catalog.calendar,
+        ),
+      ).toMatchObject({ base: dueBase, due: dueDate });
     });
   },
 );

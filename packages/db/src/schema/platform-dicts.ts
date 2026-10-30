@@ -40,7 +40,7 @@ import {
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { recordVersion } from './columns';
-import { appRole, platformReadOnly } from './rls';
+import { appRole, platformReadOnly, platformService } from './rls';
 import { users } from './users';
 
 /*
@@ -729,5 +729,49 @@ export const dictLoads = pgTable(
       using: sql`app.is_platform_admin() and ${t.rolledBackAt} is null`,
       withCheck: sql`app.is_platform_admin() and ${t.rolledBackBy} = app.current_user_id() and ${t.rolledBackAt} = now()`,
     }),
+  ],
+).enableRLS();
+
+/**
+ * Очередь пересчёта сроков несданных отчётов после правки каталога (задача 2.37; Issue «фоновой работой
+ * с пределом времени, безопасно при повторе»; docs/decisions.md п. Д-9): строка пишется в той же
+ * транзакции, что и правка календаря, правила срока вида, «Меняет сроки» статуса, загрузка или её откат.
+ * Пересчёт идёт сразу после сохранения; что не успело или упало — догоняет задача по расписанию.
+ * Обработчик занимает строку арендой (`claimed_until`): повтор и одновременный запуск безопасны, второй
+ * проход сроков не меняет. Служебная таблица платформы, как журнал задач: приложение читает и пишет.
+ */
+export const duesRecalcs = pgTable(
+  'dues_recalcs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    /** Что пересчитать: виды отчётов, статусы или всё (календарь) — `RedueScope`. */
+    kind: text('kind').notNull(),
+    /** Коды видов или статусов; у календаря — пусто. */
+    codes: text('codes')
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    createdBy: uuid('created_by')
+      .default(sql`app.current_user_id()`)
+      .references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    /** До какого момента строку обрабатывают; пусто или прошло — свободна. */
+    claimedUntil: timestamp('claimed_until', { withTimezone: true }),
+    attempts: integer('attempts').notNull().default(0),
+    /** Пересчитано во всех организациях; пусто — ещё нет. */
+    doneAt: timestamp('done_at', { withTimezone: true }),
+    /** Сколько отчётов в скольких организациях пересчитано за все проходы. */
+    reports: integer('reports').notNull().default(0),
+    orgs: integer('orgs').notNull().default(0),
+    /** Ошибка последнего прохода: класс и код, без значений запроса. */
+    lastError: text('last_error'),
+  },
+  (t) => [
+    index('dues_recalcs_pending_idx')
+      .on(t.createdAt)
+      .where(sql`${t.doneAt} is null`),
+    check('dues_recalcs_kind_check', sql`${t.kind} in ('types', 'statuses', 'calendar')`),
+    check('dues_recalcs_counts_check', sql`least(${t.attempts}, ${t.reports}, ${t.orgs}) >= 0`),
+    platformService('dues_recalcs_service'),
   ],
 ).enableRLS();

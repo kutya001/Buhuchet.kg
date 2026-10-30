@@ -85,8 +85,12 @@ import {
 import {
   adminCalendarAddDuesHandler,
   adminCalendarAddDuesRoute,
+  adminCalendarCopyDuesHandler,
+  adminCalendarCopyDuesRoute,
   adminCalendarDeleteDuesHandler,
   adminCalendarDeleteDuesRoute,
+  dictLoadRollbackDuesHandler,
+  dictLoadRollbackDuesRoute,
 } from './admin-dues';
 import {
   adminTaxInfoHandler,
@@ -192,6 +196,8 @@ export function platformDictsModule(deps: ApiDeps) {
       .openapi(addAdminCalendarDayRoute, addAdminCalendarDayHandler(deps))
       .openapi(deleteAdminCalendarDayRoute, deleteAdminCalendarDayHandler(deps))
       .openapi(adminCalendarAddDuesRoute, adminCalendarAddDuesHandler(deps))
+      // «copy» — раньше дня `{key}`: иначе адрес приняли бы за ключ дня.
+      .openapi(adminCalendarCopyDuesRoute, adminCalendarCopyDuesHandler(deps))
       .openapi(adminCalendarDeleteDuesRoute, adminCalendarDeleteDuesHandler(deps))
       .openapi(adminStatusesRoute, adminStatusesHandler(deps))
       .openapi(statusesHistoryRoute, systemHistoryHandler(deps, 'statuses', statusesHistoryRoute))
@@ -220,6 +226,7 @@ export function platformDictsModule(deps: ApiDeps) {
       .openapi(dictLoadValuesRoute, dictLoadValuesHandler(deps))
       .openapi(exportDictLoadsRoute, exportDictLoadsHandler(deps))
       .openapi(rollbackDictLoadRoute, rollbackDictLoadHandler(deps))
+      .openapi(dictLoadRollbackDuesRoute, dictLoadRollbackDuesHandler(deps))
       .openapi(listAdminDictRoute, listAdminDictHandler(deps))
       .openapi(adminDictValuesRoute, adminDictValuesHandler(deps))
       .openapi(exportAdminDictRoute, exportAdminDictHandler(deps))

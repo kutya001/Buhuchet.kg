@@ -30,6 +30,7 @@ export * from './admin-platform-dicts';
 export * from './admin-dict-requests';
 export * from './admin-dict-io';
 export * from './reports-redue';
+export * from './dues-recalcs';
 export * from './admin-calendar';
 export * from './admin-taxes';
 export * from './admin-system-dicts';

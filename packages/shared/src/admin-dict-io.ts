@@ -89,6 +89,8 @@ export type AdminDictLoadList = z.infer<typeof AdminDictLoadList>;
 export const AdminDictImportApplied = z.object({
   load: AdminDictLoad,
   preview: AdminDictImportPreview,
+  /** Сроки пересчитаны не во всех организациях: остальные догонит задача по расписанию. */
+  pending: z.boolean(),
 });
 export type AdminDictImportApplied = z.infer<typeof AdminDictImportApplied>;
 

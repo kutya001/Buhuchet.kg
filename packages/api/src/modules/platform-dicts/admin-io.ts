@@ -7,6 +7,7 @@ import {
   adminTypeReportCounts,
   dictValueTakenField,
   dueCatalog,
+  enqueueDuesRecalc,
   exportDictLoads,
   getDictLoad,
   insertDictLoad,
@@ -23,7 +24,6 @@ import {
   type DictLoadBefore,
   type DictLoadRecord,
   type DueCatalog,
-  type DuesCounter,
   type IoRecord,
   type RedueScope,
   type Tx,
@@ -78,7 +78,7 @@ import {
 } from '../../lists/xlsx-read';
 import { requirePlatformAdmin } from '../../middleware/access';
 import { serverTexts } from '../l10n/texts';
-import { duesCounter, previewDues, recalcDues } from './admin-dues';
+import { previewDues, recalcQueued, withPreviewSlot } from './admin-dues';
 import { requiredProblem, saveProblem, valueInputOf, type FieldProblem } from './admin';
 
 /*
@@ -339,7 +339,6 @@ async function runImport(
   dict: AdminValueDict,
   table: string[][],
   t: Translate,
-  countDues?: DuesCounter,
 ): Promise<ImportOutcome> {
   const ctx: IoContext = { t, refs: await ioRefs(tx) };
   const parsed = parseIoRows(dict, table, ctx);
@@ -392,7 +391,7 @@ async function runImport(
     try {
       const written = await tx.transaction(async (sp) => {
         const saved = base
-          ? await adminDictUpdate(sp, dict, row.code, input, base.version, countDues)
+          ? await adminDictUpdate(sp, dict, row.code, input, base.version)
           : await adminDictCreate(sp, dict, input, random, row.code);
         if (!saved.ok) throw new RowFail(saved);
         if (saved.record.active === after.active) return { record: saved.record, redue: [saved] };
@@ -504,6 +503,11 @@ export const adminDictImportPreviewRoute = createRoute({
       content: json(AdminDictImportPreview),
     },
     ...uploadResponses,
+    429: {
+      description:
+        'Идёт прежнее сравнение или расчёт сроков пользователя, или за час их слишком много',
+      content: error,
+    },
   },
 });
 
@@ -514,15 +518,18 @@ export function adminDictImportPreviewHandler(
     const { dict } = c.req.valid('param');
     const table = await tableOf(c);
     const t = await translator(deps);
-    try {
-      await adminTx(deps, c, async (tx) => {
-        throw new DryRun(await runImport(tx, dict, table, t));
-      });
-    } catch (err) {
-      if (err instanceof DryRun) return c.json(await withDues(deps, err.outcome), 200);
-      throw err;
-    }
-    throw new Error('сравнение без результата');
+    // Сравнение обходит все организации (сроки) — по очереди предпросмотров пользователя.
+    return withPreviewSlot(deps, c, async () => {
+      try {
+        await adminTx(deps, c, async (tx) => {
+          throw new DryRun(await runImport(tx, dict, table, t));
+        });
+      } catch (err) {
+        if (err instanceof DryRun) return c.json(await withDues(deps, err.outcome), 200);
+        throw err;
+      }
+      throw new Error('сравнение без результата');
+    });
   };
 }
 
@@ -567,7 +574,7 @@ export function adminDictImportApplyHandler(
     const t = await translator(deps);
     const body = await adminTx(deps, c, async (tx) => {
       await lockDictLoads(tx);
-      const outcome = await runImport(tx, dict, table, t, duesCounter(deps));
+      const outcome = await runImport(tx, dict, table, t);
       const { preview } = outcome;
       // ОТКЛОНЕНИЕ: docs/deviations.md#Д-16 — справочник или файл изменились после сравнения.
       if (preview.stamp !== stamp) importFail('import_changed', 409);
@@ -583,11 +590,15 @@ export function adminDictImportApplyHandler(
         before: outcome.before,
         added: outcome.added,
       });
-      return { load: loadBody((await getDictLoad(tx, id))!), preview, redue: outcome.redue };
+      const queued = outcome.redue ? await enqueueDuesRecalc(tx, outcome.redue) : undefined;
+      return { load: loadBody((await getDictLoad(tx, id))!), preview, queued };
     });
     // Сроки несданных отчётов — после записи загрузки, каждая организация своей транзакцией.
-    const dues = await recalcDues(deps, body.redue);
-    return c.json({ load: body.load, preview: { ...body.preview, dues } }, 200);
+    const { reports, orgs, pending } = await recalcQueued(deps, body.queued);
+    return c.json(
+      { load: body.load, preview: { ...body.preview, dues: { reports, orgs } }, pending },
+      200,
+    );
   };
 }
 
@@ -723,8 +734,10 @@ export function rollbackDictLoadHandler(
     const t = await translator(deps);
     // Отказ — внутри транзакции: уже восстановленные значения откатываются вместе с ней.
     const rolled = await adminTx(deps, c, async (tx) => {
-      const result = await rollbackDictLoad(tx, id, duesCounter(deps));
-      if (result.ok) return result;
+      const result = await rollbackDictLoad(tx, id);
+      if (result.ok) {
+        return { ...result, queued: result.redue ? await enqueueDuesRecalc(tx, result.redue) : '' };
+      }
       if (result.reason === 'not_found') {
         return apiFail(404, 'not_found', 'Загрузка не найдена или уже откачена');
       }
@@ -735,7 +748,7 @@ export function rollbackDictLoadHandler(
       const code = result.reason === 'changed_after' ? 'load_changed_after' : 'load_restore_failed';
       return apiFail(409, code, t(`err.${code}`, { name }), { name });
     });
-    await recalcDues(deps, rolled.redue);
+    await recalcQueued(deps, rolled.queued || undefined);
     return c.json(loadBody(rolled.load), 200);
   };
 }

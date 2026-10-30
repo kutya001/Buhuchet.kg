@@ -302,17 +302,15 @@ export function ImportDialog({
         if (res.error.code === 'import_changed') setPreview(null);
         return;
       }
-      const { load } = AdminDictImportApplied.parse(res.data);
+      const { load, pending } = AdminDictImportApplied.parse(res.data);
       refresh(dict);
       refresh('loads');
-      toast(
-        t('pdicts.io.import.done', {
-          added: load.added,
-          changed: load.changed,
-          disabled: load.disabled,
-        }),
-        { icon: 'upload' },
-      );
+      const done = t('pdicts.io.import.done', {
+        added: load.added,
+        changed: load.changed,
+        disabled: load.disabled,
+      });
+      toast(pending ? `${done}. ${t('pdicts.dues.pending')}` : done, { icon: 'upload' });
       onClose();
     } finally {
       setBusy(false);

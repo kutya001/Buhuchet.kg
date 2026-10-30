@@ -1082,12 +1082,6 @@ function redueScopeOf(dict: AdminValueDict, code: string, fields: readonly strin
   return null;
 }
 
-/**
- * Сколько несданных отчётов во всех организациях получат новые сроки по каталогу этой транзакции
- * (`redueAllOrgs` без записи): в историю статуса — «сроки по статусу пересчитаны у N отчётов».
- */
-export type DuesCounter = (tx: Tx, scope: RedueScope) => Promise<number>;
-
 const recordInput = (x: AdminDictValueRecord): AdminDictInput => ({ name: x.name, data: x.data });
 
 /**
@@ -1175,7 +1169,7 @@ export async function adminDictUpdate(
   code: string,
   input: AdminDictInput,
   version: number,
-  countDues?: DuesCounter,
+  recalculated?: number,
 ): Promise<AdminDictSaveResult> {
   const records = await adminDictRecords(tx, dict);
   const before = records.find((x) => x.code === code);
@@ -1202,10 +1196,11 @@ export async function adminDictUpdate(
     code,
     changes.map((c) => c.field),
   );
-  // Новые сроки статуса — у несданных отчётов контрагентов с ним; в историю — у скольких (прототип).
-  // Новое правило срока вида пересчитывается без записи в историю вида (прототип).
-  if (redue && changes.some((c) => isDueRules(dict, c.field))) {
-    changes.push({ field: 'recalculated', to: countDues ? await countDues(tx, redue) : 0 });
+  // Новые сроки статуса — у несданных отчётов контрагентов с ним; в историю — у скольких (прототип):
+  // число `recalculated` считают до транзакции, тем же предпросмотром, что и окно. Новое правило срока
+  // вида пересчитывается без записи в историю вида (прототип), загрузка из Excel — без числа.
+  if (recalculated !== undefined && redue && changes.some((c) => isDueRules(dict, c.field))) {
+    changes.push({ field: 'recalculated', to: recalculated });
   }
   await writePlatformHistory(tx, {
     entity: 'platform_dict',
