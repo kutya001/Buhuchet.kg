@@ -121,6 +121,11 @@ describe('окно: шапка, «На весь экран», закрытие (
     // На ПК развёрнутое окно сохраняет скругление и тень.
     expect(max).toContain('rounded-2xl');
     expect(max).toContain('shadow-pop');
+    // Окно подбора на телефоне — на весь экран и не развёрнутое; на ПК — обычного размера.
+    const full = dialogClass('wide', false, true, true);
+    expect(full).toContain('max-md:h-dvh');
+    expect(full).not.toContain('max-md:h-[92dvh]');
+    expect(full).toContain('w-[min(1100px,100%)]');
   });
 
   it('окно выезжает снизу при открытии; открытое сразу развёрнутым появляется без выезда', () => {

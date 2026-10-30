@@ -14,6 +14,7 @@ export * from './staff';
 export * from './contractors';
 export * from './socfund';
 export * from './reports';
+export * from './report-pick';
 export * from './report-list';
 export * from './tasks';
 export * from './roles';
