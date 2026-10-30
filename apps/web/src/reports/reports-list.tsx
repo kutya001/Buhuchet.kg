@@ -86,17 +86,21 @@ function NoTypesNote() {
   return (
     <div data-report-no-types="">
       <Note icon="book">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-          <span className="min-w-[200px] grow">
+        <div className="flex items-center gap-3">
+          <span className="min-w-0 grow">
             <b>{t('report.no_types.title')}</b> {t('report.no_types.text')}
           </span>
           {access.can('dicts') ? (
-            <button type="button" className={buttonClass('cta', 'sm')} onClick={pick.open}>
+            <button
+              type="button"
+              className={`${buttonClass('cta', 'sm')} shrink-0`}
+              onClick={pick.open}
+            >
               <Icon name="plus" size="sm" />
               {t('report.no_types.pick')}
             </button>
           ) : (
-            <span className="text-[11.5px] leading-[1.4] text-faint">
+            <span className="shrink-0 text-[11.5px] leading-[1.4] text-faint">
               {t('report.no_types.owner')}
             </span>
           )}
