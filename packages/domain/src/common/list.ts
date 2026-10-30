@@ -448,6 +448,8 @@ export const GRID_KEYS = [
   'reports.overdue',
   'reports.waiting',
   'reports.all',
+  // Список отчётов дня «Календаря» (прототип `'rep-cal'`).
+  'reports.calendar',
   // «Задачи»: у каждой вкладки свой вид, как `'tasks-'+tab` в прототипе.
   'tasks.mine',
   'tasks.byme',

@@ -89,7 +89,11 @@ export async function typeFor(tx: Tx, code: string, isNew: boolean): Promise<Ass
 }
 
 /** Поля назначения по правилам вида; ошибка — 400 у поля. */
-export async function checkFields(tx: Tx, fields: AssignmentFields, type: AssignableType): Promise<void> {
+export async function checkFields(
+  tx: Tx,
+  fields: AssignmentFields,
+  type: AssignableType,
+): Promise<void> {
   const problem = assignmentProblem(fields, type, await singleTaxRateRows(tx));
   if (problem) {
     apiFail(400, problem.problem, ASSIGNMENT_MESSAGES[problem.problem], { field: problem.field });

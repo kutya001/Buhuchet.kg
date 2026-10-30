@@ -29,7 +29,7 @@ import { limitFailureText } from './limit-text';
 export type FetchListPage<Row> = (params: Record<string, string>) => Promise<GridPage<Row>>;
 
 /** Поиск уходит на сервер через столько после последней буквы. */
-const SEARCH_DELAY_MS = 300;
+export const SEARCH_DELAY_MS = 300;
 
 type Filters = Record<string, ListFilterValue>;
 
@@ -145,7 +145,7 @@ export function useListPage<Row>({
 }
 
 /** Значение, которое меняется не чаще, чем через `delay` мс после последней правки. */
-function useDebounced<T>(value: T, delay: number): T {
+export function useDebounced<T>(value: T, delay: number): T {
   const [shown, setShown] = useState(value);
   useEffect(() => {
     const timer = setTimeout(() => setShown(value), delay);

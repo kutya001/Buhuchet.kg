@@ -66,9 +66,7 @@ export const reportMatrixRoute = createRoute({
 });
 
 /** Область — как у назначений («Свои» — свои контрагенты): галочка сетки назначает и снимает. */
-export function reportMatrixHandler(
-  deps: ApiDeps,
-): RouteHandler<typeof reportMatrixRoute, AppEnv> {
+export function reportMatrixHandler(deps: ApiDeps): RouteHandler<typeof reportMatrixRoute, AppEnv> {
   return async (c) => {
     const { q } = c.req.valid('query');
     const t = await translateOf(deps);

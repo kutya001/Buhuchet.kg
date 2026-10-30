@@ -19,6 +19,7 @@ const FIELD_LABEL: Readonly<Record<string, UiTextKey>> = {
   periodStart: 'report.hist.field.period_start',
   eventDate: 'report.hist.field.event_date',
   submittedOn: 'report.hist.field.submitted_on',
+  responsibleEmployeeId: 'report.hist.field.responsible',
 };
 
 const DATE_FIELDS = new Set(['dueDate', 'payDue', 'periodStart', 'eventDate', 'submittedOn']);
@@ -102,6 +103,10 @@ export function reportHistoryText(
             ? t('report.hist.revision_from', { n: rev - 1 })
             : t('report.hist.revision_from_first')
           : t('report.hist.create');
+      // «Разовый отчёт» на нерабочий день: «…; срок 21.11.2026 — нерабочий день, перенесён на 23.11.2026».
+      const shift = entry.changes.find((c) => c.field === 'dueShift');
+      if (shift && typeof shift.from === 'string' && typeof shift.to === 'string')
+        text += `; ${t('report.hist.due_shift', { from: formatDateRu(shift.from), to: formatDateRu(shift.to) })}`;
       break;
     }
     case 'file_attach':

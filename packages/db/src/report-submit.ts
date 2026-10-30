@@ -1036,9 +1036,7 @@ export async function reportSubmitView(
   );
   /** «Ответственный: было → стало» — краткими именами сотрудников (прототип `empName`). */
   const named = (c: HistoryChange): HistoryChange =>
-    c.field === 'responsibleEmployeeId'
-      ? { ...c, from: people(c.from), to: people(c.to) }
-      : c;
+    c.field === 'responsibleEmployeeId' ? { ...c, from: people(c.from), to: people(c.to) } : c;
   return {
     confirmNote: r.confirmNote,
     payments: (kind?.payments ?? []).map((p) => ({

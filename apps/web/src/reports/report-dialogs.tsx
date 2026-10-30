@@ -19,7 +19,7 @@ import {
   RecordChangedNotice,
   useToast,
 } from '@buhuchet/ui';
-import { useId, useState, type ReactNode } from 'react';
+import { useEffect, useId, useState, type ReactNode } from 'react';
 import { api, callApi } from '../api-client';
 import { useErrorText, useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
@@ -293,6 +293,8 @@ export function ManualReportDialog({
   const [due, setDue] = useState(initial.due);
   const [dueTouched, setDueTouched] = useState(false);
   const [reason, setReason] = useState(initial.reason);
+  // Срок после переноса с нерабочего дня — для вида и даты, по которым посчитан (прототип `offTxt`).
+  const [shift, setShift] = useState<{ key: string; date: string } | null>(null);
   const [errors, setErrors] = useState<Partial<Record<ManualField, string>>>({});
   const [busy, setBusy] = useState(false);
   const type: ManualType | undefined = options.types.find((x) => x.code === typeCode);
@@ -309,6 +311,23 @@ export function ManualReportDialog({
     const next = res.ok ? (res.data as { due?: string | null }).due : null;
     if (next) setDue(next);
   };
+
+  // «21.11.2026 — нерабочий день: срок будет 23.11.2026» под сроком: перенос — по календарю сервера.
+  const dueKey = `${typeCode}|${due}`;
+  const shifted = shift?.key === dueKey && shift.date !== due ? shift.date : null;
+  useEffect(() => {
+    if (!typeCode || !/^\d{4}-\d{2}-\d{2}$/.test(due)) return;
+    let live = true;
+    void callApi(() =>
+      api.api.reports['due-shift'].$get({ query: { reportTypeCode: typeCode, date: due } }),
+    ).then((res) => {
+      const date = res.ok ? (res.data as { date?: string }).date : undefined;
+      if (live && date) setShift({ key: `${typeCode}|${due}`, date });
+    });
+    return () => {
+      live = false;
+    };
+  }, [typeCode, due]);
 
   const clear = (...fields: ManualField[]) =>
     setErrors((x) => ({ ...x, ...Object.fromEntries(fields.map((f) => [f, undefined])) }));
@@ -348,7 +367,15 @@ export function ManualReportDialog({
       const saved = ReportSaved.safeParse(res.data);
       onDone(saved.success ? saved.data.id : null);
       onClose();
-      return void toast(t('report.manual.done'), { icon: 'file' });
+      return void toast(
+        shifted
+          ? t('report.manual.done_shift', {
+              date: formatDateRu(due),
+              shifted: formatDateRu(shifted),
+            })
+          : t('report.manual.done'),
+        { icon: 'file' },
+      );
     }
     const message = errorText(res.error);
     const field = fieldOf(res.error.details);
@@ -493,8 +520,21 @@ export function ManualReportDialog({
               }}
             />
           ),
-          { required: true, ...(oneOff ? { hint: t('report.manual.due_hint') } : {}) },
+          {
+            required: true,
+            hint: oneOff
+              ? `${t('report.manual.due_hint')} ${t('report.manual.due_shift_hint')}`
+              : t('report.manual.due_shift_hint'),
+          },
         )}
+        {shifted ? (
+          <div data-due-shift="" className="col-span-full text-[11.5px] leading-[1.4] text-caution">
+            {t('report.manual.off_day', {
+              date: formatDateRu(due),
+              shifted: formatDateRu(shifted),
+            })}
+          </div>
+        ) : null}
         {field(
           'reason',
           t('report.manual.reason'),

@@ -936,6 +936,7 @@ export interface ReportCalendarCounts {
  * требуется» и прежних версий; при учёте оплаты налогов — «оплат» по сроку оплаты у сумм больше нуля
  * (неоплаченные — с задачей 2.19).
  */
+// ОТКЛОНЕНИЕ: docs/deviations.md#Б-8
 export async function reportCalendarCounts(
   tx: Tx,
   o: { from: IsoDate; to: IsoDate; scope: SQL | undefined; taxpay: boolean },
@@ -958,7 +959,10 @@ export async function reportCalendarCounts(
       .groupBy(reports.dueDate),
     o.taxpay
       ? tx
-          .select({ day: sql<IsoDate>`${reports.payDue}`, n: sql<number>`count(*)`.mapWith(Number) })
+          .select({
+            day: sql<IsoDate>`${reports.payDue}`,
+            n: sql<number>`count(*)`.mapWith(Number),
+          })
           .from(reports)
           .innerJoin(contractors, eq(contractors.id, reports.contractorId))
           .where(and(base, sql`${reports.amount} > 0`, between(reports.payDue)))

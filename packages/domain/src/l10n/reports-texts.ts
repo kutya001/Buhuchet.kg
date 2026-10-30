@@ -566,6 +566,10 @@ export const REPORTS_TEXTS = {
     section: S,
   },
   'report.matrix.assigned': { ru: '{type} назначен: {cp}', section: S },
+  'report.matrix.skipped': {
+    ru: '{type} не назначен: вид уже назначен или больше не подходит контрагенту',
+    section: S,
+  },
   'report.matrix.empty': { ru: 'Контрагентов нет', section: S },
   'report.matrix.empty_text': {
     ru: 'Сетка покажет контрагентов на обслуживании и виды отчётов, подключённые в организации.',
