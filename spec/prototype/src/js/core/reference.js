@@ -89,6 +89,8 @@ function tOv(t,cp){const b=dueBen(t,cp);if(!b)return t;const o=b.dueOverride[t.i
 function tEff(t,a,cp){if(!t)return t;t=tOv(t,cp);if(!a)return t;if(!perOwn(t))return a.dueDay?Object.assign({},t,{day:a.dueDay,ovBen:null}):t;if(!a.per)return t;return Object.assign({},t,{per:a.per,day:a.day,after:a.per==='Y'?0:a.mo,ym:a.per==='Y'?a.mo:t.ym})}
 const assignOfT=(cp,id)=>cp.assign.find(a=>a.t===id&&!a.to)||cp.assign.filter(a=>a.t===id).slice(-1)[0];
 const tFor=r=>tEff(T[r.t],assignOfT(CPM[r.cp],r.t),CPM[r.cp]);
+// Срок не по правилу каталога: уточнённый отчёт, «Разовый отчёт», отчёт разового вида или срок, изменённый вручную, — правка правила срока его не трогает (ТЗ; решение заказчика 30.10.2026, продукт п. Д-18)
+const dueFixed=r=>!!(r.ver||r.adhoc||r.ev||r.dueManual||(T[r.t]&&T[r.t].oneOff));
 const regsOf=cp=>[cp.regime,cp.regime2].filter(Boolean);
 const END_IDS=['endo','endi'],EN_ZERO=['0 %','0,1 %','0,5 %'];
 const formEnd=cp=>{const f=DICT.forms.items.find(x=>x.name===cp.form);return f&&f.end||(cp.form==='ИП'?'ip':'org')};

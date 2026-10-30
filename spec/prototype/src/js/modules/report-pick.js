@@ -222,11 +222,26 @@ function pkApply(c,sel,{rates,forced}={}){const cur=new Set(c.assign.filter(a=>!
   rem.forEach(id=>{const a=c.assign.find(a=>a.t===id&&!a.to);const drop=pkDroppable(c,id);drop.forEach(r=>{const i=REPORTS.indexOf(r);if(i>=0)REPORTS.splice(i,1)});del+=drop.length;if(a)a.to=TODAY;
     log('cp',c.id,`Снят отчёт: ${T[id].name}${drop.length?` (удалено отчётов «К сдаче»: ${drop.length})`:''}${forced&&forced[id]?` — снял, хотя отчёт ${forced[id]}`:''}`,c.id)});
   if(add.length)assignTypes(c,add,null,rates||{});touch(c);derive();return {add,rem,del}}
+// Основание включили или выключили в «Изменить» контрагента: какие отчёты предложить добавить и какие снять (ТЗ «Основания для отчётов», решение заказчика 30.10.2026, продукт п. А-7).
+// Добавить — отчёты, которые отмечаются сами из-за нового основания; снять — назначенные отчёты выключенного основания, если их не требует оставшееся
+function pkBaseDiff(c,bases0){const b1=c.bases||[],on=b1.filter(k=>!bases0.includes(k)),off=bases0.filter(k=>!b1.includes(k));const cur=new Set(c.assign.filter(a=>!a.to).map(a=>a.t));
+  const old=on.length?new Set(pkAuto(Object.assign({},c,{bases:bases0}))):null;
+  return {on,off,add:on.length?pkAuto(c).filter(id=>!cur.has(id)&&!old.has(id)):[],rem:off.length?[...cur].filter(id=>{const b=(T[id]&&T[id].basis)||[];return b.some(k=>off.includes(k))&&!b.some(k=>b1.includes(k))}):[]}}
+function pkBaseDlg(c,pb){const st={add:new Set(pb.add),rem:new Set(pb.rem),done:{}},want=(pb.add.length?1:0)+(pb.rem.length?1:0);
+  const row=(k,id)=>`<label class="check-row"><input type="checkbox" data-pb="${k}:${id}" ${st[k].has(id)?'checked':''}><span class="grow">${esc(T[id].name)}<div class="hint">${esc(T[id].organ||'')} · ${esc(ruleText(T[id]))}</div></span></label>`;
+  const sec=(k,ttl,ids,btn,cls)=>st.done[k]?`<div class="note">${ic('check')}<span>${esc(st.done[k])}</span></div>`:`<div class="box flat pb-sec"><p style="margin:0 0 4px"><b>${ttl}</b></p>${ids.map(id=>row(k,id)).join('')}<p class="hint">${pkChangesHtml(c,k==='add'?[...st.add]:[],k==='rem'?[...st.rem]:[])||'Ничего не выбрано'}</p><div class="row"><div class="grow"></div><button class="btn ${cls}" data-pbgo="${k}" ${st[k].size?'':'disabled'}>${btn}</button></div></div>`;
+  openModal({live:true,render:m=>({title:'Основания изменились',sub:esc(c.name),body:`${pb.add.length?sec('add',`Включено основание: ${esc(pb.on.map(baseLow).join(', '))}. Добавить его отчёты?`,pb.add,'Добавить','cta'):''}${pb.rem.length?sec('rem',`Выключено основание: ${esc(pb.off.map(baseLow).join(', '))}. Снять отчёты, которые больше не нужны?`,pb.rem,'Снять','danger'):''}`,
+    foot:`<div class="grow"></div><button class="btn ghost" data-close>${Object.keys(st.done).length?'Готово':'Не сейчас'}</button>`,
+    mount(el){$$('[data-pb]',el).forEach(x=>x.onchange=()=>{const [k,id]=x.dataset.pb.split(':');if(x.checked)st[k].add(id);else st[k].delete(id);m.draw()});
+      $$('[data-pbgo]',el).forEach(b=>b.onclick=()=>{const k=b.dataset.pbgo,sel=new Set(c.assign.filter(a=>!a.to).map(a=>a.t));st[k].forEach(id=>k==='add'?sel.add(id):sel.delete(id));const r=pkApply(c,sel);
+        const nm=ids=>ids.map(id=>T[id].short).join(', ');st.done[k]=k==='add'?`Добавлено: ${nm(r.add)}`:`Снято: ${nm(r.rem)}${r.del?`; удалено несданных отчётов «К сдаче»: ${r.del}`:''}`;refreshAll();
+        if(Object.keys(st.done).length===want){m.close();toast(Object.values(st.done).join('. '))}else m.draw()})}})})}
 // Подтверждение перед сохранением: что будет добавлено, что снято и сколько отчётов удалится
 function pkConfirm(c,sel,opts,done){const cur=new Set(c.assign.filter(a=>!a.to).map(a=>a.t));const add=[...sel].filter(x=>!cur.has(x)),rem=[...cur].filter(x=>!sel.has(x));
   if(!add.length&&!rem.length){done&&done(null);return}
   confirmDlg({title:'Изменить отчёты контрагента?',text:pkChangesHtml(c,add,rem),ok:'Сохранить',danger:rem.length>0,run:()=>{const r=pkApply(c,sel,opts);done&&done(r)}})}
-const pkEdit=c=>(can('createCp')||can('assign'))&&!c.archived;
+// С областью «Свои» в «Отчетах для сдачи» назначать отчёты можно только своим контрагентам (ТЗ «Роли», решение заказчика 27.10.2026)
+const pkEdit=c=>!c.archived&&(can('createCp')||can('assign'))&&(seeAll('reports')||c.resp===S.me);
 // «Подобрать отчёты» из списка и меню открывает карточку контрагента на вкладке «Подбор отчётов»
 function pickForCp(c){openCp(c,'pick')}
 // Назначенные отчёты, которые статусы контрагента делают ненужными
