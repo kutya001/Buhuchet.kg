@@ -51,7 +51,11 @@ export async function newContractor(
       regimeCode: 'РЕЖ-01',
       gked: '46.34.0',
       taxOfficeCode: options.taxOfficeCode ?? null,
-      benefits: (options.benefits ?? []).map((code) => ({ code, validFrom: null, validTo: null })),
+      // Без списка льгот статусы УГНС отмечает сервер; со списком (как из формы, задача 2.09) — берёт
+      // его как есть.
+      ...(options.benefits
+        ? { benefits: options.benefits.map((code) => ({ code, validFrom: null, validTo: null })) }
+        : {}),
       startDate: '2026-01-01',
       responsibleEmployeeId: staff.items.find((e) => e.active)!.id,
       tariff: { amount: 1_000_000, period: 'M' },

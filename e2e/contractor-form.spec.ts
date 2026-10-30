@@ -21,7 +21,9 @@ async function openForm(page: Page): Promise<Locator> {
     .getByRole('menuitem', { name: 'Контрагент' })
     .click();
   const form = page.getByRole('dialog', { name: 'Новый контрагент' });
-  await expect(form.locator('[data-cf]')).toBeVisible();
+  // Форма ждёт четыре справочника (сотрудники, каталог, значения, коды телефонов): после перехода
+  // на страницу они грузятся заново — ждать дольше обычного.
+  await expect(form.locator('[data-cf]')).toBeVisible({ timeout: 15_000 });
   return form;
 }
 
@@ -426,6 +428,8 @@ test.describe('Этап 2: форма контрагента', () => {
     baseURL,
     isMobile,
   }) => {
+    // Четыре формы подряд в одном тесте: времени нужно больше обычного.
+    test.slow();
     await orgWithTypes(page.request, new URL(baseURL!).origin);
     const patent = 'Проверьте право на режим «Патент»';
     const choose = async (formCode: string, gked: string) => {
