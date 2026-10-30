@@ -3,6 +3,9 @@
 import type { AdminValueDict } from '@buhuchet/domain';
 import {
   AdminDictGroups,
+  Authorities,
+  ReportBases,
+  TaxRegimes,
   AdminDictHistory,
   AdminDictList,
   AdminDictRequestList,
@@ -44,6 +47,35 @@ export const reportTypeOptionsQuery = queryOptions({
   queryKey: ['admin', 'pdicts', 'report-type-options'],
   queryFn: async () =>
     json(await pd['report-type-options'].$get(), (v) => AdminReportTypeOptions.parse(v).items),
+});
+
+/**
+ * Органы, режимы и основания, в том числе отключённые: выбор в окне вида отчёта (отключённое, уже
+ * выбранное, остаётся) и названия в «Истории изменений» видов отчётов.
+ */
+export const pdictsOrgansQuery = queryOptions({
+  queryKey: ['admin', 'pdicts', 'all-organs'],
+  queryFn: async () =>
+    json(
+      await api.api.authorities.$get({ query: { all: 'true' } }),
+      (v) => Authorities.parse(v).items,
+    ),
+});
+export const pdictsRegimesQuery = queryOptions({
+  queryKey: ['admin', 'pdicts', 'all-regimes'],
+  queryFn: async () =>
+    json(
+      await api.api['tax-regimes'].$get({ query: { all: 'true' } }),
+      (v) => TaxRegimes.parse(v).items,
+    ),
+});
+export const pdictsBasesQuery = queryOptions({
+  queryKey: ['admin', 'pdicts', 'all-bases'],
+  queryFn: async () =>
+    json(
+      await api.api['report-bases'].$get({ query: { all: 'true' } }),
+      (v) => ReportBases.parse(v).items,
+    ),
 });
 
 /** Число новых запросов на вкладке «Запросы» (прототип pdTabs: `count` — новые). */

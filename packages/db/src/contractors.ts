@@ -927,7 +927,7 @@ export async function createContractor(
     (typeof CONTRACTOR_COLUMNS)[number]
   >;
   // Обслуживание — с месяца начала (прототип addCpDlg: periods; первый период постоянному ставит база,
-  // миграция 0058); начало в будущем — «Приостановлен» до него, как cpStatus прототипа.
+  // миграция `contractor_service_init`); начало в будущем — «Приостановлен» до него, как cpStatus прототипа.
   const oneOff = input.kind === 'oneoff';
   const periods = initialPeriods(oneOff, input.startDate);
   const month = (options.today ?? bishkekDate(new Date())).slice(0, 7);
