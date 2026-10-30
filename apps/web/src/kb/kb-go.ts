@@ -39,6 +39,8 @@ export const KB_GO: Readonly<Record<string, KbTarget>> = {
   roles: { module: 'staff', tab: 'roles', flash: 'main' },
   emps: { module: 'staff', tab: 'list', flash: LIST, open: { add: 'employee' } },
   empcard: { module: 'staff', tab: 'list', flash: LIST },
+  // Контрагенты (задача 2.09): до списка (2.10) подсвечивается экран модуля, форма открывается сама.
+  cp1: { module: 'cps', tab: 'all', flash: 'main', open: { add: 'contractor' } },
   // Задачи (задача 2.23).
   mtask: { module: 'tasks', tab: 'byme', flash: LIST, open: { add: 'task' } },
   daymonth: { module: 'tasks', tab: 'mine', flash: '[data-task-legend]' },

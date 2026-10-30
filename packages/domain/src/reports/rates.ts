@@ -13,6 +13,23 @@ import type { AssignmentEnRate } from './rules';
 export const SINGLE_TAX_TYPES: readonly string[] = ['enq', 'enm'];
 export const isSingleTaxType = (code: string) => SINGLE_TAX_TYPES.includes(code);
 
+/**
+ * Ставка вида по умолчанию (прототип defRate, refDB `defaultRates`): так её показывает форма создания
+ * контрагента, так она стоит у демо-контрагентов (НДС 12 %, Соцфонд 10 %, налог с продаж 2 %). У вида
+ * с одной ставкой — она; ставки нет — null. У единого налога ставка — строки ЕНС, а не это поле.
+ */
+export const DEFAULT_TYPE_RATES: Readonly<Record<string, string>> = {
+  enq: '4 %',
+  enm: '4 %',
+  nspm: '2 %',
+  nspq: '2 %',
+};
+
+export function defaultTypeRate(type: { code: string; rates: readonly string[] }): string | null {
+  const preset = DEFAULT_TYPE_RATES[type.code];
+  return preset && type.rates.includes(preset) ? preset : (type.rates[0] ?? null);
+}
+
 /** Ставка, из которой получается текст: строка ЕНС или добавляемая строка вида. */
 type RateSource = Pick<RateAddition, 'rate' | 'rateCashless' | 'rateCash'> & { code?: string };
 

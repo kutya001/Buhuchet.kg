@@ -23,6 +23,17 @@ const PUBLIC_PATHS = new Set([
   '/api/telegram/webhook',
 ]);
 
+/**
+ * Открытые методы с параметрами в пути: страница контрагента по ссылке — что показать
+ * (`/api/page/<адрес организации>/<ИНН>`) и ввод кода (`…/code`), без входа, только чтение одного
+ * контрагента после кода доступа (задача 2.42). Только эти два пути: новый метод под `/api/page/` без
+ * сеанса не откроется.
+ */
+const PUBLIC_PATTERNS: readonly RegExp[] = [/^\/api\/page\/[^/]+\/[^/]+(?:\/code)?$/];
+
+const isPublicPath = (path: string) =>
+  PUBLIC_PATHS.has(path) || PUBLIC_PATTERNS.some((pattern) => pattern.test(path));
+
 /** Что доступно, пока пользователь не сменил временный пароль. */
 const BEFORE_PASSWORD_CHANGE = new Set(['/api/auth/me', '/api/auth/password']);
 
@@ -37,7 +48,7 @@ export function sessionGuard(deps: ApiDeps) {
   return createMiddleware<AppEnv>(async (c, next) => {
     c.set('session', null);
     c.set('access', null);
-    if (PUBLIC_PATHS.has(c.req.path)) return next();
+    if (isPublicPath(c.req.path)) return next();
 
     const token = readSessionToken(c, deps);
     const tokenHash = token ? hashSessionToken(token) : null;

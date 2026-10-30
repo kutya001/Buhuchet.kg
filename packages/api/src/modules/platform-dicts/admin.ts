@@ -1,6 +1,7 @@
 import { createRoute, type RouteHandler } from '@hono/zod-openapi';
 import { randomBytes } from 'node:crypto';
 import {
+  adminAssignedTypeCounts,
   adminDictCreate,
   adminDictDelete,
   adminDictHistory,
@@ -18,12 +19,15 @@ import {
   withUserContext,
   type AdminDictDeleteResult,
   type AdminDictInput,
+  type AdminDictLinkProblem,
+  type AdminDictListExtras,
   type AdminDictSaveResult,
   type AdminDictValueRecord,
 } from '@buhuchet/db';
 import {
   ADMIN_DICT_META,
   DICT_HISTORY_SHOWN,
+  NEW_REPORT_TYPE,
   RecordChangedError,
   RecordNotFoundError,
   type AdminValueDict,
@@ -82,6 +86,9 @@ function valueBody(x: AdminDictValueRecord): AdminDictValue {
     active: x.active,
     used: x.usage.total,
     contractors: x.usage.contractors,
+    ...(x.texts ? { texts: x.texts } : {}),
+    ...(x.reports ? { reports: x.reports } : {}),
+    ...(x.assigned !== undefined ? { assigned: x.assigned } : {}),
     audit: {
       createdAt: x.audit.createdAt?.toISOString() ?? null,
       createdBy: x.audit.createdBy,
@@ -91,6 +98,10 @@ function valueBody(x: AdminDictValueRecord): AdminDictValue {
     version: x.version,
   };
 }
+
+/** «Назначен» видов отчётов — по всем организациям, до транзакции администратора. */
+const listExtras = async (deps: ApiDeps, dict: AdminValueDict): Promise<AdminDictListExtras> =>
+  dict === 'types' ? { assigned: await adminAssignedTypeCounts(deps.db) } : {};
 
 const adminTx = <T>(
   deps: ApiDeps,
@@ -123,7 +134,8 @@ export function listAdminDictHandler(
     const { dict } = c.req.valid('param');
     const query = listQueryOf(c.req.valid('query'));
     const t = await serverTexts(deps);
-    const page = await adminTx(deps, c, (tx) => listAdminDictPage(tx, dict, query, t));
+    const extras = await listExtras(deps, dict);
+    const page = await adminTx(deps, c, (tx) => listAdminDictPage(tx, dict, query, t, extras));
     return c.json(
       {
         items: page.rows.map(valueBody),
@@ -160,7 +172,9 @@ export function adminDictValuesHandler(
     const { dict } = c.req.valid('param');
     const { col, q } = c.req.valid('query');
     const t = await serverTexts(deps);
-    const values = await adminTx(deps, c, (tx) => listAdminDictValues(tx, dict, col, t, q));
+    // Обход организаций нужен только фильтру «Назначен».
+    const extras = col === 'assigned' ? await listExtras(deps, dict) : {};
+    const values = await adminTx(deps, c, (tx) => listAdminDictValues(tx, dict, col, t, q, extras));
     return c.json(values, 200);
   };
 }
@@ -191,10 +205,11 @@ export function exportAdminDictHandler(
     const userId = c.get('session')!.userId;
     return withExportSlot(deps, userId, async () => {
       const t = await serverTexts(deps);
+      const extras = await listExtras(deps, dict);
       const result = await withUserContext(
         deps.db,
         userId,
-        (tx) => exportAdminDict(tx, dict, query, keys, t),
+        (tx) => exportAdminDict(tx, dict, query, keys, t, extras),
         'export',
       );
       return xlsxResponse(c, {
@@ -341,20 +356,50 @@ export function getAdminDictValueHandler(
 }
 
 /**
+ * Поля формы со списком: телефоны органа, поля-связи, «Меняет сроки» статуса; у вида отчёта — платежи,
+ * ставки, «Не для ставок ЕН» и размер бизнеса.
+ */
+const LIST_FIELDS = new Set([
+  'contacts',
+  'dueRules',
+  'payments',
+  'rates',
+  'notForEnRates',
+  'bizSizes',
+]);
+const isListField = (dict: AdminValueDict, f: string) =>
+  LIST_FIELDS.has(f) || (ADMIN_DICT_META[dict].links ?? []).includes(f);
+
+/** Поля «да»/«нет» и числа срока вида отчёта (пусто — null). */
+const FLAG_FIELDS = new Set(['byPhone', 'verify', 'shiftToWorkday', 'oneOff', 'preselect']);
+const NUMBER_FIELDS = new Set([
+  'dueDay',
+  'dueAfter',
+  'dueMonth',
+  'payDay',
+  'payAfter',
+  'payMonth',
+  'paySchedule',
+]);
+
+/**
  * Поля формы → поля значения справочника (только поля этого справочника). «Тип» не этого справочника
- * (у режима — «Банк») — 400 под полем; пустой — тип нового значения.
+ * (у режима — «Банк») — 400 под полем; пустой — тип нового значения. У вида отчёта поле, которого нет
+ * в запросе, — как у нового вида (`NEW_REPORT_TYPE`).
  */
 function inputOf(dict: AdminValueDict, form: AdminDictValueForm): AdminDictInput {
   const meta = ADMIN_DICT_META[dict];
   const values = form as Record<string, unknown>;
+  const fallback = (f: string): unknown =>
+    dict === 'types' ? NEW_REPORT_TYPE[f as keyof typeof NEW_REPORT_TYPE] : undefined;
   const data: AdminDictInput['data'] = {};
   for (const f of meta.fields) {
     if (f === 'name') continue;
-    const v = values[f];
-    if (f === 'byPhone') data[f] = v === true;
-    else if (f === 'contacts' || meta.links?.includes(f)) {
-      data[f] = (v as AdminDictInput['data'][string]) ?? [];
-    } else data[f] = (v as string) ?? '';
+    const v = values[f] ?? fallback(f);
+    if (FLAG_FIELDS.has(f)) data[f] = v === true;
+    else if (NUMBER_FIELDS.has(f)) data[f] = (v as AdminDictInput['data'][string]) ?? null;
+    else if (isListField(dict, f)) data[f] = (v as AdminDictInput['data'][string]) ?? [];
+    else data[f] = (v as string) ?? '';
   }
   if (dict === 'forms' && !data.declarationFor) data.declarationFor = 'org';
   if (meta.kind) {
@@ -372,9 +417,15 @@ const REQUIRED = {
   fullName: ['full_name_required', 'Введите полное название'],
   dialCode: ['dial_code_required', '1–4 цифры'],
   mask: ['mask_required', 'Только X и пробелы'],
+  gives: ['gives_required', 'Опишите, что даёт статус'],
+  authorityCode: ['authority_required', 'Выберите орган'],
+  act: ['act_required', 'Выберите, что нужно сделать'],
 } as const;
 
-/** Краткое название управления, полное название режима, код и маска страны обязательны. */
+/**
+ * Краткое название управления, полное название режима, код и маска страны, «Что даёт» льготы, краткое
+ * название, орган и «Что нужно сделать» вида отчёта обязательны.
+ */
 function checkRequired(dict: AdminValueDict, input: AdminDictInput) {
   for (const field of ADMIN_DICT_META[dict].required ?? []) {
     if (!String(input.data[field] ?? '').trim()) {
@@ -383,6 +434,30 @@ function checkRequired(dict: AdminValueDict, input: AdminDictInput) {
     }
   }
 }
+
+/** Связи не подходят: код ошибки и текст под полем (`field` — поле окна). */
+const BAD_LINK = {
+  types: ['invalid_link', 'Можно выбрать только сквозные действующие виды отчётов'],
+  benefit_types: [
+    'invalid_link',
+    'Можно выбрать только действующие виды отчётов, кроме внутренних',
+  ],
+  both: ['benefit_types_both', 'Один вид отчёта не может быть и ненужным, и добавленным'],
+  offices: ['invalid_link', 'Можно выбрать только действующие УГНС'],
+  no_due: ['due_rule_empty', 'Выберите вид отчёта и новый срок сдачи или уплаты'],
+  due_type: [
+    'invalid_due_rule',
+    'Свой срок можно задать только действующему виду отчёта со сроком из каталога',
+  ],
+  regimes_required: ['regimes_required', 'Выберите хотя бы один режим'],
+  payments_required: ['payments_required', 'Укажите название каждого платежа'],
+  regimes: ['invalid_link', 'Можно выбрать только действующие режимы'],
+  regimes_both: ['regimes_both', 'Режим не может быть и применимым, и в «Не для режимов»'],
+  bases: ['invalid_link', 'Можно выбрать только действующие основания'],
+  authority: ['invalid_link', 'Выберите действующий орган'],
+  payment_authority: ['invalid_link', 'Получатель — орган из справочника'],
+  en_rates: ['invalid_en_rates', 'Таких ставок единого налога нет — проверьте коды'],
+} as const satisfies Record<AdminDictLinkProblem, readonly [string, string]>;
 
 const TAKEN = {
   name: ['dict_value_taken', 'Такое значение уже есть'],
@@ -413,9 +488,8 @@ async function failOf(
     apiFail(409, 'dict_value_undeletable', 'Значение можно только отключить');
   }
   if (result.reason === 'bad_link') {
-    apiFail(400, 'invalid_link', 'Можно выбрать только сквозные действующие виды отчётов', {
-      field: result.field,
-    });
+    const [errCode, message] = BAD_LINK[result.problem];
+    apiFail(400, errCode, message, { field: result.field });
   }
   if (result.reason === 'changed') {
     const now = await adminTx(deps, c, (tx) => getAdminDictValue(tx, dict, code));
@@ -450,7 +524,7 @@ async function saving<T>(run: () => Promise<T>): Promise<T> {
 
 const valueTaken = {
   description:
-    'Название пустое или уже есть, не заполнено обязательное поле, тип не этого справочника, код ГНС не из трёх цифр или уже есть',
+    'Название пустое или уже есть, не заполнено обязательное поле, тип не этого справочника, код ГНС не из трёх цифр или уже есть, связь или «Меняет сроки» не подходят; у вида отчёта — нет режима у режимного, платежа у вида с уплатой, органа или ставки ЕН',
   content: error,
 };
 

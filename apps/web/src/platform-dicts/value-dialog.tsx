@@ -101,6 +101,10 @@ function formOf(
     case 'cats':
     case 'reasons':
       return { name, note: d.note ?? '' };
+    // У льготы и вида отчёта свои окна — BenefitDialog и TypeDialog.
+    case 'benefits':
+    case 'types':
+      return { name };
   }
 }
 

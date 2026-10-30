@@ -66,6 +66,8 @@ export const TABLE_SECTIONS = [
   'holidays',
   'workingSaturdays',
   'phoneCodes',
+  'messageTemplates',
+  'templateNotes',
   // Копии разделов, у которых таблицы уже были: ui_texts, permissions, role_templates.
   'localization',
   'permissions',
@@ -959,11 +961,21 @@ export async function seedPlatformDicts(
   const all = platformDictRows(refDB);
   const { update } = options;
   // Удалённые в Админке значения и связи с ними не возвращаются (справочники механизма 2.36).
-  const [organs, regimes, bases, ugns, forms, reasons, bankKeys, days] = await Promise.all(
-    ['organs', 'regimes', 'bases', 'ugns', 'forms', 'reasons', 'banks', 'calendar'].map((d) =>
-      deletedKeys(db, d),
-    ),
-  );
+  const [organs, regimes, bases, ugns, forms, reasons, bankKeys, days, benefits, types] =
+    await Promise.all(
+      [
+        'organs',
+        'regimes',
+        'bases',
+        'ugns',
+        'forms',
+        'reasons',
+        'banks',
+        'calendar',
+        'benefits',
+        'types',
+      ].map((d) => deletedKeys(db, d)),
+    );
   const rows = {
     ...all,
     authorities: kept(all.authorities, organs!, 'code'),
@@ -974,9 +986,29 @@ export async function seedPlatformDicts(
     dueChangeReasons: kept(all.dueChangeReasons, reasons!, 'code'),
     banks: kept(all.banks, bankKeys!, 'code'),
     productionCalendar: kept(all.productionCalendar, days!, 'day'),
-    reportTypeRegimes: kept(all.reportTypeRegimes, regimes!, 'regimeCode'),
-    reportTypeBases: kept(all.reportTypeBases, bases!, 'baseCode'),
-    taxBenefitOffices: kept(all.taxBenefitOffices, ugns!, 'taxOfficeCode'),
+    reportTypes: kept(all.reportTypes, types!, 'code'),
+    reportTypeRegimes: kept(
+      kept(all.reportTypeRegimes, regimes!, 'regimeCode'),
+      types!,
+      'reportTypeCode',
+    ),
+    reportTypeBases: kept(kept(all.reportTypeBases, bases!, 'baseCode'), types!, 'reportTypeCode'),
+    taxBenefits: kept(all.taxBenefits, benefits!, 'code'),
+    taxBenefitReportTypes: kept(
+      kept(all.taxBenefitReportTypes, benefits!, 'benefitCode'),
+      types!,
+      'reportTypeCode',
+    ),
+    taxBenefitOffices: kept(
+      kept(all.taxBenefitOffices, ugns!, 'taxOfficeCode'),
+      benefits!,
+      'benefitCode',
+    ),
+    taxBenefitDueRules: kept(
+      kept(all.taxBenefitDueRules, benefits!, 'benefitCode'),
+      types!,
+      'reportTypeCode',
+    ),
   };
   const authority = await upsertDict(db, authorities, authorities.code, rows.authorities, update);
   const regime = await upsertDict(db, taxRegimes, taxRegimes.code, rows.taxRegimes, update);

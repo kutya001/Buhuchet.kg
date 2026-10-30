@@ -156,6 +156,8 @@ export interface ModalProps {
   sticky?: boolean;
   /** На телефоне тянуть вниз только за ручку и шапку (в окне свои жесты по содержимому). */
   swipeHead?: boolean;
+  /** На телефоне — на весь экран, а не шторкой (окна подбора: прототип `.modal.pickm`). */
+  phoneFull?: boolean;
   /** Вкладки карточки записи: ряд закреплён вверху содержимого, свайп вбок листает их. */
   tabs?: {
     items: readonly CardTab[];
@@ -225,6 +227,7 @@ export function Modal({
   dirty = false,
   sticky = false,
   swipeHead = false,
+  phoneFull = false,
   tabs,
 }: ModalProps) {
   const windows = useWindowsValue();
@@ -381,6 +384,7 @@ export function Modal({
         canMax={canMax}
         max={max}
         slide={!openedMax}
+        phoneFull={phoneFull}
         phone={phone}
         labels={windows.labels}
         tabs={tabs}
@@ -420,12 +424,18 @@ const PHONE_FULL =
 /**
  * Классы окна: размер на ПК, шторка на телефоне, развёрнутое — во всё окно (прототип `.modal`).
  * `slide` — окно выезжает снизу при открытии; открытое сразу развёрнутым появляется без выезда
- * (прототип `.modal.max{animation:none}`).
+ * (прототип `.modal.max{animation:none}`). `phoneFull` и размер `large` — на телефоне на весь экран
+ * и не развёрнутое.
  */
-export function dialogClass(size: ModalSize, max: boolean, slide = true): string {
+export function dialogClass(
+  size: ModalSize,
+  max: boolean,
+  slide = true,
+  phoneFull = false,
+): string {
   const desktop = max ? 'w-full h-[calc(100dvh-24px)] max-h-none' : DIALOG_SIZE[size];
   const phone =
-    max || size === 'large'
+    max || phoneFull || size === 'large'
       ? PHONE_FULL
       : `max-md:w-full max-md:max-h-[92dvh] ${size === 'wide' ? 'max-md:h-[92dvh]' : 'max-md:h-auto'} max-md:rounded-b-none max-md:border-b-0 max-md:pb-[env(safe-area-inset-bottom,0px)]`;
   return `relative flex min-w-0 touch-pan-y flex-col rounded-2xl border border-line-strong bg-pane text-ink shadow-pop outline-none ${slide ? 'animate-slide-up' : ''} ${desktop} ${phone}`;
@@ -462,6 +472,8 @@ export interface WindowFrameProps {
   max: boolean;
   /** Выезд снизу при открытии (нет у окна, открытого сразу развёрнутым). */
   slide?: boolean;
+  /** На телефоне — на весь экран. */
+  phoneFull?: boolean;
   phone: boolean;
   labels: WindowLabels;
   tabs?: ModalProps['tabs'];
@@ -489,6 +501,7 @@ export function WindowFrame({
   canMax,
   max,
   slide = true,
+  phoneFull = false,
   phone,
   labels,
   tabs,
@@ -529,7 +542,7 @@ export function WindowFrame({
         data-window-kind={kind}
         data-overlay
         data-max={max}
-        className={dialogClass(size, max, slide)}
+        className={dialogClass(size, max, slide, phoneFull)}
       >
         <div
           data-swipe-handle

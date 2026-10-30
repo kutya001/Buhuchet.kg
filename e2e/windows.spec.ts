@@ -271,8 +271,11 @@ test.describe('Этап 1: окна и уведомления', () => {
     };
     const toasts = page.getByRole('status');
 
-    await add('Контрагент');
-    const first = toasts.filter({ hasText: '«Контрагент» появится вместе с экраном модуля.' });
+    // «Контрагент» открывает форму (2.09); уведомление пока дают способы без своего окна.
+    await add('Загрузка из Excel');
+    const first = toasts.filter({
+      hasText: '«Загрузка из Excel» появится вместе с экраном модуля.',
+    });
     const box = await settledBox(first);
     // По центру внизу экрана; на телефоне — над нижней панелью.
     expect(box.x + box.width / 2).toBeCloseTo(view.width / 2, 0);
@@ -280,8 +283,8 @@ test.describe('Этап 1: окна и уведомления', () => {
     if (!isMobile) {
       // Второе уведомление встаёт под первым. На телефоне уведомление закрывает часть круглой «+»
       // (как в прототипе), поэтому второе там вызывается, когда первое уже исчезло.
-      await add('Загрузка из Excel');
-      const second = toasts.filter({ hasText: '«Загрузка из Excel»' });
+      await add('Из свидетельства и выписки');
+      const second = toasts.filter({ hasText: '«Из свидетельства и выписки»' });
       await expect(toasts).toHaveCount(2);
       const below = await settledBox(second);
       expect(below.y).toBeGreaterThan((await settledBox(first)).y + box.height - 1);
@@ -290,7 +293,7 @@ test.describe('Этап 1: окна и уведомления', () => {
 
     await test.step('исчезают сами примерно через 3 секунды', async () => {
       await expect(toasts).toHaveCount(0, { timeout: 6000 });
-      await add('Контрагент');
+      await add('Загрузка из Excel');
       await expect(first).toBeVisible();
       await page.waitForTimeout(2400);
       await expect(first).toBeVisible();
@@ -300,7 +303,7 @@ test.describe('Этап 1: окна и уведомления', () => {
     const close = page.getByRole('button', { name: 'Закрыть уведомление' });
     if (!isMobile) {
       await test.step('на ПК крестик «Закрыть» убирает уведомление сразу', async () => {
-        await add('Контрагент');
+        await add('Загрузка из Excel');
         await expect(close).toHaveAttribute('title', 'Закрыть');
         await close.click();
         await expect(toasts).toHaveCount(0, { timeout: 1000 });
@@ -310,7 +313,7 @@ test.describe('Этап 1: окна и уведомления', () => {
 
     await test.step('на телефоне крестика нет; короткий свайп — возвращается, на треть ширины — уходит, вкладка та же', async () => {
       const swipe = await finger(page);
-      await add('Контрагент');
+      await add('Загрузка из Excel');
       await expect(close).toBeHidden();
       const toast = await settledBox(first);
       const from = { x: toast.x + toast.width / 2, y: toast.y + toast.height / 2 };

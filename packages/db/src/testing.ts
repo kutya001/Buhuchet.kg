@@ -10,6 +10,8 @@ import { countryPhoneCodes, platformReference } from './schema';
 import { seedPermissions, seedRoleTemplates } from './seed/access';
 import { seedGked, seedPlatformReference } from './seed/platform';
 import { platformDictRows, seedPlatformDicts } from './seed/platform-dicts';
+import { seedUiTexts } from './seed/l10n';
+import { seedMessageTemplates, seedStatusTones } from './seed/system-dicts';
 import { readSpecJson } from './spec-data';
 
 /**
@@ -91,6 +93,12 @@ export async function seedAccessReference(db: Db): Promise<void> {
   await seedRoleTemplates(db, refDB.roleTemplates, { update: false });
 }
 
+/** Словарь текстов из refDB.json и `UI_TEXTS` — для правки названий статусов в Админке. */
+export async function seedUiTextsReference(db: Db): Promise<void> {
+  const refDB = await readSpecJson<Record<string, unknown>>('data/refDB.json');
+  await seedUiTexts(db, refDB.localization, { update: false });
+}
+
 /** Справочник «Коды стран телефонов» из refDB.json — для проверки телефона сотрудника. */
 export async function seedPhoneCodes(db: Db): Promise<void> {
   const refDB = await readSpecJson<Record<string, unknown>>('data/refDB.json');
@@ -124,6 +132,8 @@ export async function seedAllPlatformDictionaries(db: Db): Promise<void> {
   const refDB = await readSpecJson<Record<string, unknown>>('data/refDB.json');
   await seedPlatformDicts(db, refDB, { update: false });
   await seedPlatformReference(db, refDB, 'test', { update: false });
+  await seedStatusTones(db, { update: false });
+  await seedMessageTemplates(db, refDB.messageTemplates, refDB.templateNotes, { update: false });
   await seedGked(db, await readSpecJson('data/gkedDB.json'), { update: false });
 }
 

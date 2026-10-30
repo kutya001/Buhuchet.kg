@@ -57,8 +57,8 @@ export interface FieldProps {
   required?: boolean;
   /** Подсказка под полем («Не короче 8 символов»). */
   hint?: string | undefined;
-  /** Ошибка под полем: значок и текст красным, рамка поля красная. */
-  error?: string | undefined;
+  /** Ошибка под полем: значок и текст красным, рамка поля красная; можно с кнопкой («Вернуть из архива»). */
+  error?: ReactNode;
   /** На всю ширину формы и на ПК. */
   full?: boolean;
   /** Поле ввода; функцией — чтобы получить id и aria-свойства (`FieldControl`). */
@@ -265,6 +265,7 @@ const PILL_TONES = {
   caution: 'bg-caution-bg text-caution-label',
   warn: 'bg-warn-bg text-warn-label',
   violet: 'bg-violet-bg text-violet',
+  info: 'bg-info-bg text-info-label',
 } as const;
 
 const PILL_SIZES = {
@@ -280,6 +281,7 @@ export function pillClass(size: keyof typeof PILL_SIZES = 'md'): string {
 /**
  * Метка (`.pill`): «Привязан», «Основной»; `caution` — оранжевая (`.pill.orange`, «не привязан»),
  * `warn` — жёлтая (`.pill.yellow`, «сверить»), `violet` — фиолетовая (`.pill.purple`, «ждёт» у задачи);
+ * `info` — синяя (`.pill.blue`, «по УГНС», «Возобновление запланировано»);
  * `sm` — маленькая (`.pill.sm`). В компактном списке метка ниже (`data-pill`).
  */
 export function Pill({
@@ -314,11 +316,14 @@ const TAG_TONES = {
 export function Tag({
   icon,
   title,
+  wide = false,
   tone = 'plain',
   children,
 }: {
   icon?: IconName;
   title?: string;
+  /** Не уже 58 px, текст по центру — метки «Этап N» столбиком (Админка → «Статусы»). */
+  wide?: boolean;
   tone?: keyof typeof TAG_TONES;
   children: ReactNode;
 }) {
@@ -326,7 +331,7 @@ export function Tag({
     <span
       data-tag=""
       title={title}
-      className={`inline-flex flex-none items-center gap-1 rounded px-1.5 align-[1px] text-[10.5px] leading-[17px] font-[650] tracking-[.03em] whitespace-nowrap ${TAG_TONES[tone]}`}
+      className={`inline-flex flex-none items-center gap-1 rounded px-1.5 align-[1px] text-[10.5px] leading-[17px] font-[650] tracking-[.03em] whitespace-nowrap ${TAG_TONES[tone]}${wide ? ' min-w-[58px] justify-center' : ''}`}
     >
       {icon ? <Icon name={icon} size="sm" /> : null}
       {children}

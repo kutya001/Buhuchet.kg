@@ -114,6 +114,9 @@ export const KB_STEP_RULES: Readonly<Record<string, KbStepRule>> = {
   roles: { module: 'staff' },
   emps: { module: 'staff', done: { kind: 'history', entity: 'employee', actions: ['create'] } },
   empcard: { module: 'staff' },
+  // 5. Контрагенты (задача 2.09): «Добавить первого контрагента или загрузить из Excel» — создан хотя
+  // бы один контрагент (загрузка из Excel и «Из свидетельства и выписки» тоже пишут создание в историю).
+  cp1: { module: 'cps', done: { kind: 'history', entity: 'contractor', actions: ['create'] } },
   // 9. Задачи (задача 2.23). «Регулярные задачи по отчётам» — с задачей 2.24. «Выполнена» или «Не
   // выполнена» — и отправленная на подтверждение (прототип `KB_EV['t.done']`); «Подтвердить» или «На
   // доработку» (`KB_EV['t.conf']`).
@@ -191,6 +194,8 @@ export const KB_READY_MODULES: ReadonlySet<string> = new Set<MenuModuleId>([
   'dicts',
   'org',
   'tasks',
+  // «Контрагенты»: форма создания (2.09); статья описывает и список — его экран добавит задача 2.10.
+  'cps',
   // «Показатели контрагентов» (2.27).
   'kpi',
   // «Файловый менеджер» (2.29).

@@ -45,6 +45,7 @@ describe('/api/cron/tick без базы', () => {
         'system.cleanup-scheduler-runs',
         'auth.cleanup-login-attempts',
         'system.cleanup-rate-limits',
+        'contractors.sync-service-status',
         'reports.create-due',
         'files.cleanup-pending',
       ]),

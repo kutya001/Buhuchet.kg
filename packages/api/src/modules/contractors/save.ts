@@ -8,6 +8,7 @@ import {
   findContractorByInn,
   getContractor,
   lockContractor,
+  orgMenuSettings,
   readContractorFields,
   uniqueViolation,
   updateContractor,
@@ -26,6 +27,7 @@ import {
   type Translate,
 } from '@buhuchet/domain';
 import {
+  ContractorCreated,
   ContractorSaved,
   CreateContractorRequest,
   UpdateContractorRequest,
@@ -37,6 +39,8 @@ import type { AppEnv } from '../../env';
 import { apiFail, versionedSaveResponses } from '../../errors';
 import { orgContextOf, requirePermission } from '../../middleware/access';
 import { dropObjects } from '../files/files';
+import { serverTexts } from '../l10n/texts';
+import { assignmentTexts } from '../reports/common';
 import { notFound } from './card';
 import {
   checkContractor,
@@ -51,6 +55,7 @@ import {
   todayOf,
   translateOf,
 } from './common';
+import { createNewReports, planNewReports } from './new-reports';
 import {
   requireSocfundConfirm,
   requireSocfundReason,
@@ -65,7 +70,8 @@ const forbidden = (message: string) => apiFail(403, 'forbidden', message);
 
 /**
  * Ответ с карточкой после сохранения: контрагент читается заново, без области (его только что
- * сохранили); `notices` — уведомления «Отмечен статус «…» по УГНС».
+ * сохранили); `notices` — уведомления «Отмечен статус «…» по УГНС», `redued` — у скольких несданных
+ * отчётов статусы изменили срок.
  */
 export async function savedOut(
   tx: Tx,
@@ -76,6 +82,7 @@ export async function savedOut(
     today: string;
     t: Translate;
     notices: string[];
+    redued?: number;
   },
 ): Promise<ContractorSaved> {
   const r = await getContractor(tx, id, { scope: undefined, today: options.today });
@@ -85,20 +92,29 @@ export async function savedOut(
       t: options.t,
     })),
     notices: options.notices,
+    redued: options.redued ?? 0,
   };
 }
 
-/** Статусы «Ставится по УГНС» при выборе или смене УГНС (прототип ugApply). */
+/**
+ * Статусы «Ставится по УГНС» при выборе или смене УГНС (прототип ugApply). `chosen` — льготы и статусы
+ * пришли в запросе: их выбрали в форме, где статусы по УГНС ставятся и снимаются сами и снятый вручную
+ * не возвращается; без них (карточка, загрузка) статусы по УГНС ставит и снимает сервер.
+ */
 const officeBenefitsOf = (
   tx: Tx,
   benefits: ContractorFields['benefits'],
   offices: { from: string | null; to: string | null },
   t: Translate,
+  chosen?: ContractorFields['benefits'],
 ) =>
-  withOfficeBenefits(tx, benefits, offices, {
-    marked: t('cp.notice.ugns_marked'),
-    dropped: t('cp.notice.ugns_dropped'),
-  });
+  withOfficeBenefits(
+    tx,
+    benefits,
+    offices,
+    { marked: t('cp.notice.ugns_marked'), dropped: t('cp.notice.ugns_dropped') },
+    chosen,
+  );
 
 /** Причины пересчёта сроков несданных отчётов при смене статусов контрагента (прототип cpRedue). */
 export const redueTexts = (t: Translate) => ({
@@ -121,12 +137,13 @@ export const createContractorRoute = createRoute({
   },
   responses: {
     201: {
-      description: 'Контрагент создан одним целым (с первой ставкой обслуживания и историей)',
-      content: { 'application/json': { schema: ContractorSaved } },
+      description:
+        'Контрагент создан одним целым (с первой ставкой обслуживания, отчётами и историей); сколько отчётов создано',
+      content: { 'application/json': { schema: ContractorCreated } },
     },
     400: {
       description:
-        'Неверные данные: ИНН, телефон, поля, отключённые значения справочников, ГКЭД не подкласс, запрет режима по ГКЭД или нужен ответ на вопрос о праве на режим',
+        'Неверные данные: ИНН, телефон, поля, отключённые значения справочников, ГКЭД не подкласс, запрет режима по ГКЭД, нужен ответ на вопрос о праве на режим, нет ни одного отчёта, отчёт не подходит к режиму или неверная ставка',
       content: error,
     },
     401: { description: 'Нет входа', content: error },
@@ -135,16 +152,20 @@ export const createContractorRoute = createRoute({
         'Нет права «Создавать и изменять контрагентов» или стоимость, день оплаты, первый неполный месяц без права «Видеть плату за обслуживание»',
       content: error,
     },
-    409: { description: 'Такой ИНН уже есть в организации (и в архиве)', content: error },
+    409: {
+      description:
+        'Такой ИНН уже есть в организации (и в архиве); вид отчёта не подключён или отключён',
+      content: error,
+    },
   },
 });
 
 /**
  * «Новый контрагент» (ТЗ «Регистрация контрагентов», «Обязательные поля»; прототип addCpDlg): всё —
- * одним целым в одной транзакции; при сбое не создаётся ничего (экран показывает «Не удалось
- * сохранить контрагента, ничего не создано»). Стоимость обслуживания — первая запись журнала
- * тарифов: у постоянного контрагента обязательна тому, кто видит плату за обслуживание, остальным
- * недоступна.
+ * одним целым в одной транзакции, вместе с отчётами; при сбое не создаётся ничего (экран показывает
+ * «Не удалось сохранить контрагента, ничего не создано»). Стоимость обслуживания — первая запись
+ * журнала тарифов: у постоянного контрагента обязательна тому, кто видит плату за обслуживание,
+ * остальным недоступна.
  */
 export function createContractorHandler(
   deps: ApiDeps,
@@ -155,6 +176,7 @@ export function createContractorHandler(
     const ctx = orgContextOf(c);
     const today = todayOf(deps);
     const t = await translateOf(deps);
+    const texts = await serverTexts(deps);
     try {
       const out = await withOrgContext(deps.db, ctx, async (tx) => {
         const fee = await feeVisible(tx, ctx.orgId, subject);
@@ -187,7 +209,7 @@ export function createContractorHandler(
           gkedExtra: [...new Set(body.gkedExtra)],
           taxOfficeCode: body.taxOfficeCode,
           bizSize: body.bizSize,
-          benefits: uniqueBy(body.benefits),
+          benefits: uniqueBy(body.benefits ?? []),
           bases: [...new Set(body.bases)],
           responsibleEmployeeId: body.responsibleEmployeeId,
           head: body.head,
@@ -212,16 +234,19 @@ export function createContractorHandler(
         fields.benefits = withSocfundStatus(fields.benefits, sf.dict, false);
         const office = await officeBenefitsOf(
           tx,
-          fields.benefits,
+          body.benefits ? [] : fields.benefits,
           { from: null, to: fields.taxOfficeCode },
           t,
+          body.benefits ? fields.benefits : undefined,
         );
         fields.benefits = office.benefits;
         const sfInput = socfundInputOf(body.socfund, {});
+        const reportCodes =
+          fields.kind === 'regular' ? (body.reports ?? []).map((r) => r.code) : [];
         const sfSubject = socfundSubjectOf(
           { ...fields, benefits: fields.benefits.map((b) => b.code), flags: sfInput.flags },
           sf.form,
-          [],
+          [...new Set(reportCodes)],
         );
         requireSocfundReason(sfSubject, sfInput, sf.dict, t);
         fields.gkedConfirmation = await checkContractor(tx, fields, {
@@ -237,6 +262,15 @@ export function createContractorHandler(
           fields,
           socfundPatch({ ...sfSubject, flags: {} }, null, sfInput, sf.dict, fields.benefits),
         );
+        // Без поля `reports` — без отчётов, как до формы 2.09 (docs/decisions.md п. А-5).
+        const plan = body.reports
+          ? await planNewReports(
+              tx,
+              fields,
+              { reports: body.reports, forced: body.reportsForced },
+              { today, t },
+            )
+          : null;
         const id = await createContractor(
           tx,
           ctx.orgId,
@@ -247,9 +281,26 @@ export function createContractorHandler(
             validFrom: monthOf(body.startDate),
             note: t('cp.tariff.first'),
           },
+          { today },
         );
         await writeContractorNotes(tx, id, office.notes);
-        return savedOut(tx, id, { orgId: ctx.orgId, subject, today, t, notices: office.notes });
+        const reportsCreated = plan
+          ? await createNewReports(tx, id, plan, {
+              today,
+              confirm: (await orgMenuSettings(tx, ctx.orgId)).reportConfirm,
+              texts: assignmentTexts(texts),
+            })
+          : 0;
+        return {
+          ...(await savedOut(tx, id, {
+            orgId: ctx.orgId,
+            subject,
+            today,
+            t,
+            notices: office.notes,
+          })),
+          reportsCreated,
+        };
       });
       return c.json(out, 201);
     } catch (err) {
@@ -379,9 +430,10 @@ export function updateContractorHandler(
         if (patch.bases) next.bases = [...new Set(patch.bases)];
         const office = await officeBenefitsOf(
           tx,
-          next.benefits,
+          patch.benefits ? before.benefits : next.benefits,
           { from: before.taxOfficeCode, to: next.taxOfficeCode },
           t,
+          patch.benefits ? next.benefits : undefined,
         );
         next.benefits = office.benefits;
         const sfInput = socfundInputOf(socfund, before.socfundFlags ?? {});
@@ -414,7 +466,7 @@ export function updateContractorHandler(
           sf.dict,
           next.benefits,
         );
-        await updateContractor(
+        const { redued } = await updateContractor(
           tx,
           ctx.orgId,
           id,
@@ -434,7 +486,14 @@ export function updateContractorHandler(
           { today, texts: redueTexts(t) },
         );
         await writeContractorNotes(tx, id, office.notes);
-        return savedOut(tx, id, { orgId: ctx.orgId, subject, today, t, notices: office.notes });
+        return savedOut(tx, id, {
+          orgId: ctx.orgId,
+          subject,
+          today,
+          t,
+          notices: office.notes,
+          redued,
+        });
       });
     }
   };

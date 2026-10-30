@@ -49,108 +49,86 @@ const subjectOf = (s: Case['subject']): SocfundSubject => ({
   kind: s.kind as ContractorKind,
   flags: socfundFlagsOf(s.flags),
 });
-/**
- * Тариф без основания «Есть наёмные сотрудники», только по действующему STI-161: прототип (sfNeed) его
- * определяет, ТЗ — нет; пока решения нет, продукт — по ТЗ.
- */
-// ОТКЛОНЕНИЕ: docs/deviations.md#А-5
-const byReportOnly = (s: Case['subject']) =>
-  !SOCFUND_BY_REPORT &&
-  s.kind !== 'oneoff' &&
-  !(s.bases as readonly string[]).includes('employees') &&
-  s.activeTypes.some((x) => fixture.dict.reportTypes.includes(x));
 const choiceOf = (c: Case['current']): SocfundChoice | null =>
   c.tariff ? { id: c.tariff as SocfundTariffId, manual: c.manual, reason: c.reason || null } : null;
 
 describe('Тариф Соцфонда по условиям — как в прототипе', () => {
-  it.each(fixture.cases.filter((c) => !byReportOnly(c.subject)))(
-    '$name',
-    ({ subject, current, expected }) => {
-      const s = subjectOf(subject);
-      expect(socfundNeeded(s, dict)).toBe(expected.needed);
-      const auto = socfundAuto(s, dict);
-      if (!expected.auto) {
-        expect(auto).toBeNull();
-      } else {
-        expect(auto?.tariff ?? null).toBe(expected.auto.t);
-        expect(socfundAutoTexts(auto!, dict, t)).toEqual({
-          why: expected.auto.why,
-          miss: expected.auto.miss,
-          warn: expected.auto.warn,
-        });
-      }
-      const st = socfundState(s, choiceOf(current), dict);
-      if (!expected.state) {
-        expect(st).toBeNull();
-        return;
-      }
-      expect({ bad: st!.bad, none: st!.none, ask: st!.ask }).toEqual({
-        bad: expected.state.bad,
-        none: expected.state.none,
-        ask: expected.state.ask,
+  it.each(fixture.cases)('$name', ({ subject, current, expected }) => {
+    const s = subjectOf(subject);
+    expect(socfundNeeded(s, dict)).toBe(expected.needed);
+    const auto = socfundAuto(s, dict);
+    if (!expected.auto) {
+      expect(auto).toBeNull();
+    } else {
+      expect(auto?.tariff ?? null).toBe(expected.auto.t);
+      expect(socfundAutoTexts(auto!, dict, t)).toEqual({
+        why: expected.auto.why,
+        miss: expected.auto.miss,
+        warn: expected.auto.warn,
       });
-      expect(socfundBadWhy(st!, dict, t)).toBe(expected.state.why);
-      // Пояснение к STI-161 в «Подборе отчётов» (прототип sfTypeNote).
-      const tariff = (id: SocfundTariffId | null | undefined) =>
-        dict.tariffs.find((x) => x.id === id) ?? null;
-      const note = socfundTypeNote(tariff(st!.choice?.id), tariff(st!.auto.tariff), t);
-      expect(note.title + note.text).toBe(expected.typeNote);
-      expect(note.warn).toBe(!st!.choice && !st!.auto.tariff);
-    },
-  );
-
-  it('п. А-5: без основания «Есть наёмные сотрудники» тариф не нужен и при действующем STI-161', () => {
-    const cases = fixture.cases.filter((c) => byReportOnly(c.subject));
-    expect(cases.map((c) => c.name)).toEqual(['без основания, но со STI-161']);
-    for (const c of cases) {
-      const s = subjectOf(c.subject);
-      expect(socfundNeeded(s, dict)).toBe(false);
-      expect(socfundAuto(s, dict)).toBeNull();
-      expect(socfundState(s, choiceOf(c.current), dict)).toBeNull();
-      // Признаки сохраняются, тариф не меняется (прототип sfApply без sfAuto).
-      const flags = socfundFlagsOf({ cashless: true });
-      const out = socfundDecide(s, choiceOf(c.current), { flags, tariff: 'spino' }, dict);
-      expect(out).toEqual({ flags, choice: choiceOf(c.current), changed: false });
     }
+    const st = socfundState(s, choiceOf(current), dict);
+    if (!expected.state) {
+      expect(st).toBeNull();
+      return;
+    }
+    expect({ bad: st!.bad, none: st!.none, ask: st!.ask }).toEqual({
+      bad: expected.state.bad,
+      none: expected.state.none,
+      ask: expected.state.ask,
+    });
+    expect(socfundBadWhy(st!, dict, t)).toBe(expected.state.why);
+    // Пояснение к STI-161 в «Подборе отчётов» (прототип sfTypeNote).
+    const tariff = (id: SocfundTariffId | null | undefined) =>
+      dict.tariffs.find((x) => x.id === id) ?? null;
+    const note = socfundTypeNote(tariff(st!.choice?.id), tariff(st!.auto.tariff), t);
+    expect(note.title + note.text).toBe(expected.typeNote);
+    expect(note.warn).toBe(!st!.choice && !st!.auto.tariff);
+  });
+
+  it('п. А-5 (решение заказчика): без основания «Есть наёмные сотрудники», но с действующим STI-161 тариф нужен, как в прототипе', () => {
+    expect(SOCFUND_BY_REPORT).toBe(true);
+    const c = fixture.cases.find((x) => x.name === 'без основания, но со STI-161')!;
+    expect(socfundNeeded(subjectOf(c.subject), dict)).toBe(true);
+    expect(c.expected.needed).toBe(true);
   });
 });
 
 describe('Сохранение признаков и тарифа — как в прототипе', () => {
-  it.each(
-    fixture.saves
-      .map((x, i) => ({ ...x, i, name: fixture.cases[x.case]!.name }))
-      .filter((x) => !byReportOnly(fixture.cases[x.case]!.subject)),
-  )('$i: $name', ({ case: k, input, expected }) => {
-    const c = fixture.cases[k]!;
-    const s = subjectOf(c.subject);
-    const choice = choiceOf(c.current);
-    // Выбор, которого не трогали, в запрос не приходит.
-    const req: SocfundInput = {
-      flags: socfundFlagsOf(input.flags),
-      reason: input.reason,
-      ...(input.touched ? { tariff: (input.tariff as SocfundTariffId | null) ?? null } : {}),
-    };
-    const draft = { ...s, flags: req.flags };
-    expect(socfundManualMismatch(draft, req, dict)).toBe(expected.manBad);
-    const out = socfundDecide(s, choice, req, dict);
-    expect(out.choice?.id ?? null).toBe(expected.sfT);
-    expect(out.choice?.manual ?? false).toBe(expected.sfMan);
-    expect(out.choice?.reason ?? '').toBe(expected.sfWhy);
-    // Статус СПиНО идёт за тарифом, когда тариф меняется (прототип sfSet).
-    const spino = out.changed ? out.choice?.id === 'spino' : s.benefits.includes('ЛЬГ-29');
-    expect(spino).toBe(expected.spino);
+  it.each(fixture.saves.map((x, i) => ({ ...x, i, name: fixture.cases[x.case]!.name })))(
+    '$i: $name',
+    ({ case: k, input, expected }) => {
+      const c = fixture.cases[k]!;
+      const s = subjectOf(c.subject);
+      const choice = choiceOf(c.current);
+      // Выбор, которого не трогали, в запрос не приходит.
+      const req: SocfundInput = {
+        flags: socfundFlagsOf(input.flags),
+        reason: input.reason,
+        ...(input.touched ? { tariff: (input.tariff as SocfundTariffId | null) ?? null } : {}),
+      };
+      const draft = { ...s, flags: req.flags };
+      expect(socfundManualMismatch(draft, req, dict)).toBe(expected.manBad);
+      const out = socfundDecide(s, choice, req, dict);
+      expect(out.choice?.id ?? null).toBe(expected.sfT);
+      expect(out.choice?.manual ?? false).toBe(expected.sfMan);
+      expect(out.choice?.reason ?? '').toBe(expected.sfWhy);
+      // Статус СПиНО идёт за тарифом, когда тариф меняется (прототип sfSet).
+      const spino = out.changed ? out.choice?.id === 'spino' : s.benefits.includes('ЛЬГ-29');
+      expect(spino).toBe(expected.spino);
 
-    // История: признаки (если изменились) и тариф (если сменился или выбран вручную).
-    const log: string[] = [];
-    if (JSON.stringify(out.flags) !== JSON.stringify(s.flags)) {
-      log.push(socfundFlagsHistoryText(out.flags, t));
-    }
-    if (out.changed) {
-      const line = socfundTariffHistoryText(choice, out.choice, dict, t);
-      if (line) log.push(line);
-    }
-    expect(log).toEqual(expected.log);
-  });
+      // История: признаки (если изменились) и тариф (если сменился или выбран вручную).
+      const log: string[] = [];
+      if (JSON.stringify(out.flags) !== JSON.stringify(s.flags)) {
+        log.push(socfundFlagsHistoryText(out.flags, t));
+      }
+      if (out.changed) {
+        const line = socfundTariffHistoryText(choice, out.choice, dict, t);
+        if (line) log.push(line);
+      }
+      expect(log).toEqual(expected.log);
+    },
+  );
 
   it('без изменения выбора и признаков ничего не меняется', () => {
     const c = fixture.cases[0]!;

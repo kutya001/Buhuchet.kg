@@ -135,8 +135,11 @@ describe('какие статьи видны', () => {
   it('статьи о модулях не из меню и о модулях, которых ещё нет, скрыты', () => {
     expect(kbArticleVisible(article({ mod: 'staff' }), access({}))).toBe(true);
     expect(kbArticleVisible(article({ mod: 'staff' }), access({ modules: ['org'] }))).toBe(false);
-    // «Контрагенты» в меню, но экрана ещё нет.
-    expect(kbArticleVisible(article({ mod: 'cps' }), access({}))).toBe(false);
+    // «Отчёты» в меню, но экрана ещё нет; «Контрагенты» — с формой создания (2.09).
+    expect(kbArticleVisible(article({ mod: 'reports' }), access({ modules: ['reports'] }))).toBe(
+      false,
+    );
+    expect(kbArticleVisible(article({ mod: 'cps' }), access({}))).toBe(true);
     // Админка: «Учётные записи» сделаны, «Справочники платформы» — ещё нет.
     const adm = access({ admin: true, modules: ['accounts', 'orgs', 'pdicts', 'kb'] });
     expect(kbArticleVisible(article({ aud: 'adm', mod: 'accounts' }), adm)).toBe(true);

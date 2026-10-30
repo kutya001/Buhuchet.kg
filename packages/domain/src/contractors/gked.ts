@@ -157,6 +157,8 @@ export interface GkedCheck {
 
 /** Режим «Единый налог»: у него подсказка ставки по ГКЭД. */
 export const SINGLE_TAX_REGIME = 'РЕЖ-03';
+/** Сколько найденных кодов показывает окно выбора ГКЭД (ТЗ: «показываются первые 80 найденных»; прототип GK_MAX). */
+export const GKED_PICK_LIMIT = 80;
 /** Физическое лицо на патенте (ИТД) — по коду формы собственности (ТЗ: «определяется по коду ФС-22»). */
 export const ITD_FORM = 'ФС-22';
 /** Особые ставки ЕН (реэкспорт, ввоз в СЭЗ, деятельность вне КР) — признаки контрагента, а не вида деятельности. */
@@ -165,8 +167,12 @@ const EN_SPECIAL = ['ЕНС-05', 'ЕНС-07', 'ЕНС-14'];
 const EN_BENEFIT: Readonly<Record<string, string>> = { 'ЕНС-13': 'ЛЬГ-01' };
 /** Одна ставка на всю деятельность: дополнительные виды отдельно не облагаются (ст. 423 ч. 7). */
 const EN_ONE = ['ЕНС-01', 'ЕНС-05', 'ЕНС-13', 'ЕНС-15'];
+/** Ставки на всю деятельность (ст. 423 ч. 7) — для замечания к строкам ЕНС формы (прототип enWarn). */
+export const SINGLE_TAX_ONE_RATES: readonly string[] = EN_ONE;
 /** «Остальные виды деятельности» — ставка, если ни одна строка не совпала. */
 const EN_OTHER = 'ЕНС-04';
+/** Код «Остальных видов деятельности» — строка, которую форма добавляет, когда предложить нечего. */
+export const SINGLE_TAX_OTHER_RATE = EN_OTHER;
 
 const SECTION = /^[A-Z]+$/;
 
@@ -233,6 +239,18 @@ function fit(
       (!r.in.length || r.in.some((p) => gkedHit(k, p, index))) &&
       !r.ex.some((p) => gkedHit(k, p, index)),
   );
+}
+
+/**
+ * Правило для контрагента и подходящие под него коды ГКЭД контрагента (прототип gkFor, gkFit ∘ cpCodes):
+ * `fit` — null, если правило пустое (без ограничения). Для подбора отчётов и окна льгот (2.07).
+ */
+export function gkedFitOf(
+  rule: GkedRule | null,
+  s: GkedSubject,
+  index: GkedIndex,
+): { rule: GkedRule | null; fit: string[] | null } {
+  return { rule: rule && ruleFor(rule, s), fit: fit(rule, codesOf(s), index, s) };
 }
 
 /** Пометка «сверить» у перечня (прототип gkVer). */
@@ -553,6 +571,47 @@ function rateText(hint: GkedRateHint, t: Translate): string {
           : '',
       });
   }
+}
+
+/** Окно «Проверьте право на режим «…»» (прототип gkEnOk): заголовок, текст и кнопка подтверждения. */
+export interface GkedConfirmDialog {
+  title: string;
+  text: string;
+  ok: string;
+}
+
+/**
+ * Текст окна подтверждения права на режим — как в прототипе gkEnOk: у перечня патента — все коды
+ * контрагента, у «Предупреждать при ГКЭД» — основной код, группа и вопрос группы (тогда кнопка «Нет, не
+ * оказывает»). `codes` — основной и дополнительные ГКЭД, `names` — их названия.
+ */
+export function gkedConfirmDialog(
+  need: GkedConfirmNeed,
+  codes: readonly string[],
+  names: ReadonlyMap<string, string>,
+  t: Translate,
+): GkedConfirmDialog {
+  const regime = need.regimeName;
+  const code = (k: string) => t('cp.gked.confirm.code', { code: k, name: names.get(k) ?? '' });
+  const ask = need.list ? '' : need.ask;
+  const text = need.list
+    ? t('cp.gked.confirm.list', {
+        codes: codes.map(code).join(', '),
+        regime,
+        list: t(`cp.gked.list.${need.list}`),
+        article: need.article,
+      })
+    : t(ask ? 'cp.gked.confirm.ask' : 'cp.gked.confirm.warn', {
+        code: code(need.code),
+        group: need.group ? ` (${groupText(need.group)})` : '',
+        regime,
+        article: need.article,
+      });
+  return {
+    title: ask || t('cp.gked.confirm.title', { regime }),
+    text: `${text}\n\n${t('cp.gked.confirm.tail')}`,
+    ok: t(ask ? 'cp.gked.confirm.ok_ask' : 'cp.gked.confirm.ok'),
+  };
 }
 
 /** Сверка словами: тексты из словаря (прототип — те же строки). */

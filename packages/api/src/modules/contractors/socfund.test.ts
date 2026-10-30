@@ -377,7 +377,7 @@ describe.skipIf(!databaseAvailable())('Тариф Соцфонда: методы
     expect((await failure(archived)).code).toBe('contractor_archived');
   });
 
-  it('карточка отчёта STI-161: ставки тарифа и пеня информационно; без основания «Есть наёмные сотрудники» тарифа нет (п. А-5)', async () => {
+  it('карточка отчёта STI-161: ставки тарифа и пеня информационно; без основания «Есть наёмные сотрудники» — тариф по условиям (п. А-5)', async () => {
     const connect = await apiRequest(f.app, 'POST', '/api/org-report-types/connect', owner, {
       connect: ['soc'],
       disconnect: [],
@@ -394,13 +394,14 @@ describe.skipIf(!databaseAvailable())('Тариф Соцфонда: методы
     };
     const cp = await created(owner, { socfund: { flags: ALL_YES } });
     await assignSoc(cp.id);
-    // ОТКЛОНЕНИЕ: docs/deviations.md#А-5 — пока по ТЗ: STI-161 без основания тариф не требует.
+    // П. А-5, решение заказчика (как в прототипе): с действующим STI-161 тариф нужен и без основания
+    // «Есть наёмные сотрудники» — признаки и тариф по условиям, выбора ещё нет.
     const noBase = await created(owner, { bases: [], socfund: { flags: ALL_YES } });
     await assignSoc(noBase.id);
     expect((await card(owner, noBase.id)).socfund).toMatchObject({
-      needed: false,
+      needed: true,
       tariff: null,
-      auto: null,
+      auto: { id: 'spino' },
     });
 
     const reports = ReportList.parse(
@@ -439,7 +440,7 @@ describe.skipIf(!databaseAvailable())('Тариф Соцфонда: методы
       await (await apiRequest(f.app, 'GET', '/api/reports?size=all', owner)).json(),
     ).items.find((r) => r.contractor.id === noBase.id && r.periodStart === '2026-08-01')!;
     const noBaseAug = await report(other.id);
-    expect(noBaseAug.socfund).toBeNull();
+    expect(noBaseAug.socfund).toMatchObject({ tariff: null, auto: { id: 'spino' } });
     expect(noBaseAug.penalty).toContain('0,09');
   });
 });

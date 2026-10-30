@@ -1,6 +1,6 @@
 'use client';
 
-import type { PermissionId, Scope, ScopeGroupId } from '@buhuchet/domain';
+import type { Feature, PermissionId, Scope, ScopeGroupId } from '@buhuchet/domain';
 import {
   buttonClass,
   Icon,
@@ -41,6 +41,7 @@ export function PermissionGroups({
   state,
   lockWith,
   scopeLock,
+  feature,
   onChange,
 }: {
   catalog: readonly CatalogPermission[];
@@ -49,6 +50,11 @@ export function PermissionGroups({
   lockWith: (selected: ReadonlySet<PermissionId>) => PermissionLockOf;
   /** Почему переключатель области группы закрыт (`roleScopeLock`). */
   scopeLock?: ScopeLockOf;
+  /**
+   * Включён ли модуль в учётной политике; по умолчанию — у вошедшего. У шаблона роли в Админке
+   * учётной политики нет — все модули включены.
+   */
+  feature?: (feature: Feature) => boolean;
   onChange?: (next: PermissionState) => void;
 }) {
   const t = useT();
@@ -65,7 +71,7 @@ export function PermissionGroups({
     query,
     toggled,
     phone,
-    feature: access.feature,
+    feature: feature ?? access.feature,
     scopeLock,
   });
   const flip = (id: string) =>

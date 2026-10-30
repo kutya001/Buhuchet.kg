@@ -9,8 +9,8 @@ import type { Tx } from './client';
 import {
   employees,
   loginAttempts,
+  messageTemplateTexts,
   passwordResetCodes,
-  platformReference,
   sessions,
   telegramLinks,
   telegramLinkTokens,
@@ -497,12 +497,9 @@ describe.skipIf(!databaseAvailable())('Telegram и «Забыли пароль?�
 
   it('шаблоны сообщений — из справочников платформы', async () => {
     expect(await messageTemplates(t.app.db)).toEqual({});
-    await t.admin.db.insert(platformReference).values({
-      key: 'messageTemplates',
-      payload: { tgCode: 'Код: {код}', broken: 5 },
-      checksum: 'x',
-      source: 'test',
-    });
+    await t.admin.db
+      .insert(messageTemplateTexts)
+      .values({ key: 'tgCode', text: 'Код: {код}', sortOrder: 1 });
     expect(await messageTemplates(t.app.db)).toEqual({ tgCode: 'Код: {код}' });
   });
 });

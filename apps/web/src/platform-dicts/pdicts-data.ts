@@ -1,8 +1,15 @@
 'use client';
 
-import type { AdminValueDict } from '@buhuchet/domain';
+import type { AdminSystemDict, AdminValueDict } from '@buhuchet/domain';
 import {
+  AdminMessageTemplates,
+  AdminPermissionList,
+  AdminRoleTemplates,
+  AdminStatuses,
   AdminDictGroups,
+  Authorities,
+  ReportBases,
+  TaxRegimes,
   AdminDictHistory,
   AdminDictList,
   AdminDictRequestList,
@@ -11,6 +18,7 @@ import {
   ListValues,
   PdictsTabCounts,
   type AdminDictRequest,
+  type AdminPermission,
 } from '@buhuchet/shared';
 import type { ShellCount } from '@buhuchet/ui';
 import { queryOptions, useQueryClient } from '@tanstack/react-query';
@@ -46,6 +54,35 @@ export const reportTypeOptionsQuery = queryOptions({
     json(await pd['report-type-options'].$get(), (v) => AdminReportTypeOptions.parse(v).items),
 });
 
+/**
+ * Органы, режимы и основания, в том числе отключённые: выбор в окне вида отчёта (отключённое, уже
+ * выбранное, остаётся) и названия в «Истории изменений» видов отчётов.
+ */
+export const pdictsOrgansQuery = queryOptions({
+  queryKey: ['admin', 'pdicts', 'all-organs'],
+  queryFn: async () =>
+    json(
+      await api.api.authorities.$get({ query: { all: 'true' } }),
+      (v) => Authorities.parse(v).items,
+    ),
+});
+export const pdictsRegimesQuery = queryOptions({
+  queryKey: ['admin', 'pdicts', 'all-regimes'],
+  queryFn: async () =>
+    json(
+      await api.api['tax-regimes'].$get({ query: { all: 'true' } }),
+      (v) => TaxRegimes.parse(v).items,
+    ),
+});
+export const pdictsBasesQuery = queryOptions({
+  queryKey: ['admin', 'pdicts', 'all-bases'],
+  queryFn: async () =>
+    json(
+      await api.api['report-bases'].$get({ query: { all: 'true' } }),
+      (v) => ReportBases.parse(v).items,
+    ),
+});
+
 /** Число новых запросов на вкладке «Запросы» (прототип pdTabs: `count` — новые). */
 export const pdictsTabCountsQuery = queryOptions({
   queryKey: ['admin', 'pdicts', 'tab-counts'],
@@ -55,21 +92,68 @@ export const pdictsTabCountsQuery = queryOptions({
   },
 });
 
-/**
- * «История изменений» справочника или календаря (у календаря — свой адрес: ключ записи — день,
- * docs/deviations.md п. Д-6): последние записи и сколько всего.
- */
-export const pdictsHistoryQuery = (dict: AdminValueDict | 'calendar') =>
+/** Вкладка с «Историей изменений»: справочник общего механизма, календарь или вкладка части 3. */
+export type HistoryDict = AdminValueDict | AdminSystemDict | 'calendar';
+
+/** Адрес истории вкладки, у которой он свой (календарь — ключ записи день, docs/deviations.md п. Д-6). */
+function ownHistory(dict: HistoryDict) {
+  switch (dict) {
+    case 'calendar':
+      return pd.calendar.history.$get();
+    case 'statuses':
+      return pd.statuses.history.$get();
+    case 'perms':
+      return pd.perms.history.$get();
+    case 'roletpl':
+      return pd.roletpl.history.$get();
+    case 'templates':
+      return pd.templates.history.$get();
+    default:
+      return pd[':dict'].history.$get({ param: { dict } });
+  }
+}
+
+/** «История изменений» вкладки: последние записи и сколько всего. */
+export const pdictsHistoryQuery = (dict: HistoryDict) =>
   queryOptions({
     queryKey: ['admin', 'pdicts', dict, 'history'],
-    queryFn: async () =>
-      json(
-        await (dict === 'calendar'
-          ? pd.calendar.history.$get()
-          : pd[':dict'].history.$get({ param: { dict } })),
-        (v) => AdminDictHistory.parse(v),
-      ),
+    queryFn: async () => json(await ownHistory(dict), (v) => AdminDictHistory.parse(v)),
   });
+
+/** «Статусы»: статусы всех шкал с местом, названием и цветом; периодичность отчётов. */
+export const pdictsStatusesQuery = queryOptions({
+  queryKey: ['admin', 'pdicts', 'statuses'],
+  queryFn: async () => json(await pd.statuses.$get(), (v) => AdminStatuses.parse(v)),
+});
+
+/** «Права ролей»: страница списка и значения фильтра. */
+export const fetchAdminPermissions: FetchListPage<AdminPermission> = async (params) =>
+  json(await pd.perms.$get({ query: params }), (v) => AdminPermissionList.parse(v));
+
+export const fetchAdminPermissionValues = async (col: string, q?: string) =>
+  json(await pd.perms.values.$get({ query: q ? { col, q } : { col } }), (v) => ListValues.parse(v));
+
+/** Все права с группами — галочки прав в окне шаблона роли. */
+export const pdictsPermissionsQuery = queryOptions({
+  queryKey: ['admin', 'pdicts', 'perms', 'all'],
+  queryFn: async () =>
+    json(
+      await pd.perms.$get({ query: { size: 'all' } }),
+      (v) => AdminPermissionList.parse(v).items,
+    ),
+});
+
+/** «Шаблоны ролей». */
+export const pdictsRoleTemplatesQuery = queryOptions({
+  queryKey: ['admin', 'pdicts', 'roletpl'],
+  queryFn: async () => json(await pd.roletpl.$get(), (v) => AdminRoleTemplates.parse(v).items),
+});
+
+/** «Шаблоны» сообщений с подстановками. */
+export const pdictsTemplatesQuery = queryOptions({
+  queryKey: ['admin', 'pdicts', 'templates'],
+  queryFn: async () => json(await pd.templates.$get(), (v) => AdminMessageTemplates.parse(v).items),
+});
 
 /** Страница списка значений справочника. */
 export const fetchAdminDict =
@@ -102,7 +186,7 @@ export const fetchDictRequestValues = async (col: string, q?: string) =>
 export function usePdictsRefresh() {
   const client = useQueryClient();
   return useCallback(
-    (dict: AdminValueDict | 'requests') => {
+    (dict: AdminValueDict | AdminSystemDict | 'requests') => {
       void client.invalidateQueries({ queryKey: ['list', `pdicts.${dict}`] });
       void client.invalidateQueries({ queryKey: ['admin', 'pdicts'] });
     },
