@@ -369,15 +369,50 @@
     {
       "idx": 52,
       "version": "7",
-      "when": 1793310922515,
-      "tag": "0052_admin_platform_dicts_benefits",
+      "when": 1793311529605,
+      "tag": "0052_kpi_import",
       "breakpoints": true
     },
     {
       "idx": 53,
       "version": "7",
-      "when": 1793311613256,
-      "tag": "0053_admin_platform_dicts_system",
+      "when": 1793311530943,
+      "tag": "0053_kpi_import_guards",
+      "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1793314397608,
+      "tag": "0054_contractors_socfund",
+      "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1793320096835,
+      "tag": "0055_onboarding",
+      "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1793320098294,
+      "tag": "0056_onboarding_grants",
+      "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "when": 1793321579460,
+      "tag": "0057_admin_platform_dicts_benefits",
+      "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1793321989051,
+      "tag": "0058_admin_platform_dicts_system",
       "breakpoints": true
     }
   ]

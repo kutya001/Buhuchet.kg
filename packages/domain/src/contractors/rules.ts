@@ -63,6 +63,8 @@ export const CONTRACTOR_TEXT_MAX = {
   contractNo: 50,
   note: 2000,
   registration: 500,
+  /** Причина ручного выбора тарифа Соцфонда. */
+  socfundReason: 500,
 } as const;
 
 /** День оплаты обслуживания в месяце: с 1-го по 28-е (прототип editCpDlg: «Число от 1 до 28»). */

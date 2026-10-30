@@ -1,6 +1,6 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import { ADMIN_PASSWORD, platformAdmin } from './admin';
-import { hire, signIn, uniqueLogin } from './helpers';
+import { hire, newOrgOwner, signIn, uniqueLogin } from './helpers';
 
 // «Новости» и «Что нового» (задача 2.32). Новость видят все пользователи платформы, поэтому тесты — в
 // *.shared.spec.ts (идут после остальных и по одному): опубликованная новость не попадёт в чужую
@@ -268,6 +268,55 @@ test.describe('Этап 2: Новости и «Что нового»', () => {
       await expect(window.locator('[data-whats-new-item]')).toHaveCount(1);
       await expect(window.locator(`[data-whats-new-item="${v15.id}"]`)).toBeVisible();
       await expect(window).not.toContainText('Добро пожаловать');
+      await window.getByRole('button', { name: 'Понятно' }).click();
+      await expect(window).toBeHidden();
+    } finally {
+      for (const id of ids) await takeOff(admin, origin, id);
+      await admin.dispose();
+    }
+  });
+
+  // Задача 2.33 (ТЗ «Новости» → «Окно «Что нового» при входе»): у владельца новой организации сначала
+  // «Приветствие», а «Что нового» в этот вход не показывается — даже когда непрочитанная новость есть.
+  test('(проверка задачи #89) владелец новой организации: при первом входе — приветствие без «Что нового»; после «Позже» при следующем входе — «Что нового»', async ({
+    page,
+    baseURL,
+    playwright,
+  }) => {
+    const origin = new URL(baseURL!).origin;
+    const admin = await playwright.request.newContext({ baseURL });
+    await platformAdmin(admin, origin);
+    const owner = await newOrgOwner(page.request, origin);
+    await page.request.post('/api/auth/logout', { headers: { origin } });
+    const ids: string[] = [];
+    try {
+      const v16 = await publish(admin, origin, {
+        title: 'Версия 1.6 — 22.10.2026',
+        release: '1.6',
+      });
+      ids.push(v16.id);
+      let askedWhatsNew = 0;
+      page.on('request', (r) => {
+        if (r.url().endsWith('/api/news/whats-new')) askedWhatsNew += 1;
+      });
+      await logIn(page, owner);
+      const welcome = page.getByRole('dialog', { name: 'Приветствие' });
+      await expect(welcome).toBeVisible();
+      await expect(welcome).toContainText('1 из 6');
+      await expect(page.getByRole('dialog', { name: 'Что нового' })).toHaveCount(0);
+      expect(askedWhatsNew).toBe(0);
+      await welcome.getByRole('button', { name: 'Позже' }).click();
+      await expect(
+        page.getByText('Опросник можно пройти позже: «Моя организация» → «Учётная политика»'),
+      ).toBeVisible();
+
+      // Опросник отложен: приветствие само не открывается, при входе — «Что нового» с новостью.
+      await page.request.post('/api/auth/logout', { headers: { origin } });
+      await logIn(page, owner);
+      const window = page.getByRole('dialog', { name: 'Что нового' });
+      await expect(window).toBeVisible();
+      await expect(window.locator(`[data-whats-new-item="${v16.id}"]`)).toBeVisible();
+      await expect(welcome).toHaveCount(0);
       await window.getByRole('button', { name: 'Понятно' }).click();
       await expect(window).toBeHidden();
     } finally {

@@ -1,0 +1,4724 @@
+{
+  "source": "spec/prototype/src/js/modules/onboard.js",
+  "features": [
+    "tasks",
+    "calendar",
+    "fee",
+    "taxpay",
+    "accounts",
+    "telegram",
+    "files",
+    "finops",
+    "projects",
+    "indicators",
+    "cppage"
+  ],
+  "plans": [
+    {
+      "answers": {
+        "q-tasks": "unk",
+        "q-tconf": "unk",
+        "q-money": "unk",
+        "q-acc": "unk",
+        "q-fee": "unk",
+        "q-proj": "unk",
+        "q-kpi": "unk",
+        "q-files": "unk",
+        "q-tg": "unk",
+        "q-cal": "unk"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "yes",
+        "q-tconf": "unk",
+        "q-money": "unk",
+        "q-acc": "unk",
+        "q-fee": "unk",
+        "q-proj": "unk",
+        "q-kpi": "unk",
+        "q-files": "unk",
+        "q-tg": "unk",
+        "q-cal": "unk"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "no",
+        "q-tconf": "unk",
+        "q-money": "unk",
+        "q-acc": "unk",
+        "q-fee": "unk",
+        "q-proj": "unk",
+        "q-kpi": "unk",
+        "q-files": "unk",
+        "q-tg": "unk",
+        "q-cal": "unk"
+      },
+      "features": {
+        "tasks": false,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "unk",
+        "q-tconf": "unk",
+        "q-money": "unk",
+        "q-acc": "unk",
+        "q-fee": "unk",
+        "q-proj": "unk",
+        "q-kpi": "unk",
+        "q-files": "unk",
+        "q-tg": "unk",
+        "q-cal": "unk"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "yes",
+        "q-tconf": "yes",
+        "q-money": "unk",
+        "q-acc": "unk",
+        "q-fee": "unk",
+        "q-proj": "unk",
+        "q-kpi": "unk",
+        "q-files": "unk",
+        "q-tg": "unk",
+        "q-cal": "unk"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "yes",
+        "q-tconf": "no",
+        "q-money": "unk",
+        "q-acc": "unk",
+        "q-fee": "unk",
+        "q-proj": "unk",
+        "q-kpi": "unk",
+        "q-files": "unk",
+        "q-tg": "unk",
+        "q-cal": "unk"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": false
+    },
+    {
+      "answers": {
+        "q-tasks": "yes",
+        "q-tconf": "unk",
+        "q-money": "unk",
+        "q-acc": "unk",
+        "q-fee": "unk",
+        "q-proj": "unk",
+        "q-kpi": "unk",
+        "q-files": "unk",
+        "q-tg": "unk",
+        "q-cal": "unk"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "no",
+        "q-tconf": "yes",
+        "q-money": "unk",
+        "q-acc": "unk",
+        "q-fee": "unk",
+        "q-proj": "unk",
+        "q-kpi": "unk",
+        "q-files": "unk",
+        "q-tg": "unk",
+        "q-cal": "unk"
+      },
+      "features": {
+        "tasks": false,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "unk",
+        "q-tconf": "unk",
+        "q-money": "yes",
+        "q-acc": "unk",
+        "q-fee": "unk",
+        "q-proj": "unk",
+        "q-kpi": "unk",
+        "q-files": "unk",
+        "q-tg": "unk",
+        "q-cal": "unk"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": true,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": true,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "unk",
+        "q-tconf": "unk",
+        "q-money": "no",
+        "q-acc": "unk",
+        "q-fee": "unk",
+        "q-proj": "unk",
+        "q-kpi": "unk",
+        "q-files": "unk",
+        "q-tg": "unk",
+        "q-cal": "unk"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "unk",
+        "q-tconf": "unk",
+        "q-money": "unk",
+        "q-acc": "unk",
+        "q-fee": "unk",
+        "q-proj": "unk",
+        "q-kpi": "unk",
+        "q-files": "unk",
+        "q-tg": "unk",
+        "q-cal": "unk"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "unk",
+        "q-tconf": "unk",
+        "q-money": "yes",
+        "q-acc": "yes",
+        "q-fee": "unk",
+        "q-proj": "unk",
+        "q-kpi": "unk",
+        "q-files": "unk",
+        "q-tg": "unk",
+        "q-cal": "unk"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": true,
+        "accounts": true,
+        "telegram": true,
+        "files": true,
+        "finops": true,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "unk",
+        "q-tconf": "unk",
+        "q-money": "yes",
+        "q-acc": "no",
+        "q-fee": "unk",
+        "q-proj": "unk",
+        "q-kpi": "unk",
+        "q-files": "unk",
+        "q-tg": "unk",
+        "q-cal": "unk"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": true,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": true,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "unk",
+        "q-tconf": "unk",
+        "q-money": "yes",
+        "q-acc": "unk",
+        "q-fee": "unk",
+        "q-proj": "unk",
+        "q-kpi": "unk",
+        "q-files": "unk",
+        "q-tg": "unk",
+        "q-cal": "unk"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": true,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": true,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "unk",
+        "q-tconf": "unk",
+        "q-money": "no",
+        "q-acc": "yes",
+        "q-fee": "unk",
+        "q-proj": "unk",
+        "q-kpi": "unk",
+        "q-files": "unk",
+        "q-tg": "unk",
+        "q-cal": "unk"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "unk",
+        "q-tconf": "unk",
+        "q-money": "unk",
+        "q-acc": "unk",
+        "q-fee": "yes",
+        "q-proj": "unk",
+        "q-kpi": "unk",
+        "q-files": "unk",
+        "q-tg": "unk",
+        "q-cal": "unk"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": true,
+        "fee": true,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "unk",
+        "q-tconf": "unk",
+        "q-money": "unk",
+        "q-acc": "unk",
+        "q-fee": "no",
+        "q-proj": "unk",
+        "q-kpi": "unk",
+        "q-files": "unk",
+        "q-tg": "unk",
+        "q-cal": "unk"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "unk",
+        "q-tconf": "unk",
+        "q-money": "unk",
+        "q-acc": "unk",
+        "q-fee": "unk",
+        "q-proj": "unk",
+        "q-kpi": "unk",
+        "q-files": "unk",
+        "q-tg": "unk",
+        "q-cal": "unk"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "unk",
+        "q-tconf": "unk",
+        "q-money": "unk",
+        "q-acc": "unk",
+        "q-fee": "unk",
+        "q-proj": "yes",
+        "q-kpi": "unk",
+        "q-files": "unk",
+        "q-tg": "unk",
+        "q-cal": "unk"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": true,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "unk",
+        "q-tconf": "unk",
+        "q-money": "unk",
+        "q-acc": "unk",
+        "q-fee": "unk",
+        "q-proj": "no",
+        "q-kpi": "unk",
+        "q-files": "unk",
+        "q-tg": "unk",
+        "q-cal": "unk"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "unk",
+        "q-tconf": "unk",
+        "q-money": "unk",
+        "q-acc": "unk",
+        "q-fee": "unk",
+        "q-proj": "unk",
+        "q-kpi": "unk",
+        "q-files": "unk",
+        "q-tg": "unk",
+        "q-cal": "unk"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "unk",
+        "q-tconf": "unk",
+        "q-money": "unk",
+        "q-acc": "unk",
+        "q-fee": "unk",
+        "q-proj": "unk",
+        "q-kpi": "yes",
+        "q-files": "unk",
+        "q-tg": "unk",
+        "q-cal": "unk"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": true,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "unk",
+        "q-tconf": "unk",
+        "q-money": "unk",
+        "q-acc": "unk",
+        "q-fee": "unk",
+        "q-proj": "unk",
+        "q-kpi": "no",
+        "q-files": "unk",
+        "q-tg": "unk",
+        "q-cal": "unk"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "unk",
+        "q-tconf": "unk",
+        "q-money": "unk",
+        "q-acc": "unk",
+        "q-fee": "unk",
+        "q-proj": "unk",
+        "q-kpi": "unk",
+        "q-files": "unk",
+        "q-tg": "unk",
+        "q-cal": "unk"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "unk",
+        "q-tconf": "unk",
+        "q-money": "unk",
+        "q-acc": "unk",
+        "q-fee": "unk",
+        "q-proj": "unk",
+        "q-kpi": "unk",
+        "q-files": "yes",
+        "q-tg": "unk",
+        "q-cal": "unk"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "unk",
+        "q-tconf": "unk",
+        "q-money": "unk",
+        "q-acc": "unk",
+        "q-fee": "unk",
+        "q-proj": "unk",
+        "q-kpi": "unk",
+        "q-files": "no",
+        "q-tg": "unk",
+        "q-cal": "unk"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": false,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "unk",
+        "q-tconf": "unk",
+        "q-money": "unk",
+        "q-acc": "unk",
+        "q-fee": "unk",
+        "q-proj": "unk",
+        "q-kpi": "unk",
+        "q-files": "unk",
+        "q-tg": "unk",
+        "q-cal": "unk"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "unk",
+        "q-tconf": "unk",
+        "q-money": "unk",
+        "q-acc": "unk",
+        "q-fee": "unk",
+        "q-proj": "unk",
+        "q-kpi": "unk",
+        "q-files": "unk",
+        "q-tg": "yes",
+        "q-cal": "unk"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "unk",
+        "q-tconf": "unk",
+        "q-money": "unk",
+        "q-acc": "unk",
+        "q-fee": "unk",
+        "q-proj": "unk",
+        "q-kpi": "unk",
+        "q-files": "unk",
+        "q-tg": "no",
+        "q-cal": "unk"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": false,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "unk",
+        "q-tconf": "unk",
+        "q-money": "unk",
+        "q-acc": "unk",
+        "q-fee": "unk",
+        "q-proj": "unk",
+        "q-kpi": "unk",
+        "q-files": "unk",
+        "q-tg": "unk",
+        "q-cal": "unk"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "unk",
+        "q-tconf": "unk",
+        "q-money": "unk",
+        "q-acc": "unk",
+        "q-fee": "unk",
+        "q-proj": "unk",
+        "q-kpi": "unk",
+        "q-files": "unk",
+        "q-tg": "unk",
+        "q-cal": "yes"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "unk",
+        "q-tconf": "unk",
+        "q-money": "unk",
+        "q-acc": "unk",
+        "q-fee": "unk",
+        "q-proj": "unk",
+        "q-kpi": "unk",
+        "q-files": "unk",
+        "q-tg": "unk",
+        "q-cal": "no"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": false,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "unk",
+        "q-tconf": "unk",
+        "q-money": "unk",
+        "q-acc": "unk",
+        "q-fee": "unk",
+        "q-proj": "unk",
+        "q-kpi": "unk",
+        "q-files": "unk",
+        "q-tg": "unk",
+        "q-cal": "unk"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "yes",
+        "q-tconf": "yes",
+        "q-money": "no",
+        "q-acc": "unk",
+        "q-fee": "unk",
+        "q-proj": "unk",
+        "q-kpi": "no",
+        "q-files": "no",
+        "q-tg": "yes",
+        "q-cal": "unk"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": false,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "yes",
+        "q-tconf": "yes",
+        "q-money": "yes",
+        "q-acc": "no",
+        "q-fee": "no",
+        "q-proj": "unk",
+        "q-kpi": "unk",
+        "q-files": "yes",
+        "q-tg": "yes",
+        "q-cal": "yes"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": true,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": true,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "no",
+        "q-tconf": "unk",
+        "q-money": "no",
+        "q-acc": "unk",
+        "q-fee": "yes",
+        "q-proj": "yes",
+        "q-kpi": "unk",
+        "q-files": "unk",
+        "q-tg": "unk",
+        "q-cal": "unk"
+      },
+      "features": {
+        "tasks": false,
+        "calendar": true,
+        "fee": true,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": true,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "yes",
+        "q-tconf": "yes",
+        "q-money": "no",
+        "q-acc": "no",
+        "q-fee": "unk",
+        "q-proj": "yes",
+        "q-kpi": "no",
+        "q-files": "unk",
+        "q-tg": "yes",
+        "q-cal": "unk"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": true,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "no",
+        "q-tconf": "unk",
+        "q-money": "yes",
+        "q-acc": "no",
+        "q-fee": "no",
+        "q-proj": "no",
+        "q-kpi": "no",
+        "q-files": "yes",
+        "q-tg": "yes",
+        "q-cal": "unk"
+      },
+      "features": {
+        "tasks": false,
+        "calendar": true,
+        "fee": false,
+        "taxpay": true,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": true,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "no",
+        "q-tconf": "unk",
+        "q-money": "unk",
+        "q-acc": "no",
+        "q-fee": "unk",
+        "q-proj": "no",
+        "q-kpi": "unk",
+        "q-files": "unk",
+        "q-tg": "unk",
+        "q-cal": "no"
+      },
+      "features": {
+        "tasks": false,
+        "calendar": false,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "no",
+        "q-tconf": "yes",
+        "q-money": "yes",
+        "q-acc": "yes",
+        "q-fee": "no",
+        "q-proj": "unk",
+        "q-kpi": "yes",
+        "q-files": "unk",
+        "q-tg": "yes",
+        "q-cal": "unk"
+      },
+      "features": {
+        "tasks": false,
+        "calendar": true,
+        "fee": false,
+        "taxpay": true,
+        "accounts": true,
+        "telegram": true,
+        "files": true,
+        "finops": true,
+        "projects": false,
+        "indicators": true,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "unk",
+        "q-tconf": "no",
+        "q-money": "unk",
+        "q-acc": "no",
+        "q-fee": "yes",
+        "q-proj": "no",
+        "q-kpi": "yes",
+        "q-files": "unk",
+        "q-tg": "yes",
+        "q-cal": "no"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": false,
+        "fee": true,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": true,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "unk",
+        "q-tconf": "yes",
+        "q-money": "unk",
+        "q-acc": "no",
+        "q-fee": "unk",
+        "q-proj": "yes",
+        "q-kpi": "no",
+        "q-files": "yes",
+        "q-tg": "no",
+        "q-cal": "no"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": false,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": false,
+        "files": true,
+        "finops": false,
+        "projects": true,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "unk",
+        "q-tconf": "yes",
+        "q-money": "yes",
+        "q-acc": "yes",
+        "q-fee": "no",
+        "q-proj": "unk",
+        "q-kpi": "yes",
+        "q-files": "unk",
+        "q-tg": "yes",
+        "q-cal": "yes"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": true,
+        "accounts": true,
+        "telegram": true,
+        "files": true,
+        "finops": true,
+        "projects": false,
+        "indicators": true,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "yes",
+        "q-tconf": "yes",
+        "q-money": "yes",
+        "q-acc": "yes",
+        "q-fee": "no",
+        "q-proj": "no",
+        "q-kpi": "no",
+        "q-files": "unk",
+        "q-tg": "unk",
+        "q-cal": "yes"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": true,
+        "accounts": true,
+        "telegram": true,
+        "files": true,
+        "finops": true,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "no",
+        "q-tconf": "unk",
+        "q-money": "unk",
+        "q-acc": "no",
+        "q-fee": "no",
+        "q-proj": "unk",
+        "q-kpi": "unk",
+        "q-files": "unk",
+        "q-tg": "unk",
+        "q-cal": "yes"
+      },
+      "features": {
+        "tasks": false,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "no",
+        "q-tconf": "yes",
+        "q-money": "yes",
+        "q-acc": "yes",
+        "q-fee": "yes",
+        "q-proj": "unk",
+        "q-kpi": "yes",
+        "q-files": "unk",
+        "q-tg": "no",
+        "q-cal": "unk"
+      },
+      "features": {
+        "tasks": false,
+        "calendar": true,
+        "fee": true,
+        "taxpay": true,
+        "accounts": true,
+        "telegram": false,
+        "files": true,
+        "finops": true,
+        "projects": false,
+        "indicators": true,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "no",
+        "q-tconf": "unk",
+        "q-money": "no",
+        "q-acc": "no",
+        "q-fee": "yes",
+        "q-proj": "yes",
+        "q-kpi": "unk",
+        "q-files": "unk",
+        "q-tg": "yes",
+        "q-cal": "unk"
+      },
+      "features": {
+        "tasks": false,
+        "calendar": true,
+        "fee": true,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": true,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "no",
+        "q-tconf": "no",
+        "q-money": "unk",
+        "q-acc": "no",
+        "q-fee": "no",
+        "q-proj": "no",
+        "q-kpi": "no",
+        "q-files": "yes",
+        "q-tg": "unk",
+        "q-cal": "yes"
+      },
+      "features": {
+        "tasks": false,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "unk",
+        "q-tconf": "yes",
+        "q-money": "no",
+        "q-acc": "unk",
+        "q-fee": "no",
+        "q-proj": "no",
+        "q-kpi": "no",
+        "q-files": "no",
+        "q-tg": "unk",
+        "q-cal": "unk"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": false,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "no",
+        "q-tconf": "no",
+        "q-money": "yes",
+        "q-acc": "yes",
+        "q-fee": "unk",
+        "q-proj": "no",
+        "q-kpi": "unk",
+        "q-files": "unk",
+        "q-tg": "yes",
+        "q-cal": "no"
+      },
+      "features": {
+        "tasks": false,
+        "calendar": false,
+        "fee": false,
+        "taxpay": true,
+        "accounts": true,
+        "telegram": true,
+        "files": true,
+        "finops": true,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "no",
+        "q-tconf": "yes",
+        "q-money": "yes",
+        "q-acc": "yes",
+        "q-fee": "yes",
+        "q-proj": "yes",
+        "q-kpi": "unk",
+        "q-files": "yes",
+        "q-tg": "unk",
+        "q-cal": "yes"
+      },
+      "features": {
+        "tasks": false,
+        "calendar": true,
+        "fee": true,
+        "taxpay": true,
+        "accounts": true,
+        "telegram": true,
+        "files": true,
+        "finops": true,
+        "projects": true,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "yes",
+        "q-tconf": "no",
+        "q-money": "no",
+        "q-acc": "no",
+        "q-fee": "yes",
+        "q-proj": "yes",
+        "q-kpi": "no",
+        "q-files": "yes",
+        "q-tg": "no",
+        "q-cal": "unk"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": true,
+        "fee": true,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": false,
+        "files": true,
+        "finops": false,
+        "projects": true,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": false
+    },
+    {
+      "answers": {
+        "q-tasks": "unk",
+        "q-tconf": "no",
+        "q-money": "yes",
+        "q-acc": "no",
+        "q-fee": "no",
+        "q-proj": "yes",
+        "q-kpi": "yes",
+        "q-files": "no",
+        "q-tg": "unk",
+        "q-cal": "no"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": false,
+        "fee": false,
+        "taxpay": true,
+        "accounts": false,
+        "telegram": true,
+        "files": false,
+        "finops": true,
+        "projects": true,
+        "indicators": true,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "no",
+        "q-tconf": "yes",
+        "q-money": "unk",
+        "q-acc": "unk",
+        "q-fee": "no",
+        "q-proj": "yes",
+        "q-kpi": "yes",
+        "q-files": "no",
+        "q-tg": "yes",
+        "q-cal": "yes"
+      },
+      "features": {
+        "tasks": false,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": false,
+        "finops": false,
+        "projects": true,
+        "indicators": true,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "unk",
+        "q-tconf": "yes",
+        "q-money": "unk",
+        "q-acc": "no",
+        "q-fee": "yes",
+        "q-proj": "unk",
+        "q-kpi": "yes",
+        "q-files": "yes",
+        "q-tg": "yes",
+        "q-cal": "no"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": false,
+        "fee": true,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": true,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "unk",
+        "q-tconf": "no",
+        "q-money": "unk",
+        "q-acc": "yes",
+        "q-fee": "unk",
+        "q-proj": "no",
+        "q-kpi": "no",
+        "q-files": "no",
+        "q-tg": "unk",
+        "q-cal": "yes"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": false,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "no",
+        "q-tconf": "no",
+        "q-money": "yes",
+        "q-acc": "yes",
+        "q-fee": "yes",
+        "q-proj": "no",
+        "q-kpi": "unk",
+        "q-files": "no",
+        "q-tg": "unk",
+        "q-cal": "no"
+      },
+      "features": {
+        "tasks": false,
+        "calendar": false,
+        "fee": true,
+        "taxpay": true,
+        "accounts": true,
+        "telegram": true,
+        "files": false,
+        "finops": true,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "unk",
+        "q-tconf": "no",
+        "q-money": "no",
+        "q-acc": "no",
+        "q-fee": "unk",
+        "q-proj": "yes",
+        "q-kpi": "unk",
+        "q-files": "no",
+        "q-tg": "yes",
+        "q-cal": "unk"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": false,
+        "finops": false,
+        "projects": true,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "yes",
+        "q-tconf": "unk",
+        "q-money": "unk",
+        "q-acc": "no",
+        "q-fee": "no",
+        "q-proj": "yes",
+        "q-kpi": "yes",
+        "q-files": "yes",
+        "q-tg": "no",
+        "q-cal": "yes"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": false,
+        "files": true,
+        "finops": false,
+        "projects": true,
+        "indicators": true,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "yes",
+        "q-tconf": "no",
+        "q-money": "no",
+        "q-acc": "unk",
+        "q-fee": "unk",
+        "q-proj": "unk",
+        "q-kpi": "yes",
+        "q-files": "yes",
+        "q-tg": "no",
+        "q-cal": "yes"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": false,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": true,
+        "cppage": false
+      },
+      "taskConfirm": false
+    },
+    {
+      "answers": {
+        "q-tasks": "no",
+        "q-tconf": "no",
+        "q-money": "no",
+        "q-acc": "unk",
+        "q-fee": "yes",
+        "q-proj": "yes",
+        "q-kpi": "yes",
+        "q-files": "no",
+        "q-tg": "no",
+        "q-cal": "unk"
+      },
+      "features": {
+        "tasks": false,
+        "calendar": true,
+        "fee": true,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": false,
+        "files": false,
+        "finops": false,
+        "projects": true,
+        "indicators": true,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "yes",
+        "q-tconf": "no",
+        "q-money": "yes",
+        "q-acc": "unk",
+        "q-fee": "no",
+        "q-proj": "unk",
+        "q-kpi": "no",
+        "q-files": "unk",
+        "q-tg": "unk",
+        "q-cal": "yes"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": true,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": true,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": false
+    },
+    {
+      "answers": {
+        "q-tasks": "yes",
+        "q-tconf": "no",
+        "q-money": "unk",
+        "q-acc": "yes",
+        "q-fee": "no",
+        "q-proj": "yes",
+        "q-kpi": "no",
+        "q-files": "no",
+        "q-tg": "no",
+        "q-cal": "no"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": false,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": false,
+        "files": false,
+        "finops": false,
+        "projects": true,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": false
+    },
+    {
+      "answers": {
+        "q-tasks": "yes",
+        "q-tconf": "no",
+        "q-money": "no",
+        "q-acc": "yes",
+        "q-fee": "yes",
+        "q-proj": "yes",
+        "q-kpi": "no",
+        "q-files": "yes",
+        "q-tg": "unk",
+        "q-cal": "no"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": false,
+        "fee": true,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": true,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": false
+    },
+    {
+      "answers": {
+        "q-tasks": "unk",
+        "q-tconf": "unk",
+        "q-money": "no",
+        "q-acc": "unk",
+        "q-fee": "no",
+        "q-proj": "unk",
+        "q-kpi": "unk",
+        "q-files": "yes",
+        "q-tg": "unk",
+        "q-cal": "no"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": false,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "unk",
+        "q-tconf": "no",
+        "q-money": "unk",
+        "q-acc": "no",
+        "q-fee": "yes",
+        "q-proj": "yes",
+        "q-kpi": "yes",
+        "q-files": "unk",
+        "q-tg": "yes",
+        "q-cal": "no"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": false,
+        "fee": true,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": true,
+        "indicators": true,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "unk",
+        "q-tconf": "unk",
+        "q-money": "unk",
+        "q-acc": "yes",
+        "q-fee": "unk",
+        "q-proj": "no",
+        "q-kpi": "unk",
+        "q-files": "yes",
+        "q-tg": "unk",
+        "q-cal": "unk"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "no",
+        "q-tconf": "yes",
+        "q-money": "yes",
+        "q-acc": "no",
+        "q-fee": "yes",
+        "q-proj": "no",
+        "q-kpi": "yes",
+        "q-files": "unk",
+        "q-tg": "no",
+        "q-cal": "yes"
+      },
+      "features": {
+        "tasks": false,
+        "calendar": true,
+        "fee": true,
+        "taxpay": true,
+        "accounts": false,
+        "telegram": false,
+        "files": true,
+        "finops": true,
+        "projects": false,
+        "indicators": true,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "no",
+        "q-tconf": "no",
+        "q-money": "unk",
+        "q-acc": "unk",
+        "q-fee": "no",
+        "q-proj": "no",
+        "q-kpi": "unk",
+        "q-files": "unk",
+        "q-tg": "yes",
+        "q-cal": "unk"
+      },
+      "features": {
+        "tasks": false,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "unk",
+        "q-tconf": "unk",
+        "q-money": "yes",
+        "q-acc": "unk",
+        "q-fee": "yes",
+        "q-proj": "unk",
+        "q-kpi": "unk",
+        "q-files": "yes",
+        "q-tg": "yes",
+        "q-cal": "yes"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": true,
+        "fee": true,
+        "taxpay": true,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": true,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "unk",
+        "q-tconf": "yes",
+        "q-money": "yes",
+        "q-acc": "yes",
+        "q-fee": "no",
+        "q-proj": "yes",
+        "q-kpi": "unk",
+        "q-files": "yes",
+        "q-tg": "no",
+        "q-cal": "no"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": false,
+        "fee": false,
+        "taxpay": true,
+        "accounts": true,
+        "telegram": false,
+        "files": true,
+        "finops": true,
+        "projects": true,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "unk",
+        "q-tconf": "no",
+        "q-money": "unk",
+        "q-acc": "no",
+        "q-fee": "no",
+        "q-proj": "no",
+        "q-kpi": "unk",
+        "q-files": "yes",
+        "q-tg": "yes",
+        "q-cal": "yes"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "yes",
+        "q-tconf": "no",
+        "q-money": "yes",
+        "q-acc": "unk",
+        "q-fee": "unk",
+        "q-proj": "unk",
+        "q-kpi": "yes",
+        "q-files": "no",
+        "q-tg": "unk",
+        "q-cal": "yes"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": true,
+        "accounts": false,
+        "telegram": true,
+        "files": false,
+        "finops": true,
+        "projects": false,
+        "indicators": true,
+        "cppage": false
+      },
+      "taskConfirm": false
+    },
+    {
+      "answers": {
+        "q-tasks": "unk",
+        "q-tconf": "no",
+        "q-money": "no",
+        "q-acc": "unk",
+        "q-fee": "no",
+        "q-proj": "no",
+        "q-kpi": "no",
+        "q-files": "yes",
+        "q-tg": "yes",
+        "q-cal": "no"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": false,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "no",
+        "q-tconf": "no",
+        "q-money": "unk",
+        "q-acc": "unk",
+        "q-fee": "unk",
+        "q-proj": "unk",
+        "q-kpi": "unk",
+        "q-files": "unk",
+        "q-tg": "unk",
+        "q-cal": "yes"
+      },
+      "features": {
+        "tasks": false,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "unk",
+        "q-tconf": "yes",
+        "q-money": "no",
+        "q-acc": "yes",
+        "q-fee": "no",
+        "q-proj": "yes",
+        "q-kpi": "unk",
+        "q-files": "unk",
+        "q-tg": "yes",
+        "q-cal": "unk"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": true,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "yes",
+        "q-tconf": "yes",
+        "q-money": "yes",
+        "q-acc": "yes",
+        "q-fee": "yes",
+        "q-proj": "yes",
+        "q-kpi": "yes",
+        "q-files": "no",
+        "q-tg": "no",
+        "q-cal": "no"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": false,
+        "fee": true,
+        "taxpay": true,
+        "accounts": true,
+        "telegram": false,
+        "files": false,
+        "finops": true,
+        "projects": true,
+        "indicators": true,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "unk",
+        "q-tconf": "yes",
+        "q-money": "no",
+        "q-acc": "unk",
+        "q-fee": "unk",
+        "q-proj": "no",
+        "q-kpi": "no",
+        "q-files": "unk",
+        "q-tg": "yes",
+        "q-cal": "unk"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "unk",
+        "q-tconf": "unk",
+        "q-money": "unk",
+        "q-acc": "yes",
+        "q-fee": "unk",
+        "q-proj": "unk",
+        "q-kpi": "no",
+        "q-files": "yes",
+        "q-tg": "no",
+        "q-cal": "unk"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": false,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "no",
+        "q-tconf": "yes",
+        "q-money": "unk",
+        "q-acc": "no",
+        "q-fee": "unk",
+        "q-proj": "no",
+        "q-kpi": "no",
+        "q-files": "yes",
+        "q-tg": "unk",
+        "q-cal": "no"
+      },
+      "features": {
+        "tasks": false,
+        "calendar": false,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "yes",
+        "q-tconf": "unk",
+        "q-money": "no",
+        "q-acc": "no",
+        "q-fee": "unk",
+        "q-proj": "yes",
+        "q-kpi": "yes",
+        "q-files": "unk",
+        "q-tg": "yes",
+        "q-cal": "no"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": false,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": true,
+        "indicators": true,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "yes",
+        "q-tconf": "unk",
+        "q-money": "no",
+        "q-acc": "no",
+        "q-fee": "no",
+        "q-proj": "no",
+        "q-kpi": "unk",
+        "q-files": "yes",
+        "q-tg": "unk",
+        "q-cal": "yes"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "no",
+        "q-tconf": "no",
+        "q-money": "yes",
+        "q-acc": "no",
+        "q-fee": "no",
+        "q-proj": "no",
+        "q-kpi": "unk",
+        "q-files": "no",
+        "q-tg": "unk",
+        "q-cal": "unk"
+      },
+      "features": {
+        "tasks": false,
+        "calendar": true,
+        "fee": false,
+        "taxpay": true,
+        "accounts": false,
+        "telegram": true,
+        "files": false,
+        "finops": true,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "unk",
+        "q-tconf": "unk",
+        "q-money": "unk",
+        "q-acc": "unk",
+        "q-fee": "yes",
+        "q-proj": "yes",
+        "q-kpi": "yes",
+        "q-files": "no",
+        "q-tg": "yes",
+        "q-cal": "no"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": false,
+        "fee": true,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": false,
+        "finops": false,
+        "projects": true,
+        "indicators": true,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "yes",
+        "q-tconf": "no",
+        "q-money": "yes",
+        "q-acc": "yes",
+        "q-fee": "unk",
+        "q-proj": "unk",
+        "q-kpi": "yes",
+        "q-files": "unk",
+        "q-tg": "yes",
+        "q-cal": "unk"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": true,
+        "accounts": true,
+        "telegram": true,
+        "files": true,
+        "finops": true,
+        "projects": false,
+        "indicators": true,
+        "cppage": false
+      },
+      "taskConfirm": false
+    },
+    {
+      "answers": {
+        "q-tasks": "unk",
+        "q-tconf": "unk",
+        "q-money": "unk",
+        "q-acc": "yes",
+        "q-fee": "yes",
+        "q-proj": "unk",
+        "q-kpi": "no",
+        "q-files": "unk",
+        "q-tg": "no",
+        "q-cal": "yes"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": true,
+        "fee": true,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": false,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "yes",
+        "q-tconf": "no",
+        "q-money": "no",
+        "q-acc": "yes",
+        "q-fee": "yes",
+        "q-proj": "unk",
+        "q-kpi": "yes",
+        "q-files": "yes",
+        "q-tg": "unk",
+        "q-cal": "unk"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": true,
+        "fee": true,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": true,
+        "cppage": false
+      },
+      "taskConfirm": false
+    },
+    {
+      "answers": {
+        "q-tasks": "unk",
+        "q-tconf": "unk",
+        "q-money": "unk",
+        "q-acc": "unk",
+        "q-fee": "no",
+        "q-proj": "no",
+        "q-kpi": "yes",
+        "q-files": "no",
+        "q-tg": "no",
+        "q-cal": "no"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": false,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": false,
+        "files": false,
+        "finops": false,
+        "projects": false,
+        "indicators": true,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "unk",
+        "q-tconf": "unk",
+        "q-money": "no",
+        "q-acc": "no",
+        "q-fee": "no",
+        "q-proj": "yes",
+        "q-kpi": "no",
+        "q-files": "unk",
+        "q-tg": "no",
+        "q-cal": "no"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": false,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": false,
+        "files": true,
+        "finops": false,
+        "projects": true,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "yes",
+        "q-tconf": "yes",
+        "q-money": "no",
+        "q-acc": "unk",
+        "q-fee": "unk",
+        "q-proj": "unk",
+        "q-kpi": "no",
+        "q-files": "no",
+        "q-tg": "yes",
+        "q-cal": "no"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": false,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": false,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "no",
+        "q-tconf": "no",
+        "q-money": "unk",
+        "q-acc": "unk",
+        "q-fee": "yes",
+        "q-proj": "no",
+        "q-kpi": "no",
+        "q-files": "no",
+        "q-tg": "yes",
+        "q-cal": "no"
+      },
+      "features": {
+        "tasks": false,
+        "calendar": false,
+        "fee": true,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": false,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "yes",
+        "q-tconf": "unk",
+        "q-money": "unk",
+        "q-acc": "unk",
+        "q-fee": "unk",
+        "q-proj": "yes",
+        "q-kpi": "yes",
+        "q-files": "yes",
+        "q-tg": "yes",
+        "q-cal": "unk"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": true,
+        "indicators": true,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "unk",
+        "q-tconf": "no",
+        "q-money": "no",
+        "q-acc": "no",
+        "q-fee": "yes",
+        "q-proj": "no",
+        "q-kpi": "yes",
+        "q-files": "no",
+        "q-tg": "yes",
+        "q-cal": "yes"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": true,
+        "fee": true,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": false,
+        "finops": false,
+        "projects": false,
+        "indicators": true,
+        "cppage": false
+      },
+      "taskConfirm": true
+    },
+    {
+      "answers": {
+        "q-tasks": "unk",
+        "q-tconf": "unk",
+        "q-money": "yes",
+        "q-acc": "unk",
+        "q-fee": "unk",
+        "q-proj": "no",
+        "q-kpi": "no",
+        "q-files": "unk",
+        "q-tg": "unk",
+        "q-cal": "unk"
+      },
+      "features": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": true,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": true,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "taskConfirm": true
+    }
+  ],
+  "retakes": [
+    {
+      "policy": {
+        "features": {
+          "tasks": true,
+          "calendar": true,
+          "fee": false,
+          "taxpay": false,
+          "accounts": false,
+          "telegram": false,
+          "files": true,
+          "finops": false,
+          "projects": true,
+          "indicators": false,
+          "cppage": true
+        },
+        "taskConfirm": true
+      },
+      "answers": {
+        "q-tasks": "yes",
+        "q-tconf": "yes",
+        "q-money": "no",
+        "q-acc": "no",
+        "q-fee": "no",
+        "q-proj": "yes",
+        "q-kpi": "no",
+        "q-files": "yes",
+        "q-tg": "no",
+        "q-cal": "yes"
+      }
+    },
+    {
+      "policy": {
+        "features": {
+          "tasks": false,
+          "calendar": true,
+          "fee": false,
+          "taxpay": true,
+          "accounts": false,
+          "telegram": false,
+          "files": false,
+          "finops": false,
+          "projects": false,
+          "indicators": false,
+          "cppage": true
+        },
+        "taskConfirm": false
+      },
+      "answers": {
+        "q-tasks": "no",
+        "q-tconf": "no",
+        "q-money": "no",
+        "q-acc": "no",
+        "q-fee": "no",
+        "q-proj": "no",
+        "q-kpi": "no",
+        "q-files": "no",
+        "q-tg": "no",
+        "q-cal": "yes"
+      }
+    },
+    {
+      "policy": {
+        "features": {
+          "tasks": false,
+          "calendar": false,
+          "fee": false,
+          "taxpay": false,
+          "accounts": false,
+          "telegram": false,
+          "files": false,
+          "finops": false,
+          "projects": true,
+          "indicators": false,
+          "cppage": false
+        },
+        "taskConfirm": true
+      },
+      "answers": {
+        "q-tasks": "no",
+        "q-tconf": "yes",
+        "q-money": "no",
+        "q-acc": "no",
+        "q-fee": "no",
+        "q-proj": "yes",
+        "q-kpi": "no",
+        "q-files": "no",
+        "q-tg": "no",
+        "q-cal": "no"
+      }
+    },
+    {
+      "policy": {
+        "features": {
+          "tasks": false,
+          "calendar": true,
+          "fee": true,
+          "taxpay": false,
+          "accounts": true,
+          "telegram": false,
+          "files": false,
+          "finops": false,
+          "projects": false,
+          "indicators": false,
+          "cppage": true
+        },
+        "taskConfirm": false
+      },
+      "answers": {
+        "q-tasks": "no",
+        "q-tconf": "no",
+        "q-money": "no",
+        "q-acc": "yes",
+        "q-fee": "yes",
+        "q-proj": "no",
+        "q-kpi": "no",
+        "q-files": "no",
+        "q-tg": "no",
+        "q-cal": "yes"
+      }
+    },
+    {
+      "policy": {
+        "features": {
+          "tasks": false,
+          "calendar": false,
+          "fee": true,
+          "taxpay": true,
+          "accounts": true,
+          "telegram": true,
+          "files": true,
+          "finops": false,
+          "projects": true,
+          "indicators": true,
+          "cppage": false
+        },
+        "taskConfirm": false
+      },
+      "answers": {
+        "q-tasks": "no",
+        "q-tconf": "no",
+        "q-money": "no",
+        "q-acc": "yes",
+        "q-fee": "yes",
+        "q-proj": "yes",
+        "q-kpi": "yes",
+        "q-files": "yes",
+        "q-tg": "yes",
+        "q-cal": "no"
+      }
+    },
+    {
+      "policy": {
+        "features": {
+          "tasks": false,
+          "calendar": true,
+          "fee": false,
+          "taxpay": true,
+          "accounts": true,
+          "telegram": false,
+          "files": true,
+          "finops": true,
+          "projects": false,
+          "indicators": true,
+          "cppage": false
+        },
+        "taskConfirm": false
+      },
+      "answers": {
+        "q-tasks": "no",
+        "q-tconf": "no",
+        "q-money": "yes",
+        "q-acc": "yes",
+        "q-fee": "no",
+        "q-proj": "no",
+        "q-kpi": "yes",
+        "q-files": "yes",
+        "q-tg": "no",
+        "q-cal": "yes"
+      }
+    },
+    {
+      "policy": {
+        "features": {
+          "tasks": true,
+          "calendar": true,
+          "fee": true,
+          "taxpay": false,
+          "accounts": true,
+          "telegram": true,
+          "files": true,
+          "finops": false,
+          "projects": false,
+          "indicators": false,
+          "cppage": true
+        },
+        "taskConfirm": true
+      },
+      "answers": {
+        "q-tasks": "yes",
+        "q-tconf": "yes",
+        "q-money": "no",
+        "q-acc": "yes",
+        "q-fee": "yes",
+        "q-proj": "no",
+        "q-kpi": "no",
+        "q-files": "yes",
+        "q-tg": "yes",
+        "q-cal": "yes"
+      }
+    },
+    {
+      "policy": {
+        "features": {
+          "tasks": true,
+          "calendar": true,
+          "fee": false,
+          "taxpay": false,
+          "accounts": false,
+          "telegram": true,
+          "files": false,
+          "finops": true,
+          "projects": true,
+          "indicators": true,
+          "cppage": true
+        },
+        "taskConfirm": false
+      },
+      "answers": {
+        "q-tasks": "yes",
+        "q-tconf": "no",
+        "q-money": "no",
+        "q-acc": "no",
+        "q-fee": "no",
+        "q-proj": "yes",
+        "q-kpi": "yes",
+        "q-files": "no",
+        "q-tg": "yes",
+        "q-cal": "yes"
+      }
+    },
+    {
+      "policy": {
+        "features": {
+          "tasks": false,
+          "calendar": true,
+          "fee": false,
+          "taxpay": false,
+          "accounts": false,
+          "telegram": true,
+          "files": false,
+          "finops": true,
+          "projects": true,
+          "indicators": true,
+          "cppage": false
+        },
+        "taskConfirm": false
+      },
+      "answers": {
+        "q-tasks": "no",
+        "q-tconf": "no",
+        "q-money": "no",
+        "q-acc": "no",
+        "q-fee": "no",
+        "q-proj": "yes",
+        "q-kpi": "yes",
+        "q-files": "no",
+        "q-tg": "yes",
+        "q-cal": "yes"
+      }
+    },
+    {
+      "policy": {
+        "features": {
+          "tasks": false,
+          "calendar": false,
+          "fee": false,
+          "taxpay": false,
+          "accounts": false,
+          "telegram": false,
+          "files": true,
+          "finops": true,
+          "projects": false,
+          "indicators": false,
+          "cppage": true
+        },
+        "taskConfirm": true
+      },
+      "answers": {
+        "q-tasks": "no",
+        "q-tconf": "yes",
+        "q-money": "no",
+        "q-acc": "no",
+        "q-fee": "no",
+        "q-proj": "no",
+        "q-kpi": "no",
+        "q-files": "yes",
+        "q-tg": "no",
+        "q-cal": "no"
+      }
+    },
+    {
+      "policy": {
+        "features": {
+          "tasks": true,
+          "calendar": true,
+          "fee": true,
+          "taxpay": false,
+          "accounts": true,
+          "telegram": true,
+          "files": false,
+          "finops": false,
+          "projects": false,
+          "indicators": true,
+          "cppage": true
+        },
+        "taskConfirm": true
+      },
+      "answers": {
+        "q-tasks": "yes",
+        "q-tconf": "yes",
+        "q-money": "no",
+        "q-acc": "yes",
+        "q-fee": "yes",
+        "q-proj": "no",
+        "q-kpi": "yes",
+        "q-files": "no",
+        "q-tg": "yes",
+        "q-cal": "yes"
+      }
+    },
+    {
+      "policy": {
+        "features": {
+          "tasks": true,
+          "calendar": true,
+          "fee": false,
+          "taxpay": true,
+          "accounts": false,
+          "telegram": true,
+          "files": false,
+          "finops": false,
+          "projects": true,
+          "indicators": true,
+          "cppage": true
+        },
+        "taskConfirm": false
+      },
+      "answers": {
+        "q-tasks": "yes",
+        "q-tconf": "no",
+        "q-money": "no",
+        "q-acc": "no",
+        "q-fee": "no",
+        "q-proj": "yes",
+        "q-kpi": "yes",
+        "q-files": "no",
+        "q-tg": "yes",
+        "q-cal": "yes"
+      }
+    },
+    {
+      "policy": {
+        "features": {
+          "tasks": false,
+          "calendar": false,
+          "fee": true,
+          "taxpay": false,
+          "accounts": false,
+          "telegram": false,
+          "files": true,
+          "finops": true,
+          "projects": true,
+          "indicators": true,
+          "cppage": false
+        },
+        "taskConfirm": true
+      },
+      "answers": {
+        "q-tasks": "no",
+        "q-tconf": "yes",
+        "q-money": "no",
+        "q-acc": "no",
+        "q-fee": "yes",
+        "q-proj": "yes",
+        "q-kpi": "yes",
+        "q-files": "yes",
+        "q-tg": "no",
+        "q-cal": "no"
+      }
+    },
+    {
+      "policy": {
+        "features": {
+          "tasks": false,
+          "calendar": true,
+          "fee": false,
+          "taxpay": true,
+          "accounts": true,
+          "telegram": true,
+          "files": true,
+          "finops": false,
+          "projects": true,
+          "indicators": true,
+          "cppage": true
+        },
+        "taskConfirm": false
+      },
+      "answers": {
+        "q-tasks": "no",
+        "q-tconf": "no",
+        "q-money": "no",
+        "q-acc": "yes",
+        "q-fee": "no",
+        "q-proj": "yes",
+        "q-kpi": "yes",
+        "q-files": "yes",
+        "q-tg": "yes",
+        "q-cal": "yes"
+      }
+    },
+    {
+      "policy": {
+        "features": {
+          "tasks": false,
+          "calendar": false,
+          "fee": true,
+          "taxpay": false,
+          "accounts": false,
+          "telegram": true,
+          "files": false,
+          "finops": true,
+          "projects": true,
+          "indicators": false,
+          "cppage": false
+        },
+        "taskConfirm": true
+      },
+      "answers": {
+        "q-tasks": "no",
+        "q-tconf": "yes",
+        "q-money": "no",
+        "q-acc": "no",
+        "q-fee": "yes",
+        "q-proj": "yes",
+        "q-kpi": "no",
+        "q-files": "no",
+        "q-tg": "yes",
+        "q-cal": "no"
+      }
+    },
+    {
+      "policy": {
+        "features": {
+          "tasks": false,
+          "calendar": true,
+          "fee": true,
+          "taxpay": true,
+          "accounts": false,
+          "telegram": false,
+          "files": true,
+          "finops": false,
+          "projects": true,
+          "indicators": false,
+          "cppage": false
+        },
+        "taskConfirm": false
+      },
+      "answers": {
+        "q-tasks": "no",
+        "q-tconf": "no",
+        "q-money": "no",
+        "q-acc": "no",
+        "q-fee": "yes",
+        "q-proj": "yes",
+        "q-kpi": "no",
+        "q-files": "yes",
+        "q-tg": "no",
+        "q-cal": "yes"
+      }
+    },
+    {
+      "policy": {
+        "features": {
+          "tasks": true,
+          "calendar": false,
+          "fee": false,
+          "taxpay": true,
+          "accounts": true,
+          "telegram": true,
+          "files": true,
+          "finops": true,
+          "projects": true,
+          "indicators": false,
+          "cppage": false
+        },
+        "taskConfirm": true
+      },
+      "answers": {
+        "q-tasks": "yes",
+        "q-tconf": "yes",
+        "q-money": "yes",
+        "q-acc": "yes",
+        "q-fee": "no",
+        "q-proj": "yes",
+        "q-kpi": "no",
+        "q-files": "yes",
+        "q-tg": "yes",
+        "q-cal": "no"
+      }
+    },
+    {
+      "policy": {
+        "features": {
+          "tasks": false,
+          "calendar": true,
+          "fee": true,
+          "taxpay": true,
+          "accounts": true,
+          "telegram": true,
+          "files": true,
+          "finops": false,
+          "projects": true,
+          "indicators": true,
+          "cppage": true
+        },
+        "taskConfirm": false
+      },
+      "answers": {
+        "q-tasks": "no",
+        "q-tconf": "no",
+        "q-money": "no",
+        "q-acc": "yes",
+        "q-fee": "yes",
+        "q-proj": "yes",
+        "q-kpi": "yes",
+        "q-files": "yes",
+        "q-tg": "yes",
+        "q-cal": "yes"
+      }
+    },
+    {
+      "policy": {
+        "features": {
+          "tasks": true,
+          "calendar": true,
+          "fee": false,
+          "taxpay": true,
+          "accounts": true,
+          "telegram": false,
+          "files": true,
+          "finops": false,
+          "projects": true,
+          "indicators": true,
+          "cppage": true
+        },
+        "taskConfirm": true
+      },
+      "answers": {
+        "q-tasks": "yes",
+        "q-tconf": "yes",
+        "q-money": "no",
+        "q-acc": "yes",
+        "q-fee": "no",
+        "q-proj": "yes",
+        "q-kpi": "yes",
+        "q-files": "yes",
+        "q-tg": "no",
+        "q-cal": "yes"
+      }
+    },
+    {
+      "policy": {
+        "features": {
+          "tasks": true,
+          "calendar": false,
+          "fee": false,
+          "taxpay": false,
+          "accounts": true,
+          "telegram": true,
+          "files": true,
+          "finops": false,
+          "projects": true,
+          "indicators": false,
+          "cppage": false
+        },
+        "taskConfirm": true
+      },
+      "answers": {
+        "q-tasks": "yes",
+        "q-tconf": "yes",
+        "q-money": "no",
+        "q-acc": "yes",
+        "q-fee": "no",
+        "q-proj": "yes",
+        "q-kpi": "no",
+        "q-files": "yes",
+        "q-tg": "yes",
+        "q-cal": "no"
+      }
+    },
+    {
+      "policy": {
+        "features": {
+          "tasks": false,
+          "calendar": false,
+          "fee": true,
+          "taxpay": false,
+          "accounts": false,
+          "telegram": false,
+          "files": false,
+          "finops": true,
+          "projects": true,
+          "indicators": true,
+          "cppage": false
+        },
+        "taskConfirm": false
+      },
+      "answers": {
+        "q-tasks": "no",
+        "q-tconf": "no",
+        "q-money": "no",
+        "q-acc": "no",
+        "q-fee": "yes",
+        "q-proj": "yes",
+        "q-kpi": "yes",
+        "q-files": "no",
+        "q-tg": "no",
+        "q-cal": "no"
+      }
+    },
+    {
+      "policy": {
+        "features": {
+          "tasks": false,
+          "calendar": false,
+          "fee": false,
+          "taxpay": true,
+          "accounts": true,
+          "telegram": false,
+          "files": true,
+          "finops": true,
+          "projects": false,
+          "indicators": false,
+          "cppage": true
+        },
+        "taskConfirm": true
+      },
+      "answers": {
+        "q-tasks": "no",
+        "q-tconf": "yes",
+        "q-money": "yes",
+        "q-acc": "yes",
+        "q-fee": "no",
+        "q-proj": "no",
+        "q-kpi": "no",
+        "q-files": "yes",
+        "q-tg": "no",
+        "q-cal": "no"
+      }
+    },
+    {
+      "policy": {
+        "features": {
+          "tasks": true,
+          "calendar": false,
+          "fee": false,
+          "taxpay": true,
+          "accounts": false,
+          "telegram": false,
+          "files": false,
+          "finops": true,
+          "projects": true,
+          "indicators": true,
+          "cppage": true
+        },
+        "taskConfirm": true
+      },
+      "answers": {
+        "q-tasks": "yes",
+        "q-tconf": "yes",
+        "q-money": "yes",
+        "q-acc": "no",
+        "q-fee": "no",
+        "q-proj": "yes",
+        "q-kpi": "yes",
+        "q-files": "no",
+        "q-tg": "no",
+        "q-cal": "no"
+      }
+    },
+    {
+      "policy": {
+        "features": {
+          "tasks": false,
+          "calendar": false,
+          "fee": false,
+          "taxpay": false,
+          "accounts": false,
+          "telegram": false,
+          "files": true,
+          "finops": false,
+          "projects": true,
+          "indicators": true,
+          "cppage": false
+        },
+        "taskConfirm": false
+      },
+      "answers": {
+        "q-tasks": "no",
+        "q-tconf": "no",
+        "q-money": "no",
+        "q-acc": "no",
+        "q-fee": "no",
+        "q-proj": "yes",
+        "q-kpi": "yes",
+        "q-files": "yes",
+        "q-tg": "no",
+        "q-cal": "no"
+      }
+    },
+    {
+      "policy": {
+        "features": {
+          "tasks": true,
+          "calendar": true,
+          "telegram": true,
+          "files": true,
+          "taxpay": false,
+          "accounts": false,
+          "fee": false,
+          "finops": false,
+          "projects": false,
+          "indicators": false,
+          "cppage": false
+        },
+        "taskConfirm": true
+      },
+      "answers": {
+        "q-tasks": "yes",
+        "q-tconf": "yes",
+        "q-money": "no",
+        "q-acc": "no",
+        "q-fee": "no",
+        "q-proj": "no",
+        "q-kpi": "no",
+        "q-files": "yes",
+        "q-tg": "yes",
+        "q-cal": "yes"
+      }
+    }
+  ],
+  "toggles": [
+    {
+      "before": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "feature": "tasks",
+      "checked": true,
+      "after": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      }
+    },
+    {
+      "before": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "feature": "tasks",
+      "checked": false,
+      "after": {
+        "tasks": false,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      }
+    },
+    {
+      "before": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "feature": "calendar",
+      "checked": true,
+      "after": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      }
+    },
+    {
+      "before": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "feature": "calendar",
+      "checked": false,
+      "after": {
+        "tasks": true,
+        "calendar": false,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      }
+    },
+    {
+      "before": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "feature": "fee",
+      "checked": true,
+      "after": {
+        "tasks": true,
+        "calendar": true,
+        "fee": true,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      }
+    },
+    {
+      "before": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "feature": "fee",
+      "checked": false,
+      "after": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      }
+    },
+    {
+      "before": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "feature": "taxpay",
+      "checked": true,
+      "after": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": true,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      }
+    },
+    {
+      "before": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "feature": "taxpay",
+      "checked": false,
+      "after": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      }
+    },
+    {
+      "before": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "feature": "accounts",
+      "checked": true,
+      "after": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": true,
+        "accounts": true,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      }
+    },
+    {
+      "before": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "feature": "accounts",
+      "checked": false,
+      "after": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      }
+    },
+    {
+      "before": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "feature": "telegram",
+      "checked": true,
+      "after": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      }
+    },
+    {
+      "before": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "feature": "telegram",
+      "checked": false,
+      "after": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": false,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      }
+    },
+    {
+      "before": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "feature": "files",
+      "checked": true,
+      "after": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      }
+    },
+    {
+      "before": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "feature": "files",
+      "checked": false,
+      "after": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": false,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      }
+    },
+    {
+      "before": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "feature": "finops",
+      "checked": true,
+      "after": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": true,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      }
+    },
+    {
+      "before": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "feature": "finops",
+      "checked": false,
+      "after": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      }
+    },
+    {
+      "before": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "feature": "projects",
+      "checked": true,
+      "after": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": true,
+        "indicators": false,
+        "cppage": false
+      }
+    },
+    {
+      "before": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "feature": "projects",
+      "checked": false,
+      "after": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      }
+    },
+    {
+      "before": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "feature": "indicators",
+      "checked": true,
+      "after": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": true,
+        "cppage": false
+      }
+    },
+    {
+      "before": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "feature": "indicators",
+      "checked": false,
+      "after": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      }
+    },
+    {
+      "before": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "feature": "cppage",
+      "checked": true,
+      "after": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": true
+      }
+    },
+    {
+      "before": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      },
+      "feature": "cppage",
+      "checked": false,
+      "after": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": false,
+        "indicators": false,
+        "cppage": false
+      }
+    },
+    {
+      "before": {
+        "tasks": true,
+        "calendar": true,
+        "fee": true,
+        "taxpay": true,
+        "accounts": true,
+        "telegram": true,
+        "files": true,
+        "finops": true,
+        "projects": true,
+        "indicators": true,
+        "cppage": false
+      },
+      "feature": "tasks",
+      "checked": true,
+      "after": {
+        "tasks": true,
+        "calendar": true,
+        "fee": true,
+        "taxpay": true,
+        "accounts": true,
+        "telegram": true,
+        "files": true,
+        "finops": true,
+        "projects": true,
+        "indicators": true,
+        "cppage": false
+      }
+    },
+    {
+      "before": {
+        "tasks": true,
+        "calendar": true,
+        "fee": true,
+        "taxpay": true,
+        "accounts": true,
+        "telegram": true,
+        "files": true,
+        "finops": true,
+        "projects": true,
+        "indicators": true,
+        "cppage": false
+      },
+      "feature": "tasks",
+      "checked": false,
+      "after": {
+        "tasks": false,
+        "calendar": true,
+        "fee": true,
+        "taxpay": true,
+        "accounts": true,
+        "telegram": true,
+        "files": true,
+        "finops": true,
+        "projects": true,
+        "indicators": true,
+        "cppage": false
+      }
+    },
+    {
+      "before": {
+        "tasks": true,
+        "calendar": true,
+        "fee": true,
+        "taxpay": true,
+        "accounts": true,
+        "telegram": true,
+        "files": true,
+        "finops": true,
+        "projects": true,
+        "indicators": true,
+        "cppage": false
+      },
+      "feature": "calendar",
+      "checked": true,
+      "after": {
+        "tasks": true,
+        "calendar": true,
+        "fee": true,
+        "taxpay": true,
+        "accounts": true,
+        "telegram": true,
+        "files": true,
+        "finops": true,
+        "projects": true,
+        "indicators": true,
+        "cppage": false
+      }
+    },
+    {
+      "before": {
+        "tasks": true,
+        "calendar": true,
+        "fee": true,
+        "taxpay": true,
+        "accounts": true,
+        "telegram": true,
+        "files": true,
+        "finops": true,
+        "projects": true,
+        "indicators": true,
+        "cppage": false
+      },
+      "feature": "calendar",
+      "checked": false,
+      "after": {
+        "tasks": true,
+        "calendar": false,
+        "fee": true,
+        "taxpay": true,
+        "accounts": true,
+        "telegram": true,
+        "files": true,
+        "finops": true,
+        "projects": true,
+        "indicators": true,
+        "cppage": false
+      }
+    },
+    {
+      "before": {
+        "tasks": true,
+        "calendar": true,
+        "fee": true,
+        "taxpay": true,
+        "accounts": true,
+        "telegram": true,
+        "files": true,
+        "finops": true,
+        "projects": true,
+        "indicators": true,
+        "cppage": false
+      },
+      "feature": "fee",
+      "checked": true,
+      "after": {
+        "tasks": true,
+        "calendar": true,
+        "fee": true,
+        "taxpay": true,
+        "accounts": true,
+        "telegram": true,
+        "files": true,
+        "finops": true,
+        "projects": true,
+        "indicators": true,
+        "cppage": false
+      }
+    },
+    {
+      "before": {
+        "tasks": true,
+        "calendar": true,
+        "fee": true,
+        "taxpay": true,
+        "accounts": true,
+        "telegram": true,
+        "files": true,
+        "finops": true,
+        "projects": true,
+        "indicators": true,
+        "cppage": false
+      },
+      "feature": "fee",
+      "checked": false,
+      "after": {
+        "tasks": true,
+        "calendar": true,
+        "fee": false,
+        "taxpay": true,
+        "accounts": true,
+        "telegram": true,
+        "files": true,
+        "finops": true,
+        "projects": true,
+        "indicators": true,
+        "cppage": false
+      }
+    },
+    {
+      "before": {
+        "tasks": true,
+        "calendar": true,
+        "fee": true,
+        "taxpay": true,
+        "accounts": true,
+        "telegram": true,
+        "files": true,
+        "finops": true,
+        "projects": true,
+        "indicators": true,
+        "cppage": false
+      },
+      "feature": "taxpay",
+      "checked": true,
+      "after": {
+        "tasks": true,
+        "calendar": true,
+        "fee": true,
+        "taxpay": true,
+        "accounts": true,
+        "telegram": true,
+        "files": true,
+        "finops": true,
+        "projects": true,
+        "indicators": true,
+        "cppage": false
+      }
+    },
+    {
+      "before": {
+        "tasks": true,
+        "calendar": true,
+        "fee": true,
+        "taxpay": true,
+        "accounts": true,
+        "telegram": true,
+        "files": true,
+        "finops": true,
+        "projects": true,
+        "indicators": true,
+        "cppage": false
+      },
+      "feature": "taxpay",
+      "checked": false,
+      "after": {
+        "tasks": true,
+        "calendar": true,
+        "fee": true,
+        "taxpay": false,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": true,
+        "projects": true,
+        "indicators": true,
+        "cppage": false
+      }
+    },
+    {
+      "before": {
+        "tasks": true,
+        "calendar": true,
+        "fee": true,
+        "taxpay": true,
+        "accounts": true,
+        "telegram": true,
+        "files": true,
+        "finops": true,
+        "projects": true,
+        "indicators": true,
+        "cppage": false
+      },
+      "feature": "accounts",
+      "checked": true,
+      "after": {
+        "tasks": true,
+        "calendar": true,
+        "fee": true,
+        "taxpay": true,
+        "accounts": true,
+        "telegram": true,
+        "files": true,
+        "finops": true,
+        "projects": true,
+        "indicators": true,
+        "cppage": false
+      }
+    },
+    {
+      "before": {
+        "tasks": true,
+        "calendar": true,
+        "fee": true,
+        "taxpay": true,
+        "accounts": true,
+        "telegram": true,
+        "files": true,
+        "finops": true,
+        "projects": true,
+        "indicators": true,
+        "cppage": false
+      },
+      "feature": "accounts",
+      "checked": false,
+      "after": {
+        "tasks": true,
+        "calendar": true,
+        "fee": true,
+        "taxpay": true,
+        "accounts": false,
+        "telegram": true,
+        "files": true,
+        "finops": true,
+        "projects": true,
+        "indicators": true,
+        "cppage": false
+      }
+    },
+    {
+      "before": {
+        "tasks": true,
+        "calendar": true,
+        "fee": true,
+        "taxpay": true,
+        "accounts": true,
+        "telegram": true,
+        "files": true,
+        "finops": true,
+        "projects": true,
+        "indicators": true,
+        "cppage": false
+      },
+      "feature": "telegram",
+      "checked": true,
+      "after": {
+        "tasks": true,
+        "calendar": true,
+        "fee": true,
+        "taxpay": true,
+        "accounts": true,
+        "telegram": true,
+        "files": true,
+        "finops": true,
+        "projects": true,
+        "indicators": true,
+        "cppage": false
+      }
+    },
+    {
+      "before": {
+        "tasks": true,
+        "calendar": true,
+        "fee": true,
+        "taxpay": true,
+        "accounts": true,
+        "telegram": true,
+        "files": true,
+        "finops": true,
+        "projects": true,
+        "indicators": true,
+        "cppage": false
+      },
+      "feature": "telegram",
+      "checked": false,
+      "after": {
+        "tasks": true,
+        "calendar": true,
+        "fee": true,
+        "taxpay": true,
+        "accounts": true,
+        "telegram": false,
+        "files": true,
+        "finops": true,
+        "projects": true,
+        "indicators": true,
+        "cppage": false
+      }
+    },
+    {
+      "before": {
+        "tasks": true,
+        "calendar": true,
+        "fee": true,
+        "taxpay": true,
+        "accounts": true,
+        "telegram": true,
+        "files": true,
+        "finops": true,
+        "projects": true,
+        "indicators": true,
+        "cppage": false
+      },
+      "feature": "files",
+      "checked": true,
+      "after": {
+        "tasks": true,
+        "calendar": true,
+        "fee": true,
+        "taxpay": true,
+        "accounts": true,
+        "telegram": true,
+        "files": true,
+        "finops": true,
+        "projects": true,
+        "indicators": true,
+        "cppage": false
+      }
+    },
+    {
+      "before": {
+        "tasks": true,
+        "calendar": true,
+        "fee": true,
+        "taxpay": true,
+        "accounts": true,
+        "telegram": true,
+        "files": true,
+        "finops": true,
+        "projects": true,
+        "indicators": true,
+        "cppage": false
+      },
+      "feature": "files",
+      "checked": false,
+      "after": {
+        "tasks": true,
+        "calendar": true,
+        "fee": true,
+        "taxpay": true,
+        "accounts": true,
+        "telegram": true,
+        "files": false,
+        "finops": true,
+        "projects": true,
+        "indicators": true,
+        "cppage": false
+      }
+    },
+    {
+      "before": {
+        "tasks": true,
+        "calendar": true,
+        "fee": true,
+        "taxpay": true,
+        "accounts": true,
+        "telegram": true,
+        "files": true,
+        "finops": true,
+        "projects": true,
+        "indicators": true,
+        "cppage": false
+      },
+      "feature": "finops",
+      "checked": true,
+      "after": {
+        "tasks": true,
+        "calendar": true,
+        "fee": true,
+        "taxpay": true,
+        "accounts": true,
+        "telegram": true,
+        "files": true,
+        "finops": true,
+        "projects": true,
+        "indicators": true,
+        "cppage": false
+      }
+    },
+    {
+      "before": {
+        "tasks": true,
+        "calendar": true,
+        "fee": true,
+        "taxpay": true,
+        "accounts": true,
+        "telegram": true,
+        "files": true,
+        "finops": true,
+        "projects": true,
+        "indicators": true,
+        "cppage": false
+      },
+      "feature": "finops",
+      "checked": false,
+      "after": {
+        "tasks": true,
+        "calendar": true,
+        "fee": true,
+        "taxpay": true,
+        "accounts": true,
+        "telegram": true,
+        "files": true,
+        "finops": false,
+        "projects": true,
+        "indicators": true,
+        "cppage": false
+      }
+    },
+    {
+      "before": {
+        "tasks": true,
+        "calendar": true,
+        "fee": true,
+        "taxpay": true,
+        "accounts": true,
+        "telegram": true,
+        "files": true,
+        "finops": true,
+        "projects": true,
+        "indicators": true,
+        "cppage": false
+      },
+      "feature": "projects",
+      "checked": true,
+      "after": {
+        "tasks": true,
+        "calendar": true,
+        "fee": true,
+        "taxpay": true,
+        "accounts": true,
+        "telegram": true,
+        "files": true,
+        "finops": true,
+        "projects": true,
+        "indicators": true,
+        "cppage": false
+      }
+    },
+    {
+      "before": {
+        "tasks": true,
+        "calendar": true,
+        "fee": true,
+        "taxpay": true,
+        "accounts": true,
+        "telegram": true,
+        "files": true,
+        "finops": true,
+        "projects": true,
+        "indicators": true,
+        "cppage": false
+      },
+      "feature": "projects",
+      "checked": false,
+      "after": {
+        "tasks": true,
+        "calendar": true,
+        "fee": true,
+        "taxpay": true,
+        "accounts": true,
+        "telegram": true,
+        "files": true,
+        "finops": true,
+        "projects": false,
+        "indicators": true,
+        "cppage": false
+      }
+    },
+    {
+      "before": {
+        "tasks": true,
+        "calendar": true,
+        "fee": true,
+        "taxpay": true,
+        "accounts": true,
+        "telegram": true,
+        "files": true,
+        "finops": true,
+        "projects": true,
+        "indicators": true,
+        "cppage": false
+      },
+      "feature": "indicators",
+      "checked": true,
+      "after": {
+        "tasks": true,
+        "calendar": true,
+        "fee": true,
+        "taxpay": true,
+        "accounts": true,
+        "telegram": true,
+        "files": true,
+        "finops": true,
+        "projects": true,
+        "indicators": true,
+        "cppage": false
+      }
+    },
+    {
+      "before": {
+        "tasks": true,
+        "calendar": true,
+        "fee": true,
+        "taxpay": true,
+        "accounts": true,
+        "telegram": true,
+        "files": true,
+        "finops": true,
+        "projects": true,
+        "indicators": true,
+        "cppage": false
+      },
+      "feature": "indicators",
+      "checked": false,
+      "after": {
+        "tasks": true,
+        "calendar": true,
+        "fee": true,
+        "taxpay": true,
+        "accounts": true,
+        "telegram": true,
+        "files": true,
+        "finops": true,
+        "projects": true,
+        "indicators": false,
+        "cppage": false
+      }
+    },
+    {
+      "before": {
+        "tasks": true,
+        "calendar": true,
+        "fee": true,
+        "taxpay": true,
+        "accounts": true,
+        "telegram": true,
+        "files": true,
+        "finops": true,
+        "projects": true,
+        "indicators": true,
+        "cppage": false
+      },
+      "feature": "cppage",
+      "checked": true,
+      "after": {
+        "tasks": true,
+        "calendar": true,
+        "fee": true,
+        "taxpay": true,
+        "accounts": true,
+        "telegram": true,
+        "files": true,
+        "finops": true,
+        "projects": true,
+        "indicators": true,
+        "cppage": true
+      }
+    },
+    {
+      "before": {
+        "tasks": true,
+        "calendar": true,
+        "fee": true,
+        "taxpay": true,
+        "accounts": true,
+        "telegram": true,
+        "files": true,
+        "finops": true,
+        "projects": true,
+        "indicators": true,
+        "cppage": false
+      },
+      "feature": "cppage",
+      "checked": false,
+      "after": {
+        "tasks": true,
+        "calendar": true,
+        "fee": true,
+        "taxpay": true,
+        "accounts": true,
+        "telegram": true,
+        "files": true,
+        "finops": true,
+        "projects": true,
+        "indicators": true,
+        "cppage": false
+      }
+    }
+  ]
+}

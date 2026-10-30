@@ -1,6 +1,6 @@
 'use client';
 
-import { EmptyState, useToast } from '@buhuchet/ui';
+import { EmptyState } from '@buhuchet/ui';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useEffect, useEffectEvent } from 'react';
@@ -8,6 +8,7 @@ import { useT } from '../l10n/provider';
 import { useShell } from '../shell/context';
 import { moduleHref } from '../shell/modules';
 import { indicatorsQuery } from './kpi-data';
+import { useKpiImport } from './kpi-import';
 import { useIndicatorDialog } from './kpi-indicator-dialog';
 import { KpiMissingTab } from './kpi-missing';
 import { KpiMonthTab } from './kpi-month';
@@ -17,12 +18,14 @@ import { KpiSetupTab } from './kpi-setup';
 /*
  * Модуль «Показатели контрагентов» (задача 2.27; ТЗ «Показатели контрагентов»; прототип modules/kpi.js):
  * вкладки «Ввод за месяц», «За период», «Не заполнено», «Настройка показателей». «+ Добавить» →
- * «Показатель» открывает окно нового показателя на любой вкладке; «Из Excel» — задача 2.28.
+ * «Показатель» открывает окно нового показателя на любой вкладке, «Ввод из Excel» — окно шаблона и
+ * загрузки (задача 2.28).
  */
 
 export function KpiScreen({ tab }: { tab: string }) {
   const indicator = useIndicatorDialog();
-  useKpiAddRequest(() => indicator.open(null));
+  const excel = useKpiImport();
+  useKpiAddRequest({ indicator: () => indicator.open(null), excel: () => void excel.open() });
   const noContractors = useQuery(indicatorsQuery).data?.contractors === 0;
   return (
     <>
@@ -38,6 +41,7 @@ export function KpiScreen({ tab }: { tab: string }) {
         <KpiMonthTab />
       )}
       {indicator.dialog}
+      {excel.dialog}
     </>
   );
 }
@@ -68,20 +72,17 @@ function NoContractors() {
   );
 }
 
-/** «+ Добавить» модуля: «Показатель» — окно нового показателя; «Из Excel» пока подтверждается уведомлением. */
-function useKpiAddRequest(indicator: () => void) {
-  const t = useT();
-  const toast = useToast();
+/** «+ Добавить» модуля: «Показатель» — окно нового показателя, «Ввод из Excel» — окно шаблона и загрузки. */
+function useKpiAddRequest(actions: { indicator: () => void; excel: () => void }) {
   const { addRequest, clearAddRequest } = useShell();
   const request = addRequest?.moduleId === 'kpi' ? addRequest : null;
-  const start = useEffectEvent((actionId: string, label: string) => {
-    if (actionId === 'indicator') indicator();
-    // Ввод из Excel — задача 2.28 (#84).
-    else toast(t('shell.stub_add', { action: label }), { icon: 'info' });
+  const start = useEffectEvent((actionId: string) => {
+    if (actionId === 'indicator') actions.indicator();
+    else if (actionId === 'excel') actions.excel();
   });
   useEffect(() => {
     if (!request) return;
-    start(request.actionId, request.label);
+    start(request.actionId);
     clearAddRequest();
   }, [request, clearAddRequest]);
 }

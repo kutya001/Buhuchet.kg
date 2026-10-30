@@ -59,6 +59,9 @@ describe.skipIf(!databaseAvailable())('Админка → «Справочник
       `${P}/forms`,
       `${P}/forms/values?col=active`,
       `${P}/forms/export?cols=name`,
+      `${P}/types`,
+      `${P}/types/values?col=assigned`,
+      `${P}/types/export?cols=assigned`,
       `${P}/groups`,
       `${P}/tab-counts`,
       `${P}/report-type-options`,
@@ -446,6 +449,8 @@ describe.skipIf(!databaseAvailable())('Админка → «Справочник
       // «Назначен» — по всем организациям; назначений в тесте нет.
       assigned: 0,
     });
+    const assigned = ListValues.parse(await (await get(`${P}/types/values?col=assigned`)).json());
+    expect(assigned.items.map((v) => v.value)).toEqual(['0']);
     const base = {
       name: 'Плата за загрязнение',
       shortName: 'Экология',
