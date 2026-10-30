@@ -29,6 +29,7 @@ import { api, callApi } from '../api-client';
 import { useErrorText, useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { useListExport } from '../lists/export';
+import { spreadText } from './dues-preview';
 import { dictIoFileQuery, usePdictsRefresh } from './pdicts-data';
 
 /*
@@ -493,6 +494,24 @@ function PreviewBody({ preview, activeTitle }: { preview: Preview; activeTitle: 
           sub={t(errors ? 'pdicts.io.import.plate.errors_sub' : 'pdicts.io.import.plate.no_errors')}
         />
       </Plates>
+      {preview.act.reports > 0 ? (
+        <Note icon="info">
+          {t('pdicts.io.import.act', {
+            types: t(`pdicts.io.import.act_types.${pluralForm(preview.act.types)}`, {
+              n: preview.act.types,
+            }),
+            reports: t(
+              `pdicts.io.import.act_${preview.act.types > 1 ? 'many' : 'one'}.${pluralForm(preview.act.reports)}`,
+              { n: preview.act.reports },
+            ),
+          })}
+        </Note>
+      ) : null}
+      {preview.dues.reports > 0 ? (
+        <Note tone="warn" icon="alert">
+          {t('pdicts.io.import.dues', { spread: spreadText(t, preview.dues) })}
+        </Note>
+      ) : null}
       {/* На телефоне прокручивается всё окно, на ПК — только строки (прототип: max-height 340px). */}
       <div className="md:max-h-[340px] md:overflow-auto">
         <MiniTable

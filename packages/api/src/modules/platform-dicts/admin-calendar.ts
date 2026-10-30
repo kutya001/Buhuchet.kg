@@ -5,6 +5,7 @@ import {
   adminCalendarCopyPlan,
   adminCalendarDelete,
   adminCalendarHistory,
+  dueShiftExample,
   exportAdminCalendar,
   listAdminCalendarPage,
   listAdminCalendarValues,
@@ -15,6 +16,8 @@ import {
   bishkekDate,
   calendarAdminYears,
   DICT_HISTORY_SHOWN,
+  formatText,
+  periodLabel,
   RecordChangedError,
   RecordNotFoundError,
   type CalendarAddProblem,
@@ -42,6 +45,7 @@ import { apiFail, listQueryOf, listQueryResponses } from '../../errors';
 import { exportRateResponses, withExportSlot, xlsxContent, xlsxResponse } from '../../lists/export';
 import { requirePlatformAdmin } from '../../middleware/access';
 import { serverTexts } from '../l10n/texts';
+import { previewEdit, recalcDues } from './admin-dues';
 
 /*
  * Админка → «Справочники платформы» → «Календарь» (задача 2.36; ТЗ «Производственный календарь КР»;
@@ -68,6 +72,9 @@ const adminTx = <T>(
 
 /** «Сегодня» по Бишкеку: годы вкладки — текущий и следующий. */
 const todayOf = (deps: ApiDeps) => bishkekDate(deps.clock.now());
+
+/** Правка календаря пересчитывает сроки всех несданных отчётов (прототип recalcDues). */
+const CALENDAR = { kind: 'calendar' } as const;
 
 function dayBody(x: AdminCalendarDayRecord): AdminCalendarDay {
   return {
@@ -111,11 +118,22 @@ export function listAdminCalendarHandler(
     const query = listQueryOf(c.req.valid('query'));
     const t = await serverTexts(deps);
     const page = await adminTx(deps, c, (tx) => listAdminCalendarPage(tx, query, t, todayOf(deps)));
+    // Пример переноса — из отчётов организаций, каждая в своём контексте (без обхода RLS).
+    const shift = await dueShiftExample(deps.db);
+    const example = shift && {
+      type: shift.shortName,
+      period: periodLabel({ period: shift.period, start: shift.periodStart }, (key, params) =>
+        formatText(t(key), params),
+      ),
+      from: shift.dueBase,
+      to: shift.dueDate,
+    };
     return c.json(
       {
         items: page.rows.map(dayBody),
         year: page.year,
         nextFilled: page.nextFilled,
+        example,
         total: page.total,
         page: page.page,
         size: page.size,
@@ -234,7 +252,8 @@ export function addAdminCalendarDayHandler(
   return async (c) => {
     const today = todayOf(deps);
     const result = await adminTx(deps, c, (tx) => adminCalendarAdd(tx, c.req.valid('json'), today));
-    if (result.ok) return c.json({ recalculated: result.recalculated }, 201);
+    // Сроки несданных отчётов — после сохранения дня, каждая организация своей транзакцией.
+    if (result.ok) return c.json({ recalculated: (await recalcDues(deps, CALENDAR)).reports }, 201);
     if (result.reason === 'not_found') throw new RecordNotFoundError('platform_dict', 'calendar');
     const problem = result.problems[0]!;
     const [year, next] = calendarAdminYears(today);
@@ -271,7 +290,10 @@ export function deleteAdminCalendarDayHandler(
     const { key } = c.req.valid('param');
     const { version } = c.req.valid('query');
     const result = await adminTx(deps, c, (tx) => adminCalendarDelete(tx, key, version));
-    if (result.ok) return c.body(null, 204);
+    if (result.ok) {
+      await recalcDues(deps, CALENDAR);
+      return c.body(null, 204);
+    }
     if (result.reason === 'fixed') {
       apiFail(409, 'calendar_day_fixed', 'Государственный праздник по закону, удалить нельзя');
     }
@@ -301,8 +323,13 @@ export function adminCalendarCopyPlanHandler(
   deps: ApiDeps,
 ): RouteHandler<typeof adminCalendarCopyPlanRoute, AppEnv> {
   return async (c) => {
-    const plan = await adminTx(deps, c, (tx) => adminCalendarCopyPlan(tx, todayOf(deps)));
-    return c.json(plan, 200);
+    const today = todayOf(deps);
+    const plan = await adminTx(deps, c, (tx) => adminCalendarCopyPlan(tx, today));
+    // У скольких несданных отчётов изменятся сроки — копирование в транзакции, которая откатывается.
+    const dues = await previewEdit(deps, c, async (tx) =>
+      (await adminCalendarCopy(tx, today)).ok ? CALENDAR : false,
+    );
+    return c.json({ ...plan, dues }, 200);
   };
 }
 
@@ -328,7 +355,8 @@ export function adminCalendarCopyHandler(
     const result = await adminTx(deps, c, (tx) => adminCalendarCopy(tx, todayOf(deps)));
     if (!result.ok) throw new RecordNotFoundError('platform_dict', 'calendar');
     const { ok: _, ...body } = result;
-    return c.json(body, 200);
+    const recalculated = body.copied ? (await recalcDues(deps, CALENDAR)).reports : 0;
+    return c.json({ ...body, recalculated }, 200);
   };
 }
 

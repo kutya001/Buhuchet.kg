@@ -17,6 +17,7 @@ import {
   adminDictUpdate,
   type AdminDictDeleteResult,
   type AdminDictSaveResult,
+  type DuesCounter,
 } from './admin-platform-dicts';
 import {
   auditActorValue,
@@ -29,6 +30,7 @@ import {
   type ListTexts,
 } from './list';
 import { writePlatformHistory } from './platform-history';
+import { mergeRedueScopes, type RedueScope } from './reports-redue';
 import {
   authorities,
   dictLoads,
@@ -375,7 +377,8 @@ function unchangedSince(
 type RollbackStepFailure = Extract<AdminDictSaveResult | AdminDictDeleteResult, { ok: false }>;
 
 export type DictLoadRollbackResult =
-  | { ok: true; load: DictLoadRecord }
+  /** `redue` — сроки каких отчётов пересчитать после конца транзакции (`redueAllOrgs`). */
+  | { ok: true; load: DictLoadRecord; redue: RedueScope | null }
   | { ok: false; reason: 'not_found' }
   | { ok: false; reason: 'not_last' }
   /** Значение изменили или удалили после загрузки: откат затёр бы эту правку. */
@@ -398,7 +401,11 @@ export type DictLoadRollbackResult =
  * Отказ может прийти после части записей: вызывающий обязан откатить транзакцию (бросить исключение),
  * тогда справочник не меняется.
  */
-export async function rollbackDictLoad(tx: Tx, id: string): Promise<DictLoadRollbackResult> {
+export async function rollbackDictLoad(
+  tx: Tx,
+  id: string,
+  countDues?: DuesCounter,
+): Promise<DictLoadRollbackResult> {
   await lockDictLoads(tx);
   const [load] = await tx
     .select({ ...fields, before: l.before, addedValues: l.addedValues })
@@ -422,6 +429,7 @@ export async function rollbackDictLoad(tx: Tx, id: string): Promise<DictLoadRoll
   }
   const failed = (code: string, name: string, result: RollbackStepFailure) =>
     ({ ok: false, reason: 'restore_failed', code, name, result }) as const;
+  const redue: (RedueScope | null | undefined)[] = [];
   for (const a of load.addedValues) {
     // Удалённое после загрузки добавленное значение убирать уже не нужно.
     const now = records.get(a.code);
@@ -436,6 +444,7 @@ export async function rollbackDictLoad(tx: Tx, id: string): Promise<DictLoadRoll
     if (off && now.active) {
       const active = await adminDictSetActive(tx, dict, a.code, false, now.version);
       if (!active.ok) return failed(a.code, now.name, active);
+      redue.push(active.redue);
     }
   }
   for (const b of load.before) {
@@ -446,11 +455,14 @@ export async function rollbackDictLoad(tx: Tx, id: string): Promise<DictLoadRoll
       b.code,
       { name: b.name, data: b.data as never },
       now.version,
+      countDues,
     );
     if (!saved.ok) return failed(b.code, b.name, saved);
+    redue.push(saved.redue);
     if (saved.record.active !== b.active) {
       const active = await adminDictSetActive(tx, dict, b.code, b.active, saved.record.version);
       if (!active.ok) return failed(b.code, b.name, active);
+      redue.push(active.redue);
     }
   }
   await tx
@@ -464,7 +476,11 @@ export async function rollbackDictLoad(tx: Tx, id: string): Promise<DictLoadRoll
     changes: [{ field: 'loadedAt', to: (load.createdAt as Date).toISOString() }],
   });
   const [after] = await tx.select(fields).from(l).where(eq(l.id, id));
-  return { ok: true, load: toRecord(after as Row) };
+  return {
+    ok: true,
+    load: toRecord(after as Row),
+    redue: mergeRedueScopes(redue.map((x) => x ?? null)),
+  };
 }
 
 /** Запись загрузки по номеру (после «Применить» — для ответа). */

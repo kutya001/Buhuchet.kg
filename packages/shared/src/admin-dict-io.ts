@@ -1,5 +1,6 @@
 import { ADMIN_VALUE_DICTS } from '@buhuchet/domain';
 import { z } from 'zod';
+import { AdminDuesPreview } from './admin-dicts';
 import { Uuid } from './common';
 import { listPageSchema } from './list';
 
@@ -46,6 +47,16 @@ export const AdminDictImportPreview = z.object({
   errors: z.array(z.object({ line: Line, code: z.string(), errors: z.array(z.string()) })),
   same: z.number().int().nonnegative(),
   stamp: z.string(),
+  /** У скольких несданных отчётов в скольких организациях изменятся сроки. */
+  dues: AdminDuesPreview,
+  /**
+   * У видов отчётов: у скольких видов меняется «Что нужно сделать» и сколько отчётов по ним уже
+   * создано — они остаются с прежним (прототип `actT`, `actR`).
+   */
+  act: z.object({
+    types: z.number().int().nonnegative(),
+    reports: z.number().int().nonnegative(),
+  }),
 });
 export type AdminDictImportPreview = z.infer<typeof AdminDictImportPreview>;
 

@@ -4,7 +4,9 @@ import {
   adminDictCreate,
   adminDictSetActive,
   adminDictUpdate,
+  adminTypeReportCounts,
   dictValueTakenField,
+  dueCatalog,
   exportDictLoads,
   getDictLoad,
   insertDictLoad,
@@ -13,13 +15,17 @@ import {
   listDictLoadsPage,
   listDictLoadValues,
   lockDictLoads,
+  mergeRedueScopes,
   rollbackDictLoad,
   withUserContext,
   type AdminDictSaveResult,
   type DictLoadAdded,
   type DictLoadBefore,
   type DictLoadRecord,
+  type DueCatalog,
+  type DuesCounter,
   type IoRecord,
+  type RedueScope,
   type Tx,
 } from '@buhuchet/db';
 import {
@@ -72,6 +78,7 @@ import {
 } from '../../lists/xlsx-read';
 import { requirePlatformAdmin } from '../../middleware/access';
 import { serverTexts } from '../l10n/texts';
+import { duesCounter, previewDues, recalcDues } from './admin-dues';
 import { requiredProblem, saveProblem, valueInputOf, type FieldProblem } from './admin';
 
 /*
@@ -302,6 +309,11 @@ interface ImportOutcome {
   preview: AdminDictImportPreview;
   before: DictLoadBefore[];
   added: DictLoadAdded[];
+  /** Сроки каких отчётов пересчитать и каталог после записи (для предпросмотра). */
+  redue: RedueScope | null;
+  catalog: DueCatalog | null;
+  /** Виды отчётов, у которых меняется «Что нужно сделать». */
+  actTypes: string[];
 }
 
 /** Отметка справочника и файла: версии значений и строки файла. */
@@ -327,6 +339,7 @@ async function runImport(
   dict: AdminValueDict,
   table: string[][],
   t: Translate,
+  countDues?: DuesCounter,
 ): Promise<ImportOutcome> {
   const ctx: IoContext = { t, refs: await ioRefs(tx) };
   const parsed = parseIoRows(dict, table, ctx);
@@ -344,9 +357,13 @@ async function runImport(
     errors: [],
     same: 0,
     stamp: stampOf(dict, records, table),
+    dues: { reports: 0, orgs: 0 },
+    act: { types: 0, reports: 0 },
   };
   const before: DictLoadBefore[] = [];
   const added: DictLoadAdded[] = [];
+  const redue: (RedueScope | null | undefined)[] = [];
+  const actTypes: string[] = [];
   const random = () => randomBytes(4).toString('hex');
   for (const row of parsed.rows) {
     const fail = (errors: string[]) =>
@@ -373,12 +390,12 @@ async function runImport(
     }
     const input = checked.input;
     try {
-      const record = await tx.transaction(async (sp) => {
+      const written = await tx.transaction(async (sp) => {
         const saved = base
-          ? await adminDictUpdate(sp, dict, row.code, input, base.version)
+          ? await adminDictUpdate(sp, dict, row.code, input, base.version, countDues)
           : await adminDictCreate(sp, dict, input, random, row.code);
         if (!saved.ok) throw new RowFail(saved);
-        if (saved.record.active === after.active) return saved.record;
+        if (saved.record.active === after.active) return { record: saved.record, redue: [saved] };
         const active = await adminDictSetActive(
           sp,
           dict,
@@ -387,8 +404,10 @@ async function runImport(
           saved.record.version,
         );
         if (!active.ok) throw new RowFail(active);
-        return active.record;
+        return { record: active.record, redue: [saved, active] };
       });
+      const record = written.record;
+      redue.push(...written.redue.map((x) => x.redue));
       const name = after.name;
       // Вид сразу после загрузки: по нему откат узнаёт значение, которое вернул откат следующей загрузки.
       const loaded = { name: record.name, active: record.active, data: record.data };
@@ -399,6 +418,7 @@ async function runImport(
         continue;
       }
       const shown = changes.map(({ title, from, to }) => ({ title, from, to }));
+      if (dict === 'types' && changes.some((x) => x.key === 'act')) actTypes.push(base.code);
       const off = base.active && !after.active;
       (off ? preview.off : preview.change).push({
         line: row.line,
@@ -431,7 +451,29 @@ async function runImport(
       ]);
     }
   }
-  return { preview, before, added };
+  const scope = mergeRedueScopes(redue.map((x) => x ?? null));
+  return {
+    preview,
+    before,
+    added,
+    redue: scope,
+    catalog: scope ? await dueCatalog(tx) : null,
+    actTypes,
+  };
+}
+
+/**
+ * Что покажет сравнение сверх строк (прототип df.dues, df.actR): у скольких несданных отчётов в
+ * скольких организациях изменятся сроки и сколько отчётов уже создано по видам, у которых меняется
+ * «Что нужно сделать».
+ */
+async function withDues(deps: ApiDeps, outcome: ImportOutcome): Promise<AdminDictImportPreview> {
+  const { preview, redue, catalog, actTypes } = outcome;
+  const dues = catalog ? await previewDues(deps, redue, catalog) : preview.dues;
+  if (!actTypes.length) return { ...preview, dues };
+  const counts = await adminTypeReportCounts(deps.db);
+  const reports = actTypes.reduce((n, code) => n + (counts.get(code)?.total ?? 0), 0);
+  return { ...preview, dues, act: { types: actTypes.length, reports } };
 }
 
 /** Сравнение без записи: та же запись в транзакции, которая откатывается. */
@@ -477,7 +519,7 @@ export function adminDictImportPreviewHandler(
         throw new DryRun(await runImport(tx, dict, table, t));
       });
     } catch (err) {
-      if (err instanceof DryRun) return c.json(err.outcome.preview, 200);
+      if (err instanceof DryRun) return c.json(await withDues(deps, err.outcome), 200);
       throw err;
     }
     throw new Error('сравнение без результата');
@@ -525,7 +567,7 @@ export function adminDictImportApplyHandler(
     const t = await translator(deps);
     const body = await adminTx(deps, c, async (tx) => {
       await lockDictLoads(tx);
-      const outcome = await runImport(tx, dict, table, t);
+      const outcome = await runImport(tx, dict, table, t, duesCounter(deps));
       const { preview } = outcome;
       // ОТКЛОНЕНИЕ: docs/deviations.md#Д-16 — справочник или файл изменились после сравнения.
       if (preview.stamp !== stamp) importFail('import_changed', 409);
@@ -541,9 +583,11 @@ export function adminDictImportApplyHandler(
         before: outcome.before,
         added: outcome.added,
       });
-      return { load: loadBody((await getDictLoad(tx, id))!), preview };
+      return { load: loadBody((await getDictLoad(tx, id))!), preview, redue: outcome.redue };
     });
-    return c.json(body, 200);
+    // Сроки несданных отчётов — после записи загрузки, каждая организация своей транзакцией.
+    const dues = await recalcDues(deps, body.redue);
+    return c.json({ load: body.load, preview: { ...body.preview, dues } }, 200);
   };
 }
 
@@ -678,9 +722,9 @@ export function rollbackDictLoadHandler(
     const { id } = c.req.valid('param');
     const t = await translator(deps);
     // Отказ — внутри транзакции: уже восстановленные значения откатываются вместе с ней.
-    const load = await adminTx(deps, c, async (tx) => {
-      const result = await rollbackDictLoad(tx, id);
-      if (result.ok) return result.load;
+    const rolled = await adminTx(deps, c, async (tx) => {
+      const result = await rollbackDictLoad(tx, id, duesCounter(deps));
+      if (result.ok) return result;
       if (result.reason === 'not_found') {
         return apiFail(404, 'not_found', 'Загрузка не найдена или уже откачена');
       }
@@ -691,6 +735,7 @@ export function rollbackDictLoadHandler(
       const code = result.reason === 'changed_after' ? 'load_changed_after' : 'load_restore_failed';
       return apiFail(409, code, t(`err.${code}`, { name }), { name });
     });
-    return c.json(loadBody(load), 200);
+    await recalcDues(deps, rolled.redue);
+    return c.json(loadBody(rolled.load), 200);
   };
 }

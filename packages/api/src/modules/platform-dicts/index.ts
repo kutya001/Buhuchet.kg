@@ -25,6 +25,8 @@ import {
   taxRegimesRoute,
 } from './dicts';
 import {
+  adminDictDuesPreviewHandler,
+  adminDictDuesPreviewRoute,
   adminDictGroupsHandler,
   adminDictGroupsRoute,
   adminDictHistoryHandler,
@@ -80,6 +82,12 @@ import {
   listAdminCalendarHandler,
   listAdminCalendarRoute,
 } from './admin-calendar';
+import {
+  adminCalendarAddDuesHandler,
+  adminCalendarAddDuesRoute,
+  adminCalendarDeleteDuesHandler,
+  adminCalendarDeleteDuesRoute,
+} from './admin-dues';
 import {
   adminTaxInfoHandler,
   adminTaxInfoRoute,
@@ -183,6 +191,8 @@ export function platformDictsModule(deps: ApiDeps) {
       .openapi(adminCalendarHistoryRoute, adminCalendarHistoryHandler(deps))
       .openapi(addAdminCalendarDayRoute, addAdminCalendarDayHandler(deps))
       .openapi(deleteAdminCalendarDayRoute, deleteAdminCalendarDayHandler(deps))
+      .openapi(adminCalendarAddDuesRoute, adminCalendarAddDuesHandler(deps))
+      .openapi(adminCalendarDeleteDuesRoute, adminCalendarDeleteDuesHandler(deps))
       .openapi(adminStatusesRoute, adminStatusesHandler(deps))
       .openapi(statusesHistoryRoute, systemHistoryHandler(deps, 'statuses', statusesHistoryRoute))
       .openapi(setStatusNameRoute, setStatusNameHandler(deps))
@@ -217,6 +227,7 @@ export function platformDictsModule(deps: ApiDeps) {
       .openapi(createAdminDictValueRoute, createAdminDictValueHandler(deps))
       .openapi(getAdminDictValueRoute, getAdminDictValueHandler(deps))
       .openapi(updateAdminDictValueRoute, updateAdminDictValueHandler(deps))
+      .openapi(adminDictDuesPreviewRoute, adminDictDuesPreviewHandler(deps))
       .openapi(moveAdminDictValueRoute, moveAdminDictValueHandler(deps))
       .openapi(setAdminDictActiveRoute, setAdminDictActiveHandler(deps))
       .openapi(deleteAdminDictValueRoute, deleteAdminDictValueHandler(deps))

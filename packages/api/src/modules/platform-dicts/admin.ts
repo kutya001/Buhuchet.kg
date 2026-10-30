@@ -8,6 +8,7 @@ import {
   adminDictMove,
   adminDictSetActive,
   adminDictUpdate,
+  adminTypeReportCounts,
   countActiveDictLoads,
   countNewDictRequests,
   dictValueTakenField,
@@ -45,6 +46,7 @@ import {
   AdminDictValue,
   AdminDictValueForm,
   AdminDictValueUpdate,
+  AdminDuesPreview,
   AdminReportTypeOptions,
   AdminValueDictParam,
   ApiError,
@@ -62,6 +64,7 @@ import { apiFail, listQueryOf, listQueryResponses, versionedSaveResponses } from
 import { exportRateResponses, withExportSlot, xlsxContent, xlsxResponse } from '../../lists/export';
 import { requirePlatformAdmin } from '../../middleware/access';
 import { serverTexts } from '../l10n/texts';
+import { duesCounter, previewEdit, recalcDues } from './admin-dues';
 
 /*
  * Админка → «Справочники платформы» (задача 2.36; ТЗ «Общие правила для всех справочников»; прототип
@@ -100,9 +103,17 @@ function valueBody(x: AdminDictValueRecord): AdminDictValue {
   };
 }
 
-/** «Назначен» видов отчётов — по всем организациям, до транзакции администратора. */
+/**
+ * «Назначен» видов отчётов и созданные по ним отчёты — по всем организациям, до транзакции
+ * администратора.
+ */
 const listExtras = async (deps: ApiDeps, dict: AdminValueDict): Promise<AdminDictListExtras> =>
-  dict === 'types' ? { assigned: await adminAssignedTypeCounts(deps.db) } : {};
+  dict === 'types'
+    ? {
+        assigned: await adminAssignedTypeCounts(deps.db),
+        reports: await adminTypeReportCounts(deps.db),
+      }
+    : {};
 
 const adminTx = <T>(
   deps: ApiDeps,
@@ -354,7 +365,8 @@ export function getAdminDictValueHandler(
 ): RouteHandler<typeof getAdminDictValueRoute, AppEnv> {
   return async (c) => {
     const { dict, code } = c.req.valid('param');
-    const found = await adminTx(deps, c, (tx) => getAdminDictValue(tx, dict, code));
+    const reports = dict === 'types' ? await adminTypeReportCounts(deps.db) : undefined;
+    const found = await adminTx(deps, c, (tx) => getAdminDictValue(tx, dict, code, reports));
     if (!found) throw new RecordNotFoundError('platform_dict', code);
     return c.json(valueBody(found), 200);
   };
@@ -633,10 +645,52 @@ export function updateAdminDictValueHandler(
     const input = inputOf(dict, form);
     checkRequired(dict, input);
     const result = await saving(() =>
-      adminTx(deps, c, (tx) => adminDictUpdate(tx, dict, code, input, version)),
+      adminTx(deps, c, (tx) => adminDictUpdate(tx, dict, code, input, version, duesCounter(deps))),
     );
     if (!result.ok) return failOf(deps, c, result, dict, code);
+    // Сроки несданных отчётов — после сохранения, каждая организация своей транзакцией.
+    await recalcDues(deps, result.redue);
     return c.json(valueBody(result.record), 200);
+  };
+}
+
+export const adminDictDuesPreviewRoute = createRoute({
+  method: 'post',
+  path: '/admin/platform-dicts/{dict}/{code}/dues-preview',
+  tags: ['platform-dicts'],
+  summary: 'Предпросмотр: у скольких несданных отчётов изменятся сроки после правки значения',
+  middleware: [requirePlatformAdmin] as const,
+  request: {
+    params: AdminDictCodeParam,
+    body: { required: true, content: json(AdminDictValueUpdate) },
+  },
+  responses: {
+    200: {
+      description:
+        'Отчёты и организации; правка не сохраняется. Правка с ошибкой или без влияния на сроки — нули',
+      content: json(AdminDuesPreview),
+    },
+    ...denied,
+  },
+});
+
+/**
+ * Окна вида отчёта и статуса (прототип `te-warn`): правило срока или «Меняет сроки» изменены, но ещё
+ * не сохранены — та же правка, что у «Сохранить», в транзакции, которая откатывается.
+ */
+export function adminDictDuesPreviewHandler(
+  deps: ApiDeps,
+): RouteHandler<typeof adminDictDuesPreviewRoute, AppEnv> {
+  return async (c) => {
+    const { dict, code } = c.req.valid('param');
+    const { version, ...form } = c.req.valid('json');
+    const parsed = valueInputOf(dict, form);
+    const preview = await previewEdit(deps, c, async (tx) => {
+      if ('problem' in parsed || requiredProblem(dict, parsed.input)) return false;
+      const saved = await adminDictUpdate(tx, dict, code, parsed.input, version);
+      return saved.ok ? (saved.redue ?? null) : false;
+    });
+    return c.json(preview, 200);
   };
 }
 
@@ -698,6 +752,7 @@ export function setAdminDictActiveHandler(
       adminDictSetActive(tx, dict, code, active, version),
     );
     if (!result.ok) return failOf(deps, c, result, dict, code);
+    await recalcDues(deps, result.redue);
     return c.json(valueBody(result.record), 200);
   };
 }

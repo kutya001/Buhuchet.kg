@@ -49,6 +49,7 @@ import {
 import { api, callApi } from '../api-client';
 import { fieldError } from '../auth/fields';
 import { useErrorText, useT } from '../l10n/provider';
+import { spreadText, useDuesPreview } from './dues-preview';
 import {
   fetchAdminDictValue,
   pdictsBasesQuery,
@@ -142,8 +143,22 @@ const PAYERS: readonly PayerKind[] = ['all', 'org', 'ip'];
 const KINDS: readonly ReportKind[] = ['cross', 'regime', 'internal'];
 const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1);
 
-/** Поля правила срока: их правка у созданного вида пересчитывает сроки несданных отчётов. */
-const RULE_FIELDS = ['dueDay', 'dueAfter', 'dueMonth', 'dueFrom', 'shiftToWorkday'] as const;
+/**
+ * Поля правила срока сдачи и оплаты: их правка у созданного вида пересчитывает сроки несданных
+ * отчётов (прототип `ruleCh`; срок оплаты — docs/deviations.md п. Д-17).
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#Д-17
+const RULE_FIELDS = [
+  'dueDay',
+  'dueAfter',
+  'dueMonth',
+  'dueFrom',
+  'shiftToWorkday',
+  'paySame',
+  'payDay',
+  'payAfter',
+  'payMonth',
+] as const;
 
 /**
  * Окно вида отчёта (прототип admin/platform-dicts-edit.js typeEditDlg и pkTypeFields; ТЗ «Виды
@@ -403,17 +418,25 @@ export function TypeDialog({
   );
 
   // Предупреждения у созданного вида (прототип `te-warn`): правило срока или периодичность изменились.
+  // Сколько отчётов изменится — сервер считает по правке тем же кодом, что пересчёт после сохранения;
+  // пока ответа нет или форма с ошибкой — несданные отчёты вида (как в прототипе).
   const reports = current?.reports ?? { total: 0, open: 0, orgs: 0 };
   const initial = current ? formOf(current) : null;
   const ruleChanged = initial !== null && RULE_FIELDS.some((f) => initial[f] !== v[f]);
   const periodChanged = initial !== null && initial.period !== v.period;
-  const spread =
-    reports.open === 0
-      ? t('pdicts.type.spread_none')
-      : t(`pdicts.type.spread_orgs.${pluralForm(reports.orgs)}`, {
-          n: reports.orgs,
-          reports: t(`pdicts.type.spread.${pluralForm(reports.open)}`, { n: reports.open }),
-        });
+  const parsed = current && ruleChanged ? ReportTypeValueForm.safeParse(v) : null;
+  const dues = useDuesPreview(
+    `types:${current?.code ?? ''}`,
+    current && parsed?.success
+      ? { ...reportTypeBody(parsed.data), version: current.version }
+      : null,
+    (json) =>
+      pd[':dict'][':code']['dues-preview'].$post({
+        param: { dict: 'types', code: current!.code },
+        json,
+      }),
+  );
+  const spread = spreadText(t, dues ?? { reports: reports.open, orgs: reports.orgs });
   const actChanged = before?.act !== undefined && act !== '' && act !== before.act;
 
   return (
