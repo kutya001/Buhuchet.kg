@@ -77,7 +77,10 @@ export const statusHistory = pgTable(
       'status_history_rollback_reason_check',
       sql`not ${t.isRollback} or (${t.fromStatus} is not null and ${t.reason} is not null and btrim(${t.reason}) <> '')`,
     ),
-    check('status_history_cause_check', sql`${t.cause} is null or ${t.cause} in (${codes(STATUS_CAUSES)})`),
+    check(
+      'status_history_cause_check',
+      sql`${t.cause} is null or ${t.cause} in (${codes(STATUS_CAUSES)})`,
+    ),
     check(
       'status_history_reason_check',
       sql`${t.reason} is null or char_length(${t.reason}) <= ${sql.raw(String(ROLLBACK_REASON_MAX))}`,

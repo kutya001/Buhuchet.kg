@@ -1,4 +1,9 @@
-import { auditActorName, isScaleStatus, type StatusCause, type StatusScaleKey } from '@buhuchet/domain';
+import {
+  auditActorName,
+  isScaleStatus,
+  type StatusCause,
+  type StatusScaleKey,
+} from '@buhuchet/domain';
 import { and, asc, eq } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { Tx } from './client';

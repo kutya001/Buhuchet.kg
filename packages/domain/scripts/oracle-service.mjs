@@ -77,13 +77,22 @@ const rand = (n) => {
 const addM = (m, n) => run(`addMonths(${JSON.stringify(m)}, ${n})`);
 
 const TODAYS = ['2026-10-18', '2026-11-01', '2027-05-20'];
-const STATUS = { 'К сдаче': 'open', 'В работе': 'open', 'Требует исправления': 'open', 'Не требуется': 'not_required' };
+const STATUS = {
+  'К сдаче': 'open',
+  'В работе': 'open',
+  'Требует исправления': 'open',
+  'Не требуется': 'not_required',
+};
 
 /** Набор периодов: демо и полученные из них цепочкой действий прототипа. */
 function states(today) {
   run(`TODAY = ${JSON.stringify(today)}`);
   const month = today.slice(0, 7);
-  const out = demo.contractors.map((c) => ({ archived: !!c.archived, oneOff: c.kind === 'oneoff', periods: clone(c.periods) }));
+  const out = demo.contractors.map((c) => ({
+    archived: !!c.archived,
+    oneOff: c.kind === 'oneoff',
+    periods: clone(c.periods),
+  }));
   out.push({ archived: false, oneOff: false, periods: [] });
   const regular = out.filter((c) => !c.oneOff && !c.archived);
   for (let i = 0; i < 120; i++) {
@@ -95,7 +104,9 @@ function states(today) {
       const pp = run('planPause(c)');
       if (op === 0 && l && !l.to && l.from <= month && !pp) {
         const f = addM(month, rand(3));
-        run(`pauseP(c, ${JSON.stringify(f)}, ${rand(2) ? JSON.stringify(addM(f, rand(6) + 1)) : 'null'})`);
+        run(
+          `pauseP(c, ${JSON.stringify(f)}, ${rand(2) ? JSON.stringify(addM(f, rand(6) + 1)) : 'null'})`,
+        );
       } else if (op === 1 && !(l && !l.to && l.from <= month) && !(pp && !pp.resume)) {
         run(`resumeP(c, ${JSON.stringify(addM(month, rand(4)))})`);
       } else if (op === 2 && pp) run('unpauseP(c)');
@@ -118,7 +129,11 @@ for (const today of TODAYS) {
   const month = today.slice(0, 7);
   for (const s of states(today)) {
     run(`TODAY = ${JSON.stringify(today)}`);
-    const proto = () => ({ periods: clone(s.periods), archived: s.archived, kind: s.oneOff ? 'oneoff' : 'regular' });
+    const proto = () => ({
+      periods: clone(s.periods),
+      archived: s.archived,
+      kind: s.oneOff ? 'oneoff' : 'regular',
+    });
     const after = (code, extra = {}) => {
       ctx.c = proto();
       Object.assign(ctx, extra);
@@ -169,9 +184,21 @@ for (const today of TODAYS) {
       const pkey = `${addM(month, rand(6) - 3)}-01`;
       const due = run(`addDays(${JSON.stringify(today)}, ${rand(90) - 45})`);
       const status = statuses[rand(statuses.length)];
-      return { id: k, cp: 1, t: rand(2) ? 'a' : 'b', pkey, due, status, subDate: status === 'Сдан' || rand(5) === 0 ? due : null, superseded: false };
+      return {
+        id: k,
+        cp: 1,
+        t: rand(2) ? 'a' : 'b',
+        pkey,
+        due,
+        status,
+        subDate: status === 'Сдан' || rand(5) === 0 ? due : null,
+        superseded: false,
+      };
     });
-    const assign = [{ t: 'a', to: null }, { t: 'b', to: rand(2) ? today : null }];
+    const assign = [
+      { t: 'a', to: null },
+      { t: 'b', to: rand(2) ? today : null },
+    ];
     run('REPORTS.length = 0');
     for (const r of clone(list)) run(`REPORTS.push(${JSON.stringify(r)})`);
     ctx.c = { id: 1, periods: clone(periods), archived, kind: 'regular', assign };
@@ -202,9 +229,12 @@ for (const today of TODAYS) {
 const out = fileURLToPath(new URL('../src/contractors/__fixtures__/service.json', import.meta.url));
 writeFileSync(
   out,
-  await format(JSON.stringify({ source: 'services.js, status-scale.js, contractors.js', cases, reports }), {
-    ...(await resolveConfig(out)),
-    filepath: out,
-  }),
+  await format(
+    JSON.stringify({ source: 'services.js, status-scale.js, contractors.js', cases, reports }),
+    {
+      ...(await resolveConfig(out)),
+      filepath: out,
+    },
+  ),
 );
 console.log(`service.json: ${cases.length} контрагентов, ${reports.length} наборов отчётов`);
