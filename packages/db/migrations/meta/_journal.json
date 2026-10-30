@@ -379,6 +379,13 @@
       "when": 1793311530943,
       "tag": "0053_kpi_import_guards",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1793314397608,
+      "tag": "0054_contractors_socfund",
+      "breakpoints": true
     }
   ]
 }
