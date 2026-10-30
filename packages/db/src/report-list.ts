@@ -36,10 +36,13 @@ import {
   dueChangeReasons,
   employees,
   reportDueChanges,
+  orgSettings,
   ownershipForms,
+  productionCalendar,
   reports,
   reportTypes,
   singleTaxRates,
+  statusHistory,
   taxOffices,
   taxRegimes,
 } from './schema';
@@ -49,14 +52,16 @@ import { readStatusHistory, type StatusHistoryItem } from './status';
 
 /*
  * Список «Отчеты для сдачи» на сервере (ТЗ «Отчеты для сдачи» → список; прототип modules/reports.js,
- * reportCols): столбцы, вкладки «На неделе», «Просрочено», «Все отчёты». Прежние версии уточнённых
- * отчётов в списке не видны (прототип visReports). Тексты, которые видны в ячейках (подписи периодов,
- * «Что сделать», ставки словами), приходят одной записью `lt` в FROM запроса: так у столбцов нет
- * параметров и по ним работают фильтр, сортировка и группы. Деньги и оплата (2.19), подтверждение и
- * «Ожидают подтверждения» (2.14), файлы (поток Г) добавят свои столбцы.
+ * reportCols): столбцы, вкладки «На неделе», «Просрочено», «Ожидают подтверждения», «Все отчёты» и
+ * быстрый фильтр «Все / Сдать / Уплатить» (задача 2.13). Прежние версии уточнённых отчётов в списке не
+ * видны (прототип visReports). Тексты, которые видны в ячейках (подписи периодов, «Что сделать», ставки
+ * словами), приходят одной записью `lt` в FROM запроса: так у столбцов нет параметров и по ним работают
+ * фильтр, сортировка и группы. Деньги и оплата (2.19), файлы (2.14) добавят свои столбцы.
  */
 
 const responsible = alias(employees, 'report_responsible');
+const submitter = alias(employees, 'report_submitter');
+const confirmer = alias(employees, 'report_confirmer');
 const creator = alias(employees, 'report_creator');
 const updater = alias(employees, 'report_updater');
 const regime = alias(taxRegimes, 'report_regime');
@@ -84,6 +89,9 @@ const TEXT_FIELDS = [
   'version_primary',
   'version_revision',
   'overdue_sub',
+  'mark_waiting',
+  'mark_confirmed',
+  'mark_confirmed_by',
 ] as const;
 
 /**
@@ -137,6 +145,9 @@ async function listTexts(tx: Tx, t: ListTexts, today: IsoDate): Promise<SQL> {
     version_primary: t('report.version.primary'),
     version_revision: t('report.version.revision'),
     overdue_sub: t('report.overdue.sub'),
+    mark_waiting: t('status.report.waiting'),
+    mark_confirmed: t('status.report.confirmed'),
+    mark_confirmed_by: t('status.mark_confirmed_by'),
     months: Array.from({ length: 12 }, (_, i) => t(`report.month.${i + 1}`)),
     en,
     adds,
@@ -163,6 +174,8 @@ function fromReports(tx: Tx, fields: object, texts: SQL) {
     .leftJoin(taxOffices, eq(taxOffices.code, contractors.taxOfficeCode))
     .leftJoin(assignments, eq(assignments.id, reports.assignmentId))
     .leftJoin(responsible, eq(responsible.id, reports.responsibleEmployeeId))
+    .leftJoin(submitter, eq(submitter.userId, reports.submittedBy))
+    .leftJoin(confirmer, eq(confirmer.userId, reports.confirmedBy))
     .leftJoin(creator, eq(creator.userId, reports.createdBy))
     .leftJoin(updater, eq(updater.userId, reports.updatedBy))
     .innerJoin(texts, sql`true`)
@@ -181,6 +194,35 @@ const DONE = statusIn(['submitted', 'not_required']);
  */
 const overdueOf = (today: IsoDate) =>
   sql`(${contractors.serviceStatus} <> 'paused' and ${reports.act} <> 'pay' and ${OPEN} and ${reports.dueDate} < ${dateLiteral(today)})`;
+
+/**
+ * Сдача ждёт подтверждения (прототип repWait): сдан, у вида есть сдача, подтверждения нет — только при
+ * включённой в учётной политике «Сдача отчётов требует подтверждения».
+ */
+const waitingOf = (confirm: boolean) =>
+  confirm
+    ? sql`(${reports.status} = 'submitted' and ${reports.act} <> 'pay' and ${reports.confirmedAt} is null)`
+    : sql`false`;
+
+/** День сдачи по Бишкеку (прототип repWaitDays: `subAt || subDate`). */
+const SUBMITTED_DAY = sql`coalesce((${reports.submittedAt} at time zone 'Asia/Bishkek')::date, ${reports.submittedOn})`;
+
+/** Быстрый фильтр над списком (ТЗ «Метка «Что нужно сделать»» → «Все / Сдать / Уплатить»). */
+export const REPORT_QUICK = ['all', 'sub', 'pay'] as const;
+export type ReportQuick = (typeof REPORT_QUICK)[number];
+
+/**
+ * «Сдать» — отчёты со сдачей, которые ещё не сданы; «Уплатить» — отчёты с уплатой, где сумма не указана
+ * или больше нуля (прототип actQ); «Не требуется» — ни там ни там. Оплаченные из «Уплатить» уберёт
+ * задача 2.19 вместе с оплатами.
+ */
+function quickOf(q: ReportQuick): SQL | undefined {
+  if (q === 'sub') return sql`(${reports.act} <> 'pay' and ${OPEN})`;
+  if (q === 'pay') {
+    return sql`(${reports.act} <> 'sub' and ${reports.status} <> 'not_required' and (${reports.amount} is null or ${reports.amount} > 0))`;
+  }
+  return undefined;
+}
 
 /** «020 · Октябрьский» — код ГНС и краткое название (прототип ugnsLabel). */
 const TAX_OFFICE_LABEL = sql<
@@ -231,7 +273,10 @@ const CREATED_BY = auditActorValue(reports.createdBy, creator.shortName);
  * Столбцы списка отчётов (прототип reportCols): ключи — как у столбцов экрана. У вида «Уплата» нет
  * статуса сдачи и даты сдачи, у вида «Сдача» — суммы и срока оплаты (в ячейке «—»).
  */
-export function reportListColumns(t: ListTexts, options: { today: IsoDate }): ListColumns {
+export function reportListColumns(
+  t: ListTexts,
+  options: { today: IsoDate; confirm: boolean },
+): ListColumns {
   const statusText = sql`case ${reports.status} ${sql.join(
     ['todo', 'in_progress', 'submitted', 'needs_fix', 'not_required'].map(
       (s) => sql`when ${textLiteral(s)} then ${t(`status.report.${s}`)}`,
@@ -239,6 +284,10 @@ export function reportListColumns(t: ListTexts, options: { today: IsoDate }): Li
     sql` `,
   )} end`;
   const overdue = overdueOf(options.today);
+  const waiting = waitingOf(options.confirm);
+  const marked = options.confirm
+    ? sql`(${reports.status} = 'submitted' and ${reports.act} <> 'pay')`
+    : sql`false`;
   return {
     cp: { type: 'text', label: 'report.col.cp', value: contractors.name },
     inn: { type: 'text', label: 'report.col.inn', value: contractors.inn, compact: true },
@@ -249,11 +298,12 @@ export function reportListColumns(t: ListTexts, options: { today: IsoDate }): Li
       display: TAX_OFFICE_LABEL,
       sort: { value: TAX_OFFICE_LABEL, text: true },
     },
+    // Значение — краткое название, как в прототипе (`val: T[r.t].short`): «1-Т» месячный и годовой —
+    // одно значение фильтра и одна группа.
     type: {
       type: 'enum',
       label: 'report.col.type',
-      value: reports.reportTypeCode,
-      display: reportTypes.shortName,
+      value: reportTypes.shortName,
       sort: { value: reportTypes.shortName, text: true },
     },
     act: {
@@ -294,6 +344,19 @@ export function reportListColumns(t: ListTexts, options: { today: IsoDate }): Li
       display: sql`case when ${reports.act} = 'pay' then null else ${statusText} end`,
       sort: { value: STATUS_ORDER, text: false },
     },
+    // «Ждёт, дней» и «Сдал» — во вкладке «Ожидают подтверждения» (прототип reportCols, o.waiting).
+    wait: {
+      type: 'int',
+      label: 'report.col.wait',
+      value: sql`case when ${waiting} then ${dateLiteral(options.today)} - ${SUBMITTED_DAY} end`,
+    },
+    submittedBy: {
+      type: 'enum',
+      label: 'report.col.submitted_by',
+      value: sql`coalesce(${submitter.id}, ${reports.responsibleEmployeeId})`,
+      display: sql`coalesce(${submitter.shortName}, ${responsible.shortName})`,
+      sort: { value: sql`coalesce(${submitter.shortName}, ${responsible.shortName})`, text: true },
+    },
     submitted: {
       type: 'date',
       label: 'report.col.submitted',
@@ -325,14 +388,27 @@ export function reportListColumns(t: ListTexts, options: { today: IsoDate }): Li
       sort: { value: responsible.shortName, text: true },
     },
     formCode: { type: 'text', label: 'report.col.form_code', value: reportTypes.formCode },
+    // Текстом, как в прототипе (`type: 'text'`): фильтр — по части слова, «III квартал».
     periodFull: {
-      type: 'enum',
+      type: 'text',
       label: 'report.col.period_full',
-      value: PERIOD_KEY,
-      display: PERIOD_FULL,
+      value: PERIOD_FULL,
       sort: { value: PERIOD_KEY, text: false },
     },
     dueBase: { type: 'date', label: 'report.col.due_base', value: reports.dueBase },
+    // «Подтверждение» и «Дата подтверждения» — при подтверждении сдачи в учётной политике.
+    confirm: {
+      type: 'enum',
+      label: 'report.col.confirm',
+      // «Ждёт подтверждения» или «Подтвердил <кто>» (прототип repConfTxt): у каждого подтвердившего — своё значение.
+      value: sql`case when ${marked} then case when ${reports.confirmedAt} is null then 'waiting' else coalesce(${confirmer.id}::text, 'confirmed') end end`,
+      display: sql`case when ${marked} then case when ${reports.confirmedAt} is null then ${lt('mark_waiting')} when ${confirmer.id} is null then ${lt('mark_confirmed')} else replace(${lt('mark_confirmed_by')}, '{who}', ${confirmer.shortName}) end end`,
+    },
+    confirmedOn: {
+      type: 'date',
+      label: 'report.col.confirmed_on',
+      value: sql`case when ${marked} then (${reports.confirmedAt} at time zone 'Asia/Bishkek')::date end`,
+    },
     version: {
       type: 'enum',
       label: 'report.col.version',
@@ -365,9 +441,19 @@ export function reportListColumns(t: ListTexts, options: { today: IsoDate }): Li
   };
 }
 
-/** Вкладки списка (прототип repTabs): «Ожидают подтверждения» добавит задача 2.14. */
-export const REPORT_TABS = ['week', 'overdue', 'all'] as const;
+/** Вкладки списка (прототип repTabs). */
+export const REPORT_TABS = ['week', 'overdue', 'waiting', 'all'] as const;
 export type ReportTab = (typeof REPORT_TABS)[number];
+
+/**
+ * Кто что видит во вкладке «Ожидают подтверждения» (прототип repWaitList): включено ли подтверждение
+ * сдачи и чьи отчёты — у сотрудника без права «Подтверждать сдачу отчётов» только те, где он
+ * ответственный (`own` — его номер), иначе все в области.
+ */
+export interface ReportWaitingView {
+  confirm: boolean;
+  own: string | null;
+}
 
 export interface ReportListOptions {
   t: ListTexts;
@@ -375,6 +461,9 @@ export interface ReportListOptions {
   /** Область «Свои контрагенты» (`reportScope`). */
   scope: SQL | undefined;
   tab: ReportTab;
+  /** Быстрый фильтр «Все / Сдать / Уплатить». */
+  quick: ReportQuick;
+  waiting: ReportWaitingView;
 }
 
 /**
@@ -398,16 +487,23 @@ function weekCondition(today: IsoDate): SQL {
   return sql`(${contractors.serviceStatus} <> 'paused' and ${reports.act} <> 'pay' and ${OPEN} and ${reports.dueDate} between ${dateLiteral(from)} and ${dateLiteral(to)})`;
 }
 
-function listScope(o: Pick<ReportListOptions, 'scope' | 'tab' | 'today'>): SQL | undefined {
-  return and(
-    eq(reports.superseded, false),
-    o.scope,
-    o.tab === 'week'
-      ? weekCondition(o.today)
-      : o.tab === 'overdue'
-        ? overdueOf(o.today)
-        : undefined,
-  );
+/** «Ожидают подтверждения» в области сотрудника (прототип repWaitList). */
+function waitingCondition(w: ReportWaitingView): SQL {
+  const own = w.own ? eq(reports.responsibleEmployeeId, w.own) : undefined;
+  return and(waitingOf(w.confirm), own)!;
+}
+
+function tabCondition(o: Pick<ReportListOptions, 'tab' | 'today' | 'waiting'>): SQL | undefined {
+  if (o.tab === 'week') return weekCondition(o.today);
+  if (o.tab === 'overdue') return overdueOf(o.today);
+  if (o.tab === 'waiting') return waitingCondition(o.waiting);
+  return undefined;
+}
+
+function listScope(
+  o: Pick<ReportListOptions, 'scope' | 'tab' | 'today' | 'quick' | 'waiting'>,
+): SQL | undefined {
+  return and(eq(reports.superseded, false), o.scope, tabCondition(o), quickOf(o.quick));
 }
 
 /** Строка списка отчётов. */
@@ -428,11 +524,26 @@ export interface ReportRow {
   dueDate: IsoDate;
   dueBase: IsoDate;
   dueManual: boolean;
+  /**
+   * Срок перенесён с нерабочего дня (не вручную): название праздника срока по закону, у выходного —
+   * пустая строка (прототип dueHtml, holidayName); без переноса — null.
+   */
+  dueHoliday: string | null;
   /** Дней до срока; у сданных и «Не требуется» — пусто. */
   days: number | null;
   overdue: boolean;
   status: ReportStatus;
   submittedOn: IsoDate | null;
+  /** Когда и кто отметил «Сдан»; у отмеченных при назначении момента и сотрудника нет. */
+  submittedAt: Date | null;
+  submittedBy: { id: string; shortName: string } | null;
+  /** Сколько дней сдача ждёт подтверждения (прототип repWaitDays); подтверждённый и несданный — пусто. */
+  waitDays: number | null;
+  /** Подтверждение сдачи старшим бухгалтером (отметка на шаге «Сдан», задача 2.14). */
+  confirmedAt: Date | null;
+  confirmedBy: { id: string; shortName: string } | null;
+  /** Последняя смена статуса из «Истории статусов»: под шкалой в строке — когда и кем. */
+  lastStatus: { at: Date; by: string | null } | null;
   amount: number | null;
   amountAuto: boolean;
   payDue: IsoDate | null;
@@ -444,6 +555,20 @@ export interface ReportRow {
   audit: AuditRecord;
   version: number;
 }
+
+/** Праздник или перенос выходного на дату срока по закону — на эту дату или «каждый год» (прототип holidayName). */
+const DUE_HOLIDAY = sql<
+  string | null
+>`case when ${reports.dueDate} <> ${reports.dueBase} and not ${reports.dueManual} then coalesce((select h.name from ${productionCalendar} h where h.kind in ('holiday', 'transfer') and h.day in (${reports.dueBase}::text, to_char(${reports.dueBase}, 'MM-DD')) order by length(h.day) desc limit 1), '') end`;
+
+/** Последняя смена статуса отчёта: поле записи «Истории статусов». */
+const lastStatus = (field: SQL) =>
+  sql`(select ${field} from ${statusHistory} where ${statusHistory.orgId} = ${reports.orgId} and ${statusHistory.scale} = 'report' and ${statusHistory.entityId} = ${reports.id} order by ${statusHistory.at} desc, ${statusHistory.id} desc limit 1)`;
+const LAST_STATUS_AT = lastStatus(sql`${statusHistory.at}`);
+const LAST_STATUS_USER = lastStatus(sql`${statusHistory.actorUserId}`);
+const LAST_STATUS_NAME = lastStatus(
+  sql`(select e.short_name from ${employees} e where e.user_id = ${statusHistory.actorUserId})`,
+);
 
 function rowFields(today: IsoDate) {
   return {
@@ -467,12 +592,25 @@ function rowFields(today: IsoDate) {
     dueDate: reports.dueDate,
     dueBase: reports.dueBase,
     dueManual: reports.dueManual,
+    dueHoliday: DUE_HOLIDAY,
     days: sql<
       number | null
     >`case when ${DONE} then null else ${reports.dueDate} - ${dateLiteral(today)} end`,
     overdue: sql<boolean>`${overdueOf(today)}`,
     status: reports.status,
     submittedOn: reports.submittedOn,
+    submittedAt: reports.submittedAt,
+    submitterId: submitter.id,
+    submitterName: submitter.shortName,
+    waitDays: sql<
+      number | null
+    >`case when ${reports.status} = 'submitted' and ${reports.act} <> 'pay' and ${reports.confirmedAt} is null then ${dateLiteral(today)} - ${SUBMITTED_DAY} end`,
+    confirmedAt: reports.confirmedAt,
+    confirmerId: confirmer.id,
+    confirmerName: confirmer.shortName,
+    statusAt: LAST_STATUS_AT,
+    statusUser: LAST_STATUS_USER,
+    statusName: LAST_STATUS_NAME,
     amount: reports.amount,
     amountAuto: reports.amountAuto,
     payDue: reports.payDue,
@@ -493,6 +631,12 @@ function rowFields(today: IsoDate) {
 }
 
 type RowData = Record<keyof ReturnType<typeof rowFields>, unknown>;
+
+/** Момент из строки запроса: в подзапросе `sql` он приходит строкой, а не `Date`. */
+const momentOf = (v: unknown): Date | null => (v == null ? null : new Date(v as string | Date));
+
+const personOf = (id: unknown, name: unknown) =>
+  id ? { id: id as string, shortName: (name as string | null) ?? '' } : null;
 
 function toRow(r: RowData): ReportRow {
   const responsibleId = r.responsibleId as string | null;
@@ -522,10 +666,22 @@ function toRow(r: RowData): ReportRow {
     dueDate: r.dueDate as IsoDate,
     dueBase: r.dueBase as IsoDate,
     dueManual: Boolean(r.dueManual),
+    dueHoliday: (r.dueHoliday as string | null) ?? null,
     days: r.days == null ? null : Number(r.days),
     overdue: Boolean(r.overdue),
     status: r.status as ReportStatus,
     submittedOn: r.submittedOn as IsoDate | null,
+    submittedAt: momentOf(r.submittedAt),
+    submittedBy: personOf(r.submitterId, r.submitterName),
+    waitDays: r.waitDays == null ? null : Number(r.waitDays),
+    confirmedAt: momentOf(r.confirmedAt),
+    confirmedBy: personOf(r.confirmerId, r.confirmerName),
+    lastStatus: r.statusAt
+      ? {
+          at: momentOf(r.statusAt)!,
+          by: auditActorName(r.statusUser as string | null, r.statusName as string | null),
+        }
+      : null,
     amount: amount == null ? null : Number(amount),
     amountAuto: Boolean(r.amountAuto),
     payDue: r.payDue as IsoDate | null,
@@ -547,7 +703,11 @@ function toRow(r: RowData): ReportRow {
 }
 
 const REPORT_NATURAL = [reports.dueDate, reports.id];
-const DEFAULT_SORT = { key: 'due', dir: 'asc' } as const;
+
+const columnsOf = (o: ReportListOptions) =>
+  reportListColumns(o.t, { today: o.today, confirm: o.waiting.confirm });
+/** Как на экране (ТЗ «Списки записей», прототип defSort): от новых к старым по «Создано». */
+const DEFAULT_SORT = { key: 'createdAt', dir: 'desc' } as const;
 
 const listFrom =
   (tx: Tx, texts: SQL): ListFrom =>
@@ -564,7 +724,7 @@ export async function listReportsPage(
   const fields = rowFields(o.today);
   const page = await selectListPage({
     query,
-    columns: reportListColumns(o.t, o),
+    columns: columnsOf(o),
     natural: REPORT_NATURAL,
     defaultSort: DEFAULT_SORT,
     scope: listScope(o),
@@ -589,7 +749,7 @@ export async function listReportsPage(
 export async function listReportValues(tx: Tx, key: string, o: ReportListOptions, q?: string) {
   const texts = await listTexts(tx, o.t, o.today);
   return selectListValues({
-    columns: reportListColumns(o.t, o),
+    columns: columnsOf(o),
     key,
     scope: listScope(o),
     from: listFrom(tx, texts),
@@ -607,7 +767,7 @@ export async function exportReports(
   const texts = await listTexts(tx, o.t, o.today);
   return selectListExport({
     query,
-    columns: reportListColumns(o.t, o),
+    columns: columnsOf(o),
     keys,
     natural: REPORT_NATURAL,
     defaultSort: DEFAULT_SORT,
@@ -616,21 +776,95 @@ export async function exportReports(
   });
 }
 
-/** Счётчики вкладок и плашек (прототип counts): просрочено и на этой неделе — в области. */
-export async function reportTabCounts(
+/**
+ * Подтверждение сдачи в учётной политике: включено ли (вкладка «Ожидают подтверждения», отметки на
+ * шаге «Сдан») и через сколько дней ожидания напоминать старшим бухгалтерам.
+ */
+export async function reportConfirmPolicy(
   tx: Tx,
-  scope: SQL | undefined,
-  today: IsoDate,
-): Promise<{ overdue: number; week: number }> {
+  orgId: string,
+): Promise<{ confirm: boolean; waitDays: number }> {
+  const [r] = await tx
+    .select({ confirm: orgSettings.reportConfirm, waitDays: orgSettings.confirmWaitDays })
+    .from(orgSettings)
+    .where(eq(orgSettings.orgId, orgId));
+  return { confirm: r?.confirm ?? false, waitDays: r?.waitDays ?? 3 };
+}
+
+/** Числа быстрого фильтра «Все / Сдать / Уплатить» одной вкладки. */
+export interface ReportQuickCounts {
+  all: number;
+  sub: number;
+  pay: number;
+}
+
+/** Счётчики вкладок, плашек и быстрого фильтра (прототип counts, renderReports). */
+export interface ReportSummary {
+  overdue: number;
+  week: number;
+  waiting: number;
+  /** «Сдано в этом месяце»: сданные со сдачей, дата сдачи — в текущем месяце. */
+  submittedMonth: number;
+  /** «К уплате за <месяц>»: суммы больше нуля со сроком оплаты в текущем месяце, тыйыны. */
+  toPayMonth: number;
+  /** Быстрый фильтр каждой вкладки — без фильтров и поиска списка (прототип: `base()`). */
+  quick: Record<ReportTab, ReportQuickCounts>;
+  /** В организации ещё нет ни одного отчёта (прототип ui/empty.js, `firstEmpty`). */
+  empty: boolean;
+}
+
+/**
+ * Счётчики вкладок и плашек в области сотрудника (прототип counts, renderReports): просрочено, на этой
+ * неделе, ожидают подтверждения, «Сдано в этом месяце», «К уплате за <месяц>» и числа быстрого
+ * фильтра на каждой вкладке — одним проходом по отчётам.
+ */
+export async function reportSummary(
+  tx: Tx,
+  o: { scope: SQL | undefined; today: IsoDate; waiting: ReportWaitingView },
+): Promise<ReportSummary> {
+  const month = o.today.slice(0, 7);
+  const from = dateLiteral(`${month}-01`);
+  const to = sql`(${from} + interval '1 month' - interval '1 day')::date`;
+  const count = (where: SQL | undefined) =>
+    sql<number>`count(*) filter (where ${where ?? sql`true`})`.mapWith(Number);
+  const tabs = Object.fromEntries(
+    REPORT_TABS.flatMap((tab) => {
+      const base = tabCondition({ tab, today: o.today, waiting: o.waiting });
+      return REPORT_QUICK.map((q) => [`${tab}_${q}`, count(and(base, quickOf(q)))]);
+    }),
+  );
   const [row] = await tx
     .select({
-      overdue: sql<number>`count(*) filter (where ${overdueOf(today)})`.mapWith(Number),
-      week: sql<number>`count(*) filter (where ${weekCondition(today)})`.mapWith(Number),
+      ...tabs,
+      submitted: count(
+        sql`${reports.status} = 'submitted' and ${reports.act} <> 'pay' and ${reports.submittedOn} between ${from} and ${to}`,
+      ),
+      toPay:
+        sql<number>`coalesce(sum(${reports.amount}) filter (where ${reports.act} <> 'sub' and ${reports.amount} > 0 and ${reports.payDue} between ${from} and ${to}), 0)`.mapWith(
+          Number,
+        ),
+      empty: sql<boolean>`not exists (select 1 from ${reports})`,
     })
     .from(reports)
     .innerJoin(contractors, eq(contractors.id, reports.contractorId))
-    .where(and(eq(reports.superseded, false), scope));
-  return { overdue: row?.overdue ?? 0, week: row?.week ?? 0 };
+    .where(and(eq(reports.superseded, false), o.scope));
+  const r = (row ?? {}) as Record<string, unknown>;
+  const n = (key: string) => Number(r[key] ?? 0);
+  const quick = Object.fromEntries(
+    REPORT_TABS.map((tab) => [
+      tab,
+      { all: n(`${tab}_all`), sub: n(`${tab}_sub`), pay: n(`${tab}_pay`) },
+    ]),
+  ) as Record<ReportTab, ReportQuickCounts>;
+  return {
+    overdue: quick.overdue.all,
+    week: quick.week.all,
+    waiting: quick.waiting.all,
+    submittedMonth: n('submitted'),
+    toPayMonth: n('toPay'),
+    quick,
+    empty: Boolean(r.empty),
+  };
 }
 
 /** Одна строка списка по id (карточка берёт поля строки и добавляет своё); null — нет или вне области. */

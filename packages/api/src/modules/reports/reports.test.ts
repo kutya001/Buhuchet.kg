@@ -45,7 +45,12 @@ describe.skipIf(!databaseAvailable())('Отчёты: назначения и о�
   const reportsOf = async (cp: string, type: string) =>
     (await list(owner)).items
       .filter((r) => r.contractor.id === cp && r.type.code === type)
-      .sort((a, b) => a.periodStart.localeCompare(b.periodStart));
+      .sort(
+        (a, b) =>
+          a.periodStart.localeCompare(b.periodStart) ||
+          a.dueDate.localeCompare(b.dueDate) ||
+          a.revision - b.revision,
+      );
 
   async function contractor(orgId: string, name: string, inn: string, responsible: string) {
     const [row] = await f.t.admin.db
@@ -216,7 +221,7 @@ describe.skipIf(!databaseAvailable())('Отчёты: назначения и о�
       await (await apiRequest(f.app, 'GET', '/api/reports/tab-counts', owner)).json(),
     );
     // Просрочены Соцфонд за июль и август; на неделе 19–25.10 — Соцфонд за сентябрь (срок 20.10).
-    expect(counts).toEqual({ overdue: 2, week: 1 });
+    expect(counts).toMatchObject({ overdue: 2, week: 1 });
     expect((await list(owner, '&tab=overdue')).items.map((r) => r.periodStart)).toEqual([
       '2026-07-01',
       '2026-08-01',
@@ -460,7 +465,7 @@ describe.skipIf(!databaseAvailable())('Отчёты: назначения и о�
       ReportTabCounts.parse(
         await (await apiRequest(f.app, 'GET', '/api/reports/tab-counts', hr)).json(),
       ),
-    ).toEqual({ overdue: 0, week: 0 });
+    ).toMatchObject({ overdue: 0, week: 0, waiting: 0 });
     const file = await apiRequest(f.app, 'GET', '/api/reports/export?cols=cp', ownerB);
     expect(file.status).toBe(200);
     const sheet = unzipTexts(new Uint8Array(await file.arrayBuffer()))['xl/worksheets/sheet1.xml'];

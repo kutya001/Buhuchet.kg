@@ -153,7 +153,7 @@ test.describe('Этап 2: приветствие и опросник', () => {
     await expect(page.locator('[data-tour-count]')).toHaveText(/^1 из \d+$/);
   });
 
-  test('(п. 50) «Отметить основные», группа «Статистика» и «Подключить и начать обучение» — виды подключены с напоминаниями за 7 и 3 дня, шаг «Подключить виды отчётов» засчитан; «Пропустить» ничего не подключает', async ({
+  test('(п. 50) «Отметить основные», группа «Статистика» и «Подключить и начать обучение» — виды подключены с напоминаниями за 7 и 3 дня, шаг «Подключить виды отчётов» засчитан; «Пропустить» ничего не подключает, в «Отчетах для сдачи» — подсказка «Подключите виды отчётов»', async ({
     page,
     playwright,
     baseURL,
@@ -212,6 +212,19 @@ test.describe('Этап 2: приветствие и опросник', () => {
       ),
     ).toBeVisible();
     expect(await connected(page.request)).toEqual([]);
+
+    // «Отчеты для сдачи» (задача 2.13, слита позже — правило стыков): пока видов нет — подсказка
+    // «Подключите виды отчётов» с «Выбрать налоги» (то же окно «Выбор налогов»); после подключения её нет.
+    await page.goto('/app/reports');
+    const note = page.locator('[data-report-no-types]');
+    await expect(note).toContainText('Подключите виды отчётов.');
+    await note.getByRole('button', { name: 'Выбрать налоги' }).click();
+    const pick = page.getByRole('dialog', { name: 'Выбор налогов' });
+    await pick.getByRole('button', { name: 'Отметить основные' }).click();
+    await pick.getByRole('button', { name: 'Подключить', exact: true }).click();
+    await expect(pick).toHaveCount(0);
+    await expect(note).toHaveCount(0);
+    expect((await connected(page.request)).length).toBeGreaterThan(0);
   });
 
   test('«Позже» откладывает опросник; сотрудник при первом входе видит три экрана без опросника, при втором — ничего', async ({

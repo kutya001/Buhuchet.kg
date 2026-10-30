@@ -32,12 +32,19 @@ import {
   reportValuesHandler,
   reportValuesRoute,
 } from './list';
+import {
+  manualReportDueHandler,
+  manualReportDueRoute,
+  manualReportOptionsHandler,
+  manualReportOptionsRoute,
+} from './manual';
 
 /**
- * Модуль «Отчеты для сдачи» (задача 2.06): назначения контрагентам (список в карточке контрагента,
- * предпросмотр прошлых периодов, назначить, «Изменить», «Снять»), список отчётов (значения для
- * фильтра, выгрузка в Excel, счётчики вкладок), карточка, «Изменить срок», «Разовый отчёт», «Создать
- * уточнённый». Экраны — задачи 2.11, 2.13–2.15; сдача — 2.14; деньги — 2.19.
+ * Модуль «Отчеты для сдачи» (задачи 2.06, 2.13): назначения контрагентам (список в карточке
+ * контрагента, предпросмотр прошлых периодов, назначить, «Изменить», «Снять»), список отчётов (значения
+ * для фильтра, выгрузка в Excel, счётчики вкладок и плашек), карточка, «Изменить срок», «Разовый отчёт»
+ * (со списками окна и сроком по дате события), «Создать уточнённый». Экраны — задачи 2.11, 2.13–2.15;
+ * сдача — 2.14; деньги — 2.19.
  */
 export function reportsModule(deps: ApiDeps) {
   return (
@@ -48,10 +55,13 @@ export function reportsModule(deps: ApiDeps) {
       .openapi(updateAssignmentRoute, updateAssignmentHandler(deps))
       .openapi(endAssignmentRoute, endAssignmentHandler(deps))
       .openapi(listReportsRoute, listReportsHandler(deps))
-      // Раньше `/reports/{id}`: иначе «values», «export» и «tab-counts» разбирались бы как номер отчёта.
+      // Раньше `/reports/{id}`: иначе «values», «export», «tab-counts», «manual-options» и «manual-due»
+      // разбирались бы как номер отчёта.
       .openapi(reportValuesRoute, reportValuesHandler(deps))
       .openapi(reportTabCountsRoute, reportTabCountsHandler(deps))
       .openapi(exportReportsRoute, exportReportsHandler(deps))
+      .openapi(manualReportOptionsRoute, manualReportOptionsHandler(deps))
+      .openapi(manualReportDueRoute, manualReportDueHandler(deps))
       .openapi(getReportRoute, getReportHandler(deps))
       .openapi(createManualReportRoute, createManualReportHandler(deps))
       .openapi(changeReportDueRoute, changeReportDueHandler(deps))

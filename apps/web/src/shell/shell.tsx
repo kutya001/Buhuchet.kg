@@ -173,13 +173,18 @@ function ModuleTabRow({
 
 function TabRowWithStats({ moduleId, ...props }: TabRowProps & { moduleId: MenuModuleId }) {
   const t = useT();
+  const kb = useKb();
   const stats = useModuleStats(moduleId);
   return (
     <TabRow
       {...props}
       stats={{
         shown: stats.shown,
-        onToggle: stats.toggle,
+        onToggle: () => {
+          // «Скрыть и показать статистику модуля» в «Базе знаний» — первое использование.
+          kb.hit('stats');
+          stats.toggle();
+        },
         label: t('shell.stats'),
         show: t('shell.stats_show'),
         hide: t('shell.stats_hide'),

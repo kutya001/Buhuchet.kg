@@ -1,4 +1,10 @@
-import { formatText, RecordNotFoundError, UI_TEXTS, type ListQuery } from '@buhuchet/domain';
+import {
+  formatText,
+  RecordNotFoundError,
+  UI_TEXTS,
+  type KbDoneRule,
+  type ListQuery,
+} from '@buhuchet/domain';
 import { and, asc, eq, sql, type SQL } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { withOrgContext, type OrgContext } from './context';
@@ -13,13 +19,14 @@ import {
   type ContractorFields,
 } from './contractors';
 import { readHistory } from './history';
+import { kbDoneFacts } from './kb';
 import {
   exportReports,
   getReportRow,
   listReportsPage,
   listReportValues,
   reportScope,
-  reportTabCounts,
+  reportSummary,
   type ReportListOptions,
 } from './report-list';
 import { createOrganization, type CreatedOrganization } from './organizations';
@@ -580,6 +587,17 @@ describe.skipIf(!databaseAvailable())('Отчёты: назначения и о�
       [0, true, 'submitted'],
       [1, false, 'todo'],
     ]);
+    // Шаг «Базы знаний» «Создать уточнённый отчёт» (включит 2.14, docs/decisions.md п. Б-2): история
+    // засчитывает его тому, кто создал уточнённый.
+    const rule: KbDoneRule = {
+      kind: 'history',
+      entity: 'report',
+      actions: ['update'],
+      change: { field: 'superseded', to: true },
+    };
+    const ver = [{ id: 'ver', rule }];
+    expect([...(await inA((tx) => kbDoneFacts(tx, a.ownerUserId, ver))).keys()]).toEqual(['ver']);
+    expect((await inB((tx) => kbDoneFacts(tx, a.ownerUserId, ver))).size).toBe(0);
     await expect(
       inA((tx) =>
         createRevision(tx, july!.id, {
@@ -896,18 +914,16 @@ describe.skipIf(!databaseAvailable())('Отчёты: назначения и о�
       today,
       scope: undefined,
       tab: 'all',
+      quick: 'all',
+      waiting: { confirm: true, own: null },
       ...patch,
     });
-    expect(await inA((tx) => reportTabCounts(tx, undefined, today))).toEqual({
-      overdue: 2,
-      week: 3,
-    });
+    const summary = (scope: ReportListOptions['scope']) =>
+      inA((tx) => reportSummary(tx, { scope, today, waiting: { confirm: true, own: null } }));
+    expect(await summary(undefined)).toMatchObject({ overdue: 2, week: 3 });
     // Область «Свои» (п. А-2, вариант В): отчёты своих контрагентов и Соцфонд ИП Садыкова, который
     // перешёл к бухгалтеру при передаче, хотя контрагент закреплён за главным бухгалтером.
-    expect(await inA((tx) => reportTabCounts(tx, reportScope(accA), today))).toEqual({
-      overdue: 2,
-      week: 2,
-    });
+    expect(await summary(reportScope(accA))).toMatchObject({ overdue: 2, week: 2 });
 
     const overdue = await inA((tx) => listReportsPage(tx, query(), options({ tab: 'overdue' })));
     expect(
@@ -1203,7 +1219,14 @@ describe.skipIf(!databaseAvailable())('Отчёты: назначения и о�
         { today: TODAY, scope: undefined },
       ),
     );
-    const counts = () => inA((tx) => reportTabCounts(tx, undefined, TODAY));
+    const counts = () =>
+      inA((tx) =>
+        reportSummary(tx, {
+          scope: undefined,
+          today: TODAY,
+          waiting: { confirm: true, own: null },
+        }),
+      );
     const active = await counts();
     const setStatus = (status: string) =>
       db.admin.db.execute(sql`update contractors set service_status = ${status} where id = ${cp}`);
