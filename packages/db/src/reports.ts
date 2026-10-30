@@ -4,6 +4,8 @@ import {
   defaultAssignmentFrom,
   dueRuleText,
   effectiveRule,
+  periodEnd,
+  servedWithin,
   type AssignmentEnRate,
   type CompatibilityRate,
   type CompatibilitySubject,
@@ -31,12 +33,14 @@ import {
   type RateAddition,
   type StatusDueRule,
   type Translate,
+  type YearMonth,
 } from '@buhuchet/domain';
 import { and, asc, count, eq, gte, inArray, isNull, lte, ne, or, sql, type SQL } from 'drizzle-orm';
 import { alias, type PgInsertValue } from 'drizzle-orm/pg-core';
 import type { Tx } from './client';
 import { writeHistory } from './history';
 import { productionCalendarEntries } from './platform-dicts';
+import { servicePeriodsOf } from './service-periods';
 import {
   assignments,
   authorities,
@@ -352,11 +356,17 @@ async function insertMissing(
   return out;
 }
 
+/** Последний месяц периода отчёта: у квартального — третий, у годового — декабрь. */
+const lastMonth = (period: ReportPeriod, start: IsoDate): YearMonth =>
+  periodEnd({ period, start }).slice(0, 7);
+
 /**
  * Отчёты по действующим назначениям на сегодня (ТЗ «По каждому назначению система сама создаёт отчёт
- * на каждый период: на текущий и на один вперёд»; прототип assignTypes): только недостающие, только у
- * контрагентов на обслуживании и только по действующим видам каталога; разовые виды — через «Разовый
- * отчёт». Без условий — все назначения организации (задача по расписанию).
+ * на каждый период: на текущий и на один вперёд»; прототип assignTypes): только недостающие, только за
+ * периоды, в которых контрагент обслуживался хоть месяц (ТЗ «Приостановить»: «с этого месяца не
+ * создаются … новые отчёты»; квартал и год — `servedWithin`, docs/deviations.md п. В-11), не у архивных
+ * и только по действующим видам каталога; разовые виды — через «Разовый отчёт». Без условий — все
+ * назначения организации (задача по расписанию).
  */
 export async function createDueReports(
   tx: Tx,
@@ -368,6 +378,30 @@ export async function createDueReports(
   },
 ): Promise<number> {
   const { today } = options;
+  // Сначала — контрагенты, по номеру: правка назначения (`lockAssignee`, `lockAssignment`) и действие с
+  // обслуживанием (`changeService`) блокируют контрагента FOR UPDATE, поэтому сохранённое во время
+  // задачи она дождётся, а назначения и периоды обслуживания прочитает после блокировки — свежими.
+  await tx
+    .select({ id: contractors.id })
+    .from(contractors)
+    .where(
+      and(
+        ne(contractors.serviceStatus, 'archived'),
+        eq(contractors.kind, 'regular'),
+        options.contractorIds ? inArray(contractors.id, [...options.contractorIds]) : undefined,
+        options.assignmentIds
+          ? inArray(
+              contractors.id,
+              tx
+                .select({ id: assignments.contractorId })
+                .from(assignments)
+                .where(inArray(assignments.id, [...options.assignmentIds])),
+            )
+          : undefined,
+      ),
+    )
+    .orderBy(asc(contractors.id))
+    .for('share');
   const rows = await tx
     .select({ a: assignments, contractorResponsible: contractors.responsibleEmployeeId })
     .from(assignments)
@@ -376,7 +410,7 @@ export async function createDueReports(
     .where(
       and(
         isNull(assignments.endedOn),
-        eq(contractors.serviceStatus, 'active'),
+        ne(contractors.serviceStatus, 'archived'),
         // У разового контрагента регулярных отчётов нет (ТЗ «Непостоянные контрагенты»).
         eq(contractors.kind, 'regular'),
         eq(reportTypes.active, true),
@@ -387,14 +421,14 @@ export async function createDueReports(
         options.assignmentIds ? inArray(assignments.id, [...options.assignmentIds]) : undefined,
       ),
     )
-    .orderBy(asc(assignments.contractorId), asc(assignments.reportTypeCode))
-    // Снятие или «Изменить» назначения, сохранённые во время задачи, она видит до вставки отчётов.
-    .for('share', { of: assignments });
+    .orderBy(asc(assignments.contractorId), asc(assignments.reportTypeCode));
   if (rows.length === 0) return 0;
-  const [types, calendar, statuses] = await Promise.all([
+  const contractorIds = [...new Set(rows.map((r) => r.a.contractorId))];
+  const [types, calendar, statuses, periods] = await Promise.all([
     reportTypeInfos(tx, [...new Set(rows.map((r) => r.a.reportTypeCode))]),
     options.calendar ?? calendarOf(tx),
-    statusDueRules(tx, [...new Set(rows.map((r) => r.a.contractorId))], today),
+    statusDueRules(tx, contractorIds, today),
+    servicePeriodsOf(tx, contractorIds),
   ]);
   const values = rows.flatMap(({ a, contractorResponsible }) => {
     const rule = assignmentRule(
@@ -402,15 +436,76 @@ export async function createDueReports(
       a,
       statuses.get(ruleKey(a.contractorId, a.reportTypeCode)) ?? null,
     );
-    return periodsDue(rule, { today, from: a.fromMonth, until: a.untilMonth }, calendar).map(
-      (start) =>
+    const served = periods.get(a.contractorId)!;
+    // ОТКЛОНЕНИЕ: docs/deviations.md#В-12 — прототип создаёт отчёты и за месяцы паузы, сразу «Не требуется».
+    return periodsDue(rule, { today, from: a.fromMonth, until: a.untilMonth }, calendar)
+      .filter((start) => servedWithin(served, start.slice(0, 7), lastMonth(rule.period, start)))
+      .map((start) =>
         reportValues(rule, start, calendar, {
           contractorId: a.contractorId,
           assignmentId: a.id,
           responsibleEmployeeId: a.responsibleEmployeeId ?? contractorResponsible,
           fixedAmount: a.fixedAmount,
         }),
+      );
+  });
+  return (await insertMissing(tx, values)).length;
+}
+
+/**
+ * Отчёты за прошлые месяцы, отмеченные «досоздать» при откате приостановки (ТЗ «Откат приостановки»:
+ * «предлагает досоздать за них … отчёты»; задача 2.12): закончившиеся периоды действующих назначений
+ * контрагента, в которые входит один из `months`, только недостающие, «К сдаче» (срок мог пройти).
+ */
+export async function createMonthReports(
+  tx: Tx,
+  options: { contractorId: string; months: readonly YearMonth[]; today: IsoDate },
+): Promise<number> {
+  const { contractorId, months, today } = options;
+  if (months.length === 0) return 0;
+  // Без блокировки назначений: контрагент уже взят FOR UPDATE (`changeService`), а правка назначения
+  // сначала ждёт контрагента.
+  const rows = await tx
+    .select({ a: assignments, contractorResponsible: contractors.responsibleEmployeeId })
+    .from(assignments)
+    .innerJoin(contractors, eq(contractors.id, assignments.contractorId))
+    .innerJoin(reportTypes, eq(reportTypes.code, assignments.reportTypeCode))
+    .where(
+      and(
+        eq(assignments.contractorId, contractorId),
+        isNull(assignments.endedOn),
+        ne(contractors.serviceStatus, 'archived'),
+        eq(contractors.kind, 'regular'),
+        eq(reportTypes.active, true),
+        eq(reportTypes.oneOff, false),
+      ),
     );
+  if (rows.length === 0) return 0;
+  const [types, calendar, statuses] = await Promise.all([
+    reportTypeInfos(tx, [...new Set(rows.map((r) => r.a.reportTypeCode))]),
+    calendarOf(tx),
+    statusDueRules(tx, [contractorId], today),
+  ]);
+  const values = rows.flatMap(({ a, contractorResponsible }) => {
+    const rule = assignmentRule(
+      types.get(a.reportTypeCode)!,
+      a,
+      statuses.get(ruleKey(a.contractorId, a.reportTypeCode)) ?? null,
+    );
+    return pastPeriods(rule.period, a.fromMonth, today, rule.skipQuarters)
+      .filter((start) => {
+        const last = lastMonth(rule.period, start);
+        const picked = months.some((m) => start.slice(0, 7) <= m && m <= last);
+        return picked && (!a.untilMonth || start <= a.untilMonth);
+      })
+      .map((start) =>
+        reportValues(rule, start, calendar, {
+          contractorId,
+          assignmentId: a.id,
+          responsibleEmployeeId: a.responsibleEmployeeId ?? contractorResponsible,
+          fixedAmount: a.fixedAmount,
+        }),
+      );
   });
   return (await insertMissing(tx, values)).length;
 }

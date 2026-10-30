@@ -5,7 +5,6 @@ import {
   KPI_LOOKBACK_MONTHS,
   monthIndicators,
   monthFilled,
-  monthOf,
   monthRange,
   nextFillStatus,
   RecordChangedError,
@@ -25,6 +24,7 @@ import {
 } from '@buhuchet/domain';
 import { and, asc, desc, eq, gte, inArray, isNotNull, lte, sql, type SQL } from 'drizzle-orm';
 import type { Tx } from './client';
+import { servicePeriodsOf } from './service-periods';
 import { updateWithHistory, writeHistory } from './history';
 import { writeStatusChange } from './status';
 import {
@@ -321,6 +321,8 @@ export interface KpiContractorRecord {
   regimeName: string | null;
   /** Основной и дополнительные коды ГКЭД — для фильтра «ГКЭД» в «Кому вести». */
   gked: string[];
+  /** Периоды обслуживания (задача 2.12). */
+  periods: { from: YearMonth; to: YearMonth | null }[];
 }
 
 const GKED_CODES = sql<
@@ -332,12 +334,12 @@ const GKED_CODES = sql<
  * в «За период»), `ids` — только эти. Разовые тоже приходят: правила сами их не учитывают. Порядок — по
  * названию.
  */
-export function kpiContractorRecords(
+export async function kpiContractorRecords(
   tx: Tx,
   options: { scope: SQL | undefined; archived?: boolean; ids?: readonly string[] },
 ): Promise<KpiContractorRecord[]> {
   const ids = options.ids?.filter((id) => UUID_RE.test(id));
-  return tx
+  const rows = await tx
     .select({
       id: contractors.id,
       name: contractors.name,
@@ -362,22 +364,28 @@ export function kpiContractorRecords(
       ),
     )
     .orderBy(sql`${contractors.name} collate app.ru_natural`, asc(contractors.id));
+  const periods = await servicePeriodsOf(
+    tx,
+    rows.map((r) => r.id),
+  );
+  return rows.map((r) => ({
+    ...r,
+    periods: periods.get(r.id)!.map(({ from, to }) => ({ from, to })),
+  }));
 }
 
 /**
- * Контрагент глазами правил заполнения. Периоды обслуживания с приостановкой и возобновлением добавит
- * задача 2.12 (таблица contractor_service_periods); до неё — один период с начала обслуживания, а у
- * приостановленного — ни одного: показатели у него не требуются (ТЗ «У разовых и приостановленных
- * контрагентов показатель не требуется»).
+ * Контрагент глазами правил заполнения: периоды обслуживания (ТЗ «У разовых и приостановленных
+ * контрагентов показатель не требуется» — за месяцы паузы показатели не требуются).
  */
 export function kpiContractorOf(
-  r: Pick<KpiContractorRecord, 'id' | 'kind' | 'serviceStatus' | 'startDate'>,
+  r: Pick<KpiContractorRecord, 'id' | 'kind' | 'serviceStatus' | 'periods'>,
 ): KpiContractor {
   return {
     id: r.id,
     oneOff: r.kind === 'oneoff',
     archived: r.serviceStatus === 'archived',
-    periods: r.serviceStatus === 'active' ? [{ from: monthOf(r.startDate), to: null }] : [],
+    periods: r.periods,
   };
 }
 

@@ -1,6 +1,7 @@
 import { diffDays, type IsoDate } from '../common/dates';
 import { DUE_DAY_DEFAULT, type IndicatorScope } from './indicators';
 import { addMonths, monthDay, monthOf, monthRange, type YearMonth } from '../common/months';
+import { inService } from '../contractors/service';
 
 /*
  * Кому и за какие месяцы показатель обязателен, статус заполнения месяца, «Не заполнено» и индикатор
@@ -80,11 +81,6 @@ export function firstServiceMonth(contractor: KpiContractor): YearMonth | null {
   return months[0] ?? null;
 }
 
-/** Обслуживается ли контрагент в месяце (прототип `inService`). */
-export function inService(contractor: KpiContractor, month: YearMonth): boolean {
-  return contractor.periods.some((p) => p.from <= month && (p.to === null || month <= p.to));
-}
-
 /**
  * Месяц «с <месяц>» показателя у контрагента (прототип `kStart`): свой, иначе поздний из «Вести с»
  * и начала обслуживания.
@@ -118,7 +114,7 @@ export function indicatorApplies(
   if (!open(indicator, target, contractor)) return false;
   if (month < indicatorStart(indicator, target, contractor)) return false;
   const service = firstServiceMonth(contractor) ?? '';
-  return inService(contractor, month) || month < service;
+  return inService(contractor.periods, month) || month < service;
 }
 
 /** Месяц раньше «с <месяц>»: значение внести можно, но оно не обязательно (прототип `kEarly`). */
