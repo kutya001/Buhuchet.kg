@@ -27,12 +27,30 @@ import {
   updateContractorHandler,
   updateContractorRoute,
 } from './save';
+import {
+  archiveContractorsHandler,
+  archiveContractorsRoute,
+  cancelPauseHandler,
+  cancelPauseRoute,
+  getServiceHandler,
+  getServiceRoute,
+  pauseServiceHandler,
+  pauseServiceRoute,
+  resumeServiceHandler,
+  resumeServiceRoute,
+  rollbackPauseHandler,
+  rollbackPauseRoute,
+  toRegularHandler,
+  toRegularRoute,
+  unarchiveContractorHandler,
+  unarchiveContractorRoute,
+} from './service';
 
 /**
  * Модуль «Контрагенты»: список (значения для фильтра, выгрузка в Excel, счётчики вкладок), карточка,
  * сверка с ГКЭД для формы, создание одним целым, «Изменить», удаление, назначение ответственного и
- * передача дел. Экраны — задачи 2.09–2.11; подбор отчётов, тариф Соцфонда, приостановка и архив —
- * свои задачи.
+ * передача дел, обслуживание (приостановка, возобновление, архив, перевод разового в постоянное —
+ * задача 2.12). Экраны — задачи 2.09–2.11; подбор отчётов и тариф Соцфонда — свои задачи.
  */
 export function contractorsModule(deps: ApiDeps) {
   return (
@@ -51,5 +69,14 @@ export function contractorsModule(deps: ApiDeps) {
       .openapi(createContractorRoute, createContractorHandler(deps))
       .openapi(updateContractorRoute, updateContractorHandler(deps))
       .openapi(deleteContractorRoute, deleteContractorHandler(deps))
+      // Обслуживание: приостановка, возобновление, архив, разовые (задача 2.12).
+      .openapi(archiveContractorsRoute, archiveContractorsHandler(deps))
+      .openapi(getServiceRoute, getServiceHandler(deps))
+      .openapi(pauseServiceRoute, pauseServiceHandler(deps))
+      .openapi(resumeServiceRoute, resumeServiceHandler(deps))
+      .openapi(cancelPauseRoute, cancelPauseHandler(deps))
+      .openapi(rollbackPauseRoute, rollbackPauseHandler(deps))
+      .openapi(unarchiveContractorRoute, unarchiveContractorHandler(deps))
+      .openapi(toRegularRoute, toRegularHandler(deps))
   );
 }

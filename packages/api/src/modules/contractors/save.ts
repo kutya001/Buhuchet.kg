@@ -213,6 +213,7 @@ export function createContractorHandler(
             validFrom: monthOf(body.startDate),
             note: t('cp.tariff.first'),
           },
+          { today },
         );
         await writeContractorNotes(tx, id, office.notes);
         return savedOut(tx, id, { orgId: ctx.orgId, subject, today, t, notices: office.notes });

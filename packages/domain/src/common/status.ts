@@ -276,6 +276,14 @@ export function scaleBack(
   }
 }
 
+/**
+ * Что сменило статус системой, когда это важно потом: `service` — приостановка или архив контрагента
+ * («Не требуется» от них возвращается в «К сдаче» при возобновлении и возврате из архива, задача 2.12).
+ * Пусто — человек или другое правило.
+ */
+export const STATUS_CAUSES = ['service'] as const;
+export type StatusCause = (typeof STATUS_CAUSES)[number];
+
 /** Причина отката — не длиннее (поле «Причина» окна отката). */
 export const ROLLBACK_REASON_MAX = 500;
 

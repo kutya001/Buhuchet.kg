@@ -1,5 +1,6 @@
 import { ADMIN_ACCOUNTS_TEXTS, ADMIN_L10N_TEXTS, ADMIN_TEXTS } from './admin-texts';
 import { AUTH_TEXTS } from './auth-texts';
+import { CONTRACTOR_SERVICE_TEXTS } from './contractor-service-texts';
 import { CONTRACTORS_TEXTS } from './contractors-texts';
 import { DICTS_TEXTS } from './dicts-texts';
 import { FILES_TEXTS } from './files-texts';
@@ -74,6 +75,7 @@ export const UI_TEXTS = {
   ...STATUS_TEXTS,
   ...ORG_TEXTS,
   ...CONTRACTORS_TEXTS,
+  ...CONTRACTOR_SERVICE_TEXTS,
   ...REPORTS_TEXTS,
   ...TASKS_TEXTS,
   ...ADMIN_ACCOUNTS_TEXTS,

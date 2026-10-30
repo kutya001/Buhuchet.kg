@@ -4,6 +4,7 @@ import {
   defaultAssignmentFrom,
   dueRuleText,
   effectiveRule,
+  inService,
   type AssignmentEnRate,
   type CompatibilityRate,
   type CompatibilitySubject,
@@ -31,12 +32,14 @@ import {
   type RateAddition,
   type StatusDueRule,
   type Translate,
+  type YearMonth,
 } from '@buhuchet/domain';
 import { and, asc, count, eq, gte, inArray, isNull, lte, ne, or, sql, type SQL } from 'drizzle-orm';
 import { alias, type PgInsertValue } from 'drizzle-orm/pg-core';
 import type { Tx } from './client';
 import { writeHistory } from './history';
 import { productionCalendarEntries } from './platform-dicts';
+import { servicePeriodsOf } from './service-periods';
 import {
   assignments,
   authorities,
@@ -354,9 +357,11 @@ async function insertMissing(
 
 /**
  * Отчёты по действующим назначениям на сегодня (ТЗ «По каждому назначению система сама создаёт отчёт
- * на каждый период: на текущий и на один вперёд»; прототип assignTypes): только недостающие, только у
- * контрагентов на обслуживании и только по действующим видам каталога; разовые виды — через «Разовый
- * отчёт». Без условий — все назначения организации (задача по расписанию).
+ * на каждый период: на текущий и на один вперёд»; прототип assignTypes): только недостающие, только за
+ * месяцы обслуживания контрагента (ТЗ «Приостановить»: «с этого месяца не создаются … новые отчёты»;
+ * месяц периода — его первый месяц, как `ym(r.pkey)` прототипа), не у архивных и только по действующим
+ * видам каталога; разовые виды — через «Разовый отчёт». Без условий — все назначения организации
+ * (задача по расписанию).
  */
 export async function createDueReports(
   tx: Tx,
@@ -376,7 +381,7 @@ export async function createDueReports(
     .where(
       and(
         isNull(assignments.endedOn),
-        eq(contractors.serviceStatus, 'active'),
+        ne(contractors.serviceStatus, 'archived'),
         // У разового контрагента регулярных отчётов нет (ТЗ «Непостоянные контрагенты»).
         eq(contractors.kind, 'regular'),
         eq(reportTypes.active, true),
@@ -391,10 +396,12 @@ export async function createDueReports(
     // Снятие или «Изменить» назначения, сохранённые во время задачи, она видит до вставки отчётов.
     .for('share', { of: assignments });
   if (rows.length === 0) return 0;
-  const [types, calendar, statuses] = await Promise.all([
+  const contractorIds = [...new Set(rows.map((r) => r.a.contractorId))];
+  const [types, calendar, statuses, periods] = await Promise.all([
     reportTypeInfos(tx, [...new Set(rows.map((r) => r.a.reportTypeCode))]),
     options.calendar ?? calendarOf(tx),
-    statusDueRules(tx, [...new Set(rows.map((r) => r.a.contractorId))], today),
+    statusDueRules(tx, contractorIds, today),
+    servicePeriodsOf(tx, contractorIds),
   ]);
   const values = rows.flatMap(({ a, contractorResponsible }) => {
     const rule = assignmentRule(
@@ -402,15 +409,73 @@ export async function createDueReports(
       a,
       statuses.get(ruleKey(a.contractorId, a.reportTypeCode)) ?? null,
     );
-    return periodsDue(rule, { today, from: a.fromMonth, until: a.untilMonth }, calendar).map(
-      (start) =>
+    const served = periods.get(a.contractorId)!;
+    return periodsDue(rule, { today, from: a.fromMonth, until: a.untilMonth }, calendar)
+      .filter((start) => inService(served, start.slice(0, 7)))
+      .map((start) =>
         reportValues(rule, start, calendar, {
           contractorId: a.contractorId,
           assignmentId: a.id,
           responsibleEmployeeId: a.responsibleEmployeeId ?? contractorResponsible,
           fixedAmount: a.fixedAmount,
         }),
+      );
+  });
+  return (await insertMissing(tx, values)).length;
+}
+
+/**
+ * Отчёты за прошлые месяцы, отмеченные «досоздать» при откате приостановки (ТЗ «Откат приостановки»:
+ * «предлагает досоздать за них … отчёты»; задача 2.12): закончившиеся периоды действующих назначений
+ * контрагента, первый месяц которых — один из `months`, только недостающие, «К сдаче» (срок мог пройти).
+ */
+export async function createMonthReports(
+  tx: Tx,
+  options: { contractorId: string; months: readonly YearMonth[]; today: IsoDate },
+): Promise<number> {
+  const { contractorId, months, today } = options;
+  if (months.length === 0) return 0;
+  const rows = await tx
+    .select({ a: assignments, contractorResponsible: contractors.responsibleEmployeeId })
+    .from(assignments)
+    .innerJoin(contractors, eq(contractors.id, assignments.contractorId))
+    .innerJoin(reportTypes, eq(reportTypes.code, assignments.reportTypeCode))
+    .where(
+      and(
+        eq(assignments.contractorId, contractorId),
+        isNull(assignments.endedOn),
+        ne(contractors.serviceStatus, 'archived'),
+        eq(contractors.kind, 'regular'),
+        eq(reportTypes.active, true),
+        eq(reportTypes.oneOff, false),
+      ),
+    )
+    .for('share', { of: assignments });
+  if (rows.length === 0) return 0;
+  const [types, calendar, statuses] = await Promise.all([
+    reportTypeInfos(tx, [...new Set(rows.map((r) => r.a.reportTypeCode))]),
+    calendarOf(tx),
+    statusDueRules(tx, [contractorId], today),
+  ]);
+  const values = rows.flatMap(({ a, contractorResponsible }) => {
+    const rule = assignmentRule(
+      types.get(a.reportTypeCode)!,
+      a,
+      statuses.get(ruleKey(a.contractorId, a.reportTypeCode)) ?? null,
     );
+    return pastPeriods(rule.period, a.fromMonth, today, rule.skipQuarters)
+      .filter(
+        (start) =>
+          months.includes(start.slice(0, 7)) && (!a.untilMonth || start <= a.untilMonth),
+      )
+      .map((start) =>
+        reportValues(rule, start, calendar, {
+          contractorId,
+          assignmentId: a.id,
+          responsibleEmployeeId: a.responsibleEmployeeId ?? contractorResponsible,
+          fixedAmount: a.fixedAmount,
+        }),
+      );
   });
   return (await insertMissing(tx, values)).length;
 }

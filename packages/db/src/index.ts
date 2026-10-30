@@ -12,6 +12,8 @@ export * from './auth';
 export * from './telegram';
 export * from './staff';
 export * from './contractors';
+export * from './contractor-service';
+export * from './service-periods';
 export * from './reports';
 export * from './report-list';
 export * from './tasks';

@@ -740,6 +740,10 @@ describe.skipIf(!databaseAvailable())('Отчёты: назначения и о�
   });
 
   it('контрагент не на обслуживании: отчёты по расписанию не создаются', async () => {
+    // Приостановлен с декабря (задача 2.12): отчёты не создаются за месяцы вне периодов обслуживания.
+    await db.admin.db.execute(
+      sql`update contractor_service_periods set to_month = '2026-11-01' where contractor_id = ${cpBig}`,
+    );
     await db.admin.db.execute(
       sql`update contractors set service_status = 'paused' where id = ${cpBig}`,
     );

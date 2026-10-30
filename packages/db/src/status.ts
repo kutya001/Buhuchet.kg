@@ -1,4 +1,4 @@
-import { auditActorName, isScaleStatus, type StatusScaleKey } from '@buhuchet/domain';
+import { auditActorName, isScaleStatus, type StatusCause, type StatusScaleKey } from '@buhuchet/domain';
 import { and, asc, eq } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { Tx } from './client';
@@ -20,6 +20,8 @@ export interface StatusChange {
    * загружен (`ready`) и прикреплён к этой же записи, проверяет вызывающий модуль.
    */
   fileId?: string | null;
+  /** Что сменило статус системой (приостановка или архив контрагента); пусто — человек. */
+  cause?: StatusCause | null;
 }
 
 /**
@@ -47,6 +49,7 @@ export async function writeStatusChange(tx: Tx, ...changes: StatusChange[]): Pro
       isRollback: c.rollback ?? false,
       reason: c.reason?.trim() || null,
       fileId: c.fileId ?? null,
+      cause: c.cause ?? null,
     })),
   );
 }

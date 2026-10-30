@@ -4,6 +4,7 @@ import {
   FEE_DAY_MAX,
   FEE_DAY_MIN,
   FIRST_MONTH_MODES,
+  PAUSE_REASON_MAX,
   PAYS_TO,
   SERVICE_STATUSES,
   TARIFF_PERIODS,
@@ -191,6 +192,49 @@ export const contractorBases = pgTable(
     contractorRef('contractor_bases_contractor_fk', t),
     index('contractor_bases_code_idx').on(t.baseCode),
     orgIsolation('contractor_bases_isolation', t.orgId),
+  ],
+).enableRLS();
+
+/**
+ * Периоды обслуживания контрагента (задача 2.12; ТЗ «Остановка и возобновление обслуживания»; прототип
+ * `c.periods`): с месяца по месяц включительно (первые числа), у последнего конец пуст, пока обслуживание
+ * не приостановлено; пауза — промежуток между периодами. В месяцы вне периодов отчёты не создаются.
+ * Периоды не пересекаются — их собирают правила `@buhuchet/domain` (contractors/service.ts), а пишет
+ * `setServicePeriods` целым набором вместе со статусом и версией контрагента; открытый период — один.
+ * У разового контрагента периодов может не быть.
+ */
+export const contractorServicePeriods = pgTable(
+  'contractor_service_periods',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: orgColumn(),
+    contractorId: uuid('contractor_id').notNull(),
+    fromMonth: date('from_month', { mode: 'string' }).notNull(),
+    toMonth: date('to_month', { mode: 'string' }),
+    /**
+     * Причина приостановки, которая начинается после этого периода: её пишет в «Историю статусов» задача
+     * по расписанию, когда наступает запланированный месяц.
+     */
+    pauseReason: text('pause_reason').notNull().default(''),
+    createdBy: uuid('created_by').references(() => users.id),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    contractorRef('contractor_service_periods_contractor_fk', t),
+    unique('contractor_service_periods_from_key').on(t.contractorId, t.fromMonth),
+    uniqueIndex('contractor_service_periods_open_key')
+      .on(t.contractorId)
+      .where(sql`${t.toMonth} is null`),
+    index('contractor_service_periods_org_idx').on(t.orgId, t.contractorId),
+    check(
+      'contractor_service_periods_month_check',
+      sql`${t.fromMonth} = date_trunc('month', ${t.fromMonth})::date and (${t.toMonth} is null or (${t.toMonth} = date_trunc('month', ${t.toMonth})::date and ${t.toMonth} >= ${t.fromMonth}))`,
+    ),
+    check(
+      'contractor_service_periods_reason_check',
+      sql`char_length(${t.pauseReason}) <= ${sql.raw(String(PAUSE_REASON_MAX))}`,
+    ),
+    orgIsolation('contractor_service_periods_isolation', t.orgId),
   ],
 ).enableRLS();
 
