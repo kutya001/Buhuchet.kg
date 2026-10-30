@@ -1,7 +1,7 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import { linkTelegram, newOrgOwner, signIn, uniqueChat, uniqueLogin } from './helpers';
 import { connectAllTypes, orgWithTypes } from './orgs';
-import { find, reportsOf } from './reports';
+import { find, manualReport, newContractor, reportsOf } from './reports';
 
 // Форма контрагента (задача 2.09, #65): «+ Добавить» → «Контрагент» в модуле «Контрагенты» (списка
 // ещё нет — задача 2.10, вместо него заглушка), разделы и шаги формы, сверка с ГКЭД и вопросы перед
@@ -163,7 +163,7 @@ test.describe('Этап 2: форма контрагента', () => {
     const steps = (await me()).lessons.flatMap((l) => l.steps.map((s) => s.id));
     expect(steps).not.toContain('cp1');
     expect(steps).toEqual(
-      expect.arrayContaining(['tg', 'pdicts', 'daymonth', 'tdone', 'search', 'cols']),
+      expect.arrayContaining(['tg', 'pdicts', 'daymonth', 'tdone', 'ver', 'search', 'cols']),
     );
 
     // Остальные свои шаги — тем же, чем их засчитывают экраны: Telegram, просмотр экрана шага,
@@ -179,6 +179,53 @@ test.describe('Этап 2: форма контрагента', () => {
       const used = await acct.post(`/api/kb/hits/${hit}`, { headers: { origin } });
       expect(used.status(), await used.text()).toBe(200);
     }
+    // «Создать уточнённый отчёт» (задача 2.14) — у своего сданного отчёта. Контрагента с бухгалтером
+    // ответственным создаёт главный бухгалтер: шаг владельца «Добавить первого контрагента» открыт.
+    await connectAllTypes(api, origin);
+    const chiefLogin = uniqueLogin('e2e-chief');
+    const chiefHired = await api.post('/api/staff', {
+      headers: { origin },
+      data: {
+        fullName: 'Главная Сквозная Тестовна',
+        login: chiefLogin,
+        phone: null,
+        roleId: roles.items.find((r) => r.templateCode === 'chief')!.id,
+      },
+    });
+    expect(chiefHired.status(), await chiefHired.text()).toBe(201);
+    const chief = await playwright.request.newContext({ baseURL });
+    const chiefTemporary = ((await chiefHired.json()) as { temporaryPassword: string })
+      .temporaryPassword;
+    await signIn(chief, origin, chiefLogin, chiefTemporary);
+    const chiefChanged = await chief.post('/api/auth/password', {
+      headers: { origin },
+      data: { currentPassword: chiefTemporary, newPassword: 'Свой-пароль-e2e-3' },
+    });
+    expect(chiefChanged.status(), await chiefChanged.text()).toBe(200);
+    const own = await newContractor(chief, origin, { responsible: employeeId });
+    await chief.dispose();
+    const reportId = await manualReport(acct, origin, {
+      contractorId: own.id,
+      reportTypeCode: 't1m',
+      month: '2026-09-01',
+      due: '2030-01-15',
+    });
+    const versionOf = async () =>
+      ((await (await acct.get(`/api/reports/${reportId}`)).json()) as { version: number }).version;
+    const submitted = await acct.post(`/api/reports/${reportId}/submit`, {
+      headers: { origin },
+      data: {
+        version: await versionOf(),
+        date: new Date(Date.now() + 6 * 3600_000).toISOString().slice(0, 10),
+      },
+    });
+    expect(submitted.status(), await submitted.text()).toBe(200);
+    const revised = await acct.post(`/api/reports/${reportId}/revision`, {
+      headers: { origin },
+      data: { version: await versionOf() },
+    });
+    expect(revised.status(), await revised.text()).toBe(201);
+
     const options = (await (await api.get('/api/tasks/form-options')).json()) as {
       categories: { code: string }[];
     };
@@ -213,7 +260,6 @@ test.describe('Этап 2: форма контрагента', () => {
 
     // У владельца шаг есть: «Перейти» открывает «Новый контрагент», созданный контрагент засчитывает
     // шаг действием.
-    await connectAllTypes(api, origin);
     await page.goto('/app/kb/lessons');
     const step = page.locator('[data-kb-step="cp1"]');
     await expect(step).toHaveAttribute('data-kb-state', 'open');

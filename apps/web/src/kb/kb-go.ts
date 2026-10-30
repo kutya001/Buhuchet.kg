@@ -43,6 +43,8 @@ export const KB_GO: Readonly<Record<string, KbTarget>> = {
   cp1: { module: 'cps', tab: 'all', flash: 'main', open: { add: 'contractor' } },
   // «Отчеты для сдачи» (задача 2.13).
   rtabs: { module: 'reports', tab: 'week', flash: '[data-tabrow]' },
+  // «Создать уточнённый отчёт» (задача 2.14): список «Все», меню сданного отчёта.
+  ver: { module: 'reports', tab: 'all', flash: LIST },
   // Задачи (задача 2.23).
   mtask: { module: 'tasks', tab: 'byme', flash: LIST, open: { add: 'task' } },
   daymonth: { module: 'tasks', tab: 'mine', flash: '[data-task-legend]' },

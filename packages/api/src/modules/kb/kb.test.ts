@@ -80,7 +80,7 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
       'files',
       'lists',
     ]);
-    expect(own.progress).toMatchObject({ total: 28, done: 0, pct: 0, level: 0, next: 1, need: 7 });
+    expect(own.progress).toMatchObject({ total: 29, done: 0, pct: 0, level: 0, next: 1, need: 8 });
     expect(own.progress.levels.map((l) => l.name)).toEqual([
       'Новичок',
       'Ученик',
@@ -131,6 +131,7 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
       'pdicts',
       'cp1',
       'rtabs',
+      'ver',
       'daymonth',
       'tdone',
       'upload',
@@ -224,16 +225,21 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
     const notMine = KbMarkResult.parse(await ok(await call('POST', '/api/kb/hits/profile', acc)));
     expect(notMine.fresh).toEqual([]);
 
-    // Ещё 6 шагов — 7 из 28 (25 %): уровень «Ученик». «Добавить первого контрагента» (задача 2.09) —
-    // по истории создания контрагента.
+    // Ещё 7 шагов — 8 из 29 (27 %): уровень «Ученик». «Добавить первого контрагента» (задача 2.09) —
+    // по истории создания контрагента, «Создать уточнённый отчёт» (задача 2.14) — у прежней версии
+    // `superseded` → true.
     await saved(f.a.ownerUserId, 'organization', 'name');
     await withOrgContext(f.t.app.db, { orgId: f.a.orgId, userId: f.a.ownerUserId }, (tx) =>
-      writeHistory(tx, {
-        entity: 'contractor',
-        entityId: crypto.randomUUID(),
-        action: 'create',
-        changes: [],
-      }),
+      writeHistory(
+        tx,
+        { entity: 'contractor', entityId: crypto.randomUUID(), action: 'create', changes: [] },
+        {
+          entity: 'report',
+          entityId: crypto.randomUUID(),
+          action: 'update',
+          changes: [{ field: 'superseded', from: false, to: true }],
+        },
+      ),
     );
     await saved(f.a.ownerUserId, 'org_settings', 'remindDays');
     await saved(f.a.ownerUserId, 'org_settings', 'timezone');
@@ -244,9 +250,15 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
     const second = KbMarkResult.parse(
       await ok(await call('POST', '/api/kb/sync', owner, { reason: 'saved' })),
     );
-    expect(second.fresh.map((x) => x.id).sort()).toEqual(['cp1', 'profile', 'remind', 'settings']);
+    expect(second.fresh.map((x) => x.id).sort()).toEqual([
+      'cp1',
+      'profile',
+      'remind',
+      'settings',
+      'ver',
+    ]);
     expect(second.congrats).toBe('Ученик');
-    expect(second.state.progress).toMatchObject({ done: 7, pct: 25, level: 1 });
+    expect(second.state.progress).toMatchObject({ done: 8, pct: 27, level: 1 });
     // Повтор ничего не меняет.
     const again = KbMarkResult.parse(
       await ok(await call('POST', '/api/kb/sync', owner, { reason: 'open' })),
@@ -335,12 +347,12 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
       level: 1,
       levelName: 'Ученик',
       of: 5,
-      done: 8,
-      total: 28,
+      done: 9,
+      total: 29,
       levelAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
     });
     const accRow = team.items.find((r) => r.fullName === 'Сотрудник acc-a');
-    expect(accRow).toMatchObject({ level: 0, done: 1, total: 15, pct: 6 });
+    expect(accRow).toMatchObject({ level: 0, done: 1, total: 16, pct: 6 });
     const values = ListValues.parse(
       await ok(await call('GET', '/api/kb/team/values?col=level', owner)),
     );
@@ -366,7 +378,7 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
     const self = KbMemberProgress.parse(
       await ok(await call('GET', `/api/kb/employees/${id}`, acc)),
     );
-    expect(self).toMatchObject({ employeeId: id, progress: { done: 1, total: 15 } });
+    expect(self).toMatchObject({ employeeId: id, progress: { done: 1, total: 16 } });
     expect(self.progress.groups.map((g) => g.id)).toEqual([
       'me',
       'dicts',
@@ -391,7 +403,7 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
     expect(own.items.find((e) => e.login === 'owner-a')?.kb).toEqual({
       level: 1,
       name: 'Ученик',
-      pct: 28,
+      pct: 31,
       of: 5,
     });
     const sorted = await staff(
