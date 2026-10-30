@@ -77,19 +77,19 @@ for (const name of REQUIRED_CHECKS) {
 
 // Ветка должна содержать свежий main: иначе зелёные проверки не про то, что окажется в main.
 // Нужно только число: полный ответ сравнения (коммиты и патчи ветки) бывает больше мегабайта.
-const behindBy = Number(
-  gh(
-    'api',
-    '-H',
-    'Accept: application/vnd.github+json',
-    `repos/${REPO}/compare/${pr.base.ref}...${HEAD_SHA}`,
-    '--jq',
-    '.behind_by',
-  ).trim(),
-);
-if (!Number.isInteger(behindBy)) {
+const behindOut = gh(
+  'api',
+  '-H',
+  'Accept: application/vnd.github+json',
+  `repos/${REPO}/compare/${pr.base.ref}...${HEAD_SHA}`,
+  '--jq',
+  '.behind_by',
+).trim();
+// Пустой вывод (поля нет или null) — тоже непонятный ответ: без числа не сливаем.
+if (!/^\d+$/.test(behindOut)) {
   throw new Error(`Не удалось узнать, отстала ли ветка PR #${pr.number} от ${pr.base.ref}.`);
 }
+const behindBy = Number(behindOut);
 if (behindBy > 0) {
   comment(
     pr.number,
