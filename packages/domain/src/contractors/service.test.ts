@@ -74,7 +74,11 @@ describe('обслуживание: эталон прототипа', () => {
     else expect(paused.ok).toBe(false);
 
     const resumed = resume(s.periods, ops.resume!.from, month);
-    if (menu.resume || menu.changeResume) {
+    const pp = plannedPause(s, month);
+    if (pp?.resume && ops.resume!.from <= pp.from) {
+      // ОТКЛОНЕНИЕ: docs/deviations.md#В-13 — прототип так отменяет приостановку без права отката.
+      expect(resumed).toEqual({ ok: false, code: 'service_resume_before_pause' });
+    } else if (menu.resume || menu.changeResume) {
       expect(resumed).toEqual({ ok: true, periods: ops.resume!.periods });
     } else expect(resumed).toEqual({ ok: false, code: 'service_not_paused' });
 
@@ -83,13 +87,17 @@ describe('обслуживание: эталон прототипа', () => {
     if (ops.cancel) expect(cancelled).toEqual({ ok: true, periods: ops.cancel });
     else expect(cancelled).toEqual({ ok: false, code: 'service_no_planned_pause' });
 
-    const rolled = rollbackPause(s.periods, month);
+    // Отмечены все пропущенные — без перерыва, как в прототипе.
+    const rolled = rollbackPause(s.periods, month, skippedMonths(s.periods, month));
     if (menu.rollback) {
       expect(rolled).toEqual({ ok: true, periods: ops.rollback });
-      // ОТКЛОНЕНИЕ: docs/deviations.md#В-10 — при запланированном возобновлении прототип предлагает
-      // только идущий месяц; по ТЗ — все пропущенные с начала приостановки.
-      if (plannedResume(s, month) === null)
-        expect(skippedMonths(s.periods, month)).toEqual(ops.skipped);
+      // ОТКЛОНЕНИЕ: docs/deviations.md#В-10 — прототип предлагает и идущий месяц, а при запланированном
+      // возобновлении — только его; по ТЗ — прошедшие месяцы с начала приостановки.
+      if (plannedResume(s, month) === null) {
+        expect(skippedMonths(s.periods, month)).toEqual(
+          (ops.skipped as string[]).filter((m) => m < month),
+        );
+      }
     } else if (!c.inService) expect(menu.cancelPause).toBe(true);
     else expect(rolled).toEqual({ ok: false, code: 'service_not_paused' });
 
@@ -168,10 +176,15 @@ describe('обслуживание: правила', () => {
       ok: true,
       periods: [P('2026-01', '2026-07'), P('2026-11')],
     });
-    // Запланированная приостановка с декабря и возобновление — в ноябре: перерыва нет.
-    expect(resume([P('2026-01', '2026-11'), P('2027-05')], '2026-11', M)).toEqual({
+    // Запланированная приостановка с декабря: возобновление — только позже декабря (отменить паузу —
+    // «Отменить приостановку» с правом отката, п. В-13).
+    expect(resume([P('2026-01', '2026-11'), P('2027-05')], '2026-12', M)).toEqual({
+      ok: false,
+      code: 'service_resume_before_pause',
+    });
+    expect(resume([P('2026-01', '2026-11'), P('2027-05')], '2027-01', M)).toEqual({
       ok: true,
-      periods: [P('2026-01')],
+      periods: [P('2026-01', '2026-11'), P('2027-01')],
     });
     expect(resume([P('2026-01', '2026-11')], '2027-01', M)).toEqual({
       ok: false,
@@ -225,21 +238,42 @@ describe('обслуживание: правила', () => {
     });
   });
 
-  it('откат приостановки: пропущенные месяцы с её начала', () => {
-    expect(skippedMonths([P('2026-01', '2026-07')], M)).toEqual(['2026-08', '2026-09', '2026-10']);
+  it('откат приостановки: пропущенные — прошедшие месяцы с её начала; неотмеченные остаются перерывом', () => {
+    expect(skippedMonths([P('2026-01', '2026-07')], M)).toEqual(['2026-08', '2026-09']);
     expect(skippedMonths([P('2026-01', '2026-07'), P('2027-05')], M)).toEqual([
       '2026-08',
       '2026-09',
-      '2026-10',
     ]);
-    expect(skippedMonths([], M)).toEqual(['2026-10']);
+    expect(skippedMonths([P('2026-01', '2026-09')], M)).toEqual([]);
+    expect(skippedMonths([], M)).toEqual([]);
     expect(skippedMonths([P('2026-01')], M)).toEqual([]);
-    expect(rollbackPause([P('2026-01', '2026-07'), P('2027-05')], M)).toEqual({
+    const all = ['2026-08', '2026-09'];
+    expect(rollbackPause([P('2026-01', '2026-07'), P('2027-05')], M, all)).toEqual({
       ok: true,
       periods: [P('2026-01')],
     });
-    expect(rollbackPause([], M)).toEqual({ ok: true, periods: [P('2026-10')] });
-    expect(rollbackPause([P('2027-05')], M)).toEqual({ ok: true, periods: [P('2026-10')] });
+    expect(rollbackPause([P('2026-01', '2026-07')], M, ['2026-08'])).toEqual({
+      ok: true,
+      periods: [P('2026-01', '2026-08'), P('2026-10')],
+    });
+    expect(rollbackPause([P('2026-01', '2026-07')], M, ['2026-09'])).toEqual({
+      ok: true,
+      periods: [P('2026-01', '2026-07'), P('2026-09')],
+    });
+    expect(rollbackPause([P('2026-01', '2026-07')], M, [])).toEqual({
+      ok: true,
+      periods: [P('2026-01', '2026-07'), P('2026-10')],
+    });
+    expect(rollbackPause([P('2026-01', '2026-07')], M, ['2026-10'])).toEqual({
+      ok: false,
+      code: 'service_fill_not_skipped',
+    });
+    expect(rollbackPause([], M, [])).toEqual({ ok: true, periods: [P('2026-10')] });
+    expect(rollbackPause([P('2027-05')], M, [])).toEqual({ ok: true, periods: [P('2026-10')] });
+    expect(rollbackPause([P('2026-01')], M, [])).toEqual({
+      ok: false,
+      code: 'service_not_paused',
+    });
   });
 
   it('«В архив»: конец — идущий месяц, запланированное возобновление отменяется', () => {

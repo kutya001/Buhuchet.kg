@@ -17,7 +17,6 @@ import {
   resume,
   rollbackPause,
   serviceState,
-  skippedMonths,
   toRegularPeriods,
   unarchivePeriods,
   type ContractorGkedConfirmation,
@@ -254,14 +253,13 @@ function plan(
         oneOff,
         set: {},
       };
-    case 'rollback': {
-      const skipped = skippedMonths(cp.periods, month);
-      const next = withReasons(unwrap(rollbackPause(cp.periods, month)), cp.periods);
-      if (action.fill.some((m) => !skipped.includes(m))) {
-        throw new ServiceRefusedError('service_fill_not_skipped');
-      }
-      return { periods: next, archived: false, oneOff, set: {} };
-    }
+    case 'rollback':
+      return {
+        periods: withReasons(unwrap(rollbackPause(cp.periods, month, action.fill)), cp.periods),
+        archived: false,
+        oneOff,
+        set: {},
+      };
   }
 }
 

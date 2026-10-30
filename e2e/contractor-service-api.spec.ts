@@ -58,7 +58,8 @@ test.describe('Этап 2: контрагенты — приостановка, 
       effect: { notRequired: number };
     };
     expect(saved.service.status).toBe('paused');
-    expect(saved.service.skipped).toEqual([month]);
+    // Пауза с идущего месяца: пропущенных месяцев нет.
+    expect(saved.service.skipped).toEqual([]);
     // Просрочки по приостановленному контрагенту не считаются; сам он остаётся в списке контрагентов.
     expect(await reports(request, cp.inn, 'overdue')).toEqual([]);
     const statuses = socStatuses(await reports(request, cp.inn));
@@ -68,7 +69,7 @@ test.describe('Этап 2: контрагенты — приостановка, 
     // Откат шагом назад на шкале: обслуживание без перерыва, отчёт за идущий месяц — снова к сдаче.
     const rolled = await request.post(`/api/contractors/${cp.id}/pause/rollback`, {
       headers: { origin },
-      data: { reason: 'Поставили по ошибке', fill: [month], version: saved.service.version },
+      data: { reason: 'Поставили по ошибке', fill: [], version: saved.service.version },
     });
     expect(rolled.status(), await rolled.text()).toBe(200);
     expect(((await rolled.json()) as { service: { status: string } }).service.status).toBe(

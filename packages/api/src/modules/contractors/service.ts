@@ -120,10 +120,16 @@ const REFUSAL_FIELD: Partial<Record<ServiceRefusal, string>> = {
   service_fill_not_skipped: 'fill',
 };
 
-/** Отказы правил и состояния контрагента — ответом API. */
-function serviceFail(err: unknown): never {
+/** У «Возобновить» месяц возобновления — поле «С какого месяца». */
+const RESUME_FIELD: Partial<Record<ServiceRefusal, string>> = {
+  ...REFUSAL_FIELD,
+  service_resume_before_pause: 'from',
+};
+
+/** Отказы правил и состояния контрагента — ответом API; `fields` — поле окна по отказу. */
+function serviceFail(err: unknown, fields = REFUSAL_FIELD): never {
   if (err instanceof ServiceRefusedError) {
-    const field = REFUSAL_FIELD[err.code];
+    const field = fields[err.code];
     if (field) apiFail(400, err.code, SERVICE_MESSAGES[err.code], { field });
     apiFail(409, err.code, SERVICE_MESSAGES[err.code]);
   }
@@ -155,6 +161,7 @@ async function run(
   version: number | null,
   action:
     ServiceAction | ((tx: Tx, subject: AccessSubject, t: Translate) => Promise<ServiceAction>),
+  fields = REFUSAL_FIELD,
 ): Promise<{ service: ContractorService; effect: DbServiceEffect }> {
   const subject = subjectOf(c);
   const today = todayOf(deps);
@@ -171,7 +178,7 @@ async function run(
       });
       return { service: await readService(tx, id, today), effect };
     } catch (err) {
-      serviceFail(err);
+      serviceFail(err, fields);
     }
   });
 }
@@ -278,14 +285,25 @@ export const resumeServiceRoute = createRoute({
   ),
 });
 
-/** «Возобновить» и «Изменить возобновление: сейчас с …» (прототип resumeDlg). */
+/**
+ * «Возобновить» и «Изменить возобновление: сейчас с …» (прототип resumeDlg): у запланированной
+ * приостановки — только позже её начала (docs/deviations.md п. В-13).
+ */
 export function resumeServiceHandler(
   deps: ApiDeps,
 ): RouteHandler<typeof resumeServiceRoute, AppEnv> {
   return async (c) => {
     const { id } = c.req.valid('param');
     const body = c.req.valid('json');
-    return c.json(await run(deps, c, id, body.version, { kind: 'resume', from: body.from }), 200);
+    const out = await run(
+      deps,
+      c,
+      id,
+      body.version,
+      { kind: 'resume', from: body.from },
+      RESUME_FIELD,
+    );
+    return c.json(out, 200);
   };
 }
 

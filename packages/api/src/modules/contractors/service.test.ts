@@ -194,6 +194,14 @@ describe.skipIf(!databaseAvailable())('Контрагенты: обслужив�
       version: 2,
     });
     expect(planned.effect).toEqual({ notRequired: 0, restored: 0, created: 0, open: 5 });
+    // «Изменить возобновление» — только позже начала паузы: отменить её так без права отката нельзя.
+    const early2 = await failure(
+      await call(chief, `/${cp}/resume`, { from: '2026-12', version: 2 }),
+    );
+    expect([early2.code, early2.details]).toEqual([
+      'service_resume_before_pause',
+      { field: 'from' },
+    ]);
     const again = await call(chief, `/${cp}/pause`, { ...pause, version: 2 });
     expect([again.status, (await failure(again)).code]).toEqual([409, 'service_already_paused']);
 
@@ -257,7 +265,8 @@ describe.skipIf(!databaseAvailable())('Контрагенты: обслужив�
     expect(paused.service).toMatchObject({
       status: 'paused',
       periods: [{ from: '2026-01', to: '2026-09' }],
-      skipped: ['2026-10'],
+      // Приостановка с идущего месяца: пропущенных месяцев нет, идущий после отката обслуживается.
+      skipped: [],
     });
     expect(paused.service.statusHistory).toEqual([
       expect.objectContaining({
@@ -318,7 +327,7 @@ describe.skipIf(!databaseAvailable())('Контрагенты: обслужив�
     const rolled = await saved(
       await call(owner, `/${cp}/pause/rollback`, {
         reason: 'Статус поставили по ошибке',
-        fill: ['2026-10', '2026-10'],
+        fill: [],
         version: 3,
       }),
     );
@@ -366,7 +375,7 @@ describe.skipIf(!databaseAvailable())('Контрагенты: обслужив�
       .where(
         and(eq(schema.reports.contractorId, cp), eq(schema.reports.periodStart, '2026-08-01')),
       );
-    expect((await service(owner, cp)).skipped).toEqual(['2026-08', '2026-09', '2026-10']);
+    expect((await service(owner, cp)).skipped).toEqual(['2026-08', '2026-09']);
     const rolled = await saved(
       await call(owner, `/${cp}/pause/rollback`, {
         reason: 'Обслуживали без перерыва',
@@ -375,7 +384,18 @@ describe.skipIf(!databaseAvailable())('Контрагенты: обслужив�
       }),
     );
     expect(rolled.effect.created).toBe(1);
-    expect((await socOf(cp))[1]).toBe('2026-08 todo');
+    // Август отмечен — создан и обслуживается; сентябрь не отмечен — перерыв, его отчёт «Не требуется».
+    expect(rolled.service.periods).toEqual([
+      { from: '2026-01', to: '2026-08' },
+      { from: '2026-10', to: null },
+    ]);
+    expect(await socOf(cp)).toEqual([
+      '2026-07 todo',
+      '2026-08 todo',
+      '2026-09 not_required',
+      '2026-10 todo',
+      '2026-11 todo',
+    ]);
   });
 
   it('архив и возврат: права, все или никто, уже архивные пропускаются; (приёмка) отчёты — с текущего периода', async () => {

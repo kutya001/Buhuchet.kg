@@ -82,6 +82,7 @@ export function servedWithin(
  * Разовый не в архиве — «Обслуживается»: периодов у него нет (прототип addCpDlg), а приостановки не
  * бывает.
  */
+// ОТКЛОНЕНИЕ: docs/deviations.md#В-14 — у прототипа разовый без периодов — «Приостановлен».
 export function serviceState(c: ServiceSubject, month: YearMonth): ServiceState {
   if (c.archived) return 'archived';
   if (c.oneOff) return 'active';
@@ -208,8 +209,10 @@ export function pause(
  * «Возобновить» и «Изменить возобновление» (прототип `resumeDlg`) с месяца `from` (не раньше идущего).
  * Запланированное возобновление переносится; возобновление сразу за концом прежнего периода продолжает
  * его. Обслуживаемому и с запланированной приостановкой без возобновления — отказ (сначала «Отменить
- * приостановку»).
+ * приостановку»). У запланированной приостановки возобновление — только позже её начала: отменить
+ * приостановку можно лишь «Отменить приостановку» с правом «Откат статусов» (ТЗ «Откат приостановки»).
  */
+// ОТКЛОНЕНИЕ: docs/deviations.md#В-13 — прототип даёт «Изменить возобновление» на месяц паузы и раньше: пауза пропадает.
 export function resume(
   periods: readonly ServicePeriod[],
   from: YearMonth,
@@ -222,6 +225,7 @@ export function resume(
   if (pp ? pp.resume === null : l && l.to === null && l.from <= month) {
     return refuse('service_not_paused');
   }
+  if (pp && from <= pp.from) return refuse('service_resume_before_pause');
   if (l && l.to === null && l.from > month) {
     // Возобновление уже запланировано — меняется его месяц.
     l.from = from;
@@ -252,35 +256,57 @@ export function cancelPlannedPause(
 }
 
 /**
- * Пропущенные месяцы действующей приостановки — с её начала по идущий (ТЗ «система показывает, какие
- * месяцы были пропущены»); приостановка с первого месяца обслуживания — только идущий.
+ * Пропущенные месяцы действующей приостановки — прошедшие месяцы с её начала (ТЗ «система показывает,
+ * какие месяцы были пропущены, и предлагает досоздать за них…»): из них при откате выбирают, что
+ * досоздать. Идущий месяц после отката обслуживается всегда, поэтому выбора по нему нет; приостановка
+ * с идущего месяца или с первого месяца обслуживания — пропущенных нет.
  */
-// ОТКЛОНЕНИЕ: docs/deviations.md#В-10 — при запланированном возобновлении прототип показывает только идущий месяц.
+// ОТКЛОНЕНИЕ: docs/deviations.md#В-10 — прототип предлагает и идущий месяц, а при запланированном возобновлении — только его.
 export function skippedMonths(periods: readonly ServicePeriod[], month: YearMonth): YearMonth[] {
   if (inService(periods, month)) return [];
-  const ps = periods.filter((p) => p.from <= month);
-  const l = last(ps);
-  return l?.to && l.to < month ? monthRange(addMonths(l.to, 1), month) : [month];
+  const l = last(periods.filter((p) => p.from <= month));
+  return l?.to && addMonths(l.to, 1) < month
+    ? monthRange(addMonths(l.to, 1), addMonths(month, -1))
+    : [];
+}
+
+/** Периоды по порядку, соседние и пересекающиеся — одним периодом. */
+function mergePeriods(periods: readonly ServicePeriod[]): ServicePeriod[] {
+  const out: ServicePeriod[] = [];
+  for (const p of [...periods].sort((a, b) => a.from.localeCompare(b.from))) {
+    const l = last(out);
+    if (l && (l.to === null || addMonths(l.to, 1) >= p.from)) {
+      if (l.to !== null && (p.to === null || p.to > l.to)) l.to = p.to;
+    } else out.push({ ...p });
+  }
+  return out;
 }
 
 /**
  * Откат действующей приостановки шагом назад на шкале (прототип `rollbackDlg('svc')`): обслуживание
- * продолжается без перерыва, запланированное возобновление отменяется. Приостановка с первого месяца
- * (периодов нет) — обслуживание с идущего месяца. Что досоздать за пропущенные месяцы
- * (`skippedMonths`), выбирает пользователь.
+ * продолжается с идущего месяца, запланированное возобновление отменяется. Из пропущенных месяцев
+ * (`skippedMonths`) обслуженными становятся отмеченные «досоздать» (`fill`) — за них создаются отчёты
+ * и начисления; неотмеченные остаются перерывом. Отмечены все — обслуживание без перерыва, как в
+ * прототипе. Приостановка с первого месяца (периодов нет) — обслуживание с идущего месяца.
  */
-export function rollbackPause(periods: readonly ServicePeriod[], month: YearMonth): ServiceResult {
+// ОТКЛОНЕНИЕ: docs/deviations.md#В-10 — в прототипе галочки «что досоздать» ничего не меняют.
+export function rollbackPause(
+  periods: readonly ServicePeriod[],
+  month: YearMonth,
+  fill: readonly YearMonth[],
+): ServiceResult {
   if (inService(periods, month)) return refuse('service_not_paused');
-  if (!periods.length) return { ok: true, periods: [{ from: month, to: null }] };
-  const out = copy(periods);
-  let l = last(out)!;
-  if (l.from > month && out.length > 1) {
-    out.pop();
-    l = last(out)!;
-  }
-  if (l.from > month) l.from = month;
-  l.to = null;
-  return { ok: true, periods: out };
+  const skipped = skippedMonths(periods, month);
+  if (fill.some((m) => !skipped.includes(m))) return refuse('service_fill_not_skipped');
+  const kept = periods.filter((p) => p.from <= month);
+  return {
+    ok: true,
+    periods: mergePeriods([
+      ...kept,
+      ...fill.map((m) => ({ from: m, to: m })),
+      { from: month, to: null },
+    ]),
+  };
 }
 
 /**

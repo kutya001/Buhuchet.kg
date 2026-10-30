@@ -361,7 +361,7 @@ export function ServiceStatusBlock({
         <div className="flex flex-wrap items-center gap-2">
           <Pill
             size="sm"
-            tone={plan.kind === 'pause' ? 'warn' : 'plain'}
+            tone={plan.kind === 'pause' ? 'warn' : 'info'}
             icon={plan.kind === 'pause' ? 'pause' : 'play'}
           >
             {plan.text}

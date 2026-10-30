@@ -64,8 +64,8 @@ function useServiceSave({
 
   const save = async (
     send: Send,
-    done: (saved: ContractorServiceSaved) => string,
-    icon: 'pause' | 'play' | 'check',
+    done: ((saved: ContractorServiceSaved) => string) | null,
+    icon: 'pause' | 'play',
     onError?: (error: ApiErrorLike) => void,
   ) => {
     setBusy(true);
@@ -76,7 +76,8 @@ function useServiceSave({
       if (!saved.success) return void toast(t('err.unknown'), { bad: true });
       onDone(saved.data);
       onClose();
-      return void toast(done(saved.data), { icon });
+      if (done) toast(done(saved.data), { icon });
+      return;
     }
     if (res.error.code === 'record_changed') return setChanged(true);
     onError?.(res.error);
@@ -283,8 +284,9 @@ export function PauseServiceDialog(props: ServiceDialogProps) {
 
 /** Месяц возобновления по умолчанию (прототип `resumeDlg`): запланированный или после паузы. */
 export function defaultResumeMonth(service: ContractorService): string {
-  if (service.plannedResume) return service.plannedResume;
   const last = service.periods.at(-1);
+  // Возобновление уже запланировано (и после запланированной приостановки) — его месяц.
+  if (last && last.to === null && last.from > service.month) return last.from;
   const after = last?.to ? addMonths(last.to, 1) : service.month;
   return after > service.month ? after : service.month;
 }
@@ -306,11 +308,17 @@ export function ResumeServiceDialog({
   const id = useId();
   const s = useServiceSave(props);
   const month = s.service.month;
+  // У запланированной приостановки возобновление — позже её начала (п. В-13).
+  const pause = s.service.plannedPause?.from ?? null;
+  const min = pause ? addMonths(pause, 1) : month;
   const [from, setFrom] = useState(() => defaultResumeMonth(props.service));
 
   const submit = () => {
     if (!from) return s.setError('from', t('svc.month_required'));
     if (from < month) return s.setError('from', t('err.service_month_in_past'));
+    if (pause && from <= pause) {
+      return s.setError('from', t('err.service_resume_before_pause'));
+    }
     void s.save(
       (version) =>
         api.api.contractors[':id'].resume.$post({
@@ -352,7 +360,7 @@ export function ResumeServiceDialog({
           hint={t('svc.resume.from_hint')}
           error={s.errors.from}
           value={from}
-          min={month}
+          min={min}
           onChange={(v) => {
             setFrom(v);
             s.setError('from', undefined);
@@ -419,8 +427,9 @@ export function ToRegularDialog({
             version,
           },
         }),
-      () => t('svc.regular.done', { month: monthLabelGen(from) }),
-      'check',
+      // Уведомления нет: следом открывается выбор отчётов (прототип toRegularDlg).
+      null,
+      'play',
       // Вопрос о праве на режим приходит отказом по полю режима с текстом вопроса.
       (error) => {
         const question = (error.details as { ask?: unknown } | undefined)?.ask;
