@@ -85,6 +85,7 @@ function access(o: {
   features?: Feature[];
   modules?: string[];
   admin?: boolean;
+  reportConfirm?: boolean;
 }): KbAccess {
   const perms = new Set(o.perms ?? []);
   const features = new Set(o.features ?? []);
@@ -93,6 +94,7 @@ function access(o: {
     isOwner: o.owner ?? false,
     can: (p) => o.owner === true || perms.has(p),
     feature: (f) => features.has(f),
+    policy: (s) => s === 'reportConfirm' && (o.reportConfirm ?? true),
     modules: new Set(o.modules ?? ['home', 'cps', 'kpi', 'org', 'kb']),
   };
 }
@@ -146,6 +148,23 @@ describe('программа обучения', () => {
       'tg',
       'theme',
     ]);
+  });
+
+  it('«Подтвердить сдачу отчёта» — только когда сдача требует подтверждения (прототип `feat: () => repConfOn()`)', () => {
+    const accept = step('accept', 'reports', 30, { perm: 'repConfirm' });
+    const rules = { accept: KB_STEP_RULES.accept! };
+    const senior = (reportConfirm: boolean) =>
+      access({ perms: ['repConfirm'], modules: ['reports'], reportConfirm });
+    expect(kbStepVisible(accept, senior(true), rules)).toBe(true);
+    expect(kbStepVisible(accept, senior(false), rules)).toBe(false);
+    // Остальные шаги отчётов от настройки не зависят.
+    const submit = step('submit', 'reports', 28, { perm: 'changeStatus' });
+    const accountant = access({
+      perms: ['changeStatus'],
+      modules: ['reports'],
+      reportConfirm: false,
+    });
+    expect(kbStepVisible(submit, accountant, { submit: KB_STEP_RULES.submit! })).toBe(true);
   });
 
   it('шаги модулей, которых ещё нет, и выключенные администратором шаги скрыты', () => {

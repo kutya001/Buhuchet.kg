@@ -1,5 +1,5 @@
 {
-  "id": "358a5cd6-8f4f-486b-964c-570df6fa1103",
+  "id": "e3771415-8378-48de-bc6d-f28f383e4623",
   "prevId": "1b5a9fd7-5303-4c49-bb85-a3b5354186bd",
   "version": "7",
   "dialect": "postgresql",
@@ -234,37 +234,12 @@
           "primaryKey": false,
           "notNull": true
         },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_by": {
-          "name": "created_by",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "updated_by": {
-          "name": "updated_by",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
         "updated_at": {
           "name": "updated_at",
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
-        },
-        "version": {
-          "name": "version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
         }
       },
       "indexes": {
@@ -299,47 +274,7 @@
           "with": {}
         }
       },
-      "foreignKeys": {
-        "gked_items_parent_code_gked_items_code_fk": {
-          "name": "gked_items_parent_code_gked_items_code_fk",
-          "tableFrom": "gked_items",
-          "tableTo": "gked_items",
-          "columnsFrom": [
-            "parent_code"
-          ],
-          "columnsTo": [
-            "code"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "gked_items_created_by_users_id_fk": {
-          "name": "gked_items_created_by_users_id_fk",
-          "tableFrom": "gked_items",
-          "tableTo": "users",
-          "columnsFrom": [
-            "created_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "gked_items_updated_by_users_id_fk": {
-          "name": "gked_items_updated_by_users_id_fk",
-          "tableFrom": "gked_items",
-          "tableTo": "users",
-          "columnsFrom": [
-            "updated_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {
@@ -397,30 +332,10 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
-        },
-        "updated_by": {
-          "name": "updated_by",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {},
-      "foreignKeys": {
-        "platform_reference_updated_by_users_id_fk": {
-          "name": "platform_reference_updated_by_users_id_fk",
-          "tableFrom": "platform_reference",
-          "tableTo": "users",
-          "columnsFrom": [
-            "updated_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {
@@ -3439,6 +3354,156 @@
         }
       },
       "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.report_tax_lines": {
+      "name": "report_tax_lines",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "org_id": {
+          "name": "org_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "app.current_org_id()"
+        },
+        "report_id": {
+          "name": "report_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "line_key": {
+          "name": "line_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "label": {
+          "name": "label",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "rate": {
+          "name": "rate",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "cash": {
+          "name": "cash",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "revenue": {
+          "name": "revenue",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tax": {
+          "name": "tax",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sort_order": {
+          "name": "sort_order",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "report_tax_lines_org_id_organizations_id_fk": {
+          "name": "report_tax_lines_org_id_organizations_id_fk",
+          "tableFrom": "report_tax_lines",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "org_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "report_tax_lines_report_fk": {
+          "name": "report_tax_lines_report_fk",
+          "tableFrom": "report_tax_lines",
+          "tableTo": "reports",
+          "columnsFrom": [
+            "report_id",
+            "org_id"
+          ],
+          "columnsTo": [
+            "id",
+            "org_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "report_tax_lines_key": {
+          "name": "report_tax_lines_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "org_id",
+            "report_id",
+            "kind",
+            "line_key"
+          ]
+        }
+      },
+      "policies": {
+        "report_tax_lines_isolation": {
+          "name": "report_tax_lines_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "buhuchet_app"
+          ],
+          "using": "\"report_tax_lines\".\"org_id\" = app.current_org_id()",
+          "withCheck": "\"report_tax_lines\".\"org_id\" = app.current_org_id()"
+        }
+      },
+      "checkConstraints": {
+        "report_tax_lines_kind_check": {
+          "name": "report_tax_lines_kind_check",
+          "value": "\"report_tax_lines\".\"kind\" in ('rate', 'payment')"
+        },
+        "report_tax_lines_amounts_check": {
+          "name": "report_tax_lines_amounts_check",
+          "value": "\"report_tax_lines\".\"tax\" >= 0 and (\"report_tax_lines\".\"revenue\" is null or \"report_tax_lines\".\"revenue\" >= 0)"
+        }
+      },
       "isRLSEnabled": true
     },
     "public.reports": {
@@ -7342,7 +7407,7 @@
         },
         "status_history_cause_check": {
           "name": "status_history_cause_check",
-          "value": "\"status_history\".\"cause\" is null or \"status_history\".\"cause\" in ('service')"
+          "value": "\"status_history\".\"cause\" is null or \"status_history\".\"cause\" in ('service', 'policy')"
         },
         "status_history_reason_check": {
           "name": "status_history_reason_check",

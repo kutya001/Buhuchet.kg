@@ -13,7 +13,17 @@ import {
   reportMarkText,
   reportTone,
 } from './report-columns';
-import { reportMenuEntries, type ReportMenuAccess } from './report-menu';
+import {
+  reportCardButtons,
+  reportMenuEntries,
+  reportRollbackEffect,
+  reportScaleBack,
+  reportScaleSteps,
+  type ReportActor,
+  type ReportMenuRow,
+  type ReportMenuRun,
+} from './report-menu';
+import { rowNeedsFile, rowNeedsReceipt } from './report-status-dialogs';
 import { isPlateFilter, monthEnd, plateFilters } from './report-plates';
 import { noTypesHint, reportTabCounts } from './reports-data';
 
@@ -42,48 +52,228 @@ const report = (over: Partial<ReportRow> = {}) =>
     waitDays: null,
     confirmedAt: null,
     confirmedBy: null,
+    submittedBy: null,
+    needFile: false,
+    needReceipt: false,
+    hasFiles: false,
     version: 1,
     ...over,
   }) as ReportRow;
 
-const all: ReportMenuAccess = { repDue: true, changeStatus: true };
+const ME = '00000000-0000-4000-8000-0000000000e1';
+const OTHER = { id: '00000000-0000-4000-8000-0000000000e2', shortName: 'Айбек С.' };
 
-const menu = (r: ReportRow, access: ReportMenuAccess = all) => {
-  const run = { due: vi.fn(), revision: vi.fn() };
-  return { run, entries: reportMenuEntries({ t, access, run })(r) };
+const actor = (
+  over: Partial<ReportActor['can']> = {},
+  o: Partial<ReportActor> = {},
+): ReportActor => ({
+  employeeId: ME,
+  isOwner: false,
+  confirmOn: true,
+  filesOn: true,
+  can: {
+    changeStatus: true,
+    repDue: true,
+    repConfirm: true,
+    changeSum: true,
+    rollback: true,
+    filesUpload: true,
+    ...over,
+  },
+  ...o,
+});
+
+const menu = (r: ReportMenuRow, who: ReportActor = actor(), card = false) => {
+  const run = Object.fromEntries(
+    [
+      'open',
+      'submit',
+      'start',
+      'confirm',
+      'fix',
+      'reject',
+      'due',
+      'amount',
+      'file',
+      'revision',
+      'rollback',
+      'not_required',
+    ].map((k) => [k, vi.fn()]),
+  ) as unknown as ReportMenuRun & Record<string, ReturnType<typeof vi.fn>>;
+  return { run, entries: reportMenuEntries({ t, actor: who, run, card })(r) };
 };
 const items = (list: readonly ActionEntry[]) =>
   list.filter((x): x is ActionItem => !('separator' in x));
 const labels = (list: readonly ActionEntry[]) => items(list).map((x) => x.label);
+const entry = (list: readonly ActionEntry[], id: string) => items(list).find((x) => x.id === id);
 
-describe('reportMenuEntries', () => {
-  it('у несданного отчёта со сдачей — «Изменить срок»; пункт открывает окно этого отчёта', () => {
+describe('меню отчёта (прототип reportActions)', () => {
+  it('у «К сдаче» со сдачей и уплатой — открыть, сдать, взять в работу, срок, сумма, файл, «Не требуется»', () => {
     const r = report();
     const { run, entries } = menu(r);
-    expect(labels(entries)).toEqual(['Изменить срок']);
-    items(entries)[0]!.run();
-    expect(run.due).toHaveBeenCalledWith(r);
+    expect(labels(entries)).toEqual([
+      'Открыть карточку',
+      'Отметить сданным',
+      'Взять в работу',
+      'Изменить срок',
+      'Указать сумму',
+      'Прикрепить файл',
+      'Не требуется',
+    ]);
+    entry(entries, 'submit')!.run();
+    expect(run.submit).toHaveBeenCalledWith(r);
+    // В карточке «Открыть карточку» нет.
+    expect(labels(menu(r, actor(), true).entries)[0]).toBe('Отметить сданным');
   });
 
-  it('без права «Изменять срок отчёта» пункт бледный с причиной', () => {
-    const [due] = items(menu(report(), { repDue: false, changeStatus: true }).entries);
-    expect(due).toMatchObject({ disabled: true, reason: 'Нужно право «Изменять срок отчёта»' });
+  it('без прав пункты видны бледными с причиной', () => {
+    const { entries } = menu(
+      report(),
+      actor({ changeStatus: false, repDue: false, changeSum: false }),
+    );
+    expect(entry(entries, 'submit')).toMatchObject({
+      disabled: true,
+      reason: 'Нет права менять статус',
+    });
+    expect(entry(entries, 'due')).toMatchObject({
+      disabled: true,
+      reason: 'Нужно право «Изменять срок отчёта»',
+    });
+    expect(entry(entries, 'amount')).toMatchObject({
+      disabled: true,
+      reason: 'Нет права менять сумму',
+    });
+    expect(entry(menu(report(), actor({ filesUpload: false })).entries, 'file')).toBeUndefined();
+    expect(entry(menu(report(), actor({}, { filesOn: false })).entries, 'file')).toBeUndefined();
   });
 
-  it('у сданного — «Создать уточнённый», без права менять статус — бледный с причиной', () => {
-    const r = report({ status: 'submitted' });
-    const { run, entries } = menu(r);
-    expect(labels(entries)).toEqual(['Создать уточнённый']);
-    items(entries)[0]!.run();
-    expect(run.revision).toHaveBeenCalledWith(r);
-    const [locked] = items(menu(r, { repDue: true, changeStatus: false }).entries);
-    expect(locked).toMatchObject({ disabled: true, reason: 'Нет права менять статус' });
+  it('п. 3: у вида «Сдача» (статистика) суммы нет; у «Уплаты» нет сдачи и срока', () => {
+    expect(entry(menu(report({ act: 'sub' })).entries, 'amount')).toBeUndefined();
+    const pay = labels(menu(report({ act: 'pay' })).entries);
+    expect(pay).not.toContain('Отметить сданным');
+    expect(pay).not.toContain('Изменить срок');
+    expect(pay).toContain('Указать сумму');
   });
 
-  it('у вида «Уплата» и у «Не требуется» пунктов сдачи нет', () => {
-    expect(menu(report({ act: 'pay' })).entries).toEqual([]);
-    expect(menu(report({ act: 'pay', status: 'submitted' })).entries).toEqual([]);
-    expect(menu(report({ status: 'not_required' })).entries).toEqual([]);
+  it('п. 62: ждущий подтверждения — «Подтвердить» и «На исправление»; свой — бледные с причиной, владельцу можно', () => {
+    const waiting = report({ status: 'submitted', submittedBy: OTHER });
+    const list = labels(menu(waiting).entries);
+    expect(list).toEqual([
+      'Открыть карточку',
+      'Подтвердить',
+      'На исправление',
+      'Требует исправления',
+      'Указать сумму',
+      'Прикрепить файл',
+      'Создать уточнённый',
+      'Откатить в «В работе»',
+      'Не требуется',
+    ]);
+    const own = report({ status: 'submitted', submittedBy: { id: ME, shortName: 'Я' } });
+    expect(entry(menu(own).entries, 'confirm')).toMatchObject({
+      disabled: true,
+      reason: 'Свой сданный отчёт подтвердить нельзя: подтверждает другой сотрудник с правом',
+    });
+    expect(entry(menu(own, actor({}, { isOwner: true })).entries, 'confirm')?.disabled).toBeFalsy();
+    expect(entry(menu(waiting, actor({ repConfirm: false })).entries, 'fix')).toMatchObject({
+      disabled: true,
+      reason: 'Нужно право «Подтверждать сдачу отчётов»',
+    });
+  });
+
+  it('подтверждённый — «Снять подтверждение», «Не требуется» нет; без подтверждения в политике отметок нет', () => {
+    const confirmed = report({
+      status: 'submitted',
+      submittedBy: OTHER,
+      confirmedAt: '2026-10-20T05:00:00.000Z',
+    });
+    const list = labels(menu(confirmed).entries);
+    expect(list).toContain('Снять подтверждение');
+    expect(list).not.toContain('Подтвердить');
+    expect(list).not.toContain('Не требуется');
+    const off = labels(
+      menu(report({ status: 'submitted' }), actor({}, { confirmOn: false })).entries,
+    );
+    expect(off).not.toContain('Подтвердить');
+    expect(off).toContain('Откатить в «В работе»');
+    expect(entry(menu(confirmed, actor({ rollback: false })).entries, 'rollback')).toMatchObject({
+      disabled: true,
+      reason: 'Нужно право «Откат статусов»',
+    });
+  });
+
+  it('прежняя версия: только «Прикрепить файл» и откат с причиной', () => {
+    const old = { ...report({ status: 'submitted' }), superseded: true };
+    const { entries } = menu(old, actor(), true);
+    expect(labels(entries)).toEqual(['Прикрепить файл', 'Откатить в «—»']);
+    expect(entry(entries, 'rollback')).toMatchObject({
+      disabled: true,
+      reason: 'Сначала откатите уточнённую версию отчёта',
+    });
+  });
+});
+
+describe('кнопки и шкала карточки', () => {
+  it('несданный — «Отметить сданным» (без права — недоступна); ждущий — «Подтвердить» и «На исправление»', () => {
+    expect(reportCardButtons(report(), actor())).toEqual({
+      primary: 'submit',
+      disabled: false,
+      fix: false,
+    });
+    expect(reportCardButtons(report(), actor({ changeStatus: false })).disabled).toBe(true);
+    expect(reportCardButtons(report({ status: 'submitted', submittedBy: OTHER }), actor())).toEqual(
+      { primary: 'confirm', disabled: false, fix: true },
+    );
+    expect(
+      reportCardButtons(
+        report({ status: 'submitted', submittedBy: { id: ME, shortName: 'Я' } }),
+        actor(),
+      ).primary,
+    ).toBeNull();
+  });
+
+  it('шаги шкалы: «В работе» — сразу, «Сдан» — окном, у прежней версии — нет; откат — с правом', () => {
+    expect(reportScaleSteps(report())).toEqual({
+      in_progress: 'start',
+      submitted: 'submit',
+    });
+    expect(reportScaleSteps(report({ status: 'needs_fix' }))).toEqual({
+      submitted: 'submit',
+    });
+    // Шаги не зависят от права: без него карточка отвечает «Нет права менять статус» (прототип).
+    expect(reportScaleSteps({ ...report(), superseded: true })).toEqual({});
+    expect(reportScaleBack(report({ status: 'in_progress' }), actor())).toBe('todo');
+    expect(
+      reportScaleBack(report({ status: 'in_progress' }), actor({ rollback: false })),
+    ).toBeNull();
+  });
+
+  it('последствия отката (прототип rollbackDlg)', () => {
+    const o = { confirmOn: true, today: '2026-10-28' };
+    expect(reportRollbackEffect(t, report({ status: 'submitted' }), 'in_progress', o)).toBe(
+      'Регулярная задача по отчёту снова станет открытой. Срок уже прошёл — отчёт снова попадёт в просроченные, пойдут напоминания. Дата сдачи будет снята. Приложенные файлы не удаляются.',
+    );
+    expect(reportRollbackEffect(t, report({ status: 'needs_fix' }), 'submitted', o)).toBe(
+      'Регулярная задача по отчёту снова станет открытой. Отчёт снова будет ждать подтверждения сдачи. Приложенные файлы не удаляются.',
+    );
+    expect(
+      reportRollbackEffect(t, report({ status: 'not_required', dueDate: '2026-11-25' }), 'todo', o),
+    ).toBe('Отчёт и его регулярная задача снова станут активными. Приложенные файлы не удаляются.');
+    expect(
+      reportRollbackEffect(t, report({ status: 'submitted', confirmedBy: OTHER }), 'waiting', o),
+    ).toMatch(/^Подтверждение Айбек С\. будет снято/);
+  });
+});
+
+describe('массовые окна', () => {
+  const on = { confirmOn: true, filesOn: true };
+  it('нужен файл — при обязательном файле без файлов; квитанция — при выключенном подтверждении', () => {
+    expect(rowNeedsFile(report({ needFile: true, hasFiles: false }), on)).toBe(true);
+    expect(rowNeedsFile(report({ needFile: true, hasFiles: true }), on)).toBe(false);
+    expect(rowNeedsFile(report({ needReceipt: true }), on)).toBe(false);
+    expect(rowNeedsFile(report({ needReceipt: true }), { ...on, confirmOn: false })).toBe(true);
+    expect(rowNeedsFile(report({ needFile: true }), { ...on, filesOn: false })).toBe(false);
+    expect(rowNeedsReceipt(report({ needReceipt: true }), on)).toBe(true);
   });
 });
 

@@ -60,6 +60,9 @@ export const KB_SHOW_TARGETS: Readonly<Record<string, string>> = {
   '#st-save': 'main form [type=submit]',
   // Справочники: «Справочники платформы» — плитки.
   '#mbody .gscroll || #mbody .gcards': 'main [data-dict-tile]',
+  // Отчеты для сдачи: главная кнопка карточки отчёта — «Отметить сданным» или «Подтвердить».
+  '#rc-main':
+    '[data-window-foot] [data-report-button="submit"] || [data-window-foot] [data-report-button="confirm"]',
   // Задачи: легенда «на день / на месяц».
   '#mbody .kd-legend': '[data-task-legend]',
   // Показатели контрагентов: месяц и период, таблица ввода (на телефоне — плитки), настройка.

@@ -185,7 +185,7 @@ test.describe('Этап 2: отчёты — список и вкладки', () 
     await expect(grid.locator(`[data-id="${ownReport}"]`)).toContainText(ownName);
   });
 
-  test('(п. 9) на телефоне в «Отчётах для сдачи» доступны поиск, фильтры и действия над отчётом без правого клика: касание плитки, «⋯» и долгое нажатие открывают меню, «Изменить срок» переносит срок', async ({
+  test('(п. 9) на телефоне в «Отчётах для сдачи» доступны поиск, фильтры и действия над отчётом без правого клика: касание плитки открывает карточку, «⋯» и долгое нажатие — меню, «Изменить срок» переносит срок', async ({
     page,
     request,
     baseURL,
@@ -239,11 +239,12 @@ test.describe('Этап 2: отчёты — список и вкладки', () 
     await expect(grid.locator('[data-id]')).toHaveCount(2);
 
     const menu = page.getByRole('menu', { name: 'Действия' });
-    // Касание строки или плитки открывает меню действий (карточки отчёта ещё нет — задача 2.14).
+    // Касание строки или плитки открывает карточку отчёта (задача 2.14, как в прототипе `open`).
     await row(nds).getByText(`ОсОО «${word}»`).click();
-    await expect(menu.getByRole('menuitem')).toHaveText(['Изменить срок']);
+    const card = page.getByRole('dialog', { name: 'НДС' });
+    await expect(card.locator(`[data-report-card="${nds}"]`)).toBeVisible();
     await page.keyboard.press('Escape');
-    await expect(menu).toHaveCount(0);
+    await expect(page.getByRole('dialog')).toHaveCount(0);
 
     // Меню без правого клика: на телефоне — долгим нажатием на плитку, на ПК — правым кликом.
     if (isMobile) {
@@ -252,7 +253,10 @@ test.describe('Этап 2: отчёты — список и вкладки', () 
     } else {
       await row(t1).click({ button: 'right' });
     }
-    await expect(menu.getByRole('menuitem')).toHaveText(['Изменить срок']);
+    await expect(menu.getByRole('menuitem', { name: 'Открыть карточку' })).toBeVisible();
+    await expect(menu.getByRole('menuitem', { name: 'Изменить срок' })).toBeVisible();
+    // У 1-Т платить нечего — «Указать сумму» нет.
+    await expect(menu.getByRole('menuitem', { name: 'Указать сумму' })).toHaveCount(0);
     await page.keyboard.press('Escape');
     await expect(page.getByRole('dialog')).toHaveCount(0);
 

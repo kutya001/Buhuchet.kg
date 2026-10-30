@@ -94,11 +94,11 @@ export function asLearner<T>(
     if (!session.orgId || !access) {
       return fn(tx, { userId: session.userId, orgId: null, access: kbAdminAccess() });
     }
-    const { features } = await orgMenuSettings(tx, session.orgId);
+    const { features, reportConfirm } = await orgMenuSettings(tx, session.orgId);
     return fn(tx, {
       userId: session.userId,
       orgId: session.orgId,
-      access: kbBusinessAccess(access.subject, features),
+      access: kbBusinessAccess(access.subject, features, { reportConfirm }),
     });
   });
 }

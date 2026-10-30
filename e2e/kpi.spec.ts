@@ -357,8 +357,12 @@ test.describe('Этап 2: Показатели контрагентов', () =>
     await newOrgOwner(api, origin);
     // Что-то уже пройдено — процент больше нуля. Шаг «Включить нужные функции» засчитывается
     // любым переключением функции, поэтому он выполнен заранее: иначе включение показателей само
-    // добавило бы выполненный шаг.
-    expect((await api.post('/api/kb/hits/search', { headers: { origin } })).status()).toBe(200);
+    // добавило бы выполненный шаг. Пройдено три шага, а не два: при 2 из 34 и 2 из 40 процент вниз до
+    // целого одинаковый (5 %), и уменьшение не видно.
+    for (const step of ['search', 'cols']) {
+      const hit = await api.post(`/api/kb/hits/${step}`, { headers: { origin } });
+      expect(hit.status(), await hit.text()).toBe(200);
+    }
     const policy = (await (await api.get('/api/org/policy')).json()) as { version: number };
     const calendarOff = await api.patch('/api/org/policy', {
       headers: { origin },
@@ -370,9 +374,10 @@ test.describe('Этап 2: Показатели контрагентов', () =>
       data: { reason: 'open' },
     });
     expect(synced.status(), await synced.text()).toBe(200);
-    type Me = { progress: { pct: number; level: number } };
+    type Me = { progress: { pct: number; level: number; done: number; total: number } };
     const before = (await (await api.get('/api/kb/me')).json()) as Me;
     expect(before.progress.pct).toBeGreaterThan(0);
+    expect(before.progress.done).toBe(3);
 
     await page.goto('/app/org/policy');
     await page.locator('main [data-feat-row="indicators"]').getByRole('switch').click();
@@ -381,6 +386,8 @@ test.describe('Этап 2: Показатели контрагентов', () =>
     await expect(on.getByRole('button', { name: 'Пройти урок' })).toBeVisible();
 
     const after = (await (await api.get('/api/kb/me')).json()) as Me;
+    expect(after.progress.total).toBeGreaterThan(before.progress.total);
+    expect(after.progress.done).toBe(before.progress.done);
     expect(after.progress.pct).toBeLessThan(before.progress.pct);
     expect(after.progress.level).toBe(before.progress.level);
 

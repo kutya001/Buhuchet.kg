@@ -36,6 +36,9 @@ function changeLines(change: HistoryChange, t: Translate): string[] {
       return [t('org.history.task_confirm', { state: state(change.to) })];
     case 'reportConfirm':
       return [t('org.history.report_confirm', { state: state(change.to) })];
+    // Сколько ждущих отчётов подтвердило выключение (прототип repConfSet: «…; считаются подтверждёнными: N»).
+    case 'confirmedReports':
+      return [t('report.confirm_off.history', { n: Number(change.to) })];
     case 'payBeforeSubmit':
       return [t('org.history.pay_first', { state: state(change.to) })];
     // Было → стало (ТЗ «История изменений учётной политики»; прототип пишет только новое значение).

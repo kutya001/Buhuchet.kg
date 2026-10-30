@@ -153,6 +153,13 @@ export const OrgRoleOptions = z.object({
 });
 export type OrgRoleOptions = z.infer<typeof OrgRoleOptions>;
 
+/**
+ * Сколько отчётов организации ждут подтверждения — для вопроса «Выключить подтверждение сдачи?»
+ * (прототип modules/org.js, repConfSet).
+ */
+export const OrgWaitingReports = z.object({ count: z.number().int().nonnegative() });
+export type OrgWaitingReports = z.infer<typeof OrgWaitingReports>;
+
 /** Сохранить учётную политику или настройки: только переданные поля; функции — только переданные. */
 export const UpdateOrgPolicyRequest = z.object({
   version: RecordVersion,

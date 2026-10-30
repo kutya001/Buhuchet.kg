@@ -1,4 +1,4 @@
-import { withOrgContext, writeHistory } from '@buhuchet/db';
+import { withOrgContext, writeHistory, writeStatusChange } from '@buhuchet/db';
 import { databaseAvailable, seedKbReference } from '@buhuchet/db/testing';
 import {
   ApiError,
@@ -80,7 +80,7 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
       'files',
       'lists',
     ]);
-    expect(own.progress).toMatchObject({ total: 28, done: 0, pct: 0, level: 0, next: 1, need: 7 });
+    expect(own.progress).toMatchObject({ total: 34, done: 0, pct: 0, level: 0, next: 1, need: 9 });
     expect(own.progress.levels.map((l) => l.name)).toEqual([
       'Новичок',
       'Ученик',
@@ -131,6 +131,11 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
       'pdicts',
       'cp1',
       'rtabs',
+      'submit',
+      'bulk',
+      'ver',
+      'na',
+      'scale',
       'daymonth',
       'tdone',
       'upload',
@@ -228,16 +233,35 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
     const notMine = KbMarkResult.parse(await ok(await call('POST', '/api/kb/hits/profile', acc)));
     expect(notMine.fresh).toEqual([]);
 
-    // Ещё 6 шагов — 7 из 28 (25 %): уровень «Ученик». «Добавить первого контрагента» (задача 2.09) —
-    // по истории создания контрагента.
+    // Ещё 8 шагов — 9 из 34 (26 %): уровень «Ученик». «Добавить первого контрагента» (задача 2.09) —
+    // по истории создания контрагента, «Создать уточнённый отчёт» (задача 2.14) — у прежней версии
+    // `superseded` → true, «Отметить первый отчёт «Сдан»» — «Сдан» в «Истории статусов» (и прошлый
+    // период, сразу отмеченный сданным при назначении: запись без прежнего статуса); подтверждение
+    // при выключении его в учётной политике (смена системой) шаг «Подтвердить» не засчитывает.
     await saved(f.a.ownerUserId, 'organization', 'name');
     await withOrgContext(f.t.app.db, { orgId: f.a.orgId, userId: f.a.ownerUserId }, (tx) =>
-      writeHistory(tx, {
-        entity: 'contractor',
-        entityId: crypto.randomUUID(),
-        action: 'create',
-        changes: [],
-      }),
+      writeHistory(
+        tx,
+        { entity: 'contractor', entityId: crypto.randomUUID(), action: 'create', changes: [] },
+        {
+          entity: 'report',
+          entityId: crypto.randomUUID(),
+          action: 'update',
+          changes: [{ field: 'superseded', from: false, to: true }],
+        },
+      ).then(() =>
+        writeStatusChange(
+          tx,
+          { scale: 'report', entityId: crypto.randomUUID(), from: null, to: 'submitted' },
+          {
+            scale: 'report',
+            entityId: crypto.randomUUID(),
+            from: 'submitted',
+            to: 'confirmed',
+            cause: 'policy',
+          },
+        ),
+      ),
     );
     await saved(f.a.ownerUserId, 'org_settings', 'remindDays');
     await saved(f.a.ownerUserId, 'org_settings', 'timezone');
@@ -248,9 +272,16 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
     const second = KbMarkResult.parse(
       await ok(await call('POST', '/api/kb/sync', owner, { reason: 'saved' })),
     );
-    expect(second.fresh.map((x) => x.id).sort()).toEqual(['cp1', 'profile', 'remind', 'settings']);
+    expect(second.fresh.map((x) => x.id).sort()).toEqual([
+      'cp1',
+      'profile',
+      'remind',
+      'settings',
+      'submit',
+      'ver',
+    ]);
     expect(second.congrats).toBe('Ученик');
-    expect(second.state.progress).toMatchObject({ done: 7, pct: 25, level: 1 });
+    expect(second.state.progress).toMatchObject({ done: 9, pct: 26, level: 1 });
     // Повтор ничего не меняет.
     const again = KbMarkResult.parse(
       await ok(await call('POST', '/api/kb/sync', owner, { reason: 'open' })),
@@ -339,12 +370,12 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
       level: 1,
       levelName: 'Ученик',
       of: 5,
-      done: 8,
-      total: 28,
+      done: 10,
+      total: 34,
       levelAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
     });
     const accRow = team.items.find((r) => r.fullName === 'Сотрудник acc-a');
-    expect(accRow).toMatchObject({ level: 0, done: 1, total: 15, pct: 6 });
+    expect(accRow).toMatchObject({ level: 0, done: 1, total: 20, pct: 5 });
     const values = ListValues.parse(
       await ok(await call('GET', '/api/kb/team/values?col=level', owner)),
     );
@@ -370,7 +401,7 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
     const self = KbMemberProgress.parse(
       await ok(await call('GET', `/api/kb/employees/${id}`, acc)),
     );
-    expect(self).toMatchObject({ employeeId: id, progress: { done: 1, total: 15 } });
+    expect(self).toMatchObject({ employeeId: id, progress: { done: 1, total: 20 } });
     expect(self.progress.groups.map((g) => g.id)).toEqual([
       'me',
       'dicts',
@@ -395,7 +426,7 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
     expect(own.items.find((e) => e.login === 'owner-a')?.kb).toEqual({
       level: 1,
       name: 'Ученик',
-      pct: 28,
+      pct: 29,
       of: 5,
     });
     const sorted = await staff(
