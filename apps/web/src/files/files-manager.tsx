@@ -23,6 +23,7 @@ import { useModuleStats } from '../lists/stats';
 import { useListPage, type FetchListPage } from '../lists/use-list-page';
 import { useViewSettings } from '../lists/view-settings';
 import { useShell } from '../shell/context';
+import { useReportActions } from '../reports/report-actions';
 import { useTaskActions } from '../tasks/task-actions';
 import { taskQuery } from '../tasks/tasks-data';
 import {
@@ -83,6 +84,7 @@ export function FilesManager() {
   const summary = useQuery(managerSummaryQuery);
   const { search, clearSearch, access } = useShell();
   const tasks = useTaskActions();
+  const reports = useReportActions();
   const kpi = useKpiEntry();
   const [card, setCard] = useState<DialogSlot<FileManagerRow> | null>(null);
   const [upload, setUpload] = useState<DialogSlot<null> | null>(null);
@@ -125,8 +127,12 @@ export function FilesManager() {
     globalThis.location.assign(FileLink.parse(res.data).url);
   };
 
-  /** «Перейти к источнику» (прототип `f.open`): карточка задачи, окно значения показателя. */
+  /** «Перейти к источнику» (прототип `f.open`): карточка отчёта или задачи, окно значения показателя. */
   const sourceOf = (file: FileManagerRow): (() => void) | null => {
+    if (file.kind === 'report' && file.sourceId) {
+      const id = file.sourceId;
+      return () => reports.openCard({ id });
+    }
     if (file.kind === 'task' && file.sourceId) {
       const id = file.sourceId;
       return () =>
@@ -338,6 +344,7 @@ export function FilesManager() {
         onConfirm={() => ask && void remove(ask)}
       />
       {tasks.dialogs}
+      {reports.dialogs}
       {kpi.dialog}
     </div>
   );

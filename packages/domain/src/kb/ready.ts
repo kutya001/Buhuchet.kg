@@ -28,9 +28,15 @@ export type KbDoneRule =
     }
   /**
    * Смена статуса записи самим пользователем («История статусов», `status_history`; откат не
-   * считается): шкала, из каких статусов и в какие. Действия с задачей пишутся только туда.
+   * считается): шкала, из каких статусов и в какие; null — запись создана сразу в этом статусе
+   * (прошлые периоды «сданными» при назначении). Действия с задачей пишутся только туда.
    */
-  | { kind: 'status'; scale: StatusScaleKey; from: readonly string[]; to: readonly string[] }
+  | {
+      kind: 'status';
+      scale: StatusScaleKey;
+      from: readonly (string | null)[];
+      to: readonly string[];
+    }
   /** Привязан свой Telegram (`telegram_links`). */
   | { kind: 'telegram' }
   /** Администратор платформы сам создал организацию (`organizations.created_by`). */
@@ -56,7 +62,15 @@ export interface KbStepRule {
    * (ТЗ «Главное правило»).
    */
   permission?: PermissionId;
+  /**
+   * Настройка учётной политики, без которой шага нет (прототип `feat: () => repConfOn()`): шаг
+   * «Подтвердить сдачу отчёта» — только когда сдача требует подтверждения.
+   */
+  policy?: KbPolicySetting;
 }
+
+/** Настройки учётной политики, от которых зависят шаги (не функции из «Функций»). */
+export type KbPolicySetting = 'reportConfirm';
 
 const orgSettings = (...anyField: string[]): KbDoneRule => ({
   kind: 'history',
@@ -118,10 +132,47 @@ export const KB_STEP_RULES: Readonly<Record<string, KbStepRule>> = {
   // бы один контрагент (загрузка из Excel и «Из свидетельства и выписки» тоже пишут создание в историю).
   cp1: { module: 'cps', done: { kind: 'history', entity: 'contractor', actions: ['create'] } },
   // 6. Отчеты для сдачи (задача 2.13): вкладки списка. Назначение и «Кто что сдаёт» — с задачами 2.11 и
-  // 2.15; сдача, подтверждение, массовая отметка, «Не требуется», шкала и «Создать уточнённый отчёт» — с
-  // 2.14: уточнённый создаётся у сданного отчёта, а сдать отчёт можно только в карточке 2.14 (шаг —
-  // история отчёта, у прежней версии `superseded` → true).
+  // 2.15. Сдача, подтверждение, «Не требуется» (задача 2.14, прототип `KB_EV['r.sub']`, `r.acc`, `r.na`)
+  // — смена статуса самим пользователем; подтверждение при выключении его в учётной политике не
+  // считается. «Массовая отметка» и «Шкала статусов» — «Посмотреть». «Создать уточнённый отчёт»
+  // (`KB_EV['r.ver']`) — у прежней версии в истории `superseded` → true.
   rtabs: { module: 'reports' },
+  // «Отметить сданным», массовая отметка и прошлые периоды «сданными» при назначении (прототип
+  // `KB_EV['r.sub']`: «отмечен сданн…»).
+  submit: {
+    module: 'reports',
+    done: {
+      kind: 'status',
+      scale: 'report',
+      from: [null, 'todo', 'in_progress', 'needs_fix'],
+      to: ['submitted'],
+    },
+  },
+  accept: {
+    module: 'reports',
+    policy: 'reportConfirm',
+    done: { kind: 'status', scale: 'report', from: ['submitted'], to: ['confirmed'] },
+  },
+  bulk: { module: 'reports' },
+  ver: {
+    module: 'reports',
+    done: {
+      kind: 'history',
+      entity: 'report',
+      actions: ['update'],
+      change: { field: 'superseded', to: true },
+    },
+  },
+  na: {
+    module: 'reports',
+    done: {
+      kind: 'status',
+      scale: 'report',
+      from: ['todo', 'in_progress', 'needs_fix', 'submitted'],
+      to: ['not_required'],
+    },
+  },
+  scale: { module: 'reports' },
   // 9. Задачи (задача 2.23). «Регулярные задачи по отчётам» — с задачей 2.24. «Выполнена» или «Не
   // выполнена» — и отправленная на подтверждение (прототип `KB_EV['t.done']`); «Подтвердить» или «На
   // доработку» (`KB_EV['t.conf']`).

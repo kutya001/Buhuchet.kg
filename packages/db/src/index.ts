@@ -20,6 +20,7 @@ export * from './contractor-page';
 export * from './reports';
 export * from './report-pick';
 export * from './report-list';
+export * from './report-submit';
 export * from './tasks';
 export * from './roles';
 export * from './org';

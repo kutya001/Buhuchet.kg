@@ -100,5 +100,25 @@ export const REPORT_MESSAGES = {
   month_required: 'Укажите месяц',
   due_required: 'Укажите срок',
   reason_invalid: 'Нет такой причины в справочнике «Причины изменения срока отчёта»',
+  // Сдача и подтверждение (задача 2.14; тексты прототипа ui/status-scale.js).
+  report_not_open_submit: 'Сдать можно только несданный отчёт',
+  report_pay_only_submit: 'У вида «Уплата» нет сдачи — только оплата',
+  report_step_invalid: 'Этот шаг недоступен в нынешнем статусе отчёта',
+  submit_date_invalid: 'Укажите дату не позже сегодняшней',
+  report_file_required: 'Прикрепите файл: так настроен этот вид отчёта',
+  report_receipt_required: 'Приложите квитанцию о приёме: так настроен этот вид отчёта',
+  report_file_not_found: 'Файл не прикреплён к этому отчёту',
+  report_not_waiting: 'Отчёт не ждёт подтверждения',
+  report_confirm_right: 'Нужно право «Подтверждать сдачу отчётов»',
+  report_confirm_own:
+    'Свой сданный отчёт подтвердить нельзя: подтверждает другой сотрудник с правом',
+  report_fix_reason: 'Укажите, что исправить: без причины вернуть нельзя',
+  report_no_amount: 'У этого вида отчёта суммы нет',
+  report_amount_not_required: 'У отчёта «Не требуется» сумма не указывается',
+  report_amount_required: 'Введите сумму числом, например 1 250,50',
+  report_lines_invalid: 'Строки суммы: выручку и налог введите числом не меньше нуля',
+  report_rollback_superseded: 'Сначала откатите уточнённую версию отчёта',
+  report_rollback_none: 'Откатывать некуда: это первый шаг',
+  report_not_required_invalid: 'Сданный и подтверждённый отчёт «Не требуется» не отмечается',
 } as const;
 export type ReportMessageCode = keyof typeof REPORT_MESSAGES;

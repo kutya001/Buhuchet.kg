@@ -35,6 +35,8 @@ import {
   contractors,
   dueChangeReasons,
   employees,
+  files,
+  orgReportTypes,
   reportDueChanges,
   orgSettings,
   ownershipForms,
@@ -46,7 +48,8 @@ import {
   taxOffices,
   taxRegimes,
 } from './schema';
-import { dateLiteral, textLiteral } from './sql-text';
+import type { FileListPart } from './files';
+import { dateLiteral, dictLiteral, textLiteral } from './sql-text';
 import type { AuditRecord } from './staff';
 import { readStatusHistory, type StatusHistoryItem } from './status';
 
@@ -236,13 +239,17 @@ const romanH = sql`(array['I','II'])[case when ${month} <= 6 then 1 else 2 end]`
 const sub2 = (template: SQL, a: [string, SQL], b: [string, SQL]) =>
   sql`replace(replace(${template}, ${textLiteral(`{${a[0]}}`)}, ${a[1]}), ${textLiteral(`{${b[0]}}`)}, ${b[1]})`;
 
-/** Подпись периода (прототип plabel): «10.2026», «III кв. 2026», «I пол. 2026», «2026», «11.2026 · 05.11». */
-const PERIOD_LABEL = sql<string>`case
+/**
+ * Подпись периода (прототип plabel): «10.2026», «III кв. 2026», «I пол. 2026», «2026», «11.2026 · 05.11».
+ * `q`, `h` — шаблоны «{n} кв. {y}» и «{n} пол. {y}» из словаря.
+ */
+const periodLabel = (q: SQL, h: SQL) => sql<string>`case
   when ${reports.eventDate} is not null then to_char(${reports.eventDate}, 'MM.YYYY') || ' · ' || to_char(${reports.eventDate}, 'DD.MM')
   when ${reports.period} = 'M' then to_char(${reports.periodStart}, 'MM.YYYY')
-  when ${reports.period} = 'Q' then ${sub2(lt('q_short'), ['n', romanQ], ['y', year])}
-  when ${reports.period} = 'H' then ${sub2(lt('h_short'), ['n', romanH], ['y', year])}
+  when ${reports.period} = 'Q' then ${sub2(q, ['n', romanQ], ['y', year])}
+  when ${reports.period} = 'H' then ${sub2(h, ['n', romanH], ['y', year])}
   else ${year} end`;
+const PERIOD_LABEL = periodLabel(lt('q_short'), lt('h_short'));
 
 /** Период полностью (прототип phuman): «Октябрь 2026», «III квартал 2026», «2026 год», «… · дата ввоза 05.11.2026». */
 const monthName = sql`${lt('months')}[${month}]`;
@@ -257,7 +264,8 @@ const PERIOD_FULL = sql<string>`case
 const PERIOD_KEY = sql<string>`${reports.periodStart}::text || coalesce(' ' || ${reports.eventDate}::text, '')`;
 
 /** Ставка назначения коротко (прототип aRateTxt, short): «ЕНС-04 · 4 / 6 %», «12 %; 1 / 2 %». */
-const enKey = sql`(e.x ->> 'code') || ':' || coalesce(e.x ->> 'variant', '0')`;
+// В скобках: `->>` связывает сильнее `||`, без них искался бы ключ «ЕНС-04», а не «ЕНС-04:0».
+const enKey = sql`((e.x ->> 'code') || ':' || coalesce(e.x ->> 'variant', '0'))`;
 const RATE = sql<string | null>`case
   when ${assignments.reportTypeCode} in (${sql.join(SINGLE_TAX_TYPES.map(textLiteral), sql`, `)})
     then (select string_agg(${lt('en')} ->> ${enKey}, '; ' order by e.ord) from jsonb_array_elements(${assignments.enRates}) with ordinality e(x, ord) where ${lt('en')} ->> ${enKey} is not null)
@@ -481,6 +489,21 @@ export function reportScope(ownEmployeeId: string | null): SQL | undefined {
     : undefined;
 }
 
+/**
+ * Файлы отчётов в Файловом менеджере (задача 2.14, прототип allFiles): виден отчёт в области `scope`
+ * (`reportScope`, над отчётом и его контрагентом); источник — «НДС · 09.2026» (вид коротко и период).
+ */
+export function reportFilesPart(scope: SQL | undefined, t: ListTexts): FileListPart {
+  const label = sql`${reportTypes.shortName} || ' · ' || ${periodLabel(
+    sql`${dictLiteral(t('report.period.q_short'))}::text`,
+    sql`${dictLiteral(t('report.period.h_short'))}::text`,
+  )}`;
+  return {
+    visible: sql`exists (select 1 from ${reports} join ${contractors} on ${contractors.id} = ${reports.contractorId} where ${reports.id} = ${files.sourceId} and ${scope ?? sql`true`})`,
+    source: sql`(select ${label} from ${reports} join ${reportTypes} on ${reportTypes.code} = ${reports.reportTypeCode} where ${reports.id} = ${files.sourceId})`,
+  };
+}
+
 /** «На этой неделе» (прототип inWeek): несданные со сдачей, срок на неделе, контрагент не приостановлен. */
 function weekCondition(today: IsoDate): SQL {
   const { from, to } = reportWeek(today);
@@ -548,6 +571,13 @@ export interface ReportRow {
   amountAuto: boolean;
   payDue: IsoDate | null;
   pays: string;
+  /**
+   * Настройки вида в организации: «Файл при сдаче обязателен», «Квитанция о приёме обязательна»;
+   * `hasFiles` — у отчёта есть загруженные файлы (массовая сдача и подтверждение помечают такие строки).
+   */
+  needFile: boolean;
+  needReceipt: boolean;
+  hasFiles: boolean;
   responsible: { id: string; shortName: string } | null;
   formCode: string;
   ownershipForm: string;
@@ -615,6 +645,9 @@ function rowFields(today: IsoDate) {
     amountAuto: reports.amountAuto,
     payDue: reports.payDue,
     pays: PAYS,
+    needFile: sql<boolean>`coalesce((select ${orgReportTypes.needFile} from ${orgReportTypes} where ${orgReportTypes.orgId} = ${reports.orgId} and ${orgReportTypes.reportTypeCode} = ${reports.reportTypeCode} limit 1), false)`,
+    needReceipt: sql<boolean>`coalesce((select ${orgReportTypes.needReceipt} from ${orgReportTypes} where ${orgReportTypes.orgId} = ${reports.orgId} and ${orgReportTypes.reportTypeCode} = ${reports.reportTypeCode} limit 1), false)`,
+    hasFiles: sql<boolean>`exists (select 1 from ${files} where ${files.orgId} = ${reports.orgId} and ${files.sourceKind} = 'report' and ${files.sourceId} = ${reports.id} and ${files.state} = 'ready')`,
     responsibleId: reports.responsibleEmployeeId,
     responsibleName: responsible.shortName,
     formCode: reportTypes.formCode,
@@ -686,6 +719,9 @@ function toRow(r: RowData): ReportRow {
     amountAuto: Boolean(r.amountAuto),
     payDue: r.payDue as IsoDate | null,
     pays: (r.pays as string | null) ?? '',
+    needFile: Boolean(r.needFile),
+    needReceipt: Boolean(r.needReceipt),
+    hasFiles: Boolean(r.hasFiles),
     responsible: responsibleId
       ? { id: responsibleId, shortName: (r.responsibleName as string | null) ?? '' }
       : null,
@@ -908,6 +944,9 @@ export interface ReportCard extends ReportRow {
     status: ReportStatus;
     dueDate: IsoDate;
     superseded: boolean;
+    /** Сдача подтверждена — в «Версиях» метка «Подтверждено» (прототип repStKey). */
+    confirmed: boolean;
+    amount: number | null;
   }[];
   superseded: boolean;
 }
@@ -968,6 +1007,8 @@ export async function getReportCard(
         status: reports.status,
         dueDate: reports.dueDate,
         superseded: reports.superseded,
+        confirmedAt: reports.confirmedAt,
+        amount: reports.amount,
       })
       .from(reports)
       // Версии — в той же области: прежнюю версию видит ответственный за неё, новую уже могли передать.
@@ -1028,6 +1069,10 @@ export async function getReportCard(
       actor: auditActorName(actorUserId, actorName),
     })),
     statusHistory,
-    versions,
+    versions: versions.map(({ confirmedAt, amount, ...v }) => ({
+      ...v,
+      confirmed: confirmedAt !== null,
+      amount: amount === null ? null : Number(amount),
+    })),
   };
 }

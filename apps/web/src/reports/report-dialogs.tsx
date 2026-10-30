@@ -264,7 +264,8 @@ export function ManualReportDialog({
   reasons: readonly DueChangeReason[];
   open: boolean;
   onClose: () => void;
-  onDone: () => void;
+  /** Отчёт создан: номер — открыть его карточку (прототип: `openReport(r)`). */
+  onDone: (id: string | null) => void;
 }) {
   const t = useT();
   const toast = useToast();
@@ -344,7 +345,8 @@ export function ManualReportDialog({
     );
     setBusy(false);
     if (res.ok) {
-      onDone();
+      const saved = ReportSaved.safeParse(res.data);
+      onDone(saved.success ? saved.data.id : null);
       onClose();
       return void toast(t('report.manual.done'), { icon: 'file' });
     }

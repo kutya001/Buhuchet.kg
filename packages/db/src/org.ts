@@ -202,6 +202,8 @@ export const ORG_POLICY_FIELDS = [
   'features',
   'taskConfirm',
   'reportConfirm',
+  // Сколько ждущих отчётов подтвердило выключение «Сдача отчётов требует подтверждения» (задача 2.14).
+  'confirmedReports',
   'confirmWaitDays',
   'payBeforeSubmit',
   'remindDays',

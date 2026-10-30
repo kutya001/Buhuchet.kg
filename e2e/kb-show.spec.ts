@@ -78,6 +78,39 @@ async function showStep(page: Page, id: string) {
     .click();
 }
 
+/** Новая организация с контрагентом и отчётом НДС на вкладке «На неделе» (срок — сегодня). */
+async function reportThisWeek(page: Page, origin: string) {
+  await newOrgOwner(page.request, origin);
+  await connectAllTypes(page.request, origin);
+  const staff = (await (await page.request.get('/api/staff?size=all')).json()) as {
+    items: { id: string }[];
+  };
+  const made = await page.request.post('/api/contractors', {
+    headers: { origin },
+    data: {
+      name: 'ОсОО «Показ отчётов»',
+      inn: `08${Date.now().toString().slice(-8)}${String(Math.floor(Math.random() * 10_000)).padStart(4, '0')}`,
+      phone: '+996505890076',
+      kind: 'regular',
+      formCode: 'ФС-01',
+      regimeCode: 'РЕЖ-01',
+      gked: '46.34.0',
+      taxOfficeCode: null,
+      startDate: '2026-01-01',
+      responsibleEmployeeId: staff.items[0]!.id,
+    },
+  });
+  expect(made.status(), await made.text()).toBe(201);
+  const cp = (await made.json()) as { id: string };
+  await manualReport(page.request, origin, {
+    contractorId: cp.id,
+    reportTypeCode: 'nds',
+    month: '2026-09-01',
+    // Срок — сегодня по Бишкеку: отчёт на вкладке «На неделе».
+    due: new Date(Date.now() + 6 * 3600_000).toISOString().slice(0, 10),
+  });
+}
+
 test.describe('Этап 2: База знаний — «Показать как» и «Обзор экрана»', () => {
   // Новая организация (`pnpm db:create-org`) и показ на десятки облачков.
   test.describe.configure({ timeout: 120_000 });
@@ -207,36 +240,7 @@ test.describe('Этап 2: База знаний — «Показать как»
     baseURL,
     isMobile,
   }) => {
-    const origin = new URL(baseURL!).origin;
-    await newOrgOwner(page.request, origin);
-    await connectAllTypes(page.request, origin);
-    const staff = (await (await page.request.get('/api/staff?size=all')).json()) as {
-      items: { id: string }[];
-    };
-    const made = await page.request.post('/api/contractors', {
-      headers: { origin },
-      data: {
-        name: 'ОсОО «Показ отчётов»',
-        inn: `08${Date.now().toString().slice(-8)}${String(Math.floor(Math.random() * 10_000)).padStart(4, '0')}`,
-        phone: '+996505890076',
-        kind: 'regular',
-        formCode: 'ФС-01',
-        regimeCode: 'РЕЖ-01',
-        gked: '46.34.0',
-        taxOfficeCode: null,
-        startDate: '2026-01-01',
-        responsibleEmployeeId: staff.items[0]!.id,
-      },
-    });
-    expect(made.status(), await made.text()).toBe(201);
-    const cp = (await made.json()) as { id: string };
-    await manualReport(page.request, origin, {
-      contractorId: cp.id,
-      reportTypeCode: 'nds',
-      month: '2026-09-01',
-      // Срок — сегодня по Бишкеку: отчёт на вкладке «На неделе».
-      due: new Date(Date.now() + 6 * 3600_000).toISOString().slice(0, 10),
-    });
+    await reportThisWeek(page, new URL(baseURL!).origin);
     await showStep(page, 'rtabs');
     await expect(page).toHaveURL(/\/app\/reports\/week/);
     const first = await position(page);
@@ -291,6 +295,23 @@ test.describe('Этап 2: База знаний — «Показать как»
       page.getByRole('dialog', { name: /^Шаг выполнен: вы посмотрели «Посмотреть вкладки/ }),
     ).toBeVisible();
     expect(await stepDone(page.request, 'rtabs')).toMatchObject({ how: 'show' });
+  });
+
+  test('(задача 2.14) «Показать как» у шага «Отметить отчёт сданным»: показ на «На неделе» открывает карточку отчёта «К сдаче», «Сделать сейчас» открывает окно «Отметить отчёт сданным»', async ({
+    page,
+    baseURL,
+  }) => {
+    await reportThisWeek(page, new URL(baseURL!).origin);
+    await showStep(page, 'submit');
+    await expect(page).toHaveURL(/\/app\/reports\/week/);
+    const { titles, label } = await toEnd(page, ['Сделать сейчас']);
+    expect(label).toBe('Сделать сейчас');
+    expect(titles).toEqual(expect.arrayContaining(['Отчёт в списке', 'Как отметить «Сдан»']));
+    await nextButton(page).click();
+    // Показ продолжается облачками по окну (у облачка — своё название «Окно «…»»), поэтому — точно.
+    await expect(
+      page.getByRole('dialog', { name: 'Отметить отчёт сданным', exact: true }),
+    ).toBeVisible();
   });
 
   // ОТКЛОНЕНИЕ: docs/deviations.md#Г-7

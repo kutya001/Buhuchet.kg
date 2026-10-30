@@ -22,7 +22,7 @@ import {
   type ListQuery,
   type ListSort,
 } from '@buhuchet/domain';
-import { and, asc, eq, gte, inArray, sql, type SQL } from 'drizzle-orm';
+import { and, asc, eq, gte, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 import { adminOrganizations } from './admin-orgs';
 import type { Db, Tx } from './client';
@@ -363,6 +363,13 @@ export async function kbReadArticles(tx: Tx, userId: string): Promise<Map<string
   return new Map(rows.map((r) => [r.id, r.at]));
 }
 
+/** Из какого статуса: null в списке — и запись, созданная сразу в новом статусе. */
+function statusFrom(from: readonly (string | null)[]): SQL | undefined {
+  const codes = from.filter((f): f is string => f !== null);
+  const known = codes.length ? inArray(statusHistory.fromStatus, codes) : undefined;
+  return from.includes(null) ? or(known, isNull(statusHistory.fromStatus)) : known;
+}
+
 /** Условие истории: изменено хотя бы одно поле или поле получило значение. */
 function changesCondition(rule: Extract<KbDoneRule, { kind: 'history' }>): SQL | undefined {
   const parts: SQL[] = [];
@@ -394,7 +401,9 @@ export async function kbDoneFacts(
         eq(statusHistory.actorUserId, userId),
         eq(statusHistory.scale, rule.scale),
         eq(statusHistory.isRollback, false),
-        inArray(statusHistory.fromStatus, [...rule.from]),
+        // Смена системой (приостановка контрагента, выключение подтверждения) — не действие пользователя.
+        isNull(statusHistory.cause),
+        statusFrom(rule.from),
         inArray(statusHistory.toStatus, [...rule.to]),
       );
       return sql`(select ${id}::text as step_id, max(${statusHistory.at}) as at from ${statusHistory} where ${changed})`;
@@ -584,7 +593,7 @@ export async function kbTeam(
   const members = await kbMembers(tx, employeeIds);
   if (!members.length) return [];
   const catalog = await kbCatalog(tx);
-  const { features } = await orgMenuSettings(tx, orgId);
+  const { features, reportConfirm } = await orgMenuSettings(tx, orgId);
   const rights = await roleRightsMap(
     tx,
     members.map((m) => m.roleId),
@@ -603,7 +612,7 @@ export async function kbTeam(
         permissions: new Set(r?.permissions ?? []),
         scopes: r?.scopes ?? {},
       };
-      program = kbProgram(catalog, kbBusinessAccess(subject, features));
+      program = kbProgram(catalog, kbBusinessAccess(subject, features, { reportConfirm }));
       programs.set(member.roleId, program);
     }
     const got = reached.get(member.userId) ?? [];

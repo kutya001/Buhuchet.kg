@@ -13,12 +13,13 @@ import {
   type Feature,
   type PageSection,
 } from '@buhuchet/domain';
-import { OrgPolicy, type UpdateOrgPolicyRequest } from '@buhuchet/shared';
+import { OrgPolicy, OrgWaitingReports, type UpdateOrgPolicyRequest } from '@buhuchet/shared';
 import {
   Box,
   buttonClass,
   CheckRow,
   Chip,
+  ConfirmDialog,
   Field,
   fieldControl,
   FormGrid,
@@ -74,6 +75,8 @@ function PolicyEdit({ policy, readOnly }: { policy: OrgPolicy; readOnly: boolean
   /** Только что включённая функция — окно «Функция «…» включена». */
   const [enabled, setEnabled] = useState<Feature | null>(null);
   const [enabledOpen, setEnabledOpen] = useState(false);
+  /** Сколько отчётов ждут подтверждения — вопрос «Выключить подтверждение сдачи?». */
+  const [waiting, setWaiting] = useState(0);
   const welcome = useWelcome();
   const onboarding = useQuery(onboardingQuery).data;
   const off = readOnly || busy || changed;
@@ -118,6 +121,27 @@ function PolicyEdit({ policy, readOnly }: { policy: OrgPolicy; readOnly: boolean
     } else {
       toast(t('org.feature.off', { name: feature(f) }), { icon: 'check' });
     }
+  };
+
+  const saveReportConfirm = (on: boolean) =>
+    void save(
+      { reportConfirm: on },
+      t(on ? 'org.policy.report_confirm_on' : 'org.policy.report_confirm_off'),
+    );
+
+  /**
+   * Выключение подтверждения сдачи (прототип repConfSet): если отчёты ждут подтверждения, сначала
+   * вопрос с их числом — они станут подтверждёнными.
+   */
+  const toggleReportConfirm = async (on: boolean) => {
+    if (on) return saveReportConfirm(on);
+    setBusy(true);
+    const res = await callApi(() => api.api.org.policy['waiting-reports'].$get());
+    setBusy(false);
+    if (!res.ok) return toast(errorText(res.error), { bad: true, icon: 'alert' });
+    const { count } = OrgWaitingReports.parse(res.data);
+    if (count > 0) setWaiting(count);
+    else saveReportConfirm(false);
   };
 
   const togglePage = (section: PageSection, on: boolean) => {
@@ -205,14 +229,10 @@ function PolicyEdit({ policy, readOnly }: { policy: OrgPolicy; readOnly: boolean
       ) : null}
       <Box title={t('org.policy.reports')}>
         <CheckRow
+          data-report-confirm=""
           checked={policy.reportConfirm}
           disabled={off}
-          onChange={(on) =>
-            void save(
-              { reportConfirm: on },
-              t(on ? 'org.policy.report_confirm_on' : 'org.policy.report_confirm_off'),
-            )
-          }
+          onChange={(on) => void toggleReportConfirm(on)}
           label={t('org.policy.report_confirm')}
         >
           <Hint>{t('org.policy.report_confirm_hint')}</Hint>
@@ -248,6 +268,14 @@ function PolicyEdit({ policy, readOnly }: { policy: OrgPolicy; readOnly: boolean
         onSave={(days, done) => void save({ remindDays: days }, done)}
       />
       <PolicyHistory />
+      <ConfirmDialog
+        open={waiting > 0}
+        onClose={() => setWaiting(0)}
+        title={t('report.confirm_off.title')}
+        text={t(`report.confirm_off.text.${pluralForm(waiting)}`, { n: waiting })}
+        ok={t('report.confirm_off.ok')}
+        onConfirm={() => saveReportConfirm(false)}
+      />
       <FeatureOnDialog
         features={enabled ? [enabled] : []}
         open={enabledOpen}

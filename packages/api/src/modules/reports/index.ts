@@ -33,6 +33,28 @@ import {
   reportValuesRoute,
 } from './list';
 import {
+  confirmReportHandler,
+  confirmReportRoute,
+  confirmReportsHandler,
+  confirmReportsRoute,
+  fixReportHandler,
+  fixReportRoute,
+  notRequiredReportHandler,
+  notRequiredReportRoute,
+  rejectReportHandler,
+  rejectReportRoute,
+  reportAmountHandler,
+  reportAmountRoute,
+  rollbackReportHandler,
+  rollbackReportRoute,
+  startReportHandler,
+  startReportRoute,
+  submitReportHandler,
+  submitReportRoute,
+  submitReportsHandler,
+  submitReportsRoute,
+} from './status';
+import {
   manualReportDueHandler,
   manualReportDueRoute,
   manualReportOptionsHandler,
@@ -43,8 +65,9 @@ import {
  * Модуль «Отчеты для сдачи» (задачи 2.06, 2.13): назначения контрагентам (список в карточке
  * контрагента, предпросмотр прошлых периодов, назначить, «Изменить», «Снять»), список отчётов (значения
  * для фильтра, выгрузка в Excel, счётчики вкладок и плашек), карточка, «Изменить срок», «Разовый отчёт»
- * (со списками окна и сроком по дате события), «Создать уточнённый». Экраны — задачи 2.11, 2.13–2.15;
- * сдача — 2.14; деньги — 2.19.
+ * (со списками окна и сроком по дате события), «Создать уточнённый»; сдача, подтверждение, «На
+ * исправление», шаги без окна, откат и «Указать сумму» — по одному и массово (задача 2.14). Экраны —
+ * задачи 2.11, 2.13–2.15; деньги — 2.19.
  */
 export function reportsModule(deps: ApiDeps) {
   return (
@@ -66,5 +89,15 @@ export function reportsModule(deps: ApiDeps) {
       .openapi(createManualReportRoute, createManualReportHandler(deps))
       .openapi(changeReportDueRoute, changeReportDueHandler(deps))
       .openapi(createRevisionRoute, createRevisionHandler(deps))
+      .openapi(submitReportsRoute, submitReportsHandler(deps))
+      .openapi(confirmReportsRoute, confirmReportsHandler(deps))
+      .openapi(submitReportRoute, submitReportHandler(deps))
+      .openapi(startReportRoute, startReportHandler(deps))
+      .openapi(confirmReportRoute, confirmReportHandler(deps))
+      .openapi(fixReportRoute, fixReportHandler(deps))
+      .openapi(rejectReportRoute, rejectReportHandler(deps))
+      .openapi(notRequiredReportRoute, notRequiredReportHandler(deps))
+      .openapi(rollbackReportRoute, rollbackReportHandler(deps))
+      .openapi(reportAmountRoute, reportAmountHandler(deps))
   );
 }

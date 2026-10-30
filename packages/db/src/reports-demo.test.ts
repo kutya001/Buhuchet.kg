@@ -2,7 +2,7 @@ import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { withOrgContext } from './context';
 import { createDueReports } from './reports';
-import { assignments, reports, statusHistory } from './schema';
+import { assignments, reports, reportTaxLines, statusHistory } from './schema';
 import { DEMO_ORG_ID, demoId, seedAll } from './seed';
 import { createTestDatabase, databaseAvailable, type TestDatabase } from './testing';
 
@@ -67,14 +67,39 @@ describe.skipIf(!databaseAvailable())('Назначения и отчёты де
     expect(quarterly).toMatchObject({ ownPeriod: 'Q', ownDay: 15, ownMonth: 1 });
   });
 
-  it('«История статусов»: создан в «К сдаче», затем переход в нынешний статус', async () => {
+  it('«История статусов»: создан в «К сдаче», переход в нынешний статус и подтверждение', async () => {
     const history = await db.admin.db
       .select()
       .from(statusHistory)
       .where(eq(statusHistory.entityId, demoId('report', '1')));
-    expect(history.map((h) => [h.fromStatus, h.toStatus])).toEqual([
-      [null, 'todo'],
-      ['todo', 'submitted'],
+    expect(history.map((h) => [h.fromStatus, h.toStatus, h.actorUserId])).toEqual([
+      [null, 'todo', null],
+      ['todo', 'submitted', demoId('user', 'e3')],
+      ['submitted', 'confirmed', demoId('user', 'e2')],
+    ]);
+    // Возврат на исправление — кем и когда вернули, с причиной (прототип fixBy, fixAt, fixWhy).
+    const [, fix] = await db.admin.db
+      .select()
+      .from(statusHistory)
+      .where(eq(statusHistory.entityId, demoId('report', '345')))
+      .orderBy(statusHistory.at);
+    expect(fix).toMatchObject({
+      toStatus: 'needs_fix',
+      actorUserId: demoId('user', 'e2'),
+      reason: 'В декларации не отражён импорт за август — исправьте раздел 4 и сдайте снова',
+    });
+  });
+
+  it('строки суммы по ставкам: ЕН мес. за август — ЕНС-02 безнал и нал, ЕНС-16', async () => {
+    const lines = await db.admin.db
+      .select()
+      .from(reportTaxLines)
+      .where(eq(reportTaxLines.reportId, demoId('report', '54')))
+      .orderBy(reportTaxLines.sortOrder);
+    expect(lines.map((l) => [l.lineKey, l.cash, l.revenue, l.tax])).toEqual([
+      ['ЕНС-02:cl', false, 60_000_000, 1_200_000],
+      ['ЕНС-02:ca', true, 37_600_000, 1_504_000],
+      ['ЕНС-16:r', null, 7_500_000, 300_000],
     ]);
   });
 

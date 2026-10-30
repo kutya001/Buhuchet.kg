@@ -109,6 +109,7 @@ describe('файлы записей', () => {
 
   it('виды источников', () => {
     expect(isFileSourceKind('manual')).toBe(true);
-    expect(isFileSourceKind('report')).toBe(false);
+    expect(isFileSourceKind('report')).toBe(true);
+    expect(isFileSourceKind('contractor')).toBe(false);
   });
 });

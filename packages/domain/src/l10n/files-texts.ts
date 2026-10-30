@@ -34,9 +34,11 @@ export const FILES_TEXTS = {
   // «Файловый менеджер» (задача 2.29; прототип modules/files.js — `FKIND`, `FKIND_L`, `renderFiles`,
   // `openFile`, `uploadDlg`; modules/org.js — «Хранилище файлов»).
   'files.kind.manual': { ru: 'Загружен вручную', section: FM },
+  'files.kind.report': { ru: 'Отчёт', section: FM },
   'files.kind.task': { ru: 'Задача', section: FM },
   'files.kind.indicator_value': { ru: 'Показатель', section: FM },
   'files.plate.manual': { ru: 'Загружено вручную', section: FM },
+  'files.plate.report': { ru: 'К отчётам', section: FM },
   'files.plate.task': { ru: 'К задачам', section: FM },
   'files.plate.indicator_value': { ru: 'К показателям', section: FM },
   'files.col.name': { ru: 'Файл', section: FM },

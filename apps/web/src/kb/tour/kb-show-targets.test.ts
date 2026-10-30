@@ -17,6 +17,9 @@ describe('«Показать как»: элементы прототипа на 
     expect(productTarget('#tabs')).toBe('[data-tabrow]');
     expect(productTarget('#mbody .plate[data-plate="pend"]')).toBe('[data-plate="pend"]');
     expect(productTarget('#nothing-here')).toBeNull();
+    // «Сделать сейчас» в показах сдачи и подтверждения — главная кнопка карточки отчёта.
+    expect(productTarget('#rc-main')).toContain('[data-report-button="submit"]');
+    expect(productTarget('#rc-main')).toContain('[data-report-button="confirm"]');
   });
 
   it('«подняться до» пункта меню и строки карточки — элементы продукта', () => {

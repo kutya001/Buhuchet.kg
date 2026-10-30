@@ -1,6 +1,7 @@
 import {
   ASSIGNMENT_DUE_DAYS,
   REPORT_ACTS,
+  REPORT_LINE_KINDS,
   REPORT_PERIODS,
   REPORT_STATUSES,
   type AssignmentEnRate,
@@ -255,5 +256,49 @@ export const reportDueChanges = pgTable(
     }).onDelete('cascade'),
     index('report_due_changes_report_idx').on(t.orgId, t.reportId, t.createdAt),
     orgIsolation('report_due_changes_isolation', t.orgId),
+  ],
+).enableRLS();
+
+/**
+ * Строки суммы к уплате (ТЗ «Сумма при нескольких ставках»; прототип r.lines, r.parts): по ставкам —
+ * выручка за период и налог (единый налог, налог с продаж с добавленными строками), по платежам «Что
+ * уплачивается» — сумма платежа (Соцфонд: подоходный налог и страховые взносы). Сумма к уплате отчёта
+ * — итог строк одного вида. Строки заменяются целиком при «Сдан» и «Указать сумму»; сумма из массовой
+ * сдачи и повторяющаяся сумма строки удаляют.
+ */
+export const reportTaxLines = pgTable(
+  'report_tax_lines',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: orgColumn(),
+    reportId: uuid('report_id').notNull(),
+    kind: text('kind', { enum: REPORT_LINE_KINDS }).notNull(),
+    /** «ЕНС-04:cl», «main:r», «pay:0». */
+    lineKey: text('line_key').notNull(),
+    /** Подпись на момент ввода: «ЕНС-04 · безналичная выручка, 4 %», «Подоходный налог». */
+    label: text('label').notNull(),
+    /** Ставка строки «4 %»; у строки платежа — пусто. */
+    rate: text('rate').notNull().default(''),
+    /** Наличная выручка — да, безналичная — нет, без деления — пусто. */
+    cash: boolean('cash'),
+    /** Выручка за период, тыйыны; пусто — ввели сразу налог. */
+    revenue: money('revenue'),
+    tax: money('tax').notNull(),
+    sortOrder: smallint('sort_order').notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    foreignKey({
+      name: 'report_tax_lines_report_fk',
+      columns: [t.reportId, t.orgId],
+      foreignColumns: [reports.id, reports.orgId],
+    }).onDelete('cascade'),
+    unique('report_tax_lines_key').on(t.orgId, t.reportId, t.kind, t.lineKey),
+    check('report_tax_lines_kind_check', oneOf(t.kind, REPORT_LINE_KINDS)),
+    check(
+      'report_tax_lines_amounts_check',
+      sql`${t.tax} >= 0 and (${t.revenue} is null or ${t.revenue} >= 0)`,
+    ),
+    orgIsolation('report_tax_lines_isolation', t.orgId),
   ],
 ).enableRLS();

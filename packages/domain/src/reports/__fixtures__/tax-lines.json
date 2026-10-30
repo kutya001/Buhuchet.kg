@@ -1,0 +1,7646 @@
+{
+  "source": "spec/prototype/src/js/core/tax-lines.js",
+  "rates": [
+    { "code": "ЕНС-01", "rate": "0,5 %", "rateCashless": "", "rateCash": "" },
+    { "code": "ЕНС-02", "rate": "2 % безнал + 4 % нал", "rateCashless": "2 %", "rateCash": "4 %" },
+    { "code": "ЕНС-03", "rate": "2 % безнал + 4 % нал", "rateCashless": "2 %", "rateCash": "4 %" },
+    { "code": "ЕНС-04", "rate": "4 % безнал + 6 % нал", "rateCashless": "4 %", "rateCash": "6 %" },
+    {
+      "code": "ЕНС-05",
+      "rate": "3 % (Кабинет министров может снизить по товарам)",
+      "rateCashless": "",
+      "rateCash": ""
+    },
+    { "code": "ЕНС-06", "rate": "0,5 %", "rateCashless": "", "rateCash": "" },
+    {
+      "code": "ЕНС-07",
+      "rate": "с частичной переработкой — 1 %, в неизменном виде — 3 %",
+      "rateCashless": "",
+      "rateCash": ""
+    },
+    { "code": "ЕНС-08", "rate": "0,25 %", "rateCashless": "", "rateCash": "" },
+    { "code": "ЕНС-09", "rate": "8 %", "rateCashless": "", "rateCash": "" },
+    { "code": "ЕНС-10", "rate": "5 %", "rateCashless": "", "rateCash": "" },
+    { "code": "ЕНС-11", "rate": "4 %", "rateCashless": "", "rateCash": "" },
+    {
+      "code": "ЕНС-12",
+      "rate": "Бишкек и Ош — 5 %, остальная территория — 3 %",
+      "rateCashless": "",
+      "rateCash": ""
+    },
+    {
+      "code": "ЕНС-13",
+      "rate": "0 % с 01.08.2026 по 31.07.2031, 1 % с 01.08.2031 (1 % было с 01.01.2025 по 31.07.2026)",
+      "rateCashless": "",
+      "rateCash": ""
+    },
+    { "code": "ЕНС-14", "rate": "0,1 %", "rateCashless": "", "rateCash": "" },
+    { "code": "ЕНС-15", "rate": "0 %", "rateCashless": "", "rateCash": "" },
+    { "code": "ЕНС-16", "rate": "4 %", "rateCashless": "", "rateCash": "" },
+    { "code": "ЕНС-17", "rate": "по ставкам ЕНС-04", "rateCashless": "", "rateCash": "" },
+    { "code": "ЕНС-18", "rate": "0 %", "rateCashless": "", "rateCash": "" },
+    { "code": "ЕНС-19", "rate": "0 %", "rateCashless": "", "rateCash": "" },
+    {
+      "code": "ЕНС-20",
+      "rate": "8 % от разницы цены продажи и покупки",
+      "rateCashless": "",
+      "rateCash": ""
+    },
+    { "code": "ЕНС-91", "rate": "по ставкам ЕНС-12", "rateCashless": "", "rateCash": "" },
+    {
+      "code": "ЕНС-96",
+      "rate": "город — 2 %, село — 1 %, горы — 0,5 %",
+      "rateCashless": "",
+      "rateCash": ""
+    }
+  ],
+  "types": {
+    "nds": { "rateAdditions": [] },
+    "enq": { "rateAdditions": [] },
+    "enm": { "rateAdditions": [] },
+    "soc": { "rateAdditions": [] },
+    "nspm": {
+      "rateAdditions": [
+        {
+          "k": "pat",
+          "name": "продажа товаров покупателям на патенте, на едином налоге 0,5 % и 0 %, резидентам ПКИ и в зоне торговли",
+          "short": "Покупатели на патенте, ЕН 0,5 % и 0 %, ПКИ, зона торговли",
+          "rate": "1 % безнал + 2 % нал",
+          "rateCashless": "1 %",
+          "rateCash": "2 %",
+          "art": "ст. 368 ч. 4"
+        },
+        {
+          "k": "anon",
+          "name": "продажа товаров обезличенному покупателю",
+          "short": "Обезличенный покупатель",
+          "rate": "2 %",
+          "art": "ст. 368 ч. 4 п. 2"
+        }
+      ]
+    },
+    "nspq": {
+      "rateAdditions": [
+        {
+          "k": "pat",
+          "name": "продажа товаров покупателям на патенте, на едином налоге 0,5 % и 0 %, резидентам ПКИ и в зоне торговли",
+          "short": "Покупатели на патенте, ЕН 0,5 % и 0 %, ПКИ, зона торговли",
+          "rate": "1 % безнал + 2 % нал",
+          "rateCashless": "1 %",
+          "rateCash": "2 %",
+          "art": "ст. 368 ч. 4"
+        },
+        {
+          "k": "anon",
+          "name": "продажа товаров обезличенному покупателю",
+          "short": "Обезличенный покупатель",
+          "rate": "2 %",
+          "art": "ст. 368 ч. 4 п. 2"
+        }
+      ]
+    }
+  },
+  "cases": [
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-01", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": [
+        {
+          "key": "ЕНС-01:r",
+          "label": "Выручка, 0,5 %",
+          "pct": "0,5 %",
+          "cash": null,
+          "old": false
+        },
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "old": true
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-01", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-01", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        { "key": "ЕНС-01:r", "label": "Выручка, 0,5 %", "pct": "0,5 %", "cash": null, "old": false }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-01", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-01", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        { "key": "ЕНС-01:r", "label": "Выручка, 0,5 %", "pct": "0,5 %", "cash": null, "old": false }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-01", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-01", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": [
+        {
+          "key": "ЕНС-01/1:r",
+          "label": "Выручка, 0,5 %",
+          "pct": "0,5 %",
+          "cash": null,
+          "old": false
+        },
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "old": true
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-01", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-01", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        {
+          "key": "ЕНС-01/1:r",
+          "label": "Выручка, 0,5 %",
+          "pct": "0,5 %",
+          "cash": null,
+          "old": false
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-01", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-01", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        {
+          "key": "ЕНС-01/1:r",
+          "label": "Выручка, 0,5 %",
+          "pct": "0,5 %",
+          "cash": null,
+          "old": false
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-01", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-02", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": [
+        {
+          "key": "ЕНС-02:cl",
+          "label": "Безналичная выручка, 2 %",
+          "pct": "2 %",
+          "cash": false,
+          "old": false
+        },
+        {
+          "key": "ЕНС-02:ca",
+          "label": "Наличная выручка, 4 %",
+          "pct": "4 %",
+          "cash": true,
+          "old": false
+        },
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "old": true
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-02", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-02", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        {
+          "key": "ЕНС-02:cl",
+          "label": "Безналичная выручка, 2 %",
+          "pct": "2 %",
+          "cash": false,
+          "old": false
+        },
+        {
+          "key": "ЕНС-02:ca",
+          "label": "Наличная выручка, 4 %",
+          "pct": "4 %",
+          "cash": true,
+          "old": false
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-02", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-02", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        {
+          "key": "ЕНС-02:cl",
+          "label": "Безналичная выручка, 2 %",
+          "pct": "2 %",
+          "cash": false,
+          "old": false
+        },
+        {
+          "key": "ЕНС-02:ca",
+          "label": "Наличная выручка, 4 %",
+          "pct": "4 %",
+          "cash": true,
+          "old": false
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-02", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-02", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": [
+        {
+          "key": "ЕНС-02/1:cl",
+          "label": "Безналичная выручка, 2 %",
+          "pct": "2 %",
+          "cash": false,
+          "old": false
+        },
+        {
+          "key": "ЕНС-02/1:ca",
+          "label": "Наличная выручка, 4 %",
+          "pct": "4 %",
+          "cash": true,
+          "old": false
+        },
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "old": true
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-02", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-02", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        {
+          "key": "ЕНС-02/1:cl",
+          "label": "Безналичная выручка, 2 %",
+          "pct": "2 %",
+          "cash": false,
+          "old": false
+        },
+        {
+          "key": "ЕНС-02/1:ca",
+          "label": "Наличная выручка, 4 %",
+          "pct": "4 %",
+          "cash": true,
+          "old": false
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-02", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-02", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        {
+          "key": "ЕНС-02/1:cl",
+          "label": "Безналичная выручка, 2 %",
+          "pct": "2 %",
+          "cash": false,
+          "old": false
+        },
+        {
+          "key": "ЕНС-02/1:ca",
+          "label": "Наличная выручка, 4 %",
+          "pct": "4 %",
+          "cash": true,
+          "old": false
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-02", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-03", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": [
+        {
+          "key": "ЕНС-03:cl",
+          "label": "Безналичная выручка, 2 %",
+          "pct": "2 %",
+          "cash": false,
+          "old": false
+        },
+        {
+          "key": "ЕНС-03:ca",
+          "label": "Наличная выручка, 4 %",
+          "pct": "4 %",
+          "cash": true,
+          "old": false
+        },
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "old": true
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-03", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-03", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        {
+          "key": "ЕНС-03:cl",
+          "label": "Безналичная выручка, 2 %",
+          "pct": "2 %",
+          "cash": false,
+          "old": false
+        },
+        {
+          "key": "ЕНС-03:ca",
+          "label": "Наличная выручка, 4 %",
+          "pct": "4 %",
+          "cash": true,
+          "old": false
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-03", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-03", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        {
+          "key": "ЕНС-03:cl",
+          "label": "Безналичная выручка, 2 %",
+          "pct": "2 %",
+          "cash": false,
+          "old": false
+        },
+        {
+          "key": "ЕНС-03:ca",
+          "label": "Наличная выручка, 4 %",
+          "pct": "4 %",
+          "cash": true,
+          "old": false
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-03", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-03", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": [
+        {
+          "key": "ЕНС-03/1:cl",
+          "label": "Безналичная выручка, 2 %",
+          "pct": "2 %",
+          "cash": false,
+          "old": false
+        },
+        {
+          "key": "ЕНС-03/1:ca",
+          "label": "Наличная выручка, 4 %",
+          "pct": "4 %",
+          "cash": true,
+          "old": false
+        },
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "old": true
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-03", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-03", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        {
+          "key": "ЕНС-03/1:cl",
+          "label": "Безналичная выручка, 2 %",
+          "pct": "2 %",
+          "cash": false,
+          "old": false
+        },
+        {
+          "key": "ЕНС-03/1:ca",
+          "label": "Наличная выручка, 4 %",
+          "pct": "4 %",
+          "cash": true,
+          "old": false
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-03", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-03", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        {
+          "key": "ЕНС-03/1:cl",
+          "label": "Безналичная выручка, 2 %",
+          "pct": "2 %",
+          "cash": false,
+          "old": false
+        },
+        {
+          "key": "ЕНС-03/1:ca",
+          "label": "Наличная выручка, 4 %",
+          "pct": "4 %",
+          "cash": true,
+          "old": false
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-03", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-04", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": [
+        {
+          "key": "ЕНС-04:cl",
+          "label": "Безналичная выручка, 4 %",
+          "pct": "4 %",
+          "cash": false,
+          "old": false
+        },
+        {
+          "key": "ЕНС-04:ca",
+          "label": "Наличная выручка, 6 %",
+          "pct": "6 %",
+          "cash": true,
+          "old": false
+        },
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "old": true
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-04", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-04", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        {
+          "key": "ЕНС-04:cl",
+          "label": "Безналичная выручка, 4 %",
+          "pct": "4 %",
+          "cash": false,
+          "old": false
+        },
+        {
+          "key": "ЕНС-04:ca",
+          "label": "Наличная выручка, 6 %",
+          "pct": "6 %",
+          "cash": true,
+          "old": false
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-04", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-04", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        {
+          "key": "ЕНС-04:cl",
+          "label": "Безналичная выручка, 4 %",
+          "pct": "4 %",
+          "cash": false,
+          "old": false
+        },
+        {
+          "key": "ЕНС-04:ca",
+          "label": "Наличная выручка, 6 %",
+          "pct": "6 %",
+          "cash": true,
+          "old": false
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-04", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-04", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": [
+        {
+          "key": "ЕНС-04/1:cl",
+          "label": "Безналичная выручка, 4 %",
+          "pct": "4 %",
+          "cash": false,
+          "old": false
+        },
+        {
+          "key": "ЕНС-04/1:ca",
+          "label": "Наличная выручка, 6 %",
+          "pct": "6 %",
+          "cash": true,
+          "old": false
+        },
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "old": true
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-04", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-04", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        {
+          "key": "ЕНС-04/1:cl",
+          "label": "Безналичная выручка, 4 %",
+          "pct": "4 %",
+          "cash": false,
+          "old": false
+        },
+        {
+          "key": "ЕНС-04/1:ca",
+          "label": "Наличная выручка, 6 %",
+          "pct": "6 %",
+          "cash": true,
+          "old": false
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-04", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-04", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        {
+          "key": "ЕНС-04/1:cl",
+          "label": "Безналичная выручка, 4 %",
+          "pct": "4 %",
+          "cash": false,
+          "old": false
+        },
+        {
+          "key": "ЕНС-04/1:ca",
+          "label": "Наличная выручка, 6 %",
+          "pct": "6 %",
+          "cash": true,
+          "old": false
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-04", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-05", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": [
+        { "key": "ЕНС-05:r", "label": "Выручка, 3 %", "pct": "3 %", "cash": null, "old": false },
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "old": true
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-05", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-05", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        { "key": "ЕНС-05:r", "label": "Выручка, 3 %", "pct": "3 %", "cash": null, "old": false }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-05", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-05", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        { "key": "ЕНС-05:r", "label": "Выручка, 3 %", "pct": "3 %", "cash": null, "old": false }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-05", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-05", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": [
+        { "key": "ЕНС-05/1:r", "label": "Выручка, 3 %", "pct": "3 %", "cash": null, "old": false },
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "old": true
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-05", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-05", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        { "key": "ЕНС-05/1:r", "label": "Выручка, 3 %", "pct": "3 %", "cash": null, "old": false }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-05", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-05", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        { "key": "ЕНС-05/1:r", "label": "Выручка, 3 %", "pct": "3 %", "cash": null, "old": false }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-05", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-06", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": [
+        {
+          "key": "ЕНС-06:r",
+          "label": "Выручка, 0,5 %",
+          "pct": "0,5 %",
+          "cash": null,
+          "old": false
+        },
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "old": true
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-06", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-06", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        { "key": "ЕНС-06:r", "label": "Выручка, 0,5 %", "pct": "0,5 %", "cash": null, "old": false }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-06", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-06", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        { "key": "ЕНС-06:r", "label": "Выручка, 0,5 %", "pct": "0,5 %", "cash": null, "old": false }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-06", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-06", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": [
+        {
+          "key": "ЕНС-06/1:r",
+          "label": "Выручка, 0,5 %",
+          "pct": "0,5 %",
+          "cash": null,
+          "old": false
+        },
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "old": true
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-06", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-06", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        {
+          "key": "ЕНС-06/1:r",
+          "label": "Выручка, 0,5 %",
+          "pct": "0,5 %",
+          "cash": null,
+          "old": false
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-06", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-06", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        {
+          "key": "ЕНС-06/1:r",
+          "label": "Выручка, 0,5 %",
+          "pct": "0,5 %",
+          "cash": null,
+          "old": false
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-06", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-07", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": [
+        { "key": "ЕНС-07:r", "label": "Выручка, 1 %", "pct": "1 %", "cash": null, "old": false },
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "old": true
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-07", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-07", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        { "key": "ЕНС-07:r", "label": "Выручка, 1 %", "pct": "1 %", "cash": null, "old": false }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-07", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-07", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        { "key": "ЕНС-07:r", "label": "Выручка, 1 %", "pct": "1 %", "cash": null, "old": false }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-07", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-07", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": [
+        { "key": "ЕНС-07/1:r", "label": "Выручка, 3 %", "pct": "3 %", "cash": null, "old": false },
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "old": true
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-07", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-07", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        { "key": "ЕНС-07/1:r", "label": "Выручка, 3 %", "pct": "3 %", "cash": null, "old": false }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-07", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-07", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        { "key": "ЕНС-07/1:r", "label": "Выручка, 3 %", "pct": "3 %", "cash": null, "old": false }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-07", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-08", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": [
+        {
+          "key": "ЕНС-08:r",
+          "label": "Выручка, 0,25 %",
+          "pct": "0,25 %",
+          "cash": null,
+          "old": false
+        },
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "old": true
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-08", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-08", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        {
+          "key": "ЕНС-08:r",
+          "label": "Выручка, 0,25 %",
+          "pct": "0,25 %",
+          "cash": null,
+          "old": false
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-08", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-08", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        {
+          "key": "ЕНС-08:r",
+          "label": "Выручка, 0,25 %",
+          "pct": "0,25 %",
+          "cash": null,
+          "old": false
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-08", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-08", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": [
+        {
+          "key": "ЕНС-08/1:r",
+          "label": "Выручка, 0,25 %",
+          "pct": "0,25 %",
+          "cash": null,
+          "old": false
+        },
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "old": true
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-08", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-08", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        {
+          "key": "ЕНС-08/1:r",
+          "label": "Выручка, 0,25 %",
+          "pct": "0,25 %",
+          "cash": null,
+          "old": false
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-08", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-08", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        {
+          "key": "ЕНС-08/1:r",
+          "label": "Выручка, 0,25 %",
+          "pct": "0,25 %",
+          "cash": null,
+          "old": false
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-08", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-09", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": [
+        { "key": "ЕНС-09:r", "label": "Выручка, 8 %", "pct": "8 %", "cash": null, "old": false },
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "old": true
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-09", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-09", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        { "key": "ЕНС-09:r", "label": "Выручка, 8 %", "pct": "8 %", "cash": null, "old": false }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-09", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-09", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        { "key": "ЕНС-09:r", "label": "Выручка, 8 %", "pct": "8 %", "cash": null, "old": false }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-09", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-09", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": [
+        { "key": "ЕНС-09/1:r", "label": "Выручка, 8 %", "pct": "8 %", "cash": null, "old": false },
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "old": true
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-09", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-09", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        { "key": "ЕНС-09/1:r", "label": "Выручка, 8 %", "pct": "8 %", "cash": null, "old": false }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-09", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-09", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        { "key": "ЕНС-09/1:r", "label": "Выручка, 8 %", "pct": "8 %", "cash": null, "old": false }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-09", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-10", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": [
+        { "key": "ЕНС-10:r", "label": "Выручка, 5 %", "pct": "5 %", "cash": null, "old": false },
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "old": true
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-10", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-10", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        { "key": "ЕНС-10:r", "label": "Выручка, 5 %", "pct": "5 %", "cash": null, "old": false }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-10", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-10", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        { "key": "ЕНС-10:r", "label": "Выручка, 5 %", "pct": "5 %", "cash": null, "old": false }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-10", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-10", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": [
+        { "key": "ЕНС-10/1:r", "label": "Выручка, 5 %", "pct": "5 %", "cash": null, "old": false },
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "old": true
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-10", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-10", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        { "key": "ЕНС-10/1:r", "label": "Выручка, 5 %", "pct": "5 %", "cash": null, "old": false }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-10", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-10", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        { "key": "ЕНС-10/1:r", "label": "Выручка, 5 %", "pct": "5 %", "cash": null, "old": false }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-10", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-11", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": [
+        { "key": "ЕНС-11:r", "label": "Выручка, 4 %", "pct": "4 %", "cash": null, "old": false },
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "old": true
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-11", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-11", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        { "key": "ЕНС-11:r", "label": "Выручка, 4 %", "pct": "4 %", "cash": null, "old": false }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-11", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-11", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        { "key": "ЕНС-11:r", "label": "Выручка, 4 %", "pct": "4 %", "cash": null, "old": false }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-11", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-11", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": [
+        { "key": "ЕНС-11/1:r", "label": "Выручка, 4 %", "pct": "4 %", "cash": null, "old": false },
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "old": true
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-11", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-11", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        { "key": "ЕНС-11/1:r", "label": "Выручка, 4 %", "pct": "4 %", "cash": null, "old": false }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-11", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-11", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        { "key": "ЕНС-11/1:r", "label": "Выручка, 4 %", "pct": "4 %", "cash": null, "old": false }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-11", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-12", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": [
+        { "key": "ЕНС-12:r", "label": "Выручка, 5 %", "pct": "5 %", "cash": null, "old": false },
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "old": true
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-12", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-12", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        { "key": "ЕНС-12:r", "label": "Выручка, 5 %", "pct": "5 %", "cash": null, "old": false }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-12", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-12", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        { "key": "ЕНС-12:r", "label": "Выручка, 5 %", "pct": "5 %", "cash": null, "old": false }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-12", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-12", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": [
+        { "key": "ЕНС-12/1:r", "label": "Выручка, 3 %", "pct": "3 %", "cash": null, "old": false },
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "old": true
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-12", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-12", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        { "key": "ЕНС-12/1:r", "label": "Выручка, 3 %", "pct": "3 %", "cash": null, "old": false }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-12", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-12", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        { "key": "ЕНС-12/1:r", "label": "Выручка, 3 %", "pct": "3 %", "cash": null, "old": false }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-12", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-13", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": [
+        { "key": "ЕНС-13:r", "label": "Выручка, 0 %", "pct": "0 %", "cash": null, "old": false },
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "old": true
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-13", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-13", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        { "key": "ЕНС-13:r", "label": "Выручка, 1 %", "pct": "1 %", "cash": null, "old": false }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-13", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-13", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        { "key": "ЕНС-13:r", "label": "Выручка, 1 %", "pct": "1 %", "cash": null, "old": false }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-13", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-13", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": [
+        { "key": "ЕНС-13/1:r", "label": "Выручка, 0 %", "pct": "0 %", "cash": null, "old": false },
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "old": true
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-13", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-13", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        { "key": "ЕНС-13/1:r", "label": "Выручка, 1 %", "pct": "1 %", "cash": null, "old": false }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-13", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-13", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        { "key": "ЕНС-13/1:r", "label": "Выручка, 1 %", "pct": "1 %", "cash": null, "old": false }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-13", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-14", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": [
+        {
+          "key": "ЕНС-14:r",
+          "label": "Выручка, 0,1 %",
+          "pct": "0,1 %",
+          "cash": null,
+          "old": false
+        },
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "old": true
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-14", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-14", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        { "key": "ЕНС-14:r", "label": "Выручка, 0,1 %", "pct": "0,1 %", "cash": null, "old": false }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-14", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-14", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        { "key": "ЕНС-14:r", "label": "Выручка, 0,1 %", "pct": "0,1 %", "cash": null, "old": false }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-14", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-14", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": [
+        {
+          "key": "ЕНС-14/1:r",
+          "label": "Выручка, 0,1 %",
+          "pct": "0,1 %",
+          "cash": null,
+          "old": false
+        },
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "old": true
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-14", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-14", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        {
+          "key": "ЕНС-14/1:r",
+          "label": "Выручка, 0,1 %",
+          "pct": "0,1 %",
+          "cash": null,
+          "old": false
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-14", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-14", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        {
+          "key": "ЕНС-14/1:r",
+          "label": "Выручка, 0,1 %",
+          "pct": "0,1 %",
+          "cash": null,
+          "old": false
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-14", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-15", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": [
+        { "key": "ЕНС-15:r", "label": "Выручка, 0 %", "pct": "0 %", "cash": null, "old": false },
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "old": true
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-15", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-15", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        { "key": "ЕНС-15:r", "label": "Выручка, 0 %", "pct": "0 %", "cash": null, "old": false }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-15", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-15", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        { "key": "ЕНС-15:r", "label": "Выручка, 0 %", "pct": "0 %", "cash": null, "old": false }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-15", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-15", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": [
+        { "key": "ЕНС-15/1:r", "label": "Выручка, 0 %", "pct": "0 %", "cash": null, "old": false },
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "old": true
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-15", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-15", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        { "key": "ЕНС-15/1:r", "label": "Выручка, 0 %", "pct": "0 %", "cash": null, "old": false }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-15", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-15", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        { "key": "ЕНС-15/1:r", "label": "Выручка, 0 %", "pct": "0 %", "cash": null, "old": false }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-15", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-16", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": [
+        { "key": "ЕНС-16:r", "label": "Выручка, 4 %", "pct": "4 %", "cash": null, "old": false },
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "old": true
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-16", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-16", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        { "key": "ЕНС-16:r", "label": "Выручка, 4 %", "pct": "4 %", "cash": null, "old": false }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-16", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-16", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        { "key": "ЕНС-16:r", "label": "Выручка, 4 %", "pct": "4 %", "cash": null, "old": false }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-16", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-16", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": [
+        { "key": "ЕНС-16/1:r", "label": "Выручка, 4 %", "pct": "4 %", "cash": null, "old": false },
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "old": true
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-16", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-16", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        { "key": "ЕНС-16/1:r", "label": "Выручка, 4 %", "pct": "4 %", "cash": null, "old": false }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-16", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-16", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        { "key": "ЕНС-16/1:r", "label": "Выручка, 4 %", "pct": "4 %", "cash": null, "old": false }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-16", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-17", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": [
+        {
+          "key": "ЕНС-17:cl",
+          "label": "Безналичная выручка, 4 %",
+          "pct": "4 %",
+          "cash": false,
+          "old": false
+        },
+        {
+          "key": "ЕНС-17:ca",
+          "label": "Наличная выручка, 6 %",
+          "pct": "6 %",
+          "cash": true,
+          "old": false
+        },
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "old": true
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-17", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-17", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        {
+          "key": "ЕНС-17:cl",
+          "label": "Безналичная выручка, 4 %",
+          "pct": "4 %",
+          "cash": false,
+          "old": false
+        },
+        {
+          "key": "ЕНС-17:ca",
+          "label": "Наличная выручка, 6 %",
+          "pct": "6 %",
+          "cash": true,
+          "old": false
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-17", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-17", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        {
+          "key": "ЕНС-17:cl",
+          "label": "Безналичная выручка, 4 %",
+          "pct": "4 %",
+          "cash": false,
+          "old": false
+        },
+        {
+          "key": "ЕНС-17:ca",
+          "label": "Наличная выручка, 6 %",
+          "pct": "6 %",
+          "cash": true,
+          "old": false
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-17", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-17", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": [
+        {
+          "key": "ЕНС-17/1:cl",
+          "label": "Безналичная выручка, 4 %",
+          "pct": "4 %",
+          "cash": false,
+          "old": false
+        },
+        {
+          "key": "ЕНС-17/1:ca",
+          "label": "Наличная выручка, 6 %",
+          "pct": "6 %",
+          "cash": true,
+          "old": false
+        },
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "old": true
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-17", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-17", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        {
+          "key": "ЕНС-17/1:cl",
+          "label": "Безналичная выручка, 4 %",
+          "pct": "4 %",
+          "cash": false,
+          "old": false
+        },
+        {
+          "key": "ЕНС-17/1:ca",
+          "label": "Наличная выручка, 6 %",
+          "pct": "6 %",
+          "cash": true,
+          "old": false
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-17", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-17", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        {
+          "key": "ЕНС-17/1:cl",
+          "label": "Безналичная выручка, 4 %",
+          "pct": "4 %",
+          "cash": false,
+          "old": false
+        },
+        {
+          "key": "ЕНС-17/1:ca",
+          "label": "Наличная выручка, 6 %",
+          "pct": "6 %",
+          "cash": true,
+          "old": false
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-17", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-18", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": [
+        { "key": "ЕНС-18:r", "label": "Выручка, 0 %", "pct": "0 %", "cash": null, "old": false },
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "old": true
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-18", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-18", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        { "key": "ЕНС-18:r", "label": "Выручка, 0 %", "pct": "0 %", "cash": null, "old": false }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-18", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-18", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        { "key": "ЕНС-18:r", "label": "Выручка, 0 %", "pct": "0 %", "cash": null, "old": false }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-18", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-18", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": [
+        { "key": "ЕНС-18/1:r", "label": "Выручка, 0 %", "pct": "0 %", "cash": null, "old": false },
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "old": true
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-18", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-18", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        { "key": "ЕНС-18/1:r", "label": "Выручка, 0 %", "pct": "0 %", "cash": null, "old": false }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-18", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-18", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        { "key": "ЕНС-18/1:r", "label": "Выручка, 0 %", "pct": "0 %", "cash": null, "old": false }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-18", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-19", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": [
+        { "key": "ЕНС-19:r", "label": "Выручка, 0 %", "pct": "0 %", "cash": null, "old": false },
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "old": true
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-19", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-19", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        { "key": "ЕНС-19:r", "label": "Выручка, 0 %", "pct": "0 %", "cash": null, "old": false }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-19", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-19", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        { "key": "ЕНС-19:r", "label": "Выручка, 0 %", "pct": "0 %", "cash": null, "old": false }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-19", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-19", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": [
+        { "key": "ЕНС-19/1:r", "label": "Выручка, 0 %", "pct": "0 %", "cash": null, "old": false },
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "old": true
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-19", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-19", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        { "key": "ЕНС-19/1:r", "label": "Выручка, 0 %", "pct": "0 %", "cash": null, "old": false }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-19", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-19", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        { "key": "ЕНС-19/1:r", "label": "Выручка, 0 %", "pct": "0 %", "cash": null, "old": false }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-19", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-20", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": [
+        {
+          "key": "ЕНС-20:r",
+          "label": "Сумма разницы цены продажи и покупки, 8 %",
+          "pct": "8 %",
+          "cash": null,
+          "old": false
+        },
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "old": true
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-20", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-20", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        {
+          "key": "ЕНС-20:r",
+          "label": "Сумма разницы цены продажи и покупки, 8 %",
+          "pct": "8 %",
+          "cash": null,
+          "old": false
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-20", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-20", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        {
+          "key": "ЕНС-20:r",
+          "label": "Сумма разницы цены продажи и покупки, 8 %",
+          "pct": "8 %",
+          "cash": null,
+          "old": false
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-20", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-20", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": [
+        {
+          "key": "ЕНС-20/1:r",
+          "label": "Сумма разницы цены продажи и покупки, 8 %",
+          "pct": "8 %",
+          "cash": null,
+          "old": false
+        },
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "old": true
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-20", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-20", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        {
+          "key": "ЕНС-20/1:r",
+          "label": "Сумма разницы цены продажи и покупки, 8 %",
+          "pct": "8 %",
+          "cash": null,
+          "old": false
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-20", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-20", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        {
+          "key": "ЕНС-20/1:r",
+          "label": "Сумма разницы цены продажи и покупки, 8 %",
+          "pct": "8 %",
+          "cash": null,
+          "old": false
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-20", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-91", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": [
+        { "key": "ЕНС-91:r", "label": "Выручка, 5 %", "pct": "5 %", "cash": null, "old": false },
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "old": true
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-91", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-91", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        { "key": "ЕНС-91:r", "label": "Выручка, 5 %", "pct": "5 %", "cash": null, "old": false }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-91", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-91", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        { "key": "ЕНС-91:r", "label": "Выручка, 5 %", "pct": "5 %", "cash": null, "old": false }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-91", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-91", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": [
+        { "key": "ЕНС-91/1:r", "label": "Выручка, 3 %", "pct": "3 %", "cash": null, "old": false },
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "old": true
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-91", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-91", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        { "key": "ЕНС-91/1:r", "label": "Выручка, 3 %", "pct": "3 %", "cash": null, "old": false }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-91", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-91", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        { "key": "ЕНС-91/1:r", "label": "Выручка, 3 %", "pct": "3 %", "cash": null, "old": false }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-91", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-96", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": [
+        { "key": "ЕНС-96:r", "label": "Выручка, 2 %", "pct": "2 %", "cash": null, "old": false },
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "old": true
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-96", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-96", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        { "key": "ЕНС-96:r", "label": "Выручка, 2 %", "pct": "2 %", "cash": null, "old": false }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-96", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-96", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        { "key": "ЕНС-96:r", "label": "Выручка, 2 %", "pct": "2 %", "cash": null, "old": false }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-96", "variant": null }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-96", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": [
+        { "key": "ЕНС-96/1:r", "label": "Выручка, 1 %", "pct": "1 %", "cash": null, "old": false },
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "old": true
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-96", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-96", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        { "key": "ЕНС-96/1:r", "label": "Выручка, 1 %", "pct": "1 %", "cash": null, "old": false }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-96", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-96", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        { "key": "ЕНС-96/1:r", "label": "Выручка, 1 %", "pct": "1 %", "cash": null, "old": false }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [{ "code": "ЕНС-96", "variant": 1 }],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enm",
+      "act": "both",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [
+          { "code": "ЕНС-02", "variant": null },
+          { "code": "ЕНС-16", "variant": null }
+        ],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": [
+        {
+          "key": "ЕНС-02:cl",
+          "label": "ЕНС-02 · безналичная выручка, 2 %",
+          "pct": "2 %",
+          "cash": false,
+          "old": false
+        },
+        {
+          "key": "ЕНС-02:ca",
+          "label": "ЕНС-02 · наличная выручка, 4 %",
+          "pct": "4 %",
+          "cash": true,
+          "old": false
+        },
+        {
+          "key": "ЕНС-16:r",
+          "label": "ЕНС-16 · выручка, 4 %",
+          "pct": "4 %",
+          "cash": null,
+          "old": false
+        },
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "old": true
+        }
+      ]
+    },
+    {
+      "typeCode": "enm",
+      "act": "sub",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [
+          { "code": "ЕНС-02", "variant": null },
+          { "code": "ЕНС-16", "variant": null }
+        ],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "enm",
+      "act": "both",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [
+          { "code": "ЕНС-02", "variant": null },
+          { "code": "ЕНС-16", "variant": null }
+        ],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        {
+          "key": "ЕНС-02:cl",
+          "label": "ЕНС-02 · безналичная выручка, 2 %",
+          "pct": "2 %",
+          "cash": false,
+          "old": false
+        },
+        {
+          "key": "ЕНС-02:ca",
+          "label": "ЕНС-02 · наличная выручка, 4 %",
+          "pct": "4 %",
+          "cash": true,
+          "old": false
+        },
+        {
+          "key": "ЕНС-16:r",
+          "label": "ЕНС-16 · выручка, 4 %",
+          "pct": "4 %",
+          "cash": null,
+          "old": false
+        }
+      ]
+    },
+    {
+      "typeCode": "enm",
+      "act": "sub",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [
+          { "code": "ЕНС-02", "variant": null },
+          { "code": "ЕНС-16", "variant": null }
+        ],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enm",
+      "act": "both",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [
+          { "code": "ЕНС-02", "variant": null },
+          { "code": "ЕНС-16", "variant": null }
+        ],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        {
+          "key": "ЕНС-02:cl",
+          "label": "ЕНС-02 · безналичная выручка, 2 %",
+          "pct": "2 %",
+          "cash": false,
+          "old": false
+        },
+        {
+          "key": "ЕНС-02:ca",
+          "label": "ЕНС-02 · наличная выручка, 4 %",
+          "pct": "4 %",
+          "cash": true,
+          "old": false
+        },
+        {
+          "key": "ЕНС-16:r",
+          "label": "ЕНС-16 · выручка, 4 %",
+          "pct": "4 %",
+          "cash": null,
+          "old": false
+        }
+      ]
+    },
+    {
+      "typeCode": "enm",
+      "act": "sub",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [
+          { "code": "ЕНС-02", "variant": null },
+          { "code": "ЕНС-16", "variant": null }
+        ],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enm",
+      "act": "both",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [
+          { "code": "ЕНС-04", "variant": null },
+          { "code": "ЕНС-04", "variant": 1 }
+        ],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": [
+        {
+          "key": "ЕНС-04:cl",
+          "label": "ЕНС-04 · безналичная выручка, 4 %",
+          "pct": "4 %",
+          "cash": false,
+          "old": false
+        },
+        {
+          "key": "ЕНС-04:ca",
+          "label": "ЕНС-04 · наличная выручка, 6 %",
+          "pct": "6 %",
+          "cash": true,
+          "old": false
+        },
+        {
+          "key": "ЕНС-04/1:cl",
+          "label": "ЕНС-04 · безналичная выручка, 4 %",
+          "pct": "4 %",
+          "cash": false,
+          "old": false
+        },
+        {
+          "key": "ЕНС-04/1:ca",
+          "label": "ЕНС-04 · наличная выручка, 6 %",
+          "pct": "6 %",
+          "cash": true,
+          "old": false
+        },
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "old": true
+        }
+      ]
+    },
+    {
+      "typeCode": "enm",
+      "act": "sub",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [
+          { "code": "ЕНС-04", "variant": null },
+          { "code": "ЕНС-04", "variant": 1 }
+        ],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "enm",
+      "act": "both",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [
+          { "code": "ЕНС-04", "variant": null },
+          { "code": "ЕНС-04", "variant": 1 }
+        ],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        {
+          "key": "ЕНС-04:cl",
+          "label": "ЕНС-04 · безналичная выручка, 4 %",
+          "pct": "4 %",
+          "cash": false,
+          "old": false
+        },
+        {
+          "key": "ЕНС-04:ca",
+          "label": "ЕНС-04 · наличная выручка, 6 %",
+          "pct": "6 %",
+          "cash": true,
+          "old": false
+        },
+        {
+          "key": "ЕНС-04/1:cl",
+          "label": "ЕНС-04 · безналичная выручка, 4 %",
+          "pct": "4 %",
+          "cash": false,
+          "old": false
+        },
+        {
+          "key": "ЕНС-04/1:ca",
+          "label": "ЕНС-04 · наличная выручка, 6 %",
+          "pct": "6 %",
+          "cash": true,
+          "old": false
+        }
+      ]
+    },
+    {
+      "typeCode": "enm",
+      "act": "sub",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [
+          { "code": "ЕНС-04", "variant": null },
+          { "code": "ЕНС-04", "variant": 1 }
+        ],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enm",
+      "act": "both",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [
+          { "code": "ЕНС-04", "variant": null },
+          { "code": "ЕНС-04", "variant": 1 }
+        ],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        {
+          "key": "ЕНС-04:cl",
+          "label": "ЕНС-04 · безналичная выручка, 4 %",
+          "pct": "4 %",
+          "cash": false,
+          "old": false
+        },
+        {
+          "key": "ЕНС-04:ca",
+          "label": "ЕНС-04 · наличная выручка, 6 %",
+          "pct": "6 %",
+          "cash": true,
+          "old": false
+        },
+        {
+          "key": "ЕНС-04/1:cl",
+          "label": "ЕНС-04 · безналичная выручка, 4 %",
+          "pct": "4 %",
+          "cash": false,
+          "old": false
+        },
+        {
+          "key": "ЕНС-04/1:ca",
+          "label": "ЕНС-04 · наличная выручка, 6 %",
+          "pct": "6 %",
+          "cash": true,
+          "old": false
+        }
+      ]
+    },
+    {
+      "typeCode": "enm",
+      "act": "sub",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [
+          { "code": "ЕНС-04", "variant": null },
+          { "code": "ЕНС-04", "variant": 1 }
+        ],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [
+          { "code": "ЕНС-12", "variant": 1 },
+          { "code": "ЕНС-99", "variant": null },
+          { "code": "ЕНС-07", "variant": 0 }
+        ],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": [
+        {
+          "key": "ЕНС-12/1:r",
+          "label": "ЕНС-12 · выручка, 3 %",
+          "pct": "3 %",
+          "cash": null,
+          "old": false
+        },
+        {
+          "key": "ЕНС-07/0:r",
+          "label": "ЕНС-07 · выручка, 1 %",
+          "pct": "1 %",
+          "cash": null,
+          "old": false
+        },
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "old": true
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2026-10-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [
+          { "code": "ЕНС-12", "variant": 1 },
+          { "code": "ЕНС-99", "variant": null },
+          { "code": "ЕНС-07", "variant": 0 }
+        ],
+        "rateAdditions": []
+      },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [
+          { "code": "ЕНС-12", "variant": 1 },
+          { "code": "ЕНС-99", "variant": null },
+          { "code": "ЕНС-07", "variant": 0 }
+        ],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        {
+          "key": "ЕНС-12/1:r",
+          "label": "ЕНС-12 · выручка, 3 %",
+          "pct": "3 %",
+          "cash": null,
+          "old": false
+        },
+        {
+          "key": "ЕНС-07/0:r",
+          "label": "ЕНС-07 · выручка, 1 %",
+          "pct": "1 %",
+          "cash": null,
+          "old": false
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2025-03-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [
+          { "code": "ЕНС-12", "variant": 1 },
+          { "code": "ЕНС-99", "variant": null },
+          { "code": "ЕНС-07", "variant": 0 }
+        ],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [
+          { "code": "ЕНС-12", "variant": 1 },
+          { "code": "ЕНС-99", "variant": null },
+          { "code": "ЕНС-07", "variant": 0 }
+        ],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": [
+        {
+          "key": "ЕНС-12/1:r",
+          "label": "ЕНС-12 · выручка, 3 %",
+          "pct": "3 %",
+          "cash": null,
+          "old": false
+        },
+        {
+          "key": "ЕНС-07/0:r",
+          "label": "ЕНС-07 · выручка, 1 %",
+          "pct": "1 %",
+          "cash": null,
+          "old": false
+        }
+      ]
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2031-08-01",
+      "assignment": {
+        "rate": null,
+        "enRates": [
+          { "code": "ЕНС-12", "variant": 1 },
+          { "code": "ЕНС-99", "variant": null },
+          { "code": "ЕНС-07", "variant": 0 }
+        ],
+        "rateAdditions": []
+      },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2026-10-01",
+      "assignment": { "rate": null, "enRates": [], "rateAdditions": [] },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2026-10-01",
+      "assignment": { "rate": null, "enRates": [], "rateAdditions": [] },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2025-03-01",
+      "assignment": { "rate": null, "enRates": [], "rateAdditions": [] },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2025-03-01",
+      "assignment": { "rate": null, "enRates": [], "rateAdditions": [] },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "both",
+      "date": "2031-08-01",
+      "assignment": { "rate": null, "enRates": [], "rateAdditions": [] },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "enq",
+      "act": "sub",
+      "date": "2031-08-01",
+      "assignment": { "rate": null, "enRates": [], "rateAdditions": [] },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "nds",
+      "act": "both",
+      "date": "2026-10-01",
+      "assignment": { "rate": "12 %", "enRates": [], "rateAdditions": [] },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "nds",
+      "act": "sub",
+      "date": "2026-10-01",
+      "assignment": { "rate": "12 %", "enRates": [], "rateAdditions": [] },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "nds",
+      "act": "both",
+      "date": "2025-03-01",
+      "assignment": { "rate": "12 %", "enRates": [], "rateAdditions": [] },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "nds",
+      "act": "sub",
+      "date": "2025-03-01",
+      "assignment": { "rate": "12 %", "enRates": [], "rateAdditions": [] },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "nds",
+      "act": "both",
+      "date": "2031-08-01",
+      "assignment": { "rate": "12 %", "enRates": [], "rateAdditions": [] },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "nds",
+      "act": "sub",
+      "date": "2031-08-01",
+      "assignment": { "rate": "12 %", "enRates": [], "rateAdditions": [] },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "soc",
+      "act": "both",
+      "date": "2026-10-01",
+      "assignment": { "rate": "10 %", "enRates": [], "rateAdditions": [] },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "soc",
+      "act": "sub",
+      "date": "2026-10-01",
+      "assignment": { "rate": "10 %", "enRates": [], "rateAdditions": [] },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "soc",
+      "act": "both",
+      "date": "2025-03-01",
+      "assignment": { "rate": "10 %", "enRates": [], "rateAdditions": [] },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "soc",
+      "act": "sub",
+      "date": "2025-03-01",
+      "assignment": { "rate": "10 %", "enRates": [], "rateAdditions": [] },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "soc",
+      "act": "both",
+      "date": "2031-08-01",
+      "assignment": { "rate": "10 %", "enRates": [], "rateAdditions": [] },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "soc",
+      "act": "sub",
+      "date": "2031-08-01",
+      "assignment": { "rate": "10 %", "enRates": [], "rateAdditions": [] },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "nspm",
+      "act": "both",
+      "date": "2026-10-01",
+      "assignment": { "rate": "1 %", "enRates": [], "rateAdditions": ["pat", "anon"] },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": [
+        {
+          "key": "main:r",
+          "label": "Основная ставка · выручка, 1 %",
+          "pct": "1 %",
+          "cash": null,
+          "old": false
+        },
+        {
+          "key": "pat:cl",
+          "label": "Покупатели на патенте, ЕН 0,5 % и 0 %, ПКИ, зона торговли · безналичная выручка, 1 %",
+          "pct": "1 %",
+          "cash": false,
+          "old": false
+        },
+        {
+          "key": "pat:ca",
+          "label": "Покупатели на патенте, ЕН 0,5 % и 0 %, ПКИ, зона торговли · наличная выручка, 2 %",
+          "pct": "2 %",
+          "cash": true,
+          "old": false
+        },
+        {
+          "key": "anon:r",
+          "label": "Обезличенный покупатель · выручка, 2 %",
+          "pct": "2 %",
+          "cash": null,
+          "old": false
+        },
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "old": true
+        }
+      ]
+    },
+    {
+      "typeCode": "nspm",
+      "act": "sub",
+      "date": "2026-10-01",
+      "assignment": { "rate": "1 %", "enRates": [], "rateAdditions": ["pat", "anon"] },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "nspm",
+      "act": "both",
+      "date": "2025-03-01",
+      "assignment": { "rate": "1 %", "enRates": [], "rateAdditions": ["pat", "anon"] },
+      "stored": [],
+      "expected": [
+        {
+          "key": "main:r",
+          "label": "Основная ставка · выручка, 1 %",
+          "pct": "1 %",
+          "cash": null,
+          "old": false
+        },
+        {
+          "key": "pat:cl",
+          "label": "Покупатели на патенте, ЕН 0,5 % и 0 %, ПКИ, зона торговли · безналичная выручка, 1 %",
+          "pct": "1 %",
+          "cash": false,
+          "old": false
+        },
+        {
+          "key": "pat:ca",
+          "label": "Покупатели на патенте, ЕН 0,5 % и 0 %, ПКИ, зона торговли · наличная выручка, 2 %",
+          "pct": "2 %",
+          "cash": true,
+          "old": false
+        },
+        {
+          "key": "anon:r",
+          "label": "Обезличенный покупатель · выручка, 2 %",
+          "pct": "2 %",
+          "cash": null,
+          "old": false
+        }
+      ]
+    },
+    {
+      "typeCode": "nspm",
+      "act": "sub",
+      "date": "2025-03-01",
+      "assignment": { "rate": "1 %", "enRates": [], "rateAdditions": ["pat", "anon"] },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "nspm",
+      "act": "both",
+      "date": "2031-08-01",
+      "assignment": { "rate": "1 %", "enRates": [], "rateAdditions": ["pat", "anon"] },
+      "stored": [],
+      "expected": [
+        {
+          "key": "main:r",
+          "label": "Основная ставка · выручка, 1 %",
+          "pct": "1 %",
+          "cash": null,
+          "old": false
+        },
+        {
+          "key": "pat:cl",
+          "label": "Покупатели на патенте, ЕН 0,5 % и 0 %, ПКИ, зона торговли · безналичная выручка, 1 %",
+          "pct": "1 %",
+          "cash": false,
+          "old": false
+        },
+        {
+          "key": "pat:ca",
+          "label": "Покупатели на патенте, ЕН 0,5 % и 0 %, ПКИ, зона торговли · наличная выручка, 2 %",
+          "pct": "2 %",
+          "cash": true,
+          "old": false
+        },
+        {
+          "key": "anon:r",
+          "label": "Обезличенный покупатель · выручка, 2 %",
+          "pct": "2 %",
+          "cash": null,
+          "old": false
+        }
+      ]
+    },
+    {
+      "typeCode": "nspm",
+      "act": "sub",
+      "date": "2031-08-01",
+      "assignment": { "rate": "1 %", "enRates": [], "rateAdditions": ["pat", "anon"] },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "nspm",
+      "act": "both",
+      "date": "2026-10-01",
+      "assignment": { "rate": null, "enRates": [], "rateAdditions": ["pat"] },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "nspm",
+      "act": "sub",
+      "date": "2026-10-01",
+      "assignment": { "rate": null, "enRates": [], "rateAdditions": ["pat"] },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "nspm",
+      "act": "both",
+      "date": "2025-03-01",
+      "assignment": { "rate": null, "enRates": [], "rateAdditions": ["pat"] },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "nspm",
+      "act": "sub",
+      "date": "2025-03-01",
+      "assignment": { "rate": null, "enRates": [], "rateAdditions": ["pat"] },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "nspm",
+      "act": "both",
+      "date": "2031-08-01",
+      "assignment": { "rate": null, "enRates": [], "rateAdditions": ["pat"] },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "nspm",
+      "act": "sub",
+      "date": "2031-08-01",
+      "assignment": { "rate": null, "enRates": [], "rateAdditions": ["pat"] },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "nspm",
+      "act": "both",
+      "date": "2026-10-01",
+      "assignment": { "rate": "2 %", "enRates": [], "rateAdditions": ["anon"] },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": [
+        {
+          "key": "main:r",
+          "label": "Основная ставка · выручка, 2 %",
+          "pct": "2 %",
+          "cash": null,
+          "old": false
+        },
+        {
+          "key": "anon:r",
+          "label": "Обезличенный покупатель · выручка, 2 %",
+          "pct": "2 %",
+          "cash": null,
+          "old": false
+        },
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "old": true
+        }
+      ]
+    },
+    {
+      "typeCode": "nspm",
+      "act": "sub",
+      "date": "2026-10-01",
+      "assignment": { "rate": "2 %", "enRates": [], "rateAdditions": ["anon"] },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "nspm",
+      "act": "both",
+      "date": "2025-03-01",
+      "assignment": { "rate": "2 %", "enRates": [], "rateAdditions": ["anon"] },
+      "stored": [],
+      "expected": [
+        {
+          "key": "main:r",
+          "label": "Основная ставка · выручка, 2 %",
+          "pct": "2 %",
+          "cash": null,
+          "old": false
+        },
+        {
+          "key": "anon:r",
+          "label": "Обезличенный покупатель · выручка, 2 %",
+          "pct": "2 %",
+          "cash": null,
+          "old": false
+        }
+      ]
+    },
+    {
+      "typeCode": "nspm",
+      "act": "sub",
+      "date": "2025-03-01",
+      "assignment": { "rate": "2 %", "enRates": [], "rateAdditions": ["anon"] },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "nspm",
+      "act": "both",
+      "date": "2031-08-01",
+      "assignment": { "rate": "2 %", "enRates": [], "rateAdditions": ["anon"] },
+      "stored": [],
+      "expected": [
+        {
+          "key": "main:r",
+          "label": "Основная ставка · выручка, 2 %",
+          "pct": "2 %",
+          "cash": null,
+          "old": false
+        },
+        {
+          "key": "anon:r",
+          "label": "Обезличенный покупатель · выручка, 2 %",
+          "pct": "2 %",
+          "cash": null,
+          "old": false
+        }
+      ]
+    },
+    {
+      "typeCode": "nspm",
+      "act": "sub",
+      "date": "2031-08-01",
+      "assignment": { "rate": "2 %", "enRates": [], "rateAdditions": ["anon"] },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "nspm",
+      "act": "both",
+      "date": "2026-10-01",
+      "assignment": { "rate": "2 %", "enRates": [], "rateAdditions": [] },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "nspm",
+      "act": "sub",
+      "date": "2026-10-01",
+      "assignment": { "rate": "2 %", "enRates": [], "rateAdditions": [] },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "nspm",
+      "act": "both",
+      "date": "2025-03-01",
+      "assignment": { "rate": "2 %", "enRates": [], "rateAdditions": [] },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "nspm",
+      "act": "sub",
+      "date": "2025-03-01",
+      "assignment": { "rate": "2 %", "enRates": [], "rateAdditions": [] },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "nspm",
+      "act": "both",
+      "date": "2031-08-01",
+      "assignment": { "rate": "2 %", "enRates": [], "rateAdditions": [] },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "nspm",
+      "act": "sub",
+      "date": "2031-08-01",
+      "assignment": { "rate": "2 %", "enRates": [], "rateAdditions": [] },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "nspq",
+      "act": "both",
+      "date": "2026-10-01",
+      "assignment": { "rate": "1 %", "enRates": [], "rateAdditions": ["pat", "anon"] },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": [
+        {
+          "key": "main:r",
+          "label": "Основная ставка · выручка, 1 %",
+          "pct": "1 %",
+          "cash": null,
+          "old": false
+        },
+        {
+          "key": "pat:cl",
+          "label": "Покупатели на патенте, ЕН 0,5 % и 0 %, ПКИ, зона торговли · безналичная выручка, 1 %",
+          "pct": "1 %",
+          "cash": false,
+          "old": false
+        },
+        {
+          "key": "pat:ca",
+          "label": "Покупатели на патенте, ЕН 0,5 % и 0 %, ПКИ, зона торговли · наличная выручка, 2 %",
+          "pct": "2 %",
+          "cash": true,
+          "old": false
+        },
+        {
+          "key": "anon:r",
+          "label": "Обезличенный покупатель · выручка, 2 %",
+          "pct": "2 %",
+          "cash": null,
+          "old": false
+        },
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "old": true
+        }
+      ]
+    },
+    {
+      "typeCode": "nspq",
+      "act": "sub",
+      "date": "2026-10-01",
+      "assignment": { "rate": "1 %", "enRates": [], "rateAdditions": ["pat", "anon"] },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "nspq",
+      "act": "both",
+      "date": "2025-03-01",
+      "assignment": { "rate": "1 %", "enRates": [], "rateAdditions": ["pat", "anon"] },
+      "stored": [],
+      "expected": [
+        {
+          "key": "main:r",
+          "label": "Основная ставка · выручка, 1 %",
+          "pct": "1 %",
+          "cash": null,
+          "old": false
+        },
+        {
+          "key": "pat:cl",
+          "label": "Покупатели на патенте, ЕН 0,5 % и 0 %, ПКИ, зона торговли · безналичная выручка, 1 %",
+          "pct": "1 %",
+          "cash": false,
+          "old": false
+        },
+        {
+          "key": "pat:ca",
+          "label": "Покупатели на патенте, ЕН 0,5 % и 0 %, ПКИ, зона торговли · наличная выручка, 2 %",
+          "pct": "2 %",
+          "cash": true,
+          "old": false
+        },
+        {
+          "key": "anon:r",
+          "label": "Обезличенный покупатель · выручка, 2 %",
+          "pct": "2 %",
+          "cash": null,
+          "old": false
+        }
+      ]
+    },
+    {
+      "typeCode": "nspq",
+      "act": "sub",
+      "date": "2025-03-01",
+      "assignment": { "rate": "1 %", "enRates": [], "rateAdditions": ["pat", "anon"] },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "nspq",
+      "act": "both",
+      "date": "2031-08-01",
+      "assignment": { "rate": "1 %", "enRates": [], "rateAdditions": ["pat", "anon"] },
+      "stored": [],
+      "expected": [
+        {
+          "key": "main:r",
+          "label": "Основная ставка · выручка, 1 %",
+          "pct": "1 %",
+          "cash": null,
+          "old": false
+        },
+        {
+          "key": "pat:cl",
+          "label": "Покупатели на патенте, ЕН 0,5 % и 0 %, ПКИ, зона торговли · безналичная выручка, 1 %",
+          "pct": "1 %",
+          "cash": false,
+          "old": false
+        },
+        {
+          "key": "pat:ca",
+          "label": "Покупатели на патенте, ЕН 0,5 % и 0 %, ПКИ, зона торговли · наличная выручка, 2 %",
+          "pct": "2 %",
+          "cash": true,
+          "old": false
+        },
+        {
+          "key": "anon:r",
+          "label": "Обезличенный покупатель · выручка, 2 %",
+          "pct": "2 %",
+          "cash": null,
+          "old": false
+        }
+      ]
+    },
+    {
+      "typeCode": "nspq",
+      "act": "sub",
+      "date": "2031-08-01",
+      "assignment": { "rate": "1 %", "enRates": [], "rateAdditions": ["pat", "anon"] },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "nspq",
+      "act": "both",
+      "date": "2026-10-01",
+      "assignment": { "rate": null, "enRates": [], "rateAdditions": ["pat"] },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "nspq",
+      "act": "sub",
+      "date": "2026-10-01",
+      "assignment": { "rate": null, "enRates": [], "rateAdditions": ["pat"] },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "nspq",
+      "act": "both",
+      "date": "2025-03-01",
+      "assignment": { "rate": null, "enRates": [], "rateAdditions": ["pat"] },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "nspq",
+      "act": "sub",
+      "date": "2025-03-01",
+      "assignment": { "rate": null, "enRates": [], "rateAdditions": ["pat"] },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "nspq",
+      "act": "both",
+      "date": "2031-08-01",
+      "assignment": { "rate": null, "enRates": [], "rateAdditions": ["pat"] },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "nspq",
+      "act": "sub",
+      "date": "2031-08-01",
+      "assignment": { "rate": null, "enRates": [], "rateAdditions": ["pat"] },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "nspq",
+      "act": "both",
+      "date": "2026-10-01",
+      "assignment": { "rate": "2 %", "enRates": [], "rateAdditions": ["anon"] },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": [
+        {
+          "key": "main:r",
+          "label": "Основная ставка · выручка, 2 %",
+          "pct": "2 %",
+          "cash": null,
+          "old": false
+        },
+        {
+          "key": "anon:r",
+          "label": "Обезличенный покупатель · выручка, 2 %",
+          "pct": "2 %",
+          "cash": null,
+          "old": false
+        },
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "old": true
+        }
+      ]
+    },
+    {
+      "typeCode": "nspq",
+      "act": "sub",
+      "date": "2026-10-01",
+      "assignment": { "rate": "2 %", "enRates": [], "rateAdditions": ["anon"] },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "nspq",
+      "act": "both",
+      "date": "2025-03-01",
+      "assignment": { "rate": "2 %", "enRates": [], "rateAdditions": ["anon"] },
+      "stored": [],
+      "expected": [
+        {
+          "key": "main:r",
+          "label": "Основная ставка · выручка, 2 %",
+          "pct": "2 %",
+          "cash": null,
+          "old": false
+        },
+        {
+          "key": "anon:r",
+          "label": "Обезличенный покупатель · выручка, 2 %",
+          "pct": "2 %",
+          "cash": null,
+          "old": false
+        }
+      ]
+    },
+    {
+      "typeCode": "nspq",
+      "act": "sub",
+      "date": "2025-03-01",
+      "assignment": { "rate": "2 %", "enRates": [], "rateAdditions": ["anon"] },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "nspq",
+      "act": "both",
+      "date": "2031-08-01",
+      "assignment": { "rate": "2 %", "enRates": [], "rateAdditions": ["anon"] },
+      "stored": [],
+      "expected": [
+        {
+          "key": "main:r",
+          "label": "Основная ставка · выручка, 2 %",
+          "pct": "2 %",
+          "cash": null,
+          "old": false
+        },
+        {
+          "key": "anon:r",
+          "label": "Обезличенный покупатель · выручка, 2 %",
+          "pct": "2 %",
+          "cash": null,
+          "old": false
+        }
+      ]
+    },
+    {
+      "typeCode": "nspq",
+      "act": "sub",
+      "date": "2031-08-01",
+      "assignment": { "rate": "2 %", "enRates": [], "rateAdditions": ["anon"] },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "nspq",
+      "act": "both",
+      "date": "2026-10-01",
+      "assignment": { "rate": "2 %", "enRates": [], "rateAdditions": [] },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "nspq",
+      "act": "sub",
+      "date": "2026-10-01",
+      "assignment": { "rate": "2 %", "enRates": [], "rateAdditions": [] },
+      "stored": [
+        {
+          "key": "ЕНС-99:r",
+          "label": "ЕНС-99 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": 1000,
+          "tax": 70
+        },
+        {
+          "key": "ЕНС-98:r",
+          "label": "ЕНС-98 · выручка, 7 %",
+          "pct": "7 %",
+          "cash": null,
+          "rev": null,
+          "tax": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "typeCode": "nspq",
+      "act": "both",
+      "date": "2025-03-01",
+      "assignment": { "rate": "2 %", "enRates": [], "rateAdditions": [] },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "nspq",
+      "act": "sub",
+      "date": "2025-03-01",
+      "assignment": { "rate": "2 %", "enRates": [], "rateAdditions": [] },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "nspq",
+      "act": "both",
+      "date": "2031-08-01",
+      "assignment": { "rate": "2 %", "enRates": [], "rateAdditions": [] },
+      "stored": [],
+      "expected": []
+    },
+    {
+      "typeCode": "nspq",
+      "act": "sub",
+      "date": "2031-08-01",
+      "assignment": { "rate": "2 %", "enRates": [], "rateAdditions": [] },
+      "stored": [],
+      "expected": []
+    }
+  ],
+  "taxes": [
+    { "rev": 0, "pct": "4 %", "expected": 0 },
+    { "rev": 0, "pct": "6 %", "expected": 0 },
+    { "rev": 0, "pct": "0,5 %", "expected": 0 },
+    { "rev": 0, "pct": "0,25 %", "expected": 0 },
+    { "rev": 0, "pct": "12 %", "expected": 0 },
+    { "rev": 0, "pct": "0 %", "expected": 0 },
+    { "rev": 0, "pct": "2 %", "expected": 0 },
+    { "rev": 1, "pct": "4 %", "expected": 0 },
+    { "rev": 1, "pct": "6 %", "expected": 0 },
+    { "rev": 1, "pct": "0,5 %", "expected": 0 },
+    { "rev": 1, "pct": "0,25 %", "expected": 0 },
+    { "rev": 1, "pct": "12 %", "expected": 0 },
+    { "rev": 1, "pct": "0 %", "expected": 0 },
+    { "rev": 1, "pct": "2 %", "expected": 0 },
+    { "rev": 99, "pct": "4 %", "expected": 4 },
+    { "rev": 99, "pct": "6 %", "expected": 6 },
+    { "rev": 99, "pct": "0,5 %", "expected": 0 },
+    { "rev": 99, "pct": "0,25 %", "expected": 0 },
+    { "rev": 99, "pct": "12 %", "expected": 12 },
+    { "rev": 99, "pct": "0 %", "expected": 0 },
+    { "rev": 99, "pct": "2 %", "expected": 2 },
+    { "rev": 100, "pct": "4 %", "expected": 4 },
+    { "rev": 100, "pct": "6 %", "expected": 6 },
+    { "rev": 100, "pct": "0,5 %", "expected": 1 },
+    { "rev": 100, "pct": "0,25 %", "expected": 0 },
+    { "rev": 100, "pct": "12 %", "expected": 12 },
+    { "rev": 100, "pct": "0 %", "expected": 0 },
+    { "rev": 100, "pct": "2 %", "expected": 2 },
+    { "rev": 125, "pct": "4 %", "expected": 5 },
+    { "rev": 125, "pct": "6 %", "expected": 8 },
+    { "rev": 125, "pct": "0,5 %", "expected": 1 },
+    { "rev": 125, "pct": "0,25 %", "expected": 0 },
+    { "rev": 125, "pct": "12 %", "expected": 15 },
+    { "rev": 125, "pct": "0 %", "expected": 0 },
+    { "rev": 125, "pct": "2 %", "expected": 3 },
+    { "rev": 300000, "pct": "4 %", "expected": 12000 },
+    { "rev": 300000, "pct": "6 %", "expected": 18000 },
+    { "rev": 300000, "pct": "0,5 %", "expected": 1500 },
+    { "rev": 300000, "pct": "0,25 %", "expected": 750 },
+    { "rev": 300000, "pct": "12 %", "expected": 36000 },
+    { "rev": 300000, "pct": "0 %", "expected": 0 },
+    { "rev": 300000, "pct": "2 %", "expected": 6000 },
+    { "rev": 200000, "pct": "4 %", "expected": 8000 },
+    { "rev": 200000, "pct": "6 %", "expected": 12000 },
+    { "rev": 200000, "pct": "0,5 %", "expected": 1000 },
+    { "rev": 200000, "pct": "0,25 %", "expected": 500 },
+    { "rev": 200000, "pct": "12 %", "expected": 24000 },
+    { "rev": 200000, "pct": "0 %", "expected": 0 },
+    { "rev": 200000, "pct": "2 %", "expected": 4000 },
+    { "rev": 1234567.89, "pct": "4 %", "expected": 49383 },
+    { "rev": 1234567.89, "pct": "6 %", "expected": 74074 },
+    { "rev": 1234567.89, "pct": "0,5 %", "expected": 6173 },
+    { "rev": 1234567.89, "pct": "0,25 %", "expected": 3086 },
+    { "rev": 1234567.89, "pct": "12 %", "expected": 148148 },
+    { "rev": 1234567.89, "pct": "0 %", "expected": 0 },
+    { "rev": 1234567.89, "pct": "2 %", "expected": 24691 }
+  ]
+}
