@@ -548,8 +548,8 @@ export const unarchiveContractorRoute = createRoute({
 /**
  * «Вернуть из архива» (ТЗ: «назначения и отчёты продолжают создаваться с текущего периода… после
  * возврата система показывает, сколько открытых отчётов»; прототип unarchiveCp). Ответ — карточка
- * (`ContractorSaved`): форма «Новый контрагент» после него открывает «Изменить» (docs/decisions.md
- * п. А-5); версия — необязательна (форма знает только номер найденного по ИНН).
+ * (`ContractorSaved`): форма «Новый контрагент» после него закрывается, карточку откроет задача 2.11
+ * (docs/decisions.md п. А-5); версия — необязательна (форма знает только номер найденного по ИНН).
  */
 export function unarchiveContractorHandler(
   deps: ApiDeps,
@@ -581,6 +581,8 @@ export function unarchiveContractorHandler(
             t,
           })),
           notices: [],
+          // Статусы контрагента не меняются — сроки отчётов не пересчитываются.
+          redued: 0,
           service: await readService(tx, id, today),
           effect,
         };

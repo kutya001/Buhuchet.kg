@@ -2,6 +2,7 @@
 
 import type { MenuModuleId } from '@buhuchet/domain';
 import { AccountsList } from '../admin/accounts-list';
+import { ContractorsStub } from '../contractors/contractor-add';
 import { L10nList } from '../admin/l10n-list';
 import { OrgsList } from '../admin/orgs-list';
 import { PlatformDicts } from '../dicts/platform-tab';
@@ -46,6 +47,8 @@ export function ModuleScreen({
     if (tab === 'roles') return <RolesList />;
     return <StaffStub />;
   }
+  // «Контрагенты»: до списка (2.10) — заглушка с «+ Добавить» → «Контрагент» (2.09).
+  if (moduleId === 'cps') return <ContractorsStub />;
   if (moduleId === 'org') {
     const tab = tabId ?? 'main';
     if (tab === 'policy') return <OrgPolicyTab />;
