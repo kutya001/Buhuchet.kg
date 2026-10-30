@@ -1,6 +1,6 @@
 {
-  "id": "c546d636-dc91-4635-9eff-0ffc76664729",
-  "prevId": "ed722693-52c3-4ba6-a44c-1c983b5019a7",
+  "id": "2df9cf32-deac-47e1-bbdb-fb4b435783e0",
+  "prevId": "b33879de-f80c-4d21-a449-3819b754d313",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1712,179 +1712,6 @@
       "checkConstraints": {},
       "isRLSEnabled": true
     },
-    "public.contractor_service_periods": {
-      "name": "contractor_service_periods",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "org_id": {
-          "name": "org_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "contractor_id": {
-          "name": "contractor_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "from_month": {
-          "name": "from_month",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "to_month": {
-          "name": "to_month",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "pause_reason": {
-          "name": "pause_reason",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "''"
-        },
-        "created_by": {
-          "name": "created_by",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "contractor_service_periods_open_key": {
-          "name": "contractor_service_periods_open_key",
-          "columns": [
-            {
-              "expression": "contractor_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "with": {},
-          "method": "btree",
-          "where": "\"contractor_service_periods\".\"to_month\" is null",
-          "concurrently": false
-        },
-        "contractor_service_periods_org_idx": {
-          "name": "contractor_service_periods_org_idx",
-          "columns": [
-            {
-              "expression": "org_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "contractor_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "with": {},
-          "method": "btree",
-          "concurrently": false
-        }
-      },
-      "foreignKeys": {
-        "contractor_service_periods_org_id_organizations_id_fk": {
-          "name": "contractor_service_periods_org_id_organizations_id_fk",
-          "tableFrom": "contractor_service_periods",
-          "columnsFrom": [
-            "org_id"
-          ],
-          "tableTo": "organizations",
-          "columnsTo": [
-            "id"
-          ],
-          "onUpdate": "no action",
-          "onDelete": "restrict"
-        },
-        "contractor_service_periods_created_by_users_id_fk": {
-          "name": "contractor_service_periods_created_by_users_id_fk",
-          "tableFrom": "contractor_service_periods",
-          "columnsFrom": [
-            "created_by"
-          ],
-          "tableTo": "users",
-          "columnsTo": [
-            "id"
-          ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
-        },
-        "contractor_service_periods_contractor_fk": {
-          "name": "contractor_service_periods_contractor_fk",
-          "tableFrom": "contractor_service_periods",
-          "columnsFrom": [
-            "contractor_id",
-            "org_id"
-          ],
-          "tableTo": "contractors",
-          "columnsTo": [
-            "id",
-            "org_id"
-          ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "contractor_service_periods_from_key": {
-          "name": "contractor_service_periods_from_key",
-          "columns": [
-            "contractor_id",
-            "from_month"
-          ],
-          "nullsNotDistinct": false
-        }
-      },
-      "policies": {
-        "contractor_service_periods_isolation": {
-          "name": "contractor_service_periods_isolation",
-          "as": "PERMISSIVE",
-          "for": "ALL",
-          "to": [
-            "buhuchet_app"
-          ],
-          "using": "\"contractor_service_periods\".\"org_id\" = app.current_org_id()",
-          "withCheck": "\"contractor_service_periods\".\"org_id\" = app.current_org_id()"
-        }
-      },
-      "checkConstraints": {
-        "contractor_service_periods_month_check": {
-          "name": "contractor_service_periods_month_check",
-          "value": "\"contractor_service_periods\".\"from_month\" = date_trunc('month', \"contractor_service_periods\".\"from_month\")::date and (\"contractor_service_periods\".\"to_month\" is null or (\"contractor_service_periods\".\"to_month\" = date_trunc('month', \"contractor_service_periods\".\"to_month\")::date and \"contractor_service_periods\".\"to_month\" >= \"contractor_service_periods\".\"from_month\"))"
-        },
-        "contractor_service_periods_reason_check": {
-          "name": "contractor_service_periods_reason_check",
-          "value": "char_length(\"contractor_service_periods\".\"pause_reason\") <= 500"
-        }
-      },
-      "isRLSEnabled": true
-    },
     "public.contractor_tariffs": {
       "name": "contractor_tariffs",
       "schema": "",
@@ -2512,6 +2339,302 @@
         "contractors_socfund_tariff_check": {
           "name": "contractors_socfund_tariff_check",
           "value": "\"contractors\".\"socfund_tariff\" is null or (jsonb_typeof(\"contractors\".\"socfund_tariff\") = 'object' and \"contractors\".\"socfund_tariff\" - array['id', 'manual', 'reason'] = '{}'::jsonb and coalesce(\"contractors\".\"socfund_tariff\" ->> 'id', '') in ('spino', 'general', 'pvtpki') and coalesce(jsonb_typeof(\"contractors\".\"socfund_tariff\" -> 'manual'), 'null') = 'boolean' and coalesce(jsonb_typeof(\"contractors\".\"socfund_tariff\" -> 'reason'), 'null') in ('null', 'string') and (\"contractors\".\"socfund_tariff\" -> 'manual' = 'true' or coalesce(jsonb_typeof(\"contractors\".\"socfund_tariff\" -> 'reason'), 'null') = 'null'))"
+        }
+      },
+      "isRLSEnabled": true
+    },
+    "public.contractor_page_grants": {
+      "name": "contractor_page_grants",
+      "schema": "",
+      "columns": {
+        "token_hash": {
+          "name": "token_hash",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "org_id": {
+          "name": "org_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "contractor_id": {
+          "name": "contractor_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "code_version": {
+          "name": "code_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "contractor_page_grants_expires_idx": {
+          "name": "contractor_page_grants_expires_idx",
+          "columns": [
+            {
+              "expression": "expires_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "contractor_page_grants_contractor_idx": {
+          "name": "contractor_page_grants_contractor_idx",
+          "columns": [
+            {
+              "expression": "contractor_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "contractor_page_grants_org_id_organizations_id_fk": {
+          "name": "contractor_page_grants_org_id_organizations_id_fk",
+          "tableFrom": "contractor_page_grants",
+          "columnsFrom": [
+            "org_id"
+          ],
+          "tableTo": "organizations",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "restrict"
+        },
+        "contractor_page_grants_contractor_id_contractor_pages_contractor_id_fk": {
+          "name": "contractor_page_grants_contractor_id_contractor_pages_contractor_id_fk",
+          "tableFrom": "contractor_page_grants",
+          "columnsFrom": [
+            "contractor_id"
+          ],
+          "tableTo": "contractor_pages",
+          "columnsTo": [
+            "contractor_id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "contractor_page_grants_isolation": {
+          "name": "contractor_page_grants_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "buhuchet_app"
+          ],
+          "using": "\"contractor_page_grants\".\"org_id\" = app.current_org_id()",
+          "withCheck": "\"contractor_page_grants\".\"org_id\" = app.current_org_id()"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.contractor_pages": {
+      "name": "contractor_pages",
+      "schema": "",
+      "columns": {
+        "contractor_id": {
+          "name": "contractor_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "org_id": {
+          "name": "org_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "enabled": {
+          "name": "enabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "code": {
+          "name": "code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "code_version": {
+          "name": "code_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "hidden_sections": {
+          "name": "hidden_sections",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'"
+        },
+        "failures": {
+          "name": "failures",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "locked_until": {
+          "name": "locked_until",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_by": {
+          "name": "updated_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "contractor_pages_org_id_organizations_id_fk": {
+          "name": "contractor_pages_org_id_organizations_id_fk",
+          "tableFrom": "contractor_pages",
+          "columnsFrom": [
+            "org_id"
+          ],
+          "tableTo": "organizations",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "restrict"
+        },
+        "contractor_pages_created_by_users_id_fk": {
+          "name": "contractor_pages_created_by_users_id_fk",
+          "tableFrom": "contractor_pages",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "contractor_pages_updated_by_users_id_fk": {
+          "name": "contractor_pages_updated_by_users_id_fk",
+          "tableFrom": "contractor_pages",
+          "columnsFrom": [
+            "updated_by"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "contractor_pages_contractor_fk": {
+          "name": "contractor_pages_contractor_fk",
+          "tableFrom": "contractor_pages",
+          "columnsFrom": [
+            "contractor_id",
+            "org_id"
+          ],
+          "tableTo": "contractors",
+          "columnsTo": [
+            "id",
+            "org_id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "contractor_pages_isolation": {
+          "name": "contractor_pages_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "buhuchet_app"
+          ],
+          "using": "\"contractor_pages\".\"org_id\" = app.current_org_id()",
+          "withCheck": "\"contractor_pages\".\"org_id\" = app.current_org_id()"
+        }
+      },
+      "checkConstraints": {
+        "contractor_pages_code_check": {
+          "name": "contractor_pages_code_check",
+          "value": "\"contractor_pages\".\"code\" ~ '^[0-9]{6}$'"
+        },
+        "contractor_pages_hidden_check": {
+          "name": "contractor_pages_hidden_check",
+          "value": "\"contractor_pages\".\"hidden_sections\" <@ array['pay', 'reports', 'money', 'fee', 'kpi', 'contacts']::text[]"
+        },
+        "contractor_pages_failures_check": {
+          "name": "contractor_pages_failures_check",
+          "value": "\"contractor_pages\".\"failures\" >= 0"
         }
       },
       "isRLSEnabled": true
@@ -6640,12 +6763,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "cause": {
-          "name": "cause",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "file_id": {
           "name": "file_id",
           "type": "uuid",
@@ -6780,10 +6897,6 @@
         "status_history_rollback_reason_check": {
           "name": "status_history_rollback_reason_check",
           "value": "not \"status_history\".\"is_rollback\" or (\"status_history\".\"from_status\" is not null and \"status_history\".\"reason\" is not null and btrim(\"status_history\".\"reason\") <> '')"
-        },
-        "status_history_cause_check": {
-          "name": "status_history_cause_check",
-          "value": "\"status_history\".\"cause\" is null or \"status_history\".\"cause\" in ('service')"
         },
         "status_history_reason_check": {
           "name": "status_history_reason_check",

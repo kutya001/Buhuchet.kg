@@ -15,6 +15,7 @@ export * from './contractors';
 export * from './socfund';
 export * from './contractor-service';
 export * from './service-periods';
+export * from './contractor-page';
 export * from './reports';
 export * from './report-list';
 export * from './tasks';
