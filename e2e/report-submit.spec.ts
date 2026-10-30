@@ -550,6 +550,13 @@ test.describe('Этап 2: отчёты — сдача, подтверждени
         'Сдача отчётов требует подтверждения: выключено; считаются подтверждёнными: 1',
       ),
     ).toBeVisible();
-    await expect.poll(async () => (await cardOf(page.request, id)).mark).toBe('confirmed');
+    // Подтверждение выключено — отметки на шаге «Сдан» больше нет, отчёт подтверждён с причиной.
+    const after = (await cardOf(page.request, id)) as Card & {
+      confirmedAt: string | null;
+      confirmNote: string | null;
+    };
+    expect(after.mark).toBeNull();
+    expect(after.confirmedAt).not.toBeNull();
+    expect(after.confirmNote).toBe('Подтверждение выключено в учётной политике');
   });
 });
