@@ -19,6 +19,8 @@ import { OrgMain } from '../org/org-main';
 import { OrgPolicyTab } from '../org/org-policy';
 import { OrgSettingsTab } from '../org/org-settings';
 import { PlatformDictsAdmin } from '../platform-dicts/pdicts-screen';
+import { REPORT_LIST_TABS, type ReportListTab } from '../reports/reports-data';
+import { ReportsList } from '../reports/reports-list';
 import { RolesList } from '../roles/roles-list';
 import { ModuleStub } from '../shell/module-stub';
 import { StaffList } from '../staff/staff-list';
@@ -55,6 +57,12 @@ export function ModuleScreen({
     if (tab === 'settings') return <OrgSettingsTab />;
     return <OrgMain />;
   }
+  // «Кто что сдаёт» и «Календарь» — задача 2.15.
+  if (moduleId === 'reports') {
+    const tab = (tabId ?? 'week') as ReportListTab;
+    if (REPORT_LIST_TABS.includes(tab)) return <ReportsList key={tab} tab={tab} />;
+    return <ModuleStub moduleId={moduleId} />;
+  }
   if (moduleId === 'tasks') {
     const tab = (tabId ?? 'mine') as TaskTab;
     return <TasksList key={tab} tab={TASK_TABS.includes(tab) ? tab : 'mine'} />;
@@ -88,6 +96,11 @@ export function ModuleScreen({
  * вкладку («модуль/вкладка») и показывает плашки по `useModuleStats`.
  */
 const SCREENS_WITH_PLATES: ReadonlySet<string> = new Set<string>([
+  'reports/',
+  'reports/week',
+  'reports/overdue',
+  'reports/waiting',
+  'reports/all',
   'tasks/',
   'tasks/mine',
   'tasks/byme',

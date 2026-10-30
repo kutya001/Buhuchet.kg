@@ -9,6 +9,7 @@ import type { Translate } from '../l10n/translate';
 /** Ключи числа записей в трёх формах: `grid.count` — «записей», `staff.count` — «сотрудников». */
 export type CountKey =
   | 'grid.count'
+  | 'report.count'
   | 'staff.count'
   | 'roles.count'
   | 'task.count'

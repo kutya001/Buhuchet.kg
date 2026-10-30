@@ -34,7 +34,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { api } from '../api-client';
 import { kbStateQuery } from '../kb/kb-data';
-import { KbContext, useKbRuntime, type KbControls } from '../kb/kb-provider';
+import { KbContext, useKb, useKbRuntime, type KbControls } from '../kb/kb-provider';
 import { useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { newsUnreadQuery } from '../news/news-data';
@@ -159,13 +159,18 @@ function ModuleTabRow({
 
 function TabRowWithStats({ moduleId, ...props }: TabRowProps & { moduleId: MenuModuleId }) {
   const t = useT();
+  const kb = useKb();
   const stats = useModuleStats(moduleId);
   return (
     <TabRow
       {...props}
       stats={{
         shown: stats.shown,
-        onToggle: stats.toggle,
+        onToggle: () => {
+          // «Скрыть и показать статистику модуля» в «Базе знаний» — первое использование.
+          kb.hit('stats');
+          stats.toggle();
+        },
         label: t('shell.stats'),
         show: t('shell.stats_show'),
         hide: t('shell.stats_hide'),

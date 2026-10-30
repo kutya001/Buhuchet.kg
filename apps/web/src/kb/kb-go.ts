@@ -39,6 +39,8 @@ export const KB_GO: Readonly<Record<string, KbTarget>> = {
   empcard: { module: 'staff', tab: 'list', flash: LIST },
   // Контрагенты (задача 2.09): до списка (2.10) подсвечивается экран модуля, форма открывается сама.
   cp1: { module: 'cps', tab: 'all', flash: 'main', open: { add: 'contractor' } },
+  // «Отчеты для сдачи» (задача 2.13).
+  rtabs: { module: 'reports', tab: 'week', flash: '[data-tabrow]' },
   // Задачи (задача 2.23).
   mtask: { module: 'tasks', tab: 'byme', flash: LIST, open: { add: 'task' } },
   daymonth: { module: 'tasks', tab: 'mine', flash: '[data-task-legend]' },
@@ -65,7 +67,8 @@ export const KB_GO: Readonly<Record<string, KbTarget>> = {
   cols: { module: 'dicts', tab: 'types', flash: '[data-grid-columns-button]' },
   grp: { module: 'dicts', tab: 'types', flash: '[data-grid-group-button]' },
   xls: { module: 'dicts', tab: 'types', flash: '[data-grid-export]' },
-  swipe: { module: 'dicts', tab: 'types', flash: '[data-tabrow]' },
+  stats: { module: 'reports', tab: 'week', flash: '[data-stats-toggle]' },
+  swipe: { module: 'reports', tab: 'week', flash: '[data-tabrow]' },
   // Админка.
   'a-dicts': { module: 'pdicts', tab: 'regimes', flash: 'main' },
   'a-cal': { module: 'pdicts', tab: 'calendar', flash: 'main' },

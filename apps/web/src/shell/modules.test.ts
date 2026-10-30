@@ -229,6 +229,15 @@ describe('адрес страницы за входом', () => {
     });
   });
 
+  it('«Ожидают подтверждения» без подтверждения сдачи в учётной политике — на «Все отчёты» (прототип renderReports)', () => {
+    expect(resolveAppRoute(me({ reportConfirm: false }), 'reports', ['waiting'])).toEqual({
+      redirect: '/app/reports/all',
+    });
+    expect(resolveAppRoute(me({ reportConfirm: false }), 'reports', ['nope'])).toEqual({
+      redirect: '/app/reports/week',
+    });
+  });
+
   it('модуля нет в меню (нет права «Просматривать …») — на первый модуль меню', () => {
     expect(resolveAppRoute(me(), 'projects', ['active'])).toEqual({
       redirect: '/app/home/today',

@@ -231,25 +231,28 @@ const NOTE_ICONS: Record<keyof typeof NOTE_TONES, IconName> = {
 
 /**
  * Заметка (`.note`, `.note.warn`, `.note.bad`, `.note.ok`): значок и текст. `alert` — важное сообщение,
- * которое экранный диктор читает сразу (ошибка формы).
+ * которое экранный диктор читает сразу (ошибка формы). `center` — значок по центру строки, как у
+ * заметки с кнопкой (`.fe-note`).
  */
 export function Note({
   tone = 'info',
   icon,
   alert = false,
+  center = false,
   children,
 }: {
   tone?: keyof typeof NOTE_TONES;
   icon?: IconName;
   alert?: boolean;
+  center?: boolean;
   children: ReactNode;
 }) {
   return (
     <div
       role={alert ? 'alert' : undefined}
-      className={`flex items-start gap-[9px] rounded-lg border px-3 py-[9px] text-[12.5px] leading-[1.45] ${NOTE_TONES[tone]}`}
+      className={`flex ${center ? 'items-center' : 'items-start'} gap-[9px] rounded-lg border px-3 py-[9px] text-[12.5px] leading-[1.45] ${NOTE_TONES[tone]}`}
     >
-      <Icon name={icon ?? NOTE_ICONS[tone]} className="mt-px" />
+      <Icon name={icon ?? NOTE_ICONS[tone]} className={center ? undefined : 'mt-px'} />
       <div className="min-w-0 grow">{children}</div>
     </div>
   );
