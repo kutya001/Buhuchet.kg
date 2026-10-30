@@ -1,5 +1,5 @@
 import type { IsoDate } from '../common/dates';
-import type { Translate } from '../l10n/texts';
+import type { Translate, UiTextKey } from '../l10n/texts';
 import type { ReportPeriod } from '../platform-dicts/catalog';
 
 /*
@@ -78,6 +78,24 @@ export function periodLabel(ref: PeriodRef, t: Translate): string {
       return t('report.period.h_short', { n: ROMAN[partOf(ref) - 1]!, y });
     case 'Y':
       return String(y);
+  }
+}
+
+/** Период полностью (прототип phuman): «Октябрь 2026», «III квартал 2026», «II полугодие 2026», «2026 год». */
+export function periodFull(ref: Pick<PeriodRef, 'period' | 'start'>, t: Translate): string {
+  const y = yearOf(ref.start);
+  switch (ref.period) {
+    case 'M':
+      return t('report.period.m_full', {
+        month: t(`report.month.${monthOf(ref.start)}` as UiTextKey),
+        y,
+      });
+    case 'Q':
+      return t('report.period.q_full', { n: ROMAN[partOf(ref) - 1]!, y });
+    case 'H':
+      return t('report.period.h_full', { n: ROMAN[partOf(ref) - 1]!, y });
+    case 'Y':
+      return t('report.period.y_full', { y });
   }
 }
 

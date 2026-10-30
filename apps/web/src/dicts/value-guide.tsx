@@ -16,7 +16,7 @@ import type {
   TaxOffice,
   TaxRegime,
 } from '@buhuchet/shared';
-import { KeyValues, Note, type KeyValueItem } from '@buhuchet/ui';
+import { KeyValues, Note, Pill, type KeyValueItem } from '@buhuchet/ui';
 import type { ReactNode } from 'react';
 import { useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
@@ -156,6 +156,7 @@ function benefitItems(
   catalog: Catalog,
   offices: readonly TaxOffice[],
   t: Translate,
+  ownOffice: ReactNode,
 ): KeyValueItem[] {
   const short = (codes: readonly string[]) =>
     codes.map((c) => catalog.type(c)?.shortName ?? c).join(', ');
@@ -167,7 +168,10 @@ function benefitItems(
     !!due && [t('dicts.value.due'), due],
     x.taxOffices.length > 0 && [
       t('dicts.value.ugns'),
-      x.taxOffices.map((c) => officeLabel(offices, c)).join(', '),
+      <>
+        {x.taxOffices.map((c) => officeLabel(offices, c)).join(', ')}
+        {ownOffice ? <> {ownOffice}</> : null}
+      </>,
     ],
     [t('dicts.value.payer'), t(`dicts.guide.who.${x.payer}`)],
     !!x.conditions && [t('dicts.value.conditions'), x.conditions, true],
@@ -198,20 +202,32 @@ function benefitItems(
 }
 
 /**
- * Льгота или особый статус (прототип `benDescHtml` без контрагента): название с «сверить», «Данные
- * уточняются», тип, что даёт, меняет сроки, УГНС, кто может применять, условия, подтверждение,
- * совмещение, срок действия, ГКЭД, добавляемые и ненужные отчёты, статья.
+ * Льгота или особый статус (прототип `benDescHtml`): название с «сверить», «Данные уточняются», тип,
+ * что даёт, меняет сроки, УГНС, кто может применять, условия, подтверждение, совмещение, срок
+ * действия, ГКЭД, добавляемые и ненужные отчёты, статья. В окне «Льготы и особые статусы»: `office` —
+ * УГНС контрагента (у «Ставится по УГНС» — метка «у контрагента»), `footer` — «Подходит» / «Не
+ * подходит».
  */
 export function BenefitGuide({
   x,
   catalog,
   offices,
+  office,
+  footer,
 }: {
   x: TaxBenefit;
   catalog: Catalog;
   offices: readonly TaxOffice[];
+  office?: { code: string | null; label: string };
+  footer?: ReactNode;
 }) {
   const t = useT();
+  const own =
+    office?.code && x.taxOffices.includes(office.code) ? (
+      <Pill tone="info" size="sm">
+        {office.label}
+      </Pill>
+    ) : null;
   return (
     <div className="flex flex-col gap-2.5">
       <h3 className="m-0 flex flex-wrap items-center gap-1.5 text-[15px] leading-[1.3] font-bold">
@@ -225,7 +241,8 @@ export function BenefitGuide({
             : t('dicts.value.verify')}
         </Note>
       ) : null}
-      <KeyValues items={benefitItems(x, catalog, offices, t)} columns={2} />
+      <KeyValues items={benefitItems(x, catalog, offices, t, own)} columns={2} />
+      {footer}
     </div>
   );
 }

@@ -235,6 +235,18 @@ function fit(
   );
 }
 
+/**
+ * Правило для контрагента и подходящие под него коды ГКЭД контрагента (прототип gkFor, gkFit ∘ cpCodes):
+ * `fit` — null, если правило пустое (без ограничения). Для подбора отчётов и окна льгот (2.07).
+ */
+export function gkedFitOf(
+  rule: GkedRule | null,
+  s: GkedSubject,
+  index: GkedIndex,
+): { rule: GkedRule | null; fit: string[] | null } {
+  return { rule: rule && ruleFor(rule, s), fit: fit(rule, codesOf(s), index, s) };
+}
+
 /** Пометка «сверить» у перечня (прототип gkVer). */
 function verifyOf(r: GkedRule | null | undefined): GkedVerify {
   if (!r) return '';
