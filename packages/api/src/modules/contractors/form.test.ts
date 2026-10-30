@@ -219,9 +219,9 @@ describe.skipIf(!databaseAvailable())('Форма контрагента: мет
     const reports = await reportsOf(cp.id);
     expect(cp.reportsCreated).toBe(reports.length);
     expect(cp.reportsCreated).toBeGreaterThan(0);
-    expect(new Set(reports.map((r) => r.type.code))).toEqual(
-      new Set(['nds', 'npa', 'nspm', 'endo']),
-    );
+    // «НП предв.» — квартальный без IV квартала: обслуживание с октября, за III квартал отчёта нет
+    // (отчёты — только за периоды обслуживания, docs/deviations.md п. В-11, задача 2.12); назначение есть.
+    expect(new Set(reports.map((r) => r.type.code))).toEqual(new Set(['nds', 'nspm', 'endo']));
     // Ответственный за отчёты — ответственный контрагента.
     expect(reports.every((r) => r.responsible?.id === f.people['acc-a']!.employeeId)).toBe(true);
     const items = await assignmentsOf(cp.id);
