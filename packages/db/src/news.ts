@@ -24,6 +24,7 @@ import {
   type ListPageResult,
   type ListTexts,
 } from './list';
+import { welcomeSeenByMe } from './onboarding';
 import { writePlatformHistory } from './platform-history';
 import { news, newsReads, platformAuditLog } from './schema';
 
@@ -181,8 +182,10 @@ export async function newsUnreadCount(tx: Tx): Promise<number> {
 
 /**
  * Окно «Что нового» (прототип whatsNew): непрочитанные новости «Показывать при входе» от новых к
- * старым; `first` — у пользователя ещё нет ни одной прочитанной новости (окно впервые — с
- * приветствием и «Открыть Базу знаний»).
+ * старым; `first` — у пользователя ещё нет ни одной прочитанной новости и он не видел приветствия
+ * организации (окно впервые — с приветствием и «Открыть Базу знаний»). Кто видел приветствие
+ * (задача 2.33), тому приветствие в окне не повторяется, как в прототипе: `firstLogin` ставит ту же
+ * отметку `kbw.<пользователь>` (решение заказчика Г-4 «А»).
  */
 // ОТКЛОНЕНИЕ: docs/deviations.md#Г-4
 export async function newsWhatsNew(tx: Tx): Promise<{ items: NewsRecord[]; first: boolean }> {
@@ -194,7 +197,8 @@ export async function newsWhatsNew(tx: Tx): Promise<{ items: NewsRecord[]; first
     .select({ n: sql<number>`count(*)::integer` })
     .from(newsReads)
     .where(sql`${newsReads.userId} = app.current_user_id()`);
-  return { items: rows.map(toRecord).sort(byFeedOrder), first: (seen?.n ?? 0) === 0 };
+  const first = (seen?.n ?? 0) === 0 && !(await welcomeSeenByMe(tx));
+  return { items: rows.map(toRecord).sort(byFeedOrder), first };
 }
 
 /**

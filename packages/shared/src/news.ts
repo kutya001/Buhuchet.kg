@@ -51,7 +51,8 @@ export type NewsUnread = z.infer<typeof NewsUnread>;
 
 /**
  * Окно «Что нового»: непрочитанные новости «Показывать при входе»; `first` — у пользователя ещё нет
- * прочитанных новостей (окно впервые: приветствие и «Открыть Базу знаний»).
+ * прочитанных новостей и он не видел приветствия организации (окно впервые: приветствие и «Открыть
+ * Базу знаний»).
  */
 export const WhatsNew = z.object({ items: z.array(NewsItem), first: z.boolean() });
 export type WhatsNew = z.infer<typeof WhatsNew>;
