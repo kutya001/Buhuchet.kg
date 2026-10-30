@@ -9,6 +9,7 @@ import {
   rollbackTitle,
   scaleView,
   statusEvents,
+  statusPillView,
   type StatusEvent,
 } from './status-view';
 
@@ -325,5 +326,19 @@ describe('словарь и значки', () => {
         expect(Object.hasOwn(ICONS, look.icon), look.icon).toBe(true);
       }
     }
+  });
+});
+
+describe('цвет статуса из Админки (справочник «Статусы»)', () => {
+  it('цвет приходит со словарём и действует на метке, шкале и мини-шкале; чужой цвет — по умолчанию', () => {
+    const tt = makeTranslate({ ...defaultUiTexts(), 'tone.report.submitted': 'purple' });
+    expect(statusPillView(tt, 'report', 'submitted').tone).toBe('purple');
+    expect(statusPillView(t, 'report', 'submitted').tone).toBe('green');
+    const full = scaleView(tt, { scale: 'report', status: 'submitted', history: report });
+    expect(full.kind === 'scale' && full.props.tone).toBe('purple');
+    const mini = miniView(tt, { scale: 'report', status: 'submitted', history: report });
+    expect(mini.kind === 'mini' && mini.props.tone).toBe('purple');
+    const odd = makeTranslate({ ...defaultUiTexts(), 'tone.report.submitted': 'pink' });
+    expect(statusPillView(odd, 'report', 'submitted').tone).toBe('green');
   });
 });

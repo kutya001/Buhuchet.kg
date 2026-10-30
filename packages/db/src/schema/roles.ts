@@ -21,6 +21,8 @@ import { users } from './users';
 /**
  * Каталог прав — справочник платформы «Права ролей»: названия и описания из refDB.json. Набор прав
  * и их группы задаёт система (`PERMISSIONS` в @buhuchet/domain), наполнение сверяет каталог с ним.
+ * Название и описание меняет администратор платформы (`app.admin_set_permission`); «Изменил» не даёт
+ * наполнению затереть его правку.
  */
 export const permissions = pgTable(
   'permissions',
@@ -31,11 +33,17 @@ export const permissions = pgTable(
     description: text('description').notNull(),
     sortOrder: integer('sort_order').notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    /** Кто поправил тексты в Админке; null — тексты из наполнения. */
+    updatedBy: uuid('updated_by').references(() => users.id),
+    version: recordVersion(),
   },
   () => [platformReadOnly('permissions_read')],
 ).enableRLS();
 
-/** Шаблоны ролей платформы («Главный бухгалтер», «Бухгалтер»): новая организация получает копии. */
+/**
+ * Шаблоны ролей платформы («Главный бухгалтер», «Бухгалтер»): новая организация получает копии.
+ * Название, права и область меняет администратор платформы (`app.admin_set_role_template`).
+ */
 export const roleTemplates = pgTable(
   'role_templates',
   {
@@ -47,6 +55,8 @@ export const roleTemplates = pgTable(
     active: boolean('active').notNull().default(true),
     sortOrder: integer('sort_order').notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    /** Кто поправил шаблон в Админке; null — шаблон из наполнения. */
+    updatedBy: uuid('updated_by').references(() => users.id),
     version: recordVersion(),
   },
   () => [platformReadOnly('role_templates_read')],

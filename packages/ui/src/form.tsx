@@ -313,11 +313,14 @@ const TAG_TONES = {
 export function Tag({
   icon,
   title,
+  wide = false,
   tone = 'plain',
   children,
 }: {
   icon?: IconName;
   title?: string;
+  /** Не уже 58 px, текст по центру — метки «Этап N» столбиком (Админка → «Статусы»). */
+  wide?: boolean;
   tone?: keyof typeof TAG_TONES;
   children: ReactNode;
 }) {
@@ -325,7 +328,7 @@ export function Tag({
     <span
       data-tag=""
       title={title}
-      className={`inline-flex flex-none items-center gap-1 rounded px-1.5 align-[1px] text-[10.5px] leading-[17px] font-[650] tracking-[.03em] whitespace-nowrap ${TAG_TONES[tone]}`}
+      className={`inline-flex flex-none items-center gap-1 rounded px-1.5 align-[1px] text-[10.5px] leading-[17px] font-[650] tracking-[.03em] whitespace-nowrap ${TAG_TONES[tone]}${wide ? ' min-w-[58px] justify-center' : ''}`}
     >
       {icon ? <Icon name={icon} size="sm" /> : null}
       {children}

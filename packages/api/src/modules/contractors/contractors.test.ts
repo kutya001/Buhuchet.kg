@@ -12,7 +12,7 @@ import {
   ListValues,
   TransferContractorsPreview,
 } from '@buhuchet/shared';
-import { and, eq } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { apiRequest, createStaffFixture, signIn, TEST_PASSWORD, unzipTexts } from '../../testing';
 
@@ -71,7 +71,9 @@ describe.skipIf(!databaseAvailable())('Контрагенты: методы API'
       .from(schema.auditLog)
       .where(
         and(eq(schema.auditLog.entity, 'contractor'), eq(schema.auditLog.entityId, contractorId)),
-      );
+      )
+      // По порядку записи: без сортировки база отдаёт строки как лежат на диске.
+      .orderBy(asc(schema.auditLog.id));
 
   beforeAll(async () => {
     f = await createStaffFixture();

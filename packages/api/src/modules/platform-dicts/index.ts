@@ -90,6 +90,37 @@ import {
   listAdminTaxesHandler,
   listAdminTaxesRoute,
 } from './admin-taxes';
+import {
+  adminMessageTemplatesHandler,
+  adminMessageTemplatesRoute,
+  adminPermissionsHandler,
+  adminPermissionsRoute,
+  adminPermissionValuesHandler,
+  adminPermissionValuesRoute,
+  adminRoleTemplatesHandler,
+  adminRoleTemplatesRoute,
+  adminStatusesHandler,
+  adminStatusesRoute,
+  exportAdminPermissionsHandler,
+  exportAdminPermissionsRoute,
+  permsHistoryRoute,
+  roletplHistoryRoute,
+  saveMessageTemplatesHandler,
+  saveMessageTemplatesRoute,
+  setPeriodNameHandler,
+  setPeriodNameRoute,
+  setPermissionHandler,
+  setPermissionRoute,
+  setRoleTemplateHandler,
+  setRoleTemplateRoute,
+  setStatusNameHandler,
+  setStatusNameRoute,
+  setStatusToneHandler,
+  setStatusToneRoute,
+  statusesHistoryRoute,
+  systemHistoryHandler,
+  templatesHistoryRoute,
+} from './admin-system';
 import { phoneCodesHandler, phoneCodesRoute } from './phone-codes';
 
 /**
@@ -134,6 +165,25 @@ export function platformDictsModule(deps: ApiDeps) {
       .openapi(adminCalendarHistoryRoute, adminCalendarHistoryHandler(deps))
       .openapi(addAdminCalendarDayRoute, addAdminCalendarDayHandler(deps))
       .openapi(deleteAdminCalendarDayRoute, deleteAdminCalendarDayHandler(deps))
+      .openapi(adminStatusesRoute, adminStatusesHandler(deps))
+      .openapi(statusesHistoryRoute, systemHistoryHandler(deps, 'statuses', statusesHistoryRoute))
+      .openapi(setStatusNameRoute, setStatusNameHandler(deps))
+      .openapi(setStatusToneRoute, setStatusToneHandler(deps))
+      .openapi(setPeriodNameRoute, setPeriodNameHandler(deps))
+      .openapi(adminPermissionsRoute, adminPermissionsHandler(deps))
+      .openapi(adminPermissionValuesRoute, adminPermissionValuesHandler(deps))
+      .openapi(exportAdminPermissionsRoute, exportAdminPermissionsHandler(deps))
+      .openapi(permsHistoryRoute, systemHistoryHandler(deps, 'perms', permsHistoryRoute))
+      .openapi(setPermissionRoute, setPermissionHandler(deps))
+      .openapi(adminRoleTemplatesRoute, adminRoleTemplatesHandler(deps))
+      .openapi(roletplHistoryRoute, systemHistoryHandler(deps, 'roletpl', roletplHistoryRoute))
+      .openapi(setRoleTemplateRoute, setRoleTemplateHandler(deps))
+      .openapi(adminMessageTemplatesRoute, adminMessageTemplatesHandler(deps))
+      .openapi(
+        templatesHistoryRoute,
+        systemHistoryHandler(deps, 'templates', templatesHistoryRoute),
+      )
+      .openapi(saveMessageTemplatesRoute, saveMessageTemplatesHandler(deps))
       .openapi(listAdminDictRoute, listAdminDictHandler(deps))
       .openapi(adminDictValuesRoute, adminDictValuesHandler(deps))
       .openapi(exportAdminDictRoute, exportAdminDictHandler(deps))

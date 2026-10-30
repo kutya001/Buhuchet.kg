@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { loadUiTexts, uiTextsStamp } from '@buhuchet/db';
+import { loadUiTexts, statusTonesStamp, statusToneTexts, uiTextsStamp } from '@buhuchet/db';
 import { DEFAULT_UI_LANGUAGE, defaultUiTexts, type UiLanguage } from '@buhuchet/domain';
 import type { UiDictionary } from '@buhuchet/shared';
 import type { ApiDeps } from '../../deps';
@@ -57,7 +57,9 @@ export function uiDictionary(deps: ApiDeps): LoadDictionary {
     const now = Date.now();
     const edited = edits().get(lang) ?? 0;
     if (cached && cached.edits === edited && now - cached.checkedAt < recheckMs) return cached.body;
-    const stamp = await uiTextsStamp(deps.db, lang);
+    // Цвета статусов из Админки едут вместе с текстами (`tone.<шкала>.<код>`): шкалы и метки всех
+    // экранов берут цвет из словаря.
+    const stamp = `${await uiTextsStamp(deps.db, lang)}|${await statusTonesStamp(deps.db)}`;
     if (cached?.stamp === stamp) {
       Object.assign(cached, { checkedAt: now, edits: edited });
       return cached.body;
@@ -65,7 +67,11 @@ export function uiDictionary(deps: ApiDeps): LoadDictionary {
     const body: UiDictionary = {
       lang,
       version: versionOf(lang, stamp),
-      texts: { ...DEFAULT_TEXTS, ...(await loadUiTexts(deps.db, lang)) },
+      texts: {
+        ...DEFAULT_TEXTS,
+        ...(await loadUiTexts(deps.db, lang)),
+        ...(await statusToneTexts(deps.db)),
+      },
     };
     cache.set(lang, { stamp, checkedAt: now, edits: edited, body });
     return body;
