@@ -181,9 +181,12 @@ test.describe('Этап 2: форма контрагента', () => {
     // Остальные свои шаги — тем же, чем их засчитывают экраны: Telegram, просмотр экрана шага,
     // «Тема оформления» — показом (задача 2.31), первое использование, своя задача «Выполнена».
     await linkTelegram(acct, origin, uniqueChat());
-    const theme = await acct.post('/api/kb/steps/theme/show', { headers: { origin } });
-    expect(theme.status(), await theme.text()).toBe(200);
-    for (const id of ['pdicts', 'rtabs', 'bulk', 'scale', 'daymonth']) {
+    // «Массовая отметка» и «Шкала статусов» (задача 2.14) — «Посмотреть» без своего экрана: показом.
+    for (const id of ['theme', 'bulk', 'scale']) {
+      const shown = await acct.post(`/api/kb/steps/${id}/show`, { headers: { origin } });
+      expect(shown.status(), await shown.text()).toBe(200);
+    }
+    for (const id of ['pdicts', 'rtabs', 'daymonth']) {
       const look = await acct.post(`/api/kb/steps/${id}/look`, { headers: { origin } });
       expect(look.status(), await look.text()).toBe(200);
     }
