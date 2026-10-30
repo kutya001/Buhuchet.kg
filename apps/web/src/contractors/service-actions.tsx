@@ -63,7 +63,7 @@ export function useServiceActions(
 ): {
   actions: (contractor: ServiceContractor, service: ContractorService) => ActionEntry[];
   archive: (contractors: readonly { id: string; name: string }[]) => void;
-  unarchive: (contractorId: string) => void;
+  unarchive: (contractorId: string) => Promise<void>;
   dialogs: ReactNode;
 } {
   const t = useT();
@@ -323,7 +323,7 @@ export function useServiceActions(
   return {
     actions,
     archive: (list) => setAskArchive(list),
-    unarchive: (id) => void unarchive(id),
+    unarchive,
     dialogs,
   };
 }

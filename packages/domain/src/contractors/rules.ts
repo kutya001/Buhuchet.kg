@@ -73,6 +73,39 @@ export const FEE_DAY_MAX = 28;
 /** День оплаты по умолчанию (прототип addCpDlg: feeDay 10). */
 export const DEFAULT_FEE_DAY = 10;
 
+/** Форма собственности новой записи в форме создания (прототип addCpDlg: `form:'ОсОО'`). */
+export const NEW_CONTRACTOR_FORM = 'ФС-01';
+
+/** Начисление за месяц начала обслуживания — для подсказки формы (прототип addCpDlg, pro). */
+export type FirstMonthFee =
+  | { kind: 'full'; amount: number }
+  | { kind: 'prorate'; amount: number; full: number; left: number; days: number }
+  | { kind: 'next'; amount: number };
+
+/**
+ * Сколько начислится за месяц начала обслуживания при ставке «в месяц» (прототип core/org.js: с 1-го
+ * числа — полная ставка; «Пропорционально дням» — ставка × оставшиеся дни / дни месяца, до целого сома;
+ * «Со следующего месяца» — ничего, полная ставка со следующего). Суммы — в тыйынах.
+ */
+export function firstMonthFee(
+  amount: number,
+  startDate: string,
+  mode: FirstMonthMode,
+): FirstMonthFee {
+  const [y, m, d] = startDate.split('-').map(Number) as [number, number, number];
+  if (d === 1 || mode === 'full') return { kind: 'full', amount };
+  if (mode === 'next') return { kind: 'next', amount };
+  const days = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const left = days - d + 1;
+  return {
+    kind: 'prorate',
+    amount: Math.round(((amount / 100) * left) / days) * 100,
+    full: amount,
+    left,
+    days,
+  };
+}
+
 export const CONTRACTOR_PROBLEMS = [
   'inn_format',
   'inn_start',

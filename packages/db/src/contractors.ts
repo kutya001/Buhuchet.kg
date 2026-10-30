@@ -1040,14 +1040,19 @@ export interface OfficeBenefitTexts {
  * Статусы «Ставится по УГНС» при выборе или смене УГНС (ТЗ «Окно «Льготы и особые статусы»»; прототип
  * ugAuto, ugDrop, ugMsg): льготы и статусы контрагента после смены и уведомления «Отмечен статус «…» по
  * УГНС», «Снят статус «…» по УГНС». Новый статус — без дат действия. УГНС не менялось — без изменений.
+ * `chosen` — список, который прислала форма: статусы по УГНС она ставит и снимает сама, а снятый
+ * вручную статус не возвращается (ТЗ: «можно поставить и снять вручную»). Тогда список остаётся как
+ * прислан, а уведомления — только об изменениях, которые в нём оставили (прототип: st.ugAdd, st.ugDrop
+ * при сохранении формы).
  */
 export async function withOfficeBenefits(
   tx: Tx,
   benefits: ContractorFields['benefits'],
   offices: { from: string | null; to: string | null },
   texts: OfficeBenefitTexts,
+  chosen?: ContractorFields['benefits'],
 ): Promise<{ benefits: ContractorFields['benefits']; notes: string[] }> {
-  if (offices.from === offices.to) return { benefits, notes: [] };
+  if (offices.from === offices.to) return { benefits: chosen ?? benefits, notes: [] };
   const [byOld, byNew] = await Promise.all([
     officeBenefits(tx, offices.from),
     officeBenefits(tx, offices.to),
@@ -1059,6 +1064,16 @@ export async function withOfficeBenefits(
   );
   const names = new Map([...byOld, ...byNew].map((b) => [b.code, b.name]));
   const note = (template: string, code: string) => template.replace('{name}', names.get(code)!);
+  if (chosen) {
+    const kept = new Set(chosen.map((b) => b.code));
+    return {
+      benefits: chosen,
+      notes: [
+        ...add.filter((code) => kept.has(code)).map((code) => note(texts.marked, code)),
+        ...drop.filter((code) => !kept.has(code)).map((code) => note(texts.dropped, code)),
+      ],
+    };
+  }
   return {
     benefits: [
       ...benefits.filter((b) => !drop.includes(b.code)),
@@ -1093,7 +1108,7 @@ export async function writeContractorNotes(
  * Изменить контрагента («Изменить» в карточке): поля, дополнительные ГКЭД, льготы и основания — с
  * защитой от одновременной правки и историей «было → стало» в той же транзакции. Устаревшая версия —
  * `RecordChangedError`, вне области — `RecordNotFoundError`. С `redue` сменившиеся статусы пересчитывают
- * сроки несданных отчётов.
+ * сроки несданных отчётов; `redued` — у скольких отчётов изменился срок.
  */
 export async function updateContractor(
   tx: Tx,
@@ -1103,7 +1118,7 @@ export async function updateContractor(
   patch: Partial<ContractorFields>,
   scope: SQL | undefined,
   redue?: { today: IsoDate; texts: RedueTexts },
-): Promise<void> {
+): Promise<{ redued: number }> {
   const current = await lockContractor(tx, id, scope);
   if (!current) throw new RecordNotFoundError('contractor', id);
   const fields = Object.fromEntries(
@@ -1153,8 +1168,11 @@ export async function updateContractor(
   }
   // Статусы со своим сроком поменялись — сроки несданных пересчитываются (прототип cpRedue).
   if (redue && was && changes.some((c) => c.field === 'benefits')) {
-    await redueContractorReports(tx, id, redue.today, { was, texts: redue.texts });
+    return {
+      redued: await redueContractorReports(tx, id, redue.today, { was, texts: redue.texts }),
+    };
   }
+  return { redued: 0 };
 }
 
 const sameJson = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
@@ -1326,6 +1344,15 @@ export async function employeeActive(tx: Tx, id: string): Promise<boolean | null
     .from(employees)
     .where(eq(employees.id, id));
   return row ? row.active : null;
+}
+
+/** Действующие сотрудники для поля «Ответственный бухгалтер» формы контрагента: по имени. */
+export async function responsibleOptions(tx: Tx): Promise<{ id: string; shortName: string }[]> {
+  return tx
+    .select({ id: employees.id, shortName: employees.shortName })
+    .from(employees)
+    .where(eq(employees.active, true))
+    .orderBy(sql`${employees.shortName} collate app.ru_natural`, employees.id);
 }
 
 /** Значения справочников платформы, на которые ссылается контрагент: есть ли и действует ли. */
