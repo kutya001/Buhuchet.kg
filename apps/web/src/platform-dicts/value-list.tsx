@@ -6,7 +6,7 @@ import {
   adminDictDefaultSort,
   bishkekDate,
   DEFAULT_PHONE_COUNTRY,
-  diffDays,
+  gnsCheckState,
   dictStatusKey,
   formatDateRu,
   formatMomentRu,
@@ -290,10 +290,11 @@ export function adminDictColumns(
     // «Сверено с ГНС» (прототип): дата старше 180 дней — жёлтым, кто сверял; не сверено — оранжевым.
     if (c.key === 'gns') {
       column.cell = (x) => {
-        if (!x.gns?.at) {
+        const state = gnsCheckState(x.gns?.at, bishkekDate(new Date()));
+        if (state === 'none' || !x.gns?.at) {
           return <StatusPill tone="orange" icon="alert" label={t('pdicts.gns.none')} size="sm" />;
         }
-        const old = diffDays(bishkekDate(new Date()), x.gns.at) > GNS_OLD_DAYS;
+        const old = state === 'old';
         return (
           <span>
             <span
@@ -323,9 +324,6 @@ export function adminDictColumns(
     return column;
   });
 }
-
-/** Сверка с ГНС старше стольких дней — дата жёлтым (прототип). */
-const GNS_OLD_DAYS = 180;
 
 const moment = (iso: string | null) => (iso ? formatMomentRu(new Date(iso)) : '');
 

@@ -12,6 +12,7 @@ import type { GkedRuleLists } from '@buhuchet/shared';
 import { Field, inputClass, Note } from '@buhuchet/ui';
 import { useState } from 'react';
 import { useT } from '../l10n/provider';
+import type { ApiErrorLike } from '../l10n/translate';
 
 /*
  * «Виды деятельности (ГКЭД)» в окнах справочников (задача 2.38; прототип modules/gked-ui.js
@@ -35,8 +36,22 @@ const draftOf = (r: GkedRule | null | undefined): Draft => ({
   itd: (r?.itd ?? []).join(', '),
 });
 
-/** Где «Предупреждать при ГКЭД»: у статуса — всегда, у режима — если перечень уже есть. */
+/**
+ * Где «Предупреждать при ГКЭД»: у статуса — всегда (подсказка статуса), у остальных — если перечень уже
+ * есть (подсказка режима), как `warnOn||(r.warn||[]).length` прототипа.
+ */
 export type GkedWarnField = 'status' | 'regime' | false;
+
+/** Отказ сервера `gked_unknown`: текст и коды, которых нет в справочнике. */
+export interface GkedFieldError {
+  text: string;
+  codes: readonly string[];
+}
+
+export const gkedFieldError = (error: ApiErrorLike, text: string): GkedFieldError => {
+  const codes = (error.details as { codes?: unknown } | undefined)?.codes;
+  return { text, codes: typeof codes === 'string' ? splitGkedCodes(codes) : [] };
+};
 
 export interface GkedRuleDraft {
   rule: GkedRule | null;
@@ -53,18 +68,19 @@ export interface GkedRuleDraft {
 }
 
 /**
- * Состояние полей окна: `warn` — какая подсказка у «Предупреждать при ГКЭД» (поле видно у статуса и у
- * режима с перечнем), `lists` — окно режима (перечни ИП и ИТД — если они есть или перечень только для
- * организаций).
+ * Состояние полей окна: `warn: 'status'` — окно статуса («Предупреждать при ГКЭД» видно всегда; у
+ * остальных — если перечень есть), `lists` — окно режима (перечни ИП и ИТД — если они есть или перечень
+ * только для организаций).
  */
 export function useGkedRuleDraft(
   rule: GkedRule | null | undefined,
-  { warn = false, lists = false }: { warn?: GkedWarnField; lists?: boolean } = {},
+  { warn = false, lists = false }: { warn?: 'status' | false; lists?: boolean } = {},
 ): GkedRuleDraft {
   const [base, setBase] = useState<GkedRule | null>(rule ?? null);
   const [draft, setDraft] = useState<Draft>(() => draftOf(rule));
   const [dirty, setDirty] = useState(false);
-  const showWarn: GkedWarnField = warn === 'status' || (base?.warn ?? []).length ? warn : false;
+  const showWarn: GkedWarnField =
+    warn === 'status' ? 'status' : (base?.warn ?? []).length ? 'regime' : false;
   const showLists =
     lists && (OWNER_LISTS.some((k) => (base?.[k] ?? []).length) || base?.who === 'org');
   return {
@@ -117,7 +133,8 @@ const PLACEHOLDER: Partial<Record<GkedRuleList, UiTextKey>> = {
 /**
  * Поля перечня в сетке окна (`FormGrid`): примечание и «Сверить» перечня, справочные перечни ИП и ИТД
  * (не в окне режима), «Виды деятельности (ГКЭД)», «Кроме», перечни ИП и ИТД (окно режима),
- * «Предупреждать при ГКЭД». `error` — отказ сервера (кода нет в справочнике) под перечнем.
+ * «Предупреждать при ГКЭД». `error` — отказ сервера (кода нет в справочнике) под тем перечнем, где
+ * код (прототип gkRuleRead); не нашёлся — под «Виды деятельности (ГКЭД)».
  */
 export function GkedRuleFields({
   id,
@@ -126,18 +143,28 @@ export function GkedRuleFields({
 }: {
   id: string;
   state: GkedRuleDraft;
-  error?: string | undefined;
+  error?: GkedFieldError | undefined;
 }) {
   const t = useT();
   const r = state.rule;
   const verify = gkedRuleToVerify(r);
+  const shown: GkedRuleList[] = [
+    'in',
+    'ex',
+    ...(state.lists ? OWNER_LISTS : []),
+    ...(state.warn ? (['warn'] as const) : []),
+  ];
+  const errorAt = new Set(
+    shown.filter((k) => splitGkedCodes(state.draft[k]).some((c) => error?.codes.includes(c))),
+  );
+  if (error && !errorAt.size) errorAt.add('in');
   const input = (k: GkedRuleList, hint?: string) => (
     <Field
       key={k}
       id={`${id}-gked-${k}`}
       label={t(LABEL[k])}
       hint={hint ?? (HINT[k] ? t(HINT[k]) : undefined)}
-      error={k === 'in' ? error : undefined}
+      error={errorAt.has(k) ? error?.text : undefined}
       full
     >
       {(c) => (

@@ -11,10 +11,15 @@ import {
   useToast,
 } from '@buhuchet/ui';
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useId, useState, type FormEvent } from 'react';
+import { useId, useState, type FormEvent } from 'react';
 import { api, callApi } from '../api-client';
 import { useErrorText, useT } from '../l10n/provider';
-import { GkedRuleFields, useGkedRuleDraft } from './gked-rule-fields';
+import {
+  gkedFieldError,
+  GkedRuleFields,
+  useGkedRuleDraft,
+  type GkedFieldError,
+} from './gked-rule-fields';
 import { fetchAdminEnRate, usePdictsRefresh } from './pdicts-data';
 
 /**
@@ -44,16 +49,14 @@ export function EnRateDialog({
   });
   const [current, setCurrent] = useState<AdminEnRate | null>(null);
   const gked = useGkedRuleDraft(null);
-  const [error, setError] = useState<string>();
+  const [error, setError] = useState<GkedFieldError>();
   const [changed, setChanged] = useState(false);
   const [busy, setBusy] = useState(false);
-  // Окно открывается сразу, перечень приходит следом.
-  useEffect(() => {
-    if (rate.data && !current) {
-      setCurrent(rate.data);
-      gked.reset(rate.data.gked);
-    }
-  }, [rate.data, current, gked]);
+  // Окно открывается сразу, перечень приходит следом: черновик — из первого ответа.
+  if (rate.data && !current) {
+    setCurrent(rate.data);
+    gked.reset(rate.data.gked);
+  }
 
   const reload = async () => {
     const fresh = (await rate.refetch()).data;
@@ -81,7 +84,9 @@ export function EnRateDialog({
       return toast(t('pdicts.toast.saved'), { icon: 'check' });
     }
     if (res.error.code === 'record_changed') return setChanged(true);
-    if (res.error.code === 'gked_unknown') return setError(errorText(res.error));
+    if (res.error.code === 'gked_unknown') {
+      return setError(gkedFieldError(res.error, errorText(res.error)));
+    }
     toast(errorText(res.error), { bad: true });
   };
   const formId = `${id}-form`;

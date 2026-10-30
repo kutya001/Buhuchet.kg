@@ -152,17 +152,21 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
     // «Каталог видов отчётов», календарь, шаблоны и загрузка из Excel — с их вкладками.
     expect(steps(s).map((x) => [x.id, x.module, x.learn])).toEqual([
       ['a-dicts', 'pdicts', true],
+      ['a-types', 'pdicts', true],
+      ['a-xls', 'pdicts', false],
       ['a-cal', 'pdicts', true],
+      ['a-tpl', 'pdicts', true],
       ['a-l10n', 'l10n', true],
       ['a-org', 'orgs', false],
     ]);
     expect(step(s, 'a-dicts')!.screens).toContain('pdicts.regimes');
     expect(step(s, 'a-cal')!.screens).toEqual(['pdicts.calendar']);
-    // Статьи Админки — только о сделанных модулях («Справочники платформы» — с задачей 2.37).
+    // Статьи Админки — только о сделанных модулях («Справочники платформы» — с задачей 2.37, «Telegram»
+    // — ещё нет).
     const arts = KbArticleList.parse(await ok(await call('GET', '/api/kb/articles', admin)));
     const ids = arts.items.map((a) => a.id);
-    expect(ids).toEqual(expect.arrayContaining(['a19_1', 'a19_2', 'a19_4']));
-    expect(ids).not.toContain('a19_3');
+    expect(ids).toEqual(expect.arrayContaining(['a19_1', 'a19_2', 'a19_3', 'a19_4']));
+    expect(ids).not.toContain('a19_5');
 
     // «Проверить справочники платформы» — 3 секунды на экране шага (docs/deviations.md п. Д-7).
     const looked = KbMarkResult.parse(

@@ -51,7 +51,12 @@ import { api, callApi } from '../api-client';
 import { fieldError } from '../auth/fields';
 import { useErrorText, useT } from '../l10n/provider';
 import { duesNote, useDuesPreview } from './dues-preview';
-import { GkedRuleFields, useGkedRuleDraft } from './gked-rule-fields';
+import {
+  gkedFieldError,
+  GkedRuleFields,
+  useGkedRuleDraft,
+  type GkedFieldError,
+} from './gked-rule-fields';
 import {
   fetchAdminDictValue,
   pdictsBasesQuery,
@@ -205,7 +210,7 @@ export function TypeDialog({
   const payments = useFieldArray({ control, name: 'payments' });
   // «Виды деятельности (ГКЭД)» вида (задача 2.38): перечни ИП и ИТД — справочно.
   const gked = useGkedRuleDraft(item?.data.gked);
-  const [gkedError, setGkedError] = useState<string>();
+  const [gkedError, setGkedError] = useState<GkedFieldError>();
   const organs = useQuery(pdictsOrgansQuery);
   const regimes = useQuery(pdictsRegimesQuery);
   const bases = useQuery(pdictsBasesQuery);
@@ -256,7 +261,9 @@ export function TypeDialog({
       }
       const code = res.error.code;
       if (code === 'record_changed') return setChanged(true);
-      if (code === 'gked_unknown') return setGkedError(errorText(res.error));
+      if (code === 'gked_unknown') {
+        return setGkedError(gkedFieldError(res.error, errorText(res.error)));
+      }
       const field = (res.error.details as { field?: string } | undefined)?.field ?? '';
       const target: [Path<Form>, UiTextKey] | undefined =
         code === 'invalid_link' && LINK_TEXT[field]

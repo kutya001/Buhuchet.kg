@@ -37,7 +37,12 @@ import { api, apiFailure, callApi } from '../api-client';
 import { fieldError } from '../auth/fields';
 import { useErrorText, useT } from '../l10n/provider';
 import { duesNote, useDuesPreview } from './dues-preview';
-import { GkedRuleFields, useGkedRuleDraft } from './gked-rule-fields';
+import {
+  gkedFieldError,
+  GkedRuleFields,
+  useGkedRuleDraft,
+  type GkedFieldError,
+} from './gked-rule-fields';
 import { fetchAdminDictValue, reportTypeOptionsQuery } from './pdicts-data';
 
 const pd = api.api.admin['platform-dicts'];
@@ -144,7 +149,7 @@ export function BenefitDialog({
   });
   // «Виды деятельности (ГКЭД)» и «Предупреждать при ГКЭД» статуса (задача 2.38).
   const gked = useGkedRuleDraft(item?.data.gked, { warn: 'status' });
-  const [gkedError, setGkedError] = useState<string>();
+  const [gkedError, setGkedError] = useState<GkedFieldError>();
   const types = useQuery(reportTypeOptionsQuery);
   const offices = useQuery(officesQuery);
   const typeOf = new Map((types.data ?? []).map((x) => [x.code, x]));
@@ -201,7 +206,9 @@ export function BenefitDialog({
       }
       const code = res.error.code;
       if (code === 'record_changed') return setChanged(true);
-      if (code === 'gked_unknown') return setGkedError(errorText(res.error));
+      if (code === 'gked_unknown') {
+        return setGkedError(gkedFieldError(res.error, errorText(res.error)));
+      }
       const field = (res.error.details as { field?: string } | undefined)?.field ?? '';
       const target: [Path<BenefitValueFormInput>, UiTextKey] | undefined =
         code === 'invalid_link' && LINK_TEXT[field]

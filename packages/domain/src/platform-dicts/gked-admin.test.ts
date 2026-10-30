@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { formatText, UI_TEXTS, type Translate } from '../l10n/texts';
 import {
+  GKED_GROUP_ID_PATTERN,
   gkedEditProblems,
   gkedGroupActText,
   gkedGroupApply,
@@ -47,6 +48,14 @@ describe('ГКЭД в Админке (задача 2.38)', () => {
     expect(check('01.12', 'class', '01.11')).toEqual(['gked_parent_level']);
     // У созданного кода сам код не проверяется: он не меняется.
     expect(check('01.11.1', 'subclass', '01.11', false)).toEqual([]);
+  });
+
+  it('ключ группы кодов: латиница, цифры, «-» и «_»; служебные имена объектов — нет', () => {
+    for (const id of ['banks', 'fin-other', 'g_2'])
+      expect(GKED_GROUP_ID_PATTERN.test(id), id).toBe(true);
+    for (const id of ['__proto__', 'constructor', 'prototype', 'банки', '', 'a'.repeat(41)]) {
+      expect(GKED_GROUP_ID_PATTERN.test(id), id).toBe(false);
+    }
   });
 
   it('секция кода — по цепочке «Входит в»', () => {

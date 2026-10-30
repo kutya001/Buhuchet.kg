@@ -7,6 +7,7 @@ import {
   gkedLevelKey,
   packGkedGroupActs,
   pluralForm,
+  searchText,
   splitGkedCodes,
   type GkedGroupAct,
   type GkedGroupTarget,
@@ -34,7 +35,15 @@ import {
   type ActionEntry,
 } from '@buhuchet/ui';
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useEffectEvent, useId, useMemo, useState, type FormEvent } from 'react';
+import {
+  useEffect,
+  useEffectEvent,
+  useId,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+  type FormEvent,
+} from 'react';
 import { api, callApi } from '../api-client';
 import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
 import { useErrorText, useT } from '../l10n/provider';
@@ -60,22 +69,52 @@ const pd = api.api.admin['platform-dicts'];
 const VIEW_KEY = 'buhuchet.pdicts.gked.view';
 type GkedView = 'tree' | 'list';
 
-function readView(): GkedView {
-  try {
-    return localStorage.getItem(VIEW_KEY) === 'list' ? 'list' : 'tree';
-  } catch {
-    return 'tree';
-  }
+/** Выбранный вид: в браузере, где нельзя запомнить, — до перезагрузки. */
+let viewPicked: GkedView | null = null;
+const viewListeners = new Set<() => void>();
+const viewStore = {
+  subscribe: (listener: () => void) => {
+    viewListeners.add(listener);
+    return () => void viewListeners.delete(listener);
+  },
+  get: (): GkedView => {
+    if (viewPicked) return viewPicked;
+    try {
+      return localStorage.getItem(VIEW_KEY) === 'list' ? 'list' : 'tree';
+    } catch {
+      return 'tree';
+    }
+  },
+  set: (v: GkedView) => {
+    viewPicked = v;
+    try {
+      localStorage.setItem(VIEW_KEY, v);
+    } catch {
+      // Браузер не даёт запомнить — вид действует до перезагрузки.
+    }
+    for (const listener of viewListeners) listener();
+  },
+};
+
+/** «+ Добавить» на вкладке: «Код ГКЭД», «Выгрузить в Excel», «Загрузить из Excel». */
+function useGkedAddRequest(run: (actionId: string) => void) {
+  const { addRequest, clearAddRequest } = useShell();
+  const request = addRequest?.moduleId === 'pdicts' ? addRequest : null;
+  const start = useEffectEvent((actionId: string) => run(actionId));
+  useEffect(() => {
+    if (!request) return;
+    start(request.actionId);
+    clearAddRequest();
+  }, [request, clearAddRequest]);
 }
 
 /** Поиск по ГКЭД (прототип gkSearch): начало кода или все слова в названии; «ё» = «е». */
-const norm = (s: string) => s.toLowerCase().replace(/ё/g, 'е');
 function searchGked(items: readonly GkedItem[], q: string): GkedItem[] {
-  const s = norm(q).trim();
+  const s = searchText(q).trim();
   if (!s) return [];
   const words = s.split(/\s+/).filter(Boolean);
   return items.filter(
-    (x) => x.code.toLowerCase().startsWith(s) || words.every((w) => norm(x.name).includes(w)),
+    (x) => x.code.toLowerCase().startsWith(s) || words.every((w) => searchText(x.name).includes(w)),
   );
 }
 
@@ -710,20 +749,11 @@ export function GkedTab() {
   const items = useQuery(pdictsGkedItemsQuery);
   const refresh = usePdictsRefresh();
   const run = useGkedActions();
-  const [view, setView] = useState<GkedView>('tree');
-  useEffect(() => setView(readView()), []);
-  const pickView = (v: GkedView) => {
-    setView(v);
-    try {
-      localStorage.setItem(VIEW_KEY, v);
-    } catch {
-      // Браузер не даёт запомнить — вид действует до перезагрузки.
-    }
-  };
+  const view = useSyncExternalStore(viewStore.subscribe, viewStore.get, () => 'tree' as const);
   const [edit, setEdit] = useState<DialogSlot<GkedItem | null> | null>(null);
   const [io, setIo] = useState<DialogSlot<IoSlot> | null>(null);
   const [askDelete, setAskDelete] = useState<GkedItem | null>(null);
-  const all = items.data ?? [];
+  const all = useMemo(() => items.data ?? [], [items.data]);
   const names = useMemo(() => new Map(all.map((x) => [x.code, x.name])), [all]);
   const actions = (x: GkedItem) =>
     gkedActions(t, x, {
@@ -732,19 +762,11 @@ export function GkedTab() {
       remove: setAskDelete,
     });
 
-  // «+ Добавить»: «Код ГКЭД», «Выгрузить в Excel», «Загрузить из Excel».
-  const { addRequest, clearAddRequest } = useShell();
-  const request = addRequest?.moduleId === 'pdicts' ? addRequest : null;
-  const start = useEffectEvent((actionId: string) => {
+  useGkedAddRequest((actionId) => {
     if (actionId === 'gked') setEdit(openSlot<GkedItem | null>(null));
     else if (actionId === 'io_export') setIo(openSlot<IoSlot>({ dict: 'gked', action: 'export' }));
     else if (actionId === 'io_import') setIo(openSlot<IoSlot>({ dict: 'gked', action: 'import' }));
   });
-  useEffect(() => {
-    if (!request) return;
-    start(request.actionId);
-    clearAddRequest();
-  }, [request, clearAddRequest]);
 
   const leaves = all.filter((x) => x.level === 'subclass').length;
   const off = all.filter((x) => !x.active).length;
@@ -768,7 +790,7 @@ export function GkedTab() {
         <Segments
           label={t('pdicts.gked.view')}
           value={view}
-          onChange={pickView}
+          onChange={viewStore.set}
           options={[
             { value: 'tree', label: t('pdicts.gked.view.tree') },
             { value: 'list', label: t('pdicts.gked.view.list') },

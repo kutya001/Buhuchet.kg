@@ -38,7 +38,12 @@ import { Controller, useFieldArray, useForm, type FieldError, type Path } from '
 import { api, callApi } from '../api-client';
 import { fieldError } from '../auth/fields';
 import { useErrorText, useT } from '../l10n/provider';
-import { GkedRuleFields, useGkedRuleDraft } from './gked-rule-fields';
+import {
+  gkedFieldError,
+  GkedRuleFields,
+  useGkedRuleDraft,
+  type GkedFieldError,
+} from './gked-rule-fields';
 import { fetchAdminDictValue, reportTypeOptionsQuery } from './pdicts-data';
 
 const pd = api.api.admin['platform-dicts'];
@@ -181,8 +186,8 @@ export function ValueDialog({
   });
   const contacts = useFieldArray({ control, name: 'contacts' });
   // «Виды деятельности (ГКЭД)» режима (задача 2.38): перечни ИП и ИТД — если они у режима есть.
-  const gked = useGkedRuleDraft(item?.data.gked, { warn: 'regime', lists: true });
-  const [gkedError, setGkedError] = useState<string>();
+  const gked = useGkedRuleDraft(item?.data.gked, { lists: true });
+  const [gkedError, setGkedError] = useState<GkedFieldError>();
   const regime = dict === 'regimes';
   // Виды отчётов основания: сквозные действующие и уже привязанные (прототип baseDlg).
   const typeOptions = useQuery({ ...reportTypeOptionsQuery, enabled: dict === 'bases' });
@@ -221,7 +226,9 @@ export function ValueDialog({
       }
       const code = res.error.code;
       if (code === 'record_changed') return setChanged(true);
-      if (code === 'gked_unknown') return setGkedError(errorText(res.error));
+      if (code === 'gked_unknown') {
+        return setGkedError(gkedFieldError(res.error, errorText(res.error)));
+      }
       const field = FIELD_OF[code];
       if (field) {
         const message = t((code === 'dict_value_taken' && TAKEN_TEXT[dict]) || field[1]);

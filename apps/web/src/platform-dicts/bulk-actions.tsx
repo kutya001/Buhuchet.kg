@@ -226,7 +226,15 @@ export function BulkStatusDialog({
       }
     >
       <p className="m-0">
-        {t(ask.active ? 'pdicts.bulk.status_text_on' : 'pdicts.bulk.status_text_off')}{' '}
+        {t(
+          ask.codes.length > 1
+            ? ask.active
+              ? 'pdicts.bulk.status_text_on'
+              : 'pdicts.bulk.status_text_off'
+            : ask.active
+              ? 'pdicts.bulk.status_one_on'
+              : 'pdicts.bulk.status_one_off',
+        )}{' '}
         {duesNote(t, dues, 'pdicts.cal.dues')}
       </p>
     </Modal>
@@ -255,12 +263,13 @@ export function BulkDueDialog({
   onDone: () => void;
 }) {
   const t = useT();
+  const toast = useToast();
   const id = useId();
   const send = useBulkSend('types');
   const [day, setDay] = useState('');
   const [after, setAfter] = useState('');
   const [month, setMonth] = useState('');
-  const [error, setError] = useState<{ day?: string; after?: string; any?: string }>({});
+  const [error, setError] = useState<{ day?: string; after?: string }>({});
   const [busy, setBusy] = useState(false);
   const years = rows.filter((x) => x.data.period === 'Y').length;
   const others = rows.length - years;
@@ -280,6 +289,8 @@ export function BulkDueDialog({
   );
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    // Ничего не заполнено — уведомлением, как в прототипе (bulkDueDlg).
+    if (!filled) return toast(t('pdicts.err.bulk_due_empty'), { bad: true });
     const next = {
       day:
         body.day !== undefined && (body.day < 1 || body.day > 31) ? t('pdicts.err.day') : undefined,
@@ -287,10 +298,9 @@ export function BulkDueDialog({
         body.after !== undefined && (body.after < 0 || body.after > 6)
           ? t('pdicts.bulk_due.after_err')
           : undefined,
-      any: filled ? undefined : t('pdicts.err.bulk_due_empty'),
     };
     setError(next);
-    if (next.day || next.after || next.any) return;
+    if (next.day || next.after) return;
     setBusy(true);
     const ok = await send(
       () => bulk.types.due.$post({ json: body }),
@@ -329,7 +339,7 @@ export function BulkDueDialog({
         className="flex flex-col gap-3.5"
       >
         <FormGrid>
-          <Field id={`${id}-day`} label={t('pdicts.bulk_due.day')} error={error.day ?? error.any}>
+          <Field id={`${id}-day`} label={t('pdicts.bulk_due.day')} error={error.day}>
             {(c) => (
               <input
                 {...c}
@@ -390,7 +400,10 @@ export function BulkDueDialog({
             </Field>
           ) : null}
         </FormGrid>
-        {valid && filled ? (
+        {/* Сразу — «Сроки отчётов не изменятся», с вводом — сколько изменится (прототип `bd-n`). */}
+        {!filled || (dues.dues && dues.dues.reports === 0) ? (
+          <Note icon="info">{t('pdicts.bulk_due.none')}</Note>
+        ) : valid ? (
           <Note tone="warn" icon="alert">
             {duesNote(t, dues, 'pdicts.cal.dues')}
           </Note>

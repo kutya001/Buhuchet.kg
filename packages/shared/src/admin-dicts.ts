@@ -16,6 +16,8 @@ import {
   DUE_FROM,
   GKED_CODE_PATTERN,
   GKED_GROUP_ACTS,
+  GKED_GROUP_ASK_MAX,
+  GKED_GROUP_ID_PATTERN,
   GKED_LEVEL_ORDER,
   GKED_NAME_MAX,
   isIsoDate,
@@ -870,7 +872,7 @@ export const AdminGkedGroups = z.object({
 });
 export type AdminGkedGroups = z.infer<typeof AdminGkedGroups>;
 
-export const AdminGkedGroupIdParam = z.object({ id: z.string().min(1).max(40) });
+export const AdminGkedGroupIdParam = z.object({ id: z.string().regex(GKED_GROUP_ID_PATTERN) });
 
 /** Окно группы кодов (прототип gkGrpDlg): название и коды обязательны. */
 export const AdminGkedGroupForm = z.object({
@@ -878,7 +880,7 @@ export const AdminGkedGroupForm = z.object({
   codes: GkedCodes.refine((v) => v.length > 0, message('pdicts.err.gked_codes_required')),
   en: GroupActs,
   spino: GroupActs,
-  ask: text(300),
+  ask: text(GKED_GROUP_ASK_MAX),
   why: text(DICT_NOTE_MAX),
   version: RecordVersion,
 });

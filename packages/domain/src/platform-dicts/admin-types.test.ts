@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { payScheduleText } from '../dicts/report-types';
 import { ADMIN_DICT_META, nextDictCode } from './admin';
 import {
+  gnsCheckState,
   inactiveLinks,
   NEW_REPORT_TYPE,
   parsePaySchedule,
@@ -86,5 +87,13 @@ describe('Админка → «Виды отчётов»: окно вида от
     expect(inactiveLinks(['a', 'b'], list, [])).toEqual(['b']);
     expect(inactiveLinks(['b'], list, ['b'])).toEqual([]);
     expect(inactiveLinks(['x'], list, ['x'])).toEqual(['x']);
+  });
+});
+
+describe('«Сверено с ГНС» (задача 2.37, часть 3)', () => {
+  it('не сверено, старше 180 дней — жёлтым, иначе обычным', () => {
+    expect(gnsCheckState(null, '2026-10-30')).toBe('none');
+    expect(gnsCheckState('2026-05-03', '2026-10-30')).toBe('fresh');
+    expect(gnsCheckState('2026-05-02', '2026-10-30')).toBe('old');
   });
 });

@@ -35,8 +35,10 @@ import {
 import {
   ADMIN_DICT_META,
   bishkekDate,
+  DICT_NAME_MAX,
   DICT_NOTE_MAX,
   formatText,
+  GKED_GROUP_ASK_MAX,
   IO_COLUMNS,
   isIoSectionDict,
   ioChanges,
@@ -516,6 +518,24 @@ const sectionFailText = (t: Translate, fail: SectionFail) =>
  * DX.taxes, DX.enrates, DX.proprates, DX.gkgroups): как у справочников значений — каждая строка в своей
  * точке сохранения; проверку и запись делает справочник (`SECTION_WRITERS`).
  */
+/** Длина текста строки раздела — как в окнах: название, «Вопрос» группы, остальное — как пояснение. */
+const SECTION_TEXT_MAX: Readonly<Record<string, number>> = {
+  name: DICT_NAME_MAX,
+  ask: GKED_GROUP_ASK_MAX,
+};
+
+/** Слишком длинный текст изменённой строки раздела — ошибка строки, а не запись в справочник. */
+function sectionTooLong(dict: IoSectionDict, value: IoValue, t: Translate): string[] {
+  return IO_COLUMNS[dict].flatMap((c) => {
+    if (c.key === 'code') return [];
+    const v = c.key === 'name' ? value.name : value.data[c.key];
+    const max = SECTION_TEXT_MAX[c.key] ?? DICT_NOTE_MAX;
+    return typeof v === 'string' && v.length > max
+      ? [t('pdicts.io.err.too_long', { col: t(c.title), n: String(max) })]
+      : [];
+  });
+}
+
 async function runSectionImport(
   tx: Tx,
   dict: IoSectionDict,
@@ -561,6 +581,11 @@ async function runSectionImport(
     const changes = base ? ioChanges(parsed.columns, base, after, ctx) : [];
     if (base && !changes.length) {
       preview.same++;
+      continue;
+    }
+    const long = sectionTooLong(dict, after, t);
+    if (long.length) {
+      fail(long);
       continue;
     }
     let saved;

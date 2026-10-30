@@ -228,8 +228,15 @@ export interface GkedGroupValue {
   why: string;
 }
 
-/** Ключ группы: латиница, цифры, «-» и «_» (прототип DX.gkgroups). */
-export const GKED_GROUP_ID_PATTERN = /^[A-Za-z0-9_-]{1,40}$/;
+/**
+ * Ключ группы: латиница, цифры, «-» и «_» (прототип DX.gkgroups); служебные имена объектов
+ * (`__proto__`, `constructor`, `prototype`) ключом быть не могут — группы хранятся объектом.
+ */
+export const GKED_GROUP_ID_PATTERN =
+  /^(?!(?:__proto__|constructor|prototype)$)[A-Za-z0-9_-]{1,40}$/;
+
+/** «Вопрос при предупреждении» группы — до 300 знаков (окно и загрузка из Excel). */
+export const GKED_GROUP_ASK_MAX = 300;
 
 /** Действие кода группы в едином налоге или СПиНО (прототип gkGrpAct); ничего — пусто. */
 export function gkedGroupAct(

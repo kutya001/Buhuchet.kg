@@ -47,7 +47,7 @@ describe.skipIf(!databaseAvailable())(
     const BULK = '/api/admin/platform-dicts-bulk';
     const IO = '/api/admin/platform-dicts-io';
     const get = (path: string, cookie = admin) => apiRequest(f.app, 'GET', path, cookie);
-    const send = (method: string, path: string, body: unknown, cookie = admin) =>
+    const send = (method: 'POST' | 'PUT', path: string, body: unknown, cookie = admin) =>
       apiRequest(f.app, method, path, cookie, body);
     const errorOf = async (res: Response) => ApiError.parse(await res.json()).error;
     const value = async (dict: string, code: string) =>
@@ -106,7 +106,7 @@ describe.skipIf(!databaseAvailable())(
         expect((await get(path, owner)).status, path).toBe(403);
         expect((await get(path, '')).status, path).toBe(401);
       }
-      const writes: [string, string, unknown][] = [
+      const writes: ['POST' | 'PUT', string, unknown][] = [
         [
           'PUT',
           '/api/admin/platform-gked/groups/banks',
@@ -254,6 +254,12 @@ describe.skipIf(!databaseAvailable())(
       });
       const path = `/api/admin/platform-gked/groups/${banks.id}`;
 
+      // Служебные имена объектов ключом группы не бывают — 400, перечни не меняются.
+      for (const id of ['__proto__', 'constructor', 'toString']) {
+        const res = await send('PUT', `/api/admin/platform-gked/groups/${id}`, body({}));
+        expect(res.status, id).toBe(id === 'toString' ? 404 : 400);
+      }
+
       const unknown = await send('PUT', path, body({ codes: [...banks.codes, '99.99'] }));
       expect(unknown.status).toBe(400);
       expect(await errorOf(unknown)).toMatchObject({ code: 'gked_unknown' });
@@ -352,6 +358,30 @@ describe.skipIf(!databaseAvailable())(
       expect((await send('POST', `${BULK}/nope/active`, { codes, active: true })).status).toBe(400);
     });
 
+    it('статус с «Меняет сроки»: предпросмотр «Отключить» — число отчётов без записи; отключение и включение — со строкой истории', async () => {
+      const big = await value('benefits', 'ЛЬГ-30');
+      expect((big.data.dueRules as unknown[]).length).toBeGreaterThan(0);
+      const body = { codes: ['ЛЬГ-30'], active: false };
+      const preview = await send('POST', `${BULK}/benefits/active/dues-preview`, body);
+      expect(preview.status, await preview.clone().text()).toBe(200);
+      expect(AdminDuesPreview.parse(await preview.json())).toMatchObject({
+        reports: expect.any(Number),
+        orgs: expect.any(Number),
+      });
+      expect((await value('benefits', 'ЛЬГ-30')).version).toBe(big.version);
+
+      const off = await send('POST', `${BULK}/benefits/active`, body);
+      expect(off.status, await off.clone().text()).toBe(200);
+      expect(AdminBulkResult.parse(await off.json())).toMatchObject({ n: 1 });
+      expect((await value('benefits', 'ЛЬГ-30')).active).toBe(false);
+      const h = await history(`${PD}/benefits/history`);
+      expect(h.items[0]).toMatchObject({ code: 'ЛЬГ-30', action: 'update' });
+
+      const on = await send('POST', `${BULK}/benefits/active`, { ...body, active: true });
+      expect(on.status).toBe(200);
+      expect((await value('benefits', 'ЛЬГ-30')).active).toBe(true);
+    });
+
     it('«Изменить срок у N видов»: число — у всех, месяцев после периода — у не годовых, месяц — у годовых; пусто — 400; предпросмотр не сохраняет', async () => {
       const empty = await send('POST', `${BULK}/types/due`, { codes: ['nds'] });
       expect(empty.status).toBe(400);
@@ -443,6 +473,55 @@ describe.skipIf(!databaseAvailable())(
       expect(back.items.some((x) => x.name === 'Новый год (из Excel)')).toBe(false);
     });
 
+    it('календарь в Excel: «Каждый год» — только у государственных праздников, год — текущий или следующий, «Рабочая суббота» — только суббота', async () => {
+      const data = await file('calendar');
+      const col = (key: Parameters<typeof title>[0]) => data.header.indexOf(title(key));
+      const kind = col('pdicts.io.col.kind');
+      const rule = col('pdicts.io.col.cal_rule');
+      const yearly = data.rows.findIndex((r) => r[rule] === title('pdicts.io.cal.rule.yearly'));
+      expect(yearly).toBeGreaterThanOrEqual(0);
+      const year = Number(/\d{4}/.exec(data.rows[0]![0]!)![0]);
+      // Будний день текущего года: 5 января или следующий будний.
+      const weekday = [5, 6, 7]
+        .map((d) => `${year}-01-0${d}`)
+        .find((d) => {
+          const w = new Date(`${d}T00:00:00Z`).getUTCDay();
+          return w !== 0 && w !== 6;
+        })!;
+      const row = (date: string, k: string, r: string) => [
+        ...data.header.map((h) => {
+          if (h === data.header[0]) return date;
+          if (h === title('pdicts.io.col.name')) return 'Проверка';
+          if (h === data.header[kind])
+            return title(`pdicts.io.cal.kind.${k}` as 'pdicts.io.cal.kind.holiday');
+          if (h === data.header[rule])
+            return title(`pdicts.io.cal.rule.${r}` as 'pdicts.io.cal.rule.once');
+          return '';
+        }),
+      ];
+      const rows = data.rows.map((r) => [...r]);
+      rows[yearly]![kind] = title('pdicts.io.cal.kind.transfer');
+      const p = await preview(
+        'calendar',
+        ioTsv([
+          data.header,
+          ...rows,
+          row(`${year + 5}-03-10`, 'holiday', 'once'),
+          row(weekday, 'workday', 'once'),
+          row(`${year}-12-30`, 'holiday', 'yearly'),
+        ]),
+      );
+      expect(p.change).toEqual([]);
+      expect(p.add).toEqual([]);
+      const errors = p.errors.map((e) => e.errors.join('; '));
+      expect(errors).toEqual([
+        '«Каждый год» — только государственные праздники: у них меняется лишь название',
+        `дата — только ${year} или ${year + 1} года`,
+        '«Рабочая суббота» — только у субботы',
+        '«Каждый год» — только государственные праздники: у них меняется лишь название',
+      ]);
+    });
+
     it('«Налоги и ставки»: выгрузка трёх таблиц без правок — без изменений; правка налога — в истории вкладки', async () => {
       for (const dict of ['taxes', 'enrates', 'proprates', 'gkgroups', 'gked']) {
         const data = await file(dict);
@@ -457,6 +536,10 @@ describe.skipIf(!databaseAvailable())(
       const data = await file('taxes');
       const name = title('pdicts.io.col.name');
       const code = data.rows[0]![0]!;
+      // Текст длиннее, чем в окне, — ошибка строки, раздел не меняется.
+      const long = await preview('taxes', edited(data, 0, name, 'Н'.repeat(201)));
+      expect(long.change).toEqual([]);
+      expect(long.errors[0]!.errors).toEqual([`«${name}» — не длиннее 200 знаков`]);
       const applied = await apply('taxes', edited(data, 0, name, 'Подоходный налог (из Excel)'));
       expect(applied.preview.change).toHaveLength(1);
       const h = await history('/api/admin/tax-ref/history');

@@ -243,7 +243,7 @@ export async function adminGkedGroupSave(
   if (!ref) return { ok: false, reason: 'not_found' };
   if (ref.version !== version) return { ok: false, reason: 'changed' };
   const groups = groupsOf(ref.payload);
-  const stored = groups[id];
+  const stored = Object.hasOwn(groups, id) ? groups[id] : undefined;
   if (create ? stored : !stored) return { ok: false, reason: create ? 'changed' : 'not_found' };
   const old = stored ? groupValue(id, stored) : null;
   const value = next && { id, ...next, codes: [...new Set(next.codes)] };
