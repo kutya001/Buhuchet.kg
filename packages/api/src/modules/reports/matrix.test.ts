@@ -37,7 +37,7 @@ describe.skipIf(!databaseAvailable())(
     let cpB = '';
 
     const employee = (login: string) => f.people[login]!.employeeId;
-    const call = (method: string, path: string, cookie: string, body?: unknown) =>
+    const call = (method: 'GET' | 'POST' | 'PATCH', path: string, cookie: string, body?: unknown) =>
       apiRequest(f.app, method, path, cookie, body);
     const json = async (res: Response, status = 200) => {
       expect(res.status, await res.clone().text()).toBe(status);

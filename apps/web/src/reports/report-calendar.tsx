@@ -44,6 +44,7 @@ type Day = ReportCalendar['days'][number];
 
 /** Месяц и день «Календаря» — до перезагрузки страницы, как `S.cal` и `S.calSel` прототипа. */
 const remembered: { month: string | null; day: string | null } = { month: null, day: null };
+const remember = (patch: Partial<typeof remembered>) => Object.assign(remembered, patch);
 
 /** Пока числа месяца не пришли — дни сетки без отметок (суббота и воскресенье — нерабочие). */
 const blankDays = (month: string): Day[] =>
@@ -95,11 +96,11 @@ export function ReportCalendarTab() {
   const [month, setMonthState] = useState(() => remembered.month ?? today.slice(0, 7));
   const [day, setDayState] = useState<string | null>(() => remembered.day);
   const setMonth = (m: string) => {
-    remembered.month = m;
+    remember({ month: m });
     setMonthState(m);
   };
   const setDay = (d: string | null) => {
-    remembered.day = d;
+    remember({ day: d });
     setDayState(d);
   };
   const query = useQuery({ ...reportCalendarQuery(month), placeholderData: keepPreviousData });
