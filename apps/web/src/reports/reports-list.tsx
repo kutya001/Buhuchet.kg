@@ -9,8 +9,11 @@ import {
 } from '@buhuchet/domain';
 import { ListValues, ReportList, type ReportQuick, type ReportRow } from '@buhuchet/shared';
 import {
+  buttonClass,
   DataGrid,
   EmptyState,
+  Icon,
+  Note,
   PHONE_QUERY,
   Plate,
   Plates,
@@ -21,6 +24,8 @@ import { useQuery } from '@tanstack/react-query';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react';
 import { api, apiFailure } from '../api-client';
+import { typeSettingsQuery } from '../dicts/dicts-data';
+import { useTaxPick } from '../dicts/tax-pick';
 import { useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { useListExport } from '../lists/export';
@@ -64,6 +69,42 @@ const QUICK: readonly ReportQuick[] = ['all', 'sub', 'pay'];
 /** «октябрь 2026», «за октябрь» — название месяца строчными (прототип ymLabel, MONTHS). */
 function monthName(t: Translate, month: string): string {
   return t(`report.month.${Number(month.slice(5, 7))}` as UiTextKey).toLowerCase();
+}
+
+/**
+ * Пустое состояние «Подключите виды отчётов» (ТЗ «Первый запуск организации», экран 6: опросник
+ * пропущен; прототип modules/tax-pick.js, `txNote`): пока в организации нет ни одного подключённого
+ * вида, над плашками — подсказка и «Выбрать налоги» (окно «Выбор налогов», как «Подключить из
+ * каталога»), без права «Вести справочники организации» — «Подключает владелец».
+ */
+function NoTypesNote() {
+  const t = useT();
+  const { access } = useShell();
+  const settings = useQuery(typeSettingsQuery);
+  const pick = useTaxPick();
+  if (!settings.data || settings.data.items.some((x) => x.enabled)) return null;
+  return (
+    <div data-report-no-types="">
+      <Note icon="book">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+          <span className="min-w-[200px] grow">
+            <b>{t('report.no_types.title')}</b> {t('report.no_types.text')}
+          </span>
+          {access.can('dicts') ? (
+            <button type="button" className={buttonClass('cta', 'sm')} onClick={pick.open}>
+              <Icon name="plus" size="sm" />
+              {t('report.no_types.pick')}
+            </button>
+          ) : (
+            <span className="text-[11.5px] leading-[1.4] text-faint">
+              {t('report.no_types.owner')}
+            </span>
+          )}
+        </div>
+      </Note>
+      {pick.dialog}
+    </div>
+  );
 }
 
 /**
@@ -250,6 +291,7 @@ export function ReportsList({ tab }: { tab: ReportListTab }) {
 
   return (
     <div className="flex flex-col gap-3.5">
+      <NoTypesNote />
       {plates.length ? (
         <Plates shown={stats.shown}>
           {plates.map((p) => (

@@ -19,7 +19,8 @@ const SEGMENT_SIZES = {
 /**
  * Переключатель из кнопок (прототип css/controls.css `.seg`, `.seg.sm`): выбранная кнопка светлая с
  * тенью. Для компоновки форм на телефоне помечен `data-segments`. `fill` — кнопки на всю ширину
- * (на телефоне в заголовке группы прав). `disabled` — выбор закрыт (причину показывает экран рядом).
+ * (на телефоне в заголовке группы прав); `'wrap'` — на всю ширину с переносом, подпись слева (шаги окна
+ * «Ввод из Excel», прототип `.kx-steps`). `disabled` — выбор закрыт (причину показывает экран рядом).
  */
 export function Segments<T extends string>({
   options,
@@ -35,7 +36,7 @@ export function Segments<T extends string>({
   onChange: (value: T) => void;
   /** Название группы кнопок для экранного диктора. */
   label: string;
-  fill?: boolean;
+  fill?: boolean | 'wrap';
   size?: keyof typeof SEGMENT_SIZES;
   disabled?: boolean;
 }) {
@@ -44,7 +45,7 @@ export function Segments<T extends string>({
       role="group"
       aria-label={label}
       data-segments=""
-      className={`gap-0.5 rounded-lg border border-line bg-pane-alt p-[3px] ${fill ? 'flex' : 'inline-flex'}`}
+      className={`gap-0.5 rounded-lg border border-line bg-pane-alt p-[3px] ${fill === 'wrap' ? 'flex flex-wrap' : fill ? 'flex' : 'inline-flex'}`}
     >
       {options.map((o) => (
         <button
@@ -53,7 +54,7 @@ export function Segments<T extends string>({
           aria-pressed={o.value === value}
           disabled={disabled}
           onClick={() => onChange(o.value)}
-          className={`inline-flex cursor-pointer items-center disabled:cursor-default disabled:opacity-60 justify-center gap-1.5 rounded-md border-0 ${SEGMENT_SIZES[size]} font-[550] focus-visible:outline-2 focus-visible:outline-accent ${fill ? 'flex-1' : ''} ${o.value === value ? 'bg-raised text-ink shadow-btn' : 'bg-transparent text-muted'}`}
+          className={`inline-flex cursor-pointer items-center disabled:cursor-default disabled:opacity-60 gap-1.5 rounded-md border-0 ${SEGMENT_SIZES[size]} font-[550] focus-visible:outline-2 focus-visible:outline-accent ${fill === 'wrap' ? 'flex-[1_1_auto] justify-start' : fill ? 'flex-1 justify-center' : 'justify-center'} ${o.value === value ? 'bg-raised text-ink shadow-btn' : 'bg-transparent text-muted'}`}
         >
           {o.icon ? <Icon name={o.icon} size="sm" /> : null}
           <span>{o.label}</span>

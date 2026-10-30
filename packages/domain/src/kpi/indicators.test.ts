@@ -4,6 +4,7 @@ import {
   DEFAULT_INDICATORS,
   INDICATOR_MESSAGES,
   INDICATOR_PROBLEMS,
+  INDICATOR_VALUE_TEXT_MAX_LENGTH,
   indicatorNumberText,
   indicatorProblems,
   indicatorTotals,
@@ -121,6 +122,19 @@ describe('разбор введённого значения', () => {
     for (const text of ['1e3', '0x10', 'Infinity', '9'.repeat(20)]) {
       expect(parseIndicatorValue('som', text)).toEqual({ ok: false });
     }
+  });
+
+  it('длинный текст — не число и не разбирается; пробелы по краям в длину не входят', () => {
+    const spaces = ' '.repeat(INDICATOR_VALUE_TEXT_MAX_LENGTH);
+    expect(parseIndicatorValue('som', `${spaces}1 250${spaces}`)).toEqual({
+      ok: true,
+      value: 125_000,
+    });
+    expect(parseIndicatorValue('som', `1${spaces}x`)).toEqual({ ok: false });
+    expect(parseIndicatorValue('som', `1${' '.repeat(INDICATOR_VALUE_TEXT_MAX_LENGTH)}`)).toEqual({
+      ok: true,
+      value: 100,
+    });
   });
 });
 

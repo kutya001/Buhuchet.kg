@@ -68,16 +68,48 @@ function changeLines(change: HistoryChange, t: Translate): string[] {
 }
 
 /**
+ * Запись «по опроснику» одной строкой, как в прототипе (modules/onboard.js, obApply): включены и
+ * выключены функции, «Задачи требуют подтверждения»; ничего не изменилось — «без изменений».
+ * «Пройден заново» — опросник из учётной политики (задача 2.33).
+ */
+function quizText(changes: readonly HistoryChange[], again: boolean, t: Translate): string {
+  const features = changes.find((c) => c.field === 'features');
+  const from = flags(features?.from);
+  const to = flags(features?.to);
+  const names = (list: Feature[]) =>
+    list.map((f) => t('onboarding.history.name', { name: t(`org.feature.${f}`) })).join(', ');
+  const on = features ? FEATURES.filter((f) => !from[f] && to[f]) : [];
+  const off = features ? FEATURES.filter((f) => from[f] && !to[f]) : [];
+  const confirm = changes.find((c) => c.field === 'taskConfirm');
+  const parts = [
+    on.length ? t('onboarding.history.on', { list: names(on) }) : '',
+    off.length ? t('onboarding.history.off', { list: names(off) }) : '',
+    confirm
+      ? t('onboarding.history.task_confirm', {
+          state: t(confirm.to ? 'org.history.on' : 'org.history.off'),
+        })
+      : '',
+  ].filter(Boolean);
+  return t(again ? 'onboarding.history.again' : 'onboarding.history.first', {
+    text: parts.join('; ') || t('onboarding.history.same'),
+  });
+}
+
+/**
  * Запись «Истории изменений учётной политики» для ленты: дата и время по Бишкеку, что изменено
  * словами (было → стало сравнивается здесь: включена или отключена функция, новый набор дней), кто
- * изменил; создание политики — «Учётная политика по умолчанию»; причина — в скобках.
+ * изменил; создание политики — «Учётная политика по умолчанию», опросник — «по опроснику»; причина — в
+ * скобках.
  */
 export function policyHistoryItem(item: HistoryItem, index: number, t: Translate): TimelineItem {
   const at = new Date(item.at);
+  const quiz = item.changes.find((c) => c.field === 'quiz');
   const lines =
     item.action === 'create'
       ? [t('org.history.created')]
-      : item.changes.flatMap((c) => changeLines(c, t));
+      : quiz
+        ? [quizText(item.changes, quiz.to === 'again', t)]
+        : item.changes.flatMap((c) => changeLines(c, t));
   const text = lines.join('; ');
   return {
     id: `${item.at}-${index}`,

@@ -89,6 +89,13 @@ export const REPORTS_TEXTS = {
     section: S,
   },
   'report.empty.go_cps': { ru: 'Перейти к контрагентам', section: S },
+  'report.no_types.title': { ru: 'Подключите виды отчётов.', section: S },
+  'report.no_types.text': {
+    ru: 'Отметьте налоги и отчёты, которые сдают ваши клиенты: только их можно назначать контрагентам.',
+    section: S,
+  },
+  'report.no_types.pick': { ru: 'Выбрать налоги', section: S },
+  'report.no_types.owner': { ru: 'Подключает владелец', section: S },
   'report.due.overdue': { ru: 'Просрочен', section: S },
   'report.due.moved': { ru: 'перенос', section: S },
   'report.due.moved_title': { ru: 'Перенесён с {date}: {why}', section: S },

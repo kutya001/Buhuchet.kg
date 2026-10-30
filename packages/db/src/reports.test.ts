@@ -129,6 +129,8 @@ const fields = (patch: Partial<ContractorFields> = {}): ContractorFields => ({
   feeDay: 15,
   paysTo: 'emp',
   gkedConfirmation: null,
+  socfundFlags: {},
+  socfundTariff: null,
   ...patch,
 });
 

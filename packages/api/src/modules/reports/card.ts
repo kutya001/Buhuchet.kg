@@ -1,15 +1,33 @@
 import { createRoute, type RouteHandler } from '@hono/zod-openapi';
 import {
+  activeReportTypes,
   assignableType,
   changeReportDue,
   createManualReport,
   createRevision,
   dueChangeReason,
+  getContractor,
   getReportCard,
+  penaltyOf,
   withOrgContext,
+  type ReportCard as ReportCardData,
   type Tx,
 } from '@buhuchet/db';
-import { ORG_REPORT_TYPE_MESSAGES, REPORT_MESSAGES } from '@buhuchet/domain';
+import {
+  formatText,
+  ORG_REPORT_TYPE_MESSAGES,
+  penaltyText,
+  REPORT_MESSAGES,
+  socfundCapHint,
+  socfundCapText,
+  socfundRatesText,
+  socfundShort,
+  socfundState,
+  type IsoDate,
+  type SocfundDict,
+  type SocfundTariffId,
+  type Translate,
+} from '@buhuchet/domain';
 import {
   ManualReportCreate,
   ReportCard,
@@ -24,6 +42,7 @@ import { apiFail, versionedSaveResponses } from '../../errors';
 import { orgContextOf, requirePermission } from '../../middleware/access';
 import { serverTexts } from '../l10n/texts';
 import { subjectOf, todayOf } from '../contractors/common';
+import { socfundContext, socfundSubjectOf } from '../contractors/socfund-view';
 import { assigneeScopeOf, error, reportScopeOf, withReportErrors } from './common';
 import { reportRowBody } from './list';
 
@@ -64,19 +83,101 @@ export const getReportRoute = createRoute({
   },
 });
 
+/** Тариф кратко: название, итоговая ставка, ставки одной строкой и предельная база. */
+function socfundBrief(dict: SocfundDict, id: SocfundTariffId | null, t: Translate) {
+  const x = id ? dict.tariffs.find((y) => y.id === id) : undefined;
+  return x
+    ? {
+        id: x.id,
+        short: socfundShort(x),
+        total: x.total,
+        rates: socfundRatesText(x, t),
+        cap: socfundCapText(x, t),
+      }
+    : null;
+}
+
+/**
+ * Тариф Соцфонда и подсказка о пене для карточки отчёта (ТЗ «Связь с отчётами», «Пеня (информационно)»;
+ * прототип report-card.js, sfPeniNote): тариф — у вида со взносами (STI-161), если он нужен контрагенту;
+ * пеня — у просроченного по виду, у налога которого есть пеня. Оплаченного по отчёту и просрочки оплаты
+ * пока нет (деньги — поток В): пеня — у просроченной сдачи, примерная — от всей суммы к уплате.
+ */
+async function socfundOfReport(tx: Tx, card: ReportCardData, today: IsoDate, t: Translate) {
+  const [penalty, contractor, types] = await Promise.all([
+    penaltyOf(tx, card.type.code),
+    getContractor(tx, card.contractor.id, { scope: undefined, today }),
+    activeReportTypes(tx, card.contractor.id),
+  ]);
+  const penaltyNote = penaltyText(
+    {
+      dueDate: card.dueDate,
+      payDue: card.payDue,
+      overdue: card.overdue,
+      // Просрочку оплаты (прототип derive: payOverdue) и оплаченное передаст задача денег.
+      payOverdue: false,
+      amount: card.amount,
+      paid: 0,
+    },
+    penalty,
+    today,
+    t,
+  );
+  if (!contractor) return { socfund: null, penalty: penaltyNote };
+  const { dict, form } = await socfundContext(
+    tx,
+    contractor.gked?.code ?? null,
+    contractor.form.code,
+  );
+  if (!dict.reportTypes.includes(card.type.code)) return { socfund: null, penalty: penaltyNote };
+  const st = socfundState(
+    socfundSubjectOf(
+      {
+        kind: contractor.kind,
+        bases: contractor.bases.map((b) => b.code),
+        gked: contractor.gked?.code ?? null,
+        benefits: contractor.benefits.map((b) => b.code),
+        flags: contractor.socfundFlags,
+      },
+      form,
+      types,
+    ),
+    contractor.socfundTariff,
+    dict,
+  );
+  return {
+    socfund: st && {
+      tariff: socfundBrief(dict, st.choice?.id ?? null, t),
+      auto: socfundBrief(dict, st.auto.tariff, t),
+      capHint: socfundCapHint(dict.tariffs.find((x) => x.id === st.choice?.id) ?? null, t),
+    },
+    penalty: penaltyNote,
+  };
+}
+
 export function getReportHandler(deps: ApiDeps): RouteHandler<typeof getReportRoute, AppEnv> {
   return async (c) => {
     const { id } = c.req.valid('param');
-    const t = await serverTexts(deps);
-    const card = await withOrgContext(deps.db, orgContextOf(c), (tx) =>
-      getReportCard(tx, id, { t, today: todayOf(deps), scope: reportScopeOf(subjectOf(c)) }),
-    );
-    if (!card) notFound();
+    const texts = await serverTexts(deps);
+    const t: Translate = (key, params) => formatText(texts(key), params);
+    const today = todayOf(deps);
+    const out = await withOrgContext(deps.db, orgContextOf(c), async (tx) => {
+      const card = await getReportCard(tx, id, {
+        t: texts,
+        today,
+        scope: reportScopeOf(subjectOf(c)),
+      });
+      return card && { card, ...(await socfundOfReport(tx, card, today, t)) };
+    });
+    if (!out) notFound();
+    const { card, socfund, penalty } = out;
     return c.json(
       {
         ...reportRowBody(card),
         dueChanges: card.dueChanges.map((d) => ({ ...d, at: d.at.toISOString() })),
         statusHistory: card.statusHistory.map((h) => ({ ...h, at: h.at.toISOString() })),
+        socfund,
+        penalty,
       },
       200,
     );

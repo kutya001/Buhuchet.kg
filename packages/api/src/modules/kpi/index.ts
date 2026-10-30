@@ -18,6 +18,22 @@ import {
   updateIndicatorRoute,
 } from './indicators';
 import {
+  importApplyHandler,
+  importApplyRoute,
+  importErrorsHandler,
+  importErrorsRoute,
+  importHistoryHandler,
+  importHistoryRoute,
+  importOptionsHandler,
+  importOptionsRoute,
+  importPreviewHandler,
+  importPreviewRoute,
+  templateHandler,
+  templatePreviewHandler,
+  templatePreviewRoute,
+  templateRoute,
+} from './import';
+import {
   missingExportHandler,
   missingExportRoute,
   missingHandler,
@@ -57,7 +73,7 @@ import {
 /**
  * Модуль «Показатели контрагентов» (поток В, задача 2.27): настройка показателей и «Кому вести», ввод за
  * месяц и окно значения со статусом месяца, «За период», «Не заполнено», индикатор незаполненных и
- * вкладка «Показатели» карточки контрагента. Ввод из Excel — задача 2.28.
+ * вкладка «Показатели» карточки контрагента; ввод из Excel (задача 2.28).
  */
 export function kpiModule(deps: ApiDeps) {
   return createModuleApp()
@@ -83,5 +99,12 @@ export function kpiModule(deps: ApiDeps) {
     .openapi(missingValuesRoute, missingValuesHandler(deps))
     .openapi(missingExportRoute, missingExportHandler(deps))
     .openapi(missingSummaryRoute, missingSummaryHandler(deps))
+    .openapi(importOptionsRoute, importOptionsHandler(deps))
+    .openapi(templatePreviewRoute, templatePreviewHandler(deps))
+    .openapi(templateRoute, templateHandler(deps))
+    .openapi(importPreviewRoute, importPreviewHandler(deps))
+    .openapi(importApplyRoute, importApplyHandler(deps))
+    .openapi(importErrorsRoute, importErrorsHandler(deps))
+    .openapi(importHistoryRoute, importHistoryHandler(deps))
     .openapi(cardRoute, cardHandler(deps));
 }
