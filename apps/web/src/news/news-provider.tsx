@@ -62,6 +62,11 @@ export interface NewsShellInfo {
   newsHref: string;
   /** «Открыть Базу знаний» в первом «Что нового» — «Уроки». */
   lessonsHref: string;
+  /**
+   * Сразу после входа сначала — приветствие (задача 2.33): true — оно открыто, и «Что нового» в этот
+   * вход не показывается (ТЗ «Окно «Что нового» при входе»).
+   */
+  welcomeFirst?: () => Promise<boolean>;
 }
 
 export function useNewsRuntime(shell: NewsShellInfo): {
@@ -72,7 +77,7 @@ export function useNewsRuntime(shell: NewsShellInfo): {
   const [item, setItem] = useState<DialogSlot<NewsItem> | null>(null);
   const [whatsNew, setWhatsNew] = useState<DialogSlot<WhatsNew> | null>(null);
   const started = useRef(false);
-  const { tabHrefOf, openArticle } = shell;
+  const { tabHrefOf, openArticle, welcomeFirst } = shell;
 
   const read = useCallback(
     (ids: string[]) => void markNewsRead(client, ids).catch(() => {}),
@@ -92,14 +97,15 @@ export function useNewsRuntime(shell: NewsShellInfo): {
     if (started.current) return;
     started.current = true;
     if (!takeSignedIn()) return;
-    fetchWhatsNew()
+    (welcomeFirst?.() ?? Promise.resolve(false))
+      .then((welcome) => (welcome ? null : fetchWhatsNew()))
       .then((wn) => {
-        if (!wn.items.length) return;
+        if (!wn?.items.length) return;
         read(wn.items.map((n) => n.id));
         setTimeout(() => setWhatsNew(openSlot(wn)), WHATS_NEW_DELAY_MS);
       })
       .catch(() => {});
-  }, [read]);
+  }, [read, welcomeFirst]);
 
   const controls = useMemo<NewsControls>(
     () => ({

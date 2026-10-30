@@ -14,6 +14,7 @@ export type CountKey =
   | 'task.count'
   | 'kpi.period.count'
   | 'kpi.missing.count'
+  | 'files.count'
   | 'accounts.count'
   | 'orgs.count'
   | 'locale.count'

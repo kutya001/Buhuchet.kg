@@ -19,6 +19,7 @@ import { createOrganization, type CreatedOrganization } from './organizations';
 import { employees, files, statusHistory, users } from './schema';
 import { seedPermissions, seedRoleTemplates } from './seed';
 import { readSpecJson } from './spec-data';
+import { dictLiteral } from './sql-text';
 import { readStatusHistory, writeStatusChange } from './status';
 import { createTestDatabase, databaseAvailable, type TestDatabase } from './testing';
 
@@ -208,6 +209,28 @@ describe.skipIf(!databaseAvailable())('файлы организации: таб
       violation('files_source_kind_check'),
     );
     await insert({ sizeBytes: 20 * 1048576, name: 'я'.repeat(255) });
+  });
+
+  it('тексты словаря в запросе (`dictLiteral`): кавычки, обратная косая черта и доллары запрос не меняют', async () => {
+    const texts = [
+      'Загружен вручную',
+      "О'Нил «Ала-Тоо»",
+      "\\' or true --",
+      '$t$',
+      'x$t',
+      '$t1$ и $t$',
+      'конец$',
+    ];
+    for (const text of texts) {
+      const [row] = await t.admin.db.execute<{ v: string }>(
+        sql`select ${dictLiteral(text)}::text as v`,
+      );
+      expect(row!.v).toBe(text);
+    }
+    const [row] = await t.admin.db.execute<{ v: string }>(
+      sql`select ${dictLiteral('a\0b')}::text as v`,
+    );
+    expect(row!.v).toBe('ab');
   });
 
   it('удаление: отметка с автором и временем, устаревшая версия — «изменено другим»', async () => {

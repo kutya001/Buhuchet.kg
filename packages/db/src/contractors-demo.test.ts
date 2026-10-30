@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { withOrgContext } from './context';
 import { contractorGkedDicts, getContractor, listContractorsPage } from './contractors';
 import { readHistory } from './history';
-import { contractors, contractorTariffs } from './schema';
+import { contractorBenefits, contractors, contractorTariffs } from './schema';
 import { DEMO_ORG_ID, demoId, seedAll } from './seed';
 import { createTestDatabase, databaseAvailable, type TestDatabase } from './testing';
 
@@ -125,6 +125,49 @@ describe.skipIf(!databaseAvailable())('Контрагенты демо-орга�
           }),
         ],
       }),
+    ]);
+  });
+
+  it('тариф Соцфонда — как в прототипе: статус СПиНО ровно у тарифа СПиНО, «под вопросом» — трое', async () => {
+    const all = await db.admin.db
+      .select()
+      .from(contractors)
+      .where(eq(contractors.orgId, DEMO_ORG_ID));
+    const spinoStatus = new Set(
+      (
+        await db.admin.db
+          .select({ id: contractorBenefits.contractorId })
+          .from(contractorBenefits)
+          .where(eq(contractorBenefits.benefitCode, 'ЛЬГ-29'))
+      ).map((r) => r.id),
+    );
+    for (const c of all) {
+      expect([c.name, spinoStatus.has(c.id)]).toEqual([c.name, c.socfundTariff?.id === 'spino']);
+    }
+    const byNo = (no: string) => all.find((c) => c.id === demoId('contractor', no))!;
+    expect(byNo('1')).toMatchObject({
+      socfundFlags: { cashless: true, registry: true, confirmed: true, gov: false },
+      socfundTariff: { id: 'spino', manual: false, reason: null },
+    });
+    expect(byNo('10').socfundTariff).toMatchObject({ id: 'spino', manual: true });
+    expect(byNo('10').socfundTariff?.reason).toBeTruthy();
+    expect(byNo('11').socfundTariff).toMatchObject({ id: 'pvtpki' });
+    expect(byNo('30').socfundTariff).toBeNull();
+
+    const page = await inDemo((tx) =>
+      listContractorsPage(tx, { page: 1, size: 'all', filters: {} } as unknown as ListQuery, {
+        t,
+        today: '2026-10-27',
+        fee: false,
+        scope: undefined,
+        tab: 'all',
+        employeeId: demoId('employee', 'e1'),
+      }),
+    );
+    expect(page.rows.filter((r) => r.socfund?.ask).map((r) => r.name)).toEqual([
+      'ОсОО «Каракол Мед Сервис»',
+      'ОсОО «Нарын Жүн»',
+      'ОсОО «Укс»',
     ]);
   });
 
