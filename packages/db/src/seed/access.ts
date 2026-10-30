@@ -21,6 +21,7 @@ const RoleTemplatesSection = z.array(
 /**
  * Каталог прав из refDB.permissions. Набор и группы прав задаёт система: если refDB с ним расходится,
  * наполнение останавливается — права нельзя добавить или переложить в другую группу только данными.
+ * Название и описание, поправленные в Админке («Изменил» задан), `--update` не затирает.
  */
 export async function seedPermissions(
   db: Db,
@@ -51,13 +52,16 @@ export async function seedPermissions(
           target: permissions.id,
           set: {
             permGroup: sql`excluded.perm_group`,
-            name: sql`excluded.name`,
-            description: sql`excluded.description`,
+            name: sql`case when ${permissions.updatedBy} is null then excluded.name else ${permissions.name} end`,
+            description: sql`case when ${permissions.updatedBy} is null then excluded.description else ${permissions.description} end`,
             sortOrder: sql`excluded.sort_order`,
+            // Открытое окно «Право роли» после наполнения получит «запись изменена».
+            version: sql`${permissions.version} + 1`,
             updatedAt: sql`now()`,
           },
-          setWhere: sql`(${permissions.permGroup}, ${permissions.name}, ${permissions.description}, ${permissions.sortOrder})
-            is distinct from (excluded.perm_group, excluded.name, excluded.description, excluded.sort_order)`,
+          setWhere: sql`(${permissions.permGroup}, ${permissions.sortOrder}) is distinct from (excluded.perm_group, excluded.sort_order)
+            or (${permissions.updatedBy} is null
+              and (${permissions.name}, ${permissions.description}) is distinct from (excluded.name, excluded.description))`,
         })
         .returning({ id: permissions.id })
     : await insert.onConflictDoNothing().returning({ id: permissions.id });
@@ -65,7 +69,10 @@ export async function seedPermissions(
   return { inserted, updated: touched.length - inserted, unchanged: rows.length - touched.length };
 }
 
-/** Шаблоны ролей из refDB.roleTemplates → role_templates. */
+/**
+ * Шаблоны ролей из refDB.roleTemplates → role_templates. Шаблон, поправленный в Админке («Изменил»
+ * задан), `--update` не затирает.
+ */
 export async function seedRoleTemplates(
   db: Db,
   section: unknown,
@@ -92,7 +99,8 @@ export async function seedRoleTemplates(
             updatedAt: sql`now()`,
             version: sql`${roleTemplates.version} + 1`,
           },
-          setWhere: sql`(${roleTemplates.name}, ${roleTemplates.permissions}, ${roleTemplates.scopes}, ${roleTemplates.sortOrder})
+          setWhere: sql`${roleTemplates.updatedBy} is null
+            and (${roleTemplates.name}, ${roleTemplates.permissions}, ${roleTemplates.scopes}, ${roleTemplates.sortOrder})
             is distinct from (excluded.name, excluded.permissions, excluded.scopes, excluded.sort_order)`,
         })
         .returning({ code: roleTemplates.code })

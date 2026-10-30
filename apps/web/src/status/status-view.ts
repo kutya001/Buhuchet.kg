@@ -4,14 +4,17 @@ import {
   durationText,
   formatMomentRu,
   isNoScale,
+  isStatusTone,
   scalePosition,
   scaleTextKey,
   statusDurations,
   statusLook,
   statusTextKey,
+  statusToneKey,
   statusTotals,
   type StatusScaleKey,
   type StatusTone,
+  type UiTextKey,
 } from '@buhuchet/domain';
 import { fileDownloadPath, type StatusHistoryEntry } from '@buhuchet/shared';
 import type {
@@ -63,6 +66,15 @@ export function statusName(t: Translate, scale: StatusScaleKey, status: string):
   return t(statusTextKey(scale, status));
 }
 
+/**
+ * Цвет статуса: из Админки → «Справочники платформы» → «Статусы» — он приходит со словарём
+ * (`tone.<шкала>.<код>`); нет в словаре — цвет шкалы по умолчанию.
+ */
+export function statusTone(t: Translate, scale: StatusScaleKey, status: string): StatusTone {
+  const value = t(statusToneKey(scale, status) as UiTextKey);
+  return isStatusTone(value) ? value : statusLook(scale, status).tone;
+}
+
 /** Метка статуса: название, цвет и значок справочника «Статусы» (значки есть в наборе — тест). */
 export function statusPillView(
   t: Translate,
@@ -70,7 +82,11 @@ export function statusPillView(
   status: string,
 ): { label: string; tone: StatusTone; icon: IconName } {
   const look = statusLook(scale, status);
-  return { label: statusName(t, scale, status), tone: look.tone, icon: look.icon as IconName };
+  return {
+    label: statusName(t, scale, status),
+    tone: statusTone(t, scale, status),
+    icon: look.icon as IconName,
+  };
 }
 
 /** Длительность словами: «меньше часа», «5 ч», «3 дня». */
@@ -146,7 +162,7 @@ export function scaleView(t: Translate, input: ScaleInput): ScaleView {
         at: j <= pos.index ? moment(lastSet(history, code)) : null,
       })),
       index: pos.index,
-      tone: mark ? mark.tone : statusLook(scale, status).tone,
+      tone: mark ? mark.tone : statusTone(t, scale, status),
       side: pos.side
         ? { label: name, tone: pos.side.tone, at: moment(lastSet(history, status)) }
         : null,
@@ -191,7 +207,7 @@ export function miniView(
     props: {
       count: pos.steps.length,
       index: pos.index,
-      tone: statusLook(scale, status).tone,
+      tone: statusTone(t, scale, status),
       label: name,
       side: !!pos.side,
       title: mark ? `${step} · ${input.markLabel ?? mark.label}` : step,

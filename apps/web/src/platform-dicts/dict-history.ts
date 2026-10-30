@@ -2,10 +2,13 @@ import {
   bishkekDate,
   bishkekTime,
   formatDateRu,
+  isAdminSystemDict,
   payRuleText,
   paysText,
   payScheduleText,
   pluralForm,
+  SCOPE_GROUPS,
+  type AdminSystemDict,
   type AdminValueDict,
   type PayRule,
   type UiTextKey,
@@ -200,9 +203,91 @@ export function calendarHistoryText(item: Item, t: Translate): string {
   });
 }
 
+const strings = (v: unknown) => (Array.isArray(v) ? v.map(String) : []);
+const scopesOf = (v: unknown) =>
+  v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
+
+/** Цвет статуса словами: «Синий»; неизвестный — как есть. */
+function toneText(t: Translate, v: unknown): string {
+  return t(`pdicts.status.tone.${shown(v)}` as UiTextKey);
+}
+
+/**
+ * Запись истории вкладок «Работа системы» — как пишет прототип (pdLog): «Статусы: «К сдаче»
+ * переименован в «К отправке»», «Периодичность: «Месяц» → «Отчётный месяц»», «Права ролей: «…»
+ * переименовано в «…»» и «— изменено описание», «Шаблоны ролей: «Бухгалтер» — добавлено право «…»»,
+ * «— область «Контрагенты»: «Все контрагенты»». Цвет статуса и текст шаблона прототип в историю не
+ * пишет — у нас пишется: «— цвет «Серый» → «Синий»», «— изменён текст».
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#Д-13
+export function systemHistoryText(
+  dict: AdminSystemDict,
+  item: Item,
+  t: Translate,
+  names: HistoryNames = new Map(),
+): string {
+  const title = t(`tab.pdicts.${dict}`);
+  const name = item.label;
+  const parts = item.changes.flatMap((c): string[] => {
+    const from = shown(c.from);
+    const to = shown(c.to);
+    if (dict === 'statuses') {
+      if (c.field === 'tone') {
+        return [
+          t('pdicts.hist.status_tone', {
+            dict: title,
+            name,
+            from: toneText(t, c.from),
+            to: toneText(t, c.to),
+          }),
+        ];
+      }
+      return [
+        item.code.startsWith('period.')
+          ? t('pdicts.hist.period_rename', { from, to })
+          : t('pdicts.hist.status_rename', { dict: title, from, to }),
+      ];
+    }
+    if (dict === 'perms') {
+      return [
+        c.field === 'name'
+          ? t('pdicts.hist.perm_rename', { dict: title, from, to })
+          : t('pdicts.hist.perm_description', { dict: title, name }),
+      ];
+    }
+    if (dict === 'templates') return [t('pdicts.hist.template', { dict: title, name })];
+    // Шаблон роли: название, права по одному, область по группам.
+    if (c.field === 'name') return [t('pdicts.hist.rename', { dict: title, from, to })];
+    if (c.field === 'permissions') {
+      const before = strings(c.from);
+      const after = strings(c.to);
+      const perm = (p: string) => names.get(p) ?? p;
+      return [
+        ...after
+          .filter((p) => !before.includes(p))
+          .map((p) => t('pdicts.hist.roletpl_add', { dict: title, name, perm: perm(p) })),
+        ...before
+          .filter((p) => !after.includes(p))
+          .map((p) => t('pdicts.hist.roletpl_remove', { dict: title, name, perm: perm(p) })),
+      ];
+    }
+    const before = scopesOf(c.from);
+    const after = scopesOf(c.to);
+    return SCOPE_GROUPS.filter((g) => (before[g] ?? 'own') !== (after[g] ?? 'own')).map((g) =>
+      t('pdicts.hist.roletpl_scope', {
+        dict: title,
+        name,
+        group: t(`roles.group.${g}`),
+        scope: t(after[g] === 'all' ? 'roles.scope.all' : 'roles.scope.own'),
+      }),
+    );
+  });
+  return parts.join('; ');
+}
+
 /** Запись «Истории изменений» для ленты: дата и время по Бишкеку, что изменено, кто. */
 export function dictHistoryItem(
-  dict: AdminValueDict | 'calendar',
+  dict: AdminValueDict | AdminSystemDict | 'calendar',
   item: Item,
   t: Translate,
   names: HistoryNames = new Map(),
@@ -213,7 +298,11 @@ export function dictHistoryItem(
     date: formatDateRu(bishkekDate(at)),
     time: bishkekTime(at),
     text:
-      dict === 'calendar' ? calendarHistoryText(item, t) : dictHistoryText(dict, item, t, names),
+      dict === 'calendar'
+        ? calendarHistoryText(item, t)
+        : isAdminSystemDict(dict)
+          ? systemHistoryText(dict, item, t, names)
+          : dictHistoryText(dict, item, t, names),
     who: item.actor ?? t('org.history.system'),
   };
 }

@@ -435,6 +435,13 @@
       "when": 1793326244895,
       "tag": "0061_contractor_service_init",
       "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1793327519196,
+      "tag": "0062_admin_platform_dicts_system",
+      "breakpoints": true
     }
   ]
 }

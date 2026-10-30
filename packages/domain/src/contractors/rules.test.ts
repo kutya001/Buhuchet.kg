@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   contractorDeleteRefusal,
   contractorFieldProblems,
+  firstMonthFee,
   innDuplicateMessage,
   innProblem,
   officeBenefitChanges,
@@ -128,5 +129,36 @@ describe('Статусы «Ставится по УГНС»', () => {
       add: [],
       drop: [],
     });
+  });
+});
+
+describe('firstMonthFee — начисление за месяц начала обслуживания (прототип addCpDlg, pro)', () => {
+  it('с 1-го числа и «Полный месяц» — полная ставка', () => {
+    expect(firstMonthFee(500_000, '2026-10-01', 'prorate')).toEqual({
+      kind: 'full',
+      amount: 500_000,
+    });
+    expect(firstMonthFee(500_000, '2026-10-14', 'full')).toEqual({ kind: 'full', amount: 500_000 });
+  });
+
+  it('«Пропорционально дням» — ставка × оставшиеся дни / дни месяца, до целого сома', () => {
+    // 5 000 × 18 / 31 = 2 903,23 → 2 903 сом.
+    expect(firstMonthFee(500_000, '2026-10-14', 'prorate')).toEqual({
+      kind: 'prorate',
+      amount: 290_300,
+      full: 500_000,
+      left: 18,
+      days: 31,
+    });
+    // Февраль невисокосного года — 28 дней.
+    expect(firstMonthFee(280_000, '2026-02-15', 'prorate')).toMatchObject({
+      left: 14,
+      days: 28,
+      amount: 140_000,
+    });
+  });
+
+  it('«Со следующего месяца» — за месяц начала ничего', () => {
+    expect(firstMonthFee(500_000, '2026-10-14', 'next')).toEqual({ kind: 'next', amount: 500_000 });
   });
 });

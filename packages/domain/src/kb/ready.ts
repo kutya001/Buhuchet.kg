@@ -113,6 +113,9 @@ export const KB_STEP_RULES: Readonly<Record<string, KbStepRule>> = {
   roles: { module: 'staff' },
   emps: { module: 'staff', done: { kind: 'history', entity: 'employee', actions: ['create'] } },
   empcard: { module: 'staff' },
+  // 5. Контрагенты (задача 2.09): «Добавить первого контрагента или загрузить из Excel» — создан хотя
+  // бы один контрагент (загрузка из Excel и «Из свидетельства и выписки» тоже пишут создание в историю).
+  cp1: { module: 'cps', done: { kind: 'history', entity: 'contractor', actions: ['create'] } },
   // 6. Отчеты для сдачи (задача 2.13): вкладки списка и «Создать уточнённый» — у прежней версии
   // ставится «superseded». Назначение и «Кто что сдаёт» — с задачами 2.11 и 2.15, сдача, подтверждение,
   // массовая отметка, «Не требуется» и шкала — с 2.14.
@@ -206,6 +209,8 @@ export const KB_READY_MODULES: ReadonlySet<string> = new Set<MenuModuleId>([
   // «Отчеты для сдачи» (2.13).
   'reports',
   'tasks',
+  // «Контрагенты»: форма создания (2.09); статья описывает и список — его экран добавит задача 2.10.
+  'cps',
   // «Показатели контрагентов» (2.27).
   'kpi',
   // «Файловый менеджер» (2.29).

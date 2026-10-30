@@ -7,6 +7,7 @@ import { queryOptions, useQuery } from '@tanstack/react-query';
 import { useId, useState, type ReactNode } from 'react';
 import { api, apiFailure } from '../api-client';
 import { BenefitPickDialog, type BenefitChoice } from '../contractors/benefit-pick';
+import { EditContractorDialog } from '../contractors/contractor-edit';
 import {
   NotNeededNote,
   ReportPickDialog,
@@ -14,6 +15,7 @@ import {
   useReportPickAuto,
 } from '../contractors/report-pick';
 import { catalogQuery, valueDictsQuery } from '../dicts/dicts-data';
+import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
 import { useT } from '../l10n/provider';
 
 /*
@@ -50,7 +52,13 @@ const EMPTY: Draft = {
   taxOfficeCode: '',
 };
 
-export function ReportPickSamples({ initialCp }: { initialCp: string | null }) {
+export function ReportPickSamples({
+  initialCp,
+  canEdit,
+}: {
+  initialCp: string | null;
+  canEdit: boolean;
+}) {
   const t = useT();
   const id = useId();
   const catalog = useQuery(catalogQuery).data;
@@ -69,6 +77,7 @@ export function ReportPickSamples({ initialCp }: { initialCp: string | null }) {
   } | null>(null);
   const [open, setOpen] = useState(false);
   const [cp, setCp] = useState(initialCp ?? '');
+  const [edit, setEdit] = useState<DialogSlot<string> | null>(null);
 
   const request = {
     formCode: draft.formCode || null,
@@ -257,8 +266,27 @@ export function ReportPickSamples({ initialCp }: { initialCp: string | null }) {
             </select>
           )}
         </Field>
+        {cp && canEdit ? (
+          <button
+            type="button"
+            className={`${buttonClass('default')} self-start`}
+            data-sample-edit=""
+            onClick={() => setEdit(openSlot(cp))}
+          >
+            <Icon name="edit" size="sm" />
+            {t('samples.pick.edit')}
+          </button>
+        ) : null}
         {cp ? <ReportPickTab key={cp} contractorId={cp} /> : null}
       </section>
+      {edit ? (
+        <EditContractorDialog
+          key={edit.n}
+          contractorId={edit.data}
+          open={edit.open}
+          onClose={() => setEdit(closeSlot)}
+        />
+      ) : null}
 
       {dialog?.kind === 'pick' || dialog?.kind === 'single' ? (
         <ReportPickDialog

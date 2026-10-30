@@ -112,8 +112,28 @@ const contractorFields = {
 };
 
 /**
+ * Отчёт, который форма создания назначает новому контрагенту (прототип addCpDlg, rateRows): ставка из
+ * ставок вида (null — по умолчанию, как `defRate` прототипа), строки ЕНС у единого налога (пусто — по
+ * ГКЭД и статусам, как `enAuto`) и добавленные строки налога с продаж. Строка ЕНС — как
+ * `AssignmentEnRate` в reports.ts (тот файл сам импортирует этот, поэтому схема своя).
+ */
+export const ContractorNewReport = z.strictObject({
+  code: Code,
+  rate: Text(60).min(1).nullable().default(null),
+  enRates: z
+    .array(z.strictObject({ code: Code, variant: z.number().int().min(0).max(20).nullable() }))
+    .max(20)
+    .default([]),
+  rateAdditions: z.array(Code).max(20).default([]),
+});
+export type ContractorNewReport = z.input<typeof ContractorNewReport>;
+
+/**
  * Новый контрагент (прототип modules/contractor-form.js, addCpDlg). Ответственный обязателен;
  * стоимость обслуживания — у постоянного и только с правом «Видеть плату за обслуживание».
+ * Отчёты (`reports`) создаются вместе с контрагентом одним целым: у постоянного нужен хотя бы один, у
+ * разового их нет; `reportsForced` — обязательные, которые сняли с подтверждением «Снять обязательный
+ * отчёт?» (в истории «Не назначен отчёт …, хотя он …»).
  */
 export const CreateContractorRequest = z.object({
   ...contractorFields,
@@ -124,7 +144,9 @@ export const CreateContractorRequest = z.object({
   gkedExtra: contractorFields.gkedExtra.default([]),
   taxOfficeCode: contractorFields.taxOfficeCode.default(null),
   bizSize: contractorFields.bizSize.default('small'),
-  benefits: contractorFields.benefits.default([]),
+  // Список из формы берётся как есть (статусы по УГНС форма ставит и снимает сама); без поля статусы
+  // по УГНС ставит сервер.
+  benefits: contractorFields.benefits.optional(),
   bases: contractorFields.bases.default([]),
   head: contractorFields.head.default(''),
   contact: contractorFields.contact.default(''),
@@ -139,6 +161,9 @@ export const CreateContractorRequest = z.object({
   feeDay: contractorFields.feeDay.optional(),
   paysTo: contractorFields.paysTo.default('emp'),
   tariff: ContractorTariffRequest.nullable().default(null),
+  // Без поля — контрагент без отчётов, как до формы 2.09 (docs/decisions.md п. А-5).
+  reports: z.array(ContractorNewReport).max(300).optional(),
+  reportsForced: z.array(Code).max(300).default([]),
 });
 export type CreateContractorRequest = z.input<typeof CreateContractorRequest>;
 
@@ -211,6 +236,11 @@ export const ContractorGkedNotes = z.object({
   confirmNeeded: z.boolean(),
   /** Вопрос группы кода («Оказывает услуги интернета?»); пусто — общий «Подтверждаю». */
   ask: z.string(),
+  /**
+   * Окно «Проверьте право на режим «…»» с текстом и кнопкой — у сверки для формы, пока нужен ответ;
+   * в карточке — null.
+   */
+  confirm: z.object({ title: z.string(), text: z.string(), ok: z.string() }).nullable(),
 });
 export type ContractorGkedNotes = z.infer<typeof ContractorGkedNotes>;
 
@@ -268,9 +298,21 @@ export const Contractor = z.object({
 });
 export type Contractor = z.infer<typeof Contractor>;
 
-/** Ответ на создание и «Изменить»: карточка и уведомления «Отмечен статус «…» по УГНС». */
-export const ContractorSaved = Contractor.extend({ notices: z.array(z.string()) });
+/**
+ * Ответ на создание и «Изменить»: карточка, уведомления «Отмечен статус «…» по УГНС» и у скольких
+ * несданных отчётов статусы изменили срок (уведомление «Сроки по статусу изменены у N отчётов»).
+ */
+export const ContractorSaved = Contractor.extend({
+  notices: z.array(z.string()),
+  redued: z.number().int().nonnegative(),
+});
 export type ContractorSaved = z.infer<typeof ContractorSaved>;
+
+/** Ответ на создание: ещё и сколько отчётов создано («Контрагент добавлен, отчётов создано: N»). */
+export const ContractorCreated = ContractorSaved.extend({
+  reportsCreated: z.number().int().nonnegative(),
+});
+export type ContractorCreated = z.infer<typeof ContractorCreated>;
 
 /** Строка списка контрагентов (прототип cpCols): тексты, как в столбцах экрана. */
 export const ContractorRow = z.object({
@@ -353,6 +395,29 @@ export type TransferContractorsPreview = z.infer<typeof TransferContractorsPrevi
 
 export const TransferContractorsRequest = z.object({ from: Uuid, to: Uuid });
 export type TransferContractorsRequest = z.infer<typeof TransferContractorsRequest>;
+
+/**
+ * Значения для формы контрагента: действующие сотрудники для «Ответственный бухгалтер», ответственный
+ * по умолчанию (сам сотрудник, если он видит только своих контрагентов), видит ли он плату за
+ * обслуживание (`fee`) и включена ли она в организации (`feeOn` — иначе поля нет совсем).
+ */
+export const ContractorFormOptions = z.object({
+  employees: z.array(z.object({ id: Uuid, shortName: z.string() })),
+  defaultResponsible: Uuid.nullable(),
+  fee: z.boolean(),
+  feeOn: z.boolean(),
+});
+export type ContractorFormOptions = z.infer<typeof ContractorFormOptions>;
+
+/** Окно выбора ГКЭД: код, начало кода или слова названия (прототип gkPickDlg). */
+export const GkedSearchQuery = z.object({ q: Text(200).default('') });
+
+/** Найденные подклассы ГКЭД: первые по порядку справочника, путь — коды от секции до класса. */
+export const GkedSearchResult = z.object({
+  items: z.array(z.object({ code: z.string(), name: z.string(), path: z.array(z.string()) })),
+  total: z.number().int().nonnegative(),
+});
+export type GkedSearchResult = z.infer<typeof GkedSearchResult>;
 
 /**
  * Сверка с ГКЭД для формы (ТЗ: «под полями ГКЭД сразу видны предупреждения»): набранные значения и, у

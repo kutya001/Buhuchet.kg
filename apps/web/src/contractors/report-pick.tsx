@@ -14,6 +14,7 @@ import {
   searchText,
   STAT_BASE,
   statBaseAuto,
+  type PickResult,
   type PickSection,
 } from '@buhuchet/domain';
 import {
@@ -269,13 +270,13 @@ function usePick(ctx: ReportPickContext, catalog: Catalog, bases: readonly strin
 }
 
 /**
- * Отчёты, которые отмечаются сами (прототип pkAuto), для черновика формы без окна: форма показывает их
- * в «Сдаёт отчёты» и открывает с ними окно, пока выбор в окне не меняли. null — данные ещё грузятся
- * (окно тогда не открывать: начальный выбор был бы не тот).
+ * Подбор для черновика формы без окна (прототип pkCalc): «Рекомендуемые» с причинами и обязательностью —
+ * форма подписывает выбранные отчёты и предупреждает о снятых обязательных; `ctx` — ответ сервера (ГКЭД,
+ * подключённые виды). null — данные ещё грузятся.
  */
-export function useReportPickAuto(
-  request: Omit<ReportPickRequest, 'contractorId'>,
-): string[] | null {
+export function useReportPickCalc(
+  request: Omit<ReportPickRequest, 'contractorId'> & { contractorId?: string },
+): { pick: PickResult; ctx: ReportPickContext; catalog: Catalog } | null {
   const t = useT();
   const catalog = useQuery(catalogQuery).data;
   const query = useQuery(reportPickQuery(request));
@@ -284,17 +285,31 @@ export function useReportPickAuto(
   return useMemo(
     () =>
       catalog && ctx
-        ? reportPickAuto(
-            reportPick(
+        ? {
+            pick: reportPick(
               pickSubjectOf(ctx, ctx.subject.bases),
               pickDictOf(catalog, ctx),
               ctx.today,
               t,
             ),
-          )
+            ctx,
+            catalog,
+          }
         : null,
     [catalog, ctx, t],
   );
+}
+
+/**
+ * Отчёты, которые отмечаются сами (прототип pkAuto), для черновика формы без окна: форма показывает их
+ * в «Сдаёт отчёты» и открывает с ними окно, пока выбор в окне не меняли. null — данные ещё грузятся
+ * (окно тогда не открывать: начальный выбор был бы не тот).
+ */
+export function useReportPickAuto(
+  request: Omit<ReportPickRequest, 'contractorId'>,
+): string[] | null {
+  const calc = useReportPickCalc(request);
+  return useMemo(() => (calc ? reportPickAuto(calc.pick) : null), [calc]);
 }
 
 /** Содержимое подбора: шапка, поиск, вкладки, список и описание; внизу — итог (`PickSummary`). */

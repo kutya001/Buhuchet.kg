@@ -1,6 +1,6 @@
-import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
-import { ownerPassword, platformAdmin, uniqueInn } from './admin';
-import { signIn, uniqueLogin } from './helpers';
+import { expect, test, type Locator, type Page } from '@playwright/test';
+import { uniqueInn } from './admin';
+import { orgWithTypes } from './orgs';
 import { assign, reportsOf } from './reports';
 
 // «Подбор отчётов» и «Льготы и особые статусы» (задача 2.07, #63). Формы контрагента (задача 2.09) и
@@ -9,44 +9,11 @@ import { assign, reportsOf } from './reports';
 // каждый тест, в ней подключён весь каталог видов: «Рекомендуемые» не зависят от того, что подключила
 // демо-организация, а её общие записи тест не меняет.
 
-/** Новая организация со всеми видами каталога (`connect`); сеанс владельца — в `api`. */
-async function pickOrg(api: APIRequestContext, origin: string, connect = true) {
-  await platformAdmin(api, origin);
-  const owner = uniqueLogin('e2e-pick');
-  const temporary = ownerPassword();
-  const created = await api.post('/api/admin/organizations', {
-    headers: { origin },
-    data: {
-      name: `ОсОО «${owner}»`,
-      inn: uniqueInn(),
-      ownerFullName: 'Подборова Сквозная',
-      ownerLogin: owner,
-      temporaryPassword: temporary,
-    },
-  });
-  expect(created.status(), await created.text()).toBe(201);
-  await signIn(api, origin, owner, temporary);
-  const changed = await api.post('/api/auth/password', {
-    headers: { origin },
-    data: { currentPassword: temporary, newPassword: ownerPassword() },
-  });
-  expect(changed.status(), await changed.text()).toBe(200);
-  if (!connect) return;
-  const types = (await (await api.get('/api/report-types')).json()) as {
-    items: { code: string }[];
-  };
-  const connected = await api.post('/api/org-report-types/connect', {
-    headers: { origin },
-    data: { connect: types.items.map((x) => x.code), disconnect: [] },
-  });
-  expect(connected.status(), await connected.text()).toBe(200);
-}
-
 type Draft = { form?: string; regime?: string; gked?: string; biz?: string };
 
 /** Черновик формы создания на странице образцов. */
 async function draft(page: Page, baseURL: string | undefined, fields: Draft, connect = true) {
-  await pickOrg(page.request, new URL(baseURL!).origin, connect);
+  await orgWithTypes(page.request, new URL(baseURL!).origin, connect);
   await page.goto('/samples');
   await fill(page, fields);
 }
@@ -284,7 +251,7 @@ test.describe('Этап 2: подбор отчётов и налогов', () =>
     baseURL,
   }) => {
     const origin = new URL(baseURL!).origin;
-    await pickOrg(page.request, origin);
+    await orgWithTypes(page.request, origin);
     const staff = (await (await page.request.get('/api/staff?size=all')).json()) as {
       items: { id: string }[];
     };
