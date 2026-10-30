@@ -75,7 +75,8 @@ export const KB_STEP_RULES: Readonly<Record<string, KbStepRule>> = {
   },
   // Реквизиты для приёма денег (задача 2.18): «добавлен счёт организации».
   accs: { module: 'org', done: { kind: 'history', entity: 'org_account', actions: ['create'] } },
-  policy: { module: 'org', done: orgSettings('features') },
+  // ТЗ: «засчитывается при завершении опросника или изменении хотя бы одной функции» (2.33).
+  policy: { module: 'org', done: orgSettings('features', 'quiz') },
   // ТЗ: «добавлен или убран день напоминания в учётной политике».
   remind: { module: 'org', done: orgSettings('remindDays') },
   settings: {
