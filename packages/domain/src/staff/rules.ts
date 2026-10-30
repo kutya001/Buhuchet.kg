@@ -137,16 +137,19 @@ export type StaffRefusal =
   /** Права, которые выдаёт и снимает только владелец: такую роль назначает и снимает владелец. */
   | 'owner_granted'
   /** Роль шире прав того, кто действует: её назначает и снимает, носителей ведёт владелец. */
-  | 'beyond_own';
+  | 'beyond_own'
+  /** Пароль сотрудника сбрасывает только владелец (решение заказчика 30.10.2026). */
+  | 'password_owner_only';
 
 /**
  * Можно ли действие над сотрудником (прототип modules/staff.js, empActions: у владельца организации
- * действий нет). Сверх прототипа (ОТКЛОНЕНИЕ: docs/deviations.md#15): свою роль меняет только
+ * действий нет; «Сбросить пароль» — только у владельца, docs/deviations.md п. 11, решение заказчика
+ * 30.10.2026). Сверх прототипа (ОТКЛОНЕНИЕ: docs/deviations.md#15): свою роль меняет только
  * владелец; себя не блокируют. Сотрудника, в роли которого есть права, которые выдаёт только
- * владелец, блокирует и разблокирует, меняет ему роль и сбрасывает пароль только владелец — иначе эти
- * права снимал бы или получал (через временный пароль) тот, кому их не выдавали. По той же причине не
- * владелец назначает, снимает, сбрасывает пароль, блокирует и разблокирует только для ролей не шире
- * своей (`roleWithinRights`). `newRole` — роль, которую назначают (changeRole).
+ * владелец, блокирует и разблокирует и меняет ему роль только владелец — иначе эти права снимал бы
+ * или получал тот, кому их не выдавали. По той же причине не владелец назначает, снимает, блокирует и
+ * разблокирует только для ролей не шире своей (`roleWithinRights`). `newRole` — роль, которую
+ * назначают (changeRole).
  */
 export function staffActionRefusal(
   actor: StaffActor,
@@ -168,8 +171,7 @@ export function staffActionRefusal(
       if (ownerGranted) return 'owner_granted';
       return roleWithinRights(actor, target.role) ? null : 'beyond_own';
     case 'resetPassword':
-      if (ownerGranted) return 'owner_granted';
-      return roleWithinRights(actor, target.role) ? null : 'beyond_own';
+      return actor.isOwner ? null : 'password_owner_only';
     case 'changeRole':
       if (!newRole) throw new Error('staffActionRefusal: changeRole без новой роли');
       if (newRole.isOwner) return 'owner_role';
@@ -197,13 +199,13 @@ export function newEmployeeRoleRefusal(
 }
 
 /**
- * Показывать ли у сотрудника «Сменить роль», «Сбросить пароль», «Заблокировать» и «Разблокировать»
- * (ТЗ «Сотрудники → Роли», решение заказчика 27.10.2026: недоступные кнопки скрыты; прототип
- * core/org.js, empLocked): не у владельца организации и не у себя; не владельцу — не у сотрудника с
- * правами «выдаёт только владелец» и не у сотрудника с ролью шире своей. Те же правила, что у
- * `staffActionRefusal`; право «Сотрудники и роли» проверяет вызывающий.
+ * Показывать ли у сотрудника «Сменить роль», «Заблокировать» и «Разблокировать», а владельцу — и
+ * «Сбросить пароль» (ТЗ «Сотрудники → Роли», решение заказчика 27.10.2026: недоступные кнопки скрыты;
+ * прототип core/org.js, empLocked): не у владельца организации и не у себя; не владельцу — не у
+ * сотрудника с правами «выдаёт только владелец» и не у сотрудника с ролью шире своей. Те же правила,
+ * что у `staffActionRefusal`; право «Сотрудники и роли» проверяет вызывающий.
  */
 export function staffManageable(actor: StaffActor, target: StaffTarget): boolean {
   if (actor.employeeId === target.employeeId) return false;
-  return staffActionRefusal(actor, target, 'resetPassword') === null;
+  return staffActionRefusal(actor, target, 'unblock') === null;
 }

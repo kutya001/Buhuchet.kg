@@ -17,13 +17,19 @@ const moneyVis=()=>(feat('fee')&&can('fee'))||can('projects');
 const taxVis=()=>feat('taxpay')&&can('money');
 
 /* ── Пауза и возобновление обслуживания ── */
-function applyService(c){const ids=c.assign.filter(a=>!a.to).map(a=>a.t);if(ids.length&&c.kind!=='oneoff'&&!c.archived)assignTypes(c,ids,TODAY,null,null,true);
-  let off=0,on=0;REPORTS.filter(r=>r.cp===c.id&&!r.superseded).forEach(r=>{const m=ym(r.pkey);const act=c.assign.some(a=>a.t===r.t&&!a.to);
-    if(!inService(c,m)&&OPEN.has(r.status)&&r.due>=addDays(TODAY,-31)){r.status='Не требуется';r._paused=true;off++}
-    else if(inService(c,m)&&r.status==='Не требуется'&&act&&!r.subDate&&r.due>=TODAY&&!c.archived){r.status='К сдаче';delete r._paused;on++}});return {off,on}}
+// Периоды обслуживания изменились: отчёты за периоды без обслуживания — «Не требуется» (отметка _paused), вернувшиеся в обслуживание — снова «К сдаче».
+// Период обслуживается, если обслуживался хотя бы один его месяц (п. В-11); возвращаются только отчёты, которым «Не требуется» поставила приостановка или архив (п. В-9)
+function applyService(c){const ids=c.assign.filter(a=>!a.to).map(a=>a.t);if(ids.length&&c.kind!=='oneoff'&&!c.archived)assignTypes(c,ids,TODAY,null,null,true,null,true);
+  let off=0,on=0;REPORTS.filter(r=>r.cp===c.id&&!r.superseded).forEach(r=>{const svc=repInService(c,r);const act=c.assign.some(a=>a.t===r.t&&!a.to);
+    if(!svc&&OPEN.has(r.status)&&r.due>=addDays(TODAY,-31)){r.status='Не требуется';r._paused=true;off++}
+    else if(svc&&r.status==='Не требуется'&&r._paused&&act&&!r.subDate&&r.due>=TODAY&&!c.archived){r.status='К сдаче';delete r._paused;on++}});return {off,on}}
+// Откат действующей приостановки: отмеченные пропущенные месяцы стали месяцами обслуживания — досоздать за них отчёты (и вернуть снятые паузой), даже если срок уже прошёл (п. В-10)
+function fillServiceMonths(c,months){if(!months.length||c.kind==='oneoff')return 0;let n=0;
+  c.assign.filter(a=>!a.to).forEach(a=>{const t=tEff(T[a.t],a,c);if(!t||t.oneOff||t.active===false)return;const ps=[];months.forEach(m=>{const p=perOfYm(t,m);if(!(t.skipQ&&t.skipQ.includes(p.q))&&!ps.some(x=>pstart(t,x)===pstart(t,p)))ps.push(p)});ps.forEach(p=>{if((a.from&&pend(t,p)<a.from.slice(0,10))||(a.until&&ym(pstart(t,p))>a.until))return;
+    const ex=REPORTS.find(r=>r.cp===c.id&&r.t===a.t&&r.pkey===pstart(t,p)&&!r.superseded);if(ex){if(ex.status==='Не требуется'&&ex._paused&&!ex.subDate){ex.status='К сдаче';delete ex._paused;n++}return}REPORTS.push(born(makeReport(c,t,p,a.resp||c.resp)));n++})});return n}
 function pauseDlg(c){const nm=addMonths(ym(TODAY),1);
   openModal({form:true,render:()=>({title:'Приостановить обслуживание',sub:esc(c.name),body:`<div class="form">${fld('Приостановить с месяца',inp('pz-from',nm,`type="month" min="${ym(TODAY)}"`),{req:true,id:'pz-from',hint:'С этого месяца отчёты не создаются, плата не начисляется, напоминаний нет'})}${fld('Возобновить с месяца',inp('pz-to','','type="month"'),{id:'pz-to',hint:'Необязательно, можно указать позже'})}${fld('Причина',inp('pz-why','','placeholder="Например: сезонная деятельность"'),{full:true,id:'pz-why'})}</div>
-    <div class="note">${ic('info')}<span>Пример: приостановить с ноября 2026, возобновить с мая 2027. Несданные отчёты за месяцы паузы получат статус «Не требуется», сданные останутся. Ответственный и назначенные отчёты сохраняются, просрочки по приостановленному контрагенту не считаются.</span></div>`,
+    <div class="note">${ic('info')}<span>Пример: приостановить с ноября 2026, возобновить с мая 2027. Несданные отчёты за месяцы паузы получат статус «Не требуется», сданные останутся; квартальные и годовые остаются к сдаче, если контрагент обслуживался хотя бы один месяц периода. Ответственный и назначенные отчёты сохраняются, просрочки по приостановленному контрагенту не считаются.</span></div>`,
     foot:'<button class="btn ghost" data-close>Отмена</button><button class="btn cta" id="pz-ok">Приостановить</button>',
     mount(el,m){$('#pz-ok',el).onclick=()=>{const f=val(el,'pz-from'),t=val(el,'pz-to'),why=val(el,'pz-why');
       if(!setErr(el,'pz-from',!f?'Укажите месяц':f<ym(TODAY)?'Прошлые месяцы не меняются':''))return;if(!setErr(el,'pz-to',t&&t<=f?'Месяц возобновления должен быть позже месяца паузы':''))return;
@@ -31,10 +37,11 @@ function pauseDlg(c){const nm=addMonths(ym(TODAY),1);
       const r=applyService(c);log('cp',c.id,`Обслуживание приостановлено с ${ymG(f)}${t?', возобновление с '+ymG(t):''}${why?'. Причина: '+why:''}`,c.id);m.close();refreshAll();
       toast(`Приостановлено с ${ymG(f)}${r.off?`, отчётов «Не требуется»: ${r.off}`:''}`,'pause')}}})});
 }
-function resumeDlg(c){const l=lastPeriod(c);const plan=l&&!l.to&&l.from>ym(TODAY);const def=plan?l.from:maxIso(ym(TODAY),l&&l.to?addMonths(l.to,1):ym(TODAY));
-  openModal({form:true,render:()=>({title:'Возобновить обслуживание',sub:`${esc(c.name)} · ${esc(periodsText(c))}`,body:`<div class="form">${fld('Возобновить с месяца',inp('rs-from',def,`type="month" min="${ym(TODAY)}"`),{req:true,id:'rs-from',hint:'Отчёты за этот и следующие периоды создадутся сами'})}</div>${feat('fee')&&can('fee')&&curTariff(c)?`<div class="note">${ic('info')}<span>Плата начнёт начисляться по текущей ставке ${som(curTariff(c).amount)} ${curTariff(c).per==='Y'?'в год':'в месяц'}. Новую ставку можно внести во вкладке «Обслуживание».</span></div>`:''}`,
+// Месяц возобновления — позже начала паузы: убрать паузу целиком можно только «Отменить приостановку» с правом «Откат статусов» (ТЗ; решение заказчика 30.10.2026, продукт п. В-13)
+function resumeDlg(c){const l=lastPeriod(c);const plan=l&&!l.to&&l.from>ym(TODAY);const pv=plan?c.periods[c.periods.length-2]:l;const p0=pv&&pv.to?addMonths(pv.to,1):null;const mn=maxIso(ym(TODAY),p0?addMonths(p0,1):ym(TODAY));const def=plan?l.from:maxIso(ym(TODAY),mn);
+  openModal({form:true,render:()=>({title:'Возобновить обслуживание',sub:`${esc(c.name)} · ${esc(periodsText(c))}`,body:`<div class="form">${fld('Возобновить с месяца',inp('rs-from',def,`type="month" min="${mn}"`),{req:true,id:'rs-from',hint:p0?`Пауза с ${ymG(p0)}; отчёты за месяц возобновления и следующие периоды создадутся сами`:'Отчёты за этот и следующие периоды создадутся сами'})}</div>${feat('fee')&&can('fee')&&curTariff(c)?`<div class="note">${ic('info')}<span>Плата начнёт начисляться по текущей ставке ${som(curTariff(c).amount)} ${curTariff(c).per==='Y'?'в год':'в месяц'}. Новую ставку можно внести во вкладке «Обслуживание».</span></div>`:''}`,
     foot:'<button class="btn ghost" data-close>Отмена</button><button class="btn cta" id="rs-ok">Возобновить</button>',
-    mount(el,m){$('#rs-ok',el).onclick=()=>{const f=val(el,'rs-from');if(!setErr(el,'rs-from',!f?'Укажите месяц':f<ym(TODAY)?'Прошлые месяцы не меняются':''))return;
+    mount(el,m){$('#rs-ok',el).onclick=()=>{const f=val(el,'rs-from');if(!setErr(el,'rs-from',!f?'Укажите месяц':f<ym(TODAY)?'Прошлые месяцы не меняются':p0&&f<=p0?`Не раньше ${ymG(addMonths(p0,1))}: пауза начинается с ${ymG(p0)}. Убрать паузу целиком можно кнопкой «Отменить приостановку» (нужно право «Откат статусов»)`:''))return;
       const l=lastPeriod(c);if(l&&!l.to&&l.from>ym(TODAY)){l.from=f;const pv=c.periods[c.periods.length-2];if(pv&&pv.to&&addMonths(pv.to,1)>=f){c.periods.pop();pv.to=null}}else if(l&&l.to&&addMonths(l.to,1)>=f)l.to=null;else c.periods.push({from:f,to:null});
       const r=applyService(c);log('cp',c.id,`Обслуживание возобновлено с ${ymG(f)}`,c.id);m.close();refreshAll();toast(`Обслуживание возобновится с ${ymG(f)}${r.on?`, отчётов вернулось в работу: ${r.on}`:''}`,'play')}}})});
 }

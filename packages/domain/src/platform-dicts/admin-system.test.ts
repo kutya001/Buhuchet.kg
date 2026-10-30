@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { defaultUiTexts } from '../l10n/texts';
+import refDB from '../../../../spec/data/refDB.json';
 import {
   ADMIN_STATUS_SCALES,
   defaultStatusTones,
   isAdminSystemDict,
   MESSAGE_TEMPLATE_ORDER,
   MESSAGE_TEMPLATE_VARIABLES,
+  messageTemplateLabelKey,
   messageTemplateVariables,
   roleTemplateProblem,
   sameName,
@@ -104,6 +106,22 @@ describe('Админка → «Шаблоны» сообщений', () => {
     expect([...MESSAGE_TEMPLATE_ORDER].sort()).toEqual(
       Object.keys(MESSAGE_TEMPLATE_VARIABLES).sort(),
     );
+  });
+
+  it('у каждого шаблона справочника (refDB.json, messageTemplates) — подстановки, место и подпись', () => {
+    const keys = Object.keys(refDB.messageTemplates).sort();
+    expect([...MESSAGE_TEMPLATE_ORDER].sort()).toEqual(keys);
+    const texts = defaultUiTexts();
+    for (const key of keys) {
+      expect(texts[messageTemplateLabelKey(key)], key).toBeTruthy();
+      expect(
+        unknownTemplateVariables(
+          key,
+          refDB.messageTemplates[key as keyof typeof refDB.messageTemplates],
+        ),
+        key,
+      ).toEqual([]);
+    }
   });
 
   it('подстановка, которой нет у шаблона, — ошибка; известные и повторы — нет', () => {

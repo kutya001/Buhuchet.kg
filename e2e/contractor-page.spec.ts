@@ -54,6 +54,14 @@ async function enabledPage(api: APIRequestContext, baseURL: string | undefined, 
 }
 
 test.describe('Этап 2: страница контрагента по ссылке — код доступа и защита', () => {
+  // Свой адрес на каждый тест: с одного адреса после 3 неверных кодов за час ввод закрыт на час
+  // (docs/deviations.md п. Е-2), а тесты обоих проектов и повторы идут с одной машины. Адрес берётся
+  // из первого X-Forwarded-For, как за Vercel и Caddy.
+  test.beforeEach(async ({ page }) => {
+    const part = () => Math.floor(Math.random() * 256);
+    await page.setExtraHTTPHeaders({ 'x-forwarded-for': `198.18.${part()}.${part()}` });
+  });
+
   test('(проверка задачи #98) ссылка без входа просит код: неверный — «Осталось попыток: 4», верный — шапка страницы; код запоминается в браузере', async ({
     page,
     request,

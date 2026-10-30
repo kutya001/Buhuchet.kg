@@ -208,7 +208,10 @@ describe.skipIf(!databaseAvailable())('вход и сеансы в базе', ()
       .where(eq(sessions.id, id));
     expect(await sessionByToken(t.app.db, tokenHash)).toMatchObject({ touched: true });
     const [row] = await t.admin.db.select().from(sessions).where(eq(sessions.id, id));
-    expect(row!.expiresAt.getTime() - Date.now()).toBeGreaterThan(29 * 86_400_000);
+    // Продлён на 1 день с этого обращения (docs/deviations.md, п. 5, решение 30.10.2026).
+    const left = row!.expiresAt.getTime() - Date.now();
+    expect(left).toBeGreaterThan(86_400_000 - 60_000);
+    expect(left).toBeLessThan(86_400_000 + 60_000);
     expect(await sessionByToken(t.app.db, tokenHash)).toMatchObject({ touched: false });
   });
 

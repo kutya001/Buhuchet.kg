@@ -31,8 +31,9 @@ const kCanVal=(i,c,m)=>kApplies(i,c,m)||kEarly(i,c,m);
 const ymN=m=>m.slice(5,7)+'.'+m.slice(0,4);
 const kWhoTxt=i=>{const cs=kWhoAll(),n=cs.filter(c=>kOn(i,c)).length;return i.scope==='all'?(n<cs.length?`всем, кроме ${cs.length-n}`:'всем контрагентам'):`выбранным: ${n}${i.autoNew?', новые — автоматически':''}`};
 const kOffLbl=(i,c)=>!kOn(i,c)&&i.off&&i.off[c.id]?`Не ведётся с ${ymG(i.off[c.id])}`:'';
+// Снова включённый у контрагента показатель обязателен с идущего месяца (ТЗ, решение заказчика 27.10.2026); месяц меняется в «с …»
 function kSetOn(i,c,on,quiet){if(kOn(i,c)===on)return false;i.off=i.off||{};i.from=i.from||{};
-  if(on){delete i.off[c.id];if(i.scope==='sel'&&!(i.cps||[]).includes(c.id))(i.cps=i.cps||[]).push(c.id);i.from[c.id]=kPrev()}
+  if(on){delete i.off[c.id];if(i.scope==='sel'&&!(i.cps||[]).includes(c.id))(i.cps=i.cps||[]).push(c.id);i.from[c.id]=ym(TODAY)}
   else{i.off[c.id]=ym(TODAY);if(i.cps)i.cps=i.cps.filter(x=>x!==c.id)}
   if(i.scope==='sel'&&!(i.seen||[]).includes(c.id))(i.seen=i.seen||[]).push(c.id);
   touch(i);log('kind',i.id,`Показатель «${i.name}», ${c.name}: «${on?'Не ведётся':'Ведётся'}» → «${on?'Ведётся':'Не ведётся'}»`,c.id);if(!quiet)kResync();return true}
@@ -42,7 +43,8 @@ const kNum=(i,v)=>i.type==='int'?fmtM(v,false):fmtM(v,i.type==='dec'||(Math.roun
 const kFmt=(i,v)=>v==null||v===''?'':kNum(i,v)+(i.unit?' '+i.unit:'');
 function kAgg(vals){const a=vals.filter(v=>v!=null);if(!a.length)return {n:0};const s=a.reduce((x,y)=>x+y,0);return {n:a.length,sum:s,avg:s/a.length,max:Math.max(...a),min:Math.min(...a),last:a[a.length-1]}}
 const kMonths=(from,to)=>{const o=[];for(let x=from;x<=to;x=addMonths(x,1))o.push(x);return o};
-const kPrev=()=>{const p=addMonths(ym(TODAY),-1);return !CPS.length||CPS.some(c=>c.kind!=='oneoff'&&inService(c,p))?p:ym(TODAY)};
+// Текущий месяц заполнения — всегда прошлый календарный месяц (ТЗ «Индикатор незаполненных показателей», решение заказчика 27.10.2026)
+const kPrev=()=>addMonths(ym(TODAY),-1);
 const kCanEdit=c=>!isAdmin()&&can('kpiEdit')&&(seeAll('kpi')||c.resp===S.me);
 function kReq(c,m){const ap=kInds().filter(i=>kApplies(i,c,m));const rq=ap.filter(i=>i.req);return rq.length?rq:ap}
 function kDue(c,m){const rq=kReq(c,m);const d=rq.length?Math.min(...rq.map(i=>i.dueDay||10)):10;const n=addMonths(m,1);return mkDate(+n.slice(0,4),+n.slice(5,7),d)}
@@ -268,7 +270,7 @@ function kWhoApply(i,st,isNew){const cs=CPS.filter(c=>c.kind!=='oneoff');const b
   i.scope=st.scope;i.autoNew=st.scope==='all'?true:st.autoNew;i.off=i.off||{};i.from=i.from||{};
   if(st.scope==='sel'){i.cps=[...st.sel];i.seen=CPS.map(c=>c.id)}else{i.cps=[];i.seen=[];if(!stayAll)i.off={}}
   cs.forEach(c=>{const b=before.get(c.id);const want=st.scope==='sel'?st.sel.has(c.id):stayAll?b:true;
-    if(want){delete i.off[c.id];if(b===false)i.from[c.id]=kPrev()}else if(b)i.off[c.id]=ym(TODAY);
+    if(want){delete i.off[c.id];if(b===false)i.from[c.id]=ym(TODAY)}else if(b)i.off[c.id]=ym(TODAY);
     if(b!=null&&b!==want)log('kind',i.id,`Показатель «${i.name}», ${c.name}: «${b?'Ведётся':'Не ведётся'}» → «${want?'Ведётся':'Не ведётся'}»`,c.id)})}
 // One contractor × month: all indicators, comment and file per value, status scale and history.
 function kEditDlg(c,m){if(!c)return;const ed=kCanEdit(c);

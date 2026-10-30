@@ -333,7 +333,8 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
     const code = (await pageRow(cpAcc.id)).code;
     await resetLock(cpAcc.id);
     let last: Response | null = null;
-    for (let i = 1; i <= 5; i++) last = await enter(path, wrongOf(code), '198.51.100.2');
+    // С разных адресов: с одного ввод закрылся бы раньше — на третьем неверном (п. Е-2).
+    for (let i = 1; i <= 5; i++) last = await enter(path, wrongOf(code), `198.51.100.${10 + i}`);
     expect(last!.status).toBe(429);
     const locked = await failure(last!);
     expect(locked.code).toBe('page_locked');
@@ -348,19 +349,23 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
     await resetLock(cpAcc.id);
   });
 
-  it('30 неверных кодов за час с одного адреса — час закрыто с этого адреса', async () => {
+  it('3 неверных кода за час с одного адреса — час закрыто с этого адреса', async () => {
+    // Решение заказчика 30.10.2026 (docs/deviations.md п. Е-2): 3 с адреса, по ссылке — 5 подряд.
     const path = `org-a/${cpAcc.inn}`;
     const code = (await pageRow(cpAcc.id)).code;
     const ip = '203.0.113.7';
+    await resetLock(cpAcc.id);
     let last: Response | null = null;
-    for (let i = 1; i <= 30; i++) {
-      // Ссылка закрылась бы на пятом — снимаем перерыв, чтобы считался только адрес.
-      await resetLock(cpAcc.id);
+    for (let i = 1; i <= 3; i++) {
       last = await enter(path, wrongOf(code), ip);
-      if (i < 30) expect(last.status).toBe(403);
+      if (i < 3) expect(last.status).toBe(403);
     }
     expect(last!.status).toBe(429);
-    expect((await failure(last!)).code).toBe('page_ip_locked');
+    const locked = await failure(last!);
+    expect(locked.code).toBe('page_ip_locked');
+    const until = new Date((locked.details as { lockedUntil: string }).lockedUntil).getTime();
+    expect(until - Date.now()).toBeGreaterThan(59 * 60_000);
+    expect(until - Date.now()).toBeLessThanOrEqual(60 * 60_000 + 5_000);
     expect((await enter(path, code, ip)).status).toBe(429);
     // С другого адреса верный код подходит.
     expect((await enter(path, code, '203.0.113.8')).status).toBe(200);

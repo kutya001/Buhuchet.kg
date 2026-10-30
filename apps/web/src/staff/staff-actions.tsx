@@ -54,7 +54,7 @@ export function useStaffActions(): {
   const errorText = useErrorText();
   const client = useQueryClient();
   const refresh = useStaffRefresh();
-  const { access, employeeId } = useShell();
+  const { access, employeeId, editor } = useShell();
   const router = useRouter();
   const canManage = access.can('staff');
   const [card, setCard] = useState<DialogSlot<Employee> | null>(null);
@@ -154,8 +154,9 @@ export function useStaffActions(): {
     block: setAskBlock,
     unblock: (e: Employee) => void setActive(e, true),
   };
-  const actions = staffMenu({ canManage, employeeId, t, run });
-  const cardActions = staffMenu({ canManage, employeeId, t, run, card: true });
+  const isOwner = editor?.isOwner ?? false;
+  const actions = staffMenu({ canManage, isOwner, employeeId, t, run });
+  const cardActions = staffMenu({ canManage, isOwner, employeeId, t, run, card: true });
 
   const dialogs = (
     <>

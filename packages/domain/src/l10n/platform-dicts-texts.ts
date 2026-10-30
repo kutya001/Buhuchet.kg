@@ -140,7 +140,15 @@ const SYSTEM_TEXTS = {
   'pdicts.tpl.label.tg_week': { ru: 'Telegram: еженедельная сводка', section: S },
   'pdicts.tpl.label.tg_code': { ru: 'Telegram: код восстановления пароля', section: S },
   'pdicts.tpl.label.tg_task': { ru: 'Telegram: новая задача', section: S },
+  'pdicts.tpl.label.tg_linked': { ru: 'Telegram: привязан', section: S },
+  'pdicts.tpl.label.tg_pass_changed': { ru: 'Telegram: пароль изменён', section: S },
+  'pdicts.tpl.label.tg_pass_reset': { ru: 'Telegram: пароль сброшен', section: S },
+  'pdicts.tpl.label.tg_relinked': { ru: 'Telegram: привязан другой Telegram', section: S },
+  'pdicts.tpl.label.tg_unlinked': { ru: 'Telegram: отвязан', section: S },
+  'pdicts.tpl.label.tg_link_invalid': { ru: 'Telegram: ссылка устарела', section: S },
+  'pdicts.tpl.label.tg_start': { ru: 'Telegram: ответ на /start', section: S },
   'pdicts.tpl.vars': { ru: 'Подстановки: {list}', section: S },
+  'pdicts.tpl.no_vars': { ru: 'Без подстановок', section: S },
   'pdicts.tpl.save': { ru: 'Сохранить шаблоны', section: S },
   'pdicts.tpl.toast': { ru: 'Шаблоны сохранены', section: S },
   // Ошибки вкладок «Работа системы».
@@ -153,6 +161,10 @@ const SYSTEM_TEXTS = {
   'pdicts.err.text_required': { ru: 'Введите текст шаблона', section: E },
   'pdicts.err.unknown_vars': {
     ru: 'Нет такой подстановки: {list}. Доступны: {known}',
+    section: E,
+  },
+  'pdicts.err.unknown_vars_none': {
+    ru: 'Нет такой подстановки: {list}. В этом шаблоне подстановок нет',
     section: E,
   },
   // «История изменений» вкладок (прототип pdLog).

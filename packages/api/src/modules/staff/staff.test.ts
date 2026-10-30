@@ -119,7 +119,7 @@ describe.skipIf(!databaseAvailable())('Сотрудники: API', () => {
       expect((await call('GET', values)).status).toBe(401);
     });
 
-    it('кого смотрящий может вести (сменить роль, сбросить пароль, заблокировать) — признак manageable', async () => {
+    it('кого смотрящий может вести (сменить роль, заблокировать; владельцу — и сбросить пароль) — признак manageable', async () => {
       const manageable = async (cookie: string) => {
         const res = await call('GET', '/api/staff?size=all', cookie);
         expect(res.status).toBe(200);
@@ -547,33 +547,35 @@ describe.skipIf(!databaseAvailable())('Сотрудники: API', () => {
   });
 
   describe('сброс пароля', () => {
-    it('пароль сотрудника с правами «выдаёт владелец» сбрасывает только владелец', async () => {
-      const senior = f.people['senior-a']!.employeeId;
-      const byHr = await call('POST', `/api/staff/${senior}/password-reset`, hr, {});
+    it('пароль сотрудника сбрасывает только владелец: с правом «Сотрудники и роли» — отказ (п. 11)', async () => {
+      // Решение заказчика 30.10.2026 (docs/deviations.md п. 11, «Б»): даже бухгалтеру с ролью не шире
+      // своей кадровик пароль не сбрасывает.
+      const { employee } = await hire('reset-by-hr-a');
+      const byHr = await call('POST', `/api/staff/${employee.id}/password-reset`, hr, {});
       expect(byHr.status).toBe(403);
-      expect(await errorCode(byHr)).toBe('owner_granted');
+      expect(ApiError.parse(await byHr.json()).error).toEqual({
+        code: 'password_owner_only',
+        message: 'Пароль сотрудника сбрасывает владелец',
+      });
+      const senior = f.people['senior-a']!.employeeId;
+      const seniorByHr = await call('POST', `/api/staff/${senior}/password-reset`, hr, {});
+      expect(await errorCode(seniorByHr)).toBe('password_owner_only');
       expect((await loginAs('senior-a')).status).toBe(200);
 
-      const { employee } = await hire('reset-by-hr-a');
-      const ok = await call('POST', `/api/staff/${employee.id}/password-reset`, hr, {});
+      const ok = await call('POST', `/api/staff/${employee.id}/password-reset`, owner, {});
       expect(ok.status).toBe(200);
       expect(TemporaryPasswordResponse.parse(await ok.json()).temporaryPassword).toMatch(
         TEMP_PASSWORD_PATTERN,
       );
-
       const bySenior = await call('POST', `/api/staff/${senior}/password-reset`, owner, {});
       expect(bySenior.status).toBe(200);
     });
 
-    it('пароль сотрудника с правами шире своих не владелец не сбрасывает', async () => {
+    it('пароль сотрудника с правами шире своих не владелец не сбрасывает; нет сотрудника — 404', async () => {
       const chiefId = f.people['chief-a']!.employeeId;
       const byHr = await call('POST', `/api/staff/${chiefId}/password-reset`, hr, {});
       expect(byHr.status).toBe(403);
-      expect(ApiError.parse(await byHr.json()).error).toEqual({
-        code: 'beyond_own',
-        message: 'Пароль сотрудника с правами шире ваших сбрасывает владелец',
-        details: { variant: 'reset_password' },
-      });
+      expect(await errorCode(byHr)).toBe('password_owner_only');
       expect((await loginAs('chief-a')).status).toBe(200);
       const missing = await call(
         'POST',

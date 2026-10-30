@@ -124,13 +124,13 @@ const REFUSAL_MESSAGES: Record<StaffRefusal, string> = {
   owner_role: 'Роль владельца организации не назначается',
   owner_granted: 'Роль с правами, которые выдаёт только владелец, назначает и снимает владелец',
   beyond_own: 'Роль с правами шире ваших назначает и снимает владелец',
+  password_owner_only: 'Пароль сотрудника сбрасывает владелец',
 };
 
 /**
  * Отказ 403 в действии над сотрудником (`staffActionRefusal`, `newEmployeeRoleRefusal`); внутри
- * транзакции откатывает её. Отказ в правке, сбросе пароля, блокировке и разблокировке передаёт
- * `details.variant` (`edit`, `reset_password`, `block`): экран берёт текст из словаря
- * (`err.<код>.<вариант>`), а не из ответа.
+ * транзакции откатывает её. Отказ в правке, блокировке и разблокировке передаёт `details.variant`
+ * (`edit`, `block`): экран берёт текст из словаря (`err.<код>.<вариант>`), а не из ответа.
  */
 export function refuse(refusal: StaffRefusal, action: StaffAction | 'create'): never {
   if (refusal === 'owner_employee' && action === 'edit') {
@@ -139,14 +139,6 @@ export function refuse(refusal: StaffRefusal, action: StaffAction | 'create'): n
   if (refusal === 'owner_employee' && action === 'resetPassword') {
     apiFail(403, 'owner_password_reset', 'Пароль владельца сбрасывает администратор платформы');
   }
-  if (refusal === 'owner_granted' && action === 'resetPassword') {
-    apiFail(
-      403,
-      refusal,
-      'Пароль сотрудника с правами, которые выдаёт только владелец, сбрасывает владелец',
-      { variant: 'reset_password' },
-    );
-  }
   if (refusal === 'owner_granted' && (action === 'block' || action === 'unblock')) {
     apiFail(
       403,
@@ -154,11 +146,6 @@ export function refuse(refusal: StaffRefusal, action: StaffAction | 'create'): n
       'Сотрудника с правами, которые выдаёт только владелец, блокирует и разблокирует владелец',
       { variant: 'block' },
     );
-  }
-  if (refusal === 'beyond_own' && action === 'resetPassword') {
-    apiFail(403, refusal, 'Пароль сотрудника с правами шире ваших сбрасывает владелец', {
-      variant: 'reset_password',
-    });
   }
   if (refusal === 'beyond_own' && (action === 'block' || action === 'unblock')) {
     apiFail(403, refusal, 'Сотрудника с правами шире ваших блокирует и разблокирует владелец', {

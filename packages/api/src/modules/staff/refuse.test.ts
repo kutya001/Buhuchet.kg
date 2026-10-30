@@ -40,10 +40,9 @@ describe('тексты словаря err.* совпадают с отказам
       ['owner_employee', 'unblock', 'owner_employee'],
       ['owner_employee', 'edit', 'owner_employee'],
       ['owner_employee', 'resetPassword', 'owner_password_reset'],
-      ['owner_granted', 'resetPassword', 'owner_granted'],
+      ['password_owner_only', 'resetPassword', 'password_owner_only'],
       ['owner_granted', 'block', 'owner_granted'],
       ['owner_granted', 'unblock', 'owner_granted'],
-      ['beyond_own', 'resetPassword', 'beyond_own'],
       ['beyond_own', 'block', 'beyond_own'],
       ['beyond_own', 'unblock', 'beyond_own'],
     ];
