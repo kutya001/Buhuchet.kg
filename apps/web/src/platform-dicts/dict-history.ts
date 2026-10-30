@@ -89,6 +89,30 @@ function typeHistoryText(item: Item, t: Translate, names: HistoryNames): string 
 }
 
 /**
+ * Загрузка из Excel и её откат (задача 2.37, прототип importDictDlg и rollbackLoad, pdLog): «Органы:
+ * загрузка из Excel — добавлено 1, изменено 2, отключено 0», «Органы: загрузка от 30.10.2026 откачена».
+ */
+function loadHistoryText(dict: AdminValueDict, item: Item, t: Translate): string | null {
+  const title = t(`pdicts.title.${dict}`);
+  const to = (field: string) => item.changes.find((c) => c.field === field)?.to;
+  if (item.action === 'import') {
+    const n = (field: string) => Number(to(field) ?? 0);
+    return t('pdicts.hist.import', {
+      dict: title,
+      added: n('added'),
+      changed: n('changed'),
+      disabled: n('disabled'),
+    });
+  }
+  if (item.action === 'rollback') {
+    const at = to('loadedAt');
+    const date = typeof at === 'string' ? formatDateRu(bishkekDate(new Date(at))) : '';
+    return t('pdicts.hist.rollback', { dict: title, date });
+  }
+  return null;
+}
+
+/**
  * Что изменено, словами — как пишет прототип (admin/platform-dicts*.js, pdLog): «Формы: добавлено
  * «ОсОО»», «Органы: «ГНС» → «ГНС при МФ»», «отключено (было: активно)», «перемещено с № 3 на № 2»; у
  * УГНС — «изменено. Было: … Стало: …» по изменённым полям; у режима — «изменено: 2 поля», у
@@ -103,6 +127,8 @@ export function dictHistoryText(
   t: Translate,
   names: HistoryNames = new Map(),
 ): string {
+  const load = loadHistoryText(dict, item, t);
+  if (load !== null) return load;
   if (dict === 'types') {
     const text = typeHistoryText(item, t, names);
     if (text !== null) return text;

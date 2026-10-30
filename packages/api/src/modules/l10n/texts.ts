@@ -4,6 +4,9 @@ import { DEFAULT_UI_LANGUAGE, defaultUiTexts, type UiLanguage } from '@buhuchet/
 import type { UiDictionary } from '@buhuchet/shared';
 import type { ApiDeps } from '../../deps';
 
+/** Что нужно словарю: база и частота сверки (у задач по расписанию — по умолчанию). */
+type TextDeps = Pick<ApiDeps, 'db' | 'l10nRecheckMs'>;
+
 /** Тексты экранов продукта по умолчанию (`UI_TEXTS`): под ними — тексты базы. */
 export const DEFAULT_TEXTS = defaultUiTexts();
 
@@ -22,7 +25,7 @@ function versionOf(lang: UiLanguage, stamp: string): string {
 
 type LoadDictionary = (lang: UiLanguage) => Promise<UiDictionary>;
 
-const loaders = new WeakMap<ApiDeps, LoadDictionary>();
+const loaders = new WeakMap<TextDeps, LoadDictionary>();
 
 /**
  * Правки словаря в этом процессе: число правок по языку. Счётчик — на `globalThis`, а не в модуле:
@@ -43,7 +46,7 @@ function edits(): Map<UiLanguage, number> {
  * перечитывается, только когда она изменилась. Им пользуются метод словаря для экранов и методы,
  * которым нужны подписи на сервере (поиск по подписям статусов, заголовки выгрузки в Excel).
  */
-export function uiDictionary(deps: ApiDeps): LoadDictionary {
+export function uiDictionary(deps: TextDeps): LoadDictionary {
   const existing = loaders.get(deps);
   if (existing) return existing;
   const recheckMs = deps.l10nRecheckMs ?? RECHECK_MS;
@@ -92,7 +95,7 @@ export function uiDictionaryEdited(lang: UiLanguage): void {
  * Тексты словаря на сервере по ключу — те же, что на экране (язык интерфейса пока один —
  * русский). Ключа нет — сам ключ, как у экрана.
  */
-export async function serverTexts(deps: ApiDeps): Promise<(key: string) => string> {
+export async function serverTexts(deps: TextDeps): Promise<(key: string) => string> {
   const { texts } = await uiDictionary(deps)(DEFAULT_UI_LANGUAGE);
   return (key) => texts[key] ?? key;
 }

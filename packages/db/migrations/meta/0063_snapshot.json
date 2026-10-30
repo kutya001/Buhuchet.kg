@@ -1,5 +1,5 @@
 {
-  "id": "dfb8d52d-f9bd-4863-84d9-f7c992fd5034",
+  "id": "6e88256d-4468-450b-b464-7bc36dfecb7a",
   "prevId": "3903c98d-8de8-43b4-8130-d80e36d853a0",
   "version": "7",
   "dialect": "postgresql",
@@ -6185,137 +6185,6 @@
       },
       "isRLSEnabled": true
     },
-    "public.kb_known": {
-      "name": "kb_known",
-      "schema": "",
-      "columns": {
-        "user_id": {
-          "name": "user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "org_id": {
-          "name": "org_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false,
-          "default": "app.current_org_id()"
-        },
-        "key": {
-          "name": "key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "known_at": {
-          "name": "known_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "kb_known_org_idx": {
-          "name": "kb_known_org_idx",
-          "columns": [
-            {
-              "expression": "org_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "kb_known_user_id_users_id_fk": {
-          "name": "kb_known_user_id_users_id_fk",
-          "tableFrom": "kb_known",
-          "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "kb_known_org_id_organizations_id_fk": {
-          "name": "kb_known_org_id_organizations_id_fk",
-          "tableFrom": "kb_known",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "org_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        },
-        "kb_known_user_org_fk": {
-          "name": "kb_known_user_org_fk",
-          "tableFrom": "kb_known",
-          "tableTo": "users",
-          "columnsFrom": [
-            "user_id",
-            "org_id"
-          ],
-          "columnsTo": [
-            "id",
-            "org_id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "kb_known_pk": {
-          "name": "kb_known_pk",
-          "columns": [
-            "user_id",
-            "key"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "policies": {
-        "kb_known_own": {
-          "name": "kb_known_own",
-          "as": "PERMISSIVE",
-          "for": "ALL",
-          "to": [
-            "buhuchet_app"
-          ],
-          "using": "\"kb_known\".\"org_id\" = app.current_org_id() and \"kb_known\".\"user_id\" = app.current_user_id()",
-          "withCheck": "\"kb_known\".\"org_id\" = app.current_org_id() and \"kb_known\".\"user_id\" = app.current_user_id()"
-        },
-        "kb_known_platform_admin": {
-          "name": "kb_known_platform_admin",
-          "as": "PERMISSIVE",
-          "for": "ALL",
-          "to": [
-            "buhuchet_app"
-          ],
-          "using": "\"kb_known\".\"org_id\" is null and app.current_org_id() is null and \"kb_known\".\"user_id\" = app.current_user_id() and app.is_platform_admin()",
-          "withCheck": "\"kb_known\".\"org_id\" is null and app.current_org_id() is null and \"kb_known\".\"user_id\" = app.current_user_id() and app.is_platform_admin()"
-        }
-      },
-      "checkConstraints": {
-        "kb_known_key_check": {
-          "name": "kb_known_key_check",
-          "value": "char_length(\"kb_known\".\"key\") between 3 and 300 and \"kb_known\".\"key\" ~ '^[gs]:'"
-        }
-      },
-      "isRLSEnabled": true
-    },
     "public.kb_levels": {
       "name": "kb_levels",
       "schema": "",
@@ -7723,6 +7592,181 @@
       },
       "isRLSEnabled": true
     },
+    "public.dict_loads": {
+      "name": "dict_loads",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "dict": {
+          "name": "dict",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "rows": {
+          "name": "rows",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "added": {
+          "name": "added",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "changed": {
+          "name": "changed",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "disabled": {
+          "name": "disabled",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "errors": {
+          "name": "errors",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "before": {
+          "name": "before",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "added_values": {
+          "name": "added_values",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "app.current_user_id()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "rolled_back_by": {
+          "name": "rolled_back_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "rolled_back_at": {
+          "name": "rolled_back_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "dict_loads_created_idx": {
+          "name": "dict_loads_created_idx",
+          "columns": [
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "dict_loads_created_by_users_id_fk": {
+          "name": "dict_loads_created_by_users_id_fk",
+          "tableFrom": "dict_loads",
+          "tableTo": "users",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "dict_loads_rolled_back_by_users_id_fk": {
+          "name": "dict_loads_rolled_back_by_users_id_fk",
+          "tableFrom": "dict_loads",
+          "tableTo": "users",
+          "columnsFrom": [
+            "rolled_back_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "dict_loads_read": {
+          "name": "dict_loads_read",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "buhuchet_app"
+          ],
+          "using": "app.is_platform_admin()"
+        },
+        "dict_loads_insert": {
+          "name": "dict_loads_insert",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "buhuchet_app"
+          ],
+          "withCheck": "app.is_platform_admin() and \"dict_loads\".\"created_by\" = app.current_user_id() and \"dict_loads\".\"created_at\" = now() and \"dict_loads\".\"rolled_back_at\" is null"
+        },
+        "dict_loads_rollback": {
+          "name": "dict_loads_rollback",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "buhuchet_app"
+          ],
+          "using": "app.is_platform_admin() and \"dict_loads\".\"rolled_back_at\" is null",
+          "withCheck": "app.is_platform_admin() and \"dict_loads\".\"rolled_back_by\" = app.current_user_id() and \"dict_loads\".\"rolled_back_at\" = now()"
+        }
+      },
+      "checkConstraints": {
+        "dict_loads_counts_check": {
+          "name": "dict_loads_counts_check",
+          "value": "least(\"dict_loads\".\"rows\", \"dict_loads\".\"added\", \"dict_loads\".\"changed\", \"dict_loads\".\"disabled\", \"dict_loads\".\"errors\") >= 0"
+        },
+        "dict_loads_rollback_check": {
+          "name": "dict_loads_rollback_check",
+          "value": "(\"dict_loads\".\"rolled_back_at\" is null) = (\"dict_loads\".\"rolled_back_by\" is null)"
+        }
+      },
+      "isRLSEnabled": true
+    },
     "public.due_change_reasons": {
       "name": "due_change_reasons",
       "schema": "",
@@ -7851,6 +7895,155 @@
         }
       },
       "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.dues_recalcs": {
+      "name": "dues_recalcs",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "codes": {
+          "name": "codes",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::text[]"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "app.current_user_id()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "claimed_until": {
+          "name": "claimed_until",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "claim_token": {
+          "name": "claim_token",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "attempts": {
+          "name": "attempts",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "after_org": {
+          "name": "after_org",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "done_at": {
+          "name": "done_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reports": {
+          "name": "reports",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "orgs": {
+          "name": "orgs",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "last_error": {
+          "name": "last_error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "dues_recalcs_pending_idx": {
+          "name": "dues_recalcs_pending_idx",
+          "columns": [
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"dues_recalcs\".\"done_at\" is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "dues_recalcs_created_by_users_id_fk": {
+          "name": "dues_recalcs_created_by_users_id_fk",
+          "tableFrom": "dues_recalcs",
+          "tableTo": "users",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "dues_recalcs_service": {
+          "name": "dues_recalcs_service",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "buhuchet_app"
+          ],
+          "using": "true",
+          "withCheck": "true"
+        }
+      },
+      "checkConstraints": {
+        "dues_recalcs_kind_check": {
+          "name": "dues_recalcs_kind_check",
+          "value": "\"dues_recalcs\".\"kind\" in ('types', 'statuses', 'calendar')"
+        },
+        "dues_recalcs_counts_check": {
+          "name": "dues_recalcs_counts_check",
+          "value": "least(\"dues_recalcs\".\"attempts\", \"dues_recalcs\".\"reports\", \"dues_recalcs\".\"orgs\") >= 0"
+        }
+      },
       "isRLSEnabled": true
     },
     "public.message_templates": {

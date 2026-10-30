@@ -59,6 +59,7 @@ import { useGridLabels } from '../lists/grid-labels';
 import { useListPage, type FetchListPage } from '../lists/use-list-page';
 import { useViewSettings } from '../lists/view-settings';
 import { useShell } from '../shell/context';
+import { duesNote, duesShown, spreadText, useDuesPreview } from './dues-preview';
 import { DictHistory } from './dict-history-box';
 import { pdictsHistoryQuery } from './pdicts-data';
 
@@ -189,15 +190,27 @@ function HolidayDialog({
     },
   });
   const workday = useWatch({ control, name: 'type' }) === 'workday';
+  // Сколько несданных отчётов получат новые сроки (ТЗ: показывается заранее) — тем же кодом, что пересчёт.
+  // ОТКЛОНЕНИЕ: docs/deviations.md#Д-17
+  const parsed = AdminCalendarAddForm.safeParse(useWatch({ control }));
+  const dues = useDuesPreview(
+    'calendar:add',
+    parsed.success ? parsed.data : null,
+    (json, signal) => cal['dues-preview'].$post({ json }, { init: { signal } }),
+    parsed.success ? [parsed.data.date, parsed.data.type] : null,
+  );
 
   const submit = (event: FormEvent) =>
     void handleSubmit(async (values) => {
       const res = await callApi(() => cal.$post({ json: values }));
       if (res.ok) {
-        const { recalculated: n } = AdminCalendarChanged.parse(res.data);
+        const { recalculated: n, pending } = AdminCalendarChanged.parse(res.data);
         onDone();
         onClose();
-        return toast(t(`pdicts.cal.toast.added.${pluralForm(n)}`, { n }), { icon: 'calendar' });
+        const text = t(`pdicts.cal.toast.added.${pluralForm(n)}`, { n });
+        return toast(pending ? `${text}. ${t('pdicts.dues.pending')}` : text, {
+          icon: 'calendar',
+        });
       }
       const field = FIELD_OF[res.error.code];
       if (field) {
@@ -262,6 +275,11 @@ function HolidayDialog({
             {(c) => <input {...c} {...register('name')} className={inputClass()} />}
           </Field>
         </FormGrid>
+        {parsed.success && duesShown(dues) ? (
+          <div className="mt-3">
+            <Note tone="warn">{duesNote(t, dues, 'pdicts.cal.dues')}</Note>
+          </div>
+        ) : null}
       </form>
     </Modal>
   );
@@ -286,6 +304,10 @@ function CalendarCopyDialog({
   const toast = useToast();
   const errorText = useErrorText();
   const plan = useQuery(copyPlanQuery);
+  // Сколько сроков изменит копирование — отдельным запросом: та же запись, которая откатывается.
+  const dues = useDuesPreview('calendar:copy', plan.data?.items.length ? true : null, (_, signal) =>
+    cal.copy['dues-preview'].$post(undefined, { init: { signal } }),
+  );
   const [busy, setBusy] = useState(false);
   const next = plan.data?.year ?? year + 1;
   const items = plan.data?.items;
@@ -303,7 +325,8 @@ function CalendarCopyDialog({
     const recalc = done.recalculated
       ? t(`pdicts.cal.toast.recalc.${pluralForm(done.recalculated)}`, { n: done.recalculated })
       : '';
-    toast(`${t('pdicts.cal.toast.copied', { n: done.copied, y: done.year })}${recalc}`, {
+    const pending = done.pending ? `. ${t('pdicts.dues.pending')}` : '';
+    toast(`${t('pdicts.cal.toast.copied', { n: done.copied, y: done.year })}${recalc}${pending}`, {
       icon: 'calendar',
     });
   };
@@ -335,6 +358,7 @@ function CalendarCopyDialog({
         <Note tone="warn" icon="alert">
           {t('pdicts.cal.copy.warn', prev)}
         </Note>
+        {duesShown(dues) ? <Note tone="warn">{duesNote(t, dues, 'pdicts.cal.dues')}</Note> : null}
         <Timeline
           label={t('pdicts.cal.copy.title', prev)}
           items={items.map((x) => ({
@@ -389,6 +413,23 @@ function useCalendarAddRequest(run: (actionId: string) => void) {
     start(request.actionId);
     clearAddRequest();
   }, [request, clearAddRequest]);
+}
+
+/**
+ * Вопрос «Удалить …?» (прототип: «Сроки несданных отчётов будут пересчитаны.»): с ответом сервера —
+ * у скольких несданных отчётов в скольких организациях.
+ */
+function DeleteDuesText({ day }: { day: AdminCalendarDay }) {
+  const t = useT();
+  const { dues } = useDuesPreview(`calendar:delete:${day.key}`, day.version, (version, signal) =>
+    cal[':key']['dues-preview'].$post(
+      { param: { key: day.key }, query: { version: String(version) } },
+      { init: { signal } },
+    ),
+  );
+  return dues && dues.reports > 0
+    ? t('pdicts.cal.dues', { spread: spreadText(t, dues) })
+    : t('pdicts.cal.delete_text');
 }
 
 /**
@@ -477,7 +518,17 @@ export function CalendarList() {
           {t('pdicts.cal.copy_btn', { y: year + 1 })}
         </button>
       </div>
-      <Note icon="info">{t('pdicts.cal.rule_note')}</Note>
+      <Note icon="info">
+        {t('pdicts.cal.rule_note')}
+        {data?.example
+          ? ` ${t('pdicts.cal.rule_example', {
+              type: data.example.type,
+              period: data.example.period,
+              from: formatDateRu(data.example.from),
+              to: formatDateRu(data.example.to),
+            })}`
+          : ''}
+      </Note>
       <DataGrid
         columns={columns}
         audit={AUDIT}
@@ -531,7 +582,7 @@ export function CalendarList() {
         title={t('pdicts.cal.delete_title', {
           date: askDelete ? formatDateRu(askDelete.date) : '',
         })}
-        text={t('pdicts.cal.delete_text')}
+        text={askDelete ? <DeleteDuesText day={askDelete} /> : t('pdicts.cal.delete_text')}
         ok={t('pdicts.action.delete')}
         danger
         onConfirm={() => askDelete && void remove(askDelete)}

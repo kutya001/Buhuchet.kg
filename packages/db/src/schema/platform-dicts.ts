@@ -29,6 +29,7 @@ import {
   index,
   integer,
   jsonb,
+  pgPolicy,
   pgTable,
   primaryKey,
   smallint,
@@ -39,7 +40,7 @@ import {
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { recordVersion } from './columns';
-import { platformReadOnly } from './rls';
+import { appRole, platformReadOnly, platformService } from './rls';
 import { users } from './users';
 
 /*
@@ -638,5 +639,144 @@ export const taskCategories = pgTable(
   (t) => [
     uniqueIndex('task_categories_name_key').on(t.name),
     platformReadOnly('task_categories_read'),
+  ],
+).enableRLS();
+
+/** Добавленное загрузкой значение и его версия после загрузки. */
+export interface DictLoadAdded {
+  code: string;
+  version: number;
+  /** Значение сразу после загрузки. */
+  after: DictLoadState;
+}
+
+/** Название, «Активно» и поля значения. */
+export interface DictLoadState {
+  name: string;
+  active: boolean;
+  data: Record<string, unknown>;
+}
+
+/**
+ * Значение до загрузки из Excel: название, «Активно» и поля — и его версия и вид сразу после загрузки.
+ * Изменённое позже значение откат не трогает: другая версия и другой вид. Тот же вид при другой
+ * версии — значение вернул откат следующей загрузки.
+ */
+export interface DictLoadBefore extends DictLoadState {
+  code: string;
+  version: number;
+  after: DictLoadState;
+}
+
+/**
+ * «Загрузки» (задача 2.37; ТЗ «Каждая загрузка — отдельная запись в истории (кто, когда, сколько строк);
+ * последнюю загрузку можно откатить»; прототип admin/platform-dicts-io.js: PD_LOADS, renderLoads,
+ * rollbackLoad): загрузка справочника платформы из Excel — сколько строк в файле, добавлено, изменено,
+ * отключено и с ошибками; что было у изменённых значений до загрузки и какие добавлены — для отката.
+ * Пишет и откатывает только незаблокированный администратор платформы (автор и время — из контекста);
+ * запись не удаляется, у отката меняются только «кто» и «когда» (права на столбцы — в миграции).
+ */
+export const dictLoads = pgTable(
+  'dict_loads',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    /** Справочник (`AdminValueDict` из @buhuchet/domain). */
+    dict: text('dict').notNull(),
+    rows: integer('rows').notNull(),
+    added: integer('added').notNull(),
+    changed: integer('changed').notNull(),
+    disabled: integer('disabled').notNull(),
+    errors: integer('errors').notNull(),
+    /** Изменённые и отключённые значения до загрузки. */
+    before: jsonb('before').$type<DictLoadBefore[]>().notNull(),
+    /** Добавленные значения. */
+    addedValues: jsonb('added_values').$type<DictLoadAdded[]>().notNull(),
+    createdBy: uuid('created_by')
+      .notNull()
+      .default(sql`app.current_user_id()`)
+      .references(() => users.id, { onDelete: 'restrict' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    rolledBackBy: uuid('rolled_back_by').references(() => users.id, { onDelete: 'restrict' }),
+    rolledBackAt: timestamp('rolled_back_at', { withTimezone: true }),
+  },
+  (t) => [
+    index('dict_loads_created_idx').on(t.createdAt),
+    check(
+      'dict_loads_counts_check',
+      sql`least(${t.rows}, ${t.added}, ${t.changed}, ${t.disabled}, ${t.errors}) >= 0`,
+    ),
+    check(
+      'dict_loads_rollback_check',
+      sql`(${t.rolledBackAt} is null) = (${t.rolledBackBy} is null)`,
+    ),
+    pgPolicy('dict_loads_read', {
+      as: 'permissive',
+      for: 'select',
+      to: appRole,
+      using: sql`app.is_platform_admin()`,
+    }),
+    pgPolicy('dict_loads_insert', {
+      as: 'permissive',
+      for: 'insert',
+      to: appRole,
+      withCheck: sql`app.is_platform_admin() and ${t.createdBy} = app.current_user_id() and ${t.createdAt} = now() and ${t.rolledBackAt} is null`,
+    }),
+    // Откатить можно один раз: «кто» — администратор из контекста, «когда» — сейчас.
+    pgPolicy('dict_loads_rollback', {
+      as: 'permissive',
+      for: 'update',
+      to: appRole,
+      using: sql`app.is_platform_admin() and ${t.rolledBackAt} is null`,
+      withCheck: sql`app.is_platform_admin() and ${t.rolledBackBy} = app.current_user_id() and ${t.rolledBackAt} = now()`,
+    }),
+  ],
+).enableRLS();
+
+/**
+ * Очередь пересчёта сроков несданных отчётов после правки каталога (задача 2.37; Issue «фоновой работой
+ * с пределом времени, безопасно при повторе»; docs/decisions.md п. Д-9): строка пишется в той же
+ * транзакции, что и правка календаря, правила срока вида, «Меняет сроки» статуса, загрузка или её откат.
+ * Пересчёт идёт сразу после сохранения; что не успело или упало — догоняет задача по расписанию.
+ * Обработчик занимает строку арендой (`claimed_until`): повтор и одновременный запуск безопасны, второй
+ * проход сроков не меняет. Служебная таблица платформы, как журнал задач: приложение читает и пишет.
+ */
+export const duesRecalcs = pgTable(
+  'dues_recalcs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    /** Что пересчитать: виды отчётов, статусы или всё (календарь) — `RedueScope`. */
+    kind: text('kind').notNull(),
+    /** Коды видов или статусов; у календаря — пусто. */
+    codes: text('codes')
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    createdBy: uuid('created_by')
+      .default(sql`app.current_user_id()`)
+      .references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    /** До какого момента строку обрабатывают; пусто или прошло — свободна. */
+    claimedUntil: timestamp('claimed_until', { withTimezone: true }),
+    /** Чей проход: только он отмечает итог, даже если его аренда истекла. */
+    claimToken: uuid('claim_token'),
+    /** Проходы с ошибкой или оборванные; проход, у которого кончилось время, не считается. */
+    attempts: integer('attempts').notNull().default(0),
+    /** Последняя пройденная организация: следующий проход продолжит после неё. */
+    afterOrg: uuid('after_org'),
+    /** Пересчитано во всех организациях; пусто — ещё нет. */
+    doneAt: timestamp('done_at', { withTimezone: true }),
+    /** Сколько отчётов в скольких организациях пересчитано за все проходы. */
+    reports: integer('reports').notNull().default(0),
+    orgs: integer('orgs').notNull().default(0),
+    /** Ошибка последнего прохода: класс и код, без значений запроса. */
+    lastError: text('last_error'),
+  },
+  (t) => [
+    index('dues_recalcs_pending_idx')
+      .on(t.createdAt)
+      .where(sql`${t.doneAt} is null`),
+    check('dues_recalcs_kind_check', sql`${t.kind} in ('types', 'statuses', 'calendar')`),
+    check('dues_recalcs_counts_check', sql`least(${t.attempts}, ${t.reports}, ${t.orgs}) >= 0`),
+    platformService('dues_recalcs_service'),
   ],
 ).enableRLS();

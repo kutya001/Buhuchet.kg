@@ -658,7 +658,8 @@ describe.skipIf(!databaseAvailable())(
         dueRules: [rule({ payDay: 20, payAfter: 1 })],
       });
 
-      // «Меняет сроки» изменены — в истории число пересчитанных отчётов (пока отчётов нет — 0).
+      // «Меняет сроки» изменены — в истории число пересчитанных отчётов (его считает вызывающий до
+      // транзакции) и что пересчитать после сохранения.
       const updated = await asAdmin((tx) =>
         adminDictUpdate(
           tx,
@@ -669,8 +670,13 @@ describe.skipIf(!databaseAvailable())(
             data: { ...created.record.data, dueRules: [rule({ dueDay: 31, dueAfter: 1 })] },
           },
           created.record.version,
+          7,
         ),
       );
+      expect(updated.ok && updated.redue).toEqual({
+        kind: 'statuses',
+        codes: [created.record.code],
+      });
       expect(updated.ok && updated.record.data.dueRules).toEqual([
         rule({ dueDay: 31, dueAfter: 1 }),
       ]);
@@ -681,7 +687,7 @@ describe.skipIf(!databaseAvailable())(
           from: [rule({ payDay: 20, payAfter: 1 })],
           to: [rule({ dueDay: 31, dueAfter: 1 })],
         },
-        { field: 'recalculated', to: 0 },
+        { field: 'recalculated', to: 7 },
       ]);
 
       // Удаление — вместе со своими связями и сроками.

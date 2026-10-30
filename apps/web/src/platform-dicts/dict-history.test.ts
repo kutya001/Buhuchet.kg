@@ -34,6 +34,31 @@ describe('«История изменений» справочника', () => {
     expect(dictHistoryText('organs', fields, t)).toBe('Органы: «ГНС» — изменены поля');
   });
 
+  it('загрузка из Excel и её откат — одной строкой справочника', () => {
+    const load = item({
+      action: 'import',
+      code: '',
+      label: '',
+      changes: [
+        { field: 'added', to: 1 },
+        { field: 'changed', to: 2 },
+        { field: 'disabled', to: 0 },
+      ],
+    });
+    expect(dictHistoryText('organs', load, t)).toBe(
+      'Органы: загрузка из Excel — добавлено 1, изменено 2, отключено 0',
+    );
+    const rollback = item({
+      action: 'rollback',
+      code: '',
+      label: '',
+      changes: [{ field: 'loadedAt', to: '2026-10-29T20:30:00.000Z' }],
+    });
+    expect(dictHistoryText('types', rollback, t)).toBe(
+      'Виды отчётов: загрузка от 30.10.2026 откачена',
+    );
+  });
+
   it('льгота: «изменено», после правки «Меняет сроки» — сколько отчётов пересчитано', () => {
     const benefit = (changes: Parameters<typeof item>[0]['changes']) =>
       dictHistoryText('benefits', item({ label: 'Крупный налогоплательщик', changes }), t);
