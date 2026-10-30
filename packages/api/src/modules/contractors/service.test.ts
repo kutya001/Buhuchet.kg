@@ -143,15 +143,18 @@ describe.skipIf(!databaseAvailable())('Контрагенты: обслужив�
     const chiefs = await contractor(employee('chief-a'));
     expect((await call(acc, `/${chiefs}/service`)).status).toBe(404);
     expect((await call(ownerB, `/${cp}/service`)).status).toBe(404);
-    expect((await apiRequest(f.app, 'GET', `/api/contractors/${cp}/service`, '')).status).toBe(
-      401,
-    );
+    expect((await apiRequest(f.app, 'GET', `/api/contractors/${cp}/service`, '')).status).toBe(401);
     expect((await call(owner, '/not-a-uuid/service')).status).toBe(400);
   });
 
   it('приостановка: права, проверки окна, запланированная — статус меняет задача, отмена — с правом отката', async () => {
     const cp = await contractor(employee('chief-a'));
-    const pause = { from: '2026-12', resume: '2027-05', reason: 'Сезонная деятельность', version: 1 };
+    const pause = {
+      from: '2026-12',
+      resume: '2027-05',
+      reason: 'Сезонная деятельность',
+      version: 1,
+    };
     // «Приостанавливать контрагентов» есть у главного бухгалтера, но не у бухгалтера и «Старшего».
     expect((await call(acc, `/${cp}/pause`, pause)).status).toBe(403);
     expect((await call(senior, `/${cp}/pause`, pause)).status).toBe(403);
@@ -165,7 +168,10 @@ describe.skipIf(!databaseAvailable())('Контрагенты: обслужив�
     ]);
     expect(screen(pastError)).toBe(pastError.message);
     const early = await failure(await call(chief, `/${cp}/pause`, { ...pause, resume: '2026-12' }));
-    expect([early.code, early.details]).toEqual(['service_resume_before_pause', { field: 'resume' }]);
+    expect([early.code, early.details]).toEqual([
+      'service_resume_before_pause',
+      { field: 'resume' },
+    ]);
     expect(screen(early)).toBe(early.message);
     expect((await call(chief, `/${cp}/pause`, { ...pause, extra: 1 })).status).toBe(400);
     expect((await call(chief, `/${cp}/pause`, { ...pause, from: '2026-13' })).status).toBe(400);
@@ -242,7 +248,11 @@ describe.skipIf(!databaseAvailable())('Контрагенты: обслужив�
     );
 
     const paused = await saved(
-      await call(owner, `/${cp}/pause`, { from: '2026-10', reason: 'Нет деятельности', version: 1 }),
+      await call(owner, `/${cp}/pause`, {
+        from: '2026-10',
+        reason: 'Нет деятельности',
+        version: 1,
+      }),
     );
     expect(paused.service).toMatchObject({
       status: 'paused',
@@ -273,7 +283,9 @@ describe.skipIf(!databaseAvailable())('Контрагенты: обслужив�
     expect(after.overdue).toBe(before.overdue - 2);
 
     // «Возобновить» с ноября: октябрь остаётся «Не требуется», ноябрь — снова к сдаче.
-    const resumed = await saved(await call(chief, `/${cp}/resume`, { from: '2026-11', version: 2 }));
+    const resumed = await saved(
+      await call(chief, `/${cp}/resume`, { from: '2026-11', version: 2 }),
+    );
     expect(resumed.service).toMatchObject({
       status: 'paused',
       periods: [
@@ -299,7 +311,10 @@ describe.skipIf(!databaseAvailable())('Контрагенты: обслужив�
       fill: ['2026-09'],
       version: 3,
     });
-    expect([notSkipped.status, (await failure(notSkipped)).details]).toEqual([400, { field: 'fill' }]);
+    expect([notSkipped.status, (await failure(notSkipped)).details]).toEqual([
+      400,
+      { field: 'fill' },
+    ]);
     const rolled = await saved(
       await call(owner, `/${cp}/pause/rollback`, {
         reason: 'Статус поставили по ошибке',
@@ -329,7 +344,10 @@ describe.skipIf(!databaseAvailable())('Контрагенты: обслужив�
       reason: 'Ещё раз',
       version: 4,
     });
-    expect([notPaused.status, (await failure(notPaused)).code]).toEqual([409, 'service_not_paused']);
+    expect([notPaused.status, (await failure(notPaused)).code]).toEqual([
+      409,
+      'service_not_paused',
+    ]);
   });
 
   it('откат приостановки с прошлых месяцев: досоздаются отчёты только за отмеченные', async () => {
@@ -394,7 +412,10 @@ describe.skipIf(!databaseAvailable())('Контрагенты: обслужив�
 
     // Архивного не приостанавливают и не правят — тот же ответ, что у «Изменить».
     const archived = await service(owner, cp);
-    expect(archived).toMatchObject({ status: 'archived', periods: [{ from: '2026-01', to: '2026-10' }] });
+    expect(archived).toMatchObject({
+      status: 'archived',
+      periods: [{ from: '2026-01', to: '2026-10' }],
+    });
     const pause = await call(owner, `/${cp}/pause`, { from: '2026-11', version: archived.version });
     const pauseError = await failure(pause);
     expect([pause.status, pauseError.code]).toEqual([409, 'contractor_archived']);
@@ -440,10 +461,14 @@ describe.skipIf(!databaseAvailable())('Контрагенты: обслужив�
       .where(eq(schema.contractors.id, cp));
     await f.t.admin.db
       .delete(schema.reports)
-      .where(and(eq(schema.reports.contractorId, cp), eq(schema.reports.periodStart, '2026-08-01')));
+      .where(
+        and(eq(schema.reports.contractorId, cp), eq(schema.reports.periodStart, '2026-08-01')),
+      );
     await f.t.admin.db
       .delete(schema.reports)
-      .where(and(eq(schema.reports.contractorId, cp), eq(schema.reports.periodStart, '2026-10-01')));
+      .where(
+        and(eq(schema.reports.contractorId, cp), eq(schema.reports.periodStart, '2026-10-01')),
+      );
 
     const card = ContractorUnarchived.parse(
       await (await call(owner, `/${cp}/unarchive`, {})).json(),
@@ -466,7 +491,12 @@ describe.skipIf(!databaseAvailable())('Контрагенты: обслужив�
   it('разовый → постоянный: право «Создавать», ставка — тому, кто видит плату, режим проверяется', async () => {
     const cp = await contractor(employee('acc-a'), { kind: 'oneoff' });
     const oneOff = await service(owner, cp);
-    expect(oneOff).toMatchObject({ kind: 'oneoff', status: 'active', periods: [], periodsText: '' });
+    expect(oneOff).toMatchObject({
+      kind: 'oneoff',
+      status: 'active',
+      periods: [],
+      periodsText: '',
+    });
 
     // У разового нет приостановки.
     const pause = await call(owner, `/${cp}/pause`, { from: '2026-11', version: 1 });
@@ -526,8 +556,10 @@ describe.skipIf(!databaseAvailable())('Контрагенты: обслужив�
 
     // Бухгалтер переводит своего разового без ставки.
     const mine = await contractor(employee('acc-a'), { kind: 'oneoff' });
-    expect((await saved(await call(acc, `/${mine}/to-regular`, { from: '2026-10', version: 1 })))
-      .service).toMatchObject({ kind: 'regular', status: 'active' });
+    expect(
+      (await saved(await call(acc, `/${mine}/to-regular`, { from: '2026-10', version: 1 })))
+        .service,
+    ).toMatchObject({ kind: 'regular', status: 'active' });
   });
 
   it('чужая организация не видна: обслуживание и все действия — «не найден»', async () => {

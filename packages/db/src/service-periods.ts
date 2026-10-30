@@ -39,7 +39,10 @@ export async function servicePeriodsOf(
         })
         .from(contractorServicePeriods)
         .where(inArray(contractorServicePeriods.contractorId, ids.slice(i, i + 10_000)))
-        .orderBy(asc(contractorServicePeriods.contractorId), asc(contractorServicePeriods.fromMonth))),
+        .orderBy(
+          asc(contractorServicePeriods.contractorId),
+          asc(contractorServicePeriods.fromMonth),
+        )),
     );
   }
   for (const r of rows) {

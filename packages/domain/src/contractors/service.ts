@@ -51,7 +51,8 @@ export const SERVICE_MESSAGES: Record<ServiceRefusal, string> = {
 /** Причина приостановки — не длиннее (как причина отката в «Истории статусов»). */
 export const PAUSE_REASON_MAX = ROLLBACK_REASON_MAX;
 
-export type ServiceResult = { ok: true; periods: ServicePeriod[] } | { ok: false; code: ServiceRefusal };
+export type ServiceResult =
+  { ok: true; periods: ServicePeriod[] } | { ok: false; code: ServiceRefusal };
 
 const last = <T>(xs: readonly T[]): T | undefined => xs[xs.length - 1];
 const copy = (periods: readonly ServicePeriod[]) => periods.map((p) => ({ ...p }));
@@ -60,6 +61,20 @@ const refuse = (code: ServiceRefusal): { ok: false; code: ServiceRefusal } => ({
 /** Обслуживается ли контрагент в месяце (прототип `inService`). */
 export function inService(periods: readonly ServicePeriod[], month: YearMonth): boolean {
   return periods.some((p) => p.from <= month && (p.to === null || month <= p.to));
+}
+
+/**
+ * Обслуживался ли контрагент хоть в одном месяце с `from` по `to` — период отчёта (квартал, полугодие,
+ * год) относится к обслуживанию, если обслуживался хотя бы один его месяц (ТЗ «несданные отчёты за
+ * месяцы, когда контрагент ещё обслуживался, остаются открытыми»). У месячного — `inService`.
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#В-11 — прототип (applyService, archiveDlg) смотрит только на первый месяц периода.
+export function servedWithin(
+  periods: readonly ServicePeriod[],
+  from: YearMonth,
+  to: YearMonth,
+): boolean {
+  return periods.some((p) => p.from <= to && (p.to === null || from <= p.to));
 }
 
 /**
@@ -272,7 +287,10 @@ export function rollbackPause(periods: readonly ServicePeriod[], month: YearMont
  * «В архив» (прототип `archiveDlg`): обслуживание заканчивается идущим месяцем, если шло дольше;
  * запланированное возобновление отменяется (у прототипа оно оставалось периодом с концом раньше начала).
  */
-export function archivePeriods(periods: readonly ServicePeriod[], month: YearMonth): ServicePeriod[] {
+export function archivePeriods(
+  periods: readonly ServicePeriod[],
+  month: YearMonth,
+): ServicePeriod[] {
   const out = copy(periods);
   if (out.length > 1 && last(out)!.from > month) out.pop();
   const l = last(out);
@@ -322,6 +340,8 @@ export function toRegularPeriods(
 export interface ServiceReport {
   /** Месяц начала периода отчёта (прототип `ym(r.pkey)`). */
   month: YearMonth;
+  /** Последний месяц периода отчёта (у месячного — тот же). */
+  last: YearMonth;
   /** Срок сдачи. */
   due: IsoDate;
   /** Открыт (не сдан, прототип OPEN), «Не требуется» или другой. */
@@ -342,10 +362,10 @@ function daysBefore(date: IsoDate, days: number): IsoDate {
 }
 
 /**
- * Что станет с отчётом после изменения периодов (прототип `applyService`): открытый отчёт за месяц вне
- * обслуживания со сроком не старше месяца назад — «Не требуется»; «Не требуется» от приостановки или
- * архива за месяц обслуживания с действующим назначением, несданный и со сроком не в прошлом — снова
- * «К сдаче» (не у архивного). Остальные — без изменений (null).
+ * Что станет с отчётом после изменения периодов (прототип `applyService`): открытый отчёт за период вне
+ * обслуживания (`servedWithin`) со сроком не старше месяца назад — «Не требуется»; «Не требуется» от
+ * приостановки или архива за период обслуживания с действующим назначением, несданный и со сроком не в
+ * прошлом — снова «К сдаче» (не у архивного). Остальные — без изменений (null).
  */
 // ОТКЛОНЕНИЕ: docs/deviations.md#В-9 — «Не требуется», поставленное вручную, не возвращается (прототип возвращает).
 export function reportAfterServiceChange(
@@ -353,7 +373,7 @@ export function reportAfterServiceChange(
   c: Pick<ServiceSubject, 'archived' | 'periods'>,
   today: IsoDate,
 ): 'not_required' | 'to_submit' | null {
-  const served = inService(c.periods, r.month);
+  const served = servedWithin(c.periods, r.month, r.last);
   if (!served && r.status === 'open' && r.due >= daysBefore(today, 31)) return 'not_required';
   if (
     served &&
@@ -372,27 +392,24 @@ export function reportAfterServiceChange(
 /**
  * Отчёт при отправке в архив (прототип `archiveDlg`; ТЗ «несданные отчёты за периоды после окончания
  * обслуживания получают статус «Не требуется»; …за месяцы, когда контрагент ещё обслуживался, остаются
- * открытыми»): открытый, срок не прошёл, месяц вне обслуживания после архива.
+ * открытыми»): открытый, срок не прошёл, ни один месяц периода не обслуживается после архива.
  */
 export function notRequiredOnArchive(
-  r: Pick<ServiceReport, 'month' | 'due' | 'status'>,
+  r: Pick<ServiceReport, 'month' | 'last' | 'due' | 'status'>,
   periodsAfter: readonly ServicePeriod[],
   today: IsoDate,
 ): boolean {
-  return r.status === 'open' && r.due >= today && !inService(periodsAfter, r.month);
+  return r.status === 'open' && r.due >= today && !servedWithin(periodsAfter, r.month, r.last);
 }
 
 /**
- * Отчёт за пропущенный месяц, отмеченный при откате приостановки «досоздать»: «Не требуется» от
- * приостановки с действующим назначением снова «К сдаче», даже если срок прошёл (ТЗ «предлагает
- * досоздать за них … отчёты»).
+ * Отчёт за пропущенный месяц, отмеченный при откате приостановки «досоздать» (месяц входит в период
+ * отчёта): «Не требуется» от приостановки с действующим назначением снова «К сдаче», даже если срок
+ * прошёл (ТЗ «предлагает досоздать за них … отчёты»).
  */
-export function restoredOnFill(
-  r: Omit<ServiceReport, 'due'>,
-  fill: readonly YearMonth[],
-): boolean {
+export function restoredOnFill(r: Omit<ServiceReport, 'due'>, fill: readonly YearMonth[]): boolean {
   return (
-    fill.includes(r.month) &&
+    fill.some((m) => r.month <= m && m <= r.last) &&
     r.status === 'not_required' &&
     r.byService &&
     r.assigned &&

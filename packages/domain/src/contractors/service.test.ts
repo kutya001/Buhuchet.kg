@@ -14,6 +14,7 @@ import {
   restoredOnFill,
   resume,
   rollbackPause,
+  servedWithin,
   serviceMenu,
   serviceState,
   skippedMonths,
@@ -87,7 +88,8 @@ describe('обслуживание: эталон прототипа', () => {
       expect(rolled).toEqual({ ok: true, periods: ops.rollback });
       // ОТКЛОНЕНИЕ: docs/deviations.md#В-10 — при запланированном возобновлении прототип предлагает
       // только идущий месяц; по ТЗ — все пропущенные с начала приостановки.
-      if (plannedResume(s, month) === null) expect(skippedMonths(s.periods, month)).toEqual(ops.skipped);
+      if (plannedResume(s, month) === null)
+        expect(skippedMonths(s.periods, month)).toEqual(ops.skipped);
     } else if (!c.inService) expect(menu.cancelPause).toBe(true);
     else expect(rolled).toEqual({ ok: false, code: 'service_not_paused' });
 
@@ -104,11 +106,11 @@ describe('обслуживание: эталон прототипа', () => {
   it.each(fixture.reports.map((r, i) => [i, r] as const))('отчёты, набор %i', (_, set) => {
     const c = { archived: set.archived, periods: set.periods as ServicePeriod[] };
     for (const r of set.reports) {
-      const report = { ...r, byService: true } as ServiceReport;
+      const report = { ...r, last: r.month, byService: true } as ServiceReport;
       const next = reportAfterServiceChange(report, c, set.today);
-      expect(next === 'not_required' ? 'not_required' : next === 'to_submit' ? 'open' : r.status).toBe(
-        r.applied,
-      );
+      expect(
+        next === 'not_required' ? 'not_required' : next === 'to_submit' ? 'open' : r.status,
+      ).toBe(r.applied);
       expect(notRequiredOnArchive(report, c.periods, set.today) ? 'not_required' : r.status).toBe(
         r.onArchive,
       );
@@ -190,7 +192,11 @@ describe('обслуживание: правила', () => {
   });
 
   it('меню: пункты как в прототипе cpActions', () => {
-    expect(serviceMenu(S([P('2026-01')]), M)).toMatchObject({ pause: true, resume: false, rollback: false });
+    expect(serviceMenu(S([P('2026-01')]), M)).toMatchObject({
+      pause: true,
+      resume: false,
+      rollback: false,
+    });
     expect(serviceMenu(S([P('2026-01', '2026-11'), P('2027-05')]), M)).toMatchObject({
       cancelPause: true,
       changeResume: '2027-05',
@@ -198,7 +204,10 @@ describe('обслуживание: правила', () => {
       resume: false,
       rollback: false,
     });
-    expect(serviceMenu(S([P('2026-01', '2026-07')]), M)).toMatchObject({ resume: true, rollback: true });
+    expect(serviceMenu(S([P('2026-01', '2026-07')]), M)).toMatchObject({
+      resume: true,
+      rollback: true,
+    });
     expect(serviceMenu(S([], { oneOff: true }), M)).toMatchObject({
       toRegular: true,
       archive: true,
@@ -251,18 +260,25 @@ describe('обслуживание: правила', () => {
     ]);
     expect(unarchivePeriods([P('2026-01', '2026-10')], false, M)).toEqual([P('2026-01')]);
     expect(unarchivePeriods([], true, M)).toEqual([]);
-    expect(toRegularPeriods([], '2026-09', M)).toEqual({ ok: false, code: 'service_month_in_past' });
+    expect(toRegularPeriods([], '2026-09', M)).toEqual({
+      ok: false,
+      code: 'service_month_in_past',
+    });
     expect(toRegularPeriods([], '2026-11', M)).toEqual({ ok: true, periods: [P('2026-11')] });
     expect(toRegularPeriods([P('2026-04')], '2026-10', M)).toEqual({
       ok: true,
       periods: [P('2026-04', '2026-09'), P('2026-10')],
     });
-    expect(toRegularPeriods([P('2026-11')], '2026-10', M)).toEqual({ ok: true, periods: [P('2026-10')] });
+    expect(toRegularPeriods([P('2026-11')], '2026-10', M)).toEqual({
+      ok: true,
+      periods: [P('2026-10')],
+    });
   });
 
   it('отчёты: «Не требуется», поставленное вручную, не возвращается', () => {
     const r: ServiceReport = {
       month: '2026-10',
+      last: '2026-10',
       due: '2026-11-20',
       status: 'not_required',
       submitted: false,
@@ -283,9 +299,41 @@ describe('обслуживание: правила', () => {
     ).toBe('not_required');
   });
 
+  it('квартал и год: период обслуживается, если обслуживается хотя бы один его месяц (п. В-11)', () => {
+    expect(servedWithin([P('2026-03')], '2026-01', '2026-12')).toBe(true);
+    expect(servedWithin([P('2026-01', '2026-02')], '2026-04', '2026-06')).toBe(false);
+    expect(servedWithin([P('2026-01', '2026-10')], '2026-10', '2026-12')).toBe(true);
+    const year: ServiceReport = {
+      month: '2026-01',
+      last: '2026-12',
+      due: '2027-03-31',
+      status: 'open',
+      submitted: false,
+      assigned: true,
+      byService: false,
+    };
+    // Обслуживается с марта и приостановлен с ноября: годовой за 2026 остаётся к сдаче.
+    const c = { archived: false, periods: [P('2026-03', '2026-10')] };
+    expect(reportAfterServiceChange(year, c, '2026-10-30')).toBeNull();
+    expect(notRequiredOnArchive(year, c.periods, '2026-10-30')).toBe(false);
+    // Квартал целиком в паузе — «Не требуется».
+    const q4 = { ...year, month: '2026-10', last: '2026-12', due: '2027-01-20' };
+    expect(
+      reportAfterServiceChange(
+        q4,
+        { archived: false, periods: [P('2026-01', '2026-09')] },
+        '2026-10-30',
+      ),
+    ).toBe('not_required');
+    expect(restoredOnFill({ ...q4, status: 'not_required', byService: true }, ['2026-11'])).toBe(
+      true,
+    );
+  });
+
   it('досоздать за пропущенный месяц: «Не требуется» от приостановки снова «К сдаче»', () => {
     const r = {
       month: '2026-08',
+      last: '2026-08',
       status: 'not_required' as const,
       submitted: false,
       assigned: true,

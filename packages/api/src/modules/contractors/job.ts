@@ -38,7 +38,10 @@ export const syncServiceStatusesJob: Job = {
         );
       }
     }
-    ctx.logger.info({ job: 'contractors.sync-service-status', today, changed }, 'статусы обслуживания сверены');
+    ctx.logger.info(
+      { job: 'contractors.sync-service-status', today, changed },
+      'статусы обслуживания сверены',
+    );
     if (failed.length) {
       throw new Error(`contractors.sync-service-status: не сверены организации: ${failed.length}`);
     }

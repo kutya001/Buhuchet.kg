@@ -4,7 +4,8 @@ import {
   defaultAssignmentFrom,
   dueRuleText,
   effectiveRule,
-  inService,
+  periodEnd,
+  servedWithin,
   type AssignmentEnRate,
   type CompatibilityRate,
   type CompatibilitySubject,
@@ -355,13 +356,17 @@ async function insertMissing(
   return out;
 }
 
+/** Последний месяц периода отчёта: у квартального — третий, у годового — декабрь. */
+const lastMonth = (period: ReportPeriod, start: IsoDate): YearMonth =>
+  periodEnd({ period, start }).slice(0, 7);
+
 /**
  * Отчёты по действующим назначениям на сегодня (ТЗ «По каждому назначению система сама создаёт отчёт
  * на каждый период: на текущий и на один вперёд»; прототип assignTypes): только недостающие, только за
- * месяцы обслуживания контрагента (ТЗ «Приостановить»: «с этого месяца не создаются … новые отчёты»;
- * месяц периода — его первый месяц, как `ym(r.pkey)` прототипа), не у архивных и только по действующим
- * видам каталога; разовые виды — через «Разовый отчёт». Без условий — все назначения организации
- * (задача по расписанию).
+ * периоды, в которых контрагент обслуживался хоть месяц (ТЗ «Приостановить»: «с этого месяца не
+ * создаются … новые отчёты»; квартал и год — `servedWithin`, docs/deviations.md п. В-11), не у архивных
+ * и только по действующим видам каталога; разовые виды — через «Разовый отчёт». Без условий — все
+ * назначения организации (задача по расписанию).
  */
 export async function createDueReports(
   tx: Tx,
@@ -410,8 +415,9 @@ export async function createDueReports(
       statuses.get(ruleKey(a.contractorId, a.reportTypeCode)) ?? null,
     );
     const served = periods.get(a.contractorId)!;
+    // ОТКЛОНЕНИЕ: docs/deviations.md#В-12 — прототип создаёт отчёты и за месяцы паузы, сразу «Не требуется».
     return periodsDue(rule, { today, from: a.fromMonth, until: a.untilMonth }, calendar)
-      .filter((start) => inService(served, start.slice(0, 7)))
+      .filter((start) => servedWithin(served, start.slice(0, 7), lastMonth(rule.period, start)))
       .map((start) =>
         reportValues(rule, start, calendar, {
           contractorId: a.contractorId,
@@ -427,7 +433,7 @@ export async function createDueReports(
 /**
  * Отчёты за прошлые месяцы, отмеченные «досоздать» при откате приостановки (ТЗ «Откат приостановки»:
  * «предлагает досоздать за них … отчёты»; задача 2.12): закончившиеся периоды действующих назначений
- * контрагента, первый месяц которых — один из `months`, только недостающие, «К сдаче» (срок мог пройти).
+ * контрагента, в которые входит один из `months`, только недостающие, «К сдаче» (срок мог пройти).
  */
 export async function createMonthReports(
   tx: Tx,
@@ -464,10 +470,11 @@ export async function createMonthReports(
       statuses.get(ruleKey(a.contractorId, a.reportTypeCode)) ?? null,
     );
     return pastPeriods(rule.period, a.fromMonth, today, rule.skipQuarters)
-      .filter(
-        (start) =>
-          months.includes(start.slice(0, 7)) && (!a.untilMonth || start <= a.untilMonth),
-      )
+      .filter((start) => {
+        const last = lastMonth(rule.period, start);
+        const picked = months.some((m) => start.slice(0, 7) <= m && m <= last);
+        return picked && (!a.untilMonth || start <= a.untilMonth);
+      })
       .map((start) =>
         reportValues(rule, start, calendar, {
           contractorId,

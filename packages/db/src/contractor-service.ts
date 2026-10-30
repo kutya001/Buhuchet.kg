@@ -6,6 +6,7 @@ import {
   inService,
   monthLabelGen,
   notRequiredOnArchive,
+  periodEnd,
   OPEN_REPORT_STATUSES,
   pause,
   periodsText,
@@ -161,10 +162,13 @@ const withReasons = (
 ): ServicePeriodRow[] =>
   next.map((p) => ({
     ...p,
-    pauseReason: (p.to && before.find((b) => b.from === p.from && b.to === p.to)?.pauseReason) || '',
+    pauseReason:
+      (p.to && before.find((b) => b.from === p.from && b.to === p.to)?.pauseReason) || '',
   }));
 
-const unwrap = (r: { ok: true; periods: ServicePeriod[] } | { ok: false; code: ServiceRefusal }) => {
+const unwrap = (
+  r: { ok: true; periods: ServicePeriod[] } | { ok: false; code: ServiceRefusal },
+) => {
   if (!r.ok) throw new ServiceRefusedError(r.code);
   return r.periods;
 };
@@ -227,7 +231,12 @@ function plan(
         cp.periods,
       );
       // Причина — у периода, который закончился перед приостановкой.
-      const ended = next.find((p) => p.to !== null && p.to < action.from && !cp.periods.some((b) => b.from === p.from && b.to === p.to));
+      const ended = next.find(
+        (p) =>
+          p.to !== null &&
+          p.to < action.from &&
+          !cp.periods.some((b) => b.from === p.from && b.to === p.to),
+      );
       if (ended) ended.pauseReason = action.reason;
       return { periods: next, archived: false, oneOff, set: {} };
     }
@@ -262,7 +271,9 @@ async function lockServiceReports(tx: Tx, contractorId: string) {
     .select({
       id: reports.id,
       status: reports.status,
+      period: reports.period,
       periodStart: reports.periodStart,
+      eventDate: reports.eventDate,
       dueDate: reports.dueDate,
       submittedOn: reports.submittedOn,
       // Столбцы отчёта — с именем таблицы: в подзапросах есть свои id и contractor_id.
@@ -332,6 +343,7 @@ async function applyToReports(
   for (const r of rows) {
     const report = {
       month: r.periodStart.slice(0, 7),
+      last: periodEnd({ period: r.period, start: r.periodStart, event: r.eventDate }).slice(0, 7),
       due: r.dueDate,
       status: OPEN_REPORT_STATUSES.has(r.status)
         ? ('open' as const)
@@ -367,11 +379,7 @@ async function applyToReports(
 }
 
 /** Причина смены статуса контрагента в «Истории статусов». */
-function statusReason(
-  action: ServiceAction,
-  to: ServiceState,
-  texts: ServiceTexts,
-): string | null {
+function statusReason(action: ServiceAction, to: ServiceState, texts: ServiceTexts): string | null {
   switch (action.kind) {
     case 'pause': {
       const base = action.resume
@@ -380,14 +388,18 @@ function statusReason(
             resume: monthLabelGen(action.resume),
           })
         : fill(texts.pausedFrom, { month: monthLabelGen(action.from) });
-      return action.reason ? `${base}. ${fill(texts.pauseReason, { reason: action.reason })}` : base;
+      return action.reason
+        ? `${base}. ${fill(texts.pauseReason, { reason: action.reason })}`
+        : base;
     }
     case 'resume':
       return fill(texts.resumedFrom, { month: monthLabelGen(action.from) });
     case 'rollback':
       return action.reason;
     case 'to_regular':
-      return to === 'paused' ? fill(texts.regularFrom, { month: monthLabelGen(action.from) }) : null;
+      return to === 'paused'
+        ? fill(texts.regularFrom, { month: monthLabelGen(action.from) })
+        : null;
     default:
       return null;
   }
@@ -459,18 +471,16 @@ export async function changeService(
     action: 'update',
     contractorId,
     changes: historyChanges(cp, next, action, before, after),
-    reason:
-      action.kind === 'pause' || action.kind === 'rollback' ? action.reason || null : null,
+    reason: action.kind === 'pause' || action.kind === 'rollback' ? action.reason || null : null,
   });
 
-  const reportsEffect =
-    next.oneOff
-      ? { notRequired: 0, restored: 0 }
-      : await applyToReports(
-          tx,
-          { id: contractorId, archived: next.archived, periods: next.periods },
-          { action, today, texts },
-        );
+  const reportsEffect = next.oneOff
+    ? { notRequired: 0, restored: 0 }
+    : await applyToReports(
+        tx,
+        { id: contractorId, archived: next.archived, periods: next.periods },
+        { action, today, texts },
+      );
   let created = 0;
   if (!next.archived && !next.oneOff) {
     created += await createDueReports(tx, { today, contractorIds: [contractorId] });
@@ -523,7 +533,11 @@ function historyChanges(
   if (action.kind === 'to_regular' && action.tariff) {
     out.push({
       field: 'tariff',
-      to: { amount: action.tariff.amount, period: action.tariff.period, validFrom: `${action.from}-01` },
+      to: {
+        amount: action.tariff.amount,
+        period: action.tariff.period,
+        validFrom: `${action.from}-01`,
+      },
     });
   }
   // «Отменить приостановку» — запись «Приостановка отменена» (ТЗ: «в истории остаётся запись»).

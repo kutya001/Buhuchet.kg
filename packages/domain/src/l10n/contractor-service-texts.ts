@@ -111,6 +111,8 @@ export const CONTRACTOR_SERVICE_TEXTS = {
   },
   'svc.regular.ok': { ru: 'Дальше: выбрать отчёты', section: S },
   'svc.regular.tariff_note': { ru: 'Переход на постоянное обслуживание', section: S },
+  'svc.regular.done': { ru: 'Постоянное обслуживание с {month}', section: S },
+  'svc.regular.gked_confirm': { ru: 'Подтверждаю', section: S },
   'svc.month_required': { ru: 'Укажите месяц', section: S },
   'svc.reason_required': { ru: 'Укажите причину', section: S },
   // Причины в «Истории статусов» (пишет система).

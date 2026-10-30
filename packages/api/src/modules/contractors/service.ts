@@ -152,7 +152,8 @@ async function run(
   c: Context<AppEnv>,
   id: string,
   version: number | null,
-  action: ServiceAction | ((tx: Tx, subject: AccessSubject, t: Translate) => Promise<ServiceAction>),
+  action:
+    ServiceAction | ((tx: Tx, subject: AccessSubject, t: Translate) => Promise<ServiceAction>),
 ): Promise<{ service: ContractorService; effect: DbServiceEffect }> {
   const subject = subjectOf(c);
   const today = todayOf(deps);
@@ -247,9 +248,7 @@ export const pauseServiceRoute = createRoute({
  * позже, причина — в историю. Приостановка с идущего месяца сразу меняет статус; будущая — когда
  * наступит месяц (задача по расписанию).
  */
-export function pauseServiceHandler(
-  deps: ApiDeps,
-): RouteHandler<typeof pauseServiceRoute, AppEnv> {
+export function pauseServiceHandler(deps: ApiDeps): RouteHandler<typeof pauseServiceRoute, AppEnv> {
   return async (c) => {
     const { id } = c.req.valid('param');
     const body = c.req.valid('json');
@@ -387,7 +386,11 @@ export function toRegularHandler(deps: ApiDeps): RouteHandler<typeof toRegularRo
       }
       const fee = await feeVisible(tx, orgContextOf(c).orgId, subject);
       if (!fee && body.tariff) {
-        apiFail(403, 'forbidden', 'Стоимость обслуживания задаёт тот, кто видит плату за обслуживание');
+        apiFail(
+          403,
+          'forbidden',
+          'Стоимость обслуживания задаёт тот, кто видит плату за обслуживание',
+        );
       }
       if (fee && !body.tariff) {
         apiFail(400, 'tariff_required', CONTRACTOR_MESSAGES.tariff_required, { field: 'tariff' });
@@ -469,12 +472,17 @@ export function archiveContractorsHandler(
       const result = { archived: 0, skipped: 0, notRequired: 0 };
       for (const id of [...new Set(ids)].sort()) {
         try {
-          const effect = await changeService(tx, id, { kind: 'archive' }, {
-            today,
-            scope,
-            version: null,
-            texts,
-          });
+          const effect = await changeService(
+            tx,
+            id,
+            { kind: 'archive' },
+            {
+              today,
+              scope,
+              version: null,
+              texts,
+            },
+          );
           result.archived++;
           result.notRequired += effect.notRequired;
         } catch (err) {
@@ -536,12 +544,17 @@ export function unarchiveContractorHandler(
     const t = await translateOf(deps);
     const out = await withOrgContext(deps.db, ctx, async (tx) => {
       try {
-        const effect = await changeService(tx, id, { kind: 'unarchive' }, {
-          today,
-          scope: scopeSqlOf(subject),
-          version: version ?? null,
-          texts: serviceTextsOf(t),
-        });
+        const effect = await changeService(
+          tx,
+          id,
+          { kind: 'unarchive' },
+          {
+            today,
+            scope: scopeSqlOf(subject),
+            version: version ?? null,
+            texts: serviceTextsOf(t),
+          },
+        );
         const card = await getContractor(tx, id, { scope: undefined, today });
         return {
           ...(await contractorOut(tx, card!, {
