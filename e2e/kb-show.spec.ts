@@ -1,11 +1,12 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import { newOrgOwner, uniqueLogin } from './helpers';
+import { connectAllTypes } from './orgs';
+import { manualReport } from './reports';
 
 // «Показать как», «Обзор экрана» и знакомые элементы (задача 2.31). Шаги засчитываются один раз, а
 // знакомые элементы копятся у пользователя, поэтому каждый тест — со своей новой организацией и её
-// владельцем (`newOrgOwner`). Пункт 48 приёмки проверяется на экранах «Отчетов для сдачи» — его
-// закроет задача этого экрана (docs/decisions.md п. Г-5); здесь тот же механизм на экранах, которые уже
-// есть: «Сотрудники», «Роли», «Задачи». Пункт 59 — на «Контрагентах» (задача 2.09 слита раньше).
+// владельцем (`newOrgOwner`). Пункты 48 и 59 приёмки — на «Отчетах для сдачи» (2.13) и форме
+// «Новый контрагент» (2.09); тот же механизм — на «Сотрудниках», «Ролях» и «Задачах».
 
 async function stepDone(api: APIRequestContext, id: string) {
   const res = await api.get('/api/kb/me');
@@ -138,7 +139,7 @@ test.describe('Этап 2: База знаний — «Показать как»
   });
 
   // ОТКЛОНЕНИЕ: docs/deviations.md#Г-7
-  test('(проверка задачи #87; механизм п. 59 на «Ролях» и карточке сотрудника) после показа «Ролей» показ карточки сотрудника пропускает знакомые общие элементы: «Пропущено знакомых элементов: N» и «Показать всё»; повторный показ «Ролей» — «Всё на этом экране вам уже знакомо»; «Показывать всё заново» в «Мой уровень»', async ({
+  test('(п. 59, решение Г-7) после показа «Ролей» показ карточки сотрудника пропускает знакомые общие элементы: «Пропущено знакомых элементов: N» и «Показать всё»; повторный показ «Ролей» — «Всё на этом экране вам уже знакомо»; «Показывать всё заново» в «Мой уровень»', async ({
     page,
     baseURL,
   }) => {
@@ -201,8 +202,99 @@ test.describe('Этап 2: База знаний — «Показать как»
     await expect(skipped).toHaveCount(0);
   });
 
+  test('(п. 48) «Показать как» у шага «Посмотреть вкладки «На неделе», «Просрочено»…»: показ проходит по каждой вкладке, плашке, фильтру и кнопке с пояснением и счётчиком «N из M»; «Закончить показ» на середине не засчитывает шаг, проход до «Готово» засчитывает', async ({
+    page,
+    baseURL,
+    isMobile,
+  }) => {
+    const origin = new URL(baseURL!).origin;
+    await newOrgOwner(page.request, origin);
+    await connectAllTypes(page.request, origin);
+    const staff = (await (await page.request.get('/api/staff?size=all')).json()) as {
+      items: { id: string }[];
+    };
+    const made = await page.request.post('/api/contractors', {
+      headers: { origin },
+      data: {
+        name: 'ОсОО «Показ отчётов»',
+        inn: `08${Date.now().toString().slice(-8)}${String(Math.floor(Math.random() * 10_000)).padStart(4, '0')}`,
+        phone: '+996505890076',
+        kind: 'regular',
+        formCode: 'ФС-01',
+        regimeCode: 'РЕЖ-01',
+        gked: '46.34.0',
+        taxOfficeCode: null,
+        startDate: '2026-01-01',
+        responsibleEmployeeId: staff.items[0]!.id,
+      },
+    });
+    expect(made.status(), await made.text()).toBe(201);
+    const cp = (await made.json()) as { id: string };
+    await manualReport(page.request, origin, {
+      contractorId: cp.id,
+      reportTypeCode: 'nds',
+      month: '2026-09-01',
+      // Срок — сегодня по Бишкеку: отчёт на вкладке «На неделе».
+      due: new Date(Date.now() + 6 * 3600_000).toISOString().slice(0, 10),
+    });
+    await showStep(page, 'rtabs');
+    await expect(page).toHaveURL(/\/app\/reports\/week/);
+    const first = await position(page);
+    expect(first.i).toBe(1);
+    await expect(titleOf(page)).toHaveText(/^Посмотреть вкладки «На неделе», «Просрочено»/);
+    await forward(page);
+    await forward(page);
+    await endShow(page);
+    await expect(bubble(page)).toHaveCount(0);
+    await expect(
+      page.getByText(
+        'Показ закончен раньше: шаг «Посмотреть» засчитается, когда пройдёте показ до конца',
+      ),
+    ).toBeVisible();
+    expect(await stepDone(page.request, 'rtabs')).toBeNull();
+
+    await showStep(page, 'rtabs');
+    await page
+      .getByRole('dialog', { name: 'Продолжить показ?' })
+      .getByRole('button', { name: 'Сначала' })
+      .click();
+    const all = await position(page);
+    const { titles, texts, label } = await toEnd(page);
+    expect(label).toBe('Готово');
+    expect(titles.length).toBe(all.n);
+    expect(titles).toEqual(
+      expect.arrayContaining([
+        'Вкладка «На неделе»',
+        'Вкладка «Просрочено»',
+        'Вкладка «Ожидают подтверждения»',
+        'Вкладка «Календарь»',
+        'Кнопка «Статистика»',
+        'Кнопка «…» — действия',
+      ]),
+    );
+    // На телефоне плашки по умолчанию скрыты, а список — карточками без фильтров столбцов, как в
+    // прототипе: облачка показывают только видимое.
+    if (!isMobile) {
+      expect(titles).toEqual(
+        expect.arrayContaining([
+          'Плашка «Просрочено»',
+          'Плашка «На этой неделе»',
+          'Фильтр столбца',
+        ]),
+      );
+    }
+    expect(titles.some((x) => x.startsWith('Кнопка «+'))).toBe(true);
+    // У каждого облачка — пояснение.
+    expect(texts.every((x) => x.length > 0)).toBe(true);
+    await nextButton(page).click();
+    await expect(
+      page.getByRole('dialog', { name: /^Шаг выполнен: вы посмотрели «Посмотреть вкладки/ }),
+    ).toBeVisible();
+    expect(await stepDone(page.request, 'rtabs')).toMatchObject({ how: 'show' });
+  });
+
   // ОТКЛОНЕНИЕ: docs/deviations.md#Г-7
-  test('(п. 59) «Показать как» у шага «Заполнить профиль организации», затем у «Добавить первого контрагента»: показ на «Контрагентах», «Сделать сейчас» открывает «Новый контрагент» и идёт по разделам и полям с пояснениями; «На весь экран» показывается — в показе профиля общих элементов нет, как в прототипе', async ({
+  test('(проверка задачи #87) «Показать как» у шага «Заполнить профиль организации», затем у «Добавить первого контрагента»: показ на «Контрагентах», «Сделать сейчас» открывает «Новый контрагент» и идёт по разделам и полям с пояснениями; «На весь экран» показывается — в показе профиля общих элементов нет, как в прототипе', async ({
     page,
     baseURL,
   }) => {
@@ -243,7 +335,7 @@ test.describe('Этап 2: База знаний — «Показать как»
   });
 
   // ОТКЛОНЕНИЕ: docs/deviations.md#Г-7
-  test('(п. 59) после показа «Ролей» показ «Добавить первого контрагента» пропускает знакомые общие элементы формы: «Пропущено знакомых элементов: N» и «Показать всё», «На весь экран» не показывается', async ({
+  test('(проверка задачи #87) после показа «Ролей» показ «Добавить первого контрагента» пропускает знакомые общие элементы формы: «Пропущено знакомых элементов: N» и «Показать всё», «На весь экран» не показывается', async ({
     page,
     baseURL,
   }) => {
