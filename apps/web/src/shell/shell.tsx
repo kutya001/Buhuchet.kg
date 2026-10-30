@@ -303,6 +303,7 @@ function ShellPage({
           sub: a.sub && t(a.sub),
           badge: a.beta ? t('add.beta') : undefined,
           separate: a.separate,
+          sep: a.sep,
         }),
       )
     : [];

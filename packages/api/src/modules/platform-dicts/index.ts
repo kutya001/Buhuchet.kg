@@ -25,6 +25,8 @@ import {
   taxRegimesRoute,
 } from './dicts';
 import {
+  adminDictDuesPreviewHandler,
+  adminDictDuesPreviewRoute,
   adminDictGroupsHandler,
   adminDictGroupsRoute,
   adminDictHistoryHandler,
@@ -81,6 +83,16 @@ import {
   listAdminCalendarRoute,
 } from './admin-calendar';
 import {
+  adminCalendarAddDuesHandler,
+  adminCalendarAddDuesRoute,
+  adminCalendarCopyDuesHandler,
+  adminCalendarCopyDuesRoute,
+  adminCalendarDeleteDuesHandler,
+  adminCalendarDeleteDuesRoute,
+  dictLoadRollbackDuesHandler,
+  dictLoadRollbackDuesRoute,
+} from './admin-dues';
+import {
   adminTaxInfoHandler,
   adminTaxInfoRoute,
   adminTaxValuesHandler,
@@ -121,6 +133,24 @@ import {
   systemHistoryHandler,
   templatesHistoryRoute,
 } from './admin-system';
+import {
+  adminDictImportApplyHandler,
+  adminDictImportApplyRoute,
+  adminDictImportPreviewHandler,
+  adminDictImportPreviewRoute,
+  adminDictIoFileHandler,
+  adminDictIoFileRoute,
+  adminDictIoXlsxHandler,
+  adminDictIoXlsxRoute,
+  dictLoadValuesHandler,
+  dictLoadValuesRoute,
+  exportDictLoadsHandler,
+  exportDictLoadsRoute,
+  listDictLoadsHandler,
+  listDictLoadsRoute,
+  rollbackDictLoadHandler,
+  rollbackDictLoadRoute,
+} from './admin-io';
 import { phoneCodesHandler, phoneCodesRoute } from './phone-codes';
 
 /**
@@ -165,6 +195,10 @@ export function platformDictsModule(deps: ApiDeps) {
       .openapi(adminCalendarHistoryRoute, adminCalendarHistoryHandler(deps))
       .openapi(addAdminCalendarDayRoute, addAdminCalendarDayHandler(deps))
       .openapi(deleteAdminCalendarDayRoute, deleteAdminCalendarDayHandler(deps))
+      .openapi(adminCalendarAddDuesRoute, adminCalendarAddDuesHandler(deps))
+      // «copy» — раньше дня `{key}`: иначе адрес приняли бы за ключ дня.
+      .openapi(adminCalendarCopyDuesRoute, adminCalendarCopyDuesHandler(deps))
+      .openapi(adminCalendarDeleteDuesRoute, adminCalendarDeleteDuesHandler(deps))
       .openapi(adminStatusesRoute, adminStatusesHandler(deps))
       .openapi(statusesHistoryRoute, systemHistoryHandler(deps, 'statuses', statusesHistoryRoute))
       .openapi(setStatusNameRoute, setStatusNameHandler(deps))
@@ -184,6 +218,15 @@ export function platformDictsModule(deps: ApiDeps) {
         systemHistoryHandler(deps, 'templates', templatesHistoryRoute),
       )
       .openapi(saveMessageTemplatesRoute, saveMessageTemplatesHandler(deps))
+      .openapi(adminDictIoFileRoute, adminDictIoFileHandler(deps))
+      .openapi(adminDictIoXlsxRoute, adminDictIoXlsxHandler(deps))
+      .openapi(adminDictImportPreviewRoute, adminDictImportPreviewHandler(deps))
+      .openapi(adminDictImportApplyRoute, adminDictImportApplyHandler(deps))
+      .openapi(listDictLoadsRoute, listDictLoadsHandler(deps))
+      .openapi(dictLoadValuesRoute, dictLoadValuesHandler(deps))
+      .openapi(exportDictLoadsRoute, exportDictLoadsHandler(deps))
+      .openapi(rollbackDictLoadRoute, rollbackDictLoadHandler(deps))
+      .openapi(dictLoadRollbackDuesRoute, dictLoadRollbackDuesHandler(deps))
       .openapi(listAdminDictRoute, listAdminDictHandler(deps))
       .openapi(adminDictValuesRoute, adminDictValuesHandler(deps))
       .openapi(exportAdminDictRoute, exportAdminDictHandler(deps))
@@ -191,6 +234,7 @@ export function platformDictsModule(deps: ApiDeps) {
       .openapi(createAdminDictValueRoute, createAdminDictValueHandler(deps))
       .openapi(getAdminDictValueRoute, getAdminDictValueHandler(deps))
       .openapi(updateAdminDictValueRoute, updateAdminDictValueHandler(deps))
+      .openapi(adminDictDuesPreviewRoute, adminDictDuesPreviewHandler(deps))
       .openapi(moveAdminDictValueRoute, moveAdminDictValueHandler(deps))
       .openapi(setAdminDictActiveRoute, setAdminDictActiveHandler(deps))
       .openapi(deleteAdminDictValueRoute, deleteAdminDictValueHandler(deps))

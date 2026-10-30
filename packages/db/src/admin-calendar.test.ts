@@ -131,11 +131,8 @@ describe.skipIf(!databaseAvailable())(
         problems: [{ field: 'name', code: 'name_required' }],
       });
 
-      expect(await add('2027-01-04', 'off', 'Перенос: Новый год')).toEqual({
-        ok: true,
-        recalculated: 0,
-      });
-      expect(await add('2027-02-27', 'workday', 'не нужно')).toEqual({ ok: true, recalculated: 0 });
+      expect(await add('2027-01-04', 'off', 'Перенос: Новый год')).toEqual({ ok: true });
+      expect(await add('2027-02-27', 'workday', 'не нужно')).toEqual({ ok: true });
       const rows = await db.admin.db
         .select({
           day: productionCalendar.day,
@@ -190,7 +187,7 @@ describe.skipIf(!databaseAvailable())(
       ).toEqual({ ok: false, reason: 'changed', version: transfer.version });
       expect(
         await asAdmin((tx) => adminCalendarDelete(tx, '2027-01-04', transfer.version)),
-      ).toEqual({ ok: true, recalculated: 0 });
+      ).toEqual({ ok: true });
       expect(
         await asAdmin((tx) => adminCalendarDelete(tx, '2027-01-04', transfer.version)),
       ).toEqual({ ok: false, reason: 'not_found' });
@@ -222,7 +219,7 @@ describe.skipIf(!databaseAvailable())(
         ['2026-05-27', '2027-05-27', 'holiday'],
       ]);
       const copied = await asAdmin((tx) => adminCalendarCopy(tx, TODAY));
-      expect(copied).toEqual({ ok: true, year: 2027, copied: 3, recalculated: 0 });
+      expect(copied).toEqual({ ok: true, year: 2027, copied: 3 });
       const [orozo] = await db.admin.db
         .select({ name: productionCalendar.name, by: productionCalendar.createdBy })
         .from(productionCalendar)
@@ -234,7 +231,6 @@ describe.skipIf(!databaseAvailable())(
         ok: true,
         year: 2027,
         copied: 0,
-        recalculated: 0,
       });
     });
 

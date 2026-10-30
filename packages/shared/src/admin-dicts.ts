@@ -549,6 +549,13 @@ export type AdminCalendarDay = z.infer<typeof AdminCalendarDay>;
 export const AdminCalendarList = listPageSchema(AdminCalendarDay).extend({
   year: z.number().int(),
   nextFilled: z.boolean(),
+  /**
+   * Пример переноса для пояснения (прототип): вид, период словами, срок по закону и после переноса;
+   * без перенесённых сроков — null.
+   */
+  example: z
+    .object({ type: z.string(), period: z.string(), from: IsoDate, to: IsoDate })
+    .nullable(),
 });
 export type AdminCalendarList = z.infer<typeof AdminCalendarList>;
 
@@ -571,8 +578,24 @@ export const AdminCalendarDayParam = z.object({
   key: z.string().regex(/^(\d{4}-)?\d{2}-\d{2}$/),
 });
 
-/** Ответ правки календаря: у скольких несданных отчётов пересчитан срок. */
-export const AdminCalendarChanged = z.object({ recalculated: z.number().int().nonnegative() });
+/**
+ * Предпросмотр пересчёта сроков после правки каталога (задача 2.37; ТЗ «система показывает, сколько
+ * несданных отчётов в скольких организациях изменится»): `reports` отчётов в `orgs` организациях.
+ */
+export const AdminDuesPreview = z.object({
+  reports: z.number().int().nonnegative(),
+  orgs: z.number().int().nonnegative(),
+});
+export type AdminDuesPreview = z.infer<typeof AdminDuesPreview>;
+
+/**
+ * Ответ правки календаря: у скольких несданных отчётов пересчитан срок; `pending` — пересчитано не во
+ * всех организациях, остальные догонит задача по расписанию.
+ */
+export const AdminCalendarChanged = z.object({
+  recalculated: z.number().int().nonnegative(),
+  pending: z.boolean(),
+});
 export type AdminCalendarChanged = z.infer<typeof AdminCalendarChanged>;
 
 /** «Календарь на следующий год копированием»: что будет скопировано в год `year`. */
@@ -640,7 +663,11 @@ export const AdminDictGroups = z.object({
 export type AdminDictGroups = z.infer<typeof AdminDictGroups>;
 
 /** Числа на вкладках модуля: новых запросов. */
-export const PdictsTabCounts = z.object({ requests: z.number().int().nonnegative() });
+/** Числа на вкладках: новые запросы организаций и неоткаченные загрузки из Excel. */
+export const PdictsTabCounts = z.object({
+  requests: z.number().int().nonnegative(),
+  loads: z.number().int().nonnegative(),
+});
 export type PdictsTabCounts = z.infer<typeof PdictsTabCounts>;
 
 /** Запрос организации в «Запросах»: кто, что просил, статус и ответ. «Создал» — кто отправил. */

@@ -55,6 +55,12 @@ async function rowAction(page: Page, found: ReturnType<Page['locator']>, name: s
   return page.getByRole('menu', { name: 'Действия' }).getByRole('menuitem', { name });
 }
 
+/** Пункт меню «Добавить»: на вкладках справочников в нём ещё «Выгрузить в Excel» и «Загрузить из Excel». */
+async function addMenu(page: Page, item: string) {
+  await page.getByRole('button', { name: 'Добавить', exact: true }).click();
+  await page.getByRole('menu', { name: 'Добавить' }).getByRole('menuitem', { name: item }).click();
+}
+
 test.describe('Админка: справочники платформы', () => {
   test('(п. 37) ряд вкладок «Справочники платформы» разделён по группам, у вкладки шапка с пояснением', async ({
     page,
@@ -139,7 +145,7 @@ test.describe('Админка: справочники платформы', () =>
     try {
       await page.goto('/app/pdicts/organs');
       await expect(page.locator('[data-grid] [data-id]').first()).toBeVisible();
-      await page.getByRole('button', { name: 'Добавить', exact: true }).click();
+      await addMenu(page, 'Значение');
       const dialog = page.getByRole('dialog', { name: 'Новое значение · Органы' });
       await dialog.getByRole('button', { name: 'Сохранить' }).click();
       await expect(dialog.getByText('Введите название')).toBeVisible();
@@ -228,7 +234,7 @@ test.describe('Админка: справочники платформы', () =>
     try {
       await page.goto('/app/pdicts/ugns');
       await expect(page.getByText('Налоговые органы: республиканские управления')).toBeVisible();
-      await page.getByRole('button', { name: 'Добавить', exact: true }).click();
+      await addMenu(page, 'Налоговый орган');
       const dialog = page.getByRole('dialog', { name: 'Новый налоговый орган' });
       await expect(dialog.getByLabel('Регион')).toHaveValue('г. Бишкек');
       await dialog.getByLabel('Код').fill('12');
@@ -271,7 +277,7 @@ test.describe('Админка: справочники платформы', () =>
     try {
       await page.goto('/app/pdicts/banks');
       await expect(page.locator('[data-grid] [data-id]').first()).toBeVisible();
-      await page.getByRole('button', { name: 'Добавить', exact: true }).click();
+      await addMenu(page, 'Значение');
       const dialog = page.getByRole('dialog', { name: 'Новое значение · Банковские провайдеры' });
       await dialog.getByLabel('Название').fill(name);
       await dialog.getByLabel('Тип').selectOption({ label: 'Электронный кошелёк' });
@@ -395,7 +401,7 @@ test.describe('Админка: справочники платформы', () =>
     try {
       await page.goto('/app/pdicts/regimes');
       await expect(page.getByText('Состав — по ст. 46 НК КР')).toBeVisible();
-      await page.getByRole('button', { name: 'Добавить', exact: true }).click();
+      await addMenu(page, 'Режим');
       const dialog = page.getByRole('dialog', { name: 'Новый режим' });
       await dialog.getByLabel('Краткое название').fill(regime);
       await dialog.getByRole('button', { name: 'Сохранить' }).click();
@@ -409,7 +415,7 @@ test.describe('Админка: справочники платформы', () =>
       await expect(found).toContainText('Специальный');
 
       await page.goto('/app/pdicts/bases');
-      await page.getByRole('button', { name: 'Добавить', exact: true }).click();
+      await addMenu(page, 'Основание');
       const baseDialog = page.getByRole('dialog', { name: 'Новое основание' });
       await baseDialog.getByLabel('Название').fill(base);
       await baseDialog
@@ -452,7 +458,7 @@ test.describe('Админка: справочники платформы', () =>
     try {
       await page.goto('/app/pdicts/benefits');
       await expect(page.getByText('Признаки контрагента, от которых зависят ставки')).toBeVisible();
-      await page.getByRole('button', { name: 'Добавить', exact: true }).click();
+      await addMenu(page, 'Льгота или статус');
       const dialog = page.getByRole('dialog', { name: 'Новая льгота или статус' });
       await dialog.getByLabel('Название').fill(name);
       await dialog.getByRole('button', { name: 'Сохранить' }).click();
@@ -513,7 +519,7 @@ test.describe('Админка: справочники платформы', () =>
     try {
       await page.goto('/app/pdicts/types');
       await expect(page.getByText('Единый каталог для всех организаций.')).toBeVisible();
-      await page.getByRole('button', { name: 'Добавить', exact: true }).click();
+      await addMenu(page, 'Вид отчёта');
       const dialog = page.getByRole('dialog', { name: 'Новый вид отчёта' });
       await dialog.getByRole('textbox', { name: 'Название', exact: true }).fill(name);
       await dialog.getByRole('button', { name: 'Сохранить' }).click();

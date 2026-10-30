@@ -32,7 +32,15 @@ export interface SheetLimits {
   cells: number;
   /** Ячеек вместе с пустыми до последней непустой в каждой строке: столько займут строки в памяти. */
   area: number;
+  /**
+   * Знаков в тексте ячейки: длиннее — обрезается и кончается «…». По умолчанию —
+   * `SHEET_TEXT_MAX_LENGTH`; загрузке справочников платформы нужны пояснения до 2 000 знаков.
+   */
+  text: number;
 }
+
+/** Текст ячейки — не длиннее: длиннее обрезается и кончается «…» (названия и заголовки короче). */
+export const SHEET_TEXT_MAX_LENGTH = 1_000;
 
 /**
  * Пределы по умолчанию: с запасом для самого большого шаблона «Ввода из Excel» — 1 000 контрагентов и
@@ -43,12 +51,8 @@ export const DEFAULT_SHEET_LIMITS: SheetLimits = {
   columns: 4_096,
   cells: 500_000,
   area: 2_000_000,
+  text: SHEET_TEXT_MAX_LENGTH,
 };
-
-/** Текст ячейки — не длиннее: длиннее обрезается и кончается «…» (названия и заголовки короче). */
-export const SHEET_TEXT_MAX_LENGTH = 1_000;
-/** Сколько символов XML читается для текста ячейки: сущность «&#x10FFFF;» — 10 символов на один. */
-const TEXT_RAW_MAX_LENGTH = SHEET_TEXT_MAX_LENGTH * 10;
 
 /**
  * Распакованный файл (все части книги, которые читаются) — не больше: шаблон на 1 000 контрагентов и
@@ -204,21 +208,24 @@ export function xmlUnescape(text: string, max = Infinity): string {
   return parts.join('');
 }
 
-/** Текст не длиннее предела: длиннее — обрезан, в конце «…». */
-function clip(text: string): string {
-  return text.length > SHEET_TEXT_MAX_LENGTH ? `${text.slice(0, SHEET_TEXT_MAX_LENGTH)}…` : text;
+/** Текст не длиннее предела `max`: длиннее — обрезан, в конце «…». */
+function clip(text: string, max: number): string {
+  return text.length > max ? `${text.slice(0, max)}…` : text;
 }
 
-/** Текст ячейки из XML: сущности — в символы, длина — не больше предела. */
-function cellText(raw: string): string {
-  if (raw.length <= TEXT_RAW_MAX_LENGTH) return clip(xmlUnescape(raw, SHEET_TEXT_MAX_LENGTH));
-  const text = xmlUnescape(raw.slice(0, TEXT_RAW_MAX_LENGTH), SHEET_TEXT_MAX_LENGTH);
-  return `${text.slice(0, SHEET_TEXT_MAX_LENGTH)}…`;
+/**
+ * Текст ячейки из XML: сущности — в символы, длина — не больше предела. XML читается не дальше
+ * `max * 10` символов: сущность «&#x10FFFF;» — 10 символов на один.
+ */
+function cellText(raw: string, max: number): string {
+  if (raw.length <= max * 10) return clip(xmlUnescape(raw, max), max);
+  const text = xmlUnescape(raw.slice(0, max * 10), max);
+  return `${text.slice(0, max)}…`;
 }
 
 /** Текст из нескольких кусков (`<t>` форматированного текста): после предела куски не добавляются. */
-function appendText(text: string, raw: string): string {
-  return text.length > SHEET_TEXT_MAX_LENGTH ? text : text + cellText(raw);
+function appendText(text: string, raw: string, max: number): string {
+  return text.length > max ? text : text + cellText(raw, max);
 }
 
 /**
@@ -344,7 +351,7 @@ function sharedStrings(xml: string, limits: SheetLimits): string[] {
     if (tags.name === 'si') {
       if (tags.closing) {
         if (!open) throw unreadable();
-        out.push(clip(text));
+        out.push(clip(text, limits.text));
         open = false;
       } else if (tags.selfClosing) out.push('');
       else {
@@ -356,7 +363,7 @@ function sharedStrings(xml: string, limits: SheetLimits): string[] {
       if (out.length > limits.cells) throw tooBig();
     } else if (tags.name === 'rPh') phonetic = !tags.closing && !tags.selfClosing;
     else if (tags.name === 't' && tags.closing && open && !phonetic) {
-      text = appendText(text, tags.text());
+      text = appendText(text, tags.text(), limits.text);
     }
   }
   if (open) throw unreadable();
@@ -388,12 +395,12 @@ function sheetRows(xml: string, shared: readonly string[], limits: SheetLimits):
   let phonetic = false;
   const cellValue = (): SheetCell => {
     if (type === 's') return v === undefined ? null : (shared[Number(v)] ?? null);
-    if (type === 'inlineStr') return clip(inline);
-    if (type === 'str' || type === 'e') return v === undefined ? null : cellText(v);
+    if (type === 'inlineStr') return clip(inline, limits.text);
+    if (type === 'str' || type === 'e') return v === undefined ? null : cellText(v, limits.text);
     if (type === 'b') return v === undefined ? null : v.trim() === '1' ? 'TRUE' : 'FALSE';
     if (v === undefined || v.trim() === '') return null;
     const n = Number(v);
-    return Number.isFinite(n) ? n : cellText(v);
+    return Number.isFinite(n) ? n : cellText(v, limits.text);
   };
   while (tags.next()) {
     // Имя — заново после `next()`: сужение типа выше к нему не относится.
@@ -458,7 +465,9 @@ function sheetRows(xml: string, shared: readonly string[], limits: SheetLimits):
         phonetic = !tags.closing && !tags.selfClosing;
         break;
       case 't':
-        if (tags.closing && inInline && !phonetic) inline = appendText(inline, tags.text());
+        if (tags.closing && inInline && !phonetic) {
+          inline = appendText(inline, tags.text(), limits.text);
+        }
         break;
     }
   }
@@ -506,7 +515,7 @@ export function readCsvRows(buf: Buffer, limits: Partial<SheetLimits> = {}): She
   const push = () => {
     if (row.length >= lim.columns || ++area > lim.area) throw tooBig();
     if (field !== '' && ++cells > lim.cells) throw tooBig();
-    row.push(field === '' ? null : clip(field));
+    row.push(field === '' ? null : clip(field, lim.text));
     field = '';
   };
   const endRow = () => {
@@ -517,7 +526,7 @@ export function readCsvRows(buf: Buffer, limits: Partial<SheetLimits> = {}): She
   };
   // Длиннее предела поле не растёт: `clip` всё равно обрежет.
   const add = (ch: string) => {
-    if (field.length <= SHEET_TEXT_MAX_LENGTH) field += ch;
+    if (field.length <= lim.text) field += ch;
   };
   for (let i = 0; i < text.length; i++) {
     const ch = text[i]!;

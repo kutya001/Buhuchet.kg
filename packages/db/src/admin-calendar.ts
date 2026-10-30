@@ -270,14 +270,6 @@ export async function exportAdminCalendar(
 
 /* ───────────── Правка ───────────── */
 
-/**
- * Пересчёт сроков несданных отчётов после правки календаря (прототип recalcDues): отчётов организаций
- * ещё нет — пересчёт подключит задача отчётов (правило стыков, docs/decisions.md п. Д-3).
- */
-async function recalcOpenReportDues(_tx: Tx): Promise<number> {
-  return 0;
-}
-
 /** Вставка дня функцией базы: версия; 0 — день уже есть; null — не администратор. */
 async function insertDay(tx: Tx, day: string, kind: CalendarDayKind, name: string) {
   const [row] = await tx.execute<{ version: number | null }>(
@@ -293,8 +285,13 @@ const createdHistory = (day: string, kind: CalendarDayKind, name: string) => ({
   changes: [{ field: 'kind', to: kind }, ...(name ? [{ field: 'name', to: name }] : [])],
 });
 
+/*
+ * Сроки несданных отчётов после правки календаря (прототип recalcDues) пересчитывает вызывающий после
+ * конца транзакции: `redueAllOrgs` с областью «календарь» — каждая организация своей транзакцией.
+ */
+
 export type AdminCalendarAddResult =
-  | { ok: true; recalculated: number }
+  | { ok: true }
   | { ok: false; reason: 'invalid'; problems: CalendarAddProblem[] }
   | { ok: false; reason: 'not_found' };
 
@@ -319,11 +316,11 @@ export async function adminCalendarAdd(
     return { ok: false, reason: 'invalid', problems: [{ field: 'date', code: 'date_taken' }] };
   }
   await writePlatformHistory(tx, createdHistory(input.date.trim(), kind, name));
-  return { ok: true, recalculated: await recalcOpenReportDues(tx) };
+  return { ok: true };
 }
 
 export type AdminCalendarDeleteResult =
-  | { ok: true; recalculated: number }
+  | { ok: true }
   | { ok: false; reason: 'not_found' | 'fixed' }
   /** Версия устарела: `version` — нынешняя. */
   | { ok: false; reason: 'changed'; version: number };
@@ -359,7 +356,7 @@ export async function adminCalendarDelete(
       ...(before.name ? [{ field: 'name', from: before.name }] : []),
     ],
   });
-  return { ok: true, recalculated: await recalcOpenReportDues(tx) };
+  return { ok: true };
 }
 
 /** Что скопирует «Календарь на следующий год копированием»: год, в который копируется, и дни. */
@@ -379,7 +376,7 @@ export async function adminCalendarCopyPlan(
 export async function adminCalendarCopy(
   tx: Tx,
   today: IsoDate,
-): Promise<{ ok: true; year: number; copied: number; recalculated: number } | { ok: false }> {
+): Promise<{ ok: true; year: number; copied: number } | { ok: false }> {
   const plan = await adminCalendarCopyPlan(tx, today);
   const history = [];
   for (const [i, x] of plan.items.entries()) {
@@ -391,12 +388,7 @@ export async function adminCalendarCopy(
     if (version > 0) history.push(createdHistory(x.to, x.kind, x.name));
   }
   await writePlatformHistory(tx, ...history);
-  return {
-    ok: true,
-    year: plan.year,
-    copied: history.length,
-    recalculated: history.length ? await recalcOpenReportDues(tx) : 0,
-  };
+  return { ok: true, year: plan.year, copied: history.length };
 }
 
 // ОТКЛОНЕНИЕ: docs/deviations.md#Д-6

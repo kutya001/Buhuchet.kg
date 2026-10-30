@@ -42,6 +42,7 @@ import { useShell } from '../shell/context';
 import { BenefitDialog } from './benefit-dialog';
 import { TypeDialog } from './type-dialog';
 import { DictHistory } from './dict-history-box';
+import { ExportDialog, ImportDialog, IoBar } from './io-dialogs';
 import {
   fetchAdminDict,
   fetchAdminDictValues,
@@ -304,6 +305,9 @@ const ADD_ACTION: Partial<Record<AdminValueDict, string>> = {
   ugns: 'ugns',
 };
 
+/** «Выгрузить в Excel» и «Загрузить из Excel» в меню «+ Добавить». */
+type IoAction = 'io_export' | 'io_import';
+
 /** Тексты справочника вместо общих («Значение отключено», «Значение нигде не используется…»). */
 const OFF_TOAST: Partial<Record<AdminValueDict, UiTextKey>> = {
   types: 'pdicts.toast.off_type',
@@ -348,12 +352,16 @@ function usedReason(dict: AdminValueDict, x: AdminDictValue, t: Translate): stri
   return t('pdicts.delete.used', { n: x.used });
 }
 
-/** «+ Добавить» → способ добавления вкладки справочника. */
-function useValueAddRequest(dict: AdminValueDict, run: () => void) {
+/**
+ * «+ Добавить» → способ добавления вкладки справочника, «Выгрузить в Excel» или «Загрузить из Excel»
+ * (задача 2.37).
+ */
+function useValueAddRequest(dict: AdminValueDict, run: (action: 'add' | IoAction) => void) {
   const { addRequest, clearAddRequest } = useShell();
   const request = addRequest?.moduleId === 'pdicts' ? addRequest : null;
   const start = useEffectEvent((actionId: string) => {
-    if (actionId === (ADD_ACTION[dict] ?? 'value')) run();
+    if (actionId === (ADD_ACTION[dict] ?? 'value')) run('add');
+    else if (actionId === 'io_export' || actionId === 'io_import') run(actionId);
   });
   useEffect(() => {
     if (!request) return;
@@ -416,7 +424,8 @@ export function ValueDictList({ dict }: { dict: AdminValueDict }) {
   const [askDelete, setAskDelete] = useState<AdminDictValue | null>(null);
   const [pending, setPending] = useState<ReadonlySet<string>>(new Set());
   const open = (x: AdminDictValue | null) => setEdit(openSlot(x));
-  useValueAddRequest(dict, () => open(null));
+  const [io, setIo] = useState<DialogSlot<IoAction> | null>(null);
+  useValueAddRequest(dict, (action) => (action === 'add' ? open(null) : setIo(openSlot(action))));
   // Всего значений в справочнике (без фильтров): «Ниже» у последнего по «№» недоступно.
   const count = (list.data as { count?: number } | undefined)?.count ?? 0;
 
@@ -544,6 +553,10 @@ export function ValueDictList({ dict }: { dict: AdminValueDict }) {
   return (
     <div className="flex flex-col gap-3.5">
       {note ? <Note icon="info">{t(note)}</Note> : null}
+      <IoBar
+        onExport={() => setIo(openSlot<IoAction>('io_export'))}
+        onImport={() => setIo(openSlot<IoAction>('io_import'))}
+      />
       <DataGrid
         columns={columns}
         audit={AUDIT}
@@ -602,6 +615,21 @@ export function ValueDictList({ dict }: { dict: AdminValueDict }) {
           dict={dict}
           item={edit.data}
           onDone={() => refresh(dict)}
+        />
+      ) : null}
+      {io?.data === 'io_export' ? (
+        <ExportDialog
+          key={`io-${io.n}`}
+          dict={dict}
+          open={io.open}
+          onClose={() => setIo(closeSlot)}
+        />
+      ) : io ? (
+        <ImportDialog
+          key={`io-${io.n}`}
+          dict={dict}
+          open={io.open}
+          onClose={() => setIo(closeSlot)}
         />
       ) : null}
       <ConfirmDialog

@@ -148,6 +148,19 @@ describe('MiniTable — маленькая таблица карточки (пр
     expect(html).toContain('md:text-right');
   });
 
+  it('ширина столбца на ПК — у заголовка, как в прототипе', () => {
+    const html = renderToStaticMarkup(
+      <MiniTable
+        columns={[{ key: 'what', label: 'Что будет', width: 130 }, ...columns]}
+        rows={[]}
+        empty="—"
+        label="Сравнение"
+      />,
+    );
+    expect(html).toContain('style="width:130px"');
+    expect(html.match(/style=/g)).toHaveLength(1);
+  });
+
   it('на телефоне кнопки строки — в правом верхнем углу, длинное значение — на всю ширину (прототип mCardsTable)', () => {
     const cells = (html: string) => html.split('<td').slice(1);
     const html = renderToStaticMarkup(

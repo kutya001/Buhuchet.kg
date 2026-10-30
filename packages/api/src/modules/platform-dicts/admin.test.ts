@@ -576,7 +576,10 @@ describe.skipIf(!databaseAvailable())('Админка → «Справочник
     expect([noName.status, (await errorOf(noName)).code]).toEqual([400, 'validation_failed']);
     const res = await add({ date: '2027-01-04', type: 'off', name: 'Перенос: Новый год' });
     expect(res.status, await res.clone().text()).toBe(201);
-    expect(AdminCalendarChanged.parse(await res.json())).toEqual({ recalculated: 0 });
+    expect(AdminCalendarChanged.parse(await res.json())).toEqual({
+      recalculated: 0,
+      pending: false,
+    });
     const taken = await add({ date: '2027-01-04', type: 'off', name: 'Ещё раз' });
     expect((await errorOf(taken)).code).toBe('calendar_date_taken');
 
@@ -602,6 +605,7 @@ describe.skipIf(!databaseAvailable())('Админка → «Справочник
       year: 2027,
       copied: 3,
       recalculated: 0,
+      pending: false,
     });
     // «История изменений» календаря: три скопированных дня, удалённый и добавленный перенос.
     const history = AdminDictHistory.parse(await (await get(`${P}/calendar/history`)).json());

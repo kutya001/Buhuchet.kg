@@ -154,8 +154,13 @@ describe('вкладки и «+ Добавить» по правам и учёт
       'tab.pdicts.group.system',
       'tab.pdicts.group.service',
     ]);
-    expect(ids(addActions('pdicts', access, 'organs'))).toEqual(['value']);
-    expect(ids(addActions('pdicts', access, 'ugns'))).toEqual(['ugns']);
+    expect(ids(addActions('pdicts', access, 'organs'))).toEqual([
+      'value',
+      'io_export',
+      'io_import',
+    ]);
+    expect(ids(addActions('pdicts', access, 'ugns'))).toEqual(['ugns', 'io_export', 'io_import']);
+    expect(addActions('pdicts', access, 'types').find((a) => a.id === 'io_export')?.sep).toBe(true);
     expect(addActions('pdicts', access, 'requests')).toEqual([]);
     expect(addActions('pdicts', access)).toEqual([]);
   });

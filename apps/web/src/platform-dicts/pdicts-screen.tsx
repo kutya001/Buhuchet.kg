@@ -3,6 +3,7 @@
 import { isAdminValueDict } from '@buhuchet/domain';
 import { ModuleStub } from '../shell/module-stub';
 import { CalendarList } from './calendar-list';
+import { LoadsList } from './loads-list';
 import { PdictsHead } from './pdicts-head';
 import { PermsTab } from './perms-tab';
 import { RequestsList } from './requests-list';
@@ -14,13 +15,14 @@ import { ValueDictList } from './value-list';
 
 /**
  * Админка → «Справочники платформы» (ТЗ «Админка» → «Справочники платформы»; прототип
- * admin/platform-dicts.js renderPDicts): над вкладкой — шапка справочника, под ней — список значений
- * или «Запросы» организаций. Вкладки, правку которых добавят следующие части задачи 2.36 и задачи
- * других потоков, пока показывают заглушку.
+ * admin/platform-dicts.js renderPDicts): над вкладкой — шапка справочника, под ней — список значений,
+ * «Загрузки» из Excel или «Запросы» организаций. Вкладки, правку которых добавят следующие задачи,
+ * пока показывают заглушку.
  */
 export function PlatformDictsAdmin({ tabId }: { tabId: string }) {
   let body;
   if (tabId === 'requests') body = <RequestsList />;
+  else if (tabId === 'loads') body = <LoadsList />;
   else if (isAdminValueDict(tabId)) body = <ValueDictList key={tabId} dict={tabId} />;
   else if (tabId === 'taxes') body = <TaxesTab />;
   else if (tabId === 'calendar') body = <CalendarList />;

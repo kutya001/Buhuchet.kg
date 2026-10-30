@@ -5,6 +5,8 @@ export interface MiniColumn {
   key: string;
   label: string;
   numeric?: boolean;
+  /** Ширина столбца на ПК, px (прототип `<th style="width:…">`). */
+  width?: number;
   /** Кнопки строки («Изменить», «Удалить»): на телефоне — в правом верхнем углу карточки. */
   actions?: boolean;
 }
@@ -74,6 +76,7 @@ export function MiniTable({
               <th
                 key={c.key}
                 scope="col"
+                style={c.width ? { width: c.width } : undefined}
                 className={`border-b border-line px-2 py-1.5 text-[11.5px] font-[650] text-faint ${num(c)}`}
               >
                 {c.label}

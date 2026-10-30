@@ -8,6 +8,8 @@ import {
   adminDictMove,
   adminDictSetActive,
   adminDictUpdate,
+  adminTypeReportCounts,
+  countActiveDictLoads,
   countNewDictRequests,
   dictValueTakenField,
   exportAdminDict,
@@ -44,6 +46,7 @@ import {
   AdminDictValue,
   AdminDictValueForm,
   AdminDictValueUpdate,
+  AdminDuesPreview,
   AdminReportTypeOptions,
   AdminValueDictParam,
   ApiError,
@@ -61,6 +64,7 @@ import { apiFail, listQueryOf, listQueryResponses, versionedSaveResponses } from
 import { exportRateResponses, withExportSlot, xlsxContent, xlsxResponse } from '../../lists/export';
 import { requirePlatformAdmin } from '../../middleware/access';
 import { serverTexts } from '../l10n/texts';
+import { countEdit, duesPreviewResponses, previewEdit, queued, recalcQueued } from './admin-dues';
 
 /*
  * Админка → «Справочники платформы» (задача 2.36; ТЗ «Общие правила для всех справочников»; прототип
@@ -99,9 +103,17 @@ function valueBody(x: AdminDictValueRecord): AdminDictValue {
   };
 }
 
-/** «Назначен» видов отчётов — по всем организациям, до транзакции администратора. */
+/**
+ * «Назначен» видов отчётов и созданные по ним отчёты — по всем организациям, до транзакции
+ * администратора.
+ */
 const listExtras = async (deps: ApiDeps, dict: AdminValueDict): Promise<AdminDictListExtras> =>
-  dict === 'types' ? { assigned: await adminAssignedTypeCounts(deps.db) } : {};
+  dict === 'types'
+    ? {
+        assigned: await adminAssignedTypeCounts(deps.db),
+        reports: await adminTypeReportCounts(deps.db),
+      }
+    : {};
 
 const adminTx = <T>(
   deps: ApiDeps,
@@ -284,18 +296,23 @@ export const pdictsTabCountsRoute = createRoute({
   summary: 'Числа на вкладках «Справочников платформы»',
   middleware: [requirePlatformAdmin] as const,
   responses: {
-    200: { description: 'Новых запросов организаций', content: json(PdictsTabCounts) },
+    200: {
+      description: 'Новых запросов организаций и неоткаченных загрузок',
+      content: json(PdictsTabCounts),
+    },
     ...denied,
   },
 });
 
-/** Число на вкладке «Запросы» — новых запросов (прототип pdTabs). */
+/** Числа на вкладках (прототип pdTabs): «Запросы» — новых запросов, «Загрузки» — неоткаченных. */
 export function pdictsTabCountsHandler(
   deps: ApiDeps,
 ): RouteHandler<typeof pdictsTabCountsRoute, AppEnv> {
   return async (c) => {
-    const requests = await adminTx(deps, c, (tx) => countNewDictRequests(tx));
-    return c.json({ requests }, 200);
+    const [requests, loads] = await adminTx(deps, c, (tx) =>
+      Promise.all([countNewDictRequests(tx), countActiveDictLoads(tx)]),
+    );
+    return c.json({ requests, loads }, 200);
   };
 }
 
@@ -349,7 +366,8 @@ export function getAdminDictValueHandler(
 ): RouteHandler<typeof getAdminDictValueRoute, AppEnv> {
   return async (c) => {
     const { dict, code } = c.req.valid('param');
-    const found = await adminTx(deps, c, (tx) => getAdminDictValue(tx, dict, code));
+    const reports = dict === 'types' ? await adminTypeReportCounts(deps.db) : undefined;
+    const found = await adminTx(deps, c, (tx) => getAdminDictValue(tx, dict, code, reports));
     if (!found) throw new RecordNotFoundError('platform_dict', code);
     return c.json(valueBody(found), 200);
   };
@@ -382,12 +400,22 @@ const NUMBER_FIELDS = new Set([
   'paySchedule',
 ]);
 
+/** Отказ проверки поля: код ошибки (текст — `err.<код>` словаря), текст по умолчанию и поле окна. */
+export interface FieldProblem {
+  code: string;
+  message: string;
+  field: string;
+}
+
 /**
  * Поля формы → поля значения справочника (только поля этого справочника). «Тип» не этого справочника
- * (у режима — «Банк») — 400 под полем; пустой — тип нового значения. У вида отчёта поле, которого нет
- * в запросе, — как у нового вида (`NEW_REPORT_TYPE`).
+ * (у режима — «Банк») — отказ под полем; пустой — тип нового значения. У вида отчёта поле, которого нет
+ * в запросе, — как у нового вида (`NEW_REPORT_TYPE`). Загрузка из Excel проверяет строку так же.
  */
-function inputOf(dict: AdminValueDict, form: AdminDictValueForm): AdminDictInput {
+export function valueInputOf(
+  dict: AdminValueDict,
+  form: AdminDictValueForm,
+): { input: AdminDictInput } | { problem: FieldProblem } {
   const meta = ADMIN_DICT_META[dict];
   const values = form as Record<string, unknown>;
   const fallback = (f: string): unknown =>
@@ -405,11 +433,21 @@ function inputOf(dict: AdminValueDict, form: AdminDictValueForm): AdminDictInput
   if (meta.kind) {
     data.kind ||= meta.kind.default;
     if (!meta.kind.values.includes(data.kind as string)) {
-      apiFail(400, 'invalid_kind', 'Такого типа у справочника нет', { field: 'kind' });
+      return {
+        problem: { code: 'invalid_kind', message: 'Такого типа у справочника нет', field: 'kind' },
+      };
     }
   }
-  return { name: form.name, data };
+  return { input: { name: form.name, data } };
 }
+
+function inputOf(dict: AdminValueDict, form: AdminDictValueForm): AdminDictInput {
+  const result = valueInputOf(dict, form);
+  if ('problem' in result) return fieldFail(result.problem);
+  return result.input;
+}
+
+const fieldFail = (p: FieldProblem): never => apiFail(400, p.code, p.message, { field: p.field });
 
 /** Обязательные поля сверх названия (прототип ugnsDlg, regimeDlg). */
 const REQUIRED = {
@@ -426,13 +464,19 @@ const REQUIRED = {
  * Краткое название управления, полное название режима, код и маска страны, «Что даёт» льготы, краткое
  * название, орган и «Что нужно сделать» вида отчёта обязательны.
  */
-function checkRequired(dict: AdminValueDict, input: AdminDictInput) {
+export function requiredProblem(dict: AdminValueDict, input: AdminDictInput): FieldProblem | null {
   for (const field of ADMIN_DICT_META[dict].required ?? []) {
     if (!String(input.data[field] ?? '').trim()) {
       const [code, message] = REQUIRED[field];
-      apiFail(400, code, message, { field });
+      return { code, message, field };
     }
   }
+  return null;
+}
+
+function checkRequired(dict: AdminValueDict, input: AdminDictInput) {
+  const problem = requiredProblem(dict, input);
+  if (problem) fieldFail(problem);
 }
 
 /** Связи не подходят: код ошибки и текст под полем (`field` — поле окна). */
@@ -464,6 +508,22 @@ const TAKEN = {
   gnsCode: ['ugns_code_taken', 'Такой код уже есть'],
 } as const;
 
+/** Отказ сохранения под полем: повтор названия или кода ГНС, связь или «Меняет сроки» не подходят. */
+export function saveProblem(
+  result: Exclude<AdminDictSaveResult | AdminDictDeleteResult, { ok: true }>,
+): FieldProblem | null {
+  if (result.reason === 'taken') {
+    const field = result.problems[0]!.field;
+    const [code, message] = TAKEN[field];
+    return { code, message, field };
+  }
+  if (result.reason === 'bad_link') {
+    const [code, message] = BAD_LINK[result.problem];
+    return { code, message, field: result.field };
+  }
+  return null;
+}
+
 /**
  * Отказ сохранения: повтор — 400 под полем; используется — 409 `dict_value_used` с числом записей;
  * устаревшая версия — 409 «запись изменена другим пользователем» с нынешней версией; нет значения — 404.
@@ -475,21 +535,14 @@ async function failOf(
   dict: AdminValueDict,
   code: string,
 ): Promise<never> {
-  if (result.reason === 'taken') {
-    const field = result.problems[0]!.field;
-    const [errCode, message] = TAKEN[field];
-    apiFail(400, errCode, message, { field });
-  }
+  const problem = saveProblem(result);
+  if (problem) fieldFail(problem);
   if (result.reason === 'used') return usedFail(result.usage);
   if (result.reason === 'fixed') {
     apiFail(409, 'dict_value_fixed', 'Код по умолчанию отключить нельзя');
   }
   if (result.reason === 'undeletable') {
     apiFail(409, 'dict_value_undeletable', 'Значение можно только отключить');
-  }
-  if (result.reason === 'bad_link') {
-    const [errCode, message] = BAD_LINK[result.problem];
-    apiFail(400, errCode, message, { field: result.field });
   }
   if (result.reason === 'changed') {
     const now = await adminTx(deps, c, (tx) => getAdminDictValue(tx, dict, code));
@@ -592,11 +645,70 @@ export function updateAdminDictValueHandler(
     const { version, ...form } = c.req.valid('json');
     const input = inputOf(dict, form);
     checkRequired(dict, input);
+    // У статуса в историю — «сроки по статусу пересчитаны у N отчётов»: N — тем же предпросмотром до
+    // транзакции правки (по всем организациям — не внутри неё). Не посчиталось — сохранить без числа.
+    const recalculated =
+      dict === 'benefits'
+        ? await countEdit(deps, c, async (tx) => {
+            const saved = await adminDictUpdate(tx, dict, code, input, version);
+            return saved.ok ? (saved.redue ?? null) : false;
+          }).then(
+            (x) => x.reports,
+            (err: unknown) => {
+              deps.logger.error({ err }, 'число пересчитанных сроков статуса не посчитано');
+              return undefined;
+            },
+          )
+        : undefined;
     const result = await saving(() =>
-      adminTx(deps, c, (tx) => adminDictUpdate(tx, dict, code, input, version)),
+      adminTx(deps, c, async (tx) =>
+        queued(tx, await adminDictUpdate(tx, dict, code, input, version, recalculated)),
+      ),
     );
     if (!result.ok) return failOf(deps, c, result, dict, code);
+    // Сроки несданных отчётов — после сохранения, каждая организация своей транзакцией.
+    await recalcQueued(deps, result.queued);
     return c.json(valueBody(result.record), 200);
+  };
+}
+
+export const adminDictDuesPreviewRoute = createRoute({
+  method: 'post',
+  path: '/admin/platform-dicts/{dict}/{code}/dues-preview',
+  tags: ['platform-dicts'],
+  summary: 'Предпросмотр: у скольких несданных отчётов изменятся сроки после правки значения',
+  middleware: [requirePlatformAdmin] as const,
+  request: {
+    params: AdminDictCodeParam,
+    body: { required: true, content: json(AdminDictValueUpdate) },
+  },
+  responses: {
+    200: {
+      description:
+        'Отчёты и организации; правка не сохраняется. Правка с ошибкой или без влияния на сроки — нули',
+      content: json(AdminDuesPreview),
+    },
+    ...duesPreviewResponses,
+  },
+});
+
+/**
+ * Окна вида отчёта и статуса (прототип `te-warn`): правило срока или «Меняет сроки» изменены, но ещё
+ * не сохранены — та же правка, что у «Сохранить», в транзакции, которая откатывается.
+ */
+export function adminDictDuesPreviewHandler(
+  deps: ApiDeps,
+): RouteHandler<typeof adminDictDuesPreviewRoute, AppEnv> {
+  return async (c) => {
+    const { dict, code } = c.req.valid('param');
+    const { version, ...form } = c.req.valid('json');
+    const parsed = valueInputOf(dict, form);
+    const preview = await previewEdit(deps, c, async (tx) => {
+      if ('problem' in parsed || requiredProblem(dict, parsed.input)) return false;
+      const saved = await adminDictUpdate(tx, dict, code, parsed.input, version);
+      return saved.ok ? (saved.redue ?? null) : false;
+    });
+    return c.json(preview, 200);
   };
 }
 
@@ -654,10 +766,12 @@ export function setAdminDictActiveHandler(
   return async (c) => {
     const { dict, code } = c.req.valid('param');
     const { active, version } = c.req.valid('json');
-    const result = await adminTx(deps, c, (tx) =>
-      adminDictSetActive(tx, dict, code, active, version),
+    const result = await adminTx(deps, c, async (tx) =>
+      queued(tx, await adminDictSetActive(tx, dict, code, active, version)),
     );
     if (!result.ok) return failOf(deps, c, result, dict, code);
+    // ОТКЛОНЕНИЕ: docs/deviations.md#Д-17 — статус со своими сроками: сроки по каталогу без числа заранее.
+    await recalcQueued(deps, result.queued);
     return c.json(valueBody(result.record), 200);
   };
 }
