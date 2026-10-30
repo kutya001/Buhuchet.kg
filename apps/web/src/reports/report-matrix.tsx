@@ -1,7 +1,7 @@
 'use client';
 
 import { AssignmentBulkResult, AssignmentEndPreview, type ReportMatrix } from '@buhuchet/shared';
-import { ConfirmDialog, EmptyState, Note, useToast } from '@buhuchet/ui';
+import { ConfirmDialog, EmptyState, Note, NothingFound, useToast } from '@buhuchet/ui';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { api, ApiFailure, callApi } from '../api-client';
@@ -42,7 +42,7 @@ export function ReportMatrixTab() {
   const t = useT();
   const toast = useToast();
   const errorText = useErrorText();
-  const { search, access } = useShell();
+  const { search, clearSearch, access } = useShell();
   const refresh = useReportsRefresh();
   const q = useDebounced(search.trim(), SEARCH_DELAY_MS);
   const query = useQuery(reportMatrixQuery(q));
@@ -101,6 +101,7 @@ export function ReportMatrixTab() {
       setUnassign({ cp, type, assignment, n: notRequired });
     });
 
+  // ОТКЛОНЕНИЕ: docs/deviations.md#Б-9
   const end = (u: Unassign) =>
     once(`${u.cp.id}|${u.type.code}`, async () => {
       const res = await callApi(() =>
@@ -138,7 +139,14 @@ export function ReportMatrixTab() {
           {query.error instanceof ApiFailure ? errorText(query.error.error) : t('err.unknown')}
         </Note>
       ) : null}
-      {data && !data.rows.length ? (
+      {data && !data.rows.length && q ? (
+        <NothingFound
+          title={t('grid.not_found')}
+          resetLabel={t('grid.reset_filters')}
+          onReset={clearSearch}
+        />
+      ) : null}
+      {data && !data.rows.length && !q ? (
         <EmptyState
           icon="building"
           title={t('report.matrix.empty')}

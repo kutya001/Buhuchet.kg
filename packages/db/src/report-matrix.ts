@@ -175,8 +175,8 @@ async function assignees(tx: Tx, scope: SQL | undefined, q?: string): Promise<As
   }));
 }
 
-/** Режимы контрагента словами: «ОНР + Патент» (прототип `c.regime`); пусто — не указан. */
-const regimeText = (c: Assignee) => c.regimes.map((r) => r.name).join(' + ') || null;
+/** Основной режим под названием контрагента (прототип `c.regime`); пусто — не указан. */
+const regimeText = (c: Assignee) => c.regimes[0]?.name ?? null;
 
 /** Вид, подключённый в организации: подходит ли контрагенту, ставки, правило ГКЭД, орган. */
 interface ConnectedType {

@@ -41,7 +41,10 @@ import { error, reportScopeOf } from './common';
  * уточнённых не показываются; область — п. А-2.
  */
 
-const noView = { description: 'Нет права «Просматривать отчёты»', content: error };
+const noView = {
+  description: 'Нет права «Просматривать отчёты»; вкладка «Календарь» при выключенном календаре',
+  content: error,
+};
 
 /**
  * «Ожидают подтверждения» (прототип repWaitList): тому, кто может подтверждать, — все в области,
@@ -69,6 +72,10 @@ async function listOptions(
     reportConfirmPolicy(tx, orgContextOf(c).orgId),
     orgMenuSettings(tx, orgContextOf(c).orgId),
   ]);
+  // Список дня, его значения фильтров и Excel закрыты вместе с «Календарём отчётов».
+  if (q.tab === 'calendar' && !settings.features.calendar) {
+    apiFail(403, 'calendar_off', 'Календарь отчётов выключен в учётной политике');
+  }
   return {
     t: await serverTexts(deps),
     today: todayOf(deps),

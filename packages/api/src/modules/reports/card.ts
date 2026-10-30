@@ -44,6 +44,7 @@ import {
   ReportIdParam,
   ReportResponsibleChange,
   ReportRevisionCreate,
+  ManualReportSaved,
   ReportSaved,
 } from '@buhuchet/shared';
 import type { ApiDeps } from '../../deps';
@@ -372,7 +373,10 @@ export const createManualReportRoute = createRoute({
     body: { required: true, content: { 'application/json': { schema: ManualReportCreate } } },
   },
   responses: {
-    201: { description: 'Отчёт создан', content: { 'application/json': { schema: ReportSaved } } },
+    201: {
+      description: 'Отчёт создан; срок — после переноса с нерабочего дня',
+      content: { 'application/json': { schema: ManualReportSaved } },
+    },
     400: {
       description: 'Неверные данные: нет месяца, даты события, срока или причины',
       content: error,
@@ -448,7 +452,7 @@ export function createManualReportHandler(
         { eventDate: type.oneOff },
       );
     });
-    return c.json({ id: saved.id, version: saved.version }, 201);
+    return c.json({ id: saved.id, version: saved.version, dueDate: saved.dueDate }, 201);
   };
 }
 

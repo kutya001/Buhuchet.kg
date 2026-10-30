@@ -55,7 +55,7 @@ test.describe('Этап 2: отчёты — «Кто что сдаёт», мас
   }) => {
     const origin = await asOwner(request, baseURL);
     const word = uniqueWord('Массово');
-    const cps = [];
+    const cps: Awaited<ReturnType<typeof newContractor>>[] = [];
     for (const n of [1, 2, 3]) {
       cps.push(await newContractor(request, origin, { name: `ОсОО «${word} ${n}»` }));
     }
@@ -69,7 +69,20 @@ test.describe('Этап 2: отчёты — «Кто что сдаёт», мас
       const dialog = page.getByRole('dialog', { name: 'Назначить отчёт нескольким контрагентам' });
       await expect(dialog.locator('[data-mass-type]')).toHaveValue('nds');
       await expect(dialog).toContainText('Срок: до 25-го числа месяца после отчётного');
-      for (const cp of cps) await dialog.locator(`[data-mass-cp="${cp.id}"] input`).check();
+      const box = (id: string) => dialog.locator(`[data-mass-cp="${id}"] input`);
+      // «Отметить все подходящие» — все, кто ещё не сдаёт и кому вид подходит; смена вида снимает отметки.
+      await dialog.locator('[data-mass-all]').click();
+      for (const cp of cps) await expect(box(cp.id)).toBeChecked();
+      const free = await dialog.locator('[data-mass-cp] input:not(:disabled)').count();
+      await expect(dialog.locator('[data-mass-selected]')).toHaveText(`Выбрано: ${free}`);
+      const other = await dialog
+        .locator('[data-mass-type] option:not([value="nds"])')
+        .first()
+        .getAttribute('value');
+      await dialog.locator('[data-mass-type]').selectOption(other!);
+      await dialog.locator('[data-mass-type]').selectOption('nds');
+      await expect(dialog.locator('[data-mass-selected]')).toHaveText('Выбрано: 0');
+      for (const cp of cps) await box(cp.id).check();
       await expect(dialog.locator('[data-mass-selected]')).toHaveText('Выбрано: 3');
       await dialog.locator('[data-mass-rate]').selectOption('12 %');
       await dialog.getByRole('button', { name: 'Назначить' }).click();

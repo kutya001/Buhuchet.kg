@@ -5,11 +5,13 @@ import {
   AssignmentEndPreview,
   AssignmentList,
   AssignmentMassOptions,
+  ManualReportSaved,
   OrgPolicy,
   ReportCalendar,
   ReportCard,
   ReportList,
   ReportMatrix,
+  ReportSaved,
   ResponsibleOptions,
 } from '@buhuchet/shared';
 import { eq } from 'drizzle-orm';
@@ -276,6 +278,20 @@ describe.skipIf(!databaseAvailable())(
       expect((await call('GET', `/api/reports/matrix?q=${'я'.repeat(300)}`, owner)).status).toBe(
         400,
       );
+
+      // Вид отключён в каталоге: столбец остаётся (назначения видны), новое назначение не ставится.
+      await f.t.admin.db
+        .update(schema.reportTypes)
+        .set({ active: false })
+        .where(eq(schema.reportTypes.code, 'soc'));
+      const inactive = await matrix(owner);
+      expect(inactive.types.find((x) => x.code === 'soc')?.active).toBe(false);
+      const closed = await bulk(owner, { reportTypeCode: 'soc', contractorIds: [cpA] });
+      expect([closed.status, await errorCode(closed)]).toEqual([409, 'report_type_inactive']);
+      await f.t.admin.db
+        .update(schema.reportTypes)
+        .set({ active: true })
+        .where(eq(schema.reportTypes.code, 'soc'));
     });
 
     it('снятая галочка: сколько будущих несданных отчётов получат «Не требуется», затем снятие', async () => {
@@ -338,6 +354,19 @@ describe.skipIf(!databaseAvailable())(
       await json(await change(owner, { ...body, version: after.version }));
       expect((await card(owner, oct!.id)).history).toHaveLength(after.history.length);
 
+      // Область — как у карточки (п. А-2): «Кадры» (область «Свои») — ответственный за отчёт
+      // чужого контрагента — видят его и могут передать другому.
+      const toHr = ReportSaved.parse(
+        await json(
+          await change(owner, {
+            responsibleEmployeeId: employee('hr-a'),
+            version: after.version,
+          }),
+        ),
+      );
+      await json(await change(hr, { ...body, version: toHr.version }));
+      expect((await card(owner, oct!.id)).responsible?.id).toBe(employee('chief-a'));
+
       // У прежней версии ответственного не меняют.
       const [, nov] = await reportsOf(cpA, 'nds');
       await f.t.admin.db
@@ -376,7 +405,8 @@ describe.skipIf(!databaseAvailable())(
         due: '2026-10-24',
         reasonCode: 'ПРЧ-001',
       });
-      const { id } = (await json(res, 201)) as { id: string };
+      const { id, dueDate } = ManualReportSaved.parse(await json(res, 201));
+      expect(dueDate).toBe('2026-10-26');
       const created = await card(owner, id);
       expect(created.dueDate).toBe('2026-10-26');
       expect(created.history.at(-1)).toMatchObject({
@@ -408,6 +438,42 @@ describe.skipIf(!databaseAvailable())(
       expect(
         day(ReportCalendar.parse(await json(await cal(ownerB, '2026-11'))), '2026-11-25').todo,
       ).toBe(0);
+      // Сдано, оплаты и «только уплата» (пока как в прототипе: в «сдано» — docs/deviations.md п. Б-8);
+      // праздник — названием из производственного календаря.
+      const [chiefOct] = await reportsOf(cpChief, 'nds');
+      const [aOct] = await reportsOf(cpA, 'nds');
+      await f.t.admin.db
+        .update(schema.reports)
+        .set({ status: 'submitted', amount: 500_000, payDue: '2026-11-25' })
+        .where(eq(schema.reports.id, chiefOct!.id));
+      await f.t.admin.db
+        .update(schema.reports)
+        .set({ act: 'pay' })
+        .where(eq(schema.reports.id, aOct!.id));
+      const counted = ReportCalendar.parse(await json(await cal(owner, '2026-11')));
+      expect(day(counted, '2026-11-25')).toMatchObject({ todo: 0, done: 2, pay: 0 });
+      expect(day(counted, '2026-11-07')).toMatchObject({
+        working: false,
+        holiday: 'Дни истории и памяти предков',
+      });
+      const before = OrgPolicy.parse(await json(await call('GET', '/api/org/policy', owner)));
+      await json(
+        await call('PATCH', '/api/org/policy', owner, {
+          version: before.version,
+          features: { taxpay: true },
+        }),
+      );
+      expect(
+        day(ReportCalendar.parse(await json(await cal(owner, '2026-11'))), '2026-11-25').pay,
+      ).toBe(1);
+      const paid = OrgPolicy.parse(await json(await call('GET', '/api/org/policy', owner)));
+      await json(
+        await call('PATCH', '/api/org/policy', owner, {
+          version: paid.version,
+          features: { taxpay: before.features.taxpay },
+        }),
+      );
+
       expect((await cal(owner, '2026-13')).status).toBe(400);
       expect((await cal(owner, '1999-12')).status).toBe(400);
       expect((await cal(senior, '2026-11')).status).toBe(403);
@@ -438,6 +504,8 @@ describe.skipIf(!databaseAvailable())(
       );
       const closed = await cal(owner, '2026-11');
       expect([closed.status, await errorCode(closed)]).toEqual([403, 'calendar_off']);
+      const dayList = await call('GET', '/api/reports?tab=calendar&day=2026-11-25', owner);
+      expect([dayList.status, await errorCode(dayList)]).toEqual([403, 'calendar_off']);
       const back = OrgPolicy.parse(await json(await call('GET', '/api/org/policy', owner)));
       await json(
         await call('PATCH', '/api/org/policy', owner, {

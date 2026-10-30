@@ -5,6 +5,7 @@ import {
   isRecordChanged,
   REPORT_NOTE_MAX,
   ReportCard,
+  ManualReportSaved,
   ReportSaved,
   type DueChangeReason,
   type ManualReportOptions,
@@ -364,14 +365,16 @@ export function ManualReportDialog({
     );
     setBusy(false);
     if (res.ok) {
-      const saved = ReportSaved.safeParse(res.data);
+      const saved = ManualReportSaved.safeParse(res.data);
       onDone(saved.success ? saved.data.id : null);
       onClose();
+      // Перенос — по сроку сохранённого отчёта: подсказка могла не успеть прийти.
+      const moved = saved.success && saved.data.dueDate !== due ? saved.data.dueDate : null;
       return void toast(
-        shifted
+        moved
           ? t('report.manual.done_shift', {
               date: formatDateRu(due),
-              shifted: formatDateRu(shifted),
+              shifted: formatDateRu(moved),
             })
           : t('report.manual.done'),
         { icon: 'file' },

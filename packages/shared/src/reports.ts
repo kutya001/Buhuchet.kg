@@ -454,6 +454,10 @@ export const ReportRevisionCreate = z.strictObject({ version: RecordVersion });
 export const ReportSaved = z.object({ id: Uuid, version: RecordVersion });
 export type ReportSaved = z.infer<typeof ReportSaved>;
 
+/** «Разовый отчёт» создан: срок после переноса с нерабочего дня — для уведомления «перенесён на …». */
+export const ManualReportSaved = ReportSaved.extend({ dueDate: IsoDate });
+export type ManualReportSaved = z.infer<typeof ManualReportSaved>;
+
 /* ───────────── Сдача, подтверждение, откат и сумма (задача 2.14) ───────────── */
 
 /** Сумма не меньше нуля, в тыйынах. */
