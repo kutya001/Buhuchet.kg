@@ -20,6 +20,14 @@ import {
   listContractorsRoute,
 } from './list';
 import {
+  applyReportPickHandler,
+  applyReportPickRoute,
+  reportPickContextHandler,
+  reportPickContextRoute,
+  reportPickPreviewHandler,
+  reportPickPreviewRoute,
+} from './report-pick';
+import {
   createContractorHandler,
   createContractorRoute,
   deleteContractorHandler,
@@ -55,16 +63,15 @@ import {
 /**
  * Модуль «Контрагенты»: список (значения для фильтра, выгрузка в Excel, счётчики вкладок), карточка,
  * сверка с ГКЭД и тариф Соцфонда для формы, создание одним целым, «Изменить», удаление, назначение
- * ответственного, передача дел, окно «Тариф Соцфонда» и обслуживание (приостановка, возобновление,
- * архив, перевод разового в постоянное — задача 2.12). Экраны — задачи 2.09–2.11; подбор отчётов —
- * своя задача.
+ * ответственного, передача дел, окно «Тариф Соцфонда», «Подбор отчётов» и обслуживание (приостановка,
+ * возобновление, архив, перевод разового в постоянное — задача 2.12). Экраны — задачи 2.09–2.11.
  */
 export function contractorsModule(deps: ApiDeps) {
   return (
     createModuleApp()
       .openapi(listContractorsRoute, listContractorsHandler(deps))
-      // Раньше `/contractors/{id}`: иначе «values», «export», «tab-counts», «transfer», «gked-check» и
-      // «socfund-check» разбирались бы как номер контрагента.
+      // Раньше `/contractors/{id}`: иначе «values», «export», «tab-counts», «transfer», «gked-check»,
+      // «socfund-check» и «report-pick» разбирались бы как номер контрагента.
       .openapi(contractorValuesRoute, contractorValuesHandler(deps))
       .openapi(contractorTabCountsRoute, contractorTabCountsHandler(deps))
       .openapi(exportContractorsRoute, exportContractorsHandler(deps))
@@ -73,11 +80,14 @@ export function contractorsModule(deps: ApiDeps) {
       .openapi(assignContractorsRoute, assignContractorsHandler(deps))
       .openapi(gkedCheckRoute, gkedCheckHandler(deps))
       .openapi(socfundCheckRoute, socfundCheckHandler(deps))
+      .openapi(reportPickContextRoute, reportPickContextHandler(deps))
       .openapi(getContractorRoute, getContractorHandler(deps))
       .openapi(createContractorRoute, createContractorHandler(deps))
       .openapi(updateContractorRoute, updateContractorHandler(deps))
       .openapi(deleteContractorRoute, deleteContractorHandler(deps))
       .openapi(saveSocfundRoute, saveSocfundHandler(deps))
+      .openapi(reportPickPreviewRoute, reportPickPreviewHandler(deps))
+      .openapi(applyReportPickRoute, applyReportPickHandler(deps))
       // Обслуживание: приостановка, возобновление, архив, разовые (задача 2.12).
       .openapi(archiveContractorsRoute, archiveContractorsHandler(deps))
       .openapi(getServiceRoute, getServiceHandler(deps))

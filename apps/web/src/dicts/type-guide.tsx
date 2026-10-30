@@ -531,19 +531,22 @@ export function TypeGuide({
 }
 
 /**
- * Описание вида в строке «Выбора налогов» (ТЗ: «то же, что в «Подборе отчётов»»; прототип pkDescHtml):
- * название с пометкой «сверить», описание, выбор, подсказка, «Данные уточняются», пары «подпись —
- * значение» и свёрнутые налоги. «Ближайший срок» и «Срок по статусу» добавит «Подбор отчётов»
- * контрагента (docs/decisions.md).
+ * Описание вида в строке «Выбора налогов» и «Подбора отчётов» (ТЗ: «то же, что в «Подборе отчётов»»;
+ * прототип pkDescHtml): название с пометкой «сверить», описание, выбор, подсказка, «Данные
+ * уточняются», пары «подпись — значение» и свёрнутые налоги. `pick` — строки для контрагента из
+ * «Подбора отчётов»: «Срок по статусу», «Ближайший срок» (null — у разового вида строки нет), ставки
+ * ЕН по ГКЭД у ставок и то, что идёт под парами (тариф Соцфонда, «Подходит» / «Не подходит»).
  */
 export function TypeDesc({
   type: x,
   catalog,
   taxes,
+  pick,
 }: {
   type: ReportType;
   catalog: Catalog;
   taxes: Taxes | undefined;
+  pick?: { statusDue: string; near: string | null; enRates: string; footer: ReactNode };
 }) {
   const t = useT();
   const r = typeRows(x, catalog, t);
@@ -577,9 +580,20 @@ export function TypeDesc({
           [t('dicts.col.per'), r.period],
           [x.act === 'pay' ? t('dicts.guide.due') : t('dicts.col.rule'), r.due],
           !x.oneOff && [t('dicts.col.payrule'), r.pay],
+          !!pick && [t('cp.pick.ui.row.status_due'), pick.statusDue],
+          !!pick && [t('cp.pick.ui.row.near'), pick.near],
           [t('dicts.guide.act'), r.act],
           x.act !== 'sub' && [t('dicts.col.pays'), r.pays || '—'],
-          [t('dicts.col.rates'), r.rates],
+          [
+            t('dicts.col.rates'),
+            r.rates && pick?.enRates ? (
+              <>
+                {r.rates} <Tag>{t('cp.pick.ui.en_tag', { rates: pick.enRates })}</Tag>
+              </>
+            ) : (
+              r.rates
+            ),
+          ],
           [
             t('dicts.col.regimes'),
             x.regimes.length
@@ -605,6 +619,7 @@ export function TypeDesc({
         2,
         true,
       )}
+      {pick?.footer}
       {taxes
         ? own.map((tax) => (
             <TaxBlock

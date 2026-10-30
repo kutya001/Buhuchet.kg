@@ -37,6 +37,7 @@ import {
   statusName,
   type ScaleView,
 } from '../status/status-view';
+import { ReportPickSamples } from './report-pick-samples';
 import {
   buildSamples,
   moveSample,
@@ -56,6 +57,10 @@ interface StatusSamplesProps {
   canRollback: boolean;
   /** Показать блок «Файлы»: право «Просматривать файлы» и функция «Файлы в карточках» включена. */
   showFiles: boolean;
+  /** Показать окна «Подбор отчётов» и «Льготы и особые статусы»: право «Просматривать контрагентов». */
+  showPick: boolean;
+  /** Контрагент вкладки «Подбор отчётов» из адреса страницы (`?cp=`). */
+  cp: string | null;
   initialMax: MaxPrefs;
   /** Момент показа страницы на сервере (мс): от него отсчитана демо-история. */
   now: number;
@@ -65,7 +70,8 @@ interface StatusSamplesProps {
  * Страница образцов общих компонентов (задача #17; на рабочем сайте её нет): шкалы статусов всех
  * видов на демо-записях — компактные в плитках, полные и «История статусов» в карточке записи,
  * переход на следующий шаг и откат с причиной (ничего не сохраняется); блок «Файлы» записи (задача
- * 2.04) — на общих файлах организации, файлы сохраняются по-настоящему.
+ * 2.04) — на общих файлах организации, файлы сохраняются по-настоящему; окна «Подбор отчётов» и
+ * «Льготы и особые статусы» (задача 2.07).
  */
 export function StatusSamples({ initialMax, ...props }: StatusSamplesProps) {
   return (
@@ -90,6 +96,8 @@ function SamplesPage({
   actor,
   canRollback,
   showFiles,
+  showPick,
+  cp,
   now: serverNow,
 }: Omit<StatusSamplesProps, 'initialMax'>) {
   const t = useT();
@@ -162,6 +170,8 @@ function SamplesPage({
           </div>
         </Card>
       ) : null}
+
+      {showPick ? <ReportPickSamples initialCp={cp} /> : null}
 
       {sample ? (
         <Modal
