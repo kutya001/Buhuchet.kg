@@ -467,8 +467,15 @@
     {
       "idx": 66,
       "version": "7",
-      "when": 1793353976908,
-      "tag": "0066_report_tax_lines",
+      "when": 1793358131609,
+      "tag": "0066_contractor_page_tries_left",
+      "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1793359913491,
+      "tag": "0067_report_tax_lines",
       "breakpoints": true
     }
   ]

@@ -247,7 +247,9 @@ describe.skipIf(!databaseAvailable())('Страница контрагента �
   it('5 неверных кодов подряд — ввод по ссылке закрыт на 15 минут; верный код запоминает браузер до смены кода', async () => {
     const right = await code();
     const wrong = wrongOf(right);
-    for (const left of [4, 3, 2, 1]) {
+    // Каждый код — с нового адреса: «Осталось попыток» — меньшее из остатков по ссылке и по адресу (у
+    // адреса после первого неверного — 2), docs/deviations.md п. О-1.
+    for (const left of [2, 2, 2, 1]) {
       expect(await attempt(wrong)).toEqual({ outcome: 'wrong', triesLeft: left });
     }
     expect(await attempt(wrong)).toMatchObject({ outcome: 'locked' });
@@ -266,7 +268,8 @@ describe.skipIf(!databaseAvailable())('Страница контрагента �
     await db.admin.db
       .update(contractorPages)
       .set({ lockedUntil: sql`now() - interval '1 second'` });
-    expect(await attempt(wrong)).toEqual({ outcome: 'wrong', triesLeft: 4 });
+    expect(await attempt(wrong)).toEqual({ outcome: 'wrong', triesLeft: 2 });
+    expect((await page())[0]).toMatchObject({ failures: 1 });
     expect(await attempt(right, { token: 'browser-1' })).toEqual({ outcome: 'ok' });
     expect((await page())[0]).toMatchObject({ failures: 0, lockedUntil: null });
     expect(await contractorPageState(db.app.db, 'page-a', INN, hash('browser-1'))).toEqual({
@@ -291,10 +294,14 @@ describe.skipIf(!databaseAvailable())('Страница контрагента �
 
   it('«подряд» — до верного кода: давние неверные коды тоже считаются (прототип p.fails)', async () => {
     const wrong = wrongOf(await code());
-    expect(await attempt(wrong)).toEqual({ outcome: 'wrong', triesLeft: 4 });
-    expect(await attempt(wrong)).toEqual({ outcome: 'wrong', triesLeft: 3 });
+    await attempt(wrong);
+    await attempt(wrong);
+    expect((await page())[0]).toMatchObject({ failures: 2 });
     await db.admin.db.update(contractorPages).set({ updatedAt: sql`now() - interval '30 days'` });
+    // Остаток по ссылке — 2, по новому адресу — тоже 2; четвёртый — уже 1 (по ссылке).
     expect(await attempt(wrong)).toEqual({ outcome: 'wrong', triesLeft: 2 });
+    expect((await page())[0]).toMatchObject({ failures: 3 });
+    expect(await attempt(wrong)).toEqual({ outcome: 'wrong', triesLeft: 1 });
     await db.admin.db.update(contractorPages).set({ failures: 0 });
   });
 
@@ -305,7 +312,8 @@ describe.skipIf(!databaseAvailable())('Страница контрагента �
     expect(outcomes.filter((o) => o === 'wrong')).toHaveLength(4);
     expect(outcomes.filter((o) => o === 'locked')).toHaveLength(6);
     const left = results.flatMap((r) => (r.outcome === 'wrong' ? [r.triesLeft] : []));
-    expect(left.sort()).toEqual([1, 2, 3, 4]);
+    // Остаток по ссылке 4, 3, 2, 1, у каждого нового адреса — 2: показывается меньший (п. О-1).
+    expect(left.sort()).toEqual([1, 2, 2, 2]);
     const locks = (await inA((tx) => readHistory(tx, 'contractor_page', cpId))).filter(
       (h) => h.action === 'page_lock',
     );
@@ -329,6 +337,9 @@ describe.skipIf(!databaseAvailable())('Страница контрагента �
     const outcomes = results.map((r) => r.outcome);
     expect(outcomes.filter((o) => o === 'wrong')).toHaveLength(PAGE_IP_MAX_FAILURES - 1);
     expect(outcomes.filter((o) => o === 'ip_locked')).toHaveLength(5 - PAGE_IP_MAX_FAILURES + 1);
+    // Остаток по адресу меньше, чем по ссылке: 2, затем 1 (п. О-1).
+    const left = results.flatMap((r) => (r.outcome === 'wrong' ? [r.triesLeft] : []));
+    expect(left.sort()).toEqual([1, 2]);
     await db.admin.db.update(contractorPages).set({ failures: 0, lockedUntil: null });
   });
 
@@ -357,7 +368,8 @@ describe.skipIf(!databaseAvailable())('Страница контрагента �
     let last;
     for (let i = 1; i <= 3; i++) {
       last = await attempt(wrong, { ip });
-      if (i < 3) expect(last).toMatchObject({ outcome: 'wrong', triesLeft: 5 - i });
+      // «Осталось попыток» — по адресу, он меньше, чем по ссылке: 2, потом 1 (п. О-1).
+      if (i < 3) expect(last).toMatchObject({ outcome: 'wrong', triesLeft: 3 - i });
     }
     expect(last).toMatchObject({ outcome: 'ip_locked' });
     // С этого адреса закрыто и для верного кода, с другого — открыто.
