@@ -35,6 +35,8 @@ export * from './common/months';
 export * from './contractors/rules';
 export * from './contractors/gked';
 export * from './contractors/socfund';
+export * from './contractors/service';
+export * from './contractor-page/page';
 export * from './reports/periods';
 export * from './reports/due';
 export * from './reports/rules';

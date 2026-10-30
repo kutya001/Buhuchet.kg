@@ -1,4 +1,4 @@
-import { ROLLBACK_REASON_MAX, scaleStatuses, STATUS_SCALES } from '@buhuchet/domain';
+import { ROLLBACK_REASON_MAX, scaleStatuses, STATUS_CAUSES, STATUS_SCALES } from '@buhuchet/domain';
 import { sql } from 'drizzle-orm';
 import {
   bigint,
@@ -45,6 +45,8 @@ export const statusHistory = pgTable(
     isRollback: boolean('is_rollback').notNull().default(false),
     /** Комментарий или причина (у отката обязательна). */
     reason: text('reason'),
+    /** Что сменило статус системой (`STATUS_CAUSES`); пусто — человек или другое правило. */
+    cause: text('cause', { enum: STATUS_CAUSES }),
     /** Файл к смене статуса (например, квитанция о приёме); пусто — без файла. */
     fileId: uuid('file_id'),
     /** Пусто — система (задача по расписанию). */
@@ -74,6 +76,10 @@ export const statusHistory = pgTable(
     check(
       'status_history_rollback_reason_check',
       sql`not ${t.isRollback} or (${t.fromStatus} is not null and ${t.reason} is not null and btrim(${t.reason}) <> '')`,
+    ),
+    check(
+      'status_history_cause_check',
+      sql`${t.cause} is null or ${t.cause} in (${codes(STATUS_CAUSES)})`,
     ),
     check(
       'status_history_reason_check',

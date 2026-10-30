@@ -1,16 +1,19 @@
 import {
+  bishkekDate,
   BIZ_SIZES,
   CONTRACTOR_KINDS,
   FIRST_MONTH_MODES,
   gkedSignature,
   parseContract,
   PAYS_TO,
+  serviceState,
   SOCFUND_TARIFFS,
   socfundFlagsOf,
   TARIFF_PERIODS,
   type HistoryValue,
+  type ServicePeriod,
 } from '@buhuchet/domain';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Db } from '../client';
 import {
@@ -19,6 +22,7 @@ import {
   contractorBenefits,
   contractorGkedExtra,
   contractors,
+  contractorServicePeriods,
   contractorTariffs,
   ownershipForms,
   taxBenefits,
@@ -69,6 +73,18 @@ const DemoContractor = z.object({
         by: z.string(),
         at: z.iso.date(),
         note: z.string().default(''),
+      }),
+    )
+    .default([]),
+  /** Периоды обслуживания (задача 2.12): «2026-01» по «2026-09», пусто — обслуживается дальше. */
+  periods: z
+    .array(
+      z.object({
+        from: z.string().regex(/^\d{4}-\d{2}$/),
+        to: z
+          .string()
+          .regex(/^\d{4}-\d{2}$/)
+          .nullable(),
       }),
     )
     .default([]),
@@ -138,6 +154,9 @@ export async function seedDemoContractors(
   const employee = (protoId: string | null) =>
     protoId && ids.employees.includes(protoId) ? demoId('employee', protoId) : null;
 
+  // Статус обслуживания — по периодам demoDB.json в идущем месяце (прототип cpStatus); дальше его
+  // сверяет задача по расписанию.
+  const month = bishkekDate(new Date()).slice(0, 7);
   const rows = demo.map((c) => {
     const formCode = codeOf(forms, 'Формы собственности', c.form);
     const declarationFor = forms.find((f) => f.code === formCode)!.declarationFor;
@@ -186,7 +205,10 @@ export async function seedDemoContractors(
         firstMonthMode: c.first,
         feeDay: c.feeDay,
         paysTo: c.paysTo,
-        serviceStatus: c.archived ? ('archived' as const) : ('active' as const),
+        serviceStatus: serviceState(
+          { archived: c.archived, oneOff: c.kind === 'oneoff', periods: c.periods },
+          month,
+        ),
         gkedConfirmation: confirmation ?? null,
         socfundFlags: socfundFlagsOf(c.sf),
         socfundTariff: c.sfT
@@ -261,6 +283,7 @@ export async function seedDemoContractors(
         ),
       );
   }
+  await seedDemoServicePeriods(db, orgId, rows);
 
   // Подтверждение права на режим — в истории контрагента (п. 58: «в истории — кто подтвердил»);
   // пишется вместе с новым контрагентом, поэтому повторный запуск его не задваивает.
@@ -289,4 +312,58 @@ export async function seedDemoContractors(
     );
   }
   return inserted.length;
+}
+
+/**
+ * Периоды обслуживания демо-контрагентов (задача 2.12). Новому контрагенту — из demoDB.json; у
+ * заведённого раньше (миграция дала ему один период с начала обслуживания) периоды заменяются, только
+ * пока их никто не менял: так стенд получает приостановки демо, а правки на стенде не затираются.
+ */
+async function seedDemoServicePeriods(
+  db: Db,
+  orgId: string,
+  rows: readonly {
+    contractor: { id: string; startDate: string; serviceStatus: string };
+    c: { kind: string; archived: boolean; periods: ServicePeriod[] };
+  }[],
+): Promise<void> {
+  for (const { contractor, c } of rows) {
+    const current = await db
+      .select({
+        from: contractorServicePeriods.fromMonth,
+        to: contractorServicePeriods.toMonth,
+      })
+      .from(contractorServicePeriods)
+      .where(eq(contractorServicePeriods.contractorId, contractor.id))
+      .orderBy(asc(contractorServicePeriods.fromMonth));
+    const untouched =
+      current.length === 0 ||
+      (current.length === 1 && current[0]!.from.slice(0, 7) === contractor.startDate.slice(0, 7));
+    const same =
+      current.length === c.periods.length &&
+      c.periods.every(
+        (p, i) =>
+          current[i]!.from.slice(0, 7) === p.from && (current[i]!.to?.slice(0, 7) ?? null) === p.to,
+      );
+    if (!untouched || same) continue;
+    await db.transaction(async (tx) => {
+      await tx
+        .delete(contractorServicePeriods)
+        .where(eq(contractorServicePeriods.contractorId, contractor.id));
+      if (c.periods.length) {
+        await tx.insert(contractorServicePeriods).values(
+          c.periods.map((p) => ({
+            orgId,
+            contractorId: contractor.id,
+            fromMonth: `${p.from}-01`,
+            toMonth: p.to ? `${p.to}-01` : null,
+          })),
+        );
+      }
+      await tx
+        .update(contractors)
+        .set({ serviceStatus: contractor.serviceStatus as 'active' | 'paused' | 'archived' })
+        .where(eq(contractors.id, contractor.id));
+    });
+  }
 }

@@ -1,8 +1,14 @@
 import type { AppConfig } from '@buhuchet/adapters';
-import { cleanupLoginAttempts, cleanupRateLimits, schema } from '@buhuchet/db';
+import {
+  cleanupContractorPageGrants,
+  cleanupLoginAttempts,
+  cleanupRateLimits,
+  schema,
+} from '@buhuchet/db';
 import { lt } from 'drizzle-orm';
 import type { Job } from '../deps';
 import { cleanupPendingFiles } from '../modules/files/cleanup';
+import { syncServiceStatusesJob } from '../modules/contractors/job';
 import { createDueReportsJob } from '../modules/reports/job';
 
 const { schedulerRuns } = schema;
@@ -44,6 +50,19 @@ export const cleanupRateLimitsJob: Job = {
 };
 
 /**
+ * Запомненные браузеры страницы контрагента: истёкшие через 30 дней, после «Сменить код» и у
+ * выключенных страниц — удаляются раз в сутки (проверка при открытии их и так не пускает).
+ */
+export const cleanupContractorPageGrantsJob: Job = {
+  name: 'contractor-page.cleanup-grants',
+  cron: '40 3 * * *',
+  lookbackMinutes: 24 * 60,
+  async run(ctx) {
+    await cleanupContractorPageGrants(ctx.db);
+  },
+};
+
+/**
  * Незаконченные загрузки файлов (браузер не положил файл в хранилище или окно закрыли) старше суток
  * убираются раз в час — время загрузки ставит база по настоящим часам, поэтому и срок — по ним.
  */
@@ -66,6 +85,8 @@ export const jobs: readonly Job[] = [
   cleanupSchedulerRuns,
   cleanupLoginAttemptsJob,
   cleanupRateLimitsJob,
+  syncServiceStatusesJob,
+  cleanupContractorPageGrantsJob,
   createDueReportsJob,
   cleanupPendingFilesJob,
 ];
