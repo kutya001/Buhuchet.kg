@@ -116,7 +116,7 @@ describe('Сумма из строк', () => {
     });
   });
 
-  it('чужой ключ, повтор строки и отрицательное значение — отказ по строке', () => {
+  it('чужой ключ, повтор строки, отрицательное значение и итог за пределом — отказ по строке', () => {
     expect(reportLinesOf(defs, [{ key: 'ЕНС-99:r', revenue: 1, tax: null }])).toEqual({
       ok: false,
       key: 'ЕНС-99:r',
@@ -130,6 +130,13 @@ describe('Сумма из строк', () => {
         { key: 'ЕНС-04:cl', revenue: 200, tax: null },
       ]),
     ).toMatchObject({ ok: false });
+    // Итог двух строк по пределу точных целых — за пределом: отказ, а не неточная сумма.
+    expect(
+      reportLinesOf(defs, [
+        { key: 'ЕНС-04:cl', revenue: null, tax: Number.MAX_SAFE_INTEGER },
+        { key: 'ЕНС-04:ca', revenue: null, tax: Number.MAX_SAFE_INTEGER },
+      ]),
+    ).toEqual({ ok: false, key: 'ЕНС-04:ca' });
   });
 
   it('строки платежей: у вида с двумя платежами — по каждому, итог — их сумма; у «Сдача» — нет', () => {

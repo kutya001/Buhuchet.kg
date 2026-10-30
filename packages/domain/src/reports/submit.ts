@@ -175,7 +175,8 @@ export type ReportLinesResult =
 /**
  * Строки из введённого (прототип readLines): налог без выручки — как введён, выручка без налога —
  * выручка × ставка; пустые строки не сохраняются. Все строки пустые — строк нет, итог null (сумма к
- * уплате остаётся прежней). Ключ не из строк окна или отрицательное значение — отказ по этой строке.
+ * уплате остаётся прежней). Ключ не из строк окна, отрицательное значение, налог или итог за пределом
+ * точных целых — отказ по этой строке.
  */
 export function reportLinesOf(
   defs: readonly ReportLineDef[],
@@ -191,6 +192,7 @@ export function reportLinesOf(
     const tax =
       input.tax ??
       (def.kind === 'rate' && input.revenue !== null ? lineTax(input.revenue, def.pct) : 0);
+    if (!Number.isSafeInteger(tax)) return { ok: false, key: input.key };
     lines.push({
       kind: def.kind,
       key: def.key,
@@ -205,7 +207,11 @@ export function reportLinesOf(
     (x, y) => defs.findIndex((d) => d.key === x.key) - defs.findIndex((d) => d.key === y.key),
   );
   if (!lines.length) return { ok: true, lines, total: null };
-  return { ok: true, lines, total: lines.reduce((s, l) => s + l.tax, 0) };
+  // Итог за пределом точных целых — неверный ввод, как неверная строка (последняя введённая).
+  const total = lines.reduce((s, l) => s + l.tax, 0);
+  return Number.isSafeInteger(total)
+    ? { ok: true, lines, total }
+    : { ok: false, key: lines.at(-1)!.key };
 }
 
 /** Отчёт для правил сдачи и подтверждения. */
