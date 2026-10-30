@@ -308,7 +308,10 @@ test.describe('Этап 2: База знаний — «Показать как»
     expect(label).toBe('Сделать сейчас');
     expect(titles).toEqual(expect.arrayContaining(['Отчёт в списке', 'Как отметить «Сдан»']));
     await nextButton(page).click();
-    await expect(page.getByRole('dialog', { name: 'Отметить отчёт сданным' })).toBeVisible();
+    // Показ продолжается облачками по окну (у облачка — своё название «Окно «…»»), поэтому — точно.
+    await expect(
+      page.getByRole('dialog', { name: 'Отметить отчёт сданным', exact: true }),
+    ).toBeVisible();
   });
 
   // ОТКЛОНЕНИЕ: docs/deviations.md#Г-7
