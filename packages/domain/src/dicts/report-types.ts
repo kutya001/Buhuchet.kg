@@ -78,8 +78,8 @@ export function dueRuleText(rule: DueRule, t: Translate): string {
   return t('rule.nth_month_after', { dd, n: after, of: t(PERIOD_GENITIVE[rule.period]) });
 }
 
-/** «15.04; 15.07» — даты графика платежей: [месяц, число]. */
-function scheduleText(schedule: readonly (readonly [number, number])[]): string {
+/** «15.04; 15.07» — даты графика платежей: [месяц, число] (прототип instTxt). */
+export function payScheduleText(schedule: readonly (readonly [number, number])[]): string {
   const two = (n: number) => String(n).padStart(2, '0');
   return schedule.map(([month, day]) => `${two(day)}.${two(month)}`).join('; ');
 }
@@ -93,7 +93,7 @@ export function payRuleText(rule: PayRule, t: Translate): string {
   if (schedule.length) {
     return t(`rule.installments.${pluralForm(schedule.length)}`, {
       n: schedule.length,
-      dates: scheduleText(schedule),
+      dates: payScheduleText(schedule),
     });
   }
   if (rule.payDay === null) return t('rule.pay_as_due');

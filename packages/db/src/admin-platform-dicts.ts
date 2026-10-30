@@ -4,25 +4,45 @@ import {
   adminDictDefaultSort,
   auditActorName,
   badBaseTypes,
+  badBenefitOffices,
+  badBenefitTypes,
+  benefitDueRulesProblem,
+  dictStatusKey,
   dictValueProblems,
+  dueRuleText,
+  formatText,
+  inactiveLinks,
   maskDigits,
+  NEW_REPORT_TYPE,
   nextDictCode,
+  payRuleText,
+  paysText,
   phoneCodeExample,
   regimeAccountantNote,
+  REPORT_TYPE_RULE_FIELDS,
+  reportTypeProblems,
   toHistoryValue,
   sameHistoryValue,
   type AdminValueDict,
   type AuthorityContact,
+  type BenefitDueOverride,
   type DictUsage,
   type DictValueProblem,
   type HistoryChange,
   type HistoryValue,
+  type DueFrom,
   type ListQuery,
+  type PayRule,
+  type ReportAct,
   type ReportKind,
+  type ReportPayment,
+  type ReportPeriod,
+  type Translate,
 } from '@buhuchet/domain';
 import { and, asc, count, desc, eq, getTableColumns, sql, type SQL } from 'drizzle-orm';
 import type { PgColumn, PgTable } from 'drizzle-orm/pg-core';
-import type { Tx } from './client';
+import type { Db, Tx } from './client';
+import { withOrgContext } from './context';
 import {
   selectListExport,
   selectListPage,
@@ -32,7 +52,9 @@ import {
   type ListFrom,
   type ListTexts,
 } from './list';
+import { orgIds } from './organizations';
 import { writePlatformHistory } from './platform-history';
+import { activeAssignmentCounts } from './reports';
 import {
   authorities,
   banks,
@@ -42,8 +64,14 @@ import {
   platformAuditLog,
   reportBases,
   reportTypeBases,
+  reportTypeRegimes,
   reportTypes,
+  singleTaxRates,
   taskCategories,
+  taxBenefitDueRules,
+  taxBenefitOffices,
+  taxBenefitReportTypes,
+  taxBenefits,
   taxOffices,
   taxRegimes,
 } from './schema';
@@ -68,8 +96,10 @@ type DictTable = PgTable & {
 };
 
 const TABLES: Readonly<Record<AdminValueDict, DictTable>> = {
+  types: reportTypes,
   bases: reportBases,
   regimes: taxRegimes,
+  benefits: taxBenefits,
   forms: ownershipForms,
   phones: countryPhoneCodes,
   organs: authorities,
@@ -80,10 +110,30 @@ const TABLES: Readonly<Record<AdminValueDict, DictTable>> = {
 };
 
 /**
- * Поля значения сверх кода и названия — как в таблице (`contacts` — массив, `gnsCode` — null,
- * `byPhone` — да или нет); поле-связь — коды связанных значений (`types` основания).
+ * Поля значения сверх кода и названия — как в таблице (`contacts` — массив, `gnsCode` и `validUntil` —
+ * null, `byPhone` и `verify` — да или нет); поле-связь — коды связанных значений (`types` основания),
+ * «Меняет сроки» статуса — строки сроков (`dueRules`). У вида отчёта ещё числа срока, платежи и
+ * график оплаты ([месяц, число]).
  */
-export type AdminDictData = Record<string, string | boolean | null | AuthorityContact[] | string[]>;
+export type AdminDictData = Record<
+  string,
+  | string
+  | number
+  | boolean
+  | null
+  | AuthorityContact[]
+  | string[]
+  | BenefitDueOverride[]
+  | ReportPayment[]
+  | [number, number][]
+>;
+
+/** Отчёты организаций по виду отчёта: всего, несданных и в скольких организациях. */
+export interface TypeReportCounts {
+  total: number;
+  open: number;
+  orgs: number;
+}
 
 /** Значение справочника в Админке. */
 export interface AdminDictValueRecord {
@@ -94,6 +144,12 @@ export interface AdminDictValueRecord {
   data: AdminDictData;
   active: boolean;
   usage: DictUsage;
+  /** У вида отчёта в списке — столбцы словами (срок сдачи, «Что уплачивается», орган…). */
+  texts?: Record<string, string>;
+  /** У вида отчёта — созданные по нему отчёты (для предупреждений окна вида). */
+  reports?: TypeReportCounts;
+  /** У вида отчёта в списке — «Назначен»: у скольких контрагентов вид назначен сейчас. */
+  assigned?: number;
   audit: {
     createdAt: Date | null;
     createdBy: string | null;
@@ -121,17 +177,33 @@ const dataFields = (dict: AdminValueDict) =>
 /** Поля-связи справочника: хранятся в таблице связей, не в столбцах значения. */
 const linkFields = (dict: AdminValueDict) => ADMIN_DICT_META[dict].links ?? [];
 const isLink = (dict: AdminValueDict, f: string) => linkFields(dict).includes(f);
+/** «Меняет сроки» статуса: строки своей таблицы, не столбец значения. */
+const isDueRules = (dict: AdminValueDict, f: string) =>
+  f === 'dueRules' && ADMIN_DICT_META[dict].dueRules === true;
+/** Поле значения, которое хранится в столбце его таблицы. */
+const isColumn = (dict: AdminValueDict, f: string) => !isLink(dict, f) && !isDueRules(dict, f);
 
-/** Вид отчёта для выбора в окне основания и подписи «Виды отчётов»: в порядке каталога. */
+/**
+ * Вид отчёта для выбора в окнах основания и статуса и подписи «Виды отчётов»: в порядке каталога; с
+ * правилом срока сдачи — для строк «Меняет сроки» статуса.
+ */
 export interface ReportTypeOption {
   code: string;
   name: string;
   shortName: string;
   kind: ReportKind;
   active: boolean;
+  period: ReportPeriod;
+  dueDay: number;
+  dueAfter: number | null;
+  dueMonth: number | null;
+  dueFrom: DueFrom;
+  act: ReportAct;
+  oneOff: boolean;
+  periodPerAssignment: boolean;
 }
 
-/** Каталог видов отчётов кратко: для выбора видов у основания и подписей связей. */
+/** Каталог видов отчётов кратко: для выбора видов у основания и статуса и подписей связей. */
 export async function reportTypeOptions(tx: Tx): Promise<ReportTypeOption[]> {
   return tx
     .select({
@@ -140,30 +212,101 @@ export async function reportTypeOptions(tx: Tx): Promise<ReportTypeOption[]> {
       shortName: reportTypes.shortName,
       kind: reportTypes.kind,
       active: reportTypes.active,
+      period: reportTypes.period,
+      dueDay: reportTypes.dueDay,
+      dueAfter: reportTypes.dueAfter,
+      dueMonth: reportTypes.dueMonth,
+      dueFrom: reportTypes.dueFrom,
+      act: reportTypes.act,
+      oneOff: reportTypes.oneOff,
+      periodPerAssignment: reportTypes.periodPerAssignment,
     })
     .from(reportTypes)
     .orderBy(asc(reportTypes.sortOrder), asc(reportTypes.code));
 }
 
+/** Поля-связи и «Меняет сроки» значений: код значения → поле → коды или строки сроков. */
+type LinkValues = Map<string, Record<string, string[] | BenefitDueOverride[]>>;
+
+/** Добавить связанное значение в поле значения `code`. */
+function pushLink(links: LinkValues, code: string, field: string, value: unknown) {
+  const own = links.get(code) ?? {};
+  ((own[field] ??= []) as unknown[]).push(value);
+  links.set(code, own);
+}
+
 /**
  * Поля-связи каждого значения: виды отчётов основания (по полю «Основание» вида; ТЗ «связь с видами
- * правится с любой стороны») — в порядке каталога.
+ * правится с любой стороны»), у статуса — «Делает ненужными», «Добавляет» и «Меняет сроки» в порядке
+ * каталога видов, «Ставится по УГНС» — в порядке справочника УГНС; у вида отчёта — «Применимые
+ * режимы», «Не для режимов» и «Основания» в порядке своих справочников.
  */
-async function linkValues(
-  tx: Tx,
-  dict: AdminValueDict,
-): Promise<Map<string, Record<string, string[]>>> {
-  const links = new Map<string, Record<string, string[]>>();
-  if (dict !== 'bases') return links;
-  const rows = await tx
-    .select({ code: reportTypeBases.baseCode, link: reportTypeBases.reportTypeCode })
-    .from(reportTypeBases)
-    .innerJoin(reportTypes, eq(reportTypes.code, reportTypeBases.reportTypeCode))
-    .orderBy(asc(reportTypes.sortOrder), asc(reportTypes.code));
-  for (const r of rows) {
-    const own = links.get(r.code) ?? { types: [] };
-    own.types!.push(r.link);
-    links.set(r.code, own);
+async function linkValues(tx: Tx, dict: AdminValueDict): Promise<LinkValues> {
+  const links: LinkValues = new Map();
+  const byCatalog = [asc(reportTypes.sortOrder), asc(reportTypes.code)];
+  if (dict === 'types') {
+    const [regimes, bases] = await Promise.all([
+      tx
+        .select({
+          code: reportTypeRegimes.reportTypeCode,
+          link: reportTypeRegimes.regimeCode,
+          relation: reportTypeRegimes.relation,
+        })
+        .from(reportTypeRegimes)
+        .innerJoin(taxRegimes, eq(taxRegimes.code, reportTypeRegimes.regimeCode))
+        .orderBy(asc(taxRegimes.sortOrder), asc(taxRegimes.code)),
+      tx
+        .select({ code: reportTypeBases.reportTypeCode, link: reportTypeBases.baseCode })
+        .from(reportTypeBases)
+        .innerJoin(reportBases, eq(reportBases.code, reportTypeBases.baseCode))
+        .orderBy(asc(reportBases.sortOrder), asc(reportBases.code)),
+    ]);
+    for (const r of regimes) {
+      pushLink(links, r.code, r.relation === 'applies' ? 'regimes' : 'notForRegimes', r.link);
+    }
+    for (const r of bases) pushLink(links, r.code, 'bases', r.link);
+  }
+  if (dict === 'bases') {
+    const rows = await tx
+      .select({ code: reportTypeBases.baseCode, link: reportTypeBases.reportTypeCode })
+      .from(reportTypeBases)
+      .innerJoin(reportTypes, eq(reportTypes.code, reportTypeBases.reportTypeCode))
+      .orderBy(...byCatalog);
+    for (const r of rows) pushLink(links, r.code, 'types', r.link);
+  }
+  if (dict === 'benefits') {
+    const [types, offices, rules] = await Promise.all([
+      tx
+        .select({
+          code: taxBenefitReportTypes.benefitCode,
+          link: taxBenefitReportTypes.reportTypeCode,
+          effect: taxBenefitReportTypes.effect,
+        })
+        .from(taxBenefitReportTypes)
+        .innerJoin(reportTypes, eq(reportTypes.code, taxBenefitReportTypes.reportTypeCode))
+        .orderBy(...byCatalog),
+      tx
+        .select({ code: taxBenefitOffices.benefitCode, link: taxBenefitOffices.taxOfficeCode })
+        .from(taxBenefitOffices)
+        .innerJoin(taxOffices, eq(taxOffices.code, taxBenefitOffices.taxOfficeCode))
+        .orderBy(asc(taxOffices.sortOrder), asc(taxOffices.code)),
+      tx
+        .select({
+          code: taxBenefitDueRules.benefitCode,
+          reportType: taxBenefitDueRules.reportTypeCode,
+          dueDay: taxBenefitDueRules.dueDay,
+          dueAfter: taxBenefitDueRules.dueAfter,
+          dueMonth: taxBenefitDueRules.dueMonth,
+          payDay: taxBenefitDueRules.payDay,
+          payAfter: taxBenefitDueRules.payAfter,
+        })
+        .from(taxBenefitDueRules)
+        .innerJoin(reportTypes, eq(reportTypes.code, taxBenefitDueRules.reportTypeCode))
+        .orderBy(...byCatalog),
+    ]);
+    for (const r of types) pushLink(links, r.code, r.effect, r.link);
+    for (const r of offices) pushLink(links, r.code, 'offices', r.link);
+    for (const { code, ...rule } of rules) pushLink(links, code, 'dueRules', rule);
   }
   return links;
 }
@@ -201,16 +344,27 @@ export async function adminDictUsage(
 }
 
 const NO_USAGE: DictUsage = { total: 0, contractors: 0 };
+const NO_REPORTS: TypeReportCounts = { total: 0, open: 0, orgs: 0 };
+
+/**
+ * Отчёты организаций по видам отчётов — всего, несданных и в скольких организациях (прототип
+ * typeEditDlg: «По этому виду уже создано N отчётов», `spreadTxt`). Отчётов организаций ещё нет —
+ * счёт подключит задача отчётов (правило стыков, docs/decisions.md п. Д-6).
+ */
+async function typeReportCounts(_tx: Tx): Promise<Map<string, TypeReportCounts>> {
+  return new Map();
+}
 
 /** Все значения справочника в его порядке (`sort_order`, при равных — код), с «№» и «Используется». */
 async function dictRecords(tx: Tx, dict: AdminValueDict): Promise<AdminDictValueRecord[]> {
   const table = TABLES[dict];
-  const [rows, usage, links] = await Promise.all([
+  const [rows, usage, links, reports] = await Promise.all([
     tx.select().from(table).orderBy(asc(table.sortOrder), asc(table.code)) as unknown as Promise<
       TableRow[]
     >,
     adminDictUsage(tx, dict),
     linkValues(tx, dict),
+    dict === 'types' ? typeReportCounts(tx) : null,
   ]);
   const ordered = ADMIN_DICT_META[dict].ordered;
   return rows.map((r, i) => {
@@ -222,11 +376,12 @@ async function dictRecords(tx: Tx, dict: AdminValueDict): Promise<AdminDictValue
       data: Object.fromEntries(
         dataFields(dict).map((f) => [
           f,
-          isLink(dict, f) ? (links.get(r.code)?.[f] ?? []) : dataValue(f, r[f]),
+          isColumn(dict, f) ? dataValue(f, r[f]) : (links.get(r.code)?.[f] ?? []),
         ]),
       ),
       active: r.active,
       usage: usage.get(r.code) ?? NO_USAGE,
+      ...(reports ? { reports: reports.get(r.code) ?? NO_REPORTS } : {}),
       audit: {
         createdAt: r.createdAt,
         createdBy,
@@ -249,16 +404,79 @@ const contactsText = (value: unknown) =>
     ? (value as AuthorityContact[]).map((c) => `${c.label}: ${c.value}`).join('; ')
     : '';
 
+/** Названия для столбцов списка: краткие названия видов отчётов, названия органов и режимов. */
+interface ListNames {
+  types: ReadonlyMap<string, string>;
+  authorities: ReadonlyMap<string, string>;
+  regimes: ReadonlyMap<string, string>;
+}
+
+async function listNames(tx: Tx, dict: AdminValueDict): Promise<ListNames> {
+  const [types, organs, regimes] = await Promise.all([
+    dict === 'bases' || dict === 'benefits' ? reportTypeOptions(tx) : [],
+    dict === 'types'
+      ? tx.select({ code: authorities.code, name: authorities.name }).from(authorities)
+      : [],
+    dict === 'types'
+      ? tx.select({ code: taxRegimes.code, name: taxRegimes.name }).from(taxRegimes)
+      : [],
+  ]);
+  return {
+    types: new Map(types.map((x) => [x.code, x.shortName])),
+    authorities: new Map(organs.map((x) => [x.code, x.name])),
+    regimes: new Map(regimes.map((x) => [x.code, x.name])),
+  };
+}
+
+/** Поля вида отчёта, из которых считаются столбцы словами. */
+interface TypeData extends PayRule {
+  authorityCode: string;
+  payments: ReportPayment[];
+  rates: string[];
+  regimes: string[];
+  payer: string;
+}
+
+const translate =
+  (t: ListTexts): Translate =>
+  (key, params) =>
+    formatText(t(key), params);
+
+/**
+ * Столбцы вида отчёта словами — как в прототипе (`adm-types`): «Что сделать», «Что уплачивается»
+ * (`paysText`), орган, периодичность, срок сдачи и оплаты (`dueRuleText`, `payRuleText`; у «Сдачи»
+ * срока оплаты нет), ставки, режимы и «Для кого».
+ */
+function typeTexts(x: AdminDictValueRecord, t: Translate, names: ListNames) {
+  const d = x.data as unknown as TypeData;
+  const organ = (code: string) => names.authorities.get(code) ?? code;
+  return {
+    act: t(`report.act.${d.act}`),
+    pays: paysText(
+      d.payments.map((p) => ({ name: p.name, authority: organ(p.authority) })),
+      organ(d.authorityCode),
+    ),
+    authorityCode: organ(d.authorityCode),
+    period: t(`report.period.${d.period.toLowerCase() as Lowercase<ReportPeriod>}`),
+    rule: dueRuleText(d, t),
+    payRule: d.act === 'sub' ? '' : payRuleText(d, t),
+    rates: d.rates.join('; '),
+    regimes: d.regimes.map((code) => names.regimes.get(code) ?? code).join(', '),
+    payer: t(`pdicts.type.payer.${d.payer as 'all' | 'org' | 'ip'}`),
+  };
+}
+
 /**
  * Строка списка для `jsonb_to_recordset`: тексты столбцов, подписи кодов и служебные поля; поле-связь
- * — краткими названиями связанных значений (`names`).
+ * — краткими названиями связанных видов отчётов (`names`). У вида отчёта — столбцы словами
+ * (`typeTexts`).
  */
 function listRow(
   dict: AdminValueDict,
   x: AdminDictValueRecord,
   ord: number,
   t: ListTexts,
-  names: ReadonlyMap<string, string>,
+  names: ListNames,
 ) {
   const row: Record<string, string | number | null> = {
     id: x.code,
@@ -269,18 +487,46 @@ function listRow(
     used: x.usage.total,
     contractors: x.usage.contractors,
     active: x.active ? 'on' : 'off',
-    active_text: t(x.active ? 'pdicts.status.on' : 'pdicts.status.off'),
+    active_text: t(dictStatusKey(dict, x.active)),
     created_at: x.audit.createdAt?.toISOString() ?? null,
     updated_at: x.audit.updatedAt.toISOString(),
     created_by: x.audit.createdBy,
     updated_by: x.audit.updatedBy,
   };
+  if (dict === 'types') {
+    const d = x.data;
+    const texts = x.texts ?? {};
+    return {
+      ...row,
+      shortName: d.shortName as string,
+      formCode: d.formCode as string,
+      act: d.act as string,
+      act_text: texts.act ?? '',
+      pays: texts.pays ?? '',
+      authorityCode: d.authorityCode as string,
+      authorityCode_text: texts.authorityCode ?? '',
+      period: d.period as string,
+      period_text: texts.period ?? '',
+      rule: texts.rule ?? '',
+      payRule: texts.payRule ?? '',
+      kind: d.kind as string,
+      kind_text: t(`report.kind.${d.kind as string}`),
+      rates: texts.rates ?? '',
+      regimes: texts.regimes ?? '',
+      payer: d.payer as string,
+      payer_text: texts.payer ?? '',
+      assigned: x.assigned ?? 0,
+    };
+  }
   for (const f of dataFields(dict)) {
     const value = x.data[f];
+    // «Меняет сроки» и «Ставится по УГНС» — не столбцы списка.
+    if (isDueRules(dict, f) || f === 'offices') continue;
     if (f === 'contacts') row[f] = contactsText(value);
     else if (isLink(dict, f))
-      row[f] = (value as string[]).map((code) => names.get(code) ?? code).join(', ');
-    else if (f === 'byPhone') row[f] = value ? 'yes' : 'no';
+      row[f] = (value as string[]).map((code) => names.types.get(code) ?? code).join(', ');
+    else if (f === 'byPhone' || f === 'verify') row[f] = value ? 'yes' : 'no';
+    else if (f === 'validUntil') row[f] = (value as string | null) ?? null;
     else row[f] = (value as string | null) ?? '';
   }
   if (dict === 'forms') row.declarationFor_text = t(`dicts.platform.end.${x.data.declarationFor}`);
@@ -300,10 +546,12 @@ function listRow(
 }
 
 const RECORD_TYPES: Readonly<Record<string, string>> = {
+  validUntil: 'date',
   digits: 'integer',
   ord: 'integer',
   n: 'integer',
   used: 'integer',
+  assigned: 'integer',
   contractors: 'integer',
   created_at: 'timestamptz',
   updated_at: 'timestamptz',
@@ -317,7 +565,16 @@ function recordset(rows: readonly Record<string, string | number | null>[]) {
 }
 
 /** Столбцы с кодом в значении (фильтр по коду), на экране и в сортировке — подпись (`<ключ>_text`). */
-const TEXT_SHOWN = new Set(['active', 'declarationFor', 'kind', 'byPhone']);
+const TEXT_SHOWN = new Set([
+  'active',
+  'declarationFor',
+  'kind',
+  'byPhone',
+  'act',
+  'authorityCode',
+  'period',
+  'payer',
+]);
 
 /** Столбцы списка справочника на сервере — ключи и подписи, как у экрана (`ADMIN_DICT_COLUMNS`). */
 export function adminDictListColumns(dict: AdminValueDict): ListColumns {
@@ -348,12 +605,41 @@ const NATURAL = [field('ord')];
 const naturalQuery = (dict: AdminValueDict, query: ListQuery): ListQuery =>
   query.sort === undefined ? { ...query, sort: adminDictDefaultSort(dict) } : query;
 
-async function listSource(tx: Tx, dict: AdminValueDict, t: ListTexts) {
-  const [records, types] = await Promise.all([
-    dictRecords(tx, dict),
-    linkFields(dict).length ? reportTypeOptions(tx) : [],
-  ]);
-  const names = new Map(types.map((x) => [x.code, x.shortName]));
+/**
+ * «Назначен» видов отчётов (прототип `adm-types`): у скольких контрагентов на обслуживании вид назначен
+ * сейчас — по всем организациям. Каждая организация — своя транзакция в её контексте
+ * (`activeAssignmentCounts` модуля отчётов): обхода RLS у администратора платформы нет.
+ */
+export async function adminAssignedTypeCounts(db: Db): Promise<Map<string, number>> {
+  const total = new Map<string, number>();
+  for (const orgId of await orgIds(db)) {
+    const counts = await withOrgContext(db, { orgId }, (tx) => activeAssignmentCounts(tx));
+    for (const [code, n] of counts) total.set(code, (total.get(code) ?? 0) + n);
+  }
+  return total;
+}
+
+/** Что список берёт не из таблицы справочника: «Назначен» видов отчётов (`adminAssignedTypeCounts`). */
+export interface AdminDictListExtras {
+  assigned?: ReadonlyMap<string, number>;
+}
+
+async function listSource(
+  tx: Tx,
+  dict: AdminValueDict,
+  t: ListTexts,
+  extras: AdminDictListExtras = {},
+) {
+  const [all, names] = await Promise.all([dictRecords(tx, dict), listNames(tx, dict)]);
+  const tr = translate(t);
+  const records =
+    dict === 'types'
+      ? all.map((x) => ({
+          ...x,
+          texts: typeTexts(x, tr, names),
+          assigned: extras.assigned?.get(x.code) ?? 0,
+        }))
+      : all;
   const source = recordset(records.map((x, i) => listRow(dict, x, i + 1, t, names)));
   return { records, source };
 }
@@ -369,8 +655,9 @@ export async function listAdminDictPage(
   dict: AdminValueDict,
   query: ListQuery,
   t: ListTexts,
+  extras?: AdminDictListExtras,
 ) {
-  const { records, source } = await listSource(tx, dict, t);
+  const { records, source } = await listSource(tx, dict, t, extras);
   const byCode = new Map(records.map((x) => [x.code, x]));
   const page = await selectListPage({
     query: naturalQuery(dict, query),
@@ -398,8 +685,9 @@ export async function listAdminDictValues(
   key: string,
   t: ListTexts,
   q?: string,
+  extras?: AdminDictListExtras,
 ) {
-  const { source } = await listSource(tx, dict, t);
+  const { source } = await listSource(tx, dict, t, extras);
   return selectListValues({
     columns: adminDictListColumns(dict),
     key,
@@ -416,8 +704,9 @@ export async function exportAdminDict(
   query: ListQuery,
   keys: readonly string[],
   t: ListTexts,
+  extras?: AdminDictListExtras,
 ) {
-  const { source } = await listSource(tx, dict, t);
+  const { source } = await listSource(tx, dict, t, extras);
   return selectListExport({
     query: naturalQuery(dict, query),
     columns: adminDictListColumns(dict),
@@ -455,62 +744,276 @@ function dbRow(dict: AdminValueDict, input: AdminDictInput): Record<string, unkn
   const value = (f: string): unknown => {
     if (f === 'name') return input.name.trim();
     const v = input.data[f];
+    if (dict === 'types') return typeValue(f, v);
     if (f === 'contacts') {
       return (Array.isArray(v) ? (v as AuthorityContact[]) : [])
         .map((c) => ({ label: c.label.trim(), value: c.value.trim() }))
         .filter((c) => c.label || c.value);
     }
-    if (f === 'byPhone') return v === true;
+    if (f === 'byPhone' || f === 'verify') return v === true;
     const text = typeof v === 'string' ? v.trim() : '';
-    if (f === 'gnsCode') return text || null;
+    if (f === 'gnsCode' || f === 'validUntil') return text || null;
     if (f === 'kind') return text || ADMIN_DICT_META[dict].kind?.default;
+    if (f === 'payer') return text || 'all';
     if (f === 'accountantNote') return regimeAccountantNote(text);
     return text;
   };
   return Object.fromEntries(
     ADMIN_DICT_META[dict].fields
-      .filter((f) => !isLink(dict, f))
+      .filter((f) => isColumn(dict, f))
       .map((f) => [columns[f]!.name, value(f)]),
   );
 }
 
+/** Поля вида отчёта — числами, да или нет, списками и строками (без пробелов по краям). */
+const TYPE_NUMBERS = new Set(['dueDay', 'dueAfter', 'dueMonth', 'payDay', 'payAfter', 'payMonth']);
+const TYPE_FLAGS = new Set(['shiftToWorkday', 'oneOff', 'preselect', 'verify']);
+const TYPE_LISTS = new Set(['rates', 'notForEnRates', 'bizSizes']);
+
+/**
+ * Поле вида отчёта для столбца: числа срока, «да»/«нет», списки без пустых и повторов, платежи без
+ * пробелов по краям, пустой график оплаты — null; пустые «Тип», «Для кого», периодичность, «Срок
+ * считается» и «Группа подбора» — как у нового вида.
+ */
+function typeValue(f: string, v: unknown): unknown {
+  if (TYPE_NUMBERS.has(f)) return typeof v === 'number' ? v : null;
+  if (TYPE_FLAGS.has(f)) return v === true;
+  if (TYPE_LISTS.has(f)) {
+    return [
+      ...new Set((Array.isArray(v) ? (v as string[]) : []).map((x) => x.trim()).filter(Boolean)),
+    ];
+  }
+  if (f === 'payments') {
+    return (Array.isArray(v) ? (v as ReportPayment[]) : []).map((p) => ({
+      name: p.name.trim(),
+      authority: p.authority,
+      kbk: p.kbk.trim(),
+    }));
+  }
+  if (f === 'paySchedule') return Array.isArray(v) && v.length ? v : null;
+  const text = typeof v === 'string' ? v.trim() : '';
+  if (f in NEW_REPORT_TYPE) return text || NEW_REPORT_TYPE[f as keyof typeof NEW_REPORT_TYPE];
+  return text;
+}
+
 /** Поля-связи значения для `app.admin_dict_set_links`: коды без повторов. */
-const linkRow = (dict: AdminValueDict, input: AdminDictInput) =>
+const linkRow = (dict: AdminValueDict, input: AdminDictInput): Record<string, string[]> =>
   Object.fromEntries(
     linkFields(dict).map((f) => [f, [...new Set((input.data[f] as string[] | undefined) ?? [])]]),
   );
+
+/** «Меняет сроки» значения для `app.admin_benefit_set_due_rules`: только поля строки срока. */
+const dueRulesOf = (input: AdminDictInput): BenefitDueOverride[] =>
+  ((input.data.dueRules as BenefitDueOverride[] | undefined) ?? []).map((r) => ({
+    reportType: r.reportType,
+    dueDay: r.dueDay ?? null,
+    dueAfter: r.dueAfter ?? null,
+    dueMonth: r.dueMonth ?? null,
+    payDay: r.payDay ?? null,
+    payAfter: r.payAfter ?? null,
+  }));
 
 /** Поля значения для истории: название и поля справочника, как их сохранит база. */
 function historyFields(dict: AdminValueDict, input: AdminDictInput): Record<string, HistoryValue> {
   const columns = getTableColumns(TABLES[dict]) as Record<string, PgColumn>;
   const row = dbRow(dict, input);
   const links = linkRow(dict, input);
-  return Object.fromEntries(
-    ADMIN_DICT_META[dict].fields.map((f) => [
-      f,
-      toHistoryValue(isLink(dict, f) ? links[f] : row[columns[f]!.name]),
-    ]),
-  );
+  const value = (f: string): unknown => {
+    if (isLink(dict, f)) return links[f];
+    if (isDueRules(dict, f)) return dueRulesOf(input);
+    return row[columns[f]!.name];
+  };
+  return Object.fromEntries(ADMIN_DICT_META[dict].fields.map((f) => [f, toHistoryValue(value(f))]));
 }
 
 /**
+ * Что не так с полями-связями: у основания — не сквозные действующие виды (`types`); у статуса —
+ * отключённые или внутренние виды (`benefit_types`), один вид и в «Делает ненужными», и в
+ * «Добавляет» (`both`), отключённое УГНС (`offices`), строка «Меняет сроки» без нового срока
+ * (`no_due`) или с видом, которому свой срок не задать (`due_type`). У вида отчёта: у режимного нет
+ * режимов (`regimes_required`), у вида с уплатой нет платежа с названием (`payments_required`),
+ * отключённый режим или основание (`regimes`, `bases`), один режим и в «Применимых», и в «Не для
+ * режимов» (`regimes_both`), отключённый орган (`authority`), получатель платежа не из справочника
+ * органов (`payment_authority`), нет такой ставки единого налога (`en_rates`).
+ */
+export type AdminDictLinkProblem =
+  | 'types'
+  | 'benefit_types'
+  | 'both'
+  | 'offices'
+  | 'no_due'
+  | 'due_type'
+  | 'regimes_required'
+  | 'payments_required'
+  | 'regimes'
+  | 'regimes_both'
+  | 'bases'
+  | 'authority'
+  | 'payment_authority'
+  | 'en_rates';
+
+type PreparedLinks =
+  | { input: AdminDictInput; bad: null }
+  | { input: AdminDictInput; bad: { field: string; problem: AdminDictLinkProblem } };
+
+/**
  * Поля-связи в порядке каталога (как их читает список) и проверка: у основания — только сквозные
- * действующие виды отчётов; уже привязанный остаётся (`badBaseTypes`). Не подходит — поле с ошибкой.
+ * действующие виды отчётов; уже привязанный остаётся (`badBaseTypes`). У статуса — `prepareBenefit`.
+ * Не подходит — поле с ошибкой.
  */
 async function prepareLinks(
   tx: Tx,
   dict: AdminValueDict,
   input: AdminDictInput,
   before: AdminDictValueRecord | undefined,
-): Promise<{ input: AdminDictInput; bad: string | null }> {
+): Promise<PreparedLinks> {
+  if (dict === 'benefits') return prepareBenefit(tx, input, before);
+  if (dict === 'types') return prepareType(tx, input, before);
   if (!linkFields(dict).length) return { input, bad: null };
   const catalog = await reportTypeOptions(tx);
   const order = new Map(catalog.map((x, i) => [x.code, i]));
   const types = linkRow(dict, input).types ?? [];
   const was = (before?.data.types as string[] | undefined) ?? [];
-  if (badBaseTypes(types, catalog, was).length) return { input, bad: 'types' };
+  if (badBaseTypes(types, catalog, was).length) {
+    return { input, bad: { field: 'types', problem: 'types' } };
+  }
   const sorted = [...types].sort((a, b) => order.get(a)! - order.get(b)!);
   return { input: { ...input, data: { ...input.data, types: sorted } }, bad: null };
+}
+
+/**
+ * Связи и «Меняет сроки» статуса (прототип benefitDlg): виды отчётов — действующие, кроме внутренних
+ * (`badBenefitTypes`), и не в двух полях сразу; УГНС — действующие (`badBenefitOffices`); строки
+ * сроков — `benefitDueRulesProblem`. Уже выбранное остаётся, даже если его потом отключили. Виды — в
+ * порядке каталога, УГНС — в порядке справочника.
+ */
+async function prepareBenefit(
+  tx: Tx,
+  input: AdminDictInput,
+  before: AdminDictValueRecord | undefined,
+): Promise<PreparedLinks> {
+  const [catalog, offices] = await Promise.all([
+    reportTypeOptions(tx),
+    tx
+      .select({ code: taxOffices.code, active: taxOffices.active })
+      .from(taxOffices)
+      .orderBy(asc(taxOffices.sortOrder), asc(taxOffices.code)),
+  ]);
+  const links = linkRow('benefits', input);
+  const was = (f: string) => (before?.data[f] as string[] | undefined) ?? [];
+  const fail = (field: string, problem: AdminDictLinkProblem): PreparedLinks => ({
+    input,
+    bad: { field, problem },
+  });
+  for (const f of ['removes', 'adds']) {
+    if (badBenefitTypes(links[f]!, catalog, was(f)).length) return fail(f, 'benefit_types');
+  }
+  // ОТКЛОНЕНИЕ: docs/deviations.md#Д-9
+  if (links.removes!.some((code) => links.adds!.includes(code))) return fail('adds', 'both');
+  if (badBenefitOffices(links.offices!, offices, was('offices')).length) {
+    return fail('offices', 'offices');
+  }
+  const rules = dueRulesOf(input);
+  const beforeRules = before ? dueRulesOf(recordInput(before)) : [];
+  const problem = benefitDueRulesProblem(rules, catalog, beforeRules);
+  if (problem) return fail('dueRules', problem === 'no_due' ? 'no_due' : 'due_type');
+  const typeOrder = new Map(catalog.map((x, i) => [x.code, i]));
+  const officeOrder = new Map(offices.map((x, i) => [x.code, i]));
+  const byType = (a: string, b: string) => typeOrder.get(a)! - typeOrder.get(b)!;
+  const data = {
+    ...input.data,
+    removes: [...links.removes!].sort(byType),
+    adds: [...links.adds!].sort(byType),
+    offices: [...links.offices!].sort((a, b) => officeOrder.get(a)! - officeOrder.get(b)!),
+    dueRules: [...rules].sort((a, b) => byType(a.reportType, b.reportType)),
+  };
+  return { input: { ...input, data }, bad: null };
+}
+
+/**
+ * Вид отчёта перед записью (прототип typeEditDlg `te-ok`): у вида «Сдача» нет платежей, своего срока
+ * оплаты и графика, «Название даты события» — только у разового. Проверки — `reportTypeProblems`;
+ * режимы, основания и орган — действующие (уже выбранное остаётся, `inactiveLinks`); получатель
+ * платежа — любой орган справочника (прототип: весь список органов); «Не для ставок ЕН» — коды строк
+ * «Ставок единого налога». Режимы и основания — в порядке своих справочников.
+ */
+async function prepareType(
+  tx: Tx,
+  input: AdminDictInput,
+  before: AdminDictValueRecord | undefined,
+): Promise<PreparedLinks> {
+  const [regimes, bases, organs, enRates] = await Promise.all([
+    tx
+      .select({ code: taxRegimes.code, active: taxRegimes.active })
+      .from(taxRegimes)
+      .orderBy(asc(taxRegimes.sortOrder), asc(taxRegimes.code)),
+    tx
+      .select({ code: reportBases.code, active: reportBases.active })
+      .from(reportBases)
+      .orderBy(asc(reportBases.sortOrder), asc(reportBases.code)),
+    tx.select({ code: authorities.code, active: authorities.active }).from(authorities),
+    tx.select({ code: singleTaxRates.code }).from(singleTaxRates),
+  ]);
+  const sub = input.data.act === 'sub';
+  const data: AdminDictData = {
+    ...input.data,
+    ...(sub
+      ? { payments: [], payDay: null, payAfter: null, payMonth: null, paySchedule: null }
+      : {}),
+    ...(input.data.oneOff === true ? {} : { eventLabel: '' }),
+  };
+  const links = linkRow('types', { ...input, data });
+  const payments = typeValue('payments', data.payments) as ReportPayment[];
+  const fail = (field: string, problem: AdminDictLinkProblem): PreparedLinks => ({
+    input,
+    bad: { field, problem },
+  });
+  const [problem] = reportTypeProblems({
+    kind: data.kind as ReportKind,
+    regimes: links.regimes!,
+    act: data.act as ReportAct,
+    payments,
+  });
+  if (problem) return fail(problem.field, problem.problem);
+  const was = (f: string) => (before?.data[f] as string[] | undefined) ?? [];
+  for (const f of ['regimes', 'notForRegimes']) {
+    if (inactiveLinks(links[f]!, regimes, was(f)).length) return fail(f, 'regimes');
+  }
+  // ОТКЛОНЕНИЕ: docs/deviations.md#Д-10
+  if (links.regimes!.some((code) => links.notForRegimes!.includes(code))) {
+    return fail('notForRegimes', 'regimes_both');
+  }
+  if (inactiveLinks(links.bases!, bases, was('bases')).length) return fail('bases', 'bases');
+  const organ = String(data.authorityCode ?? '');
+  const wasOrgan = before ? [String(before.data.authorityCode)] : [];
+  if (inactiveLinks([organ], organs, wasOrgan).length) return fail('authorityCode', 'authority');
+  const organCodes = new Set(organs.map((x) => x.code));
+  if (payments.some((p) => !organCodes.has(p.authority))) {
+    return fail('payments', 'payment_authority');
+  }
+  const rateCodes = new Set(enRates.map((x) => x.code));
+  const notForEn = typeValue('notForEnRates', data.notForEnRates) as string[];
+  if (notForEn.some((code) => !rateCodes.has(code))) return fail('notForEnRates', 'en_rates');
+  const order = (list: readonly { code: string }[]) => {
+    const at = new Map(list.map((x, i) => [x.code, i]));
+    return (a: string, b: string) => at.get(a)! - at.get(b)!;
+  };
+  const sorted = {
+    ...data,
+    regimes: [...links.regimes!].sort(order(regimes)),
+    notForRegimes: [...links.notForRegimes!].sort(order(regimes)),
+    bases: [...links.bases!].sort(order(bases)),
+  };
+  return { input: { ...input, data: sorted }, bad: null };
+}
+
+/**
+ * Пересчёт сроков несданных отчётов вида после правки правила срока (прототип typeEditDlg: `ruleCh` →
+ * `dueOf`, кроме отчётов с ручным сроком): отчётов организаций ещё нет — пересчёт подключит задача
+ * отчётов (правило стыков, docs/decisions.md п. Д-6).
+ */
+async function recalcTypeReportDues(_tx: Tx, _code: string): Promise<number> {
+  return 0;
 }
 
 /** Записать поля-связи значения (`app.admin_dict_set_links`); у справочника без связей — ничего. */
@@ -520,11 +1023,27 @@ async function prepareLinks(
  * откатывает и запись значения: значение без своих связей и без истории не сохраняется.
  */
 async function saveLinks(tx: Tx, dict: AdminValueDict, code: string, input: AdminDictInput) {
-  if (!linkFields(dict).length) return;
-  const [row] = await tx.execute<{ ok: boolean | null }>(
-    sql`select app.admin_dict_set_links(${dict}, ${code}, ${JSON.stringify(linkRow(dict, input))}::jsonb) as ok`,
-  );
-  if (row?.ok !== true) throw new Error(`Связи значения ${dict}:${code} не сохранены`);
+  if (linkFields(dict).length) {
+    const [row] = await tx.execute<{ ok: boolean | null }>(
+      sql`select app.admin_dict_set_links(${dict}, ${code}, ${JSON.stringify(linkRow(dict, input))}::jsonb) as ok`,
+    );
+    if (row?.ok !== true) throw new Error(`Связи значения ${dict}:${code} не сохранены`);
+  }
+  if (ADMIN_DICT_META[dict].dueRules) {
+    const [row] = await tx.execute<{ ok: boolean | null }>(
+      sql`select app.admin_benefit_set_due_rules(${code}, ${JSON.stringify(dueRulesOf(input))}::jsonb) as ok`,
+    );
+    if (row?.ok !== true) throw new Error(`Сроки статуса ${code} не сохранены`);
+  }
+}
+
+/**
+ * Пересчёт сроков несданных отчётов контрагентов со статусом после правки «Меняет сроки» (прототип
+ * `cpRedue`): отчётов организаций ещё нет — пересчёт подключит задача отчётов (правило стыков,
+ * docs/decisions.md п. Д-5).
+ */
+async function recalcBenefitReportDues(_tx: Tx, _code: string): Promise<number> {
+  return 0;
 }
 
 const recordInput = (x: AdminDictValueRecord): AdminDictInput => ({ name: x.name, data: x.data });
@@ -532,7 +1051,7 @@ const recordInput = (x: AdminDictValueRecord): AdminDictInput => ({ name: x.name
 export type AdminDictSaveResult =
   | { ok: true; record: AdminDictValueRecord }
   | { ok: false; reason: 'not_found' | 'changed' | 'fixed' }
-  | { ok: false; reason: 'bad_link'; field: string }
+  | { ok: false; reason: 'bad_link'; field: string; problem: AdminDictLinkProblem }
   | { ok: false; reason: 'taken'; problems: DictValueProblem[] }
   | { ok: false; reason: 'used'; usage: DictUsage };
 
@@ -574,7 +1093,7 @@ export async function adminDictCreate(
   const problems = problemsOf(dict, code, input, records);
   if (problems.length) return { ok: false, reason: 'taken', problems };
   const links = await prepareLinks(tx, dict, input, undefined);
-  if (links.bad) return { ok: false, reason: 'bad_link', field: links.bad };
+  if (links.bad) return { ok: false, reason: 'bad_link', ...links.bad };
   input = links.input;
   const [row] = await tx.execute<{ version: number | null }>(
     sql`select app.admin_dict_insert(${dict}, ${code}, ${JSON.stringify(dbRow(dict, input))}::jsonb) as version`,
@@ -612,7 +1131,7 @@ export async function adminDictUpdate(
   if (!before) return { ok: false, reason: 'not_found' };
   if (before.version !== version) return { ok: false, reason: 'changed' };
   const links = await prepareLinks(tx, dict, input, before);
-  if (links.bad) return { ok: false, reason: 'bad_link', field: links.bad };
+  if (links.bad) return { ok: false, reason: 'bad_link', ...links.bad };
   input = links.input;
   const was = historyFields(dict, recordInput(before));
   const now = historyFields(dict, input);
@@ -627,6 +1146,14 @@ export async function adminDictUpdate(
   );
   if (row?.version == null) return { ok: false, reason: 'changed' };
   await saveLinks(tx, dict, code, input);
+  // Новые сроки статуса — у несданных отчётов контрагентов с ним; в историю — у скольких (прототип).
+  if (changes.some((c) => isDueRules(dict, c.field))) {
+    changes.push({ field: 'recalculated', to: await recalcBenefitReportDues(tx, code) });
+  }
+  // Новое правило срока вида — у его несданных отчётов (прототип: в историю не пишется).
+  if (dict === 'types' && changes.some((c) => REPORT_TYPE_RULE_FIELDS.includes(c.field as never))) {
+    await recalcTypeReportDues(tx, code);
+  }
   await writePlatformHistory(tx, {
     entity: 'platform_dict',
     entityId: entityId(dict, code),
@@ -782,11 +1309,19 @@ export interface AdminDictHistoryItem {
   summary?: { from: string; to: string };
 }
 
-/** Подпись значения: у УГНС — «002 Ленинский р-н, Бишкек» (прототип pdLog), у остальных — название. */
-function labelOf(dict: AdminValueDict, fields: Record<string, HistoryValue | undefined>): string {
+/**
+ * Подпись значения: у УГНС — «002 Ленинский р-н, Бишкек» (прототип pdLog), у вида отчёта в правке —
+ * краткое название («Виды отчётов: НДС — …»), у остальных — название.
+ */
+function labelOf(
+  dict: AdminValueDict,
+  fields: Record<string, HistoryValue | undefined>,
+  action = 'create',
+): string {
   const text = (v: HistoryValue | undefined) => (typeof v === 'string' ? v : '');
   if (dict === 'ugns')
     return [text(fields.gnsCode), text(fields.shortName)].filter(Boolean).join(' ');
+  if (dict === 'types' && action === 'update') return text(fields.shortName) || text(fields.name);
   return text(fields.name);
 }
 
@@ -813,10 +1348,8 @@ export async function adminDictHistory(
     tx.select({ n: count() }).from(platformAuditLog).where(where),
     dictRecords(tx, dict),
   ]);
-  const labels = new Map(
-    records.map((x) => [x.code, labelOf(dict, historyFields(dict, recordInput(x)))]),
-  );
-  // Поля значений после каждой записи: от нынешних назад по записям, сначала новые (для кода страны).
+  // Поля значений после каждой записи: от нынешних назад по записям, сначала новые. По ним — подпись
+  // записи, какой она была тогда (прототип пишет строку истории сразу), и код страны строкой.
   const state = new Map(records.map((x) => [x.code, historyFields(dict, recordInput(x))]));
   return {
     total: counted?.n ?? 0,
@@ -830,6 +1363,10 @@ export async function adminDictHistory(
         ...Object.fromEntries(changes.map((c) => [c.field, c.from ?? null])),
       };
       if (before) state.set(code, before);
+      const shown =
+        dict === 'types' && r.action === 'update' && after && before
+          ? joinPayChanges(changes, before, after)
+          : changes;
       const line =
         dict === 'phones' && r.action === 'update' && after && before
           ? { from: phoneLine(before), to: phoneLine(after) }
@@ -840,13 +1377,52 @@ export async function adminDictHistory(
         actor: auditActorName(r.actorUserId, null),
         action: r.action,
         code,
-        label: (r.action === 'update' ? labels.get(code) : labelOf(dict, own)) || code,
-        changes,
+        // Правка полей вида отчёта подписана кратким названием, включение и отключение — названием.
+        label:
+          (r.action !== 'update'
+            ? labelOf(dict, own)
+            : after &&
+              labelOf(
+                dict,
+                after,
+                changes.some((c) => c.field === 'active') ? undefined : 'update',
+              )) || code,
+        changes: shown,
         // Только включение/отключение — строка та же, без «было → стало».
         ...(line && line.from !== line.to ? { summary: line } : {}),
       };
     }),
   };
+}
+
+const PAY_FIELDS = ['payDay', 'payAfter', 'payMonth'];
+
+/**
+ * Срок оплаты вида отчёта в истории — одним полем `pay`, как у прототипа (`TL.pay`): было и стало —
+ * правило целиком (с периодичностью и сроком сдачи), словами его пишет экран (`payRuleText`).
+ */
+function joinPayChanges(
+  changes: HistoryChange[],
+  before: Record<string, HistoryValue | undefined>,
+  after: Record<string, HistoryValue | undefined>,
+): HistoryChange[] {
+  const at = changes.findIndex((c) => PAY_FIELDS.includes(c.field));
+  if (at < 0) return changes;
+  const rule = (f: Record<string, HistoryValue | undefined>): HistoryValue => ({
+    period: f.period ?? null,
+    dueFrom: f.dueFrom ?? null,
+    dueDay: f.dueDay ?? null,
+    dueAfter: f.dueAfter ?? null,
+    dueMonth: f.dueMonth ?? null,
+    oneOff: f.oneOff ?? false,
+    act: f.act ?? null,
+    payDay: f.payDay ?? null,
+    payAfter: f.payAfter ?? null,
+    payMonth: f.payMonth ?? null,
+  });
+  const rest = changes.filter((c) => !PAY_FIELDS.includes(c.field));
+  rest.splice(at, 0, { field: 'pay', from: rule(before), to: rule(after) });
+  return rest;
 }
 
 /**

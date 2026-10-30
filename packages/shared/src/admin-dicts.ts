@@ -2,6 +2,8 @@ import {
   ADMIN_TAX_LISTS,
   ADMIN_VALUE_DICTS,
   BANK_KINDS,
+  BENEFIT_KINDS,
+  BIZ_SIZES,
   CALENDAR_ADD_TYPES,
   CALENDAR_DAY_KINDS,
   DECLARATION_FOR,
@@ -11,13 +13,24 @@ import {
   DICT_REQUEST_ANSWERS,
   DICT_REQUEST_DICTS,
   DICT_REQUEST_STATUSES,
+  DUE_FROM,
   isIsoDate,
+  LAST_DAY_OF_MONTH,
   ORGAN_CONTACTS_MAX,
   PHONE_DIAL_CODE_PATTERN,
+  PAYER_KINDS,
   PHONE_MASK_PATTERN,
+  REPORT_ACTS,
   REPORT_KINDS,
+  REPORT_PERIODS,
   organSiteUrl,
+  parsePaySchedule,
+  PAY_SCHEDULE_MAX,
+  PICK_GROUPS,
   REGIME_KINDS,
+  REPORT_DUE_AFTER_MAX,
+  REPORT_PAYMENTS_MAX,
+  reportTypeProblems,
   UGNS_CODE_PATTERN,
   type UiTextKey,
 } from '@buhuchet/domain';
@@ -39,8 +52,31 @@ export const AdminDictCodeParam = AdminValueDictParam.extend({ code: z.string().
 
 const Contact = z.object({ label: z.string(), value: z.string() });
 
-/** «Тип»: у банковского провайдера — банк или кошелёк, у режима — общий или специальный. */
-const Kind = z.enum([...BANK_KINDS, ...REGIME_KINDS]);
+/**
+ * «Тип»: у банковского провайдера — банк или кошелёк, у режима — общий или специальный, у льготы —
+ * льгота или статус, у вида отчёта — сквозной, режимный или внутренний.
+ */
+const Kind = z.enum([...BANK_KINDS, ...REGIME_KINDS, ...BENEFIT_KINDS, ...REPORT_KINDS]);
+
+/** «Что уплачивается» у вида отчёта: платёж, получатель (код органа) и код платежа. */
+const ReportPayment = z.object({ name: z.string(), authority: z.string(), kbk: z.string() });
+
+const dueDay = z.number().int().min(1).max(LAST_DAY_OF_MONTH).nullable();
+const dueAfter = z.number().int().min(0).max(12).nullable();
+
+/**
+ * Строка «Меняет сроки» статуса: свой срок сдачи и (или) уплаты вида отчёта; пусто — как у вида, день
+ * 31 — последний день месяца.
+ */
+export const BenefitDueRule = z.object({
+  reportType: z.string().min(1).max(80),
+  dueDay,
+  dueAfter,
+  dueMonth: z.number().int().min(1).max(12).nullable(),
+  payDay: dueDay,
+  payAfter: dueAfter,
+});
+export type BenefitDueRule = z.infer<typeof BenefitDueRule>;
 
 /** Поля значения сверх кода и названия — у каждого справочника свои (`ADMIN_DICT_META.fields`). */
 export const AdminDictData = z.object({
@@ -72,6 +108,63 @@ export const AdminDictData = z.object({
   flag: z.string().optional(),
   dialCode: z.string().optional(),
   mask: z.string().optional(),
+  /**
+   * У льготы: «Что даёт», «Кто может применять», «Условия», «Как подтверждается», «Срок действия»,
+   * «Действует до» (null — без даты), «Сверить» и «Что сверить».
+   */
+  gives: z.string().optional(),
+  payer: z.enum(PAYER_KINDS).optional(),
+  conditions: z.string().optional(),
+  confirmation: z.string().optional(),
+  term: z.string().optional(),
+  validUntil: IsoDate.nullable().optional(),
+  verify: z.boolean().optional(),
+  verifyNote: z.string().optional(),
+  /** У льготы: виды отчётов, которые статус делает ненужными и добавляет, — в порядке каталога. */
+  removes: z.array(z.string()).optional(),
+  adds: z.array(z.string()).optional(),
+  /** У льготы: «Меняет сроки» — в порядке каталога видов. */
+  dueRules: z.array(BenefitDueRule).optional(),
+  /** У льготы: «Ставится по УГНС» — постоянные ключи управлений. */
+  offices: z.array(z.string()).optional(),
+  /**
+   * У вида отчёта (прототип typeEditDlg): код формы, орган, периодичность и правило срока сдачи,
+   * свой срок оплаты (пусто — как срок сдачи) и график оплаты ([месяц, число]), «Что нужно сделать»
+   * и «Что уплачивается», ставки и поля «Подбора отчётов». «Применимые режимы», «Не для режимов» и
+   * «Основания» — коды в порядке справочника.
+   */
+  formCode: z.string().optional(),
+  statIndex: z.string().optional(),
+  respondents: z.string().optional(),
+  authorityCode: z.string().optional(),
+  period: z.enum(REPORT_PERIODS).optional(),
+  dueFrom: z.enum(DUE_FROM).optional(),
+  dueDay: z.number().int().optional(),
+  dueAfter: z.number().int().nullable().optional(),
+  dueMonth: z.number().int().nullable().optional(),
+  payDay: z.number().int().nullable().optional(),
+  payAfter: z.number().int().nullable().optional(),
+  payMonth: z.number().int().nullable().optional(),
+  paySchedule: z
+    .array(z.tuple([z.number().int(), z.number().int()]))
+    .nullable()
+    .optional(),
+  shiftToWorkday: z.boolean().optional(),
+  oneOff: z.boolean().optional(),
+  eventLabel: z.string().optional(),
+  act: z.enum(REPORT_ACTS).optional(),
+  payments: z.array(ReportPayment).optional(),
+  regimes: z.array(z.string()).optional(),
+  notForRegimes: z.array(z.string()).optional(),
+  bases: z.array(z.string()).optional(),
+  rates: z.array(z.string()).optional(),
+  notForEnRates: z.array(z.string()).optional(),
+  bizSizes: z.array(z.enum(BIZ_SIZES)).optional(),
+  pickGroup: z.enum(PICK_GROUPS).optional(),
+  preselect: z.boolean().optional(),
+  choiceNote: z.string().optional(),
+  clientNote: z.string().optional(),
+  source: z.string().optional(),
 });
 export type AdminDictData = z.infer<typeof AdminDictData>;
 
@@ -85,6 +178,24 @@ export const AdminDictValue = z.object({
   used: z.number().int().nonnegative(),
   /** У УГНС: у скольких контрагентов указано. */
   contractors: z.number().int().nonnegative(),
+  /**
+   * У вида отчёта в списке — столбцы словами, как их считает сервер: «Что уплачивается», срок сдачи и
+   * оплаты, орган, режимы.
+   */
+  texts: z.record(z.string(), z.string()).optional(),
+  /**
+   * У вида отчёта — созданные по нему отчёты: всего, несданных и в скольких организациях (для
+   * предупреждений окна вида).
+   */
+  reports: z
+    .object({
+      total: z.number().int().nonnegative(),
+      open: z.number().int().nonnegative(),
+      orgs: z.number().int().nonnegative(),
+    })
+    .optional(),
+  /** У вида отчёта в списке — «Назначен»: у скольких контрагентов вид назначен сейчас. */
+  assigned: z.number().int().nonnegative().optional(),
   audit: RecordAudit.extend({
     /** Когда администратор добавил значение; у значений из наполнения — null. */
     createdAt: z.iso.datetime().nullable(),
@@ -100,6 +211,20 @@ export const AdminDictList = listPageSchema(AdminDictValue).extend({
 export type AdminDictList = z.infer<typeof AdminDictList>;
 
 const text = (max: number) => z.string().trim().max(max, message('form.too_long'));
+
+/** День срока вида отчёта: от 1 до 31 (31 — последний день месяца). */
+const typeDay = z
+  .number(message('pdicts.err.day'))
+  .int(message('pdicts.err.day'))
+  .min(1, message('pdicts.err.day'))
+  .max(LAST_DAY_OF_MONTH, message('pdicts.err.day'));
+/** «M-го месяца после периода» (или от его начала): от 0 до 6. */
+const typeAfter = z
+  .number(message('pdicts.err.after'))
+  .int(message('pdicts.err.after'))
+  .min(0, message('pdicts.err.after'))
+  .max(REPORT_DUE_AFTER_MAX, message('pdicts.err.after'));
+const typeMonth = z.number().int().min(1).max(12);
 
 /**
  * Окно значения (прототип valueDlg, ugnsDlg; React Hook Form): название обязательно — «Введите
@@ -152,6 +277,69 @@ export const AdminDictValueForm = z.object({
     .regex(PHONE_DIAL_CODE_PATTERN, message('pdicts.err.dial_code'))
     .optional(),
   mask: z.string().trim().max(30).regex(PHONE_MASK_PATTERN, message('pdicts.err.mask')).optional(),
+  gives: text(DICT_NOTE_MAX).optional(),
+  payer: z.enum(PAYER_KINDS).optional(),
+  conditions: text(DICT_NOTE_MAX).optional(),
+  confirmation: text(DICT_NOTE_MAX).optional(),
+  term: text(DICT_NAME_MAX).optional(),
+  // Пусто — без даты окончания.
+  validUntil: z
+    .string()
+    .trim()
+    .refine((v) => v === '' || isIsoDate(v), message('pdicts.err.until'))
+    .optional(),
+  verify: z.boolean().optional(),
+  verifyNote: text(300).optional(),
+  removes: z.array(z.string().min(1).max(80)).max(500).optional(),
+  adds: z.array(z.string().min(1).max(80)).max(500).optional(),
+  dueRules: z.array(BenefitDueRule).max(500).optional(),
+  offices: z.array(z.string().min(1).max(80)).max(500).optional(),
+  // Вид отчёта (прототип typeEditDlg): дни — от 1 до 31 (31 — последний день), «M-го месяца» — от 0
+  // до 6, месяц — от 1 до 12.
+  formCode: text(50).optional(),
+  statIndex: text(50).optional(),
+  respondents: text(DICT_NOTE_MAX).optional(),
+  authorityCode: z.string().trim().max(80).optional(),
+  period: z.enum(REPORT_PERIODS).optional(),
+  dueFrom: z.enum(DUE_FROM).optional(),
+  dueDay: typeDay.optional(),
+  dueAfter: typeAfter.nullable().optional(),
+  dueMonth: typeMonth.nullable().optional(),
+  payDay: typeDay.nullable().optional(),
+  payAfter: typeAfter.nullable().optional(),
+  payMonth: typeMonth.nullable().optional(),
+  paySchedule: z
+    .array(z.tuple([typeMonth, typeDay]))
+    .max(PAY_SCHEDULE_MAX)
+    .nullable()
+    .optional(),
+  shiftToWorkday: z.boolean().optional(),
+  oneOff: z.boolean().optional(),
+  eventLabel: text(DICT_NAME_MAX).optional(),
+  act: z.enum(REPORT_ACTS).optional(),
+  payments: z
+    .array(
+      z.object({
+        name: text(DICT_NAME_MAX),
+        authority: z.string().trim().max(80),
+        kbk: text(50),
+      }),
+    )
+    .max(REPORT_PAYMENTS_MAX)
+    .optional(),
+  regimes: z.array(z.string().min(1).max(80)).max(100).optional(),
+  notForRegimes: z.array(z.string().min(1).max(80)).max(100).optional(),
+  bases: z.array(z.string().min(1).max(80)).max(100).optional(),
+  rates: z.array(text(50)).max(30).optional(),
+  notForEnRates: z.array(z.string().trim().min(1).max(20)).max(100).optional(),
+  bizSizes: z.array(z.enum(BIZ_SIZES)).max(BIZ_SIZES.length).optional(),
+  pickGroup: z.enum(PICK_GROUPS).optional(),
+  preselect: z.boolean().optional(),
+  choiceNote: text(300).optional(),
+  clientNote: text(DICT_NOTE_MAX).optional(),
+  // «Источник» открывается ссылкой в новой вкладке — только адрес с протоколом, как сайт органа.
+  // ОТКЛОНЕНИЕ: docs/deviations.md#Д-10
+  source: text(300).transform(organSiteUrl).optional(),
 });
 export type AdminDictValueFormInput = z.input<typeof AdminDictValueForm>;
 export type AdminDictValueForm = z.output<typeof AdminDictValueForm>;
@@ -173,6 +361,126 @@ export const RegimeValueForm = AdminDictValueForm.extend({
     .min(1, message('pdicts.err.full_required'))
     .max(DICT_NAME_MAX, message('form.too_long')),
 });
+
+/** Окно льготы или статуса: «Что даёт» тоже обязательно — «Опишите, что даёт статус». */
+export const BenefitValueForm = AdminDictValueForm.extend({
+  gives: z
+    .string()
+    .trim()
+    .min(1, message('pdicts.err.gives_required'))
+    .max(DICT_NOTE_MAX, message('form.too_long')),
+});
+export type BenefitValueFormInput = z.input<typeof BenefitValueForm>;
+export type BenefitValueForm = z.output<typeof BenefitValueForm>;
+
+/** Число из поля окна: пусто — null. */
+const numberOf = (v: string): number | null => (v.trim() === '' ? null : Number(v.trim()));
+
+/** Поле числа окна вида отчёта прошло схему поля (`typeDay`, `typeAfter`, месяц). */
+const fits = (schema: z.ZodType, v: string) => schema.safeParse(numberOf(v)).success;
+
+/**
+ * Окно вида отчёта (прототип typeEditDlg; React Hook Form): числа срока — строками полей (скрытое поле
+ * хранит прежнее значение, в том числе пустое); «Срок оплаты совпадает со сроком сдачи»; «График
+ * оплаты», «Ставки» и «Не для ставок ЕН» — строкой через точку с запятой. Краткое название, орган и
+ * «Что нужно сделать» обязательны; у режимного — хотя бы один режим, у вида с уплатой — платёж с
+ * названием (`reportTypeProblems`). Проверяются только видимые поля срока. В запрос — `reportTypeBody`.
+ */
+export const ReportTypeValueForm = AdminDictValueForm.omit({
+  dueDay: true,
+  dueAfter: true,
+  dueMonth: true,
+  payDay: true,
+  payAfter: true,
+  payMonth: true,
+  paySchedule: true,
+  rates: true,
+  notForEnRates: true,
+})
+  .extend({
+    shortName: z
+      .string()
+      .trim()
+      .min(1, message('pdicts.err.short_required'))
+      .max(DICT_NAME_MAX, message('form.too_long')),
+    authorityCode: z.string().trim().min(1, message('pdicts.err.organ_required')).max(80),
+    period: z.enum(REPORT_PERIODS),
+    kind: z.enum(REPORT_KINDS),
+    act: z.enum(REPORT_ACTS, message('pdicts.err.act_required')),
+    oneOff: z.boolean(),
+    regimes: z.array(z.string()),
+    payments: z.array(
+      z.object({
+        name: text(DICT_NAME_MAX),
+        authority: z.string().trim().max(80),
+        kbk: text(50),
+      }),
+    ),
+    dueDay: z.string(),
+    dueAfter: z.string(),
+    dueMonth: z.string(),
+    paySame: z.boolean(),
+    payDay: z.string(),
+    payAfter: z.string(),
+    payMonth: z.string(),
+    paySchedule: z
+      .string()
+      .refine((v) => parsePaySchedule(v) !== null, message('pdicts.err.schedule')),
+    rates: z.string().max(1500, message('form.too_long')),
+    notForEnRates: z.string().max(1500, message('form.too_long')),
+  })
+  .superRefine((x, ctx) => {
+    const bad = (path: string, key: UiTextKey) =>
+      ctx.addIssue({ code: 'custom', path: [path], message: key });
+    const yearly = x.period === 'Y';
+    if (!fits(typeDay, x.dueDay)) bad('dueDay', 'pdicts.err.day');
+    if (!x.oneOff && !yearly && !fits(typeAfter, x.dueAfter)) bad('dueAfter', 'pdicts.err.after');
+    if (!x.oneOff && yearly && !fits(typeMonth, x.dueMonth)) bad('dueMonth', 'pdicts.err.day');
+    if (x.act !== 'sub' && !x.paySame) {
+      if (!fits(typeDay, x.payDay)) bad('payDay', 'pdicts.err.day');
+      if (!yearly && !fits(typeAfter, x.payAfter)) bad('payAfter', 'pdicts.err.after');
+      if (yearly && !fits(typeMonth, x.payMonth)) bad('payMonth', 'pdicts.err.day');
+    }
+    for (const p of reportTypeProblems(x)) bad(p.field, `pdicts.err.${p.problem}`);
+  });
+export type ReportTypeValueFormInput = z.input<typeof ReportTypeValueForm>;
+export type ReportTypeValueForm = z.output<typeof ReportTypeValueForm>;
+
+/** Список через точку с запятой («2 %; 4 %») — без пустых и повторов. */
+const splitList = (v: string) => [
+  ...new Set(
+    v
+      .split(';')
+      .map((x) => x.trim())
+      .filter(Boolean),
+  ),
+];
+
+/**
+ * Окно вида отчёта → тело запроса (прототип typeEditDlg, `snap` и `te-ok`): числа срока — числами
+ * (пустое скрытое поле — пусто); «Срок оплаты совпадает» — своего срока оплаты нет; у вида «Сдача» нет
+ * срока оплаты, графика и платежей; «Название даты события» — только у разового.
+ */
+export function reportTypeBody(x: ReportTypeValueForm): AdminDictValueFormInput {
+  const { paySame, ...rest } = x;
+  const sub = x.act === 'sub';
+  const ownPay = !sub && !paySame;
+  const schedule = parsePaySchedule(x.paySchedule) ?? [];
+  return {
+    ...rest,
+    dueDay: numberOf(x.dueDay) ?? 1,
+    dueAfter: numberOf(x.dueAfter),
+    dueMonth: numberOf(x.dueMonth),
+    payDay: ownPay ? numberOf(x.payDay) : null,
+    payAfter: ownPay ? numberOf(x.payAfter) : null,
+    payMonth: ownPay ? numberOf(x.payMonth) : null,
+    paySchedule: sub || !schedule.length ? null : schedule,
+    rates: splitList(x.rates),
+    notForEnRates: splitList(x.notForEnRates),
+    payments: sub ? [] : x.payments,
+    eventLabel: x.oneOff ? (x.eventLabel ?? '') : '',
+  };
+}
 
 /** Окно кода страны: телефонный код и маска обязательны. */
 export const PhoneValueForm = AdminDictValueForm.extend({
@@ -288,7 +596,10 @@ export const AdminCalendarCopied = AdminCalendarChanged.extend({
 });
 export type AdminCalendarCopied = z.infer<typeof AdminCalendarCopied>;
 
-/** Каталог видов отчётов кратко: выбор видов у основания и подписи «Виды отчётов». */
+/**
+ * Каталог видов отчётов кратко: выбор видов у основания и статуса, подписи «Виды отчётов» и правило
+ * срока сдачи — для строк «Меняет сроки» статуса.
+ */
 export const AdminReportTypeOptions = z.object({
   items: z.array(
     z.object({
@@ -297,6 +608,14 @@ export const AdminReportTypeOptions = z.object({
       shortName: z.string(),
       kind: z.enum(REPORT_KINDS),
       active: z.boolean(),
+      period: z.enum(REPORT_PERIODS),
+      dueDay: z.number().int(),
+      dueAfter: z.number().int().nullable(),
+      dueMonth: z.number().int().nullable(),
+      dueFrom: z.enum(DUE_FROM),
+      act: z.enum(REPORT_ACTS),
+      oneOff: z.boolean(),
+      periodPerAssignment: z.boolean(),
     }),
   ),
 });
