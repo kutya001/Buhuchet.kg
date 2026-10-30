@@ -109,6 +109,7 @@ function access(o: {
     isOwner: false,
     can: (p) => perms.has(p),
     feature: (f) => features.has(f),
+    policy: () => true,
     modules: new Set(o.modules ?? ['staff', 'dicts', 'org', 'kb', 'cps']),
   };
 }

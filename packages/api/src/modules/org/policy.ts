@@ -2,6 +2,7 @@ import { createRoute, type RouteHandler } from '@hono/zod-openapi';
 import {
   confirmSubmittedWhileOff,
   confirmWaitingReports,
+  countWaitingReports,
   getOrgPolicy,
   getRole,
   orgPolicyHistory,
@@ -18,6 +19,7 @@ import {
   isValidRemindDays,
   normalizePageSections,
   normalizeRemindDays,
+  RecordChangedError,
   RecordNotFoundError,
   REMIND_DAYS_MESSAGE,
   sameHistoryValue,
@@ -28,6 +30,7 @@ import {
   OrgPolicy,
   OrgPolicyHistory,
   OrgRoleOptions,
+  OrgWaitingReports,
   UpdateOrgPolicyRequest,
 } from '@buhuchet/shared';
 import type { ApiDeps } from '../../deps';
@@ -121,6 +124,37 @@ export function orgRoleOptionsHandler(
   };
 }
 
+export const orgWaitingReportsRoute = createRoute({
+  method: 'get',
+  path: '/org/policy/waiting-reports',
+  tags: ['org'],
+  summary: 'Сколько отчётов ждут подтверждения — для вопроса «Выключить подтверждение сдачи?»',
+  middleware: [requirePermission('org')] as const,
+  responses: {
+    200: {
+      description: 'Число отчётов организации, ждущих подтверждения',
+      content: { 'application/json': { schema: OrgWaitingReports } },
+    },
+    401: { description: 'Нет входа', content: error },
+    403: { description: 'Нет права «Настройки и учётная политика»', content: error },
+  },
+});
+
+/**
+ * Число для вопроса «Выключить подтверждение сдачи?» (прототип modules/org.js, repConfSet) — тому, кто
+ * меняет учётную политику: выключение подтверждает все ждущие отчёты организации, поэтому и число — по
+ * всем, а не по области «Свои».
+ */
+export function orgWaitingReportsHandler(
+  deps: ApiDeps,
+): RouteHandler<typeof orgWaitingReportsRoute, AppEnv> {
+  return async (c) => {
+    const ctx = orgContextOf(c);
+    const count = await withOrgContext(deps.db, ctx, (tx) => countWaitingReports(tx));
+    return c.json({ count }, 200);
+  };
+}
+
 export const updateOrgPolicyRoute = createRoute({
   method: 'patch',
   path: '/org/policy',
@@ -160,8 +194,8 @@ function changed<T>(next: T | undefined, current: T): T | undefined {
  * меню у всех со следующего запроса, данные не удаляются. Каждое изменение — в историю учётной
  * политики: что изменено, было → стало, кто, когда. При выключении «Сдача отчётов требует
  * подтверждения» ждущие подтверждения отчёты считаются подтверждёнными с записью в их «Истории
- * статусов» (ТЗ; прототип repConfSet; задача 2.14), при включении — сданные без подтверждения отмечаются
- * «Сдан, когда подтверждение было выключено» и его не ждут.
+ * статусов», а в истории политики — сколько их (ТЗ; прототип repConfSet; задача 2.14); при включении
+ * сданные без подтверждения отмечаются «Сдан, когда подтверждение было выключено» и его не ждут.
  */
 export function updateOrgPolicyHandler(
   deps: ApiDeps,
@@ -178,8 +212,12 @@ export function updateOrgPolicyHandler(
     const policy = await withOrgContext(deps.db, ctx, async (tx) => {
       const current = await getOrgPolicy(tx, ctx.orgId);
       if (!current) throw new RecordNotFoundError('org_settings', ctx.orgId);
+      // Устаревшая версия — 409 сразу, до подтверждения ждущих отчётов, которые всё равно откатятся.
+      if (current.version !== body.version) {
+        throw new RecordChangedError('org_settings', ctx.orgId, current.version);
+      }
       // Правила проверяются по прочитанной записи; если её успели изменить, updateWithHistory ниже
-      // ответит 409 по версии и правка не сохранится.
+      // ответит 409 по версии под блокировкой и правка не сохранится.
       const features: Record<Feature, boolean> | undefined = body.features && {
         ...current.features,
         ...body.features,
@@ -195,6 +233,12 @@ export function updateOrgPolicyHandler(
           apiFail(400, 'default_role_owner', 'Роль владельца не бывает ролью по умолчанию');
         }
       }
+      // Выключили подтверждение — ждущие отчёты считаются подтверждёнными, число — в той же записи
+      // истории политики: «…: выключено; считаются подтверждёнными: N» (прототип repConfSet).
+      const confirmed =
+        current.reportConfirm && body.reportConfirm === false
+          ? await confirmWaitingReports(tx, (await serverTexts(deps))('report.reason.confirm_off'))
+          : 0;
       await updateWithHistory(tx, {
         table: orgSettings,
         entity: 'org_settings',
@@ -220,10 +264,8 @@ export function updateOrgPolicyHandler(
           digestTime: changed(body.digestTime, current.digestTime),
           defaultRoleId: body.defaultRoleId,
         },
+        changes: confirmed ? [{ field: 'confirmedReports', to: confirmed }] : [],
       });
-      if (current.reportConfirm && body.reportConfirm === false) {
-        await confirmWaitingReports(tx, (await serverTexts(deps))('report.reason.confirm_off'));
-      }
       // Включили — сданные без подтверждения его не ждут (прототип repConfSet).
       if (!current.reportConfirm && body.reportConfirm === true) {
         await confirmSubmittedWhileOff(

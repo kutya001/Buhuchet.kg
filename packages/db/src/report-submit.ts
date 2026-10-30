@@ -24,7 +24,7 @@ import {
   type Translate,
   type Tyiyn,
 } from '@buhuchet/domain';
-import { and, asc, desc, eq, gt, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gt, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { Tx } from './client';
 import { writeHistory } from './history';
@@ -875,6 +875,20 @@ export async function rollbackReport(
   return updated!;
 }
 
+/** Сданный отчёт ждёт подтверждения (прототип status-scale.js, repWait): не только уплата и без отметки. */
+const waitingConfirm = () =>
+  and(eq(reports.status, 'submitted'), sql`${reports.act} <> 'pay'`, isNull(reports.confirmedAt));
+
+/**
+ * Сколько отчётов организации ждут подтверждения — для вопроса «Выключить подтверждение сдачи?»
+ * (прототип org.js, repConfSet): все отчёты, а не только видимые сотруднику, потому что выключение
+ * подтверждает все.
+ */
+export async function countWaitingReports(tx: Tx): Promise<number> {
+  const [row] = await tx.select({ n: count() }).from(reports).where(waitingConfirm());
+  return row?.n ?? 0;
+}
+
 /**
  * Выключили «Сдача отчётов требует подтверждения» (ТЗ: отчёты, которые ждали подтверждения, считаются
  * подтверждёнными с записью в истории «Подтверждение выключено в учётной политике»; прототип org.js).
@@ -889,13 +903,7 @@ export async function confirmWaitingReports(tx: Tx, reason: string): Promise<num
       confirmNote: reason,
       ...bump(),
     })
-    .where(
-      and(
-        eq(reports.status, 'submitted'),
-        sql`${reports.act} <> 'pay'`,
-        isNull(reports.confirmedAt),
-      ),
-    )
+    .where(waitingConfirm())
     .returning({ id: reports.id });
   for (let i = 0; i < rows.length; i += 500) {
     await writeStatusChange(
@@ -923,13 +931,7 @@ export async function confirmSubmittedWhileOff(tx: Tx, note: string): Promise<nu
   const rows = await tx
     .update(reports)
     .set({ confirmedAt: sql`now()`, confirmedBy: null, confirmNote: note, ...bump() })
-    .where(
-      and(
-        eq(reports.status, 'submitted'),
-        sql`${reports.act} <> 'pay'`,
-        isNull(reports.confirmedAt),
-      ),
-    )
+    .where(waitingConfirm())
     .returning({ id: reports.id });
   return rows.length;
 }

@@ -231,7 +231,8 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
 
     // Ещё 8 шагов — 9 из 34 (26 %): уровень «Ученик». «Добавить первого контрагента» (задача 2.09) —
     // по истории создания контрагента, «Создать уточнённый отчёт» (задача 2.14) — у прежней версии
-    // `superseded` → true, «Отметить первый отчёт «Сдан»» — «Сдан» в «Истории статусов»; подтверждение
+    // `superseded` → true, «Отметить первый отчёт «Сдан»» — «Сдан» в «Истории статусов» (и прошлый
+    // период, сразу отмеченный сданным при назначении: запись без прежнего статуса); подтверждение
     // при выключении его в учётной политике (смена системой) шаг «Подтвердить» не засчитывает.
     await saved(f.a.ownerUserId, 'organization', 'name');
     await withOrgContext(f.t.app.db, { orgId: f.a.orgId, userId: f.a.ownerUserId }, (tx) =>
@@ -247,7 +248,7 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
       ).then(() =>
         writeStatusChange(
           tx,
-          { scale: 'report', entityId: crypto.randomUUID(), from: 'todo', to: 'submitted' },
+          { scale: 'report', entityId: crypto.randomUUID(), from: null, to: 'submitted' },
           {
             scale: 'report',
             entityId: crypto.randomUUID(),

@@ -1,7 +1,8 @@
 import { randomBytes } from 'node:crypto';
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import { search } from './admin';
-import { DEMO_PASSWORD, signIn } from './helpers';
+import { DEMO_PASSWORD, newOrgOwner, signIn } from './helpers';
+import { connectAllTypes } from './orgs';
 import { asOwner, manualReport, newContractor, reportsOf, staffIds } from './reports';
 
 // «Отчеты для сдачи»: сдача, подтверждение и карточка отчёта (задача 2.14, #70) через настоящий сайт.
@@ -508,5 +509,47 @@ test.describe('Этап 2: отчёты — сдача, подтверждени
     await expect(
       page.getByRole('dialog', { name: 'НДС' }).locator(`[data-report-card="${nds}"]`),
     ).toBeVisible();
+  });
+
+  // Своя новая организация: выключение подтверждения меняет учётную политику, а у демо-организации
+  // она общая для всех проверок.
+  test('(задача 2.14) выключение «Сдача отчётов требует подтверждения» спрашивает «Выключить подтверждение сдачи?» с числом ждущих отчётов; после «Выключить» отчёт подтверждён, в истории учётной политики — «считаются подтверждёнными: 1»', async ({
+    page,
+    baseURL,
+  }) => {
+    test.setTimeout(90_000);
+    const origin = new URL(baseURL!).origin;
+    await newOrgOwner(page.request, origin);
+    await connectAllTypes(page.request, origin);
+    const cp = await newContractor(page.request, origin, { tariff: false });
+    const id = await manualReport(page.request, origin, {
+      contractorId: cp.id,
+      reportTypeCode: 'nds',
+      month: '2026-09-01',
+      due: '2030-01-15',
+    });
+    await submit(page.request, origin, id, { amount: 100_000 });
+    expect((await cardOf(page.request, id)).mark).toBe('waiting');
+
+    await page.goto('/app/org/policy');
+    await page.locator('[data-report-confirm] input[type=checkbox]').click();
+    const dialog = page.getByRole('dialog', { name: 'Выключить подтверждение сдачи?' });
+    await expect(dialog).toContainText(
+      '1 отчёт ждёт подтверждения: они будут считаться подтверждёнными, в истории статусов появится запись «Подтверждение выключено в учётной политике».',
+    );
+    // «Отмена» — ничего не меняется.
+    await dialog.getByRole('button', { name: 'Отмена' }).click();
+    await expect(page.locator('[data-report-confirm] input[type=checkbox]')).toBeChecked();
+    expect((await cardOf(page.request, id)).mark).toBe('waiting');
+
+    await page.locator('[data-report-confirm] input[type=checkbox]').click();
+    await dialog.getByRole('button', { name: 'Выключить' }).click();
+    await expect(page.getByText('«Сдан» теперь окончательная отметка')).toBeVisible();
+    await expect(
+      page.getByText(
+        'Сдача отчётов требует подтверждения: выключено; считаются подтверждёнными: 1',
+      ),
+    ).toBeVisible();
+    await expect.poll(async () => (await cardOf(page.request, id)).mark).toBe('confirmed');
   });
 });

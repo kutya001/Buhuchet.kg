@@ -9,7 +9,7 @@ import {
   type KbLevelDef,
   type KbStepDef,
 } from './catalog';
-import { KB_STEP_RULES, type KbStepRule } from './ready';
+import { KB_STEP_RULES, type KbPolicySetting, type KbStepRule } from './ready';
 
 /*
  * Программа обучения пользователя и его уровень (ТЗ «База знаний» → «Главное правило», «Уровни»,
@@ -26,6 +26,8 @@ export interface KbAccess {
   isOwner: boolean;
   can: (permission: PermissionId) => boolean;
   feature: (feature: Feature) => boolean;
+  /** Включена ли настройка учётной политики («Сдача отчётов требует подтверждения»). */
+  policy: (setting: KbPolicySetting) => boolean;
   /** Модули меню пользователя. */
   modules: ReadonlySet<string>;
 }
@@ -34,12 +36,14 @@ export interface KbAccess {
 export function kbBusinessAccess(
   subject: AccessSubject,
   features: Readonly<Partial<Record<Feature, boolean>>>,
+  settings: Readonly<Record<KbPolicySetting, boolean>>,
 ): KbAccess {
   return {
     admin: false,
     isOwner: subject.isOwner,
     can: (p) => hasPermission(subject, p),
     feature: (f) => features[f] === true,
+    policy: (s) => settings[s],
     modules: new Set(menuModules(subject, features)),
   };
 }
@@ -51,6 +55,7 @@ export function kbAdminAccess(): KbAccess {
     isOwner: false,
     can: () => false,
     feature: () => false,
+    policy: () => false,
     modules: new Set(ADMIN_MENU_MODULES),
   };
 }
@@ -104,7 +109,8 @@ function isFeature(value: string, access: KbAccess): boolean {
 
 /**
  * Виден ли шаг в программе (прототип kbVis): шаг работает (`KB_STEP_RULES`), не выключен
- * администратором, есть его право, включена его функция и модуль шага есть в меню.
+ * администратором, есть его право, включены его функция и настройка учётной политики и модуль шага
+ * есть в меню.
  */
 export function kbStepVisible(
   step: KbStepDef,
@@ -116,6 +122,7 @@ export function kbStepVisible(
   if (step.perm && !access.can(step.perm as PermissionId)) return false;
   if (rule.permission && !access.can(rule.permission)) return false;
   if (step.featk && !isFeature(step.featk, access)) return false;
+  if (rule.policy && !access.policy(rule.policy)) return false;
   return rule.module === null || access.modules.has(rule.module);
 }
 

@@ -28,9 +28,15 @@ export type KbDoneRule =
     }
   /**
    * Смена статуса записи самим пользователем («История статусов», `status_history`; откат не
-   * считается): шкала, из каких статусов и в какие. Действия с задачей пишутся только туда.
+   * считается): шкала, из каких статусов и в какие; null — запись создана сразу в этом статусе
+   * (прошлые периоды «сданными» при назначении). Действия с задачей пишутся только туда.
    */
-  | { kind: 'status'; scale: StatusScaleKey; from: readonly string[]; to: readonly string[] }
+  | {
+      kind: 'status';
+      scale: StatusScaleKey;
+      from: readonly (string | null)[];
+      to: readonly string[];
+    }
   /** Привязан свой Telegram (`telegram_links`). */
   | { kind: 'telegram' }
   /** Администратор платформы сам создал организацию (`organizations.created_by`). */
@@ -56,7 +62,15 @@ export interface KbStepRule {
    * (ТЗ «Главное правило»).
    */
   permission?: PermissionId;
+  /**
+   * Настройка учётной политики, без которой шага нет (прототип `feat: () => repConfOn()`): шаг
+   * «Подтвердить сдачу отчёта» — только когда сдача требует подтверждения.
+   */
+  policy?: KbPolicySetting;
 }
+
+/** Настройки учётной политики, от которых зависят шаги (не функции из «Функций»). */
+export type KbPolicySetting = 'reportConfirm';
 
 const orgSettings = (...anyField: string[]): KbDoneRule => ({
   kind: 'history',
@@ -123,17 +137,20 @@ export const KB_STEP_RULES: Readonly<Record<string, KbStepRule>> = {
   // считается. «Массовая отметка» и «Шкала статусов» — «Посмотреть». «Создать уточнённый отчёт»
   // (`KB_EV['r.ver']`) — у прежней версии в истории `superseded` → true.
   rtabs: { module: 'reports' },
+  // «Отметить сданным», массовая отметка и прошлые периоды «сданными» при назначении (прототип
+  // `KB_EV['r.sub']`: «отмечен сданн…»).
   submit: {
     module: 'reports',
     done: {
       kind: 'status',
       scale: 'report',
-      from: ['todo', 'in_progress', 'needs_fix'],
+      from: [null, 'todo', 'in_progress', 'needs_fix'],
       to: ['submitted'],
     },
   },
   accept: {
     module: 'reports',
+    policy: 'reportConfirm',
     done: { kind: 'status', scale: 'report', from: ['submitted'], to: ['confirmed'] },
   },
   bulk: { module: 'reports' },

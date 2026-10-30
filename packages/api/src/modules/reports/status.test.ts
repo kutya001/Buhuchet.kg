@@ -370,11 +370,36 @@ describe.skipIf(!databaseAvailable())(
       const sep = await reportOf(cpChief, 'nds', '2026-09-01');
       await act(chief, sep.id, 'submit', { version: sep.version, date: '2026-10-18' });
       expect((await card(chief, sep.id)).mark).toBe('waiting');
+      // Число для вопроса «Выключить подтверждение сдачи?» — по всем отчётам организации и только с
+      // правом «Настройки и учётная политика».
+      const waitingNow = (await list(owner, '&tab=waiting')).items.length;
+      const count = await call('GET', '/api/org/policy/waiting-reports', owner);
+      expect(count.status, await count.clone().text()).toBe(200);
+      expect(await count.json()).toEqual({ count: waitingNow });
+      expect((await call('GET', '/api/org/policy/waiting-reports', senior)).status).toBe(403);
+      // Чужая организация: своё число, отчёты организации А не видны.
+      const foreign = await call('GET', '/api/org/policy/waiting-reports', ownerB);
+      expect(await foreign.json()).toEqual({ count: 0 });
+      // Устаревшая версия политики — 409, ждущие отчёты не подтверждены.
+      const stale = await call('PATCH', '/api/org/policy', owner, {
+        version: (await policy()).version - 1,
+        reportConfirm: false,
+      });
+      expect(stale.status).toBe(409);
+      expect((await failure(stale)).code).toBe('record_changed');
+      expect((await card(chief, sep.id)).mark).toBe('waiting');
       const res = await call('PATCH', '/api/org/policy', owner, {
         version: (await policy()).version,
         reportConfirm: false,
       });
       expect(res.status, await res.clone().text()).toBe(200);
+      // В истории политики — сколько подтверждено (прототип: «…: выключено; считаются подтверждёнными: N»).
+      const history = await call('GET', '/api/org/policy/history', owner);
+      const [last] = ((await history.json()) as { items: { changes: unknown[] }[] }).items;
+      expect(last!.changes).toEqual([
+        { field: 'reportConfirm', from: true, to: false },
+        { field: 'confirmedReports', to: waitingNow },
+      ]);
       const after = await card(chief, sep.id);
       expect(after.mark).toBeNull();
       expect(after.confirmedAt).not.toBeNull();

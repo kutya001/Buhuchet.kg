@@ -15,6 +15,8 @@ import {
   orgPolicyHistoryRoute,
   orgRoleOptionsHandler,
   orgRoleOptionsRoute,
+  orgWaitingReportsHandler,
+  orgWaitingReportsRoute,
   updateOrgPolicyHandler,
   updateOrgPolicyRoute,
 } from './policy';
@@ -40,5 +42,6 @@ export function orgModule(deps: ApiDeps) {
     .openapi(getOrgPolicyRoute, getOrgPolicyHandler(deps))
     .openapi(updateOrgPolicyRoute, updateOrgPolicyHandler(deps))
     .openapi(orgPolicyHistoryRoute, orgPolicyHistoryHandler(deps))
-    .openapi(orgRoleOptionsRoute, orgRoleOptionsHandler(deps));
+    .openapi(orgRoleOptionsRoute, orgRoleOptionsHandler(deps))
+    .openapi(orgWaitingReportsRoute, orgWaitingReportsHandler(deps));
 }

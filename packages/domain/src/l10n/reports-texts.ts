@@ -492,6 +492,22 @@ export const REPORTS_TEXTS = {
     ru: 'Сдан, когда подтверждение было выключено',
     section: S,
   },
+  // Вопрос в учётной политике перед выключением подтверждения (прототип org.js, repConfSet).
+  'report.confirm_off.title': { ru: 'Выключить подтверждение сдачи?', section: S },
+  'report.confirm_off.text.one': {
+    ru: '{n} отчёт ждёт подтверждения: они будут считаться подтверждёнными, в истории статусов появится запись «Подтверждение выключено в учётной политике».',
+    section: S,
+  },
+  'report.confirm_off.text.few': {
+    ru: '{n} отчёта ждут подтверждения: они будут считаться подтверждёнными, в истории статусов появится запись «Подтверждение выключено в учётной политике».',
+    section: S,
+  },
+  'report.confirm_off.text.many': {
+    ru: '{n} отчётов ждут подтверждения: они будут считаться подтверждёнными, в истории статусов появится запись «Подтверждение выключено в учётной политике».',
+    section: S,
+  },
+  'report.confirm_off.ok': { ru: 'Выключить', section: S },
+  'report.confirm_off.history': { ru: 'считаются подтверждёнными: {n}', section: S },
   'err.until_before_from': { ru: ASSIGNMENT_MESSAGES.until_before_from, section: E },
   'err.rate_invalid': { ru: ASSIGNMENT_MESSAGES.rate_invalid, section: E },
   'err.en_rates_invalid': { ru: ASSIGNMENT_MESSAGES.en_rates_invalid, section: E },
