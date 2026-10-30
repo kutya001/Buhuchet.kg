@@ -373,13 +373,14 @@ function EditContractorForm({
       return toast(t('cp.form.edit.no_changes'), { icon: 'info' });
     }
     // Основания изменились — после сохранения окно «Основания изменились»: добавить отчёты включённых и
-    // снять отчёты выключенных (ТЗ, решение заказчика 30.10.2026, docs/deviations.md п. А-7). Иначе
-    // обязательные по подбору, но не назначенные — в уведомлении после сохранения (прототип pkAuto).
+    // снять отчёты выключенных (ТЗ, решение заказчика 30.10.2026, docs/deviations.md п. А-7).
+    // Обязательные по подбору, но не назначенные — в уведомлении после сохранения, без отчётов, которые
+    // предложит окно (ТЗ «не повторяя отчёты оснований»; прототип editCpDlg: pkAuto без `pb.add`).
     const bases =
       regular && calc && 'bases' in patch && onBases ? baseChangesOf(c, calc, assigned, t) : null;
     const missing =
-      regular && calc && !bases
-        ? reportPickAuto(calc.pick).filter((x) => !assigned.includes(x))
+      regular && calc
+        ? reportPickAuto(calc.pick).filter((x) => !assigned.includes(x) && !bases?.add.includes(x))
         : [];
     setBusy(true);
     const res = await callApi(() =>

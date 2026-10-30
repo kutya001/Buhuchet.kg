@@ -1,9 +1,19 @@
 import { createRoute, z, type RouteHandler } from '@hono/zod-openapi';
-import { contractorHistory, withOrgContext } from '@buhuchet/db';
+import {
+  contractorHistory,
+  orgMenuSettings,
+  withOrgContext,
+  type ContractorHistoryAccess,
+  type Tx,
+} from '@buhuchet/db';
+import { hasPermission, type AccessSubject } from '@buhuchet/domain';
 import { ContractorHistory, Uuid } from '@buhuchet/shared';
 import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
 import { orgContextOf, requirePermission } from '../../middleware/access';
+import { filesScopeOf } from '../files/manager';
+import { kpiScopeOf } from '../kpi/common';
+import { reportScopeOf } from '../reports/common';
 import { notFound } from './card';
 import { error, scopeSqlOf, subjectOf, translateOf } from './common';
 
@@ -28,8 +38,30 @@ export const contractorHistoryRoute = createRoute({
 });
 
 /**
+ * Что из истории видно (как вкладки карточки): отчёты и назначения — с «Просматривать отчёты» в его
+ * области, задачи — с функцией «Задачи», показатели и файлы — с функцией, правом и областью своего
+ * модуля, поля платы — с «Видеть плату за обслуживание».
+ */
+async function historyAccess(
+  tx: Tx,
+  orgId: string,
+  subject: AccessSubject,
+): Promise<ContractorHistoryAccess> {
+  const { features } = await orgMenuSettings(tx, orgId);
+  const can = (p: Parameters<typeof hasPermission>[1]) => hasPermission(subject, p);
+  return {
+    fee: features.fee && can('fee'),
+    reports: can('repView') && reportScopeOf(subject),
+    tasks: features.tasks,
+    kpi: features.indicators && can('kpiView') && kpiScopeOf(subject),
+    files: features.files && can('filesView') && filesScopeOf(subject),
+  };
+}
+
+/**
  * Вкладка «История» карточки контрагента (прототип contractor-card.js, вкладка «hist»: последние 80
- * записей контрагента): область — как у карточки («Свои / Все контрагенты»).
+ * записей контрагента): область — как у карточки («Свои / Все контрагенты»), записи модулей — по
+ * правам (`historyAccess`).
  */
 export function contractorHistoryHandler(
   deps: ApiDeps,
@@ -37,8 +69,14 @@ export function contractorHistoryHandler(
   return async (c) => {
     const { id } = c.req.valid('param');
     const t = await translateOf(deps);
-    const history = await withOrgContext(deps.db, orgContextOf(c), (tx) =>
-      contractorHistory(tx, id, { scope: scopeSqlOf(subjectOf(c)), t }),
+    const ctx = orgContextOf(c);
+    const subject = subjectOf(c);
+    const history = await withOrgContext(deps.db, ctx, async (tx) =>
+      contractorHistory(tx, id, {
+        scope: scopeSqlOf(subject),
+        access: await historyAccess(tx, ctx.orgId, subject),
+        t,
+      }),
     );
     if (!history) notFound();
     return c.json(

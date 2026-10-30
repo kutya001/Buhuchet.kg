@@ -5,7 +5,7 @@ import {
   type ReportPeriod,
   type Translate,
 } from '@buhuchet/domain';
-import { and, desc, eq, inArray, type SQL } from 'drizzle-orm';
+import { and, desc, eq, inArray, notInArray, or, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { Tx } from './client';
 import {
@@ -174,11 +174,87 @@ async function subjectsOf(
   return out;
 }
 
+/**
+ * Что из истории контрагента видно сотруднику — как вкладки карточки по правам, функциям и областям.
+ * Область — условие над контрагентом (`contractorScope`) или, у отчётов, над отчётом и контрагентом
+ * (`reportScope`); undefined — все; false — модуль не виден.
+ */
+export interface ContractorHistoryAccess {
+  /** «Видеть плату за обслуживание» с включённой функцией: иначе поля платы убираются из записей. */
+  fee: boolean;
+  /** Отчёты и назначения («Просматривать отчёты»). */
+  reports: SQL | undefined | false;
+  /** Задачи (функция «Задачи»). */
+  tasks: boolean;
+  /** Показатели (функция «Показатели контрагентов» и право их смотреть). */
+  kpi: SQL | undefined | false;
+  /** Файлы (функция «Файлы в карточках» и право их смотреть): записи прикрепления и удаления. */
+  files: SQL | undefined | false;
+}
+
+/** Поля платы за обслуживание: без права их «было → стало» не отдаются (ТЗ: «скрыты везде»). */
+const FEE_FIELDS: ReadonlySet<string> = new Set(['tariff', 'feeDay', 'firstMonthMode']);
+const KPI_ENTITIES = ['indicator', 'indicator_value'] as const;
+const FILE_ACTIONS = ['file_attach', 'file_delete'] as const;
+
+/**
+ * Какие записи истории видны: сам контрагент и его страница — всем, кто видит карточку; остальное —
+ * по модулю. Сущность, которой здесь нет (например, деньги потока В), не видна, пока её модуль не
+ * добавит сюда своё правило.
+ */
+async function visibleEntries(
+  tx: Tx,
+  id: string,
+  access: ContractorHistoryAccess,
+): Promise<SQL | undefined> {
+  const inScope = async (scope: SQL | undefined | false) => {
+    if (scope === false) return false;
+    if (!scope) return true;
+    const [row] = await tx
+      .select({ id: contractors.id })
+      .from(contractors)
+      .where(and(eq(contractors.id, id), scope));
+    return !!row;
+  };
+  const [kpi, files] = await Promise.all([inScope(access.kpi), inScope(access.files)]);
+  const own: SQL[] = [inArray(auditLog.entity, ['contractor', 'contractor_page'])];
+  if (access.reports !== false) {
+    own.push(eq(auditLog.entity, 'assignment'));
+    // Отчёт — в области отчётов: «Свои» — отчёты своего контрагента или где ответственный он сам.
+    own.push(
+      access.reports
+        ? and(
+            eq(auditLog.entity, 'report'),
+            inArray(
+              auditLog.entityId,
+              tx
+                .select({ id: sql<string>`${reports.id}::text` })
+                .from(reports)
+                .innerJoin(contractors, eq(contractors.id, reports.contractorId))
+                .where(and(eq(reports.contractorId, id), access.reports)),
+            ),
+          )!
+        : eq(auditLog.entity, 'report'),
+    );
+  }
+  if (access.tasks) own.push(eq(auditLog.entity, 'task'));
+  if (kpi) own.push(inArray(auditLog.entity, [...KPI_ENTITIES]));
+  if (files) own.push(eq(auditLog.entity, 'file'));
+  return and(or(...own), files ? undefined : notInArray(auditLog.action, [...FILE_ACTIONS]));
+}
+
+/** Запись без полей платы; запись только о плате без причины — null (её не видно). */
+function withoutFee<T extends { changes: HistoryChange[]; reason: string | null }>(r: T): T | null {
+  const changes = r.changes.filter((c) => !FEE_FIELDS.has(c.field));
+  if (changes.length === r.changes.length) return r;
+  return changes.length || r.reason ? { ...r, changes } : null;
+}
+
 /** История контрагента в области `scope`; null — нет такого или он вне области. */
 export async function contractorHistory(
   tx: Tx,
   id: string,
-  o: { scope: SQL | undefined; t: Translate; limit?: number },
+  o: { scope: SQL | undefined; access: ContractorHistoryAccess; t: Translate; limit?: number },
 ): Promise<ContractorHistory | null> {
   if (!UUID_RE.test(id)) return null;
   const [found] = await tx
@@ -186,6 +262,7 @@ export async function contractorHistory(
     .from(contractors)
     .where(and(eq(contractors.id, id), o.scope));
   if (!found) return null;
+  const visible = await visibleEntries(tx, id, o.access);
   const rows = await tx
     .select({
       id: auditLog.id,
@@ -200,9 +277,10 @@ export async function contractorHistory(
     })
     .from(auditLog)
     .leftJoin(actor, eq(actor.userId, auditLog.actorUserId))
-    .where(eq(auditLog.contractorId, id))
+    .where(and(eq(auditLog.contractorId, id), visible))
     .orderBy(desc(auditLog.at), desc(auditLog.id))
-    .limit(o.limit ?? 200);
+    .limit(o.limit ?? 200)
+    .then((list) => (o.access.fee ? list : list.flatMap((r) => withoutFee(r) ?? [])));
   const [names, subjects] = await Promise.all([
     namesOf(tx, referencesOf(rows)),
     subjectsOf(tx, rows, o.t),

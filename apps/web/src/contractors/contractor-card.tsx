@@ -41,6 +41,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { api, apiFailure } from '../api-client';
 import { ContractorPageBox } from '../contractor-page/page-box';
+import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
 import { catalogQuery, type Catalog } from '../dicts/dicts-data';
 import { KpiCardTab, useKpiCardCount } from '../kpi/kpi-card-tab';
 import { useT } from '../l10n/provider';
@@ -75,6 +76,8 @@ import { ContractorFilesTab, contractorFilesQuery, useFilesTabOn } from './contr
 import { GkedNotesView } from './contractor-fields';
 import { contractorHistoryItem } from './contractor-history';
 import { serviceScaleSteps } from './contractor-menu';
+import { useNotNeededRemove } from './not-needed-remove';
+import { RatesDialog } from './rates-dialog';
 import { NotNeededNote, ReportPickTab } from './report-pick';
 import { serviceQuery } from './service-data';
 import { ServicePlanNote, ServiceStatusBlock } from './service-actions';
@@ -703,7 +706,8 @@ function RegistrationBox({ t, c }: { t: Translate; c: Contractor }) {
  * «Сдаёт отчёты · N» (прототип openCp, `cp-asg`): действующие назначения — вид и код формы, орган,
  * срок сдачи с метками «по статусу», «разовый», «только оплата», ставка, повторяющаяся сумма, с какого и
  * по какой месяц, ответственный («отдельно» — свой у вида), примечание и «Изменить назначение» (право
- * «Назначать отчёты»). Над таблицей — «По статусу «…» не нужны». На телефоне — плитка на вид.
+ * «Назначать отчёты»). Над таблицей — «По статусу «…» не нужны». На телефоне — плитка на вид. В
+ * заголовке — «Подбор отчётов» и, с правом «Назначать отчёты», «Ставки» (окно «Ставки и сроки отчётов»).
  */
 function AssignmentsBox({
   t,
@@ -718,24 +722,46 @@ function AssignmentsBox({
   const query = useQuery(assignmentsQuery(c.id));
   const catalog = useQuery(catalogQuery).data;
   const [edit, setEdit] = useState<{ a: Assignment; open: boolean; n: number } | null>(null);
+  const [rates, setRates] = useState<DialogSlot<null> | null>(null);
   const list = (query.data ?? []).filter((a) => !a.endedOn);
   const canEdit = access.can('assign') && c.serviceStatus !== 'archived';
+  // «Снять» у «По статусу «…» не нужны» — кто может менять отчёты в «Подборе отчётов» (прототип pkEdit).
+  const notNeeded = useNotNeededRemove(
+    c.id,
+    list.map((a) => a.reportTypeCode),
+  );
   const month = (d: string | null) => (d ? `${d.slice(5, 7)}.${d.slice(0, 4)}` : null);
   return (
     <Box
       title={t('cp.card.asg.title', { n: list.length })}
       actions={
-        onPick ? (
-          <button
-            type="button"
-            data-cp-pick=""
-            title={t('cp.card.asg.pick_title')}
-            className={`${buttonClass('default', 'sm')} normal-case tracking-normal`}
-            onClick={onPick}
-          >
-            <Icon name="list" size="sm" />
-            {t('cp.card.asg.pick')}
-          </button>
+        onPick || (access.can('assign') && list.length) ? (
+          <>
+            {onPick ? (
+              <button
+                type="button"
+                data-cp-pick=""
+                title={t('cp.card.asg.pick_title')}
+                className={`${buttonClass('default', 'sm')} normal-case tracking-normal`}
+                onClick={onPick}
+              >
+                <Icon name="list" size="sm" />
+                {t('cp.card.asg.pick')}
+              </button>
+            ) : null}
+            {access.can('assign') && list.length ? (
+              <button
+                type="button"
+                data-cp-rates=""
+                title={t('cp.card.asg.rates_title')}
+                className={`${buttonClass('default', 'sm')} normal-case tracking-normal`}
+                onClick={() => setRates(openSlot(null))}
+              >
+                <Icon name="sliders" size="sm" />
+                {t('cp.card.asg.rates')}
+              </button>
+            ) : null}
+          </>
         ) : null
       }
     >
@@ -744,6 +770,7 @@ function AssignmentsBox({
           benefits={c.benefits.map((b) => b.code)}
           assigned={list.map((a) => a.reportTypeCode)}
           catalog={catalog}
+          {...(canEdit && c.kind === 'regular' ? { onRemove: notNeeded.onRemove } : {})}
         />
       ) : null}
       {query.data ? (
@@ -836,6 +863,16 @@ function AssignmentsBox({
           contractor={{ id: c.id, responsible: c.responsible?.id ?? null }}
           open={edit.open}
           onClose={() => setEdit({ ...edit, open: false })}
+        />
+      ) : null}
+      {notNeeded.dialog}
+      {rates ? (
+        <RatesDialog
+          key={`rates-${rates.n}`}
+          contractor={c}
+          assignments={list}
+          open={rates.open}
+          onClose={() => setRates(closeSlot)}
         />
       ) : null}
     </Box>

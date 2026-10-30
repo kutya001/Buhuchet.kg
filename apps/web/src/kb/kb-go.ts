@@ -54,8 +54,6 @@ export const KB_GO: Readonly<Record<string, KbTarget>> = {
   pause: { module: 'cps', tab: 'all', flash: 'main' },
   archive: { module: 'cps', tab: 'all', flash: 'main' },
   cppage: { module: 'cps', tab: 'all', flash: LIST },
-  // Назначение (2.11): до «Кто что сдаёт» (2.15) — вкладка «Подбор отчётов» карточки контрагента.
-  assign: { module: 'cps', tab: 'all', flash: LIST },
   // «Отчеты для сдачи» (задача 2.13).
   rtabs: { module: 'reports', tab: 'week', flash: '[data-tabrow]' },
   // Сдача и подтверждение (задача 2.14): «На неделе» и «Ожидают подтверждения»; массовая отметка,

@@ -315,7 +315,81 @@ describe.skipIf(!databaseAvailable())(
       expect(ha.items[0]!.subject).toMatch(/^(1-Т|НДС|[^ ]+) (08|09)\.2026$/);
     });
 
-    it('история: чужая организация и чужой контрагент со «Своими» — «не найден»', async () => {
+    it('история по правам: без «Видеть плату» — без полей платы; отчёты, задачи, показатели и файлы — как вкладки карточки', async () => {
+      const senior = await signIn(f.app, 'senior-a', TEST_PASSWORD);
+      const cp = await contractor(f.a.orgId, 'ОсОО «История»', '02810201510077', {
+        responsibleEmployeeId: employee('senior-a'),
+      });
+      const setFeatures = (features: Record<string, boolean>) =>
+        f.t.admin.db
+          .update(schema.orgSettings)
+          .set({ features })
+          .where(eq(schema.orgSettings.orgId, f.a.orgId));
+      const entry = (
+        entity: string,
+        action: string,
+        changes: { field: string; from?: unknown; to?: unknown }[],
+      ) => ({
+        orgId: f.a.orgId,
+        entity,
+        entityId: crypto.randomUUID(),
+        action,
+        contractorId: cp,
+        changes,
+        actorUserId: f.a.ownerUserId,
+      });
+      await f.t.admin.db.insert(schema.auditLog).values([
+        entry('contractor', 'create', [
+          { field: 'name', to: 'ОсОО «История»' },
+          { field: 'tariff', to: { amount: 1_200_000, period: 'M', validFrom: '2026-01-01' } },
+          { field: 'feeDay', to: 5 },
+        ]),
+        entry('contractor', 'update', [{ field: 'tariff', from: null, to: { amount: 1 } }]),
+        entry('assignment', 'create', [{ field: 'typeCode', to: 'nds' }]),
+        entry('report', 'update', [{ field: 'amount', from: 0, to: 500_000 }]),
+        entry('task', 'create', [{ field: 'title', to: 'Сверка' }]),
+        entry('indicator_value', 'update', [{ field: 'value', from: 1, to: 2 }]),
+        entry('file', 'file_attach', [{ field: 'file', to: 'Договор.pdf' }]),
+        // Сущность без правила (например, деньги потока В) не видна никому.
+        entry('employee', 'update', [{ field: 'phone', from: '1', to: '2' }]),
+      ]);
+      const kinds = (h: ContractorHistory) => h.items.map((x) => x.entity).sort();
+
+      await setFeatures({ fee: true, tasks: true, indicators: true, files: true });
+      expect(kinds(await history(owner, cp))).toEqual([
+        'assignment',
+        'contractor',
+        'contractor',
+        'file',
+        'indicator_value',
+        'report',
+        'task',
+      ]);
+      const ownCreate = (await history(owner, cp)).items.find(
+        (x) => x.entity === 'contractor' && x.action === 'create',
+      );
+      expect(ownCreate?.changes.map((x) => x.field)).toEqual(['name', 'tariff', 'feeDay']);
+
+      // «Старший»: только «Просматривать контрагентов» — без отчётов, показателей, файлов и платы.
+      const h = await history(senior, cp);
+      expect(kinds(h)).toEqual(['contractor', 'task']);
+      expect(h.items.find((x) => x.entity === 'contractor')?.changes).toEqual([
+        { field: 'name', to: 'ОсОО «История»' },
+      ]);
+      expect(JSON.stringify(h)).not.toContain('1200000');
+
+      // Выключенные функции прячут свои записи и у владельца.
+      await setFeatures({ fee: false, tasks: false, indicators: false, files: false });
+      const off = await history(owner, cp);
+      expect(kinds(off)).toEqual(['assignment', 'contractor', 'report']);
+      expect(off.items.find((x) => x.entity === 'contractor')?.changes).toHaveLength(1);
+      await setFeatures({});
+    });
+
+    it('история: неверный номер — 400, без входа — 401, чужая организация и чужой контрагент со «Своими» — «не найден»', async () => {
+      expect((await get(owner, '/api/contractors/not-a-uuid/history')).status).toBe(400);
+      expect((await apiRequest(f.app, 'GET', `/api/contractors/${cpA}/history`)).status).toBe(401);
+      expect((await apiRequest(f.app, 'GET', '/api/contractors/summary')).status).toBe(401);
       expect((await get(ownerB, `/api/contractors/${cpA}/history`)).status).toBe(404);
       expect((await get(acc, `/api/contractors/${cpPaused}/history`)).status).toBe(404);
       expect((await get(acc, `/api/contractors/${cpA}/history`)).status).toBe(200);

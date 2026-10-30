@@ -215,6 +215,12 @@ test.describe('Этап 2: Показатели контрагентов', () =>
       missing,
     );
 
+    // Список контрагентов (задача 2.10): у названия — значок «Показатели не заполнены» с числом месяцев.
+    await page.goto('/app/cps/all');
+    const badge = page.locator(`[data-kpi-badge="${org.contractors[cp]}"]`).first();
+    await expect(badge).toBeVisible();
+    await expect(badge).toHaveText(String(missing.length));
+
     // «Не заполнено»: семь месяцев, раньше «Вести с» — ни одного.
     await page.goto('/app/kpi/missing');
     await expectModuleCount(page, isMobile, 'red');

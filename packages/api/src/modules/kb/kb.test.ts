@@ -80,7 +80,7 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
       'files',
       'lists',
     ]);
-    expect(own.progress).toMatchObject({ total: 39, done: 0, pct: 0, level: 0, next: 1, need: 10 });
+    expect(own.progress).toMatchObject({ total: 38, done: 0, pct: 0, level: 0, next: 1, need: 10 });
     expect(own.progress.levels.map((l) => l.name)).toEqual([
       'Новичок',
       'Ученик',
@@ -230,7 +230,7 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
     const notMine = KbMarkResult.parse(await ok(await call('POST', '/api/kb/hits/profile', acc)));
     expect(notMine.fresh).toEqual([]);
 
-    // Ещё 9 шагов — 10 из 39 (25 %): уровень «Ученик». «Добавить первого контрагента» (задача 2.09) —
+    // Ещё 9 шагов — 10 из 38 (26 %): уровень «Ученик». «Добавить первого контрагента» (задача 2.09) —
     // по истории создания контрагента, «Закрепить ответственных» (задача 2.10) — ответственный в той же
     // записи, «Создать уточнённый отчёт» (задача 2.14) — у прежней версии
     // `superseded` → true, «Отметить первый отчёт «Сдан»» — «Сдан» в «Истории статусов» (и прошлый
@@ -285,7 +285,7 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
       'ver',
     ]);
     expect(second.congrats).toBe('Ученик');
-    expect(second.state.progress).toMatchObject({ done: 10, pct: 25, level: 1 });
+    expect(second.state.progress).toMatchObject({ done: 10, pct: 26, level: 1 });
     // Повтор ничего не меняет.
     const again = KbMarkResult.parse(
       await ok(await call('POST', '/api/kb/sync', owner, { reason: 'open' })),
@@ -375,7 +375,7 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
       levelName: 'Ученик',
       of: 5,
       done: 11,
-      total: 39,
+      total: 38,
       levelAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
     });
     const accRow = team.items.find((r) => r.fullName === 'Сотрудник acc-a');

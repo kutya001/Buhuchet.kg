@@ -364,9 +364,9 @@ describe.skipIf(!databaseAvailable())('«База знаний»: прогрес
     expect(await asOwner(a, (tx) => kbDoneFacts(tx, a.ownerUserId, []))).toEqual(new Map());
   });
 
-  it('факты «Сделать» контрагентов: ответственный, разовый, страница, назначение отчёта', async () => {
+  it('факты «Сделать» контрагентов: ответственный, разовый, страница', async () => {
     const cp = '00000000-0000-4000-8000-0000000000c1';
-    const steps = ['resp', 'oneoff', 'cppage', 'assign'].map((id) => ({
+    const steps = ['resp', 'oneoff', 'cppage'].map((id) => ({
       id,
       rule: KB_STEP_RULES[id]!.done!,
     }));
@@ -390,8 +390,7 @@ describe.skipIf(!databaseAvailable())('«База знаний»: прогрес
       ),
     );
     expect((await inOrg(a, accUserId, (tx) => kbDoneFacts(tx, accUserId, steps))).size).toBe(0);
-    // Разовый с ответственным, смена ответственного («Передать контрагентов»), включённая страница,
-    // назначенный вид отчёта.
+    // Разовый с ответственным, смена ответственного («Передать контрагентов»), включённая страница.
     await inOrg(a, accUserId, (tx) =>
       writeHistory(
         tx,
@@ -405,16 +404,10 @@ describe.skipIf(!databaseAvailable())('«База знаний»: прогрес
           ],
         },
         { entity: 'contractor_page', entityId: cp, action: 'page_on' },
-        {
-          entity: 'assignment',
-          entityId: '00000000-0000-4000-8000-0000000000c2',
-          action: 'create',
-          changes: [{ field: 'typeCode', to: 'nds' }],
-        },
       ),
     );
     const acc = await inOrg(a, accUserId, (tx) => kbDoneFacts(tx, accUserId, steps));
-    expect([...acc.keys()].sort()).toEqual(['assign', 'cppage', 'oneoff', 'resp']);
+    expect([...acc.keys()].sort()).toEqual(['cppage', 'oneoff', 'resp']);
     await asOwner(a, (tx) =>
       writeHistory(tx, {
         entity: 'contractor',
