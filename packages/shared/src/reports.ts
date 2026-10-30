@@ -590,7 +590,7 @@ export const ReportMatrix = z.object({
         id: Uuid,
         name: z.string(),
         inn: z.string(),
-        /** Режимы словами: «ОНР», «ОНР + Патент»; пусто — режим не указан. */
+        /** Основной режим (прототип `c.regime`); пусто — режим не указан. */
         regime: z.string().nullable(),
       }),
       cells: z.array(ReportMatrixCell),
