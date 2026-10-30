@@ -40,6 +40,7 @@ describe('«Показать как»: элементы прототипа на 
     expect(fieldForm({ screen: 'org.main' }, t)).toBe('og');
     expect(fieldForm({ screen: 'staff.list' }, t)).toBeUndefined();
     expect(fieldForm({ title: 'Новый сотрудник' }, t)).toBe('ne');
+    expect(fieldForm({ title: 'Новый контрагент' }, t)).toBe('nc');
     expect(fieldForm({ title: 'Показатель «Выручка»' }, t)).toBe('ki');
     expect(fieldForm({ title: 'Что-то другое' }, t)).toBeUndefined();
     expect(formTitle('Удалить «Договор.pdf»?')).toBe('Удалить «…»?');

@@ -211,6 +211,8 @@ test.describe('Этап 2: База знаний — «Показать как»
     await toEnd(page, ['Сделать сейчас']);
     await endShow(page);
     await expect(bubble(page)).toHaveCount(0);
+    // Показ профиля пройден: его элементы стали знакомыми на сервере.
+    await expect.poll(() => knownCount(page.request), { timeout: 15_000 }).toBeGreaterThan(0);
 
     await showStep(page, 'cp1');
     await expect(page).toHaveURL(/\/app\/cps\/all/);
@@ -226,13 +228,8 @@ test.describe('Этап 2: База знаний — «Показать как»
     await expect(page.locator('[data-tour-skipped]')).toHaveCount(0);
     const fields = await toEnd(page, ['Понятно, заполню']);
     expect(fields.titles).toContain('«На весь экран»');
-    expect(fields.titles).toEqual(
-      expect.arrayContaining([
-        'Вкладка «Реквизиты»',
-        'Вкладка «Режим и статусы»',
-        'Вкладка «Отчёты и обслуживание»',
-      ]),
-    );
+    // Оглавление формы (разделы) в показ не попадает, как в прототипе.
+    expect(fields.titles.some((x) => x.startsWith('Вкладка'))).toBe(false);
     // Пояснение поля — из справочника показов по коду поля прототипа (nc-inn).
     const inn = fields.titles.indexOf('ИНН · обязательно');
     expect(inn).toBeGreaterThan(-1);

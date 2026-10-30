@@ -592,6 +592,7 @@ function NewContractorForm({
       role="tablist"
       aria-label={t('cp.form.sections')}
       data-cf-toc=""
+      data-form-toc=""
       className={`sticky -top-1.5 z-[3] -mt-1.5 flex gap-1.5 bg-pane pt-1.5 pb-2 shadow-[0_1px_0_var(--bu-line)] ${phone ? 'flex-nowrap items-center gap-0.5' : 'flex-wrap'}`}
     >
       {FORM_SECTIONS.map((sec) => {
@@ -604,7 +605,6 @@ function NewContractorForm({
               role="tab"
               aria-selected={on}
               data-cf-step={sec}
-              data-tab-label={t(`cp.form.sec.${sec}`)}
               onClick={() => goStep(sec)}
               className={`inline-flex cursor-pointer items-center border border-line font-semibold ${on ? 'bg-raised text-ink shadow-btn' : 'bg-pane-alt text-muted'} ${phone ? 'min-w-0 flex-[1_1_0] flex-col gap-0.5 rounded-md px-1 py-1.5 text-center text-[11.5px] leading-[1.2]' : 'gap-[7px] rounded-full py-[5px] pr-3 pl-1.5 text-[12.5px]'}`}
             >
