@@ -43,8 +43,14 @@ export const KB_GO: Readonly<Record<string, KbTarget>> = {
   cp1: { module: 'cps', tab: 'all', flash: 'main', open: { add: 'contractor' } },
   // «Отчеты для сдачи» (задача 2.13).
   rtabs: { module: 'reports', tab: 'week', flash: '[data-tabrow]' },
-  // «Создать уточнённый отчёт» (задача 2.14): список «Все», меню сданного отчёта.
+  // Сдача и подтверждение (задача 2.14): «На неделе» и «Ожидают подтверждения»; массовая отметка,
+  // «Создать уточнённый» (меню сданного), «Не требуется» и шкала — список «Все».
+  submit: { module: 'reports', tab: 'week', flash: LIST },
+  accept: { module: 'reports', tab: 'waiting', flash: LIST },
+  bulk: { module: 'reports', tab: 'all', flash: LIST },
   ver: { module: 'reports', tab: 'all', flash: LIST },
+  na: { module: 'reports', tab: 'all', flash: LIST },
+  scale: { module: 'reports', tab: 'all', flash: LIST },
   // Задачи (задача 2.23).
   mtask: { module: 'tasks', tab: 'byme', flash: LIST, open: { add: 'task' } },
   daymonth: { module: 'tasks', tab: 'mine', flash: '[data-task-legend]' },

@@ -32,6 +32,7 @@ import { lockReport, ReportChangedError, ReportStateError } from './reports';
 import {
   assignments,
   auditLog,
+  authorities,
   contractors,
   employees,
   files,
@@ -74,6 +75,11 @@ export interface ReportActionContext {
   today: IsoDate;
   /** Область «Свои» (`reportScope`) над отчётом с контрагентом. */
   scope: SQL | undefined;
+  /**
+   * Область «Свои» над контрагентом (`contractorScope`): «Повторять эту сумму» меняет назначение и
+   * следующие отчёты — только у своего контрагента, а не у того, где сотрудник ответственный за один отчёт.
+   */
+  contractorScope: SQL | undefined;
   confirmOn: boolean;
   filesOn: boolean;
   t: Translate;
@@ -303,8 +309,16 @@ async function applyRepeat(
   r: ReportRecord,
   amount: Tyiyn,
   on: boolean,
-  texts: ReportSubmitTexts,
+  ctx: Pick<ReportActionContext, 'contractorScope'> & { texts: ReportSubmitTexts },
 ): Promise<void> {
+  if (ctx.contractorScope) {
+    const [own] = await tx
+      .select({ id: contractors.id })
+      .from(contractors)
+      .where(and(eq(contractors.id, r.contractorId), ctx.contractorScope));
+    if (!own) return;
+  }
+  const { texts } = ctx;
   const a = await assignmentOf(tx, r, true);
   if (!a) return;
   const was = a.fixedAmount === null ? null : Number(a.fixedAmount);
@@ -445,8 +459,9 @@ export async function submitReport(
       submittedAt: sql`now()`,
       submittedBy: sql`app.current_user_id()`,
       ...CLEAR_CONFIRM,
-      // Введённая сумма — уже не повторяющаяся из назначения (прототип: r.auto = false).
-      ...(sum ? { amount: sum.amount, amountAuto: sum.changes.length ? false : r.amountAuto } : {}),
+      // Сумма из окна — уже не повторяющаяся из назначения, даже без изменений (прототип submitDlg:
+      // r.auto = false).
+      ...(sum ? { amount: sum.amount, amountAuto: false } : {}),
       ...bump(),
     })
     .where(eq(reports.id, id))
@@ -471,7 +486,7 @@ export async function submitReport(
     contractorId: r.contractorId,
   });
   if (sum && input.amount !== null && sum.amount !== null) {
-    await applyRepeat(tx, r, sum.amount, input.repeat, ctx.texts);
+    await applyRepeat(tx, r, sum.amount, input.repeat, ctx);
   }
   return updated!;
 }
@@ -600,7 +615,7 @@ export async function setReportAmount(
       contractorId: r.contractorId,
     });
   }
-  await applyRepeat(tx, r, sum.amount, input.repeat, ctx.texts);
+  await applyRepeat(tx, r, sum.amount, input.repeat, ctx);
   return updated!;
 }
 
@@ -615,8 +630,13 @@ const CONFIRM_STATUS = {
   report_confirm_own: 403,
 } as const;
 
-/** Подтвердить или вернуть можно (прототип repConfWhy); иначе — отказ. */
+/**
+ * Подтвердить или вернуть можно (прототип repConfWhy); иначе — отказ. Прежняя версия не меняется
+ * (ТЗ «Уточнённые отчёты», docs/decisions.md п. Б-3).
+ */
 function confirmable(r: ReportRecord, ctx: ReportConfirmContext): void {
+  // ОТКЛОНЕНИЕ: docs/deviations.md#Б-7 — в прототипе прежнюю версию можно подтвердить и вернуть.
+  if (r.superseded) throw new ReportStateError(r.id, 'superseded');
   const refusal = reportConfirmRefusal(
     { status: r.status, act: r.act, confirmed: r.confirmedAt !== null, submittedBy: r.submittedBy },
     ctx.confirmer,
@@ -698,7 +718,7 @@ export async function confirmReports(
     try {
       confirmable(r, ctx);
     } catch (e) {
-      if (!(e instanceof ReportRefusedError)) throw e;
+      if (!(e instanceof ReportRefusedError || e instanceof ReportStateError)) throw e;
       result.skipped++;
       continue;
     }
@@ -728,7 +748,9 @@ export async function returnReportForFix(
 ): Promise<ReportRecord> {
   const r = await lockCurrent(tx, id, ctx.version, ctx.scope);
   confirmable(r, ctx);
-  if (!reason.trim()) throw new ReportRefusedError(id, 'report_fix_reason', 400, 'reason');
+  // Причина из одних пробелов и невидимых символов (U+200B и т. п.) — пустая, как у отката.
+  if (!/[^\s\p{Cf}]/u.test(reason))
+    throw new ReportRefusedError(id, 'report_fix_reason', 400, 'reason');
   return setStatus(tx, r, 'needs_fix', { reason, clear: CLEAR_CONFIRM });
 }
 
@@ -877,9 +899,31 @@ export async function confirmWaitingReports(tx: Tx, reason: string): Promise<num
         from: 'submitted',
         to: 'confirmed',
         reason,
+        cause: 'policy' as const,
       })),
     );
   }
+  return rows.length;
+}
+
+/**
+ * Включили «Сдача отчётов требует подтверждения» (прототип org.js, repConfSet): отчёты, сданные, пока
+ * подтверждение было выключено, его не ждут — отметка «Подтверждено» без автора с пометкой «Сдан, когда
+ * подтверждение было выключено» (запись «Истории статусов» не пишется, как в прототипе: изменение
+ * политики — в её истории). Возвращает, сколько отчётов отмечено.
+ */
+export async function confirmSubmittedWhileOff(tx: Tx, note: string): Promise<number> {
+  const rows = await tx
+    .update(reports)
+    .set({ confirmedAt: sql`now()`, confirmedBy: null, confirmNote: note, ...bump() })
+    .where(
+      and(
+        eq(reports.status, 'submitted'),
+        sql`${reports.act} <> 'pay'`,
+        isNull(reports.confirmedAt),
+      ),
+    )
+    .returning({ id: reports.id });
   return rows.length;
 }
 
@@ -964,11 +1008,20 @@ export async function reportSubmitView(
       .from(reportTypes)
       .where(eq(reportTypes.code, r.reportTypeCode)),
   ]);
+  // В справочнике вида — код органа (ОРГ-01); на экране — его название («ГНС»), как в прототипе.
+  const codes = [...new Set((kind?.payments ?? []).map((p) => p.authority))];
+  const organs = codes.length
+    ? await tx
+        .select({ code: authorities.code, name: authorities.name })
+        .from(authorities)
+        .where(inArray(authorities.code, codes))
+    : [];
+  const organ = new Map(organs.map((o) => [o.code, o.name]));
   return {
     confirmNote: r.confirmNote,
     payments: (kind?.payments ?? []).map((p) => ({
       name: p.name,
-      authority: p.authority,
+      authority: organ.get(p.authority) ?? p.authority,
       kbk: p.kbk,
     })),
     lines,

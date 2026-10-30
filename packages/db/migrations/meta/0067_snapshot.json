@@ -1,5 +1,5 @@
 {
-  "id": "1d15be17-3ab0-46f5-abe6-a23925d33928",
+  "id": "e3771415-8378-48de-bc6d-f28f383e4623",
   "prevId": "1b5a9fd7-5303-4c49-bb85-a3b5354186bd",
   "version": "7",
   "dialect": "postgresql",
@@ -7407,7 +7407,7 @@
         },
         "status_history_cause_check": {
           "name": "status_history_cause_check",
-          "value": "\"status_history\".\"cause\" is null or \"status_history\".\"cause\" in ('service')"
+          "value": "\"status_history\".\"cause\" is null or \"status_history\".\"cause\" in ('service', 'policy')"
         },
         "status_history_reason_check": {
           "name": "status_history_reason_check",

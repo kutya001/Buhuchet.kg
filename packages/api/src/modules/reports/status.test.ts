@@ -11,7 +11,7 @@ import {
   ReportList,
   ReportSaved,
 } from '@buhuchet/shared';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { apiRequest, createStaffFixture, signIn, TEST_PASSWORD } from '../../testing';
 
@@ -142,6 +142,12 @@ describe.skipIf(!databaseAvailable())(
       expect(
         (await act(acc, aug.id, 'rollback', { ...body, to: 'todo', reason: 'x' }, 403)).ok,
       ).toBe(false);
+      // «Откат статусов» из группы «Общие» без «Просматривать отчёты» отчёт не откатывает.
+      expect(
+        (await failure(
+          await act(senior, aug.id, 'rollback', { ...body, to: 'todo', reason: 'x' }, 403),
+        )).code,
+      ).toBe('forbidden');
       // Чужая организация и контрагент вне области «Свои» — «не найден».
       await act(ownerB, aug.id, 'submit', body, 404);
       const chiefAug = await reportOf(cpChief, 'nds', '2026-08-01');
@@ -328,6 +334,28 @@ describe.skipIf(!databaseAvailable())(
         kind: 'report',
         source: '1-Т · 08.2026',
       });
+      expect(done.history.some((h) => h.changes.some((c) => c.field === 'files'))).toBe(true);
+
+      // Отчёты видит («Все»), файлы — нет (без «Просматривать файлы»): имён файлов в карточке нет.
+      const hrRole = f.roleIds.hr;
+      await f.t.admin.db
+        .update(schema.roleScopes)
+        .set({ scope: 'all' })
+        .where(and(eq(schema.roleScopes.roleId, hrRole), eq(schema.roleScopes.permGroup, 'reports')));
+      await f.t.admin.db
+        .delete(schema.rolePermissions)
+        .where(
+          and(
+            eq(schema.rolePermissions.roleId, hrRole),
+            eq(schema.rolePermissions.permissionId, 'filesView'),
+          ),
+        );
+      const hr = await signIn(f.app, 'hr-a', TEST_PASSWORD);
+      const blind = await card(hr, t1.id);
+      expect(blind).toMatchObject({ files: [], hasFiles: true });
+      expect(blind.statusHistory.at(-1)!.file).toBeNull();
+      expect(blind.history.flatMap((h) => h.changes).some((c) => c.field === 'files')).toBe(false);
+      expect(blind.history.some((h) => h.action === 'file_attach')).toBe(false);
     });
 
     it('выключили «Сдача отчётов требует подтверждения» — ждущие подтверждены с записью в истории', async () => {
@@ -346,6 +374,23 @@ describe.skipIf(!databaseAvailable())(
         to: 'confirmed',
         reason: 'Подтверждение выключено в учётной политике',
       });
+
+      // Сдан без подтверждения, потом подтверждение включили — отчёт его не ждёт (прототип repConfSet).
+      const oct = await reportOf(cpChief, 'nds', '2026-10-01');
+      await act(chief, oct.id, 'submit', { version: oct.version, date: '2026-10-18' });
+      expect((await card(chief, oct.id)).confirmedAt).toBeNull();
+      const on = await call('PATCH', '/api/org/policy', owner, {
+        version: (await policy()).version,
+        reportConfirm: true,
+      });
+      expect(on.status, await on.clone().text()).toBe(200);
+      const kept = await card(chief, oct.id);
+      expect(kept).toMatchObject({
+        mark: 'confirmed',
+        confirmedBy: null,
+        confirmNote: 'Сдан, когда подтверждение было выключено',
+      });
+      expect((await list(owner, '&tab=waiting')).items.map((r) => r.id)).not.toContain(oct.id);
     });
   },
 );

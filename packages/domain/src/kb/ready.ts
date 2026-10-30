@@ -118,9 +118,25 @@ export const KB_STEP_RULES: Readonly<Record<string, KbStepRule>> = {
   // бы один контрагент (загрузка из Excel и «Из свидетельства и выписки» тоже пишут создание в историю).
   cp1: { module: 'cps', done: { kind: 'history', entity: 'contractor', actions: ['create'] } },
   // 6. Отчеты для сдачи (задача 2.13): вкладки списка. Назначение и «Кто что сдаёт» — с задачами 2.11 и
-  // 2.15. «Создать уточнённый отчёт» (задача 2.14, прототип `KB_EV['r.ver']`) — у прежней версии в
-  // истории `superseded` → true.
+  // 2.15. Сдача, подтверждение, «Не требуется» (задача 2.14, прототип `KB_EV['r.sub']`, `r.acc`, `r.na`)
+  // — смена статуса самим пользователем; подтверждение при выключении его в учётной политике не
+  // считается. «Массовая отметка» и «Шкала статусов» — «Посмотреть». «Создать уточнённый отчёт»
+  // (`KB_EV['r.ver']`) — у прежней версии в истории `superseded` → true.
   rtabs: { module: 'reports' },
+  submit: {
+    module: 'reports',
+    done: {
+      kind: 'status',
+      scale: 'report',
+      from: ['todo', 'in_progress', 'needs_fix'],
+      to: ['submitted'],
+    },
+  },
+  accept: {
+    module: 'reports',
+    done: { kind: 'status', scale: 'report', from: ['submitted'], to: ['confirmed'] },
+  },
+  bulk: { module: 'reports' },
   ver: {
     module: 'reports',
     done: {
@@ -130,6 +146,16 @@ export const KB_STEP_RULES: Readonly<Record<string, KbStepRule>> = {
       change: { field: 'superseded', to: true },
     },
   },
+  na: {
+    module: 'reports',
+    done: {
+      kind: 'status',
+      scale: 'report',
+      from: ['todo', 'in_progress', 'needs_fix', 'submitted'],
+      to: ['not_required'],
+    },
+  },
+  scale: { module: 'reports' },
   // 9. Задачи (задача 2.23). «Регулярные задачи по отчётам» — с задачей 2.24. «Выполнена» или «Не
   // выполнена» — и отправленная на подтверждение (прототип `KB_EV['t.done']`); «Подтвердить» или «На
   // доработку» (`KB_EV['t.conf']`).

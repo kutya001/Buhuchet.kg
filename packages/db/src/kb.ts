@@ -22,7 +22,7 @@ import {
   type ListQuery,
   type ListSort,
 } from '@buhuchet/domain';
-import { and, asc, eq, gte, inArray, sql, type SQL } from 'drizzle-orm';
+import { and, asc, eq, gte, inArray, isNull, sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 import { adminOrganizations } from './admin-orgs';
 import type { Db, Tx } from './client';
@@ -394,6 +394,8 @@ export async function kbDoneFacts(
         eq(statusHistory.actorUserId, userId),
         eq(statusHistory.scale, rule.scale),
         eq(statusHistory.isRollback, false),
+        // Смена системой (приостановка контрагента, выключение подтверждения) — не действие пользователя.
+        isNull(statusHistory.cause),
         inArray(statusHistory.fromStatus, [...rule.from]),
         inArray(statusHistory.toStatus, [...rule.to]),
       );

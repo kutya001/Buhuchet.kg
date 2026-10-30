@@ -27,6 +27,7 @@ import {
   StatusScale,
   Tag,
   Timeline,
+  useToast,
   type ActionEntry,
   type KeyValueItem,
 } from '@buhuchet/ui';
@@ -280,8 +281,9 @@ function ScaleBox({
   onStep: (action: 'start' | 'submit') => void;
   onBack: (to: string) => void;
 }) {
+  const toast = useToast();
   const events = statusEvents(r.statusHistory);
-  const steps = actor ? reportScaleSteps(r, actor) : {};
+  const steps = actor ? reportScaleSteps(r) : {};
   const back = actor ? reportScaleBack(r, actor) : null;
   const view = scaleView(t, {
     scale: 'report',
@@ -307,7 +309,10 @@ function ScaleBox({
       {...view.props}
       onStep={(to) => {
         const action = steps[to];
-        if (action) onStep(action);
+        if (!action) return;
+        // Без права шаг нажимается, но статус не меняет (прототип status-scale.js).
+        if (!actor?.can.changeStatus) return void toast(t('report.menu.no_status'), { bad: true });
+        onStep(action);
       }}
       onBack={onBack}
     />

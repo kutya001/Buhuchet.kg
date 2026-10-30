@@ -162,8 +162,20 @@ test.describe('Этап 2: форма контрагента', () => {
     };
     const steps = (await me()).lessons.flatMap((l) => l.steps.map((s) => s.id));
     expect(steps).not.toContain('cp1');
+    // «Подтвердить сдачу отчёта» — только с правом «Подтверждать сдачу отчётов».
+    expect(steps).not.toContain('accept');
     expect(steps).toEqual(
-      expect.arrayContaining(['tg', 'pdicts', 'daymonth', 'tdone', 'ver', 'search', 'cols']),
+      expect.arrayContaining([
+        'tg',
+        'pdicts',
+        'daymonth',
+        'tdone',
+        'submit',
+        'ver',
+        'na',
+        'search',
+        'cols',
+      ]),
     );
 
     // Остальные свои шаги — тем же, чем их засчитывают экраны: Telegram, просмотр экрана шага,
@@ -171,7 +183,7 @@ test.describe('Этап 2: форма контрагента', () => {
     await linkTelegram(acct, origin, uniqueChat());
     const theme = await acct.post('/api/kb/steps/theme/show', { headers: { origin } });
     expect(theme.status(), await theme.text()).toBe(200);
-    for (const id of ['pdicts', 'rtabs', 'daymonth']) {
+    for (const id of ['pdicts', 'rtabs', 'bulk', 'scale', 'daymonth']) {
       const look = await acct.post(`/api/kb/steps/${id}/look`, { headers: { origin } });
       expect(look.status(), await look.text()).toBe(200);
     }
@@ -179,7 +191,8 @@ test.describe('Этап 2: форма контрагента', () => {
       const used = await acct.post(`/api/kb/hits/${hit}`, { headers: { origin } });
       expect(used.status(), await used.text()).toBe(200);
     }
-    // «Создать уточнённый отчёт» (задача 2.14) — у своего сданного отчёта. Контрагента с бухгалтером
+    // «Отметить первый отчёт «Сдан»», «Создать уточнённый отчёт» и «Не требуется» (задача 2.14) — у
+    // своего отчёта: сданный, его уточнённая версия — «Не требуется». Контрагента с бухгалтером
     // ответственным создаёт главный бухгалтер: шаг владельца «Добавить первого контрагента» открыт.
     await connectAllTypes(api, origin);
     const chiefLogin = uniqueLogin('e2e-chief');
@@ -225,6 +238,12 @@ test.describe('Этап 2: форма контрагента', () => {
       data: { version: await versionOf() },
     });
     expect(revised.status(), await revised.text()).toBe(201);
+    const revision = (await revised.json()) as { id: string; version: number };
+    const skipped = await acct.post(`/api/reports/${revision.id}/not-required`, {
+      headers: { origin },
+      data: { version: revision.version },
+    });
+    expect(skipped.status(), await skipped.text()).toBe(200);
 
     const options = (await (await api.get('/api/tasks/form-options')).json()) as {
       categories: { code: string }[];

@@ -34,7 +34,7 @@ import type { AppEnv } from '../../env';
 import { orgContextOf, requirePermission } from '../../middleware/access';
 import { serverTexts } from '../l10n/texts';
 import { subjectOf, todayOf } from '../contractors/common';
-import { error, reportScopeOf, withReportErrors } from './common';
+import { assigneeScopeOf, error, reportScopeOf, withReportErrors } from './common';
 
 /*
  * Сдача и подтверждение отчёта (задача 2.14; ТЗ «Отчеты для сдачи» → «Сдача отчёта», «Подтверждение
@@ -57,6 +57,7 @@ async function actionContext(
   return {
     today: todayOf(deps),
     scope: reportScopeOf(subject),
+    contractorScope: assigneeScopeOf(subject),
     confirmOn: reportConfirm,
     filesOn: features.files,
     t,
@@ -119,10 +120,11 @@ const STATUS_RIGHT = 'Нет права «Менять статус сдачи»
 const CONFIRM_RIGHT = 'Нет права «Подтверждать сдачу отчётов» или это свой сданный отчёт';
 
 // Путь — литералом: по нему клиент API (`hc`) строит методы, `string` ломает типы всего клиента.
+// Права — все нужные: право группы «Отчёты» уже требует «Просматривать отчёты», право из «Общих» — нет.
 const route = <P extends string, B extends z.ZodType>(
   path: P,
   summary: string,
-  permission: PermissionId,
+  permissions: readonly PermissionId[],
   schema: B,
   responses: ReturnType<typeof oneResponses>,
 ) =>
@@ -131,7 +133,7 @@ const route = <P extends string, B extends z.ZodType>(
     path,
     tags: ['reports'],
     summary,
-    middleware: [requirePermission(permission)] as const,
+    middleware: permissions.map((p) => requirePermission(p)),
     request: { params: ReportIdParam, body: body(schema) },
     responses,
   });
@@ -139,7 +141,7 @@ const route = <P extends string, B extends z.ZodType>(
 export const submitReportRoute = route(
   '/reports/{id}/submit',
   '«Отметить сданным»',
-  'changeStatus',
+  ['changeStatus'],
   ReportSubmitRequest,
   oneResponses(STATUS_RIGHT, 'отчёт уже сдан, это прежняя версия или вид «Уплата»'),
 );
@@ -187,7 +189,7 @@ export function submitReportsHandler(
 export const confirmReportRoute = route(
   '/reports/{id}/confirm',
   '«Подтвердить» сдачу отчёта',
-  'repConfirm',
+  ['repConfirm'],
   ReportConfirmRequest,
   oneResponses(CONFIRM_RIGHT, 'отчёт не ждёт подтверждения'),
 );
@@ -227,7 +229,7 @@ export function confirmReportsHandler(
 export const fixReportRoute = route(
   '/reports/{id}/fix',
   '«На исправление»',
-  'repConfirm',
+  ['repConfirm'],
   ReportFixRequest,
   oneResponses(CONFIRM_RIGHT, 'отчёт не ждёт подтверждения'),
 );
@@ -249,7 +251,7 @@ function stepRoute<P extends string>(path: P, summary: string, refused: string) 
   return route(
     path,
     summary,
-    'changeStatus',
+    ['changeStatus'],
     ReportStepRequest,
     oneResponses(STATUS_RIGHT, refused),
   );
@@ -308,9 +310,9 @@ export const notRequiredReportHandler =
 export const rollbackReportRoute = route(
   '/reports/{id}/rollback',
   'Откат статуса отчёта на шаг назад',
-  'rollback',
+  ['repView', 'rollback'],
   ReportRollbackRequest,
-  oneResponses('Нет права «Откат статусов»', 'откатывать некуда или сначала — уточнённая версия'),
+  oneResponses('Нет права «Просматривать отчёты» или «Откат статусов»', 'откатывать некуда или сначала — уточнённая версия'),
 );
 
 /** Откат (ТЗ «Откат статуса»: право «Откат статусов», причина обязательна, запись в историю). */
@@ -330,7 +332,7 @@ export function rollbackReportHandler(
 export const reportAmountRoute = route(
   '/reports/{id}/amount',
   '«Указать сумму»',
-  'changeSum',
+  ['changeSum'],
   ReportAmountRequest,
   oneResponses('Нет права «Менять сумму к уплате»', 'у вида нет суммы или отчёт «Не требуется»'),
 );

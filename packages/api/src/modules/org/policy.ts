@@ -1,5 +1,6 @@
 import { createRoute, type RouteHandler } from '@hono/zod-openapi';
 import {
+  confirmSubmittedWhileOff,
   confirmWaitingReports,
   getOrgPolicy,
   getRole,
@@ -159,7 +160,8 @@ function changed<T>(next: T | undefined, current: T): T | undefined {
  * меню у всех со следующего запроса, данные не удаляются. Каждое изменение — в историю учётной
  * политики: что изменено, было → стало, кто, когда. При выключении «Сдача отчётов требует
  * подтверждения» ждущие подтверждения отчёты считаются подтверждёнными с записью в их «Истории
- * статусов» (ТЗ; прототип repConfSet; задача 2.14).
+ * статусов» (ТЗ; прототип repConfSet; задача 2.14), при включении — сданные без подтверждения отмечаются
+ * «Сдан, когда подтверждение было выключено» и его не ждут.
  */
 export function updateOrgPolicyHandler(
   deps: ApiDeps,
@@ -221,6 +223,10 @@ export function updateOrgPolicyHandler(
       });
       if (current.reportConfirm && body.reportConfirm === false) {
         await confirmWaitingReports(tx, (await serverTexts(deps))('report.reason.confirm_off'));
+      }
+      // Включили — сданные без подтверждения его не ждут (прототип repConfSet).
+      if (!current.reportConfirm && body.reportConfirm === true) {
+        await confirmSubmittedWhileOff(tx, (await serverTexts(deps))('report.reason.confirm_was_off'));
       }
       return (await getOrgPolicy(tx, ctx.orgId))!;
     });

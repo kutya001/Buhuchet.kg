@@ -4,6 +4,7 @@ import { and, asc, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { withOrgContext, type OrgContext } from './context';
 import {
+  contractorScope,
   createContractor,
   getContractor,
   updateContractor,
@@ -16,6 +17,7 @@ import { createOrganization, type CreatedOrganization } from './organizations';
 import {
   confirmReport,
   confirmReports,
+  confirmSubmittedWhileOff,
   confirmWaitingReports,
   reportFileTarget,
   ReportRefusedError,
@@ -33,6 +35,7 @@ import {
   createManualReport,
   createRevision,
   ReportChangedError,
+  ReportStateError,
   type AssignmentInput,
   type AssignmentTexts,
 } from './reports';
@@ -132,6 +135,7 @@ describe.skipIf(!databaseAvailable())('Отчёты: сдача, подтвер�
   const act = (patch: Partial<ReportActionContext> = {}): ReportActionContext => ({
     today: TODAY,
     scope: undefined,
+    contractorScope: undefined,
     confirmOn: true,
     filesOn: true,
     t,
@@ -446,26 +450,43 @@ describe.skipIf(!databaseAvailable())('Отчёты: сдача, подтвер�
       { key: 'pay:0', revenue: null, tax: som(1_200) },
       { key: 'pay:1', revenue: null, tax: som(3_000) },
     ];
-    const set = (version: number, repeat: boolean) =>
+    // Область «Свои» над контрагентом: `own` — сотрудник, за чьих контрагентов можно менять назначения.
+    const set = (version: number, repeat: boolean, own = accA) =>
       inA((tx) =>
-        setReportAmount(tx, sep.id, { amount: null, lines, repeat }, { ...act(), version, texts }),
+        setReportAmount(
+          tx,
+          sep.id,
+          { amount: null, lines, repeat },
+          { ...act({ contractorScope: contractorScope(own) }), version, texts },
+        ),
       );
-    const saved = await set(sep.version, true);
+    const fixedOf = async () => {
+      const [x] = await inA((tx) =>
+        tx
+          .select()
+          .from(assignments)
+          .where(and(eq(assignments.contractorId, cpA), eq(assignments.reportTypeCode, 'soc'))),
+      );
+      return x!.fixedAmount;
+    };
+    // Контрагент не свой (сотрудник отвечает только за отчёт): сумма — да, назначение и следующие — нет.
+    const foreign = await set(sep.version, true, chiefA);
+    expect(foreign).toMatchObject({ amount: som(4_200), amountAuto: false });
+    expect(await fixedOf()).toBeNull();
+    expect((await reportOf(cpA, 'soc', '2026-11-01')).amount).toBeNull();
+    const saved = await set(foreign.version, true);
     expect(saved).toMatchObject({ amount: som(4_200), amountAuto: false });
-    const [a1] = await inA((tx) =>
-      tx
-        .select()
-        .from(assignments)
-        .where(and(eq(assignments.contractorId, cpA), eq(assignments.reportTypeCode, 'soc'))),
-    );
-    expect(a1!.fixedAmount).toBe(som(4_200));
+    expect(await fixedOf()).toBe(som(4_200));
+    // Снятая галочка у чужого контрагента не отключает повторяющуюся сумму.
+    const kept = await set(saved.version, false, chiefA);
+    expect(await fixedOf()).toBe(som(4_200));
     const nov = await reportOf(cpA, 'soc', '2026-11-01');
     expect(nov).toMatchObject({ amount: som(4_200), amountAuto: true });
     expect((await inA((tx) => readHistory(tx, 'report', nov.id))).at(-1)).toMatchObject({
       reason: 'Повторяющаяся сумма из назначения',
     });
     // Галочку сняли — повторяющаяся сумма уходит из следующих отчётов.
-    await set(saved.version, false);
+    await set(kept.version, false);
     expect((await reportOf(cpA, 'soc', '2026-11-01')).amount).toBeNull();
     // Строки пустые, суммы ещё нет — сумма не указана.
     const q4 = await reportOf(cpA, 'enq', '2026-10-01');
@@ -645,6 +666,73 @@ describe.skipIf(!databaseAvailable())('Отчёты: сдача, подтвер�
     expect([rev!.dueDate, man!.dueDate]).toEqual(['2026-11-09', '2026-11-09']);
   });
 
+  it('прежняя версия не меняется: «Подтвердить» и «На исправление» отклоняются, массовое пропускает', async () => {
+    const [old] = await inA((tx) =>
+      tx
+        .select()
+        .from(reports)
+        .where(and(eq(reports.superseded, true), eq(reports.status, 'submitted')))
+        .limit(1),
+    );
+    expect(old?.confirmedAt).toBeNull();
+    const ctx = { ...act(), confirmer: chief, version: old!.version };
+    const superseded = expect.objectContaining({ reason: 'superseded' });
+    await expect(
+      inA((tx) => confirmReport(tx, old!.id, { note: '', fileIds: [] }, ctx), chiefUser),
+    ).rejects.toEqual(superseded);
+    await expect(
+      inA((tx) => returnReportForFix(tx, old!.id, 'Исправить', ctx), chiefUser),
+    ).rejects.toEqual(superseded);
+    expect(ReportStateError).toBeDefined();
+    const res = await inA(
+      (tx) =>
+        confirmReports(tx, [{ id: old!.id, version: old!.version }], '', {
+          ...act(),
+          confirmer: chief,
+        }),
+      chiefUser,
+    );
+    expect(res).toEqual({ done: 0, skippedFile: 0, skipped: 1 });
+  });
+
+  it('включили подтверждение сдачи: сданные без подтверждения его не ждут', async () => {
+    const [open] = await inA((tx) =>
+      tx
+        .select()
+        .from(reports)
+        .where(
+          and(
+            eq(reports.reportTypeCode, 'nds'),
+            eq(reports.status, 'todo'),
+            eq(reports.superseded, false),
+          ),
+        )
+        .orderBy(asc(reports.periodStart))
+        .limit(1),
+    );
+    const done = await inA((tx) =>
+      submitReport(
+        tx,
+        open!.id,
+        { date: TODAY, amount: som(100), lines: null, repeat: false, fileIds: [] },
+        { ...act({ confirmOn: false, filesOn: false }), version: open!.version, texts },
+      ),
+    );
+    expect(done.confirmedAt).toBeNull();
+    const n = await inA((tx) => confirmSubmittedWhileOff(tx, t('report.reason.confirm_was_off')));
+    expect(n).toBeGreaterThanOrEqual(1);
+    const [after] = await inA((tx) => tx.select().from(reports).where(eq(reports.id, open!.id)));
+    expect(after).toMatchObject({
+      confirmedBy: null,
+      confirmNote: 'Сдан, когда подтверждение было выключено',
+    });
+    expect(after!.confirmedAt).not.toBeNull();
+    // Отчёты другой организации не тронуты.
+    expect(
+      await inB((tx) => tx.select().from(reports).where(eq(reports.confirmNote, after!.confirmNote))),
+    ).toEqual([]);
+  });
+
   it('чужая организация не видна: строки суммы отчёта', async () => {
     const q3 = await reportOf(cpA, 'enq', '2026-07-01');
     expect(
@@ -662,6 +750,28 @@ describe.skipIf(!databaseAvailable())('Отчёты: сдача, подтвер�
         }),
       ),
     ).rejects.toEqual(permissionDenied);
+    // Чужая организация не меняет и не удаляет строки: под RLS их для неё нет.
+    const before = await inA((tx) =>
+      tx.select().from(reportTaxLines).where(eq(reportTaxLines.reportId, q3.id)),
+    );
+    expect(before.length).toBeGreaterThan(0);
+    expect(
+      await inB((tx) =>
+        tx
+          .update(reportTaxLines)
+          .set({ tax: 1 })
+          .where(eq(reportTaxLines.reportId, q3.id))
+          .returning(),
+      ),
+    ).toEqual([]);
+    expect(
+      await inB((tx) =>
+        tx.delete(reportTaxLines).where(eq(reportTaxLines.reportId, q3.id)).returning(),
+      ),
+    ).toEqual([]);
+    expect(
+      await inA((tx) => tx.select().from(reportTaxLines).where(eq(reportTaxLines.reportId, q3.id))),
+    ).toEqual(before);
     await expect(
       inB((tx) =>
         submitReport(

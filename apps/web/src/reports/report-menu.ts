@@ -117,6 +117,7 @@ export function reportMenuEntries({
         ? [item('file', { label: t('report.act.file'), icon: 'clip' })]
         : [];
     const rollback = st === 'submitted' ? [rollbackItem(t, r, actor, item)] : [];
+    // ОТКЛОНЕНИЕ: docs/deviations.md#Б-7 — в прототипе у прежней версии меню как у последней.
     if (facts.superseded) {
       return [...items, ...file, ...(rollback.length ? [SEP, ...rollback] : [])];
     }
@@ -229,14 +230,12 @@ export function reportCardButtons(r: ReportMenuRow, actor: ReportActor): ReportC
 }
 
 /**
- * Шаги шкалы, которые можно поставить нажатием (прототип scNext, stepTo): «В работе» — сразу,
- * «Сдан» — окно «Отметить сданным»; только с правом «Менять статус сдачи», не у прежней версии.
+ * Шаги шкалы, которые можно нажать (прототип scNext, stepTo): «В работе» — сразу, «Сдан» — окно
+ * «Отметить сданным»; не у прежней версии. Без права «Менять статус сдачи» шаг нажимается, но карточка
+ * отвечает «Нет права менять статус», как прототип.
  */
-export function reportScaleSteps(
-  r: ReportMenuRow,
-  actor: ReportActor,
-): Partial<Record<string, 'start' | 'submit'>> {
-  if (!actor.can.changeStatus || r.superseded || r.act === 'pay') return {};
+export function reportScaleSteps(r: ReportMenuRow): Partial<Record<string, 'start' | 'submit'>> {
+  if (r.superseded || r.act === 'pay') return {};
   const steps: Partial<Record<string, 'start' | 'submit'>> = {};
   for (const to of scaleNext('report', r.status))
     steps[to] = to === 'in_progress' ? 'start' : 'submit';

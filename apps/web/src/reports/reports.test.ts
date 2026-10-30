@@ -232,15 +232,16 @@ describe('кнопки и шкала карточки', () => {
     ).toBeNull();
   });
 
-  it('шаги шкалы: «В работе» — сразу, «Сдан» — окном; откат — с правом', () => {
-    expect(reportScaleSteps(report(), actor())).toEqual({
+  it('шаги шкалы: «В работе» — сразу, «Сдан» — окном, у прежней версии — нет; откат — с правом', () => {
+    expect(reportScaleSteps(report())).toEqual({
       in_progress: 'start',
       submitted: 'submit',
     });
-    expect(reportScaleSteps(report({ status: 'needs_fix' }), actor())).toEqual({
+    expect(reportScaleSteps(report({ status: 'needs_fix' }))).toEqual({
       submitted: 'submit',
     });
-    expect(reportScaleSteps(report(), actor({ changeStatus: false }))).toEqual({});
+    // Шаги не зависят от права: без него карточка отвечает «Нет права менять статус» (прототип).
+    expect(reportScaleSteps({ ...report(), superseded: true })).toEqual({});
     expect(reportScaleBack(report({ status: 'in_progress' }), actor())).toBe('todo');
     expect(
       reportScaleBack(report({ status: 'in_progress' }), actor({ rollback: false })),

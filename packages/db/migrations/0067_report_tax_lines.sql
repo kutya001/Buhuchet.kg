@@ -17,6 +17,8 @@ CREATE TABLE "report_tax_lines" (
 );
 --> statement-breakpoint
 ALTER TABLE "report_tax_lines" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "status_history" DROP CONSTRAINT "status_history_cause_check";--> statement-breakpoint
 ALTER TABLE "report_tax_lines" ADD CONSTRAINT "report_tax_lines_org_id_organizations_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."organizations"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "report_tax_lines" ADD CONSTRAINT "report_tax_lines_report_fk" FOREIGN KEY ("report_id","org_id") REFERENCES "public"."reports"("id","org_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "status_history" ADD CONSTRAINT "status_history_cause_check" CHECK ("status_history"."cause" is null or "status_history"."cause" in ('service', 'policy'));--> statement-breakpoint
 CREATE POLICY "report_tax_lines_isolation" ON "report_tax_lines" AS PERMISSIVE FOR ALL TO "buhuchet_app" USING ("report_tax_lines"."org_id" = app.current_org_id()) WITH CHECK ("report_tax_lines"."org_id" = app.current_org_id());

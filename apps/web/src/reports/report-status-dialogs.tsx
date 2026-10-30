@@ -414,7 +414,8 @@ export function ReportSubmitDialog({
     const read = withAmount ? readAmount(card.lineDefs, form, false) : null;
     const bad = read && amountErrors(t, read);
     if (bad) return setErrors(bad);
-    if (card.fileRequired && card.files.length === 0 && picked.length === 0)
+    // `hasFiles`, а не список: без права «Просматривать файлы» имён файлов в карточке нет.
+    if (card.fileRequired && !card.hasFiles && picked.length === 0)
       return setErrors({ files: t('err.report_file_required') });
     setBusy(true);
     const files = await uploadPicked(t, errorText, card.id, picked);
@@ -534,7 +535,7 @@ export function ReportSubmitDialog({
                 />
               )}
             </Field>
-          ) : card.fileRequired && card.files.length === 0 ? (
+          ) : card.fileRequired && !card.hasFiles ? (
             <div className="col-span-full">
               <Note tone="warn" icon="clip">
                 {errors.files ?? t('report.submit.files_need')}
@@ -742,7 +743,7 @@ export function ReportConfirmDialog({ card: initial, open, onClose, onDone }: Ca
   const canUpload = useCanUpload(card);
 
   const submit = async () => {
-    if (card.receiptRequired && card.files.length === 0 && picked.length === 0)
+    if (card.receiptRequired && !card.hasFiles && picked.length === 0)
       return setError(t('err.report_receipt_required'));
     setBusy(true);
     const files = await uploadPicked(t, errorText, card.id, picked);
@@ -785,15 +786,20 @@ export function ReportConfirmDialog({ card: initial, open, onClose, onDone }: Ca
           },
         ]
       : []),
-    {
-      id: 'files',
-      label: t('report.confirm.files'),
-      value: card.files.length ? (
-        card.files.map((f) => f.name).join(', ')
-      ) : (
-        <span className="text-faint">{t('report.confirm.no_files')}</span>
-      ),
-    },
+    // Файлы есть, а имён нет (нет права «Просматривать файлы») — строки нет, а не «нет файлов».
+    ...(card.files.length || !card.hasFiles
+      ? [
+          {
+            id: 'files',
+            label: t('report.confirm.files'),
+            value: card.files.length ? (
+              card.files.map((f) => f.name).join(', ')
+            ) : (
+              <span className="text-faint">{t('report.confirm.no_files')}</span>
+            ),
+          },
+        ]
+      : []),
     {
       id: 'wait',
       label: t('report.confirm.wait'),
