@@ -23,7 +23,7 @@ import {
   TEST_ORIGIN as ORIGIN,
 } from '../../testing';
 
-const { auditLog, employees, platformReference, telegramLinkTokens, users } = schema;
+const { auditLog, employees, messageTemplateTexts, telegramLinkTokens, users } = schema;
 
 const PASSWORD = 'Верный-пароль-1';
 type App = ReturnType<typeof createApp>;
@@ -225,15 +225,12 @@ describe.skipIf(!databaseAvailable())('Telegram: привязка по ссыл�
   });
 
   it('шаблон справочника платформы главнее текста по умолчанию', async () => {
-    await t.admin.db.insert(platformReference).values({
-      key: 'messageTemplates',
-      payload: { tgStart: 'Привязка — в профиле.' },
-      checksum: 'x',
-      source: 'test',
-    });
+    await t.admin.db
+      .insert(messageTemplateTexts)
+      .values({ key: 'tgStart', text: 'Привязка — в профиле.', sortOrder: 1 });
     await sendToBot(app, telegramUpdate('/start', 9001));
     expect(lastText()).toBe('Привязка — в профиле.');
-    await t.admin.db.delete(platformReference).where(eq(platformReference.key, 'messageTemplates'));
+    await t.admin.db.delete(messageTemplateTexts).where(eq(messageTemplateTexts.key, 'tgStart'));
   });
 
   it('один Telegram у логинов разных организаций — в сообщениях указана организация', async () => {

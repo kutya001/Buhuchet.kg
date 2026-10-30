@@ -208,12 +208,14 @@ describe.skipIf(!databaseAvailable())('RLS: сотрудники, роли и у
   it('каталог прав и шаблоны ролей приложение только читает', async () => {
     expect(await t.app.db.$count(permissions)).toBe(39);
     expect(await t.app.db.$count(roleTemplates)).toBe(2);
-    expect(await t.app.db.update(permissions).set({ name: 'Взлом' }).returning()).toEqual([]);
+    // Права на запись у роли приложения забраны: тексты правит функция администратора платформы.
+    const denied = expect.objectContaining({ cause: expect.objectContaining({ code: '42501' }) });
+    await expect(t.app.db.update(permissions).set({ name: 'Взлом' })).rejects.toThrow(denied);
     await expect(
       t.app.db
         .insert(roleTemplates)
         .values({ code: 'x', name: 'X', permissions: [], scopes: {}, sortOrder: 9 }),
-    ).rejects.toThrow(rlsViolation);
+    ).rejects.toThrow(denied);
   });
 
   it('app.org_ids() отдаёт роли приложения все организации для задач по расписанию', async () => {

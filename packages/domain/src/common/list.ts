@@ -496,6 +496,7 @@ export const GRID_KEYS = [
   'pdicts.calendar',
   'pdicts.cats',
   'pdicts.reasons',
+  'pdicts.perms',
   'pdicts.requests',
 ] as const;
 export type GridKey = (typeof GRID_KEYS)[number];
