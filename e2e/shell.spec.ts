@@ -198,7 +198,7 @@ test.describe('Этап 1: оболочка рабочей страницы', ()
     // «?»: окно «Базы знаний» о модуле — описание и «Открыть Базу знаний».
     await page.getByRole('button', { name: 'Помощь' }).click();
     const help = page.getByRole('dialog', { name: 'Отчеты для сдачи' });
-    await expect(help).toContainText('Отчёты создаются автоматически по назначениям');
+    await expect(help).toContainText('Главный рабочий модуль');
     await help.getByRole('link', { name: 'Открыть Базу знаний' }).click();
     await expect(page).toHaveURL(/\/app\/kb\/level$/);
 

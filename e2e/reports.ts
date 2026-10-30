@@ -30,11 +30,19 @@ export type NewContractor = {
   notices: string[];
 };
 
-/** Новый контрагент демо-организации; `benefits` — коды льгот и статусов, `taxOfficeCode` — УГНС. */
+/**
+ * Новый контрагент демо-организации; `benefits` — коды льгот и статусов, `taxOfficeCode` — УГНС,
+ * `name` — название (по умолчанию «Сроки отчётов <ИНН>»), `responsible` — id ответственного сотрудника.
+ */
 export async function newContractor(
   api: APIRequestContext,
   origin: string,
-  options: { benefits?: string[]; taxOfficeCode?: string } = {},
+  options: {
+    benefits?: string[];
+    taxOfficeCode?: string;
+    name?: string;
+    responsible?: string;
+  } = {},
 ): Promise<NewContractor> {
   const staff = (await (await api.get('/api/staff?size=all')).json()) as {
     items: { id: string; active: boolean }[];
@@ -43,7 +51,7 @@ export async function newContractor(
   const res = await api.post('/api/contractors', {
     headers: { origin },
     data: {
-      name: `Сроки отчётов ${inn}`,
+      name: options.name ?? `Сроки отчётов ${inn}`,
       inn,
       phone: '+996505890076',
       kind: 'regular',
@@ -53,7 +61,7 @@ export async function newContractor(
       taxOfficeCode: options.taxOfficeCode ?? null,
       benefits: (options.benefits ?? []).map((code) => ({ code, validFrom: null, validTo: null })),
       startDate: '2026-01-01',
-      responsibleEmployeeId: staff.items.find((e) => e.active)!.id,
+      responsibleEmployeeId: options.responsible ?? staff.items.find((e) => e.active)!.id,
       tariff: { amount: 1_000_000, period: 'M' },
     },
   });
@@ -98,3 +106,25 @@ export async function reportsOf(api: APIRequestContext, inn: string): Promise<Ro
 
 export const find = (rows: Row[], code: string, periodStart: string) =>
   rows.find((r) => r.type.code === code && r.periodStart === periodStart);
+
+/** Id сотрудников демо-организации по логину. */
+export async function staffIds(api: APIRequestContext): Promise<Record<string, string>> {
+  const res = await api.get('/api/staff?size=all');
+  expect(res.status()).toBe(200);
+  const { items } = (await res.json()) as { items: { id: string; login: string }[] };
+  return Object.fromEntries(items.map((e) => [e.login, e.id]));
+}
+
+/** «+ Добавить» → «Разовый отчёт» через API: вид, месяц периода и срок; ответ — id отчёта. */
+export async function manualReport(
+  api: APIRequestContext,
+  origin: string,
+  data: { contractorId: string; reportTypeCode: string; month: string; due: string },
+): Promise<string> {
+  const res = await api.post('/api/reports', {
+    headers: { origin },
+    data: { ...data, reasonCode: 'ПРЧ-001' },
+  });
+  expect(res.status(), await res.text()).toBe(201);
+  return ((await res.json()) as { id: string }).id;
+}
