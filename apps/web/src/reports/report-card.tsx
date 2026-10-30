@@ -33,6 +33,7 @@ import {
 } from '@buhuchet/ui';
 import { useQuery } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
+import { ContractorLink } from '../contractors/contractor-link';
 import { RecordFiles } from '../files/record-files';
 import { useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
@@ -123,7 +124,11 @@ function cardItems(t: Translate, r: Card): KeyValueItem[] {
       label: t('grid.col.updated_by'),
       value: <Audit who={r.audit.updatedBy ?? r.audit.createdBy} at={r.audit.updatedAt} />,
     },
-    { id: 'cp', label: t('report.card.cp'), value: r.contractor.name },
+    {
+      id: 'cp',
+      label: t('report.card.cp'),
+      value: <ContractorLink id={r.contractor.id} name={r.contractor.name} />,
+    },
     { id: 'inn', label: t('report.card.inn'), value: r.contractor.inn, mono: true },
     {
       id: 'form',

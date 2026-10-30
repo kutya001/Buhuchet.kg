@@ -269,7 +269,7 @@ test.describe('Этап 1: оболочка на телефоне', () => {
     from = await at(0.85);
     await swipe.drag(from, { x: from.x - from.width / 3 - 40, y: from.y });
     await expect(current).toContainText('Контрагенты');
-    await expect(card).toContainText('Нет закреплённых контрагентов');
+    await expect(card).toContainText('Закреплено контрагентов:');
     from = await at(0.15);
     await swipe.flick(from, { x: from.x + 80, y: from.y });
     await expect(current).toContainText('Основное');

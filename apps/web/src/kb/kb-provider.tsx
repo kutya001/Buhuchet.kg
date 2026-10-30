@@ -123,8 +123,8 @@ export interface KbShellInfo extends ArticleScreenInfo {
   screen: string | null;
   /** Адрес вкладки модуля; null — модуля нет в меню. */
   tabHrefOf: (module: MenuModuleId, tab?: string) => string | null;
-  /** Выбрать способ «+ Добавить» модуля. */
-  onAdd: (module: MenuModuleId, actionId: string) => void;
+  /** Выбрать способ «+ Добавить» модуля (`variant` — вариант формы). */
+  onAdd: (module: MenuModuleId, actionId: string, variant?: string) => void;
   /** Открыть «Мой профиль». */
   onProfile: () => void;
   lessonsHref: string;
@@ -185,7 +185,11 @@ export function useKbRuntime(shell: KbShellInfo): { controls: KbControls; overla
   const [article, setArticle] = useState<DialogSlot<ArticleView> | null>(null);
   const [congrats, setCongrats] = useState<{ name: string; n: number } | null>(null);
   /** «Перейти» к шагу, который открывает «+ Добавить»: способ выбирается, когда модуль открыт. */
-  const [pendingAdd, setPendingAdd] = useState<{ module: MenuModuleId; add: string } | null>(null);
+  const [pendingAdd, setPendingAdd] = useState<{
+    module: MenuModuleId;
+    add: string;
+    variant?: string;
+  } | null>(null);
   const shown = useRef(new Set<string>());
   const hits = useRef(new Set<string>());
   // Отклик на ответ и «Перейти» читают урок и программу на момент события.
@@ -326,7 +330,7 @@ export function useKbRuntime(shell: KbShellInfo): { controls: KbControls; overla
       }
       const open = target?.open;
       if (open === 'profile') onProfile();
-      else if (open && module) setPendingAdd({ module, add: open.add });
+      else if (open && module) setPendingAdd({ module, add: open.add, variant: open.variant });
       if (!open || open === 'profile') {
         const phone = window.matchMedia('(max-width: 767px)').matches;
         flashTarget(
@@ -343,7 +347,7 @@ export function useKbRuntime(shell: KbShellInfo): { controls: KbControls; overla
     if (!pendingAdd || shownModule !== pendingAdd.module) return;
     const timer = setTimeout(() => {
       setPendingAdd(null);
-      onAdd(pendingAdd.module, pendingAdd.add);
+      onAdd(pendingAdd.module, pendingAdd.add, pendingAdd.variant);
     }, 220);
     return () => clearTimeout(timer);
   }, [pendingAdd, shownModule, onAdd]);

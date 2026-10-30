@@ -68,6 +68,7 @@ async function listOptions(
     tab: q.tab,
     quick: q.quick,
     waiting: waitingView(subject, policy.confirm),
+    contractorId: q.contractorId ?? null,
   };
 }
 

@@ -16,7 +16,10 @@ import {
   type CardTab,
   type KeyValueItem,
 } from '@buhuchet/ui';
+import { useQuery } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
+import { openContractorCard, useContractorCardOn } from '../contractors/card-store';
+import { employeeContractorsQuery } from '../contractors/contractor-data';
 import { KbMemberBox } from '../kb/kb-team';
 import { useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
@@ -34,7 +37,7 @@ type CardTabId = 'main' | 'cps';
  * «Сотрудники и роли» и у владельца организации кнопки нет) и
  * «Готово». Под сведениями — «Уровень знаний» (свой — всегда, чужой — с правом «Видеть уровни
  * сотрудников»). Плашки «Несданных отчётов», «Просрочено», «Открытых задач», вкладку «Счёт» и реквизиты
- * добавят их модули; список контрагентов наполнит модуль «Контрагенты».
+ * добавят их модули. Вкладка «Контрагенты» — с правом «Просматривать контрагентов».
  */
 export function EmployeeCard({
   id,
@@ -43,6 +46,7 @@ export function EmployeeCard({
   onClose,
   actions,
   onEdit,
+  onTransfer,
 }: {
   id: string;
   /** Строка списка — показывается, пока карточка не загрузилась. */
@@ -53,6 +57,8 @@ export function EmployeeCard({
   actions: (e: Employee) => ActionEntry[];
   /** Кнопка «Изменить» (ФИО и телефон) у этого сотрудника; null — кнопки нет. */
   onEdit: (e: Employee) => (() => void) | null;
+  /** «Передать контрагентов» во вкладке «Контрагенты»; null — кнопки нет. */
+  onTransfer: (e: Employee) => (() => void) | null;
 }) {
   const t = useT();
   const query = useEmployee(id);
@@ -61,10 +67,14 @@ export function EmployeeCard({
   const [menu, setMenu] = useState<HTMLElement | null>(null);
   const items = employee ? actions(employee) : [];
   const edit = employee ? onEdit(employee) : null;
+  const cpsOn = useContractorCardOn();
   const tabs: CardTab[] = [
     { id: 'main', label: t('staff.card.tab.main'), icon: 'user' },
-    { id: 'cps', label: t('staff.card.tab.cps'), icon: 'building' },
+    ...(cpsOn
+      ? [{ id: 'cps', label: t('staff.card.tab.cps'), icon: 'building' } satisfies CardTab]
+      : []),
   ];
+  const shownTab = tabs.some((x) => x.id === tab) ? tab : 'main';
 
   return (
     <Modal
@@ -82,7 +92,7 @@ export function EmployeeCard({
       }
       tabs={{
         items: tabs,
-        active: tab,
+        active: shownTab,
         onSelect: (next) => setTab(next as CardTabId),
         label: t('staff.card.tabs'),
       }}
@@ -115,13 +125,15 @@ export function EmployeeCard({
     >
       <div data-employee-card={id} className="flex flex-col gap-3.5">
         {query.isError && !employee ? <Note tone="bad">{t('staff.card.load_error')}</Note> : null}
-        {employee && tab === 'main' ? (
+        {employee && shownTab === 'main' ? (
           <>
             <MainTab t={t} e={employee} />
             <KbMemberBox employeeId={employee.id} />
           </>
         ) : null}
-        {employee && tab === 'cps' ? <ContractorsTab t={t} /> : null}
+        {employee && shownTab === 'cps' ? (
+          <ContractorsTab t={t} employeeId={employee.id} onTransfer={onTransfer(employee)} />
+        ) : null}
       </div>
       {menu && employee ? (
         <ActionMenu
@@ -214,13 +226,44 @@ function MainTab({ t, e }: { t: Translate; e: Employee }) {
 }
 
 /**
- * Закреплённые контрагенты (прототип empCard, вкладка «cps»): контрагент, режим, несданных,
- * просрочено. Пока модуля «Контрагенты» нет, закреплённых нет; «Передать контрагентов» появится с ним.
+ * Закреплённые контрагенты (прототип empCard, вкладка «cps»): «Закреплено контрагентов: N» и «Передать
+ * контрагентов» (право «Сотрудники и роли», не у владельца, есть кого передавать); таблица — контрагент,
+ * режим, несданных, просрочено (красным); строка открывает карточку контрагента. Без архивных; видны
+ * контрагенты в области того, кто смотрит.
  */
-function ContractorsTab({ t }: { t: Translate }) {
+function ContractorsTab({
+  t,
+  employeeId,
+  onTransfer,
+}: {
+  t: Translate;
+  employeeId: string;
+  onTransfer: (() => void) | null;
+}) {
+  const query = useQuery(employeeContractorsQuery(employeeId));
+  if (query.isError) return <Note tone="bad">{t('staff.card.load_error')}</Note>;
+  const list = query.data;
+  if (!list) return null;
+  const rows = list.items.filter((c) => c.serviceStatus !== 'archived');
   return (
     <>
-      <div className="text-[13px] text-muted">{t('staff.card.cps_count', { n: 0 })}</div>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[13px] text-muted" data-employee-cps={rows.length}>
+          {t('staff.card.cps_count', { n: rows.length })}
+        </span>
+        <div className="flex-1" />
+        {rows.length && onTransfer ? (
+          <button
+            type="button"
+            data-employee-transfer=""
+            className={buttonClass('cta', 'sm')}
+            onClick={onTransfer}
+          >
+            <Icon name="refresh" size="sm" />
+            {t('cp.transfer.title')}
+          </button>
+        ) : null}
+      </div>
       <Box>
         <MiniTable
           label={t('staff.card.tab.cps')}
@@ -230,7 +273,23 @@ function ContractorsTab({ t }: { t: Translate }) {
             { key: 'open', label: t('staff.card.cps.open'), numeric: true },
             { key: 'overdue', label: t('staff.card.cps.overdue'), numeric: true },
           ]}
-          rows={[]}
+          rows={rows.map((c) => ({
+            key: c.id,
+            cells: {
+              name: c.name,
+              regime: c.regime ?? '—',
+              open: String(c.openReports),
+              overdue: c.overdue ? (
+                <b className="text-danger-label">{c.overdue}</b>
+              ) : (
+                String(c.overdue)
+              ),
+            },
+          }))}
+          onOpen={(key) => {
+            const row = rows.find((c) => c.id === key);
+            if (row) openContractorCard(row);
+          }}
           empty={t('staff.card.cps.empty')}
         />
       </Box>

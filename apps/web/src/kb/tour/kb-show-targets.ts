@@ -60,6 +60,10 @@ export const KB_SHOW_TARGETS: Readonly<Record<string, string>> = {
   '#st-save': 'main form [type=submit]',
   // Справочники: «Справочники платформы» — плитки.
   '#mbody .gscroll || #mbody .gcards': 'main [data-dict-tile]',
+  // Контрагенты: «сменить» ответственного и блок «Страница контрагента» в карточке.
+  '#cp-resp': '[data-cp-resp]',
+  '#cp-page': '[data-box]:has([data-cp-page])',
+  '#cp-page .acts': '[data-cp-page] > div:has([data-cp-page-action])',
   // Отчеты для сдачи: главная кнопка карточки отчёта — «Отметить сданным» или «Подтвердить».
   '#rc-main':
     '[data-window-foot] [data-report-button="submit"] || [data-window-foot] [data-report-button="confirm"]',

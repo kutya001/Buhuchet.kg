@@ -12,6 +12,7 @@ import {
 } from '@buhuchet/domain';
 import { z } from 'zod';
 import { IsoDate, RecordAudit, RecordVersion, Tyiyn, Uuid } from './common';
+import { YearMonth } from './kpi';
 import { listPageSchema } from './list';
 import { TaxTariff } from './platform-dicts';
 import { Phone } from './staff';
@@ -293,6 +294,10 @@ export const Contractor = z.object({
     .nullable(),
   gkedNotes: ContractorGkedNotes,
   socfund: ContractorSocfund,
+  /** Просроченных отчётов (у приостановленного — 0): в подписи карточки и на вкладке «Отчёты к сдаче». */
+  overdue: z.number().int().nonnegative(),
+  /** Есть отчёты: «Удалить» недоступно, только «В архив». */
+  hasReports: z.boolean(),
   audit: RecordAudit,
   version: RecordVersion,
 });
@@ -324,6 +329,7 @@ export const ContractorRow = z.object({
   kind: z.enum(CONTRACTOR_KINDS),
   form: z.string(),
   regime: z.string().nullable(),
+  regimeCode: z.string().nullable(),
   regime2: z.string().nullable(),
   benefits: z.string().nullable(),
   gked: Named.nullable(),
@@ -350,6 +356,26 @@ export const ContractorRow = z.object({
       ask: z.boolean(),
     })
     .nullable(),
+  /** Просроченных отчётов (у приостановленного — 0). */
+  overdue: z.number().int().nonnegative(),
+  /** Незавершённых отчётов: ещё не сданы и не «Не требуется». */
+  openReports: z.number().int().nonnegative(),
+  /** Видов отчётов: действующие назначения. */
+  reportTypes: z.number().int().nonnegative(),
+  /** Есть отчёты: «Удалить» недоступно, только «В архив». */
+  hasReports: z.boolean(),
+  /**
+   * Обслуживание для пунктов меню строки (правила `serviceMenu`): периоды, идущий месяц по Бишкеку и
+   * запланированное.
+   */
+  service: z.object({
+    periods: z.array(z.object({ from: YearMonth, to: YearMonth.nullable() })),
+    month: YearMonth,
+    plannedPause: z.object({ from: YearMonth, resume: YearMonth.nullable() }).nullable(),
+    plannedResume: YearMonth.nullable(),
+  }),
+  /** Когда и кто поставил нынешний статус обслуживания; без смен — создание контрагента. */
+  serviceSince: z.object({ at: z.iso.datetime(), by: z.string().nullable() }),
   audit: RecordAudit,
   version: RecordVersion,
 });
@@ -368,6 +394,49 @@ export const ContractorTabCounts = z.object({
   mine: z.number().int().nonnegative(),
 });
 export type ContractorTabCounts = z.infer<typeof ContractorTabCounts>;
+
+/**
+ * Итоги плашек списка (прототип renderCps) в области сотрудника: кроме «В архиве» — без архивных;
+ * `kpiMissing` null — плашки «Не заполнены показатели» нет (функция выключена или нет права).
+ */
+export const ContractorSummary = z.object({
+  active: z.number().int().nonnegative(),
+  noResponsible: z.number().int().nonnegative(),
+  withOverdue: z.number().int().nonnegative(),
+  noGked: z.number().int().nonnegative(),
+  socfundAsk: z.number().int().nonnegative(),
+  kpiMissing: z.number().int().nonnegative().nullable(),
+  paused: z.number().int().nonnegative(),
+  oneoff: z.number().int().nonnegative(),
+  archived: z.number().int().nonnegative(),
+  /** Область «Все контрагенты» («вся организация» под «На обслуживании»). */
+  scopeAll: z.boolean(),
+});
+export type ContractorSummary = z.infer<typeof ContractorSummary>;
+
+/**
+ * Вкладка «История» карточки контрагента: записи самого контрагента, его назначений, отчётов, задач и
+ * страницы — от новых к старым; `subject` — «НДС 09.2026» у отчёта, вид у назначения, название задачи;
+ * `names` — названия сотрудников и справочных кодов из «было → стало».
+ */
+export const ContractorHistory = z.object({
+  items: z.array(
+    z.object({
+      id: z.number().int(),
+      at: z.iso.datetime(),
+      actor: z.string().nullable(),
+      entity: z.string(),
+      action: z.string(),
+      reason: z.string().nullable(),
+      changes: z.array(
+        z.object({ field: z.string(), from: z.unknown().optional(), to: z.unknown().optional() }),
+      ),
+      subject: z.string().nullable(),
+    }),
+  ),
+  names: z.record(z.string(), z.string()),
+});
+export type ContractorHistory = z.infer<typeof ContractorHistory>;
 
 /** «Назначить ответственного» одному или нескольким контрагентам (прототип respDlg). */
 export const AssignContractorsRequest = z.object({

@@ -472,6 +472,8 @@ export interface ReportListOptions {
   /** Быстрый фильтр «Все / Сдать / Уплатить». */
   quick: ReportQuick;
   waiting: ReportWaitingView;
+  /** Только отчёты контрагента: вкладка «Отчёты к сдаче» его карточки. */
+  contractorId?: string | null;
 }
 
 /**
@@ -524,9 +526,15 @@ function tabCondition(o: Pick<ReportListOptions, 'tab' | 'today' | 'waiting'>): 
 }
 
 function listScope(
-  o: Pick<ReportListOptions, 'scope' | 'tab' | 'today' | 'quick' | 'waiting'>,
+  o: Pick<ReportListOptions, 'scope' | 'tab' | 'today' | 'quick' | 'waiting' | 'contractorId'>,
 ): SQL | undefined {
-  return and(eq(reports.superseded, false), o.scope, tabCondition(o), quickOf(o.quick));
+  return and(
+    eq(reports.superseded, false),
+    o.scope,
+    o.contractorId ? eq(reports.contractorId, o.contractorId) : undefined,
+    tabCondition(o),
+    quickOf(o.quick),
+  );
 }
 
 /** Строка списка отчётов. */

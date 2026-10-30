@@ -209,11 +209,12 @@ test.describe('Этап 1: сотрудники и роли (экраны)', () 
     );
 
     // «Изменить» — отдельной кнопкой; «Действия» — пункты меню списка без «Открыть карточку» и
-    // «Изменить».
+    // «Изменить». У нового сотрудника нет контрагентов: «Передать контрагентов» бледным с причиной.
     await expect(card.getByRole('button', { name: 'Изменить' })).toBeVisible();
     await card.getByRole('button', { name: 'Действия' }).click();
     const menu = page.getByRole('menu', { name: 'Действия' });
     await expect(menu.getByRole('menuitem')).toHaveText([
+      'Передать контрагентовНет закреплённых контрагентов',
       'Сменить роль',
       'Сбросить пароль',
       'Заблокировать',
@@ -443,7 +444,7 @@ test.describe('Этап 1: сотрудники и роли (экраны)', () 
     const menu = page.getByRole('menu', { name: 'Действия' });
     const grid = page.locator('[data-grid]');
     /** Пункты меню «⋯» записи; меню закрывается Esc. */
-    const menuOf = async (id: string, names: string[]) => {
+    const menuOf = async (id: string, names: (string | RegExp)[]) => {
       await grid.locator(`[data-id="${id}"] [data-row-menu]`).click();
       await expect(menu.getByRole('menuitem')).toHaveText(names);
       await page.keyboard.press('Escape');
@@ -455,15 +456,18 @@ test.describe('Этап 1: сотрудники и роли (экраны)', () 
       await search(page, isMobile, word);
       await expect(grid.locator('[data-id]')).toHaveCount(3);
       // Пароль сотрудника сбрасывает только владелец (docs/deviations.md п. 11).
+      // «Передать контрагентов» — у всех, кроме владельца (бледным, если контрагентов нет и это видно).
+      const transfer = /^Передать контрагентов/;
       await menuOf(colleague.employee.id, [
         'Открыть карточку',
         'Изменить',
+        transfer,
         'Сменить роль',
         'Заблокировать',
       ]);
       // Главный бухгалтер шире кадровика, а себя не ведут: пунктов нет вовсе, не неактивны.
-      await menuOf(chief.employee.id, ['Открыть карточку', 'Изменить']);
-      await menuOf(manager.employee.id, ['Открыть карточку', 'Изменить']);
+      await menuOf(chief.employee.id, ['Открыть карточку', 'Изменить', transfer]);
+      await menuOf(manager.employee.id, ['Открыть карточку', 'Изменить', transfer]);
 
       // В «Сменить роль» нет роли владельца, своей роли и ролей шире своей; под полем — почему.
       await grid.locator(`[data-id="${colleague.employee.id}"] [data-row-menu]`).click();

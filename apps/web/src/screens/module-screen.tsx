@@ -2,7 +2,7 @@
 
 import type { MenuModuleId } from '@buhuchet/domain';
 import { AccountsList } from '../admin/accounts-list';
-import { ContractorsStub } from '../contractors/contractor-add';
+import { ContractorsList } from '../contractors/contractors-list';
 import { L10nList } from '../admin/l10n-list';
 import { OrgsList } from '../admin/orgs-list';
 import { PlatformDicts } from '../dicts/platform-tab';
@@ -49,8 +49,12 @@ export function ModuleScreen({
     if (tab === 'roles') return <RolesList />;
     return <StaffStub />;
   }
-  // «Контрагенты»: до списка (2.10) — заглушка с «+ Добавить» → «Контрагент» (2.09).
-  if (moduleId === 'cps') return <ContractorsStub />;
+  // «Контрагенты»: «Все» и «Мои контрагенты»; «Должники» — задача 2.21.
+  if (moduleId === 'cps') {
+    const tab = tabId ?? 'all';
+    if (tab === 'all' || tab === 'mine') return <ContractorsList key={tab} tab={tab} />;
+    return <ModuleStub moduleId={moduleId} />;
+  }
   if (moduleId === 'org') {
     const tab = tabId ?? 'main';
     if (tab === 'policy') return <OrgPolicyTab />;
@@ -96,6 +100,9 @@ export function ModuleScreen({
  * вкладку («модуль/вкладка») и показывает плашки по `useModuleStats`.
  */
 const SCREENS_WITH_PLATES: ReadonlySet<string> = new Set<string>([
+  'cps/',
+  'cps/all',
+  'cps/mine',
   'reports/',
   'reports/week',
   'reports/overdue',

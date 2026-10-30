@@ -432,6 +432,39 @@ export function reportPickChanges(
   };
 }
 
+/**
+ * «Основания изменились» после «Изменить» контрагента (прототип pkBaseDiff; ТЗ «Основания для сквозных
+ * отчётов»: при включении основания система предлагает добавить его отчёты, при выключении — снять;
+ * docs/deviations.md п. А-7, решение А). `s` — контрагент после правки, `before` — основания до неё.
+ * Добавить — отмечаемые сами при новых основаниях, которых не было при прежних и которые ещё не
+ * назначены; снять — назначенные виды выключенного основания, у которых не осталось включённого.
+ */
+export function reportPickBaseDiff(
+  before: readonly string[],
+  s: PickSubject,
+  assigned: readonly string[],
+  dict: PickDict,
+  date: string,
+  t: Translate,
+): { on: string[]; off: string[]; add: string[]; remove: string[] } {
+  const on = s.bases.filter((b) => !before.includes(b));
+  const off = before.filter((b) => !s.bases.includes(b));
+  let add: string[] = [];
+  if (on.length) {
+    const was = new Set(reportPickAuto(reportPick({ ...s, bases: before }, dict, date, t)));
+    add = reportPickAuto(reportPick(s, dict, date, t)).filter(
+      (code) => !assigned.includes(code) && !was.has(code),
+    );
+  }
+  const remove = off.length
+    ? assigned.filter((code) => {
+        const bases = dict.types.find((x) => x.code === code)?.bases ?? [];
+        return bases.some((b) => off.includes(b)) && !bases.some((b) => s.bases.includes(b));
+      })
+    : [];
+  return { on, off, add, remove };
+}
+
 /** Коды льгот, с которыми статус не совмещается: «не совмещается с ЛЬГ-01 (ПКИ) …» (прототип benConflicts). */
 function benefitConflicts(b: PickBenefit): string[] {
   const m = /не совмещается с ([^;.]+)/i.exec(b.combines);

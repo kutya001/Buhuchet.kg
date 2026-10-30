@@ -1,5 +1,5 @@
 import { expect, type APIRequestContext } from '@playwright/test';
-import { DEMO_PASSWORD, signIn } from './helpers';
+import { DEMO_PASSWORD, defaultResponsible, signIn } from './helpers';
 
 // Общее для сквозных тестов отчётов (задача 2.06): владелец демо-организации, новый контрагент,
 // назначение и отчёты контрагента через API сайта.
@@ -33,7 +33,8 @@ export type NewContractor = {
 
 /**
  * Новый контрагент демо-организации; `benefits` — коды льгот и статусов, `taxOfficeCode` — УГНС,
- * `name` — название (по умолчанию «Сроки отчётов <ИНН>»), `responsible` — id ответственного сотрудника,
+ * `name` — название (по умолчанию «Сроки отчётов <ИНН>»), `responsible` — id ответственного сотрудника
+ * (по умолчанию — `defaultResponsible`),
  * `tariff: false` — без стоимости обслуживания (в организации без «Платы за обслуживание»).
  */
 export async function newContractor(
@@ -47,9 +48,6 @@ export async function newContractor(
     tariff?: boolean;
   } = {},
 ): Promise<NewContractor> {
-  const staff = (await (await api.get('/api/staff?size=all')).json()) as {
-    items: { id: string; active: boolean }[];
-  };
   const inn = freshInn();
   const res = await api.post('/api/contractors', {
     headers: { origin },
@@ -68,7 +66,7 @@ export async function newContractor(
         ? { benefits: options.benefits.map((code) => ({ code, validFrom: null, validTo: null })) }
         : {}),
       startDate: '2026-01-01',
-      responsibleEmployeeId: options.responsible ?? staff.items.find((e) => e.active)!.id,
+      responsibleEmployeeId: options.responsible ?? (await defaultResponsible(api)),
       ...(options.tariff === false ? {} : { tariff: { amount: 1_000_000, period: 'M' } }),
     },
   });

@@ -19,6 +19,7 @@ import {
   reportPick,
   reportPickAllWhy,
   reportPickAuto,
+  reportPickBaseDiff,
   reportPickChanges,
   reportsNotNeeded,
   statBaseAuto,
@@ -180,6 +181,39 @@ describe('Основания в шапке подбора', () => {
     const withStat = { ...s, bases: ['statSample'] };
     const off = baseToggle('statSample', false, ['t1m', 'nds'], withStat, dict, fixture.date, t);
     expect(off.selected).toEqual(['nds']);
+  });
+});
+
+describe('«Основания изменились» после «Изменить» (docs/deviations.md п. А-7)', () => {
+  const s = subjectOf(named('придуманный 3').subject);
+
+  it('включённое основание предлагает добавить его отмечаемые сами отчёты, которых нет', () => {
+    const after = { ...s, bases: [...s.bases, 'employees'] };
+    const d = reportPickBaseDiff(s.bases, after, ['nds'], dict, fixture.date, t);
+    expect(d.on).toEqual(['employees']);
+    expect(d.off).toEqual([]);
+    expect(d.add).toContain('soc');
+    expect(d.add).not.toContain('nds');
+    expect(d.remove).toEqual([]);
+  });
+
+  it('выключенное основание предлагает снять назначенные виды без другого включённого основания', () => {
+    const before = [...s.bases, 'employees', 'property', 'land'];
+    const after = { ...s, bases: [...s.bases, 'land'] };
+    const d = reportPickBaseDiff(before, after, ['nds', 'soc', 'imn'], dict, fixture.date, t);
+    expect(d.off).toEqual(['employees', 'property']);
+    // «Налог на имущество» держится и на «Есть земля» — не снимается.
+    expect(d.remove).toEqual(['soc']);
+    expect(d.add).toEqual([]);
+  });
+
+  it('основания не менялись — предлагать нечего', () => {
+    expect(reportPickBaseDiff(s.bases, s, ['nds'], dict, fixture.date, t)).toEqual({
+      on: [],
+      off: [],
+      add: [],
+      remove: [],
+    });
   });
 });
 

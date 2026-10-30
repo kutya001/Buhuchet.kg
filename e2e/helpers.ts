@@ -48,6 +48,21 @@ export async function hire(
   return (await res.json()) as { temporaryPassword: string };
 }
 
+/**
+ * Ответственный по умолчанию для контрагента, которого тест создаёт через API: в демо-организации —
+ * главный бухгалтер meerim, в своей организации теста — первый активный сотрудник. Не первый в списке
+ * (он — самый новый): им бывает только что нанятый сотрудник другого теста, у которого в карточке
+ * проверяют «Закреплено контрагентов: 0».
+ */
+export async function defaultResponsible(api: APIRequestContext): Promise<string> {
+  const res = await api.get('/api/staff?size=all');
+  expect(res.status()).toBe(200);
+  const { items } = (await res.json()) as {
+    items: { id: string; login: string; active: boolean }[];
+  };
+  return (items.find((e) => e.login === 'meerim' && e.active) ?? items.find((e) => e.active))!.id;
+}
+
 /** Подделка Telegram Bot API (fake-telegram.ts): её запускает Playwright на этом компьютере. */
 const FAKE_TELEGRAM = `http://127.0.0.1:${process.env.FAKE_TELEGRAM_PORT ?? 8091}`;
 /** Секрет вебхука бота сайта — тот же, что в .env (по умолчанию из .env.example). */

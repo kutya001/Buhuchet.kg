@@ -36,6 +36,7 @@ const run = () => ({
   resetPassword: vi.fn(),
   block: vi.fn(),
   unblock: vi.fn(),
+  transfer: vi.fn(),
 });
 const items = (list: readonly ActionEntry[]) =>
   list.filter((i): i is ActionItem => !('separator' in i));
@@ -94,12 +95,13 @@ describe('меню сотрудника', () => {
     expect(labels(list)).toEqual([
       'Открыть карточку',
       'Изменить',
+      'Передать контрагентов',
       'Сменить роль',
       'Сбросить пароль',
       '—',
       'Заблокировать',
     ]);
-    const [, edit, role, reset, block] = items(list);
+    const [, edit, , role, reset, block] = items(list);
     expect(role).toMatchObject({ icon: 'shield' });
     expect(role!.disabled).toBeFalsy();
     expect(block).toMatchObject({ danger: true, icon: 'lock' });
@@ -123,7 +125,13 @@ describe('меню сотрудника', () => {
       run: run(),
       card: true,
     })(employee());
-    expect(labels(list)).toEqual(['Сменить роль', 'Сбросить пароль', '—', 'Заблокировать']);
+    expect(labels(list)).toEqual([
+      'Передать контрагентов',
+      'Сменить роль',
+      'Сбросить пароль',
+      '—',
+      'Заблокировать',
+    ]);
   });
 
   it('заблокированному вместо «Заблокировать» — «Разблокировать»', () => {
@@ -143,6 +151,7 @@ describe('меню сотрудника', () => {
     expect(labels(menu(employee()))).toEqual([
       'Открыть карточку',
       'Изменить',
+      'Передать контрагентов',
       'Сменить роль',
       '—',
       'Заблокировать',
@@ -155,19 +164,22 @@ describe('меню сотрудника', () => {
       run: run(),
       card: true,
     });
-    expect(labels(card(employee()))).toEqual(['Сменить роль', '—', 'Заблокировать']);
+    expect(labels(card(employee()))).toEqual([
+      'Передать контрагентов',
+      'Сменить роль',
+      '—',
+      'Заблокировать',
+    ]);
   });
 
   it('у себя и у того, кого вести нельзя, «Сменить роль», «Сбросить пароль» и «Заблокировать» скрыты', () => {
     const menu = staffMenu({ canManage: true, isOwner: true, employeeId: ME, t, run: run() });
-    expect(labels(menu(employee({ id: ME })))).toEqual(['Открыть карточку', 'Изменить']);
-    // Сотрудник с правами «выдаёт только владелец» или с ролью шире своей: только «Изменить».
-    expect(labels(menu(employee({ manageable: false })))).toEqual(['Открыть карточку', 'Изменить']);
-    expect(labels(menu(employee({ manageable: false, active: false })))).toEqual([
-      'Открыть карточку',
-      'Изменить',
-    ]);
-    // В карточке «Действий» тогда нет: пусто.
+    const rest = ['Открыть карточку', 'Изменить', 'Передать контрагентов'];
+    expect(labels(menu(employee({ id: ME })))).toEqual(rest);
+    // Сотрудник с правами «выдаёт только владелец» или с ролью шире своей: «Изменить» и передача
+    // контрагентов (прототип: «Передать контрагентов» — до проверки empLocked).
+    expect(labels(menu(employee({ manageable: false })))).toEqual(rest);
+    expect(labels(menu(employee({ manageable: false, active: false })))).toEqual(rest);
     const card = staffMenu({
       canManage: true,
       isOwner: true,
@@ -176,6 +188,24 @@ describe('меню сотрудника', () => {
       run: run(),
       card: true,
     });
-    expect(card(employee({ manageable: false }))).toEqual([]);
+    expect(labels(card(employee({ manageable: false })))).toEqual(['Передать контрагентов']);
+  });
+
+  it('«Передать контрагентов»: без закреплённых — бледным с причиной; число неизвестно — доступно', () => {
+    const r = run();
+    const e = employee();
+    const transferOf = (cps: number | null) =>
+      items(
+        staffMenu({ canManage: true, isOwner: true, employeeId: ME, t, run: r, cps: () => cps })(e),
+      ).find((i) => i.id === 'transfer')!;
+    expect(transferOf(0)).toMatchObject({
+      disabled: true,
+      reason: 'Нет закреплённых контрагентов',
+      icon: 'refresh',
+    });
+    expect(transferOf(3).disabled).toBeFalsy();
+    expect(transferOf(null).disabled).toBeFalsy();
+    transferOf(3).run();
+    expect(r.transfer).toHaveBeenCalledWith(e);
   });
 });

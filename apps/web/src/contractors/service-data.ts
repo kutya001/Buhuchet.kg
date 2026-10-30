@@ -38,7 +38,7 @@ export const activeRegimesQuery = queryOptions({
 });
 
 /**
- * После действия с обслуживанием: перечитать всё о контрагентах (карточка, список, счётчики) и отчёты —
+ * После действия с обслуживанием: перечитать всё о контрагентах (карточка, списки, счётчики) и отчёты —
  * приостановка и архив меняют их статусы и «Просрочено».
  */
 export function useServiceRefresh(): () => void {
@@ -46,5 +46,6 @@ export function useServiceRefresh(): () => void {
   return useCallback(() => {
     void client.invalidateQueries({ queryKey: ['contractors'] });
     void client.invalidateQueries({ queryKey: ['reports'] });
+    void client.invalidateQueries({ queryKey: ['list'] });
   }, [client]);
 }

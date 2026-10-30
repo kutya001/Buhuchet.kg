@@ -10,6 +10,8 @@ export interface AddRequest {
   actionId: string;
   label: string;
   n: number;
+  /** Вариант формы от «Перейти» шага «Базы знаний» (`KbTarget.open.variant`). */
+  variant?: string;
 }
 
 export interface ShellState {

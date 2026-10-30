@@ -33,6 +33,7 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
 import { api, callApi } from '../api-client';
+import { ContractorLink } from '../contractors/contractor-link';
 import { RecordFiles } from '../files/record-files';
 import { useErrorText, useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
@@ -48,7 +49,11 @@ const date = (iso: string) => formatDateRu(bishkekDate(new Date(iso)));
 function cardItems(t: Translate, task: Task): KeyValueItem[] {
   const items: KeyValueItem[] = [];
   if (task.contractor)
-    items.push({ id: 'cp', label: t('task.kv.cp'), value: task.contractor.name });
+    items.push({
+      id: 'cp',
+      label: t('task.kv.cp'),
+      value: <ContractorLink id={task.contractor.id} name={task.contractor.name} />,
+    });
   else items.push({ id: 'scope', label: t('task.kv.scope'), value: t('task.kv.general') });
   items.push(
     {

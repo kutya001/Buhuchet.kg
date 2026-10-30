@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext } from '@playwright/test';
-import { DEMO_PASSWORD, signIn } from './helpers';
+import { DEMO_PASSWORD, defaultResponsible, signIn } from './helpers';
 
 // Страница контрагента по ссылке: включение, код доступа и защита (задача 2.42, #98). Блок карточки
 // подключит карточка контрагента (2.11), разделы страницы — задача 2.43; поэтому страница включается
@@ -25,9 +25,6 @@ interface PageBlock {
 async function enabledPage(api: APIRequestContext, baseURL: string | undefined, name: string) {
   const origin = new URL(baseURL!).origin;
   await signIn(api, origin, 'erkin', DEMO_PASSWORD);
-  const staff = (await (await api.get('/api/staff?size=all')).json()) as {
-    items: { id: string; active: boolean }[];
-  };
   const inn = freshInn();
   const created = await api.post('/api/contractors', {
     headers: { origin },
@@ -40,7 +37,7 @@ async function enabledPage(api: APIRequestContext, baseURL: string | undefined, 
       regimeCode: 'РЕЖ-01',
       gked: '46.34.0',
       startDate: '2026-10-01',
-      responsibleEmployeeId: staff.items.find((e) => e.active)!.id,
+      responsibleEmployeeId: await defaultResponsible(api),
       tariff: { amount: 0, period: 'M' },
     },
   });

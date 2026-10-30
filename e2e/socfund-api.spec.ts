@@ -1,4 +1,5 @@
 import { expect, test, type APIRequestContext } from '@playwright/test';
+import { defaultResponsible } from './helpers';
 import { asOwner, assign, reportsOf } from './reports';
 
 // Тариф Соцфонда (задача 2.08, #64). Экранов у задачи нет (форма — 2.09, список — 2.10, карточка —
@@ -34,9 +35,6 @@ async function newContractor(
   origin: string,
   data: Record<string, unknown>,
 ): Promise<Saved> {
-  const staff = (await (await api.get('/api/staff?size=all')).json()) as {
-    items: { id: string; active: boolean }[];
-  };
   const inn = freshInn();
   const res = await api.post('/api/contractors', {
     headers: { origin },
@@ -49,7 +47,7 @@ async function newContractor(
       regimeCode: 'РЕЖ-01',
       bases: ['employees'],
       startDate: '2026-01-01',
-      responsibleEmployeeId: staff.items.find((e) => e.active)!.id,
+      responsibleEmployeeId: await defaultResponsible(api),
       tariff: { amount: 1_000_000, period: 'M' },
       ...data,
     },

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  benefitsEndingSoon,
   contractorDeleteRefusal,
   contractorFieldProblems,
   firstMonthFee,
@@ -160,5 +161,29 @@ describe('firstMonthFee — начисление за месяц начала о
 
   it('«Со следующего месяца» — за месяц начала ничего', () => {
     expect(firstMonthFee(500_000, '2026-10-14', 'next')).toEqual({ kind: 'next', amount: 500_000 });
+  });
+});
+
+describe('льгота по кодексу скоро кончается (карточка контрагента)', () => {
+  const catalog = [
+    { code: 'B1', name: 'Льгота 1', kind: 'benefit', validUntil: '2026-12-29' },
+    { code: 'B2', name: 'Льгота 2', kind: 'benefit', validUntil: '2026-12-30' },
+    { code: 'B3', name: 'Льгота 3', kind: 'benefit', validUntil: '2026-10-29' },
+    { code: 'B4', name: 'Льгота 4', kind: 'benefit', validUntil: null },
+    { code: 'S1', name: 'Статус', kind: 'status', validUntil: '2026-11-01' },
+    { code: 'B5', name: 'Льгота 5', kind: 'benefit', validUntil: '2026-10-30' },
+  ];
+
+  it('до 60 дней включительно и сегодня; дальше, прошедшие, без срока и статусы — нет', () => {
+    expect(
+      benefitsEndingSoon(catalog, ['B1', 'B2', 'B3', 'B4', 'S1', 'B5', 'NOPE'], '2026-10-30'),
+    ).toEqual([
+      { name: 'Льгота 1', until: '2026-12-29', days: 60 },
+      { name: 'Льгота 5', until: '2026-10-30', days: 0 },
+    ]);
+  });
+
+  it('только выбранные у контрагента', () => {
+    expect(benefitsEndingSoon(catalog, [], '2026-10-30')).toEqual([]);
   });
 });
