@@ -45,6 +45,8 @@ const json = async <T>(res: JsonResponse, parse: (v: unknown) => T) => {
 export interface Catalog {
   /** Действующие виды отчётов в порядке каталога. */
   types: readonly ReportType[];
+  /** Весь каталог по порядку — и отключённые («Вид отключён» в «Подборе отчётов»). */
+  all: readonly ReportType[];
   /** Вид по коду — и отключённый в каталоге (его название нужно в «Связях» налога). */
   type: (code: string) => ReportType | undefined;
   /** Орган — название по коду. */
@@ -91,6 +93,7 @@ export const catalogQuery = queryOptions({
     const fullNames = new Map(regimes.items.map((r) => [r.name, r.fullName]));
     return {
       types: active,
+      all: types.items,
       type: (code) => byCode.get(code),
       authority,
       regime,
@@ -178,5 +181,7 @@ export function useDictsRefresh() {
   return useCallback(() => {
     void client.invalidateQueries({ queryKey: ['list', 'dicts.types'] });
     void client.invalidateQueries({ queryKey: typeSettingsQuery.queryKey });
+    // Подключённые виды — и в окне «Подбор отчётов».
+    void client.invalidateQueries({ queryKey: ['contractors', 'report-pick'] });
   }, [client]);
 }
