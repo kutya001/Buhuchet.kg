@@ -8,8 +8,13 @@ const BEHIND_MARKER = '<!-- automerge:behind -->';
 const GUARD_MARKER = '<!-- automerge:guards -->';
 const { REPO, HEAD_SHA } = process.env;
 
+// Буфер больше 1 МБ по умолчанию: ответы gh api по длинной истории ветки бывают больше.
 const gh = (...args) =>
-  execFileSync('gh', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] });
+  execFileSync('gh', args, {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'inherit'],
+    maxBuffer: 64 * 1024 * 1024,
+  });
 const api = (path) => JSON.parse(gh('api', '-H', 'Accept: application/vnd.github+json', path));
 const comment = (number, marker, text) => {
   const comments = api(`repos/${REPO}/issues/${number}/comments?per_page=100`);
@@ -71,15 +76,28 @@ for (const name of REQUIRED_CHECKS) {
 }
 
 // Ветка должна содержать свежий main: иначе зелёные проверки не про то, что окажется в main.
-const compare = api(`repos/${REPO}/compare/${pr.base.ref}...${HEAD_SHA}`);
-if (compare.behind_by > 0) {
+// Нужно только число: полный ответ сравнения (коммиты и патчи ветки) бывает больше мегабайта.
+const behindOut = gh(
+  'api',
+  '-H',
+  'Accept: application/vnd.github+json',
+  `repos/${REPO}/compare/${pr.base.ref}...${HEAD_SHA}`,
+  '--jq',
+  '.behind_by',
+).trim();
+// Пустой вывод (поля нет или null) — тоже непонятный ответ: без числа не сливаем.
+if (!/^\d+$/.test(behindOut)) {
+  throw new Error(`Не удалось узнать, отстала ли ветка PR #${pr.number} от ${pr.base.ref}.`);
+}
+const behindBy = Number(behindOut);
+if (behindBy > 0) {
   comment(
     pr.number,
     BEHIND_MARKER,
-    `Все проверки зелёные, но ветка отстала от main на ${compare.behind_by} коммит(а). ` +
+    `Все проверки зелёные, но ветка отстала от main на ${behindBy} коммит(а). ` +
       'Обновите ветку (rebase или merge с main) и запушьте — после новых зелёных проверок PR сольётся сам.',
   );
-  console.log(`PR #${pr.number} отстал от main на ${compare.behind_by} — ждём обновления ветки.`);
+  console.log(`PR #${pr.number} отстал от main на ${behindBy} — ждём обновления ветки.`);
   process.exit(0);
 }
 
