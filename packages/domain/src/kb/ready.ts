@@ -234,10 +234,13 @@ export const KB_STEP_RULES: Readonly<Record<string, KbStepRule>> = {
   xls: { module: 'dicts' },
   stats: { module: 'reports' },
   swipe: { module: 'reports' },
-  // Админка (задачи 2.35, 2.36, 2.40). «Каталог видов отчётов», шаблоны и загрузка из Excel — с их
-  // вкладками (2.36, 2.37).
+  // Админка (задачи 2.35–2.37, 2.40). «Выгрузить и загрузить через Excel» — первое применение
+  // загрузки (экран отмечает `pdload`, прототип: загрузка этого администратора сегодня).
   'a-dicts': { module: 'pdicts' },
+  'a-types': { module: 'pdicts' },
+  'a-xls': { module: 'pdicts' },
   'a-cal': { module: 'pdicts' },
+  'a-tpl': { module: 'pdicts' },
   'a-l10n': { module: 'l10n' },
   'a-org': { module: 'orgs', done: { kind: 'org_created' } },
 };
@@ -260,9 +263,10 @@ export const KB_READY_MODULES: ReadonlySet<string> = new Set<MenuModuleId>([
   // «Файловый менеджер» (2.29).
   'files',
   'kb',
-  // Админка: «Учётные записи» (2.35), «Организации», «Локализация» (2.40). Статья «Справочников
-  // платформы» описывает и загрузку из Excel — модуль добавит задача 2.37.
+  // Админка: «Учётные записи» (2.35), «Организации», «Локализация» (2.40), «Справочники
+  // платформы» с загрузкой из Excel и массовыми правками (2.36, 2.37).
   'accounts',
   'orgs',
+  'pdicts',
   'l10n',
 ]);

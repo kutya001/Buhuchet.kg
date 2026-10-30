@@ -81,7 +81,11 @@ export const KB_GO: Readonly<Record<string, KbTarget>> = {
   swipe: { module: 'reports', tab: 'week', flash: '[data-tabrow]' },
   // Админка.
   'a-dicts': { module: 'pdicts', tab: 'regimes', flash: 'main' },
+  'a-types': { module: 'pdicts', tab: 'types', flash: LIST },
+  // «Выгрузить» и «Загрузить» над списком (задача 2.37).
+  'a-xls': { module: 'pdicts', tab: 'types', flash: '[data-io-bar]' },
   'a-cal': { module: 'pdicts', tab: 'calendar', flash: 'main' },
+  'a-tpl': { module: 'pdicts', tab: 'templates', flash: 'main' },
   'a-l10n': { module: 'l10n', flash: 'main' },
   'a-org': { module: 'orgs', flash: LIST, open: { add: 'org' } },
 };

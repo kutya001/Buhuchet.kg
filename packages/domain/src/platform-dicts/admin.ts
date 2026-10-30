@@ -16,6 +16,7 @@ export const ADMIN_VALUE_DICTS = [
   'bases',
   'regimes',
   'benefits',
+  'gked',
   'forms',
   'phones',
   'organs',
@@ -36,6 +37,7 @@ export function isAdminValueDict(value: string): value is AdminValueDict {
  */
 export function dictStatusKey(dict: AdminValueDict, active: boolean) {
   if (dict === 'types') return active ? 'pdicts.status.on_type' : 'pdicts.status.off_type';
+  if (dict === 'gked') return active ? 'pdicts.status.on_gked' : 'pdicts.status.off_gked';
   return active ? 'pdicts.status.on' : 'pdicts.status.off';
 }
 
@@ -61,7 +63,9 @@ import {
 type CodeRule =
   | { prefix: string; digits: number }
   | { byKind: Readonly<Record<BankKind, string>>; digits: number }
-  | { key: string };
+  | { key: string }
+  /** Код вводит администратор (ГКЭД: «A», «01», «01.1», «01.11», «01.11.1»). */
+  | { manual: true };
 
 /** Страна телефона по умолчанию: Кыргызстан, отключить нельзя (ТЗ «Коды стран телефонов»). */
 export const DEFAULT_PHONE_COUNTRY = 'KG';
@@ -162,12 +166,13 @@ export const ADMIN_DICT_META: Readonly<Record<AdminValueDict, AdminDictMeta>> = 
       'combines',
       'accountantNote',
       'article',
+      'gked',
     ],
     required: ['fullName'],
     kind: { values: REGIME_KINDS, default: 'special', text: 'dicts.value.regime_kind' },
   },
-  // Льготы и особые статусы (прототип benefitDlg): «Виды деятельности (ГКЭД)» правит задача 2.38. Без
-  // «№» и «Выше»/«Ниже» (docs/deviations.md п. Д-2): список — по коду, как в прототипе.
+  // Льготы и особые статусы (прототип benefitDlg). Без «№» и «Выше»/«Ниже» (docs/deviations.md п. Д-2):
+  // список — по коду, как в прототипе.
   benefits: {
     code: { prefix: 'ЛЬГ', digits: 2 },
     ordered: false,
@@ -188,12 +193,22 @@ export const ADMIN_DICT_META: Readonly<Record<AdminValueDict, AdminDictMeta>> = 
       'offices',
       'verify',
       'verifyNote',
+      'gked',
     ],
     required: ['gives'],
     links: ['removes', 'adds', 'offices'],
     dueRules: true,
     contractorTable: 'contractor_benefits',
     kind: { values: BENEFIT_KINDS, default: 'benefit', text: 'pdicts.benefit.kind' },
+  },
+  // ГКЭД (задача 2.38, прототип gkEditDlg): код вводит администратор; «Входит в» — код этого же
+  // справочника, поэтому код с вложенными кодами «Используется»; названия повторяются (у подкласса —
+  // как у класса), повтор названия не проверяется. Без «№»: список — по коду.
+  gked: {
+    code: { manual: true },
+    ordered: false,
+    fields: ['name', 'level', 'parentCode', 'note'],
+    contractorTable: 'contractors',
   },
   forms: {
     code: { prefix: 'ФС', digits: 2 },
@@ -248,6 +263,7 @@ export function nextDictCode(
   kind: BankKind = 'bank',
 ): string {
   const rule = ADMIN_DICT_META[dict].code;
+  if ('manual' in rule) throw new Error(`код справочника «${dict}» вводит администратор`);
   if ('key' in rule) return `${rule.key}-${random()}`;
   const head = `${'byKind' in rule ? rule.byKind[kind] : rule.prefix}-`;
   const max = codes.reduce((m, code) => {
@@ -479,8 +495,7 @@ const STATUS = c('active', 'enum', 'pdicts.col.status');
 export const ADMIN_DICT_COLUMNS: Readonly<Record<AdminValueDict, readonly AdminDictColumn[]>> = {
   // Виды отчётов (прототип `adm-types`): «Что сделать», «Что уплачивается», код формы, орган,
   // периодичность и срок сдачи видны; «Назначен» — у скольких контрагентов на обслуживании вид
-  // назначен сейчас, по всем организациям. «Виды деятельности (ГКЭД)» добавит задача 2.38, «Сверено
-  // с ГНС» — задача 2.37.
+  // назначен сейчас, по всем организациям; «Сверено с ГНС» — дата и кто сверял.
   types: [
     c('code', 'text', 'pdicts.col.code', true),
     c('name', 'text', 'pdicts.col.name'),
@@ -496,7 +511,9 @@ export const ADMIN_DICT_COLUMNS: Readonly<Record<AdminValueDict, readonly AdminD
     c('rates', 'text', 'dicts.col.rates', true),
     c('regimes', 'text', 'dicts.col.regimes', true),
     c('payer', 'enum', 'pdicts.col.payer', true),
+    c('gked', 'text', 'pdicts.col.gked', true),
     c('assigned', 'int', 'pdicts.col.assigned', true),
+    c('gns', 'date', 'pdicts.col.gns', true),
     c('active', 'enum', 'pdicts.col.status', true),
   ],
   bases: [
@@ -521,6 +538,7 @@ export const ADMIN_DICT_COLUMNS: Readonly<Record<AdminValueDict, readonly AdminD
     c('combines', 'text', 'pdicts.col.combines', true),
     c('accountantNote', 'text', 'pdicts.col.acc'),
     c('article', 'text', 'pdicts.col.article'),
+    c('gked', 'text', 'pdicts.col.gked', true),
     USED,
     STATUS,
   ],
@@ -532,9 +550,22 @@ export const ADMIN_DICT_COLUMNS: Readonly<Record<AdminValueDict, readonly AdminD
     c('removes', 'text', 'pdicts.col.removes', true),
     c('adds', 'text', 'pdicts.col.adds', true),
     c('validUntil', 'date', 'pdicts.col.until'),
+    c('gked', 'text', 'pdicts.col.gked', true),
     CONTRACTORS,
     c('used', 'int', 'pdicts.col.used', true),
     STATUS,
+  ],
+  // ГКЭД (прототип `adm-gked`): «Используется» — у скольких контрагентов и в скольких перечнях
+  // «Виды деятельности (ГКЭД)» справочников; «Действует» — да или нет.
+  gked: [
+    c('code', 'text', 'pdicts.col.code'),
+    c('name', 'text', 'pdicts.col.name'),
+    c('level', 'enum', 'pdicts.gked.col.level'),
+    c('section', 'enum', 'pdicts.gked.col.section'),
+    c('parentCode', 'text', 'pdicts.gked.col.parent', true),
+    c('note', 'text', 'pdicts.col.note', true),
+    USED,
+    c('active', 'enum', 'pdicts.gked.col.active'),
   ],
   phones: [
     c('code', 'text', 'pdicts.col.code', true),
@@ -606,11 +637,11 @@ export const ADMIN_CALENDAR_SORT: ListSort = { key: 'date', dir: 'asc' };
 
 /**
  * Сортировка списка по умолчанию (как в прототипе, docs/deviations.md п. 48): короткий справочник — в
- * своём порядке («№»), УГНС — по региону, льготы — по коду, виды отчётов, основания и коды стран — в
+ * своём порядке («№»), УГНС — по региону, льготы и ГКЭД — по коду, виды отчётов, основания и коды стран — в
  * порядке справочника без «№» (null).
  */
 export function adminDictDefaultSort(dict: AdminValueDict): ListSort | null {
   if (ADMIN_DICT_META[dict].ordered) return { key: 'n', dir: 'asc' };
   if (dict === 'ugns') return { key: 'region', dir: 'asc' };
-  return dict === 'benefits' ? { key: 'code', dir: 'asc' } : null;
+  return dict === 'benefits' || dict === 'gked' ? { key: 'code', dir: 'asc' } : null;
 }

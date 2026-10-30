@@ -1,6 +1,8 @@
 import {
   ADMIN_TAX_COLUMNS,
   ADMIN_TAX_SORT,
+  formatText,
+  gkedRuleText,
   propertyRateTyiyn,
   type AdminTaxList,
   type ListQuery,
@@ -27,7 +29,8 @@ import { listTaxes } from './taxes';
  * налоги и обязательные платежи (разделы `taxes`), ставки единого налога (таблица
  * `single_tax_rates`), ставки налога на имущество (`propertyRates`), размер бизнеса и пояснения
  * (`bizSize`, `notes`). Списки — общим механизмом (поиск, фильтры, сортировка, группы, «В Excel») по
- * строкам, собранным здесь. Выгрузку и загрузку из Excel добавит задача 2.37, правку ГКЭД ставок — 2.38.
+ * строкам, собранным здесь. Выгрузка и загрузка — `admin-io-sections.ts`, «Виды деятельности (ГКЭД)»
+ * ставок — `admin-gked.ts`.
  */
 
 /** Строка таблицы: постоянный ключ и значения столбцов (`ADMIN_TAX_COLUMNS`). */
@@ -119,6 +122,7 @@ async function taxRows(tx: Tx, list: AdminTaxList, t: ListTexts): Promise<AdminT
         rate: x.rate,
         cond: x.conditions,
         art: x.article,
+        gked: gkedRuleText(x.gked, (key, params) => formatText(t(key), params)),
       },
     }));
   }

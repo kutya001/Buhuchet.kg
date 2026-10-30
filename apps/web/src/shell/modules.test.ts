@@ -161,6 +161,11 @@ describe('вкладки и «+ Добавить» по правам и учёт
     ]);
     expect(ids(addActions('pdicts', access, 'ugns'))).toEqual(['ugns', 'io_export', 'io_import']);
     expect(addActions('pdicts', access, 'types').find((a) => a.id === 'io_export')?.sep).toBe(true);
+    // «ГКЭД»: «Код ГКЭД» и Excel; календарь — Excel рядом с «Нерабочий день» (задачи 2.37 и 2.38).
+    expect(ids(addActions('pdicts', access, 'gked'))).toEqual(['gked', 'io_export', 'io_import']);
+    expect(ids(addActions('pdicts', access, 'calendar'))).toEqual(
+      expect.arrayContaining(['io_export', 'io_import']),
+    );
     expect(addActions('pdicts', access, 'requests')).toEqual([]);
     expect(addActions('pdicts', access)).toEqual([]);
   });

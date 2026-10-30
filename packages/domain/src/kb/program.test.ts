@@ -208,7 +208,7 @@ describe('программа обучения', () => {
     expect(kbProgram(CATALOG, admin, RULES).map((g) => g.def.id)).toEqual(['adm']);
   });
 
-  it('шаги Админки: справочники платформы, календарь, «Локализация», «Создать организацию» (остальные — с их вкладками)', () => {
+  it('шаги Админки: справочники платформы, каталог, Excel, календарь, шаблоны, «Локализация», «Создать организацию»', () => {
     const steps = ['a-dicts', 'a-types', 'a-xls', 'a-cal', 'a-tpl', 'a-l10n', 'a-org'].map(
       (id, i) => step(id, 'adm', 70 + i),
     );
@@ -216,7 +216,10 @@ describe('программа обучения', () => {
     expect(program.flatMap((g) => g.steps.map((s) => [s.def.id, s.module, !!s.rule.done]))).toEqual(
       [
         ['a-dicts', 'pdicts', false],
+        ['a-types', 'pdicts', false],
+        ['a-xls', 'pdicts', false],
         ['a-cal', 'pdicts', false],
+        ['a-tpl', 'pdicts', false],
         ['a-l10n', 'l10n', false],
         ['a-org', 'orgs', true],
       ],

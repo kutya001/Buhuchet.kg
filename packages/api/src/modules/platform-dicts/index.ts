@@ -94,6 +94,8 @@ import {
 } from './admin-dues';
 import {
   adminTaxInfoHandler,
+  adminTaxHistoryHandler,
+  adminTaxHistoryRoute,
   adminTaxInfoRoute,
   adminTaxValuesHandler,
   adminTaxValuesRoute,
@@ -151,6 +153,28 @@ import {
   rollbackDictLoadHandler,
   rollbackDictLoadRoute,
 } from './admin-io';
+import {
+  adminEnRateHandler,
+  adminEnRateRoute,
+  adminGkedGroupsHandler,
+  adminGkedGroupsRoute,
+  adminGkedItemsHandler,
+  adminGkedItemsRoute,
+  bulkActiveHandler,
+  bulkActivePreviewHandler,
+  bulkActivePreviewRoute,
+  bulkActiveRoute,
+  bulkDueHandler,
+  bulkDuePreviewHandler,
+  bulkDuePreviewRoute,
+  bulkDueRoute,
+  markGnsHandler,
+  markGnsRoute,
+  saveEnRateGkedHandler,
+  saveEnRateGkedRoute,
+  saveGkedGroupHandler,
+  saveGkedGroupRoute,
+} from './admin-gked';
 import { phoneCodesHandler, phoneCodesRoute } from './phone-codes';
 
 /**
@@ -184,6 +208,7 @@ export function platformDictsModule(deps: ApiDeps) {
       .openapi(exportAdminDictRequestsRoute, exportAdminDictRequestsHandler(deps))
       .openapi(answerDictRequestRoute, answerDictRequestHandler(deps))
       .openapi(adminTaxInfoRoute, adminTaxInfoHandler(deps))
+      .openapi(adminTaxHistoryRoute, adminTaxHistoryHandler(deps))
       .openapi(listAdminTaxesRoute, listAdminTaxesHandler(deps))
       .openapi(adminTaxValuesRoute, adminTaxValuesHandler(deps))
       .openapi(exportAdminTaxesRoute, exportAdminTaxesHandler(deps))
@@ -218,6 +243,17 @@ export function platformDictsModule(deps: ApiDeps) {
         systemHistoryHandler(deps, 'templates', templatesHistoryRoute),
       )
       .openapi(saveMessageTemplatesRoute, saveMessageTemplatesHandler(deps))
+      .openapi(adminGkedItemsRoute, adminGkedItemsHandler(deps))
+      .openapi(adminGkedGroupsRoute, adminGkedGroupsHandler(deps))
+      .openapi(saveGkedGroupRoute, saveGkedGroupHandler(deps))
+      .openapi(adminEnRateRoute, adminEnRateHandler(deps))
+      .openapi(saveEnRateGkedRoute, saveEnRateGkedHandler(deps))
+      // «types/due» и «types/gns» — раньше «{dict}/active»: разные адреса, но порядок — от частного.
+      .openapi(bulkDuePreviewRoute, bulkDuePreviewHandler(deps))
+      .openapi(bulkDueRoute, bulkDueHandler(deps))
+      .openapi(markGnsRoute, markGnsHandler(deps))
+      .openapi(bulkActivePreviewRoute, bulkActivePreviewHandler(deps))
+      .openapi(bulkActiveRoute, bulkActiveHandler(deps))
       .openapi(adminDictIoFileRoute, adminDictIoFileHandler(deps))
       .openapi(adminDictIoXlsxRoute, adminDictIoXlsxHandler(deps))
       .openapi(adminDictImportPreviewRoute, adminDictImportPreviewHandler(deps))

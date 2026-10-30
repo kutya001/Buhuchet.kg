@@ -4,8 +4,9 @@ import {
   ADMIN_DICT_META,
   IO_COLUMNS,
   ioTsv,
+  isAdminValueDict,
   pluralForm,
-  type AdminValueDict,
+  type IoDict,
 } from '@buhuchet/domain';
 import { AdminDictImportApplied, AdminDictImportPreview } from '@buhuchet/shared';
 import {
@@ -26,6 +27,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useId, useState, type ReactNode } from 'react';
 import { api, callApi } from '../api-client';
+import { useKb } from '../kb/kb-provider';
 import { useErrorText, useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { useListExport } from '../lists/export';
@@ -72,7 +74,7 @@ export function ExportDialog({
   open,
   onClose,
 }: {
-  dict: AdminValueDict;
+  dict: IoDict;
   open: boolean;
   onClose: () => void;
 }) {
@@ -91,7 +93,7 @@ export function ExportDialog({
       (document.getElementById(textId) as HTMLTextAreaElement | null)?.select();
     }
   };
-  const keyCode = 'key' in ADMIN_DICT_META[dict].code;
+  const keyCode = isAdminValueDict(dict) && 'key' in ADMIN_DICT_META[dict].code;
   return (
     <Modal
       open={open}
@@ -254,7 +256,7 @@ export function ImportDialog({
   open,
   onClose,
 }: {
-  dict: AdminValueDict;
+  dict: IoDict;
   open: boolean;
   onClose: () => void;
 }) {
@@ -262,6 +264,7 @@ export function ImportDialog({
   const toast = useToast();
   const errorText = useErrorText();
   const refresh = usePdictsRefresh();
+  const kb = useKb();
   const fieldId = useId();
   const [text, setText] = useState('');
   const [file, setFile] = useState<File | null>(null);
@@ -303,6 +306,8 @@ export function ImportDialog({
         return;
       }
       const { load, pending } = AdminDictImportApplied.parse(res.data);
+      // Урок Админки «Выгрузить и загрузить справочник через Excel» (прототип ckHit 'pdload').
+      kb.hit('pdload');
       refresh(dict);
       refresh('loads');
       const done = t('pdicts.io.import.done', {

@@ -57,6 +57,8 @@ export const ADMIN_TAX_COLUMNS: Readonly<Record<AdminTaxList, readonly AdminTaxC
     c('rate', 'text', 'pdicts.en.col.rate'),
     c('cond', 'text', 'pdicts.en.col.cond'),
     c('art', 'text', 'pdicts.tax.col.art'),
+    // «Виды деятельности (ГКЭД)» — подбор ставки по основному ГКЭД (задача 2.38, прототип enRateDlg).
+    c('gked', 'text', 'pdicts.col.gked'),
   ],
   property_rates: [
     c('place', 'text', 'pdicts.prop.col.place'),

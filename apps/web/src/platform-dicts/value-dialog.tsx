@@ -38,6 +38,12 @@ import { Controller, useFieldArray, useForm, type FieldError, type Path } from '
 import { api, callApi } from '../api-client';
 import { fieldError } from '../auth/fields';
 import { useErrorText, useT } from '../l10n/provider';
+import {
+  gkedFieldError,
+  GkedRuleFields,
+  useGkedRuleDraft,
+  type GkedFieldError,
+} from './gked-rule-fields';
 import { fetchAdminDictValue, reportTypeOptionsQuery } from './pdicts-data';
 
 const pd = api.api.admin['platform-dicts'];
@@ -101,9 +107,10 @@ function formOf(
     case 'cats':
     case 'reasons':
       return { name, note: d.note ?? '' };
-    // У льготы и вида отчёта свои окна — BenefitDialog и TypeDialog.
+    // У льготы, вида отчёта и кода ГКЭД свои окна — BenefitDialog, TypeDialog и GkedDialog.
     case 'benefits':
     case 'types':
+    case 'gked':
       return { name };
   }
 }
@@ -178,6 +185,10 @@ export function ValueDialog({
     defaultValues: formOf(dict, item, t('pdicts.ugns.region_default')),
   });
   const contacts = useFieldArray({ control, name: 'contacts' });
+  // «Виды деятельности (ГКЭД)» режима (задача 2.38): перечни ИП и ИТД — если они у режима есть.
+  const gked = useGkedRuleDraft(item?.data.gked, { lists: true });
+  const [gkedError, setGkedError] = useState<GkedFieldError>();
+  const regime = dict === 'regimes';
   // Виды отчётов основания: сквозные действующие и уже привязанные (прототип baseDlg).
   const typeOptions = useQuery({ ...reportTypeOptionsQuery, enabled: dict === 'bases' });
 
@@ -189,19 +200,22 @@ export function ValueDialog({
     if (!fresh) return toast(t('err.unknown'), { bad: true });
     setCurrent(fresh);
     reset(formOf(dict, fresh, ''));
+    gked.reset(fresh.data.gked);
     setChanged(false);
   };
 
   const submit = (event: FormEvent) =>
     void handleSubmit(async (values) => {
-      if (current && !isDirty) return onClose();
+      if (current && !isDirty && !gked.dirty) return onClose();
+      const json = regime && gked.dirty ? { ...values, gked: gked.value() } : values;
+      setGkedError(undefined);
       const res = await callApi(() =>
         current
           ? pd[':dict'][':code'].$put({
               param: { dict, code: current.code },
-              json: { ...values, version: current.version },
+              json: { ...json, version: current.version },
             })
-          : pd[':dict'].$post({ param: { dict }, json: values }),
+          : pd[':dict'].$post({ param: { dict }, json }),
       );
       if (res.ok) {
         onDone();
@@ -212,6 +226,9 @@ export function ValueDialog({
       }
       const code = res.error.code;
       if (code === 'record_changed') return setChanged(true);
+      if (code === 'gked_unknown') {
+        return setGkedError(gkedFieldError(res.error, errorText(res.error)));
+      }
       const field = FIELD_OF[code];
       if (field) {
         const message = t((code === 'dict_value_taken' && TAKEN_TEXT[dict]) || field[1]);
@@ -389,6 +406,7 @@ export function ValueDialog({
             />
           )}
         </Field>
+        <GkedRuleFields id={id} state={gked} error={gkedError} />
       </FormGrid>
     );
   } else if (ugns) {
@@ -626,7 +644,7 @@ export function ValueDialog({
                 ? t('pdicts.base.sub')
                 : undefined
       }
-      dirty={isDirty}
+      dirty={isDirty || gked.dirty}
       footer={
         <>
           <button type="button" className={buttonClass('ghost')} onClick={onClose}>

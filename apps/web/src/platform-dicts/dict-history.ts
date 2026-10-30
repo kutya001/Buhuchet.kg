@@ -2,6 +2,8 @@ import {
   bishkekDate,
   bishkekTime,
   formatDateRu,
+  gkedGroupActText,
+  gkedRuleText,
   isAdminSystemDict,
   payRuleText,
   paysText,
@@ -10,6 +12,9 @@ import {
   SCOPE_GROUPS,
   type AdminSystemDict,
   type AdminValueDict,
+  type GkedGroupActs,
+  type GkedRule,
+  type IoDict,
   type PayRule,
   type UiTextKey,
 } from '@buhuchet/domain';
@@ -46,6 +51,7 @@ function typeValueText(field: string, v: unknown, t: Translate, names: HistoryNa
   const name = (code: string) => names.get(code) ?? code;
   // Срок оплаты — правилом целиком: «как срок сдачи», «до 25-го числа месяца после отчётного».
   if (field === 'pay') return payRuleText({ ...(v as PayRule), paySchedule: null }, t);
+  if (field === 'gked') return ruleText(v, t);
   if (field === 'paySchedule') {
     const schedule = (v ?? []) as [number, number][];
     return schedule.length ? payScheduleText(schedule) : t('pdicts.type.hist.one_payment');
@@ -67,6 +73,10 @@ function typeValueText(field: string, v: unknown, t: Translate, names: HistoryNa
   if (field === 'authorityCode') return name(String(v));
   return String(v);
 }
+
+/** Перечень «Виды деятельности (ГКЭД)» в истории: без ограничения — «все». */
+const ruleText = (v: unknown, t: Translate) =>
+  gkedRuleText(v as GkedRule | null, t) || t('pdicts.gked.rule.all');
 
 /**
  * Запись истории вида отчёта (прототип typeEditDlg, pdLog): «добавлен «НДС»», «удалён «НДС»»,
@@ -92,7 +102,7 @@ function typeHistoryText(item: Item, t: Translate, names: HistoryNames): string 
  * Загрузка из Excel и её откат (задача 2.37, прототип importDictDlg и rollbackLoad, pdLog): «Органы:
  * загрузка из Excel — добавлено 1, изменено 2, отключено 0», «Органы: загрузка от 30.10.2026 откачена».
  */
-function loadHistoryText(dict: AdminValueDict, item: Item, t: Translate): string | null {
+function loadHistoryText(dict: IoDict, item: Item, t: Translate): string | null {
   const title = t(`pdicts.title.${dict}`);
   const to = (field: string) => item.changes.find((c) => c.field === field)?.to;
   if (item.action === 'import') {
@@ -127,8 +137,14 @@ export function dictHistoryText(
   t: Translate,
   names: HistoryNames = new Map(),
 ): string {
+  if (dict === 'gked') return sectionHistoryText(item, t);
   const load = loadHistoryText(dict, item, t);
   if (load !== null) return load;
+  // «Отметить сверку с ГНС» — одной строкой по всем отмеченным видам (прототип markGns).
+  const gns = item.changes.find((c) => c.field === 'gns');
+  if (dict === 'types' && gns) {
+    return t('pdicts.hist.gns', { names: strings(gns.to).join(', ') });
+  }
   if (dict === 'types') {
     const text = typeHistoryText(item, t, names);
     if (text !== null) return text;
@@ -217,16 +233,90 @@ export function dictHistoryText(
  * «… удалено»; у рабочей субботы названия нет — «Рабочая суббота».
  */
 export function calendarHistoryText(item: Item, t: Translate): string {
+  const load = loadHistoryText('calendar', item, t);
+  if (load !== null) return load;
   const day = item.code;
   const date = /^\d{2}-\d{2}$/.test(day) ? `${day.slice(3)}.${day.slice(0, 2)}` : formatDateRu(day);
   const kind = item.changes.find((c) => c.field === 'kind');
   const name =
     item.label ||
     (kind && (kind.to ?? kind.from) === 'workday' ? t('dicts.platform.calendar.workday') : '');
+  // Загрузка из Excel меняет у праздника «каждый год» название (docs/deviations.md п. Д-19).
+  const renamed = item.action === 'update' && item.changes.find((c) => c.field === 'name');
+  if (renamed) {
+    return t('pdicts.cal.hist.update', { date, from: shown(renamed.from), to: shown(renamed.to) });
+  }
   return t(item.action === 'delete' ? 'pdicts.cal.hist.delete' : 'pdicts.cal.hist.create', {
     date,
     name,
   });
+}
+
+/** Действие группы кодов в истории: «Запрет», по кодам — «64.91 — предупреждение». */
+const actsText = (v: unknown, k: 'en' | 'spino', t: Translate) =>
+  gkedGroupActText({ en: null, spino: null, [k]: (v ?? null) as GkedGroupActs }, k, t);
+
+/**
+ * Запись вкладки из нескольких разделов (задача 2.38; прототип pdLog 'gked' и 'taxes'): коды ГКЭД —
+ * «ГКЭД: добавлен код 69.20.0 «…»», «ГКЭД: 69.20.0 — «Действует»: нет», «ГКЭД: 69.20.0 изменён»;
+ * группы кодов — «ГКЭД: группа кодов «…» изменена — коды …; единый налог: …; СПиНО: …» (изменённое);
+ * перечни ГКЭД ставок и налогов — «Ставки единого налога: ЕНС-01 — виды деятельности (ГКЭД): «…» →
+ * «…»»; загрузки и строки загрузок — как у справочников значений.
+ */
+export function sectionHistoryText(item: Item, t: Translate): string {
+  const section = item.section ?? 'gked';
+  const load = loadHistoryText(section, item, t);
+  if (load !== null) return load;
+  const change = (field: string) => item.changes.find((c) => c.field === field);
+  const name = item.label;
+  const code = item.code;
+  if (section === 'gked') {
+    if (item.action === 'create') return t('pdicts.hist.gked_create', { code, name });
+    if (item.action === 'delete') return t('pdicts.hist.gked_delete', { code, name });
+    const active = change('active');
+    if (active && item.changes.length === 1) {
+      return t('pdicts.hist.gked_active', {
+        code,
+        value: t(active.to ? 'pdicts.type.hist.yes' : 'pdicts.type.hist.no'),
+      });
+    }
+    return t('pdicts.hist.gked_update', { code });
+  }
+  if (section === 'gkgroups') {
+    if (item.action === 'create') return t('pdicts.hist.gkgroup_create', { name });
+    if (item.action === 'delete') return t('pdicts.hist.gkgroup_delete', { name });
+    const parts = item.changes.flatMap((c) => {
+      if (c.field === 'codes')
+        return [t('pdicts.hist.gkgroup_codes', { codes: strings(c.to).join(', ') })];
+      if (c.field === 'en') return [t('pdicts.hist.gkgroup_en', { act: actsText(c.to, 'en', t) })];
+      if (c.field === 'spino') {
+        return [t('pdicts.hist.gkgroup_spino', { act: actsText(c.to, 'spino', t) })];
+      }
+      return [];
+    });
+    return parts.length
+      ? t('pdicts.hist.gkgroup_more', { name, changes: parts.join('; ') })
+      : t('pdicts.hist.gkgroup', { name });
+  }
+  const dict = t(`pdicts.title.${section}`);
+  const gked = change('gked');
+  if (gked && item.changes.length === 1 && item.action === 'update') {
+    return t('pdicts.hist.rule_gked', {
+      dict,
+      code,
+      from: ruleText(gked.from, t),
+      to: ruleText(gked.to, t),
+    });
+  }
+  if (item.action === 'create') return t('pdicts.hist.create', { dict, name });
+  if (item.action === 'delete') return t('pdicts.hist.delete', { dict, name });
+  const active = change('active');
+  if (active) return t(active.to ? 'pdicts.hist.on' : 'pdicts.hist.off', { dict, name });
+  const renamed = change('name');
+  if (renamed) {
+    return t('pdicts.hist.rename', { dict, from: shown(renamed.from), to: shown(renamed.to) });
+  }
+  return t('pdicts.hist.fields', { dict, name });
 }
 
 const strings = (v: unknown) => (Array.isArray(v) ? v.map(String) : []);
@@ -313,7 +403,7 @@ export function systemHistoryText(
 
 /** Запись «Истории изменений» для ленты: дата и время по Бишкеку, что изменено, кто. */
 export function dictHistoryItem(
-  dict: AdminValueDict | AdminSystemDict | 'calendar',
+  dict: AdminValueDict | AdminSystemDict | 'calendar' | 'taxes',
   item: Item,
   t: Translate,
   names: HistoryNames = new Map(),
@@ -326,9 +416,11 @@ export function dictHistoryItem(
     text:
       dict === 'calendar'
         ? calendarHistoryText(item, t)
-        : isAdminSystemDict(dict)
-          ? systemHistoryText(dict, item, t, names)
-          : dictHistoryText(dict, item, t, names),
+        : dict === 'taxes'
+          ? sectionHistoryText(item, t)
+          : isAdminSystemDict(dict)
+            ? systemHistoryText(dict, item, t, names)
+            : dictHistoryText(dict, item, t, names),
     who: item.actor ?? t('org.history.system'),
   };
 }
