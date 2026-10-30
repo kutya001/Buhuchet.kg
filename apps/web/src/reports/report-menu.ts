@@ -117,7 +117,7 @@ export function reportMenuEntries({
         ? [item('file', { label: t('report.act.file'), icon: 'clip' })]
         : [];
     const rollback = st === 'submitted' ? [rollbackItem(t, r, actor, item)] : [];
-    // ОТКЛОНЕНИЕ: docs/deviations.md#Б-7 — в прототипе у прежней версии меню как у последней.
+    // ОТКЛОНЕНИЕ: docs/deviations.md#Б-7 (решение «А») — в прототипе у прежней версии меню как у последней.
     if (facts.superseded) {
       return [...items, ...file, ...(rollback.length ? [SEP, ...rollback] : [])];
     }

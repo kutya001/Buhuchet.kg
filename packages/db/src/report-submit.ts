@@ -635,7 +635,7 @@ const CONFIRM_STATUS = {
  * (ТЗ «Уточнённые отчёты», docs/decisions.md п. Б-3).
  */
 function confirmable(r: ReportRecord, ctx: ReportConfirmContext): void {
-  // ОТКЛОНЕНИЕ: docs/deviations.md#Б-7 — в прототипе прежнюю версию можно подтвердить и вернуть.
+  // ОТКЛОНЕНИЕ: docs/deviations.md#Б-7 (решение «А») — в прототипе прежнюю версию можно подтвердить и вернуть.
   if (r.superseded) throw new ReportStateError(r.id, 'superseded');
   const refusal = reportConfirmRefusal(
     { status: r.status, act: r.act, confirmed: r.confirmedAt !== null, submittedBy: r.submittedBy },
