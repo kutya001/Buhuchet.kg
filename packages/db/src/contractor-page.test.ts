@@ -337,6 +337,9 @@ describe.skipIf(!databaseAvailable())('Страница контрагента �
     const outcomes = results.map((r) => r.outcome);
     expect(outcomes.filter((o) => o === 'wrong')).toHaveLength(PAGE_IP_MAX_FAILURES - 1);
     expect(outcomes.filter((o) => o === 'ip_locked')).toHaveLength(5 - PAGE_IP_MAX_FAILURES + 1);
+    // Остаток по адресу меньше, чем по ссылке: 2, затем 1 (п. О-1).
+    const left = results.flatMap((r) => (r.outcome === 'wrong' ? [r.triesLeft] : []));
+    expect(left.sort()).toEqual([1, 2]);
     await db.admin.db.update(contractorPages).set({ failures: 0, lockedUntil: null });
   });
 
