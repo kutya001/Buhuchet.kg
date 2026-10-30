@@ -279,7 +279,7 @@ export const ProductionCalendarYear = z.object({
 export type ProductionCalendarYear = z.infer<typeof ProductionCalendarYear>;
 
 /** Тариф по фондам у налога со страховыми взносами: общий тариф, доли, раскладка, предельная база. */
-const TaxTariff = z.object({
+export const TaxTariff = z.object({
   name: z.string(),
   total: z.string(),
   who: z.string(),

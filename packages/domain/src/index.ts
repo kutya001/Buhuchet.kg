@@ -32,6 +32,7 @@ export * from './dicts/value-guide';
 export * from './common/months';
 export * from './contractors/rules';
 export * from './contractors/gked';
+export * from './contractors/socfund';
 export * from './reports/periods';
 export * from './reports/due';
 export * from './reports/rules';
