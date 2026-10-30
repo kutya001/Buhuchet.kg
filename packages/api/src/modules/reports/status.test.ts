@@ -338,14 +338,23 @@ describe.skipIf(!databaseAvailable())(
       });
       expect(done.history.some((h) => h.changes.some((c) => c.field === 'files'))).toBe(true);
 
-      // Отчёты видит («Все»), файлы — нет (без «Просматривать файлы»): имён файлов в карточке нет.
+      // Отчёты видит («Все»), файлы этого контрагента — нет: имён файлов в карточке нет. Сначала —
+      // с правом «Просматривать файлы», но вне области «Файлы» («Свои»), потом — без права.
       const hrRole = f.roleIds.hr;
-      await f.t.admin.db
-        .update(schema.roleScopes)
-        .set({ scope: 'all' })
-        .where(
-          and(eq(schema.roleScopes.roleId, hrRole), eq(schema.roleScopes.permGroup, 'reports')),
-        );
+      const scopeOf = (group: string, scope: 'all' | 'own') =>
+        f.t.admin.db
+          .update(schema.roleScopes)
+          .set({ scope })
+          .where(and(eq(schema.roleScopes.roleId, hrRole), eq(schema.roleScopes.permGroup, group)));
+      await scopeOf('reports', 'all');
+      const hidden = (c: ReportCard) => {
+        expect(c).toMatchObject({ files: [], hasFiles: true });
+        expect(c.statusHistory.at(-1)!.file).toBeNull();
+        expect(c.history.flatMap((h) => h.changes).some((x) => x.field === 'files')).toBe(false);
+        expect(c.history.some((h) => h.action === 'file_attach')).toBe(false);
+      };
+      hidden(await card(await signIn(f.app, 'hr-a', TEST_PASSWORD), t1.id));
+      await scopeOf('files', 'all');
       await f.t.admin.db
         .delete(schema.rolePermissions)
         .where(
@@ -354,12 +363,7 @@ describe.skipIf(!databaseAvailable())(
             eq(schema.rolePermissions.permissionId, 'filesView'),
           ),
         );
-      const hr = await signIn(f.app, 'hr-a', TEST_PASSWORD);
-      const blind = await card(hr, t1.id);
-      expect(blind).toMatchObject({ files: [], hasFiles: true });
-      expect(blind.statusHistory.at(-1)!.file).toBeNull();
-      expect(blind.history.flatMap((h) => h.changes).some((c) => c.field === 'files')).toBe(false);
-      expect(blind.history.some((h) => h.action === 'file_attach')).toBe(false);
+      hidden(await card(await signIn(f.app, 'hr-a', TEST_PASSWORD), t1.id));
     });
 
     it('выключили «Сдача отчётов требует подтверждения» — ждущие подтверждены с записью в истории', async () => {

@@ -513,6 +513,13 @@ export interface ReportBatchResult {
 }
 
 /**
+ * Отчёты пачки по номеру: две пачки с общими отчётами блокируют их в одном порядке и не ждут друг
+ * друга по кругу.
+ */
+const byId = <T extends { id: string }>(items: readonly T[]) =>
+  [...items].sort((x, y) => (x.id < y.id ? -1 : x.id > y.id ? 1 : 0));
+
+/**
  * Массовая «Сдан» (ТЗ «Массово: выбрать несколько отчётов и отметить сданными одной датой, суммы
  * вписать в том же окне»; прототип submitDlg): отчёты, для которых файл обязателен, а его нет, и уже
  * сданные пропускаются; сумма — одна на отчёт без строк, изменённая сумма удаляет строки отчёта.
@@ -526,7 +533,7 @@ export async function submitReports(
   if (date > ctx.today) throw new ReportRefusedError('', 'submit_date_invalid', 400, 'date');
   const result: ReportBatchResult = { done: 0, skippedFile: 0, skipped: 0 };
   const types = new Map<string, { needFile: boolean; needReceipt: boolean }>();
-  for (const item of items) {
+  for (const item of byId(items)) {
     const r = await lockCurrent(tx, item.id, item.version, ctx.scope);
     if (r.superseded || !reportSubmittable(r)) {
       result.skipped++;
@@ -713,7 +720,7 @@ export async function confirmReports(
   ctx: ReportConfirmContext,
 ): Promise<ReportBatchResult> {
   const result: ReportBatchResult = { done: 0, skippedFile: 0, skipped: 0 };
-  for (const item of items) {
+  for (const item of byId(items)) {
     const r = await lockCurrent(tx, item.id, item.version, ctx.scope);
     try {
       confirmable(r, ctx);
