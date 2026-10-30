@@ -175,15 +175,20 @@ describe('действия над сотрудником', () => {
     expect(staffActionRefusal(owner, target('e3'), 'changeRole', finRole)).toBeNull();
   });
 
-  it('пароль сбрасывает не владелец только сотруднику с ролью не шире своей и без прав владельца', () => {
-    expect(staffActionRefusal(hr, target('e3', staffRole), 'resetPassword')).toBe('owner_granted');
-    expect(staffActionRefusal(hr, target('e3', finRole), 'resetPassword')).toBe('beyond_own');
+  it('пароль сотрудника сбрасывает только владелец, даже с правом «Сотрудники и роли» — нет (п. 11)', () => {
+    expect(staffActionRefusal(owner, target('e3'), 'resetPassword')).toBeNull();
     expect(staffActionRefusal(owner, target('e3', staffRole), 'resetPassword')).toBeNull();
     expect(staffActionRefusal(owner, target('e3', finRole), 'resetPassword')).toBeNull();
-    expect(staffActionRefusal(hr, target('e3'), 'resetPassword')).toBeNull();
+    expect(staffActionRefusal(hr, target('e3'), 'resetPassword')).toBe('password_owner_only');
+    expect(staffActionRefusal(hr, target('e3', staffRole), 'resetPassword')).toBe(
+      'password_owner_only',
+    );
+    expect(staffActionRefusal(hr, target('e3', finRole), 'resetPassword')).toBe(
+      'password_owner_only',
+    );
   });
 
-  it('кнопки «Сменить роль», «Сбросить пароль», «Заблокировать» — только у тех, кого можно вести', () => {
+  it('кнопки «Сменить роль», «Заблокировать» (у владельца и «Сбросить пароль») — только у тех, кого можно вести', () => {
     // Владелец организации и сам себе — ни у кого.
     expect(staffManageable(owner, target('e1', ownerRole))).toBe(false);
     expect(staffManageable(hr, target('e1', ownerRole))).toBe(false);
