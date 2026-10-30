@@ -470,6 +470,13 @@
       "when": 1793358131609,
       "tag": "0066_contractor_page_tries_left",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1793362215471,
+      "tag": "0067_admin_gked",
+      "breakpoints": true
     }
   ]
 }

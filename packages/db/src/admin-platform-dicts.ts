@@ -11,10 +11,17 @@ import {
   dictValueProblems,
   dueRuleText,
   formatText,
+  gkedEditProblems,
+  gkedLevelKey,
+  gkedRuleCodes,
+  gkedRuleKeep,
+  gkedRuleText,
+  gkedSectionOf,
   inactiveLinks,
   maskDigits,
   NEW_REPORT_TYPE,
   nextDictCode,
+  PLATFORM_ADMIN_NAME,
   payRuleText,
   paysText,
   phoneCodeExample,
@@ -31,6 +38,9 @@ import {
   type HistoryChange,
   type HistoryValue,
   type DueFrom,
+  type GkedEditProblem,
+  type GkedRule,
+  type GkedRuleList,
   type ListQuery,
   type PayRule,
   type ReportAct,
@@ -39,7 +49,7 @@ import {
   type ReportPeriod,
   type Translate,
 } from '@buhuchet/domain';
-import { and, asc, count, desc, eq, getTableColumns, sql, type SQL } from 'drizzle-orm';
+import { and, asc, count, desc, eq, getTableColumns, inArray, sql, type SQL } from 'drizzle-orm';
 import type { PgColumn, PgTable } from 'drizzle-orm/pg-core';
 import type { Db, Tx } from './client';
 import { withOrgContext } from './context';
@@ -61,8 +71,10 @@ import {
   banks,
   countryPhoneCodes,
   dueChangeReasons,
+  gkedItems,
   ownershipForms,
   platformAuditLog,
+  platformReference,
   reportBases,
   reportTypeBases,
   reportTypeRegimes,
@@ -101,6 +113,7 @@ const TABLES: Readonly<Record<AdminValueDict, DictTable>> = {
   bases: reportBases,
   regimes: taxRegimes,
   benefits: taxBenefits,
+  gked: gkedItems,
   forms: ownershipForms,
   phones: countryPhoneCodes,
   organs: authorities,
@@ -127,7 +140,15 @@ export type AdminDictData = Record<
   | BenefitDueOverride[]
   | ReportPayment[]
   | [number, number][]
+  | GkedRule
+  | GkedRuleLists
 >;
+
+/**
+ * Перечни «Виды деятельности (ГКЭД)» из окна (без служебных признаков правила): перечня нет в окне —
+ * он не меняется.
+ */
+export type GkedRuleLists = Partial<Record<GkedRuleList, string[]>>;
 
 /** Отчёты организаций по виду отчёта: всего, несданных и в скольких организациях. */
 export interface TypeReportCounts {
@@ -151,6 +172,10 @@ export interface AdminDictValueRecord {
   reports?: TypeReportCounts;
   /** У вида отчёта в списке — «Назначен»: у скольких контрагентов вид назначен сейчас. */
   assigned?: number;
+  /** У вида отчёта — «Сверено с ГНС»: когда и кто (null — ещё не сверялось). */
+  gns?: { at: string | null; by: string | null };
+  /** У кода ГКЭД — сколько кодов входит в него («Вложенных кодов»). */
+  children?: number;
   audit: {
     createdAt: Date | null;
     createdBy: string | null;
@@ -335,13 +360,62 @@ export async function adminDictUsage(
   const usage = new Map<string, DictUsage>();
   const contractors = ADMIN_DICT_META[dict].contractorTable;
   for (const r of rows) {
+    // Код ГКЭД: вложенные коды — не «Используется», а «Вложенных кодов» (`gkedChildren`); у
+    // контрагента код — основной или дополнительный.
+    if (dict === 'gked' && r.ref === 'gked_items') continue;
     const u = usage.get(r.code) ?? { total: 0, contractors: 0 };
     const n = Number(r.n);
     u.total += n;
-    if (r.ref === contractors) u.contractors += n;
+    if (r.ref === contractors || (dict === 'gked' && r.ref === 'contractor_gked_extra')) {
+      u.contractors += n;
+    }
     usage.set(r.code, u);
   }
+  if (dict === 'gked') {
+    for (const [code, n] of await gkedRuleUsage(tx)) {
+      const u = usage.get(code) ?? { total: 0, contractors: 0 };
+      usage.set(code, { ...u, total: u.total + n });
+    }
+  }
   return usage;
+}
+
+/**
+ * В скольких перечнях «Виды деятельности (ГКЭД)» справочников указан код (прототип gkUsed `rules`):
+ * у режимов, льгот и статусов, видов отчётов, ставок единого налога и налогов — по записи на перечень,
+ * в каком бы его списке («Кроме», «Предупреждать при ГКЭД», для ИП) код ни стоял.
+ */
+export async function gkedRuleUsage(tx: Tx): Promise<Map<string, number>> {
+  const ruleOf = (table: typeof taxRegimes | typeof taxBenefits | typeof reportTypes) =>
+    tx.select({ gked: table.gked }).from(table);
+  const [regimes, benefits, types, rates, taxes] = await Promise.all([
+    ruleOf(taxRegimes),
+    ruleOf(taxBenefits),
+    ruleOf(reportTypes),
+    tx.select({ gked: singleTaxRates.gked }).from(singleTaxRates),
+    tx
+      .select({ payload: platformReference.payload })
+      .from(platformReference)
+      .where(eq(platformReference.key, 'taxes')),
+  ]);
+  const taxRules = (Array.isArray(taxes[0]?.payload) ? (taxes[0].payload as unknown[]) : []).map(
+    (x) => ({ gked: ((x as { gked?: GkedRule } | null)?.gked ?? null) as GkedRule | null }),
+  );
+  const used = new Map<string, number>();
+  for (const r of [...regimes, ...benefits, ...types, ...rates, ...taxRules]) {
+    for (const code of new Set(gkedRuleCodes(r.gked))) used.set(code, (used.get(code) ?? 0) + 1);
+  }
+  return used;
+}
+
+/** Сколько кодов ГКЭД входит в каждый код («Входит в»). */
+async function gkedChildren(tx: Tx): Promise<Map<string, number>> {
+  const rows = await tx
+    .select({ code: gkedItems.parentCode, n: count() })
+    .from(gkedItems)
+    .where(sql`${gkedItems.parentCode} is not null`)
+    .groupBy(gkedItems.parentCode);
+  return new Map(rows.map((r) => [r.code!, r.n]));
 }
 
 const NO_USAGE: DictUsage = { total: 0, contractors: 0 };
@@ -376,14 +450,20 @@ export async function adminDictRecords(
   tx: Tx,
   dict: AdminValueDict,
   reports?: ReadonlyMap<string, TypeReportCounts>,
+  only?: string,
 ): Promise<AdminDictValueRecord[]> {
   const table = TABLES[dict];
-  const [rows, usage, links] = await Promise.all([
-    tx.select().from(table).orderBy(asc(table.sortOrder), asc(table.code)) as unknown as Promise<
-      TableRow[]
-    >,
+  // Одно значение справочника без «№» — без чтения остальных (у ГКЭД их тысячи).
+  const one = only !== undefined && !ADMIN_DICT_META[dict].ordered;
+  const [rows, usage, links, children] = await Promise.all([
+    tx
+      .select()
+      .from(table)
+      .where(one ? eq(table.code, only) : undefined)
+      .orderBy(asc(table.sortOrder), asc(table.code)) as unknown as Promise<TableRow[]>,
     adminDictUsage(tx, dict),
     linkValues(tx, dict),
+    dict === 'gked' ? gkedChildren(tx) : null,
   ]);
   const ordered = ADMIN_DICT_META[dict].ordered;
   return rows.map((r, i) => {
@@ -400,7 +480,17 @@ export async function adminDictRecords(
       ),
       active: r.active,
       usage: usage.get(r.code) ?? NO_USAGE,
-      ...(dict === 'types' ? { reports: reports?.get(r.code) ?? NO_REPORTS } : {}),
+      ...(dict === 'types'
+        ? {
+            reports: reports?.get(r.code) ?? NO_REPORTS,
+            gns: {
+              at: (r.gnsCheckedAt as string | null) ?? null,
+              // Сверку отмечает администратор платформы (в наполнении — «admin»).
+              by: r.gnsCheckedAt ? PLATFORM_ADMIN_NAME : null,
+            },
+          }
+        : {}),
+      ...(children ? { children: children.get(r.code) ?? 0 } : {}),
       audit: {
         createdAt: r.createdAt,
         createdBy,
@@ -428,6 +518,8 @@ interface ListNames {
   types: ReadonlyMap<string, string>;
   authorities: ReadonlyMap<string, string>;
   regimes: ReadonlyMap<string, string>;
+  /** Коды ГКЭД с уровнем и «Входит в» — для столбца «Секция». */
+  gked: ReadonlyMap<string, { parentCode: string | null; level: string }>;
 }
 
 async function listNames(tx: Tx, dict: AdminValueDict): Promise<ListNames> {
@@ -444,6 +536,7 @@ async function listNames(tx: Tx, dict: AdminValueDict): Promise<ListNames> {
     types: new Map(types.map((x) => [x.code, x.shortName])),
     authorities: new Map(organs.map((x) => [x.code, x.name])),
     regimes: new Map(regimes.map((x) => [x.code, x.name])),
+    gked: new Map(),
   };
 }
 
@@ -497,6 +590,7 @@ function listRow(
   t: ListTexts,
   names: ListNames,
 ) {
+  const rule = (v: unknown) => gkedRuleText(v as GkedRule | null, translate(t));
   const row: Record<string, string | number | null> = {
     id: x.code,
     ord,
@@ -534,7 +628,20 @@ function listRow(
       regimes: texts.regimes ?? '',
       payer: d.payer as string,
       payer_text: texts.payer ?? '',
+      gked: rule(d.gked),
       assigned: x.assigned ?? 0,
+      gns: x.gns?.at ?? null,
+    };
+  }
+  if (dict === 'gked') {
+    const level = x.data.level as string;
+    return {
+      ...row,
+      level,
+      level_text: t(gkedLevelKey(level)),
+      section: gkedSectionOf(x.code, names.gked),
+      parentCode: (x.data.parentCode as string | null) ?? '',
+      note: (x.data.note as string) ?? '',
     };
   }
   for (const f of dataFields(dict)) {
@@ -542,6 +649,7 @@ function listRow(
     // «Меняет сроки» и «Ставится по УГНС» — не столбцы списка.
     if (isDueRules(dict, f) || f === 'offices') continue;
     if (f === 'contacts') row[f] = contactsText(value);
+    else if (f === 'gked') row[f] = rule(value);
     else if (isLink(dict, f))
       row[f] = (value as string[]).map((code) => names.types.get(code) ?? code).join(', ');
     else if (f === 'byPhone' || f === 'verify') row[f] = value ? 'yes' : 'no';
@@ -571,6 +679,7 @@ const RECORD_TYPES: Readonly<Record<string, string>> = {
   n: 'integer',
   used: 'integer',
   assigned: 'integer',
+  gns: 'date',
   contractors: 'integer',
   created_at: 'timestamptz',
   updated_at: 'timestamptz',
@@ -593,6 +702,7 @@ const TEXT_SHOWN = new Set([
   'authorityCode',
   'period',
   'payer',
+  'level',
 ]);
 
 /** Столбцы списка справочника на сервере — ключи и подписи, как у экрана (`ADMIN_DICT_COLUMNS`). */
@@ -604,7 +714,7 @@ export function adminDictListColumns(dict: AdminValueDict): ListColumns {
       column.display = field(`${c.key}_text`);
       column.sort = { value: field(`${c.key}_text`), text: true };
     }
-    if (c.key === 'gnsCode' || isLink(dict, c.key)) {
+    if (c.key === 'gnsCode' || c.key === 'gked' || c.key === 'parentCode' || isLink(dict, c.key)) {
       column.display = sql`coalesce(nullif(${field(c.key)}, ''), '—')`;
     }
     columns[c.key] = column;
@@ -657,6 +767,14 @@ async function listSource(
     adminDictRecords(tx, dict, extras.reports),
     listNames(tx, dict),
   ]);
+  if (dict === 'gked') {
+    names.gked = new Map(
+      all.map((x) => [
+        x.code,
+        { parentCode: (x.data.parentCode as string | null) ?? null, level: x.data.level as string },
+      ]),
+    );
+  }
   const tr = translate(t);
   const records =
     dict === 'types'
@@ -665,7 +783,16 @@ async function listSource(
           texts: typeTexts(x, tr, names),
           assigned: extras.assigned?.get(x.code) ?? 0,
         }))
-      : all;
+      : dict === 'gked'
+        ? // Уровень и секция кода — словами, как столбцы списка.
+          all.map((x) => ({
+            ...x,
+            texts: {
+              level: t(gkedLevelKey(x.data.level as string)),
+              section: gkedSectionOf(x.code, names.gked),
+            } as Record<string, string>,
+          }))
+        : all;
   const source = recordset(records.map((x, i) => listRow(dict, x, i + 1, t, names)));
   return { records, source };
 }
@@ -751,7 +878,7 @@ export async function getAdminDictValue(
   code: string,
   reports?: ReadonlyMap<string, TypeReportCounts>,
 ): Promise<AdminDictValueRecord | null> {
-  return (await adminDictRecords(tx, dict, reports)).find((x) => x.code === code) ?? null;
+  return (await adminDictRecords(tx, dict, reports, code)).find((x) => x.code === code) ?? null;
 }
 
 /* ───────────── Правка ───────────── */
@@ -771,7 +898,10 @@ function dbRow(dict: AdminValueDict, input: AdminDictInput): Record<string, unkn
   const value = (f: string): unknown => {
     if (f === 'name') return input.name.trim();
     const v = input.data[f];
+    // Правило «Виды деятельности (ГКЭД)» — объект перечней (jsonb), без правила — null.
+    if (f === 'gked') return (v as GkedRule | null | undefined) ?? null;
     if (dict === 'types') return typeValue(f, v);
+    if (f === 'parentCode') return (typeof v === 'string' && v.trim().toUpperCase()) || null;
     if (f === 'contacts') {
       return (Array.isArray(v) ? (v as AuthorityContact[]) : [])
         .map((c) => ({ label: c.label.trim(), value: c.value.trim() }))
@@ -861,7 +991,8 @@ function historyFields(dict: AdminValueDict, input: AdminDictInput): Record<stri
  * режимов (`regimes_required`), у вида с уплатой нет платежа с названием (`payments_required`),
  * отключённый режим или основание (`regimes`, `bases`), один режим и в «Применимых», и в «Не для
  * режимов» (`regimes_both`), отключённый орган (`authority`), получатель платежа не из справочника
- * органов (`payment_authority`), нет такой ставки единого налога (`en_rates`).
+ * органов (`payment_authority`), нет такой ставки единого налога (`en_rates`). В перечне «Виды
+ * деятельности (ГКЭД)» — код, которого нет в справочнике ГКЭД (`gked`).
  */
 export type AdminDictLinkProblem =
   | 'types'
@@ -877,11 +1008,15 @@ export type AdminDictLinkProblem =
   | 'bases'
   | 'authority'
   | 'payment_authority'
-  | 'en_rates';
+  | 'en_rates'
+  | 'gked';
 
 type PreparedLinks =
   | { input: AdminDictInput; bad: null }
-  | { input: AdminDictInput; bad: { field: string; problem: AdminDictLinkProblem } };
+  | {
+      input: AdminDictInput;
+      bad: { field: string; problem: AdminDictLinkProblem; codes?: string[] };
+    };
 
 /**
  * Поля-связи в порядке каталога (как их читает список) и проверка: у основания — только сквозные
@@ -894,6 +1029,13 @@ async function prepareLinks(
   input: AdminDictInput,
   before: AdminDictValueRecord | undefined,
 ): Promise<PreparedLinks> {
+  if (ADMIN_DICT_META[dict].fields.includes('gked')) {
+    const gked = await prepareGked(tx, input, before);
+    if ('unknown' in gked) {
+      return { input, bad: { field: 'gked', problem: 'gked', codes: gked.unknown } };
+    }
+    input = { ...input, data: { ...input.data, gked: gked.rule } };
+  }
   if (dict === 'benefits') return prepareBenefit(tx, input, before);
   if (dict === 'types') return prepareType(tx, input, before);
   if (!linkFields(dict).length) return { input, bad: null };
@@ -906,6 +1048,32 @@ async function prepareLinks(
   }
   const sorted = [...types].sort((a, b) => order.get(a)! - order.get(b)!);
   return { input: { ...input, data: { ...input.data, types: sorted } }, bad: null };
+}
+
+/**
+ * Правило «Виды деятельности (ГКЭД)» после правки (прототип gkRuleRead, gkRuleKeep): перечни из окна
+ * поверх прежнего правила — служебные признаки («только основной», «запрет», примечание, «Сверить»)
+ * сохраняются, перечня нет в окне — он прежний; null — без правила. Новые коды — только из справочника
+ * ГКЭД (уже указанные остаются); иначе — коды, которых нет.
+ */
+async function prepareGked(
+  tx: Tx,
+  input: AdminDictInput,
+  before: AdminDictValueRecord | undefined,
+): Promise<{ rule: GkedRule | null } | { unknown: string[] }> {
+  const old = (before?.data.gked as GkedRule | null | undefined) ?? null;
+  const value = input.data.gked as GkedRuleLists | null | undefined;
+  if (value === undefined) return { rule: old };
+  const rule = value === null ? null : gkedRuleKeep(old, value);
+  const was = new Set(gkedRuleCodes(old));
+  const fresh = [...new Set(gkedRuleCodes(rule).filter((code) => !was.has(code)))];
+  if (!fresh.length) return { rule };
+  const known = await tx
+    .select({ code: gkedItems.code })
+    .from(gkedItems)
+    .where(inArray(gkedItems.code, fresh));
+  const unknown = fresh.filter((c) => !known.some((k) => k.code === c));
+  return unknown.length ? { unknown } : { rule };
 }
 
 /**
@@ -1091,9 +1259,18 @@ const recordInput = (x: AdminDictValueRecord): AdminDictInput => ({ name: x.name
 export type AdminDictSaveResult =
   | { ok: true; record: AdminDictValueRecord; redue?: RedueScope | null }
   | { ok: false; reason: 'not_found' | 'changed' | 'fixed' }
-  | { ok: false; reason: 'bad_link'; field: string; problem: AdminDictLinkProblem }
+  | {
+      ok: false;
+      reason: 'bad_link';
+      field: string;
+      problem: AdminDictLinkProblem;
+      /** Коды перечня ГКЭД, которых нет в справочнике. */
+      codes?: string[];
+    }
   | { ok: false; reason: 'taken'; problems: DictValueProblem[] }
-  | { ok: false; reason: 'used'; usage: DictUsage };
+  | { ok: false; reason: 'used'; usage: DictUsage }
+  /** Код ГКЭД: формат или повтор нового кода, «Входит в» не подходит. */
+  | { ok: false; reason: 'gked'; problem: GkedEditProblem };
 
 const entityId = (dict: AdminValueDict, code: string) => `${dict}:${code}`;
 
@@ -1104,6 +1281,7 @@ function problemsOf(
   input: AdminDictInput,
   records: readonly AdminDictValueRecord[],
 ): DictValueProblem[] {
+  if (dict === 'gked') return [];
   const gns = (x: AdminDictInput) =>
     dict === 'ugns' ? ((x.data.gnsCode as string) ?? null) : null;
   return dictValueProblems(
@@ -1125,6 +1303,7 @@ export async function adminDictCreate(
   random: () => string,
   fileCode?: string,
 ): Promise<AdminDictSaveResult> {
+  if (dict === 'gked') return gkedCreate(tx, input, fileCode ?? '');
   const records = await adminDictRecords(tx, dict);
   const code =
     fileCode ??
@@ -1139,6 +1318,16 @@ export async function adminDictCreate(
   const links = await prepareLinks(tx, dict, input, undefined);
   if (links.bad) return { ok: false, reason: 'bad_link', ...links.bad };
   input = links.input;
+  return insertValue(tx, dict, code, input);
+}
+
+/** Запись нового значения функцией базы, его связи и история «добавлено». */
+async function insertValue(
+  tx: Tx,
+  dict: AdminValueDict,
+  code: string,
+  input: AdminDictInput,
+): Promise<AdminDictSaveResult> {
   const [row] = await tx.execute<{ version: number | null }>(
     sql`select app.admin_dict_insert(${dict}, ${code}, ${JSON.stringify(dbRow(dict, input))}::jsonb) as version`,
   );
@@ -1158,6 +1347,48 @@ export async function adminDictCreate(
   return created ? { ok: true, record: created } : { ok: false, reason: 'not_found' };
 }
 
+/** Уровни кодов ГКЭД для проверки «Входит в». */
+async function gkedLevels(tx: Tx): Promise<Map<string, { level: string }>> {
+  const rows = await tx.select({ code: gkedItems.code, level: gkedItems.level }).from(gkedItems);
+  return new Map(rows.map((r) => [r.code, { level: r.level }]));
+}
+
+/** Что не так с кодом ГКЭД и «Входит в» (`gkedEditProblems`): первое — под полем окна. */
+async function gkedProblem(
+  tx: Tx,
+  code: string,
+  input: AdminDictInput,
+  isNew: boolean,
+): Promise<GkedEditProblem | null> {
+  const parent = input.data.parentCode;
+  const [problem] = gkedEditProblems(
+    {
+      code,
+      level: String(input.data.level ?? ''),
+      parentCode: typeof parent === 'string' ? parent.trim().toUpperCase() : null,
+      isNew,
+    },
+    await gkedLevels(tx),
+  );
+  return problem ?? null;
+}
+
+/**
+ * «+ Добавить» → «Код ГКЭД» (прототип gkEditDlg): код вводит администратор — в формате классификатора
+ * и ещё не занятый; «Входит в» — код выше по классификатору (у секции — пусто). Названия в
+ * классификаторе повторяются (у подкласса — как у класса), поэтому повтор названия не проверяется.
+ */
+async function gkedCreate(
+  tx: Tx,
+  input: AdminDictInput,
+  code: string,
+): Promise<AdminDictSaveResult> {
+  const value = code.trim().toUpperCase();
+  const problem = await gkedProblem(tx, value, input, true);
+  if (problem) return { ok: false, reason: 'gked', problem };
+  return insertValue(tx, 'gked', value, input);
+}
+
 /**
  * «Изменить» / «Переименовать» (прототип valueDlg «Новое название увидят все организации, в том числе
  * в старых записях»): записи ссылаются на код, поэтому новое название сразу видно везде. Без изменений —
@@ -1171,10 +1402,15 @@ export async function adminDictUpdate(
   version: number,
   recalculated?: number,
 ): Promise<AdminDictSaveResult> {
-  const records = await adminDictRecords(tx, dict);
+  // У ГКЭД названия не проверяются на повтор — остальные коды не нужны.
+  const records = await adminDictRecords(tx, dict, undefined, dict === 'gked' ? code : undefined);
   const before = records.find((x) => x.code === code);
   if (!before) return { ok: false, reason: 'not_found' };
   if (before.version !== version) return { ok: false, reason: 'changed' };
+  if (dict === 'gked') {
+    const problem = await gkedProblem(tx, code, input, false);
+    if (problem) return { ok: false, reason: 'gked', problem };
+  }
   const links = await prepareLinks(tx, dict, input, before);
   if (links.bad) return { ok: false, reason: 'bad_link', ...links.bad };
   input = links.input;
@@ -1280,7 +1516,7 @@ export async function adminDictMove(
 
 export type AdminDictDeleteResult =
   | { ok: true }
-  | { ok: false; reason: 'not_found' | 'changed' | 'undeletable' }
+  | { ok: false; reason: 'not_found' | 'changed' | 'undeletable' | 'children' }
   | { ok: false; reason: 'used'; usage: DictUsage };
 
 /** Ошибка базы «значение используется» (23503): внешний ключ или отказ `app.admin_dict_delete`. */
@@ -1305,6 +1541,8 @@ export async function adminDictDelete(
   if (ADMIN_DICT_META[dict].undeletable) return { ok: false, reason: 'undeletable' };
   if (before.version !== version) return { ok: false, reason: 'changed' };
   if (before.usage.total > 0) return { ok: false, reason: 'used', usage: before.usage };
+  // Код ГКЭД, в который входят другие коды, не удалить (прототип: «У кода есть вложенные коды»).
+  if (before.children) return { ok: false, reason: 'children' };
   let deleted: boolean | null | undefined;
   try {
     // Точка сохранения: после отказа базы транзакция остаётся рабочей, чтобы пересчитать «Используется».

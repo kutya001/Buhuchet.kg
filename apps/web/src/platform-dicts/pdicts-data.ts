@@ -1,6 +1,6 @@
 'use client';
 
-import type { AdminSystemDict, AdminValueDict } from '@buhuchet/domain';
+import type { AdminSystemDict, AdminValueDict, IoDict } from '@buhuchet/domain';
 import {
   AdminMessageTemplates,
   AdminPermissionList,
@@ -16,6 +16,9 @@ import {
   AdminDictLoadList,
   AdminDictRequestList,
   AdminDictValue,
+  AdminEnRate,
+  AdminGkedGroups,
+  AdminGkedItems,
   AdminReportTypeOptions,
   ListValues,
   PdictsTabCounts,
@@ -95,14 +98,16 @@ export const pdictsTabCountsQuery = queryOptions({
   },
 });
 
-/** Вкладка с «Историей изменений»: справочник общего механизма, календарь или вкладка части 3. */
-export type HistoryDict = AdminValueDict | AdminSystemDict | 'calendar';
+/** Вкладка с «Историей изменений»: справочник общего механизма, календарь, «Налоги и ставки» или вкладка части 3. */
+export type HistoryDict = AdminValueDict | AdminSystemDict | 'calendar' | 'taxes';
 
 /** Адрес истории вкладки, у которой он свой (календарь — ключ записи день, docs/deviations.md п. Д-6). */
 function ownHistory(dict: HistoryDict) {
   switch (dict) {
     case 'calendar':
       return pd.calendar.history.$get();
+    case 'taxes':
+      return api.api.admin['tax-ref'].history.$get();
     case 'statuses':
       return pd.statuses.history.$get();
     case 'perms':
@@ -194,13 +199,40 @@ export const fetchDictLoadValues = async (col: string, q?: string) =>
 const io = api.api.admin['platform-dicts-io'];
 
 /** Справочник в формате загрузки — для окна «Выгрузка». */
-export const dictIoFileQuery = (dict: AdminValueDict) =>
+export const dictIoFileQuery = (dict: IoDict) =>
   queryOptions({
     queryKey: ['admin', 'pdicts', 'io', dict],
     queryFn: async () =>
       json(await io[':dict'].$get({ param: { dict } }), (v) => AdminDictIoFile.parse(v)),
     staleTime: 0,
   });
+
+const gked = api.api.admin['platform-gked'];
+
+/** Список вкладки «Налоги и ставки» по справочнику загрузки. */
+const LIST_OF: Readonly<Record<string, string>> = {
+  enrates: 'en_rates',
+  proprates: 'property_rates',
+};
+
+/** Все коды ГКЭД — дерево и поиск вкладки «ГКЭД» (задача 2.38). */
+export const pdictsGkedItemsQuery = queryOptions({
+  queryKey: ['admin', 'pdicts', 'gked', 'items'],
+  queryFn: async () => json(await gked.items.$get(), (v) => AdminGkedItems.parse(v).items),
+});
+
+/** Группы кодов ГКЭД и что меняет их правка. */
+export const pdictsGkedGroupsQuery = queryOptions({
+  queryKey: ['admin', 'pdicts', 'gked', 'groups'],
+  queryFn: async () => json(await gked.groups.$get(), (v) => AdminGkedGroups.parse(v)),
+});
+
+/** Ставка единого налога с перечнем ГКЭД и версией — окно «Виды деятельности (ГКЭД)». */
+export const fetchAdminEnRate = async (code: string) =>
+  json(
+    await api.api.admin['platform-enrates'][':code'].$get({ param: { code } }),
+    (v) => AdminEnRate.parse(v),
+  );
 
 /**
  * После правки: список и история справочника, число запросов на вкладке; справочники организаций
@@ -209,8 +241,8 @@ export const dictIoFileQuery = (dict: AdminValueDict) =>
 export function usePdictsRefresh() {
   const client = useQueryClient();
   return useCallback(
-    (dict: AdminValueDict | AdminSystemDict | 'requests' | 'loads') => {
-      void client.invalidateQueries({ queryKey: ['list', `pdicts.${dict}`] });
+    (dict: IoDict | AdminSystemDict | 'requests' | 'loads') => {
+      void client.invalidateQueries({ queryKey: ['list', `pdicts.${LIST_OF[dict] ?? dict}`] });
       void client.invalidateQueries({ queryKey: ['admin', 'pdicts'] });
     },
     [client],

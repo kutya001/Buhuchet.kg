@@ -6,6 +6,7 @@ import {
   adminDictDelete,
   adminDictHistory,
   adminDictMove,
+  adminSectionHistory,
   adminDictSetActive,
   adminDictUpdate,
   adminTypeReportCounts,
@@ -28,7 +29,9 @@ import {
 } from '@buhuchet/db';
 import {
   ADMIN_DICT_META,
+  bishkekDate,
   DICT_HISTORY_SHOWN,
+  DICT_NAME_MAX,
   NEW_REPORT_TYPE,
   RecordChangedError,
   RecordNotFoundError,
@@ -44,7 +47,7 @@ import {
   AdminDictList,
   AdminDictMove,
   AdminDictValue,
-  AdminDictValueForm,
+  AdminDictValueBody,
   AdminDictValueUpdate,
   AdminDuesPreview,
   AdminReportTypeOptions,
@@ -93,6 +96,8 @@ function valueBody(x: AdminDictValueRecord): AdminDictValue {
     ...(x.texts ? { texts: x.texts } : {}),
     ...(x.reports ? { reports: x.reports } : {}),
     ...(x.assigned !== undefined ? { assigned: x.assigned } : {}),
+    ...(x.gns ? { gns: x.gns } : {}),
+    ...(x.children !== undefined ? { children: x.children } : {}),
     audit: {
       createdAt: x.audit.createdAt?.toISOString() ?? null,
       createdBy: x.audit.createdBy,
@@ -337,7 +342,17 @@ export function adminDictHistoryHandler(
 ): RouteHandler<typeof adminDictHistoryRoute, AppEnv> {
   return async (c) => {
     const { dict } = c.req.valid('param');
-    const history = await adminTx(deps, c, (tx) => adminDictHistory(tx, dict, DICT_HISTORY_SHOWN));
+    // У ГКЭД — коды и группы кодов одной лентой (прототип pdHistHtml('gked')).
+    const history = await adminTx(deps, c, (tx) =>
+      dict === 'gked'
+        ? adminSectionHistory(
+            tx,
+            ['gked', 'gkgroups'],
+            DICT_HISTORY_SHOWN,
+            bishkekDate(deps.clock.now()),
+          )
+        : adminDictHistory(tx, dict, DICT_HISTORY_SHOWN),
+    );
     const body: AdminDictHistory = {
       total: history.total,
       items: history.items.map((h) => ({ ...h, at: h.at.toISOString() })),
@@ -405,6 +420,8 @@ export interface FieldProblem {
   code: string;
   message: string;
   field: string;
+  /** Подстановки текста (`{codes}`). */
+  params?: Record<string, string>;
 }
 
 /**
@@ -414,15 +431,24 @@ export interface FieldProblem {
  */
 export function valueInputOf(
   dict: AdminValueDict,
-  form: AdminDictValueForm,
+  form: AdminDictValueBody,
 ): { input: AdminDictInput } | { problem: FieldProblem } {
   const meta = ADMIN_DICT_META[dict];
   const values = form as Record<string, unknown>;
   const fallback = (f: string): unknown =>
     dict === 'types' ? NEW_REPORT_TYPE[f as keyof typeof NEW_REPORT_TYPE] : undefined;
+  // Название кода ГКЭД — до 500 знаков (как в классификаторе), у остальных — до 200.
+  if (dict !== 'gked' && form.name.length > DICT_NAME_MAX) {
+    return { problem: { code: 'too_long', message: 'Слишком длинное значение', field: 'name' } };
+  }
   const data: AdminDictInput['data'] = {};
   for (const f of meta.fields) {
     if (f === 'name') continue;
+    // «Виды деятельности (ГКЭД)»: нет поля — правило прежнее (окно без перечней ГКЭД).
+    if (f === 'gked') {
+      if (form.gked !== undefined) data.gked = form.gked;
+      continue;
+    }
     const v = values[f] ?? fallback(f);
     if (FLAG_FIELDS.has(f)) data[f] = v === true;
     else if (NUMBER_FIELDS.has(f)) data[f] = (v as AdminDictInput['data'][string]) ?? null;
@@ -441,13 +467,14 @@ export function valueInputOf(
   return { input: { name: form.name, data } };
 }
 
-function inputOf(dict: AdminValueDict, form: AdminDictValueForm): AdminDictInput {
+function inputOf(dict: AdminValueDict, form: AdminDictValueBody): AdminDictInput {
   const result = valueInputOf(dict, form);
   if ('problem' in result) return fieldFail(result.problem);
   return result.input;
 }
 
-const fieldFail = (p: FieldProblem): never => apiFail(400, p.code, p.message, { field: p.field });
+const fieldFail = (p: FieldProblem): never =>
+  apiFail(400, p.code, p.message, { field: p.field, ...p.params });
 
 /** Обязательные поля сверх названия (прототип ugnsDlg, regimeDlg). */
 const REQUIRED = {
@@ -501,7 +528,20 @@ const BAD_LINK = {
   authority: ['invalid_link', 'Выберите действующий орган'],
   payment_authority: ['invalid_link', 'Получатель — орган из справочника'],
   en_rates: ['invalid_en_rates', 'Таких ставок единого налога нет — проверьте коды'],
+  gked: ['gked_unknown', 'Нет в справочнике ГКЭД: {codes}'],
 } as const satisfies Record<AdminDictLinkProblem, readonly [string, string]>;
+
+/** Код ГКЭД и «Входит в» (прототип gkEditDlg). */
+const GKED_PROBLEM = {
+  gked_code_required: 'Введите код',
+  gked_code_format: 'Формат кода: A, 01, 01.1, 01.11 или 01.11.1',
+  gked_code_taken: 'Такой код уже есть',
+  gked_parent_section: 'У секции нет верхнего уровня',
+  gked_parent_required: 'Укажите код верхнего уровня',
+  gked_parent_unknown: 'Такого кода нет в справочнике',
+  gked_parent_self: 'Код не может входить сам в себя',
+  gked_parent_level: 'Верхний уровень должен быть выше по классификатору',
+} as const;
 
 const TAKEN = {
   name: ['dict_value_taken', 'Такое значение уже есть'],
@@ -519,7 +559,13 @@ export function saveProblem(
   }
   if (result.reason === 'bad_link') {
     const [code, message] = BAD_LINK[result.problem];
-    return { code, message, field: result.field };
+    if (!result.codes) return { code, message, field: result.field };
+    const codes = result.codes.join(', ');
+    return { code, message: message.replace('{codes}', codes), field: result.field, params: { codes } };
+  }
+  if (result.reason === 'gked') {
+    const { code, field } = result.problem;
+    return { code, message: GKED_PROBLEM[code], field };
   }
   return null;
 }
@@ -543,6 +589,9 @@ async function failOf(
   }
   if (result.reason === 'undeletable') {
     apiFail(409, 'dict_value_undeletable', 'Значение можно только отключить');
+  }
+  if (result.reason === 'children') {
+    apiFail(409, 'dict_value_children', 'У кода есть вложенные коды');
   }
   if (result.reason === 'changed') {
     const now = await adminTx(deps, c, (tx) => getAdminDictValue(tx, dict, code));
@@ -581,6 +630,22 @@ const valueTaken = {
   content: error,
 };
 
+/**
+ * «Действует» в окне кода ГКЭД (прототип gkEditDlg): после записи полей — включить или снять, как
+ * кнопкой в списке, в той же транзакции. У остальных справочников окно «Статус» не меняет.
+ */
+async function withActive(
+  tx: Parameters<typeof adminDictSetActive>[0],
+  dict: AdminValueDict,
+  form: AdminDictValueBody,
+  saved: AdminDictSaveResult,
+): Promise<AdminDictSaveResult> {
+  if (!saved.ok || dict !== 'gked' || form.active === undefined) return saved;
+  if (saved.record.active === form.active) return saved;
+  const active = await adminDictSetActive(tx, dict, saved.record.code, form.active, saved.record.version);
+  return active.ok ? { ...active, redue: saved.redue ?? null } : active;
+}
+
 export const createAdminDictValueRoute = createRoute({
   method: 'post',
   path: '/admin/platform-dicts/{dict}',
@@ -589,7 +654,7 @@ export const createAdminDictValueRoute = createRoute({
   middleware: [requirePlatformAdmin] as const,
   request: {
     params: AdminValueDictParam,
-    body: { required: true, content: json(AdminDictValueForm) },
+    body: { required: true, content: json(AdminDictValueBody) },
   },
   responses: {
     201: { description: 'Значение добавлено в конец справочника', content: json(AdminDictValue) },
@@ -604,11 +669,16 @@ export function createAdminDictValueHandler(
 ): RouteHandler<typeof createAdminDictValueRoute, AppEnv> {
   return async (c) => {
     const { dict } = c.req.valid('param');
-    const input = inputOf(dict, c.req.valid('json'));
+    const form = c.req.valid('json');
+    const input = inputOf(dict, form);
     checkRequired(dict, input);
     const random = () => randomBytes(4).toString('hex');
+    // Код ГКЭД вводит администратор (прототип gkEditDlg), остальные — следующий номер справочника.
+    const code = dict === 'gked' ? (form.code ?? '') : undefined;
     const result = await saving(() =>
-      adminTx(deps, c, (tx) => adminDictCreate(tx, dict, input, random)),
+      adminTx(deps, c, async (tx) =>
+        withActive(tx, dict, form, await adminDictCreate(tx, dict, input, random, code)),
+      ),
     );
     if (!result.ok) return failOf(deps, c, result, dict, '');
     return c.json(valueBody(result.record), 201);
@@ -662,7 +732,15 @@ export function updateAdminDictValueHandler(
         : undefined;
     const result = await saving(() =>
       adminTx(deps, c, async (tx) =>
-        queued(tx, await adminDictUpdate(tx, dict, code, input, version, recalculated)),
+        queued(
+          tx,
+          await withActive(
+            tx,
+            dict,
+            form,
+            await adminDictUpdate(tx, dict, code, input, version, recalculated),
+          ),
+        ),
       ),
     );
     if (!result.ok) return failOf(deps, c, result, dict, code);

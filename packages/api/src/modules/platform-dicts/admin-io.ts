@@ -10,6 +10,7 @@ import {
   enqueueDuesRecalc,
   exportDictLoads,
   getDictLoad,
+  gkedCodeSet,
   insertDictLoad,
   ioRecords,
   ioRefs,
@@ -19,6 +20,7 @@ import {
   mergeRedueScopes,
   RedueTimeoutError,
   rollbackDictLoad,
+  SECTION_WRITERS,
   withUserContext,
   type AdminDictSaveResult,
   type DictLoadAdded,
@@ -27,13 +29,16 @@ import {
   type DueCatalog,
   type IoRecord,
   type RedueScope,
+  type SectionFail,
   type Tx,
 } from '@buhuchet/db';
 import {
   ADMIN_DICT_META,
+  bishkekDate,
   DICT_NOTE_MAX,
   formatText,
   IO_COLUMNS,
+  isIoSectionDict,
   ioChanges,
   ioCodeValid,
   ioHeader,
@@ -45,7 +50,10 @@ import {
   UI_TEXTS,
   type AdminValueDict,
   type IoContext,
+  type IoDict,
+  type IoSectionDict,
   type IoValue,
+  type IsoDate,
   type Translate,
   type UiTextKey,
 } from '@buhuchet/domain';
@@ -57,8 +65,8 @@ import {
   AdminDictLoad,
   AdminDictLoadIdParam,
   AdminDictLoadList,
-  AdminDictValueForm,
-  AdminValueDictParam,
+  AdminDictValueBody,
+  AdminIoDictParam,
   ApiError,
   ListExportParams,
   ListQueryParams,
@@ -111,9 +119,31 @@ const adminTx = <T>(deps: ApiDeps, c: Context<AppEnv>, fn: (tx: Tx) => Promise<T
 
 const IO_PATH = '/admin/platform-dicts-io/{dict}';
 
-async function fileOf(tx: Tx, dict: AdminValueDict, t: Translate) {
-  const ctx: IoContext = { t, refs: await ioRefs(tx) };
-  const records = await ioRecords(tx, dict);
+/** Справочник со столбцами кодов ГКЭД: перечни «Виды деятельности (ГКЭД)» и коды групп. */
+const hasGked = (dict: IoDict) =>
+  IO_COLUMNS[dict].some((c) => ['gked', 'gkedCodes', 'groupActs'].includes(c.field.type));
+
+/** Подписи ссылок и коды ГКЭД — для ячеек файла и разбора строк. */
+async function ioContextOf(tx: Tx, dict: IoDict, t: Translate): Promise<IoContext> {
+  return {
+    t,
+    refs: await ioRefs(tx),
+    ...(hasGked(dict) ? { gked: await gkedCodeSet(tx) } : {}),
+  };
+}
+
+/**
+ * Значения справочника для файла и сравнения: у справочников значений — общим механизмом, у
+ * календаря, «Налогов и ставок» и групп кодов — своими (`SECTION_WRITERS`).
+ */
+const recordsOf = (tx: Tx, dict: IoDict, today: IsoDate): Promise<IoRecord[]> =>
+  isIoSectionDict(dict) ? SECTION_WRITERS[dict].records(tx, today) : ioRecords(tx, dict);
+
+const todayOf = (deps: ApiDeps) => bishkekDate(deps.clock.now());
+
+async function fileOf(tx: Tx, dict: IoDict, t: Translate, today: IsoDate) {
+  const ctx = await ioContextOf(tx, dict, t);
+  const records = await recordsOf(tx, dict, today);
   return { header: ioHeader(dict, t), rows: records.map((x) => ioRow(dict, x, ctx)) };
 }
 
@@ -123,7 +153,7 @@ export const adminDictIoFileRoute = createRoute({
   tags: ['platform-dicts'],
   summary: '«Выгрузить»: справочник в формате загрузки',
   middleware: [requirePlatformAdmin] as const,
-  request: { params: AdminValueDictParam },
+  request: { params: AdminIoDictParam },
   responses: {
     200: {
       description: 'Заголовки столбцов и строки — текстом ячеек, все значения справочника',
@@ -140,7 +170,7 @@ export function adminDictIoFileHandler(
   return async (c) => {
     const { dict } = c.req.valid('param');
     const t = await translator(deps);
-    return c.json(await adminTx(deps, c, (tx) => fileOf(tx, dict, t)), 200);
+    return c.json(await adminTx(deps, c, (tx) => fileOf(tx, dict, t, todayOf(deps))), 200);
   };
 }
 
@@ -150,7 +180,7 @@ export const adminDictIoXlsxRoute = createRoute({
   tags: ['platform-dicts'],
   summary: '«Скачать для Excel»: справочник в формате загрузки',
   middleware: [requirePlatformAdmin] as const,
-  request: { params: AdminValueDictParam },
+  request: { params: AdminIoDictParam },
   responses: {
     200: { description: 'Файл Excel: все значения справочника, все поля', content: xlsxContent },
     ...exportRateResponses,
@@ -167,7 +197,7 @@ export function adminDictIoXlsxHandler(
     const userId = c.get('session')!.userId;
     return withExportSlot(deps, userId, async () => {
       const t = await translator(deps);
-      const file = await adminTx(deps, c, (tx) => fileOf(tx, dict, t));
+      const file = await adminTx(deps, c, (tx) => fileOf(tx, dict, t, todayOf(deps)));
       const numeric = IO_COLUMNS[dict].map((col) => col.field.type === 'int');
       const xlsx = await buildXlsx(
         t(`pdicts.title.${dict}` as UiTextKey),
@@ -261,7 +291,7 @@ function problemText(t: Translate, p: FieldProblem): string {
 }
 
 /** «Столбец: что не так»; поля нет в столбцах файла — только «что не так». */
-function cellError(dict: AdminValueDict, t: Translate, field: string, text: string): string {
+function cellError(dict: IoDict, t: Translate, field: string, text: string): string {
   const col = IO_COLUMNS[dict].find((c) => c.key === field);
   return col ? t('pdicts.io.err.cell', { col: t(col.title), text }) : text;
 }
@@ -272,7 +302,7 @@ function cellError(dict: AdminValueDict, t: Translate, field: string, text: stri
  */
 // ОТКЛОНЕНИЕ: docs/deviations.md#Д-16 — строка проверяется, как окно значения.
 function rowProblems(dict: AdminValueDict, x: IoValue, t: Translate) {
-  const parsed = AdminDictValueForm.safeParse({ name: x.name, ...x.data });
+  const parsed = AdminDictValueBody.safeParse({ name: x.name, ...x.data });
   if (!parsed.success) {
     return {
       errors: parsed.error.issues.map((i) => {
@@ -318,14 +348,21 @@ interface ImportOutcome {
 }
 
 /** Отметка справочника и файла: версии значений и строки файла. */
-const stampOf = (dict: AdminValueDict, records: readonly IoRecord[], table: string[][]) =>
+const stampOf = (dict: IoDict, records: readonly IoRecord[], table: string[][]) =>
   createHash('sha256')
     .update(JSON.stringify([dict, records.map((x) => [x.code, x.version]), table]))
     .digest('hex');
 
-/** Почему код новой строки не подходит: у кодов стран — две латинские буквы, у ключей — латиница. */
-function newCodeError(dict: AdminValueDict): UiTextKey {
+/**
+ * Почему код новой строки не подходит: у кодов стран — две латинские буквы, у ключей — латиница, у
+ * ГКЭД — формат классификатора, у календаря — дата, у групп кодов — латиница.
+ */
+function newCodeError(dict: IoDict): UiTextKey {
   if (dict === 'phones') return 'pdicts.io.err.code_country';
+  if (dict === 'gked') return 'pdicts.io.err.code_gked';
+  if (dict === 'calendar') return 'pdicts.io.err.code_date';
+  if (dict === 'gkgroups') return 'pdicts.io.err.code_group';
+  if (isIoSectionDict(dict)) return 'pdicts.io.err.code';
   return 'key' in ADMIN_DICT_META[dict].code ? 'pdicts.io.err.code_key' : 'pdicts.io.err.code';
 }
 
@@ -337,11 +374,13 @@ function newCodeError(dict: AdminValueDict): UiTextKey {
  */
 async function runImport(
   tx: Tx,
-  dict: AdminValueDict,
+  dict: IoDict,
   table: string[][],
   t: Translate,
+  today: IsoDate,
 ): Promise<ImportOutcome> {
-  const ctx: IoContext = { t, refs: await ioRefs(tx) };
+  if (isIoSectionDict(dict)) return runSectionImport(tx, dict, table, t, today);
+  const ctx = await ioContextOf(tx, dict, t);
   const parsed = parseIoRows(dict, table, ctx);
   // Нет столбца кода — с его названием: у УГНС это «Ключ», у кодов стран — «Код страны» (прототип).
   if ('fatal' in parsed) {
@@ -462,6 +501,115 @@ async function runImport(
   };
 }
 
+/** Отказ записи строки календаря, «Налогов и ставок» или группы кодов. */
+class SectionRowFail extends Error {
+  constructor(readonly fail: SectionFail) {
+    super('section row');
+  }
+}
+
+const sectionFailText = (t: Translate, fail: SectionFail) =>
+  fail === 'changed' ? t('pdicts.io.err.changed') : t(fail.key, fail.params);
+
+/**
+ * Сравнение и запись строк календаря, «Налогов и ставок» и групп кодов (прототип DX.calendar,
+ * DX.taxes, DX.enrates, DX.proprates, DX.gkgroups): как у справочников значений — каждая строка в своей
+ * точке сохранения; проверку и запись делает справочник (`SECTION_WRITERS`).
+ */
+async function runSectionImport(
+  tx: Tx,
+  dict: IoSectionDict,
+  table: string[][],
+  t: Translate,
+  today: IsoDate,
+): Promise<ImportOutcome> {
+  const ctx = await ioContextOf(tx, dict, t);
+  const parsed = parseIoRows(dict, table, ctx);
+  if ('fatal' in parsed) {
+    importFail(`import_${parsed.fatal}`, 400, { col: t(IO_COLUMNS[dict][0]!.title) });
+  }
+  const writer = SECTION_WRITERS[dict];
+  const records = await writer.records(tx, today);
+  const byCode = new Map(records.map((x) => [x.code, x]));
+  const preview: AdminDictImportPreview = {
+    rows: parsed.rows.length,
+    add: [],
+    change: [],
+    off: [],
+    errors: [],
+    same: 0,
+    stamp: stampOf(dict, records, table),
+    dues: { reports: 0, orgs: 0 },
+    act: { types: 0, reports: 0 },
+  };
+  const before: DictLoadBefore[] = [];
+  const added: DictLoadAdded[] = [];
+  const redue: (RedueScope | null | undefined)[] = [];
+  for (const row of parsed.rows) {
+    const fail = (errors: string[]) =>
+      preview.errors.push({ line: row.line, code: row.code, errors });
+    if (row.errors.length) {
+      fail(row.errors);
+      continue;
+    }
+    const base = byCode.get(row.code);
+    if (!base && !ioCodeValid(dict, row.code)) {
+      fail([t(newCodeError(dict))]);
+      continue;
+    }
+    const after = ioMerge(base ?? ioNewValue(dict, row.code), row.values);
+    const changes = base ? ioChanges(parsed.columns, base, after, ctx) : [];
+    if (base && !changes.length) {
+      preview.same++;
+      continue;
+    }
+    let saved;
+    try {
+      saved = await tx.transaction(async (sp) => {
+        const result = await writer.save(sp, after, base, today);
+        if (!result.ok) throw new SectionRowFail(result.fail);
+        return result;
+      });
+    } catch (err) {
+      if (!(err instanceof SectionRowFail)) throw err;
+      fail([sectionFailText(t, err.fail)]);
+      continue;
+    }
+    redue.push(saved.redue);
+    const { record } = saved;
+    const loaded = { name: record.name, active: record.active, data: { ...record.data } };
+    if (!base) {
+      preview.add.push({ line: row.line, code: row.code, name: after.name });
+      added.push({ code: row.code, version: record.version, after: loaded });
+      continue;
+    }
+    const off = base.active && !after.active;
+    (off ? preview.off : preview.change).push({
+      line: row.line,
+      code: row.code,
+      name: off ? base.name : after.name,
+      changes: changes.map(({ title, from, to }) => ({ title, from, to })),
+    });
+    before.push({
+      code: base.code,
+      name: base.name,
+      active: base.active,
+      data: { ...base.data },
+      version: record.version,
+      after: loaded,
+    });
+  }
+  const scope = mergeRedueScopes(redue.map((x) => x ?? null));
+  return {
+    preview,
+    before,
+    added,
+    redue: scope,
+    catalog: scope ? await dueCatalog(tx) : null,
+    actTypes: [],
+  };
+}
+
 /**
  * Что покажет сравнение сверх строк (прототип df.dues, df.actR): у скольких несданных отчётов в
  * скольких организациях изменятся сроки и сколько отчётов уже создано по видам, у которых меняется
@@ -503,7 +651,7 @@ export const adminDictImportPreviewRoute = createRoute({
   tags: ['platform-dicts'],
   summary: '«Загрузить» → «Сравнить»: что будет добавлено, изменено и отключено',
   middleware: [requirePlatformAdmin] as const,
-  request: { params: AdminValueDictParam, body: fileBody },
+  request: { params: AdminIoDictParam, body: fileBody },
   responses: {
     200: {
       description: 'Строки: добавится, изменится («было → стало»), отключится, ошибки',
@@ -530,7 +678,7 @@ export function adminDictImportPreviewHandler(
     return withPreviewSlot(deps, c, async () => {
       try {
         await adminTx(deps, c, async (tx) => {
-          throw new DryRun(await runImport(tx, dict, table, t));
+          throw new DryRun(await runImport(tx, dict, table, t, todayOf(deps)));
         });
       } catch (err) {
         if (err instanceof DryRun) return c.json(await withDues(deps, err.outcome), 200);
@@ -547,7 +695,7 @@ export const adminDictImportApplyRoute = createRoute({
   tags: ['platform-dicts'],
   summary: '«ОК, применить»: записать строки без ошибок',
   middleware: [requirePlatformAdmin] as const,
-  request: { params: AdminValueDictParam, query: AdminDictImportApplyQuery, body: fileBody },
+  request: { params: AdminIoDictParam, query: AdminDictImportApplyQuery, body: fileBody },
   responses: {
     200: {
       description: 'Запись «Загрузок» и что было в файле',
@@ -582,7 +730,7 @@ export function adminDictImportApplyHandler(
     const t = await translator(deps);
     const body = await adminTx(deps, c, async (tx) => {
       await lockDictLoads(tx);
-      const outcome = await runImport(tx, dict, table, t);
+      const outcome = await runImport(tx, dict, table, t, todayOf(deps));
       const { preview } = outcome;
       // ОТКЛОНЕНИЕ: docs/deviations.md#Д-16 — справочник или файл изменились после сравнения.
       if (preview.stamp !== stamp) importFail('import_changed', 409);
@@ -742,7 +890,7 @@ export function rollbackDictLoadHandler(
     const t = await translator(deps);
     // Отказ — внутри транзакции: уже восстановленные значения откатываются вместе с ней.
     const rolled = await adminTx(deps, c, async (tx) => {
-      const result = await rollbackDictLoad(tx, id);
+      const result = await rollbackDictLoad(tx, id, todayOf(deps));
       if (result.ok) {
         return { ...result, queued: result.redue ? await enqueueDuesRecalc(tx, result.redue) : '' };
       }

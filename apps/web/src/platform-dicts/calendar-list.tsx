@@ -61,6 +61,7 @@ import { useViewSettings } from '../lists/view-settings';
 import { useShell } from '../shell/context';
 import { duesNote, duesShown, spreadText, useDuesPreview } from './dues-preview';
 import { DictHistory } from './dict-history-box';
+import { ExportDialog, ImportDialog, IoBar } from './io-dialogs';
 import { pdictsHistoryQuery } from './pdicts-data';
 
 const cal = api.api.admin['platform-dicts'].calendar;
@@ -471,9 +472,12 @@ export function CalendarList() {
   const [adding, setAdding] = useState<DialogSlot<null> | null>(null);
   const [copying, setCopying] = useState<DialogSlot<null> | null>(null);
   const [askDelete, setAskDelete] = useState<AdminCalendarDay | null>(null);
+  const [io, setIo] = useState<DialogSlot<'export' | 'import'> | null>(null);
   useCalendarAddRequest((actionId) => {
     if (actionId === 'holiday') setAdding(openSlot(null));
     if (actionId === 'calendar_copy') setCopying(openSlot(null));
+    if (actionId === 'io_export') setIo(openSlot<'export' | 'import'>('export'));
+    if (actionId === 'io_import') setIo(openSlot<'export' | 'import'>('import'));
   });
 
   const remove = async (x: AdminCalendarDay) => {
@@ -504,6 +508,11 @@ export function CalendarList() {
           {t('pdicts.cal.warn_next', { y: year + 1 })}
         </Note>
       ) : null}
+      {/* Задача 2.37, часть 3: календарь в Excel — строки сопоставляются по дате. */}
+      <IoBar
+        onExport={() => setIo(openSlot<'export' | 'import'>('export'))}
+        onImport={() => setIo(openSlot<'export' | 'import'>('import'))}
+      />
       <div className="flex flex-wrap items-center gap-2.5">
         <span className="text-[13px] text-muted">
           {t('pdicts.cal.copy_hint', { y: year + 1, prev: year })}
@@ -558,6 +567,21 @@ export function CalendarList() {
         actions={actions}
       />
       <DictHistory dict="calendar" />
+      {io?.data === 'export' ? (
+        <ExportDialog
+          key={`io-${io.n}`}
+          dict="calendar"
+          open={io.open}
+          onClose={() => setIo(closeSlot)}
+        />
+      ) : io ? (
+        <ImportDialog
+          key={`io-${io.n}`}
+          dict="calendar"
+          open={io.open}
+          onClose={() => setIo(closeSlot)}
+        />
+      ) : null}
       {adding ? (
         <HolidayDialog
           key={`add-${adding.n}`}

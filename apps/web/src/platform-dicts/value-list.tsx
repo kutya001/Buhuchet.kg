@@ -4,11 +4,17 @@ import {
   ADMIN_DICT_COLUMNS,
   ADMIN_DICT_META,
   adminDictDefaultSort,
+  bishkekDate,
   DEFAULT_PHONE_COUNTRY,
+  diffDays,
   dictStatusKey,
   formatDateRu,
   formatMomentRu,
+  gkedRuleEmpty,
+  gkedRuleText,
+  gkedRuleToVerify,
   phoneCodeExample,
+  type GkedLevel,
   type AdminValueDict,
   type GridKey,
   type UiTextKey,
@@ -21,6 +27,7 @@ import {
   EmptyState,
   MONO_CLASS,
   Note,
+  STATUS_TONE,
   StatusPill,
   Tag,
   useToast,
@@ -40,6 +47,15 @@ import { useListPage } from '../lists/use-list-page';
 import { useViewSettings } from '../lists/view-settings';
 import { useShell } from '../shell/context';
 import { BenefitDialog } from './benefit-dialog';
+import {
+  BulkDueDialog,
+  BulkStatusDialog,
+  useBulkActions,
+  useMarkGns,
+  type BulkStatusAsk,
+} from './bulk-actions';
+import { gkedActions, useGkedActions } from './gked-tab';
+import type { GkedItem } from './gked-dialog';
 import { TypeDialog } from './type-dialog';
 import { DictHistory } from './dict-history-box';
 import { ExportDialog, ImportDialog, IoBar } from './io-dialogs';
@@ -99,6 +115,11 @@ const WIDTHS: Readonly<Record<string, number>> = {
   contractors: 130,
   used: 130,
   active: 130,
+  gked: 240,
+  gns: 200,
+  level: 130,
+  section: 100,
+  parentCode: 110,
 };
 
 /** Свои ширины справочника: у режима краткое название узкое. */
@@ -108,10 +129,11 @@ const DICT_WIDTHS: Partial<Record<AdminValueDict, Readonly<Record<string, number
   regimes: { code: 90, name: 180, kind: 120 },
   benefits: { code: 90, name: 280, article: 110, contractors: 120 },
   phones: { code: 90, name: 200 },
+  gked: { code: 110, name: 460, note: 240 },
 };
 
 /** Столбцы моноширинным шрифтом: коды, маски и номера. */
-const MONO = new Set(['code', 'gnsCode', 'dialCode', 'mask', 'example', 'formCode']);
+const MONO = new Set(['code', 'gnsCode', 'dialCode', 'mask', 'example', 'formCode', 'parentCode']);
 
 /** Столбцы вида отчёта словами — их считает сервер (`texts`): срок, «Что уплачивается», орган. */
 const TYPE_TEXTS = new Set([
@@ -141,7 +163,15 @@ function cellText(
   names: ReadonlyMap<string, string>,
 ): string {
   if (dict === 'types' && TYPE_TEXTS.has(key)) return x.texts?.[key] ?? '';
+  // Уровень и секция кода ГКЭД — словами с сервера.
+  if (dict === 'gked' && (key === 'level' || key === 'section')) return x.texts?.[key] ?? '';
   switch (key) {
+    case 'gked':
+      return gkedRuleText(x.data.gked, t);
+    case 'gns':
+      return x.gns?.at ? formatDateRu(x.gns.at) : t('pdicts.gns.none');
+    case 'parentCode':
+      return x.data.parentCode ?? '';
     case 'types':
     case 'removes':
     case 'adds': {
@@ -235,6 +265,53 @@ export function adminDictColumns(
           <span className="text-faint">{t('pdicts.bank.by_phone.no')}</span>
         );
     }
+    // «Виды деятельности (ГКЭД)» (прототип gkRuleHtml): пусто — «все виды», «сверить» — оранжевым.
+    if (c.key === 'gked') {
+      column.cell = (x) =>
+        gkedRuleEmpty(x.data.gked) ? (
+          <span className="text-faint">{t('pdicts.gked.rule.any')}</span>
+        ) : (
+          <span>
+            <span className={MONO_CLASS}>{gkedRuleText(x.data.gked, t)}</span>
+            {gkedRuleToVerify(x.data.gked) ? (
+              <>
+                {' '}
+                <StatusPill
+                  tone="orange"
+                  icon="alert"
+                  label={t('pdicts.gkr.verify_pill')}
+                  size="sm"
+                />
+              </>
+            ) : null}
+          </span>
+        );
+    }
+    // «Сверено с ГНС» (прототип): дата старше 180 дней — жёлтым, кто сверял; не сверено — оранжевым.
+    if (c.key === 'gns') {
+      column.cell = (x) => {
+        if (!x.gns?.at) {
+          return <StatusPill tone="orange" icon="alert" label={t('pdicts.gns.none')} size="sm" />;
+        }
+        const old = diffDays(bishkekDate(new Date()), x.gns.at) > GNS_OLD_DAYS;
+        return (
+          <span>
+            <span
+              className={old ? `${STATUS_TONE.yellow.text} font-semibold` : undefined}
+              title={old ? t('pdicts.gns.old') : undefined}
+            >
+              {formatDateRu(x.gns.at)}
+            </span>
+            {x.gns.by ? <span className="text-faint"> · {x.gns.by}</span> : null}
+          </span>
+        );
+      };
+    }
+    if (dict === 'gked' && c.key === 'name') {
+      column.cell = (x) => (
+        <span className={x.data.level === 'subclass' ? undefined : 'font-semibold'}>{x.name}</span>
+      );
+    }
     if (c.key === 'active') {
       column.cell = (x) =>
         x.active ? (
@@ -247,7 +324,24 @@ export function adminDictColumns(
   });
 }
 
+/** Сверка с ГНС старше стольких дней — дата жёлтым (прототип). */
+const GNS_OLD_DAYS = 180;
+
 const moment = (iso: string | null) => (iso ? formatMomentRu(new Date(iso)) : '');
+
+/** Код ГКЭД строки списка — для окна и действий кода. */
+const gkedOf = (x: AdminDictValue): GkedItem => ({
+  code: x.code,
+  name: x.name,
+  level: (x.data.level ?? 'subclass') as GkedLevel,
+  parentCode: x.data.parentCode ?? null,
+  note: x.data.note ?? '',
+  active: x.active,
+  used: x.used,
+  contractors: x.contractors,
+  children: x.children ?? 0,
+  version: x.version,
+});
 
 /** Служебные столбцы; у значений из наполнения «Создано» пусто (docs/deviations.md п. 48). */
 const AUDIT: GridAudit<AdminDictValue> = {
@@ -269,6 +363,7 @@ const COUNT: Readonly<Record<AdminValueDict, CountKey>> = {
   reasons: 'pdicts.count',
   ugns: 'pdicts.ugns_count',
   banks: 'pdicts.count',
+  gked: 'pdicts.gked.codes',
 };
 
 /**
@@ -323,6 +418,7 @@ const DELETE_TEXT: Partial<Record<AdminValueDict, UiTextKey>> = {
   regimes: 'pdicts.delete.text_regime',
   benefits: 'pdicts.delete.text_benefit',
   ugns: 'pdicts.delete.text_ugns',
+  gked: 'pdicts.gked.del_text',
 };
 
 /** Пояснение «Отключить»: что будет с отключённым значением. */
@@ -356,9 +452,13 @@ function usedReason(dict: AdminValueDict, x: AdminDictValue, t: Translate): stri
  * «+ Добавить» → способ добавления вкладки справочника, «Выгрузить в Excel» или «Загрузить из Excel»
  * (задача 2.37).
  */
-function useValueAddRequest(dict: AdminValueDict, run: (action: 'add' | IoAction) => void) {
+function useValueAddRequest(
+  dict: AdminValueDict,
+  run: (action: 'add' | IoAction) => void,
+  enabled: boolean,
+) {
   const { addRequest, clearAddRequest } = useShell();
-  const request = addRequest?.moduleId === 'pdicts' ? addRequest : null;
+  const request = enabled && addRequest?.moduleId === 'pdicts' ? addRequest : null;
   const start = useEffectEvent((actionId: string) => {
     if (actionId === (ADD_ACTION[dict] ?? 'value')) run('add');
     else if (actionId === 'io_export' || actionId === 'io_import') run(actionId);
@@ -378,7 +478,17 @@ function useValueAddRequest(dict: AdminValueDict, run: (action: 'add' | IoAction
  * приглушённо. Действия: «Изменить»/«Переименовать», «Выше» и «Ниже», «Отключить»/«Включить»,
  * «Удалить» — только неиспользуемое, после вопроса. Под списком — «История изменений».
  */
-export function ValueDictList({ dict }: { dict: AdminValueDict }) {
+export function ValueDictList({
+  dict,
+  bare = false,
+  onGkedEdit,
+}: {
+  dict: AdminValueDict;
+  /** Список внутри своей вкладки (ГКЭД): без строки Excel, «+ Добавить» и истории — они у вкладки. */
+  bare?: boolean;
+  /** Окно кода ГКЭД открывает вкладка. */
+  onGkedEdit?: (x: GkedItem) => void;
+}) {
   const t = useT();
   const toast = useToast();
   const errorText = useErrorText();
@@ -425,7 +535,24 @@ export function ValueDictList({ dict }: { dict: AdminValueDict }) {
   const [pending, setPending] = useState<ReadonlySet<string>>(new Set());
   const open = (x: AdminDictValue | null) => setEdit(openSlot(x));
   const [io, setIo] = useState<DialogSlot<IoAction> | null>(null);
-  useValueAddRequest(dict, (action) => (action === 'add' ? open(null) : setIo(openSlot(action))));
+  useValueAddRequest(
+    dict,
+    (action) => (action === 'add' ? open(null) : setIo(openSlot(action))),
+    !bare,
+  );
+  const gkedRun = useGkedActions();
+  const markGns = useMarkGns();
+  const [askStatus, setAskStatus] = useState<DialogSlot<BulkStatusAsk & { done: () => void }> | null>(
+    null,
+  );
+  const [bulkDue, setBulkDue] = useState<DialogSlot<{
+    rows: readonly AdminDictValue[];
+    done: () => void;
+  }> | null>(null);
+  const bulk = useBulkActions(dict, {
+    status: (x, done) => setAskStatus(openSlot({ ...x, done })),
+    due: (rows, done) => setBulkDue(openSlot({ rows, done })),
+  });
   // Всего значений в справочнике (без фильтров): «Ниже» у последнего по «№» недоступно.
   const count = (list.data as { count?: number } | undefined)?.count ?? 0;
 
@@ -456,8 +583,19 @@ export function ValueDictList({ dict }: { dict: AdminValueDict }) {
     act(x, () =>
       pd[':dict'][':code'].move.$post({ param: param(x), json: { step, version: x.version } }),
     );
-  const setActive = (x: AdminDictValue, active: boolean) =>
-    act(
+  const setActive = (x: AdminDictValue, active: boolean) => {
+    // Статус со своими сроками — с предпросмотром пересчёта (прототип benActive).
+    if (dict === 'benefits' && (x.data.dueRules ?? []).length) {
+      return setAskStatus(
+        openSlot<BulkStatusAsk & { done: () => void }>({
+          codes: [x.code],
+          names: [x.name],
+          active,
+          done: () => undefined,
+        }),
+      );
+    }
+    return act(
       x,
       () =>
         pd[':dict'][':code'].active.$post({
@@ -466,6 +604,7 @@ export function ValueDictList({ dict }: { dict: AdminValueDict }) {
         }),
       active ? undefined : (OFF_TOAST[dict] ?? 'pdicts.toast.off'),
     );
+  };
   const remove = (x: AdminDictValue) =>
     act(
       x,
@@ -475,6 +614,13 @@ export function ValueDictList({ dict }: { dict: AdminValueDict }) {
     );
 
   const actions = (x: AdminDictValue): ActionEntry[] => {
+    if (dict === 'gked') {
+      return gkedActions(t, gkedOf(x), {
+        edit: (y) => onGkedEdit?.(y),
+        active: gkedRun.active,
+        remove: () => setAskDelete(x),
+      });
+    }
     const ugns = dict === 'ugns';
     const edit: ActionEntry = {
       id: 'edit',
@@ -511,8 +657,29 @@ export function ValueDictList({ dict }: { dict: AdminValueDict }) {
           },
         ]
       : [];
+    // «Отметить сверку с ГНС» вида (прототип): под ним — когда сверяли последний раз.
+    const gns: ActionEntry[] =
+      dict === 'types'
+        ? [
+            {
+              id: 'gns',
+              label: t('pdicts.bulk.gns'),
+              icon: 'ok',
+              ...(x.gns?.at
+                ? {
+                    sub: t('pdicts.bulk.gns_last', {
+                      date: formatDateRu(x.gns.at),
+                      who: x.gns.by ?? '',
+                    }),
+                  }
+                : {}),
+              run: () => markGns(x),
+            },
+          ]
+        : [];
     return [
       edit,
+      ...gns,
       ...order,
       { id: 'sep', separator: true },
       x.active
@@ -553,10 +720,12 @@ export function ValueDictList({ dict }: { dict: AdminValueDict }) {
   return (
     <div className="flex flex-col gap-3.5">
       {note ? <Note icon="info">{t(note)}</Note> : null}
-      <IoBar
-        onExport={() => setIo(openSlot<IoAction>('io_export'))}
-        onImport={() => setIo(openSlot<IoAction>('io_import'))}
-      />
+      {bare ? null : (
+        <IoBar
+          onExport={() => setIo(openSlot<IoAction>('io_export'))}
+          onImport={() => setIo(openSlot<IoAction>('io_import'))}
+        />
+      )}
       <DataGrid
         columns={columns}
         audit={AUDIT}
@@ -585,13 +754,32 @@ export function ValueDictList({ dict }: { dict: AdminValueDict }) {
         labels={labels}
         rowTone={(x) => (x.active ? undefined : 'muted')}
         actions={actions}
-        onOpen={(x) => open(x)}
+        {...(bulk.length ? { bulk } : {})}
+        onOpen={(x) => (dict === 'gked' ? onGkedEdit?.(gkedOf(x)) : open(x))}
         {...(TABLE_ONLY.has(dict) ? { fixedView: 'table' as const } : {})}
       />
-      <DictHistory dict={dict} />
+      {bare ? null : <DictHistory dict={dict} />}
       {/* Прототип: у кодов стран пояснение — под списком и историей. */}
       {dict === 'phones' ? <Note icon="info">{t('pdicts.note.phones')}</Note> : null}
-      {edit && dict === 'types' ? (
+      {askStatus ? (
+        <BulkStatusDialog
+          key={`status-${askStatus.n}`}
+          open={askStatus.open}
+          onClose={() => setAskStatus(closeSlot)}
+          ask={askStatus.data}
+          onDone={askStatus.data.done}
+        />
+      ) : null}
+      {bulkDue ? (
+        <BulkDueDialog
+          key={`due-${bulkDue.n}`}
+          open={bulkDue.open}
+          onClose={() => setBulkDue(closeSlot)}
+          rows={bulkDue.data.rows}
+          onDone={bulkDue.data.done}
+        />
+      ) : null}
+      {dict === 'gked' ? null : edit && dict === 'types' ? (
         <TypeDialog
           key={`edit-${edit.n}`}
           open={edit.open}
@@ -635,7 +823,11 @@ export function ValueDictList({ dict }: { dict: AdminValueDict }) {
       <ConfirmDialog
         open={askDelete !== null}
         onClose={() => setAskDelete(null)}
-        title={t('pdicts.delete.title', { name: askDelete ? ugnsName(dict, askDelete) : '' })}
+        title={
+          dict === 'gked'
+            ? t('pdicts.gked.del_title', { code: askDelete?.code ?? '' })
+            : t('pdicts.delete.title', { name: askDelete ? ugnsName(dict, askDelete) : '' })
+        }
         text={t(DELETE_TEXT[dict] ?? 'pdicts.delete.text')}
         ok={t('pdicts.action.delete')}
         danger

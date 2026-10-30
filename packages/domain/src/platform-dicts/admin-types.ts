@@ -46,6 +46,7 @@ export const REPORT_TYPE_FIELDS = [
   'shiftToWorkday',
   'act',
   'payments',
+  'gked',
 ] as const;
 export type ReportTypeField = (typeof REPORT_TYPE_FIELDS)[number];
 

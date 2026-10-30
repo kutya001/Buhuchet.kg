@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery } from '@tanstack/react-query';
 import {
   BIZ_SIZES,
+  formatDateRu,
   NEW_REPORT_TYPE,
   payScheduleText,
   pluralForm,
@@ -50,6 +51,7 @@ import { api, callApi } from '../api-client';
 import { fieldError } from '../auth/fields';
 import { useErrorText, useT } from '../l10n/provider';
 import { duesNote, useDuesPreview } from './dues-preview';
+import { GkedRuleFields, useGkedRuleDraft } from './gked-rule-fields';
 import {
   fetchAdminDictValue,
   pdictsBasesQuery,
@@ -201,6 +203,9 @@ export function TypeDialog({
     defaultValues: formOf(item),
   });
   const payments = useFieldArray({ control, name: 'payments' });
+  // «Виды деятельности (ГКЭД)» вида (задача 2.38): перечни ИП и ИТД — справочно.
+  const gked = useGkedRuleDraft(item?.data.gked);
+  const [gkedError, setGkedError] = useState<string>();
   const organs = useQuery(pdictsOrgansQuery);
   const regimes = useQuery(pdictsRegimesQuery);
   const bases = useQuery(pdictsBasesQuery);
@@ -225,13 +230,15 @@ export function TypeDialog({
     if (!fresh) return toast(t('err.unknown'), { bad: true });
     setCurrent(fresh);
     reset(formOf(fresh));
+    gked.reset(fresh.data.gked);
     setChanged(false);
   };
 
   const submit = (event: FormEvent) =>
     void handleSubmit(async (values) => {
-      if (current && !isDirty) return onClose();
-      const body = reportTypeBody(values);
+      if (current && !isDirty && !gked.dirty) return onClose();
+      const body = { ...reportTypeBody(values), ...(gked.dirty ? { gked: gked.value() } : {}) };
+      setGkedError(undefined);
       const res = await callApi(() =>
         current
           ? pd[':dict'][':code'].$put({
@@ -249,6 +256,7 @@ export function TypeDialog({
       }
       const code = res.error.code;
       if (code === 'record_changed') return setChanged(true);
+      if (code === 'gked_unknown') return setGkedError(errorText(res.error));
       const field = (res.error.details as { field?: string } | undefined)?.field ?? '';
       const target: [Path<Form>, UiTextKey] | undefined =
         code === 'invalid_link' && LINK_TEXT[field]
@@ -452,7 +460,7 @@ export function TypeDialog({
       size="mid"
       title={current ? current.name : t('pdicts.type.title_new')}
       sub={t('pdicts.type.sub')}
-      dirty={isDirty}
+      dirty={isDirty || gked.dirty}
       footer={
         <>
           <button type="button" className={buttonClass('ghost')} onClick={onClose}>
@@ -643,6 +651,7 @@ export function TypeDialog({
           {v.kind === 'regime'
             ? chips('regimes', t('pdicts.type.regimes'), regimes.data ?? [])
             : null}
+          <GkedRuleFields id={id} state={gked} error={gkedError} />
           <div className="col-span-full">
             <b className="font-semibold">{t('pdicts.type.pick')}</b>
             <Hint>{t('pdicts.type.pick_hint')}</Hint>
@@ -857,6 +866,17 @@ export function TypeDialog({
               act: t(`report.act.${act}`),
             })}
           </Note>
+        ) : null}
+        {/* Прототип typeEditDlg: когда вид сверяли с ГНС (задача 2.37, часть 3). */}
+        {current ? (
+          <Hint>
+            {current.gns?.at
+              ? t('pdicts.gns.hint', {
+                  date: formatDateRu(current.gns.at),
+                  who: current.gns.by ?? '',
+                })
+              : t('pdicts.gns.hint_none')}
+          </Hint>
         ) : null}
         {v.kind === 'internal' ? <Note>{t('pdicts.type.internal_note')}</Note> : null}
         {ruleChanged || periodChanged ? (

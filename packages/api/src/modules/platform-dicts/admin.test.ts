@@ -1,3 +1,4 @@
+import { schema } from '@buhuchet/db';
 import { databaseAvailable, seedAllPlatformDictionaries } from '@buhuchet/db/testing';
 import { DICT_REQUEST_HOURLY_LIMIT } from '@buhuchet/domain';
 import {
@@ -20,6 +21,7 @@ import {
   ListValues,
   PdictsTabCounts,
 } from '@buhuchet/shared';
+import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { apiRequest, createStaffFixture, signIn, TEST_PASSWORD } from '../../testing';
 
@@ -713,9 +715,18 @@ describe.skipIf(!databaseAvailable())('Админка → «Справочник
     expect(PdictsTabCounts.parse(await (await get(`${P}/tab-counts`)).json()).requests).toBe(0);
   });
 
-  it(`«Попросить добавить» — не больше ${DICT_REQUEST_HOURLY_LIMIT} запросов в час от сотрудника`, async () => {
+  it(`«Попросить добавить» — не больше ${DICT_REQUEST_HOURLY_LIMIT} запросов в час от организации`, async () => {
     const post = (what: string, cookie = acc) =>
       send('POST', '/api/dict-requests', { dict: 'types', what }, cookie);
+    // Запросы организации из прошлых проверок — не в счёт этой.
+    await f.t.admin.db
+      .delete(schema.rateLimits)
+      .where(
+        and(
+          eq(schema.rateLimits.kind, 'dict_request'),
+          eq(schema.rateLimits.subject, f.a.orgId),
+        ),
+      );
     for (let i = 1; i <= DICT_REQUEST_HOURLY_LIMIT; i++) {
       expect((await post(`Вид ${i}`)).status).toBe(201);
     }
@@ -725,9 +736,10 @@ describe.skipIf(!databaseAvailable())('Админка → «Справочник
     expect(limited.status).toBe(429);
     expect(await errorOf(limited)).toMatchObject({
       code: 'dict_request_rate',
-      details: { n: DICT_REQUEST_HOURLY_LIMIT },
+      message: `Не больше ${DICT_REQUEST_HOURLY_LIMIT} запросов за час. Отправьте этот запрос позже`,
+      details: { n: DICT_REQUEST_HOURLY_LIMIT, field: 'what' },
     });
-    // Предел — у каждого сотрудника свой.
-    expect((await post('Вид владельца', owner)).status).toBe(201);
+    // Предел — у организации: другой её сотрудник тоже не отправит (ТЗ v63, docs/deviations.md п. Д-4).
+    expect((await post('Вид владельца', owner)).status).toBe(429);
   });
 });

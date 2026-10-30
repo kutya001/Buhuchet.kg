@@ -1,9 +1,10 @@
 import { searchText } from '../common/list';
 import { formatDateRu, isIsoDate, type IsoDate } from '../common/dates';
+import { formatSom, parseSom } from '../common/money';
 import { payScheduleText } from '../dicts/report-types';
 import type { BenefitDueOverride } from '../dicts/value-guide';
 import type { Translate, UiTextKey } from '../l10n/texts';
-import { ADMIN_DICT_META, type AdminValueDict } from './admin';
+import { ADMIN_DICT_META, isAdminValueDict, type AdminValueDict } from './admin';
 import { NEW_REPORT_TYPE, parsePaySchedule, REPORT_DUE_AFTER_MAX } from './admin-types';
 import {
   BANK_KINDS,
@@ -18,8 +19,24 @@ import {
   REPORT_ACTS,
   REPORT_KINDS,
   REPORT_PERIODS,
+  type GkedRule,
   type ReportPayment,
 } from './catalog';
+import { CALENDAR_DAY_KINDS } from './calendar';
+import {
+  GKED_CODE_PATTERN,
+  GKED_GROUP_ID_PATTERN,
+  GKED_LEVEL_ORDER,
+  gkedGroupActText,
+  gkedLevelKey,
+  gkedRuleKeep,
+  gkedRuleText,
+  parseGkedCodes,
+  parseGkedGroupActs,
+  parseGkedRule,
+  type GkedGroupActs,
+  type GkedRuleList,
+} from './gked-admin';
 
 /*
  * Админка → «Справочники платформы» → «Выгрузить» и «Загрузить» (задача 2.37; ТЗ «Выгрузка и загрузка
@@ -28,8 +45,28 @@ import {
  * тот же, что выгрузка: администратор правит его в Excel и загружает обратно; строки сопоставляются по
  * коду, поэтому переименование не создаёт дубль. Удаления через загрузку нет — только «Нет» в
  * «Активно». Проверки значения (связи, повторы, обязательные поля) — те же, что у окна правки: их делают
- * сервер и база при сравнении.
+ * сервер и база при сравнении. Кроме справочников значений, так же выгружаются и загружаются
+ * производственный календарь (строки — по дате), три таблицы «Налогов и ставок» и группы кодов ГКЭД
+ * (задачи 2.37, часть 3, и 2.38).
  */
+
+/**
+ * Справочники с «Выгрузить» и «Загрузить», которые правятся не общим механизмом: календарь, налоги,
+ * ставки единого налога и налога на имущество, группы кодов ГКЭД.
+ */
+export const IO_SECTION_DICTS = ['calendar', 'taxes', 'enrates', 'proprates', 'gkgroups'] as const;
+export type IoSectionDict = (typeof IO_SECTION_DICTS)[number];
+
+/** Все справочники с «Выгрузить» и «Загрузить». */
+export type IoDict = AdminValueDict | IoSectionDict;
+
+export function isIoSectionDict(value: string): value is IoSectionDict {
+  return (IO_SECTION_DICTS as readonly string[]).includes(value);
+}
+
+export function isIoDict(value: string): value is IoDict {
+  return isAdminValueDict(value) || isIoSectionDict(value);
+}
 
 /** Значение справочника в файле: код, название, «Активно» и поля значения (`ADMIN_DICT_META.fields`). */
 export interface IoValue {
@@ -57,6 +94,8 @@ export type IoRefs = Readonly<Record<IoRefDict, readonly IoRef[]>>;
 export interface IoContext {
   t: Translate;
   refs: IoRefs;
+  /** Коды справочника ГКЭД — для перечней «Виды деятельности (ГКЭД)» и кодов групп. */
+  gked?: ReadonlySet<string>;
 }
 
 type IoField =
@@ -75,7 +114,18 @@ type IoField =
   | { type: 'payments' }
   | { type: 'schedule' }
   | { type: 'contacts' }
-  | { type: 'dueRules' };
+  | { type: 'dueRules' }
+  /**
+   * Перечень правила ГКЭД (`data.gked`): `in` — «47, 56.10; кроме 47.26» (и «Кроме»), остальные —
+   * коды через запятую («Предупреждать при ГКЭД», перечни патента для ИП и ИТД).
+   */
+  | { type: 'gked'; part: 'in' | Exclude<GkedRuleList, 'in' | 'ex'> }
+  /** Коды ГКЭД через запятую (коды группы). */
+  | { type: 'gkedCodes' }
+  /** Действие группы кодов: «Запрет», «Предупреждение» или по кодам. */
+  | { type: 'groupActs' }
+  /** Сумма в сомах с копейками («12,50») — в тыйынах. */
+  | { type: 'money' };
 
 /** Столбец файла: поле, заголовок (ключ словаря) и как его писать и читать. */
 export interface IoColumn {
@@ -133,12 +183,38 @@ const after = (empty: 'keep' | 'null'): IoField => ({
 });
 const month = (empty: 'keep' | 'null'): IoField => ({ type: 'int', min: 1, max: 12, empty });
 
+/** Столбцы «Виды деятельности (ГКЭД)»: ключ столбца `gked` — перечень и «Кроме», `gked.<перечень>` — остальные. */
+const GKED = col('gked', 'pdicts.io.col.gked', { type: 'gked', part: 'in' });
+const GKED_WARN = col('gked.warn', 'pdicts.io.col.gked_warn', { type: 'gked', part: 'warn' });
+const GKED_LISTS = [
+  col('gked.ip', 'pdicts.io.col.gked_ip', { type: 'gked', part: 'ip' }),
+  col('gked.ipEx', 'pdicts.io.col.gked_ip_ex', { type: 'gked', part: 'ipEx' }),
+  col('gked.itd', 'pdicts.io.col.gked_itd', { type: 'gked', part: 'itd' }),
+];
+
+/** Дата ячейки календаря — как в выгрузке (ГГГГ-ММ-ДД); «31.12.2026» узнаётся (прототип DX.calendar). */
+const isoDay = (text: string) => {
+  const s = text.trim();
+  const ru = /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/.exec(s);
+  return ru ? `${ru[3]}-${ru[2]!.padStart(2, '0')}-${ru[1]!.padStart(2, '0')}` : s;
+};
+
+const PROPERTY_MONEY = [
+  ['homeA', 'pdicts.prop.col.home_a'],
+  ['homeB', 'pdicts.prop.col.home_b'],
+  ['homeLand', 'pdicts.prop.col.home_land'],
+  ['bizA', 'pdicts.prop.col.biz_a'],
+  ['bizB', 'pdicts.prop.col.biz_b'],
+  ['bizLand', 'pdicts.prop.col.biz_land'],
+] as const;
+
 /**
  * Столбцы файла справочника — как в прототипе (DX), плюс поля продукта, которых в прототипе нет («Не
  * для режимов», «Размер бизнеса», свой срок оплаты, «Что сверить»…): ТЗ — «выгрузка содержит все поля
- * значения». «Виды деятельности (ГКЭД)» добавит задача 2.38.
+ * значения»; «Виды деятельности (ГКЭД)» — у режимов, статусов, видов отчётов, налогов и ставок единого
+ * налога, у режимов и статусов — и «Предупреждать при ГКЭД» (задача 2.38).
  */
-export const IO_COLUMNS: Readonly<Record<AdminValueDict, readonly IoColumn[]>> = {
+export const IO_COLUMNS: Readonly<Record<IoDict, readonly IoColumn[]>> = {
   types: [
     CODE,
     NAME,
@@ -207,6 +283,7 @@ export const IO_COLUMNS: Readonly<Record<AdminValueDict, readonly IoColumn[]>> =
     col('description', 'pdicts.io.col.description'),
     col('clientNote', 'pdicts.io.col.client_note'),
     col('article', 'pdicts.io.col.article'),
+    GKED,
     col('verify', 'pdicts.io.col.verify', { type: 'yesno' }),
     col('verifyNote', 'pdicts.io.col.verify_note'),
     col('active', 'pdicts.io.col.active_type', { type: 'yesno' }),
@@ -235,6 +312,9 @@ export const IO_COLUMNS: Readonly<Record<AdminValueDict, readonly IoColumn[]>> =
     col('combines', 'pdicts.io.col.combines'),
     col('accountantNote', 'pdicts.io.col.acc'),
     col('article', 'pdicts.io.col.article'),
+    GKED,
+    ...GKED_LISTS,
+    GKED_WARN,
     ACTIVE,
   ],
   benefits: [
@@ -256,6 +336,8 @@ export const IO_COLUMNS: Readonly<Record<AdminValueDict, readonly IoColumn[]>> =
     col('term', 'pdicts.io.col.term'),
     col('verify', 'pdicts.io.col.verify', { type: 'yesno' }),
     col('verifyNote', 'pdicts.io.col.verify_note'),
+    GKED,
+    GKED_WARN,
     col(
       'kind',
       'pdicts.io.col.kind',
@@ -324,14 +406,101 @@ export const IO_COLUMNS: Readonly<Record<AdminValueDict, readonly IoColumn[]>> =
   ],
   cats: [CODE, NAME, col('note', 'pdicts.io.col.note'), ACTIVE],
   reasons: [CODE, NAME, col('note', 'pdicts.io.col.note'), ACTIVE],
+  // ГКЭД (прототип DX.gked): код — заглавными, «Входит в» — код верхнего уровня.
+  gked: [
+    col('code', 'pdicts.io.col.code', { type: 'text' }, { normalize: upper }),
+    NAME,
+    col(
+      'level',
+      'pdicts.io.col.level',
+      enumOf(GKED_LEVEL_ORDER, (v) => gkedLevelKey(v)),
+      { required: true },
+    ),
+    col('parentCode', 'pdicts.io.col.parent', { type: 'text' }, { normalize: upper }),
+    col('note', 'pdicts.io.col.remark'),
+    col('active', 'pdicts.io.col.gked_active', { type: 'yesno' }),
+  ],
+  // Производственный календарь (прототип DX.calendar): строки — по дате текущего и следующего года.
+  calendar: [
+    col('code', 'pdicts.io.col.date', { type: 'text' }, { normalize: isoDay }),
+    col('name', 'pdicts.io.col.name'),
+    col(
+      'kind',
+      'pdicts.io.col.kind',
+      enumOf(CALENDAR_DAY_KINDS, (v) => `pdicts.io.cal.kind.${v}`),
+      { required: true },
+    ),
+    col(
+      'rule',
+      'pdicts.io.col.cal_rule',
+      enumOf(['once', 'yearly'], (v) => `pdicts.io.cal.rule.${v}`, 'once'),
+    ),
+  ],
+  // «Налоги и обязательные платежи» (прототип DX.taxes).
+  taxes: [
+    CODE,
+    NAME,
+    col('group', 'pdicts.io.col.tax_group'),
+    col('level', 'pdicts.io.col.tax_level'),
+    col('payers', 'pdicts.io.col.payers'),
+    col('base', 'pdicts.io.col.base'),
+    col('rates', 'pdicts.io.col.rates'),
+    col('period', 'pdicts.io.col.tax_period'),
+    col('reportDue', 'pdicts.io.col.report_due'),
+    col('payDue', 'pdicts.io.col.pay_due'),
+    col('form', 'pdicts.io.col.form'),
+    col('organ', 'pdicts.io.col.organ'),
+    col('art', 'pdicts.io.col.article'),
+    col('reportTypes', 'pdicts.io.col.types', { type: 'list' }),
+    col('note', 'pdicts.io.col.remark'),
+    GKED,
+    col('verify', 'pdicts.io.col.verify', { type: 'yesno' }),
+  ],
+  // «Ставки единого налога» (прототип DX.enrates) и поля продукта: ставки безнал и нал, «Когда
+  // применяется», «Добавляется к ставкам».
+  enrates: [
+    CODE,
+    col('name', 'pdicts.io.col.activity', { type: 'text' }, { required: true }),
+    col('rate', 'pdicts.io.col.rate', { type: 'text' }, { required: true }),
+    col('rateCashless', 'pdicts.io.col.rate_cashless'),
+    col('rateCash', 'pdicts.io.col.rate_cash'),
+    col('conditions', 'pdicts.io.col.cond'),
+    col('article', 'pdicts.io.col.article'),
+    col('explanation', 'pdicts.io.col.explain'),
+    col('addsTo', 'pdicts.io.col.adds_to', { type: 'list' }),
+    GKED,
+    ACTIVE,
+  ],
+  // «Ставки налога на имущество» (прототип DX.proprates): сомы за 1 м² в год.
+  proprates: [
+    CODE,
+    col('name', 'pdicts.io.col.place', { type: 'text' }, { required: true }),
+    col('region', 'pdicts.io.col.oblast'),
+    ...PROPERTY_MONEY.map(([key, title]) => col(key, title, { type: 'money' })),
+  ],
+  // «Группы кодов ГКЭД» (прототип DX.gkgroups).
+  gkgroups: [
+    CODE,
+    NAME,
+    col('codes', 'pdicts.io.col.codes', { type: 'gkedCodes' }, { required: true }),
+    col('en', 'pdicts.io.col.en', { type: 'groupActs' }),
+    col('spino', 'pdicts.io.col.spino', { type: 'groupActs' }),
+    col('ask', 'pdicts.io.col.ask'),
+    col('why', 'pdicts.io.col.why'),
+  ],
 };
 
 /**
  * Код нового значения в файле: латиница, цифры, «-» и «_» у видов отчётов, оснований и УГНС (ключи
  * вроде `nds`, `employees`), у остальных — ещё и кириллица (`РЕЖ-12`, `ФС-25`); до 40 знаков. Код
- * страны — две латинские буквы (KG, KZ…), как в прототипе; строчные приводятся к заглавным.
+ * страны — две латинские буквы (KG, KZ…), как в прототипе; строчные приводятся к заглавным. Код ГКЭД —
+ * в формате классификатора, у календаря — дата, у группы кодов — латиница.
  */
-export function ioCodeValid(dict: AdminValueDict, code: string): boolean {
+export function ioCodeValid(dict: IoDict, code: string): boolean {
+  if (dict === 'gked') return GKED_CODE_PATTERN.test(code);
+  if (dict === 'calendar') return isIsoDate(code);
+  if (dict === 'gkgroups') return GKED_GROUP_ID_PATTERN.test(code);
+  if (!isAdminValueDict(dict)) return /^[\p{L}\d][\p{L}\d_-]{0,39}$/u.test(code);
   if (dict === 'phones') return /^[A-Z]{2}$/.test(code);
   if ('key' in ADMIN_DICT_META[dict].code) return /^[a-z0-9][a-z0-9_-]{0,39}$/i.test(code);
   return /^[\p{L}\d][\p{L}\d_-]{0,39}$/u.test(code);
@@ -379,6 +548,9 @@ function valueOf(x: IoValue, key: string): unknown {
   return x.data[key];
 }
 
+/** Правило ГКЭД значения (`data.gked`). */
+const ruleOf = (x: IoValue) => (x.data.gked ?? null) as GkedRule | null;
+
 /** Текст ячейки файла — как в выгрузке прототипа (`DX[k].cols[i][2]`). */
 export function ioCellText(column: IoColumn, x: IoValue, ctx: IoContext): string {
   if (column.shown && !column.shown(x)) return '';
@@ -417,16 +589,29 @@ export function ioCellText(column: IoColumn, x: IoValue, ctx: IoContext): string
         .join('; ');
     case 'dueRules':
       return dueRulesText((v ?? []) as BenefitDueOverride[], ctx.t);
+    case 'gked': {
+      const rule = ruleOf(x);
+      if (f.part === 'in') return gkedRuleText(rule, ctx.t);
+      return (rule?.[f.part] ?? []).join(', ');
+    }
+    case 'gkedCodes':
+      return ((v ?? []) as string[]).join(', ');
+    case 'groupActs': {
+      const acts = (v ?? null) as GkedGroupActs;
+      return acts ? gkedGroupActText({ en: acts, spino: null }, 'en', ctx.t) : '';
+    }
+    case 'money':
+      return typeof v === 'number' ? formatSom(v, 'auto') : '';
   }
 }
 
 /** Строка заголовков файла. */
-export function ioHeader(dict: AdminValueDict, t: Translate): string[] {
+export function ioHeader(dict: IoDict, t: Translate): string[] {
   return IO_COLUMNS[dict].map((c) => t(c.title));
 }
 
 /** Строка файла по значению. */
-export function ioRow(dict: AdminValueDict, x: IoValue, ctx: IoContext): string[] {
+export function ioRow(dict: IoDict, x: IoValue, ctx: IoContext): string[] {
   return IO_COLUMNS[dict].map((c) => ioCellText(c, x, ctx));
 }
 
@@ -739,6 +924,36 @@ export function parseIoCell(column: IoColumn, text: string, ctx: IoContext): Par
       return parseContacts(s);
     case 'dueRules':
       return parseDueRules(ctx, s);
+    case 'gked': {
+      const known = ctx.gked ?? new Set<string>();
+      const parsed = f.part === 'in' ? parseGkedRule(s, known, ctx.t) : parseGkedCodes(s, known);
+      if ('unknown' in parsed) {
+        return bad(ctx, 'pdicts.io.err.gked_unknown', { codes: parsed.unknown.join(', ') });
+      }
+      return { value: 'codes' in parsed ? parsed.codes : parsed };
+    }
+    case 'gkedCodes': {
+      const parsed = parseGkedCodes(s, ctx.gked ?? new Set<string>());
+      if ('unknown' in parsed) {
+        return bad(ctx, 'pdicts.io.err.gked_unknown', { codes: parsed.unknown.join(', ') });
+      }
+      return parsed.codes.length ? { value: parsed.codes } : bad(ctx, 'pdicts.io.err.empty');
+    }
+    case 'groupActs': {
+      const parsed = parseGkedGroupActs(s, ctx.gked ?? new Set<string>(), ctx.t);
+      if ('error' in parsed) {
+        return bad(
+          ctx,
+          parsed.error === 'whole' ? 'pdicts.io.err.group_act' : 'pdicts.io.err.group_acts',
+        );
+      }
+      return { value: parsed.value };
+    }
+    case 'money': {
+      if (!s) return { value: 0 };
+      const v = parseSom(s);
+      return v === null || v < 0 ? bad(ctx, 'pdicts.io.err.money') : { value: v };
+    }
   }
 }
 
@@ -760,7 +975,7 @@ export type IoParseResult =
  * строки.
  */
 export function parseIoRows(
-  dict: AdminValueDict,
+  dict: IoDict,
   table: readonly (readonly string[])[],
   ctx: IoContext,
 ): IoParseResult {
@@ -797,11 +1012,11 @@ export function parseIoRows(
  * Новое значение до разбора строки: поля по умолчанию — как у окна «+ Добавить» (у вида отчёта —
  * `NEW_REPORT_TYPE`, «Тип» — тип нового значения, «Для ЕНД» — организация), действующее.
  */
-export function ioNewValue(dict: AdminValueDict, code: string): IoValue {
-  const meta = ADMIN_DICT_META[dict];
+export function ioNewValue(dict: IoDict, code: string): IoValue {
   const data: Record<string, unknown> = {};
   for (const c of IO_COLUMNS[dict]) {
     if (c.key === 'code' || c.key === 'name' || c.key === 'active') continue;
+    if (c.key.startsWith('gked')) continue;
     const f = c.field;
     const fallback =
       dict === 'types' ? NEW_REPORT_TYPE[c.key as keyof typeof NEW_REPORT_TYPE] : undefined;
@@ -811,8 +1026,17 @@ export function ioNewValue(dict: AdminValueDict, code: string): IoValue {
     else if (f.type === 'text') data[c.key] = '';
     else if (f.type === 'enum') data[c.key] = f.values[0];
     else if (f.type === 'ref') data[c.key] = '';
+    else if (f.type === 'money') data[c.key] = 0;
+    else if (f.type === 'groupActs') data[c.key] = null;
     else data[c.key] = [];
   }
+  if (IO_COLUMNS[dict].some((c) => c.key === 'gked')) data.gked = null;
+  if (!isAdminValueDict(dict)) {
+    if (dict === 'calendar') data.rule = 'once';
+    return { code, name: '', active: true, data };
+  }
+  const meta = ADMIN_DICT_META[dict];
+  if (dict === 'gked') data.parentCode = null;
   if (meta.kind) data.kind = meta.kind.default;
   if ('payer' in data && dict !== 'types') data.payer = 'all';
   if ('declarationFor' in data) data.declarationFor = 'org';
@@ -821,9 +1045,18 @@ export function ioNewValue(dict: AdminValueDict, code: string): IoValue {
 
 /** Значение после строки файла: поля из файла поверх прежних (у нового — поверх полей по умолчанию). */
 export function ioMerge(base: IoValue, values: Readonly<Record<string, unknown>>): IoValue {
-  const data = Object.fromEntries(
-    Object.entries(values).filter(([k]) => k !== 'code' && k !== 'name' && k !== 'active'),
+  const data: Record<string, unknown> = Object.fromEntries(
+    Object.entries(values).filter(
+      ([k]) => k !== 'code' && k !== 'name' && k !== 'active' && !k.startsWith('gked'),
+    ),
   );
+  // Перечни ГКЭД — в правило значения; служебные признаки правила сохраняются (прототип gkRuleKeep).
+  const lists: Partial<Record<GkedRuleList, readonly string[]>> = {};
+  for (const [k, v] of Object.entries(values)) {
+    if (k === 'gked') Object.assign(lists, v as { in: string[]; ex: string[] });
+    else if (k.startsWith('gked.')) lists[k.slice(5) as GkedRuleList] = v as string[];
+  }
+  if (Object.keys(lists).length) data.gked = gkedRuleKeep(ruleOf(base), lists);
   return {
     code: base.code,
     name: typeof values.name === 'string' ? values.name : base.name,

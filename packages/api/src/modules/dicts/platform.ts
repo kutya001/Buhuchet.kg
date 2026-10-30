@@ -330,7 +330,10 @@ export const createDictRequestRoute = createRoute({
   },
 });
 
-/** Предел «Попросить добавить» (docs/decisions.md, п. Д-2): запросов за час от одного пользователя. */
+/**
+ * Предел «Попросить добавить» (docs/decisions.md, п. Д-2; ТЗ v63): запросов за час от одной
+ * организации.
+ */
 export const DICT_REQUEST_RATE_LIMIT: RateLimit = {
   kind: 'dict_request',
   max: DICT_REQUEST_HOURLY_LIMIT,
@@ -338,27 +341,26 @@ export const DICT_REQUEST_RATE_LIMIT: RateLimit = {
 };
 
 /**
- * Отправить запрос; больше `DICT_REQUEST_HOURLY_LIMIT` за час от пользователя — 429
- * `dict_request_rate`, чтобы запросами не завалили «Запросы» администратора. Попытка с неверными
- * данными (400) в счёт не идёт: тело проверено раньше.
+ * Отправить запрос; больше `DICT_REQUEST_HOURLY_LIMIT` за час от организации — 429
+ * `dict_request_rate` под полем «Что добавить» (прототип `reqHour`), чтобы запросами не завалили
+ * «Запросы» администратора. Попытка с неверными данными (400) в счёт не идёт: тело проверено раньше.
  */
 export function createDictRequestHandler(
   deps: ApiDeps,
 ): RouteHandler<typeof createDictRequestRoute, AppEnv> {
   return async (c) => {
     const body = c.req.valid('json');
-    const userId = c.get('session')!.userId;
-    // ОТКЛОНЕНИЕ: docs/deviations.md#Д-4 — не больше 20 запросов в час от пользователя.
-    const take = await takeRateLimit(deps.db, DICT_REQUEST_RATE_LIMIT, userId);
+    const ctx = orgContextOf(c);
+    const take = await takeRateLimit(deps.db, DICT_REQUEST_RATE_LIMIT, ctx.orgId);
     if (!take.ok) {
       apiFail(
         429,
         'dict_request_rate',
-        `Не больше ${DICT_REQUEST_HOURLY_LIMIT} запросов за час. Попробуйте позже.`,
-        { n: DICT_REQUEST_HOURLY_LIMIT },
+        `Не больше ${DICT_REQUEST_HOURLY_LIMIT} запросов за час. Отправьте этот запрос позже`,
+        { n: DICT_REQUEST_HOURLY_LIMIT, field: 'what' },
       );
     }
-    const created = await withOrgContext(deps.db, orgContextOf(c), (tx) =>
+    const created = await withOrgContext(deps.db, ctx, (tx) =>
       createDictRequest(tx, { dict: body.dict, what: body.what, comment: body.comment ?? '' }),
     );
     return c.json(requestBody(created), 201);

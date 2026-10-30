@@ -2,8 +2,14 @@ import {
   ADMIN_DICT_META,
   ADMIN_VALUE_DICTS,
   auditActorName,
+  bishkekDate,
+  IO_SECTION_DICTS,
+  isIoSectionDict,
   type AdminValueDict,
+  type IoDict,
   type IoRef,
+  type IoSectionDict,
+  type IsoDate,
   type IoRefs,
   type IoValue,
   type ListQuery,
@@ -28,6 +34,7 @@ import {
   type ListPageResult,
   type ListTexts,
 } from './list';
+import { SECTION_WRITERS } from './admin-io-sections';
 import { writePlatformHistory } from './platform-history';
 import { mergeRedueScopes, type RedueScope } from './reports-redue';
 import {
@@ -137,7 +144,7 @@ function uniqueLabels(refs: IoRef[]): IoRef[] {
 /** Загрузка справочника: сколько строк, что сделано, кто и когда; откат — кто и когда. */
 export interface DictLoadRecord {
   id: string;
-  dict: AdminValueDict;
+  dict: IoDict;
   rows: number;
   added: number;
   changed: number;
@@ -153,7 +160,7 @@ export interface DictLoadRecord {
 
 /** Что записать о загрузке: числа, значения до неё и добавленные. */
 export interface DictLoadInput {
-  dict: AdminValueDict;
+  dict: IoDict;
   rows: number;
   errors: number;
   changed: number;
@@ -162,7 +169,10 @@ export interface DictLoadInput {
   added: DictLoadAdded[];
 }
 
-const historyId = (dict: AdminValueDict) => `${dict}:`;
+const historyId = (dict: IoDict) => `${dict}:`;
+
+/** Справочники «Загрузок» по порядку вкладок: справочники значений, затем календарь, налоги, группы. */
+const IO_DICTS: readonly IoDict[] = [...ADMIN_VALUE_DICTS, ...IO_SECTION_DICTS];
 
 /**
  * Запись «Загрузок» (прототип: `PD_LOADS.push`, `pdLog(… загрузка из Excel — добавлено N, изменено N,
@@ -205,11 +215,11 @@ const BY = auditActorValue(l.createdBy, sql`null::text`);
 /** Порядок кодов для сортировки и подпись по словарю — как у «Запросов». */
 const dictLabel = (t: ListTexts) =>
   sql`case ${l.dict} ${sql.join(
-    ADMIN_VALUE_DICTS.map((d) => sql`when ${textLiteral(d)} then ${t(`pdicts.title.${d}`)}`),
+    IO_DICTS.map((d) => sql`when ${textLiteral(d)} then ${t(`pdicts.title.${d}`)}`),
     sql` `,
   )} else ${l.dict} end`;
 const dictOrder = sql`case ${l.dict} ${sql.join(
-  ADMIN_VALUE_DICTS.map((d, i) => sql`when ${textLiteral(d)} then ${sql.raw(String(i))}`),
+  IO_DICTS.map((d, i) => sql`when ${textLiteral(d)} then ${sql.raw(String(i))}`),
   sql` `,
 )} end`;
 
@@ -280,7 +290,7 @@ type Row = { [K in keyof typeof fields]: unknown };
 function toRecord(r: Row): DictLoadRecord {
   return {
     id: r.id as string,
-    dict: r.dict as AdminValueDict,
+    dict: r.dict as IoDict,
     rows: r.rows as number,
     added: r.added as number,
     changed: r.changed as number,
@@ -400,7 +410,11 @@ export type DictLoadRollbackResult =
  * Отказ может прийти после части записей: вызывающий обязан откатить транзакцию (бросить исключение),
  * тогда справочник не меняется.
  */
-export async function rollbackDictLoad(tx: Tx, id: string): Promise<DictLoadRollbackResult> {
+export async function rollbackDictLoad(
+  tx: Tx,
+  id: string,
+  today: IsoDate = bishkekDate(new Date()),
+): Promise<DictLoadRollbackResult> {
   await lockDictLoads(tx);
   const [load] = await tx
     .select({ ...fields, before: l.before, addedValues: l.addedValues })
@@ -408,6 +422,7 @@ export async function rollbackDictLoad(tx: Tx, id: string): Promise<DictLoadRoll
     .where(eq(l.id, id));
   if (!load || load.rolledBackAt) return { ok: false, reason: 'not_found' };
   if (!load.last) return { ok: false, reason: 'not_last' };
+  if (isIoSectionDict(load.dict)) return rollbackSectionLoad(tx, load as SectionLoad, today);
   const dict = load.dict as AdminValueDict;
   const records = new Map((await adminDictRecords(tx, dict)).map((x) => [x.code, x]));
   for (const b of load.before) {
@@ -459,6 +474,17 @@ export async function rollbackDictLoad(tx: Tx, id: string): Promise<DictLoadRoll
       redue.push(active.redue);
     }
   }
+  return finishRollback(tx, id, dict, load.createdAt as Date, redue);
+}
+
+/** Отметка «Откачена» и строка «Истории изменений» справочника. */
+async function finishRollback(
+  tx: Tx,
+  id: string,
+  dict: IoDict,
+  loadedAt: Date,
+  redue: (RedueScope | null | undefined)[],
+): Promise<DictLoadRollbackResult> {
   await tx
     .update(l)
     .set({ rolledBackAt: sql`now()`, rolledBackBy: sql`app.current_user_id()` })
@@ -467,7 +493,7 @@ export async function rollbackDictLoad(tx: Tx, id: string): Promise<DictLoadRoll
     entity: 'platform_dict',
     entityId: historyId(dict),
     action: 'rollback',
-    changes: [{ field: 'loadedAt', to: (load.createdAt as Date).toISOString() }],
+    changes: [{ field: 'loadedAt', to: loadedAt.toISOString() }],
   });
   const [after] = await tx.select(fields).from(l).where(eq(l.id, id));
   return {
@@ -475,6 +501,65 @@ export async function rollbackDictLoad(tx: Tx, id: string): Promise<DictLoadRoll
     load: toRecord(after as Row),
     redue: mergeRedueScopes(redue.map((x) => x ?? null)),
   };
+}
+
+type SectionLoad = {
+  id: string;
+  dict: IoSectionDict;
+  createdAt: Date;
+  before: DictLoadBefore[];
+  addedValues: DictLoadAdded[];
+};
+
+/**
+ * Откат загрузки календаря, «Налогов и ставок» или групп кодов — так же, как у справочника значений:
+ * изменённое после загрузки не трогается (ОТКЛОНЕНИЕ: docs/deviations.md#Д-15), добавленное
+ * убирается, изменённое возвращается к виду до загрузки.
+ */
+async function rollbackSectionLoad(
+  tx: Tx,
+  load: SectionLoad,
+  today: IsoDate,
+): Promise<DictLoadRollbackResult> {
+  const writer = SECTION_WRITERS[load.dict];
+  const records = new Map((await writer.records(tx, today)).map((x) => [x.code, x]));
+  for (const b of load.before) {
+    const now = records.get(b.code);
+    if (!now || !unchangedSince(now, b)) {
+      return { ok: false, reason: 'changed_after', code: b.code, name: now?.name ?? b.name };
+    }
+  }
+  for (const a of load.addedValues) {
+    const now = records.get(a.code);
+    if (now && !unchangedSince(now, a)) {
+      return { ok: false, reason: 'changed_after', code: a.code, name: now.name };
+    }
+  }
+  const failed = (code: string, name: string) =>
+    ({
+      ok: false,
+      reason: 'restore_failed',
+      code,
+      name,
+      result: { ok: false, reason: 'changed' },
+    }) as const;
+  const redue: (RedueScope | null | undefined)[] = [];
+  for (const a of load.addedValues) {
+    const now = records.get(a.code);
+    if (!now) continue;
+    const removed = await writer.remove(tx, now, today);
+    if (!removed.ok) return failed(a.code, now.name);
+    if ('record' in removed) redue.push(removed.redue);
+  }
+  for (const b of load.before) {
+    const now = (await writer.records(tx, today)).find((x) => x.code === b.code);
+    if (!now) return failed(b.code, b.name);
+    const value = { code: b.code, name: b.name, active: b.active, data: b.data };
+    const saved = await writer.save(tx, value, now, today);
+    if (!saved.ok) return failed(b.code, b.name);
+    redue.push(saved.redue);
+  }
+  return finishRollback(tx, load.id, load.dict, load.createdAt, redue);
 }
 
 /** Запись загрузки по номеру (после «Применить» — для ответа). */

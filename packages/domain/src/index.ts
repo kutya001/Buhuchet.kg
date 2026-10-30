@@ -27,6 +27,7 @@ export * from './platform-dicts/admin-types';
 export * from './platform-dicts/admin-system';
 export * from './platform-dicts/admin-taxes';
 export * from './platform-dicts/io';
+export * from './platform-dicts/gked-admin';
 export * from './dicts/report-types';
 export * from './dicts/tax-pick';
 export * from './dicts/org-report-types';

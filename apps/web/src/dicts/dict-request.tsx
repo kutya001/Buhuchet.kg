@@ -73,7 +73,11 @@ function DictRequestDialog({
       api.api['dict-requests'].$post({ json: { dict, what: value, comment: comment.trim() } }),
     );
     setBusy(false);
-    if (!res.ok) return toast(errorText(res.error), { bad: true, icon: 'alert' });
+    if (!res.ok) {
+      // Предел запросов организации за час — под полем «Что добавить» (прототип `reqHour`).
+      if (res.error.code === 'dict_request_rate') return setWhatError(errorText(res.error));
+      return toast(errorText(res.error), { bad: true, icon: 'alert' });
+    }
     void client.invalidateQueries({ queryKey: dictRequestsQuery.queryKey });
     onClose();
     toast(t('dicts.req.sent'), {

@@ -1,4 +1,5 @@
 import { PLATFORM_DICTS_DUES_TEXTS } from './platform-dicts-dues-texts';
+import { PLATFORM_DICTS_GKED_TEXTS } from './platform-dicts-gked-texts';
 import { PLATFORM_DICTS_IO_TEXTS } from './platform-dicts-io-texts';
 import type { UiTextDefault } from './texts';
 
@@ -955,7 +956,7 @@ export const PLATFORM_DICTS_TEXTS = {
     section: E,
   },
   'err.dict_request_rate': {
-    ru: 'Не больше {n} запросов за час. Попробуйте позже.',
+    ru: 'Не больше {n} запросов за час. Отправьте этот запрос позже',
     section: E,
   },
   // «История изменений» (прототип pdLog и pdHistHtml).
@@ -1054,6 +1055,7 @@ export const PLATFORM_DICTS_TEXTS = {
   ...SYSTEM_TEXTS,
   ...PLATFORM_DICTS_IO_TEXTS,
   ...PLATFORM_DICTS_DUES_TEXTS,
+  ...PLATFORM_DICTS_GKED_TEXTS,
   // Месяцы в окне вида отчёта (прототип MONTHS): срок годового отчёта и срок оплаты.
   ...(Object.fromEntries(
     MONTHS.map((ru, i) => [`pdicts.type.month.${i + 1}`, { ru, section: S }]),

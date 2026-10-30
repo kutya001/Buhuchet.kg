@@ -1,5 +1,7 @@
 import { createRoute, type RouteHandler } from '@hono/zod-openapi';
+import { bishkekDate, DICT_HISTORY_SHOWN } from '@buhuchet/domain';
 import {
+  adminSectionHistory,
   adminTaxInfo,
   exportAdminTaxes,
   listAdminTaxPage,
@@ -7,6 +9,7 @@ import {
   withUserContext,
 } from '@buhuchet/db';
 import {
+  AdminDictHistory,
   AdminTaxInfo,
   AdminTaxListParam,
   AdminTaxRowList,
@@ -73,6 +76,42 @@ export function adminTaxInfoHandler(deps: ApiDeps): RouteHandler<typeof adminTax
   return async (c) => {
     const info = await adminTx(deps, c, (tx) => adminTaxInfo(tx));
     return c.json(info, 200);
+  };
+}
+
+export const adminTaxHistoryRoute = createRoute({
+  method: 'get',
+  path: `${P}/history`,
+  tags: ['platform-dicts'],
+  summary: '«История изменений» вкладки «Налоги и ставки»',
+  middleware: [requirePlatformAdmin] as const,
+  responses: {
+    200: {
+      description: `Последние ${DICT_HISTORY_SHOWN} записей налогов и ставок, сначала новые, и сколько их всего`,
+      content: json(AdminDictHistory),
+    },
+    ...denied,
+  },
+});
+
+/** История налогов, ставок единого налога и налога на имущество: загрузки и правки ГКЭД (задача 2.38). */
+export function adminTaxHistoryHandler(
+  deps: ApiDeps,
+): RouteHandler<typeof adminTaxHistoryRoute, AppEnv> {
+  return async (c) => {
+    const history = await adminTx(deps, c, (tx) =>
+      adminSectionHistory(
+        tx,
+        ['taxes', 'enrates', 'proprates'],
+        DICT_HISTORY_SHOWN,
+        bishkekDate(deps.clock.now()),
+      ),
+    );
+    const body: AdminDictHistory = {
+      total: history.total,
+      items: history.items.map((h) => ({ ...h, at: h.at.toISOString() })),
+    };
+    return c.json(body, 200);
   };
 }
 
