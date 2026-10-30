@@ -30,9 +30,12 @@ export interface CompatibilityType {
   regimes: readonly string[];
 }
 
-/** Контрагент: форма собственности, режимы по порядку и строки ЕНС действующего назначения единого налога. */
+/**
+ * Контрагент: форма собственности (в черновике формы её может не быть — тогда «Для кого» не проверяется),
+ * режимы по порядку и строки ЕНС действующего назначения единого налога.
+ */
 export interface CompatibilitySubject {
-  form: { code: string; declarationFor: 'org' | 'ip' };
+  form: { code: string; declarationFor: 'org' | 'ip' } | null;
   regimes: readonly { code: string; name: string }[];
   singleTax: readonly AssignmentEnRate[];
 }
@@ -58,9 +61,9 @@ export function typeIncompatibility(
   date: string,
   t: Translate,
 ): Incompatibility | null {
-  const ip = s.form.declarationFor === 'ip';
-  if (type.payer === 'org' && ip) return { reason: 'for_ip' };
-  if (type.payer === 'ip' && !ip) return { reason: 'for_org' };
+  const ip = s.form?.declarationFor === 'ip';
+  if (s.form && type.payer === 'org' && ip) return { reason: 'for_ip' };
+  if (s.form && type.payer === 'ip' && !ip) return { reason: 'for_org' };
   const codes = s.regimes.map((r) => r.code);
   if (type.kind === 'regime' && codes.length && !type.regimes.some((r) => codes.includes(r))) {
     return { reason: 'regime', regimes: s.regimes.map((r) => r.name) };
@@ -68,7 +71,7 @@ export function typeIncompatibility(
   if (!DECLARATION_TYPES.includes(type.code)) return null;
   const free = s.regimes.find((r) => NO_DECLARATION_REGIMES.includes(r.code));
   if (free) return { reason: 'declaration_regime', regime: free.name };
-  if (s.form.code === FARM_FORM) return { reason: 'declaration_farm' };
+  if (s.form?.code === FARM_FORM) return { reason: 'declaration_farm' };
   const rows = s.singleTax
     .map((e) => ({ e, x: rates.find((r) => r.code === e.code) }))
     .filter((r): r is { e: AssignmentEnRate; x: CompatibilityRate } => !!r.x && !r.x.addsTo.length);

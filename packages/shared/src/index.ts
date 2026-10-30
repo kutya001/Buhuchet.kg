@@ -8,6 +8,7 @@ export * from './contractors';
 export * from './contractor-service';
 export * from './contractor-page';
 export * from './reports';
+export * from './report-pick';
 export * from './tasks';
 export * from './roles';
 export * from './org';

@@ -265,7 +265,7 @@ const PILL_TONES = {
   caution: 'bg-caution-bg text-caution-label',
   warn: 'bg-warn-bg text-warn-label',
   violet: 'bg-violet-bg text-violet',
-  info: 'bg-info-bg text-info',
+  info: 'bg-info-bg text-info-label',
 } as const;
 
 const PILL_SIZES = {
@@ -280,9 +280,9 @@ export function pillClass(size: keyof typeof PILL_SIZES = 'md'): string {
 
 /**
  * Метка (`.pill`): «Привязан», «Основной»; `caution` — оранжевая (`.pill.orange`, «не привязан»),
- * `warn` — жёлтая (`.pill.yellow`, «сверить»), `violet` — фиолетовая (`.pill.purple`, «ждёт» у задачи),
- * `info` — синяя (`.pill.blue`, «Возобновление запланировано»); `sm` — маленькая (`.pill.sm`). В
- * компактном списке метка ниже (`data-pill`).
+ * `warn` — жёлтая (`.pill.yellow`, «сверить»), `violet` — фиолетовая (`.pill.purple`, «ждёт» у задачи);
+ * `info` — синяя (`.pill.blue`, «по УГНС», «Возобновление запланировано»);
+ * `sm` — маленькая (`.pill.sm`). В компактном списке метка ниже (`data-pill`).
  */
 export function Pill({
   tone = 'plain',
