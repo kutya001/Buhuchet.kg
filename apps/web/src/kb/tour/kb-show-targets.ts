@@ -137,6 +137,8 @@ const KB_FIELD_SCREENS: Readonly<Record<string, string>> = {
 const KB_FIELD_WINDOWS: Readonly<Partial<Record<UiTextKey, string>>> = {
   // Моя организация
   'money.org.dialog.new': 'oa',
+  // Контрагенты
+  'cp.form.title_new': 'nc',
   // Задачи
   'task.form.new': 'tk',
   'task.form.edit': 'tk',

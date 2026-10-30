@@ -159,6 +159,8 @@ export function tourDictText(dict: Readonly<Record<string, string>> | undefined,
 
 /** Название без счётчиков: «Сотрудники 12» → «Сотрудники», «Основное 1 из 5» → «Основное». */
 const stripCount = (s: string) => s.replace(/\s*\d+ из \d+.*$/, '').replace(/\s*\d+$/, '');
+/** Название вкладки окна: `data-tab-label`, если в подписи есть номер или отметка, иначе подпись. */
+const tabLabel = (el: Element) => el.getAttribute('data-tab-label') || stripCount(labelOf(el));
 /** Заголовок блока без «· N»: «Файлы · 3» → «Файлы». */
 const stripDot = (s: string) => s.replace(/\s*·\s*\d+.*$/, '').trim();
 
@@ -372,9 +374,7 @@ export class TourDom {
     const find = () => {
       const w = topWindow();
       return w
-        ? [...w.querySelectorAll<HTMLElement>('[role=tab]')].find(
-            (x) => stripCount(labelOf(x)) === label,
-          )
+        ? [...w.querySelectorAll<HTMLElement>('[role=tab]')].find((x) => tabLabel(x) === label)
         : undefined;
     };
     let tab = find();
@@ -734,7 +734,7 @@ export class TourDom {
       });
     }
     visibleIn(w, '[data-window-body] [role=tablist] [role=tab]', false).forEach((tab, n) => {
-      const l = stripCount(labelOf(tab));
+      const l = tabLabel(tab);
       P.push({
         ...c,
         loc: at('[data-window-body] [role=tablist] [role=tab]', n),

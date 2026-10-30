@@ -3,9 +3,9 @@ import { newOrgOwner, uniqueLogin } from './helpers';
 
 // «Показать как», «Обзор экрана» и знакомые элементы (задача 2.31). Шаги засчитываются один раз, а
 // знакомые элементы копятся у пользователя, поэтому каждый тест — со своей новой организацией и её
-// владельцем (`newOrgOwner`). Пункты 48 и 59 приёмки проверяются на экранах «Отчетов для сдачи» и
-// «Контрагентов» — их закрывают задачи этих экранов (docs/decisions.md п. Г-5); здесь тот же механизм
-// на экранах, которые уже есть: «Сотрудники», «Роли», «Задачи».
+// владельцем (`newOrgOwner`). Пункт 48 приёмки проверяется на экранах «Отчетов для сдачи» — его
+// закроет задача этого экрана (docs/decisions.md п. Г-5); здесь тот же механизм на экранах, которые уже
+// есть: «Сотрудники», «Роли», «Задачи». Пункт 59 — на «Контрагентах» (задача 2.09 слита раньше).
 
 async function stepDone(api: APIRequestContext, id: string) {
   const res = await api.get('/api/kb/me');
@@ -199,6 +199,77 @@ test.describe('Этап 2: База знаний — «Показать как»
     await showStep(page, 'roles');
     expect(await position(page)).toEqual({ i: 1, n: roles.titles.length });
     await expect(skipped).toHaveCount(0);
+  });
+
+  // ОТКЛОНЕНИЕ: docs/deviations.md#Г-7
+  test('(п. 59) «Показать как» у шага «Заполнить профиль организации», затем у «Добавить первого контрагента»: показ на «Контрагентах», «Сделать сейчас» открывает «Новый контрагент» и идёт по разделам и полям с пояснениями; «На весь экран» показывается — в показе профиля общих элементов нет, как в прототипе', async ({
+    page,
+    baseURL,
+  }) => {
+    await newOrgOwner(page.request, new URL(baseURL!).origin);
+    await showStep(page, 'profile');
+    await toEnd(page, ['Сделать сейчас']);
+    await endShow(page);
+    await expect(bubble(page)).toHaveCount(0);
+
+    await showStep(page, 'cp1');
+    await expect(page).toHaveURL(/\/app\/cps\/all/);
+    await position(page);
+    await expect(titleOf(page)).toHaveText('Добавить первого контрагента или загрузить из Excel');
+    const screen = await toEnd(page, ['Сделать сейчас']);
+    // «+ Добавить» на телефоне — «+».
+    expect(screen.titles.some((x) => x.startsWith('Кнопка «+'))).toBe(true);
+    await nextButton(page).click();
+    const form = page.getByRole('dialog', { name: 'Новый контрагент', exact: true });
+    await expect(form).toBeVisible();
+    await position(page);
+    await expect(page.locator('[data-tour-skipped]')).toHaveCount(0);
+    const fields = await toEnd(page, ['Понятно, заполню']);
+    expect(fields.titles).toContain('«На весь экран»');
+    expect(fields.titles).toEqual(
+      expect.arrayContaining([
+        'Вкладка «Реквизиты»',
+        'Вкладка «Режим и статусы»',
+        'Вкладка «Отчёты и обслуживание»',
+      ]),
+    );
+    // Пояснение поля — из справочника показов по коду поля прототипа (nc-inn).
+    const inn = fields.titles.indexOf('ИНН · обязательно');
+    expect(inn).toBeGreaterThan(-1);
+    expect(fields.texts[inn]).toBe(
+      '14 цифр. Система проверит, что такого ИНН ещё нет, в том числе среди архивных.',
+    );
+    await nextButton(page).click();
+    await expect(bubble(page)).toHaveCount(0);
+    await expect(form).toBeVisible();
+    expect(await stepDone(page.request, 'cp1')).toBeNull();
+  });
+
+  // ОТКЛОНЕНИЕ: docs/deviations.md#Г-7
+  test('(п. 59) после показа «Ролей» показ «Добавить первого контрагента» пропускает знакомые общие элементы формы: «Пропущено знакомых элементов: N» и «Показать всё», «На весь экран» не показывается', async ({
+    page,
+    baseURL,
+  }) => {
+    await newOrgOwner(page.request, new URL(baseURL!).origin);
+    await showStep(page, 'roles');
+    const roles = await toEnd(page);
+    expect(roles.titles).toContain('«На весь экран»');
+    const saved = knownSaved(page);
+    await nextButton(page).click();
+    await saved;
+    await page.getByRole('button', { name: 'Остаться здесь' }).click();
+
+    await showStep(page, 'cp1');
+    await toEnd(page, ['Сделать сейчас']);
+    await nextButton(page).click();
+    await expect(page.getByRole('dialog', { name: 'Новый контрагент', exact: true })).toBeVisible();
+    await position(page);
+    const skipped = page.locator('[data-tour-skipped]');
+    await expect(skipped).toContainText(/Пропущено знакомых элементов: \d+/);
+    await expect(skipped.getByRole('button', { name: 'Показать всё' })).toBeVisible();
+    const fields = await toEnd(page, ['Понятно, заполню']);
+    expect(fields.titles).not.toContain('«На весь экран»');
+    expect(fields.titles).toContain('Название · обязательно');
   });
 
   test('(проверка задачи #87) шаг «Выбрать тему оформления» без экрана засчитывается только показом: «Показать как» подсвечивает переключатель темы, «Готово» засчитывает шаг', async ({
