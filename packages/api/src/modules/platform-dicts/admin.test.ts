@@ -59,6 +59,9 @@ describe.skipIf(!databaseAvailable())('Админка → «Справочник
       `${P}/forms`,
       `${P}/forms/values?col=active`,
       `${P}/forms/export?cols=name`,
+      `${P}/types`,
+      `${P}/types/values?col=assigned`,
+      `${P}/types/export?cols=assigned`,
       `${P}/groups`,
       `${P}/tab-counts`,
       `${P}/report-type-options`,
@@ -88,6 +91,16 @@ describe.skipIf(!databaseAvailable())('Админка → «Справочник
       ['POST', `${form}/move`, { step: 1, version: 1 }],
       ['POST', `${form}/active`, { active: false, version: 1 }],
       ['DELETE', `${form}?version=1`, undefined],
+      ['POST', `${P}/benefits`, { name: 'Взлом', gives: 'x', dueRules: [], types: [] }],
+      [
+        'PUT',
+        `${P}/benefits/${encodeURIComponent('ЛЬГ-01')}`,
+        { name: 'Взлом', gives: 'x', dueRules: [], version: 1 },
+      ],
+      ['POST', `${P}/types`, { name: 'Взлом', shortName: 'Взлом', act: 'sub' }],
+      ['PUT', `${P}/types/nds`, { name: 'Взлом', shortName: 'Взлом', act: 'sub', version: 1 }],
+      ['POST', `${P}/types/nds/active`, { active: false, version: 1 }],
+      ['DELETE', `${P}/types/nds?version=1`, undefined],
       ['POST', `${P}/calendar`, { date: '2027-01-04', type: 'off', name: 'Взлом' }],
       ['DELETE', `${P}/calendar/2026-03-20?version=1`, undefined],
       ['POST', `${P}/calendar/copy`, undefined],
@@ -341,6 +354,9 @@ describe.skipIf(!databaseAvailable())('Админка → «Справочник
       shortName: 'НДС',
       kind: 'regime',
       active: true,
+      period: 'M',
+      oneOff: false,
+      periodPerAssignment: false,
     });
     const bad = await send('POST', `${P}/bases`, { name: 'Есть НДС', types: ['nds'] });
     expect([bad.status, await errorOf(bad)]).toMatchObject([
@@ -353,6 +369,160 @@ describe.skipIf(!databaseAvailable())('Админка → «Справочник
     expect(created).toMatchObject({ n: null, used: 1, contractors: 0, data: { types: ['roy'] } });
     const taken = await send('POST', `${P}/bases`, { name: 'Есть роялти' });
     expect((await errorOf(taken)).code).toBe('dict_value_taken');
+  });
+
+  it('льгота или статус: «Что даёт» обязательно, связи и «Меняет сроки» проверяются; список по коду', async () => {
+    const list = AdminDictList.parse(await (await get(`${P}/benefits`)).json());
+    expect(list.items[0]).toMatchObject({ code: 'ЛЬГ-01', n: null, data: { kind: 'benefit' } });
+    const rule = { reportType: 'nds', dueDay: 31, dueAfter: 1, dueMonth: null };
+    const bad: [Record<string, unknown>, string, string][] = [
+      [{ gives: ' ' }, 'gives_required', 'gives'],
+      [{ removes: ['nope'] }, 'invalid_link', 'removes'],
+      [{ removes: ['nds'], adds: ['nds'] }, 'benefit_types_both', 'adds'],
+      [{ offices: ['nope'] }, 'invalid_link', 'offices'],
+      [
+        { dueRules: [{ ...rule, dueDay: null, dueAfter: null, payDay: null, payAfter: null }] },
+        'due_rule_empty',
+        'dueRules',
+      ],
+      [{ kind: 'bank' }, 'invalid_kind', 'kind'],
+    ];
+    for (const [patch, code, field] of bad) {
+      const res = await send('POST', `${P}/benefits`, {
+        name: 'Резидент СЭЗ',
+        gives: 'Освобождение от НДС',
+        ...patch,
+      });
+      expect([res.status, await errorOf(res)], code).toMatchObject([
+        400,
+        { code, details: { field } },
+      ]);
+    }
+    // День срока вне 1–31 и неверная дата — схема.
+    const day = await send('POST', `${P}/benefits`, {
+      name: 'Резидент СЭЗ',
+      gives: 'Освобождение от НДС',
+      dueRules: [{ ...rule, dueDay: 32, payDay: null, payAfter: null }],
+    });
+    expect(day.status).toBe(400);
+    const date = await send('POST', `${P}/benefits`, {
+      name: 'Резидент СЭЗ',
+      gives: 'Освобождение от НДС',
+      validUntil: '31.12.2030',
+    });
+    expect(date.status).toBe(400);
+
+    const res = await send('POST', `${P}/benefits`, {
+      name: 'Резидент СЭЗ',
+      gives: 'Освобождение от НДС',
+      kind: 'status',
+      validUntil: '2030-12-31',
+      verify: true,
+      adds: ['soc'],
+      dueRules: [{ ...rule, payDay: 25, payAfter: 1 }],
+    });
+    expect(res.status, await res.clone().text()).toBe(201);
+    const created = AdminDictValue.parse(await res.json());
+    expect(created).toMatchObject({
+      code: 'ЛЬГ-32',
+      n: null,
+      data: {
+        kind: 'status',
+        payer: 'all',
+        validUntil: '2030-12-31',
+        verify: true,
+        adds: ['soc'],
+        dueRules: [{ ...rule, payDay: 25, payAfter: 1 }],
+      },
+    });
+    const taken = await send('POST', `${P}/benefits`, { name: 'Резидент СЭЗ', gives: 'Другое' });
+    expect((await errorOf(taken)).code).toBe('dict_value_taken');
+  });
+
+  it('вид отчёта: краткое название, орган и «Что нужно сделать» обязательны; режимы, платежи, ставки ЕН проверяются', async () => {
+    const list = AdminDictList.parse(await (await get(`${P}/types`)).json());
+    expect(list.items[0]).toMatchObject({
+      code: 'nds',
+      n: null,
+      data: { act: 'both', kind: 'regime', regimes: ['РЕЖ-01'] },
+      texts: { act: 'Сдача + уплата', authorityCode: 'ГНС' },
+      // «Назначен» — по всем организациям; назначений в тесте нет.
+      assigned: 0,
+    });
+    const assigned = ListValues.parse(await (await get(`${P}/types/values?col=assigned`)).json());
+    expect(assigned.items.map((v) => v.value)).toEqual(['0']);
+    const base = {
+      name: 'Плата за загрязнение',
+      shortName: 'Экология',
+      authorityCode: 'ОРГ-01',
+      act: 'sub',
+    };
+    const bad: [Record<string, unknown>, string, string][] = [
+      [{ shortName: ' ' }, 'short_name_required', 'shortName'],
+      [{ authorityCode: '' }, 'authority_required', 'authorityCode'],
+      [{ act: undefined }, 'act_required', 'act'],
+      [{ kind: 'regime' }, 'regimes_required', 'regimes'],
+      [{ act: 'pay' }, 'payments_required', 'payments'],
+      [{ kind: 'regime', regimes: ['РЕЖ-12'] }, 'invalid_link', 'regimes'],
+      [
+        { kind: 'regime', regimes: ['РЕЖ-01'], notForRegimes: ['РЕЖ-01'] },
+        'regimes_both',
+        'notForRegimes',
+      ],
+      [{ bases: ['transport'] }, 'invalid_link', 'bases'],
+      [{ authorityCode: 'ОРГ-99' }, 'invalid_link', 'authorityCode'],
+      [{ notForEnRates: ['ЕНС-99'] }, 'invalid_en_rates', 'notForEnRates'],
+      [{ kind: 'special' }, 'invalid_kind', 'kind'],
+    ];
+    for (const [patch, code, field] of bad) {
+      const res = await send('POST', `${P}/types`, { ...base, ...patch });
+      expect([res.status, await errorOf(res)], code).toMatchObject([
+        400,
+        { code, details: { field } },
+      ]);
+    }
+    // День срока вне 1–31, «M-го месяца» больше 6, график с днём 32 — схема.
+    for (const patch of [{ dueDay: 32 }, { dueAfter: 7 }, { paySchedule: [[3, 32]] }]) {
+      expect((await send('POST', `${P}/types`, { ...base, ...patch })).status).toBe(400);
+    }
+
+    const res = await send('POST', `${P}/types`, {
+      ...base,
+      act: 'both',
+      payments: [{ name: 'Плата', authority: 'ОРГ-01', kbk: '' }],
+      payDay: 25,
+      payAfter: 1,
+      bases: ['emissions'],
+      source: 'stat.gov.kg/forms',
+    });
+    expect(res.status, await res.clone().text()).toBe(201);
+    const created = AdminDictValue.parse(await res.json());
+    // Не переданные поля — как у нового вида; «Источник» — адрес с протоколом.
+    expect(created).toMatchObject({
+      code: expect.stringMatching(/^type-[0-9a-f]{8}$/),
+      data: {
+        period: 'M',
+        dueDay: 20,
+        dueAfter: 1,
+        kind: 'cross',
+        payer: 'all',
+        pickGroup: 'optional',
+        preselect: true,
+        shiftToWorkday: true,
+        payDay: 25,
+        bases: ['emissions'],
+        source: 'https://stat.gov.kg/forms',
+      },
+      reports: { total: 0, open: 0, orgs: 0 },
+    });
+    const history = AdminDictHistory.parse(await (await get(`${P}/types/history`)).json());
+    expect(history.items[0]).toMatchObject({ action: 'create', label: 'Плата за загрязнение' });
+    const taken = await send('POST', `${P}/types`, { ...base, shortName: 'Другое' });
+    expect((await errorOf(taken)).code).toBe('dict_value_taken');
+    // Вид, на который ссылается статус, удалить нельзя — только отключить.
+    const nds = await value(`${P}/types/nds`);
+    const del = await send('DELETE', `${P}/types/nds?version=${nds.version}`);
+    expect([del.status, (await errorOf(del)).code]).toEqual([409, 'dict_value_used']);
   });
 
   it('код страны: код и маска обязательны; Кыргызстан не отключается, коды стран не удаляются', async () => {

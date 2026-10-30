@@ -13,7 +13,15 @@ type Value = {
   name: string;
   used: number;
   version: number;
-  data: { gnsCode?: string | null; site?: string; kind?: string; byPhone?: boolean };
+  data: {
+    gnsCode?: string | null;
+    site?: string;
+    kind?: string;
+    byPhone?: boolean;
+    adds?: string[];
+    act?: string;
+    regimes?: string[];
+  };
 };
 
 /** Значения справочника через API администратора. */
@@ -429,6 +437,136 @@ test.describe('Админка: справочники платформы', () =>
         });
       }
       await cleanup(page.request, origin, 'bases', base);
+    }
+  });
+
+  test('(проверка задачи #92) льготы и статусы: «Что даёт» обязательно, тип, отчёты и «Меняет сроки»; после правки сроков — строка в истории', async ({
+    page,
+    baseURL,
+    isMobile,
+  }, testInfo) => {
+    const origin = new URL(baseURL!).origin;
+    await platformAdmin(page.request, origin);
+    const name = `Статус ${testInfo.project.name} ${Date.now()}`;
+
+    try {
+      await page.goto('/app/pdicts/benefits');
+      await expect(page.getByText('Признаки контрагента, от которых зависят ставки')).toBeVisible();
+      await page.getByRole('button', { name: 'Добавить', exact: true }).click();
+      const dialog = page.getByRole('dialog', { name: 'Новая льгота или статус' });
+      await dialog.getByLabel('Название').fill(name);
+      await dialog.getByRole('button', { name: 'Сохранить' }).click();
+      await expect(dialog.getByText('Опишите, что даёт статус')).toBeVisible();
+      await dialog.getByLabel('Что даёт').fill('Сдача НДС до последнего дня');
+      await dialog
+        .getByLabel('Тип')
+        .selectOption({ label: 'Статус — льгот не даёт, меняет отчёты или сроки' });
+      await dialog
+        .getByRole('group', { name: 'Отчёты, которые статус добавляет' })
+        .getByRole('button', { name: 'Соцфонд', exact: true })
+        .click();
+      // «Меняет сроки»: без нового срока — подсказка, с ним — строка с правилом словами.
+      await expect(dialog.getByText('Сроки не меняет')).toBeVisible();
+      await dialog.getByLabel('Вид отчёта', { exact: true }).selectOption({ label: 'НДС' });
+      await dialog.getByRole('button', { name: 'Добавить', exact: true }).click();
+      await expect(
+        page.getByText('Выберите вид отчёта и новый срок сдачи или уплаты'),
+      ).toBeVisible();
+      await dialog.getByLabel('Срок сдачи').selectOption({ label: 'сдача до последнего дня' });
+      await dialog.getByLabel('Срок уплаты').selectOption({ label: 'уплата до 25-го' });
+      await dialog.getByRole('button', { name: 'Добавить', exact: true }).click();
+      await expect(dialog.locator('[data-due-rule]')).toHaveText(
+        /НДС\s*сдача — до последнего дня месяца после отчётного; уплата — до 25-го числа месяца после отчётного/,
+      );
+      await dialog.getByRole('button', { name: 'Сохранить' }).click();
+      await expect(dialog).toBeHidden();
+      const created = (await values(page.request, 'benefits')).find((x) => x.name === name)!;
+      expect(created.code).toMatch(/^ЛЬГ-\d{2}$/);
+      expect(created.data).toMatchObject({ kind: 'status', adds: ['soc'] });
+
+      // Убрать срок — в истории «сроки по статусу пересчитаны» (прототип benefitDlg).
+      const found = await row(page, isMobile, name, created.code);
+      await (await rowAction(page, found, 'Изменить')).click();
+      const edit = page.getByRole('dialog', { name });
+      await edit.locator('[data-due-rule]').getByRole('button', { name: 'Убрать' }).click();
+      await expect(edit.getByText('Сроки не меняет')).toBeVisible();
+      await edit.getByRole('button', { name: 'Сохранить' }).click();
+      await expect(edit).toBeHidden();
+      await expect(
+        page.getByText(`«${name}» изменено, сроки по статусу пересчитаны у 0 отчётов`),
+      ).toBeVisible();
+    } finally {
+      await cleanup(page.request, origin, 'benefits', name);
+    }
+  });
+
+  test('(проверка задачи #92) виды отчётов: краткое название и «Что нужно сделать» обязательны, режимный — с режимом, «Что уплачивается» и график оплаты; правка срока — предупреждение и строка в истории', async ({
+    page,
+    baseURL,
+    isMobile,
+  }, testInfo) => {
+    const origin = new URL(baseURL!).origin;
+    await platformAdmin(page.request, origin);
+    const name = `Вид ${testInfo.project.name} ${Date.now()}`;
+    const short = `В-${Date.now() % 100000}`;
+
+    try {
+      await page.goto('/app/pdicts/types');
+      await expect(page.getByText('Единый каталог для всех организаций.')).toBeVisible();
+      await page.getByRole('button', { name: 'Добавить', exact: true }).click();
+      const dialog = page.getByRole('dialog', { name: 'Новый вид отчёта' });
+      await dialog.getByRole('textbox', { name: 'Название', exact: true }).fill(name);
+      await dialog.getByRole('button', { name: 'Сохранить' }).click();
+      await expect(dialog.getByText('Введите краткое название')).toBeVisible();
+      await expect(dialog.getByText('Выберите, что нужно сделать')).toBeVisible();
+      await dialog.getByLabel('Краткое название').fill(short);
+      // «Сдача + уплата» — сразу платёж с названием вида; режимный без режима — ошибка.
+      await dialog
+        .getByRole('group', { name: 'Что нужно сделать' })
+        .getByRole('button', { name: 'Сдача + уплата' })
+        .click();
+      await expect(dialog.getByLabel('Платёж')).toHaveValue(name);
+      await dialog.getByLabel('Тип', { exact: true }).selectOption({ label: 'Режимный' });
+      await dialog.getByLabel('График оплаты').fill('20/03');
+      await dialog.getByRole('button', { name: 'Сохранить' }).click();
+      await expect(dialog.getByText('Выберите хотя бы один режим')).toBeVisible();
+      await expect(dialog.getByText('Формат: ДД.ММ через точку с запятой')).toBeVisible();
+      await dialog
+        .getByRole('group', { name: 'Применимые режимы' })
+        .getByRole('button', { name: 'ОНР', exact: true })
+        .click();
+      await dialog.getByLabel('График оплаты').fill('20.03; 20.09');
+      await dialog.getByRole('button', { name: 'Сохранить' }).click();
+      await expect(dialog).toBeHidden();
+      const created = (await values(page.request, 'types')).find((x) => x.name === name)!;
+      expect(created.code).toMatch(/^type-[0-9a-f]{8}$/);
+      expect(created.data).toMatchObject({
+        act: 'both',
+        kind: 'regime',
+        regimes: ['РЕЖ-01'],
+        paySchedule: [
+          [3, 20],
+          [9, 20],
+        ],
+      });
+
+      // Правка правила срока — предупреждение о пересчёте; в истории — поле «было → стало».
+      const found = await row(page, isMobile, name, created.code);
+      await (await rowAction(page, found, 'Изменить')).click();
+      const edit = page.getByRole('dialog', { name });
+      await edit.getByLabel('Срок сдачи: N-е число').fill('15');
+      await expect(
+        edit.getByText(
+          'Правило срока изменится: сроки пересчитаются у 0 несданных отчётов. Сданные не меняются.',
+        ),
+      ).toBeVisible();
+      await edit.getByRole('button', { name: 'Сохранить' }).click();
+      await expect(edit).toBeHidden();
+      await expect(
+        page.getByText(`Виды отчётов: ${short} — срок: число: «20» → «15»`),
+      ).toBeVisible();
+    } finally {
+      await cleanup(page.request, origin, 'types', name);
     }
   });
 
