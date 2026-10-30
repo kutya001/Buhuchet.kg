@@ -1,0 +1,143 @@
+import { SERVICE_MESSAGES } from '../contractors/service';
+import type { UiTextDefault } from './texts';
+
+const S = 'Контрагенты: обслуживание';
+const E = 'Ошибки';
+
+/**
+ * Обслуживание контрагента (задача 2.12; прототип modules/services.js: pauseDlg, resumeDlg, unpauseCp,
+ * toRegularDlg; modules/contractors.js: cpActions, archiveDlg, unarchiveCp; ui/status-scale.js:
+ * svcPlanNote, rollbackDlg('svc')): пункты меню, окна, уведомления и причины «Истории статусов».
+ */
+export const CONTRACTOR_SERVICE_TEXTS = {
+  'svc.status': { ru: 'Статус обслуживания', section: S },
+  'svc.periods': { ru: 'Периоды обслуживания: {text}', section: S },
+  'svc.periods.none': { ru: 'Периодов обслуживания нет', section: S },
+  'svc.plan.pause': { ru: 'Запланирована приостановка с {month}', section: S },
+  'svc.plan.pause_resume': {
+    ru: 'Запланирована приостановка с {month}, возобновление с {resume}',
+    section: S,
+  },
+  'svc.plan.resume': { ru: 'Возобновление запланировано с {month}', section: S },
+  'svc.menu.to_regular': { ru: 'Перевести в постоянное обслуживание', section: S },
+  'svc.menu.cancel_pause': { ru: 'Отменить приостановку', section: S },
+  'svc.menu.cancel_pause.sub': { ru: 'Запланирована с {month}', section: S },
+  'svc.menu.change_resume': { ru: 'Изменить возобновление: сейчас с {month}', section: S },
+  'svc.menu.pause': { ru: 'Приостановить обслуживание', section: S },
+  'svc.menu.resume': { ru: 'Возобновить обслуживание', section: S },
+  'svc.menu.rollback': { ru: 'Откатить приостановку', section: S },
+  'svc.menu.archive': { ru: 'В архив', section: S },
+  'svc.menu.unarchive': { ru: 'Вернуть из архива', section: S },
+  'svc.need_rollback': { ru: 'Нужно право «Откат статусов»', section: S },
+  'svc.pause.title': { ru: 'Приостановить обслуживание', section: S },
+  'svc.pause.from': { ru: 'Приостановить с месяца', section: S },
+  'svc.pause.from_hint': {
+    ru: 'С этого месяца отчёты не создаются, плата не начисляется, напоминаний нет',
+    section: S,
+  },
+  'svc.pause.resume': { ru: 'Возобновить с месяца', section: S },
+  'svc.pause.resume_hint': { ru: 'Необязательно, можно указать позже', section: S },
+  'svc.pause.reason': { ru: 'Причина', section: S },
+  'svc.pause.reason_ph': { ru: 'Например: сезонная деятельность', section: S },
+  'svc.pause.note': {
+    ru: 'Пример: приостановить с ноября 2026, возобновить с мая 2027. Несданные отчёты за месяцы паузы получат статус «Не требуется», сданные останутся. Ответственный и назначенные отчёты сохраняются, просрочки по приостановленному контрагенту не считаются.',
+    section: S,
+  },
+  'svc.pause.ok': { ru: 'Приостановить', section: S },
+  'svc.pause.done': { ru: 'Приостановлено с {month}', section: S },
+  'svc.pause.done_off': { ru: 'Приостановлено с {month}, отчётов «Не требуется»: {n}', section: S },
+  'svc.resume.title': { ru: 'Возобновить обслуживание', section: S },
+  'svc.resume.from': { ru: 'Возобновить с месяца', section: S },
+  'svc.resume.from_hint': { ru: 'Отчёты за этот и следующие периоды создадутся сами', section: S },
+  'svc.resume.fee_note': {
+    ru: 'Плата начнёт начисляться по текущей ставке {sum} {per}. Новую ставку можно внести во вкладке «Обслуживание».',
+    section: S,
+  },
+  'svc.per.month': { ru: 'в месяц', section: S },
+  'svc.per.year': { ru: 'в год', section: S },
+  'svc.resume.ok': { ru: 'Возобновить', section: S },
+  'svc.resume.done': { ru: 'Обслуживание возобновится с {month}', section: S },
+  'svc.resume.done_on': {
+    ru: 'Обслуживание возобновится с {month}, отчётов вернулось в работу: {n}',
+    section: S,
+  },
+  'svc.cancel.title': { ru: 'Отменить приостановку?', section: S },
+  'svc.cancel.text': {
+    ru: 'Запланированная пауза с {month} отменится, обслуживание продолжится без перерыва.',
+    section: S,
+  },
+  'svc.cancel.text_resume': {
+    ru: 'Запланированная пауза с {month} и возобновление с {resume} отменятся, обслуживание продолжится без перерыва.',
+    section: S,
+  },
+  'svc.cancel.ok': { ru: 'Отменить приостановку', section: S },
+  'svc.cancel.done': { ru: 'Приостановка отменена', section: S },
+  'svc.rollback.title': { ru: 'Откатить: «Приостановлен» → «Обслуживается»', section: S },
+  'svc.rollback.note': {
+    ru: 'Приостановка будет отменена, обслуживание продолжится без перерыва.',
+    section: S,
+  },
+  'svc.rollback.skipped': { ru: 'Пропущенные месяцы — что досоздать', section: S },
+  'svc.rollback.month': { ru: '{month}: начисление за обслуживание и отчёты', section: S },
+  'svc.rollback.reason': { ru: 'Причина отката', section: S },
+  'svc.rollback.reason_ph': { ru: 'Например: статус поставили по ошибке', section: S },
+  'svc.rollback.hint': {
+    ru: 'Откат делается на один шаг и попадает в историю статусов с пометкой «Откат».',
+    section: S,
+  },
+  'svc.rollback.ok': { ru: 'Откатить', section: S },
+  'svc.rollback.done': { ru: 'Откат выполнен', section: S },
+  'svc.archive.title_one': { ru: 'Отправить в архив {name}?', section: S },
+  'svc.archive.title_many': { ru: 'Отправить в архив {n} контрагентов?', section: S },
+  'svc.archive.text': {
+    ru: 'Удалить контрагента с отчётами нельзя, его можно только архивировать. Отчёты за периоды после текущего месяца получат статус «Не требуется»; отчёты за уже обслуженные периоды остаются к сдаче, сданные — без изменений.',
+    section: S,
+  },
+  'svc.archive.ok': { ru: 'В архив', section: S },
+  'svc.archive.done': { ru: 'Отправлено в архив', section: S },
+  'svc.unarchive.done': { ru: 'Контрагент возвращён из архива', section: S },
+  'svc.unarchive.done_open': {
+    ru: 'Контрагент возвращён из архива, открытых отчётов: {n}',
+    section: S,
+  },
+  'svc.regular.title': { ru: 'Перевести в постоянное обслуживание', section: S },
+  'svc.regular.from': { ru: 'Начало обслуживания', section: S },
+  'svc.regular.regime': { ru: 'Режим налогообложения', section: S },
+  'svc.regular.regime_none': { ru: '— не указан —', section: S },
+  'svc.regular.fee': { ru: 'Стоимость обслуживания, сом', section: S },
+  'svc.regular.note': {
+    ru: 'После сохранения откроется выбор отчётов, которые сдаёт контрагент. Разовые услуги и проекты останутся в его карточке.',
+    section: S,
+  },
+  'svc.regular.ok': { ru: 'Дальше: выбрать отчёты', section: S },
+  'svc.regular.tariff_note': { ru: 'Переход на постоянное обслуживание', section: S },
+  'svc.regular.gked_confirm': { ru: 'Подтверждаю', section: S },
+  'svc.month_required': { ru: 'Укажите месяц', section: S },
+  'svc.reason_required': { ru: 'Укажите причину', section: S },
+  // Причины в «Истории статусов» (пишет система).
+  'svc.hist.paused_from': { ru: 'С {month}', section: S },
+  'svc.hist.paused_from_resume': { ru: 'С {month}, возобновление с {resume}', section: S },
+  'svc.hist.pause_reason': { ru: 'Причина: {reason}', section: S },
+  'svc.hist.resumed_from': { ru: 'Возобновление с {month}', section: S },
+  'svc.hist.regular_from': { ru: 'Постоянное обслуживание с {month}', section: S },
+  'svc.hist.pause_cancelled': { ru: 'Приостановка отменена', section: S },
+  'svc.hist.report_paused': { ru: 'Обслуживание контрагента приостановлено', section: S },
+  'svc.hist.report_archived': { ru: 'Контрагент отправлен в архив', section: S },
+  'svc.hist.report_resumed': { ru: 'Обслуживание контрагента возобновлено', section: S },
+  'svc.hist.report_filled': { ru: 'Досоздан при откате приостановки', section: S },
+  'err.service_month_in_past': { ru: SERVICE_MESSAGES.service_month_in_past, section: E },
+  'err.service_resume_before_pause': {
+    ru: SERVICE_MESSAGES.service_resume_before_pause,
+    section: E,
+  },
+  'err.service_not_paused': { ru: SERVICE_MESSAGES.service_not_paused, section: E },
+  'err.service_already_paused': { ru: SERVICE_MESSAGES.service_already_paused, section: E },
+  'err.service_no_planned_pause': { ru: SERVICE_MESSAGES.service_no_planned_pause, section: E },
+  'err.service_fill_not_skipped': { ru: SERVICE_MESSAGES.service_fill_not_skipped, section: E },
+  'err.service_oneoff': {
+    ru: 'У разового контрагента нет приостановки — сначала переведите его в постоянное обслуживание',
+    section: E,
+  },
+  'err.contractor_not_archived': { ru: 'Контрагент не в архиве', section: E },
+  'err.contractor_regular': { ru: 'Контрагент уже на постоянном обслуживании', section: E },
+} as const satisfies Record<string, UiTextDefault>;

@@ -1,5 +1,5 @@
 {
-  "id": "7e4d6f31-6436-4bc4-9d95-6dc505664d4a",
+  "id": "b33879de-f80c-4d21-a449-3819b754d313",
   "prevId": "82fb3eef-67ff-4c28-951c-4467fa07a20d",
   "version": "7",
   "dialect": "postgresql",
@@ -692,37 +692,10 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
-        },
-        "updated_by": {
-          "name": "updated_by",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "version": {
-          "name": "version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
         }
       },
       "indexes": {},
-      "foreignKeys": {
-        "permissions_updated_by_users_id_fk": {
-          "name": "permissions_updated_by_users_id_fk",
-          "tableFrom": "permissions",
-          "tableTo": "users",
-          "columnsFrom": [
-            "updated_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {
@@ -973,12 +946,6 @@
           "notNull": true,
           "default": "now()"
         },
-        "updated_by": {
-          "name": "updated_by",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
         "version": {
           "name": "version",
           "type": "integer",
@@ -988,21 +955,7 @@
         }
       },
       "indexes": {},
-      "foreignKeys": {
-        "role_templates_updated_by_users_id_fk": {
-          "name": "role_templates_updated_by_users_id_fk",
-          "tableFrom": "role_templates",
-          "tableTo": "users",
-          "columnsFrom": [
-            "updated_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {
@@ -2386,6 +2339,302 @@
         "contractors_socfund_tariff_check": {
           "name": "contractors_socfund_tariff_check",
           "value": "\"contractors\".\"socfund_tariff\" is null or (jsonb_typeof(\"contractors\".\"socfund_tariff\") = 'object' and \"contractors\".\"socfund_tariff\" - array['id', 'manual', 'reason'] = '{}'::jsonb and coalesce(\"contractors\".\"socfund_tariff\" ->> 'id', '') in ('spino', 'general', 'pvtpki') and coalesce(jsonb_typeof(\"contractors\".\"socfund_tariff\" -> 'manual'), 'null') = 'boolean' and coalesce(jsonb_typeof(\"contractors\".\"socfund_tariff\" -> 'reason'), 'null') in ('null', 'string') and (\"contractors\".\"socfund_tariff\" -> 'manual' = 'true' or coalesce(jsonb_typeof(\"contractors\".\"socfund_tariff\" -> 'reason'), 'null') = 'null'))"
+        }
+      },
+      "isRLSEnabled": true
+    },
+    "public.contractor_page_grants": {
+      "name": "contractor_page_grants",
+      "schema": "",
+      "columns": {
+        "token_hash": {
+          "name": "token_hash",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "org_id": {
+          "name": "org_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "contractor_id": {
+          "name": "contractor_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "code_version": {
+          "name": "code_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "contractor_page_grants_expires_idx": {
+          "name": "contractor_page_grants_expires_idx",
+          "columns": [
+            {
+              "expression": "expires_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "contractor_page_grants_contractor_idx": {
+          "name": "contractor_page_grants_contractor_idx",
+          "columns": [
+            {
+              "expression": "contractor_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "contractor_page_grants_org_id_organizations_id_fk": {
+          "name": "contractor_page_grants_org_id_organizations_id_fk",
+          "tableFrom": "contractor_page_grants",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "org_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "contractor_page_grants_contractor_id_contractor_pages_contractor_id_fk": {
+          "name": "contractor_page_grants_contractor_id_contractor_pages_contractor_id_fk",
+          "tableFrom": "contractor_page_grants",
+          "tableTo": "contractor_pages",
+          "columnsFrom": [
+            "contractor_id"
+          ],
+          "columnsTo": [
+            "contractor_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "contractor_page_grants_isolation": {
+          "name": "contractor_page_grants_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "buhuchet_app"
+          ],
+          "using": "\"contractor_page_grants\".\"org_id\" = app.current_org_id()",
+          "withCheck": "\"contractor_page_grants\".\"org_id\" = app.current_org_id()"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
+    "public.contractor_pages": {
+      "name": "contractor_pages",
+      "schema": "",
+      "columns": {
+        "contractor_id": {
+          "name": "contractor_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "org_id": {
+          "name": "org_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "enabled": {
+          "name": "enabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "code": {
+          "name": "code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "code_version": {
+          "name": "code_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "hidden_sections": {
+          "name": "hidden_sections",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'"
+        },
+        "failures": {
+          "name": "failures",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "locked_until": {
+          "name": "locked_until",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_by": {
+          "name": "updated_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "contractor_pages_org_id_organizations_id_fk": {
+          "name": "contractor_pages_org_id_organizations_id_fk",
+          "tableFrom": "contractor_pages",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "org_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "contractor_pages_created_by_users_id_fk": {
+          "name": "contractor_pages_created_by_users_id_fk",
+          "tableFrom": "contractor_pages",
+          "tableTo": "users",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "contractor_pages_updated_by_users_id_fk": {
+          "name": "contractor_pages_updated_by_users_id_fk",
+          "tableFrom": "contractor_pages",
+          "tableTo": "users",
+          "columnsFrom": [
+            "updated_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "contractor_pages_contractor_fk": {
+          "name": "contractor_pages_contractor_fk",
+          "tableFrom": "contractor_pages",
+          "tableTo": "contractors",
+          "columnsFrom": [
+            "contractor_id",
+            "org_id"
+          ],
+          "columnsTo": [
+            "id",
+            "org_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "contractor_pages_isolation": {
+          "name": "contractor_pages_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "buhuchet_app"
+          ],
+          "using": "\"contractor_pages\".\"org_id\" = app.current_org_id()",
+          "withCheck": "\"contractor_pages\".\"org_id\" = app.current_org_id()"
+        }
+      },
+      "checkConstraints": {
+        "contractor_pages_code_check": {
+          "name": "contractor_pages_code_check",
+          "value": "\"contractor_pages\".\"code\" ~ '^[0-9]{6}$'"
+        },
+        "contractor_pages_hidden_check": {
+          "name": "contractor_pages_hidden_check",
+          "value": "\"contractor_pages\".\"hidden_sections\" <@ array['pay', 'reports', 'money', 'fee', 'kpi', 'contacts']::text[]"
+        },
+        "contractor_pages_failures_check": {
+          "name": "contractor_pages_failures_check",
+          "value": "\"contractor_pages\".\"failures\" >= 0"
         }
       },
       "isRLSEnabled": true
@@ -7243,95 +7492,6 @@
       "checkConstraints": {},
       "isRLSEnabled": true
     },
-    "public.message_templates": {
-      "name": "message_templates",
-      "schema": "",
-      "columns": {
-        "key": {
-          "name": "key",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "text": {
-          "name": "text",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "note": {
-          "name": "note",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "''"
-        },
-        "sort_order": {
-          "name": "sort_order",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "updated_by": {
-          "name": "updated_by",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "version": {
-          "name": "version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "message_templates_updated_by_users_id_fk": {
-          "name": "message_templates_updated_by_users_id_fk",
-          "tableFrom": "message_templates",
-          "tableTo": "users",
-          "columnsFrom": [
-            "updated_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {
-        "message_templates_read": {
-          "name": "message_templates_read",
-          "as": "PERMISSIVE",
-          "for": "SELECT",
-          "to": [
-            "buhuchet_app"
-          ],
-          "using": "true"
-        }
-      },
-      "checkConstraints": {},
-      "isRLSEnabled": true
-    },
     "public.ownership_forms": {
       "name": "ownership_forms",
       "schema": "",
@@ -8520,98 +8680,6 @@
         "single_tax_rates_adds_to_check": {
           "name": "single_tax_rates_adds_to_check",
           "value": "not (\"single_tax_rates\".\"code\" = any(\"single_tax_rates\".\"adds_to\"))"
-        }
-      },
-      "isRLSEnabled": true
-    },
-    "public.status_tones": {
-      "name": "status_tones",
-      "schema": "",
-      "columns": {
-        "scale": {
-          "name": "scale",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "tone": {
-          "name": "tone",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "updated_by": {
-          "name": "updated_by",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "version": {
-          "name": "version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "status_tones_updated_by_users_id_fk": {
-          "name": "status_tones_updated_by_users_id_fk",
-          "tableFrom": "status_tones",
-          "tableTo": "users",
-          "columnsFrom": [
-            "updated_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "status_tones_scale_status_pk": {
-          "name": "status_tones_scale_status_pk",
-          "columns": [
-            "scale",
-            "status"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "policies": {
-        "status_tones_read": {
-          "name": "status_tones_read",
-          "as": "PERMISSIVE",
-          "for": "SELECT",
-          "to": [
-            "buhuchet_app"
-          ],
-          "using": "true"
-        }
-      },
-      "checkConstraints": {
-        "status_tones_scale_check": {
-          "name": "status_tones_scale_check",
-          "value": "\"status_tones\".\"scale\" in ('report', 'payment', 'task', 'service', 'project', 'indicator')"
-        },
-        "status_tones_tone_check": {
-          "name": "status_tones_tone_check",
-          "value": "\"status_tones\".\"tone\" in ('gray', 'blue', 'yellow', 'green', 'orange', 'red', 'purple', 'faint')"
         }
       },
       "isRLSEnabled": true
