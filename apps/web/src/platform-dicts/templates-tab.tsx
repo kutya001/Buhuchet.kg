@@ -18,21 +18,15 @@ import { useForm } from 'react-hook-form';
 import { api, callApi } from '../api-client';
 import { fieldError } from '../auth/fields';
 import { useErrorText, useT } from '../l10n/provider';
-import type { Translate } from '../l10n/translate';
 import { DictHistory } from './dict-history-box';
 import { pdictsTemplatesQuery, usePdictsRefresh } from './pdicts-data';
+import { templateHint, unknownVarsMessage } from './template-hint';
 
 const templates = api.api.admin['platform-dicts'].templates;
 
 const formOf = (items: readonly AdminMessageTemplate[]): AdminMessageTemplatesFields => ({
   items: items.map((x) => ({ key: x.key, text: x.text })),
 });
-
-/** Подсказка под шаблоном: пояснение и «Подстановки: {контрагент}, {сумма}» (прототип TPL_NOTES). */
-function templateHint(t: Translate, x: AdminMessageTemplate): string {
-  const vars = t('pdicts.tpl.vars', { list: x.variables.map((v) => `{${v}}`).join(', ') });
-  return x.note ? `${x.note}. ${vars}` : vars;
-}
 
 /**
  * Админка → «Справочники платформы» → «Шаблоны» (ТЗ «Шаблоны для организаций»; прототип renderPDicts,
@@ -92,10 +86,11 @@ export function TemplatesTab() {
       const details = (res.error.details ?? {}) as Record<string, unknown>;
       const i = items.findIndex((x) => x.key === details.field);
       if (code === 'unknown_vars' && i >= 0) {
-        const message = t('pdicts.err.unknown_vars', {
-          list: String(details.list ?? ''),
-          known: String(details.known ?? ''),
-        });
+        const message = unknownVarsMessage(
+          t,
+          String(details.list ?? ''),
+          String(details.known ?? ''),
+        );
         return setError(`items.${i}.text`, { type: 'server', message }, { shouldFocus: true });
       }
       toast(errorText(res.error), { bad: true });

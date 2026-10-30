@@ -148,6 +148,7 @@ const SYSTEM_TEXTS = {
   'pdicts.tpl.label.tg_link_invalid': { ru: 'Telegram: ссылка устарела', section: S },
   'pdicts.tpl.label.tg_start': { ru: 'Telegram: ответ на /start', section: S },
   'pdicts.tpl.vars': { ru: 'Подстановки: {list}', section: S },
+  'pdicts.tpl.no_vars': { ru: 'Без подстановок', section: S },
   'pdicts.tpl.save': { ru: 'Сохранить шаблоны', section: S },
   'pdicts.tpl.toast': { ru: 'Шаблоны сохранены', section: S },
   // Ошибки вкладок «Работа системы».
@@ -160,6 +161,10 @@ const SYSTEM_TEXTS = {
   'pdicts.err.text_required': { ru: 'Введите текст шаблона', section: E },
   'pdicts.err.unknown_vars': {
     ru: 'Нет такой подстановки: {list}. Доступны: {known}',
+    section: E,
+  },
+  'pdicts.err.unknown_vars_none': {
+    ru: 'Нет такой подстановки: {list}. В этом шаблоне подстановок нет',
     section: E,
   },
   // «История изменений» вкладок (прототип pdLog).
