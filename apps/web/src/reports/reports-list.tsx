@@ -44,7 +44,7 @@ import {
   reportDefaultVisible,
   reportTone,
 } from './report-columns';
-import { reportSummaryQuery, type ReportListTab } from './reports-data';
+import { noTypesHint, reportSummaryQuery, type ReportListTab } from './reports-data';
 
 /**
  * Быстрый фильтр «Все / Сдать / Уплатить» (прототип `S.repAct`): один на все вкладки модуля, до
@@ -82,15 +82,16 @@ function NoTypesNote() {
   const { access } = useShell();
   const settings = useQuery(typeSettingsQuery);
   const pick = useTaxPick();
-  if (!settings.data || settings.data.items.some((x) => x.enabled)) return null;
+  const hint = settings.data ? noTypesHint(settings.data.items, access.can('dicts')) : null;
+  if (!hint) return null;
   return (
     <div data-report-no-types="">
-      <Note icon="book">
-        <div className="flex items-center gap-3">
+      <Note icon="book" center>
+        <div className="flex items-center gap-[9px]">
           <span className="min-w-0 grow">
             <b>{t('report.no_types.title')}</b> {t('report.no_types.text')}
           </span>
-          {access.can('dicts') ? (
+          {hint === 'pick' ? (
             <button
               type="button"
               className={`${buttonClass('cta', 'sm')} shrink-0`}

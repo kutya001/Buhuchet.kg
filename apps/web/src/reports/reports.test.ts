@@ -15,7 +15,7 @@ import {
 } from './report-columns';
 import { reportMenuEntries, type ReportMenuAccess } from './report-menu';
 import { isPlateFilter, monthEnd, plateFilters } from './report-plates';
-import { reportTabCounts } from './reports-data';
+import { noTypesHint, reportTabCounts } from './reports-data';
 
 // Список «Отчетов для сдачи» (задача 2.13; прототип modules/reports.js — reportCols, reportActions,
 // repMark, renderReports): меню строки, отметки подтверждения, суммы, переносы срока, плашки.
@@ -201,6 +201,13 @@ describe('плашки и счётчики', () => {
       overdue: { value: 53, tone: 'red' },
       waiting: { value: 0 },
     });
+  });
+
+  it('«Подключите виды отчётов» — пока нет подключённых видов: с правом справочников — «Выбрать налоги», без него — «Подключает владелец»', () => {
+    expect(noTypesHint([], true)).toBe('pick');
+    expect(noTypesHint([{ enabled: false }], false)).toBe('owner');
+    expect(noTypesHint([{ enabled: false }, { enabled: true }], true)).toBeNull();
+    expect(noTypesHint([{ enabled: true }], false)).toBeNull();
   });
 
   it('у модуля в левой панели — число просроченных, только когда оно больше нуля', () => {

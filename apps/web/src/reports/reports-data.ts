@@ -43,6 +43,16 @@ export const reportTabCounts = (
   waiting: { value: s.waiting },
 });
 
+/**
+ * Подсказка «Подключите виды отчётов» (прототип modules/tax-pick.js, `txNote`): пока нет ни одного
+ * подключённого вида — с кнопкой «Выбрать налоги» у права «Вести справочники организации», без него —
+ * «Подключает владелец»; вид подключён — подсказки нет.
+ */
+export const noTypesHint = (
+  items: readonly { enabled: boolean }[],
+  canDicts: boolean,
+): 'pick' | 'owner' | null => (items.some((x) => x.enabled) ? null : canDicts ? 'pick' : 'owner');
+
 export const reportTabCountsQuery = queryOptions({
   queryKey: ['reports', 'summary'],
   queryFn: summaryFn,
