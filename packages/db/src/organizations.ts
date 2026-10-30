@@ -20,6 +20,7 @@ import type { Db, Tx } from './client';
 import { withOrgContext } from './context';
 import { uniqueViolation } from './errors';
 import { writeHistory } from './history';
+import { startOnboarding } from './onboarding';
 import {
   employees,
   indicators,
@@ -231,6 +232,8 @@ async function insertOrganization(
       })),
     )
     .returning({ id: indicators.id, name: indicators.name });
+  // Новая организация получает приветствие с опросником (задача 2.33, docs/decisions.md п. Г-4).
+  await startOnboarding(tx, orgId);
   // Кто создал организацию и что появилось вместе с ней; учётная политика — запись с ключом org_id.
   await writeHistory(
     tx,
@@ -251,8 +254,9 @@ async function insertOrganization(
 }
 
 /**
- * Номера всех организаций для задач по расписанию (функция app.org_ids, SECURITY DEFINER):
- * задача обходит их по одной, каждую — в своей транзакции withOrgContext.
+ * Номера всех организаций (функция app.org_ids, SECURITY DEFINER) для задач по расписанию и сводок
+ * администратора платформы («Назначен» у видов отчётов): их обходят по одной, каждую — в своей
+ * транзакции withOrgContext.
  */
 export async function orgIds(db: Db): Promise<string[]> {
   const rows = await db.execute<{ id: string }>(sql`select id from app.org_ids() as id`);

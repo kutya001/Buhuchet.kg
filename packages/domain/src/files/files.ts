@@ -54,6 +54,7 @@ export const FILE_MESSAGES = {
   file_not_uploaded: 'Файл не загрузился. Попробуйте ещё раз',
   file_upload_limit: 'Слишком много загрузок за час. Попробуйте позже',
   files_off: 'Файлы в карточках выключены в учётной политике',
+  file_no_preview: 'Этот файл не открывается в окне: скачайте его',
 } as const;
 export type FileProblem = keyof typeof FILE_MESSAGES;
 

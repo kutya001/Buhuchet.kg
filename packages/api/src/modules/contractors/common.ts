@@ -1,4 +1,5 @@
 import {
+  activeReportTypes,
   contractorDictValues,
   contractorGkedDicts,
   contractorScope,
@@ -38,6 +39,7 @@ import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
 import { apiFail } from '../../errors';
 import { serverTexts } from '../l10n/texts';
+import { socfundContext, socfundOut, socfundSubjectOf } from './socfund-view';
 
 export const error = { 'application/json': { schema: ApiError } };
 
@@ -118,17 +120,21 @@ export function checkSubject(
 
 /**
  * Карточка для ответа API: моменты — строкой ISO, ставка — только тому, кто видит плату за
- * обслуживание, и сверка с ГКЭД словами по сохранённым значениям.
+ * обслуживание, сверка с ГКЭД и тариф Соцфонда словами по сохранённым значениям.
  */
 export async function contractorOut(
   tx: Tx,
   r: ContractorRecord,
   options: { fee: boolean; t: Translate },
 ): Promise<Contractor> {
-  const dicts = await contractorGkedDicts(
-    tx,
-    [r.gked?.code, ...r.gkedExtra.map((x) => x.code)].filter((c): c is string => !!c),
-  );
+  const [dicts, sf, types] = await Promise.all([
+    contractorGkedDicts(
+      tx,
+      [r.gked?.code, ...r.gkedExtra.map((x) => x.code)].filter((c): c is string => !!c),
+    ),
+    socfundContext(tx, r.gked?.code ?? null, r.form.code),
+    activeReportTypes(tx, r.id),
+  ]);
   const subject = subjectFor(
     {
       gked: r.gked?.code ?? null,
@@ -141,8 +147,10 @@ export async function contractorOut(
   );
   const confirmation = confirmationFor(r.gkedConfirmation, r.gkedConfirmation?.by ?? '');
   const { check, ok } = checkSubject(dicts, subject, confirmation);
+  // Признаки и тариф Соцфонда уходят словами (`socfund`), а не полями записи.
+  const { socfundFlags: _flags, socfundTariff: _tariff, ...rest } = r;
   return {
-    ...r,
+    ...rest,
     tariff: options.fee ? r.tariff : null,
     feeDay: options.fee ? r.feeDay : null,
     firstMonthMode: options.fee ? r.firstMonthMode : null,
@@ -153,6 +161,22 @@ export async function contractorOut(
       ask: r.gkedConfirmation.ask,
     },
     gkedNotes: notesOf(check, ok, options.t),
+    socfund: socfundOut(
+      socfundSubjectOf(
+        {
+          kind: r.kind,
+          bases: r.bases.map((b) => b.code),
+          gked: r.gked?.code ?? null,
+          benefits: r.benefits.map((b) => b.code),
+          flags: r.socfundFlags,
+        },
+        { code: r.form.code, name: r.form.name },
+        types,
+      ),
+      r.socfundTariff,
+      sf.dict,
+      options.t,
+    ),
     audit: {
       createdAt: r.audit.createdAt.toISOString(),
       createdBy: r.audit.createdBy,

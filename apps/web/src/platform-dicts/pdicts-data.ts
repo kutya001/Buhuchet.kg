@@ -3,10 +3,14 @@
 import type { AdminValueDict } from '@buhuchet/domain';
 import {
   AdminDictGroups,
+  Authorities,
+  ReportBases,
+  TaxRegimes,
   AdminDictHistory,
   AdminDictList,
   AdminDictRequestList,
   AdminDictValue,
+  AdminReportTypeOptions,
   ListValues,
   PdictsTabCounts,
   type AdminDictRequest,
@@ -38,6 +42,42 @@ export const pdictsGroupsQuery = queryOptions({
   staleTime: Infinity,
 });
 
+/** Каталог видов отчётов кратко: выбор видов у основания и подписи «Виды отчётов». */
+export const reportTypeOptionsQuery = queryOptions({
+  queryKey: ['admin', 'pdicts', 'report-type-options'],
+  queryFn: async () =>
+    json(await pd['report-type-options'].$get(), (v) => AdminReportTypeOptions.parse(v).items),
+});
+
+/**
+ * Органы, режимы и основания, в том числе отключённые: выбор в окне вида отчёта (отключённое, уже
+ * выбранное, остаётся) и названия в «Истории изменений» видов отчётов.
+ */
+export const pdictsOrgansQuery = queryOptions({
+  queryKey: ['admin', 'pdicts', 'all-organs'],
+  queryFn: async () =>
+    json(
+      await api.api.authorities.$get({ query: { all: 'true' } }),
+      (v) => Authorities.parse(v).items,
+    ),
+});
+export const pdictsRegimesQuery = queryOptions({
+  queryKey: ['admin', 'pdicts', 'all-regimes'],
+  queryFn: async () =>
+    json(
+      await api.api['tax-regimes'].$get({ query: { all: 'true' } }),
+      (v) => TaxRegimes.parse(v).items,
+    ),
+});
+export const pdictsBasesQuery = queryOptions({
+  queryKey: ['admin', 'pdicts', 'all-bases'],
+  queryFn: async () =>
+    json(
+      await api.api['report-bases'].$get({ query: { all: 'true' } }),
+      (v) => ReportBases.parse(v).items,
+    ),
+});
+
 /** Число новых запросов на вкладке «Запросы» (прототип pdTabs: `count` — новые). */
 export const pdictsTabCountsQuery = queryOptions({
   queryKey: ['admin', 'pdicts', 'tab-counts'],
@@ -47,12 +87,20 @@ export const pdictsTabCountsQuery = queryOptions({
   },
 });
 
-/** «История изменений» справочника: последние записи и сколько всего. */
-export const pdictsHistoryQuery = (dict: AdminValueDict) =>
+/**
+ * «История изменений» справочника или календаря (у календаря — свой адрес: ключ записи — день,
+ * docs/deviations.md п. Д-6): последние записи и сколько всего.
+ */
+export const pdictsHistoryQuery = (dict: AdminValueDict | 'calendar') =>
   queryOptions({
     queryKey: ['admin', 'pdicts', dict, 'history'],
     queryFn: async () =>
-      json(await pd[':dict'].history.$get({ param: { dict } }), (v) => AdminDictHistory.parse(v)),
+      json(
+        await (dict === 'calendar'
+          ? pd.calendar.history.$get()
+          : pd[':dict'].history.$get({ param: { dict } })),
+        (v) => AdminDictHistory.parse(v),
+      ),
   });
 
 /** Страница списка значений справочника. */

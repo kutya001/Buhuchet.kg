@@ -117,6 +117,23 @@ describe('программа обучения', () => {
     expect(ids(kbProgram(CATALOG, OWNER, RULES))).toContain('cp1');
   });
 
+  it('шаг «Сделать» без права из реестра шагов (`permission`) скрыт: «Загрузить файл вручную» — только с правом «Загружать файлы»', () => {
+    const upload = step('upload', 'files', 60, { featk: 'files' });
+    const rules = { upload: KB_STEP_RULES.upload! };
+    const viewer = access({ perms: ['filesView'], features: ['files'], modules: ['files'] });
+    expect(kbStepVisible(upload, viewer, rules)).toBe(false);
+    const uploader = access({
+      perms: ['filesView', 'filesUpload'],
+      features: ['files'],
+      modules: ['files'],
+    });
+    expect(kbStepVisible(upload, uploader, rules)).toBe(true);
+    // Функция «Файлы в карточках» выключена — модуля в меню нет, шага тоже (п. 21 приёмки).
+    expect(
+      kbStepVisible(upload, access({ perms: ['filesView', 'filesUpload'], modules: [] }), rules),
+    ).toBe(false);
+  });
+
   it('шаги выключенной в учётной политике функции и модуля не из меню скрыты', () => {
     const noKpi = access({ owner: true, features: ['taxpay'] });
     expect(ids(kbProgram(CATALOG, noKpi, RULES))).not.toContain('kset');
@@ -170,7 +187,7 @@ describe('программа обучения', () => {
     expect(kbProgram(CATALOG, admin, RULES).map((g) => g.def.id)).toEqual(['adm']);
   });
 
-  it('шаги Админки: справочники платформы, «Локализация», «Создать организацию» (остальные — с их вкладками)', () => {
+  it('шаги Админки: справочники платформы, календарь, «Локализация», «Создать организацию» (остальные — с их вкладками)', () => {
     const steps = ['a-dicts', 'a-types', 'a-xls', 'a-cal', 'a-tpl', 'a-l10n', 'a-org'].map(
       (id, i) => step(id, 'adm', 70 + i),
     );
@@ -178,6 +195,7 @@ describe('программа обучения', () => {
     expect(program.flatMap((g) => g.steps.map((s) => [s.def.id, s.module, !!s.rule.done]))).toEqual(
       [
         ['a-dicts', 'pdicts', false],
+        ['a-cal', 'pdicts', false],
         ['a-l10n', 'l10n', false],
         ['a-org', 'orgs', true],
       ],

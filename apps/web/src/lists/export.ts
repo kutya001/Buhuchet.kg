@@ -60,7 +60,7 @@ export function exportDoneText(headers: Pick<Headers, 'get'>, t: Translate): str
 }
 
 /** Отдать файл браузеру на скачивание. */
-function saveFile(blob: Blob, name: string) {
+export function saveFile(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;

@@ -13,7 +13,15 @@ type Value = {
   name: string;
   used: number;
   version: number;
-  data: { gnsCode?: string | null; site?: string; kind?: string; byPhone?: boolean };
+  data: {
+    gnsCode?: string | null;
+    site?: string;
+    kind?: string;
+    byPhone?: boolean;
+    adds?: string[];
+    act?: string;
+    regimes?: string[];
+  };
 };
 
 /** Значения справочника через API администратора. */
@@ -68,6 +76,52 @@ test.describe('Админка: справочники платформы', () =>
     await page.goto('/app/pdicts/reasons');
     await expect(head).toContainText('Работа системы · Категории задач');
     await expect(page.getByText('Шаблон для организаций: причины')).toBeVisible();
+  });
+
+  test('(п. 37) «Налоги и ставки»: строка налога открывает ту же форму просмотра налога; ставки единого налога и налога на имущество, размер бизнеса', async ({
+    page,
+    baseURL,
+    isMobile,
+  }) => {
+    await platformAdmin(page.request, new URL(baseURL!).origin);
+    await page.goto('/app/pdicts/taxes');
+    await expect(page.getByText('Справка по НК КР (ред. 06.08.2026 № 145)')).toBeVisible();
+    for (const title of [
+      'Налоги и обязательные платежи',
+      'Ставки единого налога (ст. 423)',
+      'Ставки налога на имущество (ст. 379)',
+      'Размер бизнеса (ст. 4)',
+    ]) {
+      await expect(page.getByRole('heading', { name: title })).toBeVisible();
+    }
+    // Над ставками единого налога — кто не может его применять; размер бизнеса — «правило; примечание».
+    await expect(page.getByText('Кто не может применять ЕН (ст. 419 ч. 2)')).toBeVisible();
+    await expect(
+      page.getByText(
+        'выручка за 12 месяцев до 8 млн сом; единый налог и налог с продаж — ежеквартально',
+      ),
+    ).toBeVisible();
+    // Ставки на имущество — сомы за м²: с копейками только дробные.
+    const city = page.locator('[data-grid] [data-id="ИМН-01"]');
+    await expect(city).toContainText('г. Джалал-Абад');
+    await expect(city).toContainText('50,50');
+    await expect(city).not.toContainText('116,00');
+
+    const tax = await row(page, isMobile, 'НДС на облагаемые', 'НАЛ-06');
+    await expect(tax).toContainText('Сверить');
+    await tax.getByText('НДС на облагаемые поставки', { exact: true }).click();
+    const view = page.getByRole('dialog', { name: 'НДС на облагаемые поставки' });
+    await expect(view).toContainText(
+      'НАЛ-06 · Общегосударственные налоги · справочник платформы «Налоги и ставки»',
+    );
+    for (const section of ['Что это', 'Кто платит и с чего', 'Ставки', 'Сроки']) {
+      await expect(view.getByText(section, { exact: true }).first()).toBeVisible();
+    }
+    await view.getByRole('button', { name: 'Закрыть' }).last().click();
+    await expect(view).toBeHidden();
+    // То же — «Открыть» в действиях строки.
+    await (await rowAction(page, tax, 'Открыть')).click();
+    await expect(view).toBeVisible();
   });
 
   test('(проверка задачи #92) органы: добавить с телефоном, повтор названия — ошибка, «Выше», переименовать, отключить, удалить только неиспользуемое; история', async ({
@@ -323,5 +377,309 @@ test.describe('Админка: справочники платформы', () =>
     const full = page.getByRole('dialog', { name: what });
     await expect(full).toContainText('Отклонено');
     await expect(full).toContainText(answer);
+  });
+  test('(проверка задачи #92) режимы и основания: полное название режима обязательно; виды отчётов основания — из сквозных', async ({
+    page,
+    baseURL,
+    isMobile,
+  }, testInfo) => {
+    const origin = new URL(baseURL!).origin;
+    await platformAdmin(page.request, origin);
+    const regime = `Режим ${testInfo.project.name} ${Date.now()}`;
+    const base = `Основание ${testInfo.project.name} ${Date.now()}`;
+    const options = await page.request.get('/api/admin/platform-dicts/report-type-options');
+    const type = (
+      (await options.json()) as { items: { kind: string; active: boolean; shortName: string }[] }
+    ).items.find((x) => x.kind === 'cross' && x.active)!;
+
+    try {
+      await page.goto('/app/pdicts/regimes');
+      await expect(page.getByText('Состав — по ст. 46 НК КР')).toBeVisible();
+      await page.getByRole('button', { name: 'Добавить', exact: true }).click();
+      const dialog = page.getByRole('dialog', { name: 'Новый режим' });
+      await dialog.getByLabel('Краткое название').fill(regime);
+      await dialog.getByRole('button', { name: 'Сохранить' }).click();
+      await expect(dialog.getByText('Введите полное название')).toBeVisible();
+      await dialog.getByLabel('Полное название').fill(`${regime} — полное`);
+      await dialog.getByRole('button', { name: 'Сохранить' }).click();
+      await expect(dialog).toBeHidden();
+      const created = (await values(page.request, 'regimes')).find((x) => x.name === regime)!;
+      expect(created.code).toMatch(/^РЕЖ-\d{2}$/);
+      const found = await row(page, isMobile, regime, created.code);
+      await expect(found).toContainText('Специальный');
+
+      await page.goto('/app/pdicts/bases');
+      await page.getByRole('button', { name: 'Добавить', exact: true }).click();
+      const baseDialog = page.getByRole('dialog', { name: 'Новое основание' });
+      await baseDialog.getByLabel('Название').fill(base);
+      await baseDialog
+        .getByRole('group', { name: 'Виды отчётов' })
+        .getByRole('button', { name: type.shortName, exact: true })
+        .click();
+      await baseDialog.getByRole('button', { name: 'Сохранить' }).click();
+      await expect(baseDialog).toBeHidden();
+      const saved = (await values(page.request, 'bases')).find((x) => x.name === base)!;
+      const baseRow = await row(page, isMobile, base, saved.code);
+      await expect(baseRow).toContainText(type.shortName);
+      // Основание с видом отчёта «используется» — удалить нельзя, пока связь есть; у оснований нет
+      // «Выше»/«Ниже» (docs/deviations.md п. Д-2).
+      await expect(await rowAction(page, baseRow, 'Удалить')).toBeDisabled();
+      await expect(
+        page.getByRole('menu', { name: 'Действия' }).getByRole('menuitem', { name: 'Выше' }),
+      ).toHaveCount(0);
+      await page.keyboard.press('Escape');
+    } finally {
+      await cleanup(page.request, origin, 'regimes', regime);
+      for (const x of (await values(page.request, 'bases')).filter((v) => v.name === base)) {
+        await page.request.put(`/api/admin/platform-dicts/bases/${encodeURIComponent(x.code)}`, {
+          headers: { origin },
+          data: { name: x.name, types: [], version: x.version },
+        });
+      }
+      await cleanup(page.request, origin, 'bases', base);
+    }
+  });
+
+  test('(проверка задачи #92) льготы и статусы: «Что даёт» обязательно, тип, отчёты и «Меняет сроки»; после правки сроков — строка в истории', async ({
+    page,
+    baseURL,
+    isMobile,
+  }, testInfo) => {
+    const origin = new URL(baseURL!).origin;
+    await platformAdmin(page.request, origin);
+    const name = `Статус ${testInfo.project.name} ${Date.now()}`;
+
+    try {
+      await page.goto('/app/pdicts/benefits');
+      await expect(page.getByText('Признаки контрагента, от которых зависят ставки')).toBeVisible();
+      await page.getByRole('button', { name: 'Добавить', exact: true }).click();
+      const dialog = page.getByRole('dialog', { name: 'Новая льгота или статус' });
+      await dialog.getByLabel('Название').fill(name);
+      await dialog.getByRole('button', { name: 'Сохранить' }).click();
+      await expect(dialog.getByText('Опишите, что даёт статус')).toBeVisible();
+      await dialog.getByLabel('Что даёт').fill('Сдача НДС до последнего дня');
+      await dialog
+        .getByLabel('Тип')
+        .selectOption({ label: 'Статус — льгот не даёт, меняет отчёты или сроки' });
+      await dialog
+        .getByRole('group', { name: 'Отчёты, которые статус добавляет' })
+        .getByRole('button', { name: 'Соцфонд', exact: true })
+        .click();
+      // «Меняет сроки»: без нового срока — подсказка, с ним — строка с правилом словами.
+      await expect(dialog.getByText('Сроки не меняет')).toBeVisible();
+      await dialog.getByLabel('Вид отчёта', { exact: true }).selectOption({ label: 'НДС' });
+      await dialog.getByRole('button', { name: 'Добавить', exact: true }).click();
+      await expect(
+        page.getByText('Выберите вид отчёта и новый срок сдачи или уплаты'),
+      ).toBeVisible();
+      await dialog.getByLabel('Срок сдачи').selectOption({ label: 'сдача до последнего дня' });
+      await dialog.getByLabel('Срок уплаты').selectOption({ label: 'уплата до 25-го' });
+      await dialog.getByRole('button', { name: 'Добавить', exact: true }).click();
+      await expect(dialog.locator('[data-due-rule]')).toHaveText(
+        /НДС\s*сдача — до последнего дня месяца после отчётного; уплата — до 25-го числа месяца после отчётного/,
+      );
+      await dialog.getByRole('button', { name: 'Сохранить' }).click();
+      await expect(dialog).toBeHidden();
+      const created = (await values(page.request, 'benefits')).find((x) => x.name === name)!;
+      expect(created.code).toMatch(/^ЛЬГ-\d{2}$/);
+      expect(created.data).toMatchObject({ kind: 'status', adds: ['soc'] });
+
+      // Убрать срок — в истории «сроки по статусу пересчитаны» (прототип benefitDlg).
+      const found = await row(page, isMobile, name, created.code);
+      await (await rowAction(page, found, 'Изменить')).click();
+      const edit = page.getByRole('dialog', { name });
+      await edit.locator('[data-due-rule]').getByRole('button', { name: 'Убрать' }).click();
+      await expect(edit.getByText('Сроки не меняет')).toBeVisible();
+      await edit.getByRole('button', { name: 'Сохранить' }).click();
+      await expect(edit).toBeHidden();
+      await expect(
+        page.getByText(`«${name}» изменено, сроки по статусу пересчитаны у 0 отчётов`),
+      ).toBeVisible();
+    } finally {
+      await cleanup(page.request, origin, 'benefits', name);
+    }
+  });
+
+  test('(проверка задачи #92) виды отчётов: краткое название и «Что нужно сделать» обязательны, режимный — с режимом, «Что уплачивается» и график оплаты; правка срока — предупреждение и строка в истории', async ({
+    page,
+    baseURL,
+    isMobile,
+  }, testInfo) => {
+    const origin = new URL(baseURL!).origin;
+    await platformAdmin(page.request, origin);
+    const name = `Вид ${testInfo.project.name} ${Date.now()}`;
+    const short = `В-${Date.now() % 100000}`;
+
+    try {
+      await page.goto('/app/pdicts/types');
+      await expect(page.getByText('Единый каталог для всех организаций.')).toBeVisible();
+      await page.getByRole('button', { name: 'Добавить', exact: true }).click();
+      const dialog = page.getByRole('dialog', { name: 'Новый вид отчёта' });
+      await dialog.getByRole('textbox', { name: 'Название', exact: true }).fill(name);
+      await dialog.getByRole('button', { name: 'Сохранить' }).click();
+      await expect(dialog.getByText('Введите краткое название')).toBeVisible();
+      await expect(dialog.getByText('Выберите, что нужно сделать')).toBeVisible();
+      await dialog.getByLabel('Краткое название').fill(short);
+      // «Сдача + уплата» — сразу платёж с названием вида; режимный без режима — ошибка.
+      await dialog
+        .getByRole('group', { name: 'Что нужно сделать' })
+        .getByRole('button', { name: 'Сдача + уплата' })
+        .click();
+      await expect(dialog.getByLabel('Платёж')).toHaveValue(name);
+      await dialog.getByLabel('Тип', { exact: true }).selectOption({ label: 'Режимный' });
+      await dialog.getByLabel('График оплаты').fill('20/03');
+      await dialog.getByRole('button', { name: 'Сохранить' }).click();
+      await expect(dialog.getByText('Выберите хотя бы один режим')).toBeVisible();
+      await expect(dialog.getByText('Формат: ДД.ММ через точку с запятой')).toBeVisible();
+      await dialog
+        .getByRole('group', { name: 'Применимые режимы' })
+        .getByRole('button', { name: 'ОНР', exact: true })
+        .click();
+      await dialog.getByLabel('График оплаты').fill('20.03; 20.09');
+      await dialog.getByRole('button', { name: 'Сохранить' }).click();
+      await expect(dialog).toBeHidden();
+      const created = (await values(page.request, 'types')).find((x) => x.name === name)!;
+      expect(created.code).toMatch(/^type-[0-9a-f]{8}$/);
+      expect(created.data).toMatchObject({
+        act: 'both',
+        kind: 'regime',
+        regimes: ['РЕЖ-01'],
+        paySchedule: [
+          [3, 20],
+          [9, 20],
+        ],
+      });
+
+      // Правка правила срока — предупреждение о пересчёте; в истории — поле «было → стало».
+      const found = await row(page, isMobile, name, created.code);
+      await (await rowAction(page, found, 'Изменить')).click();
+      const edit = page.getByRole('dialog', { name });
+      await edit.getByLabel('Срок сдачи: N-е число').fill('15');
+      await expect(
+        edit.getByText(
+          'Правило срока изменится: сроки пересчитаются у 0 несданных отчётов. Сданные не меняются.',
+        ),
+      ).toBeVisible();
+      await edit.getByRole('button', { name: 'Сохранить' }).click();
+      await expect(edit).toBeHidden();
+      await expect(
+        page.getByText(`Виды отчётов: ${short} — срок: число: «20» → «15»`),
+      ).toBeVisible();
+    } finally {
+      await cleanup(page.request, origin, 'types', name);
+    }
+  });
+
+  test('(проверка задачи #92) коды стран: Кыргызстан по умолчанию не отключается, коды стран не удаляются', async ({
+    page,
+    baseURL,
+    isMobile,
+  }) => {
+    await platformAdmin(page.request, new URL(baseURL!).origin);
+    await page.goto('/app/pdicts/phones');
+    await expect(page.getByText('У Казахстана и России общий код +7')).toBeVisible();
+    const found = await row(page, isMobile, 'Кыргызстан', 'KG');
+    await expect(found).toContainText('+996');
+    await expect(found).toContainText('+996 555 123 456');
+    const off = await rowAction(page, found, 'Отключить');
+    await expect(off).toBeDisabled();
+    await expect(off).toContainText('Код по умолчанию отключить нельзя');
+    await expect(
+      page.getByRole('menu', { name: 'Действия' }).getByRole('menuitem', { name: 'Удалить' }),
+    ).toHaveCount(0);
+    await page
+      .getByRole('menu', { name: 'Действия' })
+      .getByRole('menuitem', { name: 'Изменить' })
+      .click();
+    const dialog = page.getByRole('dialog', { name: 'Изменить код страны' });
+    await expect(dialog).toContainText('сохранённые номера не меняются');
+    // С «+» код не сохраняется: поле — только цифры.
+    await dialog.getByLabel('Код без +').fill('+996');
+    await dialog.getByRole('button', { name: 'Сохранить' }).click();
+    await expect(dialog.getByText('1–4 цифры')).toBeVisible();
+    await dialog.getByRole('button', { name: 'Отмена' }).click();
+  });
+
+  test('(проверка задачи #92) календарь: нерабочий день добавляется и удаляется, праздник «каждый год» не удаляется; копирование на следующий год', async ({
+    page,
+    baseURL,
+    isMobile,
+  }, testInfo) => {
+    const origin = new URL(baseURL!).origin;
+    await platformAdmin(page.request, origin);
+    type Day = { key: string; date: string; version: number };
+    const days = async () => {
+      const res = await page.request.get('/api/admin/platform-dicts/calendar?size=all');
+      expect(res.status(), await res.text()).toBe(200);
+      return (await res.json()) as { year: number; items: Day[] };
+    };
+    const { year, items } = await days();
+    const next = year + 1;
+    // Свободный будний день следующего года: с 1 июня вперёд.
+    const taken = new Set(items.map((x) => x.date));
+    let date = `${next}-06-01`;
+    while (taken.has(date) || [0, 6].includes(new Date(`${date}T00:00:00Z`).getUTCDay())) {
+      const d = new Date(`${date}T00:00:00Z`);
+      d.setUTCDate(d.getUTCDate() + 1);
+      date = d.toISOString().slice(0, 10);
+    }
+    const ru = `${date.slice(8)}.${date.slice(5, 7)}.${date.slice(0, 4)}`;
+    const name = `Перенос: проверка ${testInfo.project.name}`;
+    const toast = (text: string) => page.getByRole('status').filter({ hasText: text });
+
+    try {
+      await page.goto('/app/pdicts/calendar');
+      await expect(page.getByText('Правило «суббота → понедельник» не используется')).toBeVisible();
+      await page.getByRole('button', { name: 'Добавить', exact: true }).click();
+      await page.getByRole('menuitem', { name: 'Нерабочий день' }).click();
+      const dialog = page.getByRole('dialog', { name: 'Нерабочий день' });
+      await expect(dialog.getByLabel('Название')).toHaveValue('Орозо айт');
+      await dialog.getByLabel('Дата').fill(date);
+      await dialog.getByLabel('Тип').selectOption({ label: 'Рабочая суббота' });
+      await dialog.getByRole('button', { name: 'Добавить' }).click();
+      await expect(dialog.getByText('Рабочая суббота — только суббота')).toBeVisible();
+      await dialog.getByLabel('Тип').selectOption({ label: 'Праздник или перенос' });
+      await dialog.getByLabel('Название').fill(name);
+      await dialog.getByRole('button', { name: 'Добавить' }).click();
+      await expect(dialog).toBeHidden();
+      await expect(toast('Календарь обновлён, сроки пересчитаны')).toBeVisible();
+
+      let found = await row(page, isMobile, name, `${date}|${date}`);
+      await expect(found).toContainText('Перенос');
+      await expect(found).toContainText('Только в этом году');
+      await (await rowAction(page, found, 'Удалить')).click();
+      const ask = page.getByRole('dialog', { name: `Удалить ${ru}?` });
+      await expect(ask).toContainText('Сроки несданных отчётов будут пересчитаны.');
+      await ask.getByRole('button', { name: 'Удалить' }).click();
+      await expect(toast('Удалено')).toBeVisible();
+      await expect(found).toHaveCount(0);
+      // «История изменений» под календарём (ТЗ; docs/deviations.md п. Д-6).
+      const history = page.locator('[data-pdicts-history]');
+      await expect(history).toContainText(`Календарь: «${ru} ${name}» удалено`);
+      await expect(history).toContainText(`Календарь: добавлено «${ru} ${name}»`);
+
+      // Государственный праздник «каждый год» удалить нельзя.
+      found = await row(page, isMobile, 'Новый год', `${year}-01-01|01-01`);
+      const remove = await rowAction(page, found, 'Удалить');
+      await expect(remove).toBeDisabled();
+      await expect(remove).toContainText('Государственный праздник по закону, удалить нельзя');
+      await page.keyboard.press('Escape');
+
+      await page.getByRole('button', { name: `Создать ${next} год копированием` }).click();
+      const copy = page.getByRole('dialog', {
+        name: `Создать календарь ${next} года копированием`,
+      });
+      await expect(copy).toContainText(`Праздники «Каждый год» уже есть в ${next} году`);
+      // Кнопка внизу окна: «Отмена», а если копировать нечего — «Закрыть» (у крестика нет текста).
+      await copy.getByText(/^(Отмена|Закрыть)$/).click();
+      await expect(copy).toBeHidden();
+    } finally {
+      for (const x of (await days()).items.filter((d) => d.key === date)) {
+        await page.request.delete(`/api/admin/platform-dicts/calendar/${x.key}`, {
+          headers: { origin },
+          params: { version: x.version },
+        });
+      }
+    }
   });
 });

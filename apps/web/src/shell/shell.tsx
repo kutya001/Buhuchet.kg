@@ -39,6 +39,11 @@ import { useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { newsUnreadQuery } from '../news/news-data';
 import { NewsContext, useNewsRuntime, type NewsControls } from '../news/news-provider';
+import {
+  useWelcomeRuntime,
+  WelcomeContext,
+  type WelcomeControls,
+} from '../onboarding/welcome-provider';
 import { OrgProfileWindow } from '../org/org-profile-window';
 import { ProfileWindow } from '../profile/profile-window';
 import { QueryProvider } from '../query';
@@ -389,12 +394,20 @@ function ShellPage({
     kbHref: moduleHref('kb', access),
     lessonsHref: tabHref('kb', 'lessons'),
   });
+  // Приветствие и опросник: после входа — вместо «Что нового», если нужно (задача 2.33).
+  const welcome = useWelcomeRuntime({
+    access,
+    modules: me.modules,
+    homeHref: moduleHref('home', access),
+    lessonsHref: tabHref('kb', 'lessons'),
+  });
   // «Новости»: окно новости и «Что нового» после входа (задача 2.32).
   const news = useNewsRuntime({
     tabHrefOf,
     openArticle: kb.controls.openArticle,
     newsHref: tabHref('kb', 'news'),
     lessonsHref: tabHref('kb', 'lessons'),
+    welcomeFirst: welcome.atLogin,
   });
   const openHelp = () => {
     if (!moduleId || !isModuleId(moduleId)) return setHelpOpen(true);
@@ -408,7 +421,7 @@ function ShellPage({
 
   return (
     <ShellContext.Provider value={state}>
-      <KbProviders kb={kb.controls} news={news.controls}>
+      <KbProviders kb={kb.controls} news={news.controls} welcome={welcome.controls}>
         <AppFrame
           navHidden={navHidden}
           paneLabel={title}
@@ -616,6 +629,7 @@ function ShellPage({
         </AppFrame>
         {kb.overlays}
         {news.overlays}
+        {welcome.overlays}
         {/* «?» без статьи о модуле — описание модуля (прототип kb.js kbHelp). */}
         <Modal
           open={helpOpen}
@@ -651,19 +665,23 @@ function ShellPage({
   );
 }
 
-/** Управление «Базой знаний» и «Новостями» для экранов модулей (задачи 2.30 и 2.32). */
+/** Управление «Базой знаний», «Новостями» и приветствием для экранов модулей (задачи 2.30, 2.32, 2.33). */
 function KbProviders({
   kb,
   news,
+  welcome,
   children,
 }: {
   kb: KbControls;
   news: NewsControls;
+  welcome: WelcomeControls;
   children: ReactNode;
 }) {
   return (
     <KbContext.Provider value={kb}>
-      <NewsContext.Provider value={news}>{children}</NewsContext.Provider>
+      <NewsContext.Provider value={news}>
+        <WelcomeContext.Provider value={welcome}>{children}</WelcomeContext.Provider>
+      </NewsContext.Provider>
     </KbContext.Provider>
   );
 }

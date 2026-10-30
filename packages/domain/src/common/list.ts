@@ -453,6 +453,8 @@ export const GRID_KEYS = [
   // «Показатели контрагентов»: вкладки «За период» и «Не заполнено».
   'kpi.period',
   'kpi.missing',
+  // «Файловый менеджер»: вкладок нет.
+  'files.list',
   'kb.team',
   // Админка → «База знаний (содержимое)» → «Новости».
   'kbadm.news',
@@ -477,11 +479,22 @@ export const GRID_KEYS = [
   'dicts.platform.statuses',
   'dicts.platform.cats',
   'dicts.platform.templates',
-  // Админка → «Справочники платформы»: справочник каждой вкладки и «Запросы».
+  // Админка → «Справочники платформы»: справочник каждой вкладки (у «Налогов и ставок» — три таблицы)
+  // и «Запросы».
+  'pdicts.types',
+  'pdicts.taxes',
+  'pdicts.en_rates',
+  'pdicts.property_rates',
+  'pdicts.bases',
+  'pdicts.regimes',
+  'pdicts.benefits',
   'pdicts.forms',
+  'pdicts.phones',
   'pdicts.organs',
   'pdicts.ugns',
   'pdicts.banks',
+  'pdicts.calendar',
+  'pdicts.cats',
   'pdicts.reasons',
   'pdicts.requests',
 ] as const;

@@ -7,11 +7,13 @@ import {
   FIRST_MONTH_MODES,
   PAYS_TO,
   SERVICE_STATUSES,
+  SOCFUND_TARIFFS,
   TARIFF_PERIODS,
 } from '@buhuchet/domain';
 import { z } from 'zod';
 import { IsoDate, RecordAudit, RecordVersion, Tyiyn, Uuid } from './common';
 import { listPageSchema } from './list';
+import { TaxTariff } from './platform-dicts';
 import { Phone } from './staff';
 
 /** Без нулевого символа: PostgreSQL его в тексте не принимает, и сохранение упало бы ошибкой сервера. */
@@ -50,6 +52,26 @@ export const ContractorTariffRequest = z.object({
   period: z.enum(TARIFF_PERIODS),
 });
 
+/** Признак для тарифа Соцфонда: да, нет или не указан (null). */
+const SocfundFlag = z.boolean().nullable().default(null);
+
+/**
+ * Признаки и выбор тарифа Соцфонда из формы (прототип socfund-ui.js, sfApply): `tariff` не передан —
+ * выбор не трогали, null — «Определить автоматически». Причина обязательна, если выбор расходится с
+ * условиями (`socfund_reason_required`).
+ */
+export const ContractorSocfundRequest = z.strictObject({
+  flags: z.strictObject({
+    cashless: SocfundFlag,
+    registry: SocfundFlag,
+    confirmed: SocfundFlag,
+    gov: SocfundFlag,
+  }),
+  tariff: z.enum(SOCFUND_TARIFFS).nullable().optional(),
+  reason: Text(CONTRACTOR_TEXT_MAX.socfundReason).default(''),
+});
+export type ContractorSocfundRequest = z.input<typeof ContractorSocfundRequest>;
+
 /** Поля формы контрагента, общие для создания и «Изменить» (ТЗ «Обязательные поля», «Необязательные поля»). */
 const contractorFields = {
   name: z.string().trim().min(1).max(CONTRACTOR_TEXT_MAX.name).refine(noNul),
@@ -80,6 +102,13 @@ const contractorFields = {
    * сохраняется у контрагента и пишется в историю.
    */
   gkedConfirm: z.boolean().optional(),
+  /** Признаки и тариф Соцфонда; не переданы — не меняются (у разового контрагента их нет). */
+  socfund: ContractorSocfundRequest.optional(),
+  /**
+   * «Сохранить» в окне «Тариф не совпадает с условиями» (прототип sfConfirm): без него ручной выбор,
+   * который расходится с условиями, отклоняется (`socfund_confirm_required`).
+   */
+  socfundConfirm: z.boolean().optional(),
 };
 
 /**
@@ -125,6 +154,45 @@ export const UpdateContractorRequest = z
   .partial()
   .extend({ version: RecordVersion });
 export type UpdateContractorRequest = z.infer<typeof UpdateContractorRequest>;
+
+/**
+ * Тариф Соцфонда словами (прототип sfState, sfCardKv): нужен ли (постоянный контрагент с наёмными
+ * сотрудниками, docs/deviations.md п. А-5), признаки, выбранный тариф, тариф по условиям с причинами, `bad` — выбранный
+ * не совпадает с условиями (`badWhy` — почему), `ask` — «Тариф под вопросом».
+ */
+export const ContractorSocfund = z.object({
+  needed: z.boolean(),
+  flags: z.object({
+    cashless: z.boolean().nullable(),
+    registry: z.boolean().nullable(),
+    confirmed: z.boolean().nullable(),
+    gov: z.boolean().nullable(),
+  }),
+  tariff: z
+    .object({
+      id: z.enum(SOCFUND_TARIFFS),
+      short: z.string(),
+      title: z.string(),
+      total: z.string(),
+      manual: z.boolean(),
+      reason: z.string().nullable(),
+    })
+    .nullable(),
+  auto: z
+    .object({
+      id: z.enum(SOCFUND_TARIFFS).nullable(),
+      short: z.string(),
+      total: z.string(),
+      why: z.array(z.string()),
+      miss: z.array(z.string()),
+      warn: z.array(z.string()),
+    })
+    .nullable(),
+  bad: z.boolean(),
+  badWhy: z.string(),
+  ask: z.boolean(),
+});
+export type ContractorSocfund = z.infer<typeof ContractorSocfund>;
 
 /** Сверка с ГКЭД словами (как в форме и карточке, `gkedCheckTexts`). */
 export const ContractorGkedNotes = z.object({
@@ -194,6 +262,7 @@ export const Contractor = z.object({
     .object({ by: z.string(), employeeId: Uuid, at: IsoDate, ask: z.string() })
     .nullable(),
   gkedNotes: ContractorGkedNotes,
+  socfund: ContractorSocfund,
   audit: RecordAudit,
   version: RecordVersion,
 });
@@ -227,6 +296,18 @@ export const ContractorRow = z.object({
   contact: z.string(),
   /** null — нет ставки или нет права «Видеть плату за обслуживание». */
   tariff: z.object({ amount: Tyiyn, period: z.enum(TARIFF_PERIODS) }).nullable(),
+  /**
+   * Тариф Соцфонда: выбранный кратко (`id` null — «Не определён») и «Тариф под вопросом» (не определён
+   * или выбран вручную вопреки условиям); null — тариф контрагенту не нужен.
+   */
+  socfund: z
+    .object({
+      id: z.enum(SOCFUND_TARIFFS).nullable(),
+      short: z.string(),
+      total: z.string(),
+      ask: z.boolean(),
+    })
+    .nullable(),
   audit: RecordAudit,
   version: RecordVersion,
 });
@@ -289,3 +370,58 @@ export const ContractorGkedCheckRequest = z.object({
   reportTypes: z.array(Code).max(300).default([]),
 });
 export type ContractorGkedCheckRequest = z.input<typeof ContractorGkedCheckRequest>;
+
+/**
+ * Тариф Соцфонда для формы и окна «Тариф Соцфонда» (прототип sfFields): набранные значения и, у
+ * созданного контрагента, его номер — для сохранённого выбора и действующих назначений (STI-161).
+ */
+export const ContractorSocfundCheckRequest = ContractorSocfundRequest.extend({
+  contractorId: Uuid.optional(),
+  kind: z.enum(CONTRACTOR_KINDS),
+  bases: z.array(Code).max(50).default([]),
+  gked: Code.nullable(),
+  formCode: Code.nullable(),
+  benefits: z.array(Code).max(100).default([]),
+});
+export type ContractorSocfundCheckRequest = z.input<typeof ContractorSocfundCheckRequest>;
+
+/** Тариф справочника для выбора и «Ставки»: название, ставки одной строкой, предельная база, ставки по фондам. */
+export const SocfundTariffInfo = z.object({
+  id: z.enum(SOCFUND_TARIFFS),
+  title: z.string(),
+  short: z.string(),
+  total: z.string(),
+  rates: z.string(),
+  cap: z.string(),
+  tariff: TaxTariff,
+});
+export type SocfundTariffInfo = z.infer<typeof SocfundTariffInfo>;
+
+/**
+ * Ответ форме: тариф по набранным значениям (`tariff` — выбранный в форме), нужны ли причина и
+ * подтверждение (`manualMismatch`, текст окна — `confirm`), тарифы справочника и пояснение о ГНПФ.
+ */
+export const ContractorSocfundCheck = ContractorSocfund.extend({
+  manualMismatch: z.boolean(),
+  confirm: z.string(),
+  tariffs: z.array(SocfundTariffInfo),
+  gnpf: z.object({ text: z.string(), verifyNote: z.string() }).nullable(),
+});
+export type ContractorSocfundCheck = z.infer<typeof ContractorSocfundCheck>;
+
+/** Тариф кратко для отчёта STI-161: название, итоговая ставка, ставки одной строкой, предельная база. */
+export const SocfundBrief = z.object({
+  id: z.enum(SOCFUND_TARIFFS),
+  short: z.string(),
+  total: z.string(),
+  rates: z.string(),
+  cap: z.string(),
+});
+export type SocfundBrief = z.infer<typeof SocfundBrief>;
+
+/** Окно «Тариф Соцфонда» из карточки: признаки, выбор, причина, версия и подтверждение. */
+export const SaveContractorSocfundRequest = ContractorSocfundRequest.extend({
+  version: RecordVersion,
+  confirm: z.boolean().optional(),
+});
+export type SaveContractorSocfundRequest = z.input<typeof SaveContractorSocfundRequest>;
