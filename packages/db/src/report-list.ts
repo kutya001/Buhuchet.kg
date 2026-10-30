@@ -35,6 +35,7 @@ import {
   contractors,
   dueChangeReasons,
   employees,
+  files,
   reportDueChanges,
   orgSettings,
   ownershipForms,
@@ -46,7 +47,8 @@ import {
   taxOffices,
   taxRegimes,
 } from './schema';
-import { dateLiteral, textLiteral } from './sql-text';
+import type { FileListPart } from './files';
+import { dateLiteral, dictLiteral, textLiteral } from './sql-text';
 import type { AuditRecord } from './staff';
 import { readStatusHistory, type StatusHistoryItem } from './status';
 
@@ -236,13 +238,17 @@ const romanH = sql`(array['I','II'])[case when ${month} <= 6 then 1 else 2 end]`
 const sub2 = (template: SQL, a: [string, SQL], b: [string, SQL]) =>
   sql`replace(replace(${template}, ${textLiteral(`{${a[0]}}`)}, ${a[1]}), ${textLiteral(`{${b[0]}}`)}, ${b[1]})`;
 
-/** Подпись периода (прототип plabel): «10.2026», «III кв. 2026», «I пол. 2026», «2026», «11.2026 · 05.11». */
-const PERIOD_LABEL = sql<string>`case
+/**
+ * Подпись периода (прототип plabel): «10.2026», «III кв. 2026», «I пол. 2026», «2026», «11.2026 · 05.11».
+ * `q`, `h` — шаблоны «{n} кв. {y}» и «{n} пол. {y}» из словаря.
+ */
+const periodLabel = (q: SQL, h: SQL) => sql<string>`case
   when ${reports.eventDate} is not null then to_char(${reports.eventDate}, 'MM.YYYY') || ' · ' || to_char(${reports.eventDate}, 'DD.MM')
   when ${reports.period} = 'M' then to_char(${reports.periodStart}, 'MM.YYYY')
-  when ${reports.period} = 'Q' then ${sub2(lt('q_short'), ['n', romanQ], ['y', year])}
-  when ${reports.period} = 'H' then ${sub2(lt('h_short'), ['n', romanH], ['y', year])}
+  when ${reports.period} = 'Q' then ${sub2(q, ['n', romanQ], ['y', year])}
+  when ${reports.period} = 'H' then ${sub2(h, ['n', romanH], ['y', year])}
   else ${year} end`;
+const PERIOD_LABEL = periodLabel(lt('q_short'), lt('h_short'));
 
 /** Период полностью (прототип phuman): «Октябрь 2026», «III квартал 2026», «2026 год», «… · дата ввоза 05.11.2026». */
 const monthName = sql`${lt('months')}[${month}]`;
@@ -479,6 +485,21 @@ export function reportScope(ownEmployeeId: string | null): SQL | undefined {
         eq(reports.responsibleEmployeeId, ownEmployeeId),
       )
     : undefined;
+}
+
+/**
+ * Файлы отчётов в Файловом менеджере (задача 2.14, прототип allFiles): виден отчёт в области `scope`
+ * (`reportScope`, над отчётом и его контрагентом); источник — «НДС · 09.2026» (вид коротко и период).
+ */
+export function reportFilesPart(scope: SQL | undefined, t: ListTexts): FileListPart {
+  const label = sql`${reportTypes.shortName} || ' · ' || ${periodLabel(
+    sql`${dictLiteral(t('report.period.q_short'))}::text`,
+    sql`${dictLiteral(t('report.period.h_short'))}::text`,
+  )}`;
+  return {
+    visible: sql`exists (select 1 from ${reports} join ${contractors} on ${contractors.id} = ${reports.contractorId} where ${reports.id} = ${files.sourceId} and ${scope ?? sql`true`})`,
+    source: sql`(select ${label} from ${reports} join ${reportTypes} on ${reportTypes.code} = ${reports.reportTypeCode} where ${reports.id} = ${files.sourceId})`,
+  };
 }
 
 /** «На этой неделе» (прототип inWeek): несданные со сдачей, срок на неделе, контрагент не приостановлен. */

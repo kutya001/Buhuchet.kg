@@ -2,6 +2,7 @@ import {
   fileContractor,
   indicatorFilesPart,
   manualFilesPart,
+  reportFilesPart,
   taskFilesPart,
   type FileListPart,
   type ListTexts,
@@ -16,6 +17,8 @@ import {
 } from '@buhuchet/domain';
 import { indicatorValueSource } from '../kpi/card';
 import { kpiScopeOf } from '../kpi/common';
+import { reportScopeOf } from '../reports/common';
+import { reportFileSource } from '../reports/files';
 import { taskAccessOf } from '../tasks/common';
 import { taskFileSource } from '../tasks/files';
 
@@ -34,8 +37,8 @@ export interface FileSourceRecord {
    */
   contractor: { id: string; responsibleEmployeeId: string | null } | null;
   /**
-   * Может ли сотрудник прикреплять и удалять файлы этой записи по правам её модуля (отчёт — «Менять
-   * статус отчёта», проект — «Вести проекты» и т. п.; запись в архиве — нет). Права группы «Файловый
+   * Может ли сотрудник прикреплять и удалять файлы этой записи по правам её модуля (задача — её
+   * исполнитель, проект — «Вести проекты» и т. п.; запись в архиве — нет). Права группы «Файловый
    * менеджер» проверяет модуль файлов сам.
    */
   editable: boolean;
@@ -102,6 +105,11 @@ export const manualSource: FileListSource = {
   list: ({ t }) => manualFilesPart(t),
 };
 
+/** Файлы отчётов в списке: право «Просматривать отчёты»; видны отчёты области «Свои». */
+function reportFilesList({ subject, t }: FileListContext): FileListPart | null {
+  return hasPermission(subject, 'repView') ? reportFilesPart(reportScopeOf(subject), t) : null;
+}
+
 /** Файлы задач в списке: модуль «Задачи» включён; видны задачи, которые сотрудник может открыть. */
 // ОТКЛОНЕНИЕ: docs/deviations.md#Г-9 — в прототипе видны файлы всех задач контрагентов области.
 function taskFilesList({ subject, features }: FileListContext): FileListPart | null {
@@ -124,6 +132,7 @@ function indicatorFilesList({ subject, features, t }: FileListContext): FileList
  */
 export const FILE_SOURCES: Readonly<Record<FileSourceKind, FileListSource>> = {
   manual: manualSource,
+  report: { ...reportFileSource, list: reportFilesList },
   task: { ...taskFileSource, list: taskFilesList },
   indicator_value: { ...indicatorValueSource, list: indicatorFilesList },
 };

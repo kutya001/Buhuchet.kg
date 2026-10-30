@@ -35,6 +35,7 @@ import {
   type StatusDueRule,
   type Translate,
   type YearMonth,
+  nextWorkingDay,
 } from '@buhuchet/domain';
 import { and, asc, count, eq, gte, inArray, isNull, lte, ne, or, sql, type SQL } from 'drizzle-orm';
 import { alias, type PgInsertValue } from 'drizzle-orm/pg-core';
@@ -1478,9 +1479,24 @@ export interface RedueTexts {
   byCatalogDropped: string;
 }
 
+/** Отчёт создан через «Разовый отчёт»: его первая запись изменения срока — без прежнего срока. */
+const CREATED_BY_HAND = sql`exists (select 1 from ${reportDueChanges} where ${reportDueChanges.orgId} = ${reports.orgId} and ${reportDueChanges.reportId} = ${reports.id} and ${reportDueChanges.fromDue} is null)`;
+
+/**
+ * Срок по правилу — только у отчётов, созданных по правилу: не разового вида (дата события), не
+ * уточнённых и не созданных вручную (решение заказчика 30.10.2026, docs/deviations.md п. Д-18): их
+ * срок не пересчитывают ни правка каталога (задача 2.37), ни статус контрагента.
+ */
+export const DUE_BY_RULE = and(
+  isNull(reports.eventDate),
+  eq(reports.revision, 0),
+  sql`not ${CREATED_BY_HAND}`,
+)!;
+
 /**
  * Сроки несданных отчётов контрагента по его статусам на сегодня (прототип cpRedueList, cpRedue): при
- * установке или снятии статуса со своим сроком; изменённые вручную и разовые не трогаются. Каждый
+ * установке или снятии статуса со своим сроком; изменённые вручную, уточнённые, созданные «Разовым
+ * отчётом» и отчёты разовых видов не трогаются (`DUE_BY_RULE`). Каждый
  * изменённый отчёт — запись в его историю «было → стало» с причиной: срок по статусу или по каталогу;
  * `was` — статусы со своим сроком до правки (от них — «снят статус «…»»).
  */
@@ -1500,7 +1516,7 @@ export async function redueContractorReports(
         inArray(reports.status, [...OPEN_REPORT_STATUSES]),
         eq(reports.superseded, false),
         eq(reports.dueManual, false),
-        isNull(reports.eventDate),
+        DUE_BY_RULE,
       ),
     )
     .for('update', { of: reports });
@@ -1647,7 +1663,7 @@ const payFollowsDue = (rule: EffectiveRule | null, r: typeof reports.$inferSelec
   r.payDue !== null && (r.eventDate !== null || !rule || rule.payDay === null);
 
 /** Отчёт в области сотрудника (через контрагента), заблокированный до конца транзакции. */
-async function lockReport(tx: Tx, id: string, scope: SQL | undefined) {
+export async function lockReport(tx: Tx, id: string, scope: SQL | undefined) {
   if (!UUID_RE.test(id)) throw new RecordNotFoundError('report', id);
   const [row] = await tx
     .select({ r: reports })
@@ -1762,7 +1778,9 @@ export async function createManualReport(
     ? { period: 'M' as const, start: periodStartOf('M', event), event }
     : { period: rule.period, start: periodStartOf(rule.period, input.month!) };
   const computed = reportDue(rule, ref, calendar);
-  const due = input.due ?? computed.due;
+  // Введённый срок на нерабочем дне сразу переносится на рабочий (п. Д-18, решение А).
+  const entered = input.due ?? computed.due;
+  const due = rule.shiftToWorkday ? nextWorkingDay(calendar, entered) : entered;
   const [clash] = await tx
     .select({ id: reports.id })
     .from(reports)
@@ -1789,8 +1807,8 @@ export async function createManualReport(
       periodStart: ref.start,
       eventDate: event,
       act: type.act,
-      // У разового вида срок по закону — от даты события; у остального срок задают руками.
-      dueBase: event ? computed.base : due,
+      // У разового вида срок по закону — от даты события; у остального — введённый руками.
+      dueBase: event ? computed.base : entered,
       dueDate: due,
       dueManual: event ? due !== computed.due : false,
       payDue,
@@ -1923,8 +1941,11 @@ export async function createRevision(
   // У вида «Уплата» статуса сдачи нет — нет и уточнённого (прототип: статус «—», кнопки нет).
   if (r.act === 'pay') throw new ReportStateError(id, 'pay_only');
   if (r.status !== 'submitted') throw new ReportStateError(id, 'not_submitted');
-  const due = revisionDue(r.dueDate, context.today);
-  const follows = payFollowsDue(await reportRule(tx, r, context.today), r);
+  // Срок на нерабочем дне сразу переносится на рабочий, как у срока по правилу (п. Д-18, решение А).
+  const rule = await reportRule(tx, r, context.today);
+  const base = revisionDue(r.dueDate, context.today);
+  const due = rule?.shiftToWorkday ? nextWorkingDay(await calendarOf(tx), base) : base;
+  const follows = payFollowsDue(rule, r);
   const [created] = await tx
     .insert(reports)
     .values({
@@ -1936,7 +1957,7 @@ export async function createRevision(
       eventDate: r.eventDate,
       act: r.act,
       revision: r.revision + 1,
-      dueBase: due,
+      dueBase: base,
       dueDate: due,
       // Срок оплаты своим правилом вида остаётся прежним, иначе — как новый срок сдачи.
       payDue: follows ? due : r.payDue,

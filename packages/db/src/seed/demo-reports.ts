@@ -2,7 +2,7 @@ import { REPORT_PERIODS, type ReportStatus } from '@buhuchet/domain';
 import { inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Db } from '../client';
-import { assignments, reports, reportTypes, statusHistory } from '../schema';
+import { assignments, reports, reportTaxLines, reportTypes, statusHistory } from '../schema';
 import type { DemoIdOf } from './demo';
 
 const Stamp = z.string().regex(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
@@ -66,6 +66,21 @@ const DemoReport = z.object({
   auto: z.boolean().default(false),
   resp: z.string().nullable(),
   fixWhy: z.string().optional(),
+  fixBy: z.string().optional(),
+  fixAt: Stamp.optional(),
+  /** Строки суммы по ставкам (прототип r.lines): выручка и налог в сомах. */
+  lines: z
+    .array(
+      z.object({
+        key: z.string(),
+        label: z.string(),
+        pct: z.string(),
+        cash: z.union([z.literal(0), z.literal(1)]).nullable(),
+        rev: z.number().nonnegative().nullable(),
+        tax: z.number().nonnegative().nullable(),
+      }),
+    )
+    .default([]),
   _ca: Stamp,
   _ub: z.string().nullable(),
   _ua: Stamp,
@@ -80,9 +95,10 @@ const DemoFile = z.object({
 
 /**
  * Назначения и отчёты демо-организации (задача 2.06): ставки, строки ЕНС, периодичность в назначении,
- * повторяющиеся суммы; у отчётов — сроки, статус, сдача и подтверждение, сумма к уплате, первая запись
- * «Истории статусов» и переход в нынешний статус. Повторный запуск досоздаёт только недостающее.
- * Строки суммы, оплата и файлы добавят задачи 2.14, 2.19 и поток Г.
+ * повторяющиеся суммы; у отчётов — сроки, статус, сдача и подтверждение, сумма к уплате и её строки по
+ * ставкам (задача 2.14), первая запись «Истории статусов», переход в нынешний статус и подтверждение.
+ * Повторный запуск досоздаёт только недостающее. Оплату добавит задача 2.19; файлов у демо-отчётов нет
+ * (в хранилище их нет, как и у задач).
  */
 export async function seedDemoReports(
   db: Db,
@@ -206,13 +222,57 @@ export async function seedDemoReports(
               fromStatus: 'todo',
               toStatus: x.status,
               reason: x.status === 'needs_fix' ? (x.r.fixWhy ?? null) : null,
-              actorUserId: x.status === 'submitted' ? (x.submittedBy ?? x.updatedBy) : x.updatedBy,
-              at: x.status === 'submitted' && x.submittedAt ? x.submittedAt : x.updatedAt,
+              actorUserId:
+                x.status === 'submitted'
+                  ? (x.submittedBy ?? x.updatedBy)
+                  : x.status === 'needs_fix' && x.r.fixBy
+                    ? user(x.r.fixBy)
+                    : x.updatedBy,
+              at:
+                x.status === 'submitted' && x.submittedAt
+                  ? x.submittedAt
+                  : x.status === 'needs_fix' && x.r.fixAt
+                    ? stampOf(x.r.fixAt)
+                    : x.updatedAt,
             },
           ]),
+      // Подтверждение сдачи — отметкой «Подтверждено» в «Истории статусов», как `confirmReport`.
+      ...(x.confirmedAt
+        ? [
+            {
+              orgId,
+              scale: 'report' as const,
+              entityId: x.id,
+              fromStatus: 'submitted',
+              toStatus: 'confirmed',
+              reason: x.confirmNote || null,
+              actorUserId: x.confirmedBy,
+              at: x.confirmedAt,
+            },
+          ]
+        : []),
     ]);
   for (let i = 0; i < history.length; i += 500) {
     await db.insert(statusHistory).values(history.slice(i, i + 500));
   }
+  const lines = rows
+    .filter((x) => inserted.has(x.id))
+    .flatMap((x) =>
+      x.r.lines
+        .filter((l) => l.rev !== null || l.tax !== null)
+        .map((l, i) => ({
+          orgId,
+          reportId: x.id,
+          kind: 'rate' as const,
+          lineKey: l.key,
+          label: l.label,
+          rate: l.pct,
+          cash: l.cash === null ? null : l.cash === 1,
+          revenue: l.rev === null ? null : Math.round(l.rev * 100),
+          tax: Math.round((l.tax ?? 0) * 100),
+          sortOrder: i,
+        })),
+    );
+  if (lines.length) await db.insert(reportTaxLines).values(lines).onConflictDoNothing();
   return inserted.size;
 }

@@ -21,7 +21,6 @@ import {
   inArray,
   isNull,
   lte,
-  not,
   or,
   sql,
   type SQL,
@@ -30,11 +29,16 @@ import type { Db, Tx } from './client';
 import { withOrgContext } from './context';
 import { writeHistory } from './history';
 import { orgIds } from './organizations';
-import { assignmentRule, calendarOf, reportTypeInfos, type ReportTypeInfo } from './reports';
+import {
+  assignmentRule,
+  calendarOf,
+  DUE_BY_RULE,
+  reportTypeInfos,
+  type ReportTypeInfo,
+} from './reports';
 import {
   assignments,
   contractorBenefits,
-  reportDueChanges,
   reports,
   taxBenefitDueRules,
   taxBenefits,
@@ -129,15 +133,8 @@ export function mergeRedueScopes(scopes: readonly (RedueScope | null)[]): RedueS
   return null;
 }
 
-/** Отчёт создан через «Разовый отчёт»: его первая запись изменения срока — без прежнего срока. */
-const createdByHand = sql`exists (select 1 from ${reportDueChanges} where ${reportDueChanges.orgId} = ${reports.orgId} and ${reportDueChanges.reportId} = ${reports.id} and ${reportDueChanges.fromDue} is null)`;
-
-/**
- * Срок по правилу — только у отчётов, созданных по правилу: не разового вида (дата события), не
- * уточнённых и не созданных вручную.
- */
-// ОТКЛОНЕНИЕ: docs/deviations.md#Д-18
-const byRule = and(isNull(reports.eventDate), eq(reports.revision, 0), not(createdByHand));
+/** Срок по правилу — только у отчётов, созданных по правилу (`DUE_BY_RULE`, п. Д-18). */
+const byRule = DUE_BY_RULE;
 
 /** Отбор отчётов области в SQL. */
 function scopeSql(scope: RedueScope): SQL | undefined {
