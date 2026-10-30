@@ -71,7 +71,7 @@ const badInput = { description: 'Неверные данные назначен�
  * Вид для назначения: есть в каталоге, подключён в организации; новое назначение — только действующего
  * вида (у прежнего назначения вид, отключённый в каталоге, остаётся).
  */
-async function typeFor(tx: Tx, code: string, isNew: boolean): Promise<AssignableType> {
+export async function typeFor(tx: Tx, code: string, isNew: boolean): Promise<AssignableType> {
   const type = await assignableType(tx, code);
   if (!type)
     apiFail(400, 'validation_failed', 'Нет такого вида отчёта', { field: 'reportTypeCode' });
@@ -89,7 +89,7 @@ async function typeFor(tx: Tx, code: string, isNew: boolean): Promise<Assignable
 }
 
 /** Поля назначения по правилам вида; ошибка — 400 у поля. */
-async function checkFields(tx: Tx, fields: AssignmentFields, type: AssignableType): Promise<void> {
+export async function checkFields(tx: Tx, fields: AssignmentFields, type: AssignableType): Promise<void> {
   const problem = assignmentProblem(fields, type, await singleTaxRateRows(tx));
   if (problem) {
     apiFail(400, problem.problem, ASSIGNMENT_MESSAGES[problem.problem], { field: problem.field });
