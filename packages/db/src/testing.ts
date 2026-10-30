@@ -127,10 +127,13 @@ export async function seedAllPlatformDictionaries(db: Db): Promise<void> {
   await seedGked(db, await readSpecJson('data/gkedDB.json'), { update: false });
 }
 
-/** Разделы «Базы знаний» из refDB.json (шаги, группы, уровни, статьи, описание экранов). */
+/**
+ * Разделы «Базы знаний» из refDB.json (шаги, группы, уровни, статьи, описание экранов) и тексты
+ * приветствия с опросником (`onboarding`).
+ */
 export async function seedKbReference(db: Db): Promise<void> {
   const refDB = await readSpecJson<Record<string, unknown>>('data/refDB.json');
-  const keys = ['kbSteps', 'kbGroups', 'kbLevels', 'kbArticles', 'kbUi'] as const;
+  const keys = ['kbSteps', 'kbGroups', 'kbLevels', 'kbArticles', 'kbUi', 'onboarding'] as const;
   await db
     .insert(platformReference)
     .values(keys.map((key) => ({ key, payload: refDB[key], checksum: 'test', source: 'test' })))

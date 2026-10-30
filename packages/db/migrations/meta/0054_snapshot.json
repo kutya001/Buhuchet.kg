@@ -1,5 +1,5 @@
 {
-  "id": "23d8effc-5eec-49f4-a6cf-859c91f762a3",
+  "id": "718dc7a6-121e-41b4-ac25-5ca8fa885dbf",
   "prevId": "9af19645-a570-4998-9a72-c05589b28ede",
   "version": "7",
   "dialect": "postgresql",
@@ -1712,179 +1712,6 @@
       "checkConstraints": {},
       "isRLSEnabled": true
     },
-    "public.contractor_service_periods": {
-      "name": "contractor_service_periods",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "org_id": {
-          "name": "org_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "contractor_id": {
-          "name": "contractor_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "from_month": {
-          "name": "from_month",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "to_month": {
-          "name": "to_month",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "pause_reason": {
-          "name": "pause_reason",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "''"
-        },
-        "created_by": {
-          "name": "created_by",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "contractor_service_periods_open_key": {
-          "name": "contractor_service_periods_open_key",
-          "columns": [
-            {
-              "expression": "contractor_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"contractor_service_periods\".\"to_month\" is null",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "contractor_service_periods_org_idx": {
-          "name": "contractor_service_periods_org_idx",
-          "columns": [
-            {
-              "expression": "org_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "contractor_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "contractor_service_periods_org_id_organizations_id_fk": {
-          "name": "contractor_service_periods_org_id_organizations_id_fk",
-          "tableFrom": "contractor_service_periods",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "org_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        },
-        "contractor_service_periods_created_by_users_id_fk": {
-          "name": "contractor_service_periods_created_by_users_id_fk",
-          "tableFrom": "contractor_service_periods",
-          "tableTo": "users",
-          "columnsFrom": [
-            "created_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "contractor_service_periods_contractor_fk": {
-          "name": "contractor_service_periods_contractor_fk",
-          "tableFrom": "contractor_service_periods",
-          "tableTo": "contractors",
-          "columnsFrom": [
-            "contractor_id",
-            "org_id"
-          ],
-          "columnsTo": [
-            "id",
-            "org_id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "contractor_service_periods_from_key": {
-          "name": "contractor_service_periods_from_key",
-          "nullsNotDistinct": false,
-          "columns": [
-            "contractor_id",
-            "from_month"
-          ]
-        }
-      },
-      "policies": {
-        "contractor_service_periods_isolation": {
-          "name": "contractor_service_periods_isolation",
-          "as": "PERMISSIVE",
-          "for": "ALL",
-          "to": [
-            "buhuchet_app"
-          ],
-          "using": "\"contractor_service_periods\".\"org_id\" = app.current_org_id()",
-          "withCheck": "\"contractor_service_periods\".\"org_id\" = app.current_org_id()"
-        }
-      },
-      "checkConstraints": {
-        "contractor_service_periods_month_check": {
-          "name": "contractor_service_periods_month_check",
-          "value": "\"contractor_service_periods\".\"from_month\" = date_trunc('month', \"contractor_service_periods\".\"from_month\")::date and (\"contractor_service_periods\".\"to_month\" is null or (\"contractor_service_periods\".\"to_month\" = date_trunc('month', \"contractor_service_periods\".\"to_month\")::date and \"contractor_service_periods\".\"to_month\" >= \"contractor_service_periods\".\"from_month\"))"
-        },
-        "contractor_service_periods_reason_check": {
-          "name": "contractor_service_periods_reason_check",
-          "value": "char_length(\"contractor_service_periods\".\"pause_reason\") <= 500"
-        }
-      },
-      "isRLSEnabled": true
-    },
     "public.contractor_tariffs": {
       "name": "contractor_tariffs",
       "schema": "",
@@ -2216,6 +2043,19 @@
           "primaryKey": false,
           "notNull": false
         },
+        "socfund_flags": {
+          "name": "socfund_flags",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "socfund_tariff": {
+          "name": "socfund_tariff",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_by": {
           "name": "created_by",
           "type": "uuid",
@@ -2491,6 +2331,14 @@
         "contractors_regime2_check": {
           "name": "contractors_regime2_check",
           "value": "\"contractors\".\"regime2_code\" is null or (\"contractors\".\"regime_code\" is not null and \"contractors\".\"regime2_code\" <> \"contractors\".\"regime_code\")"
+        },
+        "contractors_socfund_flags_check": {
+          "name": "contractors_socfund_flags_check",
+          "value": "jsonb_typeof(\"contractors\".\"socfund_flags\") = 'object' and \"contractors\".\"socfund_flags\" - array['cashless', 'registry', 'confirmed', 'gov'] = '{}'::jsonb and coalesce(jsonb_typeof(socfund_flags -> 'cashless'), 'boolean') = 'boolean' and coalesce(jsonb_typeof(socfund_flags -> 'registry'), 'boolean') = 'boolean' and coalesce(jsonb_typeof(socfund_flags -> 'confirmed'), 'boolean') = 'boolean' and coalesce(jsonb_typeof(socfund_flags -> 'gov'), 'boolean') = 'boolean'"
+        },
+        "contractors_socfund_tariff_check": {
+          "name": "contractors_socfund_tariff_check",
+          "value": "\"contractors\".\"socfund_tariff\" is null or (jsonb_typeof(\"contractors\".\"socfund_tariff\") = 'object' and \"contractors\".\"socfund_tariff\" - array['id', 'manual', 'reason'] = '{}'::jsonb and coalesce(\"contractors\".\"socfund_tariff\" ->> 'id', '') in ('spino', 'general', 'pvtpki') and coalesce(jsonb_typeof(\"contractors\".\"socfund_tariff\" -> 'manual'), 'null') = 'boolean' and coalesce(jsonb_typeof(\"contractors\".\"socfund_tariff\" -> 'reason'), 'null') in ('null', 'string') and (\"contractors\".\"socfund_tariff\" -> 'manual' = 'true' or coalesce(jsonb_typeof(\"contractors\".\"socfund_tariff\" -> 'reason'), 'null') = 'null'))"
         }
       },
       "isRLSEnabled": true
@@ -6408,12 +6256,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "cause": {
-          "name": "cause",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "file_id": {
           "name": "file_id",
           "type": "uuid",
@@ -6548,10 +6390,6 @@
         "status_history_rollback_reason_check": {
           "name": "status_history_rollback_reason_check",
           "value": "not \"status_history\".\"is_rollback\" or (\"status_history\".\"from_status\" is not null and \"status_history\".\"reason\" is not null and btrim(\"status_history\".\"reason\") <> '')"
-        },
-        "status_history_cause_check": {
-          "name": "status_history_cause_check",
-          "value": "\"status_history\".\"cause\" is null or \"status_history\".\"cause\" in ('service')"
         },
         "status_history_reason_check": {
           "name": "status_history_reason_check",

@@ -20,11 +20,16 @@ import {
   type ReportKind,
   type ServiceStatus,
   type SingleTaxSubject,
+  type SocfundChoice,
+  type SocfundFlags,
+  type SocfundTariffId,
   type TariffPeriod,
 } from '@buhuchet/domain';
 import { and, asc, count, eq, inArray, ne, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { Tx } from './client';
+import { gkedIndexOf } from './gked';
+import { SOCFUND_LIST, socfundListTable } from './socfund';
 import { updateWithHistory, writeHistory } from './history';
 import {
   auditActorValue,
@@ -104,6 +109,12 @@ export interface ContractorFields {
   feeDay: number;
   paysTo: 'emp' | 'org';
   gkedConfirmation: ContractorGkedConfirmation | null;
+  /**
+   * Признаки для тарифа Соцфонда и выбранный тариф (docs/decisions.md п. А-3); не переданы — признаки
+   * не указаны и тарифа нет (так создают контрагентов тесты модулей, которым тариф не нужен).
+   */
+  socfundFlags?: SocfundFlags;
+  socfundTariff?: SocfundChoice | null;
 }
 
 /** Первая запись журнала тарифов: сумма в тыйынах, периодичность и месяц (первое число). */
@@ -152,6 +163,8 @@ export interface ContractorRecord {
   /** Действующая ставка обслуживания (последняя с месяцем не позже текущего); null — нет. */
   tariff: { amount: number; period: TariffPeriod; validFrom: IsoDate } | null;
   gkedConfirmation: (ContractorGkedConfirmation & { by: string }) | null;
+  socfundFlags: SocfundFlags;
+  socfundTariff: SocfundChoice | null;
   audit: AuditRecord;
   version: number;
 }
@@ -179,6 +192,11 @@ export interface ContractorRow {
   head: string;
   contact: string;
   tariff: { amount: number; period: TariffPeriod } | null;
+  /**
+   * Тариф Соцфонда (прототип cpCols, «Тариф Соцфонда» и «Тариф под вопросом»): выбранный (`id` null —
+   * не определён) и «под вопросом»; null — тариф контрагенту не нужен.
+   */
+  socfund: { id: SocfundTariffId | null; short: string; total: string; ask: boolean } | null;
   audit: AuditRecord;
   version: number;
 }
@@ -254,8 +272,8 @@ function rowFields(today: IsoDate) {
 }
 
 /** Контрагенты со справочными названиями, ответственным и именами «Создал» и «Изменил». */
-function fromContractors(tx: Tx, fields: object) {
-  return tx
+function fromContractors(tx: Tx, fields: object, sf?: SQL) {
+  const q = tx
     .select(fields as Record<string, SQL>)
     .from(contractors)
     .innerJoin(ownershipForms, eq(ownershipForms.code, contractors.formCode))
@@ -267,12 +285,32 @@ function fromContractors(tx: Tx, fields: object) {
     .leftJoin(creator, eq(creator.userId, contractors.createdBy))
     .leftJoin(updater, eq(updater.userId, contractors.updatedBy))
     .$dynamic();
+  return sf ? q.leftJoin(sf, sql`${SOCFUND_LIST.id} = ${contractors.id}`) : q;
 }
 
+/** Таблицы списка; `sf` — тариф Соцфонда контрагентов (`socfundListTable`). */
 const contractorListFrom =
-  (tx: Tx): ListFrom =>
+  (tx: Tx, sf: SQL): ListFrom =>
   (fields) =>
-    fromContractors(tx, fields);
+    fromContractors(tx, fields, sf);
+
+/** Поля тарифа Соцфонда строки списка. */
+const SOCFUND_ROW = {
+  sfTariff: SOCFUND_LIST.tariff,
+  sfName: SOCFUND_LIST.name,
+  sfTotal: SOCFUND_LIST.total,
+  sfAsk: SOCFUND_LIST.ask,
+};
+
+function socfundOfRow(r: Record<string, unknown>): ContractorRow['socfund'] {
+  if (r.sfTariff == null) return null;
+  return {
+    id: r.sfTariff === 'none' ? null : (r.sfTariff as SocfundTariffId),
+    short: r.sfName as string,
+    total: r.sfTotal as string,
+    ask: r.sfAsk === 'yes',
+  };
+}
 
 type RowData = Record<keyof ReturnType<typeof rowFields>, unknown>;
 
@@ -287,7 +325,7 @@ function auditOf(r: RowData): AuditRecord {
   };
 }
 
-function toRow(r: RowData, codes: PhoneCodes): ContractorRow {
+function toRow(r: RowData, codes: PhoneCodes): Omit<ContractorRow, 'socfund'> {
   const gked = r.gked as string | null;
   const responsibleId = r.responsibleId as string | null;
   return {
@@ -337,8 +375,8 @@ function contractText(t: ListTexts): SQL {
  * Столбцы списка контрагентов на сервере (ТЗ «Список контрагентов»; прототип modules/contractors.js,
  * cpCols): ключи — как у столбцов экрана. Справочные значения фильтруются по коду, а сортируются и
  * ищутся по названию; ответственный — по сотруднику. «Стоимость обслуживания» — только с правом «Видеть
- * плату за обслуживание» (`fee`). Просрочено, видов отчётов, тариф Соцфонда, деньги и долг добавят их
- * задачи (2.06, 2.08, поток В).
+ * плату за обслуживание» (`fee`). Тариф Соцфонда — из таблицы `sf` (`socfundListTable`). Просрочено, видов
+ * отчётов, деньги и долг добавят их задачи (2.06, поток В).
  */
 export function contractorListColumns(
   t: ListTexts,
@@ -381,6 +419,19 @@ export function contractorListColumns(
       label: 'cp.col.gked_set',
       value: sql`case when ${contractors.gked} is null then 'no' else 'yes' end`,
       display: sql`case when ${contractors.gked} is null then ${t('cp.no')} else ${t('cp.yes')} end`,
+    },
+    socfund: {
+      type: 'enum',
+      label: 'cp.col.socfund',
+      value: SOCFUND_LIST.tariff,
+      display: SOCFUND_LIST.name,
+      sort: { value: SOCFUND_LIST.name, text: true },
+    },
+    socfundAsk: {
+      type: 'enum',
+      label: 'cp.col.socfund_ask',
+      value: sql`coalesce(${SOCFUND_LIST.ask}, 'no')`,
+      display: sql`case when ${SOCFUND_LIST.ask} = 'yes' then ${t('cp.yes')} else ${t('cp.no')} end`,
     },
     taxOffice: {
       type: 'enum',
@@ -476,7 +527,8 @@ export async function listContractorsPage(
   query: ListQuery,
   o: ContractorListOptions,
 ): Promise<ListPageResult<ContractorRow>> {
-  const fields = rowFields(o.today);
+  const fields = { ...rowFields(o.today), ...SOCFUND_ROW };
+  const sf = await socfundListTable(tx, o.t);
   const page = await selectListPage({
     query,
     columns: contractorListColumns(o.t, o),
@@ -484,7 +536,7 @@ export async function listContractorsPage(
     defaultSort: DEFAULT_SORT,
     scope: listScope(query, o),
     select: ({ window, where, orderBy, limit, offset }) =>
-      fromContractors(tx, { ...fields, ...window } as typeof fields & ListWindowFields)
+      fromContractors(tx, { ...fields, ...window } as typeof fields & ListWindowFields, sf)
         .where(where)
         .orderBy(...orderBy)
         .limit(limit)
@@ -495,14 +547,17 @@ export async function listContractorsPage(
           listGroups: string[] | null;
         })[]
       >,
-    from: contractorListFrom(tx),
+    from: contractorListFrom(tx, sf),
   });
   const codes = await phoneCodes(tx);
-  return { ...page, rows: page.rows.map((r) => toRow(r as RowData, codes)) };
+  return {
+    ...page,
+    rows: page.rows.map((r) => ({ ...toRow(r as RowData, codes), socfund: socfundOfRow(r) })),
+  };
 }
 
 /** Значения столбца для фильтра-галочек — в той же области и вкладке. */
-export function listContractorValues(
+export async function listContractorValues(
   tx: Tx,
   key: string,
   o: ContractorListOptions,
@@ -513,7 +568,7 @@ export function listContractorValues(
     columns: contractorListColumns(o.t, o),
     key,
     scope: listScope(query, o),
-    from: contractorListFrom(tx),
+    from: contractorListFrom(tx, await socfundListTable(tx, o.t)),
     q,
   });
 }
@@ -532,7 +587,7 @@ export async function exportContractors(
     natural: CONTRACTOR_NATURAL,
     defaultSort: DEFAULT_SORT,
     scope: listScope(query, o),
-    from: contractorListFrom(tx),
+    from: contractorListFrom(tx, await socfundListTable(tx, o.t)),
   });
   const phone = keys.indexOf('phone');
   if (phone < 0) return result;
@@ -582,6 +637,8 @@ export async function getContractor(
     feeDay: contractors.feeDay,
     paysTo: contractors.paysTo,
     gkedConfirmation: contractors.gkedConfirmation,
+    socfundFlags: contractors.socfundFlags,
+    socfundTariff: contractors.socfundTariff,
     tariffFrom: sql<
       string | null
     >`(select ${contractorTariffs.validFrom}::text from ${contractorTariffs} where ${contractorTariffs.contractorId} = ${contractors.id} and ${contractorTariffs.validFrom} <= date_trunc('month', ${options.today}::date)::date order by ${contractorTariffs.validFrom} desc, ${contractorTariffs.createdAt} desc limit 1)`,
@@ -664,6 +721,8 @@ export async function getContractor(
     serviceStatus: base.serviceStatus,
     tariff: base.tariff && { ...base.tariff, validFrom: r.tariffFrom as IsoDate },
     gkedConfirmation: confirmation && { ...confirmation, by },
+    socfundFlags: r.socfundFlags as SocfundFlags,
+    socfundTariff: r.socfundTariff as SocfundChoice | null,
     audit: base.audit,
     version: base.version,
   };
@@ -782,6 +841,8 @@ export async function readContractorFields(
     feeDay: row.feeDay,
     paysTo: row.paysTo,
     gkedConfirmation: row.gkedConfirmation,
+    socfundFlags: row.socfundFlags,
+    socfundTariff: row.socfundTariff,
   };
 }
 
@@ -844,6 +905,8 @@ const CONTRACTOR_COLUMNS = [
   'feeDay',
   'paysTo',
   'gkedConfirmation',
+  'socfundFlags',
+  'socfundTariff',
 ] as const;
 
 /**
@@ -864,7 +927,7 @@ export async function createContractor(
     (typeof CONTRACTOR_COLUMNS)[number]
   >;
   // Обслуживание — с месяца начала (прототип addCpDlg: periods; первый период постоянному ставит база,
-  // миграция 0055); начало в будущем — «Приостановлен» до него, как cpStatus прототипа.
+  // миграция 0058); начало в будущем — «Приостановлен» до него, как cpStatus прототипа.
   const oneOff = input.kind === 'oneoff';
   const periods = initialPeriods(oneOff, input.startDate);
   const month = (options.today ?? bishkekDate(new Date())).slice(0, 7);
@@ -1340,18 +1403,8 @@ export async function contractorGkedDicts(
   codes: readonly string[],
   typeCodes: readonly string[] = [],
 ): Promise<GkedDicts> {
-  const list = codes.length ? [...codes] : [''];
-  const up = (await tx.execute(sql`
-    with recursive up as (
-      select code, level, parent_code, active from ${gkedItems} where code in (${sql.join(
-        list.map((c) => sql`${c}`),
-        sql`, `,
-      )})
-      union
-      select g.code, g.level, g.parent_code, g.active from ${gkedItems} g join up on g.code = up.parent_code
-    ) select code, level, parent_code, active from up
-  `)) as unknown as { code: string; level: string; parent_code: string | null; active: boolean }[];
-  const [regimes, benefits, rates, groupsRow, types, typeRegimes] = await Promise.all([
+  const [index, regimes, benefits, rates, groupsRow, types, typeRegimes] = await Promise.all([
+    gkedIndexOf(tx, codes),
     tx
       .select({
         code: taxRegimes.code,
@@ -1407,12 +1460,7 @@ export async function contractorGkedDicts(
     >,
   ).map(([id, g]) => ({ id, name: g.name ?? '', codes: g.codes ?? [], ask: g.ask ?? '' }));
   return {
-    index: new Map(
-      up.map((x) => [
-        x.code,
-        { code: x.code, level: x.level, parent: x.parent_code, active: x.active },
-      ]),
-    ),
+    index,
     regimes: regimes.map((r) => ({ ...r, gked: r.gked as GkedRule | null })),
     benefits: benefits.map((b) => ({ ...b, gked: b.gked as GkedRule | null })),
     rates: rates.map((x) => ({ ...x, gked: x.gked as GkedRule | null })),

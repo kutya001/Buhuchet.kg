@@ -7,9 +7,13 @@ import {
   PAUSE_REASON_MAX,
   PAYS_TO,
   SERVICE_STATUSES,
+  SOCFUND_FLAGS,
+  SOCFUND_TARIFFS,
   TARIFF_PERIODS,
   type ContractorGkedConfirmation,
   type ContractorRegistration,
+  type SocfundChoice,
+  type SocfundFlags,
 } from '@buhuchet/domain';
 import { sql, type SQL } from 'drizzle-orm';
 import {
@@ -36,6 +40,9 @@ import { ownershipForms, reportBases, taxBenefits, taxOffices, taxRegimes } from
 import { orgIsolation } from './rls';
 import { employees } from './staff';
 import { users } from './users';
+
+/** Список ключей объекта JSON для `jsonb - text[]` (без кавычек в самих ключах). */
+const jsonKeys = (keys: readonly string[]) => `array[${keys.map((k) => `'${k}'`).join(', ')}]`;
 
 /** Значение столбца — одно из постоянных кодов (без кавычек в самих кодах). */
 const oneOf = (column: AnyPgColumn, values: readonly string[]): SQL =>
@@ -87,6 +94,10 @@ export const contractors = pgTable(
     serviceStatus: text('service_status', { enum: SERVICE_STATUSES }).notNull().default('active'),
     /** Подтверждение права на режим по ГКЭД; действует, пока не изменился набор данных `sig`. */
     gkedConfirmation: jsonb('gked_confirmation').$type<ContractorGkedConfirmation>(),
+    /** Признаки для тарифа Соцфонда: только указанные, да или нет (docs/decisions.md п. А-3). */
+    socfundFlags: jsonb('socfund_flags').$type<SocfundFlags>().notNull().default({}),
+    /** Тариф Соцфонда: какой, выбран ли вручную и почему; пусто — не определён. */
+    socfundTariff: jsonb('socfund_tariff').$type<SocfundChoice>(),
     createdBy: uuid('created_by').references(() => users.id),
     updatedBy: uuid('updated_by').references(() => users.id),
     ...timestamps(),
@@ -115,6 +126,21 @@ export const contractors = pgTable(
     check(
       'contractors_regime2_check',
       sql`${t.regime2Code} is null or (${t.regimeCode} is not null and ${t.regime2Code} <> ${t.regimeCode})`,
+    ),
+    check(
+      'contractors_socfund_flags_check',
+      sql`jsonb_typeof(${t.socfundFlags}) = 'object' and ${t.socfundFlags} - ${sql.raw(jsonKeys(SOCFUND_FLAGS))} = '{}'::jsonb and ${sql.raw(
+        SOCFUND_FLAGS.map(
+          (k) => `coalesce(jsonb_typeof(socfund_flags -> '${k}'), 'boolean') = 'boolean'`,
+        ).join(' and '),
+      )}`,
+    ),
+    check(
+      'contractors_socfund_tariff_check',
+      // coalesce: без ключа id или manual проверка дала бы NULL, а CHECK с NULL проходит.
+      sql`${t.socfundTariff} is null or (jsonb_typeof(${t.socfundTariff}) = 'object' and ${t.socfundTariff} - ${sql.raw(jsonKeys(['id', 'manual', 'reason']))} = '{}'::jsonb and coalesce(${t.socfundTariff} ->> 'id', '') in (${sql.raw(
+        SOCFUND_TARIFFS.map((v) => `'${v}'`).join(', '),
+      )}) and coalesce(jsonb_typeof(${t.socfundTariff} -> 'manual'), 'null') = 'boolean' and coalesce(jsonb_typeof(${t.socfundTariff} -> 'reason'), 'null') in ('null', 'string') and (${t.socfundTariff} -> 'manual' = 'true' or coalesce(jsonb_typeof(${t.socfundTariff} -> 'reason'), 'null') = 'null'))`,
     ),
     orgIsolation('contractors_isolation', t.orgId),
   ],

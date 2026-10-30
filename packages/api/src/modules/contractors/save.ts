@@ -1,5 +1,6 @@
 import { createRoute, z, type RouteHandler } from '@hono/zod-openapi';
 import {
+  activeReportTypes,
   contractorUsage,
   createContractor,
   deleteContractor,
@@ -50,6 +51,15 @@ import {
   todayOf,
   translateOf,
 } from './common';
+import {
+  requireSocfundConfirm,
+  requireSocfundReason,
+  socfundContext,
+  socfundInputOf,
+  socfundPatch,
+  socfundSubjectOf,
+  withSocfundStatus,
+} from './socfund-view';
 
 const forbidden = (message: string) => apiFail(403, 'forbidden', message);
 
@@ -57,7 +67,7 @@ const forbidden = (message: string) => apiFail(403, 'forbidden', message);
  * Ответ с карточкой после сохранения: контрагент читается заново, без области (его только что
  * сохранили); `notices` — уведомления «Отмечен статус «…» по УГНС».
  */
-async function savedOut(
+export async function savedOut(
   tx: Tx,
   id: string,
   options: {
@@ -89,6 +99,13 @@ const officeBenefitsOf = (
     marked: t('cp.notice.ugns_marked'),
     dropped: t('cp.notice.ugns_dropped'),
   });
+
+/** Причины пересчёта сроков несданных отчётов при смене статусов контрагента (прототип cpRedue). */
+export const redueTexts = (t: Translate) => ({
+  byStatus: t('report.reason.due_status'),
+  byCatalog: t('report.reason.due_catalog'),
+  byCatalogDropped: t('report.reason.due_catalog_dropped'),
+});
 
 /** Первое число месяца даты: с него действует первая ставка обслуживания (прототип: start.slice(0, 7)). */
 const monthOf = (date: string) => `${date.slice(0, 7)}-01`;
@@ -187,7 +204,12 @@ export function createContractorHandler(
           feeDay: body.feeDay ?? DEFAULT_FEE_DAY,
           paysTo: body.paysTo,
           gkedConfirmation: null,
+          socfundFlags: {},
+          socfundTariff: null,
         };
+        const sf = await socfundContext(tx, fields.gked, fields.formCode);
+        // Статус СПиНО ставит тариф, а не окно «Льготы и особые статусы».
+        fields.benefits = withSocfundStatus(fields.benefits, sf.dict, false);
         const office = await officeBenefitsOf(
           tx,
           fields.benefits,
@@ -195,6 +217,13 @@ export function createContractorHandler(
           t,
         );
         fields.benefits = office.benefits;
+        const sfInput = socfundInputOf(body.socfund, {});
+        const sfSubject = socfundSubjectOf(
+          { ...fields, benefits: fields.benefits.map((b) => b.code), flags: sfInput.flags },
+          sf.form,
+          [],
+        );
+        requireSocfundReason(sfSubject, sfInput, sf.dict, t);
         fields.gkedConfirmation = await checkContractor(tx, fields, {
           before: null,
           gkedConfirm: body.gkedConfirm ?? false,
@@ -203,6 +232,11 @@ export function createContractorHandler(
           today,
           t,
         });
+        requireSocfundConfirm(sfSubject, null, sfInput, sf.dict, body.socfundConfirm ?? false, t);
+        Object.assign(
+          fields,
+          socfundPatch({ ...sfSubject, flags: {} }, null, sfInput, sf.dict, fields.benefits),
+        );
         const id = await createContractor(
           tx,
           ctx.orgId,
@@ -298,7 +332,7 @@ export function updateContractorHandler(
 ): RouteHandler<typeof updateContractorRoute, AppEnv> {
   return async (c) => {
     const { id } = c.req.valid('param');
-    const { version, gkedConfirm, ...patch } = c.req.valid('json');
+    const { version, gkedConfirm, socfund, socfundConfirm, ...patch } = c.req.valid('json');
     const subject = subjectOf(c);
     const ctx = orgContextOf(c);
     const today = todayOf(deps);
@@ -330,8 +364,19 @@ export function updateContractorHandler(
           ...before,
           ...Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined)),
         };
+        const [sf, types] = await Promise.all([
+          socfundContext(tx, next.gked, next.formCode),
+          activeReportTypes(tx, id),
+        ]);
         if (patch.gkedExtra) next.gkedExtra = [...new Set(patch.gkedExtra)];
-        if (patch.benefits) next.benefits = uniqueBy(patch.benefits);
+        // Статус СПиНО ставит тариф, а не окно «Льготы и особые статусы»: до решения о тарифе — как был.
+        if (patch.benefits) {
+          next.benefits = withSocfundStatus(
+            uniqueBy(patch.benefits),
+            sf.dict,
+            before.socfundTariff?.id === 'spino',
+          );
+        }
         if (patch.bases) next.bases = [...new Set(patch.bases)];
         const office = await officeBenefitsOf(
           tx,
@@ -340,6 +385,13 @@ export function updateContractorHandler(
           t,
         );
         next.benefits = office.benefits;
+        const sfInput = socfundInputOf(socfund, before.socfundFlags ?? {});
+        const sfSubject = socfundSubjectOf(
+          { ...next, benefits: next.benefits.map((b) => b.code), flags: sfInput.flags },
+          sf.form,
+          types,
+        );
+        requireSocfundReason(sfSubject, sfInput, sf.dict, t);
         const confirmation = await checkContractor(tx, next, {
           before: { id, fields: before },
           gkedConfirm: gkedConfirm ?? false,
@@ -348,6 +400,21 @@ export function updateContractorHandler(
           today,
           t,
         });
+        requireSocfundConfirm(
+          sfSubject,
+          before.socfundTariff ?? null,
+          sfInput,
+          sf.dict,
+          socfundConfirm ?? false,
+          t,
+        );
+        const sfPatch = socfundPatch(
+          { ...sfSubject, flags: before.socfundFlags ?? {} },
+          before.socfundTariff ?? null,
+          sfInput,
+          sf.dict,
+          next.benefits,
+        );
         await updateContractor(
           tx,
           ctx.orgId,
@@ -356,19 +423,16 @@ export function updateContractorHandler(
           {
             ...Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined)),
             ...(patch.gkedExtra ? { gkedExtra: next.gkedExtra } : {}),
-            ...(patch.benefits || office.notes.length ? { benefits: next.benefits } : {}),
+            ...(patch.benefits || office.notes.length || sfPatch.benefits !== next.benefits
+              ? { benefits: sfPatch.benefits }
+              : {}),
             ...(patch.bases ? { bases: next.bases } : {}),
             gkedConfirmation: confirmation,
+            socfundFlags: sfPatch.socfundFlags,
+            socfundTariff: sfPatch.socfundTariff,
           },
           scope,
-          {
-            today,
-            texts: {
-              byStatus: t('report.reason.due_status'),
-              byCatalog: t('report.reason.due_catalog'),
-              byCatalogDropped: t('report.reason.due_catalog_dropped'),
-            },
-          },
+          { today, texts: redueTexts(t) },
         );
         await writeContractorNotes(tx, id, office.notes);
         return savedOut(tx, id, { orgId: ctx.orgId, subject, today, t, notices: office.notes });
