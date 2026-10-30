@@ -83,11 +83,17 @@ const inService=(c,m)=>(c.periods||[]).some(p=>p.from<=m&&(!p.to||m<=p.to));
 const lastPeriod=c=>c.periods[c.periods.length-1];
 // Срок оплаты за месяц — «день оплаты» этого месяца; если он раньше начала обслуживания или дня, когда контрагента завели, — тот же день следующего месяца
 function feeDue(c,m){let d=mkDate(+m.slice(0,4),+m.slice(5,7),c.feeDay);const s=c.start||'',cr=(c._ca||'').slice(0,10);if(d<s||d<=cr){const n=addMonths(m,1);d=mkDate(+n.slice(0,4),+n.slice(5,7),c.feeDay)}return d}
-const cpStatus=c=>c.archived?'В архиве':inService(c,ym(TODAY))?'Обслуживается':'Приостановлен';
+// Разовый контрагент вне архива — «Обслуживается»: его отчёты, назначенные вручную, видны в «Просрочено» и «На неделе» (ТЗ; решение заказчика 30.10.2026, продукт п. В-14)
+const cpStatus=c=>c.archived?'В архиве':c.kind==='oneoff'||inService(c,ym(TODAY))?'Обслуживается':'Приостановлен';
+// Отчёт за период нужен, если контрагент обслуживался хотя бы один месяц периода: квартальный и годовой — тоже (ТЗ; решение заказчика 30.10.2026, продукт п. В-11)
+function pInService(c,t,p){const e=ym(pend(t,p));for(let m=ym(pstart(t,p));m<=e;m=addMonths(m,1))if(inService(c,m))return true;return false}
+const repInService=(c,r)=>c.kind==='oneoff'||pInService(c,tFor(r),r.p);
 const pTxt=m=>m.slice(5)+'.'+m.slice(0,4);
 const periodsText=c=>(c.periods||[]).map(p=>`${pTxt(p.from)}–${p.to?pTxt(p.to):'…'}`).join(', ');
 const fileName=(t,r)=>`квитанция_${t.short.replace(/[\s.\/]+/g,'')}_${r.plabel.replace(/[\s.]+/g,'-')}.pdf`;
-function feeMonths(c){if(c.kind==='oneoff')return [];const out=[];let m=maxIso(c.start.slice(0,7),TODAY.slice(0,4)+'-01');const end=ym(TODAY);while(m<=end){if(inService(c,m))out.push(m);m=addMonths(m,1)}return out}
+// Месяцы платы за обслуживание: с более позднего из месяца начала обслуживания и месяца, когда контрагента завели в программе, по идущий месяц;
+// долг прошлых лет остаётся (решение заказчика 27.10.2026, продукт п. В-5)
+function feeMonths(c){if(c.kind==='oneoff')return [];const out=[];let m=maxIso(c.start.slice(0,7),(c._ca||'').slice(0,7));const end=ym(TODAY);while(m<=end){if(inService(c,m))out.push(m);m=addMonths(m,1)}return out}
 function feeCharge(c,m){const t=tariffAt(c,m);if(!t)return 0;if(t.per==='Y')return m.slice(5)===t.from.slice(5)?t.amount:0;
   if(m===c.start.slice(0,7)&&c.start.slice(8)!=='01'){if(c.first==='next')return 0;if(c.first==='prorate'){const days=+lastDay(m).slice(8);const left=days-(+c.start.slice(8))+1;return Math.round(t.amount*left/days)}}
   return t.amount}

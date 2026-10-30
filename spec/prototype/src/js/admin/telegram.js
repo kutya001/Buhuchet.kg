@@ -1,6 +1,11 @@
 'use strict';
 // Админка: «Телеграм»
 const TG_LOG=DB.telegramLog;
+// Служебные сообщения бота — код восстановления, привязка и отвязка, смена и сброс пароля — тоже пишутся в журнал: тип сообщения без текста, код в журнале не виден (решение заказчика 30.10.2026, п. 12). o.chat — прежний чат, если сообщение уходит в него; o.org — организация пользователя не из демо-организации
+const TG_CODE='Код восстановления';
+function tgSvc(u,kind,o={}){const to=o.chat||u.tg;if(!to)return;TG_LOG.unshift({id:TG_LOG.length+1,at:nowStamp(),to:(u.short||u.fio||u.login)+' '+to,org:o.org||(u.id==='admin'?'Платформа':ORG.name),kind,st:'Отправлено',tries:1,err:''})}
+// Сообщение с кодом повторно не отправляется: код живёт 10 минут, пользователь запросит новый
+const tgNoRetry=x=>x.st!=='Ошибка'?'Повтор доступен только для ошибок':x.kind===TG_CODE?'Код восстановления повторно не отправляется: пользователь запросит новый':'';
 // Состояние вебхука бота: в продукте его возвращает сервер по ответу Telegram (getWebhookInfo), в макете — «Работает»
 const TG_WH={url:'https://buhuchet.kg/api/telegram/webhook',err:'',at:''};
 function renderTg(body,tab,fresh){
@@ -9,8 +14,8 @@ function renderTg(body,tab,fresh){
     body.querySelector('.plates').onclick=e=>{const b=e.target.closest('[data-plate]');if(!b)return;const g=GS['tg-log'];if(!g)return;g.filters={};if(b.dataset.plate==='e')g.filters.st={type:'enum',vals:['Ошибка']};if(b.dataset.plate==='q')g.filters.st={type:'enum',vals:['Ожидает']};renderPage()};
     grid($('#tgg',body),{id:'tg-log',audit:false,cols:[{key:'at',label:'Время',type:'text',w:150,val:x=>x.at,text:x=>fmtD(x.at.slice(0,10))+' '+x.at.slice(11),sortVal:x=>x.at},{key:'to',label:'Получатель',type:'text',w:190,val:x=>x.to},{key:'org',label:'Организация',type:'enum',w:220,val:x=>x.org},{key:'kind',label:'Тип сообщения',type:'enum',w:190,val:x=>x.kind},{key:'st',label:'Статус',type:'enum',w:140,val:x=>x.st,html:x=>pill(x.st,{Отправлено:['green','check'],Ожидает:['yellow','hourglass'],Ошибка:['red','alert']})},{key:'tries',label:'Попыток',type:'int',w:90,num:true,val:x=>x.tries},{key:'err',label:'Ошибка',type:'text',w:280,val:x=>x.err,cls:'mono'}],
       rows:()=>TG_LOG,title:'kind',noun:['сообщение','сообщения','сообщений'],sort:{key:'at',dir:-1},rowClass:x=>x.st==='Ошибка'?'overdue':'',simulateLoad:fresh,
-      actions:x=>[{label:'Повторить отправку',icon:'refresh',disabled:x.st!=='Ошибка',reason:x.st!=='Ошибка'?'Повтор доступен только для ошибок':'',run:()=>{x.st='Ожидает';x.tries=0;x.err='';renderPage();toast('Сообщение снова в очереди','tg');setTimeout(()=>{x.st='Отправлено';x.tries=1;if(S.mod==='tg')renderPage()},1600)}}],
-      bulk:[{label:'Повторить ошибки',icon:'refresh',run:(rs,done)=>{rs.filter(x=>x.st==='Ошибка').forEach(x=>{x.st='Ожидает';x.err=''});done();renderPage();toast('Поставлено в очередь')}}]});return}
+      actions:x=>[{label:'Повторить отправку',icon:'refresh',disabled:!!tgNoRetry(x),reason:tgNoRetry(x),run:()=>{x.st='Ожидает';x.tries=0;x.err='';renderPage();toast('Сообщение снова в очереди','tg');setTimeout(()=>{x.st='Отправлено';x.tries=1;if(S.mod==='tg')renderPage()},1600)}}],
+      bulk:[{label:'Повторить ошибки',icon:'refresh',run:(rs,done)=>{const xs=rs.filter(x=>!tgNoRetry(x)),k=rs.filter(x=>x.st==='Ошибка'&&x.kind===TG_CODE).length;xs.forEach(x=>{x.st='Ожидает';x.err=''});done();renderPage();toast(`Поставлено в очередь: ${xs.length}`+(k?`; коды восстановления повторно не отправляются (${k})`:''))}}]});return}
   // Бот платформы (решение заказчика 26.10.2026): токен, секрет вебхука и имя бота хранятся только в окружении Vercel; здесь — адрес вебхука, его состояние и проверка, токен не вводится и не показывается
   if(tab==='bot'){if(!TG_WH.at)TG_WH.at=bishkekNow().hm;
     const st=TG_WH.err?pill('Ошибка',{Ошибка:['red','alert']}):pill('Работает',{Работает:['green','check']});
