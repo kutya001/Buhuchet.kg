@@ -129,6 +129,7 @@ export function Shell({ initialMax, ...props }: ShellProps) {
 /** Нижняя строка окна помощи: «Открыть Базу знаний» (окно закрывается, переход заменяет его в истории) и «Закрыть». */
 function HelpFooter({ kbHref }: { kbHref: string }) {
   const t = useT();
+  const kb = useKb();
   const { close, leave } = useWindow();
   return (
     <>
@@ -137,6 +138,19 @@ function HelpFooter({ kbHref }: { kbHref: string }) {
         {t('kb.open')}
       </Link>
       <div className="flex-1" />
+      <button
+        type="button"
+        data-kb-show-screen=""
+        className={buttonClass()}
+        title={t('kb.show.screen_hint')}
+        onClick={() => {
+          close();
+          kb.showScreen();
+        }}
+      >
+        <Icon name="play" size="sm" />
+        {t('kb.show.screen')}
+      </button>
       <button type="button" onClick={close} className={buttonClass('cta')}>
         {t('btn.close')}
       </button>
@@ -399,6 +413,16 @@ function ShellPage({
     onProfile: useCallback(() => setProfileOpen(true), [setProfileOpen]),
     kbHref: moduleHref('kb', access),
     lessonsHref: tabHref('kb', 'lessons'),
+    userId: me.user.id,
+    current: current
+      ? {
+          id: current.id,
+          title,
+          desc,
+          tabs: current.tabs.map((x) => ({ id: x.id, label: x.label, href: x.href })),
+          add: actions,
+        }
+      : null,
   });
   // Приветствие и опросник: после входа — вместо «Что нового», если нужно (задача 2.33).
   const welcome = useWelcomeRuntime({

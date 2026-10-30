@@ -203,7 +203,10 @@ export function Box({
   children: ReactNode;
 }) {
   return (
-    <section className="flex min-w-0 flex-col gap-2.5 rounded-xl border border-line bg-raised px-4 py-3.5">
+    <section
+      data-box
+      className="flex min-w-0 flex-col gap-2.5 rounded-xl border border-line bg-raised px-4 py-3.5"
+    >
       {title ? (
         <h3 className="m-0 flex items-center gap-2 text-[11.5px] font-bold tracking-[.08em] text-faint uppercase">
           <span className="grow">{title}</span>

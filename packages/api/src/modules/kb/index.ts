@@ -23,6 +23,20 @@ import {
   kbUnskipRoute,
 } from './progress';
 import {
+  kbKnownAddHandler,
+  kbKnownAddRoute,
+  kbKnownHandler,
+  kbKnownResetHandler,
+  kbKnownResetRoute,
+  kbKnownRoute,
+  kbScreenShowHandler,
+  kbScreenShowRoute,
+  kbShowsHandler,
+  kbShowsRoute,
+  kbStepShowHandler,
+  kbStepShowRoute,
+} from './shows';
+import {
   kbMemberHandler,
   kbMemberRoute,
   kbTeamExportHandler,
@@ -35,7 +49,8 @@ import {
 
 /**
  * «База знаний» (ТЗ «База знаний», задача 2.30): своя программа обучения и уровень, отметки шагов,
- * статьи, уровни сотрудников. Свою программу видит любой вошедший (у администратора платформы — своя),
+ * статьи, уровни сотрудников; «Показать как» и «Обзор экрана» — сценарии, знакомые элементы, отметка
+ * показом (задача 2.31). Свою программу видит любой вошедший (у администратора платформы — своя),
  * уровни других — право «Видеть уровни сотрудников».
  */
 export function kbModule(deps: ApiDeps) {
@@ -46,6 +61,12 @@ export function kbModule(deps: ApiDeps) {
     .openapi(kbHitRoute, kbHitHandler(deps))
     .openapi(kbSkipRoute, kbSkipHandler(deps))
     .openapi(kbUnskipRoute, kbUnskipHandler(deps))
+    .openapi(kbStepShowRoute, kbStepShowHandler(deps))
+    .openapi(kbScreenShowRoute, kbScreenShowHandler(deps))
+    .openapi(kbShowsRoute, kbShowsHandler(deps))
+    .openapi(kbKnownRoute, kbKnownHandler(deps))
+    .openapi(kbKnownAddRoute, kbKnownAddHandler(deps))
+    .openapi(kbKnownResetRoute, kbKnownResetHandler(deps))
     .openapi(kbArticlesRoute, kbArticlesHandler(deps))
     .openapi(kbArticleRoute, kbArticleHandler(deps))
     .openapi(kbArticleReadRoute, kbArticleReadHandler(deps))

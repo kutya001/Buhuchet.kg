@@ -143,7 +143,15 @@ export async function seedAllPlatformDictionaries(db: Db): Promise<void> {
  */
 export async function seedKbReference(db: Db): Promise<void> {
   const refDB = await readSpecJson<Record<string, unknown>>('data/refDB.json');
-  const keys = ['kbSteps', 'kbGroups', 'kbLevels', 'kbArticles', 'kbUi', 'onboarding'] as const;
+  const keys = [
+    'kbSteps',
+    'kbGroups',
+    'kbLevels',
+    'kbArticles',
+    'kbUi',
+    'kbShows',
+    'onboarding',
+  ] as const;
   await db
     .insert(platformReference)
     .values(keys.map((key) => ({ key, payload: refDB[key], checksum: 'test', source: 'test' })))

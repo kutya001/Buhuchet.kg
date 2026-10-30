@@ -2,6 +2,8 @@ import {
   bishkekDate,
   FEATURES,
   isKbHow,
+  KB_KNOWN_LIMIT,
+  KB_SHOW_AUTOS,
   kbBusinessAccess,
   kbProgram,
   kbStats,
@@ -37,6 +39,7 @@ import {
   auditLog,
   employees,
   kbArticleReads,
+  kbKnown,
   kbLevels,
   kbProgress,
   platformReference,
@@ -162,6 +165,141 @@ export async function kbFeatureInfo(db: Db | Tx): Promise<Partial<Record<Feature
   const ui = await kbScreenUi(db);
   const info = ui.features ?? {};
   return Object.fromEntries(FEATURES.filter((f) => info[f]).map((f) => [f, info[f]!]));
+}
+
+/* ───────────── Показы ───────────── */
+
+const ShowAction = z.union([
+  z.string().max(64),
+  z.record(z.string(), z.union([z.string().max(200), z.number(), z.boolean()])),
+]);
+const optActions = z.array(ShowAction).optional().catch(undefined);
+const optNullText = z.string().nullable().optional().catch(undefined);
+const optFlag = z.boolean().optional().catch(undefined);
+const ShowItem = z.object({
+  s: optNullText,
+  m: optNullText,
+  t: optText,
+  x: optText,
+  in: optText,
+  txt: optText,
+  up: optText,
+  ctx: optText,
+  pre: optActions,
+  sub: optActions,
+  auto: z.enum(KB_SHOW_AUTOS).optional().catch(undefined),
+  common: optFlag,
+  noBody: optFlag,
+});
+const Show = z.object({
+  id: z.string().regex(CODE),
+  step: z.string().regex(CODE),
+  scr: optText,
+  items: z.array(ShowItem),
+  doit: optActions,
+  active: optFlag,
+});
+const dict = z.record(z.string(), z.string()).optional().catch(undefined);
+const ShowUi = z.object({
+  ui: dict,
+  plateMode: dict,
+  mods: dict,
+  tabs: dict,
+  add: dict,
+  addItems: dict,
+  plates: dict,
+  boxes: dict,
+  ctabs: dict,
+  cards: dict,
+  buttons: dict,
+  acts: dict,
+  forms: dict,
+  rows: dict,
+  fields: z
+    .record(z.string(), z.object({ n: optText, req: flag, x: optText }))
+    .optional()
+    .catch(undefined),
+  els: z
+    .array(
+      z.object({
+        id: z.string(),
+        scr: z.string(),
+        s: optNullText,
+        m: optNullText,
+        in: optText,
+        txt: optText,
+        up: optText,
+        t: z.string(),
+        x: optText,
+        at: optText,
+      }),
+    )
+    .optional()
+    .catch(undefined),
+});
+export type KbShowUi = z.infer<typeof ShowUi>;
+export type KbShowRecord = z.infer<typeof Show>;
+
+/**
+ * Сценарии «Показать как» (`kbShows`, только активные) и тексты облачков (`kbUi`: служебные тексты,
+ * описания модулей, вкладок, кнопок, плашек, полей, элементов экрана) — для показа на экране.
+ */
+export async function kbShowContent(db: Db | Tx): Promise<{ ui: KbShowUi; shows: KbShowRecord[] }> {
+  const p = await payloads(db, ['kbShows', 'kbUi']);
+  const ui = ShowUi.safeParse(p.get('kbUi') ?? {});
+  return {
+    ui: ui.success ? ui.data : {},
+    shows: items(Show, p.get('kbShows')).filter((s) => s.active !== false),
+  };
+}
+
+/* ───────────── Знакомые элементы ───────────── */
+
+/** Свои знакомые элементы показов (RLS: только свои строки). */
+export async function kbKnownKeys(tx: Tx): Promise<string[]> {
+  const rows = await tx
+    .select({ key: kbKnown.key })
+    .from(kbKnown)
+    .where(eq(kbKnown.userId, sql`app.current_user_id()`))
+    .orderBy(asc(kbKnown.knownAt), asc(kbKnown.key));
+  return rows.map((r) => r.key);
+}
+
+/**
+ * Запомнить свои знакомые элементы (уже знакомые не меняются). Больше `KB_KNOWN_LIMIT` не хранится:
+ * сверх предела новые не запоминаются — показ просто покажет их снова. Возвращает, сколько знакомых
+ * теперь.
+ */
+export async function kbAddKnown(tx: Tx, keys: readonly string[]): Promise<number> {
+  // Одна вставка пользователя за раз: две параллельные не перешагнут предел.
+  await tx.execute(
+    sql`select pg_advisory_xact_lock(hashtext('kb_known'), hashtext(app.current_user_id()::text))`,
+  );
+  const count = async () => {
+    const [row] = await tx
+      .select({ n: sql<number>`count(*)::int` })
+      .from(kbKnown)
+      .where(eq(kbKnown.userId, sql`app.current_user_id()`));
+    return row?.n ?? 0;
+  };
+  const before = await count();
+  const room = KB_KNOWN_LIMIT - before;
+  const fresh = [...new Set(keys)].slice(0, Math.max(0, room));
+  if (!fresh.length) return before;
+  await tx
+    .insert(kbKnown)
+    .values(fresh.map((key) => ({ userId: sql`app.current_user_id()`, key })))
+    .onConflictDoNothing();
+  return count();
+}
+
+/** «Показывать всё заново»: забыть свои знакомые элементы; возвращает, сколько их было. */
+export async function kbResetKnown(tx: Tx): Promise<number> {
+  const rows = await tx
+    .delete(kbKnown)
+    .where(eq(kbKnown.userId, sql`app.current_user_id()`))
+    .returning({ key: kbKnown.key });
+  return rows.length;
 }
 
 /* ───────────── Прогресс ───────────── */

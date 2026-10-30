@@ -380,6 +380,7 @@ export function Modal({
         footer={footer}
         size={size}
         narrow={kind === 'form' && size !== 'wide'}
+        kind={kind}
         canMax={canMax}
         max={max}
         slide={!openedMax}
@@ -465,6 +466,8 @@ export interface WindowFrameProps {
   size: ModalSize;
   /** Форма: развёрнутое содержимое — колонкой до 980 px. */
   narrow: boolean;
+  /** Вид окна (`data-window-kind`): «Показать как» разбирает карточку и форму по-разному. */
+  kind?: WindowKind;
   canMax: boolean;
   max: boolean;
   /** Выезд снизу при открытии (нет у окна, открытого сразу развёрнутым). */
@@ -494,6 +497,7 @@ export function WindowFrame({
   footer,
   size,
   narrow,
+  kind,
   canMax,
   max,
   slide = true,
@@ -535,6 +539,7 @@ export function WindowFrame({
         aria-label={label}
         tabIndex={-1}
         data-window
+        data-window-kind={kind}
         data-overlay
         data-max={max}
         className={dialogClass(size, max, slide, phoneFull)}
@@ -546,6 +551,7 @@ export function WindowFrame({
         />
         <div
           data-swipe-handle
+          data-window-head
           onDoubleClick={doubleClick}
           className={`flex flex-none items-start gap-3 pt-[18px] pb-2.5 max-md:pt-3 max-md:pb-2 ${edgeClass(max, narrow, 'pr-[18px] pl-[22px] max-md:pr-3.5 max-md:pl-4')}`}
         >
@@ -568,12 +574,14 @@ export function WindowFrame({
                 title={phone ? maxLabel : `${maxLabel} ${labels.maximizeHint}`}
                 onClick={onToggleMax}
                 className={iconButtonClass()}
+                data-window-max
               >
                 <Icon name={max ? 'minimize' : 'maximize'} />
               </button>
             )}
             <button
               type="button"
+              data-window-close
               aria-label={labels.close}
               onClick={onClose}
               className={iconButtonClass()}
@@ -607,6 +615,7 @@ export function WindowFrame({
         </div>
         {footer && (
           <div
+            data-window-foot
             className={`flex flex-none flex-wrap items-center justify-end gap-2 border-t border-line pt-3 pb-3.5 max-md:pt-2.5 max-md:pb-3 ${edgeClass(max, narrow, 'pr-[18px] pl-[22px] max-md:px-4')}`}
           >
             {footer}

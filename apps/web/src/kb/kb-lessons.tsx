@@ -53,7 +53,7 @@ function writeClosed(key: string, closed: ReadonlySet<string>) {
  * «База знаний» → «Уроки» (прототип modules/kb.js, renderKB → уроки): программа обучения — уровень,
  * «Продолжить», уроки по модулям со шагами: ★ основной, «Посмотреть» или «Сделать», «Новое», статья
  * шага, как и когда засчитан, «Перейти» и «⋯» («Пропустить», «Вернуть»); урок «Пройден» или
- * «Пройден частично»; «Можно включить». «Показать как» и «Показать экран» добавит задача 2.31.
+ * «Пройден частично»; «Можно включить»; «Показать как» у шага и «Показать экран» у урока (задача 2.31).
  * С `?step=` (из «Пройти урок») подсвечен этот шаг, иначе — следующий; урок этого шага раскрыт, даже
  * если его свернули раньше. Свёрнутые уроки запоминаются.
  */
@@ -202,6 +202,7 @@ function LessonBox({
   onToggle: () => void;
 }) {
   const t = useT();
+  const kb = useKb();
   const done = lesson.steps.filter((s) => s.done).length;
   return (
     <section
@@ -224,6 +225,18 @@ function LessonBox({
             {n}. {lesson.title}
           </b>
         </button>
+        {lesson.screen && kb.screenOpen(lesson.screen) ? (
+          <button
+            type="button"
+            data-ck-scr={lesson.screen}
+            className={`${linkButtonClass()} inline-flex items-center gap-1 text-[12.5px] whitespace-nowrap`}
+            title={t('kb.show.screen_hint')}
+            onClick={() => kb.showScreen(lesson.screen)}
+          >
+            <Icon name="play" size="sm" />
+            {t('kb.show.screen')}
+          </button>
+        ) : null}
         <LessonStatus lesson={lesson} />
         <span
           className={`text-[12.5px] font-semibold ${done === lesson.steps.length ? 'text-ok' : 'text-muted'}`}
@@ -288,6 +301,7 @@ function StepRow({ step, next }: { step: KbStep; next: boolean }) {
           },
         ]
       : []),
+    { id: 'show', label: t('kb.show.how'), icon: 'play' as const, run: () => kb.show(step.id) },
     ...(!step.done
       ? [{ id: 'go', label: t('kb.go'), icon: 'right' as const, run: () => kb.go(step.id) }]
       : []),
@@ -348,12 +362,37 @@ function StepRow({ step, next }: { step: KbStep; next: boolean }) {
           ) : null}
         </div>
       </div>
-      <div className="flex flex-none items-center gap-1.5 max-md:w-full max-md:pl-7 max-md:[&>button:first-child]:flex-1 max-md:[&>button:first-child]:justify-center">
-        {!step.done ? (
-          <button type="button" className={buttonClass('cta', 'sm')} onClick={() => kb.go(step.id)}>
-            {t('kb.go')}
+      <div className="flex flex-none items-center gap-1.5 max-md:w-full max-md:pl-7 max-md:[&>button:not(:last-child)]:flex-1 max-md:[&>button:not(:last-child)]:justify-center">
+        {step.done ? (
+          <button
+            type="button"
+            data-ck-how={step.id}
+            className={buttonClass('ghost', 'sm')}
+            onClick={() => kb.show(step.id)}
+          >
+            {t('kb.show.again')}
           </button>
-        ) : null}
+        ) : (
+          <>
+            <button
+              type="button"
+              data-ck-go={step.id}
+              className={buttonClass('cta', 'sm')}
+              onClick={() => kb.go(step.id)}
+            >
+              {t('kb.go')}
+            </button>
+            <button
+              type="button"
+              data-ck-how={step.id}
+              className={buttonClass('default', 'sm')}
+              onClick={() => kb.show(step.id)}
+            >
+              <Icon name="play" size="sm" />
+              {t('kb.show.how')}
+            </button>
+          </>
+        )}
         <button
           type="button"
           className={iconButtonClass('sm')}

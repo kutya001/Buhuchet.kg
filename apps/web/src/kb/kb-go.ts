@@ -31,6 +31,8 @@ export const KB_GO: Readonly<Record<string, KbTarget>> = {
   // «Хранилище файлов» (задача 2.29).
   storage: { module: 'org', tab: 'settings', flash: '[data-org-storage]' },
   tg: { module: null, flash: '[data-profile-telegram]', open: 'profile' },
+  // «Тема оформления» (задача 2.31): кнопка темы в верхней панели.
+  theme: { module: null, flash: '[data-theme-toggle]' },
   types: { module: 'dicts', tab: 'types', flash: LIST },
   typecfg: { module: 'dicts', tab: 'types', flash: LIST },
   pdicts: { module: 'dicts', tab: 'platform', flash: 'main' },

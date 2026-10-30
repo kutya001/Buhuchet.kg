@@ -384,7 +384,14 @@ test.describe('Этап 2: Показатели контрагентов', () =>
     expect(after.progress.pct).toBeLessThan(before.progress.pct);
     expect(after.progress.level).toBe(before.progress.level);
 
+    // «Пройти урок» открывает «Уроки» и сразу показывает первый шаг показателей (задача 2.31).
     await on.getByRole('button', { name: 'Пройти урок' }).click();
+    const bubble = page.locator('[data-tour-bubble]');
+    await expect(bubble.locator('b').first()).toHaveText('Настроить показатели');
+    await expect(page.locator('[data-tour-count]')).toHaveText(/^1 из \d+$/);
+    await bubble.getByRole('button', { name: 'Закончить показ', exact: true }).last().click();
+    await expect(bubble).toHaveCount(0);
+    await page.goto('/app/kb/lessons');
     for (const id of ['kset', 'kwho', 'kval', 'kper', 'kchk']) {
       const step = page.locator(`[data-kb-step="${id}"]`);
       await expect(step).toHaveAttribute('data-kb-state', 'open');

@@ -592,6 +592,7 @@ function NewContractorForm({
       role="tablist"
       aria-label={t('cp.form.sections')}
       data-cf-toc=""
+      data-form-toc=""
       className={`sticky -top-1.5 z-[3] -mt-1.5 flex gap-1.5 bg-pane pt-1.5 pb-2 shadow-[0_1px_0_var(--bu-line)] ${phone ? 'flex-nowrap items-center gap-0.5' : 'flex-wrap'}`}
     >
       {FORM_SECTIONS.map((sec) => {

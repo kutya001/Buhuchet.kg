@@ -6,10 +6,12 @@ import { withUserContext } from './auth';
 import { withOrgContext } from './context';
 import { writeHistory } from './history';
 import {
+  kbAddKnown,
   kbArticles,
   kbCatalog,
   kbDoneFacts,
   kbFeatureOnDates,
+  kbKnownKeys,
   kbMarkArticleRead,
   kbMarkDone,
   kbMarksOf,
@@ -17,11 +19,13 @@ import {
   kbReachedOf,
   kbReadArticles,
   kbRecordLevels,
+  kbResetKnown,
   kbScreenUi,
   kbSetSkipped,
+  kbShowContent,
 } from './kb';
 import { createOrganization, type CreatedOrganization } from './organizations';
-import { kbArticleReads, kbLevels, kbProgress, telegramLinks, users } from './schema';
+import { kbArticleReads, kbKnown, kbLevels, kbProgress, telegramLinks, users } from './schema';
 import { createEmployee } from './staff';
 import { writeStatusChange } from './status';
 import {
@@ -235,6 +239,64 @@ describe.skipIf(!databaseAvailable())('«База знаний»: прогрес
     expect([...own.get(adminId)!.keys()]).toEqual(['theme']);
     expect(own.get(a.ownerUserId)?.size).toBe(0);
     expect((await asOwner(a, (tx) => kbMarksOf(tx, [adminId]))).get(adminId)?.size).toBe(0);
+  });
+
+  it('сценарии показов и тексты облачков — из refDB.json, только активные', async () => {
+    const { ui, shows } = await kbShowContent(db.app.db);
+    expect(shows.find((s) => s.id === 'sh-profile')).toMatchObject({
+      step: 'profile',
+      scr: 'org.main',
+    });
+    expect(shows.every((s) => s.active !== false)).toBe(true);
+    expect(ui.ui?.finLookT).toBe('Готово');
+    expect(ui.fields?.['nc-inn']).toMatchObject({ n: 'ИНН', req: 1 });
+    expect(ui.els?.length).toBeGreaterThan(5);
+  });
+
+  it('знакомые элементы: свои, без повторов, «Показывать всё заново» удаляет все', async () => {
+    expect(await asOwner(a, (tx) => kbAddKnown(tx, ['g:max', 's:org.main|ИНН', 'g:max']))).toBe(2);
+    expect(await asOwner(a, (tx) => kbAddKnown(tx, ['g:max', 'g:cols']))).toBe(3);
+    expect(await asOwner(a, (tx) => kbKnownKeys(tx))).toEqual(
+      expect.arrayContaining(['g:max', 's:org.main|ИНН', 'g:cols']),
+    );
+    // Сотрудник своей организации и владелец чужой чужого списка не видят и не меняют.
+    expect(await inOrg(a, accUserId, (tx) => kbKnownKeys(tx))).toEqual([]);
+    expect(await inOrg(a, accUserId, (tx) => tx.select().from(kbKnown))).toEqual([]);
+    expect(await asOwner(b, (tx) => tx.select().from(kbKnown))).toEqual([]);
+    await expect(
+      inOrg(a, accUserId, (tx) => tx.insert(kbKnown).values({ userId: a.ownerUserId, key: 'g:x' })),
+    ).rejects.toEqual(permissionDenied);
+    await expect(
+      asOwner(b, (tx) =>
+        tx.insert(kbKnown).values({ orgId: a.orgId, userId: b.ownerUserId, key: 'g:x' }),
+      ),
+    ).rejects.toEqual(permissionDenied);
+    expect(await asOwner(b, (tx) => tx.delete(kbKnown).returning())).toEqual([]);
+    expect(await inOrg(a, accUserId, (tx) => kbResetKnown(tx))).toBe(0);
+    // Менять строки нельзя, неверный ключ база не примет.
+    await expect(asOwner(a, (tx) => tx.update(kbKnown).set({ key: 'g:y' }))).rejects.toEqual(
+      permissionDenied,
+    );
+    await expect(asOwner(a, (tx) => kbAddKnown(tx, ['x:bad']))).rejects.toBeDefined();
+    expect(await asOwner(a, (tx) => kbResetKnown(tx))).toBe(3);
+    expect(await asOwner(a, (tx) => kbKnownKeys(tx))).toEqual([]);
+  });
+
+  it('знакомые элементы администратора платформы — без организации, только у него', async () => {
+    const asAdmin = <T>(fn: Parameters<typeof withUserContext<T>>[2]) =>
+      withUserContext(db.app.db, adminId, fn);
+    expect(await asAdmin((tx) => kbAddKnown(tx, ['g:search']))).toBe(1);
+    const [row] = await db.admin.db.select().from(kbKnown).where(eq(kbKnown.userId, adminId));
+    expect(row).toMatchObject({ orgId: null, key: 'g:search' });
+    expect(await asOwner(a, (tx) => tx.select().from(kbKnown))).toEqual([]);
+    // Пользователь организации вне её контекста строку «без организации» не создаёт и не видит чужих.
+    const asUser = <T>(fn: Parameters<typeof withUserContext<T>>[2]) =>
+      withUserContext(db.app.db, a.ownerUserId, fn);
+    await expect(
+      asUser((tx) => tx.insert(kbKnown).values({ userId: a.ownerUserId, key: 'g:x' })),
+    ).rejects.toEqual(permissionDenied);
+    expect(await asUser((tx) => tx.select().from(kbKnown))).toEqual([]);
+    expect(await asAdmin((tx) => kbResetKnown(tx))).toBe(1);
   });
 
   it('факты «Сделать» — из своей истории изменений и своего Telegram', async () => {

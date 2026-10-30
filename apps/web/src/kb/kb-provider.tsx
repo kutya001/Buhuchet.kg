@@ -30,6 +30,8 @@ import {
   kbSync,
 } from './kb-data';
 import { flashTarget, KB_GO } from './kb-go';
+import type { TourEnv } from './tour/tour-dom';
+import { useTour } from './tour/tour-runtime';
 
 /*
  * Обучение по ходу работы (задача 2.30, ТЗ «База знаний» и «Обучение и подсказки», прототип
@@ -60,6 +62,14 @@ export interface KbControls {
   help: (module: MenuModuleId) => Promise<boolean>;
   /** Открыть урок в «Уроках»: подсвечен его первый невыполненный шаг. */
   openLesson: (lessonId: string) => void;
+  /** «Показать как» шага (задача 2.31). */
+  show: (stepId: string) => void;
+  /** «Показать экран»: `screen` — «модуль.вкладка», без него — открытый экран. */
+  showScreen: (screen?: string | null) => void;
+  /** «Показывать всё заново»: спросить и забыть знакомые элементы показов. */
+  resetKnown: () => void;
+  /** Экран «модуль.вкладка» доступен пользователю («Показать экран» есть только у таких). */
+  screenOpen: (screen: string) => boolean;
 }
 
 export const KbContext = createContext<KbControls>({
@@ -68,6 +78,10 @@ export const KbContext = createContext<KbControls>({
   openArticle: () => {},
   help: async () => false,
   openLesson: () => {},
+  show: () => {},
+  showScreen: () => {},
+  resetKnown: () => {},
+  screenOpen: () => false,
 });
 
 export function useKb(): KbControls {
@@ -76,9 +90,9 @@ export function useKb(): KbControls {
 
 /**
  * «Пройти урок» в окне «Функция … включена» (прототип onboard.js, featOnDlg и featLesson): урок
- * функции есть в программе пользователя — открыть его; null — у функции нет урока или его шаги ещё
- * скрыты (модуль не сделан). Включено несколько функций (опросник) — урок первой, у которой он есть.
- * «Показать как» первого шага добавит задача 2.31.
+ * функции есть в программе пользователя — открыть его и начать «Показать как» его первого
+ * невыполненного шага; null — у функции нет урока или его шаги ещё скрыты (модуль не сделан).
+ * Включено несколько функций (опросник) — урок первой, у которой он есть.
  */
 export function useFeatureLesson(
   features: Feature | readonly Feature[] | null,
@@ -87,8 +101,17 @@ export function useFeatureLesson(
   const state = useQuery(kbStateQuery).data;
   const list = features === null ? [] : typeof features === 'string' ? [features] : features;
   const lesson = list.map((f) => state?.featureLessons[f]).find(Boolean);
-  return lesson ? () => kb.openLesson(lesson) : null;
+  if (!lesson) return null;
+  return () => {
+    kb.openLesson(lesson);
+    const steps = state?.lessons.find((l) => l.id === lesson)?.steps ?? [];
+    const step = steps.find((s) => !s.done) ?? steps[0];
+    if (step) setTimeout(() => kb.show(step.id), SHOW_AFTER_GO_MS);
+  };
 }
+
+/** «Показать как» после перехода в «Уроки» — когда экран встал на место (прототип: 450 мс). */
+export const SHOW_AFTER_GO_MS = 450;
 
 /** Адрес «Уроков» с шагом, который нужно подсветить (`?step=`). */
 export const lessonStepHref = (lessonsHref: string, stepId: string) =>
@@ -105,6 +128,10 @@ export interface KbShellInfo extends ArticleScreenInfo {
   /** Открыть «Мой профиль». */
   onProfile: () => void;
   lessonsHref: string;
+  /** Пользователь: «где остановились» в показе хранится у каждого своё. */
+  userId: string;
+  /** Открытый модуль для показа: название, описание, вкладки, способы «+ Добавить». */
+  current: ReturnType<TourEnv['module']>;
 }
 
 /** Урок, начатый «Перейти»: полоса внизу (`bar`), закрыта крестиком (`off`). */
@@ -408,9 +435,48 @@ export function useKbRuntime(shell: KbShellInfo): { controls: KbControls; overla
     [router, lessonsHref],
   );
 
+  // «Показать как» и «Обзор экрана» (задача 2.31).
+  const tour = useTour({
+    userId: shell.userId,
+    screen: shell.screen,
+    module: () => shell.current,
+    tabHrefOf: (module, tab) => tabHrefOf(module as MenuModuleId, tab),
+    navigate: (screen) => {
+      const [module, tab] = screen.split('.') as [string, string?];
+      const href = tabHrefOf(module as MenuModuleId, tab);
+      if (href) router.push(href);
+    },
+    steps: () => stepsOf(stateRef.current),
+    go,
+    onLesson: (id, bar) => setLesson({ id, bar, off: false }),
+    onStepShown: (result, id) => {
+      // Полоса урока — только при новой отметке, не при «Показать ещё раз» (прототип tourEnd → ckMark).
+      if (result.fresh.some((s) => s.id === id)) setLesson({ id, bar: true, off: false });
+      applyRef.current(result, 'look');
+    },
+    onScreenShown: (result) => {
+      client.setQueryData(KB_STATE_KEY, result.state);
+      if (result.fresh.length) void client.invalidateQueries({ queryKey: ['kb', 'member'] });
+      if (result.congrats) setCongrats((c) => ({ name: result.congrats!, n: (c?.n ?? 0) + 1 }));
+      if (result.fresh.length === 1) {
+        toast(t('kb.show.screen_done', { title: result.fresh[0]!.title }), { icon: 'grad' });
+      } else if (result.fresh.length > 1) {
+        toast(t('kb.show.screen_done_n', { n: result.fresh.length }), { icon: 'grad' });
+      }
+    },
+  });
+
+  const screenOpen = useCallback(
+    (screen: string) => {
+      const [module, tab] = screen.split('.') as [string, string?];
+      return !!tabHrefOf(module as MenuModuleId, tab);
+    },
+    [tabHrefOf],
+  );
+
   const controls = useMemo(
-    () => ({ go, hit, openArticle, help, openLesson }),
-    [go, hit, openArticle, help, openLesson],
+    () => ({ go, hit, openArticle, help, openLesson, screenOpen, ...tour.controls }),
+    [go, hit, openArticle, help, openLesson, screenOpen, tour.controls],
   );
 
   const barStep = lesson ? stepsOf(state).find((s) => s.id === lesson.id) : undefined;
@@ -458,6 +524,7 @@ export function useKbRuntime(shell: KbShellInfo): { controls: KbControls; overla
         />
       ) : null}
       {congrats ? <Congrats key={congrats.n} name={congrats.name} /> : null}
+      {tour.overlay}
     </>
   );
   return { controls, overlays };

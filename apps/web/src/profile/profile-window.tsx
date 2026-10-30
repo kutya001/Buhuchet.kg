@@ -7,6 +7,7 @@ import {
   buttonClass,
   Field,
   FormGrid,
+  Icon,
   inputClass,
   KeyValues,
   Modal,
@@ -26,6 +27,7 @@ import { fieldError, NewPasswordFields } from '../auth/fields';
 import { TelegramLinkRow, useTelegramLink } from '../auth/telegram-link';
 import { kbStateQuery } from '../kb/kb-data';
 import { BOX_LINK_CLASS, KbBox } from '../kb/kb-parts';
+import { useKb } from '../kb/kb-provider';
 import { useErrorText, useT } from '../l10n/provider';
 import { MyWalletsBox } from '../money/wallets';
 import { currentTheme, setTheme } from '../shell/browser';
@@ -89,6 +91,7 @@ export function ProfileWindow({
         <FormGrid>
           <ThemeField />
         </FormGrid>
+        <KnownRow />
       </Box>
       <PasswordBox onDirty={setDirty} />
     </Modal>
@@ -199,6 +202,31 @@ function TelegramLinkPanel({ onLinked }: { onLinked: (telegram: TelegramInfo) =>
       {link.status === 'ready' ? <TelegramLinkRow url={link.url} /> : null}
       {link.status === 'failed' ? <Note>{errorText(link.error)}</Note> : null}
     </>
+  );
+}
+
+/** «Знакомые элементы в показах» и «Показывать всё заново» (задача 2.31; прототип profileDlg `#pf-known`). */
+function KnownRow() {
+  const t = useT();
+  const kb = useKb();
+  return (
+    <div className="mt-2.5 flex flex-wrap items-center gap-2.5">
+      <span className="min-w-[200px] flex-1">
+        <b>{t('kb.known.title')}</b>
+        <span className="block text-[11.5px] leading-[1.4] text-faint">
+          {t('kb.known.hint_profile')}
+        </span>
+      </span>
+      <button
+        type="button"
+        data-known-reset=""
+        className={buttonClass('default', 'sm')}
+        onClick={kb.resetKnown}
+      >
+        <Icon name="refresh" size="sm" />
+        {t('kb.known.reset')}
+      </button>
+    </div>
   );
 }
 

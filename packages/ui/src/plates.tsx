@@ -58,7 +58,10 @@ export function Plate({
 }: PlateProps) {
   const content = (
     <>
-      <span className="flex items-center gap-2 text-[12.5px] font-semibold text-muted max-md:group-data-static/plates:gap-1.5 max-md:group-data-static/plates:text-[11.5px]">
+      <span
+        data-plate-label
+        className="flex items-center gap-2 text-[12.5px] font-semibold text-muted max-md:group-data-static/plates:gap-1.5 max-md:group-data-static/plates:text-[11.5px]"
+      >
         <span
           className={`grid h-6 w-6 flex-none place-items-center rounded-[7px] max-md:group-data-static/plates:h-5 max-md:group-data-static/plates:w-5 ${DOT[color]}`}
         >
@@ -67,7 +70,10 @@ export function Plate({
         {label}
       </span>
       {value !== undefined && (
-        <span className="text-[25px] leading-[1.05] font-[720] tracking-[-0.025em] tabular-nums max-md:text-[21px] max-md:group-data-static/plates:text-[18px]">
+        <span
+          data-plate-value
+          className="text-[25px] leading-[1.05] font-[720] tracking-[-0.025em] tabular-nums max-md:text-[21px] max-md:group-data-static/plates:text-[18px]"
+        >
           {value}
           {unit && (
             <small className="ml-[3px] text-[13px] font-[550] tracking-normal text-faint">
@@ -77,7 +83,10 @@ export function Plate({
         </span>
       )}
       {sub && (
-        <span className="text-[12px] text-faint group-data-static/plates:leading-[1.35] max-md:group-data-static/plates:line-clamp-2 max-md:group-data-static/plates:text-[11px]">
+        <span
+          data-plate-sub
+          className="text-[12px] text-faint group-data-static/plates:leading-[1.35] max-md:group-data-static/plates:line-clamp-2 max-md:group-data-static/plates:text-[11px]"
+        >
           {sub}
         </span>
       )}

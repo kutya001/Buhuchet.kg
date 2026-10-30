@@ -331,6 +331,10 @@
   --shadow-btn-hover: var(--bu-sh-btn-h);
   --shadow-btn-active: var(--bu-sh-btn-a);
   --shadow-cta: var(--bu-sh-cta);
+  /* «Показать как»: затемнение вокруг подсвеченного элемента и его светлая рамка — одни в обеих темах
+     (прототип css/kb.css, `.tour-hole`). */
+  --color-tour-dim: hsla(34 30% 5% / 0.58);
+  --color-tour-ring: hsla(0 0% 100% / 0.85);
   --font-sans:
     'Inter Variable', 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
   /* Моноширинный (`.mono` прототипа): логины, коды, номера счетов. */

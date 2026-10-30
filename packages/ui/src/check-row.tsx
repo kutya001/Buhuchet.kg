@@ -48,8 +48,9 @@ export function CheckRow({
 } & { [attr: `data-${string}`]: string | undefined }) {
   return (
     <label
-      {...data}
       className={`flex items-center gap-2.5 border-b border-line last:border-b-0 ${compact ? 'py-1' : 'py-2'} ${disabled ? '' : 'cursor-pointer'}`}
+      data-check-row=""
+      {...data}
     >
       <input
         type="checkbox"

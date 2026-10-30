@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { useT } from '../l10n/provider';
 import { useWelcome } from '../onboarding/welcome-provider';
 import { tabHref } from '../shell/modules';
-import { kbStateQuery } from './kb-data';
+import { kbKnownQuery, kbStateQuery } from './kb-data';
 import { KbBar, KbLadder, KbModules, levelTone } from './kb-parts';
 import { useKb } from './kb-provider';
 
@@ -15,13 +15,14 @@ import { useKb } from './kb-provider';
  * «База знаний» → «Мой уровень» (прототип modules/kb.js, renderKB → level): уровень и процент,
  * «Продолжить», сколько шагов до следующего уровня, как считается уровень, прогресс по модулям,
  * прочитанные статьи, лесенка уровней и «Приветствие и обзор модулей» (задача 2.33; не у администратора
- * платформы). «Знакомые элементы в показах» добавит задача 2.31.
+ * платформы), «Знакомые элементы в показах» с «Показывать всё заново» (задача 2.31).
  */
 export function KbLevelTab() {
   const t = useT();
   const kb = useKb();
   const welcome = useWelcome();
   const query = useQuery(kbStateQuery);
+  const known = useQuery(kbKnownQuery).data?.keys.length ?? 0;
   if (query.isError) return <Note tone="bad">{t('kb.load_error')}</Note>;
   const state = query.data;
   if (!state) return null;
@@ -75,7 +76,10 @@ export function KbLevelTab() {
             </span>
           ) : null}
         </div>
-        <div className="rounded-lg bg-pane-alt px-3.5 py-2.5 text-[13px] leading-normal">
+        <div
+          data-kb-rules=""
+          className="rounded-lg bg-pane-alt px-3.5 py-2.5 text-[13px] leading-normal"
+        >
           <b>{t('kb.rules.title')}</b>
           <ul className="mt-1 mb-0 pl-5 text-muted [&>li]:my-0.5">
             <li>{t('kb.rules.program')}</li>
@@ -125,6 +129,25 @@ export function KbLevelTab() {
           </div>
         </Box>
       )}
+      <Box>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <span className="min-w-[200px] flex-1">
+            <b>{t('kb.known.title')}</b>
+            <span className="block text-[11.5px] leading-[1.4] text-faint">
+              {known ? t('kb.known.hint_n', { n: known }) : t('kb.known.hint')}
+            </span>
+          </span>
+          <button
+            type="button"
+            data-known-reset=""
+            className={buttonClass()}
+            onClick={kb.resetKnown}
+          >
+            <Icon name="refresh" size="sm" />
+            {t('kb.known.reset')}
+          </button>
+        </div>
+      </Box>
     </div>
   );
 }

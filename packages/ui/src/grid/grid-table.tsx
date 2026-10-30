@@ -275,6 +275,7 @@ export function GridTable<Row>({
       <tr
         key={id}
         data-id={id}
+        data-tone={tone}
         tabIndex={0}
         {...events.handlers(row)}
         className={`group/row focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-blue [&:hover>td]:bg-row-hover ${clickable ? 'cursor-pointer' : ''} ${toneClass} ${stripe ? STRIPE_ROW[stripe] : ''} ${picked ? '[&>td]:bg-sel' : ''}`}

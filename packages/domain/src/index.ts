@@ -58,5 +58,6 @@ export * from './kb/catalog';
 export * from './kb/ready';
 export * from './kb/program';
 export * from './kb/articles';
+export * from './kb/shows';
 export * from './news/news';
 export * from './news/markdown';

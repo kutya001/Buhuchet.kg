@@ -32,7 +32,10 @@ export function EmptyState({
   children?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-line-strong bg-pane-alt px-4 py-[42px] text-center text-muted">
+    <div
+      data-empty-state
+      className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-line-strong bg-pane-alt px-4 py-[42px] text-center text-muted"
+    >
       <Icon name={icon} size="lg" className="text-faint" />
       <b className="max-w-[520px] text-[15px] text-balance text-ink">{title}</b>
       {text && <span className="max-w-[420px]">{text}</span>}

@@ -105,6 +105,7 @@ export function GridCards<Row>({
       <div
         key={id}
         data-id={id}
+        data-tone={tone}
         tabIndex={0}
         {...events.handlers(row)}
         className={`flex min-w-0 flex-col gap-[9px] rounded-xl border border-line bg-raised pt-[11px] pr-3 pb-3 pl-3.5 transition-shadow duration-150 hover:shadow-pane focus-visible:outline-2 focus-visible:outline-brand-blue ${clickable ? 'cursor-pointer' : ''} ${tone && !(stripe && tone === 'warn') ? TONE_CARD[tone] : ''} ${stripe ? STRIPE_CARD[stripe] : ''} ${picked ? 'shadow-btn-active' : ''}`}
