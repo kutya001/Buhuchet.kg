@@ -645,15 +645,19 @@ export function updateAdminDictValueHandler(
     const input = inputOf(dict, form);
     checkRequired(dict, input);
     // У статуса в историю — «сроки по статусу пересчитаны у N отчётов»: N — тем же предпросмотром до
-    // транзакции правки (по всем организациям — не внутри неё).
+    // транзакции правки (по всем организациям — не внутри неё). Не посчиталось — сохранить без числа.
     const recalculated =
       dict === 'benefits'
-        ? (
-            await countEdit(deps, c, async (tx) => {
-              const saved = await adminDictUpdate(tx, dict, code, input, version);
-              return saved.ok ? (saved.redue ?? null) : false;
-            })
-          ).reports
+        ? await countEdit(deps, c, async (tx) => {
+            const saved = await adminDictUpdate(tx, dict, code, input, version);
+            return saved.ok ? (saved.redue ?? null) : false;
+          }).then(
+            (x) => x.reports,
+            (err: unknown) => {
+              deps.logger.error({ err }, 'число пересчитанных сроков статуса не посчитано');
+              return undefined;
+            },
+          )
         : undefined;
     const result = await saving(() =>
       adminTx(deps, c, async (tx) =>

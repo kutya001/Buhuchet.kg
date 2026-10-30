@@ -508,6 +508,7 @@ export const adminDictImportPreviewRoute = createRoute({
         'Идёт прежнее сравнение или расчёт сроков пользователя, или за час их слишком много',
       content: error,
     },
+    503: { description: 'Расчёт сроков дольше предела', content: error },
   },
 });
 

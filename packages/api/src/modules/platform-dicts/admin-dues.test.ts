@@ -386,11 +386,36 @@ describe.skipIf(!databaseAvailable())(
       });
     });
 
-    it('предпросмотров у администратора — не больше предела за час: дальше 429', async () => {
+    const adminId = async () => {
       const [me] = await f.t.admin.db
         .select({ id: users.id })
         .from(users)
         .where(eq(users.login, 'platform-admin'));
+      return me!.id;
+    };
+    const errorCode = async (res: Response) =>
+      ((await res.json()) as { error: { code: string } }).error.code;
+
+    it('пока идёт прежний предпросмотр администратора — 429 «расчёт ещё идёт»', async () => {
+      const me = await adminId();
+      await f.t.admin.db.insert(rateLimits).values({
+        kind: DUES_PREVIEW_RATE_LIMIT.kind,
+        subject: me,
+        busyUntil: sql`now() + interval '1 minute'`,
+      });
+      try {
+        const res = await send('POST', `${P}/calendar/copy/dues-preview`);
+        expect(res.status).toBe(429);
+        expect(await errorCode(res)).toBe('dues_preview_busy');
+      } finally {
+        await f.t.admin.db.delete(rateLimits).where(eq(rateLimits.subject, me));
+      }
+      // Отпущен — снова считает.
+      await dues(`${P}/calendar/copy/dues-preview`);
+    });
+
+    it('предпросмотров у администратора — не больше предела за час: дальше 429', async () => {
+      const me = { id: await adminId() };
       await f.t.admin.db.insert(rateLimits).values(
         Array.from({ length: DUES_PREVIEW_RATE_LIMIT.max }, () => ({
           kind: DUES_PREVIEW_RATE_LIMIT.kind,
@@ -400,9 +425,10 @@ describe.skipIf(!databaseAvailable())(
       try {
         const res = await send('POST', `${P}/calendar/copy/dues-preview`);
         expect(res.status).toBe(429);
-        expect(((await res.json()) as { error: { code: string } }).error.code).toBe(
-          'dues_preview_limit',
-        );
+        expect(await res.clone().json()).toMatchObject({
+          error: { details: { n: DUES_PREVIEW_RATE_LIMIT.max } },
+        });
+        expect(await errorCode(res)).toBe('dues_preview_limit');
       } finally {
         await f.t.admin.db.delete(rateLimits).where(eq(rateLimits.subject, me!.id));
       }

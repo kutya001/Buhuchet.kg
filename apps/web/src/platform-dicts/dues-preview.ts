@@ -72,6 +72,10 @@ export function spreadText(t: Translate, x: AdminDuesPreview): string {
   });
 }
 
+/** Показывать строку о сроках: ещё считается, не посчиталось или изменится хотя бы один срок. */
+export const duesShown = (state: DuesPreviewState): boolean =>
+  !state.dues || state.dues.reports > 0;
+
 /**
  * Строка предупреждения окна: с числом (`template` с `{spread}`), «Считаем…» или — посчитать не вышло —
  * без числа: сроки пересчитаются после сохранения.

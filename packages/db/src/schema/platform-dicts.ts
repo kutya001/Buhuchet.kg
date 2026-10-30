@@ -757,7 +757,12 @@ export const duesRecalcs = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     /** До какого момента строку обрабатывают; пусто или прошло — свободна. */
     claimedUntil: timestamp('claimed_until', { withTimezone: true }),
+    /** Чей проход: только он отмечает итог, даже если его аренда истекла. */
+    claimToken: uuid('claim_token'),
+    /** Проходы с ошибкой или оборванные; проход, у которого кончилось время, не считается. */
     attempts: integer('attempts').notNull().default(0),
+    /** Последняя пройденная организация: следующий проход продолжит после неё. */
+    afterOrg: uuid('after_org'),
     /** Пересчитано во всех организациях; пусто — ещё нет. */
     doneAt: timestamp('done_at', { withTimezone: true }),
     /** Сколько отчётов в скольких организациях пересчитано за все проходы. */

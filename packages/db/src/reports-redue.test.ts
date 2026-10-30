@@ -29,6 +29,7 @@ import {
   mergeRedueScopes,
   redueAllOrgs,
   redueOpenReports,
+  RedueTimeoutError,
   type CatalogRedueTexts,
   type DueCatalog,
 } from './reports-redue';
@@ -58,6 +59,8 @@ const TEXTS: CatalogRedueTexts = {
   byStatusDropped: t('report.reason.due_catalog_dropped'),
   byCatalog: t('report.reason.due_catalog'),
 };
+/** Последняя пройденная организация полного прохода — любая (номера случайные). */
+const LAST = expect.any(String) as unknown as string;
 /** Нерабочий день на срок НДС за октябрь. */
 const HOLIDAY = { date: '2026-11-25', type: 'off' as const, name: 'Перенос' };
 const ASSIGNMENT_TEXTS: AssignmentTexts = {
@@ -259,7 +262,7 @@ describe.skipIf(!databaseAvailable())(
         texts: TEXTS,
         catalog,
       });
-      expect(preview).toEqual({ reports: 3, orgs: 2, failed: [], left: 0 });
+      expect(preview).toEqual({ reports: 3, orgs: 2, failed: [], left: 0, last: LAST });
       expect(
         await db.admin.db
           .select()
@@ -298,7 +301,7 @@ describe.skipIf(!databaseAvailable())(
       // Повтор ничего не меняет.
       expect(
         await redueAllOrgs(db.app.db, { kind: 'calendar' }, TODAY, { write: true, texts: TEXTS }),
-      ).toEqual({ reports: 0, orgs: 0, failed: [], left: 0 });
+      ).toEqual({ reports: 0, orgs: 0, failed: [], left: 0, last: LAST });
 
       // Удаление дня возвращает сроки.
       const [day] = await db.admin.db
@@ -332,7 +335,7 @@ describe.skipIf(!databaseAvailable())(
         // А: октябрь cpA (ноябрь сдан) и ноябрь с ручным октябрём; у «Крупного» сроки по статусу.
         expect(counted).toBe(2);
         const summary = await redueAllOrgs(db.app.db, scope, TODAY, { write: true, texts: TEXTS });
-        expect(summary).toEqual({ reports: 2 + 2, orgs: 2, failed: [], left: 0 });
+        expect(summary).toEqual({ reports: 2 + 2, orgs: 2, failed: [], left: 0, last: LAST });
         expect(await dues(a, cpBig)).toEqual(['2026-11-30', '2026-11-30', '2026-11-25']);
         // Уплата НДС — своим правилом (до 25-го), оно не менялось.
         expect(await dues(a, cpA)).toEqual(['2026-11-20', '2026-11-20', '2026-11-25']);
@@ -373,13 +376,13 @@ describe.skipIf(!databaseAvailable())(
           texts: TEXTS,
           catalog: without,
         }),
-      ).toEqual({ reports: 2, orgs: 1, failed: [], left: 0 });
+      ).toEqual({ reports: 2, orgs: 1, failed: [], left: 0, last: LAST });
 
       await db.admin.db
         .delete(taxBenefitDueRules)
         .where(eq(taxBenefitDueRules.benefitCode, 'ЛЬГ-30'));
       const summary = await redueAllOrgs(db.app.db, scope, TODAY, { write: true, texts: TEXTS });
-      expect(summary).toEqual({ reports: 2, orgs: 1, failed: [], left: 0 });
+      expect(summary).toEqual({ reports: 2, orgs: 1, failed: [], left: 0, last: LAST });
       const big = await october(a, cpBig);
       expect([big.dueDate, big.payDue]).toEqual(['2026-11-25', '2026-11-25']);
       const dropped = await inOrg(a, (tx) => readHistory(tx, 'report', big.id));
@@ -571,6 +574,7 @@ describe.skipIf(!databaseAvailable())(
           orgs: 2,
           failed: [],
           left: 0,
+          last: LAST,
         });
         expect(await dues(a, cpA)).toEqual(['2026-11-29', '2026-11-30', '2026-11-25']);
         expect((await historyOf()).length).toBe(before);
@@ -604,16 +608,48 @@ describe.skipIf(!databaseAvailable())(
         await claimDuesRecalc(db.app.db, { leaseSeconds: 60, olderThanSeconds: 600 }),
       ).toBeNull();
       const task = await claimDuesRecalc(db.app.db, { id, leaseSeconds: 60 });
-      expect(task).toEqual({ id, scope: { kind: 'types', codes: ['nds'] }, attempts: 1 });
+      expect(task).toMatchObject({
+        id,
+        scope: { kind: 'types', codes: ['nds'] },
+        attempts: 1,
+        after: null,
+      });
       // Занятую не выдать второй раз.
       expect(await claimDuesRecalc(db.app.db, { id, leaseSeconds: 60 })).toBeNull();
-      await finishDuesRecalc(db.app.db, id, { done: false, reports: 2, orgs: 1, error: 'Error' });
+      // Кончилось время: попыткой не считается, следующий проход — после последней организации.
+      const [first] = [a.orgId, b.orgId].sort();
+      const timedOut = { done: false, reports: 2, orgs: 1, error: null, after: first! };
+      expect(await finishDuesRecalc(db.app.db, task!, timedOut)).toBe(true);
+      const next = await claimDuesRecalc(db.app.db, { leaseSeconds: 60 });
+      expect(next).toMatchObject({ id, attempts: 1, after: first });
+      // Проход, чью аренду перехватили, итог не отмечает.
+      expect(await finishDuesRecalc(db.app.db, task!, { ...timedOut, done: true })).toBe(false);
+      // Ошибка — попытка, повтор позже и с начала.
+      await finishDuesRecalc(db.app.db, next!, {
+        done: false,
+        reports: 0,
+        orgs: 0,
+        error: 'Ошибка запроса к базе (40001)',
+        retryAfterSeconds: 300,
+      });
+      expect(await claimDuesRecalc(db.app.db, { id, leaseSeconds: 60 })).toBeNull();
+      await db.admin.db
+        .update(duesRecalcs)
+        .set({ claimedUntil: sql`now() - interval '1 second'` })
+        .where(eq(duesRecalcs.id, id));
       const again = await claimDuesRecalc(db.app.db, { leaseSeconds: 60 });
-      expect(again).toMatchObject({ id, attempts: 2 });
-      await finishDuesRecalc(db.app.db, id, { done: true, reports: 1, orgs: 1, error: null });
+      expect(again).toMatchObject({ id, attempts: 2, after: null });
+      await finishDuesRecalc(db.app.db, again!, { done: true, reports: 1, orgs: 1, error: null });
       expect(await claimDuesRecalc(db.app.db, { id, leaseSeconds: 60 })).toBeNull();
       const [done] = await db.admin.db.select().from(duesRecalcs).where(eq(duesRecalcs.id, id));
-      expect(done).toMatchObject({ reports: 3, orgs: 2, lastError: null, claimedUntil: null });
+      expect(done).toMatchObject({
+        reports: 3,
+        orgs: 2,
+        attempts: 2,
+        lastError: null,
+        claimedUntil: null,
+        claimToken: null,
+      });
       expect(done!.doneAt).not.toBeNull();
 
       // Исчерпавшая попытки строка остаётся в очереди, но не выдаётся.
@@ -633,6 +669,101 @@ describe.skipIf(!databaseAvailable())(
       const left = await db.admin.db.select({ id: duesRecalcs.id }).from(duesRecalcs);
       expect(left).toEqual([{ id: tired }]);
       await db.admin.db.delete(duesRecalcs);
+    });
+
+    it('проход продолжает после последней пройденной организации; предпросмотр дольше предела — ошибка', async () => {
+      const ids = [a.orgId, b.orgId].sort();
+      await db.admin.db.update(reportTypes).set({ dueDay: 20 }).where(eq(reportTypes.code, 'nds'));
+      try {
+        const types = { kind: 'types', codes: ['nds'] } as const;
+        // Вторая организация по порядку номеров — без первой.
+        const rest = await redueAllOrgs(db.app.db, types, TODAY, {
+          write: true,
+          texts: TEXTS,
+          after: ids[0],
+        });
+        expect(rest.last).toBe(ids[1]);
+        const orgOf = (id: string) => (id === a.orgId ? a : b);
+        const cpOf = (org: CreatedOrganization) => (org === a ? cpA : cpB);
+        const second = orgOf(ids[1]!);
+        const firstOrg = orgOf(ids[0]!);
+        expect((await october(second, cpOf(second))).dueDate).toBe('2026-11-20');
+        expect((await october(firstOrg, cpOf(firstOrg))).dueDate).toBe('2026-11-25');
+        await expect(
+          redueAllOrgs(db.app.db, types, TODAY, { write: false, texts: TEXTS, until: 0 }),
+        ).rejects.toBeInstanceOf(RedueTimeoutError);
+      } finally {
+        await db.admin.db
+          .update(reportTypes)
+          .set({ dueDay: 25 })
+          .where(eq(reportTypes.code, 'nds'));
+        await redueAllOrgs(db.app.db, { kind: 'types', codes: ['nds'] }, TODAY, {
+          write: true,
+          texts: TEXTS,
+        });
+      }
+    });
+
+    it('правка календаря переносит и срок отчёта разового вида — от даты события', async () => {
+      // Утилизационный сбор при импорте: оплатить в течение 15 дней после ввоза; ввоз 10.11 → 25.11.
+      const made = await inOrg(b, (tx) =>
+        createManualReport(
+          tx,
+          {
+            contractorId: cpB,
+            reportTypeCode: 'utli',
+            month: null,
+            eventDate: '2026-11-10',
+            due: null,
+            reasonCode: 'ПРЧ-001',
+            reasonName: 'Ввоз',
+          },
+          { today: TODAY, scope: undefined },
+        ),
+      );
+      expect([made.dueBase, made.dueDate, made.payDue, made.dueManual]).toEqual([
+        '2026-11-25',
+        '2026-11-25',
+        '2026-11-25',
+        false,
+      ]);
+      const byId = async () =>
+        (await inOrg(b, (tx) => tx.select().from(reports).where(eq(reports.id, made.id))))[0]!;
+      expect(await asAdmin((tx) => adminCalendarAdd(tx, HOLIDAY, TODAY))).toEqual({ ok: true });
+      try {
+        await redueAllOrgs(db.app.db, { kind: 'calendar' }, TODAY, { write: true, texts: TEXTS });
+        const shifted = await byId();
+        expect([shifted.dueBase, shifted.dueDate, shifted.payDue]).toEqual([
+          '2026-11-25',
+          '2026-11-26',
+          '2026-11-26',
+        ]);
+      } finally {
+        const [day] = await db.admin.db
+          .select()
+          .from(productionCalendar)
+          .where(eq(productionCalendar.day, HOLIDAY.date));
+        await asAdmin((tx) => adminCalendarDelete(tx, HOLIDAY.date, day!.version));
+        await redueAllOrgs(db.app.db, { kind: 'calendar' }, TODAY, { write: true, texts: TEXTS });
+      }
+      expect((await byId()).dueDate).toBe('2026-11-25');
+      // Правило вида разовый отчёт не трогает.
+      await db.admin.db.update(reportTypes).set({ dueDay: 20 }).where(eq(reportTypes.code, 'utli'));
+      try {
+        expect(
+          await inOrg(b, (tx) =>
+            redueOpenReports(tx, { kind: 'types', codes: ['utli'] }, TODAY, {
+              write: false,
+              texts: TEXTS,
+            }),
+          ),
+        ).toBe(0);
+      } finally {
+        await db.admin.db
+          .update(reportTypes)
+          .set({ dueDay: 15 })
+          .where(eq(reportTypes.code, 'utli'));
+      }
     });
 
     it('пример переноса на вкладке «Календарь» — из каталога платформы, без данных организаций', async () => {

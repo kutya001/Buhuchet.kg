@@ -10,14 +10,20 @@ import { duesRecalcs } from './schema';
  * повторе, поэтому строка, которую не довели до конца, просто проходится заново.
  */
 
-/** Сколько раз строка проходится, пока не останется в очереди с ошибкой (видна в журнале). */
+/**
+ * Сколько проходов с ошибкой (или оборванных) у строки, пока она не останется в очереди с ошибкой (видна
+ * в журнале). Проход, у которого кончилось время, попыткой не считается: следующий продолжит с места.
+ */
 export const DUES_RECALC_ATTEMPTS = 5;
 
-/** Строка очереди: что пересчитать и какая это попытка. */
+/** Строка очереди: что пересчитать, какая это попытка, чей проход и с какой организации продолжить. */
 export interface DuesRecalcTask {
   id: string;
   scope: RedueScope;
   attempts: number;
+  token: string;
+  /** Последняя пройденная организация прошлого прохода; пусто — с начала. */
+  after: string | null;
 }
 
 /** Поставить пересчёт в очередь — в транзакции правки, чтобы правка без пересчёта не сохранилась. */
@@ -58,45 +64,62 @@ export async function claimDuesRecalc(
     .update(duesRecalcs)
     .set({
       claimedUntil: sql`now() + make_interval(secs => ${options.leaseSeconds})`,
+      claimToken: sql`gen_random_uuid()`,
       attempts: sql`${duesRecalcs.attempts} + 1`,
     })
     .where(eq(duesRecalcs.id, sql`(${next})`))
     .returning();
-  if (!row) return null;
+  if (!row?.claimToken) return null;
   const scope: RedueScope =
     row.kind === 'calendar'
       ? { kind: 'calendar' }
       : { kind: row.kind as 'types' | 'statuses', codes: row.codes };
-  return { id: row.id, scope, attempts: row.attempts };
+  return {
+    id: row.id,
+    scope,
+    attempts: row.attempts,
+    token: row.claimToken,
+    after: row.afterOrg,
+  };
 }
 
 /**
- * Проход по строке закончен: `done` — во всех организациях, иначе строка освобождается для догона —
- * сразу или через `retryAfterSeconds` (после ошибки). Отчёты и организации прохода прибавляются к
- * прежним.
+ * Проход по строке закончен (отмечает только тот, кто её занял, — по `token`): `done` — во всех
+ * организациях. Иначе строка освобождается для догона: кончилось время — сразу, с организации после
+ * `after`, и проход не считается попыткой; ошибка — через `retryAfterSeconds` и с начала. Отчёты и
+ * организации прохода прибавляются к прежним. Ответ — отметил ли (строку не перехватили).
  */
 export async function finishDuesRecalc(
   db: Db,
-  id: string,
+  task: Pick<DuesRecalcTask, 'id' | 'token'>,
   outcome: {
     done: boolean;
     reports: number;
     orgs: number;
     error: string | null;
+    after?: string | null;
     retryAfterSeconds?: number;
   },
-): Promise<void> {
+): Promise<boolean> {
   const retry = outcome.done ? 0 : (outcome.retryAfterSeconds ?? 0);
-  await db
+  const rows = await db
     .update(duesRecalcs)
     .set({
       claimedUntil: retry > 0 ? sql`now() + make_interval(secs => ${retry})` : null,
+      claimToken: null,
       doneAt: outcome.done ? sql`now()` : null,
+      attempts:
+        outcome.done || outcome.error !== null
+          ? duesRecalcs.attempts
+          : sql`greatest(${duesRecalcs.attempts} - 1, 0)`,
+      afterOrg: outcome.done || outcome.error !== null ? null : (outcome.after ?? null),
       reports: sql`${duesRecalcs.reports} + ${outcome.reports}`,
       orgs: sql`${duesRecalcs.orgs} + ${outcome.orgs}`,
       lastError: outcome.error,
     })
-    .where(eq(duesRecalcs.id, id));
+    .where(and(eq(duesRecalcs.id, task.id), eq(duesRecalcs.claimToken, task.token)))
+    .returning({ id: duesRecalcs.id });
+  return rows.length > 0;
 }
 
 /** Выполненные строки старше `days` дней удаляются (очередь не растёт). */

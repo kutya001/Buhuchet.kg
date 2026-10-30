@@ -393,6 +393,13 @@
       "when": 1793319520704,
       "tag": "0055_dues_recalcs",
       "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1793320995595,
+      "tag": "0056_dues_recalcs_cursor",
+      "breakpoints": true
     }
   ]
 }

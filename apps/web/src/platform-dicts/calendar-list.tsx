@@ -59,7 +59,7 @@ import { useGridLabels } from '../lists/grid-labels';
 import { useListPage, type FetchListPage } from '../lists/use-list-page';
 import { useViewSettings } from '../lists/view-settings';
 import { useShell } from '../shell/context';
-import { duesNote, spreadText, useDuesPreview } from './dues-preview';
+import { duesNote, duesShown, spreadText, useDuesPreview } from './dues-preview';
 import { DictHistory } from './dict-history-box';
 import { pdictsHistoryQuery } from './pdicts-data';
 
@@ -275,7 +275,7 @@ function HolidayDialog({
             {(c) => <input {...c} {...register('name')} className={inputClass()} />}
           </Field>
         </FormGrid>
-        {(dues.dues && dues.dues.reports > 0) || dues.failed ? (
+        {parsed.success && duesShown(dues) ? (
           <div className="mt-3">
             <Note tone="warn">{duesNote(t, dues, 'pdicts.cal.dues')}</Note>
           </div>
@@ -358,9 +358,7 @@ function CalendarCopyDialog({
         <Note tone="warn" icon="alert">
           {t('pdicts.cal.copy.warn', prev)}
         </Note>
-        {(dues.dues && dues.dues.reports > 0) || dues.failed ? (
-          <Note tone="warn">{duesNote(t, dues, 'pdicts.cal.dues')}</Note>
-        ) : null}
+        {duesShown(dues) ? <Note tone="warn">{duesNote(t, dues, 'pdicts.cal.dues')}</Note> : null}
         <Timeline
           label={t('pdicts.cal.copy.title', prev)}
           items={items.map((x) => ({

@@ -6,6 +6,7 @@ import {
   adminCalendarDelete,
   claimDuesRecalc,
   cleanupDuesRecalcs,
+  DUES_RECALC_ATTEMPTS,
   dictValueTakenField,
   dueCatalog,
   enqueueDuesRecalc,
@@ -82,6 +83,9 @@ export async function redueTexts(deps: JobContext): Promise<CatalogRedueTexts> {
 
 const NO_DUES: AdminDuesPreview = { reports: 0, orgs: 0 };
 
+/** Предпросмотр обходит организации не дольше минуты, иначе 503 (аренда слота — дольше). */
+const PREVIEW_MS = 60_000;
+
 /** Сколько несданных отчётов в скольких организациях изменится по каталогу `catalog`. */
 export async function previewDues(
   deps: ApiDeps,
@@ -94,6 +98,7 @@ export async function previewDues(
     write: false,
     texts,
     catalog,
+    until: Date.now() + PREVIEW_MS,
   });
   return { reports, orgs };
 }
@@ -119,7 +124,9 @@ export async function withPreviewSlot<T>(
   const slot = await takeRateLimit(deps.db, DUES_PREVIEW_RATE_LIMIT, userId);
   if (!slot.ok) {
     if (slot.reason === 'busy') apiFail(429, 'dues_preview_busy', 'Предыдущий расчёт ещё идёт');
-    apiFail(429, 'dues_preview_limit', 'Слишком много расчётов за час');
+    apiFail(429, 'dues_preview_limit', 'Слишком много расчётов за час', {
+      n: DUES_PREVIEW_RATE_LIMIT.max,
+    });
   }
   try {
     return await run();
@@ -194,9 +201,24 @@ export async function queued<T extends { ok: boolean; redue?: RedueScope | null 
   return { ...result, queued: await enqueueDuesRecalc(tx, result.redue) };
 }
 
+/** Ошибка прохода — в журнал; последняя попытка — отдельной строкой: дальше строку не проходят. */
+function logFailure(ctx: JobContext, task: DuesRecalcTask, fields: object, message: string) {
+  ctx.logger.error(
+    { dues: task.id, scope: task.scope.kind, attempt: task.attempts, ...fields },
+    message,
+  );
+  if (task.attempts >= DUES_RECALC_ATTEMPTS) {
+    ctx.logger.error(
+      { dues: task.id, scope: task.scope.kind, attempts: task.attempts },
+      'пересчёт сроков отчётов оставлен: попытки кончились',
+    );
+  }
+}
+
 /**
- * Проход строки очереди до момента `until`: пересчитано везде — строка выполнена; кончилось время —
- * освобождается для догона; ошибка — в журнал (класс и код, без значений запроса) и повтор позже.
+ * Проход строки очереди до момента `until` (с организации после прошлого прохода): пересчитано везде —
+ * строка выполнена; кончилось время — освобождается для догона с места, где остановился; ошибка — в
+ * журнал (класс и код, без значений запроса), повтор позже и с начала.
  */
 async function runTask(
   ctx: JobContext,
@@ -208,35 +230,31 @@ async function runTask(
       write: true,
       texts: await redueTexts(ctx),
       until,
+      after: task.after,
     });
     for (const { orgId, error: err } of summary.failed) {
-      ctx.logger.error(
-        { dues: task.id, scope: task.scope.kind, orgId, attempt: task.attempts, err },
-        'сроки отчётов организации не пересчитаны',
-      );
+      logFailure(ctx, task, { orgId, err }, 'сроки отчётов организации не пересчитаны');
     }
     const [first] = summary.failed;
     const pending = summary.left > 0 || first !== undefined;
-    await finishDuesRecalc(ctx.db, task.id, {
+    await finishDuesRecalc(ctx.db, task, {
       done: !pending,
       reports: summary.reports,
       orgs: summary.orgs,
       error: first ? safeErrorMessage(first.error) : null,
+      after: summary.last,
       retryAfterSeconds: first ? RETRY_SECONDS : 0,
     });
     return { reports: summary.reports, orgs: summary.orgs, pending };
   } catch (err) {
-    ctx.logger.error(
-      { dues: task.id, scope: task.scope.kind, attempt: task.attempts, err },
-      'пересчёт сроков отчётов не прошёл',
-    );
-    await finishDuesRecalc(ctx.db, task.id, {
+    logFailure(ctx, task, { err }, 'пересчёт сроков отчётов не прошёл');
+    await finishDuesRecalc(ctx.db, task, {
       done: false,
       reports: 0,
       orgs: 0,
       error: safeErrorMessage(err),
       retryAfterSeconds: RETRY_SECONDS,
-    });
+    }).catch((e: unknown) => ctx.logger.error({ dues: task.id, err: e }, 'очередь не отмечена'));
     return { ...NO_DUES, pending: true };
   }
 }
@@ -247,7 +265,14 @@ async function runTask(
  */
 export async function recalcQueued(deps: ApiDeps, id: string | undefined): Promise<RecalcOutcome> {
   if (!id) return { ...NO_DUES, pending: false };
-  const task = await claimDuesRecalc(deps.db, { id, leaseSeconds: LEASE_SECONDS });
+  let task: DuesRecalcTask | null;
+  try {
+    task = await claimDuesRecalc(deps.db, { id, leaseSeconds: LEASE_SECONDS });
+  } catch (err) {
+    // Правка уже сохранена: строку догонит задача по расписанию.
+    deps.logger.error({ dues: id, err }, 'пересчёт сроков отчётов не начат');
+    return { ...NO_DUES, pending: true };
+  }
   // Строку уже взяла задача по расписанию — пересчёт идёт там.
   if (!task) return { ...NO_DUES, pending: true };
   return runTask(deps, task, Date.now() + INLINE_MS);

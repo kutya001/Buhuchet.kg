@@ -245,7 +245,6 @@ export async function redueOpenReports(
         inArray(reports.status, [...OPEN_REPORT_STATUSES]),
         eq(reports.superseded, false),
         eq(reports.dueManual, false),
-        isNull(reports.eventDate),
         scopeSql(scope),
       ),
     );
@@ -344,30 +343,54 @@ export interface RedueSummary {
   failed: { orgId: string; error: unknown }[];
   /** Сколько организаций не начато: время прохода (`until`) кончилось. */
   left: number;
+  /** Последняя пройденная организация: следующий проход продолжит после неё (`after`). */
+  last: string | null;
 }
 
 /**
- * Пересчёт или предпросмотр во всех организациях, каждая — своей транзакцией. Пересчёт идёт с пределом
- * времени задач и до момента `until` (мс): организации, до которых не дошло, — в `left`, их догонит
- * следующий проход; не прошедшая со второй попытки не мешает остальным. Предпросмотр (без `write`) —
- * с пределом времени запроса API, и ошибка поднимается: число в окне должно быть честным.
+ * Предпросмотр не уложился в своё время: API отвечает 503, как на запрос дольше предела (код 57014 —
+ * отмена запроса по `statement_timeout`).
+ */
+export class RedueTimeoutError extends Error {
+  readonly code = '57014';
+  constructor() {
+    super('предпросмотр пересчёта сроков дольше предела');
+    this.name = 'RedueTimeoutError';
+  }
+}
+
+/**
+ * Пересчёт или предпросмотр во всех организациях по порядку номеров (`app.org_ids`), каждая — своей
+ * транзакцией. Пересчёт идёт с пределом времени задач и до момента `until` (мс): организации, до
+ * которых не дошло, — в `left`, следующий проход продолжит после `last` (`after`); не прошедшая со
+ * второй попытки не мешает остальным. Предпросмотр (без `write`) — с пределом времени запроса API и
+ * весь до `until`, иначе `RedueTimeoutError`; ошибка поднимается: число в окне должно быть честным.
  */
 export async function redueAllOrgs(
   db: Db,
   scope: RedueScope,
   today: IsoDate,
-  options: { write: boolean; texts: CatalogRedueTexts; catalog?: DueCatalog; until?: number },
+  options: {
+    write: boolean;
+    texts: CatalogRedueTexts;
+    catalog?: DueCatalog;
+    until?: number;
+    after?: string | null;
+  },
 ): Promise<RedueSummary> {
-  const summary: RedueSummary = { reports: 0, orgs: 0, failed: [], left: 0 };
-  const ids = await orgIds(db);
+  const summary: RedueSummary = { reports: 0, orgs: 0, failed: [], left: 0, last: null };
+  const after = options.after;
+  const ids = (await orgIds(db)).filter((id) => !after || id > after);
   for (const [i, orgId] of ids.entries()) {
     if (options.until !== undefined && Date.now() >= options.until) {
+      if (!options.write) throw new RedueTimeoutError();
       summary.left = ids.length - i;
       break;
     }
     const kind = options.write ? 'job' : 'request';
     const run = () =>
       withOrgContext(db, { orgId, kind }, (tx) => redueOpenReports(tx, scope, today, options));
+    summary.last = orgId;
     let n: number;
     try {
       n = await run();
