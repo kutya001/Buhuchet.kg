@@ -29,9 +29,11 @@ import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
 import { apiFail } from '../../errors';
 import { orgContextOf, requireEmployee, requirePermission } from '../../middleware/access';
+import { serverTexts } from '../l10n/texts';
 import {
   cpScopeOf,
   error,
+  listRowBody,
   requireTasks,
   rowBody,
   subjectOf,
@@ -209,12 +211,17 @@ export function contractorTasksHandler(
     const subject = subjectOf(c);
     const today = todayOf(deps);
     const body = await withOrgContext(deps.db, orgContextOf(c), async (tx) => {
-      await requireTasks(tx, orgContextOf(c).orgId);
+      const settings = await requireTasks(tx, orgContextOf(c).orgId);
       if (!(await taskContractorOf(tx, id, cpScopeOf(subject)))) {
         apiFail(404, 'contractor_not_found', 'Контрагент не найден');
       }
-      const tab = await contractorTasks(tx, id);
-      return { ...tab, items: tab.items.map((r) => rowBody(r, today)) };
+      const tab = await contractorTasks(tx, id, {
+        t: await serverTexts(deps),
+        today,
+        reportConfirm: settings.reportConfirm,
+      });
+      const sums = hasPermission(subject, 'changeStatus');
+      return { ...tab, items: tab.items.map((r) => listRowBody(r, today, sums)) };
     });
     return c.json(body, 200);
   };

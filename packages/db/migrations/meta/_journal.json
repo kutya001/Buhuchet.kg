@@ -547,6 +547,20 @@
       "when": 1793466879842,
       "tag": "0077_finance_journal_guards",
       "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1793481721688,
+      "tag": "0078_telegram_outbox",
+      "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "7",
+      "when": 1793481731426,
+      "tag": "0079_telegram_outbox_functions",
+      "breakpoints": true
     }
   ]
 }

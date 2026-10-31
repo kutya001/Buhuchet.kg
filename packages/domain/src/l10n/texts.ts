@@ -24,6 +24,7 @@ import { SHELL_TEXTS } from './shell-texts';
 import { STAFF_TEXTS } from './staff-texts';
 import { STATUS_TEXTS } from './status-texts';
 import { TASKS_TEXTS } from './tasks-texts';
+import { TELEGRAM_TEXTS } from './telegram-texts';
 
 /**
  * Языки интерфейса (ТЗ, Админка → «Локализация»). Сейчас язык один — русский; добавление языка
@@ -76,6 +77,7 @@ const SYSTEM_TEXTS = {
  * остатка контрагента и окна финансовой операции — `finance-texts.ts`,
  * показателей контрагентов и названий месяцев —
  * `kpi-texts.ts`, блока «Файлы» — `files-texts.ts`, «Базы знаний» — `kb-texts.ts`, «Новостей» — `news-texts.ts`,
+ * уведомлений в Telegram и блока «Уведомления в Telegram» профиля — `telegram-texts.ts`,
  * Админки → «Справочники платформы» — `platform-dicts-texts.ts`, Админки → «База знаний (содержимое)» —
  * `kb-admin-texts.ts`.
  */
@@ -108,6 +110,7 @@ export const UI_TEXTS = {
   ...FILES_TEXTS,
   ...KB_TEXTS,
   ...NEWS_TEXTS,
+  ...TELEGRAM_TEXTS,
   ...PLATFORM_DICTS_TEXTS,
   ...KB_ADMIN_TEXTS,
 } as const satisfies Record<string, UiTextDefault>;

@@ -58,10 +58,18 @@ describe('/api/cron/tick без базы', () => {
       TELEGRAM_WEBHOOK_SECRET: 'webhook-secret-0000',
     };
     const names = (list: readonly Job[]) => list.map((j) => j.name);
-    expect(names(jobsFor({ APP_BASE_URL: 'https://test.buhuchet.kg' }))).toEqual(names(jobs));
-    expect(names(jobsFor({ APP_BASE_URL: 'http://localhost:3000', ...bot }))).toEqual(names(jobs));
+    // Напоминания и очередь отправки в Telegram (задача 2.25) — всегда: без бота они ничего не делают.
+    const telegramJobs = ['telegram.reminders', 'telegram.send'];
+    expect(names(jobsFor({ APP_BASE_URL: 'https://test.buhuchet.kg' }))).toEqual([
+      ...names(jobs),
+      ...telegramJobs,
+    ]);
+    expect(names(jobsFor({ APP_BASE_URL: 'http://localhost:3000', ...bot }))).toEqual([
+      ...names(jobs),
+      ...telegramJobs,
+    ]);
     const withBot = jobsFor({ APP_BASE_URL: 'https://test.buhuchet.kg/', ...bot });
-    expect(names(withBot)).toEqual([...names(jobs), 'telegram.register-webhook']);
+    expect(names(withBot)).toEqual([...names(jobs), ...telegramJobs, 'telegram.register-webhook']);
 
     const telegram = createFakeTelegram();
     await withBot.at(-1)!.run(createTestDeps({ telegram }), new Date());

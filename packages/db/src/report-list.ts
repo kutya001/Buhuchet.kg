@@ -278,6 +278,13 @@ const PERIOD_FULL = sql<string>`case
   when ${reports.period} = 'H' then ${sub2(lt('h_full'), ['n', romanH], ['y', year])}
   else replace(${lt('y_full')}, '{y}', ${year}) end`;
 
+/**
+ * Период полностью — и в названии регулярной задачи (задача 2.24, `tasks.ts`): запросу нужны `reports`,
+ * `report_types` и запись текстов `lt` с полями m_full, q_full, h_full, y_full, event_full,
+ * event_default и months.
+ */
+export const REPORT_PERIOD_FULL = PERIOD_FULL;
+
 /** Ключ периода для фильтра и сортировки: первое число и дата события. */
 const PERIOD_KEY = sql<string>`${reports.periodStart}::text || coalesce(' ' || ${reports.eventDate}::text, '')`;
 

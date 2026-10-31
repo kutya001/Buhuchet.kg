@@ -31,6 +31,7 @@ import { useKb } from '../kb/kb-provider';
 import { useErrorText, useT } from '../l10n/provider';
 import { MyWalletsBox } from '../money/wallets';
 import { currentTheme, setTheme } from '../shell/browser';
+import { NotifyBox } from '../telegram/notify-box';
 import { tabHref } from '../shell/modules';
 import type { Theme } from '../shell/prefs';
 
@@ -39,7 +40,7 @@ import type { Theme } from '../shell/prefs';
  * (ФИО, логин, телефон, роль), Telegram для уведомлений (привязка по ссылке, «Отвязать»), «Мои реквизиты
  * для переводов» (задача 2.18), тема и смена пароля, вверху — уровень знаний («Открыть Базу знаний»). Окно —
  * карточка; пока в «Смене пароля» что-то введено, протяжка вниз, «Назад» и выход из аккаунта спрашивают.
- * Уведомления придут со своей задачей (поток В, задача 2.24).
+ * «Уведомления в Telegram» — режим и переключатели (задача 2.25), у сотрудника организации.
  */
 export function ProfileWindow({
   open,
@@ -87,6 +88,7 @@ export function ProfileWindow({
       </Box>
       <TelegramBox initial={me.telegram} />
       {me.employee ? <MyWalletsBox holderDefault={me.employee.shortName} /> : null}
+      {me.employee ? <NotifyBox /> : null}
       <Box title={t('profile.settings')}>
         <FormGrid>
           <ThemeField />
