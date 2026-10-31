@@ -229,6 +229,7 @@ export function contractorMoneyHandler(
           holder: o.holderName,
           receiptDate: o.receiptDate,
           revision: o.revision,
+          edited: o.edited,
         })),
       canReceive: hasPermission(subject, 'money') && !cp.archived,
       actions,

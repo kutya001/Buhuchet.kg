@@ -176,16 +176,21 @@ async function feeSubjects(
 
 /**
  * Оплаты контрагентов (`ids`; null — все в организации) с распределением, по дате и времени записи.
- * Удалённые (вместе с общим поступлением — задача 2.20) в долг и итоги не входят.
+ * Удалённые (вместе с общим поступлением — задача 2.20) в долг и итоги не входят; `exceptOperation` —
+ * без частей этого поступления (его изменяют: свои части не считаются «уже оплаченным», задача 2.22).
  */
 async function feePaymentsOf(
   tx: Tx,
   ids: readonly string[] | null,
+  exceptOperation?: string,
 ): Promise<Map<string, FeePaymentRow[]>> {
   if (ids && ids.length === 0) return new Map();
   const where = and(
     ids ? inArray(feePayments.contractorId, [...ids]) : undefined,
     isNull(feePayments.deletedAt),
+    exceptOperation
+      ? sql`${feePayments.operationId} is distinct from ${exceptOperation}::uuid`
+      : undefined,
   );
   const [pays, allocs] = await Promise.all([
     tx
@@ -241,11 +246,13 @@ export async function feeSubject(
   tx: Tx,
   contractorId: string,
   scope: SQL | undefined,
+  exceptOperation?: string,
 ): Promise<{ subject: FeeSubject; payments: FeePaymentRow[] } | null> {
   if (!UUID.test(contractorId)) return null;
   const subject = (await feeSubjects(tx, [contractorId], scope)).get(contractorId);
   if (!subject) return null;
-  const payments = (await feePaymentsOf(tx, [contractorId])).get(contractorId) ?? [];
+  const payments =
+    (await feePaymentsOf(tx, [contractorId], exceptOperation)).get(contractorId) ?? [];
   return { subject, payments };
 }
 
@@ -642,9 +649,24 @@ export async function receiptFeeRows(
   tx: Tx,
   contractorId: string,
   today: IsoDate,
+  editOperation?: string,
 ): Promise<ReceiptFeeMonth[]> {
-  const found = await feeSubject(tx, contractorId, undefined);
-  return found ? receiptFeeMonths(found.subject, found.payments, today) : [];
+  const found = await feeSubject(tx, contractorId, undefined, editOperation);
+  if (!found) return [];
+  const months = receiptFeeMonths(found.subject, found.payments, today);
+  if (!editOperation) return months;
+  // Изменение поступления (задача 2.22; прототип inDlg: `fms` — и месяцы, которые оно уже закрывало).
+  const own = await receiptFeeParts(tx, editOperation);
+  const all = contractorFees(found.subject, found.payments, today).months;
+  const listed = new Set(months.map((m) => m.month));
+  for (const p of own) {
+    if (listed.has(p.month)) continue;
+    const m = all.find((x) => x.month === p.month);
+    if (!m) continue;
+    months.push({ month: m.month, charge: m.charge, got: m.got, left: 0, due: m.due });
+    listed.add(m.month);
+  }
+  return months.sort((a, b) => (a.month < b.month ? -1 : a.month > b.month ? 1 : 0));
 }
 
 /** Сколько осталось получить за месяц — для проверки поступления; контрагент уже заблокирован. */
@@ -652,8 +674,25 @@ export async function receiptFeeLeft(
   tx: Tx,
   contractorId: string,
   today: IsoDate,
+  editOperation?: string,
 ): Promise<Map<YearMonth, Tyiyn>> {
-  return new Map((await receiptFeeRows(tx, contractorId, today)).map((m) => [m.month, m.left]));
+  return new Map(
+    (await receiptFeeRows(tx, contractorId, today, editOperation)).map((m) => [m.month, m.left]),
+  );
+}
+
+/** Части за обслуживание поступления (не удалённые): по месяцу на оплату. */
+export async function receiptFeeParts(
+  tx: Tx,
+  operationId: string,
+): Promise<{ id: string; month: YearMonth; amount: Tyiyn }[]> {
+  const rows = await tx
+    .select({ id: feePayments.id, month: feeAllocations.month, amount: feeAllocations.amount })
+    .from(feePayments)
+    .innerJoin(feeAllocations, eq(feeAllocations.paymentId, feePayments.id))
+    .where(and(eq(feePayments.operationId, operationId), isNull(feePayments.deletedAt)))
+    .orderBy(asc(feeAllocations.month));
+  return rows.map((r) => ({ id: r.id, month: monthOfDate(r.month), amount: Number(r.amount) }));
 }
 
 /**

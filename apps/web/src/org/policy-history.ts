@@ -3,9 +3,11 @@ import {
   bishkekTime,
   FEATURES,
   formatDateRu,
+  monthLabel,
   PAGE_SECTIONS,
   type Feature,
   type PageSection,
+  type YearMonth,
 } from '@buhuchet/domain';
 import type { OrgPolicyHistory } from '@buhuchet/shared';
 import type { TimelineItem } from '@buhuchet/ui';
@@ -65,6 +67,12 @@ function changeLines(change: HistoryChange, t: Translate): string[] {
         }),
       );
     }
+    // «Закрыть <месяц>» во вкладке «Списания в бонус» (задача 2.22; прототип modules/staff.js:
+    // log('org', 'policy', `Месяц … закрыт отчётом о списаниях`)).
+    case 'monthClosed':
+      return typeof change.to === 'string' && /^\d{4}-\d{2}$/.test(change.to)
+        ? [t('org.history.month_closed', { month: monthLabel(change.to as YearMonth) })]
+        : [];
     default:
       return [];
   }

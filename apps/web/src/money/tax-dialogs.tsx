@@ -14,8 +14,10 @@ import {
 } from '@buhuchet/domain';
 import {
   isRecordChanged,
+  OperationEdited,
   PaymentSaved,
   ReceiptSaved,
+  type ReceiptEditForm,
   type ReceiptForm,
   type ReportCard,
 } from '@buhuchet/shared';
@@ -37,9 +39,17 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { useId, useState } from 'react';
 import { api, callApi } from '../api-client';
+import { reasonNeeded, type ChangedPart } from '../finance/edit-reason';
+import { editReceipt, receiptEditFormQuery } from '../finance/journal-data';
 import { useErrorText, useT } from '../l10n/provider';
 import { reportSub } from '../reports/report-menu';
-import { pickedMoneyFilesProblem, receiptFormQuery, uploadMoneyFiles } from './tax-data';
+import { useShell } from '../shell/context';
+import {
+  pickedMoneyFilesProblem,
+  receiptContractorsQuery,
+  receiptFormQuery,
+  uploadMoneyFiles,
+} from './tax-data';
 
 /*
  * Окна денег по отчётам (задача 2.19; ТЗ «Отчеты для сдачи» → «Оплата налога»; прототип
@@ -331,7 +341,8 @@ export interface ReceiptPreset {
  * «Поступление от контрагента» (прототип inDlg): общая сумма и дата, детализация по неоплаченным
  * отчётам по сроку оплаты («Распределить по срокам»), излишек — аванс; файлы — платёжка, чек, скрин
  * (обязательны, если так отмечено у контрагента и «Файлы в карточках» включены). Окно ждёт неоплаченные
- * отчёты с сервера.
+ * отчёты с сервера. Без контрагента (из «+ Добавить» модуля «Финансовые операции») — сначала поле
+ * «Контрагент» (прототип `inDlg()` без `c0`).
  */
 export function ReceiptDialog({
   contractorId,
@@ -342,7 +353,7 @@ export function ReceiptDialog({
   onClose,
   onDone,
 }: {
-  contractorId: string;
+  contractorId: string | null;
   preset: ReceiptPreset | null;
   /** «Файлы в карточках» включены: без них «Файл при поступлении» не требуется — приложить некуда. */
   filesOn: boolean;
@@ -352,19 +363,72 @@ export function ReceiptDialog({
   onDone: () => void;
 }) {
   const t = useT();
-  const query = useQuery(receiptFormQuery(contractorId));
+  const choices = useQuery({ ...receiptContractorsQuery, enabled: contractorId === null });
+  const [picked, setPicked] = useState<string | null>(null);
+  const list = choices.data ?? [];
+  // По умолчанию — первый неразовый контрагент (прототип: `visCps().find(c => c.kind !== 'oneoff')`).
+  const cp = contractorId ?? picked ?? list.find((c) => !c.oneOff)?.id ?? list[0]?.id ?? null;
+  const query = useQuery({ ...receiptFormQuery(cp ?? ''), enabled: !!cp });
   return (
     <ReceiptModal
-      key={query.data ? 'ready' : 'loading'}
+      key={`${cp ?? ''}-${query.data ? 'ready' : 'loading'}`}
       t={t}
       form={query.data ?? null}
-      failed={query.isError}
+      failed={query.isError || choices.isError}
       preset={preset}
       filesOn={filesOn}
       canUpload={canUpload}
       open={open}
       onClose={onClose}
       onDone={onDone}
+      picker={
+        contractorId === null
+          ? { options: list, value: cp ?? '', onChange: setPicked, empty: choices.isSuccess && !cp }
+          : null
+      }
+      edit={null}
+      onOpenOperation={null}
+    />
+  );
+}
+
+/**
+ * «Изменить поступление» (прототип inDlg с `edit`): то же окно с введённым, файлы, «Счёт» и «Причина
+ * изменения»; уменьшить на налоги можно не ниже уже потраченного — окно называет оплаты, которые
+ * мешают. Новые файлы окно загружает к поступлению после сохранения.
+ */
+export function ReceiptEditDialog({
+  id,
+  open,
+  onClose,
+  onDone,
+  onOpenOperation,
+}: {
+  id: string;
+  open: boolean;
+  onClose: () => void;
+  onDone: () => void;
+  onOpenOperation: (id: string) => void;
+}) {
+  const t = useT();
+  const { access } = useShell();
+  const filesOn = access.feature('files');
+  const query = useQuery(receiptEditFormQuery(id));
+  return (
+    <ReceiptModal
+      key={query.data ? 'ready' : 'loading'}
+      t={t}
+      form={query.data ?? null}
+      failed={query.isError}
+      preset={null}
+      filesOn={filesOn}
+      canUpload={filesOn && access.can('filesUpload')}
+      open={open}
+      onClose={onClose}
+      onDone={onDone}
+      picker={null}
+      edit={query.data?.edit ?? null}
+      onOpenOperation={onOpenOperation}
     />
   );
 }
@@ -393,6 +457,17 @@ function oneSumSplit(form: ReceiptForm) {
   return { alloc, fee, total };
 }
 
+/** Поле «Контрагент» окна без контрагента. */
+interface ReceiptPicker {
+  options: readonly { id: string; name: string; oneOff: boolean }[];
+  value: string;
+  onChange: (id: string) => void;
+  /** Контрагентов нет — записать некуда. */
+  empty: boolean;
+}
+
+type ReceiptEdit = ReceiptEditForm['edit'];
+
 function ReceiptModal({
   t,
   form,
@@ -403,6 +478,9 @@ function ReceiptModal({
   open,
   onClose,
   onDone,
+  picker,
+  edit,
+  onOpenOperation,
 }: {
   t: ReturnType<typeof useT>;
   form: ReceiptForm | null;
@@ -413,35 +491,60 @@ function ReceiptModal({
   open: boolean;
   onClose: () => void;
   onDone: () => void;
+  picker: ReceiptPicker | null;
+  edit: ReceiptEdit | null;
+  onOpenOperation: ((id: string) => void) | null;
 }) {
   const toast = useToast();
   const errorText = useErrorText();
   const id = useId();
   const presetOk = !!preset && !!form?.rows.some((r) => r.reportId === preset.reportId);
-  // «Платит одной суммой»: деление на налоги и обслуживание подставляется само (не для «Оплатить»).
-  const one = !presetOk && !!form?.fee && form.contractor.oneSum;
+  // «Платит одной суммой»: деление на налоги и обслуживание подставляется само (не для «Оплатить» и
+  // не при изменении).
+  const one = !presetOk && !edit && !!form?.fee && form.contractor.oneSum;
   const [split] = useState(() => (one && form ? oneSumSplit(form) : null));
+  const som = (v: number) => formatSom(v, 'auto');
   const [total, setTotal] = useState(() =>
-    presetOk && preset
-      ? formatSom(preset.amount, 'auto')
-      : split?.total
-        ? formatSom(split.total, 'auto')
-        : '',
+    edit
+      ? som(edit.total)
+      : presetOk && preset
+        ? som(preset.amount)
+        : split?.total
+          ? som(split.total)
+          : '',
   );
-  const [date, setDate] = useState(todayBishkek);
+  const [date, setDate] = useState(() => edit?.date ?? todayBishkek());
   const [alloc, setAlloc] = useState<Record<string, string>>(() =>
-    presetOk && preset
-      ? { [preset.reportId]: formatSom(preset.amount, 'auto') }
-      : (split?.alloc ?? {}),
+    edit
+      ? Object.fromEntries(edit.rows.map((x) => [x.reportId, som(x.amount)]))
+      : presetOk && preset
+        ? { [preset.reportId]: som(preset.amount) }
+        : (split?.alloc ?? {}),
   );
-  const [feeAlloc, setFeeAlloc] = useState<Record<string, string>>(() => split?.fee ?? {});
+  const [feeAlloc, setFeeAlloc] = useState<Record<string, string>>(() =>
+    edit
+      ? Object.fromEntries((edit.fee ?? []).map((x) => [x.month, som(x.amount)]))
+      : (split?.fee ?? {}),
+  );
+  const [holder, setHolder] = useState(() => edit?.holder ?? '');
+  const [reason, setReason] = useState('');
+  const [changed, setChanged] = useState(false);
   const [picked, setPicked] = useState<File[]>([]);
-  const needFile = filesOn && !!form?.contractor.needReceiptFile;
+  // Файл уже приложен к изменяемому поступлению — второй не требуется (прототип: «уже приложено N»).
+  const needFile = filesOn && !!form?.contractor.needReceiptFile && !(edit && edit.files > 0);
+  const fileHint =
+    filesOn && form?.contractor.needReceiptFile
+      ? edit && edit.files > 0
+        ? t('money.in.files_need_have', { n: edit.files })
+        : t('money.in.files_need')
+      : undefined;
   const [errors, setErrors] = useState<{
     total?: string;
     date?: string;
     rows?: string;
     files?: string;
+    reason?: string;
+    contractor?: string;
   }>({});
   const [busy, setBusy] = useState(false);
   const rows = form?.rows ?? [];
@@ -491,8 +594,107 @@ function ReceiptModal({
     setErrors((e) => ({ ...e, rows: undefined, total: undefined }));
   };
 
+  const rowsOut = () =>
+    rows
+      .filter((r) => value(r.reportId) > 0)
+      .map((r) => ({ reportId: r.reportId, amount: value(r.reportId) }));
+  const feeOut = () =>
+    feeRows
+      .filter((m) => feeValue(m.month) > 0)
+      .map((m) => ({ month: m.month, amount: feeValue(m.month) }));
+
+  // «Сохранить» изменения (прототип inDlg с `edit`): на налоги не меньше потраченного, причина — если
+  // меняются сумма, дата, детализация или счёт; проверяет и сервер. Без изменений — «Без изменений», как
+  // у остальных операций (opEditDlg), без пустой записи истории.
+  // ОТКЛОНЕНИЕ: docs/deviations.md#В-28
+  const saveEdit = async (e: ReceiptEdit) => {
+    if (totalN === null || totalN <= 0) return setErrors({ total: t('money.amount_invalid') });
+    if (detail > totalN)
+      return setErrors({
+        total: t('money.in.total_less', { amount: formatSomWithUnit(detail - totalN) }),
+      });
+    if (!date) return setErrors({ date: t('fin.edit.date_required') });
+    if (date > todayBishkek()) return setErrors({ date: t('fin.edit.date_future') });
+    if (over) return setErrors({ rows: t('err.receipt_row_over') });
+    if (e.spent && totalN - feeDetail < e.spent.min)
+      return setErrors({
+        total: t('err.receipt_min', { amount: formatSomWithUnit(e.spent.min) }),
+      });
+    if (needFile && picked.length === 0)
+      return setErrors({ files: t('err.receipt_file_required') });
+    const bad = pickedMoneyFilesProblem(t, errorText, picked);
+    if (bad) return setErrors({ files: bad });
+    const sig = (list: readonly { key: string; amount: number }[]) =>
+      list
+        .map((x) => `${x.key}=${x.amount}`)
+        .sort()
+        .join(';');
+    const byReport = (list: readonly { reportId: string; amount: number }[]) =>
+      sig(list.map((x) => ({ key: x.reportId, amount: x.amount })));
+    const byMonth = (list: readonly { month: string; amount: number }[]) =>
+      sig(list.map((x) => ({ key: x.month, amount: x.amount })));
+    const parts: ChangedPart[] = [];
+    if (totalN !== e.total) parts.push('amount');
+    if (date !== e.date) parts.push('date');
+    if (
+      byReport(rowsOut()) !== byReport(e.rows) ||
+      (e.fee !== null && byMonth(feeOut()) !== byMonth(e.fee))
+    )
+      parts.push('alloc');
+    if (holder !== e.holder) parts.push('holder');
+    // Новые файлы — к поступлению после сохранения (прототип: «добавлены файлы» без причины).
+    const upload = async () =>
+      picked.length ? uploadMoneyFiles(t, errorText, { kind: 'receipt', id: e.id }, picked) : null;
+    if (parts.length === 0) {
+      if (picked.length === 0) {
+        onClose();
+        return void toast(t('fin.edit.same'), { icon: 'info' });
+      }
+      setBusy(true);
+      const failedUpload = await upload();
+      setBusy(false);
+      onDone();
+      onClose();
+      if (failedUpload) toast(failedUpload, { bad: true });
+      return void toast(t('fin.in_edit.done'), { icon: 'wallet' });
+    }
+    if (!reason.trim()) return setErrors({ reason: reasonNeeded(t, parts, true) });
+    setBusy(true);
+    const res = await editReceipt(e.id, {
+      version: e.version,
+      total: totalN,
+      date,
+      rows: rowsOut(),
+      ...(e.fee !== null ? { fee: feeOut() } : {}),
+      holder,
+      reason: reason.trim(),
+    });
+    if (res.ok) {
+      const saved = OperationEdited.safeParse(res.data);
+      const failedUpload = await upload();
+      setBusy(false);
+      onDone();
+      onClose();
+      if (failedUpload) toast(failedUpload, { bad: true });
+      const same = saved.success && !saved.data.changed && !picked.length;
+      return void toast(t(same ? 'fin.edit.same' : 'fin.in_edit.done'), { icon: 'wallet' });
+    }
+    setBusy(false);
+    if (isRecordChanged(res.error)) return setChanged(true);
+    const message = errorText(res.error);
+    const field = fieldOf(res.error.details);
+    if (field === 'fee') return setErrors({ rows: message });
+    if (field === 'total' || field === 'date' || field === 'rows' || field === 'reason')
+      return setErrors({ [field]: message });
+    toast(message, { bad: true });
+  };
+
   const save = async () => {
-    if (!form) return;
+    if (!form) {
+      if (picker?.empty) setErrors({ contractor: t('money.in.contractor_required') });
+      return;
+    }
+    if (edit) return saveEdit(edit);
     if (totalN === null || totalN <= 0) return setErrors({ total: t('money.amount_invalid') });
     if (detail > totalN)
       return setErrors({
@@ -511,16 +713,8 @@ function ReceiptModal({
         json: {
           total: totalN,
           date,
-          rows: rows
-            .filter((r) => value(r.reportId) > 0)
-            .map((r) => ({ reportId: r.reportId, amount: value(r.reportId) })),
-          ...(feeDetail > 0
-            ? {
-                fee: feeRows
-                  .filter((m) => feeValue(m.month) > 0)
-                  .map((m) => ({ month: m.month, amount: feeValue(m.month) })),
-              }
-            : {}),
+          rows: rowsOut(),
+          ...(feeDetail > 0 ? { fee: feeOut() } : {}),
           files: picked.length,
         },
       }),
@@ -568,13 +762,13 @@ function ReceiptModal({
       onClose={onClose}
       kind="form"
       size="wide"
-      dirty={total !== '' || picked.length > 0}
-      title={t('money.in.title')}
+      dirty={(edit ? reason !== '' : total !== '') || picked.length > 0}
+      title={t(edit ? 'fin.in_edit.title' : 'money.in.title')}
       sub={sub}
       footer={
         <Footer
-          label={t('money.in.ok')}
-          icon="download"
+          label={t(edit ? 'btn.save' : 'money.in.ok')}
+          icon={edit ? 'wallet' : 'download'}
           busy={busy || !form}
           onClose={onClose}
           onOk={() => void save()}
@@ -582,8 +776,73 @@ function ReceiptModal({
         />
       }
     >
-      <div className="flex flex-col gap-3.5" data-receipt-dialog={c?.id ?? ''}>
+      <div
+        className="flex flex-col gap-3.5"
+        data-receipt-dialog={c?.id ?? ''}
+        data-receipt-edit={edit?.id}
+      >
+        {changed ? (
+          <RecordChangedNotice
+            message={t('err.record_changed')}
+            reloadLabel={t('form.reload')}
+            onReload={onClose}
+            reloading={false}
+          />
+        ) : null}
         {failed && !form ? <Note tone="bad">{t('money.in.load_error')}</Note> : null}
+        {edit?.spent ? (
+          <>
+            <Note tone="warn" icon="lock">
+              {t('fin.in_edit.spent', { amount: formatSomWithUnit(edit.spent.min) })}
+            </Note>
+            <MiniTable
+              label={t('fin.del.blocked_pay')}
+              empty=""
+              phoneCards={false}
+              onOpen={onOpenOperation ? (key) => onOpenOperation(key) : undefined}
+              columns={[
+                { key: 'report', label: t('fin.del.blocked_pay') },
+                { key: 'date', label: t('fin.op.date') },
+                { key: 'amount', label: t('fin.op.amount'), numeric: true },
+              ]}
+              rows={edit.spent.payments.map((p) => ({
+                key: p.id,
+                cells: {
+                  report: p.report,
+                  date: formatDateRu(p.date),
+                  amount: formatSom(p.amount),
+                },
+              }))}
+            />
+          </>
+        ) : null}
+        {picker ? (
+          <FormGrid>
+            <Field
+              id={`${id}-cp`}
+              label={t('money.in.contractor')}
+              required
+              full
+              error={errors.contractor}
+            >
+              {(control) => (
+                <select
+                  {...control}
+                  data-receipt-contractor=""
+                  className={`${inputClass()} cursor-pointer`}
+                  value={picker.value}
+                  onChange={(e) => picker.onChange(e.target.value)}
+                >
+                  {picker.options.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </Field>
+          </FormGrid>
+        ) : null}
         {one ? (
           <Note icon="coins">
             <b>{t('fee.receipt.one_sum_title')}</b> {t('fee.receipt.one_sum_text')}
@@ -814,7 +1073,7 @@ function ReceiptModal({
               label={t('money.in.files')}
               full
               required={needFile}
-              hint={needFile ? t('money.in.files_need') : undefined}
+              hint={fileHint}
               error={errors.files}
             >
               {(control) => (
@@ -832,6 +1091,57 @@ function ReceiptModal({
           <Note tone="warn" icon="clip">
             {errors.files ?? t('err.receipt_file_required')}
           </Note>
+        ) : null}
+        {edit ? (
+          <FormGrid>
+            <Field id={`${id}-acc`} label={t('fin.edit.account')}>
+              {(control) => (
+                <select
+                  {...control}
+                  data-receipt-holder=""
+                  className={`${inputClass()} cursor-pointer`}
+                  value={holder}
+                  onChange={(e) => {
+                    setHolder(e.target.value);
+                    setErrors((x) => ({ ...x, reason: undefined }));
+                  }}
+                >
+                  {edit.accounts.map((a) => (
+                    <option key={a.key} value={a.key}>
+                      {a.key === 'org'
+                        ? t('fin.edit.acc_org')
+                        : t(a.responsible ? 'fin.edit.acc_resp' : 'fin.edit.acc_emp', {
+                            name: a.name ?? '—',
+                          })}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </Field>
+            <div />
+            <Field
+              id={`${id}-why`}
+              label={t('fin.edit.reason')}
+              full
+              hint={t('fin.in_edit.reason_hint')}
+              error={errors.reason}
+            >
+              {(control) => (
+                <textarea
+                  {...control}
+                  data-receipt-reason=""
+                  maxLength={500}
+                  placeholder={t('fin.edit.reason_ph')}
+                  className={`${inputClass({ multiline: true })} min-h-14`}
+                  value={reason}
+                  onChange={(e) => {
+                    setReason(e.target.value);
+                    setErrors((x) => ({ ...x, reason: undefined }));
+                  }}
+                />
+              )}
+            </Field>
+          </FormGrid>
         ) : null}
       </div>
     </Modal>

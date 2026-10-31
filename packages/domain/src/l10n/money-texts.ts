@@ -315,6 +315,8 @@ export const TAX_MONEY_TEXTS = {
 
   // «Поступление от контрагента»
   'money.in.title': { ru: 'Поступление от контрагента', section: S },
+  'money.in.contractor': { ru: 'Контрагент', section: S },
+  'money.in.contractor_required': { ru: 'Выберите контрагента', section: S },
   'money.in.sub_org': { ru: '{name} · на счёт организации', section: S },
   'money.in.sub_emp': { ru: '{name} · на счёт {holder}', section: S },
   'money.in.total': { ru: 'Общая сумма, сом', section: S },
@@ -353,6 +355,10 @@ export const TAX_MONEY_TEXTS = {
   },
   'money.in.files': { ru: 'Файлы: платёжка, чек, скрин перевода', section: S },
   'money.in.files_need': { ru: 'Для этого контрагента файл обязателен', section: S },
+  'money.in.files_need_have': {
+    ru: 'Для этого контрагента файл обязателен: уже приложено {n}',
+    section: S,
+  },
   'money.in.total_less': {
     ru: 'Сумма детализации больше общей на {amount}: общая сумма должна быть не меньше',
     section: E,
@@ -396,6 +402,10 @@ export const TAX_MONEY_TEXTS = {
   },
   'money.tab.ops_title': { ru: 'Операции · {n}', section: S },
   'money.tab.ops_empty': { ru: 'Операций пока не было', section: S },
+  'money.tab.ops_hint': {
+    ru: 'Нажмите на операцию — откроется её окно: там видно, кто и когда её внёс, и её можно изменить или удалить с причиной.',
+    section: S,
+  },
   'money.tab.col_date': { ru: 'Дата', section: S },
   'money.tab.col_op': { ru: 'Операция', section: S },
   'money.tab.col_basis': { ru: 'Основание', section: S },

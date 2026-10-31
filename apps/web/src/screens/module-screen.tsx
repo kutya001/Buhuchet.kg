@@ -8,6 +8,8 @@ import { OrgsList } from '../admin/orgs-list';
 import { PlatformDicts } from '../dicts/platform-tab';
 import { ReportTypesList } from '../dicts/report-types-list';
 import { FilesManager } from '../files/files-manager';
+import { BonusTab } from '../finance/bonus-tab';
+import { FinanceScreen } from '../finance/finance-screen';
 import { KbArticlesTab } from '../kb/kb-articles';
 import { KbLessonsTab } from '../kb/kb-lessons';
 import { KbLevelTab } from '../kb/kb-level';
@@ -30,7 +32,6 @@ import { ReportsList } from '../reports/reports-list';
 import { RolesList } from '../roles/roles-list';
 import { ModuleStub } from '../shell/module-stub';
 import { StaffList } from '../staff/staff-list';
-import { StaffStub } from '../staff/staff-stub';
 import { TasksList, type TaskTab } from '../tasks/tasks-list';
 
 /**
@@ -53,8 +54,10 @@ export function ModuleScreen({
     const tab = tabId ?? 'list';
     if (tab === 'list') return <StaffList />;
     if (tab === 'roles') return <RolesList />;
-    return <StaffStub />;
+    if (tab === 'bonus') return <BonusTab />;
+    return <StaffList />;
   }
+  if (moduleId === 'fin') return <FinanceScreen tab={tabId ?? 'all'} />;
   // «Контрагенты»: «Все», «Мои контрагенты» и «Должники».
   if (moduleId === 'cps') {
     const tab = tabId ?? 'all';
@@ -133,6 +136,11 @@ const SCREENS_WITH_PLATES: ReadonlySet<string> = new Set<string>([
   'kpi/month',
   'kpi/period',
   'kpi/missing',
+  'fin/',
+  'fin/all',
+  'fin/tax',
+  'fin/fee',
+  'fin/wo',
   'files/',
   'orgs/',
   'l10n/',

@@ -2,6 +2,7 @@ import {
   contractorMoney,
   hasTaxSum,
   MONEY_AMOUNT_MAX,
+  monthLabel,
   monthReconciliation,
   payOnlyReportStatus,
   formatDateRu,
@@ -30,6 +31,7 @@ import {
   type TaxReport,
   type Translate,
   type Tyiyn,
+  type YearMonth,
 } from '@buhuchet/domain';
 import { and, asc, desc, eq, inArray, isNull, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
@@ -38,6 +40,7 @@ import { updateWithHistory, writeHistory } from './history';
 import { insertReceiptFeePayments, receiptFeeLeft } from './fees';
 import { calendarOf, lockReport, ReportChangedError } from './reports';
 import {
+  closedMonths,
   contractors,
   employees,
   feePayments,
@@ -325,17 +328,30 @@ export interface ReceiptFormRow {
 }
 
 /** «Уже получено» по отчёту (прототип inDlg, `already`). */
-const alreadyOf = (r: Pick<TaxReport, 'paid' | 'received'>) => Math.max(0, r.paid, r.received);
+const alreadyOf = (r: Pick<TaxReport, 'paid' | 'received'>, own = 0) =>
+  Math.max(0, r.paid - own, r.received - own);
 
 /**
  * Неоплаченные отчёты контрагента для формы поступления (прототип inDlg): с суммой больше 0, не «Не
- * требуется», не прежние версии, ещё не всё получено — по сроку оплаты.
+ * требуется», не прежние версии, ещё не всё получено — по сроку оплаты. При изменении поступления
+ * (`editOpId`, задача 2.22) его собственная детализация не считается «уже полученным», а отчёты из неё
+ * остаются в форме, даже если по ним всё получено (прототип inDlg: `own`, `already`).
  */
 export async function receiptFormRows(
   tx: Tx,
   contractorId: string,
+  editOpId?: string,
 ): Promise<{ rows: ReceiptFormRow[]; unpaid: number }> {
-  const list = await moneyReportsOf(tx, contractorId);
+  const [list, ownRows] = await Promise.all([
+    moneyReportsOf(tx, contractorId),
+    editOpId
+      ? tx
+          .select({ reportId: moneyAllocations.reportId, amount: moneyAllocations.amount })
+          .from(moneyAllocations)
+          .where(eq(moneyAllocations.operationId, editOpId))
+      : [],
+  ]);
+  const own = new Map(ownRows.map((x) => [x.reportId, Number(x.amount)]));
   // Неоплаченные отчёты, деньги на которые уже получены: подсказка «эта сумма станет авансом».
   const unpaid = list.filter(
     (r) => hasTaxSum(r.act) && r.status !== 'not_required' && (r.sum ?? 0) > r.paid,
@@ -346,19 +362,22 @@ export async function receiptFormRows(
         hasTaxSum(r.act) &&
         (r.sum ?? 0) > 0 &&
         r.status !== 'not_required' &&
-        r.sum! - alreadyOf(r) > 0,
+        (r.sum! - alreadyOf(r, own.get(r.id)) > 0 || own.has(r.id)),
     )
-    .map((r) => ({
-      reportId: r.id,
-      typeShort: r.typeShort,
-      period: r.period,
-      periodStart: r.periodStart,
-      eventDate: r.eventDate,
-      payDue: r.payDue,
-      sum: r.sum!,
-      already: alreadyOf(r),
-      left: r.sum! - alreadyOf(r),
-    }));
+    .map((r) => {
+      const already = alreadyOf(r, own.get(r.id));
+      return {
+        reportId: r.id,
+        typeShort: r.typeShort,
+        period: r.period,
+        periodStart: r.periodStart,
+        eventDate: r.eventDate,
+        payDue: r.payDue,
+        sum: r.sum!,
+        already,
+        left: Math.max(0, r.sum! - already),
+      };
+    });
   return { rows, unpaid };
 }
 
@@ -789,6 +808,16 @@ export async function cancelPayment(
   if (r.superseded) throw new MoneyRefusedError('payment_superseded');
   const op = await lastPayment(tx, id);
   if (!op) throw new MoneyRefusedError('payment_none');
+  // Месяц оплаты закрыт отчётом о списаниях (задача 2.22; прототип status-scale.js, откат 'pay').
+  const [closed] = await tx
+    .select({ id: closedMonths.id })
+    .from(closedMonths)
+    .where(eq(closedMonths.month, `${op.opDate.slice(0, 7)}-01`));
+  if (closed) {
+    throw new MoneyRefusedError('payment_month_closed', 409, undefined, {
+      month: monthLabel(op.opDate.slice(0, 7) as YearMonth),
+    });
+  }
   const [bonus] = await tx
     .select({ date: moneyOperations.opDate })
     .from(moneyOperations)
@@ -933,6 +962,8 @@ export interface MoneyOperationRow {
   receiptDate: IsoDate | null;
   /** Возврат по уточнённому — номер версии отчёта. */
   revision: number | null;
+  /** Изменена в окне операции (задача 2.22). */
+  edited: boolean;
 }
 
 const opActor = alias(employees, 'op_actor');
@@ -961,6 +992,7 @@ export async function contractorOperations(
       holderName: opHolder.shortName,
       receiptDate: opReceipt.opDate,
       revision: opReport.revision,
+      edited: moneyOperations.edited,
       typeShort: opType.shortName,
       period: opReport.period,
       periodStart: opReport.periodStart,
@@ -1023,6 +1055,7 @@ export async function contractorOperations(
     holderName: o.kind === 'xfer' ? o.holderName : null,
     receiptDate: o.kind === 'corr' ? o.receiptDate : null,
     revision: o.kind === 'back' ? o.revision : null,
+    edited: o.edited,
   }));
 }
 

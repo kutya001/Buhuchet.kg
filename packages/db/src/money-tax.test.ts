@@ -756,11 +756,13 @@ describe.skipIf(!databaseAvailable())('Деньги по отчётам: пос�
     await expect(inA((tx) => tx.delete(moneyOperations).returning())).rejects.toEqual(
       permissionDenied,
     );
-    await expect(inA((tx) => tx.delete(moneyAllocations).returning())).rejects.toEqual(
-      permissionDenied,
-    );
+    // Детализацию не правят на месте (при изменении поступления её заменяют, задача 2.22); вид,
+    // контрагента и отчёт операции не меняет никто.
     await expect(
-      inA((tx) => tx.update(moneyOperations).set({ amount: 1 }).returning()),
+      inA((tx) => tx.update(moneyAllocations).set({ amount: 1 }).returning()),
+    ).rejects.toEqual(permissionDenied);
+    await expect(
+      inA((tx) => tx.update(moneyOperations).set({ kind: 'pay' }).returning()),
     ).rejects.toEqual(permissionDenied);
     // Чужой контрагент для поступления не найден.
     await expect(

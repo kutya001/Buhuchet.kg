@@ -11,7 +11,7 @@ import { asOwner, newContractor, staffIds } from './reports';
 type Fees = {
   debt: number;
   months: { month: string; charge: number; got: number; status: string }[];
-  payments: { amount: number; allocation: { month: string; amount: number }[] }[];
+  payments: { id: string; amount: number; allocation: { month: string; amount: number }[] }[];
 };
 
 /** Слово из кириллицы, своё на каждый запуск: по нему поиск находит только контрагентов теста. */
@@ -73,7 +73,7 @@ async function feesOf(api: APIRequestContext, id: string): Promise<Fees> {
 }
 
 test.describe('Этап 2: плата за обслуживание', () => {
-  test('(п. 64) в меню «…» строки контрагента с начислением за обслуживание 60 000 сом «Принять оплату за обслуживание»: сумма подставлена 60 000, после сохранения начисление «Оплачено», долг 0, на вкладке «Обслуживание» — новая оплата', async ({
+  test('(п. 64) в меню «…» строки контрагента с начислением за обслуживание 60 000 сом «Принять оплату за обслуживание»: сумма подставлена 60 000, после сохранения начисление «Оплачено», долг 0, на вкладке «Обслуживание» — новая оплата, в «Финансовых операциях» на вкладке «Обслуживание» — её строка', async ({
     page,
     request,
     baseURL,
@@ -125,6 +125,16 @@ test.describe('Этап 2: плата за обслуживание', () => {
     // Долга нет — «Напомнить в WhatsApp» нет; «Новая ставка» есть.
     await expect(tab.locator('[data-fee-tariff]')).toBeVisible();
     await expect(tab.locator('[data-fee-remind]')).toHaveCount(0);
+
+    // «Финансовые операции» → «Обслуживание» (вторая половина п. 64, задача 2.22): строка оплаты.
+    await page.goto('/app/fin/fee');
+    await expect(page.locator('[data-grid]')).toBeVisible();
+    await search(page, isMobile, word);
+    const line = row(page, `fee:${fees.payments[0]!.id}`);
+    await expect(line).toHaveCount(1);
+    await expect(line).toContainText(name);
+    await expect(line).toContainText('Оплата за обслуживание');
+    await expect(line).toContainText(/\+60\s000,00/);
   });
 
   test('(п. 7, плата за обслуживание) плата ведётся отдельно от налогов, и обычный бухгалтер её не видит: нет вкладки «Обслуживание», плашки «Должники», долга в строке списка и записей об оплате в истории; API отвечает 403', async ({

@@ -533,6 +533,20 @@
       "when": 1793455368590,
       "tag": "0075_finance_ops_guards",
       "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "7",
+      "when": 1793466877521,
+      "tag": "0076_finance_journal",
+      "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1793466879842,
+      "tag": "0077_finance_journal_guards",
+      "breakpoints": true
     }
   ]
 }

@@ -7,6 +7,7 @@ import {
   lockOperation,
   moneyContractor,
   operationCard,
+  operationMonthClosed,
   receiptHasFee,
   transferTargets,
   transferToEmployee,
@@ -81,7 +82,7 @@ const allFinOf = (c: Context<AppEnv>) => scopeOf(subjectOf(c), 'fin') === 'all';
  * Поступление только за обслуживание сотруднику, который не видит плату по контрагенту, не
  * показывается и не меняется (docs/deviations.md п. В-19): для него такой операции нет.
  */
-async function hiddenFeeReceipt(
+export async function hiddenFeeReceipt(
   tx: Tx,
   c: Context<AppEnv>,
   locked: LockedOperation,
@@ -101,7 +102,7 @@ async function hiddenFeeReceipt(
  * оплата за обслуживание, которую он не видит.
  */
 // ОТКЛОНЕНИЕ: docs/deviations.md#В-27
-async function feeDeleteLock(
+export async function feeDeleteLock(
   tx: Tx,
   t: Translate,
   subject: AccessSubject,
@@ -287,7 +288,11 @@ export function operationHandler(deps: ApiDeps): RouteHandler<typeof operationRo
         (await feeVisible(tx, orgContextOf(c).orgId, subject)) &&
         canSeeContractor(subject, 'cps', card.contractor);
       if (!fee && card.op.kind === 'in' && card.op.amount === 0) return null;
-      const op = { kind: card.op.kind, deleted: !!card.op.cancelledAt };
+      const op = {
+        kind: card.op.kind,
+        deleted: !!card.op.cancelledAt,
+        monthClosed: await operationMonthClosed(tx, card.op),
+      };
       const [edit, del] = await Promise.all([
         operationLock(tx, t, subject, op, card.contractor, 'edit'),
         operationLock(tx, t, subject, op, card.contractor, 'del').then(
@@ -320,10 +325,14 @@ function operationWindow(
   const feeSum = card.fee.reduce((a, x) => a + x.amount, 0);
   const allocated = card.allocations.reduce((a, x) => a + x.amount, 0);
   const at = (d: Date | null) => (d ?? op.createdAt).toISOString();
-  const filesKind = op.kind === 'in' ? 'receipt' : op.kind === 'pay' ? 'tax_payment' : null;
+  // Файлы есть у всех операций (прототип opWin): у поступления и оплаты налога — свои источники.
+  const filesKind =
+    op.kind === 'in' ? 'receipt' : op.kind === 'pay' ? 'tax_payment' : 'money_operation';
   return {
     id: op.id,
+    version: op.version,
     kind: op.kind,
+    edited: op.edited,
     self: op.self,
     date: op.opDate,
     amount: op.kind === 'in' ? (fee ? (op.total ?? op.amount) : op.amount) : op.amount,
@@ -447,7 +456,11 @@ export function deleteOperationHandler(
           tx,
           t,
           subject,
-          { kind: locked.op.kind, deleted: !!locked.op.cancelledAt },
+          {
+            kind: locked.op.kind,
+            deleted: !!locked.op.cancelledAt,
+            monthClosed: await operationMonthClosed(tx, locked.op),
+          },
           locked.c,
           'del',
         )) ?? (await feeDeleteLock(tx, t, subject, locked.op, locked.c));

@@ -22,6 +22,11 @@ export const FEE_MESSAGES = {
   tariff_month_taken: 'На этот месяц ставка уже есть: ставка меняется не чаще раза в месяц',
   tariff_month_past: 'Прошлые месяцы не меняются',
   tariff_month_current: 'Ставка меняется со следующего месяца: текущий месяц уже начислен',
+  // Окно оплаты за обслуживание в «Финансовых операциях» (задача 2.22; прототип fin-op.js, feePayDlg).
+  fee_payment_deleted: 'Операция удалена',
+  fee_payment_receipt_part:
+    'Эта оплата — часть общего поступления: уберите её через «Изменить» или удалите поступление целиком',
+  fee_reason_required: 'Укажите причину',
 } as const;
 
 export type FeeMessageKey = keyof typeof FEE_MESSAGES;

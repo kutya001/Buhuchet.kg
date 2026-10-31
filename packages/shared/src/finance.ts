@@ -7,7 +7,9 @@ import {
   OP_REASON_MAX,
 } from '@buhuchet/domain';
 import { z } from 'zod';
-import { IsoDate, Tyiyn, Uuid } from './common';
+import { IsoDate, RecordAudit, RecordVersion, Tyiyn, Uuid } from './common';
+import { FeePaymentForm, FeePaymentRequest } from './fees';
+import { ReceiptForm, ReceiptRequest } from './money';
 
 /*
  * Остаток контрагента и окно финансовой операции (задача 2.20; ТЗ «Виртуальные счета сотрудников» →
@@ -81,7 +83,11 @@ const Audit = z.object({ name: z.string().nullable(), at: z.string() });
 /** Окно финансовой операции (прототип `opWin`): поля, как их вводили, и что с ней можно сделать. */
 export const OperationWindow = z.object({
   id: Uuid,
+  /** Версия записи: «Изменить» сохраняет её с ней (устаревшая — «запись изменена другим пользователем»). */
+  version: RecordVersion,
   kind: z.enum(MONEY_OP_KINDS),
+  /** Отметка «Изменена» (задача 2.22). */
+  edited: z.boolean(),
   /** «Оплатил контрагент сам». */
   self: z.boolean(),
   date: IsoDate,
@@ -122,7 +128,7 @@ export const OperationWindow = z.object({
     })
     .nullable(),
   /** Блок «Файлы»: источник файлов операции; null — у этого вида файлов нет или они выключены. */
-  files: z.object({ kind: z.enum(['receipt', 'tax_payment']) }).nullable(),
+  files: z.object({ kind: z.enum(['receipt', 'tax_payment', 'money_operation']) }).nullable(),
   history: z.array(
     z.object({
       id: z.number().int(),
@@ -201,3 +207,252 @@ export const TaxReminder = z.object({
   ),
 });
 export type TaxReminder = z.infer<typeof TaxReminder>;
+
+/* ───────────── Журнал «Финансовые операции по контрагентам» (задача 2.22) ───────────── */
+
+const Month = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Месяц — ГГГГ-ММ');
+const Flag = z.enum(['0', '1']).optional();
+
+/** Вкладки журнала (прототип FIN_TABS): «Проекты и услуги» заполнят разовые услуги. */
+export const FIN_JOURNAL_TAB_IDS = ['all', 'tax', 'fee', 'proj', 'wo'] as const;
+
+/** Вкладка журнала и «Показать удалённые». */
+export const FinJournalParams = z.object({
+  tab: z.enum(FIN_JOURNAL_TAB_IDS).default('all'),
+  deleted: Flag,
+});
+
+/** «Журнал поступлений»: «Показать удалённые». */
+export const ReceiptJournalParams = z.object({ deleted: Flag });
+
+/** Строка журнала (прототип finRows): операция по счёту контрагента или оплата за обслуживание. */
+export const FinJournalRow = z.object({
+  key: z.string(),
+  src: z.enum(['op', 'fee']),
+  id: Uuid,
+  kind: z.string(),
+  self: z.boolean(),
+  contractor: z.object({ id: Uuid, name: z.string() }),
+  date: IsoDate,
+  /** Сумма без знака; со знаком — `signed` (расход с минусом, у обратной записи — её знак). */
+  amount: Tyiyn,
+  signed: z.number().int(),
+  what: z.string(),
+  deleted: z.boolean(),
+  edited: z.boolean(),
+  acc: z.object({ kind: z.enum(MONEY_HOLDER_KINDS), name: z.string().nullable() }),
+  by: z.string().nullable(),
+  files: z.number().int().nonnegative(),
+  rep: z.string().nullable(),
+  per: z.string().nullable(),
+  note: z.string(),
+  /** Оплата за обслуживание — часть общего поступления. */
+  receiptPart: z.boolean(),
+  /** «Открыть источник»: отчёт оплаты налога, общее поступление оплаты за обслуживание. */
+  reportId: Uuid.nullable(),
+  receipt: z.object({ id: Uuid, total: Tyiyn, date: IsoDate }).nullable(),
+  /** Меню строки: почему нельзя «Изменить» и «Удалить» (прототип `opLock`); null — можно. */
+  locks: z.object({ edit: Lock, del: Lock }),
+  audit: RecordAudit,
+});
+export type FinJournalRow = z.infer<typeof FinJournalRow>;
+
+/** Строка «Журнала поступлений» (прототип renderJournal). */
+export const ReceiptJournalRow = z.object({
+  id: Uuid,
+  contractor: z.object({ id: Uuid, name: z.string() }),
+  date: IsoDate,
+  total: Tyiyn,
+  tax: Tyiyn,
+  /** Часть за обслуживание; null — плата не видна. */
+  fee: Tyiyn.nullable(),
+  distributed: Tyiyn,
+  advance: Tyiyn,
+  lines: z.number().int().nonnegative(),
+  alloc: z.string().nullable(),
+  corrections: z.number().int().nullable(),
+  /** На налоги уже потрачено (прототип `inMin`). */
+  spent: Tyiyn,
+  deleted: z.boolean(),
+  edited: z.boolean(),
+  files: z.number().int().nonnegative(),
+  by: z.string().nullable(),
+  note: z.string(),
+  holder: z.object({ kind: z.enum(MONEY_HOLDER_KINDS), name: z.string().nullable() }),
+  audit: RecordAudit,
+  /** Замки «Изменить», «Обратная запись» и «Удалить» в меню строки (прототип opActs). */
+  locks: z.object({ edit: Lock, del: Lock }),
+});
+export type ReceiptJournalRow = z.infer<typeof ReceiptJournalRow>;
+
+/** Плашки модуля за текущий месяц (прототип renderFin); null — группа не видна. */
+export const FinSummary = z.object({
+  month: Month,
+  tax: z.object({ received: Tyiyn, paid: Tyiyn }).nullable(),
+  fee: Tyiyn.nullable(),
+  wo: Tyiyn.nullable(),
+});
+export type FinSummary = z.infer<typeof FinSummary>;
+
+/** Строка вкладки «Списания в бонус» (прототип staff.js, `bonus`). */
+export const BonusRow = z.object({
+  id: Uuid,
+  date: IsoDate,
+  contractor: z.object({ id: Uuid, name: z.string() }),
+  holder: z.object({ kind: z.enum(MONEY_HOLDER_KINDS), name: z.string().nullable() }),
+  amount: Tyiyn,
+  note: z.string(),
+  by: z.string().nullable(),
+  /** Меню строки: почему нельзя «Изменить» и «Отменить списание»; null — можно. */
+  locks: z.object({ edit: Lock, del: Lock }),
+  audit: RecordAudit,
+});
+export type BonusRow = z.infer<typeof BonusRow>;
+
+/** Закрытые месяцы и «Закрыть <прошлый месяц>» (прототип staff.js: `CLOSED`, `bg-close`). */
+export const ClosedMonths = z.object({
+  closed: z.array(Month),
+  /** Прошлый месяц — его закрывают. */
+  toClose: Month,
+  /** Кнопка «Закрыть …»: право «Списывать остаток в бонус» и область «Все» финансовых операций. */
+  canClose: z.boolean(),
+  /** Списаний за прошлый месяц — для подтверждения. */
+  bonuses: z.object({ count: z.number().int().nonnegative(), amount: Tyiyn }),
+});
+export type ClosedMonths = z.infer<typeof ClosedMonths>;
+
+export const CloseMonthRequest = z.strictObject({ month: Month });
+export type CloseMonthRequest = z.infer<typeof CloseMonthRequest>;
+
+/** Счёт в окне изменения: `org` или сотрудник. */
+const EditAccount = z.object({
+  key: z.string(),
+  name: z.string().nullable(),
+  responsible: z.boolean(),
+});
+
+/** Окно «Изменить: …» (прототип opEditDlg). */
+export const OperationEditForm = z.object({
+  id: Uuid,
+  version: RecordVersion,
+  kind: z.enum(MONEY_OP_KINDS),
+  self: z.boolean(),
+  contractor: z.object({ id: Uuid, name: z.string() }),
+  /** Обратная запись: «Уменьшить» или «Увеличить». */
+  sign: z.enum(['-', '+']).nullable(),
+  amount: Tyiyn,
+  date: IsoDate,
+  holder: z.string(),
+  note: z.string(),
+  /** «Счёт» или «Кому»; null — у этого вида счёта нет. */
+  accounts: z.array(EditAccount).nullable(),
+  /** «Не больше …» у суммы; null — без предела. */
+  max: Tyiyn.nullable(),
+  /** Обратная запись: уменьшить — не больше этого. */
+  available: Tyiyn,
+  /**
+   * «Добавить файлы» (прототип opEditDlg): сколько файлов уже приложено; null — «Файлы в карточках»
+   * выключены.
+   */
+  files: z.number().int().nonnegative().nullable(),
+  today: IsoDate,
+});
+export type OperationEditForm = z.infer<typeof OperationEditForm>;
+
+const EditReason = z.string().max(OP_REASON_MAX).default('');
+
+export const OperationEditRequest = z.strictObject({
+  version: RecordVersion,
+  amount: Positive,
+  sign: z.enum(['-', '+']).optional(),
+  date: IsoDate,
+  holder: z.string().max(40).optional(),
+  note: Note.default(''),
+  reason: EditReason,
+});
+export type OperationEditRequest = z.input<typeof OperationEditRequest>;
+
+/** Сохранено: `changed` — false, если ничего не менялось («Без изменений»). */
+export const OperationEdited = z.object({ changed: z.boolean() });
+export type OperationEdited = z.infer<typeof OperationEdited>;
+
+/** Окно «Изменить поступление» (прототип inDlg с `edit`): форма поступления и то, что было введено. */
+export const ReceiptEditForm = ReceiptForm.extend({
+  edit: z.object({
+    id: Uuid,
+    version: RecordVersion,
+    /** Общая сумма: с платой — тому, кто её видит. */
+    total: Tyiyn,
+    date: IsoDate,
+    rows: z.array(z.object({ reportId: Uuid, amount: Tyiyn })),
+    /** Части за обслуживание; null — плата не видна. */
+    fee: z.array(z.object({ month: Month, amount: Tyiyn })).nullable(),
+    holder: z.string(),
+    accounts: z.array(EditAccount),
+    /** Уже потрачено на налоги и оплаты, которые мешают уменьшить сильнее (прототип `inEditNote`). */
+    spent: z
+      .object({
+        min: Tyiyn,
+        payments: z.array(z.object({ id: Uuid, report: z.string(), date: IsoDate, amount: Tyiyn })),
+      })
+      .nullable(),
+    files: z.number().int().nonnegative(),
+  }),
+});
+export type ReceiptEditForm = z.infer<typeof ReceiptEditForm>;
+
+/** Новые файлы окно изменения загружает к поступлению отдельно, после сохранения. */
+export const ReceiptEditRequest = ReceiptRequest.omit({ files: true }).extend({
+  version: RecordVersion,
+  holder: z.string().max(40),
+  reason: EditReason,
+});
+export type ReceiptEditRequest = z.input<typeof ReceiptEditRequest>;
+
+/** Окно оплаты за обслуживание (прототип opWin с `src:'fee'`). */
+export const FeePaymentWindow = z.object({
+  id: Uuid,
+  version: RecordVersion,
+  contractor: z.object({ id: Uuid, name: z.string(), archived: z.boolean() }),
+  date: IsoDate,
+  amount: Tyiyn,
+  allocation: z.array(z.object({ month: Month, amount: Tyiyn })),
+  /** «Куда поступили»: подпись и вид (владельцу — значок человека, как в прототипе). */
+  to: z.string(),
+  toOwner: z.boolean(),
+  note: z.string(),
+  edited: z.boolean(),
+  /** Часть общего поступления. */
+  receipt: z.object({ id: Uuid, date: IsoDate, total: Tyiyn }).nullable(),
+  created: Audit,
+  updated: Audit,
+  deleted: z.object({ name: z.string().nullable(), at: z.string(), reason: z.string() }).nullable(),
+  locks: z.object({ edit: Lock, del: Lock }),
+  /** «Изменить» у части поступления открывает окно поступления. */
+  editReceipt: z.boolean(),
+  files: z.boolean(),
+  history: OperationWindow.shape.history,
+});
+export type FeePaymentWindow = z.infer<typeof FeePaymentWindow>;
+
+export const FeePaymentIdParam = z.object({ id: Uuid });
+
+/** Окно «Изменить оплату за обслуживание» (прототип feePayDlg с `edit`). */
+export const FeePaymentEditForm = FeePaymentForm.extend({
+  edit: z.object({
+    id: Uuid,
+    version: RecordVersion,
+    date: IsoDate,
+    to: z.string(),
+    note: z.string(),
+    files: z.number().int().nonnegative(),
+  }),
+});
+export type FeePaymentEditForm = z.infer<typeof FeePaymentEditForm>;
+
+/** Новые файлы окно изменения загружает к оплате отдельно, после сохранения. */
+export const FeePaymentEditRequest = FeePaymentRequest.omit({ files: true }).extend({
+  version: RecordVersion,
+  reason: EditReason,
+});
+export type FeePaymentEditRequest = z.input<typeof FeePaymentEditRequest>;
