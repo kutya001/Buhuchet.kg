@@ -234,6 +234,7 @@ export const KB_ADMIN_TEXTS = {
   'kbadm.err.kb_html_too_long': { ru: 'Не длиннее 100 000 знаков', section: E },
   'kbadm.err.kb_unknown': { ru: 'Такого значения нет в списке', section: E },
   'kbadm.err.kb_level_name': { ru: 'У каждого уровня должно быть название', section: E },
+  'kbadm.err.kb_level_count': { ru: 'Число уровней не меняется', section: E },
   'kbadm.err.kb_level_name_too_long': { ru: 'Не длиннее 60 знаков', section: E },
   'kbadm.err.kb_level_order': {
     ru: 'Пороги должны расти и быть не больше 100 %',

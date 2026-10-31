@@ -277,6 +277,11 @@ export async function adminKbStepSave(
     if (versionOf(found.item) !== version) return CHANGED;
     before = stepOf(found.item);
     saved = { ...raws[k], ...value, v: versionOf(found.item) + 1 };
+    // Как kbBind прототипа: шаг администратора, переключённый на «Перейти» и 3 секунды, получает
+    // экран своего модуля.
+    if (saved.evk === 'open' && !saved.at && typeof saved.mod === 'string') {
+      saved = { ...saved, at: [saved.mod] };
+    }
     raws[k] = saved;
   }
   if ((await saveItems(tx, 'kbSteps', raws, ref.version)) === null) return CHANGED;
@@ -420,6 +425,11 @@ export async function adminKbArticleSave(
     if (versionOf(found.item) !== version) return CHANGED;
     before = articleOf(found.item);
     saved = { ...raws[k], ...value, v: versionOf(found.item) + 1 };
+    // Как kbBind прототипа: шаг администратора, переключённый на «Перейти» и 3 секунды, получает
+    // экран своего модуля.
+    if (saved.evk === 'open' && !saved.at && typeof saved.mod === 'string') {
+      saved = { ...saved, at: [saved.mod] };
+    }
     raws[k] = saved;
   }
   if ((await saveItems(tx, 'kbArticles', raws, ref.version)) === null) return CHANGED;

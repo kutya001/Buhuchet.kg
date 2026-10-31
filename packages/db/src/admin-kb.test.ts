@@ -130,6 +130,35 @@ describe.skipIf(!databaseAvailable())(
       expect(history.items[0]!.changes.map((c) => c.field).sort()).toEqual(['evk', 'perm', 't']);
     });
 
+    it('шаг администратора, переключённый на «Перейти» и 3 секунды, получает экран своего модуля', async () => {
+      const input = {
+        g: 'dicts',
+        t: 'Показ справочников',
+        w: '',
+        learn: true,
+        art: '',
+        star: false,
+        perm: '',
+        featk: '',
+        evk: 'hand',
+        active: true,
+        mod: 'dicts',
+      };
+      const added = await asAdmin((tx) => adminKbStepSave(tx, null, input, 0));
+      const id = added.ok ? added.value.id : '';
+      const at = async () =>
+        (
+          (await asAdmin((tx) => readReference(tx, 'kbSteps')))!.payload as {
+            id: string;
+            at?: string[];
+          }[]
+        ).find((s) => s.id === id)!.at;
+      expect(await at()).toBeUndefined();
+      const saved = await asAdmin((tx) => adminKbStepSave(tx, id, { ...input, evk: 'open' }, 1));
+      expect(saved.ok).toBe(true);
+      expect(await at()).toEqual(['dicts']);
+    });
+
     it('новый шаг: «Новое», последним по порядку, место для «Перейти»; «Выше», «Выключить»', async () => {
       const added = await asAdmin((tx) =>
         adminKbStepSave(
