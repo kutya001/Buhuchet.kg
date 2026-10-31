@@ -245,6 +245,8 @@ describe('текст из Админки', () => {
     kbArticleBlocks(odd);
     kbArticleText(odd);
     kbArticleBlocks('<'.repeat(100_000));
-    expect(performance.now() - started).toBeLessThan(500);
+    // С запасом под покрытие и параллельные тесты на CI (там бывает 0,5–0,6 с): разбор с квадратом
+    // длины на 100 000 символов занимает десятки секунд и всё равно не уложится.
+    expect(performance.now() - started).toBeLessThan(2_000);
   });
 });
