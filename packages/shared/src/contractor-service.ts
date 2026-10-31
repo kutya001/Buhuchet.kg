@@ -1,7 +1,8 @@
 import { PAUSE_REASON_MAX, SERVICE_STATUSES } from '@buhuchet/domain';
 import { z } from 'zod';
-import { RecordVersion, Uuid } from './common';
+import { RecordVersion, Tyiyn, Uuid } from './common';
 import { ContractorSaved, ContractorTariffRequest } from './contractors';
+import { ArchiveRestItem } from './finance';
 import { YearMonth } from './kpi';
 import { RollbackReason, StatusHistoryEntry } from './status';
 
@@ -124,5 +125,11 @@ export const ArchiveContractorsResult = z.object({
   archived: z.number().int().nonnegative(),
   skipped: z.number().int().nonnegative(),
   notRequired: z.number().int().nonnegative(),
+  /**
+   * Остаток денег у отправленных в архив (задача 2.20; прототип archiveDlg и restDlg): сумма — тому,
+   * кто видит деньги контрагентов; строки — тому, кто решает, что с остатком делать. null — остатков
+   * нет или они не видны.
+   */
+  rest: z.object({ total: Tyiyn, items: z.array(ArchiveRestItem).nullable() }).nullable(),
 });
 export type ArchiveContractorsResult = z.infer<typeof ArchiveContractorsResult>;

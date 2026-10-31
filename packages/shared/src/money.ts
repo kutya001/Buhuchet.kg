@@ -147,6 +147,14 @@ export const MoneyOperationItem = z.object({
   total: Tyiyn.nullable(),
   reports: z.array(z.string()),
   author: z.string().nullable(),
+  /** Причина списания, комментарий возврата и перевода, причина обратной записи (задача 2.20). */
+  note: z.string(),
+  /** Перевод — на чей счёт. */
+  holder: z.string().nullable(),
+  /** Обратная запись — дата поступления, к которому она. */
+  receiptDate: IsoDate.nullable(),
+  /** Возврат по уточнённому — номер версии отчёта. */
+  revision: z.number().int().nullable(),
 });
 export type MoneyOperationItem = z.infer<typeof MoneyOperationItem>;
 
@@ -185,6 +193,11 @@ export const ContractorMoney = z.object({
   operations: z.array(MoneyOperationItem),
   /** «Поступление»: право «Учёт денег», контрагент не в архиве. */
   canReceive: z.boolean(),
+  /**
+   * Кнопки остатка (задача 2.20; прототип contractor-card.js): «Списать в бонус», «Вернуть остаток»,
+   * «Перевод». Неактивные «Списать» и «Вернуть» объясняют причину — её окно считает по `free`.
+   */
+  actions: z.object({ bonus: z.boolean(), refund: z.boolean(), xfer: z.boolean() }),
 });
 export type ContractorMoney = z.infer<typeof ContractorMoney>;
 

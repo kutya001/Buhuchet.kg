@@ -241,6 +241,36 @@ export function MyWalletsBox({ holderDefault }: { holderDefault: string }) {
   );
 }
 
+/**
+ * «Новый реквизит» из другого окна (прототип waDlg, «Добавить реквизиты»: `walletDlg(holderEmp, …)`) —
+ * свой реквизит, со справочниками банков и кодов стран; первый реквизит — «Основной».
+ */
+export function NewWalletDialog({
+  open,
+  onClose,
+  holderDefault,
+}: {
+  open: boolean;
+  onClose: () => void;
+  holderDefault: string;
+}) {
+  const wallets = useQuery(myWalletsQuery);
+  const banks = useQuery(banksQuery);
+  const codes = useQuery(phoneCodesQuery);
+  if (!wallets.data || !banks.data || !codes.data) return null;
+  return (
+    <WalletDialog
+      open={open}
+      onClose={onClose}
+      wallet={null}
+      first={wallets.data.length === 0}
+      holderDefault={holderDefault}
+      banks={banks.data}
+      codes={codes.data}
+    />
+  );
+}
+
 /** Окно «Новый реквизит» / «Изменить реквизит» (прототип walletDlg). */
 function WalletDialog({
   open,

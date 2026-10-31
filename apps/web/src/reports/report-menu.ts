@@ -28,6 +28,7 @@ export type ReportAction =
   | 'amount'
   | 'receive'
   | 'pay'
+  | 'remind'
   | 'file'
   | 'revision'
   | 'rollback'
@@ -215,6 +216,8 @@ export function reportMenuEntries({
               }),
           ...money,
         }),
+        // Прототип: «Напомнить в WhatsApp» без отдельного права (`waDlg({r})`).
+        item('remind', { label: t('btn.remind_wa'), icon: 'chat' }),
       );
     }
     items.push(...file);

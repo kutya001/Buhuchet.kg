@@ -163,7 +163,7 @@ export const PAYMENT_STATUS = sql<PaymentStatus>`case
   else 'unpaid' end`;
 
 /** Деньги контрагента на счетах (прототип c.avail) — `fundsBalance` в SQL. */
-async function availableOf(tx: Tx, contractorId: string): Promise<Tyiyn> {
+export async function availableOf(tx: Tx, contractorId: string): Promise<Tyiyn> {
   const [row] = await tx
     .select({
       avail:
@@ -250,7 +250,7 @@ export async function contractorMoneyOf(
 }
 
 /** Контрагент для денежного действия: в области, куда переводит деньги, ответственный. */
-interface MoneyContractor {
+export interface MoneyContractor {
   id: string;
   name: string;
   paysTo: 'emp' | 'org';
@@ -299,7 +299,7 @@ export async function moneyContractor(
  * ни на чьём кошельке (holder пуст), в базе — на счёте организации, как в `syncMoneyHolders`.
  */
 // ОТКЛОНЕНИЕ: docs/deviations.md#В-15
-function holderOf(
+export function holderOf(
   c: MoneyContractor,
   self: boolean,
 ): { holderKind: MoneyHolderKind; holderEmployeeId: string | null } {
@@ -526,6 +526,9 @@ async function lockContractor(
   return c;
 }
 
+/** Блокировка контрагента для денежных действий других модулей (окно операции, списания, переводы). */
+export { lockContractor as lockMoneyContractor };
+
 /**
  * Оплата и её отмена: сначала контрагент, потом отчёт — в том же порядке, что приостановка и архив
  * контрагента, чтобы одновременные действия не заблокировали друг друга.
@@ -549,12 +552,23 @@ async function lockReportMoney(
 /**
  * Деньги контрагента — на счёте, куда он их переводит (прототип transferCp и `cp-pays`): после смены
  * ответственного или «Деньги на налоги переводит» операции, кроме «Оплатил контрагент сам», переходят
- * на счёт организации или нового ответственного; без ответственного — на счёт организации. Области
- * функция не проверяет: вызывающий передаёт контрагентов, уже найденных в своей области и
- * заблокированных в этой транзакции (организацию отделяет RLS обеих таблиц).
+ * на счёт организации или нового ответственного; без ответственного — на счёт организации. После
+ * смены только ответственного (`why: 'responsible'`) у контрагента, который переводит деньги
+ * организации, переводы на счёт сотрудника остаются у того, кому перевели (задача 2.20; прототип
+ * transferCp меняет счёт операций только при `paysTo === 'emp'`). Области функция не проверяет:
+ * вызывающий передаёт контрагентов, уже найденных в своей области и заблокированных в этой транзакции
+ * (организацию отделяет RLS обеих таблиц).
  */
-export async function syncMoneyHolders(tx: Tx, contractorIds: readonly string[]): Promise<void> {
+export async function syncMoneyHolders(
+  tx: Tx,
+  contractorIds: readonly string[],
+  why: 'paysTo' | 'responsible' = 'paysTo',
+): Promise<void> {
   if (!contractorIds.length) return;
+  const keepTransfers =
+    why === 'responsible'
+      ? sql`and not (${moneyOperations.kind} = 'xfer' and ${contractors.paysTo} = 'org')`
+      : sql``;
   const toOrg = sql`(${contractors.paysTo} = 'org' or ${contractors.responsibleEmployeeId} is null)`;
   const kind = sql`case when ${toOrg} then 'org' else 'employee' end`;
   const employee = sql`case when ${toOrg} then null else ${contractors.responsibleEmployeeId} end`;
@@ -564,7 +578,7 @@ export async function syncMoneyHolders(tx: Tx, contractorIds: readonly string[])
     from ${contractors}
     where ${contractors.id} = ${moneyOperations.contractorId}
       and ${inArray(moneyOperations.contractorId, [...contractorIds])}
-      and not ${moneyOperations.self}
+      and not ${moneyOperations.self} ${keepTransfers}
       and (${moneyOperations.holderKind}, ${moneyOperations.holderEmployeeId}) is distinct from (${kind}, ${employee})`);
 }
 
@@ -913,9 +927,17 @@ export interface MoneyOperationRow {
   note: string;
   actorUserId: string | null;
   actorName: string | null;
+  /** Перевод — на чей счёт (задача 2.20). */
+  holderName: string | null;
+  /** Обратная запись — дата поступления, к которому она. */
+  receiptDate: IsoDate | null;
+  /** Возврат по уточнённому — номер версии отчёта. */
+  revision: number | null;
 }
 
 const opActor = alias(employees, 'op_actor');
+const opHolder = alias(employees, 'op_holder');
+const opReceipt = alias(moneyOperations, 'op_receipt');
 const opReport = alias(reports, 'op_report');
 const opType = alias(reportTypes, 'op_type');
 
@@ -936,6 +958,9 @@ export async function contractorOperations(
       note: moneyOperations.note,
       actorUserId: moneyOperations.createdBy,
       actorName: opActor.shortName,
+      holderName: opHolder.shortName,
+      receiptDate: opReceipt.opDate,
+      revision: opReport.revision,
       typeShort: opType.shortName,
       period: opReport.period,
       periodStart: opReport.periodStart,
@@ -943,6 +968,8 @@ export async function contractorOperations(
     })
     .from(moneyOperations)
     .leftJoin(opActor, eq(opActor.userId, moneyOperations.createdBy))
+    .leftJoin(opHolder, eq(opHolder.id, moneyOperations.holderEmployeeId))
+    .leftJoin(opReceipt, eq(opReceipt.id, moneyOperations.refOperationId))
     .leftJoin(opReport, eq(opReport.id, moneyOperations.reportId))
     .leftJoin(opType, eq(opType.code, opReport.reportTypeCode))
     .where(and(eq(moneyOperations.contractorId, contractorId), isNull(moneyOperations.cancelledAt)))
@@ -993,6 +1020,9 @@ export async function contractorOperations(
     note: o.note,
     actorUserId: o.actorUserId,
     actorName: o.actorName,
+    holderName: o.kind === 'xfer' ? o.holderName : null,
+    receiptDate: o.kind === 'corr' ? o.receiptDate : null,
+    revision: o.kind === 'back' ? o.revision : null,
   }));
 }
 

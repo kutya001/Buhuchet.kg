@@ -1,4 +1,4 @@
-import { FEE_TO_KINDS, MONEY_AMOUNT_MAX, MONEY_NOTE_MAX } from '@buhuchet/domain';
+import { FEE_TO_KINDS, MONEY_AMOUNT_MAX, MONEY_NOTE_MAX, OP_REASON_MAX } from '@buhuchet/domain';
 import { sql } from 'drizzle-orm';
 import {
   check,
@@ -7,6 +7,7 @@ import {
   index,
   pgTable,
   text,
+  timestamp,
   unique,
   uniqueIndex,
   uuid,
@@ -53,6 +54,13 @@ export const feePayments = pgTable(
     /** Общее поступление от контрагента, частью которого была оплата. */
     operationId: uuid('operation_id'),
     note: text('note').notNull().default(''),
+    /**
+     * Удалена в окне операции вместе с общим поступлением (задача 2.20) или сама (задача 2.22): запись
+     * остаётся с причиной, в долг и итоги не входит.
+     */
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+    deletedBy: uuid('deleted_by').references(() => users.id),
+    deleteReason: text('delete_reason'),
     createdBy: uuid('created_by').references(() => users.id),
     updatedBy: uuid('updated_by').references(() => users.id),
     ...timestamps(),
@@ -82,6 +90,10 @@ export const feePayments = pgTable(
     check(
       'fee_payments_note_check',
       sql`char_length(${t.note}) <= ${sql.raw(String(MONEY_NOTE_MAX))}`,
+    ),
+    check(
+      'fee_payments_delete_check',
+      sql`(${t.deletedAt} is null) = (${t.deletedBy} is null) and (${t.deletedAt} is null) = (${t.deleteReason} is null) and char_length(coalesce(${t.deleteReason}, '')) <= ${sql.raw(String(OP_REASON_MAX))}`,
     ),
     orgIsolation('fee_payments_isolation', t.orgId),
   ],

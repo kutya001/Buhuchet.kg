@@ -1447,7 +1447,11 @@ export async function updateContractor(
   // Деньги контрагента — на счёт, куда он теперь переводит (задача 2.19, прототип transferCp).
   // Меняет только операции, у которых счёт другой.
   if (patch.paysTo !== undefined || patch.responsibleEmployeeId !== undefined)
-    await syncMoneyHolders(tx, [id]);
+    await syncMoneyHolders(
+      tx,
+      [id],
+      patch.paysTo !== undefined && patch.paysTo !== current.paysTo ? 'paysTo' : 'responsible',
+    );
   // Статусы со своим сроком поменялись — сроки несданных пересчитываются (прототип cpRedue).
   if (redue && was && changes.some((c) => c.field === 'benefits')) {
     return {
@@ -1536,6 +1540,7 @@ export async function assignContractors(
   await syncMoneyHolders(
     tx,
     moving.map((r) => r.id),
+    'responsible',
   );
   return { changed: moving.length, archived: [] };
 }

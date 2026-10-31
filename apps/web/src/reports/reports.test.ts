@@ -108,6 +108,7 @@ const menu = (r: ReportMenuRow, who: ReportActor = actor(), card = false) => {
       'amount',
       'receive',
       'pay',
+      'remind',
       'file',
       'revision',
       'rollback',
@@ -300,6 +301,21 @@ describe('кнопки и шкала карточки', () => {
     // Оплачен полностью или учёт выключен — пунктов нет.
     expect(labels(menu({ ...r, paid: 500_000 }, on).entries)).not.toContain('Принять деньги');
     expect(labels(menu(r).entries)).not.toContain('Принять деньги');
+  });
+
+  it('у ждущего оплаты — «Напомнить в WhatsApp» сразу после «Отметить оплаченным», без права на деньги', () => {
+    const r = report({ amount: 500_000, funds: { state: 'short', need: 500_000, short: 400_000 } });
+    const { run, entries } = menu(r, actor({ money: false }, { taxpay: true }));
+    const list = labels(entries);
+    expect(list.indexOf('Напомнить в WhatsApp')).toBe(list.indexOf('Отметить оплаченным') + 1);
+    const remind = entry(entries, 'remind');
+    expect(remind).toMatchObject({ icon: 'chat' });
+    expect(remind).not.toHaveProperty('disabled', true);
+    remind?.run();
+    expect(run.remind).toHaveBeenCalledWith(r);
+    expect(
+      labels(menu({ ...r, paid: 500_000 }, actor({}, { taxpay: true })).entries),
+    ).not.toContain('Напомнить в WhatsApp');
   });
 
   it('шаги шкалы: «В работе» — сразу, «Сдан» — окном, у прежней версии — нет; откат — с правом', () => {

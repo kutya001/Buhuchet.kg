@@ -6,6 +6,7 @@ import {
   contractorOperations,
   createReceipt,
   moneyContractor,
+  orgHeldOf,
   payReport,
   receiptFeeRows,
   receiptFormRows,
@@ -52,6 +53,7 @@ import { orgContextOf, requireAnyPermission, requirePermission } from '../../mid
 import { feeVisible, scopeSqlOf, subjectOf, todayOf } from '../contractors/common';
 import { serverTexts } from '../l10n/texts';
 import { error } from '../reports/common';
+import { canBonus, canRefund, canTransfer } from '../finance/common';
 import { finScopeOf, inTaxpay } from './common';
 
 /*
@@ -160,20 +162,27 @@ export function contractorMoneyHandler(
     }
     const subject = subjectOf(c);
     const t = await translator(deps);
-    const out = await inTaxpay(deps, c, async (tx) => {
+    const out = await inTaxpay(deps, c, async (tx, settings) => {
       const cp = await moneyContractor(tx, id, finScopeOf(subject));
       if (!cp) return null;
-      const [view, ops, balance, fee] = await Promise.all([
+      const [view, ops, balance, fee, held] = await Promise.all([
         contractorMoneyView(tx, id, monthEnd(month)),
         contractorOperations(tx, id, t),
         contractorBalance(tx, id),
         feeVisible(tx, orgContextOf(c).orgId, subject),
+        orgHeldOf(tx, id),
       ]);
+      // Кнопки остатка (задача 2.20; прототип contractor-card.js, вкладка «Деньги»).
+      const actions = {
+        bonus: canBonus(subject, cp, settings.features.accounts),
+        refund: canRefund(subject, cp),
+        xfer: canTransfer(subject, cp, scopeOf(subject, 'fin') === 'all', held),
+      };
       // Плата видна по контрагенту ещё и в области группы «Контрагенты» (как `receiptFeeAllowed`).
-      return { cp, view, ops, balance, fee: fee && canSeeContractor(subject, 'cps', cp) };
+      return { cp, view, ops, balance, actions, fee: fee && canSeeContractor(subject, 'cps', cp) };
     });
     if (!out) notFound();
-    const { cp, view, ops, balance, fee } = out;
+    const { cp, view, ops, balance, fee, actions } = out;
     const byId = new Map(view.reports.map((r) => [r.id, r]));
     const item = (rid: string, amount: (r: (typeof view.reports)[number]) => number) => {
       const r = byId.get(rid)!;
@@ -216,8 +225,13 @@ export function contractorMoneyHandler(
           total: fee || o.total === null ? o.total : o.amount,
           reports: o.reports,
           author: o.actorName,
+          note: o.note,
+          holder: o.holderName,
+          receiptDate: o.receiptDate,
+          revision: o.revision,
         })),
       canReceive: hasPermission(subject, 'money') && !cp.archived,
+      actions,
     };
     return c.json(body, 200);
   };

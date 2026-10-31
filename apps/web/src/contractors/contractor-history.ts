@@ -12,6 +12,7 @@ import {
 import type { ContractorHistory } from '@buhuchet/shared';
 import type { TimelineItem } from '@buhuchet/ui';
 import { pageHistoryActor, pageHistoryText } from '../contractor-page/page-history';
+import { operationCreatedText, operationDeletedText } from '../finance/finance-history';
 import type { Translate } from '../l10n/translate';
 import { reportHistoryText } from '../reports/report-history';
 
@@ -333,9 +334,19 @@ export function contractorHistoryText(t: Translate, e: Entry, names: Names): str
     case 'file':
       lines = [reportHistoryText(t, { ...e, reason: null }, 0)];
       break;
-    case 'money_operation':
+    case 'money_operation': {
+      // Удаление операции — с причиной в тексте (прототип opLog); ввод списания, возврата, перевода и
+      // обратной записи — без причины, как в прототипе `log('cp', …)` (задача 2.20).
+      const op =
+        e.action === 'delete'
+          ? operationDeletedText(t, e.changes, e.reason)
+          : e.action === 'create'
+            ? operationCreatedText(t, e.changes)
+            : null;
+      if (op) return op;
       lines = moneyLines(t, e);
       break;
+    }
     case 'fee_payment':
       lines = feePaymentLines(t, e);
       break;

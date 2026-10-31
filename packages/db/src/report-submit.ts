@@ -29,6 +29,7 @@ import { and, asc, count, desc, eq, gt, inArray, isNull, or, sql, type SQL } fro
 import { alias } from 'drizzle-orm/pg-core';
 import type { Tx } from './client';
 import { writeHistory } from './history';
+import { revisionRefund } from './finance';
 import { syncPaymentState } from './money-tax';
 import { lockReport, ReportChangedError, ReportStateError } from './reports';
 import {
@@ -516,7 +517,8 @@ export async function submitReport(
     await applyRepeat(tx, r, sum.amount, input.repeat, ctx);
   }
   if (sum) await syncPaymentState(tx, id);
-  return { report: updated!, waitsPayment: null };
+  // Уточнённая версия уменьшила оплаченный налог — разница возвращается в остаток (прототип revBack).
+  return { report: await revisionRefund(tx, updated!, input.date), waitsPayment: null };
 }
 
 /**
@@ -653,7 +655,7 @@ export async function submitReports(
       { field: 'submittedOn', from: r.submittedOn, to: date },
       ...sumChanges,
     ];
-    await tx
+    const [updated] = await tx
       .update(reports)
       .set({
         status: 'submitted',
@@ -664,7 +666,8 @@ export async function submitReports(
         ...(amount !== before ? { amount, amountAuto: false } : {}),
         ...bump(),
       })
-      .where(eq(reports.id, r.id));
+      .where(eq(reports.id, r.id))
+      .returning();
     await writeStatusChange(tx, {
       scale: 'report',
       entityId: r.id,
@@ -679,6 +682,7 @@ export async function submitReports(
       contractorId: r.contractorId,
     });
     if (amount !== before) await syncPaymentState(tx, r.id);
+    await revisionRefund(tx, updated!, date);
     result.done++;
   }
   return result;

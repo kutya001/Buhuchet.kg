@@ -1,10 +1,11 @@
 'use client';
 
-import { monthLabel, monthLabelGen, type TariffPeriod } from '@buhuchet/domain';
+import { formatSomWithUnit, monthLabel, monthLabelGen, type TariffPeriod } from '@buhuchet/domain';
 import {
   ArchiveContractorsResult,
   ContractorServiceSaved,
   ContractorUnarchived,
+  type ArchiveRestItem,
   type ContractorService,
   type TaxRegime,
 } from '@buhuchet/shared';
@@ -22,6 +23,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
 import { api, callApi } from '../api-client';
 import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
+import { RestDialog } from '../finance/finance-dialogs';
 import { useErrorText, useT } from '../l10n/provider';
 import { useShell } from '../shell/context';
 import { rollbackLabels, rollbackTitle, statusPillView } from '../status/status-view';
@@ -82,6 +84,7 @@ export function useServiceActions(
   const feeVisible = access.can('fee');
   const [dialog, setDialog] = useState<DialogSlot<Dialog> | null>(null);
   const [askCancel, setAskCancel] = useState<ContractorService | null>(null);
+  const [rest, setRest] = useState<DialogSlot<ArchiveRestItem[]> | null>(null);
   const [askArchive, setAskArchive] = useState<{
     list: readonly { id: string; name: string }[];
     done?: () => void;
@@ -171,11 +174,17 @@ export function useServiceActions(
     );
     refresh();
     if (!res.ok) return toast(errorText(res.error), { bad: true });
-    if (!ArchiveContractorsResult.safeParse(res.data).success) {
-      return toast(t('err.unknown'), { bad: true });
-    }
-    // Остаток денег контрагента при архивировании предложат задачи денег (2.20, 2.21).
-    toast(t('svc.archive.done'), { icon: 'archive' });
+    const done = ArchiveContractorsResult.safeParse(res.data);
+    if (!done.success) return toast(t('err.unknown'), { bad: true });
+    // Остаток денег у отправленных в архив (задача 2.20; прототип archiveDlg и restDlg).
+    const left = done.data.rest;
+    if (left?.items) return setRest(openSlot(left.items));
+    toast(
+      left
+        ? t('fin.rest.owner_decides', { amount: formatSomWithUnit(left.total) })
+        : t('svc.archive.done'),
+      { icon: 'archive' },
+    );
   };
 
   const unarchive = async (contractorId: string) => {
@@ -321,6 +330,14 @@ export function useServiceActions(
           error={backError}
           labels={rollbackLabels(t)}
           onConfirm={(reason) => void rollback(reason)}
+        />
+      ) : null}
+      {rest ? (
+        <RestDialog
+          key={`svc-rest-${rest.n}`}
+          items={rest.data}
+          open={rest.open}
+          onClose={() => setRest(closeSlot)}
         />
       ) : null}
     </>

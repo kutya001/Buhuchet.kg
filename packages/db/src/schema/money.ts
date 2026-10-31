@@ -181,7 +181,8 @@ const AMOUNT_MAX = sql.raw(String(MONEY_AMOUNT_MAX));
  * платой за обслуживание), оплата налога по отчёту (`pay`, «Оплатил контрагент сам» — `self` и счёт
  * `client`), списание в бонус, возвраты, корректирующая запись и перевод (задача 2.20). Счёт — организации
  * или виртуальный счёт сотрудника; деньги — всегда деньги этого контрагента. Отменённая операция
- * (откат оплаты) остаётся с автором, временем и причиной отмены, в деньгах не считается.
+ * (откат оплаты; «Удалить», «Отменить списание» и «Отменить возврат» в окне операции — задачи 2.20 и
+ * 2.22) остаётся с автором, временем и причиной отмены, в деньгах не считается.
  */
 export const moneyOperations = pgTable(
   'money_operations',
@@ -205,6 +206,11 @@ export const moneyOperations = pgTable(
     /** «Оплатил контрагент сам»: в «Оплачено в бюджет», но не в деньги контрагента на счетах. */
     self: boolean('self').notNull().default(false),
     note: text('note').notNull().default(''),
+    /**
+     * Обратная запись — к какому поступлению (задача 2.20; прототип `ref`): «Обратные записи» в его
+     * окне. У других видов пусто.
+     */
+    refOperationId: uuid('ref_operation_id'),
     cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
     cancelledBy: uuid('cancelled_by').references(() => users.id),
     cancelReason: text('cancel_reason'),
@@ -215,6 +221,15 @@ export const moneyOperations = pgTable(
   },
   (t) => [
     unique('money_operations_id_org_unique').on(t.id, t.orgId),
+    foreignKey({
+      name: 'money_operations_ref_fk',
+      columns: [t.refOperationId, t.orgId],
+      foreignColumns: [t.id, t.orgId],
+    }).onDelete('restrict'),
+    index('money_operations_ref_idx')
+      .on(t.refOperationId)
+      .where(sql`${t.refOperationId} is not null`),
+    check('money_operations_ref_check', sql`${t.refOperationId} is null or ${t.kind} = 'corr'`),
     foreignKey({
       name: 'money_operations_contractor_fk',
       columns: [t.contractorId, t.orgId],

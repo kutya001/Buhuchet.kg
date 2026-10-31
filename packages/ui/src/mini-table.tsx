@@ -57,7 +57,16 @@ export function MiniTable({
   onOpen?: (key: string) => void;
 }) {
   if (!phoneCards)
-    return <PlainMiniTable columns={columns} rows={rows} empty={empty} label={label} />;
+    return (
+      <PlainMiniTable
+        columns={columns}
+        rows={rows}
+        empty={empty}
+        label={label}
+        headless={headless}
+        onOpen={onOpen}
+      />
+    );
   const num = (c: MiniColumn) => (c.numeric ? 'text-left md:text-right' : 'text-left');
   const hasActions = columns.some((c) => c.actions);
   // На телефоне: заголовок карточки, кнопки в углу, значение на всю ширину или с подписью из шапки.
@@ -133,17 +142,24 @@ export function MiniTable({
   );
 }
 
-/** Таблица без карточек на телефоне (`phoneCards={false}`): шапка, числа справа, прокрутка вбок. */
+/**
+ * Таблица без карточек на телефоне (`phoneCards={false}`, `table.mini` прототипа без `m-cards`): шапка
+ * (без неё — `headless`), числа справа, прокрутка вбок; `onOpen` — строка открывает запись.
+ */
 function PlainMiniTable({
   columns,
   rows,
   empty,
   label,
+  headless,
+  onOpen,
 }: {
   columns: readonly MiniColumn[];
   rows: readonly MiniRow[];
   empty: string;
   label: string;
+  headless: boolean;
+  onOpen?: (key: string) => void;
 }) {
   const align = (c: MiniColumn) => (c.numeric ? 'text-right' : 'text-left');
   return (
@@ -153,7 +169,7 @@ function PlainMiniTable({
         data-mini-table=""
         className="w-full border-collapse text-[13px] tabular-nums"
       >
-        <thead>
+        <thead className={headless ? 'hidden' : undefined}>
           <tr>
             {columns.map((c) => (
               <th
@@ -176,7 +192,22 @@ function PlainMiniTable({
             </tr>
           ) : (
             rows.map((row) => (
-              <tr key={row.key} className="last:[&>td]:border-b-0">
+              <tr
+                key={row.key}
+                {...(onOpen
+                  ? {
+                      'data-open': '',
+                      tabIndex: 0,
+                      onClick: () => onOpen(row.key),
+                      onKeyDown: (e: KeyboardEvent<HTMLTableRowElement>) => {
+                        if (e.key !== 'Enter') return;
+                        e.preventDefault();
+                        onOpen(row.key);
+                      },
+                    }
+                  : {})}
+                className="last:[&>td]:border-b-0 data-open:cursor-pointer data-open:hover:bg-row-hover data-open:focus-visible:bg-row-hover data-open:focus-visible:outline-none"
+              >
                 {columns.map((c) => (
                   <td
                     key={c.key}
