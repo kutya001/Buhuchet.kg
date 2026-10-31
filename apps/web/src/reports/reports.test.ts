@@ -7,6 +7,7 @@ import { withTabCounts } from '../shell/tab-counts';
 import {
   amountText,
   dueMovedTitle,
+  overdueText,
   reportColumns,
   reportDefaultVisible,
   reportMark,
@@ -57,6 +58,13 @@ const report = (over: Partial<ReportRow> = {}) =>
     needReceipt: false,
     hasFiles: false,
     version: 1,
+    paid: 0,
+    selfPaid: 0,
+    received: 0,
+    receivedFor: 0,
+    paymentStatus: 'unpaid',
+    payOverdue: false,
+    funds: null,
     ...over,
   }) as ReportRow;
 
@@ -71,6 +79,8 @@ const actor = (
   isOwner: false,
   confirmOn: true,
   filesOn: true,
+  taxpay: false,
+  payFirst: false,
   can: {
     changeStatus: true,
     repDue: true,
@@ -79,6 +89,7 @@ const actor = (
     rollback: true,
     filesUpload: true,
     assign: true,
+    money: true,
     ...over,
   },
   ...o,
@@ -95,6 +106,8 @@ const menu = (r: ReportMenuRow, who: ReportActor = actor(), card = false) => {
       'reject',
       'due',
       'amount',
+      'receive',
+      'pay',
       'file',
       'revision',
       'rollback',
@@ -216,21 +229,77 @@ describe('меню отчёта (прототип reportActions)', () => {
 
 describe('кнопки и шкала карточки', () => {
   it('несданный — «Отметить сданным» (без права — недоступна); ждущий — «Подтвердить» и «На исправление»', () => {
-    expect(reportCardButtons(report(), actor())).toEqual({
+    expect(reportCardButtons(report(), actor(), t)).toEqual({
       primary: 'submit',
       disabled: false,
+      why: null,
       fix: false,
+      pay: false,
     });
-    expect(reportCardButtons(report(), actor({ changeStatus: false })).disabled).toBe(true);
-    expect(reportCardButtons(report({ status: 'submitted', submittedBy: OTHER }), actor())).toEqual(
-      { primary: 'confirm', disabled: false, fix: true },
-    );
+    expect(reportCardButtons(report(), actor({ changeStatus: false }), t).disabled).toBe(true);
+    expect(
+      reportCardButtons(report({ status: 'submitted', submittedBy: OTHER }), actor(), t),
+    ).toEqual({ primary: 'confirm', disabled: false, why: null, fix: true, pay: false });
     expect(
       reportCardButtons(
         report({ status: 'submitted', submittedBy: { id: ME, shortName: 'Я' } }),
         actor(),
+        t,
       ).primary,
     ).toBeNull();
+  });
+
+  it('п. 69: «Сдача только после оплаты» — «Отметить сданным» неактивна с причиной, рядом «Отметить оплаченным»', () => {
+    const money = actor({}, { taxpay: true, payFirst: true });
+    const unpaid = report({ amount: 500_000 });
+    expect(reportCardButtons(unpaid, money, t)).toEqual({
+      primary: 'submit',
+      disabled: true,
+      why: 'Сначала оплатите налог: к уплате 5\u00a0000\u00a0сом, оплачено 0\u00a0сом',
+      fix: false,
+      pay: true,
+    });
+    const submit = entry(menu(unpaid, money).entries, 'submit')!;
+    expect(submit).toMatchObject({ disabled: true });
+    expect(submit.reason).toContain('Сначала оплатите налог');
+    // Оплачено частично — «Сдан» можно; статистический отчёт и сумма 0 — сразу.
+    expect(reportCardButtons({ ...unpaid, paid: 300_000 }, money, t).disabled).toBe(false);
+    expect(reportCardButtons(report({ act: 'sub' }), money, t).disabled).toBe(false);
+    expect(reportCardButtons(report({ amount: 0 }), money, t).disabled).toBe(false);
+    // Без «Сдачи только после оплаты» — можно и без оплаты.
+    expect(reportCardButtons(unpaid, actor({}, { taxpay: true }), t).disabled).toBe(false);
+    // Сдан, но не оплачен — главная кнопка «Отметить оплаченным»; пока сдача ждёт подтверждения —
+    // «Подтвердить» (прототип: подтверждение раньше оплаты).
+    const submitted = report({ amount: 500_000, status: 'submitted' });
+    expect(reportCardButtons(submitted, money, t).primary).toBe('confirm');
+    expect(reportCardButtons(submitted, { ...money, confirmOn: false }, t)).toMatchObject({
+      primary: 'pay',
+      disabled: false,
+    });
+    expect(
+      reportCardButtons(
+        submitted,
+        { ...money, confirmOn: false, can: { ...money.can, money: false } },
+        t,
+      ),
+    ).toMatchObject({ primary: 'pay', disabled: true, why: 'Нет права на учёт денег' });
+  });
+
+  it('у ждущего оплаты в меню — «Принять деньги» и «Отметить оплаченным»; без права — бледные', () => {
+    const r = report({ amount: 500_000, funds: { state: 'short', need: 500_000, short: 400_000 } });
+    const on = actor({}, { taxpay: true });
+    const list = menu(r, on).entries;
+    expect(labels(list)).toContain('Принять деньги');
+    expect(entry(list, 'pay')).toMatchObject({
+      label: 'Отметить оплаченным',
+      sub: 'Денег контрагента не хватает: 4\u00a0000\u00a0сом — или «Оплатил контрагент сам»',
+    });
+    expect(
+      entry(menu(r, actor({ money: false }, { taxpay: true })).entries, 'receive'),
+    ).toMatchObject({ disabled: true, reason: 'Нет права на учёт денег' });
+    // Оплачен полностью или учёт выключен — пунктов нет.
+    expect(labels(menu({ ...r, paid: 500_000 }, on).entries)).not.toContain('Принять деньги');
+    expect(labels(menu(r).entries)).not.toContain('Принять деньги');
   });
 
   it('шаги шкалы: «В работе» — сразу, «Сдан» — окном, у прежней версии — нет; откат — с правом', () => {
@@ -363,6 +432,54 @@ describe('столбцы', () => {
       'amount',
       'responsible',
     ]);
+  });
+
+  it('деньги по отчёту — только с «Учётом оплаты налогов», в порядке прототипа (2.19)', () => {
+    expect(keys(base)).not.toContain('received');
+    expect(keys(base)).not.toContain('funds');
+    const list = keys({ ...base, taxpay: true });
+    const at = list.indexOf('amount');
+    expect(list.slice(at, at + 8)).toEqual([
+      'amount',
+      'received',
+      'paid',
+      'left',
+      'payDue',
+      'paymentStatus',
+      'funds',
+      'overdue',
+    ]);
+    expect(reportDefaultVisible(false, true)).toEqual([
+      'cp',
+      'type',
+      'act',
+      'period',
+      'due',
+      'status',
+      'amount',
+      'received',
+      'paid',
+      'responsible',
+    ]);
+    const cols = reportColumns(t, { ...base, taxpay: true });
+    const col = (k: string) => cols.find((c) => c.key === k)!;
+    const r = report({ act: 'both', amount: 500_000, paid: 300_000, received: 100_000 });
+    expect(col('received').text(r)).toBe('1\u00a0000');
+    expect(col('paid').text(r)).toBe('3\u00a0000');
+    expect(col('left').text(r)).toBe('2\u00a0000');
+    expect(col('received').tileLine?.label).toBe('Получено');
+    expect(col('paid').tileLine?.label).toBe('Оплачено');
+    const sub = report({ act: 'sub', amount: null });
+    expect(['received', 'paid', 'left'].map((k) => col(k).text(sub))).toEqual(['', '', '']);
+    expect(col('paymentStatus').text(sub)).toBe('—');
+  });
+
+  it('просрочка оплаты — красным и в «Просрочке» (прототип repRowClass, `ovk`)', () => {
+    expect(reportTone(report({ payOverdue: true }))).toBe('overdue');
+    expect(overdueText(t, report({ overdue: true, payOverdue: true }))).toBe('Сдача и оплата');
+    expect(overdueText(t, report({ payOverdue: true }))).toBe('Оплата');
+    expect(overdueText(t, report({ overdue: true }))).toBe('Сдача');
+    expect(overdueText(t, report())).toBe('');
   });
 
   it('«К уплате» — строкой сумм на плитке телефона, у вида «Сдача» строки нет', () => {

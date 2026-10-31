@@ -1,5 +1,6 @@
 import {
   ASSIGNMENT_DUE_DAYS,
+  PAYMENT_STATUSES,
   REPORT_ACTS,
   REPORT_LINE_KINDS,
   REPORT_PERIODS,
@@ -9,6 +10,7 @@ import { z } from 'zod';
 import { IsoDate, RecordAudit, RecordVersion, Tyiyn, Uuid } from './common';
 import { SocfundBrief } from './contractors';
 import { listPageSchema } from './list';
+import { ReportFunds } from './money';
 import { StatusHistoryEntry, StatusRollback } from './status';
 
 /*
@@ -193,7 +195,8 @@ const Person = z.object({ id: Uuid, shortName: z.string() });
 /** Строка списка отчётов (прототип repCols): тексты, как в столбцах экрана. */
 export const ReportRow = z.object({
   id: Uuid,
-  contractor: z.object({ id: Uuid, name: z.string(), inn: z.string() }),
+  /** `archived` — контрагент в архиве: «Принять» не показывается (прототип canRecv). */
+  contractor: z.object({ id: Uuid, name: z.string(), inn: z.string(), archived: z.boolean() }),
   taxOffice: z.string().nullable(),
   type: z.object({ code: z.string(), name: z.string(), shortName: z.string() }),
   act: z.enum(REPORT_ACTS),
@@ -226,6 +229,18 @@ export const ReportRow = z.object({
   lastStatus: z.object({ at: z.iso.datetime(), by: z.string().nullable() }).nullable(),
   amount: Tyiyn.nullable(),
   amountAuto: z.boolean(),
+  /** «Оплачено в бюджет», в том числе «Оплатил контрагент сам» (`selfPaid`). */
+  paid: Tyiyn,
+  selfPaid: Tyiyn,
+  /** «Получено от контрагента»: его деньги, оплаченные по отчёту и отложенные под него. */
+  received: Tyiyn,
+  /** Принято под отчёт детализацией поступлений: «Принять» в «Деньгах (сверка)» — пока меньше суммы. */
+  receivedFor: Tyiyn,
+  paymentStatus: z.enum(PAYMENT_STATUSES),
+  /** Просрочена оплата (при «Учёте оплаты налогов»). */
+  payOverdue: z.boolean(),
+  /** Сверка «Деньги»: только у отчёта, который ждёт денег. */
+  funds: ReportFunds.nullable(),
   payDue: IsoDate.nullable(),
   pays: z.string(),
   /**
@@ -277,6 +292,8 @@ export const ReportTabCounts = z.object({
   waiting: Count,
   submittedMonth: Count,
   toPayMonth: Tyiyn,
+  /** «оплачено …» под «К уплате за <месяц>» (при «Учёте оплаты налогов»). */
+  paidMonth: Tyiyn,
   quick: z.object({
     week: QuickCounts,
     overdue: QuickCounts,
@@ -326,8 +343,42 @@ export const ReportHistoryEntry = z.object({
 });
 export type ReportHistoryEntry = z.infer<typeof ReportHistoryEntry>;
 
+/**
+ * Деньги отчёта в карточке (задача 2.19; прототип report-card.js): деньги контрагента на счетах, график
+ * оплаты, оплаты для «Истории статусов» оплаты и что можно сделать.
+ */
+export const ReportCardMoney = z.object({
+  /** Деньги контрагента на счетах (окно «Отметить оплаченным»); null — оплачивать нельзя. */
+  available: Tyiyn.nullable(),
+  schedule: z.array(z.object({ due: IsoDate, amount: Tyiyn, paid: Tyiyn })),
+  payments: z.array(
+    z.object({
+      at: z.iso.datetime(),
+      amount: Tyiyn,
+      self: z.boolean(),
+      date: IsoDate,
+      actor: z.string().nullable(),
+      file: z.object({ id: Uuid, name: z.string() }).nullable(),
+      cancelled: z
+        .object({ at: z.iso.datetime(), actor: z.string().nullable(), reason: z.string() })
+        .nullable(),
+    }),
+  ),
+  /** «Отметить оплаченным» и «Принять деньги»: право «Учёт денег», область «Финансовые операции». */
+  canPay: z.boolean(),
+  canReceive: z.boolean(),
+  /** Откат шкалы оплаты: ещё и право «Откат статусов». */
+  canCancel: z.boolean(),
+});
+export type ReportCardMoney = z.infer<typeof ReportCardMoney>;
+
 export const ReportCard = ReportRow.extend({
   superseded: z.boolean(),
+  /** «Учёт оплаты налогов» и «Сдача отчёта только после оплаты» (учётная политика). */
+  taxpay: z.boolean(),
+  payFirst: z.boolean(),
+  /** Деньги отчёта; null — у вида нет суммы. Без «Учёта оплаты налогов» — только график оплаты. */
+  money: ReportCardMoney.nullable(),
   /** Отметка на шаге «Сдан» при подтверждении сдачи: «Ждёт подтверждения» или «Подтверждено». */
   mark: z.enum(['waiting', 'confirmed']).nullable(),
   /** Комментарий подтверждения. */
@@ -517,6 +568,21 @@ export const ReportBatchResult = z.object({
   skipped: Count,
 });
 export type ReportBatchResult = z.infer<typeof ReportBatchResult>;
+
+/** Итог массовой «Сдан»: ещё — без оплаты при «Сдаче только после оплаты» («Нет оплаты»). */
+export const ReportBatchSubmitResult = ReportBatchResult.extend({ skippedPay: Count });
+export type ReportBatchSubmitResult = z.infer<typeof ReportBatchSubmitResult>;
+
+/**
+ * «Сдан» одного отчёта: новая версия и, если «Сдан» ждёт оплаты, — к уплате и оплачено (сумма и файлы
+ * сохранены, статус прежний).
+ */
+export const ReportSubmitted = z.object({
+  id: Uuid,
+  version: RecordVersion,
+  waitsPayment: z.object({ amount: Tyiyn, paid: Tyiyn }).nullable(),
+});
+export type ReportSubmitted = z.infer<typeof ReportSubmitted>;
 
 /** «Подтвердить»: комментарий (необязательно) и квитанция, загруженная в окне. */
 export const ReportConfirmRequest = z.strictObject({

@@ -52,6 +52,7 @@ import type { AppEnv } from '../../env';
 import { apiFail, versionedSaveResponses } from '../../errors';
 import { orgContextOf, requirePermission } from '../../middleware/access';
 import { serverTexts } from '../l10n/texts';
+import { reportCardMoney } from '../money/tax';
 import { checkResponsible, subjectOf, todayOf } from '../contractors/common';
 import { socfundContext, socfundSubjectOf } from '../contractors/socfund-view';
 import {
@@ -143,8 +144,7 @@ function socfundBrief(dict: SocfundDict, id: SocfundTariffId | null, t: Translat
 /**
  * Тариф Соцфонда и подсказка о пене для карточки отчёта (ТЗ «Связь с отчётами», «Пеня (информационно)»;
  * прототип report-card.js, sfPeniNote): тариф — у вида со взносами (STI-161), если он нужен контрагенту;
- * пеня — у просроченного по виду, у налога которого есть пеня. Оплаченного по отчёту и просрочки оплаты
- * пока нет (деньги — поток В): пеня — у просроченной сдачи, примерная — от всей суммы к уплате.
+ * пеня — у просроченного по виду, у налога которого есть пеня; примерная — от неоплаченной суммы.
  */
 async function socfundOfReport(tx: Tx, card: ReportCardData, today: IsoDate, t: Translate) {
   const [penalty, contractor, types] = await Promise.all([
@@ -157,10 +157,9 @@ async function socfundOfReport(tx: Tx, card: ReportCardData, today: IsoDate, t: 
       dueDate: card.dueDate,
       payDue: card.payDue,
       overdue: card.overdue,
-      // Просрочку оплаты (прототип derive: payOverdue) и оплаченное передаст задача денег.
-      payOverdue: false,
+      payOverdue: card.payOverdue,
       amount: card.amount,
-      paid: 0,
+      paid: card.paid,
     },
     penalty,
     today,
@@ -204,29 +203,33 @@ export function getReportHandler(deps: ApiDeps): RouteHandler<typeof getReportRo
     const texts = await serverTexts(deps);
     const t: Translate = (key, params) => formatText(texts(key), params);
     const today = todayOf(deps);
+    const subject = subjectOf(c);
     const out = await withOrgContext(deps.db, orgContextOf(c), async (tx) => {
+      const settings = await orgMenuSettings(tx, orgContextOf(c).orgId);
+      const taxpay = settings.features.taxpay;
       const card = await getReportCard(tx, id, {
         t: texts,
         today,
-        scope: reportScopeOf(subjectOf(c)),
+        scope: reportScopeOf(subject),
+        taxpay,
       });
       if (!card) return null;
-      const [view, settings, socfund, target] = await Promise.all([
+      const [view, socfund, target] = await Promise.all([
         reportSubmitView(tx, id, t),
-        orgMenuSettings(tx, orgContextOf(c).orgId),
         socfundOfReport(tx, card, today, t),
         reportFileTarget(tx, id, undefined),
       ]);
-      return { card, view, settings, ...socfund, contractor: target?.contractor };
+      const contractor = target?.contractor;
+      const filesVisible = reportFilesVisible(subject, contractor, settings.features.files);
+      const money = await reportCardMoney(tx, card, subject, contractor, filesVisible, taxpay);
+      return { card, view, settings, ...socfund, contractor, filesVisible, money };
     });
     if (!out) notFound();
-    const { card, view, settings, socfund, penalty, contractor } = out;
+    const { card, view, settings, socfund, penalty, contractor, filesVisible, money } = out;
     const confirmOn = settings.reportConfirm;
     const filesOn = settings.features.files;
-    // Имена файлов (блок «Файлы», файл в «Истории статусов», записи истории) — только тому, кто их видит.
-    const filesVisible = reportFilesVisible(subjectOf(c), contractor, filesOn);
     // «Повторять эту сумму» меняет назначение контрагента: галочка — только у своего контрагента.
-    const own = ownReportsEmployeeOf(subjectOf(c));
+    const own = ownReportsEmployeeOf(subject);
     const ownContractor = !own || contractor?.responsibleEmployeeId === own;
     const history = view.history.map((h) => ({ ...h, at: h.at.toISOString() }));
     const body: ReportCard = {
@@ -254,6 +257,9 @@ export function getReportHandler(deps: ApiDeps): RouteHandler<typeof getReportRo
       repeat: ownContractor ? view.repeat : null,
       fix: view.fix && { ...view.fix, at: view.fix.at.toISOString() },
       history: filesVisible ? history : historyWithoutFiles(history),
+      taxpay: settings.features.taxpay,
+      payFirst: settings.payFirst,
+      money,
     };
     return c.json(body, 200);
   };

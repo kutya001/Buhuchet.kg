@@ -916,10 +916,13 @@ describe.skipIf(!databaseAvailable())('Отчёты: назначения и о�
       tab: 'all',
       quick: 'all',
       waiting: { confirm: true, own: null },
+      taxpay: true,
       ...patch,
     });
     const summary = (scope: ReportListOptions['scope']) =>
-      inA((tx) => reportSummary(tx, { scope, today, waiting: { confirm: true, own: null } }));
+      inA((tx) =>
+        reportSummary(tx, { scope, today, waiting: { confirm: true, own: null }, taxpay: true }),
+      );
     expect(await summary(undefined)).toMatchObject({ overdue: 2, week: 3 });
     // Область «Свои» (п. А-2, вариант В): отчёты своих контрагентов и Соцфонд ИП Садыкова, который
     // перешёл к бухгалтеру при передаче, хотя контрагент закреплён за главным бухгалтером.
@@ -1225,6 +1228,7 @@ describe.skipIf(!databaseAvailable())('Отчёты: назначения и о�
           scope: undefined,
           today: TODAY,
           waiting: { confirm: true, own: null },
+          taxpay: true,
         }),
       );
     const active = await counts();

@@ -265,6 +265,8 @@ describe.skipIf(!databaseAvailable())(
         submittedMonth: 2,
         // Патент 5 000 и НДС за август 3 000 сом — срок оплаты в октябре.
         toPayMonth: 800_000,
+        // Оплат нет (деньги по отчётам — задача 2.19).
+        paidMonth: 0,
         quick: {
           week: { all: 1, sub: 1, pay: 1 },
           overdue: { all: 1, sub: 1, pay: 0 },

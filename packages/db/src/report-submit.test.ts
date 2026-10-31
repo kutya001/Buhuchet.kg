@@ -138,10 +138,14 @@ describe.skipIf(!databaseAvailable())('Отчёты: сдача, подтвер�
     contractorScope: undefined,
     confirmOn: true,
     filesOn: true,
+    payFirst: false,
     t,
     ...patch,
   });
-  const texts = { repeat: 'Повторяющаяся сумма из назначения' };
+  const texts = {
+    repeat: 'Повторяющаяся сумма из назначения',
+    afterPayment: 'сдача — после оплаты',
+  };
   const chief: ReportConfirmer = { canConfirm: true, userId: '', isOwner: false };
   const reportOf = async (contractorId: string, typeCode: string, periodStart: string) => {
     const [r] = await inA((tx) =>
@@ -172,7 +176,7 @@ describe.skipIf(!databaseAvailable())('Отчёты: сдача, подтвер�
           id,
           { date: TODAY, amount: null, lines: null, repeat: false, fileIds: [], ...patch },
           { ...act(), version, texts },
-        ),
+        ).then((x) => x.report),
       userId,
     );
 
@@ -525,11 +529,11 @@ describe.skipIf(!databaseAvailable())('Отчёты: сдача, подтвер�
             { id: nov.id, version: nov.version, amount: som(3_000) },
           ],
           TODAY,
-          act(),
+          { ...act(), texts },
         ),
       accUser,
     );
-    expect(batch).toEqual({ done: 1, skippedFile: 1, skipped: 0 });
+    expect(batch).toEqual({ done: 1, skippedFile: 1, skipped: 0, skippedPay: 0 });
     expect(await reportOf(cpA, 'nds', '2026-11-01')).toMatchObject({
       status: 'submitted',
       amount: som(3_000),
@@ -718,7 +722,7 @@ describe.skipIf(!databaseAvailable())('Отчёты: сдача, подтвер�
         { ...act({ confirmOn: false, filesOn: false }), version: open!.version, texts },
       ),
     );
-    expect(done.confirmedAt).toBeNull();
+    expect(done.report.confirmedAt).toBeNull();
     const n = await inA((tx) => confirmSubmittedWhileOff(tx, t('report.reason.confirm_was_off')));
     expect(n).toBeGreaterThanOrEqual(1);
     const [after] = await inA((tx) => tx.select().from(reports).where(eq(reports.id, open!.id)));

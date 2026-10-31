@@ -3,6 +3,7 @@ import {
   bishkekTime,
   formatDateRu,
   formatSom,
+  formatSomWithUnit,
   type UiTextKey,
 } from '@buhuchet/domain';
 import type { ContractorHistory } from '@buhuchet/shared';
@@ -152,6 +153,16 @@ function contractorLines(t: Translate, e: Entry, names: Names): string[] {
           }),
         );
         break;
+      case 'needReceiptFile':
+        lines.push(t(c.to ? 'cp.hist.need_file_on' : 'cp.hist.need_file_off'));
+        break;
+      case 'paysTo':
+        lines.push(
+          t('cp.hist.pays_to', {
+            to: t(c.to === 'org' ? 'money.cp.pays_to.org' : 'money.cp.pays_to.emp'),
+          }),
+        );
+        break;
       case 'gkedConfirmation': {
         const ask = (c.to as { ask?: unknown } | null)?.ask;
         lines.push(
@@ -181,6 +192,36 @@ function assignmentLines(t: Translate, e: Entry): string[] {
   const fields = labelsOf(t, e.changes, ASSIGNMENT_FIELD);
   return [
     fields ? t('cp.hist.asg.update', { name, fields }) : t('cp.hist.asg.update_any', { name }),
+  ];
+}
+
+/**
+ * Поступление от контрагента (задача 2.19; прототип inDlg, `log('cp', …)`, allocText): «Поступление
+ * 6 000 сом: НДС 09.2026 — 3 000, ЕН III кв. 2026 — 2 000, аванс — 1 000».
+ */
+function moneyLines(t: Translate, e: Entry): string[] {
+  if (e.action === 'file_attach' || e.action === 'file_delete')
+    return [t('cp.hist.receipt_file', { text: reportHistoryText(t, { ...e, reason: null }, 0) })];
+  if (e.action !== 'create') return [];
+  const total = e.changes.find((c) => c.field === 'total')?.to;
+  if (typeof total !== 'number') return [];
+  const allocs = e.changes.find((c) => c.field === 'allocations')?.to;
+  const parts = (Array.isArray(allocs) ? allocs : []).filter(
+    (a): a is { report: string; amount: number } =>
+      typeof a === 'object' &&
+      a !== null &&
+      typeof a.report === 'string' &&
+      typeof a.amount === 'number',
+  );
+  const rest = total - parts.reduce((sum, a) => sum + a.amount, 0);
+  const list = parts.map((a) => `${a.report} — ${formatSom(a.amount, 'auto')}`);
+  if (list.length && rest > 0)
+    list.push(t('cp.hist.receipt_advance', { amount: formatSom(rest, 'auto') }));
+  const amount = formatSomWithUnit(total);
+  return [
+    list.length
+      ? t('cp.hist.receipt_for', { amount, list: list.join(', ') })
+      : t('cp.hist.receipt', { amount }),
   ];
 }
 
@@ -217,6 +258,9 @@ export function contractorHistoryText(t: Translate, e: Entry, names: Names): str
       break;
     case 'contractor_page':
       lines = [pageHistoryText(t, e)];
+      break;
+    case 'money_operation':
+      lines = moneyLines(t, e);
       break;
     default:
       lines = [];

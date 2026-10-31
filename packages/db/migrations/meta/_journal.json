@@ -491,6 +491,20 @@
       "when": 1793415618019,
       "tag": "0069_admin_kb",
       "breakpoints": true
+    },
+    {
+      "idx": 70,
+      "version": "7",
+      "when": 1793430588008,
+      "tag": "0070_money_operations",
+      "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1793432301780,
+      "tag": "0071_money_operations_guards",
+      "breakpoints": true
     }
   ]
 }

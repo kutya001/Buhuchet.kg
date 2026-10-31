@@ -3,6 +3,7 @@
 import {
   bishkekDate,
   formatDateRu,
+  OPEN_REPORT_STATUSES,
   formatMomentRu,
   formatSom,
   formatSomWithUnit,
@@ -36,6 +37,15 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
 import { ContractorLink } from '../contractors/contractor-link';
 import { RecordFiles } from '../files/record-files';
+import {
+  FundsCell,
+  PayFirstNote,
+  PaymentScale,
+  payFirstWhy,
+  paymentEvents,
+  ScheduleBox,
+  SumsBox,
+} from '../money/report-money';
 import { useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import {
@@ -120,6 +130,7 @@ function cardItems(
   t: Translate,
   r: Card,
   onResponsible: ((anchor: HTMLElement) => void) | null,
+  money: { sums: boolean; onReceive: (() => void) | null },
 ): KeyValueItem[] {
   const items: KeyValueItem[] = [
     {
@@ -212,24 +223,26 @@ function cardItems(
       ),
     });
   if (reportHasAmount(r.act)) {
-    items.push({
-      id: 'amount',
-      label: t('report.card.amount'),
-      value: (
-        <span className="inline-flex flex-wrap items-center gap-1.5">
-          {r.amount === null ? (
-            <span className="text-faint">{t('report.amount.none')}</span>
-          ) : (
-            <b className="tabular-nums">{formatSomWithUnit(r.amount)}</b>
-          )}
-          {r.amountAuto ? (
-            <Tag icon="repeat" title={t('report.amount.repeat')}>
-              {t('report.repeat.tag')}
-            </Tag>
-          ) : null}
-        </span>
-      ),
-    });
+    // С блоком сумм вверху карточки «Сумма к уплате» здесь не повторяется (прототип `sums`).
+    if (!money.sums)
+      items.push({
+        id: 'amount',
+        label: t('report.card.amount'),
+        value: (
+          <span className="inline-flex flex-wrap items-center gap-1.5">
+            {r.amount === null ? (
+              <span className="text-faint">{t('report.amount.none')}</span>
+            ) : (
+              <b className="tabular-nums">{formatSomWithUnit(r.amount)}</b>
+            )}
+            {r.amountAuto ? (
+              <Tag icon="repeat" title={t('report.amount.repeat')}>
+                {t('report.repeat.tag')}
+              </Tag>
+            ) : null}
+          </span>
+        ),
+      });
     if (r.lines.length)
       items.push({
         id: 'lines',
@@ -237,6 +250,24 @@ function cardItems(
         value: <LinesValue t={t} lines={r.lines} />,
         wide: true,
       });
+    if (r.taxpay) {
+      items.push(
+        {
+          id: 'payDue',
+          label: t('report.money.pay_due'),
+          value: (
+            <span className={r.payOverdue ? 'font-semibold text-danger' : undefined}>
+              {r.payDue ? formatDateRu(r.payDue) : '—'}
+            </span>
+          ),
+        },
+        {
+          id: 'funds',
+          label: t('report.money.funds'),
+          value: <FundsCell t={t} r={r} onReceive={money.onReceive} />,
+        },
+      );
+    }
   } else {
     items.push({
       id: 'amount',
@@ -316,6 +347,8 @@ function ScaleBox({
   const events = statusEvents(r.statusHistory);
   const steps = actor ? reportScaleSteps(r) : {};
   const back = actor ? reportScaleBack(r, actor) : null;
+  // «Сдан» до оплаты закрыт: шаг неактивен с причиной, под шкалой — подсказка (прототип scaleFull, `blk`).
+  const why = steps.submitted ? payFirstWhy(t, r, r.taxpay && r.payFirst) : '';
   const view = scaleView(t, {
     scale: 'report',
     status: r.status,
@@ -324,6 +357,7 @@ function ScaleBox({
     markLabel: r.mark ? confirmMarkLabel(t, events, r.mark, new Date()) : null,
     next: Object.keys(steps),
     back,
+    blocked: why ? { submitted: why } : {},
   });
   if (view.kind === 'none')
     return (
@@ -338,6 +372,17 @@ function ScaleBox({
   return (
     <StatusScale
       {...view.props}
+      hints={
+        why
+          ? [
+              ...(view.props.hints ?? []),
+              <span key="pay-first" className="inline-flex items-center gap-1">
+                <Icon name="lock" size="sm" />
+                {t('report.pay_first.scale_hint', { why })}
+              </span>,
+            ]
+          : view.props.hints
+      }
       onStep={(to) => {
         const action = steps[to];
         if (!action) return;
@@ -356,8 +401,10 @@ function ScaleBox({
  * ним — контрагент, период, орган и «Что уплачивается». Шкала «Сдача» с отметкой подтверждения,
  * просрочка, подтверждение или возврат на исправление, реквизиты и сумма со строками, «Версии» (строка
  * открывает другую версию), «Файлы», «История статусов» и «История изменений». Внизу — «Ещё
- * действия», «На исправление» и главное действие: «Отметить сданным» или «Подтвердить». Деньги
- * (получено, оплачено, график оплаты) добавит задача 2.19.
+ * действия», «На исправление» и главное действие: «Отметить сданным» или «Подтвердить». С «Учётом
+ * оплаты налогов» (задача 2.19) — шкала «Оплата», блок сумм, при «Сдаче только после оплаты» — причина
+ * и закрытый шаг «Сдан», «Срок оплаты», «Деньги контрагента», график оплаты,
+ * «История статусов» оплаты; внизу — «Принять деньги» и «Отметить оплаченным».
  */
 export function ReportCardWindow({
   id,
@@ -379,7 +426,10 @@ export function ReportCardWindow({
   actor: ReportActor | null;
   /** Пункты «Ещё действия» (без «Открыть карточку»). */
   actions: (r: Card) => ActionEntry[];
-  onAction: (action: 'submit' | 'start' | 'confirm' | 'fix', r: Card) => void;
+  onAction: (
+    action: 'submit' | 'start' | 'confirm' | 'fix' | 'receive' | 'pay' | 'cancelPay',
+    r: Card,
+  ) => void;
   onBack: (r: Card, to: string) => void;
   /** Открыть другую версию отчёта. */
   onVersion: (id: string) => void;
@@ -416,7 +466,9 @@ export function ReportCardWindow({
   const changeResponsible =
     r && actor?.can.assign && !r.superseded ? (a: HTMLElement) => void openPeople(a) : null;
   const items = r ? actions(r) : [];
-  const buttons = r && actor ? reportCardButtons(r, actor) : null;
+  const buttons = r && actor ? reportCardButtons(r, actor, t) : null;
+  const canReceive = !!r?.money?.canReceive;
+  const canPay = !!r?.money?.canPay;
 
   const title = shown ? (
     <span className="inline-flex flex-wrap items-center gap-2">
@@ -466,6 +518,17 @@ export function ReportCardWindow({
             </button>
           ) : null}
           <div className="flex-1" />
+          {r && canReceive ? (
+            <button
+              type="button"
+              data-report-button="receive"
+              className={buttonClass('default')}
+              onClick={() => onAction('receive', r)}
+            >
+              <Icon name="download" size="sm" />
+              {t('report.act.receive')}
+            </button>
+          ) : null}
           {r && buttons?.fix ? (
             <button
               type="button"
@@ -477,17 +540,43 @@ export function ReportCardWindow({
               {t('report.act.fix')}
             </button>
           ) : null}
-          {r && buttons?.primary ? (
+          {r && buttons?.pay && canPay ? (
+            <button
+              type="button"
+              data-report-button="pay"
+              className={buttonClass('default')}
+              onClick={() => onAction('pay', r)}
+            >
+              <Icon name="wallet" size="sm" />
+              {t('report.act.mark_paid')}
+            </button>
+          ) : null}
+          {r && buttons?.primary && (buttons.primary !== 'pay' || canPay) ? (
             <button
               type="button"
               data-report-button={buttons.primary}
               className={buttonClass('cta')}
               disabled={buttons.disabled}
-              title={buttons.disabled ? t('report.menu.no_status') : undefined}
+              title={buttons.disabled ? (buttons.why ?? undefined) : undefined}
               onClick={() => onAction(buttons.primary!, r)}
             >
-              <Icon name={buttons.primary === 'submit' ? 'send' : 'check'} size="sm" />
-              {t(buttons.primary === 'submit' ? 'report.act.submit' : 'report.act.confirm')}
+              <Icon
+                name={
+                  buttons.primary === 'submit'
+                    ? 'send'
+                    : buttons.primary === 'pay'
+                      ? 'wallet'
+                      : 'check'
+                }
+                size="sm"
+              />
+              {t(
+                buttons.primary === 'submit'
+                  ? 'report.act.submit'
+                  : buttons.primary === 'pay'
+                    ? 'report.act.mark_paid'
+                    : 'report.act.confirm',
+              )}
             </button>
           ) : null}
         </>
@@ -504,6 +593,9 @@ export function ReportCardWindow({
             onBack={(to) => onBack(r, to)}
             onVersion={onVersion}
             onResponsible={changeResponsible}
+            onReceive={canReceive ? () => onAction('receive', r) : null}
+            onPay={canPay ? () => onAction('pay', r) : null}
+            onCancelPay={r.money?.canCancel ? () => onAction('cancelPay', r) : null}
           />
         ) : null}
       </div>
@@ -535,6 +627,9 @@ function CardBody({
   onBack,
   onVersion,
   onResponsible,
+  onReceive,
+  onPay,
+  onCancelPay,
 }: {
   t: Translate;
   r: Card;
@@ -543,19 +638,35 @@ function CardBody({
   onBack: (to: string) => void;
   onVersion: (id: string) => void;
   onResponsible: ((anchor: HTMLElement) => void) | null;
+  onReceive: (() => void) | null;
+  onPay: (() => void) | null;
+  onCancelPay: (() => void) | null;
 }) {
+  const now = new Date();
   const events = statusEvents(r.statusHistory);
-  const history = historyView(t, 'report', events, new Date());
+  const history = historyView(t, 'report', events, now);
   const timeline = r.history.map((h, i) => reportHistoryItem(t, h, i, r.revision));
   const late = r.overdue ? Math.abs(r.days ?? 0) : 0;
+  // Деньги отчёта — при «Учёте оплаты налогов» у вида с суммой (прототип `feat('taxpay') && t.sum`).
+  const money = r.taxpay && reportHasAmount(r.act);
+  const sums = money && r.status !== 'not_required';
+  const payHistory = money ? historyView(t, 'payment', paymentEvents(t, r), now) : null;
+  const why = OPEN_REPORT_STATUSES.has(r.status) ? payFirstWhy(t, r, r.taxpay && r.payFirst) : '';
 
   return (
     <>
-      {r.act !== 'pay' ? (
+      {r.act !== 'pay' || money ? (
         <Box>
-          <ScaleBox t={t} r={r} actor={actor} onStep={onStep} onBack={onBack} />
+          <div className="flex flex-col gap-3">
+            {r.act !== 'pay' ? (
+              <ScaleBox t={t} r={r} actor={actor} onStep={onStep} onBack={onBack} />
+            ) : null}
+            {money ? <PaymentScale t={t} r={r} onPay={onPay} onCancel={onCancelPay} /> : null}
+          </div>
         </Box>
       ) : null}
+      {sums ? <SumsBox t={t} r={r} /> : null}
+      {why ? <PayFirstNote t={t} why={why} /> : null}
       {r.overdue ? (
         <div className="flex flex-wrap gap-2">
           <Pill tone="bad" icon="alert">
@@ -565,9 +676,11 @@ function CardBody({
       ) : null}
       <ConfirmBox t={t} r={r} actor={actor} />
       <Box>
-        <KeyValues items={cardItems(t, r, onResponsible)} />
+        <KeyValues items={cardItems(t, r, onResponsible, { sums, onReceive })} />
         {r.penalty ? <Note>{r.penalty}</Note> : null}
       </Box>
+      {/* График оплаты — у вида с суммой и долями, и без «Учёта оплаты налогов» (прототип report-card.js). */}
+      {reportHasAmount(r.act) ? <ScheduleBox t={t} r={r} today={bishkekDate(now)} /> : null}
       {r.versions.length > 1 ? (
         <Box title={t('report.card.versions')}>
           <MiniTable
@@ -605,7 +718,20 @@ function CardBody({
       {r.filesOn ? <RecordFiles source={{ kind: 'report', id: r.id }} /> : null}
       <Box title={t('status.history')}>
         {r.act !== 'pay' ? (
-          <StatusHistory rows={history.rows} totals={history.totals} labels={historyLabels(t)} />
+          <StatusHistory
+            rows={history.rows}
+            totals={history.totals}
+            title={money ? t('status.scale.report') : undefined}
+            labels={historyLabels(t)}
+          />
+        ) : null}
+        {payHistory ? (
+          <StatusHistory
+            rows={payHistory.rows}
+            totals={payHistory.totals}
+            title={r.act === 'pay' ? undefined : t('status.scale.payment')}
+            labels={historyLabels(t)}
+          />
         ) : null}
       </Box>
       <Box title={t('report.card.history')}>

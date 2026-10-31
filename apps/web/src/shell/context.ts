@@ -37,6 +37,7 @@ export interface ShellState {
 const NO_ACCESS: ShellAccess = {
   admin: false,
   reportConfirm: false,
+  payFirst: false,
   can: () => false,
   feature: () => false,
 };

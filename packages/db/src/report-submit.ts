@@ -12,6 +12,7 @@ import {
   reportRateLines,
   reportReceiptRequired,
   reportSubmittable,
+  submitNeedsPayment,
   type HistoryChange,
   type HistoryValue,
   type IsoDate,
@@ -28,6 +29,7 @@ import { and, asc, count, desc, eq, gt, inArray, isNull, or, sql, type SQL } fro
 import { alias } from 'drizzle-orm/pg-core';
 import type { Tx } from './client';
 import { writeHistory } from './history';
+import { syncPaymentState } from './money-tax';
 import { lockReport, ReportChangedError, ReportStateError } from './reports';
 import {
   assignments,
@@ -52,7 +54,8 @@ import { writeStatusChange } from './status';
  * (`reportSubmittable`, `reportConfirmRefusal`, `reportBack`); здесь — что прочитать и что записать.
  * Смена статуса пишется в «Историю статусов», сумма, строки, дата сдачи и файлы — в историю отчёта, в
  * той же транзакции. Отчёт блокируется до конца транзакции; устаревшая версия —
- * `ReportChangedError`. «Сдан только после оплаты» добавит задача денег (2.19).
+ * `ReportChangedError`. «Сдача отчёта только после оплаты» (задача 2.19): отчёт «Сдача + уплата» с
+ * суммой больше 0 без оплаты «Сдан» не получает — сумма и файлы сохраняются, отчёт ждёт оплаты.
  */
 
 /** Отказ действия с отчётом: код и текст — `REPORT_MESSAGES`; 400 — неверный ввод, 403 — не по правам. */
@@ -82,6 +85,11 @@ export interface ReportActionContext {
   contractorScope: SQL | undefined;
   confirmOn: boolean;
   filesOn: boolean;
+  /**
+   * «Сдача отчёта только после оплаты» учётной политики при включённом «Учёт оплаты налогов» (прототип
+   * payFirstOn).
+   */
+  payFirst: boolean;
   t: Translate;
 }
 
@@ -89,6 +97,14 @@ export interface ReportActionContext {
 export interface ReportSubmitTexts {
   /** «Повторяющаяся сумма из назначения». */
   repeat: string;
+  /** «Сдача — после оплаты»: окно «Сдан» сохранило сумму и файлы, «Сдан» — после оплаты. */
+  afterPayment: string;
+}
+
+/** Отчёт ждёт оплаты: к уплате и оплачено — для подсказки «Сначала оплатите налог…». */
+export interface ReportWaitsPayment {
+  amount: Tyiyn;
+  paid: Tyiyn;
 }
 
 /** Настройки вида в организации: файл при сдаче и квитанция о приёме обязательны. */
@@ -380,6 +396,7 @@ async function applyRepeat(
       contractorId: r.contractorId,
     })),
   );
+  for (const x of changed) await syncPaymentState(tx, x.id);
 }
 
 /** Отчёт заблокирован, версия совпадает. */
@@ -440,7 +457,7 @@ export async function submitReport(
   id: string,
   input: ReportSubmitInput,
   ctx: ReportActionContext & { version: number; texts: ReportSubmitTexts },
-): Promise<ReportRecord> {
+): Promise<{ report: ReportRecord; waitsPayment: ReportWaitsPayment | null }> {
   const r = await lockCurrent(tx, id, ctx.version, ctx.scope);
   submittable(r);
   if (input.date > ctx.today) throw new ReportRefusedError(id, 'submit_date_invalid', 400, 'date');
@@ -451,6 +468,16 @@ export async function submitReport(
   }
   const typed = reportHasAmount(r.act) && (input.amount !== null || input.lines !== null);
   const sum = typed ? await amountOf(tx, r, input, ctx.t) : null;
+  const before = r.amount === null ? null : Number(r.amount);
+  const amount = sum ? sum.amount : before;
+  const paid = Number(r.paid);
+  if (submitNeedsPayment({ ...r, sum: before, paid }, ctx.payFirst, amount)) {
+    const report = await keepForPayment(tx, r, sum, added, ctx);
+    if (sum && input.amount !== null && sum.amount !== null) {
+      await applyRepeat(tx, r, sum.amount, input.repeat, ctx);
+    }
+    return { report, waitsPayment: { amount: amount ?? 0, paid } };
+  }
   const [updated] = await tx
     .update(reports)
     .set({
@@ -488,6 +515,44 @@ export async function submitReport(
   if (sum && input.amount !== null && sum.amount !== null) {
     await applyRepeat(tx, r, sum.amount, input.repeat, ctx);
   }
+  if (sum) await syncPaymentState(tx, id);
+  return { report: updated!, waitsPayment: null };
+}
+
+/**
+ * Окно «Сдан» без оплаты при «Сдаче только после оплаты» (прототип submitDlg: «Без оплаты «Сдан» не
+ * ставится: сумма и файлы сохраняются, отчёт ждёт «Отметить оплаченным»): статус прежний, в истории —
+ * сумма, строки и файлы с пометкой «(сдача — после оплаты)».
+ */
+async function keepForPayment(
+  tx: Tx,
+  r: ReportRecord,
+  sum: Awaited<ReturnType<typeof amountOf>> | null,
+  added: readonly { id: string; name: string }[],
+  ctx: { texts: ReportSubmitTexts },
+): Promise<ReportRecord> {
+  const [updated] = await tx
+    .update(reports)
+    .set({ ...(sum ? { amount: sum.amount, amountAuto: false } : {}), ...bump() })
+    .where(eq(reports.id, r.id))
+    .returning();
+  if (sum?.lines) await saveLines(tx, r.id, sum.lines);
+  const amount = sum ? sum.amount : r.amount === null ? null : Number(r.amount);
+  const amountChanged = sum?.changes.some((c) => c.field === 'amount') ?? false;
+  await writeHistory(tx, {
+    entity: 'report',
+    entityId: r.id,
+    action: 'update',
+    changes: [
+      // Сумма без изменения — «Сумма к уплате: 5 000 сом» без «было» (прототип: log «Сумма к уплате: …»).
+      ...(amountChanged ? [] : [{ field: 'amount', to: amount }]),
+      ...(sum?.changes ?? []),
+      ...(added.length ? [{ field: 'files', to: added.map((f) => f.name) }] : []),
+    ],
+    reason: ctx.texts.afterPayment,
+    contractorId: r.contractorId,
+  });
+  if (sum) await syncPaymentState(tx, r.id);
   return updated!;
 }
 
@@ -512,6 +577,11 @@ export interface ReportBatchResult {
   skipped: number;
 }
 
+/** Итог массовой «Сдан»: ещё — пропущено без оплаты при «Сдаче только после оплаты» («Нет оплаты»). */
+export interface ReportSubmitBatchResult extends ReportBatchResult {
+  skippedPay: number;
+}
+
 /**
  * Отчёты пачки по номеру: две пачки с общими отчётами блокируют их в одном порядке и не ждут друг
  * друга по кругу.
@@ -528,10 +598,10 @@ export async function submitReports(
   tx: Tx,
   items: readonly ReportBatchItem[],
   date: IsoDate,
-  ctx: ReportActionContext,
-): Promise<ReportBatchResult> {
+  ctx: ReportActionContext & { texts: Pick<ReportSubmitTexts, 'afterPayment'> },
+): Promise<ReportSubmitBatchResult> {
   if (date > ctx.today) throw new ReportRefusedError('', 'submit_date_invalid', 400, 'date');
-  const result: ReportBatchResult = { done: 0, skippedFile: 0, skipped: 0 };
+  const result: ReportSubmitBatchResult = { done: 0, skippedFile: 0, skipped: 0, skippedPay: 0 };
   const types = new Map<string, { needFile: boolean; needReceipt: boolean }>();
   for (const item of byId(items)) {
     const r = await lockCurrent(tx, item.id, item.version, ctx.scope);
@@ -550,15 +620,39 @@ export async function submitReports(
     }
     const before = r.amount === null ? null : Number(r.amount);
     const amount = reportHasAmount(r.act) && item.amount !== null ? item.amount : before;
-    const changes: HistoryChange[] = [{ field: 'submittedOn', from: r.submittedOn, to: date }];
+    const sumChanges: HistoryChange[] = [];
     if (amount !== before) {
-      changes.push({ field: 'amount', from: before, to: amount });
+      sumChanges.push({ field: 'amount', from: before, to: amount });
       const was = await storedLines(tx, r.id);
       if (was.length) {
-        changes.push({ field: 'lines', from: linesValue(was), to: [] });
+        sumChanges.push({ field: 'lines', from: linesValue(was), to: [] });
         await saveLines(tx, r.id, []);
       }
     }
+    // «Нет оплаты» (прототип submitDlg): сумма из окна сохраняется, «Сдан» — после оплаты налога.
+    if (submitNeedsPayment({ ...r, sum: before, paid: Number(r.paid) }, ctx.payFirst, amount)) {
+      if (sumChanges.length) {
+        await tx
+          .update(reports)
+          .set({ amount, amountAuto: false, ...bump() })
+          .where(eq(reports.id, r.id));
+        await writeHistory(tx, {
+          entity: 'report',
+          entityId: r.id,
+          action: 'update',
+          changes: sumChanges,
+          reason: ctx.texts.afterPayment,
+          contractorId: r.contractorId,
+        });
+        await syncPaymentState(tx, r.id);
+      }
+      result.skippedPay++;
+      continue;
+    }
+    const changes: HistoryChange[] = [
+      { field: 'submittedOn', from: r.submittedOn, to: date },
+      ...sumChanges,
+    ];
     await tx
       .update(reports)
       .set({
@@ -584,6 +678,7 @@ export async function submitReports(
       changes,
       contractorId: r.contractorId,
     });
+    if (amount !== before) await syncPaymentState(tx, r.id);
     result.done++;
   }
   return result;
@@ -623,6 +718,7 @@ export async function setReportAmount(
     });
   }
   await applyRepeat(tx, r, sum.amount, input.repeat, ctx);
+  await syncPaymentState(tx, id);
   return updated!;
 }
 

@@ -50,6 +50,12 @@ import { useListExport } from '../lists/export';
 import { useGridLabels } from '../lists/grid-labels';
 import { useListPage, type FetchListPage } from '../lists/use-list-page';
 import { useViewSettings } from '../lists/view-settings';
+import {
+  ContractorBalanceBox,
+  ContractorMoneyTab,
+  useMoneySettingsItems,
+  useMoneyTabOn,
+} from '../money/contractor-money';
 import { useReportActions } from '../reports/report-actions';
 import {
   REPORT_AUDIT,
@@ -83,7 +89,8 @@ import { reportPickQuery } from './report-pick-data';
 import { serviceQuery } from './service-data';
 import { ServicePlanNote, ServiceStatusBlock } from './service-actions';
 
-export type ContractorCardTab = 'main' | 'reports' | 'pick' | 'tasks' | 'kpi' | 'files' | 'hist';
+export type ContractorCardTab =
+  'main' | 'reports' | 'pick' | 'money' | 'tasks' | 'kpi' | 'files' | 'hist';
 
 const REPORTS_GRID: GridKey = 'cps.reports';
 
@@ -127,8 +134,8 @@ export interface ContractorCardProps {
  * Карточка контрагента (ТЗ «Карточка контрагента с вкладками»; прототип modules/contractor-card.js,
  * `openCp`): в заголовке — название и «архив», под ним ИНН, режим, приостановка, «разовый» и
  * «просрочено отчётов: N». Вкладки «Основное», «Отчёты к сдаче» (просроченные — красным числом),
- * «Подбор отчётов» (у постоянного), «Задачи», «Показатели», «Файлы», «История»; «Деньги»,
- * «Обслуживание» и «Проекты» добавят их задачи. Уйти с «Подбора отчётов» с несохранённым выбором —
+ * «Подбор отчётов» (у постоянного), «Деньги» (при «Учёте оплаты налогов»), «Задачи», «Показатели»,
+ * «Файлы», «История»; «Обслуживание» и «Проекты» добавят их задачи. Уйти с «Подбора отчётов» с несохранённым выбором —
  * вопрос «Подбор не применён». Внизу — «Действия» и «Готово»; «На весь экран» и свайпы по вкладкам — у
  * окна карточки.
  */
@@ -153,6 +160,7 @@ export function ContractorCardWindow(props: ContractorCardProps) {
   const files = useQuery({ ...contractorFilesQuery(id), enabled: filesOn }).data;
   const overdue = c?.overdue ?? initial?.overdue ?? 0;
   const repView = access.can('repView');
+  const moneyOn = useMoneyTabOn(c);
 
   const tabs: CardTab[] = [
     { id: 'main', label: t('cp.card.tab.main'), icon: 'building' },
@@ -170,6 +178,9 @@ export function ContractorCardWindow(props: ContractorCardProps) {
       : []),
     ...(regular && repView
       ? [{ id: 'pick', label: t('cp.card.tab.pick'), icon: 'list' } satisfies CardTab]
+      : []),
+    ...(moneyOn
+      ? [{ id: 'money', label: t('cp.card.tab.money'), icon: 'wallet' } satisfies CardTab]
       : []),
     ...(tasksOn
       ? [
@@ -287,6 +298,7 @@ export function ContractorCardWindow(props: ContractorCardProps) {
         ) : null}
         {shownTab === 'reports' ? <ReportsTab contractorId={id} /> : null}
         {shownTab === 'pick' ? <ReportPickTab contractorId={id} onDirty={setPickDirty} /> : null}
+        {shownTab === 'money' ? <ContractorMoneyTab contractorId={id} /> : null}
         {shownTab === 'tasks' ? <ContractorTasksTab contractorId={id} archived={archived} /> : null}
         {shownTab === 'kpi' ? <KpiCardTab contractorId={id} /> : null}
         {shownTab === 'files' ? <ContractorFilesTab contractorId={id} archived={archived} /> : null}
@@ -454,6 +466,7 @@ function MainTab({
   const entries = service ? serviceActions(c, service) : [];
   const catalog = useQuery(catalogQuery).data;
   const edits = useCardEdits(c, catalog);
+  const money = useMoneySettingsItems(c);
   return (
     <>
       {service ? (
@@ -462,12 +475,16 @@ function MainTab({
       {regular || c.gked ? <GkedNotesView notes={c.gkedNotes} /> : null}
       <Box>
         <KeyValues
-          items={mainItems(t, c, service, { onResponsible, onEdit }, { edits, catalog })}
+          items={[
+            ...mainItems(t, c, service, { onResponsible, onEdit }, { edits, catalog }),
+            ...money,
+          ]}
         />
       </Box>
       <RegistrationBox t={t} c={c} />
       <AssignmentsBox t={t} c={c} onPick={regular ? onPick : null} />
       <ContractorPageBox contractorId={c.id} />
+      <ContractorBalanceBox contractorId={c.id} />
       {edits.dialogs}
     </>
   );
@@ -897,11 +914,25 @@ function ReportsTab({ contractorId }: { contractorId: string }) {
   const { access } = useShell();
   const phone = useMediaQuery(PHONE_QUERY);
   const labels = useGridLabels('report.count');
+  const reports = useReportActions();
+  const taxpay = access.feature('taxpay');
+  const onReceive = reports.receive;
   const columns = useMemo(
-    () => reportColumns(t, { waiting: false, confirm: access.reportConfirm, waitDays: 3, phone }),
-    [t, access.reportConfirm, phone],
+    () =>
+      reportColumns(t, {
+        waiting: false,
+        confirm: access.reportConfirm,
+        waitDays: 3,
+        phone,
+        taxpay,
+        onReceive,
+      }),
+    [t, access.reportConfirm, phone, taxpay, onReceive],
   );
-  const defaultVisible = useMemo(() => reportDefaultVisible(false).filter((k) => k !== 'cp'), []);
+  const defaultVisible = useMemo(
+    () => reportDefaultVisible(false, taxpay).filter((k) => k !== 'cp'),
+    [taxpay],
+  );
   const view = useViewSettings(REPORTS_GRID);
   const extra = useMemo(() => ({ tab: 'all' as const, contractorId }), [contractorId]);
   const fetchPage = useCallback<FetchListPage<ReportRow>>(async (params) => {
@@ -936,7 +967,6 @@ function ReportsTab({ contractorId }: { contractorId: string }) {
     [params, visible],
   );
   const exporter = useListExport(sendExport);
-  const reports = useReportActions();
   return (
     <>
       <DataGrid

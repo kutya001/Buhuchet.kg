@@ -22,6 +22,8 @@ export interface ShellAccess {
   admin: boolean;
   /** «Сдача отчётов требует подтверждения» включена в учётной политике. */
   reportConfirm: boolean;
+  /** «Сдача отчёта только после оплаты» действует (задача 2.19). */
+  payFirst: boolean;
   can: (permission: PermissionId) => boolean;
   feature: (feature: Feature) => boolean;
 }
@@ -31,6 +33,7 @@ export function shellAccess(me: MeResponse): ShellAccess {
   return {
     admin: me.user.isPlatformAdmin,
     reportConfirm: me.reportConfirm,
+    payFirst: me.payFirst,
     can: (p) => permissions.has(p),
     feature: (f) => me.features[f] === true,
   };

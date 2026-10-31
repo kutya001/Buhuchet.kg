@@ -39,7 +39,7 @@ const cellText = (grid: Locator, id: string, key: string) =>
   );
 
 test.describe('Этап 2: отчёты — список и вкладки', () => {
-  test('(п. 11, без шкалы оплаты) у НДС — «Сдача + уплата» и шкала сдачи, у патента — «Уплата» без шкалы сдачи, у 1-Т — «Сдача» без суммы; «Уплатить» — только отчёты, по которым есть что платить', async ({
+  test('(п. 11) у НДС — «Сдача + уплата» и обе шкалы, у патента — «Уплата» и только шкала оплаты, у 1-Т — «Сдача» и только шкала сдачи; «Уплатить» — только отчёты, по которым есть что платить', async ({
     page,
     request,
     baseURL,
@@ -72,10 +72,18 @@ test.describe('Этап 2: отчёты — список и вкладки', () 
     await expect(row(nds).locator('[data-act]')).toHaveAttribute('data-act', 'both');
     await expect(row(pat).locator('[data-act]')).toHaveText('Уплата');
     await expect(row(t1).locator('[data-act]')).toHaveText('Сдача');
-    // Шкала сдачи — у НДС и 1-Т; у патента вместо неё «—». Шкалу оплаты добавит задача 2.19.
-    await expect(row(nds).locator('[data-status-mini]')).toContainText('К сдаче');
-    await expect(row(t1).locator('[data-status-mini]')).toContainText('К сдаче');
-    await expect(row(pat).locator('[data-status-mini]')).toHaveCount(0);
+    // Шкала сдачи — у НДС и 1-Т; у патента вместо неё «—». Шкала оплаты (в «Оплачено в бюджет», задача
+    // 2.19) — у НДС и патента, у 1-Т её нет.
+    const reportMini = (id: string) =>
+      row(id).locator('[data-status-mini]:not([data-payment-mini] *)');
+    await expect(reportMini(nds)).toContainText('К сдаче');
+    await expect(reportMini(t1)).toContainText('К сдаче');
+    await expect(reportMini(pat)).toHaveCount(0);
+    if (!isMobile) {
+      await expect(row(nds).locator('[data-payment-mini]')).toContainText('Не оплачено');
+      await expect(row(pat).locator('[data-payment-mini]')).toContainText('Не оплачено');
+      await expect(row(t1).locator('[data-payment-mini]')).toHaveCount(0);
+    }
     if (isMobile) {
       // На плитке строки сумм у 1-Т нет: платить нечего.
       await expect(row(t1).locator('[data-tile-line]')).toHaveCount(0);
@@ -84,6 +92,22 @@ test.describe('Этап 2: отчёты — список и вкладки', () 
       expect(await cellText(grid, t1, 'amount')).toBe('—');
       expect(await cellText(grid, nds, 'amount')).toBe('не указана');
     }
+
+    // Карточка отчёта: у НДС — шкалы «Сдача» и «Оплата», у патента — только «Оплата», у 1-Т — только
+    // «Сдача».
+    const scales = async (id: string, typeName: string, steps: string[]) => {
+      await row(id).getByText(`ОсОО «${word}»`).first().click();
+      const card = page.getByRole('dialog', { name: typeName });
+      const scale = card.locator(`[data-report-card="${id}"] ol[data-status-scale]`);
+      await expect(scale).toHaveCount(steps.length);
+      for (const [i, text] of steps.entries()) await expect(scale.nth(i)).toContainText(text);
+      await page.keyboard.press('Escape');
+      await expect(card).toBeHidden();
+    };
+    await scales(nds, 'НДС', ['К сдаче', 'Не оплачено']);
+    await scales(pat, 'Патент', ['Не оплачено']);
+    await scales(t1, 'Форма 1-Т — отчёт по труду, месячный', ['К сдаче']);
+    await expect(row(t1).locator('[data-payment-mini]')).toHaveCount(0);
 
     // Быстрый фильтр над списком.
     const quick = page.locator('[data-report-quick]');

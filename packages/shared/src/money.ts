@@ -2,11 +2,16 @@ import {
   ACCOUNT_PURPOSES,
   BANK_KINDS,
   HOLDER_NAME_MAX_LENGTH,
+  MONEY_AMOUNT_MAX,
+  MONEY_NOTE_MAX,
+  MONEY_OP_KINDS,
+  RECEIPT_ROWS_MAX,
   REQUISITE_KINDS,
   REQUISITE_NO_MAX_LENGTH,
+  VERDICT_STATES,
 } from '@buhuchet/domain';
 import { z } from 'zod';
-import { RecordVersion, Uuid } from './common';
+import { IsoDate, RecordVersion, Tyiyn, Uuid } from './common';
 
 /*
  * Реквизиты для переводов (задача 2.18): справочник «Банковские провайдеры», счета организации и
@@ -96,3 +101,167 @@ export const RequisiteIdParam = z.object({ id: Uuid });
 export const RequisiteDeleteQuery = z.object({
   version: z.coerce.number().int().nonnegative(),
 });
+
+/* ───────────── Деньги по отчётам: поступления и оплата налога (задача 2.19) ───────────── */
+
+/** Сумма больше нуля и не больше предела (`MONEY_AMOUNT_MAX`). */
+const Positive = Tyiyn.refine((v) => v > 0, 'Введите сумму больше нуля').refine(
+  (v) => v <= MONEY_AMOUNT_MAX,
+  'Сумма слишком большая',
+);
+/** Строка детализации: 0 — строка не заполнена. */
+const RowAmount = Tyiyn.refine((v) => v >= 0 && v <= MONEY_AMOUNT_MAX, 'Неверная сумма');
+
+/** Месяц `YYYY-MM`. */
+const Month = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Месяц — ГГГГ-ММ');
+
+/** Сверка по отчёту (столбец «Деньги (сверка)»): «Оплачено», «Достаточно», «Недостача N». */
+export const ReportFunds = z.discriminatedUnion('state', [
+  z.object({ state: z.literal('paid') }),
+  z.object({ state: z.literal('enough'), need: Tyiyn }),
+  z.object({ state: z.literal('short'), need: Tyiyn, short: Tyiyn }),
+]);
+export type ReportFunds = z.infer<typeof ReportFunds>;
+
+/** Номер контрагента в пути. */
+export const MoneyContractorParam = z.object({ id: Uuid });
+
+/** Вкладка «Деньги»: месяц сверки (по умолчанию — текущий). */
+export const ContractorMoneyQuery = z.object({ month: Month.optional() });
+
+/** Отчёт в сверке за месяц: «НДС · 09.2026», срок оплаты, сколько осталось или отложено. */
+const MoneyTabReport = z.object({
+  reportId: Uuid,
+  label: z.string(),
+  payDue: IsoDate,
+  amount: Tyiyn,
+});
+
+/** Операция вкладки «Деньги»: дата, вид, основание (отчёты), кто внёс, сумма. */
+export const MoneyOperationItem = z.object({
+  id: Uuid,
+  kind: z.enum(MONEY_OP_KINDS),
+  self: z.boolean(),
+  date: IsoDate,
+  amount: Tyiyn,
+  total: Tyiyn.nullable(),
+  reports: z.array(z.string()),
+  author: z.string().nullable(),
+});
+export type MoneyOperationItem = z.infer<typeof MoneyOperationItem>;
+
+/**
+ * Вкладка «Деньги» карточки контрагента (прототип contractor-card.js, вкладка `money`) и «Баланс по
+ * контрагенту» на «Основном»: сверка по сроку оплаты до конца месяца, что нужно оплатить, операции.
+ */
+export const ContractorMoney = z.object({
+  contractor: z.object({
+    id: Uuid,
+    name: z.string(),
+    paysTo: z.enum(['emp', 'org']),
+    /** Ответственный — чей кошелёк, если деньги переводятся ему. */
+    holder: z.string().nullable(),
+    archived: z.boolean(),
+    needReceiptFile: z.boolean(),
+    version: RecordVersion,
+  }),
+  month: Month,
+  /** Месяцы выбора: два прошлых, текущий и следующий. */
+  months: z.array(Month),
+  balance: z.object({
+    received: Tyiyn,
+    paid: Tyiyn,
+    selfPaid: Tyiyn,
+    bonus: Tyiyn,
+    available: Tyiyn,
+  }),
+  /** Свободный остаток после всех неоплаченных отчётов. */
+  free: Tyiyn,
+  need: z.array(MoneyTabReport),
+  needSum: Tyiyn,
+  later: z.array(MoneyTabReport),
+  laterSum: Tyiyn,
+  verdict: z.object({ state: z.enum(VERDICT_STATES), amount: Tyiyn }),
+  operations: z.array(MoneyOperationItem),
+  /** «Поступление»: право «Учёт денег», контрагент не в архиве. */
+  canReceive: z.boolean(),
+});
+export type ContractorMoney = z.infer<typeof ContractorMoney>;
+
+/** Окно «Поступление от контрагента»: неоплаченные отчёты для детализации (прототип inDlg). */
+export const ReceiptForm = z.object({
+  contractor: z.object({
+    id: Uuid,
+    name: z.string(),
+    paysTo: z.enum(['emp', 'org']),
+    holder: z.string().nullable(),
+    needReceiptFile: z.boolean(),
+  }),
+  rows: z.array(
+    z.object({
+      reportId: Uuid,
+      typeShort: z.string(),
+      periodLabel: z.string(),
+      payDue: IsoDate,
+      sum: Tyiyn,
+      already: Tyiyn,
+      left: Tyiyn,
+    }),
+  ),
+  /** Неоплаченных отчётов, деньги на которые уже получены (подсказка «станет авансом»). */
+  unpaid: z.number().int().nonnegative(),
+});
+export type ReceiptForm = z.infer<typeof ReceiptForm>;
+
+/** Файлов, загружаемых в окне поступления или оплаты, — не больше. */
+export const MONEY_FILES_MAX = 20;
+
+/**
+ * «Записать поступление»: общая сумма, дата, детализация по отчётам и сколько файлов окно загрузит к
+ * поступлению после сохранения.
+ */
+export const ReceiptRequest = z.strictObject({
+  total: Positive,
+  date: IsoDate,
+  rows: z
+    .array(z.strictObject({ reportId: Uuid, amount: RowAmount }))
+    .max(RECEIPT_ROWS_MAX)
+    .default([]),
+  files: z.number().int().min(0).max(MONEY_FILES_MAX).default(0),
+});
+export type ReceiptRequest = z.input<typeof ReceiptRequest>;
+
+export const ReceiptSaved = z.object({ id: Uuid });
+export type ReceiptSaved = z.infer<typeof ReceiptSaved>;
+
+/** «Отметить оплаченным»: сумма (может быть больше к уплате — пеня), дата, «Оплатил контрагент сам». */
+export const PaymentRequest = z.strictObject({
+  version: RecordVersion,
+  amount: Positive,
+  date: IsoDate,
+  self: z.boolean().default(false),
+});
+export type PaymentRequest = z.input<typeof PaymentRequest>;
+
+/** Оплата записана: новая версия отчёта и операция — к ней загружается платёжное поручение. */
+export const PaymentSaved = z.object({ id: Uuid, version: RecordVersion, operationId: Uuid });
+export type PaymentSaved = z.infer<typeof PaymentSaved>;
+
+/** Откат шкалы оплаты: отмена последней оплаты с причиной. */
+export const PaymentRollbackRequest = z.strictObject({
+  version: RecordVersion,
+  reason: z.string().trim().min(1, 'Укажите причину').max(MONEY_NOTE_MAX),
+});
+export type PaymentRollbackRequest = z.infer<typeof PaymentRollbackRequest>;
+
+/** «Файл при поступлении» и «Деньги на налоги переводит» на «Основном» карточки контрагента. */
+export const MoneySettingsRequest = z
+  .strictObject({
+    version: RecordVersion,
+    needReceiptFile: z.boolean().optional(),
+    paysTo: z.enum(['emp', 'org']).optional(),
+  })
+  .refine((b) => b.needReceiptFile !== undefined || b.paysTo !== undefined, 'Нечего менять');
+export type MoneySettingsRequest = z.infer<typeof MoneySettingsRequest>;
+
+export const MoneySettingsSaved = z.object({ id: Uuid, version: RecordVersion });

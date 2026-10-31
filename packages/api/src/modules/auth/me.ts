@@ -36,7 +36,11 @@ function meBody(
   access: EmployeeAccess | null,
   organization: MeResponse['organization'],
   telegram: TelegramChat | null,
-  settings: { features: Record<Feature, boolean>; reportConfirm: boolean } | null,
+  settings: {
+    features: Record<Feature, boolean>;
+    reportConfirm: boolean;
+    payFirst: boolean;
+  } | null,
   phone: string | null = null,
 ): MeResponse {
   const features = settings?.features ?? null;
@@ -67,6 +71,7 @@ function meBody(
       : {},
     features: features ?? {},
     reportConfirm: settings?.reportConfirm ?? false,
+    payFirst: settings?.payFirst ?? false,
     modules: user.isPlatformAdmin
       ? [...ADMIN_MENU_MODULES]
       : access && features

@@ -15,6 +15,7 @@ import { seedDemoContractorPages } from './demo-contractor-page';
 import { seedDemoContractors } from './demo-contractors';
 import { seedDemoDictRequests } from './demo-dicts';
 import { seedDemoMoney } from './demo-money';
+import { seedDemoMoneyTax } from './demo-money-tax';
 import { seedDemoKpi } from './demo-kpi';
 import { seedDemoReports } from './demo-reports';
 import { seedDemoTasks } from './demo-tasks';
@@ -45,6 +46,7 @@ export type DemoKind =
   | 'task'
   | 'task_comment'
   | 'requisite'
+  | 'money_operation'
   | 'indicator'
   | 'indicator_value'
   | 'indicator_month'
@@ -317,6 +319,8 @@ export async function seedDemoOrganization(
   });
 
   await seedDemoMoney(db, file, orgId);
+  // Деньги по отчётам (задача 2.19).
+  await seedDemoMoneyTax(db, file, { orgId, demoId });
 
   await seedDemoKpi(db, file, orgId);
 

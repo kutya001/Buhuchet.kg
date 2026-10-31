@@ -59,11 +59,35 @@ function valueText(t: Translate, field: string, v: unknown): string {
   return String(v);
 }
 
+/** Оплата в истории отчёта (задача 2.19): сумма, дата, «оплатил контрагент сам», переплата. */
+interface PaymentValue {
+  amount: number;
+  date: string;
+  self?: boolean;
+  over?: number;
+}
+
+const isPayment = (v: unknown): v is PaymentValue =>
+  typeof v === 'object' &&
+  v !== null &&
+  typeof (v as PaymentValue).amount === 'number' &&
+  typeof (v as PaymentValue).date === 'string';
+
+/** «Оплата в бюджет 3 000 сом от 18.10.2026 (оплатил контрагент сам)» (прототип payDlg, `log`). */
+function paymentText(t: Translate, p: PaymentValue): string {
+  return (
+    t('report.hist.payment', { amount: formatSomWithUnit(p.amount), date: formatDateRu(p.date) }) +
+    (p.self ? t('report.hist.payment_self') : '') +
+    (p.over ? t('report.hist.payment_over', { amount: formatSomWithUnit(p.over) }) : '')
+  );
+}
+
 /**
  * Строки одного изменения (прототип report-card.js, «История изменений»; ТЗ «История изменений» —
  * было → стало): сумма и даты — «Поле: было → стало»; строки суммы — «строки: …» или «строки по ставкам
  * очищены»; файлы, загруженные в окне, — «Прикреплены файлы: …»; прежняя версия — «Создан уточнённый
- * отчёт, версия N».
+ * отчёт, версия N»; оплата и её отмена — «Оплата в бюджет …», «Отменена оплата в бюджет …»; сумма,
+ * сохранённая без «было», — «Сумма к уплате: …».
  */
 function changeLines(t: Translate, c: Change, revision: number): string[] {
   if (c.field === 'lines') {
@@ -74,6 +98,17 @@ function changeLines(t: Translate, c: Change, revision: number): string[] {
     return [t('report.hist.files', { names: c.to.map(String).join(', ') })];
   if (c.field === 'superseded')
     return c.to ? [t('report.hist.superseded', { n: revision + 1 })] : [];
+  if (c.field === 'payment' && isPayment(c.to)) return [paymentText(t, c.to)];
+  if (c.field === 'paymentCancel' && isPayment(c.from))
+    return [
+      t('report.hist.payment_cancel', {
+        amount: formatSomWithUnit(c.from.amount),
+        date: formatDateRu(c.from.date),
+      }),
+    ];
+  // Сумма без «было» — сохранена окном «Сдан» без оплаты (прототип: «Сумма к уплате: 5 000 сом»).
+  if (c.field === 'amount' && !('from' in c))
+    return [t('report.hist.amount_set', { amount: valueText(t, 'amount', c.to) })];
   const label = FIELD_LABEL[c.field];
   if (!label) return [];
   return [

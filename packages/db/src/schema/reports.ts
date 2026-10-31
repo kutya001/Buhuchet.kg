@@ -181,6 +181,12 @@ export const reports = pgTable(
     amount: money('amount'),
     /** Сумма подставлена из повторяющейся суммы назначения. */
     amountAuto: boolean('amount_auto').notNull().default(false),
+    /**
+     * «Оплачено в бюджет», тыйыны: отметки оплаты (`money_operations` вида `pay`), с «Оплатил контрагент
+     * сам», минус возвраты по уточнённому; уточнённая версия начинает с оплаченного по прежней
+     * (прототип createRevision). Меняется в той же транзакции, что и операция (задача 2.19).
+     */
+    paid: money('paid').notNull().default(0),
     responsibleEmployeeId: uuid('responsible_employee_id'),
     /** Пусто — создан задачей по расписанию. */
     createdBy: uuid('created_by').references(() => users.id),
@@ -221,6 +227,7 @@ export const reports = pgTable(
     check('reports_act_check', oneOf(t.act, REPORT_ACTS)),
     check('reports_status_check', oneOf(t.status, REPORT_STATUSES)),
     check('reports_amount_check', sql`${t.amount} is null or ${t.amount} >= 0`),
+    check('reports_paid_check', sql`${t.paid} >= 0`),
     orgIsolation('reports_isolation', t.orgId),
   ],
 ).enableRLS();

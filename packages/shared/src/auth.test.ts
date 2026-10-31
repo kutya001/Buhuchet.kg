@@ -55,6 +55,7 @@ describe('схемы входа', () => {
       scopes: { cps: 'own' },
       features: { tasks: true, projects: false },
       reportConfirm: true,
+      payFirst: false,
       modules: ['home', 'cps', 'tasks'],
     };
     expect(MeResponse.parse(me)).toEqual(me);

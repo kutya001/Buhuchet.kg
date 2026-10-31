@@ -12,6 +12,8 @@ import {
   type ListQuery,
   type ReportAct,
   type ReportPeriod,
+  type PaymentStatus,
+  type ReportFunds,
   type ReportStatus,
   type Translate,
 } from '@buhuchet/domain';
@@ -23,6 +25,7 @@ import {
   selectListExport,
   selectListPage,
   selectListValues,
+  somUnitText,
   type ListColumns,
   type ListFrom,
   type ListPageResult,
@@ -36,6 +39,7 @@ import {
   dueChangeReasons,
   employees,
   files,
+  moneyOperations,
   orgReportTypes,
   reportDueChanges,
   orgSettings,
@@ -49,6 +53,7 @@ import {
   taxRegimes,
 } from './schema';
 import type { FileListPart } from './files';
+import { FUNDS_STATE, PAYMENT_STATUS, RECEIVED, REPORT_MONEY, rmField } from './money-tax';
 import { dateLiteral, dictLiteral, textLiteral } from './sql-text';
 import type { AuditRecord } from './staff';
 import { readStatusHistory, type StatusHistoryItem } from './status';
@@ -59,7 +64,9 @@ import { readStatusHistory, type StatusHistoryItem } from './status';
  * быстрый фильтр «Все / Сдать / Уплатить» (задача 2.13). Прежние версии уточнённых отчётов в списке не
  * видны (прототип visReports). Тексты, которые видны в ячейках (подписи периодов, «Что сделать», ставки
  * словами), приходят одной записью `lt` в FROM запроса: так у столбцов нет параметров и по ним работают
- * фильтр, сортировка и группы. Деньги и оплата (2.19), файлы (2.14) добавят свои столбцы.
+ * фильтр, сортировка и группы. Деньги и оплата (задача 2.19): «Оплачено в бюджет», «Получено от
+ * контрагента», статус оплаты и сверка «Деньги» — из подзапроса `rm` (`REPORT_MONEY`), при включённом
+ * «Учёте оплаты налогов»; просрочка оплаты — во вкладках «Просрочено» и «На неделе».
  */
 
 const responsible = alias(employees, 'report_responsible');
@@ -181,6 +188,7 @@ function fromReports(tx: Tx, fields: object, texts: SQL) {
     .leftJoin(confirmer, eq(confirmer.userId, reports.confirmedBy))
     .leftJoin(creator, eq(creator.userId, reports.createdBy))
     .leftJoin(updater, eq(updater.userId, reports.updatedBy))
+    .leftJoin(REPORT_MONEY, sql`${rmField('id')} = ${reports.id}`)
     .innerJoin(texts, sql`true`)
     .$dynamic();
 }
@@ -193,10 +201,21 @@ const DONE = statusIn(['submitted', 'not_required']);
 /**
  * Просрочена сдача (прототип derive: r.overdue): несданный отчёт со сдачей, срок прошёл, контрагент не
  * приостановлен. У архивного несданные за месяцы обслуживания остаются просроченными (ТЗ «Архив»).
- * Просрочку оплаты добавит задача 2.19.
  */
 const overdueOf = (today: IsoDate) =>
   sql`(${contractors.serviceStatus} <> 'paused' and ${reports.act} <> 'pay' and ${OPEN} and ${reports.dueDate} < ${dateLiteral(today)})`;
+
+/** Налог не оплачен полностью: сумма больше 0, «Не оплачено» или «Оплачено частично». */
+const UNPAID = sql`(${reports.act} <> 'sub' and ${reports.status} <> 'not_required' and ${reports.amount} > 0 and ${reports.paid} < ${reports.amount})`;
+
+/**
+ * Просрочена оплата (прототип derive: r.payOverdue): при «Учёте оплаты налогов» — налог не оплачен
+ * полностью, срок оплаты прошёл, контрагент не приостановлен (прежних версий в списке нет).
+ */
+const payOverdueOf = (today: IsoDate, taxpay: boolean) =>
+  taxpay
+    ? sql`(${contractors.serviceStatus} <> 'paused' and not ${reports.superseded} and ${UNPAID} and ${reports.payDue} < ${dateLiteral(today)})`
+    : sql`false`;
 
 /**
  * Сдача ждёт подтверждения (прототип repWait): сдан, у вида есть сдача, подтверждения нет — только при
@@ -216,13 +235,12 @@ export type ReportQuick = (typeof REPORT_QUICK)[number];
 
 /**
  * «Сдать» — отчёты со сдачей, которые ещё не сданы; «Уплатить» — отчёты с уплатой, где сумма не указана
- * или больше нуля (прототип actQ); «Не требуется» — ни там ни там. Оплаченные из «Уплатить» уберёт
- * задача 2.19 вместе с оплатами.
+ * или налог ещё не оплачен полностью (прототип actQ); «Не требуется» — ни там ни там.
  */
 function quickOf(q: ReportQuick): SQL | undefined {
   if (q === 'sub') return sql`(${reports.act} <> 'pay' and ${OPEN})`;
   if (q === 'pay') {
-    return sql`(${reports.act} <> 'sub' and ${reports.status} <> 'not_required' and (${reports.amount} is null or ${reports.amount} > 0))`;
+    return sql`(${reports.act} <> 'sub' and ${reports.status} <> 'not_required' and (${reports.amount} is null or (${reports.amount} > 0 and ${reports.paid} < ${reports.amount})))`;
   }
   return undefined;
 }
@@ -283,7 +301,7 @@ const CREATED_BY = auditActorValue(reports.createdBy, creator.shortName);
  */
 export function reportListColumns(
   t: ListTexts,
-  options: { today: IsoDate; confirm: boolean },
+  options: { today: IsoDate; confirm: boolean; taxpay: boolean },
 ): ListColumns {
   const statusText = sql`case ${reports.status} ${sql.join(
     ['todo', 'in_progress', 'submitted', 'needs_fix', 'not_required'].map(
@@ -292,6 +310,19 @@ export function reportListColumns(
     sql` `,
   )} end`;
   const overdue = overdueOf(options.today);
+  const payOverdue = payOverdueOf(options.today, options.taxpay);
+  const paymentText = sql`case ${PAYMENT_STATUS} ${sql.join(
+    ['unpaid', 'partial', 'paid', 'not_required'].map(
+      (s) => sql`when ${textLiteral(s)} then ${t(`status.payment.${s}`)}`,
+    ),
+    sql` `,
+  )} end`;
+  const fundsText = sql`case ${FUNDS_STATE} ${sql.join(
+    ['paid', 'enough', 'short'].map(
+      (s) => sql`when ${textLiteral(s)} then ${t(`report.funds.${s}`)}`,
+    ),
+    sql` `,
+  )} end`;
   const waiting = waitingOf(options.confirm);
   const marked = options.confirm
     ? sql`(${reports.status} = 'submitted' and ${reports.act} <> 'pay')`
@@ -376,16 +407,56 @@ export function reportListColumns(
       value: sql`case when ${reports.act} = 'sub' then null else ${reports.amount} end`,
       total: true,
     },
+    // Деньги по отчёту (задача 2.19; прототип reportCols): «Получено от контрагента», «Оплачено в
+    // бюджет», «Осталось оплатить», «Статус оплаты» и сверка «Деньги».
+    received: {
+      type: 'money',
+      label: 'report.col.received',
+      value: sql`case when ${reports.act} <> 'sub' and ${reports.amount} > 0 then ${RECEIVED} end`,
+      total: true,
+    },
+    paid: {
+      type: 'money',
+      label: 'report.col.paid',
+      value: sql`case when ${reports.act} <> 'sub' then ${reports.paid} end`,
+      total: true,
+    },
+    left: {
+      type: 'money',
+      label: 'report.col.left',
+      value: sql`case when ${reports.act} <> 'sub' and ${reports.amount} > 0 then greatest(0, ${reports.amount} - ${reports.paid}) end`,
+      total: true,
+    },
     payDue: {
       type: 'date',
       label: 'report.col.pay_due',
       value: sql`case when ${reports.act} = 'sub' then null else ${reports.payDue} end`,
     },
+    paymentStatus: {
+      type: 'enum',
+      label: 'report.col.payment_status',
+      value: sql`case when ${reports.act} = 'sub' then null else ${PAYMENT_STATUS} end`,
+      display: sql`case when ${reports.act} = 'sub' then null else ${paymentText} end`,
+      sort: {
+        value: sql`case ${PAYMENT_STATUS} when 'unpaid' then 0 when 'partial' then 1 when 'paid' then 2 else 3 end`,
+        text: false,
+      },
+    },
+    funds: {
+      type: 'enum',
+      label: 'report.col.funds',
+      value: FUNDS_STATE,
+      display: fundsText,
+      sort: {
+        value: sql`case ${FUNDS_STATE} when 'short' then 0 when 'enough' then 1 when 'paid' then 2 end`,
+        text: false,
+      },
+    },
     overdue: {
       type: 'enum',
       label: 'report.col.overdue',
-      value: sql`case when ${overdue} then 'sub' end`,
-      display: sql`case when ${overdue} then ${lt('overdue_sub')} end`,
+      value: sql`case when ${overdue} and ${payOverdue} then 'both' when ${overdue} then 'sub' when ${payOverdue} then 'pay' end`,
+      display: sql`case when ${overdue} and ${payOverdue} then ${t('report.overdue.both')} when ${overdue} then ${lt('overdue_sub')} when ${payOverdue} then ${t('report.overdue.pay')} end`,
     },
     pays: { type: 'text', label: 'report.col.pays', value: PAYS },
     responsible: {
@@ -476,6 +547,8 @@ export interface ReportListOptions {
   contractorId?: string | null;
   /** Вкладка «Календарь»: день и включён ли «Учёт оплаты налогов» (тогда — и оплаты с этим сроком). */
   day?: { date: IsoDate; taxpay: boolean };
+  /** «Учёт оплаты налогов» включён: просрочка оплаты во вкладках «Просрочено» и «На неделе». */
+  taxpay: boolean;
 }
 
 /**
@@ -508,10 +581,46 @@ export function reportFilesPart(scope: SQL | undefined, t: ListTexts): FileListP
   };
 }
 
-/** «На этой неделе» (прототип inWeek): несданные со сдачей, срок на неделе, контрагент не приостановлен. */
-function weekCondition(today: IsoDate): SQL {
+/**
+ * Файлы поступлений и оплат налога в Файловом менеджере (задача 2.19, прототип allFiles): операция
+ * контрагента в области `scope` группы «Финансовые операции» (над `contractors`), отменённая оплата —
+ * нет; источник — «Поступление 15 000 сом от 05.10.2026», «Оплата НДС 09.2026 — 3 000 сом от 20.10.2026».
+ */
+export function moneyFilesPart(
+  kind: 'receipt' | 'tax_payment',
+  scope: SQL | undefined,
+  t: ListTexts,
+): FileListPart {
+  const op = sql`(select ${moneyOperations.id} from ${moneyOperations} join ${contractors} on ${contractors.id} = ${moneyOperations.contractorId} where ${moneyOperations.id} = ${files.sourceId} and ${moneyOperations.kind} = ${textLiteral(kind === 'receipt' ? 'in' : 'pay')} and ${moneyOperations.cancelledAt} is null and ${scope ?? sql`true`})`;
+  const date = sql`to_char(${moneyOperations.opDate}, 'DD.MM.YYYY')`;
+  if (kind === 'receipt') {
+    const label = sql`replace(replace(${dictLiteral(t('files.src.receipt'))}::text, '{amount}', ${somUnitText(sql`coalesce(${moneyOperations.total}, ${moneyOperations.amount})`)}), '{date}', ${date})`;
+    return {
+      visible: sql`exists ${op}`,
+      source: sql`(select ${label} from ${moneyOperations} where ${moneyOperations.id} = ${files.sourceId})`,
+    };
+  }
+  const report = sql`${reportTypes.shortName} || ' ' || ${periodLabel(
+    sql`${dictLiteral(t('report.period.q_short'))}::text`,
+    sql`${dictLiteral(t('report.period.h_short'))}::text`,
+  )}`;
+  const label = sql`replace(replace(replace(${dictLiteral(t('files.src.tax_payment'))}::text, '{report}', ${report}), '{amount}', ${somUnitText(moneyOperations.amount)}), '{date}', ${date})`;
+  return {
+    visible: sql`exists ${op}`,
+    source: sql`(select ${label} from ${moneyOperations} join ${reports} on ${reports.id} = ${moneyOperations.reportId} join ${reportTypes} on ${reportTypes.code} = ${reports.reportTypeCode} where ${moneyOperations.id} = ${files.sourceId})`,
+  };
+}
+
+/**
+ * «На этой неделе» (прототип inWeek): контрагент не приостановлен; несданные со сдачей со сроком на
+ * неделе, а при «Учёте оплаты налогов» — и неоплаченные со сроком оплаты на неделе.
+ */
+function weekCondition(today: IsoDate, taxpay: boolean): SQL {
   const { from, to } = reportWeek(today);
-  return sql`(${contractors.serviceStatus} <> 'paused' and ${reports.act} <> 'pay' and ${OPEN} and ${reports.dueDate} between ${dateLiteral(from)} and ${dateLiteral(to)})`;
+  const pay = taxpay
+    ? sql` or (${UNPAID} and ${reports.payDue} between ${dateLiteral(from)} and ${dateLiteral(to)})`
+    : sql``;
+  return sql`(${contractors.serviceStatus} <> 'paused' and ((${reports.act} <> 'pay' and ${OPEN} and ${reports.dueDate} between ${dateLiteral(from)} and ${dateLiteral(to)})${pay}))`;
 }
 
 /** «Ожидают подтверждения» в области сотрудника (прототип repWaitList). */
@@ -522,20 +631,21 @@ function waitingCondition(w: ReportWaitingView): SQL {
 
 /**
  * Отчёты дня календаря (прототип renderCalendar, `cal-grid`): срок сдачи в этот день, а при учёте оплаты
- * налогов — и неоплаченная сумма со сроком оплаты в этот день. Оплаченные уберёт задача 2.19.
+ * налогов — и неоплаченная сумма со сроком оплаты в этот день.
  */
 function dayCondition(day: NonNullable<ReportListOptions['day']>): SQL {
   const pay = day.taxpay
-    ? sql` or (${reports.amount} > 0 and ${reports.payDue} = ${dateLiteral(day.date)})`
+    ? sql` or (${reports.amount} > 0 and ${reports.paid} < ${reports.amount} and ${reports.payDue} = ${dateLiteral(day.date)})`
     : sql``;
   return sql`(${reports.dueDate} = ${dateLiteral(day.date)}${pay})`;
 }
 
 function tabCondition(
-  o: Pick<ReportListOptions, 'tab' | 'today' | 'waiting' | 'day'>,
+  o: Pick<ReportListOptions, 'tab' | 'today' | 'waiting' | 'day' | 'taxpay'>,
 ): SQL | undefined {
-  if (o.tab === 'week') return weekCondition(o.today);
-  if (o.tab === 'overdue') return overdueOf(o.today);
+  if (o.tab === 'week') return weekCondition(o.today, o.taxpay);
+  if (o.tab === 'overdue')
+    return sql`(${overdueOf(o.today)} or ${payOverdueOf(o.today, o.taxpay)})`;
   if (o.tab === 'waiting') return waitingCondition(o.waiting);
   if (o.tab === 'calendar') return o.day ? dayCondition(o.day) : sql`false`;
   return undefined;
@@ -544,7 +654,7 @@ function tabCondition(
 function listScope(
   o: Pick<
     ReportListOptions,
-    'scope' | 'tab' | 'today' | 'quick' | 'waiting' | 'contractorId' | 'day'
+    'scope' | 'tab' | 'today' | 'quick' | 'waiting' | 'contractorId' | 'day' | 'taxpay'
   >,
 ): SQL | undefined {
   return and(
@@ -559,7 +669,8 @@ function listScope(
 /** Строка списка отчётов. */
 export interface ReportRow {
   id: string;
-  contractor: { id: string; name: string; inn: string };
+  /** `archived` — контрагент в архиве: «Принять» у отчёта не показывается (прототип canRecv). */
+  contractor: { id: string; name: string; inn: string; archived: boolean };
   taxOffice: string | null;
   type: { code: string; name: string; shortName: string };
   act: ReportAct;
@@ -596,6 +707,18 @@ export interface ReportRow {
   lastStatus: { at: Date; by: string | null } | null;
   amount: number | null;
   amountAuto: boolean;
+  /** «Оплачено в бюджет», в том числе «Оплатил контрагент сам» (`selfPaid`). */
+  paid: number;
+  selfPaid: number;
+  /** «Получено от контрагента» (прототип r.got): его деньги, оплаченные по отчёту и отложенные под него. */
+  received: number;
+  /** Принято под отчёт детализацией поступлений (прототип r.recv): «Принять» в строке — пока меньше суммы. */
+  receivedFor: number;
+  paymentStatus: PaymentStatus;
+  /** Просрочена оплата — при «Учёте оплаты налогов» (прототип r.payOverdue). */
+  payOverdue: boolean;
+  /** Сверка «Деньги» (прототип r.money): только у отчёта, который ждёт денег. */
+  funds: ReportFunds | null;
   payDue: IsoDate | null;
   pays: string;
   /**
@@ -627,12 +750,13 @@ const LAST_STATUS_NAME = lastStatus(
   sql`(select e.short_name from ${employees} e where e.user_id = ${statusHistory.actorUserId})`,
 );
 
-function rowFields(today: IsoDate) {
+function rowFields(today: IsoDate, taxpay: boolean) {
   return {
     id: reports.id,
     contractorId: reports.contractorId,
     contractorName: contractors.name,
     inn: contractors.inn,
+    contractorArchived: sql<boolean>`${contractors.serviceStatus} = 'archived'`,
     taxOffice: TAX_OFFICE_LABEL,
     typeCode: reports.reportTypeCode,
     typeName: reportTypes.name,
@@ -670,6 +794,15 @@ function rowFields(today: IsoDate) {
     statusName: LAST_STATUS_NAME,
     amount: reports.amount,
     amountAuto: reports.amountAuto,
+    paid: reports.paid,
+    selfPaid: sql<number>`coalesce(${rmField('self_paid')}, 0)`,
+    received: RECEIVED,
+    receivedFor: sql<number>`coalesce(${rmField('recv')}, 0)`,
+    paymentStatus: PAYMENT_STATUS,
+    payOverdue: sql<boolean>`${payOverdueOf(today, taxpay)}`,
+    fundsState: FUNDS_STATE,
+    fundsNeed: rmField('need'),
+    fundsShort: rmField('short'),
     payDue: reports.payDue,
     pays: PAYS,
     needFile: sql<boolean>`coalesce((select ${orgReportTypes.needFile} from ${orgReportTypes} where ${orgReportTypes.orgId} = ${reports.orgId} and ${orgReportTypes.reportTypeCode} = ${reports.reportTypeCode} limit 1), false)`,
@@ -698,6 +831,17 @@ const momentOf = (v: unknown): Date | null => (v == null ? null : new Date(v as 
 const personOf = (id: unknown, name: unknown) =>
   id ? { id: id as string, shortName: (name as string | null) ?? '' } : null;
 
+/** Сверка по отчёту из полей строки. */
+function fundsOf(r: RowData): ReportFunds | null {
+  const state = r.fundsState as string | null;
+  if (state === 'paid') return { state: 'paid' };
+  if (state === 'enough') return { state, need: Number(r.fundsNeed) };
+  if (state === 'short') {
+    return { state, need: Number(r.fundsNeed), short: Number(r.fundsShort) };
+  }
+  return null;
+}
+
 function toRow(r: RowData): ReportRow {
   const responsibleId = r.responsibleId as string | null;
   const amount = r.amount as number | string | null;
@@ -707,6 +851,7 @@ function toRow(r: RowData): ReportRow {
       id: r.contractorId as string,
       name: r.contractorName as string,
       inn: r.inn as string,
+      archived: r.contractorArchived as boolean,
     },
     taxOffice: r.taxOffice as string | null,
     type: {
@@ -744,6 +889,13 @@ function toRow(r: RowData): ReportRow {
       : null,
     amount: amount == null ? null : Number(amount),
     amountAuto: Boolean(r.amountAuto),
+    paid: Number(r.paid),
+    selfPaid: Number(r.selfPaid),
+    received: Number(r.received),
+    receivedFor: Number(r.receivedFor),
+    paymentStatus: r.paymentStatus as PaymentStatus,
+    payOverdue: Boolean(r.payOverdue),
+    funds: fundsOf(r),
     payDue: r.payDue as IsoDate | null,
     pays: (r.pays as string | null) ?? '',
     needFile: Boolean(r.needFile),
@@ -768,7 +920,7 @@ function toRow(r: RowData): ReportRow {
 const REPORT_NATURAL = [reports.dueDate, reports.id];
 
 const columnsOf = (o: ReportListOptions) =>
-  reportListColumns(o.t, { today: o.today, confirm: o.waiting.confirm });
+  reportListColumns(o.t, { today: o.today, confirm: o.waiting.confirm, taxpay: o.taxpay });
 /** Как на экране (ТЗ «Списки записей», прототип defSort): от новых к старым по «Создано». */
 const DEFAULT_SORT = { key: 'createdAt', dir: 'desc' } as const;
 
@@ -784,7 +936,7 @@ export async function listReportsPage(
   o: ReportListOptions,
 ): Promise<ListPageResult<ReportRow>> {
   const texts = await listTexts(tx, o.t, o.today);
-  const fields = rowFields(o.today);
+  const fields = rowFields(o.today, o.taxpay);
   const page = await selectListPage({
     query,
     columns: columnsOf(o),
@@ -874,6 +1026,8 @@ export interface ReportSummary {
   submittedMonth: number;
   /** «К уплате за <месяц>»: суммы больше нуля со сроком оплаты в текущем месяце, тыйыны. */
   toPayMonth: number;
+  /** «оплачено …» под «К уплате за <месяц>»: оплачено по тем же отчётам, тыйыны. */
+  paidMonth: number;
   /** Быстрый фильтр каждой вкладки — без фильтров и поиска списка (прототип: `base()`). */
   quick: Record<ReportSummaryTab, ReportQuickCounts>;
   /** В организации ещё нет ни одного отчёта (прототип ui/empty.js, `firstEmpty`). */
@@ -887,7 +1041,7 @@ export interface ReportSummary {
  */
 export async function reportSummary(
   tx: Tx,
-  o: { scope: SQL | undefined; today: IsoDate; waiting: ReportWaitingView },
+  o: { scope: SQL | undefined; today: IsoDate; waiting: ReportWaitingView; taxpay: boolean },
 ): Promise<ReportSummary> {
   const month = o.today.slice(0, 7);
   const from = dateLiteral(`${month}-01`);
@@ -896,7 +1050,7 @@ export async function reportSummary(
     sql<number>`count(*) filter (where ${where ?? sql`true`})`.mapWith(Number);
   const tabs = Object.fromEntries(
     SUMMARY_TABS.flatMap((tab) => {
-      const base = tabCondition({ tab, today: o.today, waiting: o.waiting });
+      const base = tabCondition({ tab, today: o.today, waiting: o.waiting, taxpay: o.taxpay });
       return REPORT_QUICK.map((q) => [`${tab}_${q}`, count(and(base, quickOf(q)))]);
     }),
   );
@@ -908,6 +1062,10 @@ export async function reportSummary(
       ),
       toPay:
         sql<number>`coalesce(sum(${reports.amount}) filter (where ${reports.act} <> 'sub' and ${reports.amount} > 0 and ${reports.payDue} between ${from} and ${to}), 0)`.mapWith(
+          Number,
+        ),
+      paidMonth:
+        sql<number>`coalesce(sum(${reports.paid}) filter (where ${reports.act} <> 'sub' and ${reports.amount} > 0 and ${reports.payDue} between ${from} and ${to}), 0)`.mapWith(
           Number,
         ),
       empty: sql<boolean>`not exists (select 1 from ${reports})`,
@@ -929,6 +1087,7 @@ export async function reportSummary(
     waiting: quick.waiting.all,
     submittedMonth: n('submitted'),
     toPayMonth: n('toPay'),
+    paidMonth: n('paidMonth'),
     quick,
     empty: Boolean(r.empty),
   };
@@ -944,8 +1103,8 @@ export interface ReportCalendarCounts {
 /**
  * Числа дней календаря в области сотрудника (прототип renderCalendar): по сроку сдачи — «к сдаче»
  * (несданные со сдачей) и «сдано» (остальные со сроком в этот день, как `list.length - todo`), без «Не
- * требуется» и прежних версий; при учёте оплаты налогов — «оплат» по сроку оплаты у сумм больше нуля
- * (неоплаченные — с задачей 2.19).
+ * требуется» и прежних версий; при учёте оплаты налогов — «оплат» по сроку оплаты у неоплаченных
+ * полностью сумм больше нуля.
  */
 // ОТКЛОНЕНИЕ: docs/deviations.md#Б-8
 export async function reportCalendarCounts(
@@ -976,7 +1135,13 @@ export async function reportCalendarCounts(
           })
           .from(reports)
           .innerJoin(contractors, eq(contractors.id, reports.contractorId))
-          .where(and(base, sql`${reports.amount} > 0`, between(reports.payDue)))
+          .where(
+            and(
+              base,
+              sql`${reports.amount} > 0 and ${reports.paid} < ${reports.amount}`,
+              between(reports.payDue),
+            ),
+          )
           .groupBy(reports.payDue)
       : Promise.resolve([]),
   ]);
@@ -995,10 +1160,10 @@ export async function reportCalendarCounts(
 export async function getReportRow(
   tx: Tx,
   id: string,
-  o: { t: ListTexts; today: IsoDate; scope: SQL | undefined },
+  o: { t: ListTexts; today: IsoDate; scope: SQL | undefined; taxpay?: boolean },
 ): Promise<ReportRow | null> {
   const texts = await listTexts(tx, o.t, o.today);
-  const [row] = await fromReports(tx, rowFields(o.today), texts).where(
+  const [row] = await fromReports(tx, rowFields(o.today, o.taxpay ?? false), texts).where(
     and(eq(reports.id, id), o.scope),
   );
   return row ? toRow(row as RowData) : null;
@@ -1049,14 +1214,14 @@ const dueActor = alias(employees, 'due_actor');
 export async function getReportCard(
   tx: Tx,
   id: string,
-  o: { t: ListTexts; today: IsoDate; scope: SQL | undefined },
+  o: { t: ListTexts; today: IsoDate; scope: SQL | undefined; taxpay?: boolean },
 ): Promise<ReportCard | null> {
   if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
   const texts = await listTexts(tx, o.t, o.today);
   const [row] = await fromReports(
     tx,
     {
-      ...rowFields(o.today),
+      ...rowFields(o.today, o.taxpay ?? false),
       superseded: reports.superseded,
       assignmentId: assignments.id,
       assignmentType: assignments.reportTypeCode,

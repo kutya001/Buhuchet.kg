@@ -6,13 +6,16 @@ import {
   formatSom,
   formatSomWithUnit,
   parseSom,
+  pluralForm,
   reportHasAmount,
 } from '@buhuchet/domain';
 import {
   isRecordChanged,
   REPORT_NOTE_MAX,
   ReportBatchResult,
+  ReportBatchSubmitResult,
   ReportSaved,
+  ReportSubmitted,
   type ReportCard,
   type ReportRow,
 } from '@buhuchet/shared';
@@ -38,6 +41,7 @@ import { api, callApi } from '../api-client';
 import { filesQuery, pickedFilesProblem, uploadFile } from '../files/files-data';
 import { useErrorText, useT } from '../l10n/provider';
 import type { ApiErrorLike, Translate } from '../l10n/translate';
+import { payFirstWhy } from '../money/report-money';
 import { amountFormOf, readAmount, withRevenue, withTax, type AmountForm } from './report-amount';
 import { reportSub } from './report-menu';
 import { reportQuery } from './reports-data';
@@ -439,9 +443,19 @@ export function ReportSubmitDialog({
     setBusy(false);
     // Загруженные файлы уже в отчёте — карточку перечитать при любом исходе.
     if (files.ids.length) onDone();
-    if (res.ok && ReportSaved.safeParse(res.data).success) {
+    const saved = res.ok ? ReportSubmitted.safeParse(res.data) : null;
+    if (res.ok && saved?.success) {
       onDone();
       onClose();
+      // «Сдача только после оплаты»: сумма и файлы сохранены, «Сдан» — после оплаты (прототип submitDlg).
+      const wait = saved.data.waitsPayment;
+      if (wait) {
+        const why = t('report.pay_first.why', {
+          amount: formatSomWithUnit(wait.amount),
+          paid: formatSomWithUnit(wait.paid),
+        });
+        return void toast(t('report.pay_first.saved', { why }), { bad: true, icon: 'lock' });
+      }
       return void toast(t(confirmOn ? 'report.submit.done_confirm' : 'report.submit.done'), {
         icon: 'send',
       });
@@ -543,6 +557,13 @@ export function ReportSubmitDialog({
             </div>
           ) : null}
         </FormGrid>
+        {card.taxpay &&
+        card.payFirst &&
+        card.act === 'both' &&
+        card.amount === null &&
+        !(card.paid > 0) ? (
+          <Note icon="lock">{t('report.pay_first.submit_note')}</Note>
+        ) : null}
       </div>
     </Modal>
   );
@@ -577,10 +598,11 @@ export function ReportBatchSubmitDialog({
   rows,
   confirmOn,
   filesOn,
+  payFirst,
   open,
   onClose,
   onDone,
-}: BatchProps) {
+}: BatchProps & { payFirst: boolean }) {
   const t = useT();
   const toast = useToast();
   const errorText = useErrorText();
@@ -595,6 +617,9 @@ export function ReportBatchSubmitDialog({
   const [busy, setBusy] = useState(false);
   const needFile = (r: ReportRow) => rowNeedsFile(r, { confirmOn, filesOn });
   const skip = rows.filter(needFile).length;
+  // «Нет оплаты»: при «Сдаче только после оплаты» такие не отмечаются (прототип subNeedPay).
+  const needPay = (r: ReportRow) => !needFile(r) && !!payFirstWhy(t, r, payFirst);
+  const unpaid = rows.filter(needPay).length;
 
   const submit = async () => {
     if (!date || date > todayBishkek()) return setDateError(t('err.submit_date_invalid'));
@@ -612,7 +637,7 @@ export function ReportBatchSubmitDialog({
     setBusy(true);
     const res = await callApi(() => api.api.reports.submit.$post({ json: { date, items } }));
     setBusy(false);
-    const out = res.ok ? ReportBatchResult.safeParse(res.data) : null;
+    const out = res.ok ? ReportBatchSubmitResult.safeParse(res.data) : null;
     if (!res.ok) {
       if (fieldOf(res.error.details) === 'date') return setDateError(errorText(res.error));
       onDone();
@@ -621,17 +646,27 @@ export function ReportBatchSubmitDialog({
     if (!out?.success) return void toast(t('err.unknown'), { bad: true });
     onDone();
     onClose();
-    const { done, skippedFile } = out.data;
+    const { done, skippedFile, skippedPay } = out.data;
     const missed = skippedFile + skip;
     if (!done)
-      return void toast(t(missed ? 'report.submit.all_need_file' : 'report.submit.none'), {
-        bad: true,
-        icon: 'alert',
-      });
+      return void toast(
+        t(
+          skippedPay
+            ? 'report.pay_first.all_unpaid'
+            : missed
+              ? 'report.submit.all_need_file'
+              : 'report.submit.none',
+        ),
+        { bad: true, icon: 'alert' },
+      );
     toast(
-      missed
-        ? t('report.submit.done_many_skip', { n: done, m: missed })
-        : t('report.submit.done_many', { n: done }),
+      missed && skippedPay
+        ? t('report.submit.done_many_skip_both', { n: done, m: missed, k: skippedPay })
+        : skippedPay
+          ? t('report.submit.done_many_skip_pay', { n: done, m: skippedPay })
+          : missed
+            ? t('report.submit.done_many_skip', { n: done, m: missed })
+            : t('report.submit.done_many', { n: done }),
       { icon: 'send' },
     );
   };
@@ -674,6 +709,13 @@ export function ReportBatchSubmitDialog({
             )}
           </Field>
         </FormGrid>
+        {unpaid ? (
+          <Note tone="warn" icon="lock">
+            {t('report.pay_first.batch_note', {
+              n: t(`report.count.${pluralForm(unpaid)}`, { n: unpaid }),
+            })}
+          </Note>
+        ) : null}
         {skip ? <Note tone="warn">{t('report.submit.need_file_note', { n: skip })}</Note> : null}
         <MiniTable
           label={t('report.submit.title_many', { n: rows.length })}
@@ -691,6 +733,11 @@ export function ReportBatchSubmitDialog({
               report: (
                 <span className="inline-flex flex-wrap items-center gap-1">
                   {r.type.shortName}
+                  {needPay(r) ? (
+                    <Pill tone="warn" size="sm" icon="lock">
+                      {t('report.pay_first.pill')}
+                    </Pill>
+                  ) : null}
                   {needFile(r) ? (
                     <Pill tone="warn" size="sm" icon="clip">
                       {t('report.submit.need_file_pill')}

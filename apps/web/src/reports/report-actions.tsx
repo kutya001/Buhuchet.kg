@@ -1,6 +1,6 @@
 'use client';
 
-import { OPEN_REPORT_STATUSES } from '@buhuchet/domain';
+import { formatDateRu, formatSomWithUnit, OPEN_REPORT_STATUSES } from '@buhuchet/domain';
 import {
   ReportSaved,
   type DueChangeReason,
@@ -16,10 +16,13 @@ import {
   type GridBulkAction,
 } from '@buhuchet/ui';
 import { useQueryClient } from '@tanstack/react-query';
-import { useEffect, useEffectEvent, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useEffectEvent, useState, type ReactNode } from 'react';
 import { api, callApi } from '../api-client';
 import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
 import { useErrorText, useT } from '../l10n/provider';
+import { PaymentDialog, ReceiptDialog, type ReceiptPreset } from '../money/tax-dialogs';
+import { useMoneyRefresh } from '../money/tax-data';
+import { lastPayment, payFirstWhy } from '../money/report-money';
 import { useShell } from '../shell/context';
 import { rollbackLabels, rollbackTitle, statusName } from '../status/status-view';
 import { ReportCardWindow, reportToday } from './report-card';
@@ -80,6 +83,8 @@ export function useReportActions(): {
   openCard: (r: ReportRow | { id: string }) => void;
   bulk: (tab: ReportListTab | 'calendar') => GridBulkAction<ReportRow>[];
   newReport: () => void;
+  /** «Принять» в строке списка: с «Учётом оплаты налогов» и правом «Учёт денег», иначе null. */
+  receive: ((r: ReportRow) => void) | null;
   dialogs: ReactNode;
 } {
   const t = useT();
@@ -105,6 +110,13 @@ export function useReportActions(): {
   const [back, setBack] = useState<DialogSlot<{ report: ReportRow; to: string }> | null>(null);
   const [backBusy, setBackBusy] = useState(false);
   const [backError, setBackError] = useState<string | undefined>();
+  const moneyRefresh = useMoneyRefresh();
+  const [pay, setPay] = useState<DialogSlot<ReportCard> | null>(null);
+  const [receive, setReceive] = useState<DialogSlot<{
+    contractorId: string;
+    preset: ReceiptPreset | null;
+  }> | null>(null);
+  const [cancelPay, setCancelPay] = useState<DialogSlot<ReportCard> | null>(null);
   // Отчёты, по которым запрос ещё идёт: повторное нажатие не шлёт второй запрос.
   const [pending, setPending] = useState<ReadonlySet<string>>(() => new Set());
 
@@ -203,6 +215,44 @@ export function useReportActions(): {
     toast(t('report.responsible.done'), { icon: 'user' });
   };
 
+  /** «Отметить оплаченным» — по свежей карточке: деньги контрагента и график на сейчас. */
+  const openPay = async (r: ReportRow) => {
+    const full = await load(r.id, () => fresh(r.id));
+    if (full) setPay(openSlot(full));
+  };
+
+  /**
+   * «Принять деньги» под отчёт (прототип recvDlg): в детализации — этот отчёт на сумму, которой ещё
+   * нет (к уплате без оплаченного и принятого под него).
+   */
+  const openReceive = useCallback((r: ReportRow) => {
+    const sum = r.amount ?? 0;
+    const amount = Math.max(0, sum - Math.max(r.paid, r.receivedFor)) || sum - r.paid;
+    setReceive(
+      openSlot({
+        contractorId: r.contractor.id,
+        preset: amount > 0 ? { reportId: r.id, amount } : null,
+      }),
+    );
+  }, []);
+
+  const cancelPayment = async (reason: string) => {
+    if (!cancelPay) return;
+    const card = cancelPay.data;
+    setBackBusy(true);
+    const res = await callApi(() =>
+      api.api.reports[':id'].payments.rollback.$post({
+        param: { id: card.id },
+        json: { version: card.version, reason },
+      }),
+    );
+    setBackBusy(false);
+    if (!res.ok) return setBackError(errorText(res.error));
+    moneyRefresh();
+    setCancelPay(closeSlot);
+    toast(t('money.cancel.done'), { icon: 'history' });
+  };
+
   const askBack = (r: ReportRow, to?: string) => {
     if (!actor) return;
     const target = reportBackOf(r, actor);
@@ -240,6 +290,8 @@ export function useReportActions(): {
     reject: (r) => void step(r, 'reject'),
     due: (r) => void openDue(r),
     amount: (r) => void openDialog(r, 'amount'),
+    receive: openReceive,
+    pay: (r) => void openPay(r),
     file: (r) => setFile(openSlot(r)),
     revision: setRevision,
     rollback: (r) => askBack(r),
@@ -294,7 +346,12 @@ export function useReportActions(): {
         run: (rows, done) => {
           const ok = rows.filter((r) => r.act !== 'pay' && OPEN_REPORT_STATUSES.has(r.status));
           if (!ok.length) return void toast(t('report.submit.none'), { bad: true, icon: 'alert' });
-          if (ok.length === 1) return void openDialog(ok[0]!, 'submit');
+          if (ok.length === 1) {
+            // Один неоплаченный — сразу причина, окно не открывается (прототип reports.js, bulk).
+            const why = payFirstWhy(t, ok[0]!, actor.taxpay && actor.payFirst);
+            if (why) return void toast(why, { bad: true, icon: 'lock' });
+            return void openDialog(ok[0]!, 'submit');
+          }
           setBatch(openSlot<BatchDialog>({ kind: 'submit', rows: ok, done }));
         },
       },
@@ -320,7 +377,13 @@ export function useReportActions(): {
           onClose={() => setCard(closeSlot)}
           actor={actor}
           actions={cardActions}
-          onAction={(action, r) => run[action](r)}
+          onAction={(action, r) => {
+            if (action === 'cancelPay') {
+              setBackError(undefined);
+              return setCancelPay(openSlot(r));
+            }
+            run[action](r);
+          }}
           onBack={(r, to) => askBack(r, to)}
           onVersion={(id) => openCard({ id })}
           onResponsible={(r, employeeId) => void changeResponsible(r, employeeId)}
@@ -328,6 +391,47 @@ export function useReportActions(): {
       ) : null}
       {dialog?.data.kind === 'submit' ? (
         <ReportSubmitDialog {...cardProps(dialog)} confirmOn={actor?.confirmOn ?? false} />
+      ) : null}
+      {pay ? (
+        <PaymentDialog
+          key={`pay-${pay.n}`}
+          card={pay.data}
+          canUpload={!!actor?.filesOn && !!actor?.can.filesUpload}
+          open={pay.open}
+          onClose={() => setPay(closeSlot)}
+          onDone={moneyRefresh}
+          onReload={() => {
+            const card = pay.data;
+            setPay(closeSlot);
+            void openPay(card);
+          }}
+        />
+      ) : null}
+      {receive ? (
+        <ReceiptDialog
+          key={`receive-${receive.n}`}
+          contractorId={receive.data.contractorId}
+          preset={receive.data.preset}
+          filesOn={!!actor?.filesOn}
+          canUpload={!!actor?.filesOn && !!actor?.can.filesUpload}
+          open={receive.open}
+          onClose={() => setReceive(closeSlot)}
+          onDone={moneyRefresh}
+        />
+      ) : null}
+      {cancelPay ? (
+        <RollbackDialog
+          key={`cancel-pay-${cancelPay.n}`}
+          open={cancelPay.open}
+          onClose={() => setCancelPay(closeSlot)}
+          title={t('money.cancel.title')}
+          sub={reportSub(cancelPay.data)}
+          consequences={cancelPayEffect(t, cancelPay.data)}
+          busy={backBusy}
+          error={backError}
+          labels={rollbackLabels(t)}
+          onConfirm={(reason) => void cancelPayment(reason)}
+        />
       ) : null}
       {dialog?.data.kind === 'confirm' ? <ReportConfirmDialog {...cardProps(dialog)} /> : null}
       {dialog?.data.kind === 'fix' ? <ReportFixDialog {...cardProps(dialog)} /> : null}
@@ -338,6 +442,7 @@ export function useReportActions(): {
           rows={batch.data.rows}
           confirmOn={actor?.confirmOn ?? false}
           filesOn={actor?.filesOn ?? false}
+          payFirst={!!actor?.taxpay && !!actor?.payFirst}
           open={batch.open}
           onClose={() => setBatch(closeSlot)}
           onDone={() => {
@@ -439,7 +544,29 @@ export function useReportActions(): {
       ) : null}
     </>
   );
-  return { actions, openCard, bulk, newReport: () => void newReport(), dialogs };
+  return {
+    actions,
+    openCard,
+    bulk,
+    newReport: () => void newReport(),
+    receive: actor?.taxpay && actor.can.money ? openReceive : null,
+    dialogs,
+  };
+}
+
+/**
+ * Последствия отмены оплаты (прототип rollbackDlg('pay')): последняя оплата отменяется, сумма
+ * возвращается в свободный остаток, статус оплаты — «Не оплачено» или «Оплачено частично».
+ */
+function cancelPayEffect(t: ReturnType<typeof useT>, card: ReportCard): string {
+  const last = lastPayment(card);
+  if (!last) return '';
+  const rest = card.paid - last.amount;
+  return t('money.cancel.effect', {
+    amount: formatSomWithUnit(last.amount),
+    date: formatDateRu(last.date),
+    status: statusName(t, 'payment', rest <= 0 ? 'unpaid' : 'partial'),
+  });
 }
 
 /** Кто действует: права, подтверждение сдачи и «Файлы в карточках» учётной политики. */
@@ -451,6 +578,8 @@ export function useReportActor(): ReportActor | null {
     isOwner: editor?.isOwner ?? false,
     confirmOn: access.reportConfirm,
     filesOn: access.feature('files'),
+    taxpay: access.feature('taxpay'),
+    payFirst: access.payFirst,
     can: {
       changeStatus: access.can('changeStatus'),
       repDue: access.can('repDue'),
@@ -459,6 +588,7 @@ export function useReportActor(): ReportActor | null {
       rollback: access.can('rollback'),
       filesUpload: access.can('filesUpload'),
       assign: access.can('assign'),
+      money: access.can('money'),
     },
   };
 }

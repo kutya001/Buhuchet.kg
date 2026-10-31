@@ -50,6 +50,7 @@ export * from './reports/submit';
 export * from './reports/calendar';
 export * from './tasks/rules';
 export * from './money/requisites';
+export * from './money/tax';
 export * from './kpi/indicators';
 export * from './kpi/fill';
 export * from './kpi/targets';

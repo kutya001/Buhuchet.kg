@@ -54,6 +54,7 @@ export * from './platform-values';
 export * from './dict-requests';
 export * as schema from './schema';
 export * from './money';
+export * from './money-tax';
 export * from './kpi';
 export * from './kpi-lists';
 export * from './kpi-import';

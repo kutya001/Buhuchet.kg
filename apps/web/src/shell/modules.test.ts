@@ -54,6 +54,7 @@ function me({
     scopes: {},
     features,
     reportConfirm,
+    payFirst: false,
     modules,
   };
 }

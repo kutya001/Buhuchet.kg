@@ -9,9 +9,11 @@ import {
   scaleNext,
   type ReportFacts,
 } from '@buhuchet/domain';
+import { formatSomWithUnit } from '@buhuchet/domain';
 import type { ReportRow } from '@buhuchet/shared';
 import type { ActionEntry, ActionItem } from '@buhuchet/ui';
 import type { Translate } from '../l10n/translate';
+import { payFirstWhy, reportWaitsPayment } from '../money/report-money';
 import { statusName } from '../status/status-view';
 
 /** Действия с отчётом из меню, кнопок карточки и шагов шкалы. */
@@ -24,6 +26,8 @@ export type ReportAction =
   | 'reject'
   | 'due'
   | 'amount'
+  | 'receive'
+  | 'pay'
   | 'file'
   | 'revision'
   | 'rollback'
@@ -44,6 +48,9 @@ export interface ReportActor {
   isOwner: boolean;
   confirmOn: boolean;
   filesOn: boolean;
+  /** «Учёт оплаты налогов» и «Сдача отчёта только после оплаты» (учётная политика). */
+  taxpay: boolean;
+  payFirst: boolean;
   can: Readonly<
     Record<
       | 'changeStatus'
@@ -52,7 +59,8 @@ export interface ReportActor {
       | 'changeSum'
       | 'rollback'
       | 'filesUpload'
-      | 'assign',
+      | 'assign'
+      | 'money',
       boolean
     >
   >;
@@ -91,7 +99,9 @@ const locked = (ok: boolean, reason: string): Partial<ActionItem> =>
  * у сданного — «Создать уточнённый»; черта; у сданного — «Снять подтверждение» или «Откатить в «…»»;
  * «Не требуется». Без права пункт виден бледным с причиной. У прежней версии (её открывают из «Версий»
  * карточки) сервер действия отклоняет — в меню только «Прикрепить файл» и откат с причиной. `card` —
- * меню «Ещё действия» карточки, без «Открыть карточку». Деньги добавит задача 2.19.
+ * меню «Ещё действия» карточки, без «Открыть карточку». С «Учётом оплаты налогов» у отчёта, который
+ * ждёт оплаты, — «Принять деньги» и «Отметить оплаченным» (право «Учёт денег»); при «Сдаче только
+ * после оплаты» «Отметить сданным» без оплаты неактивна с причиной (задача 2.19).
  */
 export function reportMenuEntries({
   t,
@@ -127,10 +137,16 @@ export function reportMenuEntries({
     if (facts.superseded) {
       return [...items, ...file, ...(rollback.length ? [SEP, ...rollback] : [])];
     }
-    if (st && OPEN_REPORT_STATUSES.has(st))
+    if (st && OPEN_REPORT_STATUSES.has(st)) {
+      const why = payFirstWhy(t, r, actor.taxpay && actor.payFirst);
       items.push(
-        item('submit', { label: t('report.act.submit'), icon: 'send', ...locked(cs, no) }),
+        item('submit', {
+          label: t('report.act.submit'),
+          icon: 'send',
+          ...locked(cs && !why, cs ? why : no),
+        }),
       );
+    }
     if (st === 'todo')
       items.push(item('start', { label: t('report.act.start'), icon: 'clock', ...locked(cs, no) }));
     if (reportWaiting(facts, actor.confirmOn)) {
@@ -176,6 +192,31 @@ export function reportMenuEntries({
           ...locked(actor.can.changeSum, t('report.act.amount_no')),
         }),
       );
+    if (actor.taxpay && reportWaitsPayment(r)) {
+      const money = locked(actor.can.money, t('report.act.money_no'));
+      const f = r.funds;
+      items.push(
+        item('receive', {
+          label: t('report.act.receive'),
+          icon: 'download',
+          sub: t('report.act.receive_sub'),
+          ...money,
+        }),
+        item('pay', {
+          label: t('report.act.mark_paid'),
+          icon: 'wallet',
+          ...(f?.state === 'enough'
+            ? {}
+            : {
+                sub:
+                  f?.state === 'short'
+                    ? t('report.act.pay_short_n', { amount: formatSomWithUnit(f.short) })
+                    : t('report.act.pay_short'),
+              }),
+          ...money,
+        }),
+      );
+    }
     items.push(...file);
     if (st === 'submitted')
       items.push(
@@ -217,22 +258,50 @@ function rollbackItem(
   return item('rollback', { label, icon: 'history', ...locked(!reason && !!to, reason) });
 }
 
-/** Кнопки внизу карточки (прототип openReport, `primary`): «Отметить сданным» или «Подтвердить». */
+/**
+ * Кнопки внизу карточки (прототип openReport, `primary`, `payBtn`): «Отметить сданным», «Подтвердить»
+ * или «Отметить оплаченным» (у ждущего оплаты, когда сдавать и подтверждать нечего).
+ */
 export interface ReportCardButtons {
-  primary: 'submit' | 'confirm' | null;
-  /** «Отметить сданным» без права «Менять статус сдачи» — видна, но недоступна. */
+  primary: 'submit' | 'confirm' | 'pay' | null;
+  /** «Отметить сданным» без права «Менять статус сдачи» или без оплаты — видна, но недоступна. */
   disabled: boolean;
+  /** Почему недоступна (подсказка). */
+  why: string | null;
   /** «На исправление» рядом с «Подтвердить». */
   fix: boolean;
+  /** «Отметить оплаченным» рядом с недоступной без оплаты «Отметить сданным». */
+  pay: boolean;
 }
 
-export function reportCardButtons(r: ReportMenuRow, actor: ReportActor): ReportCardButtons {
+export function reportCardButtons(
+  r: ReportMenuRow,
+  actor: ReportActor,
+  t: Translate,
+): ReportCardButtons {
   const facts = reportFacts(r);
-  if (reportSubmittable(facts))
-    return { primary: 'submit', disabled: !actor.can.changeStatus, fix: false };
+  const payOk = actor.taxpay && reportWaitsPayment(r);
+  if (reportSubmittable(facts)) {
+    const why = payFirstWhy(t, r, actor.taxpay && actor.payFirst);
+    return {
+      primary: 'submit',
+      disabled: !actor.can.changeStatus || !!why,
+      why: !actor.can.changeStatus ? t('report.menu.no_status') : why || null,
+      fix: false,
+      pay: payOk && !!why && actor.can.money,
+    };
+  }
   if (reportWaiting(facts, actor.confirmOn) && !confirmRefusal(r, actor))
-    return { primary: 'confirm', disabled: false, fix: true };
-  return { primary: null, disabled: false, fix: false };
+    return { primary: 'confirm', disabled: false, why: null, fix: true, pay: false };
+  if (payOk)
+    return {
+      primary: 'pay',
+      disabled: !actor.can.money,
+      why: actor.can.money ? null : t('report.act.money_no'),
+      fix: false,
+      pay: false,
+    };
+  return { primary: null, disabled: false, why: null, fix: false, pay: false };
 }
 
 /**

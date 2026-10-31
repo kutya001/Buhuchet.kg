@@ -17,6 +17,7 @@ import {
 } from '@buhuchet/domain';
 import { sql, type SQL } from 'drizzle-orm';
 import {
+  boolean,
   check,
   date,
   foreignKey,
@@ -91,6 +92,8 @@ export const contractors = pgTable(
     feeDay: smallint('fee_day').notNull().default(10),
     /** Куда переводит деньги на налоги (поток В, задача 2.18). */
     paysTo: text('pays_to', { enum: PAYS_TO }).notNull().default('emp'),
+    /** «Файл при поступлении: обязательно требовать» — поступление без файла не сохраняется (2.19). */
+    needReceiptFile: boolean('need_receipt_file').notNull().default(false),
     serviceStatus: text('service_status', { enum: SERVICE_STATUSES }).notNull().default('active'),
     /** Подтверждение права на режим по ГКЭД; действует, пока не изменился набор данных `sig`. */
     gkedConfirmation: jsonb('gked_confirmation').$type<ContractorGkedConfirmation>(),

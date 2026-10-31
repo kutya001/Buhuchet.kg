@@ -197,6 +197,8 @@ export interface ContractorHistoryAccess {
   kpi: SQL | undefined | false;
   /** Файлы (функция «Файлы в карточках» и право их смотреть): записи прикрепления и удаления. */
   files: SQL | undefined | false;
+  /** Деньги по отчётам: поступления (функция «Учёт оплаты налогов», право и область «Финансовых операций»). */
+  money: SQL | undefined | false;
 }
 
 /** Поля платы за обслуживание: без права их «было → стало» не отдаются (ТЗ: «скрыты везде»). */
@@ -206,8 +208,7 @@ const FILE_ACTIONS = ['file_attach', 'file_delete'] as const;
 
 /**
  * Какие записи истории видны: сам контрагент и его страница — всем, кто видит карточку; остальное —
- * по модулю. Сущность, которой здесь нет (например, деньги потока В), не видна, пока её модуль не
- * добавит сюда своё правило.
+ * по модулю. Сущность, которой здесь нет, не видна, пока её модуль не добавит сюда своё правило.
  */
 async function visibleEntries(
   tx: Tx,
@@ -223,7 +224,11 @@ async function visibleEntries(
       .where(and(eq(contractors.id, id), scope));
     return !!row;
   };
-  const [kpi, files] = await Promise.all([inScope(access.kpi), inScope(access.files)]);
+  const [kpi, files, money] = await Promise.all([
+    inScope(access.kpi),
+    inScope(access.files),
+    inScope(access.money),
+  ]);
   const own: SQL[] = [inArray(auditLog.entity, ['contractor', 'contractor_page'])];
   if (access.reports !== false) {
     own.push(eq(auditLog.entity, 'assignment'));
@@ -247,6 +252,7 @@ async function visibleEntries(
   if (access.tasks) own.push(eq(auditLog.entity, 'task'));
   if (kpi) own.push(inArray(auditLog.entity, [...KPI_ENTITIES]));
   if (files) own.push(eq(auditLog.entity, 'file'));
+  if (money) own.push(eq(auditLog.entity, 'money_operation'));
   return and(or(...own), files ? undefined : notInArray(auditLog.action, [...FILE_ACTIONS]));
 }
 

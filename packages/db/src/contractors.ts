@@ -29,6 +29,7 @@ import { and, asc, count, eq, inArray, ne, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { Tx } from './client';
 import { gkedIndexOf } from './gked';
+import { contractorHasMoney, syncMoneyHolders } from './money-tax';
 import { SOCFUND_LIST, socfundListTable } from './socfund';
 import { updateWithHistory, writeHistory } from './history';
 import {
@@ -163,6 +164,7 @@ export interface ContractorRecord {
   firstMonthMode: FirstMonthMode;
   feeDay: number;
   paysTo: 'emp' | 'org';
+  needReceiptFile: boolean;
   serviceStatus: ServiceStatus;
   /** Действующая ставка обслуживания (последняя с месяцем не позже текущего); null — нет. */
   tariff: { amount: number; period: TariffPeriod; validFrom: IsoDate } | null;
@@ -786,6 +788,7 @@ export async function getContractor(
     firstMonthMode: contractors.firstMonthMode,
     feeDay: contractors.feeDay,
     paysTo: contractors.paysTo,
+    needReceiptFile: contractors.needReceiptFile,
     gkedConfirmation: contractors.gkedConfirmation,
     socfundFlags: contractors.socfundFlags,
     socfundTariff: contractors.socfundTariff,
@@ -868,6 +871,7 @@ export async function getContractor(
     firstMonthMode: r.firstMonthMode as FirstMonthMode,
     feeDay: r.feeDay as number,
     paysTo: r.paysTo as 'emp' | 'org',
+    needReceiptFile: r.needReceiptFile as boolean,
     serviceStatus: base.serviceStatus,
     tariff: base.tariff && { ...base.tariff, validFrom: r.tariffFrom as IsoDate },
     gkedConfirmation: confirmation && { ...confirmation, by },
@@ -1318,6 +1322,10 @@ export async function updateContractor(
       { contractorId: id, from: current.responsibleEmployeeId, to },
     ]);
   }
+  // Деньги контрагента — на счёт, куда он теперь переводит (задача 2.19, прототип transferCp).
+  // Меняет только операции, у которых счёт другой.
+  if (patch.paysTo !== undefined || patch.responsibleEmployeeId !== undefined)
+    await syncMoneyHolders(tx, [id]);
   // Статусы со своим сроком поменялись — сроки несданных пересчитываются (прототип cpRedue).
   if (redue && was && changes.some((c) => c.field === 'benefits')) {
     return {
@@ -1333,7 +1341,7 @@ const sameJson = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringif
  * Назначить ответственного контрагентам (ТЗ «Массовое закрепление»; прототип respDlg и transferCp):
  * каждому — запись истории «Ответственный: было → стало». Тот же ответственный — без изменений. Все
  * контрагенты должны быть в области и не в архиве. Незавершённые отчёты, открытые задачи и деньги
- * переходят вместе с контрагентом — это добавят задачи 2.06, 2.14 и поток В в эту же транзакцию.
+ * переходят вместе с контрагентом в этой же транзакции.
  */
 export async function assignContractors(
   tx: Tx,
@@ -1402,6 +1410,11 @@ export async function assignContractors(
     moving.map((r) => ({ contractorId: r.id, from: r.responsibleEmployeeId })),
     employeeId,
   );
+  // Деньги контрагентов, которые переводят на кошелёк ответственного, — на счёт нового (задача 2.19).
+  await syncMoneyHolders(
+    tx,
+    moving.map((r) => r.id),
+  );
   return { changed: moving.length, archived: [] };
 }
 
@@ -1460,11 +1473,15 @@ export async function transferContractors(
 
 /**
  * Что есть по контрагенту — отчёты, деньги, проекты и услуги: без них его можно удалить (ТЗ
- * «Контрагента нельзя удалить, если по нему есть отчёты»). Деньги и проекты добавят задачи 2.19 и
- * 2.22, 2.16 в эту функцию.
+ * «Контрагента нельзя удалить, если по нему есть отчёты»). Деньги — операции по контрагенту (задача
+ * 2.19); проекты добавят задачи 2.22, 2.16 в эту функцию.
  */
 export async function contractorUsage(tx: Tx, id: string): Promise<ContractorUsage> {
-  return { reports: await contractorReportCount(tx, id), money: 0, projects: 0 };
+  const [reportCount, money] = await Promise.all([
+    contractorReportCount(tx, id),
+    contractorHasMoney(tx, id),
+  ]);
+  return { reports: reportCount, money: money ? 1 : 0, projects: 0 };
 }
 
 /**

@@ -10,7 +10,7 @@ import { GRID_TEXTS } from './grid-texts';
 import { KB_ADMIN_TEXTS } from './kb-admin-texts';
 import { KB_TEXTS } from './kb-texts';
 import { KPI_TEXTS } from './kpi-texts';
-import { MONEY_TEXTS } from './money-texts';
+import { MONEY_TEXTS, TAX_MONEY_TEXTS } from './money-texts';
 import { NEWS_TEXTS } from './news-texts';
 import { ONBOARDING_TEXTS } from './onboarding-texts';
 import { ORG_TEXTS } from './org-texts';
@@ -92,6 +92,7 @@ export const UI_TEXTS = {
   ...ADMIN_TEXTS,
   ...DICTS_TEXTS,
   ...MONEY_TEXTS,
+  ...TAX_MONEY_TEXTS,
   ...KPI_TEXTS,
   ...FILES_TEXTS,
   ...KB_TEXTS,

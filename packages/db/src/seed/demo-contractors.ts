@@ -62,6 +62,8 @@ const DemoContractor = z.object({
   first: z.enum(FIRST_MONTH_MODES).default('full'),
   feeDay: z.number().int().default(10),
   paysTo: z.enum(PAYS_TO).default('emp'),
+  /** «Файл при поступлении» (задача 2.19). */
+  needInFile: z.boolean().default(false),
   archived: z.boolean().default(false),
   /** Журнал ставок обслуживания: сумма в сомах, «с месяца» — «2026-01». */
   tariffs: z
@@ -205,6 +207,7 @@ export async function seedDemoContractors(
         firstMonthMode: c.first,
         feeDay: c.feeDay,
         paysTo: c.paysTo,
+        needReceiptFile: c.needInFile,
         serviceStatus: serviceState(
           { archived: c.archived, oneOff: c.kind === 'oneoff', periods: c.periods },
           month,

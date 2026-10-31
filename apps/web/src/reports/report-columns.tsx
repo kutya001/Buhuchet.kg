@@ -21,6 +21,15 @@ import {
   type GridRowTone,
 } from '@buhuchet/ui';
 import type { Translate } from '../l10n/translate';
+import {
+  FundsCell,
+  fundsText,
+  PaidCell,
+  PaidTile,
+  PaymentStatusCell,
+  ReceivedCell,
+  reportWaitsPayment,
+} from '../money/report-money';
 import { miniView, statusName, type StatusEvent } from '../status/status-view';
 
 /**
@@ -32,10 +41,10 @@ export const REPORT_DEFAULT_SORT: ListSort = { key: 'createdAt', dir: 'desc' };
 /**
  * Видимые по умолчанию (ТЗ «Столбцы, видимые по умолчанию», прототип reportCols без `hide`):
  * контрагент, вид отчёта, что сделать, период, срок сдачи, статус сдачи, к уплате, ответственный; во
- * вкладке «Ожидают подтверждения» — ещё «Ждёт, дней» и «Сдал». «Получено от контрагента» и «Оплачено
- * в бюджет» добавит задача 2.19.
+ * вкладке «Ожидают подтверждения» — ещё «Ждёт, дней» и «Сдал»; с «Учётом оплаты налогов» — ещё
+ * «Получено от контрагента» и «Оплачено в бюджет».
  */
-export function reportDefaultVisible(waiting: boolean): string[] {
+export function reportDefaultVisible(waiting: boolean, taxpay = false): string[] {
   return [
     'cp',
     'type',
@@ -45,6 +54,7 @@ export function reportDefaultVisible(waiting: boolean): string[] {
     'status',
     ...(waiting ? ['wait', 'submittedBy'] : []),
     'amount',
+    ...(taxpay ? ['received', 'paid'] : []),
     'responsible',
   ];
 }
@@ -56,9 +66,19 @@ export const REPORT_AUDIT: GridAudit<ReportRow> = {
   updatedAt: (r) => formatMomentRu(new Date(r.audit.updatedAt)),
 };
 
-/** Подсветка строки (прототип repRowClass): просроченный — красным, «Не требуется» — приглушённо. */
+/**
+ * Подсветка строки (прототип repRowClass): просроченная сдача или оплата — красным, «Не требуется» —
+ * приглушённо.
+ */
 export const reportTone = (r: ReportRow): GridRowTone | undefined =>
-  r.overdue ? 'overdue' : r.status === 'not_required' ? 'muted' : undefined;
+  r.overdue || r.payOverdue ? 'overdue' : r.status === 'not_required' ? 'muted' : undefined;
+
+/** «Просрочка» (прототип `ovk`): «Сдача и оплата», «Сдача» или «Оплата». */
+export function overdueText(t: Translate, r: ReportRow): string {
+  if (r.overdue && r.payOverdue) return t('report.overdue.both');
+  if (r.overdue) return t('report.overdue.sub');
+  return r.payOverdue ? t('report.overdue.pay') : '';
+}
 
 /** Отметка подтверждения на шаге «Сдан» (прототип repMark): только при подтверждении в политике. */
 export function reportMark(r: ReportRow, confirm: boolean): 'waiting' | 'confirmed' | null {
@@ -215,16 +235,76 @@ export interface ReportColumnsOptions {
   waitDays: number;
   /** Телефон: метка «Что сделать» — на плитке рядом с видом отчёта. */
   phone: boolean;
+  /** «Учёт оплаты налогов»: столбцы денег (задача 2.19). */
+  taxpay?: boolean;
+  /** «Принять» в строке — окно поступления под отчёт (право «Учёт денег»); null — без кнопки. */
+  onReceive?: ((r: ReportRow) => void) | null;
 }
 
 /**
  * Столбцы списка отчётов — как в прототипе (modules/reports.js, `reportCols`), ключи — как на сервере.
- * Суммы «Получено от контрагента», «Оплачено в бюджет», «Осталось оплатить», «Статус оплаты» и
- * «Деньги (сверка)» добавит задача 2.19, «Файлов» — 2.14. Служебные «Создал», «Изменил», «Создано»,
- * «Изменено» добавляет сам список (`REPORT_AUDIT`).
+ * С «Учётом оплаты налогов» — «Получено от контрагента», «Оплачено в бюджет», «Осталось оплатить»,
+ * «Статус оплаты» и «Деньги (сверка)» (задача 2.19); «Файлов» добавит 2.14. Служебные «Создал»,
+ * «Изменил», «Создано», «Изменено» добавляет сам список (`REPORT_AUDIT`).
  */
 export function reportColumns(t: Translate, o: ReportColumnsOptions): GridColumn<ReportRow>[] {
   const money = (v: number) => formatSom(v);
+  // «Принять» — не у архивного контрагента (прототип canRecv).
+  const receive = (r: ReportRow) =>
+    o.onReceive && reportWaitsPayment(r) && !r.contractor.archived ? () => o.onReceive!(r) : null;
+  const withSum = (r: ReportRow) => r.act !== 'sub' && (r.amount ?? 0) > 0;
+  const moneyColumns: GridColumn<ReportRow>[] = o.taxpay
+    ? [
+        {
+          key: 'received',
+          label: t('report.col.received'),
+          type: 'money',
+          width: 170,
+          total: money,
+          text: (r) => (withSum(r) ? formatSom(r.received, 'auto') : ''),
+          cell: (r) => <ReceivedCell t={t} r={r} onReceive={receive(r)} />,
+          tileLine: { label: t('report.col.received_short') },
+        },
+        {
+          key: 'paid',
+          label: t('report.col.paid'),
+          type: 'money',
+          width: 178,
+          total: money,
+          text: (r) => (r.act === 'sub' ? '' : formatSom(r.paid, 'auto')),
+          cell: (r) => <PaidCell t={t} r={r} />,
+          tileLine: { label: t('report.col.paid_short'), cell: (r) => <PaidTile t={t} r={r} /> },
+        },
+        {
+          key: 'left',
+          label: t('report.col.left'),
+          type: 'money',
+          width: 140,
+          total: money,
+          text: (r) => (withSum(r) ? formatSom(Math.max(0, r.amount! - r.paid), 'auto') : ''),
+        },
+      ]
+    : [];
+  const statusColumns: GridColumn<ReportRow>[] = o.taxpay
+    ? [
+        {
+          key: 'paymentStatus',
+          label: t('report.col.payment_status'),
+          type: 'enum',
+          width: 170,
+          text: (r) => (r.act === 'sub' ? '—' : statusName(t, 'payment', r.paymentStatus)),
+          cell: (r) => <PaymentStatusCell t={t} r={r} />,
+        },
+        {
+          key: 'funds',
+          label: t('report.col.funds'),
+          type: 'enum',
+          width: 290,
+          text: (r) => fundsText(t, r),
+          cell: (r) => <FundsCell t={t} r={r} onReceive={receive(r)} />,
+        },
+      ]
+    : [];
   const statusText = (r: ReportRow) =>
     r.act === 'pay'
       ? '—'
@@ -357,20 +437,29 @@ export function reportColumns(t: Translate, o: ReportColumnsOptions): GridColumn
       cell: (r) => <AmountCell t={t} r={r} />,
       tileLine: {},
     },
+    ...moneyColumns,
     {
       key: 'payDue',
       label: t('report.col.pay_due'),
       type: 'date',
       width: 116,
       text: (r) => (r.act === 'sub' || !r.payDue ? '' : formatDateRu(r.payDue)),
-      cell: (r) => (r.act === 'sub' ? <Dash /> : r.payDue ? formatDateRu(r.payDue) : null),
+      cell: (r) =>
+        r.act === 'sub' ? (
+          <Dash />
+        ) : r.payDue ? (
+          <span className={r.payOverdue ? 'font-semibold text-danger' : undefined}>
+            {formatDateRu(r.payDue)}
+          </span>
+        ) : null,
     },
+    ...statusColumns,
     {
       key: 'overdue',
       label: t('report.col.overdue'),
       type: 'enum',
       width: 140,
-      text: (r) => (r.overdue ? t('report.overdue.sub') : ''),
+      text: (r) => overdueText(t, r),
     },
     { key: 'pays', label: t('report.col.pays'), type: 'text', width: 220, text: (r) => r.pays },
     {

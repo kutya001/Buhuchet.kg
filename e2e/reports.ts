@@ -133,3 +133,38 @@ export async function manualReport(
   expect(res.status(), await res.text()).toBe(201);
   return ((await res.json()) as { id: string }).id;
 }
+
+/** Сегодня по Бишкеку: дата оплаты не может быть позже. */
+const bishkekToday = () => new Date(Date.now() + 6 * 3600_000).toISOString().slice(0, 10);
+
+/**
+ * Сумма к уплате и «Оплатил контрагент сам» на `paid` тыйынов (по умолчанию — на всю сумму) через API
+ * (задача 2.19): в демо-организации «Сдача отчёта только после оплаты», без оплаты «Сдан» не ставится.
+ */
+export async function prepay(
+  api: APIRequestContext,
+  origin: string,
+  id: string,
+  amount: number,
+  paid = amount,
+) {
+  const card = async () => {
+    const res = await api.get(`/api/reports/${id}`);
+    expect(res.status(), await res.text()).toBe(200);
+    return (await res.json()) as { version: number; amount: number | null };
+  };
+  let r = await card();
+  if (r.amount !== amount) {
+    const set = await api.post(`/api/reports/${id}/amount`, {
+      headers: { origin },
+      data: { version: r.version, amount },
+    });
+    expect(set.status(), await set.text()).toBe(200);
+    r = await card();
+  }
+  const res = await api.post(`/api/reports/${id}/payments`, {
+    headers: { origin },
+    data: { version: r.version, amount: paid, date: bishkekToday(), self: true },
+  });
+  expect(res.status(), await res.text()).toBe(200);
+}

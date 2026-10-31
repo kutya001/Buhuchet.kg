@@ -69,6 +69,8 @@ export const MeResponse = z.object({
   features: z.partialRecord(FeatureSchema, z.boolean()),
   /** «Сдача отчётов требует подтверждения» (учётная политика): есть ли вкладка «Ожидают подтверждения». */
   reportConfirm: z.boolean(),
+  /** «Сдача отчёта только после оплаты» действует (при «Учёте оплаты налогов», задача 2.19). */
+  payFirst: z.boolean(),
   modules: z.array(MenuModuleIdSchema),
 });
 export type MeResponse = z.infer<typeof MeResponse>;
