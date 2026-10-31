@@ -30,7 +30,7 @@ import {
   BonusRow,
   ClosedMonths,
   CloseMonthRequest,
-  FIN_JOURNAL_TAB_IDS,
+  type FIN_JOURNAL_TAB_IDS,
   FinJournalParams,
   FinJournalRow,
   FinSummary,

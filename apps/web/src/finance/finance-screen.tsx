@@ -3,6 +3,7 @@
 import {
   formatMomentRu,
   formatSom,
+  formatSomWithUnit,
   monthLabel,
   type ListSort,
   type MoneyOpKind,
@@ -265,7 +266,7 @@ function sourceOf(t: Translate, r: FinJournalRow): string {
   if (r.src === 'fee')
     return r.receipt
       ? t('fin.fee.source_receipt', {
-          amount: `${formatSom(r.receipt.total)} сом`,
+          amount: formatSomWithUnit(r.receipt.total),
           date: r.receipt.date.split('-').reverse().join('.'),
         })
       : t('fin.fee.source_cp');
@@ -598,7 +599,7 @@ function receiptColumns(t: Translate, fee: boolean): GridColumn<ReceiptJournalRo
         r.deleted ? (
           <span className="text-faint">—</span>
         ) : r.spent > 0 ? (
-          <span title={t('fin.r.ed.min_tip', { amount: `${formatSom(r.spent)} сом` })}>
+          <span title={t('fin.r.ed.min_tip', { amount: formatSomWithUnit(r.spent) })}>
             <Pill size="sm" icon="lock">
               {t('fin.r.ed.min', {
                 amount: formatSom(Math.round((r.spent + (r.fee ?? 0)) / 100) * 100, 'auto'),
