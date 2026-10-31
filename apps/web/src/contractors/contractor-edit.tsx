@@ -57,8 +57,8 @@ import {
 } from './contractor-form-model';
 import { GkedFields } from './gked-pick';
 import { RegistrationFields } from './registration-fields';
-import { useReportPickCalc } from './report-pick';
-import { pickDictOf, pickSubjectOf } from './report-pick-data';
+import { reportPickCalcOf, useReportPickCalc, type ReportPickCalc } from './report-pick';
+import { pickDictOf, pickSubjectOf, reportPickQuery } from './report-pick-data';
 import { SocfundFields } from './socfund-fields';
 
 /*
@@ -217,7 +217,7 @@ function EditContractorForm({
         }
       : {}),
   };
-  const calc = useReportPickCalc({
+  const pickRequest = {
     contractorId: c.id,
     formCode: d.formCode || null,
     regimeCode: d.regimeCode || null,
@@ -229,7 +229,8 @@ function EditContractorForm({
     benefits: benefitCodes,
     bases: d.bases,
     socfund: socfundChoice,
-  });
+  };
+  const calc = useReportPickCalc(pickRequest);
   const assigned = useMemo(() => calc?.ctx.assigned ?? [], [calc]);
   // Назначенные виды, которые не подходят к новому режиму или форме (прототип editCpDlg, `bad`).
   const bad = assigned.filter((code) => calc?.pick.off.has(code));
@@ -376,13 +377,24 @@ function EditContractorForm({
     // снять отчёты выключенных (ТЗ, решение заказчика 30.10.2026, docs/deviations.md п. А-7).
     // Обязательные по подбору, но не назначенные — в уведомлении после сохранения, без отчётов, которые
     // предложит окно (ТЗ «не повторяя отчёты оснований»; прототип editCpDlg: pkAuto без `pb.add`).
-    const bases =
-      regular && calc && 'bases' in patch && onBases ? baseChangesOf(c, calc, assigned, t) : null;
-    const missing =
-      regular && calc
-        ? reportPickAuto(calc.pick).filter((x) => !assigned.includes(x) && !bases?.add.includes(x))
-        : [];
+    // Подбор ещё пересчитывается (поле поменяли только что) — дождаться ответа: иначе окно и уведомление
+    // считались бы по прежним полям или не появились бы вовсе.
     setBusy(true);
+    const now =
+      calc ??
+      (regular
+        ? await client
+            .fetchQuery(reportPickQuery(pickRequest))
+            .then((ctx) => reportPickCalcOf(catalog, ctx, t))
+            .catch(() => null)
+        : null);
+    const had = now?.ctx.assigned ?? [];
+    const bases =
+      regular && now && 'bases' in patch && onBases ? baseChangesOf(c, now, had, t) : null;
+    const missing =
+      regular && now
+        ? reportPickAuto(now.pick).filter((x) => !had.includes(x) && !bases?.add.includes(x))
+        : [];
     const res = await callApi(() =>
       api.api.contractors[':id'].$patch({
         param: { id: c.id },
@@ -770,7 +782,7 @@ export interface BaseChanges {
 /** Основания до и после «Изменить» (прототип pkBaseDiff); нечего добавить и снять — null. */
 function baseChangesOf(
   c: Contractor,
-  calc: NonNullable<ReturnType<typeof useReportPickCalc>>,
+  calc: ReportPickCalc,
   assigned: readonly string[],
   t: Translate,
 ): Omit<BaseChanges, 'version'> | null {

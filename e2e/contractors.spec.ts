@@ -718,7 +718,17 @@ test.describe('Этап 2: контрагенты — список и карто
     const period = card.locator('[data-kpi-period] input[type="month"]');
     await period.nth(0).fill(monthAt(-3));
     await period.nth(1).fill(monthAt(-1));
-    const total = (k: string) => card.locator(`[data-kpi-card-total="Выручка|${k}"]`);
+    // На ПК — столбцы итогов таблицы, на телефоне — плитки «Сумма», «Среднее»… над месяцами показателя.
+    const label = { sum: 'Сумма', avg: 'Среднее', max: 'Максимум', min: 'Минимум' } as const;
+    const total = (k: keyof typeof label) =>
+      isMobile
+        ? card
+            .locator('section', { hasText: 'Выручка' })
+            .locator('span', {
+              has: page.locator('small', { hasText: new RegExp(`^${label[k]}$`) }),
+            })
+            .locator('b')
+        : card.locator(`[data-kpi-card-total="Выручка|${k}"]`);
     await expect(total('sum')).toHaveText(/^450\s000$/);
     await expect(total('avg')).toContainText(/^150\s000/);
     await expect(total('max')).toHaveText(/^200\s000$/);
