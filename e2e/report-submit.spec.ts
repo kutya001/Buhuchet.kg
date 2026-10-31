@@ -96,13 +96,19 @@ async function openCard(page: Page, id: string, text: string, typeName: string):
   await expect(row(page, id)).toHaveCount(1);
   await row(page, id).getByText(text).first().click();
   const card = page.getByRole('dialog', { name: typeName });
-  await expect(card.locator(`[data-report-card="${id}"] [data-status-scale]`)).toBeVisible();
+  // С «Учётом оплаты налогов» у вида с суммой две шкалы — «Сдача» и «Оплата» (задача 2.19).
+  await expect(
+    card.locator(`[data-report-card="${id}"] [data-status-scale]`).first(),
+  ).toBeVisible();
   return card;
 }
 
+/** Шкала «Сдача» карточки: с «Учётом оплаты налогов» рядом ещё шкала «Оплата» (задача 2.19). */
+const SUBMIT_SCALE = 'ol[data-status-scale][aria-label="Сдача"]';
+
 /** Шаг шкалы «Сдача» по названию. */
 const step = (card: Locator, name: string) =>
-  card.locator('ol[data-status-scale] > li').filter({ hasText: name });
+  card.locator(`${SUBMIT_SCALE} > li`).filter({ hasText: name });
 
 /** Шкала стоит на шаге: у его кнопки `aria-current="step"`. */
 const current = (card: Locator, name: string) =>
@@ -287,7 +293,7 @@ test.describe('Этап 2: отчёты — сдача, подтверждени
     await dialog.locator('[data-report-ok]').click();
     await expect(dialog).toBeHidden();
     await expect(step(card, 'Сдан')).toContainText('Ждёт подтверждения');
-    await expect(card.locator('ol[data-status-scale]')).not.toContainText('Принят');
+    await expect(card.locator(SUBMIT_SCALE)).not.toContainText('Принят');
     // Без права «Подтверждать сдачу» — ни «Подтвердить», ни «На исправление».
     await expect(card.locator('[data-report-button]')).toHaveCount(0);
     await page.keyboard.press('Escape');
@@ -430,9 +436,11 @@ test.describe('Этап 2: отчёты — сдача, подтверждени
     await signIn(page.request, origin, 'erkin', DEMO_PASSWORD);
     await openTab(page, isMobile, 'all', word);
     const card = await openCard(page, nds, name, 'НДС');
-    const steps = card.locator('ol[data-status-scale] > li > button');
+    const steps = card.locator(`${SUBMIT_SCALE} > li > button`);
     await expect(steps.first()).toBeVisible();
-    const rows = card.locator('[data-status-history] tbody > tr');
+    // Первая «История статусов» — шкалы «Сдача»; вторая — «Оплата» (задача 2.19).
+    const history = card.locator('[data-status-history]').first();
+    const rows = history.locator('tbody > tr');
     await expect(rows).toHaveCount(2);
     const boxes = await Promise.all([0, 1].map(async (i) => (await steps.nth(i).boundingBox())!));
     if (isMobile) {
@@ -441,7 +449,7 @@ test.describe('Этап 2: отчёты — сдача, подтверждени
       const date = steps.nth(1).locator('small', { hasText: /^\d\d\.\d\d\.\d{4} \d\d:\d\d$/ });
       const at = (await date.boundingBox())!;
       expect(at.x).toBeGreaterThan(boxes[1]!.x + boxes[1]!.width / 2);
-      await expect(card.locator('[data-status-history] thead')).toBeHidden();
+      await expect(history.locator('thead')).toBeHidden();
       const [first, second] = await Promise.all([
         rows.nth(0).boundingBox(),
         rows.nth(1).boundingBox(),

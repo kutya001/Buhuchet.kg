@@ -350,6 +350,8 @@ test.describe('Этап 2: деньги по отчётам — поступле
         /К уплате\s*5\s000.*Получено\s*5\s000.*Оплачено\s*2\s000/,
       );
     } else {
+      // Строка появляется после поиска — ждать её, а не читать таблицу сразу.
+      await expect(row(page, nds)).toHaveCount(1);
       expect(await cellText(page, nds, 'received')).toMatch(/5\s000/);
       expect(await cellText(page, nds, 'paid')).toMatch(/2\s000/);
     }
