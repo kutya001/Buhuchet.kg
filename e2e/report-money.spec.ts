@@ -97,7 +97,7 @@ const sum = (card: Locator, label: string) =>
 const cellText = (page: Page, id: string, key: string) =>
   page.locator('[data-grid]').evaluate(
     (el, [rowId, col]) => {
-      const heads = [...el.querySelectorAll('thead tr:first-child th')];
+      const heads = Array.from(el.querySelectorAll('thead tr:first-child th'));
       const i = heads.findIndex((th) => th.getAttribute('data-column') === col);
       const r = el.querySelector(`tbody tr[data-id="${rowId}"]`);
       return i < 0 || !r ? null : (r.children[i]?.textContent ?? null);
