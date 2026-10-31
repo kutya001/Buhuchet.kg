@@ -304,7 +304,8 @@ export function OperationWindowDialog({
           ? t('fin.op.title', { kind: kindLabel, amount: formatSomWithUnit(Math.abs(op.amount)) })
           : ''
       }
-      label={kindLabel || t('fin.op.open')}
+      // Пока операция не загрузилась, названия нет; потом имя окна — его заголовок («Списание в бонус 300 сом»).
+      label={op ? undefined : t('fin.op.open')}
       sub={op ? `${op.contractor.name} · ${formatDateRu(op.date)}` : undefined}
       footer={footer}
     >
