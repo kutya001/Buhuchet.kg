@@ -164,6 +164,7 @@ function PaymentsBox({
                   <span className="inline-flex flex-wrap items-center gap-1.5">
                     {p.allocation[0] ? monthLabel(p.allocation[0].month) : t('fee.pays.advance')}
                     {p.fromReceipt ? <Tag>{t('fee.pays.from_receipt')}</Tag> : null}
+                    {p.edited ? <Tag tone="warn">{t('fin.j.edited_tag')}</Tag> : null}
                   </span>
                 ),
                 by: p.author ?? '—',

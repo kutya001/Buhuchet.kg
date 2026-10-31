@@ -146,7 +146,9 @@ function EditModal({
     if (form.accounts && holder !== form.holder) parts.push('holder');
     const bad = pickedMoneyFilesProblem(t, errorText, picked);
     if (bad) return setErrors({ files: bad });
-    // Новые файлы — к операции после сохранения (прототип: «добавлены файлы» без причины).
+    // Новые файлы — к операции после сохранения (прототип: «добавлены файлы» без причины), каждый —
+    // своей строкой истории.
+    // ОТКЛОНЕНИЕ: docs/deviations.md#В-28
     const kind = form.kind === 'pay' ? 'tax_payment' : 'money_operation';
     const upload = async () =>
       picked.length ? uploadMoneyFiles(t, errorText, { kind, id: form.id }, picked) : null;

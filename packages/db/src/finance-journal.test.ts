@@ -12,6 +12,7 @@ import {
   editReceipt,
   feePaymentCard,
   feePaymentOf,
+  holderKeyOf,
   receiptEditForm,
   type OperationEditInput,
 } from './finance-edit';
@@ -423,19 +424,36 @@ describe.skipIf(!databaseAvailable())('Журнал финансовых опе�
       total: number,
       reason: string,
       rows = [{ reportId: sep.id, amount: som(10_000) }],
+      holder?: string,
     ) =>
       inA(async (tx) => {
         const locked = await lockOperation(tx, id, undefined);
         return editReceipt(
           tx,
           locked,
-          { version: locked.op.version, total, date: TODAY, rows, holder: 'org', reason },
+          {
+            version: locked.op.version,
+            total,
+            date: TODAY,
+            rows,
+            holder: holder ?? 'org',
+            reason,
+          },
           { today: TODAY, fee: false, t },
         );
       });
     await expect(save(som(9_000), 'Ошибка', [])).rejects.toEqual(refused('receipt_min', 400));
     // Причина обязательна, если меняются сумма или счёт.
     await expect(save(som(12_000), '')).rejects.toEqual(refused('op_reason_required', 400));
+    // Без изменений — сохраняется (прототип inDlg): «Сохранено без изменений», без «Изменена».
+    const op0 = await opOf(id);
+    const v0 = op0.version;
+    expect(await save(som(15_000), '', undefined, holderKeyOf(op0))).toEqual({ changed: false });
+    expect(await opOf(id)).toMatchObject({ version: v0 + 1, edited: false });
+    expect((await inA((tx) => readHistory(tx, 'money_operation', id))).at(-1)).toMatchObject({
+      action: 'update',
+      changes: [{ field: 'kind', from: 'in', to: 'in' }],
+    });
     expect(await save(som(12_000), 'Ошибка в сумме платёжки')).toEqual({ changed: true });
     const op = await opOf(id);
     expect(op).toMatchObject({ amount: som(12_000), total: som(12_000), edited: true });
@@ -583,6 +601,12 @@ describe.skipIf(!databaseAvailable())('Журнал финансовых опе�
     await expect(save({ amount: som(2_000) })).rejects.toEqual(
       feeRefused('fee_reason_required', 400),
     );
+    // Без изменений — сохраняется (прототип feePayDlg): «Изменено: без изменений», без «Изменена».
+    const v0 = (await inA((tx) => feePaymentCard(tx, id, undefined)))!.payment.version;
+    expect(await save({})).toEqual({ changed: false });
+    const same = await inA((tx) => feePaymentCard(tx, id, undefined));
+    expect(same!.payment).toMatchObject({ version: v0 + 1, edited: false });
+    expect(same!.history[0]).toMatchObject({ action: 'update', changes: [], reason: null });
     expect(await save({ amount: som(2_000), reason: 'Ошибка в сумме' })).toEqual({
       changed: true,
     });
@@ -652,6 +676,13 @@ describe.skipIf(!databaseAvailable())('Журнал финансовых опе�
     expect(page.rows).toEqual([]);
     expect(await inB((tx) => closedMonthsOf(tx))).toEqual([]);
     expect(await inB((tx) => tx.select().from(closedMonths))).toEqual([]);
+    // Закрыть месяц за чужую организацию нельзя: запись с чужим org_id не создаётся.
+    await expect(
+      inB((tx) => tx.insert(closedMonths).values({ orgId: a.orgId, month: '2026-07-01' })),
+    ).rejects.toThrow();
+    expect(
+      (await inA((tx) => tx.select().from(closedMonths))).some((m) => m.month === '2026-07-01'),
+    ).toBe(false);
     const [fp] = await inA((tx) => tx.select({ id: feePayments.id }).from(feePayments).limit(1));
     expect(await inB((tx) => feePaymentCard(tx, fp!.id, undefined))).toBeNull();
   });

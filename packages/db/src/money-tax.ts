@@ -784,6 +784,21 @@ async function lastPayment(tx: Tx, reportId: string) {
   return op ?? null;
 }
 
+/**
+ * Месяц последней действующей оплаты отчёта, если он закрыт отчётом о списаниях: откатить оплату нельзя
+ * (прототип status-scale.js, scBack('pay') с `no` — подсказка под шкалой). Иначе null.
+ */
+export async function paymentCancelClosed(tx: Tx, reportId: string): Promise<YearMonth | null> {
+  const op = await lastPayment(tx, reportId);
+  if (!op) return null;
+  const month = op.opDate.slice(0, 7) as YearMonth;
+  const [closed] = await tx
+    .select({ id: closedMonths.id })
+    .from(closedMonths)
+    .where(eq(closedMonths.month, `${month}-01`));
+  return closed ? month : null;
+}
+
 /** Откат шкалы оплаты: сколько останется оплачено (`scaleBack` с `paidRest`); null — оплат нет. */
 export async function paymentRest(tx: Tx, reportId: string, paid: number): Promise<number | null> {
   const op = await lastPayment(tx, reportId);
@@ -809,13 +824,10 @@ export async function cancelPayment(
   const op = await lastPayment(tx, id);
   if (!op) throw new MoneyRefusedError('payment_none');
   // Месяц оплаты закрыт отчётом о списаниях (задача 2.22; прототип status-scale.js, откат 'pay').
-  const [closed] = await tx
-    .select({ id: closedMonths.id })
-    .from(closedMonths)
-    .where(eq(closedMonths.month, `${op.opDate.slice(0, 7)}-01`));
+  const closed = await paymentCancelClosed(tx, id);
   if (closed) {
     throw new MoneyRefusedError('payment_month_closed', 409, undefined, {
-      month: monthLabel(op.opDate.slice(0, 7) as YearMonth),
+      month: monthLabel(closed),
     });
   }
   const [bonus] = await tx

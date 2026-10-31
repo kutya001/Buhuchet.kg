@@ -304,4 +304,21 @@ describe('история изменения операций (было → ст�
       'Операция удалена: оплата за обслуживание на 14 000 сом от 05.10.2026. Причина: дубль',
     );
   });
+
+  it('сохранено без изменений: поступление и оплата за обслуживание — как в прототипе', () => {
+    const receipt = cp({ action: 'update', changes: [{ field: 'kind', from: 'in', to: 'in' }] });
+    expect(contractorHistoryText(t, receipt, {})).toBe('Сохранено без изменений');
+    const op = { kind: 'in', amount: 30_000, date: '2026-10-18' } as OperationWindow;
+    expect(
+      operationHistoryText(t, op, {
+        at: receipt.at,
+        actor: receipt.actor,
+        action: 'update',
+        reason: null,
+        changes: receipt.changes,
+      } as OperationWindow['history'][number]),
+    ).toBe('Сохранено без изменений');
+    const fee = cp({ entity: 'fee_payment', action: 'update', changes: [] });
+    expect(contractorHistoryText(t, fee, {})).toBe('Изменено: без изменений');
+  });
 });

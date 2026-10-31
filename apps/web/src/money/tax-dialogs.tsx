@@ -14,7 +14,6 @@ import {
 } from '@buhuchet/domain';
 import {
   isRecordChanged,
-  OperationEdited,
   PaymentSaved,
   ReceiptSaved,
   type ReceiptEditForm,
@@ -604,8 +603,8 @@ function ReceiptModal({
       .map((m) => ({ month: m.month, amount: feeValue(m.month) }));
 
   // «Сохранить» изменения (прототип inDlg с `edit`): на налоги не меньше потраченного, причина — если
-  // меняются сумма, дата, детализация или счёт; проверяет и сервер. Без изменений — «Без изменений», как
-  // у остальных операций (opEditDlg), без пустой записи истории.
+  // меняются сумма, дата, детализация или счёт; проверяет и сервер. Новые файлы — каждый своей строкой
+  // истории, как у файлов поступлений с задачи 2.19.
   // ОТКЛОНЕНИЕ: docs/deviations.md#В-28
   const saveEdit = async (e: ReceiptEdit) => {
     if (totalN === null || totalN <= 0) return setErrors({ total: t('money.amount_invalid') });
@@ -645,11 +644,9 @@ function ReceiptModal({
     // Новые файлы — к поступлению после сохранения (прототип: «добавлены файлы» без причины).
     const upload = async () =>
       picked.length ? uploadMoneyFiles(t, errorText, { kind: 'receipt', id: e.id }, picked) : null;
-    if (parts.length === 0) {
-      if (picked.length === 0) {
-        onClose();
-        return void toast(t('fin.edit.same'), { icon: 'info' });
-      }
+    // Без изменений, только с новыми файлами — файлы без записи «Сохранено без изменений» (прототип:
+    // «Прикреплены файлы»); совсем без изменений — сохраняется, в истории «Сохранено без изменений».
+    if (parts.length === 0 && picked.length > 0) {
       setBusy(true);
       const failedUpload = await upload();
       setBusy(false);
@@ -658,7 +655,7 @@ function ReceiptModal({
       if (failedUpload) toast(failedUpload, { bad: true });
       return void toast(t('fin.in_edit.done'), { icon: 'wallet' });
     }
-    if (!reason.trim()) return setErrors({ reason: reasonNeeded(t, parts, true) });
+    if (parts.length && !reason.trim()) return setErrors({ reason: reasonNeeded(t, parts, true) });
     setBusy(true);
     const res = await editReceipt(e.id, {
       version: e.version,
@@ -670,14 +667,12 @@ function ReceiptModal({
       reason: reason.trim(),
     });
     if (res.ok) {
-      const saved = OperationEdited.safeParse(res.data);
       const failedUpload = await upload();
       setBusy(false);
       onDone();
       onClose();
       if (failedUpload) toast(failedUpload, { bad: true });
-      const same = saved.success && !saved.data.changed && !picked.length;
-      return void toast(t(same ? 'fin.edit.same' : 'fin.in_edit.done'), { icon: 'wallet' });
+      return void toast(t('fin.in_edit.done'), { icon: 'wallet' });
     }
     setBusy(false);
     if (isRecordChanged(res.error)) return setChanged(true);

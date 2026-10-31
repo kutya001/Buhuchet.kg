@@ -21,9 +21,10 @@ import {
   ReceiptEditForm,
   ReceiptJournalRow,
   ReceiptSaved,
+  ReportCard,
   ReportList,
 } from '@buhuchet/shared';
-import { eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { apiRequest, createStaffFixture, signIn, TEST_PASSWORD } from '../../testing';
 
@@ -298,7 +299,10 @@ describe.skipIf(!databaseAvailable())(
         ).json(),
       );
       expect(ok.changed).toBe(true);
-      expect((await fees(chief, cpChief)).debt).toBe(debt + som(10_000));
+      const after = await fees(chief, cpChief);
+      expect(after.debt).toBe(debt + som(10_000));
+      // Вкладка «Обслуживание»: у изменённой оплаты — «изменена» (прототип `f.edited`).
+      expect(after.payments.find((p) => p.id === saved.id)).toMatchObject({ edited: true });
       w = await feeWindow(chief, saved.id);
       expect(w.edited).toBe(true);
       expect(w.history[0]).toMatchObject({
@@ -477,7 +481,7 @@ describe.skipIf(!databaseAvailable())(
       expect(manager.items.map((x) => x.name)).not.toContain('приказ.pdf');
     });
 
-    it('«Списания в бонус» и «Закрыть <месяц>»: только прошлый, один раз, закрытый месяц не принимает операций', async () => {
+    it('«Списания в бонус» и «Закрыть <месяц>»: только прошлый, один раз; в закрытом месяце операции не изменить, не удалить, не перенести в него и оплату не отменить', async () => {
       const list = await get(owner, '/api/fin/bonuses?size=all', (x) => Bonuses.parse(x));
       expect(list.items.map((r) => r.contractor.id)).toEqual([cpA]);
       // «Кадры» с областью «Свои»: своих контрагентов нет — пусто (docs/deviations.md п. В-29).
@@ -539,10 +543,164 @@ describe.skipIf(!databaseAvailable())(
         del: { code: 'month_closed' },
       });
       expect(rows.find((r) => r.date === '2026-10-18')?.locks).toEqual({ edit: null, del: null });
+      // Оплата налога закрытого месяца: отката нет, под шкалой — почему; сервер тоже не отменяет
+      // (прототип scBack('pay') с `no`). Дата оплаты — сентябрьская (поставлена в базе: оплату вносят
+      // по сегодняшний день).
+      const nds = await reportOf(cpB, 'nds', '2026-09-01');
+      await f.t.admin.db
+        .update(schema.moneyOperations)
+        .set({ opDate: '2026-09-30' })
+        .where(
+          and(eq(schema.moneyOperations.reportId, nds.id), eq(schema.moneyOperations.kind, 'pay')),
+        );
+      const card = await get(owner, `/api/reports/${nds.id}`, (x) => ReportCard.parse(x));
+      expect(card.money).toMatchObject({ canCancel: false, cancelClosed: '2026-09' });
+      const cancel = await expectStatus(
+        await call('POST', `/api/reports/${nds.id}/payments/rollback`, owner, {
+          version: card.version,
+          reason: 'Ошибка',
+        }),
+        409,
+      );
+      expect((await failure(cancel)).code).toBe('payment_month_closed');
       // Другая организация своих месяцев не видит.
       expect((await get(ownerB, '/api/fin/months', (x) => ClosedMonths.parse(x))).closed).toEqual(
         [],
       );
+    });
+
+    it('«Изменить» и «Удалить»: другая организация и чужой контрагент при области «Свои» — 404', async () => {
+      const [bonus] = (await get(owner, '/api/fin/bonuses?size=all', (x) => Bonuses.parse(x)))
+        .items;
+      const receiptChief = (await receipts(owner)).items.find(
+        (r) => r.contractor.id === cpChief && !r.deleted,
+      )!;
+      const fee = (await journal(owner, '&tab=fee&deleted=1')).items[0]!;
+      const reason = { reason: 'x' };
+      const op = await get(owner, `/api/money-operations/${bonus!.id}/edit-form`, (x) =>
+        OperationEditForm.parse(x),
+      );
+      const opBody = {
+        version: op.version,
+        amount: op.amount,
+        date: op.date,
+        holder: op.holder,
+        ...reason,
+      };
+      for (const [method, path, body] of [
+        ['GET', `/api/money-operations/${bonus!.id}/edit-form`, undefined],
+        ['PUT', `/api/money-operations/${bonus!.id}`, opBody],
+        ['GET', `/api/money-operations/${receiptChief.id}/receipt-form`, undefined],
+        [
+          'PUT',
+          `/api/money-operations/${receiptChief.id}/receipt`,
+          { version: 1, total: som(1), date: '2026-10-17', rows: [], holder: 'org', ...reason },
+        ],
+        ['GET', `/api/fee-payments/${fee.id}`, undefined],
+        ['GET', `/api/fee-payments/${fee.id}/edit-form`, undefined],
+        [
+          'PUT',
+          `/api/fee-payments/${fee.id}`,
+          { version: 1, amount: som(1), date: '2026-10-18', to: 'org', allocation: [], ...reason },
+        ],
+        ['POST', `/api/fee-payments/${fee.id}/delete`, reason],
+      ] as const) {
+        expect((await call(method, path, ownerB, body)).status, `${method} ${path}`).toBe(404);
+      }
+      // «Бухгалтер» с областью «Свои»: поступление контрагента главного бухгалтера — не найдено.
+      expect(
+        (await call('GET', `/api/money-operations/${receiptChief.id}/receipt-form`, acc)).status,
+      ).toBe(404);
+      expect(
+        (
+          await call('PUT', `/api/money-operations/${receiptChief.id}/receipt`, acc, {
+            version: 1,
+            total: som(1),
+            date: '2026-10-17',
+            rows: [],
+            holder: 'org',
+            reason: 'x',
+          })
+        ).status,
+      ).toBe(404);
+    });
+
+    it('оплата за обслуживание при разных областях: окно — по «Финансовым операциям», изменить и удалить — только в области «Контрагенты»', async () => {
+      const form = await get(chief, `/api/contractors/${cpChief}/fee-payment-form`, (x) =>
+        FeePaymentForm.parse(x),
+      );
+      const saved = FeePaymentSaved.parse(
+        await (
+          await expectStatus(
+            await call('POST', `/api/contractors/${cpChief}/fee-payments`, chief, {
+              amount: som(1_000),
+              date: '2026-10-18',
+              to: 'org',
+              allocation: [{ month: form.months[0]!.month, amount: som(1_000) }],
+            }),
+            201,
+          )
+        ).json(),
+      );
+      // «Кадры»: «Видеть плату» и «Менять журнал тарифов», «Финансовые операции» — «Все»,
+      // «Контрагенты» — «Свои» (контрагент главного бухгалтера — не свой).
+      const hrRole = f.roleIds.hr;
+      const hrFin = and(
+        eq(schema.roleScopes.roleId, hrRole),
+        eq(schema.roleScopes.permGroup, 'fin'),
+      );
+      await f.t.admin.db.insert(schema.rolePermissions).values(
+        (['fee', 'tariff'] as const).map((permissionId) => ({
+          orgId: f.a.orgId,
+          roleId: hrRole,
+          permissionId,
+        })),
+      );
+      await f.t.admin.db.update(schema.roleScopes).set({ scope: 'all' }).where(hrFin);
+      try {
+        // Окно открывается из журнала, но изменить и удалить нельзя: замок «только просмотр».
+        const w = await feeWindow(hr, saved.id);
+        expect(w.locks.edit).toMatchObject({ code: 'op_view_only' });
+        expect(w.locks.del).toMatchObject({ code: 'op_view_only' });
+        expect((await call('GET', `/api/fee-payments/${saved.id}/edit-form`, hr)).status).toBe(404);
+        const put = await call('PUT', `/api/fee-payments/${saved.id}`, hr, {
+          version: w.version,
+          amount: som(500),
+          date: '2026-10-18',
+          to: 'org',
+          allocation: [{ month: form.months[0]!.month, amount: som(500) }],
+          reason: 'Ошибка',
+        });
+        expect(put.status).toBe(404);
+        const del = await call('POST', `/api/fee-payments/${saved.id}/delete`, hr, {
+          reason: 'Дубль',
+        });
+        expect(del.status).toBe(404);
+        expect((await feeWindow(chief, saved.id)).amount).toBe(som(1_000));
+        // Без права «Просматривать финансовые операции» область «Все» этой группы ничего не открывает.
+        await f.t.admin.db
+          .delete(schema.rolePermissions)
+          .where(
+            and(
+              eq(schema.rolePermissions.roleId, hrRole),
+              eq(schema.rolePermissions.permissionId, 'finView'),
+            ),
+          );
+        expect((await call('GET', `/api/fee-payments/${saved.id}`, hr)).status).toBe(404);
+      } finally {
+        await f.t.admin.db.update(schema.roleScopes).set({ scope: 'own' }).where(hrFin);
+        await f.t.admin.db
+          .delete(schema.rolePermissions)
+          .where(
+            and(
+              eq(schema.rolePermissions.roleId, hrRole),
+              inArray(schema.rolePermissions.permissionId, ['fee', 'tariff', 'finView']),
+            ),
+          );
+        await f.t.admin.db
+          .insert(schema.rolePermissions)
+          .values({ orgId: f.a.orgId, roleId: hrRole, permissionId: 'finView' });
+      }
     });
   },
 );

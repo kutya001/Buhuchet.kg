@@ -19,7 +19,6 @@ import {
 import {
   FeePaymentSaved,
   isRecordChanged,
-  OperationEdited,
   type ContractorFees,
   type FeePaymentEditForm,
   type FeePaymentForm,
@@ -400,8 +399,9 @@ function FeePaymentModal({
 
   const auto = (value: string) => setRows(allocRows(autoAllocate(ordered, parseSom(value) ?? 0)));
 
-  // «Сохранить» изменения: причина — если меняются сумма, дата, месяцы или куда поступили деньги. Без
-  // изменений — «Без изменений», как у остальных операций (opEditDlg), без пустой записи истории.
+  // «Сохранить» изменения (прототип feePayDlg с `edit`): причина — если меняются сумма, дата, месяцы
+  // или куда поступили деньги; без изменений — сохраняется, в истории «Изменено: без изменений». Новые
+  // файлы — каждый своей строкой истории, как у файлов оплат с задачи 2.21.
   // ОТКЛОНЕНИЕ: docs/deviations.md#В-28
   const saveEdit = async (e: FeeEdit) => {
     if (!form) return;
@@ -423,11 +423,7 @@ function FeePaymentModal({
       picked.length
         ? uploadMoneyFiles(t, errorText, { kind: 'fee_payment', id: e.id }, picked)
         : null;
-    if (parts.length === 0 && note === e.note) {
-      if (picked.length === 0) {
-        onClose();
-        return void toast(t('fin.edit.same'), { icon: 'info' });
-      }
+    if (parts.length === 0 && note === e.note && picked.length > 0) {
       setBusy(true);
       const failedUpload = await upload();
       setBusy(false);
@@ -449,14 +445,12 @@ function FeePaymentModal({
       reason: reason.trim(),
     });
     if (res.ok) {
-      const saved = OperationEdited.safeParse(res.data);
       const failedUpload = await upload();
       setBusy(false);
       onDone();
       onClose();
       if (failedUpload) toast(failedUpload, { bad: true });
-      const same = saved.success && !saved.data.changed && !picked.length;
-      return void toast(t(same ? 'fin.edit.same' : 'fin.fee.edit_done'), { icon: 'wallet' });
+      return void toast(t('fin.fee.edit_done'), { icon: 'wallet' });
     }
     setBusy(false);
     if (isRecordChanged(res.error)) return setChanged(true);

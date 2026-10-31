@@ -17,10 +17,12 @@ import {
   type Tx,
 } from '@buhuchet/db';
 import {
+  canSeeContractor,
   hasPermission,
   opLock,
   periodLabel,
   type AccessSubject,
+  type Feature,
   type HistoryAction,
   type Translate,
   type UiTextKey,
@@ -391,32 +393,39 @@ export function receiptEditHandler(deps: ApiDeps): RouteHandler<typeof receiptEd
 /* ───────────── Окно оплаты за обслуживание ───────────── */
 
 /**
- * Оплата за обслуживание видна в «Финансовых операциях» (область группы «Финансовые операции») и на
- * вкладке «Обслуживание» карточки (область «Контрагенты»): окно — в любой из них.
+ * Оплата за обслуживание видна на вкладке «Обслуживание» карточки (область «Контрагенты») и в
+ * «Финансовых операциях» (область группы «Финансовые операции» — когда модуль включён и есть право
+ * его просматривать): окно — в любой из них. Изменить и удалить — только в области «Контрагенты»:
+ * «Менять журнал тарифов» — право этой группы (защита строже прототипа, как п. В-27).
  */
-function feeScopeOf(subject: AccessSubject): SQL | undefined {
-  const fin = finScopeOf(subject);
+// ОТКЛОНЕНИЕ: docs/deviations.md#В-30
+function feeScopeOf(subject: AccessSubject, features: Record<Feature, boolean>): SQL | undefined {
   const cps = scopeSqlOf(subject);
+  if (!features.finops || !hasPermission(subject, 'finView')) return cps;
+  const fin = finScopeOf(subject);
   return fin && cps ? or(fin, cps) : undefined;
 }
 
-/** Замок оплаты за обслуживание (прототип `opLock` для `fee`): право «Менять журнал тарифов». */
+/**
+ * Замок оплаты за обслуживание (прототип `opLock` для `fee`): право «Менять журнал тарифов» с
+ * контрагентом в области «Контрагенты».
+ */
 async function feeLock(
   tx: Tx,
   t: Translate,
   subject: AccessSubject,
   p: { deleted: boolean; receiptPart: boolean },
-  archived: boolean,
+  contractor: { archived: boolean; responsibleEmployeeId: string | null },
   act: 'edit' | 'del',
 ): Promise<OpLockInfo | null> {
   const code = opLock(
     {
       kind: 'fee',
       deleted: p.deleted,
-      canKind: hasPermission(subject, 'tariff'),
+      canKind: hasPermission(subject, 'tariff') && canSeeContractor(subject, 'cps', contractor),
       canArchiveRest: false,
       canMoney: hasPermission(subject, 'money'),
-      archived,
+      archived: contractor.archived,
       monthClosed: false,
       receiptPart: p.receiptPart,
     },
@@ -456,12 +465,12 @@ export function feePaymentWindowHandler(
     const subject = subjectOf(c);
     const t = await translateOf(deps);
     const out = await inFee(deps, c, async (tx, settings) => {
-      const card = await feePaymentCard(tx, id, feeScopeOf(subject));
+      const card = await feePaymentCard(tx, id, feeScopeOf(subject, settings.features));
       if (!card) return null;
       const facts = { deleted: !!card.payment.deletedAt, receiptPart: !!card.payment.operationId };
       const [edit, del] = await Promise.all([
-        feeLock(tx, t, subject, facts, card.contractor.archived, 'edit'),
-        feeLock(tx, t, subject, facts, card.contractor.archived, 'del'),
+        feeLock(tx, t, subject, facts, card.contractor, 'edit'),
+        feeLock(tx, t, subject, facts, card.contractor, 'del'),
       ]);
       return { card, edit, del, files: settings.features.files };
     });
@@ -533,12 +542,12 @@ export function feePaymentEditFormHandler(
     const subject = subjectOf(c);
     const t = await translateOf(deps);
     const out = await inFee(deps, c, async (tx, settings) => {
-      const locked = await feePaymentOf(tx, id, feeScopeOf(subject), false);
+      const locked = await feePaymentOf(tx, id, scopeSqlOf(subject), false);
       const facts = {
         deleted: !!locked.payment.deletedAt,
         receiptPart: !!locked.payment.operationId,
       };
-      const lock = await feeLock(tx, t, subject, facts, locked.contractor.archived, 'edit');
+      const lock = await feeLock(tx, t, subject, facts, locked.contractor, 'edit');
       if (lock) lockFail(lock);
       if (locked.payment.operationId) feeFail(409, 'fee_payment_receipt_part');
       const form = await feePaymentEditForm(tx, locked, { today: todayOf(deps), t });
@@ -613,12 +622,12 @@ export function feePaymentEditHandler(
     const subject = subjectOf(c);
     const t = await translateOf(deps);
     const out = await inFee(deps, c, async (tx) => {
-      const locked = await feePaymentOf(tx, id, feeScopeOf(subject), true);
+      const locked = await feePaymentOf(tx, id, scopeSqlOf(subject), true);
       const facts = {
         deleted: !!locked.payment.deletedAt,
         receiptPart: !!locked.payment.operationId,
       };
-      const lock = await feeLock(tx, t, subject, facts, locked.contractor.archived, 'edit');
+      const lock = await feeLock(tx, t, subject, facts, locked.contractor, 'edit');
       if (lock) lockFail(lock);
       return editFeePayment(
         tx,
@@ -668,12 +677,12 @@ export function feePaymentDeleteHandler(
     const subject = subjectOf(c);
     const t = await translateOf(deps);
     await inFee(deps, c, async (tx) => {
-      const locked = await feePaymentOf(tx, id, feeScopeOf(subject), true);
+      const locked = await feePaymentOf(tx, id, scopeSqlOf(subject), true);
       const facts = {
         deleted: !!locked.payment.deletedAt,
         receiptPart: !!locked.payment.operationId,
       };
-      const lock = await feeLock(tx, t, subject, facts, locked.contractor.archived, 'del');
+      const lock = await feeLock(tx, t, subject, facts, locked.contractor, 'del');
       if (lock) lockFail(lock);
       await deleteFeePayment(tx, locked, reason);
     });

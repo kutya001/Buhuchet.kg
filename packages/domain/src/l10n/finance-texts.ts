@@ -304,7 +304,7 @@ export const FINANCE_TEXTS = {
   'fin.edit.note_bonus': { ru: 'Причина списания', section: S },
   'fin.edit.reason': { ru: 'Причина изменения', section: S },
   'fin.edit.reason_ph': { ru: 'Например: ошибка в сумме платёжки', section: S },
-  'fin.edit.reason_hint': { ru: 'Обязательна, если меняются сумма или дата', section: S },
+  'fin.edit.reason_hint': { ru: 'Обязательна, если меняются сумма, дата', section: S },
   'fin.edit.reason_hint_acc': {
     ru: 'Обязательна, если меняются сумма, дата или счёт',
     section: S,
@@ -368,6 +368,8 @@ export const FINANCE_TEXTS = {
   // История изменения (прототип opLog: «Изменено: …. Причина: …»)
   'fin.hist.edited': { ru: 'Изменено: {what}', section: S },
   'fin.hist.edited_why': { ru: 'Изменено: {what}. Причина: {reason}', section: S },
+  'fin.hist.in_same': { ru: 'Сохранено без изменений', section: S },
+  'fin.hist.fee_same': { ru: 'Изменено: без изменений', section: S },
   'fin.hist.ch.amount': { ru: 'сумма {from} → {to} сом', section: S },
   'fin.hist.ch.total': { ru: 'общая сумма {from} → {to} сом', section: S },
   'fin.hist.ch.date': { ru: 'дата {from} → {to}', section: S },

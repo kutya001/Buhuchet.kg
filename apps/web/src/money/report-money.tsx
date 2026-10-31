@@ -4,8 +4,10 @@ import {
   formatDateRu,
   formatSom,
   formatSomWithUnit,
+  monthLabel,
   pluralForm,
   submitNeedsPayment,
+  type YearMonth,
 } from '@buhuchet/domain';
 import { fileDownloadPath, type ReportCard, type ReportRow } from '@buhuchet/shared';
 import {
@@ -399,9 +401,18 @@ export function PaymentScale({
   });
   if (view.kind === 'none') return <StatusMiniNone label={view.title} title={view.text} />;
   if (view.kind === 'pill') return <StatusPill {...view.pill} />;
+  // Месяц последней оплаты закрыт: отката нет, под шкалой — почему (прототип scBack('pay') с `no`).
+  const closed = r.money?.cancelClosed;
+  const hints = closed
+    ? [
+        ...(view.props.hints ?? []),
+        t('err.payment_month_closed', { month: monthLabel(closed as YearMonth) }),
+      ]
+    : view.props.hints;
   return (
     <StatusScale
       {...view.props}
+      hints={hints}
       onStep={() =>
         onPay ? onPay() : toast(t('report.act.money_no'), { bad: true, icon: 'alert' })
       }

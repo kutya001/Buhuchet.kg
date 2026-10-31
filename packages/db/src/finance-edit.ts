@@ -493,7 +493,26 @@ export async function editReceipt(
   if (needsReason(changes.map((x) => x.field)) && !reason) {
     throw new MoneyRefusedError('op_reason_required', 400, 'reason');
   }
-  if (!changes.length) return { changed: false };
+  if (!changes.length) {
+    // Прототип inDlg с `edit`: сохранение без изменений — «Сохранено без изменений» в истории, отметки
+    // «Изменена» нет.
+    await tx
+      .update(moneyOperations)
+      .set({
+        version: sql`${moneyOperations.version} + 1`,
+        updatedAt: sql`now()`,
+        updatedBy: sql`app.current_user_id()`,
+      })
+      .where(eq(moneyOperations.id, op.id));
+    await writeHistory(tx, {
+      entity: 'money_operation',
+      entityId: op.id,
+      action: 'update',
+      changes: [{ field: 'kind', from: 'in', to: 'in' }],
+      contractorId: c.id,
+    });
+    return { changed: false };
+  }
   await tx
     .update(moneyOperations)
     .set({
@@ -823,7 +842,26 @@ export async function editFeePayment(
   if (needsReason(fields) && !reason) {
     throw new FeeRefusedError('fee_reason_required', 400, 'reason');
   }
-  if (!changes.length) return { changed: false };
+  if (!changes.length) {
+    // Прототип feePayDlg с `edit`: сохранение без изменений — «Изменено: без изменений» в истории,
+    // отметки «Изменена» нет.
+    await tx
+      .update(feePayments)
+      .set({
+        version: sql`${feePayments.version} + 1`,
+        updatedAt: sql`now()`,
+        updatedBy: sql`app.current_user_id()`,
+      })
+      .where(eq(feePayments.id, payment.id));
+    await writeHistory(tx, {
+      entity: 'fee_payment',
+      entityId: payment.id,
+      action: 'update',
+      changes: [],
+      contractorId: locked.contractor.id,
+    });
+    return { changed: false };
+  }
   await tx
     .update(feePayments)
     .set({

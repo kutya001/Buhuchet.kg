@@ -249,7 +249,8 @@ export function operationEditedText(
         to: (typeof note.to === 'string' && note.to) || '—',
       }),
     );
-  if (!parts.length) return null;
+  // Поступление, сохранённое без изменений (прототип inDlg с `edit`).
+  if (!parts.length) return kind === 'in' && changes.length === 1 ? t('fin.hist.in_same') : null;
   return withReason(t, parts, reason);
 }
 
@@ -284,7 +285,8 @@ export function feePaymentEditedText(
   if (to && typeof to.from === 'string' && typeof to.to === 'string')
     parts.push(t('fin.hist.ch.to', { from: to.from, to: to.to }));
   if (changes.some((c) => c.field === 'note')) parts.push(t('fin.hist.ch.note_word'));
-  if (!parts.length) return null;
+  // Сохранена без изменений (прототип feePayDlg с `edit`).
+  if (!parts.length) return changes.length ? null : t('fin.hist.fee_same');
   return withReason(t, parts, reason);
 }
 

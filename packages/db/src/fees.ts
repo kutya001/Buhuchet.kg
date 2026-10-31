@@ -89,6 +89,8 @@ export interface FeePaymentRow extends FeePayment {
   id: string;
   date: IsoDate;
   operationId: string | null;
+  /** Изменена после ввода (задача 2.22): ярлык «изменена» во вкладке «Обслуживание». */
+  edited: boolean;
   author: string | null;
   createdAt: Date;
 }
@@ -200,6 +202,7 @@ async function feePaymentsOf(
         amount: feePayments.amount,
         date: feePayments.paidOn,
         operationId: feePayments.operationId,
+        edited: feePayments.edited,
         author: employees.shortName,
         createdAt: feePayments.createdAt,
       })
@@ -233,6 +236,7 @@ async function feePaymentsOf(
       allocation: alloc.get(p.id) ?? [],
       date: p.date,
       operationId: p.operationId,
+      edited: p.edited,
       author: p.author,
       createdAt: p.createdAt,
     });
