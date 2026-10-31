@@ -137,9 +137,9 @@ export interface ContractorColumnsOptions {
 
 /**
  * Столбцы списка контрагентов — как в прототипе (modules/contractors.js, `cpCols`), ключи — как на
- * сервере. «Платит одной суммой», «Файл к поступлению обязателен», «Свободный остаток» и «Долг за
- * обслуживание» добавят задачи денег (поток В); служебные «Создал», «Изменил», «Создано», «Изменено»
- * добавляет сам список (`CONTRACTOR_AUDIT`).
+ * сервере. «Долг за обслуживание» — красным, с итогом по фильтру; «Свободный остаток» добавит задача
+ * денег (поток В); служебные «Создал», «Изменил», «Создано», «Изменено» добавляет сам список
+ * (`CONTRACTOR_AUDIT`).
  */
 export function contractorColumns(
   t: Translate,
@@ -288,6 +288,20 @@ export function contractorColumns(
       text: (r) => formatDateRu(r.startDate),
     },
     {
+      key: 'oneSum',
+      label: t('cp.col.one_sum'),
+      type: 'enum',
+      width: 150,
+      text: (r) => yes(r.oneSum),
+    },
+    {
+      key: 'needReceiptFile',
+      label: t('cp.col.need_file'),
+      type: 'enum',
+      width: 200,
+      text: (r) => yes(r.needReceiptFile),
+    },
+    {
       key: 'contract',
       label: t('cp.col.contract'),
       type: 'text',
@@ -356,6 +370,20 @@ export function contractorColumns(
               ) : (
                 <Faint>—</Faint>
               ),
+          },
+          {
+            key: 'debt',
+            label: t('cp.col.debt'),
+            type: 'money',
+            width: 165,
+            text: (r) => formatSom(r.feeDebt ?? 0),
+            cell: (r) =>
+              (r.feeDebt ?? 0) > 0 ? (
+                <span className="font-semibold text-danger">{formatSom(r.feeDebt ?? 0)}</span>
+              ) : (
+                <Faint>{formatSom(0)}</Faint>
+              ),
+            total: (v) => formatSom(v),
           },
         ] satisfies GridColumn<ContractorRow>[])
       : []),

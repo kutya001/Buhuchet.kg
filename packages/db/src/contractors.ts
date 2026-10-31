@@ -29,6 +29,7 @@ import { and, asc, count, eq, inArray, ne, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { Tx } from './client';
 import { gkedIndexOf } from './gked';
+import { FEE_DEBT, feeDebtTable } from './fees';
 import { contractorHasMoney, syncMoneyHolders } from './money-tax';
 import { SOCFUND_LIST, socfundListTable } from './socfund';
 import { updateWithHistory, writeHistory } from './history';
@@ -172,6 +173,8 @@ export interface ContractorRecord {
    * прототипе `regFiles` тоже остаётся (удалённый файл остаётся записью в `files`).
    */
   regdocs: boolean;
+  /** «Платит одной суммой»: налоги и обслуживание вместе (задача 2.21). */
+  oneSum: boolean;
   serviceStatus: ServiceStatus;
   /** Действующая ставка обслуживания (последняя с месяцем не позже текущего); null — нет. */
   tariff: { amount: number; period: TariffPeriod; validFrom: IsoDate } | null;
@@ -211,6 +214,17 @@ export interface ContractorRow {
   head: string;
   contact: string;
   tariff: { amount: number; period: TariffPeriod } | null;
+  /**
+   * Долг за обслуживание (прототип derive: `c.feeDebt`); null — плата не видна (нет права или функция
+   * выключена) — его в запросе нет.
+   */
+  feeDebt: number | null;
+  /** Есть начисление больше 0 (прототип `feeAccOk`); null — плата не видна. */
+  feeCharged: boolean | null;
+  /** «Платит одной суммой»: налоги и обслуживание вместе (задача 2.21). */
+  oneSum: boolean;
+  /** «Файл при поступлении обязателен» (задача 2.19). */
+  needReceiptFile: boolean;
   /**
    * Тариф Соцфонда (прототип cpCols, «Тариф Соцфонда» и «Тариф под вопросом»): выбранный (`id` null —
    * не определён) и «под вопросом»; null — тариф контрагенту не нужен.
@@ -326,6 +340,8 @@ function rowFields(today: IsoDate) {
     contractDate: contractors.contractDate,
     head: contractors.head,
     contact: contractors.contact,
+    oneSum: contractors.oneSum,
+    needReceiptFile: contractors.needReceiptFile,
     tariffAmount: sql<number | null>`${tariffOf(today, 'amount')}`.mapWith((v) =>
       v == null ? null : Number(v),
     ),
@@ -347,8 +363,11 @@ function rowFields(today: IsoDate) {
   };
 }
 
-/** Контрагенты со справочными названиями, ответственным и именами «Создал» и «Изменил». */
-function fromContractors(tx: Tx, fields: object, sf?: SQL) {
+/**
+ * Контрагенты со справочными названиями, ответственным и именами «Создал» и «Изменил»; `sf` — тариф
+ * Соцфонда, `fd` — долг за обслуживание (`feeDebtTable`), если плата видна.
+ */
+function fromContractors(tx: Tx, fields: object, sf?: SQL, fd?: SQL | null) {
   const q = tx
     .select(fields as Record<string, SQL>)
     .from(contractors)
@@ -361,14 +380,36 @@ function fromContractors(tx: Tx, fields: object, sf?: SQL) {
     .leftJoin(creator, eq(creator.userId, contractors.createdBy))
     .leftJoin(updater, eq(updater.userId, contractors.updatedBy))
     .$dynamic();
-  return sf ? q.leftJoin(sf, sql`${SOCFUND_LIST.id} = ${contractors.id}`) : q;
+  const withSf = sf ? q.leftJoin(sf, sql`${SOCFUND_LIST.id} = ${contractors.id}`) : q;
+  return fd ? withSf.leftJoin(fd, sql`${FEE_DEBT.id} = ${contractors.id}`) : withSf;
 }
 
-/** Таблицы списка; `sf` — тариф Соцфонда контрагентов (`socfundListTable`). */
+/** Долг за обслуживание строки: 0, если долга нет (контрагента нет в таблице `fd`). */
+const FEE_DEBT_VALUE = sql<number>`coalesce(${FEE_DEBT.debt}, 0)`;
+/** Есть начисления за обслуживание: строка в таблице `fd` с `charged`. */
+const FEE_CHARGED_VALUE = sql<boolean>`coalesce(${FEE_DEBT.charged}, false)`;
+
+/** Таблицы списка: тариф Соцфонда (`socfundListTable`) и, если плата видна, долг за обслуживание. */
+interface ListTables {
+  sf: SQL;
+  fd: SQL | null;
+}
+
+async function listTables(
+  tx: Tx,
+  o: Pick<ContractorListOptions, 't' | 'today' | 'fee'>,
+): Promise<ListTables> {
+  const [sf, fd] = await Promise.all([
+    socfundListTable(tx, o.t),
+    o.fee ? feeDebtTable(tx, o.today) : null,
+  ]);
+  return { sf, fd };
+}
+
 const contractorListFrom =
-  (tx: Tx, sf: SQL): ListFrom =>
+  (tx: Tx, tables: ListTables): ListFrom =>
   (fields) =>
-    fromContractors(tx, fields, sf);
+    fromContractors(tx, fields, tables.sf, tables.fd);
 
 /** Поля тарифа Соцфонда строки списка. */
 const SOCFUND_ROW = {
@@ -388,7 +429,10 @@ function socfundOfRow(r: Record<string, unknown>): ContractorRow['socfund'] {
   };
 }
 
-type RowData = Record<keyof ReturnType<typeof rowFields>, unknown>;
+type RowData = Record<keyof ReturnType<typeof rowFields>, unknown> & {
+  feeDebt?: unknown;
+  feeCharged?: unknown;
+};
 
 type PhoneCodes = Awaited<ReturnType<typeof phoneCodes>>;
 
@@ -428,6 +472,10 @@ function toRow(r: RowData, codes: PhoneCodes): Omit<ContractorRow, 'socfund'> {
     contractDate: r.contractDate as IsoDate | null,
     head: r.head as string,
     contact: r.contact as string,
+    feeDebt: r.feeDebt == null ? null : Number(r.feeDebt),
+    feeCharged: r.feeCharged == null ? null : Boolean(r.feeCharged),
+    oneSum: Boolean(r.oneSum),
+    needReceiptFile: Boolean(r.needReceiptFile),
     tariff:
       r.tariffAmount == null
         ? null
@@ -464,7 +512,8 @@ function contractText(t: ListTexts): SQL {
  * ищутся по названию; ответственный — по сотруднику. «Стоимость обслуживания» — только с правом «Видеть
  * плату за обслуживание» (`fee`). Тариф Соцфонда — из таблицы `sf` (`socfundListTable`). «Не заполнены
  * показатели» — только когда передан список контрагентов с незаполненными месяцами (`kpiMissing`).
- * «Свободный остаток» и «Долг за обслуживание» добавят задачи денег (поток В).
+ * «Долг за обслуживание» — с правом на плату, из таблицы `fd` (`feeDebtTable`), с итогом. «Свободный
+ * остаток» добавит задача 2.20.
  */
 export function contractorListColumns(
   t: ListTexts,
@@ -549,6 +598,18 @@ export function contractorListColumns(
       sort: { value: responsible.shortName, text: true },
     },
     start: { type: 'date', label: 'cp.col.start', value: contractors.startDate },
+    oneSum: {
+      type: 'enum',
+      label: 'cp.col.one_sum',
+      value: sql`case when ${contractors.oneSum} then 'yes' else 'no' end`,
+      display: sql`case when ${contractors.oneSum} then ${t('cp.yes')} else ${t('cp.no')} end`,
+    },
+    needReceiptFile: {
+      type: 'enum',
+      label: 'cp.col.need_file',
+      value: sql`case when ${contractors.needReceiptFile} then 'yes' else 'no' end`,
+      display: sql`case when ${contractors.needReceiptFile} then ${t('cp.yes')} else ${t('cp.no')} end`,
+    },
     contract: {
       type: 'text',
       label: 'cp.col.contract',
@@ -582,18 +643,25 @@ export function contractorListColumns(
       label: 'cp.col.fee',
       value: tariffOf(options.today, 'amount'),
     };
+    columns.debt = { type: 'money', label: 'cp.col.debt', value: FEE_DEBT_VALUE, total: true };
   }
   return columns;
 }
 
-/** Вкладки модуля (прототип cpsTabs): все контрагенты в области и закреплённые за собой. */
-export const CONTRACTOR_TABS = ['all', 'mine'] as const;
+/**
+ * Вкладки модуля (прототип cpsTabs): все контрагенты в области, закреплённые за собой и «Должники» —
+ * с долгом за обслуживание (только тем, кто видит плату).
+ */
+export const CONTRACTOR_TABS = ['all', 'mine', 'debtors'] as const;
 export type ContractorTab = (typeof CONTRACTOR_TABS)[number];
 
 export interface ContractorListOptions {
   t: ListTexts;
   today: IsoDate;
-  /** Право «Видеть плату за обслуживание»: столбец «Стоимость обслуживания». */
+  /**
+   * Плата за обслуживание видна (функция и право «Видеть плату»): столбцы «Стоимость обслуживания» и
+   * «Долг за обслуживание», вкладка «Должники».
+   */
   fee: boolean;
   /** Область «Свои контрагенты» (`contractorScope`). */
   scope: SQL | undefined;
@@ -614,6 +682,7 @@ export interface ContractorListOptions {
 function listScope(query: Pick<ListQuery, 'filters'>, o: ContractorListOptions): SQL | undefined {
   const parts: (SQL | undefined)[] = [o.scope];
   if (o.tab === 'mine') parts.push(eq(contractors.responsibleEmployeeId, o.employeeId));
+  if (o.tab === 'debtors') parts.push(o.fee ? sql`${FEE_DEBT_VALUE} > 0` : sql`false`);
   if (!Object.hasOwn(query.filters, 'service'))
     parts.push(ne(contractors.serviceStatus, 'archived'));
   return and(...parts);
@@ -631,8 +700,12 @@ export async function listContractorsPage(
   query: ListQuery,
   o: ContractorListOptions,
 ): Promise<ListPageResult<ContractorRow>> {
-  const fields = { ...rowFields(o.today), ...SOCFUND_ROW };
-  const sf = await socfundListTable(tx, o.t);
+  const tables = await listTables(tx, o);
+  const fields = {
+    ...rowFields(o.today),
+    ...SOCFUND_ROW,
+    ...(tables.fd ? { feeDebt: FEE_DEBT_VALUE, feeCharged: FEE_CHARGED_VALUE } : {}),
+  };
   const page = await selectListPage({
     query,
     columns: contractorListColumns(o.t, o),
@@ -640,7 +713,12 @@ export async function listContractorsPage(
     defaultSort: DEFAULT_SORT,
     scope: listScope(query, o),
     select: ({ window, where, orderBy, limit, offset }) =>
-      fromContractors(tx, { ...fields, ...window } as typeof fields & ListWindowFields, sf)
+      fromContractors(
+        tx,
+        { ...fields, ...window } as typeof fields & ListWindowFields,
+        tables.sf,
+        tables.fd,
+      )
         .where(where)
         .orderBy(...orderBy)
         .limit(limit)
@@ -651,7 +729,7 @@ export async function listContractorsPage(
           listGroups: string[] | null;
         })[]
       >,
-    from: contractorListFrom(tx, sf),
+    from: contractorListFrom(tx, tables),
   });
   const codes = await phoneCodes(tx);
   return {
@@ -672,7 +750,7 @@ export async function listContractorValues(
     columns: contractorListColumns(o.t, o),
     key,
     scope: listScope(query, o),
-    from: contractorListFrom(tx, await socfundListTable(tx, o.t)),
+    from: contractorListFrom(tx, await listTables(tx, o)),
     q,
   });
 }
@@ -691,7 +769,7 @@ export async function exportContractors(
     natural: CONTRACTOR_NATURAL,
     defaultSort: DEFAULT_SORT,
     scope: listScope(query, o),
-    from: contractorListFrom(tx, await socfundListTable(tx, o.t)),
+    from: contractorListFrom(tx, await listTables(tx, o)),
   });
   const phone = keys.indexOf('phone');
   if (phone < 0) return result;
@@ -704,19 +782,33 @@ export async function exportContractors(
   return { ...result, rows };
 }
 
-/** Счётчики вкладок (прототип cpsTabs): «Все» — в области, «Мои контрагенты» — свои; без архива. */
+/**
+ * Счётчики вкладок (прототип cpsTabs): «Все» — в области, «Мои контрагенты» — свои, «Должники» — в
+ * области с долгом за обслуживание (null — плата не видна: `fee` не передан); без архива.
+ */
 export async function contractorTabCounts(
   tx: Tx,
   scope: SQL | undefined,
   employeeId: string,
-): Promise<{ all: number; mine: number }> {
+  fee?: { today: IsoDate },
+): Promise<{ all: number; mine: number; debtors: number | null }> {
   const live = ne(contractors.serviceStatus, 'archived');
   const [all] = await tx.select({ n: count() }).from(contractors).where(and(live, scope));
   const [mine] = await tx
     .select({ n: count() })
     .from(contractors)
     .where(and(live, eq(contractors.responsibleEmployeeId, employeeId)));
-  return { all: Number(all?.n ?? 0), mine: Number(mine?.n ?? 0) };
+  let debtors: number | null = null;
+  if (fee) {
+    const fd = await feeDebtTable(tx, fee.today);
+    const [row] = await tx
+      .select({ n: count() })
+      .from(contractors)
+      .innerJoin(fd, sql`${FEE_DEBT.id} = ${contractors.id}`)
+      .where(and(live, scope, sql`${FEE_DEBT.debt} > 0`));
+    debtors = Number(row?.n ?? 0);
+  }
+  return { all: Number(all?.n ?? 0), mine: Number(mine?.n ?? 0), debtors };
 }
 
 /** Итоги плашек списка контрагентов (прототип renderCps) в области сотрудника. */
@@ -729,6 +821,11 @@ export interface ContractorSummary {
   socfundAsk: number;
   /** С незаполненными показателями; null — плашки нет (функция выключена или нет права). */
   kpiMissing: number | null;
+  /**
+   * «Должники» (прототип renderCps, плашка `deb`): сколько контрагентов с долгом за обслуживание и
+   * сумма долгов; null — плата не видна.
+   */
+  debtors: { count: number; sum: number } | null;
   paused: number;
   oneoff: number;
   archived: number;
@@ -740,12 +837,13 @@ export interface ContractorSummary {
  */
 export async function contractorSummary(
   tx: Tx,
-  o: Pick<ContractorListOptions, 't' | 'today' | 'scope' | 'kpiMissing'>,
+  o: Pick<ContractorListOptions, 't' | 'today' | 'scope' | 'kpiMissing' | 'fee'>,
 ): Promise<ContractorSummary> {
-  const sf = await socfundListTable(tx, o.t);
+  const { sf, fd } = await listTables(tx, o);
   const live = sql`${contractors.serviceStatus} <> 'archived'`;
   const n = (cond: SQL) => sql<number>`coalesce(sum(case when ${cond} then 1 else 0 end), 0)::int`;
-  const [row] = await tx
+  const debt = fd ? FEE_DEBT_VALUE : sql`0`;
+  const base = tx
     .select({
       active: n(live),
       noResponsible: n(sql`${live} and ${contractors.responsibleEmployeeId} is null`),
@@ -756,10 +854,18 @@ export async function contractorSummary(
       paused: n(sql`${contractors.serviceStatus} = 'paused'`),
       oneoff: n(sql`${live} and ${contractors.kind} = 'oneoff'`),
       archived: n(sql`${contractors.serviceStatus} = 'archived'`),
+      debtors: n(sql`${live} and ${debt} > 0`),
+      debtSum:
+        sql<number>`coalesce(sum(case when ${live} then ${debt} else 0 end), 0)::bigint`.mapWith(
+          Number,
+        ),
     })
     .from(contractors)
     .leftJoin(sf, sql`${SOCFUND_LIST.id} = ${contractors.id}`)
-    .where(o.scope);
+    .$dynamic();
+  const [row] = await (
+    fd ? base.leftJoin(fd, sql`${FEE_DEBT.id} = ${contractors.id}`) : base
+  ).where(o.scope);
   const r = row!;
   return {
     active: r.active,
@@ -771,6 +877,7 @@ export async function contractorSummary(
     paused: r.paused,
     oneoff: r.oneoff,
     archived: r.archived,
+    debtors: fd ? { count: r.debtors, sum: r.debtSum } : null,
   };
 }
 
@@ -881,6 +988,7 @@ export async function getContractor(
     paysTo: r.paysTo as 'emp' | 'org',
     needReceiptFile: r.needReceiptFile as boolean,
     regdocs: r.regdocs as boolean,
+    oneSum: base.oneSum,
     serviceStatus: base.serviceStatus,
     tariff: base.tariff && { ...base.tariff, validFrom: r.tariffFrom as IsoDate },
     gkedConfirmation: confirmation && { ...confirmation, by },

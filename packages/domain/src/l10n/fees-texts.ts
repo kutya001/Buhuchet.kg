@@ -1,0 +1,202 @@
+import { FEE_MESSAGES } from '../fees/messages';
+import type { UiTextDefault } from './texts';
+
+const S = 'Плата за обслуживание';
+const E = 'Ошибки';
+
+const FEE_ERR_TEXTS = Object.fromEntries(
+  Object.entries(FEE_MESSAGES).map(([code, ru]) => [`err.${code}`, { ru, section: E }]),
+) as { readonly [K in keyof typeof FEE_MESSAGES as `err.${K}`]: UiTextDefault };
+
+/**
+ * Тексты платы за обслуживание (задача 2.21; прототип modules/contractor-card.js — вкладка
+ * «Обслуживание», `tariffDlg`, `feePayDlg`, кнопка «Принять оплату» в шапке, «Платит одной суммой»;
+ * modules/contractors.js — плашка и вкладка «Должники», столбец «Долг за обслуживание», пункты меню «…»,
+ * часть за обслуживание в `inDlg`; ui/status-scale.js — `waDlg` с `fee`).
+ */
+export const FEE_TEXTS = {
+  'cp.card.tab.fee': { ru: 'Обслуживание', section: S },
+  'cp.card.fee_accept': { ru: 'Принять оплату', section: S },
+  'cp.card.one_sum': { ru: 'Платит одной суммой', section: S },
+  'cp.card.one_sum_tip': {
+    ru: 'Контрагент переводит одну сумму сразу на налоги и обслуживание. Система сама делит её: сначала налоги, остаток — в оплату обслуживания.',
+    section: S,
+  },
+  'cp.card.one_sum_on': { ru: 'налоги и обслуживание вместе', section: S },
+  'cp.card.one_sum_hint': {
+    ru: 'При поступлении деление на налоги и обслуживание подставится само',
+    section: S,
+  },
+  'cp.plate.debtors': { ru: 'Должники', section: S },
+  'cp.plate.debtors_ok': { ru: 'долгов нет', section: S },
+  'cp.col.debt': { ru: 'Долг за обслуживание', section: S },
+  'cp.col.one_sum': { ru: 'Платит одной суммой', section: S },
+  'cp.menu.fee_accept': { ru: 'Принять оплату за обслуживание', section: S },
+  'cp.menu.fee_debt': { ru: 'Долг {amount}', section: S },
+  'cp.menu.fee_remind': { ru: 'Напомнить о долге в WhatsApp', section: S },
+
+  'fee.plate.tariff': { ru: 'Текущая ставка', section: S },
+  'fee.plate.unit_month': { ru: 'сом в месяц', section: S },
+  'fee.plate.unit_year': { ru: 'сом в год', section: S },
+  'fee.plate.tariff_month': { ru: 'с {from}, оплата до {day}-го', section: S },
+  'fee.plate.tariff_year': {
+    ru: 'ежегодно, начисление раз в год в {month}, оплата до {day}-го числа',
+    section: S,
+  },
+  'fee.plate.debt': { ru: 'Долг за обслуживание', section: S },
+  'fee.plate.unit': { ru: 'сом', section: S },
+  'fee.plate.debt_late': { ru: 'срок оплаты прошёл', section: S },
+  'fee.plate.debt_none': { ru: 'долгов нет', section: S },
+  'fee.plate.with_advance': { ru: '{text} · аванс {amount}', section: S },
+  'fee.btn.tariff': { ru: 'Новая ставка', section: S },
+  'fee.btn.remind': { ru: 'Напомнить в WhatsApp', section: S },
+  'fee.btn.accept': { ru: 'Принять оплату за обслуживание', section: S },
+  'fee.months.title': { ru: 'Начисления и оплаты', section: S },
+  'fee.col.month': { ru: 'Месяц', section: S },
+  'fee.col.charged': { ru: 'Начислено', section: S },
+  'fee.col.paid': { ru: 'Оплачено', section: S },
+  'fee.col.status': { ru: 'Статус', section: S },
+  'fee.col.got': { ru: 'Уже оплачено', section: S },
+  'fee.col.allocate': { ru: 'Распределить', section: S },
+  'fee.col.becomes': { ru: 'Станет', section: S },
+  'fee.col.date': { ru: 'Дата', section: S },
+  'fee.col.for_month': { ru: 'За месяц', section: S },
+  'fee.col.by': { ru: 'Внёс', section: S },
+  'fee.col.amount': { ru: 'Сумма', section: S },
+  'fee.months.first': { ru: 'с {day}-го', section: S },
+  'fee.months.first_tip': { ru: 'Первый неполный месяц', section: S },
+  'fee.months.from_advance': { ru: 'из аванса', section: S },
+  'fee.months.from_advance_tip': { ru: 'Засчитано из аванса {amount}', section: S },
+  'fee.months.empty': { ru: 'Начислений пока нет', section: S },
+  'fee.pays.title': { ru: 'Оплаты · {n}', section: S },
+  'fee.pays.from_receipt': { ru: 'из общего поступления', section: S },
+  'fee.pays.advance': { ru: 'аванс', section: S },
+  'fee.pays.more': {
+    ru: 'Показаны последние {n}; все оплаты — в «Финансовых операциях», вкладка «Обслуживание»',
+    section: S,
+  },
+  'fee.pays.empty': { ru: 'Оплат пока не было', section: S },
+  'fee.tariffs.title': { ru: 'Журнал тарифов', section: S },
+  'fee.tariffs.from': { ru: 'с {month}', section: S },
+  'fee.tariffs.per_month': { ru: 'в месяц', section: S },
+  'fee.tariffs.per_year': { ru: 'в год', section: S },
+  'fee.tariffs.hint': {
+    ru: 'Записи не удаляются и не переписываются: новая ставка всегда добавляется новой записью и действует с 1-го числа.',
+    section: S,
+  },
+
+  'fee.tariff.title': { ru: 'Новая ставка обслуживания', section: S },
+  'fee.tariff.amount': { ru: 'Сумма, сом', section: S },
+  'fee.tariff.period': { ru: 'Периодичность', section: S },
+  'fee.tariff.period_month': { ru: 'В месяц', section: S },
+  'fee.tariff.period_year': { ru: 'В год (одна оплата)', section: S },
+  'fee.tariff.period_hint': {
+    ru: 'Годовая ставка начисляется раз в год, в месяце «действует с»',
+    section: S,
+  },
+  'fee.tariff.from': { ru: 'Действует с месяца', section: S },
+  'fee.tariff.from_hint_next': {
+    ru: 'С 1-го числа следующего месяца или позже: текущий месяц уже начислен',
+    section: S,
+  },
+  'fee.tariff.from_hint_first': { ru: 'Ставка всегда начинается с 1-го числа', section: S },
+  'fee.tariff.note': { ru: 'Примечание', section: S },
+  'fee.tariff.note_default': { ru: 'Повышение с {month}', section: S },
+  'fee.tariff.info': {
+    ru: 'Начисления за прошлые месяцы не пересчитываются. Ставку можно внести заранее — она вступит в силу сама.',
+    section: S,
+  },
+  'fee.tariff.ok': { ru: 'Добавить в журнал', section: S },
+  'fee.tariff.saved': { ru: 'Ставка добавлена в журнал', section: S },
+
+  'fee.pay.title': { ru: 'Принять оплату за обслуживание', section: S },
+  'fee.pay.sub_debt': { ru: 'долг {amount}', section: S },
+  'fee.pay.sub_unpaid': { ru: 'к оплате {amount}', section: S },
+  'fee.pay.sub_none': { ru: 'долгов нет', section: S },
+  'fee.pay.sub_advance': { ru: '{text} · аванс {amount}', section: S },
+  'fee.pay.amount': { ru: 'Сумма, сом', section: S },
+  'fee.pay.amount_hint': { ru: 'Подставлен долг за обслуживание: {amount}', section: S },
+  'fee.pay.date': { ru: 'Дата', section: S },
+  'fee.pay.to': { ru: 'Куда поступили деньги', section: S },
+  'fee.pay.to_hint': {
+    ru: 'Плата за обслуживание поступает только организации: на её счёт или владельцу',
+    section: S,
+  },
+  'fee.to.account': { ru: 'Счёт организации · {bank}', section: S },
+  'fee.to.account_phone': { ru: 'Счёт организации · {bank} · по номеру {phone}', section: S },
+  'fee.to.main': { ru: '{text} (основной)', section: S },
+  'fee.to.org': { ru: 'Счёт организации', section: S },
+  'fee.to.owner': { ru: 'Владельцу организации', section: S },
+  'fee.pay.months': { ru: 'За какие месяцы', section: S },
+  'fee.pay.auto': { ru: 'От старых к новым', section: S },
+  'fee.pay.overdue': { ru: 'просрочено', section: S },
+  'fee.pay.no_months': {
+    ru: 'Неоплаченных начислений нет — вся сумма станет авансом и сама засчитается в следующие начисления.',
+    section: S,
+  },
+  'fee.pay.row_over': { ru: 'больше долга', section: S },
+  'fee.pay.row_paid': { ru: 'оплачено', section: S },
+  'fee.pay.row_partial': { ru: 'частично', section: S },
+  'fee.pay.allocated': { ru: 'Распределено:', section: S },
+  'fee.pay.over': { ru: 'больше суммы на {amount}', section: S },
+  'fee.pay.advance': { ru: 'аванс {amount} — засчитается в следующие начисления', section: S },
+  'fee.pay.even': { ru: 'сходится', section: S },
+  'fee.pay.allocate_aria': { ru: 'Распределить на {month}', section: S },
+  'fee.pay.file': { ru: 'Файл: скрин перевода, квитанция', section: S },
+  'fee.pay.note': { ru: 'Примечание', section: S },
+  'fee.pay.ok': { ru: 'Принять оплату', section: S },
+  'fee.pay.saved': { ru: 'Оплата за обслуживание принята', section: S },
+  'fee.alloc.item': { ru: '{month} — {amount}', section: S },
+  'fee.alloc.advance': { ru: 'аванс — {amount}', section: S },
+
+  'fee.wa.title': { ru: 'Напомнить в WhatsApp', section: S },
+  'fee.wa.no_phone': {
+    ru: 'У контрагента нет номера телефона — сообщение отправить нельзя. Добавьте номер в карточке.',
+    section: S,
+  },
+  'fee.wa.where': { ru: 'Куда переводить · основной счёт для обслуживания', section: S },
+  'fee.wa.by_phone': { ru: 'по номеру', section: S },
+  'fee.wa.text': { ru: 'Текст сообщения', section: S },
+  'fee.wa.text_hint': {
+    ru: 'Шаблон ведёт администратор платформы. Здесь текст можно поправить перед отправкой.',
+    section: S,
+  },
+  'fee.wa.note': {
+    ru: 'Сообщение откроется в WhatsApp на номер {phone}, отправляете его вы сами. Нажатие записывается в историю.',
+    section: S,
+  },
+  'fee.wa.open': { ru: 'Открыть WhatsApp', section: S },
+  'fee.wa.logged': { ru: 'Записано в историю', section: S },
+  'fee.wa.requisites': { ru: 'Реквизиты для оплаты: {req}.', section: S },
+
+  'fee.receipt.row': { ru: 'Обслуживание', section: S },
+  'fee.receipt.to_org': { ru: 'плата за обслуживание — на счёт организации', section: S },
+  'fee.receipt.one_sum_title': {
+    ru: 'Платит одной суммой: налоги и обслуживание вместе.',
+    section: S,
+  },
+  'fee.receipt.one_sum_text': {
+    ru: 'Деление подставлено само: обслуживание за текущий месяц и налоги со сроком до конца месяца. Поправьте суммы, если контрагент перевёл иначе.',
+    section: S,
+  },
+  'fee.receipt.split': { ru: '(налоги {tax}, обслуживание {fee})', section: S },
+  'fee.receipt.hint': {
+    ru: 'Часть за обслуживание на виртуальный счёт не попадает.',
+    section: S,
+  },
+  'fee.receipt.aria': { ru: 'Распределить на обслуживание', section: S },
+
+  'files.kind.fee_payment': { ru: 'Оплата за обслуживание', section: S },
+  'money.op.basis_fee': { ru: 'За обслуживание', section: S },
+  'fee.hist.tariff': { ru: 'Новая ставка {amount} {per} с {month}', section: S },
+  'fee.hist.payment': { ru: 'Оплата за обслуживание {amount}: {what}', section: S },
+  'fee.hist.reminder': { ru: 'Напоминание в WhatsApp о долге за обслуживание', section: S },
+  'fee.hist.one_sum_on': {
+    ru: 'Отмечено: платит одной суммой (налоги и обслуживание)',
+    section: S,
+  },
+  'fee.hist.one_sum_off': { ru: 'Снята отметка «Платит одной суммой»', section: S },
+  'fee.hist.payment_file': { ru: 'Оплата за обслуживание · {text}', section: S },
+  'fee.hist.receipt_item': { ru: 'обслуживание {month} — {amount}', section: S },
+  ...FEE_ERR_TEXTS,
+} as const satisfies Record<string, UiTextDefault>;

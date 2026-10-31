@@ -14,6 +14,7 @@ import type { Db } from '../client';
 import { seedDemoContractorPages } from './demo-contractor-page';
 import { seedDemoContractors } from './demo-contractors';
 import { seedDemoDictRequests } from './demo-dicts';
+import { seedDemoFees } from './demo-fees';
 import { seedDemoMoney } from './demo-money';
 import { seedDemoMoneyTax } from './demo-money-tax';
 import { seedDemoKpi } from './demo-kpi';
@@ -47,6 +48,7 @@ export type DemoKind =
   | 'task_comment'
   | 'requisite'
   | 'money_operation'
+  | 'fee_payment'
   | 'indicator'
   | 'indicator_value'
   | 'indicator_month'
@@ -321,6 +323,8 @@ export async function seedDemoOrganization(
   await seedDemoMoney(db, file, orgId);
   // Деньги по отчётам (задача 2.19).
   await seedDemoMoneyTax(db, file, { orgId, demoId });
+  // Плата за обслуживание (задача 2.21).
+  await seedDemoFees(db, file, { orgId, demoId });
 
   await seedDemoKpi(db, file, orgId);
 

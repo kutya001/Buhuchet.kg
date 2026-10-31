@@ -236,6 +236,8 @@ describe.skipIf(!databaseAvailable())(
         paused: 1,
         oneoff: 1,
         archived: 1,
+        // «Плата за обслуживание» выключена — плашки «Должники» нет.
+        debtors: null,
         scopeAll: true,
       });
       expect(await summary(acc)).toMatchObject({

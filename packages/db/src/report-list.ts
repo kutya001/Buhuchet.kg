@@ -585,19 +585,28 @@ export function reportFilesPart(scope: SQL | undefined, t: ListTexts): FileListP
  * Файлы поступлений и оплат налога в Файловом менеджере (задача 2.19, прототип allFiles): операция
  * контрагента в области `scope` группы «Финансовые операции» (над `contractors`), отменённая оплата —
  * нет; источник — «Поступление 15 000 сом от 05.10.2026», «Оплата НДС 09.2026 — 3 000 сом от 20.10.2026».
+ * Плата за обслуживание (задача 2.21): `feeScope` — где сотрудник видит плату (область группы
+ * «Контрагенты» над `contractors`; null — нигде). Там у поступления — вся сумма, иначе — только часть на
+ * налоги, а поступление только за обслуживание (часть на налоги 0) не видно (docs/deviations.md п. В-19).
  */
+// ОТКЛОНЕНИЕ: docs/deviations.md#В-19
 export function moneyFilesPart(
   kind: 'receipt' | 'tax_payment',
   scope: SQL | undefined,
   t: ListTexts,
+  feeScope: { scope: SQL | undefined } | null = null,
 ): FileListPart {
-  const op = sql`(select ${moneyOperations.id} from ${moneyOperations} join ${contractors} on ${contractors.id} = ${moneyOperations.contractorId} where ${moneyOperations.id} = ${files.sourceId} and ${moneyOperations.kind} = ${textLiteral(kind === 'receipt' ? 'in' : 'pay')} and ${moneyOperations.cancelledAt} is null and ${scope ?? sql`true`})`;
+  const feeSeen = feeScope ? (feeScope.scope ?? sql`true`) : sql`false`;
+  const receiptOnly =
+    kind === 'receipt' ? sql` and (${moneyOperations.amount} > 0 or ${feeSeen})` : sql``;
+  const op = sql`(select ${moneyOperations.id} from ${moneyOperations} join ${contractors} on ${contractors.id} = ${moneyOperations.contractorId} where ${moneyOperations.id} = ${files.sourceId} and ${moneyOperations.kind} = ${textLiteral(kind === 'receipt' ? 'in' : 'pay')} and ${moneyOperations.cancelledAt} is null and ${scope ?? sql`true`}${receiptOnly})`;
   const date = sql`to_char(${moneyOperations.opDate}, 'DD.MM.YYYY')`;
   if (kind === 'receipt') {
-    const label = sql`replace(replace(${dictLiteral(t('files.src.receipt'))}::text, '{amount}', ${somUnitText(sql`coalesce(${moneyOperations.total}, ${moneyOperations.amount})`)}), '{date}', ${date})`;
+    const amount = sql`case when ${feeSeen} then coalesce(${moneyOperations.total}, ${moneyOperations.amount}) else ${moneyOperations.amount} end`;
+    const label = sql`replace(replace(${dictLiteral(t('files.src.receipt'))}::text, '{amount}', ${somUnitText(amount)}), '{date}', ${date})`;
     return {
       visible: sql`exists ${op}`,
-      source: sql`(select ${label} from ${moneyOperations} where ${moneyOperations.id} = ${files.sourceId})`,
+      source: sql`(select ${label} from ${moneyOperations} join ${contractors} on ${contractors.id} = ${moneyOperations.contractorId} where ${moneyOperations.id} = ${files.sourceId})`,
     };
   }
   const report = sql`${reportTypes.shortName} || ' ' || ${periodLabel(

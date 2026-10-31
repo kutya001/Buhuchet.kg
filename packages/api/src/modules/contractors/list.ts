@@ -76,7 +76,7 @@ async function listOptions(
   deps: ApiDeps,
   c: Context<AppEnv>,
   tx: Tx,
-  tab: 'all' | 'mine',
+  tab: ContractorListOptions['tab'],
   kpi = false,
 ): Promise<ContractorListOptions> {
   const subject = subjectOf(c);
@@ -122,11 +122,13 @@ async function rowServices(
   );
 }
 
-/** Строка списка для ответа API: моменты — строкой ISO, ставка — только тому, кто видит плату. */
+/** Строка списка для ответа API: моменты — строкой ISO, ставка и долг — только тому, кто видит плату. */
 function rowBody(r: ContractorRow, fee: boolean, service: RowService): ContractorRowBody {
   return {
     ...r,
     tariff: fee ? r.tariff : null,
+    feeDebt: fee ? r.feeDebt : null,
+    feeCharged: fee ? r.feeCharged : null,
     service,
     serviceSince: { at: r.serviceSince.at.toISOString(), by: r.serviceSince.by },
     audit: {
@@ -194,7 +196,8 @@ export const contractorTabCountsRoute = createRoute({
   middleware: [requirePermission('cpView')] as const,
   responses: {
     200: {
-      description: 'Контрагентов на обслуживании в области и закреплённых за собой',
+      description:
+        'Контрагентов на обслуживании в области, закреплённых за собой и с долгом за обслуживание',
       content: { 'application/json': { schema: ContractorTabCounts } },
     },
     401: { description: 'Нет входа', content: error },
@@ -202,14 +205,24 @@ export const contractorTabCountsRoute = createRoute({
   },
 });
 
-/** Числа на вкладках (прототип cpsTabs): «Все» — в области, «Мои контрагенты» — свои; без архива. */
+/**
+ * Числа на вкладках (прототип cpsTabs): «Все» — в области, «Мои контрагенты» — свои, «Должники» — с
+ * долгом за обслуживание (только тому, кто видит плату); без архива.
+ */
 export function contractorTabCountsHandler(
   deps: ApiDeps,
 ): RouteHandler<typeof contractorTabCountsRoute, AppEnv> {
   return async (c) => {
     const subject = subjectOf(c);
-    const counts = await withOrgContext(deps.db, orgContextOf(c), (tx) =>
-      contractorTabCounts(tx, scopeSqlOf(subject), subject.employeeId),
+    const counts = await withOrgContext(deps.db, orgContextOf(c), async (tx) =>
+      contractorTabCounts(
+        tx,
+        scopeSqlOf(subject),
+        subject.employeeId,
+        (await feeVisible(tx, orgContextOf(c).orgId, subject))
+          ? { today: todayOf(deps) }
+          : undefined,
+      ),
     );
     return c.json(counts, 200);
   };
@@ -317,7 +330,7 @@ export const contractorSummaryRoute = createRoute({
   responses: {
     200: {
       description:
-        'Контрагентов в области: на обслуживании, без ответственного, с просрочкой, без ГКЭД, с тарифом под вопросом, с незаполненными показателями, приостановленных, разовых и в архиве',
+        'Контрагентов в области: на обслуживании, без ответственного, с просрочкой, должников за обслуживание, без ГКЭД, с тарифом под вопросом, с незаполненными показателями, приостановленных, разовых и в архиве',
       content: { 'application/json': { schema: ContractorSummary } },
     },
     401: { description: 'Нет входа', content: error },
