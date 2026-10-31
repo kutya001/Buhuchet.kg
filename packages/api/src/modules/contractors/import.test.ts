@@ -10,6 +10,7 @@ import { CP_IMPORT_CELL_MAX } from '@buhuchet/domain';
 import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { readSheetRows } from '../../lists/xlsx-read';
+import { CP_IMPORT_RATE_LIMIT } from './import';
 import { apiRequest, createStaffFixture, signIn, TEST_PASSWORD } from '../../testing';
 
 type Fixture = Awaited<ReturnType<typeof createStaffFixture>>;
@@ -79,6 +80,12 @@ describe.skipIf(!databaseAvailable())('Загрузка контрагентов
     const body = { map: MAP, rows: [['ОсОО «А»']] };
     expect((await call('/api/contractors/import/check', undefined, body)).status).toBe(401);
     expect((await call('/api/contractors/import', undefined, body)).status).toBe(401);
+    for (const path of [
+      '/api/contractors/import/template/preview',
+      '/api/contractors/import/template',
+    ]) {
+      expect((await apiRequest(f.app, 'GET', path, undefined)).status).toBe(401);
+    }
     for (const cookie of [acc, senior]) {
       const res = await call('/api/contractors/import/check', cookie, body);
       expect(res.status).toBe(403);
@@ -313,6 +320,57 @@ describe.skipIf(!databaseAvailable())('Загрузка контрагентов
       .from(schema.contractorTariffs)
       .where(eq(schema.contractorTariffs.contractorId, cp.id));
     expect(tariffs).toEqual([]);
+  });
+
+  it('область «Свои»: ИНН контрагента вне области — только «ИНН уже есть в организации», без названия', async () => {
+    // У «Кадров» область «Свои» и (с прошлого теста) право загрузки; контрагент с этим ИНН закреплён
+    // не за ним.
+    const hr = await signIn(f.app, 'hr-a', TEST_PASSWORD);
+    const foreign = (await byInn('01504202010080'))!;
+    expect(foreign.responsibleEmployeeId).not.toBe(f.people['hr-a']!.employeeId);
+    const res = await call('/api/contractors/import/check', hr, {
+      map: MAP,
+      rows: [['ОсОО «Свой»', '01504202010080', '555 404 411', 'НДС', '', 'acc-a', 'ОНР', '']],
+    });
+    expect(res.status).toBe(200);
+    const text = await res.text();
+    expect(text).not.toContain(foreign.name);
+    expect(text).not.toContain(foreign.id);
+    expect(ContractorImportCheck.parse(JSON.parse(text)).rows[0]!.errors).toEqual([
+      'ИНН уже есть в организации',
+    ]);
+  });
+
+  it('по очереди: идёт прежняя проверка — 429 «ещё идёт», за час уже 60 — 429', async () => {
+    const { userId } = f.people['chief-a']!;
+    const mine = and(
+      eq(schema.rateLimits.kind, CP_IMPORT_RATE_LIMIT.kind),
+      eq(schema.rateLimits.subject, userId),
+    );
+    await f.t.admin.db.delete(schema.rateLimits).where(mine);
+    const body = { map: MAP, rows: [['ОсОО «Очередь»']] };
+    await f.t.admin.db.insert(schema.rateLimits).values({
+      kind: CP_IMPORT_RATE_LIMIT.kind,
+      subject: userId,
+      busyUntil: new Date(Date.now() + 60_000),
+    });
+    const busy = await call('/api/contractors/import/check', chief, body);
+    expect(busy.status).toBe(429);
+    expect((await failure(busy)).code).toBe('cp_import_busy');
+    // Другой сотрудник в это время проверяет свою вставку.
+    await checked(body.rows);
+    await f.t.admin.db.update(schema.rateLimits).set({ busyUntil: null }).where(mine);
+    await f.t.admin.db.insert(schema.rateLimits).values(
+      Array.from({ length: CP_IMPORT_RATE_LIMIT.max - 1 }, () => ({
+        kind: CP_IMPORT_RATE_LIMIT.kind,
+        subject: userId,
+        at: new Date(Date.now() - 30 * 60_000),
+      })),
+    );
+    const limited = await call('/api/contractors/import', chief, body);
+    expect(limited.status).toBe(429);
+    expect((await failure(limited)).code).toBe('cp_import_limit');
+    await f.t.admin.db.delete(schema.rateLimits).where(mine);
   });
 
   it('чужая организация не видна: ИНН другой организации свободен, создаётся в своей', async () => {

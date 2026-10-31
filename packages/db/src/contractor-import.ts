@@ -116,18 +116,26 @@ export async function takenInns(tx: Tx, inns: readonly string[]): Promise<Set<st
   return new Set(rows.map((r) => r.inn));
 }
 
+/** Код ГКЭД не длиннее этого (подкласс — «69.20.0»): длиннее в справочнике не ищется. */
+const GKED_CODE_MAX = 12;
+/** Кодов в одном запросе к справочнику — чтобы не упереться в предел параметров запроса. */
+const GKED_CHUNK = 1000;
+
 /** Коды ГКЭД из вставки, которые есть в справочнике: уровень и действует ли. */
 export async function gkedLevels(
   tx: Tx,
   codes: readonly string[],
 ): Promise<Map<string, { level: string; active: boolean }>> {
-  const list = [...new Set(codes)];
-  if (!list.length) return new Map();
-  const rows = await tx
-    .select({ code: gkedItems.code, level: gkedItems.level, active: gkedItems.active })
-    .from(gkedItems)
-    .where(inArray(gkedItems.code, list));
-  return new Map(rows.map((r) => [r.code, { level: r.level, active: r.active }]));
+  const list = [...new Set(codes)].filter((c) => c.length <= GKED_CODE_MAX);
+  const out = new Map<string, { level: string; active: boolean }>();
+  for (let i = 0; i < list.length; i += GKED_CHUNK) {
+    const rows = await tx
+      .select({ code: gkedItems.code, level: gkedItems.level, active: gkedItems.active })
+      .from(gkedItems)
+      .where(inArray(gkedItems.code, list.slice(i, i + GKED_CHUNK)));
+    for (const r of rows) out.set(r.code, { level: r.level, active: r.active });
+  }
+  return out;
 }
 
 /**

@@ -70,6 +70,15 @@ test.describe('Этап 2: загрузка контрагентов из Excel'
     await expect(importRow(dialog, 2)).toContainText('не указан ответственный');
     await expect(dialog.locator('[data-cp-import-ready]')).toHaveText('Готово к загрузке: 2 из 3');
 
+    // Ячейку можно исправить прямо в таблице: строка снова «не проверено», «Проверить» — заново.
+    await importRow(dialog, 2).getByLabel('Телефон, строка 3').fill('555 123 458');
+    await expect(importRow(dialog, 2)).toContainText('не проверено');
+    await expect(dialog.locator('[data-cp-import-ready]')).toHaveText('Готово к загрузке: 0 из 3');
+    await dialog.getByRole('button', { name: 'Проверить' }).click();
+    await expect(importRow(dialog, 2)).toContainText('ИНН не 14 цифр');
+    await expect(importRow(dialog, 2)).not.toContainText('нет телефона');
+    await expect(dialog.locator('[data-cp-import-ready]')).toHaveText('Готово к загрузке: 2 из 3');
+
     // «ОК» создаёт только готовые строки; строка с ошибками остаётся в окне.
     await dialog.getByRole('button', { name: 'ОК, создать 2' }).click();
     await expect(page.getByText('Создано контрагентов: 2. Пропущено строк: 1')).toBeVisible();

@@ -276,10 +276,15 @@ export function checkImportRows(
     if ('problem' in ph)
       err(ph.problem === 'missing' ? 'cp.import.err.phone' : 'cp.import.err.phone_length');
 
-    const names = v.types
-      .split(',')
-      .map((x) => x.trim())
-      .filter(Boolean);
+    // Повтор в ячейке — одно значение и одна ошибка (прототип давал ошибку на каждый повтор).
+    const names = [
+      ...new Set(
+        v.types
+          .split(',')
+          .map((x) => x.trim())
+          .filter(Boolean),
+      ),
+    ];
     const typeCodes: string[] = [];
     for (const n of names) {
       const q = importNorm(n).replace(/\.$/, '');
@@ -332,10 +337,14 @@ export function checkImportRows(
     else if (!node.active) err('cp.import.err.gked_inactive', { code: gk });
     else gked = gk;
 
-    const extra = v.gked2
-      .split(/[,;]/)
-      .map((x) => x.trim())
-      .filter(Boolean);
+    const extra = [
+      ...new Set(
+        v.gked2
+          .split(/[,;]/)
+          .map((x) => x.trim())
+          .filter(Boolean),
+      ),
+    ];
     const gkedExtra: string[] = [];
     for (const k of extra) {
       const x = dicts.gked.get(k);

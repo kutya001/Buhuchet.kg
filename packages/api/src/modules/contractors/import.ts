@@ -268,17 +268,31 @@ async function createRows(
   const { t, today } = ctx;
   const confirm = (await orgMenuSettings(tx, orgId)).reportConfirm;
   const start = `${today.slice(0, 7)}-01`;
+  // Статусы по УГНС и справочники Соцфонда у строк с тем же УГНС, ГКЭД и формой одинаковы — читаются
+  // один раз на загрузку.
+  const offices = new Map<string, Awaited<ReturnType<typeof withOfficeBenefits>>>();
+  const socfunds = new Map<string, Awaited<ReturnType<typeof socfundContext>>>();
   let created = 0;
   for (const p of rows) {
     if (p.check.errors.length) continue;
     const d = p.check.draft;
-    const office = await withOfficeBenefits(
-      tx,
-      [],
-      { from: null, to: d.taxOfficeCode },
-      { marked: t('cp.notice.ugns_marked'), dropped: t('cp.notice.ugns_dropped') },
-    );
-    const sf = await socfundContext(tx, d.gked, d.formCode);
+    const officeKey = d.taxOfficeCode ?? '';
+    let office = offices.get(officeKey);
+    if (!office) {
+      office = await withOfficeBenefits(
+        tx,
+        [],
+        { from: null, to: d.taxOfficeCode },
+        { marked: t('cp.notice.ugns_marked'), dropped: t('cp.notice.ugns_dropped') },
+      );
+      offices.set(officeKey, office);
+    }
+    const sfKey = `${d.gked ?? ''}|${d.formCode ?? ''}`;
+    let sf = socfunds.get(sfKey);
+    if (!sf) {
+      sf = await socfundContext(tx, d.gked, d.formCode);
+      socfunds.set(sfKey, sf);
+    }
     const codes = p.types.map((x) => x.code);
     const employees =
       Object.keys(d.socfund).length > 0 || codes.some((c) => sf.dict.reportTypes.includes(c));
