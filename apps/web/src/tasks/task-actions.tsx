@@ -1,7 +1,18 @@
 'use client';
 
-import type { TaskAction, TaskActor } from '@buhuchet/domain';
-import { Task, type TaskFormOptions, type TaskRow } from '@buhuchet/shared';
+import {
+  formatSomWithUnit,
+  submitNeedsPayment,
+  type TaskAction,
+  type TaskActor,
+} from '@buhuchet/domain';
+import {
+  Task,
+  type RegularTaskRow,
+  type TaskFormOptions,
+  type TaskListRow,
+  type TaskRow,
+} from '@buhuchet/shared';
 import { ConfirmDialog, RollbackDialog, useToast, type ActionEntry } from '@buhuchet/ui';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
@@ -9,6 +20,7 @@ import { api, callApi } from '../api-client';
 import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
 import { useErrorText, useT } from '../l10n/provider';
 import { useShell } from '../shell/context';
+import { useReportActions, useReportActor } from '../reports/report-actions';
 import { rollbackLabels, rollbackTitle } from '../status/status-view';
 import { TaskCard } from './task-card';
 import {
@@ -42,11 +54,14 @@ const ROLLBACK_EFFECT = {
  * действий): в списке — кнопкой «⋯», долгим нажатием и правым кликом; в карточке — кнопкой «Действия»,
  * кнопками внизу и шагами шкалы. «Взять в работу» — сразу; «Выполнена», «Не выполнена», «Подтвердить»,
  * «На доработку», «Изменить» — окном (по свежей карточке с сервера); «Отменить задачу» — после
- * вопроса; откат — окном с причиной. Отказ сервера — уведомлением с текстом из словаря.
+ * вопроса; откат — окном с причиной. Отказ сервера — уведомлением с текстом из словаря. Регулярная
+ * задача открывает карточку своего отчёта; в меню — «Открыть отчёт», «Отметить отчёт сданным» и когда
+ * задача закроется сама (задача 2.24).
  */
 export function useTaskActions(): {
-  actions: (task: TaskRow) => ActionEntry[];
-  openCard: (task: TaskRow) => void;
+  actions: (task: TaskListRow) => ActionEntry[];
+  /** Карточка: ручной задачи (строка списка или карточка с сервера) или отчёта регулярной задачи. */
+  openCard: (task: TaskListRow | TaskRow) => void;
   newTask: (preset?: TaskFormPreset) => void;
   dialogs: ReactNode;
 } {
@@ -147,8 +162,56 @@ export function useTaskActions(): {
     edit: (task) => void edit(task),
     cancel: setAskCancel,
   };
-  const actions = actor ? taskMenuEntries({ actor, t, run }) : () => [];
+  const manualActions = actor ? taskMenuEntries({ actor, t, run }) : () => [];
   const cardActions = actor ? taskMenuEntries({ actor, t, run, card: true }) : () => [];
+
+  const reports = useReportActions();
+  const reportActor = useReportActor();
+  /** Меню регулярной задачи (прототип `taskActions`, `t.reg`). */
+  const regularActions = (task: RegularTaskRow): ActionEntry[] => {
+    const r = task.report;
+    const open = r.status === 'todo' || r.status === 'in_progress' || r.status === 'needs_fix';
+    const payWhy = submitNeedsPayment(
+      { act: r.act, status: r.status, sum: r.amount, paid: r.paid, superseded: false },
+      !!reportActor?.taxpay && !!reportActor.payFirst,
+    )
+      ? t('report.pay_first.why', {
+          amount: formatSomWithUnit(r.amount ?? 0),
+          paid: formatSomWithUnit(r.paid),
+        })
+      : '';
+    const why = !access.can('changeStatus') ? t('task.reg.no_status_right') : payWhy;
+    const closes =
+      r.mark === 'waiting'
+        ? 'task.reg.closes_wait'
+        : access.reportConfirm && r.act !== 'pay'
+          ? 'task.reg.closes_confirm'
+          : 'task.reg.closes';
+    return [
+      {
+        id: 'report',
+        label: t('task.reg.open_report'),
+        icon: 'file',
+        run: () => reports.openCard({ id: task.id }),
+      },
+      ...(open && r.act !== 'pay'
+        ? [
+            {
+              id: 'submit',
+              label: t('task.reg.submit'),
+              icon: 'send' as const,
+              ...(why ? { disabled: true, reason: why } : {}),
+              run: () => reports.submit({ id: task.id }),
+            },
+          ]
+        : []),
+      { id: 'closes', label: t(closes), icon: 'info', disabled: true, run: () => {} },
+    ];
+  };
+  const actions = (task: TaskListRow) =>
+    task.kind === 'regular' ? regularActions(task) : manualActions(task);
+  const openCard = (task: TaskListRow | TaskRow) =>
+    'kind' in task && task.kind === 'regular' ? reports.openCard({ id: task.id }) : run.open(task);
 
   const rollback = async (reason: string) => {
     if (!back) return;
@@ -247,8 +310,13 @@ export function useTaskActions(): {
 
   return {
     actions,
-    openCard: run.open,
+    openCard,
     newTask: (preset) => void newTask(preset),
-    dialogs,
+    dialogs: (
+      <>
+        {dialogs}
+        {reports.dialogs}
+      </>
+    ),
   };
 }

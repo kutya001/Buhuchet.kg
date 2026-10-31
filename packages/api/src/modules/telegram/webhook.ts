@@ -141,14 +141,22 @@ export function webhookHandler(deps: ApiDeps): RouteHandler<typeof webhookRoute,
         result.previous.chatId,
         withOrganization(notice, target.orgName, result.previous.shared),
         'telegram_relinked',
+        {},
+        { userId: target.userId, kind: 'relinked' },
       );
     }
-    return reply(
+    await sendNow(
+      deps,
+      chat.id,
       withOrganization(
         await botText(deps, 'tgLinked', { логин: target.login }),
         target.orgName,
         result.shared,
       ),
+      'bot_reply',
+      {},
+      { userId: target.userId, kind: 'linked' },
     );
+    return ok;
   };
 }

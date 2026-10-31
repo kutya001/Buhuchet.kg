@@ -91,6 +91,8 @@ export function unlinkHandler(deps: ApiDeps): RouteHandler<typeof unlinkRoute, A
         removed.chatId,
         withOrganization(notice, session.orgName, removed.shared),
         'telegram_unlinked',
+        {},
+        { userId: session.userId, kind: 'unlinked' },
       );
     }
     return c.json({ ok: true as const }, 200);

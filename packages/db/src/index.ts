@@ -10,6 +10,8 @@ export * from './status';
 export * from './files';
 export * from './auth';
 export * from './telegram';
+export * from './telegram-outbox';
+export * from './telegram-reminders';
 export * from './staff';
 export * from './contractors';
 export * from './contractor-history';

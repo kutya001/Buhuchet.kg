@@ -2,6 +2,7 @@ import { createRoute, z, type RouteHandler } from '@hono/zod-openapi';
 import {
   addTaskComment,
   changeTaskStatus,
+  employeeShortName,
   getTask,
   lockTask,
   taskReadyFiles,
@@ -41,6 +42,8 @@ import type { AppEnv } from '../../env';
 import { apiFail } from '../../errors';
 import { orgContextOf, requireEmployee } from '../../middleware/access';
 import { serverTexts } from '../l10n/texts';
+import { queueTelegramEvents } from '../telegram/events';
+import { flushEvents } from '../telegram/outbox';
 import { taskOut } from './card';
 import {
   actorOf,
@@ -118,20 +121,93 @@ async function runAction<B>(
   const texts = await serverTexts(deps);
   const t = (key: string, params?: Record<string, string | number>) =>
     formatText(texts(key), params);
-  return withOrgContext(deps.db, orgContextOf(c), async (tx) => {
-    const settings = await requireTasks(tx, orgContextOf(c).orgId);
+  const org = orgContextOf(c);
+  let queued: string[] = [];
+  const out = await withOrgContext(deps.db, org, async (tx) => {
+    const settings = await requireTasks(tx, org.orgId);
     const task = await getTask(tx, id, taskAccessOf(subject));
     const lock = task && (await lockTask(tx, id));
     if (!task || !lock) taskNotFound();
     const ctx = { tx, subject, task, lock, filesOn: settings.files, now: deps.clock.now(), t };
     const result = await act(ctx, body);
     if (result) await changeTaskStatus(tx, id, result.change, result.patch);
-    return taskOut(tx, (await getTask(tx, id, undefined))!, {
-      today,
-      filesOn: settings.files,
-      subject,
-    });
+    const after = (await getTask(tx, id, undefined))!;
+    if (result) {
+      const actor = await employeeShortName(tx, subject.employeeId);
+      queued = await queueTelegramEvents(
+        deps,
+        tx,
+        taskEvents(after, result.change, subject, actor),
+      );
+    }
+    return taskOut(tx, after, { today, filesOn: settings.files, subject });
   });
+  await flushEvents(deps, org.orgId, queued);
+  return out;
+}
+
+/**
+ * Сообщения в Telegram о смене статуса (ТЗ «Уведомления в Telegram»; прототип: «Отправлено на
+ * подтверждение: … получит уведомление в Telegram», «Задача подтверждена: … получит уведомление»,
+ * причина доработки — «получит её в Telegram», отмена — «Исполнитель увидит это в Telegram»).
+ */
+function taskEvents(
+  task: TaskRecord,
+  change: TaskStatusChange,
+  subject: AccessSubject,
+  actor: string,
+) {
+  const by = subject.employeeId;
+  const base = { by, link: 'tasks' as const };
+  if (change.to === 'on_confirm') {
+    return [
+      {
+        ...base,
+        kind: 'task_on_confirm' as const,
+        to: task.author.id,
+        template: 'tgTaskDone' as const,
+        values: { задача: task.title, автор: task.executor.shortName },
+      },
+    ];
+  }
+  if (change.to === 'confirmed') {
+    return [
+      {
+        ...base,
+        kind: 'task_confirmed' as const,
+        to: task.executor.id,
+        template: 'tgTaskConfirmed' as const,
+        values: { задача: task.title, автор: actor },
+      },
+    ];
+  }
+  if (change.to === 'rework') {
+    return [
+      {
+        ...base,
+        kind: 'task_rework' as const,
+        to: task.executor.id,
+        template: 'tgTaskRework' as const,
+        values: {
+          задача: task.title,
+          причина: task.reworkReason,
+          автор: actor,
+        },
+      },
+    ];
+  }
+  if (change.to === 'cancelled') {
+    return [
+      {
+        ...base,
+        kind: 'task_cancelled' as const,
+        to: task.executor.id,
+        template: 'tgTaskCancelled' as const,
+        values: { задача: task.title, автор: actor },
+      },
+    ];
+  }
+  return [];
 }
 
 /** Действие по правилам домена: недоступно — тот же отказ, что у пункта меню. */

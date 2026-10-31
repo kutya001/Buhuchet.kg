@@ -82,6 +82,8 @@ export type ReportActions = ReturnType<typeof useReportActions>;
 export function useReportActions(): {
   actions: (r: ReportRow) => ActionEntry[];
   openCard: (r: ReportRow | { id: string }) => void;
+  /** «Отметить сданным» — окно сдачи по свежей карточке (и из регулярной задачи, задача 2.24). */
+  submit: (r: { id: string }) => void;
   bulk: (tab: ReportListTab | 'calendar') => GridBulkAction<ReportRow>[];
   newReport: () => void;
   /** «Принять» в строке списка: с «Учётом оплаты налогов» и правом «Учёт денег», иначе null. */
@@ -149,7 +151,7 @@ export function useReportActions(): {
   const openCard = (r: ReportRow | { id: string }) =>
     setCard(openSlot({ id: r.id, row: 'contractor' in r ? r : null }));
 
-  const openDialog = async (r: ReportRow, kind: CardDialog['kind']) => {
+  const openDialog = async (r: { id: string }, kind: CardDialog['kind']) => {
     const full = await load(r.id, () => fresh(r.id));
     if (full) setDialog(openSlot({ kind, card: full }));
   };
@@ -559,6 +561,7 @@ export function useReportActions(): {
   return {
     actions,
     openCard,
+    submit: (r) => void openDialog(r, 'submit'),
     bulk,
     newReport: () => void newReport(),
     receive: actor?.taxpay && actor.can.money ? openReceive : null,

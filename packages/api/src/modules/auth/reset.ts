@@ -121,7 +121,15 @@ async function sendResetCode(deps: ApiDeps, account: LoginRecord): Promise<void>
     request.chat.shared,
   );
   // Дольше секунды не ждём: иначе медленный Telegram выдал бы по времени ответа, что логин есть.
-  await sendNow(deps, request.chat.chatId, text, 'reset_code', { timeoutMs: 1000 });
+  // В журнал отправок — без текста кода (docs/deviations.md, п. 12).
+  await sendNow(
+    deps,
+    request.chat.chatId,
+    text,
+    'reset_code',
+    { timeoutMs: 1000 },
+    { userId: account.userId, kind: 'code' },
+  );
 }
 
 export const resetConfirmRoute = createRoute({

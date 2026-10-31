@@ -11,6 +11,8 @@ import { cleanupPendingFiles } from '../modules/files/cleanup';
 import { syncServiceStatusesJob } from '../modules/contractors/job';
 import { duesRecalcJob } from '../modules/platform-dicts/admin-dues';
 import { createDueReportsJob } from '../modules/reports/job';
+import { telegramSendJob } from '../modules/telegram/outbox';
+import { telegramRemindersJob } from '../modules/telegram/reminders';
 
 const { schedulerRuns } = schema;
 
@@ -111,19 +113,23 @@ export function telegramWebhookJob(webhook: { url: string; secretToken: string }
   };
 }
 
-/** Задачи для этих настроек: вебхук бота — только если бот задан и сайт открыт по https. */
+/**
+ * Задачи для этих настроек: напоминания за день и отправка очереди Telegram (задача 2.25; без бота они
+ * ничего не делают), вебхук бота — только если бот задан и сайт открыт по https.
+ */
 export function jobsFor(
   config: Pick<AppConfig, 'APP_BASE_URL' | 'TELEGRAM_BOT_TOKEN' | 'TELEGRAM_WEBHOOK_SECRET'>,
 ): readonly Job[] {
+  const all = [...jobs, telegramRemindersJob(config.APP_BASE_URL), telegramSendJob()];
   if (
     !config.TELEGRAM_BOT_TOKEN ||
     !config.TELEGRAM_WEBHOOK_SECRET ||
     !config.APP_BASE_URL.startsWith('https://')
   ) {
-    return jobs;
+    return all;
   }
   return [
-    ...jobs,
+    ...all,
     telegramWebhookJob({
       url: new URL('/api/telegram/webhook', config.APP_BASE_URL).href,
       secretToken: config.TELEGRAM_WEBHOOK_SECRET,

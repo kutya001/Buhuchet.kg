@@ -10,9 +10,12 @@ import {
   withOrgContext,
   type TaskFields,
   type TaskLock,
+  type TaskRecord,
   type Tx,
 } from '@buhuchet/db';
 import {
+  formatDateRu,
+  formatText,
   monthLastDay,
   taskActionRefusal,
   taskConfirmEditable,
@@ -25,6 +28,8 @@ import type { AppEnv } from '../../env';
 import { apiFail, versionedSaveResponses } from '../../errors';
 import { orgContextOf, requireEmployee, requirePermission } from '../../middleware/access';
 import { serverTexts } from '../l10n/texts';
+import { queueTelegramEvents, type TelegramEvent } from '../telegram/events';
+import { flushEvents } from '../telegram/outbox';
 import { taskOut } from './card';
 import {
   actorOf,
@@ -141,16 +146,17 @@ export function createTaskHandler(deps: ApiDeps): RouteHandler<typeof createTask
     const body = c.req.valid('json');
     const subject = subjectOf(c);
     const today = todayOf(deps);
+    const t = await serverTexts(deps);
+    let queued: string[] = [];
     const out = await withOrgContext(deps.db, orgContextOf(c), async (tx) => {
       const settings = await requireTasks(tx, orgContextOf(c).orgId);
       const fields = await fieldsOf(tx, subject, body, settings.files, null);
       const id = await createTask(tx, fields, subject.employeeId);
-      return taskOut(tx, (await getTask(tx, id, undefined))!, {
-        today,
-        filesOn: settings.files,
-        subject,
-      });
+      const task = (await getTask(tx, id, undefined))!;
+      queued = await queueTelegramEvents(deps, tx, [newTaskEvent(task, subject.employeeId, t)]);
+      return taskOut(tx, task, { today, filesOn: settings.files, subject });
     });
+    await flushEvents(deps, orgContextOf(c).orgId, queued);
     return c.json(out, 201);
   };
 }
@@ -196,6 +202,7 @@ export function updateTaskHandler(deps: ApiDeps): RouteHandler<typeof updateTask
     const subject = subjectOf(c);
     const today = todayOf(deps);
     const t = await serverTexts(deps);
+    let queued: string[] = [];
     const out = await withOrgContext(deps.db, orgContextOf(c), async (tx) => {
       const settings = await requireTasks(tx, orgContextOf(c).orgId);
       const visible = await getTask(tx, id, taskAccessOf(subject));
@@ -216,12 +223,34 @@ export function updateTaskHandler(deps: ApiDeps): RouteHandler<typeof updateTask
         to ? { from: lock.status, to, reason: t('task.hist.confirm_off') } : null,
         lock.contractorId,
       );
-      return taskOut(tx, (await getTask(tx, id, undefined))!, {
-        today,
-        filesOn: settings.files,
-        subject,
-      });
+      const task = (await getTask(tx, id, undefined))!;
+      // Задачу передали другому исполнителю — для него это новая задача.
+      if (task.executor.id !== visible.executor.id) {
+        queued = await queueTelegramEvents(deps, tx, [newTaskEvent(task, subject.employeeId, t)]);
+      }
+      return taskOut(tx, task, { today, filesOn: settings.files, subject });
     });
+    await flushEvents(deps, orgContextOf(c).orgId, queued);
     return c.json(out, 200);
+  };
+}
+
+/**
+ * «Новая задача от {автор}: {задача}, срок {срок}.» исполнителю (ТЗ: «сообщение о новой задаче …
+ * приходит сразу»); у задачи на месяц срок — «до 31.10.2026».
+ */
+function newTaskEvent(task: TaskRecord, by: string, t: (key: string) => string): TelegramEvent {
+  const date = formatDateRu(task.dueDate);
+  return {
+    kind: 'task_new',
+    to: task.executor.id,
+    by,
+    template: 'tgTask',
+    values: {
+      автор: task.author.shortName,
+      задача: task.title,
+      срок: task.term === 'month' ? formatText(t('task.date.month'), { date }) : date,
+    },
+    link: 'tasks',
   };
 }
