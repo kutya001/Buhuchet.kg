@@ -13,6 +13,35 @@ export function mergeGuardFiles(files) {
   return files.filter((f) => MERGE_GUARDS.some((re) => re.test(f)));
 }
 
+/**
+ * Какая обязательная проверка коммита мешает слиянию (`runs` — check_runs из API): первая, последний
+ * запуск которой не зелёный, или null — все зелёные. Учитываются только проверки GitHub Actions:
+ * чужое приложение не может «зажечь» зелёный check с тем же именем.
+ *
+ * `stale` — проверка ещё «идёт», но её workflow уже завершён (`finishedSuites` — наборы проверок
+ * таких workflow: запустившего автослияние и найденных по API): API ещё несколько секунд отдаёт
+ * прежнее состояние. Такой ответ надо перечитать, а не ждать: следующего события не будет, и PR
+ * встанет (так было с #145). Завершённая незелёная проверка — не `stale`: это настоящий итог.
+ */
+export function blockingCheck(runs, required, finishedSuites = []) {
+  const finished = new Set([...finishedSuites].filter(Boolean).map(String));
+  for (const name of required) {
+    const latest = runs
+      .filter((r) => r.name === name && r.app?.slug === 'github-actions')
+      .sort((a, b) => new Date(b.started_at) - new Date(a.started_at))[0];
+    if (!latest || latest.status !== 'completed' || latest.conclusion !== 'success') {
+      const suite = latest?.check_suite?.id;
+      const stale =
+        Boolean(latest) &&
+        latest.status !== 'completed' &&
+        suite != null &&
+        finished.has(String(suite));
+      return { name, latest: latest ?? null, stale };
+    }
+  }
+  return null;
+}
+
 /** Меняет ли PR базу или данные справочников: тогда после слияния нужны миграции стенда (migrate-test.yml). */
 export function needsStagingMigration(files) {
   return files.some((f) => f.startsWith('packages/db/') || f.startsWith('spec/data/'));
