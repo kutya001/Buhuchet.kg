@@ -74,41 +74,57 @@ const run = (
   status,
   conclusion,
   started_at: startedAt,
-  check_suite: { id: suite },
+  ...(suite == null ? {} : { check_suite: { id: suite } }),
   app: { slug: app },
 });
 const green = [
-  run('check', 'completed', 'success', 1),
-  run('docker-e2e', 'completed', 'success', 1),
-  run('pr-policy', 'completed', 'success', 2),
+  run('check', 'completed', 'success', 111441286992),
+  run('docker-e2e', 'completed', 'success', 111441286992),
+  run('pr-policy', 'completed', 'success', 111441286986),
 ];
+const e2eRunning = [green[0], run('docker-e2e', 'in_progress', null, 111441286992), green[2]];
 
 test('слияние по проверкам: все зелёные — ничего не мешает', () => {
-  assert.equal(blockingCheck(green, REQUIRED, '1'), null);
+  assert.equal(blockingCheck(green, REQUIRED, ['111441286992']), null);
 });
 
 test('проверка ещё идёт в другом workflow — ждать его завершения, не перечитывать', () => {
-  const runs = [green[0], run('docker-e2e', 'in_progress', null, 1), green[2]];
-  // Запустил PR policy (набор 2): CI ещё идёт, его завершение снова запустит автослияние.
-  assert.deepEqual(blockingCheck(runs, REQUIRED, '2'), {
+  // Запустил PR policy: CI ещё идёт, его завершение снова запустит автослияние.
+  assert.deepEqual(blockingCheck(e2eRunning, REQUIRED, ['111441286986']), {
     name: 'docker-e2e',
-    latest: runs[1],
+    latest: e2eRunning[1],
     stale: false,
   });
 });
 
-test('запустивший workflow уже зелёный, а API отдаёт прежнее — перечитать (#145)', () => {
-  const runs = [green[0], run('docker-e2e', 'in_progress', null, 1), green[2]];
-  // Запустил CI (набор 1), его docker-e2e в ответе ещё in_progress.
-  assert.equal(blockingCheck(runs, REQUIRED, 1).stale, true);
-  assert.equal(blockingCheck(runs, REQUIRED, '1').stale, true);
-  // Без набора (старый запуск) — как раньше: ждать.
-  assert.equal(blockingCheck(runs, REQUIRED, undefined).stale, false);
-  assert.equal(blockingCheck(runs, REQUIRED, '').stale, false);
+test('workflow проверки уже завершён, а API отдаёт её прежней — перечитать (#145)', () => {
+  // Запустил CI (набор 111441286992 — как у #145), его docker-e2e в ответе ещё in_progress.
+  assert.equal(blockingCheck(e2eRunning, REQUIRED, ['111441286992']).stale, true);
+  assert.equal(
+    blockingCheck(e2eRunning, REQUIRED, new Set(['111441286986', '111441286992'])).stale,
+    true,
+  );
+  // Без наборов (старый запуск) — как раньше: ждать.
+  assert.equal(blockingCheck(e2eRunning, REQUIRED).stale, false);
+  assert.equal(blockingCheck(e2eRunning, REQUIRED, ['', undefined]).stale, false);
+  // У запуска проверки нет набора — не перечитывать.
+  const noSuite = [green[0], run('docker-e2e', 'in_progress', null, null), green[2]];
+  assert.equal(blockingCheck(noSuite, REQUIRED, ['111441286992']).stale, false);
+});
+
+test('завершённая незелёная проверка — настоящий итог, а не отставание API', () => {
+  const skipped = [green[0], run('docker-e2e', 'completed', 'skipped', 111441286992), green[2]];
+  assert.deepEqual(blockingCheck(skipped, REQUIRED, ['111441286992']), {
+    name: 'docker-e2e',
+    latest: skipped[1],
+    stale: false,
+  });
+  const failed = [run('check', 'completed', 'failure', 111441286992), green[1], green[2]];
+  assert.equal(blockingCheck(failed, REQUIRED, ['111441286992']).stale, false);
 });
 
 test('проверки ещё нет — ждать; чужое приложение и прежние запуски не считаются', () => {
-  assert.deepEqual(blockingCheck(green.slice(0, 2), REQUIRED, '2'), {
+  assert.deepEqual(blockingCheck(green.slice(0, 2), REQUIRED, ['111441286992']), {
     name: 'pr-policy',
     latest: null,
     stale: false,
@@ -118,16 +134,19 @@ test('проверки ещё нет — ждать; чужое приложен
     green[1],
     run('pr-policy', 'completed', 'success', 9, undefined, 'evil'),
   ];
-  assert.equal(blockingCheck(foreign, REQUIRED, '1').name, 'pr-policy');
+  assert.equal(blockingCheck(foreign, REQUIRED, ['111441286992']).name, 'pr-policy');
   // Перезапуск: решает последний по времени запуск.
-  const rerun = [run('check', 'completed', 'failure', 1, '2026-10-30T18:00:00Z'), ...green];
-  assert.equal(blockingCheck(rerun, REQUIRED, '1'), null);
+  const rerun = [
+    run('check', 'completed', 'failure', 111441286992, '2026-10-30T18:00:00Z'),
+    ...green,
+  ];
+  assert.equal(blockingCheck(rerun, REQUIRED, ['111441286992']), null);
   const failedAgain = [
     ...green.slice(1),
     run('check', 'completed', 'failure', 3, '2026-10-30T19:00:00Z'),
     green[0],
   ];
-  assert.deepEqual(blockingCheck(failedAgain, REQUIRED, '1'), {
+  assert.deepEqual(blockingCheck(failedAgain, REQUIRED, ['111441286992']), {
     name: 'check',
     latest: failedAgain[2],
     stale: false,

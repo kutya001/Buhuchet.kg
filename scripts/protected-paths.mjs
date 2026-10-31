@@ -18,20 +18,24 @@ export function mergeGuardFiles(files) {
  * запуск которой не зелёный, или null — все зелёные. Учитываются только проверки GitHub Actions:
  * чужое приложение не может «зажечь» зелёный check с тем же именем.
  *
- * `stale` — проверка из набора запустившего workflow (`triggerSuiteId`, событие workflow_run
- * completed с успехом): она уже зелёная, а API ещё несколько секунд отдаёт прежнее состояние. Такой
- * ответ надо перечитать, а не ждать: следующего события не будет, и PR встанет (так было с #145).
+ * `stale` — проверка ещё «идёт», но её workflow уже завершён (`finishedSuites` — наборы проверок
+ * таких workflow: запустившего автослияние и найденных по API): API ещё несколько секунд отдаёт
+ * прежнее состояние. Такой ответ надо перечитать, а не ждать: следующего события не будет, и PR
+ * встанет (так было с #145). Завершённая незелёная проверка — не `stale`: это настоящий итог.
  */
-export function blockingCheck(runs, required, triggerSuiteId) {
+export function blockingCheck(runs, required, finishedSuites = []) {
+  const finished = new Set([...finishedSuites].filter(Boolean).map(String));
   for (const name of required) {
     const latest = runs
       .filter((r) => r.name === name && r.app?.slug === 'github-actions')
       .sort((a, b) => new Date(b.started_at) - new Date(a.started_at))[0];
     if (!latest || latest.status !== 'completed' || latest.conclusion !== 'success') {
+      const suite = latest?.check_suite?.id;
       const stale =
         Boolean(latest) &&
-        Boolean(triggerSuiteId) &&
-        String(latest.check_suite?.id) === String(triggerSuiteId);
+        latest.status !== 'completed' &&
+        suite != null &&
+        finished.has(String(suite));
       return { name, latest: latest ?? null, stale };
     }
   }

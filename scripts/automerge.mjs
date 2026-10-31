@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// Автослияние PR (вызывается из .github/workflows/automerge.yml после каждой завершённой проверки).
+// Автослияние PR (вызывается из .github/workflows/automerge.yml после каждого успешно завершённого
+// workflow CI и PR policy).
 import { execFileSync } from 'node:child_process';
 import { blockingCheck, mergeGuardFiles, needsStagingMigration } from './protected-paths.mjs';
 
@@ -9,7 +10,7 @@ const GUARD_MARKER = '<!-- automerge:guards -->';
 // Сколько раз и через сколько перечитать проверки, если API отстаёт от завершённого workflow.
 const STALE_RETRIES = 6;
 const STALE_DELAY_MS = 10_000;
-// TRIGGER_SUITE_ID — набор проверок workflow, завершение которого запустило автослияние.
+// TRIGGER_SUITE_ID — набор проверок workflow, успешное завершение которого запустило автослияние.
 const { REPO, HEAD_SHA, TRIGGER_SUITE_ID } = process.env;
 
 // Буфер больше 1 МБ по умолчанию: ответы gh api по длинной истории ветки бывают больше.
@@ -65,13 +66,27 @@ if (guards.length) {
 }
 
 // Последний запуск каждой обязательной проверки должен быть успешным. Проверка ещё идёт в другом
-// workflow — выйти: его завершение снова запустит автослияние. Проверка запустившего workflow уже
-// зелёная, а API отдаёт прежнее состояние — перечитать (следующего события не будет).
+// workflow — выйти: его завершение снова запустит автослияние. Workflow проверки уже завершён (это
+// запустивший или найденный по API), а API отдаёт её прежнее состояние — перечитать: следующего
+// события не будет.
+const finishedSuites = new Set([TRIGGER_SUITE_ID].filter(Boolean).map(String));
 let blocking;
+let retried = false;
 for (let attempt = 0; ; attempt++) {
   const runs = api(`repos/${REPO}/commits/${HEAD_SHA}/check-runs?per_page=100`).check_runs;
-  blocking = blockingCheck(runs, REQUIRED_CHECKS, TRIGGER_SUITE_ID);
+  blocking = blockingCheck(runs, REQUIRED_CHECKS, finishedSuites);
+  const suite = blocking?.latest?.check_suite?.id;
+  if (blocking && !blocking.stale && blocking.latest?.status !== 'completed' && suite != null) {
+    // Проверка другого workflow: завершён ли он на самом деле (CI и PR policy закончились почти разом).
+    const owner = api(`repos/${REPO}/actions/runs?check_suite_id=${suite}&per_page=1`)
+      .workflow_runs?.[0];
+    if (owner?.status === 'completed') {
+      finishedSuites.add(String(suite));
+      blocking = blockingCheck(runs, REQUIRED_CHECKS, finishedSuites);
+    }
+  }
   if (!blocking?.stale || attempt === STALE_RETRIES) break;
+  retried = true;
   console.log(
     `Проверка ${blocking.name} уже завершилась, но GitHub отдаёт ` +
       `${blocking.latest.status}/${blocking.latest.conclusion} — перечитываем через ${STALE_DELAY_MS / 1000} с.`,
@@ -89,6 +104,19 @@ if (blocking) {
   }
   console.log(`Проверка ${name}: ${state} — ждём.`);
   process.exit(0);
+}
+// Пока перечитывали (до минуты), PR могли закрыть, сделать черновиком, поставить hold или запушить.
+if (retried) {
+  const fresh = api(`repos/${REPO}/pulls/${pr.number}`);
+  if (
+    fresh.state !== 'open' ||
+    fresh.draft ||
+    fresh.head.sha !== HEAD_SHA ||
+    fresh.labels.some((l) => l.name === 'hold')
+  ) {
+    console.log(`PR #${pr.number} изменился, пока перечитывали проверки, — не сливаем.`);
+    process.exit(0);
+  }
 }
 
 // Ветка должна содержать свежий main: иначе зелёные проверки не про то, что окажется в main.
