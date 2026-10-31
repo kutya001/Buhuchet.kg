@@ -290,9 +290,15 @@ test.describe('Этап 2: финансовые операции по контр
     });
     expect(paid.status(), await paid.text()).toBe(201);
     const { id } = (await paid.json()) as { id: string };
-    const debtOf = async () =>
-      ((await (await request.get(`/api/contractors/${cp.id}/fees`)).json()) as { debt: number })
-        .debt;
+    // Недоплата за месяц: «Долг» нового контрагента начнётся только со сроком оплаты (он — в
+    // следующем месяце, `feeDue`), поэтому пересчёт сверяем по начислению месяца.
+    const debtOf = async () => {
+      const fees = (await (await request.get(`/api/contractors/${cp.id}/fees`)).json()) as {
+        months: { month: string; charge: number; got: number }[];
+      };
+      const row = fees.months.find((m) => m.month === month)!;
+      return row.charge - row.got;
+    };
     expect(await debtOf()).toBe(2_000_000);
 
     await signIn(page.request, origin, 'erkin', DEMO_PASSWORD);
@@ -382,6 +388,12 @@ test.describe('Этап 2: финансовые операции по контр
     await openFin(page, isMobile, 'journal', word);
     const line = page.locator(`[data-grid] [data-id="${id}"]`);
     await expect(line).toHaveCount(1);
+    // «Изменение» по умолчанию скрыт, как `SHOW` прототипа: включаем в «Столбцах».
+    await page.getByRole('button', { name: /^Столбцы/ }).click();
+    const panel = page.getByRole('dialog', { name: 'Столбцы' });
+    await panel.getByRole('checkbox', { name: 'Изменение' }).check();
+    await page.keyboard.press('Escape');
+    await expect(panel).toBeHidden();
     await expect(line).toContainText(som('не меньше 10 000'));
     await line.getByText(name).first().click();
     const win = page.getByRole('dialog', { name: som('Поступление 15 000 сом') });
