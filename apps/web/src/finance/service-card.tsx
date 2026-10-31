@@ -18,6 +18,7 @@ import {
   KeyValues,
   linkButtonClass,
   MiniTable,
+  miniWide,
   Modal,
   Note,
   Pill,
@@ -226,7 +227,7 @@ export function serviceMenu(
     contractorId: string;
     deleted: boolean;
     locks: {
-      edit: { text: string } | null;
+      edit: { code?: string; text: string } | null;
       del: { text: string } | null;
       pay: { text: string } | null;
     };
@@ -254,7 +255,8 @@ export function serviceMenu(
       label: t('fin.op.edit'),
       icon: 'edit',
       disabled: !!s.locks.edit,
-      reason: s.locks.edit?.text,
+      // Прототип svcActions: «Изменить» без права — неактивна без подсказки.
+      reason: s.locks.edit?.code === 'op_view_only' ? undefined : s.locks.edit?.text,
       run: run.edit,
     },
     card,
@@ -497,6 +499,7 @@ export function ServiceCardDialog({
                 rows={s.payments.map((p) => ({
                   key: p.id,
                   blank: p.files.length ? [] : ['files'],
+                  wide: miniWide({ files: p.files.join(', ') }),
                   cells: {
                     date: (
                       <span className="inline-flex flex-wrap items-center gap-1.5">

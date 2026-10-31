@@ -484,7 +484,7 @@ function ServiceModal({
                     data-svc-reason=""
                     maxLength={500}
                     placeholder={t('fin.svc.reason_ph')}
-                    className={`${inputClass({ multiline: true })} min-h-14`}
+                    className={`${inputClass()} min-h-14 resize-y leading-normal`}
                     value={reason}
                     onChange={(e) => {
                       setReason(e.target.value);
@@ -730,7 +730,7 @@ export function ServiceDeleteDialog({
               data-svc-reason=""
               maxLength={500}
               placeholder={t('fin.del.reason_ph')}
-              className={`${inputClass({ multiline: true })} min-h-16`}
+              className={`${inputClass()} min-h-16 resize-y leading-normal`}
               value={reason}
               onChange={(e) => {
                 setReason(e.target.value);
@@ -946,7 +946,7 @@ export function ServicePaymentEditDialog({
                 data-svc-reason=""
                 maxLength={500}
                 placeholder={t('fin.edit.reason_ph')}
-                className={`${inputClass({ multiline: true })} min-h-14`}
+                className={`${inputClass()} min-h-14 resize-y leading-normal`}
                 value={reason}
                 onChange={(e) => {
                   setReason(e.target.value);

@@ -422,6 +422,31 @@ describe.skipIf(!databaseAvailable())(
       expect(seen.locks.pay?.text).toBe('Нужно право «Вести проекты и разовые услуги»');
       expect(seen.locks.edit?.code).toBe('op_view_only');
       expect((await pay(senior, id, som(1))).status).toBe(403);
+
+      // Файлы услуги и оплаты (п. В-34): без права «Просматривать файлы» — ни имён, ни записей о файлах.
+      await expectStatus(await pay(owner, id, som(100)), 201);
+      const pid = (await card(owner, id)).payments[0]!.id;
+      await expectStatus(await upload(owner, { kind: 'one_off_service', id }, 'акт.pdf'), 200);
+      await expectStatus(
+        await upload(owner, { kind: 'one_off_service_payment', id: pid }, 'платёжка.pdf'),
+        200,
+      );
+      const fileActions = (h: readonly { action: string }[]) =>
+        h.filter((e) => e.action === 'file_attach').length;
+      const full = await card(owner, id);
+      expect(full.files).toBe(true);
+      expect(full.payments[0]!.files).toEqual(['платёжка.pdf']);
+      expect(fileActions(full.history)).toBeGreaterThan(0);
+      const bare = await card(senior, id);
+      expect(bare.files).toBe(false);
+      expect(bare.payments[0]!.files).toEqual([]);
+      expect(fileActions(bare.history)).toBe(0);
+      const ownerWindow = await payment(owner, pid);
+      expect(ownerWindow.files).toBe(1);
+      expect(fileActions(ownerWindow.history)).toBeGreaterThan(0);
+      const seniorWindow = await payment(senior, pid);
+      expect(seniorWindow.files).toBeNull();
+      expect(fileActions(seniorWindow.history)).toBe(0);
     });
 
     it('область «Свои»: чужой контрагент — нет услуги и не записать', async () => {
@@ -448,6 +473,12 @@ describe.skipIf(!databaseAvailable())(
       const chiefIds = (await journal(chief, '&tab=proj')).items.map((r) => r.id);
       expect(chiefIds).toEqual(expect.arrayContaining([mine, others]));
       await expectStatus(await pay(chief, mine, som(100)), 201);
+
+      // Плашка и число у вкладки — по контрагентам области (п. В-35): оплата чужой услуги их не меняет.
+      const [hrBefore, ownerBefore] = [(await summary(hr)).proj!, (await summary(owner)).proj!];
+      await expectStatus(await pay(owner, others, som(50)), 201);
+      expect((await summary(hr)).proj).toEqual(hrBefore);
+      expect((await summary(owner)).proj!.received).toBe(ownerBefore.received + som(50));
     });
 
     it('файлы услуги и оплаты: Файловый менеджер, «Разовая услуга», история контрагента', async () => {
