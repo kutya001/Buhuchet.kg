@@ -1076,7 +1076,11 @@ export async function createContractor(
   orgId: string,
   input: ContractorFields,
   tariff: ContractorTariffInput | null,
-  options: { today?: IsoDate } = {},
+  options: {
+    today?: IsoDate;
+    /** Причина в истории: «Создан загрузкой из Excel». */
+    reason?: string;
+  } = {},
 ): Promise<string> {
   const values = Object.fromEntries(CONTRACTOR_COLUMNS.map((k) => [k, input[k]])) as Pick<
     ContractorFields,
@@ -1129,6 +1133,7 @@ export async function createContractor(
     action: 'create',
     contractorId: id,
     changes: changes.filter((c) => c.to !== '' && c.to !== null && !isEmptyList(c.to)),
+    reason: options.reason,
   });
   return id;
 }
