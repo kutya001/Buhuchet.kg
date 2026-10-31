@@ -306,8 +306,14 @@ test.describe('Этап 2: финансовые операции по контр
     const line = page.locator(`[data-grid] [data-id="fee:${id}"]`);
     await expect(line).toHaveCount(1);
     await line.getByText(name).first().click();
-    const win = page.getByRole('dialog', { name: som('Оплата за обслуживание 30 000 сом') });
-    await expect(win.locator(`[data-fee-payment-window="${id}"]`)).toBeVisible();
+    await expect(
+      page.getByRole('dialog', { name: som('Оплата за обслуживание 30 000 сом') }),
+    ).toBeVisible();
+    // Окно — по оплате, а не по заголовку: после «Изменить» в заголовке новая сумма.
+    const win = page
+      .getByRole('dialog')
+      .filter({ has: page.locator(`[data-fee-payment-window="${id}"]`) });
+    await expect(win).toHaveCount(1);
 
     // «Изменить»: сумма 20 000 без причины не сохраняется.
     await win.locator('[data-fin-action="edit"]').click();
@@ -324,6 +330,9 @@ test.describe('Этап 2: финансовые операции по контр
     await expect(edit).toBeHidden();
     await expect(page.getByRole('status').filter({ hasText: 'Оплата изменена' })).toBeVisible();
     expect(await debtOf()).toBe(3_000_000);
+    await expect(
+      page.getByRole('dialog', { name: som('Оплата за обслуживание 20 000 сом') }),
+    ).toBeVisible();
     await expect(win).toContainText('Изменена');
     await expect(win).toContainText(
       som('Изменено: сумма 30 000,00 → 20 000,00 сом; месяцы .*Причина: ошибка в сумме'),
@@ -401,7 +410,7 @@ test.describe('Этап 2: финансовые операции по контр
     const edit = page.getByRole('dialog', { name: 'Изменить поступление' });
     // Окно называет оплату налога, из-за которой меньше нельзя.
     await expect(edit).toContainText(som('на налоги уже потрачено 10 000'));
-    await expect(edit.locator('[data-mini-table]')).toContainText('НДС');
+    await expect(edit.getByRole('table', { name: 'Оплата налога' })).toContainText('НДС');
     // 9 000 без детализации: на налоги останется меньше потраченного — не сохраняется.
     await edit.locator('[data-receipt-total]').fill('9000');
     await edit.locator(`[data-receipt-row="${nds}"]`).fill('0');
