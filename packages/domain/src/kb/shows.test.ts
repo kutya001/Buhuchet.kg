@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest';
+import { UI_TEXTS, formatText, type Translate } from '../l10n/texts';
 import {
   KB_KNOWN_KEY_MAX,
+  KB_SHOW_AUTOS,
   KB_SHOW_GO_TARGET,
   kbKnownKey,
   kbKnownKeyOk,
   kbScreenOk,
   kbScreenShowItems,
   kbShowOf,
+  kbShowSubTab,
+  kbShowWhat,
   kbSmartList,
   kbStepShowItems,
   type KbShowDef,
@@ -180,5 +184,25 @@ describe('облачка шага и обзора экрана', () => {
     expect(kbScreenOk('files')).toBe(true);
     expect(kbScreenOk('staff.roles.x')).toBe(false);
     expect(kbScreenOk('Staff')).toBe(false);
+  });
+});
+
+describe('«Что подсвечивает» облачко (прототип kbShowWhat)', () => {
+  const t: Translate = (key, params) => formatText(UI_TEXTS[key].ru, params);
+
+  it('автоматически, элемент с текстом, элемент экрана, только текст', () => {
+    expect(kbShowWhat({ auto: 'fields' }, t)).toBe('Автоматически: Поля формы');
+    expect(kbShowWhat({ auto: 'grid', tab: 'Обслуживание' }, t)).toBe(
+      'Автоматически: Список: столбцы, фильтры, строка, меню «…» · вкладка «Обслуживание»',
+    );
+    expect(kbShowWhat({ txt: 'Сохранить', s: '#b' }, t)).toBe('Элемент с текстом «Сохранить»');
+    expect(kbShowWhat({ s: '#og-save' }, t)).toBe('Элемент экрана');
+    expect(kbShowWhat({}, t)).toBe('Только текст');
+    for (const a of KB_SHOW_AUTOS) expect(UI_TEXTS).toHaveProperty(`kbadm.show.auto.${a}`);
+  });
+
+  it('вкладка облачка — из действий перед показом', () => {
+    expect(kbShowSubTab([{ click: '#x' }, { tab: 'Роли' }])).toBe('Роли');
+    expect(kbShowSubTab(null)).toBeNull();
   });
 });

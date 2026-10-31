@@ -52,12 +52,14 @@ import {
   fetchKbAdminRows,
   fetchKbAdminValues,
   kb,
+  KBADM_AUDIT,
   KBADM_GRID,
   kbAdminMetaQuery,
   kbAdminStepQuery,
   refreshKbAdmin,
 } from './kbadm-data';
 import { useKbAdmAdd } from './kbadm-add';
+import { useKbAdmIo } from './kbadm-io';
 
 /** Ширины столбцов, px — как в прототипе (`kb-steps`). */
 const WIDTHS: Readonly<Record<string, number>> = {
@@ -158,6 +160,7 @@ export function KbAdmStepsTab() {
     [client, toast, errorText],
   );
   useKbAdmAdd('step', () => setDialog(openSlot<AdminKbStep | null>(null)));
+  const io = useKbAdmIo('kbsteps');
 
   const act = async (
     send: () => Promise<{ ok: boolean; status: number; json(): Promise<unknown> }>,
@@ -206,8 +209,10 @@ export function KbAdmStepsTab() {
   return (
     <div className="flex flex-col gap-3.5">
       <Note icon="info">{t('kbadm.steps.note')}</Note>
+      {io.bar}
       <DataGrid
         columns={columns}
+        audit={KBADM_AUDIT}
         defaultVisible={DEFAULT_VISIBLE}
         defaultSort={KB_ADMIN_SORT.steps}
         settings={view.settings}
@@ -236,6 +241,7 @@ export function KbAdmStepsTab() {
         onOpen={(x) => void edit(x)}
       />
       <KbAdmHistory section="kbsteps" />
+      {io.dialogs}
       {dialog ? (
         <KbStepDialog
           key={dialog.n}

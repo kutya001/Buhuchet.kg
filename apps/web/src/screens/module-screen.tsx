@@ -14,9 +14,10 @@ import { KbLevelTab } from '../kb/kb-level';
 import { KbTeamTab } from '../kb/kb-team';
 import { KpiScreen } from '../kpi/kpi-screen';
 import { KbAdmArtsTab } from '../kbadm/kbadm-arts';
+import { KbAdmNewsTab } from '../kbadm/kbadm-io';
 import { KbAdmLevelsTab } from '../kbadm/kbadm-levels';
+import { KbAdmShowsTab } from '../kbadm/kbadm-shows';
 import { KbAdmStepsTab } from '../kbadm/kbadm-steps';
-import { NewsAdminList } from '../news/news-admin';
 import { KbNewsTab } from '../news/news-tab';
 import { OrgMain } from '../org/org-main';
 import { OrgPolicyTab } from '../org/org-policy';
@@ -91,9 +92,10 @@ export function ModuleScreen({
   if (moduleId === 'kbadm') {
     const tab = tabId ?? 'steps';
     if (tab === 'steps') return <KbAdmStepsTab />;
+    if (tab === 'shows') return <KbAdmShowsTab />;
     if (tab === 'arts') return <KbAdmArtsTab />;
     if (tab === 'levels') return <KbAdmLevelsTab />;
-    if (tab === 'news') return <NewsAdminList />;
+    if (tab === 'news') return <KbAdmNewsTab />;
     return <ModuleStub moduleId={moduleId} />;
   }
   if (moduleId === 'accounts') return <AccountsList />;

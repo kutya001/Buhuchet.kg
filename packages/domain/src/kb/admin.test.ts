@@ -9,6 +9,7 @@ import {
   kbArticleProblems,
   kbHistoryLine,
   kbLevelsProblem,
+  kbShowEdit,
   kbStepProblems,
   type KbArticleInput,
   type KbHistoryItemInput,
@@ -212,5 +213,111 @@ describe('«История изменений» словами прототип�
         changes: [{ field: '2', from: { n: 'Ученик', p: 25 }, to: { n: 'Ученик', p: 30 } }],
       }),
     ).toBe('Уровни (организации): 2: Ученик 25 % → Ученик 30 %');
+  });
+});
+
+describe('сценарий показа (прототип kbShowDlg «Сохранить»)', () => {
+  const stored = [
+    { s: '#a', t: 'Первое', x: 'Текст', sub: [{ tab: 'Обслуживание' }] },
+    { auto: 'fields', in: '#mbody' },
+    { s: '#b', t: 'Третье', x: '', common: true },
+  ];
+
+  it('облачка по прежним номерам: что подсвечивает — как было, тексты — из окна', () => {
+    expect(
+      kbShowEdit(stored, {
+        active: true,
+        items: [
+          { from: 2, t: ' Третье ', x: ' ', common: false },
+          { from: 1, t: 'Лишнее' },
+          { from: 0, t: 'Первое', x: 'Новый', common: true },
+          { t: 'Своё', x: 'Текст' },
+          { auto: 'screen' },
+        ],
+      }),
+    ).toEqual({
+      items: [
+        { s: '#b', t: 'Третье', x: '' },
+        { auto: 'fields', in: '#mbody' },
+        { s: '#a', t: 'Первое', x: 'Новый', sub: [{ tab: 'Обслуживание' }], common: true },
+        { t: 'Своё', x: 'Текст' },
+        { auto: 'screen' },
+      ],
+    });
+  });
+
+  it('заголовок обязателен, длины — как в окне, номер прежнего облачка — один раз и из сценария', () => {
+    const edit = (items: Parameters<typeof kbShowEdit>[1]['items']) =>
+      kbShowEdit(stored, { active: true, items });
+    expect(edit([{ from: 0, t: ' ' }])).toEqual({ problem: 'kb_show_title', index: 0 });
+    expect(edit([{ from: 1 }, { t: 'а'.repeat(201) }])).toEqual({
+      problem: 'kb_show_title_too_long',
+      index: 1,
+    });
+    expect(edit([{ t: 'x', x: 'а'.repeat(1001) }])).toEqual({
+      problem: 'kb_show_text_too_long',
+      index: 0,
+    });
+    expect(
+      edit([
+        { from: 0, t: 'x' },
+        { from: 0, t: 'y' },
+      ]),
+    ).toEqual({
+      problem: 'kb_show_item',
+      index: 1,
+    });
+    expect(edit([{ from: 3, t: 'x' }])).toEqual({ problem: 'kb_show_item', index: 0 });
+    expect(edit(Array.from({ length: 61 }, () => ({ auto: 'screen' as const })))).toEqual({
+      problem: 'kb_show_too_many',
+      index: -1,
+    });
+  });
+});
+
+describe('«История изменений» показов и загрузок', () => {
+  it('показы: свой сценарий, правка, «Вернуть автоматический»', () => {
+    const show = (action: string, n: number): KbHistoryItemInput => ({
+      section: 'kbshows',
+      code: 'profile',
+      action,
+      label: 'Заполнить профиль',
+      changes: [action === 'delete' ? { field: 'n', from: n } : { field: 'n', to: n }],
+    });
+    expect(line(show('create', 3))).toBe(
+      'Показы: «Заполнить профиль» — создан свой сценарий (3 облачков)',
+    );
+    expect(line(show('update', 4))).toBe(
+      'Показы: «Заполнить профиль» — сценарий изменён (4 облачков)',
+    );
+    expect(line(show('delete', 4))).toBe('Показы: «Заполнить профиль» — снова автоматический');
+  });
+
+  it('загрузка из Excel и откат — строкой справочника; удаление при откате', () => {
+    const load = (
+      section: KbHistoryItemInput['section'],
+      action: string,
+      changes: KbHistoryItemInput['changes'],
+    ) => line({ section, code: '', action, label: '', changes });
+    expect(
+      load('kbsteps', 'import', [
+        { field: 'added', to: 1 },
+        { field: 'changed', to: 2 },
+        { field: 'disabled', to: 0 },
+      ]),
+    ).toBe('Шаги уроков: загрузка из Excel — добавлено 1, изменено 2, отключено 0');
+    expect(
+      load('kbshows', 'rollback', [{ field: 'loadedAt', to: '2026-10-31T04:00:00.000Z' }]),
+    ).toBe('Показы: загрузка от 31.10.2026 откачена');
+    const removed = (section: KbHistoryItemInput['section']) =>
+      line({
+        section,
+        code: 'x',
+        action: 'delete',
+        label: 'Своё',
+        changes: [{ field: 't', from: 'Своё' }],
+      });
+    expect(removed('kbsteps')).toBe('Шаги уроков: шаг «Своё» удалён');
+    expect(removed('kbarts')).toBe('Статьи: «Своё» удалена');
   });
 });

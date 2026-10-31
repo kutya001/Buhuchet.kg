@@ -27,7 +27,7 @@ import {
   type GridColumn,
 } from '@buhuchet/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useEffectEvent, useMemo, useState } from 'react';
+import { useCallback, useEffect, useEffectEvent, useMemo, useState, type ReactNode } from 'react';
 import { api, ApiFailure, callApi } from '../api-client';
 import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
 import { useErrorText, useT } from '../l10n/provider';
@@ -224,10 +224,10 @@ function useNewsAddRequest(run: () => void) {
 /**
  * Админка → «База знаний (содержимое)» → «Новости» (ТЗ; прототип admin/news.js, renderNewsAdm): все
  * новости с поиском, фильтрами и «В Excel»; черновики и снятые — приглушённо; строка открывает окно
- * «Новость», меню — действия. «+ Добавить» → «Новость». Выгрузка и загрузка Excel справочником — задача
- * 2.39.
+ * «Новость», меню — действия. «+ Добавить» → «Новость». Строка выгрузки и загрузки Excel (`ioBar`) —
+ * от вкладки Админки (задача 2.39).
  */
-export function NewsAdminList() {
+export function NewsAdminList({ ioBar }: { ioBar?: ReactNode } = {}) {
   const t = useT();
   const toast = useToast();
   const errorText = useErrorText();
@@ -330,6 +330,7 @@ export function NewsAdminList() {
   return (
     <div className="flex flex-col gap-3.5">
       <Note icon="info">{t('news.adm.note')}</Note>
+      {ioBar}
       <DataGrid
         columns={columns}
         audit={NEWS_AUDIT}
@@ -440,7 +441,13 @@ function NewsHistory() {
       id: `${h.id}-${h.kind}`,
       date: formatDateRu(bishkekDate(at)),
       time: bishkekTime(at),
-      text: t(`news.hist.${h.kind}`, { title: h.title }),
+      text: t(`news.hist.${h.kind}`, {
+        title: h.title,
+        added: String(h.counts?.added ?? 0),
+        changed: String(h.counts?.changed ?? 0),
+        disabled: String(h.counts?.disabled ?? 0),
+        date: h.loadedAt ? formatDateRu(bishkekDate(new Date(h.loadedAt))) : '',
+      }),
       who: h.actor,
     };
   });

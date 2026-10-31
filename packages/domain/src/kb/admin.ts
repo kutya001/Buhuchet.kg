@@ -1,4 +1,5 @@
 import type { ListColumnType, ListSort } from '../common/list';
+import { bishkekDate, formatDateRu } from '../common/dates';
 import type { UiTextKey } from '../l10n/texts';
 import { MENU_MODULE_IDS, type MenuModuleId } from '../org/modules';
 import { FEATURES, PERMISSIONS } from '../roles/permissions';
@@ -8,12 +9,13 @@ import { isKbEvent } from './events';
 /*
  * Админка → «База знаний (содержимое)» (задача 2.39; ТЗ «Модуль База знаний (содержимое)»; прототип
  * admin/kb-content.js): шаги уроков, статьи и уровни для всех организаций и отдельная программа
- * администраторов платформы. Здесь — что можно записать (`kbStepProblems`, `kbArticleProblems`,
- * `kbLevelsProblem`), столбцы списков и строки «Истории изменений» словами прототипа (`pdLog`).
+ * администраторов платформы, сценарии «Показать как». Здесь — что можно записать (`kbStepProblems`,
+ * `kbArticleProblems`, `kbLevelsProblem`, `kbShowEdit`), столбцы списков и строки «Истории
+ * изменений» словами прототипа (`pdLog`).
  */
 
-/** Списки вкладок: «Шаги уроков» и «Статьи». */
-export const KB_ADMIN_LISTS = ['steps', 'arts'] as const;
+/** Списки вкладок: «Шаги уроков», «Статьи» и «Показы» (строка — шаг программы организаций). */
+export const KB_ADMIN_LISTS = ['steps', 'arts', 'shows'] as const;
 export type KbAdminList = (typeof KB_ADMIN_LISTS)[number];
 
 export function isKbAdminList(value: string): value is KbAdminList {
@@ -186,6 +188,82 @@ export function kbLevelsProblem(levels: readonly KbLevelDef[]): KbLevelsProblem 
   return ok ? null : 'kb_level_order';
 }
 
+/* ───────────── Показы ───────────── */
+
+/** Облачков в своём сценарии не больше; заголовок и текст облачка — не длиннее. */
+export const KB_SHOW_ITEMS_MAX = 60;
+export const KB_SHOW_TITLE_MAX = 200;
+export const KB_SHOW_TEXT_MAX = 1000;
+
+/**
+ * Облачко из окна «Сценарий показа» (прототип kbShowDlg): `from` — номер облачка в сохранённом
+ * сценарии (по нему сохраняется всё, что задал разработчик: что подсвечивать, действия перед
+ * облачком); без него — новое: «Облачко с текстом» или «Все элементы экрана» (`auto: 'screen'`).
+ */
+export interface KbShowItemInput {
+  from?: number | undefined;
+  auto?: 'screen' | undefined;
+  t?: string | undefined;
+  x?: string | undefined;
+  common?: boolean | undefined;
+}
+
+export interface KbShowInput {
+  active: boolean;
+  items: readonly KbShowItemInput[];
+}
+
+export type KbShowProblem =
+  | 'kb_show_title'
+  | 'kb_show_title_too_long'
+  | 'kb_show_text_too_long'
+  | 'kb_show_item'
+  | 'kb_show_too_many';
+
+/** Облачко сценария как в справочнике: поля разработчика не разбираются, а переносятся как есть. */
+export type KbShowStoredItem = Readonly<Record<string, unknown>>;
+
+/**
+ * Облачки сценария после окна (прототип kbShowDlg «Сохранить»): порядок и удаление — из окна, у
+ * облачка «Автоматически» ничего не меняется, у остальных — заголовок, текст и «Общий элемент». У
+ * каждого облачка с текстом должен быть заголовок («У каждого облачка должен быть заголовок»).
+ * Номер прежнего облачка — только свой и один раз (запрос в обход окна — `kb_show_item`).
+ */
+export function kbShowEdit(
+  stored: readonly KbShowStoredItem[],
+  input: KbShowInput,
+): { items: Record<string, unknown>[] } | { problem: KbShowProblem; index: number } {
+  if (input.items.length > KB_SHOW_ITEMS_MAX) return { problem: 'kb_show_too_many', index: -1 };
+  const used = new Set<number>();
+  const items: Record<string, unknown>[] = [];
+  for (const [index, p] of input.items.entries()) {
+    const fail = (problem: KbShowProblem) => ({ problem, index });
+    let base: KbShowStoredItem | null = null;
+    if (p.from !== undefined) {
+      if (!Number.isInteger(p.from) || p.from < 0 || p.from >= stored.length || used.has(p.from)) {
+        return fail('kb_show_item');
+      }
+      used.add(p.from);
+      base = stored[p.from]!;
+      if (typeof base.auto === 'string') {
+        items.push({ ...base });
+        continue;
+      }
+    } else if (p.auto === 'screen') {
+      items.push({ auto: 'screen' });
+      continue;
+    }
+    const t = (p.t ?? '').trim();
+    const x = (p.x ?? '').trim();
+    if (!t) return fail('kb_show_title');
+    if (t.length > KB_SHOW_TITLE_MAX) return fail('kb_show_title_too_long');
+    if (x.length > KB_SHOW_TEXT_MAX) return fail('kb_show_text_too_long');
+    const { common: _common, ...rest } = base ?? {};
+    items.push({ ...rest, t, x, ...(p.common ? { common: true } : {}) });
+  }
+  return { items };
+}
+
 /* ───────────── Списки ───────────── */
 
 /** Столбец списка: ключ, тип, подпись (ключ словаря) и скрыт ли по умолчанию. */
@@ -199,7 +277,7 @@ export interface KbAdminColumn {
 const c = (key: string, type: ListColumnType, label: UiTextKey, hidden = false): KbAdminColumn =>
   hidden ? { key, type, label, hidden } : { key, type, label };
 
-/** Столбцы — как в прототипе (`kb-steps`, `kb-arts`). */
+/** Столбцы — как в прототипе (`kb-steps`, `kb-arts`, `kb-shows`). */
 export const KB_ADMIN_COLUMNS: Readonly<Record<KbAdminList, readonly KbAdminColumn[]>> = {
   steps: [
     c('n', 'int', 'kbadm.col.n'),
@@ -224,25 +302,45 @@ export const KB_ADMIN_COLUMNS: Readonly<Record<KbAdminList, readonly KbAdminColu
     c('len', 'int', 'kbadm.col.len', true),
     c('active', 'enum', 'kbadm.col.art_active'),
   ],
+  shows: [
+    c('g', 'enum', 'kbadm.col.group'),
+    c('t', 'text', 'kbadm.col.step'),
+    c('type', 'enum', 'kbadm.col.type'),
+    c('sc', 'enum', 'kbadm.col.sc'),
+    c('scr', 'text', 'kbadm.col.scr'),
+    c('n', 'int', 'kbadm.col.clouds'),
+    c('doit', 'enum', 'kbadm.col.doit'),
+    c('active', 'enum', 'kbadm.col.active'),
+  ],
 };
 
-/** Сортировка по умолчанию: шаги — по «№» (порядок программ), статьи — как в справочнике. */
+/**
+ * Сортировка по умолчанию: шаги — по «№» (порядок программ), статьи — как в справочнике, показы — по
+ * порядку программы организаций.
+ */
 export const KB_ADMIN_SORT: Readonly<Record<KbAdminList, ListSort | null>> = {
   steps: { key: 'n', dir: 'asc' },
   arts: null,
+  shows: null,
 };
 
 /* ───────────── История изменений ───────────── */
 
-/** Разделы истории: шаги, статьи, уровни (`platform_audit_log`, `<раздел>:<код>`). */
-export const KB_HISTORY_SECTIONS = ['kbsteps', 'kbarts', 'kblevels'] as const;
+/**
+ * Разделы истории: шаги, статьи, уровни, показы (`platform_audit_log`, `<раздел>:<код>`); загрузка из
+ * Excel и её откат — записи раздела без кода (`<раздел>:`).
+ */
+export const KB_HISTORY_SECTIONS = ['kbsteps', 'kbarts', 'kblevels', 'kbshows'] as const;
 export type KbHistorySection = (typeof KB_HISTORY_SECTIONS)[number];
 
 /** Вкладка → её раздел истории. */
-export const KB_TAB_HISTORY: Readonly<Record<'steps' | 'arts' | 'levels', KbHistorySection>> = {
+export const KB_TAB_HISTORY: Readonly<
+  Record<'steps' | 'arts' | 'levels' | 'shows', KbHistorySection>
+> = {
   steps: 'kbsteps',
   arts: 'kbarts',
   levels: 'kblevels',
+  shows: 'kbshows',
 };
 
 /** Изменённое поле записи истории: было → стало (значения как в JSON). */
@@ -285,11 +383,36 @@ const levelText = (v: unknown, t: (key: UiTextKey) => string) => {
   return `${String(l.n ?? '')} ${String(l.p ?? '')} ${t('kbadm.hist.percent')}`;
 };
 
+const changeTo = (item: KbHistoryItemInput, field: string) =>
+  item.changes.find((ch) => ch.field === field)?.to;
+
+/**
+ * Загрузка из Excel и её откат (прототип importDictDlg, rollbackLoad): «Шаги уроков: загрузка из Excel
+ * — добавлено 1, изменено 2, отключено 0», «Показы: загрузка от 31.10.2026 откачена».
+ */
+function loadLine(
+  item: KbHistoryItemInput & { section: Exclude<KbHistorySection, 'kblevels'> },
+  t: (key: UiTextKey) => string,
+): KbHistoryLine {
+  const dict = t(`pdicts.title.${item.section}`);
+  if (item.action === 'rollback') {
+    const at = changeTo(item, 'loadedAt');
+    const date = typeof at === 'string' ? formatDateRu(bishkekDate(new Date(at))) : '';
+    return { key: 'pdicts.hist.rollback', params: { dict, date } };
+  }
+  const n = (field: string) => String(Number(changeTo(item, field) ?? 0));
+  return {
+    key: 'pdicts.hist.import',
+    params: { dict, added: n('added'), changed: n('changed'), disabled: n('disabled') },
+  };
+}
+
 /**
  * Запись истории словами прототипа (`pdLog`): «Шаги уроков: добавлен шаг «…» (Организации)», «… изменён
  * — название, право», «… перемещён выше», «… выключен»; «Статьи: добавлена «…»», «… изменена», «…
- * отключена»; «Уровни (организации): 2: Ученик 25 % → Ученик 30 %». `adminGroup` — группа шага в
- * программе администратора платформы.
+ * отключена»; «Уровни (организации): 2: Ученик 25 % → Ученик 30 %»; «Показы: «…» — создан свой
+ * сценарий (3 облачков)», «… — сценарий изменён (4 облачков)», «… — снова автоматический».
+ * `adminGroup` — группа шага в программе администратора платформы.
  */
 export function kbHistoryLine(
   item: KbHistoryItemInput,
@@ -297,6 +420,15 @@ export function kbHistoryLine(
   adminGroup: (group: string) => boolean,
 ): KbHistoryLine {
   const name = item.label;
+  if ((item.action === 'import' || item.action === 'rollback') && item.section !== 'kblevels') {
+    return loadLine({ ...item, section: item.section }, t);
+  }
+  if (item.section === 'kbshows') {
+    if (item.action === 'delete') return { key: 'kbadm.hist.show.auto', params: { name } };
+    const n = String(Number(changeTo(item, 'n') ?? 0));
+    const key = item.action === 'create' ? 'kbadm.hist.show.create' : 'kbadm.hist.show.update';
+    return { key, params: { name, n } };
+  }
   if (item.section === 'kblevels') {
     const list = item.changes
       .map((ch) => `${ch.field}: ${levelText(ch.from, t)} → ${levelText(ch.to, t)}`)
@@ -309,11 +441,13 @@ export function kbHistoryLine(
   const active = only(item.changes, 'active');
   if (item.section === 'kbarts') {
     if (item.action === 'create') return { key: 'kbadm.hist.art.create', params: { name } };
+    if (item.action === 'delete') return { key: 'kbadm.hist.art.delete', params: { name } };
     if (active) {
       return { key: active.to ? 'kbadm.hist.art.on' : 'kbadm.hist.art.off', params: { name } };
     }
     return { key: 'kbadm.hist.art.update', params: { name } };
   }
+  if (item.action === 'delete') return { key: 'kbadm.hist.step.delete', params: { name } };
   if (item.action === 'create') {
     const g = item.changes.find((ch) => ch.field === 'g')?.to;
     const prog = t(
