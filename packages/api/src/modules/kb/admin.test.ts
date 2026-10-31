@@ -67,6 +67,7 @@ describe.skipIf(!databaseAvailable())(
         `${P}/levels`,
         `${P}/list/steps`,
         `${P}/list/arts/values?col=sec`,
+        `${P}/list/steps/export`,
         `${P}/steps/profile`,
         `${P}/arts/a1`,
       ];
@@ -75,11 +76,15 @@ describe.skipIf(!databaseAvailable())(
         expect((await get(path, '')).status, path).toBe(401);
       }
       const profile = await step('profile');
+      const art = { sec: 'x', t: 'x', mod: '', perm: '', aud: 'biz', active: true, html: '' };
       const writes: ['POST' | 'PUT', string, unknown][] = [
         ['POST', `${P}/steps`, { ...fields(profile), mod: 'org' }],
         ['PUT', `${P}/steps/profile`, { ...fields(profile), version: profile.version }],
         ['POST', `${P}/steps/profile/move`, { dir: 'down', version: profile.version }],
         ['POST', `${P}/steps/profile/active`, { active: false, version: profile.version }],
+        ['POST', `${P}/arts`, art],
+        ['PUT', `${P}/arts/a1`, { ...art, version: 1 }],
+        ['POST', `${P}/arts/a1/active`, { active: false, version: 1 }],
         ['POST', `${P}/arts/preview`, { t: 'x', sec: 'x', mod: '', html: '' }],
         ['PUT', `${P}/levels/business`, { levels: [{ n: 'x', p: 0 }], version: 1 }],
       ];
@@ -234,6 +239,20 @@ describe.skipIf(!databaseAvailable())(
         { type: 'p', inline: [{ text: 'Нажмите ' }, { text: '«+ Добавить»', bold: true }] },
         { type: 'p', inline: [{ text: 'alert(1)' }] },
       ]);
+      // Предпросмотр — не длиннее статьи; описание экрана — только у модуля меню.
+      const long = { t: 'x', sec: 'x', mod: '', html: 'а'.repeat(100_001) };
+      expect((await send('POST', `${P}/arts/preview`, long)).status).toBe(400);
+      const odd = KbArticle.parse(
+        await (
+          await send('POST', `${P}/arts/preview`, {
+            t: 'x',
+            sec: 'x',
+            mod: '',
+            html: '<kb-screen data-mod="constructor"></kb-screen><p>Текст</p>',
+          })
+        ).json(),
+      );
+      expect(odd.blocks).toEqual([{ type: 'p', inline: [{ text: 'Текст' }] }]);
       const meta = AdminKbMeta.parse(await (await get(`${P}/meta`)).json());
       expect(meta.articles.some((a) => a.id === art.id)).toBe(true);
       const history = AdminKbHistory.parse(await (await get(`${P}/history/kbarts`)).json());

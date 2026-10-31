@@ -1,4 +1,5 @@
 import { NEWS_IMAGE_PATH } from '../news/markdown';
+import { MENU_MODULE_IDS } from '../org/modules';
 import type { Feature, PermissionId } from '../roles/permissions';
 import type { KbArticleDef, KbScreenUi } from './catalog';
 import type { KbAccess, KbProgramStep } from './program';
@@ -45,6 +46,9 @@ export type KbBlock =
    */
   | { type: 'image'; src: string; alt: string };
 
+/** Модули меню: описание экрана `kb-screen` — только у них. */
+const MENU: ReadonlySet<string> = new Set(MENU_MODULE_IDS);
+
 /** Адрес картинки статьи: загруженная в Админке (`/api/news/images/<id>`). */
 // ОТКЛОНЕНИЕ: docs/deviations.md#Д-26
 const IMAGE_SRC = new RegExp(`^${NEWS_IMAGE_PATH}[0-9a-f-]{36}$`);
@@ -80,7 +84,8 @@ const attr = (attrs: string, name: string): string | undefined => {
 
 function tokenize(html: string): Token[] {
   const out: Token[] = [];
-  const re = /<\s*(\/)?\s*([a-zA-Z][a-zA-Z0-9-]*)([^>]*)>|([^<]+)|(<)/g;
+  // `[^<>]*`: тег не содержит `<` — разбор линейный и на тексте `<a<a<a…` без `>`.
+  const re = /<\s*(\/)?\s*([a-zA-Z][a-zA-Z0-9-]*)([^<>]*)>|([^<]+)|(<)/g;
   for (const m of html.matchAll(re)) {
     if (m[4] !== undefined || m[5] !== undefined) {
       out.push({ text: decode(m[4] ?? m[5]!) });
@@ -192,7 +197,8 @@ export function kbArticleBlocks(html: string): KbBlock[] {
         inline = [];
       } else if (tag === 'kb-screen' && !lists.length) {
         flushText();
-        if (token.mod) blocks.push({ type: 'screen', module: token.mod });
+        // Описание экрана — только у модуля меню: ключ ищется в справочнике `kbUi`.
+        if (token.mod && MENU.has(token.mod)) blocks.push({ type: 'screen', module: token.mod });
       } else if (tag === 'img' && !lists.length) {
         // Картинка — отдельным блоком; текст абзаца после неё — новым абзацем.
         const block: 'h4' | 'h5' | 'p' | 'quote' | null = textBlock;
@@ -224,7 +230,7 @@ export function kbArticleBlocks(html: string): KbBlock[] {
 
 /** Текст статьи без тегов, пробелы схлопнуты (прототип stripTags): по нему ищет поиск. */
 export function kbArticleText(html: string): string {
-  return decode(html.replace(/<[^>]+>/g, ' '))
+  return decode(html.replace(/<[^<>]+>/g, ' '))
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -317,12 +323,15 @@ export function kbScreenBlocks(ui: KbScreenUi, module: string): KbScreenBlocks {
     const [mod, tab] = key.split('.');
     if (mod === module && tab) tabs[tab] = text;
   }
-  const items = (ui.screens?.[module] ?? []).map((key): KbScreenItem => {
+  // Ключи — из текста статьи и справочника: только свои ключи словарей («constructor» — не модуль).
+  const own = <T>(map: Record<string, T> | undefined, key: string): T | undefined =>
+    map && Object.hasOwn(map, key) ? map[key] : undefined;
+  const items = (own(ui.screens, module) ?? []).map((key): KbScreenItem => {
     const el = ui.els?.find((e) => e.id === key);
     if (el) return { kind: 'el', name: el.t, text: el.x ?? '' };
-    const plate = ui.plates?.[key];
+    const plate = own(ui.plates, key);
     if (plate !== undefined) return { kind: 'plate', name: key, text: plate };
-    return { kind: 'button', name: key, text: ui.buttons?.[key] ?? ui.addItems?.[key] ?? '' };
+    return { kind: 'button', name: key, text: own(ui.buttons, key) ?? own(ui.addItems, key) ?? '' };
   });
   const forms = (ui.artForms ?? [])
     .filter((f) => f.mod === module)
@@ -330,7 +339,7 @@ export function kbScreenBlocks(ui: KbScreenUi, module: string): KbScreenBlocks {
       title: f.t,
       text: f.x ?? '',
       fields: f.fields.map((key) => {
-        const d = ui.fields?.[key] ?? {};
+        const d = own(ui.fields, key) ?? {};
         return { name: d.n ?? key, required: d.req === true || d.req === 1, text: d.x ?? '' };
       }),
     }));

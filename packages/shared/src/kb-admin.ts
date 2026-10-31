@@ -1,6 +1,7 @@
 import {
   KB_ADMIN_LISTS,
   KB_ARTICLE_AUDIENCES,
+  KB_ARTICLE_HTML_MAX,
   KB_HISTORY_SECTIONS,
   KB_LEVEL_SETS,
 } from '@buhuchet/domain';
@@ -93,12 +94,12 @@ export const AdminKbArticle = AdminKbArticleFields.extend({
 });
 export type AdminKbArticle = z.infer<typeof AdminKbArticle>;
 
-/** Предпросмотр статьи из окна (прототип kbArtDlg с несохранённым текстом). */
+/** Предпросмотр статьи из окна (прототип kbArtDlg с несохранённым текстом): текст не длиннее статьи. */
 export const AdminKbArticlePreview = z.object({
   t: short,
   sec: short,
   mod: z.string().max(64),
-  html: z.string().max(200_000),
+  html: z.string().max(KB_ARTICLE_HTML_MAX),
 });
 
 const Level = z.object({ n: z.string().max(200), p: z.number() });

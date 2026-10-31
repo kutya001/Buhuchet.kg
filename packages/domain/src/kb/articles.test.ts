@@ -227,5 +227,24 @@ describe('описание экрана модуля', () => {
       ],
     });
     expect(kbScreenBlocks({}, 'org')).toEqual({ tabs: {}, items: [], forms: [] });
+    // Ключ не из справочника («constructor») — пусто, а не ошибка.
+    expect(kbScreenBlocks(ui, 'constructor')).toEqual({ tabs: {}, items: [], forms: [] });
+  });
+
+  it('описание экрана — только у модуля меню', () => {
+    expect(
+      kbArticleBlocks('<kb-screen data-mod="constructor"></kb-screen><kb-screen data-mod="cps">'),
+    ).toEqual([{ type: 'screen', module: 'cps' }]);
+  });
+});
+
+describe('текст из Админки', () => {
+  it('теги без «>» разбираются быстро: время не растёт с квадратом длины', () => {
+    const odd = '<a'.repeat(50_000);
+    const started = performance.now();
+    kbArticleBlocks(odd);
+    kbArticleText(odd);
+    kbArticleBlocks('<'.repeat(100_000));
+    expect(performance.now() - started).toBeLessThan(500);
   });
 });
