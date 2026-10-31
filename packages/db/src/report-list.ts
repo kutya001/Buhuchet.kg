@@ -589,6 +589,7 @@ export function reportFilesPart(scope: SQL | undefined, t: ListTexts): FileListP
  * «Контрагенты» над `contractors`; null — нигде). Там у поступления — вся сумма, иначе — только часть на
  * налоги, а поступление только за обслуживание (часть на налоги 0) не видно (docs/deviations.md п. В-19).
  */
+// ОТКЛОНЕНИЕ: docs/deviations.md#В-19
 export function moneyFilesPart(
   kind: 'receipt' | 'tax_payment',
   scope: SQL | undefined,

@@ -265,7 +265,8 @@ async function visibleEntries(
   if (access.tasks) own.push(eq(auditLog.entity, 'task'));
   if (kpi) own.push(inArray(auditLog.entity, [...KPI_ENTITIES]));
   if (files) own.push(eq(auditLog.entity, 'file'));
-  // Поступление только за обслуживание (часть на налоги 0) — только тому, кто видит плату (п. В-19).
+  // ОТКЛОНЕНИЕ: docs/deviations.md#В-19
+  // Поступление только за обслуживание (часть на налоги 0) — только тому, кто видит плату.
   if (money) {
     own.push(
       access.fee

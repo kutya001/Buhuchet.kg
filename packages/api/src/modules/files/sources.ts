@@ -139,6 +139,7 @@ function indicatorFilesList({ subject, features, t }: FileListContext): FileList
  * Поступление только за обслуживание и его сумму целиком видит только тот, кто видит плату по этому
  * контрагенту (задача 2.21, docs/deviations.md п. В-19).
  */
+// ОТКЛОНЕНИЕ: docs/deviations.md#В-19
 function moneySource(kind: 'receipt' | 'tax_payment'): FileListSource {
   return {
     async resolve(tx, subject, id) {

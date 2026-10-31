@@ -70,6 +70,7 @@ const body = <S>(schema: S) => ({ required: true, content: json(schema) });
  * плату за обслуживание»), контрагент не разовый и платит организации; строже прототипа — ещё право
  * «Менять журнал тарифов» и контрагент в области группы «Контрагенты» (docs/deviations.md п. В-19).
  */
+// ОТКЛОНЕНИЕ: docs/deviations.md#В-19
 async function receiptFeeAllowed(
   tx: Tx,
   c: Context<AppEnv>,
@@ -201,6 +202,7 @@ export function contractorMoneyHandler(
         state: rec.verdict.state,
         amount: 'amount' in rec.verdict ? rec.verdict.amount : 0,
       },
+      // ОТКЛОНЕНИЕ: docs/deviations.md#В-19
       // Часть за обслуживание (общая сумма больше части на налоги) — только тому, кто видит плату:
       // остальным общая сумма равна части на налоги, а поступление только за обслуживание не видно.
       operations: ops

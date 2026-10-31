@@ -481,23 +481,44 @@ describe.skipIf(!databaseAvailable())('Плата за обслуживание 
     expect((await ops(owner)).map((o) => o.id).sort()).toEqual([mixed, pure].sort());
   });
 
-  it('право на плату с областью «Свои»: чужой контрагент — 404, свой — 200', async () => {
+  it('право на плату с областью «Свои»: чужой контрагент — 404, свой — 200; часть за обслуживание в поступлении — ещё и с «Менять журнал тарифов»', async () => {
     const hr = employee('hr-a');
     const [role] = await f.t.admin.db
       .select({ id: schema.employees.roleId })
       .from(schema.employees)
       .where(eq(schema.employees.id, hr));
-    await f.t.admin.db.insert(schema.rolePermissions).values(
-      ['fee', 'tariff'].map((permissionId) => ({
-        orgId: f.a.orgId,
-        roleId: role!.id!,
-        permissionId,
-      })),
-    );
+    const grant = (permissionId: string) =>
+      f.t.admin.db
+        .insert(schema.rolePermissions)
+        .values({ orgId: f.a.orgId, roleId: role!.id, permissionId });
     const mine = await contractor(f.a.orgId, 'ИП Своя', '21503198700031', {
       responsibleEmployeeId: hr,
     });
     const hrCookie = await signIn(f.app, 'hr-a', TEST_PASSWORD);
+    // Только «Видеть плату»: части за обслуживание в поступлении нет, запрос с ней — 400 (п. В-19).
+    await grant('fee');
+    const receiptForm = async () =>
+      ReceiptForm.parse(
+        await (
+          await expectStatus(
+            await call('GET', `/api/contractors/${mine}/receipt-form`, hrCookie),
+            200,
+          )
+        ).json(),
+      );
+    expect((await receiptForm()).fee).toBeNull();
+    const feeReceipt = {
+      total: som(100),
+      date: '2026-10-18',
+      fee: [{ month: '2026-07', amount: som(100) }],
+    };
+    const refused = await expectStatus(
+      await call('POST', `/api/contractors/${mine}/receipts`, hrCookie, feeReceipt),
+      400,
+    );
+    expect((await failure(refused)).code).toBe('receipt_fee_invalid');
+    await grant('tariff');
+    expect((await receiptForm()).fee!.months[0]!.month).toBe('2026-07');
     for (const path of ['fees', 'fee-payment-form', 'fee-reminder']) {
       await expectStatus(await call('GET', `/api/contractors/${cpDebt}/${path}`, hrCookie), 404);
     }

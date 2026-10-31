@@ -148,7 +148,11 @@ export interface ContractorFees {
   advance: Tyiyn;
 }
 
-/** Начисления и оплаты контрагента по месяцам, долг и аванс (прототип `derive`, вкладка «Обслуживание»). */
+/**
+ * Начисления и оплаты контрагента по месяцам, долг и аванс (прототип `derive`, вкладка «Обслуживание»).
+ * Начисления считаются, не хранятся, ручного исправления нет — как в прототипе.
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#В-17
 export function contractorFees(
   c: FeeContractor,
   payments: readonly FeePayment[],
