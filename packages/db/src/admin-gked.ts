@@ -37,7 +37,7 @@ import { socfundDict, socfundStatusCode } from './socfund';
  * коды для дерева и поиска, «Группы кодов» (раздел `gkedGroups`) с правкой перечней единого налога и
  * СПиНО, «Виды деятельности (ГКЭД)» ставок единого налога. Сами коды правит общий механизм
  * справочников (`adminDictCreate`, `adminDictUpdate` — справочник `gked`). Пишет администратор
- * платформы функциями базы (миграции 0043 и 0068); история — `platform_audit_log`.
+ * платформы функциями базы (миграции 0043, 0068 и 0069); история — `platform_audit_log`.
  */
 
 /** Код ГКЭД для дерева и поиска: «Используется» — у контрагентов и в перечнях справочников. */
@@ -96,7 +96,7 @@ export async function readReference(
  */
 export async function saveReference(
   tx: Tx,
-  key: 'taxes' | 'propertyRates' | 'gkedGroups',
+  key: 'taxes' | 'propertyRates' | 'gkedGroups' | 'kbSteps' | 'kbArticles' | 'kbLevels' | 'kbShows',
   payload: unknown,
   version: number,
 ): Promise<number | null> {

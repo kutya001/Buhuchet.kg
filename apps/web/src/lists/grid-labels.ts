@@ -37,6 +37,8 @@ export type CountKey =
   | 'pdicts.perms_count'
   | 'pdicts.loads.count'
   | 'pdicts.req.count'
+  | 'kbadm.steps_count'
+  | 'kbadm.arts_count'
   | 'news.count';
 
 /** Тексты списка из словаря; число записей — в форме для числа (1 сотрудник, 2 сотрудника, 5 сотрудников). */

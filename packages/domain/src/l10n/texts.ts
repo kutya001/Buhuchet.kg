@@ -7,6 +7,7 @@ import { CONTRACTORS_TEXTS } from './contractors-texts';
 import { DICTS_TEXTS } from './dicts-texts';
 import { FILES_TEXTS } from './files-texts';
 import { GRID_TEXTS } from './grid-texts';
+import { KB_ADMIN_TEXTS } from './kb-admin-texts';
 import { KB_TEXTS } from './kb-texts';
 import { KPI_TEXTS } from './kpi-texts';
 import { MONEY_TEXTS } from './money-texts';
@@ -68,7 +69,8 @@ const SYSTEM_TEXTS = {
  * контрагента по ссылке — `contractor-page-texts.ts`, задач —
  * `tasks-texts.ts`, реквизитов для переводов — `money-texts.ts`, показателей контрагентов и названий месяцев —
  * `kpi-texts.ts`, блока «Файлы» — `files-texts.ts`, «Базы знаний» — `kb-texts.ts`, «Новостей» — `news-texts.ts`,
- * Админки → «Справочники платформы» — `platform-dicts-texts.ts`.
+ * Админки → «Справочники платформы» — `platform-dicts-texts.ts`, Админки → «База знаний (содержимое)» —
+ * `kb-admin-texts.ts`.
  */
 export const UI_TEXTS = {
   ...SYSTEM_TEXTS,
@@ -95,6 +97,7 @@ export const UI_TEXTS = {
   ...KB_TEXTS,
   ...NEWS_TEXTS,
   ...PLATFORM_DICTS_TEXTS,
+  ...KB_ADMIN_TEXTS,
 } as const satisfies Record<string, UiTextDefault>;
 
 /** Ключ текста интерфейса: только из `UI_TEXTS`, поэтому опечатка в ключе — ошибка типов. */

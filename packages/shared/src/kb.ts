@@ -157,7 +157,10 @@ export type KbArticleList = z.infer<typeof KbArticleList>;
 
 const KbInline = z.array(z.object({ text: z.string(), bold: z.literal(true).optional() }));
 
-/** Блок статьи: заголовок, абзац, цитата, список (пункты с глубиной) или описание экрана модуля. */
+/**
+ * Блок статьи: заголовок, абзац, цитата, список (пункты с глубиной), описание экрана модуля или
+ * картинка из хранилища.
+ */
 export const KbBlockSchema = z.discriminatedUnion('type', [
   z.object({ type: z.enum(['h4', 'h5', 'p', 'quote']), inline: KbInline }),
   z.object({
@@ -167,6 +170,7 @@ export const KbBlockSchema = z.discriminatedUnion('type', [
     ),
   }),
   z.object({ type: z.literal('screen'), module: z.string() }),
+  z.object({ type: z.literal('image'), src: z.string(), alt: z.string() }),
 ]);
 
 /** Описание экрана модуля из `kbUi`: подписи вкладок, элементы и формы с полями. */

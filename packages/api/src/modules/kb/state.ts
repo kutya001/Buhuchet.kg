@@ -17,7 +17,6 @@ import {
   addDays,
   bishkekDate,
   FEATURES,
-  KB_STEP_RULES,
   kbAdminAccess,
   kbArticleVisible,
   kbBusinessAccess,
@@ -29,6 +28,7 @@ import {
   kbStats,
   kbStepArticle,
   kbStepIsNew,
+  kbStepRule,
   type KbAccess,
   type KbArticleDef,
   type KbCatalog,
@@ -168,7 +168,7 @@ function featureOffers(
       !ctx.learner.access.feature(f) &&
       !!info[f]?.benefit &&
       !!g &&
-      ctx.catalog.steps.some((s) => s.g === g && Object.hasOwn(KB_STEP_RULES, s.id))
+      ctx.catalog.steps.some((s) => s.g === g && kbStepRule(s) !== undefined)
     );
   }).map((f) => ({ feature: f, benefit: info[f]!.benefit! }));
 }
