@@ -146,6 +146,12 @@ function moneyText(value: Expr): SQL {
   return sql`case when ${value} is null then null else (case when ${value} < 0 then ${MINUS} else '' end) || regexp_replace(${whole}, '(\\d)(?=(\\d{3})+$)', '\\1' || ${NBSP}, 'g') || ',' || lpad((abs(${value}) % 100)::text, 2, '0') end`;
 }
 
+/** Сумма с единицей, как `formatSomWithUnit`: «1 250,50 сом», «1 250 сом» (копейки — только если есть). */
+export function somUnitText(value: Expr): SQL {
+  const whole = sql`(abs(${value}) / 100)::text`;
+  return sql`(case when ${value} < 0 then ${MINUS} else '' end) || regexp_replace(${whole}, '(\\d)(?=(\\d{3})+$)', '\\1' || ${NBSP}, 'g') || case when abs(${value}) % 100 = 0 then '' else ',' || lpad((abs(${value}) % 100)::text, 2, '0') end || ${NBSP} || 'сом'`;
+}
+
 /** Текст столбца, как на экране (`display` или по типу); пусто — null. */
 export function displayOf(column: ListColumn): SQL {
   if (column.display) return sql`nullif(${column.display}::text, '')`;

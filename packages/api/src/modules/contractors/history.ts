@@ -13,6 +13,7 @@ import type { AppEnv } from '../../env';
 import { orgContextOf, requirePermission } from '../../middleware/access';
 import { filesScopeOf } from '../files/manager';
 import { kpiScopeOf } from '../kpi/common';
+import { finScopeOf } from '../money/common';
 import { reportScopeOf } from '../reports/common';
 import { notFound } from './card';
 import { error, scopeSqlOf, subjectOf, translateOf } from './common';
@@ -39,8 +40,8 @@ export const contractorHistoryRoute = createRoute({
 
 /**
  * Что из истории видно (как вкладки карточки): отчёты и назначения — с «Просматривать отчёты» в его
- * области, задачи — с функцией «Задачи», показатели и файлы — с функцией, правом и областью своего
- * модуля, поля платы — с «Видеть плату за обслуживание».
+ * области, задачи — с функцией «Задачи», показатели, файлы и поступления денег — с функцией, правом и
+ * областью своего модуля, поля платы — с «Видеть плату за обслуживание».
  */
 async function historyAccess(
   tx: Tx,
@@ -55,6 +56,7 @@ async function historyAccess(
     tasks: features.tasks,
     kpi: features.indicators && can('kpiView') && kpiScopeOf(subject),
     files: features.files && can('filesView') && filesScopeOf(subject),
+    money: features.taxpay && (can('finView') || can('money')) && finScopeOf(subject),
   };
 }
 

@@ -2014,6 +2014,8 @@ export async function createRevision(
       dueDate: due,
       // Срок оплаты своим правилом вида остаётся прежним, иначе — как новый срок сдачи.
       payDue: follows ? due : r.payDue,
+      // Оплаченное переходит в уточнённую версию (прототип createRevision: копия отчёта без суммы).
+      paid: r.paid,
       responsibleEmployeeId: r.responsibleEmployeeId,
       createdBy: sql`app.current_user_id()`,
       updatedBy: sql`app.current_user_id()`,

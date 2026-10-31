@@ -9,6 +9,8 @@ import { FILE_SOURCE_KINDS, fileExtension, type FileSourceKind } from './files';
 export const FILE_KIND_ICONS: Readonly<Record<FileSourceKind, string>> = {
   manual: 'upload',
   report: 'file',
+  receipt: 'wallet',
+  tax_payment: 'send',
   task: 'task',
   indicator_value: 'gauge',
 };

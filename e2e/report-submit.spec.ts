@@ -3,12 +3,14 @@ import { expect, test, type APIRequestContext, type Locator, type Page } from '@
 import { search } from './admin';
 import { DEMO_PASSWORD, newOrgOwner, signIn } from './helpers';
 import { connectAllTypes } from './orgs';
-import { asOwner, manualReport, newContractor, reportsOf, staffIds } from './reports';
+import { asOwner, manualReport, newContractor, prepay, reportsOf, staffIds } from './reports';
 
 // «Отчеты для сдачи»: сдача, подтверждение и карточка отчёта (задача 2.14, #70) через настоящий сайт.
 // Отчёты — «Разовым отчётом» через API у своего на каждый запуск и проект (ПК и телефон) контрагента
 // демо-организации: в ней сдача требует подтверждения, «Файлы в карточках» включены, Соцфонду нужен
-// файл. Владелец erkin, главный бухгалтер meerim, бухгалтер alisher с областью «Свои контрагенты».
+// файл, «Сдан» с суммой — только после оплаты (задача 2.19: оплата «Оплатил контрагент сам» через API
+// перед сдачей). Владелец erkin, главный бухгалтер meerim, бухгалтер alisher с областью «Свои
+// контрагенты».
 
 type Card = {
   id: string;
@@ -127,6 +129,9 @@ test.describe('Этап 2: отчёты — сдача, подтверждени
     const soc = await report('soc');
     const pni = await report('pni');
     const nds = await report('nds');
+    // «Сдача только после оплаты»: Соцфонд и налог у источника оплачены заранее.
+    await prepay(request, origin, soc, 250_000);
+    await prepay(request, origin, pni, 300_000);
 
     // Массово одной датой: Соцфонду нужен файл — он пропущен, налог у источника сдан со своей суммой.
     const batch = await request.post('/api/reports/submit', {
@@ -140,7 +145,7 @@ test.describe('Этап 2: отчёты — сдача, подтверждени
       },
     });
     expect(batch.status(), await batch.text()).toBe(200);
-    expect(await batch.json()).toEqual({ done: 1, skippedFile: 1, skipped: 0 });
+    expect(await batch.json()).toEqual({ done: 1, skippedFile: 1, skipped: 0, skippedPay: 0 });
     expect((await cardOf(request, soc)).status).toBe('todo');
     const file = await uploadToReport(request, origin, soc, `соцфонд-${word}.pdf`);
     await submit(request, origin, soc, { amount: 250_000, fileIds: [file] });
@@ -150,6 +155,8 @@ test.describe('Этап 2: отчёты — сдача, подтверждени
       data: { version: (await cardOf(request, nds)).version, amount: 400_000 },
     });
     expect(amount.status(), await amount.text()).toBe(200);
+    // Оплачено 4 000 из указанных — «Сдан» с исправленной суммой 5 000 можно поставить.
+    await prepay(request, origin, nds, 400_000);
 
     // Фильтр «компания А, 09.2026»: итог по столбцу «Сумма к уплате».
     const filters = encodeURIComponent(
@@ -264,6 +271,10 @@ test.describe('Этап 2: отчёты — сдача, подтверждени
     const nds = await report('2026-09-01');
     const toFix = await report('2026-08-01', '2030-01-15');
     const own = await report('2026-07-01', '2030-01-15');
+    // «Сдача только после оплаты»: налог оплачен полностью — после «Сдан» отчёт не просрочен и по оплате.
+    await prepay(request, origin, nds, 1_200_000);
+    await prepay(request, origin, toFix, 100_000);
+    await prepay(request, origin, own, 100_000);
 
     // Бухгалтер: отчёт со сроком в прошлом и статусом «К сдаче» — во вкладке «Просрочено».
     await signIn(page.request, origin, 'alisher', DEMO_PASSWORD);

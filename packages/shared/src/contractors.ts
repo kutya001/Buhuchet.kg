@@ -283,6 +283,8 @@ export const Contractor = z.object({
   firstMonthMode: z.enum(FIRST_MONTH_MODES).nullable(),
   feeDay: z.number().int().nullable(),
   paysTo: z.enum(PAYS_TO),
+  /** «Файл при поступлении»: поступление нельзя сохранить без файла (задача 2.19). */
+  needReceiptFile: z.boolean(),
   serviceStatus: z.enum(SERVICE_STATUSES),
   /** Действующая ставка обслуживания; null — нет ставки или нет права «Видеть плату за обслуживание». */
   tariff: z

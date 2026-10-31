@@ -22,6 +22,8 @@ export const HISTORY_ENTITIES = [
   'dict_request',
   'org_account',
   'employee_wallet',
+  // Деньги контрагента: поступление, оплата налога и другие операции (задача 2.19).
+  'money_operation',
   // Показатели контрагентов: показатель (настройка, «Кому вести»), значение за месяц, ввод из Excel.
   'indicator',
   'indicator_value',

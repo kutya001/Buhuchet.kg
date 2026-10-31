@@ -84,6 +84,7 @@ async function listOptions(
     quick: q.quick,
     waiting: waitingView(subject, policy.confirm),
     contractorId: q.contractorId ?? null,
+    taxpay: settings.features.taxpay,
     ...(q.tab === 'calendar' && q.day
       ? { day: { date: q.day, taxpay: settings.features.taxpay } }
       : {}),
@@ -172,11 +173,15 @@ export function reportTabCountsHandler(
     const subject = subjectOf(c);
     const today = todayOf(deps);
     const body = await withOrgContext(deps.db, orgContextOf(c), async (tx) => {
-      const policy = await reportConfirmPolicy(tx, orgContextOf(c).orgId);
+      const [policy, settings] = await Promise.all([
+        reportConfirmPolicy(tx, orgContextOf(c).orgId),
+        orgMenuSettings(tx, orgContextOf(c).orgId),
+      ]);
       const summary = await reportSummary(tx, {
         scope: reportScopeOf(subject),
         today,
         waiting: waitingView(subject, policy.confirm),
+        taxpay: settings.features.taxpay,
       });
       const week = reportWeek(today);
       return {

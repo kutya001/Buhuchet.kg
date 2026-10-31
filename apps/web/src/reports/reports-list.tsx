@@ -133,6 +133,9 @@ export function ReportsList({ tab }: { tab: ReportListTab }) {
   const summary = useQuery(reportSummaryQuery);
   const s = summary.data;
   const waiting = tab === 'waiting';
+  const reports = useReportActions();
+  const taxpay = access.feature('taxpay');
+  const onReceive = reports.receive;
   const columns = useMemo(
     () =>
       reportColumns(t, {
@@ -140,10 +143,12 @@ export function ReportsList({ tab }: { tab: ReportListTab }) {
         confirm: access.reportConfirm,
         waitDays: s?.waitDays ?? 3,
         phone,
+        taxpay,
+        onReceive,
       }),
-    [t, waiting, access.reportConfirm, s?.waitDays, phone],
+    [t, waiting, access.reportConfirm, s?.waitDays, phone, taxpay, onReceive],
   );
-  const defaultVisible = useMemo(() => reportDefaultVisible(waiting), [waiting]);
+  const defaultVisible = useMemo(() => reportDefaultVisible(waiting, taxpay), [waiting, taxpay]);
   const view = useViewSettings(gridKey);
   const stats = useModuleStats('reports');
   const quick = useSyncExternalStore(quickStore.subscribe, quickStore.get, () => 'all' as const);
@@ -180,7 +185,6 @@ export function ReportsList({ tab }: { tab: ReportListTab }) {
     [params, visible],
   );
   const exporter = useListExport(sendExport);
-  const reports = useReportActions();
   const mass = useMassAssign();
   useReportAddRequest({ adhoc: reports.newReport, mass: mass.open });
 
@@ -252,13 +256,16 @@ export function ReportsList({ tab }: { tab: ReportListTab }) {
           onClick: () => goPlate('submitted'),
         },
         {
-          // «оплачено N» под суммой добавит задача 2.19 вместе с оплатами.
+          // Под суммой — «оплачено N» по тем же отчётам (прототип: целыми сомами).
           id: 'sum',
           icon: 'coins',
           color: 'purple',
           label: t('report.plate.to_pay', { month: monthName(t, s.month) }),
           value: formatSom(Math.round(s.toPayMonth / 100) * 100, 'auto'),
           unit: t('report.plate.som'),
+          sub: t('report.tab.paid_month', {
+            amount: formatSom(Math.round(s.paidMonth / 100) * 100, 'auto'),
+          }),
           onClick: () => goPlate('to_pay'),
         },
       ]

@@ -20,6 +20,7 @@ import {
   ReportBatchConfirmRequest,
   ReportBatchResult,
   ReportBatchSubmitRequest,
+  ReportBatchSubmitResult,
   ReportConfirmRequest,
   ReportFixRequest,
   ReportIdParam,
@@ -27,6 +28,7 @@ import {
   ReportSaved,
   ReportStepRequest,
   ReportSubmitRequest,
+  ReportSubmitted,
 } from '@buhuchet/shared';
 import type { Context } from 'hono';
 import type { ApiDeps } from '../../deps';
@@ -53,13 +55,14 @@ async function actionContext(
 ): Promise<ReportConfirmContext> {
   const subject = subjectOf(c);
   const org = orgContextOf(c);
-  const { features, reportConfirm } = await orgMenuSettings(tx, org.orgId);
+  const { features, reportConfirm, payFirst } = await orgMenuSettings(tx, org.orgId);
   return {
     today: todayOf(deps),
     scope: reportScopeOf(subject),
     contractorScope: assigneeScopeOf(subject),
     confirmOn: reportConfirm,
     filesOn: features.files,
+    payFirst,
     t,
     confirmer: {
       canConfirm: hasPermission(subject, 'repConfirm'),
@@ -82,7 +85,10 @@ async function run<T>(
   );
 }
 
-const repeatTexts = (ctx: ReportConfirmContext) => ({ repeat: ctx.t('report.amount.repeat') });
+const repeatTexts = (ctx: ReportConfirmContext) => ({
+  repeat: ctx.t('report.amount.repeat'),
+  afterPayment: ctx.t('report.reason.after_payment'),
+});
 
 const saved = { 'application/json': { schema: ReportSaved } };
 const batch = { 'application/json': { schema: ReportBatchResult } };
@@ -138,13 +144,22 @@ const route = <P extends string, B extends z.ZodType>(
     responses,
   });
 
-export const submitReportRoute = route(
-  '/reports/{id}/submit',
-  '«Отметить сданным»',
-  ['changeStatus'],
-  ReportSubmitRequest,
-  oneResponses(STATUS_RIGHT, 'отчёт уже сдан, это прежняя версия или вид «Уплата»'),
-);
+export const submitReportRoute = createRoute({
+  method: 'post',
+  path: '/reports/{id}/submit',
+  tags: ['reports'],
+  summary: '«Отметить сданным»',
+  middleware: [requirePermission('changeStatus')] as const,
+  request: { params: ReportIdParam, body: body(ReportSubmitRequest) },
+  responses: {
+    ...oneResponses(STATUS_RIGHT, 'отчёт уже сдан, это прежняя версия или вид «Уплата»'),
+    200: {
+      description:
+        'Сделано: новая версия отчёта; `waitsPayment` — «Сдан» ждёт оплаты, сумма и файлы сохранены',
+      content: { 'application/json': { schema: ReportSubmitted } },
+    },
+  },
+});
 
 /**
  * «Отметить сданным» (ТЗ «При отметке «Сдан» указывается дата сдачи, сумма к уплате и можно
@@ -155,10 +170,10 @@ export function submitReportHandler(deps: ApiDeps): RouteHandler<typeof submitRe
   return async (c) => {
     const { id } = c.req.valid('param');
     const { version, ...input } = c.req.valid('json');
-    const r = await run(deps, c, (tx, ctx) =>
+    const { report: r, waitsPayment } = await run(deps, c, (tx, ctx) =>
       submitReport(tx, id, input, { ...ctx, version, texts: repeatTexts(ctx) }),
     );
-    return c.json({ id: r.id, version: r.version }, 200);
+    return c.json({ id: r.id, version: r.version, waitsPayment }, 200);
   };
 }
 
@@ -169,7 +184,13 @@ export const submitReportsRoute = createRoute({
   summary: 'Массово «Отметить сданными»',
   middleware: [requirePermission('changeStatus')] as const,
   request: { body: body(ReportBatchSubmitRequest) },
-  responses: batchResponses(STATUS_RIGHT),
+  responses: {
+    ...batchResponses(STATUS_RIGHT),
+    200: {
+      description: 'Сколько сделано и сколько пропущено (без файла, без оплаты, по статусу)',
+      content: { 'application/json': { schema: ReportBatchSubmitResult } },
+    },
+  },
 });
 
 /**
@@ -181,7 +202,9 @@ export function submitReportsHandler(
 ): RouteHandler<typeof submitReportsRoute, AppEnv> {
   return async (c) => {
     const { date, items } = c.req.valid('json');
-    const result = await run(deps, c, (tx, ctx) => submitReports(tx, items, date, ctx));
+    const result = await run(deps, c, (tx, ctx) =>
+      submitReports(tx, items, date, { ...ctx, texts: repeatTexts(ctx) }),
+    );
     return c.json(result, 200);
   };
 }

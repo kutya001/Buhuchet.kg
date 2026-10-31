@@ -1,20 +1,33 @@
-import { ACCOUNT_PURPOSES, REQUISITE_KINDS } from '@buhuchet/domain';
+import {
+  ACCOUNT_PURPOSES,
+  MONEY_AMOUNT_MAX,
+  MONEY_HOLDER_KINDS,
+  MONEY_NOTE_MAX,
+  MONEY_OP_KINDS,
+  REQUISITE_KINDS,
+  ROLLBACK_REASON_MAX,
+} from '@buhuchet/domain';
 import { sql } from 'drizzle-orm';
 import {
   boolean,
   check,
+  date,
   foreignKey,
   index,
   pgPolicy,
   pgTable,
   text,
+  timestamp,
+  unique,
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
-import { recordVersion, timestamps } from './columns';
+import { money, recordVersion, timestamps } from './columns';
+import { contractors } from './contractors';
 import { organizations } from './organizations';
 import { banks } from './platform-dicts';
-import { appRole, orgIsolation } from './rls';
+import { reports } from './reports';
+import { appRole, currentOrgId, orgIsolation } from './rls';
 import { employees } from './staff';
 import { users } from './users';
 
@@ -157,5 +170,134 @@ export const employeeWallets = pgTable(
       to: appRole,
       using: sql`${t.employeeId} in (${ownEmployee})`,
     }),
+  ],
+).enableRLS();
+
+const AMOUNT_MAX = sql.raw(String(MONEY_AMOUNT_MAX));
+
+/**
+ * Операции с деньгами контрагента (задача 2.19; ТЗ «Виртуальные счета сотрудников» → «Операции по
+ * счёту»; прототип OPS): поступление от контрагента (`in`: `amount` — на налоги, `total` — вся сумма с
+ * платой за обслуживание), оплата налога по отчёту (`pay`, «Оплатил контрагент сам» — `self` и счёт
+ * `client`), списание в бонус, возвраты, корректирующая запись и перевод (задача 2.20). Счёт — организации
+ * или виртуальный счёт сотрудника; деньги — всегда деньги этого контрагента. Отменённая операция
+ * (откат оплаты) остаётся с автором, временем и причиной отмены, в деньгах не считается.
+ */
+export const moneyOperations = pgTable(
+  'money_operations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .default(currentOrgId)
+      .references(() => organizations.id, { onDelete: 'restrict' }),
+    contractorId: uuid('contractor_id').notNull(),
+    kind: text('kind', { enum: MONEY_OP_KINDS }).notNull(),
+    /** Тыйыны; у корректирующей записи — со знаком. */
+    amount: money('amount').notNull(),
+    /** Поступление: вся сумма, с частью за обслуживание; у других видов — пусто. */
+    total: money('total'),
+    opDate: date('op_date', { mode: 'string' }).notNull(),
+    holderKind: text('holder_kind', { enum: MONEY_HOLDER_KINDS }).notNull(),
+    holderEmployeeId: uuid('holder_employee_id'),
+    /** Отчёт оплаты и возврата по уточнённому; у поступления отчёты — в детализации. */
+    reportId: uuid('report_id'),
+    /** «Оплатил контрагент сам»: в «Оплачено в бюджет», но не в деньги контрагента на счетах. */
+    self: boolean('self').notNull().default(false),
+    note: text('note').notNull().default(''),
+    cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
+    cancelledBy: uuid('cancelled_by').references(() => users.id),
+    cancelReason: text('cancel_reason'),
+    createdBy: uuid('created_by').references(() => users.id),
+    updatedBy: uuid('updated_by').references(() => users.id),
+    ...timestamps(),
+    version: recordVersion(),
+  },
+  (t) => [
+    unique('money_operations_id_org_unique').on(t.id, t.orgId),
+    foreignKey({
+      name: 'money_operations_contractor_fk',
+      columns: [t.contractorId, t.orgId],
+      foreignColumns: [contractors.id, contractors.orgId],
+    }).onDelete('restrict'),
+    foreignKey({
+      name: 'money_operations_holder_fk',
+      columns: [t.holderEmployeeId, t.orgId],
+      foreignColumns: [employees.id, employees.orgId],
+    }).onDelete('restrict'),
+    foreignKey({
+      name: 'money_operations_report_fk',
+      columns: [t.reportId, t.orgId],
+      foreignColumns: [reports.id, reports.orgId],
+    }).onDelete('restrict'),
+    index('money_operations_contractor_idx').on(t.orgId, t.contractorId, t.opDate),
+    index('money_operations_report_idx')
+      .on(t.orgId, t.reportId)
+      .where(sql`${t.reportId} is not null`),
+    check('money_operations_kind_check', sql`${t.kind} in (${oneOf(MONEY_OP_KINDS)})`),
+    check(
+      'money_operations_holder_check',
+      sql`${t.holderKind} in (${oneOf(MONEY_HOLDER_KINDS)}) and (${t.holderKind} = 'employee') = (${t.holderEmployeeId} is not null)`,
+    ),
+    check(
+      'money_operations_amount_check',
+      sql`abs(${t.amount}) <= ${AMOUNT_MAX} and case ${t.kind} when 'corr' then ${t.amount} <> 0 when 'in' then ${t.amount} >= 0 else ${t.amount} > 0 end`,
+    ),
+    check(
+      'money_operations_total_check',
+      sql`(${t.kind} = 'in') = (${t.total} is not null) and (${t.total} is null or (${t.total} > 0 and ${t.total} >= ${t.amount} and ${t.total} <= ${AMOUNT_MAX}))`,
+    ),
+    check(
+      'money_operations_report_check',
+      sql`(${t.kind} not in ('pay', 'back') or ${t.reportId} is not null) and (${t.kind} in ('pay', 'back') or ${t.reportId} is null)`,
+    ),
+    check(
+      'money_operations_self_check',
+      sql`(${t.self} = (${t.holderKind} = 'client')) and (not ${t.self} or ${t.kind} = 'pay')`,
+    ),
+    check(
+      'money_operations_cancel_check',
+      sql`(${t.cancelledAt} is null) = (${t.cancelledBy} is null) and (${t.cancelledAt} is null) = (${t.cancelReason} is null) and char_length(coalesce(${t.cancelReason}, '')) <= ${sql.raw(String(ROLLBACK_REASON_MAX))}`,
+    ),
+    check(
+      'money_operations_note_check',
+      sql`char_length(${t.note}) <= ${sql.raw(String(MONEY_NOTE_MAX))}`,
+    ),
+    orgIsolation('money_operations_isolation', t.orgId),
+  ],
+).enableRLS();
+
+/**
+ * Детализация поступления: за какие отчёты и сколько (ТЗ «Поступление от контрагента: … детализация —
+ * за какие отчёты и сколько»; прототип `alloc`). Эти деньги сначала идут на свой отчёт (сверка денег);
+ * то, что не распределено, — аванс контрагента. Часть за обслуживание добавит задача 2.21.
+ */
+export const moneyAllocations = pgTable(
+  'money_allocations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .default(currentOrgId)
+      .references(() => organizations.id, { onDelete: 'restrict' }),
+    operationId: uuid('operation_id').notNull(),
+    reportId: uuid('report_id').notNull(),
+    amount: money('amount').notNull(),
+  },
+  (t) => [
+    foreignKey({
+      name: 'money_allocations_operation_fk',
+      columns: [t.operationId, t.orgId],
+      foreignColumns: [moneyOperations.id, moneyOperations.orgId],
+    }).onDelete('cascade'),
+    foreignKey({
+      name: 'money_allocations_report_fk',
+      columns: [t.reportId, t.orgId],
+      foreignColumns: [reports.id, reports.orgId],
+    }).onDelete('restrict'),
+    uniqueIndex('money_allocations_key').on(t.operationId, t.reportId),
+    index('money_allocations_report_idx').on(t.orgId, t.reportId),
+    check('money_allocations_amount_check', sql`${t.amount} > 0 and ${t.amount} <= ${AMOUNT_MAX}`),
+    orgIsolation('money_allocations_isolation', t.orgId),
   ],
 ).enableRLS();

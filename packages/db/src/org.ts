@@ -167,17 +167,28 @@ export function orgRoleOptions(tx: Tx): Promise<{ id: string; name: string }[]> 
 
 /**
  * Учётная политика для меню в «кто я»: включённые функции (модули) и «Сдача отчётов требует
- * подтверждения» (вкладка «Ожидают подтверждения»). Чужая организация не видна (RLS) — всё выключено.
+ * подтверждения» (вкладка «Ожидают подтверждения»), «Сдача отчёта только после оплаты». Чужая организация
+ * не видна (RLS) — всё выключено.
  */
 export async function orgMenuSettings(
   tx: Tx,
   orgId: string,
-): Promise<{ features: Record<Feature, boolean>; reportConfirm: boolean }> {
+): Promise<{ features: Record<Feature, boolean>; reportConfirm: boolean; payFirst: boolean }> {
   const [r] = await tx
-    .select({ features: orgSettings.features, reportConfirm: orgSettings.reportConfirm })
+    .select({
+      features: orgSettings.features,
+      reportConfirm: orgSettings.reportConfirm,
+      payBeforeSubmit: orgSettings.payBeforeSubmit,
+    })
     .from(orgSettings)
     .where(eq(orgSettings.orgId, orgId));
-  return { features: featureSet(r?.features ?? {}), reportConfirm: r?.reportConfirm ?? false };
+  const features = featureSet(r?.features ?? {});
+  return {
+    features,
+    reportConfirm: r?.reportConfirm ?? false,
+    // «Сдача отчёта только после оплаты» действует при включённом «Учёт оплаты налогов» (прототип payFirstOn).
+    payFirst: features.taxpay && (r?.payBeforeSubmit ?? true),
+  };
 }
 
 export interface HistoryItem {

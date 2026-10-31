@@ -29,6 +29,7 @@ import { and, asc, count, eq, inArray, ne, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { Tx } from './client';
 import { gkedIndexOf } from './gked';
+import { contractorHasMoney } from './money-tax';
 import { SOCFUND_LIST, socfundListTable } from './socfund';
 import { updateWithHistory, writeHistory } from './history';
 import {
@@ -163,6 +164,7 @@ export interface ContractorRecord {
   firstMonthMode: FirstMonthMode;
   feeDay: number;
   paysTo: 'emp' | 'org';
+  needReceiptFile: boolean;
   serviceStatus: ServiceStatus;
   /** Действующая ставка обслуживания (последняя с месяцем не позже текущего); null — нет. */
   tariff: { amount: number; period: TariffPeriod; validFrom: IsoDate } | null;
@@ -786,6 +788,7 @@ export async function getContractor(
     firstMonthMode: contractors.firstMonthMode,
     feeDay: contractors.feeDay,
     paysTo: contractors.paysTo,
+    needReceiptFile: contractors.needReceiptFile,
     gkedConfirmation: contractors.gkedConfirmation,
     socfundFlags: contractors.socfundFlags,
     socfundTariff: contractors.socfundTariff,
@@ -868,6 +871,7 @@ export async function getContractor(
     firstMonthMode: r.firstMonthMode as FirstMonthMode,
     feeDay: r.feeDay as number,
     paysTo: r.paysTo as 'emp' | 'org',
+    needReceiptFile: r.needReceiptFile as boolean,
     serviceStatus: base.serviceStatus,
     tariff: base.tariff && { ...base.tariff, validFrom: r.tariffFrom as IsoDate },
     gkedConfirmation: confirmation && { ...confirmation, by },
@@ -1460,11 +1464,15 @@ export async function transferContractors(
 
 /**
  * Что есть по контрагенту — отчёты, деньги, проекты и услуги: без них его можно удалить (ТЗ
- * «Контрагента нельзя удалить, если по нему есть отчёты»). Деньги и проекты добавят задачи 2.19 и
- * 2.22, 2.16 в эту функцию.
+ * «Контрагента нельзя удалить, если по нему есть отчёты»). Деньги — операции по контрагенту (задача
+ * 2.19); проекты добавят задачи 2.22, 2.16 в эту функцию.
  */
 export async function contractorUsage(tx: Tx, id: string): Promise<ContractorUsage> {
-  return { reports: await contractorReportCount(tx, id), money: 0, projects: 0 };
+  const [reportCount, money] = await Promise.all([
+    contractorReportCount(tx, id),
+    contractorHasMoney(tx, id),
+  ]);
+  return { reports: reportCount, money: money ? 1 : 0, projects: 0 };
 }
 
 /**

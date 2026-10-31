@@ -245,6 +245,8 @@ function ReportDayList({ day, reports }: { day: string; reports: ReportActions }
   const phone = useMediaQuery(PHONE_QUERY);
   const { search, clearSearch, access } = useShell();
   const summary = useQuery(reportSummaryQuery);
+  const taxpay = access.feature('taxpay');
+  const onReceive = reports.receive;
   const columns = useMemo(
     () =>
       reportColumns(t, {
@@ -252,10 +254,12 @@ function ReportDayList({ day, reports }: { day: string; reports: ReportActions }
         confirm: access.reportConfirm,
         waitDays: summary.data?.waitDays ?? 3,
         phone,
+        taxpay,
+        onReceive,
       }),
-    [t, access.reportConfirm, summary.data?.waitDays, phone],
+    [t, access.reportConfirm, summary.data?.waitDays, phone, taxpay, onReceive],
   );
-  const defaultVisible = useMemo(() => reportDefaultVisible(false), []);
+  const defaultVisible = useMemo(() => reportDefaultVisible(false, taxpay), [taxpay]);
   const view = useViewSettings('reports.calendar');
   const extra = useMemo(() => ({ tab: 'calendar', quick: 'all', day }), [day]);
   const fetchPage = useCallback<FetchListPage<ReportRow>>(async (params) => {

@@ -17,7 +17,8 @@ import { asOwner, assign, newContractor, staffIds } from './reports';
 // Плашки на телефоне скрыты, пока их не включить: включает их новый главный бухгалтер теста, чтобы не
 // менять вид списка демо-сотрудникам. Передача дел, подбор отчётов и показатели — в своей организации
 // теста. Тариф Соцфонда в карточке и плашка «Тариф под вопросом» закрывают пункты 38 и 39 целиком (их
-// правила и ответы API — e2e/socfund-api.spec.ts), итоги вкладки «Показатели» — пункт 22.
+// правила и ответы API — e2e/socfund-api.spec.ts), итоги вкладки «Показатели» — пункт 22. Вкладка «Деньги»
+// (задача 2.19, #75) — в пунктах 26 и 32.
 
 type CpRow = { id: string; name: string; gked: { code: string } | null };
 type ReportItem = {
@@ -386,6 +387,25 @@ test.describe('Этап 2: контрагенты — список и карто
     });
     expect(Math.max(...skew)).toBeLessThanOrEqual(1);
 
+    await test.step('вкладка «Деньги»: таблица операций на всю ширину развёрнутой карточки, без перекоса', async () => {
+      await toTab(page, card, isMobile, /^Деньги/);
+      const ops = card.getByRole('table', { name: /^Операции · \d+$/ });
+      await expect(ops.locator('tbody tr').first()).toBeVisible();
+      expect(await ops.locator('tbody tr').count()).toBeGreaterThan(1);
+      const table = (await ops.boundingBox())!;
+      expect(table.width).toBeGreaterThan(full.width - 120);
+      const opsSkew = await ops.evaluate((el) => {
+        const heads = Array.from(el.querySelectorAll('thead tr:first-child th'));
+        const cells = Array.from(el.querySelector('tbody tr')?.children ?? []);
+        return heads.map((th, i) => {
+          const a = th.getBoundingClientRect();
+          const b = cells[i]?.getBoundingClientRect();
+          return b ? Math.abs(a.left - b.left) + Math.abs(a.width - b.width) : 0;
+        });
+      });
+      expect(Math.max(...opsSkew)).toBeLessThanOrEqual(1);
+    });
+
     await test.step('следующая карточка открывается развёрнутой; «Свернуть окно» — снова обычная', async () => {
       await card.locator('[data-cp-done]').click();
       await expect(card).toBeHidden();
@@ -407,13 +427,22 @@ test.describe('Этап 2: контрагенты — список и карто
     });
   });
 
-  test('(п. 32) в карточке вкладки «Отчёты к сдаче» и «Подбор отчётов»: отметили отчёт — «новых 1»; переход на другую вкладку спрашивает «Подбор не применён»; «Применить» и подтверждение — отчёт назначен; в «Изменить» блока «Сдаёт отчёты» нет', async ({
+  test('(п. 32) в карточке вкладки «Отчёты к сдаче» и «Подбор отчётов»: отметили отчёт — «новых 1»; переход на «Деньги» спрашивает «Подбор не применён»; «Применить» и подтверждение — отчёт назначен; в «Изменить» блока «Сдаёт отчёты» нет', async ({
     page,
     baseURL,
     isMobile,
   }) => {
     const origin = new URL(baseURL!).origin;
     await orgWithTypes(page.request, origin);
+    // Вкладка «Деньги» — при «Учёте оплаты налогов».
+    const policy = (await (await page.request.get('/api/org/policy')).json()) as {
+      version: number;
+    };
+    const on = await page.request.patch('/api/org/policy', {
+      headers: { origin },
+      data: { version: policy.version, features: { taxpay: true } },
+    });
+    expect(on.status(), await on.text()).toBe(200);
     const word = uniqueWord('Подбор');
     const name = `ОсОО «${word}»`;
     await newContractor(page.request, origin, { name, tariff: false });
@@ -424,6 +453,7 @@ test.describe('Этап 2: контрагенты — список и карто
     if (!isMobile) {
       await expect(card.getByRole('tab', { name: /^Отчёты к сдаче/ })).toBeVisible();
       await expect(card.getByRole('tab', { name: /^Подбор отчётов/ })).toBeVisible();
+      await expect(card.getByRole('tab', { name: /^Деньги/ })).toBeVisible();
     }
 
     await toTab(page, card, isMobile, /^Подбор отчётов/);
@@ -435,8 +465,8 @@ test.describe('Этап 2: контрагенты — список и карто
     await row.getByRole('checkbox').check();
     await expect(tab.locator('[data-pick-sum]')).toContainText('новых 1');
 
-    await test.step('уход на другую вкладку — «Подбор не применён»; «Отмена» оставляет подбор', async () => {
-      await toTab(page, card, isMobile, /^Отчёты к сдаче/);
+    await test.step('уход на «Деньги» — «Подбор не применён»; «Отмена» оставляет подбор', async () => {
+      await toTab(page, card, isMobile, /^Деньги/);
       const leave = page.getByRole('dialog', { name: 'Подбор не применён' });
       await expect(leave).toBeVisible();
       await leave.getByRole('button', { name: 'Отмена' }).click();
