@@ -37,6 +37,12 @@ import { api, apiFailure, callApi } from '../api-client';
 import { fieldError } from '../auth/fields';
 import { useErrorText, useT } from '../l10n/provider';
 import { duesNote, useDuesPreview } from './dues-preview';
+import {
+  gkedFieldError,
+  GkedRuleFields,
+  useGkedRuleDraft,
+  type GkedFieldError,
+} from './gked-rule-fields';
 import { fetchAdminDictValue, reportTypeOptionsQuery } from './pdicts-data';
 
 const pd = api.api.admin['platform-dicts'];
@@ -141,6 +147,9 @@ export function BenefitDialog({
     resolver: zodResolver(BenefitValueForm),
     defaultValues: formOf(item),
   });
+  // «Виды деятельности (ГКЭД)» и «Предупреждать при ГКЭД» статуса (задача 2.38).
+  const gked = useGkedRuleDraft(item?.data.gked, { warn: 'status' });
+  const [gkedError, setGkedError] = useState<GkedFieldError>();
   const types = useQuery(reportTypeOptionsQuery);
   const offices = useQuery(officesQuery);
   const typeOf = new Map((types.data ?? []).map((x) => [x.code, x]));
@@ -173,19 +182,22 @@ export function BenefitDialog({
     if (!fresh) return toast(t('err.unknown'), { bad: true });
     setCurrent(fresh);
     reset(formOf(fresh));
+    gked.reset(fresh.data.gked);
     setChanged(false);
   };
 
   const submit = (event: FormEvent) =>
     void handleSubmit(async (values) => {
-      if (current && !isDirty) return onClose();
+      if (current && !isDirty && !gked.dirty) return onClose();
+      const json = gked.dirty ? { ...values, gked: gked.value() } : values;
+      setGkedError(undefined);
       const res = await callApi(() =>
         current
           ? pd[':dict'][':code'].$put({
               param: { dict: 'benefits', code: current.code },
-              json: { ...values, version: current.version },
+              json: { ...json, version: current.version },
             })
-          : pd[':dict'].$post({ param: { dict: 'benefits' }, json: values }),
+          : pd[':dict'].$post({ param: { dict: 'benefits' }, json }),
       );
       if (res.ok) {
         onDone();
@@ -194,6 +206,9 @@ export function BenefitDialog({
       }
       const code = res.error.code;
       if (code === 'record_changed') return setChanged(true);
+      if (code === 'gked_unknown') {
+        return setGkedError(gkedFieldError(res.error, errorText(res.error)));
+      }
       const field = (res.error.details as { field?: string } | undefined)?.field ?? '';
       const target: [Path<BenefitValueFormInput>, UiTextKey] | undefined =
         code === 'invalid_link' && LINK_TEXT[field]
@@ -427,7 +442,7 @@ export function BenefitDialog({
       size="mid"
       title={current ? current.name : t('pdicts.benefit.title_new')}
       sub={t('pdicts.benefit.sub')}
-      dirty={isDirty}
+      dirty={isDirty || gked.dirty}
       footer={
         <>
           <button type="button" className={buttonClass('ghost')} onClick={onClose}>
@@ -546,6 +561,7 @@ export function BenefitDialog({
               />
             )}
           </Field>
+          <GkedRuleFields id={id} state={gked} error={gkedError} />
           <div className="col-span-full">
             <Controller
               control={control}

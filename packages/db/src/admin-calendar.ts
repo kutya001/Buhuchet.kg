@@ -74,7 +74,7 @@ const entryOf = (r: { day: string; kind: CalendarDayKind; name: string }): Calen
  * Дни текущего и следующего года по Бишкеку (прототип: holidayRows(y) и holidayRows(y + 1)): праздник
  * «каждый год» — в обоих годах, 29 февраля — только в високосном.
  */
-async function calendarDays(tx: Tx, today: IsoDate): Promise<AdminCalendarDayRecord[]> {
+export async function calendarDays(tx: Tx, today: IsoDate): Promise<AdminCalendarDayRecord[]> {
   const years = calendarAdminYears(today);
   const rows = await calendarRecords(tx);
   return rows

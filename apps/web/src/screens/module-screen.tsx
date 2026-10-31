@@ -19,6 +19,8 @@ import { OrgMain } from '../org/org-main';
 import { OrgPolicyTab } from '../org/org-policy';
 import { OrgSettingsTab } from '../org/org-settings';
 import { PlatformDictsAdmin } from '../platform-dicts/pdicts-screen';
+import { ReportCalendarTab } from '../reports/report-calendar';
+import { ReportMatrixTab } from '../reports/report-matrix';
 import { REPORT_LIST_TABS, type ReportListTab } from '../reports/reports-data';
 import { ReportsList } from '../reports/reports-list';
 import { RolesList } from '../roles/roles-list';
@@ -61,10 +63,11 @@ export function ModuleScreen({
     if (tab === 'settings') return <OrgSettingsTab />;
     return <OrgMain />;
   }
-  // «Кто что сдаёт» и «Календарь» — задача 2.15.
   if (moduleId === 'reports') {
     const tab = (tabId ?? 'week') as ReportListTab;
     if (REPORT_LIST_TABS.includes(tab)) return <ReportsList key={tab} tab={tab} />;
+    if (tabId === 'matrix') return <ReportMatrixTab />;
+    if (tabId === 'calendar') return <ReportCalendarTab />;
     return <ModuleStub moduleId={moduleId} />;
   }
   if (moduleId === 'tasks') {

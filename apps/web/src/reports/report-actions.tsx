@@ -73,10 +73,12 @@ const STEP = {
  * требуется» и «Создать уточнённый» — после вопроса, остальное — окном по свежей карточке. «+ Добавить»
  * → «Разовый отчёт» — окно; созданный отчёт открывается карточкой. Отказ сервера — уведомлением.
  */
+export type ReportActions = ReturnType<typeof useReportActions>;
+
 export function useReportActions(): {
   actions: (r: ReportRow) => ActionEntry[];
   openCard: (r: ReportRow | { id: string }) => void;
-  bulk: (tab: ReportListTab) => GridBulkAction<ReportRow>[];
+  bulk: (tab: ReportListTab | 'calendar') => GridBulkAction<ReportRow>[];
   newReport: () => void;
   dialogs: ReactNode;
 } {
@@ -184,6 +186,23 @@ export function useReportActions(): {
     if (saved.success) openCard({ id: saved.data.id });
   };
 
+  /** «сменить» ответственного в карточке (прототип `#rc-resp`). */
+  const changeResponsible = async (r: ReportCard, employeeId: string) => {
+    if (employeeId === r.responsible?.id) return;
+    const res = await once(r.id, () =>
+      callApi(() =>
+        api.api.reports[':id'].responsible.$patch({
+          param: { id: r.id },
+          json: { responsibleEmployeeId: employeeId, version: r.version },
+        }),
+      ),
+    );
+    if (!res) return;
+    refresh();
+    if (!res.ok) return void toast(errorText(res.error), { bad: true });
+    toast(t('report.responsible.done'), { icon: 'user' });
+  };
+
   const askBack = (r: ReportRow, to?: string) => {
     if (!actor) return;
     const target = reportBackOf(r, actor);
@@ -234,7 +253,7 @@ export function useReportActions(): {
    * сдачи»; во вкладке «Ожидают подтверждения» вместо него — «Подтвердить» с правом «Подтверждать сдачу
    * отчётов». Один подходящий отчёт — обычным окном по его карточке.
    */
-  const bulk = (tab: ReportListTab): GridBulkAction<ReportRow>[] => {
+  const bulk = (tab: ReportListTab | 'calendar'): GridBulkAction<ReportRow>[] => {
     if (!actor) return [];
     if (tab === 'waiting') {
       if (!actor.can.repConfirm) return [];
@@ -304,6 +323,7 @@ export function useReportActions(): {
           onAction={(action, r) => run[action](r)}
           onBack={(r, to) => askBack(r, to)}
           onVersion={(id) => openCard({ id })}
+          onResponsible={(r, employeeId) => void changeResponsible(r, employeeId)}
         />
       ) : null}
       {dialog?.data.kind === 'submit' ? (
@@ -438,16 +458,21 @@ export function useReportActor(): ReportActor | null {
       changeSum: access.can('changeSum'),
       rollback: access.can('rollback'),
       filesUpload: access.can('filesUpload'),
+      assign: access.can('assign'),
     },
   };
 }
 
-/** «+ Добавить» модуля (прототип `repAdd`): «Разовый отчёт» — окно; массовое назначение — задача 2.15. */
-export function useReportAddRequest(run: () => void) {
+/**
+ * «+ Добавить» модуля (прототип `repAdd`): «Назначить отчёты массово» и «Разовый отчёт» — окна; каждая
+ * вкладка модуля открывает их сама.
+ */
+export function useReportAddRequest(run: { adhoc: () => void; mass: () => void }) {
   const { addRequest, clearAddRequest } = useShell();
   const request = addRequest?.moduleId === 'reports' ? addRequest : null;
   const start = useEffectEvent((actionId: string) => {
-    if (actionId === 'adhoc') run();
+    if (actionId === 'adhoc') run.adhoc();
+    if (actionId === 'mass') run.mass();
   });
   useEffect(() => {
     if (!request) return;

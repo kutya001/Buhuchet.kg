@@ -80,7 +80,7 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
       'files',
       'lists',
     ]);
-    expect(own.progress).toMatchObject({ total: 38, done: 0, pct: 0, level: 0, next: 1, need: 10 });
+    expect(own.progress).toMatchObject({ total: 40, done: 0, pct: 0, level: 0, next: 1, need: 10 });
     expect(own.progress.levels.map((l) => l.name)).toEqual([
       'Новичок',
       'Ученик',
@@ -131,6 +131,7 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
       'pdicts',
       'cp1',
       'oneoff',
+      'matrix',
       'rtabs',
       'submit',
       'bulk',
@@ -158,17 +159,21 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
     // «Каталог видов отчётов», календарь, шаблоны и загрузка из Excel — с их вкладками.
     expect(steps(s).map((x) => [x.id, x.module, x.learn])).toEqual([
       ['a-dicts', 'pdicts', true],
+      ['a-types', 'pdicts', true],
+      ['a-xls', 'pdicts', false],
       ['a-cal', 'pdicts', true],
+      ['a-tpl', 'pdicts', true],
       ['a-l10n', 'l10n', true],
       ['a-org', 'orgs', false],
     ]);
     expect(step(s, 'a-dicts')!.screens).toContain('pdicts.regimes');
     expect(step(s, 'a-cal')!.screens).toEqual(['pdicts.calendar']);
-    // Статьи Админки — только о сделанных модулях («Справочники платформы» — с задачей 2.37).
+    // Статьи Админки — только о сделанных модулях («Справочники платформы» — с задачей 2.37, «Telegram»
+    // — ещё нет).
     const arts = KbArticleList.parse(await ok(await call('GET', '/api/kb/articles', admin)));
     const ids = arts.items.map((a) => a.id);
-    expect(ids).toEqual(expect.arrayContaining(['a19_1', 'a19_2', 'a19_4']));
-    expect(ids).not.toContain('a19_3');
+    expect(ids).toEqual(expect.arrayContaining(['a19_1', 'a19_2', 'a19_3', 'a19_4']));
+    expect(ids).not.toContain('a19_5');
 
     // «Проверить справочники платформы» — 3 секунды на экране шага (docs/deviations.md п. Д-7).
     const looked = KbMarkResult.parse(
@@ -285,7 +290,7 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
       'ver',
     ]);
     expect(second.congrats).toBe('Ученик');
-    expect(second.state.progress).toMatchObject({ done: 10, pct: 26, level: 1 });
+    expect(second.state.progress).toMatchObject({ done: 10, pct: 25, level: 1 });
     // Повтор ничего не меняет.
     const again = KbMarkResult.parse(
       await ok(await call('POST', '/api/kb/sync', owner, { reason: 'open' })),
@@ -375,11 +380,11 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
       levelName: 'Ученик',
       of: 5,
       done: 11,
-      total: 38,
+      total: 40,
       levelAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
     });
     const accRow = team.items.find((r) => r.fullName === 'Сотрудник acc-a');
-    expect(accRow).toMatchObject({ level: 0, done: 1, total: 21, pct: 4 });
+    expect(accRow).toMatchObject({ level: 0, done: 1, total: 22, pct: 4 });
     const values = ListValues.parse(
       await ok(await call('GET', '/api/kb/team/values?col=level', owner)),
     );
@@ -405,7 +410,7 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
     const self = KbMemberProgress.parse(
       await ok(await call('GET', `/api/kb/employees/${id}`, acc)),
     );
-    expect(self).toMatchObject({ employeeId: id, progress: { done: 1, total: 21 } });
+    expect(self).toMatchObject({ employeeId: id, progress: { done: 1, total: 22 } });
     expect(self.progress.groups.map((g) => g.id)).toEqual([
       'me',
       'dicts',
@@ -430,7 +435,7 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
     expect(own.items.find((e) => e.login === 'owner-a')?.kb).toEqual({
       level: 1,
       name: 'Ученик',
-      pct: 28,
+      pct: 27,
       of: 5,
     });
     const sorted = await staff(

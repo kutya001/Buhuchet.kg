@@ -168,8 +168,9 @@ test.describe('Админка: справочники платформы', () =>
       // Сайт без протокола сохраняется с https:// — у организации он открывается ссылкой.
       expect(created.data.site).toBe('https://mineconom.gov.kg');
       let found = await row(page, isMobile, name, created.code);
-      // «№» — первый столбец таблицы (вид закреплён: «Таблица» и на телефоне, как в прототипе).
-      const n = found.locator('td').first();
+      // «№» — первый столбец таблицы (вид закреплён: «Таблица» и на телефоне, как в прототипе);
+      // перед ним — галочка массовых действий, у ячеек данных есть title.
+      const n = found.locator('td[title]').first();
       await expect(n).toHaveText(String(created.n));
       // Последнее значение ниже не опустить.
       await expect(await rowAction(page, found, 'Ниже')).toBeDisabled();

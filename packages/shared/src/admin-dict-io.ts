@@ -1,4 +1,4 @@
-import { ADMIN_VALUE_DICTS } from '@buhuchet/domain';
+import { ADMIN_VALUE_DICTS, IO_SECTION_DICTS } from '@buhuchet/domain';
 import { z } from 'zod';
 import { AdminDuesPreview } from './admin-dicts';
 import { Uuid } from './common';
@@ -9,6 +9,10 @@ import { listPageSchema } from './list';
  * admin/platform-dicts-io.js: exportDlg, importDictDlg, renderLoads): файл справочника, сравнение
  * загрузки со справочником, «ОК, применить» и «Загрузки» с откатом.
  */
+
+/** Справочники с «Выгрузить» и «Загрузить»: справочники значений, календарь, «Налоги и ставки», группы кодов. */
+const IO_DICTS = [...ADMIN_VALUE_DICTS, ...IO_SECTION_DICTS] as const;
+export const AdminIoDictParam = z.object({ dict: z.enum(IO_DICTS) });
 
 /** Выгрузка справочника: заголовки столбцов и строки — текстом ячеек, как в файле. */
 export const AdminDictIoFile = z.object({
@@ -70,7 +74,7 @@ export const AdminDictImportApplyQuery = z.object({
 /** Загрузка в «Загрузках»: когда, справочник, кто, сколько строк и что сделано; статус и откат. */
 export const AdminDictLoad = z.object({
   id: Uuid,
-  dict: z.enum(ADMIN_VALUE_DICTS),
+  dict: z.enum(IO_DICTS),
   rows: z.number().int().nonnegative(),
   added: z.number().int().nonnegative(),
   changed: z.number().int().nonnegative(),

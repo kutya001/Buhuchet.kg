@@ -14,6 +14,12 @@ import {
   DICT_REQUEST_DICTS,
   DICT_REQUEST_STATUSES,
   DUE_FROM,
+  GKED_CODE_PATTERN,
+  GKED_GROUP_ACTS,
+  GKED_GROUP_ASK_MAX,
+  GKED_GROUP_ID_PATTERN,
+  GKED_LEVEL_ORDER,
+  GKED_NAME_MAX,
   isIsoDate,
   LAST_DAY_OF_MONTH,
   ORGAN_CONTACTS_MAX,
@@ -37,6 +43,7 @@ import {
 import { z } from 'zod';
 import { IsoDate, RecordAudit, RecordVersion, Uuid } from './common';
 import { listPageSchema } from './list';
+import { GkedRule } from './platform-dicts';
 
 /*
  * Админка → «Справочники платформы» (задача 2.36; прототип admin/platform-dicts*.js): значения
@@ -165,6 +172,14 @@ export const AdminDictData = z.object({
   choiceNote: z.string().optional(),
   clientNote: z.string().optional(),
   source: z.string().optional(),
+  /**
+   * «Виды деятельности (ГКЭД)» режима, льготы и вида отчёта (задача 2.38): перечни кодов и служебные
+   * признаки правила; без правила — null.
+   */
+  gked: GkedRule.nullable().optional(),
+  /** Код ГКЭД: уровень и «Входит в» (у секции — null). */
+  level: z.enum(GKED_LEVEL_ORDER).optional(),
+  parentCode: z.string().nullable().optional(),
 });
 export type AdminDictData = z.infer<typeof AdminDictData>;
 
@@ -196,6 +211,10 @@ export const AdminDictValue = z.object({
     .optional(),
   /** У вида отчёта в списке — «Назначен»: у скольких контрагентов вид назначен сейчас. */
   assigned: z.number().int().nonnegative().optional(),
+  /** У вида отчёта — «Сверено с ГНС»: дата и кто; null — ещё не сверялось. */
+  gns: z.object({ at: IsoDate.nullable(), by: z.string().nullable() }).optional(),
+  /** У кода ГКЭД — «Вложенных кодов». */
+  children: z.number().int().nonnegative().optional(),
   audit: RecordAudit.extend({
     /** Когда администратор добавил значение; у значений из наполнения — null. */
     createdAt: z.iso.datetime().nullable(),
@@ -211,6 +230,26 @@ export const AdminDictList = listPageSchema(AdminDictValue).extend({
 export type AdminDictList = z.infer<typeof AdminDictList>;
 
 const text = (max: number) => z.string().trim().max(max, message('form.too_long'));
+
+/** Коды ГКЭД перечня: заглавными, без повторов (проверку по справочнику делает сервер). */
+const GkedCodes = z
+  .array(z.string().trim().toUpperCase().min(1).max(20))
+  .max(3000)
+  .transform((v) => [...new Set(v)]);
+
+/**
+ * Перечни «Виды деятельности (ГКЭД)» из окна (прототип gkRuleFields): перечень и «Кроме»; у статуса —
+ * «Предупреждать при ГКЭД»; у режима — перечни для ИП и ИТД. Перечня нет — он прежний.
+ */
+export const GkedRuleLists = z.object({
+  in: GkedCodes,
+  ex: GkedCodes,
+  warn: GkedCodes.optional(),
+  ip: GkedCodes.optional(),
+  ipEx: GkedCodes.optional(),
+  itd: GkedCodes.optional(),
+});
+export type GkedRuleLists = z.output<typeof GkedRuleLists>;
 
 /** День срока вида отчёта: от 1 до 31 (31 — последний день месяца). */
 const typeDay = z
@@ -340,9 +379,60 @@ export const AdminDictValueForm = z.object({
   // «Источник» открывается ссылкой в новой вкладке — только адрес с протоколом, как сайт органа.
   // ОТКЛОНЕНИЕ: docs/deviations.md#Д-10
   source: text(300).transform(organSiteUrl).optional(),
+  // «Виды деятельности (ГКЭД)» (задача 2.38): перечни окна; нет поля — правило не меняется, null — без
+  // правила.
+  gked: GkedRuleLists.nullable().optional(),
+  // Код ГКЭД (прототип gkEditDlg): код нового кода, уровень, «Входит в» и «Действует».
+  code: z.string().trim().toUpperCase().max(20).optional(),
+  level: z.enum(GKED_LEVEL_ORDER).optional(),
+  parentCode: z.string().trim().toUpperCase().max(20).nullable().optional(),
+  active: z.boolean().optional(),
 });
 export type AdminDictValueFormInput = z.input<typeof AdminDictValueForm>;
 export type AdminDictValueForm = z.output<typeof AdminDictValueForm>;
+
+/**
+ * Тело «Добавить» и «Изменить» значения: названия кодов ГКЭД длиннее (до 500 знаков, как в
+ * классификаторе) — у остальных справочников предел названия проверяет сервер.
+ */
+export const AdminDictValueBody = AdminDictValueForm.extend({
+  name: z
+    .string()
+    .trim()
+    .min(1, message('pdicts.err.name_required'))
+    .max(GKED_NAME_MAX, message('form.too_long')),
+});
+export type AdminDictValueBody = z.output<typeof AdminDictValueBody>;
+
+/** Окно кода ГКЭД (прототип gkEditDlg): название до 500 знаков; код нового — в формате классификатора. */
+export const GkedValueForm = AdminDictValueBody.extend({
+  code: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .refine((v) => v === '' || GKED_CODE_PATTERN.test(v), message('pdicts.err.gked_code_format'))
+    .optional(),
+});
+export type GkedValueFormInput = z.input<typeof GkedValueForm>;
+
+/**
+ * Проверки окна сразу, как в прототипе (все ошибки вместе): код нового обязателен, «Входит в» — у всех,
+ * кроме секции, у секции пусто. Есть ли код в справочнике и уровень выше — отвечает сервер.
+ */
+export const gkedValueForm = (isNew: boolean) =>
+  GkedValueForm.superRefine((v, ctx) => {
+    if (isNew && !v.code) {
+      ctx.addIssue({ code: 'custom', path: ['code'], message: 'err.gked_code_required' });
+    }
+    const parent = (v.parentCode ?? '').trim();
+    if (v.level === 'section' ? parent : !parent) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['parentCode'],
+        message: v.level === 'section' ? 'err.gked_parent_section' : 'err.gked_parent_required',
+      });
+    }
+  });
 
 /** Окно налогового органа: краткое название тоже обязательно — «Введите краткое название». */
 export const UgnsValueForm = AdminDictValueForm.extend({
@@ -489,7 +579,7 @@ export const PhoneValueForm = AdminDictValueForm.extend({
 });
 
 /** Изменить значение: поля окна и версия, которую видел администратор. */
-export const AdminDictValueUpdate = AdminDictValueForm.extend({ version: RecordVersion });
+export const AdminDictValueUpdate = AdminDictValueBody.extend({ version: RecordVersion });
 export type AdminDictValueUpdate = z.infer<typeof AdminDictValueUpdate>;
 
 /** «Выше» (−1) и «Ниже» (1). */
@@ -525,6 +615,8 @@ export const AdminDictHistory = z.object({
       changes: z.array(HistoryChange),
       /** Правка кода страны: вся строка до и после («Кыргызстан +996 XXX XXX XXX»), как в прототипе. */
       summary: z.object({ from: z.string(), to: z.string() }).optional(),
+      /** Раздел записи на вкладке из нескольких: ГКЭД и группы кодов, налоги и две таблицы ставок. */
+      section: z.enum(['gked', 'gkgroups', 'taxes', 'enrates', 'proprates', 'calendar']).optional(),
     }),
   ),
 });
@@ -728,3 +820,123 @@ export const AdminTaxInfo = z.object({
   propertyRates: z.string(),
 });
 export type AdminTaxInfo = z.infer<typeof AdminTaxInfo>;
+
+/* ───────────── ГКЭД, группы кодов, массовые действия (задачи 2.37, часть 3, и 2.38) ───────────── */
+
+/** Код ГКЭД для дерева и поиска (прототип gkTree): «Используется», у контрагентов, вложенных кодов. */
+export const AdminGkedItem = z.object({
+  code: z.string(),
+  name: z.string(),
+  level: z.enum(GKED_LEVEL_ORDER),
+  parentCode: z.string().nullable(),
+  note: z.string(),
+  active: z.boolean(),
+  used: z.number().int().nonnegative(),
+  contractors: z.number().int().nonnegative(),
+  children: z.number().int().nonnegative(),
+  version: RecordVersion,
+});
+export type AdminGkedItem = z.infer<typeof AdminGkedItem>;
+export const AdminGkedItems = z.object({ items: z.array(AdminGkedItem) });
+
+const GroupActs = z.union([
+  z.enum(GKED_GROUP_ACTS),
+  z.record(z.string(), z.enum(GKED_GROUP_ACTS)),
+  z.null(),
+]);
+
+/** Группа кодов (раздел `gkedGroups`): действие в едином налоге и в тарифе СПиНО. */
+export const AdminGkedGroup = z.object({
+  id: z.string(),
+  name: z.string(),
+  codes: z.array(z.string()),
+  en: GroupActs,
+  spino: GroupActs,
+  ask: z.string(),
+  why: z.string(),
+});
+export type AdminGkedGroup = z.infer<typeof AdminGkedGroup>;
+
+const GroupTarget = z.object({
+  kind: z.enum(['regime', 'type', 'tax', 'status']),
+  code: z.string(),
+  name: z.string(),
+});
+export type AdminGkedGroupTarget = z.infer<typeof GroupTarget>;
+
+export const AdminGkedGroups = z.object({
+  items: z.array(AdminGkedGroup),
+  version: RecordVersion,
+  /** Что меняет правка группы: в едином налоге (режим, виды отчётов, налоги) и в СПиНО (статус). */
+  targets: z.object({ en: z.array(GroupTarget), spino: z.array(GroupTarget) }),
+});
+export type AdminGkedGroups = z.infer<typeof AdminGkedGroups>;
+
+export const AdminGkedGroupIdParam = z.object({ id: z.string().regex(GKED_GROUP_ID_PATTERN) });
+
+/** Окно группы кодов (прототип gkGrpDlg): название и коды обязательны. */
+export const AdminGkedGroupForm = z.object({
+  name: z.string().trim().min(1, message('pdicts.err.name_required')).max(DICT_NAME_MAX),
+  codes: GkedCodes.refine((v) => v.length > 0, message('pdicts.err.gked_codes_required')),
+  en: GroupActs,
+  spino: GroupActs,
+  ask: text(GKED_GROUP_ASK_MAX),
+  why: text(DICT_NOTE_MAX),
+  version: RecordVersion,
+});
+export type AdminGkedGroupFormInput = z.input<typeof AdminGkedGroupForm>;
+
+/** Ставка единого налога в Админке: «Виды деятельности (ГКЭД)» для подбора по основному ГКЭД. */
+export const AdminEnRate = z.object({
+  code: z.string(),
+  activity: z.string(),
+  rate: z.string(),
+  explanation: z.string(),
+  article: z.string(),
+  gked: GkedRule.nullable(),
+  version: RecordVersion,
+});
+export type AdminEnRate = z.infer<typeof AdminEnRate>;
+
+export const AdminEnRateCodeParam = z.object({ code: z.string().min(1).max(40) });
+
+export const AdminEnRateGkedForm = z.object({ gked: GkedRuleLists, version: RecordVersion });
+
+/** Справочники с «Включить» / «Отключить» у отмеченных. */
+export const AdminBulkActiveParam = AdminValueDictParam;
+
+/** Отмеченные значения: до 500 за раз. */
+const BulkCodes = z.array(z.string().min(1).max(80)).min(1).max(500);
+
+export const AdminBulkActive = z.object({ codes: BulkCodes, active: z.boolean() });
+
+/**
+ * «Изменить срок у N видов» (прототип bulkDueDlg): число — от 1 до 31, месяцев после периода — от 0 до
+ * 6, месяц следующего года — от 1 до 12; пусто — не менять, хотя бы одно — обязательно.
+ */
+export const AdminBulkDue = z
+  .object({
+    codes: BulkCodes,
+    day: typeDay.optional(),
+    after: typeAfter.optional(),
+    month: typeMonth.optional(),
+  })
+  .refine((x) => x.day !== undefined || x.after !== undefined || x.month !== undefined, {
+    path: ['day'],
+    ...message('pdicts.err.bulk_due_empty'),
+  });
+export type AdminBulkDueInput = z.input<typeof AdminBulkDue>;
+
+/** «Отметить сверку с ГНС». */
+export const AdminMarkGns = z.object({ codes: BulkCodes });
+
+/** Итог массового действия: сколько значений и у скольких отчётов пересчитаны сроки. */
+export const AdminBulkResult = z.object({
+  n: z.number().int().nonnegative(),
+  dues: z.object({
+    reports: z.number().int().nonnegative(),
+    orgs: z.number().int().nonnegative(),
+  }),
+  pending: z.boolean(),
+});
+export type AdminBulkResult = z.infer<typeof AdminBulkResult>;

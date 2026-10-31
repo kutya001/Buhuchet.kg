@@ -1,6 +1,18 @@
 import { sql } from 'drizzle-orm';
-import { boolean, index, integer, jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+import {
+  boolean,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  uuid,
+  type AnyPgColumn,
+} from 'drizzle-orm/pg-core';
+import { recordVersion } from './columns';
 import { platformReadOnly } from './rls';
+import { users } from './users';
 
 /**
  * Справочники платформы — разделы refDB.json прототипа как есть (reportTypes, holidays, taxes, …).
@@ -18,6 +30,11 @@ export const platformReference = pgTable(
     /** Откуда раздел: `refDB.json@<коммит прототипа>`. */
     source: text('source').notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    /**
+     * Раздел поправил администратор платформы в Админке («Налоги и ставки», «Группы кодов ГКЭД»):
+     * `db:seed --update` его не затирает.
+     */
+    updatedBy: uuid('updated_by').references(() => users.id),
   },
   () => [platformReadOnly('platform_reference_read')],
 ).enableRLS();
@@ -31,18 +48,27 @@ export const GKED_LEVELS = [
   'subclass',
 ] as const;
 
-/** ГКЭД 2022 (gkedDB.json). У контрагента выбирается только subclass. */
+/**
+ * ГКЭД 2022 (gkedDB.json). У контрагента выбирается только subclass. Ведёт администратор платформы
+ * (задача 2.38): «Создано», «Создал», «Изменил» и версия — как у остальных справочников платформы;
+ * «Входит в» — код этого же справочника, поэтому код с вложенными кодами не удалить.
+ */
 export const gkedItems = pgTable(
   'gked_items',
   {
     code: text('code').primaryKey(),
     name: text('name').notNull(),
     level: text('level', { enum: GKED_LEVELS }).notNull(),
-    parentCode: text('parent_code'),
+    parentCode: text('parent_code').references((): AnyPgColumn => gkedItems.code),
     active: boolean('active').notNull().default(true),
     note: text('note').notNull().default(''),
     sortOrder: integer('sort_order').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }),
+    createdBy: uuid('created_by').references(() => users.id),
+    /** Поправленный в Админке код `db:seed --update` не затирает. */
+    updatedBy: uuid('updated_by').references(() => users.id),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    version: recordVersion(),
   },
   (t) => [
     index('gked_items_parent_idx').on(t.parentCode),

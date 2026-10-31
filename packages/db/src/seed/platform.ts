@@ -73,7 +73,8 @@ export async function seedPlatformReference(
       await db.insert(platformReference).values({ key, payload, checksum, source });
       report.inserted++;
     } else if (current !== checksum && options.update) {
-      await db
+      // Раздел, поправленный в Админке (`updated_by`), наполнение не затирает.
+      const updated = await db
         .update(platformReference)
         .set({
           payload,
@@ -82,8 +83,10 @@ export async function seedPlatformReference(
           version: sql`${platformReference.version} + 1`,
           updatedAt: sql`now()`,
         })
-        .where(sql`${platformReference.key} = ${key}`);
-      report.updated++;
+        .where(sql`${platformReference.key} = ${key} and ${platformReference.updatedBy} is null`)
+        .returning({ key: platformReference.key });
+      if (updated.length) report.updated++;
+      else report.unchanged++;
     } else {
       report.unchanged++;
     }
@@ -134,7 +137,8 @@ export async function seedGked(db: Db, file: unknown, options: SeedOptions): Pro
               sortOrder: sql`excluded.sort_order`,
               updatedAt: sql`now()`,
             },
-            setWhere: sql`(${gkedItems.name}, ${gkedItems.level}, ${gkedItems.parentCode}, ${gkedItems.active}, ${gkedItems.note}, ${gkedItems.sortOrder})
+            // Код, поправленный в Админке (`updated_by`), наполнение не затирает.
+            setWhere: sql`${gkedItems.updatedBy} is null and (${gkedItems.name}, ${gkedItems.level}, ${gkedItems.parentCode}, ${gkedItems.active}, ${gkedItems.note}, ${gkedItems.sortOrder})
               is distinct from (excluded.name, excluded.level, excluded.parent_code, excluded.active, excluded.note, excluded.sort_order)`,
           })
           .returning({ code: gkedItems.code })

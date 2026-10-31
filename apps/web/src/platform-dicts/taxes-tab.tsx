@@ -41,6 +41,9 @@ import { useGridLabels, type CountKey } from '../lists/grid-labels';
 import { useListPage, type FetchListPage } from '../lists/use-list-page';
 import { useViewSettings } from '../lists/view-settings';
 import { useShell } from '../shell/context';
+import { DictHistory } from './dict-history-box';
+import { EnRateDialog } from './enrate-dialog';
+import { ExportDialog, ImportDialog, IoBar } from './io-dialogs';
 
 const ref = api.api.admin['tax-ref'];
 
@@ -95,7 +98,15 @@ const WIDTHS: Readonly<Record<AdminTaxList, Readonly<Record<string, number>>>> =
     types: 180,
     verify: 110,
   },
-  en_rates: { code: 90, activity: 320, explain: 360, rate: 220, cond: 300, art: 160 },
+  en_rates: {
+    code: 90,
+    activity: 320,
+    explain: 360,
+    rate: 220,
+    cond: 300,
+    art: 160,
+    gked: 240,
+  },
   property_rates: {
     place: 220,
     region: 220,
@@ -138,6 +149,16 @@ function taxColumns(list: AdminTaxList, t: Translate): GridColumn<AdminTaxRow>[]
     if (STRONG[list] === c.key) {
       column.cell = (x) => <span className="font-semibold">{value(x, c.key)}</span>;
     }
+    // «Виды деятельности (ГКЭД)» ставки (задача 2.38, прототип gkRuleHtml): пусто — «все виды».
+    if (c.key === 'gked') {
+      column.className = MONO_CLASS;
+      column.cell = (x) =>
+        value(x, 'gked') ? (
+          <span>{value(x, 'gked')}</span>
+        ) : (
+          <span className="font-sans text-faint">{t('pdicts.gked.rule.any')}</span>
+        );
+    }
     // «Сверка»: «Сверить» — оранжевой меткой, иначе пусто (прототип vf).
     if (c.key === 'verify') {
       column.text = (x) => String(value(x, 'verify_text'));
@@ -153,7 +174,16 @@ function taxColumns(list: AdminTaxList, t: Translate): GridColumn<AdminTaxRow>[]
 }
 
 /** Таблица вкладки: поиск сверху экрана, фильтры, сортировка, группы и «В Excel» — общим механизмом. */
-function TaxTable({ list, onOpen }: { list: AdminTaxList; onOpen?: (x: AdminTaxRow) => void }) {
+function TaxTable({
+  list,
+  onOpen,
+  openLabel = 'pdicts.tax.action.open',
+}: {
+  list: AdminTaxList;
+  onOpen?: (x: AdminTaxRow) => void;
+  /** Пункт меню строки: «Открыть», у ставки единого налога — «Виды деятельности (ГКЭД)». */
+  openLabel?: UiTextKey;
+}) {
   const t = useT();
   const gridKey = `pdicts.${list}` as GridKey;
   const labels = useGridLabels(COUNT[list]);
@@ -185,7 +215,12 @@ function TaxTable({ list, onOpen }: { list: AdminTaxList; onOpen?: (x: AdminTaxR
   const exporter = useListExport(sendExport);
   const actions = onOpen
     ? (x: AdminTaxRow): ActionEntry[] => [
-        { id: 'open', label: t('pdicts.tax.action.open'), icon: 'eye', run: () => onOpen(x) },
+        {
+          id: 'open',
+          label: t(openLabel),
+          icon: list === 'en_rates' ? 'edit' : 'eye',
+          run: () => onOpen(x),
+        },
       ]
     : undefined;
 
@@ -223,6 +258,10 @@ function TaxTable({ list, onOpen }: { list: AdminTaxList; onOpen?: (x: AdminTaxR
   );
 }
 
+/** Таблицы вкладки с «Выгрузить» и «Загрузить». */
+type TaxIoDict = 'taxes' | 'enrates' | 'proprates';
+type TaxIo = { dict: TaxIoDict; action: 'export' | 'import' };
+
 interface TaxView {
   title: string;
   sub: string;
@@ -240,6 +279,15 @@ export function TaxesTab() {
   const client = useQueryClient();
   const info = useQuery(infoQuery);
   const [view, setView] = useState<DialogSlot<TaxView> | null>(null);
+  const [enRate, setEnRate] = useState<DialogSlot<string> | null>(null);
+  const [io, setIo] = useState<DialogSlot<TaxIo> | null>(null);
+  // «Выгрузить» и «Загрузить» над таблицей (задача 2.37, часть 3, прототип ioBar).
+  const ioBar = (dict: TaxIoDict) => (
+    <IoBar
+      onExport={() => setIo(openSlot<TaxIo>({ dict, action: 'export' }))}
+      onImport={() => setIo(openSlot<TaxIo>({ dict, action: 'import' }))}
+    />
+  );
 
   const openTax = async (x: AdminTaxRow) => {
     const [taxes, catalog] = await Promise.all([
@@ -261,6 +309,7 @@ export function TaxesTab() {
     <div className="flex flex-col gap-3.5">
       <Note icon="info">{t('pdicts.note.taxes')}</Note>
       <Box title={t('pdicts.tax.box.taxes')}>
+        {ioBar('taxes')}
         <TaxTable list="taxes" onOpen={(x) => void openTax(x)} />
       </Box>
       <Box title={t('pdicts.tax.box.en_rates')}>
@@ -269,12 +318,18 @@ export function TaxesTab() {
             {n}
           </p>
         ))}
-        <TaxTable list="en_rates" />
+        {ioBar('enrates')}
+        <TaxTable
+          list="en_rates"
+          onOpen={(x) => setEnRate(openSlot(x.id))}
+          openLabel="pdicts.enrate.gked"
+        />
       </Box>
       <Box title={t('pdicts.tax.box.property_rates')}>
         {info.data?.propertyRates ? (
           <p className="m-0 text-muted">{info.data.propertyRates}</p>
         ) : null}
+        {ioBar('proprates')}
         <TaxTable list="property_rates" />
       </Box>
       <Box title={t('pdicts.tax.box.biz')}>
@@ -286,6 +341,30 @@ export function TaxesTab() {
           }))}
         />
       </Box>
+      <DictHistory dict="taxes" />
+      {enRate ? (
+        <EnRateDialog
+          key={`enrate-${enRate.n}`}
+          open={enRate.open}
+          onClose={() => setEnRate(closeSlot)}
+          code={enRate.data}
+        />
+      ) : null}
+      {io?.data.action === 'export' ? (
+        <ExportDialog
+          key={`io-${io.n}`}
+          dict={io.data.dict}
+          open={io.open}
+          onClose={() => setIo(closeSlot)}
+        />
+      ) : io ? (
+        <ImportDialog
+          key={`io-${io.n}`}
+          dict={io.data.dict}
+          open={io.open}
+          onClose={() => setIo(closeSlot)}
+        />
+      ) : null}
       {view ? (
         <Modal
           key={`tax-${view.n}`}

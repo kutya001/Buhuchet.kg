@@ -103,7 +103,7 @@ const taxVis: When = (a) => a.feature('taxpay') && a.can('money');
 const feeVis: When = (a) => a.feature('fee') && a.can('fee');
 
 /** Вкладки «Справочников платформы» с «Выгрузить в Excel» и «Загрузить из Excel». */
-const IO_TABS: readonly string[] = ADMIN_VALUE_DICTS;
+const IO_TABS: readonly string[] = [...ADMIN_VALUE_DICTS, 'calendar'];
 
 /** Группы вкладок «Справочников платформы» (ТЗ «Группы справочников»). */
 const G = {
@@ -180,8 +180,7 @@ export const MODULES: Record<MenuModuleId, ModuleDef> = {
       },
     ],
     add: [
-      // «Назначить отчёты массово» откроет задача 2.15 («Кто что сдаёт»): до неё способ скрыт.
-      { id: 'mass', icon: 'matrix', label: 'add.reports.mass', when: () => false },
+      { id: 'mass', icon: 'matrix', label: 'add.reports.mass', when: (a) => a.can('assign') },
       { id: 'adhoc', icon: 'file', label: 'add.reports.adhoc', when: (a) => a.can('changeStatus') },
     ],
   },
@@ -395,6 +394,7 @@ export const MODULES: Record<MenuModuleId, ModuleDef> = {
       { id: 'base', icon: 'plus', label: 'pdicts.add.base', tabs: ['bases'] },
       { id: 'regime', icon: 'plus', label: 'pdicts.add.regime', tabs: ['regimes'] },
       { id: 'benefit', icon: 'plus', label: 'pdicts.add.benefit', tabs: ['benefits'] },
+      { id: 'gked', icon: 'plus', label: 'pdicts.gked.add', tabs: ['gked'] },
       {
         id: 'value',
         icon: 'plus',
@@ -410,7 +410,8 @@ export const MODULES: Record<MenuModuleId, ModuleDef> = {
         label: 'pdicts.add.calendar_copy',
         tabs: ['calendar'],
       },
-      // «Выгрузить» и «Загрузить» (задача 2.37, прототип pdAdd `io`) — у справочников значений.
+      // «Выгрузить» и «Загрузить» (задача 2.37, прототип pdAdd `io`) — у справочников значений и
+      // календаря.
       {
         id: 'io_export',
         icon: 'download',

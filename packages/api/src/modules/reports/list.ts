@@ -3,6 +3,7 @@ import {
   exportReports,
   listReportsPage,
   listReportValues,
+  orgMenuSettings,
   reportConfirmPolicy,
   reportSummary,
   withOrgContext,
@@ -26,7 +27,7 @@ import type { Context } from 'hono';
 import type { z } from 'zod';
 import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
-import { listQueryOf, listQueryResponses } from '../../errors';
+import { apiFail, listQueryOf, listQueryResponses } from '../../errors';
 import { exportRateResponses, withExportSlot, xlsxContent, xlsxResponse } from '../../lists/export';
 import { orgContextOf, requirePermission } from '../../middleware/access';
 import { serverTexts } from '../l10n/texts';
@@ -36,10 +37,14 @@ import { error, reportScopeOf } from './common';
 /*
  * Список отчётов (прототип modules/reports.js: repGrid, repTabs, renderReports; экран — задача 2.13):
  * вкладки «На неделе», «Просрочено», «Ожидают подтверждения», «Все отчёты», быстрый фильтр «Все /
- * Сдать / Уплатить»; прежние версии уточнённых не показываются; область — п. А-2.
+ * Сдать / Уплатить»; список дня вкладки «Календарь» (`tab=calendar&day=…`, задача 2.15); прежние версии
+ * уточнённых не показываются; область — п. А-2.
  */
 
-const noView = { description: 'Нет права «Просматривать отчёты»', content: error };
+const noView = {
+  description: 'Нет права «Просматривать отчёты»; вкладка «Календарь» при выключенном календаре',
+  content: error,
+};
 
 /**
  * «Ожидают подтверждения» (прототип repWaitList): тому, кто может подтверждать, — все в области,
@@ -60,7 +65,17 @@ async function listOptions(
   q: TabQuery,
 ): Promise<ReportListOptions> {
   const subject = subjectOf(c);
-  const policy = await reportConfirmPolicy(tx, orgContextOf(c).orgId);
+  if (q.tab === 'calendar' && !q.day) {
+    apiFail(400, 'validation_failed', 'Укажите день календаря', { field: 'day' });
+  }
+  const [policy, settings] = await Promise.all([
+    reportConfirmPolicy(tx, orgContextOf(c).orgId),
+    orgMenuSettings(tx, orgContextOf(c).orgId),
+  ]);
+  // Список дня, его значения фильтров и Excel закрыты вместе с «Календарём отчётов».
+  if (q.tab === 'calendar' && !settings.features.calendar) {
+    apiFail(403, 'calendar_off', 'Календарь отчётов выключен в учётной политике');
+  }
   return {
     t: await serverTexts(deps),
     today: todayOf(deps),
@@ -69,6 +84,9 @@ async function listOptions(
     quick: q.quick,
     waiting: waitingView(subject, policy.confirm),
     contractorId: q.contractorId ?? null,
+    ...(q.tab === 'calendar' && q.day
+      ? { day: { date: q.day, taxpay: settings.features.taxpay } }
+      : {}),
   };
 }
 

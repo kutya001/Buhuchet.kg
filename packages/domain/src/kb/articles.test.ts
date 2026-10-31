@@ -143,10 +143,11 @@ describe('какие статьи видны', () => {
       true,
     );
     expect(kbArticleVisible(article({ mod: 'cps' }), access({}))).toBe(true);
-    // Админка: «Учётные записи» сделаны, «Справочники платформы» — ещё нет.
-    const adm = access({ admin: true, modules: ['accounts', 'orgs', 'pdicts', 'kb'] });
+    // Админка: «Учётные записи» и «Справочники платформы» сделаны, «Telegram» — ещё нет.
+    const adm = access({ admin: true, modules: ['accounts', 'orgs', 'pdicts', 'tg', 'kb'] });
     expect(kbArticleVisible(article({ aud: 'adm', mod: 'accounts' }), adm)).toBe(true);
-    expect(kbArticleVisible(article({ aud: 'adm', mod: 'pdicts' }), adm)).toBe(false);
+    expect(kbArticleVisible(article({ aud: 'adm', mod: 'pdicts' }), adm)).toBe(true);
+    expect(kbArticleVisible(article({ aud: 'adm', mod: 'tg' }), adm)).toBe(false);
   });
 
   it('по праву, функции и включённости', () => {

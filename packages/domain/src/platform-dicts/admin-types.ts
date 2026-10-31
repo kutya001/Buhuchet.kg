@@ -1,3 +1,4 @@
+import { diffDays, type IsoDate } from '../common/dates';
 import { LAST_DAY_OF_MONTH, type ReportAct, type ReportKind } from './catalog';
 
 /*
@@ -46,6 +47,7 @@ export const REPORT_TYPE_FIELDS = [
   'shiftToWorkday',
   'act',
   'payments',
+  'gked',
 ] as const;
 export type ReportTypeField = (typeof REPORT_TYPE_FIELDS)[number];
 
@@ -149,4 +151,16 @@ export function inactiveLinks(
 ): string[] {
   const active = new Map(options.map((x) => [x.code, x.active]));
   return codes.filter((code) => !active.has(code) || (!before.includes(code) && !active.get(code)));
+}
+
+/** Сверка с ГНС старше стольких дней — дата жёлтым (прототип: `diffDays(TODAY, t.gnsAt) > 180`). */
+export const GNS_OLD_DAYS = 180;
+
+/** Ячейка «Сверено с ГНС»: не сверено, давно (жёлтым) или недавно. */
+export function gnsCheckState(
+  at: IsoDate | null | undefined,
+  today: IsoDate,
+): 'none' | 'old' | 'fresh' {
+  if (!at) return 'none';
+  return diffDays(today, at) > GNS_OLD_DAYS ? 'old' : 'fresh';
 }
