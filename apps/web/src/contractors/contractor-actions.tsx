@@ -1,12 +1,14 @@
 'use client';
 
 import type { ContractorKind } from '@buhuchet/domain';
-import type { Contractor, ContractorRow } from '@buhuchet/shared';
+import type { Contractor, ContractorFees, ContractorRow } from '@buhuchet/shared';
 import { ConfirmDialog, useToast, type ActionEntry, type GridBulkAction } from '@buhuchet/ui';
 import { useState, type ReactNode } from 'react';
 import { api, callApi } from '../api-client';
 import { useEnablePages } from '../contractor-page/page-box';
 import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
+import { useFeeDialogs } from '../fees/fee-dialogs';
+import { feeMenuEntries, type FeeMenuContractor } from '../fees/fee-menu';
 import { useErrorText, useT } from '../l10n/provider';
 import { useShell } from '../shell/context';
 import { BaseChangesDialog } from './base-changes';
@@ -43,6 +45,17 @@ const serviceOf = (c: Contractor): ServiceContractor => ({
   tariff: c.tariff ? { amount: c.tariff.amount, period: c.tariff.period } : null,
 });
 
+/** Плата за обслуживание карточки для пунктов меню: по вкладке «Обслуживание» (долг, начисления). */
+const feeOfCard = (c: Contractor, f: ContractorFees | undefined): FeeMenuContractor | null =>
+  f
+    ? {
+        archived: c.serviceStatus === 'archived',
+        oneoff: c.kind === 'oneoff',
+        feeDebt: f.debt,
+        charged: f.months.some((m) => m.charge > 0),
+      }
+    : null;
+
 /**
  * Действия с контрагентом (прототип modules/contractors.js — cpActions, respDlg, archiveDlg, массовые
  * действия списка; modules/contractor-card.js — кнопка «Действия» карточки): пункты меню «…» строки,
@@ -71,6 +84,11 @@ export function useContractorActions(): {
   const people = rights.assign || rights.createCp;
   const pagesOn = access.feature('cppage') && access.can('cpPage');
   const service = useServiceActions({ onRegular: (id) => openContractorCard({ id }, 'pick') });
+  const fee = useFeeDialogs();
+  const feeRights = {
+    fee: access.feature('fee') && access.can('fee'),
+    tariff: access.can('tariff'),
+  };
   const pages = useEnablePages();
   const [edit, setEdit] = useState<DialogSlot<string> | null>(null);
   const [bases, setBases] = useState<DialogSlot<BaseChanges> | null>(null);
@@ -90,6 +108,7 @@ export function useContractorActions(): {
     c: MenuContractor & { name: string; responsibleId: string | null },
     serviceEntries: readonly ActionEntry[],
     card: boolean,
+    feeOf: FeeMenuContractor | null,
   ) =>
     contractorMenuEntries({
       c,
@@ -97,6 +116,14 @@ export function useContractorActions(): {
       t,
       card,
       service: serviceEntries,
+      fee: feeOf
+        ? feeMenuEntries({
+            c: feeOf,
+            rights: feeRights,
+            t,
+            run: { accept: () => fee.accept(c.id), remind: () => fee.remind(c.id) },
+          })
+        : [],
       run: {
         open: () => openContractorCard({ id: c.id }),
         edit: () => setEdit(openSlot(c.id)),
@@ -117,6 +144,12 @@ export function useContractorActions(): {
         rowService(r),
       ),
       false,
+      {
+        archived: r.serviceStatus === 'archived',
+        oneoff: r.kind === 'oneoff',
+        feeDebt: r.feeDebt,
+        charged: (r.feeDebt ?? 0) > 0 || (r.tariff?.amount ?? 0) > 0,
+      },
     );
     // «Открыть карточку» строки — со строкой: карточка сразу показывает название и ИНН.
     return entries.map((e) =>
@@ -125,7 +158,7 @@ export function useContractorActions(): {
   };
 
   const card: CardActions = {
-    actions: (c, s) =>
+    actions: (c, s, f) =>
       menu(
         {
           id: c.id,
@@ -137,6 +170,7 @@ export function useContractorActions(): {
         },
         s ? service.actions(serviceOf(c), s) : [],
         true,
+        feeOfCard(c, f),
       ),
     serviceActions: (c, s) => service.actions(serviceOf(c), s),
     onResponsible: people
@@ -219,6 +253,7 @@ export function useContractorActions(): {
   const dialogs = (
     <>
       {service.dialogs}
+      {fee.dialogs}
       {pages.dialog}
       {edit ? (
         <EditContractorDialog

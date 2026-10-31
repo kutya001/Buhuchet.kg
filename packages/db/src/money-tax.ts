@@ -15,6 +15,7 @@ import {
   RecordNotFoundError,
   scheduleDues,
   schedulePayDue,
+  type Allocation,
   type ContractorMoney,
   type IsoDate,
   type MoneyHolderKind,
@@ -34,10 +35,12 @@ import { and, asc, desc, eq, inArray, isNull, sql, type SQL } from 'drizzle-orm'
 import { alias } from 'drizzle-orm/pg-core';
 import type { Tx } from './client';
 import { updateWithHistory, writeHistory } from './history';
+import { insertReceiptFeePayments, receiptFeeLeft } from './fees';
 import { calendarOf, lockReport, ReportChangedError } from './reports';
 import {
   contractors,
   employees,
+  feePayments,
   files,
   moneyAllocations,
   moneyOperations,
@@ -255,6 +258,10 @@ interface MoneyContractor {
   responsibleName: string | null;
   archived: boolean;
   needReceiptFile: boolean;
+  /** «Платит одной суммой»: налоги и обслуживание вместе (задача 2.21). */
+  oneSum: boolean;
+  /** Разовый контрагент: без платы за обслуживание. */
+  oneOff: boolean;
   version: number;
 }
 
@@ -276,6 +283,8 @@ export async function moneyContractor(
       responsibleName: respEmployee.shortName,
       archived: sql<boolean>`${contractors.serviceStatus} = 'archived'`,
       needReceiptFile: contractors.needReceiptFile,
+      oneSum: contractors.oneSum,
+      oneOff: sql<boolean>`${contractors.kind} = 'oneoff'`,
       version: contractors.version,
     })
     .from(contractors)
@@ -359,6 +368,11 @@ export interface ReceiptInput {
   date: IsoDate;
   rows: readonly { reportId: string; amount: Tyiyn }[];
   /**
+   * Часть за обслуживание по месяцам (задача 2.21; прототип inDlg, `feeAlloc`): только когда
+   * сотруднику она доступна (`ctx.fee`) — плата видна, контрагент не разовый и платит организации.
+   */
+  fee?: Allocation;
+  /**
    * Сколько файлов окно загрузит к поступлению после сохранения (источник «Поступление», как файлы
    * задачи — к уже созданной записи): при «Файл при поступлении обязателен» и включённых «Файлах в
    * карточках» — не меньше одного.
@@ -377,7 +391,14 @@ export async function createReceipt(
   tx: Tx,
   contractorId: string,
   input: ReceiptInput,
-  ctx: { today: IsoDate; scope: SQL | undefined; filesOn: boolean; t: Translate },
+  ctx: {
+    today: IsoDate;
+    scope: SQL | undefined;
+    filesOn: boolean;
+    t: Translate;
+    /** Часть за обслуживание доступна: плата видна, контрагент в области «Контрагентов». */
+    fee?: boolean;
+  },
 ): Promise<{ id: string }> {
   // Контрагент блокируется: два поступления или поступление с оплатой не считают остаток одновременно.
   const c = await lockContractor(tx, contractorId, ctx.scope);
@@ -387,13 +408,32 @@ export async function createReceipt(
   if (new Set(rows.map((x) => x.reportId)).size !== rows.length) {
     throw new MoneyRefusedError('receipt_row_invalid', 400, 'rows');
   }
-  const detail = rows.reduce((a, x) => a + x.amount, 0);
+  const fee = (input.fee ?? [])
+    .filter((x) => x.amount > 0)
+    .sort((a, b) => (a.month < b.month ? -1 : 1));
+  // Плата — только организации: у контрагента, который переводит деньги ответственному, её части нет.
+  if (fee.length && !(ctx.fee && c.paysTo === 'org' && !c.oneOff)) {
+    throw new MoneyRefusedError('receipt_fee_invalid', 400, 'fee');
+  }
+  const feeSum = fee.reduce((a, x) => a + x.amount, 0);
+  const detail = rows.reduce((a, x) => a + x.amount, 0) + feeSum;
   if (detail > input.total) throw new MoneyRefusedError('receipt_total_less', 400, 'total');
   const open = new Map((await receiptFormRows(tx, contractorId)).rows.map((r) => [r.reportId, r]));
   for (const x of rows) {
     const r = open.get(x.reportId);
     if (!r) throw new MoneyRefusedError('receipt_row_invalid', 400, 'rows');
     if (x.amount > r.left) throw new MoneyRefusedError('receipt_row_over', 400, 'rows');
+  }
+  if (fee.length) {
+    if (new Set(fee.map((x) => x.month)).size !== fee.length) {
+      throw new MoneyRefusedError('receipt_fee_invalid', 400, 'fee');
+    }
+    const feeLeft = await receiptFeeLeft(tx, contractorId, ctx.today);
+    for (const x of fee) {
+      const left = feeLeft.get(x.month);
+      if (left === undefined) throw new MoneyRefusedError('receipt_fee_invalid', 400, 'fee');
+      if (x.amount > left) throw new MoneyRefusedError('receipt_row_over', 400, 'fee');
+    }
   }
   if (c.needReceiptFile && ctx.filesOn && input.files < 1) {
     throw new MoneyRefusedError('receipt_file_required', 400, 'files');
@@ -403,7 +443,8 @@ export async function createReceipt(
     .values({
       contractorId,
       kind: 'in',
-      amount: input.total,
+      // На налоги — всё, кроме части за обслуживание: она на виртуальный счёт не попадает.
+      amount: input.total - feeSum,
       total: input.total,
       opDate: input.date,
       ...holderOf(c, false),
@@ -416,13 +457,21 @@ export async function createReceipt(
       .insert(moneyAllocations)
       .values(rows.map((x) => ({ operationId: op!.id, reportId: x.reportId, amount: x.amount })));
   }
+  await insertReceiptFeePayments(
+    tx,
+    contractorId,
+    { operationId: op!.id, date: input.date, rows: fee },
+    ctx.t,
+  );
+  // Часть за обслуживание — отдельными полями: без права «Видеть плату» их в истории не видно, а
+  // `total` — только то, что пришло на налоги (ТЗ: плата скрыта везде).
   await writeHistory(tx, {
     entity: 'money_operation',
     entityId: op!.id,
     action: 'create',
     changes: [
       { field: 'kind', to: 'in' },
-      { field: 'total', to: input.total },
+      { field: 'total', to: input.total - feeSum },
       { field: 'opDate', to: input.date },
       {
         field: 'allocations',
@@ -431,6 +480,15 @@ export async function createReceipt(
           return { report: reportLabel(r, ctx.t), amount: x.amount };
         }),
       },
+      ...(fee.length
+        ? [
+            { field: 'feeTotal', to: feeSum },
+            {
+              field: 'feeAllocations',
+              to: fee.map((x) => ({ month: x.month, amount: x.amount })),
+            },
+          ]
+        : []),
     ],
     contractorId,
   });
@@ -1105,23 +1163,30 @@ export async function moneyFileSource(
 }
 
 /**
- * «Файл при поступлении» и «Деньги на налоги переводит» (прототип contractor-card.js, `cp-needf`,
- * `cp-pays`): с версией контрагента, в истории контрагента — было → стало. Смена счёта переносит на
- * него деньги контрагента: операции, кроме «Оплатил контрагент сам», получают новый счёт. Отметку
- * файла у контрагента в архиве не меняют (в прототипе переключатель неактивен).
+ * «Файл при поступлении», «Деньги на налоги переводит» и «Платит одной суммой» (прототип
+ * contractor-card.js, `cp-needf`, `cp-pays`, `cp-one`): с версией контрагента, в истории контрагента —
+ * было → стало. Смена счёта переносит на него деньги контрагента: операции, кроме «Оплатил контрагент
+ * сам», получают новый счёт. Отметки файла и одной суммы у контрагента в архиве не меняют (в прототипе
+ * переключатель неактивен); «Платит одной суммой» у разового нет — у него нет платы за обслуживание.
+ * Видит ли сотрудник плату, проверяет вызывающий.
  */
 export async function saveMoneySettings(
   tx: Tx,
   contractorId: string,
-  input: { version: number; needReceiptFile?: boolean; paysTo?: 'emp' | 'org' },
+  input: { version: number; needReceiptFile?: boolean; paysTo?: 'emp' | 'org'; oneSum?: boolean },
   scope: SQL | undefined,
 ): Promise<{ id: string; version: number }> {
   const c = await lockContractor(tx, contractorId, scope);
   if (c.version !== input.version) throw new RecordChangedError('contractor', c.id, c.version);
-  const patch: { needReceiptFile?: boolean; paysTo?: 'emp' | 'org' } = {};
+  const patch: { needReceiptFile?: boolean; paysTo?: 'emp' | 'org'; oneSum?: boolean } = {};
   if (input.needReceiptFile !== undefined && input.needReceiptFile !== c.needReceiptFile) {
     if (c.archived) throw new MoneyRefusedError('contractor_archived');
     patch.needReceiptFile = input.needReceiptFile;
+  }
+  if (input.oneSum !== undefined && input.oneSum !== c.oneSum) {
+    if (c.archived) throw new MoneyRefusedError('contractor_archived');
+    if (c.oneOff) throw new MoneyRefusedError('one_sum_one_off', 400, 'oneSum');
+    patch.oneSum = input.oneSum;
   }
   if (input.paysTo !== undefined && input.paysTo !== c.paysTo) patch.paysTo = input.paysTo;
   const saved = await updateWithHistory(tx, {
@@ -1137,14 +1202,14 @@ export async function saveMoneySettings(
 }
 
 /**
- * Есть операции с деньгами контрагента (и отменённые — они остаются в журнале): его можно только
- * отправить в архив (ТЗ «Контрагенты» → удаление; прототип cpActions, `has_money`).
+ * Есть операции с деньгами контрагента (и отменённые — они остаются в журнале) или оплаты за
+ * обслуживание: его можно только отправить в архив (ТЗ «Контрагенты» → удаление; прототип cpActions:
+ * `OPS.some(…) || FEEPAYS.some(…)`).
  */
 export async function contractorHasMoney(tx: Tx, contractorId: string): Promise<boolean> {
-  const [row] = await tx
-    .select({ id: moneyOperations.id })
-    .from(moneyOperations)
-    .where(eq(moneyOperations.contractorId, contractorId))
-    .limit(1);
-  return !!row;
+  const [row] = await tx.execute<{ yes: boolean }>(
+    sql`select exists (select 1 from ${moneyOperations} where ${moneyOperations.contractorId} = ${contractorId})
+      or exists (select 1 from ${feePayments} where ${feePayments.contractorId} = ${contractorId}) as yes`,
+  );
+  return !!row?.yes;
 }

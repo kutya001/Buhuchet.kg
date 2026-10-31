@@ -7,6 +7,7 @@ import {
   createReceipt,
   moneyContractor,
   payReport,
+  receiptFeeRows,
   receiptFormRows,
   reportLabel,
   reportMoneyCard,
@@ -43,11 +44,12 @@ import {
   ReportSaved,
   type ReportCardMoney,
 } from '@buhuchet/shared';
+import type { Context } from 'hono';
 import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
 import { apiFail } from '../../errors';
-import { requireAnyPermission, requirePermission } from '../../middleware/access';
-import { scopeSqlOf, subjectOf, todayOf } from '../contractors/common';
+import { orgContextOf, requireAnyPermission, requirePermission } from '../../middleware/access';
+import { feeVisible, scopeSqlOf, subjectOf, todayOf } from '../contractors/common';
 import { serverTexts } from '../l10n/texts';
 import { error } from '../reports/common';
 import { finScopeOf, inTaxpay } from './common';
@@ -62,6 +64,22 @@ import { finScopeOf, inTaxpay } from './common';
 
 const json = <S>(schema: S) => ({ 'application/json': { schema } });
 const body = <S>(schema: S) => ({ required: true, content: json(schema) });
+
+/**
+ * Часть за обслуживание в поступлении (прототип inDlg, `feeOk`): плата видна (функция и право «Видеть
+ * плату за обслуживание»), контрагент не разовый и платит организации; строже прототипа — контрагент
+ * ещё и в области группы «Контрагенты», где у сотрудника право на плату.
+ */
+async function receiptFeeAllowed(
+  tx: Tx,
+  c: Context<AppEnv>,
+  cp: { id: string; paysTo: 'emp' | 'org'; oneOff: boolean },
+): Promise<boolean> {
+  if (cp.paysTo !== 'org' || cp.oneOff) return false;
+  const subject = subjectOf(c);
+  if (!(await feeVisible(tx, orgContextOf(c).orgId, subject))) return false;
+  return !!(await moneyContractor(tx, cp.id, scopeSqlOf(subject)));
+}
 
 /** Тексты словаря для подписей отчётов («НДС 09.2026»). */
 async function translator(deps: ApiDeps): Promise<Translate> {
@@ -142,15 +160,16 @@ export function contractorMoneyHandler(
     const out = await inTaxpay(deps, c, async (tx) => {
       const cp = await moneyContractor(tx, id, finScopeOf(subject));
       if (!cp) return null;
-      const [view, ops, balance] = await Promise.all([
+      const [view, ops, balance, fee] = await Promise.all([
         contractorMoneyView(tx, id, monthEnd(month)),
         contractorOperations(tx, id, t),
         contractorBalance(tx, id),
+        feeVisible(tx, orgContextOf(c).orgId, subject),
       ]);
-      return { cp, view, ops, balance };
+      return { cp, view, ops, balance, fee };
     });
     if (!out) notFound();
-    const { cp, view, ops, balance } = out;
+    const { cp, view, ops, balance, fee } = out;
     const byId = new Map(view.reports.map((r) => [r.id, r]));
     const item = (rid: string, amount: (r: (typeof view.reports)[number]) => number) => {
       const r = byId.get(rid)!;
@@ -179,16 +198,20 @@ export function contractorMoneyHandler(
         state: rec.verdict.state,
         amount: 'amount' in rec.verdict ? rec.verdict.amount : 0,
       },
-      operations: ops.map((o) => ({
-        id: o.id,
-        kind: o.kind,
-        self: o.self,
-        date: o.date,
-        amount: o.amount,
-        total: o.total,
-        reports: o.reports,
-        author: o.actorName,
-      })),
+      // Часть за обслуживание (общая сумма больше части на налоги) — только тому, кто видит плату:
+      // остальным общая сумма равна части на налоги, а поступление только за обслуживание не видно.
+      operations: ops
+        .filter((o) => fee || !(o.kind === 'in' && o.amount === 0))
+        .map((o) => ({
+          id: o.id,
+          kind: o.kind,
+          self: o.self,
+          date: o.date,
+          amount: o.amount,
+          total: fee || o.total === null ? o.total : o.amount,
+          reports: o.reports,
+          author: o.actorName,
+        })),
       canReceive: hasPermission(subject, 'money') && !cp.archived,
     };
     return c.json(body, 200);
@@ -217,11 +240,14 @@ export function receiptFormHandler(deps: ApiDeps): RouteHandler<typeof receiptFo
   return async (c) => {
     const { id } = c.req.valid('param');
     const t = await translator(deps);
+    const subject = subjectOf(c);
+    const today = todayOf(deps);
     const out = await inTaxpay(deps, c, async (tx) => {
-      const cp = await moneyContractor(tx, id, finScopeOf(subjectOf(c)));
+      const cp = await moneyContractor(tx, id, finScopeOf(subject));
       if (!cp) return null;
       const { rows, unpaid } = await receiptFormRows(tx, id);
-      return { cp, rows, unpaid };
+      const fee = (await receiptFeeAllowed(tx, c, cp)) ? await receiptFeeRows(tx, id, today) : null;
+      return { cp, rows, unpaid, fee };
     });
     if (!out) notFound();
     const body: ReceiptForm = {
@@ -231,6 +257,7 @@ export function receiptFormHandler(deps: ApiDeps): RouteHandler<typeof receiptFo
         paysTo: out.cp.paysTo,
         holder: out.cp.responsibleName,
         needReceiptFile: out.cp.needReceiptFile,
+        oneSum: out.cp.oneSum,
       },
       rows: out.rows.map((r) => ({
         reportId: r.reportId,
@@ -242,6 +269,8 @@ export function receiptFormHandler(deps: ApiDeps): RouteHandler<typeof receiptFo
         left: r.left,
       })),
       unpaid: out.unpaid,
+      fee: out.fee ? { months: out.fee } : null,
+      today,
     };
     return c.json(body, 200);
   };
@@ -287,15 +316,17 @@ export function createReceiptHandler(
     const input = c.req.valid('json');
     const t = await translator(deps);
     const subject = subjectOf(c);
-    const saved = await inTaxpay(deps, c, (tx, settings) => {
+    const saved = await inTaxpay(deps, c, async (tx, settings) => {
       // Файлы к поступлению окно загрузит после сохранения — значит, загружать их должно быть можно.
       if (input.files > 0 && !(settings.features.files && hasPermission(subject, 'filesUpload')))
         apiFail(403, 'forbidden', 'Нет права на это действие');
+      const cp = await moneyContractor(tx, id, finScopeOf(subject));
       return createReceipt(tx, id, input, {
         today: todayOf(deps),
         scope: finScopeOf(subject),
         filesOn: settings.features.files,
         t,
+        fee: !!cp && (await receiptFeeAllowed(tx, c, cp)),
       });
     });
     return c.json(saved, 201);
@@ -438,9 +469,13 @@ export function moneySettingsHandler(
     const { version, ...patch } = c.req.valid('json');
     const subject = subjectOf(c);
     // Область — группы «Контрагенты», как у «Изменить» карточки: переключатели на «Основном» (прототип).
-    const saved = await inTaxpay(deps, c, (tx) =>
-      saveMoneySettings(tx, id, { version, ...patch }, scopeSqlOf(subject)),
-    );
+    const saved = await inTaxpay(deps, c, async (tx) => {
+      // «Платит одной суммой» видит и меняет только тот, кто видит плату (прототип: переключатель
+      // показан при feat('fee') && can('fee')).
+      if (patch.oneSum !== undefined && !(await feeVisible(tx, orgContextOf(c).orgId, subject)))
+        apiFail(403, 'forbidden', 'Нет права на это действие');
+      return saveMoneySettings(tx, id, { version, ...patch }, scopeSqlOf(subject));
+    });
     return c.json(saved, 200);
   };
 }

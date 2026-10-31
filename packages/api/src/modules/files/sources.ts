@@ -18,6 +18,7 @@ import {
   type FileSourceKind,
   type HistoryEntity,
 } from '@buhuchet/domain';
+import { feePaymentFiles } from '../fees/files';
 import { indicatorValueSource } from '../kpi/card';
 import { kpiScopeOf } from '../kpi/common';
 import { finScopeOf } from '../money/common';
@@ -164,13 +165,15 @@ function moneySource(kind: 'receipt' | 'tax_payment'): FileListSource {
 /**
  * Источники файлов по видам (`FILE_SOURCE_KINDS` из @buhuchet/domain). Модуль с блоком «Файлы» добавляет
  * свою строку (по порядку модулей ТЗ) и вид в домене. Файлы платы за обслуживание видит только право
- * «Видеть плату за обслуживание» — это проверяет `resolve` модуля обслуживания (ТЗ «Файловый менеджер»).
+ * «Видеть плату за обслуживание» — это проверяет `resolve` модуля обслуживания (ТЗ «Файловый менеджер»;
+ * `fees/files.ts`).
  */
 export const FILE_SOURCES: Readonly<Record<FileSourceKind, FileListSource>> = {
   manual: manualSource,
   report: { ...reportFileSource, list: reportFilesList },
   receipt: moneySource('receipt'),
   tax_payment: moneySource('tax_payment'),
+  fee_payment: feePaymentFiles,
   task: { ...taskFileSource, list: taskFilesList },
   indicator_value: { ...indicatorValueSource, list: indicatorFilesList },
 };

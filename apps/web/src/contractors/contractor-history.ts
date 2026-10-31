@@ -1,9 +1,12 @@
 import {
+  allocationText,
   bishkekDate,
   bishkekTime,
   formatDateRu,
   formatSom,
   formatSomWithUnit,
+  monthLabel,
+  monthLabelGen,
   type UiTextKey,
 } from '@buhuchet/domain';
 import type { ContractorHistory } from '@buhuchet/shared';
@@ -91,6 +94,29 @@ function tariffText(t: Translate, v: unknown): string {
   });
 }
 
+/** Новая ставка журнала тарифов (прототип tariffDlg): «Новая ставка 14 000,00 сом в месяц с ноября 2026». */
+function tariffAddedText(t: Translate, v: unknown): string {
+  if (typeof v !== 'object' || v === null) return '';
+  const x = v as { amount?: unknown; period?: unknown; validFrom?: unknown };
+  if (typeof x.amount !== 'number' || typeof x.validFrom !== 'string') return '';
+  return t('fee.hist.tariff', {
+    amount: formatSomWithUnit(x.amount),
+    per: t(x.period === 'Y' ? 'fee.tariffs.per_year' : 'fee.tariffs.per_month'),
+    month: monthLabelGen(x.validFrom.slice(0, 7)),
+  });
+}
+
+/** Распределение по месяцам из истории: `[{ month, amount }]`, лишнее отброшено. */
+const monthAmounts = (v: unknown) =>
+  (Array.isArray(v) ? v : []).filter(
+    (a): a is { month: string; amount: number } =>
+      typeof a === 'object' &&
+      a !== null &&
+      typeof a.month === 'string' &&
+      /^\d{4}-\d{2}$/.test(a.month) &&
+      typeof a.amount === 'number',
+  );
+
 /** Строки изменения контрагента (прототип: «Ответственный: А → Б», «Изменено: …», статус и периоды). */
 function contractorLines(t: Translate, e: Entry, names: Names): string[] {
   if (e.action === 'create') {
@@ -145,6 +171,15 @@ function contractorLines(t: Translate, e: Entry, names: Names): string[] {
       case 'tariff':
         lines.push(tariffText(t, c.to));
         break;
+      case 'tariffAdded':
+        lines.push(tariffAddedText(t, c.to));
+        break;
+      case 'oneSum':
+        lines.push(t(c.to ? 'fee.hist.one_sum_on' : 'fee.hist.one_sum_off'));
+        break;
+      case 'feeReminder':
+        lines.push(t('fee.hist.reminder'));
+        break;
       case 'kind':
         lines.push(
           t('cp.hist.kind', {
@@ -197,7 +232,9 @@ function assignmentLines(t: Translate, e: Entry): string[] {
 
 /**
  * Поступление от контрагента (задача 2.19; прототип inDlg, `log('cp', …)`, allocText): «Поступление
- * 6 000 сом: НДС 09.2026 — 3 000, ЕН III кв. 2026 — 2 000, аванс — 1 000».
+ * 6 000 сом: НДС 09.2026 — 3 000, ЕН III кв. 2026 — 2 000, аванс — 1 000». Часть за обслуживание
+ * (задача 2.21) — в общей сумме и строками «обслуживание октябрь 2026 — 14 000»; кто не видит плату,
+ * её в истории не получает.
  */
 function moneyLines(t: Translate, e: Entry): string[] {
   if (e.action === 'file_attach' || e.action === 'file_delete')
@@ -214,14 +251,43 @@ function moneyLines(t: Translate, e: Entry): string[] {
       typeof a.amount === 'number',
   );
   const rest = total - parts.reduce((sum, a) => sum + a.amount, 0);
-  const list = parts.map((a) => `${a.report} — ${formatSom(a.amount, 'auto')}`);
+  const feeTotal = e.changes.find((c) => c.field === 'feeTotal')?.to;
+  const fee = monthAmounts(e.changes.find((c) => c.field === 'feeAllocations')?.to);
+  const list = [
+    ...parts.map((a) => `${a.report} — ${formatSom(a.amount, 'auto')}`),
+    ...fee.map((a) =>
+      t('fee.hist.receipt_item', {
+        month: monthLabel(a.month),
+        amount: formatSom(a.amount, 'auto'),
+      }),
+    ),
+  ];
   if (list.length && rest > 0)
     list.push(t('cp.hist.receipt_advance', { amount: formatSom(rest, 'auto') }));
-  const amount = formatSomWithUnit(total);
+  const amount = formatSomWithUnit(total + (typeof feeTotal === 'number' ? feeTotal : 0));
   return [
     list.length
       ? t('cp.hist.receipt_for', { amount, list: list.join(', ') })
       : t('cp.hist.receipt', { amount }),
+  ];
+}
+
+/**
+ * Оплата за обслуживание (задача 2.21; прототип feePayDlg, `log('fp', …)`): «Оплата за обслуживание
+ * 16 000,00 сом: октябрь 2026 — 14 000, аванс — 2 000»; файлы оплаты — «Оплата за обслуживание · …».
+ */
+function feePaymentLines(t: Translate, e: Entry): string[] {
+  if (e.action === 'file_attach' || e.action === 'file_delete')
+    return [t('fee.hist.payment_file', { text: reportHistoryText(t, { ...e, reason: null }, 0) })];
+  if (e.action !== 'create') return [];
+  const amount = e.changes.find((c) => c.field === 'amount')?.to;
+  if (typeof amount !== 'number') return [];
+  const allocation = monthAmounts(e.changes.find((c) => c.field === 'allocation')?.to);
+  return [
+    t('fee.hist.payment', {
+      amount: formatSomWithUnit(amount),
+      what: allocationText(t, amount, allocation),
+    }),
   ];
 }
 
@@ -261,6 +327,9 @@ export function contractorHistoryText(t: Translate, e: Entry, names: Names): str
       break;
     case 'money_operation':
       lines = moneyLines(t, e);
+      break;
+    case 'fee_payment':
+      lines = feePaymentLines(t, e);
       break;
     default:
       lines = [];

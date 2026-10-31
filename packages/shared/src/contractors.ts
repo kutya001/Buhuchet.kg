@@ -285,6 +285,8 @@ export const Contractor = z.object({
   paysTo: z.enum(PAYS_TO),
   /** «Файл при поступлении»: поступление нельзя сохранить без файла (задача 2.19). */
   needReceiptFile: z.boolean(),
+  /** «Платит одной суммой» (задача 2.21); null — нет права «Видеть плату за обслуживание». */
+  oneSum: z.boolean().nullable(),
   serviceStatus: z.enum(SERVICE_STATUSES),
   /** Действующая ставка обслуживания; null — нет ставки или нет права «Видеть плату за обслуживание». */
   tariff: z
@@ -346,6 +348,12 @@ export const ContractorRow = z.object({
   contact: z.string(),
   /** null — нет ставки или нет права «Видеть плату за обслуживание». */
   tariff: z.object({ amount: Tyiyn, period: z.enum(TARIFF_PERIODS) }).nullable(),
+  /** Долг за обслуживание (задача 2.21); null — нет права «Видеть плату за обслуживание». */
+  feeDebt: Tyiyn.nullable(),
+  /** «Платит одной суммой». */
+  oneSum: z.boolean(),
+  /** «Файл к поступлению обязателен». */
+  needReceiptFile: z.boolean(),
   /**
    * Тариф Соцфонда: выбранный кратко (`id` null — «Не определён») и «Тариф под вопросом» (не определён
    * или выбран вручную вопреки условиям); null — тариф контрагенту не нужен.
@@ -388,12 +396,16 @@ export const ContractorList = listPageSchema(ContractorRow);
 export type ContractorList = z.infer<typeof ContractorList>;
 
 /** Вкладка списка (прототип cpsTabs): «Все» и «Мои контрагенты». */
-export const ContractorTabParam = z.object({ tab: z.enum(['all', 'mine']).default('all') });
+/** Вкладка списка: «Все», «Мои контрагенты», «Должники» (задача 2.21: только тем, кто видит плату). */
+export const ContractorTabParam = z.object({
+  tab: z.enum(['all', 'mine', 'debtors']).default('all'),
+});
 
-/** Счётчики вкладок: в области и свои; без архива. */
+/** Счётчики вкладок: в области, свои и должники (null — плата не видна); без архива. */
 export const ContractorTabCounts = z.object({
   all: z.number().int().nonnegative(),
   mine: z.number().int().nonnegative(),
+  debtors: z.number().int().nonnegative().nullable(),
 });
 export type ContractorTabCounts = z.infer<typeof ContractorTabCounts>;
 
@@ -411,6 +423,11 @@ export const ContractorSummary = z.object({
   paused: z.number().int().nonnegative(),
   oneoff: z.number().int().nonnegative(),
   archived: z.number().int().nonnegative(),
+  /**
+   * Плашка «Должники» (задача 2.21): контрагентов с долгом за обслуживание и сумма долгов; null —
+   * плата не видна.
+   */
+  debtors: z.object({ count: z.number().int().nonnegative(), sum: Tyiyn }).nullable(),
   /** Область «Все контрагенты» («вся организация» под «На обслуживании»). */
   scopeAll: z.boolean(),
 });

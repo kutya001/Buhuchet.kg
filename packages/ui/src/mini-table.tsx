@@ -31,7 +31,8 @@ export const miniWide = (texts: Readonly<Record<string, string>>): string[] =>
  * таблица с серой шапкой, узкая прокручивается вбок; на телефоне — строки карточками по два значения с
  * подписями, первый столбец — заголовок карточки, длинные значения — на всю ширину, кнопки строки — в
  * правом верхнем углу. Пустая — одна строка с серым текстом. С `onOpen` строка открывает запись
- * (нажатием или Enter), как строка списка.
+ * (нажатием или Enter), как строка списка. С `phoneCards={false}` — таблица и на телефоне, узкая
+ * прокручивается вбок (прототип `table.mini` без `m-cards`: строки распределения в окнах оплаты).
  */
 export function MiniTable({
   columns,
@@ -39,6 +40,7 @@ export function MiniTable({
   empty,
   label,
   headless = false,
+  phoneCards = true,
   onOpen,
 }: {
   columns: readonly MiniColumn[];
@@ -49,9 +51,13 @@ export function MiniTable({
   empty: string;
   /** Название таблицы для экранного диктора. */
   label: string;
+  /** false — на телефоне не карточки, а та же таблица с прокруткой вбок. */
+  phoneCards?: boolean;
   /** Открыть запись строки (ключ строки). */
   onOpen?: (key: string) => void;
 }) {
+  if (!phoneCards)
+    return <PlainMiniTable columns={columns} rows={rows} empty={empty} label={label} />;
   const num = (c: MiniColumn) => (c.numeric ? 'text-left md:text-right' : 'text-left');
   const hasActions = columns.some((c) => c.actions);
   // На телефоне: заголовок карточки, кнопки в углу, значение на всю ширину или с подписью из шапки.
@@ -114,6 +120,67 @@ export function MiniTable({
                     key={c.key}
                     data-label={c.label}
                     className={`align-middle md:border-b md:border-line md:px-2 md:py-[7px] max-md:flex max-md:min-w-0 max-md:flex-col max-md:gap-px max-md:[overflow-wrap:anywhere] ${num(c)} ${phone(c, i, row)}`}
+                  >
+                    {row.cells[c.key]}
+                  </td>
+                ))}
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/** Таблица без карточек на телефоне (`phoneCards={false}`): шапка, числа справа, прокрутка вбок. */
+function PlainMiniTable({
+  columns,
+  rows,
+  empty,
+  label,
+}: {
+  columns: readonly MiniColumn[];
+  rows: readonly MiniRow[];
+  empty: string;
+  label: string;
+}) {
+  const align = (c: MiniColumn) => (c.numeric ? 'text-right' : 'text-left');
+  return (
+    <div className="overflow-x-auto">
+      <table
+        aria-label={label}
+        data-mini-table=""
+        className="w-full border-collapse text-[13px] tabular-nums"
+      >
+        <thead>
+          <tr>
+            {columns.map((c) => (
+              <th
+                key={c.key}
+                scope="col"
+                style={c.width ? { width: c.width } : undefined}
+                className={`border-b border-line px-2 py-1.5 text-[11.5px] font-[650] text-faint ${align(c)}`}
+              >
+                {c.label}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.length === 0 ? (
+            <tr>
+              <td colSpan={columns.length} className="px-2 py-[7px] text-faint">
+                {empty}
+              </td>
+            </tr>
+          ) : (
+            rows.map((row) => (
+              <tr key={row.key} className="last:[&>td]:border-b-0">
+                {columns.map((c) => (
+                  <td
+                    key={c.key}
+                    className={`border-b border-line px-2 py-[7px] align-middle ${align(c)}`}
                   >
                     {row.cells[c.key]}
                   </td>

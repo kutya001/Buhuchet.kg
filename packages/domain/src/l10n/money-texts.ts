@@ -415,6 +415,7 @@ export const TAX_MONEY_TEXTS = {
   'money.op.basis_self': { ru: 'Оплата контрагентом напрямую · {report}', section: S },
 
   // «Основное» карточки контрагента: деньги
+  'cp.col.need_file': { ru: 'Файл к поступлению обязателен', section: S },
   'money.cp.need_file': { ru: 'Файл при поступлении', section: S },
   'money.cp.need_file_on': { ru: 'обязательно требовать', section: S },
   'money.cp.need_file_hint': {

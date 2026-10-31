@@ -28,6 +28,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
 import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
+import { InfoTip } from '../kpi/kpi-table';
 import { useErrorText, useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { useReportActions } from '../reports/report-actions';
@@ -102,7 +103,11 @@ type Operation = ContractorMoney['operations'][number];
 /** «Основание» операции (прототип `note`): «За НДС 09.2026», «Аванс», «Оплата контрагентом напрямую · …». */
 export function operationBasis(t: Translate, o: Operation): string {
   const list = o.reports.join(', ');
-  if (o.kind === 'in') return list ? t('money.op.basis_in', { list }) : t('money.op.basis_advance');
+  if (o.kind === 'in') {
+    if (list) return t('money.op.basis_in', { list });
+    // Без отчётов, но с частью за обслуживание (прототип inDlg: «За обслуживание»).
+    return (o.total ?? 0) > o.amount ? t('money.op.basis_fee') : t('money.op.basis_advance');
+  }
   if (o.kind === 'pay' && o.self) return t('money.op.basis_self', { report: list });
   return list || '—';
 }
@@ -341,9 +346,11 @@ export function ContractorBalanceBox({ contractorId }: { contractorId: string })
 }
 
 /**
- * Строки «Файл при поступлении» и «Деньги на налоги переводит» на «Основном» (прототип `#cp-needf`,
- * `#cp-pays`): при «Учёте оплаты налогов»; менять — с правом «Создавать и изменять контрагентов»,
- * у архивного — только смотреть. Сохраняется сразу, с версией записи.
+ * Строки «Платит одной суммой», «Файл при поступлении» и «Деньги на налоги переводит» на «Основном»
+ * (прототип `#cp-one`, `#cp-needf`, `#cp-pays`): при «Учёте оплаты налогов»; «Платит одной суммой» —
+ * ещё при «Плате за обслуживание», с правом «Видеть плату» и у постоянного контрагента (`oneSum` не
+ * null). Менять — с правом «Создавать и изменять контрагентов», у архивного — только смотреть.
+ * Сохраняется сразу, с версией записи.
  */
 export function useMoneySettingsItems(c: Contractor): KeyValueItem[] {
   const t = useT();
@@ -355,7 +362,11 @@ export function useMoneySettingsItems(c: Contractor): KeyValueItem[] {
   if (!access.feature('taxpay')) return [];
   const edit = access.can('createCp');
   const live = c.serviceStatus !== 'archived';
-  const save = async (body: { needReceiptFile?: boolean; paysTo?: 'emp' | 'org' }) => {
+  const save = async (body: {
+    needReceiptFile?: boolean;
+    paysTo?: 'emp' | 'org';
+    oneSum?: boolean;
+  }) => {
     setBusy(true);
     const res = await saveMoneySettings(c.id, { version: c.version, ...body });
     setBusy(false);
@@ -363,7 +374,33 @@ export function useMoneySettingsItems(c: Contractor): KeyValueItem[] {
     if (!res.ok) return toast(errorText(res.error), { icon: 'alert', bad: true });
     toast(t('money.cp.saved'));
   };
+  const oneSumOn =
+    access.feature('fee') && access.can('fee') && c.kind !== 'oneoff' && c.oneSum !== null;
   return [
+    ...(oneSumOn
+      ? [
+          {
+            id: 'one-sum',
+            label: t('cp.card.one_sum'),
+            value: (
+              <span data-fee-one-sum="">
+                <span className="inline-flex items-center gap-1">
+                  <CheckRow
+                    plain
+                    compact
+                    checked={!!c.oneSum}
+                    disabled={!edit || !live || busy}
+                    onChange={(on) => void save({ oneSum: on })}
+                    label={t('cp.card.one_sum_on')}
+                  />
+                  <InfoTip label={t('cp.card.one_sum')} text={t('cp.card.one_sum_tip')} />
+                </span>
+                <Hint>{t('cp.card.one_sum_hint')}</Hint>
+              </span>
+            ),
+          } satisfies KeyValueItem,
+        ]
+      : []),
     {
       id: 'need-file',
       label: t('money.cp.need_file'),

@@ -201,8 +201,20 @@ export interface ContractorHistoryAccess {
   money: SQL | undefined | false;
 }
 
-/** Поля платы за обслуживание: без права их «было → стало» не отдаются (ТЗ: «скрыты везде»). */
-const FEE_FIELDS: ReadonlySet<string> = new Set(['tariff', 'feeDay', 'firstMonthMode']);
+/**
+ * Поля платы за обслуживание: без права их «было → стало» не отдаются (ТЗ: «скрыты везде») — ставка,
+ * день оплаты, первый месяц, новая ставка журнала, напоминание о долге, часть за обслуживание в
+ * поступлении (задача 2.21).
+ */
+const FEE_FIELDS: ReadonlySet<string> = new Set([
+  'tariff',
+  'feeDay',
+  'firstMonthMode',
+  'tariffAdded',
+  'feeReminder',
+  'feeTotal',
+  'feeAllocations',
+]);
 const KPI_ENTITIES = ['indicator', 'indicator_value'] as const;
 const FILE_ACTIONS = ['file_attach', 'file_delete'] as const;
 
@@ -253,6 +265,8 @@ async function visibleEntries(
   if (kpi) own.push(inArray(auditLog.entity, [...KPI_ENTITIES]));
   if (files) own.push(eq(auditLog.entity, 'file'));
   if (money) own.push(eq(auditLog.entity, 'money_operation'));
+  // Оплаты за обслуживание — с правом «Видеть плату» и включённой функцией (как вкладка «Обслуживание»).
+  if (access.fee) own.push(eq(auditLog.entity, 'fee_payment'));
   return and(or(...own), files ? undefined : notInArray(auditLog.action, [...FILE_ACTIONS]));
 }
 
