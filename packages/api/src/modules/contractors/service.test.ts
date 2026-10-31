@@ -417,6 +417,7 @@ describe.skipIf(!databaseAvailable())('Контрагенты: обслужив�
       archived: 2,
       skipped: 0,
       notRequired: 2,
+      rest: null,
     });
     expect(await socOf(cp)).toEqual([
       '2026-07 todo',
@@ -428,7 +429,7 @@ describe.skipIf(!databaseAvailable())('Контрагенты: обслужив�
     const twice = ArchiveContractorsResult.parse(
       await (await call(owner, '/archive', { ids: [cp] })).json(),
     );
-    expect(twice).toEqual({ archived: 0, skipped: 1, notRequired: 0 });
+    expect(twice).toEqual({ archived: 0, skipped: 1, notRequired: 0, rest: null });
 
     // Архивного не приостанавливают и не правят — тот же ответ, что у «Изменить».
     const archived = await service(owner, cp);

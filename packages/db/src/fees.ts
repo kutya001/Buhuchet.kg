@@ -33,7 +33,7 @@ import {
   type Tyiyn,
   type YearMonth,
 } from '@buhuchet/domain';
-import { and, asc, eq, inArray, ne, sql, type SQL } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, ne, sql, type SQL } from 'drizzle-orm';
 import type { Tx } from './client';
 import { writeHistory } from './history';
 import {
@@ -174,13 +174,19 @@ async function feeSubjects(
   );
 }
 
-/** Оплаты контрагентов (`ids`; null — все в организации) с распределением, по дате и времени записи. */
+/**
+ * Оплаты контрагентов (`ids`; null — все в организации) с распределением, по дате и времени записи.
+ * Удалённые (вместе с общим поступлением — задача 2.20) в долг и итоги не входят.
+ */
 async function feePaymentsOf(
   tx: Tx,
   ids: readonly string[] | null,
 ): Promise<Map<string, FeePaymentRow[]>> {
   if (ids && ids.length === 0) return new Map();
-  const where = ids ? inArray(feePayments.contractorId, [...ids]) : undefined;
+  const where = and(
+    ids ? inArray(feePayments.contractorId, [...ids]) : undefined,
+    isNull(feePayments.deletedAt),
+  );
   const [pays, allocs] = await Promise.all([
     tx
       .select({
@@ -372,7 +378,8 @@ export async function feeToOptions(tx: Tx, t: Translate): Promise<FeeToOption[]>
   return options;
 }
 
-async function bankNamesOf(tx: Tx, codes: readonly string[]): Promise<Map<string, string>> {
+/** Названия банков и кошельков по кодам справочника платформы. */
+export async function bankNamesOf(tx: Tx, codes: readonly string[]): Promise<Map<string, string>> {
   const list = [...new Set(codes)];
   if (!list.length) return new Map();
   const rows = await tx

@@ -20,13 +20,14 @@ import { useQuery } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
 import { openContractorCard, useContractorCardOn } from '../contractors/card-store';
 import { employeeContractorsQuery } from '../contractors/contractor-data';
+import { EmployeeAccountTab, useEmployeeAccountOn } from '../finance/employee-account';
 import { KbMemberBox } from '../kb/kb-team';
 import { useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { EmployeeWalletsBox } from '../money/wallets';
 import { useEmployee } from './staff-data';
 
-type CardTabId = 'main' | 'cps';
+type CardTabId = 'main' | 'cps' | 'acc';
 
 /**
  * Карточка сотрудника (прототип modules/staff.js, empCard): вкладки «Основное» — кто создал и изменил,
@@ -36,8 +37,8 @@ type CardTabId = 'main' | 'cps';
  * «Действия» (те же пункты, что в меню списка, кроме «Открыть карточку» и «Изменить»; без права
  * «Сотрудники и роли» и у владельца организации кнопки нет) и
  * «Готово». Под сведениями — «Уровень знаний» (свой — всегда, чужой — с правом «Видеть уровни
- * сотрудников»). Плашки «Несданных отчётов», «Просрочено», «Открытых задач», вкладку «Счёт» и реквизиты
- * добавят их модули. Вкладка «Контрагенты» — с правом «Просматривать контрагентов».
+ * сотрудников»). Плашки «Несданных отчётов», «Просрочено», «Открытых задач» и реквизиты добавят их
+ * модули. Вкладка «Контрагенты» — с правом «Просматривать контрагентов»; «Счёт» — задача 2.20.
  */
 export function EmployeeCard({
   id,
@@ -68,11 +69,13 @@ export function EmployeeCard({
   const items = employee ? actions(employee) : [];
   const edit = employee ? onEdit(employee) : null;
   const cpsOn = useContractorCardOn();
+  const accOn = useEmployeeAccountOn();
   const tabs: CardTab[] = [
     { id: 'main', label: t('staff.card.tab.main'), icon: 'user' },
     ...(cpsOn
       ? [{ id: 'cps', label: t('staff.card.tab.cps'), icon: 'building' } satisfies CardTab]
       : []),
+    ...(accOn ? [{ id: 'acc', label: t('fin.acc.tab'), icon: 'wallet' } satisfies CardTab] : []),
   ];
   const shownTab = tabs.some((x) => x.id === tab) ? tab : 'main';
 
@@ -134,6 +137,7 @@ export function EmployeeCard({
         {employee && shownTab === 'cps' ? (
           <ContractorsTab t={t} employeeId={employee.id} onTransfer={onTransfer(employee)} />
         ) : null}
+        {employee && shownTab === 'acc' ? <EmployeeAccountTab employeeId={employee.id} /> : null}
       </div>
       {menu && employee ? (
         <ActionMenu

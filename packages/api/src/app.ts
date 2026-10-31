@@ -17,6 +17,7 @@ import { KPI_IMPORT_UPLOAD_PATHS } from './modules/kpi/import';
 import { l10nModule } from './modules/l10n';
 import { moneyModule } from './modules/money';
 import { feesModule } from './modules/fees';
+import { financeModule } from './modules/finance';
 import { NEWS_IMAGE_UPLOAD_PATH, newsModule } from './modules/news';
 import { onboardingModule } from './modules/onboarding';
 import { orgModule } from './modules/org';
@@ -105,6 +106,7 @@ export function createApp(deps: ApiDeps) {
     .route('/', dictsModule(deps))
     .route('/', moneyModule(deps))
     .route('/', feesModule(deps))
+    .route('/', financeModule(deps))
     .route('/', kpiModule(deps))
     .route('/', filesModule(deps))
     .route('/', viewsModule(deps))

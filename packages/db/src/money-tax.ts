@@ -163,7 +163,7 @@ export const PAYMENT_STATUS = sql<PaymentStatus>`case
   else 'unpaid' end`;
 
 /** Деньги контрагента на счетах (прототип c.avail) — `fundsBalance` в SQL. */
-async function availableOf(tx: Tx, contractorId: string): Promise<Tyiyn> {
+export async function availableOf(tx: Tx, contractorId: string): Promise<Tyiyn> {
   const [row] = await tx
     .select({
       avail:
@@ -250,7 +250,7 @@ export async function contractorMoneyOf(
 }
 
 /** Контрагент для денежного действия: в области, куда переводит деньги, ответственный. */
-interface MoneyContractor {
+export interface MoneyContractor {
   id: string;
   name: string;
   paysTo: 'emp' | 'org';
@@ -299,7 +299,7 @@ export async function moneyContractor(
  * ни на чьём кошельке (holder пуст), в базе — на счёте организации, как в `syncMoneyHolders`.
  */
 // ОТКЛОНЕНИЕ: docs/deviations.md#В-15
-function holderOf(
+export function holderOf(
   c: MoneyContractor,
   self: boolean,
 ): { holderKind: MoneyHolderKind; holderEmployeeId: string | null } {
@@ -525,6 +525,9 @@ async function lockContractor(
   if (!c) throw new RecordNotFoundError('contractor', contractorId);
   return c;
 }
+
+/** Блокировка контрагента для денежных действий других модулей (окно операции, списания, переводы). */
+export { lockContractor as lockMoneyContractor };
 
 /**
  * Оплата и её отмена: сначала контрагент, потом отчёт — в том же порядке, что приостановка и архив
@@ -913,9 +916,17 @@ export interface MoneyOperationRow {
   note: string;
   actorUserId: string | null;
   actorName: string | null;
+  /** Перевод — на чей счёт (задача 2.20). */
+  holderName: string | null;
+  /** Обратная запись — дата поступления, к которому она. */
+  receiptDate: IsoDate | null;
+  /** Возврат по уточнённому — номер версии отчёта. */
+  revision: number | null;
 }
 
 const opActor = alias(employees, 'op_actor');
+const opHolder = alias(employees, 'op_holder');
+const opReceipt = alias(moneyOperations, 'op_receipt');
 const opReport = alias(reports, 'op_report');
 const opType = alias(reportTypes, 'op_type');
 
@@ -936,6 +947,9 @@ export async function contractorOperations(
       note: moneyOperations.note,
       actorUserId: moneyOperations.createdBy,
       actorName: opActor.shortName,
+      holderName: opHolder.shortName,
+      receiptDate: opReceipt.opDate,
+      revision: opReport.revision,
       typeShort: opType.shortName,
       period: opReport.period,
       periodStart: opReport.periodStart,
@@ -943,6 +957,8 @@ export async function contractorOperations(
     })
     .from(moneyOperations)
     .leftJoin(opActor, eq(opActor.userId, moneyOperations.createdBy))
+    .leftJoin(opHolder, eq(opHolder.id, moneyOperations.holderEmployeeId))
+    .leftJoin(opReceipt, eq(opReceipt.id, moneyOperations.refOperationId))
     .leftJoin(opReport, eq(opReport.id, moneyOperations.reportId))
     .leftJoin(opType, eq(opType.code, opReport.reportTypeCode))
     .where(and(eq(moneyOperations.contractorId, contractorId), isNull(moneyOperations.cancelledAt)))
@@ -993,6 +1009,9 @@ export async function contractorOperations(
     note: o.note,
     actorUserId: o.actorUserId,
     actorName: o.actorName,
+    holderName: o.kind === 'xfer' ? o.holderName : null,
+    receiptDate: o.kind === 'corr' ? o.receiptDate : null,
+    revision: o.kind === 'back' ? o.revision : null,
   }));
 }
 

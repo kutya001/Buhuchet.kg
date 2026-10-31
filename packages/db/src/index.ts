@@ -57,6 +57,7 @@ export * as schema from './schema';
 export * from './money';
 export * from './money-tax';
 export * from './fees';
+export * from './finance';
 export * from './kpi';
 export * from './kpi-lists';
 export * from './kpi-import';

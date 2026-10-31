@@ -2,6 +2,7 @@ import { addDays, type IsoDate } from '../common/dates';
 import { formatSomWithUnit, type Tyiyn } from '../common/money';
 import type { ReportAct } from '../platform-dicts/catalog';
 import { nextWorkingDay, type ProductionCalendar } from '../platform-dicts/calendar';
+import { FIN_MESSAGES } from './fin-messages';
 
 /*
  * Деньги по отчётам: статус оплаты налога, график оплаты, сверка денег контрагента по отчётам
@@ -435,6 +436,8 @@ export const MONEY_MESSAGES = {
   payment_none: 'Оплат по отчёту нет: отменять нечего',
   payment_superseded: 'Сначала откатите уточнённую версию отчёта',
   payment_bonus_after: 'Сначала отмените списание остатка от {date}: оно сделано после этой оплаты',
+  // Окно операции, списания, переводы, обратные записи, закрытие месяца, разовые услуги (2.20, 2.22).
+  ...FIN_MESSAGES,
 } as const;
 export type MoneyMessageKey = keyof typeof MONEY_MESSAGES;
 

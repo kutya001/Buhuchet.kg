@@ -22,6 +22,7 @@ import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
 import { useErrorText, useT } from '../l10n/provider';
 import { PaymentDialog, ReceiptDialog, type ReceiptPreset } from '../money/tax-dialogs';
 import { useMoneyRefresh } from '../money/tax-data';
+import { TaxReminderDialog } from '../finance/tax-reminder';
 import { lastPayment, payFirstWhy } from '../money/report-money';
 import { useShell } from '../shell/context';
 import { rollbackLabels, rollbackTitle, statusName } from '../status/status-view';
@@ -117,6 +118,7 @@ export function useReportActions(): {
     preset: ReceiptPreset | null;
   }> | null>(null);
   const [cancelPay, setCancelPay] = useState<DialogSlot<ReportCard> | null>(null);
+  const [remind, setRemind] = useState<DialogSlot<string> | null>(null);
   // Отчёты, по которым запрос ещё идёт: повторное нажатие не шлёт второй запрос.
   const [pending, setPending] = useState<ReadonlySet<string>>(() => new Set());
 
@@ -292,6 +294,7 @@ export function useReportActions(): {
     amount: (r) => void openDialog(r, 'amount'),
     receive: openReceive,
     pay: (r) => void openPay(r),
+    remind: (r) => setRemind(openSlot(r.id)),
     file: (r) => setFile(openSlot(r)),
     revision: setRevision,
     rollback: (r) => askBack(r),
@@ -417,6 +420,15 @@ export function useReportActions(): {
           open={receive.open}
           onClose={() => setReceive(closeSlot)}
           onDone={moneyRefresh}
+        />
+      ) : null}
+      {remind ? (
+        <TaxReminderDialog
+          key={`remind-${remind.n}`}
+          reportId={remind.data}
+          open={remind.open}
+          onClose={() => setRemind(closeSlot)}
+          onDone={refresh}
         />
       ) : null}
       {cancelPay ? (

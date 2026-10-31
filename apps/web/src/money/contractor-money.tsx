@@ -28,6 +28,9 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
 import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
+import { TransferDialog, WhyButton, WriteOffDialog } from '../finance/finance-dialogs';
+import { useFinanceRefresh } from '../finance/finance-data';
+import { OperationWindowDialog } from '../finance/operation-window';
 import { InfoTip } from '../kpi/kpi-table';
 import { useErrorText, useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
@@ -41,7 +44,7 @@ import { contractorMoneyQuery, saveMoneySettings, useMoneyRefresh } from './tax-
  * прототип modules/contractor-card.js — вкладка `money`, блок «Баланс по контрагенту», строки «Файл при
  * поступлении» и «Деньги на налоги переводит» на «Основном»). Всё — при «Учёте оплаты налогов»; данные и
  * область «Финансовые операции» проверяет сервер. «Списать в бонус», «Вернуть остаток», «Перевод» и окно
- * операции добавят задачи 2.20 и 2.22.
+ * операции — задача 2.20; «Изменить» в окне операции добавит задача 2.22.
  */
 
 const Hint = ({ children }: { children: ReactNode }) => (
@@ -88,7 +91,8 @@ function Verdict({ t, m }: { t: Translate; m: ContractorMoney }) {
 type PillTone = NonNullable<Parameters<typeof Pill>[0]['tone']>;
 
 /** Вид операции: цвет и знак суммы (прототип OPK, OP_SELF). */
-const OP_LOOK: Record<string, { tone: PillTone; sign: '+' | '−' | '' }> = {
+export const OP_LOOK: Record<string, { tone: PillTone; sign: '+' | '−' | '' }> = {
+  self: { tone: 'plain', sign: '' },
   in: { tone: 'ok', sign: '+' },
   pay: { tone: 'info', sign: '−' },
   bonus: { tone: 'violet', sign: '−' },
@@ -100,24 +104,52 @@ const OP_LOOK: Record<string, { tone: PillTone; sign: '+' | '−' | '' }> = {
 
 type Operation = ContractorMoney['operations'][number];
 
-/** «Основание» операции (прототип `note`): «За НДС 09.2026», «Аванс», «Оплата контрагентом напрямую · …». */
+/**
+ * «Основание» операции (прототип `note`): «За НДС 09.2026», «Аванс», «Оплата контрагентом напрямую · …»;
+ * списание и возврат — причина или комментарий; перевод — «Со счёта организации на счёт …» и комментарий;
+ * обратная запись — «К поступлению от …: причина»; возврат по уточнённому — «… (версия N)» (задача 2.20).
+ */
 export function operationBasis(t: Translate, o: Operation): string {
   const list = o.reports.join(', ');
-  if (o.kind === 'in') {
-    if (list) return t('money.op.basis_in', { list });
-    // Без отчётов, но с частью за обслуживание (прототип inDlg: «За обслуживание»).
-    return (o.total ?? 0) > o.amount ? t('money.op.basis_fee') : t('money.op.basis_advance');
+  switch (o.kind) {
+    case 'in':
+      if (list) return t('money.op.basis_in', { list });
+      // Без отчётов, но с частью за обслуживание (прототип inDlg: «За обслуживание»).
+      return (o.total ?? 0) > o.amount ? t('money.op.basis_fee') : t('money.op.basis_advance');
+    case 'pay':
+      return o.self ? t('money.op.basis_self', { report: list }) : list || '—';
+    case 'bonus':
+    case 'refund':
+      return o.note || '—';
+    case 'xfer': {
+      // Имя без точки в конце: «на счёт Иванова А. Комментарий», а не «…А.. Комментарий».
+      const head = t('fin.basis.xfer', { name: o.holder ?? '—' });
+      return o.note ? `${head.replace(/\.$/, '')}. ${o.note}` : head;
+    }
+    case 'corr': {
+      const head = t('fin.basis.corr', { date: o.receiptDate ? formatDateRu(o.receiptDate) : '—' });
+      return o.note ? `${head}: ${o.note}` : head;
+    }
+    case 'back':
+      return o.revision !== null ? t('fin.basis.back', { n: o.revision }) : list || '—';
   }
-  if (o.kind === 'pay' && o.self) return t('money.op.basis_self', { report: list });
-  return list || '—';
 }
 
-function OperationsBox({ t, m }: { t: Translate; m: ContractorMoney }) {
+function OperationsBox({
+  t,
+  m,
+  onOpen,
+}: {
+  t: Translate;
+  m: ContractorMoney;
+  onOpen: (id: string) => void;
+}) {
   return (
     <Box title={t('money.tab.ops_title', { n: m.operations.length })}>
       <MiniTable
         label={t('money.tab.ops_title', { n: m.operations.length })}
         empty={t('money.tab.ops_empty')}
+        onOpen={onOpen}
         columns={[
           { key: 'date', label: t('money.tab.col_date') },
           { key: 'op', label: t('money.tab.col_op') },
@@ -141,7 +173,7 @@ function OperationsBox({ t, m }: { t: Translate; m: ContractorMoney }) {
               author: o.author ?? '—',
               amount: (
                 <span className={look.sign === '+' ? 'text-ok' : undefined}>
-                  {look.sign}
+                  {o.kind === 'corr' ? (o.amount < 0 ? '−' : '+') : look.sign}
                   {formatSom(Math.abs(o.amount))}
                 </span>
               ),
@@ -166,7 +198,11 @@ export function ContractorMoneyTab({ contractorId }: { contractorId: string }) {
   const query = useQuery(contractorMoneyQuery(contractorId, month));
   const reports = useReportActions();
   const refresh = useMoneyRefresh();
+  const finRefresh = useFinanceRefresh();
   const [receive, setReceive] = useState<DialogSlot<null> | null>(null);
+  const [writeOff, setWriteOff] = useState<DialogSlot<'bonus' | 'refund'> | null>(null);
+  const [xfer, setXfer] = useState<DialogSlot<null> | null>(null);
+  const [op, setOp] = useState<DialogSlot<string> | null>(null);
   const m = query.data;
   if (query.isError && !m) return <Note tone="bad">{t('money.tab.load_error')}</Note>;
   if (!m) return null;
@@ -226,18 +262,18 @@ export function ContractorMoneyTab({ contractorId }: { contractorId: string }) {
           })}
         </Note>
       ) : null}
-      {m.canReceive ? (
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <button
-            type="button"
-            data-money-receive=""
-            className={buttonClass('cta', 'sm')}
-            onClick={() => setReceive(openSlot(null))}
-          >
-            <Icon name="plus" size="sm" />
-            {t('money.tab.receive')}
-          </button>
-        </div>
+      <MoneyActions
+        t={t}
+        m={m}
+        onReceive={() => setReceive(openSlot(null))}
+        onWriteOff={(kind) => setWriteOff(openSlot(kind))}
+        onTransfer={() => setXfer(openSlot(null))}
+      />
+      {m.contractor.archived && m.free > 0 ? (
+        <Note tone="warn" icon="alert">
+          {t('fin.archived_rest', { amount: formatSomWithUnit(m.free) })}{' '}
+          {t(access.can('archiveRest') ? 'fin.archived_rest.decide' : 'fin.archived_rest.owner')}
+        </Note>
       ) : null}
       <Box title={t('money.tab.need_title', { n: m.need.length })}>
         {m.need.length ? (
@@ -280,7 +316,7 @@ export function ContractorMoneyTab({ contractorId }: { contractorId: string }) {
           {org ? t('money.tab.hint_org') : t('money.tab.hint_emp', { name: holder || '—' })}
         </Hint>
       </Box>
-      <OperationsBox t={t} m={m} />
+      <OperationsBox t={t} m={m} onOpen={(id) => setOp(openSlot(id))} />
       {receive ? (
         <ReceiptDialog
           key={`receive-${receive.n}`}
@@ -293,7 +329,118 @@ export function ContractorMoneyTab({ contractorId }: { contractorId: string }) {
           onDone={refresh}
         />
       ) : null}
+      {writeOff ? (
+        <WriteOffDialog
+          key={`wo-${writeOff.n}`}
+          contractor={{ id: m.contractor.id, name: m.contractor.name }}
+          free={m.free}
+          kind={writeOff.data}
+          open={writeOff.open}
+          onClose={() => setWriteOff(closeSlot)}
+          onDone={finRefresh}
+        />
+      ) : null}
+      {xfer ? (
+        <TransferDialog
+          key={`xfer-${xfer.n}`}
+          contractorId={contractorId}
+          open={xfer.open}
+          onClose={() => setXfer(closeSlot)}
+          onDone={finRefresh}
+        />
+      ) : null}
+      {op ? (
+        <OperationWindowDialog
+          key={`op-${op.n}`}
+          id={op.data}
+          open={op.open}
+          onClose={() => setOp(closeSlot)}
+          onOpenReport={(id) => reports.openCard({ id })}
+        />
+      ) : null}
       {reports.dialogs}
+    </div>
+  );
+}
+
+/**
+ * Кнопки остатка (прототип contractor-card.js, вкладка «Деньги»): «Поступление»; «Списать в бонус» и
+ * «Вернуть остаток» — без свободного остатка видны приглушёнными с причиной; «Перевод». Кто какую
+ * кнопку видит, решает сервер (`actions`).
+ */
+function MoneyActions({
+  t,
+  m,
+  onReceive,
+  onWriteOff,
+  onTransfer,
+}: {
+  t: Translate;
+  m: ContractorMoney;
+  onReceive: () => void;
+  onWriteOff: (kind: 'bonus' | 'refund') => void;
+  onTransfer: () => void;
+}) {
+  const { actions } = m;
+  if (!m.canReceive && !actions.bonus && !actions.refund && !actions.xfer) return null;
+  const available = m.balance.available;
+  const noFree =
+    m.free > 0
+      ? null
+      : available > 0
+        ? t('fin.no_free.taxes', {
+            amount: formatSomWithUnit(available - Math.max(0, m.free)),
+          })
+        : t('fin.no_free.empty');
+  return (
+    <div className="flex flex-wrap items-center justify-end gap-2" data-money-actions="">
+      {m.canReceive ? (
+        <button
+          type="button"
+          data-money-receive=""
+          className={buttonClass('cta', 'sm')}
+          onClick={onReceive}
+        >
+          <Icon name="plus" size="sm" />
+          {t('money.tab.receive')}
+        </button>
+      ) : null}
+      {actions.bonus ? (
+        <span className="inline-flex items-center gap-1">
+          <WhyButton
+            icon="gift"
+            label={t('fin.btn.bonus')}
+            why={noFree}
+            size="sm"
+            data="bonus"
+            onClick={() => onWriteOff('bonus')}
+          />
+          <InfoTip label={t('fin.btn.bonus')} text={t('fin.btn.bonus_tip')} />
+        </span>
+      ) : null}
+      {actions.refund ? (
+        <WhyButton
+          icon="refresh"
+          label={t('fin.btn.refund')}
+          why={noFree}
+          size="sm"
+          data="refund"
+          onClick={() => onWriteOff('refund')}
+        />
+      ) : null}
+      {actions.xfer ? (
+        <span className="inline-flex items-center gap-1">
+          <WhyButton
+            icon="send"
+            label={t('fin.btn.xfer')}
+            why={null}
+            size="sm"
+            data="xfer"
+            onClick={onTransfer}
+          />
+          <InfoTip label={t('fin.btn.xfer')} text={t('fin.btn.xfer_tip')} />
+        </span>
+      ) : null}
     </div>
   );
 }

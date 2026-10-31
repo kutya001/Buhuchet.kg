@@ -519,6 +519,20 @@
       "when": 1793444676895,
       "tag": "0073_fees_guards",
       "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1793455357901,
+      "tag": "0074_finance_ops",
+      "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1793455368590,
+      "tag": "0075_finance_ops_guards",
+      "breakpoints": true
     }
   ]
 }

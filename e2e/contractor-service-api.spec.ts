@@ -101,7 +101,7 @@ test.describe('Этап 2: контрагенты — приостановка, 
       data: { ids: [cp.id] },
     });
     expect(archived.status(), await archived.text()).toBe(200);
-    expect(await archived.json()).toEqual({ archived: 1, skipped: 0, notRequired: 1 });
+    expect(await archived.json()).toEqual({ archived: 1, skipped: 0, notRequired: 1, rest: null });
     // Обслуживание заканчивается идущим месяцем: за него отчёт остаётся к сдаче, за следующий — нет.
     expect(socStatuses(await reports(request, cp.inn))).toEqual([
       `${month} todo`,

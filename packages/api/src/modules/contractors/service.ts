@@ -1,5 +1,6 @@
 import { createRoute, z, type RouteHandler } from '@hono/zod-openapi';
 import {
+  archiveRestOf,
   changeService,
   ContractorArchivedError,
   lockContractor,
@@ -10,6 +11,7 @@ import {
   ContractorRegularError,
   getContractor,
   getContractorService,
+  orgMenuSettings,
   ServiceRefusedError,
   withOrgContext,
   type ContractorServiceRecord,
@@ -20,6 +22,7 @@ import {
 } from '@buhuchet/db';
 import {
   CONTRACTOR_MESSAGES,
+  hasPermission,
   periodsText,
   plannedPause,
   plannedResume,
@@ -48,6 +51,7 @@ import type { Context } from 'hono';
 import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
 import { apiFail, versionedSaveResponses } from '../../errors';
+import { finScopeOf } from '../money/common';
 import { orgContextOf, requirePermission } from '../../middleware/access';
 import { notFound } from './card';
 import {
@@ -478,6 +482,31 @@ export const archiveContractorsRoute = createRoute({
  * отчёты; его можно отправить в архив»; прототип archiveDlg): все или никто; уже архивные пропускаются.
  * Остаток денег при архивировании решают задачи денег (2.20, 2.21).
  */
+/**
+ * Остаток денег у отправленных в архив (задача 2.20; прототип archiveDlg): при «Учёте оплаты налогов»
+ * свободный остаток контрагентов в области группы «Финансовые операции». Сумму видит тот, кто видит
+ * деньги контрагентов (строже прототипа, docs/deviations.md п. В-23); строки окна «Остаток денег у
+ * архивных контрагентов» — с правом «Распоряжаться остатком при архивировании».
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#В-23
+async function archiveRest(
+  tx: Tx,
+  orgId: string,
+  subject: AccessSubject,
+  ids: readonly string[],
+): Promise<ArchiveContractorsResult['rest']> {
+  if (!ids.length) return null;
+  if (!hasPermission(subject, 'finView') && !hasPermission(subject, 'money')) return null;
+  const settings = await orgMenuSettings(tx, orgId);
+  if (!settings.features.taxpay) return null;
+  const rest = await archiveRestOf(tx, ids, finScopeOf(subject));
+  if (!rest.length) return null;
+  return {
+    total: rest.reduce((a, x) => a + x.free, 0),
+    items: hasPermission(subject, 'archiveRest') ? rest : null,
+  };
+}
+
 export function archiveContractorsHandler(
   deps: ApiDeps,
 ): RouteHandler<typeof archiveContractorsRoute, AppEnv> {
@@ -487,8 +516,10 @@ export function archiveContractorsHandler(
     const today = todayOf(deps);
     const texts = serviceTextsOf(await translateOf(deps));
     const scope = scopeSqlOf(subject);
-    const out = await withOrgContext(deps.db, orgContextOf(c), async (tx) => {
+    const ctx = orgContextOf(c);
+    const out = await withOrgContext(deps.db, ctx, async (tx) => {
       const result = { archived: 0, skipped: 0, notRequired: 0 };
+      const archived: string[] = [];
       for (const id of [...new Set(ids)].sort()) {
         try {
           const effect = await changeService(
@@ -504,6 +535,7 @@ export function archiveContractorsHandler(
           );
           result.archived++;
           result.notRequired += effect.notRequired;
+          archived.push(id);
         } catch (err) {
           if (err instanceof ContractorArchivedError) {
             result.skipped++;
@@ -512,7 +544,7 @@ export function archiveContractorsHandler(
           serviceFail(err);
         }
       }
-      return result;
+      return { ...result, rest: await archiveRest(tx, ctx.orgId, subject, archived) };
     });
     return c.json(out, 200);
   };

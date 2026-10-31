@@ -73,6 +73,13 @@ const isPayment = (v: unknown): v is PaymentValue =>
   typeof (v as PaymentValue).amount === 'number' &&
   typeof (v as PaymentValue).date === 'string';
 
+/** Возврат по уточнённому расчёту (задача 2.20): сколько вернулось в остаток и номер версии. */
+const isRevisionRefund = (v: unknown): v is { amount: number; revision: number } =>
+  typeof v === 'object' &&
+  v !== null &&
+  typeof (v as { amount?: unknown }).amount === 'number' &&
+  typeof (v as { revision?: unknown }).revision === 'number';
+
 /** «Оплата в бюджет 3 000 сом от 18.10.2026 (оплатил контрагент сам)» (прототип payDlg, `log`). */
 function paymentText(t: Translate, p: PaymentValue): string {
   return (
@@ -106,6 +113,16 @@ function changeLines(t: Translate, c: Change, revision: number): string[] {
         date: formatDateRu(c.from.date),
       }),
     ];
+  // Уточнённый расчёт меньше оплаченного — разница вернулась в остаток (прототип `revBack`).
+  if (c.field === 'revisionRefund' && isRevisionRefund(c.to))
+    return [
+      t('fin.hist.revision_refund', {
+        n: c.to.revision,
+        amount: formatSomWithUnit(c.to.amount),
+      }),
+    ];
+  // «Напомнить в WhatsApp» по отчёту (прототип `waDlg({r})`).
+  if (c.field === 'taxReminder') return [t('fin.hist.tax_reminder')];
   // Сумма без «было» — сохранена окном «Сдан» без оплаты (прототип: «Сумма к уплате: 5 000 сом»).
   if (c.field === 'amount' && !('from' in c))
     return [t('report.hist.amount_set', { amount: valueText(t, 'amount', c.to) })];
