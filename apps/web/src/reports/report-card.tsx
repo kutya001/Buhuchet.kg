@@ -375,7 +375,7 @@ function ScaleBox({
       hints={
         why
           ? [
-              ...view.props.hints,
+              ...(view.props.hints ?? []),
               <span key="pay-first" className="inline-flex items-center gap-1">
                 <Icon name="lock" size="sm" />
                 {t('report.pay_first.scale_hint', { why })}
