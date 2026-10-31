@@ -96,7 +96,9 @@ async function withAdvance(api: APIRequestContext, origin: string, prefix: strin
   const word = uniqueWord(prefix);
   const name = `ОсОО «${word}»`;
   const emp = await meerim(api);
-  const cp = await newContractor(api, origin, { name, responsible: emp.id, tariff: false });
+  // «Плата за обслуживание» в демо-организации включена: стоимость обслуживания обязательна, 0 — без
+  // начислений, чтобы остаток считался только из денег на налоги.
+  const cp = await newContractor(api, origin, { name, responsible: emp.id, tariffAmount: 0 });
   await receive(api, origin, cp.id, 100_000);
   return { word, name, cp, emp };
 }
