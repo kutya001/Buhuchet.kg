@@ -64,6 +64,24 @@ describe('чтение PDF на сервере', () => {
     expect(await quick.read(file('regdocs-scan.pdf'))).toEqual({ ok: false, error: 'timeout' });
   });
 
+  it('время вышло посреди распознавания — очередь свободна, следующий скан читается', async () => {
+    const started = performance.now();
+    expect((await reader.read(file('regdocs-scan.pdf'))).ok).toBe(true);
+    const full = performance.now() - started;
+    // Половина обычного времени — посреди распознавания (успел — тоже не ошибка).
+    const cut = await createDocumentReader({ timeoutMs: Math.max(50, Math.round(full / 2)) }).read(
+      file('regdocs-scan.pdf'),
+    );
+    if (!cut.ok) expect(cut.error).toBe('timeout');
+    const again = await createDocumentReader({ timeoutMs: 30_000 }).read(file('regdocs-scan.pdf'));
+    expect(again.ok).toBe(true);
+  }, 90_000);
+
+  it('картинка больше предела точек не разжимается — скана нет, «no_text»', async () => {
+    const small = createDocumentReader({ maxImagePixels: 1_000 });
+    expect(await small.read(file('regdocs-scan.pdf'))).toEqual({ ok: false, error: 'no_text' });
+  });
+
   it('скан без распознанного текста — «no_text»', async () => {
     const strict = createDocumentReader({ minChars: 100_000 });
     expect(await strict.read(file('regdocs-scan.pdf'))).toEqual({ ok: false, error: 'no_text' });

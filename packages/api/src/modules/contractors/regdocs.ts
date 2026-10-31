@@ -128,7 +128,8 @@ export function regdocsUploadHandler(
     const id = randomUUID();
     const storageKey = orgFileKey(ctx.orgId, FILES_SECTION, id);
     const slot = await takeRateLimit(deps.db, UPLOAD_RATE_LIMIT, ctx.userId!);
-    if (!slot.ok) apiFail(429, 'file_upload_limit', 'Слишком много загрузок за час. Попробуйте позже');
+    if (!slot.ok)
+      apiFail(429, 'file_upload_limit', 'Слишком много загрузок за час. Попробуйте позже');
     await withOrgContext(deps.db, ctx, (tx) =>
       insertPendingFile(tx, {
         id,
@@ -197,9 +198,13 @@ type Read = { id: string; doc: RdDoc & { kind: RdKind } } | { id: string; error:
  */
 async function readOne(deps: ApiDeps, reader: DocumentReader, file: FileRecord): Promise<Read> {
   const fail = (error: RegdocsFileError): Read => ({ id: file.id, error });
+  // Сначала размер в хранилище, потом сам файл: больше заявленного не читается в память.
+  const stored = await deps.storage.stat(file.storageKey);
+  if (!stored) return fail('upload');
+  if (stored.size !== file.sizeBytes || stored.size > RD_MAX_BYTES) return fail('size');
   const bytes = await deps.storage.get(file.storageKey);
   if (!bytes) return fail('upload');
-  if (bytes.length !== file.sizeBytes || bytes.length > RD_MAX_BYTES) return fail('size');
+  if (bytes.length !== file.sizeBytes) return fail('size');
   const read = await reader.read(bytes);
   if (!read.ok) return fail(read.error === 'password' ? 'password' : 'read');
   const doc = rdExtract(read.doc);
@@ -239,14 +244,15 @@ async function withRecognizeSlot<T>(deps: ApiDeps, c: Context<AppEnv>, run: () =
   const userId = c.get('session')!.userId;
   const slot = await takeRateLimit(deps.db, REGDOCS_RATE_LIMIT, userId);
   if (!slot.ok) {
-    if (slot.reason === 'busy') apiFail(429, 'regdocs_busy', 'Предыдущие документы ещё распознаются');
+    if (slot.reason === 'busy')
+      apiFail(429, 'regdocs_busy', 'Предыдущие документы ещё распознаются');
     apiFail(429, 'regdocs_limit', 'Слишком много распознаваний документов за час');
   }
   try {
     return await run();
   } finally {
-    await releaseRateLimit(deps.db, REGDOCS_RATE_LIMIT, userId, slot.ticket).catch(
-      (err: unknown) => deps.logger.error({ err }, 'распознавание документов не отпущено'),
+    await releaseRateLimit(deps.db, REGDOCS_RATE_LIMIT, userId, slot.ticket).catch((err: unknown) =>
+      deps.logger.error({ err }, 'распознавание документов не отпущено'),
     );
   }
 }
@@ -255,7 +261,7 @@ async function withRecognizeSlot<T>(deps: ApiDeps, c: Context<AppEnv>, run: () =
  * «Распознать» (прототип rdRun): документы читаются по одному, у каждого — вид и дата выдачи или
  * почему не распознан; два документа одного вида, ни одного распознанного и документы разных
  * организаций — ошибка итога, формы нет. ИНН проверяется на повтор среди всех контрагентов
- * организации, включая архив; найденный вне области сотрудника — без номера и названия.
+ * организации, включая архив; найденный вне области сотрудника — без номера.
  * Неудачные распознавания пишутся в журнал без содержимого документа (ТЗ «Как распознаётся»).
  */
 export function regdocsRecognizeHandler(
@@ -282,7 +288,8 @@ export function regdocsRecognizeHandler(
           : { id: r.id, state: 'bad', kind: null, issued: '', error: r.error },
       );
       for (const r of reads) {
-        if ('error' in r) deps.logger.info({ regdocs: { error: r.error } }, 'документ не распознан');
+        if ('error' in r)
+          deps.logger.info({ regdocs: { error: r.error } }, 'документ не распознан');
       }
       const docs = reads.flatMap((r) => ('doc' in r ? [r.doc] : []));
       const empty = {
@@ -295,7 +302,8 @@ export function regdocsRecognizeHandler(
       const same = docs.find((d, i) => docs.findIndex((x) => x.kind === d.kind) !== i);
       if (same) return { ...empty, error: 'same' as const, sameKind: same.kind };
       const out = rdToCp(docs, dicts);
-      if (out.err) return { ...empty, error: out.err === 'diff' ? ('diff' as const) : ('none' as const) };
+      if (out.err)
+        return { ...empty, error: out.err === 'diff' ? ('diff' as const) : ('none' as const) };
       const missing = RD_KEYS.filter((k) => out.res.v[k] === undefined);
       if (missing.length || !out.res.gk?.code) {
         deps.logger.info(
@@ -312,13 +320,9 @@ export function regdocsRecognizeHandler(
       return {
         ...empty,
         result: resultOut(out.res, dicts),
+        // Вне области сотрудника — без номера (не открыть), название — как в ответе формы (409).
         duplicate: dup
-          ? {
-              inn,
-              id: visible ? dup.id : null,
-              name: visible ? dup.name : null,
-              archived: visible && dup.archived,
-            }
+          ? { inn, id: visible ? dup.id : null, name: dup.name, archived: dup.archived }
           : null,
       };
     });

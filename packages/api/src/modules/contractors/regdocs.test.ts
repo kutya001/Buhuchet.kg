@@ -119,9 +119,9 @@ describe.skipIf(!databaseAvailable())('«Из свидетельства и вы
       (await post('/api/contractors/regdocs/uploads', undefined, { name: 'a.pdf', size: 1 }))
         .status,
     ).toBe(401);
-    expect((await post('/api/contractors/regdocs/recognize', undefined, { files: [id] })).status).toBe(
-      401,
-    );
+    expect(
+      (await post('/api/contractors/regdocs/recognize', undefined, { files: [id] })).status,
+    ).toBe(401);
     expect(
       (await post('/api/contractors/regdocs/uploads', senior, { name: 'a.pdf', size: 1 })).status,
     ).toBe(403);
@@ -165,6 +165,16 @@ describe.skipIf(!databaseAvailable())('«Из свидетельства и вы
       createdBy: f.a.ownerUserId,
       storageKey: `org/${f.a.orgId}/files/${id}`,
     });
+  });
+
+  it('общая загрузка файлов не кладёт файл вида «Контрагент»: его прикрепляет только создание контрагента', async () => {
+    const res = await post('/api/files/uploads', owner, {
+      source: { kind: 'contractor', id: crypto.randomUUID() },
+      name: 'устав.pdf',
+      size: 10,
+    });
+    expect(res.status).toBe(400);
+    expect(await failure(res)).toMatchObject({ code: 'validation_failed' });
   });
 
   it('«Распознать» свидетельство и выписку: вид и дата у каждого, реквизиты и ГКЭД для формы', async () => {
@@ -296,7 +306,7 @@ describe.skipIf(!databaseAvailable())('«Из свидетельства и вы
       .where(and(eq(schema.auditLog.entityId, vyp), eq(schema.auditLog.action, 'file_delete')));
     expect(deleted).toMatchObject({ entity: 'file', contractorId: cp.id });
     // Те же документы ещё раз: контрагент с этим ИНН уже есть. Сотруднику с областью «Свои» (контрагент
-    // не его) — без номера и названия.
+    // не его) — без номера: название, как в ответе формы, а открыть нельзя.
     const again = [await upload('svid'), await upload('vyp')];
     expect((await recognized(again)).duplicate).toEqual({
       inn: '02503202010045',
@@ -308,7 +318,7 @@ describe.skipIf(!databaseAvailable())('«Из свидетельства и вы
     expect((await recognized(own, hr)).duplicate).toEqual({
       inn: '02503202010045',
       id: null,
-      name: null,
+      name: 'ОсОО «Тестовая бухгалтерия»',
       archived: false,
     });
   });
@@ -318,7 +328,10 @@ describe.skipIf(!databaseAvailable())('«Из свидетельства и вы
     const res = await post(
       '/api/contractors',
       owner,
-      draft('02503202010053', { name: 'ОсОО «Вручную»', regdocs: { files: [file], recognized: false } }),
+      draft('02503202010053', {
+        name: 'ОсОО «Вручную»',
+        regdocs: { files: [file], recognized: false },
+      }),
     );
     expect(res.status, await res.clone().text()).toBe(201);
     const cp = ContractorCreated.parse(await res.json());
@@ -357,7 +370,10 @@ describe.skipIf(!databaseAvailable())('«Из свидетельства и вы
     expect(rows[mine]).toMatchObject({ orgId: f.a.orgId, state: 'pending', contractorId: null });
     expect(rows[theirs]).toMatchObject({ orgId: f.b.orgId, state: 'ready', contractorId: cp.id });
     // ИНН контрагента другой организации не мешает: в своей его нет.
-    const again = await recognized([await upload('svid', { cookie: ownerB, orgId: f.b.orgId })], ownerB);
+    const again = await recognized(
+      [await upload('svid', { cookie: ownerB, orgId: f.b.orgId })],
+      ownerB,
+    );
     expect(again.duplicate).toBeNull();
   });
 

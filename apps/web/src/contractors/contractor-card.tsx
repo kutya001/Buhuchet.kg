@@ -712,10 +712,7 @@ function RegistrationBox({ t, c }: { t: Translate; c: Contractor }) {
         c.regdocs ? (
           <>
             {t('cp.card.reg')}{' '}
-            <span
-              className="text-[12px] font-medium tracking-normal normal-case"
-              data-cp-reg-docs=""
-            >
+            <span className="text-[12px] font-medium" data-cp-reg-docs="">
               {t('cp.rd.card_label')}
             </span>
           </>

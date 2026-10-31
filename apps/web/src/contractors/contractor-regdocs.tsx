@@ -7,11 +7,7 @@ import {
   type RdKey,
   type RdKind,
 } from '@buhuchet/domain';
-import {
-  FileUploadTicket,
-  RegdocsRecognized,
-  type RegdocsResult,
-} from '@buhuchet/shared';
+import { FileUploadTicket, RegdocsRecognized, type RegdocsResult } from '@buhuchet/shared';
 import {
   BetaBadge,
   buttonClass,
@@ -71,11 +67,11 @@ interface Row {
 
 const isPdf = (f: File) => /\.pdf$/i.test(f.name) || f.type === 'application/pdf';
 
-/** Контрагент с тем же ИНН (прототип rdRun, `dup`): вне области сотрудника — без номера и названия. */
+/** Контрагент с тем же ИНН (прототип rdRun, `dup`): вне области сотрудника — без номера, как в форме. */
 interface Duplicate {
   inn: string;
   id: string | null;
-  name: string | null;
+  name: string;
   archived: boolean;
 }
 
@@ -138,7 +134,8 @@ export function RegdocsDialog({
     );
     if (!started.ok) {
       return {
-        error: started.error.code === 'regdocs_file' ? t('cp.rd.err.size') : errorText(started.error),
+        error:
+          started.error.code === 'regdocs_file' ? t('cp.rd.err.size') : errorText(started.error),
       };
     }
     const ticket = FileUploadTicket.parse(started.data);
@@ -155,19 +152,14 @@ export function RegdocsDialog({
     return { id: ticket.id };
   };
 
-  /** Загрузить ещё не загруженные; false — какой-то не загрузился (у него ошибка). */
-  const uploadAll = async (todo: readonly Row[]): Promise<boolean> => {
-    let ok = true;
+  /** Загрузить ещё не загруженные; не загрузившийся получает ошибку. */
+  const uploadAll = async (todo: readonly Row[]) => {
     for (const r of todo) {
       if (r.id) continue;
       const res = await upload(r);
       if ('id' in res) patch([r.key], { id: res.id });
-      else {
-        ok = false;
-        patch([r.key], { state: 'bad', msg: res.error, kind: null });
-      }
+      else patch([r.key], { state: 'bad', msg: res.error, kind: null });
     }
-    return ok;
   };
 
   const run = async () => {
@@ -236,13 +228,13 @@ export function RegdocsDialog({
       fresh.map((r) => r.key),
       { state: 'busy' },
     );
-    const ok = await uploadAll(todo);
+    // Форма открывается всегда, как в прототипе: прикрепятся те, что загрузились.
+    await uploadAll(todo);
     patch(
       current.current.filter((r) => r.state === 'busy').map((r) => r.key),
       { state: 'new' },
     );
     setBusy(false);
-    if (!ok) return;
     onFill({
       files: current.current
         .filter((r) => !r.local && r.id)
@@ -262,7 +254,10 @@ export function RegdocsDialog({
     r.state === 'ok' && r.kind ? (
       <Pill tone="ok" size="sm" icon="check">
         {r.issued
-          ? t('cp.rd.state.ok_date', { kind: t(`cp.rd.kind.${r.kind}`), date: rdDateText(r.issued) })
+          ? t('cp.rd.state.ok_date', {
+              kind: t(`cp.rd.kind.${r.kind}`),
+              date: rdDateText(r.issued),
+            })
           : t(`cp.rd.kind.${r.kind}`)}
       </Pill>
     ) : r.state === 'bad' ? (
@@ -308,7 +303,7 @@ export function RegdocsDialog({
             <button
               type="button"
               className={buttonClass('cta')}
-              disabled={busy || !rows.some((r) => !r.local)}
+              disabled={busy || !rows.some((r) => r.state !== 'bad')}
               data-rd-go=""
               onClick={() => void run()}
             >
@@ -317,8 +312,11 @@ export function RegdocsDialog({
           </>
         }
       >
-        <div className="flex flex-col gap-2.5" data-rd="">
-          <BetaNote />
+        <div className="flex flex-col gap-3.5" data-rd="">
+          {/* у «Бета-версии» снизу ещё 10 точек (прототип `.note.beta`) */}
+          <div className="mb-2.5">
+            <BetaNote />
+          </div>
           <label
             tabIndex={0}
             className={`flex cursor-pointer flex-col items-center gap-1.5 rounded-xl border-[1.5px] border-dashed px-4 py-[22px] text-center outline-none ${over ? 'border-accent text-ink' : 'border-line bg-pane-alt text-muted hover:border-accent hover:text-ink focus-visible:border-accent focus-visible:text-ink'}`}
@@ -355,7 +353,7 @@ export function RegdocsDialog({
             />
           </label>
           {rows.length ? (
-            <ul className="m-0 flex list-none flex-col p-0" data-rd-files="">
+            <ul className="m-0 mt-2.5 flex list-none flex-col p-0" data-rd-files="">
               {rows.map((r) => (
                 <li
                   key={r.key}
@@ -394,11 +392,13 @@ export function RegdocsDialog({
             </ul>
           ) : null}
           {err ? (
-            <Note tone="bad" alert>
-              <span data-rd-err="">{err}</span>
-            </Note>
+            <div className="mt-2.5">
+              <Note tone="bad" alert>
+                <span data-rd-err="">{err}</span>
+              </Note>
+            </div>
           ) : null}
-          <div className="text-[11.5px] leading-[1.4] text-faint">{t('cp.rd.hint')}</div>
+          <div className="mt-2.5 text-[11.5px] leading-[1.4] text-faint">{t('cp.rd.hint')}</div>
         </div>
       </Modal>
       {dup ? (
@@ -416,6 +416,7 @@ export function RegdocsDialog({
               >
                 {t('btn.cancel')}
               </button>
+              {/* ОТКЛОНЕНИЕ: docs/deviations.md#А-10 — контрагент вне области сотрудника не открывается. */}
               {dup.d.id ? (
                 <button
                   type="button"
@@ -433,13 +434,10 @@ export function RegdocsDialog({
           }
         >
           <p className="m-0 leading-[1.55] text-muted" data-rd-dup="">
-            {dup.d.name === null
-              ? // ОТКЛОНЕНИЕ: docs/deviations.md#А-10 — контрагент вне области сотрудника не называется.
-                t('cp.rd.dup.text_hidden', { inn: dup.d.inn })
-              : t(dup.d.archived ? 'cp.rd.dup.text_archived' : 'cp.rd.dup.text', {
-                  inn: dup.d.inn,
-                  name: dup.d.name,
-                })}
+            {t(dup.d.archived ? 'cp.rd.dup.text_archived' : 'cp.rd.dup.text', {
+              inn: dup.d.inn,
+              name: dup.d.name,
+            })}
           </p>
         </Modal>
       ) : null}
@@ -471,9 +469,7 @@ export function RegdocsHead({ pre, st }: { pre: RegdocsPrefill; st: RegdocsState
       {res?.stopped ? (
         <Note tone="bad">
           <b>
-            {res.status
-              ? t('cp.rd.stopped_status', { status: res.status })
-              : t('cp.rd.stopped')}
+            {res.status ? t('cp.rd.stopped_status', { status: res.status }) : t('cp.rd.stopped')}
           </b>{' '}
           {t('cp.rd.stopped_tail')}
         </Note>
@@ -641,7 +637,10 @@ export function regdocsMarks(o: {
     }
   }
   for (const k of needs(st, d, { reports: o.reports, fee: o.fee })) at(k).need = true;
-  for (const [k, list] of Object.entries(st.alt) as [RdKey, NonNullable<RegdocsState['alt'][RdKey]>][]) {
+  for (const [k, list] of Object.entries(st.alt) as [
+    RdKey,
+    NonNullable<RegdocsState['alt'][RdKey]>,
+  ][]) {
     at(k).alt = (
       <MarkLine tone="alt" data={{ 'data-rd-alt': k }}>
         {t('cp.rd.alt')}{' '}

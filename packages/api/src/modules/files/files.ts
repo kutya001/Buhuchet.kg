@@ -226,7 +226,8 @@ export const startUploadRoute = createRoute({
       content: { 'application/json': { schema: FileUploadTicket } },
     },
     400: {
-      description: 'Файл больше 20 МБ, такой тип не загружается, неверное имя',
+      description:
+        'Файл больше 20 МБ, такой тип не загружается, неверное имя; файлы источника, который прикрепляет их своим действием',
       content: error,
     },
     401: { description: 'Нет входа', content: error },
@@ -250,6 +251,11 @@ export function startUploadHandler(deps: ApiDeps): RouteHandler<typeof startUplo
     const problem = fileUploadProblem({ name: rawName, size });
     if (problem) apiFail(400, problem, FILE_MESSAGES[problem]);
     const name = rawName.trim();
+    if (sourceOf(deps, source.kind)?.ownUpload) {
+      apiFail(400, 'validation_failed', 'Такие файлы прикрепляются только своим действием', {
+        field: 'source',
+      });
+    }
     const contentType = fileContentType(name);
     const ctx = orgContextOf(c);
     const subject = subjectOf(c);

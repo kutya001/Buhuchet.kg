@@ -58,6 +58,11 @@ export interface FileSourceRecord {
  * записей — null; `own` — контрагент, к которому привязан сам файл (у файла без записи).
  */
 export interface FileSource {
+  /**
+   * Файлы источника появляются только своим методом модуля (документы «Из свидетельства и выписки»
+   * прикрепляет создание контрагента), а не общей загрузкой `POST /files/uploads`.
+   */
+  ownUpload?: true;
   resolve(
     tx: Tx,
     subject: AccessSubject,
@@ -118,6 +123,7 @@ export const manualSource: FileListSource = {
  * контрагентом, как у загруженного вручную.
  */
 export const contractorSource: FileListSource = {
+  ownUpload: true,
   async resolve(tx, _subject, id, own) {
     const contractorId = id ?? own?.contractorId ?? null;
     if (!contractorId) return null;

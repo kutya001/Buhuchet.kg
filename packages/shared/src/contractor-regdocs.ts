@@ -74,7 +74,7 @@ export type RegdocsResult = z.infer<typeof RegdocsResult>;
 /**
  * Ответ «Распознать»: документы по порядку; ошибка итога — два документа одного вида, ни один не
  * распознан, документы разных организаций; итог; контрагент с этим ИНН, если он уже есть (вне области
- * сотрудника — без номера и названия).
+ * сотрудника — без номера).
  */
 export const RegdocsRecognized = z.object({
   files: z.array(RegdocsFile),
@@ -85,7 +85,7 @@ export const RegdocsRecognized = z.object({
     .object({
       inn: z.string(),
       id: Uuid.nullable(),
-      name: z.string().nullable(),
+      name: z.string(),
       archived: z.boolean(),
     })
     .nullable(),

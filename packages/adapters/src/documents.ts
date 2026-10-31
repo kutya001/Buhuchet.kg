@@ -1,7 +1,11 @@
+// Объявления модулей без своих типов (воркер pdf.js, языки распознавания) нужны и пакетам, которые
+// импортируют этот файл из исходников, — поэтому ссылкой, а не через tsconfig пакета.
+// eslint-disable-next-line @typescript-eslint/triple-slash-reference
 /// <reference path="./documents-modules.d.ts" />
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { gunzipSync } from 'node:zlib';
+import type * as PdfJsModule from 'pdfjs-dist/legacy/build/pdf.mjs';
 
 /*
  * Чтение PDF на сервере платформы (ТЗ «Создание контрагента из свидетельства и выписки» → «Как
@@ -35,8 +39,7 @@ export interface DocumentText {
 export type DocumentReadError = 'broken' | 'password' | 'timeout' | 'no_text';
 
 export type DocumentReadResult =
-  | { ok: true; doc: DocumentText }
-  | { ok: false; error: DocumentReadError };
+  { ok: true; doc: DocumentText } | { ok: false; error: DocumentReadError };
 
 export interface DocumentReader {
   read(bytes: Uint8Array): Promise<DocumentReadResult>;
@@ -51,14 +54,25 @@ export interface DocumentReaderOptions {
   minChars?: number;
   /** Предел на один документ, мс (ТЗ: не больше 60 секунд). */
   timeoutMs?: number;
+  /**
+   * Картинка больше стольких точек не разжимается (по умолчанию 40 млн — с запасом больше листа A4 при
+   * 600 dpi): маленький PDF с огромной картинкой иначе занял бы гигабайты памяти процесса сайта.
+   */
+  maxImagePixels?: number;
 }
 
-const DEFAULTS = { maxPages: 10, ocrPages: 4, minChars: 40, timeoutMs: 60_000 };
+const DEFAULTS = {
+  maxPages: 10,
+  ocrPages: 4,
+  minChars: 40,
+  timeoutMs: 60_000,
+  maxImagePixels: 40_000_000,
+};
 
 /** Картинка страницы меньше этого (по меньшей стороне, точек) — не скан, а герб или подпись. */
 const MIN_SCAN_SIDE = 400;
 
-type PdfJs = typeof import('pdfjs-dist/legacy/build/pdf.mjs');
+type PdfJs = typeof PdfJsModule;
 type PdfTask = ReturnType<PdfJs['getDocument']>;
 type PdfDocument = Awaited<PdfTask['promise']>;
 type PdfPage = Awaited<ReturnType<PdfDocument['getPage']>>;
@@ -102,7 +116,11 @@ const loadLangs = () => {
   return langData;
 };
 
-/** Распознавание идёт по одному документу за раз: оно занимает процессор, сайт должен отвечать. */
+/**
+ * Распознавание сканов идёт по одному документу за раз на процесс: разжатие картинок и распознавание
+ * занимают память и процессор, сайт должен отвечать. Ожидание в очереди входит в предел времени
+ * документа; отменённое распознавание освобождает очередь сразу.
+ */
 let ocrQueue: Promise<unknown> = Promise.resolve();
 
 /** Картинка pdf.js: размер, вид (1 — ч/б 1 бит, 2 — RGB, 3 — RGBA) и точки. */
@@ -144,8 +162,8 @@ function toPnm(img: PdfImage): Buffer | null {
 }
 
 /** Самая большая картинка страницы — скан; меньше `MIN_SCAN_SIDE` — не скан. */
-async function pageScan(pdfjs: PdfJs, page: PdfPage): Promise<PdfImage | null> {
-  const ops = await page.getOperatorList();
+async function pageScan(pdfjs: PdfJs, page: PdfPage, signal: Signal): Promise<PdfImage | null> {
+  const ops = await guard(page.getOperatorList(), signal);
   let best: PdfImage | null = null;
   for (let i = 0; i < ops.fnArray.length; i++) {
     const fn = ops.fnArray[i];
@@ -155,13 +173,16 @@ async function pageScan(pdfjs: PdfJs, page: PdfPage): Promise<PdfImage | null> {
       const name = args[0] as string;
       // общие для документа картинки (g_…) лежат в commonObjs
       const objs = name.startsWith('g_') ? page.commonObjs : page.objs;
-      img = await new Promise<PdfImage | null>((resolve) => {
-        try {
-          objs.get(name, (x: unknown) => resolve(x as PdfImage));
-        } catch {
-          resolve(null);
-        }
-      });
+      img = await guard(
+        new Promise<PdfImage | null>((resolve) => {
+          try {
+            objs.get(name, (x: unknown) => resolve(x as PdfImage));
+          } catch {
+            resolve(null);
+          }
+        }),
+        signal,
+      );
     } else if (fn === pdfjs.OPS.paintInlineImageXObject) img = args[0] as PdfImage;
     if (img && Math.min(img.width, img.height) >= MIN_SCAN_SIDE)
       if (!best || img.width * img.height > best.width * best.height) best = img;
@@ -169,21 +190,15 @@ async function pageScan(pdfjs: PdfJs, page: PdfPage): Promise<PdfImage | null> {
   return best;
 }
 
-/**
- * Распознать сканы страниц: tesseract.js с языками rus и kir из node_modules. Слова переводятся в куски
- * текста в пунктах страницы; у слов одной строки — общая высота строки (как у текстового слоя).
- */
-async function ocrPages(
-  scans: { img: PdfImage; width: number; height: number }[],
-  signal: Signal,
-): Promise<DocumentText['pages']> {
-  const { createWorker, OEM } = await import('tesseract.js');
-  const data = await loadLangs();
+/** Распознаватель tesseract.js с языками rus и kir из node_modules. */
+async function startWorker(signal: Signal) {
+  const { createWorker, OEM } = await guard(import('tesseract.js'), signal);
+  const data = await guard(loadLangs(), signal);
   // Языки — из своих пакетов в разных папках: русский загружается по `langPath`, кыргызский
   // кладётся в файловую систему распознавателя. tesseract.js держит переданный массив как «уже
   // загруженные языки» — после добавления в него «kir» `reinitialize` не ищет файл заново.
   const langs: string[] = ['rus'];
-  const worker = await createWorker(langs, OEM.LSTM_ONLY, {
+  const created = createWorker(langs, OEM.LSTM_ONLY, {
     langPath: data.rusDir,
     gzip: true,
     cacheMethod: 'none',
@@ -191,22 +206,50 @@ async function ocrPages(
     // процесс сайта; ошибка и так приходит отказом createWorker или recognize.
     errorHandler: () => undefined,
   });
-  // Время вышло — распознавание останавливается сразу, не дожидаясь конца страницы.
-  signal.stop = () => void worker.terminate().catch(() => undefined);
+  // Остановить один раз: и по времени, и по окончании. Ответов на задания, ждущие после
+  // `terminate`, tesseract.js не присылает — поэтому каждое ожидание идёт наперегонки с отменой.
+  let stopped = false;
+  signal.stop = () => {
+    if (stopped) return;
+    stopped = true;
+    void created.then((w) => w.terminate()).catch(() => undefined);
+  };
   if (signal.cancelled) signal.stop();
+  const worker = await guard(created, signal);
+  await guard(worker.FS('writeFile', ['kir.traineddata', gunzipSync(data.kir)]), signal);
+  langs.push('kir');
+  await guard(worker.reinitialize('rus+kir', OEM.LSTM_ONLY), signal);
+  return worker;
+}
+
+type OcrWorker = Awaited<ReturnType<typeof startWorker>>;
+
+/**
+ * Распознать сканы страниц по одной: картинка страницы разжимается, распознаётся и отпускается, и
+ * только потом берётся следующая. Слова переводятся в куски текста в пунктах страницы; у слов одной
+ * строки — общая высота строки (как у текстового слоя). Распознаватель запускается на первом скане.
+ */
+async function ocrPages(
+  count: number,
+  scanOf: (k: number) => Promise<{ img: PdfImage; width: number; height: number } | null>,
+  signal: Signal,
+): Promise<DocumentText['pages']> {
+  let worker: OcrWorker | null = null;
   try {
-    await worker.FS('writeFile', ['kir.traineddata', gunzipSync(data.kir)]);
-    langs.push('kir');
-    await worker.reinitialize('rus+kir', OEM.LSTM_ONLY);
     const pages: DocumentText['pages'] = [];
-    for (const scan of scans) {
-      if (signal.cancelled) break;
+    for (let k = 0; k < count && !signal.cancelled; k++) {
+      const scan = await scanOf(k);
+      if (!scan) continue;
       const pnm = toPnm(scan.img);
       if (!pnm) {
         pages.push({ items: [] });
         continue;
       }
-      const { data: page } = await worker.recognize(pnm, {}, { text: false, blocks: true });
+      worker ??= await startWorker(signal);
+      const { data: page } = await guard(
+        worker.recognize(pnm, {}, { text: false, blocks: true }),
+        signal,
+      );
       const sx = scan.width / scan.img.width;
       const sy = scan.height / scan.img.height;
       const items: DocumentTextItem[] = [];
@@ -217,14 +260,15 @@ async function ocrPages(
             const h = Math.max(1, (l.bbox.y1 - l.bbox.y0) * sy);
             for (const w of l.words) {
               const str = w.text.trim();
-              if (str) items.push({ str, x: w.bbox.x0 * sx, y, w: (w.bbox.x1 - w.bbox.x0) * sx, h });
+              if (str)
+                items.push({ str, x: w.bbox.x0 * sx, y, w: (w.bbox.x1 - w.bbox.x0) * sx, h });
             }
           }
       pages.push({ items });
     }
     return pages;
   } finally {
-    await worker.terminate().catch(() => undefined);
+    signal.stop?.();
   }
 }
 
@@ -234,12 +278,25 @@ const pdfDate = (s: unknown) => {
   return m ? `${m[1]}-${m[2]}-${m[3]}` : '';
 };
 
-/** Остановка чтения по времени: признак, задача pdf.js и распознаватель, если он уже запущен. */
+/**
+ * Остановка чтения по времени: признак, обещание, которое отклоняется при отмене, задача pdf.js и
+ * распознаватель, если он уже запущен.
+ */
 interface Signal {
   cancelled: boolean;
+  aborted: Promise<never>;
   task?: PdfTask;
   stop?: () => void;
 }
+
+/** Время вышло — чтение прекращается. */
+class ReadCancelled extends Error {}
+
+/**
+ * Ожидание, которое прерывается отменой: задания pdf.js и распознавателя после остановки могут не
+ * ответить никогда, а очередь распознавания должна освободиться сразу.
+ */
+const guard = <T>(p: Promise<T>, signal: Signal): Promise<T> => Promise.race([p, signal.aborted]);
 
 async function readPdf(
   bytes: Uint8Array,
@@ -252,12 +309,13 @@ async function readPdf(
     useSystemFonts: false,
     disableFontFace: true,
     stopAtErrors: false,
+    maxImageSize: o.maxImagePixels,
     verbosity: 0,
   });
   signal.task = task;
   let doc: PdfDocument;
   try {
-    doc = await task.promise;
+    doc = await guard(task.promise, signal);
   } catch (e) {
     await task.destroy().catch(() => undefined);
     const name = (e as { name?: string } | null)?.name ?? '';
@@ -268,10 +326,10 @@ async function readPdf(
     const pages: DocumentText['pages'] = [];
     const sizes: { width: number; height: number }[] = [];
     for (let p = 1; p <= n && !signal.cancelled; p++) {
-      const page = await doc.getPage(p);
+      const page = await guard(doc.getPage(p), signal);
       const vp = page.getViewport({ scale: 1 });
       sizes.push({ width: vp.width, height: vp.height });
-      const tc = await page.getTextContent();
+      const tc = await guard(page.getTextContent(), signal);
       const items: DocumentTextItem[] = [];
       for (const i of tc.items) {
         if (!('str' in i) || !i.str || !i.str.trim()) continue;
@@ -287,20 +345,27 @@ async function readPdf(
     }
     let created = '';
     try {
-      created = pdfDate(((await doc.getMetadata()).info as { CreationDate?: unknown }).CreationDate);
+      const meta = await guard(doc.getMetadata(), signal);
+      created = pdfDate((meta.info as { CreationDate?: unknown }).CreationDate);
     } catch {
       created = '';
     }
-    const chars = pages.reduce((a, pg) => a + pg.items.reduce((b, i) => b + i.str.trim().length, 0), 0);
+    const chars = pages.reduce(
+      (a, pg) => a + pg.items.reduce((b, i) => b + i.str.trim().length, 0),
+      0,
+    );
     if (chars >= o.minChars) return { ok: true, doc: { pages, created, ocr: false } };
-    // Текста нет — скан или фото: распознаём картинки первых страниц
-    const scans: { img: PdfImage; width: number; height: number }[] = [];
-    for (let p = 1; p <= Math.min(n, o.ocrPages) && !signal.cancelled; p++) {
-      const img = await pageScan(pdfjs, await doc.getPage(p));
-      if (img) scans.push({ img, ...sizes[p - 1]! });
-    }
-    if (!scans.length) return { ok: false, error: 'no_text' };
-    const run = ocrQueue.then(() => (signal.cancelled ? [] : ocrPages(scans, signal)));
+    // Текста нет — скан или фото: распознаём картинки первых страниц, по одной и в общей очереди.
+    const scanOf = async (k: number) => {
+      const page = await guard(doc.getPage(k + 1), signal);
+      const img = await pageScan(pdfjs, page, signal);
+      page.cleanup();
+      return img ? { img, ...sizes[k]! } : null;
+    };
+    const count = Math.min(n, o.ocrPages);
+    const run = ocrQueue.then(() =>
+      signal.cancelled ? [] : guard(ocrPages(count, scanOf, signal), signal),
+    );
     ocrQueue = run.catch(() => undefined);
     const ocr = await run;
     const found = ocr.reduce((a, pg) => a + pg.items.reduce((b, i) => b + i.str.length, 0), 0);
@@ -317,11 +382,18 @@ export function createDocumentReader(options: DocumentReaderOptions = {}): Docum
   return {
     async read(bytes) {
       if (!isPdf(bytes)) return { ok: false, error: 'broken' };
-      const signal: Signal = { cancelled: false };
+      let abort: (e: Error) => void = () => undefined;
+      const aborted = new Promise<never>((_, reject) => {
+        abort = reject;
+      });
+      // Отказ отмены ловят те, кто ждёт через `guard`; здесь — чтобы он не считался необработанным.
+      aborted.catch(() => undefined);
+      const signal: Signal = { cancelled: false, aborted };
       let timer: NodeJS.Timeout | undefined;
       const timeout = new Promise<DocumentReadResult>((resolve) => {
         timer = setTimeout(() => {
           signal.cancelled = true;
+          abort(new ReadCancelled());
           void signal.task?.destroy().catch(() => undefined);
           signal.stop?.();
           resolve({ ok: false, error: 'timeout' });
@@ -329,7 +401,11 @@ export function createDocumentReader(options: DocumentReaderOptions = {}): Docum
       });
       try {
         return await Promise.race([
-          readPdf(bytes, o, signal).catch((): DocumentReadResult => ({ ok: false, error: 'broken' })),
+          readPdf(bytes, o, signal).catch((e: unknown): DocumentReadResult =>
+            e instanceof ReadCancelled
+              ? { ok: false, error: 'timeout' }
+              : { ok: false, error: 'broken' },
+          ),
           timeout,
         ]);
       } finally {

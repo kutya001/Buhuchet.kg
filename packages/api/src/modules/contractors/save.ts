@@ -332,7 +332,7 @@ const FEE_ONLY =
 /**
  * Документы «Из свидетельства и выписки», которые прикрепятся к новому контрагенту (прототип addCpDlg:
  * `pre.files`): загруженные этим пользователем и ещё ни к кому не прикреплённые, которые дошли до
- * хранилища того размера, что заявлен (не больше 10 МБ). Остальные не прикрепляются — контрагент
+ * хранилища того размера и типа, что заявлены (PDF не больше 10 МБ). Остальные не прикрепляются — контрагент
  * создаётся без них, незаконченные загрузки убирает задача очистки.
  */
 async function storedRegdocs(
@@ -347,7 +347,13 @@ async function storedRegdocs(
   const out: string[] = [];
   for (const f of files) {
     const stored = await deps.storage.stat(f.storageKey);
-    if (stored && stored.size === f.sizeBytes && stored.size <= RD_MAX_BYTES) out.push(f.id);
+    if (
+      stored &&
+      stored.size === f.sizeBytes &&
+      stored.size <= RD_MAX_BYTES &&
+      stored.contentType === 'application/pdf'
+    )
+      out.push(f.id);
   }
   return out;
 }
