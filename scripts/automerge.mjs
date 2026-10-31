@@ -1,12 +1,17 @@
 #!/usr/bin/env node
-// Автослияние PR (вызывается из .github/workflows/automerge.yml после каждой завершённой проверки).
+// Автослияние PR (вызывается из .github/workflows/automerge.yml после каждого успешно завершённого
+// workflow CI и PR policy).
 import { execFileSync } from 'node:child_process';
-import { mergeGuardFiles, needsStagingMigration } from './protected-paths.mjs';
+import { blockingCheck, mergeGuardFiles, needsStagingMigration } from './protected-paths.mjs';
 
 const REQUIRED_CHECKS = ['check', 'docker-e2e', 'pr-policy'];
 const BEHIND_MARKER = '<!-- automerge:behind -->';
 const GUARD_MARKER = '<!-- automerge:guards -->';
-const { REPO, HEAD_SHA } = process.env;
+// Сколько раз и через сколько перечитать проверки, если API отстаёт от завершённого workflow.
+const STALE_RETRIES = 6;
+const STALE_DELAY_MS = 10_000;
+// TRIGGER_SUITE_ID — набор проверок workflow, успешное завершение которого запустило автослияние.
+const { REPO, HEAD_SHA, TRIGGER_SUITE_ID } = process.env;
 
 // Буфер больше 1 МБ по умолчанию: ответы gh api по длинной истории ветки бывают больше.
 const gh = (...args) =>
@@ -60,17 +65,56 @@ if (guards.length) {
   process.exit(0);
 }
 
-// Последний запуск каждой обязательной проверки должен быть успешным.
-const runs = api(`repos/${REPO}/commits/${HEAD_SHA}/check-runs?per_page=100`).check_runs;
-for (const name of REQUIRED_CHECKS) {
-  const latest = runs
-    // Только проверки GitHub Actions: чужое приложение не может «зажечь» зелёный check с тем же именем.
-    .filter((r) => r.name === name && r.app?.slug === 'github-actions')
-    .sort((a, b) => new Date(b.started_at) - new Date(a.started_at))[0];
-  if (!latest || latest.status !== 'completed' || latest.conclusion !== 'success') {
-    console.log(
-      `Проверка ${name}: ${latest ? `${latest.status}/${latest.conclusion}` : 'ещё нет'} — ждём.`,
+// Последний запуск каждой обязательной проверки должен быть успешным. Проверка ещё идёт в другом
+// workflow — выйти: его завершение снова запустит автослияние. Workflow проверки уже завершён (это
+// запустивший или найденный по API), а API отдаёт её прежнее состояние — перечитать: следующего
+// события не будет.
+const finishedSuites = new Set([TRIGGER_SUITE_ID].filter(Boolean).map(String));
+let blocking;
+let retried = false;
+for (let attempt = 0; ; attempt++) {
+  const runs = api(`repos/${REPO}/commits/${HEAD_SHA}/check-runs?per_page=100`).check_runs;
+  blocking = blockingCheck(runs, REQUIRED_CHECKS, finishedSuites);
+  const suite = blocking?.latest?.check_suite?.id;
+  if (blocking && !blocking.stale && blocking.latest?.status !== 'completed' && suite != null) {
+    // Проверка другого workflow: завершён ли он на самом деле (CI и PR policy закончились почти разом).
+    const owner = api(`repos/${REPO}/actions/runs?check_suite_id=${suite}&per_page=1`)
+      .workflow_runs?.[0];
+    if (owner?.status === 'completed') {
+      finishedSuites.add(String(suite));
+      blocking = blockingCheck(runs, REQUIRED_CHECKS, finishedSuites);
+    }
+  }
+  if (!blocking?.stale || attempt === STALE_RETRIES) break;
+  retried = true;
+  console.log(
+    `Проверка ${blocking.name} уже завершилась, но GitHub отдаёт ` +
+      `${blocking.latest.status}/${blocking.latest.conclusion} — перечитываем через ${STALE_DELAY_MS / 1000} с.`,
+  );
+  await new Promise((resolve) => setTimeout(resolve, STALE_DELAY_MS));
+}
+if (blocking) {
+  const { name, latest, stale } = blocking;
+  const state = latest ? `${latest.status}/${latest.conclusion}` : 'ещё нет';
+  if (stale) {
+    // Запуск красный, чтобы его было видно: Actions → Automerge → Re-run.
+    throw new Error(
+      `Проверка ${name} завершилась, но GitHub так и отдаёт ${state}. Перезапустите Automerge (Re-run).`,
     );
+  }
+  console.log(`Проверка ${name}: ${state} — ждём.`);
+  process.exit(0);
+}
+// Пока перечитывали (до минуты), PR могли закрыть, сделать черновиком, поставить hold или запушить.
+if (retried) {
+  const fresh = api(`repos/${REPO}/pulls/${pr.number}`);
+  if (
+    fresh.state !== 'open' ||
+    fresh.draft ||
+    fresh.head.sha !== HEAD_SHA ||
+    fresh.labels.some((l) => l.name === 'hold')
+  ) {
+    console.log(`PR #${pr.number} изменился, пока перечитывали проверки, — не сливаем.`);
     process.exit(0);
   }
 }
