@@ -5,6 +5,7 @@ import {
   kbArticleProblems,
   kbEventWorks,
   kbStepProblems,
+  newsLoginDefault,
   newsMdTrim,
   newsProblems,
   type IsoDate,
@@ -336,16 +337,20 @@ const newsWriter: SectionWriter = {
     const now = await getNews(tx, value.code);
     if (base ? !now : now) return CHANGED;
     const d = value.data;
+    const type = str(d.type) as NewsType;
+    const pinned = d.pinned === true;
     const input: NewsInput = {
       title: value.name.trim(),
-      type: str(d.type) as NewsType,
+      type,
       release: str(d.release).trim() || null,
       date: str(d.date) as IsoDate,
       short: str(d.short).trim(),
       md: newsMdTrim(str(d.md)),
       link: now?.link ?? null,
-      pinned: d.pinned === true,
-      showOnLogin: d.showOnLogin === true,
+      pinned,
+      // Пустая ячейка у новой новости — как в окне: у «Обновления», «Нововведения» и закреплённых.
+      showOnLogin:
+        typeof d.showOnLogin === 'boolean' ? d.showOnLogin : newsLoginDefault(type, pinned),
       audience: str(d.aud) as NewsAudience,
     };
     const problem = firstProblem(

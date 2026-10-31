@@ -10,6 +10,8 @@ import {
   AdminDictIoFile,
   AdminKbHistory,
   AdminKbShow,
+  AdminKbStep,
+  ApiError,
   NewsAdminHistory,
 } from '@buhuchet/shared';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -305,6 +307,22 @@ describe.skipIf(!databaseAvailable())(
         kind: 'rollback',
         loadedAt: expect.any(String),
       });
+    });
+
+    // ОТКЛОНЕНИЕ: docs/deviations.md#Д-27 — откат не трогает то, что поправили после загрузки (п. Д-15).
+    it('откат не выполняется, если шаг из загрузки поправили после неё', async () => {
+      const data = await file('kbsteps');
+      const { load } = await apply('kbsteps', edited(data, [['profile', 'Название', 'Профиль 2']]));
+      const step = AdminKbStep.parse(await (await get('/api/admin/kb/steps/profile')).json());
+      const off = await apiRequest(f.app, 'POST', '/api/admin/kb/steps/profile/active', admin, {
+        active: false,
+        version: step.version,
+      });
+      expect(off.status, await off.clone().text()).toBe(200);
+      const res = await rollback(load.id);
+      expect(res.status).toBe(409);
+      expect(ApiError.parse(await res.json()).error).toMatchObject({ code: 'load_changed_after' });
+      expect((await file('kbsteps')).rows.find((r) => r[0] === 'profile')![2]).toBe('Профиль 2');
     });
   },
 );

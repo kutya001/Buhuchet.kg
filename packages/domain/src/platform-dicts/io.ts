@@ -1166,13 +1166,16 @@ export function ioNewValue(dict: IoDict, code: string): IoValue {
     else if (f.type === 'int' || f.type === 'date' || f.type === 'schedule') data[c.key] = null;
     else if (f.type === 'yesno') data[c.key] = false;
     else if (f.type === 'text') data[c.key] = '';
-    else if (f.type === 'enum') data[c.key] = f.values[0];
+    // Перечисление с пустым значением — пусто (функция, модуль): без столбца в файле поле не задаётся.
+    else if (f.type === 'enum') data[c.key] = f.empty ?? f.values[0];
     else if (f.type === 'ref') data[c.key] = '';
     else if (f.type === 'money') data[c.key] = 0;
     else if (f.type === 'groupActs') data[c.key] = null;
     else data[c.key] = [];
   }
   if (IO_COLUMNS[dict].some((c) => c.key === 'gked')) data.gked = null;
+  // «Показывать при входе» новой новости не задано — по типу и «Закрепить», как в окне новости.
+  if (dict === 'kbnews') data.showOnLogin = null;
   if (!isAdminValueDict(dict)) {
     if (dict === 'calendar') data.rule = 'once';
     return { code, name: '', active: true, data };

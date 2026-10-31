@@ -474,6 +474,10 @@ describe('Выгрузка и загрузка справочников: тек�
     expect(ioNewValue('regimes', 'РЕЖ-12').data.kind).toBe('special');
     expect(ioNewValue('banks', 'БНК-40').data).toMatchObject({ kind: 'bank', byPhone: false });
     expect(ioNewValue('forms', 'ФС-30').data.declarationFor).toBe('org');
+    // База знаний: без столбца в файле функции, модуля и «Показывать при входе» нет (как в окне).
+    expect(ioNewValue('kbsteps', 'my-step').data).toMatchObject({ featk: '', mod: '' });
+    expect(ioNewValue('kbarts', 'my-art').data.mod).toBe('');
+    expect(ioNewValue('kbnews', 'my-news').data.showOnLogin).toBeNull();
     expect(ioNewValue('benefits', 'ЛЬГ-40').data).toMatchObject({
       kind: 'benefit',
       payer: 'all',

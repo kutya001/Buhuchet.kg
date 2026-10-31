@@ -207,6 +207,11 @@ describe.skipIf(!databaseAvailable())(
       const profile = (await record('kbsteps', 'profile'))!;
       expect(profile.data).toMatchObject({ g: 'org', learn: 'do', mod: '' });
       const fresh = ioNewValue('kbsteps', 'my-step');
+      // Без столбцов в файле функции и места для «Перейти» нет — у нового шага нужен модуль.
+      expect(fresh.data).toMatchObject({ featk: '', mod: '' });
+      expect(
+        await save('kbsteps', row(fresh, { name: 'Мой шаг', data: { g: 'cps', evk: 'open' } })),
+      ).toEqual({ ok: false, fail: { key: 'kbadm.io.err.step_mod', col: 'kbadm.io.col.go' } });
       const value = row(fresh, {
         name: 'Мой шаг',
         data: { g: 'cps', learn: 'look', evk: 'open', ord: 500, mod: 'cps' },
@@ -423,6 +428,16 @@ describe.skipIf(!databaseAvailable())(
         ok: true,
       });
       expect(await record('kbnews', 'n-excel2')).toBeUndefined();
+      // Пустая ячейка «Показывать при входе» у новой — как в окне новости: по типу и «Закрепить».
+      const login = async (code: string, data: object) => {
+        const draft = row(value, { data: { ...data, showOnLogin: null } });
+        expect(await save('kbnews', { ...draft, code })).toMatchObject({ ok: true });
+        return (await record('kbnews', code))!.data.showOnLogin;
+      };
+      expect(ioNewValue('kbnews', 'x').data.showOnLogin).toBeNull();
+      expect(await login('n-login1', {})).toBe(false);
+      expect(await login('n-login2', { type: 'update' })).toBe(true);
+      expect(await login('n-login3', { pinned: true })).toBe(true);
     });
   },
 );
