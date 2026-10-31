@@ -67,6 +67,7 @@ export async function buildDailyReminders(
     isOwner: e.subject.isOwner,
     linked: e.chatId !== null,
     settings: e.settings,
+    viewReports: hasPermission(e.subject, 'repView') ? scopeOf(e.subject, 'reports') : null,
     confirmReports: hasPermission(e.subject, 'repConfirm') ? scopeOf(e.subject, 'reports') : null,
     confirmTasks: hasPermission(e.subject, 'tasksConfirm'),
   }));
@@ -84,7 +85,8 @@ export async function buildDailyReminders(
     dueDate: r.dueDate,
     payDue: r.payDue,
     open: OPEN_REPORT_STATUSES.has(r.status),
-    unpaid: r.amount === null || r.amount > r.paid,
+    // Как в прототипе (главная, «Оплатить на неделе»): только отчёты с суммой к уплате больше нуля.
+    unpaid: r.amount !== null && r.amount > r.paid,
     responsibleId: r.responsibleId,
     remindDays: r.remindDays,
     waitingSince: r.waitingSince,

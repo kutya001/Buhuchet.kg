@@ -67,6 +67,7 @@ async function remindDays(api: APIRequestContext, origin: string, code: string, 
 test.describe('Этап 2: напоминания в Telegram и регулярные задачи', () => {
   test('(п. 8) ответственный получает одно сообщение в Telegram со всеми своими отчётами за 3 дня до срока; повторный запуск расписания второго не присылает; регулярные задачи по этим отчётам — со статусом отчёта и без дублей', async ({
     request,
+    page,
     baseURL,
   }) => {
     test.setTimeout(150_000);
@@ -143,6 +144,15 @@ test.describe('Этап 2: напоминания в Telegram и регуляр�
     expect(subTask.title.endsWith(` — ${name}`)).toBe(true);
     expect(rows.find((r) => r.id === both.id)?.title).toMatch(/^Сдать и оплатить НДС за /);
     expect((await regular()).map((r) => r.id).sort()).toEqual([sub.id, both.id].sort());
+
+    // На экране «Задачи» → «Все»: метка «регулярная», шкала отчёта с меткой «отчёт», «Поставил» — «Система».
+    await page.context().addCookies((await request.storageState()).cookies);
+    await page.goto('/app/tasks/all');
+    const row = page.locator(`[data-grid] [data-id="${sub.id}"]`);
+    await expect(row).toContainText(subTask.title);
+    await expect(row).toContainText('регулярная');
+    await expect(row).toContainText('отчёт');
+    await expect(row).toContainText('Система');
   });
 
   test('(п. 41, Telegram) возвращённую на доработку задачу исполнитель получает в Telegram с причиной; о новой задаче — тоже сообщение', async ({

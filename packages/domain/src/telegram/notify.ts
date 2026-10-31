@@ -51,6 +51,8 @@ export const OUTBOX_MAX_TRIES = 5;
 export const OUTBOX_LEASE_SECONDS = 120;
 /** Длина текста ошибки в журнале. */
 export const OUTBOX_ERROR_MAX = 300;
+/** Итог строки, получатель которой отвязал или сменил Telegram или заблокирован (журнал Админки). */
+export const OUTBOX_UNDELIVERABLE = 'Получатель отвязал Telegram или заблокирован';
 
 /**
  * Через сколько секунд повторить после временной ошибки: сколько попросил Telegram (429), иначе 1, 2,

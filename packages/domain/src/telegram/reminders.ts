@@ -64,6 +64,11 @@ export interface ReminderPerson {
   /** Привязан Telegram. */
   linked: boolean;
   settings: NotifySettings;
+  /**
+   * Какие чужие отчёты видит: право «Просматривать отчёты» и область группы «Отчеты для сдачи»; null —
+   * права нет. Владельцу и главному бухгалтеру чужие отчёты приходят только в этой области (п. Б-13).
+   */
+  viewReports: 'all' | 'own' | null;
   /** Право «Подтверждать сдачу отчётов» и его область; null — права нет. */
   confirmReports: 'all' | 'own' | null;
   /** Право «Подтверждать задачи». */
@@ -156,6 +161,19 @@ function put(b: Bucket, when: When, item: ReminderItem) {
  * день срока — в режиме «Все», за N дней — с переключателем «за N дней», просрочка — с переключателем
  * «Просрочки»; если у ответственного не привязан Telegram — всегда, с пометкой.
  */
+/**
+ * Чужой отчёт в области того, кто получает: «Все» — любой, «Свои» — отчёты его контрагентов и те, где он
+ * ответственный (как область отчётов, п. А-2).
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#Б-13 — в прототипе владелец и главный бухгалтер получают по всем отчётам.
+function inView(person: ReminderPerson, r: ReminderReport): boolean {
+  if (person.viewReports === 'all') return true;
+  return (
+    person.viewReports === 'own' &&
+    (r.contractorResponsibleId === person.employeeId || r.responsibleId === person.employeeId)
+  );
+}
+
 function reportReach(
   person: ReminderPerson,
   r: ReminderReport,
@@ -164,7 +182,7 @@ function reportReach(
 ): ReminderItem | null {
   const item = { id: r.id, label: r.label };
   if (r.responsibleId === person.employeeId) return item;
-  if (!person.boss) return null;
+  if (!person.boss || !inView(person, r)) return null;
   if (!responsible?.linked) {
     return { ...item, unlinked: { shortName: responsible?.shortName ?? null } };
   }
@@ -184,7 +202,8 @@ function weekLine(
   const week = p.week;
   if (!week) return null;
   if (person.boss ? !notifyOn(person.settings, true, 'week') : false) return null;
-  const mine = (r: ReminderReport) => person.boss || r.responsibleId === person.employeeId;
+  const mine = (r: ReminderReport) =>
+    r.responsibleId === person.employeeId || (person.boss && inView(person, r));
   const byName = new Map<string, WeekContractor>();
   const at = (name: string) => {
     let c = byName.get(name);
@@ -250,7 +269,9 @@ export function remindersFor(
       r.waitingSince &&
       person.confirmReports &&
       notifyOn(person.settings, person.boss, 'regtasks') &&
-      (person.confirmReports === 'all' || r.contractorResponsibleId === person.employeeId) &&
+      (person.confirmReports === 'all' ||
+        r.contractorResponsibleId === person.employeeId ||
+        r.responsibleId === person.employeeId) &&
       (person.isOwner || r.submittedById !== person.employeeId)
     ) {
       // ОТКЛОНЕНИЕ: docs/deviations.md#Б-12 — повтор, как у просрочки; прототип этого не показывает.

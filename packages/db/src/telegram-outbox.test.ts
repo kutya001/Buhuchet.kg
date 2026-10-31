@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { RecordChangedError } from '@buhuchet/domain';
+import { OUTBOX_UNDELIVERABLE, RecordChangedError } from '@buhuchet/domain';
 import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { withOrgContext } from './context';
@@ -62,6 +62,11 @@ describe.skipIf(!databaseAvailable())('Журнал отправок и очер
   });
 
   it('очередь: ключ не даёт дубля, попытка засчитывается сразу, итоги — отправлено, повтор, ошибка', async () => {
+    const token = createHash('sha256').update(randomBytes(32)).digest('hex');
+    await withOrgContext(t.app.db, ctxA(), (tx) => createTelegramLinkToken(tx, token));
+    await withOrgContext(t.app.db, ctxA(), (tx) =>
+      useTelegramLink(tx, { tokenHash: token, chatId: 5001, username: 'owner', firstName: null }),
+    );
     const message = { userId: a.ownerUserId, chatId: 5001, kind: 'reminders' as const };
     const ids = await withOrgContext(t.app.db, ctxA(), (tx) =>
       enqueueTelegram(tx, [
@@ -75,6 +80,12 @@ describe.skipIf(!databaseAvailable())('Журнал отправок и очер
     );
     expect(again).toEqual([]);
     expect(await telegramOutboxOrgs(t.app.db, new Date())).toEqual([a.orgId]);
+    // Заблокированной организации сообщения не отправляются.
+    await t.admin.db.execute(
+      sql`update organizations set status = 'blocked' where id = ${a.orgId}`,
+    );
+    expect(await telegramOutboxOrgs(t.app.db, new Date())).toEqual([]);
+    await t.admin.db.execute(sql`update organizations set status = 'active' where id = ${a.orgId}`);
 
     const now = new Date();
     const claimed = await withOrgContext(t.app.db, ctxA(), (tx) =>
@@ -112,6 +123,18 @@ describe.skipIf(!databaseAvailable())('Журнал отправок и очер
       ['Второе', 'error', 2, '403: bot was blocked by the user'],
       ['Первое', 'sent', 1, null],
     ]);
+    // Чат, который уже не привязан к получателю (отвязал или сменил Telegram), — не отправляется.
+    const [stale] = await withOrgContext(t.app.db, ctxA(), (tx) =>
+      enqueueTelegram(tx, [{ ...message, chatId: 5002, text: 'В прежний чат' }], now),
+    );
+    expect(
+      await withOrgContext(t.app.db, ctxA(), (tx) =>
+        claimOutbox(tx, { now: later, limit: 10, leaseSeconds: 120 }),
+      ),
+    ).toEqual([]);
+    expect(
+      (await withOrgContext(t.app.db, ctxA(), (tx) => listOutbox(tx))).find((r) => r.id === stale),
+    ).toMatchObject({ status: 'error', tries: 0, lastError: OUTBOX_UNDELIVERABLE });
   });
 
   it('строки журнала не удаляются, текст и получатель не меняются', async () => {
@@ -189,12 +212,50 @@ describe.skipIf(!databaseAvailable())('Журнал отправок и очер
       expect(await tx.select().from(telegramNotifySettings)).toEqual([]);
       expect(await tx.select().from(telegramDigestDays)).toEqual([]);
     });
-    // Чужую отметку дня не поставить: строка с чужой организацией не проходит RLS.
+    // Чужую отметку дня, строку журнала и настройки не создать: строка с чужой организацией не проходит RLS.
     await expect(
       withOrgContext(t.app.db, ctxA(), (tx) =>
         tx.insert(telegramDigestDays).values({ orgId: b.orgId, day: '2026-10-02' }),
       ),
     ).rejects.toThrow();
+    await expect(
+      withOrgContext(t.app.db, ctxA(), (tx) =>
+        tx.insert(telegramOutbox).values({
+          orgId: b.orgId,
+          userId: b.ownerUserId,
+          chatId: 7001,
+          kind: 'reminders',
+          text: 'Чужое',
+        }),
+      ),
+    ).rejects.toThrow();
+    await expect(
+      withOrgContext(t.app.db, ctxA(), (tx) =>
+        tx.insert(telegramNotifySettings).values({
+          orgId: b.orgId,
+          userId: b.ownerUserId,
+          mode: 'manual',
+          off: [],
+        }),
+      ),
+    ).rejects.toThrow();
+    // Чужие строки не меняются: их не видно — 0 строк.
+    const changed = await withOrgContext(t.app.db, ctxA(), async (tx) => [
+      ...(await tx
+        .update(telegramOutbox)
+        .set({ status: 'error' })
+        .where(eq(telegramOutbox.userId, b.ownerUserId))
+        .returning({ id: telegramOutbox.id })),
+      ...(await tx
+        .update(telegramNotifySettings)
+        .set({ mode: 'manual' })
+        .where(eq(telegramNotifySettings.userId, b.ownerUserId))
+        .returning({ id: telegramNotifySettings.userId })),
+    ]);
+    expect(changed).toEqual([]);
+    expect(
+      await withOrgContext(t.app.db, ctxB(), (tx) => getNotifySettings(tx, b.ownerUserId)),
+    ).toMatchObject({ mode: 'digest' });
   });
 
   it('настройки уведомлений: первая запись, правка по версии, устаревшая — «изменена другим пользователем», история', async () => {
@@ -231,17 +292,15 @@ describe.skipIf(!databaseAvailable())('Журнал отправок и очер
   });
 
   it('кому пора собрать напоминания: «Напоминания в Telegram» включены, есть привязка, время наступило, за день ещё нет', async () => {
+    // «Напоминания в Telegram» выключены — не собираются, хотя Telegram владельца А привязан.
     await t.admin.db
       .update(orgSettings)
-      .set({ features: sql`${orgSettings.features} || '{"telegram": true}'::jsonb` })
-      .where(eq(orgSettings.orgId, a.orgId));
-    // Без привязанного Telegram — некому писать.
+      .set({ features: sql`${orgSettings.features} || '{"telegram": false}'::jsonb` });
     expect(await telegramDigestOrgs(t.app.db, NOW)).toEqual([]);
-    const token = createHash('sha256').update(randomBytes(32)).digest('hex');
-    await withOrgContext(t.app.db, ctxA(), (tx) => createTelegramLinkToken(tx, token));
-    await withOrgContext(t.app.db, ctxA(), (tx) =>
-      useTelegramLink(tx, { tokenHash: token, chatId: 5001, username: 'owner', firstName: null }),
-    );
+    await t.admin.db
+      .update(orgSettings)
+      .set({ features: sql`${orgSettings.features} || '{"telegram": true}'::jsonb` });
+    // В организации Б Telegram не привязан ни у кого — некому писать.
     expect(await telegramDigestOrgs(t.app.db, NOW)).toEqual([
       { orgId: a.orgId, day: '2026-10-29' },
     ]);
@@ -255,7 +314,7 @@ describe.skipIf(!databaseAvailable())('Журнал отправок и очер
       false,
     );
     expect(await telegramDigestOrgs(t.app.db, NOW)).toEqual([]);
-    // Организация Б: «Напоминания в Telegram» выключены.
+    // Следующий день — снова только организация А.
     expect(
       (await telegramDigestOrgs(t.app.db, new Date('2026-10-30T04:00:00Z'))).map((r) => r.orgId),
     ).toEqual([a.orgId]);

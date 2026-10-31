@@ -25,6 +25,7 @@ const person = (id: string, patch: Partial<ReminderPerson> = {}): ReminderPerson
   isOwner: false,
   linked: true,
   settings: DEFAULT_NOTIFY_SETTINGS,
+  viewReports: 'own',
   confirmReports: null,
   confirmTasks: false,
   ...patch,
@@ -77,7 +78,12 @@ const policy = (patch: Partial<ReminderPolicy> = {}): ReminderPolicy => ({
 });
 
 const acc = person('acc');
-const chief = person('chief', { boss: true, confirmReports: 'all', confirmTasks: true });
+const chief = person('chief', {
+  boss: true,
+  viewReports: 'all',
+  confirmReports: 'all',
+  confirmTasks: true,
+});
 const people = new Map([acc, chief].map((p) => [p.employeeId, p]));
 const keys = (lines: { key: string }[]) => lines.map((l) => l.key);
 const linesOf = (
@@ -182,6 +188,24 @@ describe('напоминания за день (ТЗ «Уведомления в
     expect(linesOf(person('x'), { reports })).toEqual([]);
   });
 
+  it('главный бухгалтер с областью «Свои» или без «Просматривать отчёты» получает чужие отчёты только в своей области (п. Б-13)', () => {
+    const mine = report({ contractorResponsibleId: 'chief', responsibleId: 'acc' });
+    const foreign = report({ contractorName: 'ОсОО «Чужая»' });
+    const unlinked = person('acc', { linked: false });
+    const map = new Map([unlinked, chief].map((p) => [p.employeeId, p]));
+    const week = { week: { from: '2026-10-26', to: '2026-11-01' } };
+    const own = { ...chief, viewReports: 'own' as const };
+    const lines = linesOf(own, { reports: [mine, foreign], people: map }, week);
+    expect(lines.flatMap((l) => ('items' in l ? l.items.map((i) => i.id) : []))).toEqual([mine.id]);
+    expect(lines.find((l) => l.key === 'tgWeek')).toMatchObject({ sub: 1 });
+    const blind = { ...chief, viewReports: null };
+    expect(linesOf(blind, { reports: [mine, foreign], people: map }, week)).toEqual([]);
+    // Свои отчёты (где он ответственный) приходят всегда.
+    expect(
+      keys(linesOf(blind, { reports: [report({ responsibleId: 'chief' })], people: map })),
+    ).toEqual(['tgBefore']);
+  });
+
   it('у ответственного не привязан Telegram — главный бухгалтер получает с пометкой при любом режиме', () => {
     const unlinked = person('acc', { linked: false, shortName: 'Алишер Т.' });
     const map = new Map([unlinked, chief].map((p) => [p.employeeId, p]));
@@ -220,9 +244,12 @@ describe('напоминания за день (ТЗ «Уведомления в
     // Владелец подтверждает и свою сдачу.
     const owner = { ...chief, isOwner: true };
     expect(linesOf(owner, { reports: [own] })[0]).toMatchObject({ key: 'tgConfWait' });
-    // Область «Свои» — только по своим контрагентам.
+    // Область «Свои» — только по своим контрагентам и отчётам, где он ответственный.
     const scoped = person('y', { confirmReports: 'own' });
     expect(linesOf(scoped, { reports: [waiting] })).toEqual([]);
+    expect(
+      linesOf(scoped, { reports: [report({ ...waiting, id: 'ry', responsibleId: 'y' })] }),
+    ).toHaveLength(1);
     expect(
       linesOf(
         { ...scoped, employeeId: 'acc' },

@@ -125,7 +125,7 @@ describe.skipIf(!databaseAvailable())('Напоминания и сообщен�
   });
 
   it('п. 8: одно сообщение за 3 дня до срока со всеми своими отчётами, в понедельник — сводка на неделю; повтор — без дублей', async () => {
-    await telegramRemindersJob(BASE, noPause).run(deps);
+    await telegramRemindersJob(BASE, noPause).run(deps, clock.now());
     const mine = to(CHAT.acc);
     expect(mine).toHaveLength(1);
     const text = mine[0]!;
@@ -140,9 +140,9 @@ describe.skipIf(!databaseAvailable())('Напоминания и сообщен�
     expect(boss).toHaveLength(1);
     expect(boss[0]).toContain('ИП Садыков (chief-a: не привязан Telegram)');
     // Повтор в тот же день (и через минуту) ничего не добавляет.
-    await telegramRemindersJob(BASE, noPause).run(deps);
+    await telegramRemindersJob(BASE, noPause).run(deps, clock.now());
     clock.advance(60_000);
-    await telegramRemindersJob(BASE, noPause).run(deps);
+    await telegramRemindersJob(BASE, noPause).run(deps, clock.now());
     expect(tg.sent).toHaveLength(2);
     clock.set('2026-10-19T03:00:00Z');
   });
@@ -267,16 +267,16 @@ describe.skipIf(!databaseAvailable())('Напоминания и сообщен�
       retryAfterSeconds: 30,
       permanent: false,
     });
-    await job.run(deps);
+    await job.run(deps, clock.now());
     expect(await row(slow!)).toMatchObject({
       status: 'pending',
       tries: 1,
       lastError: '429: Too Many Requests',
     });
-    await job.run(deps);
+    await job.run(deps, clock.now());
     expect((await row(slow!)).tries).toBe(1);
     clock.advance(30_000);
-    await job.run(deps);
+    await job.run(deps, clock.now());
     expect(await row(slow!)).toMatchObject({ status: 'sent', tries: 2 });
     expect(to(CHAT.owner).at(-1)).toBe('Пауза от Telegram');
 
@@ -287,13 +287,13 @@ describe.skipIf(!databaseAvailable())('Напоминания и сообщен�
       description: 'Forbidden: bot was blocked by the user',
       permanent: true,
     });
-    await job.run(deps);
+    await job.run(deps, clock.now());
     expect(await row(blocked!)).toMatchObject({ status: 'error', tries: 1 });
 
     const [flaky] = await queue('Сбой сети');
     for (let n = 1; n <= 5; n++) {
       tg.failNext({ ok: false, errorCode: 502, description: 'Bad Gateway', permanent: false });
-      await job.run(deps);
+      await job.run(deps, clock.now());
       expect((await row(flaky!)).tries).toBe(n);
       clock.advance(10 * 60_000);
     }
@@ -302,7 +302,7 @@ describe.skipIf(!databaseAvailable())('Напоминания и сообщен�
       tries: 5,
       lastError: '502: Bad Gateway',
     });
-    await job.run(deps);
+    await job.run(deps, clock.now());
     expect(to(CHAT.owner)).not.toContain('Сбой сети');
   });
 });

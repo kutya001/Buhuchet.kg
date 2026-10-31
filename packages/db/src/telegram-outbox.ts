@@ -1,5 +1,6 @@
 import {
   OUTBOX_ERROR_MAX,
+  OUTBOX_UNDELIVERABLE,
   RecordChangedError,
   type NotifyKind,
   type NotifyMode,
@@ -14,6 +15,7 @@ import {
   telegramLinks,
   telegramNotifySettings,
   telegramOutbox,
+  users,
 } from './schema';
 import { writeHistory } from './history';
 
@@ -85,6 +87,18 @@ export async function claimOutbox(
   o: { now: Date; limit: number; leaseSeconds: number; ids?: readonly string[] },
 ): Promise<ClaimedOutbox[]> {
   if (o.ids && !o.ids.length) return [];
+  // Получатель отвязал или сменил Telegram, его заблокировали — строка не уходит в прежний чат.
+  await tx
+    .update(telegramOutbox)
+    .set({ status: 'error', lastError: OUTBOX_UNDELIVERABLE })
+    .where(
+      and(
+        eq(telegramOutbox.status, 'pending'),
+        lte(telegramOutbox.nextAt, o.now),
+        o.ids ? inArray(telegramOutbox.id, [...o.ids]) : undefined,
+        sql`not exists (select 1 from ${telegramLinks} inner join ${users} on ${users.id} = ${telegramLinks.userId} where ${telegramLinks.userId} = ${telegramOutbox.userId} and ${telegramLinks.chatId} = ${telegramOutbox.chatId} and not ${users.blocked})`,
+      ),
+    );
   const due = tx
     .select({ id: telegramOutbox.id })
     .from(telegramOutbox)
@@ -155,7 +169,8 @@ export async function logTelegram(
   },
 ): Promise<void> {
   await db.execute(
-    sql`select app.telegram_log(${entry.userId}, ${entry.chatId}, ${entry.kind}, ${entry.text}, ${entry.ok}, ${entry.error ?? null})`,
+    // Текст кода в базу не передаётся вовсе (его не пишет и функция): не попадёт и в журнал PostgreSQL.
+    sql`select app.telegram_log(${entry.userId}, ${entry.chatId}, ${entry.kind}, ${entry.kind === 'code' ? null : entry.text}, ${entry.ok}, ${entry.error ?? null})`,
   );
 }
 

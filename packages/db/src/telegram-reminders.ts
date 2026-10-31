@@ -215,7 +215,7 @@ export async function loadReminderData(tx: Tx, today: IsoDate): Promise<Reminder
           eq(contractors.serviceStatus, 'active'),
           or(
             sql`(${reports.status} in ${OPEN} and ${reports.act} <> 'pay' and ${reports.dueDate} <= ${horizon}::date)`,
-            sql`(${reports.act} <> 'sub' and ${reports.payDue} <= ${horizon}::date and (${reports.amount} is null or ${reports.amount} > ${reports.paid}))`,
+            sql`(${reports.act} <> 'sub' and ${reports.payDue} <= ${horizon}::date and ${reports.amount} > ${reports.paid})`,
             sql`(${reports.status} = 'submitted' and ${reports.act} <> 'pay' and ${reports.confirmedAt} is null)`,
           ),
         ),

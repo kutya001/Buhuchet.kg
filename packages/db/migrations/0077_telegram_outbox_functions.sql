@@ -39,7 +39,8 @@ CREATE OR REPLACE FUNCTION app.telegram_log(
   $$;
 --> statement-breakpoint
 -- Организации, у которых в очереди есть сообщения к отправке: задача отправки открывает для каждой
--- свою транзакцию withOrgContext. Отдаёт только номера организаций, как app.org_ids().
+-- свою транзакцию withOrgContext. Отдаёт только номера организаций, как app.org_ids(); заблокированной
+-- организации сообщения не отправляются.
 CREATE OR REPLACE FUNCTION app.telegram_outbox_orgs(p_now timestamptz)
   RETURNS SETOF uuid
   LANGUAGE sql STABLE SECURITY DEFINER
@@ -47,7 +48,8 @@ CREATE OR REPLACE FUNCTION app.telegram_outbox_orgs(p_now timestamptz)
   AS $$
     SELECT DISTINCT o.org_id
     FROM public.telegram_outbox o
-    WHERE o.status = 'pending' AND o.next_at <= p_now AND o.org_id IS NOT NULL
+    JOIN public.organizations g ON g.id = o.org_id AND g.status = 'active'
+    WHERE o.status = 'pending' AND o.next_at <= p_now
     ORDER BY o.org_id
   $$;
 --> statement-breakpoint
