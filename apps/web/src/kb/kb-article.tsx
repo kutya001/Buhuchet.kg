@@ -119,11 +119,7 @@ export function KbArticleDialog({
         />
       }
     >
-      <div data-kb-article={article.id} className="max-w-[820px] text-[14px] leading-[1.6]">
-        {article.blocks.map((b, i) => (
-          <ArticleBlock key={i} block={b} article={article} info={info} />
-        ))}
-      </div>
+      <KbArticleBody article={article} info={info} />
       <div
         ref={end}
         aria-hidden="true"
@@ -134,6 +130,17 @@ export function KbArticleDialog({
         {t('kb.art.end')}
       </div>
     </Modal>
+  );
+}
+
+/** Текст статьи блоками — в окне статьи и в предпросмотре Админки (задача 2.39). */
+export function KbArticleBody({ article, info }: { article: KbArticle; info: ArticleScreenInfo }) {
+  return (
+    <div data-kb-article={article.id} className="max-w-[820px] text-[14px] leading-[1.6]">
+      {article.blocks.map((b, i) => (
+        <ArticleBlock key={i} block={b} article={article} info={info} />
+      ))}
+    </div>
   );
 }
 
@@ -244,6 +251,18 @@ function ArticleBlock({
       return <ListView node={nestList(block.items)} />;
     case 'screen':
       return <ScreenView module={block.module} article={article} info={info} />;
+    case 'image':
+      // Картинка из хранилища (`/api/news/images/…`, задача 2.39), размеры заранее неизвестны.
+      return (
+        <p className="my-2">
+          <img
+            src={block.src}
+            alt={block.alt}
+            loading="lazy"
+            className="max-w-full rounded-lg border border-line"
+          />
+        </p>
+      );
   }
 }
 

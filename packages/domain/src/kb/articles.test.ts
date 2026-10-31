@@ -62,6 +62,21 @@ describe('статья по блокам', () => {
     expect(JSON.stringify(blocks)).not.toMatch(/onclick|href|onerror|script/);
   });
 
+  it('картинка из хранилища — отдельным блоком, другие адреса пропускаются (задача 2.39)', () => {
+    const id = '0b6f1c2e-3a4d-4e5f-8a9b-0c1d2e3f4a5b';
+    const blocks = kbArticleBlocks(
+      `<p>До <img src="/api/news/images/${id}" alt="Окно &quot;Шаг&quot;"> после</p>` +
+        '<p><img src="https://evil.example/x.png" alt="x"><img src="javascript:alert(1)"></p>' +
+        `<ul><li>Пункт <img src="/api/news/images/${id}" alt="в списке"></li></ul>`,
+    );
+    expect(blocks).toEqual([
+      { type: 'p', inline: [{ text: 'До' }] },
+      { type: 'image', src: `/api/news/images/${id}`, alt: 'Окно "Шаг"' },
+      { type: 'p', inline: [{ text: 'после' }] },
+      { type: 'list', items: [{ depth: 0, ordered: false, inline: [{ text: 'Пункт' }] }] },
+    ]);
+  });
+
   it('текст статьи для поиска — без тегов, пробелы схлопнуты', () => {
     expect(kbArticleText('<h4>Роли</h4><ul><li>«Владелец» — <b>все</b>  права</li></ul>')).toBe(
       'Роли «Владелец» — все права',
@@ -212,5 +227,24 @@ describe('описание экрана модуля', () => {
       ],
     });
     expect(kbScreenBlocks({}, 'org')).toEqual({ tabs: {}, items: [], forms: [] });
+    // Ключ не из справочника («constructor») — пусто, а не ошибка.
+    expect(kbScreenBlocks(ui, 'constructor')).toEqual({ tabs: {}, items: [], forms: [] });
+  });
+
+  it('описание экрана — только у модуля меню', () => {
+    expect(
+      kbArticleBlocks('<kb-screen data-mod="constructor"></kb-screen><kb-screen data-mod="cps">'),
+    ).toEqual([{ type: 'screen', module: 'cps' }]);
+  });
+});
+
+describe('текст из Админки', () => {
+  it('теги без «>» разбираются быстро: время не растёт с квадратом длины', () => {
+    const odd = '<a'.repeat(50_000);
+    const started = performance.now();
+    kbArticleBlocks(odd);
+    kbArticleText(odd);
+    kbArticleBlocks('<'.repeat(100_000));
+    expect(performance.now() - started).toBeLessThan(500);
   });
 });
