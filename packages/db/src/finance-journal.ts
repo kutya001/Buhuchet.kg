@@ -1148,5 +1148,13 @@ export function exportBonuses(
 /**
  * Баланс виртуального счёта сотрудника (прототип `empBal`): поступления, возвраты по уточнённому,
  * обратные записи и переводы на его счёт — приход; оплаты, бонусы и возвраты контрагенту — расход.
+ * `scope` — только деньги контрагентов области (условие над `contractors`, docs/deviations.md п. В-22).
  */
-export const EMPLOYEE_BALANCE = sql<number>`(select coalesce(sum(case when eo.kind in ('in', 'back', 'corr', 'xfer') then eo.amount else -eo.amount end), 0)::bigint from ${moneyOperations} eo where eo.holder_kind = 'employee' and eo.holder_employee_id = "employees"."id" and eo.cancelled_at is null)`;
+export function employeeBalance(scope: SQL | undefined): SQL<number> {
+  const inScope = scope
+    ? sql` and exists (select 1 from ${contractors} where ${contractors.id} = eo.contractor_id and ${scope})`
+    : sql``;
+  return sql<number>`(select coalesce(sum(case when eo.kind in ('in', 'back', 'corr', 'xfer') then eo.amount else -eo.amount end), 0)::bigint from ${moneyOperations} eo where eo.holder_kind = 'employee' and eo.holder_employee_id = "employees"."id" and eo.cancelled_at is null${inScope})`;
+}
+
+export const EMPLOYEE_BALANCE = employeeBalance(undefined);

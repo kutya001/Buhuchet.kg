@@ -312,3 +312,71 @@ export function feePaymentDeletedText(
     ? t('fin.hist.fee_deleted_why', { ...params, reason })
     : t('fin.hist.fee_deleted', params);
 }
+
+/**
+ * История разовой услуги и её оплат (задача 2.22; прототип services.js — `log('s', …)`, fin-op.js —
+ * opLog с `sp` и `svc`): «Разовая услуга «…» на 5 000 сом, оплачена», «Изменено: стоимость 5 000,00 →
+ * 6 000,00 сом; дата … Причина: …», «Услуга изменена», «Оплата 2 000 сом», «Операция удалена: разовая
+ * услуга на 5 000 сом от 01.10.2026. Причина: …»; изменение оплаты — как у операции. Файлы — как в
+ * карточке отчёта. Общие для карточки услуги, окна оплаты и вкладки «История» контрагента.
+ */
+export function serviceHistoryText(
+  t: Translate,
+  e: {
+    entity: string;
+    action: string;
+    changes: readonly HistoryChange[];
+    reason: string | null;
+  },
+  fileText: () => string,
+): string {
+  if (e.action === 'file_attach' || e.action === 'file_delete') return fileText();
+  const payment = e.entity === 'one_off_service_payment';
+  const amountTo = numberOf(valueOf(e.changes, 'amount', 'to'));
+  if (e.action === 'create') {
+    if (payment)
+      return t('fin.svc.hist.pay', { amount: formatSomWithUnit(amountTo ?? 0) });
+    const name = valueOf(e.changes, 'name', 'to');
+    return t(valueOf(e.changes, 'paid', 'to') ? 'fin.svc.hist.created_paid' : 'fin.svc.hist.created', {
+      name: typeof name === 'string' ? name : '',
+      amount: formatSomWithUnit(amountTo ?? 0),
+    });
+  }
+  if (e.action === 'delete') {
+    const amount = numberOf(valueOf(e.changes, 'amount', 'from'));
+    const date = valueOf(e.changes, payment ? 'paidOn' : 'serviceDate', 'from');
+    const params = {
+      done: t('fin.del.done'),
+      kind: t(payment ? 'fin.sp.kind' : 'files.kind.one_off_service').toLowerCase(),
+      amount: formatSomWithUnit(amount ?? 0),
+      date: typeof date === 'string' ? formatDateRu(date) : '—',
+    };
+    return e.reason
+      ? t('fin.hist.deleted_why', { ...params, reason: e.reason })
+      : t('fin.hist.deleted', params);
+  }
+  const parts: string[] = [];
+  const amount = e.changes.find((c) => c.field === 'amount');
+  if (amount)
+    parts.push(
+      t(payment ? 'fin.hist.ch.amount' : 'fin.svc.hist.ch.amount', {
+        from: formatSom(numberOf(amount.from) ?? 0),
+        to: formatSom(numberOf(amount.to) ?? 0),
+      }),
+    );
+  const date = e.changes.find((c) => c.field === (payment ? 'paidOn' : 'serviceDate'));
+  if (date && typeof date.from === 'string' && typeof date.to === 'string')
+    parts.push(t('fin.hist.ch.date', { from: formatDateRu(date.from), to: formatDateRu(date.to) }));
+  const note = payment ? e.changes.find((c) => c.field === 'note') : undefined;
+  if (note)
+    parts.push(
+      t('fin.hist.ch.note', {
+        from: (typeof note.from === 'string' && note.from) || '—',
+        to: (typeof note.to === 'string' && note.to) || '—',
+      }),
+    );
+  // Услуга без смены стоимости и даты — «Услуга изменена» (прототип serviceDlg).
+  if (!payment && !parts.length) return t('fin.svc.hist.edited');
+  if (!parts.length) return t('fin.edit.same');
+  return withReason(t, parts, e.reason);
+}

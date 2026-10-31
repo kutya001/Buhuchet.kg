@@ -60,6 +60,26 @@ import {
   writeOffRoute,
 } from './ops';
 import {
+  serviceCardHandler,
+  serviceCardRoute,
+  serviceCreateHandler,
+  serviceCreateRoute,
+  serviceDeleteHandler,
+  serviceDeleteRoute,
+  serviceEditHandler,
+  serviceEditRoute,
+  serviceFormHandler,
+  serviceFormRoute,
+  servicePayHandler,
+  servicePaymentDeleteHandler,
+  servicePaymentDeleteRoute,
+  servicePaymentEditHandler,
+  servicePaymentEditRoute,
+  servicePaymentWindowHandler,
+  servicePaymentWindowRoute,
+  servicePayRoute,
+} from './services';
+import {
   taxReminderHandler,
   taxReminderRoute,
   taxReminderSentHandler,
@@ -70,7 +90,8 @@ import {
  * Модуль «Финансовые операции» (поток В, задача 2.20): «Списать в бонус» и «Вернуть остаток», перевод
  * на счёт сотрудника, окно операции с удалением и обратной записью, вкладка «Счёт» сотрудника,
  * «Напомнить в WhatsApp» о налоге. Задача 2.22: журнал операций с вкладками и плашками, «Журнал
- * поступлений», «Изменить» операций, окно оплаты за обслуживание, «Списания в бонус» и закрытие месяца.
+ * поступлений», «Изменить» операций, окно оплаты за обслуживание, «Списания в бонус» и закрытие месяца,
+ * разовые услуги с оплатами.
  */
 export function financeModule(deps: ApiDeps) {
   return createModuleApp()
@@ -94,6 +115,15 @@ export function financeModule(deps: ApiDeps) {
     .openapi(feePaymentEditFormRoute, feePaymentEditFormHandler(deps))
     .openapi(feePaymentEditRoute, feePaymentEditHandler(deps))
     .openapi(feePaymentDeleteRoute, feePaymentDeleteHandler(deps))
+    .openapi(serviceFormRoute, serviceFormHandler(deps))
+    .openapi(serviceCreateRoute, serviceCreateHandler(deps))
+    .openapi(serviceCardRoute, serviceCardHandler(deps))
+    .openapi(serviceEditRoute, serviceEditHandler(deps))
+    .openapi(serviceDeleteRoute, serviceDeleteHandler(deps))
+    .openapi(servicePayRoute, servicePayHandler(deps))
+    .openapi(servicePaymentWindowRoute, servicePaymentWindowHandler(deps))
+    .openapi(servicePaymentEditRoute, servicePaymentEditHandler(deps))
+    .openapi(servicePaymentDeleteRoute, servicePaymentDeleteHandler(deps))
     .openapi(correctionRoute, correctionHandler(deps))
     .openapi(employeeAccountRoute, employeeAccountHandler(deps))
     .openapi(bonusListRoute, bonusListHandler(deps))

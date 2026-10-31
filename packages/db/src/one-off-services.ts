@@ -17,6 +17,7 @@ import {
 import { and, asc, desc, eq, inArray, or, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { Tx } from './client';
+import type { FileListPart } from './files';
 import { writeHistory, type HistoryEntry } from './history';
 import { MoneyRefusedError } from './money-tax';
 import {
@@ -274,8 +275,8 @@ export interface ServicePaymentLine {
   edited: boolean;
   by: string | null;
   createdBy: string | null;
-  /** Файлов у оплаты. */
-  files: number;
+  /** Названия файлов оплаты (прототип serviceCard: столбец «Файлы» таблицы оплат). */
+  files: string[];
 }
 
 /** Карточка услуги (прототип `serviceCard`). */
@@ -331,7 +332,7 @@ export async function oneOffServiceCard(
         deleted: sql<boolean>`${oneOffServicePayments.deletedAt} is not null`,
         createdBy: oneOffServicePayments.createdBy,
         by: payBy.shortName,
-        files: sql<number>`(select count(*)::int from ${files} pf where pf.source_kind = 'one_off_service_payment' and pf.source_id = ${oneOffServicePayments.id} and pf.state = 'ready')`,
+        files: sql<string[]>`array(select pf.name from ${files} pf where pf.source_kind = 'one_off_service_payment' and pf.source_id = ${oneOffServicePayments.id} and pf.state = 'ready' order by pf.created_at, pf.id)`,
       })
       .from(oneOffServicePayments)
       .leftJoin(payBy, eq(payBy.userId, oneOffServicePayments.createdBy))
@@ -362,7 +363,7 @@ export async function oneOffServiceCard(
       edited: p.edited,
       by: p.by,
       createdBy: p.createdBy,
-      files: Number(p.files),
+      files: p.files,
     })),
     deletedPayments: pays.filter((p) => p.deleted).map((p) => p.id),
     history: await historyOf(
@@ -738,7 +739,7 @@ export async function deleteServicePayment(
 /**
  * Услуга или оплата — источник файлов (прототип: `filesBox` карточки услуги, «Файлы: акт, договор, чек»;
  * оплата — «Файлы: платёжка, чек»): контрагент в области `scope`, удалена ли запись, включены ли
- * «Финансовые операции».
+ * «Финансовые операции» и «Плата за обслуживание».
  */
 export async function oneOffServiceFileSource(
   tx: Tx,
@@ -750,6 +751,7 @@ export async function oneOffServiceFileSource(
   serviceId: string;
   deleted: boolean;
   finops: boolean;
+  feeOn: boolean;
 } | null> {
   if (!UUID.test(id)) return null;
   const serviceId =
@@ -771,10 +773,73 @@ export async function oneOffServiceFileSource(
           : sql``
       }`,
       finops: sql<boolean>`coalesce((select (${orgSettings.features} ->> 'finops')::boolean from ${orgSettings} where ${orgSettings.orgId} = app.current_org_id()), false)`,
+      feeOn: sql<boolean>`coalesce((select (${orgSettings.features} ->> 'fee')::boolean from ${orgSettings} where ${orgSettings.orgId} = app.current_org_id()), false)`,
     })
     .from(oneOffServices)
     .innerJoin(contractors, eq(contractors.id, oneOffServices.contractorId))
     .where(and(eq(oneOffServices.id, serviceId), scope));
   if (!row) return null;
   return { ...row, serviceId };
+}
+
+/* ───────────── Окно «Разовая услуга» ───────────── */
+
+/**
+ * Данные окна (прототип serviceDlg): контрагенты области `scope` не в архиве по названию (разовый — с
+ * пометкой «разовый»), действующие сотрудники-исполнители; ответственный выбранного контрагента.
+ */
+export async function oneOffServiceFormData(
+  tx: Tx,
+  scope: SQL | undefined,
+  contractorId: string | null,
+): Promise<{
+  contractors: { id: string; name: string; oneOff: boolean }[];
+  performers: { id: string; name: string }[];
+  responsible: string | null;
+}> {
+  const [cps, people] = await Promise.all([
+    tx
+      .select({
+        id: contractors.id,
+        name: contractors.name,
+        oneOff: sql<boolean>`${contractors.kind} = 'oneoff'`,
+        responsible: contractors.responsibleEmployeeId,
+      })
+      .from(contractors)
+      .where(and(sql`${contractors.serviceStatus} <> 'archived'`, scope))
+      .orderBy(asc(contractors.name), asc(contractors.id)),
+    tx
+      .select({ id: employees.id, name: employees.shortName })
+      .from(employees)
+      .where(eq(employees.active, true))
+      .orderBy(asc(employees.fullName), asc(employees.id)),
+  ]);
+  const chosen = contractorId ? cps.find((c) => c.id === contractorId) : undefined;
+  return {
+    contractors: cps.map(({ id, name, oneOff }) => ({ id, name, oneOff })),
+    performers: people,
+    responsible: chosen?.responsible ?? null,
+  };
+}
+
+/* ───────────── Файловый менеджер ───────────── */
+
+/**
+ * Файлы услуги и её оплат в Файловом менеджере (прототип `allFiles`: вид «Разовая услуга», источник —
+ * название услуги, «Перейти к источнику» — карточка услуги): услуга контрагента в области `scope` (над
+ * `contractors`); `ref` — номер услуги (у файла оплаты — её услуги).
+ */
+export function serviceFilesPart(
+  kind: 'one_off_service' | 'one_off_service_payment',
+  scope: SQL | undefined,
+): FileListPart {
+  const serviceId =
+    kind === 'one_off_service'
+      ? sql`${files.sourceId}`
+      : sql`(select ${oneOffServicePayments.serviceId} from ${oneOffServicePayments} where ${oneOffServicePayments.id} = ${files.sourceId})`;
+  return {
+    visible: sql`exists (select 1 from ${oneOffServices} join ${contractors} on ${contractors.id} = ${oneOffServices.contractorId} where ${oneOffServices.id} = ${serviceId} and ${scope ?? sql`true`})`,
+    source: sql`(select ${oneOffServices.name} from ${oneOffServices} where ${oneOffServices.id} = ${serviceId})`,
+    ref: sql`(${serviceId})::text`,
+  };
 }

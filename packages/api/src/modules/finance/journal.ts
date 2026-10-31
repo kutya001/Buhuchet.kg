@@ -53,6 +53,7 @@ import { subjectOf, todayOf, translateOf } from '../contractors/common';
 import { serverTexts } from '../l10n/texts';
 import { finScopeOf, moneyFail, withMoneyErrors } from '../money/common';
 import { journalLocks } from './common';
+import { serviceLocks, servicesVisible } from './services';
 import { error } from '../reports/common';
 
 /*
@@ -109,11 +110,15 @@ function inFinops<T>(
   });
 }
 
-/** Что видит сотрудник в модуле (прототип `taxVis`, `feat('fee') && can('fee')`). */
+/**
+ * Что видит сотрудник в модуле (прототип `taxVis`, `feat('fee') && can('fee')`, `moneyVis` — разовые
+ * услуги на вкладке «Проекты и услуги»).
+ */
 function visibility(subject: AccessSubject, features: Record<Feature, boolean>) {
   return {
     tax: features.taxpay && hasPermission(subject, 'money'),
     fee: features.fee && hasPermission(subject, 'fee'),
+    proj: servicesVisible(subject, features),
   };
 }
 
@@ -166,13 +171,23 @@ export function finJournalHandler(deps: ApiDeps): RouteHandler<typeof finJournal
         query,
         await journalInput(deps, c, features, params),
       );
-      // Меню строки: «Изменить» и «Удалить» с замком и причиной (прототип opActs).
+      // Меню строки: «Изменить» и «Удалить» с замком и причиной (прототип opActs, у услуги — svcActions
+      // с «Записать оплату»).
       const lockOf = journalLocks(tx, t, subject, new Set(await closedMonthsOf(tx)));
       const rows = await Promise.all(
         found.rows.map(async ({ archived, responsibleEmployeeId, ...r }) => {
-          const facts = { ...r, archived, responsibleEmployeeId };
+          if (r.src === 'svc') {
+            const svc = r.service!;
+            const { edit, del, pay } = await serviceLocks(tx, t, subject, {
+              deleted: r.deleted,
+              left: r.amount - svc.paid,
+              contractor: { archived, responsibleEmployeeId },
+            });
+            return { ...r, service: { ...svc, pay }, locks: { edit, del } };
+          }
+          const facts = { ...r, src: r.src, archived, responsibleEmployeeId };
           const [edit, del] = await Promise.all([lockOf(facts, 'edit'), lockOf(facts, 'del')]);
-          return { ...r, locks: { edit, del } };
+          return { ...r, service: null, locks: { edit, del } };
         }),
       );
       return { ...found, rows };

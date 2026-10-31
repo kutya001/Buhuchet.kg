@@ -470,6 +470,7 @@ export const GRID_KEYS = [
   'fin.all',
   'fin.tax',
   'fin.fee',
+  'fin.proj',
   'fin.wo',
   'fin.journal',
   // «Показатели контрагентов»: вкладки «За период» и «Не заполнено».

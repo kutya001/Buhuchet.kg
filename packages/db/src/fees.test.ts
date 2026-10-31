@@ -129,6 +129,7 @@ describe.skipIf(!databaseAvailable())('Плата за обслуживание:
     kpi: false,
     files: false,
     money: undefined,
+    services: false,
   });
 
   beforeAll(async () => {

@@ -15,6 +15,7 @@ import {
   type Tx,
 } from '@buhuchet/db';
 import {
+  FILE_LIST_KIND_OF,
   FILE_MESSAGES,
   fileDeleteRefusal,
   fileManagerPlates,
@@ -116,7 +117,8 @@ function rowBody(r: FileManagerRow, subject: AccessSubject, userId: string, now:
     name: r.name,
     contentType: r.contentType,
     size: r.sizeBytes,
-    kind: r.sourceKind,
+    // Файлы оплат разовой услуги — вид «Разовая услуга» (прототип allFiles).
+    kind: FILE_LIST_KIND_OF[r.sourceKind as FileSourceKind] ?? (r.sourceKind as FileSourceKind),
     sourceId: r.sourceId,
     source: r.source,
     sourceRef: r.sourceRef,
