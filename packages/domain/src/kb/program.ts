@@ -9,6 +9,7 @@ import {
   type KbLevelDef,
   type KbStepDef,
 } from './catalog';
+import { kbStepRule } from './events';
 import { KB_STEP_RULES, type KbPolicySetting, type KbStepRule } from './ready';
 
 /*
@@ -108,8 +109,8 @@ function isFeature(value: string, access: KbAccess): boolean {
 }
 
 /**
- * Виден ли шаг в программе (прототип kbVis): шаг работает (`KB_STEP_RULES`), не выключен
- * администратором, есть его право, включены его функция и настройка учётной политики и модуль шага
+ * Виден ли шаг в программе (прототип kbVis): шаг работает (`kbStepRule`: шаг разработчика или
+ * добавленный администратором с работающим условием), не выключен администратором, есть его право, включены его функция и настройка учётной политики и модуль шага
  * есть в меню.
  */
 export function kbStepVisible(
@@ -117,7 +118,7 @@ export function kbStepVisible(
   access: KbAccess,
   rules: Readonly<Record<string, KbStepRule>> = KB_STEP_RULES,
 ): boolean {
-  const rule = Object.hasOwn(rules, step.id) ? rules[step.id] : undefined;
+  const rule = kbStepRule(step, rules);
   if (!rule || step.active === false) return false;
   if (step.perm && !access.can(step.perm as PermissionId)) return false;
   if (rule.permission && !access.can(rule.permission)) return false;
@@ -148,7 +149,7 @@ export function kbProgram(
         .filter((s) => s.g === def.id && kbStepVisible(s, access, rules))
         .sort((a, b) => a.ord - b.ord)
         .map((s) => {
-          const rule = rules[s.id]!;
+          const rule = kbStepRule(s, rules)!;
           return {
             def: s,
             rule,

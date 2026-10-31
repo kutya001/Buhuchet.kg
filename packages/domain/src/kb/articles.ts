@@ -1,3 +1,4 @@
+import { NEWS_IMAGE_PATH } from '../news/markdown';
 import type { Feature, PermissionId } from '../roles/permissions';
 import type { KbArticleDef, KbScreenUi } from './catalog';
 import type { KbAccess, KbProgramStep } from './program';
@@ -37,7 +38,15 @@ export type KbBlock =
   | { type: 'h4' | 'h5' | 'p' | 'quote'; inline: KbInline[] }
   | KbList
   /** Описание экрана модуля (`<kb-screen data-mod="…">`) — разворачивает `kbScreenBlocks`. */
-  | { type: 'screen'; module: string };
+  | { type: 'screen'; module: string }
+  /**
+   * Картинка, загруженная в Админке (задача 2.39, прототип kbArtEditDlg «Добавить картинку»): только
+   * из хранилища — `/api/news/images/<id>`, как у новостей; другие адреса пропускаются.
+   */
+  | { type: 'image'; src: string; alt: string };
+
+/** Адрес картинки статьи: загруженная в Админке (`/api/news/images/<id>`). */
+const IMAGE_SRC = new RegExp(`^${NEWS_IMAGE_PATH}[0-9a-f-]{36}$`);
 
 const ENTITIES: Readonly<Record<string, string>> = {
   amp: '&',
@@ -59,7 +68,16 @@ function decode(text: string): string {
   });
 }
 
-type Token = { open: string; mod?: string } | { close: string } | { text: string };
+type Token =
+  | { open: string; mod?: string; src?: string; alt?: string }
+  | { close: string }
+  | { text: string };
+
+/** Значение атрибута тега в кавычках (`name="…"`), с разбором сущностей. */
+const attr = (attrs: string, name: string): string | undefined => {
+  const m = new RegExp(`(?:^|\\s)${name}\\s*=\\s*"([^"]*)"`, 'i').exec(attrs);
+  return m ? decode(m[1]!) : undefined;
+};
 
 function tokenize(html: string): Token[] {
   const out: Token[] = [];
@@ -71,7 +89,9 @@ function tokenize(html: string): Token[] {
     }
     const tag = m[2]!.toLowerCase();
     if (m[1]) out.push({ close: tag });
-    else {
+    else if (tag === 'img') {
+      out.push({ open: tag, src: attr(m[3] ?? '', 'src') ?? '', alt: attr(m[3] ?? '', 'alt') ?? '' });
+    } else {
       const mod = /data-mod\s*=\s*"([^"]*)"/.exec(m[3] ?? '')?.[1];
       out.push(mod === undefined ? { open: tag } : { open: tag, mod });
     }
@@ -104,7 +124,8 @@ function tidy(inline: KbInline[]): KbInline[] {
 
 /**
  * Статья по блокам: заголовки `h4`/`h5`, абзацы, цитаты, списки `ul`/`ol` (со вложенными списками),
- * жирный `b`/`strong` и описание экрана `kb-screen`. Прочие теги не попадают в ответ — только их текст.
+ * жирный `b`/`strong`, описание экрана `kb-screen` и картинки `img` из хранилища. Прочие теги не
+ * попадают в ответ — только их текст.
  */
 export function kbArticleBlocks(html: string): KbBlock[] {
   const blocks: KbBlock[] = [];
@@ -169,6 +190,17 @@ export function kbArticleBlocks(html: string): KbBlock[] {
       } else if (tag === 'kb-screen' && !lists.length) {
         flushText();
         if (token.mod) blocks.push({ type: 'screen', module: token.mod });
+      } else if (tag === 'img' && !lists.length) {
+        // Картинка — отдельным блоком; текст абзаца после неё — новым абзацем.
+        const block: 'h4' | 'h5' | 'p' | 'quote' | null = textBlock;
+        flushText();
+        if (token.src && IMAGE_SRC.test(token.src)) {
+          blocks.push({ type: 'image', src: token.src, alt: token.alt ?? '' });
+        }
+        if (block) {
+          textBlock = block;
+          inline = [];
+        }
       } else if (tag === 'br' && inline) {
         inline.push({ text: ' ' });
       }
