@@ -22,6 +22,7 @@ import {
   createReceipt,
   lockMoneyContractor,
   payReport,
+  syncMoneyHolders,
   type ReceiptInput,
 } from './money-tax';
 import { createOrganization, type CreatedOrganization } from './organizations';
@@ -390,6 +391,13 @@ describe.skipIf(!databaseAvailable())(
       });
       const card = await inA((tx) => operationCard(tx, id, undefined, t));
       expect(card).toMatchObject({ holderName: 'Алишер Т.', op: { note: 'Для оплаты Соцфонда' } });
+      // Сменился только ответственный: перевод остаётся у того, кому перевели (прототип transferCp
+      // меняет счёт операций только у контрагента, который переводит деньги ответственному).
+      await inA((tx) => syncMoneyHolders(tx, [cpOrg], 'responsible'));
+      const still = await inA((tx) => employeeAccountOf(tx, accA, undefined));
+      expect(still.account.rows.find((r) => r.contractorId === cpOrg)).toMatchObject({
+        received: som(300),
+      });
       await remove(id);
       expect(await funds(cpOrg)).toMatchObject(before);
     });
@@ -507,6 +515,14 @@ describe.skipIf(!databaseAvailable())(
         }),
       );
       expect(Number(rev.paid)).toBe(som(900));
+      // Оплату прежней версии не удалить: сначала откатывают уточнённую (docs/deviations.md п. В-20).
+      const [oldPay] = await inA((tx) =>
+        tx
+          .select()
+          .from(moneyOperations)
+          .where(and(eq(moneyOperations.reportId, jul.id), eq(moneyOperations.kind, 'pay'))),
+      );
+      await expect(remove(oldPay!.id)).rejects.toEqual(refused('payment_superseded'));
       const freeBefore = (await funds(cpRev)).free;
       await setAmount(rev.id, som(600));
       const after = await submit(rev.id);

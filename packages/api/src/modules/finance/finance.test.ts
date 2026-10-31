@@ -456,7 +456,34 @@ describe.skipIf(!databaseAvailable())(
       );
       r = await reminder(owner);
       expect(r.holder?.self).toBe(false);
+      expect(r.hidden).toBe(false);
       expect(r.requisites).toMatchObject([{ phone: true, main: true }]);
+      // Чужие реквизиты — только владельцу и роли с «Учётом денег» и «Видеть все…» (п. В-1, В-25):
+      // «Кадры» с областью «Все» в отчётах видят отчёт, но не реквизиты ответственного.
+      const hrReports = and(
+        eq(schema.roleScopes.roleId, f.roleIds.hr),
+        eq(schema.roleScopes.permGroup, 'reports'),
+      );
+      await f.t.admin.db.update(schema.roleScopes).set({ scope: 'all' }).where(hrReports);
+      r = await reminder(hr);
+      expect(r).toMatchObject({ hidden: true, requisites: [], holder: { self: false } });
+      const hiddenPost = await call('POST', `/api/reports/${nds.id}/tax-reminder`, hr);
+      expect(hiddenPost.status).toBe(409);
+      expect((await failure(hiddenPost)).code).toBe('remind_no_requisites');
+      await f.t.admin.db.update(schema.roleScopes).set({ scope: 'own' }).where(hrReports);
+      // Без телефона контрагента сообщение не отправляется.
+      await f.t.admin.db
+        .update(schema.contractors)
+        .set({ phone: '' })
+        .where(eq(schema.contractors.id, cpA));
+      expect((await reminder(owner)).phone).toBeNull();
+      const noPhone = await call('POST', `/api/reports/${nds.id}/tax-reminder`, owner);
+      expect(noPhone.status).toBe(409);
+      expect((await failure(noPhone)).code).toBe('remind_no_phone');
+      await f.t.admin.db
+        .update(schema.contractors)
+        .set({ phone: '+996505890076' })
+        .where(eq(schema.contractors.id, cpA));
       await expectStatus(await call('POST', `/api/reports/${nds.id}/tax-reminder`, acc), 200);
       const logged = await f.t.admin.db
         .select({ action: schema.auditLog.action })
@@ -499,6 +526,57 @@ describe.skipIf(!databaseAvailable())(
       expect((await writeOff(chief, cpRest, { kind: 'refund', amount: som(1) })).status).toBe(403);
       await expectStatus(await writeOff(owner, cpRest, { kind: 'bonus', amount: som(400) }), 201);
       expect((await money(owner, cpRest)).free).toBe(0);
+    });
+
+    it('остаток при архиве и вкладка «Счёт» — тому, кто видит деньги (docs/deviations.md п. В-22, В-23)', async () => {
+      await f.t.admin.db.insert(schema.rolePermissions).values([
+        { orgId: f.a.orgId, roleId: f.roleIds.hr, permissionId: 'cpArchive' },
+        { orgId: f.a.orgId, roleId: f.roleIds.senior, permissionId: 'cpArchive' },
+        { orgId: f.a.orgId, roleId: f.roleIds.senior, permissionId: 'staffView' },
+        { orgId: f.a.orgId, roleId: f.roleIds.senior, permissionId: 'staff' },
+      ]);
+      const archive = async (cookie: string, id: string) =>
+        ArchiveContractorsResult.parse(
+          await (
+            await expectStatus(
+              await call('POST', '/api/contractors/archive', cookie, { ids: [id] }),
+              200,
+            )
+          ).json(),
+        ).rest;
+      const cpHr = await contractor('ИП Кадры', '21503198700023', employee('hr-a'));
+      const cpSenior = await contractor('ИП Старший', '21503198700031', employee('senior-a'));
+      await receive(owner, cpHr, som(100));
+      await receive(owner, cpSenior, som(100));
+      // «Кадры»: деньги видят, «Распоряжаться остатком» нет — только сумма, без кнопок.
+      expect(await archive(hr, cpHr)).toEqual({ total: som(100), items: null });
+      expect((await money(hr, cpHr)).actions).toEqual({ bonus: false, refund: false, xfer: false });
+      expect((await writeOff(hr, cpHr, { kind: 'refund', amount: som(1) })).status).toBe(403);
+      // «Старший»: прав на деньги нет — остатка в ответе нет, вкладки «Счёт» тоже.
+      expect(await archive(senior, cpSenior)).toBeNull();
+      expect((await call('GET', `/api/staff/${employee('senior-a')}/account`, senior)).status).toBe(
+        403,
+      );
+    });
+
+    it('область «Свои»: окно, удаление и обратная запись чужого поступления — 404', async () => {
+      const chiefReceipt = await receive(owner, cpChief, som(100));
+      expect((await call('GET', `/api/money-operations/${chiefReceipt}`, acc)).status).toBe(404);
+      expect(
+        (await call('POST', `/api/money-operations/${chiefReceipt}/delete`, acc, { reason: 'x' }))
+          .status,
+      ).toBe(404);
+      expect(
+        (
+          await call('POST', `/api/money-operations/${chiefReceipt}/corrections`, acc, {
+            sign: '-',
+            amount: som(1),
+            date: '2026-10-18',
+            reason: 'x',
+          })
+        ).status,
+      ).toBe(404);
+      expect((await opWindow(chief, chiefReceipt)).kind).toBe('in');
     });
   },
 );

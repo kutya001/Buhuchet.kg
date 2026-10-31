@@ -18,10 +18,18 @@ import { employeeAccountQuery } from './finance-data';
 /** Целые сомы на плашке (прототип `fmtM(…, false)`). */
 const whole = (tyiyn: number) => formatSom(Math.round(tyiyn / 100) * 100, 'auto');
 
-/** Вкладка видна (прототип empCard `tabs`): «Управлять сотрудниками», «Виртуальные счета», «Учёт оплаты налогов». */
+/**
+ * Вкладка видна (прототип empCard `tabs`): «Сотрудники и роли», «Виртуальные счета», «Учёт оплаты
+ * налогов»; ещё — право на деньги контрагентов (строже прототипа, docs/deviations.md п. В-22).
+ */
 export function useEmployeeAccountOn(): boolean {
   const { access } = useShell();
-  return access.can('staff') && access.feature('accounts') && access.feature('taxpay');
+  return (
+    access.can('staff') &&
+    (access.can('finView') || access.can('money')) &&
+    access.feature('accounts') &&
+    access.feature('taxpay')
+  );
 }
 
 export function EmployeeAccountTab({ employeeId }: { employeeId: string }) {

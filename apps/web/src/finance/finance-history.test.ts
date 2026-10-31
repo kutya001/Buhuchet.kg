@@ -3,6 +3,7 @@ import type { ContractorHistory, OperationWindow, ReportHistoryEntry } from '@bu
 import { describe, expect, it } from 'vitest';
 import { contractorHistoryText } from '../contractors/contractor-history';
 import { makeTranslate } from '../l10n/translate';
+import { noFreeReason } from '../money/contractor-money';
 import { reportHistoryText } from '../reports/report-history';
 import { operationHistoryText } from './operation-window';
 
@@ -138,5 +139,59 @@ describe('история отчёта и окна операции', () => {
         ),
       ),
     ).toBe('Обратная запись +100 сом: не учли');
+  });
+
+  it('окно поступления: «Поступление … записано» и удаление — на всю сумму с частью за обслуживание', () => {
+    const op = { kind: 'in', amount: 50_000, date: '2026-10-18' } as OperationWindow;
+    const h = (over: Partial<OperationWindow['history'][number]>) =>
+      ({
+        at: '2026-10-18T04:30:00.000Z',
+        actor: 'Эркин О.',
+        action: 'create',
+        reason: null,
+        changes: [],
+        ...over,
+      }) as OperationWindow['history'][number];
+    const fee = { field: 'feeTotal', to: 20_000 };
+    expect(
+      plain(operationHistoryText(t, op, h({ changes: [{ field: 'total', to: 50_000 }, fee] }))),
+    ).toBe('Поступление 700 сом записано');
+    // Без права «Видеть плату» сервер части за обслуживание не отдаёт — только налоги.
+    expect(
+      plain(operationHistoryText(t, op, h({ changes: [{ field: 'total', to: 50_000 }] }))),
+    ).toBe('Поступление 500 сом записано');
+    expect(
+      plain(
+        operationHistoryText(
+          t,
+          op,
+          h({
+            action: 'delete',
+            reason: 'ошибка',
+            changes: [
+              { field: 'kind', from: 'in' },
+              { field: 'amount', from: 50_000 },
+              { field: 'opDate', from: '2026-10-18' },
+              { field: 'feeTotal', from: 20_000 },
+            ],
+          }),
+        ),
+      ),
+    ).toBe('Операция удалена: поступление на 700 сом от 18.10.2026. Причина: ошибка');
+  });
+});
+
+describe('бледные «Списать в бонус» и «Вернуть остаток»', () => {
+  it('причина — как в прототипе: деньги нужны на налоги или денег нет', () => {
+    const m = (free: number, available: number) => ({ free, balance: { available } });
+    expect(noFreeReason(t, m(30_000, 100_000))).toBeNull();
+    expect(plain(noFreeReason(t, m(0, 1_200_000))!)).toBe(
+      'Свободного остатка нет: 12 000 сом нужны на неоплаченные налоги',
+    );
+    // Недостача: свободный остаток ниже нуля — нужны все деньги на счёте.
+    expect(plain(noFreeReason(t, m(-50_000, 300_000))!)).toBe(
+      'Свободного остатка нет: 3 000 сом нужны на неоплаченные налоги',
+    );
+    expect(noFreeReason(t, m(0, 0))).toBe('Свободного остатка нет: денег контрагента на счёте нет');
   });
 });

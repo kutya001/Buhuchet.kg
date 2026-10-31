@@ -185,6 +185,7 @@ export const FINANCE_TEXTS = {
     section: S,
   },
   'fin.hist.correction': { ru: 'Обратная запись {amount}: {reason}', section: S },
+  'fin.hist.receipt_created': { ru: 'Поступление {amount} записано', section: S },
   'fin.hist.bonus': { ru: 'Списано в бонус {amount}', section: S },
   'fin.hist.refund': { ru: 'Возврат контрагенту {amount}', section: S },
   'fin.hist.xfer': {
@@ -231,7 +232,7 @@ export const FINANCE_TEXTS = {
     ru: 'Можно решить позже: кнопки есть во вкладке «Деньги» карточки архивного контрагента.',
     section: S,
   },
-  'fin.rest.empty': { ru: 'Остатков больше нет', section: S },
+  'fin.rest.empty': { ru: 'Остатков больше нет.', section: S },
   'fin.rest.later': { ru: 'Решить позже', section: S },
   'fin.rest.owner_decides': {
     ru: 'Отправлено в архив. Остаток денег ({amount}) решает владелец',
@@ -245,6 +246,10 @@ export const FINANCE_TEXTS = {
   },
   'fin.wa.no_req_none': {
     ru: 'Не указан ответственный. Без реквизитов сообщение не отправляется.',
+    section: S,
+  },
+  'fin.wa.hidden': {
+    ru: 'Реквизиты {name} видят только он сам, владелец и главный бухгалтер. Без реквизитов сообщение не отправляется.',
     section: S,
   },
   'fin.wa.add_req': { ru: 'Добавить реквизиты', section: S },

@@ -28,12 +28,24 @@ export function forbidden(): never {
  */
 export function canBonus(subject: AccessSubject, c: MoneyContractor, accounts: boolean): boolean {
   if (!accounts || c.paysTo !== 'emp') return false;
-  return hasPermission(subject, c.archived ? 'archiveRest' : 'bonus');
+  return c.archived ? canArchiveRest(subject) : hasPermission(subject, 'bonus');
 }
 
 /** «Вернуть остаток» (прототип: `!archived && can('money') || archived && can('archiveRest')`). */
 export function canRefund(subject: AccessSubject, c: MoneyContractor): boolean {
-  return hasPermission(subject, c.archived ? 'archiveRest' : 'money');
+  return c.archived ? canArchiveRest(subject) : hasPermission(subject, 'money');
+}
+
+/**
+ * Остаток архивного — с правом «Распоряжаться остатком при архивировании» и тому, кто видит деньги
+ * контрагентов (строже прототипа, docs/deviations.md п. В-23): без права на деньги сумму не узнать.
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#В-23
+function canArchiveRest(subject: AccessSubject): boolean {
+  return (
+    hasPermission(subject, 'archiveRest') &&
+    (hasPermission(subject, 'finView') || hasPermission(subject, 'money'))
+  );
 }
 
 /**

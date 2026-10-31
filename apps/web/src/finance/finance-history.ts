@@ -54,8 +54,11 @@ export function operationDeletedText(
   const kind = valueOf(changes, 'kind', 'from');
   const amount = valueOf(changes, 'amount', 'from');
   const date = valueOf(changes, 'opDate', 'from');
+  // Часть за обслуживание — тому, кто видит плату (сервер иначе её не отдаёт): сумма всего поступления.
+  const fee = valueOf(changes, 'feeTotal', 'from');
   const k = (typeof kind === 'string' ? kind : fallback?.kind) as MoneyOpKind | undefined;
-  const sum = typeof amount === 'number' ? amount : fallback?.amount;
+  const sum =
+    typeof amount === 'number' ? amount + (typeof fee === 'number' ? fee : 0) : fallback?.amount;
   const day = typeof date === 'string' ? date : fallback?.date;
   if (!k || sum === undefined || !day) return null;
   const params = {
@@ -101,4 +104,17 @@ export function operationCreatedText(
     default:
       return null;
   }
+}
+
+/**
+ * Запись поступления в окне операции (прототип inDlg: «Поступление 5 000 сом записано»): вся сумма,
+ * часть за обслуживание — если сервер её отдал.
+ */
+export function receiptCreatedText(t: Translate, changes: readonly HistoryChange[]): string | null {
+  const total = valueOf(changes, 'total', 'to');
+  if (typeof total !== 'number') return null;
+  const fee = valueOf(changes, 'feeTotal', 'to');
+  return t('fin.hist.receipt_created', {
+    amount: formatSomWithUnit(total + (typeof fee === 'number' ? fee : 0)),
+  });
 }

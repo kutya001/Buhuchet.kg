@@ -1,5 +1,6 @@
 import { createRoute, type RouteHandler } from '@hono/zod-openapi';
 import { employeeAccountOf, getEmployee } from '@buhuchet/db';
+import { hasPermission } from '@buhuchet/domain';
 import { AccountEmployeeParam, EmployeeAccount } from '@buhuchet/shared';
 import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
@@ -31,7 +32,7 @@ export const employeeAccountRoute = createRoute({
     401: { description: 'Нет входа', content: error },
     403: {
       description:
-        'Нет права «Управлять сотрудниками»; «Учёт оплаты налогов» или «Виртуальные счета» выключены',
+        'Нет права «Сотрудники и роли» или права на деньги контрагентов; «Учёт оплаты налогов» или «Виртуальные счета» выключены',
       content: error,
     },
     404: { description: 'Сотрудника нет', content: error },
@@ -39,8 +40,9 @@ export const employeeAccountRoute = createRoute({
 });
 
 /**
- * Деньги на счёте сотрудника (прототип: `OPS.filter(o => o.holder === e.id)`): суммы — только по
- * контрагентам в области группы «Финансовые операции» (docs/deviations.md п. В-22).
+ * Деньги на счёте сотрудника (прототип: `OPS.filter(o => o.holder === e.id)`): с правом «Сотрудники и
+ * роли» и правом на деньги контрагентов, суммы — только по контрагентам в области группы «Финансовые
+ * операции» (docs/deviations.md п. В-22).
  */
 export function employeeAccountHandler(
   deps: ApiDeps,
@@ -48,6 +50,9 @@ export function employeeAccountHandler(
   return async (c) => {
     const { id } = c.req.valid('param');
     const subject = subjectOf(c);
+    // Суммы видит тот, кто видит деньги контрагентов (строже прототипа, docs/deviations.md п. В-22).
+    if (!hasPermission(subject, 'finView') && !hasPermission(subject, 'money'))
+      apiFail(403, 'forbidden', 'Нет права на это действие');
     const out = await inTaxpay(deps, c, async (tx, settings) => {
       if (!settings.features.accounts) moneyFail(403, 'accounts_off');
       if (!(await getEmployee(tx, id))) return null;

@@ -183,6 +183,11 @@ export const TaxReminder = z.object({
   to: z.enum(['org', 'employee']),
   /** Ответственный — чьи реквизиты; null — у контрагента его нет. */
   holder: z.object({ id: Uuid, name: z.string(), self: z.boolean() }).nullable(),
+  /**
+   * Реквизиты ответственного скрыты: их видят только он сам, владелец и главный бухгалтер (решение
+   * 27.10.2026, docs/deviations.md п. В-1 и В-25); `requisites` тогда пуст.
+   */
+  hidden: z.boolean(),
   requisites: z.array(
     z.object({
       id: Uuid,

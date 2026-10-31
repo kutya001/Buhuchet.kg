@@ -364,6 +364,21 @@ export function ContractorMoneyTab({ contractorId }: { contractorId: string }) {
 }
 
 /**
+ * Почему «Списать в бонус» и «Вернуть остаток» бледные (прототип: «Свободного остатка нет: 12 000 сом
+ * нужны на неоплаченные налоги»); null — свободный остаток есть.
+ */
+export function noFreeReason(
+  t: Translate,
+  m: Pick<ContractorMoney, 'free'> & { balance: Pick<ContractorMoney['balance'], 'available'> },
+): string | null {
+  if (m.free > 0) return null;
+  const available = m.balance.available;
+  return available > 0
+    ? t('fin.no_free.taxes', { amount: formatSomWithUnit(available - Math.max(0, m.free)) })
+    : t('fin.no_free.empty');
+}
+
+/**
  * Кнопки остатка (прототип contractor-card.js, вкладка «Деньги»): «Поступление»; «Списать в бонус» и
  * «Вернуть остаток» — без свободного остатка видны приглушёнными с причиной; «Перевод». Кто какую
  * кнопку видит, решает сервер (`actions`).
@@ -383,15 +398,7 @@ function MoneyActions({
 }) {
   const { actions } = m;
   if (!m.canReceive && !actions.bonus && !actions.refund && !actions.xfer) return null;
-  const available = m.balance.available;
-  const noFree =
-    m.free > 0
-      ? null
-      : available > 0
-        ? t('fin.no_free.taxes', {
-            amount: formatSomWithUnit(available - Math.max(0, m.free)),
-          })
-        : t('fin.no_free.empty');
+  const noFree = noFreeReason(t, m);
   return (
     <div className="flex flex-wrap items-center justify-end gap-2" data-money-actions="">
       {m.canReceive ? (

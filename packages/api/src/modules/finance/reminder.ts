@@ -8,12 +8,15 @@ import {
   type TaxReminderSource,
 } from '@buhuchet/db';
 import {
+  formatDateRu,
   formatPhone,
+  hasPermission,
   periodFull,
   scopeOf,
   TAX_WHATSAPP_TEMPLATE,
   taxWhatsAppBase,
   type AccessSubject,
+  type Translate,
 } from '@buhuchet/domain';
 import { OkResponse, ReportIdParam, TaxReminder } from '@buhuchet/shared';
 import type { ApiDeps } from '../../deps';
@@ -35,6 +38,26 @@ const json = <S>(schema: S) => ({ 'application/json': { schema } });
 
 const reportScopeOf = (subject: AccessSubject) =>
   reportScope(scopeOf(subject, 'reports') === 'own' ? subject.employeeId : null);
+
+/** Ответственный по контрагенту — сам пользователь (сотрудник без входа — никто). */
+const isHolder = (src: TaxReminderSource, userId: string | null | undefined) =>
+  !!userId && src.holder?.userId === userId;
+
+/**
+ * Реквизиты ответственного видят только он сам и роли с правом «Деньги» по всем контрагентам —
+ * владелец и главный бухгалтер (решение 27.10.2026, docs/deviations.md п. В-1); остальным окно их не
+ * показывает и сообщение не отправляется (п. В-25). Счета организации видит каждый сотрудник.
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#В-25
+function walletsHidden(
+  src: TaxReminderSource,
+  subject: AccessSubject,
+  userId: string | null | undefined,
+): boolean {
+  if (src.contractor.paysTo === 'org' || !src.holder) return false;
+  if (isHolder(src, userId)) return false;
+  return !(hasPermission(subject, 'money') && hasPermission(subject, 'viewAll'));
+}
 
 const unauthorized = { description: 'Нет входа', content: error };
 const forbidden = {
@@ -74,6 +97,23 @@ export const taxReminderRoute = createRoute({
 const inSentence = (period: string, text: string) =>
   period === 'M' ? text.charAt(0).toLowerCase() + text.slice(1) : text;
 
+/** Первая буква — строчная: «дата события» внутри фразы. */
+const lowerFirst = (text: string) => text.charAt(0).toLowerCase() + text.slice(1);
+
+/**
+ * Период отчёта внутри фразы (прототип `phuman`): «сентябрь 2026», у разового отчёта — с датой события:
+ * «сентябрь 2026 · дата ликвидации 18.09.2026».
+ */
+function periodInSentence(r: TaxReminderSource['report'], t: Translate): string {
+  const period = inSentence(r.period, periodFull({ period: r.period, start: r.periodStart }, t));
+  if (!r.eventDate) return period;
+  return t('report.period.event_full', {
+    period,
+    event: lowerFirst(r.eventLabel || t('report.event.default')),
+    date: formatDateRu(r.eventDate),
+  });
+}
+
 /**
  * Текст по шаблону waTax справочника платформы: контрагент, полное название вида, период, срок сдачи,
  * сколько осталось оплатить, «перечислить до»; «{реквизиты}» окно подставляет по отметкам.
@@ -94,6 +134,8 @@ export function taxReminderHandler(deps: ApiDeps): RouteHandler<typeof taxRemind
     if (!out) apiFail(404, 'not_found', 'Отчёт не найден');
     const { src } = out;
     const r = src.report;
+    const userId = orgContextOf(c).userId;
+    const hidden = walletsHidden(src, subject, userId);
     const body: TaxReminder = {
       contractor: { id: src.contractor.id, name: src.contractor.name },
       phone: src.contractor.phone || null,
@@ -101,7 +143,7 @@ export function taxReminderHandler(deps: ApiDeps): RouteHandler<typeof taxRemind
       base: taxWhatsAppBase(out.template, {
         contractor: src.contractor.name,
         report: r.typeName,
-        period: inSentence(r.period, periodFull({ period: r.period, start: r.periodStart }, t)),
+        period: periodInSentence(r, t),
         due: r.dueDate,
         left: (r.amount ?? 0) - r.paid,
         payDue: r.payDue ?? r.dueDate,
@@ -111,9 +153,10 @@ export function taxReminderHandler(deps: ApiDeps): RouteHandler<typeof taxRemind
       holder: src.holder && {
         id: src.holder.id,
         name: src.holder.name,
-        self: src.holder.userId === orgContextOf(c).userId,
+        self: isHolder(src, userId),
       },
-      requisites: src.requisites,
+      hidden,
+      requisites: hidden ? [] : src.requisites,
     };
     c.header('Cache-Control', 'no-store');
     return c.json(body, 200);
@@ -152,7 +195,8 @@ export function taxReminderSentHandler(
       if (!src) return false;
       if (!waitsPayment(src.report)) moneyFail(409, 'remind_not_waiting');
       if (!src.contractor.phone) moneyFail(409, 'remind_no_phone');
-      if (!src.requisites.length) moneyFail(409, 'remind_no_requisites');
+      if (!src.requisites.length || walletsHidden(src, subject, orgContextOf(c).userId))
+        moneyFail(409, 'remind_no_requisites');
       await logTaxReminder(tx, src.report.id, src.contractor.id);
       return true;
     });

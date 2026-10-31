@@ -552,12 +552,23 @@ async function lockReportMoney(
 /**
  * Деньги контрагента — на счёте, куда он их переводит (прототип transferCp и `cp-pays`): после смены
  * ответственного или «Деньги на налоги переводит» операции, кроме «Оплатил контрагент сам», переходят
- * на счёт организации или нового ответственного; без ответственного — на счёт организации. Области
- * функция не проверяет: вызывающий передаёт контрагентов, уже найденных в своей области и
- * заблокированных в этой транзакции (организацию отделяет RLS обеих таблиц).
+ * на счёт организации или нового ответственного; без ответственного — на счёт организации. После
+ * смены только ответственного (`why: 'responsible'`) у контрагента, который переводит деньги
+ * организации, переводы на счёт сотрудника остаются у того, кому перевели (задача 2.20; прототип
+ * transferCp меняет счёт операций только при `paysTo === 'emp'`). Области функция не проверяет:
+ * вызывающий передаёт контрагентов, уже найденных в своей области и заблокированных в этой транзакции
+ * (организацию отделяет RLS обеих таблиц).
  */
-export async function syncMoneyHolders(tx: Tx, contractorIds: readonly string[]): Promise<void> {
+export async function syncMoneyHolders(
+  tx: Tx,
+  contractorIds: readonly string[],
+  why: 'paysTo' | 'responsible' = 'paysTo',
+): Promise<void> {
   if (!contractorIds.length) return;
+  const keepTransfers =
+    why === 'responsible'
+      ? sql`and not (${moneyOperations.kind} = 'xfer' and ${contractors.paysTo} = 'org')`
+      : sql``;
   const toOrg = sql`(${contractors.paysTo} = 'org' or ${contractors.responsibleEmployeeId} is null)`;
   const kind = sql`case when ${toOrg} then 'org' else 'employee' end`;
   const employee = sql`case when ${toOrg} then null else ${contractors.responsibleEmployeeId} end`;
@@ -567,7 +578,7 @@ export async function syncMoneyHolders(tx: Tx, contractorIds: readonly string[])
     from ${contractors}
     where ${contractors.id} = ${moneyOperations.contractorId}
       and ${inArray(moneyOperations.contractorId, [...contractorIds])}
-      and not ${moneyOperations.self}
+      and not ${moneyOperations.self} ${keepTransfers}
       and (${moneyOperations.holderKind}, ${moneyOperations.holderEmployeeId}) is distinct from (${kind}, ${employee})`);
 }
 

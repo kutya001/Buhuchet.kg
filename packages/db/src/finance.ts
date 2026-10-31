@@ -857,7 +857,7 @@ export interface AccountContractor {
  * Виртуальный счёт сотрудника (ТЗ «Сотрудники» → вкладка «Счёт»; прототип staff.js, вкладка `acc`):
  * действующие операции на его счёте по контрагентам в области `scope` (группа «Финансовые операции»,
  * docs/deviations.md п. В-22) — баланс, поступления, оплаты налогов, бонусы и строки по контрагентам в
- * порядке создания первой операции (docs/deviations.md п. В-24).
+ * порядке, в котором контрагентов завели (docs/deviations.md п. В-24).
  */
 // ОТКЛОНЕНИЕ: docs/deviations.md#В-22
 // ОТКЛОНЕНИЕ: docs/deviations.md#В-24
@@ -885,7 +885,9 @@ export async function employeeAccountOf(
         scope,
       ),
     )
-    .orderBy(asc(moneyOperations.createdAt), asc(moneyOperations.id));
+    // Строки — по порядку, в котором контрагентов завели (прототип: `Object.entries(byCp)` с номерами
+    // контрагентов по возрастанию).
+    .orderBy(asc(contractors.createdAt), asc(contractors.id), asc(moneyOperations.createdAt));
   const names = new Map(rows.map((r) => [r.contractorId, r.name]));
   const account = employeeAccount(
     rows.map((r) => ({ ...r, kind: r.kind as MoneyOpKind, amount: Number(r.amount) })),
@@ -984,6 +986,9 @@ export interface TaxReminderSource {
     amount: Tyiyn | null;
     paid: Tyiyn;
     typeName: string;
+    /** Разовый отчёт: дата события и её подпись в справочнике (пусто — «Дата события»). */
+    eventDate: IsoDate | null;
+    eventLabel: string;
   };
   contractor: {
     id: string;
@@ -1025,6 +1030,8 @@ export async function taxReminderSource(
         amount: reports.amount,
         paid: reports.paid,
         typeName: reportTypes.name,
+        eventDate: reports.eventDate,
+        eventLabel: reportTypes.eventLabel,
       },
       c: {
         id: contractors.id,

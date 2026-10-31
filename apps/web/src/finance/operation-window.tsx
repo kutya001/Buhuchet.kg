@@ -34,7 +34,7 @@ import { useErrorText, useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { OP_LOOK } from '../money/contractor-money';
 import { CorrectionDialog, OperationDeleteDialog, WhyButton } from './finance-dialogs';
-import { operationDeletedText, signedSom } from './finance-history';
+import { operationDeletedText, receiptCreatedText, signedSom } from './finance-history';
 import { operationQuery, useFinanceRefresh } from './finance-data';
 
 /*
@@ -48,10 +48,12 @@ import { operationQuery, useFinanceRefresh } from './finance-data';
 type HistoryRow = OperationWindow['history'][number];
 
 /**
- * Строка «Истории изменений» окна (прототип opLog): удаление — «Списание отменено: списание в бонус на
- * 300 сом от 18.10.2026. Причина: …»; обратная запись к поступлению — «Обратная запись +100 сом: …».
+ * Строка «Истории изменений» окна (прототип opLog): поступление — «Поступление 5 000 сом записано»;
+ * удаление — «Списание отменено: списание в бонус на 300 сом от 18.10.2026. Причина: …»; обратная
+ * запись к поступлению — «Обратная запись +100 сом: …».
  */
 export function operationHistoryText(t: Translate, op: OperationWindow, h: HistoryRow): string {
+  if (h.action === 'create') return receiptCreatedText(t, h.changes) ?? t('cp.hist.update');
   if (h.action === 'delete')
     return (
       operationDeletedText(t, h.changes, h.reason, {
@@ -122,6 +124,7 @@ export function OperationWindowDialog({
   const [corr, setCorr] = useState<DialogSlot<OperationWindow> | null>(null);
   const [child, setChild] = useState<DialogSlot<string> | null>(null);
   const op = query.data;
+  const corrections = op?.corrections.filter((x) => !x.deleted) ?? [];
   const failed =
     query.isError && !op
       ? errorText(
@@ -199,18 +202,17 @@ export function OperationWindowDialog({
       items.push({
         id: 'what',
         label: t('fin.op.what'),
-        value:
-          op.report && op.kind !== 'back' ? (
-            <button
-              type="button"
-              className={linkButtonClass()}
-              onClick={() => openReport(op.report!.id)}
-            >
-              {what}
-            </button>
-          ) : (
-            what
-          ),
+        value: op.report ? (
+          <button
+            type="button"
+            className={linkButtonClass()}
+            onClick={() => openReport(op.report!.id)}
+          >
+            {what}
+          </button>
+        ) : (
+          what
+        ),
       });
     }
     const acc =
@@ -384,7 +386,8 @@ export function OperationWindowDialog({
             />
           </Box>
         ) : null}
-        {op?.corrections.length ? (
+        {/* Отменённая обратная запись из списка уходит (прототип: вид `corr_x` в список не попадает). */}
+        {corrections.length ? (
           <Box title={t('fin.op.corrections')}>
             <MiniTable
               label={t('fin.op.corrections')}
@@ -396,15 +399,11 @@ export function OperationWindowDialog({
                 { key: 'who', label: t('fin.op.created') },
                 { key: 'amount', label: t('fin.op.amount'), numeric: true },
               ]}
-              rows={op.corrections.map((x) => ({
+              rows={corrections.map((x) => ({
                 key: x.id,
                 cells: {
                   date: formatDateRu(x.date),
-                  note: (
-                    <span className={x.deleted ? 'text-faint line-through' : 'whitespace-normal'}>
-                      {x.note}
-                    </span>
-                  ),
+                  note: <span className="whitespace-normal">{x.note}</span>,
                   who: x.author ?? '—',
                   amount: `${x.amount > 0 ? '+' : '−'}${formatSom(Math.abs(x.amount))}`,
                 },

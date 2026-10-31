@@ -865,7 +865,7 @@ export function RestDialog({
             <span className="text-[11.5px] leading-[1.4] text-faint">{t('fin.rest.hint')}</span>
           </>
         ) : (
-          <span className="text-faint">{t('fin.rest.empty')}</span>
+          <Note icon="check">{t('fin.rest.empty')}</Note>
         )}
       </div>
       {dialog ? (

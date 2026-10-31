@@ -168,11 +168,13 @@ function TaxReminderModal({
           <Note tone="warn">
             <span className="flex flex-wrap items-center gap-2">
               <span className="flex-1">
-                {holder
-                  ? t('fin.wa.no_req_holder', { name: holder.name })
-                  : t('fin.wa.no_req_none')}
+                {data?.hidden && holder
+                  ? t('fin.wa.hidden', { name: holder.name })
+                  : holder
+                    ? t('fin.wa.no_req_holder', { name: holder.name })
+                    : t('fin.wa.no_req_none')}
               </span>
-              {holder?.self ? (
+              {holder?.self && !data?.hidden ? (
                 <button
                   type="button"
                   className={buttonClass('default', 'sm')}

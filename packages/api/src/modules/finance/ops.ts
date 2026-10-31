@@ -5,10 +5,13 @@ import {
   deleteOperation,
   lockMoneyContractor,
   lockOperation,
+  moneyContractor,
   operationCard,
   transferTargets,
   transferToEmployee,
   writeOff,
+  type LockedOperation,
+  type Tx,
 } from '@buhuchet/db';
 import { canSeeContractor, hasPermission, scopeOf, type HistoryAction } from '@buhuchet/domain';
 import {
@@ -56,6 +59,23 @@ const offOrNoRight = (right: string) => ({
 });
 
 const allFinOf = (c: Context<AppEnv>) => scopeOf(subjectOf(c), 'fin') === 'all';
+
+/**
+ * Поступление только за обслуживание сотруднику, который не видит плату по контрагенту, не
+ * показывается и не меняется (docs/deviations.md п. В-19): для него такой операции нет.
+ */
+async function hiddenFeeReceipt(
+  tx: Tx,
+  c: Context<AppEnv>,
+  locked: LockedOperation,
+): Promise<boolean> {
+  if (locked.op.kind !== 'in' || Number(locked.op.amount) !== 0) return false;
+  const subject = subjectOf(c);
+  return !(
+    (await feeVisible(tx, orgContextOf(c).orgId, subject)) &&
+    canSeeContractor(subject, 'cps', locked.c)
+  );
+}
 
 export const writeOffRoute = createRoute({
   method: 'post',
@@ -127,7 +147,9 @@ export function transferFormHandler(deps: ApiDeps): RouteHandler<typeof transfer
     const { id } = c.req.valid('param');
     const subject = subjectOf(c);
     const out = await inTaxpay(deps, c, async (tx) => {
-      const cp = await lockMoneyContractor(tx, id, finScopeOf(subject));
+      // Только чтение: без блокировки, открытое окно не задерживает действия с деньгами.
+      const cp = await moneyContractor(tx, id, finScopeOf(subject));
+      if (!cp) apiFail(404, 'not_found', 'Контрагент не найден');
       const funds = await contractorFunds(tx, cp.id);
       if (!allFinOf(c)) forbidden();
       if (!canTransfer(subject, cp, true, funds.orgHeld)) {
@@ -317,20 +339,29 @@ function operationWindow(
     files:
       filesKind && out.filesOn && hasPermission(subject, 'filesView') ? { kind: filesKind } : null,
     history: card.history
-      .map((h) => ({
-        id: h.id,
-        at: h.at.toISOString(),
-        actor: h.actorName,
-        action: h.action as HistoryAction,
-        // Без права на плату — без полей платы (как история контрагента).
-        changes: (h.changes as { field: string; from?: unknown; to?: unknown }[]).filter(
+      // Как в прототипе (`opHistHtml`): у поступления в истории есть «Поступление … записано»
+      // (`inDlg`), у остальных создание — только в «Создал»; дальше — изменения и удаление.
+      .filter((h) => h.action !== 'create' || op.kind === 'in')
+      .flatMap((h) => {
+        const all = h.changes as { field: string; from?: unknown; to?: unknown }[];
+        // Без права на плату — без полей платы; запись только о плате не видна целиком, как в
+        // истории контрагента (в причине может быть сумма).
+        const changes = all.filter(
           (x) => fee || (x.field !== 'feeTotal' && x.field !== 'feeAllocations'),
-        ),
-        reason: h.reason,
-      }))
-      // Как в прототипе (`opHistHtml`): создание — в «Создал», в истории — изменения и удаление.
-      .filter((h) => h.action !== 'create')
-      .filter((h) => h.changes.length || h.reason || h.action !== 'update'),
+        );
+        if (all.length && !changes.length) return [];
+        if (!changes.length && !h.reason && h.action === 'update') return [];
+        return [
+          {
+            id: h.id,
+            at: h.at.toISOString(),
+            actor: h.actorName,
+            action: h.action as HistoryAction,
+            changes,
+            reason: h.reason,
+          },
+        ];
+      }),
   };
 }
 
@@ -370,6 +401,7 @@ export function deleteOperationHandler(
     await inTaxpay(deps, c, async (tx) => {
       const scope = finScopeOf(subject);
       const locked = await lockOperation(tx, id, scope);
+      if (await hiddenFeeReceipt(tx, c, locked)) apiFail(404, 'not_found', 'Операция не найдена');
       const lock = await operationLock(
         tx,
         t,
@@ -379,7 +411,8 @@ export function deleteOperationHandler(
         'del',
       );
       if (lock) lockFail(lock);
-      // Оплату налога удаляют по отчёту в области «Отчётов для сдачи» не шире финансовой.
+      // Права на удаление — по области «Финансовых операций» (ТЗ «Окно оплаты» → «Права», прототип
+      // `opLock`): контрагент уже найден в ней, отчёт оплаты отдельно не ограничивается.
       await deleteOperation(tx, locked, reason, { scope: undefined, t });
     });
     return c.json({ ok: true as const }, 200);
@@ -415,7 +448,8 @@ export function correctionHandler(deps: ApiDeps): RouteHandler<typeof correction
     const t = await translateOf(deps);
     const saved = await inTaxpay(deps, c, async (tx) => {
       const locked = await lockOperation(tx, id, finScopeOf(subject));
-      if (locked.op.kind !== 'in') apiFail(404, 'not_found', 'Поступление не найдено');
+      if (locked.op.kind !== 'in' || (await hiddenFeeReceipt(tx, c, locked)))
+        apiFail(404, 'not_found', 'Поступление не найдено');
       const lock = await operationLock(
         tx,
         t,
