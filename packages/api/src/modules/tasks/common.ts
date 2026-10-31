@@ -145,8 +145,12 @@ export function rowBody(r: TaskRow | TaskRecord, today: IsoDate): TaskRowBody {
   };
 }
 
-/** Строка списка (ручная или регулярная) для ответа API. */
-export function listRowBody(r: TaskListRow, today: IsoDate): TaskListRowBody {
+/**
+ * Строка списка (ручная или регулярная) для ответа API. Сумму и оплату отчёта регулярной задачи
+ * экран показывает только с правом «Менять статус» (подсказка у «Отметить отчёт сданным», прототип
+ * `taskActions` → `subPayWhy`): без него они не отдаются (защита — по более строгому, п. Б-11).
+ */
+export function listRowBody(r: TaskListRow, today: IsoDate, sums: boolean): TaskListRowBody {
   if (r.kind === 'manual') return { ...rowBody(r, today), kind: 'manual', open: r.open };
   const audit = {
     createdAt: r.audit.createdAt.toISOString(),
@@ -169,6 +173,8 @@ export function listRowBody(r: TaskListRow, today: IsoDate): TaskListRowBody {
     overdue: r.overdue,
     report: {
       ...report,
+      amount: sums ? report.amount : null,
+      paid: sums ? report.paid : 0,
       waitDays:
         report.mark === 'waiting' && submittedOn ? Math.max(0, diffDays(today, submittedOn)) : 0,
     },

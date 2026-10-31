@@ -13,7 +13,7 @@ import {
 } from '@buhuchet/db';
 import { databaseAvailable, seedAllPlatformDictionaries } from '@buhuchet/db/testing';
 import { ApiError, NotifySettingsResponse, Task, TaskList, TaskSummary } from '@buhuchet/shared';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../../app';
 import type { ApiDeps } from '../../deps';
@@ -162,6 +162,37 @@ describe.skipIf(!databaseAvailable())('Напоминания и сообщен�
     });
     const summary = TaskSummary.parse(await (await call('GET', '/api/tasks/summary', acc)).json());
     expect(summary.progress.mine).toEqual({ done: 0, total: 2 });
+
+    // Сумма и оплата отчёта — только с правом «Менять статус» (п. Б-11).
+    const nds = items.find((r) => r.title.startsWith('Сдать и оплатить НДС'))!;
+    await f.t.admin.db
+      .update(schema.reports)
+      .set({ amount: 125_050, paid: 25_000 })
+      .where(eq(schema.reports.id, nds.id));
+    const ndsOf = async () =>
+      TaskList.parse(
+        await (await call('GET', '/api/tasks?tab=mine&size=all', acc)).json(),
+      ).items.find((r) => r.id === nds.id)!;
+    expect(await ndsOf()).toMatchObject({ report: { amount: 125_050, paid: 25_000 } });
+    const accRole = f.templateRole(f.a, 'acc');
+    const right = and(
+      eq(schema.rolePermissions.roleId, accRole),
+      eq(schema.rolePermissions.permissionId, 'changeStatus'),
+    );
+    await f.t.admin.db.delete(schema.rolePermissions).where(right);
+    try {
+      expect(await ndsOf()).toMatchObject({ report: { amount: null, paid: 0 } });
+      const tab = await call('GET', `/api/contractors/${cpAcc}/tasks`, acc);
+      expect(tab.status, await tab.clone().text()).toBe(200);
+      const row = ((await tab.json()) as { items: { id: string; report?: unknown }[] }).items.find(
+        (r) => r.id === nds.id,
+      );
+      expect(row).toMatchObject({ report: { amount: null, paid: 0 } });
+    } finally {
+      await f.t.admin.db
+        .insert(schema.rolePermissions)
+        .values({ orgId: f.a.orgId, roleId: accRole, permissionId: 'changeStatus' });
+    }
   });
 
   it('п. 41: исполнитель получает в Telegram новую задачу и возврат на доработку с причиной; выключил «Ручные задачи» — не получает', async () => {

@@ -65,7 +65,7 @@ async function remindDays(api: APIRequestContext, origin: string, code: string, 
 }
 
 test.describe('Этап 2: напоминания в Telegram и регулярные задачи', () => {
-  test('(п. 8) ответственный получает одно сообщение в Telegram со всеми своими отчётами за 3 дня до срока; повторный запуск расписания второго не присылает; регулярные задачи по этим отчётам — со статусом отчёта и без дублей', async ({
+  test('(п. 8) ответственный получает одно сообщение в Telegram со всеми своими отчётами за 3 дня до срока; повторный запуск расписания второго не присылает; регулярные задачи по отчётам — со статусом отчёта и без дублей', async ({
     request,
     page,
     baseURL,
@@ -100,6 +100,17 @@ test.describe('Этап 2: напоминания в Telegram и регуляр�
       month,
       due: addDays(today, 3),
     });
+    // Несданный просроченный отчёт другого контрагента: его регулярная задача видна в любой день месяца
+    // (у отчётов со сроком в следующем месяце задачи ещё нет, как в прототипе `allTasks`).
+    const lateName = `ОсОО «Просрочка ${Date.now().toString(36)}»`;
+    const lateCp = await newContractor(request, origin, { tariff: false, name: lateName });
+    const late = await manualReport(request, origin, {
+      contractorId: lateCp.id,
+      reportTypeCode: 't1m',
+      month,
+      due: addDays(today, -10),
+    });
+    expect(late.dueDate < today).toBe(true);
     // Срок на выходном или празднике переносится на рабочий день — напоминание за столько же дней до него.
     const days = daysBetween(today, sub.dueDate);
     expect(both.dueDate).toBe(sub.dueDate);
@@ -127,7 +138,12 @@ test.describe('Этап 2: напоминания в Telegram и регуляр�
     await tick(request);
     expect(await reminders()).toHaveLength(1);
 
-    // Регулярные задачи: по одной на отчёт, статус — из отчёта; повторные запуски дублей не создают.
+    // Регулярные задачи: по одной на отчёт со сроком в этом месяце или просроченный, статус — из отчёта;
+    // повторные запуски дублей не создают.
+    const expected = [late, sub, both]
+      .filter((r) => r.dueDate < today || r.dueDate.slice(0, 7) === today.slice(0, 7))
+      .map((r) => r.id)
+      .sort();
     const regular = async () => {
       const res = await request.get('/api/tasks?tab=all&size=all');
       expect(res.status(), await res.text()).toBe(200);
@@ -137,19 +153,21 @@ test.describe('Этап 2: напоминания в Telegram и регуляр�
       return items.filter((r) => r.kind === 'regular');
     };
     const rows = await regular();
-    expect(rows.map((r) => r.id).sort()).toEqual([sub.id, both.id].sort());
-    const subTask = rows.find((r) => r.id === sub.id)!;
-    expect(subTask.report).toMatchObject({ status: 'todo' });
-    expect(subTask.title.startsWith('Сдать 1-Т за ')).toBe(true);
-    expect(subTask.title.endsWith(` — ${name}`)).toBe(true);
-    expect(rows.find((r) => r.id === both.id)?.title).toMatch(/^Сдать и оплатить НДС за /);
-    expect((await regular()).map((r) => r.id).sort()).toEqual([sub.id, both.id].sort());
+    expect(rows.map((r) => r.id).sort()).toEqual(expected);
+    const lateTask = rows.find((r) => r.id === late.id)!;
+    expect(lateTask.report).toMatchObject({ status: 'todo' });
+    expect(lateTask.title.startsWith('Сдать 1-Т за ')).toBe(true);
+    expect(lateTask.title.endsWith(` — ${lateName}`)).toBe(true);
+    if (expected.includes(both.id)) {
+      expect(rows.find((r) => r.id === both.id)?.title).toMatch(/^Сдать и оплатить НДС за /);
+    }
+    expect((await regular()).map((r) => r.id).sort()).toEqual(expected);
 
     // На экране «Задачи» → «Все»: метка «регулярная», шкала отчёта с меткой «отчёт», «Поставил» — «Система».
     await page.context().addCookies((await request.storageState()).cookies);
     await page.goto('/app/tasks/all');
-    const row = page.locator(`[data-grid] [data-id="${sub.id}"]`);
-    await expect(row).toContainText(subTask.title);
+    const row = page.locator(`[data-grid] [data-id="${late.id}"]`);
+    await expect(row).toContainText(lateTask.title);
     await expect(row).toContainText('регулярная');
     await expect(row).toContainText('отчёт');
     await expect(row).toContainText('Система');

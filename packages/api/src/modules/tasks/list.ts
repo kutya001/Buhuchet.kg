@@ -11,7 +11,7 @@ import {
   type TaskTab,
   type Tx,
 } from '@buhuchet/db';
-import { monthStart } from '@buhuchet/domain';
+import { hasPermission, monthStart } from '@buhuchet/domain';
 import {
   ListExportParams,
   ListQueryParams,
@@ -86,7 +86,9 @@ export function listTasksHandler(deps: ApiDeps): RouteHandler<typeof listTasksRo
     );
     return c.json(
       {
-        items: page.rows.map((r) => listRowBody(r, today)),
+        items: page.rows.map((r) =>
+          listRowBody(r, today, hasPermission(subjectOf(c), 'changeStatus')),
+        ),
         total: page.total,
         page: page.page,
         size: page.size,

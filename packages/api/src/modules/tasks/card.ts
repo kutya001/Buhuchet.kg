@@ -220,7 +220,8 @@ export function contractorTasksHandler(
         today,
         reportConfirm: settings.reportConfirm,
       });
-      return { ...tab, items: tab.items.map((r) => listRowBody(r, today)) };
+      const sums = hasPermission(subject, 'changeStatus');
+      return { ...tab, items: tab.items.map((r) => listRowBody(r, today, sums)) };
     });
     return c.json(body, 200);
   };
