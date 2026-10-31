@@ -62,10 +62,7 @@ async function kbLevelsFor(c: Context<AppEnv>, tx: Tx): Promise<EmployeeKbLevels
  * налогов» и «Виртуальных счетах»; суммы — по контрагентам его области (docs/deviations.md п. В-22).
  */
 // ОТКЛОНЕНИЕ: docs/deviations.md#В-33
-async function balanceFor(
-  c: Context<AppEnv>,
-  tx: Tx,
-): Promise<EmployeeBalanceView | undefined> {
+async function balanceFor(c: Context<AppEnv>, tx: Tx): Promise<EmployeeBalanceView | undefined> {
   const access = c.get('access');
   if (!access) return undefined;
   const { subject } = access;

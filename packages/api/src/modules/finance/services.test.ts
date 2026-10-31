@@ -206,9 +206,9 @@ describe.skipIf(!databaseAvailable())(
       // «Финансовые операции по контрагентам» выключены — 403 `finops_off`.
       await features(f.a.orgId, { ...ALL_ON, finops: false });
       try {
-        expect(
-          await refused(await call('GET', `/api/one-off-services/${id}`, owner), 403),
-        ).toBe('finops_off');
+        expect(await refused(await call('GET', `/api/one-off-services/${id}`, owner), 403)).toBe(
+          'finops_off',
+        );
         expect(await refused(await pay(owner, id, som(1)), 403)).toBe('finops_off');
       } finally {
         await features(f.a.orgId, ALL_ON);

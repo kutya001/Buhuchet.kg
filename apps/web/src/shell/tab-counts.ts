@@ -48,7 +48,17 @@ export function useTabCounts(modules: readonly MenuModuleId[]): TabCounts {
       ...(pdicts.data ? { pdicts: pdicts.data } : {}),
       ...(kbadm.data ? { kbadm: kbadm.data } : {}),
     }),
-    [cps.data, reports.data, staff.data, tasks.data, fin.data, kpi.data, pdicts.data, kbadm.data, t],
+    [
+      cps.data,
+      reports.data,
+      staff.data,
+      tasks.data,
+      fin.data,
+      kpi.data,
+      pdicts.data,
+      kbadm.data,
+      t,
+    ],
   );
 }
 

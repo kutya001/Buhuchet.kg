@@ -59,6 +59,7 @@ async function historyAccess(
     kpi: features.indicators && can('kpiView') && kpiScopeOf(subject),
     files: features.files && can('filesView') && filesScopeOf(subject),
     money: features.taxpay && (can('finView') || can('money')) && finScopeOf(subject),
+    // ОТКЛОНЕНИЕ: docs/deviations.md#В-34 — записи разовых услуг тому, кто видит услуги.
     services: features.finops && servicesVisible(subject, features) && serviceReadScope(subject),
   };
 }

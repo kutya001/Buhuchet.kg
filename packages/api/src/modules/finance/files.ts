@@ -62,6 +62,7 @@ export const operationFiles: FileListSource = {
  * оплаты — когда открыт её «Изменить». История — у услуги или у оплаты. В Файловом менеджере файлы
  * оплат — вместе с файлами услуги: источник — название услуги, переход — карточка услуги.
  */
+// ОТКЛОНЕНИЕ: docs/deviations.md#В-34
 function serviceFiles(kind: 'one_off_service' | 'one_off_service_payment'): FileListSource {
   return {
     async resolve(tx, subject, id) {

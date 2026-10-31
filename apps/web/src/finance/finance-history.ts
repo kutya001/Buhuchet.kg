@@ -334,13 +334,15 @@ export function serviceHistoryText(
   const payment = e.entity === 'one_off_service_payment';
   const amountTo = numberOf(valueOf(e.changes, 'amount', 'to'));
   if (e.action === 'create') {
-    if (payment)
-      return t('fin.svc.hist.pay', { amount: formatSomWithUnit(amountTo ?? 0) });
+    if (payment) return t('fin.svc.hist.pay', { amount: formatSomWithUnit(amountTo ?? 0) });
     const name = valueOf(e.changes, 'name', 'to');
-    return t(valueOf(e.changes, 'paid', 'to') ? 'fin.svc.hist.created_paid' : 'fin.svc.hist.created', {
-      name: typeof name === 'string' ? name : '',
-      amount: formatSomWithUnit(amountTo ?? 0),
-    });
+    return t(
+      valueOf(e.changes, 'paid', 'to') ? 'fin.svc.hist.created_paid' : 'fin.svc.hist.created',
+      {
+        name: typeof name === 'string' ? name : '',
+        amount: formatSomWithUnit(amountTo ?? 0),
+      },
+    );
   }
   if (e.action === 'delete') {
     const amount = numberOf(valueOf(e.changes, 'amount', 'from'));

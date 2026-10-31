@@ -225,7 +225,11 @@ export function serviceMenu(
   s: {
     contractorId: string;
     deleted: boolean;
-    locks: { edit: { text: string } | null; del: { text: string } | null; pay: { text: string } | null };
+    locks: {
+      edit: { text: string } | null;
+      del: { text: string } | null;
+      pay: { text: string } | null;
+    };
   },
   run: { pay: () => void; edit: () => void; del: () => void; card: () => void },
 ): ActionEntry[] {

@@ -332,7 +332,9 @@ export async function oneOffServiceCard(
         deleted: sql<boolean>`${oneOffServicePayments.deletedAt} is not null`,
         createdBy: oneOffServicePayments.createdBy,
         by: payBy.shortName,
-        files: sql<string[]>`array(select pf.name from ${files} pf where pf.source_kind = 'one_off_service_payment' and pf.source_id = ${oneOffServicePayments.id} and pf.state = 'ready' order by pf.created_at, pf.id)`,
+        files: sql<
+          string[]
+        >`array(select pf.name from ${files} pf where pf.source_kind = 'one_off_service_payment' and pf.source_id = ${oneOffServicePayments.id} and pf.state = 'ready' order by pf.created_at, pf.id)`,
       })
       .from(oneOffServicePayments)
       .leftJoin(payBy, eq(payBy.userId, oneOffServicePayments.createdBy))

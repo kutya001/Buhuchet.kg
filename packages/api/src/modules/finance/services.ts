@@ -95,6 +95,7 @@ export const servicesVisible = (subject: AccessSubject, features: { fee: boolean
   (features.fee && hasPermission(subject, 'fee')) || hasPermission(subject, 'projects');
 
 /** Может вести услуги контрагента: право «Вести проекты» и контрагент в области группы «Проекты». */
+// ОТКЛОНЕНИЕ: docs/deviations.md#В-31
 export const canKeepServices = (
   subject: AccessSubject,
   c: { responsibleEmployeeId: string | null },
@@ -247,7 +248,10 @@ export const serviceFormRoute = createRoute({
   middleware: [requirePermission('projects')] as const,
   request: { query: ServiceFormQuery },
   responses: {
-    200: { description: 'Контрагенты области, исполнители, кто по умолчанию', content: json(ServiceForm) },
+    200: {
+      description: 'Контрагенты области, исполнители, кто по умолчанию',
+      content: json(ServiceForm),
+    },
     401: unauthorized,
     403: noRight('«Вести проекты и разовые услуги»'),
   },
@@ -356,7 +360,11 @@ export function serviceCardHandler(deps: ApiDeps): RouteHandler<typeof serviceCa
       });
       const payLocks = await Promise.all(
         card.payments.map(async () => {
-          const facts = { deleted: false, serviceDeleted: !!s.deletedAt, contractor: card.contractor };
+          const facts = {
+            deleted: false,
+            serviceDeleted: !!s.deletedAt,
+            contractor: card.contractor,
+          };
           return {
             edit: await servicePaymentLock(tx, t, subject, facts, 'edit'),
             del: await servicePaymentLock(tx, t, subject, facts, 'del'),
@@ -515,7 +523,10 @@ export const servicePayRoute = createRoute({
   request: { params: ServiceIdParam, body: body(ServicePaymentRequest) },
   responses: {
     201: { description: 'Оплата записана; файлы окно загрузит к ней', content: json(ServiceSaved) },
-    400: { description: 'Сумма не больше нуля или больше остатка; дата позже сегодня', content: error },
+    400: {
+      description: 'Сумма не больше нуля или больше остатка; дата позже сегодня',
+      content: error,
+    },
     401: unauthorized,
     403: noRight('«Вести проекты и разовые услуги» или «Загружать файлы»'),
     404: svcNotFound,
@@ -661,7 +672,8 @@ export const servicePaymentEditRoute = createRoute({
   responses: {
     200: { description: 'Сохранено (или без изменений)', content: json(OperationEdited) },
     400: {
-      description: 'Сумма больше стоимости услуги без остальных оплат; дата позже сегодня; нет причины',
+      description:
+        'Сумма больше стоимости услуги без остальных оплат; дата позже сегодня; нет причины',
       content: error,
     },
     401: unauthorized,

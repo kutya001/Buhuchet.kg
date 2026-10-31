@@ -343,7 +343,9 @@ function JournalTab({ tab }: { tab: FinJournalTab }) {
   const openReport = (id: string) => reports.openCard({ id });
   const canProjects = access.can('projects');
   const openRow = (r: FinJournalRow) =>
-    r.src === 'svc' ? runSvc({ act: 'card', id: r.id }) : run({ act: 'open', src: r.src, id: r.id });
+    r.src === 'svc'
+      ? runSvc({ act: 'card', id: r.id })
+      : run({ act: 'open', src: r.src, id: r.id });
 
   // Разовая услуга (прототип finActions → svcActions): «Открыть», «Записать оплату», «Изменить»,
   // «Карточка контрагента», «Удалить» с замком; удалённая — «Открыть» и карточка контрагента.

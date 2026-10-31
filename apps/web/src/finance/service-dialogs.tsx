@@ -133,13 +133,7 @@ const problemText = (t: Translate, p: { problem: string; amount?: number }) =>
     amount: p.amount !== undefined ? formatSomWithUnit(p.amount) : '',
   });
 
-function FilesInput({
-  control,
-  onPick,
-}: {
-  control: object;
-  onPick: (files: File[]) => void;
-}) {
+function FilesInput({ control, onPick }: { control: object; onPick: (files: File[]) => void }) {
   return (
     <input
       {...control}
@@ -244,9 +238,7 @@ function ServiceModal({
     if (!edit && !preset && !cp) found.contractor = t('err.service_contractor_invalid');
     for (const p of serviceProblems(
       { name, date: date as IsoDate | '', amount: n },
-      edit
-        ? { paid: edit.paid, amount: edit.amount, date: edit.date, reason }
-        : undefined,
+      edit ? { paid: edit.paid, amount: edit.amount, date: edit.date, reason } : undefined,
     ))
       found[p.field] = problemText(t, p);
     const bad = pickedMoneyFilesProblem(t, errorText, picked);
@@ -661,9 +653,7 @@ export function ServiceDeleteDialog({
   onClose,
   onDone,
 }: {
-  target:
-    | { kind: 'svc'; service: ServiceCard }
-    | { kind: 'sp'; payment: ServicePaymentWindow };
+  target: { kind: 'svc'; service: ServiceCard } | { kind: 'sp'; payment: ServicePaymentWindow };
   open: boolean;
   onClose: () => void;
   onDone: () => void;
