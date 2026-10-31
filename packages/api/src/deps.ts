@@ -6,6 +6,7 @@ import type {
   Storage,
   Telegram,
 } from '@buhuchet/adapters';
+import type { DocumentReader } from '@buhuchet/adapters/documents';
 import type { Db } from '@buhuchet/db';
 import type { FileSource } from './modules/files/sources';
 
@@ -37,4 +38,9 @@ export interface ApiDeps extends JobContext {
   l10nRecheckMs?: number;
   /** Источники файлов (по умолчанию `FILE_SOURCES`; тесты подставляют запись с контрагентом). */
   fileSources?: Readonly<Record<string, FileSource>>;
+  /**
+   * Чтение PDF «Из свидетельства и выписки» (по умолчанию — настоящее, загружается при первом
+   * «Распознать»; тесты подставляют поддельное).
+   */
+  documents?: DocumentReader;
 }

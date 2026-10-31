@@ -12,6 +12,7 @@ import {
 } from '@buhuchet/domain';
 import { z } from 'zod';
 import { IsoDate, RecordAudit, RecordVersion, Tyiyn, Uuid } from './common';
+import { ContractorRegdocs } from './contractor-regdocs';
 import { YearMonth } from './kpi';
 import { listPageSchema } from './list';
 import { TaxTariff } from './platform-dicts';
@@ -165,6 +166,8 @@ export const CreateContractorRequest = z.object({
   // Без поля — контрагент без отчётов, как до формы 2.09 (docs/decisions.md п. А-5).
   reports: z.array(ContractorNewReport).max(300).optional(),
   reportsForced: z.array(Code).max(300).default([]),
+  // Создание «Из свидетельства и выписки» (задача 2.17): документы окна прикрепятся к контрагенту.
+  regdocs: ContractorRegdocs.optional(),
 });
 export type CreateContractorRequest = z.input<typeof CreateContractorRequest>;
 
@@ -285,6 +288,11 @@ export const Contractor = z.object({
   paysTo: z.enum(PAYS_TO),
   /** «Файл при поступлении»: поступление нельзя сохранить без файла (задача 2.19). */
   needReceiptFile: z.boolean(),
+  /**
+   * Создан «Из свидетельства и выписки» с документами (задача 2.17; прототип `c.regFiles`): подпись у
+   * блока «Регистрационные данные».
+   */
+  regdocs: z.boolean(),
   serviceStatus: z.enum(SERVICE_STATUSES),
   /** Действующая ставка обслуживания; null — нет ставки или нет права «Видеть плату за обслуживание». */
   tariff: z

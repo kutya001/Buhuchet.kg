@@ -62,7 +62,7 @@ export const error = { 'application/json': { schema: ApiError } };
 const notFound = (): never => apiFail(404, 'not_found', 'Файл не найден');
 
 /** Раздел ключа хранилища: `org/<org_id>/files/<id>` (ограничение files_key_check в базе). */
-const FILES_SECTION = 'files';
+export const FILES_SECTION = 'files';
 
 type FileSources = Readonly<Record<string, FileSource>>;
 
@@ -73,7 +73,7 @@ export function sourceOf(deps: ApiDeps, kind: string): FileSource | undefined {
 }
 
 /** Начатые загрузки пользователя за час (незаконченные лежат в хранилище сутки до очистки). */
-const UPLOAD_RATE_LIMIT: RateLimit = {
+export const UPLOAD_RATE_LIMIT: RateLimit = {
   kind: 'file_upload',
   max: FILE_UPLOADS_PER_HOUR,
   windowSeconds: 3600,

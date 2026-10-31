@@ -51,6 +51,7 @@ import {
   contractors,
   contractorTariffs,
   employees,
+  files,
   gkedItems,
   ownershipForms,
   platformReference,
@@ -165,6 +166,11 @@ export interface ContractorRecord {
   feeDay: number;
   paysTo: 'emp' | 'org';
   needReceiptFile: boolean;
+  /**
+   * Создан из свидетельства и выписки с документами (прототип `c.regFiles`): у блока «Регистрационные
+   * данные» карточки подпись «из свидетельства и выписки».
+   */
+  regdocs: boolean;
   serviceStatus: ServiceStatus;
   /** Действующая ставка обслуживания (последняя с месяцем не позже текущего); null — нет. */
   tariff: { amount: number; period: TariffPeriod; validFrom: IsoDate } | null;
@@ -789,6 +795,7 @@ export async function getContractor(
     feeDay: contractors.feeDay,
     paysTo: contractors.paysTo,
     needReceiptFile: contractors.needReceiptFile,
+    regdocs: sql<boolean>`exists (select 1 from ${files} where ${files.contractorId} = ${contractors.id} and ${files.sourceKind} = 'contractor')`,
     gkedConfirmation: contractors.gkedConfirmation,
     socfundFlags: contractors.socfundFlags,
     socfundTariff: contractors.socfundTariff,
@@ -872,6 +879,7 @@ export async function getContractor(
     feeDay: r.feeDay as number,
     paysTo: r.paysTo as 'emp' | 'org',
     needReceiptFile: r.needReceiptFile as boolean,
+    regdocs: r.regdocs as boolean,
     serviceStatus: base.serviceStatus,
     tariff: base.tariff && { ...base.tariff, validFrom: r.tariffFrom as IsoDate },
     gkedConfirmation: confirmation && { ...confirmation, by },

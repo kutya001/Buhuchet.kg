@@ -20,10 +20,12 @@ import {
 } from '@buhuchet/shared';
 import {
   ActPill,
+  BetaBadge,
   buttonClass,
   ConfirmDialog,
   EmptyState,
   Field,
+  FieldMarks,
   FormGrid,
   Icon,
   iconButtonClass,
@@ -38,7 +40,7 @@ import {
   useToast,
 } from '@buhuchet/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useId, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { api, callApi } from '../api-client';
 import { catalogQuery, valueDictsQuery, type Catalog, type ValueDicts } from '../dicts/dicts-data';
 import { useErrorText, useT } from '../l10n/provider';
@@ -78,6 +80,16 @@ import {
   type FormField,
   type FormSection,
 } from './contractor-form-model';
+import { RegdocsGkedBox, RegdocsHead, regdocsMarks } from './contractor-regdocs';
+import {
+  regdocsDraft,
+  regdocsState,
+  takeAlt,
+  type RdField,
+  type RdNeed,
+  type RegdocsPrefill,
+  type RegdocsState,
+} from './contractor-regdocs-model';
 import { GkedFields } from './gked-pick';
 import { RateRows, singleTaxDefaults, type SingleTaxContext } from './rate-rows';
 import { RegistrationFields } from './registration-fields';
@@ -113,9 +125,11 @@ interface Decisions {
   benefits: string;
   /** «Тариф не совпадает с условиями» → «Сохранить». */
   socfund: boolean;
+  /** «Юрлицо прекращено» → «Создать» (форма из свидетельства и выписки). */
+  stop: boolean;
 }
 
-const NO_DECISIONS: Decisions = { gked: '', benefits: '', socfund: false };
+const NO_DECISIONS: Decisions = { gked: '', benefits: '', socfund: false, stop: false };
 
 const gkedSig = (d: ContractorDraft) =>
   JSON.stringify([
@@ -142,12 +156,15 @@ export function NewContractorDialog({
   open,
   onClose,
   kind = 'regular',
+  pre,
   onCreated,
   onUnarchived,
 }: {
   open: boolean;
   onClose: () => void;
   kind?: ContractorKind;
+  /** Из окна «Из свидетельства и выписки» (задача 2.17): итог распознавания и документы. */
+  pre?: RegdocsPrefill | undefined;
   /** Контрагент создан: карточка (задача 2.11) откроет его. */
   onCreated?: (created: ContractorCreated) => void;
   /** Контрагент с этим ИНН возвращён из архива: карточка (задача 2.11) откроет его. */
@@ -164,6 +181,7 @@ export function NewContractorDialog({
         open={open}
         onClose={onClose}
         kind={kind}
+        pre={pre}
         onCreated={onCreated}
         onUnarchived={onUnarchived}
         options={options.data}
@@ -202,6 +220,7 @@ function NewContractorForm({
   open,
   onClose,
   kind,
+  pre,
   onCreated,
   onUnarchived,
   options,
@@ -212,6 +231,7 @@ function NewContractorForm({
   open: boolean;
   onClose: () => void;
   kind: ContractorKind;
+  pre: RegdocsPrefill | undefined;
   onCreated: ((created: ContractorCreated) => void) | undefined;
   onUnarchived: ((card: ContractorUnarchived) => void) | undefined;
   options: ContractorFormOptions;
@@ -226,8 +246,10 @@ function NewContractorForm({
   const phone = useMediaQuery(PHONE_QUERY);
   const client = useQueryClient();
   const refresh = useContractorsRefresh();
-  const [initial] = useState(() =>
-    newDraft({
+  // Из свидетельства и выписки (прототип addCpDlg с `pre`, rdPrefill): поля из документов,
+  // регистрационные данные раскрыты; статусы по налоговому органу — как при его выборе (ugAuto).
+  const [start] = useState(() => {
+    const base = newDraft({
       kind,
       today: bishkekDate(new Date()),
       formCode: dicts.forms.some((f) => f.active && f.code === NEW_CONTRACTOR_FORM)
@@ -238,9 +260,22 @@ function NewContractorForm({
         : '',
       responsibleId: options.defaultResponsible ?? '',
       phoneCc: codes.find((c) => c.active)?.cc ?? codes[0]?.cc ?? '',
-    }),
-  );
+    });
+    if (!pre?.result) return { draft: pre ? { ...base, regOpen: true } : base, message: '' };
+    const draft = regdocsDraft(base, pre.result, codes);
+    const office = changeOffice(catalog, draft.benefits, '', draft.taxOfficeCode, t);
+    return { draft: { ...draft, benefits: office.benefits }, message: office.message };
+  });
+  const initial = start.draft;
   const [d, setD] = useState<ContractorDraft>(initial);
+  const [rd, setRd] = useState<RegdocsState | null>(() =>
+    pre?.result ? regdocsState(pre.result) : null,
+  );
+  useEffect(() => {
+    if (!start.message) return;
+    const timer = setTimeout(() => toast(start.message, { icon: 'info' }), 600);
+    return () => clearTimeout(timer);
+  }, [start.message, toast]);
   const [fieldErrors, setErrors] = useState<Partial<Record<FormField, string>>>({});
   // ИНН архивного контрагента: в ошибке поля — «Вернуть из архива» (ТЗ «Регистрация контрагентов»,
   // прототип addCpDlg `nc-unarch`; возврат — задача 2.12). Кнопка — с правом метода «Отправлять в
@@ -513,17 +548,39 @@ function NewContractorForm({
         },
       });
     }
+    const stopped = pre?.result?.stopped ? pre.result : null;
+    if (stopped && !dec.stop) {
+      return confirm({
+        title: t('cp.rd.stop.title'),
+        text: stopped.status
+          ? t('cp.rd.stop.text_status', { status: stopped.status })
+          : t('cp.rd.stop.text'),
+        ok: t('cp.rd.stop.ok'),
+        danger: true,
+        run: () => {
+          setDecided((x) => ({ ...x, stop: true }));
+          void save({ ...over, stop: true });
+        },
+      });
+    }
     setBusy(true);
     const res = await callApi(() =>
       api.api.contractors.$post({
-        json: createRequestOf(d, {
-          codes,
-          fee,
-          reports: sel,
-          enDefaults,
-          gkedConfirm: dec.gked === gkedSig(d),
-          socfundConfirm: dec.socfund,
-        }),
+        json: {
+          ...createRequestOf(d, {
+            codes,
+            fee,
+            reports: sel,
+            enDefaults,
+            gkedConfirm: dec.gked === gkedSig(d),
+            socfundConfirm: dec.socfund,
+          }),
+          // Документы окна прикрепятся к контрагенту; распознанные — запись истории «Создан из
+          // свидетельства и выписки (бета)».
+          ...(pre
+            ? { regdocs: { files: pre.files.map((f) => f.id), recognized: !!pre.result } }
+            : {}),
+        },
       }),
     );
     setBusy(false);
@@ -741,6 +798,25 @@ function NewContractorForm({
         extra={d.gkedExtra}
         off={notes?.off ?? []}
         error={errors.gked}
+        after={
+          pre?.result?.gk ? (
+            <RegdocsGkedBox
+              gk={pre.result.gk}
+              current={d.gked?.code ?? ''}
+              onPick={(v) =>
+                set(
+                  {
+                    gked: v,
+                    gkedExtra: d.gkedExtra.filter((x) => x.code !== v.code),
+                    rates: { ...d.rates, manual: [] },
+                  },
+                  'gked',
+                  'regimeCode',
+                )
+              }
+            />
+          ) : null
+        }
         onMain={(v) =>
           set(
             {
@@ -967,7 +1043,10 @@ function NewContractorForm({
             className={inputClass()}
             value={d.startDate}
             data-cp-field="start"
-            onChange={(e) => set({ startDate: e.target.value }, 'startDate')}
+            onChange={(e) => {
+              set({ startDate: e.target.value }, 'startDate');
+              setRd((x) => (x && !x.startSet ? { ...x, startSet: true } : x));
+            }}
           />
         )}
       </Field>
@@ -1027,6 +1106,54 @@ function NewContractorForm({
     </>
   );
 
+  // Подписи полей формы из свидетельства и выписки (прототип rdMarks): у реквизита — id его поля.
+  const fieldOfRd = (k: RdField | RdNeed): string => {
+    switch (k) {
+      case 'name':
+      case 'inn':
+      case 'phone':
+      case 'gked':
+        return fieldId(k);
+      case 'form':
+        return fieldId('formCode');
+      case 'ugns':
+        return `${id}-office`;
+      case 'head':
+        return `${id}-head`;
+      case 'types':
+        return fieldId('reports');
+      case 'resp':
+        return fieldId('responsibleEmployeeId');
+      case 'fee':
+        return fieldId('tariff');
+      case 'start':
+        return fieldId('startDate');
+      case 'full':
+        return `${id}-reg-fullName`;
+      case 'addr':
+        return `${id}-reg-address`;
+      default:
+        return `${id}-reg-${k}`;
+    }
+  };
+  const marks = rd
+    ? regdocsMarks({
+        st: rd,
+        d,
+        codes,
+        reports: sel.length,
+        fee: showFee,
+        fieldOf: fieldOfRd,
+        formName: (code) => dicts.forms.find((f) => f.code === code)?.name ?? code,
+        t,
+        onTake: (k, i) => {
+          const next = takeAlt(rd, d, k, i, codes);
+          setRd(next.st);
+          setD(next.d);
+        },
+      })
+    : null;
+
   const cancel = (
     <button type="button" className={buttonClass('ghost')} onClick={onClose}>
       {t('btn.cancel')}
@@ -1052,8 +1179,16 @@ function NewContractorForm({
         onClose={onClose}
         kind="form"
         size="mid"
-        title={t('cp.form.title_new')}
-        sub={t('cp.form.sub_new')}
+        title={
+          pre ? (
+            <>
+              {t('cp.form.title_new')} <BetaBadge label={t('cp.rd.beta')} />
+            </>
+          ) : (
+            t('cp.form.title_new')
+          )
+        }
+        sub={pre?.result ? t('cp.rd.form_sub') : t('cp.form.sub_new')}
         dirty={JSON.stringify(d) !== JSON.stringify(initial)}
         footer={
           phone ? (
@@ -1089,12 +1224,15 @@ function NewContractorForm({
           )
         }
       >
-        <div className="flex flex-col gap-[18px]" data-cf="" data-step={phone ? step : undefined}>
-          {toc}
-          {section(1, s1)}
-          {section(2, s2)}
-          {section(3, s3)}
-        </div>
+        {pre ? <RegdocsHead pre={pre} st={rd} /> : null}
+        <FieldMarks.Provider value={marks}>
+          <div className="flex flex-col gap-[18px]" data-cf="" data-step={phone ? step : undefined}>
+            {toc}
+            {section(1, s1)}
+            {section(2, s2)}
+            {section(3, s3)}
+          </div>
+        </FieldMarks.Provider>
       </Modal>
       {win?.kind === 'benefits' ? (
         <BenefitPickDialog

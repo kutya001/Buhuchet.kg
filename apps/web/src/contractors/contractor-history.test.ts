@@ -27,6 +27,16 @@ const entry = (over: Partial<Entry>): Entry => ({
 });
 
 describe('история контрагента', () => {
+  it('файл контрагента (вручную или из свидетельства и выписки): прикреплён и удалён — с именем файла', () => {
+    const file = (action: Entry['action'], change: Entry['changes'][number]) =>
+      contractorHistoryText(t, entry({ entity: 'file', action, changes: [change] }), names);
+    expect(file('file_attach', { field: 'file', to: 'svid.pdf' })).toContain('svid.pdf');
+    expect(file('file_delete', { field: 'file', from: 'vyp.pdf' })).toContain('vyp.pdf');
+    expect(file('file_delete', { field: 'file', from: 'vyp.pdf' })).not.toBe(
+      t('cp.hist.update'),
+    );
+  });
+
   it('создание, смена ответственного и статуса, остальные поля — «Изменено: …» без повторов', () => {
     expect(contractorHistoryText(t, entry({ action: 'create' }), names)).toBe('Контрагент создан');
     const text = contractorHistoryText(

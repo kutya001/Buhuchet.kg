@@ -3,7 +3,7 @@
 import { GKED_PICK_LIMIT } from '@buhuchet/domain';
 import { buttonClass, Field, Icon, Modal, Pill } from '@buhuchet/ui';
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useT } from '../l10n/provider';
 import { gkedSearchQuery } from './contractor-data';
 
@@ -132,6 +132,7 @@ export function GkedFields({
   extra,
   off,
   error,
+  after,
   onMain,
   onExtra,
 }: {
@@ -143,6 +144,8 @@ export function GkedFields({
   /** Коды, которые больше не действуют (сверка с ГКЭД). */
   off: readonly string[];
   error?: string | undefined;
+  /** Под основным видом деятельности (прототип rdGkBox — подсказки ГКЭД из документов). */
+  after?: ReactNode;
   onMain: (value: GkedValue) => void;
   onExtra: (values: GkedValue[]) => void;
 }) {
@@ -188,6 +191,7 @@ export function GkedFields({
           </div>
         )}
       </Field>
+      {after}
       <Field
         id={`${idPrefix}-gkx`}
         label={t('cp.form.gked.extra')}

@@ -264,7 +264,7 @@ test.describe('Этап 1: окна и уведомления', () => {
     isMobile,
   }) => {
     await signIn(page.request, new URL(baseURL!).origin);
-    await page.goto('/app/cps/all');
+    await page.goto('/app/fin/all');
     const view = page.viewportSize()!;
     const add = async (name: string) => {
       await page.getByRole('button', { name: 'Добавить', exact: true }).click();
@@ -272,9 +272,10 @@ test.describe('Этап 1: окна и уведомления', () => {
     };
     const toasts = page.getByRole('status');
 
-    // «Контрагент» и «Загрузка из Excel» открывают окна (2.09, 2.16); уведомление пока даёт способ без
-    // своего окна — «Из свидетельства и выписки» (2.17). Одинаковые уведомления встают столбиком.
-    const stub = 'Из свидетельства и выписки';
+    // Уведомление даёт способ добавления модуля без своего экрана — «Разовая услуга» в «Финансовых
+    // операциях» (у контрагентов все три способа уже открывают окна). Одинаковые уведомления встают
+    // столбиком.
+    const stub = 'Разовая услуга';
     await add(stub);
     const first = toasts.filter({ hasText: `«${stub}» появится вместе с экраном модуля.` }).first();
     const box = await settledBox(first);
@@ -324,7 +325,7 @@ test.describe('Этап 1: окна и уведомления', () => {
       expect((await first.boundingBox())!.x).toBeCloseTo(toast.x, 0);
       await swipe.drag(from, { x: from.x - toast.width / 3 - 30, y: from.y });
       await expect(toasts).toHaveCount(0, { timeout: 1000 });
-      await expect(page).toHaveURL(/\/app\/cps\/all$/);
+      await expect(page).toHaveURL(/\/app\/fin\/all$/);
     });
   });
 });

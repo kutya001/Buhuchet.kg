@@ -14,6 +14,7 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useEffectEvent, useMemo, useState } from 'react';
 import { api, ApiFailure, apiFailure, callApi } from '../api-client';
+import { openContractorCard } from '../contractors/card-store';
 import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
 import { useKpiEntry } from '../kpi/kpi-entry';
 import { useErrorText, useT } from '../l10n/provider';
@@ -127,8 +128,15 @@ export function FilesManager() {
     globalThis.location.assign(FileLink.parse(res.data).url);
   };
 
-  /** «Перейти к источнику» (прототип `f.open`): карточка отчёта или задачи, окно значения показателя. */
+  /**
+   * «Перейти к источнику» (прототип `f.open`): карточка отчёта или задачи, окно значения показателя,
+   * у файла контрагента (из свидетельства и выписки) — вкладка «Файлы» его карточки.
+   */
   const sourceOf = (file: FileManagerRow): (() => void) | null => {
+    if (file.kind === 'contractor' && file.contractor) {
+      const { id } = file.contractor;
+      return () => openContractorCard({ id }, 'files');
+    }
     if (file.kind === 'report' && file.sourceId) {
       const id = file.sourceId;
       return () => reports.openCard({ id });

@@ -42,6 +42,12 @@ import {
   listContractorsRoute,
 } from './list';
 import {
+  regdocsRecognizeHandler,
+  regdocsRecognizeRoute,
+  regdocsUploadHandler,
+  regdocsUploadRoute,
+} from './regdocs';
+import {
   applyReportPickHandler,
   applyReportPickRoute,
   reportPickContextHandler,
@@ -87,7 +93,8 @@ import {
  * карточка и её «История», значения формы, поиск и сверка с ГКЭД и тариф Соцфонда для формы, создание
  * одним целым вместе с отчётами, «Изменить», удаление, назначение ответственного, передача дел, окно «Тариф Соцфонда»,
  * «Подбор отчётов», обслуживание (приостановка, возобновление, архив, перевод разового в постоянное —
- * задача 2.12) и загрузка из Excel (задача 2.16). Экраны — задачи 2.09–2.11 и 2.16.
+ * задача 2.12), загрузка из Excel (задача 2.16) и создание «Из свидетельства и выписки» (задача 2.17).
+ * Экраны — задачи 2.09–2.11, 2.16 и 2.17.
  */
 export function contractorsModule(deps: ApiDeps) {
   return (
@@ -95,7 +102,7 @@ export function contractorsModule(deps: ApiDeps) {
       .openapi(listContractorsRoute, listContractorsHandler(deps))
       // Раньше `/contractors/{id}`: иначе «values», «export», «tab-counts», «summary», «transfer»,
       // «gked-check», «gked-search», «form-options», «socfund-check» и «report-pick» разбирались бы как
-      // номер контрагента.
+      // номер контрагента; «regdocs» — тоже.
       .openapi(contractorValuesRoute, contractorValuesHandler(deps))
       .openapi(contractorTabCountsRoute, contractorTabCountsHandler(deps))
       .openapi(contractorSummaryRoute, contractorSummaryHandler(deps))
@@ -112,6 +119,8 @@ export function contractorsModule(deps: ApiDeps) {
       .openapi(importTemplateRoute, importTemplateHandler(deps))
       .openapi(importCheckRoute, importCheckHandler(deps))
       .openapi(importApplyRoute, importApplyHandler(deps))
+      .openapi(regdocsUploadRoute, regdocsUploadHandler(deps))
+      .openapi(regdocsRecognizeRoute, regdocsRecognizeHandler(deps))
       .openapi(getContractorRoute, getContractorHandler(deps))
       .openapi(contractorHistoryRoute, contractorHistoryHandler(deps))
       .openapi(createContractorRoute, createContractorHandler(deps))

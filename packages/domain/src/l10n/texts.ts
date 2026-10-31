@@ -2,6 +2,7 @@ import { ADMIN_ACCOUNTS_TEXTS, ADMIN_L10N_TEXTS, ADMIN_TEXTS } from './admin-tex
 import { AUTH_TEXTS } from './auth-texts';
 import { CONTRACTOR_CARD_TEXTS } from './contractor-card-texts';
 import { CONTRACTOR_IMPORT_TEXTS } from './contractor-import-texts';
+import { CONTRACTOR_REGDOCS_TEXTS } from './contractor-regdocs-texts';
 import { CONTRACTOR_SERVICE_TEXTS } from './contractor-service-texts';
 import { CONTRACTOR_PAGE_TEXTS } from './contractor-page-texts';
 import { CONTRACTORS_TEXTS } from './contractors-texts';
@@ -67,7 +68,7 @@ const SYSTEM_TEXTS = {
  * `auth-texts.ts`, списков — `grid-texts.ts`, сотрудников — `staff-texts.ts`, шкалы и истории статусов —
  * `status-texts.ts`, «Моей организации» — `org-texts.ts`, Админки — `admin-texts.ts`, «Справочников» и сроков
  * видов отчётов словами — `dicts-texts.ts`, контрагентов и сверки с ГКЭД — `contractors-texts.ts`, загрузки контрагентов из Excel —
- * `contractor-import-texts.ts`, страницы
+ * `contractor-import-texts.ts`, создания контрагента из свидетельства и выписки — `contractor-regdocs-texts.ts`, страницы
  * контрагента по ссылке — `contractor-page-texts.ts`, задач —
  * `tasks-texts.ts`, реквизитов для переводов — `money-texts.ts`, показателей контрагентов и названий месяцев —
  * `kpi-texts.ts`, блока «Файлы» — `files-texts.ts`, «Базы знаний» — `kb-texts.ts`, «Новостей» — `news-texts.ts`,
@@ -86,6 +87,7 @@ export const UI_TEXTS = {
   ...CONTRACTORS_TEXTS,
   ...CONTRACTOR_CARD_TEXTS,
   ...CONTRACTOR_IMPORT_TEXTS,
+  ...CONTRACTOR_REGDOCS_TEXTS,
   ...CONTRACTOR_SERVICE_TEXTS,
   ...CONTRACTOR_PAGE_TEXTS,
   ...REPORTS_TEXTS,
