@@ -46,7 +46,13 @@ export interface ReportActor {
   filesOn: boolean;
   can: Readonly<
     Record<
-      'changeStatus' | 'repDue' | 'repConfirm' | 'changeSum' | 'rollback' | 'filesUpload',
+      | 'changeStatus'
+      | 'repDue'
+      | 'repConfirm'
+      | 'changeSum'
+      | 'rollback'
+      | 'filesUpload'
+      | 'assign',
       boolean
     >
   >;

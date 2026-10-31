@@ -252,8 +252,10 @@ export type ReportList = z.infer<typeof ReportList>;
  * нужно сделать»»).
  */
 export const ReportTabParam = z.object({
-  tab: z.enum(['week', 'overdue', 'waiting', 'all']).default('all'),
+  tab: z.enum(['week', 'overdue', 'waiting', 'all', 'calendar']).default('all'),
   quick: z.enum(['all', 'sub', 'pay']).default('all'),
+  /** Вкладка «Календарь»: день, отчёты которого показать (прототип `S.calSel`). */
+  day: ReportDate.optional(),
 });
 export type ReportTab = z.infer<typeof ReportTabParam>['tab'];
 export type ReportQuick = z.infer<typeof ReportTabParam>['quick'];
@@ -452,6 +454,10 @@ export const ReportRevisionCreate = z.strictObject({ version: RecordVersion });
 export const ReportSaved = z.object({ id: Uuid, version: RecordVersion });
 export type ReportSaved = z.infer<typeof ReportSaved>;
 
+/** «Разовый отчёт» создан: срок после переноса с нерабочего дня — для уведомления «перенесён на …». */
+export const ManualReportSaved = ReportSaved.extend({ dueDate: IsoDate });
+export type ManualReportSaved = z.infer<typeof ManualReportSaved>;
+
 /* ───────────── Сдача, подтверждение, откат и сумма (задача 2.14) ───────────── */
 
 /** Сумма не меньше нуля, в тыйынах. */
@@ -549,3 +555,155 @@ export const ReportAmountRequest = z.strictObject({
   repeat: z.boolean().default(false),
 });
 export type ReportAmountRequest = z.infer<typeof ReportAmountRequest>;
+
+/* ──────── «Кто что сдаёт», массовое назначение, «Календарь», ответственный (задача 2.15) ──────── */
+
+/** Поиск над сеткой «Кто что сдаёт»: по названию и ИНН контрагента (прототип `S.search`). */
+export const ReportMatrixQuery = z.object({ q: z.string().trim().max(200).optional() });
+
+/** Столбец сетки — вид, подключённый в организации (прототип `ORG.types[t.id].on`). */
+export const ReportMatrixType = z.object({
+  code: z.string(),
+  name: z.string(),
+  shortName: z.string(),
+  /** false — вид отключён в каталоге платформы: новые назначения недоступны. */
+  active: z.boolean(),
+  /** Ставка нового назначения из сетки (прототип assignTypes: вторая ставка вида или единственная). */
+  defaultRate: z.string().nullable(),
+});
+
+/** Клетка сетки: действующее назначение и почему вид не подходит контрагенту (пусто — подходит). */
+export const ReportMatrixCell = z.object({
+  assignment: z.object({ id: Uuid, version: RecordVersion }).nullable(),
+  why: z.string().nullable(),
+});
+
+/**
+ * Сетка «Кто что сдаёт» (прототип renderMatrix): контрагенты в области «Свои» группы «Отчеты для сдачи»
+ * без архивных; клетки — по порядку `types`.
+ */
+export const ReportMatrix = z.object({
+  types: z.array(ReportMatrixType),
+  rows: z.array(
+    z.object({
+      contractor: z.object({
+        id: Uuid,
+        name: z.string(),
+        inn: z.string(),
+        /** Основной режим (прототип `c.regime`); пусто — режим не указан. */
+        regime: z.string().nullable(),
+      }),
+      cells: z.array(ReportMatrixCell),
+    }),
+  ),
+});
+export type ReportMatrix = z.infer<typeof ReportMatrix>;
+
+/** Окно «Назначить отчёт нескольким контрагентам»: какой вид показать (пусто — НДС или первый). */
+export const AssignmentMassQuery = z.object({ type: Code.optional() });
+
+/** Что показывает окно массового назначения (прототип massAssignDlg). */
+export const AssignmentMassOptions = z.object({
+  /** Подключённые в организации действующие виды: «Название · орган». */
+  types: z.array(z.object({ code: z.string(), name: z.string(), organ: z.string() })),
+  /** Выбранный вид; null — в организации не подключён ни один действующий вид. */
+  type: z
+    .object({
+      code: z.string(),
+      name: z.string(),
+      shortName: z.string(),
+      /** Срок словами (прототип ruleText). */
+      dueText: z.string(),
+      /** Ставки вида: при нескольких окно предлагает «Ставку для отмеченных». */
+      rates: z.array(z.string()),
+      defaultRate: z.string().nullable(),
+      /** Единый налог: ставка подставится каждому контрагенту по его ГКЭД. */
+      singleTax: z.boolean(),
+    })
+    .nullable(),
+  contractors: z.array(
+    z.object({
+      id: Uuid,
+      name: z.string(),
+      regime: z.string().nullable(),
+      /** Уже сдаёт этот вид. */
+      assigned: z.boolean(),
+      /** Почему вид не подходит (пусто — подходит). */
+      why: z.string().nullable(),
+      /** Строки ЕНС, которые встанут при назначении единого налога. */
+      singleTaxRate: z.string().nullable(),
+      /** Вид подходит по ГКЭД контрагента (метка «Подходит по ГКЭД»). */
+      gkedFit: z.boolean(),
+    }),
+  ),
+});
+export type AssignmentMassOptions = z.infer<typeof AssignmentMassOptions>;
+
+/** Контрагентов в одном массовом назначении — не больше. */
+export const ASSIGNMENT_BULK_MAX = 500;
+
+/**
+ * «Назначить» в окне массового назначения: вид, отмеченные контрагенты и ставка для отмеченных (у вида
+ * с одной ставкой — она, у единого налога — по ГКЭД каждого, у вида без ставок — пусто).
+ */
+export const AssignmentBulkCreate = z.strictObject({
+  reportTypeCode: Code,
+  contractorIds: z.array(Uuid).min(1).max(ASSIGNMENT_BULK_MAX),
+  rate: assignmentFields.rate.default(null),
+});
+export type AssignmentBulkCreate = z.infer<typeof AssignmentBulkCreate>;
+
+/**
+ * Итог массового назначения: скольким назначено, сколько отчётов создано и скольких пропустили — вид
+ * уже назначен, не подходит или контрагент тем временем ушёл в архив.
+ */
+export const AssignmentBulkResult = z.object({ done: Count, created: Count, skipped: Count });
+export type AssignmentBulkResult = z.infer<typeof AssignmentBulkResult>;
+
+/** Сколько будущих несданных отчётов получат «Не требуется», если снять назначение сегодня. */
+export const AssignmentEndPreview = z.object({ notRequired: Count });
+
+/** Действующие сотрудники для «сменить» ответственного (прототип: `EMP.filter(e => e.active)`). */
+export const ResponsibleOptions = z.object({
+  employees: z.array(z.object({ id: Uuid, shortName: z.string() })),
+});
+export type ResponsibleOptions = z.infer<typeof ResponsibleOptions>;
+
+/** «сменить» ответственного в карточке отчёта. */
+export const ReportResponsibleChange = z.strictObject({
+  responsibleEmployeeId: Uuid,
+  version: RecordVersion,
+});
+export type ReportResponsibleChange = z.infer<typeof ReportResponsibleChange>;
+
+/** Срок окна «Разовый отчёт» после переноса с нерабочего дня — до сохранения (прототип `offTxt`). */
+export const ReportDueShiftQuery = z.object({ reportTypeCode: Code, date: ReportDate });
+export const ReportDueShift = z.object({ date: IsoDate });
+
+/** Месяц календаря: `YYYY-MM`, с 2000 по 2100 год. */
+const CalendarMonth = z
+  .string()
+  .regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Месяц в виде ГГГГ-ММ')
+  .refine((m) => m >= '2000-01' && m <= '2100-12', 'Месяц — с 2000 по 2100 год');
+
+export const ReportCalendarQuery = z.object({ month: CalendarMonth });
+
+/**
+ * Вкладка «Календарь» (прототип renderCalendar): 42 дня с понедельника недели первого числа; у дня —
+ * рабочий ли он, праздник и сколько отчётов к сдаче, сдано и ждут оплаты со сроком в этот день.
+ */
+export const ReportCalendar = z.object({
+  month: CalendarMonth,
+  days: z.array(
+    z.object({
+      date: IsoDate,
+      working: z.boolean(),
+      /** Название праздника или переноса; пусто — нет. */
+      holiday: z.string(),
+      todo: Count,
+      done: Count,
+      pay: Count,
+    }),
+  ),
+});
+export type ReportCalendar = z.infer<typeof ReportCalendar>;

@@ -3,6 +3,7 @@ import {
   activeReportTypes,
   assignableType,
   changeReportDue,
+  changeReportResponsible,
   createManualReport,
   createRevision,
   dueChangeReason,
@@ -41,7 +42,9 @@ import {
   ReportCard,
   ReportDueChange,
   ReportIdParam,
+  ReportResponsibleChange,
   ReportRevisionCreate,
+  ManualReportSaved,
   ReportSaved,
 } from '@buhuchet/shared';
 import type { ApiDeps } from '../../deps';
@@ -49,7 +52,7 @@ import type { AppEnv } from '../../env';
 import { apiFail, versionedSaveResponses } from '../../errors';
 import { orgContextOf, requirePermission } from '../../middleware/access';
 import { serverTexts } from '../l10n/texts';
-import { subjectOf, todayOf } from '../contractors/common';
+import { checkResponsible, subjectOf, todayOf } from '../contractors/common';
 import { socfundContext, socfundSubjectOf } from '../contractors/socfund-view';
 import {
   assigneeScopeOf,
@@ -308,6 +311,58 @@ export function changeReportDueHandler(
   };
 }
 
+export const changeReportResponsibleRoute = createRoute({
+  method: 'patch',
+  path: '/reports/{id}/responsible',
+  tags: ['reports'],
+  summary: '«сменить» ответственного в карточке отчёта',
+  middleware: [requirePermission('assign')] as const,
+  request: {
+    params: ReportIdParam,
+    body: {
+      required: true,
+      content: { 'application/json': { schema: ReportResponsibleChange } },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Ответственный изменён (или совпал с прежним)',
+      content: { 'application/json': { schema: ReportSaved } },
+    },
+    400: { description: 'Нет такого сотрудника или он отключён', content: error },
+    401: { description: 'Нет входа', content: error },
+    403: { description: 'Нет права «Назначать отчёты контрагентам»', content: error },
+    ...versionedSaveResponses,
+    409: {
+      description: 'Отчёт изменён другим пользователем или это прежняя версия',
+      content: error,
+    },
+  },
+});
+
+/**
+ * «сменить» (прототип report-card.js, `#rc-resp`: меню действующих сотрудников, право «Назначать
+ * отчёты»): «Ответственный: было → стало» в истории отчёта; область — как у карточки (п. А-2).
+ */
+export function changeReportResponsibleHandler(
+  deps: ApiDeps,
+): RouteHandler<typeof changeReportResponsibleRoute, AppEnv> {
+  return async (c) => {
+    const { id } = c.req.valid('param');
+    const { version, responsibleEmployeeId } = c.req.valid('json');
+    const saved = await withOrgContext(deps.db, orgContextOf(c), async (tx) => {
+      await checkResponsible(tx, responsibleEmployeeId);
+      return withReportErrors(() =>
+        changeReportResponsible(tx, id, responsibleEmployeeId, {
+          version,
+          scope: reportScopeOf(subjectOf(c)),
+        }),
+      );
+    });
+    return c.json({ id: saved.id, version: saved.version }, 200);
+  };
+}
+
 export const createManualReportRoute = createRoute({
   method: 'post',
   path: '/reports',
@@ -318,7 +373,10 @@ export const createManualReportRoute = createRoute({
     body: { required: true, content: { 'application/json': { schema: ManualReportCreate } } },
   },
   responses: {
-    201: { description: 'Отчёт создан', content: { 'application/json': { schema: ReportSaved } } },
+    201: {
+      description: 'Отчёт создан; срок — после переноса с нерабочего дня',
+      content: { 'application/json': { schema: ManualReportSaved } },
+    },
     400: {
       description: 'Неверные данные: нет месяца, даты события, срока или причины',
       content: error,
@@ -394,7 +452,7 @@ export function createManualReportHandler(
         { eventDate: type.oneOff },
       );
     });
-    return c.json({ id: saved.id, version: saved.version }, 201);
+    return c.json({ id: saved.id, version: saved.version, dueDate: saved.dueDate }, 201);
   };
 }
 

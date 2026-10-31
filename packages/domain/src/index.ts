@@ -47,6 +47,7 @@ export * from './reports/rates';
 export * from './reports/assignment';
 export * from './reports/compatible';
 export * from './reports/submit';
+export * from './reports/calendar';
 export * from './tasks/rules';
 export * from './money/requisites';
 export * from './kpi/indicators';

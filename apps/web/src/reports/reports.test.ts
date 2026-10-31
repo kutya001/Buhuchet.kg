@@ -78,6 +78,7 @@ const actor = (
     changeSum: true,
     rollback: true,
     filesUpload: true,
+    assign: true,
     ...over,
   },
   ...o,

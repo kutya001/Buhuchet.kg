@@ -17,6 +17,7 @@ import {
   buttonClass,
   Icon,
   KeyValues,
+  linkButtonClass,
   MiniTable,
   Modal,
   Note,
@@ -31,7 +32,7 @@ import {
   type ActionEntry,
   type KeyValueItem,
 } from '@buhuchet/ui';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
 import { RecordFiles } from '../files/record-files';
 import { useT } from '../l10n/provider';
@@ -54,7 +55,7 @@ import {
   reportScaleSteps,
   type ReportActor,
 } from './report-menu';
-import { reportQuery } from './reports-data';
+import { reportQuery, responsibleOptionsQuery } from './reports-data';
 
 /** Кто и когда: имя, под ним момент мелким серым (прототип `auditKv`). */
 function Audit({ who, at }: { who: string | null; at: string }) {
@@ -110,8 +111,15 @@ function LinesValue({ t, lines }: { t: Translate; lines: Card['lines'] }) {
   );
 }
 
-/** Строки «подпись — значение» (прототип openReport, `.kv`). */
-function cardItems(t: Translate, r: Card): KeyValueItem[] {
+/**
+ * Строки «подпись — значение» (прототип openReport, `.kv`). У ответственного с правом «Назначать
+ * отчёты» — «сменить» (у прежней версии нет: она только для просмотра, решение Б-7).
+ */
+function cardItems(
+  t: Translate,
+  r: Card,
+  onResponsible: ((anchor: HTMLElement) => void) | null,
+): KeyValueItem[] {
   const items: KeyValueItem[] = [
     {
       id: 'created',
@@ -162,7 +170,25 @@ function cardItems(t: Translate, r: Card): KeyValueItem[] {
   items.push({
     id: 'responsible',
     label: t('report.card.responsible'),
-    value: r.responsible?.shortName ?? '—',
+    value: (
+      <>
+        {r.responsible?.shortName ?? '—'}
+        {onResponsible ? (
+          <>
+            {' '}
+            <button
+              type="button"
+              data-report-responsible=""
+              aria-haspopup="menu"
+              className={`${linkButtonClass()} text-[12px]`}
+              onClick={(e) => onResponsible(e.currentTarget)}
+            >
+              {t('report.card.change_responsible')}
+            </button>
+          </>
+        ) : null}
+      </>
+    ),
   });
   if (r.act !== 'pay')
     items.push({
@@ -338,6 +364,7 @@ export function ReportCardWindow({
   onAction,
   onBack,
   onVersion,
+  onResponsible,
 }: {
   id: string;
   /** Строка списка — показывается, пока карточка не загрузилась. */
@@ -351,12 +378,38 @@ export function ReportCardWindow({
   onBack: (r: Card, to: string) => void;
   /** Открыть другую версию отчёта. */
   onVersion: (id: string) => void;
+  /** «сменить» ответственного: выбран сотрудник. */
+  onResponsible: (r: Card, employeeId: string) => void;
 }) {
   const t = useT();
+  const toast = useToast();
+  const client = useQueryClient();
   const query = useQuery(reportQuery(id));
   const r = query.data ?? null;
   const shown = r ?? initial;
   const [menu, setMenu] = useState<HTMLElement | null>(null);
+  const [people, setPeople] = useState<{
+    anchor: HTMLElement;
+    items: ActionEntry[];
+  } | null>(null);
+  // Меню действующих сотрудников (прототип `#rc-resp`): текущий ответственный отмечен.
+  const openPeople = async (anchor: HTMLElement) => {
+    if (!r) return;
+    const list = await client.fetchQuery(responsibleOptionsQuery).catch(() => null);
+    if (!list) return void toast(t('err.unknown'), { bad: true });
+    setPeople({
+      anchor,
+      items: list.employees.map((e) => ({
+        id: e.id,
+        label: e.shortName,
+        icon: 'user',
+        on: e.id === r.responsible?.id,
+        run: () => onResponsible(r, e.id),
+      })),
+    });
+  };
+  const changeResponsible =
+    r && actor?.can.assign && !r.superseded ? (a: HTMLElement) => void openPeople(a) : null;
   const items = r ? actions(r) : [];
   const buttons = r && actor ? reportCardButtons(r, actor) : null;
 
@@ -445,9 +498,18 @@ export function ReportCardWindow({
             onStep={(action) => onAction(action, r)}
             onBack={(to) => onBack(r, to)}
             onVersion={onVersion}
+            onResponsible={changeResponsible}
           />
         ) : null}
       </div>
+      {people ? (
+        <ActionMenu
+          items={people.items}
+          place={{ anchor: people.anchor }}
+          label={t('report.card.responsible')}
+          onClose={() => setPeople(null)}
+        />
+      ) : null}
       {menu && r ? (
         <ActionMenu
           items={items}
@@ -467,6 +529,7 @@ function CardBody({
   onStep,
   onBack,
   onVersion,
+  onResponsible,
 }: {
   t: Translate;
   r: Card;
@@ -474,6 +537,7 @@ function CardBody({
   onStep: (action: 'start' | 'submit') => void;
   onBack: (to: string) => void;
   onVersion: (id: string) => void;
+  onResponsible: ((anchor: HTMLElement) => void) | null;
 }) {
   const events = statusEvents(r.statusHistory);
   const history = historyView(t, 'report', events, new Date());
@@ -496,7 +560,7 @@ function CardBody({
       ) : null}
       <ConfirmBox t={t} r={r} actor={actor} />
       <Box>
-        <KeyValues items={cardItems(t, r)} />
+        <KeyValues items={cardItems(t, r, onResponsible)} />
         {r.penalty ? <Note>{r.penalty}</Note> : null}
       </Box>
       {r.versions.length > 1 ? (

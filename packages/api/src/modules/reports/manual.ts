@@ -1,9 +1,16 @@
 import { createRoute, type RouteHandler } from '@hono/zod-openapi';
-import { manualReportDue, manualReportOptions, withOrgContext } from '@buhuchet/db';
+import { manualDueShift, manualReportDue, manualReportOptions, withOrgContext } from '@buhuchet/db';
 import { dueRuleText } from '@buhuchet/domain';
-import { ManualReportDue, ManualReportDueQuery, ManualReportOptions } from '@buhuchet/shared';
+import {
+  ManualReportDue,
+  ManualReportDueQuery,
+  ManualReportOptions,
+  ReportDueShift,
+  ReportDueShiftQuery,
+} from '@buhuchet/shared';
 import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
+import { apiFail } from '../../errors';
 import { orgContextOf, requirePermission } from '../../middleware/access';
 import { subjectOf, todayOf, translateOf } from '../contractors/common';
 import { assigneeScopeOf, error, withReportErrors } from './common';
@@ -90,5 +97,41 @@ export function manualReportDueHandler(
       ),
     );
     return c.json({ due }, 200);
+  };
+}
+
+export const reportDueShiftRoute = createRoute({
+  method: 'get',
+  path: '/reports/due-shift',
+  tags: ['reports'],
+  summary: 'Срок «Разового отчёта» после переноса с нерабочего дня',
+  middleware: [requirePermission('changeStatus')] as const,
+  request: { query: ReportDueShiftQuery },
+  responses: {
+    200: {
+      description: 'Ближайший рабочий день по производственному календарю (у вида с переносом)',
+      content: { 'application/json': { schema: ReportDueShift } },
+    },
+    400: { description: 'Неверные данные: вид или дата', content: error },
+    401: { description: 'Нет входа', content: error },
+    403: noRight,
+  },
+});
+
+/**
+ * Подсказка под полем срока (ТЗ: «под полем видно «21.11.2026 — нерабочий день: срок будет
+ * 23.11.2026»»; прототип adhocDlg, `offTxt`), задача 2.15. Создание переносит срок так же.
+ */
+export function reportDueShiftHandler(
+  deps: ApiDeps,
+): RouteHandler<typeof reportDueShiftRoute, AppEnv> {
+  return async (c) => {
+    const { reportTypeCode, date } = c.req.valid('query');
+    const shifted = await withOrgContext(deps.db, orgContextOf(c), (tx) =>
+      manualDueShift(tx, reportTypeCode, date),
+    );
+    if (!shifted)
+      apiFail(400, 'validation_failed', 'Нет такого вида отчёта', { field: 'reportTypeCode' });
+    return c.json({ date: shifted }, 200);
   };
 }

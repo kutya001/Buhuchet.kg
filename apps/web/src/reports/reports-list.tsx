@@ -35,6 +35,7 @@ import { useListPage, type FetchListPage } from '../lists/use-list-page';
 import { useViewSettings } from '../lists/view-settings';
 import { useShell } from '../shell/context';
 import { moduleHref, tabHref } from '../shell/modules';
+import { useMassAssign } from './mass-assign';
 import { useReportActions, useReportAddRequest } from './report-actions';
 import { isPlateFilter, plateFilters, type PlateFilter } from './report-plates';
 import {
@@ -180,7 +181,8 @@ export function ReportsList({ tab }: { tab: ReportListTab }) {
   );
   const exporter = useListExport(sendExport);
   const reports = useReportActions();
-  useReportAddRequest(reports.newReport);
+  const mass = useMassAssign();
+  useReportAddRequest({ adhoc: reports.newReport, mass: mass.open });
 
   // Плашка с другой вкладки: фильтр на «Все отчёты» и адрес без `?plate=`.
   useEffect(() => {
@@ -360,6 +362,7 @@ export function ReportsList({ tab }: { tab: ReportListTab }) {
         onOpen={reports.openCard}
         bulk={reports.bulk(tab)}
       />
+      {mass.dialog}
       {reports.dialogs}
     </div>
   );

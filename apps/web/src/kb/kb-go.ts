@@ -41,7 +41,16 @@ export const KB_GO: Readonly<Record<string, KbTarget>> = {
   empcard: { module: 'staff', tab: 'list', flash: LIST },
   // Контрагенты (задача 2.09): до списка (2.10) подсвечивается экран модуля, форма открывается сама.
   cp1: { module: 'cps', tab: 'all', flash: 'main', open: { add: 'contractor' } },
-  // «Отчеты для сдачи» (задача 2.13).
+  // «Отчеты для сдачи» (задача 2.13). «Назначить отчёты» (2.15): «Кто что сдаёт» и сразу окно
+  // массового назначения.
+  assign: {
+    module: 'reports',
+    tab: 'matrix',
+    flash: '[data-add-button="button"]',
+    phoneFlash: '[data-add-button="fab"]',
+    open: { add: 'mass' },
+  },
+  matrix: { module: 'reports', tab: 'matrix', flash: '[data-matrix], main' },
   rtabs: { module: 'reports', tab: 'week', flash: '[data-tabrow]' },
   // Сдача и подтверждение (задача 2.14): «На неделе» и «Ожидают подтверждения»; массовая отметка,
   // «Создать уточнённый» (меню сданного), «Не требуется» и шкала — список «Все».

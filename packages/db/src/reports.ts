@@ -1726,6 +1726,41 @@ export async function changeReportDue(
   return updated!;
 }
 
+/**
+ * «сменить» ответственного в карточке отчёта (прототип report-card.js, `#rc-resp`: «Ответственный: было →
+ * стало» в истории отчёта): любой отчёт, кроме прежней версии уточнённого; сотрудника проверяет API.
+ * Тот же — без изменений.
+ */
+export async function changeReportResponsible(
+  tx: Tx,
+  id: string,
+  employeeId: string,
+  context: { version: number; scope: SQL | undefined },
+): Promise<typeof reports.$inferSelect> {
+  const r = await lockReport(tx, id, context.scope);
+  if (r.version !== context.version) throw new ReportChangedError(id, r.version);
+  if (r.superseded) throw new ReportStateError(id, 'superseded');
+  if (r.responsibleEmployeeId === employeeId) return r;
+  const [updated] = await tx
+    .update(reports)
+    .set({
+      responsibleEmployeeId: employeeId,
+      version: sql`${reports.version} + 1`,
+      updatedAt: sql`now()`,
+      updatedBy: sql`app.current_user_id()`,
+    })
+    .where(eq(reports.id, id))
+    .returning();
+  await writeHistory(tx, {
+    entity: 'report',
+    entityId: id,
+    action: 'update',
+    changes: [{ field: 'responsibleEmployeeId', from: r.responsibleEmployeeId, to: employeeId }],
+    contractorId: r.contractorId,
+  });
+  return updated!;
+}
+
 /** Ввод «Разового отчёта». */
 export interface ManualReportInput {
   contractorId: string;
@@ -1839,6 +1874,8 @@ export async function createManualReport(
       { field: 'periodStart', to: created.periodStart },
       ...(event ? [{ field: 'eventDate', to: event }] : []),
       { field: 'dueDate', to: due },
+      // Срок пришёлся на нерабочий день и перенесён (ТЗ: «в истории отчёта — на какой день срок перенесён»).
+      ...(due !== entered ? [{ field: 'dueShift', from: entered, to: due }] : []),
     ],
     reason: input.reasonName,
     contractorId: input.contractorId,
@@ -1890,6 +1927,22 @@ export async function manualReportOptions(
       .orderBy(asc(reportTypes.sortOrder), asc(reportTypes.code)),
   ]);
   return { contractors: cps, types };
+}
+
+/**
+ * Срок «Разового отчёта» после переноса с нерабочего дня — до сохранения (прототип adhocDlg, `offTxt`:
+ * «21.11.2026 — нерабочий день: срок будет 23.11.2026»): у вида с переносом — ближайший рабочий день по
+ * производственному календарю, иначе та же дата; вида нет — null.
+ */
+export async function manualDueShift(
+  tx: Tx,
+  typeCode: string,
+  date: IsoDate,
+): Promise<IsoDate | null> {
+  const [types, calendar] = await Promise.all([reportTypeInfos(tx, [typeCode]), calendarOf(tx)]);
+  const type = types.get(typeCode);
+  if (!type) return null;
+  return type.shiftToWorkday ? nextWorkingDay(calendar, date) : date;
 }
 
 /**

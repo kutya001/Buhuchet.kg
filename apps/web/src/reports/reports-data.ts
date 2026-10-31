@@ -1,10 +1,14 @@
 'use client';
 
 import {
+  AssignmentMassOptions,
   DueChangeReasons,
   ManualReportOptions,
+  ReportCalendar,
   ReportCard,
+  ReportMatrix,
   ReportTabCounts,
+  ResponsibleOptions,
 } from '@buhuchet/shared';
 import type { ShellCount } from '@buhuchet/ui';
 import { queryOptions, useQueryClient } from '@tanstack/react-query';
@@ -13,7 +17,8 @@ import { api, apiFailure } from '../api-client';
 
 /**
  * Данные модуля «Отчеты для сдачи» через TanStack Query: счётчики вкладок, плашки и числа быстрого
- * фильтра, карточка отчёта, списки окна «Разовый отчёт», причины изменения срока. После действия —
+ * фильтра, карточка отчёта, списки окна «Разовый отчёт», причины изменения срока, сетка «Кто что
+ * сдаёт», окно массового назначения, числа «Календаря», сотрудники для «сменить». После действия —
  * `useReportsRefresh`.
  */
 
@@ -91,14 +96,63 @@ export const dueReasonsQuery = queryOptions({
   staleTime: 10 * 60_000,
 });
 
-/** После действия с отчётом — перечитать карточки, списки вкладок, счётчики и блоки «Файлы». */
+/** Сетка «Кто что сдаёт» с поиском оболочки по названию и ИНН (прототип renderMatrix). */
+export function reportMatrixQuery(q: string) {
+  return queryOptions({
+    queryKey: ['reports', 'matrix', q],
+    queryFn: async () =>
+      json(await api.api.reports.matrix.$get({ query: q ? { q } : {} }), (v) =>
+        ReportMatrix.parse(v),
+      ),
+  });
+}
+
+/** Окно «Назначить отчёт нескольким контрагентам»: виды, выбранный вид и контрагенты в области. */
+export function massAssignQuery(type: string | null) {
+  return queryOptions({
+    queryKey: ['reports', 'mass', type ?? ''],
+    queryFn: async () =>
+      json(await api.api.assignments.mass.$get({ query: type ? { type } : {} }), (v) =>
+        AssignmentMassOptions.parse(v),
+      ),
+    staleTime: 30_000,
+  });
+}
+
+/** Числа дней «Календаря» месяца `YYYY-MM` (прототип renderCalendar). */
+export function reportCalendarQuery(month: string) {
+  return queryOptions({
+    queryKey: ['reports', 'calendar', month],
+    queryFn: async () =>
+      json(await api.api.reports.calendar.$get({ query: { month } }), (v) =>
+        ReportCalendar.parse(v),
+      ),
+  });
+}
+
+/** Действующие сотрудники для «сменить» ответственного в карточке отчёта. */
+export const responsibleOptionsQuery = queryOptions({
+  queryKey: ['reports', 'responsible-options'],
+  queryFn: async () =>
+    json(await api.api.assignments['responsible-options'].$get(), (v) =>
+      ResponsibleOptions.parse(v),
+    ),
+  staleTime: 60_000,
+});
+
+/**
+ * После действия с отчётом — перечитать карточки, списки вкладок и дня «Календаря», счётчики, сетку
+ * «Кто что сдаёт», числа «Календаря» и блоки «Файлы».
+ */
 export function useReportsRefresh() {
   const client = useQueryClient();
   return useCallback(() => {
     void client.invalidateQueries({ queryKey: ['reports', 'summary'] });
     void client.invalidateQueries({ queryKey: ['reports', 'card'] });
+    void client.invalidateQueries({ queryKey: ['reports', 'matrix'] });
+    void client.invalidateQueries({ queryKey: ['reports', 'calendar'] });
     void client.invalidateQueries({ queryKey: ['files', 'report'] });
-    for (const tab of REPORT_LIST_TABS)
+    for (const tab of [...REPORT_LIST_TABS, 'calendar'])
       void client.invalidateQueries({ queryKey: ['list', `reports.${tab}`] });
   }, [client]);
 }

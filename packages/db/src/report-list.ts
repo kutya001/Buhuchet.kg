@@ -15,7 +15,7 @@ import {
   type ReportStatus,
   type Translate,
 } from '@buhuchet/domain';
-import { and, asc, desc, eq, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, ne, or, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { Tx } from './client';
 import {
@@ -449,8 +449,8 @@ export function reportListColumns(
   };
 }
 
-/** Вкладки списка (прототип repTabs). */
-export const REPORT_TABS = ['week', 'overdue', 'waiting', 'all'] as const;
+/** Вкладки списка (прототип repTabs); «Календарь» — отчёты выбранного дня (прототип `S.calSel`). */
+export const REPORT_TABS = ['week', 'overdue', 'waiting', 'all', 'calendar'] as const;
 export type ReportTab = (typeof REPORT_TABS)[number];
 
 /**
@@ -472,6 +472,8 @@ export interface ReportListOptions {
   /** Быстрый фильтр «Все / Сдать / Уплатить». */
   quick: ReportQuick;
   waiting: ReportWaitingView;
+  /** Вкладка «Календарь»: день и включён ли «Учёт оплаты налогов» (тогда — и оплаты с этим сроком). */
+  day?: { date: IsoDate; taxpay: boolean };
 }
 
 /**
@@ -516,15 +518,29 @@ function waitingCondition(w: ReportWaitingView): SQL {
   return and(waitingOf(w.confirm), own)!;
 }
 
-function tabCondition(o: Pick<ReportListOptions, 'tab' | 'today' | 'waiting'>): SQL | undefined {
+/**
+ * Отчёты дня календаря (прототип renderCalendar, `cal-grid`): срок сдачи в этот день, а при учёте оплаты
+ * налогов — и неоплаченная сумма со сроком оплаты в этот день. Оплаченные уберёт задача 2.19.
+ */
+function dayCondition(day: NonNullable<ReportListOptions['day']>): SQL {
+  const pay = day.taxpay
+    ? sql` or (${reports.amount} > 0 and ${reports.payDue} = ${dateLiteral(day.date)})`
+    : sql``;
+  return sql`(${reports.dueDate} = ${dateLiteral(day.date)}${pay})`;
+}
+
+function tabCondition(
+  o: Pick<ReportListOptions, 'tab' | 'today' | 'waiting' | 'day'>,
+): SQL | undefined {
   if (o.tab === 'week') return weekCondition(o.today);
   if (o.tab === 'overdue') return overdueOf(o.today);
   if (o.tab === 'waiting') return waitingCondition(o.waiting);
+  if (o.tab === 'calendar') return o.day ? dayCondition(o.day) : sql`false`;
   return undefined;
 }
 
 function listScope(
-  o: Pick<ReportListOptions, 'scope' | 'tab' | 'today' | 'quick' | 'waiting'>,
+  o: Pick<ReportListOptions, 'scope' | 'tab' | 'today' | 'quick' | 'waiting' | 'day'>,
 ): SQL | undefined {
   return and(eq(reports.superseded, false), o.scope, tabCondition(o), quickOf(o.quick));
 }
@@ -834,6 +850,10 @@ export interface ReportQuickCounts {
   pay: number;
 }
 
+/** Вкладки с быстрым фильтром и счётчиком: у «Календаря» их нет. */
+const SUMMARY_TABS = ['week', 'overdue', 'waiting', 'all'] as const;
+type ReportSummaryTab = (typeof SUMMARY_TABS)[number];
+
 /** Счётчики вкладок, плашек и быстрого фильтра (прототип counts, renderReports). */
 export interface ReportSummary {
   overdue: number;
@@ -844,7 +864,7 @@ export interface ReportSummary {
   /** «К уплате за <месяц>»: суммы больше нуля со сроком оплаты в текущем месяце, тыйыны. */
   toPayMonth: number;
   /** Быстрый фильтр каждой вкладки — без фильтров и поиска списка (прототип: `base()`). */
-  quick: Record<ReportTab, ReportQuickCounts>;
+  quick: Record<ReportSummaryTab, ReportQuickCounts>;
   /** В организации ещё нет ни одного отчёта (прототип ui/empty.js, `firstEmpty`). */
   empty: boolean;
 }
@@ -864,7 +884,7 @@ export async function reportSummary(
   const count = (where: SQL | undefined) =>
     sql<number>`count(*) filter (where ${where ?? sql`true`})`.mapWith(Number);
   const tabs = Object.fromEntries(
-    REPORT_TABS.flatMap((tab) => {
+    SUMMARY_TABS.flatMap((tab) => {
       const base = tabCondition({ tab, today: o.today, waiting: o.waiting });
       return REPORT_QUICK.map((q) => [`${tab}_${q}`, count(and(base, quickOf(q)))]);
     }),
@@ -887,11 +907,11 @@ export async function reportSummary(
   const r = (row ?? {}) as Record<string, unknown>;
   const n = (key: string) => Number(r[key] ?? 0);
   const quick = Object.fromEntries(
-    REPORT_TABS.map((tab) => [
+    SUMMARY_TABS.map((tab) => [
       tab,
       { all: n(`${tab}_all`), sub: n(`${tab}_sub`), pay: n(`${tab}_pay`) },
     ]),
-  ) as Record<ReportTab, ReportQuickCounts>;
+  ) as Record<ReportSummaryTab, ReportQuickCounts>;
   return {
     overdue: quick.overdue.all,
     week: quick.week.all,
@@ -901,6 +921,63 @@ export async function reportSummary(
     quick,
     empty: Boolean(r.empty),
   };
+}
+
+/** Числа дня календаря: отчётов к сдаче, сданных (и остальных со сроком в этот день) и оплат. */
+export interface ReportCalendarCounts {
+  todo: number;
+  done: number;
+  pay: number;
+}
+
+/**
+ * Числа дней календаря в области сотрудника (прототип renderCalendar): по сроку сдачи — «к сдаче»
+ * (несданные со сдачей) и «сдано» (остальные со сроком в этот день, как `list.length - todo`), без «Не
+ * требуется» и прежних версий; при учёте оплаты налогов — «оплат» по сроку оплаты у сумм больше нуля
+ * (неоплаченные — с задачей 2.19).
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#Б-8
+export async function reportCalendarCounts(
+  tx: Tx,
+  o: { from: IsoDate; to: IsoDate; scope: SQL | undefined; taxpay: boolean },
+): Promise<Map<IsoDate, ReportCalendarCounts>> {
+  const base = and(eq(reports.superseded, false), ne(reports.status, 'not_required'), o.scope);
+  const between = (col: typeof reports.dueDate | typeof reports.payDue) =>
+    sql`${col} between ${dateLiteral(o.from)} and ${dateLiteral(o.to)}`;
+  const [due, pay] = await Promise.all([
+    tx
+      .select({
+        day: reports.dueDate,
+        todo: sql<number>`count(*) filter (where ${reports.act} <> 'pay' and ${OPEN})`.mapWith(
+          Number,
+        ),
+        all: sql<number>`count(*)`.mapWith(Number),
+      })
+      .from(reports)
+      .innerJoin(contractors, eq(contractors.id, reports.contractorId))
+      .where(and(base, between(reports.dueDate)))
+      .groupBy(reports.dueDate),
+    o.taxpay
+      ? tx
+          .select({
+            day: sql<IsoDate>`${reports.payDue}`,
+            n: sql<number>`count(*)`.mapWith(Number),
+          })
+          .from(reports)
+          .innerJoin(contractors, eq(contractors.id, reports.contractorId))
+          .where(and(base, sql`${reports.amount} > 0`, between(reports.payDue)))
+          .groupBy(reports.payDue)
+      : Promise.resolve([]),
+  ]);
+  const out = new Map<IsoDate, ReportCalendarCounts>();
+  const at = (day: IsoDate) => {
+    const x = out.get(day) ?? { todo: 0, done: 0, pay: 0 };
+    out.set(day, x);
+    return x;
+  };
+  for (const r of due) Object.assign(at(r.day), { todo: r.todo, done: r.all - r.todo });
+  for (const r of pay) at(r.day).pay = r.n;
+  return out;
 }
 
 /** Одна строка списка по id (карточка берёт поля строки и добавляет своё); null — нет или вне области. */

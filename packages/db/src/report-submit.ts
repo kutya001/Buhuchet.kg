@@ -1026,6 +1026,17 @@ export async function reportSubmitView(
         .where(inArray(authorities.code, codes))
     : [];
   const organ = new Map(organs.map((o) => [o.code, o.name]));
+  const people = await employeeNames(
+    tx,
+    history.flatMap((h) =>
+      ((h.changes ?? []) as HistoryChange[])
+        .filter((c) => c.field === 'responsibleEmployeeId')
+        .flatMap((c) => [c.from, c.to]),
+    ),
+  );
+  /** «Ответственный: было → стало» — краткими именами сотрудников (прототип `empName`). */
+  const named = (c: HistoryChange): HistoryChange =>
+    c.field === 'responsibleEmployeeId' ? { ...c, from: people(c.from), to: people(c.to) } : c;
   return {
     confirmNote: r.confirmNote,
     payments: (kind?.payments ?? []).map((p) => ({
@@ -1049,7 +1060,20 @@ export async function reportSubmitView(
       actor: auditActorName(h.actorUserId, h.actorName),
       action: h.action,
       reason: h.reason,
-      changes: (h.changes ?? []) as HistoryChange[],
+      changes: ((h.changes ?? []) as HistoryChange[]).map(named),
     })),
   };
+}
+
+/** Краткие имена сотрудников по номерам из записей истории; не номер — null. */
+async function employeeNames(tx: Tx, values: readonly unknown[]) {
+  const ids = [...new Set(values.filter((v): v is string => typeof v === 'string'))];
+  const rows = ids.length
+    ? await tx
+        .select({ id: employees.id, shortName: employees.shortName })
+        .from(employees)
+        .where(inArray(employees.id, ids))
+    : [];
+  const byId = new Map(rows.map((e) => [e.id, e.shortName]));
+  return (v: unknown) => (typeof v === 'string' ? (byId.get(v) ?? null) : null);
 }
