@@ -1,4 +1,3 @@
-import type { HistoryChange, HistoryValue } from '../common/history';
 import type { ListColumnType, ListSort } from '../common/list';
 import type { UiTextKey } from '../l10n/texts';
 import { MENU_MODULE_IDS, type MenuModuleId } from '../org/modules';
@@ -124,7 +123,8 @@ export function kbStepProblems(
   if (!known.groups.has(input.g)) out.g = 'kb_unknown';
   if (input.art && !known.articles.has(input.art)) out.art = 'kb_unknown';
   if (input.perm && !PERMISSION_IDS.has(input.perm)) out.perm = 'kb_unknown';
-  if (input.featk && !(FEATURES as readonly string[]).includes(input.featk)) out.featk = 'kb_unknown';
+  if (input.featk && !(FEATURES as readonly string[]).includes(input.featk))
+    out.featk = 'kb_unknown';
   if (!isKbEvent(input.evk)) out.evk = 'kb_unknown';
   if (known.isNew && !(input.mod && isMenuModuleId(input.mod))) out.mod = 'kb_unknown';
   return out;
@@ -181,8 +181,7 @@ export function kbLevelsProblem(levels: readonly KbLevelDef[]): KbLevelsProblem 
   if (levels.some((l) => !l.n.trim())) return 'kb_level_name';
   if (levels.some((l) => l.n.trim().length > KB_LEVEL_NAME_MAX)) return 'kb_level_name_too_long';
   const ok = levels.every(
-    (l, j) =>
-      Number.isInteger(l.p) && (j === 0 ? l.p === 0 : l.p > levels[j - 1]!.p && l.p <= 100),
+    (l, j) => Number.isInteger(l.p) && (j === 0 ? l.p === 0 : l.p > levels[j - 1]!.p && l.p <= 100),
   );
   return ok ? null : 'kb_level_order';
 }
@@ -246,13 +245,20 @@ export const KB_TAB_HISTORY: Readonly<Record<'steps' | 'arts' | 'levels', KbHist
   levels: 'kblevels',
 };
 
+/** Изменённое поле записи истории: было → стало (значения как в JSON). */
+export interface KbHistoryChange {
+  field: string;
+  from?: unknown;
+  to?: unknown;
+}
+
 export interface KbHistoryItemInput {
   section: KbHistorySection;
   code: string;
   action: string;
   /** Название на момент записи. */
   label: string;
-  changes: readonly HistoryChange[];
+  changes: readonly KbHistoryChange[];
 }
 
 /** Строка истории: ключ словаря и подстановки. */
@@ -270,11 +276,12 @@ const STEP_FIELDS: readonly [string, UiTextKey][] = [
   ['featk', 'kbadm.hist.f.feat'],
 ];
 
-const only = (changes: readonly HistoryChange[], field: string) =>
+const only = (changes: readonly KbHistoryChange[], field: string) =>
   changes.length === 1 && changes[0]!.field === field ? changes[0]! : null;
 
-const levelText = (v: HistoryValue | undefined, t: (key: UiTextKey) => string) => {
-  const l = v && typeof v === 'object' && !Array.isArray(v) ? v : {};
+const levelText = (v: unknown, t: (key: UiTextKey) => string) => {
+  const l: Record<string, unknown> =
+    v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
   return `${String(l.n ?? '')} ${String(l.p ?? '')} ${t('kbadm.hist.percent')}`;
 };
 

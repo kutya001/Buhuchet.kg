@@ -46,6 +46,7 @@ export type KbBlock =
   | { type: 'image'; src: string; alt: string };
 
 /** Адрес картинки статьи: загруженная в Админке (`/api/news/images/<id>`). */
+// ОТКЛОНЕНИЕ: docs/deviations.md#Д-26
 const IMAGE_SRC = new RegExp(`^${NEWS_IMAGE_PATH}[0-9a-f-]{36}$`);
 
 const ENTITIES: Readonly<Record<string, string>> = {
@@ -69,9 +70,7 @@ function decode(text: string): string {
 }
 
 type Token =
-  | { open: string; mod?: string; src?: string; alt?: string }
-  | { close: string }
-  | { text: string };
+  { open: string; mod?: string; src?: string; alt?: string } | { close: string } | { text: string };
 
 /** Значение атрибута тега в кавычках (`name="…"`), с разбором сущностей. */
 const attr = (attrs: string, name: string): string | undefined => {
@@ -90,7 +89,11 @@ function tokenize(html: string): Token[] {
     const tag = m[2]!.toLowerCase();
     if (m[1]) out.push({ close: tag });
     else if (tag === 'img') {
-      out.push({ open: tag, src: attr(m[3] ?? '', 'src') ?? '', alt: attr(m[3] ?? '', 'alt') ?? '' });
+      out.push({
+        open: tag,
+        src: attr(m[3] ?? '', 'src') ?? '',
+        alt: attr(m[3] ?? '', 'alt') ?? '',
+      });
     } else {
       const mod = /data-mod\s*=\s*"([^"]*)"/.exec(m[3] ?? '')?.[1];
       out.push(mod === undefined ? { open: tag } : { open: tag, mod });

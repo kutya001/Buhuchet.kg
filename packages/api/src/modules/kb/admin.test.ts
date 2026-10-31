@@ -163,9 +163,7 @@ describe.skipIf(!databaseAvailable())(
       expect(off.status).toBe(200);
       expect((await lessons()).some((s) => s.id === added.id)).toBe(false);
 
-      const rows = AdminKbRowList.parse(
-        await (await get(`${P}/list/steps?size=all`)).json(),
-      ).items;
+      const rows = AdminKbRowList.parse(await (await get(`${P}/list/steps?size=all`)).json()).items;
       const row = rows.find((r) => r.id === added.id)!;
       expect(row).toMatchObject({ active: false, isNew: true, canUp: true, canDown: false });
       expect(row.values).toMatchObject({
@@ -223,7 +221,12 @@ describe.skipIf(!databaseAvailable())(
 
       const preview = KbArticle.parse(
         await (
-          await send('POST', `${P}/arts/preview`, { t: input.t, sec: input.sec, mod: 'cps', html: input.html })
+          await send('POST', `${P}/arts/preview`, {
+            t: input.t,
+            sec: input.sec,
+            mod: 'cps',
+            html: input.html,
+          })
         ).json(),
       );
       expect(preview.blocks).toEqual([

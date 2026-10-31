@@ -103,10 +103,12 @@ describe.skipIf(!databaseAvailable())(
         ),
       );
       expect(saved).toMatchObject({ ok: true, value: { t: 'Дни и месяцы', version: 2 } });
-      const raw = ((await asAdmin((tx) => readReference(tx, 'kbSteps')))!.payload as {
-        id: string;
-        at?: string[];
-      }[]).find((s) => s.id === 'daymonth')!;
+      const raw = (
+        (await asAdmin((tx) => readReference(tx, 'kbSteps')))!.payload as {
+          id: string;
+          at?: string[];
+        }[]
+      ).find((s) => s.id === 'daymonth')!;
       expect(raw.at).toEqual(['tasks.mine', 'tasks.overdue', 'tasks.all']);
       // Шаг программы организации — тот же, с новым названием.
       const catalog = await asOwner((tx) => kbCatalog(tx));
@@ -153,10 +155,12 @@ describe.skipIf(!databaseAvailable())(
       const step = added.ok ? added.value : null;
       expect(step).toMatchObject({ isNew: true, mod: 'cps', module: 'cps', version: 1 });
       expect(step!.id).toMatch(/^u[0-9a-f]{12}$/);
-      const raw = ((await asAdmin((tx) => readReference(tx, 'kbSteps')))!.payload as {
-        id: string;
-        at?: string[];
-      }[]).find((s) => s.id === step!.id)!;
+      const raw = (
+        (await asAdmin((tx) => readReference(tx, 'kbSteps')))!.payload as {
+          id: string;
+          at?: string[];
+        }[]
+      ).find((s) => s.id === step!.id)!;
       expect(raw.at).toEqual(['cps']);
       const steps = await asAdmin((tx) => adminKbSteps(tx));
       const cps = steps.filter((s) => s.g === 'cps');
@@ -167,7 +171,9 @@ describe.skipIf(!databaseAvailable())(
       const after = (await asAdmin((tx) => adminKbSteps(tx))).filter((s) => s.g === 'cps');
       expect(after[after.length - 2]!.id).toBe(step!.id);
       // Первый шаг модуля выше не двигается.
-      expect(await asAdmin((tx) => adminKbStepMove(tx, after[0]!.id, 'up', after[0]!.version))).toEqual({
+      expect(
+        await asAdmin((tx) => adminKbStepMove(tx, after[0]!.id, 'up', after[0]!.version)),
+      ).toEqual({
         ok: false,
         reason: 'not_found',
       });
@@ -195,9 +201,7 @@ describe.skipIf(!databaseAvailable())(
       const added = await asAdmin((tx) => adminKbArticleSave(tx, null, input, 0));
       expect(added).toMatchObject({ ok: true, value: { t: 'Новая статья', version: 1 } });
       const id = added.ok ? added.value.id : '';
-      const off = await asAdmin((tx) =>
-        adminKbArticleSave(tx, id, { ...input, active: false }, 1),
-      );
+      const off = await asAdmin((tx) => adminKbArticleSave(tx, id, { ...input, active: false }, 1));
       expect(off).toMatchObject({ ok: true, value: { active: false, version: 2 } });
       expect(await asAdmin((tx) => adminKbArticleSave(tx, id, input, 1))).toEqual({
         ok: false,
@@ -230,7 +234,9 @@ describe.skipIf(!databaseAvailable())(
       const now = (await asAdmin((tx) => adminKbLevels(tx)))!;
       expect(now.business[1]).toEqual({ n: 'Ученик', p: 30 });
       expect(now.admin).toEqual(levels.admin);
-      expect(await asAdmin((tx) => adminKbLevelsSave(tx, 'admin', levels.admin, levels.version))).toEqual({
+      expect(
+        await asAdmin((tx) => adminKbLevelsSave(tx, 'admin', levels.admin, levels.version)),
+      ).toEqual({
         ok: false,
         reason: 'changed',
       });

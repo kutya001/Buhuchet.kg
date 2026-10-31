@@ -440,7 +440,11 @@ export const MODULES: Record<MenuModuleId, ModuleDef> = {
       { id: 'levels', icon: 'grad', label: 'tab.kbadm.levels' },
       { id: 'news', icon: 'bell', label: 'tab.kbadm.news' },
     ],
-    add: [{ id: 'news', icon: 'bell', label: 'add.kbadm.news', tabs: ['news'] }],
+    add: [
+      { id: 'step', icon: 'plus', label: 'add.kbadm.step', tabs: ['steps'] },
+      { id: 'art', icon: 'book', label: 'add.kbadm.art', tabs: ['arts'] },
+      { id: 'news', icon: 'bell', label: 'add.kbadm.news', tabs: ['news'] },
+    ],
   },
   tg: {
     icon: 'tg',

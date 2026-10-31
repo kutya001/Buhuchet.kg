@@ -93,6 +93,7 @@ const isLook = (evk: string | undefined) => evk === 'open' || evk === 'hand';
  * администратором, — событие, которое уже отмечает шаги, или отметка показом и статьёй (первое
  * использование и условие в данных у такого шага задать нечем).
  */
+// ОТКЛОНЕНИЕ: docs/deviations.md#Д-25
 export function kbEventWorks(evk: KbEvent, own: boolean, rules: Rules = KB_STEP_RULES): boolean {
   return own || isLook(evk) || !!eventOf(evk, rules);
 }

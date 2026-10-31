@@ -145,9 +145,7 @@ export function adminKbHistoryHandler(
 ): RouteHandler<typeof adminKbHistoryRoute, AppEnv> {
   return async (c) => {
     const { section } = c.req.valid('param');
-    const history = await adminTx(deps, c, (tx) =>
-      adminKbHistory(tx, section, DICT_HISTORY_SHOWN),
-    );
+    const history = await adminTx(deps, c, (tx) => adminKbHistory(tx, section, DICT_HISTORY_SHOWN));
     const body: AdminKbHistory = {
       total: history.total,
       items: history.items.map((h) => ({ ...h, at: h.at.toISOString() })),
@@ -218,10 +216,7 @@ export function adminKbValuesHandler(
     const { list } = c.req.valid('param');
     const { col, q } = c.req.valid('query');
     const t = await serverTexts(deps);
-    return c.json(
-      await adminTx(deps, c, (tx) => listAdminKbValues(tx, list, col, t, q)),
-      200,
-    );
+    return c.json(await adminTx(deps, c, (tx) => listAdminKbValues(tx, list, col, t, q)), 200);
   };
 }
 
@@ -437,9 +432,7 @@ export function getAdminKbArticleHandler(
 ): RouteHandler<typeof getAdminKbArticleRoute, AppEnv> {
   return async (c) => {
     const { id } = c.req.valid('param');
-    const article = (await adminTx(deps, c, (tx) => adminKbArticles(tx))).find(
-      (a) => a.id === id,
-    );
+    const article = (await adminTx(deps, c, (tx) => adminKbArticles(tx))).find((a) => a.id === id);
     if (!article) {
       return c.json(apiError('not_found', 'Статья не найдена'), 404);
     }
@@ -549,7 +542,9 @@ export function previewAdminKbArticleHandler(
     const blocks = kbArticleBlocks(input.html);
     const ui = await adminTx(deps, c, (tx) => kbScreenUi(tx));
     const screens = Object.fromEntries(
-      blocks.flatMap((b) => (b.type === 'screen' ? [[b.module, kbScreenBlocks(ui, b.module)]] : [])),
+      blocks.flatMap((b) =>
+        b.type === 'screen' ? [[b.module, kbScreenBlocks(ui, b.module)]] : [],
+      ),
     );
     return c.json(
       {

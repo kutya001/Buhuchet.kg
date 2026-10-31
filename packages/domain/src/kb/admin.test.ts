@@ -49,10 +49,7 @@ describe('шаг урока (прототип kbStepDlg)', () => {
   it('верный шаг', () => {
     expect(kbStepProblems(STEP, KNOWN)).toEqual({});
     expect(
-      kbStepProblems(
-        { ...STEP, art: 'a1', perm: 'createCp', featk: 'tasks', evk: 'open' },
-        KNOWN,
-      ),
+      kbStepProblems({ ...STEP, art: 'a1', perm: 'createCp', featk: 'tasks', evk: 'open' }, KNOWN),
     ).toEqual({});
   });
 
@@ -68,11 +65,14 @@ describe('шаг урока (прототип kbStepDlg)', () => {
 
   it('значения — только из списков', () => {
     expect(
-      kbStepProblems(
-        { ...STEP, g: 'x', art: 'zz', perm: 'root', featk: 'x', evk: 'x' },
-        KNOWN,
-      ),
-    ).toEqual({ g: 'kb_unknown', art: 'kb_unknown', perm: 'kb_unknown', featk: 'kb_unknown', evk: 'kb_unknown' });
+      kbStepProblems({ ...STEP, g: 'x', art: 'zz', perm: 'root', featk: 'x', evk: 'x' }, KNOWN),
+    ).toEqual({
+      g: 'kb_unknown',
+      art: 'kb_unknown',
+      perm: 'kb_unknown',
+      featk: 'kb_unknown',
+      evk: 'kb_unknown',
+    });
   });
 
   it('у нового шага — место для «Перейти» из модулей меню', () => {
@@ -101,7 +101,12 @@ describe('статья (прототип kbArtEditDlg)', () => {
         aud: 'x' as KbArticleInput['aud'],
         html: 'а'.repeat(100_001),
       }),
-    ).toEqual({ mod: 'kb_unknown', perm: 'kb_unknown', aud: 'kb_unknown', html: 'kb_html_too_long' });
+    ).toEqual({
+      mod: 'kb_unknown',
+      perm: 'kb_unknown',
+      aud: 'kb_unknown',
+      html: 'kb_html_too_long',
+    });
   });
 });
 
@@ -129,7 +134,8 @@ describe('уровни (прототип renderKbAdm, levels)', () => {
 describe('столбцы и тексты', () => {
   it('подписи столбцов, отказов и модулей — в словаре', () => {
     for (const list of KB_ADMIN_LISTS) {
-      for (const col of KB_ADMIN_COLUMNS[list]) expect(UI_TEXTS, col.label).toHaveProperty(col.label);
+      for (const col of KB_ADMIN_COLUMNS[list])
+        expect(UI_TEXTS, col.label).toHaveProperty(col.label);
     }
     for (const code of Object.keys(KB_ADMIN_MESSAGES)) {
       expect(UI_TEXTS, code).toHaveProperty(`kbadm.err.${code}`);

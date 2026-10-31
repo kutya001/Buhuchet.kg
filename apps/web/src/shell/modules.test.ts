@@ -170,10 +170,12 @@ describe('вкладки и «+ Добавить» по правам и учёт
     expect(addActions('pdicts', access)).toEqual([]);
   });
 
-  it('у «Базы знаний (содержимое)» способ добавления — своей вкладки: «Новость» только на «Новостях»', () => {
+  it('у «Базы знаний (содержимое)» способ добавления — своей вкладки: «Шаг урока», «Статья», «Новость»', () => {
     const access = shellAccess(me({ admin: true }));
     expect(ids(addActions('kbadm', access, 'news'))).toEqual(['news']);
-    expect(addActions('kbadm', access, 'steps')).toEqual([]);
+    expect(ids(addActions('kbadm', access, 'steps'))).toEqual(['step']);
+    expect(ids(addActions('kbadm', access, 'arts'))).toEqual(['art']);
+    expect(addActions('kbadm', access, 'levels')).toEqual([]);
   });
 });
 

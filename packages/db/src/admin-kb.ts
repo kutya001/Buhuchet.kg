@@ -174,8 +174,7 @@ export async function adminKbSteps(tx: Tx): Promise<AdminKbStep[]> {
 }
 
 export type AdminKbSaveResult<T> =
-  | { ok: true; value: T }
-  | { ok: false; reason: 'not_found' | 'changed' };
+  { ok: true; value: T } | { ok: false; reason: 'not_found' | 'changed' };
 
 const CHANGED = { ok: false, reason: 'changed' } as const;
 const NOT_FOUND = { ok: false, reason: 'not_found' } as const;

@@ -102,7 +102,9 @@ export const KB_ADMIN_TEXTS = {
   'kbadm.step.evk_hint': { ru: 'События задаёт разработчик', section: S },
   'kbadm.step.f.mod': { ru: 'Место для «Перейти»', section: S },
   'kbadm.step.f.how': { ru: 'Показ «Показать как»', section: S },
-  'kbadm.step.how_own': { ru: 'Свой сценарий: {n} облачков · вкладка «Показы»', section: S },
+  'kbadm.step.how_own.one': { ru: 'Свой сценарий: {n} облачко · вкладка «Показы»', section: S },
+  'kbadm.step.how_own.few': { ru: 'Свой сценарий: {n} облачка · вкладка «Показы»', section: S },
+  'kbadm.step.how_own.many': { ru: 'Свой сценарий: {n} облачков · вкладка «Показы»', section: S },
   'kbadm.step.how_auto': {
     ru: 'Собирается автоматически по экрану шага · вкладка «Показы»',
     section: S,
@@ -119,6 +121,7 @@ export const KB_ADMIN_TEXTS = {
   'kbadm.art.title_new': { ru: 'Новая статья', section: S },
   'kbadm.art.title': { ru: 'Статья', section: S },
   'kbadm.art.f.sec': { ru: 'Раздел', section: S },
+  'kbadm.art.sec_default': { ru: 'Модули', section: S },
   'kbadm.art.f.t': { ru: 'Название', section: S },
   'kbadm.art.f.mod': { ru: 'К какому модулю относится', section: S },
   'kbadm.art.mod_none': { ru: '— общая статья', section: S },
