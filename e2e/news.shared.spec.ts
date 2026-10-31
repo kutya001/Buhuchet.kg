@@ -109,7 +109,12 @@ test.describe('Этап 2: Новости и «Что нового»', () => {
     try {
       await page.goto('/app/kbadm/news');
       await expect(page.locator('[data-grid] [data-id]').first()).toBeVisible();
+      // «+ Добавить» → «Новость» (в меню вкладки ещё «Выгрузить в Excel» и «Загрузить из Excel»).
       await page.getByRole('button', { name: 'Добавить', exact: true }).click();
+      await page
+        .getByRole('menu', { name: 'Добавить' })
+        .getByRole('menuitem', { name: 'Новость' })
+        .click();
       const form = page.getByRole('dialog', { name: 'Новая новость' });
       await expect(form).toContainText('Сначала сохраняется черновиком');
       const publishButton = form.getByRole('button', { name: 'Опубликовать' });

@@ -43,6 +43,12 @@ async function rowAction(page: Page, row: ReturnType<Page['locator']>, name: str
   await page.getByRole('menu', { name: 'Действия' }).getByRole('menuitem', { name }).click();
 }
 
+/** Пункт меню «+ Добавить»: на вкладках с Excel в нём ещё «Выгрузить в Excel» и «Загрузить из Excel». */
+async function addMenu(page: Page, item: string) {
+  await page.getByRole('button', { name: 'Добавить', exact: true }).click();
+  await page.getByRole('menu', { name: 'Добавить' }).getByRole('menuitem', { name: item }).click();
+}
+
 test.describe('Этап 2: Админка → «База знаний (содержимое)»', () => {
   test('(проверка задачи #95) новый шаг урока появляется у организаций с «Новое», выключенный пропадает; правка — в «Истории изменений»', async ({
     page,
@@ -59,7 +65,7 @@ test.describe('Этап 2: Админка → «База знаний (соде�
     await page.goto('/app/kbadm/steps');
     await expect(page.getByText('Шаги программ обучения для всех организаций')).toBeVisible();
     await expect(page.locator('[data-grid] [data-id]').first()).toBeVisible();
-    await page.getByRole('button', { name: 'Добавить', exact: true }).click();
+    await addMenu(page, 'Шаг урока');
     const form = page.getByRole('dialog', { name: 'Новый шаг урока' });
     await expect(form).toContainText('Появится у всех с отметкой «Новое»');
     await form.getByRole('button', { name: 'Сохранить' }).click();
@@ -105,7 +111,7 @@ test.describe('Этап 2: Админка → «База знаний (соде�
     await page.goto('/app/kbadm/arts');
     await expect(page.getByText('Статьи «Базы знаний» для всех организаций')).toBeVisible();
     await expect(page.locator('[data-grid] [data-id]').first()).toBeVisible();
-    await page.getByRole('button', { name: 'Добавить', exact: true }).click();
+    await addMenu(page, 'Статья');
     const form = page.getByRole('dialog', { name: 'Новая статья' });
     await form.getByRole('textbox', { name: 'Название', exact: true }).fill(title);
     await form.getByLabel('К какому модулю относится').selectOption({ label: 'Контрагенты' });
@@ -281,11 +287,7 @@ test.describe('Этап 2: Админка → «База знаний (соде�
       await out.getByRole('button', { name: 'Закрыть' }).last().click();
       await expect(out).toBeHidden();
 
-      await page.getByRole('button', { name: 'Добавить', exact: true }).click();
-      await page
-        .getByRole('menu', { name: 'Добавить' })
-        .getByRole('menuitem', { name: 'Загрузить из Excel' })
-        .click();
+      await addMenu(page, 'Загрузить из Excel');
       const load = page.getByRole('dialog', { name: 'Загрузка: Шаги уроков' });
       await load.getByRole('button', { name: 'Подставить текущую выгрузку' }).click();
       const data = load.getByLabel('Данные');
