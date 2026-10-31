@@ -447,7 +447,9 @@ export function reportLabel(
 
 /**
  * Контрагент заблокирован до конца транзакции: деньги по нему считает одно действие. Сначала
- * блокировка, потом чтение — архив, ответственный и счёт берутся уже под ней.
+ * блокировка, потом чтение — архив, ответственный и счёт берутся уже под ней. `no key update`:
+ * денежные действия, архив и назначение идут по очереди, а вставка уточнённого отчёта (внешний ключ на
+ * контрагента) не ждёт оплату — взаимной блокировки «оплата ↔ уточнённый» нет.
  */
 async function lockContractor(
   tx: Tx,
@@ -460,7 +462,7 @@ async function lockContractor(
     .select({ id: contractors.id })
     .from(contractors)
     .where(and(eq(contractors.id, contractorId), scope))
-    .for('update');
+    .for('no key update');
   const c = locked ? await moneyContractor(tx, contractorId, scope) : null;
   if (!c) throw new RecordNotFoundError('contractor', contractorId);
   return c;
@@ -489,7 +491,9 @@ async function lockReportMoney(
 /**
  * Деньги контрагента — на счёте, куда он их переводит (прототип transferCp и `cp-pays`): после смены
  * ответственного или «Деньги на налоги переводит» операции, кроме «Оплатил контрагент сам», переходят
- * на счёт организации или нового ответственного; без ответственного — на счёт организации.
+ * на счёт организации или нового ответственного; без ответственного — на счёт организации. Области
+ * функция не проверяет: вызывающий передаёт контрагентов, уже найденных в своей области и
+ * заблокированных в этой транзакции (организацию отделяет RLS обеих таблиц).
  */
 export async function syncMoneyHolders(tx: Tx, contractorIds: readonly string[]): Promise<void> {
   if (!contractorIds.length) return;

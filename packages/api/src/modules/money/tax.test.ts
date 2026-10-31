@@ -491,6 +491,19 @@ describe.skipIf(!databaseAvailable())('Деньги по отчётам — ме
       code: 'receipt_file_required',
       details: { field: 'files' },
     });
+    // Файлы к поступлению — только если их можно загрузить: «Файлы в карточках» выключены — 403.
+    await features({ taxpay: true });
+    try {
+      const claimed = await call('POST', `/api/contractors/${cpChief}/receipts`, chief, {
+        total: som(100),
+        date: '2026-10-18',
+        files: 1,
+      });
+      expect(claimed.status).toBe(403);
+      expect((await failure(claimed)).code).toBe('forbidden');
+    } finally {
+      await features({ files: true, taxpay: true });
+    }
     m = await money(owner, cpChief);
     expect(m.contractor).toMatchObject({ needReceiptFile: true, paysTo: 'emp' });
     await expectStatus(

@@ -266,14 +266,12 @@ export const createReceiptRoute = createRoute({
     },
     401: { description: 'Нет входа', content: error },
     403: {
-      description: 'Нет права «Учёт денег» или «Учёт оплаты налогов» выключен',
+      description:
+        'Нет права «Учёт денег», «Учёт оплаты налогов» выключен или файлы к поступлению загружать нельзя',
       content: error,
     },
     404: { description: 'Нет такого контрагента или он вне области', content: error },
-    409: {
-      description: 'Контрагент в архиве или у него нет ответственного, на чей кошелёк идут деньги',
-      content: error,
-    },
+    409: { description: 'Контрагент в архиве', content: error },
   },
 });
 
@@ -288,14 +286,18 @@ export function createReceiptHandler(
     const { id } = c.req.valid('param');
     const input = c.req.valid('json');
     const t = await translator(deps);
-    const saved = await inTaxpay(deps, c, (tx, settings) =>
-      createReceipt(tx, id, input, {
+    const subject = subjectOf(c);
+    const saved = await inTaxpay(deps, c, (tx, settings) => {
+      // Файлы к поступлению окно загрузит после сохранения — значит, загружать их должно быть можно.
+      if (input.files > 0 && !(settings.features.files && hasPermission(subject, 'filesUpload')))
+        apiFail(403, 'forbidden', 'Нет права на это действие');
+      return createReceipt(tx, id, input, {
         today: todayOf(deps),
-        scope: finScopeOf(subjectOf(c)),
+        scope: finScopeOf(subject),
         filesOn: settings.features.files,
         t,
-      }),
-    );
+      });
+    });
     return c.json(saved, 201);
   };
 }
