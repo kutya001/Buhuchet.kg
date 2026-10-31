@@ -55,10 +55,11 @@ export function ModuleScreen({
     if (tab === 'roles') return <RolesList />;
     return <StaffStub />;
   }
-  // «Контрагенты»: «Все» и «Мои контрагенты»; «Должники» — задача 2.21.
+  // «Контрагенты»: «Все», «Мои контрагенты» и «Должники».
   if (moduleId === 'cps') {
     const tab = tabId ?? 'all';
-    if (tab === 'all' || tab === 'mine') return <ContractorsList key={tab} tab={tab} />;
+    if (tab === 'all' || tab === 'mine' || tab === 'debtors')
+      return <ContractorsList key={tab} tab={tab} />;
     return <ModuleStub moduleId={moduleId} />;
   }
   if (moduleId === 'org') {

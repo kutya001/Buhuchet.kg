@@ -1,9 +1,15 @@
 'use client';
 
-import { formatCount, type GridKey, type ListFilterValue } from '@buhuchet/domain';
+import {
+  formatCount,
+  formatSomWithUnit,
+  type GridKey,
+  type ListFilterValue,
+} from '@buhuchet/domain';
 import { ContractorList, ListValues, type ContractorRow } from '@buhuchet/shared';
 import { DataGrid, EmptyState, Plate, Plates, type PlateProps } from '@buhuchet/ui';
 import { useQuery } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
 import { useCallback, useMemo } from 'react';
 import { api, apiFailure } from '../api-client';
 import { missingSummaryQuery } from '../kpi/kpi-data';
@@ -14,6 +20,7 @@ import { useModuleStats } from '../lists/stats';
 import { useListPage, type FetchListPage } from '../lists/use-list-page';
 import { useViewSettings } from '../lists/view-settings';
 import { useShell } from '../shell/context';
+import { tabHref } from '../shell/modules';
 import { openContractorCard } from './card-store';
 import { useContractorActions } from './contractor-actions';
 import { useContractorAddRequest } from './contractor-add';
@@ -27,7 +34,8 @@ import {
 } from './contractor-columns';
 import { contractorSummaryQuery } from './contractor-data';
 
-export type ContractorTab = 'all' | 'mine';
+/** «Все», «Мои контрагенты», «Должники» (с долгом за обслуживание; при «Плате за обслуживание»). */
+export type ContractorTab = 'all' | 'mine' | 'debtors';
 
 type Filters = Readonly<Record<string, ListFilterValue>>;
 
@@ -62,9 +70,10 @@ const plateOn = (f: Filters, id: string): boolean => {
 };
 
 /**
- * «Контрагенты» → «Все» или «Мои контрагенты» (ТЗ «Контрагенты»: вкладки, плашки, столбцы, «Без
- * ГКЭД», «Тариф под вопросом», закрепление; прототип modules/contractors.js, `renderCps`): плашки-итоги
- * (клик ставит фильтр), общий список с поиском, фильтрами, группировкой и «В Excel». Без ответственного
+ * «Контрагенты» → «Все», «Мои контрагенты» или «Должники» (ТЗ «Контрагенты»: вкладки, плашки, столбцы,
+ * «Без ГКЭД», «Тариф под вопросом», закрепление; прототип modules/contractors.js, `renderCps`):
+ * плашки-итоги (клик ставит фильтр, «Должники» — открывает вкладку), общий список с поиском,
+ * фильтрами, группировкой и «В Excel». Без ответственного
  * — оранжевым, приостановленные и архивные — приглушённо; архивные видны, только если фильтр
  * «Статус обслуживания» их включает (плашка «В архиве»). Строка открывает карточку; галочки —
  * «Назначить ответственного», «Включить страницу», «В архив». На телефоне — плитки; номер телефона —
@@ -72,6 +81,7 @@ const plateOn = (f: Filters, id: string): boolean => {
  */
 export function ContractorsList({ tab }: { tab: ContractorTab }) {
   const t = useT();
+  const router = useRouter();
   const gridKey: GridKey = `cps.${tab}`;
   const labels = useGridLabels('cp.count');
   const { search, clearSearch, access } = useShell();
@@ -157,6 +167,20 @@ export function ContractorsList({ tab }: { tab: ContractorTab }) {
           label: t('cp.plate.overdue'),
           value: formatCount(s.withOverdue),
         }),
+        ...(s.debtors
+          ? [
+              {
+                id: 'deb',
+                icon: 'coins',
+                color: s.debtors.count ? 'red' : 'green',
+                label: t('cp.plate.debtors'),
+                value: formatCount(s.debtors.count),
+                sub: s.debtors.count ? formatSomWithUnit(s.debtors.sum) : t('cp.plate.debtors_ok'),
+                on: tab === 'debtors',
+                onClick: () => router.push(tabHref('cps', 'debtors')),
+              } satisfies PlateProps,
+            ]
+          : []),
         plate({
           id: 'nogk',
           icon: 'alert',

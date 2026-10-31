@@ -35,7 +35,8 @@ export type NewContractor = {
  * Новый контрагент демо-организации; `benefits` — коды льгот и статусов, `taxOfficeCode` — УГНС,
  * `name` — название (по умолчанию «Сроки отчётов <ИНН>»), `responsible` — id ответственного сотрудника
  * (по умолчанию — `defaultResponsible`),
- * `tariff: false` — без стоимости обслуживания (в организации без «Платы за обслуживание»).
+ * `tariff: false` — без стоимости обслуживания (в организации без «Платы за обслуживание»),
+ * `tariffAmount` — ставка в тыйынах в месяц (по умолчанию 10 000 сом).
  */
 export async function newContractor(
   api: APIRequestContext,
@@ -46,6 +47,7 @@ export async function newContractor(
     name?: string;
     responsible?: string;
     tariff?: boolean;
+    tariffAmount?: number;
   } = {},
 ): Promise<NewContractor> {
   const inn = freshInn();
@@ -67,7 +69,9 @@ export async function newContractor(
         : {}),
       startDate: '2026-01-01',
       responsibleEmployeeId: options.responsible ?? (await defaultResponsible(api)),
-      ...(options.tariff === false ? {} : { tariff: { amount: 1_000_000, period: 'M' } }),
+      ...(options.tariff === false
+        ? {}
+        : { tariff: { amount: options.tariffAmount ?? 1_000_000, period: 'M' } }),
     },
   });
   expect(res.status(), await res.text()).toBe(201);

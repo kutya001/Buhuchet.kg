@@ -95,14 +95,21 @@ export const contractorSummaryQuery = queryOptions({
   },
 });
 
-/** Числа у вкладок «Все» и «Мои контрагенты» (прототип cpsTabs): без архива. */
+/**
+ * Числа у вкладок «Все», «Мои контрагенты» и «Должники» (прототип cpsTabs, у «Должников» — красное):
+ * без архива; «Должники» — только тому, кто видит плату за обслуживание.
+ */
 export const contractorTabCountsQuery = queryOptions({
   queryKey: ['contractors', 'tab-counts'],
   queryFn: async (): Promise<Partial<Record<string, ShellCount>>> => {
     const res = await api.api.contractors['tab-counts'].$get();
     if (!res.ok) throw await apiFailure(res);
     const counts = ContractorTabCounts.parse(await res.json());
-    return { all: { value: counts.all }, mine: { value: counts.mine } };
+    return {
+      all: { value: counts.all },
+      mine: { value: counts.mine },
+      ...(counts.debtors !== null ? { debtors: { value: counts.debtors, tone: 'red' } } : {}),
+    };
   },
 });
 

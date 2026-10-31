@@ -54,13 +54,13 @@ export function useMoneyRefresh() {
 }
 
 /**
- * Загрузить файлы к записанной операции (источник «Поступление» или «Оплата налога»). Операция уже
- * сохранена — ошибка загрузки возвращается текстом, а не отменяет запись.
+ * Загрузить файлы к записанной операции (источник «Поступление», «Оплата налога» или «Оплата за
+ * обслуживание»). Операция уже сохранена — ошибка загрузки возвращается текстом, а не отменяет запись.
  */
 export async function uploadMoneyFiles(
   t: Translate,
   errorText: (e: ApiErrorLike) => string,
-  source: { kind: 'receipt' | 'tax_payment'; id: string },
+  source: { kind: 'receipt' | 'tax_payment' | 'fee_payment'; id: string },
   picked: readonly File[],
 ): Promise<string | null> {
   for (const file of picked) {
@@ -87,10 +87,13 @@ export function pickedMoneyFilesProblem(
       });
 }
 
-/** «Файл при поступлении» и «Деньги на налоги переводит» на «Основном» карточки контрагента. */
+/**
+ * «Файл при поступлении», «Деньги на налоги переводит» и «Платит одной суммой» на «Основном» карточки
+ * контрагента.
+ */
 export function saveMoneySettings(
   id: string,
-  body: { version: number; needReceiptFile?: boolean; paysTo?: 'emp' | 'org' },
+  body: { version: number; needReceiptFile?: boolean; paysTo?: 'emp' | 'org'; oneSum?: boolean },
 ) {
   return callApi(() =>
     api.api.contractors[':id']['money-settings'].$patch({ param: { id }, json: body }),

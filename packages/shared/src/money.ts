@@ -196,6 +196,8 @@ export const ReceiptForm = z.object({
     paysTo: z.enum(['emp', 'org']),
     holder: z.string().nullable(),
     needReceiptFile: z.boolean(),
+    /** «Платит одной суммой»: деление на налоги и обслуживание подставляется само (задача 2.21). */
+    oneSum: z.boolean(),
   }),
   rows: z.array(
     z.object({
@@ -210,6 +212,19 @@ export const ReceiptForm = z.object({
   ),
   /** Неоплаченных отчётов, деньги на которые уже получены (подсказка «станет авансом»). */
   unpaid: z.number().int().nonnegative(),
+  /**
+   * Часть за обслуживание (задача 2.21; прототип inDlg, `fms`): месяцы с недоплатой; null — части нет
+   * (плата не видна, контрагент разовый или переводит деньги ответственному).
+   */
+  fee: z
+    .object({
+      months: z.array(
+        z.object({ month: Month, charge: Tyiyn, got: Tyiyn, left: Tyiyn, due: IsoDate }),
+      ),
+    })
+    .nullable(),
+  /** Сегодня по Бишкеку: «Платит одной суммой» делит по срокам до конца этого месяца. */
+  today: IsoDate,
 });
 export type ReceiptForm = z.infer<typeof ReceiptForm>;
 
@@ -225,6 +240,11 @@ export const ReceiptRequest = z.strictObject({
   date: IsoDate,
   rows: z
     .array(z.strictObject({ reportId: Uuid, amount: RowAmount }))
+    .max(RECEIPT_ROWS_MAX)
+    .default([]),
+  /** Часть за обслуживание по месяцам (задача 2.21): только когда она есть в окне. */
+  fee: z
+    .array(z.strictObject({ month: Month, amount: RowAmount }))
     .max(RECEIPT_ROWS_MAX)
     .default([]),
   files: z.number().int().min(0).max(MONEY_FILES_MAX).default(0),
@@ -254,14 +274,22 @@ export const PaymentRollbackRequest = z.strictObject({
 });
 export type PaymentRollbackRequest = z.infer<typeof PaymentRollbackRequest>;
 
-/** «Файл при поступлении» и «Деньги на налоги переводит» на «Основном» карточки контрагента. */
+/**
+ * «Файл при поступлении», «Деньги на налоги переводит» и «Платит одной суммой» на «Основном» карточки
+ * контрагента.
+ */
 export const MoneySettingsRequest = z
   .strictObject({
     version: RecordVersion,
     needReceiptFile: z.boolean().optional(),
     paysTo: z.enum(['emp', 'org']).optional(),
+    /** «Платит одной суммой» (задача 2.21): только тому, кто видит плату за обслуживание. */
+    oneSum: z.boolean().optional(),
   })
-  .refine((b) => b.needReceiptFile !== undefined || b.paysTo !== undefined, 'Нечего менять');
+  .refine(
+    (b) => b.needReceiptFile !== undefined || b.paysTo !== undefined || b.oneSum !== undefined,
+    'Нечего менять',
+  );
 export type MoneySettingsRequest = z.infer<typeof MoneySettingsRequest>;
 
 export const MoneySettingsSaved = z.object({ id: Uuid, version: RecordVersion });

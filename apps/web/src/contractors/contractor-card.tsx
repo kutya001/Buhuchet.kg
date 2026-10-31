@@ -7,6 +7,7 @@ import {
   type Assignment,
   type Contractor,
   type ContractorRow,
+  type ContractorFees,
   type ContractorService,
   type ReportRow,
 } from '@buhuchet/shared';
@@ -43,6 +44,9 @@ import { api, apiFailure } from '../api-client';
 import { ContractorPageBox } from '../contractor-page/page-box';
 import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
 import { catalogQuery, type Catalog } from '../dicts/dicts-data';
+import { ContractorFeesTab } from '../fees/contractor-fees';
+import { useFeeDialogs } from '../fees/fee-dialogs';
+import { contractorFeesQuery } from '../fees/fees-data';
 import { KpiCardTab, useKpiCardCount } from '../kpi/kpi-card-tab';
 import { useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
@@ -90,7 +94,7 @@ import { serviceQuery } from './service-data';
 import { ServicePlanNote, ServiceStatusBlock } from './service-actions';
 
 export type ContractorCardTab =
-  'main' | 'reports' | 'pick' | 'money' | 'tasks' | 'kpi' | 'files' | 'hist';
+  'main' | 'reports' | 'pick' | 'money' | 'fee' | 'tasks' | 'kpi' | 'files' | 'hist';
 
 const REPORTS_GRID: GridKey = 'cps.reports';
 
@@ -118,8 +122,15 @@ export interface ContractorCardProps {
   tab: ContractorCardTab;
   open: boolean;
   onClose: () => void;
-  /** Пункты «Действия» (без «Открыть карточку» и «Подобрать отчёты»). */
-  actions: (c: Contractor, service: ContractorService | undefined) => ActionEntry[];
+  /**
+   * Пункты «Действия» (без «Открыть карточку» и «Подобрать отчёты»); `fee` — вкладка «Обслуживание»
+   * (пункты оплаты и напоминания о долге), undefined — плата не видна или ещё не загрузилась.
+   */
+  actions: (
+    c: Contractor,
+    service: ContractorService | undefined,
+    fee: ContractorFees | undefined,
+  ) => ActionEntry[];
   /** Пункты обслуживания: шаги шкалы нажимаются, если есть пункт. */
   serviceActions: (c: Contractor, service: ContractorService) => ActionEntry[];
   /** «сменить» у ответственного; null — нет права. */
@@ -134,10 +145,11 @@ export interface ContractorCardProps {
  * Карточка контрагента (ТЗ «Карточка контрагента с вкладками»; прототип modules/contractor-card.js,
  * `openCp`): в заголовке — название и «архив», под ним ИНН, режим, приостановка, «разовый» и
  * «просрочено отчётов: N». Вкладки «Основное», «Отчёты к сдаче» (просроченные — красным числом),
- * «Подбор отчётов» (у постоянного), «Деньги» (при «Учёте оплаты налогов»), «Задачи», «Показатели»,
- * «Файлы», «История»; «Обслуживание» и «Проекты» добавят их задачи. Уйти с «Подбора отчётов» с несохранённым выбором —
- * вопрос «Подбор не применён». Внизу — «Действия» и «Готово»; «На весь экран» и свайпы по вкладкам — у
- * окна карточки.
+ * «Подбор отчётов» (у постоянного), «Деньги» (при «Учёте оплаты налогов»), «Обслуживание» (при «Плате
+ * за обслуживание», с правом «Видеть плату», у постоянного), «Задачи», «Показатели», «Файлы», «История»;
+ * «Проекты» добавит их задача. В шапке — «Принять оплату» за обслуживание (прототип `cp-feeacc`). Уйти
+ * с «Подбора отчётов» с несохранённым выбором — вопрос «Подбор не применён». Внизу — «Действия» и
+ * «Готово»; «На весь экран» и свайпы по вкладкам — у окна карточки.
  */
 export function ContractorCardWindow(props: ContractorCardProps) {
   const { id, initial, open, onClose, actions } = props;
@@ -161,6 +173,11 @@ export function ContractorCardWindow(props: ContractorCardProps) {
   const overdue = c?.overdue ?? initial?.overdue ?? 0;
   const repView = access.can('repView');
   const moneyOn = useMoneyTabOn(c);
+  const feeOn = access.feature('fee') && access.can('fee') && regular;
+  const feeDialogs = useFeeDialogs();
+  // «Принять оплату» в шапке и пункты «Действий» о плате (прототип feeAccOk): долг и начисления — с сервера.
+  const fees = useQuery({ ...contractorFeesQuery(id), enabled: feeOn && !archived }).data;
+  const feeAccept = feeOn && !archived && !!fees?.canAccept;
 
   const tabs: CardTab[] = [
     { id: 'main', label: t('cp.card.tab.main'), icon: 'building' },
@@ -182,6 +199,7 @@ export function ContractorCardWindow(props: ContractorCardProps) {
     ...(moneyOn
       ? [{ id: 'money', label: t('cp.card.tab.money'), icon: 'wallet' } satisfies CardTab]
       : []),
+    ...(feeOn ? [{ id: 'fee', label: t('cp.card.tab.fee'), icon: 'coins' } satisfies CardTab] : []),
     ...(tasksOn
       ? [
           {
@@ -222,7 +240,7 @@ export function ContractorCardWindow(props: ContractorCardProps) {
     else go();
   };
   const close = () => guard(onClose);
-  const items = c ? actions(c, service) : [];
+  const items = c ? actions(c, service, feeOn && !archived ? fees : undefined) : [];
   const name = c?.name ?? initial?.name ?? '';
   const inn = c?.inn ?? initial?.inn ?? '';
   const regime = c ? c.regime?.name : initial?.regime;
@@ -257,6 +275,21 @@ export function ContractorCardWindow(props: ContractorCardProps) {
       title={title}
       label={name}
       sub={sub}
+      head={
+        feeAccept ? (
+          <button
+            type="button"
+            data-cp-fee-accept=""
+            title={t('fee.btn.accept')}
+            aria-label={t('fee.btn.accept')}
+            className={`${buttonClass('default', 'sm')} mr-1 flex-none self-center max-md:px-2`}
+            onClick={() => feeDialogs.accept(id)}
+          >
+            <Icon name="wallet" size="sm" />
+            <span className="max-md:hidden">{t('cp.card.fee_accept')}</span>
+          </button>
+        ) : null
+      }
       tabs={{
         items: tabs,
         active: shownTab,
@@ -299,11 +332,19 @@ export function ContractorCardWindow(props: ContractorCardProps) {
         {shownTab === 'reports' ? <ReportsTab contractorId={id} /> : null}
         {shownTab === 'pick' ? <ReportPickTab contractorId={id} onDirty={setPickDirty} /> : null}
         {shownTab === 'money' ? <ContractorMoneyTab contractorId={id} /> : null}
+        {shownTab === 'fee' ? (
+          <ContractorFeesTab
+            contractorId={id}
+            onAccept={() => feeDialogs.accept(id)}
+            onRemind={() => feeDialogs.remind(id)}
+          />
+        ) : null}
         {shownTab === 'tasks' ? <ContractorTasksTab contractorId={id} archived={archived} /> : null}
         {shownTab === 'kpi' ? <KpiCardTab contractorId={id} /> : null}
         {shownTab === 'files' ? <ContractorFilesTab contractorId={id} archived={archived} /> : null}
         {shownTab === 'hist' ? <HistoryTab t={t} id={id} /> : null}
       </div>
+      {feeDialogs.dialogs}
       {menu && c ? (
         <ActionMenu
           items={items}

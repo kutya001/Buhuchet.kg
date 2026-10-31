@@ -83,6 +83,21 @@ const MONTH_NAMES_GEN = [
   'декабря',
 ] as const;
 
+const MONTH_NAMES_IN = [
+  'январе',
+  'феврале',
+  'марте',
+  'апреле',
+  'мае',
+  'июне',
+  'июле',
+  'августе',
+  'сентябре',
+  'октябре',
+  'ноябре',
+  'декабре',
+] as const;
+
 /** «октябрь 2026» (прототип `ymLabel`). */
 export function monthLabel(month: YearMonth): string {
   const [y, m] = parts(month);
@@ -93,6 +108,11 @@ export function monthLabel(month: YearMonth): string {
 export function monthLabelGen(month: YearMonth): string {
   const [y, m] = parts(month);
   return `${MONTH_NAMES_GEN[m - 1]} ${y}`;
+}
+
+/** «январе» — после «в» (прототип: название месяца с окончанием «-е» на плашке годовой ставки). */
+export function monthNameIn(month: YearMonth): string {
+  return MONTH_NAMES_IN[parts(month)[1] - 1]!;
 }
 
 /** Дата `day`-го числа месяца (`day` от 1 до 28 — в любом месяце есть). */

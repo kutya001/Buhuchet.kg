@@ -94,6 +94,8 @@ export const contractors = pgTable(
     paysTo: text('pays_to', { enum: PAYS_TO }).notNull().default('emp'),
     /** «Файл при поступлении: обязательно требовать» — поступление без файла не сохраняется (2.19). */
     needReceiptFile: boolean('need_receipt_file').notNull().default(false),
+    /** «Платит одной суммой»: налоги и обслуживание одним поступлением, деление подставляется само (2.21). */
+    oneSum: boolean('one_sum').notNull().default(false),
     serviceStatus: text('service_status', { enum: SERVICE_STATUSES }).notNull().default('active'),
     /** Подтверждение права на режим по ГКЭД; действует, пока не изменился набор данных `sig`. */
     gkedConfirmation: jsonb('gked_confirmation').$type<ContractorGkedConfirmation>(),

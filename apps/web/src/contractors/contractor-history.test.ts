@@ -8,6 +8,8 @@ import { contractorHistoryItem, contractorHistoryText } from './contractor-histo
 // изменений»: что изменено, кто и когда).
 
 const t = makeTranslate(defaultUiTexts());
+/** Суммы на экране — с неразрывными пробелами; в ожиданиях — обычные. */
+const plain = (s: string) => s.replace(/\u00a0/g, ' ');
 type Entry = ContractorHistory['items'][number];
 
 const A = '00000000-0000-4000-8000-00000000000a';
@@ -113,6 +115,105 @@ describe('история контрагента', () => {
         names,
       ),
     ).toBe('Поставлена задача «Собрать первичку»');
+  });
+
+  it('плата за обслуживание: ставка, «одной суммой», напоминание, оплата и её файл (задача 2.21)', () => {
+    expect(
+      plain(
+        contractorHistoryText(
+          t,
+          entry({
+            changes: [
+              {
+                field: 'tariffAdded',
+                to: { amount: 1_600_000, period: 'M', validFrom: '2026-11-01', note: '' },
+              },
+            ],
+          }),
+          names,
+        ),
+      ),
+    ).toBe('Новая ставка 16 000 сом в месяц с ноября 2026');
+    expect(
+      plain(
+        contractorHistoryText(
+          t,
+          entry({ changes: [{ field: 'oneSum', from: false, to: true }] }),
+          names,
+        ),
+      ),
+    ).toBe('Отмечено: платит одной суммой (налоги и обслуживание)');
+    expect(
+      plain(
+        contractorHistoryText(
+          t,
+          entry({ changes: [{ field: 'oneSum', from: true, to: false }] }),
+          names,
+        ),
+      ),
+    ).toBe('Снята отметка «Платит одной суммой»');
+    expect(
+      plain(
+        contractorHistoryText(
+          t,
+          entry({ action: 'remind', changes: [{ field: 'feeReminder' }] }),
+          names,
+        ),
+      ),
+    ).toBe('Напоминание в WhatsApp о долге за обслуживание');
+    const pay = (allocation: unknown, amount = 1_600_000) =>
+      plain(
+        contractorHistoryText(
+          t,
+          entry({
+            entity: 'fee_payment',
+            action: 'create',
+            changes: [
+              { field: 'amount', to: amount },
+              { field: 'paidOn', to: '2026-10-18' },
+              { field: 'allocation', to: allocation },
+              { field: 'to', to: 'Счёт организации' },
+            ],
+          }),
+          names,
+        ),
+      );
+    expect(pay([{ month: '2026-09', amount: 1_400_000 }])).toBe(
+      'Оплата за обслуживание 16 000 сом: сентябрь 2026 — 14 000, аванс — 2 000',
+    );
+    expect(pay([], 500_000)).toBe('Оплата за обслуживание 5 000 сом: аванс — 5 000');
+  });
+
+  it('поступление с частью за обслуживание: общая сумма и строки обслуживания (задача 2.21)', () => {
+    const changes = [
+      { field: 'kind', to: 'in' },
+      { field: 'total', to: 500_000 },
+      { field: 'opDate', to: '2026-10-18' },
+      { field: 'allocations', to: [{ report: 'НДС 09.2026', amount: 300_000 }] },
+      { field: 'feeTotal', to: 1_400_000 },
+      { field: 'feeAllocations', to: [{ month: '2026-10', amount: 1_400_000 }] },
+    ];
+    expect(
+      plain(
+        contractorHistoryText(
+          t,
+          entry({ entity: 'money_operation', action: 'create', changes }),
+          names,
+        ),
+      ),
+    ).toBe(
+      'Поступление 19 000 сом: НДС 09.2026 — 3 000, обслуживание октябрь 2026 — 14 000, аванс — 2 000',
+    );
+    // Без права «Видеть плату» сервер не отдаёт части за обслуживание — только налоговая часть.
+    expect(
+      plain(
+        contractorHistoryText(
+          t,
+          entry({ entity: 'money_operation', action: 'create', changes: changes.slice(0, 4) }),
+          names,
+        ),
+      ),
+    ).toBe('Поступление 5 000 сом: НДС 09.2026 — 3 000, аванс — 2 000');
   });
 
   it('запись ленты: дата и время по Бишкеку, кто; без автора — «Система»', () => {

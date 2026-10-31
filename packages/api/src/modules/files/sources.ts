@@ -18,6 +18,8 @@ import {
   type FileSourceKind,
   type HistoryEntity,
 } from '@buhuchet/domain';
+import { scopeSqlOf } from '../contractors/common';
+import { feePaymentFiles } from '../fees/files';
 import { indicatorValueSource } from '../kpi/card';
 import { kpiScopeOf } from '../kpi/common';
 import { finScopeOf } from '../money/common';
@@ -134,13 +136,21 @@ function indicatorFilesList({ subject, features, t }: FileListContext): FileList
  * налога. Видны при включённом «Учёте оплаты налогов» с правом «Учёт денег» по контрагентам области
  * группы «Финансовые операции»; прикреплять и удалять — пока операция не отменена и контрагент не в
  * архиве. История — у поступления; у оплаты — у отчёта (как «Прикреплён файл» в карточке отчёта).
+ * Поступление только за обслуживание и его сумму целиком видит только тот, кто видит плату по этому
+ * контрагенту (задача 2.21, docs/deviations.md п. В-19).
  */
+// ОТКЛОНЕНИЕ: docs/deviations.md#В-19
 function moneySource(kind: 'receipt' | 'tax_payment'): FileListSource {
   return {
     async resolve(tx, subject, id) {
       if (id === null || !hasPermission(subject, 'money')) return null;
       const row = await moneyFileSource(tx, id, kind, finScopeOf(subject));
       if (!row?.taxpay || !canSeeContractor(subject, 'fin', row.contractor)) return null;
+      const feeSeen =
+        row.feeOn &&
+        hasPermission(subject, 'fee') &&
+        canSeeContractor(subject, 'cps', row.contractor);
+      if (row.feeOnly && !feeSeen) return null;
       const contractor = {
         id: row.contractor.id,
         responsibleEmployeeId: row.contractor.responsibleEmployeeId,
@@ -156,7 +166,12 @@ function moneySource(kind: 'receipt' | 'tax_payment'): FileListSource {
     },
     list: ({ subject, features, t }) =>
       features.taxpay && hasPermission(subject, 'money')
-        ? moneyFilesPart(kind, finScopeOf(subject), t)
+        ? moneyFilesPart(
+            kind,
+            finScopeOf(subject),
+            t,
+            features.fee && hasPermission(subject, 'fee') ? { scope: scopeSqlOf(subject) } : null,
+          )
         : null,
   };
 }
@@ -164,13 +179,15 @@ function moneySource(kind: 'receipt' | 'tax_payment'): FileListSource {
 /**
  * Источники файлов по видам (`FILE_SOURCE_KINDS` из @buhuchet/domain). Модуль с блоком «Файлы» добавляет
  * свою строку (по порядку модулей ТЗ) и вид в домене. Файлы платы за обслуживание видит только право
- * «Видеть плату за обслуживание» — это проверяет `resolve` модуля обслуживания (ТЗ «Файловый менеджер»).
+ * «Видеть плату за обслуживание» — это проверяет `resolve` модуля обслуживания (ТЗ «Файловый менеджер»;
+ * `fees/files.ts`).
  */
 export const FILE_SOURCES: Readonly<Record<FileSourceKind, FileListSource>> = {
   manual: manualSource,
   report: { ...reportFileSource, list: reportFilesList },
   receipt: moneySource('receipt'),
   tax_payment: moneySource('tax_payment'),
+  fee_payment: feePaymentFiles,
   task: { ...taskFileSource, list: taskFilesList },
   indicator_value: { ...indicatorValueSource, list: indicatorFilesList },
 };

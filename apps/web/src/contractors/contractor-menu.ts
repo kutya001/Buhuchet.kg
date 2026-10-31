@@ -28,11 +28,12 @@ export interface ContractorMenuRun {
 /**
  * Пункты меню «…» контрагента (прототип modules/contractors.js, `cpActions`): «Открыть карточку»; у
  * не архивного — «Изменить» (право «Создавать и изменять контрагентов»), «Сменить ответственного» и
- * «Подобрать отчёты» (у постоянного; «Назначать отчёты» или «Создавать…»); после черты — пункты
- * обслуживания (`service`, их правила — `serviceMenuEntries`); после черты — «Удалить» красным (право
- * «Отправлять в архив и удалять»), бледным с причиной, если по контрагенту есть отчёты. Деньги, проекты
- * и разовые услуги добавят их задачи. `card` — кнопка «Действия» карточки: без «Открыть карточку» и
- * «Подобрать отчёты» (в карточке это вкладка).
+ * «Подобрать отчёты» (у постоянного; «Назначать отчёты» или «Создавать…»), пункты платы за обслуживание
+ * (`fee`, их правила — `feeMenuEntries`); после черты — пункты обслуживания (`service`, их правила —
+ * `serviceMenuEntries`); после черты — «Удалить» красным (право «Отправлять в архив и удалять»),
+ * бледным с причиной, если по контрагенту есть отчёты. Проекты и разовые услуги добавят их задачи.
+ * `card` — кнопка «Действия» карточки: без «Открыть карточку» и «Подобрать отчёты» (в карточке это
+ * вкладка).
  */
 export function contractorMenuEntries({
   c,
@@ -40,6 +41,7 @@ export function contractorMenuEntries({
   t,
   run,
   service,
+  fee = [],
   card = false,
 }: {
   c: MenuContractor;
@@ -48,6 +50,8 @@ export function contractorMenuEntries({
   run: ContractorMenuRun;
   /** Пункты обслуживания (`useServiceActions().actions`). */
   service: readonly ActionEntry[];
+  /** «Принять оплату за обслуживание», «Напомнить о долге в WhatsApp» (`feeMenuEntries`). */
+  fee?: readonly ActionEntry[];
   card?: boolean;
 }): ActionEntry[] {
   const items: ActionEntry[] = card
@@ -68,6 +72,7 @@ export function contractorMenuEntries({
     if (people && !c.oneoff && !card) {
       items.push({ id: 'pick', label: t('cp.menu.pick'), icon: 'matrix', run: run.pick });
     }
+    items.push(...fee);
   }
   if (service.length) items.push({ id: 'sep-service', separator: true }, ...service);
   if (!c.archived && rights.cpArchive) {

@@ -5,6 +5,8 @@ import {
   formatDateRu,
   formatSom,
   formatSomWithUnit,
+  monthLabel,
+  monthOf,
   parseSom,
   paymentDefaults,
   paymentProblem,
@@ -367,6 +369,30 @@ export function ReceiptDialog({
   );
 }
 
+/**
+ * «Платит одной суммой» (прототип inDlg, `one`): налоги со сроком оплаты до конца текущего месяца и
+ * обслуживание по текущий месяц, общая сумма — их итог.
+ */
+function oneSumSplit(form: ReceiptForm) {
+  const month = monthOf(form.today);
+  const alloc: Record<string, string> = {};
+  const fee: Record<string, string> = {};
+  let total = 0;
+  for (const r of form.rows) {
+    if (monthOf(r.payDue) <= month && r.left > 0) {
+      alloc[r.reportId] = formatSom(r.left, 'auto');
+      total += r.left;
+    }
+  }
+  for (const m of form.fee?.months ?? []) {
+    if (m.month <= month && m.left > 0) {
+      fee[m.month] = formatSom(m.left, 'auto');
+      total += m.left;
+    }
+  }
+  return { alloc, fee, total };
+}
+
 function ReceiptModal({
   t,
   form,
@@ -392,13 +418,23 @@ function ReceiptModal({
   const errorText = useErrorText();
   const id = useId();
   const presetOk = !!preset && !!form?.rows.some((r) => r.reportId === preset.reportId);
+  // «Платит одной суммой»: деление на налоги и обслуживание подставляется само (не для «Оплатить»).
+  const one = !presetOk && !!form?.fee && form.contractor.oneSum;
+  const [split] = useState(() => (one && form ? oneSumSplit(form) : null));
   const [total, setTotal] = useState(() =>
-    presetOk && preset ? formatSom(preset.amount, 'auto') : '',
+    presetOk && preset
+      ? formatSom(preset.amount, 'auto')
+      : split?.total
+        ? formatSom(split.total, 'auto')
+        : '',
   );
   const [date, setDate] = useState(todayBishkek);
   const [alloc, setAlloc] = useState<Record<string, string>>(() =>
-    presetOk && preset ? { [preset.reportId]: formatSom(preset.amount, 'auto') } : {},
+    presetOk && preset
+      ? { [preset.reportId]: formatSom(preset.amount, 'auto') }
+      : (split?.alloc ?? {}),
   );
+  const [feeAlloc, setFeeAlloc] = useState<Record<string, string>>(() => split?.fee ?? {});
   const [picked, setPicked] = useState<File[]>([]);
   const needFile = filesOn && !!form?.contractor.needReceiptFile;
   const [errors, setErrors] = useState<{
@@ -409,19 +445,30 @@ function ReceiptModal({
   }>({});
   const [busy, setBusy] = useState(false);
   const rows = form?.rows ?? [];
+  const feeRows = form?.fee?.months ?? [];
   const today = todayBishkek();
   const value = (rid: string) => parseSom(alloc[rid] ?? '') ?? 0;
-  const detail = rows.reduce((a, r) => a + Math.max(0, value(r.reportId)), 0);
+  const feeValue = (month: string) => parseSom(feeAlloc[month] ?? '') ?? 0;
+  const taxDetail = rows.reduce((a, r) => a + Math.max(0, value(r.reportId)), 0);
+  const feeDetail = feeRows.reduce((a, m) => a + Math.max(0, feeValue(m.month)), 0);
+  const detail = taxDetail + feeDetail;
   const totalN = parseSom(total);
   const totalSafe = totalN ?? 0;
-  const rest = rows.reduce((a, r) => a + Math.max(0, r.left - value(r.reportId)), 0);
-  const over = rows.some((r) => {
-    const v = parseSom(alloc[r.reportId] ?? '');
-    return v !== null && (v < 0 || v > r.left);
-  });
+  const rest =
+    rows.reduce((a, r) => a + Math.max(0, r.left - value(r.reportId)), 0) +
+    feeRows.reduce((a, m) => a + Math.max(0, m.left - feeValue(m.month)), 0);
+  const overOf = (raw: string | undefined, left: number) => {
+    const v = parseSom(raw ?? '');
+    return v !== null && (v < 0 || v > left);
+  };
+  const over =
+    rows.some((r) => overOf(alloc[r.reportId], r.left)) ||
+    feeRows.some((m) => overOf(feeAlloc[m.month], m.left));
 
+  // «Распределить по срокам»: сначала налоги по сроку оплаты, потом обслуживание от старых месяцев.
   const distribute = () => {
-    let left = totalN ?? rows.reduce((a, r) => a + r.left, 0);
+    let left =
+      totalN ?? rows.reduce((a, r) => a + r.left, 0) + feeRows.reduce((a, m) => a + m.left, 0);
     if (totalN === null) setTotal(formatSom(left, 'auto'));
     const next: Record<string, string> = {};
     for (const r of rows) {
@@ -431,7 +478,16 @@ function ReceiptModal({
         left -= x;
       }
     }
+    const nextFee: Record<string, string> = {};
+    for (const m of feeRows) {
+      const x = Math.min(left, m.left);
+      if (x > 0) {
+        nextFee[m.month] = formatSom(x, 'auto');
+        left -= x;
+      }
+    }
     setAlloc(next);
+    setFeeAlloc(nextFee);
     setErrors((e) => ({ ...e, rows: undefined, total: undefined }));
   };
 
@@ -458,6 +514,13 @@ function ReceiptModal({
           rows: rows
             .filter((r) => value(r.reportId) > 0)
             .map((r) => ({ reportId: r.reportId, amount: value(r.reportId) })),
+          ...(feeDetail > 0
+            ? {
+                fee: feeRows
+                  .filter((m) => feeValue(m.month) > 0)
+                  .map((m) => ({ month: m.month, amount: feeValue(m.month) })),
+              }
+            : {}),
           files: picked.length,
         },
       }),
@@ -477,6 +540,7 @@ function ReceiptModal({
     if (res.ok) return void toast(t('err.unknown'), { bad: true });
     const message = errorText(res.error);
     const field = fieldOf(res.error.details);
+    if (field === 'fee') return setErrors({ rows: message });
     if (field === 'total' || field === 'date' || field === 'rows' || field === 'files')
       return setErrors({ [field]: message });
     toast(message, { bad: true });
@@ -484,9 +548,10 @@ function ReceiptModal({
 
   const c = form?.contractor;
   const sub = c
-    ? c.paysTo === 'org'
-      ? t('money.in.sub_org', { name: c.name })
-      : t('money.in.sub_emp', { name: c.name, holder: c.holder ?? '—' })
+    ? (c.paysTo === 'org'
+        ? t('money.in.sub_org', { name: c.name })
+        : t('money.in.sub_emp', { name: c.name, holder: c.holder ?? '—' })) +
+      (feeRows.length ? ` · ${t('fee.receipt.to_org')}` : '')
     : '';
   const unpaidText = form
     ? form.unpaid
@@ -519,6 +584,11 @@ function ReceiptModal({
     >
       <div className="flex flex-col gap-3.5" data-receipt-dialog={c?.id ?? ''}>
         {failed && !form ? <Note tone="bad">{t('money.in.load_error')}</Note> : null}
+        {one ? (
+          <Note icon="coins">
+            <b>{t('fee.receipt.one_sum_title')}</b> {t('fee.receipt.one_sum_text')}
+          </Note>
+        ) : null}
         <FormGrid>
           <Field
             id={`${id}-total`}
@@ -568,16 +638,17 @@ function ReceiptModal({
               data-receipt-auto=""
               className={buttonClass('default', 'sm')}
               onClick={distribute}
-              disabled={!rows.length}
+              disabled={!rows.length && !feeRows.length}
             >
               <Icon name="list" size="sm" />
               {t('money.in.auto')}
             </button>
           </h3>
-          {rows.length ? (
+          {rows.length || feeRows.length ? (
             <MiniTable
               label={t('money.in.detail')}
               empty=""
+              phoneCards={false}
               columns={[
                 { key: 'report', label: t('money.in.col_report') },
                 { key: 'period', label: t('money.in.col_period') },
@@ -629,12 +700,66 @@ function ReceiptModal({
                     },
                   };
                 }),
+                ...feeRows.map((m) => {
+                  const x = m.left - feeValue(m.month);
+                  return {
+                    key: `fee-${m.month}`,
+                    cells: {
+                      report: (
+                        <span className="inline-flex items-center gap-1.5">
+                          <Icon name="coins" size="sm" />
+                          {t('fee.receipt.row')}
+                        </span>
+                      ),
+                      period: monthLabel(m.month),
+                      payDue: formatDateRu(m.due),
+                      sum: formatSom(m.charge),
+                      already: formatSom(m.got),
+                      now: (
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          data-receipt-fee={m.month}
+                          aria-label={t('fee.receipt.aria')}
+                          className={`${inputClass()} ml-auto max-w-[130px] text-right tabular-nums ${
+                            x < 0 ? 'border-danger' : ''
+                          }`}
+                          value={feeAlloc[m.month] ?? ''}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setFeeAlloc((a) => ({ ...a, [m.month]: v }));
+                            setErrors((er) => ({ ...er, rows: undefined, total: undefined }));
+                          }}
+                        />
+                      ),
+                      left: (
+                        <b className={x < 0 ? 'text-danger' : x === 0 ? 'text-faint' : undefined}>
+                          {formatSom(x)}
+                        </b>
+                      ),
+                    },
+                  };
+                }),
                 {
                   key: 'total',
                   cells: {
                     report: <b>{t('money.in.total_row')}</b>,
-                    sum: <b>{formatSom(rows.reduce((a, r) => a + r.sum, 0))}</b>,
-                    already: <b>{formatSom(rows.reduce((a, r) => a + r.already, 0))}</b>,
+                    sum: (
+                      <b>
+                        {formatSom(
+                          rows.reduce((a, r) => a + r.sum, 0) +
+                            feeRows.reduce((a, m) => a + m.charge, 0),
+                        )}
+                      </b>
+                    ),
+                    already: (
+                      <b>
+                        {formatSom(
+                          rows.reduce((a, r) => a + r.already, 0) +
+                            feeRows.reduce((a, m) => a + m.got, 0),
+                        )}
+                      </b>
+                    ),
                     now: <b>{formatSom(detail)}</b>,
                     left: <b>{formatSom(rest)}</b>,
                   },
@@ -652,6 +777,15 @@ function ReceiptModal({
           <div className="flex flex-wrap items-center gap-2" data-receipt-sumline="">
             <span>
               {t('money.in.sumline')} <b className="tabular-nums">{formatSom(detail)}</b>
+              {feeDetail ? (
+                <span className="text-muted">
+                  {' '}
+                  {t('fee.receipt.split', {
+                    tax: formatSom(taxDetail),
+                    fee: formatSom(feeDetail),
+                  })}
+                </span>
+              ) : null}
             </span>
             <span className="flex-1" />
             {detail > totalSafe ? (
@@ -668,7 +802,10 @@ function ReceiptModal({
               </Pill>
             ) : null}
           </div>
-          <span className="text-[11.5px] leading-[1.4] text-faint">{t('money.in.hint')}</span>
+          <span className="text-[11.5px] leading-[1.4] text-faint">
+            {t('money.in.hint')}
+            {feeRows.length ? ` ${t('fee.receipt.hint')}` : ''}
+          </span>
         </section>
         {canUpload ? (
           <FormGrid>

@@ -164,6 +164,7 @@ export async function contractorOut(
     tariff: options.fee ? r.tariff : null,
     feeDay: options.fee ? r.feeDay : null,
     firstMonthMode: options.fee ? r.firstMonthMode : null,
+    oneSum: options.fee ? r.oneSum : null,
     gkedConfirmation: r.gkedConfirmation && {
       by: r.gkedConfirmation.by,
       employeeId: r.gkedConfirmation.employeeId,

@@ -6,6 +6,7 @@ import { CONTRACTOR_SERVICE_TEXTS } from './contractor-service-texts';
 import { CONTRACTOR_PAGE_TEXTS } from './contractor-page-texts';
 import { CONTRACTORS_TEXTS } from './contractors-texts';
 import { DICTS_TEXTS } from './dicts-texts';
+import { FEE_TEXTS } from './fees-texts';
 import { FILES_TEXTS } from './files-texts';
 import { GRID_TEXTS } from './grid-texts';
 import { KB_ADMIN_TEXTS } from './kb-admin-texts';
@@ -69,7 +70,8 @@ const SYSTEM_TEXTS = {
  * видов отчётов словами — `dicts-texts.ts`, контрагентов и сверки с ГКЭД — `contractors-texts.ts`, загрузки контрагентов из Excel —
  * `contractor-import-texts.ts`, страницы
  * контрагента по ссылке — `contractor-page-texts.ts`, задач —
- * `tasks-texts.ts`, реквизитов для переводов — `money-texts.ts`, показателей контрагентов и названий месяцев —
+ * `tasks-texts.ts`, реквизитов для переводов — `money-texts.ts`, платы за обслуживание — `fees-texts.ts`,
+ * показателей контрагентов и названий месяцев —
  * `kpi-texts.ts`, блока «Файлы» — `files-texts.ts`, «Базы знаний» — `kb-texts.ts`, «Новостей» — `news-texts.ts`,
  * Админки → «Справочники платформы» — `platform-dicts-texts.ts`, Админки → «База знаний (содержимое)» —
  * `kb-admin-texts.ts`.
@@ -96,6 +98,7 @@ export const UI_TEXTS = {
   ...DICTS_TEXTS,
   ...MONEY_TEXTS,
   ...TAX_MONEY_TEXTS,
+  ...FEE_TEXTS,
   ...KPI_TEXTS,
   ...FILES_TEXTS,
   ...KB_TEXTS,
