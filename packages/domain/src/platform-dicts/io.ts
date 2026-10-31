@@ -1,4 +1,10 @@
 import { searchText } from '../common/list';
+import { KB_ARTICLE_AUDIENCES, KB_MODULE_TITLES } from '../kb/admin';
+import { KB_EVENTS } from '../kb/events';
+import { kbShowWhat, type KbShowWhatInput } from '../kb/shows';
+import { NEWS_AUDIENCES, NEWS_TYPES } from '../news/news';
+import { MENU_MODULE_IDS, type MenuModuleId } from '../org/modules';
+import { FEATURES } from '../roles/permissions';
 import { formatDateRu, isIsoDate, type IsoDate } from '../common/dates';
 import { formatSom, parseSom } from '../common/money';
 import { payScheduleText } from '../dicts/report-types';
@@ -47,14 +53,30 @@ import {
  * «Активно». Проверки значения (связи, повторы, обязательные поля) — те же, что у окна правки: их делают
  * сервер и база при сравнении. Кроме справочников значений, так же выгружаются и загружаются
  * производственный календарь (строки — по дате), три таблицы «Налогов и ставок» и группы кодов ГКЭД
- * (задачи 2.37, часть 3, и 2.38).
+ * (задачи 2.37, часть 3, и 2.38), а также шаги уроков, показы, статьи и новости «Базы знаний» (задача
+ * 2.39, прототип DX.kbsteps, DX.kbshows, DX.kbarts, DX.kbnews).
  */
+
+/** Содержимое «Базы знаний» с «Выгрузить» и «Загрузить» (Админка → «База знаний (содержимое)»). */
+export const KB_IO_DICTS = ['kbsteps', 'kbshows', 'kbarts', 'kbnews'] as const;
+export type KbIoDict = (typeof KB_IO_DICTS)[number];
+
+export function isKbIoDict(value: string): value is KbIoDict {
+  return (KB_IO_DICTS as readonly string[]).includes(value);
+}
 
 /**
  * Справочники с «Выгрузить» и «Загрузить», которые правятся не общим механизмом: календарь, налоги,
- * ставки единого налога и налога на имущество, группы кодов ГКЭД.
+ * ставки единого налога и налога на имущество, группы кодов ГКЭД, содержимое «Базы знаний».
  */
-export const IO_SECTION_DICTS = ['calendar', 'taxes', 'enrates', 'proprates', 'gkgroups'] as const;
+export const IO_SECTION_DICTS = [
+  'calendar',
+  'taxes',
+  'enrates',
+  'proprates',
+  'gkgroups',
+  ...KB_IO_DICTS,
+] as const;
 export type IoSectionDict = (typeof IO_SECTION_DICTS)[number];
 
 /** Все справочники с «Выгрузить» и «Загрузить». */
@@ -76,8 +98,11 @@ export interface IoValue {
   data: Readonly<Record<string, unknown>>;
 }
 
-/** Справочники, на значения которых ссылаются столбцы: в файле — названием, в базе — кодом. */
-export type IoRefDict = 'organs' | 'regimes' | 'bases' | 'types' | 'ugns';
+/**
+ * Справочники, на значения которых ссылаются столбцы: в файле — названием, в базе — кодом; `kbgroups` —
+ * модули программы обучения, `perms` — права.
+ */
+export type IoRefDict = 'organs' | 'regimes' | 'bases' | 'types' | 'ugns' | 'kbgroups' | 'perms';
 
 /**
  * Значение, на которое ссылаются: код и подпись в файле (у вида отчёта — краткое название, у УГНС —
@@ -107,7 +132,8 @@ type IoField =
   | { type: 'enum'; values: readonly string[]; label: (v: string) => UiTextKey; empty?: string }
   /** Несколько значений через «;» (размер бизнеса). */
   | { type: 'enums'; values: readonly string[]; label: (v: string) => UiTextKey }
-  | { type: 'ref'; ref: IoRefDict }
+  /** Ссылка; `optional` — пустая ячейка или «—» — без значения (право шага и статьи). */
+  | { type: 'ref'; ref: IoRefDict; optional?: boolean }
   | { type: 'refs'; ref: IoRefDict }
   | { type: 'list' }
   | { type: 'date' }
@@ -125,7 +151,9 @@ type IoField =
   /** Действие группы кодов: «Запрет», «Предупреждение» или по кодам. */
   | { type: 'groupActs' }
   /** Сумма в сомах с копейками («12,50») — в тыйынах. */
-  | { type: 'money' };
+  | { type: 'money' }
+  /** Что подсвечивает облачко показа (`kbShowWhat`): только в выгрузке. */
+  | { type: 'showWhat' };
 
 /** Столбец файла: поле, заголовок (ключ словаря) и как его писать и читать. */
 export interface IoColumn {
@@ -139,6 +167,10 @@ export interface IoColumn {
   shown?: (x: IoValue) => boolean;
   /** Ячейка до разбора: код страны — заглавными, телефонный код — без «+» (прототип DX.phones). */
   normalize?: (text: string) => string;
+  /** Только в выгрузке: при загрузке не читается (шаг и «Что подсвечивает» у показов). */
+  readonly?: boolean;
+  /** Читается только у новой строки (место для «Перейти» нового шага). */
+  onlyNew?: boolean;
 }
 
 const yearly = (x: IoValue) => x.data.period === 'Y';
@@ -160,10 +192,12 @@ const col = (
   key: string,
   title: string,
   field: IoField = { type: 'text' },
-  extra: Pick<IoColumn, 'required' | 'shown' | 'normalize'> = {},
+  extra: Pick<IoColumn, 'required' | 'shown' | 'normalize' | 'readonly' | 'onlyNew'> = {},
 ): IoColumn => ({ key, title: title as UiTextKey, field, ...extra });
 
 const upper = (text: string) => text.trim().toUpperCase();
+/** «—» в ячейке — пусто (прототип: `!v || v === '—'`). */
+const noDash = (text: string) => (text.trim() === '—' ? '' : text);
 const noPlus = (text: string) => text.trim().replace(/^\+/, '');
 
 const CODE = col('code', 'pdicts.io.col.code');
@@ -198,6 +232,10 @@ const isoDay = (text: string) => {
   const ru = /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/.exec(s);
   return ru ? `${ru[3]}-${ru[2]!.padStart(2, '0')}-${ru[1]!.padStart(2, '0')}` : s;
 };
+
+const moduleTitle = (v: string) => KB_MODULE_TITLES[v as MenuModuleId];
+/** Облачко «Автоматически»: заголовка, текста и «Общий элемент» у него нет (прототип DX.kbshows). */
+const notAuto = (x: IoValue) => !x.data.auto;
 
 const PROPERTY_MONEY = [
   ['homeA', 'pdicts.prop.col.home_a'],
@@ -488,6 +526,99 @@ export const IO_COLUMNS: Readonly<Record<IoDict, readonly IoColumn[]>> = {
     col('ask', 'pdicts.io.col.ask'),
     col('why', 'pdicts.io.col.why'),
   ],
+  // «Шаги уроков» (прототип DX.kbsteps) и поле продукта «Место для «Перейти»» — у нового шага.
+  // ОТКЛОНЕНИЕ: docs/deviations.md#Д-27
+  kbsteps: [
+    CODE,
+    col('g', 'kbadm.col.group', { type: 'ref', ref: 'kbgroups' }, { required: true }),
+    col('name', 'kbadm.col.title', { type: 'text' }, { required: true }),
+    col('w', 'kbadm.io.col.why'),
+    col(
+      'learn',
+      'kbadm.col.type',
+      enumOf(['do', 'look'], (v) => `kbadm.step.type.${v}`),
+      { required: true },
+    ),
+    col('star', 'kbadm.col.star', { type: 'yesno' }),
+    col(
+      'perm',
+      'kbadm.col.perm',
+      { type: 'ref', ref: 'perms', optional: true },
+      { normalize: noDash },
+    ),
+    col(
+      'featk',
+      'kbadm.col.feat',
+      enumOf(FEATURES, (v) => `org.feature.${v}`, ''),
+      { normalize: noDash },
+    ),
+    col(
+      'evk',
+      'kbadm.col.evk',
+      enumOf(KB_EVENTS, (v) => `kbadm.ev.${v}`),
+      { required: true },
+    ),
+    col('ord', 'kbadm.io.col.ord', { type: 'int', min: 1, max: 9999, empty: 'keep' }),
+    col('active', 'kbadm.col.active', { type: 'yesno' }),
+    col('mod', 'kbadm.io.col.go', enumOf(MENU_MODULE_IDS, moduleTitle, ''), {
+      normalize: noDash,
+      onlyNew: true,
+    }),
+  ],
+  // «Показы» (прототип DX.kbshows): строка — облачко сценария, код — «сценарий#номер».
+  kbshows: [
+    CODE,
+    col('step', 'kbadm.col.step', { type: 'text' }, { readonly: true }),
+    col('what', 'kbadm.io.col.what', { type: 'showWhat' }, { readonly: true }),
+    col('t', 'kbadm.show.f.t', { type: 'text' }, { shown: notAuto }),
+    col('x', 'kbadm.io.col.show_x', { type: 'text' }, { shown: notAuto }),
+    col('common', 'kbadm.show.f.common', { type: 'yesno' }, { shown: notAuto }),
+    col('active', 'kbadm.io.col.show_active', { type: 'yesno' }),
+  ],
+  // «Статьи Базы знаний» (прототип DX.kbarts).
+  kbarts: [
+    CODE,
+    col('sec', 'kbadm.col.sec', { type: 'text' }, { required: true }),
+    col('name', 'kbadm.col.title', { type: 'text' }, { required: true }),
+    col('mod', 'kbadm.col.mod', enumOf(MENU_MODULE_IDS, moduleTitle, ''), { normalize: noDash }),
+    col(
+      'perm',
+      'kbadm.col.art_perm',
+      { type: 'ref', ref: 'perms', optional: true },
+      { normalize: noDash },
+    ),
+    col(
+      'aud',
+      'kbadm.col.aud',
+      enumOf(KB_ARTICLE_AUDIENCES, (v) => (v === 'adm' ? 'kbadm.io.aud_adm' : `kbadm.v.aud.${v}`)),
+      { required: true },
+    ),
+    col('html', 'kbadm.io.col.html', { type: 'text' }, { required: true }),
+    col('active', 'kbadm.col.art_active', { type: 'yesno' }),
+  ],
+  // «Новости» (прототип DX.kbnews).
+  kbnews: [
+    CODE,
+    col('name', 'kbadm.io.col.news_t', { type: 'text' }, { required: true }),
+    col(
+      'type',
+      'kbadm.io.col.news_type',
+      enumOf(NEWS_TYPES, (v) => `news.type.${v}`),
+      { required: true },
+    ),
+    col('release', 'kbadm.io.col.ver'),
+    col('date', 'kbadm.io.col.date', { type: 'date' }, { required: true }),
+    col(
+      'aud',
+      'kbadm.io.col.news_aud',
+      enumOf(NEWS_AUDIENCES, (v) => `news.aud.${v}`),
+      { required: true },
+    ),
+    col('pinned', 'kbadm.io.col.pin', { type: 'yesno' }),
+    col('showOnLogin', 'kbadm.io.col.login', { type: 'yesno' }),
+    col('short', 'kbadm.io.col.short', { type: 'text' }, { required: true }),
+    col('md', 'kbadm.io.col.md', { type: 'text' }, { required: true }),
+  ],
 };
 
 /**
@@ -498,6 +629,9 @@ export const IO_COLUMNS: Readonly<Record<IoDict, readonly IoColumn[]>> = {
  */
 export function ioCodeValid(dict: IoDict, code: string): boolean {
   if (dict === 'gked') return GKED_CODE_PATTERN.test(code);
+  // Шаги, статьи, новости — как коды записей «Базы знаний»; облачко показа — «сценарий#номер».
+  if (dict === 'kbshows') return /^[a-z0-9][a-z0-9_-]{0,63}#\d{1,3}$/.test(code);
+  if (isKbIoDict(dict)) return /^[a-z0-9][a-z0-9_-]{0,63}$/.test(code);
   if (dict === 'calendar') return isIsoDate(code);
   if (dict === 'gkgroups') return GKED_GROUP_ID_PATTERN.test(code);
   if (!isAdminValueDict(dict)) return /^[\p{L}\d][\p{L}\d_-]{0,39}$/u.test(code);
@@ -602,6 +736,8 @@ export function ioCellText(column: IoColumn, x: IoValue, ctx: IoContext): string
     }
     case 'money':
       return typeof v === 'number' ? formatSom(v, 'auto') : '';
+    case 'showWhat':
+      return v && typeof v === 'object' ? kbShowWhat(v as KbShowWhatInput, ctx.t) : '';
   }
 }
 
@@ -901,6 +1037,7 @@ export function parseIoCell(column: IoColumn, text: string, ctx: IoContext): Par
       return v ? { value: v } : bad(ctx, 'pdicts.io.err.enum', list);
     }
     case 'ref': {
+      if (!s && f.optional) return { value: '' };
       const code = refCode(ctx, f.ref, s);
       return code ? { value: code } : refError(ctx, f.ref, s);
     }
@@ -954,6 +1091,8 @@ export function parseIoCell(column: IoColumn, text: string, ctx: IoContext): Par
       const v = parseSom(s);
       return v === null || v < 0 ? bad(ctx, 'pdicts.io.err.money') : { value: v };
     }
+    case 'showWhat':
+      return { value: undefined };
   }
 }
 
@@ -990,7 +1129,7 @@ export function parseIoRows(
     const values: Record<string, unknown> = {};
     const errors: string[] = [];
     all.forEach((c, ci) => {
-      if (at[ci]! < 0 || ci === 0) return;
+      if (at[ci]! < 0 || ci === 0 || c.readonly) return;
       const parsed = parseIoCell(c, cells[at[ci]!] ?? '', ctx);
       if ('error' in parsed)
         errors.push(ctx.t('pdicts.io.err.cell', { col: ctx.t(c.title), text: parsed.error }));
@@ -1084,7 +1223,7 @@ export function ioChanges(
   ctx: IoContext,
 ): IoChange[] {
   return columns
-    .filter((c) => c.key !== 'code')
+    .filter((c) => c.key !== 'code' && !c.readonly && !c.onlyNew)
     .flatMap((c) => {
       const from = ioCellText(c, before, ctx);
       const to = ioCellText(c, after, ctx);

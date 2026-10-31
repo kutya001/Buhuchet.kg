@@ -170,11 +170,14 @@ describe('вкладки и «+ Добавить» по правам и учёт
     expect(addActions('pdicts', access)).toEqual([]);
   });
 
-  it('у «Базы знаний (содержимое)» способ добавления — своей вкладки: «Шаг урока», «Статья», «Новость»', () => {
+  it('у «Базы знаний (содержимое)» способ добавления — своей вкладки и Excel; у «Уровней» — ничего', () => {
     const access = shellAccess(me({ admin: true }));
-    expect(ids(addActions('kbadm', access, 'news'))).toEqual(['news']);
-    expect(ids(addActions('kbadm', access, 'steps'))).toEqual(['step']);
-    expect(ids(addActions('kbadm', access, 'arts'))).toEqual(['art']);
+    const io = ['io_export', 'io_import'];
+    expect(ids(addActions('kbadm', access, 'news'))).toEqual(['news', ...io]);
+    expect(ids(addActions('kbadm', access, 'steps'))).toEqual(['step', ...io]);
+    expect(ids(addActions('kbadm', access, 'shows'))).toEqual(['show', ...io]);
+    expect(ids(addActions('kbadm', access, 'arts'))).toEqual(['art', ...io]);
+    expect(addActions('kbadm', access, 'arts').find((a) => a.id === 'io_export')?.sep).toBe(true);
     expect(addActions('kbadm', access, 'levels')).toEqual([]);
   });
 });

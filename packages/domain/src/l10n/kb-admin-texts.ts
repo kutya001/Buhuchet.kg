@@ -5,8 +5,9 @@ const E = 'Ошибки';
 
 /**
  * Тексты Админки → «База знаний (содержимое)» задачи 2.39 (прототип admin/kb-content.js; условия
- * отметки — `KB_EV` modules/kb-lessons.js): вкладки «Шаги уроков», «Статьи», «Уровни», окна шага и
- * статьи, «История изменений».
+ * отметки — `KB_EV` modules/kb-lessons.js): вкладки «Шаги уроков», «Показы», «Статьи», «Уровни», окна
+ * шага, сценария показа и статьи, «История изменений», столбцы файлов Excel (прототип DX.kbsteps,
+ * DX.kbshows, DX.kbarts, DX.kbnews).
  */
 export const KB_ADMIN_TEXTS = {
   // Списки.
@@ -27,6 +28,11 @@ export const KB_ADMIN_TEXTS = {
   'kbadm.col.aud': { ru: 'Кому', section: S },
   'kbadm.col.len': { ru: 'Объём, знаков', section: S },
   'kbadm.col.art_active': { ru: 'Активна', section: S },
+  'kbadm.col.step': { ru: 'Шаг', section: S },
+  'kbadm.col.sc': { ru: 'Сценарий', section: S },
+  'kbadm.col.scr': { ru: 'Экран', section: S },
+  'kbadm.col.clouds': { ru: 'Облачков', section: S },
+  'kbadm.col.doit': { ru: '«Сделать сейчас»', section: S },
   'kbadm.steps_count.one': { ru: '{n} шаг', section: S },
   'kbadm.steps_count.few': { ru: '{n} шага', section: S },
   'kbadm.steps_count.many': { ru: '{n} шагов', section: S },
@@ -45,6 +51,10 @@ export const KB_ADMIN_TEXTS = {
   'kbadm.v.aud.biz': { ru: 'Организациям', section: S },
   'kbadm.v.aud.adm': { ru: 'Администраторам', section: S },
   'kbadm.v.aud.all': { ru: 'Всем', section: S },
+  'kbadm.v.sc.own': { ru: 'Свой', section: S },
+  'kbadm.v.sc.auto': { ru: 'Автоматический', section: S },
+  'kbadm.v.doit.show': { ru: 'По сценарию', section: S },
+  'kbadm.v.doit.form': { ru: 'Форма шага', section: S },
 
   // Пояснения вкладок.
   'kbadm.steps.note': {
@@ -53,6 +63,10 @@ export const KB_ADMIN_TEXTS = {
   },
   'kbadm.arts.note': {
     ru: 'Статьи «Базы знаний» для всех организаций. Начальный набор — разделы «Инструкции пользователя Buhuchet.kg». Статьи о модулях, недоступных пользователю по правам, ему не показываются. Организации своих статей не добавляют.',
+    section: S,
+  },
+  'kbadm.shows.note': {
+    ru: 'Сценарий «Показать как» для каждого шага. Без своего сценария показ собирается сам по экрану шага: заголовок, вкладки, «+ Добавить», плашки, список, столбцы, меню «…», поля формы. Свой сценарий задаёт порядок облачков и их тексты; тексты кнопок и полей для всех экранов — справочник «Тексты элементов» (kbUi). Невидимые пользователю элементы (нет права, выключена функция) показ пропускает.',
     section: S,
   },
   'kbadm.levels.note': {
@@ -165,6 +179,7 @@ export const KB_ADMIN_TEXTS = {
   'kbadm.hist.step.down': { ru: 'Шаги уроков: «{name}» перемещён ниже', section: S },
   'kbadm.hist.step.on': { ru: 'Шаги уроков: «{name}» включён', section: S },
   'kbadm.hist.step.off': { ru: 'Шаги уроков: «{name}» выключен', section: S },
+  'kbadm.hist.step.delete': { ru: 'Шаги уроков: шаг «{name}» удалён', section: S },
   'kbadm.hist.f.title': { ru: 'название', section: S },
   'kbadm.hist.f.on': { ru: 'включён', section: S },
   'kbadm.hist.f.off': { ru: 'выключен', section: S },
@@ -175,6 +190,7 @@ export const KB_ADMIN_TEXTS = {
   'kbadm.hist.art.update': { ru: 'Статьи: «{name}» изменена', section: S },
   'kbadm.hist.art.on': { ru: 'Статьи: «{name}» включена', section: S },
   'kbadm.hist.art.off': { ru: 'Статьи: «{name}» отключена', section: S },
+  'kbadm.hist.art.delete': { ru: 'Статьи: «{name}» удалена', section: S },
   'kbadm.hist.levels.business': { ru: 'Уровни (организации): {list}', section: S },
   'kbadm.hist.levels.admin': { ru: 'Уровни (администраторы): {list}', section: S },
   'kbadm.hist.percent': { ru: '%', section: S },
@@ -225,6 +241,118 @@ export const KB_ADMIN_TEXTS = {
   'kbadm.ev.state': { ru: 'выполнено условие в данных пользователя', section: S },
   'kbadm.ev.hand': { ru: 'только показом или статьёй', section: S },
 
+  // «Показы» (прототип kbShowPick, kbShowDlg, kbShowPrev, KB_AUTO, kbShowWhat).
+  'kbadm.act.show_edit': { ru: 'Изменить сценарий', section: S },
+  'kbadm.act.show_new': { ru: 'Создать свой сценарий', section: S },
+  'kbadm.act.show_auto': { ru: 'Вернуть автоматический', section: S },
+  'kbadm.act.show_auto.sub': { ru: 'Свой сценарий удаляется', section: S },
+  'kbadm.show.pick.title': { ru: 'Свой сценарий показа', section: S },
+  'kbadm.show.pick.step': { ru: 'Шаг', section: S },
+  'kbadm.show.pick.next': { ru: 'Далее', section: S },
+  'kbadm.show.pick.none': { ru: 'У всех шагов уже есть свой сценарий', section: S },
+  'kbadm.show.title': { ru: 'Сценарий показа', section: S },
+  'kbadm.show.note': {
+    ru: 'Первое облачко — название шага и «Зачем это нужно», последнее — «Готово» или «Сделать сейчас»: их программа добавляет сама. Здесь — облачки между ними. Тексты можно менять; что подсвечивать, задаёт разработчик.',
+    section: S,
+  },
+  'kbadm.show.f.active': { ru: 'Активен', section: S },
+  'kbadm.show.active_hint': {
+    ru: 'выключенный сценарий заменяется автоматическим',
+    section: S,
+  },
+  'kbadm.show.item': { ru: '{n}. {what}', section: S },
+  'kbadm.show.auto_hint': {
+    ru: 'Облачка и тексты берутся из справочника текстов элементов; общие элементы (поиск, «Столбцы», «На весь экран», кнопки формы) система отмечает сама',
+    section: S,
+  },
+  'kbadm.show.f.t': { ru: 'Заголовок облачка', section: S },
+  'kbadm.show.f.x': { ru: 'Текст облачка: что делает и пример', section: S },
+  'kbadm.show.f.common': { ru: 'Общий элемент', section: S },
+  'kbadm.show.common_hint': {
+    ru: 'Одинаковый на всех экранах: пройденное один раз облачко больше не показывается пользователю ни на одном экране',
+    section: S,
+  },
+  'kbadm.show.add_text': { ru: 'Облачко с текстом', section: S },
+  'kbadm.show.add_auto': { ru: 'Все элементы экрана', section: S },
+  'kbadm.show.up': { ru: 'Выше', section: S },
+  'kbadm.show.delete': { ru: 'Удалить', section: S },
+  'kbadm.show.saved': { ru: 'Сценарий сохранён', section: S },
+  'kbadm.show.prev.title': { ru: 'Предпросмотр показа', section: S },
+  'kbadm.show.prev.auto': { ru: 'Автоматически', section: S },
+  'kbadm.show.prev.tag_auto': { ru: 'авто', section: S },
+  'kbadm.show.prev.tag_common': { ru: 'общий элемент', section: S },
+  'kbadm.show.prev.hint': {
+    ru: 'Облачки «Автоматически» раскрываются по живому экрану: по одному на каждую вкладку, кнопку, столбец, пункт меню или поле.',
+    section: S,
+  },
+  'kbadm.show.auto.screen': { ru: 'Все элементы экрана', section: S },
+  'kbadm.show.auto.grid': { ru: 'Список: столбцы, фильтры, строка, меню «…»', section: S },
+  'kbadm.show.auto.add': { ru: '«+ Добавить» и пункты его меню', section: S },
+  'kbadm.show.auto.boxes': { ru: 'Блоки экрана', section: S },
+  'kbadm.show.auto.plates': { ru: 'Плашки', section: S },
+  'kbadm.show.auto.tabs': { ru: 'Вкладки', section: S },
+  'kbadm.show.auto.fields': { ru: 'Поля формы', section: S },
+  'kbadm.show.auto.card': { ru: 'Карточка: вкладки, блоки, кнопки', section: S },
+  'kbadm.show.auto.form': { ru: 'Форма: все поля', section: S },
+  'kbadm.show.auto.menu': { ru: 'Меню действий: каждый пункт', section: S },
+  'kbadm.show.what.auto': { ru: 'Автоматически: {what}', section: S },
+  'kbadm.show.what.auto_tab': { ru: 'Автоматически: {what} · вкладка «{tab}»', section: S },
+  'kbadm.show.what.txt': { ru: 'Элемент с текстом «{txt}»', section: S },
+  'kbadm.show.what.el': { ru: 'Элемент экрана', section: S },
+  'kbadm.show.what.text': { ru: 'Только текст', section: S },
+  'kbadm.show.cloud': { ru: '{step} · облачко {n}', section: S },
+  'kbadm.hist.show.create': {
+    ru: 'Показы: «{name}» — создан свой сценарий ({n} облачков)',
+    section: S,
+  },
+  'kbadm.hist.show.update': {
+    ru: 'Показы: «{name}» — сценарий изменён ({n} облачков)',
+    section: S,
+  },
+  'kbadm.hist.show.auto': { ru: 'Показы: «{name}» — снова автоматический', section: S },
+
+  // Выгрузка и загрузка Excel (прототип DX.kbsteps, DX.kbshows, DX.kbarts, DX.kbnews).
+  'pdicts.title.kbsteps': { ru: 'Шаги уроков', section: S },
+  'pdicts.title.kbshows': { ru: 'Показы', section: S },
+  'pdicts.title.kbarts': { ru: 'Статьи Базы знаний', section: S },
+  'pdicts.title.kbnews': { ru: 'Новости', section: S },
+  'kbadm.io.col.why': { ru: 'Зачем это нужно', section: S },
+  'kbadm.io.col.ord': { ru: 'Порядок', section: S },
+  'kbadm.io.col.go': { ru: 'Место для «Перейти»', section: S },
+  'kbadm.io.col.what': { ru: 'Что подсвечивает', section: S },
+  'kbadm.io.col.show_x': { ru: 'Текст облачка', section: S },
+  'kbadm.io.col.show_active': { ru: 'Сценарий активен', section: S },
+  'kbadm.io.col.html': { ru: 'Текст', section: S },
+  'kbadm.io.col.news_t': { ru: 'Заголовок', section: S },
+  'kbadm.io.col.news_type': { ru: 'Тип', section: S },
+  'kbadm.io.col.ver': { ru: 'Версия', section: S },
+  'kbadm.io.col.date': { ru: 'Дата публикации', section: S },
+  'kbadm.io.col.news_aud': { ru: 'Для кого', section: S },
+  'kbadm.io.col.pin': { ru: 'Закрепить вверху', section: S },
+  'kbadm.io.col.login': { ru: 'Показывать при входе', section: S },
+  'kbadm.io.col.short': { ru: 'Краткое описание', section: S },
+  'kbadm.io.col.md': { ru: 'Подробное описание (markdown)', section: S },
+  'kbadm.io.aud_adm': { ru: 'Администраторам платформы', section: S },
+  'pdicts.io.err.ref.kbgroups': { ru: 'модуля программы «{value}» нет', section: E },
+  'pdicts.io.err.ref.perms': { ru: 'права «{value}» нет', section: E },
+  'kbadm.io.err.code': {
+    ru: 'Код — латиница, цифры, «-» и «_», с буквы или цифры, до 64 знаков',
+    section: E,
+  },
+  'kbadm.io.err.step_mod': { ru: 'у нового шага укажите модуль', section: E },
+  'kbadm.io.err.step_event': {
+    ru: 'у нового шага — только условие, которое уже работает',
+    section: E,
+  },
+  'kbadm.io.err.show_none': {
+    ru: 'своего сценария «{id}» нет: сначала создайте его на вкладке «Показы»',
+    section: E,
+  },
+  'kbadm.io.err.show_code': {
+    ru: 'Код облачка — код сценария, «#» и номер облачка, например sh-profile#4',
+    section: E,
+  },
+
   // Отказы.
   'kbadm.err.kb_title_required': { ru: 'Введите название', section: E },
   'kbadm.err.kb_title_too_long': { ru: 'Не длиннее 200 знаков', section: E },
@@ -240,4 +368,12 @@ export const KB_ADMIN_TEXTS = {
     ru: 'Пороги должны расти и быть не больше 100 %',
     section: E,
   },
+  'kbadm.err.kb_show_title': { ru: 'У каждого облачка должен быть заголовок', section: E },
+  'kbadm.err.kb_show_title_too_long': {
+    ru: 'Заголовок облачка — не длиннее 200 знаков',
+    section: E,
+  },
+  'kbadm.err.kb_show_text_too_long': { ru: 'Текст облачка — не длиннее 1000 знаков', section: E },
+  'kbadm.err.kb_show_item': { ru: 'Сценарий изменён — откройте окно заново', section: E },
+  'kbadm.err.kb_show_too_many': { ru: 'Не больше 60 облачков', section: E },
 } as const satisfies Record<string, UiTextDefault>;

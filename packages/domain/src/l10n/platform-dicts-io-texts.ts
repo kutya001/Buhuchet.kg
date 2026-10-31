@@ -216,6 +216,10 @@ export const PLATFORM_DICTS_IO_TEXTS = {
     ru: 'Колонки: {cols}. Удаление через загрузку не делается — чтобы убрать значение, поставьте «Нет» в колонке «{active}».',
     section: S,
   },
+  'pdicts.io.import.hint_no_active': {
+    ru: 'Колонки: {cols}. Удаление через загрузку не делается.',
+    section: S,
+  },
   'pdicts.io.import.file': { ru: 'Файл Excel/CSV', section: S },
   'pdicts.io.import.file_chosen': { ru: 'Файл «{name}»: нажмите «Сравнить»', section: S },
   'pdicts.io.import.file_read': { ru: 'Файл прочитан: нажмите «Сравнить»', section: S },

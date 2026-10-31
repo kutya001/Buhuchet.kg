@@ -343,7 +343,9 @@ export function ImportDialog({
   };
 
   const columns = IO_COLUMNS[dict];
-  const activeTitle = t(columns[columns.length - 1]!.title);
+  // «Активно» — столбец `active` (у шагов уроков за ним «Место для «Перейти»», у новостей его нет).
+  const active = columns.find((c) => c.key === 'active');
+  const activeTitle = active ? t(active.title) : '';
   const n = preview ? preview.add.length + preview.change.length + preview.off.length : 0;
   const title = t('pdicts.io.import.title', { dict: t(`pdicts.title.${dict}`) });
 
@@ -409,7 +411,7 @@ export function ImportDialog({
             label={t('pdicts.io.import.data')}
             full
             error={error ?? undefined}
-            hint={t('pdicts.io.import.hint', {
+            hint={t(active ? 'pdicts.io.import.hint' : 'pdicts.io.import.hint_no_active', {
               cols: columns.map((c) => t(c.title)).join(', '),
               active: activeTitle,
             })}

@@ -4,14 +4,15 @@ import {
   KB_ARTICLE_HTML_MAX,
   KB_HISTORY_SECTIONS,
   KB_LEVEL_SETS,
+  KB_SHOW_ITEMS_MAX,
 } from '@buhuchet/domain';
 import { z } from 'zod';
-import { RecordVersion } from './common';
+import { RecordAudit, RecordVersion } from './common';
 import { listPageSchema } from './list';
 
 /*
- * Админка → «База знаний (содержимое)» (задача 2.39, docs/decisions.md п. Д-11): «Шаги уроков»,
- * «Статьи», «Уровни». Длины ограничены с запасом — точные правила (200 знаков названия и т. п.)
+ * Админка → «База знаний (содержимое)» (задача 2.39, docs/decisions.md п. Д-11, Д-12): «Шаги уроков»,
+ * «Показы», «Статьи», «Уровни». Длины ограничены с запасом — точные правила (200 знаков названия и т. п.)
  * проверяет домен с текстом ошибки под полем.
  */
 
@@ -32,7 +33,14 @@ export const AdminKbRow = z.object({
   /** Шаг можно поднять или опустить в своём модуле программы. */
   canUp: z.boolean(),
   canDown: z.boolean(),
+  /** «Показы»: у шага свой сценарий. */
+  own: z.boolean().optional(),
   values: z.record(z.string(), z.union([z.string(), z.number()])),
+  /** Служебные столбцы: у значений из наполнения без правок — пусто. */
+  audit: RecordAudit.extend({
+    createdAt: z.iso.datetime().nullable(),
+    updatedAt: z.iso.datetime().nullable(),
+  }),
 });
 export type AdminKbRow = z.infer<typeof AdminKbRow>;
 
@@ -125,8 +133,56 @@ export const AdminKbMeta = z.object({
   articles: z.array(z.object({ id: z.string(), sec: z.string(), t: z.string() })),
   permissions: z.array(z.object({ id: z.string(), name: z.string() })),
   shows: z.record(z.string(), z.number().int().nonnegative()),
+  steps: z.array(z.object({ id: z.string(), g: z.string(), t: z.string() })),
 });
 export type AdminKbMeta = z.infer<typeof AdminKbMeta>;
+
+/** Облачко сценария: что подсвечивает (задаёт разработчик) и тексты. */
+export const AdminKbShowItem = z.object({
+  auto: z.string().nullable(),
+  txt: z.string().nullable(),
+  el: z.boolean(),
+  tab: z.string().nullable(),
+  t: z.string(),
+  x: z.string(),
+  common: z.boolean(),
+});
+export type AdminKbShowItem = z.infer<typeof AdminKbShowItem>;
+
+/** Сценарий шага для окна и предпросмотра; своего нет — `own: false`, версия 0. */
+export const AdminKbShow = z.object({
+  step: z.object({ id: z.string(), t: z.string(), w: z.string(), learn: z.boolean() }),
+  own: z.boolean(),
+  active: z.boolean(),
+  version: z.number().int().nonnegative(),
+  items: z.array(AdminKbShowItem),
+  fin: z.object({ t: z.string(), x: z.string() }),
+});
+export type AdminKbShow = z.infer<typeof AdminKbShow>;
+
+/**
+ * «Сохранить» окна сценария: облачки по порядку (`from` — номер прежнего облачка), «Активен» и версия
+ * сценария (нового — 0).
+ */
+export const AdminKbShowUpdate = z.object({
+  active: z.boolean(),
+  items: z
+    .array(
+      z.object({
+        from: z.number().int().nonnegative().optional(),
+        auto: z.literal('screen').optional(),
+        t: short.optional(),
+        x: z.string().max(5000).optional(),
+        common: z.boolean().optional(),
+      }),
+    )
+    .max(KB_SHOW_ITEMS_MAX),
+  version: z.number().int().nonnegative(),
+});
+export type AdminKbShowUpdate = z.infer<typeof AdminKbShowUpdate>;
+
+/** «Вернуть автоматический»: версия своего сценария. */
+export const AdminKbVersionQuery = z.object({ version: z.coerce.number().int().positive() });
 
 const HistoryValue: z.ZodType<unknown> = z.unknown();
 

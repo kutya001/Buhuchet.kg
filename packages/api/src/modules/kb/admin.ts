@@ -6,6 +6,9 @@ import {
   adminKbLevels,
   adminKbLevelsSave,
   adminKbMeta,
+  adminKbShow,
+  adminKbShowAuto,
+  adminKbShowSave,
   adminKbStepActive,
   adminKbStepMove,
   adminKbStepSave,
@@ -27,6 +30,7 @@ import {
   kbScreenBlocks,
   kbStepProblems,
   type KbArticleInput,
+  type KbShowProblem,
   type KbStepInput,
 } from '@buhuchet/domain';
 import {
@@ -46,9 +50,12 @@ import {
   AdminKbMeta,
   AdminKbMove,
   AdminKbRowList,
+  AdminKbShow,
+  AdminKbShowUpdate,
   AdminKbStep,
   AdminKbStepCreate,
   AdminKbStepUpdate,
+  AdminKbVersionQuery,
   ApiError,
   KbArticle,
   ListExportParams,
@@ -66,9 +73,9 @@ import { serverTexts } from '../l10n/texts';
 
 /*
  * Админка → «База знаний (содержимое)» (задача 2.39, docs/decisions.md п. Д-11; прототип
- * admin/kb-content.js): списки «Шагов уроков» и «Статей» (страница, значения фильтра, «В Excel»),
- * окна шага и статьи, «Выше» / «Ниже», «Выключить» / «Включить», предпросмотр статьи, «Уровни» и
- * «История изменений» вкладок. Только администратору платформы; пишет функция базы, история — в той
+ * admin/kb-content.js): списки «Шагов уроков», «Показов» и «Статей» (страница, значения фильтра, «В
+ * Excel»), окна шага, сценария показа и статьи, «Выше» / «Ниже», «Выключить» / «Включить», «Вернуть
+ * автоматический», предпросмотр статьи, «Уровни» и «История изменений» вкладок. Только администратору платформы; пишет функция базы, история — в той
  * же транзакции. Пути со словом (`meta`, `history`, `levels`, `list`, `preview`) не совпадают с путями
  * с кодом записи.
  */
@@ -156,13 +163,17 @@ export function adminKbHistoryHandler(
 
 /* ───────────── Списки ───────────── */
 
-const TITLE = { steps: 'tab.kbadm.steps', arts: 'tab.kbadm.arts' } as const;
+const TITLE = {
+  steps: 'tab.kbadm.steps',
+  arts: 'tab.kbadm.arts',
+  shows: 'tab.kbadm.shows',
+} as const;
 
 export const listAdminKbRoute = createRoute({
   method: 'get',
   path: `${P}/list/{list}`,
   tags: ['kb'],
-  summary: '«Шаги уроков» или «Статьи»: страница списка',
+  summary: '«Шаги уроков», «Статьи» или «Показы»: страница списка',
   middleware: [requirePlatformAdmin] as const,
   request: { params: AdminKbListParam, query: ListQueryParams },
   responses: {
@@ -224,7 +235,7 @@ export const exportAdminKbRoute = createRoute({
   method: 'get',
   path: `${P}/list/{list}/export`,
   tags: ['kb'],
-  summary: 'Список «Шагов уроков» или «Статей» в Excel',
+  summary: 'Список «Шагов уроков», «Статей» или «Показов» в Excel',
   middleware: [requirePlatformAdmin] as const,
   request: { params: AdminKbListParam, query: ListExportParams },
   responses: {
@@ -558,6 +569,108 @@ export function previewAdminKbArticleHandler(
       },
       200,
     );
+  };
+}
+
+/* ───────────── Показы ───────────── */
+
+export const getAdminKbShowRoute = createRoute({
+  method: 'get',
+  path: `${P}/shows/{id}`,
+  tags: ['kb'],
+  summary: 'Сценарий «Показать как» шага для окна и предпросмотра',
+  middleware: [requirePlatformAdmin] as const,
+  request: { params: AdminKbCodeParam },
+  responses: {
+    200: {
+      description: 'Свой сценарий или автоматический («Все элементы экрана»)',
+      content: json(AdminKbShow),
+    },
+    404: { description: 'Шага нет в программе организаций', content: error },
+    ...denied,
+  },
+});
+
+export function getAdminKbShowHandler(
+  deps: ApiDeps,
+): RouteHandler<typeof getAdminKbShowRoute, AppEnv> {
+  return async (c) => {
+    const { id } = c.req.valid('param');
+    const show = await adminTx(deps, c, (tx) => adminKbShow(tx, id));
+    if (!show) return c.json(apiError('not_found', 'Шаг не найден'), 404);
+    return c.json(show, 200);
+  };
+}
+
+const SHOW_MESSAGES: Readonly<Record<KbShowProblem, string>> = {
+  kb_show_title: 'У каждого облачка должен быть заголовок',
+  kb_show_title_too_long: 'Заголовок облачка — не длиннее 200 знаков',
+  kb_show_text_too_long: 'Текст облачка — не длиннее 1000 знаков',
+  kb_show_item: 'Сценарий изменён — откройте окно заново',
+  kb_show_too_many: 'Не больше 60 облачков',
+};
+
+export const saveAdminKbShowRoute = createRoute({
+  method: 'put',
+  path: `${P}/shows/{id}`,
+  tags: ['kb'],
+  summary:
+    'Свой сценарий шага: создать (версия 0) или сохранить ту версию, что видел администратор',
+  middleware: [requirePlatformAdmin] as const,
+  request: { params: AdminKbCodeParam, body: body(AdminKbShowUpdate) },
+  responses: {
+    200: { description: 'Сценарий после записи', content: json(AdminKbShow) },
+    400: { description: 'Неверное облачко: номер в `details.field` (`items.<n>`)', content: error },
+    404: { description: 'Шага нет в программе организаций', content: error },
+    409: { description: 'Запись изменена другим пользователем', content: error },
+    ...denied,
+  },
+});
+
+export function saveAdminKbShowHandler(
+  deps: ApiDeps,
+): RouteHandler<typeof saveAdminKbShowRoute, AppEnv> {
+  return async (c) => {
+    const { id } = c.req.valid('param');
+    const { version, ...input } = c.req.valid('json');
+    const show = await adminTx(deps, c, async (tx) => {
+      const r = await adminKbShowSave(tx, id, input, version);
+      if (!r.ok && r.reason === 'invalid') {
+        const field = r.index < 0 ? 'items' : `items.${r.index}`;
+        return apiFail(400, r.problem, SHOW_MESSAGES[r.problem], { field });
+      }
+      return savedOrFail(r);
+    });
+    return c.json(show, 200);
+  };
+}
+
+export const autoAdminKbShowRoute = createRoute({
+  method: 'delete',
+  path: `${P}/shows/{id}`,
+  tags: ['kb'],
+  summary: '«Вернуть автоматический»: свой сценарий удаляется',
+  middleware: [requirePlatformAdmin] as const,
+  request: { params: AdminKbCodeParam, query: AdminKbVersionQuery },
+  responses: {
+    200: { description: 'Сценарий шага теперь автоматический', content: json(AdminKbShow) },
+    400: { description: 'Неверный запрос', content: error },
+    404: { description: 'Своего сценария у шага нет', content: error },
+    409: { description: 'Запись изменена другим пользователем', content: error },
+    ...denied,
+  },
+});
+
+export function autoAdminKbShowHandler(
+  deps: ApiDeps,
+): RouteHandler<typeof autoAdminKbShowRoute, AppEnv> {
+  return async (c) => {
+    const { id } = c.req.valid('param');
+    const { version } = c.req.valid('query');
+    const show = await adminTx(deps, c, async (tx) =>
+      savedOrFail(await adminKbShowAuto(tx, id, version)),
+    );
+    return c.json(show, 200);
   };
 }
 

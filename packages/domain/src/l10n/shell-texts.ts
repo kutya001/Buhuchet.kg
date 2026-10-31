@@ -222,6 +222,7 @@ export const SHELL_TEXTS = {
   'add.orgs.org': { ru: 'Организация', section: 'Добавление' },
   'add.tg.cast': { ru: 'Объявление', section: 'Добавление' },
   'add.kbadm.step': { ru: 'Шаг урока', section: 'Добавление' },
+  'add.kbadm.show': { ru: 'Показ для шага', section: 'Добавление' },
   'add.kbadm.art': { ru: 'Статья', section: 'Добавление' },
   'add.kbadm.news': { ru: 'Новость', section: 'Добавление' },
 

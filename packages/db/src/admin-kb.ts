@@ -6,8 +6,11 @@ import {
   KB_MODULE_TITLES,
   kbArticleText,
   kbFlag,
+  kbShowEdit,
+  kbShowSubTab,
   kbStepRule,
   isMenuModuleId,
+  PLATFORM_ADMIN_NAME,
   sameHistoryValue,
   toHistoryValue,
   type HistoryChange,
@@ -16,6 +19,8 @@ import {
   type KbHistorySection,
   type KbLevelDef,
   type KbLevelSet,
+  type KbShowInput,
+  type KbShowProblem,
   type KbStepInput,
   type ListQuery,
 } from '@buhuchet/domain';
@@ -38,13 +43,15 @@ import { permissions, platformAuditLog } from './schema';
 
 /*
  * Админка → «База знаний (содержимое)» (задача 2.39, docs/decisions.md п. Д-11; прототип
- * admin/kb-content.js): шаги уроков, статьи и уровни — разделы `platform_reference` (`kbSteps`,
- * `kbArticles`, `kbLevels`), из которых строится «База знаний» всех организаций (`kb.ts`). Правка —
+ * admin/kb-content.js): шаги уроков, статьи, уровни и сценарии показов — разделы `platform_reference`
+ * (`kbSteps`, `kbArticles`, `kbLevels`, `kbShows`), из которых строится «База знаний» всех организаций
+ * (`kb.ts`). Правка —
  * той же функцией `app.admin_set_reference`, что у налогов: раздел целиком, той версии, что прочитана
  * в этой же транзакции. У каждой записи раздела своя версия `v` (нет — 1): «запись изменена другим
  * пользователем» — по ней, правка соседней записи не мешает. Поля, которых окно не меняет (экраны шага,
- * первое использование), сохраняются как были. Изменения пишутся в историю платформы
- * (`kbsteps:<код>`, `kbarts:<код>`, `kblevels:<набор>`) в той же транзакции. Всё — в
+ * первое использование, что подсвечивает облачко) сохраняются как были. Изменения пишутся в историю
+ * платформы (`kbsteps:<код>`, `kbarts:<код>`, `kblevels:<набор>`, `kbshows:<шаг>`) в той же
+ * транзакции. Всё — в
  * `withUserContext` администратора платформы.
  */
 
@@ -220,23 +227,31 @@ function freshCode(prefix: string, taken: ReadonlySet<string>): string {
 /** Записать раздел-массив той версии, что прочитана; null — раздел изменили между чтением и записью. */
 async function saveItems(
   tx: Tx,
-  key: 'kbSteps' | 'kbArticles',
+  key: 'kbSteps' | 'kbArticles' | 'kbShows',
   items: RawItem[],
   version: number,
 ): Promise<number | null> {
   return saveReference(tx, key, items, version);
 }
 
+/** Код и порядок шага из файла Excel (прототип DX.kbsteps: код новой строки, «Порядок»). */
+export interface AdminKbStepFileFields {
+  code?: string;
+  ord?: number;
+}
+
 /**
  * Новый шаг (`id` нет) или правка шага той версии, что видел администратор (прототип kbStepDlg
  * «Сохранить»). Новый — с отметкой «Новое», последним по порядку и с местом для «Перейти»; у шага
- * «Посмотреть» без экранов экран — модуль этого места (прототип kbBind: `at=[mod]`).
+ * «Посмотреть» без экранов экран — модуль этого места (прототип kbBind: `at=[mod]`). Загрузка из Excel
+ * задаёт код нового шага и «Порядок» (`file`); занятый код — `changed`.
  */
 export async function adminKbStepSave(
   tx: Tx,
   id: string | null,
   input: KbStepInput,
   version: number,
+  file: AdminKbStepFileFields = {},
 ): Promise<AdminKbSaveResult<AdminKbStep>> {
   const ref = await readReference(tx, 'kbSteps');
   if (!ref) return NOT_FOUND;
@@ -258,10 +273,11 @@ export async function adminKbStepSave(
   let before: AdminKbStep | null = null;
   if (id === null) {
     const taken = new Set(items.map((x) => x.item.id));
-    const ord = Math.max(0, ...items.map((x) => x.item.ord)) + 1;
+    if (file.code && taken.has(file.code)) return CHANGED;
+    const ord = file.ord ?? Math.max(0, ...items.map((x) => x.item.ord)) + 1;
     const mod = input.mod!;
     saved = {
-      id: freshCode('u', taken),
+      id: file.code ?? freshCode('u', taken),
       ...value,
       ord,
       isNew: true,
@@ -276,7 +292,12 @@ export async function adminKbStepSave(
     if (k < 0 || !found) return NOT_FOUND;
     if (versionOf(found.item) !== version) return CHANGED;
     before = stepOf(found.item);
-    saved = { ...raws[k], ...value, v: versionOf(found.item) + 1 };
+    saved = {
+      ...raws[k],
+      ...value,
+      ...(file.ord !== undefined ? { ord: file.ord } : {}),
+      v: versionOf(found.item) + 1,
+    };
     // Как kbBind прототипа: шаг администратора, переключённый на «Перейти» и 3 секунды, получает
     // экран своего модуля.
     if (saved.evk === 'open' && !saved.at && typeof saved.mod === 'string') {
@@ -287,6 +308,9 @@ export async function adminKbStepSave(
   if ((await saveItems(tx, 'kbSteps', raws, ref.version)) === null) return CHANGED;
   const after = stepOf(StoredStep.parse(saved));
   const changes = diff(before && stepFields(before), stepFields(after));
+  if (before && before.ord !== after.ord) {
+    changes.push({ field: 'ord', from: before.ord, to: after.ord });
+  }
   if (changes.length) {
     await writePlatformHistory(tx, {
       entity: 'platform_dict',
@@ -357,6 +381,43 @@ export async function adminKbStepActive(
   return adminKbStepSave(tx, id, { ...rest, ...(mod ? { mod } : {}), active }, version);
 }
 
+/**
+ * Убрать запись раздела-массива (откат загрузки из Excel убирает добавленные ею шаги и статьи):
+ * удаление — в историю с прежним названием. Записи нет — `not_found`, раздел изменили — `changed`.
+ */
+async function deleteItem(
+  tx: Tx,
+  key: 'kbSteps' | 'kbArticles',
+  section: 'kbsteps' | 'kbarts',
+  id: string,
+): Promise<AdminKbSaveResult<null>> {
+  const ref = await readReference(tx, key);
+  const raws = Array.isArray(ref?.payload) ? (ref.payload as RawItem[]) : [];
+  const k = raws.findIndex((r) => r && r.id === id);
+  if (!ref || k < 0) return NOT_FOUND;
+  if (
+    (await saveItems(
+      tx,
+      key,
+      raws.filter((_, i) => i !== k),
+      ref.version,
+    )) === null
+  )
+    return CHANGED;
+  await writePlatformHistory(tx, {
+    entity: 'platform_dict',
+    entityId: `${section}:${id}`,
+    action: 'delete',
+    changes: [{ field: 't', from: str(raws[k]!.t) }],
+  });
+  return { ok: true, value: null };
+}
+
+/** Шаг, добавленный загрузкой из Excel, — при её откате (отметки шага у пользователей не считаются). */
+export function adminKbStepDelete(tx: Tx, id: string): Promise<AdminKbSaveResult<null>> {
+  return deleteItem(tx, 'kbSteps', 'kbsteps', id);
+}
+
 /* ───────────── Статьи ───────────── */
 
 /** Статья для окна: поля окна, код и версия. */
@@ -393,12 +454,16 @@ const articleFields = (a: KbArticleInput) => ({
   html: a.html,
 });
 
-/** Новая статья (`id` нет) или правка той версии, что видел администратор (прототип kbArtEditDlg). */
+/**
+ * Новая статья (`id` нет) или правка той версии, что видел администратор (прототип kbArtEditDlg).
+ * Загрузка из Excel задаёт код новой статьи (`code`); занятый код — `changed`.
+ */
 export async function adminKbArticleSave(
   tx: Tx,
   id: string | null,
   input: KbArticleInput,
   version: number,
+  code?: string,
 ): Promise<AdminKbSaveResult<AdminKbArticle>> {
   const ref = await readReference(tx, 'kbArticles');
   if (!ref) return NOT_FOUND;
@@ -416,7 +481,9 @@ export async function adminKbArticleSave(
   let saved: RawItem;
   let before: AdminKbArticle | null = null;
   if (id === null) {
-    saved = { id: freshCode('a_u', new Set(items.map((x) => x.item.id))), ...value, v: 1 };
+    const taken = new Set(items.map((x) => x.item.id));
+    if (code && taken.has(code)) return CHANGED;
+    saved = { id: code ?? freshCode('a_u', taken), ...value, v: 1 };
     raws.push(saved);
   } else {
     const k = raws.findIndex((r) => r.id === id);
@@ -425,11 +492,6 @@ export async function adminKbArticleSave(
     if (versionOf(found.item) !== version) return CHANGED;
     before = articleOf(found.item);
     saved = { ...raws[k], ...value, v: versionOf(found.item) + 1 };
-    // Как kbBind прототипа: шаг администратора, переключённый на «Перейти» и 3 секунды, получает
-    // экран своего модуля.
-    if (saved.evk === 'open' && !saved.at && typeof saved.mod === 'string') {
-      saved = { ...saved, at: [saved.mod] };
-    }
     raws[k] = saved;
   }
   if ((await saveItems(tx, 'kbArticles', raws, ref.version)) === null) return CHANGED;
@@ -444,6 +506,261 @@ export async function adminKbArticleSave(
     });
   }
   return { ok: true, value: after };
+}
+
+/**
+ * Статья, добавленная загрузкой из Excel, — при её откате. Статья шага (`art`) не удаляется, а
+ * отключается: иначе шаг ссылался бы на статью, которой нет.
+ */
+export async function adminKbArticleRemove(
+  tx: Tx,
+  id: string,
+): Promise<AdminKbSaveResult<AdminKbArticle | null>> {
+  const steps = await adminKbSteps(tx);
+  if (!steps.some((s) => s.art === id)) return deleteItem(tx, 'kbArticles', 'kbarts', id);
+  const found = (await adminKbArticles(tx)).find((a) => a.id === id);
+  if (!found) return NOT_FOUND;
+  if (!found.active) return { ok: true, value: found };
+  const { id: _id, version, ...fields } = found;
+  return adminKbArticleSave(tx, id, { ...fields, active: false }, version);
+}
+
+/* ───────────── Показы ───────────── */
+
+const StoredShow = z.object({
+  id: z.string().regex(CODE),
+  step: z.string().regex(CODE),
+  scr: z.string().optional().catch(undefined),
+  items: z.array(RawItem).catch([]),
+  doit: z.array(z.unknown()).optional().catch(undefined),
+  active: z.boolean().optional().catch(undefined),
+  v: z.number().int().positive().optional().catch(undefined),
+});
+type StoredShow = z.infer<typeof StoredShow>;
+
+/** Облачко сценария для окна: что подсвечивает (задаёт разработчик) и тексты (меняет администратор). */
+export interface AdminKbShowItem {
+  auto: string | null;
+  txt: string | null;
+  /** Подсвечивает элемент экрана. */
+  el: boolean;
+  /** Вкладка, которую облачко открывает перед показом. */
+  tab: string | null;
+  t: string;
+  x: string;
+  common: boolean;
+}
+
+/** Сценарий шага для окна и предпросмотра; своего нет — `own: false`, облачко «Все элементы экрана». */
+export interface AdminKbShow {
+  step: { id: string; t: string; w: string; learn: boolean };
+  own: boolean;
+  active: boolean;
+  /** Версия сценария; своего нет — 0. */
+  version: number;
+  items: AdminKbShowItem[];
+  /** Последнее облачко показа: «Готово» у «Посмотреть», «Сделать сейчас» у «Сделать» (`kbUi.ui`). */
+  fin: { t: string; x: string };
+}
+
+const str = (v: unknown) => (typeof v === 'string' ? v : '');
+
+export function showItemOf(raw: RawItem): AdminKbShowItem {
+  return {
+    auto: typeof raw.auto === 'string' ? raw.auto : null,
+    txt: typeof raw.txt === 'string' && raw.txt ? raw.txt : null,
+    el: typeof raw.s === 'string' && raw.s !== '',
+    tab: kbShowSubTab(Array.isArray(raw.sub) ? (raw.sub as never[]) : null),
+    t: str(raw.t),
+    x: str(raw.x),
+    common: raw.common === true,
+  };
+}
+
+/** Шаги программы организаций (сценарии показов — только у них, прототип: `!adm`). */
+async function businessSteps(tx: Tx): Promise<{ steps: StoredStep[]; groups: AdminKbGroup[] }> {
+  const [ref, groups] = await Promise.all([readReference(tx, 'kbSteps'), groupsOf(tx)]);
+  const admin = new Set(groups.filter((g) => g.adm).map((g) => g.id));
+  const steps = itemsOf(ref?.payload, StoredStep)
+    .map((x) => x.item)
+    .filter((s) => !admin.has(s.g));
+  return { steps: sortSteps(steps, groups), groups };
+}
+
+/** Запись раздела — этот сценарий (разобранная запись — копия, сравнение по коду и шагу). */
+const isShowOf = (r: unknown, show: StoredShow) =>
+  !!r &&
+  typeof r === 'object' &&
+  (r as RawItem).id === show.id &&
+  (r as RawItem).step === show.step;
+
+/** Сценарии шагов: у шага — первый (прототип kbShowOf). */
+async function showsOf(tx: Tx) {
+  const ref = await readReference(tx, 'kbShows');
+  const list = itemsOf(ref?.payload, StoredShow);
+  const byStep = new Map<string, StoredShow>();
+  for (const { item } of list) if (!byStep.has(item.step)) byStep.set(item.step, item);
+  return { ref, byStep };
+}
+
+const UiTexts = z.object({ ui: z.record(z.string(), z.string()).catch({}) }).catch({ ui: {} });
+
+async function finOf(tx: Tx, learn: boolean): Promise<{ t: string; x: string }> {
+  const ref = await readReference(tx, 'kbUi');
+  const { ui } = UiTexts.parse(ref?.payload ?? {});
+  return learn
+    ? { t: ui.finLookT ?? '', x: ui.finLook ?? '' }
+    : { t: ui.finDoT ?? '', x: ui.finDo ?? '' };
+}
+
+/** Сценарий шага программы организаций для окна «Сценарий показа» и предпросмотра; шага нет — null. */
+export async function adminKbShow(tx: Tx, stepId: string): Promise<AdminKbShow | null> {
+  const [{ steps }, { byStep }] = await Promise.all([businessSteps(tx), showsOf(tx)]);
+  const step = steps.find((s) => s.id === stepId);
+  if (!step) return null;
+  const show = byStep.get(stepId);
+  const learn = kbFlag(step.learn);
+  return {
+    step: { id: step.id, t: step.t, w: step.w, learn },
+    own: !!show,
+    active: show ? show.active !== false : true,
+    version: show ? versionOf(show) : 0,
+    items: (show ? show.items : [{ auto: 'screen' }]).map(showItemOf),
+    fin: await finOf(tx, learn),
+  };
+}
+
+/** Свой сценарий шага для выгрузки в Excel: шаг, «Активен», версия и облачка, как они в разделе. */
+export interface AdminKbOwnShow {
+  id: string;
+  step: string;
+  stepTitle: string;
+  active: boolean;
+  version: number;
+  items: RawItem[];
+}
+
+/**
+ * Свои сценарии шагов программы организаций по порядку раздела (прототип DX.kbshows: `KBSH`); у шага —
+ * первый, как в показе.
+ */
+export async function adminKbOwnShows(tx: Tx): Promise<AdminKbOwnShow[]> {
+  const [{ steps }, { byStep }] = await Promise.all([businessSteps(tx), showsOf(tx)]);
+  const titles = new Map(steps.map((s) => [s.id, s.t]));
+  return [...byStep.values()].flatMap((h) =>
+    titles.has(h.step)
+      ? [
+          {
+            id: h.id,
+            step: h.step,
+            stepTitle: titles.get(h.step)!,
+            active: h.active !== false,
+            version: versionOf(h),
+            items: h.items,
+          },
+        ]
+      : [],
+  );
+}
+
+export type AdminKbShowSaveResult =
+  | AdminKbSaveResult<AdminKbShow>
+  | { ok: false; reason: 'invalid'; problem: KbShowProblem; index: number };
+
+/** Заголовки облачков в истории: у «Автоматически» — его вид. */
+const showTitles = (items: readonly RawItem[]) =>
+  items.map((p) => (typeof p.auto === 'string' ? `auto:${p.auto}` : str(p.t)));
+
+/**
+ * Свой сценарий шага: новый (`version` 0, прототип «Создать свой сценарий») или правка той версии, что
+ * видел администратор (kbShowDlg «Сохранить»): порядок облачков, тексты, «Общий элемент», «Активен».
+ * Что подсвечивает облачко и действия перед ним сохраняются как были (`kbShowEdit`). Без изменений —
+ * ничего не пишется.
+ */
+export async function adminKbShowSave(
+  tx: Tx,
+  stepId: string,
+  input: KbShowInput,
+  version: number,
+): Promise<AdminKbShowSaveResult> {
+  const [{ steps }, { ref }] = await Promise.all([businessSteps(tx), showsOf(tx)]);
+  if (!ref || !steps.some((s) => s.id === stepId)) return NOT_FOUND;
+  const shows = itemsOf(ref.payload, StoredShow);
+  const raws = Array.isArray(ref.payload) ? (ref.payload as RawItem[]) : [];
+  const found = shows.find((x) => x.item.step === stepId);
+  if ((found ? versionOf(found.item) : 0) !== version) return CHANGED;
+  const edited = kbShowEdit(found?.item.items ?? [], input);
+  if ('problem' in edited) return { ok: false, reason: 'invalid', ...edited };
+  const before = found?.item ?? null;
+  const wasActive = before ? before.active !== false : true;
+  if (
+    before &&
+    wasActive === input.active &&
+    JSON.stringify(before.items) === JSON.stringify(edited.items)
+  ) {
+    return { ok: true, value: (await adminKbShow(tx, stepId))! };
+  }
+  let next: RawItem[];
+  if (found) {
+    const k = raws.findIndex((r) => isShowOf(r, found.item));
+    next = raws.map((r, i) =>
+      i === k ? { ...r, items: edited.items, active: input.active, v: version + 1 } : r,
+    );
+  } else {
+    const taken = new Set(shows.map((x) => x.item.id));
+    const own = `sh-${stepId}`;
+    const id = own.length <= 64 && !taken.has(own) ? own : freshCode('sh-', taken);
+    next = [...raws, { id, step: stepId, active: input.active, items: edited.items, v: 1 }];
+  }
+  if ((await saveItems(tx, 'kbShows', next, ref.version)) === null) return CHANGED;
+  const changes: HistoryChange[] = [
+    before
+      ? { field: 'n', from: before.items.length, to: edited.items.length }
+      : { field: 'n', to: edited.items.length },
+  ];
+  if (wasActive !== input.active || (!before && !input.active)) {
+    changes.push({ field: 'active', from: wasActive, to: input.active });
+  }
+  const titles = showTitles(edited.items);
+  if (!before || JSON.stringify(showTitles(before.items)) !== JSON.stringify(titles)) {
+    changes.push({
+      field: 'items',
+      ...(before ? { from: toHistoryValue(showTitles(before.items)) } : {}),
+      to: toHistoryValue(titles),
+    });
+  }
+  await writePlatformHistory(tx, {
+    entity: 'platform_dict',
+    entityId: `kbshows:${stepId}`,
+    action: before ? 'update' : 'create',
+    changes,
+  });
+  return { ok: true, value: (await adminKbShow(tx, stepId))! };
+}
+
+/** «Вернуть автоматический» (прототип): свой сценарий удаляется, показ снова собирается сам. */
+export async function adminKbShowAuto(
+  tx: Tx,
+  stepId: string,
+  version: number,
+): Promise<AdminKbSaveResult<AdminKbShow>> {
+  const { ref } = await showsOf(tx);
+  if (!ref) return NOT_FOUND;
+  const found = itemsOf(ref.payload, StoredShow).find((x) => x.item.step === stepId);
+  if (!found) return NOT_FOUND;
+  if (versionOf(found.item) !== version) return CHANGED;
+  const raws = ref.payload as RawItem[];
+  const k = raws.findIndex((r) => isShowOf(r, found.item));
+  const next = raws.filter((_, i) => i !== k);
+  if ((await saveItems(tx, 'kbShows', next, ref.version)) === null) return CHANGED;
+  await writePlatformHistory(tx, {
+    entity: 'platform_dict',
+    entityId: `kbshows:${stepId}`,
+    action: 'delete',
+    changes: [{ field: 'n', from: found.item.items.length }],
+  });
+  const show = await adminKbShow(tx, stepId);
+  return show ? { ok: true, value: show } : NOT_FOUND;
 }
 
 /* ───────────── Уровни ───────────── */
@@ -513,7 +830,72 @@ export interface AdminKbRow {
   /** Шаг можно поднять или опустить в своём модуле программы («Выше», «Ниже»). */
   canUp: boolean;
   canDown: boolean;
+  /** «Показы»: у шага свой сценарий. */
+  own?: boolean;
   values: Record<string, string | number>;
+  audit: AdminKbAudit;
+}
+
+/** «Создал», «Изменил», «Создано», «Изменено» строки; null — значение из наполнения, без правок. */
+export interface AdminKbAudit {
+  createdAt: string | null;
+  createdBy: string | null;
+  updatedAt: string | null;
+  updatedBy: string | null;
+}
+
+type KbRowBase = Omit<AdminKbRow, 'audit'>;
+
+const NO_AUDIT: AdminKbAudit = {
+  createdAt: null,
+  createdBy: null,
+  updatedAt: null,
+  updatedBy: null,
+};
+
+const LIST_SECTION: Readonly<Record<KbAdminList, KbHistorySection>> = {
+  steps: 'kbsteps',
+  arts: 'kbarts',
+  shows: 'kbshows',
+};
+
+/**
+ * Служебные столбцы (прототип ui/grid.js, `auditCols`: у значений refDB пусто, правка ставит «Изменил»)
+ * — по истории платформы значения (`<раздел>:<код>`, у «Показов» — сценарий шага): «Создано» —
+ * последнее добавление, «Изменено» — последняя запись. Пишет только администратор платформы.
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#Д-29
+async function kbAudits(tx: Tx, list: KbAdminList): Promise<Map<string, AdminKbAudit>> {
+  const prefix = `${LIST_SECTION[list]}:`;
+  const h = platformAuditLog;
+  const created = sql`${h.action} = 'create'`;
+  const rows = await tx
+    .select({
+      entityId: h.entityId,
+      createdAt: sql<Date | null>`max(${h.at}) filter (where ${created})`.mapWith(h.at),
+      created: sql<boolean>`bool_or(${created})`,
+      updatedAt: sql<Date>`max(${h.at})`.mapWith(h.at),
+    })
+    .from(h)
+    .where(
+      and(
+        eq(h.entity, 'platform_dict'),
+        sql`${h.entityId} like ${`${prefix}%`}`,
+        sql`${h.entityId} <> ${prefix}`,
+      ),
+    )
+    .groupBy(h.entityId);
+  return new Map(
+    rows.map((r) => [
+      r.entityId.slice(prefix.length),
+      {
+        createdAt: r.createdAt ? r.createdAt.toISOString() : null,
+        createdBy: r.created ? PLATFORM_ADMIN_NAME : null,
+        updatedAt: r.updatedAt.toISOString(),
+        updatedBy: PLATFORM_ADMIN_NAME,
+      },
+    ]),
+  );
 }
 
 async function permissionNames(tx: Tx): Promise<Map<string, string>> {
@@ -529,6 +911,11 @@ const moduleTitle = (t: ListTexts, mod: string | null) =>
 
 /** Строки списка по порядку справочника (у шагов — по порядку программ). */
 async function kbRows(tx: Tx, list: KbAdminList, t: ListTexts): Promise<AdminKbRow[]> {
+  const [rows, audits] = await Promise.all([kbRowsOf(tx, list, t), kbAudits(tx, list)]);
+  return rows.map((x) => ({ ...x, audit: audits.get(x.id) ?? NO_AUDIT }));
+}
+
+async function kbRowsOf(tx: Tx, list: KbAdminList, t: ListTexts): Promise<KbRowBase[]> {
   const perms = await permissionNames(tx);
   const yes = t('kbadm.v.yes');
   const no = t('kbadm.v.no');
@@ -567,6 +954,7 @@ async function kbRows(tx: Tx, list: KbAdminList, t: ListTexts): Promise<AdminKbR
       };
     });
   }
+  if (list === 'shows') return showRows(tx, t);
   return (await adminKbArticles(tx)).map((a) => ({
     id: a.id,
     version: a.version,
@@ -588,14 +976,69 @@ async function kbRows(tx: Tx, list: KbAdminList, t: ListTexts): Promise<AdminKbR
   }));
 }
 
+/**
+ * «Показы» (прототип renderKbAdm, вкладка `shows`): шаги программы организаций по порядку; «Экран» —
+ * экран сценария, иначе первый экран шага или его модуль; «Сделать сейчас» — у шага «Сделать»: по
+ * сценарию (`doit`) или форма шага. Версия строки — версия своего сценария (нет — 0).
+ */
+async function showRows(tx: Tx, t: ListTexts): Promise<KbRowBase[]> {
+  const [{ steps, groups }, { byStep }] = await Promise.all([businessSteps(tx), showsOf(tx)]);
+  const yes = t('kbadm.v.yes');
+  const no = t('kbadm.v.no');
+  return steps.map((s) => {
+    const show = byStep.get(s.id);
+    const learn = kbFlag(s.learn);
+    const active = show ? show.active !== false : true;
+    return {
+      id: s.id,
+      version: show ? versionOf(show) : 0,
+      active,
+      isNew: false,
+      star: false,
+      canUp: false,
+      canDown: false,
+      own: !!show,
+      values: {
+        g: groups.find((g) => g.id === s.g)?.t ?? s.g,
+        t: s.t,
+        type: t(learn ? 'kbadm.step.type.look' : 'kbadm.step.type.do'),
+        sc: t(show ? 'kbadm.v.sc.own' : 'kbadm.v.sc.auto'),
+        // ОТКЛОНЕНИЕ: docs/deviations.md#Д-28
+        scr: show?.scr || s.at?.[0] || stepOf(s).module || '',
+        n: show ? show.items.length : 0,
+        doit: learn
+          ? t('kbadm.v.none')
+          : t(show?.doit?.length ? 'kbadm.v.doit.show' : 'kbadm.v.doit.form'),
+        active: active ? yes : no,
+      },
+    };
+  });
+}
+
 /** Столбец строки из `jsonb_to_recordset`: ключи — постоянные имена столбцов, не ввод пользователя. */
 const field = (key: string) => sql.raw(`"r"."${key}"`);
 
 const SQL_TYPE: Readonly<Record<string, string>> = { int: 'integer' };
 
 function recordset(list: KbAdminList, rows: readonly AdminKbRow[]): SQL {
-  const records = rows.map((x, i) => ({ ...x.values, id: x.id, ord: i + 1 }));
-  const defs = ['"ord" integer'];
+  const records = rows.map((x, i) => ({
+    ...x.values,
+    id: x.id,
+    ord: i + 1,
+    created_at: x.audit.createdAt,
+    updated_at: x.audit.updatedAt,
+    created_by: x.audit.createdBy,
+    updated_by: x.audit.updatedBy,
+  }));
+  const defs = [
+    '"ord" integer',
+    '"created_at" timestamptz',
+    '"updated_at" timestamptz',
+    '"created_by" text',
+    '"updated_by" text',
+  ];
+  // Код строки — и у списка без столбца «Код» («Показы»).
+  if (!KB_ADMIN_COLUMNS[list].some((c) => c.key === 'id')) defs.push('"id" text');
   for (const c of KB_ADMIN_COLUMNS[list]) defs.push(`"${c.key}" ${SQL_TYPE[c.type] ?? 'text'}`);
   return sql`jsonb_to_recordset(${JSON.stringify(records)}::jsonb) as r(${sql.raw(defs.join(', '))})`;
 }
@@ -605,7 +1048,13 @@ export function adminKbListColumns(list: KbAdminList): ListColumns {
   for (const c of KB_ADMIN_COLUMNS[list]) {
     columns[c.key] = { type: c.type, label: c.label, value: field(c.key) };
   }
-  return columns;
+  return {
+    ...columns,
+    createdAt: { type: 'datetime', label: 'grid.col.created_at', value: field('created_at') },
+    updatedAt: { type: 'datetime', label: 'grid.col.updated_at', value: field('updated_at') },
+    createdBy: { type: 'enum', label: 'grid.col.created_by', value: field('created_by') },
+    updatedBy: { type: 'enum', label: 'grid.col.updated_by', value: field('updated_by') },
+  };
 }
 
 const NATURAL = [field('ord')];
@@ -694,18 +1143,22 @@ export interface AdminKbMeta {
   permissions: { id: string; name: string }[];
   /** Шаги со своим сценарием «Показать как»: код шага → облачков. */
   shows: Record<string, number>;
+  /** Шаги программы организаций — для «Показ для шага»: код, модуль программы, название. */
+  steps: { id: string; g: string; t: string }[];
 }
 
 const ShowRef = z.object({ step: z.string(), items: z.array(z.unknown()).catch([]) });
 
 export async function adminKbMeta(tx: Tx): Promise<AdminKbMeta> {
-  const [groups, articles, perms, shows] = await Promise.all([
+  const [groups, articles, perms, shows, business] = await Promise.all([
     groupsOf(tx),
     adminKbArticles(tx),
     permissionNames(tx),
     readReference(tx, 'kbShows'),
+    businessSteps(tx),
   ]);
   return {
+    steps: business.steps.map((s) => ({ id: s.id, g: s.g, t: s.t })),
     groups,
     articles: articles.map((a) => ({ id: a.id, sec: a.sec, t: a.t })),
     permissions: [...perms].map(([id, name]) => ({ id, name })),
@@ -754,6 +1207,7 @@ export async function adminKbHistory(
   const titles = new Map<string, string>();
   if (section === 'kbsteps') for (const s of await adminKbSteps(tx)) titles.set(s.id, s.t);
   if (section === 'kbarts') for (const a of await adminKbArticles(tx)) titles.set(a.id, a.t);
+  if (section === 'kbshows') for (const s of await adminKbSteps(tx)) titles.set(s.id, s.t);
   return {
     total: counted?.n ?? 0,
     items: rows.map((r) => {
@@ -767,7 +1221,7 @@ export async function adminKbHistory(
         section,
         code,
         action: r.action,
-        label: String(title?.to ?? '') || titles.get(code) || code,
+        label: String(title?.to ?? title?.from ?? '') || titles.get(code) || code,
         changes,
       };
     }),

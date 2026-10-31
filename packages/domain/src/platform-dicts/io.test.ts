@@ -37,6 +37,11 @@ const ctx: IoContext = {
       { code: 'soc', label: 'Соцфонд' },
     ],
     ugns: [{ code: 'ugns-lenin', label: 'Ленинский', alt: ['002'] }],
+    kbgroups: [
+      { code: 'cps', label: 'Контрагенты' },
+      { code: 'adm', label: 'Администратор платформы' },
+    ],
+    perms: [{ code: 'cp.create', label: 'Создавать контрагентов' }],
   },
 };
 
@@ -483,5 +488,135 @@ describe('Выгрузка и загрузка справочников: тек�
     expect(ioCodeValid('regimes', 'РЕЖ-12')).toBe(true);
     expect(ioCodeValid('regimes', 'РЕЖ 12')).toBe(false);
     expect(ioCodeValid('forms', 'x'.repeat(41))).toBe(false);
+  });
+});
+
+describe('Выгрузка и загрузка «Базы знаний (содержимое)» (задача 2.39, прототип DX.kbsteps, DX.kbshows, DX.kbarts, DX.kbnews)', () => {
+  const step: IoValue = {
+    code: 'profile',
+    name: 'Заполнить профиль',
+    active: true,
+    data: {
+      g: 'cps',
+      w: 'Зачем',
+      learn: 'look',
+      star: true,
+      perm: 'cp.create',
+      featk: '',
+      evk: 'open',
+      ord: 3,
+      mod: '',
+      art: 'a1',
+    },
+  };
+  const load = (
+    dict: 'kbsteps' | 'kbshows' | 'kbarts' | 'kbnews',
+    x: IoValue,
+    cells?: Record<string, string>,
+  ) => {
+    const header = ioHeader(dict, t);
+    const row = ioRow(dict, x, ctx);
+    for (const [title, value] of Object.entries(cells ?? {})) row[header.indexOf(title)] = value;
+    const parsed = parseIoRows(dict, [header, row], ctx);
+    if ('fatal' in parsed) throw new Error(parsed.fatal);
+    const [r] = parsed.rows;
+    return { row: r!, changes: ioChanges(parsed.columns, x, ioMerge(x, r!.values), ctx), header };
+  };
+
+  it('шаг урока: модуль программы и право — названием, «Вид шага» словами; выгрузка загружается без изменений', () => {
+    const { row, changes, header } = load('kbsteps', step);
+    expect(row.errors).toEqual([]);
+    expect(changes).toEqual([]);
+    expect(ioRow('kbsteps', step, ctx)[header.indexOf('Модуль программы')]).toBe('Контрагенты');
+    expect(ioRow('kbsteps', step, ctx)[header.indexOf('Вид шага')]).toBe('Посмотреть');
+    expect(ioRow('kbsteps', step, ctx)[header.indexOf('Необходимое право')]).toBe(
+      'Создавать контрагентов',
+    );
+    // «—» в праве — без права; статья шага в файл не выгружается и сохраняется.
+    const dash = load('kbsteps', step, { 'Необходимое право': '—', 'Вид шага': 'Сделать' });
+    expect(ioMerge(step, dash.row.values).data).toMatchObject({ perm: '', learn: 'do', art: 'a1' });
+    const bad = load('kbsteps', step, { 'Модуль программы': 'Нет такого' });
+    expect(bad.row.errors).toEqual(['Модуль программы: модуля программы «Нет такого» нет']);
+    // «Место для «Перейти»» — только у нового шага: у прежнего не сравнивается.
+    const place = load('kbsteps', step, { 'Место для «Перейти»': 'Контрагенты' });
+    expect(place.row.errors).toEqual([]);
+    expect(place.changes).toEqual([]);
+  });
+
+  it('облачко показа: «Шаг» и «Что подсвечивает» только выгружаются; у «Автоматически» текстов нет', () => {
+    const cloud: IoValue = {
+      code: 'sh-profile#2',
+      name: 'Заполнить профиль #2',
+      active: true,
+      data: {
+        step: 'Заполнить профиль',
+        what: { auto: 'fields', txt: null, s: null, tab: null },
+        auto: 'fields',
+        t: '',
+        x: '',
+        common: false,
+      },
+    };
+    const { row, changes, header } = load('kbshows', cloud, {
+      Шаг: 'Другой шаг',
+      'Что подсвечивает': 'Другое',
+    });
+    expect(row.errors).toEqual([]);
+    expect(changes).toEqual([]);
+    const cells = ioRow('kbshows', cloud, ctx);
+    expect(cells[header.indexOf('Что подсвечивает')]).toBe('Автоматически: Поля формы');
+    expect(cells[header.indexOf('Общий элемент')]).toBe('');
+    const text = {
+      ...cloud,
+      data: { ...cloud.data, auto: null, what: {}, t: 'Кнопка', x: 'Текст' },
+    };
+    const edited = load('kbshows', text, { 'Заголовок облачка': 'Сохранить' });
+    expect(edited.changes).toEqual([
+      { key: 't', title: 'Заголовок облачка', from: 'Кнопка', to: 'Сохранить' },
+    ]);
+  });
+
+  it('статья и новость: «Кому», «Для кого», тип и дата — словами прототипа', () => {
+    const art: IoValue = {
+      code: 'a1',
+      name: 'Контрагенты',
+      active: true,
+      data: { sec: 'Модули', mod: 'cps', perm: '', aud: 'adm', html: '<p>Текст</p>' },
+    };
+    const a = load('kbarts', art);
+    expect(a.changes).toEqual([]);
+    expect(ioRow('kbarts', art, ctx)[a.header.indexOf('Кому')]).toBe('Администраторам платформы');
+    const news: IoValue = {
+      code: 'v1',
+      name: 'Версия 1',
+      active: true,
+      data: {
+        type: 'feature',
+        release: '1.0',
+        date: '2026-11-02',
+        aud: 'all',
+        pinned: false,
+        showOnLogin: true,
+        short: 'Кратко',
+        md: '## Что нового\nТекст',
+        status: 'draft',
+        off: false,
+      },
+    };
+    const n = load('kbnews', news);
+    expect(n.changes).toEqual([]);
+    const cells = ioRow('kbnews', news, ctx);
+    expect(cells[n.header.indexOf('Дата публикации')]).toBe('02.11.2026');
+    expect(cells[n.header.indexOf('Для кого')]).toBe('Все пользователи');
+    expect(load('kbnews', news, { 'Дата публикации': '' }).row.errors).toHaveLength(1);
+  });
+
+  it('коды: шаги, статьи и новости — латиницей; облачко — «сценарий#номер»', () => {
+    expect(ioCodeValid('kbsteps', 'u-excel')).toBe(true);
+    expect(ioCodeValid('kbsteps', 'Шаг')).toBe(false);
+    expect(ioCodeValid('kbnews', 'n-1')).toBe(true);
+    expect(ioCodeValid('kbshows', 'sh-profile#4')).toBe(true);
+    expect(ioCodeValid('kbshows', 'sh-profile')).toBe(false);
+    expect(ioCodeValid('kbshows', 'sh-profile#x')).toBe(false);
   });
 });

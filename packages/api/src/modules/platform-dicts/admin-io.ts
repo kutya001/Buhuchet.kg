@@ -41,6 +41,9 @@ import {
   GKED_GROUP_ASK_MAX,
   IO_COLUMNS,
   isIoSectionDict,
+  isKbIoDict,
+  KB_ARTICLE_HTML_MAX,
+  NEWS_MD_MAX,
   ioChanges,
   ioCodeValid,
   ioHeader,
@@ -230,6 +233,15 @@ const IMPORT_SHEET_LIMITS: Partial<SheetLimits> = {
   text: DICT_NOTE_MAX,
 };
 
+/**
+ * Текст ячейки у «Базы знаний (содержимое)» — до длины статьи (текст статьи, подробное описание
+ * новости); длину полей проверяют окна вкладок.
+ */
+const KB_SHEET_TEXT = Math.max(KB_ARTICLE_HTML_MAX, NEWS_MD_MAX);
+
+const sheetLimits = (dict: IoDict): Partial<SheetLimits> =>
+  isKbIoDict(dict) ? { ...IMPORT_SHEET_LIMITS, text: KB_SHEET_TEXT } : IMPORT_SHEET_LIMITS;
+
 const cellString = (v: SheetCell | undefined) => (v === null || v === undefined ? '' : String(v));
 
 /**
@@ -239,19 +251,20 @@ const cellString = (v: SheetCell | undefined) => (v === null || v === undefined 
  * слишком большой — 400.
  */
 // ОТКЛОНЕНИЕ: docs/deviations.md#Д-16 — файл и .xlsx, не только CSV.
-async function tableOf(c: Context<AppEnv>): Promise<string[][]> {
+async function tableOf(c: Context<AppEnv>, dict: IoDict): Promise<string[][]> {
+  const limits = sheetLimits(dict);
   const bytes = Buffer.from(await c.req.arrayBuffer());
   if (!bytes.length) importFail('import_empty');
   if (c.req.header('content-type')?.toLowerCase().startsWith('text/plain')) {
     const table = parseIoText(new TextDecoder('utf-8').decode(bytes));
     // Вставке — те же пределы строк и столбцов, что файлу.
-    const { rows = 0, columns = 0 } = IMPORT_SHEET_LIMITS;
+    const { rows = 0, columns = 0 } = limits;
     if (table.length > rows || table.some((r) => r.length > columns)) importFail('import_too_big');
     return table;
   }
   let rows: SheetCell[][];
   try {
-    rows = readSheetRows(bytes, IMPORT_SHEET_LIMITS);
+    rows = readSheetRows(bytes, limits);
   } catch (err) {
     if (!(err instanceof SheetReadError)) throw err;
     importFail(err.code === 'sheet_too_big' ? 'import_too_big' : 'import_unreadable');
@@ -364,6 +377,8 @@ function newCodeError(dict: IoDict): UiTextKey {
   if (dict === 'gked') return 'pdicts.io.err.code_gked';
   if (dict === 'calendar') return 'pdicts.io.err.code_date';
   if (dict === 'gkgroups') return 'pdicts.io.err.code_group';
+  if (dict === 'kbshows') return 'kbadm.io.err.show_code';
+  if (isKbIoDict(dict)) return 'kbadm.io.err.code';
   if (isIoSectionDict(dict)) return 'pdicts.io.err.code';
   return 'key' in ADMIN_DICT_META[dict].code ? 'pdicts.io.err.code_key' : 'pdicts.io.err.code';
 }
@@ -510,8 +525,18 @@ class SectionRowFail extends Error {
   }
 }
 
-const sectionFailText = (t: Translate, fail: SectionFail) =>
-  fail === 'changed' ? t('pdicts.io.err.changed') : t(fail.key, fail.params);
+/** Название строки в сравнении; у облачка показа — шаг и номер (прототип shFlat: «Шаг · облачко 4»). */
+function rowName(t: Translate, dict: IoSectionDict, code: string, name: string): string {
+  if (dict !== 'kbshows') return name;
+  return t('kbadm.show.cloud', { step: name, n: code.slice(code.lastIndexOf('#') + 1) });
+}
+
+/** Текст отказа; у отказа поля — «Столбец: что не так». */
+function sectionFailText(t: Translate, fail: SectionFail): string {
+  if (fail === 'changed') return t('pdicts.io.err.changed');
+  const text = t(fail.key, fail.params);
+  return fail.col ? t('pdicts.io.err.cell', { col: t(fail.col), text }) : text;
+}
 
 /**
  * Сравнение и запись строк календаря, «Налогов и ставок» и групп кодов (прототип DX.calendar,
@@ -524,8 +549,12 @@ const SECTION_TEXT_MAX: Readonly<Record<string, number>> = {
   ask: GKED_GROUP_ASK_MAX,
 };
 
-/** Слишком длинный текст изменённой строки раздела — ошибка строки, а не запись в справочник. */
+/**
+ * Слишком длинный текст изменённой строки раздела — ошибка строки, а не запись в справочник. У «Базы
+ * знаний (содержимое)» длину проверяет запись строки — пределами окон вкладок.
+ */
 function sectionTooLong(dict: IoSectionDict, value: IoValue, t: Translate): string[] {
+  if (isKbIoDict(dict)) return [];
   return IO_COLUMNS[dict].flatMap((c) => {
     if (c.key === 'code') return [];
     const v = c.key === 'name' ? value.name : value.data[c.key];
@@ -604,15 +633,21 @@ async function runSectionImport(
     const { record } = saved;
     const loaded = { name: record.name, active: record.active, data: { ...record.data } };
     if (!base) {
-      preview.add.push({ line: row.line, code: row.code, name: after.name });
-      added.push({ code: row.code, version: record.version, after: loaded });
+      // Новое облачко показа встаёт в конец сценария: его код — из записи, а не из файла; названия
+      // у облачков в файле нет — шаг и номер из записи.
+      preview.add.push({
+        line: row.line,
+        code: row.code,
+        name: rowName(t, dict, record.code, after.name || record.name),
+      });
+      added.push({ code: record.code, version: record.version, after: loaded });
       continue;
     }
     const off = base.active && !after.active;
     (off ? preview.off : preview.change).push({
       line: row.line,
       code: row.code,
-      name: off ? base.name : after.name,
+      name: rowName(t, dict, base.code, off ? base.name : after.name),
       changes: changes.map(({ title, from, to }) => ({ title, from, to })),
     });
     before.push({
@@ -623,6 +658,17 @@ async function runSectionImport(
       version: record.version,
       after: loaded,
     });
+  }
+  // Вид после всей загрузки: строки одного значения меняют друг друга (у облачков сценария общий
+  // «Сценарий активен») — по нему откат узнаёт, что после загрузки значение не трогали.
+  if (before.length || added.length) {
+    const final = new Map((await writer.records(tx, today)).map((x) => [x.code, x]));
+    for (const x of [...before, ...added]) {
+      const now = final.get(x.code);
+      if (!now) continue;
+      x.version = now.version;
+      x.after = { name: now.name, active: now.active, data: { ...now.data } };
+    }
   }
   const scope = mergeRedueScopes(redue.map((x) => x ?? null));
   return {
@@ -697,7 +743,7 @@ export function adminDictImportPreviewHandler(
 ): RouteHandler<typeof adminDictImportPreviewRoute, AppEnv> {
   return async (c) => {
     const { dict } = c.req.valid('param');
-    const table = await tableOf(c);
+    const table = await tableOf(c, dict);
     const t = await translator(deps);
     // Сравнение обходит все организации (сроки) — по очереди предпросмотров пользователя.
     return withPreviewSlot(deps, c, async () => {
@@ -751,7 +797,7 @@ export function adminDictImportApplyHandler(
   return async (c) => {
     const { dict } = c.req.valid('param');
     const { stamp } = c.req.valid('query');
-    const table = await tableOf(c);
+    const table = await tableOf(c, dict);
     const t = await translator(deps);
     const body = await adminTx(deps, c, async (tx) => {
       await lockDictLoads(tx);

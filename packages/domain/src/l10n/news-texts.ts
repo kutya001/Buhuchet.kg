@@ -113,6 +113,11 @@ export const NEWS_TEXTS = {
   'news.hist.off': { ru: 'Новости: «{title}» — Снято с публикации', section: S },
   'news.hist.back': { ru: 'Новости: «{title}» — Возвращена в публикацию', section: S },
   'news.hist.deleted': { ru: 'Новости: черновик «{title}» удалён', section: S },
+  'news.hist.import': {
+    ru: 'Новости: загрузка из Excel — добавлено {added}, изменено {changed}, отключено {disabled}',
+    section: S,
+  },
+  'news.hist.rollback': { ru: 'Новости: загрузка от {date} откачена', section: S },
   'news.published': { ru: 'Новость опубликована', section: S },
   'news.published_live': {
     ru: 'Новость опубликована: у всех на вкладке «Новости» с отметкой «Новое»',

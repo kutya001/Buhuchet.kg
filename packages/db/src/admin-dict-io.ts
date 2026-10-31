@@ -34,12 +34,14 @@ import {
   type ListPageResult,
   type ListTexts,
 } from './list';
+import { readReference } from './admin-gked';
 import { SECTION_WRITERS } from './admin-io-sections';
 import { writePlatformHistory } from './platform-history';
 import { mergeRedueScopes, type RedueScope } from './reports-redue';
 import {
   authorities,
   dictLoads,
+  permissions,
   reportBases,
   reportTypes,
   taxOffices,
@@ -77,14 +79,25 @@ export async function ioRecords(tx: Tx, dict: AdminValueDict): Promise<IoRecord[
   }));
 }
 
+/** Модули программ обучения (`kbGroups`): код и название — для «Модуля программы» шагов уроков. */
+async function kbGroupRefs(tx: Tx): Promise<IoRef[]> {
+  const ref = await readReference(tx, 'kbGroups');
+  const items = Array.isArray(ref?.payload) ? (ref.payload as unknown[]) : [];
+  return items.flatMap((x) => {
+    const g = x as { id?: unknown; t?: unknown };
+    return typeof g?.id === 'string' && typeof g.t === 'string' ? [{ code: g.id, label: g.t }] : [];
+  });
+}
+
 /**
  * Подписи ссылок в файле: органы, режимы и основания — названием, виды отчётов и УГНС — кратким
  * названием; узнаются и код, и другие написания (полное название, код ГНС). Подпись, которая есть у
  * двух значений (у видов отчётов краткие названия форм Нацстаткома повторяются: «1-Т», «2-инвест»), —
- * кодом, иначе загрузка не поймёт, какое значение имелось в виду.
+ * кодом, иначе загрузка не поймёт, какое значение имелось в виду. Модули программ и права — для
+ * «Базы знаний (содержимое)» (задача 2.39).
  */
 export async function ioRefs(tx: Tx): Promise<IoRefs> {
-  const [organs, regimes, bases, types, ugns] = await Promise.all([
+  const [organs, regimes, bases, types, ugns, kbgroups, perms] = await Promise.all([
     tx
       .select({ code: authorities.code, label: authorities.name })
       .from(authorities)
@@ -110,6 +123,11 @@ export async function ioRefs(tx: Tx): Promise<IoRefs> {
       })
       .from(taxOffices)
       .orderBy(asc(taxOffices.sortOrder), asc(taxOffices.code)),
+    kbGroupRefs(tx),
+    tx
+      .select({ code: permissions.id, label: permissions.name })
+      .from(permissions)
+      .orderBy(asc(permissions.sortOrder), asc(permissions.id)),
   ]);
   return {
     organs: uniqueLabels(organs.map((x) => ({ code: x.code, label: x.label }))),
@@ -119,6 +137,8 @@ export async function ioRefs(tx: Tx): Promise<IoRefs> {
     ugns: uniqueLabels(
       ugns.map((x) => ({ code: x.code, label: x.label, alt: [x.name, ...(x.gns ? [x.gns] : [])] })),
     ),
+    kbgroups: uniqueLabels(kbgroups),
+    perms: uniqueLabels(perms),
   };
 }
 
@@ -544,7 +564,8 @@ async function rollbackSectionLoad(
       result: { ok: false, reason: 'changed' },
     }) as const;
   const redue: (RedueScope | null | undefined)[] = [];
-  for (const a of load.addedValues) {
+  // С конца: облачко показа, добавленное следующим номером, убирается раньше предыдущего.
+  for (const a of [...load.addedValues].reverse()) {
     const now = records.get(a.code);
     if (!now) continue;
     const removed = await writer.remove(tx, now, today);

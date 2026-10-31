@@ -6,6 +6,7 @@ import {
   AdminKbLevelsSaved,
   AdminKbMeta,
   AdminKbRowList,
+  AdminKbShow,
   AdminKbStep,
   ApiError,
   KbArticle,
@@ -40,7 +41,7 @@ describe.skipIf(!databaseAvailable())(
 
     const P = '/api/admin/kb';
     const get = (path: string, cookie = admin) => apiRequest(f.app, 'GET', path, cookie);
-    const send = (method: 'POST' | 'PUT', path: string, body: unknown, cookie = admin) =>
+    const send = (method: 'POST' | 'PUT' | 'DELETE', path: string, body: unknown, cookie = admin) =>
       apiRequest(f.app, method, path, cookie, body);
     const errorOf = async (res: Response) => ApiError.parse(await res.json()).error;
     const step = async (id: string) =>
@@ -257,6 +258,60 @@ describe.skipIf(!databaseAvailable())(
       expect(meta.articles.some((a) => a.id === art.id)).toBe(true);
       const history = AdminKbHistory.parse(await (await get(`${P}/history/kbarts`)).json());
       expect(history.items.map((h) => h.action)).toEqual(['update', 'create']);
+    });
+
+    it('показы: свой сценарий шага — только администратору; 400 с номером облачка, 404, 409', async () => {
+      const show = async (id: string) =>
+        AdminKbShow.parse(await (await get(`${P}/shows/${id}`)).json());
+      const body = { active: true, items: [{ auto: 'screen' }, { t: 'Напоминания', x: '' }] };
+      for (const [method, path, payload] of [
+        ['GET', `${P}/shows/remind`, undefined],
+        ['PUT', `${P}/shows/remind`, { ...body, version: 0 }],
+        ['DELETE', `${P}/shows/profile?version=1`, undefined],
+      ] as const) {
+        expect((await apiRequest(f.app, method, path, owner, payload)).status, path).toBe(403);
+        expect((await apiRequest(f.app, method, path, '', payload)).status, path).toBe(401);
+      }
+      expect(await show('remind')).toMatchObject({
+        own: false,
+        version: 0,
+        items: [{ auto: 'screen' }],
+      });
+      expect((await get(`${P}/shows/a-dicts`)).status).toBe(404);
+      const bad = await send('PUT', `${P}/shows/remind`, {
+        active: true,
+        items: [{ auto: 'screen' }, { t: ' ', x: '' }],
+        version: 0,
+      });
+      expect(bad.status).toBe(400);
+      expect(await errorOf(bad)).toMatchObject({
+        code: 'kb_show_title',
+        details: { field: 'items.1' },
+      });
+      const created = await send('PUT', `${P}/shows/remind`, { ...body, version: 0 });
+      expect(created.status, await created.clone().text()).toBe(200);
+      expect(AdminKbShow.parse(await created.json())).toMatchObject({ own: true, version: 1 });
+      const stale = await send('PUT', `${P}/shows/remind`, { ...body, version: 0 });
+      expect(stale.status).toBe(409);
+      const listRes = await get(`${P}/list/shows?size=all`);
+      expect(listRes.status, await listRes.clone().text()).toBe(200);
+      const list = AdminKbRowList.parse(await listRes.json()).items;
+      expect(list.find((r) => r.id === 'remind')).toMatchObject({
+        own: true,
+        version: 1,
+        values: { n: 2 },
+      });
+      expect(list.some((r) => r.id === 'a-dicts')).toBe(false);
+      expect((await send('DELETE', `${P}/shows/remind?version=2`, undefined)).status).toBe(409);
+      const auto = await send('DELETE', `${P}/shows/remind?version=1`, undefined);
+      expect(auto.status).toBe(200);
+      expect(AdminKbShow.parse(await auto.json())).toMatchObject({ own: false, version: 0 });
+      expect((await send('DELETE', `${P}/shows/remind?version=1`, undefined)).status).toBe(404);
+      const history = AdminKbHistory.parse(await (await get(`${P}/history/kbshows`)).json());
+      expect(history.items.map((h) => [h.code, h.action])).toEqual([
+        ['remind', 'delete'],
+        ['remind', 'create'],
+      ]);
     });
 
     it('уровни: проверка порогов, число уровней не меняется, полученные не отнимаются', async () => {

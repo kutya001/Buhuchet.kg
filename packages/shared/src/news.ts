@@ -169,6 +169,16 @@ export const NewsAdminHistory = z.object({
       at: z.iso.datetime(),
       kind: z.enum(NEWS_HISTORY_KINDS),
       title: z.string(),
+      /** Загрузка из Excel: сколько добавлено, изменено и отключено. */
+      counts: z
+        .object({
+          added: z.number().int().nonnegative(),
+          changed: z.number().int().nonnegative(),
+          disabled: z.number().int().nonnegative(),
+        })
+        .optional(),
+      /** Откат загрузки: когда была загрузка. */
+      loadedAt: z.iso.datetime().optional(),
       /** Кто — «Администратор платформы» (историю платформы пишут только они). */
       actor: z.string(),
     }),
