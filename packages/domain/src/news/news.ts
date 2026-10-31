@@ -269,7 +269,8 @@ export function newsImageProblem(bytes: Uint8Array): NewsImageProblem | null {
 /**
  * Запись «Истории изменений» под списком новостей в Админке (прототип admin/news.js: `newsLog`, `pdLog`):
  * черновик заведён, опубликована, исправлена опубликованная, сохранён черновик, снята с публикации,
- * возвращена, черновик удалён. Тексты — словарь `news.hist.<вид>`.
+ * возвращена, черновик удалён; загрузка из Excel и её откат (задача 2.39, прототип importDictDlg,
+ * rollbackLoad). Тексты — словарь `news.hist.<вид>`.
  */
 export const NEWS_HISTORY_KINDS = [
   'draft',
@@ -279,6 +280,8 @@ export const NEWS_HISTORY_KINDS = [
   'off',
   'back',
   'deleted',
+  'import',
+  'rollback',
 ] as const;
 export type NewsHistoryKind = (typeof NEWS_HISTORY_KINDS)[number];
 
@@ -295,6 +298,7 @@ export function newsHistoryKinds(
   statusBefore: NewsStatus | null,
 ): NewsHistoryKind[] {
   const to = (field: string) => changes.find((c) => c.field === field)?.to;
+  if (action === 'import' || action === 'rollback') return [action];
   if (action === 'delete') return ['deleted'];
   if (action === 'create') return to('status') === 'published' ? ['published', 'draft'] : ['draft'];
   if (to('status') === 'published') return ['published'];

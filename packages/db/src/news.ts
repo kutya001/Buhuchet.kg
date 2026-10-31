@@ -11,7 +11,7 @@ import {
   type NewsStatus,
   type NewsType,
 } from '@buhuchet/domain';
-import { and, eq, inArray, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, sql, type SQL } from 'drizzle-orm';
 import type { PgUpdateSetSource } from 'drizzle-orm/pg-core';
 import type { Tx } from './client';
 import {
@@ -406,6 +406,18 @@ const inputColumns = (v: NewsInput) => ({
   audience: v.audience,
 });
 
+/**
+ * Все новости для «Выгрузить» и «Загрузить» в Excel (задача 2.39, прототип DX.kbnews): сначала новые
+ * по дате публикации (администратору платформы — все, политика таблицы).
+ */
+export async function allNewsForAdmin(tx: Tx): Promise<NewsRecord[]> {
+  const rows = await tx
+    .select(fields)
+    .from(news)
+    .orderBy(desc(news.publishDate), desc(news.createdAt), asc(news.id));
+  return rows.map(toRecord);
+}
+
 /** Одна новость (администратору — любая, пользователю — только видимая ему). */
 export async function getNews(tx: Tx, id: string): Promise<NewsRecord | null> {
   const [row] = await tx.select(fields).from(news).where(eq(news.id, id));
@@ -433,16 +445,19 @@ const historyFields = (n: NewsRecord) => ({
   off: n.off,
 });
 
-/** Новая новость черновиком или сразу опубликованной (прототип: «Сохранить черновик», «Опубликовать»). */
+/**
+ * Новая новость черновиком или сразу опубликованной (прототип: «Сохранить черновик», «Опубликовать»).
+ * `id` — код из файла загрузки Excel (Админка → «База знаний (содержимое)», задача 2.39).
+ */
 export async function createNews(
   tx: Tx,
   input: NewsInput,
-  options: { publish: boolean },
+  options: { publish: boolean; id?: string },
 ): Promise<NewsRecord> {
   const [row] = await tx
     .insert(news)
     .values({
-      id: newNewsId(),
+      id: options.id ?? newNewsId(),
       ...inputColumns(input),
       status: options.publish ? 'published' : 'draft',
       publishedAt: options.publish ? sql`now()` : null,
@@ -586,7 +601,17 @@ export interface NewsHistoryItem {
   kind: NewsHistoryKind;
   /** Заголовок на момент записи: из неё самой, из прошлой записи с заголовком или нынешний. */
   title: string;
+  /** Загрузка из Excel: сколько добавлено, изменено, отключено. */
+  counts?: { added: number; changed: number; disabled: number };
+  /** Откат загрузки: когда была загрузка. */
+  loadedAt?: Date;
 }
+
+/**
+ * Записи истории новостей: сами новости и загрузки «Новостей» из Excel с их откатами (справочник
+ * `kbnews` Админки → «База знаний (содержимое)», задача 2.39).
+ */
+const NEWS_HISTORY = sql`(${platformAuditLog.entity} = 'news' or (${platformAuditLog.entity} = 'platform_dict' and ${platformAuditLog.entityId} = 'kbnews:'))`;
 
 /**
  * «История изменений · N» под списком новостей в Админке: всего строк и последние 12, новые сверху
@@ -603,7 +628,7 @@ export async function newsAdminHistory(
       total: sql<number>`(count(*) + count(*) filter (where ${platformAuditLog.action} = 'create' and ${platformAuditLog.changes} @> '[{"field":"status","to":"published"}]'::jsonb))::int`,
     })
     .from(platformAuditLog)
-    .where(eq(platformAuditLog.entity, 'news'));
+    .where(NEWS_HISTORY);
   const rows = await tx.execute<{
     id: number | string;
     at: Date | string;
@@ -629,8 +654,8 @@ export async function newsAdminHistory(
         n.title
       ) as title
     from platform_audit_log h
-    left join news n on n.id = h.entity_id
-    where h.entity = 'news'
+    left join news n on h.entity = 'news' and n.id = h.entity_id
+    where h.entity = 'news' or (h.entity = 'platform_dict' and h.entity_id = 'kbnews:')
     order by h.at desc, h.id desc
     limit ${NEWS_HISTORY_SHOWN}`);
   return {
@@ -641,13 +666,26 @@ export async function newsAdminHistory(
           r.action,
           r.changes,
           r.status_before === 'published' || r.status_before === 'draft' ? r.status_before : null,
-        ).map((kind) => ({
-          id: Number(r.id),
-          at: new Date(r.at),
-          newsId: r.news_id,
-          kind,
-          title: r.title ?? '',
-        })),
+        ).map((kind): NewsHistoryItem => {
+          const item = {
+            id: Number(r.id),
+            at: new Date(r.at),
+            newsId: kind === 'import' || kind === 'rollback' ? '' : r.news_id,
+            kind,
+            title: r.title ?? '',
+          };
+          const n = (field: string) => Number(r.changes.find((c) => c.field === field)?.to ?? 0);
+          if (kind === 'import') {
+            return {
+              ...item,
+              counts: { added: n('added'), changed: n('changed'), disabled: n('disabled') },
+            };
+          }
+          const at = r.changes.find((c) => c.field === 'loadedAt')?.to;
+          return kind === 'rollback' && typeof at === 'string'
+            ? { ...item, loadedAt: new Date(at) }
+            : item;
+        }),
       )
       .slice(0, NEWS_HISTORY_SHOWN),
   };

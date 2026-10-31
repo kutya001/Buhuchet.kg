@@ -13,12 +13,14 @@ import {
   type HistoryChange,
   type IoSectionDict,
   type IoValue,
+  type KbIoDict,
   type IsoDate,
   type UiTextKey,
 } from '@buhuchet/domain';
 import { and, count, desc, eq, inArray, or, sql } from 'drizzle-orm';
 import { adminCalendarDelete, calendarDays } from './admin-calendar';
 import type { IoRecord } from './admin-dict-io';
+import { KB_SECTION_WRITERS } from './admin-kb-io';
 import {
   adminEnRates,
   adminGkedGroups,
@@ -43,8 +45,12 @@ import { gkedItems, platformAuditLog, productionCalendar, reportTypes } from './
  * (`parseIoRows`, `ioChanges`); всё — в `withUserContext` администратора платформы.
  */
 
-/** Отказ записи строки: текст словаря с подстановками; `changed` — запись изменили между чтением и записью. */
-export type SectionFail = { key: UiTextKey; params?: Record<string, string> } | 'changed';
+/**
+ * Отказ записи строки: текст словаря с подстановками и столбец, к которому он относится («Столбец: что
+ * не так»); `changed` — запись изменили между чтением и записью.
+ */
+export type SectionFail =
+  { key: UiTextKey; params?: Record<string, string>; col?: UiTextKey } | 'changed';
 
 export type SectionSaveResult =
   { ok: true; record: IoRecord; redue?: RedueScope | null } | { ok: false; fail: SectionFail };
@@ -524,12 +530,16 @@ export const SECTION_WRITERS: Readonly<Record<IoSectionDict, SectionWriter>> = {
   enrates: enratesWriter,
   proprates: propratesWriter,
   gkgroups: gkgroupsWriter,
+  ...KB_SECTION_WRITERS,
 };
 
 /* ───────────── История ───────────── */
 
-/** Разделы общей «Истории изменений»: ГКЭД с группами кодов и «Налоги и ставки» (три таблицы). */
-export type HistorySection = IoSectionDict | 'gked';
+/**
+ * Разделы общей «Истории изменений»: календарь, ГКЭД с группами кодов и «Налоги и ставки» (три
+ * таблицы); у «Базы знаний (содержимое)» — своя (`adminKbHistory`).
+ */
+export type HistorySection = Exclude<IoSectionDict, KbIoDict> | 'gked';
 
 /**
  * «История изменений · N» вкладки из нескольких разделов (прототип pdHistHtml('gked'),

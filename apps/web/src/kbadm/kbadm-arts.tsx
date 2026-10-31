@@ -48,10 +48,12 @@ import { useViewSettings } from '../lists/view-settings';
 import { useShell } from '../shell/context';
 import { isModuleId, MODULES } from '../shell/modules';
 import { useKbAdmAdd } from './kbadm-add';
+import { useKbAdmIo } from './kbadm-io';
 import {
   fetchKbAdminRows,
   fetchKbAdminValues,
   kb,
+  KBADM_AUDIT,
   KBADM_GRID,
   kbAdminArticleQuery,
   kbAdminMetaQuery,
@@ -149,6 +151,7 @@ export function KbAdmArtsTab() {
       .then((a) => previewArticle(a))
       .then((p) => setPreview(openSlot(p)), fail);
   useKbAdmAdd('art', () => setDialog(openSlot<AdminKbArticle | null>(null)));
+  const io = useKbAdmIo('kbarts');
 
   const setActive = async (x: AdminKbRow, active: boolean) => {
     const res = await callApi(() =>
@@ -176,8 +179,10 @@ export function KbAdmArtsTab() {
   return (
     <div className="flex flex-col gap-3.5">
       <Note icon="info">{t('kbadm.arts.note')}</Note>
+      {io.bar}
       <DataGrid
         columns={columns}
+        audit={KBADM_AUDIT}
         defaultVisible={DEFAULT_VISIBLE}
         defaultSort={null}
         settings={view.settings}
@@ -206,6 +211,7 @@ export function KbAdmArtsTab() {
         onOpen={(x) => edit(x)}
       />
       <KbAdmHistory section="kbarts" />
+      {io.dialogs}
       {dialog ? (
         <KbArticleEditDialog
           key={dialog.n}

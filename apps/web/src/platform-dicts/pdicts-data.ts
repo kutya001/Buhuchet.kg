@@ -1,6 +1,11 @@
 'use client';
 
-import type { AdminSystemDict, AdminValueDict, IoDict } from '@buhuchet/domain';
+import {
+  isKbIoDict,
+  type AdminSystemDict,
+  type AdminValueDict,
+  type IoDict,
+} from '@buhuchet/domain';
 import {
   AdminMessageTemplates,
   AdminPermissionList,
@@ -30,7 +35,9 @@ import type { ShellCount } from '@buhuchet/ui';
 import { queryOptions, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 import { api, apiFailure } from '../api-client';
+import { refreshKbAdmin } from '../kbadm/kbadm-data';
 import type { FetchListPage } from '../lists/use-list-page';
+import { ADMIN_NEWS_GRID, refreshNews } from '../news/news-data';
 
 /**
  * Данные Админки → «Справочники платформы» через TanStack Query: шапки вкладок, числа на вкладках,
@@ -243,6 +250,12 @@ export function usePdictsRefresh() {
     (dict: IoDict | AdminSystemDict | 'requests' | 'loads') => {
       void client.invalidateQueries({ queryKey: ['list', `pdicts.${LIST_OF[dict] ?? dict}`] });
       void client.invalidateQueries({ queryKey: ['admin', 'pdicts'] });
+      if (!isKbIoDict(dict)) return;
+      // «База знаний (содержимое)» (задача 2.39): загрузка и откат — вкладки модуля, у новостей — и лента.
+      refreshKbAdmin(client);
+      if (dict !== 'kbnews') return;
+      void client.invalidateQueries({ queryKey: ['list', ADMIN_NEWS_GRID] });
+      refreshNews(client);
     },
     [client],
   );

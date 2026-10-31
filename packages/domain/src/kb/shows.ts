@@ -1,3 +1,4 @@
+import type { Translate } from '../l10n/texts';
 import type { KbStepDef } from './catalog';
 
 /*
@@ -228,4 +229,39 @@ const SCREEN = /^[a-z][a-z0-9-]{0,30}(\.[a-z][a-z0-9-]{0,30})?$/;
 /** Экран «модуль» или «модуль.вкладка» для «Обзора экрана». */
 export function kbScreenOk(screen: string): boolean {
   return SCREEN.test(screen);
+}
+
+/** Облачко для описания «что подсвечивает» (поля сценария, которые задаёт разработчик). */
+export interface KbShowWhatInput {
+  auto?: string | null | undefined;
+  txt?: string | null | undefined;
+  s?: string | null | undefined;
+  /** Вкладка, которую облачко открывает перед показом (`kbShowSubTab`). */
+  tab?: string | null | undefined;
+}
+
+/** Вкладка, которую открывает облачко перед показом (`sub: [{ tab: 'Обслуживание' }]`). */
+export function kbShowSubTab(sub: readonly KbShowAction[] | null | undefined): string | null {
+  for (const a of sub ?? []) {
+    if (a && typeof a === 'object' && typeof a.tab === 'string') return a.tab;
+  }
+  return null;
+}
+
+/**
+ * Что подсвечивает облачко — словами для администратора (прототип kbShowWhat): «Автоматически: Поля
+ * формы · вкладка «…»», «Элемент с текстом «…»», «Элемент экрана», «Только текст».
+ */
+export function kbShowWhat(p: KbShowWhatInput, t: Translate): string {
+  if (p.auto) {
+    const what = (KB_SHOW_AUTOS as readonly string[]).includes(p.auto)
+      ? t(`kbadm.show.auto.${p.auto as KbShowAuto}`)
+      : p.auto;
+    return p.tab
+      ? t('kbadm.show.what.auto_tab', { what, tab: p.tab })
+      : t('kbadm.show.what.auto', { what });
+  }
+  if (p.txt) return t('kbadm.show.what.txt', { txt: p.txt });
+  if (p.s) return t('kbadm.show.what.el');
+  return t('kbadm.show.what.text');
 }

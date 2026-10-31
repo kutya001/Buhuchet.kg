@@ -13,6 +13,8 @@ import {
   adminKbMetaRoute,
   adminKbValuesHandler,
   adminKbValuesRoute,
+  autoAdminKbShowHandler,
+  autoAdminKbShowRoute,
   createAdminKbArticleHandler,
   createAdminKbArticleRoute,
   createAdminKbStepHandler,
@@ -21,6 +23,8 @@ import {
   exportAdminKbRoute,
   getAdminKbArticleHandler,
   getAdminKbArticleRoute,
+  getAdminKbShowHandler,
+  getAdminKbShowRoute,
   getAdminKbStepHandler,
   getAdminKbStepRoute,
   listAdminKbHandler,
@@ -33,6 +37,8 @@ import {
   saveAdminKbArticleRoute,
   saveAdminKbLevelsHandler,
   saveAdminKbLevelsRoute,
+  saveAdminKbShowHandler,
+  saveAdminKbShowRoute,
   saveAdminKbStepHandler,
   saveAdminKbStepRoute,
 } from './admin';
@@ -124,6 +130,9 @@ export function kbModule(deps: ApiDeps) {
     .openapi(saveAdminKbStepRoute, saveAdminKbStepHandler(deps))
     .openapi(moveAdminKbStepRoute, moveAdminKbStepHandler(deps))
     .openapi(activeAdminKbStepRoute, activeAdminKbStepHandler(deps))
+    .openapi(getAdminKbShowRoute, getAdminKbShowHandler(deps))
+    .openapi(saveAdminKbShowRoute, saveAdminKbShowHandler(deps))
+    .openapi(autoAdminKbShowRoute, autoAdminKbShowHandler(deps))
     .openapi(getAdminKbArticleRoute, getAdminKbArticleHandler(deps))
     .openapi(createAdminKbArticleRoute, createAdminKbArticleHandler(deps))
     .openapi(saveAdminKbArticleRoute, saveAdminKbArticleHandler(deps))

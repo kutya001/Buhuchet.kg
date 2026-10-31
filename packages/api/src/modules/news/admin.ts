@@ -522,6 +522,8 @@ export function newsHistoryHandler(deps: ApiDeps): RouteHandler<typeof newsHisto
         at: h.at.toISOString(),
         kind: h.kind,
         title: h.title,
+        ...(h.counts ? { counts: h.counts } : {}),
+        ...(h.loadedAt ? { loadedAt: h.loadedAt.toISOString() } : {}),
         actor: PLATFORM_ADMIN_NAME,
       })),
     };

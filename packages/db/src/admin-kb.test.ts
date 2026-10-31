@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { KbArticleInput, KbStepInput } from '@buhuchet/domain';
+import { PLATFORM_ADMIN_NAME, type KbArticleInput, type KbStepInput } from '@buhuchet/domain';
 import { readReference, saveReference } from './admin-gked';
 import {
   adminKbArticleSave,
@@ -292,6 +292,32 @@ describe.skipIf(!databaseAvailable())(
         evk: 'kbadm.ev.org.main',
         active: 'kbadm.v.yes',
       });
+      // Служебные столбцы — по истории: добавленный шаг — «Создал» и «Создано», правленый из
+      // наполнения — только «Изменил» и «Изменено», нетронутый — пусто (прототип `auditCols`).
+      const added = page.rows.find((r) => r.values.t === 'Посмотреть список')!;
+      expect(added.audit).toMatchObject({
+        createdBy: PLATFORM_ADMIN_NAME,
+        updatedBy: PLATFORM_ADMIN_NAME,
+      });
+      expect(added.audit.createdAt! < added.audit.updatedAt!).toBe(true);
+      const edited = page.rows.find((r) => r.id === 'daymonth')!.audit;
+      expect(edited).toMatchObject({ createdAt: null, createdBy: null });
+      expect(edited.updatedAt).not.toBeNull();
+      expect(page.rows.find((r) => r.id === 'theme')!.audit).toEqual({
+        createdAt: null,
+        createdBy: null,
+        updatedAt: null,
+        updatedBy: null,
+      });
+      const latest = await asAdmin((tx) =>
+        listAdminKbPage(
+          tx,
+          'steps',
+          { sort: { key: 'updatedAt', dir: 'desc' }, page: 1, size: 25, filters: {} },
+          t,
+        ),
+      );
+      expect(latest.rows[0]!.id).toBe(added.id);
       const arts = await asAdmin((tx) =>
         listAdminKbPage(
           tx,

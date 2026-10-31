@@ -104,6 +104,7 @@ const feeVis: When = (a) => a.feature('fee') && a.can('fee');
 
 /** Вкладки «Справочников платформы» с «Выгрузить в Excel» и «Загрузить из Excel». */
 const IO_TABS: readonly string[] = [...ADMIN_VALUE_DICTS, 'calendar'];
+const KBADM_IO_TABS: readonly string[] = ['steps', 'shows', 'arts', 'news'];
 
 /** Группы вкладок «Справочников платформы» (ТЗ «Группы справочников»). */
 const G = {
@@ -440,10 +441,21 @@ export const MODULES: Record<MenuModuleId, ModuleDef> = {
       { id: 'levels', icon: 'grad', label: 'tab.kbadm.levels' },
       { id: 'news', icon: 'bell', label: 'tab.kbadm.news' },
     ],
+    // У каждой вкладки — своё (прототип kbAdmAdd), у «Уровней» — ничего; «Выгрузить» и «Загрузить» —
+    // шаги, показы, статьи и новости (задача 2.39).
     add: [
       { id: 'step', icon: 'plus', label: 'add.kbadm.step', tabs: ['steps'] },
+      { id: 'show', icon: 'play', label: 'add.kbadm.show', tabs: ['shows'] },
       { id: 'art', icon: 'book', label: 'add.kbadm.art', tabs: ['arts'] },
       { id: 'news', icon: 'bell', label: 'add.kbadm.news', tabs: ['news'] },
+      {
+        id: 'io_export',
+        icon: 'download',
+        label: 'pdicts.add.io_export',
+        tabs: KBADM_IO_TABS,
+        sep: true,
+      },
+      { id: 'io_import', icon: 'upload', label: 'pdicts.add.io_import', tabs: KBADM_IO_TABS },
     ],
   },
   tg: {

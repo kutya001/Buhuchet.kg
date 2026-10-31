@@ -1,23 +1,26 @@
 'use client';
 
-import type { KbAdminList, KbHistorySection } from '@buhuchet/domain';
+import { formatMomentRu, type KbAdminList, type KbHistorySection } from '@buhuchet/domain';
 import {
   AdminKbArticle,
   AdminKbHistory,
   AdminKbLevels,
   AdminKbMeta,
   AdminKbRowList,
+  AdminKbShow,
   AdminKbStep,
   ListValues,
   type AdminKbRow,
 } from '@buhuchet/shared';
+import type { GridAudit } from '@buhuchet/ui';
 import { queryOptions, type QueryClient } from '@tanstack/react-query';
 import { api, apiFailure } from '../api-client';
 import type { FetchListPage } from '../lists/use-list-page';
 
 /*
- * Данные Админки → «База знаний (содержимое)» (задача 2.39, docs/decisions.md п. Д-11): списки «Шагов
- * уроков» и «Статей», окна шага и статьи, «Уровни», «История изменений». Всё под ключом `kbadm`:
+ * Данные Админки → «База знаний (содержимое)» (задача 2.39, docs/decisions.md п. Д-11, Д-12): списки
+ * «Шагов уроков», «Показов» и «Статей», окна шага, сценария показа и статьи, «Уровни», «История
+ * изменений». Всё под ключом `kbadm`:
  * после записи обновляется вкладка целиком, а программа обучения самого администратора — `kb`.
  */
 
@@ -30,7 +33,21 @@ const json = async <T>(res: JsonResponse, parse: (v: unknown) => T) => {
   return parse(await res.json());
 };
 
-export const KBADM_GRID = { steps: 'kbadm.steps', arts: 'kbadm.arts' } as const;
+export const KBADM_GRID = {
+  steps: 'kbadm.steps',
+  arts: 'kbadm.arts',
+  shows: 'kbadm.shows',
+} as const;
+
+const moment = (iso: string | null) => (iso ? formatMomentRu(new Date(iso)) : '');
+
+/** Служебные столбцы списков вкладок (прототип ui/grid.js, `auditCols`). */
+export const KBADM_AUDIT: GridAudit<AdminKbRow> = {
+  createdBy: (x) => x.audit.createdBy ?? '',
+  updatedBy: (x) => x.audit.updatedBy ?? x.audit.createdBy ?? '',
+  createdAt: (x) => moment(x.audit.createdAt),
+  updatedAt: (x) => moment(x.audit.updatedAt ?? x.audit.createdAt),
+};
 
 export const fetchKbAdminRows =
   (list: KbAdminList): FetchListPage<AdminKbRow> =>
@@ -67,6 +84,15 @@ export const kbAdminArticleQuery = (id: string) =>
     staleTime: 0,
   });
 
+/** Сценарий показа шага: свой или автоматический. */
+export const kbAdminShowQuery = (id: string) =>
+  queryOptions({
+    queryKey: ['kbadm', 'show', id],
+    queryFn: async () =>
+      json(await kb.shows[':id'].$get({ param: { id } }), (v) => AdminKbShow.parse(v)),
+    staleTime: 0,
+  });
+
 export const kbAdminLevelsQuery = queryOptions({
   queryKey: ['kbadm', 'levels'],
   queryFn: async () => json(await kb.levels.$get(), (v) => AdminKbLevels.parse(v)),
@@ -86,5 +112,6 @@ export function refreshKbAdmin(client: QueryClient): void {
   void client.invalidateQueries({ queryKey: ['kbadm'] });
   void client.invalidateQueries({ queryKey: ['list', KBADM_GRID.steps] });
   void client.invalidateQueries({ queryKey: ['list', KBADM_GRID.arts] });
+  void client.invalidateQueries({ queryKey: ['list', KBADM_GRID.shows] });
   void client.invalidateQueries({ queryKey: ['kb'] });
 }
