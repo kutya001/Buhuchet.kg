@@ -155,6 +155,8 @@ export const MoneyOperationItem = z.object({
   receiptDate: IsoDate.nullable(),
   /** Возврат по уточнённому — номер версии отчёта. */
   revision: z.number().int().nullable(),
+  /** Изменена в окне операции (задача 2.22): отметка «изменена» рядом с видом. */
+  edited: z.boolean(),
 });
 export type MoneyOperationItem = z.infer<typeof MoneyOperationItem>;
 

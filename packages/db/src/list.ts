@@ -141,7 +141,7 @@ const NBSP = sql.raw('chr(160)');
 const MINUS = sql.raw('chr(8722)');
 
 /** Сумма в тыйынах как на экране: «1 250,50», «−300,00» (`formatSom`). */
-function moneyText(value: Expr): SQL {
+export function moneyText(value: Expr): SQL {
   const whole = sql`(abs(${value}) / 100)::text`;
   return sql`case when ${value} is null then null else (case when ${value} < 0 then ${MINUS} else '' end) || regexp_replace(${whole}, '(\\d)(?=(\\d{3})+$)', '\\1' || ${NBSP}, 'g') || ',' || lpad((abs(${value}) % 100)::text, 2, '0') end`;
 }

@@ -12,7 +12,13 @@ import {
 import type { ContractorHistory } from '@buhuchet/shared';
 import type { TimelineItem } from '@buhuchet/ui';
 import { pageHistoryActor, pageHistoryText } from '../contractor-page/page-history';
-import { operationCreatedText, operationDeletedText } from '../finance/finance-history';
+import {
+  feePaymentDeletedText,
+  feePaymentEditedText,
+  operationCreatedText,
+  operationDeletedText,
+  operationEditedText,
+} from '../finance/finance-history';
 import type { Translate } from '../l10n/translate';
 import { reportHistoryText } from '../reports/report-history';
 
@@ -276,11 +282,30 @@ function moneyLines(t: Translate, e: Entry): string[] {
   ];
 }
 
+type FeeEntry = Pick<Entry, 'at' | 'actor' | 'action' | 'changes' | 'reason'>;
+
+/**
+ * Строка истории оплаты за обслуживание — во вкладке «История» контрагента и в окне оплаты (задачи 2.21
+ * и 2.22): ввод, изменение «было → стало» и удаление — с причиной в тексте, как в прототипе (opLog).
+ */
+export function feePaymentHistoryText(t: Translate, e: FeeEntry): string {
+  const own =
+    e.action === 'update'
+      ? feePaymentEditedText(t, e.changes, e.reason)
+      : e.action === 'delete'
+        ? feePaymentDeletedText(t, e.changes, e.reason)
+        : null;
+  if (own) return own;
+  const text = feePaymentLines(t, e).filter(Boolean).join('; ');
+  if (!e.reason) return text || t('cp.hist.update');
+  return text ? `${text} (${e.reason})` : e.reason;
+}
+
 /**
  * Оплата за обслуживание (задача 2.21; прототип feePayDlg, `log('fp', …)`): «Оплата за обслуживание
  * 16 000,00 сом: октябрь 2026 — 14 000, аванс — 2 000»; файлы оплаты — «Оплата за обслуживание · …».
  */
-function feePaymentLines(t: Translate, e: Entry): string[] {
+function feePaymentLines(t: Translate, e: FeeEntry): string[] {
   if (e.action === 'file_attach' || e.action === 'file_delete')
     return [t('fee.hist.payment_file', { text: reportHistoryText(t, { ...e, reason: null }, 0) })];
   if (e.action !== 'create') return [];
@@ -335,21 +360,22 @@ export function contractorHistoryText(t: Translate, e: Entry, names: Names): str
       lines = [reportHistoryText(t, { ...e, reason: null }, 0)];
       break;
     case 'money_operation': {
-      // Удаление операции — с причиной в тексте (прототип opLog); ввод списания, возврата, перевода и
-      // обратной записи — без причины, как в прототипе `log('cp', …)` (задача 2.20).
+      // Удаление и изменение операции — с причиной в тексте (прототип opLog, задача 2.22); ввод
+      // списания, возврата, перевода и обратной записи — без причины, как в прототипе `log('cp', …)`.
       const op =
         e.action === 'delete'
           ? operationDeletedText(t, e.changes, e.reason)
           : e.action === 'create'
             ? operationCreatedText(t, e.changes)
-            : null;
+            : e.action === 'update'
+              ? operationEditedText(t, e.changes, e.reason)
+              : null;
       if (op) return op;
       lines = moneyLines(t, e);
       break;
     }
     case 'fee_payment':
-      lines = feePaymentLines(t, e);
-      break;
+      return feePaymentHistoryText(t, e);
     default:
       lines = [];
   }

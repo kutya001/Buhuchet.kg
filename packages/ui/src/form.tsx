@@ -350,11 +350,14 @@ const TAG_TONES = {
   plain: 'bg-label-bg text-label',
   info: 'bg-info-bg text-info',
   violet: 'bg-violet-bg text-violet',
+  warn: 'bg-warn-bg text-warn',
+  bad: 'bg-danger-bg text-danger',
 } as const;
 
 /**
  * Ярлык (`.tag`): «все права», «Свои контрагенты» в карточке роли; `title` — подсказка. `info` и
- * `violet` — метки вида срока задачи «День» и «Месяц» (`.tag.kd-day`, `.tag.kd-month`).
+ * `violet` — метки вида срока задачи «День» и «Месяц» (`.tag.kd-day`, `.tag.kd-month`); `warn` и `bad`
+ * — «изменена» и «удалена» в журналах операций (`.tag.yellow`, `.tag.red`).
  */
 export function Tag({
   icon,

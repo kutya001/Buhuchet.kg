@@ -75,6 +75,13 @@ export function useFinanceRefresh() {
     money();
     void client.invalidateQueries({ queryKey: ['finance'] });
     void client.invalidateQueries({ queryKey: ['fees'] });
+    // Журналы модуля и «Списания в бонус» (задача 2.22): ключи списков `['list', 'fin.<вкладка>', …]`.
+    void client.invalidateQueries({
+      predicate: (q) =>
+        q.queryKey[0] === 'list' &&
+        typeof q.queryKey[1] === 'string' &&
+        (q.queryKey[1].startsWith('fin.') || q.queryKey[1] === 'staff.bonus'),
+    });
   }, [client, money]);
 }
 

@@ -80,6 +80,8 @@ export const ContractorFees = z.object({
       allocation: z.array(AllocationItem),
       /** Часть за обслуживание из общего поступления от контрагента. */
       fromReceipt: z.boolean(),
+      /** Изменена после ввода — ярлык «изменена» (прототип contractor-card.js, `f.edited`). */
+      edited: z.boolean(),
       author: z.string().nullable(),
     }),
   ),

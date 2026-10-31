@@ -195,3 +195,130 @@ describe('бледные «Списать в бонус» и «Вернуть о
     expect(noFreeReason(t, m(0, 0))).toBe('Свободного остатка нет: денег контрагента на счёте нет');
   });
 });
+
+// Изменение и удаление (задача 2.22; прототип modules/fin-op.js `opEditDlg` → opLog, modules/
+// contractors.js inDlg с `edit`, modules/contractor-card.js — изменение оплаты за обслуживание).
+describe('история изменения операций (было → стало)', () => {
+  it('операция: сумма, дата, счёт и примечание — с причиной', () => {
+    const text = contractorHistoryText(
+      t,
+      cp({
+        action: 'update',
+        reason: 'ошибка в сумме',
+        changes: [
+          { field: 'kind', from: 'bonus', to: 'bonus' },
+          { field: 'amount', from: 30000, to: 25000 },
+          { field: 'opDate', from: '2026-10-18', to: '2026-10-17' },
+          {
+            field: 'holder',
+            from: { kind: 'org', name: null },
+            to: { kind: 'employee', name: 'Асель К.' },
+          },
+          { field: 'note', from: '', to: 'остаток' },
+        ],
+      }),
+      {},
+    );
+    expect(plain(text)).toBe(
+      'Изменено: сумма 300,00 → 250,00 сом; дата 18.10.2026 → 17.10.2026; счёт: счёт организации → счёт Асель К.; примечание «—» → «остаток». Причина: ошибка в сумме',
+    );
+  });
+
+  it('обратная запись — суммы со знаком', () => {
+    const text = contractorHistoryText(
+      t,
+      cp({
+        action: 'update',
+        reason: 'знак',
+        changes: [
+          { field: 'kind', from: 'corr', to: 'corr' },
+          { field: 'amount', from: -10000, to: 10000 },
+        ],
+      }),
+      {},
+    );
+    expect(plain(text)).toBe('Изменено: сумма −100,00 → +100,00 сом. Причина: знак');
+  });
+
+  it('поступление: общая сумма с платой и детализация с авансом', () => {
+    const text = contractorHistoryText(
+      t,
+      cp({
+        action: 'update',
+        reason: 'уточнили',
+        changes: [
+          { field: 'kind', from: 'in', to: 'in' },
+          { field: 'total', from: 1500000, to: 1200000 },
+          {
+            field: 'allocations',
+            from: [{ report: 'НДС 09.2026', amount: 1000000 }],
+            to: [{ report: 'НДС 09.2026', amount: 1000000 }],
+          },
+          { field: 'feeTotal', from: 0, to: 0 },
+        ],
+      }),
+      {},
+    );
+    expect(plain(text)).toBe(
+      'Изменено: общая сумма 15 000,00 → 12 000,00 сом; детализация «НДС 09.2026 — 10 000; аванс — 5 000» → «НДС 09.2026 — 10 000; аванс — 2 000». Причина: уточнили',
+    );
+  });
+
+  it('оплата за обслуживание: месяцы, куда, примечание словом; удаление', () => {
+    const edited = contractorHistoryText(
+      t,
+      cp({
+        entity: 'fee_payment',
+        action: 'update',
+        reason: 'не тот месяц',
+        changes: [
+          { field: 'amount', from: 1400000, to: 1600000 },
+          {
+            field: 'allocation',
+            from: [{ month: '2026-09', amount: 1400000 }],
+            to: [{ month: '2026-10', amount: 1400000 }],
+          },
+          { field: 'to', from: 'счёт организации', to: 'владельцу организации' },
+          { field: 'note', from: '', to: 'x' },
+        ],
+      }),
+      {},
+    );
+    expect(plain(edited)).toBe(
+      'Изменено: сумма 14 000,00 → 16 000,00 сом; месяцы «сентябрь 2026 — 14 000» → «октябрь 2026 — 14 000»; куда: счёт организации → владельцу организации; примечание. Причина: не тот месяц',
+    );
+    const deleted = contractorHistoryText(
+      t,
+      cp({
+        entity: 'fee_payment',
+        action: 'delete',
+        reason: 'дубль',
+        changes: [
+          { field: 'amount', from: 1400000 },
+          { field: 'paidOn', from: '2026-10-05' },
+        ],
+      }),
+      {},
+    );
+    expect(plain(deleted)).toBe(
+      'Операция удалена: оплата за обслуживание на 14 000 сом от 05.10.2026. Причина: дубль',
+    );
+  });
+
+  it('сохранено без изменений: поступление и оплата за обслуживание — как в прототипе', () => {
+    const receipt = cp({ action: 'update', changes: [{ field: 'kind', from: 'in', to: 'in' }] });
+    expect(contractorHistoryText(t, receipt, {})).toBe('Сохранено без изменений');
+    const op = { kind: 'in', amount: 30_000, date: '2026-10-18' } as OperationWindow;
+    expect(
+      operationHistoryText(t, op, {
+        at: receipt.at,
+        actor: receipt.actor,
+        action: 'update',
+        reason: null,
+        changes: receipt.changes,
+      } as OperationWindow['history'][number]),
+    ).toBe('Сохранено без изменений');
+    const fee = cp({ entity: 'fee_payment', action: 'update', changes: [] });
+    expect(contractorHistoryText(t, fee, {})).toBe('Изменено: без изменений');
+  });
+});

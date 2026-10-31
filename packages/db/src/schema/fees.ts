@@ -1,10 +1,12 @@
 import { FEE_TO_KINDS, MONEY_AMOUNT_MAX, MONEY_NOTE_MAX, OP_REASON_MAX } from '@buhuchet/domain';
 import { sql } from 'drizzle-orm';
 import {
+  boolean,
   check,
   date,
   foreignKey,
   index,
+  pgPolicy,
   pgTable,
   text,
   timestamp,
@@ -16,7 +18,7 @@ import { money, recordVersion, timestamps } from './columns';
 import { contractors } from './contractors';
 import { moneyOperations } from './money';
 import { organizations } from './organizations';
-import { currentOrgId, orgIsolation } from './rls';
+import { appRole, currentOrgId, orgIsolation } from './rls';
 import { users } from './users';
 
 /*
@@ -54,6 +56,8 @@ export const feePayments = pgTable(
     /** Общее поступление от контрагента, частью которого была оплата. */
     operationId: uuid('operation_id'),
     note: text('note').notNull().default(''),
+    /** Изменена в окне оплаты (задача 2.22; прототип `edited`): отметка «Изменена». */
+    edited: boolean('edited').notNull().default(false),
     /**
      * Удалена в окне операции вместе с общим поступлением (задача 2.20) или сама (задача 2.22): запись
      * остаётся с причиной, в долг и итоги не входит.
@@ -96,6 +100,14 @@ export const feePayments = pgTable(
       sql`(${t.deletedAt} is null) = (${t.deletedBy} is null) and (${t.deletedAt} is null) = (${t.deleteReason} is null) and char_length(coalesce(${t.deleteReason}, '')) <= ${sql.raw(String(OP_REASON_MAX))}`,
     ),
     orgIsolation('fee_payments_isolation', t.orgId),
+    // Оплата не стирается («Удалить» — отметка с причиной); стираются только части общего поступления,
+    // когда его изменяют (задача 2.22; прототип inDlg пересоздаёт их).
+    pgPolicy('fee_payments_delete_receipt_part', {
+      as: 'restrictive',
+      for: 'delete',
+      to: appRole,
+      using: sql`${t.operationId} is not null`,
+    }),
   ],
 ).enableRLS();
 

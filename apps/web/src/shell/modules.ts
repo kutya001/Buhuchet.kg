@@ -297,7 +297,12 @@ export const MODULES: Record<MenuModuleId, ModuleDef> = {
         id: 'bonus',
         icon: 'gift',
         label: 'tab.staff.bonus',
-        when: (a) => a.can('staff') && a.feature('accounts') && a.feature('taxpay'),
+        // Суммы списаний — только тому, кто видит деньги контрагентов (docs/deviations.md п. В-29).
+        when: (a) =>
+          a.can('staff') &&
+          (a.can('finView') || a.can('money')) &&
+          a.feature('accounts') &&
+          a.feature('taxpay'),
       },
     ],
     add: [

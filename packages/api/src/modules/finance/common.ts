@@ -1,5 +1,7 @@
 import { permissionCatalog, type MoneyContractor, type Tx } from '@buhuchet/db';
 import {
+  canSeeContractor,
+  closesWithMonth,
   hasPermission,
   opLock,
   opRight,
@@ -42,7 +44,7 @@ export function canRefund(subject: AccessSubject, c: MoneyContractor): boolean {
  * контрагентов (строже прототипа, docs/deviations.md п. В-23): без права на деньги сумму не узнать.
  */
 // ОТКЛОНЕНИЕ: docs/deviations.md#В-23
-function canArchiveRest(subject: AccessSubject): boolean {
+export function canArchiveRest(subject: AccessSubject): boolean {
   return (
     hasPermission(subject, 'archiveRest') &&
     (hasPermission(subject, 'finView') || hasPermission(subject, 'money'))
@@ -76,14 +78,14 @@ export interface OpLockInfo {
 
 /**
  * Замок операции (прототип `opLock`): удалена, создана системой, нет права своего вида (у архивного
- * списание и возврат — с правом «Распоряжаться остатком»), контрагент в архиве. Закрытый месяц и часть
- * общего поступления добавит задача 2.22.
+ * списание и возврат — с правом «Распоряжаться остатком»), контрагент в архиве, месяц оплаты, списания
+ * или возврата закрыт, оплата за обслуживание — часть общего поступления (задача 2.22).
  */
 export async function operationLock(
   tx: Tx,
   t: Translate,
   subject: AccessSubject,
-  op: { kind: FinOpKind; deleted: boolean },
+  op: { kind: FinOpKind; deleted: boolean; monthClosed?: boolean; receiptPart?: boolean },
   c: Pick<MoneyContractor, 'archived'>,
   act: 'edit' | 'del',
 ): Promise<OpLockInfo | null> {
@@ -96,8 +98,8 @@ export async function operationLock(
       canArchiveRest: canArchiveRest(subject),
       canMoney: hasPermission(subject, 'money'),
       archived: c.archived,
-      monthClosed: false,
-      receiptPart: false,
+      monthClosed: op.monthClosed ?? false,
+      receiptPart: op.receiptPart ?? false,
     },
     act,
   );
@@ -111,6 +113,63 @@ export async function viewOnlyLock(tx: Tx, t: Translate, right: PermissionId): P
   const catalog = await permissionCatalog(tx);
   const name = catalog.find((p) => p.id === right)?.name ?? right;
   return { code: 'op_view_only', text: t('err.op_view_only', { right: name }) };
+}
+
+/**
+ * Замки строк журнала — для меню строки «Изменить», «Обратная запись», «Удалить» (прототип finActions →
+ * opActs → `opLock`): как у окна операции, но без запроса на каждую строку — закрытые месяцы известны
+ * заранее, текст «Только просмотр» берётся из каталога один раз. Окно и сам запрос проверяют всё ещё раз.
+ */
+export function journalLocks(
+  tx: Tx,
+  t: Translate,
+  subject: AccessSubject,
+  closed: ReadonlySet<string>,
+) {
+  const viewOnly = new Map<PermissionId, Promise<OpLockInfo>>();
+  const canMoney = hasPermission(subject, 'money');
+  return async (
+    r: {
+      src: 'op' | 'fee';
+      kind: string;
+      deleted: boolean;
+      archived: boolean;
+      receiptPart: boolean;
+      date: string;
+      /** Ответственный контрагента: у оплаты за обслуживание — область «Контрагенты» (п. В-30). */
+      responsibleEmployeeId?: string | null;
+    },
+    act: 'edit' | 'del',
+  ): Promise<OpLockInfo | null> => {
+    const fee = r.src === 'fee';
+    const kind = (fee ? 'fee' : r.kind) as FinOpKind;
+    const right = opRight(kind);
+    // ОТКЛОНЕНИЕ: docs/deviations.md#В-30 — «Менять журнал тарифов» действует в области «Контрагенты».
+    const inCps =
+      !fee ||
+      canSeeContractor(subject, 'cps', { responsibleEmployeeId: r.responsibleEmployeeId ?? null });
+    const code = opLock(
+      {
+        kind,
+        deleted: r.deleted,
+        canKind: hasPermission(subject, right) && inCps,
+        canArchiveRest: !fee && canArchiveRest(subject),
+        canMoney,
+        archived: r.archived,
+        monthClosed: closesWithMonth(kind) && closed.has(r.date.slice(0, 7)),
+        receiptPart: r.receiptPart,
+      },
+      act,
+    );
+    if (!code) return null;
+    if (code !== 'op_view_only') return { code, text: t(`err.${code}` as UiTextKey) };
+    let lock = viewOnly.get(right);
+    if (!lock) {
+      lock = viewOnlyLock(tx, t, right);
+      viewOnly.set(right, lock);
+    }
+    return lock;
+  };
 }
 
 /** Действие с операцией запрещено замком: 403 без права, 409 — в остальных случаях. */

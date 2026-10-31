@@ -461,15 +461,24 @@ describe.skipIf(!databaseAvailable())('Плата за обслуживание:
     expect((await inA((tx) => contractorUsage(tx, cpOne))).money).toBe(0);
   });
 
-  it('оплаты и распределение не меняются и не удаляются ролью приложения', async () => {
-    await expect(inA((tx) => tx.update(feePayments).set({ amount: 1 }))).rejects.toEqual(
+  it('оплаты не стираются и не переходят к другому контрагенту; распределение не правится на месте', async () => {
+    // Сумму, дату и распределение меняет окно оплаты в «Финансовых операциях» (задача 2.22,
+    // миграция 0077); контрагента, поступление и автора — никто.
+    await expect(inA((tx) => tx.update(feePayments).set({ contractorId: cpDebt }))).rejects.toEqual(
       permissionDenied,
     );
-    await expect(inA((tx) => tx.delete(feePayments))).rejects.toEqual(permissionDenied);
+    // Стираются только части общего поступления (ограничивающая политика): обычная оплата остаётся.
+    expect(
+      await inA((tx) =>
+        tx
+          .delete(feePayments)
+          .where(sql`${feePayments.operationId} is null`)
+          .returning(),
+      ),
+    ).toEqual([]);
     await expect(inA((tx) => tx.update(feeAllocations).set({ amount: 1 }))).rejects.toEqual(
       permissionDenied,
     );
-    await expect(inA((tx) => tx.delete(feeAllocations))).rejects.toEqual(permissionDenied);
   });
 
   it('чужая организация оплат и распределения не видит и не пишет', async () => {
