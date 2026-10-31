@@ -17,6 +17,8 @@ export interface MiniRow {
   cells: Readonly<Record<string, ReactNode>>;
   /** Ячейки на всю ширину карточки на телефоне — длинные значения (`miniWide`). */
   wide?: readonly string[];
+  /** Пустые ячейки («—»): на телефоне скрыты (прототип `m-empty`). */
+  blank?: readonly string[];
 }
 
 /** Значение длиннее стольких знаков на телефоне занимает всю ширину карточки (прототип `MC_LONG`). */
@@ -76,6 +78,7 @@ export function MiniTable({
     const label = headless
       ? ''
       : 'max-md:before:text-[11px] max-md:before:font-[650] max-md:before:text-faint max-md:before:content-[attr(data-label)]';
+    if (row.blank?.includes(c.key)) return `${label} max-md:hidden`;
     return row.wide?.includes(c.key) ? `${label} max-md:col-span-2` : label;
   };
   return (

@@ -12,9 +12,9 @@ import type { DemoIdOf } from './demo';
 
 const tyiyn = (som: number) => Math.round(som * 100);
 
-/** Момент прототипа «2026-09-08 18:13» — по Бишкеку. */
+/** Момент прототипа «2026-09-08 18:13» — по Бишкеку; без него — 10:00 дня записи (прототип finRows). */
 const stampOf = (s: string | undefined, date: string) =>
-  new Date(s ? `${s.replace(' ', 'T')}:00+06:00` : `${date}T12:00:00+06:00`);
+  new Date(s ? `${s.replace(' ', 'T')}:00+06:00` : `${date}T10:00:00+06:00`);
 
 const DemoServicePayment = z.object({
   id: z.string(),

@@ -24,6 +24,7 @@ import {
   CheckRow,
   Field,
   FormGrid,
+  Hint,
   Icon,
   inputClass,
   Modal,
@@ -436,21 +437,23 @@ function ServiceModal({
                   {...control}
                   data-svc-desc=""
                   maxLength={2000}
-                  className={`${inputClass({ multiline: true })} min-h-[60px]`}
+                  className={`${inputClass()} min-h-[60px] resize-y leading-normal`}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                 />
               )}
             </Field>
             {edit ? null : (
-              <div className="col-span-full">
+              // Прототип serviceDlg: название обычным шрифтом, пояснение — строкой ниже, под строкой черта.
+              <div className={`col-span-full ${canUpload ? 'border-b border-line' : ''}`}>
                 <CheckRow
+                  plain
                   checked={paidNow}
                   onChange={setPaidNow}
                   label={t('fin.svc.paid_now')}
                   data-svc-paid=""
                 >
-                  {t('fin.svc.paid_now_hint')}
+                  <Hint>{t('fin.svc.paid_now_hint')}</Hint>
                 </CheckRow>
               </div>
             )}

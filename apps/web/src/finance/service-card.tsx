@@ -322,7 +322,7 @@ export function ServiceCardDialog({
           id: 'left',
           label: t('fin.svc.left'),
           value: (
-            <span className={`tabular-nums ${left > 0 ? 'font-semibold text-bad' : ''}`}>
+            <span className={`tabular-nums ${left > 0 ? 'font-semibold text-danger' : ''}`}>
               {formatSomWithUnit(left)}
             </span>
           ),
@@ -496,6 +496,7 @@ export function ServiceCardDialog({
                 ]}
                 rows={s.payments.map((p) => ({
                   key: p.id,
+                  blank: p.files.length ? [] : ['files'],
                   cells: {
                     date: (
                       <span className="inline-flex flex-wrap items-center gap-1.5">
