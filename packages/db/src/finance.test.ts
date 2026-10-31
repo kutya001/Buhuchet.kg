@@ -578,16 +578,22 @@ describe.skipIf(!databaseAvailable())(
             .returning(),
         ),
       ).toEqual([]);
-      // Сумму, вид и дату операции, сумму оплаты за обслуживание роль приложения не меняет и не стирает.
+      // Вид операции и контрагента оплаты за обслуживание роль приложения не меняет (сумму и дату меняет
+      // «Изменить», задача 2.22); оплату, которая не часть поступления, не стирает.
       await expect(
-        inA((tx) => tx.update(moneyOperations).set({ amount: 1 }).returning()),
+        inA((tx) => tx.update(moneyOperations).set({ kind: 'in' }).returning()),
       ).rejects.toEqual(permissionDenied);
       await expect(
-        inA((tx) => tx.update(feePayments).set({ amount: 1 }).returning()),
+        inA((tx) => tx.update(feePayments).set({ contractorId: cpEmp }).returning()),
       ).rejects.toEqual(permissionDenied);
-      await expect(inA((tx) => tx.delete(feePayments).returning())).rejects.toEqual(
-        permissionDenied,
-      );
+      expect(
+        await inA((tx) =>
+          tx
+            .delete(feePayments)
+            .where(sql`${feePayments.operationId} is null`)
+            .returning(),
+        ),
+      ).toEqual([]);
     });
   },
 );

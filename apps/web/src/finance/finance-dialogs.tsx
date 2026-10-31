@@ -5,11 +5,13 @@ import {
   formatDateRu,
   formatSom,
   formatSomWithUnit,
+  monthLabel,
   parseSom,
 } from '@buhuchet/domain';
 import {
   OperationSaved,
   type ArchiveRestItem,
+  type FeePaymentWindow,
   type OperationWindow,
   type TransferForm,
 } from '@buhuchet/shared';
@@ -41,6 +43,7 @@ import {
   writeOff,
 } from './finance-data';
 import { deleteWords } from './finance-history';
+import { deleteFeePayment } from './journal-data';
 
 /*
  * Окна остатка контрагента и операции (задача 2.20; прототип modules/contractors.js `moneyOpDlg`,
@@ -761,6 +764,97 @@ export function OperationDeleteDialog({
         <p className="m-0">{t(words.ask, { amount })}</p>
         <Note icon="history">
           {consequences(t, op)} {t('fin.del.keep')}
+        </Note>
+        <Field id={`${id}-reason`} label={t('fin.del.reason')} required full error={errors.reason}>
+          {(control) => (
+            <textarea
+              {...control}
+              data-fin-reason=""
+              maxLength={500}
+              placeholder={t('fin.del.reason_ph')}
+              className={`${inputClass({ multiline: true })} min-h-16`}
+              value={reason}
+              onChange={(e) => {
+                setReason(e.target.value);
+                setErrors({});
+              }}
+            />
+          )}
+        </Field>
+      </div>
+    </Modal>
+  );
+}
+
+/**
+ * «Удалить» оплату за обслуживание (задача 2.22; прототип opDelDlg с `src:'fee'`): причина обязательна;
+ * долг за её месяцы пересчитается (без месяцев — уменьшится аванс); запись получает отметку «Удалена» и
+ * видна с «Показать удалённые».
+ */
+export function FeePaymentDeleteDialog({
+  payment,
+  open,
+  onClose,
+  onDone,
+}: {
+  payment: FeePaymentWindow;
+  open: boolean;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const t = useT();
+  const toast = useToast();
+  const id = useId();
+  const [reason, setReason] = useState('');
+  const [errors, setErrors] = useState<Errors>({});
+  const [busy, setBusy] = useState(false);
+  const fail = useFail(setErrors);
+  const amount = formatSomWithUnit(payment.amount);
+  const months = payment.allocation
+    .map((x) => monthLabel(x.month as `${number}-${number}`))
+    .join(', ');
+
+  const save = async () => {
+    if (!reason.trim()) return setErrors({ reason: t('err.op_reason_required') });
+    setBusy(true);
+    const res = await deleteFeePayment(payment.id, reason.trim());
+    setBusy(false);
+    if (!res.ok) return fail(res.error);
+    onDone();
+    onClose();
+    toast(t('fin.del.done'), { icon: 'trash' });
+  };
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      kind="form"
+      dirty={!!reason}
+      title={t('fin.del.title')}
+      sub={t('fin.del.sub', {
+        kind: t('fin.fee.kind'),
+        name: payment.contractor.name,
+        amount,
+        date: formatDateRu(payment.date),
+      })}
+      footer={
+        <Footer
+          t={t}
+          label={t('fin.del.ok')}
+          icon="trash"
+          danger
+          busy={busy}
+          onClose={onClose}
+          onOk={() => void save()}
+        />
+      }
+    >
+      <div className="flex flex-col gap-3" data-fee-delete={payment.id}>
+        <p className="m-0">{t('fin.del.ask', { amount })}</p>
+        <Note icon="history">
+          {months ? t('fin.del.cons.fee', { months }) : t('fin.del.cons.fee_adv')}{' '}
+          {t('fin.del.keep')}
         </Note>
         <Field id={`${id}-reason`} label={t('fin.del.reason')} required full error={errors.reason}>
           {(control) => (

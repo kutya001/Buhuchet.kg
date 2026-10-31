@@ -211,6 +211,8 @@ export const moneyOperations = pgTable(
      * окне. У других видов пусто.
      */
     refOperationId: uuid('ref_operation_id'),
+    /** Изменена в окне операции (задача 2.22; прототип `edited`): отметка «Изменена» в окне и журнале. */
+    edited: boolean('edited').notNull().default(false),
     cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
     cancelledBy: uuid('cancelled_by').references(() => users.id),
     cancelReason: text('cancel_reason'),

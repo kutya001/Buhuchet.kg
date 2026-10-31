@@ -125,6 +125,7 @@ export function contractorFeesHandler(
         amount: p.amount,
         allocation: p.allocation.map((x) => ({ month: x.month, amount: x.amount })),
         fromReceipt: p.operationId !== null,
+        edited: p.edited,
         author: p.author,
       })),
       paymentsTotal: payments.length,

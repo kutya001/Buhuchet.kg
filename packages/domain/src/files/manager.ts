@@ -13,6 +13,7 @@ export const FILE_KIND_ICONS: Readonly<Record<FileSourceKind, string>> = {
   receipt: 'wallet',
   tax_payment: 'send',
   fee_payment: 'coins',
+  money_operation: 'wallet',
   task: 'task',
   indicator_value: 'gauge',
 };

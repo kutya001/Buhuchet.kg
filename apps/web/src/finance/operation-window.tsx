@@ -33,16 +33,24 @@ import { RecordFiles } from '../files/record-files';
 import { useErrorText, useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { OP_LOOK } from '../money/contractor-money';
+import { ReceiptEditDialog } from '../money/tax-dialogs';
 import { CorrectionDialog, OperationDeleteDialog, WhyButton } from './finance-dialogs';
-import { operationDeletedText, receiptCreatedText, signedSom } from './finance-history';
+import {
+  operationDeletedText,
+  operationEditedText,
+  receiptCreatedText,
+  signedSom,
+} from './finance-history';
+import { OperationEditDialog } from './operation-edit';
 import { operationQuery, useFinanceRefresh } from './finance-data';
 
 /*
- * Окно финансовой операции (задача 2.20; ТЗ «Финансовые операции по контрагентам» → «Окно оплаты»,
- * «Обратные записи»; прототип modules/fin-op.js `opWin`, `opHistHtml`): поля, как их вводили, кто и
- * когда внёс, детализация поступления, обратные записи, файлы, история изменений; «Удалить» и
- * «Обратная запись» — с замком и причиной, «Открыть источник» — отчёт или вкладка «Деньги». «Изменить»
- * добавит задача 2.22.
+ * Окно финансовой операции (задачи 2.20 и 2.22; ТЗ «Финансовые операции по контрагентам» → «Окно
+ * оплаты», «Обратные записи», «Изменить» и «Удалить»; прототип modules/fin-op.js `opWin`, `opHistHtml`):
+ * поля, как их вводили, кто и когда внёс, отметка «Изменена», детализация поступления, обратные записи,
+ * файлы, история изменений «было → стало»; «Удалить», «Обратная запись» и «Изменить» — с замком и
+ * причиной (поступление изменяется своим окном, прочие — `opEditDlg`), «Открыть источник» — отчёт или
+ * вкладка «Деньги».
  */
 
 type HistoryRow = OperationWindow['history'][number];
@@ -54,6 +62,11 @@ type HistoryRow = OperationWindow['history'][number];
  */
 export function operationHistoryText(t: Translate, op: OperationWindow, h: HistoryRow): string {
   if (h.action === 'create') return receiptCreatedText(t, h.changes) ?? t('cp.hist.update');
+  // Файлы операции (прототип opLog: «Прикреплены файлы: …»).
+  const file = (key: 'from' | 'to') =>
+    String(h.changes.find((c) => c.field === 'file')?.[key] ?? '');
+  if (h.action === 'file_attach') return t('report.hist.file_attach', { name: file('to') });
+  if (h.action === 'file_delete') return t('report.hist.file_delete', { name: file('from') });
   if (h.action === 'delete')
     return (
       operationDeletedText(t, h.changes, h.reason, {
@@ -65,6 +78,8 @@ export function operationHistoryText(t: Translate, op: OperationWindow, h: Histo
   const corr = h.changes.find((c) => c.field === 'correction')?.to;
   if (typeof corr === 'number')
     return t('fin.hist.correction', { amount: signedSom(corr), reason: h.reason ?? '' });
+  const edited = operationEditedText(t, h.changes, h.reason);
+  if (edited) return edited;
   return h.reason ? `${t('cp.hist.update')} (${h.reason})` : t('cp.hist.update');
 }
 
@@ -123,6 +138,7 @@ export function OperationWindowDialog({
   const [del, setDel] = useState<DialogSlot<OperationWindow> | null>(null);
   const [corr, setCorr] = useState<DialogSlot<OperationWindow> | null>(null);
   const [child, setChild] = useState<DialogSlot<string> | null>(null);
+  const [edit, setEdit] = useState<DialogSlot<OperationWindow> | null>(null);
   const op = query.data;
   const corrections = op?.corrections.filter((x) => !x.deleted) ?? [];
   const failed =
@@ -268,6 +284,13 @@ export function OperationWindowDialog({
               onClick={() => setCorr(openSlot(op))}
             />
           ) : null}
+          <WhyButton
+            icon="edit"
+            label={t('fin.op.edit')}
+            why={op.locks.edit?.text ?? null}
+            data="edit"
+            onClick={() => setEdit(openSlot(op))}
+          />
         </>
       ) : null}
       <div className="flex-1" />
@@ -311,12 +334,24 @@ export function OperationWindowDialog({
     >
       <div className="flex flex-col gap-3.5" data-fin-op-window={id} data-fin-op-kind={op?.kind}>
         {failed ? <Note tone="bad">{failed}</Note> : null}
+        {op?.edited && !op.deleted ? (
+          <div className="flex flex-wrap gap-1.5">
+            <Pill tone="warn" icon="edit">
+              {t('fin.op.edited_pill')}
+            </Pill>
+          </div>
+        ) : null}
         {op?.deleted ? (
           <>
             <div className="flex flex-wrap gap-1.5">
               <Pill tone="bad" icon="trash">
                 {t('fin.op.deleted_pill')}
               </Pill>
+              {op.edited ? (
+                <Pill tone="warn" icon="edit">
+                  {t('fin.op.edited_pill')}
+                </Pill>
+              ) : null}
             </div>
             <Note tone="bad" icon="trash">
               <b>{t('fin.op.deleted_pill')}</b>
@@ -447,6 +482,24 @@ export function OperationWindowDialog({
           }}
           open={corr.open}
           onClose={() => setCorr(closeSlot)}
+          onDone={refresh}
+        />
+      ) : null}
+      {edit && edit.data.kind === 'in' ? (
+        <ReceiptEditDialog
+          key={`edit-${edit.n}`}
+          id={edit.data.id}
+          open={edit.open}
+          onClose={() => setEdit(closeSlot)}
+          onDone={refresh}
+          onOpenOperation={(next) => setChild(openSlot(next))}
+        />
+      ) : edit ? (
+        <OperationEditDialog
+          key={`edit-${edit.n}`}
+          id={edit.data.id}
+          open={edit.open}
+          onClose={() => setEdit(closeSlot)}
           onDone={refresh}
         />
       ) : null}

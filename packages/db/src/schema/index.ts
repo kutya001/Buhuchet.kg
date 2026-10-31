@@ -22,5 +22,6 @@ export * from './platform-dicts';
 export * from './dicts';
 export * from './money';
 export * from './fees';
+export * from './finance';
 export * from './kpi';
 export * from './files';

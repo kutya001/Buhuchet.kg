@@ -12,6 +12,42 @@ import { find, manualReport, newContractor, reportsOf } from './reports';
 const freshInn = () =>
   `09${Date.now().toString().slice(-8)}${String(Math.floor(Math.random() * 10_000)).padStart(4, '0')}`;
 
+/** Первый день месяца, на `k` месяцев позже месяца даты `date` (сегодня — по Бишкеку). */
+function monthStart(k: number, date = new Date(Date.now() + 6 * 3_600_000).toISOString()): string {
+  const d = new Date(`${date.slice(0, 7)}-01T00:00:00Z`);
+  d.setUTCMonth(d.getUTCMonth() + k);
+  return d.toISOString().slice(0, 10);
+}
+
+/** День до даты. */
+function dayBefore(date: string): string {
+  const d = new Date(`${date}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Срок на нерабочем дне — следующий рабочий день по производственному календарю платформы (рабочая
+ * суббота — рабочий день, праздник и перенос — нет), как `nextWorkingDay` правила сроков.
+ */
+async function workingDayFrom(api: APIRequestContext, date: string): Promise<string> {
+  const kinds = new Map<string, string>();
+  for (const year of new Set([date.slice(0, 4), monthStart(1, date).slice(0, 4)])) {
+    const res = await api.get(`/api/production-calendar?year=${year}`);
+    expect(res.status(), await res.text()).toBe(200);
+    const { days } = (await res.json()) as { days: { date: string; kind: string }[] };
+    // Рабочая суббота идёт в списке дня последней: она главнее.
+    for (const day of days) kinds.set(day.date, day.kind);
+  }
+  const off = (d: Date) => {
+    const kind = kinds.get(d.toISOString().slice(0, 10));
+    return kind ? kind !== 'workday' : [0, 6].includes(d.getUTCDay());
+  };
+  const d = new Date(`${date}T00:00:00Z`);
+  while (off(d)) d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
 /** «+ Добавить» → «Контрагент»: окно «Новый контрагент». */
 async function openForm(page: Page): Promise<Locator> {
   await page.goto('/app/cps/all');
@@ -424,7 +460,7 @@ test.describe('Этап 2: форма контрагента', () => {
     }
   });
 
-  test('(п. 52) УГНС «Управление по крупным налогоплательщикам ГНС»: статус «Крупный налогоплательщик» отмечен сам «по УГНС»; НДС за октябрь 2026 — сдать до 30.11.2026, оплатить до 25.11.2026', async ({
+  test('(п. 52) УГНС «Управление по крупным налогоплательщикам ГНС»: статус «Крупный налогоплательщик» отмечен сам «по УГНС»; НДС за месяц — сдать до последнего дня следующего месяца, оплатить до 25-го (за октябрь 2026 — до 30.11.2026 и 25.11.2026)', async ({
     page,
     baseURL,
     isMobile,
@@ -450,8 +486,14 @@ test.describe('Этап 2: форма контрагента', () => {
     expect(card.benefits).toContainEqual(
       expect.objectContaining({ code: 'ЛЬГ-30', byOffice: true }),
     );
-    const nds = find(await reportsOf(page.request, inn), 'nds', '2026-10-01');
-    expect(nds).toMatchObject({ dueDate: '2026-11-30', payDue: '2026-11-25' });
+    // Форма назначает отчёты с текущего месяца, поэтому НДС — за него, а сроки — по правилу статуса
+    // (у обычного плательщика и сдать, и оплатить — до 25-го). Точные даты НДС за октябрь 2026 сверяет
+    // тест п. 52 задачи 2.06 (e2e/reports-api.spec.ts): там назначение с октября.
+    const nds = find(await reportsOf(page.request, inn), 'nds', monthStart(0));
+    expect(nds).toMatchObject({
+      dueDate: await workingDayFrom(page.request, dayBefore(monthStart(2))),
+      payDue: await workingDayFrom(page.request, `${monthStart(1).slice(0, 7)}-25`),
+    });
   });
 
   test('(п. 56) ГКЭД 61.10.0 и «Единый налог»: вопрос «Оказывает услуги интернета?», после ответа режим сохраняется с отметкой о подтверждении; 64.19.2 (МФО) — «Проверьте право на режим «Единый налог»» с «Подтверждаю», тариф СПиНО — с предупреждением', async ({

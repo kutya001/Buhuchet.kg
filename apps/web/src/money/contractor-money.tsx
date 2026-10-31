@@ -21,6 +21,7 @@ import {
   Plate,
   Plates,
   Pill,
+  Tag,
   useToast,
   type IconName,
   type KeyValueItem,
@@ -165,9 +166,17 @@ function OperationsBox({
             cells: {
               date: formatDateRu(o.date),
               op: (
-                <Pill tone={look.tone} size="sm">
-                  {t(self ? 'money.op.self' : `money.op.${o.kind}`)}
-                </Pill>
+                <>
+                  <Pill tone={look.tone} size="sm">
+                    {t(self ? 'money.op.self' : `money.op.${o.kind}`)}
+                  </Pill>
+                  {o.edited ? (
+                    <>
+                      {' '}
+                      <Tag tone="warn">{t('fin.j.edited_tag')}</Tag>
+                    </>
+                  ) : null}
+                </>
               ),
               basis: <span className="whitespace-normal">{operationBasis(t, o)}</span>,
               author: o.author ?? '—',
@@ -181,6 +190,7 @@ function OperationsBox({
           };
         })}
       />
+      <Hint>{t('money.tab.ops_hint')}</Hint>
     </Box>
   );
 }

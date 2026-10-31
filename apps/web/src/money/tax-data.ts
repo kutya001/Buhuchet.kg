@@ -1,6 +1,6 @@
 'use client';
 
-import { ContractorMoney, ReceiptForm } from '@buhuchet/shared';
+import { ContractorList, ContractorMoney, ReceiptForm } from '@buhuchet/shared';
 import { queryOptions, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 import { api, apiFailure, callApi } from '../api-client';
@@ -40,6 +40,26 @@ export const receiptFormQuery = (id: string) =>
     staleTime: 0,
   });
 
+/**
+ * Контрагенты для поля «Контрагент» окна поступления из «+ Добавить» модуля «Финансовые операции»
+ * (прототип `visCps()`): видимые сотруднику, по названию.
+ */
+export const receiptContractorsQuery = queryOptions({
+  queryKey: ['money', 'receipt-contractors'],
+  queryFn: async () => {
+    const res = await api.api.contractors.$get({
+      query: { tab: 'all', size: 'all', sort: 'name.asc' },
+    });
+    if (!res.ok) throw await apiFailure(res);
+    return ContractorList.parse(await res.json()).items.map((c) => ({
+      id: c.id,
+      name: c.name,
+      oneOff: c.kind === 'oneoff',
+    }));
+  },
+  staleTime: 0,
+});
+
 /** Перечитать всё, что меняют деньги по отчётам. */
 export function useMoneyRefresh() {
   const client = useQueryClient();
@@ -60,7 +80,7 @@ export function useMoneyRefresh() {
 export async function uploadMoneyFiles(
   t: Translate,
   errorText: (e: ApiErrorLike) => string,
-  source: { kind: 'receipt' | 'tax_payment' | 'fee_payment'; id: string },
+  source: { kind: 'receipt' | 'tax_payment' | 'fee_payment' | 'money_operation'; id: string },
   picked: readonly File[],
 ): Promise<string | null> {
   for (const file of picked) {

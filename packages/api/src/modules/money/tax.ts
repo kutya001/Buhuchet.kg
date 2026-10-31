@@ -7,6 +7,7 @@ import {
   createReceipt,
   moneyContractor,
   orgHeldOf,
+  paymentCancelClosed,
   payReport,
   receiptFeeRows,
   receiptFormRows,
@@ -229,6 +230,7 @@ export function contractorMoneyHandler(
           holder: o.holderName,
           receiptDate: o.receiptDate,
           revision: o.revision,
+          edited: o.edited,
         })),
       canReceive: hasPermission(subject, 'money') && !cp.archived,
       actions,
@@ -526,6 +528,7 @@ export async function reportCardMoney(
       canPay: false,
       canReceive: false,
       canCancel: false,
+      cancelClosed: null,
     };
   }
   const [m, payments] = await Promise.all([
@@ -543,6 +546,9 @@ export async function reportCardMoney(
   const canPay = fin && waits;
   const canReceive = canPay && !contractor!.archived;
   const live = payments.filter((p) => !p.cancelled);
+  const mayCancel =
+    fin && hasPermission(subject, 'rollback') && !card.superseded && live.length > 0;
+  const cancelClosed = mayCancel ? await paymentCancelClosed(tx, card.id) : null;
   return {
     available: canPay || canReceive ? m.available : null,
     schedule: m.schedule,
@@ -563,6 +569,7 @@ export async function reportCardMoney(
     })),
     canPay,
     canReceive,
-    canCancel: fin && hasPermission(subject, 'rollback') && !card.superseded && live.length > 0,
+    canCancel: mayCancel && !cancelClosed,
+    cancelClosed,
   };
 }

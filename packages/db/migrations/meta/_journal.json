@@ -537,15 +537,29 @@
     {
       "idx": 76,
       "version": "7",
-      "when": 1793468037559,
-      "tag": "0076_telegram_outbox",
+      "when": 1793466877521,
+      "tag": "0076_finance_journal",
       "breakpoints": true
     },
     {
       "idx": 77,
       "version": "7",
-      "when": 1793468039412,
-      "tag": "0077_telegram_outbox_functions",
+      "when": 1793466879842,
+      "tag": "0077_finance_journal_guards",
+      "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1793481721688,
+      "tag": "0078_telegram_outbox",
+      "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "7",
+      "when": 1793481731426,
+      "tag": "0079_telegram_outbox_functions",
       "breakpoints": true
     }
   ]

@@ -149,6 +149,7 @@ describe('история контрагента: деньги', () => {
         holder: null,
         receiptDate: null,
         revision: null,
+        edited: false,
         ...over,
       });
     expect(op({ reports: ['НДС 09.2026', 'ЕН III кв. 2026'] })).toBe(

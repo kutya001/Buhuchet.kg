@@ -1,5 +1,5 @@
 {
-  "id": "3f1721e3-d16a-4df4-a34c-cfad5bf08a0d",
+  "id": "82e56720-e87d-4552-99f9-da2d8a09fa38",
   "prevId": "5a8601da-3d64-4047-91ca-711413bc28e5",
   "version": "7",
   "dialect": "postgresql",
@@ -5802,71 +5802,6 @@
       "checkConstraints": {},
       "isRLSEnabled": true
     },
-    "public.telegram_digest_days": {
-      "name": "telegram_digest_days",
-      "schema": "",
-      "columns": {
-        "org_id": {
-          "name": "org_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "day": {
-          "name": "day",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "telegram_digest_days_org_id_organizations_id_fk": {
-          "name": "telegram_digest_days_org_id_organizations_id_fk",
-          "tableFrom": "telegram_digest_days",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "org_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "telegram_digest_days_pk": {
-          "name": "telegram_digest_days_pk",
-          "columns": [
-            "org_id",
-            "day"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "policies": {
-        "telegram_digest_days_isolation": {
-          "name": "telegram_digest_days_isolation",
-          "as": "PERMISSIVE",
-          "for": "ALL",
-          "to": [
-            "buhuchet_app"
-          ],
-          "using": "\"telegram_digest_days\".\"org_id\" = app.current_org_id()",
-          "withCheck": "\"telegram_digest_days\".\"org_id\" = app.current_org_id()"
-        }
-      },
-      "checkConstraints": {},
-      "isRLSEnabled": true
-    },
     "public.telegram_link_tokens": {
       "name": "telegram_link_tokens",
       "schema": "",
@@ -6103,345 +6038,6 @@
         }
       },
       "checkConstraints": {},
-      "isRLSEnabled": true
-    },
-    "public.telegram_notify_settings": {
-      "name": "telegram_notify_settings",
-      "schema": "",
-      "columns": {
-        "user_id": {
-          "name": "user_id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "org_id": {
-          "name": "org_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "mode": {
-          "name": "mode",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'all'"
-        },
-        "off": {
-          "name": "off",
-          "type": "text[]",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'{}'::text[]"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_by": {
-          "name": "updated_by",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "version": {
-          "name": "version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "telegram_notify_settings_org_id_organizations_id_fk": {
-          "name": "telegram_notify_settings_org_id_organizations_id_fk",
-          "tableFrom": "telegram_notify_settings",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "org_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        },
-        "telegram_notify_settings_updated_by_users_id_fk": {
-          "name": "telegram_notify_settings_updated_by_users_id_fk",
-          "tableFrom": "telegram_notify_settings",
-          "tableTo": "users",
-          "columnsFrom": [
-            "updated_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "telegram_notify_settings_user_org_fk": {
-          "name": "telegram_notify_settings_user_org_fk",
-          "tableFrom": "telegram_notify_settings",
-          "tableTo": "users",
-          "columnsFrom": [
-            "user_id",
-            "org_id"
-          ],
-          "columnsTo": [
-            "id",
-            "org_id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {
-        "telegram_notify_settings_isolation": {
-          "name": "telegram_notify_settings_isolation",
-          "as": "PERMISSIVE",
-          "for": "ALL",
-          "to": [
-            "buhuchet_app"
-          ],
-          "using": "\"telegram_notify_settings\".\"org_id\" = app.current_org_id()",
-          "withCheck": "\"telegram_notify_settings\".\"org_id\" = app.current_org_id()"
-        }
-      },
-      "checkConstraints": {
-        "telegram_notify_settings_mode_check": {
-          "name": "telegram_notify_settings_mode_check",
-          "value": "\"telegram_notify_settings\".\"mode\" in ('all', 'digest', 'manual')"
-        },
-        "telegram_notify_settings_off_check": {
-          "name": "telegram_notify_settings_off_check",
-          "value": "\"telegram_notify_settings\".\"off\" <@ array['before', 'over', 'tasks', 'regtasks', 'week']::text[]"
-        }
-      },
-      "isRLSEnabled": true
-    },
-    "public.telegram_outbox": {
-      "name": "telegram_outbox",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "org_id": {
-          "name": "org_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "chat_id": {
-          "name": "chat_id",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "kind": {
-          "name": "kind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "text": {
-          "name": "text",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'pending'"
-        },
-        "tries": {
-          "name": "tries",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "next_at": {
-          "name": "next_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "last_error": {
-          "name": "last_error",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "sent_at": {
-          "name": "sent_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "dedupe_key": {
-          "name": "dedupe_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "telegram_outbox_due_idx": {
-          "name": "telegram_outbox_due_idx",
-          "columns": [
-            {
-              "expression": "org_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "next_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "where": "\"telegram_outbox\".\"status\" = 'pending'",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "telegram_outbox_org_created_idx": {
-          "name": "telegram_outbox_org_created_idx",
-          "columns": [
-            {
-              "expression": "org_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "created_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "telegram_outbox_org_id_organizations_id_fk": {
-          "name": "telegram_outbox_org_id_organizations_id_fk",
-          "tableFrom": "telegram_outbox",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "org_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        },
-        "telegram_outbox_user_id_users_id_fk": {
-          "name": "telegram_outbox_user_id_users_id_fk",
-          "tableFrom": "telegram_outbox",
-          "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "telegram_outbox_user_org_fk": {
-          "name": "telegram_outbox_user_org_fk",
-          "tableFrom": "telegram_outbox",
-          "tableTo": "users",
-          "columnsFrom": [
-            "user_id",
-            "org_id"
-          ],
-          "columnsTo": [
-            "id",
-            "org_id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "telegram_outbox_dedupe_key": {
-          "name": "telegram_outbox_dedupe_key",
-          "nullsNotDistinct": false,
-          "columns": [
-            "dedupe_key"
-          ]
-        }
-      },
-      "policies": {
-        "telegram_outbox_isolation": {
-          "name": "telegram_outbox_isolation",
-          "as": "PERMISSIVE",
-          "for": "ALL",
-          "to": [
-            "buhuchet_app"
-          ],
-          "using": "\"telegram_outbox\".\"org_id\" = app.current_org_id()",
-          "withCheck": "\"telegram_outbox\".\"org_id\" = app.current_org_id()"
-        }
-      },
-      "checkConstraints": {
-        "telegram_outbox_kind_check": {
-          "name": "telegram_outbox_kind_check",
-          "value": "\"telegram_outbox\".\"kind\" in ('reminders', 'task_new', 'task_on_confirm', 'task_confirmed', 'task_rework', 'task_cancelled', 'report_fix', 'code', 'linked', 'relinked', 'unlinked', 'pass_changed', 'pass_reset', 'broadcast')"
-        },
-        "telegram_outbox_status_check": {
-          "name": "telegram_outbox_status_check",
-          "value": "\"telegram_outbox\".\"status\" in ('pending', 'sent', 'error')"
-        },
-        "telegram_outbox_tries_check": {
-          "name": "telegram_outbox_tries_check",
-          "value": "\"telegram_outbox\".\"tries\" >= 0"
-        },
-        "telegram_outbox_code_text_check": {
-          "name": "telegram_outbox_code_text_check",
-          "value": "\"telegram_outbox\".\"kind\" <> 'code' or \"telegram_outbox\".\"text\" is null"
-        }
-      },
       "isRLSEnabled": true
     },
     "public.ui_texts": {
@@ -12107,6 +11703,13 @@
           "primaryKey": false,
           "notNull": false
         },
+        "edited": {
+          "name": "edited",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
         "cancelled_at": {
           "name": "cancelled_at",
           "type": "timestamp with time zone",
@@ -12850,6 +12453,13 @@
           "notNull": true,
           "default": "''"
         },
+        "edited": {
+          "name": "edited",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
         "deleted_at": {
           "name": "deleted_at",
           "type": "timestamp with time zone",
@@ -13052,6 +12662,15 @@
           ],
           "using": "\"fee_payments\".\"org_id\" = app.current_org_id()",
           "withCheck": "\"fee_payments\".\"org_id\" = app.current_org_id()"
+        },
+        "fee_payments_delete_receipt_part": {
+          "name": "fee_payments_delete_receipt_part",
+          "as": "RESTRICTIVE",
+          "for": "DELETE",
+          "to": [
+            "buhuchet_app"
+          ],
+          "using": "\"fee_payments\".\"operation_id\" is not null"
         }
       },
       "checkConstraints": {
@@ -13070,6 +12689,104 @@
         "fee_payments_delete_check": {
           "name": "fee_payments_delete_check",
           "value": "(\"fee_payments\".\"deleted_at\" is null) = (\"fee_payments\".\"deleted_by\" is null) and (\"fee_payments\".\"deleted_at\" is null) = (\"fee_payments\".\"delete_reason\" is null) and char_length(coalesce(\"fee_payments\".\"delete_reason\", '')) <= 500"
+        }
+      },
+      "isRLSEnabled": true
+    },
+    "public.closed_months": {
+      "name": "closed_months",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "org_id": {
+          "name": "org_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "app.current_org_id()"
+        },
+        "month": {
+          "name": "month",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "closed_by": {
+          "name": "closed_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "closed_at": {
+          "name": "closed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "closed_months_org_id_organizations_id_fk": {
+          "name": "closed_months_org_id_organizations_id_fk",
+          "tableFrom": "closed_months",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "org_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "closed_months_closed_by_users_id_fk": {
+          "name": "closed_months_closed_by_users_id_fk",
+          "tableFrom": "closed_months",
+          "tableTo": "users",
+          "columnsFrom": [
+            "closed_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "closed_months_org_month_unique": {
+          "name": "closed_months_org_month_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "org_id",
+            "month"
+          ]
+        }
+      },
+      "policies": {
+        "closed_months_isolation": {
+          "name": "closed_months_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "buhuchet_app"
+          ],
+          "using": "\"closed_months\".\"org_id\" = app.current_org_id()",
+          "withCheck": "\"closed_months\".\"org_id\" = app.current_org_id()"
+        }
+      },
+      "checkConstraints": {
+        "closed_months_month_check": {
+          "name": "closed_months_month_check",
+          "value": "\"closed_months\".\"month\" = date_trunc('month', \"closed_months\".\"month\")::date"
         }
       },
       "isRLSEnabled": true

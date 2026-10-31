@@ -27,6 +27,8 @@ import { useState, type ReactNode } from 'react';
 import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
 import { useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
+import { FeePaymentWindowDialog } from '../finance/fee-payment-window';
+import { useReportActions } from '../reports/report-actions';
 import { statusPillView } from '../status/status-view';
 import { TariffDialog } from './fee-dialogs';
 import { contractorFeesQuery, useFeesRefresh } from './fees-data';
@@ -126,8 +128,19 @@ function MonthsBox({ t, f }: { t: Translate; f: ContractorFees }) {
   );
 }
 
-/** «Оплаты · N»: последние 24, «За месяц» — первый закрытый месяц или «аванс». */
-function PaymentsBox({ t, f }: { t: Translate; f: ContractorFees }) {
+/**
+ * «Оплаты · N»: последние 24, «За месяц» — первый закрытый месяц или «аванс»; строка открывает окно
+ * оплаты (задача 2.22; прототип: `data-opw="fee:…"`).
+ */
+function PaymentsBox({
+  t,
+  f,
+  onOpen,
+}: {
+  t: Translate;
+  f: ContractorFees;
+  onOpen: (id: string) => void;
+}) {
   const title = t('fee.pays.title', { n: f.paymentsTotal });
   return (
     <Box title={title}>
@@ -136,6 +149,7 @@ function PaymentsBox({ t, f }: { t: Translate; f: ContractorFees }) {
           <MiniTable
             label={title}
             empty=""
+            onOpen={onOpen}
             columns={[
               { key: 'date', label: t('fee.col.date') },
               { key: 'month', label: t('fee.col.for_month') },
@@ -150,6 +164,7 @@ function PaymentsBox({ t, f }: { t: Translate; f: ContractorFees }) {
                   <span className="inline-flex flex-wrap items-center gap-1.5">
                     {p.allocation[0] ? monthLabel(p.allocation[0].month) : t('fee.pays.advance')}
                     {p.fromReceipt ? <Tag>{t('fee.pays.from_receipt')}</Tag> : null}
+                    {p.edited ? <Tag tone="warn">{t('fin.j.edited_tag')}</Tag> : null}
                   </span>
                 ),
                 by: p.author ?? '—',
@@ -210,6 +225,8 @@ export function ContractorFeesTab({
   const query = useQuery(contractorFeesQuery(contractorId));
   const refresh = useFeesRefresh();
   const [tariff, setTariff] = useState<DialogSlot<null> | null>(null);
+  const [payment, setPayment] = useState<DialogSlot<string> | null>(null);
+  const reports = useReportActions();
   const f = query.data;
   if (query.isError && !f) return <Note tone="bad">{t('cp.card.load_error')}</Note>;
   if (!f) return null;
@@ -290,7 +307,7 @@ export function ContractorFeesTab({
       ) : null}
       <div className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] gap-3.5 max-[900px]:grid-cols-1">
         <MonthsBox t={t} f={f} />
-        <PaymentsBox t={t} f={f} />
+        <PaymentsBox t={t} f={f} onOpen={(id) => setPayment(openSlot(id))} />
         <TariffsBox t={t} f={f} />
       </div>
       {tariff ? (
@@ -302,6 +319,16 @@ export function ContractorFeesTab({
           onDone={refresh}
         />
       ) : null}
+      {payment ? (
+        <FeePaymentWindowDialog
+          key={`pay-${payment.n}`}
+          id={payment.data}
+          open={payment.open}
+          onClose={() => setPayment(closeSlot)}
+          onOpenReport={(id) => reports.openCard({ id })}
+        />
+      ) : null}
+      {reports.dialogs}
     </div>
   );
 }

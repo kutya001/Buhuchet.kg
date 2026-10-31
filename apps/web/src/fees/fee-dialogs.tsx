@@ -18,7 +18,9 @@ import {
 } from '@buhuchet/domain';
 import {
   FeePaymentSaved,
+  isRecordChanged,
   type ContractorFees,
+  type FeePaymentEditForm,
   type FeePaymentForm,
   type FeeReminder,
 } from '@buhuchet/shared';
@@ -33,12 +35,15 @@ import {
   MONO_CLASS,
   Note,
   Pill,
+  RecordChangedNotice,
   useToast,
 } from '@buhuchet/ui';
 import { useQuery } from '@tanstack/react-query';
 import { useId, useState, type ReactNode } from 'react';
 import { ApiFailure } from '../api-client';
 import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
+import { reasonNeeded, type ChangedPart } from '../finance/edit-reason';
+import { editFeePayment, feePaymentEditFormQuery } from '../finance/journal-data';
 import { useErrorText, useT } from '../l10n/provider';
 import type { ApiErrorLike, Translate } from '../l10n/translate';
 import { pickedMoneyFilesProblem, uploadMoneyFiles } from '../money/tax-data';
@@ -296,6 +301,43 @@ export function FeePaymentDialog({
   );
 }
 
+/**
+ * «Изменить оплату за обслуживание» (прототип `feePayDlg` с `edit`): то же окно с тем, что вводили, и
+ * «Причина изменения»; сумма делится сначала на месяцы, которые оплата уже закрывала. Новые файлы окно
+ * загружает к оплате после сохранения («Уже приложено: N»).
+ */
+export function FeePaymentEditDialog({
+  id,
+  open,
+  onClose,
+  onDone,
+}: {
+  id: string;
+  open: boolean;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const t = useT();
+  const { access } = useShell();
+  const query = useQuery(feePaymentEditFormQuery(id));
+  const errorText = useErrorText();
+  return (
+    <FeePaymentModal
+      key={query.data ? 'ready' : 'loading'}
+      t={t}
+      form={query.data ?? null}
+      failed={query.isError ? loadError(errorText, query.error) : null}
+      canUpload={access.feature('files') && access.can('filesUpload')}
+      open={open}
+      onClose={onClose}
+      onDone={onDone}
+      edit={query.data?.edit ?? null}
+    />
+  );
+}
+
+type FeeEdit = FeePaymentEditForm['edit'];
+
 function FeePaymentModal({
   t,
   form,
@@ -304,6 +346,7 @@ function FeePaymentModal({
   open,
   onClose,
   onDone,
+  edit = null,
 }: {
   t: Translate;
   form: FeePaymentForm | null;
@@ -312,6 +355,7 @@ function FeePaymentModal({
   open: boolean;
   onClose: () => void;
   onDone: () => void;
+  edit?: FeeEdit | null;
 }) {
   const toast = useToast();
   const errorText = useErrorText();
@@ -320,9 +364,11 @@ function FeePaymentModal({
   const allocRows = (list: readonly { month: string; amount: number }[]) =>
     Object.fromEntries(list.map((x) => [x.month, toText(x.amount)]));
   const [sum, setSum] = useState(() => (form?.amount != null ? toText(form.amount) : ''));
-  const [date, setDate] = useState(todayBishkek);
-  const [to, setTo] = useState(() => form?.to[0]?.key ?? '');
-  const [note, setNote] = useState('');
+  const [date, setDate] = useState(() => edit?.date ?? todayBishkek());
+  const [to, setTo] = useState(() => edit?.to ?? form?.to[0]?.key ?? '');
+  const [note, setNote] = useState(() => edit?.note ?? '');
+  const [reason, setReason] = useState('');
+  const [changed, setChanged] = useState(false);
   const [rows, setRows] = useState<Record<string, string>>(() =>
     form ? allocRows(form.allocation) : {},
   );
@@ -335,6 +381,7 @@ function FeePaymentModal({
     to?: string;
     allocation?: string;
     files?: string;
+    reason?: string;
   }>({});
   const [busy, setBusy] = useState(false);
   const months = form?.months ?? [];
@@ -352,6 +399,74 @@ function FeePaymentModal({
 
   const auto = (value: string) => setRows(allocRows(autoAllocate(ordered, parseSom(value) ?? 0)));
 
+  // «Сохранить» изменения (прототип feePayDlg с `edit`): причина — если меняются сумма, дата, месяцы
+  // или куда поступили деньги; без изменений — сохраняется, в истории «Изменено: без изменений». Новые
+  // файлы — каждый своей строкой истории, как у файлов оплат с задачи 2.21.
+  // ОТКЛОНЕНИЕ: docs/deviations.md#В-28
+  const saveEdit = async (e: FeeEdit) => {
+    if (!form) return;
+    const sig = (list: readonly { month: string; amount: number }[]) =>
+      list
+        .filter((x) => x.amount > 0)
+        .map((x) => `${x.month}=${x.amount}`)
+        .sort()
+        .join(';');
+    const parts: ChangedPart[] = [];
+    if (total !== form.amount) parts.push('amount');
+    if (date !== e.date) parts.push('date');
+    if (sig(allocation) !== sig(form.allocation)) parts.push('months');
+    if (to !== e.to) parts.push('to');
+    const bad = pickedMoneyFilesProblem(t, errorText, picked);
+    if (bad) return setErrors({ files: bad });
+    // Новые файлы — к оплате после сохранения (прототип: «добавлены файлы» без причины).
+    const upload = async () =>
+      picked.length
+        ? uploadMoneyFiles(t, errorText, { kind: 'fee_payment', id: e.id }, picked)
+        : null;
+    if (parts.length === 0 && note === e.note && picked.length > 0) {
+      setBusy(true);
+      const failedUpload = await upload();
+      setBusy(false);
+      onDone();
+      onClose();
+      if (failedUpload) toast(failedUpload, { bad: true });
+      return void toast(t('fin.fee.edit_done'), { icon: 'wallet' });
+    }
+    if (parts.length > 0 && !reason.trim())
+      return setErrors({ reason: reasonNeeded(t, parts, true) });
+    setBusy(true);
+    const res = await editFeePayment(e.id, {
+      version: e.version,
+      amount: total ?? 0,
+      date,
+      to,
+      allocation: allocation.filter((x) => x.amount > 0),
+      note,
+      reason: reason.trim(),
+    });
+    if (res.ok) {
+      const failedUpload = await upload();
+      setBusy(false);
+      onDone();
+      onClose();
+      if (failedUpload) toast(failedUpload, { bad: true });
+      return void toast(t('fin.fee.edit_done'), { icon: 'wallet' });
+    }
+    setBusy(false);
+    if (isRecordChanged(res.error)) return setChanged(true);
+    const message = errorText(res.error);
+    const field = fieldOf(res.error.details);
+    if (
+      field === 'amount' ||
+      field === 'date' ||
+      field === 'to' ||
+      field === 'allocation' ||
+      field === 'reason'
+    )
+      return setErrors({ [field]: message });
+    toast(message, { bad: true });
+  };
+
   const save = async () => {
     if (!form) return;
     const problem = feePaymentProblem(months, total, allocation, date || null, todayBishkek());
@@ -362,6 +477,7 @@ function FeePaymentModal({
       return setErrors(problem.field === 'date' ? { date: text } : { amount: text });
     }
     if (!to) return setErrors({ to: t('err.fee_to_invalid') });
+    if (edit) return saveEdit(edit);
     const bad = pickedMoneyFilesProblem(t, errorText, picked);
     if (bad) return setErrors({ files: bad });
     setBusy(true);
@@ -402,7 +518,7 @@ function FeePaymentModal({
     : '';
   const sub = form
     ? `${form.contractor.name} · ${
-        form.advance
+        form.advance && !edit
           ? t('fee.pay.sub_advance', { text: subText, amount: formatSomWithUnit(form.advance) })
           : subText
       }`
@@ -414,13 +530,13 @@ function FeePaymentModal({
       onClose={onClose}
       kind="form"
       size="mid"
-      dirty={picked.length > 0 || note !== '' || manual}
-      title={t('fee.pay.title')}
+      dirty={picked.length > 0 || (edit ? reason !== '' : note !== '') || manual}
+      title={t(edit ? 'fin.fee.edit_title' : 'fee.pay.title')}
       sub={sub}
       footer={
         <Footer
           t={t}
-          label={t('fee.pay.ok')}
+          label={t(edit ? 'btn.save' : 'fee.pay.ok')}
           icon="wallet"
           busy={busy || !form}
           onClose={onClose}
@@ -428,7 +544,19 @@ function FeePaymentModal({
         />
       }
     >
-      <div className="flex flex-col gap-3.5" data-fee-pay-dialog={form?.contractor.id ?? ''}>
+      <div
+        className="flex flex-col gap-3.5"
+        data-fee-pay-dialog={form?.contractor.id ?? ''}
+        data-fee-pay-edit={edit?.id}
+      >
+        {changed ? (
+          <RecordChangedNotice
+            message={t('err.record_changed')}
+            reloadLabel={t('form.reload')}
+            onReload={onClose}
+            reloading={false}
+          />
+        ) : null}
         {failed && !form ? <Note tone="bad">{failed}</Note> : null}
         <FormGrid>
           <Field
@@ -623,7 +751,15 @@ function FeePaymentModal({
         </section>
         <FormGrid>
           {canUpload ? (
-            <Field id={`${id}-files`} label={t('fee.pay.file')} full error={errors.files}>
+            <Field
+              id={`${id}-files`}
+              label={t('fee.pay.file')}
+              full
+              hint={
+                edit && edit.files > 0 ? t('fin.edit.files_have', { n: edit.files }) : undefined
+              }
+              error={errors.files}
+            >
               {(control) => (
                 <input
                   {...control}
@@ -651,6 +787,30 @@ function FeePaymentModal({
               />
             )}
           </Field>
+          {edit ? (
+            <Field
+              id={`${id}-why`}
+              label={t('fin.edit.reason')}
+              full
+              hint={t('fin.fee.reason_hint')}
+              error={errors.reason}
+            >
+              {(control) => (
+                <textarea
+                  {...control}
+                  data-fee-pay-reason=""
+                  maxLength={500}
+                  placeholder={t('fin.fee.reason_ph')}
+                  className={`${inputClass({ multiline: true })} min-h-14`}
+                  value={reason}
+                  onChange={(e) => {
+                    setReason(e.target.value);
+                    setErrors((x) => ({ ...x, reason: undefined }));
+                  }}
+                />
+              )}
+            </Field>
+          ) : null}
         </FormGrid>
       </div>
     </Modal>

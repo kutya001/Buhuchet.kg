@@ -463,6 +463,15 @@ export const GRID_KEYS = [
   'tasks.overdue',
   'staff.list',
   'staff.roles',
+  // «Списания в бонус» (прототип `'bonus'`).
+  'staff.bonus',
+  // «Финансовые операции»: у каждой вкладки свой вид, как `'fin-'+tab` в прототипе; «Журнал
+  // поступлений» — `'fin-journal'`.
+  'fin.all',
+  'fin.tax',
+  'fin.fee',
+  'fin.wo',
+  'fin.journal',
   // «Показатели контрагентов»: вкладки «За период» и «Не заполнено».
   'kpi.period',
   'kpi.missing',

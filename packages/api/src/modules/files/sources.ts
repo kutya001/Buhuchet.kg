@@ -21,6 +21,7 @@ import {
 } from '@buhuchet/domain';
 import { scopeSqlOf } from '../contractors/common';
 import { feePaymentFiles } from '../fees/files';
+import { operationFiles } from '../finance/files';
 import { indicatorValueSource } from '../kpi/card';
 import { kpiScopeOf } from '../kpi/common';
 import { finScopeOf } from '../money/common';
@@ -218,6 +219,7 @@ export const FILE_SOURCES: Readonly<Record<FileSourceKind, FileListSource>> = {
   receipt: moneySource('receipt'),
   tax_payment: moneySource('tax_payment'),
   fee_payment: feePaymentFiles,
+  money_operation: operationFiles,
   task: { ...taskFileSource, list: taskFilesList },
   indicator_value: { ...indicatorValueSource, list: indicatorFilesList },
 };

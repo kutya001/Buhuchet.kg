@@ -20,7 +20,7 @@ import {
 import { writeHistory } from './history';
 
 /*
- * Журнал отправок и очередь Telegram (задача 2.25, docs/decisions.md, п. Б-5; миграции 0076–0077):
+ * Журнал отправок и очередь Telegram (задача 2.25, docs/decisions.md, п. Б-5; миграции 0078–0079):
  * постановка в очередь, разбор очереди пачками с повторами, запись служебных сообщений бота и отметка
  * «напоминания за день собраны». Всё, кроме `logTelegram`, `telegramOutboxOrgs` и `telegramDigestOrgs`,
  * — в контексте организации `withOrgContext` (RLS).

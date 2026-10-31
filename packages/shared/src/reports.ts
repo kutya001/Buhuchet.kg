@@ -369,6 +369,14 @@ export const ReportCardMoney = z.object({
   canReceive: z.boolean(),
   /** Откат шкалы оплаты: ещё и право «Откат статусов». */
   canCancel: z.boolean(),
+  /**
+   * Месяц последней оплаты закрыт отчётом о списаниях (ГГГГ-ММ): откатить оплату нельзя, под шкалой —
+   * подсказка (прототип status-scale.js, scBack('pay') с `no`). Задача 2.22.
+   */
+  cancelClosed: z
+    .string()
+    .regex(/^\d{4}-(0[1-9]|1[0-2])$/)
+    .nullable(),
 });
 export type ReportCardMoney = z.infer<typeof ReportCardMoney>;
 

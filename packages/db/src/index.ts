@@ -61,6 +61,8 @@ export * from './money';
 export * from './money-tax';
 export * from './fees';
 export * from './finance';
+export * from './finance-journal';
+export * from './finance-edit';
 export * from './kpi';
 export * from './kpi-lists';
 export * from './kpi-import';
