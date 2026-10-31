@@ -33,7 +33,11 @@ export type Pause = (ms: number) => Promise<void>;
 const realPause: Pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** Отправить одну строку и решить, что с ней дальше. */
-async function sendOne(ctx: JobContext, row: ClaimedOutbox, now: () => Date): Promise<OutboxOutcome> {
+async function sendOne(
+  ctx: JobContext,
+  row: ClaimedOutbox,
+  now: () => Date,
+): Promise<OutboxOutcome> {
   const fail = (error: string, permanent: boolean, retryAfter?: number): OutboxOutcome =>
     permanent || row.tries >= OUTBOX_MAX_TRIES
       ? { id: row.id, result: 'error', error }
@@ -108,10 +112,14 @@ export function telegramSendJob(pause?: Pause): Job {
           await sendOrgOutbox(ctx, orgId, pause ? { pause } : {});
         } catch (err) {
           failed.push(orgId);
-          ctx.logger.error({ job: 'telegram.send', orgId, err }, 'очередь организации не разобрана');
+          ctx.logger.error(
+            { job: 'telegram.send', orgId, err },
+            'очередь организации не разобрана',
+          );
         }
       }
-      if (failed.length) throw new Error(`telegram.send: не разобрана очередь организаций: ${failed.length}`);
+      if (failed.length)
+        throw new Error(`telegram.send: не разобрана очередь организаций: ${failed.length}`);
     },
   };
 }
@@ -120,15 +128,23 @@ export function telegramSendJob(pause?: Pause): Job {
  * Сообщение о событии (новая задача, на подтверждении, подтверждена, на доработку, отменена, отчёт «На
  * исправление») — в очередь в транзакции действия: если действие откатится, сообщения не будет.
  */
-export function queueEvents(tx: Tx, messages: readonly OutboxMessage[]): Promise<string[]> {
-  return enqueueTelegram(tx, messages);
+export function queueEvents(
+  tx: Tx,
+  messages: readonly OutboxMessage[],
+  now: Date,
+): Promise<string[]> {
+  return enqueueTelegram(tx, messages, now);
 }
 
 /**
  * После действия — сразу отправить его сообщения (ТЗ: «сообщение о новой задаче… приходит сразу»), не
  * дожидаясь очереди. Ошибка не роняет метод: строки остаются в очереди и уйдут с повтором.
  */
-export async function flushEvents(ctx: JobContext, orgId: string, ids: readonly string[]): Promise<void> {
+export async function flushEvents(
+  ctx: JobContext,
+  orgId: string,
+  ids: readonly string[],
+): Promise<void> {
   if (!ids.length || !ctx.telegram) return;
   try {
     await sendOrgOutbox(ctx, orgId, { ids, maxBatches: 1 });

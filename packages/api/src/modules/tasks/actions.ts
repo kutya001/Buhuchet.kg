@@ -134,7 +134,11 @@ async function runAction<B>(
     const after = (await getTask(tx, id, undefined))!;
     if (result) {
       const actor = await employeeShortName(tx, subject.employeeId);
-      queued = await queueTelegramEvents(deps, tx, taskEvents(after, result.change, subject, actor));
+      queued = await queueTelegramEvents(
+        deps,
+        tx,
+        taskEvents(after, result.change, subject, actor),
+      );
     }
     return taskOut(tx, after, { today, filesOn: settings.files, subject });
   });

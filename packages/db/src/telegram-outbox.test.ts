@@ -97,9 +97,13 @@ describe.skipIf(!databaseAvailable())('Журнал отправок и очер
     const retry = await withOrgContext(t.app.db, ctxA(), (tx) =>
       claimOutbox(tx, { now: later, limit: 10, leaseSeconds: 120 }),
     );
-    expect(retry).toEqual([{ id: ids[1], chatId: 5001, kind: 'reminders', text: 'Второе', tries: 2 }]);
+    expect(retry).toEqual([
+      { id: ids[1], chatId: 5001, kind: 'reminders', text: 'Второе', tries: 2 },
+    ]);
     await withOrgContext(t.app.db, ctxA(), (tx) =>
-      finishOutbox(tx, [{ id: ids[1]!, result: 'error', error: '403: bot was blocked by the user' }]),
+      finishOutbox(tx, [
+        { id: ids[1]!, result: 'error', error: '403: bot was blocked by the user' },
+      ]),
     );
     const rows = await withOrgContext(t.app.db, ctxA(), (tx) => listOutbox(tx));
     // Обе строки записаны в одной транзакции (одно время) — порядок между ними не важен.
@@ -194,7 +198,9 @@ describe.skipIf(!databaseAvailable())('Журнал отправок и очер
   });
 
   it('настройки уведомлений: первая запись, правка по версии, устаревшая — «изменена другим пользователем», история', async () => {
-    const target = await withOrgContext(t.app.db, ctxA(), (tx) => notifyTarget(tx, a.ownerEmployeeId));
+    const target = await withOrgContext(t.app.db, ctxA(), (tx) =>
+      notifyTarget(tx, a.ownerEmployeeId),
+    );
     expect(target).toMatchObject({ boss: true, settings: { mode: 'all', off: [] } });
     const save = (version: number, mode: 'all' | 'digest' | 'manual', off: ('week' | 'over')[]) =>
       withOrgContext(t.app.db, ctxA(), (tx) =>
@@ -208,7 +214,9 @@ describe.skipIf(!databaseAvailable())('Журнал отправок и очер
           to: 'стало',
         }),
       );
-    expect(await withOrgContext(t.app.db, ctxA(), (tx) => getNotifySettings(tx, a.ownerUserId))).toEqual({
+    expect(
+      await withOrgContext(t.app.db, ctxA(), (tx) => getNotifySettings(tx, a.ownerUserId)),
+    ).toEqual({
       mode: 'all',
       off: [],
       version: 0,
@@ -234,16 +242,22 @@ describe.skipIf(!databaseAvailable())('Журнал отправок и очер
     await withOrgContext(t.app.db, ctxA(), (tx) =>
       useTelegramLink(tx, { tokenHash: token, chatId: 5001, username: 'owner', firstName: null }),
     );
-    expect(await telegramDigestOrgs(t.app.db, NOW)).toEqual([{ orgId: a.orgId, day: '2026-10-29' }]);
+    expect(await telegramDigestOrgs(t.app.db, NOW)).toEqual([
+      { orgId: a.orgId, day: '2026-10-29' },
+    ]);
     // До времени сводки (09:00 по Бишкеку) — рано.
     expect(await telegramDigestOrgs(t.app.db, new Date('2026-10-29T02:30:00Z'))).toEqual([]);
     // Отметка дня — один раз: второй запуск ничего не собирает.
-    expect(await withOrgContext(t.app.db, ctxA(), (tx) => markDigestDay(tx, '2026-10-29'))).toBe(true);
-    expect(await withOrgContext(t.app.db, ctxA(), (tx) => markDigestDay(tx, '2026-10-29'))).toBe(false);
+    expect(await withOrgContext(t.app.db, ctxA(), (tx) => markDigestDay(tx, '2026-10-29'))).toBe(
+      true,
+    );
+    expect(await withOrgContext(t.app.db, ctxA(), (tx) => markDigestDay(tx, '2026-10-29'))).toBe(
+      false,
+    );
     expect(await telegramDigestOrgs(t.app.db, NOW)).toEqual([]);
     // Организация Б: «Напоминания в Telegram» выключены.
-    expect((await telegramDigestOrgs(t.app.db, new Date('2026-10-30T04:00:00Z'))).map((r) => r.orgId)).toEqual([
-      a.orgId,
-    ]);
+    expect(
+      (await telegramDigestOrgs(t.app.db, new Date('2026-10-30T04:00:00Z'))).map((r) => r.orgId),
+    ).toEqual([a.orgId]);
   });
 });

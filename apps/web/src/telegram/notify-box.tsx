@@ -86,9 +86,7 @@ export function NotifyBox() {
                   className={`${CHECKBOX_CLASS} mt-0.5`}
                   checked={data.mode === mode}
                   disabled={busy}
-                  onChange={() =>
-                    void save(withNotifyMode(mode), t('profile.notify.mode_saved'))
-                  }
+                  onChange={() => void save(withNotifyMode(mode), t('profile.notify.mode_saved'))}
                 />
                 <span>
                   <b>{t(`profile.notify.mode.${mode}` as UiTextKey)}</b>

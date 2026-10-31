@@ -116,7 +116,11 @@ export function notifyOn(settings: NotifySettings, boss: boolean, kind: NotifyKi
  * Переключатель недоступен (прототип: «Отключённый переключатель — это то, что не входит в выбранный
  * режим»): у владельца и главного бухгалтера — то, что не входит в режим.
  */
-export function notifyKindLocked(settings: NotifySettings, boss: boolean, kind: NotifyKind): boolean {
+export function notifyKindLocked(
+  settings: NotifySettings,
+  boss: boolean,
+  kind: NotifyKind,
+): boolean {
   return boss && !MODE_KINDS[settings.mode].includes(kind);
 }
 

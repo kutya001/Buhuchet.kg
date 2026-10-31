@@ -83,8 +83,15 @@ export async function notifyPasswordChanged(
     user.orgName,
     chat.shared,
   );
-  return sendNow(deps, chat.chatId, text, 'password_changed', {}, {
-    userId: user.userId,
-    kind: resetBy === undefined ? 'pass_changed' : 'pass_reset',
-  });
+  return sendNow(
+    deps,
+    chat.chatId,
+    text,
+    'password_changed',
+    {},
+    {
+      userId: user.userId,
+      kind: resetBy === undefined ? 'pass_changed' : 'pass_reset',
+    },
+  );
 }

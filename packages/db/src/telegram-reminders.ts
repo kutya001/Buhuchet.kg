@@ -97,9 +97,7 @@ export interface ReminderOrgData {
   tasks: ReminderTaskRow[];
 }
 
-const OPEN = sql.raw(
-  `(${[...OPEN_REPORT_STATUSES].map((s) => `'${s}'`).join(', ')})`,
-);
+const OPEN = sql.raw(`(${[...OPEN_REPORT_STATUSES].map((s) => `'${s}'`).join(', ')})`);
 
 /** Действующие сотрудники организации из контекста с правами, областями, Telegram и настройками. */
 export async function reminderEmployees(tx: Tx): Promise<ReminderEmployee[]> {
@@ -128,7 +126,11 @@ export async function reminderEmployees(tx: Tx): Promise<ReminderEmployee[]> {
       : [],
     roleIds.length
       ? tx
-          .select({ roleId: roleScopes.roleId, group: roleScopes.permGroup, scope: roleScopes.scope })
+          .select({
+            roleId: roleScopes.roleId,
+            group: roleScopes.permGroup,
+            scope: roleScopes.scope,
+          })
           .from(roleScopes)
           .where(inArray(roleScopes.roleId, roleIds))
       : [],
@@ -195,10 +197,12 @@ export async function loadReminderData(tx: Tx, today: IsoDate): Promise<Reminder
         amount: reports.amount,
         paid: reports.paid,
         responsibleId: reports.responsibleEmployeeId,
-        remindDays: sql<number[]>`coalesce(${orgReportTypes.remindDays}, ${settings.remindDays}::int[])`,
+        remindDays: orgReportTypes.remindDays,
         confirmedAt: reports.confirmedAt,
         submittedDay,
-        submittedById: sql<string | null>`(select e.id from ${employees} e where e.user_id = ${reports.submittedBy})`,
+        submittedById: sql<
+          string | null
+        >`(select e.id from ${employees} e where e.user_id = ${reports.submittedBy})`,
       })
       .from(reports)
       .innerJoin(contractors, eq(contractors.id, reports.contractorId))
@@ -258,7 +262,8 @@ export async function loadReminderData(tx: Tx, today: IsoDate): Promise<Reminder
       amount: r.amount,
       paid: r.paid,
       responsibleId: r.responsibleId,
-      remindDays: r.remindDays ?? [],
+      // Дни напоминаний вида в организации; не задавали — из учётной политики.
+      remindDays: r.remindDays ?? settings.remindDays ?? [],
       waitingSince:
         r.status === 'submitted' && r.act !== 'pay' && r.confirmedAt === null
           ? (r.submittedDay?.slice(0, 10) ?? null)

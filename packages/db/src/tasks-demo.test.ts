@@ -72,7 +72,9 @@ describe.skipIf(!databaseAvailable())('Задачи демо-организац�
 
   it('вкладки бухгалтера Алишера: мои открытые и просроченные', async () => {
     const viewer = { employeeId: demoId('employee', 'e3'), all: false, canConfirm: false };
-    const counts = await inDemo((tx) => taskTabCounts(tx, viewer, { t, today: '2026-10-18', reportConfirm: true }));
+    const counts = await inDemo((tx) =>
+      taskTabCounts(tx, viewer, { t, today: '2026-10-18', reportConfirm: true }),
+    );
     // Ручные: t3 (на доработке), t8, t9, t13 — открыты; t3 просрочена (срок 17.10). Регулярные (задача
     // 2.24, прототип `allTasks`): 20 открытых по его отчётам, из них 3 просрочены; за октябрь сдано 10 из 26.
     expect(counts).toMatchObject({
@@ -81,7 +83,13 @@ describe.skipIf(!databaseAvailable())('Задачи демо-организац�
       progress: { mine: { done: 10, total: 26 } },
     });
     const page = await inDemo((tx) =>
-      listTasksPage(tx, query(), { t, today: '2026-10-18', reportConfirm: true, viewer, tab: 'mine' }),
+      listTasksPage(tx, query(), {
+        t,
+        today: '2026-10-18',
+        reportConfirm: true,
+        viewer,
+        tab: 'mine',
+      }),
     );
     expect(page.rows.every((r) => r.executor?.id === viewer.employeeId)).toBe(true);
   });

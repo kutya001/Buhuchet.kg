@@ -1,7 +1,11 @@
 import {
   contextOrgName,
   messageTemplates,
-  notifyTarget, telegramChat, telegramFeatureOn, type Tx } from '@buhuchet/db';
+  notifyTarget,
+  telegramChat,
+  telegramFeatureOn,
+  type Tx,
+} from '@buhuchet/db';
 import {
   fillTemplate,
   formatText,
@@ -28,7 +32,12 @@ import { queueEvents } from './outbox';
 export interface TelegramEvent {
   kind: Extract<
     OutboxKind,
-    'task_new' | 'task_on_confirm' | 'task_confirmed' | 'task_rework' | 'task_cancelled' | 'report_fix'
+    | 'task_new'
+    | 'task_on_confirm'
+    | 'task_confirmed'
+    | 'task_rework'
+    | 'task_cancelled'
+    | 'report_fix'
   >;
   /** Кому (сотрудник). */
   to: string;
@@ -63,7 +72,10 @@ export async function queueTelegramEvents(
     if (!notifyOn(target.settings, target.boss, kind)) continue;
     const chat = await telegramChat(tx, target.userId);
     if (!chat) continue;
-    const body = fillTemplate(templates[e.template] ?? TELEGRAM_TEMPLATE_DEFAULTS[e.template], e.values);
+    const body = fillTemplate(
+      templates[e.template] ?? TELEGRAM_TEMPLATE_DEFAULTS[e.template],
+      e.values,
+    );
     const link = formatText(t('telegram.open'), {
       link: new URL(LINKS[e.link], deps.config.APP_BASE_URL).href,
     });
@@ -74,5 +86,5 @@ export async function queueTelegramEvents(
       text: withOrganization(`${body}\n\n${link}`, name, chat.shared),
     });
   }
-  return queueEvents(tx, messages);
+  return queueEvents(tx, messages, deps.clock.now());
 }

@@ -174,7 +174,10 @@ export const telegramNotifySettings = pgTable(
       .notNull()
       .references(() => organizations.id, { onDelete: 'restrict' }),
     mode: text('mode', { enum: NOTIFY_MODES }).notNull().default('all'),
-    off: text('off').array().notNull().default(sql`'{}'::text[]`),
+    off: text('off')
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
     updatedBy: uuid('updated_by').references(() => users.id),
     version: recordVersion(),

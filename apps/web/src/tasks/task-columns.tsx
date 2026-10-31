@@ -270,7 +270,11 @@ export function taskColumns(t: Translate): GridColumn<TaskListRow>[] {
           ? statusName(t, 'report', r.report.status)
           : statusName(t, 'task', r.status),
       cell: (r) =>
-        r.kind === 'regular' ? <RegularStatusMini t={t} task={r} /> : <TaskStatusMini t={t} task={r} />,
+        r.kind === 'regular' ? (
+          <RegularStatusMini t={t} task={r} />
+        ) : (
+          <TaskStatusMini t={t} task={r} />
+        ),
     },
     {
       key: 'needFile',

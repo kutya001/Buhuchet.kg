@@ -158,7 +158,7 @@ export function telegramRemindersJob(baseUrl: string, pause?: Pause): Job {
           const n = await withOrgContext(ctx.db, { orgId, kind: 'job' }, async (tx) => {
             if (!(await markDigestDay(tx, day))) return 0;
             const messages = await buildDailyReminders(ctx, tx, day as IsoDate, baseUrl);
-            return (await enqueueTelegram(tx, messages)).length;
+            return (await enqueueTelegram(tx, messages, ctx.clock.now())).length;
           });
           queued += n;
           if (n) await sendOrgOutbox(ctx, orgId, pause ? { pause } : {});

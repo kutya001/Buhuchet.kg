@@ -35,7 +35,11 @@ describe('«Уведомления в Telegram» в профиле (протот
     expect(notifyKindLocked(digest, true, 'before')).toBe(true);
     expect(notifyKindLocked(digest, true, 'over')).toBe(false);
     expect(notifyKindLocked(digest, false, 'before')).toBe(false);
-    const off = withNotifyKind(withNotifyKind(DEFAULT_NOTIFY_SETTINGS, 'week', false), 'over', false);
+    const off = withNotifyKind(
+      withNotifyKind(DEFAULT_NOTIFY_SETTINGS, 'week', false),
+      'over',
+      false,
+    );
     // Порядок — как в каталоге, повторное выключение не дублирует.
     expect(withNotifyKind(off, 'week', false).off).toEqual(['over', 'week']);
     expect(withNotifyKind(off, 'over', true).off).toEqual(['week']);

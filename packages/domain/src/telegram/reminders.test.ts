@@ -82,7 +82,11 @@ const people = new Map([acc, chief].map((p) => [p.employeeId, p]));
 const keys = (lines: { key: string }[]) => lines.map((l) => l.key);
 const linesOf = (
   who: ReminderPerson,
-  data: { reports?: ReminderReport[]; tasks?: ReminderTask[]; people?: Map<string, ReminderPerson> },
+  data: {
+    reports?: ReminderReport[];
+    tasks?: ReminderTask[];
+    people?: Map<string, ReminderPerson>;
+  },
   p: Partial<ReminderPolicy> = {},
 ) =>
   remindersFor(
@@ -109,7 +113,11 @@ describe('напоминания за день (ТЗ «Уведомления в
     const messages = dailyReminders([acc], { reports, tasks: [] }, policy());
     expect(messages).toHaveLength(1);
     expect(messages[0]!.lines).toEqual([
-      { key: 'tgBefore', days: 3, items: [reports[0], reports[1]].map((r) => ({ id: r!.id, label: r!.label })) },
+      {
+        key: 'tgBefore',
+        days: 3,
+        items: [reports[0], reports[1]].map((r) => ({ id: r!.id, label: r!.label })),
+      },
     ]);
     const text = reminderText(messages[0]!, texts, 'https://test.buhuchet.kg/app/reports/week');
     expect(text).toBe(
@@ -134,10 +142,12 @@ describe('напоминания за день (ТЗ «Уведомления в
       key: 'tgOver',
       items: [{ id: late.id }, { id: yesterday.id }],
     });
-    expect(linesOf(acc, { reports: [late, yesterday] }, { overdueRepeat: false })[0]).toMatchObject({
-      key: 'tgOver',
-      items: [{ id: yesterday.id }],
-    });
+    expect(linesOf(acc, { reports: [late, yesterday] }, { overdueRepeat: false })[0]).toMatchObject(
+      {
+        key: 'tgOver',
+        items: [{ id: yesterday.id }],
+      },
+    );
   });
 
   it('сданный, «Уплата» без сдачи и приостановленный контрагент — без напоминаний о сдаче', () => {
@@ -179,14 +189,20 @@ describe('напоминания за день (ТЗ «Уведомления в
     const manual = { ...chief, settings: withNotifyMode('manual') };
     const lines = linesOf(manual, { reports: [r], people: map });
     expect(lines).toEqual([
-      { key: 'tgBefore', days: 3, items: [{ id: r.id, label: r.label, unlinked: { shortName: 'Алишер Т.' } }] },
+      {
+        key: 'tgBefore',
+        days: 3,
+        items: [{ id: r.id, label: r.label, unlinked: { shortName: 'Алишер Т.' } }],
+      },
     ]);
     expect(reminderText({ lines }, texts, 'https://x')).toContain(
       `${r.label} (Алишер Т.: не привязан Telegram)`,
     );
     // Без ответственного — «ответственный не назначен».
     const none = linesOf(manual, { reports: [report({ responsibleId: null })], people: map });
-    expect(reminderText({ lines: none }, texts, 'https://x')).toContain('(ответственный не назначен)');
+    expect(reminderText({ lines: none }, texts, 'https://x')).toContain(
+      '(ответственный не назначен)',
+    );
     // Сам непривязанный сообщения не получает.
     expect(dailyReminders([unlinked], { reports: [r], tasks: [] }, policy())).toEqual([]);
   });
@@ -207,7 +223,12 @@ describe('напоминания за день (ТЗ «Уведомления в
     // Область «Свои» — только по своим контрагентам.
     const scoped = person('y', { confirmReports: 'own' });
     expect(linesOf(scoped, { reports: [waiting] })).toEqual([]);
-    expect(linesOf({ ...scoped, employeeId: 'acc' }, { reports: [report({ ...waiting, submittedById: 'z' })] })).toHaveLength(1);
+    expect(
+      linesOf(
+        { ...scoped, employeeId: 'acc' },
+        { reports: [report({ ...waiting, submittedById: 'z' })] },
+      ),
+    ).toHaveLength(1);
     // Без повтора — только в день, когда исполнилось N дней; без подтверждения в политике — никогда.
     const longer = report({ open: false, waitingSince: addDays(TODAY, -5), submittedById: 'acc' });
     expect(linesOf(chief, { reports: [longer] }, { overdueRepeat: false })).toEqual([]);
@@ -244,7 +265,12 @@ describe('напоминания за день (ТЗ «Уведомления в
     const monday: IsoDate = '2026-11-02';
     const week = { from: monday, to: addDays(monday, 6) };
     const reports = [
-      report({ dueDate: addDays(monday, 2), contractorName: 'ОсОО «Б»', typeShort: 'НДС', remindDays: [] }),
+      report({
+        dueDate: addDays(monday, 2),
+        contractorName: 'ОсОО «Б»',
+        typeShort: 'НДС',
+        remindDays: [],
+      }),
       report({ dueDate: addDays(monday, 20), typeShort: 'ЕН', remindDays: [] }),
       report({
         act: 'pay',
@@ -254,7 +280,12 @@ describe('напоминания за день (ТЗ «Уведомления в
         typeShort: 'Патент',
         remindDays: [],
       }),
-      report({ dueDate: addDays(monday, -3), contractorName: 'ОсОО «А»', typeShort: 'Соцфонд', remindDays: [] }),
+      report({
+        dueDate: addDays(monday, -3),
+        contractorName: 'ОсОО «А»',
+        typeShort: 'Соцфонд',
+        remindDays: [],
+      }),
       report({ responsibleId: 'other', dueDate: addDays(monday, 1), remindDays: [] }),
     ];
     const lines = linesOf(acc, { reports }, { today: monday, week });
@@ -265,7 +296,9 @@ describe('напоминания за день (ТЗ «Уведомления в
       '🗓 Неделя 02.11–08.11: сдать 1, оплатить 1, просрочено 1.\n• ОсОО «А»: оплатить Патент 06.11; просрочено Соцфонд\n• ОсОО «Б»: сдать НДС 04.11\n\nОткрыть в Buhuchet.kg: https://x',
     );
     // Главный бухгалтер видит всю организацию; переключатель «Сводка» снят — сводки нет.
-    expect(linesOf(chief, { reports }, { today: monday, week }).find((l) => l.key === 'tgWeek')).toMatchObject({ sub: 2 });
+    expect(
+      linesOf(chief, { reports }, { today: monday, week }).find((l) => l.key === 'tgWeek'),
+    ).toMatchObject({ sub: 2 });
     const noWeek = { ...chief, settings: withNotifyKind(DEFAULT_NOTIFY_SETTINGS, 'week', false) };
     expect(keys(linesOf(noWeek, { reports }, { today: monday, week }))).not.toContain('tgWeek');
     // Не понедельник — сводки нет; на неделе ничего нет — тоже.
@@ -279,9 +312,15 @@ describe('напоминания за день (ТЗ «Уведомления в
     expect(keys(lines)).toEqual(['tgToday', 'tgBefore']);
     const text = reminderText({ lines }, texts, 'https://x');
     expect(text).toContain('; и ещё 4');
-    const huge = Array.from({ length: 400 }, (_, i) => report({ label: `Очень длинное название отчёта номер ${i}` }));
+    const huge = Array.from({ length: 400 }, (_, i) =>
+      report({ label: `Очень длинное название отчёта номер ${i}` }),
+    );
     const long = reminderText(
-      { lines: [{ key: 'tgBefore', days: 3, items: huge.map((r) => ({ id: r.id, label: r.label })) }] },
+      {
+        lines: [
+          { key: 'tgBefore', days: 3, items: huge.map((r) => ({ id: r.id, label: r.label })) },
+        ],
+      },
       { ...texts, more: 'и ещё {n}' },
       'https://x',
     );

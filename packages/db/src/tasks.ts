@@ -343,6 +343,7 @@ function taskListSource(o: TaskSourceOptions): SQL {
     ${tasks.createdAt} as created_at, ${tasks.createdBy} as created_by, ${tasks.updatedAt} as updated_at,
     ${tasks.updatedBy} as updated_by, ${tasks.version} as version
     from ${tasks}`;
+  // ОТКЛОНЕНИЕ: docs/deviations.md#Б-11 — «Файл» — по готовым файлам отчёта, «Оплата» — по метке отчёта.
   const regular = sql`select ${reports.id}, 'regular'::text, 'report'::text, ${REGULAR_TITLE},
     case when ${reports.act} = 'pay' then 'reg:pay' else 'reg:sub' end, ${reports.contractorId},
     ${reports.responsibleEmployeeId}, null::uuid, 'day'::text, ${reports.dueDate},
@@ -482,7 +483,8 @@ export interface RegularTaskRow {
 }
 
 /** Строка списка: ручная задача или регулярная по отчёту. */
-export type TaskListRow = (TaskRow & { kind: 'manual'; open: boolean; overdue: boolean }) | RegularTaskRow;
+export type TaskListRow =
+  (TaskRow & { kind: 'manual'; open: boolean; overdue: boolean }) | RegularTaskRow;
 
 function toListRow(r: ListRowData): TaskListRow {
   const base = toRow(r as unknown as RowData);
@@ -496,7 +498,9 @@ function toListRow(r: ListRowData): TaskListRow {
     title: base.title,
     category: base.category,
     contractor: base.contractor!,
-    executor: executorId ? { id: executorId, shortName: (r.executorName as string | null) ?? '' } : null,
+    executor: executorId
+      ? { id: executorId, shortName: (r.executorName as string | null) ?? '' }
+      : null,
     dueDate: base.dueDate,
     needFile: base.needFile,
     hasFile: base.hasFile,

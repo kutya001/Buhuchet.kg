@@ -100,7 +100,15 @@ export type ReminderLine =
   | { key: 'tgBefore' | 'tgPay'; days: number; items: ReminderItem[] }
   | { key: 'tgConfWait'; days: number; items: ReminderItem[] }
   | { key: 'tgTaskSoon' | 'tgTaskOver' | 'tgTaskWait'; items: ReminderItem[] }
-  | { key: 'tgWeek'; from: IsoDate; to: IsoDate; sub: number; pay: number; over: number; byContractor: WeekContractor[] };
+  | {
+      key: 'tgWeek';
+      from: IsoDate;
+      to: IsoDate;
+      sub: number;
+      pay: number;
+      over: number;
+      byContractor: WeekContractor[];
+    };
 
 export interface WeekContractor {
   name: string;
@@ -215,7 +223,11 @@ function weekLine(
 /** Напоминания одного человека за день; пустой список — сегодня ему писать нечего. */
 export function remindersFor(
   person: ReminderPerson,
-  data: { reports: readonly ReminderReport[]; tasks: readonly ReminderTask[]; people: ReadonlyMap<string, ReminderPerson> },
+  data: {
+    reports: readonly ReminderReport[];
+    tasks: readonly ReminderTask[];
+    people: ReadonlyMap<string, ReminderPerson>;
+  },
   p: ReminderPolicy,
 ): ReminderLine[] {
   const sub = bucket();
@@ -241,6 +253,7 @@ export function remindersFor(
       (person.confirmReports === 'all' || r.contractorResponsibleId === person.employeeId) &&
       (person.isOwner || r.submittedById !== person.employeeId)
     ) {
+      // ОТКЛОНЕНИЕ: docs/deviations.md#Б-12 — повтор, как у просрочки; прототип этого не показывает.
       const days = diffDays(p.today, r.waitingSince);
       if (p.overdueRepeat ? days >= p.confirmWaitDays : days === p.confirmWaitDays) {
         wait.push({ id: r.id, label: r.label });
@@ -338,13 +351,15 @@ const fill = (template: string, values: Readonly<Record<string, string | number>
   );
 
 function listText(items: readonly ReminderItem[], t: ReminderTexts): string {
-  const shown = items.slice(0, REMINDER_LIST_MAX).map((x) =>
-    x.unlinked
-      ? x.unlinked.shortName
-        ? fill(t.unlinked, { report: x.label, name: x.unlinked.shortName })
-        : fill(t.unassigned, { report: x.label })
-      : x.label,
-  );
+  const shown = items
+    .slice(0, REMINDER_LIST_MAX)
+    .map((x) =>
+      x.unlinked
+        ? x.unlinked.shortName
+          ? fill(t.unlinked, { report: x.label, name: x.unlinked.shortName })
+          : fill(t.unassigned, { report: x.label })
+        : x.label,
+    );
   const rest = items.length - shown.length;
   return rest > 0 ? `${shown.join('; ')}; ${fill(t.more, { n: rest })}` : shown.join('; ');
 }
@@ -376,7 +391,11 @@ function lineText(line: ReminderLine, t: ReminderTexts): string {
 }
 
 /** Текст сообщения: части по порядку, затем ссылка на список; длинный текст обрезается. */
-export function reminderText(message: Pick<ReminderMessage, 'lines'>, t: ReminderTexts, link: string): string {
+export function reminderText(
+  message: Pick<ReminderMessage, 'lines'>,
+  t: ReminderTexts,
+  link: string,
+): string {
   const body = message.lines.map((l) => lineText(l, t)).join('\n\n');
   const tail = `\n\n${fill(t.open, { link })}`;
   const max = REMINDER_TEXT_MAX - tail.length;

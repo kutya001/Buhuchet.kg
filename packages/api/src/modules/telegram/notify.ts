@@ -84,7 +84,8 @@ export const saveNotifyRoute = createRoute({
     400: { description: 'Неверные данные', content: error },
     401: { description: 'Нет входа', content: error },
     403: {
-      description: 'Режим и переключатели по отчётам других — только владельцу и главному бухгалтеру',
+      description:
+        'Режим и переключатели по отчётам других — только владельцу и главному бухгалтеру',
       content: error,
     },
     409: { description: 'Запись изменена другим пользователем', content: error },
@@ -97,7 +98,8 @@ function historyText(
   from: { mode: NotifyMode; off: readonly NotifyKind[] },
   to: { mode: NotifyMode; off: readonly NotifyKind[] },
 ): { from: string; to: string } | null {
-  const mode = (m: NotifyMode) => t('profile.notify.history_mode', { mode: t(`profile.notify.mode.${m}`) });
+  const mode = (m: NotifyMode) =>
+    t('profile.notify.history_mode', { mode: t(`profile.notify.mode.${m}`) });
   if (from.mode !== to.mode) return { from: mode(from.mode), to: mode(to.mode) };
   const kind = (k: NotifyKind, on: boolean) =>
     t('profile.notify.history_kind', {

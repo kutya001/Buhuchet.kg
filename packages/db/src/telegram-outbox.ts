@@ -9,7 +9,12 @@ import {
 } from '@buhuchet/domain';
 import { and, asc, eq, inArray, lte, sql } from 'drizzle-orm';
 import type { Db, Tx } from './client';
-import { telegramDigestDays, telegramLinks, telegramNotifySettings, telegramOutbox } from './schema';
+import {
+  telegramDigestDays,
+  telegramLinks,
+  telegramNotifySettings,
+  telegramOutbox,
+} from './schema';
 import { writeHistory } from './history';
 
 /*
@@ -31,8 +36,16 @@ export interface OutboxMessage {
   dedupeKey?: string | null;
 }
 
-/** Поставить в очередь организации из контекста; повтор с тем же ключом пропускается. Номера новых строк. */
-export async function enqueueTelegram(tx: Tx, messages: readonly OutboxMessage[]): Promise<string[]> {
+/**
+ * Поставить в очередь организации из контекста; повтор с тем же ключом пропускается. Номера новых строк.
+ * `now` — часы приложения: с этого момента строку можно отправлять (в тестах и на демо-стенде часы стоят
+ * на месте, поэтому время базы не годится).
+ */
+export async function enqueueTelegram(
+  tx: Tx,
+  messages: readonly OutboxMessage[],
+  now?: Date,
+): Promise<string[]> {
   if (!messages.length) return [];
   const rows = await tx
     .insert(telegramOutbox)
@@ -44,6 +57,7 @@ export async function enqueueTelegram(tx: Tx, messages: readonly OutboxMessage[]
         kind: m.kind,
         text: m.text,
         dedupeKey: m.dedupeKey ?? null,
+        ...(now ? { nextAt: now } : {}),
       })),
     )
     .onConflictDoNothing({ target: telegramOutbox.dedupeKey })
@@ -115,7 +129,11 @@ export async function finishOutbox(tx: Tx, outcomes: readonly OutboxOutcome[]): 
       o.result === 'sent'
         ? { status: 'sent' as const, sentAt: o.at, lastError: null }
         : o.result === 'retry'
-          ? { status: 'pending' as const, nextAt: o.at, lastError: o.error.slice(0, OUTBOX_ERROR_MAX) }
+          ? {
+              status: 'pending' as const,
+              nextAt: o.at,
+              lastError: o.error.slice(0, OUTBOX_ERROR_MAX),
+            }
           : { status: 'error' as const, lastError: o.error.slice(0, OUTBOX_ERROR_MAX) };
     await tx.update(telegramOutbox).set(set).where(eq(telegramOutbox.id, o.id));
   }
@@ -127,7 +145,14 @@ export async function finishOutbox(tx: Tx, outcomes: readonly OutboxOutcome[]): 
  */
 export async function logTelegram(
   db: Db | Tx,
-  entry: { userId: string; chatId: number; kind: OutboxKind; text: string; ok: boolean; error?: string },
+  entry: {
+    userId: string;
+    chatId: number;
+    kind: OutboxKind;
+    text: string;
+    ok: boolean;
+    error?: string;
+  },
 ): Promise<void> {
   await db.execute(
     sql`select app.telegram_log(${entry.userId}, ${entry.chatId}, ${entry.kind}, ${entry.text}, ${entry.ok}, ${entry.error ?? null})`,
