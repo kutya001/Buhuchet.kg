@@ -169,8 +169,8 @@ export function finJournalHandler(deps: ApiDeps): RouteHandler<typeof finJournal
       // Меню строки: «Изменить» и «Удалить» с замком и причиной (прототип opActs).
       const lockOf = journalLocks(tx, t, subject, new Set(await closedMonthsOf(tx)));
       const rows = await Promise.all(
-        found.rows.map(async ({ archived, ...r }) => {
-          const facts = { ...r, archived };
+        found.rows.map(async ({ archived, responsibleEmployeeId, ...r }) => {
+          const facts = { ...r, archived, responsibleEmployeeId };
           const [edit, del] = await Promise.all([lockOf(facts, 'edit'), lockOf(facts, 'del')]);
           return { ...r, locks: { edit, del } };
         }),

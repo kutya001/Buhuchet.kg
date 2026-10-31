@@ -662,6 +662,13 @@ describe.skipIf(!databaseAvailable())(
         const w = await feeWindow(hr, saved.id);
         expect(w.locks.edit).toMatchObject({ code: 'op_view_only' });
         expect(w.locks.del).toMatchObject({ code: 'op_view_only' });
+        // Меню строки журнала — те же замки, что в окне.
+        const row = (await journal(hr, '&tab=fee')).items.find((r) => r.id === saved.id);
+        expect(row?.locks).toMatchObject({
+          edit: { code: 'op_view_only' },
+          del: { code: 'op_view_only' },
+        });
+        expect(row).not.toHaveProperty('responsibleEmployeeId');
         expect((await call('GET', `/api/fee-payments/${saved.id}/edit-form`, hr)).status).toBe(404);
         const put = await call('PUT', `/api/fee-payments/${saved.id}`, hr, {
           version: w.version,

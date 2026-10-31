@@ -1,5 +1,6 @@
 import { permissionCatalog, type MoneyContractor, type Tx } from '@buhuchet/db';
 import {
+  canSeeContractor,
   closesWithMonth,
   hasPermission,
   opLock,
@@ -135,17 +136,23 @@ export function journalLocks(
       archived: boolean;
       receiptPart: boolean;
       date: string;
+      /** Ответственный контрагента: у оплаты за обслуживание — область «Контрагенты» (п. В-30). */
+      responsibleEmployeeId?: string | null;
     },
     act: 'edit' | 'del',
   ): Promise<OpLockInfo | null> => {
     const fee = r.src === 'fee';
     const kind = (fee ? 'fee' : r.kind) as FinOpKind;
     const right = opRight(kind);
+    // ОТКЛОНЕНИЕ: docs/deviations.md#В-30 — «Менять журнал тарифов» действует в области «Контрагенты».
+    const inCps =
+      !fee ||
+      canSeeContractor(subject, 'cps', { responsibleEmployeeId: r.responsibleEmployeeId ?? null });
     const code = opLock(
       {
         kind,
         deleted: r.deleted,
-        canKind: hasPermission(subject, right),
+        canKind: hasPermission(subject, right) && inCps,
         canArchiveRest: !fee && canArchiveRest(subject),
         canMoney,
         archived: r.archived,

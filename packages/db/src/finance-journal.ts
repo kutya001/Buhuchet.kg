@@ -368,6 +368,8 @@ export interface FinJournalRow {
   receiptPart: boolean;
   /** Контрагент в архиве — для замков меню строки (прототип `opLock`). */
   archived: boolean;
+  /** Ответственный контрагента — для замка оплаты за обслуживание по области «Контрагенты». */
+  responsibleEmployeeId: string | null;
   /** «Открыть источник»: отчёт оплаты налога, общее поступление оплаты за обслуживание. */
   reportId: string | null;
   receipt: { id: string; total: Tyiyn; date: IsoDate } | null;
@@ -403,6 +405,7 @@ function journalFields(o: FinJournalOptions) {
     note: sql<string>`${j('note')}`,
     receiptPart: sql<boolean>`${j('receipt_id')} is not null`,
     archived: sql<boolean>`${contractors.serviceStatus} = 'archived'`,
+    responsibleEmployeeId: contractors.responsibleEmployeeId,
     reportId: sql<string | null>`${j('report_id')}`,
     receiptId: sql<string | null>`${j('receipt_id')}`,
     receiptTotal: sql<
@@ -443,6 +446,7 @@ function toJournalRow(r: JournalData): FinJournalRow {
     note: (r.note as string | null) ?? '',
     receiptPart: Boolean(r.receiptPart),
     archived: Boolean(r.archived),
+    responsibleEmployeeId: (r.responsibleEmployeeId as string | null) ?? null,
     reportId: (r.reportId as string | null) ?? null,
     receipt: r.receiptId
       ? {
