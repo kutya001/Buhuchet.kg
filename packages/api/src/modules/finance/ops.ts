@@ -7,13 +7,21 @@ import {
   lockOperation,
   moneyContractor,
   operationCard,
+  receiptHasFee,
   transferTargets,
   transferToEmployee,
   writeOff,
   type LockedOperation,
   type Tx,
 } from '@buhuchet/db';
-import { canSeeContractor, hasPermission, scopeOf, type HistoryAction } from '@buhuchet/domain';
+import {
+  canSeeContractor,
+  hasPermission,
+  scopeOf,
+  type AccessSubject,
+  type HistoryAction,
+  type Translate,
+} from '@buhuchet/domain';
 import {
   CorrectionRequest,
   MoneyContractorParam,
@@ -34,7 +42,16 @@ import { orgContextOf, requireAnyPermission, requirePermission } from '../../mid
 import { feeVisible, subjectOf, todayOf, translateOf } from '../contractors/common';
 import { finScopeOf, inTaxpay, moneyFail } from '../money/common';
 import { error } from '../reports/common';
-import { canBonus, canRefund, canTransfer, forbidden, lockFail, operationLock } from './common';
+import {
+  canBonus,
+  canRefund,
+  canTransfer,
+  forbidden,
+  lockFail,
+  operationLock,
+  viewOnlyLock,
+  type OpLockInfo,
+} from './common';
 
 /*
  * Остаток контрагента и окно операции (задача 2.20; ТЗ «Виртуальные счета сотрудников» → «Остаток
@@ -75,6 +92,25 @@ async function hiddenFeeReceipt(
     (await feeVisible(tx, orgContextOf(c).orgId, subject)) &&
     canSeeContractor(subject, 'cps', locked.c)
   );
+}
+
+/**
+ * Поступление, из которого оплачено и обслуживание, удаляет только тот, кто может менять записи о плате
+ * этого контрагента, — с правом «Менять журнал тарифов» в области «Контрагенты» (строже прототипа,
+ * docs/deviations.md п. В-27): иначе вместе с поступлением незаметно для сотрудника удалилась бы и
+ * оплата за обслуживание, которую он не видит.
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#В-27
+async function feeDeleteLock(
+  tx: Tx,
+  t: Translate,
+  subject: AccessSubject,
+  op: { id: string; kind: string },
+  contractor: Parameters<typeof canSeeContractor>[2],
+): Promise<OpLockInfo | null> {
+  if (op.kind !== 'in') return null;
+  if (hasPermission(subject, 'tariff') && canSeeContractor(subject, 'cps', contractor)) return null;
+  return (await receiptHasFee(tx, op.id)) ? viewOnlyLock(tx, t, 'tariff') : null;
 }
 
 export const writeOffRoute = createRoute({
@@ -254,7 +290,11 @@ export function operationHandler(deps: ApiDeps): RouteHandler<typeof operationRo
       const op = { kind: card.op.kind, deleted: !!card.op.cancelledAt };
       const [edit, del] = await Promise.all([
         operationLock(tx, t, subject, op, card.contractor, 'edit'),
-        operationLock(tx, t, subject, op, card.contractor, 'del'),
+        operationLock(tx, t, subject, op, card.contractor, 'del').then(
+          async (lock) =>
+            lock ??
+            feeDeleteLock(tx, t, subject, { id: card.op.id, kind: card.op.kind }, card.contractor),
+        ),
       ]);
       return { card, fee, edit, del, filesOn: settings.features.files };
     });
@@ -402,14 +442,15 @@ export function deleteOperationHandler(
       const scope = finScopeOf(subject);
       const locked = await lockOperation(tx, id, scope);
       if (await hiddenFeeReceipt(tx, c, locked)) apiFail(404, 'not_found', 'Операция не найдена');
-      const lock = await operationLock(
-        tx,
-        t,
-        subject,
-        { kind: locked.op.kind, deleted: !!locked.op.cancelledAt },
-        locked.c,
-        'del',
-      );
+      const lock =
+        (await operationLock(
+          tx,
+          t,
+          subject,
+          { kind: locked.op.kind, deleted: !!locked.op.cancelledAt },
+          locked.c,
+          'del',
+        )) ?? (await feeDeleteLock(tx, t, subject, locked.op, locked.c));
       if (lock) lockFail(lock);
       // Права на удаление — по области «Финансовых операций» (ТЗ «Окно оплаты» → «Права», прототип
       // `opLock`): контрагент уже найден в ней, отчёт оплаты отдельно не ограничивается.

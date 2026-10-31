@@ -790,6 +790,16 @@ async function allocationsOf(tx: Tx, operationId: string, t: Translate) {
   }));
 }
 
+/** Из поступления оплачено и обслуживание: у него есть действующая оплата за обслуживание. */
+export async function receiptHasFee(tx: Tx, operationId: string): Promise<boolean> {
+  const [row] = await tx
+    .select({ id: feePayments.id })
+    .from(feePayments)
+    .where(and(eq(feePayments.operationId, operationId), isNull(feePayments.deletedAt)))
+    .limit(1);
+  return !!row;
+}
+
 /** Части за обслуживание поступления; у удалённого поступления — удалённые вместе с ним. */
 async function feePartsOf(tx: Tx, operationId: string, withDeleted: boolean) {
   const rows = await tx

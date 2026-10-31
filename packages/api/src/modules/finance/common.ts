@@ -6,6 +6,7 @@ import {
   type AccessSubject,
   type FinOpKind,
   type OpLock,
+  type PermissionId,
   type Translate,
   type UiTextKey,
 } from '@buhuchet/domain';
@@ -92,7 +93,7 @@ export async function operationLock(
       kind: op.kind,
       deleted: op.deleted,
       canKind: hasPermission(subject, right),
-      canArchiveRest: hasPermission(subject, 'archiveRest'),
+      canArchiveRest: canArchiveRest(subject),
       canMoney: hasPermission(subject, 'money'),
       archived: c.archived,
       monthClosed: false,
@@ -101,12 +102,15 @@ export async function operationLock(
     act,
   );
   if (!code) return null;
-  const params: Record<string, string> = {};
-  if (code === 'op_view_only') {
-    const catalog = await permissionCatalog(tx);
-    params.right = catalog.find((p) => p.id === right)?.name ?? right;
-  }
-  return { code, text: t(`err.${code}` as UiTextKey, params) };
+  if (code === 'op_view_only') return viewOnlyLock(tx, t, right);
+  return { code, text: t(`err.${code}` as UiTextKey) };
+}
+
+/** «Только просмотр: нужно право «…»» — с названием права из каталога. */
+export async function viewOnlyLock(tx: Tx, t: Translate, right: PermissionId): Promise<OpLockInfo> {
+  const catalog = await permissionCatalog(tx);
+  const name = catalog.find((p) => p.id === right)?.name ?? right;
+  return { code: 'op_view_only', text: t('err.op_view_only', { right: name }) };
 }
 
 /** Действие с операцией запрещено замком: 403 без права, 409 — в остальных случаях. */

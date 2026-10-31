@@ -340,6 +340,7 @@ export function OperationWindowDialog({
             <MiniTable
               label={t('fin.op.alloc')}
               empty=""
+              phoneCards={false}
               onOpen={(key) => key.startsWith('r:') && openReport(key.slice(2))}
               columns={[
                 { key: 'what', label: t('fin.op.what') },
@@ -392,6 +393,8 @@ export function OperationWindowDialog({
             <MiniTable
               label={t('fin.op.corrections')}
               empty=""
+              phoneCards={false}
+              headless
               onOpen={(key) => setChild(openSlot(key))}
               columns={[
                 { key: 'date', label: t('fin.op.date') },

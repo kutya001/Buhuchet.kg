@@ -534,6 +534,7 @@ describe.skipIf(!databaseAvailable())(
         { orgId: f.a.orgId, roleId: f.roleIds.senior, permissionId: 'cpArchive' },
         { orgId: f.a.orgId, roleId: f.roleIds.senior, permissionId: 'staffView' },
         { orgId: f.a.orgId, roleId: f.roleIds.senior, permissionId: 'staff' },
+        { orgId: f.a.orgId, roleId: f.roleIds.senior, permissionId: 'archiveRest' },
       ]);
       const archive = async (cookie: string, id: string) =>
         ArchiveContractorsResult.parse(
@@ -552,11 +553,60 @@ describe.skipIf(!databaseAvailable())(
       expect(await archive(hr, cpHr)).toEqual({ total: som(100), items: null });
       expect((await money(hr, cpHr)).actions).toEqual({ bonus: false, refund: false, xfer: false });
       expect((await writeOff(hr, cpHr, { kind: 'refund', amount: som(1) })).status).toBe(403);
-      // «Старший»: прав на деньги нет — остатка в ответе нет, вкладки «Счёт» тоже.
+      // «Старший»: «Распоряжаться остатком» есть, прав на деньги нет — остатка в ответе нет, ни
+      // «Вернуть» и «В бонус», ни их отмены, ни вкладки «Счёт».
       expect(await archive(senior, cpSenior)).toBeNull();
+      expect((await writeOff(senior, cpSenior, { kind: 'refund', amount: som(1) })).status).toBe(
+        403,
+      );
+      const refundId = OperationSaved.parse(
+        await (
+          await expectStatus(
+            await writeOff(owner, cpSenior, { kind: 'refund', amount: som(1) }),
+            201,
+          )
+        ).json(),
+      ).id;
+      const undo = await call('POST', `/api/money-operations/${refundId}/delete`, senior, {
+        reason: 'Ошибка',
+      });
+      expect(undo.status).toBe(403);
+      expect((await failure(undo)).code).toBe('op_view_only');
       expect((await call('GET', `/api/staff/${employee('senior-a')}/account`, senior)).status).toBe(
         403,
       );
+    });
+
+    it('поступление с оплатой за обслуживание удаляет только право «Менять журнал тарифов» (п. В-27)', async () => {
+      const mixed = await receive(owner, cpA, som(50));
+      await f.t.admin.db.insert(schema.feePayments).values({
+        orgId: f.a.orgId,
+        contractorId: cpA,
+        amount: som(20),
+        paidOn: '2026-10-17',
+        toKind: 'org',
+        operationId: mixed,
+      });
+      // «Бухгалтер»: «Учёт денег» есть, платы не видит — удалить нельзя, окно показывает замок.
+      expect((await opWindow(acc, mixed)).locks.del).toMatchObject({ code: 'op_view_only' });
+      const denied = await call('POST', `/api/money-operations/${mixed}/delete`, acc, {
+        reason: 'Ошибка',
+      });
+      expect(denied.status).toBe(403);
+      expect((await failure(denied)).code).toBe('op_view_only');
+      // Без оплаты за обслуживание «Бухгалтер» удаляет своё поступление, как в прототипе.
+      expect((await opWindow(acc, receiptA)).locks.del).toBeNull();
+      // «Главный бухгалтер» с «Менять журнал тарифов» удаляет поступление вместе с оплатой.
+      expect((await opWindow(chief, mixed)).locks.del).toBeNull();
+      await expectStatus(
+        await call('POST', `/api/money-operations/${mixed}/delete`, chief, { reason: 'Ошибка' }),
+        200,
+      );
+      const [fee] = await f.t.admin.db
+        .select({ deletedAt: schema.feePayments.deletedAt })
+        .from(schema.feePayments)
+        .where(eq(schema.feePayments.operationId, mixed));
+      expect(fee?.deletedAt).not.toBeNull();
     });
 
     it('область «Свои»: окно, удаление и обратная запись чужого поступления — 404', async () => {

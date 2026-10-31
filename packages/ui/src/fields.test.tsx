@@ -199,6 +199,24 @@ describe('MiniTable — маленькая таблица карточки (пр
     expect(html).not.toContain('content-[attr(data-label)]');
   });
 
+  it('phoneCards={false} — таблица и на телефоне; headless и onOpen работают и в ней (прототип table.mini)', () => {
+    const html = renderToStaticMarkup(
+      <MiniTable
+        columns={columns}
+        rows={[{ key: '1', cells: { name: '18.10.2026', open: 'Банк вернул' } }]}
+        empty="—"
+        label="Обратные записи"
+        phoneCards={false}
+        headless
+        onOpen={() => undefined}
+      />,
+    );
+    expect(html).toContain('<thead class="hidden">');
+    expect(html).toContain('data-open=""');
+    expect(html).toContain('tabindex="0"');
+    expect(html).not.toContain('max-md:grid');
+  });
+
   it('miniWide — ключи значений длиннее 22 знаков без лишних пробелов', () => {
     expect(
       miniWide({ short: 'Optima Bank', long: 'Бакай Банк, M-Bank, О!Банк', spaced: '  a   b  ' }),

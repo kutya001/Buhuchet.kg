@@ -715,6 +715,7 @@ export function OperationDeleteDialog({
             <MiniTable
               label={t('fin.del.blocked_pay')}
               empty=""
+              phoneCards={false}
               onOpen={(key) => onOpenOperation(key)}
               columns={[
                 { key: 'report', label: t('fin.del.blocked_pay') },
@@ -841,6 +842,7 @@ export function RestDialog({
             <MiniTable
               label={t('fin.rest.title')}
               empty=""
+              phoneCards={false}
               columns={[
                 { key: 'name', label: t('fin.rest.col.cp') },
                 { key: 'where', label: t('fin.rest.col.where') },
@@ -865,7 +867,7 @@ export function RestDialog({
             <span className="text-[11.5px] leading-[1.4] text-faint">{t('fin.rest.hint')}</span>
           </>
         ) : (
-          <Note icon="check">{t('fin.rest.empty')}</Note>
+          <Note icon="ok">{t('fin.rest.empty')}</Note>
         )}
       </div>
       {dialog ? (
