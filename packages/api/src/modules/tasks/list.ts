@@ -9,6 +9,7 @@ import {
   withOrgContext,
   type TaskListOptions,
   type TaskTab,
+  type Tx,
 } from '@buhuchet/db';
 import { monthStart } from '@buhuchet/domain';
 import {
@@ -27,19 +28,25 @@ import { listQueryOf, listQueryResponses } from '../../errors';
 import { exportRateResponses, withExportSlot, xlsxContent, xlsxResponse } from '../../lists/export';
 import { orgContextOf, requireEmployee, requirePermission } from '../../middleware/access';
 import { serverTexts } from '../l10n/texts';
-import { error, requireTasks, rowBody, subjectOf, todayOf, viewerOf } from './common';
+import { error, listRowBody, requireTasks, subjectOf, todayOf, viewerOf } from './common';
 
 const off = { description: 'Задачи выключены в учётной политике', content: error };
 
-/** Условия списка того, кто смотрит: его права, вкладка, сегодня по Бишкеку. */
+/**
+ * Условия списка того, кто смотрит: его права, вкладка, сегодня по Бишкеку и «Сдача отчётов требует
+ * подтверждения» (когда закрывается регулярная задача). Задачи выключены — 403.
+ */
 async function listOptions(
   deps: ApiDeps,
   c: Context<AppEnv>,
+  tx: Tx,
   tab: TaskTab,
 ): Promise<TaskListOptions> {
+  const settings = await requireTasks(tx, orgContextOf(c).orgId);
   return {
     t: await serverTexts(deps),
     today: todayOf(deps),
+    reportConfirm: settings.reportConfirm,
     viewer: viewerOf(subjectOf(c)),
     tab,
   };
@@ -73,14 +80,13 @@ export function listTasksHandler(deps: ApiDeps): RouteHandler<typeof listTasksRo
   return async (c) => {
     const params = c.req.valid('query');
     const query = listQueryOf(params);
-    const o = await listOptions(deps, c, params.tab);
-    const page = await withOrgContext(deps.db, orgContextOf(c), async (tx) => {
-      await requireTasks(tx, orgContextOf(c).orgId);
-      return listTasksPage(tx, query, o);
-    });
+    const today = todayOf(deps);
+    const page = await withOrgContext(deps.db, orgContextOf(c), async (tx) =>
+      listTasksPage(tx, query, await listOptions(deps, c, tx, params.tab)),
+    );
     return c.json(
       {
-        items: page.rows.map((r) => rowBody(r, o.today)),
+        items: page.rows.map((r) => listRowBody(r, today)),
         total: page.total,
         page: page.page,
         size: page.size,
@@ -101,7 +107,7 @@ export const taskSummaryRoute = createRoute({
   responses: {
     200: {
       description:
-        'Мои открытые, поставленные мной открытые, просроченные; ждущие подтверждения и сколько из них можно подтвердить; есть ли в организации задачи',
+        'Мои открытые, поставленные мной открытые, просроченные; ждущие подтверждения и сколько из них можно подтвердить; «Отчёты за месяц: сдано N из M»; есть ли в организации задачи',
       content: { 'application/json': { schema: TaskSummary } },
     },
     401: { description: 'Нет входа', content: error },
@@ -115,11 +121,12 @@ export function taskSummaryHandler(deps: ApiDeps): RouteHandler<typeof taskSumma
     const viewer = viewerOf(subjectOf(c));
     const today = todayOf(deps);
     const body = await withOrgContext(deps.db, orgContextOf(c), async (tx) => {
-      await requireTasks(tx, orgContextOf(c).orgId);
+      const settings = await requireTasks(tx, orgContextOf(c).orgId);
+      const source = { t: await serverTexts(deps), today, reportConfirm: settings.reportConfirm };
       const [counts, pending, empty] = await Promise.all([
-        taskTabCounts(tx, viewer, today),
+        taskTabCounts(tx, viewer, source),
         taskPendingStats(tx, viewer),
-        tasksOrgEmpty(tx),
+        tasksOrgEmpty(tx, source),
       ]);
       return { ...counts, ...pending, monthStart: monthStart(today), empty };
     });
@@ -149,11 +156,9 @@ export const taskValuesRoute = createRoute({
 export function taskValuesHandler(deps: ApiDeps): RouteHandler<typeof taskValuesRoute, AppEnv> {
   return async (c) => {
     const { col, q, tab } = c.req.valid('query');
-    const o = await listOptions(deps, c, tab);
-    const values = await withOrgContext(deps.db, orgContextOf(c), async (tx) => {
-      await requireTasks(tx, orgContextOf(c).orgId);
-      return listTaskValues(tx, col, o, { filters: {} }, q);
-    });
+    const values = await withOrgContext(deps.db, orgContextOf(c), async (tx) =>
+      listTaskValues(tx, col, await listOptions(deps, c, tx, tab), { filters: {} }, q),
+    );
     return c.json(values, 200);
   };
 }
@@ -188,24 +193,21 @@ export function exportTasksHandler(deps: ApiDeps): RouteHandler<typeof exportTas
     const query = listQueryOf(params);
     const cols = [...new Set(params.cols.split(','))];
     const keys = cols.includes('scope') ? cols : [...cols, 'scope'];
-    const o = await listOptions(deps, c, params.tab);
+    const t = await serverTexts(deps);
     return withExportSlot(deps, c.get('session')!.userId, async () => {
       const result = await withOrgContext(
         deps.db,
         { ...orgContextOf(c), kind: 'export' },
-        async (tx) => {
-          await requireTasks(tx, orgContextOf(c).orgId);
-          return exportTasks(tx, query, keys, o);
-        },
+        async (tx) => exportTasks(tx, query, keys, await listOptions(deps, c, tx, params.tab)),
       );
       return xlsxResponse(c, {
-        title: o.t('nav.tasks'),
+        title: t('nav.tasks'),
         today: deps.clock.now(),
         columns: result.columns,
         rows: result.rows,
         more: result.more,
         total: result.total,
-        t: o.t,
+        t,
       });
     });
   };

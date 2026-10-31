@@ -21,7 +21,8 @@ import {
 import { readHistory } from './history';
 import { createOrganization, type CreatedOrganization } from './organizations';
 import { listTaskCategories } from './platform-dicts';
-import { employees, taskComments, tasks, users } from './schema';
+import { changeReportResponsible, createManualReport } from './reports';
+import { contractors, employees, reports, taskComments, tasks, users } from './schema';
 import { seedPermissions, seedRoleTemplates } from './seed';
 import { readSpecJson } from './spec-data';
 import { createEmployee } from './staff';
@@ -116,6 +117,7 @@ describe.skipIf(!databaseAvailable())('Задачи: данные', () => {
   const options = (v: TaskViewer, patch: Partial<TaskListOptions> = {}): TaskListOptions => ({
     t,
     today: TODAY,
+    reportConfirm: true,
     viewer: v,
     tab: 'all',
     ...patch,
@@ -354,7 +356,7 @@ describe.skipIf(!databaseAvailable())('Задачи: данные', () => {
     expect(await titles(options(v, { tab: 'overdue' }))).toEqual(['Месяц: прошлый, просрочена']);
     // «Поставленные мной» у главного бухгалтера.
     expect(await titles(options(viewer(chief), { tab: 'byme' }))).toHaveLength(2);
-    const counts = await inA((tx) => taskTabCounts(tx, v, TODAY));
+    const counts = await inA((tx) => taskTabCounts(tx, v, { t, today: TODAY, reportConfirm: true }));
     expect(counts.overdue).toBe(1);
     expect(counts.mine).toBeGreaterThanOrEqual(2);
     // Плашка: ждущие подтверждения среди видимых и сколько можно подтвердить (свои — нельзя).
@@ -372,7 +374,7 @@ describe.skipIf(!databaseAvailable())('Задачи: данные', () => {
       ),
     );
     expect(pendingRows.rows.length).toBeGreaterThanOrEqual(1);
-    expect(pendingRows.rows.every((r) => r.status === 'on_confirm')).toBe(true);
+    expect(pendingRows.rows.every((r) => r.kind === 'manual' && r.status === 'on_confirm')).toBe(true);
   });
 
   it('фильтр «Контрагент»: «Общие задачи» — первым значением; поиск по «Общая»; в выгрузке контрагент общей задачи пустой', async () => {
@@ -474,7 +476,7 @@ describe.skipIf(!databaseAvailable())('Задачи: данные', () => {
       changes: [{ field: 'executorEmployeeId', from: acc.employeeId, to: other.employeeId }],
     });
     // Вкладка карточки контрагента и доступ через контрагента.
-    const tab = await inA((tx) => contractorTasks(tx, cp));
+    const tab = await inA((tx) => contractorTasks(tx, cp, { t, today: TODAY, reportConfirm: true }));
     expect(tab).toMatchObject({ total: 3, open: 2 });
     const access = taskContractorAccess(contractorScope(other.employeeId));
     expect(await inA((tx) => getTask(tx, foreign, access))).not.toBeNull();
@@ -492,6 +494,95 @@ describe.skipIf(!databaseAvailable())('Задачи: данные', () => {
         .from(tasks)
         .where(eq(tasks.id, open)),
     ).toEqual([{ n: 0 }]);
+  });
+
+  it('регулярные задачи по отчётам: название по метке, статус отчёта, исполнитель — ответственный; «Не требуется» и архив снимают; повтор без дублей', async () => {
+    const cpName = 'ОсОО «Регуляр»';
+    const cp = await inA((tx) =>
+      createContractor(
+        tx,
+        a.orgId,
+        contractor({ name: cpName, inn: '02000000000088', responsibleEmployeeId: acc.employeeId }),
+        null,
+      ),
+    );
+    const manual = (reportTypeCode: string, month: string, due: string) =>
+      inA((tx) =>
+        createManualReport(
+          tx,
+          {
+            contractorId: cp,
+            reportTypeCode,
+            month,
+            eventDate: null,
+            due,
+            reasonCode: 'ПРЧ-001',
+            reasonName: 'Продление от госоргана',
+          },
+          { today: TODAY, scope: undefined },
+        ),
+      );
+    // Срок в текущем месяце; несданный просроченный не старше 75 дней; старше и следующий месяц — нет.
+    const nds = await manual('nds', '2026-09-01', '2026-10-28');
+    const pat = await manual('pat', '2026-10-01', '2026-10-30');
+    const late = await manual('t1m', '2026-08-01', '2026-09-10');
+    await manual('t1m', '2026-06-01', '2026-08-10');
+    await manual('t1m', '2026-10-01', '2026-11-10');
+    const regular = async (v = viewer(acc)) => {
+      const page = await inA((tx) =>
+        listTasksPage(tx, query(), options(v, { tab: 'all' })),
+      );
+      return page.rows
+        .filter((r) => r.kind === 'regular' && r.contractor.id === cp)
+        .sort((x, y) => x.dueDate.localeCompare(y.dueDate));
+    };
+    const rows = await regular();
+    expect(rows.map((r) => [r.title, r.category.name, r.dueDate, r.executor?.id, r.overdue])).toEqual([
+      ['Сдать 1-Т за Август 2026 — ' + cpName, 'Сдача отчёта', '2026-09-10', acc.employeeId, true],
+      ['Сдать и оплатить НДС за Сентябрь 2026 — ' + cpName, 'Сдача отчёта', '2026-10-28', acc.employeeId, false],
+      ['Оплатить патент за Октябрь 2026 — ' + cpName, 'Оплата', '2026-10-30', acc.employeeId, false],
+    ]);
+    expect(rows.map((r) => r.id)).toEqual([late.id, nds.id, pat.id]);
+    expect(rows[1]).toMatchObject({
+      kind: 'regular',
+      open: true,
+      report: { status: 'todo', act: 'both', mark: null },
+    });
+    // Повторное чтение — те же строки, без дублей (задачи выводятся из отчётов, а не создаются заданием).
+    expect((await regular()).map((r) => r.id)).toEqual([late.id, nds.id, pat.id]);
+    // Сдан — статус отчёта в задаче; ждёт подтверждения — задача ещё открыта.
+    await db.admin.db
+      .update(reports)
+      .set({ status: 'submitted', submittedAt: new Date('2026-10-26T06:00:00Z') })
+      .where(eq(reports.id, nds.id));
+    expect((await regular()).find((r) => r.id === nds.id)).toMatchObject({
+      open: true,
+      report: { status: 'submitted', mark: 'waiting', submittedOn: '2026-10-26' },
+    });
+    // Смена ответственного переводит задачу к новому.
+    await inA((tx) =>
+      changeReportResponsible(tx, pat.id, other.employeeId, { version: pat.version, scope: undefined }),
+    );
+    expect((await regular()).map((r) => r.id)).toEqual([late.id, nds.id]);
+    expect((await regular(viewer(other))).map((r) => [r.id, r.executor?.shortName])).toEqual([
+      [pat.id, 'Айгерим О.'],
+    ]);
+    // «Не требуется» снимает задачу; вкладка карточки контрагента считает открытыми только несданные.
+    await db.admin.db.update(reports).set({ status: 'not_required' }).where(eq(reports.id, late.id));
+    expect((await regular(viewer(acc, { all: true }))).map((r) => r.id)).toEqual([nds.id, pat.id]);
+    const tab = await inA((tx) => contractorTasks(tx, cp, { t, today: TODAY, reportConfirm: true }));
+    expect(tab).toMatchObject({ total: 2, open: 1 });
+    // «Отчёты мои за месяц»: у нового ответственного — одна несданная.
+    const counts = await inA((tx) =>
+      taskTabCounts(tx, viewer(other), { t, today: TODAY, reportConfirm: true }),
+    );
+    expect(counts.progress.mine).toEqual({ done: 0, total: 1 });
+    // Архивный контрагент — регулярных задач по нему нет.
+    await db.admin.db
+      .update(contractors)
+      .set({ serviceStatus: 'archived' })
+      .where(eq(contractors.id, cp));
+    expect(await regular(viewer(acc, { all: true }))).toEqual([]);
   });
 
   it('Админка → «Категории задач»: администратор добавляет категорию; категория задачи — «Используется», не удалить', async () => {

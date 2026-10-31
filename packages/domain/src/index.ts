@@ -19,6 +19,8 @@ export * from './common/errors';
 export * from './auth/session';
 export * from './auth/reset';
 export * from './telegram/messages';
+export * from './telegram/notify';
+export * from './telegram/reminders';
 export * from './l10n/texts';
 export * from './platform-dicts/catalog';
 export * from './platform-dicts/calendar';

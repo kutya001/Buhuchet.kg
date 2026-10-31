@@ -1,4 +1,6 @@
 import {
+  REPORT_ACTS,
+  REPORT_STATUSES,
   TASK_COMMENT_MAX,
   TASK_CONFIRM_NOTE_MAX,
   TASK_DESCRIPTION_MAX,
@@ -63,11 +65,64 @@ export const TaskRow = z.object({
 });
 export type TaskRow = z.infer<typeof TaskRow>;
 
-export const TaskList = listPageSchema(TaskRow);
+/**
+ * Регулярная задача по отчёту (задача 2.24; ТЗ «Регулярные задачи — по отчётам»; прототип `allTasks`):
+ * номер — номер отчёта; статус, отметка «Ждёт подтверждения» и шкала — отчёта; поставил — «Система».
+ */
+export const RegularTaskRow = z.object({
+  kind: z.literal('regular'),
+  id: Uuid,
+  title: z.string(),
+  /** `reg:sub` — «Сдача отчёта», `reg:pay` — «Оплата». */
+  category: z.object({ code: z.string(), name: z.string() }),
+  contractor: z.object({ id: Uuid, name: z.string() }),
+  /** Ответственный за отчёт; null — не назначен. */
+  executor: Person.nullable(),
+  dueDate: IsoDate,
+  needFile: z.boolean(),
+  hasFile: z.boolean(),
+  /** Открыта: отчёт не сдан или сдача ждёт подтверждения. */
+  open: z.boolean(),
+  /** Просрочена: отчёт не сдан, а срок прошёл. */
+  overdue: z.boolean(),
+  report: z.object({
+    status: z.enum(REPORT_STATUSES),
+    act: z.enum(REPORT_ACTS),
+    /** Сумма к уплате и оплачено, тыйыны: «Сдача только после оплаты». */
+    amount: z.number().int().nullable(),
+    paid: z.number().int(),
+    /** Отметка на шаге «Сдан» при включённом подтверждении сдачи. */
+    mark: z.enum(['waiting', 'confirmed']).nullable(),
+    confirmedBy: z.string().nullable(),
+    /** Сколько дней сдача ждёт подтверждения. */
+    waitDays: z.number().int().nonnegative(),
+  }),
+  lastStatus: z.object({ at: z.iso.datetime(), by: z.string().nullable() }).nullable(),
+  audit: RecordAudit,
+  version: RecordVersion,
+});
+export type RegularTaskRow = z.infer<typeof RegularTaskRow>;
+
+/** Ручная задача в списке: признак вида и открыта ли. */
+export const ManualTaskRow = TaskRow.extend({ kind: z.literal('manual'), open: z.boolean() });
+export type ManualTaskRow = z.infer<typeof ManualTaskRow>;
+
+/** Строка списка задач: ручная или регулярная. */
+export const TaskListRow = z.discriminatedUnion('kind', [ManualTaskRow, RegularTaskRow]);
+export type TaskListRow = z.infer<typeof TaskListRow>;
+
+export const TaskList = listPageSchema(TaskListRow);
 export type TaskList = z.infer<typeof TaskList>;
 
+/** «Отчёты за месяц: сдано N из M»: регулярные задачи со сроком в текущем месяце. */
+const MonthProgress = z.object({
+  done: z.number().int().nonnegative(),
+  total: z.number().int().nonnegative(),
+});
+
 /**
- * Счётчики вкладок и плашка «На подтверждении» (прототип `taskTabs`, `renderTasks`): мои открытые,
+ * Счётчики вкладок и плашка «На подтверждении» (прототип `taskTabs`, `renderTasks`): мои открытые (и
+ * регулярные),
  * поставленные мной открытые, просроченные; ждущие подтверждения и сколько из них можно подтвердить;
  * `monthStart` — с какого дня список («С <месяц>, вперёд и всё просроченное»); `empty` — задач в
  * организации ещё нет (прототип ui/empty.js).
@@ -79,6 +134,8 @@ export const TaskSummary = z.object({
   pending: z.number().int().nonnegative(),
   canConfirm: z.number().int().nonnegative(),
   monthStart: IsoDate,
+  /** «Отчёты мои / всех за месяц: сдано N из M» (прототип `renderTasks`; не на «Поставленных мной»). */
+  progress: z.object({ mine: MonthProgress, all: MonthProgress }),
   /** В организации ещё нет ни одной задачи: пустой список с подсказкой первого входа. */
   empty: z.boolean(),
 });
@@ -188,6 +245,6 @@ export type TaskFormOptions = z.infer<typeof TaskFormOptions>;
 export const ContractorTasks = z.object({
   total: z.number().int().nonnegative(),
   open: z.number().int().nonnegative(),
-  items: z.array(TaskRow),
+  items: z.array(TaskListRow),
 });
 export type ContractorTasks = z.infer<typeof ContractorTasks>;

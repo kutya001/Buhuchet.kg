@@ -216,7 +216,7 @@ describe.skipIf(!databaseAvailable())('Задачи: методы API', () => {
     expect((await call('GET', `/api/tasks/${task.id}`, hr)).status).toBe(404);
     expect((await call('GET', `/api/tasks/${task.id}`, ownerB)).status).toBe(404);
     const mine = await list(acc, 'tab=mine&size=all');
-    expect(mine.items.every((r) => r.executor.id === employee('acc-a'))).toBe(true);
+    expect(mine.items.every((r) => r.executor?.id === employee('acc-a'))).toBe(true);
     expect(mine.items.map((r) => r.id)).toContain(task.id);
     expect((await list(hr, 'tab=all&size=all')).items.map((r) => r.id)).not.toContain(task.id);
     expect((await list(chief, 'tab=all&size=all')).items.map((r) => r.id)).toContain(task.id);

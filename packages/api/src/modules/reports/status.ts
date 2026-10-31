@@ -2,7 +2,9 @@ import { createRoute, type RouteHandler, type z } from '@hono/zod-openapi';
 import {
   confirmReport,
   confirmReports,
+  employeeShortName,
   orgMenuSettings,
+  reportMessageFacts,
   returnReportForFix,
   rollbackReport,
   setReportAmount,
@@ -14,7 +16,13 @@ import {
   type ReportStep,
   type Tx,
 } from '@buhuchet/db';
-import { formatText, hasPermission, type PermissionId, type Translate } from '@buhuchet/domain';
+import {
+  formatText,
+  hasPermission,
+  periodFull,
+  type PermissionId,
+  type Translate,
+} from '@buhuchet/domain';
 import {
   ReportAmountRequest,
   ReportBatchConfirmRequest,
@@ -35,6 +43,8 @@ import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
 import { orgContextOf, requirePermission } from '../../middleware/access';
 import { serverTexts } from '../l10n/texts';
+import { queueTelegramEvents, type TelegramEvent } from '../telegram/events';
+import { flushEvents } from '../telegram/outbox';
 import { subjectOf, todayOf } from '../contractors/common';
 import { assigneeScopeOf, error, reportScopeOf, withReportErrors } from './common';
 
@@ -262,11 +272,49 @@ export function fixReportHandler(deps: ApiDeps): RouteHandler<typeof fixReportRo
   return async (c) => {
     const { id } = c.req.valid('param');
     const { version, reason } = c.req.valid('json');
-    const r = await run(deps, c, (tx, ctx) =>
-      returnReportForFix(tx, id, reason, { ...ctx, version }),
-    );
+    let queued: string[] = [];
+    const r = await run(deps, c, async (tx, ctx) => {
+      const fixed = await returnReportForFix(tx, id, reason, { ...ctx, version });
+      const by = subjectOf(c).employeeId;
+      queued = await queueTelegramEvents(deps, tx, await fixEvent(tx, ctx, id, reason, by));
+      return fixed;
+    });
+    await flushEvents(deps, orgContextOf(c).orgId, queued);
     return c.json({ id: r.id, version: r.version }, 200);
   };
+}
+
+/**
+ * «На исправление» — ответственному в Telegram с причиной (ТЗ «Подтверждение сдачи: возврат «На
+ * исправление» — ответственному, с причиной»; прототип: «… получит сообщение в Telegram»).
+ */
+async function fixEvent(
+  tx: Tx,
+  ctx: ReportConfirmContext,
+  id: string,
+  reason: string,
+  by: string,
+): Promise<TelegramEvent[]> {
+  const facts = await reportMessageFacts(tx, id);
+  if (!facts?.responsibleId || facts.responsibleId === by) return [];
+  return [
+    {
+      kind: 'report_fix',
+      to: facts.responsibleId,
+      by,
+      template: 'tgFix',
+      values: {
+        отчёт: ctx.t('telegram.item.report', {
+          type: facts.typeShort,
+          period: periodFull({ period: facts.period, start: facts.periodStart }, ctx.t),
+          contractor: facts.contractorName,
+        }),
+        причина: reason,
+        автор: await employeeShortName(tx, by),
+      },
+      link: 'reports',
+    },
+  ];
 }
 
 /** Шаг без окна из меню и шкалы. */

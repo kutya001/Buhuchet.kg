@@ -1,9 +1,10 @@
 import type { TelegramSendOptions } from '@buhuchet/adapters';
-import { messageTemplates, telegramChat } from '@buhuchet/db';
+import { logTelegram, messageTemplates, telegramChat } from '@buhuchet/db';
 import {
   fillTemplate,
   TELEGRAM_TEMPLATE_DEFAULTS,
   withOrganization,
+  type OutboxKind,
   type TelegramTemplateKey,
 } from '@buhuchet/domain';
 import type { ApiDeps } from '../../deps';
@@ -23,8 +24,9 @@ export async function botText(
 
 /**
  * Отправить сразу, мимо очереди (ТЗ: код восстановления пароля приходит сразу; так же — ответы бота и
- * сообщение о смене пароля). Очередь напоминаний с повторами — поток Б. Ошибка Telegram не роняет
- * метод: она пишется в журнал без текста сообщения (в нём может быть код).
+ * сообщение о смене пароля). Служебное сообщение пользователю (`log`) пишется в журнал отправок после
+ * попытки — у кода без текста, повторно код не отправляется (docs/deviations.md, п. 12). Ошибка
+ * Telegram не роняет метод: она пишется в журнал сервера без текста сообщения (в нём может быть код).
  */
 export async function sendNow(
   deps: ApiDeps,
@@ -32,21 +34,33 @@ export async function sendNow(
   text: string,
   purpose: string,
   options: TelegramSendOptions = {},
+  log?: { userId: string; kind: OutboxKind },
 ): Promise<boolean> {
   if (!deps.telegram) return false;
+  let ok = false;
+  let error = '';
   try {
     const res = await deps.telegram.sendMessage(chatId, text, options);
+    ok = res.ok;
     if (!res.ok) {
+      error = `${res.errorCode}: ${res.description}`;
       deps.logger.warn(
         { purpose, errorCode: res.errorCode, description: res.description },
         'Telegram: сообщение не отправлено',
       );
     }
-    return res.ok;
   } catch (err) {
+    error = err instanceof Error ? err.message : String(err);
     deps.logger.warn({ err, purpose }, 'Telegram: сообщение не отправлено');
-    return false;
   }
+  if (log) {
+    try {
+      await logTelegram(deps.db, { ...log, chatId, text, ok, error });
+    } catch (err) {
+      deps.logger.warn({ err, purpose }, 'Telegram: сообщение не записано в журнал отправок');
+    }
+  }
+  return ok;
 }
 
 /**
@@ -69,5 +83,8 @@ export async function notifyPasswordChanged(
     user.orgName,
     chat.shared,
   );
-  return sendNow(deps, chat.chatId, text, 'password_changed');
+  return sendNow(deps, chat.chatId, text, 'password_changed', {}, {
+    userId: user.userId,
+    kind: resetBy === undefined ? 'pass_changed' : 'pass_reset',
+  });
 }
