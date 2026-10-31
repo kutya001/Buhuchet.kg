@@ -13,6 +13,7 @@ export * from './telegram';
 export * from './staff';
 export * from './contractors';
 export * from './contractor-history';
+export * from './contractor-import';
 export { gkedNames, gkedSearch, type GkedFound } from './gked';
 export * from './socfund';
 export * from './contractor-service';

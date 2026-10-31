@@ -44,6 +44,7 @@ export const KB_GO: Readonly<Record<string, KbTarget>> = {
   empcard: { module: 'staff', tab: 'list', flash: LIST },
   // Контрагенты (задачи 2.09–2.11): форма открывается сама; шаги карточки — строки списка, как в прототипе.
   cp1: { module: 'cps', tab: 'all', flash: LIST, open: { add: 'contractor' } },
+  import: { module: 'cps', tab: 'all', flash: LIST, open: { add: 'import' } },
   resp: { module: 'cps', tab: 'all', flash: LIST },
   oneoff: {
     module: 'cps',

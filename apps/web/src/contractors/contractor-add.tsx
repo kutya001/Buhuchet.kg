@@ -8,17 +8,22 @@ import { useShell } from '../shell/context';
 
 /**
  * «+ Добавить» в модуле «Контрагенты» (прототип core/registry.js, `add` модуля cps): «Контрагент» —
- * окно «Новый контрагент» на любой вкладке модуля. «Загрузить из Excel» (2.16) и «Из свидетельства и
- * выписки» (2.17) — уведомление, как у модуля без экрана, пока их задачи не подключат свои окна.
- * Вариант `oneoff` («Перейти» шага «Добавить разового контрагента») открывает форму с «Разовым».
+ * окно «Новый контрагент» на любой вкладке модуля, «Загрузка из Excel» — окно «Загрузка контрагентов
+ * из Excel» (2.16). «Из свидетельства и выписки» (2.17) — уведомление, как у модуля без экрана, пока его
+ * задача не подключит своё окно. Вариант `oneoff` («Перейти» шага «Добавить разового контрагента»)
+ * открывает форму с «Разовым».
  */
-export function useContractorAddRequest(run: { contractor: (kind?: ContractorKind) => void }) {
+export function useContractorAddRequest(run: {
+  contractor: (kind?: ContractorKind) => void;
+  import: () => void;
+}) {
   const t = useT();
   const toast = useToast();
   const { addRequest, clearAddRequest } = useShell();
   const request = addRequest?.moduleId === 'cps' ? addRequest : null;
   const start = useEffectEvent((actionId: string, label: string, variant?: string) => {
     if (actionId === 'contractor') run.contractor(variant === 'oneoff' ? 'oneoff' : undefined);
+    else if (actionId === 'import') run.import();
     else toast(t('shell.stub_add', { action: label }), { icon: 'info' });
   });
   useEffect(() => {

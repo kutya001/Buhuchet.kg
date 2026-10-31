@@ -24,6 +24,7 @@ import { tabHref } from '../shell/modules';
 import { openContractorCard } from './card-store';
 import { useContractorActions } from './contractor-actions';
 import { useContractorAddRequest } from './contractor-add';
+import { useContractorImport } from './contractor-import';
 import {
   CONTRACTOR_AUDIT,
   CONTRACTOR_DEFAULT_SORT,
@@ -126,7 +127,8 @@ export function ContractorsList({ tab }: { tab: ContractorTab }) {
   );
   const exporter = useListExport(sendExport);
   const cps = useContractorActions();
-  useContractorAddRequest({ contractor: cps.newContractor });
+  const importer = useContractorImport();
+  useContractorAddRequest({ contractor: cps.newContractor, import: importer.open });
 
   const goPlate = (id: string) => {
     const want = PLATE_FILTERS[id];
@@ -232,10 +234,32 @@ export function ContractorsList({ tab }: { tab: ContractorTab }) {
       ]
     : [];
 
-  const canAdd = access.can('createCp');
   // Контрагентов нет совсем — пустое состояние первого входа (ТЗ «Пустые состояния», прототип
-  // ui/empty.js `firstEmpty`) на любой вкладке; «Загрузить из Excel» рядом подключит задача загрузки (2.16).
+  // ui/empty.js `firstEmpty`) на любой вкладке: «Добавить контрагента» и «Загрузить из Excel» — по правам.
   const first = !!s && s.active + s.archived === 0;
+  const emptyActions = [
+    ...(access.can('createCp')
+      ? [
+          {
+            id: 'add',
+            icon: 'plus' as const,
+            label: t('cp.empty.add'),
+            primary: true,
+            onClick: () => cps.newContractor(),
+          },
+        ]
+      : []),
+    ...(access.can('cpImport')
+      ? [
+          {
+            id: 'import',
+            icon: 'paste' as const,
+            label: t('cp.import.open'),
+            onClick: importer.open,
+          },
+        ]
+      : []),
+  ];
   const empty =
     tab === 'mine' && !first ? (
       <EmptyState icon="building" title={t('cp.empty.mine')} />
@@ -244,19 +268,7 @@ export function ContractorsList({ tab }: { tab: ContractorTab }) {
         icon="building"
         title={t(first ? 'cp.empty.first' : 'cp.empty.all')}
         text={t(first ? 'cp.empty.first_text' : 'cp.empty.all_text')}
-        {...(canAdd
-          ? {
-              actions: [
-                {
-                  id: 'add',
-                  icon: 'plus',
-                  label: t('cp.empty.add'),
-                  primary: true,
-                  onClick: () => cps.newContractor(),
-                },
-              ],
-            }
-          : {})}
+        {...(emptyActions.length ? { actions: emptyActions } : {})}
       />
     );
 
@@ -301,6 +313,7 @@ export function ContractorsList({ tab }: { tab: ContractorTab }) {
         bulk={cps.bulk}
       />
       {cps.dialogs}
+      {importer.dialog}
     </div>
   );
 }

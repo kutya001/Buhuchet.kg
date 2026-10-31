@@ -176,10 +176,11 @@ describe('программа обучения', () => {
       ),
     ).toBe(false);
     expect(kbStepVisible({ ...CATALOG.steps[0]!, active: false }, OWNER, RULES)).toBe(false);
-    // Реестр работающих шагов продукта: «Добавить первого контрагента» есть (2.09), загрузки из
-    // Excel пока нет (2.16).
+    // Реестр работающих шагов продукта: «Добавить первого контрагента» (2.09) и «Загрузка из Excel»
+    // (2.16) есть, «Указать стоимость обслуживания» пока нет (задачи денег).
     expect(Object.keys(KB_STEP_RULES)).toContain('cp1');
-    expect(Object.keys(KB_STEP_RULES)).not.toContain('import');
+    expect(Object.keys(KB_STEP_RULES)).toContain('import');
+    expect(Object.keys(KB_STEP_RULES)).not.toContain('tariff');
     expect(
       kbStepVisible(
         CATALOG.steps.find((s) => s.id === 'profile')!,

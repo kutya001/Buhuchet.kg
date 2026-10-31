@@ -106,15 +106,24 @@ function sheetXml(columns: readonly XlsxColumn[], rows: readonly XlsxCell[][]): 
   );
 }
 
-const CONTENT_TYPES =
-  `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
-  `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
-  `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
-  `<Default Extension="xml" ContentType="application/xml"/>` +
-  `<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>` +
-  `<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>` +
-  `<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>` +
-  `</Types>`;
+/** Типы частей архива: книга, листы по порядку и стили. */
+function contentTypes(sheets: number): string {
+  const parts = Array.from(
+    { length: sheets },
+    (_, i) =>
+      `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`,
+  ).join('');
+  return (
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+    `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
+    `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+    `<Default Extension="xml" ContentType="application/xml"/>` +
+    `<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>` +
+    parts +
+    `<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>` +
+    `</Types>`
+  );
+}
 
 const ROOT_RELS =
   `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
@@ -122,12 +131,21 @@ const ROOT_RELS =
   `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>` +
   `</Relationships>`;
 
-const WORKBOOK_RELS =
-  `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
-  `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
-  `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>` +
-  `<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>` +
-  `</Relationships>`;
+/** Связи книги: листы `rId1…rIdN`, стили — следующим номером. */
+function workbookRels(sheets: number): string {
+  const rels = Array.from(
+    { length: sheets },
+    (_, i) =>
+      `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`,
+  ).join('');
+  return (
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+    `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+    rels +
+    `<Relationship Id="rId${sheets + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>` +
+    `</Relationships>`
+  );
+}
 
 const STYLES =
   `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
@@ -143,11 +161,17 @@ const STYLES =
   `<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>` +
   `</styleSheet>`;
 
-function workbookXml(name: string): string {
+function workbookXml(names: readonly string[]): string {
+  const sheets = names
+    .map(
+      (name, i) =>
+        `<sheet name="${xmlText(sheetName(name))}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`,
+    )
+    .join('');
   return (
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
     `<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
-    `<sheets><sheet name="${xmlText(sheetName(name))}" sheetId="1" r:id="rId1"/></sheets></workbook>`
+    `<sheets>${sheets}</sheets></workbook>`
   );
 }
 
@@ -213,21 +237,33 @@ export async function zip(files: readonly { name: string; data: Buffer }[]): Pro
   return Buffer.concat([...locals, directory, end]);
 }
 
+/** Лист книги: имя, заголовки и строки. */
+export interface XlsxSheet {
+  name: string;
+  columns: readonly XlsxColumn[];
+  rows: readonly XlsxCell[][];
+}
+
+/** Файл .xlsx из нескольких листов по порядку (у каждого — заголовки жирным, закреплены, с фильтром). */
+export function buildXlsxBook(sheets: readonly XlsxSheet[]): Promise<Buffer> {
+  const file = (path: string, xml: string) => ({ name: path, data: Buffer.from(xml, 'utf8') });
+  return zip([
+    file('[Content_Types].xml', contentTypes(sheets.length)),
+    file('_rels/.rels', ROOT_RELS),
+    file('xl/workbook.xml', workbookXml(sheets.map((x) => x.name))),
+    file('xl/_rels/workbook.xml.rels', workbookRels(sheets.length)),
+    file('xl/styles.xml', STYLES),
+    ...sheets.map((x, i) => file(`xl/worksheets/sheet${i + 1}.xml`, sheetXml(x.columns, x.rows))),
+  ]);
+}
+
 /** Файл .xlsx с одним листом `name`: заголовки `columns` и строки `rows` (значения по столбцам). */
 export function buildXlsx(
   name: string,
   columns: readonly XlsxColumn[],
   rows: readonly XlsxCell[][],
 ): Promise<Buffer> {
-  const file = (path: string, xml: string) => ({ name: path, data: Buffer.from(xml, 'utf8') });
-  return zip([
-    file('[Content_Types].xml', CONTENT_TYPES),
-    file('_rels/.rels', ROOT_RELS),
-    file('xl/workbook.xml', workbookXml(name)),
-    file('xl/_rels/workbook.xml.rels', WORKBOOK_RELS),
-    file('xl/styles.xml', STYLES),
-    file('xl/worksheets/sheet1.xml', sheetXml(columns, rows)),
-  ]);
+  return buildXlsxBook([{ name, columns, rows }]);
 }
 
 /** MIME-тип файла .xlsx. */

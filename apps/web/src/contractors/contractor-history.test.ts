@@ -65,6 +65,14 @@ describe('история контрагента', () => {
       contractorHistoryText(t, entry({ reason: 'Отмечен статус «Крупный» по УГНС' }), names),
     ).toBe('Отмечен статус «Крупный» по УГНС');
     expect(contractorHistoryText(t, entry({}), names)).toBe('Изменено');
+    // Созданный загрузкой из Excel — одной строкой-причиной (прототип importDlg).
+    expect(
+      contractorHistoryText(
+        t,
+        entry({ action: 'create', reason: 'Создан загрузкой из Excel' }),
+        names,
+      ),
+    ).toBe('Создан загрузкой из Excel');
   });
 
   it('подтверждение права на режим по ГКЭД (п. 58) — с вопросом', () => {
