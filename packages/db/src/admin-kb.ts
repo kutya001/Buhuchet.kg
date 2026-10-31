@@ -39,7 +39,7 @@ import {
   type ListTexts,
 } from './list';
 import { writePlatformHistory } from './platform-history';
-import { permissions, platformAuditLog } from './schema';
+import { news, permissions, platformAuditLog } from './schema';
 
 /*
  * Админка → «База знаний (содержимое)» (задача 2.39, docs/decisions.md п. Д-11; прототип
@@ -509,15 +509,26 @@ export async function adminKbArticleSave(
 }
 
 /**
- * Статья, добавленная загрузкой из Excel, — при её откате. Статья шага (`art`) не удаляется, а
- * отключается: иначе шаг ссылался бы на статью, которой нет.
+ * Статья, добавленная загрузкой из Excel, — при её откате. Статья шага (`art`) или «Подробнее» новости
+ * не удаляется, а отключается: иначе ссылка вела бы на статью, которой нет.
  */
+// ОТКЛОНЕНИЕ: docs/deviations.md#Д-27
 export async function adminKbArticleRemove(
   tx: Tx,
   id: string,
 ): Promise<AdminKbSaveResult<AdminKbArticle | null>> {
-  const steps = await adminKbSteps(tx);
-  if (!steps.some((s) => s.art === id)) return deleteItem(tx, 'kbArticles', 'kbarts', id);
+  // На статью ссылается шаг или «Подробнее» новости — статья отключается, ссылки не повисают.
+  const [steps, linked] = await Promise.all([
+    adminKbSteps(tx),
+    tx
+      .select({ id: news.id })
+      .from(news)
+      .where(and(eq(news.linkKind, 'art'), eq(news.linkId, id)))
+      .limit(1),
+  ]);
+  if (!steps.some((s) => s.art === id) && !linked.length) {
+    return deleteItem(tx, 'kbArticles', 'kbarts', id);
+  }
   const found = (await adminKbArticles(tx)).find((a) => a.id === id);
   if (!found) return NOT_FOUND;
   if (!found.active) return { ok: true, value: found };

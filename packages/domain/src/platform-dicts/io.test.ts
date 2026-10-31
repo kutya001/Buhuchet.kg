@@ -535,6 +535,10 @@ describe('Выгрузка и загрузка «Базы знаний (соде
     // «—» в праве — без права; статья шага в файл не выгружается и сохраняется.
     const dash = load('kbsteps', step, { 'Необходимое право': '—', 'Вид шага': 'Сделать' });
     expect(ioMerge(step, dash.row.values).data).toMatchObject({ perm: '', learn: 'do', art: 'a1' });
+    // Старые значения «Вида шага» — «Действие» и «Изучить» (ТЗ «Шаги уроков»).
+    const old = load('kbsteps', step, { 'Вид шага': 'Действие' });
+    expect(ioMerge(step, old.row.values).data).toMatchObject({ learn: 'do' });
+    expect(load('kbsteps', step, { 'Вид шага': 'изучить' }).changes).toEqual([]);
     const bad = load('kbsteps', step, { 'Модуль программы': 'Нет такого' });
     expect(bad.row.errors).toEqual(['Модуль программы: модуля программы «Нет такого» нет']);
     // «Место для «Перейти»» — только у нового шага: у прежнего не сравнивается.

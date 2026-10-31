@@ -16,7 +16,7 @@ import { withUserContext } from './auth';
 import type { Tx } from './client';
 import { withOrgContext } from './context';
 import { kbCatalog } from './kb';
-import { newsAdminHistory } from './news';
+import { createNews, newsAdminHistory, publishNews } from './news';
 import { createOrganization, type CreatedOrganization } from './organizations';
 import { writePlatformHistory } from './platform-history';
 import { users } from './schema';
@@ -254,7 +254,7 @@ describe.skipIf(!databaseAvailable())(
       expect(removed).toMatchObject({ code: 'my-step', action: 'delete', label: 'Мой шаг' });
     });
 
-    it('статьи в файле: новая с кодом; откат удаляет её, а статью шага — отключает', async () => {
+    it('статьи в файле: новая с кодом; откат удаляет её, а статью шага и новости — отключает', async () => {
       const value = row(ioNewValue('kbarts', 'my-art'), {
         name: 'Моя статья',
         data: { sec: 'Модули', mod: 'cps', aud: 'biz', html: '<p>Текст</p>' },
@@ -281,14 +281,36 @@ describe.skipIf(!databaseAvailable())(
             TODAY,
           ),
         );
+      // Статья «Подробнее» новости.
+      expect(await save('kbarts', { ...value, code: 'my-art3' })).toMatchObject({ ok: true });
+      await asAdmin((tx) =>
+        createNews(
+          tx,
+          {
+            title: 'Со ссылкой',
+            type: 'announce',
+            release: null,
+            date: '2026-11-02',
+            short: 'Кратко',
+            md: 'Текст',
+            link: { kind: 'art', id: 'my-art3' },
+            pinned: false,
+            showOnLogin: false,
+            audience: 'all',
+          },
+          { publish: false },
+        ),
+      );
       expect(await remove('my-art')).toEqual({ ok: true });
       expect(await remove('my-art2')).toEqual({ ok: true });
+      expect(await remove('my-art3')).toEqual({ ok: true });
       const arts = await asAdmin((tx) => adminKbArticles(tx));
       expect(arts.some((a) => a.id === 'my-art')).toBe(false);
       expect(arts.find((a) => a.id === 'my-art2')).toMatchObject({ active: false });
+      expect(arts.find((a) => a.id === 'my-art3')).toMatchObject({ active: false });
     });
 
-    it('показы в файле: облачко — строка; новое — только следующим номером своего сценария', async () => {
+    it('показы в файле: облачко — строка; новое — в конец своего сценария', async () => {
       const clouds = (await records('kbshows')).filter((r) => r.code.startsWith('sh-policy#'));
       expect(clouds.map((r) => r.code)).toEqual([
         'sh-policy#1',
@@ -384,10 +406,23 @@ describe.skipIf(!databaseAvailable())(
       });
       expect(history.items[1]).toMatchObject({ kind: 'draft_saved', title: 'Из Excel' });
       const now = (await record('kbnews', 'n-excel'))!;
-      expect(await asAdmin((tx) => SECTION_WRITERS.kbnews.remove(tx, now, TODAY))).toEqual({
+      // Опубликованную после загрузки новость откат не удаляет.
+      expect(await asAdmin((tx) => publishNews(tx, 'n-excel', now.version))).toMatchObject({
         ok: true,
       });
-      expect(await record('kbnews', 'n-excel')).toBeUndefined();
+      const published = (await record('kbnews', 'n-excel'))!;
+      expect(await asAdmin((tx) => SECTION_WRITERS.kbnews.remove(tx, published, TODAY))).toEqual({
+        ok: false,
+        fail: 'changed',
+      });
+      expect(await record('kbnews', 'n-excel')).toMatchObject({ data: { status: 'published' } });
+      // Черновик из загрузки откат удаляет.
+      expect(await save('kbnews', { ...value, code: 'n-excel2' })).toMatchObject({ ok: true });
+      const fresh = (await record('kbnews', 'n-excel2'))!;
+      expect(await asAdmin((tx) => SECTION_WRITERS.kbnews.remove(tx, fresh, TODAY))).toEqual({
+        ok: true,
+      });
+      expect(await record('kbnews', 'n-excel2')).toBeUndefined();
     });
   },
 );

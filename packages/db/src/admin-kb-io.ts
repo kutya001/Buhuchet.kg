@@ -33,7 +33,6 @@ import {
   type AdminKbOwnShow,
   type AdminKbStep,
 } from './admin-kb';
-import type { Tx } from './client';
 import {
   allNewsForAdmin,
   createNews,

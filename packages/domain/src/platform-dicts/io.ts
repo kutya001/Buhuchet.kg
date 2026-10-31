@@ -199,6 +199,9 @@ const upper = (text: string) => text.trim().toUpperCase();
 /** «—» в ячейке — пусто (прототип: `!v || v === '—'`). */
 const noDash = (text: string) => (text.trim() === '—' ? '' : text);
 const noPlus = (text: string) => text.trim().replace(/^\+/, '');
+/** «Вид шага»: понимаются и старые «Изучить» и «Действие» (ТЗ «Шаги уроков»; прототип DX.kbsteps). */
+const stepType = (text: string) =>
+  /^\s*изучить\s*$/i.test(text) ? 'look' : /^\s*действие\s*$/i.test(text) ? 'do' : text;
 
 const CODE = col('code', 'pdicts.io.col.code');
 const NAME = col('name', 'pdicts.io.col.name', { type: 'text' }, { required: true });
@@ -537,7 +540,7 @@ export const IO_COLUMNS: Readonly<Record<IoDict, readonly IoColumn[]>> = {
       'learn',
       'kbadm.col.type',
       enumOf(['do', 'look'], (v) => `kbadm.step.type.${v}`),
-      { required: true },
+      { required: true, normalize: stepType },
     ),
     col('star', 'kbadm.col.star', { type: 'yesno' }),
     col(
