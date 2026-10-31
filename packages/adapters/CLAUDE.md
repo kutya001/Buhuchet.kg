@@ -8,6 +8,7 @@
 - `scheduler` — разбор расписаний (по времени Бишкека), поиск «пропущенного» запуска, проверка секрета вызова, цикл worker; Vercel Cron только будит маршрут `/api/cron/tick` раз в минуту.
 - `telegram` — отправка сообщений и проверка секрета вебхука; в тестах — `createFakeTelegram`.
 - `logger` — pino в стандартный вывод, секреты вычищаются.
+- `documents` — чтение PDF «Из свидетельства и выписки» (вход `@buhuchet/adapters/documents`, грузится при первом вызове): текстовый слой — pdf.js, нет текста — распознавание картинки tesseract.js (rus + kir, языки из `@tesseract.js-data/*`, без сети); пределы — страницы, время, знаки; в тестах — `createFakeDocumentReader`. Новый файл библиотеки, который нужен в работе, — в `outputFileTracingIncludes` `apps/web/next.config.ts`, иначе его не будет в сборке `standalone` (docs/decisions.md, п. А-8).
 
 Правила:
 - `@supabase/*` и `@vercel/*` разрешены только в этом пакете (ESLint и `pnpm check:portability`); сейчас они не нужны вовсе.

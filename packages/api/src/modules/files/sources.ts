@@ -1,4 +1,5 @@
 import {
+  contractorFilesPart,
   fileContractor,
   indicatorFilesPart,
   manualFilesPart,
@@ -59,6 +60,11 @@ export interface FileSourceRecord {
  * записей — null; `own` — контрагент, к которому привязан сам файл (у файла без записи).
  */
 export interface FileSource {
+  /**
+   * Файлы источника появляются только своим методом модуля (документы «Из свидетельства и выписки»
+   * прикрепляет создание контрагента), а не общей загрузкой `POST /files/uploads`.
+   */
+  ownUpload?: true;
   resolve(
     tx: Tx,
     subject: AccessSubject,
@@ -109,6 +115,29 @@ export const manualSource: FileListSource = {
     };
   },
   list: ({ t }) => manualFilesPart(t),
+};
+
+/**
+ * «Контрагент» (задача 2.17; прототип `allFiles`: вид «Контрагент», источник «Из свидетельства и
+ * выписки»): свидетельство и выписка, прикреплённые к контрагенту при создании из документов. Запись —
+ * сам контрагент: номер из запроса или контрагент файла (у прикреплённых при создании номера записи
+ * нет); к контрагенту в архиве файлы не прикрепляются и не удаляются. История — у файла с
+ * контрагентом, как у загруженного вручную.
+ */
+export const contractorSource: FileListSource = {
+  ownUpload: true,
+  async resolve(tx, _subject, id, own) {
+    const contractorId = id ?? own?.contractorId ?? null;
+    if (!contractorId) return null;
+    const contractor = await fileContractor(tx, contractorId);
+    if (!contractor) return null;
+    return {
+      contractor: { id: contractor.id, responsibleEmployeeId: contractor.responsibleEmployeeId },
+      editable: !contractor.archived,
+      history: (fileId) => ({ entity: 'file', entityId: fileId, contractorId: contractor.id }),
+    };
+  },
+  list: ({ t }) => contractorFilesPart(t),
 };
 
 /** Файлы отчётов в списке: право «Просматривать отчёты»; видны отчёты области «Свои». */
@@ -184,6 +213,7 @@ function moneySource(kind: 'receipt' | 'tax_payment'): FileListSource {
  */
 export const FILE_SOURCES: Readonly<Record<FileSourceKind, FileListSource>> = {
   manual: manualSource,
+  contractor: contractorSource,
   report: { ...reportFileSource, list: reportFilesList },
   receipt: moneySource('receipt'),
   tax_payment: moneySource('tax_payment'),

@@ -726,7 +726,10 @@ function mainItems(
   return items;
 }
 
-/** «Регистрационные данные» (прототип regKvBox): незаполненные — «—»; пустой блок — подсказка. */
+/**
+ * «Регистрационные данные» (прототип regKvBox): незаполненные — «—»; пустой блок — подсказка; у
+ * созданного из свидетельства и выписки — подпись «из свидетельства и выписки».
+ */
 function RegistrationBox({ t, c }: { t: Translate; c: Contractor }) {
   const r = c.registration;
   const rows: [string, string | undefined][] = [
@@ -745,7 +748,20 @@ function RegistrationBox({ t, c }: { t: Translate; c: Contractor }) {
   ];
   const empty = rows.every(([, v]) => !v);
   return (
-    <Box title={t('cp.card.reg')}>
+    <Box
+      title={
+        c.regdocs ? (
+          <>
+            {t('cp.card.reg')}{' '}
+            <span className="text-[12px] font-medium" data-cp-reg-docs="">
+              {t('cp.rd.card_label')}
+            </span>
+          </>
+        ) : (
+          t('cp.card.reg')
+        )
+      }
+    >
       {empty ? (
         <Faint>{t('cp.card.reg_empty')}</Faint>
       ) : (

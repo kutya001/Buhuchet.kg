@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, type ReactNode } from 'react';
+import { createContext, useContext, useRef, type ReactNode } from 'react';
 import { Icon } from './icon';
 import type { IconName } from './icons';
 import { useFormPack } from './use-form-pack';
@@ -80,14 +80,46 @@ export function fieldControl(
   };
 }
 
-/** Поле формы (`.fld`): подпись, поле ввода, подсказка и ошибка. */
+/**
+ * Отметки у поля (прототип rdMarks формы «Из свидетельства и выписки»: `.src-l`, `.alt-l`, `.need-l`,
+ * `.fld.need`): строки под полем ввода перед подсказкой и оранжевая рамка у незаполненного
+ * обязательного поля (у поля с ошибкой рамка остаётся красной).
+ */
+export interface FieldMark {
+  node?: ReactNode;
+  need?: boolean;
+}
+
+/**
+ * Отметки полей формы по id поля: форма даёт их всем своим полям сразу, не протягивая через
+ * составные поля (ГКЭД, телефон, списки).
+ */
+export const FieldMarks = createContext<((id: string) => FieldMark | null | undefined) | null>(
+  null,
+);
+
+/**
+ * Оранжевая рамка поля ввода у незаполненного обязательного поля (`.fld.need .inp`, `.gk-main`).
+ * Классы целиком — их находит сборка стилей.
+ */
+const NEED_CLASS = [
+  '[&_input]:shadow-[0_0_0_1.5px_var(--bu-orange-bg),inset_0_0_0_1px_var(--bu-orange)]',
+  '[&_select]:shadow-[0_0_0_1.5px_var(--bu-orange-bg),inset_0_0_0_1px_var(--bu-orange)]',
+  '[&_textarea]:shadow-[0_0_0_1.5px_var(--bu-orange-bg),inset_0_0_0_1px_var(--bu-orange)]',
+  '[&_[data-gked-main]]:shadow-[0_0_0_1.5px_var(--bu-orange-bg),inset_0_0_0_1px_var(--bu-orange)]',
+].join(' ');
+
+/** Поле формы (`.fld`): подпись, поле ввода, отметки формы, подсказка и ошибка. */
 export function Field(props: FieldProps) {
   const { id, label, required, hint, error, full, children } = props;
+  const mark = useContext(FieldMarks)?.(id);
+  const need = !!mark?.need && !error;
   return (
     <div
       data-field=""
       data-full={full ? '' : undefined}
-      className={`flex min-w-0 flex-col gap-[5px]${full ? ' col-span-full' : ''}`}
+      data-need={need ? '' : undefined}
+      className={`flex min-w-0 flex-col gap-[5px]${full ? ' col-span-full' : ''}${need ? ` ${NEED_CLASS}` : ''}`}
     >
       <label htmlFor={id} className="text-[12px] font-semibold tracking-[.01em] text-muted">
         {label}
@@ -98,6 +130,7 @@ export function Field(props: FieldProps) {
         ) : null}
       </label>
       {typeof children === 'function' ? children(fieldControl(props)) : children}
+      {mark?.node}
       {hint ? (
         <div id={`${id}-hint`} data-hint="" className="text-[11.5px] leading-[1.4] text-faint">
           {hint}
@@ -194,13 +227,16 @@ export function KeyValues({
   );
 }
 
-/** Блок карточки (`.box`): заголовок прописными буквами, справа от него — кнопки; без заголовка — только рамка. */
+/**
+ * Блок карточки (`.box`): заголовок прописными буквами (с пометкой — `title` разметкой), справа от него
+ * — кнопки; без заголовка — только рамка.
+ */
 export function Box({
   title,
   actions,
   children,
 }: {
-  title?: string;
+  title?: ReactNode;
   actions?: ReactNode;
   children: ReactNode;
 }) {
@@ -225,6 +261,7 @@ const NOTE_TONES = {
   warn: 'border-transparent bg-caution-bg text-caution-label',
   bad: 'border-transparent bg-danger-bg text-danger-label',
   ok: 'border-transparent bg-ok-bg text-ok',
+  beta: 'border-transparent bg-warn-bg text-warn',
 } as const;
 
 const NOTE_ICONS: Record<keyof typeof NOTE_TONES, IconName> = {
@@ -232,12 +269,13 @@ const NOTE_ICONS: Record<keyof typeof NOTE_TONES, IconName> = {
   warn: 'alert',
   bad: 'alert',
   ok: 'check',
+  beta: 'alert',
 };
 
 /**
- * Заметка (`.note`, `.note.warn`, `.note.bad`, `.note.ok`): значок и текст. `alert` — важное сообщение,
- * которое экранный диктор читает сразу (ошибка формы). `center` — значок по центру строки, как у
- * заметки с кнопкой (`.fe-note`).
+ * Заметка (`.note`, `.note.warn`, `.note.bad`, `.note.ok`, `.note.beta` — жёлтая «Бета-версия»): значок и
+ * текст. `alert` — важное сообщение, которое экранный диктор читает сразу (ошибка формы). `center` —
+ * значок по центру строки, как у заметки с кнопкой (`.fe-note`).
  */
 export function Note({
   tone = 'info',

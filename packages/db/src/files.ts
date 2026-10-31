@@ -211,6 +211,67 @@ export async function moveSourceFiles(
     );
 }
 
+/**
+ * Документы «Из свидетельства и выписки» (задача 2.17), которые загрузил этот пользователь и которые
+ * ещё ни к кому не прикреплены: незаконченные загрузки вида «contractor» без записи. Чужие, уже
+ * прикреплённые и неизвестные номера в ответ не попадают.
+ */
+export async function pendingRegdocs(
+  tx: Tx,
+  ids: readonly string[],
+  userId: string,
+  options: { lock?: boolean } = {},
+): Promise<FileRecord[]> {
+  if (ids.length === 0) return [];
+  const query = tx
+    .select(columns)
+    .from(files)
+    .leftJoin(employees, eq(employees.userId, files.createdBy))
+    .where(
+      and(
+        inArray(files.id, [...ids]),
+        eq(files.state, 'pending'),
+        eq(files.sourceKind, 'contractor'),
+        isNull(files.sourceId),
+        isNull(files.contractorId),
+        eq(files.createdBy, userId),
+      ),
+    );
+  const rows = options.lock ? await query.for('update', { of: files }) : await query;
+  return rows.map(record);
+}
+
+/**
+ * Прикрепить загруженные документы к созданному контрагенту (задача 2.17): файл становится видимым
+ * («ready») на вкладке «Файлы» контрагента и в Файловом менеджере — в той же транзакции, что и
+ * создание. Запись-источник у такого файла — сам контрагент (`contractor_id`): источник файла после
+ * вставки роль приложения не меняет (миграция 0037), номер записи остаётся пустым.
+ */
+export async function attachRegdocs(
+  tx: Tx,
+  ids: readonly string[],
+  contractorId: string,
+): Promise<void> {
+  if (ids.length === 0) return;
+  await tx
+    .update(files)
+    .set({
+      state: 'ready',
+      contractorId,
+      version: sql`${files.version} + 1`,
+      updatedAt: sql`now()`,
+      updatedBy: sql`app.current_user_id()`,
+    })
+    .where(
+      and(
+        inArray(files.id, [...ids]),
+        eq(files.state, 'pending'),
+        eq(files.sourceKind, 'contractor'),
+        isNull(files.contractorId),
+      ),
+    );
+}
+
 /** Убрать запись незаконченной загрузки (файл не дошёл или оказался больше предела). */
 export async function dropPendingFile(tx: Tx, id: string): Promise<void> {
   await tx.delete(files).where(and(eq(files.id, id), eq(files.state, 'pending')));
@@ -264,6 +325,15 @@ export type FileListParts = Readonly<Partial<Record<FileSourceKind, FileListPart
 /** «Загружен вручную»: файл без записи, виден по одной области группы «Файловый менеджер». */
 export function manualFilesPart(t: ListTexts): FileListPart {
   return { visible: undefined, source: sql`${dictLiteral(t('files.kind.manual'))}::text` };
+}
+
+/**
+ * Файлы контрагента (задача 2.17): свидетельство и выписка, по которым он создан «Из свидетельства и
+ * выписки», — видны по одной области группы «Файловый менеджер» (прототип `allFiles`: вид «Контрагент»,
+ * источник «Из свидетельства и выписки»).
+ */
+export function contractorFilesPart(t: ListTexts): FileListPart {
+  return { visible: undefined, source: sql`${dictLiteral(t('files.src.regdocs'))}::text` };
 }
 
 /**

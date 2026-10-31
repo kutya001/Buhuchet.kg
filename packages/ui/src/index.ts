@@ -24,7 +24,7 @@ export { EmptyState, NothingFound, type EmptyAction } from './empty-state';
 export { FilesBox, type FilesBoxItem, type FilesBoxLabels, type FilesBoxProps } from './files-box';
 export { Icon } from './icon';
 export { ICONS, type IconName } from './icons';
-export { MenuItems, type MenuItem } from './menu';
+export { BetaBadge, MenuItems, type MenuItem } from './menu';
 export {
   ConfirmDialog,
   Modal,
@@ -71,6 +71,7 @@ export {
   Box,
   Field,
   fieldControl,
+  FieldMarks,
   FormGrid,
   inputClass,
   KeyValues,
@@ -80,6 +81,7 @@ export {
   pillClass,
   Tag,
   type FieldControl,
+  type FieldMark,
   type FieldProps,
   type KeyValueItem,
 } from './form';

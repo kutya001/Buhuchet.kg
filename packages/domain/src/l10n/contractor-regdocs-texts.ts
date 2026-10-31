@@ -1,0 +1,163 @@
+import type { UiTextDefault } from './texts';
+
+const S = 'Контрагенты: из свидетельства и выписки';
+
+/**
+ * Создание контрагента «Из свидетельства и выписки» (Бета; задача 2.17; прототип
+ * modules/contractor-regdocs.js — regDocsDlg, rdRun, rdHead, rdGkBox, rdMarks; core/regdocs.js — RD_DOC,
+ * RD_FROM): окно загрузки, ошибки документов, сводка и подписи у полей заполненной формы.
+ */
+export const CONTRACTOR_REGDOCS_TEXTS = {
+  'cp.rd.title': { ru: 'Новый контрагент из свидетельства и выписки', section: S },
+  'cp.rd.beta': { ru: 'Бета', section: S },
+  'cp.rd.sub': {
+    ru: 'Загрузите один или оба документа юрлица из Минюста КР — в любом порядке',
+    section: S,
+  },
+  'cp.rd.beta_note.lead': { ru: 'Бета-версия.', section: S },
+  'cp.rd.beta_note': {
+    ru: 'Распознавание свидетельства и выписки может работать неточно: формы документов меняются. Проверьте все поля перед сохранением.',
+    section: S,
+  },
+  'cp.rd.drop': { ru: 'Перетащите PDF сюда', section: S },
+  'cp.rd.drop_or': { ru: 'или нажмите, чтобы выбрать файл', section: S },
+  'cp.rd.drop_hint': {
+    ru: 'Свидетельство (справка) о государственной регистрации и выписка из Единого государственного реестра юридических лиц · PDF до 10 МБ · вид документа определяется по содержимому',
+    section: S,
+  },
+  'cp.rd.hint': {
+    ru: 'Распознаётся текст внутри PDF, скачанного с сайта Минюста; скан или фото документа читается распознаванием текста. Файлы обрабатываются на сервере платформы и никуда не передаются. ИП и филиалы пока не поддерживаются.',
+    section: S,
+  },
+  'cp.rd.kind.svid': { ru: 'Свидетельство', section: S },
+  'cp.rd.kind.vyp': { ru: 'Выписка', section: S },
+  'cp.rd.state.ok_date': { ru: '{kind} от {date}', section: S },
+  'cp.rd.state.bad': { ru: 'Не распознан', section: S },
+  'cp.rd.state.busy': { ru: 'Читается…', section: S },
+  'cp.rd.state.new': { ru: 'Ещё не распознан', section: S },
+  'cp.rd.remove': { ru: 'Убрать {name}', section: S },
+  'cp.rd.remove_title': { ru: 'Убрать файл', section: S },
+  'cp.rd.manual': { ru: 'Заполнить вручную', section: S },
+  'cp.rd.go': { ru: 'Распознать', section: S },
+  'cp.rd.going': { ru: 'Распознаётся…', section: S },
+  'cp.rd.err.size': { ru: 'Загрузите PDF до 10 МБ', section: S },
+  'cp.rd.err.password': { ru: 'Файл защищён паролем', section: S },
+  'cp.rd.err.read': { ru: 'Не удалось прочитать документ. Заполните форму вручную', section: S },
+  'cp.rd.err.kind': { ru: 'Документ не распознан как свидетельство или выписка', section: S },
+  'cp.rd.err.ip': {
+    ru: 'Документ не распознан: для ИП и филиалов создание по документам пока не поддерживается, заполните форму вручную',
+    section: S,
+  },
+  'cp.rd.err.upload': { ru: 'Файл не загрузился. Попробуйте ещё раз', section: S },
+  'cp.rd.err.many': { ru: 'За один раз — не больше {n} документов', section: S },
+  'cp.rd.err.same': {
+    ru: 'Загружены два документа одного вида ({kind}): уберите лишний файл.',
+    section: S,
+  },
+  'cp.rd.err.none': {
+    ru: 'Ни один документ не распознан. Можно заполнить форму вручную — загруженные файлы прикрепятся к контрагенту.',
+    section: S,
+  },
+  'cp.rd.err.diff': {
+    ru: 'Документы относятся к разным организациям: ИНН не совпадает. Уберите лишний файл.',
+    section: S,
+  },
+  'cp.rd.dup.title': { ru: 'Контрагент с таким ИНН уже есть', section: S },
+  'cp.rd.dup.text': {
+    ru: 'ИНН {inn} уже у контрагента «{name}». Второй раз его создать нельзя.',
+    section: S,
+  },
+  'cp.rd.dup.text_archived': {
+    ru: 'ИНН {inn} уже у контрагента «{name}» (в архиве). Второй раз его создать нельзя.',
+    section: S,
+  },
+  'cp.rd.dup.open': { ru: 'Открыть', section: S },
+  'cp.rd.form_sub': {
+    ru: 'Заполнено из свидетельства и выписки — проверьте все поля. Ничего не сохранится до «Сохранить контрагента»',
+    section: S,
+  },
+  'cp.rd.stopped': {
+    ru: 'Юрлицо прекращено (ликвидировано) по данным документа.',
+    section: S,
+  },
+  'cp.rd.stopped_status': {
+    ru: 'Юрлицо прекращено (ликвидировано) по данным документа — статус «{status}».',
+    section: S,
+  },
+  'cp.rd.stopped_tail': { ru: 'Сохранить можно после подтверждения.', section: S },
+  'cp.rd.sum.docs': { ru: 'Распознано: {docs}.', section: S },
+  'cp.rd.sum.and': { ru: ' и ', section: S },
+  'cp.rd.sum.filled': { ru: 'Заполнено из документов:', section: S },
+  'cp.rd.sum.check': { ru: 'требуют проверки:', section: S },
+  'cp.rd.sum.miss': { ru: 'Не найдено в документах: {list}.', section: S },
+  'cp.rd.sum.manual': {
+    ru: 'Виды отчётов, стоимость обслуживания, ответственного и дату начала заполните вручную.',
+    section: S,
+  },
+  'cp.rd.sum.warn': { ru: 'Предупреждения: {list}.', section: S },
+  'cp.rd.warn.alt': { ru: 'документы расходятся: {field}', section: S },
+  'cp.rd.warn.phone': { ru: 'телефон в документе неполный ({phone})', section: S },
+  'cp.rd.f.name': { ru: 'Название', section: S },
+  'cp.rd.f.full': { ru: 'Полное наименование', section: S },
+  'cp.rd.f.inn': { ru: 'ИНН', section: S },
+  'cp.rd.f.reg_no': { ru: 'Регистрационный номер', section: S },
+  'cp.rd.f.okpo': { ru: 'Код ОКПО', section: S },
+  'cp.rd.f.form': { ru: 'Форма собственности', section: S },
+  'cp.rd.f.phone': { ru: 'Телефон', section: S },
+  'cp.rd.f.email': { ru: 'Электронная почта', section: S },
+  'cp.rd.f.head': { ru: 'Руководитель', section: S },
+  'cp.rd.f.reg_date': { ru: 'Дата первичной регистрации', section: S },
+  'cp.rd.f.rereg_date': { ru: 'Дата перерегистрации', section: S },
+  'cp.rd.f.founders': { ru: 'Количество учредителей', section: S },
+  'cp.rd.f.foreign': { ru: 'Иностранное участие', section: S },
+  'cp.rd.f.addr': { ru: 'Юридический адрес', section: S },
+  'cp.rd.f.gked': { ru: 'Основной вид деятельности (ГКЭД)', section: S },
+  'cp.rd.files': { ru: 'После сохранения к контрагенту прикрепятся: {list}', section: S },
+  'cp.rd.src.svid': { ru: 'из свидетельства', section: S },
+  'cp.rd.src.vyp': { ru: 'из выписки', section: S },
+  'cp.rd.src.both': { ru: 'из выписки и свидетельства', section: S },
+  'cp.rd.src.addr': { ru: 'Предложено по адресу, проверьте', section: S },
+  'cp.rd.need': { ru: 'Заполните вручную', section: S },
+  'cp.rd.alt': {
+    ru: 'Документы расходятся, по умолчанию взято значение из более позднего документа:',
+    section: S,
+  },
+  'cp.rd.alt.svid': { ru: 'в свидетельстве', section: S },
+  'cp.rd.alt.vyp': { ru: 'в выписке', section: S },
+  'cp.rd.alt.from': { ru: 'от {date}', section: S },
+  'cp.rd.alt.in_form': { ru: '(в форме)', section: S },
+  'cp.rd.alt.take': { ru: 'взять это', section: S },
+  'cp.rd.v.yes': { ru: 'есть', section: S },
+  'cp.rd.v.no': { ru: 'нет', section: S },
+  'cp.rd.gk.doc': { ru: 'В документе:', section: S },
+  'cp.rd.gk.found': { ru: 'код найден в справочнике ГКЭД', section: S },
+  'cp.rd.gk.choose': { ru: 'Код {code} — не нижний уровень, выберите подкласс:', section: S },
+  'cp.rd.gk.like': {
+    ru: 'Кода нет в документе или справочнике. Похожие виды деятельности — выберите подходящий:',
+    section: S,
+  },
+  'cp.rd.stop.title': { ru: 'Юрлицо прекращено', section: S },
+  'cp.rd.stop.text': {
+    ru: 'По данным документа юрлицо прекращено (ликвидировано). Всё равно создать контрагента?',
+    section: S,
+  },
+  'cp.rd.stop.text_status': {
+    ru: 'По данным документа юрлицо прекращено (ликвидировано), статус «{status}». Всё равно создать контрагента?',
+    section: S,
+  },
+  'cp.rd.stop.ok': { ru: 'Создать', section: S },
+  'cp.rd.reason': { ru: 'Создан из свидетельства и выписки (бета)', section: S },
+  'cp.rd.card_label': { ru: 'из свидетельства и выписки', section: S },
+  'err.regdocs_busy': {
+    ru: 'Предыдущие документы ещё распознаются. Попробуйте чуть позже.',
+    section: 'Ошибки',
+  },
+  'err.regdocs_limit': {
+    ru: 'Слишком много распознаваний документов за час. Попробуйте позже.',
+    section: 'Ошибки',
+  },
+  'err.regdocs_file': {
+    ru: 'Загрузите PDF до 10 МБ',
+    section: 'Ошибки',
+  },
+} as const satisfies Record<string, UiTextDefault>;

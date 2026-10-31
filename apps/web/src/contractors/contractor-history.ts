@@ -329,6 +329,11 @@ export function contractorHistoryText(t: Translate, e: Entry, names: Names): str
     case 'contractor_page':
       lines = [pageHistoryText(t, e)];
       break;
+    // Файл контрагента — загруженный вручную или из свидетельства и выписки: «Прикреплён файл «…»»,
+    // «Удалён файл «…»», как в карточке отчёта.
+    case 'file':
+      lines = [reportHistoryText(t, { ...e, reason: null }, 0)];
+      break;
     case 'money_operation': {
       // Удаление операции — с причиной в тексте (прототип opLog); ввод списания, возврата, перевода и
       // обратной записи — без причины, как в прототипе `log('cp', …)` (задача 2.20).

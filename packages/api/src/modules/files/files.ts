@@ -62,7 +62,7 @@ export const error = { 'application/json': { schema: ApiError } };
 const notFound = (): never => apiFail(404, 'not_found', 'Файл не найден');
 
 /** Раздел ключа хранилища: `org/<org_id>/files/<id>` (ограничение files_key_check в базе). */
-const FILES_SECTION = 'files';
+export const FILES_SECTION = 'files';
 
 type FileSources = Readonly<Record<string, FileSource>>;
 
@@ -73,7 +73,7 @@ export function sourceOf(deps: ApiDeps, kind: string): FileSource | undefined {
 }
 
 /** Начатые загрузки пользователя за час (незаконченные лежат в хранилище сутки до очистки). */
-const UPLOAD_RATE_LIMIT: RateLimit = {
+export const UPLOAD_RATE_LIMIT: RateLimit = {
   kind: 'file_upload',
   max: FILE_UPLOADS_PER_HOUR,
   windowSeconds: 3600,
@@ -226,7 +226,8 @@ export const startUploadRoute = createRoute({
       content: { 'application/json': { schema: FileUploadTicket } },
     },
     400: {
-      description: 'Файл больше 20 МБ, такой тип не загружается, неверное имя',
+      description:
+        'Файл больше 20 МБ, такой тип не загружается, неверное имя; файлы источника, который прикрепляет их своим действием',
       content: error,
     },
     401: { description: 'Нет входа', content: error },
@@ -250,6 +251,11 @@ export function startUploadHandler(deps: ApiDeps): RouteHandler<typeof startUplo
     const problem = fileUploadProblem({ name: rawName, size });
     if (problem) apiFail(400, problem, FILE_MESSAGES[problem]);
     const name = rawName.trim();
+    if (sourceOf(deps, source.kind)?.ownUpload) {
+      apiFail(400, 'validation_failed', 'Такие файлы прикрепляются только своим действием', {
+        field: 'source',
+      });
+    }
     const contentType = fileContentType(name);
     const ctx = orgContextOf(c);
     const subject = subjectOf(c);

@@ -1,6 +1,7 @@
 import { createRoute, z, type RouteHandler } from '@hono/zod-openapi';
 import {
   activeReportTypes,
+  attachRegdocs,
   contractorUsage,
   createContractor,
   deleteContractor,
@@ -9,6 +10,7 @@ import {
   getContractor,
   lockContractor,
   orgMenuSettings,
+  pendingRegdocs,
   readContractorFields,
   uniqueViolation,
   updateContractor,
@@ -23,6 +25,7 @@ import {
   CONTRACTOR_MESSAGES,
   contractorDeleteRefusal,
   DEFAULT_FEE_DAY,
+  RD_MAX_BYTES,
   type AccessSubject,
   type Translate,
 } from '@buhuchet/domain';
@@ -177,6 +180,7 @@ export function createContractorHandler(
     const today = todayOf(deps);
     const t = await translateOf(deps);
     const texts = await serverTexts(deps);
+    const regdocs = body.regdocs ? await storedRegdocs(deps, c, body.regdocs.files) : [];
     try {
       const out = await withOrgContext(deps.db, ctx, async (tx) => {
         const fee = await feeVisible(tx, ctx.orgId, subject);
@@ -281,8 +285,20 @@ export function createContractorHandler(
             validFrom: monthOf(body.startDate),
             note: t('cp.tariff.first'),
           },
-          { today },
+          {
+            today,
+            ...(body.regdocs?.recognized ? { reason: t('cp.rd.reason') } : {}),
+          },
         );
+        if (regdocs.length) {
+          // Документы окна «Из свидетельства и выписки» — к контрагенту, той же транзакцией.
+          const files = await pendingRegdocs(tx, regdocs, ctx.userId!, { lock: true });
+          await attachRegdocs(
+            tx,
+            files.map((f) => f.id),
+            id,
+          );
+        }
         await writeContractorNotes(tx, id, office.notes);
         const reportsCreated = plan
           ? await createNewReports(tx, id, plan, {
@@ -312,6 +328,35 @@ export function createContractorHandler(
 
 const FEE_ONLY =
   'Стоимость, день оплаты и первый неполный месяц задаёт тот, кто видит плату за обслуживание';
+
+/**
+ * Документы «Из свидетельства и выписки», которые прикрепятся к новому контрагенту (прототип addCpDlg:
+ * `pre.files`): загруженные этим пользователем и ещё ни к кому не прикреплённые, которые дошли до
+ * хранилища того размера и типа, что заявлены (PDF не больше 10 МБ). Остальные не прикрепляются — контрагент
+ * создаётся без них, незаконченные загрузки убирает задача очистки.
+ */
+async function storedRegdocs(
+  deps: ApiDeps,
+  c: Context<AppEnv>,
+  ids: readonly string[],
+): Promise<string[]> {
+  const ctx = orgContextOf(c);
+  const files = await withOrgContext(deps.db, ctx, (tx) =>
+    pendingRegdocs(tx, [...new Set(ids)], ctx.userId!),
+  );
+  const out: string[] = [];
+  for (const f of files) {
+    const stored = await deps.storage.stat(f.storageKey);
+    if (
+      stored &&
+      stored.size === f.sizeBytes &&
+      stored.size <= RD_MAX_BYTES &&
+      stored.contentType === 'application/pdf'
+    )
+      out.push(f.id);
+  }
+  return out;
+}
 
 /**
  * Одновременное сохранение того же ИНН: уникальный ключ базы отклоняет второе, и оно получает тот же

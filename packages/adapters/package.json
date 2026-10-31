@@ -12,7 +12,8 @@
     "./telegram": "./src/telegram.ts",
     "./logger": "./src/logger.ts",
     "./password": "./src/password.ts",
-    "./tokens": "./src/tokens.ts"
+    "./tokens": "./src/tokens.ts",
+    "./documents": "./src/documents.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
@@ -25,7 +26,11 @@
     "@aws-sdk/s3-request-presigner": "^3.1156.0",
     "@buhuchet/domain": "workspace:*",
     "@node-rs/argon2": "^2.2.2",
+    "@tesseract.js-data/kir": "1.0.0",
+    "@tesseract.js-data/rus": "1.0.0",
+    "pdfjs-dist": "6.4.299",
     "pino": "catalog:",
+    "tesseract.js": "7.0.0",
     "zod": "catalog:"
   },
   "devDependencies": {
