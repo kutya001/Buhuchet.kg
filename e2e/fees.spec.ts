@@ -118,7 +118,8 @@ test.describe('Этап 2: плата за обслуживание', () => {
     const card = await openCard(page, cp.id, name);
     await toTab(page, card, isMobile, /Обслуживание/);
     const tab = card.locator('[data-fee-tab]');
-    await expect(tab.locator('[data-plate="debt"] [data-plate-value]')).toHaveText(som('0'));
+    // Значение плашки — вместе с единицей: «0 сом».
+    await expect(tab.locator('[data-plate="debt"] [data-plate-value]')).toHaveText(/^0\s*сом$/);
     await expect(tab).toContainText('Оплачено');
     await expect(tab).toContainText('Оплаты · 1');
     // Долга нет — «Напомнить в WhatsApp» нет; «Новая ставка» есть.
