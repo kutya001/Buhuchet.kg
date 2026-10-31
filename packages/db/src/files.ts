@@ -1,5 +1,6 @@
 import {
   auditActorName,
+  FILE_LIST_KIND_OF,
   FILE_SOURCE_KINDS,
   RecordChangedError,
   RecordNotFoundError,
@@ -371,9 +372,18 @@ export interface FileListOptions {
 
 const uploader = employees;
 
+/**
+ * Вид источника в списке, плашках и фильтре (`FILE_LIST_KIND_OF`): файлы оплат разовой услуги — вид
+ * «Разовая услуга».
+ */
+const LIST_KIND_SQL = `(case "files"."source_kind" ${Object.entries(FILE_LIST_KIND_OF)
+  .map(([k, v]) => `when '${k}' then '${v}'`)
+  .join(' ')} else "files"."source_kind" end)`;
+const LIST_KIND = sql.raw(LIST_KIND_SQL);
+
 /** Виды источника по порядку модулей ТЗ — для сортировки «Откуда». */
 const KIND_ORDER = sql.raw(
-  `case "files"."source_kind" ${FILE_SOURCE_KINDS.map((k, i) => `when '${k}' then ${i}`).join(' ')} else ${FILE_SOURCE_KINDS.length} end`,
+  `case ${LIST_KIND_SQL} ${FILE_SOURCE_KINDS.map((k, i) => `when '${k}' then ${i}`).join(' ')} else ${FILE_SOURCE_KINDS.length} end`,
 );
 
 /** Выражение по виду источника: `case files.source_kind when … then … end`. */
@@ -405,7 +415,7 @@ const UPLOADED_BY = auditActorValue(files.createdBy, uploader.shortName);
  */
 export function fileListColumns(o: Pick<FileListOptions, 't' | 'parts'>): ListColumns {
   const { t } = o;
-  const kindText = sql`(case ${files.sourceKind} ${sql.join(
+  const kindText = sql`(case ${LIST_KIND} ${sql.join(
     FILE_SOURCE_KINDS.map((k) => sql`when ${k} then ${t(`files.kind.${k}`)}`),
     sql` `,
   )} end)`;
@@ -420,7 +430,7 @@ export function fileListColumns(o: Pick<FileListOptions, 't' | 'parts'>): ListCo
     kind: {
       type: 'enum',
       label: 'files.col.kind',
-      value: files.sourceKind,
+      value: LIST_KIND,
       display: kindText,
       sort: { value: KIND_ORDER, text: false },
     },
@@ -615,14 +625,14 @@ export async function fileKindCounts(
 ): Promise<{ kinds: Partial<Record<string, number>>; bytes: number; count: number }> {
   const rows = await tx
     .select({
-      kind: files.sourceKind,
+      kind: sql<string>`${LIST_KIND}`,
       count: sql<number>`count(*)::int`,
       bytes: sql<string>`coalesce(sum(${files.sizeBytes}), 0)::text`,
     })
     .from(files)
     .leftJoin(contractors, eq(contractors.id, files.contractorId))
     .where(listScope(o))
-    .groupBy(files.sourceKind);
+    .groupBy(LIST_KIND);
   return {
     kinds: Object.fromEntries(rows.map((r) => [r.kind, r.count])),
     bytes: rows.reduce((sum, r) => sum + Number(r.bytes), 0),

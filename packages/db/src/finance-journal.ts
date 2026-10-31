@@ -32,6 +32,8 @@ import {
   files,
   moneyAllocations,
   moneyOperations,
+  oneOffServicePayments,
+  oneOffServices,
   reports,
   reportTypes,
 } from './schema';
@@ -41,8 +43,8 @@ import { dictLiteral } from './sql-text';
  * Журнал модуля «Финансовые операции по контрагентам» (задача 2.22; ТЗ «Финансовые операции по
  * контрагентам»: «единый журнал всех денег от контрагентов … это тот же журнал, показанный целиком, а не
  * копия»; прототип modules/finance.js `finRows`, `finCols`, `renderFin`, `renderJournal`, modules/staff.js
- * — вкладка «Списания в бонус»). Строки — операции по счёту контрагента (`money_operations`) и оплаты за
- * обслуживание (`fee_payments`) одним подзапросом `j`; сортировка, фильтры, поиск, группы, итоги и
+ * — вкладка «Списания в бонус»). Строки — операции по счёту контрагента (`money_operations`), оплаты за
+ * обслуживание (`fee_payments`) и разовые услуги (`one_off_services`) одним подзапросом `j`; сортировка, фильтры, поиск, группы, итоги и
  * выгрузка — общим механизмом списков. Область «Финансовые операции» и права видимости групп строк
  * передаёт API.
  */
@@ -51,29 +53,40 @@ import { dictLiteral } from './sql-text';
 const j = (name: string) => sql.raw(`"j"."${name}"`);
 
 /**
- * Операции и оплаты за обслуживание одной таблицей: ключ строки (`op:…`, `fee:…`), группа вкладки
- * (`tax` — налоги, `wo` — списания и возвраты, `fee` — обслуживание), удалена ли, изменена ли, счёт.
- * У поступления `amount` — часть на налоги: плата за обслуживание из него — отдельные строки `fee`
- * (ТЗ: «сумма одних и тех же денег не задваивается»).
+ * Операции, оплаты за обслуживание и разовые услуги одной таблицей: ключ строки (`op:…`, `fee:…`,
+ * `svc:…`), группа вкладки (`tax` — налоги, `wo` — списания и возвраты, `fee` — обслуживание, `proj` —
+ * проекты и услуги), удалена ли, изменена ли, счёт. У поступления `amount` — часть на налоги: плата за
+ * обслуживание из него — отдельные строки `fee` (ТЗ: «сумма одних и тех же денег не задваивается»).
+ * Разовая услуга — одна строка со стоимостью и статусом оплаты (прототип finRows, `src: 'svc'`): её
+ * оплаты строками журнала не бывают; «Кто внёс» у неё — исполнитель (`performer_id`).
  */
 const JOURNAL = sql`(
   select 'op:' || o.id::text as key, 'op' as src, o.id as ref_id, o.contractor_id, o.kind,
     case when o.kind in ('bonus', 'refund') then 'wo' else 'tax' end as grp,
     o.op_date, o.amount, o.total, o.cancelled_at is not null as deleted, o.edited,
     o.holder_kind, o.holder_employee_id, o.report_id, o.self, o.ref_operation_id,
-    null::uuid as receipt_id, o.note, o.created_by, o.created_at, o.updated_by, o.updated_at
+    null::uuid as receipt_id, o.note, o.created_by, o.created_at, o.updated_by, o.updated_at,
+    null::uuid as performer_id, null::text as svc_name
   from ${moneyOperations} o
   union all
   select 'fee:' || f.id::text, 'fee', f.id, f.contractor_id, 'fee', 'fee', f.paid_on, f.amount,
     null::bigint, f.deleted_at is not null, f.edited, 'org', null::uuid, null::uuid, false, null::uuid,
-    f.operation_id, f.note, f.created_by, f.created_at, f.updated_by, f.updated_at
+    f.operation_id, f.note, f.created_by, f.created_at, f.updated_by, f.updated_at, null::uuid, null::text
   from ${feePayments} f
+  union all
+  select 'svc:' || s.id::text, 'svc', s.id, s.contractor_id, 'svc', 'proj', s.service_date, s.amount,
+    null::bigint, s.deleted_at is not null, s.edited, 'org', null::uuid, null::uuid, false, null::uuid,
+    null::uuid, s.description, s.created_by, s.created_at, s.updated_by, s.updated_at,
+    s.performer_employee_id, s.name
+  from ${oneOffServices} s
 ) j`;
 
 /** Счёт операции — сотрудник; внёс операцию — сотрудник по пользователю. */
 const jh = alias(employees, 'jh');
 const jc = alias(employees, 'jc');
 const ju = alias(employees, 'ju');
+/** Исполнитель разовой услуги. */
+const jp = alias(employees, 'jp');
 
 /**
  * Служебные столбцы «Создал», «Изменил», «Создано», «Изменено» (прототип ui/grid.js `auditCols`):
@@ -172,6 +185,7 @@ function whatOf(t: ListTexts, fee: boolean): SQL {
     when 'back' then coalesce(replace(${lit(t, 'fin.basis.back')}, '{n}', (select jb.revision::text from ${reports} jb where jb.id = ${j('report_id')})), '—')
     when 'xfer' then case when ${j('note')} = '' then replace(${lit(t, 'fin.basis.xfer')}, '{name}', ${holderName}) else regexp_replace(replace(${lit(t, 'fin.basis.xfer')}, '{name}', ${holderName}), '\\.$', '') || '. ' || ${j('note')} end
     when 'corr' then replace(${lit(t, 'fin.basis.corr')}, '{date}', coalesce((select to_char(jo.op_date, 'DD.MM.YYYY') from ${moneyOperations} jo where jo.id = ${j('ref_operation_id')}), '—')) || case when ${j('note')} = '' then '' else ': ' || ${j('note')} end
+    when 'svc' then ${j('svc_name')}
     when 'fee' then case when ${feeMonths} is null then ${lit(t, 'fin.j.fee_adv')} else replace(${lit(t, 'fin.j.fee_months')}, '{months}', ${feeMonths}) || case when ${feeAdv} > 0 then replace(${lit(t, 'fin.j.fee_more_adv')}, '{amount}', ${somUnitText(feeAdv)}) else '' end end || case when ${j('receipt_id')} is not null then ${lit(t, 'fin.j.from_receipt')} else '' end
     else ${j('note')} end`;
 }
@@ -180,7 +194,7 @@ function whatOf(t: ListTexts, fee: boolean): SQL {
 const CAT = sql<string>`case when ${j('kind')} = 'pay' and ${j('self')} then 'self' else ${j('kind')} end`;
 
 const catLabel = (t: ListTexts) =>
-  sql`case ${CAT} when 'self' then ${lit(t, 'money.op.self')} when 'fee' then ${lit(t, 'files.kind.fee_payment')} ${sql.join(
+  sql`case ${CAT} when 'self' then ${lit(t, 'money.op.self')} when 'fee' then ${lit(t, 'files.kind.fee_payment')} when 'svc' then ${lit(t, 'files.kind.one_off_service')} ${sql.join(
     ['in', 'pay', 'bonus', 'refund', 'back', 'corr', 'xfer'].map(
       (k) => sql` when ${dictLiteral(k)} then ${lit(t, `money.op.${k}`)}`,
     ),
@@ -196,8 +210,19 @@ const ACC = sql<string>`case ${j('holder_kind')} when 'org' then 'org' when 'cli
  */
 const SIGNED = sql`case when ${j('deleted')} or ${j('kind')} = 'xfer' or ${j('self')} then null when ${j('kind')} in ('pay', 'bonus', 'refund') then -${j('amount')} else ${j('amount')} end`;
 
-/** Файлов у операции: поступление, оплата налога, оплата за обслуживание, остальные операции. */
-const FILES = sql<number>`(select count(*)::int from ${files} jf where jf.source_id = ${j('ref_id')} and jf.state = 'ready' and jf.source_kind in ('receipt', 'tax_payment', 'fee_payment', 'money_operation'))`;
+/**
+ * Файлов у операции: поступление, оплата налога, оплата за обслуживание, остальные операции; у разовой
+ * услуги — её файлы и файлы её оплат (прототип finRows: `s.files.length + pays files`).
+ */
+const FILES = sql<number>`((select count(*)::int from ${files} jf where jf.source_id = ${j('ref_id')} and jf.state = 'ready' and jf.source_kind in ('receipt', 'tax_payment', 'fee_payment', 'money_operation', 'one_off_service')) + case when ${j('src')} = 'svc' then (select count(*)::int from ${files} jf join ${oneOffServicePayments} jsp on jsp.id = jf.source_id where jsp.service_id = ${j('ref_id')} and jf.state = 'ready' and jf.source_kind = 'one_off_service_payment') else 0 end)`;
+
+/** Получено по разовой услуге: действующие оплаты (прототип `svcPaid`). */
+const SVC_PAID = sql`(select coalesce(sum(sp.amount), 0)::bigint from ${oneOffServicePayments} sp where sp.service_id = ${j('ref_id')} and sp.deleted_at is null)`;
+
+/** «Оплата» разовой услуги (прототип finCols `st`, `svcStatus`); у других строк — нет. */
+const SVC_STATUS = sql<
+  string | null
+>`case when ${j('src')} = 'svc' then case when ${SVC_PAID} >= ${j('amount')} then 'paid' when ${SVC_PAID} > 0 then 'partial' else 'unpaid' end end`;
 
 /** «Отчёт»: оплата и возврат — свой отчёт, поступление — виды из детализации. */
 const repOf = sql`case when ${j('report_id')} is not null then (select jrt.short_name from ${reports} jr join ${reportTypes} jrt on jrt.code = jr.report_type_code where jr.id = ${j('report_id')}) when ${j('kind')} = 'in' then (select string_agg(art.short_name, ', ' order by ar.period_start, art.short_name, ar.id) from ${moneyAllocations} a join ${reports} ar on ar.id = a.report_id join ${reportTypes} art on art.code = ar.report_type_code where a.operation_id = ${j('ref_id')}) end`;
@@ -206,7 +231,7 @@ const repOf = sql`case when ${j('report_id')} is not null then (select jrt.short
 const perOf = (t: ListTexts) =>
   sql`case when ${j('report_id')} is not null then (select ${periodOf(t, 'jr')} from ${reports} jr where jr.id = ${j('report_id')}) when ${j('kind')} = 'in' then (select string_agg(distinct ${periodOf(t, 'ar')}, ', ') from ${moneyAllocations} a join ${reports} ar on ar.id = a.report_id where a.operation_id = ${j('ref_id')}) when ${j('kind')} = 'fee' then ${feeMonths} end`;
 
-/** Вкладка журнала (прототип FIN_TABS; «Проекты и услуги» заполнят разовые услуги и проекты). */
+/** Вкладка журнала (прототип FIN_TABS; «Проекты и услуги» — разовые услуги, позже и транши проектов). */
 export const FIN_JOURNAL_TABS = ['all', 'tax', 'fee', 'proj', 'wo'] as const;
 export type FinJournalTab = (typeof FIN_JOURNAL_TABS)[number];
 
@@ -218,6 +243,11 @@ export interface FinJournalOptions {
   tax: boolean;
   /** Оплаты за обслуживание видны: функция «Плата за обслуживание» и право «Видеть плату». */
   fee: boolean;
+  /**
+   * Разовые услуги видны (прототип `moneyVis`): «Видеть плату за обслуживание» при включённой плате или
+   * «Вести проекты и разовые услуги».
+   */
+  proj: boolean;
   /** Область группы «Финансовые операции» по контрагенту. */
   scope: SQL | undefined;
   t: ListTexts;
@@ -235,6 +265,7 @@ function journalScope(o: FinJournalOptions): SQL {
     ...(o.tax && (o.tab === 'all' || o.tab === 'tax') ? ['tax'] : []),
     ...(o.tax && (o.tab === 'all' || o.tab === 'wo') ? ['wo'] : []),
     ...(o.fee && (o.tab === 'all' || o.tab === 'fee') ? ['fee'] : []),
+    ...(o.proj && (o.tab === 'all' || o.tab === 'proj') ? ['proj'] : []),
   ];
   const grp = groups.length
     ? sql`${j('grp')} in (${sql.join(
@@ -276,7 +307,18 @@ export function finJournalColumns(o: Pick<FinJournalOptions, 't' | 'fee'>): List
       label: 'fin.j.col.amount',
       value: SIGNED,
       total: true,
-      display: sql`case when ${j('kind')} in ('pay', 'bonus', 'refund') and not ${j('self')} then chr(8722) when ${j('kind')} = 'corr' then case when ${j('amount')} < 0 then chr(8722) else '+' end when ${j('kind')} in ('xfer') or ${j('self')} then '' else '+' end || ${moneyText(sql`abs(${j('amount')})`)}`,
+      display: sql`case when ${j('kind')} = 'svc' then '' when ${j('kind')} in ('pay', 'bonus', 'refund') and not ${j('self')} then chr(8722) when ${j('kind')} = 'corr' then case when ${j('amount')} < 0 then chr(8722) else '+' end when ${j('kind')} in ('xfer') or ${j('self')} then '' else '+' end || ${moneyText(sql`abs(${j('amount')})`)}`,
+    },
+    st: {
+      type: 'enum',
+      label: 'fin.j.col.st',
+      value: SVC_STATUS,
+      display: sql`case ${SVC_STATUS} ${sql.join(
+        ['unpaid', 'partial', 'paid'].map(
+          (k) => sql` when ${dictLiteral(k)} then ${lit(t, `status.payment.${k}`)}`,
+        ),
+        sql``,
+      )} end`,
     },
     acc: {
       type: 'enum',
@@ -284,7 +326,11 @@ export function finJournalColumns(o: Pick<FinJournalOptions, 't' | 'fee'>): List
       value: ACC,
       display: sql`case ${j('holder_kind')} when 'org' then ${lit(t, 'fin.j.acc_org')} when 'client' then ${lit(t, 'fin.j.acc_client')} else coalesce(${jh.shortName}, '—') end`,
     },
-    by: { type: 'enum', label: 'fin.j.col.by', value: created },
+    by: {
+      type: 'enum',
+      label: 'fin.j.col.by',
+      value: sql`case when ${j('src')} = 'svc' then ${jp.shortName} else ${created} end`,
+    },
     files: { type: 'int', label: 'fin.j.col.files', value: FILES },
     rep: { type: 'text', label: 'fin.j.col.rep', value: repOf },
     per: { type: 'text', label: 'fin.j.col.per', value: perOf(t) },
@@ -332,6 +378,7 @@ function journalQuery(tx: Tx, fields: Record<string, SQL>) {
     .leftJoin(jh, sql`${jh.id} = ${j('holder_employee_id')}`)
     .leftJoin(jc, sql`${jc.userId} = ${j('created_by')}`)
     .leftJoin(ju, sql`${ju.userId} = ${j('updated_by')}`)
+    .leftJoin(jp, sql`${jp.id} = ${j('performer_id')}`)
     .$dynamic();
 }
 
@@ -346,7 +393,7 @@ const JOURNAL_SORT = { key: 'date', dir: 'desc' } as const;
 /** Строка журнала. */
 export interface FinJournalRow {
   key: string;
-  src: 'op' | 'fee';
+  src: 'op' | 'fee' | 'svc';
   id: string;
   kind: string;
   self: boolean;
@@ -366,6 +413,8 @@ export interface FinJournalRow {
   note: string;
   /** Оплата за обслуживание — часть общего поступления. */
   receiptPart: boolean;
+  /** Разовая услуга: статус оплаты и получено по ней (прототип finCols `st`); у остальных — null. */
+  service: { status: 'unpaid' | 'partial' | 'paid'; paid: Tyiyn } | null;
   /** Контрагент в архиве — для замков меню строки (прототип `opLock`). */
   archived: boolean;
   /** Ответственный контрагента — для замка оплаты за обслуживание по области «Контрагенты». */
@@ -380,7 +429,7 @@ function journalFields(o: FinJournalOptions) {
   const cols = finJournalColumns(o);
   return {
     key: sql<string>`${j('key')}`,
-    src: sql<'op' | 'fee'>`${j('src')}`,
+    src: sql<'op' | 'fee' | 'svc'>`${j('src')}`,
     id: sql<string>`${j('ref_id')}`,
     kind: sql<string>`${j('kind')}`,
     self: sql<boolean>`${j('self')}`,
@@ -395,6 +444,9 @@ function journalFields(o: FinJournalOptions) {
     holderName: sql<string | null>`${jh.shortName}`,
     createdBy: sql<string | null>`${j('created_by')}`,
     createdByName: sql<string | null>`${jc.shortName}`,
+    performerName: sql<string | null>`${jp.shortName}`,
+    svcStatus: SVC_STATUS,
+    svcPaid: sql<string | null>`case when ${j('src')} = 'svc' then ${SVC_PAID}::text end`,
     createdAt: sql<string>`to_json(${j('created_at')}) #>> '{}'`,
     updatedAt: sql<string | null>`to_json(${j('updated_at')}) #>> '{}'`,
     updatedBy: sql<string | null>`${j('updated_by')}`,
@@ -424,7 +476,7 @@ function toJournalRow(r: JournalData): FinJournalRow {
   const kind = r.kind as string;
   return {
     key: r.key as string,
-    src: r.src as 'op' | 'fee',
+    src: r.src as 'op' | 'fee' | 'svc',
     id: r.id as string,
     kind,
     self: Boolean(r.self),
@@ -439,12 +491,21 @@ function toJournalRow(r: JournalData): FinJournalRow {
       kind: r.holderKind as MoneyHolderKind,
       name: (r.holderName as string | null) ?? null,
     },
-    by: auditActorName(r.createdBy as string | null, r.createdByName as string | null),
+    by:
+      r.src === 'svc'
+        ? ((r.performerName as string | null) ?? null)
+        : auditActorName(r.createdBy as string | null, r.createdByName as string | null),
     files: Number(r.files ?? 0),
     rep: (r.rep as string | null) ?? null,
     per: (r.per as string | null) ?? null,
     note: (r.note as string | null) ?? '',
     receiptPart: Boolean(r.receiptPart),
+    service: r.svcStatus
+      ? {
+          status: r.svcStatus as 'unpaid' | 'partial' | 'paid',
+          paid: Number(r.svcPaid ?? 0),
+        }
+      : null,
     archived: Boolean(r.archived),
     responsibleEmployeeId: (r.responsibleEmployeeId as string | null) ?? null,
     reportId: (r.reportId as string | null) ?? null,
@@ -780,6 +841,11 @@ export interface FinSummary {
   tax: { received: Tyiyn; paid: Tyiyn } | null;
   /** «Получено за обслуживание»; null — плата не видна. */
   fee: Tyiyn | null;
+  /**
+   * «Проекты и разовые услуги»: получено за месяц — действующие оплаты действующих услуг (позже и транши
+   * проектов); `open` — услуг не оплачено полностью (счётчик вкладки «Проекты и услуги»); null — не видны.
+   */
+  proj: { received: Tyiyn; open: number } | null;
   /** «Списания и возвраты»; null — не видны. */
   wo: Tyiyn | null;
 }
@@ -787,9 +853,11 @@ export interface FinSummary {
 export async function finSummary(
   tx: Tx,
   month: YearMonth,
-  o: Pick<FinJournalOptions, 'tax' | 'fee' | 'scope'>,
+  o: Pick<FinJournalOptions, 'tax' | 'fee' | 'proj' | 'scope'>,
 ): Promise<FinSummary> {
   const first = `${month}-01`;
+  const inMonth = (d: SQL) =>
+    sql`${d} >= ${first}::date and ${d} < (${first}::date + interval '1 month')`;
   const [row] = await tx
     .select({
       received: sql<string>`coalesce(sum(${j('amount')}) filter (where ${j('kind')} = 'in'), 0)::text`,
@@ -799,17 +867,26 @@ export async function finSummary(
     })
     .from(JOURNAL)
     .innerJoin(contractors, sql`${contractors.id} = ${j('contractor_id')}`)
-    .where(
-      and(
-        sql`not ${j('deleted')}`,
-        sql`${j('op_date')} >= ${first}::date and ${j('op_date')} < (${first}::date + interval '1 month')`,
-        o.scope,
-      ),
-    );
+    .where(and(sql`not ${j('deleted')}`, inMonth(j('op_date')), o.scope));
+  let proj: FinSummary['proj'] = null;
+  if (o.proj) {
+    // Прототип renderFin: `pj` — оплаты действующих услуг за месяц; счётчик вкладки — не «Оплачено».
+    const paid = sql`(select coalesce(sum(p.amount), 0) from ${oneOffServicePayments} p where p.service_id = ${oneOffServices.id} and p.deleted_at is null)`;
+    const [svc] = await tx
+      .select({
+        received: sql<string>`coalesce(sum((select coalesce(sum(p.amount), 0) from ${oneOffServicePayments} p where p.service_id = ${oneOffServices.id} and p.deleted_at is null and ${inMonth(sql.raw('p.paid_on'))})), 0)::text`,
+        open: sql<number>`(count(*) filter (where ${paid} < ${oneOffServices.amount}))::int`,
+      })
+      .from(oneOffServices)
+      .innerJoin(contractors, eq(contractors.id, oneOffServices.contractorId))
+      .where(and(sql`${oneOffServices.deletedAt} is null`, o.scope));
+    proj = { received: Number(svc?.received ?? 0), open: Number(svc?.open ?? 0) };
+  }
   return {
     month,
     tax: o.tax ? { received: Number(row?.received ?? 0), paid: Number(row?.paid ?? 0) } : null,
     fee: o.fee ? Number(row?.fee ?? 0) : null,
+    proj,
     wo: o.tax ? Number(row?.wo ?? 0) : null,
   };
 }

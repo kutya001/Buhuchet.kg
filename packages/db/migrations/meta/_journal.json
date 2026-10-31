@@ -547,6 +547,20 @@
       "when": 1793466879842,
       "tag": "0077_finance_journal_guards",
       "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1793482329396,
+      "tag": "0078_one_off_services",
+      "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "7",
+      "when": 1793482331467,
+      "tag": "0079_one_off_services_guards",
+      "breakpoints": true
     }
   ]
 }

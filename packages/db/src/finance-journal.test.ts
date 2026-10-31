@@ -229,6 +229,7 @@ describe.skipIf(!databaseAvailable())('Журнал финансовых опе�
         deleted: false,
         tax: true,
         fee: true,
+        proj: true,
         scope: undefined,
         t: texts,
         ...o,
@@ -353,11 +354,14 @@ describe.skipIf(!databaseAvailable())('Журнал финансовых опе�
     expect(found.rows.map((r) => r.id)).toEqual([bonusId]);
     // Плашки месяца.
     expect(
-      await inA((tx) => finSummary(tx, '2026-10', { tax: true, fee: true, scope: undefined })),
+      await inA((tx) =>
+        finSummary(tx, '2026-10', { tax: true, fee: true, proj: false, scope: undefined }),
+      ),
     ).toEqual({
       month: '2026-10',
       tax: { received: som(1_500), paid: 0 },
       fee: 0,
+      proj: null,
       wo: som(200),
     });
   });
@@ -669,6 +673,7 @@ describe.skipIf(!databaseAvailable())('Журнал финансовых опе�
         deleted: true,
         tax: true,
         fee: true,
+        proj: true,
         scope: undefined,
         t: texts,
       }),
