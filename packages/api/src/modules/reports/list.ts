@@ -83,6 +83,7 @@ async function listOptions(
     tab: q.tab,
     quick: q.quick,
     waiting: waitingView(subject, policy.confirm),
+    contractorId: q.contractorId ?? null,
     ...(q.tab === 'calendar' && q.day
       ? { day: { date: q.day, taxpay: settings.features.taxpay } }
       : {}),

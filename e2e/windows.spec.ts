@@ -181,7 +181,7 @@ test.describe('Этап 1: окна и уведомления', () => {
     await test.step('протяжка влево дальше трети ширины — вкладка «Контрагенты»', async () => {
       await swipe.drag(left, { x: left.x - box.width / 3 - 40, y });
       await expect(current).toContainText('Контрагенты');
-      await expect(card).toContainText('Нет закреплённых контрагентов');
+      await expect(card).toContainText('Закреплено контрагентов:');
       // Развёрнутой карточка и осталась.
       expectBox(await settledBox(card), { x: 0, y: 0, width: view.width, height: view.height });
     });

@@ -276,28 +276,36 @@ function usePick(ctx: ReportPickContext, catalog: Catalog, bases: readonly strin
  */
 export function useReportPickCalc(
   request: Omit<ReportPickRequest, 'contractorId'> & { contractorId?: string },
-): { pick: PickResult; ctx: ReportPickContext; catalog: Catalog } | null {
+): ReportPickCalc | null {
   const t = useT();
   const catalog = useQuery(catalogQuery).data;
   const query = useQuery(reportPickQuery(request));
   // Прежний ответ, пока перечитывается новый, — набор для прежних полей формы: его не отдаём.
   const ctx = query.isPlaceholderData ? undefined : query.data;
   return useMemo(
-    () =>
-      catalog && ctx
-        ? {
-            pick: reportPick(
-              pickSubjectOf(ctx, ctx.subject.bases),
-              pickDictOf(catalog, ctx),
-              ctx.today,
-              t,
-            ),
-            ctx,
-            catalog,
-          }
-        : null,
+    () => (catalog && ctx ? reportPickCalcOf(catalog, ctx, t) : null),
     [catalog, ctx, t],
   );
+}
+
+/** Набор подбора по ответу сервера. */
+export interface ReportPickCalc {
+  pick: PickResult;
+  ctx: ReportPickContext;
+  catalog: Catalog;
+}
+
+/** Набор подбора по ответу сервера — как `useReportPickCalc`, для ответа, которого дождались сами. */
+export function reportPickCalcOf(
+  catalog: Catalog,
+  ctx: ReportPickContext,
+  t: Translate,
+): ReportPickCalc {
+  return {
+    pick: reportPick(pickSubjectOf(ctx, ctx.subject.bases), pickDictOf(catalog, ctx), ctx.today, t),
+    ctx,
+    catalog,
+  };
 }
 
 /**

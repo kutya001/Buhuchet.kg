@@ -13,8 +13,11 @@ export interface KbTarget {
   /** Что подсветить на ПК и, если другое, на телефоне (первый видимый элемент). */
   flash: string;
   phoneFlash?: string;
-  /** Сразу открыть: «+ Добавить» модуля этим способом или «Мой профиль». */
-  open?: { add: string } | 'profile';
+  /**
+   * Сразу открыть: «+ Добавить» модуля этим способом (`variant` — вариант формы: «Разовый» у нового
+   * контрагента, прототип `addCpDlg('oneoff')`) или «Мой профиль».
+   */
+  open?: { add: string; variant?: string } | 'profile';
   /** Нажать подсвеченную кнопку (у блока на экране своё «+ Добавить», не в меню модуля). */
   press?: boolean;
 }
@@ -39,8 +42,18 @@ export const KB_GO: Readonly<Record<string, KbTarget>> = {
   roles: { module: 'staff', tab: 'roles', flash: 'main' },
   emps: { module: 'staff', tab: 'list', flash: LIST, open: { add: 'employee' } },
   empcard: { module: 'staff', tab: 'list', flash: LIST },
-  // Контрагенты (задача 2.09): до списка (2.10) подсвечивается экран модуля, форма открывается сама.
-  cp1: { module: 'cps', tab: 'all', flash: 'main', open: { add: 'contractor' } },
+  // Контрагенты (задачи 2.09–2.11): форма открывается сама; шаги карточки — строки списка, как в прототипе.
+  cp1: { module: 'cps', tab: 'all', flash: LIST, open: { add: 'contractor' } },
+  resp: { module: 'cps', tab: 'all', flash: LIST },
+  oneoff: {
+    module: 'cps',
+    tab: 'all',
+    flash: LIST,
+    open: { add: 'contractor', variant: 'oneoff' },
+  },
+  pause: { module: 'cps', tab: 'all', flash: 'main' },
+  archive: { module: 'cps', tab: 'all', flash: 'main' },
+  cppage: { module: 'cps', tab: 'all', flash: LIST },
   // «Отчеты для сдачи» (задача 2.13). «Назначить отчёты» (2.15): «Кто что сдаёт» и сразу окно
   // массового назначения.
   assign: {
@@ -78,14 +91,16 @@ export const KB_GO: Readonly<Record<string, KbTarget>> = {
   kxls: { module: 'kpi', tab: 'month', flash: '[data-kpi-import]', open: { add: 'excel' } },
   kper: { module: 'kpi', tab: 'period', flash: LIST },
   kchk: { module: 'kpi', tab: 'period', flash: LIST },
+  // Вкладка «Показатели» карточки контрагента (2.11): строки списка контрагентов.
+  kcard: { module: 'cps', tab: 'all', flash: LIST },
   // «Файловый менеджер» (2.29): «Загрузить файл» сразу открывает окно загрузки.
   upload: { module: 'files', flash: LIST, open: { add: 'upload' } },
   ffind: { module: 'files', flash: LIST },
   search: { module: null, flash: '[role=search]', phoneFlash: '[data-search-open]' },
-  // Пока нет «Контрагентов» — на списке «Видов отчётов»: он виден всем.
-  cols: { module: 'dicts', tab: 'types', flash: '[data-grid-columns-button]' },
-  grp: { module: 'dicts', tab: 'types', flash: '[data-grid-group-button]' },
-  xls: { module: 'dicts', tab: 'types', flash: '[data-grid-export]' },
+  // На списке контрагентов (2.10), как в прототипе.
+  cols: { module: 'cps', tab: 'all', flash: 'main [data-grid-columns-button]' },
+  grp: { module: 'cps', tab: 'all', flash: 'main [data-grid-group-button]' },
+  xls: { module: 'cps', tab: 'all', flash: 'main [data-grid-export]' },
   stats: { module: 'reports', tab: 'week', flash: '[data-stats-toggle]' },
   swipe: { module: 'reports', tab: 'week', flash: '[data-tabrow]' },
   // Админка.

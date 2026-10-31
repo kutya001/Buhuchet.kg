@@ -1,7 +1,9 @@
 'use client';
 
+import { pluralForm, roleScopeLock } from '@buhuchet/domain';
 import {
   TemporaryPasswordResponse,
+  TransferContractorsPreview,
   type Employee,
   type PhoneCodes,
   type RoleListItem,
@@ -14,10 +16,12 @@ import {
   useToast,
   type ActionEntry,
 } from '@buhuchet/ui';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
-import { api, callApi } from '../api-client';
+import { api, apiFailure, callApi } from '../api-client';
+import { responsibleCountsQuery } from '../contractors/contractor-data';
+import { TransferDialog } from '../contractors/responsible-dialogs';
 import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
 import { useErrorText, useT } from '../l10n/provider';
 import { policyQuery } from '../org/org-data';
@@ -26,6 +30,12 @@ import { EmployeeCard } from './employee-card';
 import { ChangeRoleDialog, EditEmployeeDialog, NewEmployeeDialog } from './employee-forms';
 import { allRolesQuery, phoneCodesQuery, useStaffRefresh } from './staff-data';
 import { canEditEmployee, staffMenu } from './staff-menu';
+
+/** «Передать контрагентов»; `block` — после передачи заблокировать («Передать и заблокировать»). */
+interface TransferSlot {
+  employee: Employee;
+  block: boolean;
+}
 
 interface NewEmployeeData {
   roles: RoleListItem[];
@@ -41,7 +51,9 @@ interface NewEmployeeData {
  * «Сменить роль»; «Сбросить пароль» — окно с временным
  * паролем; «Заблокировать» — после подтверждения; «Разблокировать» — сразу; «Новый сотрудник».
  * Отказ сервера (роль с правами, которые выдаёт только владелец, или шире ваших) — уведомлением с
- * текстом из словаря. «Передать контрагентов» — вместе с контрагентами (поток А).
+ * текстом из словаря. «Передать контрагентов» — окно передачи (модуль «Контрагенты»); «Заблокировать»
+ * сотрудника с контрагентами сначала предлагает их передать (ТЗ «Сотрудники»: «система предлагает это
+ * при блокировке»; прототип blockDlg — «Передать и заблокировать»).
  */
 export function useStaffActions(): {
   actions: (e: Employee) => ActionEntry[];
@@ -68,6 +80,14 @@ export function useStaffActions(): {
     codes: PhoneCodes['items'];
   }> | null>(null);
   const [askBlock, setAskBlock] = useState<Employee | null>(null);
+  const [askTransfer, setAskTransfer] = useState<{ employee: Employee; n: number } | null>(null);
+  const [transfer, setTransfer] = useState<DialogSlot<TransferSlot> | null>(null);
+  // Число закреплённых — только когда видны все контрагенты организации: иначе неизвестно.
+  const countsOn =
+    canManage && access.can('cpView') && editor !== null && roleScopeLock(editor, 'cps') === null;
+  const counts = useQuery({ ...responsibleCountsQuery, enabled: countsOn }).data;
+  const cps = (e: Employee) =>
+    counts ? (counts.counts.get(e.id) ?? (counts.complete ? 0 : null)) : null;
   const [reset, setReset] = useState<{ employee: Employee; password: string } | null>(null);
   // Сотрудники, по которым запрос ещё идёт: повторное действие над ними не шлёт второй запрос
   // (иначе окно могло бы показать уже недействительный временный пароль).
@@ -145,18 +165,31 @@ export function useStaffActions(): {
       setHire(openSlot({ roles: data[0], defaultRoleId: data[1].defaultRoleId, codes: data[2] }));
   };
 
+  /** «Заблокировать»: у кого есть контрагенты — сначала «Передать и заблокировать». */
+  const block = async (e: Employee) => {
+    const preview = await load(e.id, async () => {
+      const res = await api.api.contractors.transfer.$get({ query: { from: e.id } });
+      if (!res.ok) throw await apiFailure(res);
+      return TransferContractorsPreview.parse(await res.json());
+    });
+    if (!preview) return;
+    if (preview.contractors > 0) setAskTransfer({ employee: e, n: preview.contractors });
+    else setAskBlock(e);
+  };
+
   // В карточке — свежая запись (версия для «Заблокировать»); в списке — строка списка.
   const run = {
     open: (e: Employee) => setCard(openSlot(e)),
     edit: (e: Employee) => void editEmployee(e),
     changeRole: (e: Employee) => void changeRole(e),
     resetPassword: (e: Employee) => void resetPassword(e),
-    block: setAskBlock,
+    block: (e: Employee) => void block(e),
     unblock: (e: Employee) => void setActive(e, true),
+    transfer: (e: Employee) => setTransfer(openSlot<TransferSlot>({ employee: e, block: false })),
   };
   const isOwner = editor?.isOwner ?? false;
-  const actions = staffMenu({ canManage, isOwner, employeeId, t, run });
-  const cardActions = staffMenu({ canManage, isOwner, employeeId, t, run, card: true });
+  const actions = staffMenu({ canManage, isOwner, employeeId, t, run, cps });
+  const cardActions = staffMenu({ canManage, isOwner, employeeId, t, run, cps, card: true });
 
   const dialogs = (
     <>
@@ -169,8 +202,37 @@ export function useStaffActions(): {
           onClose={() => setCard(closeSlot)}
           actions={cardActions}
           onEdit={(e) => (canEditEmployee(canManage, employeeId, e) ? () => run.edit(e) : null)}
+          onTransfer={(e) => (canManage && !e.role.isOwner ? () => run.transfer(e) : null)}
         />
       ) : null}
+      {transfer ? (
+        <TransferDialog
+          key={`transfer-${transfer.n}`}
+          from={{ id: transfer.data.employee.id, name: transfer.data.employee.shortName }}
+          open={transfer.open}
+          onClose={() => setTransfer(closeSlot)}
+          onDone={() => {
+            refresh();
+            if (transfer.data.block) void setActive(transfer.data.employee, false);
+          }}
+        />
+      ) : null}
+      <ConfirmDialog
+        open={askTransfer !== null}
+        onClose={() => setAskTransfer(null)}
+        title={
+          askTransfer
+            ? t(`staff.block.transfer.${pluralForm(askTransfer.n)}`, { n: askTransfer.n })
+            : ''
+        }
+        text={t('staff.block.transfer_text')}
+        ok={t('staff.block.transfer_ok')}
+        danger
+        onConfirm={() =>
+          askTransfer &&
+          setTransfer(openSlot<TransferSlot>({ employee: askTransfer.employee, block: true }))
+        }
+      />
       {role ? (
         <ChangeRoleDialog
           key={`role-${role.n}`}

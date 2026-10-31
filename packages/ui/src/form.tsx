@@ -158,6 +158,8 @@ export interface KeyValueItem {
   mono?: boolean;
   /** Во всю ширину, через оба столбца (`.pk-wide`: «Что даёт» и «Условия» в описании льготы). */
   wide?: boolean;
+  /** Через два столбца сетки, до 420 px — в один (`.sf-kv`: «Тариф Соцфонда» в карточке контрагента). */
+  span2?: boolean;
 }
 
 /** Ровно два столбца, на телефоне — один (`.pk-kv`: описание вида в «Подборе отчётов» и «Выборе налогов»). */
@@ -177,12 +179,12 @@ export function KeyValues({
       {items.map((item) => (
         <div
           key={item.id}
-          className={`flex min-w-0 flex-col gap-0.5${item.wide ? ' col-span-full' : ''}`}
+          className={`flex min-w-0 flex-col gap-0.5${item.wide ? ' col-span-full' : item.span2 ? ' col-span-2 max-[420px]:col-span-1' : ''}`}
         >
           <dt className="text-[11.5px] font-semibold text-faint">{item.label}</dt>
           <dd
             data-kv-value=""
-            className={`m-0 text-[13.5px] [overflow-wrap:anywhere]${item.mono ? ` ${MONO_CLASS}` : ''}`}
+            className={`m-0 text-[13.5px] [overflow-wrap:anywhere] [&_[data-pill]]:max-w-full [&_[data-pill]]:whitespace-normal${item.mono ? ` ${MONO_CLASS}` : ''}`}
           >
             {item.value}
           </dd>

@@ -1,6 +1,6 @@
 'use client';
 
-import { pluralForm, reportPickAuto } from '@buhuchet/domain';
+import { pluralForm, reportPickAuto, reportPickBaseDiff } from '@buhuchet/domain';
 import {
   ContractorSaved,
   type Contractor,
@@ -27,6 +27,7 @@ import { useId, useMemo, useState, type ReactNode } from 'react';
 import { api, callApi } from '../api-client';
 import { catalogQuery, valueDictsQuery, type Catalog, type ValueDicts } from '../dicts/dicts-data';
 import { useErrorText, useT } from '../l10n/provider';
+import type { Translate } from '../l10n/translate';
 import { phoneCodesQuery } from '../staff/staff-data';
 import { BenefitPickDialog } from './benefit-pick';
 import {
@@ -56,7 +57,8 @@ import {
 } from './contractor-form-model';
 import { GkedFields } from './gked-pick';
 import { RegistrationFields } from './registration-fields';
-import { useReportPickCalc } from './report-pick';
+import { reportPickCalcOf, useReportPickCalc, type ReportPickCalc } from './report-pick';
+import { pickDictOf, pickSubjectOf, reportPickQuery } from './report-pick-data';
 import { SocfundFields } from './socfund-fields';
 
 /*
@@ -102,11 +104,17 @@ export function EditContractorDialog({
   open,
   onClose,
   onSaved,
+  onBases,
 }: {
   contractorId: string;
   open: boolean;
   onClose: () => void;
   onSaved?: (saved: ContractorSaved) => void;
+  /**
+   * Сохранение изменило основания и есть что добавить или снять (docs/deviations.md п. А-7): окно
+   * «Основания изменились» открывает тот, кто открыл форму; без него — уведомление, как в прототипе.
+   */
+  onBases?: (diff: BaseChanges) => void;
 }) {
   const t = useT();
   const contractor = useQuery(contractorQuery(contractorId));
@@ -122,6 +130,7 @@ export function EditContractorDialog({
         open={open}
         onClose={onClose}
         onSaved={onSaved}
+        onBases={onBases}
         onReload={() => void contractor.refetch()}
         options={options.data}
         catalog={catalog.data}
@@ -161,6 +170,7 @@ function EditContractorForm({
   open,
   onClose,
   onSaved,
+  onBases,
   onReload,
   options,
   catalog,
@@ -171,6 +181,7 @@ function EditContractorForm({
   open: boolean;
   onClose: () => void;
   onSaved: ((saved: ContractorSaved) => void) | undefined;
+  onBases: ((diff: BaseChanges) => void) | undefined;
   onReload: () => void;
   options: ContractorFormOptions;
   catalog: Catalog;
@@ -206,7 +217,7 @@ function EditContractorForm({
         }
       : {}),
   };
-  const calc = useReportPickCalc({
+  const pickRequest = {
     contractorId: c.id,
     formCode: d.formCode || null,
     regimeCode: d.regimeCode || null,
@@ -218,7 +229,8 @@ function EditContractorForm({
     benefits: benefitCodes,
     bases: d.bases,
     socfund: socfundChoice,
-  });
+  };
+  const calc = useReportPickCalc(pickRequest);
   const assigned = useMemo(() => calc?.ctx.assigned ?? [], [calc]);
   // Назначенные виды, которые не подходят к новому режиму или форме (прототип editCpDlg, `bad`).
   const bad = assigned.filter((code) => calc?.pick.off.has(code));
@@ -361,12 +373,28 @@ function EditContractorForm({
       onClose();
       return toast(t('cp.form.edit.no_changes'), { icon: 'info' });
     }
-    // Обязательные по подбору, но не назначенные — в уведомлении после сохранения (прототип pkAuto).
-    // ОТКЛОНЕНИЕ: docs/deviations.md#А-7 — по ТЗ (решение заказчика) при смене оснований после сохранения
-    // окно предлагает добавить и снять их отчёты; окно сделает карточка контрагента (2.11).
-    const missing =
-      regular && calc ? reportPickAuto(calc.pick).filter((x) => !assigned.includes(x)) : [];
+    // Основания изменились — после сохранения окно «Основания изменились»: добавить отчёты включённых и
+    // снять отчёты выключенных (ТЗ, решение заказчика 30.10.2026, docs/deviations.md п. А-7).
+    // Обязательные по подбору, но не назначенные — в уведомлении после сохранения, без отчётов, которые
+    // предложит окно (ТЗ «не повторяя отчёты оснований»; прототип editCpDlg: pkAuto без `pb.add`).
+    // Подбор ещё пересчитывается (поле поменяли только что) — дождаться ответа: иначе окно и уведомление
+    // считались бы по прежним полям или не появились бы вовсе.
     setBusy(true);
+    const now =
+      calc ??
+      (regular
+        ? await client
+            .fetchQuery(reportPickQuery(pickRequest))
+            .then((ctx) => reportPickCalcOf(catalog, ctx, t))
+            .catch(() => null)
+        : null);
+    const had = now?.ctx.assigned ?? [];
+    const bases =
+      regular && now && 'bases' in patch && onBases ? baseChangesOf(c, now, had, t) : null;
+    const missing =
+      regular && now
+        ? reportPickAuto(now.pick).filter((x) => !had.includes(x) && !bases?.add.includes(x))
+        : [];
     const res = await callApi(() =>
       api.api.contractors[':id'].$patch({
         param: { id: c.id },
@@ -415,6 +443,7 @@ function EditContractorForm({
           );
         }
         onSaved?.(s);
+        if (bases) onBases?.({ ...bases, version: s.version });
       }
       return;
     }
@@ -735,4 +764,36 @@ function EditContractorForm({
       ) : null}
     </>
   );
+}
+
+/** Что предложить в окне «Основания изменились»: основания, отчёты к добавлению и снятию. */
+export interface BaseChanges {
+  contractorId: string;
+  name: string;
+  on: string[];
+  off: string[];
+  add: string[];
+  remove: string[];
+  /** Назначенные виды до окна: с них считается новый выбор. */
+  assigned: string[];
+  version: number;
+}
+
+/** Основания до и после «Изменить» (прототип pkBaseDiff); нечего добавить и снять — null. */
+function baseChangesOf(
+  c: Contractor,
+  calc: ReportPickCalc,
+  assigned: readonly string[],
+  t: Translate,
+): Omit<BaseChanges, 'version'> | null {
+  const d = reportPickBaseDiff(
+    c.bases.map((b) => b.code),
+    pickSubjectOf(calc.ctx, calc.ctx.subject.bases),
+    assigned,
+    pickDictOf(calc.catalog, calc.ctx),
+    calc.ctx.today,
+    t,
+  );
+  if (!d.add.length && !d.remove.length) return null;
+  return { contractorId: c.id, name: c.name, ...d, assigned: [...assigned] };
 }

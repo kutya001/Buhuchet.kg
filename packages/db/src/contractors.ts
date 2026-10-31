@@ -53,11 +53,14 @@ import {
   gkedItems,
   ownershipForms,
   platformReference,
+  assignments,
   reportBases,
+  reports,
   reportTypeRegimes,
   reportTypes,
   roles,
   singleTaxRates,
+  statusHistory,
   taxBenefitOffices,
   taxBenefits,
   taxOffices,
@@ -71,6 +74,7 @@ import {
   unfinishedReportsCount,
   type RedueTexts,
 } from './reports';
+import { dateLiteral, textLiteral } from './sql-text';
 import { phoneCodes, type AuditRecord } from './staff';
 import { moveContractorTasks, openTasksOfContractors } from './tasks';
 
@@ -165,6 +169,10 @@ export interface ContractorRecord {
   gkedConfirmation: (ContractorGkedConfirmation & { by: string }) | null;
   socfundFlags: SocfundFlags;
   socfundTariff: SocfundChoice | null;
+  /** Просроченных отчётов (у приостановленного — 0): «просрочено отчётов: N» и счётчик вкладки. */
+  overdue: number;
+  /** Есть отчёты: «Удалить» недоступно, только «В архив». */
+  hasReports: boolean;
   audit: AuditRecord;
   version: number;
 }
@@ -179,6 +187,8 @@ export interface ContractorRow {
   kind: ContractorKind;
   form: string;
   regime: string | null;
+  /** Код режима — окно «Перевести в постоянное обслуживание» подставляет его. */
+  regimeCode: string | null;
   regime2: string | null;
   benefits: string | null;
   gked: { code: string; name: string } | null;
@@ -197,6 +207,19 @@ export interface ContractorRow {
    * не определён) и «под вопросом»; null — тариф контрагенту не нужен.
    */
   socfund: { id: SocfundTariffId | null; short: string; total: string; ask: boolean } | null;
+  /** Просроченных отчётов (прототип c.overdue): у приостановленного — 0. */
+  overdue: number;
+  /** Незавершённых отчётов: ещё не сданы и не «Не требуется» (карточка сотрудника, «Несданных»). */
+  openReports: number;
+  /** Видов отчётов: действующие назначения (прототип nrep). */
+  reportTypes: number;
+  /** Есть отчёты: контрагента можно только отправить в архив, не удалить. */
+  hasReports: boolean;
+  /**
+   * Когда и кто поставил нынешний статус обслуживания (дата под шкалой в столбце): последняя смена
+   * статуса, без смен — создание контрагента (прототип statusHist('svc'), «Начало обслуживания»).
+   */
+  serviceSince: { at: Date; by: string | null };
   audit: AuditRecord;
   version: number;
 }
@@ -234,6 +257,42 @@ const TAX_OFFICE_LABEL = sql<
   string | null
 >`case when ${taxOffices.code} is null then null else coalesce(${taxOffices.gnsCode} || ' · ', '') || ${taxOffices.shortName} end`;
 
+const OPEN_STATUSES = sql.join(['todo', 'in_progress', 'needs_fix'].map(textLiteral), sql`, `);
+
+/**
+ * Просроченных отчётов (прототип derive: c.overdue, как вкладка «Просрочено»): несданные со сдачей, срок
+ * прошёл; у приостановленного контрагента просрочки нет. Значение — литералами: столбец входит и в
+ * группировку списка.
+ */
+function overdueCount(today: IsoDate): SQL<number> {
+  return sql<number>`(case when ${contractors.serviceStatus} = 'paused' then 0 else (select count(*)::int from ${reports} where ${reports.contractorId} = ${contractors.id} and not ${reports.superseded} and ${reports.act} <> 'pay' and ${reports.status} in (${OPEN_STATUSES}) and ${reports.dueDate} < ${dateLiteral(today)}) end)`;
+}
+
+/** Незавершённых отчётов (как при передаче дел): ещё не «Сдан» и не «Не требуется». */
+const OPEN_REPORTS = sql<number>`(select count(*)::int from ${reports} where ${reports.contractorId} = ${contractors.id} and not ${reports.superseded} and ${reports.status} not in ('submitted', 'not_required'))`;
+
+/** Видов отчётов: действующие (не снятые) назначения. */
+const REPORT_TYPES = sql<number>`(select count(*)::int from ${assignments} where ${assignments.contractorId} = ${contractors.id} and ${assignments.endedOn} is null)`;
+
+/** Контрагент среди `ids` (литералами — столбец входит в группировку); пусто — ни один. */
+function idIn(ids: readonly string[]): SQL {
+  return ids.length
+    ? sql`${contractors.id} in (${sql.join(
+        ids.map((id) => sql`${textLiteral(id)}::uuid`),
+        sql`, `,
+      )})`
+    : sql`false`;
+}
+
+/** Последняя смена статуса обслуживания: поле записи «Истории статусов». */
+const lastServiceStatus = (field: SQL) =>
+  sql`(select ${field} from ${statusHistory} where ${statusHistory.orgId} = ${contractors.orgId} and ${statusHistory.scale} = 'service' and ${statusHistory.entityId} = ${contractors.id} order by ${statusHistory.at} desc, ${statusHistory.id} desc limit 1)`;
+const SERVICE_AT = lastServiceStatus(sql`${statusHistory.at}`);
+const SERVICE_USER = lastServiceStatus(sql`${statusHistory.actorUserId}`);
+const SERVICE_USER_NAME = lastServiceStatus(
+  sql`(select e.short_name from ${employees} e where e.user_id = ${statusHistory.actorUserId})`,
+);
+
 function rowFields(today: IsoDate) {
   return {
     id: contractors.id,
@@ -243,6 +302,7 @@ function rowFields(today: IsoDate) {
     kind: contractors.kind,
     form: ownershipForms.name,
     regime: regime1.name,
+    regimeCode: contractors.regimeCode,
     regime2: regime2.name,
     benefits: BENEFIT_NAMES,
     gked: contractors.gked,
@@ -261,6 +321,13 @@ function rowFields(today: IsoDate) {
       v == null ? null : Number(v),
     ),
     tariffPeriod: sql<TariffPeriod | null>`${tariffOf(today, 'period')}`,
+    overdue: overdueCount(today),
+    openReports: OPEN_REPORTS,
+    reportTypes: REPORT_TYPES,
+    hasReports: sql<boolean>`exists (select 1 from ${reports} where ${reports.contractorId} = ${contractors.id})`,
+    serviceAt: SERVICE_AT,
+    serviceUser: SERVICE_USER,
+    serviceUserName: SERVICE_USER_NAME,
     createdAt: contractors.createdAt,
     createdBy: contractors.createdBy,
     createdByName: creator.shortName,
@@ -337,6 +404,7 @@ function toRow(r: RowData, codes: PhoneCodes): Omit<ContractorRow, 'socfund'> {
     kind: r.kind as ContractorKind,
     form: r.form as string,
     regime: r.regime as string | null,
+    regimeCode: r.regimeCode as string | null,
     regime2: r.regime2 as string | null,
     benefits: r.benefits as string | null,
     gked: gked ? { code: gked, name: (r.gkedName as string | null) ?? '' } : null,
@@ -355,6 +423,16 @@ function toRow(r: RowData, codes: PhoneCodes): Omit<ContractorRow, 'socfund'> {
       r.tariffAmount == null
         ? null
         : { amount: Number(r.tariffAmount), period: r.tariffPeriod as TariffPeriod },
+    overdue: Number(r.overdue ?? 0),
+    openReports: Number(r.openReports ?? 0),
+    reportTypes: Number(r.reportTypes ?? 0),
+    hasReports: Boolean(r.hasReports),
+    serviceSince: r.serviceAt
+      ? {
+          at: new Date(r.serviceAt as string | Date),
+          by: auditActorName(r.serviceUser as string | null, r.serviceUserName as string | null),
+        }
+      : { at: r.createdAt as Date, by: auditOf(r).createdBy },
     audit: auditOf(r),
     version: r.version as number,
   };
@@ -375,12 +453,13 @@ function contractText(t: ListTexts): SQL {
  * Столбцы списка контрагентов на сервере (ТЗ «Список контрагентов»; прототип modules/contractors.js,
  * cpCols): ключи — как у столбцов экрана. Справочные значения фильтруются по коду, а сортируются и
  * ищутся по названию; ответственный — по сотруднику. «Стоимость обслуживания» — только с правом «Видеть
- * плату за обслуживание» (`fee`). Тариф Соцфонда — из таблицы `sf` (`socfundListTable`). Просрочено, видов
- * отчётов, деньги и долг добавят их задачи (2.06, поток В).
+ * плату за обслуживание» (`fee`). Тариф Соцфонда — из таблицы `sf` (`socfundListTable`). «Не заполнены
+ * показатели» — только когда передан список контрагентов с незаполненными месяцами (`kpiMissing`).
+ * «Свободный остаток» и «Долг за обслуживание» добавят задачи денег (поток В).
  */
 export function contractorListColumns(
   t: ListTexts,
-  options: { today: IsoDate; fee: boolean },
+  options: { today: IsoDate; fee: boolean; kpiMissing?: readonly string[] | null },
 ): ListColumns {
   const columns: Record<string, ListColumns[string]> = {
     name: { type: 'text', label: 'cp.col.name', value: contractors.name },
@@ -468,6 +547,8 @@ export function contractorListColumns(
     },
     head: { type: 'text', label: 'cp.col.head', value: contractors.head },
     contact: { type: 'text', label: 'cp.col.contact', value: contractors.contact },
+    reportTypes: { type: 'int', label: 'cp.col.report_types', value: REPORT_TYPES },
+    overdue: { type: 'int', label: 'cp.col.overdue', value: overdueCount(options.today) },
     createdAt: { type: 'datetime', label: 'grid.col.created_at', value: contractors.createdAt },
     updatedAt: { type: 'datetime', label: 'grid.col.updated_at', value: contractors.updatedAt },
     createdBy: { type: 'enum', label: 'grid.col.created_by', value: CREATED_BY },
@@ -477,6 +558,15 @@ export function contractorListColumns(
       value: sql`coalesce(${auditActorValue(contractors.updatedBy, updater.shortName)}, ${CREATED_BY})`,
     },
   };
+  if (options.kpiMissing) {
+    const missing = idIn(options.kpiMissing);
+    columns.kpiMissing = {
+      type: 'enum',
+      label: 'cp.col.kpi_missing',
+      value: sql`case when ${missing} then 'yes' else 'no' end`,
+      display: sql`case when ${missing} then ${t('cp.yes')} else ${t('cp.no')} end`,
+    };
+  }
   if (options.fee) {
     columns.fee = {
       type: 'money',
@@ -501,6 +591,11 @@ export interface ContractorListOptions {
   tab: ContractorTab;
   /** Сотрудник, который смотрит: вкладка «Мои контрагенты». */
   employeeId: string;
+  /**
+   * Контрагенты с незаполненными показателями (индикатор «Показателей контрагентов»): столбец «Не
+   * заполнены показатели»; null — столбца нет (функция выключена, нет права или он не нужен запросу).
+   */
+  kpiMissing?: readonly string[] | null;
 }
 
 /**
@@ -615,6 +710,61 @@ export async function contractorTabCounts(
   return { all: Number(all?.n ?? 0), mine: Number(mine?.n ?? 0) };
 }
 
+/** Итоги плашек списка контрагентов (прототип renderCps) в области сотрудника. */
+export interface ContractorSummary {
+  /** На обслуживании: все, кроме архивных. */
+  active: number;
+  noResponsible: number;
+  withOverdue: number;
+  noGked: number;
+  socfundAsk: number;
+  /** С незаполненными показателями; null — плашки нет (функция выключена или нет права). */
+  kpiMissing: number | null;
+  paused: number;
+  oneoff: number;
+  archived: number;
+}
+
+/**
+ * Итоги плашек (прототип renderCps): кроме «В архиве» — без архивных; «Не заполнены показатели» — среди
+ * контрагентов из `kpiMissing`.
+ */
+export async function contractorSummary(
+  tx: Tx,
+  o: Pick<ContractorListOptions, 't' | 'today' | 'scope' | 'kpiMissing'>,
+): Promise<ContractorSummary> {
+  const sf = await socfundListTable(tx, o.t);
+  const live = sql`${contractors.serviceStatus} <> 'archived'`;
+  const n = (cond: SQL) => sql<number>`coalesce(sum(case when ${cond} then 1 else 0 end), 0)::int`;
+  const [row] = await tx
+    .select({
+      active: n(live),
+      noResponsible: n(sql`${live} and ${contractors.responsibleEmployeeId} is null`),
+      withOverdue: n(sql`${live} and ${overdueCount(o.today)} > 0`),
+      noGked: n(sql`${live} and ${contractors.gked} is null`),
+      socfundAsk: n(sql`${live} and ${SOCFUND_LIST.ask} = 'yes'`),
+      kpiMissing: n(sql`${live} and ${idIn(o.kpiMissing ?? [])}`),
+      paused: n(sql`${contractors.serviceStatus} = 'paused'`),
+      oneoff: n(sql`${live} and ${contractors.kind} = 'oneoff'`),
+      archived: n(sql`${contractors.serviceStatus} = 'archived'`),
+    })
+    .from(contractors)
+    .leftJoin(sf, sql`${SOCFUND_LIST.id} = ${contractors.id}`)
+    .where(o.scope);
+  const r = row!;
+  return {
+    active: r.active,
+    noResponsible: r.noResponsible,
+    withOverdue: r.withOverdue,
+    noGked: r.noGked,
+    socfundAsk: r.socfundAsk,
+    kpiMissing: o.kpiMissing ? r.kpiMissing : null,
+    paused: r.paused,
+    oneoff: r.oneoff,
+    archived: r.archived,
+  };
+}
+
 /** Карточка контрагента; null — нет такого в организации или он вне области. */
 export async function getContractor(
   tx: Tx,
@@ -723,6 +873,8 @@ export async function getContractor(
     gkedConfirmation: confirmation && { ...confirmation, by },
     socfundFlags: r.socfundFlags as SocfundFlags,
     socfundTariff: r.socfundTariff as SocfundChoice | null,
+    overdue: base.overdue,
+    hasReports: base.hasReports,
     audit: base.audit,
     version: base.version,
   };

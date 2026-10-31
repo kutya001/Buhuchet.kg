@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext } from '@playwright/test';
-import { DEMO_PASSWORD, signIn } from './helpers';
+import { DEMO_PASSWORD, defaultResponsible, signIn } from './helpers';
 
 // Контрагенты: данные, правила и API (задача 2.05, #61). Экранов у задачи нет (форма — задача 2.09),
 // поэтому её проверки идут через API сайта под владельцем демо-организации.
@@ -11,14 +11,6 @@ async function asOwner(api: APIRequestContext, baseURL: string | undefined) {
   const origin = new URL(baseURL!).origin;
   await signIn(api, origin, 'erkin', DEMO_PASSWORD);
   return origin;
-}
-
-/** Активный сотрудник демо-организации — ответственный нового контрагента. */
-async function someEmployee(api: APIRequestContext): Promise<string> {
-  const res = await api.get('/api/staff?size=all');
-  expect(res.status()).toBe(200);
-  const list = (await res.json()) as { items: { id: string; active: boolean }[] };
-  return list.items.find((e) => e.active)!.id;
 }
 
 test.describe('Этап 2: контрагенты — данные, правила и API', () => {
@@ -45,7 +37,7 @@ test.describe('Этап 2: контрагенты — данные, правил
         regimeCode: 'РЕЖ-01',
         gked: '46.34.0',
         startDate: '2026-10-01',
-        responsibleEmployeeId: await someEmployee(request),
+        responsibleEmployeeId: await defaultResponsible(request),
       },
     });
     expect(res.status()).toBe(409);
@@ -77,7 +69,7 @@ test.describe('Этап 2: контрагенты — данные, правил
         gked: '46.34.0',
         benefits: [{ code: 'нет-такой-льготы', validFrom: null, validTo: null }],
         startDate: '2026-10-01',
-        responsibleEmployeeId: await someEmployee(request),
+        responsibleEmployeeId: await defaultResponsible(request),
         tariff: { amount: 1_000_000, period: 'M' },
       },
     });

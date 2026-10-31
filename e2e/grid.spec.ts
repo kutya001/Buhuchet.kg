@@ -472,6 +472,7 @@ test.describe('Списки: UnifiedDataGrid', () => {
     await expect(menu.getByRole('menuitem')).toHaveText([
       'Открыть карточку',
       'Изменить',
+      /^Передать контрагентов/,
       'Сменить роль',
       'Заблокировать',
     ]);

@@ -5,6 +5,7 @@ import { ListValues, listPageSchema, KpiPeriodRow } from '@buhuchet/shared';
 import { DataGrid, EmptyState, Tag, type GridColumn } from '@buhuchet/ui';
 import { useCallback, useMemo } from 'react';
 import { api, apiFailure } from '../api-client';
+import { ContractorLink } from '../contractors/contractor-link';
 import { useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { useListExport } from '../lists/export';
@@ -46,8 +47,14 @@ function periodColumns(
       type: 'text',
       width: 230,
       text: (r) => r.contractorName,
-      // Карточку контрагента на вкладке «Показатели» откроет её задача (2.11, #67).
-      cell: (r) => <span className="truncate font-semibold">{r.contractorName}</span>,
+      cell: (r) => (
+        <ContractorLink
+          id={r.contractorId}
+          name={r.contractorName}
+          tab="kpi"
+          className="truncate font-semibold"
+        />
+      ),
     },
     {
       key: 'ind',

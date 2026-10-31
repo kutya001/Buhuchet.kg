@@ -22,6 +22,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { useId, useState } from 'react';
 import { api, callApi } from '../api-client';
+import { ContractorLink } from '../contractors/contractor-link';
 import { useErrorText, useT } from '../l10n/provider';
 import { useShell } from '../shell/context';
 import { useKpiRefresh, whoQuery } from './kpi-data';
@@ -293,8 +294,9 @@ export function KpiWhoView() {
                         }}
                       />
                       <span className="min-w-0">
-                        {/* Карточку контрагента откроет её задача (2.11, #67). */}
-                        <span className="block truncate">{c.name}</span>
+                        <span className="block truncate">
+                          <ContractorLink id={c.id} name={c.name} tab="kpi" />
+                        </span>
                         <small className="block text-[11.5px] text-faint">{whoSub(t, c)}</small>
                       </span>
                     </label>

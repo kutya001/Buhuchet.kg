@@ -33,6 +33,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { api } from '../api-client';
+import { ContractorCardHost } from '../contractors/contractor-actions';
 import { kbStateQuery } from '../kb/kb-data';
 import { KbContext, useKb, useKbRuntime, type KbControls } from '../kb/kb-provider';
 import { useT } from '../l10n/provider';
@@ -398,7 +399,7 @@ function ShellPage({
         ? visibleTabs(module, access).map((x) => ({ id: x.id, label: t(x.label) }))
         : [],
     onAdd: useCallback(
-      (module: MenuModuleId, actionId: string) => {
+      (module: MenuModuleId, actionId: string, variant?: string) => {
         const action = addActions(module, access).find((a) => a.id === actionId);
         if (!action) return;
         setAddRequest((prev) => ({
@@ -406,6 +407,7 @@ function ShellPage({
           actionId,
           label: t(action.label),
           n: (prev?.n ?? 0) + 1,
+          variant,
         }));
       },
       [access, t],
@@ -660,6 +662,7 @@ function ShellPage({
         {kb.overlays}
         {news.overlays}
         {welcome.overlays}
+        {me.organization ? <ContractorCardHost /> : null}
         {/* «?» без статьи о модуле — описание модуля (прототип kb.js kbHelp). */}
         <Modal
           open={helpOpen}

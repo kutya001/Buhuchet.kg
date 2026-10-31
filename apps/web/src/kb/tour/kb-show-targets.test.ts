@@ -20,6 +20,9 @@ describe('«Показать как»: элементы прототипа на 
     // «Сделать сейчас» в показах сдачи и подтверждения — главная кнопка карточки отчёта.
     expect(productTarget('#rc-main')).toContain('[data-report-button="submit"]');
     expect(productTarget('#rc-main')).toContain('[data-report-button="confirm"]');
+    // Карточка контрагента: «сменить» ответственного и блок «Страница контрагента».
+    expect(productTarget('#cp-resp')).toBe('[data-cp-resp]');
+    expect(productTarget('#cp-page')).toBe('[data-box]:has([data-cp-page])');
   });
 
   it('«подняться до» пункта меню и строки карточки — элементы продукта', () => {

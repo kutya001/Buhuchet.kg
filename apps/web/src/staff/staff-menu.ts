@@ -10,6 +10,7 @@ export interface StaffMenuRun {
   resetPassword: (e: Employee) => void;
   block: (e: Employee) => void;
   unblock: (e: Employee) => void;
+  transfer: (e: Employee) => void;
 }
 
 /**
@@ -21,7 +22,9 @@ export interface StaffMenuRun {
  * (красным) или у заблокированного — «Разблокировать». Где вести нельзя — у владельца организации,
  * у себя, у сотрудника с правами «выдаёт только владелец» и с ролью шире своей, — этих пунктов нет
  * (ТЗ, решение заказчика 27.10.2026: недоступные кнопки скрыты; прототип core/org.js, empLocked).
- * «Передать контрагентов» добавит модуль «Контрагенты» (поток А). `card` — меню кнопки «Действия» в
+ * «Передать контрагентов» — с правом «Сотрудники и роли» у всех, кроме владельца, и у тех, кого вести
+ * нельзя (как в прототипе — до проверки `empLocked`); без закреплённых контрагентов (`cps` — 0) —
+ * бледным с причиной, число неизвестно (null) — доступно. `card` — меню кнопки «Действия» в
  * карточке: без «Открыть карточку» и без «Изменить» — в карточке это отдельная кнопка (ТЗ
  * «Сотрудники»: «кнопкой «Изменить» в карточке сотрудника»).
  */
@@ -31,6 +34,7 @@ export function staffMenu({
   employeeId,
   t,
   run,
+  cps = () => null,
   card = false,
 }: {
   canManage: boolean;
@@ -40,6 +44,8 @@ export function staffMenu({
   employeeId: string | null;
   t: Translate;
   run: StaffMenuRun;
+  /** Сколько контрагентов закреплено за сотрудником; null — неизвестно. */
+  cps?: (e: Employee) => number | null;
   card?: boolean;
 }): (e: Employee) => ActionEntry[] {
   return (e) => {
@@ -51,10 +57,22 @@ export function staffMenu({
         ? []
         : [{ id: 'edit', label: t('staff.action.edit'), icon: 'edit', run: () => run.edit(e) }];
     if (!canManage) return open;
-    if (!e.manageable) return [...open, ...edit];
+    const transfer: ActionEntry[] = e.role.isOwner
+      ? []
+      : [
+          {
+            id: 'transfer',
+            label: t('cp.transfer.title'),
+            icon: 'refresh',
+            run: () => run.transfer(e),
+            ...(cps(e) === 0 ? { disabled: true, reason: t('cp.transfer.none') } : {}),
+          },
+        ];
+    if (!e.manageable) return [...open, ...edit, ...transfer];
     return [
       ...open,
       ...edit,
+      ...transfer,
       {
         id: 'change-role',
         label: t('staff.action.change_role'),

@@ -18,6 +18,7 @@ import {
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useRef } from 'react';
 import { api, callApi } from '../api-client';
+import { ContractorLink } from '../contractors/contractor-link';
 import { useErrorText, useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { useShell } from '../shell/context';
@@ -311,8 +312,9 @@ function MonthTable({
               className={row.overdue ? OVERDUE_ROW : ''}
               data-kpi-row={row.contractorId}
             >
-              {/* Карточку контрагента на вкладке «Показатели» откроет её задача (2.11, #67). */}
-              <td className={FIRST_CLASS}>{row.name}</td>
+              <td className={FIRST_CLASS}>
+                <ContractorLink id={row.contractorId} name={row.name} tab="kpi" />
+              </td>
               <td className="text-muted">{row.responsibleName ?? '—'}</td>
               {row.cells.map((cell, c) => {
                 const col = cols[c]!;

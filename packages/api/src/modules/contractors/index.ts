@@ -18,7 +18,10 @@ import {
   gkedSearchHandler,
   gkedSearchRoute,
 } from './card';
+import { contractorHistoryHandler, contractorHistoryRoute } from './history';
 import {
+  contractorSummaryHandler,
+  contractorSummaryRoute,
   contractorTabCountsHandler,
   contractorTabCountsRoute,
   contractorValuesHandler,
@@ -70,9 +73,9 @@ import {
 } from './service';
 
 /**
- * Модуль «Контрагенты»: список (значения для фильтра, выгрузка в Excel, счётчики вкладок), карточка,
- * значения формы, поиск и сверка с ГКЭД и тариф Соцфонда для формы, создание одним целым вместе с
- * отчётами, «Изменить», удаление, назначение ответственного, передача дел, окно «Тариф Соцфонда»,
+ * Модуль «Контрагенты»: список (значения для фильтра, выгрузка в Excel, счётчики вкладок, итоги плашек),
+ * карточка и её «История», значения формы, поиск и сверка с ГКЭД и тариф Соцфонда для формы, создание
+ * одним целым вместе с отчётами, «Изменить», удаление, назначение ответственного, передача дел, окно «Тариф Соцфонда»,
  * «Подбор отчётов» и обслуживание (приостановка, возобновление, архив, перевод разового в постоянное —
  * задача 2.12). Экраны — задачи 2.09–2.11.
  */
@@ -80,11 +83,12 @@ export function contractorsModule(deps: ApiDeps) {
   return (
     createModuleApp()
       .openapi(listContractorsRoute, listContractorsHandler(deps))
-      // Раньше `/contractors/{id}`: иначе «values», «export», «tab-counts», «transfer», «gked-check»,
-      // «gked-search», «form-options», «socfund-check» и «report-pick» разбирались бы как номер
-      // контрагента.
+      // Раньше `/contractors/{id}`: иначе «values», «export», «tab-counts», «summary», «transfer»,
+      // «gked-check», «gked-search», «form-options», «socfund-check» и «report-pick» разбирались бы как
+      // номер контрагента.
       .openapi(contractorValuesRoute, contractorValuesHandler(deps))
       .openapi(contractorTabCountsRoute, contractorTabCountsHandler(deps))
+      .openapi(contractorSummaryRoute, contractorSummaryHandler(deps))
       .openapi(exportContractorsRoute, exportContractorsHandler(deps))
       .openapi(transferPreviewRoute, transferPreviewHandler(deps))
       .openapi(transferContractorsRoute, transferContractorsHandler(deps))
@@ -95,6 +99,7 @@ export function contractorsModule(deps: ApiDeps) {
       .openapi(socfundCheckRoute, socfundCheckHandler(deps))
       .openapi(reportPickContextRoute, reportPickContextHandler(deps))
       .openapi(getContractorRoute, getContractorHandler(deps))
+      .openapi(contractorHistoryRoute, contractorHistoryHandler(deps))
       .openapi(createContractorRoute, createContractorHandler(deps))
       .openapi(updateContractorRoute, updateContractorHandler(deps))
       .openapi(deleteContractorRoute, deleteContractorHandler(deps))

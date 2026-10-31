@@ -254,6 +254,8 @@ export type ReportList = z.infer<typeof ReportList>;
 export const ReportTabParam = z.object({
   tab: z.enum(['week', 'overdue', 'waiting', 'all', 'calendar']).default('all'),
   quick: z.enum(['all', 'sub', 'pay']).default('all'),
+  /** Только отчёты контрагента: вкладка «Отчёты к сдаче» его карточки. */
+  contractorId: Uuid.optional(),
   /** Вкладка «Календарь»: день, отчёты которого показать (прототип `S.calSel`). */
   day: ReportDate.optional(),
 });

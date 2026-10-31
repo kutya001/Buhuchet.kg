@@ -62,7 +62,8 @@ export function useServiceActions(
   } = {},
 ): {
   actions: (contractor: ServiceContractor, service: ContractorService) => ActionEntry[];
-  archive: (contractors: readonly { id: string; name: string }[]) => void;
+  /** «В архив» выбранных: после вопроса; `done` — снять галочки, когда отправлено. */
+  archive: (contractors: readonly { id: string; name: string }[], done?: () => void) => void;
   unarchive: (contractorId: string) => Promise<void>;
   dialogs: ReactNode;
 } {
@@ -81,9 +82,10 @@ export function useServiceActions(
   const feeVisible = access.can('fee');
   const [dialog, setDialog] = useState<DialogSlot<Dialog> | null>(null);
   const [askCancel, setAskCancel] = useState<ContractorService | null>(null);
-  const [askArchive, setAskArchive] = useState<readonly { id: string; name: string }[] | null>(
-    null,
-  );
+  const [askArchive, setAskArchive] = useState<{
+    list: readonly { id: string; name: string }[];
+    done?: () => void;
+  } | null>(null);
   const [back, setBack] = useState<DialogSlot<{
     contractor: ServiceContractor;
     service: ContractorService;
@@ -210,7 +212,7 @@ export function useServiceActions(
           setBack(openSlot({ contractor, service: next }));
         });
       },
-      archive: () => setAskArchive([{ id: contractor.id, name: contractor.name }]),
+      archive: () => setAskArchive({ list: [{ id: contractor.id, name: contractor.name }] }),
       unarchive: () => void unarchive(contractor.id),
     };
     return serviceMenuEntries({ service, rights, t, run });
@@ -268,14 +270,18 @@ export function useServiceActions(
         open={askArchive !== null}
         onClose={() => setAskArchive(null)}
         title={
-          askArchive && askArchive.length > 1
-            ? t('svc.archive.title_many', { n: askArchive.length })
-            : t('svc.archive.title_one', { name: askArchive?.[0]?.name ?? '' })
+          askArchive && askArchive.list.length > 1
+            ? t('svc.archive.title_many', { n: askArchive.list.length })
+            : t('svc.archive.title_one', { name: askArchive?.list[0]?.name ?? '' })
         }
         text={t('svc.archive.text')}
         ok={t('svc.archive.ok')}
         danger
-        onConfirm={() => askArchive && void archive(askArchive)}
+        onConfirm={() => {
+          if (!askArchive) return;
+          askArchive.done?.();
+          void archive(askArchive.list);
+        }}
       />
       {back ? (
         <RollbackDialog
@@ -322,7 +328,7 @@ export function useServiceActions(
 
   return {
     actions,
-    archive: (list) => setAskArchive(list),
+    archive: (list, done) => setAskArchive({ list, done }),
     unarchive,
     dialogs,
   };
@@ -330,21 +336,21 @@ export function useServiceActions(
 
 /**
  * Блок «Статус обслуживания» карточки контрагента (прототип contractor-card: метка статуса, «Периоды
- * обслуживания: 01.2026–10.2026, 05.2027–…»; ui/status-scale.js `svcPlanNote`): запланированная
- * приостановка — жёлтой меткой и кнопкой «Отменить приостановку» (с правом «Откат статусов»),
- * запланированное возобновление — синей. Карточку (2.11) собирает её задача.
+ * обслуживания: 01.2026–10.2026, 05.2027–…»). Отметку запланированного карточка показывает под шкалой
+ * (`ServicePlanNote`), поэтому здесь её можно выключить (`plan={false}`).
  */
 export function ServiceStatusBlock({
   service,
   onCancelPause,
+  plan = true,
 }: {
   service: ContractorService;
   /** «Отменить приостановку» у отметки; null — кнопки нет (нет прав). */
   onCancelPause: (() => void) | null;
+  plan?: boolean;
 }) {
   const t = useT();
   const pill = statusPillView(t, 'service', service.status);
-  const plan = servicePlanNote(t, service);
   return (
     <div data-service-block="" className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
@@ -357,26 +363,43 @@ export function ServiceStatusBlock({
           </span>
         ) : null}
       </div>
-      {plan ? (
-        <div className="flex flex-wrap items-center gap-2">
-          <Pill
-            size="sm"
-            tone={plan.kind === 'pause' ? 'warn' : 'info'}
-            icon={plan.kind === 'pause' ? 'pause' : 'play'}
-          >
-            {plan.text}
-          </Pill>
-          {plan.kind === 'pause' && onCancelPause ? (
-            <button
-              type="button"
-              data-service-unpause=""
-              className={buttonClass('default', 'sm')}
-              onClick={onCancelPause}
-            >
-              {t('svc.menu.cancel_pause')}
-            </button>
-          ) : null}
-        </div>
+      {plan ? <ServicePlanNote service={service} onCancelPause={onCancelPause} /> : null}
+    </div>
+  );
+}
+
+/**
+ * Отметка запланированного (ui/status-scale.js `svcPlanNote`): приостановка — жёлтой меткой и кнопкой
+ * «Отменить приостановку» (с правом «Откат статусов»), возобновление — синей.
+ */
+export function ServicePlanNote({
+  service,
+  onCancelPause,
+}: {
+  service: ContractorService;
+  onCancelPause: (() => void) | null;
+}) {
+  const t = useT();
+  const plan = servicePlanNote(t, service);
+  if (!plan) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <Pill
+        size="sm"
+        tone={plan.kind === 'pause' ? 'warn' : 'info'}
+        icon={plan.kind === 'pause' ? 'pause' : 'play'}
+      >
+        {plan.text}
+      </Pill>
+      {plan.kind === 'pause' && onCancelPause ? (
+        <button
+          type="button"
+          data-service-unpause=""
+          className={buttonClass('default', 'sm')}
+          onClick={onCancelPause}
+        >
+          {t('svc.menu.cancel_pause')}
+        </button>
       ) : null}
     </div>
   );

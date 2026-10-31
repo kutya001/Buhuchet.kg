@@ -1,3 +1,5 @@
+import { diffDays, type IsoDate } from '../common/dates';
+
 /*
  * Правила данных контрагента (ТЗ «Контрагенты» → «Регистрация контрагентов», «Обязательные поля»,
  * «Необязательные поля», «Закрепление контрагентов за сотрудниками», «Контрагента нельзя удалить…»;
@@ -279,4 +281,25 @@ export function officeBenefitChanges(
     add: byNewOffice.filter((code) => !current.includes(code)),
     drop: byOldOffice.filter((code) => current.includes(code) && !keep.has(code)),
   };
+}
+
+/** Сколько дней до конца льготы по кодексу предупреждать в карточке контрагента. */
+export const BENEFIT_ENDING_DAYS = 60;
+
+/**
+ * Льготы контрагента (не особые статусы), срок которых по кодексу кончается в ближайшие 60 дней —
+ * предупреждение под строкой льгот карточки (ТЗ «Окно «Льготы и особые статусы»»; прототип benSoon):
+ * сегодня и до 60 дней включительно; прошедший срок и льготы без срока — без предупреждения.
+ */
+export function benefitsEndingSoon(
+  catalog: readonly { code: string; name: string; kind: string; validUntil: IsoDate | null }[],
+  codes: readonly string[],
+  today: IsoDate,
+): { name: string; until: IsoDate; days: number }[] {
+  return codes.flatMap((code) => {
+    const b = catalog.find((x) => x.code === code);
+    if (!b || b.kind === 'status' || !b.validUntil || b.validUntil < today) return [];
+    const days = diffDays(b.validUntil, today);
+    return days <= BENEFIT_ENDING_DAYS ? [{ name: b.name, until: b.validUntil, days }] : [];
+  });
 }

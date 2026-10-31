@@ -131,6 +131,35 @@ export const KB_STEP_RULES: Readonly<Record<string, KbStepRule>> = {
   // 5. Контрагенты (задача 2.09): «Добавить первого контрагента или загрузить из Excel» — создан хотя
   // бы один контрагент (загрузка из Excel и «Из свидетельства и выписки» тоже пишут создание в историю).
   cp1: { module: 'cps', done: { kind: 'history', entity: 'contractor', actions: ['create'] } },
+  // Список и карточка (задачи 2.10, 2.11). «Закрепить ответственных» — ответственный записан при
+  // создании или сменён (прототип `KB_EV['cp.resp']`: «Ответственный:», «Контрагент создан»), в том числе
+  // «Передать контрагентов». «Загрузка из Excel» — с задачей 2.16, «Указать стоимость обслуживания»,
+  // отметки оплаты и «Баланс контрагента и история» — с задачами денег (поток В).
+  resp: {
+    module: 'cps',
+    done: {
+      kind: 'history',
+      entity: 'contractor',
+      actions: ['create', 'update'],
+      anyField: ['responsibleEmployeeId'],
+    },
+  },
+  oneoff: {
+    module: 'cps',
+    done: {
+      kind: 'history',
+      entity: 'contractor',
+      actions: ['create'],
+      change: { field: 'kind', to: 'oneoff' },
+    },
+  },
+  pause: { module: 'cps' },
+  archive: { module: 'cps' },
+  // Блок «Страница контрагента» в карточке (прототип `KB_EV['cp.page']`: «Страница контрагента включена»).
+  cppage: {
+    module: 'cps',
+    done: { kind: 'history', entity: 'contractor_page', actions: ['page_on'] },
+  },
   // 6. Отчеты для сдачи (задача 2.13): вкладки списка. «Назначить отчёты контрагентам» (задача 2.15,
   // прототип `KB_EV['r.assign']`: «Назначен отчёт») — создано назначение: галочкой «Кто что сдаёт»,
   // окном массового назначения или «Подбором отчётов» в карточке контрагента; «Кто что сдаёт» —
@@ -198,8 +227,8 @@ export const KB_STEP_RULES: Readonly<Record<string, KbStepRule>> = {
     module: 'tasks',
     done: { kind: 'status', scale: 'task', from: ['on_confirm'], to: ['confirmed', 'rework'] },
   },
-  // 11. Показатели контрагентов (задачи 2.27, 2.28). «Вкладка «Показатели» в карточке контрагента» — с
-  // карточкой контрагента (2.11).
+  // 11. Показатели контрагентов (задачи 2.27, 2.28). «Вкладка «Показатели» в карточке контрагента»
+  // (`kcard`) — с карточкой контрагента (2.11), ниже по порядку шагов.
   kset: {
     module: 'kpi',
     done: { kind: 'history', entity: 'indicator', actions: ['create', 'update', 'delete'] },
@@ -223,6 +252,7 @@ export const KB_STEP_RULES: Readonly<Record<string, KbStepRule>> = {
     module: 'kpi',
     done: { kind: 'status', scale: 'indicator', from: ['filled'], to: ['checked'] },
   },
+  kcard: { module: 'kpi' },
   // 12. Файловый менеджер (задача 2.29): «Загрузить файл вручную» — запись истории ручной загрузки
   // (сущность «файл»: файлы записей пишутся в историю своей записи); шаг — только с правом «Загружать
   // файлы» (ТЗ «Главное правило»; в справочнике шагов права нет).
@@ -233,12 +263,12 @@ export const KB_STEP_RULES: Readonly<Record<string, KbStepRule>> = {
     done: { kind: 'history', entity: 'file', actions: ['file_attach'] },
   },
   ffind: { module: 'files' },
-  // 14. Работа со списками и интерфейсом: пока нет «Контрагентов», «Перейти» ведёт в список «Видов
-  // отчётов» — он виден всем. «Статистика» и «Свайпы» — на «Отчетах для сдачи», как в прототипе (2.13).
+  // 14. Работа со списками и интерфейсом: «Столбцы», «Группировка» и «В Excel» — на списке контрагентов
+  // (2.10), «Статистика» и «Свайпы» — на «Отчетах для сдачи» (2.13), как в прототипе.
   search: { module: null },
-  cols: { module: 'dicts' },
-  grp: { module: 'dicts' },
-  xls: { module: 'dicts' },
+  cols: { module: 'cps' },
+  grp: { module: 'cps' },
+  xls: { module: 'cps' },
   stats: { module: 'reports' },
   swipe: { module: 'reports' },
   // Админка (задачи 2.35–2.37, 2.40). «Выгрузить и загрузить через Excel» — первое применение
@@ -263,7 +293,7 @@ export const KB_READY_MODULES: ReadonlySet<string> = new Set<MenuModuleId>([
   // «Отчеты для сдачи» (2.13).
   'reports',
   'tasks',
-  // «Контрагенты»: форма создания (2.09); статья описывает и список — его экран добавит задача 2.10.
+  // «Контрагенты»: форма создания (2.09), список и карточка (2.10, 2.11).
   'cps',
   // «Показатели контрагентов» (2.27).
   'kpi',

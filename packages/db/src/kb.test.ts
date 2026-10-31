@@ -364,6 +364,64 @@ describe.skipIf(!databaseAvailable())('«База знаний»: прогрес
     expect(await asOwner(a, (tx) => kbDoneFacts(tx, a.ownerUserId, []))).toEqual(new Map());
   });
 
+  it('факты «Сделать» контрагентов: ответственный, разовый, страница', async () => {
+    const cp = '00000000-0000-4000-8000-0000000000c1';
+    const steps = ['resp', 'oneoff', 'cppage'].map((id) => ({
+      id,
+      rule: KB_STEP_RULES[id]!.done!,
+    }));
+    // Постоянный контрагент без ответственного в записи и правка другого поля шагов не засчитывают.
+    await inOrg(a, accUserId, (tx) =>
+      writeHistory(
+        tx,
+        {
+          entity: 'contractor',
+          entityId: cp,
+          action: 'create',
+          changes: [{ field: 'kind', to: 'regular' }],
+        },
+        {
+          entity: 'contractor',
+          entityId: cp,
+          action: 'update',
+          changes: [{ field: 'head', from: 'А', to: 'Б' }],
+        },
+        { entity: 'contractor_page', entityId: cp, action: 'page_code' },
+      ),
+    );
+    expect((await inOrg(a, accUserId, (tx) => kbDoneFacts(tx, accUserId, steps))).size).toBe(0);
+    // Разовый с ответственным, смена ответственного («Передать контрагентов»), включённая страница.
+    await inOrg(a, accUserId, (tx) =>
+      writeHistory(
+        tx,
+        {
+          entity: 'contractor',
+          entityId: cp,
+          action: 'create',
+          changes: [
+            { field: 'kind', to: 'oneoff' },
+            { field: 'responsibleEmployeeId', to: accUserId },
+          ],
+        },
+        { entity: 'contractor_page', entityId: cp, action: 'page_on' },
+      ),
+    );
+    const acc = await inOrg(a, accUserId, (tx) => kbDoneFacts(tx, accUserId, steps));
+    expect([...acc.keys()].sort()).toEqual(['cppage', 'oneoff', 'resp']);
+    await asOwner(a, (tx) =>
+      writeHistory(tx, {
+        entity: 'contractor',
+        entityId: cp,
+        action: 'update',
+        changes: [{ field: 'responsibleEmployeeId', from: accUserId, to: a.ownerUserId }],
+      }),
+    );
+    expect([...(await asOwner(a, (tx) => kbDoneFacts(tx, a.ownerUserId, steps))).keys()]).toEqual([
+      'resp',
+    ]);
+    expect((await asOwner(b, (tx) => kbDoneFacts(tx, accUserId, steps))).size).toBe(0);
+  });
+
   it('факты «Сделать» задач — из своей «Истории статусов»', async () => {
     const entityId = '00000000-0000-4000-8000-0000000000aa';
     const steps = ['tdone', 'tconf'].map((id) => ({ id, rule: KB_STEP_RULES[id]!.done! }));
