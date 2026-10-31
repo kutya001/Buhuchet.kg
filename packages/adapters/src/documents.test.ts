@@ -65,13 +65,8 @@ describe('чтение PDF на сервере', () => {
   });
 
   it('время вышло посреди распознавания — очередь свободна, следующий скан читается', async () => {
-    const started = performance.now();
-    expect((await reader.read(file('regdocs-scan.pdf'))).ok).toBe(true);
-    const full = performance.now() - started;
-    // Половина обычного времени — посреди распознавания (успел — тоже не ошибка).
-    const cut = await createDocumentReader({ timeoutMs: Math.max(50, Math.round(full / 2)) }).read(
-      file('regdocs-scan.pdf'),
-    );
+    // Через секунду распознавание обычно уже идёт (успел раньше — тоже не ошибка).
+    const cut = await createDocumentReader({ timeoutMs: 1_000 }).read(file('regdocs-scan.pdf'));
     if (!cut.ok) expect(cut.error).toBe('timeout');
     const again = await createDocumentReader({ timeoutMs: 30_000 }).read(file('regdocs-scan.pdf'));
     expect(again.ok).toBe(true);
