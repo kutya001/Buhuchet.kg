@@ -13,6 +13,31 @@ export function mergeGuardFiles(files) {
   return files.filter((f) => MERGE_GUARDS.some((re) => re.test(f)));
 }
 
+/**
+ * Какая обязательная проверка коммита мешает слиянию (`runs` — check_runs из API): первая, последний
+ * запуск которой не зелёный, или null — все зелёные. Учитываются только проверки GitHub Actions:
+ * чужое приложение не может «зажечь» зелёный check с тем же именем.
+ *
+ * `stale` — проверка из набора запустившего workflow (`triggerSuiteId`, событие workflow_run
+ * completed с успехом): она уже зелёная, а API ещё несколько секунд отдаёт прежнее состояние. Такой
+ * ответ надо перечитать, а не ждать: следующего события не будет, и PR встанет (так было с #145).
+ */
+export function blockingCheck(runs, required, triggerSuiteId) {
+  for (const name of required) {
+    const latest = runs
+      .filter((r) => r.name === name && r.app?.slug === 'github-actions')
+      .sort((a, b) => new Date(b.started_at) - new Date(a.started_at))[0];
+    if (!latest || latest.status !== 'completed' || latest.conclusion !== 'success') {
+      const stale =
+        Boolean(latest) &&
+        Boolean(triggerSuiteId) &&
+        String(latest.check_suite?.id) === String(triggerSuiteId);
+      return { name, latest: latest ?? null, stale };
+    }
+  }
+  return null;
+}
+
 /** Меняет ли PR базу или данные справочников: тогда после слияния нужны миграции стенда (migrate-test.yml). */
 export function needsStagingMigration(files) {
   return files.some((f) => f.startsWith('packages/db/') || f.startsWith('spec/data/'));
