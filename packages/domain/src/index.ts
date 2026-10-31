@@ -35,6 +35,7 @@ export * from './dicts/platform-dicts';
 export * from './dicts/value-guide';
 export * from './common/months';
 export * from './contractors/rules';
+export * from './contractors/import';
 export * from './contractors/gked';
 export * from './contractors/socfund';
 export * from './contractors/report-pick';

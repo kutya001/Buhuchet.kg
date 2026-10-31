@@ -20,6 +20,16 @@ import {
 } from './card';
 import { contractorHistoryHandler, contractorHistoryRoute } from './history';
 import {
+  importApplyHandler,
+  importApplyRoute,
+  importCheckHandler,
+  importCheckRoute,
+  importTemplateHandler,
+  importTemplatePreviewHandler,
+  importTemplatePreviewRoute,
+  importTemplateRoute,
+} from './import';
+import {
   contractorSummaryHandler,
   contractorSummaryRoute,
   contractorTabCountsHandler,
@@ -76,8 +86,8 @@ import {
  * Модуль «Контрагенты»: список (значения для фильтра, выгрузка в Excel, счётчики вкладок, итоги плашек),
  * карточка и её «История», значения формы, поиск и сверка с ГКЭД и тариф Соцфонда для формы, создание
  * одним целым вместе с отчётами, «Изменить», удаление, назначение ответственного, передача дел, окно «Тариф Соцфонда»,
- * «Подбор отчётов» и обслуживание (приостановка, возобновление, архив, перевод разового в постоянное —
- * задача 2.12). Экраны — задачи 2.09–2.11.
+ * «Подбор отчётов», обслуживание (приостановка, возобновление, архив, перевод разового в постоянное —
+ * задача 2.12) и загрузка из Excel (задача 2.16). Экраны — задачи 2.09–2.11 и 2.16.
  */
 export function contractorsModule(deps: ApiDeps) {
   return (
@@ -98,6 +108,10 @@ export function contractorsModule(deps: ApiDeps) {
       .openapi(formOptionsRoute, formOptionsHandler(deps))
       .openapi(socfundCheckRoute, socfundCheckHandler(deps))
       .openapi(reportPickContextRoute, reportPickContextHandler(deps))
+      .openapi(importTemplatePreviewRoute, importTemplatePreviewHandler(deps))
+      .openapi(importTemplateRoute, importTemplateHandler(deps))
+      .openapi(importCheckRoute, importCheckHandler(deps))
+      .openapi(importApplyRoute, importApplyHandler(deps))
       .openapi(getContractorRoute, getContractorHandler(deps))
       .openapi(contractorHistoryRoute, contractorHistoryHandler(deps))
       .openapi(createContractorRoute, createContractorHandler(deps))

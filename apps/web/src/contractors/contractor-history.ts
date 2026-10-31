@@ -93,6 +93,9 @@ function tariffText(t: Translate, v: unknown): string {
 
 /** Строки изменения контрагента (прототип: «Ответственный: А → Б», «Изменено: …», статус и периоды). */
 function contractorLines(t: Translate, e: Entry, names: Names): string[] {
+  // Созданный загрузкой (из Excel, из свидетельства и выписки) — одной строкой-причиной, как в
+  // прототипе: «Создан загрузкой из Excel».
+  if (e.action === 'create' && e.reason) return [];
   if (e.action === 'create') {
     const oneoff = e.changes.some((c) => c.field === 'kind' && c.to === 'oneoff');
     return [t(oneoff ? 'cp.hist.created_oneoff' : 'cp.hist.created')];

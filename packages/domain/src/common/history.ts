@@ -14,6 +14,8 @@ export const HISTORY_ENTITIES = [
   'contractor',
   // Страница контрагента по ссылке (задача 2.42): включение, код, разделы, открытия.
   'contractor_page',
+  // Загрузка контрагентов из Excel (задача 2.16): кто, когда, сколько создано и пропущено.
+  'contractor_import',
   'assignment',
   'report',
   'task',
