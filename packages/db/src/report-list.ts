@@ -669,7 +669,8 @@ function listScope(
 /** Строка списка отчётов. */
 export interface ReportRow {
   id: string;
-  contractor: { id: string; name: string; inn: string };
+  /** `archived` — контрагент в архиве: «Принять» у отчёта не показывается (прототип canRecv). */
+  contractor: { id: string; name: string; inn: string; archived: boolean };
   taxOffice: string | null;
   type: { code: string; name: string; shortName: string };
   act: ReportAct;
@@ -755,6 +756,7 @@ function rowFields(today: IsoDate, taxpay: boolean) {
     contractorId: reports.contractorId,
     contractorName: contractors.name,
     inn: contractors.inn,
+    contractorArchived: sql<boolean>`${contractors.serviceStatus} = 'archived'`,
     taxOffice: TAX_OFFICE_LABEL,
     typeCode: reports.reportTypeCode,
     typeName: reportTypes.name,
@@ -849,6 +851,7 @@ function toRow(r: RowData): ReportRow {
       id: r.contractorId as string,
       name: r.contractorName as string,
       inn: r.inn as string,
+      archived: r.contractorArchived as boolean,
     },
     taxOffice: r.taxOffice as string | null,
     type: {

@@ -14,7 +14,7 @@ import {
   ReportList,
   ReportSubmitted,
 } from '@buhuchet/shared';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { apiRequest, createStaffFixture, signIn, TEST_PASSWORD } from '../../testing';
 
@@ -180,6 +180,45 @@ describe.skipIf(!databaseAvailable())('Деньги по отчётам — ме
       ).status,
     ).toBe(404);
     expect((await money(acc, cpA)).contractor.id).toBe(cpA);
+    // Отчёт чужого контрагента своей организации: оплата, её отмена и настройки денег — 404.
+    const other = await reportOf(cpChief, 'nds', '2026-09-01');
+    const otherPay = { ...pay, version: other.version };
+    expect((await call('POST', `/api/reports/${other.id}/payments`, acc, otherPay)).status).toBe(
+      404,
+    );
+    const cpVersion = (await money(owner, cpChief)).contractor.version;
+    const settings = { version: cpVersion, needReceiptFile: true };
+    expect(
+      (await call('PATCH', `/api/contractors/${cpChief}/money-settings`, acc, settings)).status,
+    ).toBe(404);
+    // Область «Финансовые операции — Все» не открывает чужую карточку: настройки денег — по области
+    // «Контрагенты», как «Изменить» (у «Кадров» — «Создавать и изменять контрагентов», «Свои»).
+    await f.t.admin.db
+      .update(schema.roleScopes)
+      .set({ scope: 'all' })
+      .where(
+        and(eq(schema.roleScopes.roleId, f.roleIds.hr), eq(schema.roleScopes.permGroup, 'fin')),
+      );
+    await f.t.admin.db
+      .insert(schema.rolePermissions)
+      .values({ orgId: f.a.orgId, roleId: f.roleIds.hr, permissionId: 'rollback' });
+    const hr = await signIn(f.app, 'hr-a', TEST_PASSWORD);
+    expect(
+      (await call('PATCH', `/api/contractors/${cpChief}/money-settings`, hr, settings)).status,
+    ).toBe(404);
+    // Отмена оплаты — ещё и по области «Отчёты» («Свои»): чужой отчёт — 404.
+    expect(
+      (
+        await call('POST', `/api/reports/${other.id}/payments/rollback`, hr, {
+          version: other.version,
+          reason: 'Ошибка',
+        })
+      ).status,
+    ).toBe(404);
+    expect((await money(owner, cpChief)).contractor).toMatchObject({
+      version: cpVersion,
+      needReceiptFile: false,
+    });
     // Неверное тело — 400.
     for (const body of [
       { total: 0, date: '2026-10-18' },
@@ -202,8 +241,20 @@ describe.skipIf(!databaseAvailable())('Деньги по отчётам — ме
       expect(off.status).toBe(403);
       expect((await failure(off)).code).toBe('taxpay_off');
       expect((await call('POST', `/api/reports/${nds.id}/payments`, owner, pay)).status).toBe(403);
+      // Без учёта — только график оплаты (прототип report-card.js), денег и действий нет.
       const c = await card(owner, nds.id);
-      expect(c).toMatchObject({ taxpay: false, payFirst: false, money: null });
+      expect(c).toMatchObject({
+        taxpay: false,
+        payFirst: false,
+        money: {
+          available: null,
+          payments: [],
+          canPay: false,
+          canReceive: false,
+          canCancel: false,
+        },
+      });
+      expect(c.money?.schedule).toHaveLength(1);
     } finally {
       await features({ files: true, taxpay: true });
     }

@@ -328,11 +328,13 @@ export interface ReceiptPreset {
 /**
  * «Поступление от контрагента» (прототип inDlg): общая сумма и дата, детализация по неоплаченным
  * отчётам по сроку оплаты («Распределить по срокам»), излишек — аванс; файлы — платёжка, чек, скрин
- * (обязательны, если так отмечено у контрагента). Окно ждёт неоплаченные отчёты с сервера.
+ * (обязательны, если так отмечено у контрагента и «Файлы в карточках» включены). Окно ждёт неоплаченные
+ * отчёты с сервера.
  */
 export function ReceiptDialog({
   contractorId,
   preset,
+  filesOn,
   canUpload,
   open,
   onClose,
@@ -340,6 +342,8 @@ export function ReceiptDialog({
 }: {
   contractorId: string;
   preset: ReceiptPreset | null;
+  /** «Файлы в карточках» включены: без них «Файл при поступлении» не требуется — приложить некуда. */
+  filesOn: boolean;
   canUpload: boolean;
   open: boolean;
   onClose: () => void;
@@ -354,6 +358,7 @@ export function ReceiptDialog({
       form={query.data ?? null}
       failed={query.isError}
       preset={preset}
+      filesOn={filesOn}
       canUpload={canUpload}
       open={open}
       onClose={onClose}
@@ -367,6 +372,7 @@ function ReceiptModal({
   form,
   failed,
   preset,
+  filesOn,
   canUpload,
   open,
   onClose,
@@ -376,6 +382,7 @@ function ReceiptModal({
   form: ReceiptForm | null;
   failed: boolean;
   preset: ReceiptPreset | null;
+  filesOn: boolean;
   canUpload: boolean;
   open: boolean;
   onClose: () => void;
@@ -393,6 +400,7 @@ function ReceiptModal({
     presetOk && preset ? { [preset.reportId]: formatSom(preset.amount, 'auto') } : {},
   );
   const [picked, setPicked] = useState<File[]>([]);
+  const needFile = filesOn && !!form?.contractor.needReceiptFile;
   const [errors, setErrors] = useState<{
     total?: string;
     date?: string;
@@ -436,7 +444,7 @@ function ReceiptModal({
       });
     if (!date || date > todayBishkek()) return setErrors({ date: t('err.money_date_future') });
     if (over) return setErrors({ rows: t('err.receipt_row_over') });
-    if (form.contractor.needReceiptFile && picked.length === 0)
+    if (needFile && picked.length === 0)
       return setErrors({ files: t('err.receipt_file_required') });
     const bad = pickedMoneyFilesProblem(t, errorText, picked);
     if (bad) return setErrors({ files: bad });
@@ -668,8 +676,8 @@ function ReceiptModal({
               id={`${id}-files`}
               label={t('money.in.files')}
               full
-              required={c?.needReceiptFile ?? false}
-              hint={c?.needReceiptFile ? t('money.in.files_need') : undefined}
+              required={needFile}
+              hint={needFile ? t('money.in.files_need') : undefined}
               error={errors.files}
             >
               {(control) => (
@@ -683,7 +691,7 @@ function ReceiptModal({
               )}
             </Field>
           </FormGrid>
-        ) : c?.needReceiptFile ? (
+        ) : needFile ? (
           <Note tone="warn" icon="clip">
             {errors.files ?? t('err.receipt_file_required')}
           </Note>

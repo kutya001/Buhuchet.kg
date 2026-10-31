@@ -195,7 +195,8 @@ const Person = z.object({ id: Uuid, shortName: z.string() });
 /** Строка списка отчётов (прототип repCols): тексты, как в столбцах экрана. */
 export const ReportRow = z.object({
   id: Uuid,
-  contractor: z.object({ id: Uuid, name: z.string(), inn: z.string() }),
+  /** `archived` — контрагент в архиве: «Принять» не показывается (прототип canRecv). */
+  contractor: z.object({ id: Uuid, name: z.string(), inn: z.string(), archived: z.boolean() }),
   taxOffice: z.string().nullable(),
   type: z.object({ code: z.string(), name: z.string(), shortName: z.string() }),
   act: z.enum(REPORT_ACTS),
@@ -376,7 +377,7 @@ export const ReportCard = ReportRow.extend({
   /** «Учёт оплаты налогов» и «Сдача отчёта только после оплаты» (учётная политика). */
   taxpay: z.boolean(),
   payFirst: z.boolean(),
-  /** Деньги отчёта; null — «Учёт оплаты налогов» выключен или у вида нет суммы. */
+  /** Деньги отчёта; null — у вида нет суммы. Без «Учёта оплаты налогов» — только график оплаты. */
   money: ReportCardMoney.nullable(),
   /** Отметка на шаге «Сдан» при подтверждении сдачи: «Ждёт подтверждения» или «Подтверждено». */
   mark: z.enum(['waiting', 'confirmed']).nullable(),

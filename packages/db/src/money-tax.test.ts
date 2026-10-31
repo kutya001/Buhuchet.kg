@@ -3,7 +3,12 @@ import { formatText, paymentDefaults, UI_TEXTS, type Translate } from '@buhuchet
 import { and, asc, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { withOrgContext, type OrgContext } from './context';
-import { createContractor, type ContractorFields } from './contractors';
+import {
+  assignContractors,
+  createContractor,
+  updateContractor,
+  type ContractorFields,
+} from './contractors';
 import { insertPendingFile, markFileReady } from './files';
 import { readHistory } from './history';
 import {
@@ -149,13 +154,13 @@ describe.skipIf(!databaseAvailable())('Деньги по отчётам: пос�
   };
   const setAmount = (id: string, amount: number | null) =>
     inA((tx) => tx.update(reports).set({ amount }).where(eq(reports.id, id)));
-  const receipt = (contractorId: string, patch: Partial<ReceiptInput>) =>
+  const receipt = (contractorId: string, patch: Partial<ReceiptInput>, filesOn = true) =>
     inA((tx) =>
       createReceipt(
         tx,
         contractorId,
         { total: 0, date: TODAY, rows: [], files: 0, ...patch },
-        { today: TODAY, scope: undefined, t },
+        { today: TODAY, scope: undefined, filesOn, t },
       ),
     );
   const pay = async (id: string, patch: { amount: number; self?: boolean; date?: string }) => {
@@ -512,6 +517,19 @@ describe.skipIf(!databaseAvailable())('Деньги по отчётам: пос�
     await expect(receipt(cpA, { total: som(100) })).rejects.toEqual(
       refused('receipt_file_required', 400),
     );
+    // «Файлы в карточках» выключены — файл приложить некуда, поступление без него сохраняется.
+    const rollback = new Error('rollback');
+    await expect(
+      inA(async (tx) => {
+        await createReceipt(
+          tx,
+          cpA,
+          { total: som(100), date: TODAY, rows: [], files: 0 },
+          { today: TODAY, scope: undefined, filesOn: false, t },
+        );
+        throw rollback;
+      }),
+    ).rejects.toBe(rollback);
     const { id } = await receipt(cpA, {
       total: som(1_500),
       rows: [{ reportId: oct.id, amount: som(1_000) }],
@@ -545,11 +563,18 @@ describe.skipIf(!databaseAvailable())('Деньги по отчётам: пос�
     const version = async () =>
       (await inA((tx) => tx.select().from(contractors).where(eq(contractors.id, cpOrg))))[0]!
         .version;
-    // Без ответственного деньги на кошелёк переводить некому.
-    const v0 = await version();
-    await expect(
-      inA((tx) => saveMoneySettings(tx, cpOrg, { version: v0, paysTo: 'emp' }, undefined)),
-    ).rejects.toEqual(refused('no_holder'));
+    const opsOf = () =>
+      inA((tx) => tx.select().from(moneyOperations).where(eq(moneyOperations.contractorId, cpOrg)));
+    // Без ответственного кошелька нет (у прототипа holder пуст): деньги остаются на счёте организации.
+    await inA(async (tx) =>
+      saveMoneySettings(tx, cpOrg, { version: await version(), paysTo: 'emp' }, undefined),
+    );
+    const before = (await opsOf()).filter((o) => !o.self);
+    expect(before.length).toBeGreaterThan(0);
+    expect(before.every((o) => o.holderKind === 'org' && o.holderEmployeeId === null)).toBe(true);
+    await inA(async (tx) =>
+      saveMoneySettings(tx, cpOrg, { version: await version(), paysTo: 'org' }, undefined),
+    );
     await inA((tx) =>
       tx.update(contractors).set({ responsibleEmployeeId: accA }).where(eq(contractors.id, cpOrg)),
     );
@@ -568,6 +593,29 @@ describe.skipIf(!databaseAvailable())('Деньги по отчётам: пос�
     expect(history.at(-1)).toMatchObject({
       changes: [{ field: 'paysTo', from: 'org', to: 'emp' }],
     });
+    // Новый ответственный (прототип transferCp) — деньги на его счёт, «Оплатил сам» не меняется.
+    const holders = async () =>
+      (
+        await inA((tx) =>
+          tx.select().from(moneyOperations).where(eq(moneyOperations.contractorId, cpOrg)),
+        )
+      ).map((o) => (o.self ? o.holderKind : o.holderEmployeeId));
+    await inA((tx) => assignContractors(tx, [cpOrg], a.ownerEmployeeId, undefined));
+    expect(new Set(await holders())).toEqual(
+      new Set(ops.some((o) => o.self) ? [a.ownerEmployeeId, 'client'] : [a.ownerEmployeeId]),
+    );
+    // «Изменить» контрагента тоже переносит: ответственный снова бухгалтер.
+    await inA(async (tx) =>
+      updateContractor(
+        tx,
+        a.orgId,
+        cpOrg,
+        await version(),
+        { responsibleEmployeeId: accA },
+        undefined,
+      ),
+    );
+    expect((await holders()).filter((h) => h !== 'client').every((h) => h === accA)).toBe(true);
     // Устаревшая версия — «запись изменена другим пользователем».
     await expect(
       inA((tx) => saveMoneySettings(tx, cpOrg, { version: v, needReceiptFile: true }, undefined)),
@@ -617,13 +665,11 @@ describe.skipIf(!databaseAvailable())('Деньги по отчётам: пос�
             .returning({ id: moneyOperations.id });
           const target = list[rnd(list.length)]!;
           if (rnd(2)) {
-            await tx
-              .insert(moneyAllocations)
-              .values({
-                operationId: op!.id,
-                reportId: target.id,
-                amount: som(100 * (1 + rnd(10))),
-              });
+            await tx.insert(moneyAllocations).values({
+              operationId: op!.id,
+              reportId: target.id,
+              amount: som(100 * (1 + rnd(10))),
+            });
           }
         }
         if (rnd(2)) {
@@ -695,6 +741,17 @@ describe.skipIf(!databaseAvailable())('Деньги по отчётам: пос�
     expect(await inB((tx) => tx.update(moneyOperations).set({ note: 'x' }).returning())).toEqual(
       [],
     );
+    // Детализация к операции организации А из организации Б не создаётся.
+    await expect(
+      inB((tx) =>
+        tx.insert(moneyAllocations).values({
+          orgId: a.orgId,
+          operationId: own[0]!.id,
+          reportId: own.find((o) => o.reportId)?.reportId ?? randomUUID(),
+          amount: 1,
+        }),
+      ),
+    ).rejects.toEqual(permissionDenied);
     // Операции не удаляются и не очищаются даже в своей организации (миграция 0071).
     await expect(inA((tx) => tx.delete(moneyOperations).returning())).rejects.toEqual(
       permissionDenied,
@@ -712,7 +769,7 @@ describe.skipIf(!databaseAvailable())('Деньги по отчётам: пос�
           tx,
           cpA,
           { total: 100, date: TODAY, rows: [], files: 0 },
-          { today: TODAY, scope: undefined, t },
+          { today: TODAY, scope: undefined, filesOn: true, t },
         ),
       ),
     ).rejects.toEqual(expect.objectContaining({ name: 'RecordNotFoundError' }));

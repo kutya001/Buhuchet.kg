@@ -220,6 +220,7 @@ export const TAX_MONEY_TEXTS = {
     section: R,
   },
   'report.pay_first.pill': { ru: 'Нет оплаты', section: R },
+  'report.pay_first.scale_hint': { ru: '«Сдан»: {why}', section: R },
   'report.pay_first.all_unpaid': {
     ru: 'Выбранные отчёты не оплачены: «Сдан» ставится после оплаты налога',
     section: R,

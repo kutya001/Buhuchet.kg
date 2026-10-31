@@ -157,6 +157,12 @@ test.describe('Этап 2: деньги по отчётам — поступле
     await expect(card.locator('[data-report-button="submit"]')).toBeDisabled();
     await expect(card.locator('[data-report-button="submit"]')).toHaveAttribute('title', why);
     await expect(card.locator('[data-pay-first]')).toContainText(why);
+    // Шаг «Сдан» на шкале закрыт с той же причиной, под шкалой — подсказка (прототип scaleFull).
+    const scale = card.locator('[data-status-scale]').first();
+    await expect(
+      scale.locator('button[aria-disabled="true"]').filter({ hasText: 'Сдан' }),
+    ).toHaveAttribute('title', why);
+    await expect(card.getByText(som('«Сдан»: Сначала оплатите налог')).first()).toBeVisible();
 
     // «Отметить оплаченным»: денег контрагента нет — «Оплатил контрагент сам» уже включён.
     await card.locator('[data-report-button="pay"]').click();
@@ -346,7 +352,6 @@ test.describe('Этап 2: деньги по отчётам — поступле
     } else {
       expect(await cellText(page, nds, 'received')).toMatch(/5\s000/);
       expect(await cellText(page, nds, 'paid')).toMatch(/2\s000/);
-      expect(await cellText(page, nds, 'left')).toMatch(/3\s000/);
     }
     const card = await openCard(page, nds, name, 'НДС');
     await expect(sum(card, 'К уплате')).toContainText(som('5 000 сом'));

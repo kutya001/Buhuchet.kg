@@ -22,6 +22,7 @@ import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
 import { useErrorText, useT } from '../l10n/provider';
 import { PaymentDialog, ReceiptDialog, type ReceiptPreset } from '../money/tax-dialogs';
 import { useMoneyRefresh } from '../money/tax-data';
+import { lastPayment, payFirstWhy } from '../money/report-money';
 import { useShell } from '../shell/context';
 import { rollbackLabels, rollbackTitle, statusName } from '../status/status-view';
 import { ReportCardWindow, reportToday } from './report-card';
@@ -345,7 +346,12 @@ export function useReportActions(): {
         run: (rows, done) => {
           const ok = rows.filter((r) => r.act !== 'pay' && OPEN_REPORT_STATUSES.has(r.status));
           if (!ok.length) return void toast(t('report.submit.none'), { bad: true, icon: 'alert' });
-          if (ok.length === 1) return void openDialog(ok[0]!, 'submit');
+          if (ok.length === 1) {
+            // Один неоплаченный — сразу причина, окно не открывается (прототип reports.js, bulk).
+            const why = payFirstWhy(t, ok[0]!, actor.taxpay && actor.payFirst);
+            if (why) return void toast(why, { bad: true, icon: 'lock' });
+            return void openDialog(ok[0]!, 'submit');
+          }
           setBatch(openSlot<BatchDialog>({ kind: 'submit', rows: ok, done }));
         },
       },
@@ -406,6 +412,7 @@ export function useReportActions(): {
           key={`receive-${receive.n}`}
           contractorId={receive.data.contractorId}
           preset={receive.data.preset}
+          filesOn={!!actor?.filesOn}
           canUpload={!!actor?.filesOn && !!actor?.can.filesUpload}
           open={receive.open}
           onClose={() => setReceive(closeSlot)}
@@ -552,7 +559,7 @@ export function useReportActions(): {
  * возвращается в свободный остаток, статус оплаты — «Не оплачено» или «Оплачено частично».
  */
 function cancelPayEffect(t: ReturnType<typeof useT>, card: ReportCard): string {
-  const last = (card.money?.payments ?? []).filter((p) => !p.cancelled).at(-1);
+  const last = lastPayment(card);
   if (!last) return '';
   const rest = card.paid - last.amount;
   return t('money.cancel.effect', {

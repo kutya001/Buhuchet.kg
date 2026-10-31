@@ -11,6 +11,7 @@ import {
   reportLabel,
   reportMoneyCard,
   reportPayments,
+  reportSchedule,
   reportScope,
   saveMoneySettings,
   type ReportCard as ReportCardData,
@@ -46,7 +47,7 @@ import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
 import { apiFail } from '../../errors';
 import { requireAnyPermission, requirePermission } from '../../middleware/access';
-import { subjectOf, todayOf } from '../contractors/common';
+import { scopeSqlOf, subjectOf, todayOf } from '../contractors/common';
 import { serverTexts } from '../l10n/texts';
 import { error } from '../reports/common';
 import { finScopeOf, inTaxpay } from './common';
@@ -287,10 +288,11 @@ export function createReceiptHandler(
     const { id } = c.req.valid('param');
     const input = c.req.valid('json');
     const t = await translator(deps);
-    const saved = await inTaxpay(deps, c, (tx) =>
+    const saved = await inTaxpay(deps, c, (tx, settings) =>
       createReceipt(tx, id, input, {
         today: todayOf(deps),
         scope: finScopeOf(subjectOf(c)),
+        filesOn: settings.features.files,
         t,
       }),
     );
@@ -433,8 +435,9 @@ export function moneySettingsHandler(
     const { id } = c.req.valid('param');
     const { version, ...patch } = c.req.valid('json');
     const subject = subjectOf(c);
+    // Область — группы «Контрагенты», как у «Изменить» карточки: переключатели на «Основном» (прототип).
     const saved = await inTaxpay(deps, c, (tx) =>
-      saveMoneySettings(tx, id, { version, ...patch }, finScopeOf(subject)),
+      saveMoneySettings(tx, id, { version, ...patch }, scopeSqlOf(subject)),
     );
     return c.json(saved, 200);
   };
@@ -442,7 +445,8 @@ export function moneySettingsHandler(
 
 /**
  * Деньги отчёта для карточки (прототип report-card.js): график, оплаты для «Истории статусов» оплаты,
- * что можно сделать. Деньги контрагента на счетах — только тому, кто может оплатить или принять.
+ * что можно сделать. Деньги контрагента на счетах — только тому, кто может оплатить или принять. Без
+ * «Учёта оплаты налогов» — только график оплаты (прототип показывает его у вида с долями всегда).
  */
 export async function reportCardMoney(
   tx: Tx,
@@ -450,8 +454,23 @@ export async function reportCardMoney(
   subject: AccessSubject,
   contractor: { responsibleEmployeeId: string | null; archived: boolean } | undefined,
   filesVisible: boolean,
+  taxpay: boolean,
 ): Promise<ReportCardMoney | null> {
   if (card.act === 'sub') return null;
+  if (!taxpay) {
+    const schedule = await reportSchedule(tx, {
+      ...card,
+      reportTypeCode: card.type.code,
+    });
+    return {
+      available: null,
+      schedule,
+      payments: [],
+      canPay: false,
+      canReceive: false,
+      canCancel: false,
+    };
+  }
   const [m, payments] = await Promise.all([
     reportMoneyCard(tx, {
       ...card,

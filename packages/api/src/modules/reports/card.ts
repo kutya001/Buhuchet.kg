@@ -221,9 +221,7 @@ export function getReportHandler(deps: ApiDeps): RouteHandler<typeof getReportRo
       ]);
       const contractor = target?.contractor;
       const filesVisible = reportFilesVisible(subject, contractor, settings.features.files);
-      const money = taxpay
-        ? await reportCardMoney(tx, card, subject, contractor, filesVisible)
-        : null;
+      const money = await reportCardMoney(tx, card, subject, contractor, filesVisible, taxpay);
       return { card, view, settings, ...socfund, contractor, filesVisible, money };
     });
     if (!out) notFound();

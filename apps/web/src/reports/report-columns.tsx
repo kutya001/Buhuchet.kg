@@ -249,8 +249,9 @@ export interface ReportColumnsOptions {
  */
 export function reportColumns(t: Translate, o: ReportColumnsOptions): GridColumn<ReportRow>[] {
   const money = (v: number) => formatSom(v);
+  // «Принять» — не у архивного контрагента (прототип canRecv).
   const receive = (r: ReportRow) =>
-    o.onReceive && reportWaitsPayment(r) ? () => o.onReceive!(r) : null;
+    o.onReceive && reportWaitsPayment(r) && !r.contractor.archived ? () => o.onReceive!(r) : null;
   const withSum = (r: ReportRow) => r.act !== 'sub' && (r.amount ?? 0) > 0;
   const moneyColumns: GridColumn<ReportRow>[] = o.taxpay
     ? [

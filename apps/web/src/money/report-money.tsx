@@ -19,6 +19,7 @@ import {
   StatusPill,
   StatusScale,
   Tag,
+  useToast,
 } from '@buhuchet/ui';
 import type { Translate } from '../l10n/translate';
 import { miniView, scaleView, statusName, type StatusEvent } from '../status/status-view';
@@ -225,7 +226,11 @@ export function SumsBox({ t, r }: { t: Translate; r: ReportCard }) {
   const sum = r.amount;
   const left = Math.max(0, (sum ?? 0) - r.paid);
   return (
-    <div data-report-sums="" className="grid grid-cols-4 gap-2.5 max-md:grid-cols-2">
+    <div
+      data-box
+      data-report-sums=""
+      className="grid grid-cols-4 gap-2.5 rounded-xl border border-line bg-raised px-4 py-3.5 max-md:grid-cols-2"
+    >
       <Cell label={t('money.pay.due')}>
         <b className="text-[18px] font-bold tabular-nums">
           {sum === null ? (
@@ -291,6 +296,23 @@ export function SumsBox({ t, r }: { t: Translate; r: ReportCard }) {
 }
 
 /**
+ * Оплата, которую отменит откат шкалы оплаты (прототип scBack('pay')): последняя действующая по дате
+ * оплаты, при равной — записанная позже; так же выбирает сервер.
+ */
+export function lastPayment(
+  r: ReportCard,
+): NonNullable<ReportCard['money']>['payments'][number] | null {
+  const live = (r.money?.payments ?? []).filter((p) => !p.cancelled);
+  return (
+    live.reduce<(typeof live)[number] | null>(
+      (best, p) =>
+        !best || p.date > best.date || (p.date === best.date && p.at >= best.at) ? p : best,
+      null,
+    ) ?? null
+  );
+}
+
+/**
  * «История статусов» оплаты (прототип statusHist('pay')): «Не оплачено» с создания отчёта, затем
  * каждая оплата («Оплата в бюджет N», платёжка) и её отмена откатом с причиной.
  */
@@ -345,8 +367,9 @@ export function paymentEvents(t: Translate, r: ReportCard): StatusEvent[] {
 }
 
 /**
- * Шкала «Оплата» (прототип scaleFull('pay')): шаги нажатием — окно «Отметить оплаченным»; откат —
- * отмена последней оплаты (с правом «Откат статусов»).
+ * Шкала «Оплата» (прототип scaleFull('pay')): шаги нажатием — окно «Отметить оплаченным», без права
+ * «Учёт денег» шаг нажимается, но отвечает «Нет права на учёт денег» (прототип stepTo); откат — отмена
+ * последней оплаты (с правом «Откат статусов»).
  */
 export function PaymentScale({
   t,
@@ -359,17 +382,14 @@ export function PaymentScale({
   onPay: (() => void) | null;
   onCancel: (() => void) | null;
 }) {
+  const toast = useToast();
   const events = paymentEvents(t, r);
-  const paidRest = (() => {
-    const live = (r.money?.payments ?? []).filter((p) => !p.cancelled);
-    const last = live.at(-1);
-    return last ? r.paid - last.amount : null;
-  })();
+  const last = lastPayment(r);
+  const paidRest = last ? r.paid - last.amount : null;
   const back = onCancel && paidRest !== null ? (paidRest <= 0 ? 'unpaid' : 'partial') : null;
-  const next =
-    onPay && reportWaitsPayment(r)
-      ? (['partial', 'paid'] as const).filter((s) => s !== r.paymentStatus)
-      : [];
+  const next = reportWaitsPayment(r)
+    ? (['partial', 'paid'] as const).filter((s) => s !== r.paymentStatus)
+    : [];
   const view = scaleView(t, {
     scale: 'payment',
     status: r.paymentStatus,
@@ -379,7 +399,15 @@ export function PaymentScale({
   });
   if (view.kind === 'none') return <StatusMiniNone label={view.title} title={view.text} />;
   if (view.kind === 'pill') return <StatusPill {...view.pill} />;
-  return <StatusScale {...view.props} onStep={() => onPay?.()} onBack={() => onCancel?.()} />;
+  return (
+    <StatusScale
+      {...view.props}
+      onStep={() =>
+        onPay ? onPay() : toast(t('report.act.money_no'), { bad: true, icon: 'alert' })
+      }
+      onBack={() => onCancel?.()}
+    />
+  );
 }
 
 /** График оплаты: срок, сумма, оплачено, статус платежа (прототип report-card.js, `sch`). */
@@ -435,53 +463,15 @@ export function ScheduleBox({ t, r, today }: { t: Translate; r: ReportCard; toda
 }
 
 /**
- * Причина и кнопки у несданного отчёта при «Сдаче только после оплаты» (прототип subPayNote): «Принять
- * деньги» и «Отметить оплаченным» — с правом «Учёт денег».
+ * Причина у несданного отчёта при «Сдаче только после оплаты» в карточке (прототип `subPayNote(r, false)`
+ * — без кнопок: «Принять деньги» и «Отметить оплаченным» — внизу карточки).
  */
-export function PayFirstNote({
-  t,
-  why,
-  onReceive,
-  onPay,
-}: {
-  t: Translate;
-  why: string;
-  onReceive: (() => void) | null;
-  onPay: (() => void) | null;
-}) {
+export function PayFirstNote({ t, why }: { t: Translate; why: string }) {
   return (
     <div data-pay-first="">
       <Note tone="warn" icon="lock">
-        <span className="flex flex-col gap-2">
-          <span>
-            <b>{why}.</b> {t('report.pay_first.note')}
-          </span>
-          {onReceive || onPay ? (
-            <span className="flex flex-wrap gap-1.5">
-              {onReceive ? (
-                <button
-                  type="button"
-                  data-pay-first-receive=""
-                  className={buttonClass('default', 'sm')}
-                  onClick={onReceive}
-                >
-                  <Icon name="download" size="sm" />
-                  {t('report.act.receive')}
-                </button>
-              ) : null}
-              {onPay ? (
-                <button
-                  type="button"
-                  data-pay-first-pay=""
-                  className={buttonClass('default', 'sm')}
-                  onClick={onPay}
-                >
-                  <Icon name="wallet" size="sm" />
-                  {t('report.act.mark_paid')}
-                </button>
-              ) : null}
-            </span>
-          ) : null}
+        <span>
+          <b>{why}.</b> {t('report.pay_first.note')}
         </span>
       </Note>
     </div>

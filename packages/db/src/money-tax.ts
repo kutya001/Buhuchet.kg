@@ -34,7 +34,7 @@ import { and, asc, desc, eq, inArray, isNull, sql, type SQL } from 'drizzle-orm'
 import { alias } from 'drizzle-orm/pg-core';
 import type { Tx } from './client';
 import { updateWithHistory, writeHistory } from './history';
-import { calendarOf, lockReport, ReportChangedError, ReportStateError } from './reports';
+import { calendarOf, lockReport, ReportChangedError } from './reports';
 import {
   contractors,
   employees,
@@ -286,15 +286,17 @@ export async function moneyContractor(
 
 /**
  * Чей счёт у операции (прототип holder): деньги переводятся на счёт организации или на кошелёк
- * ответственного; «Оплатил контрагент сам» — мимо наших счетов. Без ответственного кошелька нет.
+ * ответственного; «Оплатил контрагент сам» — мимо наших счетов. Без ответственного у прототипа деньги
+ * ни на чьём кошельке (holder пуст), в базе — на счёте организации, как в `syncMoneyHolders`.
  */
+// ОТКЛОНЕНИЕ: docs/deviations.md#В-15
 function holderOf(
   c: MoneyContractor,
   self: boolean,
 ): { holderKind: MoneyHolderKind; holderEmployeeId: string | null } {
   if (self) return { holderKind: 'client', holderEmployeeId: null };
-  if (c.paysTo === 'org') return { holderKind: 'org', holderEmployeeId: null };
-  if (!c.responsibleEmployeeId) throw new MoneyRefusedError('no_holder');
+  if (c.paysTo === 'org' || !c.responsibleEmployeeId)
+    return { holderKind: 'org', holderEmployeeId: null };
   return { holderKind: 'employee', holderEmployeeId: c.responsibleEmployeeId };
 }
 
@@ -358,7 +360,8 @@ export interface ReceiptInput {
   rows: readonly { reportId: string; amount: Tyiyn }[];
   /**
    * Сколько файлов окно загрузит к поступлению после сохранения (источник «Поступление», как файлы
-   * задачи — к уже созданной записи): при «Файл при поступлении обязателен» — не меньше одного.
+   * задачи — к уже созданной записи): при «Файл при поступлении обязателен» и включённых «Файлах в
+   * карточках» — не меньше одного.
    */
   files: number;
 }
@@ -367,13 +370,14 @@ export interface ReceiptInput {
  * «Записать поступление» (ТЗ «Поступление от контрагента»; прототип inDlg): общая сумма больше 0, дата
  * не позже сегодня; строки детализации — неоплаченные отчёты этого контрагента, каждая не больше
  * «Осталось»; общая сумма не меньше суммы строк, излишек — аванс. Файл обязателен, если так отмечено у
- * контрагента. Деньги — на счёт организации или ответственного, по карточке контрагента.
+ * контрагента, а «Файлы в карточках» включены (без них файл приложить некуда). Деньги — на счёт
+ * организации или ответственного, по карточке контрагента.
  */
 export async function createReceipt(
   tx: Tx,
   contractorId: string,
   input: ReceiptInput,
-  ctx: { today: IsoDate; scope: SQL | undefined; t: Translate },
+  ctx: { today: IsoDate; scope: SQL | undefined; filesOn: boolean; t: Translate },
 ): Promise<{ id: string }> {
   // Контрагент блокируется: два поступления или поступление с оплатой не считают остаток одновременно.
   const c = await lockContractor(tx, contractorId, ctx.scope);
@@ -391,7 +395,7 @@ export async function createReceipt(
     if (!r) throw new MoneyRefusedError('receipt_row_invalid', 400, 'rows');
     if (x.amount > r.left) throw new MoneyRefusedError('receipt_row_over', 400, 'rows');
   }
-  if (c.needReceiptFile && input.files < 1) {
+  if (c.needReceiptFile && ctx.filesOn && input.files < 1) {
     throw new MoneyRefusedError('receipt_file_required', 400, 'files');
   }
   const [op] = await tx
@@ -441,16 +445,65 @@ export function reportLabel(
   return `${r.typeShort} ${periodLabel({ period: r.period, start: r.periodStart, event: r.eventDate }, t)}`;
 }
 
-/** Контрагент заблокирован до конца транзакции: деньги по нему считает одно действие. */
+/**
+ * Контрагент заблокирован до конца транзакции: деньги по нему считает одно действие. Сначала
+ * блокировка, потом чтение — архив, ответственный и счёт берутся уже под ней.
+ */
 async function lockContractor(
   tx: Tx,
   contractorId: string,
   scope: SQL | undefined,
 ): Promise<MoneyContractor> {
-  const c = await moneyContractor(tx, contractorId, scope);
+  if (!/^[0-9a-f-]{36}$/i.test(contractorId))
+    throw new RecordNotFoundError('contractor', contractorId);
+  const [locked] = await tx
+    .select({ id: contractors.id })
+    .from(contractors)
+    .where(and(eq(contractors.id, contractorId), scope))
+    .for('update');
+  const c = locked ? await moneyContractor(tx, contractorId, scope) : null;
   if (!c) throw new RecordNotFoundError('contractor', contractorId);
-  await tx.execute(sql`select 1 from ${contractors} where ${contractors.id} = ${c.id} for update`);
   return c;
+}
+
+/**
+ * Оплата и её отмена: сначала контрагент, потом отчёт — в том же порядке, что приостановка и архив
+ * контрагента, чтобы одновременные действия не заблокировали друг друга.
+ */
+async function lockReportMoney(
+  tx: Tx,
+  id: string,
+  ctx: { scope: SQL | undefined; finScope: SQL | undefined },
+): Promise<{ r: typeof reports.$inferSelect; c: MoneyContractor }> {
+  if (!/^[0-9a-f-]{36}$/i.test(id)) throw new RecordNotFoundError('report', id);
+  const [row] = await tx
+    .select({ contractorId: reports.contractorId })
+    .from(reports)
+    .where(eq(reports.id, id));
+  if (!row) throw new RecordNotFoundError('report', id);
+  const c = await lockContractor(tx, row.contractorId, ctx.finScope);
+  const r = await lockReport(tx, id, ctx.scope);
+  return { r, c };
+}
+
+/**
+ * Деньги контрагента — на счёте, куда он их переводит (прототип transferCp и `cp-pays`): после смены
+ * ответственного или «Деньги на налоги переводит» операции, кроме «Оплатил контрагент сам», переходят
+ * на счёт организации или нового ответственного; без ответственного — на счёт организации.
+ */
+export async function syncMoneyHolders(tx: Tx, contractorIds: readonly string[]): Promise<void> {
+  if (!contractorIds.length) return;
+  const toOrg = sql`(${contractors.paysTo} = 'org' or ${contractors.responsibleEmployeeId} is null)`;
+  const kind = sql`case when ${toOrg} then 'org' else 'employee' end`;
+  const employee = sql`case when ${toOrg} then null else ${contractors.responsibleEmployeeId} end`;
+  await tx.execute(sql`update ${moneyOperations}
+    set holder_kind = ${kind}, holder_employee_id = ${employee},
+      version = ${moneyOperations.version} + 1, updated_at = now(), updated_by = app.current_user_id()
+    from ${contractors}
+    where ${contractors.id} = ${moneyOperations.contractorId}
+      and ${inArray(moneyOperations.contractorId, [...contractorIds])}
+      and not ${moneyOperations.self}
+      and (${moneyOperations.holderKind}, ${moneyOperations.holderEmployeeId}) is distinct from (${kind}, ${employee})`);
 }
 
 /** График оплаты отчёта (прототип schedule): платежи, их сроки, суммы и оплаченное. */
@@ -526,9 +579,15 @@ export interface PaymentInput {
 
 /** Можно ли отметить оплату (прототип reportActions: «Отметить оплаченным»). */
 function payable(r: typeof reports.$inferSelect): void {
-  if (r.superseded) throw new ReportStateError(r.id, 'superseded');
+  // У прежней версии оплаты нет: её оплаченное уже в уточнённой (прототип: кнопки нет).
   const sum = r.amount === null ? 0 : Number(r.amount);
-  if (!hasTaxSum(r.act) || r.status === 'not_required' || !(sum > 0) || Number(r.paid) >= sum) {
+  if (
+    r.superseded ||
+    !hasTaxSum(r.act) ||
+    r.status === 'not_required' ||
+    !(sum > 0) ||
+    Number(r.paid) >= sum
+  ) {
     throw new MoneyRefusedError('payment_not_allowed');
   }
 }
@@ -544,8 +603,7 @@ export async function payReport(
   input: PaymentInput,
   ctx: { today: IsoDate; scope: SQL | undefined; finScope: SQL | undefined },
 ): Promise<{ report: typeof reports.$inferSelect; operationId: string }> {
-  const r = await lockReport(tx, id, ctx.scope);
-  const c = await lockContractor(tx, r.contractorId, ctx.finScope);
+  const { r, c } = await lockReportMoney(tx, id, ctx);
   if (r.version !== input.version) throw new ReportChangedError(id, r.version);
   payable(r);
   if (input.date > ctx.today) throw new MoneyRefusedError('money_date_future', 400, 'date');
@@ -649,8 +707,7 @@ export async function cancelPayment(
   input: { version: number; reason: string },
   ctx: { scope: SQL | undefined; finScope: SQL | undefined },
 ): Promise<typeof reports.$inferSelect> {
-  const r = await lockReport(tx, id, ctx.scope);
-  await lockContractor(tx, r.contractorId, ctx.finScope);
+  const { r } = await lockReportMoney(tx, id, ctx);
   if (r.version !== input.version) throw new ReportChangedError(id, r.version);
   // ОТКЛОНЕНИЕ: docs/deviations.md#В-16 — у прежней версии оплату не отменяют: её оплаченное уже перешло в уточнённую.
   if (r.superseded) throw new MoneyRefusedError('payment_superseded');
@@ -1071,18 +1128,7 @@ export async function saveMoneySettings(
     patch,
     contractorId: c.id,
   });
-  if (patch.paysTo) {
-    const holder = holderOf({ ...c, paysTo: patch.paysTo }, false);
-    await tx
-      .update(moneyOperations)
-      .set({
-        ...holder,
-        version: sql`${moneyOperations.version} + 1`,
-        updatedAt: sql`now()`,
-        updatedBy: sql`app.current_user_id()`,
-      })
-      .where(and(eq(moneyOperations.contractorId, c.id), eq(moneyOperations.self, false)));
-  }
+  if (patch.paysTo) await syncMoneyHolders(tx, [c.id]);
   return { id: saved.id, version: saved.version };
 }
 

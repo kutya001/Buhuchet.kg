@@ -281,6 +281,7 @@ export function ContractorMoneyTab({ contractorId }: { contractorId: string }) {
           key={`receive-${receive.n}`}
           contractorId={contractorId}
           preset={null}
+          filesOn={access.feature('files')}
           canUpload={access.feature('files') && access.can('filesUpload')}
           open={receive.open}
           onClose={() => setReceive(closeSlot)}

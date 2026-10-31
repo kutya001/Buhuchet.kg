@@ -347,6 +347,8 @@ function ScaleBox({
   const events = statusEvents(r.statusHistory);
   const steps = actor ? reportScaleSteps(r) : {};
   const back = actor ? reportScaleBack(r, actor) : null;
+  // «Сдан» до оплаты закрыт: шаг неактивен с причиной, под шкалой — подсказка (прототип scaleFull, `blk`).
+  const why = steps.submitted ? payFirstWhy(t, r, r.taxpay && r.payFirst) : '';
   const view = scaleView(t, {
     scale: 'report',
     status: r.status,
@@ -355,6 +357,7 @@ function ScaleBox({
     markLabel: r.mark ? confirmMarkLabel(t, events, r.mark, new Date()) : null,
     next: Object.keys(steps),
     back,
+    blocked: why ? { submitted: why } : {},
   });
   if (view.kind === 'none')
     return (
@@ -369,6 +372,17 @@ function ScaleBox({
   return (
     <StatusScale
       {...view.props}
+      hints={
+        why
+          ? [
+              ...view.props.hints,
+              <span key="pay-first" className="inline-flex items-center gap-1">
+                <Icon name="lock" size="sm" />
+                {t('report.pay_first.scale_hint', { why })}
+              </span>,
+            ]
+          : view.props.hints
+      }
       onStep={(to) => {
         const action = steps[to];
         if (!action) return;
@@ -389,7 +403,7 @@ function ScaleBox({
  * открывает другую версию), «Файлы», «История статусов» и «История изменений». Внизу — «Ещё
  * действия», «На исправление» и главное действие: «Отметить сданным» или «Подтвердить». С «Учётом
  * оплаты налогов» (задача 2.19) — шкала «Оплата», блок сумм, при «Сдаче только после оплаты» — причина
- * с «Принять деньги» и «Отметить оплаченным», «Срок оплаты», «Деньги контрагента», график оплаты,
+ * и закрытый шаг «Сдан», «Срок оплаты», «Деньги контрагента», график оплаты,
  * «История статусов» оплаты; внизу — «Принять деньги» и «Отметить оплаченным».
  */
 export function ReportCardWindow({
@@ -652,7 +666,7 @@ function CardBody({
         </Box>
       ) : null}
       {sums ? <SumsBox t={t} r={r} /> : null}
-      {why ? <PayFirstNote t={t} why={why} onReceive={onReceive} onPay={onPay} /> : null}
+      {why ? <PayFirstNote t={t} why={why} /> : null}
       {r.overdue ? (
         <div className="flex flex-wrap gap-2">
           <Pill tone="bad" icon="alert">
@@ -665,6 +679,8 @@ function CardBody({
         <KeyValues items={cardItems(t, r, onResponsible, { sums, onReceive })} />
         {r.penalty ? <Note>{r.penalty}</Note> : null}
       </Box>
+      {/* График оплаты — у вида с суммой и долями, и без «Учёта оплаты налогов» (прототип report-card.js). */}
+      {reportHasAmount(r.act) ? <ScheduleBox t={t} r={r} today={bishkekDate(now)} /> : null}
       {r.versions.length > 1 ? (
         <Box title={t('report.card.versions')}>
           <MiniTable
@@ -699,7 +715,6 @@ function CardBody({
           />
         </Box>
       ) : null}
-      {money ? <ScheduleBox t={t} r={r} today={bishkekDate(now)} /> : null}
       {r.filesOn ? <RecordFiles source={{ kind: 'report', id: r.id }} /> : null}
       <Box title={t('status.history')}>
         {r.act !== 'pay' ? (
