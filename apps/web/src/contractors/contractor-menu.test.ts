@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { makeTranslate } from '../l10n/translate';
 import {
   contractorMenuEntries,
+  oneOffMenuEntries,
   serviceScaleSteps,
   type ContractorRights,
   type MenuContractor,
@@ -161,5 +162,52 @@ describe('шкала обслуживания в карточке', () => {
       { id: 'unarchive', label: 'Вернуть из архива', icon: 'refresh', run: () => {} },
     ];
     expect(serviceScaleSteps(back).next).toEqual({ active: 'unarchive' });
+  });
+});
+
+describe('«Разовая услуга» в меню контрагента', () => {
+  const FEE: ActionEntry[] = [
+    { id: 'fee-accept', label: 'Принять оплату за обслуживание', icon: 'coins', run: () => {} },
+    { id: 'fee-remind', label: 'Напомнить о долге в WhatsApp', icon: 'chat', run: () => {} },
+  ];
+
+  it('как в прототипе: после «Принять оплату…», перед «Напомнить о долге…»', () => {
+    const add = vi.fn();
+    const projects = oneOffMenuEntries({ on: true, inScope: true, t, run: add });
+    const list = contractorMenuEntries({
+      c: cp(),
+      rights: NONE,
+      t,
+      run: run(),
+      service: [],
+      fee: FEE,
+      projects,
+    });
+    expect(labels(list)).toEqual([
+      'Открыть карточку',
+      'Принять оплату за обслуживание',
+      'Разовая услуга',
+      'Напомнить о долге в WhatsApp',
+    ]);
+    item(list, 'one-off')!.run?.();
+    expect(add).toHaveBeenCalledOnce();
+  });
+
+  it('без права «Вести проекты», без «Финансовых операций» или вне своей области — пункта нет', () => {
+    expect(oneOffMenuEntries({ on: false, inScope: true, t, run: () => {} })).toEqual([]);
+    expect(oneOffMenuEntries({ on: true, inScope: false, t, run: () => {} })).toEqual([]);
+  });
+
+  it('у архивного контрагента пункта нет', () => {
+    const projects = oneOffMenuEntries({ on: true, inScope: true, t, run: () => {} });
+    const list = contractorMenuEntries({
+      c: cp({ archived: true }),
+      rights: NONE,
+      t,
+      run: run(),
+      service: [],
+      projects,
+    });
+    expect(item(list, 'one-off')).toBeUndefined();
   });
 });

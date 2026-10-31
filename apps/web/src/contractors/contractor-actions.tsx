@@ -1,12 +1,14 @@
 'use client';
 
-import type { ContractorKind } from '@buhuchet/domain';
+import { scopeOf, type ContractorKind } from '@buhuchet/domain';
 import type { Contractor, ContractorFees, ContractorRow } from '@buhuchet/shared';
 import { ConfirmDialog, useToast, type ActionEntry, type GridBulkAction } from '@buhuchet/ui';
 import { useState, type ReactNode } from 'react';
 import { api, callApi } from '../api-client';
 import { useEnablePages } from '../contractor-page/page-box';
 import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
+import { useFinanceRefresh } from '../finance/finance-data';
+import { ServiceDialog } from '../finance/service-dialogs';
 import { useFeeDialogs } from '../fees/fee-dialogs';
 import { feeMenuEntries, type FeeMenuContractor } from '../fees/fee-menu';
 import { useErrorText, useT } from '../l10n/provider';
@@ -22,6 +24,7 @@ import type { RegdocsPrefill } from './contractor-regdocs-model';
 import {
   contractorMenuEntries,
   menuContractorOf,
+  oneOffMenuEntries,
   rowService,
   type MenuContractor,
 } from './contractor-menu';
@@ -85,7 +88,8 @@ export function useContractorActions(): {
   const toast = useToast();
   const errorText = useErrorText();
   const refresh = useContractorsRefresh();
-  const { access } = useShell();
+  const finRefresh = useFinanceRefresh();
+  const { access, editor, employeeId } = useShell();
   const rights = {
     createCp: access.can('createCp'),
     assign: access.can('assign'),
@@ -99,6 +103,9 @@ export function useContractorActions(): {
     fee: access.feature('fee') && access.can('fee'),
     tariff: access.can('tariff'),
   };
+  const oneOffOn = access.can('projects') && access.feature('finops');
+  // Область группы «Проекты»: «Свои» — только контрагенты, за которых отвечает сам сотрудник.
+  const projAll = !editor || scopeOf(editor.subject, 'projects') === 'all';
   const pages = useEnablePages();
   const [edit, setEdit] = useState<DialogSlot<string> | null>(null);
   const [bases, setBases] = useState<DialogSlot<BaseChanges> | null>(null);
@@ -106,6 +113,7 @@ export function useContractorActions(): {
   const [remove, setRemove] = useState<{ id: string; name: string } | null>(null);
   const [create, setCreate] = useState<DialogSlot<NewContractorSlot> | null>(null);
   const [regdocs, setRegdocs] = useState<DialogSlot<null> | null>(null);
+  const [oneOff, setOneOff] = useState<DialogSlot<{ id: string; name: string }> | null>(null);
 
   const removeNow = async (c: { id: string; name: string }) => {
     const res = await callApi(() => api.api.contractors[':id'].$delete({ param: { id: c.id } }));
@@ -135,6 +143,12 @@ export function useContractorActions(): {
             run: { accept: () => fee.accept(c.id), remind: () => fee.remind(c.id) },
           })
         : [],
+      projects: oneOffMenuEntries({
+        on: oneOffOn,
+        inScope: projAll || c.responsibleId === employeeId,
+        t,
+        run: () => setOneOff(openSlot({ id: c.id, name: c.name })),
+      }),
       run: {
         open: () => openContractorCard({ id: c.id }),
         edit: () => setEdit(openSlot(c.id)),
@@ -310,6 +324,19 @@ export function useContractorActions(): {
           onClose={() => setCreate(closeSlot)}
           onCreated={(c) => openContractorCard({ id: c.id })}
           onUnarchived={(c) => openContractorCard({ id: c.id })}
+        />
+      ) : null}
+      {oneOff ? (
+        <ServiceDialog
+          key={`one-off-${oneOff.n}`}
+          contractor={oneOff.data}
+          edit={null}
+          open={oneOff.open}
+          onClose={() => setOneOff(closeSlot)}
+          onDone={() => {
+            refresh();
+            finRefresh();
+          }}
         />
       ) : null}
       {regdocs ? (

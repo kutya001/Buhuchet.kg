@@ -545,4 +545,5 @@ export const FINANCE_TEXTS = {
   'fin.svc.hist.edited': { ru: 'Услуга изменена', section: S },
   'fin.svc.hist.pay': { ru: 'Оплата {amount}', section: S },
   'staff.col.balance': { ru: 'Баланс счёта', section: S },
+  'cp.menu.one_off': { ru: 'Разовая услуга', section: S },
 } as const satisfies Record<string, UiTextDefault>;

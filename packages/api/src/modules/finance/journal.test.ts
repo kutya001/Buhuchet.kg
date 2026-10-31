@@ -225,6 +225,8 @@ describe.skipIf(!databaseAvailable())(
         month: '2026-10',
         tax: { received: som(1000), paid: 0 },
         fee: null,
+        // «Проекты и разовые услуги» бухгалтер не видит (прототип `moneyVis`).
+        proj: null,
         wo: 0,
       });
       expect((await journal(acc, '&tab=fee')).total).toBe(0);

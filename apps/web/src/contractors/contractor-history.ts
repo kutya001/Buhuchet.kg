@@ -18,6 +18,7 @@ import {
   operationCreatedText,
   operationDeletedText,
   operationEditedText,
+  serviceHistoryText,
 } from '../finance/finance-history';
 import type { Translate } from '../l10n/translate';
 import { reportHistoryText } from '../reports/report-history';
@@ -376,6 +377,10 @@ export function contractorHistoryText(t: Translate, e: Entry, names: Names): str
     }
     case 'fee_payment':
       return feePaymentHistoryText(t, e);
+    // Разовая услуга и её оплаты (задача 2.22): тексты — как в карточке услуги.
+    case 'one_off_service':
+    case 'one_off_service_payment':
+      return serviceHistoryText(t, e, () => reportHistoryText(t, { ...e, reason: null }, 0));
     default:
       lines = [];
   }

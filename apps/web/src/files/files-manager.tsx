@@ -16,6 +16,7 @@ import { useCallback, useEffect, useEffectEvent, useMemo, useState } from 'react
 import { api, ApiFailure, apiFailure, callApi } from '../api-client';
 import { openContractorCard } from '../contractors/card-store';
 import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
+import { ServiceActionDialog } from '../finance/service-card';
 import { useKpiEntry } from '../kpi/kpi-entry';
 import { useErrorText, useT } from '../l10n/provider';
 import { useListExport } from '../lists/export';
@@ -89,6 +90,7 @@ export function FilesManager() {
   const kpi = useKpiEntry();
   const [card, setCard] = useState<DialogSlot<FileManagerRow> | null>(null);
   const [upload, setUpload] = useState<DialogSlot<null> | null>(null);
+  const [service, setService] = useState<DialogSlot<string> | null>(null);
   const [uploading, setUploading] = useState(false);
   const [ask, setAsk] = useState<FileManagerRow | null>(null);
 
@@ -130,7 +132,8 @@ export function FilesManager() {
 
   /**
    * «Перейти к источнику» (прототип `f.open`): карточка отчёта или задачи, окно значения показателя,
-   * у файла контрагента (из свидетельства и выписки) — вкладка «Файлы» его карточки.
+   * у файла контрагента (из свидетельства и выписки) — вкладка «Файлы» его карточки, у файла разовой
+   * услуги и её оплаты — карточка услуги (прототип `serviceCard`).
    */
   const sourceOf = (file: FileManagerRow): (() => void) | null => {
     if (file.kind === 'contractor' && file.contractor) {
@@ -155,6 +158,10 @@ export function FilesManager() {
       const { id } = file.contractor;
       const month = file.sourceRef;
       return () => void kpi.open(id, month);
+    }
+    if (file.kind === 'one_off_service' && file.sourceRef) {
+      const id = file.sourceRef;
+      return () => setService(openSlot(id));
     }
     return null;
   };
@@ -351,6 +358,14 @@ export function FilesManager() {
         danger
         onConfirm={() => ask && void remove(ask)}
       />
+      {service ? (
+        <ServiceActionDialog
+          key={`service-${service.n}`}
+          action={{ act: 'card', id: service.data }}
+          open={service.open}
+          onClose={() => setService(closeSlot)}
+        />
+      ) : null}
       {tasks.dialogs}
       {reports.dialogs}
       {kpi.dialog}
