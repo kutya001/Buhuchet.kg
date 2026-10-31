@@ -434,7 +434,9 @@ test.describe('Этап 2: финансовые операции по контр
     const service = `Восстановление учёта ${word}`;
 
     await signIn(page.request, origin, 'erkin', DEMO_PASSWORD);
-    await openFin(page, isMobile, 'proj', word);
+    await page.goto('/app/fin/proj');
+    await expect(page.locator('[data-grid]')).toBeVisible();
+    // «+ Добавить» — до поиска: на телефоне круглая «+» скрыта, пока открыта клавиатура.
     await page.getByRole('button', { name: 'Добавить', exact: true }).click();
     await page
       .getByRole('menu', { name: 'Добавить' })
@@ -452,6 +454,7 @@ test.describe('Этап 2: финансовые операции по контр
 
     const row = (await journalOf(request, '&tab=proj')).find((r) => r.contractor.id === cp.id);
     expect(row).toBeDefined();
+    await search(page, isMobile, word);
     const line = page.locator(`[data-grid] [data-id="svc:${row!.id}"]`);
     await expect(line).toHaveCount(1);
     await line.getByText(name).first().click();
