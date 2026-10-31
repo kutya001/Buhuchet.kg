@@ -593,6 +593,8 @@ export interface ServicePaymentCard extends LockedServicePayment {
   createdName: string | null;
   updatedName: string | null;
   deletedName: string | null;
+  /** Кто удалил саму услугу (прототип opWin: отметка «Удалена» оплаты — по услуге, `opDelOf`). */
+  serviceDeletedName: string | null;
   history: ServiceHistoryRow[];
 }
 
@@ -614,11 +616,14 @@ export async function servicePaymentCard(
         created: spCreated.shortName,
         updated: spUpdated.shortName,
         deleted: spDeleted.shortName,
+        serviceDeleted: svcDeleted.shortName,
       })
       .from(oneOffServicePayments)
+      .innerJoin(oneOffServices, eq(oneOffServices.id, oneOffServicePayments.serviceId))
       .leftJoin(spCreated, eq(spCreated.userId, oneOffServicePayments.createdBy))
       .leftJoin(spUpdated, eq(spUpdated.userId, oneOffServicePayments.updatedBy))
       .leftJoin(spDeleted, eq(spDeleted.userId, oneOffServicePayments.deletedBy))
+      .leftJoin(svcDeleted, eq(svcDeleted.userId, oneOffServices.deletedBy))
       .where(eq(oneOffServicePayments.id, id)),
     paidOf(tx, found.service.id),
     historyOf(tx, null, [id]),
@@ -630,6 +635,7 @@ export async function servicePaymentCard(
     createdName: n?.created ?? null,
     updatedName: n?.updated ?? null,
     deletedName: n?.deleted ?? null,
+    serviceDeletedName: n?.serviceDeleted ?? null,
     history,
   };
 }

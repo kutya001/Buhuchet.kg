@@ -282,7 +282,6 @@ export function ServiceCardDialog({
 }) {
   const t = useT();
   const errorText = useErrorText();
-  const refresh = useFinanceRefresh();
   const query = useQuery(serviceCardQuery(id));
   const [child, setChild] = useState<DialogSlot<ServiceAction> | null>(null);
   const [menu, setMenu] = useState<{ el: HTMLElement; items: ActionEntry[] } | null>(null);
@@ -342,32 +341,47 @@ export function ServiceCardDialog({
       ]
     : [];
 
-  const paymentMenu = (p: ServiceCard['payments'][number]): ActionEntry[] => [
-    {
+  // Меню «⋯» оплаты (прототип opMenuBtn → opActs с `sp`): «Открыть», «Изменить», «Открыть источник»
+  // («Разовая услуга «…»» — эта же карточка), «Удалить»; у оплат удалённой услуги — «Открыть» и
+  // «Открыть источник».
+  const paymentMenu = (p: ServiceCard['payments'][number]): ActionEntry[] => {
+    const openEntry: ActionEntry = {
       id: 'open',
       label: t('fin.op.act_open'),
       icon: 'list',
       run: () => open1({ act: 'payment', id: p.id }),
-    },
-    {
-      id: 'edit',
-      label: t('fin.op.edit'),
-      icon: 'edit',
-      disabled: !!p.locks.edit,
-      reason: p.locks.edit?.text,
-      run: () => open1({ act: 'payment-edit', id: p.id }),
-    },
-    { id: 's1', separator: true },
-    {
-      id: 'delete',
-      label: t('fin.del.ok'),
-      icon: 'trash',
-      danger: true,
-      disabled: !!p.locks.del,
-      reason: p.locks.del?.text,
-      run: () => open1({ act: 'payment-delete', id: p.id }),
-    },
-  ];
+    };
+    const source: ActionEntry = {
+      id: 'source',
+      label: t('fin.op.source'),
+      icon: 'link',
+      sub: t('fin.sp.source', { name: s?.name ?? '' }),
+      run: () => s && open1({ act: 'card', id: s.id }),
+    };
+    if (s?.deleted) return [openEntry, source];
+    return [
+      openEntry,
+      {
+        id: 'edit',
+        label: t('fin.op.edit'),
+        icon: 'edit',
+        disabled: !!p.locks.edit,
+        reason: p.locks.edit?.text,
+        run: () => open1({ act: 'payment-edit', id: p.id }),
+      },
+      source,
+      { id: 's1', separator: true },
+      {
+        id: 'delete',
+        label: t('fin.del.ok'),
+        icon: 'trash',
+        danger: true,
+        disabled: !!p.locks.del,
+        reason: p.locks.del?.text,
+        run: () => open1({ act: 'payment-delete', id: p.id }),
+      },
+    ];
+  };
 
   const footer = (
     <>
@@ -549,7 +563,8 @@ export function ServiceCardDialog({
 /**
  * Окно оплаты (прототип opWin с `sp`): тип, контрагент, дата, сумма, «За что» — услуга, «Услуга:
  * получено X из Y», счёт организации, примечание, кто внёс и изменил, отметки, файлы и история;
- * «Удалить», «Изменить» с замком; «Открыть источник» — карточка услуги.
+ * «Удалить», «Изменить» с замком; «Открыть источник» — карточка услуги. Оплата удалённой услуги —
+ * «Удалена» с отметкой удаления услуги, без «Удалить» и «Изменить» (прототип `opDelOf`).
  */
 export function ServicePaymentWindowDialog({
   id,
@@ -727,10 +742,6 @@ export function ServicePaymentWindowDialog({
               at: formatMomentRu(new Date(p.deleted.at)),
               reason: p.deleted.reason,
             })}
-          </Note>
-        ) : p?.serviceDeleted ? (
-          <Note tone="bad" icon="trash">
-            {t('fin.sp.service_deleted')}
           </Note>
         ) : lock ? (
           <Note icon="lock">{lock.text}</Note>

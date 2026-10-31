@@ -51,7 +51,14 @@ import { feeVisible, scopeSqlOf, subjectOf, todayOf, translateOf } from '../cont
 import { feeFail, inFee } from '../fees/common';
 import { finScopeOf, inTaxpay } from '../money/common';
 import { error } from '../reports/common';
-import { lockFail, operationLock, viewOnlyLock, type OpLockInfo } from './common';
+import {
+  historyFilesSeen,
+  lockFail,
+  moneyFilesSeen,
+  operationLock,
+  viewOnlyLock,
+  type OpLockInfo,
+} from './common';
 import { hiddenFeeReceipt } from './ops';
 
 /*
@@ -477,6 +484,8 @@ export function feePaymentWindowHandler(
     if (!out) apiFail(404, 'not_found', 'Оплата не найдена');
     const { card } = out;
     const p = card.payment;
+    // Файлы и записи о них в истории — тому, кто видит файлы контрагента (как модуль файлов).
+    const filesSeen = moneyFilesSeen(subject, out.files, card.contractor);
     const res: FeePaymentWindow = {
       id: p.id,
       version: p.version,
@@ -500,8 +509,8 @@ export function feePaymentWindowHandler(
       locks: { edit: out.edit, del: out.del },
       // «Изменить» у части поступления — окно поступления (прототип opEditDlg: `x.op ? inDlg(…)`).
       editReceipt: !!p.operationId && !out.edit,
-      files: out.files && hasPermission(subject, 'filesView') && !p.operationId,
-      history: card.history.map((h) => ({
+      files: filesSeen && !p.operationId,
+      history: historyFilesSeen(card.history, filesSeen).map((h) => ({
         id: h.id,
         at: h.at.toISOString(),
         actor: h.actorName,

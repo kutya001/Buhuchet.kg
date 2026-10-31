@@ -532,14 +532,15 @@ export function ServicePayDialog({
     const n = parseSom(amount);
     const problem = servicePaymentProblem(n, service.left);
     if (problem) return setErrors({ amount: problemText(t, problem) });
-    if (!date) return setErrors({ date: t('fin.edit.date_required') });
-    if (date > todayBishkek()) return setErrors({ date: t('fin.edit.date_future') });
+    // Пустая дата — сегодняшняя, как в прототипе (tranchDlg).
+    const paidOn = date || todayBishkek();
+    if (paidOn > todayBishkek()) return setErrors({ date: t('fin.edit.date_future') });
     const bad = pickedMoneyFilesProblem(t, errorText, picked);
     if (bad) return setErrors({ files: bad });
     setBusy(true);
     const res = await payService(service.id, {
       amount: n ?? 0,
-      date,
+      date: paidOn,
       files: picked.length,
     });
     const saved = res.ok ? ServiceSaved.safeParse(res.data) : null;

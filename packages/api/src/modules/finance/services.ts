@@ -45,7 +45,7 @@ import {
   ServiceRequest,
   ServiceSaved,
 } from '@buhuchet/shared';
-import type { SQL } from 'drizzle-orm';
+import { and, type SQL } from 'drizzle-orm';
 import type { Context } from 'hono';
 import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
@@ -54,7 +54,13 @@ import { orgContextOf, requireEmployee, requirePermission } from '../../middlewa
 import { subjectOf, todayOf, translateOf } from '../contractors/common';
 import { finScopeOf, moneyFail, withMoneyErrors } from '../money/common';
 import { error } from '../reports/common';
-import { lockFail, viewOnlyLock, type OpLockInfo } from './common';
+import {
+  historyFilesSeen,
+  lockFail,
+  moneyFilesSeen,
+  viewOnlyLock,
+  type OpLockInfo,
+} from './common';
 
 /*
  * Разовые услуги (задача 2.22; ТЗ «Финансовые операции по контрагентам» → «Ручная операция «Разовая
@@ -109,6 +115,16 @@ export const canKeepServices = (
 export const serviceReadScope = (subject: AccessSubject): SQL | undefined => finScopeOf(subject);
 
 /**
+ * Где сотрудник меняет услугу и её оплаты: в области «Проектов» (п. В-31) и там, где он её видит, —
+ * иначе «не найдено», без остатка и версии чужой для него записи.
+ */
+const writeScopeOf = (subject: AccessSubject): SQL | undefined =>
+  and(projScopeOf(subject), serviceReadScope(subject));
+
+/** Замки «нет права» — ответ 403, остальные — 409. */
+const NO_RIGHT_LOCKS: ReadonlySet<string> = new Set(['op_view_only', 'service_pay_right']);
+
+/**
  * Транзакция услуг: «Финансовые операции по контрагентам» выключены — 403 `finops_off`; отказы слоя
  * данных — ответом API с кодом, полем и подстановками.
  */
@@ -138,7 +154,6 @@ type Lock = OpLockInfo | { code: string; text: string } | null;
  * в архиве, нет права.
  */
 export async function serviceLocks(
-  tx: Tx,
   t: Translate,
   subject: AccessSubject,
   s: {
@@ -146,9 +161,10 @@ export async function serviceLocks(
     left: number;
     contractor: { archived: boolean; responsibleEmployeeId: string | null };
   },
+  viewOnlyOf: ViewOnly,
 ): Promise<{ edit: Lock; del: Lock; pay: Lock }> {
   const can = canKeepServices(subject, s.contractor);
-  const viewOnly = can ? null : await viewOnlyLock(tx, t, 'projects');
+  const viewOnly = can ? null : await viewOnlyOf();
   const deleted = { code: 'service_deleted', text: t('err.service_deleted') };
   const delCode = opLock(
     {
@@ -169,22 +185,35 @@ export async function serviceLocks(
       : delCode === 'op_view_only'
         ? viewOnly
         : { code: delCode, text: t(`err.${delCode}` as UiTextKey) };
+  // «Записать оплату» (прототип svcActions): оплачена полностью — так и сказано, иначе без права —
+  // «Нужно право «Вести проекты и разовые услуги»».
   return {
     edit: s.deleted ? deleted : viewOnly,
     del,
     pay: s.deleted
       ? deleted
-      : viewOnly
-        ? viewOnly
-        : s.left <= 0
-          ? { code: 'service_paid_full', text: t('err.service_paid_full') }
+      : s.left <= 0
+        ? { code: 'service_paid_full', text: t('err.service_paid_full') }
+        : viewOnly
+          ? { code: 'service_pay_right', text: t('err.service_pay_right') }
           : null,
   };
 }
 
+/** «Только просмотр: нужно право «Вести проекты…»» — по запросу, из каталога прав не больше раза. */
+export type ViewOnly = () => Promise<OpLockInfo>;
+
+/**
+ * Текст «Только просмотр» для замков услуг и оплат: каталог прав читается один раз на запрос, а не на
+ * каждую строку журнала или оплату карточки (как `journalLocks`).
+ */
+export function viewOnlyOnce(tx: Tx, t: Translate): ViewOnly {
+  let lock: Promise<OpLockInfo> | undefined;
+  return () => (lock ??= viewOnlyLock(tx, t, 'projects'));
+}
+
 /** Замок оплаты услуги (прототип opLock с `sp`): услуга или оплата удалена, нет права, архив. */
 export async function servicePaymentLock(
-  tx: Tx,
   t: Translate,
   subject: AccessSubject,
   p: {
@@ -193,6 +222,7 @@ export async function servicePaymentLock(
     contractor: { archived: boolean; responsibleEmployeeId: string | null };
   },
   act: 'edit' | 'del',
+  viewOnlyOf: ViewOnly,
 ): Promise<Lock> {
   const code = opLock(
     {
@@ -209,7 +239,7 @@ export async function servicePaymentLock(
     act,
   );
   if (!code) return null;
-  if (code === 'op_view_only') return viewOnlyLock(tx, t, 'projects');
+  if (code === 'op_view_only') return viewOnlyOf();
   return { code, text: t(`err.${code}` as UiTextKey) };
 }
 
@@ -223,10 +253,6 @@ const historyOut = (rows: readonly ServiceHistoryRow[]) =>
     changes: h.changes as { field: string; from?: unknown; to?: unknown }[],
     reason: h.reason,
   }));
-
-/** Блок «Файлы»: включены в учётной политике и есть право «Просматривать файлы». */
-const filesOn = (subject: AccessSubject, features: Record<Feature, boolean>) =>
-  features.files && hasPermission(subject, 'filesView');
 
 /** Файлы к записи окно загрузит после ответа — значит, загружать их должно быть можно. */
 function checkUpload(
@@ -353,24 +379,21 @@ export function serviceCardHandler(deps: ApiDeps): RouteHandler<typeof serviceCa
       if (!card) return null;
       const s = card.service;
       const amount = Number(s.amount);
-      const locks = await serviceLocks(tx, t, subject, {
-        deleted: !!s.deletedAt,
-        left: amount - card.paid,
-        contractor: card.contractor,
-      });
-      const payLocks = await Promise.all(
-        card.payments.map(async () => {
-          const facts = {
-            deleted: false,
-            serviceDeleted: !!s.deletedAt,
-            contractor: card.contractor,
-          };
-          return {
-            edit: await servicePaymentLock(tx, t, subject, facts, 'edit'),
-            del: await servicePaymentLock(tx, t, subject, facts, 'del'),
-          };
-        }),
+      const viewOnly = viewOnlyOnce(tx, t);
+      const locks = await serviceLocks(
+        t,
+        subject,
+        { deleted: !!s.deletedAt, left: amount - card.paid, contractor: card.contractor },
+        viewOnly,
       );
+      // Замки действующих оплат одинаковы: услуга и контрагент у них общие.
+      const facts = { deleted: false, serviceDeleted: !!s.deletedAt, contractor: card.contractor };
+      const payLock = {
+        edit: await servicePaymentLock(t, subject, facts, 'edit', viewOnly),
+        del: await servicePaymentLock(t, subject, facts, 'del', viewOnly),
+      };
+      // Файлы и записи о них в истории — тому, кто видит файлы контрагента (как модуль файлов).
+      const filesSeen = moneyFilesSeen(subject, features.files, card.contractor);
       const out: ServiceCard = {
         id: s.id,
         version: s.version,
@@ -397,18 +420,18 @@ export function serviceCardHandler(deps: ApiDeps): RouteHandler<typeof serviceCa
         deleted: s.deletedAt
           ? { name: card.deletedName, at: s.deletedAt.toISOString(), reason: s.deleteReason ?? '' }
           : null,
-        payments: card.payments.map((p, i) => ({
+        payments: card.payments.map((p) => ({
           id: p.id,
           date: p.date,
           amount: p.amount,
           edited: p.edited,
           by: p.by,
-          files: filesOn(subject, features) ? p.files : [],
-          locks: payLocks[i]!,
+          files: filesSeen ? p.files : [],
+          locks: payLock,
         })),
         locks,
-        files: filesOn(subject, features),
-        history: historyOut(card.history),
+        files: filesSeen,
+        history: historyOut(historyFilesSeen(card.history, filesSeen)),
       };
       return out;
     });
@@ -426,15 +449,20 @@ async function lockedService(
   id: string,
   act: 'edit' | 'del' | 'pay',
 ) {
-  const locked = await oneOffServiceOf(tx, id, projScopeOf(subject), true);
+  const locked = await oneOffServiceOf(tx, id, writeScopeOf(subject), true);
   const card = await oneOffServiceCard(tx, id, undefined);
-  const locks = await serviceLocks(tx, t, subject, {
-    deleted: !!locked.service.deletedAt,
-    left: Number(locked.service.amount) - (card?.paid ?? 0),
-    contractor: locked.contractor,
-  });
+  const locks = await serviceLocks(
+    t,
+    subject,
+    {
+      deleted: !!locked.service.deletedAt,
+      left: Number(locked.service.amount) - (card?.paid ?? 0),
+      contractor: locked.contractor,
+    },
+    viewOnlyOnce(tx, t),
+  );
   const lock = locks[act];
-  if (lock) apiFail(lock.code === 'op_view_only' ? 403 : 409, lock.code, lock.text);
+  if (lock) apiFail(NO_RIGHT_LOCKS.has(lock.code) ? 403 : 409, lock.code, lock.text);
   return locked;
 }
 
@@ -588,9 +616,10 @@ export function servicePaymentWindowHandler(
         serviceDeleted: !!s.deletedAt,
         contractor: card.contractor,
       };
+      const viewOnly = viewOnlyOnce(tx, t);
       const [edit, del] = await Promise.all([
-        servicePaymentLock(tx, t, subject, facts, 'edit'),
-        servicePaymentLock(tx, t, subject, facts, 'del'),
+        servicePaymentLock(t, subject, facts, 'edit', viewOnly),
+        servicePaymentLock(t, subject, facts, 'del', viewOnly),
       ]);
       const amount = Number(p.amount);
       const limit = opAmountLimit('sp', amount, {
@@ -599,7 +628,8 @@ export function servicePaymentWindowHandler(
         orgHeld: 0,
         service: { amount: Number(s.amount), paid: card.paid },
       });
-      const files = filesOn(subject, features)
+      const filesSeen = moneyFilesSeen(subject, features.files, card.contractor);
+      const files = filesSeen
         ? (await listSourceFiles(tx, 'one_off_service_payment', id)).length
         : null;
       const out: ServicePaymentWindow = {
@@ -620,15 +650,22 @@ export function servicePaymentWindowHandler(
           name: card.updatedName ?? card.createdName,
           at: (p.updatedAt ?? p.createdAt).toISOString(),
         },
+        // Прототип opWin (`opDelOf`): у оплаты удалённой услуги — отметка удаления самой услуги.
         deleted: p.deletedAt
           ? { name: card.deletedName, at: p.deletedAt.toISOString(), reason: p.deleteReason ?? '' }
-          : null,
+          : s.deletedAt
+            ? {
+                name: card.serviceDeletedName,
+                at: s.deletedAt.toISOString(),
+                reason: s.deleteReason ?? '',
+              }
+            : null,
         serviceDeleted: !!s.deletedAt,
         locks: { edit, del },
         max: Math.max(0, limit?.max ?? amount),
         files,
         today: todayOf(deps),
-        history: historyOut(card.history),
+        history: historyOut(historyFilesSeen(card.history, filesSeen)),
       };
       return out;
     });
@@ -646,9 +683,8 @@ async function lockedPayment(
   id: string,
   act: 'edit' | 'del',
 ) {
-  const locked = await servicePaymentOf(tx, id, projScopeOf(subject), true);
+  const locked = await servicePaymentOf(tx, id, writeScopeOf(subject), true);
   const lock = await servicePaymentLock(
-    tx,
     t,
     subject,
     {
@@ -657,6 +693,7 @@ async function lockedPayment(
       contractor: locked.contractor,
     },
     act,
+    viewOnlyOnce(tx, t),
   );
   if (lock) lockFail(lock as OpLockInfo);
   return locked;

@@ -19,6 +19,7 @@ import { seedDemoMoney } from './demo-money';
 import { seedDemoMoneyTax } from './demo-money-tax';
 import { seedDemoKpi } from './demo-kpi';
 import { seedDemoReports } from './demo-reports';
+import { seedDemoServices } from './demo-services';
 import { seedDemoTasks } from './demo-tasks';
 import {
   employees,
@@ -49,6 +50,8 @@ export type DemoKind =
   | 'requisite'
   | 'money_operation'
   | 'fee_payment'
+  | 'one_off_service'
+  | 'one_off_service_payment'
   | 'indicator'
   | 'indicator_value'
   | 'indicator_month'
@@ -325,6 +328,8 @@ export async function seedDemoOrganization(
   await seedDemoMoneyTax(db, file, { orgId, demoId });
   // Плата за обслуживание (задача 2.21).
   await seedDemoFees(db, file, { orgId, demoId });
+  // Разовые услуги (задача 2.22).
+  await seedDemoServices(db, file, { orgId, demoId, employees: employeeIds });
 
   await seedDemoKpi(db, file, orgId);
 

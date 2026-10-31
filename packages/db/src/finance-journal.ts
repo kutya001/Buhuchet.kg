@@ -871,6 +871,7 @@ export async function finSummary(
   let proj: FinSummary['proj'] = null;
   if (o.proj) {
     // Прототип renderFin: `pj` — оплаты действующих услуг за месяц; счётчик вкладки — не «Оплачено».
+    // ОТКЛОНЕНИЕ: docs/deviations.md#В-35 — плашка, как и счётчик, по контрагентам области.
     const paid = sql`(select coalesce(sum(p.amount), 0) from ${oneOffServicePayments} p where p.service_id = ${oneOffServices.id} and p.deleted_at is null)`;
     const [svc] = await tx
       .select({

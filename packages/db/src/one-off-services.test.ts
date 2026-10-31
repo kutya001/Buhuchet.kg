@@ -479,5 +479,33 @@ describe.skipIf(!databaseAvailable())('Разовые услуги', () => {
         }),
       ),
     ).rejects.toThrow();
+    // Оплату к услуге чужой организации — тоже.
+    await expect(
+      inB((tx) =>
+        tx.insert(oneOffServicePayments).values({ serviceId: id, amount: 100, paidOn: TODAY }),
+      ),
+    ).rejects.toThrow();
+    // Изменить чужую услугу или оплату нельзя: ни одной строки не задето, данные прежние.
+    expect(
+      await inB((tx) =>
+        tx
+          .update(oneOffServices)
+          .set({ name: 'Подмена' })
+          .where(eq(oneOffServices.id, id))
+          .returning({ id: oneOffServices.id }),
+      ),
+    ).toEqual([]);
+    expect(
+      await inB((tx) =>
+        tx
+          .update(oneOffServicePayments)
+          .set({ amount: 1 })
+          .where(eq(oneOffServicePayments.id, payId))
+          .returning({ id: oneOffServicePayments.id }),
+      ),
+    ).toEqual([]);
+    const kept = await card(id);
+    expect(kept?.service.name).toBe('Проверка учёта за 2025 год');
+    expect(kept?.paid).toBe(som(100));
   });
 });

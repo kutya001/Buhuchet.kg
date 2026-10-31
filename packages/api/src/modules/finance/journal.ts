@@ -53,7 +53,7 @@ import { subjectOf, todayOf, translateOf } from '../contractors/common';
 import { serverTexts } from '../l10n/texts';
 import { finScopeOf, moneyFail, withMoneyErrors } from '../money/common';
 import { journalLocks } from './common';
-import { serviceLocks, servicesVisible } from './services';
+import { serviceLocks, servicesVisible, viewOnlyOnce } from './services';
 import { error } from '../reports/common';
 
 /*
@@ -174,15 +174,21 @@ export function finJournalHandler(deps: ApiDeps): RouteHandler<typeof finJournal
       // Меню строки: «Изменить» и «Удалить» с замком и причиной (прототип opActs, у услуги — svcActions
       // с «Записать оплату»).
       const lockOf = journalLocks(tx, t, subject, new Set(await closedMonthsOf(tx)));
+      const viewOnly = viewOnlyOnce(tx, t);
       const rows = await Promise.all(
         found.rows.map(async ({ archived, responsibleEmployeeId, ...r }) => {
           if (r.src === 'svc') {
             const svc = r.service!;
-            const { edit, del, pay } = await serviceLocks(tx, t, subject, {
-              deleted: r.deleted,
-              left: r.amount - svc.paid,
-              contractor: { archived, responsibleEmployeeId },
-            });
+            const { edit, del, pay } = await serviceLocks(
+              t,
+              subject,
+              {
+                deleted: r.deleted,
+                left: r.amount - svc.paid,
+                contractor: { archived, responsibleEmployeeId },
+              },
+              viewOnly,
+            );
             return { ...r, service: { ...svc, pay }, locks: { edit, del } };
           }
           const facts = { ...r, src: r.src, archived, responsibleEmployeeId };

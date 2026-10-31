@@ -527,10 +527,6 @@ export const FINANCE_TEXTS = {
   'fin.sp.received_of': { ru: '{paid} из {amount}', section: S },
   'fin.sp.source': { ru: 'Разовая услуга «{name}»', section: S },
   'fin.sp.open': { ru: 'Открыть оплату разовой услуги', section: S },
-  'fin.sp.service_deleted': {
-    ru: 'Разовая услуга удалена: оплата в суммы и итоги не входит.',
-    section: S,
-  },
   'fin.del.cons.sp': { ru: 'Статус оплаты услуги пересчитается.', section: S },
   'fin.del.cons.svc': {
     ru: 'Оплаты по ней ({n} на {amount}) тоже уйдут из итогов.',

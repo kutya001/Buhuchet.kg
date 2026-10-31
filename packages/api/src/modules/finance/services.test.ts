@@ -44,8 +44,12 @@ describe.skipIf(!databaseAvailable())(
     let cpArch = '';
 
     const employee = (login: string) => f.people[login]!.employeeId;
-    const call = (method: 'GET' | 'POST' | 'PUT', path: string, cookie: string, body?: unknown) =>
-      apiRequest(f.app, method, path, cookie, body);
+    const call = (
+      method: 'GET' | 'POST' | 'PUT' | 'DELETE',
+      path: string,
+      cookie: string,
+      body?: unknown,
+    ) => apiRequest(f.app, method, path, cookie, body);
     const failure = async (res: Response) => ApiError.parse(await res.json()).error;
     const expectStatus = async (res: Response, status: number) => {
       expect(res.status, await res.clone().text()).toBe(status);
@@ -368,6 +372,56 @@ describe.skipIf(!databaseAvailable())(
       expect((await journal(owner, '&tab=proj')).items.some((r) => r.id === id)).toBe(false);
       const shown = (await journal(owner, '&tab=proj&deleted=1')).items.find((r) => r.id === id);
       expect(shown?.deleted).toBe(true);
+    });
+
+    it('удалённая услуга: окно её оплаты — «Удалена» с причиной услуги, изменить и удалить нельзя', async () => {
+      const id = await create(owner, { name: 'Перенос базы', amount: som(800) });
+      await expectStatus(await pay(owner, id, som(300)), 201);
+      const pid = (await card(owner, id)).payments[0]!.id;
+      await expectStatus(
+        await call('POST', `/api/one-off-services/${id}/delete`, owner, { reason: 'не та услуга' }),
+        200,
+      );
+      const w = await payment(owner, pid);
+      expect(w.deleted?.reason).toBe('не та услуга');
+      expect(w.locks.edit?.code).toBe('service_deleted');
+      expect(w.locks.del?.code).toBe('service_deleted');
+      expect(
+        await refused(
+          await call('PUT', `/api/one-off-service-payments/${pid}`, owner, {
+            version: w.version,
+            amount: som(100),
+            date: w.date,
+            reason: 'x',
+          }),
+          409,
+        ),
+      ).toBe('service_deleted');
+    });
+
+    it('контрагента с разовой услугой удалить нельзя — только в архив', async () => {
+      const cp = await contractor('ОсОО «Без отчётов»', '03744097401859', employee('acc-a'));
+      await create(owner, { contractorId: cp, name: 'Консультация', amount: som(100) });
+      const res = await expectStatus(await call('DELETE', `/api/contractors/${cp}`, owner), 409);
+      const err = await failure(res);
+      expect(err.code).toBe('contractor_in_use');
+      expect(err.details).toMatchObject({ variant: 'has_projects' });
+    });
+
+    it('видит услугу, но не ведёт: «Записать оплату» — «Нужно право «Вести проекты…»», запись — 403', async () => {
+      // «Старший» с «Видеть плату за обслуживание» видит вкладку и свои услуги, но не ведёт их.
+      await f.t.admin.db.insert(schema.rolePermissions).values({
+        orgId: f.a.orgId,
+        roleId: f.roleIds.senior,
+        permissionId: 'fee',
+      });
+      const cp = await contractor('ИП Осмонов', '20101199000125', employee('senior-a'));
+      const id = await create(owner, { contractorId: cp, name: 'Сверка', amount: som(200) });
+      const seen = await card(senior, id);
+      expect(seen.locks.pay?.code).toBe('service_pay_right');
+      expect(seen.locks.pay?.text).toBe('Нужно право «Вести проекты и разовые услуги»');
+      expect(seen.locks.edit?.code).toBe('op_view_only');
+      expect((await pay(senior, id, som(1))).status).toBe(403);
     });
 
     it('область «Свои»: чужой контрагент — нет услуги и не записать', async () => {
