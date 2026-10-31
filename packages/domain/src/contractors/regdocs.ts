@@ -246,7 +246,8 @@ function rdKind(lines: readonly Line[]): RdKind | '' {
   if (/маалымкат|күбөлүк/.test(all)) sv += 2;
   if (/справка из единого государственного реестра/.test(all)) sv += 2;
   if (/выписк\w* из (единого )?государственн\w* реестр|^выписка/m.test(all)) vy += 3;
-  if (/сведения о наименовании|сведения о регистрационном номере|сведения об адресе/.test(all)) vy += 2;
+  if (/сведения о наименовании|сведения о регистрационном номере|сведения об адресе/.test(all))
+    vy += 2;
   if (/код экономической деятельности|сведения об учредителях/.test(all)) vy += 1;
   const num = lines.filter((l) => /^\d{1,2}\.\s+\S/.test(l.text)).length;
   if (num >= 6) vy += 2;
@@ -465,13 +466,7 @@ export function rdExtract(file: RdSource): RdDoc {
   const link = lines.find((l) => /https?:\/\//.test(l.text) && /\d{2}\.\d{2}\.\d{4}/.test(l.text));
   const given = /(?:дата выдачи|выдан\w*|берилген күнү)[:\s]*(\d{2}\.\d{2}\.\d{4})/i.exec(all);
   let issued = rdDate(
-    given
-      ? given[1]
-      : link
-        ? /\d{2}\.\d{2}\.\d{4}/.exec(link.text)![0]
-        : stamp
-          ? stamp[1]
-          : '',
+    given ? given[1] : link ? /\d{2}\.\d{2}\.\d{4}/.exec(link.text)![0] : stamp ? stamp[1] : '',
   );
   if (!issued && file.created && /^\d{4}-\d{2}-\d{2}$/.test(file.created)) issued = file.created;
   return { kind, f, more: [...new Set(more)], issued, text: all };

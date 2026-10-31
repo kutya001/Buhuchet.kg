@@ -197,7 +197,8 @@ export function sourceOf(
 export const sourceText = (s: RdFieldSrc): UiTextKey => `cp.rd.src.${s}`;
 
 /** Обязательное поле, которое нужно заполнить вручную (прототип rdMarks, `need`). */
-export type RdNeed = 'name' | 'inn' | 'phone' | 'gked' | 'form' | 'types' | 'resp' | 'fee' | 'start';
+export type RdNeed =
+  'name' | 'inn' | 'phone' | 'gked' | 'form' | 'types' | 'resp' | 'fee' | 'start';
 
 /** Что подписать «Заполните вручную» (прототип rdMarks): пустые обязательные и не тронутая дата начала. */
 export function needs(
@@ -281,11 +282,7 @@ export interface RegdocsSummary {
   warn: string[];
 }
 
-export function regdocsSummary(
-  st: RegdocsState,
-  res: RegdocsResult,
-  t: Translate,
-): RegdocsSummary {
+export function regdocsSummary(st: RegdocsState, res: RegdocsResult, t: Translate): RegdocsSummary {
   const altKeys = Object.keys(res.alt) as RdKey[];
   const miss = (['name', 'inn', 'phone', 'form'] as const)
     .filter((k) => !filled(st.v[k]))

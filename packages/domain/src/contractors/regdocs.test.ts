@@ -126,7 +126,15 @@ describe('ГКЭД по документу', () => {
 
 describe('Значения полей', () => {
   it('пустое значение документа', () => {
-    for (const v of ['', '---', '== не заполнено ==', 'нет данных', 'Не указано', null, undefined]) {
+    for (const v of [
+      '',
+      '---',
+      '== не заполнено ==',
+      'нет данных',
+      'Не указано',
+      null,
+      undefined,
+    ]) {
       expect(rdEmpty(v)).toBe(true);
     }
     expect(rdEmpty('Октябрьский район')).toBe(false);

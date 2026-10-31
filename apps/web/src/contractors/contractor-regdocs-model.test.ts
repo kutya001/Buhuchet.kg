@@ -149,10 +149,14 @@ describe('подписи у полей (rdMarks)', () => {
     expect(needs(st, d, { reports: 2, fee: true })).toEqual(['resp', 'fee', 'start']);
     expect(needs(st, d, { reports: 0, fee: false })).toEqual(['types', 'resp', 'start']);
     expect(
-      needs({ ...st, startSet: true }, { ...d, responsibleId: 'emp-1', fee: '5 000' }, {
-        reports: 1,
-        fee: true,
-      }),
+      needs(
+        { ...st, startSet: true },
+        { ...d, responsibleId: 'emp-1', fee: '5 000' },
+        {
+          reports: 1,
+          fee: true,
+        },
+      ),
     ).toEqual([]);
     const empty = { ...d, name: ' ', inn: '', phone: { cc: 'KG', local: '' }, gked: null };
     expect(needs(st, { ...empty, formCode: '' }, { reports: 1, fee: false })).toEqual([

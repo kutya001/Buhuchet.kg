@@ -34,9 +34,7 @@ describe('история контрагента', () => {
       contractorHistoryText(t, entry({ entity: 'file', action, changes: [change] }), names);
     expect(file('file_attach', { field: 'file', to: 'svid.pdf' })).toContain('svid.pdf');
     expect(file('file_delete', { field: 'file', from: 'vyp.pdf' })).toContain('vyp.pdf');
-    expect(file('file_delete', { field: 'file', from: 'vyp.pdf' })).not.toBe(
-      t('cp.hist.update'),
-    );
+    expect(file('file_delete', { field: 'file', from: 'vyp.pdf' })).not.toBe(t('cp.hist.update'));
   });
 
   it('создание, смена ответственного и статуса, остальные поля — «Изменено: …» без повторов', () => {
