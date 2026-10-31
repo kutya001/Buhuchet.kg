@@ -11,8 +11,10 @@ import {
   FeePaymentForm,
   FeePaymentSaved,
   FeeReminder,
+  FileManagerList,
   FileUploadTicket,
   ReceiptForm,
+  ReceiptSaved,
 } from '@buhuchet/shared';
 import { eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -58,6 +60,23 @@ describe.skipIf(!databaseAvailable())('Плата за обслуживание 
       .set({ features: on })
       .where(eq(schema.orgSettings.orgId, f.a.orgId));
   const ALL_ON = { fee: true, files: true, taxpay: true };
+  /** Загрузить файл к записи: начать, положить в хранилище, завершить. */
+  const upload = async (cookie: string, source: { kind: string; id: string }, name: string) => {
+    const started = await expectStatus(
+      await call('POST', '/api/files/uploads', cookie, { name, size: 5, source }),
+      201,
+    );
+    const ticket = FileUploadTicket.parse(await started.json());
+    const [row] = await f.t.admin.db
+      .select({ key: schema.files.storageKey, type: schema.files.contentType })
+      .from(schema.files)
+      .where(eq(schema.files.id, ticket.id));
+    await (f.deps.storage as MemoryStorage).put(row!.key, new Uint8Array(5), {
+      contentType: row!.type,
+    });
+    await expectStatus(await call('POST', `/api/files/${ticket.id}/complete`, cookie), 200);
+    return ticket.id;
+  };
 
   async function contractor(
     orgId: string,
@@ -285,6 +304,9 @@ describe.skipIf(!databaseAvailable())('Плата за обслуживание 
     const all = await list(owner);
     expect(all.items.find((r) => r.id === cpDebt)!.feeDebt).toBe(som(120_000));
     expect(all.items.find((r) => r.id === cpPay)!.feeDebt).toBe(0);
+    // «Принять оплату» в меню строки — по начислениям (прототип feeAccOk): долга нет, начисления есть.
+    expect(all.items.find((r) => r.id === cpPay)!.feeCharged).toBe(true);
+    expect(all.items.find((r) => r.id === cpOne)!.feeCharged).toBe(false);
     expect((await list(owner, '&tab=debtors')).items.map((r) => r.id)).toEqual([cpDebt]);
     const s = ContractorSummary.parse(
       await (await expectStatus(await call('GET', '/api/contractors/summary', owner), 200)).json(),
@@ -297,7 +319,9 @@ describe.skipIf(!databaseAvailable())('Плата за обслуживание 
     );
     expect(counts.debtors).toBe(1);
     // Бухгалтер: ни долга, ни «Должников».
-    expect((await list(acc)).items.every((r) => r.feeDebt === null)).toBe(true);
+    expect((await list(acc)).items.every((r) => r.feeDebt === null && r.feeCharged === null)).toBe(
+      true,
+    );
     expect((await list(acc, '&tab=debtors')).items).toEqual([]);
     const sAcc = ContractorSummary.parse(
       await (await expectStatus(await call('GET', '/api/contractors/summary', acc), 200)).json(),
@@ -350,6 +374,7 @@ describe.skipIf(!databaseAvailable())('Плата за обслуживание 
     expect(fields).not.toContain('feeReminder');
     expect(fields).not.toContain('tariffAdded');
     expect(hist.items.some((h) => h.entity === 'fee_payment')).toBe(false);
+    expect(hist.items.some((h) => h.entity === 'money_operation')).toBe(false);
   });
 
   it('«Платит одной суммой»: меняет тот, кто видит плату', async () => {
@@ -404,5 +429,95 @@ describe.skipIf(!databaseAvailable())('Плата за обслуживание 
     expect([403, 404]).toContain(
       (await call('GET', `/api/files?kind=fee_payment&id=${p!.id}`, acc)).status,
     );
+  });
+
+  it('поступление с частью за обслуживание: без права на плату — только часть на налоги, поступления только за обслуживание не видно (п. В-19)', async () => {
+    const receipt = async (total: number, month: string, fee: number) =>
+      ReceiptSaved.parse(
+        await (
+          await expectStatus(
+            await call('POST', `/api/contractors/${cpDebt}/receipts`, owner, {
+              total,
+              date: '2026-10-18',
+              fee: [{ month, amount: fee }],
+            }),
+            201,
+          )
+        ).json(),
+      ).id;
+    // 400 сом на налоги (аванс) и 100 сом за обслуживание; второе — только за обслуживание.
+    const mixed = await receipt(som(500), '2026-08', som(100));
+    const pure = await receipt(som(300), '2026-09', som(300));
+    await upload(owner, { kind: 'receipt', id: mixed }, 'смешанное.png');
+    await upload(owner, { kind: 'receipt', id: pure }, 'обслуживание.png');
+    const receipts = async (cookie: string) =>
+      FileManagerList.parse(
+        await (
+          await expectStatus(await call('GET', '/api/files/manager?size=all', cookie), 200)
+        ).json(),
+      )
+        .items.filter((r) => r.kind === 'receipt' && r.contractor?.id === cpDebt)
+        .map((r) => [r.name, r.source.replace(/\u00a0/g, ' ')])
+        .sort();
+    expect(await receipts(owner)).toEqual([
+      ['обслуживание.png', 'Поступление 300 сом от 18.10.2026'],
+      ['смешанное.png', 'Поступление 500 сом от 18.10.2026'],
+    ]);
+    expect(await receipts(acc)).toEqual([['смешанное.png', 'Поступление 400 сом от 18.10.2026']]);
+    expect([403, 404]).toContain(
+      (await call('GET', `/api/files?kind=receipt&id=${pure}`, acc)).status,
+    );
+    await expectStatus(await call('GET', `/api/files?kind=receipt&id=${pure}`, owner), 200);
+    // Вкладка «Деньги» бухгалтера: общая сумма — часть на налоги, поступления только за обслуживание нет.
+    const ops = async (cookie: string) =>
+      (
+        (await (
+          await expectStatus(await call('GET', `/api/contractors/${cpDebt}/money`, cookie), 200)
+        ).json()) as { operations: { id: string; amount: number; total: number | null }[] }
+      ).operations.filter((o) => o.id === mixed || o.id === pure);
+    expect((await ops(acc)).map((o) => [o.id, o.amount, o.total])).toEqual([
+      [mixed, som(400), som(400)],
+    ]);
+    expect((await ops(owner)).map((o) => o.id).sort()).toEqual([mixed, pure].sort());
+  });
+
+  it('право на плату с областью «Свои»: чужой контрагент — 404, свой — 200', async () => {
+    const hr = employee('hr-a');
+    const [role] = await f.t.admin.db
+      .select({ id: schema.employees.roleId })
+      .from(schema.employees)
+      .where(eq(schema.employees.id, hr));
+    await f.t.admin.db.insert(schema.rolePermissions).values(
+      ['fee', 'tariff'].map((permissionId) => ({
+        orgId: f.a.orgId,
+        roleId: role!.id!,
+        permissionId,
+      })),
+    );
+    const mine = await contractor(f.a.orgId, 'ИП Своя', '21503198700031', {
+      responsibleEmployeeId: hr,
+    });
+    const hrCookie = await signIn(f.app, 'hr-a', TEST_PASSWORD);
+    for (const path of ['fees', 'fee-payment-form', 'fee-reminder']) {
+      await expectStatus(await call('GET', `/api/contractors/${cpDebt}/${path}`, hrCookie), 404);
+    }
+    await expectStatus(
+      await call('POST', `/api/contractors/${cpDebt}/tariffs`, hrCookie, {
+        amount: som(1_000),
+        period: 'M',
+        from: '2026-12',
+      }),
+      404,
+    );
+    await expectStatus(
+      await call('POST', `/api/contractors/${cpDebt}/fee-payments`, hrCookie, {
+        amount: som(100),
+        date: '2026-10-18',
+        to: 'owner',
+        allocation: [],
+      }),
+      404,
+    );
+    expect((await fees(hrCookie, mine)).canAccept).toBe(true);
   });
 });

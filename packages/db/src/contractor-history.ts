@@ -13,6 +13,7 @@ import {
   auditLog,
   contractors,
   employees,
+  moneyOperations,
   ownershipForms,
   reports,
   reportTypes,
@@ -204,7 +205,7 @@ export interface ContractorHistoryAccess {
 /**
  * Поля платы за обслуживание: без права их «было → стало» не отдаются (ТЗ: «скрыты везде») — ставка,
  * день оплаты, первый месяц, новая ставка журнала, напоминание о долге, часть за обслуживание в
- * поступлении (задача 2.21).
+ * поступлении (задача 2.21). «Платит одной суммой» — отметка без суммы, видна всем, как в прототипе.
  */
 const FEE_FIELDS: ReadonlySet<string> = new Set([
   'tariff',
@@ -264,7 +265,29 @@ async function visibleEntries(
   if (access.tasks) own.push(eq(auditLog.entity, 'task'));
   if (kpi) own.push(inArray(auditLog.entity, [...KPI_ENTITIES]));
   if (files) own.push(eq(auditLog.entity, 'file'));
-  if (money) own.push(eq(auditLog.entity, 'money_operation'));
+  // Поступление только за обслуживание (часть на налоги 0) — только тому, кто видит плату (п. В-19).
+  if (money) {
+    own.push(
+      access.fee
+        ? eq(auditLog.entity, 'money_operation')
+        : and(
+            eq(auditLog.entity, 'money_operation'),
+            notInArray(
+              auditLog.entityId,
+              tx
+                .select({ id: sql<string>`${moneyOperations.id}::text` })
+                .from(moneyOperations)
+                .where(
+                  and(
+                    eq(moneyOperations.contractorId, id),
+                    eq(moneyOperations.kind, 'in'),
+                    eq(moneyOperations.amount, 0),
+                  ),
+                ),
+            ),
+          )!,
+    );
+  }
   // Оплаты за обслуживание — с правом «Видеть плату» и включённой функцией (как вкладка «Обслуживание»).
   if (access.fee) own.push(eq(auditLog.entity, 'fee_payment'));
   return and(or(...own), files ? undefined : notInArray(auditLog.action, [...FILE_ACTIONS]));

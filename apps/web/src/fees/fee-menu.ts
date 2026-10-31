@@ -8,7 +8,7 @@ export interface FeeMenuContractor {
   oneoff: boolean;
   /** Долг за обслуживание; null — плата не видна. */
   feeDebt: number | null;
-  /** Есть начисления: действует ставка больше нуля или есть долг. */
+  /** Есть начисление больше 0 (сервер: `feeCharged` строки списка, прототип `feeAccOk`). */
   charged: boolean;
 }
 

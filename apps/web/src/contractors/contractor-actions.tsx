@@ -148,7 +148,7 @@ export function useContractorActions(): {
         archived: r.serviceStatus === 'archived',
         oneoff: r.kind === 'oneoff',
         feeDebt: r.feeDebt,
-        charged: (r.feeDebt ?? 0) > 0 || (r.tariff?.amount ?? 0) > 0,
+        charged: r.feeCharged ?? false,
       },
     );
     // «Открыть карточку» строки — со строкой: карточка сразу показывает название и ИНН.

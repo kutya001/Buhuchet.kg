@@ -307,7 +307,7 @@ describe.skipIf(!databaseAvailable())('Плата за обслуживание:
       inA((tx) =>
         addTariff(tx, cpOne, { amount: som(1), period: 'M', from: '2026-11', note: '' }, ctx),
       ),
-    ).rejects.toEqual(refused('fee_not_accepted', 409));
+    ).rejects.toEqual(refused('tariff_oneoff', 409));
   });
 
   it('часть за обслуживание в поступлении: по оплате на месяц, на налоги — остальное', async () => {

@@ -99,7 +99,8 @@ export function contractorFeesHandler(
     if (!view) contractorNotFound();
     const { subject: cp, fees } = view;
     const tariffRight = hasPermission(subject, 'tariff');
-    const canTariff = tariffRight && !cp.oneOff && !cp.archived;
+    // «Новая ставка» — по праву и у архивного, как в прототипе (`tariffDlg`); у разового платы нет.
+    const canTariff = tariffRight && !cp.oneOff;
     const payments = [...view.payments].sort((a, b) =>
       a.date === b.date ? b.createdAt.getTime() - a.createdAt.getTime() : a.date < b.date ? 1 : -1,
     );

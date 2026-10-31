@@ -178,9 +178,13 @@ test.describe('Этап 2: плата за обслуживание', () => {
     expect(debtors.status(), await debtors.text()).toBe(200);
     expect(((await debtors.json()) as { items: unknown[] }).items).toEqual([]);
     const list = (await (await api.get('/api/contractors?size=all')).json()) as {
-      items: { id: string; feeDebt: number | null; tariff: unknown }[];
+      items: { id: string; feeDebt: number | null; feeCharged: boolean | null; tariff: unknown }[];
     };
-    expect(list.items.find((r) => r.id === cp.id)).toMatchObject({ feeDebt: null, tariff: null });
+    expect(list.items.find((r) => r.id === cp.id)).toMatchObject({
+      feeDebt: null,
+      feeCharged: null,
+      tariff: null,
+    });
     const summary = (await (await api.get('/api/contractors/summary')).json()) as {
       debtors: unknown;
     };

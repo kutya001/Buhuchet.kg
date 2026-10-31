@@ -350,6 +350,11 @@ export const ContractorRow = z.object({
   tariff: z.object({ amount: Tyiyn, period: z.enum(TARIFF_PERIODS) }).nullable(),
   /** Долг за обслуживание (задача 2.21); null — нет права «Видеть плату за обслуживание». */
   feeDebt: Tyiyn.nullable(),
+  /**
+   * Есть начисления за обслуживание — хотя бы одно больше 0 (прототип `feeAccOk`: пункт «Принять оплату
+   * за обслуживание» в меню строки); null — нет права «Видеть плату за обслуживание».
+   */
+  feeCharged: z.boolean().nullable(),
   /** «Платит одной суммой». */
   oneSum: z.boolean(),
   /** «Файл к поступлению обязателен». */

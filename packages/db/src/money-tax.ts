@@ -1129,6 +1129,10 @@ export async function moneyFileSource(
   cancelled: boolean;
   /** «Учёт оплаты налогов» включён в учётной политике. */
   taxpay: boolean;
+  /** «Плата за обслуживание» включена в учётной политике. */
+  feeOn: boolean;
+  /** Поступление только за обслуживание: часть на налоги — 0 (задача 2.21). */
+  feeOnly: boolean;
 } | null> {
   if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
   const [row] = await tx
@@ -1139,6 +1143,8 @@ export async function moneyFileSource(
       reportId: moneyOperations.reportId,
       cancelled: sql<boolean>`${moneyOperations.cancelledAt} is not null`,
       taxpay: sql<boolean>`coalesce((select (${orgSettings.features} ->> 'taxpay')::boolean from ${orgSettings} where ${orgSettings.orgId} = app.current_org_id()), false)`,
+      feeOn: sql<boolean>`coalesce((select (${orgSettings.features} ->> 'fee')::boolean from ${orgSettings} where ${orgSettings.orgId} = app.current_org_id()), false)`,
+      amount: moneyOperations.amount,
     })
     .from(moneyOperations)
     .innerJoin(contractors, eq(contractors.id, moneyOperations.contractorId))
@@ -1159,6 +1165,8 @@ export async function moneyFileSource(
     reportId: row.reportId,
     cancelled: row.cancelled,
     taxpay: row.taxpay,
+    feeOn: row.feeOn,
+    feeOnly: kind === 'receipt' && Number(row.amount) === 0,
   };
 }
 

@@ -215,6 +215,8 @@ export function ContractorFeesTab({
   if (!f) return null;
   const ct = f.current;
   const debtSub = t(f.debt ? 'fee.plate.debt_late' : 'fee.plate.debt_none');
+  const iconsOnPhone = f.canAccept || (f.canTariff && f.canRemind);
+  const label = iconsOnPhone ? 'max-md:hidden' : undefined;
   return (
     <div data-fee-tab="" className="flex min-w-0 flex-col gap-3.5">
       <Plates static>
@@ -241,33 +243,36 @@ export function ContractorFeesTab({
           }
         />
       </Plates>
-      {/* Прототип `.row.acts.icons`: на телефоне одна строка, у кнопок кроме главной — только значок. */}
+      {/*
+        Прототип `.row.acts` (`mActsFit`): на телефоне одна строка; если кнопки с подписями не помещаются
+        (есть главная «Принять оплату…» или обе другие), у кнопок кроме главной — только значок.
+      */}
       {f.canTariff || f.canRemind || f.canAccept ? (
         <div className="flex flex-wrap items-center justify-end gap-2 max-md:flex-nowrap max-md:[&>button]:min-h-10">
           {f.canTariff ? (
             <button
               type="button"
               data-fee-tariff=""
-              className={`${buttonClass('default', 'sm')} max-md:px-2.5`}
+              className={`${buttonClass('default', 'sm')} ${iconsOnPhone ? 'max-md:px-2.5' : ''}`}
               title={t('fee.btn.tariff')}
               aria-label={t('fee.btn.tariff')}
               onClick={() => setTariff(openSlot(null))}
             >
               <Icon name="plus" size="sm" />
-              <span className="max-md:hidden">{t('fee.btn.tariff')}</span>
+              <span className={label}>{t('fee.btn.tariff')}</span>
             </button>
           ) : null}
           {f.canRemind ? (
             <button
               type="button"
               data-fee-remind=""
-              className={`${buttonClass('default', 'sm')} max-md:px-2.5`}
+              className={`${buttonClass('default', 'sm')} ${iconsOnPhone ? 'max-md:px-2.5' : ''}`}
               title={t('fee.btn.remind')}
               aria-label={t('fee.btn.remind')}
               onClick={onRemind}
             >
               <Icon name="chat" size="sm" />
-              <span className="max-md:hidden">{t('fee.btn.remind')}</span>
+              <span className={label}>{t('fee.btn.remind')}</span>
             </button>
           ) : null}
           {f.canAccept ? (

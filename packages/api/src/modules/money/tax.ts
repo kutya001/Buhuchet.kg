@@ -67,8 +67,8 @@ const body = <S>(schema: S) => ({ required: true, content: json(schema) });
 
 /**
  * Часть за обслуживание в поступлении (прототип inDlg, `feeOk`): плата видна (функция и право «Видеть
- * плату за обслуживание»), контрагент не разовый и платит организации; строже прототипа — контрагент
- * ещё и в области группы «Контрагенты», где у сотрудника право на плату.
+ * плату за обслуживание»), контрагент не разовый и платит организации; строже прототипа — ещё право
+ * «Менять журнал тарифов» и контрагент в области группы «Контрагенты» (docs/deviations.md п. В-19).
  */
 async function receiptFeeAllowed(
   tx: Tx,
@@ -77,6 +77,8 @@ async function receiptFeeAllowed(
 ): Promise<boolean> {
   if (cp.paysTo !== 'org' || cp.oneOff) return false;
   const subject = subjectOf(c);
+  // Записать оплату за обслуживание — право «Менять журнал тарифов» (ТЗ «Роли и права»).
+  if (!hasPermission(subject, 'tariff')) return false;
   if (!(await feeVisible(tx, orgContextOf(c).orgId, subject))) return false;
   return !!(await moneyContractor(tx, cp.id, scopeSqlOf(subject)));
 }
@@ -166,7 +168,8 @@ export function contractorMoneyHandler(
         contractorBalance(tx, id),
         feeVisible(tx, orgContextOf(c).orgId, subject),
       ]);
-      return { cp, view, ops, balance, fee };
+      // Плата видна по контрагенту ещё и в области группы «Контрагенты» (как `receiptFeeAllowed`).
+      return { cp, view, ops, balance, fee: fee && canSeeContractor(subject, 'cps', cp) };
     });
     if (!out) notFound();
     const { cp, view, ops, balance, fee } = out;
@@ -257,7 +260,8 @@ export function receiptFormHandler(deps: ApiDeps): RouteHandler<typeof receiptFo
         paysTo: out.cp.paysTo,
         holder: out.cp.responsibleName,
         needReceiptFile: out.cp.needReceiptFile,
-        oneSum: out.cp.oneSum,
+        // «Платит одной суммой» — только тому, кто видит плату (как переключатель на «Основном»).
+        oneSum: !!out.fee && out.cp.oneSum,
       },
       rows: out.rows.map((r) => ({
         reportId: r.reportId,

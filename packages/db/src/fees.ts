@@ -295,21 +295,24 @@ export async function contractorFeeView(
 export const FEE_DEBT = {
   id: sql.raw('"fd"."id"'),
   debt: sql.raw('"fd"."debt"'),
+  charged: sql.raw('"fd"."charged"'),
 };
 
 /**
  * Долг за обслуживание контрагентов организации (прототип derive: `c.feeDebt`): считается доменом по
- * журналу тарифов, периодам и оплатам и подставляется в запрос списка таблицей `fd` (id, debt). Разовых
- * и контрагентов без долга в таблице нет.
+ * журналу тарифов, периодам и оплатам и подставляется в запрос списка таблицей `fd` (id, debt,
+ * charged — есть начисление больше 0, прототип `feeAccOk`). Разовых и контрагентов без начислений и
+ * долга в таблице нет; должник — `debt > 0`.
  */
 export async function feeDebtTable(tx: Tx, today: IsoDate): Promise<SQL> {
   const [subjects, payments] = await Promise.all([feeSubjects(tx, null), feePaymentsOf(tx, null)]);
-  const out: { id: string; debt: number }[] = [];
+  const out: { id: string; debt: number; charged: boolean }[] = [];
   for (const s of subjects.values()) {
-    const { debt } = contractorFees(s, payments.get(s.id) ?? [], today);
-    if (debt > 0) out.push({ id: s.id, debt });
+    const { debt, months } = contractorFees(s, payments.get(s.id) ?? [], today);
+    const charged = months.some((m) => m.charge > 0);
+    if (debt > 0 || charged) out.push({ id: s.id, debt, charged });
   }
-  return sql`jsonb_to_recordset(${JSON.stringify(out)}::jsonb) as fd(id uuid, debt bigint)`;
+  return sql`jsonb_to_recordset(${JSON.stringify(out)}::jsonb) as fd(id uuid, debt bigint, charged boolean)`;
 }
 
 /** Куда поступили деньги (прототип `fpTo`): счета организации для обслуживания, иначе «Счёт организации»; «Владельцу». */
@@ -460,7 +463,8 @@ export interface TariffInput {
 
 /**
  * «Добавить в журнал» (прототип `tariffDlg`): ставка не меньше 0, месяц не прошлый, если ставка уже есть —
- * со следующего месяца, не чаще раза в месяц; у разового и архивного ставок не вносят. Запись журнала
+ * со следующего месяца, не чаще раза в месяц; у разового ставок не вносят (у архивного — можно, как в
+ * прототипе). Запись журнала
  * не меняется и не удаляется; в истории контрагента — «Новая ставка …».
  */
 export async function addTariff(
@@ -470,8 +474,9 @@ export async function addTariff(
   ctx: { today: IsoDate; scope: SQL | undefined },
 ): Promise<{ id: string }> {
   const { subject } = await lockFeeSubject(tx, contractorId, ctx.scope);
-  if (subject.archived) throw new FeeRefusedError('fee_not_accepted');
-  if (subject.oneOff) throw new FeeRefusedError('fee_not_accepted');
+  // У архивного ставку внести можно, как в прототипе (`tariffDlg` — по одному праву); начислений по ней
+  // нет, пока контрагент в архиве.
+  if (subject.oneOff) throw new FeeRefusedError('tariff_oneoff');
   const problem = tariffProblem(subject.tariffs, input.amount, input.from, ctx.today);
   if (problem) {
     throw new FeeRefusedError(

@@ -18,6 +18,7 @@ import {
   type FileSourceKind,
   type HistoryEntity,
 } from '@buhuchet/domain';
+import { scopeSqlOf } from '../contractors/common';
 import { feePaymentFiles } from '../fees/files';
 import { indicatorValueSource } from '../kpi/card';
 import { kpiScopeOf } from '../kpi/common';
@@ -135,6 +136,8 @@ function indicatorFilesList({ subject, features, t }: FileListContext): FileList
  * налога. Видны при включённом «Учёте оплаты налогов» с правом «Учёт денег» по контрагентам области
  * группы «Финансовые операции»; прикреплять и удалять — пока операция не отменена и контрагент не в
  * архиве. История — у поступления; у оплаты — у отчёта (как «Прикреплён файл» в карточке отчёта).
+ * Поступление только за обслуживание и его сумму целиком видит только тот, кто видит плату по этому
+ * контрагенту (задача 2.21, docs/deviations.md п. В-19).
  */
 function moneySource(kind: 'receipt' | 'tax_payment'): FileListSource {
   return {
@@ -142,6 +145,11 @@ function moneySource(kind: 'receipt' | 'tax_payment'): FileListSource {
       if (id === null || !hasPermission(subject, 'money')) return null;
       const row = await moneyFileSource(tx, id, kind, finScopeOf(subject));
       if (!row?.taxpay || !canSeeContractor(subject, 'fin', row.contractor)) return null;
+      const feeSeen =
+        row.feeOn &&
+        hasPermission(subject, 'fee') &&
+        canSeeContractor(subject, 'cps', row.contractor);
+      if (row.feeOnly && !feeSeen) return null;
       const contractor = {
         id: row.contractor.id,
         responsibleEmployeeId: row.contractor.responsibleEmployeeId,
@@ -157,7 +165,12 @@ function moneySource(kind: 'receipt' | 'tax_payment'): FileListSource {
     },
     list: ({ subject, features, t }) =>
       features.taxpay && hasPermission(subject, 'money')
-        ? moneyFilesPart(kind, finScopeOf(subject), t)
+        ? moneyFilesPart(
+            kind,
+            finScopeOf(subject),
+            t,
+            features.fee && hasPermission(subject, 'fee') ? { scope: scopeSqlOf(subject) } : null,
+          )
         : null,
   };
 }

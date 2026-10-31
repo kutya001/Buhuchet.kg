@@ -128,6 +128,7 @@ function rowBody(r: ContractorRow, fee: boolean, service: RowService): Contracto
     ...r,
     tariff: fee ? r.tariff : null,
     feeDebt: fee ? r.feeDebt : null,
+    feeCharged: fee ? r.feeCharged : null,
     service,
     serviceSince: { at: r.serviceSince.at.toISOString(), by: r.serviceSince.by },
     audit: {

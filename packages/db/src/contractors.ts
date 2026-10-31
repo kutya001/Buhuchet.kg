@@ -212,6 +212,8 @@ export interface ContractorRow {
    * выключена) — его в запросе нет.
    */
   feeDebt: number | null;
+  /** Есть начисление больше 0 (прототип `feeAccOk`); null — плата не видна. */
+  feeCharged: boolean | null;
   /** «Платит одной суммой»: налоги и обслуживание вместе (задача 2.21). */
   oneSum: boolean;
   /** «Файл при поступлении обязателен» (задача 2.19). */
@@ -377,6 +379,8 @@ function fromContractors(tx: Tx, fields: object, sf?: SQL, fd?: SQL | null) {
 
 /** Долг за обслуживание строки: 0, если долга нет (контрагента нет в таблице `fd`). */
 const FEE_DEBT_VALUE = sql<number>`coalesce(${FEE_DEBT.debt}, 0)`;
+/** Есть начисления за обслуживание: строка в таблице `fd` с `charged`. */
+const FEE_CHARGED_VALUE = sql<boolean>`coalesce(${FEE_DEBT.charged}, false)`;
 
 /** Таблицы списка: тариф Соцфонда (`socfundListTable`) и, если плата видна, долг за обслуживание. */
 interface ListTables {
@@ -418,7 +422,10 @@ function socfundOfRow(r: Record<string, unknown>): ContractorRow['socfund'] {
   };
 }
 
-type RowData = Record<keyof ReturnType<typeof rowFields>, unknown> & { feeDebt?: unknown };
+type RowData = Record<keyof ReturnType<typeof rowFields>, unknown> & {
+  feeDebt?: unknown;
+  feeCharged?: unknown;
+};
 
 type PhoneCodes = Awaited<ReturnType<typeof phoneCodes>>;
 
@@ -459,6 +466,7 @@ function toRow(r: RowData, codes: PhoneCodes): Omit<ContractorRow, 'socfund'> {
     head: r.head as string,
     contact: r.contact as string,
     feeDebt: r.feeDebt == null ? null : Number(r.feeDebt),
+    feeCharged: r.feeCharged == null ? null : Boolean(r.feeCharged),
     oneSum: Boolean(r.oneSum),
     needReceiptFile: Boolean(r.needReceiptFile),
     tariff:
@@ -689,7 +697,7 @@ export async function listContractorsPage(
   const fields = {
     ...rowFields(o.today),
     ...SOCFUND_ROW,
-    ...(tables.fd ? { feeDebt: FEE_DEBT_VALUE } : {}),
+    ...(tables.fd ? { feeDebt: FEE_DEBT_VALUE, feeCharged: FEE_CHARGED_VALUE } : {}),
   };
   const page = await selectListPage({
     query,
@@ -790,7 +798,7 @@ export async function contractorTabCounts(
       .select({ n: count() })
       .from(contractors)
       .innerJoin(fd, sql`${FEE_DEBT.id} = ${contractors.id}`)
-      .where(and(live, scope));
+      .where(and(live, scope, sql`${FEE_DEBT.debt} > 0`));
     debtors = Number(row?.n ?? 0);
   }
   return { all: Number(all?.n ?? 0), mine: Number(mine?.n ?? 0), debtors };
