@@ -328,6 +328,11 @@ export function contractorHistoryText(t: Translate, e: Entry, names: Names): str
     case 'contractor_page':
       lines = [pageHistoryText(t, e)];
       break;
+    // Файл контрагента — загруженный вручную или из свидетельства и выписки: «Прикреплён файл «…»»,
+    // «Удалён файл «…»», как в карточке отчёта.
+    case 'file':
+      lines = [reportHistoryText(t, { ...e, reason: null }, 0)];
+      break;
     case 'money_operation':
       lines = moneyLines(t, e);
       break;

@@ -17,6 +17,8 @@ import { ContractorCardWindow, type ContractorCardProps } from './contractor-car
 import { useContractorsRefresh } from './contractor-data';
 import { EditContractorDialog, type BaseChanges } from './contractor-edit';
 import { NewContractorDialog } from './contractor-form';
+import { RegdocsDialog } from './contractor-regdocs';
+import type { RegdocsPrefill } from './contractor-regdocs-model';
 import {
   contractorMenuEntries,
   menuContractorOf,
@@ -31,6 +33,12 @@ type CardActions = Pick<
   ContractorCardProps,
   'actions' | 'serviceActions' | 'onResponsible' | 'onEdit' | 'onCancelPause'
 >;
+
+/** Окно «Новый контрагент»: вид и, из «Из свидетельства и выписки», документы и итог распознавания. */
+interface NewContractorSlot {
+  kind: ContractorKind;
+  pre?: RegdocsPrefill;
+}
 
 /** «Сменить ответственного» одному или выбранным; `done` — снять галочки списка. */
 interface RespTargets {
@@ -59,7 +67,8 @@ const feeOfCard = (c: Contractor, f: ContractorFees | undefined): FeeMenuContrac
 /**
  * Действия с контрагентом (прототип modules/contractors.js — cpActions, respDlg, archiveDlg, массовые
  * действия списка; modules/contractor-card.js — кнопка «Действия» карточки): пункты меню «…» строки,
- * массовые «Назначить ответственного», «Включить страницу» и «В архив», окно «Новый контрагент»,
+ * массовые «Назначить ответственного», «Включить страницу» и «В архив», окна «Новый контрагент» и
+ * «Из свидетельства и выписки» (из него — «Новый контрагент», заполненный по документам),
  * пункты карточки и все их окна (`dialogs` — поставить в разметку). Карточка открывается через
  * `openContractorCard` — её рисует `ContractorCardHost` оболочки. Права — как в прототипе; сервер
  * проверяет их ещё раз.
@@ -68,6 +77,7 @@ export function useContractorActions(): {
   actions: (r: ContractorRow) => ActionEntry[];
   bulk: GridBulkAction<ContractorRow>[] | undefined;
   newContractor: (kind?: ContractorKind) => void;
+  regdocs: () => void;
   card: CardActions;
   dialogs: ReactNode;
 } {
@@ -94,7 +104,8 @@ export function useContractorActions(): {
   const [bases, setBases] = useState<DialogSlot<BaseChanges> | null>(null);
   const [resp, setResp] = useState<DialogSlot<RespTargets> | null>(null);
   const [remove, setRemove] = useState<{ id: string; name: string } | null>(null);
-  const [create, setCreate] = useState<DialogSlot<ContractorKind> | null>(null);
+  const [create, setCreate] = useState<DialogSlot<NewContractorSlot> | null>(null);
+  const [regdocs, setRegdocs] = useState<DialogSlot<null> | null>(null);
 
   const removeNow = async (c: { id: string; name: string }) => {
     const res = await callApi(() => api.api.contractors[':id'].$delete({ param: { id: c.id } }));
@@ -294,10 +305,26 @@ export function useContractorActions(): {
         <NewContractorDialog
           key={`new-${create.n}`}
           open={create.open}
-          kind={create.data}
+          kind={create.data.kind}
+          pre={create.data.pre}
           onClose={() => setCreate(closeSlot)}
           onCreated={(c) => openContractorCard({ id: c.id })}
           onUnarchived={(c) => openContractorCard({ id: c.id })}
+        />
+      ) : null}
+      {regdocs ? (
+        <RegdocsDialog
+          key={`regdocs-${regdocs.n}`}
+          open={regdocs.open}
+          onClose={() => setRegdocs(closeSlot)}
+          onFill={(pre) => {
+            setRegdocs(closeSlot);
+            setCreate(openSlot<NewContractorSlot>({ kind: 'regular', pre }));
+          }}
+          onOpen={(id) => {
+            setRegdocs(closeSlot);
+            openContractorCard({ id });
+          }}
         />
       ) : null}
     </>
@@ -306,7 +333,9 @@ export function useContractorActions(): {
   return {
     actions,
     bulk: bulk.length ? bulk : undefined,
-    newContractor: (kind: ContractorKind = 'regular') => setCreate(openSlot(kind)),
+    newContractor: (kind: ContractorKind = 'regular') =>
+      setCreate(openSlot<NewContractorSlot>({ kind })),
+    regdocs: () => setRegdocs(openSlot(null)),
     card,
     dialogs,
   };

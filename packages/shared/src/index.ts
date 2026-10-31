@@ -6,6 +6,7 @@ export * from './telegram';
 export * from './staff';
 export * from './contractors';
 export * from './contractor-import';
+export * from './contractor-regdocs';
 export * from './contractor-service';
 export * from './contractor-page';
 export * from './reports';

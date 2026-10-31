@@ -128,7 +128,11 @@ export function ContractorsList({ tab }: { tab: ContractorTab }) {
   const exporter = useListExport(sendExport);
   const cps = useContractorActions();
   const importer = useContractorImport();
-  useContractorAddRequest({ contractor: cps.newContractor, import: importer.open });
+  useContractorAddRequest({
+    contractor: cps.newContractor,
+    import: importer.open,
+    regdocs: cps.regdocs,
+  });
 
   const goPlate = (id: string) => {
     const want = PLATE_FILTERS[id];

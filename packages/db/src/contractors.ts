@@ -52,6 +52,7 @@ import {
   contractors,
   contractorTariffs,
   employees,
+  files,
   gkedItems,
   ownershipForms,
   platformReference,
@@ -166,6 +167,12 @@ export interface ContractorRecord {
   feeDay: number;
   paysTo: 'emp' | 'org';
   needReceiptFile: boolean;
+  /**
+   * Создан из свидетельства и выписки с документами (прототип `c.regFiles`): у блока «Регистрационные
+   * данные» карточки подпись «из свидетельства и выписки». Удаление документов её не снимает — в
+   * прототипе `regFiles` тоже остаётся (удалённый файл остаётся записью в `files`).
+   */
+  regdocs: boolean;
   /** «Платит одной суммой»: налоги и обслуживание вместе (задача 2.21). */
   oneSum: boolean;
   serviceStatus: ServiceStatus;
@@ -896,6 +903,7 @@ export async function getContractor(
     feeDay: contractors.feeDay,
     paysTo: contractors.paysTo,
     needReceiptFile: contractors.needReceiptFile,
+    regdocs: sql<boolean>`exists (select 1 from ${files} where ${files.contractorId} = ${contractors.id} and ${files.sourceKind} = 'contractor')`,
     gkedConfirmation: contractors.gkedConfirmation,
     socfundFlags: contractors.socfundFlags,
     socfundTariff: contractors.socfundTariff,
@@ -979,6 +987,7 @@ export async function getContractor(
     feeDay: r.feeDay as number,
     paysTo: r.paysTo as 'emp' | 'org',
     needReceiptFile: r.needReceiptFile as boolean,
+    regdocs: r.regdocs as boolean,
     oneSum: base.oneSum,
     serviceStatus: base.serviceStatus,
     tariff: base.tariff && { ...base.tariff, validFrom: r.tariffFrom as IsoDate },

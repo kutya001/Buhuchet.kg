@@ -8,6 +8,7 @@ import { FILE_SOURCE_KINDS, fileExtension, type FileSourceKind } from './files';
 /** Значок вида источника (прототип `FKIND`): плашка, метка «Откуда», «Перейти к источнику». */
 export const FILE_KIND_ICONS: Readonly<Record<FileSourceKind, string>> = {
   manual: 'upload',
+  contractor: 'building',
   report: 'file',
   receipt: 'wallet',
   tax_payment: 'send',

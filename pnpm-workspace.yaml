@@ -23,3 +23,7 @@ onlyBuiltDependencies:
   - esbuild
   - sharp
   - '@tailwindcss/oxide'
+
+# Сценарий после установки tesseract.js — только приглашение поддержать проект: не запускается.
+ignoredBuiltDependencies:
+  - tesseract.js
