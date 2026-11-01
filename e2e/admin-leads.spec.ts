@@ -2,6 +2,18 @@ import { expect, test, type APIRequestContext, type Page } from '@playwright/tes
 import { platformAdmin, search, uniqueInn } from './admin';
 import { botMessages, linkTelegram, uniqueChat, uniqueLogin } from './helpers';
 
+const CRON_SECRET = process.env.CRON_SECRET ?? 'local-cron-secret-change-me';
+/** Сообщение администраторам платформы уходит из очереди задачей «telegram.send» раз в минуту. */
+const TG_POLL = { timeout: 120_000, intervals: [2_000, 5_000, 10_000] };
+
+/** Вызов расписания, как Vercel (/api/cron/tick): разбирает очередь Telegram, если подошла минута. */
+async function tick(api: APIRequestContext) {
+  const res = await api.post('/api/cron/tick', {
+    headers: { authorization: `Bearer ${CRON_SECRET}` },
+  });
+  expect(res.status(), await res.text()).toBe(200);
+}
+
 // Админка → «Организации» → «Заявки» (задача #165, часть 2; ТЗ «Админка» → «Вкладка «Заявки»»,
 // «Лендинг» → «Форма «Оставить заявку»»; прототип admin/leads.js): заявка гостя с лендинга, список,
 // окно заявки, статусы, «Создать организацию» по заявке.
@@ -52,6 +64,8 @@ test.describe('Этап 3: заявки с сайта в Админке (зад�
     baseURL,
     isMobile,
   }) => {
+    // Ждём отправку очереди Telegram (до минуты) — см. TG_POLL.
+    test.setTimeout(180_000);
     const origin = new URL(baseURL!).origin;
     await platformAdmin(page.request, origin);
     const chat = uniqueChat();
@@ -77,9 +91,13 @@ test.describe('Этап 3: заявки с сайта в Админке (зад�
     );
     await guest.close();
 
-    // Сообщение администраторам платформы с привязанным Telegram (шаблон «новая заявка с сайта»).
+    // Сообщение администраторам платформы с привязанным Telegram (шаблон «новая заявка с сайта»):
+    // заявка ставит его в очередь, отправляет задача по расписанию.
     await expect
-      .poll(async () => (await botMessages(page.request, chat)).some((m) => m.includes(firm)))
+      .poll(async () => {
+        await tick(page.request);
+        return (await botMessages(page.request, chat)).some((m) => m.includes(firm));
+      }, TG_POLL)
       .toBe(true);
 
     // Плитка «Заявки с сайта» на вкладке «Организации» ведёт на вкладку «Заявки».
