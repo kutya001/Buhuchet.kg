@@ -1,4 +1,5 @@
 import { createApp, type ApiApp } from './app';
+import { landingDictsLoader, readLandingDicts, type LandingDicts } from './landing-dicts';
 import { createRuntime, type Runtime } from './runtime';
 
 let web: { runtime: Runtime; app: ApiApp } | undefined;
@@ -33,6 +34,19 @@ export function siteInfo(): {
   webApp();
   const { config } = web!.runtime.deps;
   return { env: config.APP_ENV, baseUrl: config.APP_BASE_URL };
+}
+
+let landing: ((now?: number) => Promise<LandingDicts>) | undefined;
+
+/**
+ * Справочники лендинга гостю (`landingDictsLoader`): числа полосы цифр и коды стран формы из
+ * действующих справочников платформы, из базы — не чаще раза в минуту.
+ */
+export function landingDicts(): Promise<LandingDicts> {
+  webApp();
+  const { db } = web!.runtime.deps;
+  landing ??= landingDictsLoader(() => readLandingDicts(db));
+  return landing();
 }
 
 function webApp(): ApiApp {

@@ -26,6 +26,11 @@ describe('возврат на страницу после входа', () => {
       'app/reports',
       '/app/../login',
       '/app/./x',
+      // Закодированные точки и косые: браузер раскрывает их в `..` и `/`.
+      '/app/%2e%2e/api/auth/me',
+      '/app/.%2E/login',
+      '/app/%2F%2Fevil.example',
+      '/app/%5c..%5clogin',
       '/app/\u0000',
       '/app/\nx',
       `/app/${'a'.repeat(600)}`,

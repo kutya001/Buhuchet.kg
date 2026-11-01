@@ -537,7 +537,9 @@ function LandingPage({ screens, numbers, codes, today, stand }: LandingProps) {
           </span>
           {links.length > 0 ? <span className="lp-foot-l">{contactLinks}</span> : null}
           <span className="lp-foot-l">
-            <a href={LOGIN_HREF}>{t('land.btn.login')}</a>
+            <a href={LOGIN_HREF} className={linkButtonClass()}>
+              {t('land.btn.login')}
+            </a>
             <button type="button" className={linkButtonClass()} onClick={() => setConsent(true)}>
               {t('land.consent.title')}
             </button>

@@ -22,7 +22,9 @@ const BLOCKS = [
  */
 async function ownAddress(page: Page) {
   const part = () => Math.floor(Math.random() * 256);
-  await page.setExtraHTTPHeaders({ 'x-forwarded-for': `198.19.${part()}.${part()}` });
+  const address = `198.19.${part()}.${part()}`;
+  await page.setExtraHTTPHeaders({ 'x-forwarded-for': address });
+  return address;
 }
 
 /** Свой номер на каждый запуск: повтор с тем же телефоном за сутки дописывается к первой заявке. */
@@ -160,6 +162,50 @@ test.describe('Этап 3: лендинг для гостей (задача #165
     );
   });
 
+  test('(проверка задачи #165) четвёртая заявка за час с одного адреса: «Отправляем…», затем «Слишком много заявок…» с телефоном для связи; введённое не пропадает', async ({
+    page,
+    baseURL,
+  }) => {
+    const address = await ownAddress(page);
+    const origin = new URL(baseURL!).origin;
+    // Три заявки с этого адреса уже пришли (как с другой вкладки).
+    for (let i = 0; i < 3; i += 1) {
+      const res = await page.request.post('/api/leads', {
+        headers: { origin, 'x-forwarded-for': address },
+        data: {
+          name: 'Сквозная Заявка',
+          firm: 'ОсОО «Сквозной тест»',
+          phone: `+996${uniquePhone()}`,
+          size: '21–50',
+          telegram: '',
+          note: '',
+          consent: true,
+          website: '',
+        },
+      });
+      expect(res.status()).toBe(200);
+    }
+    await page.goto('/#lead');
+    await fillLead(page, uniquePhone());
+    const form = leadForm(page);
+    await form.getByLabel(/Согласен на/).check();
+    // Пока заявка отправляется — «Отправляем…», кнопка неактивна.
+    let release = () => {};
+    const held = new Promise<void>((resolve) => (release = resolve));
+    await page.route('**/api/leads', async (route) => {
+      await held;
+      await route.continue();
+    });
+    await form.getByRole('button', { name: 'Отправить заявку' }).click();
+    await expect(form.getByRole('button', { name: 'Отправляем…' })).toBeDisabled();
+    release();
+    await expect(form.getByRole('alert')).toHaveText(
+      'Слишком много заявок с этого адреса. Попробуйте через час или позвоните нам: +996 500 888 268',
+    );
+    await expect(form.getByLabel('Имя и фамилия')).toHaveValue('Сквозная Заявка');
+    await page.unroute('**/api/leads');
+  });
+
   test('(лендинг, демо) «Посмотреть на демо-организацию»: программа с полосой «Демо-версия…»; изменения — без единого запроса к серверу и только в этом браузере; «Оставить заявку» в полосе — форма на лендинге', async ({
     page,
     browser,
@@ -237,9 +283,10 @@ test.describe('Этап 3: лендинг для гостей (задача #165
   }) => {
     const demo = await request.get('/demo');
     expect(demo.status()).toBe(200);
-    expect(demo.headers()['content-security-policy']).toBe(
-      "connect-src 'none'; frame-ancestors 'none'",
-    );
+    const csp = demo.headers()['content-security-policy'] ?? '';
+    for (const rule of ["default-src 'none'", "connect-src 'none'", "form-action 'none'"]) {
+      expect(csp.split('; ')).toContain(rule);
+    }
     expect(demo.headers()['x-robots-tag']).toBe('noindex, nofollow');
     expect(await demo.text()).toContain('var BU_DEMO=');
     const landing = await (await request.get('/')).text();

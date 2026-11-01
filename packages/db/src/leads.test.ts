@@ -24,8 +24,8 @@ import {
 const NOW = new Date('2026-11-01T04:00:00Z');
 const later = (hours: number) => new Date(NOW.getTime() + hours * 3_600_000);
 
-const rlsViolation = expect.objectContaining({
-  cause: expect.objectContaining({ message: expect.stringMatching(/row-level security/) }),
+const noRights = expect.objectContaining({
+  cause: expect.objectContaining({ message: expect.stringMatching(/permission denied/) }),
 });
 
 describe.skipIf(!databaseAvailable())('заявки с лендинга', () => {
@@ -47,6 +47,7 @@ describe.skipIf(!databaseAvailable())('заявки с лендинга', () => 
       telegram: '@aigul',
       note: 'Перезвоните после обеда',
       fromStand: false,
+      trap: false,
       telegramText: '📩 Новая заявка с сайта',
       now: NOW,
       ...over,
@@ -195,19 +196,35 @@ describe.skipIf(!databaseAvailable())('заявки с лендинга', () => 
     expect((await submitLead(db.app.db, lead({ ipSubject: 'ip-other' }))).outcome).toBe('created');
   });
 
-  it('роль приложения таблицы заявок не видит и не пишет в них напрямую', async () => {
-    expect(await db.app.db.select().from(platformLeads)).toEqual([]);
-    expect(await db.app.db.select().from(platformLeadEvents)).toEqual([]);
+  it('заявка с полем-ловушкой не сохраняется, но засчитывается в предел по адресу', async () => {
+    const ip = 'ip-trap';
+    const before = await db.admin.db.$count(platformLeads);
+    const outbox = await db.admin.db.$count(telegramOutbox);
+    for (let i = 0; i < 3; i += 1) {
+      expect(await submitLead(db.app.db, lead({ ipSubject: ip, trap: true }))).toEqual({
+        outcome: 'trap',
+        leadId: null,
+      });
+    }
+    expect(await db.admin.db.$count(platformLeads)).toBe(before);
+    expect(await db.admin.db.$count(telegramOutbox)).toBe(outbox);
+    expect((await submitLead(db.app.db, lead({ ipSubject: ip }))).outcome).toBe('limited');
+  });
+
+  it('у роли приложения нет прав на таблицы заявок: ни прочитать, ни записать напрямую', async () => {
+    await expect(db.app.db.select().from(platformLeads)).rejects.toEqual(noRights);
+    await expect(db.app.db.select().from(platformLeadEvents)).rejects.toEqual(noRights);
     await expect(
       db.app.db
         .insert(platformLeads)
         .values({ name: 'x', firm: 'x', phone: '+996555000000', size: 'x' }),
-    ).rejects.toEqual(rlsViolation);
-    // И в контексте организации тоже ничего: заявки — данные платформы, а не организации.
-    const own = await withUserContext(db.app.db, org.ownerUserId, (tx) =>
-      tx.select().from(platformLeads),
-    );
-    expect(own).toEqual([]);
+    ).rejects.toEqual(noRights);
+    await expect(db.app.db.delete(platformLeads)).rejects.toEqual(noRights);
+    // И в контексте администратора платформы тоже — только представления и функции.
+    await expect(asAdmin((tx) => tx.select().from(platformLeads))).rejects.toEqual(noRights);
+    await expect(
+      asAdmin((tx) => tx.update(platformLeads).set({ status: 'connected' })),
+    ).rejects.toEqual(noRights);
   });
 
   it('список и окно заявки видит только незаблокированный администратор платформы', async () => {
@@ -315,6 +332,20 @@ describe.skipIf(!databaseAvailable())('заявки с лендинга', () => 
       'created',
       'note',
     ]);
+    // Не администратору и заблокированному администратору — ни заметки, ни истории.
+    for (const userId of [org.ownerUserId, blockedAdminId]) {
+      expect(
+        await withUserContext(db.app.db, userId, (tx) =>
+          setLeadAdminNote(tx, { id, version: 2, note: 'чужая', now: later(2) }),
+        ),
+      ).toBeNull();
+      expect(await withUserContext(db.app.db, userId, (tx) => adminLeadEvents(tx, id))).toEqual([]);
+    }
+    expect(await db.app.db.execute(sql`select * from app.admin_lead_events`)).toEqual([]);
+    expect(await asAdmin((tx) => adminLeadById(tx, id))).toMatchObject({
+      adminNote: 'Показ в понедельник',
+      version: 2,
+    });
     expect(await withUserContext(db.app.db, org.ownerUserId, (tx) => deleteLead(tx, id))).toBe(
       false,
     );

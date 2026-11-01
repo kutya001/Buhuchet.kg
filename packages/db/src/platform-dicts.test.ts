@@ -1,6 +1,7 @@
 import { eq, getTableName, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
+  landingNumbers,
   listAuthorities,
   listDueChangeReasons,
   listOwnershipForms,
@@ -246,6 +247,31 @@ describe.skipIf(!databaseAvailable())('справочники платформы
     expect(
       (await listReportTypes(t.app.db, { all: true })).find((x) => x.code === 't1q'),
     ).toMatchObject({ active: false });
+  });
+
+  it('полоса цифр лендинга — действующие виды отчётов и режимы, с правками администратора', async () => {
+    const expected = {
+      reportTypes: ref.reportTypes.filter((x) => x.active !== false).length,
+      regimes: ref.dictionaries.regimes.items.filter((x) => x.active).length,
+    };
+    expect(await landingNumbers(t.app.db)).toEqual(expected);
+    const [on] = await t.admin.db
+      .select({ code: taxRegimes.code })
+      .from(taxRegimes)
+      .where(eq(taxRegimes.active, true))
+      .limit(1);
+    await t.admin.db.update(taxRegimes).set({ active: false }).where(eq(taxRegimes.code, on!.code));
+    try {
+      expect(await landingNumbers(t.app.db)).toEqual({
+        ...expected,
+        regimes: expected.regimes - 1,
+      });
+    } finally {
+      await t.admin.db
+        .update(taxRegimes)
+        .set({ active: true })
+        .where(eq(taxRegimes.code, on!.code));
+    }
   });
 
   it('отключённые форма собственности, ставка ЕН и причина изменения срока не приходят для новых записей', async () => {

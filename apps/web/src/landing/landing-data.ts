@@ -1,12 +1,12 @@
 import { addDays, type StatusTone } from '@buhuchet/domain';
-import type { IconName, PhoneInputCode } from '@buhuchet/ui';
+import type { IconName } from '@buhuchet/ui';
 import data from './landing-data.json';
 
 /*
- * Данные лендинга из spec/ (scripts/landing-data.mjs → landing-data.json): числа полосы цифр из
- * справочников платформы, коды стран телефонов формы заявки и выборка demoDB.json для уменьшенных
- * экранов программы. Контрагенты и суммы на картинках выдуманные (демо-организация), реальных данных
- * на лендинге нет (ТЗ «Лендинг» → «Общий вид»).
+ * Картинки лендинга из spec/ (scripts/landing-data.mjs → landing-data.json): выборка demoDB.json для
+ * уменьшенных экранов программы, как `landDemo` прототипа. Контрагенты и суммы на картинках выдуманные
+ * (демо-организация), реальных данных на лендинге нет (ТЗ «Лендинг» → «Общий вид»). Числа полосы цифр
+ * и коды стран формы — из действующих справочников (`landingDicts`, `@buhuchet/api/web`).
  */
 
 /**
@@ -34,9 +34,6 @@ interface DemoContractor {
 }
 
 interface LandingData {
-  reportTypes: number;
-  regimes: number;
-  phoneCodes: PhoneInputCode[];
   demo: {
     contractors: Record<string, DemoContractor>;
     employees: Record<string, string>;
@@ -47,12 +44,6 @@ interface LandingData {
 }
 
 const DATA = data as unknown as LandingData;
-
-/** «<N> видов отчётов и платежей в каталоге», «<N> налоговых режимов по НК КР». */
-export const LANDING_NUMBERS = { reportTypes: DATA.reportTypes, regimes: DATA.regimes };
-
-/** Коды стран для поля «Телефон» (справочник «Коды стран телефонов»), по умолчанию +996. */
-export const LANDING_PHONE_CODES: readonly PhoneInputCode[] = DATA.phoneCodes;
 
 export interface DemoReport {
   contractor: string;

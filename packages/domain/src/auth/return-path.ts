@@ -14,12 +14,14 @@ export const RETURN_PATH_MAX = 512;
 
 /**
  * Адрес возврата, если это страница программы (`/app` или `/app/…`, с параметрами и якорем); иначе
- * null. Без схемы и хоста, без `//`, обратной косой черты, управляющих символов и `..`.
+ * null. Без схемы и хоста, без `//`, обратной косой черты, управляющих символов и `..`, в том числе
+ * закодированных (`%2e`, `%2f`, `%5c`): браузер раскрывает `/app/%2e%2e/api` в `/api`.
  */
 export function safeReturnPath(value: string | null | undefined): string | null {
   if (!value || value.length > RETURN_PATH_MAX) return null;
   if (!/^\/app(?:[/?#]|$)/.test(value)) return null;
   // eslint-disable-next-line no-control-regex -- управляющие символы в адресе — признак подделки
   if (/[\\\u0000-\u001f\u007f]|\/\/|(?:^|\/)\.\.?(?:[/?#]|$)/.test(value)) return null;
+  if (/%(?:2e|2f|5c)/i.test(value)) return null;
   return value;
 }

@@ -663,6 +663,11 @@
   color: var(--bu-link);
   overflow-wrap: anywhere;
 }
+/* Значок контакта — в строке с текстом, как строчный `svg.ic` прототипа. */
+.lp-foot a svg {
+  display: inline;
+  vertical-align: -3px;
+}
 .lp-foot-l {
   display: flex;
   gap: 6px 18px;

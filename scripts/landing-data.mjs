@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-// Данные лендинга из spec/ (ТЗ «Лендинг»: «числа берутся из справочников платформы при сборке страницы,
-// а не пишутся вручную»; картинки — экраны демо-организации, нарисованные из демо-данных): число
-// действующих видов отчётов и налоговых режимов, коды стран телефонов для формы заявки и короткая
-// выборка demoDB.json для уменьшенных экранов программы. Пишет apps/web/src/landing/landing-data.json;
-// тест apps/web (landing-data.test.ts) сверяет файл с spec/, поэтому после `pnpm spec:sync` —
+// Картинки лендинга из spec/ (ТЗ «Лендинг»: картинки — экраны демо-организации, нарисованные из
+// демо-данных; прототип modules/landing.js, landDemo): короткая выборка demoDB.json для уменьшенных
+// экранов программы. Числа полосы цифр и коды стран формы — не отсюда, а из действующих справочников
+// платформы при показе страницы (`landingDicts`). Пишет apps/web/src/landing/landing-data.json;
+// тест apps/web (landing.test.ts) сверяет файл с spec/, поэтому после `pnpm spec:sync` —
 // `pnpm landing:data`.
 //
 //   pnpm landing:data            — пересобрать файл
@@ -21,7 +21,7 @@ const OPEN = new Set(['К сдаче', 'В работе', 'Требует исп
 
 const read = (name) => JSON.parse(readFileSync(path.join(ROOT, 'spec/data', name), 'utf8'));
 
-/** Данные лендинга из refDB.json и demoDB.json — как считает их прототип (modules/landing.js). */
+/** Картинки лендинга из refDB.json и demoDB.json — как считает их прототип (modules/landing.js). */
 export function landingData(refDB = read('refDB.json'), demoDB = read('demoDB.json')) {
   const types = Object.fromEntries(refDB.reportTypes.map((t) => [t.id, t.short]));
   const look = refDB.statuses.report;
@@ -55,15 +55,6 @@ export function landingData(refDB = read('refDB.json'), demoDB = read('demoDB.js
       OPEN.has(r.status) ? 'open' : r.status === 'Сдан' ? 'done' : '',
     ]);
   return {
-    reportTypes: refDB.reportTypes.filter((t) => t.active !== false).length,
-    regimes: refDB.dictionaries.regimes.items.filter((x) => x.active).length,
-    phoneCodes: refDB.phoneCodes.map((c) => ({
-      cc: c.cc,
-      flag: c.flag,
-      code: c.code,
-      mask: c.mask,
-      active: c.active !== false,
-    })),
     demo: {
       contractors,
       employees,

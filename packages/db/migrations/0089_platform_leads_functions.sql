@@ -1,6 +1,7 @@
 -- Заявки с лендинга (ТЗ «Лендинг» → «Форма «Оставить заявку»», «Админка» → «Вкладка «Заявки»»;
 -- прототип modules/landing.js, admin/leads.js; решение заказчика 01.11.2026). Таблицы заявок и их
--- истории (миграция 0088) роль приложения не видит и не меняет: RLS включён, политик нет. Заявку гостя
+-- истории (миграция 0088) роль приложения не видит и не меняет: прав на них у неё нет (сняты ниже),
+-- RLS включён, политик нет. Заявку гостя
 -- пишет только app.lead_submit — единственный метод API без входа на лендинге; читает и меняет только
 -- администратор платформы — представлениями и функциями от владельца схемы, как app.admin_organizations
 -- (0024): в контексте (app.user_id) должен быть незаблокированный администратор платформы.
@@ -10,10 +11,12 @@
 -- новой не создаётся — её комментарий дописывается к первой заявке, в историю первой пишется «Повторная
 -- заявка с того же телефона»; новая заявка ставит сообщение p_tg_text в очередь Telegram каждому
 -- незаблокированному администратору платформы с привязанным Telegram (с тестового стенда p_tg_text
--- пусто — в Telegram не уходит). outcome — created, repeat или limited. p_now — часы приложения.
+-- пусто — в Telegram не уходит). p_trap — заполнено поле-ловушка: заявка засчитывается в предел по
+-- адресу, но не сохраняется (ответ гостю тот же, что на обычную заявку, — ловушку не распознать).
+-- outcome — created, repeat, trap или limited. p_now — часы приложения.
 CREATE FUNCTION app.lead_submit(
   p_ip text, p_name text, p_firm text, p_phone text, p_size text, p_telegram text, p_note text,
-  p_stand boolean, p_tg_text text, p_now timestamptz,
+  p_stand boolean, p_trap boolean, p_tg_text text, p_now timestamptz,
   p_ip_limit integer, p_ip_window integer, p_repeat_hours integer, p_note_max integer
 )
   RETURNS TABLE (outcome text, lead_id uuid)
@@ -28,6 +31,10 @@ CREATE FUNCTION app.lead_submit(
     SELECT t.outcome INTO v_take FROM app.rate_limit_take('lead', p_ip, p_ip_limit, p_ip_window, NULL) t;
     IF v_take IS DISTINCT FROM 'ok' THEN
       RETURN QUERY SELECT 'limited'::text, NULL::uuid;
+      RETURN;
+    END IF;
+    IF p_trap THEN
+      RETURN QUERY SELECT 'trap'::text, NULL::uuid;
       RETURN;
     END IF;
     -- Две заявки с одного телефона одновременно: вторая ждёт первую и становится повторной.
@@ -111,6 +118,12 @@ CREATE VIEW app.admin_lead_events WITH (security_barrier = true) AS
   FROM public.platform_lead_events e
   LEFT JOIN public.users u ON u.id = e.actor_user_id
   WHERE (SELECT app.is_platform_admin());
+--> statement-breakpoint
+-- Права на таблицы заявок роль приложения получила по умолчанию (0000_foundation); их снимаем, чтобы
+-- защищал не только RLS без политик: заявки пишут и читают только функции и представления ниже.
+REVOKE ALL ON TABLE public.platform_leads, public.platform_lead_events FROM buhuchet_app;
+--> statement-breakpoint
+REVOKE ALL ON SEQUENCE public.platform_lead_events_id_seq FROM buhuchet_app;
 --> statement-breakpoint
 REVOKE ALL ON TABLE app.admin_leads, app.admin_lead_events FROM PUBLIC;
 --> statement-breakpoint
@@ -216,7 +229,7 @@ CREATE FUNCTION app.admin_lead_delete(p_id uuid)
   END
   $$;
 --> statement-breakpoint
-REVOKE ALL ON FUNCTION app.lead_submit(text, text, text, text, text, text, text, boolean, text, timestamptz, integer, integer, integer, integer) FROM PUBLIC;
+REVOKE ALL ON FUNCTION app.lead_submit(text, text, text, text, text, text, text, boolean, boolean, text, timestamptz, integer, integer, integer, integer) FROM PUBLIC;
 --> statement-breakpoint
 REVOKE ALL ON FUNCTION app.admin_lead_status(uuid, integer, text, text, uuid, text, timestamptz) FROM PUBLIC;
 --> statement-breakpoint
@@ -225,7 +238,7 @@ REVOKE ALL ON FUNCTION app.admin_lead_note(uuid, integer, text, timestamptz) FRO
 REVOKE ALL ON FUNCTION app.admin_lead_delete(uuid) FROM PUBLIC;
 --> statement-breakpoint
 GRANT EXECUTE ON FUNCTION
-  app.lead_submit(text, text, text, text, text, text, text, boolean, text, timestamptz, integer, integer, integer, integer),
+  app.lead_submit(text, text, text, text, text, text, text, boolean, boolean, text, timestamptz, integer, integer, integer, integer),
   app.admin_lead_status(uuid, integer, text, text, uuid, text, timestamptz),
   app.admin_lead_note(uuid, integer, text, timestamptz),
   app.admin_lead_delete(uuid) TO buhuchet_app;

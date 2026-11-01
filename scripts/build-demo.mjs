@@ -28,9 +28,12 @@ export function buildDemo(out = DEMO_FILE) {
   try {
     cpSync(path.join(ROOT, 'spec/prototype'), work, { recursive: true });
     cpSync(path.join(ROOT, 'spec/data'), path.join(work, 'data'), { recursive: true });
+    // Окружение — только нужное python3: при сборке на Vercel и в Docker в process.env есть ключи
+    // и пароли, а build.py приходит из репозитория прототипа (spec:sync).
     execFileSync('python3', ['build.py', '--demo', out, '--site=/', '--lead=/#lead'], {
       cwd: work,
       stdio: ['ignore', 'pipe', 'inherit'],
+      env: { PATH: process.env.PATH ?? '/usr/bin:/bin', LANG: 'C.UTF-8', PYTHONUTF8: '1' },
     });
   } finally {
     rmSync(work, { recursive: true, force: true });

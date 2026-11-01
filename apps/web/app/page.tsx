@@ -1,11 +1,11 @@
-import { siteInfo } from '@buhuchet/api/web';
+import { landingDicts, siteInfo } from '@buhuchet/api/web';
 import { bishkekDate } from '@buhuchet/domain';
 import type { Metadata } from 'next';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { SESSION_COOKIES } from '../src/auth/return-to';
 import { Landing } from '../src/landing/landing';
-import { demoScreens, LANDING_NUMBERS, LANDING_PHONE_CODES } from '../src/landing/landing-data';
+import { demoScreens } from '../src/landing/landing-data';
 import { getT } from '../src/l10n/server';
 import { canEnter } from '../src/shell/modules';
 import { loadMe, requestNow } from '../src/shell/server';
@@ -39,8 +39,8 @@ export async function generateMetadata(): Promise<Metadata> {
 /**
  * buhuchet.kg/ (задача #165, ТЗ «Лендинг» → «Кто что видит по адресу»): вошедший сразу попадает на свою
  * рабочую страницу (Главная организации, у администратора платформы — Админка); кто вошёл с временным
- * паролем — на смену пароля; гость видит лендинг. Без cookie сеанса база не читается: только словарь
- * (он в памяти API) и данные лендинга, собранные из spec/.
+ * паролем — на смену пароля; гость видит лендинг. Цифры полосы и коды стран формы — из действующих
+ * справочников платформы, как в прототипе; картинки — экраны демо-организации, собранные из spec/.
  */
 export default async function HomePage() {
   const store = await cookies();
@@ -50,11 +50,12 @@ export default async function HomePage() {
     if (canEnter(me)) redirect('/app');
   }
   const today = bishkekDate(new Date(requestNow()));
+  const { numbers, codes } = await landingDicts();
   return (
     <Landing
       screens={demoScreens(today)}
-      numbers={LANDING_NUMBERS}
-      codes={LANDING_PHONE_CODES}
+      numbers={numbers}
+      codes={codes}
       today={today}
       stand={siteInfo().env === 'staging'}
     />

@@ -88,6 +88,14 @@ describe.skipIf(!databaseAvailable())('«Оставить заявку» с ле
       [{ size: '' }, 'size'],
       [{ phone: '555100200' }, 'phone'],
       [{ note: 'x'.repeat(1001) }, 'note'],
+      // Вариант не из списка «Сколько клиентов ведёте» действующего словаря.
+      [{ size: 'Тысяча' }, 'size'],
+      // Однострочные поля — без переводов строк; NUL — нигде (PostgreSQL его не примет).
+      [{ name: 'Айгуль\nСадыкова' }, 'name'],
+      [{ firm: 'ОсОО\u0000' }, 'firm'],
+      [{ telegram: '@aigul\r\nадмин' }, 'telegram'],
+      [{ note: 'Перезвоните\u0000' }, 'note'],
+      [{ website: '\u0000' }, 'website'],
     ];
     const before = (await leads()).length;
     for (const [over, field] of cases) {
@@ -104,11 +112,35 @@ describe.skipIf(!databaseAvailable())('«Оставить заявку» с ле
     expect((await leads()).length).toBe(before);
   });
 
-  it('поле-ловушка заполнено — «Спасибо!», но ничего не сохраняется', async () => {
+  it('без тела — 400, тело не JSON — 415 (как у входа), а не ошибка сервера', async () => {
+    const headers = { origin: TEST_ORIGIN, 'x-forwarded-for': '192.0.2.40' };
+    const empty = await f.app.request('/api/leads', { method: 'POST', headers });
+    expect(empty.status).toBe(400);
+    expect(ApiError.parse(await empty.json()).error.code).toBe('validation_failed');
+    const text = await f.app.request('/api/leads', {
+      method: 'POST',
+      headers: { ...headers, 'content-type': 'text/plain' },
+      body: 'name=x',
+    });
+    expect(text.status).toBe(415);
+    ApiError.parse(await text.json());
+  });
+
+  it('поле-ловушка заполнено — «Спасибо!», ничего не сохраняется, но проверяется и считается в предел, как обычная', async () => {
+    const ip = '192.0.2.41';
     const before = (await leads()).length;
-    const res = await send(form({ phone: '+996700000002', website: 'http://spam.example' }));
-    expect(res.status).toBe(200);
+    const sent = (await outbox()).length;
+    const trap = { website: 'http://spam.example' };
+    // Неверные данные с ловушкой — тот же 400, что без неё.
+    expect((await send(form({ ...trap, phone: '555' }), { ip })).status).toBe(400);
+    for (const phone of ['+996700000021', '+996700000022', '+996700000023']) {
+      const res = await send(form({ ...trap, phone }), { ip });
+      expect(res.status).toBe(200);
+      expect(LeadSubmitted.parse(await res.json())).toEqual({ ok: true });
+    }
     expect((await leads()).length).toBe(before);
+    expect((await outbox()).length).toBe(sent);
+    expect((await send(form({ phone: '+996700000024' }), { ip })).status).toBe(429);
   });
 
   it('повтор с того же телефона — «Спасибо!» без второй строки; четвёртая за час с адреса — 429', async () => {

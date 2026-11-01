@@ -70,12 +70,14 @@ export interface LeadSubmission {
   note: string;
   /** Заявка с тестового стенда: в истории — «(тестовый стенд)», в Telegram не уходит. */
   fromStand: boolean;
+  /** Заполнено поле-ловушка: засчитывается в предел по адресу, но не сохраняется (`trap`). */
+  trap: boolean;
   /** Сообщение администраторам платформы в Telegram; null — не отправлять. */
   telegramText: string | null;
   now: Date;
 }
 
-export type LeadSubmitOutcome = 'created' | 'repeat' | 'limited';
+export type LeadSubmitOutcome = 'created' | 'repeat' | 'trap' | 'limited';
 
 /**
  * Заявка гостя с лендинга: предел по адресу, повтор с того же телефона за сутки, очередь Telegram
@@ -88,7 +90,7 @@ export async function submitLead(
   const rows = await db.execute<{ outcome: LeadSubmitOutcome; lead_id: string | null }>(sql`
     select outcome, lead_id from app.lead_submit(
       ${s.ipSubject}, ${s.name}, ${s.firm}, ${s.phone}, ${s.size}, ${s.telegram}, ${s.note},
-      ${s.fromStand}, ${s.telegramText}, ${s.now.toISOString()}::timestamptz,
+      ${s.fromStand}, ${s.trap}, ${s.telegramText}, ${s.now.toISOString()}::timestamptz,
       ${LEAD_IP_LIMIT}, ${LEAD_IP_WINDOW_SECONDS}, ${LEAD_REPEAT_HOURS}, ${LEAD_NOTE_TOTAL_MAX}
     )`);
   const row = rows[0];

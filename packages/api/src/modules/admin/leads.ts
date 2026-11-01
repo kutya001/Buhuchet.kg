@@ -1,12 +1,19 @@
 import { createRoute, type RouteHandler } from '@hono/zod-openapi';
 import { messageTemplates, phoneCodes, submitLead } from '@buhuchet/db';
-import { fillTemplate, formatPhone, pageIpSubject, phoneProblem } from '@buhuchet/domain';
+import {
+  fillTemplate,
+  formatPhone,
+  leadSizeOptions,
+  pageIpSubject,
+  phoneProblem,
+} from '@buhuchet/domain';
 import { ApiError, LeadForm, LeadSubmitted } from '@buhuchet/shared';
 import type { Context } from 'hono';
 import { createHash } from 'node:crypto';
 import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
 import { apiFail } from '../../errors';
+import { serverTexts } from '../l10n/texts';
 
 /*
  * «Оставить заявку» с лендинга (ТЗ «Лендинг» → «Форма «Оставить заявку»», «Основные технические
@@ -15,7 +22,8 @@ import { apiFail } from '../../errors';
  * middleware/session.ts): схема Zod, 400 на неверные данные, предел — в общей таблице `rate_limits`
  * функцией базы `app.lead_submit` (миграция 0089). Защита от спама — без внешних сервисов: не больше
  * 3 заявок в час с адреса, повтор с того же телефона за сутки дописывает комментарий к первой
- * заявке, заявку с заполненным полем-ловушкой сервер не сохраняет, но отвечает «Спасибо!».
+ * заявке, заявку с заполненным полем-ловушкой сервер не сохраняет, но проверяет и засчитывает в предел
+ * как обычную и отвечает так же — по ответу ловушку не распознать.
  */
 
 const error = { 'application/json': { schema: ApiError } };
@@ -50,7 +58,7 @@ export const submitLeadRoute = createRoute({
   path: '/leads',
   tags: ['leads'],
   summary: 'Оставить заявку с лендинга (без входа)',
-  request: { body: { content: { 'application/json': { schema: LeadForm } } } },
+  request: { body: { required: true, content: { 'application/json': { schema: LeadForm } } } },
   responses: {
     200: {
       description:
@@ -69,18 +77,25 @@ export function submitLeadHandler(deps: ApiDeps): RouteHandler<typeof submitLead
   return async (c) => {
     const form = c.req.valid('json');
     c.header('Cache-Control', 'no-store');
-    // Поле-ловушка заполнено — так делают боты: ничего не сохраняем, отвечаем как обычно.
-    if (form.website.trim()) return c.json({ ok: true as const }, 200);
     const codes = await phoneCodes(deps.db);
     if (phoneProblem(form.phone, codes)) {
       apiFail(400, 'validation_failed', 'Неверные данные запроса', [
         { path: ['phone'], message: 'land.e.phone' },
       ]);
     }
+    // «Сколько клиентов ведёте» — вариант из действующего словаря, как список в форме.
+    const t = await serverTexts(deps);
+    if (!leadSizeOptions(t('land.f.size.opts')).includes(form.size)) {
+      apiFail(400, 'validation_failed', 'Неверные данные запроса', [
+        { path: ['size'], message: 'land.e.size' },
+      ]);
+    }
+    // Поле-ловушка заполнено — так делают боты: заявка засчитывается в предел, но не сохраняется.
+    const trap = form.website.trim() !== '';
     // Заявка со стенда сохраняется только на стенде и в Telegram администратора не уходит (ТЗ).
     const fromStand = deps.config.APP_ENV === 'staging';
     let telegramText: string | null = null;
-    if (!fromStand && deps.telegram) {
+    if (!trap && !fromStand && deps.telegram) {
       const templates = await messageTemplates(deps.db);
       telegramText = fillTemplate(templates.tgLead ?? TG_LEAD_FALLBACK, {
         фирма: form.firm,
@@ -98,6 +113,7 @@ export function submitLeadHandler(deps: ApiDeps): RouteHandler<typeof submitLead
       telegram: form.telegram,
       note: form.note,
       fromStand,
+      trap,
       telegramText,
       now: deps.clock.now(),
     });

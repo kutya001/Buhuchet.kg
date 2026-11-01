@@ -2,8 +2,8 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { afterLogin, loginHref } from '../auth/return-to';
-import { DEMO_HEADERS, DEMO_PATHS, SECURITY_HEADERS, SITE_PAGES } from '../site-headers';
-import { demoScreens, LANDING_NUMBERS, LANDING_PHONE_CODES } from './landing-data';
+import { DEMO_CSP, DEMO_HEADERS, DEMO_PATHS, SECURITY_HEADERS, SITE_PAGES } from '../site-headers';
+import { demoScreens } from './landing-data';
 
 const ROOT = fileURLToPath(new URL('../../../../', import.meta.url));
 
@@ -12,12 +12,6 @@ describe('данные лендинга (задача #165)', () => {
     expect(() =>
       execFileSync('node', ['scripts/landing-data.mjs', '--check'], { cwd: ROOT, stdio: 'pipe' }),
     ).not.toThrow();
-  });
-
-  it('полоса цифр — действующие виды отчётов и режимы из справочников, код +996 — первым', () => {
-    expect(LANDING_NUMBERS.reportTypes).toBeGreaterThan(100);
-    expect(LANDING_NUMBERS.regimes).toBeGreaterThan(5);
-    expect(LANDING_PHONE_CODES[0]).toMatchObject({ cc: 'KG', code: '996', active: true });
   });
 
   it('картинка: последние 2 просроченных не старше 30 дней и ближайшие сроки, всего до 6 строк', () => {
@@ -40,11 +34,20 @@ describe('данные лендинга (задача #165)', () => {
 describe('заголовки страниц и демо-версии', () => {
   const page = new RegExp(`^${SITE_PAGES}$`);
 
-  it('демо-версия: запрет исходящих запросов из страницы и без индексации', () => {
+  it('демо-версия: ничего не загружает извне и не отправляет, без индексации', () => {
     const csp = DEMO_HEADERS.filter((h) => h.key === 'Content-Security-Policy');
-    expect(csp).toEqual([
-      { key: 'Content-Security-Policy', value: "connect-src 'none'; frame-ancestors 'none'" },
-    ]);
+    expect(csp).toEqual([{ key: 'Content-Security-Policy', value: DEMO_CSP }]);
+    const rules = Object.fromEntries(
+      DEMO_CSP.split('; ').map((r) => [r.split(' ')[0], r.split(' ').slice(1).join(' ')]),
+    );
+    expect(rules).toMatchObject({
+      'default-src': "'none'",
+      'connect-src': "'none'",
+      'form-action': "'none'",
+      'frame-ancestors': "'none'",
+    });
+    // Ни один источник не разрешает другой сайт или сам сайт: только встроенное в файл.
+    expect(DEMO_CSP).not.toMatch(/https?:|'self'|\*/);
     expect(DEMO_HEADERS).toContainEqual({ key: 'X-Robots-Tag', value: 'noindex, nofollow' });
     expect(DEMO_HEADERS).toContainEqual({ key: 'X-Frame-Options', value: 'DENY' });
   });
