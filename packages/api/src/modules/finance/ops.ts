@@ -48,7 +48,9 @@ import {
   canRefund,
   canTransfer,
   forbidden,
+  historyFilesSeen,
   lockFail,
+  moneyFilesSeen,
   operationLock,
   viewOnlyLock,
   type OpLockInfo,
@@ -328,6 +330,8 @@ function operationWindow(
   // Файлы есть у всех операций (прототип opWin): у поступления и оплаты налога — свои источники.
   const filesKind =
     op.kind === 'in' ? 'receipt' : op.kind === 'pay' ? 'tax_payment' : 'money_operation';
+  // Файлы и записи о них в истории — тому, кто видит файлы контрагента (как модуль файлов).
+  const filesSeen = moneyFilesSeen(subject, out.filesOn, card.contractor);
   return {
     id: op.id,
     version: op.version,
@@ -385,9 +389,8 @@ function operationWindow(
         amount: p.amount,
       })),
     },
-    files:
-      filesKind && out.filesOn && hasPermission(subject, 'filesView') ? { kind: filesKind } : null,
-    history: card.history
+    files: filesSeen ? { kind: filesKind } : null,
+    history: historyFilesSeen(card.history, filesSeen)
       // Как в прототипе (`opHistHtml`): у поступления в истории есть «Поступление … записано»
       // (`inDlg`), у остальных создание — только в «Создал»; дальше — изменения и удаление.
       .filter((h) => h.action !== 'create' || op.kind === 'in')

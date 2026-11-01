@@ -8,6 +8,8 @@ import {
   roleRightsMap,
   staffTabCounts,
   withOrgContext,
+  orgMenuSettings,
+  type EmployeeBalanceView,
   type EmployeeKbLevels,
   type EmployeeRecord,
   type Tx,
@@ -40,6 +42,7 @@ import { apiFail, listQueryOf, listQueryResponses } from '../../errors';
 import { exportRateResponses, withExportSlot, xlsxContent, xlsxResponse } from '../../lists/export';
 import { orgContextOf, requirePermission } from '../../middleware/access';
 import { serverTexts } from '../l10n/texts';
+import { finScopeOf } from '../money/common';
 
 export const error = { 'application/json': { schema: ApiError } };
 
@@ -51,6 +54,23 @@ async function kbLevelsFor(c: Context<AppEnv>, tx: Tx): Promise<EmployeeKbLevels
   const access = c.get('access');
   if (!access || !hasPermission(access.subject, 'kbLevels')) return undefined;
   return kbEmployeeLevels(tx, orgContextOf(c).orgId);
+}
+
+/**
+ * Столбец «Баланс счёта» (задача 2.22; прототип renderStaff, `bal` с `can('staff')`) — тому, кто видит
+ * вкладку «Счёт» карточки: право «Сотрудники и роли» и право на деньги контрагентов при «Учёте оплаты
+ * налогов» и «Виртуальных счетах»; суммы — по контрагентам его области (docs/deviations.md п. В-22).
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#В-33
+async function balanceFor(c: Context<AppEnv>, tx: Tx): Promise<EmployeeBalanceView | undefined> {
+  const access = c.get('access');
+  if (!access) return undefined;
+  const { subject } = access;
+  const can = (p: Parameters<typeof hasPermission>[1]) => hasPermission(subject, p);
+  if (!can('staff') || !(can('finView') || can('money'))) return undefined;
+  const { features } = await orgMenuSettings(tx, orgContextOf(c).orgId);
+  if (!features.taxpay || !features.accounts) return undefined;
+  return { scope: finScopeOf(subject) };
 }
 
 /** Сотрудник для ответа API: только поля схемы, моменты — строкой ISO. */
@@ -78,6 +98,7 @@ export function employeeBody(e: EmployeeRecord, manageable: boolean): Employee {
     },
     version: e.version,
     kb: e.kb,
+    ...(e.balance !== null ? { balance: e.balance } : {}),
   };
 }
 
@@ -187,7 +208,13 @@ export function listEmployeesHandler(
     const t = await serverTexts(deps);
     const actor = staffActor(c);
     const { page, items } = await withOrgContext(deps.db, orgContextOf(c), async (tx) => {
-      const page = await listEmployeesPage(tx, query, t, await kbLevelsFor(c, tx));
+      const page = await listEmployeesPage(
+        tx,
+        query,
+        t,
+        await kbLevelsFor(c, tx),
+        await balanceFor(c, tx),
+      );
       return { page, items: await employeeBodies(tx, actor, page.rows) };
     });
     return c.json(
@@ -263,7 +290,7 @@ export function employeeValuesHandler(
     const { col, q } = c.req.valid('query');
     const t = await serverTexts(deps);
     const values = await withOrgContext(deps.db, orgContextOf(c), async (tx) =>
-      listEmployeeValues(tx, col, t, q, await kbLevelsFor(c, tx)),
+      listEmployeeValues(tx, col, t, q, await kbLevelsFor(c, tx), await balanceFor(c, tx)),
     );
     return c.json(values, 200);
   };
@@ -308,7 +335,8 @@ export function exportEmployeesHandler(
       const result = await withOrgContext(
         deps.db,
         { ...orgContextOf(c), kind: 'export' },
-        async (tx) => exportEmployees(tx, query, keys, t, await kbLevelsFor(c, tx)),
+        async (tx) =>
+          exportEmployees(tx, query, keys, t, await kbLevelsFor(c, tx), await balanceFor(c, tx)),
       );
       return xlsxResponse(c, {
         title: t('nav.staff'),

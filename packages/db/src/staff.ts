@@ -14,6 +14,7 @@ import {
 import { asc, count, eq, inArray, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { Db, Tx } from './client';
+import { employeeBalance } from './finance-journal';
 import { writeHistory } from './history';
 import {
   auditActorValue,
@@ -64,6 +65,8 @@ export interface EmployeeRecord {
   active: boolean;
   telegram: { username: string | null; firstName: string | null; linkedAt: Date } | null;
   lastLoginAt: Date | null;
+  /** «Баланс счёта» в списке (задача 2.22); null — столбца нет или это не список. */
+  balance: number | null;
   audit: AuditRecord;
   version: number;
   /** Уровень знаний в списке — только у того, кто видит уровни сотрудников; иначе null. */
@@ -74,6 +77,14 @@ export interface EmployeeRecord {
  * Уровни знаний сотрудников для столбца «Уровень знаний» списка (прототип modules/staff.js, столбец
  * `kb`): их считает «База знаний» (`kbTeam`), сюда они приходят одним параметром запроса.
  */
+/**
+ * «Баланс счёта» в списке сотрудников (задача 2.22; прототип renderStaff, столбец `bal`): виден тому, кто
+ * видит вкладку «Счёт»; `scope` — деньги только контрагентов его области «Финансовых операций».
+ */
+export interface EmployeeBalanceView {
+  scope: SQL | undefined;
+}
+
 export interface EmployeeKbLevels {
   rows: readonly { employeeId: string; level: number; name: string; pct: number }[];
   /** Уровней всего: «Уровень знаний N из M». */
@@ -133,13 +144,19 @@ function selectEmployees(tx: Tx) {
 }
 
 /** То же для страницы списка — с числом записей, итогами и группами (`selectListPage`). */
-function selectEmployeePage(tx: Tx, window: ListWindowFields, kb: EmployeeKbLevels | undefined) {
+function selectEmployeePage(
+  tx: Tx,
+  window: ListWindowFields,
+  kb: EmployeeKbLevels | undefined,
+  balance: EmployeeBalanceView | undefined,
+) {
   return tx
     .select({
       ...employeeFields,
       kbLevel: sql<number | null>`"kb"."level"`,
       kbName: sql<string | null>`"kb"."name"`,
       kbPct: sql<number | null>`"kb"."pct"`,
+      balance: balance ? employeeBalance(balance.scope) : sql<number | null>`null::bigint`,
       ...window,
     })
     .from(employees)
@@ -170,7 +187,12 @@ type EmployeeRow = Awaited<ReturnType<typeof selectEmployees>>[number];
 
 type PhoneCodes = Awaited<ReturnType<typeof phoneCodes>>;
 
-type KbFields = { kbLevel?: number | null; kbName?: string | null; kbPct?: number | null };
+type KbFields = {
+  kbLevel?: number | null;
+  kbName?: string | null;
+  kbPct?: number | null;
+  balance?: number | string | null;
+};
 
 function toEmployee(r: EmployeeRow & KbFields, codes: PhoneCodes, kbOf = 0): EmployeeRecord {
   return {
@@ -187,6 +209,7 @@ function toEmployee(r: EmployeeRow & KbFields, codes: PhoneCodes, kbOf = 0): Emp
       ? { username: r.tgUsername, firstName: r.tgFirstName, linkedAt: r.tgLinkedAt }
       : null,
     lastLoginAt: r.lastLoginAt,
+    balance: r.balance === null || r.balance === undefined ? null : Number(r.balance),
     audit: {
       createdAt: r.createdAt,
       createdBy: auditActorName(r.createdBy, r.createdByName),
@@ -207,11 +230,15 @@ function toEmployee(r: EmployeeRow & KbFields, codes: PhoneCodes, kbOf = 0): Emp
  * ищется по названию; статус и Telegram — коды `active`/`blocked`, `linked`/`none`, а сортируются и
  * ищутся как подписи на экране («Активен» выше «Заблокирован», «Не привязан» выше «Привязан»;
  * подписи — из словаря `t`). «Создал» и «Изменил» — как на экране; «Изменил» у записи без правок —
- * тот, кто создал. Контрагенты, отчёты, счёт и уровень знаний добавят их модули.
+ * тот, кто создал. Контрагенты и отчёты добавят их модули; «Баланс счёта» — с `balance`.
  */
 const CREATED_BY = auditActorValue(employees.createdBy, creator.shortName);
 
-export function employeeListColumns(t: ListTexts, kb?: EmployeeKbLevels): ListColumns {
+export function employeeListColumns(
+  t: ListTexts,
+  kb?: EmployeeKbLevels,
+  balance?: EmployeeBalanceView,
+): ListColumns {
   return {
     ...(kb && {
       kb: {
@@ -242,6 +269,14 @@ export function employeeListColumns(t: ListTexts, kb?: EmployeeKbLevels): ListCo
         text: false,
       },
     },
+    ...(balance && {
+      balance: {
+        type: 'money',
+        label: 'staff.col.balance',
+        value: employeeBalance(balance.scope),
+        total: true,
+      },
+    }),
     lastLoginAt: { type: 'datetime', label: 'staff.col.last_login', value: users.lastLoginAt },
     active: {
       type: 'enum',
@@ -273,15 +308,16 @@ export async function listEmployeesPage(
   query: ListQuery,
   t: ListTexts,
   kb?: EmployeeKbLevels,
+  balance?: EmployeeBalanceView,
 ): Promise<ListPageResult<EmployeeRecord>> {
   const page = await selectListPage({
     query,
-    columns: employeeListColumns(t, kb),
+    columns: employeeListColumns(t, kb, balance),
     natural: EMPLOYEE_NATURAL,
     // У сотрудников нет области «Свои»: список — вся организация (её отсекает RLS).
     scope: undefined,
     select: ({ window, where, orderBy, limit, offset }) =>
-      selectEmployeePage(tx, window, kb)
+      selectEmployeePage(tx, window, kb, balance)
         .where(where)
         .orderBy(...orderBy)
         .limit(limit)
@@ -315,9 +351,10 @@ export function listEmployeeValues(
   t: ListTexts,
   q?: string,
   kb?: EmployeeKbLevels,
+  balance?: EmployeeBalanceView,
 ) {
   return selectListValues({
-    columns: employeeListColumns(t, kb),
+    columns: employeeListColumns(t, kb, balance),
     key,
     scope: undefined,
     from: employeeListFrom(tx, kb),
@@ -335,10 +372,11 @@ export async function exportEmployees(
   keys: readonly string[],
   t: ListTexts,
   kb?: EmployeeKbLevels,
+  balance?: EmployeeBalanceView,
 ) {
   const result = await selectListExport({
     query,
-    columns: employeeListColumns(t, kb),
+    columns: employeeListColumns(t, kb, balance),
     keys,
     natural: EMPLOYEE_NATURAL,
     scope: undefined,

@@ -74,13 +74,22 @@ export function useMoneyRefresh() {
 }
 
 /**
- * Загрузить файлы к записанной операции (источник «Поступление», «Оплата налога» или «Оплата за
- * обслуживание»). Операция уже сохранена — ошибка загрузки возвращается текстом, а не отменяет запись.
+ * Загрузить файлы к записанной операции (источник «Поступление», «Оплата налога», «Оплата за
+ * обслуживание», разовая услуга или её оплата). Операция уже сохранена — ошибка загрузки возвращается текстом, а не отменяет запись.
  */
 export async function uploadMoneyFiles(
   t: Translate,
   errorText: (e: ApiErrorLike) => string,
-  source: { kind: 'receipt' | 'tax_payment' | 'fee_payment' | 'money_operation'; id: string },
+  source: {
+    kind:
+      | 'receipt'
+      | 'tax_payment'
+      | 'fee_payment'
+      | 'money_operation'
+      | 'one_off_service'
+      | 'one_off_service_payment';
+    id: string;
+  },
   picked: readonly File[],
 ): Promise<string | null> {
   for (const file of picked) {

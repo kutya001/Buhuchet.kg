@@ -31,7 +31,8 @@ export interface ContractorMenuRun {
  * «Подобрать отчёты» (у постоянного; «Назначать отчёты» или «Создавать…»), пункты платы за обслуживание
  * (`fee`, их правила — `feeMenuEntries`); после черты — пункты обслуживания (`service`, их правила —
  * `serviceMenuEntries`); после черты — «Удалить» красным (право «Отправлять в архив и удалять»),
- * бледным с причиной, если по контрагенту есть отчёты. Проекты и разовые услуги добавят их задачи.
+ * бледным с причиной, если по контрагенту есть отчёты. «Разовая услуга» — `projects`; «Новый проект»
+ * добавит задача проектов.
  * `card` — кнопка «Действия» карточки: без «Открыть карточку» и «Подобрать отчёты» (в карточке это
  * вкладка).
  */
@@ -42,6 +43,7 @@ export function contractorMenuEntries({
   run,
   service,
   fee = [],
+  projects = [],
   card = false,
 }: {
   c: MenuContractor;
@@ -52,6 +54,8 @@ export function contractorMenuEntries({
   service: readonly ActionEntry[];
   /** «Принять оплату за обслуживание», «Напомнить о долге в WhatsApp» (`feeMenuEntries`). */
   fee?: readonly ActionEntry[];
+  /** «Разовая услуга» (`oneOffMenuEntries`): после «Принять оплату…», перед «Напомнить о долге…». */
+  projects?: readonly ActionEntry[];
   card?: boolean;
 }): ActionEntry[] {
   const items: ActionEntry[] = card
@@ -72,7 +76,9 @@ export function contractorMenuEntries({
     if (people && !c.oneoff && !card) {
       items.push({ id: 'pick', label: t('cp.menu.pick'), icon: 'matrix', run: run.pick });
     }
-    items.push(...fee);
+    // Порядок прототипа: «Принять оплату за обслуживание», «Разовая услуга», «Напомнить о долге…».
+    const remind = fee.filter((e) => !('separator' in e) && e.id === 'fee-remind');
+    items.push(...fee.filter((e) => !remind.includes(e)), ...projects, ...remind);
   }
   if (service.length) items.push({ id: 'sep-service', separator: true }, ...service);
   if (!c.archived && rights.cpArchive) {
@@ -136,4 +142,24 @@ export function serviceScaleSteps(entries: readonly ActionEntry[]): {
   if (has('unarchive')) next.active = 'unarchive';
   else if (has('resume')) next.active = 'resume';
   return { next, back: has('rollback') ? 'active' : null };
+}
+
+/**
+ * «Разовая услуга» в меню контрагента (прототип cpActions: право «Вести проекты» и включены
+ * «Финансовые операции по контрагентам»; у архивного меню без него). Контрагент вне области группы
+ * «Проекты» — без пункта: сервер такую услугу не запишет.
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#В-31
+export function oneOffMenuEntries({
+  on,
+  inScope,
+  t,
+  run,
+}: {
+  on: boolean;
+  inScope: boolean;
+  t: Translate;
+  run: () => void;
+}): ActionEntry[] {
+  return on && inScope ? [{ id: 'one-off', label: t('cp.menu.one_off'), icon: 'coins', run }] : [];
 }

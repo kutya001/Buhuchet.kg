@@ -322,3 +322,79 @@ describe('история изменения операций (было → ст�
     expect(contractorHistoryText(t, fee, {})).toBe('Изменено: без изменений');
   });
 });
+
+describe('история разовой услуги', () => {
+  const svc = (over: Partial<Entry>) => cp({ entity: 'one_off_service', ...over });
+
+  it('создание: «Разовая услуга «…» на …», оплаченная сразу — «…, оплачена»', () => {
+    const created = svc({
+      changes: [
+        { field: 'name', to: 'Восстановление учёта' },
+        { field: 'amount', to: 500000 },
+      ],
+    });
+    expect(plain(contractorHistoryText(t, created, {}))).toBe(
+      'Разовая услуга «Восстановление учёта» на 5 000 сом',
+    );
+    const paid = svc({
+      changes: [
+        { field: 'name', to: 'Восстановление учёта' },
+        { field: 'amount', to: 500000 },
+        { field: 'paid', to: true },
+      ],
+    });
+    expect(plain(contractorHistoryText(t, paid, {}))).toBe(
+      'Разовая услуга «Восстановление учёта» на 5 000 сом, оплачена',
+    );
+  });
+
+  it('изменение: стоимость и дата с причиной; без них — «Услуга изменена»', () => {
+    const edited = svc({
+      action: 'update',
+      reason: 'договорились',
+      changes: [
+        { field: 'amount', from: 500000, to: 600000 },
+        { field: 'serviceDate', from: '2026-10-01', to: '2026-10-02' },
+      ],
+    });
+    expect(plain(contractorHistoryText(t, edited, {}))).toBe(
+      'Изменено: стоимость 5 000,00 → 6 000,00 сом; дата 01.10.2026 → 02.10.2026. Причина: договорились',
+    );
+    const named = svc({
+      action: 'update',
+      changes: [{ field: 'name', from: 'Учёт', to: 'Восстановление учёта' }],
+    });
+    expect(contractorHistoryText(t, named, {})).toBe('Услуга изменена');
+  });
+
+  it('оплата и удаление — как у операций', () => {
+    const pay = cp({
+      entity: 'one_off_service_payment',
+      changes: [{ field: 'amount', to: 200000 }],
+    });
+    expect(plain(contractorHistoryText(t, pay, {}))).toBe('Оплата 2 000 сом');
+    const deleted = cp({
+      entity: 'one_off_service_payment',
+      action: 'delete',
+      reason: 'ошибка',
+      changes: [
+        { field: 'amount', from: 200000 },
+        { field: 'paidOn', from: '2026-10-05' },
+      ],
+    });
+    expect(plain(contractorHistoryText(t, deleted, {}))).toBe(
+      'Операция удалена: оплата разовой услуги на 2 000 сом от 05.10.2026. Причина: ошибка',
+    );
+    const gone = svc({
+      action: 'delete',
+      reason: 'дубль',
+      changes: [
+        { field: 'amount', from: 500000 },
+        { field: 'serviceDate', from: '2026-10-01' },
+      ],
+    });
+    expect(plain(contractorHistoryText(t, gone, {}))).toBe(
+      'Операция удалена: разовая услуга на 5 000 сом от 01.10.2026. Причина: дубль',
+    );
+  });
+});

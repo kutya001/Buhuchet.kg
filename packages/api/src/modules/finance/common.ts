@@ -20,6 +20,27 @@ import { apiFail } from '../../errors';
  * «Деньги»; fin-op.js `opLock`). Область «Финансовые операции» уже отсекла контрагента при поиске.
  */
 
+/** Записи модуля файлов в истории записи: в них имя файла. */
+const FILE_ACTIONS: ReadonlySet<string> = new Set(['file_attach', 'file_delete']);
+
+/**
+ * Видит ли сотрудник файлы записи о деньгах (как модуль файлов, карточки отчёта и задачи): «Файлы в
+ * карточках», право «Просматривать файлы» и область группы «Файловый менеджер» по контрагенту записи.
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#В-34
+export const moneyFilesSeen = (
+  subject: AccessSubject,
+  filesOn: boolean,
+  contractor: { responsibleEmployeeId: string | null },
+) =>
+  filesOn && hasPermission(subject, 'filesView') && canSeeContractor(subject, 'files', contractor);
+
+/** История окна без записей модуля файлов — тому, кто файлов записи не видит (имена — в записях). */
+export const historyFilesSeen = <T extends { action: string }>(
+  rows: readonly T[],
+  seen: boolean,
+) => (seen ? [...rows] : rows.filter((h) => !FILE_ACTIONS.has(h.action)));
+
 /** Нет права на действие: 403, как у проверки права в начале метода. */
 export function forbidden(): never {
   apiFail(403, 'forbidden', 'Нет права на это действие');

@@ -14,8 +14,18 @@ export const FILE_KIND_ICONS: Readonly<Record<FileSourceKind, string>> = {
   tax_payment: 'send',
   fee_payment: 'coins',
   money_operation: 'wallet',
+  one_off_service: 'coins',
+  one_off_service_payment: 'coins',
   task: 'task',
   indicator_value: 'gauge',
+};
+
+/**
+ * Вид источника в списке, плашках и фильтре «Откуда» (прототип `allFiles`): файлы оплат разовой услуги —
+ * вместе с файлами самой услуги, вид «Разовая услуга».
+ */
+export const FILE_LIST_KIND_OF: Readonly<Partial<Record<FileSourceKind, FileSourceKind>>> = {
+  one_off_service_payment: 'one_off_service',
 };
 
 /**

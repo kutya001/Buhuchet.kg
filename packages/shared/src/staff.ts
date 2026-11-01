@@ -9,7 +9,7 @@ import {
   type UiTextKey,
 } from '@buhuchet/domain';
 import { z } from 'zod';
-import { RecordAudit, RecordVersion, Uuid } from './common';
+import { RecordAudit, RecordVersion, Tyiyn, Uuid } from './common';
 import { KbLevelBadge } from './kb';
 import { listPageSchema } from './list';
 import { TelegramInfo } from './telegram';
@@ -65,6 +65,11 @@ export const Employee = z.object({
   version: RecordVersion,
   /** Уровень знаний — в списке и только с правом «Видеть уровни сотрудников»; иначе null. */
   kb: KbLevelBadge.nullable(),
+  /**
+   * «Баланс счёта» (задача 2.22) — в списке и только тому, кто видит вкладку «Счёт»: деньги
+   * контрагентов его области на счёте сотрудника; иначе нет.
+   */
+  balance: Tyiyn.nullable().optional(),
 });
 export type Employee = z.infer<typeof Employee>;
 

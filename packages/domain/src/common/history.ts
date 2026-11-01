@@ -28,6 +28,9 @@ export const HISTORY_ENTITIES = [
   'money_operation',
   // Оплата за обслуживание с распределением по месяцам (задача 2.21).
   'fee_payment',
+  // Разовая услуга и её оплаты (задача 2.22).
+  'one_off_service',
+  'one_off_service_payment',
   // Показатели контрагентов: показатель (настройка, «Кому вести»), значение за месяц, ввод из Excel.
   'indicator',
   'indicator_value',

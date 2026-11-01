@@ -5,6 +5,8 @@ import {
   MONEY_NOTE_MAX,
   MONEY_OP_KINDS,
   OP_REASON_MAX,
+  SERVICE_DESCRIPTION_MAX,
+  SERVICE_NAME_MAX,
 } from '@buhuchet/domain';
 import { z } from 'zod';
 import { IsoDate, RecordAudit, RecordVersion, Tyiyn, Uuid } from './common';
@@ -213,7 +215,7 @@ export type TaxReminder = z.infer<typeof TaxReminder>;
 const Month = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Месяц — ГГГГ-ММ');
 const Flag = z.enum(['0', '1']).optional();
 
-/** Вкладки журнала (прототип FIN_TABS): «Проекты и услуги» заполнят разовые услуги. */
+/** Вкладки журнала (прототип FIN_TABS): «Проекты и услуги» — разовые услуги (позже и транши проектов). */
 export const FIN_JOURNAL_TAB_IDS = ['all', 'tax', 'fee', 'proj', 'wo'] as const;
 
 /** Вкладка журнала и «Показать удалённые». */
@@ -225,10 +227,13 @@ export const FinJournalParams = z.object({
 /** «Журнал поступлений»: «Показать удалённые». */
 export const ReceiptJournalParams = z.object({ deleted: Flag });
 
-/** Строка журнала (прототип finRows): операция по счёту контрагента или оплата за обслуживание. */
+/**
+ * Строка журнала (прототип finRows): операция по счёту контрагента, оплата за обслуживание или разовая
+ * услуга.
+ */
 export const FinJournalRow = z.object({
   key: z.string(),
-  src: z.enum(['op', 'fee']),
+  src: z.enum(['op', 'fee', 'svc']),
   id: Uuid,
   kind: z.string(),
   self: z.boolean(),
@@ -248,6 +253,13 @@ export const FinJournalRow = z.object({
   note: z.string(),
   /** Оплата за обслуживание — часть общего поступления. */
   receiptPart: z.boolean(),
+  /**
+   * Разовая услуга (прототип finCols `st`, svcActions): статус оплаты, получено и почему нельзя
+   * «Записать оплату»; у остальных строк — null.
+   */
+  service: z
+    .object({ status: z.enum(['unpaid', 'partial', 'paid']), paid: Tyiyn, pay: Lock })
+    .nullable(),
   /** «Открыть источник»: отчёт оплаты налога, общее поступление оплаты за обслуживание. */
   reportId: Uuid.nullable(),
   receipt: z.object({ id: Uuid, total: Tyiyn, date: IsoDate }).nullable(),
@@ -290,6 +302,8 @@ export const FinSummary = z.object({
   month: Month,
   tax: z.object({ received: Tyiyn, paid: Tyiyn }).nullable(),
   fee: Tyiyn.nullable(),
+  /** «Проекты и разовые услуги»: получено за месяц; `open` — неоплаченных услуг (счётчик вкладки). */
+  proj: z.object({ received: Tyiyn, open: z.number().int().nonnegative() }).nullable(),
   wo: Tyiyn.nullable(),
 });
 export type FinSummary = z.infer<typeof FinSummary>;
@@ -456,3 +470,147 @@ export const FeePaymentEditRequest = FeePaymentRequest.omit({ files: true }).ext
   reason: EditReason,
 });
 export type FeePaymentEditRequest = z.input<typeof FeePaymentEditRequest>;
+
+/* ───────────── Разовые услуги (задача 2.22) ───────────── */
+
+export const ServiceIdParam = z.object({ id: Uuid });
+
+/** Окно «Разовая услуга» (прототип serviceDlg): контрагенты, исполнители, кто по умолчанию. */
+export const ServiceForm = z.object({
+  /** «Контрагент»: в области «Проекты контрагентов», не в архиве; разовый — с пометкой. */
+  contractors: z.array(z.object({ id: Uuid, name: z.string(), oneOff: z.boolean() })),
+  /** «Исполнитель»: действующие сотрудники. */
+  performers: z.array(z.object({ id: Uuid, name: z.string() })),
+  /** Исполнитель по умолчанию: ответственный контрагента или сам сотрудник. */
+  performer: Uuid.nullable(),
+  today: IsoDate,
+});
+export type ServiceForm = z.infer<typeof ServiceForm>;
+
+export const ServiceFormQuery = z.object({ contractorId: Uuid.optional() });
+
+const ServiceFields = {
+  /** Название, дата и стоимость проверяет сервер — отказ у поля, текстом прототипа. */
+  name: z.string().max(SERVICE_NAME_MAX),
+  date: IsoDate,
+  amount: Tyiyn.refine((v) => v <= MONEY_AMOUNT_MAX, 'Сумма слишком большая'),
+  performerId: Uuid.nullable(),
+  description: z.string().max(SERVICE_DESCRIPTION_MAX).default(''),
+};
+
+/** «Добавить услугу»: файлы окно загрузит к услуге после ответа (`files` — сколько). */
+export const ServiceRequest = z.strictObject({
+  contractorId: Uuid,
+  ...ServiceFields,
+  paidNow: z.boolean().default(false),
+  files: z.number().int().nonnegative().max(50).default(0),
+});
+export type ServiceRequest = z.input<typeof ServiceRequest>;
+
+/** «Сохранить» в окне «Изменить разовую услугу»: причина — если меняются стоимость или дата. */
+export const ServiceEditRequest = z.strictObject({
+  version: RecordVersion,
+  ...ServiceFields,
+  reason: EditReason,
+});
+export type ServiceEditRequest = z.input<typeof ServiceEditRequest>;
+
+export const ServiceSaved = z.object({ id: Uuid });
+export type ServiceSaved = z.infer<typeof ServiceSaved>;
+
+const ServiceHistory = z.array(
+  z.object({
+    id: z.number().int(),
+    at: z.string(),
+    actor: z.string().nullable(),
+    action: z.enum(HISTORY_ACTIONS),
+    /** Запись об оплате (её номер) или о самой услуге (null). */
+    paymentId: Uuid.nullable(),
+    changes: z.array(
+      z.object({ field: z.string(), from: z.unknown().optional(), to: z.unknown().optional() }),
+    ),
+    reason: z.string().nullable(),
+  }),
+);
+
+/** Карточка разовой услуги (прототип serviceCard, svcActions). */
+export const ServiceCard = z.object({
+  id: Uuid,
+  version: RecordVersion,
+  contractor: z.object({ id: Uuid, name: z.string(), archived: z.boolean() }),
+  name: z.string(),
+  date: IsoDate,
+  amount: Tyiyn,
+  paid: Tyiyn,
+  status: z.enum(['unpaid', 'partial', 'paid']),
+  performer: z.object({ id: Uuid, name: z.string().nullable() }).nullable(),
+  description: z.string(),
+  edited: z.boolean(),
+  created: Audit,
+  updated: Audit,
+  deleted: z.object({ name: z.string().nullable(), at: z.string(), reason: z.string() }).nullable(),
+  /**
+   * Действующие оплаты: дата, кто записал, названия файлов (без права смотреть файлы — пусто), сумма,
+   * отметка «изменена».
+   */
+  payments: z.array(
+    z.object({
+      id: Uuid,
+      date: IsoDate,
+      amount: Tyiyn,
+      edited: z.boolean(),
+      by: z.string().nullable(),
+      files: z.array(z.string()),
+      locks: z.object({ edit: Lock, del: Lock }),
+    }),
+  ),
+  /** Почему нельзя «Изменить», «Удалить», «Записать оплату» (прототип svcActions, `opLock`). */
+  locks: z.object({ edit: Lock, del: Lock, pay: Lock }),
+  /** Блок «Файлы»: «Файлы в карточках» включены и есть право «Просматривать файлы». */
+  files: z.boolean(),
+  history: ServiceHistory,
+});
+export type ServiceCard = z.infer<typeof ServiceCard>;
+
+/** «Записать оплату» (прототип svcPay → tranchDlg): файлы окно загрузит к оплате после ответа. */
+export const ServicePaymentRequest = z.strictObject({
+  amount: Positive,
+  date: IsoDate,
+  note: Note.default(''),
+  files: z.number().int().nonnegative().max(50).default(0),
+});
+export type ServicePaymentRequest = z.input<typeof ServicePaymentRequest>;
+
+/** Окно оплаты разовой услуги (прототип opWin с `src: 'sp'`) и данные для «Изменить». */
+export const ServicePaymentWindow = z.object({
+  id: Uuid,
+  version: RecordVersion,
+  contractor: z.object({ id: Uuid, name: z.string(), archived: z.boolean() }),
+  service: z.object({ id: Uuid, name: z.string(), amount: Tyiyn, paid: Tyiyn }),
+  date: IsoDate,
+  amount: Tyiyn,
+  note: z.string(),
+  edited: z.boolean(),
+  created: Audit,
+  updated: Audit,
+  deleted: z.object({ name: z.string().nullable(), at: z.string(), reason: z.string() }).nullable(),
+  /** Удалена сама услуга: оплата в итоги не входит. */
+  serviceDeleted: z.boolean(),
+  locks: z.object({ edit: Lock, del: Lock }),
+  /** «Изменить»: сумма не больше этого (прототип `opMax` для `sp`). */
+  max: Tyiyn,
+  /** Сколько файлов уже приложено; null — блока «Файлы» нет. */
+  files: z.number().int().nonnegative().nullable(),
+  today: IsoDate,
+  history: ServiceHistory,
+});
+export type ServicePaymentWindow = z.infer<typeof ServicePaymentWindow>;
+
+export const ServicePaymentEditRequest = z.strictObject({
+  version: RecordVersion,
+  amount: Positive,
+  date: IsoDate,
+  note: Note.default(''),
+  reason: EditReason,
+});
+export type ServicePaymentEditRequest = z.input<typeof ServicePaymentEditRequest>;

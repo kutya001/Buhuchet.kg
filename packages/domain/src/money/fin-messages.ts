@@ -60,7 +60,9 @@ export const FIN_MESSAGES = {
   service_date_required: 'Укажите дату',
   service_amount_required: 'Введите стоимость',
   service_amount_less: 'Не меньше уже полученного: {amount}',
+  service_reason_required: 'Укажите причину: меняются стоимость или дата',
   service_responsible_invalid: 'Выберите исполнителя',
   service_paid_full: 'Услуга оплачена полностью',
+  service_pay_right: 'Нужно право «Вести проекты и разовые услуги»',
   service_pay_over: 'Больше остатка: осталось {amount}',
 } as const;

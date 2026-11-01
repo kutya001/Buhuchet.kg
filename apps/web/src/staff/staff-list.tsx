@@ -1,6 +1,6 @@
 'use client';
 
-import { formatMomentRu, initials, type ListSort } from '@buhuchet/domain';
+import { formatMomentRu, formatSom, initials, type ListSort } from '@buhuchet/domain';
 import { EmployeeList, ListValues, type Employee } from '@buhuchet/shared';
 import {
   Avatar,
@@ -33,8 +33,8 @@ const DEFAULT_SORT: ListSort = { key: 'createdAt', dir: 'desc' };
 
 /**
  * Видимые по умолчанию (ТЗ «Столбцы, видимые по умолчанию»: ФИО, роль, телефон, контрагентов,
- * просрочено, статус, уровень знаний). Контрагентов, несданные, просрочено и баланс счёта добавят их
- * модули; «Уровень знаний» — только с правом «Видеть уровни сотрудников».
+ * просрочено, статус, уровень знаний). Контрагентов, несданные и просрочено добавят их модули;
+ * «Уровень знаний» — только с правом «Видеть уровни сотрудников»; «Баланс счёта» скрыт.
  */
 const DEFAULT_VISIBLE = ['fullName', 'role', 'phone', 'active'];
 const DEFAULT_VISIBLE_KB = [...DEFAULT_VISIBLE, 'kb'];
@@ -46,7 +46,7 @@ const moment = (iso: string | null) => (iso ? formatMomentRu(new Date(iso)) : ''
  * Столбцы списка сотрудников — как в прототипе (modules/staff.js, renderStaff), ключи — как на сервере.
  * Служебные «Создал», «Изменил», «Создано», «Изменено» добавляет сам список (`STAFF_AUDIT`).
  */
-export function staffColumns(t: Translate, kb = false): GridColumn<Employee>[] {
+export function staffColumns(t: Translate, kb = false, balance = false): GridColumn<Employee>[] {
   const columns: GridColumn<Employee>[] = [
     {
       key: 'fullName',
@@ -95,6 +95,20 @@ export function staffColumns(t: Translate, kb = false): GridColumn<Employee>[] {
           </Pill>
         ),
     },
+    // «Баланс счёта» (задача 2.22; прототип renderStaff, `bal`): скрыт по умолчанию, с итогом.
+    ...(balance
+      ? [
+          {
+            key: 'balance',
+            label: t('staff.col.balance'),
+            type: 'money',
+            width: 140,
+            total: (v: number) => formatSom(v),
+            text: (e: Employee) => formatSom(e.balance ?? 0),
+            className: 'tabular-nums',
+          } satisfies GridColumn<Employee>,
+        ]
+      : []),
     {
       key: 'lastLoginAt',
       label: t('staff.col.last_login'),
@@ -170,7 +184,13 @@ export function StaffList() {
   const labels = useGridLabels('staff.count');
   const { search, clearSearch, access } = useShell();
   const kb = access.can('kbLevels');
-  const columns = useMemo(() => staffColumns(t, kb), [t, kb]);
+  // Как вкладка «Счёт» карточки сотрудника (docs/deviations.md п. В-33).
+  const balance =
+    access.can('staff') &&
+    (access.can('finView') || access.can('money')) &&
+    access.feature('taxpay') &&
+    access.feature('accounts');
+  const columns = useMemo(() => staffColumns(t, kb, balance), [t, kb, balance]);
   const defaultVisible = kb ? DEFAULT_VISIBLE_KB : DEFAULT_VISIBLE;
   const view = useViewSettings('staff.list');
   const list = useListPage({

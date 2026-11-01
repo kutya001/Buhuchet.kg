@@ -200,6 +200,11 @@ export interface ContractorHistoryAccess {
   files: SQL | undefined | false;
   /** Деньги по отчётам: поступления (функция «Учёт оплаты налогов», право и область «Финансовых операций»). */
   money: SQL | undefined | false;
+  /**
+   * Разовые услуги и их оплаты (задача 2.22): «Финансовые операции» включены, видна вкладка «Проекты и
+   * услуги», контрагент в области, где сотрудник видит услуги.
+   */
+  services: SQL | undefined | false;
 }
 
 /**
@@ -237,10 +242,11 @@ async function visibleEntries(
       .where(and(eq(contractors.id, id), scope));
     return !!row;
   };
-  const [kpi, files, money] = await Promise.all([
+  const [kpi, files, money, services] = await Promise.all([
     inScope(access.kpi),
     inScope(access.files),
     inScope(access.money),
+    inScope(access.services),
   ]);
   const own: SQL[] = [inArray(auditLog.entity, ['contractor', 'contractor_page'])];
   if (access.reports !== false) {
@@ -291,6 +297,7 @@ async function visibleEntries(
   }
   // Оплаты за обслуживание — с правом «Видеть плату» и включённой функцией (как вкладка «Обслуживание»).
   if (access.fee) own.push(eq(auditLog.entity, 'fee_payment'));
+  if (services) own.push(inArray(auditLog.entity, ['one_off_service', 'one_off_service_payment']));
   return and(or(...own), files ? undefined : notInArray(auditLog.action, [...FILE_ACTIONS]));
 }
 

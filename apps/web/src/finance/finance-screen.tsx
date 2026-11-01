@@ -17,6 +17,7 @@ import {
   Pill,
   Plate,
   Plates,
+  StatusPill,
   SWITCH_CLASS,
   Tag,
   useToast,
@@ -51,9 +52,12 @@ import { useReportActions } from '../reports/report-actions';
 import { useShell } from '../shell/context';
 import { ModuleStub } from '../shell/module-stub';
 import { tabHref } from '../shell/modules';
+import { statusPillView } from '../status/status-view';
 import { useFinanceRefresh } from './finance-data';
 import { deleteWords } from './finance-history';
 import { JournalActionDialog, type JournalAction } from './journal-actions';
+import { ServiceActionDialog, serviceMenu, type ServiceAction } from './service-card';
+import { ServiceDialog } from './service-dialogs';
 import {
   fetchJournal,
   fetchJournalValues,
@@ -71,8 +75,8 @@ import {
  * плашки за текущий месяц (нажатие — вкладка, второе — «Все»), журнал вкладки с поиском, фильтрами,
  * итогами и «В Excel», «Показать удалённые» — общий для вкладок переключатель; строка открывает окно
  * операции, меню строки — «Изменить», «Обратная запись», «Удалить» с замком. «Журнал поступлений» —
- * одна строка на перевод контрагента с детализацией. «Проекты и услуги» заполнят разовые услуги (часть
- * 3 задачи).
+ * одна строка на перевод контрагента с детализацией. «Проекты и услуги» — разовые услуги со статусом
+ * оплаты: строка открывает карточку услуги, меню — «Записать оплату», «Изменить», «Удалить».
  */
 
 /* ───────────── «Показать удалённые» — общий для вкладок (прототип `S.finDel`) ───────────── */
@@ -149,6 +153,7 @@ function accText(t: Translate, acc: FinJournalRow['acc']): string {
 /** Название и цвет вида (прототип OPK, OP_SELF, OP_OWN). */
 function kindOf(t: Translate, r: FinJournalRow) {
   if (r.src === 'fee') return { label: t('fin.fee.kind'), tone: 'violet' as const };
+  if (r.src === 'svc') return { label: t('files.kind.one_off_service'), tone: 'caution' as const };
   const key = r.self && r.kind === 'pay' ? 'self' : r.kind;
   return {
     label: t(key === 'self' ? 'money.op.self' : `money.op.${r.kind as MoneyOpKind}`),
@@ -156,9 +161,13 @@ function kindOf(t: Translate, r: FinJournalRow) {
   };
 }
 
-/** Знак суммы (прототип: приход «+», расход «−», перевод и «контрагент сам» — без знака). */
+/**
+ * Знак суммы (прототип: приход «+», расход «−», перевод, «контрагент сам» и разовая услуга — без
+ * знака).
+ */
 function signOf(r: FinJournalRow): string {
   if (r.src === 'fee') return '+';
+  if (r.src === 'svc') return '';
   if ((r.self && r.kind === 'pay') || r.kind === 'xfer') return '';
   if (r.kind === 'corr') return r.signed < 0 ? '−' : '+';
   return r.signed < 0 ? '−' : '+';
@@ -230,6 +239,25 @@ function journalColumns(t: Translate): GridColumn<FinJournalRow>[] {
           </span>
         );
       },
+    },
+    // «Оплата» (прототип finCols `st`): статус оплаты разовой услуги, у частичной — сколько получено.
+    {
+      key: 'st',
+      label: t('fin.j.col.st'),
+      type: 'enum',
+      width: 165,
+      text: (r) => (r.service ? statusPillView(t, 'payment', r.service.status).label : ''),
+      cell: (r) =>
+        r.service ? (
+          <span className="inline-flex items-center gap-1.5">
+            <StatusPill {...statusPillView(t, 'payment', r.service.status)} />
+            {r.service.status === 'partial' ? (
+              <span className="text-faint tabular-nums">{formatSom(r.service.paid, 'auto')}</span>
+            ) : null}
+          </span>
+        ) : (
+          <span className="text-faint">—</span>
+        ),
     },
     {
       key: 'acc',
@@ -307,15 +335,72 @@ function JournalTab({ tab }: { tab: FinJournalTab }) {
   );
   const exporter = useListExport(sendExport);
   const [action, setAction] = useState<DialogSlot<JournalAction> | null>(null);
+  const [svc, setSvc] = useState<DialogSlot<ServiceAction> | null>(null);
+  const [addService, setAddService] = useState<DialogSlot<null> | null>(null);
+  const refresh = useFinanceRefresh();
   const run = (a: JournalAction) => setAction(openSlot(a));
+  const runSvc = (a: ServiceAction) => setSvc(openSlot(a));
   const openReport = (id: string) => reports.openCard({ id });
+  const canProjects = access.can('projects');
+  const openRow = (r: FinJournalRow) =>
+    r.src === 'svc'
+      ? runSvc({ act: 'card', id: r.id })
+      : run({ act: 'open', src: r.src, id: r.id });
+
+  // Разовая услуга (прототип finActions → svcActions): «Открыть», «Записать оплату», «Изменить»,
+  // «Карточка контрагента», «Удалить» с замком; удалённая — «Открыть» и карточка контрагента.
+  // ОТКЛОНЕНИЕ: docs/deviations.md#В-32 — «Карточка контрагента» в меню один раз.
+  const serviceActions = (r: FinJournalRow, service: NonNullable<FinJournalRow['service']>) => {
+    const open: ActionEntry = {
+      id: 'open',
+      label: t('fin.op.act_open'),
+      icon: 'coins',
+      run: () => runSvc({ act: 'card', id: r.id }),
+    };
+    const card = () => openContractorCard({ id: r.contractor.id });
+    if (r.deleted)
+      return [
+        open,
+        { id: 's1', separator: true },
+        { id: 'card', label: t('fin.op.card'), icon: 'building', run: card },
+      ] satisfies ActionEntry[];
+    return [
+      open,
+      ...serviceMenu(
+        t,
+        {
+          contractorId: r.contractor.id,
+          deleted: r.deleted,
+          locks: { edit: r.locks.edit, del: r.locks.del, pay: service.pay },
+        },
+        {
+          pay: () =>
+            runSvc({
+              act: 'pay',
+              service: {
+                id: r.id,
+                name: r.what,
+                contractor: r.contractor.name,
+                left: r.amount - service.paid,
+              },
+            }),
+          edit: () => runSvc({ act: 'edit', id: r.id }),
+          del: () => runSvc({ act: 'delete', id: r.id }),
+          card,
+        },
+      ),
+    ];
+  };
 
   const actions = (r: FinJournalRow): ActionEntry[] => {
+    if (r.src === 'svc' && r.service) return serviceActions(r, r.service);
+    if (r.src === 'svc') return [];
+    const src = r.src;
     const open: ActionEntry = {
       id: 'open',
       label: t('fin.op.act_open'),
       icon: 'list',
-      run: () => run({ act: 'open', src: r.src, id: r.id }),
+      run: () => run({ act: 'open', src, id: r.id }),
     };
     const source: ActionEntry = {
       id: 'source',
@@ -349,7 +434,7 @@ function JournalTab({ tab }: { tab: FinJournalTab }) {
         run: () =>
           run({
             act: 'edit',
-            src: r.src,
+            src,
             id: r.id,
             kind: r.kind,
             receiptId: r.receipt?.id ?? null,
@@ -377,7 +462,7 @@ function JournalTab({ tab }: { tab: FinJournalTab }) {
         danger: true,
         disabled: !!del,
         reason: del,
-        run: () => run({ act: 'delete', src: r.src, id: r.id }),
+        run: () => run({ act: 'delete', src, id: r.id }),
       },
       { id: 's2', separator: true },
       card,
@@ -414,6 +499,18 @@ function JournalTab({ tab }: { tab: FinJournalTab }) {
       on: tab === 'fee',
       onClick: () => goPlate('fee'),
     });
+  if (s?.proj)
+    plates.push({
+      id: 'proj',
+      icon: 'briefcase',
+      color: 'orange',
+      label: t('fin.plate.proj'),
+      value: whole(s.proj.received),
+      unit: t('report.plate.som'),
+      sub: t('fin.plate.proj_sub', { month: month.toLowerCase() }),
+      on: tab === 'proj',
+      onClick: () => goPlate('proj'),
+    });
   if (s && s.wo !== null)
     plates.push({
       id: 'wo',
@@ -436,6 +533,7 @@ function JournalTab({ tab }: { tab: FinJournalTab }) {
           ))}
         </Plates>
       ) : null}
+      {tab === 'proj' ? <Note icon="info">{t('fin.j.proj_note')}</Note> : null}
       {tab === 'fee' && s?.tax ? <Note icon="info">{t('fin.j.fee_note')}</Note> : null}
       <DeletedSwitch />
       <DataGrid
@@ -459,13 +557,31 @@ function JournalTab({ tab }: { tab: FinJournalTab }) {
         onClearSearch={clearSearch}
         onExport={access.can('export') ? () => void exporter.run() : undefined}
         exporting={exporter.exporting}
-        empty={<EmptyState icon="coins" title={t('fin.j.empty')} />}
+        empty={
+          <EmptyState
+            icon="coins"
+            title={t('fin.j.empty')}
+            actions={
+              tab === 'proj' && canProjects
+                ? [
+                    {
+                      id: 'add',
+                      icon: 'plus',
+                      label: t('btn.add'),
+                      primary: true,
+                      onClick: () => setAddService(openSlot(null)),
+                    },
+                  ]
+                : []
+            }
+          />
+        }
         rowKey={(r) => r.key}
         titleKey="what"
         rowTone={(r) => (r.deleted ? 'muted' : undefined)}
         label={t(`tab.fin.${tab}`)}
         labels={labels}
-        onOpen={(r) => run({ act: 'open', src: r.src, id: r.id })}
+        onOpen={openRow}
         actions={actions}
       />
       {action ? (
@@ -478,6 +594,24 @@ function JournalTab({ tab }: { tab: FinJournalTab }) {
             setAction(closeSlot);
             openReport(id);
           }}
+        />
+      ) : null}
+      {svc ? (
+        <ServiceActionDialog
+          key={`svc-${svc.n}`}
+          action={svc.data}
+          open={svc.open}
+          onClose={() => setSvc(closeSlot)}
+        />
+      ) : null}
+      {addService ? (
+        <ServiceDialog
+          key={`add-${addService.n}`}
+          contractor={null}
+          edit={null}
+          open={addService.open}
+          onClose={() => setAddService(closeSlot)}
+          onDone={refresh}
         />
       ) : null}
       {reports.dialogs}
@@ -777,12 +911,20 @@ function ReceiptsTab() {
 
 /* ───────────── Экран модуля ───────────── */
 
-/** «+ Добавить» модуля (прототип finAdd): «Поступление» — окно с выбором контрагента. */
-function useFinAddRequest(run: { income: () => void; other: (label: string) => void }) {
+/**
+ * «+ Добавить» модуля (прототип finAdd): «Поступление» и «Разовая услуга» — окна с выбором
+ * контрагента.
+ */
+function useFinAddRequest(run: {
+  income: () => void;
+  service: () => void;
+  other: (label: string) => void;
+}) {
   const { addRequest, clearAddRequest } = useShell();
   const request = addRequest?.moduleId === 'fin' ? addRequest : null;
   const start = useEffectEvent((actionId: string, label: string) => {
     if (actionId === 'income') run.income();
+    else if (actionId === 'service') run.service();
     else run.other(label);
   });
   useEffect(() => {
@@ -792,17 +934,18 @@ function useFinAddRequest(run: { income: () => void; other: (label: string) => v
   }, [request, clearAddRequest]);
 }
 
-const JOURNAL_TABS: readonly FinJournalTab[] = ['all', 'tax', 'fee', 'wo'];
+const JOURNAL_TABS: readonly FinJournalTab[] = ['all', 'tax', 'fee', 'proj', 'wo'];
 
 export function FinanceScreen({ tab }: { tab: string }) {
   const t = useT();
   const toast = useToast();
   const { access } = useShell();
   const [income, setIncome] = useState<DialogSlot<null> | null>(null);
+  const [service, setService] = useState<DialogSlot<null> | null>(null);
   const refresh = useFinanceRefresh();
   useFinAddRequest({
     income: () => setIncome(openSlot(null)),
-    // «Разовая услуга» — с разовыми услугами (часть 3 задачи).
+    service: () => setService(openSlot(null)),
     other: (label) => toast(t('shell.stub_add', { action: label }), { icon: 'info' }),
   });
   const taxVis = access.feature('taxpay') && access.can('money');
@@ -829,6 +972,16 @@ export function FinanceScreen({ tab }: { tab: string }) {
           canUpload={access.feature('files') && access.can('filesUpload')}
           open={income.open}
           onClose={() => setIncome(closeSlot)}
+          onDone={refresh}
+        />
+      ) : null}
+      {service ? (
+        <ServiceDialog
+          key={`svc-${service.n}`}
+          contractor={null}
+          edit={null}
+          open={service.open}
+          onClose={() => setService(closeSlot)}
           onDone={refresh}
         />
       ) : null}

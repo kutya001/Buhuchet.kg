@@ -1,8 +1,14 @@
-import { operationFileSource, operationMonthClosed } from '@buhuchet/db';
+import {
+  oneOffServiceFileSource,
+  operationFileSource,
+  operationMonthClosed,
+  serviceFilesPart,
+} from '@buhuchet/db';
 import { canSeeContractor, hasPermission, opLock, opRight } from '@buhuchet/domain';
 import type { FileListSource } from '../files/sources';
 import { finScopeOf } from '../money/common';
 import { canArchiveRest } from './common';
+import { canKeepServices, serviceReadScope, servicesVisible } from './services';
 
 /**
  * Файлы списания, возврата, перевода, обратной записи и возврата по уточнённому (задача 2.22; ТЗ
@@ -46,3 +52,47 @@ export const operationFiles: FileListSource = {
   },
   list: () => null,
 };
+
+/**
+ * Файлы разовой услуги («Файлы: акт, договор, чек») и её оплат («Файлы: платёжка, чек») (задача 2.22;
+ * прототип serviceCard — `filesBox(…, can('projects') && !s.del)`, opWin — блок «Файлы» оплаты, allFiles —
+ * вид «Разовая услуга»). Видны тому, кто видит услугу (`servicesVisible`, контрагент в
+ * `serviceReadScope`), при включённых «Финансовых операциях». Прикреплять и удалять у услуги — с правом
+ * «Вести проекты и разовые услуги» в области группы «Проекты контрагентов», пока услуга не удалена; у
+ * оплаты — когда открыт её «Изменить». История — у услуги или у оплаты. В Файловом менеджере файлы
+ * оплат — вместе с файлами услуги: источник — название услуги, переход — карточка услуги.
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#В-34
+function serviceFiles(kind: 'one_off_service' | 'one_off_service_payment'): FileListSource {
+  return {
+    async resolve(tx, subject, id) {
+      if (id === null) return null;
+      const row = await oneOffServiceFileSource(tx, kind, id, serviceReadScope(subject));
+      if (!row?.finops) return null;
+      if (!servicesVisible(subject, { fee: row.feeOn })) return null;
+      const contractor = {
+        id: row.contractor.id,
+        responsibleEmployeeId: row.contractor.responsibleEmployeeId,
+      };
+      const can = canKeepServices(subject, row.contractor);
+      const editable =
+        kind === 'one_off_service'
+          ? can && !row.deleted
+          : !row.deleted && can && !row.contractor.archived;
+      return {
+        contractor,
+        editable,
+        history: () => ({ entity: kind, entityId: id, contractorId: contractor.id }),
+      };
+    },
+    list: ({ subject, features }) =>
+      features.finops && servicesVisible(subject, features)
+        ? serviceFilesPart(kind, serviceReadScope(subject))
+        : null,
+  };
+}
+
+export const serviceFileSources = {
+  one_off_service: serviceFiles('one_off_service'),
+  one_off_service_payment: serviceFiles('one_off_service_payment'),
+} as const;

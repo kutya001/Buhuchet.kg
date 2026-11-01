@@ -420,4 +420,60 @@ test.describe('Этап 2: финансовые операции по контр
     await expect(edit).toBeVisible();
     expect(await balanceOf(request, cp.id)).toMatchObject({ received: 1_500_000 });
   });
+
+  test('(проверка задачи #76) «+ Добавить» → «Разовая услуга» на 5 000 сом: строка на вкладке «Проекты и услуги», в карточке «Не оплачено»; «Записать оплату» 2 000 — «Оплачено частично»', async ({
+    page,
+    request,
+    baseURL,
+    isMobile,
+  }) => {
+    const origin = await asOwner(request, baseURL);
+    const word = uniqueWord('Услуга');
+    const name = `ОсОО «${word}»`;
+    const cp = await newContractor(request, origin, { name, tariffAmount: 0 });
+    const service = `Восстановление учёта ${word}`;
+
+    await signIn(page.request, origin, 'erkin', DEMO_PASSWORD);
+    await page.goto('/app/fin/proj');
+    await expect(page.locator('[data-grid]')).toBeVisible();
+    // «+ Добавить» — до поиска: на телефоне круглая «+» скрыта, пока открыта клавиатура.
+    await page.getByRole('button', { name: 'Добавить', exact: true }).click();
+    await page
+      .getByRole('menu', { name: 'Добавить' })
+      .getByRole('menuitem', { name: 'Разовая услуга' })
+      .click();
+    const add = page.getByRole('dialog', { name: 'Разовая услуга' });
+    await add.locator('[data-svc-cp]').selectOption(cp.id);
+    await add.locator('[data-svc-name]').fill(service);
+    await add.locator('[data-svc-amount]').fill('5000');
+    await add.locator('[data-svc-ok]').click();
+    await expect(add).toBeHidden();
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Разовая услуга добавлена' }),
+    ).toBeVisible();
+
+    const row = (await journalOf(request, '&tab=proj')).find((r) => r.contractor.id === cp.id);
+    expect(row).toBeDefined();
+    await search(page, isMobile, word);
+    const line = page.locator(`[data-grid] [data-id="svc:${row!.id}"]`);
+    await expect(line).toHaveCount(1);
+    await line.getByText(name).first().click();
+    const card = page.getByRole('dialog', { name: service });
+    await expect(card.locator(`[data-svc-card="${row!.id}"]`)).toBeVisible();
+    await expect(card).toContainText('Не оплачено');
+
+    await card.locator('[data-svc-pay-btn]').click();
+    const pay = page.getByRole('dialog', { name: 'Оплата разовой услуги' });
+    await expect(pay).toContainText(som('Осталось получить 5 000'));
+    await pay.locator('[data-svc-amount]').fill('2000');
+    await pay.locator('[data-svc-ok]').click();
+    await expect(pay).toBeHidden();
+    await expect(page.getByRole('status').filter({ hasText: 'Оплата записана' })).toBeVisible();
+    await expect(card).toContainText('Оплачено частично');
+    const saved = (await (await request.get(`/api/one-off-services/${row!.id}`)).json()) as {
+      paid: number;
+      status: string;
+    };
+    expect(saved).toMatchObject({ paid: 200_000, status: 'partial' });
+  });
 });

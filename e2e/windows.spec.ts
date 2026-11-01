@@ -264,19 +264,19 @@ test.describe('Этап 1: окна и уведомления', () => {
     isMobile,
   }) => {
     await signIn(page.request, new URL(baseURL!).origin);
-    await page.goto('/app/fin/all');
+    await page.goto('/app/projects/active');
     const view = page.viewportSize()!;
-    const add = async (name: string) => {
+    // Один способ добавления — «+ Добавить» срабатывает сразу, без меню.
+    const add = async () => {
       await page.getByRole('button', { name: 'Добавить', exact: true }).click();
-      await page.getByRole('menu', { name: 'Добавить' }).getByRole('menuitem', { name }).click();
     };
     const toasts = page.getByRole('status');
 
-    // Уведомление даёт способ добавления модуля без своего экрана — «Разовая услуга» в «Финансовых
-    // операциях» (у контрагентов все три способа уже открывают окна). Одинаковые уведомления встают
-    // столбиком.
-    const stub = 'Разовая услуга';
-    await add(stub);
+    // Уведомление даёт способ добавления модуля без своего экрана — «Проект» в «Проектах
+    // контрагентов» (у «Финансовых операций» оба способа уже открывают окна). Одинаковые уведомления
+    // встают столбиком.
+    const stub = 'Проект';
+    await add();
     const first = toasts.filter({ hasText: `«${stub}» появится вместе с экраном модуля.` }).first();
     const box = await settledBox(first);
     // По центру внизу экрана; на телефоне — над нижней панелью.
@@ -285,7 +285,7 @@ test.describe('Этап 1: окна и уведомления', () => {
     if (!isMobile) {
       // Второе уведомление встаёт под первым. На телефоне уведомление закрывает часть круглой «+»
       // (как в прототипе), поэтому второе там вызывается, когда первое уже исчезло.
-      await add(stub);
+      await add();
       const second = toasts.nth(1);
       await expect(toasts).toHaveCount(2);
       const below = await settledBox(second);
@@ -295,7 +295,7 @@ test.describe('Этап 1: окна и уведомления', () => {
 
     await test.step('исчезают сами примерно через 3 секунды', async () => {
       await expect(toasts).toHaveCount(0, { timeout: 6000 });
-      await add(stub);
+      await add();
       await expect(first).toBeVisible();
       await page.waitForTimeout(2400);
       await expect(first).toBeVisible();
@@ -305,7 +305,7 @@ test.describe('Этап 1: окна и уведомления', () => {
     const close = page.getByRole('button', { name: 'Закрыть уведомление' });
     if (!isMobile) {
       await test.step('на ПК крестик «Закрыть» убирает уведомление сразу', async () => {
-        await add(stub);
+        await add();
         await expect(close).toHaveAttribute('title', 'Закрыть');
         await close.click();
         await expect(toasts).toHaveCount(0, { timeout: 1000 });
@@ -315,7 +315,7 @@ test.describe('Этап 1: окна и уведомления', () => {
 
     await test.step('на телефоне крестика нет; короткий свайп — возвращается, на треть ширины — уходит, вкладка та же', async () => {
       const swipe = await finger(page);
-      await add(stub);
+      await add();
       await expect(close).toBeHidden();
       const toast = await settledBox(first);
       const from = { x: toast.x + toast.width / 2, y: toast.y + toast.height / 2 };
@@ -325,7 +325,7 @@ test.describe('Этап 1: окна и уведомления', () => {
       expect((await first.boundingBox())!.x).toBeCloseTo(toast.x, 0);
       await swipe.drag(from, { x: from.x - toast.width / 3 - 30, y: from.y });
       await expect(toasts).toHaveCount(0, { timeout: 1000 });
-      await expect(page).toHaveURL(/\/app\/fin\/all$/);
+      await expect(page).toHaveURL(/\/app\/projects\/active$/);
     });
   });
 });

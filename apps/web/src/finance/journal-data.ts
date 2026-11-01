@@ -26,7 +26,7 @@ import type { FetchListPage } from '../lists/use-list-page';
  * под `['finance']`: после записи их перечитывает `useFinanceRefresh`.
  */
 
-export type FinJournalTab = 'all' | 'tax' | 'fee' | 'wo';
+export type FinJournalTab = 'all' | 'tax' | 'fee' | 'proj' | 'wo';
 
 const JournalList = listPageSchema(FinJournalRow);
 const ReceiptList = listPageSchema(ReceiptJournalRow);

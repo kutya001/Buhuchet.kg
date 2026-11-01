@@ -7,6 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { missingSummaryQuery } from '../kpi/kpi-data';
 import { contractorTabCountsQuery } from '../contractors/contractor-data';
+import { finSummaryQuery } from '../finance/journal-data';
 import { useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { newsDraftsCountQuery } from '../news/news-data';
@@ -21,7 +22,7 @@ export type TabCounts = Partial<Record<MenuModuleId, Partial<Record<string, Shel
 /**
  * Счётчики вкладок модулей меню (прототип: `count` у вкладок, например staffTabs; их видно и в ряду
  * вкладок, и в левой панели). Счётчики есть у модулей с экранами — у «Контрагентов», «Отчетов для сдачи»,
- * «Сотрудников», «Задач», «Показателей контрагентов» («Не заполнено»), у «Запросов» «Справочников
+ * «Сотрудников», «Задач», «Проектов и услуг» в «Финансовых операциях», «Показателей контрагентов» («Не заполнено»), у «Запросов» «Справочников
  * платформы» и черновики «Новостей» в Админке; у остальных их добавят их экраны. Запрос — только для
  * модулей, доступных пользователю; пока ответа нет или запрос не удался — вкладки без чисел.
  */
@@ -31,6 +32,7 @@ export function useTabCounts(modules: readonly MenuModuleId[]): TabCounts {
   const reports = useQuery({ ...reportTabCountsQuery, enabled: modules.includes('reports') });
   const staff = useQuery({ ...staffTabCountsQuery, enabled: modules.includes('staff') });
   const tasks = useQuery({ ...taskTabCountsQuery, enabled: modules.includes('tasks') });
+  const fin = useQuery({ ...finSummaryQuery, enabled: modules.includes('fin') });
   const kpi = useQuery({ ...missingSummaryQuery, enabled: modules.includes('kpi') });
   const pdicts = useQuery({ ...pdictsTabCountsQuery, enabled: modules.includes('pdicts') });
   const kbadm = useQuery({ ...newsDraftsCountQuery, enabled: modules.includes('kbadm') });
@@ -40,11 +42,23 @@ export function useTabCounts(modules: readonly MenuModuleId[]): TabCounts {
       ...(reports.data ? { reports: reports.data } : {}),
       ...(staff.data ? { staff: staff.data } : {}),
       ...(tasks.data ? { tasks: tasks.data } : {}),
+      // «Проекты и услуги» — неоплаченные разовые услуги (прототип finTabs: `count` вкладки `proj`).
+      ...(fin.data?.proj ? { fin: { proj: { value: fin.data.proj.open } } } : {}),
       ...(kpi.data ? { kpi: { missing: kpiMissingCount(t, kpi.data) } } : {}),
       ...(pdicts.data ? { pdicts: pdicts.data } : {}),
       ...(kbadm.data ? { kbadm: kbadm.data } : {}),
     }),
-    [cps.data, reports.data, staff.data, tasks.data, kpi.data, pdicts.data, kbadm.data, t],
+    [
+      cps.data,
+      reports.data,
+      staff.data,
+      tasks.data,
+      fin.data,
+      kpi.data,
+      pdicts.data,
+      kbadm.data,
+      t,
+    ],
   );
 }
 
