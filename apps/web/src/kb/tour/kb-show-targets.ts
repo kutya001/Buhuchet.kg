@@ -69,6 +69,8 @@ export const KB_SHOW_TARGETS: Readonly<Record<string, string>> = {
     '[data-window-foot] [data-report-button="submit"] || [data-window-foot] [data-report-button="confirm"]',
   // Задачи: легенда «на день / на месяц».
   '#mbody .kd-legend': '[data-task-legend]',
+  // Проекты контрагентов: «Записать оплату» в карточке проекта.
+  '#pj-pay': '[data-pj-pay]',
   // Показатели контрагентов: месяц и период, таблица ввода (на телефоне — плитки), настройка.
   '#mbody .kpi-bar': 'main [role=group]:has([data-kpi-month-pick]) || main [data-kpi-period]',
   '#mbody .kt || #mbody .gcards': 'main [data-kpi-table] || main :has(> [data-kpi-tile])',
@@ -149,8 +151,6 @@ const KB_FIELD_WINDOWS: Readonly<Partial<Record<UiTextKey, string>>> = {
   // Задачи
   'task.form.new': 'tk',
   'task.form.edit': 'tk',
-  // Проекты контрагентов: «Записать оплату» в карточке проекта.
-  '#pj-pay': '[data-pj-pay]',
   // Показатели контрагентов
   'kpi.indicator.new': 'ki',
   'kpi.indicator.title': 'ki',
