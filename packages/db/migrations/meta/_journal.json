@@ -617,6 +617,20 @@
       "when": 1793551624202,
       "tag": "0087_lead_status_scale",
       "breakpoints": true
+    },
+    {
+      "idx": 88,
+      "version": "7",
+      "when": 1793552813588,
+      "tag": "0088_platform_leads",
+      "breakpoints": true
+    },
+    {
+      "idx": 89,
+      "version": "7",
+      "when": 1793552825514,
+      "tag": "0089_platform_leads_functions",
+      "breakpoints": true
     }
   ]
 }

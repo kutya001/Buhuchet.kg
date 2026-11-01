@@ -54,6 +54,7 @@ export * from './admin-io-sections';
 export * from './admin-kb';
 export * from './admin-system-dicts';
 export * from './admin-telegram';
+export * from './leads';
 export * from './rate-limits';
 export * from './dicts';
 export * from './taxes';

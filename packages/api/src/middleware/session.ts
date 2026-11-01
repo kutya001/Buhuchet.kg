@@ -19,6 +19,8 @@ const PUBLIC_PATHS = new Set([
   '/api/auth/logout',
   '/api/auth/password-reset',
   '/api/auth/password-reset/confirm',
+  // «Оставить заявку» с лендинга: единственный метод без входа на нём, предел по адресу (задача #165).
+  '/api/leads',
   // Вебхук бота проверяет свой секрет (X-Telegram-Bot-Api-Secret-Token).
   '/api/telegram/webhook',
 ]);

@@ -15,6 +15,7 @@ import {
   organizationValuesRoute,
   unblockOrganizationRoute,
 } from './organizations';
+import { submitLeadHandler, submitLeadRoute } from './leads';
 import { adminResetPasswordHandler, adminResetPasswordRoute } from './password-reset';
 import {
   telegramBotHandler,
@@ -49,7 +50,8 @@ import {
 /**
  * Модуль «Админка»: «Учётные записи» — список всех пользователей платформы, сброс пароля (#6),
  * блокировка; «Организации» — список, создание вместе с владельцем, блокировка; «Телеграм» — журнал
- * отправок с повтором, вебхук бота платформы, рассылка (задача 2.41).
+ * отправок с повтором, вебхук бота платформы, рассылка (задача 2.41); «Оставить заявку» с лендинга —
+ * единственный метод без входа на нём (задача #165).
  */
 export function adminModule(deps: ApiDeps) {
   return createModuleApp()
@@ -66,6 +68,7 @@ export function adminModule(deps: ApiDeps) {
     .openapi(createOrganizationRoute, createOrganizationHandler(deps))
     .openapi(blockOrganizationRoute, organizationStatusHandler(deps, 'block'))
     .openapi(unblockOrganizationRoute, organizationStatusHandler(deps, 'unblock'))
+    .openapi(submitLeadRoute, submitLeadHandler(deps))
     .openapi(telegramLogRoute, telegramLogHandler(deps))
     .openapi(telegramLogValuesRoute, telegramLogValuesHandler(deps))
     .openapi(telegramLogExportRoute, telegramLogExportHandler(deps))

@@ -46,7 +46,7 @@ export function makeErrorText(
       (variant ? texts[`err.${error.code}.${variant}`] : undefined) ?? texts[`err.${error.code}`];
     if (!template) return error.message;
     const text = formatText(template, params);
-    return /\{\w+\}/.test(text) ? error.message : text;
+    return /\{[\p{L}\p{N}_]+\}/u.test(text) ? error.message : text;
   };
 }
 

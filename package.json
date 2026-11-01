@@ -29,6 +29,7 @@
     "services:up": "docker compose up -d --wait postgres minio",
     "services:down": "docker compose down",
     "spec:sync": "node scripts/spec-sync.mjs",
+    "landing:data": "node scripts/landing-data.mjs",
     "storage:init": "pnpm --filter @buhuchet/adapters storage:init",
     "setup:local": "pnpm services:up && pnpm db:migrate && pnpm db:seed --update && pnpm storage:init"
   },

@@ -21,6 +21,20 @@ export function handlePageRequest(request: Request): Promise<Response> | Respons
   return webApp().fetch(request, { pageRender: true });
 }
 
+/**
+ * Среда и адрес сайта для серверной части страниц (лендинг: полоса «Тестовый стенд…», индексация и
+ * картинка превью ссылки; robots.txt). Настройки читает `loadConfig` при создании приложения API —
+ * страница сама окружение не читает.
+ */
+export function siteInfo(): {
+  env: 'local' | 'test' | 'staging' | 'production';
+  baseUrl: string;
+} {
+  webApp();
+  const { config } = web!.runtime.deps;
+  return { env: config.APP_ENV, baseUrl: config.APP_BASE_URL };
+}
+
 function webApp(): ApiApp {
   if (!web) {
     const runtime = createRuntime('web');
