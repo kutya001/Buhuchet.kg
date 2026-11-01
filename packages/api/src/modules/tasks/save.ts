@@ -4,8 +4,10 @@ import {
   employeeActive,
   getTask,
   lockTask,
+  orgMenuSettings,
   taskCategoryActive,
   taskContractorOf,
+  taskProjectAllowed,
   updateTask,
   withOrgContext,
   type TaskFields,
@@ -68,6 +70,7 @@ async function fieldsOf(
   body: Body,
   filesOn: boolean,
   before: Before | null,
+  projectsOn: boolean,
 ): Promise<TaskFields> {
   const category = await taskCategoryActive(tx, body.categoryCode);
   if (category === null) {
@@ -105,6 +108,7 @@ async function fieldsOf(
     description: body.description,
     categoryCode: body.categoryCode,
     contractorId: body.contractorId,
+    projectId: await projectOf(tx, body, before, projectsOn),
     executorEmployeeId: body.executorEmployeeId,
     term: body.term,
     dueDate: body.term === 'month' ? monthLastDay(body.dueDate.slice(0, 7)) : body.dueDate,
@@ -112,6 +116,32 @@ async function fieldsOf(
     needFile: filesOn ? body.needFile : (before?.lock.needFile ?? false),
     confirm: confirmLocked ? before.lock.confirm : body.confirm,
   };
+}
+
+/**
+ * «Проект» задачи (задача 2.26; прототип `taskDlg`, `projsOf`): только у задачи по контрагенту, проект
+ * этого контрагента — не отменённый и не завершённый (уже выбранный остаётся). «Проекты контрагентов»
+ * выключены — галочки в форме нет: проект задачи не меняется, пока не сменился контрагент.
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#Г-10
+async function projectOf(
+  tx: Tx,
+  body: Body,
+  before: Before | null,
+  projectsOn: boolean,
+): Promise<string | null> {
+  const was = before?.lock.projectId ?? null;
+  if (!projectsOn) {
+    return was && before?.lock.contractorId === body.contractorId ? was : null;
+  }
+  if (!body.projectId) return null;
+  if (
+    !body.contractorId ||
+    !(await taskProjectAllowed(tx, body.projectId, body.contractorId, was))
+  ) {
+    bad('task_project_invalid', 'Выберите проект или снимите галочку «Проект»', 'projectId');
+  }
+  return body.projectId;
 }
 
 const fieldErrors =
@@ -150,7 +180,8 @@ export function createTaskHandler(deps: ApiDeps): RouteHandler<typeof createTask
     let queued: string[] = [];
     const out = await withOrgContext(deps.db, orgContextOf(c), async (tx) => {
       const settings = await requireTasks(tx, orgContextOf(c).orgId);
-      const fields = await fieldsOf(tx, subject, body, settings.files, null);
+      const { features } = await orgMenuSettings(tx, orgContextOf(c).orgId);
+      const fields = await fieldsOf(tx, subject, body, settings.files, null, features.projects);
       const id = await createTask(tx, fields, subject.employeeId);
       const task = (await getTask(tx, id, undefined))!;
       queued = await queueTelegramEvents(deps, tx, [newTaskEvent(task, subject.employeeId, t)]);
@@ -210,10 +241,15 @@ export function updateTaskHandler(deps: ApiDeps): RouteHandler<typeof updateTask
       if (!visible || !lock) taskNotFound();
       const refusal = taskActionRefusal('edit', factsOf(lock), actorOf(subject));
       if (refusal) refuse(refusal);
-      const fields = await fieldsOf(tx, subject, body, settings.files, {
-        lock,
-        categoryCode: visible.category.code,
-      });
+      const { features } = await orgMenuSettings(tx, orgContextOf(c).orgId);
+      const fields = await fieldsOf(
+        tx,
+        subject,
+        body,
+        settings.files,
+        { lock, categoryCode: visible.category.code },
+        features.projects,
+      );
       const to = taskStatusAfterEdit(lock.status, lock.confirm, fields.confirm);
       await updateTask(
         tx,

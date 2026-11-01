@@ -1,6 +1,7 @@
 import {
   contractorScope,
   taskContractorAccess,
+  taskProjectAccess,
   taskOrgSettings,
   taskVisibility,
   type TaskListRow,
@@ -76,8 +77,15 @@ export function cpScopeOf(subject: AccessSubject): SQL | undefined {
 export function taskAccessOf(subject: AccessSubject): SQL | undefined {
   const visible = taskVisibility(viewerOf(subject));
   if (!visible) return undefined;
-  if (!hasPermission(subject, 'cpView')) return visible;
-  return or(visible, taskContractorAccess(cpScopeOf(subject)));
+  // Задачи видимых проектов (задача 2.26; прототип `openProject` → «Задачи»): при включённых «Проектах».
+  const projects = hasPermission(subject, 'projView')
+    ? taskProjectAccess({
+        employeeId: subject.employeeId,
+        seeAll: scopeOf(subject, 'projects') === 'all',
+      })
+    : undefined;
+  if (!hasPermission(subject, 'cpView')) return or(visible, projects);
+  return or(visible, taskContractorAccess(cpScopeOf(subject)), projects);
 }
 
 /**
@@ -123,6 +131,7 @@ export function rowBody(r: TaskRow | TaskRecord, today: IsoDate): TaskRowBody {
     title: r.title,
     category: r.category,
     contractor: r.contractor ? { id: r.contractor.id, name: r.contractor.name } : null,
+    project: r.project,
     executor: r.executor,
     author: r.author,
     term: r.term,

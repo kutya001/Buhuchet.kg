@@ -22,6 +22,7 @@ import { NEWS_IMAGE_UPLOAD_PATH, newsModule } from './modules/news';
 import { onboardingModule } from './modules/onboarding';
 import { orgModule } from './modules/org';
 import { platformDictsModule } from './modules/platform-dicts';
+import { projectsModule } from './modules/projects';
 import { dictsModule } from './modules/dicts';
 import { filesModule } from './modules/files';
 import { LOGO_PATH } from './modules/org/logo';
@@ -107,6 +108,7 @@ export function createApp(deps: ApiDeps) {
     .route('/', moneyModule(deps))
     .route('/', feesModule(deps))
     .route('/', financeModule(deps))
+    .route('/', projectsModule(deps))
     .route('/', kpiModule(deps))
     .route('/', filesModule(deps))
     .route('/', viewsModule(deps))

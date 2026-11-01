@@ -79,6 +79,15 @@ export const KB_GO: Readonly<Record<string, KbTarget>> = {
   daymonth: { module: 'tasks', tab: 'mine', flash: '[data-task-legend]' },
   tdone: { module: 'tasks', tab: 'mine', flash: LIST },
   tconf: { module: 'tasks', tab: 'mine', flash: '[data-plate="pend"], main' },
+  // «Проекты контрагентов» (2.26): «Создать проект» сразу открывает окно; работы — в карточке проекта.
+  proj: {
+    module: 'projects',
+    tab: 'all',
+    flash: '[data-add-button="button"]',
+    phoneFlash: '[data-add-button="fab"]',
+    open: { add: 'project' },
+  },
+  works: { module: 'projects', tab: 'all', flash: LIST },
   // «Показатели контрагентов» (2.27, 2.28): «Кому вести» — нажать переключатель вида.
   kset: { module: 'kpi', tab: 'setup', flash: '[data-kpi-setup-list]' },
   kwho: {

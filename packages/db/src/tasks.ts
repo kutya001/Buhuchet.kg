@@ -33,6 +33,7 @@ import {
   files,
   orgReportTypes,
   orgSettings,
+  projects,
   reports,
   reportTypes,
   statusHistory,
@@ -113,6 +114,8 @@ function rowFields() {
     contractorId: tasks.contractorId,
     contractorName: contractors.name,
     contractorResponsibleId: contractors.responsibleEmployeeId,
+    projectId: tasks.projectId,
+    projectName: projects.name,
     executorId: tasks.executorEmployeeId,
     executorName: executor.shortName,
     authorId: tasks.authorEmployeeId,
@@ -146,6 +149,7 @@ function fromTasks(tx: Tx, fields: object) {
     .from(tasks)
     .innerJoin(taskCategories, eq(taskCategories.code, tasks.categoryCode))
     .leftJoin(contractors, eq(contractors.id, tasks.contractorId))
+    .leftJoin(projects, eq(projects.id, tasks.projectId))
     .innerJoin(executor, eq(executor.id, tasks.executorEmployeeId))
     .innerJoin(author, eq(author.id, tasks.authorEmployeeId))
     .leftJoin(confirmer, eq(confirmer.id, tasks.confirmedByEmployeeId))
@@ -163,6 +167,8 @@ export interface TaskRow {
   category: { code: string; name: string };
   /** null — общая задача. */
   contractor: { id: string; name: string; responsibleEmployeeId: string | null } | null;
+  /** Проект контрагента (задача 2.26); null — без проекта. */
+  project: { id: string; name: string } | null;
   executor: { id: string; shortName: string };
   author: { id: string; shortName: string };
   term: TaskTerm;
@@ -182,6 +188,7 @@ export interface TaskRow {
 
 function toRow(r: RowData): TaskRow {
   const contractorId = r.contractorId as string | null;
+  const projectId = r.projectId as string | null;
   const confirmedById = r.confirmedById as string | null;
   return {
     id: r.id as string,
@@ -194,6 +201,7 @@ function toRow(r: RowData): TaskRow {
           responsibleEmployeeId: r.contractorResponsibleId as string | null,
         }
       : null,
+    project: projectId ? { id: projectId, name: (r.projectName as string | null) ?? '' } : null,
     executor: { id: r.executorId as string, shortName: (r.executorName as string) ?? '' },
     author: { id: r.authorId as string, shortName: (r.authorName as string) ?? '' },
     term: r.term as TaskTerm,
@@ -244,6 +252,7 @@ const TL = {
   title: tl('title'),
   categoryCode: tl('category_code'),
   contractorId: tl('contractor_id'),
+  projectId: tl('project_id'),
   executorId: tl('executor_id'),
   authorId: tl('author_id'),
   term: tl('term'),
@@ -334,7 +343,7 @@ function taskListSource(o: TaskSourceOptions): SQL {
     : sql`false`;
   const manual = sql`select ${tasks.id} as id, 'manual'::text as kind, 'task'::text as scale,
     ${tasks.title} as title, ${tasks.categoryCode} as category_code, ${tasks.contractorId} as contractor_id,
-    ${tasks.executorEmployeeId} as executor_id, ${tasks.authorEmployeeId} as author_id, ${tasks.term}::text as term,
+    ${tasks.projectId} as project_id, ${tasks.executorEmployeeId} as executor_id, ${tasks.authorEmployeeId} as author_id, ${tasks.term}::text as term,
     ${tasks.dueDate} as due_date, ${tasks.needFile} as need_file, ${tasks.confirm} as confirm,
     ${tasks.status}::text as status, ${tasks.doneAt} as done_at, ${tasks.confirmedByEmployeeId} as confirmed_by_id,
     null::text as act, null::bigint as amount, null::bigint as paid, null::text as rep_mark,
@@ -346,7 +355,7 @@ function taskListSource(o: TaskSourceOptions): SQL {
   // ОТКЛОНЕНИЕ: docs/deviations.md#Б-11 — «Файл» — по готовым файлам отчёта, «Оплата» — по метке отчёта.
   const regular = sql`select ${reports.id}, 'regular'::text, 'report'::text, ${REGULAR_TITLE},
     case when ${reports.act} = 'pay' then 'reg:pay' else 'reg:sub' end, ${reports.contractorId},
-    ${reports.responsibleEmployeeId}, null::uuid, 'day'::text, ${reports.dueDate},
+    null::uuid, ${reports.responsibleEmployeeId}, null::uuid, 'day'::text, ${reports.dueDate},
     coalesce(${orgReportTypes.needFile}, false), false, ${reports.status}::text, null::timestamptz, null::uuid,
     ${reports.act}::text, ${reports.amount}, ${reports.paid}, ${mark}, ${reports.confirmedBy},
     coalesce((${reports.submittedAt} at time zone 'Asia/Bishkek')::date, ${reports.submittedOn}),
@@ -375,6 +384,7 @@ function fromTaskList(tx: Tx, fields: object, o: TaskSourceOptions) {
     .from(sql`${taskListSource(o)} as "tl"`)
     .leftJoin(taskCategories, sql`${taskCategories.code} = ${TL.categoryCode}`)
     .leftJoin(contractors, sql`${contractors.id} = ${TL.contractorId}`)
+    .leftJoin(projects, sql`${projects.id} = ${TL.projectId}`)
     .leftJoin(executor, sql`${executor.id} = ${TL.executorId}`)
     .leftJoin(author, sql`${author.id} = ${TL.authorId}`)
     .leftJoin(confirmer, sql`${confirmer.id} = ${TL.confirmedById}`)
@@ -409,6 +419,8 @@ function listFields(t: ListTexts) {
     contractorId: sql<string | null>`${TL.contractorId}`,
     contractorName: contractors.name,
     contractorResponsibleId: contractors.responsibleEmployeeId,
+    projectId: sql<string | null>`${TL.projectId}`,
+    projectName: projects.name,
     executorId: sql<string | null>`${TL.executorId}`,
     executorName: executor.shortName,
     authorId: sql<string | null>`${TL.authorId}`,
@@ -566,8 +578,8 @@ const STATUS_VALUE = sql`case when ${REGULAR} then 'rep:' || ${TL.status} else $
  * Столбцы списка задач на сервере (ТЗ «Задачи» → «Общие задачи в списке», «Столбцы, видимые по
  * умолчанию»; прототип `taskCols`): ключи — как у столбцов экрана. «Общие задачи» в фильтре по
  * контрагенту — первым значением, «Вид задачи» — для фильтра, группировки и выгрузки; у регулярной
- * задачи — статус её отчёта, «Поставил» — «Система», «Тип задачи» — «Регулярная». Столбец «Проект»
- * добавит задача 2.26.
+ * задачи — статус её отчёта, «Поставил» — «Система», «Тип задачи» — «Регулярная»; «Проект» — проект
+ * ручной задачи (задача 2.26; прототип `taskCols`: `proj`).
  */
 export function taskListColumns(t: ListTexts): ListColumns {
   return {
@@ -586,6 +598,13 @@ export function taskListColumns(t: ListTexts): ListColumns {
         value: sql`(${TL.contractorId} is not null, ${contractors.name} collate app.ru_natural)`,
         text: false,
       },
+    },
+    proj: {
+      type: 'enum',
+      label: 'task.col.proj',
+      value: TL.projectId,
+      display: projects.name,
+      sort: { value: projects.name, text: true },
     },
     cat: {
       type: 'enum',
@@ -959,6 +978,7 @@ export interface TaskLock {
   executorEmployeeId: string;
   authorEmployeeId: string;
   contractorId: string | null;
+  projectId: string | null;
   dueDate: IsoDate;
   version: number;
 }
@@ -974,6 +994,7 @@ export async function lockTask(tx: Tx, id: string): Promise<TaskLock | null> {
       executorEmployeeId: tasks.executorEmployeeId,
       authorEmployeeId: tasks.authorEmployeeId,
       contractorId: tasks.contractorId,
+      projectId: tasks.projectId,
       dueDate: tasks.dueDate,
       version: tasks.version,
     })
@@ -989,6 +1010,8 @@ export interface TaskFields {
   description: string;
   categoryCode: string;
   contractorId: string | null;
+  /** Проект контрагента задачи (задача 2.26); у общей задачи — null. */
+  projectId: string | null;
   executorEmployeeId: string;
   term: TaskTerm;
   dueDate: IsoDate;
@@ -1367,7 +1390,7 @@ export interface TaskHistoryItem {
 }
 
 /** Поля-ссылки задачи: в истории — номер или код, на экране — название. */
-const REF_FIELDS = ['executorEmployeeId', 'contractorId', 'categoryCode'] as const;
+const REF_FIELDS = ['executorEmployeeId', 'contractorId', 'categoryCode', 'projectId'] as const;
 
 /** История задачи («Создана», «было → стало», файлы), сначала новые. */
 export async function taskHistory(tx: Tx, taskId: string): Promise<TaskHistoryItem[]> {
@@ -1388,13 +1411,14 @@ export async function taskHistory(tx: Tx, taskId: string): Promise<TaskHistoryIt
     executorEmployeeId: new Set<string>(),
     contractorId: new Set<string>(),
     categoryCode: new Set<string>(),
+    projectId: new Set<string>(),
   };
   for (const r of rows)
     for (const c of (r.changes ?? []) as HistoryChange[])
       if ((REF_FIELDS as readonly string[]).includes(c.field))
         for (const v of [c.from, c.to])
           if (typeof v === 'string') ids[c.field as (typeof REF_FIELDS)[number]].add(v);
-  const [people, cps, cats] = await Promise.all([
+  const [people, cps, cats, projs] = await Promise.all([
     ids.executorEmployeeId.size
       ? tx
           .select({ id: employees.id, name: employees.shortName })
@@ -1413,11 +1437,18 @@ export async function taskHistory(tx: Tx, taskId: string): Promise<TaskHistoryIt
           .from(taskCategories)
           .where(inArray(taskCategories.code, [...ids.categoryCode]))
       : [],
+    ids.projectId.size
+      ? tx
+          .select({ id: projects.id, name: projects.name })
+          .from(projects)
+          .where(inArray(projects.id, [...ids.projectId]))
+      : [],
   ]);
   const names: Record<(typeof REF_FIELDS)[number], Map<string, string>> = {
     executorEmployeeId: new Map(people.map((x) => [x.id, x.name])),
     contractorId: new Map(cps.map((x) => [x.id, x.name])),
     categoryCode: new Map(cats.map((x) => [x.id, x.name])),
+    projectId: new Map(projs.map((x) => [x.id, x.name])),
   };
   const named = (field: string, v: HistoryValue | undefined): HistoryValue | undefined => {
     if (typeof v !== 'string' || !(REF_FIELDS as readonly string[]).includes(field)) return v;

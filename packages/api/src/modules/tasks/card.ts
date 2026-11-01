@@ -4,6 +4,8 @@ import {
   getTask,
   listTaskCategories,
   listTaskComments,
+  orgMenuSettings,
+  projectsForTask,
   readStatusHistory,
   taskContractorOf,
   taskFormOptions,
@@ -22,6 +24,8 @@ import {
   ContractorTasks,
   Task,
   TaskFormOptions,
+  TaskProjects,
+  TaskProjectsQuery,
   Uuid,
   type Task as TaskBody,
 } from '@buhuchet/shared';
@@ -163,17 +167,64 @@ export function taskFormOptionsHandler(
     const subject = subjectOf(c);
     const body = await withOrgContext(deps.db, orgContextOf(c), async (tx) => {
       const settings = await requireTasks(tx, orgContextOf(c).orgId);
-      const [categories, options] = await Promise.all([
+      const [categories, options, menu] = await Promise.all([
         listTaskCategories(tx),
         taskFormOptions(tx, cpScopeOf(subject)),
+        orgMenuSettings(tx, orgContextOf(c).orgId),
       ]);
       return {
         categories: categories.map(({ code, name }) => ({ code, name })),
         ...options,
         confirmDefault: settings.confirmDefault,
         filesOn: settings.files,
+        projectsOn: menu.features.projects,
       };
     });
+    return c.json(body, 200);
+  };
+}
+
+export const taskProjectsRoute = createRoute({
+  method: 'get',
+  path: '/tasks/form-projects',
+  tags: ['tasks'],
+  summary: 'Поле «Проект» формы задачи',
+  middleware: [requirePermission('tasksCreate')] as const,
+  request: { query: TaskProjectsQuery },
+  responses: {
+    200: {
+      description:
+        'Проекты контрагента, кроме отменённых и завершённых (уже выбранный у задачи — тоже); по названию',
+      content: { 'application/json': { schema: TaskProjects } },
+    },
+    401: { description: 'Нет входа', content: error },
+    403: {
+      description: `Нет права «Ставить задачи», ${off.toLowerCase()} или выключены «Проекты контрагентов»`,
+      content: error,
+    },
+    404: { description: 'Нет такого контрагента или он вне области сотрудника', content: error },
+  },
+});
+
+/**
+ * Проекты для поля «Проект» (задача 2.26; прототип `taskDlg`, `projsOf`): контрагент — в области
+ * группы «Контрагенты», как поле «Контрагент» формы.
+ */
+export function taskProjectsHandler(deps: ApiDeps): RouteHandler<typeof taskProjectsRoute, AppEnv> {
+  return async (c) => {
+    const { contractorId, current } = c.req.valid('query');
+    const subject = subjectOf(c);
+    const body = await withOrgContext(deps.db, orgContextOf(c), async (tx) => {
+      await requireTasks(tx, orgContextOf(c).orgId);
+      const { features } = await orgMenuSettings(tx, orgContextOf(c).orgId);
+      if (!features.projects) apiFail(403, 'projects_off', 'Проекты контрагентов выключены');
+      if (!(await taskContractorOf(tx, contractorId, cpScopeOf(subject)))) {
+        apiFail(404, 'contractor_not_found', 'Контрагент не найден');
+      }
+      const items = await projectsForTask(tx, contractorId, current ?? null);
+      return { items: items.map(({ id, name }) => ({ id, name })) };
+    });
+    c.header('Cache-Control', 'no-store');
     return c.json(body, 200);
   };
 }

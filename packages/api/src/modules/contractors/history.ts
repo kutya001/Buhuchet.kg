@@ -17,6 +17,7 @@ import { serviceReadScope, servicesVisible } from '../finance/services';
 import { finScopeOf } from '../money/common';
 import { reportScopeOf } from '../reports/common';
 import { notFound } from './card';
+import { projectWhere } from '../projects/common';
 import { error, scopeSqlOf, subjectOf, translateOf } from './common';
 
 export const contractorHistoryRoute = createRoute({
@@ -61,6 +62,8 @@ async function historyAccess(
     money: features.taxpay && (can('finView') || can('money')) && finScopeOf(subject),
     // ОТКЛОНЕНИЕ: docs/deviations.md#В-34 — записи разовых услуг тому, кто видит услуги.
     services: features.finops && servicesVisible(subject, features) && serviceReadScope(subject),
+    // Записи проектов — тому, кто видит проекты (прототип: вкладка «Проекты»), по их видимости.
+    projects: features.projects && can('projView') && projectWhere(subject),
   };
 }
 

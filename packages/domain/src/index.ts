@@ -64,6 +64,7 @@ export * from './fees/charges';
 export * from './fees/payment';
 export * from './fees/reminder';
 export * from './finance/services';
+export * from './projects/projects';
 export * from './kpi/indicators';
 export * from './kpi/fill';
 export * from './kpi/targets';

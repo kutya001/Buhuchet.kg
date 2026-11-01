@@ -15,6 +15,7 @@ import {
   employees,
   moneyOperations,
   ownershipForms,
+  projects,
   reports,
   reportTypes,
   tasks,
@@ -124,7 +125,7 @@ async function namesOf(
 }
 
 /**
- * Подписи записей отчётов, назначений и задач: вид и период, название вида, название задачи. Название
+ * Подписи записей отчётов, назначений, задач и проектов: вид и период, название вида, название. Название
  * задачи — только пока она у этого контрагента: перенесённую к другому или общую не подписываем.
  */
 async function subjectsOf(
@@ -142,7 +143,8 @@ async function subjectsOf(
   const reportIds = idsOf('report');
   const assignmentIds = idsOf('assignment');
   const taskIds = idsOf('task');
-  const [reportRows, assignmentRows, taskRows] = await Promise.all([
+  const projectIds = idsOf('project');
+  const [reportRows, assignmentRows, taskRows, projectRows] = await Promise.all([
     reportIds.length
       ? tx
           .select({
@@ -169,6 +171,12 @@ async function subjectsOf(
           .from(tasks)
           .where(and(inArray(tasks.id, taskIds), eq(tasks.contractorId, contractorId)))
       : [],
+    projectIds.length
+      ? tx
+          .select({ id: projects.id, name: projects.name })
+          .from(projects)
+          .where(and(inArray(projects.id, projectIds), eq(projects.contractorId, contractorId)))
+      : [],
   ]);
   for (const r of reportRows) {
     const label = periodLabel(
@@ -179,6 +187,7 @@ async function subjectsOf(
   }
   for (const r of assignmentRows) out.set(`assignment:${r.id}`, r.name);
   for (const r of taskRows) out.set(`task:${r.id}`, r.name);
+  for (const r of projectRows) out.set(`project:${r.id}`, r.name);
   return out;
 }
 
@@ -205,6 +214,11 @@ export interface ContractorHistoryAccess {
    * услуги», контрагент в области, где сотрудник видит услуги.
    */
   services: SQL | undefined | false;
+  /**
+   * Проекты контрагента (задача 2.26): функция «Проекты контрагентов» включена, право «Просматривать
+   * проекты»; условие — какие проекты видны (`projectVisibility`, как вкладка «Проекты» карточки).
+   */
+  projects: SQL | undefined | false;
 }
 
 /**
@@ -298,6 +312,24 @@ async function visibleEntries(
   // Оплаты за обслуживание — с правом «Видеть плату» и включённой функцией (как вкладка «Обслуживание»).
   if (access.fee) own.push(eq(auditLog.entity, 'fee_payment'));
   if (services) own.push(inArray(auditLog.entity, ['one_off_service', 'one_off_service_payment']));
+  // Проекты — те, что сотрудник видит (`projectVisibility`: условие над проектом и его контрагентом).
+  if (access.projects !== false) {
+    own.push(
+      access.projects
+        ? and(
+            eq(auditLog.entity, 'project'),
+            inArray(
+              auditLog.entityId,
+              tx
+                .select({ id: sql<string>`${projects.id}::text` })
+                .from(projects)
+                .innerJoin(contractors, eq(contractors.id, projects.contractorId))
+                .where(and(eq(projects.contractorId, id), access.projects)),
+            ),
+          )!
+        : eq(auditLog.entity, 'project'),
+    );
+  }
   return and(or(...own), files ? undefined : notInArray(auditLog.action, [...FILE_ACTIONS]));
 }
 

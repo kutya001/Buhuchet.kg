@@ -21,7 +21,7 @@ const STATUS_OF: Readonly<Record<string, TaskStatus>> = {
 };
 const Status = z.enum(Object.keys(STATUS_OF) as [string, ...string[]]);
 
-/** Ручная задача демо-организации (`tasks` в demoDB.json). Проект (`proj`) добавит задача 2.26. */
+/** Ручная задача демо-организации (`tasks` в demoDB.json); `proj` — проект (задача 2.26). */
 const DemoTask = z.object({
   id: z.string(),
   title: z.string(),
@@ -29,6 +29,7 @@ const DemoTask = z.object({
   /** Категория — названием, как в справочнике «Категории задач». */
   cat: z.string(),
   cp: z.number().int().nullable(),
+  proj: z.string().nullable().optional(),
   exec: z.string(),
   by: z.string(),
   kind: z.enum(TASK_TERMS),
@@ -149,6 +150,7 @@ export async function seedDemoTasks(
       description: t.desc,
       categoryCode: categoryOf(t.cat),
       contractorId: t.cp === null ? null : demoId('contractor', String(t.cp)),
+      projectId: t.cp !== null && t.proj ? demoId('project', t.proj) : null,
       executorEmployeeId: employee(t.exec),
       authorEmployeeId: employee(t.by),
       term: t.kind,
