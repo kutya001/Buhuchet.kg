@@ -215,12 +215,26 @@ test.describe('Этап 2: контрагенты — список и карто
     await showPlates(page, isMobile);
     const plate = page.locator('[data-plate="nogk"]');
     await expect(plate).toContainText('Без ГКЭД');
+    // Пока ответ с фильтром не пришёл, список держит прежние строки (keepPreviousData): строки
+    // читаются, только когда на экране — ответ с «ГКЭД указан: нет».
+    const filtered = page.waitForResponse((r) => {
+      const url = new URL(r.url());
+      return (
+        url.pathname === '/api/contractors' &&
+        (url.searchParams.get('filters') ?? '').includes('gkedSet') &&
+        r.ok()
+      );
+    });
     await plate.click();
     await expect(plate).toHaveAttribute('aria-pressed', 'true');
-    await expect(rows(page).filter({ hasText: 'ОсОО «Укс»' })).toBeVisible();
-    const shown = await rows(page).evaluateAll((els) =>
-      els.map((el) => el.getAttribute('data-id')),
+    const served = new Set(
+      ((await (await filtered).json()) as { items: CpRow[] }).items.map((c) => c.id),
     );
+    const shownIds = () =>
+      rows(page).evaluateAll((els) => els.map((el) => el.getAttribute('data-id')));
+    await expect.poll(async () => (await shownIds()).filter((id) => !served.has(id!))).toEqual([]);
+    await expect(rows(page).filter({ hasText: 'ОсОО «Укс»' })).toBeVisible();
+    const shown = await shownIds();
 
     // Плашка ставит фильтр «ГКЭД указан: нет»: API с ним отдаёт всех контрагентов без основного ГКЭД,
     // и только их; на экране — они же.
