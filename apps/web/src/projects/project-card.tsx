@@ -185,15 +185,28 @@ function WorksBox({ t, p, me }: { t: Translate; p: ProjectCard; me: string | nul
   );
   const [due, setDue] = useState('');
   const [busy, setBusy] = useState(false);
-  const done = p.works.filter((w) => w.done).length;
-  const title = t('proj.card.works', { done, total: p.works.length });
+  // Галочка «Сделано» меняется сразу, как в прототипе, а не после ответа сервера: отметка держится,
+  // пока карточка не перечитана; ошибка возвращает прежнее.
+  const [marks, setMarks] = useState<Readonly<Record<string, boolean>>>({});
+  const [shownWorks, setShownWorks] = useState(p.works);
+  if (shownWorks !== p.works) {
+    setShownWorks(p.works);
+    setMarks({});
+  }
+  const works = p.works.map((w) => (w.id in marks ? { ...w, done: marks[w.id]! } : w));
+  const done = works.filter((w) => w.done).length;
+  const title = t('proj.card.works', { done, total: works.length });
 
   const toggle = async (workId: string, value: boolean) => {
+    setMarks((m) => ({ ...m, [workId]: value }));
     setBusy(true);
     const res = await setProjectWorkDone(p.id, workId, value);
     setBusy(false);
+    if (!res.ok) {
+      setMarks((m) => Object.fromEntries(Object.entries(m).filter(([id]) => id !== workId)));
+      toast(errorText(res.error), { bad: true });
+    }
     refresh();
-    if (!res.ok) toast(errorText(res.error), { bad: true });
   };
   const add = async () => {
     const text = name.trim();
@@ -209,8 +222,8 @@ function WorksBox({ t, p, me }: { t: Translate; p: ProjectCard; me: string | nul
 
   return (
     <Box title={title}>
-      {p.works.length ? <Bar value={done} max={p.works.length} label={title} /> : null}
-      {p.works.length ? (
+      {works.length ? <Bar value={done} max={works.length} label={title} /> : null}
+      {works.length ? (
         <MiniTable
           label={title}
           empty=""
@@ -220,7 +233,7 @@ function WorksBox({ t, p, me }: { t: Translate; p: ProjectCard; me: string | nul
             { key: 'exec', label: t('proj.card.work.exec') },
             { key: 'due', label: t('proj.card.work.due') },
           ]}
-          rows={p.works.map((w) => ({
+          rows={works.map((w) => ({
             key: w.id,
             blank: w.due ? [] : ['due'],
             cells: {

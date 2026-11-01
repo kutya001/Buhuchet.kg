@@ -173,6 +173,7 @@ test.describe('Этап 2: проекты контрагентов', () => {
     page,
     request,
     baseURL,
+    isMobile,
   }) => {
     const origin = await asOwner(request, baseURL);
     const word = uniqueWord('Проект');
@@ -183,7 +184,8 @@ test.describe('Этап 2: проекты контрагентов', () => {
     await signIn(page.request, origin, 'erkin', DEMO_PASSWORD);
     await page.goto('/app/projects/active');
     await expect(page.locator('[data-grid]')).toBeVisible();
-    await expect(page.locator('[data-plate="run"]')).toBeVisible();
+    // Плашки-итоги на телефоне по умолчанию скрыты (ТЗ «Статистика модуля»).
+    if (!isMobile) await expect(page.locator('[data-plate="run"]')).toBeVisible();
     await add(page);
     const dlg = page.getByRole('dialog', { name: 'Новый проект' });
     await dlg.locator('[data-pd-ok]').click();
