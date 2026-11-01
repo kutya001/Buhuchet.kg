@@ -236,7 +236,10 @@ export const KB_STEP_RULES: Readonly<Record<string, KbStepRule>> = {
   // 10. Проекты контрагентов (задача 2.26): проект создан; работа добавлена в карточке проекта
   // (прототип `KB_EV['p.work']`: «Добавлена работа…»). «Принять транш» — со второй частью задачи.
   proj: { module: 'projects', done: { kind: 'history', entity: 'project', actions: ['create'] } },
-  works: { module: 'projects', done: { kind: 'history', entity: 'project', actions: ['work_add'] } },
+  works: {
+    module: 'projects',
+    done: { kind: 'history', entity: 'project', actions: ['work_add'] },
+  },
   // 11. Показатели контрагентов (задачи 2.27, 2.28). «Вкладка «Показатели» в карточке контрагента»
   // (`kcard`) — с карточкой контрагента (2.11), ниже по порядку шагов.
   kset: {

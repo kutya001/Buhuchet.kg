@@ -14,9 +14,11 @@ import {
   SWITCH_CLASS,
   useToast,
 } from '@buhuchet/ui';
+import { useQuery } from '@tanstack/react-query';
 import { useId, useMemo, useState, type ReactNode } from 'react';
 import { api, callApi } from '../api-client';
 import { useErrorText, useT } from '../l10n/provider';
+import { taskProjectsQuery } from '../projects/projects-data';
 import {
   confirmHint,
   defaultExecutor,
@@ -38,6 +40,7 @@ const FIELD_OF_CODE: Record<string, keyof TaskFormValues> = {
   task_contractor_archived: 'contractorId',
   task_executor_not_found: 'executorEmployeeId',
   task_executor_inactive: 'executorEmployeeId',
+  task_project_invalid: 'projectId',
 };
 
 type Errors = Partial<Record<keyof TaskFormValues, string>>;
@@ -128,7 +131,9 @@ function Select({
  * контрагенту»), категория, исполнитель (по умолчанию — ответственный выбранного контрагента, пока
  * исполнителя не выбрали руками; у общей — тот, кто ставит), вид срока и дата или месяц, «Требуется
  * файл» (только с «Файлами в карточках» — docs/deviations.md п. Б-1), «Требуется подтверждение» (по
- * умолчанию — из учётной политики). Галочку «Проект» добавит задача 2.26.
+ * умолчанию — из учётной политики). У «По контрагенту» при включённых «Проектах контрагентов» —
+ * галочка «Проект» и список активных проектов контрагента (уже выбранный завершённый — тоже); смена
+ * контрагента снимает проект (задача 2.26).
  */
 export function TaskFormDialog({
   task,
@@ -177,12 +182,25 @@ export function TaskFormDialog({
       ...v,
       scope,
       contractorId,
+      // Прототип `taskDlg`: смена контрагента снимает выбранный проект.
+      projectId: contractorId === v.contractorId ? v.projectId : '',
       executorEmployeeId: execTouched
         ? v.executorEmployeeId
         : defaultExecutor(options, scope === 'contractor' ? contractorId : '', employeeId),
     }));
-    setErrors((e) => ({ ...e, contractorId: undefined }));
+    setErrors((e) => ({ ...e, contractorId: undefined, projectId: undefined }));
   };
+  const projectOn = options.projectsOn && values.scope === 'contractor' && values.withProject;
+  const projects = useQuery({
+    ...taskProjectsQuery(values.contractorId, current?.project?.id ?? null),
+    enabled: projectOn && !!values.contractorId,
+  });
+  const projectItems = projects.data?.items ?? [];
+  const projectPlaceholder = !values.contractorId
+    ? t('task.form.project_first')
+    : projectItems.length || projects.isPending
+      ? t('task.form.project_pick')
+      : t('task.form.project_none');
 
   const reload = async () => {
     if (!task) return;
@@ -206,7 +224,7 @@ export function TaskFormDialog({
       for (const [field, key] of Object.entries(problems)) next[field as TaskFormField] = t(key);
       setErrors(next);
       const first = (
-        ['title', 'contractorId', 'executorEmployeeId', 'date', 'month'] as const
+        ['title', 'contractorId', 'projectId', 'executorEmployeeId', 'date', 'month'] as const
       ).find((f) => problems[f]);
       if (first) document.getElementById(`${id}-${first}`)?.focus();
       return;
@@ -354,7 +372,35 @@ export function TaskFormDialog({
               ),
               { required: true },
             )}
-            <div />
+            {options.projectsOn ? (
+              <SwitchField
+                id={`${id}-withProject`}
+                text={t('task.form.project')}
+                checked={values.withProject}
+                onChange={(v) => {
+                  setValues((x) => ({ ...x, withProject: v, projectId: v ? x.projectId : '' }));
+                  setErrors((e) => ({ ...e, projectId: undefined }));
+                }}
+              />
+            ) : (
+              <div />
+            )}
+            {projectOn
+              ? field(
+                  'projectId',
+                  t('task.form.project'),
+                  (control) => (
+                    <Select
+                      control={control}
+                      value={values.projectId}
+                      options={projectItems.map((p) => ({ value: p.id, label: p.name }))}
+                      placeholder={projectPlaceholder}
+                      onChange={(v) => set('projectId', v)}
+                    />
+                  ),
+                  { required: true, full: true, hint: t('task.form.project_hint') },
+                )
+              : null}
           </>
         ) : null}
         {field('categoryCode', t('task.form.cat'), (control) => (

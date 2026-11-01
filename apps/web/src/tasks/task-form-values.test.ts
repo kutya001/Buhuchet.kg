@@ -33,7 +33,9 @@ const options: TaskFormOptions = {
   ],
   confirmDefault: true,
   filesOn: true,
+  projectsOn: true,
 };
+const PROJECT = '00000000-0000-4000-8000-0000000000a1';
 
 describe('значения формы', () => {
   it('новая: «Общая», первая категория, исполнитель — тот, кто ставит, «На день» на завтра, подтверждение из политики', () => {
@@ -69,6 +71,34 @@ describe('значения формы', () => {
         today: '2026-10-18',
       }),
     ).toMatchObject({ scope: 'contractor', contractorId: CP, executorEmployeeId: RESP });
+  });
+
+  it('«Задача по проекту» — контрагент, проект с галочкой и главный ответственный исполнителем', () => {
+    expect(
+      initialTaskForm({
+        task: null,
+        preset: { contractorId: CP, projectId: PROJECT, executorEmployeeId: ME },
+        options,
+        employeeId: RESP,
+        today: '2026-10-18',
+      }),
+    ).toMatchObject({
+      scope: 'contractor',
+      contractorId: CP,
+      withProject: true,
+      projectId: PROJECT,
+      executorEmployeeId: ME,
+    });
+    // Заблокированный главный — исполнитель по умолчанию (ответственный контрагента).
+    expect(
+      initialTaskForm({
+        task: null,
+        preset: { contractorId: CP, projectId: PROJECT, executorEmployeeId: BLOCKED },
+        options,
+        employeeId: ME,
+        today: '2026-10-18',
+      }).executorEmployeeId,
+    ).toBe(RESP);
   });
 
   it('исполнитель по умолчанию: ответственный, если он действующий; иначе тот, кто ставит', () => {
@@ -123,6 +153,24 @@ describe('проверка и тело запроса', () => {
       month: 'task.form.month_required',
     });
     expect(taskFormProblems({ ...base, title: 'X' })).toEqual({});
+  });
+
+  it('галочка «Проект» без проекта — «Выберите проект или снимите галочку «Проект»»', () => {
+    const cp = { ...base, title: 'X', scope: 'contractor' as const, contractorId: CP };
+    expect(taskFormProblems({ ...cp, withProject: true, projectId: '' })).toEqual({
+      projectId: 'task.form.project_required',
+    });
+    expect(taskFormProblems({ ...cp, withProject: true, projectId: PROJECT })).toEqual({});
+    expect(taskFormProblems({ ...cp, withProject: false, projectId: '' })).toEqual({});
+  });
+
+  it('проект — только у «По контрагенту» с галочкой «Проект»', () => {
+    const cp = { ...base, title: 'X', scope: 'contractor' as const, contractorId: CP };
+    expect(taskFormBody({ ...cp, withProject: true, projectId: PROJECT }).projectId).toBe(PROJECT);
+    expect(taskFormBody({ ...cp, withProject: false, projectId: PROJECT }).projectId).toBeNull();
+    expect(
+      taskFormBody({ ...cp, scope: 'general', withProject: true, projectId: PROJECT }).projectId,
+    ).toBeNull();
   });
 
   it('«Общая» — без контрагента; «На месяц» — первый день месяца', () => {

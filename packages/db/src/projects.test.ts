@@ -120,11 +120,7 @@ describe.skipIf(!databaseAvailable())('Проекты контрагентов',
     scope?: ReturnType<typeof sql>,
   ) =>
     inA((tx) =>
-      createProject(
-        tx,
-        { contractorId: cpA, status: 'planned', ...input(), ...patch },
-        { scope },
-      ),
+      createProject(tx, { contractorId: cpA, status: 'planned', ...input(), ...patch }, { scope }),
     );
   const locked = (id: string) => inA((tx) => projectOf(tx, id, undefined, true));
   const viewer = (employeeId: string | null, seeAll = false): ProjectViewer => ({
@@ -170,9 +166,7 @@ describe.skipIf(!databaseAvailable())('Проекты контрагентов',
     alisher = await employee('Токтогулов Алишер Бакытович', 'Алишер Т.', 'proj-alisher');
     meerim = await employee('Касымова Мээрим Талантовна', 'Мээрим К.', 'proj-meerim');
     blocked = await employee('Уволенный Сотрудник', 'Уволенный С.', 'proj-blocked');
-    await inA((tx) =>
-      tx.execute(sql`update employees set active = false where id = ${blocked}`),
-    );
+    await inA((tx) => tx.execute(sql`update employees set active = false where id = ${blocked}`));
     cpA = await inA((tx) =>
       createContractor(tx, a.orgId, fields({ responsibleEmployeeId: alisher }), null),
     );
@@ -237,7 +231,10 @@ describe.skipIf(!databaseAvailable())('Проекты контрагентов',
       expect.objectContaining({ name: 'Собрать выписки', due: '2026-11-10', done: false }),
     ]);
     expect(card.history).toEqual([
-      expect.objectContaining({ action: 'create', changes: expect.arrayContaining([{ field: 'status', to: 'in_progress' }]) }),
+      expect.objectContaining({
+        action: 'create',
+        changes: expect.arrayContaining([{ field: 'status', to: 'in_progress' }]),
+      }),
     ]);
     const statuses = await inA((tx) => readStatusHistory(tx, 'project', id));
     expect(statuses.map((h) => [h.from, h.to])).toEqual([[null, 'in_progress']]);
@@ -257,8 +254,7 @@ describe.skipIf(!databaseAvailable())('Проекты контрагентов',
       members: [meerim, alisher],
       lead: meerim,
     });
-    const seen = async (v: ProjectViewer) =>
-      (await list({ viewer: v })).rows.map((r) => r.id);
+    const seen = async (v: ProjectViewer) => (await list({ viewer: v })).rows.map((r) => r.id);
     const alisherSees = await seen(viewer(alisher));
     expect(alisherSees).toEqual(expect.arrayContaining([own, shared]));
     expect(alisherSees).not.toContain(foreign);
@@ -268,7 +264,9 @@ describe.skipIf(!databaseAvailable())('Проекты контрагентов',
     expect(await seen(viewer(null))).toEqual([]);
     expect(await seen(viewer(null, true))).toEqual(expect.arrayContaining([own, foreign, shared]));
     // Карточка невидимого проекта — как будто его нет.
-    expect(await inA((tx) => projectCard(tx, foreign, projectVisibility(viewer(alisher))))).toBeNull();
+    expect(
+      await inA((tx) => projectCard(tx, foreign, projectVisibility(viewer(alisher)))),
+    ).toBeNull();
   });
 
   it('вкладки и плашки: «Активные», «Мои», срок прошёл, осталось получить; деньги — только кто их видит', async () => {
@@ -281,7 +279,9 @@ describe.skipIf(!databaseAvailable())('Проекты контрагентов',
       plan: som(10_000),
     });
     const { id: done } = await create({ name: 'Будет завершён', status: 'in_progress' });
-    await inA(async (tx) => setProjectStatus(tx, await projectOf(tx, done, undefined, true), 'done', {}));
+    await inA(async (tx) =>
+      setProjectStatus(tx, await projectOf(tx, done, undefined, true), 'done', {}),
+    );
     const after = await inA((tx) => projectSummary(tx, viewer(alisher), TODAY, true));
     expect(after.active - before.active).toBe(1);
     expect(after.mine - before.mine).toBe(1);
@@ -311,7 +311,9 @@ describe.skipIf(!databaseAvailable())('Проекты контрагентов',
     });
     const before = (await inA((tx) => projectCard(tx, id, undefined)))!;
     const [policy, setup] = before.works;
-    await inA(async (tx) => setProjectWorkDone(tx, await projectOf(tx, id, undefined, true), policy!.id, true));
+    await inA(async (tx) =>
+      setProjectWorkDone(tx, await projectOf(tx, id, undefined, true), policy!.id, true),
+    );
     await expect(
       inA(async (tx) =>
         updateProject(tx, await projectOf(tx, id, undefined, true), { ...input(), version: 0 }),
@@ -333,7 +335,12 @@ describe.skipIf(!databaseAvailable())('Проекты контрагентов',
     });
     expect(changed).toBe(true);
     const card = (await inA((tx) => projectCard(tx, id, undefined)))!;
-    expect(card.project).toMatchObject({ name: 'Постановка учёта', plan: null, leadEmployeeId: meerim, version: 2 });
+    expect(card.project).toMatchObject({
+      name: 'Постановка учёта',
+      plan: null,
+      leadEmployeeId: meerim,
+      version: 2,
+    });
     expect(card.members).toEqual([meerim]);
     expect(card.works.map((w) => [w.name, w.done])).toEqual([
       ['Кадровые документы', false],
@@ -376,8 +383,10 @@ describe.skipIf(!databaseAvailable())('Проекты контрагентов',
 
   it('шкала статусов: шаги вперёд, «Отменить проект», откат на шаг с причиной', async () => {
     const { id } = await create();
-    const step = (to: Parameters<typeof setProjectStatus>[2], o: Parameters<typeof setProjectStatus>[3] = {}) =>
-      inA(async (tx) => setProjectStatus(tx, await projectOf(tx, id, undefined, true), to, o));
+    const step = (
+      to: Parameters<typeof setProjectStatus>[2],
+      o: Parameters<typeof setProjectStatus>[3] = {},
+    ) => inA(async (tx) => setProjectStatus(tx, await projectOf(tx, id, undefined, true), to, o));
     await expect(step('done')).rejects.toEqual(refused('project_status_invalid', 409));
     await step('in_progress');
     await expect(step('planned', { rollback: true, reason: '  ' })).rejects.toEqual(
@@ -386,7 +395,9 @@ describe.skipIf(!databaseAvailable())('Проекты контрагентов',
     await step('planned', { rollback: true, reason: 'Клиент перенёс начало' });
     await step('cancelled');
     await expect(step('in_progress')).rejects.toEqual(refused('project_status_invalid', 409));
-    await expect(step('in_progress', { rollback: true, reason: 'Ошибся', version: 1 })).rejects.toMatchObject({
+    await expect(
+      step('in_progress', { rollback: true, reason: 'Ошибся', version: 1 }),
+    ).rejects.toMatchObject({
       name: 'RecordChangedError',
     });
     await step('in_progress', { rollback: true, reason: 'Клиент передумал' });
@@ -408,7 +419,9 @@ describe.skipIf(!databaseAvailable())('Проекты контрагентов',
     });
     const workId = (await inA((tx) => projectCard(tx, id, undefined)))!.works[0]!.id;
     const done = (d: boolean) =>
-      inA(async (tx) => setProjectWorkDone(tx, await projectOf(tx, id, undefined, true), workId, d));
+      inA(async (tx) =>
+        setProjectWorkDone(tx, await projectOf(tx, id, undefined, true), workId, d),
+      );
     expect(await done(true)).toEqual({ changed: true });
     expect(await done(true)).toEqual({ changed: false });
     expect(await done(false)).toEqual({ changed: true });
@@ -425,7 +438,12 @@ describe.skipIf(!databaseAvailable())('Проекты контрагентов',
     await add(alisher);
     const card = (await inA((tx) => projectCard(tx, id, undefined)))!;
     expect(card.works.map((w) => w.name)).toEqual(['Акт сверки', 'Сдать уточнённые отчёты']);
-    expect(card.history.map((h) => h.action)).toEqual(['work_add', 'work_undone', 'work_done', 'create']);
+    expect(card.history.map((h) => h.action)).toEqual([
+      'work_add',
+      'work_undone',
+      'work_done',
+      'create',
+    ]);
     expect(card.history[0]!.changes).toEqual([
       { field: 'work', to: 'Сдать уточнённые отчёты' },
       { field: 'executor', to: alisher },
@@ -436,7 +454,9 @@ describe.skipIf(!databaseAvailable())('Проекты контрагентов',
       works: [{ name: 'Другая', executorEmployeeId: alisher, due: null }],
     });
     await expect(
-      inA(async (tx) => setProjectWorkDone(tx, await projectOf(tx, other, undefined, true), workId, true)),
+      inA(async (tx) =>
+        setProjectWorkDone(tx, await projectOf(tx, other, undefined, true), workId, true),
+      ),
     ).rejects.toMatchObject({ name: 'RecordNotFoundError' });
   });
 
@@ -480,7 +500,11 @@ describe.skipIf(!databaseAvailable())('Проекты контрагентов',
     ).rejects.toThrow();
     expect(await inA((tx) => contractorProjectCount(tx, cpA))).toBeGreaterThan(0);
     const lines = await inA((tx) => contractorProjects(tx, cpA));
-    expect(lines.find((l) => l.id === id)).toMatchObject({ status: 'planned', leadName: 'Алишер Т.', paid: 0 });
+    expect(lines.find((l) => l.id === id)).toMatchObject({
+      status: 'planned',
+      leadName: 'Алишер Т.',
+      paid: 0,
+    });
   });
 
   it('роль приложения не удаляет проекты и сделанные работы, не меняет контрагента и автора', async () => {
@@ -488,7 +512,9 @@ describe.skipIf(!databaseAvailable())('Проекты контрагентов',
       works: [{ name: 'Сделанная', executorEmployeeId: alisher, due: null }],
     });
     const workId = (await inA((tx) => projectCard(tx, id, undefined)))!.works[0]!.id;
-    await inA(async (tx) => setProjectWorkDone(tx, await projectOf(tx, id, undefined, true), workId, true));
+    await inA(async (tx) =>
+      setProjectWorkDone(tx, await projectOf(tx, id, undefined, true), workId, true),
+    );
     await expect(inA((tx) => tx.delete(projects).where(eq(projects.id, id)))).rejects.toEqual(
       permissionDenied,
     );
@@ -514,7 +540,10 @@ describe.skipIf(!databaseAvailable())('Проекты контрагентов',
     // Сделанную работу не удалить: строка не задета.
     expect(
       await inA((tx) =>
-        tx.delete(projectWorks).where(eq(projectWorks.id, workId)).returning({ id: projectWorks.id }),
+        tx
+          .delete(projectWorks)
+          .where(eq(projectWorks.id, workId))
+          .returning({ id: projectWorks.id }),
       ),
     ).toEqual([]);
   });
@@ -557,7 +586,9 @@ describe.skipIf(!databaseAvailable())('Проекты контрагентов',
     ).rejects.toThrow();
     await expect(
       inB((tx) =>
-        tx.insert(projectWorks).values({ projectId: id, name: 'Чужая', executorEmployeeId: alisher }),
+        tx
+          .insert(projectWorks)
+          .values({ projectId: id, name: 'Чужая', executorEmployeeId: alisher }),
       ),
     ).rejects.toThrow();
     // Изменить чужой проект нельзя: ни одной строки не задето.
@@ -572,7 +603,10 @@ describe.skipIf(!databaseAvailable())('Проекты контрагентов',
     ).toEqual([]);
     expect(
       await inB((tx) =>
-        tx.delete(projectWorks).where(eq(projectWorks.projectId, id)).returning({ id: projectWorks.id }),
+        tx
+          .delete(projectWorks)
+          .where(eq(projectWorks.projectId, id))
+          .returning({ id: projectWorks.id }),
       ),
     ).toEqual([]);
     expect(await inB((tx) => tx.select().from(tasks))).toEqual([]);

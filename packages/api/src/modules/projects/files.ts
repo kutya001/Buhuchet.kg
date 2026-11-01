@@ -9,6 +9,7 @@ import { canKeepProjects, projectViewerOf, projectWhere } from './common';
  * проекты» или ответственный проекта, пока контрагент не в архиве. История — у проекта. «Проекты
  * контрагентов» выключены — файлов проекта не видно.
  */
+// ОТКЛОНЕНИЕ: docs/deviations.md#Г-10
 export const projectFiles: FileListSource = {
   async resolve(tx, subject, id) {
     if (id === null || !hasPermission(subject, 'projView')) return null;
@@ -17,7 +18,10 @@ export const projectFiles: FileListSource = {
     if (!p) return null;
     const viewer = { ...projectViewerOf(subject), canKeep: canKeepProjects(subject) };
     return {
-      contractor: { id: p.contractor.id, responsibleEmployeeId: p.contractor.responsibleEmployeeId },
+      contractor: {
+        id: p.contractor.id,
+        responsibleEmployeeId: p.contractor.responsibleEmployeeId,
+      },
       editable:
         !p.contractor.archived &&
         projectWorksEditable(viewer, { members: p.members, status: 'in_progress' }),

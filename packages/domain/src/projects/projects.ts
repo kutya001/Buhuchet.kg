@@ -14,7 +14,10 @@ export const PROJECT_STATUSES = ['planned', 'in_progress', 'done', 'cancelled'] 
 export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
 
 /** Статус нового проекта (прототип `projectDlg`: «Планируется» или «В работе»). */
-export const PROJECT_NEW_STATUSES = ['planned', 'in_progress'] as const satisfies readonly ProjectStatus[];
+export const PROJECT_NEW_STATUSES = [
+  'planned',
+  'in_progress',
+] as const satisfies readonly ProjectStatus[];
 export type ProjectNewStatus = (typeof PROJECT_NEW_STATUSES)[number];
 
 export const PROJECT_NAME_MAX = 300;
@@ -74,7 +77,8 @@ export const PROJECT_MESSAGES: Readonly<Record<ProjectRefusal, string>> = {
   project_work_invalid: 'У работы нет названия, исполнителя или неверный срок',
   project_status_invalid: 'Такой смены статуса у проекта нет',
   project_cancelled: 'Проект отменён',
-  project_work_add_forbidden: 'Добавлять и отмечать работы может ответственный проекта или сотрудник с правом «Вести проекты и разовые услуги»',
+  project_work_add_forbidden:
+    'Добавлять и отмечать работы может ответственный проекта или сотрудник с правом «Вести проекты и разовые услуги»',
 };
 
 export interface ProjectProblem {
@@ -139,7 +143,11 @@ export function projectProblems(f: ProjectFields, paid: Tyiyn = 0): ProjectProbl
 export function projectWorksClean(works: readonly ProjectWorkInput[]): ProjectWorkInput[] {
   return works
     .filter((w) => w.name.trim())
-    .map((w) => ({ name: w.name.trim(), executorEmployeeId: w.executorEmployeeId, due: w.due || null }));
+    .map((w) => ({
+      name: w.name.trim(),
+      executorEmployeeId: w.executorEmployeeId,
+      due: w.due || null,
+    }));
 }
 
 /**

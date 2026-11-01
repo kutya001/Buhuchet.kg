@@ -26,11 +26,19 @@ export interface TaskFormValues {
   month: string;
   needFile: boolean;
   confirm: boolean;
+  /** Галочка «Проект» (у «По контрагенту», при включённых «Проектах контрагентов»; задача 2.26). */
+  withProject: boolean;
+  projectId: string;
 }
 
-/** Что подставить в новую задачу: из карточки контрагента — «По контрагенту» с ним. */
+/**
+ * Что подставить в новую задачу: из карточки контрагента — «По контрагенту» с ним; «Задача по
+ * проекту» — ещё проект и исполнитель (главный ответственный проекта).
+ */
 export interface TaskFormPreset {
   contractorId?: string;
+  projectId?: string;
+  executorEmployeeId?: string;
 }
 
 /** Вариант списка формы: код и подпись. */
@@ -85,21 +93,29 @@ export function initialTaskForm({
       month: task.dueDate.slice(0, 7),
       needFile: task.needFile,
       confirm: task.confirm,
+      withProject: !!task.project,
+      projectId: task.project?.id ?? '',
     };
   }
   const contractorId = preset?.contractorId ?? '';
+  const executor = preset?.executorEmployeeId;
   return {
     scope: contractorId ? 'contractor' : 'general',
     title: '',
     description: '',
     categoryCode: options.categories[0]?.code ?? '',
     contractorId,
-    executorEmployeeId: defaultExecutor(options, contractorId, employeeId),
+    executorEmployeeId:
+      executor && options.executors.some((e) => e.id === executor)
+        ? executor
+        : defaultExecutor(options, contractorId, employeeId),
     term: 'day',
     date: addDays(today, 1),
     month: today.slice(0, 7),
     needFile: false,
     confirm: options.confirmDefault,
+    withProject: !!(contractorId && preset?.projectId),
+    projectId: contractorId ? (preset?.projectId ?? '') : '',
   };
 }
 
@@ -130,13 +146,17 @@ export function taskFormLists(
   };
 }
 
-export type TaskFormField = 'title' | 'contractorId' | 'executorEmployeeId' | 'date' | 'month';
+export type TaskFormField =
+  'title' | 'contractorId' | 'projectId' | 'executorEmployeeId' | 'date' | 'month';
 
 /** Ошибки полей до отправки (прототип `taskDlg` → «Поставить задачу»): ключи словаря. */
 export function taskFormProblems(v: TaskFormValues): Partial<Record<TaskFormField, UiTextKey>> {
   const problems: Partial<Record<TaskFormField, UiTextKey>> = {};
   if (!/[^\s\p{Cf}]/u.test(v.title)) problems.title = 'task.form.title_required';
   if (v.scope === 'contractor' && !v.contractorId) problems.contractorId = 'task.form.cp_required';
+  // Прототип `taskDlg`: галочка «Проект» стоит, а проект не выбран.
+  if (v.scope === 'contractor' && v.withProject && !v.projectId)
+    problems.projectId = 'task.form.project_required';
   if (!v.executorEmployeeId) problems.executorEmployeeId = 'task.form.exec_required';
   if (v.term === 'day' && !/^\d{4}-\d{2}-\d{2}$/.test(v.date))
     problems.date = 'task.form.date_required';
@@ -146,8 +166,8 @@ export function taskFormProblems(v: TaskFormValues): Partial<Record<TaskFormFiel
 }
 
 /**
- * Тело запроса: у «Общая» контрагента нет; «На месяц» — первый день месяца (срок — последний день
- * ставит сервер).
+ * Тело запроса: у «Общая» контрагента и проекта нет; проект — только с галочкой «Проект»; «На месяц» —
+ * первый день месяца (срок — последний день ставит сервер).
  */
 export function taskFormBody(v: TaskFormValues): CreateTaskRequest {
   return {
@@ -160,6 +180,7 @@ export function taskFormBody(v: TaskFormValues): CreateTaskRequest {
     dueDate: v.term === 'month' ? `${v.month}-01` : v.date,
     needFile: v.needFile,
     confirm: v.confirm,
+    projectId: v.scope === 'contractor' && v.withProject && v.projectId ? v.projectId : null,
   };
 }
 

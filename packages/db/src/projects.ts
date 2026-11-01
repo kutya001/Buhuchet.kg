@@ -369,12 +369,7 @@ export async function listProjectsPage(tx: Tx, query: ListQuery, o: ProjectListO
   return { ...page, rows: page.rows.map((r) => toRow(r as RowData, o.money)) };
 }
 
-export function listProjectValues(
-  tx: Tx,
-  key: string,
-  o: ProjectListOptions,
-  q?: string,
-) {
+export function listProjectValues(tx: Tx, key: string, o: ProjectListOptions, q?: string) {
   return selectListValues({
     columns: projectListColumns(o.t, o.money),
     key,
@@ -546,7 +541,10 @@ async function checkInput(
   before: { members: readonly string[]; executors: readonly string[]; paid: Tyiyn } | null,
   contractorId?: string | null,
 ) {
-  if (input.members.length > PROJECT_MEMBERS_MAX || new Set(input.members).size !== input.members.length)
+  if (
+    input.members.length > PROJECT_MEMBERS_MAX ||
+    new Set(input.members).size !== input.members.length
+  )
     throw refuse('project_members_required', 400, 'members');
   if (input.works.length > PROJECT_WORKS_MAX) throw refuse('project_work_invalid', 400, 'works');
   throwProblems(
@@ -603,7 +601,8 @@ export async function createProject(
   input: ProjectInput & { contractorId: string; status: ProjectNewStatus },
   ctx: { scope: SQL | undefined },
 ): Promise<{ id: string }> {
-  if (!UUID.test(input.contractorId)) throw refuse('project_contractor_required', 400, 'contractor');
+  if (!UUID.test(input.contractorId))
+    throw refuse('project_contractor_required', 400, 'contractor');
   const [c] = await tx
     .select(contractorFields)
     .from(contractors)
@@ -689,7 +688,8 @@ export async function updateProject(
   const works = input.works
     .filter((w) => w.name.trim() || (w.id && byId.get(w.id)?.done))
     .map((w) => ({ ...w, name: w.name.trim() }));
-  if (works.some((w) => w.id && !byId.has(w.id))) throw refuse('project_work_invalid', 400, 'works');
+  if (works.some((w) => w.id && !byId.has(w.id)))
+    throw refuse('project_work_invalid', 400, 'works');
   const kept = new Set(works.map((w) => w.id).filter(Boolean));
   // Сделанная работа не убирается: если её нет во входе, она остаётся на месте.
   const removed = current.filter((w) => !kept.has(w.id) && !w.done);
@@ -707,7 +707,12 @@ export async function updateProject(
   diff('plan', project.plan == null ? null : Number(project.plan), input.plan);
   diff('lead', project.leadEmployeeId, input.lead);
   diff('members', members, input.members);
-  if (removed.length) diff('worksRemoved', [], removed.map((w) => w.name));
+  if (removed.length)
+    diff(
+      'worksRemoved',
+      [],
+      removed.map((w) => w.name),
+    );
   const added = works.filter((w) => !w.id).map((w) => w.name);
   if (added.length) diff('worksAdded', [], added);
   const edited = works.filter((w) => {
@@ -719,7 +724,12 @@ export async function updateProject(
         (was.dueDate ?? null) !== (w.due || null))
     );
   });
-  if (edited.length) diff('worksEdited', [], edited.map((w) => w.name));
+  if (edited.length)
+    diff(
+      'worksEdited',
+      [],
+      edited.map((w) => w.name),
+    );
   await tx
     .update(projects)
     .set({
@@ -796,8 +806,9 @@ export async function updateProject(
 /**
  * Смена статуса (прототип `setProjStatus`, `stepTo` для `proj`, «Отменить проект», `rollbackDlg`): шаг
  * вперёд по шкале, «Отменить проект» из «Планируется» и «В работе», откат на один шаг с причиной.
- * Пишет «Историю статусов».
+ * Пишет «Историю статусов» (в ленте «История» проекта и контрагента смены статуса нет).
  */
+// ОТКЛОНЕНИЕ: docs/deviations.md#Г-10
 export async function setProjectStatus(
   tx: Tx,
   { project }: LockedProject,
@@ -1032,8 +1043,7 @@ export async function projectCard(
   const ids = new Set<string>();
   for (const h of history)
     for (const c of (h.changes as { field: string; from?: unknown; to?: unknown }[]) ?? []) {
-      for (const v of [c.from, c.to].flat())
-        if (typeof v === 'string' && UUID.test(v)) ids.add(v);
+      for (const v of [c.from, c.to].flat()) if (typeof v === 'string' && UUID.test(v)) ids.add(v);
     }
   const known = ids.size
     ? await tx
@@ -1200,7 +1210,9 @@ export async function taskProjectAllowed(
     .select({ id: projects.id, status: projects.status })
     .from(projects)
     .where(and(eq(projects.id, projectId), eq(projects.contractorId, contractorId)));
-  return !!row && projectOfferedForTask({ id: row.id, status: row.status as ProjectStatus }, current);
+  return (
+    !!row && projectOfferedForTask({ id: row.id, status: row.status as ProjectStatus }, current)
+  );
 }
 
 /** Включены ли «Проекты контрагентов» в учётной политике текущей организации. */

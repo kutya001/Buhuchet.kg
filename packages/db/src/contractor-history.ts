@@ -53,7 +53,8 @@ export interface ContractorHistory {
 const actor = alias(employees, 'cp_hist_actor');
 
 /** Поля, значения которых — сотрудник. */
-const EMPLOYEE_FIELDS = new Set(['responsibleEmployeeId', 'executorEmployeeId']);
+// `executor` — исполнитель работы проекта («Добавлена работа: … (исполнитель)», задача 2.26).
+const EMPLOYEE_FIELDS = new Set(['responsibleEmployeeId', 'executorEmployeeId', 'executor']);
 /** Поля со справочным кодом: форма собственности, режимы, УГНС, льготы. */
 const CODE_FIELDS = new Set(['formCode', 'regimeCode', 'regime2Code', 'taxOfficeCode', 'benefits']);
 

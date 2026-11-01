@@ -66,7 +66,14 @@ describe.skipIf(!databaseAvailable())('Проекты демо-организа�
       projectSummary(tx, { employeeId: demoId('employee', 'e1'), seeAll: true }, TODAY, true),
     );
     // Активные: p1, p2, p4; «Мои» у руководителя — нет; осталось получить — планы p1 и p2 (оплат ещё нет).
-    expect(owner).toMatchObject({ active: 3, mine: 0, inProgress: 2, planned: 1, overdue: 0, any: true });
+    expect(owner).toMatchObject({
+      active: 3,
+      mine: 0,
+      inProgress: 2,
+      planned: 1,
+      overdue: 0,
+      any: true,
+    });
     expect(owner.left).toBe((120_000 + 50_000) * 100);
   });
 });

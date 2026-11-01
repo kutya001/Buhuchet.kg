@@ -62,7 +62,7 @@ async function historyAccess(
     money: features.taxpay && (can('finView') || can('money')) && finScopeOf(subject),
     // ОТКЛОНЕНИЕ: docs/deviations.md#В-34 — записи разовых услуг тому, кто видит услуги.
     services: features.finops && servicesVisible(subject, features) && serviceReadScope(subject),
-    // Записи проектов — тому, кто видит проекты (прототип: вкладка «Проекты»), по их видимости.
+    // ОТКЛОНЕНИЕ: docs/deviations.md#Г-10 — записи проектов тому, кто видит проекты, по их видимости.
     projects: features.projects && can('projView') && projectWhere(subject),
   };
 }

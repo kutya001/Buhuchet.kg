@@ -130,7 +130,10 @@ export const PROJECTS_TEXTS = {
   'proj.dlg.name_ph': { ru: 'Например: восстановление учёта 2024–2025', section: S },
   'proj.dlg.cp': { ru: 'Контрагент', section: S },
   'proj.dlg.cp_pick': { ru: '— выберите —', section: S },
-  'proj.dlg.cp_hint': { ru: 'У контрагента может быть несколько проектов одновременно', section: S },
+  'proj.dlg.cp_hint': {
+    ru: 'У контрагента может быть несколько проектов одновременно',
+    section: S,
+  },
   'proj.dlg.from': { ru: 'Срок с', section: S },
   'proj.dlg.to': { ru: 'Срок по', section: S },
   'proj.dlg.status': { ru: 'Статус', section: S },
@@ -177,7 +180,6 @@ export const PROJECTS_TEXTS = {
   'proj.cp.col.left': { ru: 'Остаток', section: S },
   'proj.cp.plan_none': { ru: 'не задан', section: S },
   'cp.card.tab.projects': { ru: 'Проекты', section: S },
-  'cp.hist.project': { ru: 'Проект «{name}»', section: S },
   // Поле «Проект» формы задачи и карточка задачи (прототип tasks.js `taskDlg`, `openTask`).
   'task.col.proj': { ru: 'Проект', section: S },
   'task.form.project': { ru: 'Проект', section: S },

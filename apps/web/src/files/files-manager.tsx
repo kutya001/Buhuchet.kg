@@ -26,6 +26,7 @@ import { useListPage, type FetchListPage } from '../lists/use-list-page';
 import { useViewSettings } from '../lists/view-settings';
 import { useShell } from '../shell/context';
 import { useReportActions } from '../reports/report-actions';
+import { openProjectCard } from '../projects/project-card-store';
 import { useTaskActions } from '../tasks/task-actions';
 import { taskQuery } from '../tasks/tasks-data';
 import {
@@ -133,7 +134,7 @@ export function FilesManager() {
   /**
    * «Перейти к источнику» (прототип `f.open`): карточка отчёта или задачи, окно значения показателя,
    * у файла контрагента (из свидетельства и выписки) — вкладка «Файлы» его карточки, у файла разовой
-   * услуги и её оплаты — карточка услуги (прототип `serviceCard`).
+   * услуги и её оплаты — карточка услуги (прототип `serviceCard`), у файла проекта — карточка проекта.
    */
   const sourceOf = (file: FileManagerRow): (() => void) | null => {
     if (file.kind === 'contractor' && file.contractor) {
@@ -158,6 +159,11 @@ export function FilesManager() {
       const { id } = file.contractor;
       const month = file.sourceRef;
       return () => void kpi.open(id, month);
+    }
+    // Файл проекта (задача 2.26) — карточка проекта.
+    if (file.kind === 'project' && file.sourceId) {
+      const id = file.sourceId;
+      return () => openProjectCard(id);
     }
     if (file.kind === 'one_off_service' && file.sourceRef) {
       const id = file.sourceRef;

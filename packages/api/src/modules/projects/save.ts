@@ -140,7 +140,10 @@ export const projectEditRoute = createRoute({
   middleware: [requirePermission('projects')] as const,
   request: { params: ProjectIdParam, body: body(ProjectEditRequest) },
   responses: {
-    200: { description: 'Сохранено; изменения — в истории «было → стало»', content: json(OkResponse) },
+    200: {
+      description: 'Сохранено; изменения — в истории «было → стало»',
+      content: json(OkResponse),
+    },
     400: fieldErrors,
     401: unauthorized,
     403: off('«Вести проекты и разовые услуги»'),
