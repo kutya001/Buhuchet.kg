@@ -18,6 +18,7 @@ import { recordVersion, timestamps } from './columns';
 import { contractors } from './contractors';
 import { organizations } from './organizations';
 import { taskCategories } from './platform-dicts';
+import { projects } from './projects';
 import { appRole, orgIsolation } from './rls';
 import { employees } from './staff';
 import { users } from './users';
@@ -55,6 +56,8 @@ export const tasks = pgTable(
       .references(() => taskCategories.code),
     /** Пусто — общая задача. */
     contractorId: uuid('contractor_id'),
+    /** Проект контрагента задачи (задача 2.26); пусто — задача без проекта. */
+    projectId: uuid('project_id'),
     executorEmployeeId: uuid('executor_employee_id').notNull(),
     /** Постановщик. */
     authorEmployeeId: uuid('author_employee_id').notNull(),
@@ -89,6 +92,12 @@ export const tasks = pgTable(
       columns: [t.contractorId, t.orgId],
       foreignColumns: [contractors.id, contractors.orgId],
     }).onDelete('cascade'),
+    // Проект — того же контрагента, что и задача (у общей задачи проекта нет — `tasks_project_check`).
+    foreignKey({
+      name: 'tasks_project_fk',
+      columns: [t.projectId, t.contractorId, t.orgId],
+      foreignColumns: [projects.id, projects.contractorId, projects.orgId],
+    }),
     employeeRef('tasks_executor_fk', t.executorEmployeeId, t.orgId),
     employeeRef('tasks_author_fk', t.authorEmployeeId, t.orgId),
     employeeRef('tasks_rework_by_fk', t.reworkByEmployeeId, t.orgId),
@@ -97,10 +106,14 @@ export const tasks = pgTable(
     index('tasks_author_idx').on(t.orgId, t.authorEmployeeId, t.status),
     index('tasks_contractor_idx').on(t.orgId, t.contractorId, t.createdAt),
     index('tasks_due_idx').on(t.orgId, t.dueDate),
+    index('tasks_project_idx')
+      .on(t.orgId, t.projectId)
+      .where(sql`${t.projectId} is not null`),
     index('tasks_pending_idx')
       .on(t.orgId)
       .where(sql`${t.status} = 'on_confirm'`),
     check('tasks_title_check', sql`char_length(btrim(${t.title})) > 0`),
+    check('tasks_project_check', sql`${t.projectId} is null or ${t.contractorId} is not null`),
     check('tasks_term_check', oneOf(t.term, TASK_TERMS)),
     check('tasks_status_check', oneOf(t.status, TASK_STATUSES)),
     // «На месяц» — срок всегда последний день месяца (ТЗ «Срок задачи»).

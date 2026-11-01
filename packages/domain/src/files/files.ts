@@ -54,6 +54,8 @@ export const FILE_SOURCE_KINDS = [
   // Разовая услуга и её оплаты (задача 2.22): в «Файловом менеджере» — вид «Разовая услуга».
   'one_off_service',
   'one_off_service_payment',
+  // Проект контрагента (задача 2.26): блок «Файлы» карточки проекта, в «Файловом менеджере» — «Проект».
+  'project',
   'task',
   'indicator_value',
 ] as const;

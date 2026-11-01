@@ -25,6 +25,8 @@ import {
   getTaskRoute,
   taskFormOptionsHandler,
   taskFormOptionsRoute,
+  taskProjectsHandler,
+  taskProjectsRoute,
 } from './card';
 import {
   exportTasksHandler,
@@ -48,12 +50,13 @@ export function tasksModule(deps: ApiDeps) {
   return (
     createModuleApp()
       .openapi(listTasksRoute, listTasksHandler(deps))
-      // Раньше `/tasks/{id}`: иначе «summary», «values», «export» и «form-options» разбирались бы как
+      // Раньше `/tasks/{id}`: иначе «summary», «values», «export» и «form-…» разбирались бы как
       // номер задачи.
       .openapi(taskSummaryRoute, taskSummaryHandler(deps))
       .openapi(taskValuesRoute, taskValuesHandler(deps))
       .openapi(exportTasksRoute, exportTasksHandler(deps))
       .openapi(taskFormOptionsRoute, taskFormOptionsHandler(deps))
+      .openapi(taskProjectsRoute, taskProjectsHandler(deps))
       .openapi(getTaskRoute, getTaskHandler(deps))
       .openapi(createTaskRoute, createTaskHandler(deps))
       .openapi(updateTaskRoute, updateTaskHandler(deps))

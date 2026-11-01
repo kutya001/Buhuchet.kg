@@ -15,6 +15,7 @@ import {
   employees,
   moneyOperations,
   ownershipForms,
+  projects,
   reports,
   reportTypes,
   tasks,
@@ -52,7 +53,8 @@ export interface ContractorHistory {
 const actor = alias(employees, 'cp_hist_actor');
 
 /** Поля, значения которых — сотрудник. */
-const EMPLOYEE_FIELDS = new Set(['responsibleEmployeeId', 'executorEmployeeId']);
+// `executor` — исполнитель работы проекта («Добавлена работа: … (исполнитель)», задача 2.26).
+const EMPLOYEE_FIELDS = new Set(['responsibleEmployeeId', 'executorEmployeeId', 'executor']);
 /** Поля со справочным кодом: форма собственности, режимы, УГНС, льготы. */
 const CODE_FIELDS = new Set(['formCode', 'regimeCode', 'regime2Code', 'taxOfficeCode', 'benefits']);
 
@@ -124,7 +126,7 @@ async function namesOf(
 }
 
 /**
- * Подписи записей отчётов, назначений и задач: вид и период, название вида, название задачи. Название
+ * Подписи записей отчётов, назначений, задач и проектов: вид и период, название вида, название. Название
  * задачи — только пока она у этого контрагента: перенесённую к другому или общую не подписываем.
  */
 async function subjectsOf(
@@ -142,7 +144,8 @@ async function subjectsOf(
   const reportIds = idsOf('report');
   const assignmentIds = idsOf('assignment');
   const taskIds = idsOf('task');
-  const [reportRows, assignmentRows, taskRows] = await Promise.all([
+  const projectIds = idsOf('project');
+  const [reportRows, assignmentRows, taskRows, projectRows] = await Promise.all([
     reportIds.length
       ? tx
           .select({
@@ -169,6 +172,12 @@ async function subjectsOf(
           .from(tasks)
           .where(and(inArray(tasks.id, taskIds), eq(tasks.contractorId, contractorId)))
       : [],
+    projectIds.length
+      ? tx
+          .select({ id: projects.id, name: projects.name })
+          .from(projects)
+          .where(and(inArray(projects.id, projectIds), eq(projects.contractorId, contractorId)))
+      : [],
   ]);
   for (const r of reportRows) {
     const label = periodLabel(
@@ -179,6 +188,7 @@ async function subjectsOf(
   }
   for (const r of assignmentRows) out.set(`assignment:${r.id}`, r.name);
   for (const r of taskRows) out.set(`task:${r.id}`, r.name);
+  for (const r of projectRows) out.set(`project:${r.id}`, r.name);
   return out;
 }
 
@@ -205,6 +215,13 @@ export interface ContractorHistoryAccess {
    * услуги», контрагент в области, где сотрудник видит услуги.
    */
   services: SQL | undefined | false;
+  /**
+   * Проекты контрагента (задача 2.26): функция «Проекты контрагентов» включена, право «Просматривать
+   * проекты»; условие — какие проекты видны (`projectVisibility`, как вкладка «Проекты» карточки).
+   */
+  projects: SQL | undefined | false;
+  /** Деньги проектов видны (`projectMoneyVisible`): иначе «было → стало» стоимости проекта убирается. */
+  projectMoney?: boolean;
 }
 
 /**
@@ -298,14 +315,51 @@ async function visibleEntries(
   // Оплаты за обслуживание — с правом «Видеть плату» и включённой функцией (как вкладка «Обслуживание»).
   if (access.fee) own.push(eq(auditLog.entity, 'fee_payment'));
   if (services) own.push(inArray(auditLog.entity, ['one_off_service', 'one_off_service_payment']));
+  // Проекты — те, что сотрудник видит (`projectVisibility`: условие над проектом и его контрагентом).
+  if (access.projects !== false) {
+    own.push(
+      access.projects
+        ? and(
+            eq(auditLog.entity, 'project'),
+            inArray(
+              auditLog.entityId,
+              tx
+                .select({ id: sql<string>`${projects.id}::text` })
+                .from(projects)
+                .innerJoin(contractors, eq(contractors.id, projects.contractorId))
+                .where(and(eq(projects.contractorId, id), access.projects)),
+            ),
+          )!
+        : eq(auditLog.entity, 'project'),
+    );
+  }
   return and(or(...own), files ? undefined : notInArray(auditLog.action, [...FILE_ACTIONS]));
 }
 
-/** Запись без полей платы; запись только о плате — null целиком, с причиной (в ней может быть сумма). */
-function withoutFee<T extends { changes: HistoryChange[] }>(r: T): T | null {
-  const changes = r.changes.filter((c) => !FEE_FIELDS.has(c.field));
+/** Запись без полей `fields`; запись только о них — null целиком, с причиной (в ней может быть сумма). */
+function withoutFields<T extends { changes: HistoryChange[] }>(
+  r: T,
+  fields: ReadonlySet<string>,
+): T | null {
+  const changes = r.changes.filter((c) => !fields.has(c.field));
   if (changes.length === r.changes.length) return r;
   return changes.length ? { ...r, changes } : null;
+}
+
+/** Деньги проекта в его истории: планируемая стоимость (транши — часть 2 задачи 2.26). */
+const PROJECT_MONEY_FIELDS: ReadonlySet<string> = new Set(['plan']);
+
+/**
+ * Записи, которые видит сотрудник: без полей платы без права «Видеть плату», без стоимости проекта —
+ * тому, кто не видит деньги проектов.
+ */
+function visibleChanges<T extends { entity: string; changes: HistoryChange[] }>(
+  r: T,
+  access: ContractorHistoryAccess,
+): T | null {
+  const fee = access.fee ? r : withoutFields(r, FEE_FIELDS);
+  if (!fee || fee.entity !== 'project' || access.projectMoney) return fee;
+  return withoutFields(fee, PROJECT_MONEY_FIELDS);
 }
 
 /** История контрагента в области `scope`; null — нет такого или он вне области. */
@@ -338,7 +392,7 @@ export async function contractorHistory(
     .where(and(eq(auditLog.contractorId, id), visible))
     .orderBy(desc(auditLog.at), desc(auditLog.id))
     .limit(o.limit ?? 200)
-    .then((list) => (o.access.fee ? list : list.flatMap((r) => withoutFee(r) ?? [])));
+    .then((list) => list.flatMap((r) => visibleChanges(r, o.access) ?? []));
   const [names, subjects] = await Promise.all([
     namesOf(tx, referencesOf(rows)),
     subjectsOf(tx, id, rows, o.t),

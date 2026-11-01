@@ -127,6 +127,7 @@ describe.skipIf(!databaseAvailable())('Задачи: данные', () => {
     description: '',
     categoryCode: 'КАТ-001',
     contractorId: null,
+    projectId: null,
     executorEmployeeId: acc.employeeId,
     term: 'day',
     dueDate: '2026-10-30',

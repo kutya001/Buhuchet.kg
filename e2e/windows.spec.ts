@@ -1,4 +1,5 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
+import { platformAdmin } from './admin';
 import { finger, settledBox } from './helpers';
 
 // Окна и уведомления оболочки (задача #12) через настоящий сайт. Карточек записей ещё нет: окно —
@@ -263,8 +264,9 @@ test.describe('Этап 1: окна и уведомления', () => {
     baseURL,
     isMobile,
   }) => {
-    await signIn(page.request, new URL(baseURL!).origin);
-    await page.goto('/app/projects/active');
+    // Модуль без своего экрана есть пока только в Админке — «Telegram» с одним способом «Объявление».
+    await platformAdmin(page.request, new URL(baseURL!).origin);
+    await page.goto('/app/tg/log');
     const view = page.viewportSize()!;
     // Один способ добавления — «+ Добавить» срабатывает сразу, без меню.
     const add = async () => {
@@ -272,10 +274,9 @@ test.describe('Этап 1: окна и уведомления', () => {
     };
     const toasts = page.getByRole('status');
 
-    // Уведомление даёт способ добавления модуля без своего экрана — «Проект» в «Проектах
-    // контрагентов» (у «Финансовых операций» оба способа уже открывают окна). Одинаковые уведомления
-    // встают столбиком.
-    const stub = 'Проект';
+    // Уведомление даёт способ добавления модуля без своего экрана — «Объявление» в «Telegram»
+    // (у модулей организации все способы уже открывают окна). Одинаковые уведомления встают столбиком.
+    const stub = 'Объявление';
     await add();
     const first = toasts.filter({ hasText: `«${stub}» появится вместе с экраном модуля.` }).first();
     const box = await settledBox(first);
@@ -325,7 +326,7 @@ test.describe('Этап 1: окна и уведомления', () => {
       expect((await first.boundingBox())!.x).toBeCloseTo(toast.x, 0);
       await swipe.drag(from, { x: from.x - toast.width / 3 - 30, y: from.y });
       await expect(toasts).toHaveCount(0, { timeout: 1000 });
-      await expect(page).toHaveURL(/\/app\/projects\/active$/);
+      await expect(page).toHaveURL(/\/app\/tg\/log$/);
     });
   });
 });

@@ -77,6 +77,8 @@ import {
   statusPillView,
 } from '../status/status-view';
 import { ContractorTasksTab } from '../tasks/contractor-tasks-tab';
+import { ContractorProjectsTab } from '../projects/contractor-projects-tab';
+import { contractorProjectsQuery } from '../projects/projects-data';
 import { contractorTasksQuery } from '../tasks/tasks-data';
 import { AssignmentDialog } from './assignment-dialog';
 import { useCardEdits, type CardEdits } from './card-edits';
@@ -94,7 +96,7 @@ import { serviceQuery } from './service-data';
 import { ServicePlanNote, ServiceStatusBlock } from './service-actions';
 
 export type ContractorCardTab =
-  'main' | 'reports' | 'pick' | 'money' | 'fee' | 'tasks' | 'kpi' | 'files' | 'hist';
+  'main' | 'reports' | 'pick' | 'money' | 'fee' | 'projects' | 'tasks' | 'kpi' | 'files' | 'hist';
 
 const REPORTS_GRID: GridKey = 'cps.reports';
 
@@ -146,8 +148,8 @@ export interface ContractorCardProps {
  * `openCp`): в заголовке — название и «архив», под ним ИНН, режим, приостановка, «разовый» и
  * «просрочено отчётов: N». Вкладки «Основное», «Отчёты к сдаче» (просроченные — красным числом),
  * «Подбор отчётов» (у постоянного), «Деньги» (при «Учёте оплаты налогов»), «Обслуживание» (при «Плате
- * за обслуживание», с правом «Видеть плату», у постоянного), «Задачи», «Показатели», «Файлы», «История»;
- * «Проекты» добавит их задача. В шапке — «Принять оплату» за обслуживание (прототип `cp-feeacc`). Уйти
+ * за обслуживание», с правом «Видеть плату», у постоянного), «Проекты» (при «Проектах контрагентов», с
+ * правом «Просматривать проекты»; задача 2.26), «Задачи», «Показатели», «Файлы», «История». В шапке — «Принять оплату» за обслуживание (прототип `cp-feeacc`). Уйти
  * с «Подбора отчётов» с несохранённым выбором — вопрос «Подбор не применён». Внизу — «Действия» и
  * «Готово»; «На весь экран» и свайпы по вкладкам — у окна карточки.
  */
@@ -167,8 +169,10 @@ export function ContractorCardWindow(props: ContractorCardProps) {
   const archived = (c?.serviceStatus ?? initial?.serviceStatus) === 'archived';
   const kpiOn = access.feature('indicators') && access.can('kpiView') && regular;
   const tasksOn = access.feature('tasks');
+  const projectsOn = access.feature('projects') && access.can('projView');
   const kpiCount = useKpiCardCount(id, kpiOn && !archived);
   const tasks = useQuery({ ...contractorTasksQuery(id), enabled: tasksOn }).data;
+  const projects = useQuery({ ...contractorProjectsQuery(id), enabled: projectsOn }).data;
   const files = useQuery({ ...contractorFilesQuery(id), enabled: filesOn }).data;
   const overdue = c?.overdue ?? initial?.overdue ?? 0;
   const repView = access.can('repView');
@@ -200,6 +204,16 @@ export function ContractorCardWindow(props: ContractorCardProps) {
       ? [{ id: 'money', label: t('cp.card.tab.money'), icon: 'wallet' } satisfies CardTab]
       : []),
     ...(feeOn ? [{ id: 'fee', label: t('cp.card.tab.fee'), icon: 'coins' } satisfies CardTab] : []),
+    ...(projectsOn
+      ? [
+          {
+            id: 'projects',
+            label: t('cp.card.tab.projects'),
+            icon: 'briefcase',
+            ...(projects?.items.length ? { count: { value: projects.items.length } } : {}),
+          } satisfies CardTab,
+        ]
+      : []),
     ...(tasksOn
       ? [
           {
@@ -338,6 +352,9 @@ export function ContractorCardWindow(props: ContractorCardProps) {
             onAccept={() => feeDialogs.accept(id)}
             onRemind={() => feeDialogs.remind(id)}
           />
+        ) : null}
+        {shownTab === 'projects' ? (
+          <ContractorProjectsTab contractor={{ id, name: c?.name ?? initial?.name ?? '' }} />
         ) : null}
         {shownTab === 'tasks' ? <ContractorTasksTab contractorId={id} archived={archived} /> : null}
         {shownTab === 'kpi' ? <KpiCardTab contractorId={id} /> : null}

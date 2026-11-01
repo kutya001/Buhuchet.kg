@@ -12,6 +12,7 @@ import { ServiceDialog } from '../finance/service-dialogs';
 import { useFeeDialogs } from '../fees/fee-dialogs';
 import { feeMenuEntries, type FeeMenuContractor } from '../fees/fee-menu';
 import { useErrorText, useT } from '../l10n/provider';
+import { useProjectActions } from '../projects/project-actions';
 import { useShell } from '../shell/context';
 import { BaseChangesDialog } from './base-changes';
 import { closeContractorCard, openContractorCard, useContractorCardRequest } from './card-store';
@@ -24,6 +25,7 @@ import type { RegdocsPrefill } from './contractor-regdocs-model';
 import {
   contractorMenuEntries,
   menuContractorOf,
+  newProjectMenuEntries,
   oneOffMenuEntries,
   rowService,
   type MenuContractor,
@@ -104,6 +106,8 @@ export function useContractorActions(): {
     tariff: access.can('tariff'),
   };
   const oneOffOn = access.can('projects') && access.feature('finops');
+  const projectOn = access.can('projects') && access.feature('projects');
+  const projectActions = useProjectActions();
   // Область группы «Проекты»: «Свои» — только контрагенты, за которых отвечает сам сотрудник.
   const projAll = !editor || scopeOf(editor.subject, 'projects') === 'all';
   const pages = useEnablePages();
@@ -143,12 +147,20 @@ export function useContractorActions(): {
             run: { accept: () => fee.accept(c.id), remind: () => fee.remind(c.id) },
           })
         : [],
-      projects: oneOffMenuEntries({
-        on: oneOffOn,
-        inScope: projAll || c.responsibleId === employeeId,
-        t,
-        run: () => setOneOff(openSlot({ id: c.id, name: c.name })),
-      }),
+      projects: [
+        ...oneOffMenuEntries({
+          on: oneOffOn,
+          inScope: projAll || c.responsibleId === employeeId,
+          t,
+          run: () => setOneOff(openSlot({ id: c.id, name: c.name })),
+        }),
+        ...newProjectMenuEntries({
+          on: projectOn,
+          inScope: projAll || c.responsibleId === employeeId,
+          t,
+          run: () => projectActions.newProject({ id: c.id, name: c.name }),
+        }),
+      ],
       run: {
         open: () => openContractorCard({ id: c.id }),
         edit: () => setEdit(openSlot(c.id)),
@@ -326,6 +338,7 @@ export function useContractorActions(): {
           onUnarchived={(c) => openContractorCard({ id: c.id })}
         />
       ) : null}
+      {projectActions.dialogs}
       {oneOff ? (
         <ServiceDialog
           key={`one-off-${oneOff.n}`}

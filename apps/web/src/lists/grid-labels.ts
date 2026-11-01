@@ -17,6 +17,7 @@ export type CountKey =
   | 'fin.j.count'
   | 'fin.r.count'
   | 'fin.b.count'
+  | 'proj.count'
   | 'kpi.period.count'
   | 'kpi.missing.count'
   | 'files.count'

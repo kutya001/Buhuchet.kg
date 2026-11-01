@@ -45,6 +45,8 @@ export const TaskRow = z.object({
   category: z.object({ code: z.string(), name: z.string() }),
   /** null — общая задача. */
   contractor: z.object({ id: Uuid, name: z.string() }).nullable(),
+  /** Проект контрагента (задача 2.26); null — задача не по проекту. */
+  project: z.object({ id: Uuid, name: z.string() }).nullable(),
   executor: Person,
   author: Person,
   term: TaskTerm,
@@ -192,6 +194,8 @@ export const TaskFieldsBody = z.object({
   categoryCode: z.string().trim().min(1).max(60).refine(noNul),
   /** null — «Общая». */
   contractorId: Uuid.nullable(),
+  /** «Проект» (галочка формы, задача 2.26): проект выбранного контрагента; null — не по проекту. */
+  projectId: Uuid.nullable().default(null),
   executorEmployeeId: Uuid,
   term: TaskTerm,
   /** «На день» — дата; «На месяц» — любой день месяца, срок станет последним днём. */
@@ -238,6 +242,8 @@ export const TaskFormOptions = z.object({
   ),
   confirmDefault: z.boolean(),
   filesOn: z.boolean(),
+  /** Включены «Проекты контрагентов»: в форме есть галочка «Проект». */
+  projectsOn: z.boolean(),
 });
 export type TaskFormOptions = z.infer<typeof TaskFormOptions>;
 

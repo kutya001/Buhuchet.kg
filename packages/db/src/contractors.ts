@@ -57,6 +57,7 @@ import {
   oneOffServices,
   ownershipForms,
   platformReference,
+  projects,
   assignments,
   reportBases,
   reports,
@@ -1603,15 +1604,20 @@ export async function transferContractors(
  * Что есть по контрагенту — отчёты, деньги, проекты и услуги: без них его можно удалить (ТЗ
  * «Контрагента нельзя удалить, если по нему есть отчёты»). Деньги — операции по контрагенту (задача
  * 2.19); разовые услуги, в том числе удалённые (прототип cpActions: `SERVICES.some(s=>s.cp===c.id)`),
- * — задача 2.22; проекты добавит задача проектов.
+ * — задача 2.22; проекты (прототип: `PROJECTS.some(p=>p.cp===c.id)`) — задача 2.26.
  */
 export async function contractorUsage(tx: Tx, id: string): Promise<ContractorUsage> {
-  const [reportCount, money, services] = await Promise.all([
+  const [reportCount, money, services, projectRows] = await Promise.all([
     contractorReportCount(tx, id),
     contractorHasMoney(tx, id),
     tx.select({ n: count() }).from(oneOffServices).where(eq(oneOffServices.contractorId, id)),
+    tx.select({ n: count() }).from(projects).where(eq(projects.contractorId, id)),
   ]);
-  return { reports: reportCount, money: money ? 1 : 0, projects: services[0]?.n ?? 0 };
+  return {
+    reports: reportCount,
+    money: money ? 1 : 0,
+    projects: (services[0]?.n ?? 0) + (projectRows[0]?.n ?? 0),
+  };
 }
 
 /**

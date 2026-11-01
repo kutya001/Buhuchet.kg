@@ -473,6 +473,10 @@ export const GRID_KEYS = [
   'fin.proj',
   'fin.wo',
   'fin.journal',
+  // «Проекты контрагентов»: вкладки «Активные», «Все», «Мои» (`'proj-'+tab` в прототипе).
+  'projects.active',
+  'projects.all',
+  'projects.mine',
   // «Показатели контрагентов»: вкладки «За период» и «Не заполнено».
   'kpi.period',
   'kpi.missing',
