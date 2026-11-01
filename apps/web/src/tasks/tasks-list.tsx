@@ -10,6 +10,7 @@ import { useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { useListExport } from '../lists/export';
 import { useGridLabels } from '../lists/grid-labels';
+import { usePresetFilters } from '../lists/preset';
 import { useModuleStats } from '../lists/stats';
 import { useListPage, type FetchListPage } from '../lists/use-list-page';
 import { useViewSettings } from '../lists/view-settings';
@@ -100,6 +101,7 @@ function useTaskAddRequest(run: () => void) {
 export function TasksList({ tab }: { tab: TaskTab }) {
   const t = useT();
   const gridKey: GridKey = `tasks.${tab}`;
+  const preset = usePresetFilters('tasks', tab);
   const labels = useGridLabels('task.count');
   const columns = useMemo(() => taskColumns(t), [t]);
   const view = useViewSettings(gridKey);
@@ -131,6 +133,7 @@ export function TasksList({ tab }: { tab: TaskTab }) {
     search,
     enabled: view.ready,
     fetchPage,
+    initialFilters: preset,
   });
   const { params, visible } = list;
   const sendExport = useCallback(

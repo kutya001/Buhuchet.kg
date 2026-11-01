@@ -20,6 +20,8 @@ import { KbAdmNewsTab } from '../kbadm/kbadm-io';
 import { KbAdmLevelsTab } from '../kbadm/kbadm-levels';
 import { KbAdmShowsTab } from '../kbadm/kbadm-shows';
 import { KbAdmStepsTab } from '../kbadm/kbadm-steps';
+import { HomeAnalyticsTab } from '../home/home-analytics';
+import { HomeSummaryTab } from '../home/home-summary';
 import { KbNewsTab } from '../news/news-tab';
 import { OrgMain } from '../org/org-main';
 import { OrgPolicyTab } from '../org/org-policy';
@@ -50,6 +52,11 @@ export function ModuleScreen({
   moduleId: MenuModuleId;
   tabId: string | null;
 }) {
+  // «Главная»: «Сводка» и «Аналитика» (задача 2.34).
+  if (moduleId === 'home') {
+    if (tabId === 'analytics') return <HomeAnalyticsTab />;
+    return <HomeSummaryTab />;
+  }
   if (moduleId === 'kpi') return <KpiScreen tab={tabId ?? 'month'} />;
   if (moduleId === 'files') return <FilesManager />;
   if (moduleId === 'staff') {
@@ -127,6 +134,9 @@ export function ModuleScreen({
  * вкладку («модуль/вкладка») и показывает плашки по `useModuleStats`.
  */
 const SCREENS_WITH_PLATES: ReadonlySet<string> = new Set<string>([
+  'home/',
+  'home/today',
+  'home/analytics',
   'cps/',
   'cps/all',
   'cps/mine',

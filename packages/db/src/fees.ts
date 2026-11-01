@@ -308,6 +308,21 @@ export async function contractorFeeView(
   };
 }
 
+/**
+ * Начисления и долг за обслуживание контрагентов в области `scope`, кроме разовых (аналитика «Главной»,
+ * задача 2.34): по правилам домена `contractorFees`, как вкладка «Обслуживание».
+ */
+export async function feeLedgers(
+  tx: Tx,
+  o: { scope: SQL | undefined; today: IsoDate },
+): Promise<Map<string, ContractorFees>> {
+  const subjects = await feeSubjects(tx, null, o.scope);
+  const payments = await feePaymentsOf(tx, [...subjects.keys()]);
+  return new Map(
+    [...subjects.values()].map((s) => [s.id, contractorFees(s, payments.get(s.id) ?? [], o.today)]),
+  );
+}
+
 /** Поле таблицы долгов `fd` — для столбца, фильтра и плашки списка контрагентов. */
 export const FEE_DEBT = {
   id: sql.raw('"fd"."id"'),

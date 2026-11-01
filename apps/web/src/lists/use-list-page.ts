@@ -53,6 +53,7 @@ export function useListPage<Row>({
   enabled,
   fetchPage,
   extra,
+  initialFilters,
 }: {
   gridKey: GridKey;
   /**
@@ -75,9 +76,11 @@ export function useListPage<Row>({
    * выгрузку; их смена — снова первая страница.
    */
   extra?: Readonly<Record<string, string>>;
+  /** Фильтры, с которыми список открыт (плашка «Главной», `usePresetFilters`): первый запрос — сразу с ними. */
+  initialFilters?: Readonly<Filters>;
 }) {
   const [page, setPage] = useState(1);
-  const [filters, setFilters] = useState<Filters>({});
+  const [filters, setFilters] = useState<Filters>(() => ({ ...initialFilters }));
   const q = useDebounced(search.trim(), SEARCH_DELAY_MS);
   const phone = useMediaQuery(PHONE_QUERY);
   const all = audit ? [...columns, ...AUDIT_COLUMNS] : columns;

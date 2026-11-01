@@ -222,8 +222,9 @@ test.describe('Этап 2: форма контрагента', () => {
       const shown = await acct.post(`/api/kb/steps/${id}/show`, { headers: { origin } });
       expect(shown.status(), await shown.text()).toBe(200);
     }
-    // «Посмотреть сетку «Кто что сдаёт»» (задача 2.15) — просмотром вкладки.
-    for (const id of ['pdicts', 'matrix', 'rtabs', 'daymonth']) {
+    // «Посмотреть сетку «Кто что сдаёт»» (задача 2.15) и «Сводка на сегодня» (задача 2.34) — просмотром
+    // вкладки.
+    for (const id of ['today', 'pdicts', 'matrix', 'rtabs', 'daymonth']) {
       const look = await acct.post(`/api/kb/steps/${id}/look`, { headers: { origin } });
       expect(look.status(), await look.text()).toBe(200);
     }

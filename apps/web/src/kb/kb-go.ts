@@ -108,6 +108,9 @@ export const KB_GO: Readonly<Record<string, KbTarget>> = {
   // «Файловый менеджер» (2.29): «Загрузить файл» сразу открывает окно загрузки.
   upload: { module: 'files', flash: LIST, open: { add: 'upload' } },
   ffind: { module: 'files', flash: LIST },
+  // «Главная» (2.34): плашки «Сводки» (на телефоне скрыты — тогда экран) и экран «Аналитики».
+  today: { module: 'home', tab: 'today', flash: '[data-plates], main' },
+  anl: { module: 'home', tab: 'analytics', flash: 'main' },
   search: { module: null, flash: '[role=search]', phoneFlash: '[data-search-open]' },
   // На списке контрагентов (2.10), как в прототипе.
   cols: { module: 'cps', tab: 'all', flash: 'main [data-grid-columns-button]' },

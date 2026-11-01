@@ -30,6 +30,7 @@ import { useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { useListExport } from '../lists/export';
 import { useGridLabels } from '../lists/grid-labels';
+import { usePresetFilters } from '../lists/preset';
 import { useModuleStats } from '../lists/stats';
 import { useListPage, type FetchListPage } from '../lists/use-list-page';
 import { useViewSettings } from '../lists/view-settings';
@@ -127,6 +128,7 @@ export function ReportsList({ tab }: { tab: ReportListTab }) {
   const router = useRouter();
   const plateParam = useSearchParams().get('plate');
   const gridKey: GridKey = `reports.${tab}`;
+  const preset = usePresetFilters('reports', tab);
   const labels = useGridLabels('report.count');
   const phone = useMediaQuery(PHONE_QUERY);
   const { search, clearSearch, access } = useShell();
@@ -178,6 +180,7 @@ export function ReportsList({ tab }: { tab: ReportListTab }) {
     enabled: view.ready,
     fetchPage,
     extra,
+    initialFilters: preset,
   });
   const { params, visible, setFilters } = list;
   const sendExport = useCallback(
