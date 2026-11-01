@@ -44,6 +44,7 @@ export * from './contractors/socfund';
 export * from './contractors/report-pick';
 export * from './contractors/service';
 export * from './contractor-page/page';
+export * from './contractor-page/view';
 export * from './reports/periods';
 export * from './reports/due';
 export * from './reports/rules';

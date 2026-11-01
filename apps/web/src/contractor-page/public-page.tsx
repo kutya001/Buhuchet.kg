@@ -1,12 +1,13 @@
 'use client';
 
-import { bishkekTime, formatMomentRu, orgLogoLetters, PAGE_CODE_LENGTH } from '@buhuchet/domain';
-import { PublicPageCodeInput, type PublicPage, type PublicPageBody } from '@buhuchet/shared';
-import { buttonClass, Field, Icon, inputClass } from '@buhuchet/ui';
+import { bishkekTime, PAGE_CODE_LENGTH } from '@buhuchet/domain';
+import { PublicPageCodeInput, type PublicPage } from '@buhuchet/shared';
+import { buttonClass, Field, Icon, inputClass, ToastProvider } from '@buhuchet/ui';
 import { useRouter } from 'next/navigation';
-import { useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { api, callApi } from '../api-client';
 import { useErrorText, useT } from '../l10n/provider';
+import { OpenPage } from './open-page';
 
 /** «после 14:35» — время по Бишкеку, как у страницы (прототип pgHm). */
 const timeOf = (iso: string) => bishkekTime(new Date(iso));
@@ -18,7 +19,8 @@ const lockedUntilOf = (details: unknown): string | null => {
 
 /**
  * Страница контрагента по ссылке (прототип modules/cp-page.js, pubDraw): «Страница недоступна», ввод
- * кода, «Ввод кода временно закрыт» или открытая страница. Только для просмотра, без входа.
+ * кода, «Ввод кода временно закрыт» или открытая страница (open-page.tsx). Только для просмотра, без
+ * входа.
  */
 export function PublicPageScreen({
   slug,
@@ -30,6 +32,10 @@ export function PublicPageScreen({
   state: PublicPage;
 }) {
   const t = useT();
+  const labels = useMemo(
+    () => ({ close: t('toast.close'), closeTitle: t('toast.close_title') }),
+    [t],
+  );
   let main: ReactNode;
   switch (state.state) {
     case 'unavailable':
@@ -47,17 +53,27 @@ export function PublicPageScreen({
       main = <CodeGate slug={slug} inn={inn} />;
       break;
     case 'open':
-      main = <OpenPage page={state.page} />;
+      main = (
+        <OpenPage
+          page={state.page}
+          fileHref={(id) => `/${slug}/inn/${inn}/files/${encodeURIComponent(id)}`}
+        />
+      );
       break;
   }
+  // На телефоне у открытой страницы внизу панель разделов: последний раздел не уходит под неё.
+  const navPad =
+    state.state === 'open' ? 'max-md:pb-[calc(84px+env(safe-area-inset-bottom,0px))]' : '';
   return (
-    <main
-      data-pub-page=""
-      className="flex min-h-dvh flex-col items-center gap-[18px] bg-frame px-4 pt-6 pb-8 max-md:gap-3.5 max-md:px-3 max-md:pt-3.5"
-    >
-      {main}
-      <footer className="text-center text-[12px] text-faint">{t('pub.foot')}</footer>
-    </main>
+    <ToastProvider labels={labels}>
+      <main
+        data-pub-page=""
+        className={`flex min-h-dvh flex-col items-center gap-[18px] bg-frame px-4 pt-6 pb-8 max-md:gap-3.5 max-md:px-3 max-md:pt-3.5 ${navPad}`}
+      >
+        {main}
+        <footer className="text-center text-[12px] text-faint">{t('pub.foot')}</footer>
+      </main>
+    </ToastProvider>
   );
 }
 
@@ -163,53 +179,5 @@ function CodeGate({ slug, inn }: { slug: string; inn: string }) {
       </button>
       <span className="text-[11.5px] leading-[1.4] text-faint">{t('pub.code.remember')}</span>
     </form>
-  );
-}
-
-/**
- * Открытая страница: шапка — логотип и название нашей организации, «Данные на», название и ИНН
- * контрагента, режим налогообложения (прототип pubBody, `pub-h`, `pub-title`). Разделы — задача 2.43.
- */
-function OpenPage({ page }: { page: PublicPageBody }) {
-  const t = useT();
-  const { org, contractor } = page;
-  return (
-    <div data-pub-body="" className="flex w-[min(1120px,100%)] flex-col gap-3.5 max-md:gap-2.5">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          {org.logo ? (
-            <img
-              src={org.logo.url}
-              alt=""
-              className="h-10 w-10 flex-none rounded-[10px] border border-line object-contain"
-            />
-          ) : (
-            <span
-              aria-hidden="true"
-              className="grid h-10 w-10 flex-none place-items-center rounded-[10px] bg-accent font-bold text-on-accent"
-            >
-              {orgLogoLetters(org.name)}
-            </span>
-          )}
-          <span className="flex flex-col">
-            <b>{org.name}</b>
-            <span className="text-[11.5px] text-faint">{t('pub.org_hint')}</span>
-          </span>
-        </div>
-        <span className="text-[11.5px] text-faint">
-          {t('pub.as_of', { at: formatMomentRu(new Date(page.asOf)) })}
-        </span>
-      </header>
-      <div>
-        <h1 className="m-0 mb-1 text-[24px] leading-[1.25] font-[720] max-md:text-[20px]">
-          {contractor.name}
-        </h1>
-        <span className="text-muted">
-          {t('pub.inn')} <span className="font-mono">{contractor.inn}</span>
-          {' · '}
-          {contractor.regime ?? t('pub.regime_none')}
-        </span>
-      </div>
-    </div>
   );
 }
