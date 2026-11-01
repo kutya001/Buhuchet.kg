@@ -198,6 +198,7 @@ export function TgAdmLog() {
     return body.data;
   };
 
+  // ОТКЛОНЕНИЕ: docs/deviations.md#Д-32 — строка снова «Ожидает» и уходит следующим запуском очереди.
   const retryOne = async (row: AdminTelegramLogRow) => {
     const result = await retry([row.id]);
     if (!result) return;

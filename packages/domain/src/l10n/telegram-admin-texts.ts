@@ -65,7 +65,7 @@ export const TELEGRAM_ADMIN_TEXTS = {
     section: S,
   },
   'tgadm.bot.problem.not_set': {
-    ru: 'Вебхук не поставлен: сайт поставит его сам в течение 10 минут после выкладки',
+    ru: 'Вебхук не поставлен: сайт ставит его сам каждые 10 минут, если адрес сайта начинается с https://',
     section: S,
   },
   'tgadm.bot.problem.other_url': {

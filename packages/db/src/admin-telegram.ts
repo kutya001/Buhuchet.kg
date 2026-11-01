@@ -249,6 +249,7 @@ export async function adminTelegramSummary(
  * восстановления, снова «Ожидают» (попыток 0) и уходят обычной очередью. Отвечает, сколько строк снова
  * в очереди и сколько из выбранных — коды восстановления с ошибкой (их повторно не отправляют).
  */
+// ОТКЛОНЕНИЕ: docs/deviations.md#Д-32 — повтор уходит очередью, в прежний чат — не отправляется.
 export async function adminTelegramRetry(
   tx: Tx,
   ids: readonly string[],
@@ -274,6 +275,7 @@ export async function adminTelegramRetry(
  * null — организация не найдена или заблокирована (или в контексте не администратор). Кто, когда, кому
  * и с каким текстом поставил объявление — в историю платформы в той же транзакции.
  */
+// ОТКЛОНЕНИЕ: docs/deviations.md#Д-31 — кому уходит объявление.
 export async function adminTelegramBroadcast(
   tx: Tx,
   input: { orgId: string | null; text: string; now: Date },
