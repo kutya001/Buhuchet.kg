@@ -18,6 +18,8 @@ export const AUTH_TEXTS = {
   'auth.password': { ru: 'Пароль', section: 'Вход' },
   'auth.sign_in': { ru: 'Войти', section: 'Вход' },
   'auth.forgot': { ru: 'Забыли пароль?', section: 'Вход' },
+  // Ссылка на лендинг под формой входа (прототип core/login.js `#lg-about`, задача #165).
+  'auth.about': { ru: 'О платформе', section: 'Вход' },
   // Ошибка входа — плашкой над «Войти» (прототип core/login.js `LG_T`, решение заказчика 26.10.2026).
   'auth.bad_login': { ru: 'Неверный логин или пароль', section: 'Вход' },
   'auth.locked': {

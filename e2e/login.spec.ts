@@ -190,7 +190,9 @@ test.describe('Этап 1: экраны входа и «Мой профиль»'
     await test.step('в программу не пускает: страницы ведут обратно на смену пароля', async () => {
       for (const path of ['/app', '/app/reports/week', '/app/staff']) {
         await page.goto(path);
-        await expect(page).toHaveURL(/\/login$/);
+        // Страница входа помнит, куда вернуться после смены пароля (задача #165); /app — без адреса.
+        const back = path === '/app' ? '' : `\\?next=${encodeURIComponent(path)}`;
+        await expect(page).toHaveURL(new RegExp(`/login${back}$`));
         await expect(title).toBeVisible();
       }
       const api = await page.request.get('/api/staff');

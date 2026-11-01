@@ -14,3 +14,5 @@ test-results/
 playwright-report/
 .DS_Store
 *.log
+# Демо-версия для buhuchet.kg/demo: собирается при сборке сайта (scripts/build-demo.mjs).
+apps/web/public/demo.html

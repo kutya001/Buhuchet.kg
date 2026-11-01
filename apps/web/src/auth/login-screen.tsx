@@ -48,7 +48,14 @@ const LINK_LEFT = `${linkButtonClass()} self-start`;
  * «при следующем входе система требует сменить его»); после смены — предложение привязать Telegram
  * (ТЗ: «привязка предлагается при первом входе»). `me` — уже вошёл с временным паролем.
  */
-export function LoginScreen({ me }: { me: MeResponse | null }) {
+export function LoginScreen({
+  me,
+  returnTo = '/app',
+}: {
+  me: MeResponse | null;
+  /** Куда после входа: /app или страница программы из ссылки (задача #165). */
+  returnTo?: string;
+}) {
   const t = useT();
   const labels = useMemo(
     () => ({ close: t('toast.close'), closeTitle: t('toast.close_title') }),
@@ -56,12 +63,12 @@ export function LoginScreen({ me }: { me: MeResponse | null }) {
   );
   return (
     <ToastProvider labels={labels}>
-      <LoginCard me={me} />
+      <LoginCard me={me} returnTo={returnTo} />
     </ToastProvider>
   );
 }
 
-function LoginCard({ me }: { me: MeResponse | null }) {
+function LoginCard({ me, returnTo }: { me: MeResponse | null; returnTo: string }) {
   const t = useT();
   const router = useRouter();
   const [step, setStep] = useState<Step>(
@@ -70,8 +77,8 @@ function LoginCard({ me }: { me: MeResponse | null }) {
   // После входа рабочая страница один раз покажет «Что нового» (задача 2.32).
   const enter = useCallback(() => {
     markSignedIn();
-    router.replace('/app');
-  }, [router]);
+    router.replace(returnTo);
+  }, [router, returnTo]);
 
   let body: ReactNode;
   switch (step.id) {
@@ -201,9 +208,15 @@ function LoginStep({
       <button type="submit" className={WIDE_CTA} disabled={isSubmitting}>
         {t('auth.sign_in')}
       </button>
-      <button type="button" className={LINK_LEFT} onClick={() => onForgot(getValues('login'))}>
-        {t('auth.forgot')}
-      </button>
+      {/* «О платформе» — лендинг для гостей (прототип core/login.js `#lg-about`, задача #165). */}
+      <div className="flex flex-wrap justify-between gap-2">
+        <button type="button" className={LINK_LEFT} onClick={() => onForgot(getValues('login'))}>
+          {t('auth.forgot')}
+        </button>
+        <a href="/" className={linkButtonClass()}>
+          {t('auth.about')}
+        </a>
+      </div>
     </form>
   );
 }

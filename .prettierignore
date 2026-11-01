@@ -5,3 +5,7 @@ packages/db/migrations/
 dist/
 coverage/
 *.md
+# Данные лендинга собирает scripts/landing-data.mjs из spec/ (pnpm landing:data).
+apps/web/src/landing/landing-data.json
+# Демо-версия для buhuchet.kg/demo собирается при сборке сайта (scripts/build-demo.mjs).
+apps/web/public/demo.html

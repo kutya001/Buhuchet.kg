@@ -3,6 +3,7 @@ import { MeResponse } from '@buhuchet/shared';
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { cache } from 'react';
+import { loginHref, RETURN_HEADER } from '../auth/return-to';
 import { localApi } from '../server-api';
 import { canEnter } from './modules';
 
@@ -24,10 +25,13 @@ export const loadMe = cache(async (): Promise<MeResponse | null> => {
   throw new Error(`GET /api/auth/me: ${(res as Response).status}`);
 });
 
-/** Вошедший пользователь для страниц за входом; иначе — на страницу входа. */
+/**
+ * Вошедший пользователь для страниц за входом; иначе — на страницу входа, а после входа — обратно на эту
+ * страницу (путь ставит `proxy.ts`, задача #165).
+ */
 export async function requireMe(): Promise<MeResponse> {
   const me = await loadMe();
-  if (!canEnter(me)) redirect('/login');
+  if (!canEnter(me)) redirect(loginHref((await headers()).get(RETURN_HEADER)));
   return me;
 }
 

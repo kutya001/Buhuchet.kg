@@ -1,4 +1,5 @@
 export * from './organizations';
+export * from './leads';
 export * from './platform';
 export * from './system';
 export * from './users';

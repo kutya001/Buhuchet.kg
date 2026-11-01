@@ -119,6 +119,20 @@ export interface TaxRegimeRecord {
   active: boolean;
 }
 
+/**
+ * Полоса цифр лендинга (прототип modules/landing.js, `landNums`): действующие виды отчётов и платежей
+ * каталога и действующие режимы налогообложения — по справочникам платформы с правками администратора.
+ */
+export async function landingNumbers(
+  db: Db | Tx,
+): Promise<{ reportTypes: number; regimes: number }> {
+  const [types, regimes] = await Promise.all([
+    db.$count(reportTypes, eq(reportTypes.active, true)),
+    db.$count(taxRegimes, eq(taxRegimes.active, true)),
+  ]);
+  return { reportTypes: types, regimes };
+}
+
 /** «Режимы налогообложения». */
 export async function listTaxRegimes(
   db: Db | Tx,

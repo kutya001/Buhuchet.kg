@@ -238,8 +238,9 @@ test.describe('Этап 1: оболочка рабочей страницы', ()
     isMobile,
   }) => {
     const origin = new URL(baseURL!).origin;
+    // Страница входа помнит, куда вернуться после входа (задача #165).
     await page.goto('/app/reports/week');
-    await expect(page).toHaveURL(/\/login$/);
+    await expect(page).toHaveURL(/\/login\?next=%2Fapp%2Freports%2Fweek$/);
 
     const owner = await playwright.request.newContext({ baseURL });
     await signIn(owner, origin, 'erkin', DEMO_PASSWORD);
@@ -277,6 +278,6 @@ test.describe('Этап 1: оболочка рабочей страницы', ()
     await page.getByRole('button', { name: 'Выйти из аккаунта' }).click();
     await expect(page).toHaveURL(/\/login$/);
     await page.goto('/app/home/today');
-    await expect(page).toHaveURL(/\/login$/);
+    await expect(page).toHaveURL(/\/login\?next=%2Fapp%2Fhome%2Ftoday$/);
   });
 });

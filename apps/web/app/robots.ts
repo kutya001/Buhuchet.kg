@@ -1,6 +1,12 @@
+import { siteInfo } from '@buhuchet/api/web';
 import type { MetadataRoute } from 'next';
 
-// Программа за входом и страницы контрагентов не индексируются.
+// Поисковики индексируют только лендинг (ТЗ «Лендинг» → «Техника»): программа, вход, демо-версия и
+// страницы контрагентов закрыты. Открыты ещё картинка превью ссылки и стили и скрипты страницы — без них
+// поисковик не увидит страницу так, как её видит человек. Тестовый стенд не индексируется целиком.
+export const dynamic = 'force-dynamic';
+
 export default function robots(): MetadataRoute.Robots {
-  return { rules: { userAgent: '*', disallow: '/' } };
+  if (siteInfo().env !== 'production') return { rules: { userAgent: '*', disallow: '/' } };
+  return { rules: { userAgent: '*', allow: ['/$', '/og.jpg', '/_next/static/'], disallow: '/' } };
 }

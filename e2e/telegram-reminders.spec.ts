@@ -131,7 +131,9 @@ test.describe('Этап 2: напоминания в Telegram и регуляр�
     expect(text).toContain(`⏰ Через ${days} дн. срок сдачи: `);
     expect(text).toContain(`1-Т за `);
     expect(text).toContain(`НДС за `);
-    expect(text!.split(name)).toHaveLength(3);
+    // По понедельникам в то же сообщение входит сводка недели («🗓 Неделя …»), и в ней имя ещё раз:
+    // оба отчёта контрагента считаются в строке напоминания, до сводки.
+    expect(text!.split('🗓')[0]!.split(name)).toHaveLength(3);
     expect(text).toMatch(/Открыть в Buhuchet\.kg: \S+\/app\/reports\/week$/);
     // Ещё запуски в тот же день — второго сообщения нет.
     await tick(request);

@@ -2,6 +2,7 @@ export * from './common';
 export * from './list';
 export * from './system';
 export * from './auth';
+export * from './leads';
 export * from './telegram';
 export * from './staff';
 export * from './contractors';

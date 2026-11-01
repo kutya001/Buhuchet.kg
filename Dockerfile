@@ -12,6 +12,8 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm fetch --frozen-lockfile
 
 FROM deps AS build
+# python3 — только для сборки: демо-версию buhuchet.kg/demo собирает build.py прототипа (scripts/build-demo.mjs).
+RUN apk add --no-cache python3
 COPY . .
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile --offline
 ENV NEXT_TELEMETRY_DISABLED=1

@@ -15,6 +15,7 @@ import { HOME_TEXTS } from './home-texts';
 import { KB_ADMIN_TEXTS } from './kb-admin-texts';
 import { KB_TEXTS } from './kb-texts';
 import { KPI_TEXTS } from './kpi-texts';
+import { LANDING_PRODUCT_TEXTS, LANDING_TEXTS } from './landing-texts';
 import { MONEY_TEXTS, TAX_MONEY_TEXTS } from './money-texts';
 import { NEWS_TEXTS } from './news-texts';
 import { ONBOARDING_TEXTS } from './onboarding-texts';
@@ -71,7 +72,7 @@ const SYSTEM_TEXTS = {
  * (`useT` в apps/web): текст, поправленный в словаре, заменяет этот без изменения кода. Ключ,
  * который есть и в refDB.json, пишется с тем же текстом (это проверяет тест наполнения). Тексты
  * разложены по файлам экранов: служебные — здесь, оболочки — `shell-texts.ts`, входа и «Мой профиль» —
- * `auth-texts.ts`, списков — `grid-texts.ts`, «Главной» — `home-texts.ts`, сотрудников — `staff-texts.ts`, шкалы и истории статусов —
+ * `auth-texts.ts`, лендинга для гостей и полосы демо-организации — `landing-texts.ts`, списков — `grid-texts.ts`, «Главной» — `home-texts.ts`, сотрудников — `staff-texts.ts`, шкалы и истории статусов —
  * `status-texts.ts`, «Моей организации» — `org-texts.ts`, Админки — `admin-texts.ts`, «Справочников» и сроков
  * видов отчётов словами — `dicts-texts.ts`, контрагентов и сверки с ГКЭД — `contractors-texts.ts`, загрузки контрагентов из Excel —
  * `contractor-import-texts.ts`, создания контрагента из свидетельства и выписки — `contractor-regdocs-texts.ts`, страницы
@@ -88,6 +89,8 @@ export const UI_TEXTS = {
   ...SYSTEM_TEXTS,
   ...SHELL_TEXTS,
   ...AUTH_TEXTS,
+  ...LANDING_TEXTS,
+  ...LANDING_PRODUCT_TEXTS,
   ...GRID_TEXTS,
   ...STAFF_TEXTS,
   ...STATUS_TEXTS,
@@ -130,10 +133,13 @@ export type UiTextParams = Readonly<Record<string, string | number>>;
 /** Текст по ключу из словаря с подстановками `{имя}` (`useT` на экране, тексты словаря на сервере). */
 export type Translate = (key: UiTextKey, params?: UiTextParams) => string;
 
-/** Текст с подстановками: `{имя}` заменяется значением; подстановки без значения остаются как есть. */
+/**
+ * Текст с подстановками: `{имя}` заменяется значением; подстановки без значения остаются как есть. Имя —
+ * латиницей или кириллицей: тексты лендинга из refDB.json пишут `{телефон}`, `{год}` (прототип `LT`).
+ */
 export function formatText(template: string, params?: UiTextParams): string {
   if (!params) return template;
-  return template.replace(/\{(\w+)\}/g, (whole, name: string) =>
+  return template.replace(/\{([\p{L}\p{N}_]+)\}/gu, (whole, name: string) =>
     Object.hasOwn(params, name) ? String(params[name]) : whole,
   );
 }
