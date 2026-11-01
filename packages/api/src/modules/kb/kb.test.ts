@@ -1,4 +1,4 @@
-import { withOrgContext, writeHistory, writeStatusChange } from '@buhuchet/db';
+import { schema, withOrgContext, writeHistory, writeStatusChange } from '@buhuchet/db';
 import { databaseAvailable, seedKbReference } from '@buhuchet/db/testing';
 import {
   ApiError,
@@ -17,6 +17,7 @@ import {
   listQueryParams,
   type ListQuery,
 } from '@buhuchet/shared';
+import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { apiRequest, createStaffFixture, signIn, TEST_PASSWORD, unzipTexts } from '../../testing';
 
@@ -330,6 +331,31 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
     // Первое использование засчитывает «Посмотреть» только в разделе «Работа со списками».
     const card = KbMarkResult.parse(await ok(await call('POST', '/api/kb/hits/empcard', owner)));
     expect(card.fresh).toEqual([]);
+  });
+
+  it('«Аналитика выручки» — с функцией и правом «Плата за обслуживание» (урок «Главная и аналитика»)', async () => {
+    const where = eq(schema.orgSettings.orgId, f.a.orgId);
+    const [row] = await f.t.admin.db
+      .select({ features: schema.orgSettings.features })
+      .from(schema.orgSettings)
+      .where(where);
+    const homeSteps = (s: KbState) =>
+      s.lessons.find((l) => l.id === 'home')?.steps.map((x) => [x.id, x.module, x.learn]);
+    expect(homeSteps(await state(owner))).toEqual([['today', 'home', true]]);
+    await f.t.admin.db
+      .update(schema.orgSettings)
+      .set({ features: { ...row!.features, fee: true } })
+      .where(where);
+    try {
+      expect(homeSteps(await state(owner))).toEqual([
+        ['today', 'home', true],
+        ['anl', 'home', true],
+      ]);
+      // У «Бухгалтера» права «Видеть плату за обслуживание» нет — шага нет.
+      expect(homeSteps(await state(acc))).toEqual([['today', 'home', true]]);
+    } finally {
+      await f.t.admin.db.update(schema.orgSettings).set({ features: row!.features }).where(where);
+    }
   });
 
   it('«Пропустить» и «Вернуть»: следующий шаг идёт мимо пропущенного; выполненный не пропускается', async () => {
