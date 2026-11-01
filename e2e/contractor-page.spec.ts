@@ -1,9 +1,9 @@
-import { expect, test, type APIRequestContext } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import { DEMO_PASSWORD, defaultResponsible, signIn } from './helpers';
+import { orgWithTypes } from './orgs';
 
-// Страница контрагента по ссылке: включение, код доступа и защита (задача 2.42, #98). Блок карточки
-// подключит карточка контрагента (2.11), разделы страницы — задача 2.43; поэтому страница включается
-// через API сайта под владельцем демо-организации, а открывает её браузер без входа.
+// Страница контрагента по ссылке: включение, код доступа и защита (задача 2.42, #98) и разделы
+// страницы (задача 2.43, #99). Страница включается через API сайта, открывает её браузер без входа.
 
 /** Адрес демо-организации «Бухгалтер Плюс». */
 const SLUG = 'buhgalter-plyus';
@@ -131,5 +131,325 @@ test.describe('Этап 2: страница контрагента по ссыл
     await expect(page.getByRole('heading', { name: 'Страница недоступна' })).toBeVisible();
     await page.goto(`/no-such-org/inn/${path.split('/').pop()}`);
     await expect(page.getByRole('heading', { name: 'Страница недоступна' })).toBeVisible();
+  });
+});
+
+// Разделы открытой страницы (задача 2.43, #99) — в своей организации теста: в ней включены страница,
+// учёт оплаты налогов, плата за обслуживание, показатели и файлы, есть счёт «Перевод по номеру
+// телефона» и кошелёк владельца — он же ответственный бухгалтер; демо-организацию тест не меняет.
+
+/** M-Bank и Бакай Банк — коды refDB.json. */
+const MBANK = 'БНК-13';
+const BAKAI = 'БНК-02';
+
+/** Дата по Бишкеку со сдвигом в днях. */
+const bishkek = (shift = 0) =>
+  new Date(Date.now() + 6 * 3600_000 + shift * 86_400_000).toISOString().slice(0, 10);
+
+/** Ближайший прошедший будний день: срок на выходном сервер сразу переносит на рабочий. */
+function lastWorkday(): string {
+  for (let i = 1; ; i++) {
+    const day = new Date(`${bishkek(-i)}T00:00:00Z`).getUTCDay();
+    if (day !== 0 && day !== 6) return bishkek(-i);
+  }
+}
+
+/** Своя организация теста: функции страницы, счёт организации и кошелёк владельца. */
+async function pageOrg(api: APIRequestContext, baseURL: string | undefined) {
+  const origin = new URL(baseURL!).origin;
+  await orgWithTypes(api, origin);
+  const policy = (await (await api.get('/api/org/policy')).json()) as { version: number };
+  const on = await api.patch('/api/org/policy', {
+    headers: { origin },
+    data: {
+      version: policy.version,
+      features: { cppage: true, taxpay: true, fee: true, indicators: true, files: true },
+    },
+  });
+  expect(on.status(), await on.text()).toBe(200);
+  // П. 67: «Перевод по номеру телефона» 0555 123 456 (M-Bank, Бакай Банк), «Налоги и обслуживание».
+  const account = await api.post('/api/org/accounts', {
+    headers: { origin },
+    data: {
+      kind: 'phone',
+      bankCode: null,
+      accountNo: null,
+      bik: null,
+      phone: '+996555123456',
+      phoneBanks: [MBANK, BAKAI],
+      holderName: 'Организация теста',
+      purpose: 'both',
+      mainTax: true,
+      mainFee: true,
+    },
+  });
+  expect(account.status(), await account.text()).toBe(200);
+  const wallet = await api.post('/api/profile/wallets', {
+    headers: { origin },
+    data: {
+      kind: 'phone',
+      bankCode: null,
+      accountNo: null,
+      phone: '+996700333444',
+      phoneBanks: [MBANK],
+      holderName: 'Подборова С.',
+      isMain: true,
+    },
+  });
+  expect(wallet.status(), await wallet.text()).toBe(200);
+  const staff = (await (await api.get('/api/staff?size=all')).json()) as {
+    items: { id: string }[];
+  };
+  return { origin, owner: staff.items[0]!.id };
+}
+
+/** Контрагент своей организации со включённой страницей: адрес и код — из блока карточки. */
+async function pageOf(
+  api: APIRequestContext,
+  o: { origin: string; owner: string },
+  name: string,
+  paysTo: 'org' | 'emp',
+) {
+  const inn = freshInn();
+  const created = await api.post('/api/contractors', {
+    headers: { origin: o.origin },
+    data: {
+      name,
+      inn,
+      phone: '+996505890076',
+      kind: 'regular',
+      formCode: 'ФС-01',
+      regimeCode: 'РЕЖ-01',
+      gked: '46.34.0',
+      startDate: '2026-01-01',
+      responsibleEmployeeId: o.owner,
+      paysTo,
+      tariff: { amount: 500_000, period: 'M' },
+    },
+  });
+  expect(created.status(), await created.text()).toBe(201);
+  const { id } = (await created.json()) as { id: string };
+  const on = await api.post(`/api/contractors/${id}/page/enable`, {
+    headers: { origin: o.origin },
+  });
+  expect(on.status(), await on.text()).toBe(200);
+  const block = (await on.json()) as PageBlock;
+  return { id, inn, code: block.code!, path: new URL(block.link!).pathname };
+}
+
+/** «Разовый отчёт» через API: вид, месяц периода и срок; ответ — id отчёта. */
+async function manualReport(
+  api: APIRequestContext,
+  origin: string,
+  data: { contractorId: string; reportTypeCode: string; month: string; due: string },
+) {
+  const res = await api.post('/api/reports', {
+    headers: { origin },
+    data: { ...data, reasonCode: 'ПРЧ-001' },
+  });
+  expect(res.status(), await res.text()).toBe(201);
+  return ((await res.json()) as { id: string }).id;
+}
+
+const versionOf = async (api: APIRequestContext, id: string) =>
+  ((await (await api.get(`/api/reports/${id}`)).json()) as { version: number }).version;
+
+/** Ввести код в браузере: открывается страница контрагента. */
+async function openByCode(page: Page, path: string, code: string, name: string) {
+  await page.goto(path);
+  await page.getByLabel('Код доступа').fill(code);
+  await page.getByRole('button', { name: 'Открыть' }).click();
+  await expect(page.getByRole('heading', { name, level: 1 })).toBeVisible();
+}
+
+const section = (page: Page, key: string) => page.locator(`[data-sec="${key}"]`);
+
+test.describe('Этап 2: страница контрагента по ссылке — разделы и компоновка', () => {
+  test.beforeEach(async ({ page }) => {
+    const part = () => Math.floor(Math.random() * 256);
+    await page.setExtraHTTPHeaders({ 'x-forwarded-for': `198.18.${part()}.${part()}` });
+  });
+
+  test('(п. 60) с верным кодом видны «Ваш бухгалтер», «Контакты», «Отчёты», «Показатели», «Оплата за обслуживание», а задач, истории и бонусов нет; после «Выключить» — «Страница недоступна. Обратитесь к вашему бухгалтеру»', async ({
+    page,
+    request,
+    baseURL,
+  }) => {
+    const o = await pageOrg(request, baseURL);
+    const name = 'ОсОО «Укс»';
+    const cp = await pageOf(request, o, name, 'org');
+    await page.goto(cp.path);
+    await expect(page.getByRole('heading', { name: 'Введите код доступа' })).toBeVisible();
+    await openByCode(page, cp.path, cp.code, name);
+    for (const key of ['acc', 'contacts', 'reports', 'kpi', 'fee']) {
+      await expect(section(page, key)).toHaveCount(1);
+    }
+    await expect(section(page, 'acc')).toContainText('Подборова Сквозная');
+    for (const absent of ['Задачи', 'История', 'Бонус']) {
+      await expect(page.getByText(absent, { exact: false })).toHaveCount(0);
+    }
+    const wide = await page.evaluate(
+      () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+    );
+    expect(wide).toBe(false);
+
+    const off = await request.post(`/api/contractors/${cp.id}/page/disable`, {
+      headers: { origin: o.origin },
+    });
+    expect(off.status()).toBe(200);
+    await page.reload();
+    await expect(page.getByRole('heading', { name: 'Страница недоступна' })).toBeVisible();
+    await expect(page.getByText('Обратитесь к вашему бухгалтеру.')).toBeVisible();
+    await expect(page.getByText(name)).toHaveCount(0);
+  });
+
+  test('(п. 67) платящий на счёт организации видит 0555 123 456 со «Скопировать» на обеих карточках; платящий на кошелёк бухгалтера — основной реквизит бухгалтера на «Налогах»', async ({
+    page,
+    request,
+    baseURL,
+  }) => {
+    const o = await pageOrg(request, baseURL);
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write'], {
+      origin: o.origin,
+    });
+    const org = await pageOf(request, o, 'ОсОО «На счёт»', 'org');
+    await openByCode(page, org.path, org.code, 'ОсОО «На счёт»');
+    const pay = section(page, 'pay');
+    await expect(pay).toBeVisible();
+    for (const k of ['tax', 'fee']) {
+      const card = pay.locator(`[data-pay="${k}"]`);
+      await expect(card.locator('[data-pay-number]')).toHaveText('0555 123 456');
+      await expect(card).toContainText('Перевод по номеру телефона');
+      await expect(card).toContainText('Бакай Банк');
+      await expect(card).toContainText('M-Bank');
+      await expect(card.getByRole('button', { name: 'Скопировать номер' })).toBeVisible();
+    }
+    await pay
+      .locator('[data-pay="tax"]')
+      .getByRole('button', { name: 'Скопировать номер' })
+      .click();
+    await expect(page.getByText('Номер скопирован')).toBeVisible();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('0555123456');
+
+    const emp = await pageOf(request, o, 'ИП На кошелёк', 'emp');
+    await openByCode(page, emp.path, emp.code, 'ИП На кошелёк');
+    await expect(section(page, 'pay').locator('[data-pay="tax"] [data-pay-number]')).toHaveText(
+      '0700 333 444',
+    );
+    await expect(section(page, 'pay').locator('[data-pay="fee"] [data-pay-number]')).toHaveText(
+      '0555 123 456',
+    );
+  });
+
+  test('(п. 68) страница с 24 отчётами на телефоне: сразу видны шапка, строка состояния, «Главное», «Как оплатить»; «Отчёты» свёрнуты с «сдано 18 из 24», внутри — плитки по видам с пояснением и «сдано N из M», касание плитки открывает периоды', async ({
+    page,
+    request,
+    baseURL,
+    isMobile,
+  }) => {
+    test.setTimeout(120_000);
+    const o = await pageOrg(request, baseURL);
+    const name = 'ОсОО «Двадцать четыре»';
+    const cp = await pageOf(request, o, name, 'org');
+    const year = bishkek().slice(0, 4);
+    const ids: string[] = [];
+    for (const type of ['t1m', 'p1m']) {
+      for (let m = 1; m <= 12; m++) {
+        ids.push(
+          await manualReport(request, o.origin, {
+            contractorId: cp.id,
+            reportTypeCode: type,
+            month: `${year}-${String(m).padStart(2, '0')}-01`,
+            due: `${year}-12-${String(10 + m).padStart(2, '0')}`,
+          }),
+        );
+      }
+    }
+    // Сданы январь — сентябрь каждого вида: 18 из 24.
+    const done = [...ids.slice(0, 9), ...ids.slice(12, 21)];
+    const items = [];
+    for (const id of done) items.push({ id, version: await versionOf(request, id) });
+    const batch = await request.post('/api/reports/submit', {
+      headers: { origin: o.origin },
+      data: { date: bishkek(), items },
+    });
+    expect(batch.status(), await batch.text()).toBe(200);
+    expect(((await batch.json()) as { done: number }).done).toBe(18);
+
+    await openByCode(page, cp.path, cp.code, name);
+    await expect(page.locator('[data-pub-state]')).toBeVisible();
+    await expect(section(page, 'main')).toBeVisible();
+    await expect(section(page, 'main')).toContainText(`Отчёты ${year}: сдано`);
+    await expect(section(page, 'pay')).toBeVisible();
+    const reports = section(page, 'reports');
+    const tiles = reports.locator('[data-pub-tile]');
+    if (isMobile) {
+      // На телефоне «Отчёты» свёрнуты: в заголовке — итог, плиток не видно.
+      await expect(reports).toHaveAttribute('data-folded', '');
+      await expect(reports.locator('[data-pub-toggle]')).toContainText('сдано 18 из 24');
+      await expect(tiles.first()).toBeHidden();
+      await expect(page.getByRole('navigation', { name: 'Разделы страницы' })).toBeVisible();
+      await reports.locator('[data-pub-toggle]').click();
+    }
+    await expect(tiles).toHaveCount(2);
+    const t1m = reports.locator('[data-pub-tile="t1m"]');
+    await expect(t1m).toBeVisible();
+    await expect(t1m).toContainText('сдано 9 из 12');
+    await expect(t1m).toContainText('Статистический отчёт для Нацстаткома');
+    await expect(t1m.locator('[data-pub-row]')).toHaveCount(0);
+    await t1m.getByRole('button').first().click();
+    await expect(t1m.locator('[data-pub-row]').first()).toBeVisible();
+    await expect(t1m).toContainText(`январь ${year}`);
+    if (isMobile) {
+      // Периодов 12: на телефоне — первые 5 и «Показать ещё 7».
+      await expect(t1m.getByRole('button', { name: 'Показать ещё 7' })).toBeVisible();
+    } else {
+      await expect(t1m.locator('[data-pub-row]')).toHaveCount(12);
+    }
+  });
+
+  test('(п. 74) просроченных отчётов нет, но не хватает на налоги — строка состояния жёлтая; после просрочки отчёта — красная', async ({
+    page,
+    request,
+    baseURL,
+  }) => {
+    const o = await pageOrg(request, baseURL);
+    const name = 'ОсОО «Строка состояния»';
+    const cp = await pageOf(request, o, name, 'org');
+    const year = bishkek().slice(0, 4);
+    // НДС за прошлый месяц: сдать — в декабре, уплатить — до 25-го этого месяца; денег нет.
+    const prev = new Date(`${bishkek()}T00:00:00Z`);
+    prev.setUTCDate(1);
+    prev.setUTCMonth(prev.getUTCMonth() - 1);
+    const nds = await manualReport(request, o.origin, {
+      contractorId: cp.id,
+      reportTypeCode: 'nds',
+      month: prev.toISOString().slice(0, 10),
+      due: `${year}-12-21`,
+    });
+    const amount = await request.post(`/api/reports/${nds}/amount`, {
+      headers: { origin: o.origin },
+      data: { version: await versionOf(request, nds), amount: 1_000_000 },
+    });
+    expect(amount.status(), await amount.text()).toBe(200);
+    await openByCode(page, cp.path, cp.code, name);
+    const state = page.locator('[data-pub-state]');
+    await expect(state).toHaveAttribute('data-pub-state', 'warn');
+    await expect(state).toContainText('не хватает');
+
+    // 1-Т: срок прошёл, не сдан.
+    await manualReport(request, o.origin, {
+      contractorId: cp.id,
+      reportTypeCode: 't1m',
+      month: prev.toISOString().slice(0, 10),
+      due: lastWorkday(),
+    });
+    await page.reload();
+    await expect(state).toHaveAttribute('data-pub-state', 'bad');
+    await expect(state).toContainText('просрочен 1 отчёт');
+    // Замечание ведёт в «Отчёты» с плашкой «Просрочено».
+    await state.getByRole('button', { name: 'просрочен 1 отчёт' }).click();
+    await expect(section(page, 'reports').locator('[data-pub-tile="t1m"]')).toBeVisible();
+    await expect(section(page, 'reports').locator('[data-pub-tile]')).toHaveCount(1);
   });
 });

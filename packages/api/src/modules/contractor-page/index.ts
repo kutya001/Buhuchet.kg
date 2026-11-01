@@ -20,6 +20,8 @@ import {
 import {
   publicPageCodeHandler,
   publicPageCodeRoute,
+  publicPageFileHandler,
+  publicPageFileRoute,
   publicPageHandler,
   publicPageRoute,
 } from './public';
@@ -27,7 +29,7 @@ import {
 /**
  * Модуль «Страница контрагента по ссылке» (задача 2.42): блок карточки — включить, выключить, сменить
  * код, разделы, скопировать и отправить ссылку, включение у выбранных; страница без входа — что
- * показать по ссылке и ввод кода. Разделы самой страницы — задача 2.43.
+ * показать по ссылке и ввод кода; разделы самой страницы и файлы отчётов с неё (задача 2.43).
  */
 export function contractorPageModule(deps: ApiDeps) {
   return createModuleApp()
@@ -40,5 +42,6 @@ export function contractorPageModule(deps: ApiDeps) {
     .openapi(pageSentRoute, pageLogHandler(deps, 'page_send'))
     .openapi(enablePagesRoute, enablePagesHandler(deps))
     .openapi(publicPageRoute, publicPageHandler(deps))
-    .openapi(publicPageCodeRoute, publicPageCodeHandler(deps));
+    .openapi(publicPageCodeRoute, publicPageCodeHandler(deps))
+    .openapi(publicPageFileRoute, publicPageFileHandler(deps));
 }
