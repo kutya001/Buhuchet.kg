@@ -1,7 +1,7 @@
 'use strict';
 // Вход и восстановление пароля
 /* ═════════════ Login & password recovery ═════════════ */
-function logoutDlg(){
+function logoutDlg(){if(DEMO.on)return demoExit('site');// в демо-версии экрана входа нет
   // «Выйти без сохранения?» — только если в открытой форме есть несохранённые изменения (решение заказчика 26.10.2026), как при закрытии окна
   const dirty=MODALS.some(m=>m.o.form&&m.dirty);
   const doOut=()=>{MODALS.slice().forEach(m=>m.close());S.loggedIn=false;showLogin()};
@@ -22,7 +22,7 @@ function showLogin(step='login',ctx={}){
   const head=`<div class="row" style="gap:11px"><div class="logo" aria-hidden="true"><i></i><i></i><i></i></div><div><div class="brand-name">Buhuchet.kg</div><div class="mode">Автоматизация бухгалтерского аутсорсинга</div></div></div>`;
   const M=s=>`<span class="mono">${s}</span>`;
   let body='';
-  if(step==='login')body=`<h2>Вход</h2>${fld('Логин',inp('lg-login',ctx.login||'','autocomplete="username"'),{id:'lg-login'})}${fld('Пароль',inp('lg-pass','','type="password" autocomplete="current-password"'),{id:'lg-pass'})}<div class="note bad" id="lg-msg" role="alert" hidden></div><button class="btn cta" id="lg-go" style="justify-content:center">Войти</button><button class="linkbtn" id="lg-forgot" style="align-self:flex-start">Забыли пароль?</button><div class="note">${ic('info')}<span>Демо: логины ${['erkin','meerim','alisher','aigerim','nurlan','admin'].map(M).join(', ')}; пароль ${M('demo')}. Логин ${M('bakyt')} — заблокированный сотрудник, ${M('easybuh')} — заблокированная организация. После 5 неверных попыток подряд вход по логину закрыт на 15 минут (в макете — до перезагрузки страницы). Сотрудник, которого создали или которому сбросили пароль в «Сотрудниках», входит с временным паролем и сразу задаёт свой; сменённые пароли действуют до перезагрузки страницы.</span></div>`;
+  if(step==='login')body=`<h2>Вход</h2>${fld('Логин',inp('lg-login',ctx.login||'','autocomplete="username"'),{id:'lg-login'})}${fld('Пароль',inp('lg-pass','','type="password" autocomplete="current-password"'),{id:'lg-pass'})}<div class="note bad" id="lg-msg" role="alert" hidden></div><button class="btn cta" id="lg-go" style="justify-content:center">Войти</button><div class="row" style="justify-content:space-between;flex-wrap:wrap"><button class="linkbtn" id="lg-forgot">Забыли пароль?</button><button class="linkbtn" id="lg-about">О платформе</button></div><div class="note">${ic('info')}<span>Демо: логины ${['erkin','meerim','alisher','aigerim','nurlan','admin'].map(M).join(', ')}; пароль ${M('demo')}. Логин ${M('bakyt')} — заблокированный сотрудник, ${M('easybuh')} — заблокированная организация. После 5 неверных попыток подряд вход по логину закрыт на 15 минут (в макете — до перезагрузки страницы). Сотрудник, которого создали или которому сбросили пароль в «Сотрудниках», входит с временным паролем и сразу задаёт свой; сменённые пароли действуют до перезагрузки страницы.</span></div>`;
   if(step==='forgot')body=`<h2>Восстановление пароля</h2><p class="muted" style="margin:0">Введите логин и нажмите «Получить код».</p>${fld('Логин',inp('fg-login',ctx.login||'','autocomplete="username"'),{id:'fg-login'})}<button class="btn cta" id="fg-go" style="justify-content:center">${ic('tg')}Получить код</button><button class="linkbtn" id="fg-back" style="align-self:flex-start">Вернуться ко входу</button>`;
   // Вход с временным паролем: в программу не пускает, пока пароль не сменён; новый пароль не совпадает с текущим (решение заказчика 27.10.2026). Тексты — как в продукте (auth-texts.ts)
   if(step==='first')body=`<h2>Смените временный пароль</h2><p class="muted" style="margin:0">Вы вошли с временным паролем. Придумайте свой: пока пароль не сменён, работать в программе нельзя.</p>${fld('Новый пароль',inp('fp-p1','','type="password" autocomplete="new-password"'),{id:'fp-p1',hint:'Не короче 8 символов'})}${fld('Повторите пароль',inp('fp-p2','','type="password" autocomplete="new-password"'),{id:'fp-p2'})}<button class="btn cta" id="fp-set" style="justify-content:center">Сменить пароль</button><button class="linkbtn" id="fp-back" style="align-self:flex-start">Выйти из аккаунта</button>`;
@@ -46,7 +46,7 @@ function showLogin(step='login',ctx={}){
       if(u.active===false)return msg(LG_T.user);
       if(u.tmpPass)return showLogin('first',{login:l});
       el.remove();S.loggedIn=true;switchUser(u.id)};
-    $('#lg-go',el).onclick=go;el.onkeydown=e=>{if(e.key==='Enter')go()};$('#lg-forgot',el).onclick=()=>showLogin('forgot',{login:val(el,'lg-login')});$('#lg-login',el).focus()}
+    $('#lg-go',el).onclick=go;el.onkeydown=e=>{if(e.key==='Enter')go()};$('#lg-forgot',el).onclick=()=>showLogin('forgot',{login:val(el,'lg-login')});$('#lg-about',el).onclick=()=>{location.hash='#landing'};$('#lg-login',el).focus()}
   // «Забыли пароль?»: ответ один для любого логина, дальше всегда ввод кода
   if(step==='forgot'){$('#fg-back',el).onclick=()=>showLogin('login',{login:val(el,'fg-login')});const go=()=>{const l=val(el,'fg-login').trim().toLowerCase();if(!setErr(el,'fg-login',l?'':'Введите логин'))return;
       // Новый код — только если не превышен предел запросов и восстановление не закрыто; прежний код при этом перестаёт действовать. Отправка кода пишется в журнал Telegram без текста кода

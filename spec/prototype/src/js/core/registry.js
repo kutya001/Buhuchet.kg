@@ -17,7 +17,7 @@ const BIZ=[
 ];
 const ADM=[
  {id:'accounts',title:'Учётные записи',short:'Учётки',icon:'user',desc:'Все пользователи платформы: сброс пароля, блокировка и разблокировка.',render:renderAccounts},
- {id:'orgs',title:'Организации',short:'Организации',icon:'building',desc:'Организации-клиенты платформы: создание вместе с владельцем, блокировка.',add:()=>[{label:'Организация',icon:'building',run:addOrgDlg}],render:renderOrgs},
+ {id:'orgs',title:'Организации',short:'Организации',icon:'building',desc:'Организации-клиенты платформы: создание вместе с владельцем, блокировка; заявки с лендинга buhuchet.kg.',tabs:()=>[{id:'list',label:'Организации',icon:'building'},{id:'leads',label:'Заявки',icon:'send',count:leadNew()}],add:()=>[{label:'Организация',icon:'building',run:addOrgDlg}],render:renderOrgs},
  {id:'pdicts',title:'Справочники платформы',short:'Справочники',icon:'book',desc:'Общие списки для всех организаций. Использованное значение нельзя удалить, только отключить. Каждое изменение пишется в историю.',tabs:pdTabs,add:pdAdd,render:renderPDicts},
  {id:'l10n',title:'Локализация',short:'Языки',icon:'globe',desc:'Словарь текстов интерфейса. Сейчас включён только русский язык; добавление других заложено в логику.',render:renderL10n},
  {id:'kb',title:'База знаний',short:'База знаний',icon:'grad',desc:'Обучение работе с системой: уроки с практикой по вашим правам, статьи инструкции и ваш уровень знаний — от «Новичка» до «Эксперта».',tabs:kbTabs,render:renderKB},
@@ -36,6 +36,8 @@ function go(mod,tab,preset){if(OV.skip){OV.next=[mod,tab,preset];return}S.preset
 function route(){
   // #/<адрес организации>/inn/<ИНН> — страница контрагента по ссылке, открывается поверх программы
   if(pubRoute())return;if(PUB.open)pubHide();
+  // #landing — лендинг buhuchet.kg для гостей, открывается поверх программы и страницы входа
+  if(landRoute())return;if(LAND.open)landHide();
   const {mod,tab}=parseHash();const l=mods();const m=l.find(x=>x.id===mod)||l[0];
   const tabs=modTabs(m);const t=tabs.find(x=>x.id===tab)||tabs[0];
   const changed=S.mod!==m.id||S.tab!==(t&&t.id);

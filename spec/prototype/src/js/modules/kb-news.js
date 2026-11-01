@@ -59,9 +59,9 @@ function newsOpen(n){newsRead().add(n.id);renderSide();renderSheetDot();
 // От новых к старым: по дате выхода, в один день — по времени публикации (последняя запись «Опубликовано» в истории), затем по номеру версии
 const newsPubAt=n=>((n.hist||[]).filter(h=>h.to==='Опубликовано').pop()||{}).at||n._ua||'';
 const newsSort=(a,b)=>b.date.localeCompare(a.date)||newsPubAt(b).localeCompare(newsPubAt(a))||(+b.ver||0)-(+a.ver||0);
-function whatsNew(how){if(navigator.webdriver&&!store.get('wntest',false))return;
-  if(how==='open'){let seen=null;try{seen=sessionStorage.getItem('bu.wn.'+S.me)}catch(e){}if(seen)return}
-  try{sessionStorage.setItem('bu.wn.'+S.me,'1')}catch(e){}
+function whatsNew(how){if(navigator.webdriver&&!store.get('wntest',false))return;if(DEMO.on)return;// в демо-версии окно не открывается само: новости — во вкладке «Новости»
+  if(how==='open'){let seen=null;try{seen=sessionStorage.getItem(BU_P+'wn.'+S.me)}catch(e){}if(seen)return}
+  try{sessionStorage.setItem(BU_P+'wn.'+S.me,'1')}catch(e){}
   const r=newsRead(),vis=newsVis().sort(newsSort);let l=vis.filter(n=>n.login&&!r.has(n.id));const unread=l.length;
   if(!l.length)return;const first=!store.get('kbw.'+S.me,false);store.set('kbw.'+S.me,true);
   const fresh=new Set(l.filter(n=>!r.has(n.id)).map(n=>n.id));l.forEach(n=>r.add(n.id));renderSide();renderSheetDot();if(typeof dbSoon==='function')dbSoon();

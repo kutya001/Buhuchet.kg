@@ -3,14 +3,15 @@
 /* ═════════════ Данные прототипа: demoDB.json, TemDB.json, refDB.json ═════════════ */
 /* Прототип — каркас: ни одной записи данных в коде. На GitHub Pages файлы читаются из папки data,
    в артефакте и при открытии с диска — из копии, которую сборка встраивает в страницу (блоки db-*). */
-const DB_VER=1,DB_KEY='bu.temdb';
+const DB_VER=1,DB_KEY=BU_P+'temdb';
 const DB_FILES={demo:'demoDB.json',empty:'TemDB.json',ref:'refDB.json',gked:'gkedDB.json'};
-const DB_ORG_KEYS=['organization','roles','employees','contractors','reports','moneyOps','history','tasks','feePayments','services','projects','files','indicators','indicatorValues','indicatorMonths','indicatorHistory','indicatorImports','kbProgress','newsRead','platformOrgs','platformUsers','dictRequests','telegramLog'];
+const DB_ORG_KEYS=['organization','roles','employees','contractors','reports','moneyOps','history','tasks','feePayments','services','projects','files','indicators','indicatorValues','indicatorMonths','indicatorHistory','indicatorImports','kbProgress','newsRead','platformOrgs','platformUsers','dictRequests','telegramLog','leads'];
 const DB_REF_KEYS=['dictionaries','taxes','enRates','propertyRates','bizSize','notes','reportTypes','singleTaxRates','taxRates','defaultRates','phoneCodes','holidays','workingSaturdays','statuses','statusNames','roleTemplates','messageTemplates','localization','kbGroups','kbSteps','kbLevels','kbArticles','news','dictHistory','dictLoads','calendarAudit','permissions','kbUi','kbShows','onboarding'];
 const DB_OBJ=new Set(['notes','organization','kbProgress','newsRead','dictionaries','taxRates','defaultRates','holidays','statuses','statusNames','messageTemplates','kbLevels','calendarAudit','kbUi','onboarding']);
-const DB_T={organization:'Организация',roles:'Роли',employees:'Сотрудники',contractors:'Контрагенты',reports:'Отчёты',moneyOps:'Поступления и оплаты',history:'История',tasks:'Задачи',feePayments:'Оплаты за обслуживание',services:'Разовые услуги',projects:'Проекты',files:'Файлы',indicators:'Показатели',indicatorValues:'Значения показателей',indicatorMonths:'Статусы месяцев показателей',indicatorHistory:'История показателей',indicatorImports:'Загрузки показателей из Excel',kbProgress:'Прогресс в Базе знаний',newsRead:'Прочитанные новости',platformOrgs:'Организации платформы',platformUsers:'Учётные записи',dictRequests:'Запросы на справочники',telegramLog:'Журнал Telegram'};
+const DB_T={organization:'Организация',roles:'Роли',employees:'Сотрудники',contractors:'Контрагенты',reports:'Отчёты',moneyOps:'Поступления и оплаты',history:'История',tasks:'Задачи',feePayments:'Оплаты за обслуживание',services:'Разовые услуги',projects:'Проекты',files:'Файлы',indicators:'Показатели',indicatorValues:'Значения показателей',indicatorMonths:'Статусы месяцев показателей',indicatorHistory:'История показателей',indicatorImports:'Загрузки показателей из Excel',kbProgress:'Прогресс в Базе знаний',newsRead:'Прочитанные новости',platformOrgs:'Организации платформы',platformUsers:'Учётные записи',dictRequests:'Запросы на справочники',telegramLog:'Журнал Telegram',leads:'Заявки с сайта'};
 function dbRead(name,id){
-  if(/^https?:/.test(location.protocol))try{const x=new XMLHttpRequest();x.open('GET','data/'+name+'?v='+Date.now(),false);x.send();
+  // Демо-версия для сайта к серверу не обращается: данные только из встроенной копии
+  if(/^https?:/.test(location.protocol)&&BU_P==='bu.')try{const x=new XMLHttpRequest();x.open('GET','data/'+name+'?v='+Date.now(),false);x.send();
     if(x.status===200){const v=JSON.parse(x.responseText);if(v&&v.meta&&v.meta.file===name)return {db:v,from:'папка data'}}}catch(e){}
   const el=document.getElementById(id);if(el)try{return {db:JSON.parse(el.textContent),from:'встроенная копия'}}catch(e){}
   return {db:{meta:{file:name}},from:'нет файла'}}
@@ -21,6 +22,8 @@ const DB_TXT_REF=[[r=>r.taxes,x=>x.code,['guide']],[r=>r.enRates,x=>x.code,['exp
 let DATA_MODE=store.get('data','demo'),DBMISS=[];
 // Недостающие разделы (старый или чужой файл) берутся из пустого шаблона и refDB.json — прототип не ломается, а показывает, чего не хватило
 function dbFill(db){const miss=[],e=DBSRC.empty.db,r=DBSRC.ref.db;db.meta=db.meta||{};
+  // Заявки с лендинга (v65): у данных, сохранённых раньше, раздел появляется сам — в демо-режиме с демо-заявками
+  if(db.leads==null&&db.meta.file==='TemDB.json'&&!db.meta.v65)db.leads=structuredClone((db.meta.mode!=='empty'&&DBSRC.demo.db.leads)||[]);
   DB_ORG_KEYS.forEach(k=>{if(db[k]==null){miss.push(DB_T[k]||k);db[k]=structuredClone(e[k]!=null?e[k]:DB_OBJ.has(k)?{}:[])}});
   const hadRef=!!db.ref;db.ref=db.ref||{};
   DB_REF_KEYS.forEach(k=>{if(db.ref[k]==null){if(hadRef)miss.push('справочник '+k);db.ref[k]=structuredClone(r[k]!=null?r[k]:DB_OBJ.has(k)?{}:[])}});
@@ -265,6 +268,23 @@ function dbFill(db){const miss=[],e=DBSRC.empty.db,r=DBSRC.ref.db;db.meta=db.met
     sw('a19_1','<li>«Сбросить пароль» — задать временный пароль (например, владельцу организации, который не привязал Telegram).</li>','<li>«Сбросить пароль» — задать временный','ram привязан, бот сообщит о сбросе.</li>');
     sw('a19_3','«ОК, применить». Удаление через загрузку не делается, только отключение.</li>','«ОК, применить». Удаление через загрузку','ажмите «Сравнить» ещё раз».</li>');
     sw('a7','контрагент открывал страницу. Включение','контрагент открывал страницу','новым открытием не считается. Включение')}
+  if(!db.meta.v64){db.meta.v64=1;
+    const sw=(id,o,st,en)=>{const a=(db.ref.kbArticles||[]).find(x=>x.id===id),h=(((r.kbArticles||[]).find(x=>x.id===id))||{}).html||'',i=h.indexOf(st),j=h.indexOf(en,i);if(a&&a.html&&a.html.includes(o)&&i>=0&&j>=0)a.html=a.html.replace(o,h.slice(i,j+en.length))};
+    sw('a8','<li>Прежние версии не меняются. В списке видна последняя версия, остальные — в карточке.</li>','<li>Прежние версии не меняются: в их меню','остальные — в карточке.</li>')}
+  // Лендинг (v65): тексты группы «Лендинг» в «Локализации», статусы заявок, шаблон «Telegram: новая заявка с сайта», справка
+  if(!db.meta.v65){db.meta.v65=1;const l=db.ref.localization;if(Array.isArray(l)){const have=new Set(l.map(x=>x.key));(r.localization||[]).forEach(x=>{if(!have.has(x.key))l.push(structuredClone(x))})}
+    if(db.ref.statuses&&!db.ref.statuses.lead&&r.statuses&&r.statuses.lead)db.ref.statuses.lead=structuredClone(r.statuses.lead);
+    ['messageTemplates','templateNotes'].forEach(k=>{const a=db.ref[k];if(a&&r[k]&&a.tgLead==null&&r[k].tgLead!=null)a.tgLead=r[k].tgLead});
+    const sw=(id,o,st,en)=>{const a=(db.ref.kbArticles||[]).find(x=>x.id===id),h=(((r.kbArticles||[]).find(x=>x.id===id))||{}).html||'',i=h.indexOf(st),j=h.indexOf(en,i);if(a&&a.html&&a.html.includes(o)&&i>=0&&j>=0)a.html=a.html.replace(o,h.slice(i,j+en.length))};
+    sw('a19_2','причиной «Демо-организация стенда».</li></ul>','причиной «Демо-организация стенда».</li>','дописывается к первой.</li></ul>');
+    sw('a4','«Сменить пароль».</li></ul><h4>4.2.','«Сменить пароль».</li>','<h4>4.2.');
+    sw('a19_4','без программиста («Изменить текст»).</li><li>Сейчас язык один','без программиста («Изменить текст»).</li>','<li>Сейчас язык один');
+    sw('a19_5','не отправляется.</li><li>«Бот платформы»','не отправляется.</li>','<li>«Бот платформы»')}
+  // v66 (решения заказчика 01.11.2026): тексты демо-организации (кнопка «Посмотреть на демо-организацию», полоса «Демо-версия», вопрос 7) — после того же ключа, что в refDB.json;
+  // настоящие контакты на лендинге — если администратор не менял демо-значения
+  if(!db.meta.v66){db.meta.v66=1;const l=db.ref.localization;if(Array.isArray(l)){const rl=r.localization||[];rl.forEach((x,i)=>{if(l.some(y=>y.key===x.key))return;let j=-1;for(let k=i-1;k>=0&&j<0;k--)j=l.findIndex(y=>y.key===rl[k].key);l.splice(j<0?l.length:j+1,0,structuredClone(x))})}
+    if(Array.isArray(l)){const old={'land.c.phone':'+996 555 000 000','land.c.tg':'@buhuchet_kg','land.c.email':'info@buhuchet.kg'};
+    l.forEach(x=>{if(old[x.key]!=null&&x.ru===old[x.key]){const n=(r.localization||[]).find(y=>y.key===x.key);if(n){x.ru=n.ru;x._ua=n._ua;x._ub=n._ub}}})}}
   if(db.organization&&db.organization.payFirst==null)db.organization.payFirst=true;
   if(db.organization&&db.organization.repConfirm==null)db.organization.repConfirm=true;
   if(db.organization&&db.organization.taskConfirm==null)db.organization.taskConfirm=true;

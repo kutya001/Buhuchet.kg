@@ -127,6 +127,8 @@ function renderCalendar(body){
 function reportActions(r){
   const t=tR(r),st=t.payOnly?'—':r.status,cs=can('changeStatus');const no='Нет права менять статус';const it=[];
   it.push({label:'Открыть карточку',icon:'file',run:()=>openReport(r)});
+  // Прежняя версия после «Создать уточнённый» не меняется: к ней можно только прикрепить файл (решение заказчика 30.10.2026, Б-7 «А»)
+  if(r.superseded){if(feat('files')&&can('filesUpload'))it.push({label:'Прикрепить файл',icon:'clip',run:()=>fileDlg(r)});if(st==='Сдан')it.push({sep:true},repBackItem(r,st));return it}
   if(OPEN.has(st)){const w=subPayWhy(r);it.push({label:'Отметить сданным',icon:'send',disabled:!cs||!!w,reason:!cs?no:w,run:()=>submitDlg([r])})}
   if(st==='К сдаче')it.push({label:'Взять в работу',icon:'clock',disabled:!cs,reason:!cs&&no,run:()=>setStatus(r,'В работе')});
   if(repWait(r)){const why=repConfWhy(r);it.push({label:'Подтвердить',icon:'check',sub:'Сдача проверена старшим бухгалтером',disabled:!!why,reason:why,run:()=>repConfDlg([r])},{label:'На исправление',icon:'refresh',sub:'Вернуть ответственному с причиной',disabled:!!why,reason:why,run:()=>repFixDlg(r)})}
@@ -140,10 +142,11 @@ function reportActions(r){
   if(feat('files')&&can('filesUpload'))it.push({label:'Прикрепить файл',icon:'clip',run:()=>fileDlg(r)});
   if(st==='Сдан')it.push({label:'Создать уточнённый',icon:'repeat',disabled:!cs,reason:!cs&&no,run:()=>createRevision(r)});
   it.push({sep:true});
-  if(st==='Сдан'){const bk=scBack('rep',st,r);it.push({label:bk===REP_MK.wait?'Снять подтверждение':`Откатить в «${bk&&!bk.no?bk:'—'}»`,icon:'history',disabled:!can('rollback')||!bk||!!bk.no,reason:!can('rollback')?'Нужно право «Откат статусов»':bk&&bk.no?bk.no:'',run:()=>rollbackDlg('rep',r.id,bk)})}
+  if(st==='Сдан')it.push(repBackItem(r,st));
   if(r.status!=='Не требуется'&&!repFin(r))it.push({label:'Не требуется',icon:'ban',disabled:!cs,run:()=>confirmDlg({title:'Отметить «Не требуется»?',text:'Отчёт не нужно сдавать за этот период. Напоминания по нему прекратятся.',ok:'Отметить',run:()=>setStatus(r,'Не требуется')})});
   return it;
 }
+function repBackItem(r,st){const bk=scBack('rep',st,r);return {label:bk===REP_MK.wait?'Снять подтверждение':`Откатить в «${bk&&!bk.no?bk:'—'}»`,icon:'history',disabled:!can('rollback')||!bk||!!bk.no,reason:!can('rollback')?'Нужно право «Откат статусов»':bk&&bk.no?bk.no:'',run:()=>rollbackDlg('rep',r.id,bk)}}
 const canRecv=r=>feat('taxpay')&&can('money')&&tR(r).sum&&r.sum>0&&r.paid<r.sum&&r.status!=='Не требуется'&&!r.superseded&&!CPM[r.cp].archived;
 function recvDlg(r){const amt=Math.max(0,r.sum-Math.max(r.paid,r.recv||0));inDlg(CPM[r.cp],null,{r:r.id,amt:amt||r.sum-r.paid})}
 document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('[data-recv]');if(!b)return;e.stopPropagation();e.preventDefault();recvDlg(REPORTS.find(r=>r.id===+b.dataset.recv))},true);

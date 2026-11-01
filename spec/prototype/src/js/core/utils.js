@@ -3,7 +3,9 @@
 /* ═════════════ Utils ═════════════ */
 const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const MEMSTORE={};const ukey=k=>/^(g5|stats)\./.test(k)&&typeof S!=='undefined'&&S.me?k.replace('.','.'+S.me+'.'):k;const store={get(k,d){k=ukey(k);if(k in MEMSTORE)return MEMSTORE[k];try{const v=localStorage.getItem('bu.'+k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){k=ukey(k);MEMSTORE[k]=v;try{localStorage.setItem('bu.'+k,JSON.stringify(v))}catch(e){}}};
+// Хранилище браузера: в демо-версии для сайта (BU_DEMO) — свои ключи budemo.*, чтобы не пересекаться с программой на том же адресе
+const BU_P=typeof BU_DEMO!=='undefined'&&BU_DEMO?'budemo.':'bu.';
+const MEMSTORE={};const ukey=k=>/^(g5|stats)\./.test(k)&&typeof S!=='undefined'&&S.me?k.replace('.','.'+S.me+'.'):k;const store={get(k,d){k=ukey(k);if(k in MEMSTORE)return MEMSTORE[k];try{const v=localStorage.getItem(BU_P+k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){k=ukey(k);MEMSTORE[k]=v;try{localStorage.setItem(BU_P+k,JSON.stringify(v))}catch(e){}}};
 function mulberry(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
 const R=mulberry(20261011);
 const pick=a=>a[Math.floor(R()*a.length)];
